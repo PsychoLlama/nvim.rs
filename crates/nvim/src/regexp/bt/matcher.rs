@@ -31,9 +31,8 @@ use crate::profile::profile_passed_limit;
 use crate::regexp::{
     MAX_LIMIT, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH,
     RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
-    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegStar, RegState, Rex, bl_maxval, bl_minval,
-    cleanup_subexpr, cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, save_capture,
-    save_subexpr,
+    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegStar, RegState, Rex, cleanup_subexpr,
+    cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, save_capture, save_subexpr,
 };
 use crate::types::{NUL, ProfTime, int16_t, int64_t, uint8_t};
 
@@ -288,8 +287,9 @@ fn push_frame(
         BtOp::BraceLimits => {
             let next_op = BtOp::decode(unsafe { *(*next) }).map(|(op, _)| op);
             if next_op == Ok(BtOp::BraceSimple) {
-                bl_minval.set(unsafe { operand_u32(scan, 3) });
-                bl_maxval.set(unsafe { operand_u32(scan, 7) });
+                rex.set_brace_limits(unsafe { operand_u32(scan, 3) }, unsafe {
+                    operand_u32(scan, 7)
+                });
                 RA_CONT
             } else if let Ok(next_op) = next_op
                 && let Some(slot) = next_op.index_in(BtOp::BraceComplex)
@@ -466,8 +466,7 @@ unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: BtOp, scan: *mut ui
         rst.minval = if op == BtOp::Star { 0 } else { 1 };
         rst.maxval = MAX_LIMIT as int64_t;
     } else {
-        rst.minval = bl_minval.get();
-        rst.maxval = bl_maxval.get();
+        (rst.minval, rst.maxval) = rex.brace_limits();
     }
 
     rst.count = super::repeat::regrepeat(rex, unsafe { scan.add(3) }, rst.maxval) as int64_t;

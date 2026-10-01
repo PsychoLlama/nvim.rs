@@ -25,7 +25,7 @@ use core::ffi::{c_char, c_int};
 use super::submatch::Rsm;
 use super::{
     BtProg, MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, Rex, cstrncmp,
-    nfa_regengine, peekchr, re_multi_type, reg_endzp, reg_endzpos, reg_startzp, reg_startzpos,
+    nfa_regengine, peekchr, re_multi_type,
 };
 use crate::charset::vim_iswordc_buf;
 use crate::getchar::state::got_int;
@@ -293,15 +293,9 @@ fn cleanup(rex: Rex, z: bool) {
     // string match records pointers and marks it unset with NULL.
     let n = NSUBEXP as usize;
     if z {
-        // The `\z(` arrays are this module's own, so blanking them is a
+        // The `\z(` slots are the context's own, so blanking them is a
         // whole-value write rather than a walk over the caller's memory.
-        if rex.multi() {
-            reg_startzpos.set([UNSET_POS; NSUBEXP as usize]);
-            reg_endzpos.set([UNSET_POS; NSUBEXP as usize]);
-        } else {
-            reg_startzp.set([core::ptr::null_mut(); NSUBEXP as usize]);
-            reg_endzp.set([core::ptr::null_mut(); NSUBEXP as usize]);
-        }
+        rex.clear_zslots();
     } else if rex.multi() {
         // SAFETY: the caller's match structure holds NSUBEXP of each.
         blank(

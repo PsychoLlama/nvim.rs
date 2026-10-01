@@ -973,7 +973,6 @@ CELL_COPY_OWNER = (
     # regexp — saved matcher state holding pointers into the subject
     "rex",
     "rsm",
-    "behind_pos",
     # the rest, one or a few sites each
     "curgrid",
     # `au_new_curbuf` left the list in phase 23's S11. It is a `BufferRef`,

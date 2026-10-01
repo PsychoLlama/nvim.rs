@@ -49,7 +49,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::{
     BACKPOS_INITIAL, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos, NSUBEXP,
     REGSTACK_INITIAL, RS_MCLOSE, RS_MOPEN, RS_ZOPEN, RegBehind, RegItem, RegStar, RegState, Rex,
-    SavedInput, reg_endzp, reg_endzpos, reg_getline, reg_startzp, reg_startzpos,
+    SavedInput, reg_getline,
 };
 use crate::types::{LPos, int64_t, uint8_t};
 
@@ -466,67 +466,10 @@ pub(crate) fn reg_restore(rex: Rex, save: &SavedInput, backpos: &mut BackPos) {
 /// pair of them.
 #[derive(Clone, Copy)]
 pub(crate) enum GroupSlot {
-    /// A buffer match's slot, in the caller's match structure.
+    /// A buffer match's slot: the caller's, or the context's for `\z(`.
     Pos(*mut LPos),
-    /// A string match's slot, in the caller's match structure.
+    /// A string match's slot, likewise.
     Ptr(*mut *mut uint8_t),
-    /// A `\z(` group's slot. Those arrays are the engine's own rather than
-    /// the caller's, so the slot is *named* — the array and the index — and
-    /// never addressed.
-    Z(ZSlot, usize),
-}
-
-/// Which of the four `\z(` arrays a [`GroupSlot::Z`] is in.
-#[derive(Clone, Copy)]
-pub(crate) enum ZSlot {
-    /// `reg_startzpos`: where a buffer match's `\z(` group opened.
-    PosStart,
-    /// `reg_endzpos`: where it closed.
-    PosEnd,
-    /// `reg_startzp`: where a string match's `\z(` group opened.
-    PtrStart,
-    /// `reg_endzp`: where it closed.
-    PtrEnd,
-}
-
-impl ZSlot {
-    /// What the slot holds.
-    fn get(self, no: usize) -> MatchPos {
-        match self {
-            ZSlot::PosStart => MatchPos::from_pos(reg_startzpos.get()[no]),
-            ZSlot::PosEnd => MatchPos::from_pos(reg_endzpos.get()[no]),
-            ZSlot::PtrStart => MatchPos::from_ptr(reg_startzp.get()[no]),
-            ZSlot::PtrEnd => MatchPos::from_ptr(reg_endzp.get()[no]),
-        }
-    }
-
-    /// Put `at` in the slot. The arrays are ten entries of a pointer each,
-    /// so a whole-value read/modify/write is cheaper than a borrow would be
-    /// and needs no `unsafe` at all.
-    fn set(self, no: usize, at: MatchPos) {
-        match self {
-            ZSlot::PosStart => {
-                let mut a = reg_startzpos.get();
-                a[no] = at.as_pos();
-                reg_startzpos.set(a);
-            }
-            ZSlot::PosEnd => {
-                let mut a = reg_endzpos.get();
-                a[no] = at.as_pos();
-                reg_endzpos.set(a);
-            }
-            ZSlot::PtrStart => {
-                let mut a = reg_startzp.get();
-                a[no] = at.as_ptr();
-                reg_startzp.set(a);
-            }
-            ZSlot::PtrEnd => {
-                let mut a = reg_endzp.get();
-                a[no] = at.as_ptr();
-                reg_endzp.set(a);
-            }
-        }
-    }
 }
 
 impl GroupSlot {
@@ -542,7 +485,6 @@ impl GroupSlot {
             // shape it holds because the match's own kind chose it.
             GroupSlot::Pos(p) => MatchPos::from_pos(unsafe { *p }),
             GroupSlot::Ptr(p) => MatchPos::from_ptr(unsafe { *p }),
-            GroupSlot::Z(which, no) => which.get(no),
         }
     }
 
@@ -557,7 +499,6 @@ impl GroupSlot {
             // SAFETY: as `get`.
             GroupSlot::Pos(p) => unsafe { *p = at.as_pos() },
             GroupSlot::Ptr(p) => unsafe { *p = at.as_ptr() },
-            GroupSlot::Z(which, no) => which.set(no, at),
         }
     }
 }
@@ -565,15 +506,10 @@ impl GroupSlot {
 /// Which slot a capture frame is about: its state says which end of which
 /// family, and `no` which group.
 ///
-/// The `\z(` groups live in this module's own arrays rather than in the
-/// caller's match structure, which is the only reason there are four families
-/// and not two — and it is why those two come back *named* rather than
-/// addressed: nothing outside needs their address, so nothing outside gets
-/// one, and their slots are reached with `get`/`set`.
-///
-/// The caller's two are still addresses, and there the *kind* has to be
-/// settled before one is formed at all, because the pair this match does not
-/// use is null for the whole run.
+/// The `\1` groups live in the caller's match structure and the `\z(` ones
+/// in the match context, which is why there are four families and not two.
+/// The *kind* has to be settled before an address is formed at all, because
+/// the caller's pair this match does not use is null for the whole run.
 ///
 /// # Safety
 ///
@@ -585,8 +521,8 @@ pub(crate) unsafe fn capture_slot(rex: Rex, state: RegState, no: usize) -> Group
         let array = match state {
             RS_MOPEN => rex.reg_startpos(),
             RS_MCLOSE => rex.reg_endpos(),
-            RS_ZOPEN => return GroupSlot::Z(ZSlot::PosStart, no),
-            _ => return GroupSlot::Z(ZSlot::PosEnd, no),
+            RS_ZOPEN => rex.zslot_start_pos(),
+            _ => rex.zslot_end_pos(),
         };
         // SAFETY: the caller promises the group, and this is the array a
         // buffer match fills.
@@ -595,8 +531,8 @@ pub(crate) unsafe fn capture_slot(rex: Rex, state: RegState, no: usize) -> Group
         let array = match state {
             RS_MOPEN => rex.reg_startp(),
             RS_MCLOSE => rex.reg_endp(),
-            RS_ZOPEN => return GroupSlot::Z(ZSlot::PtrStart, no),
-            _ => return GroupSlot::Z(ZSlot::PtrEnd, no),
+            RS_ZOPEN => rex.zslot_start_ptr(),
+            _ => rex.zslot_end_ptr(),
         };
         // SAFETY: as above, for a string match's array.
         GroupSlot::Ptr(unsafe { array.add(no) })

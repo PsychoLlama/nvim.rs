@@ -34,8 +34,8 @@ use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
-use super::pos::{MatchPos, PosKind};
-use super::{NSUBEXP, RegExec, rex};
+use super::pos::{MatchPos, PosKind, SavedInput};
+use super::{NSUBEXP, RegExec, TimeBudget, ZSlots, rex};
 use crate::charset::vim_iswordp_buf;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::types::{ColNr, LPos, LineNr, RegMMatch, RegMatch, RegProg, uint8_t};
@@ -602,5 +602,121 @@ impl Rex {
     #[inline(always)]
     pub(crate) fn set_nfa_alt_listid(self, id: c_int) {
         unsafe { (*self.0).nfa_alt_listid = id }
+    }
+
+    // --------------------------------------------- the NFA engine's run
+
+    /// The verdict so far: 0, a match, or `NFA_TOO_EXPENSIVE`.
+    #[inline(always)]
+    pub(crate) fn nfa_match(self) -> c_int {
+        unsafe { (*self.0).nfa_match }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_nfa_match(self, verdict: c_int) {
+        unsafe { (*self.0).nfa_match = verdict }
+    }
+
+    /// Where the lookbehind being matched has to stop, or null outside one.
+    /// The position lives in the frame of the `recursive_regmatch` that set
+    /// it, which outlasts the sub-match.
+    #[inline(always)]
+    pub(crate) fn nfa_endp(self) -> *mut MatchPos {
+        unsafe { (*self.0).nfa_endp }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_nfa_endp(self, endp: *mut MatchPos) {
+        unsafe { (*self.0).nfa_endp = endp }
+    }
+
+    /// Which of a state's two `lastlist` slots the running match stamps.
+    #[inline(always)]
+    pub(crate) fn nfa_ll_index(self) -> usize {
+        unsafe { (*self.0).nfa_ll_index }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_nfa_ll_index(self, index: usize) {
+        unsafe { (*self.0).nfa_ll_index = index }
+    }
+
+    /// Start the clock for one try.
+    #[inline(always)]
+    pub(crate) fn set_time_budget(self, budget: TimeBudget) {
+        unsafe { (*self.0).nfa_time = budget }
+    }
+
+    #[inline(always)]
+    pub(crate) fn time_budget(self) -> TimeBudget {
+        unsafe { (*self.0).nfa_time }
+    }
+
+    /// Count one step towards the next read of the clock: see
+    /// [`TimeBudget::tick`].
+    #[inline(always)]
+    pub(crate) fn time_check_due(self, interval: c_int) -> bool {
+        unsafe { (*self.0).nfa_time.tick(interval) }
+    }
+
+    // --------------------------------------- the backtracker's own slots
+
+    /// The `\z1`..`\z9` slots, as they stand.
+    #[inline(always)]
+    pub(crate) fn zslots(self) -> ZSlots {
+        unsafe { (*self.0).zslots }
+    }
+
+    /// Unset every `\z` slot of this match's kind.
+    #[inline(always)]
+    pub(crate) fn clear_zslots(self) {
+        let multi = self.multi();
+        unsafe { (*self.0).zslots.clear(multi) }
+    }
+
+    /// Where a `\z(` group's start or end goes: [`super::NSUBEXP`] slots in
+    /// the context itself, positions for a buffer match and pointers for a
+    /// string one.
+    #[inline(always)]
+    pub(crate) fn zslot_start_pos(self) -> *mut LPos {
+        unsafe { (&raw mut (*self.0).zslots.start_pos).cast() }
+    }
+
+    #[inline(always)]
+    pub(crate) fn zslot_end_pos(self) -> *mut LPos {
+        unsafe { (&raw mut (*self.0).zslots.end_pos).cast() }
+    }
+
+    #[inline(always)]
+    pub(crate) fn zslot_start_ptr(self) -> *mut *mut uint8_t {
+        unsafe { (&raw mut (*self.0).zslots.start_ptr).cast() }
+    }
+
+    #[inline(always)]
+    pub(crate) fn zslot_end_ptr(self) -> *mut *mut uint8_t {
+        unsafe { (&raw mut (*self.0).zslots.end_ptr).cast() }
+    }
+
+    /// Where the look-behind being tried has to end.
+    #[inline(always)]
+    pub(crate) fn behind_pos(self) -> SavedInput {
+        unsafe { (*self.0).behind_pos }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_behind_pos(self, pos: SavedInput) {
+        unsafe { (*self.0).behind_pos = pos }
+    }
+
+    /// The bounds of the `\{n,m}` about to be entered, read off its
+    /// `BRACE_LIMITS` node and consumed by the `BRACE_SIMPLE` after it.
+    #[inline(always)]
+    pub(crate) fn brace_limits(self) -> (i64, i64) {
+        unsafe { (*self.0).brace_limits }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_brace_limits(self, minval: i64, maxval: i64) {
+        unsafe { (*self.0).brace_limits = (minval, maxval) }
     }
 }

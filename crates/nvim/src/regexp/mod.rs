@@ -120,7 +120,89 @@ pub struct RegExec {
     pub nfa_listid: c_int,
     pub nfa_alt_listid: c_int,
     pub nfa_has_zsubexpr: c_int,
+    /// The NFA engine's verdict so far: 0, a match, or `NFA_TOO_EXPENSIVE`.
+    pub(crate) nfa_match: c_int,
+    /// Where a lookbehind being matched has to stop, or null outside one.
+    pub(crate) nfa_endp: *mut MatchPos,
+    /// Which of a state's two `lastlist` generations the running match
+    /// stamps: 1 inside the first nested lookaround, 0 otherwise.
+    pub(crate) nfa_ll_index: usize,
+    /// The caller's time limit, and how far towards the next read of it.
+    pub(crate) nfa_time: TimeBudget,
+    /// The backtracker's `\z1`..`\z9` slots.
+    pub(crate) zslots: ZSlots,
+    /// Where the look-behind being tried has to end.
+    pub(crate) behind_pos: SavedInput,
+    /// The bounds of the `\{n,m}` the backtracker is about to enter.
+    pub(crate) brace_limits: (int64_t, int64_t),
 }
+/// The caller's bound on how long an NFA match may run.
+#[derive(Copy, Clone)]
+pub(crate) struct TimeBudget {
+    /// The deadline, or null for none.
+    pub(crate) limit: *mut ProfTime,
+    /// Where to report that it passed, or null.
+    pub(crate) timed_out: *mut c_int,
+    /// Steps since the clock was last read.
+    count: c_int,
+}
+
+impl TimeBudget {
+    pub(crate) const NONE: TimeBudget =
+        TimeBudget::new(core::ptr::null_mut(), core::ptr::null_mut());
+
+    pub(crate) const fn new(limit: *mut ProfTime, timed_out: *mut c_int) -> TimeBudget {
+        TimeBudget {
+            limit,
+            timed_out,
+            count: 0,
+        }
+    }
+
+    /// Count a step; true once every `interval` of them, when the clock is
+    /// worth reading.
+    pub(crate) fn tick(&mut self, interval: c_int) -> bool {
+        self.count += 1;
+        if self.count != interval {
+            return false;
+        }
+        self.count = 0;
+        true
+    }
+}
+
+/// The backtracker's `\z1`..`\z9` slots. Unlike the `\1`..`\9` ones they
+/// are not the caller's: the syntax highlighter collects them once the match
+/// is over. A buffer match fills the positions, a string match the pointers.
+#[derive(Copy, Clone)]
+pub(crate) struct ZSlots {
+    pub(crate) start_pos: [LPos; NSUBEXP as usize],
+    pub(crate) end_pos: [LPos; NSUBEXP as usize],
+    pub(crate) start_ptr: [*mut uint8_t; NSUBEXP as usize],
+    pub(crate) end_ptr: [*mut uint8_t; NSUBEXP as usize],
+}
+
+impl ZSlots {
+    const UNSET: ZSlots = ZSlots {
+        start_pos: [LPos { lnum: -1, col: -1 }; NSUBEXP as usize],
+        end_pos: [LPos { lnum: -1, col: -1 }; NSUBEXP as usize],
+        start_ptr: [core::ptr::null_mut(); NSUBEXP as usize],
+        end_ptr: [core::ptr::null_mut(); NSUBEXP as usize],
+    };
+
+    /// Mark every slot unset: the position pair for a buffer match, the
+    /// pointer pair for a string match.
+    pub(crate) fn clear(&mut self, multi: bool) {
+        if multi {
+            self.start_pos = ZSlots::UNSET.start_pos;
+            self.end_pos = ZSlots::UNSET.end_pos;
+        } else {
+            self.start_ptr = ZSlots::UNSET.start_ptr;
+            self.end_ptr = ZSlots::UNSET.end_ptr;
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct RegSubMatch {
     pub sm_match: *mut RegMatch,
@@ -362,6 +444,13 @@ static rex: GlobalCell<RegExec> = GlobalCell::new(RegExec {
     nfa_listid: 0,
     nfa_alt_listid: 0,
     nfa_has_zsubexpr: 0,
+    nfa_match: 0,
+    nfa_endp: core::ptr::null_mut(),
+    nfa_ll_index: 0,
+    nfa_time: TimeBudget::NONE,
+    zslots: ZSlots::UNSET,
+    behind_pos: SavedInput::NOWHERE,
+    brace_limits: (0, 0),
 });
 static rex_in_use: GlobalCell<bool> = GlobalCell::new(false);
 static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false);
@@ -373,12 +462,6 @@ static rsm: GlobalCell<RegSubMatch> = GlobalCell::new(RegSubMatch {
     sm_maxline: 0,
     sm_line_lbr: 0,
 });
-static reg_startzp: GlobalCell<[*mut uint8_t; 10]> =
-    GlobalCell::new([core::ptr::null_mut::<uint8_t>(); 10]);
-static reg_endzp: GlobalCell<[*mut uint8_t; 10]> =
-    GlobalCell::new([core::ptr::null_mut::<uint8_t>(); 10]);
-static reg_startzpos: GlobalCell<[LPos; 10]> = GlobalCell::new([LPos { lnum: 0, col: 0 }; 10]);
-static reg_endzpos: GlobalCell<[LPos; 10]> = GlobalCell::new([LPos { lnum: 0, col: 0 }; 10]);
 pub const HASWIDTH: c_int = 0x1 as c_int;
 pub const SIMPLE: c_int = 0x2 as c_int;
 pub const SPSTART: c_int = 0x4 as c_int;
@@ -393,17 +476,12 @@ static reg_toolong: GlobalCell<c_int> = GlobalCell::new(0);
 static had_endbrace: GlobalCell<[uint8_t; 10]> = GlobalCell::new([0; 10]);
 static one_exactly: GlobalCell<c_int> = GlobalCell::new(0);
 pub const JUST_CALC_SIZE: *mut uint8_t = -1i64 as *mut uint8_t;
-static behind_pos: GlobalCell<SavedInput> = GlobalCell::new(SavedInput::NOWHERE);
 pub const REGSTACK_INITIAL: c_int = 2048;
 pub const BACKPOS_INITIAL: c_int = 64;
-static bl_minval: GlobalCell<int64_t> = GlobalCell::new(0);
-static bl_maxval: GlobalCell<int64_t> = GlobalCell::new(0);
 static nfa_re_flags: GlobalCell<c_int> = GlobalCell::new(0);
 static wants_nfa: GlobalCell<bool> = GlobalCell::new(false);
 static nstate: GlobalCell<c_int> = GlobalCell::new(0);
 static istate: GlobalCell<c_int> = GlobalCell::new(0);
-static nfa_endp: GlobalCell<*mut MatchPos> = GlobalCell::new(core::ptr::null_mut::<MatchPos>());
-static nfa_ll_index: GlobalCell<c_int> = GlobalCell::new(0);
 static state_ptr: GlobalCell<*mut NfaState> = GlobalCell::new(core::ptr::null_mut::<NfaState>());
 /// How far a postponed lookaround has got -- upstream's `NFA_PIM_*`, which
 /// share the `NFA_` prefix with the opcodes and are a different family.
@@ -418,11 +496,6 @@ pub enum PimResult {
     /// It ran and did not match.
     NoMatch,
 }
-static nfa_match: GlobalCell<c_int> = GlobalCell::new(0);
-static nfa_time_limit: GlobalCell<*mut ProfTime> =
-    GlobalCell::new(core::ptr::null_mut::<ProfTime>());
-static nfa_timed_out: GlobalCell<*mut c_int> = GlobalCell::new(core::ptr::null_mut::<c_int>());
-static nfa_time_count: GlobalCell<c_int> = GlobalCell::new(0);
 pub const ADDSTATE_HERE_OFFSET: c_int = 10;
 static bt_regengine: RegEngine = RegEngine {
     regcomp: Some(bt_regcomp),

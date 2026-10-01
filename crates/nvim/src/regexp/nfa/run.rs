@@ -7,7 +7,6 @@
 
 use super::list::{op, out_of, out1_of};
 use crate::cstr;
-use crate::guard::Depth;
 use crate::regexp::NfaOp;
 use crate::siemsg;
 use core::ffi::{c_char, c_int, c_ushort};
@@ -25,8 +24,7 @@ use crate::regexp::state::re_extmatch_in;
 use crate::regexp::{
     _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_TOO_EXPENSIVE, NfaPim,
     NfaRegProg, NfaState, RA_MATCH, RegSub, RegSubs, Rex, cleanup_subexpr, cleanup_zsubexpr,
-    cstrchr, cstrncmp, match_with_backref, nfa_endp, nfa_ll_index, nfa_match, nfa_time_limit,
-    nfa_timed_out, reg_getline, reg_getline_len, reg_iswordc,
+    cstrchr, cstrncmp, match_with_backref, reg_getline, reg_getline_len, reg_iswordc,
 };
 use crate::types::{ColNr, Failed, uint8_t};
 
@@ -184,9 +182,9 @@ pub(crate) fn recursive_regmatch(
     // is live for the duration of the match.
     let save_reginput_col = unsafe { rex.input().offset_from(rex.line()) } as c_int;
     let save_reglnum = rex.lnum();
-    let save_nfa_match = nfa_match.get();
+    let save_nfa_match = rex.nfa_match();
     let save_nfa_listid = rex.nfa_listid();
-    let save_nfa_endp = nfa_endp.get();
+    let save_nfa_endp = rex.nfa_endp();
 
     // Where the lookaround runs from: where the thread stood when it was
     // postponed, or — with no pim — where the outer match stands now.
@@ -217,26 +215,24 @@ pub(crate) fn recursive_regmatch(
 
     // Two generations of list ids are available. The first nested match
     // takes the second; a deeper one has to save and restore instead.
-    let need_restore = nfa_ll_index.get() == 1;
-    let generation = if need_restore {
+    let need_restore = rex.nfa_ll_index() == 1;
+    if need_restore {
         listids.clear();
         listids.resize(unsafe { (*prog).nstate } as usize, 0);
         nfa_save_listids(prog, listids);
-        None
     } else {
-        let held = Depth::of(&nfa_ll_index);
+        rex.set_nfa_ll_index(1);
         if rex.nfa_listid() <= rex.nfa_alt_listid() {
             rex.set_nfa_listid(rex.nfa_alt_listid());
         }
-        Some(held)
-    };
+    }
 
-    nfa_endp.set(endposp);
+    rex.set_nfa_endp(endposp);
     let result = nfa_regmatch(rex, prog, out_of(state), submatch, m);
     if need_restore {
         nfa_restore_listids(prog, listids);
     } else {
-        drop(generation);
+        rex.set_nfa_ll_index(0);
         rex.set_nfa_alt_listid(rex.nfa_listid());
     }
 
@@ -248,10 +244,10 @@ pub(crate) fn recursive_regmatch(
     // A match that ran out of budget keeps its verdict; anything else
     // hands the outer match its own state back.
     if result != NFA_TOO_EXPENSIVE {
-        nfa_match.set(save_nfa_match);
+        rex.set_nfa_match(save_nfa_match);
         rex.set_nfa_listid(save_nfa_listid);
     }
-    nfa_endp.set(save_nfa_endp);
+    rex.set_nfa_endp(save_nfa_endp);
     result
 }
 
@@ -454,14 +450,14 @@ pub(crate) fn find_match_text(
 
 /// Has the caller's time limit passed? Records the fact for the caller when
 /// it has.
-pub(crate) fn nfa_did_time_out() -> bool {
+pub(crate) fn nfa_did_time_out(rex: Rex) -> bool {
     // SAFETY: both are the caller's out-parameters, null when it gave none.
-    let limit = nfa_time_limit.get();
-    if limit.is_null() || !profile_passed_limit(unsafe { *limit }) {
+    let budget = rex.time_budget();
+    if budget.limit.is_null() || !profile_passed_limit(unsafe { *budget.limit }) {
         return false;
     }
-    if !nfa_timed_out.get().is_null() {
-        unsafe { *nfa_timed_out.get() = 1 };
+    if !budget.timed_out.is_null() {
+        unsafe { *budget.timed_out = 1 };
     }
     true
 }

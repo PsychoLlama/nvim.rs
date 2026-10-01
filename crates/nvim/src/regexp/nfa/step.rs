@@ -25,8 +25,7 @@ use super::run::{check_char_class, match_backref, match_zref, recursive_regmatch
 use super::sub::{copy_sub, copy_sub_off, copy_ze_off, has_zsubexpr};
 use crate::mbyte::{mb_get_class_tab, utf_fold, utf_iscomposing_legacy};
 use crate::regexp::{
-    NFA_TOO_EXPENSIVE, NfaPim, NfaRegProg, NfaState, PimResult, RegSubs, Rex, nfa_endp, nfa_match,
-    reg_prev_class,
+    NFA_TOO_EXPENSIVE, NfaPim, NfaRegProg, NfaState, PimResult, RegSubs, Rex, reg_prev_class,
 };
 use crate::types::NUL;
 
@@ -153,7 +152,7 @@ pub(crate) fn step(
             if !rex.reg_icombine() && !rex.at_bol() && utf_iscomposing_legacy(curc) {
                 return Step::Dead;
             }
-            nfa_match.set(1);
+            rex.set_nfa_match(1);
             // SAFETY: `run.submatch` is the caller's capture set.
             let submatch = unsafe { &mut *run.submatch };
             copy_both(rex, submatch, &thislist.thread(idx).subs);
@@ -176,7 +175,7 @@ pub(crate) fn step(
                 let m = unsafe { &mut *run.m };
                 copy_both(rex, m, &thislist.thread(idx).subs);
             }
-            nfa_match.set(1);
+            rex.set_nfa_match(1);
             if nextlist.len() == 0 {
                 *clen = 0;
             }
@@ -351,7 +350,7 @@ fn spanning(out: *mut NfaState, bytelen: c_int, clen: c_int) -> Step {
 
 /// Is the input where the lookaround that is running was told to stop?
 fn at_sub_match_end(rex: Rex) -> bool {
-    let endp = nfa_endp.get();
+    let endp = rex.nfa_endp();
     // SAFETY: `nfa_endp` is null or the caller's stopping point, which lives
     // for the whole of the lookaround it was set for.
     endp.is_null() || rex.is_at(unsafe { *endp })
@@ -495,7 +494,7 @@ fn start_lookaround(
         run.listids,
     );
     if result == NFA_TOO_EXPENSIVE {
-        nfa_match.set(result);
+        rex.set_nfa_match(result);
         return Step::TooExpensive;
     }
     let step = if lookaround_held(state, result) {
@@ -544,7 +543,7 @@ fn start_pattern(
         run.listids,
     );
     if result == NFA_TOO_EXPENSIVE {
-        nfa_match.set(result);
+        rex.set_nfa_match(result);
         return Step::TooExpensive;
     }
     if result == 0 {

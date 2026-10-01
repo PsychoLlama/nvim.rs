@@ -34,8 +34,7 @@ use crate::option::vars::p_mmp;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     ADDSTATE_HERE_OFFSET, Capture, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos,
-    NSUBEXP, NfaPim, NfaState, NfaThread, PimResult, PosKind, RegSub, RegSubs, Rex, nfa_endp,
-    nfa_ll_index,
+    NSUBEXP, NfaPim, NfaState, NfaThread, PimResult, PosKind, RegSub, RegSubs, Rex,
 };
 use crate::types::NUL;
 
@@ -221,7 +220,7 @@ impl ThreadList {
     pub(crate) fn holds(&self, state: *mut NfaState, subs: &RegSubs) -> bool {
         let rex = self.rex;
         // SAFETY: `state` is a live state of the running program.
-        let seen = unsafe { (*state).lastlist[nfa_ll_index.get() as usize] == self.id };
+        let seen = unsafe { (*state).lastlist[rex.nfa_ll_index()] == self.id };
         seen && (!has_backref(rex) || self.holds_with(state, subs, None))
     }
 
@@ -413,7 +412,7 @@ fn place(
     // SAFETY: `state` is a live state of the running program.
     let c = op(state);
     // SAFETY: `state` is a live state of the running program.
-    let seen = unsafe { (*state).lastlist[nfa_ll_index.get() as usize] == l.id };
+    let seen = unsafe { (*state).lastlist[rex.nfa_ll_index()] == l.id };
     let has_backref = has_backref(rex);
 
     // `NFA_SKIP` counts down the bytes a back-reference still owes, so two
@@ -441,7 +440,7 @@ fn place(
         return Place::Full;
     }
     // SAFETY: `state` is a live state of the running program.
-    unsafe { (*state).lastlist[nfa_ll_index.get() as usize] = l.id };
+    unsafe { (*state).lastlist[rex.nfa_ll_index()] = l.id };
     l.push(state, subs, pim);
     Place::Added
 }
@@ -451,7 +450,7 @@ fn place(
 /// The extra condition is upstream's: inside a multi-line lookaround the
 /// `^` may belong to a later line than the one the lookaround started on.
 fn past_line_start(rex: Rex) -> bool {
-    let endp = nfa_endp.get();
+    let endp = rex.nfa_endp();
     rex.input() > rex.line()
         && rex.byte() as c_int != NUL
         // SAFETY: `nfa_endp` is null or the position a lookaround was told

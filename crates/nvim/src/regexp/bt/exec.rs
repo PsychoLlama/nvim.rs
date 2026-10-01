@@ -31,8 +31,7 @@ use crate::regexp::state::re_extmatch_out;
 use crate::regexp::{
     MatchPos, NSUBEXP, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RS_MCLOSE, RS_MOPEN, Rex,
     cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec, init_regexec_multi,
-    make_extmatch, prog_magic_wrong, reg_endzp, reg_endzpos, reg_getline, reg_startzp,
-    reg_startzpos, reg_toolong, trim_line_copy, unref_extmatch,
+    make_extmatch, prog_magic_wrong, reg_getline, reg_toolong, trim_line_copy, unref_extmatch,
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
@@ -116,8 +115,8 @@ fn match_start(rex: Rex, col: ColNr) -> MatchPos {
 /// hold `NSUBEXP` slots each, and the match context is still the one that
 /// filled them.
 fn save_z_captures(rex: Rex) {
-    let (startzpos, endzpos) = (reg_startzpos.get(), reg_endzpos.get());
-    let (startzp, endzp) = (reg_startzp.get(), reg_endzp.get());
+    let z = rex.zslots();
+    let (startzpos, endzpos, startzp, endzp) = (z.start_pos, z.end_pos, z.start_ptr, z.end_ptr);
     for i in 0..NSUBEXP as usize {
         let text = if rex.multi() {
             let (start, end) = (startzpos[i], endzpos[i]);

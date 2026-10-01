@@ -22,8 +22,8 @@ use crate::mbyte::utf_head_off;
 use crate::regexp::{
     MatchPos, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRANCH,
     RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
-    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegState, Rex, SavedInput, behind_pos,
-    reg_breakcheck, reg_getline, reg_getline_len, reg_restore, reg_save, restore_subexpr,
+    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegState, Rex, SavedInput, reg_breakcheck,
+    reg_getline, reg_getline_len, reg_restore, reg_save, restore_subexpr,
 };
 use crate::types::{ColNr, NUL, int64_t, uint8_t};
 
@@ -195,9 +195,9 @@ unsafe fn behind_start(
     }
     let (rp, bp) = stack.top_behind();
     bp.save_after = reg_save(rex, backpos);
-    bp.save_behind = behind_pos.get();
+    bp.save_behind = rex.behind_pos();
     // The position the operand has to end at.
-    behind_pos.set(rp.rs_saved);
+    rex.set_behind_pos(rp.rs_saved);
     rp.rs_state = RS_BEHIND2;
     reg_restore(rex, &rp.rs_saved, backpos);
     // Past the node header and the four-byte limit.
@@ -222,8 +222,8 @@ unsafe fn behind_step(
     let (rp, bp) = stack.top_behind();
 
     // It matched, and it ended exactly where the look-behind sits.
-    if *status == RA_MATCH && rex.is_at(behind_pos.get().pos) {
-        behind_pos.set(bp.save_behind);
+    if *status == RA_MATCH && rex.is_at(rex.behind_pos().pos) {
+        rex.set_behind_pos(bp.save_behind);
         if rp.rs_no as c_int == BtOp::Behind.code() {
             reg_restore(rex, &bp.save_after, backpos);
         } else {
@@ -240,7 +240,7 @@ unsafe fn behind_step(
     // SAFETY: the caller promises a look-behind node, whose four-byte limit
     // follows its three-byte header.
     let limit = unsafe { operand_u32(rp.rs_scan, 3) };
-    let stop = behind_pos.get().pos;
+    let stop = rex.behind_pos().pos;
     // SAFETY: `rex` is the running match and `rs_saved` a position in it.
     let stepped = unsafe {
         if rex.multi() {
@@ -262,7 +262,7 @@ unsafe fn behind_step(
         }
     } else {
         // Nowhere left to look.
-        behind_pos.set(bp.save_behind);
+        rex.set_behind_pos(bp.save_behind);
         if rp.rs_no as c_int == BtOp::Nobehind.code() {
             reg_restore(rex, &bp.save_after, backpos);
             *status = RA_MATCH;

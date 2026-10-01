@@ -28,9 +28,9 @@ use crate::os::cshim::gettext;
 use crate::regexp::state::re_extmatch_out;
 use crate::regexp::{
     NFA_TOO_EXPENSIVE, NSUBEXP, NfaRegProg, NfaState, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
-    RegSubs, Rex, cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi,
-    make_extmatch, nfa_re_flags, nfa_regengine, nfa_time_count, nfa_time_limit, nfa_timed_out,
-    nstate, re_has_z, reg_getline, regflags, regnpar, state_ptr, unref_extmatch,
+    RegSubs, Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi,
+    make_extmatch, nfa_re_flags, nfa_regengine, nstate, re_has_z, reg_getline, regflags, regnpar,
+    state_ptr, unref_extmatch,
 };
 use crate::strings::xstrnsave;
 use crate::types::{
@@ -54,9 +54,7 @@ fn nfa_regtry(
     let mut subs: RegSubs = unsafe { core::mem::zeroed() };
     let mut m: RegSubs = unsafe { core::mem::zeroed() };
     rex.set_input(unsafe { rex.line().offset(col as isize) });
-    nfa_time_limit.set(tm);
-    nfa_timed_out.set(timed_out);
-    nfa_time_count.set(0);
+    rex.set_time_budget(TimeBudget::new(tm, timed_out));
 
     clear_sub(rex, &mut subs.norm);
     clear_sub(rex, &mut m.norm);

@@ -21,9 +21,9 @@ use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::state::re_extmatch_in;
 use crate::regexp::{
-    ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, behind_pos, cleanup_subexpr,
-    cleanup_zsubexpr, cstrchr, cstrncmp, kMarkBufLocal, match_with_backref, reg_getline,
-    reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class,
+    ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, cleanup_subexpr, cleanup_zsubexpr,
+    cstrchr, cstrncmp, kMarkBufLocal, match_with_backref, reg_getline, reg_getline_len,
+    reg_match_visual, reg_nextline, reg_prev_class,
 };
 use crate::types::{FileMark, GraphemeState, LineNr, NUL, Pos, uint8_t, uint32_t, uint64_t};
 
@@ -161,7 +161,7 @@ pub(crate) fn match_one(
 
         // The position a `\@<=` look-behind has to end at.
         // SAFETY: `behind_pos` is this engine's own saved position.
-        BtOp::Bhpos => nomatch_unless(rex.is_at(behind_pos.get().pos)),
+        BtOp::Bhpos => nomatch_unless(rex.is_at(rex.behind_pos().pos)),
 
         BtOp::Newl => {
             let lbr = rex.reg_line_lbr();

@@ -32,8 +32,7 @@ use crate::getchar::state::got_int;
 use crate::mbyte::{utf_fold, utf_ptr2char};
 use crate::regexp::{
     AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_TOO_EXPENSIVE, NfaPim, NfaRegProg, NfaState, PimResult,
-    RegSubs, Rex, nfa_endp, nfa_match, nfa_time_count, nfa_time_limit, recursive_regmatch,
-    reg_breakcheck, reg_nextline, skip_to_start,
+    RegSubs, Rex, recursive_regmatch, reg_breakcheck, reg_nextline, skip_to_start,
 };
 use crate::types::NUL;
 
@@ -54,10 +53,10 @@ pub(crate) fn nfa_regmatch(
     m: *mut RegSubs,
 ) -> c_int {
     reg_breakcheck(rex);
-    if got_int.get() || nfa_did_time_out() {
+    if got_int.get() || nfa_did_time_out(rex) {
         return 0;
     }
-    nfa_match.set(0);
+    rex.set_nfa_match(0);
 
     // SAFETY: `prog` and `start` are the running program; the two thread
     // lists below are owned by this call.
@@ -100,11 +99,11 @@ pub(crate) fn nfa_regmatch(
     };
 
     if !seeded {
-        nfa_match.set(NFA_TOO_EXPENSIVE);
+        rex.set_nfa_match(NFA_TOO_EXPENSIVE);
     } else {
         unsafe { scan(rex, &mut list, prog, start, toplevel, &mut run) };
     }
-    nfa_match.get()
+    rex.nfa_match()
 }
 
 /// Record where group 0 starts, `off` bytes past the input.
@@ -161,7 +160,7 @@ unsafe fn scan(
         // SAFETY: `prog` is the program being run.
         let automatic = unsafe { (*prog).re_engine } == AUTOMATIC_ENGINE;
         if automatic && rex.nfa_listid() >= NFA_MAX_STATES {
-            nfa_match.set(NFA_TOO_EXPENSIVE);
+            rex.set_nfa_match(NFA_TOO_EXPENSIVE);
             return;
         }
         thislist.id = rex.nfa_listid();
@@ -175,7 +174,7 @@ unsafe fn scan(
         let mut listidx: c_int = 0;
         while usize::try_from(listidx).is_ok_and(|idx| idx < thislist.len()) {
             reg_breakcheck(rex);
-            if got_int.get() || out_of_time() {
+            if got_int.get() || out_of_time(rex) {
                 break;
             }
             let outcome = step(
@@ -195,12 +194,12 @@ unsafe fn scan(
                     break;
                 }
                 Step::TooExpensive => {
-                    nfa_match.set(NFA_TOO_EXPENSIVE);
+                    rex.set_nfa_match(NFA_TOO_EXPENSIVE);
                     return;
                 }
                 add => {
                     if !deliver(rex, thislist, nextlist, &mut listidx, run, clen, add) {
-                        nfa_match.set(NFA_TOO_EXPENSIVE);
+                        rex.set_nfa_match(NFA_TOO_EXPENSIVE);
                         return;
                     }
                 }
@@ -223,7 +222,7 @@ unsafe fn scan(
             reg_nextline(rex);
         }
         reg_breakcheck(rex);
-        if got_int.get() || out_of_time() {
+        if got_int.get() || out_of_time(rex) {
             return;
         }
     }
@@ -231,21 +230,16 @@ unsafe fn scan(
 
 /// Has the caller's time limit passed? Checked one character in
 /// [`TIME_CHECK_INTERVAL`], because reading the clock is not free.
-fn out_of_time() -> bool {
-    if nfa_time_limit.get().is_null() {
+fn out_of_time(rex: Rex) -> bool {
+    if rex.time_budget().limit.is_null() || !rex.time_check_due(TIME_CHECK_INTERVAL) {
         return false;
     }
-    nfa_time_count.set(nfa_time_count.get() + 1);
-    if nfa_time_count.get() != TIME_CHECK_INTERVAL {
-        return false;
-    }
-    nfa_time_count.set(0);
-    nfa_did_time_out()
+    nfa_did_time_out(rex)
 }
 
 /// Does the lookaround being matched still have input left on a later line?
 fn sub_match_spans_lines(rex: Rex) -> bool {
-    let endp = nfa_endp.get();
+    let endp = rex.nfa_endp();
     // SAFETY: `nfa_endp` is null or the stopping point of the lookaround
     // being matched, which outlives it.
     !endp.is_null() && rex.multi() && rex.lnum() < unsafe { (*endp).as_pos().lnum }
@@ -378,12 +372,12 @@ unsafe fn restart(
     run: &mut Run,
     clen: c_int,
 ) -> bool {
-    if nfa_match.get() != 0 || !wants_restart(rex, toplevel, clen) {
+    if rex.nfa_match() != 0 || !wants_restart(rex, toplevel, clen) {
         return true;
     }
     if !toplevel {
         // A lookaround's own machine has no start column to move.
-        return unsafe { seed(nextlist, start, run, clen) };
+        return unsafe { seed(rex, nextlist, start, run, clen) };
     }
 
     // The program may know the character every match starts with, in
@@ -409,7 +403,7 @@ unsafe fn restart(
     // Only reachable on the match's first line, where `rex.lnum` is
     // still what the seeding call recorded.
     unsafe { record_match_start(rex, run.m, clen) };
-    unsafe { seed(nextlist, (*start).out, run, clen) }
+    unsafe { seed(rex, nextlist, (*start).out, run, clen) }
 }
 
 /// Put `state` on the next list, reporting `NFA_TOO_EXPENSIVE` if it would
@@ -419,6 +413,7 @@ unsafe fn restart(
 ///
 /// Every pointer must belong to the running match.
 unsafe fn seed(
+    rex: Rex,
     nextlist: &mut ThreadList,
     state: *mut NfaState,
     run: &mut Run,
@@ -427,7 +422,7 @@ unsafe fn seed(
     // SAFETY: the caller's list and state.
     let added = unsafe { addstate(nextlist, state, &mut *run.m, None, clen) };
     if !added {
-        nfa_match.set(NFA_TOO_EXPENSIVE);
+        rex.set_nfa_match(NFA_TOO_EXPENSIVE);
         return false;
     }
     true
@@ -446,7 +441,7 @@ fn wants_restart(rex: Rex, toplevel: bool, clen: c_int) -> bool {
     }
     // A lookaround's machine may start anywhere before the position the
     // outer match told it to stop at.
-    let endp = nfa_endp.get();
+    let endp = rex.nfa_endp();
     if endp.is_null() {
         return false;
     }
