@@ -417,3 +417,59 @@ pub fn ex_messages(excmd: &mut ExArg) {
         ui_call_msg_history_show(entries, excmd.skip);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn history(entries: &[bool]) -> History {
+        let mut history = History {
+            entries: VecDeque::new(),
+            next_seq: 0,
+            temp_from: None,
+            len: 0,
+            max: 500,
+        };
+        for &temp in entries {
+            let seq = history.next_seq;
+            history.next_seq += 1;
+            history.entries.push_back(Entry {
+                seq,
+                msg: EMPTY_HL_MESSAGE,
+                kind: String_0::NULL,
+                temp,
+                append: false,
+            });
+            history.temp_from.get_or_insert(seq);
+            history.len += c_int::from(!temp);
+        }
+        history
+    }
+
+    fn seqs(history: &History) -> Vec<u64> {
+        history.entries.iter().map(|entry| entry.seq).collect()
+    }
+
+    #[test]
+    fn clearing_keeps_the_newest_counted_entries() {
+        let mut history = history(&[false, true, false, false]);
+        history.clear(2);
+        // The oldest counted entry goes, and that is enough: the temporary
+        // one now at the front is not counted, so it stays.
+        assert_eq!(seqs(&history), [1, 2, 3]);
+        assert_eq!(history.len, 2);
+        history.clear(0);
+        assert!(history.entries.is_empty());
+        assert_eq!(history.len, 0);
+    }
+
+    #[test]
+    fn the_temporary_entries_go_from_the_mark_on() {
+        let mut history = history(&[false, true, false, true]);
+        history.temp_from = Some(2);
+        history.clear_temp();
+        // Seq 1 is before the mark, so it stays; seq 3 is after it.
+        assert_eq!(seqs(&history), [0, 1, 2]);
+        assert_eq!(history.temp_from, None);
+    }
+}

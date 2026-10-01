@@ -244,3 +244,63 @@ pub(crate) fn disp_sb_line(row: c_int, pos: SbPos) -> Option<SbPos> {
         at = next;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chunk(text: &[u8], eol: bool) -> Chunk {
+        Chunk {
+            text: text.into(),
+            eol,
+            msg_col: 0,
+            hl_id: 0,
+        }
+    }
+
+    /// Two screen lines: `a` `b` | `c` `d`, with the second unfinished.
+    fn two_lines() -> Scrollback {
+        let mut sb = Scrollback {
+            chunks: VecDeque::new(),
+            first: 0,
+        };
+        sb.chunks.push_back(chunk(b"a", false));
+        sb.chunks.push_back(chunk(b"b", true));
+        sb.chunks.push_back(chunk(b"c", false));
+        sb.chunks.push_back(chunk(b"d", false));
+        sb
+    }
+
+    #[test]
+    fn a_line_starts_after_the_previous_line_ends() {
+        let sb = two_lines();
+        assert_eq!(sb.last(), Some(3));
+        assert_eq!(sb.line_start(3), Some(2));
+        assert_eq!(sb.line_start(2), Some(2));
+        assert_eq!(sb.line_start(1), Some(0));
+        assert_eq!(sb.prev(0), None);
+    }
+
+    #[test]
+    fn a_position_survives_dropping_the_front() {
+        let mut sb = two_lines();
+        sb.drop_before(2);
+        // The surviving chunks keep their numbers ...
+        assert_eq!(sb.get(3).map(|chunk| &*chunk.text), Some(&b"d"[..]));
+        assert_eq!(sb.line_start(3), Some(2));
+        // ... and the dropped ones are simply not there.
+        assert!(sb.get(1).is_none());
+        assert_eq!(sb.prev(2), None);
+        assert_eq!(sb.line_start(0), None);
+    }
+
+    #[test]
+    fn dropping_past_the_end_empties_it() {
+        let mut sb = two_lines();
+        sb.drop_before(10);
+        assert_eq!(sb.last(), None);
+        assert_eq!(sb.first, 4);
+        sb.end_line();
+        assert_eq!(sb.last(), None);
+    }
+}
