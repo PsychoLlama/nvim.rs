@@ -50,7 +50,7 @@ pub(crate) struct Lines<'a> {
 
 /// Append the lines in `w` to the buffer.
 pub(crate) fn split_lines(
-    w: &mut Window,
+    w: &mut ConvWindow,
     st: &mut Lines,
     lnum: &mut LineNr,
     skip_count: &mut LineNr,
@@ -67,7 +67,7 @@ pub(crate) fn split_lines(
     result
 }
 
-fn split(w: &mut Window, st: &mut Lines) -> Split {
+fn split(w: &mut ConvWindow, st: &mut Lines) -> Split {
     // The loops below run once for every character read, so keep them
     // fast.
     let mut appended = |line_start: *mut c_char, len: ColNr| -> bool {

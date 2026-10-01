@@ -258,7 +258,7 @@ pub(crate) fn check_for_bom(bytes: &[u8], flags: c_int) -> Option<(&'static CStr
 /// which conversion rewrites in place or moves within the allocation;
 /// `linerest` bytes of the previous line sit at `buffer` and are moved to
 /// just before the converted bytes, which is where `line_start` ends up.
-pub(crate) struct Window {
+pub(crate) struct ConvWindow {
     pub buffer: *mut c_char,
     pub ptr: *mut c_char,
     pub line_start: *mut c_char,
@@ -268,7 +268,7 @@ pub(crate) struct Window {
     pub linerest: ptrdiff_t,
 }
 
-impl Window {
+impl ConvWindow {
     /// Move the previous line's tail to just before `at`, and make that the
     /// start of the current line.
     ///
@@ -389,7 +389,7 @@ impl Conv {
     ///
     /// False means the encoding is wrong and the file should be read again
     /// with the next one.
-    pub(crate) fn with_iconv(&mut self, w: &mut Window) -> bool {
+    pub(crate) fn with_iconv(&mut self, w: &mut ConvWindow) -> bool {
         let mut fromp: *const c_char = w.ptr;
         let mut from_size = w.size as size_t;
         // The converted bytes go after the ones being converted.
@@ -444,7 +444,7 @@ impl Conv {
     /// Works from the end of the buffer towards the start, because the number
     /// of bytes may grow. False means "read the file again with the next
     /// encoding".
-    pub(crate) fn units_to_utf8(&mut self, w: &mut Window) -> bool {
+    pub(crate) fn units_to_utf8(&mut self, w: &mut ConvWindow) -> bool {
         let flags = self.flags;
         let start: *const u8 = w.ptr.cast();
         // Where the UTF-8 bytes go, filling the allocation from its end.
@@ -595,7 +595,7 @@ impl Conv {
     /// False means "read the file again with another conversion".
     pub(crate) fn check_utf8(
         &mut self,
-        w: &mut Window,
+        w: &mut ConvWindow,
         filesize: FileOffset,
         illegal_byte: &mut LineNr,
     ) -> bool {

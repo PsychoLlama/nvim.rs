@@ -25,7 +25,7 @@
   "t_suffix_types": 0,
   "raw_win_buf_sigs": 1,
   "raw_frame_sigs": 0,
-  "mut_win_buf_refs": 10,
+  "mut_win_buf_refs": 5,
   "abbrev_params": 0,
   "curwin_raw": 0,
   "unsafe_fns": 4814,

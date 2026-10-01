@@ -100,7 +100,7 @@ pub(crate) unsafe fn readfile(
     let mut read_buf_col: ColNr = 0;
 
     let mut lnum = from;
-    let mut w = Window {
+    let mut w = ConvWindow {
         buffer: ptr::null_mut(),
         ptr: ptr::null_mut(),
         line_start: ptr::null_mut(),
