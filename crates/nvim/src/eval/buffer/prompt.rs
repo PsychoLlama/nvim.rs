@@ -115,13 +115,13 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
 /// `prompt_setcallback({buf}, {callback})`.
 pub fn f_prompt_setcallback(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals, and the buffer is live.
-    unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_callback) };
+    unsafe { set_prompt_callback(args, |mut buf| &raw mut buf.b_prompt_callback) };
 }
 
 /// `prompt_setinterrupt({buf}, {callback})`.
 pub fn f_prompt_setinterrupt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals, and the buffer is live.
-    unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_interrupt) };
+    unsafe { set_prompt_callback(args, |mut buf| &raw mut buf.b_prompt_interrupt) };
 }
 
 /// The half `prompt_setcallback()` and `prompt_setinterrupt()` share: resolve
@@ -133,19 +133,19 @@ pub fn f_prompt_setinterrupt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalF
 /// # Safety
 /// The arguments must be live typvals, and `slot` must answer a field of the
 /// buffer it is handed.
-unsafe fn set_prompt_callback(args: &[TypVal], slot: impl Fn(&mut Buffer) -> *mut Callback) {
+unsafe fn set_prompt_callback(args: &[TypVal], slot: impl Fn(Buf) -> *mut Callback) {
     // SAFETY: the caller's obligation.
     let mut callback = Callback::None;
     if check_secure() {
         return;
     }
-    let Some(mut buf) = tv_get_buf(&args[0], 0) else {
+    let Some(buf) = tv_get_buf(&args[0], 0) else {
         return;
     };
     if !unsafe { callback_from_typval(&raw mut callback, &args[1]) } {
         return;
     }
-    let slot = slot(&mut buf);
+    let slot = slot(buf);
     unsafe { callback_free(slot) };
     unsafe { *slot = callback };
 }

@@ -38,7 +38,7 @@ use crate::pos::MAXCOL;
 use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, VIsual_reselect, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
-use crate::types::{Buffer, ColNr, ExArg, LineNr, Pos, SaveState, Window};
+use crate::types::{Buffer, ColNr, ExArg, LineNr, Pos, SaveState};
 use crate::winlayer::Win;
 
 /// The `:emenu` range, when there was one: `eap != NULL` and `addr_count`.
@@ -131,18 +131,16 @@ fn select_range(line1: LineNr, line2: LineNr) {
     let visual = with_curbuf(|buf| buf.b_visual);
     let end = if visual.vi_start.lnum == line1 && visual.vi_end.lnum == line2 {
         set_visual_mode(VisualMode::from_raw(visual.vi_mode));
-        with_curwin(|win| {
-            win.w_cursor = visual.vi_start;
-            win.w_curswant = visual.vi_curswant;
-        });
+        let mut win = Win::current();
+        win.w_cursor = visual.vi_start;
+        win.w_curswant = visual.vi_curswant;
         visual.vi_end
     } else {
         // Line-wise over the range.
         set_visual_mode(VisualMode::LINE);
-        with_curwin(|win| {
-            win.w_cursor.lnum = line1;
-            win.w_cursor.col = 1;
-        });
+        let mut win = Win::current();
+        win.w_cursor.lnum = line1;
+        win.w_cursor.col = 1;
         Pos {
             lnum: line2,
             col: MAXCOL as ColNr,
@@ -153,14 +151,14 @@ fn select_range(line1: LineNr, line2: LineNr) {
     set_visual_active(true);
     VIsual_reselect.set(1);
     check_cursor_now();
-    set_visual_anchor(with_curwin(|win| win.w_cursor));
-    with_curwin(|win| win.w_cursor = end);
+    set_visual_anchor(Win::current().w_cursor);
+    Win::current().w_cursor = end;
     check_cursor_now();
 
     // With an exclusive selection the cursor sits one past the last
     // selected character.
     if selection_style() == b'e' && char_at_cursor() != 0 {
-        with_curwin(|win| win.w_cursor.col += 1);
+        Win::current().w_cursor.col += 1;
     }
 }
 
@@ -314,11 +312,6 @@ pub(crate) unsafe fn menu_find(path_name: *const c_char) -> *mut VimMenu {
 
 // The editor state this module reads and writes. Each hands out a reference
 // for exactly one statement, so none can span the rhs being run.
-
-fn with_curwin<R>(f: impl FnOnce(&mut Window) -> R) -> R {
-    // SAFETY: `curwin` always names a live window on the main thread.
-    unsafe { f(&mut *Win::current_raw()) }
-}
 
 fn with_curbuf<R>(f: impl FnOnce(&Buffer) -> R) -> R {
     // SAFETY: `curbuf` always names a live buffer on the main thread.

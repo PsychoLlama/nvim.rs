@@ -60,10 +60,10 @@ count	callee	no_raw	defs	def
 32	ptr2cells	0	1	crates/nvim/src/charset/display.rs
 32	xstrlcat	0	1	crates/nvim/src/memory/mod.rs
 31	.copy_from_nonoverlapping	0	0	
-31	f	0	0	
 31	ga_grow	0	1	crates/nvim/src/garray.rs
 31	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
 30	Term::new	0	1	crates/nvim/src/terminal/mod.rs
+30	f	0	0	
 29	.as_mut	0	0	
 29	eq_bytes	0	1	crates/nvim/src/cstr.rs
 29	from	0	0	
