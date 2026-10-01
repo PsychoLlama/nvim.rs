@@ -67,7 +67,7 @@ pub(crate) static no_lines_msg: &CStr = c"--No lines in buffer--";
 pub(crate) static msg_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 
 /// A field of [`MsgState`].
-pub type MsgField<T> = Field<MsgState, T>;
+pub(crate) type MsgField<T> = Field<MsgState, T>;
 
 /// Every field reads and writes through the one cell, a field at a time.
 ///
@@ -77,7 +77,7 @@ pub type MsgField<T> = Field<MsgState, T>;
 impl<T> Field<MsgState, T> {
     /// What the field holds.
     #[inline(always)]
-    pub fn get(self) -> T
+    pub(crate) fn get(self) -> T
     where
         T: Copy,
     {
@@ -86,19 +86,19 @@ impl<T> Field<MsgState, T> {
 
     /// Overwrite the field.
     #[inline(always)]
-    pub fn set(self, value: T) {
+    pub(crate) fn set(self, value: T) {
         MSG.set_at(self, value);
     }
 
     /// Overwrite the field, answering what it held.
     #[inline(always)]
-    pub fn replace(self, value: T) -> T {
+    pub(crate) fn replace(self, value: T) -> T {
         MSG.replace_at(self, value)
     }
 
     /// Move the value out, leaving the type's empty value behind.
     #[inline(always)]
-    pub fn take(self) -> T
+    pub(crate) fn take(self) -> T
     where
         T: Default,
     {
@@ -108,7 +108,7 @@ impl<T> Field<MsgState, T> {
     /// Look at the field. `f` must not reach back into the editor: it is
     /// for a test or a clone, never for a call that could write the field.
     #[inline(always)]
-    pub fn with<R>(self, f: impl FnOnce(&T) -> R) -> R {
+    pub(crate) fn with<R>(self, f: impl FnOnce(&T) -> R) -> R {
         MSG.with_at(self, f)
     }
 
@@ -120,7 +120,7 @@ impl<T> Field<MsgState, T> {
     /// writes it is overwritten. Meant for a push or a clear, not for a
     /// call that can run user code.
     #[inline(always)]
-    pub fn update<R>(self, f: impl FnOnce(&mut T) -> R) -> R
+    pub(crate) fn update<R>(self, f: impl FnOnce(&mut T) -> R) -> R
     where
         T: Default,
     {
@@ -140,7 +140,7 @@ macro_rules! msg_state {
     )*) => {
         /// What the message machinery knows about the message area and the
         /// one being built. See the [module docs](self).
-        pub struct MsgState {
+        pub(crate) struct MsgState {
             $($field: $ty,)*
         }
 

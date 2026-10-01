@@ -145,7 +145,7 @@ pub static sandbox: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 /// state's record (`msg_silent`, `emsg_off`, ...), which is one cell for
 /// fifty counters and flags.
 #[derive(Clone, Copy)]
-pub enum Counter {
+pub(crate) enum Counter {
     /// A `static` of its own.
     Cell(&'static GlobalCell<c_int>),
     /// A field of [`MsgState`](crate::message::state::MsgState).
@@ -473,7 +473,7 @@ impl Suppress {
     /// The constructors above exist so that a *global* counter's intended
     /// direction is greppable from one file; a `static` private to the
     /// module that reads it is already that, and does not earn a name here.
-    pub fn counter(counter: impl Into<Counter>) -> Bump {
+    pub(crate) fn counter(counter: impl Into<Counter>) -> Bump {
         Bump::new(counter)
     }
 }
@@ -494,7 +494,7 @@ pub struct Depth;
 
 impl Depth {
     /// Hold `cell` one higher until the guard is dropped.
-    pub fn of(counter: impl Into<Counter>) -> Bump {
+    pub(crate) fn of(counter: impl Into<Counter>) -> Bump {
         Bump::new(counter)
     }
 }
@@ -635,7 +635,7 @@ impl Lock {
     /// A lock counter that belongs to one module rather than to the editor
     /// as a whole, named by its own `static` — [`Suppress::counter`]'s
     /// sibling, for a counter whose sense is "refuse this operation".
-    pub fn held(counter: impl Into<Counter>) -> Bump {
+    pub(crate) fn held(counter: impl Into<Counter>) -> Bump {
         Bump::new(counter)
     }
 }
