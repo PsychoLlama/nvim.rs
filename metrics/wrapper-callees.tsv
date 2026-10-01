@@ -4,7 +4,7 @@ count	callee	no_raw	defs	def
 447	.offset	0	0	
 444	bytes_at	0	1	crates/nvim/src/cstr.rs
 341	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-318	at	0	3	
+319	at	0	3	
 279	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
 179	xstrdup	0	1	crates/nvim/src/memory/mod.rs
@@ -75,10 +75,10 @@ count	callee	no_raw	defs	def
 28	vim_strsize	0	1	crates/nvim/src/charset/display.rs
 27	add_nr	0	2	
 27	grid_line_puts	0	1	crates/nvim/src/grid/line.rs
-27	os_fopen	0	1	crates/nvim/src/os/fs/mod.rs
 27	os_remove	0	0	
 26	Node::new	0	1	crates/nvim/src/marktree/node.rs
 26	nlua_pop_boolean	0	1	crates/nvim/src/lua/converter/pop.rs
+26	os_fopen	0	1	crates/nvim/src/os/fs/mod.rs
 25	vim_snprintf_safelen	0	1	crates/nvim/src/strings/printf/mod.rs
 25	xmemcpyz	0	1	crates/nvim/src/memory/mod.rs
 24	Walk::new	0	2	
@@ -613,7 +613,6 @@ count	callee	no_raw	defs	def
 5	pattern_match	0	1	crates/nvim/src/eval/pattern.rs
 5	push_cstr	0	1	crates/nvim/src/quickfix/display.rs
 5	put_node	0	1	crates/nvim/src/spellfile/write.rs
-5	putc	0	0	
 5	qf_fmt_text	0	1	crates/nvim/src/quickfix/display.rs
 5	qf_get_curlist	0	1	crates/nvim/src/quickfix/stack.rs
 5	qf_init_ext	0	1	crates/nvim/src/quickfix/read.rs
@@ -809,6 +808,7 @@ count	callee	no_raw	defs	def
 4	put_in_typebuf	0	1	crates/nvim/src/register/exec.rs
 4	put_line	0	1	crates/nvim/src/ex_session/mod.rs
 4	put_on_cmdline	0	1	crates/nvim/src/ex_getln/draw.rs
+4	putc	0	0	
 4	qf_free_items	0	1	crates/nvim/src/quickfix/list.rs
 4	qf_id2nr	0	1	crates/nvim/src/quickfix/stack.rs
 4	qf_jump	0	1	crates/nvim/src/quickfix/jump.rs

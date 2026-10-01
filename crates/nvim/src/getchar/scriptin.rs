@@ -185,23 +185,19 @@ pub fn before_blocking() {
 /// and is where the idle fsync happens; otherwise the sync waits until
 /// `'updatecount'` characters have been typed.
 pub(crate) fn updatescript(c: c_int) {
-    /// Characters typed since the last sync.
-    static count: GlobalCell<c_int> = GlobalCell::new(0);
-
-    if c != 0 && !scriptout.get().is_null() {
-        // SAFETY (this body): `scriptout` is the open `'scriptout'` stream, or
-        // null, which `putc` is not reached with.
-        unsafe { putc(c, scriptout.get()) };
+    if c != 0 {
+        // `putc`'s `(unsigned char)c`: every caller passes a byte.
+        scriptout.with(|file| file.as_ref().map(|file| file.putc(c.to_le_bytes()[0])));
     }
     let idle = c == 0;
     if idle
         || (p_uc() > 0 && {
-            count.set(count.get() + 1);
-            OptInt::from(count.get()) >= p_uc()
+            typed_since_sync.set(typed_since_sync.get() + 1);
+            OptInt::from(typed_since_sync.get()) >= p_uc()
         })
     {
         // Always fsync at idle (CursorHold).
         ml_sync_all(c_int::from(idle), 1, p_fs() || idle);
-        count.set(0);
+        typed_since_sync.set(0);
     }
 }

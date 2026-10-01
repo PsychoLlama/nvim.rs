@@ -145,9 +145,8 @@ pub fn wait_return(redraw: c_int) {
                 // added to the typebuf after the loop.
                 let raw_key = Keys::unmapped_with_codes();
                 let save_reg_recording = reg_recording.get();
-                let save_scriptout = scriptout.get();
+                let save_scriptout = scriptout.take();
                 reg_recording.set(0);
-                scriptout.set(ptr::null_mut());
                 c = safe_vgetc();
                 if had_got_int && global_busy.get() == 0 {
                     got_int.set(false);

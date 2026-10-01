@@ -119,7 +119,7 @@ use crate::ex_getln::state::cmdline_star;
 use crate::extmark::curbuf_splice_pending;
 use crate::fileio::state::no_check_timestamps;
 use crate::fold::disable_fold_update;
-use crate::getchar::state::{allow_keys, expr_map_lock, no_mapping, no_zero_mapping};
+use crate::getchar::state::{GetcharField, allow_keys, expr_map_lock, no_mapping, no_zero_mapping};
 use crate::global_cell::GlobalCell;
 use crate::memline::inhibit_delete_count;
 use crate::message::state::{
@@ -150,6 +150,8 @@ pub(crate) enum Counter {
     Cell(&'static GlobalCell<c_int>),
     /// A field of [`MsgState`](crate::message::state::MsgState).
     Msg(MsgField<c_int>),
+    /// A field of [`GetcharState`](crate::getchar::state::GetcharState).
+    Getchar(GetcharField<c_int>),
 }
 
 impl Counter {
@@ -160,6 +162,7 @@ impl Counter {
         match self {
             Counter::Cell(cell) => cell.get(),
             Counter::Msg(field) => field.get(),
+            Counter::Getchar(field) => field.get(),
         }
     }
 
@@ -168,6 +171,7 @@ impl Counter {
         match self {
             Counter::Cell(cell) => cell.set(level),
             Counter::Msg(field) => field.set(level),
+            Counter::Getchar(field) => field.set(level),
         }
     }
 }
@@ -181,6 +185,12 @@ impl From<&'static GlobalCell<c_int>> for Counter {
 impl From<MsgField<c_int>> for Counter {
     fn from(field: MsgField<c_int>) -> Self {
         Counter::Msg(field)
+    }
+}
+
+impl From<GetcharField<c_int>> for Counter {
+    fn from(field: GetcharField<c_int>) -> Self {
+        Counter::Getchar(field)
     }
 }
 
@@ -440,7 +450,7 @@ impl Suppress {
     /// `no_zero_mapping` — a `0` read in this scope is a count digit, not
     /// the "go to column 0" command, so it must not resolve a mapping.
     pub fn zero_mapping() -> Bump {
-        Bump::new(&no_zero_mapping)
+        Bump::new(no_zero_mapping)
     }
 
     /// `autocmd_no_enter` — no `WinEnter`/`BufEnter` fires in this scope.
@@ -540,34 +550,34 @@ impl Allow {
     /// `expr_map_lock = 0` — [`Allow::text_changes`]'s companion; the two
     /// sites that invite arbitrary Lua in lift both locks together.
     pub fn expr_map() -> Saved {
-        Saved::new(&expr_map_lock, 0)
+        Saved::new(expr_map_lock, 0)
     }
 
     /// [`Allow::expr_map`], lifting the lock only when `cond`, but
     /// restoring it either way.
     pub fn expr_map_when(cond: bool) -> Saved {
-        Saved::when(cond, &expr_map_lock, 0)
+        Saved::when(cond, expr_map_lock, 0)
     }
 
     /// `allow_keys = 0` — key codes are *not* recognised in this scope, so
     /// a raw `<BS>` byte stays a byte.
     pub fn no_key_codes() -> Saved {
-        Saved::new(&allow_keys, 0)
+        Saved::new(allow_keys, 0)
     }
 
     /// `no_mapping -= 1` — the inverse of [`Keys::unmapped`], for the
     /// callee that has to read a *mapped* key back out of a caller that
     /// had suppressed mapping (`'langmap'`, composing characters).
     pub fn mapping() -> Bump {
-        Bump::by(&no_mapping, -1)
+        Bump::by(no_mapping, -1)
     }
 
     /// [`Allow::mapping`] for both halves of the pair — the inverse of
     /// [`Keys::unmapped_with_codes`].
     pub fn mapping_with_codes() -> RawKeys {
         RawKeys {
-            _no_mapping: Bump::by(&no_mapping, -1),
-            _allow_keys: Bump::by(&allow_keys, -1),
+            _no_mapping: Bump::by(no_mapping, -1),
+            _allow_keys: Bump::by(allow_keys, -1),
         }
     }
 
@@ -614,7 +624,7 @@ impl Lock {
     /// mapping and abbreviation expansions, which additionally must not
     /// change the mapping tables they are being read from.
     pub fn expr_map() -> Bump {
-        Bump::new(&expr_map_lock)
+        Bump::new(expr_map_lock)
     }
 
     /// `allbuf_lock` — no buffer may be added, removed or renamed while
@@ -655,7 +665,7 @@ impl Keys {
     /// `no_mapping` — the keys read in this scope do not go through
     /// mappings or abbreviations.
     pub fn unmapped() -> Bump {
-        Bump::new(&no_mapping)
+        Bump::new(no_mapping)
     }
 
     /// `no_mapping` + `allow_keys`: the recurring pair. Read the next key
@@ -663,7 +673,7 @@ impl Keys {
     pub fn unmapped_with_codes() -> RawKeys {
         RawKeys {
             _no_mapping: Self::unmapped(),
-            _allow_keys: Bump::new(&allow_keys),
+            _allow_keys: Bump::new(allow_keys),
         }
     }
 }

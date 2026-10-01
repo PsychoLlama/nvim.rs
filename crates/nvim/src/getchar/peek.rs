@@ -360,10 +360,6 @@ fn read_from_typeahead(
         }
 
         if ex_normal_busy.get() > 0 {
-            /// The key the previous forced answer used, so that the
-            /// cmdline window alternates between ESC and CTRL-C.
-            static tc: GlobalCell<c_int> = GlobalCell::new(0);
-
             // No typeahead left and inside `:normal`: something has to be
             // answered to avoid getting stuck. With an incomplete mapping
             // present, behave as if it timed out.
@@ -375,13 +371,14 @@ fn read_from_typeahead(
             // On the command line only CTRL-C breaks it; for the cmdline
             // window alternate between ESC (for most situations) and
             // CTRL-C (which closes the window).
-            let c = if State.get() & MODE_CMDLINE != 0 || (cmdwin_type.get() > 0 && tc.get() == ESC)
+            let c = if State.get() & MODE_CMDLINE != 0
+                || (cmdwin_type.get() > 0 && normal_busy_last_key.get() == ESC)
             {
                 Ctrl_C
             } else {
                 ESC
             };
-            tc.set(c);
+            normal_busy_last_key.set(c);
 
             // A flag saying this was not a normal character.
             if advance {
@@ -472,7 +469,7 @@ pub(crate) fn vgetorpeek(advance: bool) -> c_int {
     if vgetc_busy.get() > 0 && ex_normal_busy.get() == 0 {
         return NUL;
     }
-    let _busy = Depth::of(&vgetc_busy);
+    let _busy = Depth::of(vgetc_busy);
 
     if advance {
         KeyStuffed.set(0);

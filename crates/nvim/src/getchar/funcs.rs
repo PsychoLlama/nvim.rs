@@ -194,7 +194,7 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
         ui_busy_start();
     }
     let raw_key = Keys::unmapped_with_codes();
-    let unsimplified = (!opts.simplify).then(|| Suppress::counter(&no_reduce_keys));
+    let unsimplified = (!opts.simplify).then(|| Suppress::counter(no_reduce_keys));
 
     let n = getchar_read(args, opts.cursor);
 

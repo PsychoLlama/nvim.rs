@@ -25,15 +25,17 @@ use crate::ex_docmd::update_topline_cursor;
 use crate::ex_getln::state::cmdline_star;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
 use crate::getchar::state::{
-    KeyStuffed, KeyTyped, allow_keys, ctrl_c_interrupts, got_int, ignore_script, langmap_mapchar,
-    mapped_ctrl_c, maptick, mod_mask, no_mapping, no_zero_mapping, pending_end_reg_executing,
-    reg_executing, reg_recording, repeat_luaref, scriptout, test_disable_char_avail,
-    typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    KeyNoremap, KeyStuffed, KeyTyped, UngotKey, allow_keys, block_redo, ctrl_c_interrupts,
+    curscript, got_int, gotchars_pending, ignore_script, langmap_mapchar, last_recorded_len,
+    last_vgetc_recorded_len, mapped_ctrl_c, maptick, mod_mask, no_mapping, no_reduce_keys,
+    no_zero_mapping, normal_busy_last_key, on_key_ignore_len, pending_end_reg_executing,
+    reg_executing, reg_recording, repeat_luaref, scriptout, showcmd_pending,
+    test_disable_char_avail, typeahead_char, typebuf_was_empty, typebuf_was_filled,
+    typed_since_sync, ungot, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
 use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
-use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::mapping::{
@@ -64,7 +66,7 @@ use crate::option::vars::{
     p_fs, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
 };
 use crate::options::kOptBoFlagError;
-use crate::os::cshim::{gettext, putc, stderr};
+use crate::os::cshim::{gettext, stderr};
 use crate::os::env::expand_env;
 use crate::os::fileio::{FileOpenFlags, file_close, file_open, file_open_stdin, file_read};
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
@@ -130,7 +132,7 @@ pub const RM_NONE: ::core::ffi::c_uint = 1;
 pub const RM_YES: ::core::ffi::c_uint = 0;
 pub const RM_ABBR: ::core::ffi::c_uint = 4;
 #[derive(Copy, Clone)]
-pub struct GotcharsState {
+pub(crate) struct GotcharsState {
     pub buf: [uint8_t; 67],
     pub prev_c: ::core::ffi::c_int,
     pub buflen: size_t,
@@ -167,7 +169,6 @@ pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 fn is_internal_call(channel_id: uint64_t) -> bool {
     channel_id & INTERNAL_CALL_MASK != 0
 }
-static curscript: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 /// Streams to read script (`-s` / `:source!`) input from, innermost last.
 static scriptin: GlobalCell<[FileDescriptor; NSCRIPT as usize]> =
     GlobalCell::new([EMPTY_FILE; NSCRIPT as usize]);
@@ -197,32 +198,11 @@ static READBUF2: GlobalCell<KeyBuffer> = GlobalCell::new(KeyBuffer::EMPTY);
 /// callbacks. Upstream is a `kvec_withinit_t(char, MAXMAPLEN + 1)`; nothing
 /// outside this module touches it, so it is an owned `Vec` here.
 static on_key_buf: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
-static on_key_ignore_len: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-static typeahead_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static block_redo: GlobalCell<bool> = GlobalCell::new(false);
-static KeyNoremap: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-/// How many bytes the last `gotchars` recorded, so that `get_recorded` can
-/// drop the keys that stopped the recording.
-///
-/// Every arithmetic on this counter is **wrapping**, as the C's `size_t` is:
-/// `vgetc` subtracts what the previous call recorded and `ungetchars`
-/// subtracts what it took back, and either can take it below zero. A huge
-/// value then makes `get_recorded`'s `len >= last_recorded_len` fail and
-/// nothing is trimmed, which is what upstream does. `test_registers`'
-/// Test_recording_with_select_mode reaches it.
-static last_recorded_len: GlobalCell<size_t> = GlobalCell::new(0);
 static e_recursive_mapping: &::core::ffi::CStr = c"E223: Recursive mapping";
 static e_cmd_mapping_must_end_with_cr: &::core::ffi::CStr =
     c"E1255: <Cmd> mapping must end with <CR>";
 static e_cmd_mapping_must_end_with_cr_before_second_cmd: &::core::ffi::CStr =
     c"E1136: <Cmd> mapping must end with <CR> before second <Cmd>";
-static old_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-static old_mod_mask: GlobalCell<ModMask> = GlobalCell::new(ModMask::NONE);
-static old_mouse_grid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static old_mouse_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static old_mouse_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static old_KeyStuffed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static no_reduce_keys: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;

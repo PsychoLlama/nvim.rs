@@ -29,8 +29,8 @@ pub struct SaveRedo {
 pub struct TypeaheadSave {
     pub(crate) save_typebuf: TypeAhead,
     pub(crate) typebuf_valid: bool,
-    pub(crate) old_char: ::core::ffi::c_int,
-    pub(crate) old_mod_mask: crate::keycodes::ModMask,
+    /// The key `vungetc` had put back, which the prompt must not answer.
+    pub(crate) ungot: Option<crate::getchar::state::UngotKey>,
     pub(crate) save_readbuf1: KeyBuffer,
     pub(crate) save_readbuf2: KeyBuffer,
 }

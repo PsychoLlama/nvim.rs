@@ -23,6 +23,12 @@ use crate::types::MB_MAXCHAR;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int, c_uint};
 
+impl Default for GotcharsState {
+    fn default() -> Self {
+        GotcharsState::new()
+    }
+}
+
 impl GotcharsState {
     /// A state machine with nothing pending.
     pub(crate) const fn new() -> Self {
@@ -91,18 +97,16 @@ pub(crate) fn gotchars_add_byte(state: &mut GotcharsState, byte: u8) -> bool {
 /// than a slice because the loop calls `updatescript` and `add` between
 /// reads, and neither is provably unable to reach the buffer it points into.
 pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
-    /// What `gotchars` has half a key of, between calls.
-    static state: GlobalCell<GotcharsState> = GlobalCell::new(GotcharsState::new());
-
     for i in 0..len {
         // SAFETY (this body): the caller's promise -- `chars` is `len`
         // readable bytes.
-        if !state.with_mut(|st| gotchars_add_byte(st, unsafe { *chars.add(i) })) {
+        let byte = unsafe { *chars.add(i) };
+        if !gotchars_pending.update(|st| gotchars_add_byte(st, byte)) {
             continue;
         }
-        // A copy of the finished key, so that nothing below holds a
-        // borrow of the cell across `updatescript` or the callbacks.
-        let key = state.get();
+        // A copy of the finished key, so that nothing below holds the
+        // state across `updatescript` or the callbacks.
+        let key = gotchars_pending.get();
         let buflen = key.buflen;
 
         // One byte at a time; no translation to be done.
@@ -129,7 +133,7 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
             last_recorded_len.set(last_recorded_len.get().wrapping_add(buflen));
         }
 
-        state.with_mut(|st| st.buflen = 0);
+        gotchars_pending.update(|st| st.buflen = 0);
     }
 
     may_sync_undo();
@@ -157,22 +161,18 @@ pub fn gotchars_ignore() {
 /// key once all of its bytes are in.
 pub(crate) fn add_byte_to_showcmd(byte: u8) {
     let mut ch = [0 as c_char; MB_MAXCHAR];
-    /// What `add_byte_to_showcmd` has half a key of, between calls.
-    static state: GlobalCell<GotcharsState> = GlobalCell::new(GotcharsState::new());
-
     if !p_sc() || msg_silent.get() != 0 {
         return;
     }
-    if !state.with_mut(|st| gotchars_add_byte(st, byte)) {
+    if !showcmd_pending.update(|st| gotchars_add_byte(st, byte)) {
         return;
     }
     // A copy of the finished key: `add_to_showcmd` below can reach the
-    // screen, so no borrow of the cell may be outstanding, and the walk
-    // wants a stable buffer to point into.
-    let mut key = state.get();
+    // screen, and the walk wants a stable buffer to point into.
+    let mut key = showcmd_pending.get();
     let buflen = key.buflen;
     key.buf[buflen] = 0;
-    state.with_mut(|st| st.buflen = 0);
+    showcmd_pending.update(|st| st.buflen = 0);
 
     // Split the key into its modifier prefix and the key itself.
     let mut ptr: *const c_char = key.buf.as_ptr().cast();

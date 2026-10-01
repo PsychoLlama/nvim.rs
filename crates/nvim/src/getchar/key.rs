@@ -68,14 +68,15 @@ pub fn vgetc() -> c_int {
     }
 
     let mut c;
-    if can_get_old_char() {
+    if ungot_key_ready()
+        && let Some(key) = ungot.take()
+    {
         // A character `vungetc` put back has already been processed.
-        c = old_char.get();
-        old_char.set(-1);
-        mod_mask.set(old_mod_mask.get());
-        mouse_grid.set(old_mouse_grid.get());
-        mouse_row.set(old_mouse_row.get());
-        mouse_col.set(old_mouse_col.get());
+        c = key.c;
+        mod_mask.set(key.mod_mask);
+        mouse_grid.set(key.mouse_grid);
+        mouse_row.set(key.mouse_row);
+        mouse_col.set(key.mouse_col);
     } else {
         c = vgetc_from_typeahead();
     }
@@ -119,10 +120,6 @@ pub fn vgetc() -> c_int {
 /// Safe: everything it touches is the editor's own typeahead state; it may
 /// block waiting for input.
 fn vgetc_from_typeahead() -> c_int {
-    /// How many characters the last `vgetc` recorded. Peeking can record
-    /// more, so `last_recorded_len` may have grown past it since.
-    static last_vgetc_recorded_len: GlobalCell<usize> = GlobalCell::new(0);
-
     /// One byte out of the typeahead.
     ///
     /// SAFETY: `vgetorpeek` is callable at any time; it reads the editor's
@@ -319,10 +316,9 @@ pub fn plain_vgetc() -> c_int {
 ///
 /// Safe: it only looks at the editor's own typeahead, and never blocks.
 pub fn vpeekc() -> c_int {
-    if can_get_old_char() {
-        old_char.get()
-    } else {
-        vgetorpeek(false)
+    match ungot.with(|key| key.as_ref().map(|key| key.c)) {
+        Some(c) if ungot_key_ready() => c,
+        _ => vgetorpeek(false),
     }
 }
 
@@ -361,12 +357,14 @@ pub fn char_avail() -> bool {
 /// A stuffed character comes back immediately; anything else waits until the
 /// stuff buffer is empty.
 pub(crate) fn vungetc(c: c_int) {
-    old_char.set(c);
-    old_mod_mask.set(mod_mask.get());
-    old_mouse_grid.set(mouse_grid.get());
-    old_mouse_row.set(mouse_row.get());
-    old_mouse_col.set(mouse_col.get());
-    old_KeyStuffed.set(KeyStuffed.get());
+    ungot.set(Some(UngotKey {
+        c,
+        mod_mask: mod_mask.get(),
+        mouse_grid: mouse_grid.get(),
+        mouse_row: mouse_row.get(),
+        mouse_col: mouse_col.get(),
+        stuffed: KeyStuffed.get() != 0,
+    }));
 }
 
 /// Clear `reg_executing` now, or arrange for it to be cleared.

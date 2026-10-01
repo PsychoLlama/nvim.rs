@@ -749,8 +749,10 @@ pub(crate) fn restore_saved_typebuf(script: c_int) {
 ///
 /// It cannot when it was not stuffed and something has since been added to
 /// the stuff buffer: those characters have to come first.
-pub(crate) fn can_get_old_char() -> bool {
-    old_char.get() != -1 && (old_KeyStuffed.get() != 0 || stuff_empty())
+pub(crate) fn ungot_key_ready() -> bool {
+    ungot
+        .with(|key| key.as_ref().map(|key| key.stuffed))
+        .is_some_and(|stuffed| stuffed || stuff_empty())
 }
 
 /// Save all three kinds of typeahead, so that a prompt really has to be
@@ -765,9 +767,7 @@ pub unsafe fn save_typeahead(save: *mut TypeaheadSave) {
     unsafe { (*save).save_typebuf = typeahead().take() };
     unsafe { alloc_typebuf((*save).save_typebuf.change_cnt()) };
     unsafe { (*save).typebuf_valid = true };
-    unsafe { (*save).old_char = old_char.get() };
-    unsafe { (*save).old_mod_mask = old_mod_mask.get() };
-    old_char.set(-1);
+    unsafe { (*save).ungot = ungot.take() };
 
     unsafe { (*save).save_readbuf1 = readbuf1().take() };
     unsafe { (*save).save_readbuf2 = readbuf2().take() };
@@ -785,8 +785,7 @@ pub unsafe fn restore_typeahead(save: *mut TypeaheadSave) {
         unsafe { free_typebuf() };
         typeahead().set(core::mem::take(unsafe { &mut (*save).save_typebuf }));
     }
-    old_char.set(unsafe { (*save).old_char });
-    old_mod_mask.set(unsafe { (*save).old_mod_mask });
+    ungot.set(unsafe { (*save).ungot.take() });
 
     unsafe { readbuf1().free() };
     readbuf1().set(core::mem::take(unsafe { &mut (*save).save_readbuf1 }));
@@ -825,7 +824,7 @@ mod tests {
     fn clear() {
         init_typebuf();
         flush_typebuf(false);
-        old_char.set(-1);
+        ungot.set(None);
         while read_readbuffers(true) != NUL {}
     }
 
@@ -888,15 +887,15 @@ mod tests {
         let _fresh = Fresh::new();
         ins_char_typebuf(c_int::from(b't'), ModMask::NONE, false);
         vungetc(c_int::from(b'u'));
-        assert!(can_get_old_char());
+        assert!(ungot_key_ready());
         assert_eq!(vpeekc(), c_int::from(b'u'));
         // A typed key waits for the stuff buffer to empty; a stuffed one
         // does not.
         stuff_readbuf(c"s");
-        assert!(!can_get_old_char());
+        assert!(!ungot_key_ready());
         KeyStuffed.set(1);
         vungetc(c_int::from(b'u'));
         KeyStuffed.set(0);
-        assert!(can_get_old_char());
+        assert!(ungot_key_ready());
     }
 }

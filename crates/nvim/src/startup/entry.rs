@@ -23,6 +23,7 @@ use crate::arglist::global_arglist;
 use crate::autocmd::{apply_autocmds, autocmd_init};
 use crate::buffer::do_autochdir;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
+use crate::cstr;
 use crate::debugger::state::debug_break_level;
 use crate::diff::diff_win_options;
 use crate::drawscreen::state::{RedrawingDisabled, cmdline_row};
@@ -61,7 +62,7 @@ use crate::option::vars::{P_LPL, P_SHADA, P_UC, P_UT, cb_flags, p_ch};
 use crate::option::{set_init_1, set_init_2, set_init_3, set_init_tablocal};
 use crate::os::cshim::{gettext, stderr, stdout};
 use crate::os::env::{env_init, init_homedir, os_hint_priority};
-use crate::os::fs::os_fopen;
+use crate::os::fs::CFile;
 use crate::os::input::{input_start, input_stop};
 use crate::os::lang::{init_locale, set_lang_var};
 use crate::os::signal::{signal_init, signal_teardown};
@@ -362,12 +363,13 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
     if !params.scriptout.is_null() {
         let mode = if params.scriptout_append {
-            APPENDBIN.as_ptr()
+            APPENDBIN
         } else {
-            WRITEBIN.as_ptr()
+            WRITEBIN
         };
-        scriptout.set(unsafe { os_fopen(params.scriptout, mode) });
-        if scriptout.get().is_null() {
+        // SAFETY: an argument from the command line, NUL-terminated.
+        scriptout.set(CFile::open(unsafe { cstr::at(params.scriptout) }, mode));
+        if scriptout.with(Option::is_none) {
             let fmt = gettext(c"Cannot open for script output: \"");
             unsafe { fprintf!(stderr, fmt.as_ptr()) };
             unsafe { fprintf!(stderr, c"%s\"\n".as_ptr(), params.scriptout) };
