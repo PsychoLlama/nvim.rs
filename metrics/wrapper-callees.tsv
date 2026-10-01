@@ -1,13 +1,13 @@
 count	callee	no_raw	defs	def
-855	xfree	0	1	crates/nvim/src/memory/mod.rs
+853	xfree	0	1	crates/nvim/src/memory/mod.rs
 736	.add	0	3	
 447	.offset	0	0	
 446	bytes_at	0	1	crates/nvim/src/cstr.rs
 341	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-318	at	0	3	
+320	at	0	3	
 279	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
-182	xstrdup	0	1	crates/nvim/src/memory/mod.rs
+180	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 157	xmalloc	0	1	crates/nvim/src/memory/mod.rs

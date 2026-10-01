@@ -55,7 +55,7 @@ use crate::options::{
 use crate::types::{
     Array, Callback, FILE, GArray, Object, ScreenAttr, ScreenGrid, String_0, int64_t,
 };
-use core::ffi::{CStr, c_char, c_int, c_long};
+use core::ffi::{CStr, c_int, c_long};
 
 pub(crate) static on_print: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 pub(crate) static top_bot_msg: &CStr = c"search hit TOP, continuing at BOTTOM";
@@ -217,9 +217,12 @@ msg_state! {
     pub(crate) emsg_severe: bool = false;
 
     // -- assert_fails() --
-    pub(crate) emsg_assert_fails_msg: *mut c_char = core::ptr::null_mut();
+    /// The first error the command under `assert_fails()` gave.
+    pub(crate) emsg_assert_fails_msg: Option<XString> = None;
+    /// The line it was given from.
     pub(crate) emsg_assert_fails_lnum: c_long = 0;
-    pub(crate) emsg_assert_fails_context: *mut c_char = core::ptr::null_mut();
+    /// The script or function it was given from; empty for none.
+    pub(crate) emsg_assert_fails_context: Option<XString> = None;
 
     // -- errors --
     /// Errors given since this was last reset.

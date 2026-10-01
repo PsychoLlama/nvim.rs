@@ -180,16 +180,18 @@ pub unsafe fn emsg_multiline(
             return true;
         }
 
-        if in_assert_fails.get() && emsg_assert_fails_msg.get().is_null() {
-            emsg_assert_fails_msg.set(unsafe { xstrdup(s) });
+        if in_assert_fails.get() && emsg_assert_fails_msg.with(Option::is_none) {
+            // SAFETY: the caller's message, and the exec stack's own name for
+            // where it came from -- both NUL-terminated.
+            emsg_assert_fails_msg.set(Some(XString::from_cstr(unsafe { cstr::at(s) })));
             emsg_assert_fails_lnum.set(sourcing_top().es_lnum as c_long);
-            unsafe { xfree(emsg_assert_fails_context.get().cast()) };
-            let context = if sourcing_top().es_name.is_null() {
-                c"".as_ptr()
+            let name = sourcing_top().es_name;
+            let context = if name.is_null() {
+                c""
             } else {
-                sourcing_top().es_name
+                unsafe { cstr::at(name) }
             };
-            emsg_assert_fails_context.set(unsafe { xstrdup(context) });
+            emsg_assert_fails_context.set(Some(XString::from_cstr(context)));
         }
 
         // set "v:errmsg", also when using ":silent! cmd"

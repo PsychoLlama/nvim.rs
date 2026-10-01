@@ -32,7 +32,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{suppress_errthrow, trylevel};
 use crate::getchar::state::got_int;
 use crate::guard::{Bump, Suppress};
-use crate::memory::{xfree, xstrdup};
+use crate::memory::{XString, xfree, xstrdup};
 use crate::message::state::{
     called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
     emsg_assert_fails_msg, emsg_on_display, in_assert_fails, lines_left, msg_col, need_wait_return,
@@ -106,23 +106,19 @@ unsafe fn assert_fails_args_ok(args: &[TypVal]) -> bool {
 ///
 /// # Safety
 /// `args` has five slots; `tofree` receives an allocation the caller frees.
-unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> FailsCheck {
+unsafe fn check_reported_error(
+    args: &[TypVal],
+    reported: &CStr,
+    tofree: &mut *mut c_char,
+) -> FailsCheck {
     let mut buf = NumBuf::new();
-    // SAFETY: the caller's arguments and out-parameter.
-    let unknown = c"[unknown]".as_ptr().cast_mut();
-    let reported = emsg_assert_fails_msg.get();
-    let mut actual = if reported.is_null() {
-        unknown
-    } else {
-        reported
-    };
+    // Only read: the mismatch report borrows it.
+    let mut actual = reported.as_ptr().cast_mut();
 
     match args.get(1).map_or(VAR_UNKNOWN, TypVal::v_type) {
         VAR_STRING => {
             let expected = buf.string_ptr_chk(&args[1]);
-            if !expected.is_null()
-                && unsafe { has_bytes(cstr::at(actual), cstr::bytes_at(expected)) }
-            {
+            if !expected.is_null() && unsafe { has_bytes(reported, cstr::bytes_at(expected)) } {
                 return FailsCheck::Matched;
             }
             FailsCheck::Mismatch(FailsMismatch {
@@ -184,7 +180,7 @@ unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> Fai
 ///
 /// # Safety
 /// `args` has five slots.
-unsafe fn check_error_position(args: &[TypVal]) -> FailsCheck {
+unsafe fn check_error_position(args: &[TypVal], context: &CStr) -> FailsCheck {
     // SAFETY: the caller's arguments.
     if args.len() <= 2 || args.len() <= 3 {
         return FailsCheck::Matched;
@@ -207,9 +203,7 @@ unsafe fn check_error_position(args: &[TypVal]) -> FailsCheck {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FIFTH_ARGUMENT);
     }
     let want_context = args[4].string_or_null();
-    if want_context.is_null()
-        || unsafe { pattern_match(want_context, emsg_assert_fails_context.get(), false) }
-    {
+    if want_context.is_null() || unsafe { pattern_match(want_context, context.as_ptr(), false) } {
         return FailsCheck::Matched;
     }
     FailsCheck::Mismatch(FailsMismatch {
@@ -223,11 +217,16 @@ unsafe fn check_error_position(args: &[TypVal]) -> FailsCheck {
 ///
 /// # Safety
 /// `args` has five slots and `cmd` is the command that was run.
-unsafe fn report_fails_mismatch(args: &[TypVal], cmd: *const c_char, mismatch: &FailsMismatch) {
+unsafe fn report_fails_mismatch(
+    args: &[TypVal],
+    cmd: *const c_char,
+    context: &CStr,
+    mismatch: &FailsMismatch,
+) {
     // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
     let actual_tv = ManuallyDrop::new(match mismatch.index {
         3 => TypVal::Number(emsg_assert_fails_lnum.get() as VarNumber),
-        4 => TypVal::String(emsg_assert_fails_context.get()),
+        4 => TypVal::String(context.as_ptr().cast_mut()),
         _ => TypVal::String(mismatch.actual),
     });
     let mut ga = prepare_assert_error();
@@ -267,8 +266,7 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prom
     emsg_on_display.set(false);
     msg_reset_scroll();
     lines_left.set(Rows.get());
-    unsafe { xfree(emsg_assert_fails_msg.get().cast()) };
-    emsg_assert_fails_msg.set(ptr::null_mut());
+    emsg_assert_fails_msg.set(None);
     unsafe { xfree(tofree.cast()) };
     unsafe { set_vim_var_string(Vv::Errmsg, ptr::null(), 0) };
 }
@@ -313,15 +311,21 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
         report_assert_error(&ga);
         result.write_number(1);
     } else if args.len() > 1 {
-        let mut check = unsafe { check_reported_error(args, &mut tofree) };
+        // Copies: matching a pattern can raise an error of its own, and
+        // the reports below borrow them.
+        let reported = emsg_assert_fails_msg.with(Clone::clone);
+        let reported = reported.as_ref().map_or(c"[unknown]", XString::as_cstr);
+        let context = emsg_assert_fails_context.with(Clone::clone);
+        let context = context.as_ref().map_or(c"", XString::as_cstr);
+        let mut check = unsafe { check_reported_error(args, reported, &mut tofree) };
         if matches!(check, FailsCheck::Matched) {
-            check = unsafe { check_error_position(args) };
+            check = unsafe { check_error_position(args, context) };
         }
         match check {
             FailsCheck::Matched | FailsCheck::Abandon => {}
             FailsCheck::BadArg(msg) => wrong_arg_msg = Some(msg),
             FailsCheck::Mismatch(mismatch) => {
-                unsafe { report_fails_mismatch(args, cmd, &mismatch) };
+                unsafe { report_fails_mismatch(args, cmd, context, &mismatch) };
                 result.write_number(1);
             }
         }
