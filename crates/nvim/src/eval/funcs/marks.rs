@@ -76,7 +76,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     } else {
         (0..buf.b_wininfo.size)
             .map(|i| unsafe { *buf.b_wininfo.items.add(i) })
-            .find(|wip| unsafe { (**wip).wi_win } == Win::current_raw())
+            .find(|wip| unsafe { (**wip).wi_win } == Win::current_or_none().map(Win::id))
             .map_or(buf.b_changelistlen, |wip| unsafe {
                 (*wip).wi_changelistidx
             })

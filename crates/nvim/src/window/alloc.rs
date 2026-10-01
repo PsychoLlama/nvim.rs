@@ -381,7 +381,7 @@ fn forget_wininfo(buffer: Buf, window: Win) {
         return;
     }
     let entry = &mut infos.entries_mut()[pos_wip];
-    entry.wi_win = ptr::null_mut::<Window>();
+    entry.wi_win = None;
     // Discard saved options if the style is minimal.
     if window.w_config.style == kWinStyleMinimal && entry.wi_optset {
         clear_options(entry.opt());

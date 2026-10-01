@@ -551,7 +551,6 @@ count	callee	no_raw	defs	def
 5	ShlWalk::new	0	1	crates/nvim/src/match/searchhl.rs
 5	Si::new	0	67	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
-5	Win::from_raw	0	1	crates/nvim/src/winlayer.rs
 5	add_scanned_word	0	1	crates/nvim/src/insexpand/sources.rs
 5	add_tag_field	0	1	crates/nvim/src/tag/query.rs
 5	api_dict_to_keydict	0	1	crates/nvim/src/api/private/helpers/keydict.rs
@@ -904,6 +903,7 @@ count	callee	no_raw	defs	def
 3	Self::from_raw	0	8	
 3	Session::new	0	1	crates/nvim/src/terminal/mode.rs
 3	SynBlockRef::new	0	67	
+3	Win::from_raw	0	1	crates/nvim/src/winlayer.rs
 3	WinCfg::new	0	67	
 3	WriteError::shared	0	1	crates/nvim/src/bufwrite/mod.rs
 3	abs	0	0	

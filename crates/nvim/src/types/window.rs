@@ -323,7 +323,9 @@ pub struct Window {
 }
 #[derive(Clone)]
 pub struct WinInfo {
-    pub wi_win: *mut Window,
+    /// The window this entry remembers the buffer in, `None` for the entry
+    /// `:badd` leaves and once that window is freed.
+    pub(crate) wi_win: Option<WinId>,
     pub wi_mark: FileMark,
     pub wi_optset: bool,
     pub wi_opt: WinOpt,

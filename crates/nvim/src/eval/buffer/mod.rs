@@ -60,6 +60,7 @@ use crate::eval::{callback_from_typval, typval_tostring};
 use crate::ex_cmds::check_secure;
 use crate::extmark::extmark_splice_cols;
 use crate::narrow::number_as_int;
+use crate::winlayer::WinId;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
 
@@ -177,8 +178,8 @@ fn find_win_for_curbuf() {
     let wininfo = &buf.b_wininfo;
     for i in 0..wininfo.size {
         let wip: *mut WinInfo = unsafe { *wininfo.items.add(i) };
-        // SAFETY: an entry's `wi_win` is a live window or null.
-        let Some(win) = (unsafe { Win::from_raw((*wip).wi_win) }) else {
+        // SAFETY: the buffer's own array of live entries.
+        let Some(win) = (unsafe { (*wip).wi_win }).and_then(WinId::get) else {
             continue;
         };
         if win.w_buffer == Buf::current_raw() {

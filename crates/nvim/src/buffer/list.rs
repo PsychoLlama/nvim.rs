@@ -275,7 +275,7 @@ pub unsafe fn buflist_new(
 
     entry.wi_mark = INIT_FMARK;
     entry.wi_mark.mark.lnum = lnum;
-    entry.wi_win = current_win().raw();
+    entry.wi_win = Some(current_win().id());
 
     init_hashtabs(buf);
 

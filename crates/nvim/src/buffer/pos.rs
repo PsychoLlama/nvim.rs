@@ -27,6 +27,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::winlayer::WinId;
 use core::ffi::c_void;
 use core::ops::{Deref, DerefMut};
 use core::{ptr, slice};
@@ -92,7 +93,7 @@ impl Entry {
 
     /// The window this entry belongs to, null for the entry `:badd` leaves.
     pub(crate) fn window(self) -> Option<Win> {
-        unsafe { Win::from_raw(self.wi_win) }
+        self.wi_win.and_then(WinId::get)
     }
 
     pub(crate) fn opt(&mut self) -> *mut WinOpt {
@@ -259,7 +260,7 @@ pub fn buflist_setfpos(
     let mut entry = match found {
         None => {
             let mut entry = Entry::new();
-            entry.wi_win = win.map_or(ptr::null_mut(), Win::raw);
+            entry.wi_win = win.map(Win::id);
             if lnum == 0 as LineNr {
                 // Set lnum even when it is 0.
                 lnum = 1 as LineNr;

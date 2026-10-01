@@ -273,7 +273,7 @@ fn saved_winopts(s: Session) -> Option<*mut WinOpt> {
             // SAFETY: as above; nothing here frees one.
             let (win, optset, opts) =
                 unsafe { ((*wip).wi_win, (*wip).wi_optset, &raw mut (*wip).wi_opt) };
-            if win == wp.raw() && optset {
+            if win == Some(wp.id()) && optset {
                 return Some(opts);
             }
         }
