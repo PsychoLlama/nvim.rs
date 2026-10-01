@@ -17,11 +17,12 @@
 
 use crate::cstr;
 use crate::fprintf;
+use crate::global_cell::field;
 use crate::keycodes::ModMask;
 use crate::option::vars::P_MOUSE;
 use crate::snprintf;
 use crate::strings::has_char;
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::api::private::helpers::cstr_to_string;
@@ -46,7 +47,7 @@ use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::startup::silent_mode;
 use crate::types::{
-    FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, size_t, uint32_t,
+    FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, WinOpt, size_t, uint32_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
@@ -54,8 +55,8 @@ use crate::undo::curbuf_is_changed;
 use ::libc::fputs;
 
 use super::{
-    OptSlot, copy_option_part, get_option, get_option_unset_value, get_varp, get_varp_scope,
-    kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
+    Local, OptSlot, WinOptSet, copy_option_part, get_option, get_option_unset_value, get_varp,
+    get_varp_scope, kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
     kOptFlagUIOption, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
     option_is_global_local, option_is_global_only, option_is_window_local, option_var,
     optval_as_object, optval_equal, optval_from_varp, optval_is_default,
@@ -113,7 +114,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
             } else {
                 get_varp(opt_idx)
             };
-            if varp.is_none() || (!all && unsafe { optval_is_default(opt_idx, varp) }) {
+            if varp.is_none() || (!all && optval_is_default(opt_idx, varp)) {
                 continue;
             }
             // `:set!` gives every option a line of its own.
@@ -171,7 +172,7 @@ pub(crate) fn ui_refresh_options() {
             continue;
         }
         let name = unsafe { cstr_to_string(opt.fullname) };
-        let value = optval_as_object(unsafe { optval_from_varp(opt_idx, option_var(opt_idx)) });
+        let value = optval_as_object(optval_from_varp(opt_idx, option_var(opt_idx)));
         ui_call_option_set(name, value);
     }
     // 'mouse' is not a UI option, but the UI has to be told about it
@@ -198,11 +199,8 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     // The variable is only read for a boolean option, because for
     // anything else it is not an `int` at all. 'modified' has no
     // variable worth reading either; the undo state decides.
-    let word = || unsafe { varp.boolean_var().get() };
-    let modified = OptSlot::Boolean(super::BoolVar::Local(unsafe {
-        &raw mut (*Buf::current_raw()).b_changed
-    }));
-    let is_off = || match varp == modified {
+    let word = || varp.boolean_var().get();
+    let is_off = || match varp.is_current_modified() {
         true => !curbuf_is_changed(),
         false => word() == 0,
     };
@@ -267,8 +265,7 @@ pub(crate) unsafe fn makeset(
                 continue;
             }
             // A global value still at its default needs no command.
-            if opt_flags.has(OptionSetFlags::GLOBAL) && unsafe { optval_is_default(opt_idx, varp) }
-            {
+            if opt_flags.has(OptionSetFlags::GLOBAL) && optval_is_default(opt_idx, varp) {
                 continue;
             }
             // `:mksession` skips the runtime paths, which belong to the
@@ -290,7 +287,7 @@ pub(crate) unsafe fn makeset(
                 }
                 if !opt_flags.has(OptionSetFlags::GLOBAL) && local_only == 0 {
                     let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
-                    if !unsafe { optval_is_default(opt_idx, varp_global) } {
+                    if !optval_is_default(opt_idx, varp_global) {
                         round = 1;
                         varp_local = varp;
                         varp = varp_global;
@@ -333,42 +330,43 @@ pub(crate) unsafe fn makeset(
 ///
 /// `fd` must be an open file and the current window live.
 pub(crate) unsafe fn makefoldset(fd: *mut FILE) -> Result<(), Failed> {
-    // SAFETY: the caller's file, and `curwin` is live.
-    let wo = unsafe { &raw mut (*Win::current_raw()).w_onebuf_opt };
+    let win = Win::current();
+    let one = WinOptSet::One;
     let fields: [(OptIndex, OptSlot); 8] = [
         (
             kOptFoldmethod,
-            OptSlot::from(unsafe { &raw mut (*wo).wo_fdm }),
+            Local::Win(win, one, field!(WinOpt, wo_fdm)).into(),
         ),
         (
             kOptFoldexpr,
-            OptSlot::from(unsafe { &raw mut (*wo).wo_fde }),
+            Local::Win(win, one, field!(WinOpt, wo_fde)).into(),
         ),
         (
             kOptFoldmarker,
-            OptSlot::from(unsafe { &raw mut (*wo).wo_fmr }),
+            Local::Win(win, one, field!(WinOpt, wo_fmr)).into(),
         ),
         (
             kOptFoldignore,
-            OptSlot::from(unsafe { &raw mut (*wo).wo_fdi }),
+            Local::Win(win, one, field!(WinOpt, wo_fdi)).into(),
         ),
         (
             kOptFoldlevel,
-            OptSlot::from(unsafe { &raw mut (*wo).wo_fdl }),
+            Local::Win(win, one, field!(WinOpt, wo_fdl)).into(),
         ),
         (
             kOptFoldminlines,
-            OptSlot::from(unsafe { &raw mut (*wo).wo_fml }),
+            Local::Win(win, one, field!(WinOpt, wo_fml)).into(),
         ),
         (
             kOptFoldnestmax,
-            OptSlot::from(unsafe { &raw mut (*wo).wo_fdn }),
+            Local::Win(win, one, field!(WinOpt, wo_fdn)).into(),
         ),
         (
             kOptFoldenable,
-            OptSlot::from(unsafe { &raw mut (*wo).wo_fen }),
+            Local::Win(win, one, field!(WinOpt, wo_fen)).into(),
         ),
     ];
+    // SAFETY: the caller's open file.
     for (opt_idx, varp) in fields {
         unsafe { put_set(fd, c"setlocal".as_ptr() as *mut c_char, opt_idx, varp) }?;
     }
@@ -388,7 +386,7 @@ pub(crate) unsafe fn put_set(
     varp: OptSlot,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's file and variable, and the option table.
-    let value: OptVal = unsafe { optval_from_varp(opt_idx, varp) };
+    let value: OptVal = optval_from_varp(opt_idx, varp);
     let opt = get_option(opt_idx);
     let name = opt.fullname;
     let flags = opt.flags;
@@ -420,7 +418,7 @@ pub(crate) unsafe fn put_set(
             // 'wildchar' and 'wildcharm' hold a key, which reads back
             // as its name.
             let mut wc: OptInt = 0;
-            if unsafe { wc_use_keyname(opt_idx, varp, &mut wc) } {
+            if wc_use_keyname(opt_idx, varp, &mut wc) {
                 let name = get_special_key_name(wc as c_int, ModMask::NONE);
                 if unsafe { fputs(name.as_ptr(), fd) } < 0 {
                     return Err(Failed);
@@ -549,7 +547,7 @@ pub(crate) fn option_value2string(
 
     if option_has_type(opt_idx, kOptValTypeNumber) {
         let mut wc: OptInt = 0;
-        if unsafe { wc_use_keyname(opt_idx, varp, &mut wc) } {
+        if wc_use_keyname(opt_idx, varp, &mut wc) {
             let name = get_special_key_name(wc as c_int, ModMask::NONE);
             unsafe { xstrlcpy(buf, name.as_ptr(), cap) };
         } else if wc != 0 {
@@ -562,7 +560,7 @@ pub(crate) fn option_value2string(
         return;
     }
 
-    let value = unsafe { varp.string_var().get() };
+    let value = varp.string_var().get();
     if get_option(opt_idx).flags & kOptFlagExpand as uint32_t != 0 {
         unsafe { home_replace(None, value, buf, MAXPATHL as size_t, false) };
     } else {
@@ -572,17 +570,13 @@ pub(crate) fn option_value2string(
 
 /// Whether the option is 'wildchar' or 'wildcharm' *and* holds a key that
 /// has a name; `*wcp` comes back with the value either way for those two.
-///
-/// # Safety
-///
-/// `slot` must be the option's variable.
-pub(crate) unsafe fn wc_use_keyname(opt_idx: OptIndex, slot: OptSlot, wcp: &mut OptInt) -> bool {
+pub(crate) fn wc_use_keyname(opt_idx: OptIndex, slot: OptSlot, wcp: &mut OptInt) -> bool {
     if !matches!(opt_idx, kOptWildchar | kOptWildcharm) {
         return false;
     }
-    // SAFETY: both options are numeric and global-only, so the slot is the
-    // `OptInt` cell the table names.
-    *wcp = unsafe { slot.number_var().get() };
+    // Both options are numeric and global-only, so the slot is the number
+    // the table names.
+    *wcp = slot.number_var().get();
     // A negative value is a special key code; a positive one may still be a
     // named key such as <Tab>.
     *wcp < 0 || has_key_name(*wcp as c_int)

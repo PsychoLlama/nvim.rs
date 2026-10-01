@@ -45,7 +45,7 @@ const CPT_WITH_ARGUMENT: &CStr = c"ksF";
 /// which is upstream's behaviour and is preserved.
 pub fn did_set_complete(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value, walked to its terminator.
-    let mut p = unsafe { varp(args).get() };
+    let mut p = varp(args).get();
     while unsafe { *p } != 0 {
         let mut part = [0u8; LSIZE as usize];
         let mut into = 0;

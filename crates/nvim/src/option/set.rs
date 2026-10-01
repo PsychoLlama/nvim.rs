@@ -305,9 +305,10 @@ pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> 
     if opt_idx == kOptInvalid {
         return OptVal::Nil;
     }
-    // SAFETY: `opt` points into the option table, which is what both of
-    // these want.
-    optval_copy(&unsafe { optval_from_varp(opt_idx, get_varp_scope(opt_idx, opt_flags)) })
+    optval_copy(&optval_from_varp(
+        opt_idx,
+        get_varp_scope(opt_idx, opt_flags),
+    ))
 }
 
 /// The option table's row for an option: everything the option *is*, all
@@ -327,10 +328,7 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
     debug_assert!(opt_idx != kOptInvalid);
 
     if !option_is_global_local(opt_idx) {
-        // SAFETY: `optval_from_varp` reads the variable as its own type.
-        return unsafe {
-            optval_from_varp(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::GLOBAL))
-        };
+        return optval_from_varp(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::GLOBAL));
     }
     // A string global-local option is unset when it is empty.
     if option_has_type(opt_idx, kOptValTypeString) {
@@ -350,11 +348,7 @@ pub(crate) fn is_option_local_value_unset(opt_idx: OptIndex) -> bool {
     if !option_is_global_local(opt_idx) {
         return false;
     }
-    // SAFETY: `get_varp_scope` wants a row of the option table.
-    let local = unsafe {
-        let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
-        optval_from_varp(opt_idx, varp_local)
-    };
+    let local = optval_from_varp(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::LOCAL));
     optval_equal(&local, &get_option_unset_value(opt_idx))
 }
 
@@ -370,7 +364,10 @@ pub(crate) fn is_option_local_value_unset(opt_idx: OptIndex) -> bool {
 ///
 /// # Safety
 ///
-/// `varp` must be `opt_idx`'s variable in the scope `opt_flags` names.
+/// `old_value` is what the caller read out of `varp` before writing the new
+/// value in without freeing it, so its string now owns the bytes the
+/// variable held: this frees it, or on a rejection hands it back to the
+/// variable.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn did_set_option(
     opt_idx: OptIndex,
@@ -439,7 +436,7 @@ pub(crate) unsafe fn did_set_option(
 
     // The callback may have freed or rewritten what it was handed, so
     // read the value back rather than trusting `new_value`.
-    let new_value = unsafe { optval_from_varp(opt_idx, varp) };
+    let new_value = optval_from_varp(opt_idx, varp);
 
     if set_sid != SID_NONE {
         let script_ctx = if set_sid == 0 {
@@ -573,19 +570,19 @@ pub(crate) fn set_option(
     let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
     let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
 
-    let old_value = unsafe { optval_from_varp(opt_idx, varp) };
-    let old_global_value = unsafe { optval_from_varp(opt_idx, varp_global) };
+    let old_value = optval_from_varp(opt_idx, varp);
+    let old_global_value = optval_from_varp(opt_idx, varp_global);
     // An unset local value reads as the global one.
     let old_local_value = if is_opt_local_unset {
         old_global_value
     } else {
-        unsafe { optval_from_varp(opt_idx, varp_local) }
+        optval_from_varp(opt_idx, varp_local)
     };
     // What was actually in effect, which is what `OptionSet` reports as
     // `v:option_old`: for `:setlocal` on a global-local option with no
     // local value, that is whatever the option reads through.
     let used_old_value = if scope_local && is_opt_local_unset {
-        unsafe { optval_from_varp(opt_idx, get_varp(opt_idx)) }
+        optval_from_varp(opt_idx, get_varp(opt_idx))
     } else {
         old_value
     };

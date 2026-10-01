@@ -465,7 +465,7 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
         }
         // The value names the option's own storage; the dictionary takes a
         // copy, so this releases nothing.
-        let tv = ManuallyDrop::new(unsafe { optval_as_tv(optval_from_varp(opt_idx, varp), true) });
+        let tv = ManuallyDrop::new(optval_as_tv(optval_from_varp(opt_idx, varp), true));
         let name = get_option(opt_idx).fullname;
         let _ = unsafe { (*d).add_tv(cstr::bytes_at(name), &tv) };
     }

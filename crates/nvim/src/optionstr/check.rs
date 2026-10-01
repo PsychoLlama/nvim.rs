@@ -77,8 +77,7 @@ pub fn didset_string_options() {
         kOptWildoptions,
         kOptClipboard,
     ] {
-        // SAFETY: a null `varp` asks for the option's own global variable.
-        let _ = unsafe { check_str_opt(idx, None) };
+        let _ = check_str_opt(idx, None);
     }
 }
 

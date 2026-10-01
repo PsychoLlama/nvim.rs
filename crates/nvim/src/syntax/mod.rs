@@ -477,9 +477,18 @@ pub(crate) fn word_at(text: &[u8]) -> (&[u8], usize) {
 /// command is not necessarily [`syn_block`], the one being *parsed*.
 #[inline]
 pub(crate) fn cur_syn_block() -> SynBlockRef {
-    // SAFETY: `w_s` names either the window's own block or its buffer's, and
-    // both outlive the window that points at them.
-    unsafe { SynBlockRef::new(Win::current().w_s) }
+    Win::current().syntax()
+}
+
+impl Win {
+    /// The syntax block the window uses: its buffer's, or the one
+    /// `:ownsyntax` gave it.
+    #[inline]
+    pub(crate) fn syntax(self) -> SynBlockRef {
+        // SAFETY: `w_s` names either the window's own block or its buffer's,
+        // and both outlive the window that points at them.
+        unsafe { SynBlockRef::new(self.w_s) }
+    }
 }
 
 impl SynBlockRef {

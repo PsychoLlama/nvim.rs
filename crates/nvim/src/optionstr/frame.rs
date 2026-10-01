@@ -19,11 +19,12 @@
 use crate::winlayer::Win;
 use core::ffi::c_char;
 
-use crate::option::StrVar;
+use crate::global_cell::Field;
+use crate::option::{Local, StrVar, WinOptSet};
 
 use crate::memory::XString;
 use crate::message::e_invarg;
-use crate::types::{OptError, OptSet};
+use crate::types::{OptError, OptSet, WinOpt};
 
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.
@@ -58,14 +59,20 @@ pub(crate) fn win(args: &OptSet) -> Win {
 /// `:setglobal` on a window-local option is vetted without disturbing any
 /// window.
 ///
-/// `window` is the window from [`win`] and `local` its own variable for this
+/// `window` is the window from [`win`] and `field` its own variable for this
 /// option. Which variable it is, not what it says, so nothing is read.
-pub(crate) fn local_window(varp: StrVar, window: Win, local: *mut Option<XString>) -> Option<Win> {
-    if varp == StrVar::Local(local) {
-        Some(window)
-    } else {
-        None
-    }
+pub(crate) fn local_window(
+    varp: StrVar,
+    window: Win,
+    field: Field<WinOpt, Option<XString>>,
+) -> Option<Win> {
+    (varp == win_local(window, field)).then_some(window)
+}
+
+/// The variable naming `field` of `window`'s `w_onebuf_opt` -- the copy a
+/// `:setlocal` writes.
+pub(crate) fn win_local(window: Win, field: Field<WinOpt, Option<XString>>) -> StrVar {
+    StrVar::Local(Local::Win(window, WinOptSet::One, field))
 }
 
 /// The value the option held before this set, as a C string.

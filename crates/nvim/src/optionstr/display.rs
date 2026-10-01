@@ -7,6 +7,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::global_cell::field;
 use crate::memory::XString;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -38,7 +39,7 @@ use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::state::mode::{km_startsel, km_stopsel};
 use crate::types::{
     BreakAt, ColNr, FAIL, FloatAnchor, LPos, LineNr, NUL, OptError, OptInt, OptSet, OptionSetFlags,
-    VirtText, WinConfig, kFloatRelativeEditor,
+    VirtText, WinConfig, WinOpt, kFloatRelativeEditor,
 };
 use crate::window::check_colorcolumn;
 
@@ -66,7 +67,7 @@ pub fn did_set_ambiwidth(args: &mut OptSet) -> Result<(), OptError> {
 /// 'emoji' has the same reach as 'ambiwidth', so it re-checks the same
 /// things — including 'ambiwidth' itself, whose mask depends on it.
 pub fn did_set_emoji(_args: &mut OptSet) -> Result<(), OptError> {
-    if unsafe { check_str_opt(kOptAmbiwidth, None) }.is_err() {
+    if check_str_opt(kOptAmbiwidth, None).is_err() {
         return invalid();
     }
     check_chars_options()
@@ -131,8 +132,8 @@ pub(crate) fn derive_breakat_flags() {
 }
 
 pub fn did_set_breakindentopt(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut wp, varp) = (win(args), varp(args));
-    let local = &raw mut wp.w_onebuf_opt.wo_briopt;
+    let (wp, varp) = (win(args), varp(args));
+    let local = field!(WinOpt, wo_briopt);
     let for_window = local_window(varp, wp, local);
     // SAFETY: the option's value is a C string.
     if unsafe { briopt_check(varp.get(), for_window) } as c_int == FAIL {
@@ -147,8 +148,8 @@ pub fn did_set_breakindentopt(args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_colorcolumn(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut wp, varp) = (win(args), varp(args));
-    let local = &raw mut wp.w_onebuf_opt.wo_cc;
+    let (wp, varp) = (win(args), varp(args));
+    let local = field!(WinOpt, wo_cc);
     unsafe { check_colorcolumn(varp.get(), local_window(varp, wp, local)) }
 }
 
@@ -291,7 +292,7 @@ pub fn did_set_selection(args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_showbreak(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's value is a C string, and the walk steps by the
     // length of the character it just measured.
-    let mut s = unsafe { varp(args).get() };
+    let mut s = varp(args).get();
     while unsafe { *s } != 0 {
         if unsafe { ptr2cells(s) } != 1 {
             return Err((e_showbreak_contains_unprintable_or_wide_character).into());
@@ -312,7 +313,7 @@ pub fn did_set_showcmdloc(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_signcolumn(args: &mut OptSet) -> Result<(), OptError> {
     let (mut wp, varp) = (win(args), varp(args));
-    let local = &raw mut wp.w_onebuf_opt.wo_scl;
+    let local = field!(WinOpt, wo_scl);
     if unsafe { check_signcolumn(varp.get(), local_window(varp, wp, local)) }.is_err() {
         return invalid();
     }
@@ -460,8 +461,8 @@ pub fn did_set_pumborder(_args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_winhighlight(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut wp, varp) = (win(args), varp(args));
-    let local = &raw mut wp.w_onebuf_opt.wo_winhl;
+    let (wp, varp) = (win(args), varp(args));
+    let local = field!(WinOpt, wo_winhl);
     if !unsafe { parse_winhl_opt(varp.get(), local_window(varp, wp, local)) } {
         return invalid();
     }

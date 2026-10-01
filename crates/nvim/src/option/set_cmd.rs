@@ -287,7 +287,7 @@ unsafe fn get_option_newval(
     } else {
         varp
     };
-    let oldval = unsafe { optval_from_varp(opt_idx, from) };
+    let oldval = optval_from_varp(opt_idx, from);
 
     // `:set opt&`. Deliberately `OptionSetFlags::GLOBAL` rather than `opt_flags`, so
     // that a `:setlocal opt&` on a global-local option gets the real
@@ -311,7 +311,7 @@ unsafe fn get_option_newval(
                 // value unset.
                 oldval.as_boolean().map(|b| !b)
             } else if prefix == Prefix::Inv {
-                Some(unsafe { varp.boolean_var().get() } == 0)
+                Some(varp.boolean_var().get() == 0)
             } else {
                 Some(prefix != Prefix::No)
             };
@@ -487,7 +487,7 @@ unsafe fn do_one_set_option(
             && !has_char(c"=:&<", nextchar)
             && !option_has_type(opt_idx, kOptValTypeBoolean));
     if showing {
-        unsafe { show_one(opt_idx, opt_flags, varp, did_show) };
+        show_one(opt_idx, opt_flags, varp, did_show);
         if nextchar != '?' as c_int
             && nextchar != NUL as c_int
             && !ascii_iswhite(afterchar as c_int)
@@ -540,19 +540,9 @@ unsafe fn do_one_set_option(
 }
 
 /// Show one option's value, on its own line, opening the message area the
-/// first time.
-///
-/// # Safety
-///
-/// `varp` must be the option's variable in the scope `opt_flags` names.
-unsafe fn show_one(
-    opt_idx: OptIndex,
-    opt_flags: OptionSetFlags,
-    varp: OptSlot,
-    did_show: &mut bool,
-) {
-    // SAFETY: `curwin`/`curbuf` are live and the option table is a plain
-    // array.
+/// first time. `varp` is the variable the value is read from, which says
+/// which script context 'verbose' reports.
+fn show_one(opt_idx: OptIndex, opt_flags: OptionSetFlags, varp: OptSlot, did_show: &mut bool) {
     if *did_show {
         msg_putchar('\n' as c_int);
     } else {

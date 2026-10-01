@@ -193,11 +193,8 @@ pub(crate) fn didset_options2() {
 pub(crate) fn check_options() {
     for opt_idx in kOptAleph..kOptCount {
         if option_has_type(opt_idx, kOptValTypeString) && get_option(opt_idx).var.has_global() {
-            // SAFETY: `get_varp` hands back this string option's own
-            // variable, so a local one names a field of the live current
-            // window or buffer.
             let var = get_varp(opt_idx).string_var();
-            if unsafe { var.get() }.is_null() {
+            if var.get().is_null() {
                 // Nothing to release: the variable held null.
                 let _ = unsafe { var.replace(empty_option()) };
             }

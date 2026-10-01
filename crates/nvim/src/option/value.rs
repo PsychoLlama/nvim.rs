@@ -21,7 +21,6 @@
 )]
 
 use crate::snprintf;
-use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::cstr;
@@ -34,7 +33,7 @@ use crate::types::{
 use crate::undo::curbuf_is_changed;
 
 use super::{
-    BoolVar, NUMBUFLEN, OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil,
+    NUMBUFLEN, OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil,
     kOptValTypeNumber, kOptValTypeString, option_default, option_has_type,
 };
 
@@ -182,38 +181,26 @@ pub(crate) fn option_get_type(opt_idx: OptIndex) -> OptValType {
 
 /// Read the option variable `slot` names as a value of `opt_idx`'s type.
 ///
-/// # Safety
-///
-/// `slot` must be the variable the table names for `opt_idx`, in some scope
-/// — what `get_varp`/`get_varp_scope` hand out.
-pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
+/// A string value is a *borrow* of the variable's own buffer, which is what
+/// makes `optval_free` of this value free the variable's string -- the
+/// protocol [`set_option_varp`]'s `free_oldval` relies on.
+pub(crate) fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
     // 'modified' has no variable of its own worth reading: `b_changed` alone
     // misses a buffer whose undo state says it is unchanged after all.
-    // SAFETY: `curbuf` is a live buffer for as long as the editor is running.
-    if slot
-        == OptSlot::Boolean(BoolVar::Local(unsafe {
-            &raw mut (*Buf::current_raw()).b_changed
-        }))
-    {
-        // SAFETY: reading the current buffer's change state.
+    if slot.is_current_modified() {
         return boolean_optval(Some(curbuf_is_changed()));
     }
-    // SAFETY (all three): the slot names this option's variable, so a local
-    // one names a field of a live window or buffer. A boolean's word is the
-    // option's own tri-state, so anything above 1 reads as true.
     let value = match slot {
         OptSlot::None => OptVal::Nil,
         // The variable's word is the option's own tri-state, so anything
         // above 1 reads as true and a negative one is "not set here".
-        OptSlot::Boolean(var) => boolean_optval(tristate(unsafe { var.get() })),
-        OptSlot::Number(var) => OptVal::Number(unsafe { var.get() }),
-        // A *borrow* of the option variable's own buffer, which is what
-        // makes `optval_free` of this value free the variable's string --
-        // the protocol `set_option_varp`'s `free_oldval` relies on.
+        OptSlot::Boolean(var) => boolean_optval(tristate(var.get())),
+        OptSlot::Number(var) => OptVal::Number(var.get()),
         OptSlot::String(var) => {
-            let data = unsafe { var.get() };
-            // An option variable that has never been set is a null pointer,
-            // which is the empty value rather than a string of no bytes.
+            let data = var.get();
+            // SAFETY: an option variable answers its own NUL-terminated
+            // buffer, or the shared empty string. Null is an immutable
+            // option's default before startup has installed one.
             let len = if data.is_null() {
                 0
             } else {
@@ -234,7 +221,10 @@ pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVa
 ///
 /// # Safety
 ///
-/// `slot` must be the variable the table names for `opt_idx`, in some scope.
+/// A string `value` must be the shared empty string or one allocation with
+/// one owner, which the variable takes over; without `free_oldval`, the
+/// caller must hold the value it read out of the variable, which now owns
+/// the bytes the variable held.
 pub(crate) unsafe fn set_option_varp(
     opt_idx: OptIndex,
     slot: OptSlot,
@@ -242,23 +232,23 @@ pub(crate) unsafe fn set_option_varp(
     free_oldval: bool,
 ) {
     debug_assert!(option_has_type(opt_idx, value.kind()));
-    // SAFETY: the slot and the value are the same type — the table asserts
-    // it for every row at compile time, and the assertion above ties this
-    // value to the same row.
     match (slot, value) {
         (OptSlot::Boolean(var), OptVal::Boolean(boolean)) => {
-            let word = boolean.map_or(-1, c_int::from);
-            unsafe { var.set(word) }
+            var.set(boolean.map_or(-1, c_int::from));
         }
-        (OptSlot::Number(var), OptVal::Number(n)) => unsafe { var.set(n) },
+        (OptSlot::Number(var), OptVal::Number(n)) => var.set(n),
         // The variable takes the allocation over, and hands back the one it
         // held. Only a string owns anything, which is why `free_oldval` is
         // decided here rather than by an `optval_free` in front of the
         // match: a global value's own string is the record's, and freeing it
         // *and* overwriting the field would release it twice.
         (OptSlot::String(var), OptVal::String(s)) => {
+            // SAFETY: the caller's promise -- one owner, or the shared empty
+            // string.
             let old = unsafe { var.replace(s.data()) };
             if free_oldval {
+                // SAFETY: what the variable held was its own allocation, or
+                // the shared empty string, and nothing else holds it now.
                 unsafe { free_string_option(old) };
             }
         }
@@ -334,15 +324,9 @@ pub(crate) fn object_as_optval(o: Object) -> Option<OptVal> {
 
 /// Whether the option still holds the default the table gives it. A hidden
 /// option counts as default whatever its variable says.
-///
-/// # Safety
-///
-/// `slot` must be the variable the table names for `opt_idx`, in some scope.
-pub(crate) unsafe fn optval_is_default(opt_idx: OptIndex, slot: OptSlot) -> bool {
+pub(crate) fn optval_is_default(opt_idx: OptIndex, slot: OptSlot) -> bool {
     if is_option_hidden(opt_idx) {
         return true;
     }
-    // SAFETY: the caller's slot is this option's variable.
-    let current = unsafe { optval_from_varp(opt_idx, slot) };
-    optval_equal(&current, &option_default(opt_idx))
+    optval_equal(&optval_from_varp(opt_idx, slot), &option_default(opt_idx))
 }

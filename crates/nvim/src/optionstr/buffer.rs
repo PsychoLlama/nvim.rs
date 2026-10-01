@@ -210,7 +210,7 @@ pub fn did_set_cinoptions(args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_comments(args: &mut OptSet) -> Result<(), OptError> {
     let mut errmsg: Result<(), OptError> = Ok(());
     // SAFETY: the frame's C string value, walked to its terminator.
-    let mut s = unsafe { varp(args).get() };
+    let mut s = varp(args).get();
     while unsafe { *s } != 0 {
         // The flag letters, up to the colon.
         while unsafe { *s } != 0 && unsafe { *s } != b':' as c_char {
@@ -247,7 +247,7 @@ pub fn did_set_comments(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_commentstring(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value.
-    let value = unsafe { varp(args).get() };
+    let value = varp(args).get();
     if c_int::from(unsafe { *value }) != NUL && !has_bytes(unsafe { cstr::at(value) }, b"%s") {
         return Err((c"E537: 'commentstring' must be empty or contain %s").into());
     }
@@ -338,7 +338,7 @@ pub fn did_set_fileformat(args: &mut OptSet) -> Result<(), OptError> {
 /// really changed — which is what `os_value_changed` tells the caller.
 pub fn did_set_filetype_or_syntax(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value and its old one.
-    let value = unsafe { varp(args).get() };
+    let value = varp(args).get();
     if !valid_filetype(unsafe { CStr::from_ptr(value) }) {
         return invalid();
     }
@@ -366,7 +366,7 @@ pub fn did_set_foldignore(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_foldmarker(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value and window.
-    let value = unsafe { varp(args).get() };
+    let value = varp(args).get();
     // Two markers separated by a comma, neither of them empty.
     let comma = unsafe { vim_strchr(value, c_int::from(b',')) };
     if comma.is_null() {
@@ -470,7 +470,7 @@ pub fn did_set_keymap(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_lispoptions(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value.
-    let value = unsafe { varp(args).get() };
+    let value = varp(args).get();
     if c_int::from(unsafe { *value }) != NUL
         && unsafe { !cstr::eq_bytes(value, b"expr:0") }
         && unsafe { !cstr::eq_bytes(value, b"expr:1") }
@@ -485,7 +485,7 @@ pub fn did_set_lispoptions(args: &mut OptSet) -> Result<(), OptError> {
 /// may be multibyte.
 pub fn did_set_matchpairs(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value, walked by character length.
-    let mut p = unsafe { varp(args).get() };
+    let mut p = varp(args).get();
     while c_int::from(unsafe { *p }) != NUL {
         let mut separator = -1;
         let mut close = -1;

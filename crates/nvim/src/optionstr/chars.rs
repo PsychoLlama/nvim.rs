@@ -36,6 +36,7 @@
 )]
 
 use crate::cstr;
+use crate::global_cell::field;
 use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -55,10 +56,11 @@ use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
 use crate::types::{
     CharsOption, Expand, FcsChars, LcsChars, NUL, OptError, OptSet, OptionSetFlags, ScreenChar,
-    int64_t, size_t,
+    WinOpt, int64_t, size_t,
 };
 use crate::winlayer;
 
+use super::frame::win_local;
 use super::{
     LocalOptStr, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
     e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str, kFillchars,
@@ -708,7 +710,7 @@ pub(crate) unsafe fn did_set_global_chars_option(
 /// The option-table callback for both options and both scopes: which of the
 /// four cases this is comes from the variable being set.
 pub fn did_set_chars_option(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut win, varp, idx, flags) = (
+    let (win, varp, idx, flags) = (
         args.os_win,
         args.os_varp.string_var(),
         args.os_idx,
@@ -725,8 +727,8 @@ pub fn did_set_chars_option(args: &mut OptSet) -> Result<(), OptError> {
     // Which variable it is, not what it says.
     if varp == option_var(idx).string_var() {
         unsafe { did_set_global_chars_option(win, varp.get(), which, flags) }
-    } else if varp == crate::option::StrVar::Local(&raw mut win.w_onebuf_opt.wo_lcs)
-        || varp == crate::option::StrVar::Local(&raw mut win.w_onebuf_opt.wo_fcs)
+    } else if varp == win_local(win, field!(WinOpt, wo_lcs))
+        || varp == win_local(win, field!(WinOpt, wo_fcs))
     {
         unsafe { set_chars_option(win, varp.get(), which, true) }
     } else {

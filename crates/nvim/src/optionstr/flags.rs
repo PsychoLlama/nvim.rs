@@ -140,7 +140,7 @@ pub(crate) unsafe fn did_set_opt_flags(
 /// one of the accepted ones".
 pub fn did_set_str_generic(args: &mut OptSet) -> Result<(), OptError> {
     let (idx, varp) = (args.os_idx, args.os_varp.string_var());
-    if unsafe { check_str_opt(idx, Some(varp)) }.is_err() {
+    if check_str_opt(idx, Some(varp)).is_err() {
         Err(e_invarg.into())
     } else {
         Ok(())
@@ -166,19 +166,16 @@ pub(crate) unsafe fn did_set_option_listflag(
 }
 
 /// Re-run an option's word-list check against its current value, refreshing
-/// the mask. `varp` may be null for "wherever the option keeps its global
-/// value".
-///
-/// # Safety
-/// `varp` is the option's variable, or `None` for its global one.
-pub(crate) unsafe fn check_str_opt(
+/// the mask. `varp` is the option's variable, or `None` for "wherever the
+/// option keeps its global value".
+pub(crate) fn check_str_opt(
     idx: OptIndex,
     varp: Option<crate::option::StrVar>,
 ) -> Result<(), Failed> {
     let opt = get_option(idx);
     let varp = varp.unwrap_or_else(|| option_var(idx).string_var());
     let list = opt.flags & (kOptFlagComma | kOptFlagOneComma) != 0;
-    // SAFETY: the option's variable holds a C string.
+    // SAFETY: an option variable answers its own NUL-terminated buffer.
     let Some(mask) = (unsafe { opt_strings_mask(varp.get(), opt_values(idx), list) }) else {
         return Err(Failed);
     };
