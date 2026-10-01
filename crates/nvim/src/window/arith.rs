@@ -238,20 +238,12 @@ mod tests {
     //! the crate's public surface with the move.
 
     use core::ffi::c_char;
-    use std::sync::{Mutex, MutexGuard};
 
     use super::*;
+    use crate::global_cell::{editor_state, editor_state_lock};
     use crate::window::alloc::{bare_window, free_bare_window};
     use crate::window::{FR_COL, FR_LEAF, FR_ROW};
     use crate::winlayer::{FrameRef, free_frame, new_frame};
-
-    /// The window and frame registries are process-wide and `cargo test` runs
-    /// cases in parallel, so a case that files anything in one takes this
-    /// first. The LuaJIT harness got the isolation by forking a child per
-    /// case; here there is one process, so it is explicit. Poisoning is
-    /// ignored — a panicking case has already reported its own failure, and
-    /// each case's [`Tree`] gives back everything it registered.
-    static REGISTRIES: Mutex<()> = Mutex::new(());
 
     /// A window with the chrome a leaf frame's minimum size is made of.
     struct Chrome {
@@ -265,7 +257,10 @@ mod tests {
     struct Tree {
         frames: Vec<FrameRef>,
         windows: Vec<Win>,
-        _registries: MutexGuard<'static, ()>,
+        /// The window and frame registries are process-wide and `cargo test`
+        /// runs cases in parallel, so a tree holds the editor lock for as
+        /// long as it has anything filed in them.
+        _registries: editor_state::Held,
     }
 
     impl Drop for Tree {
@@ -284,7 +279,7 @@ mod tests {
             Tree {
                 frames: Vec::new(),
                 windows: Vec::new(),
-                _registries: REGISTRIES.lock().unwrap_or_else(|e| e.into_inner()),
+                _registries: editor_state_lock(),
             }
         }
 

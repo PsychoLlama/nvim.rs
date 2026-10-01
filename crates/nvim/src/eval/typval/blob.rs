@@ -644,12 +644,7 @@ pub fn blob_copy(from: Option<&Blob>, to: &mut TypVal) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Exclusive use of the collector's registries, which allocating a value
-    /// into a typval reaches. See [`crate::eval::gc::serial`].
-    fn serial() -> crate::eval::gc::serial::Held {
-        crate::eval::gc::serial::lock()
-    }
+    use crate::global_cell::editor_state_lock;
 
     /// A blob holding `bytes`, owned by the handle it answers.
     fn blob_of(bytes: &[u8]) -> BlobRef {
@@ -663,7 +658,7 @@ mod tests {
     /// is why [`Blob::bytes`] tests it rather than trusting the length.
     #[test]
     fn an_untouched_blob_is_the_empty_slice() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let mut b = tv_blob_alloc();
         assert!(b.bv_ga.ga_data.is_null());
         assert_eq!(b.bytes(), b"");
@@ -678,7 +673,7 @@ mod tests {
     /// `claim` hands back exactly the run it added, leaving what was there.
     #[test]
     fn claiming_room_answers_only_the_new_bytes() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let mut b = blob_of(b"ab");
         let room = b.claim(3);
         assert_eq!(room.len(), 3);
@@ -692,7 +687,7 @@ mod tests {
     /// whole of it, which is `remove(b, 0, len(b) - 1)`.
     #[test]
     fn draining_a_run_closes_the_gap() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let mut b = blob_of(b"abcdef");
         b.drain(1, 2);
         assert_eq!(b.bytes(), b"adef");
@@ -707,7 +702,7 @@ mod tests {
     /// end and ignores anything further out -- upstream's silence, kept.
     #[test]
     fn setting_the_slot_past_the_end_appends_and_no_further() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let mut b = blob_of(b"ab");
         b.set_or_append(0, b'z');
         assert_eq!(b.bytes(), b"zb");
@@ -722,7 +717,7 @@ mod tests {
     /// identity -- and the borrow is never taken twice.
     #[test]
     fn assigning_a_blob_over_the_whole_of_itself_changes_nothing() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let held = blob_of(b"abcd");
         let at = held.as_ptr();
         let src = TypVal::blob(Some(held.clone()));
@@ -745,7 +740,7 @@ mod tests {
     /// A copy is a blob of its own, holding the same bytes.
     #[test]
     fn copying_a_blob_answers_a_blob_of_its_own() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let from = blob_of(b"xyz");
         let mut to = TypVal::Unknown;
         blob_copy(Some(&from), &mut to);

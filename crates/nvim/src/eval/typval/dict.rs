@@ -917,12 +917,7 @@ pub unsafe fn tv_dict_remove(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Exclusive use of the collector's registries, which every dictionary
-    /// allocated below is entered in. See [`crate::eval::gc::serial`].
-    fn serial() -> crate::eval::gc::serial::Held {
-        crate::eval::gc::serial::lock()
-    }
+    use crate::global_cell::editor_state_lock;
 
     /// A dictionary holding `keys`, each under its own position as a number.
     fn dict_of(keys: &[&str]) -> DictRef {
@@ -955,7 +950,7 @@ mod tests {
     /// insertion order -- the answer is neither that nor sorted.
     #[test]
     fn the_slot_order_survives_growth() {
-        let _held = serial();
+        let _held = editor_state_lock();
         const KEYS: [&str; 14] = [
             "a",
             "bb",
@@ -1004,7 +999,7 @@ mod tests {
     /// -- that frees it -- which is why it is a borrow of the dictionary.
     #[test]
     fn an_item_outlives_the_rehash_that_moves_its_slot() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let mut d = dict_of(&["first"]);
         let before = d.find_ptr(b"first");
         let slots_before = d.dv_hashtab.size();
@@ -1027,7 +1022,7 @@ mod tests {
     /// NUL-terminated and so carries no NUL of its own.
     #[test]
     fn the_empty_key_is_a_key() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let d = dict_of(&["", "a"]);
         assert_eq!(d.len(), 2);
         assert_eq!(number_at(&d, b""), Some(0));
@@ -1040,7 +1035,7 @@ mod tests {
     /// finds is already there, so nothing is added and nothing overwritten.
     #[test]
     fn extending_a_dictionary_with_itself_is_the_identity() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let mut d = dict_of(&["a", "b", "c"]);
         let order = slot_order(&d);
         d.extend_from_self(b'f');
@@ -1053,7 +1048,7 @@ mod tests {
     /// one dictionary, which is the whole reason it takes pointers.
     #[test]
     fn the_branching_extend_reaches_both_cases() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let into = dict_of(&["a"]);
         let from = dict_of(&["b", "c"]);
         // SAFETY: two live dictionaries this case owns.
@@ -1071,7 +1066,7 @@ mod tests {
     /// order they were built in.
     #[test]
     fn equality_is_by_key_not_by_slot() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let d1 = dict_of(&["a", "b"]);
         assert!(dict_equal(Some(&d1), Some(&d1), false));
         let mut d2 = tv_dict_alloc();
@@ -1091,7 +1086,7 @@ mod tests {
     /// down, and the cycle is what would otherwise recurse forever.
     #[test]
     fn a_deep_copy_of_a_cycle_points_at_the_copy() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let mut d = dict_of(&["n"]);
         // The value is a second reference to the dictionary itself.
         // SAFETY: a live dictionary, which the handle takes a reference to.
@@ -1126,7 +1121,7 @@ mod tests {
     /// slots the cursor is counting through.
     #[test]
     fn a_locked_walk_may_remove_as_it_goes() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let d = dict_of(&["a", "b", "c", "d"]);
         // SAFETY: a live dictionary; the lock is released below.
         unsafe { hash_lock(&raw mut (*d.as_ptr()).dv_hashtab) };
@@ -1152,7 +1147,7 @@ mod tests {
     /// table it leaves behind takes new keys in the order a fresh one does.
     #[test]
     fn clearing_leaves_a_usable_table() {
-        let _held = serial();
+        let _held = editor_state_lock();
         let mut d = dict_of(&["a", "b", "c"]);
         // SAFETY: a live dictionary this case owns and nothing walks.
         unsafe { dict_clear(d.as_ptr()) };

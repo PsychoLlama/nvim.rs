@@ -683,13 +683,8 @@ mod tests {
     /// touch the same cell -- `a_negative_bump_adds_back` and
     /// `raw_keys_releases_both` both drive `no_mapping` -- interleave and one
     /// of them sees the other's state.
-    static COUNTERS: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    /// The lock, ignoring a poisoning left by an earlier failure: these tests
-    /// restore what they change, and a second report of the first failure is
-    /// noise.
-    fn counters() -> std::sync::MutexGuard<'static, ()> {
-        COUNTERS.lock().unwrap_or_else(|e| e.into_inner())
+    fn counters() -> crate::global_cell::editor_state::Held {
+        crate::global_cell::editor_state_lock()
     }
 
     #[test]

@@ -466,6 +466,82 @@ impl Drop for BorrowGuard {
     }
 }
 
+/// The lib harness's editor lock.
+///
+/// The editor is single-threaded -- that is what [`GlobalCell`]'s whole
+/// contract rests on -- but `cargo test` runs a binary's cases in parallel
+/// threads, and every one of them shares the one copy of the editor's
+/// process-wide state: the collector's registries, the window and frame
+/// registries, the suppression counters. A case that touches any of it
+/// takes [`editor_state_lock`] first, and holding the guard *is* being the
+/// main thread for as long as it lives.
+///
+/// One lock rather than one per registry, because a case does not know
+/// which registries the code under test reaches: a window allocates a list,
+/// a list's teardown can message. Two locks taken in different orders by two
+/// cases would deadlock; one cannot.
+///
+/// The lock is reentrant on its own thread, so a helper that takes it inside
+/// a case that already holds it nests instead of deadlocking. Poisoning is
+/// ignored: a panicking case has already reported its own failure, and a
+/// second report of it in every case that follows is noise.
+///
+/// `crates/nvim/tests/unit` is a different binary with its own
+/// `editor_lock()`; the two cannot share a mutex and need not.
+#[cfg(test)]
+pub(crate) mod editor_state {
+    use std::cell::Cell;
+    use std::sync::{Mutex, MutexGuard};
+
+    static EDITOR_STATE: Mutex<()> = Mutex::new(());
+
+    thread_local! {
+        /// How many live guards this thread holds. A thread-local count
+        /// rather than the guard's identity because [`assert_held`] is
+        /// called from inside the locked region, where asking the mutex
+        /// would deadlock.
+        static DEPTH: Cell<usize> = const { Cell::new(0) };
+    }
+
+    /// What [`editor_state_lock`](super::editor_state_lock) hands back. The
+    /// outermost guard on a thread owns the mutex; nested ones only count.
+    pub(crate) struct Held(
+        #[expect(dead_code, reason = "held for its lock")] Option<MutexGuard<'static, ()>>,
+    );
+
+    pub(super) fn lock() -> Held {
+        let guard = if DEPTH.get() == 0 {
+            Some(EDITOR_STATE.lock().unwrap_or_else(|e| e.into_inner()))
+        } else {
+            None
+        };
+        DEPTH.set(DEPTH.get() + 1);
+        Held(guard)
+    }
+
+    impl Drop for Held {
+        fn drop(&mut self) {
+            DEPTH.set(DEPTH.get() - 1);
+        }
+    }
+
+    /// Panic unless this thread holds the lock.
+    pub(crate) fn assert_held() {
+        assert!(
+            DEPTH.get() > 0,
+            "a test that touches the editor's process-wide state must hold \
+             `editor_state_lock()`"
+        );
+    }
+}
+
+/// Exclusive use of the editor's process-wide state for a `cargo test` case;
+/// see [`editor_state`].
+#[cfg(test)]
+pub(crate) fn editor_state_lock() -> editor_state::Held {
+    editor_state::lock()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -524,5 +600,22 @@ mod tests {
         // Fully released: an exclusive borrow works again afterwards.
         CELL.with_mut(|x| *x = 6);
         assert_eq!(CELL.get(), 6);
+    }
+
+    #[test]
+    fn the_editor_state_lock_nests_on_its_own_thread() {
+        let outer = editor_state_lock();
+        {
+            let _inner = editor_state_lock();
+            editor_state::assert_held();
+        }
+        editor_state::assert_held();
+        drop(outer);
+    }
+
+    #[test]
+    #[should_panic(expected = "must hold `editor_state_lock()`")]
+    fn touching_editor_state_without_the_lock_panics() {
+        editor_state::assert_held();
     }
 }
