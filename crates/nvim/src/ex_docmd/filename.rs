@@ -31,7 +31,7 @@ use crate::eval::typval::list_find_str;
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::sourcing_entry;
-use crate::ex_docmd::state::escape_chars;
+use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::ex_docmd::xfree;
 use crate::ex_docmd::{
     ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING, VALID_HEAD,
@@ -210,8 +210,8 @@ pub(crate) fn expand_filename(
             let mut l = repl;
             // SAFETY: `l` walks the NUL-terminated replacement.
             while unsafe { *l } != 0 {
-                if has_char(escape_chars.get(), byte(l) as uint8_t as c_int) {
-                    let escaped_repl = vim_strsave_escaped(repl, escape_chars.get());
+                if has_char(ESCAPE_CHARS.as_ptr(), byte(l) as uint8_t as c_int) {
+                    let escaped_repl = vim_strsave_escaped(repl, ESCAPE_CHARS.as_ptr());
                     xfree(repl as *mut c_void);
                     repl = escaped_repl;
                     break;

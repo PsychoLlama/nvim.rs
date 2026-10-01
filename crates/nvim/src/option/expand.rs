@@ -25,7 +25,7 @@ use std::ffi::CString;
 use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::cmdexpand::fuzzymatches_to_strmatches;
 use crate::cstr;
-use crate::ex_docmd::state::escape_chars;
+use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::fuzzy::fuzzy_match_str;
 use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
@@ -597,7 +597,7 @@ pub(crate) unsafe fn expand_settings(
 /// `var` must be NUL-terminated. The result is owned by the caller.
 pub(crate) unsafe fn escape_option_str_cmdline(var: *mut c_char) -> *mut c_char {
     // SAFETY: the caller's string.
-    unsafe { vim_strsave_escaped(var, escape_chars.get()) }
+    unsafe { vim_strsave_escaped(var, ESCAPE_CHARS.as_ptr()) }
 }
 
 /// Offer the option's current value as the one completion.

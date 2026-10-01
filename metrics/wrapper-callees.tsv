@@ -1,13 +1,13 @@
 count	callee	no_raw	defs	def
-847	xfree	0	1	crates/nvim/src/memory/mod.rs
+844	xfree	0	1	crates/nvim/src/memory/mod.rs
 728	.add	0	3	
 447	.offset	0	0	
 444	bytes_at	0	1	crates/nvim/src/cstr.rs
 341	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-317	at	0	3	
+318	at	0	3	
 279	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
-180	xstrdup	0	1	crates/nvim/src/memory/mod.rs
+179	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 154	from_raw_parts	0	0	
@@ -41,7 +41,7 @@ count	callee	no_raw	defs	def
 45	fprintf	0	0	
 44	eq	0	1	crates/nvim/src/cstr.rs
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
-44	xstrnsave	0	1	crates/nvim/src/strings/mod.rs
+43	xstrnsave	0	1	crates/nvim/src/strings/mod.rs
 42	key_bytes	0	1	crates/nvim/src/api/private/dispatch/mod.rs
 40	copy_option_part	0	1	crates/nvim/src/option/query.rs
 40	strcpy	0	0	
@@ -358,7 +358,6 @@ count	callee	no_raw	defs	def
 7	additional_data_len	0	1	crates/nvim/src/shada/pack.rs
 7	append_to_redobuff_literally	0	1	crates/nvim/src/getchar/redo.rs
 7	augroup_find	0	1	crates/nvim/src/autocmd/groups.rs
-7	bytes_at_or_empty	0	1	crates/nvim/src/cstr.rs
 7	callback_from_typval	0	1	crates/nvim/src/eval/callback.rs
 7	change_warning	1	1	crates/nvim/src/change/flag.rs
 7	channel_alloc	0	1	crates/nvim/src/channel/mod.rs
@@ -427,6 +426,7 @@ count	callee	no_raw	defs	def
 6	b0_store_number	0	0	
 6	buf_check_timestamp	1	1	crates/nvim/src/fileio/timestamp.rs
 6	buflist_findname_exp	0	1	crates/nvim/src/buffer/list.rs
+6	bytes_at_or_empty	0	1	crates/nvim/src/cstr.rs
 6	bytes_of	0	1	crates/nvim/src/runtime/rtp.rs
 6	cat_prefix_varname	0	1	crates/nvim/src/eval/vars/lookup.rs
 6	chan_close_on_err	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs

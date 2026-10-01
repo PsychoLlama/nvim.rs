@@ -32,7 +32,7 @@
 use crate::keycodes::Key;
 use crate::option::vars::{P_FP, P_SEL};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_int, c_void};
+use core::ffi::c_int;
 
 use super::*;
 use crate::r#move::WinValid;
@@ -261,18 +261,17 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
     } else if is_ex_cmdchar(cmd_arg) {
         // `do_cmdline` stored the first typed line in `repeat_cmdline`.
         // When several lines were typed, repeating is not possible.
-        let line = repeat_cmdline.get();
-        if line.is_null() {
-            reset_redobuff();
-        } else {
-            if cmd_arg.cmdchar == ':' as c_int {
-                unsafe { append_to_redobuff_literally(line, -1) };
-            } else {
-                unsafe { append_to_redobuff_keys(line) };
+        match repeat_cmdline.take() {
+            None => reset_redobuff(),
+            Some(line) => {
+                // SAFETY: NUL-terminated by its type.
+                if cmd_arg.cmdchar == ':' as c_int {
+                    unsafe { append_to_redobuff_literally(line.as_ptr(), -1) };
+                } else {
+                    unsafe { append_to_redobuff_keys(line.as_ptr()) };
+                }
+                unsafe { append_to_redobuff(c"\n".as_ptr()) };
             }
-            unsafe { append_to_redobuff(c"\n".as_ptr()) };
-            unsafe { xfree(line as *mut c_void) };
-            repeat_cmdline.set(::core::ptr::null_mut());
         }
     } else if cmd_arg.cmdchar == Key::Lua.code() {
         append_to_redobuff_number(repeat_luaref.get() as c_int);

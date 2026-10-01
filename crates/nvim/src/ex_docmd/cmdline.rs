@@ -239,9 +239,8 @@ fn ask_for_line(
 ) -> Option<Line> {
     if count == 1 && source.is_typed() {
         if ui_has(kUICmdline) {
-            // SAFETY: the last command line, NUL-terminated or null.
-            let last = unsafe { cstr::bytes_at_or_empty(last_cmdline.get()) };
-            ui_ext_cmdline_block_append(0, last);
+            let last = last_cmdline.with(Clone::clone).unwrap_or_default();
+            ui_ext_cmdline_block_append(0, &last);
             *did_block = true;
         }
         // The first line after an `:if` needs this, or the `:if` is
@@ -275,12 +274,8 @@ fn ask_for_line(
     // Keep the first typed line for `.` to repeat; forget it as soon as a
     // second one is typed.
     if flags.has(DoCmdOpts::KEEPLINE) {
-        xfree(repeat_cmdline.get() as *mut c_void);
-        repeat_cmdline.set(if count == 0 {
-            xstrdup(line)
-        } else {
-            ptr::null_mut()
-        });
+        // SAFETY: the line the getter just answered, NUL-terminated.
+        repeat_cmdline.set((count == 0).then(|| XString::from_cstr(unsafe { cstr::at(line) })));
     }
     Some(Line(line))
 }
@@ -605,10 +600,10 @@ impl Run {
 
             // Remember a typed command for the `:` register -- after
             // running it, so that `:@:` works.
-            if source.is_typed() && !new_last_cmdline.get().is_null() {
-                xfree(last_cmdline.get() as *mut c_void);
-                last_cmdline.set(new_last_cmdline.get());
-                new_last_cmdline.set(ptr::null_mut());
+            if source.is_typed()
+                && let Some(line) = new_last_cmdline.take()
+            {
+                last_cmdline.set(Some(line));
             }
         }
     }
@@ -976,10 +971,4 @@ fn rewind_conditionals(
 fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::runtime::source_finished(fgetline, cookie) }
-}
-
-/// `xstrdup()`, checked.
-fn xstrdup(str: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::memory::xstrdup(str) }
 }

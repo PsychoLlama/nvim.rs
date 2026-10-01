@@ -22,9 +22,11 @@
 )]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
+use core::ptr;
 
 use super::*;
 use crate::types::NUL;
@@ -243,10 +245,12 @@ pub fn ex_display(excmd: &mut ExArg) {
     };
     let insert = get_last_insert();
     special('.' as c_int, c"\n  c  \".   ".as_ptr(), insert.data(), true);
+    // A copy: listing it runs the message machinery.
+    let mut last = last_cmdline.with(Clone::clone);
     special(
         ':' as c_int,
         c"\n  c  \":   ".as_ptr(),
-        last_cmdline.get(),
+        last.as_mut().map_or(ptr::null_mut(), XString::as_mut_ptr),
         false,
     );
     special(

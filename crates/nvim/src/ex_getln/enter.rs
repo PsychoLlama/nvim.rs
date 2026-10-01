@@ -17,6 +17,7 @@ use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
 use crate::keycodes::Key;
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::option::vars::{P_STL, P_TAL, P_WBR};
 use crate::optionstr::OptString;
@@ -450,8 +451,7 @@ pub(crate) fn command_line_enter(
                     },
                 );
                 if s.firstc == ':' as ::core::ffi::c_int {
-                    unsafe { xfree(new_last_cmdline.get() as *mut ::core::ffi::c_void) };
-                    new_last_cmdline.set(unsafe { xstrnsave(cc.text(), cc.len() as size_t) });
+                    new_last_cmdline.set(Some(XString::from_bytes(cstr::as_bytes(cc.bytes()))));
                 }
             }
 

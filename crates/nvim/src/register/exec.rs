@@ -378,20 +378,16 @@ pub fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> 
     if regname == ':' as c_int {
         // The last command line, re-run. Control characters have to be
         // escaped with CTRL-V or the typeahead buffer would act on them.
-        if last_cmdline.get().is_null() {
+        let Some(last) = last_cmdline.with(Clone::clone) else {
             emsg(gettext(e_nolastcmd));
             return Err(Failed);
-        }
-        // SAFETY: `new_last_cmdline` owns whatever it holds, and is cleared
-        // on the next line so the freed pointer is never read back.
-        unsafe { xfree(new_last_cmdline.get() as *mut c_void) };
-        new_last_cmdline.set(::core::ptr::null_mut());
-        // SAFETY: `last_cmdline` is non-null (tested just above) and
-        // NUL-terminated, as is the literal set of characters to escape;
-        // the answer is a fresh allocation of ours.
+        };
+        new_last_cmdline.set(None);
+        // SAFETY: both NUL-terminated by their types; the answer is a fresh
+        // allocation of ours.
         let p = unsafe {
             vim_strsave_escaped_ext(
-                last_cmdline.get(),
+                last.as_ptr(),
                 c"\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0B\x0C\r\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F".as_ptr(),
                 Ctrl_V as c_char,
                 false,

@@ -18,8 +18,9 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
+use crate::memory::XString;
 use crate::types::{CmdMod, CmdModFlags, RegMatch, RegProg};
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 pub(crate) static exec_from_reg: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static did_emsg_syntax: GlobalCell<bool> = GlobalCell::new(false);
@@ -43,11 +44,13 @@ pub static cmdmod: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {
 pub(crate) static ex_normal_busy: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static global_busy: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static listcmd_busy: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static last_cmdline: GlobalCell<*mut c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub(crate) static repeat_cmdline: GlobalCell<*mut c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub(crate) static new_last_cmdline: GlobalCell<*mut c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub(crate) static escape_chars: GlobalCell<*mut c_char> =
-    GlobalCell::new(c" \t\\\"|".as_ptr() as *mut c_char);
+/// The last command line typed, which `@:` replays and `":` reads.
+pub(crate) static last_cmdline: GlobalCell<Option<XString>> = GlobalCell::new(None);
+/// The first line of the command being typed, which `.` repeats when the
+/// command was a single line.
+pub(crate) static repeat_cmdline: GlobalCell<Option<XString>> = GlobalCell::new(None);
+/// The command line just typed; it becomes [`last_cmdline`] once it has
+/// run, so that `:@:` inside it still sees the one before.
+pub(crate) static new_last_cmdline: GlobalCell<Option<XString>> = GlobalCell::new(None);
+/// The characters a file name inserted into a command line is escaped for.
+pub(crate) const ESCAPE_CHARS: &CStr = c" \t\\\"|";

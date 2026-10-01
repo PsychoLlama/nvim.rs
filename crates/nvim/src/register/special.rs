@@ -154,10 +154,17 @@ pub unsafe fn get_spec_reg(
         }
         // `":` -- the last command line.
         c if c == ':' as c_int => {
-            if last_cmdline.get().is_null() && errmsg {
-                emsg(gettext(e_nolastcmd));
+            // A copy: the caller may run commands while it holds it.
+            match last_cmdline.with(Clone::clone) {
+                Some(line) => {
+                    value = line.into_raw();
+                    owned = true;
+                }
+                None if errmsg => {
+                    emsg(gettext(e_nolastcmd));
+                }
+                None => {}
             }
-            value = last_cmdline.get();
             true
         }
         // `"/` -- the last search pattern.
