@@ -793,3 +793,110 @@ pub unsafe fn restore_typeahead(save: *mut TypeaheadSave) {
     unsafe { readbuf2().free() };
     readbuf2().set(core::mem::take(unsafe { &mut (*save).save_readbuf2 }));
 }
+
+#[cfg(test)]
+mod tests {
+    //! The typeahead buffer and the one key `vungetc` puts back, through
+    //! the entry points the editor uses.
+
+    use super::*;
+    use crate::global_cell::{editor_state::Held, editor_state_lock};
+    use crate::keycodes::{K_SPECIAL, KS_MODIFIER, Key, key_escape};
+    use crate::types::NUL;
+
+    /// The typeahead is process-wide; hold the lock and start from an
+    /// empty one. Dropping the answer empties it again.
+    struct Fresh(#[allow(dead_code, reason = "held for its drop")] Held);
+
+    impl Fresh {
+        fn new() -> Self {
+            let held = editor_state_lock();
+            clear();
+            Fresh(held)
+        }
+    }
+
+    impl Drop for Fresh {
+        fn drop(&mut self) {
+            clear();
+        }
+    }
+
+    fn clear() {
+        init_typebuf();
+        flush_typebuf(false);
+        old_char.set(-1);
+        while read_readbuffers(true) != NUL {}
+    }
+
+    /// The valid bytes, front first.
+    fn bytes() -> Vec<u8> {
+        (0..typeahead().len())
+            .map(|i| u8::try_from(typeahead().byte(i)).expect("the typeahead holds bytes"))
+            .collect()
+    }
+
+    #[test]
+    fn a_put_back_key_goes_in_front() {
+        let _fresh = Fresh::new();
+        assert_eq!(ins_char_typebuf(c_int::from(b'a'), ModMask::NONE, false), 1);
+        assert_eq!(ins_char_typebuf(c_int::from(b'b'), ModMask::NONE, false), 1);
+        assert_eq!(bytes(), b"ba");
+        // Remappable: `KeyNoremap` was clear.
+        assert_eq!(typeahead().noremap(0), 0);
+        assert_eq!(typeahead().noremap(1), 0);
+    }
+
+    #[test]
+    fn a_special_key_is_escaped_with_its_modifiers() {
+        let _fresh = Fresh::new();
+        let left = Key::Left.code();
+        assert_eq!(ins_char_typebuf(left, ModMask::NONE, false), 3);
+        assert_eq!(bytes(), key_escape(left));
+        flush_typebuf(false);
+        assert_eq!(ins_char_typebuf(left, ModMask::SHIFT, false), 6);
+        let byte = |c: c_int| u8::try_from(c).expect("a byte");
+        let mut expected = vec![
+            byte(K_SPECIAL),
+            byte(KS_MODIFIER),
+            byte(ModMask::SHIFT.bits()),
+        ];
+        expected.extend_from_slice(&key_escape(left));
+        assert_eq!(bytes(), expected);
+    }
+
+    #[test]
+    fn growing_past_the_initial_storage_keeps_every_byte() {
+        let _fresh = Fresh::new();
+        let before = typeahead().change_cnt();
+        assert!(!typebuf_changed(before));
+        let mut expected = Vec::new();
+        for i in 0..1000u16 {
+            let c = b'a' + u8::try_from(i % 26).expect("a letter");
+            ins_char_typebuf(c_int::from(c), ModMask::NONE, false);
+            expected.insert(0, c);
+        }
+        assert_eq!(bytes(), expected);
+        assert!(typeahead().buflen() > TYPELEN_INIT);
+        assert!(typebuf_changed(before));
+        flush_typebuf(false);
+        assert!(typeahead().is_empty());
+    }
+
+    #[test]
+    fn an_ungotten_key_is_peeked_before_the_typeahead() {
+        let _fresh = Fresh::new();
+        ins_char_typebuf(c_int::from(b't'), ModMask::NONE, false);
+        vungetc(c_int::from(b'u'));
+        assert!(can_get_old_char());
+        assert_eq!(vpeekc(), c_int::from(b'u'));
+        // A typed key waits for the stuff buffer to empty; a stuffed one
+        // does not.
+        stuff_readbuf(c"s");
+        assert!(!can_get_old_char());
+        KeyStuffed.set(1);
+        vungetc(c_int::from(b'u'));
+        KeyStuffed.set(0);
+        assert!(can_get_old_char());
+    }
+}

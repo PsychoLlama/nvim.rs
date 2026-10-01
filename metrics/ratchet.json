@@ -55,7 +55,7 @@
   "long_fns": 69,
   "dup_consts": 1246,
   "types_files": 115,
-  "untested_dirs": 36,
+  "untested_dirs": 35,
   "files_without_deny_unsafe_op": 0,
   "files_without_deny_casts": 775,
   "files_allowing_non_camel_case_types": 25,

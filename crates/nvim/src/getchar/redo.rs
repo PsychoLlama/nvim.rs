@@ -423,3 +423,152 @@ pub fn start_redo_ins() -> Result<(), Failed> {
 pub fn stop_redo_ins() {
     block_redo.set(false);
 }
+
+#[cfg(test)]
+mod tests {
+    //! The redo walk, observed from outside: what [`start_redo`] and
+    //! [`start_redo_ins`] stuff into the read buffers for a redo buffer
+    //! built through the same entry points the editor uses.
+
+    use super::*;
+    use crate::global_cell::{editor_state::Held, editor_state_lock};
+    use crate::keycodes::{Key, key_escape};
+
+    /// The editor's key buffers are process-wide; hold the lock and start
+    /// from empty ones. Dropping the answer leaves them empty again.
+    struct Fresh(#[allow(dead_code, reason = "held for its drop")] Held);
+
+    impl Fresh {
+        fn new() -> Self {
+            let held = editor_state_lock();
+            clear();
+            Fresh(held)
+        }
+    }
+
+    impl Drop for Fresh {
+        fn drop(&mut self) {
+            clear();
+        }
+    }
+
+    /// Empty both redo buffers and both read buffers.
+    fn clear() {
+        stop_redo_ins();
+        reset_redobuff();
+        reset_redobuff();
+        drain();
+    }
+
+    /// Read the read buffers out, as `vgetc` would: the escaped bytes.
+    fn drain() -> Vec<u8> {
+        let mut out = Vec::new();
+        loop {
+            let c = read_readbuffers(true);
+            if c == NUL {
+                return out;
+            }
+            out.push(u8::try_from(c).expect("a read buffer holds bytes"));
+        }
+    }
+
+    /// Append `keys` to the redo buffer one character at a time.
+    fn redo(keys: &str) {
+        for ch in keys.chars() {
+            append_to_redobuff_char(c_int::try_from(u32::from(ch)).expect("a code point"));
+        }
+    }
+
+    #[test]
+    fn nothing_to_redo_fails() {
+        let _fresh = Fresh::new();
+        assert!(start_redo(0, false).is_err());
+        assert!(start_redo(0, true).is_err());
+        assert!(start_redo_ins().is_err());
+        assert!(drain().is_empty());
+    }
+
+    #[test]
+    fn a_count_replaces_the_one_recorded() {
+        let _fresh = Fresh::new();
+        redo("3dw");
+        start_redo(0, false).unwrap();
+        assert_eq!(drain(), b"3dw");
+        start_redo(25, false).unwrap();
+        assert_eq!(drain(), b"25dw");
+        // The buffer itself is left alone by the walk.
+        start_redo(0, false).unwrap();
+        assert_eq!(drain(), b"3dw");
+    }
+
+    #[test]
+    fn a_numbered_register_shifts_up() {
+        let _fresh = Fresh::new();
+        redo("\"1p");
+        start_redo(0, false).unwrap();
+        assert_eq!(drain(), b"\"2p");
+        clear();
+        redo("\"9p");
+        start_redo(0, false).unwrap();
+        assert_eq!(drain(), b"\"9p");
+    }
+
+    #[test]
+    fn the_walk_crosses_blocks_mid_character() {
+        let _fresh = Fresh::new();
+        // One byte per add: a block is 20 bytes, so the 'é' after 19 'a's
+        // is split between the first block and the second, and the next
+        // ones land wherever they land.
+        redo(&"a".repeat(19));
+        let mut expected = vec![b'a'; 19];
+        redo("é");
+        expected.extend_from_slice("é".as_bytes());
+        // U+0080, whose second UTF-8 byte is the escape byte itself.
+        redo("\u{80}");
+        expected.push(0xC2);
+        expected.extend_from_slice(&key_escape(K_SPECIAL));
+        // A special key: one character, three bytes.
+        append_to_redobuff_char(Key::Left.code());
+        expected.extend_from_slice(&key_escape(Key::Left.code()));
+        for _ in 0..30 {
+            redo("€x");
+            expected.extend_from_slice("€x".as_bytes());
+        }
+        start_redo(0, false).unwrap();
+        assert_eq!(drain(), expected);
+    }
+
+    #[test]
+    fn repeating_an_insert_skips_the_command() {
+        let _fresh = Fresh::new();
+        redo("3ihello\x1b");
+        start_redo_ins().unwrap();
+        assert_eq!(drain(), b"hello\x1b");
+        // The repeat blocks the redo buffer until it is over.
+        redo("zz");
+        start_redo(0, false).unwrap();
+        assert_eq!(drain(), b"3ihello\x1b");
+        stop_redo_ins();
+
+        clear();
+        redo("2Oab");
+        start_redo_ins().unwrap();
+        assert_eq!(drain(), b"\nab");
+    }
+
+    #[test]
+    fn the_previous_command_is_one_reset_back() {
+        let _fresh = Fresh::new();
+        redo("dw");
+        reset_redobuff();
+        redo("x");
+        start_redo(0, true).unwrap();
+        assert_eq!(drain(), b"dw");
+        start_redo(0, false).unwrap();
+        assert_eq!(drain(), b"x");
+        // Cancelling puts the previous one back.
+        cancel_redo();
+        start_redo(0, false).unwrap();
+        assert_eq!(drain(), b"dw");
+    }
+}
