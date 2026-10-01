@@ -22,6 +22,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::winlayer::WinId;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -42,9 +43,7 @@ use crate::option::vars::{p_sol, p_window};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::state::mode::restart_edit;
-use crate::types::{
-    CmdArg, ColNr, Direction, FAIL, LineNr, OK, OpArg, OptInt, Outcome, Pos, Window,
-};
+use crate::types::{CmdArg, ColNr, Direction, FAIL, LineNr, OK, OpArg, OptInt, Outcome, Pos};
 use crate::ui::state::Rows;
 use crate::winlayer::graph::{firstwin, lastwin};
 use crate::winlayer::{Buf, Win, first_window};
@@ -218,19 +217,21 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
 /// Give every 'cursorbind' window in this tab page the current window's cursor
 /// position, adjusted for 'diff' where the two buffers disagree.
 pub fn do_check_cursorbind() {
-    static prev_curwin: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut::<Window>());
-    static prev_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
+    static PREV_CURWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+    static PREV_CURSOR: GlobalCell<Pos> = GlobalCell::new(Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
     });
 
     let old_curwin = Win::current();
-    if old_curwin.raw() == prev_curwin.get() && equalpos(old_curwin.w_cursor, prev_cursor.get()) {
+    if PREV_CURWIN.get() == Some(old_curwin.id())
+        && equalpos(old_curwin.w_cursor, PREV_CURSOR.get())
+    {
         return;
     }
-    prev_curwin.set(old_curwin.raw());
-    prev_cursor.set(old_curwin.w_cursor);
+    PREV_CURWIN.set(Some(old_curwin.id()));
+    PREV_CURSOR.set(old_curwin.w_cursor);
 
     let cursor = old_curwin.w_cursor;
     let curswant = old_curwin.w_curswant;

@@ -14,6 +14,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::winlayer::Buf;
+use crate::winlayer::BufId;
 use core::ffi::c_int;
 
 use super::*;
@@ -24,8 +25,10 @@ use crate::winlayer::Win;
 /// order, so the next call almost always wants the same chunk or the next
 /// one, and the search from chunk zero can be skipped.
 ///
-/// Setting `ml_upd_lastbuf` to null invalidates the lot.
-static ml_upd_lastbuf: GlobalCell<*mut Buffer> = GlobalCell::new(core::ptr::null_mut());
+/// Setting `ml_upd_lastbuf` to `None` invalidates the lot. An id, not an
+/// address: a buffer allocated where a wiped one was must not inherit its
+/// cached position.
+static ml_upd_lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 static ml_upd_lastline: GlobalCell<LineNr> = GlobalCell::new(0);
 static ml_upd_lastcurline: GlobalCell<LineNr> = GlobalCell::new(0);
 static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
@@ -60,10 +63,9 @@ pub(crate) fn ml_updatechunk(buffer: Buf, line: LineNr, len_arg: c_int, updtype:
 
     // Find the chunk the line belongs to; `curline` ends up at the start
     // of it.
-    // The **address**, not a handle: `ml_upd_lastbuf` is only ever compared,
-    // and the buffer it names may have been freed since -- building a `Buf`
-    // from it would read a dead buffer's number. The C compares the pointer.
-    if buffer.raw() != ml_upd_lastbuf.get()
+    let key = buffer.try_id();
+    if key.is_none()
+        || ml_upd_lastbuf.get() != key
         || line != ml_upd_lastline.get() + 1
         || updtype != ML_CHNK_ADDLINE
     {
@@ -93,12 +95,12 @@ pub(crate) fn ml_updatechunk(buffer: Buf, line: LineNr, len_arg: c_int, updtype:
             return;
         }
     } else if updtype == ML_CHNK_DELLINE {
-        ml_upd_lastbuf.set(core::ptr::null_mut()); // force a recalc
+        ml_upd_lastbuf.set(None); // force a recalc
         b.b_ml.ml_chunks.delete_line(curix, MLCS_MINL);
         return;
     }
 
-    ml_upd_lastbuf.set(buffer.raw());
+    ml_upd_lastbuf.set(key);
     ml_upd_lastline.set(line);
     ml_upd_lastcurline.set(curline);
     ml_upd_lastcurix.set(curix);
@@ -206,7 +208,7 @@ unsafe fn ml_chunk_split(buffer: Buf, curix: usize, curline_arg: LineNr) -> bool
     b.b_ml.ml_chunks.add_lines(curix + 1, -linecnt);
     b.b_ml.ml_chunks.add_size(curix + 1, -size);
     b.b_ml.ml_chunks.set(curix, linecnt, size);
-    ml_upd_lastbuf.set(core::ptr::null_mut()); // force a recalc
+    ml_upd_lastbuf.set(None); // force a recalc
     false
 }
 

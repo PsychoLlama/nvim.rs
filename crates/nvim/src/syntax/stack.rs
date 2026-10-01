@@ -88,7 +88,7 @@ pub(crate) fn syn_stack_free_all(block: SynBlockRef) {
 /// far enough that the current size is a poor fit.
 pub(crate) fn syn_stack_alloc() {
     let mut block = syn_block();
-    let lines = unsafe { (*syn_buf.get()).b_ml.ml_line_count } as c_int;
+    let lines = syn_buffer().line_count() as c_int;
     let want = clamp_entries(lines / SST_DIST + Rows.get() * 2);
     if block.b_sst_len <= want * 2 && block.b_sst_len >= want {
         return; // neither much too big nor a bit too small
@@ -227,7 +227,7 @@ pub(crate) fn syn_stack_cleanup() -> bool {
     let dist: LineNr = if entries <= Rows.get() {
         999999
     } else {
-        let lines = unsafe { (*syn_buf.get()).b_ml.ml_line_count };
+        let lines = syn_buffer().line_count();
         lines / (entries - Rows.get()) as LineNr + 1
     };
 

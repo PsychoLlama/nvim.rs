@@ -115,7 +115,6 @@ count	callee	no_raw	defs	def
 20	nlua_push_integer	0	1	crates/nvim/src/lua/converter/push_object.rs
 20	nlua_push_object	0	1	crates/nvim/src/lua/converter/push_object.rs
 20	try_enter	0	1	crates/nvim/src/api/private/helpers/mod.rs
-19	Buf::new	0	1	crates/nvim/src/winlayer.rs
 19	api_free_luaref	1	1	crates/nvim/src/lua/executor/refs.rs
 19	arena_mem_free	0	1	crates/nvim/src/memory/arena.rs
 19	channel_decref	0	1	crates/nvim/src/channel/mod.rs
@@ -123,6 +122,7 @@ count	callee	no_raw	defs	def
 19	dict_set_var	0	1	crates/nvim/src/api/private/helpers/vimdict.rs
 19	emsg_funcname	0	1	crates/nvim/src/eval/userfunc/name.rs
 19	path_fnamecmp	0	0	
+18	Buf::new	0	1	crates/nvim/src/winlayer.rs
 18	Db::new	0	67	
 18	clear_evalarg	0	1	crates/nvim/src/eval/expr/level.rs
 18	find_func	0	1	crates/nvim/src/eval/userfunc/name.rs
@@ -132,7 +132,6 @@ count	callee	no_raw	defs	def
 17	.write	0	0	
 17	Op::new	0	67	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
-17	Win::new	0	1	crates/nvim/src/winlayer.rs
 17	add_str	0	5	
 17	concat_str	0	1	crates/nvim/src/strings/mod.rs
 17	full_name_save	0	1	crates/nvim/src/path/mod.rs
@@ -152,6 +151,7 @@ count	callee	no_raw	defs	def
 15	Name::from_ptr	0	1	crates/nvim/src/file_search/mod.rs
 15	String_0::from_owned_parts	0	1	crates/nvim/src/api/private/helpers/text.rs
 15	Uf::new	0	67	
+15	Win::new	0	1	crates/nvim/src/winlayer.rs
 15	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
 15	buflist_new	0	1	crates/nvim/src/buffer/list.rs
 15	callback_call	0	1	crates/nvim/src/eval/callback.rs

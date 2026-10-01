@@ -441,8 +441,7 @@ pub(crate) fn syn_curline_byte(col: ColNr) -> u8 {
 
 /// Number of lines in the buffer being parsed.
 pub(crate) fn syn_buf_line_count() -> LineNr {
-    // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at.
-    unsafe { (*syn_buf.get()).b_ml.ml_line_count }
+    syn_buffer().line_count()
 }
 
 /// `vim_regexec_multi` in the syntax buffer, timed when `:syntime` is on.
@@ -468,11 +467,11 @@ pub(crate) unsafe fn syn_regexec(
         // NFA_TOO_EXPENSIVE, and compiling with the other engine failed.
         return false;
     }
-    unsafe { (*rmp).rmm_maxcol = (*syn_buf.get()).b_p_smc as ColNr };
+    // The window and buffer the parser was started for -- the window may
+    // have gone, the buffer never has once the parse has begun.
+    let (win, buf) = (syn_win.get().and_then(WinId::get), syn_buffer());
+    unsafe { (*rmp).rmm_maxcol = buf.b_p_smc as ColNr };
     let mut timed_out: c_int = 0;
-    // SAFETY: the window and buffer the parser was started for -- the
-    // window may be absent, the buffer never is once the parse has begun.
-    let (win, buf) = unsafe { (Win::from_raw(syn_win.get()), Buf::new(syn_buf.get())) };
     let tm = syn_tm.get();
     let r = unsafe { vim_regexec_multi(rmp, win, buf, lnum, col, tm, &raw mut timed_out) };
 
@@ -489,8 +488,11 @@ pub(crate) unsafe fn syn_regexec(
             unsafe { (*st).match_0 += 1 };
         }
     }
-    if timed_out != 0 && !unsafe { (*(*syn_win.get()).w_s).b_syn_slow } {
-        unsafe { (*(*syn_win.get()).w_s).b_syn_slow = true };
+    if timed_out != 0
+        && let Some(block) = win.map(|win| win.w_s)
+        && !unsafe { (*block).b_syn_slow }
+    {
+        unsafe { (*block).b_syn_slow = true };
         msg(
             gettext(c"'redrawtime' exceeded, syntax highlighting disabled"),
             0,

@@ -30,7 +30,7 @@
 pub(crate) mod state;
 use crate::strings::has_char;
 use crate::window::tab_index;
-use crate::winlayer::TabPage;
+use crate::winlayer::{TabPage, WinId};
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
@@ -51,7 +51,7 @@ use crate::statusline::state::tab_page_click_defs;
 use crate::statusline::stl_connected;
 use crate::types::{
     CmdArg, ColNr, EvalFuncData, LineNr, MotionType, NUL, Pos, StlClickDefinition, Tabpage, TypVal,
-    VarNumber, Window,
+    VarNumber,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
@@ -163,11 +163,11 @@ static got_click: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The window a drag started in, whose status line or separator the drag
 /// moves.
-static dragwin: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut());
+static dragwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 
 /// Reset the window being dragged.  To be called when switching tab page.
 pub(crate) fn reset_dragwin() {
-    dragwin.set(ptr::null_mut());
+    dragwin.set(None);
 }
 
 /// Remember the window's top line, so a later double click can tell whether

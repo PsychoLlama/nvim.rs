@@ -38,15 +38,15 @@ pub(crate) fn syntax_start(window: Win, lnum: LineNr) {
 
     current_sub_char.set(NUL);
     if syn_block().raw() != window.w_s
-        || syn_buf.get() != window.w_buffer
+        || syn_buf.get() != window.buffer().try_id()
         || changedtick.get() != buf_get_changedtick(syn_buffer())
     {
         invalidate_current_state();
-        syn_buf.set(window.w_buffer);
+        syn_buf.set(window.buffer().try_id());
         parsed_block.set(window.w_s);
     }
     changedtick.set(buf_get_changedtick(syn_buffer()));
-    syn_win.set(window.raw());
+    syn_win.set(Some(window.id()));
 
     syn_stack_alloc();
     if syn_block().b_sst_array.is_null() {
@@ -57,7 +57,7 @@ pub(crate) fn syntax_start(window: Win, lnum: LineNr) {
     // If the state at the end of the previous line is useful, store it.
     if current_state_valid()
         && current_lnum.get() < lnum
-        && current_lnum.get() < unsafe { (*syn_buf.get()).b_ml.ml_line_count }
+        && current_lnum.get() < syn_buffer().line_count()
     {
         syn_finish_line(false);
         if !current_state_stored.get() {
@@ -146,7 +146,7 @@ fn store_distance() -> LineNr {
     if entries <= Rows.get() {
         999999
     } else {
-        let lines = unsafe { (*syn_buf.get()).b_ml.ml_line_count };
+        let lines = syn_buffer().line_count();
         lines / (entries - Rows.get()) as LineNr + 1
     }
 }

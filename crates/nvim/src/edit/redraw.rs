@@ -51,7 +51,7 @@ pub(crate) fn ins_redraw(ready: bool) {
     // the command might delete it.
     if ready
         && has_event(AutoEvent::CursorMovedI)
-        && (last_cursormoved_win.get() != Win::current_raw()
+        && (last_cursormoved_win.get() != Win::current_or_none().map(Win::id)
             || !equalpos(last_cursormoved.get(), Win::current().w_cursor))
         && !pum_visible()
     {
@@ -65,7 +65,7 @@ pub(crate) fn ins_redraw(ready: bool) {
         // correct first.
         update_curswant();
         ins_apply_autocmds(AutoEvent::CursorMovedI);
-        last_cursormoved_win.set(Win::current_raw());
+        last_cursormoved_win.set(Win::current_or_none().map(Win::id));
         last_cursormoved.set(Win::current().w_cursor);
     }
 

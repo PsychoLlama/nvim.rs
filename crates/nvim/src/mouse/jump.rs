@@ -30,7 +30,6 @@
 
 use crate::winlayer::cmdwin_window;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::*;
 use crate::drawscreen::state::redraw_cmdline;
@@ -110,10 +109,10 @@ fn jump(mut flags: c_int, inclusive: Option<&mut bool>, which_button: c_int) -> 
     if flags & MOUSE_RELEASED != 0 {
         // On button release we may change window focus if positioned on a
         // status line and no dragging happened.
-        if !dragwin.get().is_null() && did_drag.get() == 0 {
+        if dragwin.get().is_some() && did_drag.get() == 0 {
             flags &= !(MOUSE_FOCUS | MOUSE_DID_MOVE);
         }
-        dragwin.set(ptr::null_mut());
+        dragwin.set(None);
         did_drag.set(0);
     }
 
@@ -261,13 +260,13 @@ fn enter_window(
     }
 
     let fdc = win.fdccol_count();
-    dragwin.set(ptr::null_mut());
+    dragwin.set(None);
 
     // winpos and height may change in win_enter()!
     if below_window {
         // In (or below) status line
         status_line_offset.set(pos.row + win.w_winbar_height - win.w_height + 1);
-        dragwin.set(win.raw());
+        dragwin.set(Some(win.id()));
     } else {
         status_line_offset.set(0);
     }
@@ -275,7 +274,7 @@ fn enter_window(
     if pos.grid == DEFAULT_GRID_HANDLE && pos.col >= win.w_width {
         // In separator line
         sep_line_offset.set(pos.col - win.w_width + 1);
-        dragwin.set(win.raw());
+        dragwin.set(Some(win.id()));
     } else {
         sep_line_offset.set(0);
     }
@@ -319,7 +318,7 @@ fn enter_window(
     // Only change window focus when not clicking on or dragging the status
     // line.  Do change focus when releasing the mouse button (MOUSE_FOCUS was
     // set above if we dragged first).
-    if dragwin.get().is_null() || flags & MOUSE_RELEASED != 0 {
+    if dragwin.get().is_none() || flags & MOUSE_RELEASED != 0 {
         win.enter(); // can make `win` invalid!
     }
 
@@ -350,9 +349,10 @@ fn enter_window(
 /// window, so the event either resizes a window or scrolls the current one.
 fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Option<c_int> {
     if status_line_offset.get() != 0 {
-        if which_button == MOUSE_LEFT && !dragwin.get().is_null() {
-            // SAFETY: `dragwin` holds a live window while a drag is in flight.
-            let win = unsafe { Win::new(dragwin.get()) };
+        // The window may have closed since the press: a drag of nothing.
+        if which_button == MOUSE_LEFT
+            && let Some(win) = dragwin.get().and_then(WinId::get)
+        {
             // Drag the status line.
             let count = pos.row - win.w_winrow - win.w_height + 1 - status_line_offset.get();
             win.drag_status_line(count);
@@ -361,9 +361,7 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
         return Some(IN_STATUS_LINE); // Cursor didn't move
     }
     if sep_line_offset.get() != 0 && which_button == MOUSE_LEFT {
-        if !dragwin.get().is_null() {
-            // SAFETY: as above.
-            let win = unsafe { Win::new(dragwin.get()) };
+        if let Some(win) = dragwin.get().and_then(WinId::get) {
             // Drag the separator column.
             let count = pos.col - win.w_wincol - win.w_width + 1 - sep_line_offset.get();
             win.drag_sep_line(count);

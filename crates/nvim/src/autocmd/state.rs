@@ -20,11 +20,13 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
-use crate::types::{BufferRef, ColNr, LineNr, MultiQueue, Pos, Window};
+use crate::types::{BufferRef, ColNr, LineNr, MultiQueue, Pos};
+use crate::winlayer::WinId;
 use core::ffi::{c_char, c_int};
 
-pub(crate) static last_cursormoved_win: GlobalCell<*mut Window> =
-    GlobalCell::new(::core::ptr::null_mut::<Window>());
+/// The window `CursorMoved` last fired in, with [`last_cursormoved`] its
+/// cursor then.
+pub(crate) static last_cursormoved_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static last_cursormoved: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: 0 as LineNr,
     col: 0 as ColNr,

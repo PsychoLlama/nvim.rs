@@ -70,6 +70,8 @@ use crate::message::{
     emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
     msg_putchar, msg_str, msg_str_hl, msg_title,
 };
+use crate::winlayer::BufId;
+use crate::winlayer::WinId;
 
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
@@ -86,9 +88,9 @@ use crate::regexp::{
 use crate::runtime::{do_source, source_runtime};
 use crate::types::AutoEvent;
 use crate::types::{
-    BufState, Buffer, ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegExtMatch,
-    RegMMatch, RegMatch, RegProg, SynBlock, SynState, SynTime, VarNumber, Window, int16_t, size_t,
-    uint8_t, uint64_t,
+    BufState, ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegExtMatch,
+    RegMMatch, RegMatch, RegProg, SynBlock, SynState, SynTime, VarNumber, int16_t, size_t, uint8_t,
+    uint64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;
@@ -599,20 +601,30 @@ static next_match_extmatch: GlobalCell<*mut RegExtMatch> =
 // Where the parser currently is. `syntax_start` sets the first four together
 // and everything else is relative to them.
 
-/// The window being parsed for.
-static syn_win: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut());
-/// The buffer being parsed.
-static syn_buf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut());
+/// The window being parsed for. An identity, not an address: it outlives the
+/// call that set it, and the next [`syntax_start`] compares it to decide
+/// whether the parser's state still applies.
+static syn_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+/// The buffer being parsed. [`syn_win`]'s shape, read through
+/// [`syn_buffer`].
+static syn_buf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 /// The buffer being parsed, as a handle.
 ///
-/// Null until [`syntax_start`] has run, and every caller here runs after it:
-/// the parser's own position (`current_lnum`) is only meaningful once the
-/// start has been set, and setting it is what writes this.
+/// Every caller runs after [`syntax_start`]: the parser's own position
+/// (`current_lnum`) is only meaningful once the start has been set, and
+/// setting it is what writes this. A registry lookup, so a hot loop asks
+/// once and keeps the answer for the length of the call.
+///
+/// # Panics
+///
+/// Before the first [`syntax_start`], or once the buffer it named has been
+/// wiped without a new start -- both a parser read with no parse under way.
 #[inline(always)]
 pub(crate) fn syn_buffer() -> Buf {
-    // SAFETY: `syntax_start` sets it to the buffer being parsed and the
-    // parser is torn down before that buffer goes.
-    unsafe { Buf::new(syn_buf.get()) }
+    syn_buf
+        .get()
+        .and_then(BufId::get)
+        .expect("syntax_start names a live buffer")
 }
 
 /// The syntax block being parsed -- `syn_win`'s, which for `:ownsyntax` is not

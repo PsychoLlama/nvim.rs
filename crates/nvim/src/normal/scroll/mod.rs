@@ -10,8 +10,9 @@
 
 use crate::keycodes::ModMask;
 use crate::strings::has_char;
+use crate::winlayer::BufId;
+use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win, windows};
-use core::ptr;
 
 use crate::cursor::set_leftcol;
 use crate::diff::diff_set_topline;
@@ -26,7 +27,7 @@ use crate::normal::{
 use crate::option::vars::p_sbo;
 use crate::plines::plines_m_win_fill;
 use crate::state::mode::did_syncbind;
-use crate::types::{Buffer, CmdArg, ColNr, Direction, LineNr, Window};
+use crate::types::{CmdArg, ColNr, Direction, LineNr};
 use crate::window::goto_tabpage;
 use core::ffi::c_int;
 
@@ -51,24 +52,23 @@ pub(crate) fn do_check_scrollbind(check: bool) {
     // The previous call's answers. They are what makes this a *difference*
     // rather than an absolute position, so that a window bound to two others
     // does not fight itself.
-    static old_curwin: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut());
-    static old_vtopline: GlobalCell<LineNr> = GlobalCell::new(0);
-    static old_buf: GlobalCell<*mut Buffer> = GlobalCell::new(ptr::null_mut());
-    static old_leftcol: GlobalCell<ColNr> = GlobalCell::new(0);
+    static OLD_CURWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+    static OLD_VTOPLINE: GlobalCell<LineNr> = GlobalCell::new(0);
+    static OLD_BUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+    static OLD_LEFTCOL: GlobalCell<ColNr> = GlobalCell::new(0);
 
-    // SAFETY: reads the current window and the remembered previous one.
     let mut win = Win::current();
     let vtopline = get_vtopline(win);
     if check && win.w_onebuf_opt.wo_scb != 0 {
         if did_syncbind.get() {
             // `:syncbind` has just set every bound window itself.
             did_syncbind.set(false);
-        } else if win.raw() == old_curwin.get() {
-            if (win.w_buffer == old_buf.get() || win.w_onebuf_opt.wo_diff != 0)
-                && (vtopline as LineNr != old_vtopline.get() || win.w_leftcol != old_leftcol.get())
+        } else if OLD_CURWIN.get() == Some(win.id()) {
+            if (win.buffer().try_id() == OLD_BUF.get() || win.w_onebuf_opt.wo_diff != 0)
+                && (vtopline as LineNr != OLD_VTOPLINE.get() || win.w_leftcol != OLD_LEFTCOL.get())
             {
-                let down = vtopline as LineNr - old_vtopline.get();
-                check_scrollbind(down, win.w_leftcol - old_leftcol.get());
+                let down = vtopline as LineNr - OLD_VTOPLINE.get();
+                check_scrollbind(down, win.w_leftcol - OLD_LEFTCOL.get());
             }
         } else if p_sbo(|value| has_char(value, 'j' as c_int)) {
             // Just moved into this window, and 'scrollopt' has "jump":
@@ -77,10 +77,10 @@ pub(crate) fn do_check_scrollbind(check: bool) {
         }
         win.w_scbind_pos = vtopline;
     }
-    old_curwin.set(win.raw());
-    old_vtopline.set(vtopline as LineNr);
-    old_buf.set(win.w_buffer);
-    old_leftcol.set(win.w_leftcol);
+    OLD_CURWIN.set(Some(win.id()));
+    OLD_VTOPLINE.set(vtopline as LineNr);
+    OLD_BUF.set(win.buffer().try_id());
+    OLD_LEFTCOL.set(win.w_leftcol);
 }
 
 /// Scroll every other 'scrollbind' window by the same amount this one just

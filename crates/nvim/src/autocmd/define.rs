@@ -420,7 +420,7 @@ pub unsafe fn autocmd_register(
         if (event == AutoEvent::CursorMoved && !has_event(AutoEvent::CursorMoved))
             || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))
         {
-            last_cursormoved_win.set(Win::current_raw());
+            last_cursormoved_win.set(Win::current_or_none().map(Win::id));
             last_cursormoved.set(Win::current().w_cursor);
         }
         if (event == AutoEvent::WinScrolled || event == AutoEvent::WinResized)

@@ -307,8 +307,8 @@ pub(crate) fn save_chartab(chartab: &mut [uint64_t; 4]) {
     // The two tables are the same 32 bytes, one typed as four `uint64_t`
     // and one as `uint8_t[32]`.
     let installed: [uint8_t; 32] = syn_block().b_syn_chartab;
-    // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at.
-    let buf_chartab = unsafe { &mut (*syn_buf.get()).b_chartab };
+    let mut buf = syn_buffer();
+    let buf_chartab = &mut buf.b_chartab;
     *chartab = *buf_chartab;
     *buf_chartab = ::core::array::from_fn(|i| {
         uint64_t::from_ne_bytes(installed[i * 8..i * 8 + 8].try_into().unwrap())
@@ -318,8 +318,7 @@ pub(crate) fn save_chartab(chartab: &mut [uint64_t; 4]) {
 /// Put back what [`save_chartab`] saved.
 pub(crate) fn restore_chartab(chartab: &[uint64_t; 4]) {
     if !syn_block().b_syn_isk.is_unset() {
-        // SAFETY: as [`save_chartab`].
-        unsafe { (*syn_buf.get()).b_chartab = *chartab };
+        syn_buffer().b_chartab = *chartab;
     }
 }
 

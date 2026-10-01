@@ -655,6 +655,15 @@ impl Buf {
         BufId(NonZero::new(self.id).expect("a live buffer has a number"))
     }
 
+    /// This buffer's identity, `None` for one that has no number: the null
+    /// [`Buf`], and the two off-list scratch buffers (`ml_recover`'s,
+    /// `open_spellbuf`'s) that nobody numbers. A memo keyed on a buffer asks
+    /// this and treats `None` as "never the same".
+    #[inline(always)]
+    pub(crate) fn try_id(self) -> Option<BufId> {
+        NonZero::new(self.id).map(BufId)
+    }
+
     /// Give this buffer its number. [`Win::set_handle`].
     #[inline]
     pub(crate) fn set_handle(&mut self, handle: Handle) {

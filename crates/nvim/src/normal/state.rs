@@ -461,11 +461,11 @@ fn normal_check_cursor_moved() {
     // SAFETY (throughout): reads the current window and fires an autocommand.
     if !finish_op.get()
         && has_event(AutoEvent::CursorMoved)
-        && (last_cursormoved_win.get() != Win::current_raw()
+        && (last_cursormoved_win.get() != Win::current_or_none().map(Win::id)
             || !equalpos(last_cursormoved.get(), Win::current().w_cursor))
     {
         fire_on_curbuf(AutoEvent::CursorMoved);
-        last_cursormoved_win.set(Win::current_raw());
+        last_cursormoved_win.set(Win::current_or_none().map(Win::id));
         last_cursormoved.set(Win::current().w_cursor);
     }
 }

@@ -349,7 +349,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
 
     // A change on the cursor line always triggers CursorMoved.
     let win = Win::current();
-    if last_cursormoved_win.get() == win.raw()
+    if last_cursormoved_win.get() == Some(win.id())
         && win.w_buffer == buffer.raw()
         && lnum <= win.w_cursor.lnum
         && lnume + xtra.abs() > win.w_cursor.lnum

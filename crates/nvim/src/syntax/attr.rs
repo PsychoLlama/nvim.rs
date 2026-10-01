@@ -43,9 +43,8 @@ pub(crate) unsafe fn get_syntax_attr(col: ColNr, can_spell: *mut bool, keep_stat
     }
 
     // After 'synmaxcol' the attribute is always zero.
-    if unsafe { (*syn_buf.get()).b_p_smc } > 0
-        && col >= unsafe { (*syn_buf.get()).b_p_smc } as ColNr
-    {
+    let synmaxcol = syn_buffer().b_p_smc;
+    if synmaxcol > 0 && col >= synmaxcol as ColNr {
         clear_current_state();
         current_id.set(0);
         current_trans_id.set(0);

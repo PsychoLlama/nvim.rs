@@ -35,6 +35,7 @@ use super::*;
 use crate::grid::linebuf;
 use crate::types::NUL;
 use crate::winlayer::Win;
+use crate::winlayer::WinId;
 
 /// The variables `win_line` passes to the functions that draw parts of a line.
 ///
@@ -422,7 +423,7 @@ pub(crate) unsafe fn get_rightmost_vcol(
 /// per cell of the cursor line.
 pub(crate) fn margin_columns_win(window: Win) -> (::core::ffi::c_int, ::core::ffi::c_int) {
     static SAVED_W_VIRTCOL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-    static PREV_WP: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
+    static PREV_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
     static PREV_WIDTH1: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     static PREV_WIDTH2: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     static PREV_LEFT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -431,7 +432,7 @@ pub(crate) fn margin_columns_win(window: Win) -> (::core::ffi::c_int, ::core::ff
     let width1 = window.w_view_width - window.col_off();
     let width2 = width1 + win_col_off2(window);
     if SAVED_W_VIRTCOL.get() == window.w_virtcol
-        && PREV_WP.get() == window.raw()
+        && PREV_WIN.get() == Some(window.id())
         && PREV_WIDTH1.get() == width1
         && PREV_WIDTH2.get() == width2
     {
@@ -450,7 +451,7 @@ pub(crate) fn margin_columns_win(window: Win) -> (::core::ffi::c_int, ::core::ff
 
     PREV_LEFT_COL.set(left_col);
     PREV_RIGHT_COL.set(right_col);
-    PREV_WP.set(window.raw());
+    PREV_WIN.set(Some(window.id()));
     PREV_WIDTH1.set(width1);
     PREV_WIDTH2.set(width2);
     SAVED_W_VIRTCOL.set(window.w_virtcol);

@@ -12,6 +12,7 @@
 use crate::api::extmark::parse_virt_text;
 use crate::cstr;
 use crate::vim_snprintf;
+use crate::winlayer::WinId;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{ptr2cells, skipwhite, transstr, vim_isprintc};
@@ -58,18 +59,14 @@ pub unsafe fn get_foldtext(
     // A 'foldtext' that errored is not evaluated again until the window or
     // the direction of travel changes, so one broken expression does not
     // raise one error per drawn fold.
-    static got_fdt_error: GlobalCell<bool> = GlobalCell::new(false);
-    static last_wp: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut());
-    static last_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
+    static GOT_FDT_ERROR: GlobalCell<bool> = GlobalCell::new(false);
+    static LAST_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+    static LAST_LNUM: GlobalCell<LineNr> = GlobalCell::new(0);
     let save_did_emsg = did_emsg.get();
-    if last_wp.get().is_null()
-        || last_wp.get() != window.raw()
-        || last_lnum.get() > lnum
-        || last_lnum.get() == 0
-    {
-        got_fdt_error.set(false);
+    if LAST_WIN.get() != Some(window.id()) || LAST_LNUM.get() > lnum || LAST_LNUM.get() == 0 {
+        GOT_FDT_ERROR.set(false);
     }
-    if !got_fdt_error.get() {
+    if !GOT_FDT_ERROR.get() {
         did_emsg.set(0);
     }
     let win = window;
@@ -84,7 +81,7 @@ pub unsafe fn get_foldtext(
         set_vim_var_nr(Vv::Foldend, lnume as VarNumber);
         unsafe { set_vim_var_string(Vv::Folddashes, ds, level as ptrdiff_t) };
         set_vim_var_nr(Vv::Foldlevel, level as VarNumber);
-        if !got_fdt_error.get() {
+        if !GOT_FDT_ERROR.get() {
             let saved = switch_to(window);
             let saved_sctx = current_sctx.get();
             current_sctx.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
@@ -110,13 +107,13 @@ pub unsafe fn get_foldtext(
             }
             drop(no_emsg);
             if text.is_null() || did_emsg.get() != 0 {
-                got_fdt_error.set(true);
+                GOT_FDT_ERROR.set(true);
             }
             saved.restore();
             current_sctx.set(saved_sctx);
         }
-        last_lnum.set(lnum);
-        last_wp.set(window.raw());
+        LAST_LNUM.set(lnum);
+        LAST_WIN.set(Some(window.id()));
         unsafe { set_vim_var_string(Vv::Folddashes, ptr::null(), -1 as ptrdiff_t) };
         if did_emsg.get() == 0 && save_did_emsg != 0 {
             did_emsg.set(save_did_emsg);
