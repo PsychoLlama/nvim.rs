@@ -200,7 +200,7 @@ fn save_deleted_text(op: Op) -> bool {
     // line break or a specific operator was used (Vi compatible).
     if op.motion_type == kMTLineWise || op.line_count > 1 || op.use_reg_one {
         shift_delete_registers(is_append_register(op.regname));
-        reg = unsafe { get_y_register(1) };
+        reg = get_y_register(1);
         unsafe { op_yank_reg(op.raw(), false, reg, false) };
         did_yank = true;
     }

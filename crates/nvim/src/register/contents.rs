@@ -182,7 +182,7 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
 /// so nothing may still be pointing at them.
 unsafe fn init_write_reg(
     name: c_int,
-    old_y_previous: &mut *mut YankReg,
+    old_y_previous: &mut Option<c_int>,
     must_append: bool,
 ) -> *mut YankReg {
     if !valid_yank_reg(name, true) {
@@ -438,7 +438,7 @@ unsafe fn str_to_reg(
 ///
 /// # Safety
 /// `reg` must be the register [`init_write_reg`] answered.
-unsafe fn finish_write_reg(name: c_int, reg: *mut YankReg, old_y_previous: *mut YankReg) {
+unsafe fn finish_write_reg(name: c_int, reg: *mut YankReg, old_y_previous: Option<c_int>) {
     // SAFETY: `reg` is the register `init_write_reg` answered, which the
     // provider is handed the contents of.
     unsafe { clipboard::set_clipboard(name, reg) };
@@ -499,7 +499,7 @@ pub unsafe fn write_reg_contents_lst(
         return; // black hole
     }
 
-    let mut old_y_previous: *mut YankReg = ::core::ptr::null_mut();
+    let mut old_y_previous = None;
     // SAFETY: a plain write, so nothing is still holding the old contents.
     let reg = unsafe { init_write_reg(name, &mut old_y_previous, must_append) };
     if reg.is_null() {
@@ -571,26 +571,14 @@ pub unsafe fn write_reg_contents_ex(
 
     if name == '=' as c_int {
         // The expression register keeps its source, not a yankreg.
-        let mut offset: size_t = 0;
-        let mut totlen = len as size_t;
-        if must_append && !expr_line.get().is_null() {
-            // SAFETY: the `is_null` in front proves there is a string, and
-            // `expr_line` is always NUL-terminated.
-            let exprlen = unsafe { cstr::bytes_at(expr_line.get()) }.len();
-            totlen = totlen.wrapping_add(exprlen);
-            offset = exprlen;
-        }
-        // SAFETY: `expr_line` is our own allocation, regrown to hold the text
-        // being kept (`offset` bytes), the `len` new ones, and a NUL.
-        let grown = unsafe { xrealloc(expr_line.get() as *mut c_void, totlen.wrapping_add(1)) };
-        expr_line.set(grown as *mut c_char);
-        let dst = expr_line.get();
-        // SAFETY: as above -- `offset + len` is `totlen`, and `str` holds
-        // those `len` bytes.
-        let into = unsafe { dst.add(offset) }.cast::<u8>();
-        unsafe { into.copy_from_nonoverlapping(str.cast(), len as size_t) };
-        // SAFETY: `totlen` is the last byte of the allocation.
-        unsafe { *dst.add(totlen) = NUL as c_char };
+        // SAFETY: `str` holds `len` bytes.
+        let text = unsafe { core::slice::from_raw_parts(str.cast::<u8>(), len as usize) };
+        expr_line.with_mut(|line| {
+            if !must_append {
+                *line = None;
+            }
+            line.get_or_insert_with(XString::new).push_bytes(text);
+        });
         return;
     }
 
@@ -598,7 +586,7 @@ pub unsafe fn write_reg_contents_ex(
         return; // black hole
     }
 
-    let mut old_y_previous: *mut YankReg = ::core::ptr::null_mut();
+    let mut old_y_previous = None;
     // SAFETY: a plain write, so nothing is still holding the old contents.
     let reg = unsafe { init_write_reg(name, &mut old_y_previous, must_append) };
     if reg.is_null() {

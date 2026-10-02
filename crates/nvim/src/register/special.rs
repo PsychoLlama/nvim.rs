@@ -24,7 +24,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::guard::Depth;
 use crate::memory::XString;
 use crate::winlayer::{Buf, Win};
@@ -51,19 +50,14 @@ pub fn get_expr_register() -> c_int {
         unsafe { xfree(new_line.cast::<c_void>()) }; // keep the previous expression
     } else {
         // SAFETY: an allocated, NUL-terminated string, handed over.
-        unsafe { set_expr_line(new_line) };
+        set_expr_line(unsafe { XString::from_raw(new_line) });
     }
     '=' as c_int
 }
 
-/// Set the `"=` expression, taking ownership of `new_line`.
-///
-/// # Safety
-/// `new_line` must be an allocated, NUL-terminated string.
-pub unsafe fn set_expr_line(new_line: *mut c_char) {
-    // SAFETY: `expr_line` holds an allocation this module made, or null.
-    unsafe { xfree(expr_line.get().cast::<c_void>()) };
-    expr_line.set(new_line);
+/// Set the `"=` expression.
+pub fn set_expr_line(new_line: XString) {
+    expr_line.set(Some(new_line));
 }
 
 /// Evaluate the `"=` expression and answer the result, allocated.
@@ -77,13 +71,10 @@ pub unsafe fn set_expr_line(new_line: *mut c_char) {
 pub unsafe fn get_expr_line() -> *mut c_char {
     static nested: GlobalCell<c_int> = GlobalCell::new(0);
 
-    if expr_line.get().is_null() {
-        return ::core::ptr::null_mut();
-    }
     // Evaluating may set `expr_line` again, so work on a copy.
-    //
-    // SAFETY: tested non-null just above, and it is a NUL-terminated string.
-    let mut expression = XString::from_cstr(unsafe { cstr::at(expr_line.get()) });
+    let Some(mut expression) = expr_line.with(Clone::clone) else {
+        return ::core::ptr::null_mut();
+    };
     if nested.get() >= 10 {
         return expression.into_raw();
     }
@@ -100,11 +91,10 @@ pub unsafe fn get_expr_line() -> *mut c_char {
 /// # Safety
 /// Reads the register store; main thread only.
 pub unsafe fn get_expr_line_src() -> *mut c_char {
-    if expr_line.get().is_null() {
-        return ::core::ptr::null_mut();
-    }
-    // SAFETY: tested non-null just above, and it is a NUL-terminated string.
-    unsafe { xstrdup(expr_line.get()) }
+    expr_line.with(|line| {
+        line.clone()
+            .map_or(::core::ptr::null_mut(), XString::into_raw)
+    })
 }
 
 /// The contents of a computed register.

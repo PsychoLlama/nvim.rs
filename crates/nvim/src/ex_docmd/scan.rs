@@ -26,7 +26,7 @@ use crate::ex_docmd::onecmd::shift_cmd_args;
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount, ex_msg};
 use crate::keycodes::Ctrl_V;
 
-use crate::memory::xstrdup;
+use crate::memory::XString;
 use crate::option::cpo_has;
 use crate::quickfix::grep_internal;
 use crate::register::{set_expr_line, valid_yank_reg};
@@ -95,8 +95,7 @@ pub(crate) fn parse_register(excmd: &mut ExArg) {
     // expression, and evaluating it is deferred until the register is read.
     if excmd.regname == '=' as c_int && excmd.line.byte_at(excmd.line.arg) != 0 {
         if !excmd.skip {
-            let expr = excmd.line.ptr_from(excmd.line.arg);
-            unsafe { set_expr_line(xstrdup(expr)) };
+            set_expr_line(XString::from_cstr(excmd.line.cstr_from(excmd.line.arg)));
         }
         excmd.line.arg = excmd.line.end_of(excmd.line.arg);
     }

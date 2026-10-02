@@ -68,6 +68,7 @@ use crate::mbyte::{
     utf_ptr2len_len, utf_ptr2str_char_info, utfc_next, utfc_ptr2len,
 };
 use crate::memline::{decl, ml_append, ml_replace};
+use crate::memory::XString;
 use crate::memory::{
     memchrsub, memcnt, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup,
 };
@@ -111,6 +112,7 @@ use crate::ui::state::Columns;
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
 use ::libc::{abort, atoi};
+use core::ffi::c_int;
 
 // The carve of the transpiled module; see each child's docs.
 mod contents;
@@ -177,8 +179,7 @@ pub const FIND_STRING: ::core::ffi::c_int = 2;
 pub const FIND_IDENT: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-static expr_line: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+static expr_line: GlobalCell<Option<XString>> = GlobalCell::new(None);
 static execreg_lastc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(NUL);
 /// The empty register every slot of `y_regs` starts as: upstream's
 /// `static YankReg y_regs[NUM_REGISTERS] = { 0 }`.
@@ -191,7 +192,8 @@ const EMPTY_YANKREG: YankReg = YankReg {
     additional_data: ::core::ptr::null_mut::<AdditionalData>(),
 };
 static y_regs: GlobalCell<[YankReg; 39]> = GlobalCell::new([EMPTY_YANKREG; 39]);
-static y_previous: GlobalCell<*mut YankReg> = GlobalCell::new(::core::ptr::null_mut::<YankReg>());
+/// The slot of `y_regs` that `""` reads: the last register written.
+static y_previous: GlobalCell<Option<c_int>> = GlobalCell::new(None);
 static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
     &::core::ffi::CStr =
     c"E883: Search pattern and expression register may not contain two or more lines";

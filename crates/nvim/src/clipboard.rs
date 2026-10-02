@@ -103,8 +103,7 @@ pub(crate) unsafe fn adjust_clipboard_name(
         if writing && cb_flags.get() & flag != 0 {
             CLIPBOARD.with_mut(|st| st.needs_update = false);
         }
-        // SAFETY: main-thread editor call; the register table is live.
-        return unsafe { get_y_register(reg) };
+        return get_y_register(reg);
     }
 
     // Unnamed register with clipboard= routing to "* or "+.
@@ -130,8 +129,7 @@ pub(crate) unsafe fn adjust_clipboard_name(
         *name = '*' as c_int;
         STAR_REGISTER as c_int
     };
-    // SAFETY: main-thread editor call; the register table is live.
-    unsafe { get_y_register(reg) }
+    get_y_register(reg)
 }
 
 /// The register type a provider's one-character `regtype` names, or `None`

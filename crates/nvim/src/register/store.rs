@@ -39,24 +39,23 @@ fn is_ascii_letter(c: c_int) -> bool {
 /// The index of the slot `""` currently points at, or -1 when nothing has
 /// been written yet.
 pub fn get_unname_register() -> c_int {
-    if y_previous.get().is_null() {
-        -1
-    } else {
-        unsafe { y_previous.get().offset_from(get_y_register(0)) as c_int }
-    }
+    y_previous.get().unwrap_or(-1)
 }
 
 /// Slot `reg` of the register array.
 ///
-/// # Safety
-/// `reg` must be a valid index, as [`op_reg_index`] answers.
-pub unsafe fn get_y_register(reg: c_int) -> *mut YankReg {
-    unsafe { (y_regs.ptr() as *mut YankReg).offset(reg as isize) }
+/// Panics unless `reg` is a valid index, as [`op_reg_index`] answers.
+pub fn get_y_register(reg: c_int) -> *mut YankReg {
+    let reg = usize::try_from(reg).expect("a register index");
+    assert!(reg < NUM_REGISTERS as usize, "a register index");
+    y_regs.ptr().cast::<YankReg>().wrapping_add(reg)
 }
 
 /// The register `""` points at, or null.
 pub fn get_y_previous() -> *mut YankReg {
-    y_previous.get()
+    y_previous
+        .get()
+        .map_or(::core::ptr::null_mut(), get_y_register)
 }
 
 /// Whether `regname` names a register.
@@ -117,7 +116,7 @@ pub unsafe fn op_reg_iter(
 
     unsafe { *name = get_register_name(iter_reg.offset_from(regs) as c_int) as c_char };
     unsafe { *reg = *iter_reg };
-    unsafe { *is_unnamed = core::ptr::eq(iter_reg, y_previous.get()) };
+    unsafe { *is_unnamed = core::ptr::eq(iter_reg, get_y_previous()) };
 
     // Look ahead for the next non-empty one, which is what the caller
     // passes back in.
@@ -159,7 +158,7 @@ pub unsafe fn op_reg_set(name: c_char, reg: YankReg, is_unnamed: bool) -> bool {
     unsafe { free_register(get_y_register(i)) };
     unsafe { *get_y_register(i) = reg };
     if is_unnamed {
-        y_previous.set(unsafe { get_y_register(i) });
+        y_previous.set(Some(i));
     }
     true
 }
@@ -173,7 +172,7 @@ pub unsafe fn op_reg_get(name: c_char) -> *const YankReg {
     if i == -1 {
         return ::core::ptr::null();
     }
-    unsafe { get_y_register(i) }
+    get_y_register(i)
 }
 
 /// Point `""` at the register named `name`.
@@ -184,7 +183,7 @@ pub fn op_reg_set_previous(name: c_char) -> bool {
     if i == -1 {
         return false;
     }
-    y_previous.set(unsafe { get_y_register(i) });
+    y_previous.set(Some(i));
     true
 }
 
@@ -241,18 +240,17 @@ pub unsafe fn get_yank_register(regname: c_int, mode: c_int) -> *mut YankReg {
             || regname == '"' as c_int
             || regname == '*' as c_int
             || regname == '+' as c_int)
-        && !y_previous.get().is_null()
+        && let Some(previous) = y_previous.get()
     {
         // An unnamed paste reads the last register written.
-        return y_previous.get();
+        return get_y_register(previous);
     }
 
-    let i = op_reg_index(regname);
-    let reg = unsafe { get_y_register(if i == -1 { 0 } else { i }) };
+    let i = op_reg_index(regname).max(0);
     if mode == YREG_YANK {
-        y_previous.set(reg);
+        y_previous.set(Some(i));
     }
-    reg
+    get_y_register(i)
 }
 
 /// Whether the register `regname` holds linewise text, also handing back the
@@ -311,7 +309,7 @@ pub fn shift_delete_registers(y_append: bool) {
         unsafe { *get_y_register(n) = *get_y_register(n - 1) };
     }
     if !y_append {
-        y_previous.set(unsafe { get_y_register(1) });
+        y_previous.set(Some(1));
     }
     // `"1`'s array now belongs to `"2`: forget it rather than free it.
     unsafe { (*get_y_register(1)).y_array = ::core::ptr::null_mut() };

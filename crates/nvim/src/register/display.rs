@@ -208,15 +208,9 @@ pub fn ex_display(excmd: &mut ExArg) {
                 _ => 'b' as c_int,
             };
             let mut yb = if i == -1 {
-                if y_previous.get().is_null() {
-                    // SAFETY: 0 is a register index.
-                    unsafe { get_y_register(0) }
-                } else {
-                    y_previous.get()
-                }
+                get_y_register(y_previous.get().unwrap_or(0))
             } else {
-                // SAFETY: `i` is below `NUM_REGISTERS`.
-                unsafe { get_y_register(i) }
+                get_y_register(i)
             };
             // SAFETY: main thread, with a live slot to fill in; this is the
             // call that may run the clipboard provider's Lua.
@@ -225,7 +219,7 @@ pub fn ex_display(excmd: &mut ExArg) {
             // Don't show the register `:redir` is writing into: it would
             // record its own listing.
             let redir_target = name == mb_tolower(redir_reg.get())
-                || redir_reg.get() == '"' as c_int && yb == y_previous.get();
+                || redir_reg.get() == '"' as c_int && yb == get_y_previous();
             // SAFETY: `yb` is a live register slot.
             if !redir_target && !unsafe { (*yb).y_array }.is_null() {
                 // SAFETY: a live slot whose `y_array` holds `y_size` strings.
@@ -283,10 +277,12 @@ pub fn ex_display(excmd: &mut ExArg) {
         last_search_pat(),
         false,
     );
+    // A copy: listing a register may run a message callback that sets it.
+    let mut expr = expr_line.with(Clone::clone);
     special(
         '=' as c_int,
         c"\n  c  \"=   ".as_ptr(),
-        expr_line.get(),
+        expr.as_mut().map_or(ptr::null_mut(), XString::as_mut_ptr),
         false,
     );
 
