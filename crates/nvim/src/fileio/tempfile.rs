@@ -20,24 +20,23 @@ use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
 use crate::smsg;
 use core::ffi::{c_char, c_int, c_void};
+use std::ffi::OsStr;
 use std::ffi::{CStr, CString};
+use std::os::unix::ffi::OsStrExt;
 
 use super::*;
 use crate::os::fs::TEMP_FILE_PATH_MAXLEN;
 use crate::types::{Failed, MAXPATHL};
-use ::libc::{DIR, closedir, dirfd, opendir};
 
 /// Candidate homes for our private directory, tried in order.
 const TEMP_DIR_NAMES: [&CStr; 4] = [c"$TMPDIR", c"/tmp", c".", c"~"];
-
-/// `flock` shared lock.
-const LOCK_SH: c_int = 1;
 
 /// Our temporary directory, always with a trailing path separator.
 static VIM_TEMPDIR: GlobalCell<Option<CString>> = GlobalCell::new(None);
 
 /// An open handle on it, holding a shared `flock` so it is not auto-cleaned.
-static VIM_TEMPDIR_DP: GlobalCell<*mut DIR> = GlobalCell::new(ptr::null_mut::<DIR>());
+/// Closing the handle (dropping it) releases the lock.
+static VIM_TEMPDIR_DP: GlobalCell<Option<std::fs::File>> = GlobalCell::new(None);
 
 /// `DLOG`/`WLOG`/`ELOG` from `log.h`.
 ///
@@ -329,27 +328,25 @@ fn delete_tree(name: &[u8]) -> c_int {
 /// Open the temporary directory and take a file lock, so that it is not
 /// auto-cleaned while we are using it.
 fn vim_opentempdir() {
-    if !VIM_TEMPDIR_DP.get().is_null() {
+    if VIM_TEMPDIR_DP.with(Option::is_some) {
         return;
     }
-    let dp = VIM_TEMPDIR.with(|dir| match dir {
-        Some(dir) => unsafe { opendir(dir.as_ptr()) },
-        None => ptr::null_mut(),
+    let dir = VIM_TEMPDIR.with(|dir| {
+        let path = OsStr::from_bytes(dir.as_ref()?.to_bytes());
+        std::fs::File::open(path).ok()
     });
-    if dp.is_null() {
+    let Some(dir) = dir else {
         return;
-    }
-    VIM_TEMPDIR_DP.set(dp);
-    unsafe { flock(dirfd(dp), LOCK_SH) };
+    };
+    // Upstream ignores a failed `flock` too: the lock only defends against
+    // a cleaner, and the directory is usable without it.
+    let _ = dir.lock_shared();
+    VIM_TEMPDIR_DP.set(Some(dir));
 }
 
 /// Close the temporary directory, which releases the file lock.
 fn vim_closetempdir() {
-    let dp = VIM_TEMPDIR_DP.get();
-    if !dp.is_null() {
-        unsafe { closedir(dp) };
-        VIM_TEMPDIR_DP.set(ptr::null_mut());
-    }
+    drop(VIM_TEMPDIR_DP.take());
 }
 
 /// Delete the temp directory and all files it contains.

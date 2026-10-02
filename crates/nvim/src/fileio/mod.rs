@@ -102,8 +102,8 @@ use crate::undo::{
 };
 use crate::winlayer::Buf;
 use ::libc::{
-    __errno_location, close, dup, feof, ferror, fgets, flock, fwrite, iconv, iconv_close, lseek,
-    memchr, read, readlink, symlink, umask, write,
+    __errno_location, close, dup, feof, ferror, fgets, fwrite, iconv, iconv_close, lseek, memchr,
+    read, readlink, symlink, umask, write,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;

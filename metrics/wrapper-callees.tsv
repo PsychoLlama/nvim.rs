@@ -2382,7 +2382,6 @@ count	callee	no_raw	defs	def
 1	close_job_parts	0	1	crates/nvim/src/channel/mod.rs
 1	close_stderr	0	1	crates/nvim/src/channel/mod.rs
 1	close_stdio_parts	0	1	crates/nvim/src/channel/mod.rs
-1	closedir	0	0	
 1	closest_entry	0	1	crates/nvim/src/quickfix/navigate.rs
 1	cmd_exists	0	1	crates/nvim/src/ex_docmd/lookup.rs
 1	cmdcomplete_str_to_type	0	1	crates/nvim/src/usercmd/complete.rs
@@ -2622,7 +2621,6 @@ count	callee	no_raw	defs	def
 1	fire_recording_leave	0	1	crates/nvim/src/register/exec.rs
 1	first_entry_in_buf	0	1	crates/nvim/src/quickfix/navigate.rs
 1	first_submatch	0	1	crates/nvim/src/search/find.rs
-1	flock	0	0	
 1	fold	0	0	
 1	fold_step	0	0	
 1	foldtext_cleanup	0	1	crates/nvim/src/fold/text.rs
@@ -3010,7 +3008,6 @@ count	callee	no_raw	defs	def
 1	open_source	0	1	crates/nvim/src/fileio/open.rs
 1	open_temp_writer	0	1	crates/nvim/src/shada/file.rs
 1	open_write_file	0	1	crates/nvim/src/bufwrite/backup.rs
-1	opendir	0	0	
 1	openscript	0	1	crates/nvim/src/getchar/scriptin.rs
 1	os_chown	0	0	
 1	os_close	1	1	crates/nvim/src/os/fs/mod.rs
