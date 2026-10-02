@@ -372,16 +372,17 @@ pub fn decor_sh_from_inline(item: DecorHighlightInline) -> DecorSignHighlight {
 // ---------------------------------------------------------------------------
 
 /// Decorations a callback asked to delete in the middle of a redraw, which
-/// may still be referenced by the `DecorState` the redraw is walking. Drained
-/// by [`decor_check_to_be_deleted`] once the redraw is over.
-static TO_FREE_VIRT: GlobalCell<*mut DecorVirtText> = GlobalCell::new(ptr::null_mut());
+/// may still be referenced by the `DecorState` the redraw is walking: the
+/// heads of their virtual-text chains, and (below) their highlight items
+/// spliced into one chain. Drained by [`decor_check_to_be_deleted`] once the
+/// redraw is over.
+static TO_FREE_VIRT: GlobalCell<Vec<*mut DecorVirtText>> = GlobalCell::new(Vec::new());
 static TO_FREE_SH: GlobalCell<uint32_t> = GlobalCell::new(DECOR_ID_INVALID);
 
 /// Frees `decor`, or defers it when a decoration provider is running.
 ///
-/// Deferring works by splicing the decoration's own chains onto the to-free
-/// lists, which is why it costs no allocation: the last link of each chain
-/// takes the old list head.
+/// Deferring keeps the virtual-text chain's head, and splices the highlight
+/// items onto the to-free chain: the last link takes the old head.
 ///
 /// # Safety
 /// `decor` must be live and must not be reachable from any mark afterwards.
@@ -399,17 +400,11 @@ pub unsafe fn decor_free(decor: DecorInline) {
         return;
     }
 
-    // SAFETY: the caller's chains; the two lists are this file's.
-    let mut vt = head_vt;
-    let mut idx: uint32_t = head_idx;
-    while !vt.is_null() {
-        if unsafe { (*vt).next }.is_null() {
-            unsafe { (*vt).next = TO_FREE_VIRT.get() };
-            TO_FREE_VIRT.set(head_vt);
-            break;
-        }
-        vt = unsafe { (*vt).next };
+    if !head_vt.is_null() {
+        TO_FREE_VIRT.with_mut(|heads| heads.push(head_vt));
     }
+    // SAFETY: the caller's chain; the to-free chain is this file's.
+    let mut idx: uint32_t = head_idx;
     while idx != DECOR_ID_INVALID {
         let sh = decor_item(idx);
         if unsafe { (*sh).next } == DECOR_ID_INVALID {
@@ -472,9 +467,13 @@ pub unsafe fn decor_check_to_be_deleted() {
     debug_assert!(!decor_provider_running());
     // SAFETY: the two lists are this file's, and everything on them was put
     // there by `decor_free` and is unreachable from any mark.
-    unsafe { decor_free_inner(TO_FREE_VIRT.get(), TO_FREE_SH.get()) };
-    TO_FREE_VIRT.set(ptr::null_mut());
-    TO_FREE_SH.set(DECOR_ID_INVALID);
+    // The item chain goes with the first call; an empty virtual-text chain
+    // at the end makes sure there is one.
+    let mut items = TO_FREE_SH.replace(DECOR_ID_INVALID);
+    for head_vt in TO_FREE_VIRT.take().into_iter().chain([ptr::null_mut()]) {
+        let items = core::mem::replace(&mut items, DECOR_ID_INVALID);
+        unsafe { decor_free_inner(head_vt, items) };
+    }
     state.win = None;
 }
 
