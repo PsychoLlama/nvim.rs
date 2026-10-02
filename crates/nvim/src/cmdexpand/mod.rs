@@ -43,7 +43,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start};
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
 use crate::help::{cleanup_help_tags, find_help_tags};
-use crate::highlight::state::hl_attr_active;
+use crate::highlight::namespace::hl_attr_table;
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{
     HLF_D, HLF_NONE, HLF_T, HLF_WM, get_highlight_name, set_context_in_highlight_cmd,
@@ -289,9 +289,8 @@ static pre_incsearch_pos: GlobalCell<Pos> = GlobalCell::new(Pos {
     col: 0,
     coladd: 0,
 });
-static compl_match_array: GlobalCell<*mut PumItem> =
-    GlobalCell::new(::core::ptr::null_mut::<PumItem>());
-static compl_match_arraysize: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+/// The popup menu's rows for the matches; `None` while there is no menu.
+static compl_match_array: GlobalCell<Option<Vec<PumItem>>> = GlobalCell::new(None);
 static compl_startcol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static compl_selected: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// The command line as it stood before the last expansion inserted a

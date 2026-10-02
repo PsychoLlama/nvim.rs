@@ -24,7 +24,7 @@ use crate::drawscreen::screenclear;
 use crate::getchar::plain_vgetc;
 use crate::getchar::state::got_int;
 use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_start};
-use crate::highlight::state::hl_attr_active;
+use crate::highlight::namespace::hl_attr_table;
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
 use crate::lua::executor::{kRetObject, nlua_exec};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
@@ -532,7 +532,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
         {
             len += unsafe { utfc_ptr2len(byte_at(at + len)) } as usize;
         }
-        let special_attr = unsafe { *hl_attr_active.get().add(HLF_8 as usize) };
+        let special_attr = unsafe { *hl_attr_table().add(HLF_8 as usize) };
         let colon_at = text[at..at + len].iter().position(|&byte| byte == b':');
         match colon_at {
             _ if text[at] == b'<' => {

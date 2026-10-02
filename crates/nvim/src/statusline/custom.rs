@@ -50,7 +50,7 @@ use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, edit_submode};
-use crate::statusline::state::{tab_page_click_defs, tab_page_click_defs_size};
+use crate::statusline::tab_click_defs_arena;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
@@ -300,7 +300,7 @@ fn reset_click_defs(mut win: Win, kind: ClickKind, width: c_int) {
 /// one of the window's two.
 fn click_arena(win: Option<Win>, draw_winbar: bool) -> ClickArena {
     let (defs, size) = match win {
-        None => (tab_page_click_defs.get(), tab_page_click_defs_size.get()),
+        None => return tab_click_defs_arena(),
         Some(w) if draw_winbar => (w.w_winbar_click_defs, w.w_winbar_click_defs_size),
         Some(w) => (w.w_status_click_defs, w.w_status_click_defs_size),
     };

@@ -43,5 +43,6 @@ pub(crate) static ns_hl_global: GlobalCell<NS> = GlobalCell::new(0 as NS);
 pub(crate) static ns_hl_win: GlobalCell<NS> = GlobalCell::new(-1 as NS);
 pub(crate) static ns_hl_fast: GlobalCell<NS> = GlobalCell::new(-1 as NS);
 pub(crate) static ns_hl_active: GlobalCell<NS> = GlobalCell::new(0 as NS);
-pub(crate) static hl_attr_active: GlobalCell<*mut c_int> =
-    GlobalCell::new((highlight_attr.as_raw() as *const _) as *mut c_int);
+/// The namespace whose `HLF_*` table is in force (what `HL_ATTR` reads), or
+/// `None` for the built-in one. See [`hl_attr_table`](super::namespace::hl_attr_table).
+pub(crate) static hl_attr_ns: GlobalCell<Option<NS>> = GlobalCell::new(None);

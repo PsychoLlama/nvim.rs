@@ -30,7 +30,7 @@ use crate::grid::{
     grid_draw_border, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     schar_from_ascii, schar_from_str, screengrid_line_start,
 };
-use crate::highlight::state::hl_attr_active;
+use crate::highlight::namespace::hl_attr_table;
 use crate::highlight::{hl_combine_attr, hl_get_ui_attr, win_hl_attr};
 use crate::highlight_group::{
     HLF_PBR, HLF_PMNI, HLF_PMSI, HLF_PNI, HLF_PNK, HLF_PNX, HLF_PSB, HLF_PSI, HLF_PSK, HLF_PST,
@@ -107,9 +107,10 @@ pub const DEFAULT_GRID_HANDLE: c_int = 1;
 // one struct because `pum_set_selected` re-enters the editor (autocommands,
 // `update_screen`) between writes, and no borrow may span that.
 
-/// The items being shown. Borrowed from the caller of [`pum_display`], or
-/// owned by `pum_show_popupmenu`; null while the menu is down.
-static pum_array: GlobalCell<*mut PumItem> = GlobalCell::new(::core::ptr::null_mut::<PumItem>());
+/// The items being shown: a copy of the rows [`pum_display`] was handed, or
+/// `pum_show_popupmenu`'s own; `None` while the menu is down. The rows'
+/// strings stay borrowed from whoever built them.
+static pum_array: GlobalCell<Option<Vec<PumItem>>> = GlobalCell::new(None);
 /// Number of items in `pum_array`.
 static pum_size: GlobalCell<c_int> = GlobalCell::new(0);
 /// Index of the selected item, or -1.
@@ -158,23 +159,30 @@ static pum_invalid: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The items the menu is showing, empty while it is down.
 ///
-/// `pum_array` is borrowed from whoever called [`pum_display`] and is only
-/// read; the strings inside it are what the drawing code writes through (it
-/// NUL-terminates an item in place to measure a prefix, then puts the byte
-/// back), which is why a shared slice is honest here.
+/// `pum_array` is only read; the strings its rows borrow are what the
+/// drawing code writes through (it NUL-terminates an item in place to
+/// measure a prefix, then puts the byte back), which is why a shared slice
+/// is honest here.
 ///
 /// # Safety
-/// The result must not be held across `pum_undisplay`, which drops the
-/// caller's array.
+/// The result must not be held across `pum_undisplay` or another
+/// `pum_display`, which drop or replace the rows.
 #[inline]
 unsafe fn pum_items() -> &'static [PumItem] {
-    let array = pum_array.get();
-    if array.is_null() {
-        return &[];
-    }
-    // SAFETY: `pum_array` and `pum_size` are set together and the array
-    // outlives the menu.
-    unsafe { ::core::slice::from_raw_parts(array, pum_size.get() as usize) }
+    let (rows, len) = pum_array.with(|rows| {
+        rows.as_ref().map_or(
+            (
+                ::core::ptr::NonNull::<PumItem>::dangling()
+                    .as_ptr()
+                    .cast_const(),
+                0,
+            ),
+            |rows| (rows.as_ptr(), rows.len()),
+        )
+    });
+    // SAFETY: the rows stay put until the menu replaces or drops them,
+    // which the caller promises not to hold the answer across.
+    unsafe { ::core::slice::from_raw_parts(rows, len) }
 }
 
 /// Cells `'pumborder'` costs on each side of the menu.
@@ -384,7 +392,13 @@ pub unsafe fn pum_display(
             return;
         }
 
-        pum_array.set(array);
+        // SAFETY: the caller's `size` rows.
+        let rows = unsafe { ::core::slice::from_raw_parts(array, size as usize) };
+        pum_array.with_mut(|shown| {
+            let shown = shown.get_or_insert_with(Vec::new);
+            shown.clear();
+            shown.extend_from_slice(rows);
+        });
         // Set before returning, so `pum_set_event_info` sees the size.
         pum_size.set(size);
         if pum_external.get() {
@@ -426,7 +440,7 @@ pub(crate) fn pum_grid_ref() -> GridRef {
 /// something else in its place wants.
 pub fn pum_undisplay(immediate: bool) {
     pum_is_visible.set(false);
-    pum_array.set(::core::ptr::null_mut());
+    pum_array.set(None);
     must_redraw_pum.set(false);
 
     if immediate {

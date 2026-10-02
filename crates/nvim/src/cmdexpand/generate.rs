@@ -14,6 +14,7 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::memory::XString;
 use crate::path::ExpandFlags;
 use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::String_0;
@@ -279,14 +280,14 @@ pub(crate) unsafe fn get_lsp_arg(expand: *mut Expand, idx: c_int) -> *mut c_char
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
-    static last_xp_line: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+    static last_xp_line: GlobalCell<Option<XString>> = GlobalCell::new(None);
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
-    if last_xp_line.get().is_null()
-        || !unsafe { cstr::eq(last_xp_line.get(), expand.xp_line) }
+    // SAFETY: the context's command line, a C string.
+    let line = unsafe { cstr::at(expand.xp_line) };
+    if last_xp_line.with(|last| last.as_ref().is_none_or(|last| last.as_cstr() != line))
         || last_gen.get() != get_cmdline_last_prompt_id()
     {
-        unsafe { xfree(last_xp_line.get() as *mut c_void) };
-        last_xp_line.set(unsafe { xstrdup(expand.xp_line) });
+        last_xp_line.set(Some(XString::from_cstr(line)));
         // The current command line, as the Lua function's one argument.
         let mut args = ArrayBuf::<1>::new();
         args.push(Object::string(unsafe { cstr_to_string(expand.xp_line) }));

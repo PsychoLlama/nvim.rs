@@ -29,7 +29,8 @@ use crate::grid::{
     schar_get_first_codepoint, schar_len,
 };
 use crate::highlight::default_hl_attr;
-use crate::highlight::state::{cterm_normal_bg_color, hl_attr_active, normal_bg};
+use crate::highlight::namespace::hl_attr_table;
+use crate::highlight::state::{cterm_normal_bg_color, normal_bg};
 use crate::highlight::{
     hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr, win_hl_attr,
 };
@@ -299,7 +300,7 @@ fn wlv_put_linebuf(
                 off += 1;
             }
         }
-        let at_attr = unsafe { *hl_attr_active.get().add(HLF_AT as usize) } as ScreenAttr;
+        let at_attr = unsafe { *hl_attr_table().add(HLF_AT as usize) } as ScreenAttr;
         for _ in 0..3 {
             if off >= window.w_view_width {
                 break;

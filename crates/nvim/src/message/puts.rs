@@ -249,8 +249,8 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     }
 
     let print_attr =
-        // SAFETY: `hl_attr_active` points at the active attribute table.
-        unsafe { hl_combine_attr(*hl_attr_active.get().offset(HLF_MSG as isize), attr) };
+        // SAFETY: `hl_attr_table` answers the active attribute table.
+        unsafe { hl_combine_attr(*hl_attr_table().offset(HLF_MSG as isize), attr) };
     msg_grid_validate();
     cmdline_was_last_drawn.set(redrawing_cmdline.get());
 
@@ -352,8 +352,8 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
             if cw > 1 && msg_col.get() == Columns.get() - 1 {
                 // Doesn't fit: fill the last column with a highlighted '>'
                 // and let the wrap put the character on the next line.
-                // SAFETY: `hl_attr_active` points at the active table.
-                let at = unsafe { *hl_attr_active.get().offset(HLF_AT as isize) };
+                // SAFETY: `hl_attr_table` answers the active table.
+                let at = unsafe { *hl_attr_table().offset(HLF_AT as isize) };
                 // SAFETY: a line is open and the literal is one byte.
                 unsafe { grid_line_puts(msg_col.get(), c">".as_ptr(), 1, at) };
                 cw = 1;

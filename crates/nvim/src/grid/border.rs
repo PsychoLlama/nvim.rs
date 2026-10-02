@@ -118,7 +118,7 @@ pub unsafe fn grid_draw_border(
         adj
     };
     let hl_attr = if hl_attr.is_null() {
-        hl_attr_active.get()
+        hl_attr_table()
     } else {
         hl_attr
     };

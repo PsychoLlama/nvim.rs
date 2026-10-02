@@ -343,7 +343,7 @@ unsafe fn next_match(mode: WildMode, expand: *mut Expand) -> *mut c_char {
 
     // Display the matches on screen.
     if p_wmnu() {
-        if !compl_match_array.get().is_null() {
+        if compl_match_array.with(Option::is_some) {
             compl_selected.set(findex);
             cmdline_pum_display(false);
         } else if cmdline_compl_use_pum(true) {
@@ -593,7 +593,7 @@ pub unsafe fn expand_one(
         expand.xp_orig = ptr::null_mut();
 
         // The entries from xp_files may be in the popup menu; remove it.
-        if !compl_match_array.get().is_null() {
+        if compl_match_array.with(Option::is_some) {
             cmdline_pum_remove(false);
         }
     }

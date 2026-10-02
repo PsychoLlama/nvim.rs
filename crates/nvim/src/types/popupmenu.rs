@@ -10,7 +10,9 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 
-#[derive(Default)]
+/// One row of the popup menu. The strings are borrowed from whoever built
+/// the row, so a copy of the row is as good as the row.
+#[derive(Default, Clone)]
 pub struct PumItem {
     pub pum_text: *mut ::core::ffi::c_char,
     pub pum_kind: *mut ::core::ffi::c_char,

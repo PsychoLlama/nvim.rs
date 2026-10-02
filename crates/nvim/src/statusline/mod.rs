@@ -39,6 +39,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::statusline::state::tab_page_click_defs;
 use crate::types::CAR;
 use crate::types::NL;
 use core::ffi::{CStr, c_char, c_int};
@@ -52,7 +53,7 @@ use crate::grid::{
     GridRef, grid_adjust, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     grid_line_start, screengrid_line_start,
 };
-use crate::highlight::state::hl_attr_active;
+use crate::highlight::namespace::hl_attr_table;
 use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::memory::{xcalloc, xfree, xstrdup};
@@ -281,7 +282,7 @@ impl StlJob<'_> {
 // ---------------------------------------------------------------------------
 
 /// A blank click definition: what a cell nobody claimed holds.
-const NO_CLICK: StlClickDefinition = StlClickDefinition {
+pub(crate) const NO_CLICK: StlClickDefinition = StlClickDefinition {
     type_0: kStlClickDisabled,
     tabnr: 0,
     func: ptr::null_mut(),
@@ -422,6 +423,15 @@ impl ClickArena {
     }
 }
 
+/// The tab page line's definitions as an arena, for the redraw that fills
+/// them. Never `reserve`d: the screen resize sizes the vector.
+pub(crate) fn tab_click_defs_arena() -> ClickArena {
+    let (defs, size) = tab_page_click_defs.with_mut(|defs| (defs.as_mut_ptr(), defs.len()));
+    // SAFETY: the vector's `size` entries; it only changes size on a screen
+    // resize, which no arena is held across.
+    unsafe { ClickArena::new(defs, size) }
+}
+
 /// C's `stl_clear_click_defs()`, for the callers in `window.rs` that hold
 /// the array and its size as two separate fields.
 ///
@@ -503,7 +513,7 @@ pub(crate) fn is_redrawing() -> bool {
 pub(crate) fn hl_attr(hlf: c_int) -> c_int {
     // SAFETY: the attribute table is built before the first redraw and is
     // indexed by every `HLF_*`.
-    unsafe { *hl_attr_active.get().add(hlf as usize) }
+    unsafe { *hl_attr_table().add(hlf as usize) }
 }
 
 /// The attribute `group` has in `win`, i.e. C's `win_hl_attr` -- [`hl_attr`]

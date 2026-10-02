@@ -96,7 +96,8 @@ use crate::grid::{
 };
 use crate::guard::{Depth, Suppress};
 use crate::highlight::hl_combine_attr;
-use crate::highlight::state::{hl_attr_active, need_highlight_changed};
+use crate::highlight::namespace::hl_attr_table;
+use crate::highlight::state::need_highlight_changed;
 use crate::highlight_group::{
     HLF_0, HLF_8, HLF_AT, HLF_E, HLF_M, HLF_MSG, HLF_N, HLF_R, HLF_T, HLF_W, highlight_changed,
     syn_check_group, syn_id2attr,
@@ -238,7 +239,7 @@ pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 fn hl_attr(hlf: ::core::ffi::c_int) -> ::core::ffi::c_int {
     // SAFETY: the attribute table is built before the first redraw and is
     // indexed by every `HLF_*`; every call site here passes one.
-    unsafe { *hl_attr_active.get().add(hlf as usize) }
+    unsafe { *hl_attr_table().add(hlf as usize) }
 }
 
 /// `grid_clear` over a rectangle of the message grid, in the message

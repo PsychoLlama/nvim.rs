@@ -14,10 +14,11 @@
 //!
 //! The drawing code cannot afford that lookup per cell, so each namespace
 //! also gets a resolved table — one attribute id per `HLF_*` builtin — built
-//! by [`update_ns_hl`] and cached until the provider invalidates it. Three
-//! globals point into those tables: `hl_attr_active` (what `HL_ATTR` reads),
-//! and each window's `w_ns_hl_attr` (what [`win_hl_attr`] reads). That is why
-//! the tables are boxed and handed out as raw pointers — the pointers outlive
+//! by [`update_ns_hl`] and cached until the provider invalidates it.
+//! `hl_attr_ns` names the one `HL_ATTR` reads (by namespace, resolved by
+//! [`hl_attr_table`]), and each window's `w_ns_hl_attr` points at the one
+//! [`win_hl_attr`] reads. That is why the tables are boxed and handed out as
+//! raw pointers — the pointers outlive
 //! any borrow of the map, and nothing ever removes an entry.
 //!
 //! Which namespace is "active" is itself a small resolution ([`hl_check_ns`]):
@@ -37,7 +38,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{
-    hl_attr_active, need_highlight_changed, ns_hl_active, ns_hl_fast, ns_hl_global, ns_hl_win,
+    hl_attr_ns, need_highlight_changed, ns_hl_active, ns_hl_fast, ns_hl_global, ns_hl_win,
 };
 use crate::highlight_group::{
     HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, hlf_names,
@@ -95,7 +96,7 @@ static NS_HL_ATTR: GlobalCell<Table<c_int, NsHlTable>> =
 /// One namespace's builtin-group table: `HLF_COUNT` attribute ids.
 ///
 /// Owned here, but reached through a raw pointer that escapes into
-/// `hl_attr_active` and every window's `w_ns_hl_attr`. Those outlive any
+/// every window's `w_ns_hl_attr`. Those outlive any
 /// borrow of [`NS_HL_ATTR`], which is why the storage is a separate
 /// allocation rather than inline in the map. Nothing removes an entry, so the
 /// address is good for the process's life — `Drop` is here for completeness
@@ -118,6 +119,17 @@ impl Drop for NsHlTable {
     fn drop(&mut self) {
         // SAFETY: `self.0` came from `Box::into_raw` and is dropped once.
         drop(unsafe { Box::from_raw(self.0) });
+    }
+}
+
+/// The `HLF_*` table in force: the built-in one, or the table of the
+/// namespace [`hl_attr_ns`] names. Tables are never freed, so the address is
+/// good for the process's life; the built-in case, which is every editor
+/// without a highlight namespace, reads no map.
+pub(crate) fn hl_attr_table() -> *mut c_int {
+    match hl_attr_ns.get() {
+        None => default_hl_attr_table(),
+        Some(ns) => NS_HL_ATTR.with(|tables| tables[&ns].as_ptr()),
     }
 }
 
@@ -291,8 +303,8 @@ const UNSET: ColorItem = ColorItem {
     link_global: false,
 };
 
-/// Re-resolves which namespace is active and points `hl_attr_active` at its
-/// table. Answers whether it changed, which is the caller's cue to redraw.
+/// Re-resolves which namespace is active and makes its table the one
+/// [`hl_attr_table`] answers. Answers whether it changed, which is the caller's cue to redraw.
 pub fn hl_check_ns() -> bool {
     let ns = if ns_hl_fast.get() > 0 {
         ns_hl_fast.get()
@@ -306,12 +318,11 @@ pub fn hl_check_ns() -> bool {
     }
 
     ns_hl_active.set(ns);
-    hl_attr_active.set(default_hl_attr_table());
+    hl_attr_ns.set(None);
     if ns > 0 {
         update_ns_hl(ns);
-        let table = NS_HL_ATTR.with(|tables| tables.get(&ns).map(NsHlTable::as_ptr));
-        if let Some(table) = table {
-            hl_attr_active.set(table);
+        if NS_HL_ATTR.with(|tables| tables.contains_key(&ns)) {
+            hl_attr_ns.set(Some(ns));
         }
     }
     need_highlight_changed.set(true);
@@ -416,7 +427,7 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
         } else if *hl_def.add(HLF_NONE as usize) > 0 {
             *hl_def.add(HLF_NONE as usize)
         } else if float_win {
-            let active = *hl_attr_active.get().add(HLF_NFLOAT as usize);
+            let active = *hl_attr_table().add(HLF_NFLOAT as usize);
             if active > 0 {
                 active
             } else {
@@ -457,7 +468,7 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
     let inactive = unsafe { *hl_def.add(HLF_INACTIVE as usize) };
     unsafe {
         window.w_hl_attr_normalnc = if inactive == 0 {
-            let global = *hl_attr_active.get().add(HLF_INACTIVE as usize);
+            let global = *hl_attr_table().add(HLF_INACTIVE as usize);
             hl_combine_attr(global, window.w_hl_attr_normal)
         } else {
             inactive
@@ -517,9 +528,9 @@ pub fn win_bg_attr(window: Win) -> c_int {
             return local;
         }
     }
-    let inactive = unsafe { *hl_attr_active.get().add(HLF_INACTIVE as usize) };
+    let inactive = unsafe { *hl_attr_table().add(HLF_INACTIVE as usize) };
     if window.raw() == Win::current_raw() || inactive == 0 {
-        unsafe { *hl_attr_active.get().add(HLF_NONE as usize) }
+        unsafe { *hl_attr_table().add(HLF_NONE as usize) }
     } else {
         inactive
     }
@@ -535,7 +546,7 @@ pub fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
     let table = if !window.w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 {
         window.w_ns_hl_attr
     } else {
-        hl_attr_active.get()
+        hl_attr_table()
     };
     unsafe { *table.add(hlf as usize) }
 }

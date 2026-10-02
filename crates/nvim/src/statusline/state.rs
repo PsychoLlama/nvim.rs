@@ -16,9 +16,11 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
-use crate::types::{StlClickDefinition, StlSyntax, size_t};
+use crate::types::{StlClickDefinition, StlSyntax};
 
 pub(crate) static stl_syntax: GlobalCell<StlSyntax> = GlobalCell::new(StlSyntax::NONE);
-pub(crate) static tab_page_click_defs: GlobalCell<*mut StlClickDefinition> =
-    GlobalCell::new(::core::ptr::null_mut::<StlClickDefinition>());
-pub(crate) static tab_page_click_defs_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
+/// The tab page line's click definitions, one per screen column; sized by
+/// the screen resize. Each `func` string is owned by the run of cells that
+/// holds it (see `ClickArena`).
+pub(crate) static tab_page_click_defs: GlobalCell<Vec<StlClickDefinition>> =
+    GlobalCell::new(Vec::new());

@@ -50,12 +50,13 @@ pub fn default_grid_alloc() -> bool {
     // at the old size, because the wrong size is a crash.
     grid_alloc(&mut grid, Rows.get(), Columns.get(), true, true);
 
-    let defs = tab_page_click_defs.get();
-    let size = tab_page_click_defs_size.get();
-    unsafe { stl_clear_click_defs(defs, size) };
-    let (defs, size) = unsafe { stl_alloc_click_defs(defs, Columns.get(), size) };
-    tab_page_click_defs.set(defs);
-    tab_page_click_defs_size.set(size);
+    tab_click_defs_arena().clear();
+    let columns = Columns.get() as usize;
+    tab_page_click_defs.with_mut(|defs| {
+        if defs.len() < columns {
+            defs.resize(columns, NO_CLICK);
+        }
+    });
 
     grid.comp_height = Rows.get();
     grid.comp_width = Columns.get();
@@ -109,7 +110,7 @@ pub fn screenclear() {
     msg_didany.set(false);
     msg_didout.set(false);
 
-    if unsafe { *hl_attr_active.get().add(HLF_MSG as usize) } > 0
+    if unsafe { *hl_attr_table().add(HLF_MSG as usize) } > 0
         && msg_use_grid()
         && msg_grid_ref().is_allocated()
     {

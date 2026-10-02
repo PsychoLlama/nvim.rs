@@ -315,7 +315,7 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
         config.border_attr[i] = if config.border_hl_ids[i] != 0 {
             hl_get_ui_attr(-1, HLF_PBR, config.border_hl_ids[i], false)
         } else {
-            unsafe { *hl_attr_active.get().offset(HLF_PBR as isize) }
+            unsafe { *hl_attr_table().offset(HLF_PBR as isize) }
         };
     }
 

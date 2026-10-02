@@ -1,17 +1,17 @@
 count	callee	no_raw	defs	def
-796	xfree	0	1	crates/nvim/src/memory/mod.rs
+794	xfree	0	1	crates/nvim/src/memory/mod.rs
 713	.add	0	3	
 438	bytes_at	0	1	crates/nvim/src/cstr.rs
 411	.offset	0	0	
 335	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-317	at	0	3	
+318	at	0	3	
 290	CStr::from_ptr	0	2	
 224	.offset_from	0	0	
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
-169	xstrdup	0	1	crates/nvim/src/memory/mod.rs
+168	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 159	from_raw_parts	0	0	
-145	xmalloc	0	1	crates/nvim/src/memory/mod.rs
+144	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 128	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 114	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 111	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
@@ -40,8 +40,8 @@ count	callee	no_raw	defs	def
 45	.sub	0	0	
 44	fprintf	0	0	
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
-42	eq	0	1	crates/nvim/src/cstr.rs
 42	key_bytes	0	1	crates/nvim/src/api/private/dispatch/mod.rs
+41	eq	0	1	crates/nvim/src/cstr.rs
 39	tv_copy	0	0	
 38	Tv::new	0	67	
 38	copy_option_part	0	1	crates/nvim/src/option/query.rs
@@ -127,7 +127,6 @@ count	callee	no_raw	defs	def
 18	path_tail	0	1	crates/nvim/src/path/names.rs
 18	uv_strerror	0	0	
 18	vim_fgets	0	1	crates/nvim/src/fileio/mod.rs
-17	.write	0	0	
 17	Op::new	0	67	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 17	add_str	0	5	
@@ -137,6 +136,7 @@ count	callee	no_raw	defs	def
 17	nlua_pop_object	0	1	crates/nvim/src/lua/converter/pop_object.rs
 17	utf_ptr2str_char_info	0	1	crates/nvim/src/mbyte/walk.rs
 17	value_check_lock	0	1	crates/nvim/src/eval/typval/value.rs
+16	.write	0	0	
 16	Di::new	0	67	
 16	Ui::new	0	67	
 16	append_to_redobuff	0	1	crates/nvim/src/getchar/redo.rs
@@ -1983,7 +1983,6 @@ count	callee	no_raw	defs	def
 2	start_arrow_common	0	1	crates/nvim/src/edit/undo.rs
 2	stdpaths_user_conf_subpath	0	1	crates/nvim/src/os/stdpaths.rs
 2	step_backup_name	0	1	crates/nvim/src/bufwrite/backup.rs
-2	stl_clear_click_defs	0	1	crates/nvim/src/statusline/mod.rs
 2	stop_insert	0	1	crates/nvim/src/edit/undo.rs
 2	store_loop_line	0	1	crates/nvim/src/ex_docmd/source.rs
 2	store_of	1	1	crates/nvim/src/undo/store.rs
@@ -3412,7 +3411,7 @@ count	callee	no_raw	defs	def
 1	starting_dir	0	1	crates/nvim/src/file_search/init.rs
 1	starts_continuation	0	1	crates/nvim/src/runtime/script.rs
 1	status_hl_id	0	1	crates/nvim/src/message/progress.rs
-1	stl_alloc_click_defs	0	1	crates/nvim/src/statusline/mod.rs
+1	stl_clear_click_defs	0	1	crates/nvim/src/statusline/mod.rs
 1	stop_directories	0	1	crates/nvim/src/file_search/init.rs
 1	store_counts	0	1	crates/nvim/src/ops/count.rs
 1	store_for	1	1	crates/nvim/src/undo/store.rs

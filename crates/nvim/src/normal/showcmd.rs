@@ -24,7 +24,7 @@ use crate::fold::has_folding;
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
-use crate::highlight::state::hl_attr_active;
+use crate::highlight::namespace::hl_attr_table;
 use crate::mbyte::{cluster_len, utf_char2bytes};
 use crate::message::state::msg_silent;
 use crate::message::{msg_grid_validate, msg_grid_view};
@@ -442,7 +442,7 @@ fn draw_on_last_line(clear: bool) {
     msg_grid_validate();
     let showcmd_row = Rows.get() - 1;
     grid_line_start(msg_grid_view(), showcmd_row);
-    let attr = unsafe { *hl_attr_active.get().offset(HLF_MSG as isize) };
+    let attr = unsafe { *hl_attr_table().offset(HLF_MSG as isize) };
     let mut len = 0;
     if !clear {
         len = unsafe { grid_line_puts(sc_col.get(), sc.as_cstr().as_ptr(), -1, attr) };

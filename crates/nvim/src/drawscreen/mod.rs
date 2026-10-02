@@ -43,7 +43,8 @@ use crate::grid::{
     grid_line_getchar, grid_line_mirror, grid_line_put_schar, grid_line_start,
     schar_cache_clear_if_full, schar_from_ascii, win_grid_alloc,
 };
-use crate::highlight::state::{hl_attr_active, need_highlight_changed, ns_hl_fast};
+use crate::highlight::namespace::hl_attr_table;
+use crate::highlight::state::{need_highlight_changed, ns_hl_fast};
 use crate::highlight::{
     hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,
 };
@@ -94,11 +95,10 @@ use crate::state::{
     MODE_NORMAL, MODE_SETWSIZE, MODE_TERMINAL, MODE_VISUAL, REPLACE_FLAG, VREPLACE_FLAG,
     get_real_state,
 };
-use crate::statusline::state::{stl_syntax, tab_page_click_defs, tab_page_click_defs_size};
-use crate::statusline::{
-    draw_tabline, redraw_ruler, stl_alloc_click_defs, stl_clear_click_defs, win_redr_status,
-    win_redr_winbar,
-};
+use crate::statusline::NO_CLICK;
+use crate::statusline::state::{stl_syntax, tab_page_click_defs};
+use crate::statusline::tab_click_defs_arena;
+use crate::statusline::{draw_tabline, redraw_ruler, win_redr_status, win_redr_winbar};
 use crate::syntax::{
     syn_set_timeout, syn_stack_apply_changes, syntax_check_changed, syntax_end_parsing,
     syntax_present,

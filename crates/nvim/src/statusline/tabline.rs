@@ -32,7 +32,8 @@ use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
 use crate::mbyte::utfc_ptr2len;
 use crate::normal::showcmd_buf;
 use crate::path::shorten_dir;
-use crate::statusline::state::{tab_page_click_defs, tab_page_click_defs_size};
+use crate::statusline::state::tab_page_click_defs;
+use crate::statusline::tab_click_defs_arena;
 use crate::types::ui::kUITabline;
 use crate::types::{
     BufferHandle, MAXPATHL, Object, StlClickDefinition_type_0, String_0, TabpageHandle,
@@ -134,7 +135,7 @@ pub fn draw_tabline() {
     // Clicking outside of any tab has no effect, so the whole line is
     // cleared first.
     debug_assert!(
-        tab_page_click_defs_size.get() >= Columns.get() as size_t,
+        tab_page_click_defs.with(Vec::len) >= Columns.get() as usize,
         "tab_page_click_defs_size >= (size_t)Columns"
     );
     tab_click_arena().clear();
@@ -326,7 +327,5 @@ fn set_tab_clicks(cols: core::ops::Range<c_int>, kind: StlClickDefinition_type_0
 
 /// The tab page line's click definitions.
 fn tab_click_arena() -> ClickArena {
-    // SAFETY: the global arena and its recorded size, which the screen
-    // resize holds at `Columns` or more.
-    unsafe { ClickArena::new(tab_page_click_defs.get(), tab_page_click_defs_size.get()) }
+    tab_click_defs_arena()
 }

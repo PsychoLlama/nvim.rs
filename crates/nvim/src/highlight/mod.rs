@@ -154,8 +154,8 @@ static ATTRS: GlobalCell<AttrTable> = GlobalCell::new(AttrTable::new());
 /// Results of [`hl_combine_attr`], by the pair that produced them.
 static COMBINE: GlobalCell<AttrCache> = GlobalCell::new(AttrCache::new());
 
-/// The built-in highlight table, by address: `hl_attr_active` and a window's
-/// `w_ns_hl_attr` both *hold* it, switching between this table and a
+/// The built-in highlight table, by address: a window's
+/// `w_ns_hl_attr` *holds* it, switching between this table and a
 /// namespace's own, so the address is what the family works from. This is
 /// the one place it is taken.
 pub(crate) fn default_hl_attr_table() -> *mut c_int {

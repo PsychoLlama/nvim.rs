@@ -287,7 +287,14 @@ impl ClickDefs {
     /// below `Columns`.
     unsafe fn tabline() -> Option<Self> {
         // SAFETY: the caller's promise.
-        unsafe { Self::new(tab_page_click_defs.get()) }
+        let defs = tab_page_click_defs.with_mut(|defs| {
+            if defs.is_empty() {
+                ptr::null_mut()
+            } else {
+                defs.as_mut_ptr()
+            }
+        });
+        unsafe { Self::new(defs) }
     }
 
     /// The definition recorded for screen column `col`.

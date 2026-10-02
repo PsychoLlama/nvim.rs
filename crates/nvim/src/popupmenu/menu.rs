@@ -5,9 +5,9 @@
 //! chosen entry. [`pum_select_mouse_pos`] maps a mouse position back to an
 //! item for both this loop and the completion menu.
 //!
-//! This menu owns its items, unlike the completion menu, whose array belongs
-//! to `insexpand`. They live in the two `Vec`s below for as long as the key
-//! loop runs; a mapping run from `vgetc` can call `pum_undisplay`, which is
+//! This menu owns its item strings, unlike the completion menu, whose
+//! strings belong to `insexpand`. They live in `entries` for as long as the
+//! key loop runs; a mapping run from `vgetc` can call `pum_undisplay`, which is
 //! why the loop re-checks that the menu is still up on every key.
 //!
 //! The tree itself is read through [`Menu`], the menu family's own wrapper,
@@ -212,7 +212,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
         return;
     }
 
-    let mut array: Vec<PumItem> = entries
+    let array: Vec<PumItem> = entries
         .iter()
         .map(|text| PumItem {
             pum_text: text.as_ptr().cast_mut(),
@@ -220,9 +220,9 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
         })
         .collect();
 
-    // SAFETY: `array` outlives `pum_array`, which the `pum_undisplay` at the
-    // end clears; the placement calls read the editor's own state.
-    pum_array.set(array.as_mut_ptr());
+    // The rows borrow `entries`' strings, which outlive the menu: the
+    // `pum_undisplay` at the end takes it down.
+    pum_array.set(Some(array));
     pum_compute_size();
     pum_scrollbar.set(0);
     pum_height.set(pum_size.get());
@@ -248,7 +248,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
         let c = vgetc();
         // A callback or <expr> mapping run from `vgetc` may have taken the
         // menu down under us.
-        if pum_array.get().is_null() {
+        if pum_array.with(Option::is_none) {
             break;
         }
         match pum_menu_key(c, &entries) {
@@ -261,7 +261,6 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
         }
     }
 
-    drop(array);
     pum_undisplay(true);
     if !p_mousemev() {
         set_mousemoveevent(false);

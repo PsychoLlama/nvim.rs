@@ -18,7 +18,6 @@ use crate::types::{ExpandContext, MB_MAXBYTES, NUL};
 use crate::winlayer::Win;
 use crate::winlayer::last_window;
 use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::mem::size_of;
 use core::ptr;
 
 /// Create the completion popup menu with items from `matches`.
@@ -42,9 +41,7 @@ pub(crate) unsafe fn cmdline_pum_create(
     let expand = unsafe { Xp::new(expand) };
     debug_assert!(num_matches >= 0);
     // Add all the completion matches.
-    compl_match_array
-        .set(unsafe { xmalloc(size_of::<PumItem>() * num_matches as size_t) } as *mut PumItem);
-    compl_match_arraysize.set(num_matches);
+    let mut rows = Vec::with_capacity(num_matches as usize);
     for i in 0..num_matches {
         let m = unsafe { *matches.offset(i as isize) };
         let item = PumItem {
@@ -62,11 +59,9 @@ pub(crate) unsafe fn cmdline_pum_create(
             pum_user_abbr_hlattr: -1,
             pum_user_kind_hlattr: -1,
         };
-        let slot = compl_match_array.get().wrapping_offset(i as isize);
-        // SAFETY: `slot` is the i'th of the `num_matches` items just
-        // allocated, and nothing has been written there yet.
-        unsafe { slot.write(item) };
+        rows.push(item);
     }
+    compl_match_array.set(Some(rows));
 
     // Compute the popup menu starting column.
     let endpos = if showtail {
@@ -83,10 +78,12 @@ pub(crate) unsafe fn cmdline_pum_create(
 }
 
 pub fn cmdline_pum_display(changed_array: bool) {
+    // A copy: placing the menu can run autocommands that remove it.
+    let mut rows = compl_match_array.with(Clone::clone).unwrap_or_default();
     unsafe {
         pum_display(
-            compl_match_array.get(),
-            compl_match_arraysize.get(),
+            rows.as_mut_ptr(),
+            rows.len() as c_int,
             compl_selected.get(),
             changed_array,
             compl_startcol.get(),
@@ -96,16 +93,14 @@ pub fn cmdline_pum_display(changed_array: bool) {
 
 /// True if the cmdline completion popup menu is being displayed.
 pub fn cmdline_pum_active() -> bool {
-    pum_visible() && !compl_match_array.get().is_null()
+    pum_visible() && compl_match_array.with(Option::is_some)
 }
 
 /// Remove the cmdline completion popup menu (if present) and free the list of
 /// items.
 pub fn cmdline_pum_remove(defer_redraw: bool) {
     pum_undisplay(!defer_redraw);
-    unsafe { xfree(compl_match_array.get() as *mut c_void) };
-    compl_match_array.set(ptr::null_mut());
-    compl_match_arraysize.set(0);
+    compl_match_array.set(None);
 }
 
 pub(crate) fn cmdline_pum_cleanup(cclp: Cc) {
@@ -430,7 +425,7 @@ pub(crate) unsafe fn redraw_wildmenu(
                     selstart_col,
                     selstart,
                     -1,
-                    *hl_attr_active.get().offset(HLF_WM as isize),
+                    *hl_attr_table().offset(HLF_WM as isize),
                 )
             };
         }
