@@ -10,7 +10,7 @@
 //!
 //! Instead one `unsafe` promise is made per match, at the engine's entry
 //! point, and the resulting handle is threaded down. `Rex` is `Copy` and
-//! pointer-sized, so passing it costs a register; it deliberately has no
+//! zero-sized, so passing it costs nothing; it deliberately has no
 //! `Deref`, so every field the engines touch is named here and the
 //! obligations that come with it are stated once rather than at each of the
 //! several hundred use sites.
@@ -33,6 +33,7 @@
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
+use core::marker::PhantomData;
 
 use super::pos::{MatchPos, PosKind, SavedInput};
 use super::{NSUBEXP, RegExec, TimeBudget, ZSlots, rex};
@@ -45,8 +46,21 @@ use crate::types::{ColNr, LPos, LineNr, RegMMatch, RegMatch, RegProg, uint8_t};
 /// Obtained once per match with [`Rex::acquire`] and passed down by value.
 /// Holding one is a claim that the context is set up and stays set up: see
 /// that constructor for the whole of it.
+///
+/// The handle carries no address. There is one context, the `rex` static
+/// that `with_rex` saves and restores around a nested match, and every
+/// accessor reaches it at its constant address: a field read is one load
+/// rather than a load through a pointer some caller had to keep in a
+/// register, which the NFA's per-state list walk measurably prefers.
 #[derive(Clone, Copy)]
-pub(crate) struct Rex(*mut RegExec);
+pub(crate) struct Rex(PhantomData<*mut RegExec>);
+
+/// The one match context, at its constant address. Only reached through a
+/// [`Rex`], whose existence is the promise [`Rex::acquire`] states.
+#[inline(always)]
+fn ctx() -> *mut RegExec {
+    rex.as_raw()
+}
 
 impl Rex {
     /// The context of the match that is about to run, or is running.
@@ -77,7 +91,7 @@ impl Rex {
     /// moment the memline moves underneath it.
     #[inline(always)]
     pub(crate) unsafe fn acquire() -> Rex {
-        Rex(rex.ptr())
+        Rex(PhantomData)
     }
 
     // ------------------------------------------------------- the cursor
@@ -85,34 +99,34 @@ impl Rex {
     /// The line the match is on, counted from `reg_firstlnum`.
     #[inline(always)]
     pub(crate) fn lnum(self) -> LineNr {
-        unsafe { (*self.0).lnum }
+        unsafe { (*ctx()).lnum }
     }
 
     #[inline(always)]
     pub(crate) fn set_lnum(self, lnum: LineNr) {
-        unsafe { (*self.0).lnum = lnum }
+        unsafe { (*ctx()).lnum = lnum }
     }
 
     /// The start of the line being matched.
     #[inline(always)]
     pub(crate) fn line(self) -> *mut uint8_t {
-        unsafe { (*self.0).line }
+        unsafe { (*ctx()).line }
     }
 
     #[inline(always)]
     pub(crate) fn set_line(self, line: *mut uint8_t) {
-        unsafe { (*self.0).line = line }
+        unsafe { (*ctx()).line = line }
     }
 
     /// Where in that line the match has got to.
     #[inline(always)]
     pub(crate) fn input(self) -> *mut uint8_t {
-        unsafe { (*self.0).input }
+        unsafe { (*ctx()).input }
     }
 
     #[inline(always)]
     pub(crate) fn set_input(self, input: *mut uint8_t) {
-        unsafe { (*self.0).input = input }
+        unsafe { (*ctx()).input = input }
     }
 
     /// [`Rex::input`] as the `char *` the byte-level helpers want.
@@ -125,7 +139,7 @@ impl Rex {
     /// position both engines test for, not a bound they stop short of.
     #[inline(always)]
     pub(crate) fn byte(self) -> uint8_t {
-        unsafe { *(*self.0).input }
+        unsafe { *(*ctx()).input }
     }
 
     /// The whole character at the cursor.
@@ -150,7 +164,7 @@ impl Rex {
     /// the cursor.
     #[inline(always)]
     pub(crate) fn advance(self, n: c_int) {
-        unsafe { (*self.0).input = (*self.0).input.offset(n as isize) }
+        unsafe { (*ctx()).input = (*ctx()).input.offset(n as isize) }
     }
 
     /// Step the cursor over one whole character.
@@ -171,14 +185,14 @@ impl Rex {
     /// `MAXCOL` bytes, so the difference always is a `ColNr`.
     #[inline(always)]
     pub(crate) fn col(self) -> ColNr {
-        let bytes = unsafe { (*self.0).input.offset_from((*self.0).line) };
+        let bytes = unsafe { (*ctx()).input.offset_from((*ctx()).line) };
         ColNr::try_from(bytes).unwrap_or(ColNr::MAX)
     }
 
     /// Put the cursor in column `col` of the line it is already on.
     #[inline(always)]
     pub(crate) fn set_col(self, col: ColNr) {
-        unsafe { (*self.0).input = (*self.0).line.offset(col as isize) }
+        unsafe { (*ctx()).input = (*ctx()).line.offset(col as isize) }
     }
 
     /// Put the cursor in column `col` of `line`, which becomes the line
@@ -204,12 +218,12 @@ impl Rex {
     #[inline(always)]
     pub(crate) fn reg_buf(self) -> Buf {
         // SAFETY: the type's invariant -- a live buffer, always set.
-        unsafe { (*self.0).reg_buf }
+        unsafe { (*ctx()).reg_buf }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_buf(self, buffer: Buf) {
-        unsafe { (*self.0).reg_buf = buffer }
+        unsafe { (*ctx()).reg_buf = buffer }
     }
 
     /// The window the match runs in, if there is one: `\%#` and `\%V` need
@@ -217,34 +231,34 @@ impl Rex {
     #[inline(always)]
     pub(crate) fn reg_win(self) -> Option<Win> {
         // SAFETY: the type's invariant -- a live window or none.
-        unsafe { (*self.0).reg_win }
+        unsafe { (*ctx()).reg_win }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_win(self, win: Option<Win>) {
-        unsafe { (*self.0).reg_win = win }
+        unsafe { (*ctx()).reg_win = win }
     }
 
     /// The buffer line `lnum` 0 of the match sits on.
     #[inline(always)]
     pub(crate) fn reg_firstlnum(self) -> LineNr {
-        unsafe { (*self.0).reg_firstlnum }
+        unsafe { (*ctx()).reg_firstlnum }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_firstlnum(self, lnum: LineNr) {
-        unsafe { (*self.0).reg_firstlnum = lnum }
+        unsafe { (*ctx()).reg_firstlnum = lnum }
     }
 
     /// The last line the match may reach, relative to `reg_firstlnum`.
     #[inline(always)]
     pub(crate) fn reg_maxline(self) -> LineNr {
-        unsafe { (*self.0).reg_maxline }
+        unsafe { (*ctx()).reg_maxline }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_maxline(self, lnum: LineNr) {
-        unsafe { (*self.0).reg_maxline = lnum }
+        unsafe { (*ctx()).reg_maxline = lnum }
     }
 
     /// The buffer line the cursor is on.
@@ -256,12 +270,12 @@ impl Rex {
     /// Give up once a match starts past this column, or 0 for no bound.
     #[inline(always)]
     pub(crate) fn reg_maxcol(self) -> ColNr {
-        unsafe { (*self.0).reg_maxcol }
+        unsafe { (*ctx()).reg_maxcol }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_maxcol(self, col: ColNr) {
-        unsafe { (*self.0).reg_maxcol = col }
+        unsafe { (*ctx()).reg_maxcol = col }
     }
 
     // -------------------------------------------------------- the flags
@@ -269,47 +283,47 @@ impl Rex {
     /// Is the match case-insensitive?
     #[inline(always)]
     pub(crate) fn reg_ic(self) -> bool {
-        unsafe { (*self.0).reg_ic }
+        unsafe { (*ctx()).reg_ic }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_ic(self, ic: bool) {
-        unsafe { (*self.0).reg_ic = ic }
+        unsafe { (*ctx()).reg_ic = ic }
     }
 
     /// Must combining characters match exactly? Set by `\Z`.
     #[inline(always)]
     pub(crate) fn reg_icombine(self) -> bool {
-        unsafe { (*self.0).reg_icombine }
+        unsafe { (*ctx()).reg_icombine }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_icombine(self, icombine: bool) {
-        unsafe { (*self.0).reg_icombine = icombine }
+        unsafe { (*ctx()).reg_icombine = icombine }
     }
 
     /// Is the line break in the text a character to match rather than the
     /// end of the line? Set for a string that holds newlines.
     #[inline(always)]
     pub(crate) fn reg_line_lbr(self) -> bool {
-        unsafe { (*self.0).reg_line_lbr }
+        unsafe { (*ctx()).reg_line_lbr }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_line_lbr(self, lbr: bool) {
-        unsafe { (*self.0).reg_line_lbr = lbr }
+        unsafe { (*ctx()).reg_line_lbr = lbr }
     }
 
     /// May the user interrupt this match? `RE_NOBREAK` says no, for matches
     /// run where input cannot be read.
     #[inline(always)]
     pub(crate) fn reg_nobreak(self) -> bool {
-        unsafe { (*self.0).reg_nobreak }
+        unsafe { (*ctx()).reg_nobreak }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_nobreak(self, nobreak: bool) {
-        unsafe { (*self.0).reg_nobreak = nobreak }
+        unsafe { (*ctx()).reg_nobreak = nobreak }
     }
 
     // ------------------------------------------------ the capture slots
@@ -320,7 +334,7 @@ impl Rex {
     /// two on this, and so does most of the code that spans lines.
     #[inline(always)]
     pub(crate) fn multi(self) -> bool {
-        unsafe { (*self.0).reg_match.is_null() }
+        unsafe { (*ctx()).reg_match.is_null() }
     }
 
     /// Which shape this match saves positions in — the one answer every
@@ -371,7 +385,7 @@ impl Rex {
                 }
             })
         } else {
-            MatchPos::from_ptr(unsafe { (*self.0).input.offset(off as isize) })
+            MatchPos::from_ptr(unsafe { (*ctx()).input.offset(off as isize) })
         }
     }
 
@@ -382,7 +396,7 @@ impl Rex {
         if self.multi() {
             at.as_pos().col - self.col()
         } else {
-            let bytes = unsafe { at.as_ptr().offset_from((*self.0).input) };
+            let bytes = unsafe { at.as_ptr().offset_from((*ctx()).input) };
             c_int::try_from(bytes).unwrap_or(c_int::MAX)
         }
     }
@@ -415,23 +429,23 @@ impl Rex {
     /// The string match's structure, null for a buffer match.
     #[inline(always)]
     pub(crate) fn reg_match(self) -> *mut RegMatch {
-        unsafe { (*self.0).reg_match }
+        unsafe { (*ctx()).reg_match }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_match(self, rm: *mut RegMatch) {
-        unsafe { (*self.0).reg_match = rm }
+        unsafe { (*ctx()).reg_match = rm }
     }
 
     /// The buffer match's structure, null for a string match.
     #[inline(always)]
     pub(crate) fn reg_mmatch(self) -> *mut RegMMatch {
-        unsafe { (*self.0).reg_mmatch }
+        unsafe { (*ctx()).reg_mmatch }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_mmatch(self, rmm: *mut RegMMatch) {
-        unsafe { (*self.0).reg_mmatch = rmm }
+        unsafe { (*ctx()).reg_mmatch = rmm }
     }
 
     /// The program being run, from whichever match structure is live.
@@ -466,46 +480,46 @@ impl Rex {
     /// caller's [`RegMatch`] can hold offsets: see [`super::RegExec`].
     #[inline(always)]
     pub(crate) fn reg_startp(self) -> *mut *mut uint8_t {
-        unsafe { (&raw mut (*self.0).str_start).cast() }
+        unsafe { (&raw mut (*ctx()).str_start).cast() }
     }
 
     /// The `\1`..`\9` end slots of a string match.
     #[inline(always)]
     pub(crate) fn reg_endp(self) -> *mut *mut uint8_t {
-        unsafe { (&raw mut (*self.0).str_end).cast() }
+        unsafe { (&raw mut (*ctx()).str_end).cast() }
     }
 
     /// Those two arrays, copied out for the API layer to turn into offsets.
     #[inline(always)]
     pub(crate) fn str_starts(self) -> [*mut uint8_t; NSUBEXP as usize] {
-        unsafe { (*self.0).str_start }
+        unsafe { (*ctx()).str_start }
     }
 
     #[inline(always)]
     pub(crate) fn str_ends(self) -> [*mut uint8_t; NSUBEXP as usize] {
-        unsafe { (*self.0).str_end }
+        unsafe { (*ctx()).str_end }
     }
 
     /// The `\1`..`\9` start slots of a buffer match.
     #[inline(always)]
     pub(crate) fn reg_startpos(self) -> *mut LPos {
-        unsafe { (*self.0).reg_startpos }
+        unsafe { (*ctx()).reg_startpos }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_startpos(self, p: *mut LPos) {
-        unsafe { (*self.0).reg_startpos = p }
+        unsafe { (*ctx()).reg_startpos = p }
     }
 
     /// The `\1`..`\9` end slots of a buffer match.
     #[inline(always)]
     pub(crate) fn reg_endpos(self) -> *mut LPos {
-        unsafe { (*self.0).reg_endpos }
+        unsafe { (*ctx()).reg_endpos }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_endpos(self, p: *mut LPos) {
-        unsafe { (*self.0).reg_endpos = p }
+        unsafe { (*ctx()).reg_endpos = p }
     }
 
     /// Do the `\1`..`\9` slots still hold a previous attempt's captures?
@@ -513,23 +527,23 @@ impl Rex {
     /// a back-reference.
     #[inline(always)]
     pub(crate) fn need_clear_subexpr(self) -> c_int {
-        unsafe { (*self.0).need_clear_subexpr }
+        unsafe { (*ctx()).need_clear_subexpr }
     }
 
     #[inline(always)]
     pub(crate) fn set_need_clear_subexpr(self, need: c_int) {
-        unsafe { (*self.0).need_clear_subexpr = need }
+        unsafe { (*ctx()).need_clear_subexpr = need }
     }
 
     /// As [`Rex::need_clear_subexpr`], for the `\z1`..`\z9` slots.
     #[inline(always)]
     pub(crate) fn need_clear_zsubexpr(self) -> c_int {
-        unsafe { (*self.0).need_clear_zsubexpr }
+        unsafe { (*ctx()).need_clear_zsubexpr }
     }
 
     #[inline(always)]
     pub(crate) fn set_need_clear_zsubexpr(self, need: c_int) {
-        unsafe { (*self.0).need_clear_zsubexpr = need }
+        unsafe { (*ctx()).need_clear_zsubexpr = need }
     }
 
     // ------------------------------------- what the NFA program says
@@ -537,70 +551,70 @@ impl Rex {
     /// Did the pattern use `\ze`?
     #[inline(always)]
     pub(crate) fn nfa_has_zend(self) -> c_int {
-        unsafe { (*self.0).nfa_has_zend }
+        unsafe { (*ctx()).nfa_has_zend }
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_has_zend(self, has: c_int) {
-        unsafe { (*self.0).nfa_has_zend = has }
+        unsafe { (*ctx()).nfa_has_zend = has }
     }
 
     /// Did the pattern use a back-reference? One forces the slow path.
     #[inline(always)]
     pub(crate) fn nfa_has_backref(self) -> c_int {
-        unsafe { (*self.0).nfa_has_backref }
+        unsafe { (*ctx()).nfa_has_backref }
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_has_backref(self, has: c_int) {
-        unsafe { (*self.0).nfa_has_backref = has }
+        unsafe { (*ctx()).nfa_has_backref = has }
     }
 
     /// Did the pattern use a `\z(` group?
     #[inline(always)]
     pub(crate) fn nfa_has_zsubexpr(self) -> c_int {
-        unsafe { (*self.0).nfa_has_zsubexpr }
+        unsafe { (*ctx()).nfa_has_zsubexpr }
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_has_zsubexpr(self, has: c_int) {
-        unsafe { (*self.0).nfa_has_zsubexpr = has }
+        unsafe { (*ctx()).nfa_has_zsubexpr = has }
     }
 
     /// How many capture groups the NFA program has, so that only the slots
     /// in use are copied around.
     #[inline(always)]
     pub(crate) fn nfa_nsubexpr(self) -> c_int {
-        unsafe { (*self.0).nfa_nsubexpr }
+        unsafe { (*ctx()).nfa_nsubexpr }
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_nsubexpr(self, n: c_int) {
-        unsafe { (*self.0).nfa_nsubexpr = n }
+        unsafe { (*ctx()).nfa_nsubexpr = n }
     }
 
     /// The generation stamp that says whether a state is already on the
     /// list being built. Bumped once per input position.
     #[inline(always)]
     pub(crate) fn nfa_listid(self) -> c_int {
-        unsafe { (*self.0).nfa_listid }
+        unsafe { (*ctx()).nfa_listid }
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_listid(self, id: c_int) {
-        unsafe { (*self.0).nfa_listid = id }
+        unsafe { (*ctx()).nfa_listid = id }
     }
 
     /// The stamp a `\@=` sub-match runs under, kept apart from the outer
     /// match's so that neither invalidates the other's lists.
     #[inline(always)]
     pub(crate) fn nfa_alt_listid(self) -> c_int {
-        unsafe { (*self.0).nfa_alt_listid }
+        unsafe { (*ctx()).nfa_alt_listid }
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_alt_listid(self, id: c_int) {
-        unsafe { (*self.0).nfa_alt_listid = id }
+        unsafe { (*ctx()).nfa_alt_listid = id }
     }
 
     // --------------------------------------------- the NFA engine's run
@@ -608,12 +622,12 @@ impl Rex {
     /// The verdict so far: 0, a match, or `NFA_TOO_EXPENSIVE`.
     #[inline(always)]
     pub(crate) fn nfa_match(self) -> c_int {
-        unsafe { (*self.0).nfa_match }
+        unsafe { (*ctx()).nfa_match }
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_match(self, verdict: c_int) {
-        unsafe { (*self.0).nfa_match = verdict }
+        unsafe { (*ctx()).nfa_match = verdict }
     }
 
     /// Where the lookbehind being matched has to stop, or null outside one.
@@ -621,41 +635,41 @@ impl Rex {
     /// it, which outlasts the sub-match.
     #[inline(always)]
     pub(crate) fn nfa_endp(self) -> *mut MatchPos {
-        unsafe { (*self.0).nfa_endp }
+        unsafe { (*ctx()).nfa_endp }
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_endp(self, endp: *mut MatchPos) {
-        unsafe { (*self.0).nfa_endp = endp }
+        unsafe { (*ctx()).nfa_endp = endp }
     }
 
     /// Which of a state's two `lastlist` slots the running match stamps.
     #[inline(always)]
     pub(crate) fn nfa_ll_index(self) -> usize {
-        unsafe { (*self.0).nfa_ll_index }
+        unsafe { (*ctx()).nfa_ll_index }
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_ll_index(self, index: usize) {
-        unsafe { (*self.0).nfa_ll_index = index }
+        unsafe { (*ctx()).nfa_ll_index = index }
     }
 
     /// Start the clock for one try.
     #[inline(always)]
     pub(crate) fn set_time_budget(self, budget: TimeBudget) {
-        unsafe { (*self.0).nfa_time = budget }
+        unsafe { (*ctx()).nfa_time = budget }
     }
 
     #[inline(always)]
     pub(crate) fn time_budget(self) -> TimeBudget {
-        unsafe { (*self.0).nfa_time }
+        unsafe { (*ctx()).nfa_time }
     }
 
     /// Count one step towards the next read of the clock: see
     /// [`TimeBudget::tick`].
     #[inline(always)]
     pub(crate) fn time_check_due(self, interval: c_int) -> bool {
-        unsafe { (*self.0).nfa_time.tick(interval) }
+        unsafe { (*ctx()).nfa_time.tick(interval) }
     }
 
     // --------------------------------------- the backtracker's own slots
@@ -663,14 +677,14 @@ impl Rex {
     /// The `\z1`..`\z9` slots, as they stand.
     #[inline(always)]
     pub(crate) fn zslots(self) -> ZSlots {
-        unsafe { (*self.0).zslots }
+        unsafe { (*ctx()).zslots }
     }
 
     /// Unset every `\z` slot of this match's kind.
     #[inline(always)]
     pub(crate) fn clear_zslots(self) {
         let multi = self.multi();
-        unsafe { (*self.0).zslots.clear(multi) }
+        unsafe { (*ctx()).zslots.clear(multi) }
     }
 
     /// Where a `\z(` group's start or end goes: [`super::NSUBEXP`] slots in
@@ -678,44 +692,44 @@ impl Rex {
     /// string one.
     #[inline(always)]
     pub(crate) fn zslot_start_pos(self) -> *mut LPos {
-        unsafe { (&raw mut (*self.0).zslots.start_pos).cast() }
+        unsafe { (&raw mut (*ctx()).zslots.start_pos).cast() }
     }
 
     #[inline(always)]
     pub(crate) fn zslot_end_pos(self) -> *mut LPos {
-        unsafe { (&raw mut (*self.0).zslots.end_pos).cast() }
+        unsafe { (&raw mut (*ctx()).zslots.end_pos).cast() }
     }
 
     #[inline(always)]
     pub(crate) fn zslot_start_ptr(self) -> *mut *mut uint8_t {
-        unsafe { (&raw mut (*self.0).zslots.start_ptr).cast() }
+        unsafe { (&raw mut (*ctx()).zslots.start_ptr).cast() }
     }
 
     #[inline(always)]
     pub(crate) fn zslot_end_ptr(self) -> *mut *mut uint8_t {
-        unsafe { (&raw mut (*self.0).zslots.end_ptr).cast() }
+        unsafe { (&raw mut (*ctx()).zslots.end_ptr).cast() }
     }
 
     /// Where the look-behind being tried has to end.
     #[inline(always)]
     pub(crate) fn behind_pos(self) -> SavedInput {
-        unsafe { (*self.0).behind_pos }
+        unsafe { (*ctx()).behind_pos }
     }
 
     #[inline(always)]
     pub(crate) fn set_behind_pos(self, pos: SavedInput) {
-        unsafe { (*self.0).behind_pos = pos }
+        unsafe { (*ctx()).behind_pos = pos }
     }
 
     /// The bounds of the `\{n,m}` about to be entered, read off its
     /// `BRACE_LIMITS` node and consumed by the `BRACE_SIMPLE` after it.
     #[inline(always)]
     pub(crate) fn brace_limits(self) -> (i64, i64) {
-        unsafe { (*self.0).brace_limits }
+        unsafe { (*ctx()).brace_limits }
     }
 
     #[inline(always)]
     pub(crate) fn set_brace_limits(self, minval: i64, maxval: i64) {
-        unsafe { (*self.0).brace_limits = (minval, maxval) }
+        unsafe { (*ctx()).brace_limits = (minval, maxval) }
     }
 }
