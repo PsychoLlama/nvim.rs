@@ -35,9 +35,11 @@
 
 use crate::cstr;
 use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::TAB;
 use crate::winlayer::Win;
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_uint};
 use core::slice;
 
@@ -49,7 +51,6 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::memline::ml_replace;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
 use crate::option::vars::{P_WS, p_ws};
 use crate::os::cshim::gettext;
 use crate::search::{SEARCH_KEEP, do_search};
@@ -300,10 +301,17 @@ pub struct SpellLoad {
     pub sl_nobreak: c_int,
 }
 
-/// Every language loaded, chained on `sl_next`.
-pub static first_lang: GlobalCell<*mut SpellLang> = GlobalCell::new(::core::ptr::null_mut());
+/// Every language loaded, newest first. Each is an allocation of
+/// `slang_alloc`'s, freed by `spell_free_all`; windows' `LangP` rows hold
+/// their addresses, which is why they are not moved into the vector.
+pub(crate) static loaded_langs: GlobalCell<Vec<*mut SpellLang>> = GlobalCell::new(Vec::new());
+
+/// A copy of [`loaded_langs`] to walk: a walk may load another language.
+pub(crate) fn languages() -> Vec<*mut SpellLang> {
+    loaded_langs.with(Clone::clone)
+}
 /// The word list `zg` appends to when `'spellfile'` is empty.
-pub static int_wordlist: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut());
+pub static int_wordlist: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 /// The character table currently in force.
 pub static spelltab: GlobalCell<SpellTab> = GlobalCell::new(SpellTab {
@@ -315,12 +323,17 @@ pub static spelltab: GlobalCell<SpellTab> = GlobalCell::new(SpellTab {
 /// Whether a `.spl` file replaced [`spelltab`], rather than the encoding.
 pub static did_set_spelltab: GlobalCell<bool> = GlobalCell::new(false);
 
-pub static e_format: GlobalCell<*mut c_char> =
-    GlobalCell::new(c"E759: Format error in spell file".as_ptr() as *mut c_char);
+pub const e_format: &CStr = c"E759: Format error in spell file";
 
 /// What `z=` last replaced, and with what, for [`ex_spellrepall`].
-pub static repl_from: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut());
-pub static repl_to: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut());
+#[derive(Clone)]
+pub(crate) struct SpellReplacement {
+    pub(crate) from: XString,
+    pub(crate) to: XString,
+}
+
+/// The replacement [`ex_spellrepall`] repeats; `None` until `z=` makes one.
+pub(crate) static last_replacement: GlobalCell<Option<SpellReplacement>> = GlobalCell::new(None);
 
 /// `:spellrepall` — repeat the last `z=` replacement everywhere else in
 /// the buffer.
@@ -331,18 +344,22 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     let save_ws = p_ws();
     let mut prev_lnum: LineNr = 0;
 
-    if repl_from.get().is_null() || repl_to.get().is_null() {
+    // A copy: the searches and line changes below can run autocommands.
+    let Some(SpellReplacement {
+        from: repl_from,
+        to: repl_to,
+    }) = last_replacement.with(Clone::clone)
+    else {
         emsg(gettext(c"E752: No previous spell replacement"));
         return;
-    }
-    let repl_from_len = unsafe { cstr::bytes_at(repl_from.get()) }.len();
-    let repl_to_len = unsafe { cstr::bytes_at(repl_to.get()) }.len();
+    };
+    let repl_from_len = repl_from.len();
+    let repl_to_len = repl_to.len();
     let addlen = repl_to_len as i64 - repl_from_len as i64;
 
     // The word to replace, anchored as a very-nomagic whole word.
     let mut frompat = XString::from_bytes(b"\\V\\<");
-    // SAFETY: 'spellfile' replacement words are NUL-terminated.
-    frompat.push_bytes(unsafe { cstr::bytes_at(repl_from.get()) });
+    frompat.push_bytes(&repl_from);
     frompat.push_bytes(b"\\>");
     let frompatlen = frompat.len();
     P_WS.set(false);
@@ -375,7 +392,9 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
         let line = get_cursor_line_ptr();
         let col = Win::current().w_cursor.col;
         if addlen <= 0
-            || !(unsafe { cstr::prefix_eq(line.offset(col as isize), repl_to.get(), repl_to_len) })
+            || !(unsafe {
+                cstr::prefix_eq(line.offset(col as isize), repl_to.as_ptr(), repl_to_len)
+            })
         {
             // SAFETY: the cursor line is NUL-terminated and at least `col`
             // bytes long, the replaced word is `repl_from_len` of its bytes,
@@ -383,7 +402,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
             let replaced = unsafe {
                 let mut rebuilt =
                     XString::from_bytes(slice::from_raw_parts(line.cast::<u8>(), col as size_t));
-                rebuilt.push_bytes(cstr::bytes_at(repl_to.get()));
+                rebuilt.push_bytes(&repl_to);
                 rebuilt.push_bytes(cstr::bytes_at(line.offset(col as isize).add(repl_from_len)));
                 rebuilt
             };
@@ -406,8 +425,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     Win::current().w_cursor = pos;
 
     if sub_nsubs.get() == 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe { c_str(repl_from.get()) };
+        let arg0 = msg_bytes(&repl_from);
         semsg!("E753: Not found: {arg0}");
     } else {
         do_sub_msg(false);

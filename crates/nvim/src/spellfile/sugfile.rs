@@ -51,7 +51,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
-use crate::spell::{first_lang, open_spellbuf, slang_free, spell_soundfold};
+use crate::spell::{languages, open_spellbuf, slang_free, spell_soundfold};
 use crate::types::{ColNr, Failed, GArray, LineNr, NUL, SpellIdx, SpellLang, int16_t, uint16_t};
 
 use super::wordtree::{WordNode, tree_add_word, wordtree_alloc, wordtree_compress};
@@ -74,16 +74,15 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
     // SAFETY: `wfname` is a valid path and every pointer below is either
     // from `spin` or from the language just loaded.
     // Prefer an already-loaded copy of this file.
-    let mut slang = first_lang.get();
-    while !slang.is_null() {
-        if unsafe { path_full_compare(wfname.as_ptr().cast_mut(), (*slang).sl_fname, false, true) }
-            as c_uint
-            == kEqualFiles as c_uint
-        {
-            break;
-        }
-        slang = unsafe { (*slang).sl_next };
-    }
+    let mut slang = languages()
+        .into_iter()
+        .find(|&slang| {
+            let cmp = unsafe {
+                path_full_compare(wfname.as_ptr().cast_mut(), (*slang).sl_fname, false, true)
+            };
+            cmp as c_uint == kEqualFiles as c_uint
+        })
+        .unwrap_or(core::ptr::null_mut());
     let free_slang = slang.is_null();
     if free_slang {
         spell_message(spin, c"Reading back spell file...");

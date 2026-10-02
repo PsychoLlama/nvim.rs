@@ -42,7 +42,8 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use crate::buffer::BufRef;
 use crate::buffer::buflist_findname_exp;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
-use crate::fileio::{buf_reload, vim_fgets, vim_tempname};
+use crate::fileio::temp_name;
+use crate::fileio::{buf_reload, vim_fgets};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::e_bufloaded;
 use crate::message::emsg;
@@ -102,14 +103,18 @@ pub unsafe fn spell_add_word(
     let mut bufref = BufRef::NONE;
     let mut new_spf = false;
 
+    // The internal word list's name, held for the call: `mkspell` below
+    // may reload the spelling state.
+    let wordlist;
     let fname = if idx == 0 {
-        if int_wordlist.get().is_null() {
-            int_wordlist.set(vim_tempname());
-            if int_wordlist.get().is_null() {
+        if int_wordlist.with(Option::is_none) {
+            let Some(name) = temp_name() else {
                 return;
-            }
+            };
+            int_wordlist.set(Some(name));
         }
-        int_wordlist.get()
+        wordlist = int_wordlist.with(Clone::clone).expect("just set");
+        wordlist.as_ptr().cast_mut()
     } else {
         // Give 'spellfile' a sensible default if it has none.
         if unsafe { (*Win::current().w_s).b_p_spf.first_byte() } == 0 {

@@ -23,8 +23,8 @@
 //!
 //! # What the replacement leaves behind
 //!
-//! Besides the changed line, an accepted suggestion sets `repl_from` and
-//! `repl_to` so that `:spellrepall` can repeat it over the whole buffer,
+//! Besides the changed line, an accepted suggestion sets `last_replacement`
+//! so that `:spellrepall` can repeat it over the whole buffer,
 //! and fills the redo buffer with `ciw{word}<Esc>` so that `.` can.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -41,7 +41,8 @@ use crate::getchar::{
 use crate::input::prompt_for_input;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_replace;
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::XString;
+use crate::memory::{xfree, xmalloc};
 use crate::message::e_no_spell;
 use crate::message::state::{cmdmsg_rl, lines_left, msg_col, msg_row, msg_scroll};
 use crate::message::{
@@ -56,7 +57,8 @@ use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::search::FORWARD;
 use crate::spell::{
-    SMT_ALL, check_need_cap, parse_spelllang, repl_from, repl_to, spell_iswordp_nmw, spell_move_to,
+    SMT_ALL, SpellReplacement, check_need_cap, last_replacement, parse_spelllang,
+    spell_iswordp_nmw, spell_move_to,
 };
 use crate::spellsuggest::{
     MAXWLEN, SPS_BEST, SPS_DOUBLE, Sug, SugInfo, Suggest, spell_find_cleanup, spell_find_suggest,
@@ -352,36 +354,40 @@ unsafe fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: *mut c_char) {
     // from the three pieces written into it and is handed to `ml_replace`,
     // which takes it over.
     // What `:spellrepall` will repeat.
-    unsafe { xfree(repl_from.get() as *mut c_void) };
-    repl_from.set(ptr::null_mut());
-    unsafe { xfree(repl_to.get() as *mut c_void) };
-    repl_to.set(ptr::null_mut());
-
-    if sug.su_badlen > stp.st_orglen {
+    let replacement = if sug.su_badlen > stp.st_orglen {
         // Replacing less than the bad word: what is left of it goes on
         // the end of the replacement.
-        repl_from.set(unsafe { xstrnsave(sug.su_badptr, sug.su_badlen as usize) });
         // SAFETY: `su_badptr` points into the line and the suggestion
         // replaces `st_orglen` of its bytes, so what is left of the bad
         // word starts there.
-        let rest = unsafe {
-            cstr::prefix_at(
-                sug.su_badptr.add(stp.st_orglen as usize),
-                (sug.su_badlen - stp.st_orglen) as usize,
+        let (from, rest) = unsafe {
+            (
+                cstr::prefix_at(sug.su_badptr, sug.su_badlen as usize),
+                cstr::prefix_at(
+                    sug.su_badptr.add(stp.st_orglen as usize),
+                    (sug.su_badlen - stp.st_orglen) as usize,
+                ),
             )
         };
         let mut repl = stp.word_bytes().to_vec();
         repl.extend_from_slice(rest);
         // `IOSIZE` was upstream's scratch buffer, and it truncated there.
         repl.truncate(IOSIZE as usize - 1);
-        let repl = cstr::owned(&repl);
-        repl_to.set(unsafe { xstrdup(repl.as_ptr()) });
+        SpellReplacement {
+            from: XString::from_bytes(from),
+            to: XString::from_bytes(&repl),
+        }
     } else {
         // Replacing the whole bad word, or more of the line than it
         // covers.
-        repl_from.set(unsafe { xstrnsave(sug.su_badptr, stp.st_orglen as usize) });
-        repl_to.set(unsafe { xstrdup(stp.word()) });
-    }
+        // SAFETY: as above.
+        let from = unsafe { cstr::prefix_at(sug.su_badptr, stp.st_orglen as usize) };
+        SpellReplacement {
+            from: XString::from_bytes(from),
+            to: XString::from_bytes(stp.word_bytes()),
+        }
+    };
+    last_replacement.set(Some(replacement));
 
     // Build the new line: what came before the bad word, the
     // suggestion, and what came after what it replaces.

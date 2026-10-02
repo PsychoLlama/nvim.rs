@@ -50,7 +50,6 @@ pub struct SalItem {
     pub sm_to_w: Option<Box<[::core::ffi::c_int]>>,
 }
 pub struct SpellLang {
-    pub sl_next: *mut SpellLang,
     pub sl_name: *mut ::core::ffi::c_char,
     pub sl_fname: *mut ::core::ffi::c_char,
     pub sl_add: bool,

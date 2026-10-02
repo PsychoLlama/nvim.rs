@@ -50,13 +50,13 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_verbose;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::runtime::{estack_pop, estack_push};
 use crate::spell::{
-    e_format, first_lang, init_syl_tab, open_spellbuf, parse_spelllang, slang_alloc, slang_clear,
-    slang_clear_sug, slang_free,
+    e_format, init_syl_tab, languages, loaded_langs, open_spellbuf, parse_spelllang, slang_alloc,
+    slang_clear, slang_clear_sug, slang_free,
 };
 use crate::types::{ColNr, LangP, LineNr, NUL, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
 use ::libc::{strcpy, strrchr};
@@ -216,21 +216,15 @@ unsafe fn load_spl(
     // language, and nothing else holds a reference while this runs.
     let slang = unsafe { &mut *lp };
     // SAFETY: `fname` is the caller's path, used only for messages.
-    unsafe { read_spl(&mut spl, slang, fname, lang, old_lp.is_null()) }
+    let read = read_spl(&mut spl, slang, fname);
+    if read && old_lp.is_null() && !lang.is_null() {
+        loaded_langs.with_mut(|langs| langs.insert(0, lp));
+    }
+    read
 }
 
 /// Read the header, every section and the three trees.
-///
-/// # Safety
-///
-/// `fname` and `lang` are as [`spell_load_file`]'s.
-unsafe fn read_spl(
-    spl: &mut Spl,
-    slang: &mut SpellLang,
-    fname: &CStr,
-    lang: *mut c_char,
-    fresh: bool,
-) -> bool {
+fn read_spl(spl: &mut Spl, slang: &mut SpellLang, fname: &CStr) -> bool {
     match spell_check_magic_string(spl) {
         Err(SpellReadError::Format | SpellReadError::Trunc) => {
             let fmt = gettext(c"E757: This does not look like a spell file");
@@ -265,10 +259,6 @@ unsafe fn read_spl(
         let res = if id == SN_END as c_int {
             match read_trees(spl, slang) {
                 Ok(()) => {
-                    if fresh && !lang.is_null() {
-                        slang.sl_next = first_lang.get();
-                        first_lang.set(slang);
-                    }
                     return true;
                 }
                 Err(e) => Err(Stop::Read(e)),
@@ -286,7 +276,7 @@ unsafe fn read_spl(
             Ok(()) => {}
             Err(Stop::Read(SpellReadError::Format)) => {
                 // SAFETY: the message table's own string.
-                unsafe { emsg(gettext_ptr(e_format.get())) };
+                emsg(gettext(e_format));
                 return false;
             }
             Err(Stop::Read(SpellReadError::Trunc)) => break,
@@ -725,8 +715,7 @@ pub(super) fn spell_reload_one(fname: &CStr, added_word: bool) {
     // SAFETY: the caller promises the path; the language list is global
     // and only walked here.
     let mut didit = false;
-    let mut slang = first_lang.get();
-    while !slang.is_null() {
+    for slang in languages() {
         if unsafe { path_full_compare(fname.as_ptr().cast_mut(), (*slang).sl_fname, false, true) }
             as c_uint
             == kEqualFiles as c_uint
@@ -741,7 +730,6 @@ pub(super) fn spell_reload_one(fname: &CStr, added_word: bool) {
             redraw_all_later(UPD_SOME_VALID);
             didit = true;
         }
-        slang = unsafe { (*slang).sl_next };
     }
 
     // A word was added to a file no window had loaded; re-resolving

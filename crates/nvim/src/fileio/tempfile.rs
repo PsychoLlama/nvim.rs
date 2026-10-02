@@ -15,6 +15,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
 use crate::smsg;
@@ -431,11 +432,17 @@ unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
 ///
 /// @return  the name, or NULL if Nvim can't create its temporary directory.
 pub fn vim_tempname() -> *mut c_char {
+    temp_name().map_or(ptr::null_mut(), XString::into_raw)
+}
+
+/// [`vim_tempname`], owned: `None` when Nvim can't create its temporary
+/// directory.
+pub(crate) fn temp_name() -> Option<XString> {
     /// Temp filename counter.
     static TEMP_COUNT: GlobalCell<u64> = GlobalCell::new(0);
     let tempdir = vim_gettempdir();
     if tempdir.is_null() {
-        return ptr::null_mut();
+        return None;
     }
     let count = TEMP_COUNT.get();
     TEMP_COUNT.set(count.wrapping_add(1));
@@ -444,5 +451,5 @@ pub fn vim_tempname() -> *mut c_char {
     // off the end of the buffer once the temp dir gets long enough.
     let mut name = unsafe { CStr::from_ptr(tempdir) }.to_bytes().to_vec();
     name.extend_from_slice(count.to_string().as_bytes());
-    unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast()
+    Some(XString::from_bytes(&name))
 }

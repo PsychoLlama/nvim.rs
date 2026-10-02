@@ -44,13 +44,13 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::os::cshim::gettext;
 use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::mbyte::{mb_charlen_len, utf_char2bytes, utf_head_off, utfc_ptr2len};
 use crate::memory::xmemcpyz;
 use crate::message::emsg;
-use crate::os::cshim::gettext_ptr;
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
 use crate::types::{LangP, NUL, RegProg, SpellLang, uint8_t};
@@ -150,7 +150,7 @@ pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
         if children.first() == Some(&0) {
             if endidxcnt == MAXWLEN {
                 // Only a corrupted spell file can nest this deep.
-                unsafe { emsg(gettext_ptr(e_format.get())) };
+                emsg(gettext(e_format));
                 return;
             }
             endlen[endidxcnt] = wlen;

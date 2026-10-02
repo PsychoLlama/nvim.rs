@@ -3,8 +3,8 @@
 //! A [`SpellLang`] is everything a single `.spl` file turned into: three word
 //! trees, the affix and compound rules, the sound-folding tables, the REP
 //! list, and — once a `.sug` file has been read — a fourth tree of
-//! sound-folded forms. They are chained on `sl_next` from the global
-//! `first_lang`, and shared by every window whose `'spelllang'` names them.
+//! sound-folded forms. They are listed in the global `loaded_langs`, and
+//! shared by every window whose `'spelllang'` names them.
 //!
 //! Only three things happen to one here: it is allocated
 //! ([`slang_alloc`]), emptied so the file can be read again
@@ -52,7 +52,7 @@ unsafe fn xfree_clear<T>(p: *mut *mut T) {
 }
 
 /// Allocate an empty language named `lang` (which may be null). The caller
-/// fills in `sl_next`.
+/// lists it in `loaded_langs`.
 ///
 /// # Safety
 ///
