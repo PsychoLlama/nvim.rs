@@ -49,8 +49,8 @@ use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
 use crate::ex_eval::state::{
-    EXCEPTIONS, caught_stack, current_exception, did_throw, force_abort, msg_lists, need_rethrow,
-    suppress_errthrow, trylevel,
+    EXCEPTIONS, MsgLists, caught_stack, current_exception, did_throw, force_abort, msg_lists,
+    need_rethrow, suppress_errthrow, trylevel,
 };
 use crate::getchar::state::got_int;
 use crate::guard::{Allow, Suppress};
@@ -153,7 +153,7 @@ pub(crate) unsafe fn cause_errthrow(
     // to the conditional stack here, so the actual throw waits until the
     // failing command has returned. Only the first of several errors in a
     // row is thrown, unless a severe one follows.
-    if msg_lists.with(Vec::is_empty) {
+    if msg_lists.with(MsgLists::is_empty) {
         return true;
     }
     // SAFETY: the caller's NUL-terminated message.
@@ -165,10 +165,10 @@ pub(crate) unsafe fn cause_errthrow(
 /// will be built from, or concatenate it onto the last entry. There is one.
 fn append_msg(mesg: &[u8], multiline: bool, concat: bool, severe: bool) {
     let concatenates =
-        concat && msg_lists.with(|lists| lists.last().is_some_and(|l| !l.entries.is_empty()));
+        concat && msg_lists.with(|lists| lists.innermost().is_some_and(|l| !l.entries.is_empty()));
     if concatenates {
         msg_lists.with_mut(|lists| {
-            let list = lists.last_mut().expect("a message list");
+            let list = lists.innermost_mut().expect("a message list");
             let last = list.entries.len() - 1;
             list.entries[last].msg.push_bytes(mesg);
             // Upstream points the last entry's `throw_msg` at its joined
@@ -192,7 +192,7 @@ fn append_msg(mesg: &[u8], multiline: bool, concat: bool, severe: bool) {
         multiline,
     };
     msg_lists.with_mut(|lists| {
-        let list = lists.last_mut().expect("a message list");
+        let list = lists.innermost_mut().expect("a message list");
         list.entries.push(entry);
         let at = list.entries.len() - 1;
         if at == 0 || severe {
@@ -211,7 +211,12 @@ fn append_msg(mesg: &[u8], multiline: bool, concat: bool, severe: bool) {
 /// Take the innermost message list's messages, leaving it empty.
 pub(crate) fn take_msg_list() -> ErrorMsgs {
     msg_lists
-        .with_mut(|lists| lists.last_mut().map(core::mem::take))
+        .with_mut(|lists| {
+            let filed = lists.innermost().is_some();
+            filed
+                .then(|| lists.innermost_mut().map(core::mem::take))
+                .flatten()
+        })
         .unwrap_or_default()
 }
 
@@ -224,12 +229,12 @@ pub(crate) fn free_global_msglist() {
 /// its errors in, until [`pop_msg_list`]: upstream pointing `msg_list` at
 /// its own frame's list head.
 pub(crate) fn push_msg_list() {
-    msg_lists.with_mut(|lists| lists.push(ErrorMsgs::default()));
+    msg_lists.with_mut(MsgLists::push);
 }
 
-/// End the innermost message list, answering what is left in it.
-pub(crate) fn pop_msg_list() -> ErrorMsgs {
-    msg_lists.with_mut(Vec::pop).expect("a message list to end")
+/// End the innermost message list, dropping what is left in it.
+pub(crate) fn pop_msg_list() {
+    msg_lists.with_mut(MsgLists::pop);
 }
 
 /// Throw what [`cause_errthrow`] collected as an error exception. With a
@@ -248,10 +253,12 @@ pub(crate) unsafe fn do_errthrow(cstack: *mut CondStack, cmdname: *mut c_char) {
     // Nothing to throw, or the conversion belongs to an outer
     // `do_one_cmd`.
     let messages = msg_lists.with_mut(|lists| {
-        lists
-            .last_mut()
-            .filter(|list| !list.entries.is_empty())
-            .map(core::mem::take)
+        let filed = lists
+            .innermost()
+            .is_some_and(|list| !list.entries.is_empty());
+        filed
+            .then(|| lists.innermost_mut().map(core::mem::take))
+            .flatten()
     });
     let Some(messages) = messages else {
         return;

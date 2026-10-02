@@ -24,7 +24,9 @@ use crate::cstr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use crate::ex_eval::state::{current_exception, did_throw, force_abort, need_rethrow, trylevel};
+use crate::ex_eval::state::{
+    current_exception, did_throw, force_abort, msg_lists, need_rethrow, trylevel,
+};
 use crate::ex_eval::{
     discard_current_exception, error_exception_string, pop_msg_list, push_msg_list, take_msg_list,
 };
@@ -167,7 +169,8 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
 
     // The call's own list, which `try_enter` started and which stays the
     // innermost until the state is put back below.
-    let messages = take_msg_list();
+    let has_messages =
+        msg_lists.with(|lists| lists.innermost().is_some_and(|l| !l.entries.is_empty()));
 
     let mut caught = None;
     if got_int.get() {
@@ -177,7 +180,8 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
         }
         caught = Some(Error::exception(c"Keyboard interrupt"));
         got_int.set(false);
-    } else if !messages.entries.is_empty() {
+    } else if has_messages {
+        let messages = take_msg_list();
         let msg = error_exception_string(&messages, b"");
         caught = Some(Error::from_message(kErrorTypeException, msg.as_cstr()));
     } else if did_throw.get() || need_rethrow.get() {
@@ -208,7 +212,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
 
     // SAFETY: `tstate` is what the matching `try_enter` filled in.
     let saved = unsafe { *tstate };
-    drop(pop_msg_list());
+    pop_msg_list();
     current_exception.set(saved.current_exception);
     got_int.set(saved.got_int != 0);
     did_throw.set(saved.did_throw);

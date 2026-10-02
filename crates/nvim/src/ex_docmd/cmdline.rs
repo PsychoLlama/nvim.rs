@@ -842,7 +842,7 @@ pub unsafe fn do_cmdline(
         // No command name: this is not an error of any one command.
         let mut none = empty_cstack();
         do_errthrow(&mut none, None);
-        drop(pop_msg_list());
+        pop_msg_list();
         return Err(Failed);
     }
 
@@ -906,7 +906,7 @@ pub unsafe fn do_cmdline(
     let mut run = Run::new(first);
     while run.step(source, flags) == Pass::Again {}
     run.close(source, flags, &mut debug_saved);
-    drop(pop_msg_list());
+    pop_msg_list();
     run.report();
 
     // In case `do_cmdline` was used recursively.
