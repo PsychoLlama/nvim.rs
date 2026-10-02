@@ -21,26 +21,24 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use crate::ex_eval::state::{
-    current_exception, did_throw, force_abort, msg_list, need_rethrow, trylevel,
+use crate::ex_eval::state::{current_exception, did_throw, force_abort, need_rethrow, trylevel};
+use crate::ex_eval::{
+    discard_current_exception, error_exception_string, pop_msg_list, push_msg_list, take_msg_list,
 };
-use crate::ex_eval::{discard_current_exception, free_global_msglist, get_exception_string};
 use crate::getchar::state::got_int;
 use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
 use crate::mark::setmark_pos;
-use crate::memory::xfree;
 use crate::message::state::did_emsg;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    BufferHandle, ColNr, Error, ExceptType, FileMarkView, Integer, LineNr, MsgList, NUL, Pos,
-    ScriptId, String_0, TabpageHandle, TryState, WindowHandle, int64_t, kErrorTypeException,
-    uint64_t,
+    BufferHandle, ColNr, Error, FileMarkView, Integer, LineNr, NUL, Pos, ScriptId, String_0,
+    TabpageHandle, TryState, WindowHandle, int64_t, kErrorTypeException, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -55,8 +53,6 @@ pub(crate) use self::value::*;
 // Reached by name from `crates/nvim/tests/unit`, which links the library from
 // outside; the rest of `value` stays in-crate.
 pub(crate) use self::vimdict::*;
-
-const ET_ERROR: ExceptType = 1;
 
 /// `DictItem.di_flags`: the key cannot be changed, cannot be changed right
 /// now, and cannot be removed.
@@ -139,8 +135,6 @@ pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle) -> Result<Option<TabPag
 pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
     let saved = TryState {
         current_exception: current_exception.get(),
-        private_msg_list: ptr::null_mut(),
-        msg_list: msg_list.get() as *const *const MsgList,
         got_int: got_int.get() as c_int,
         did_throw: did_throw.get(),
         need_rethrow: need_rethrow.get() as c_int,
@@ -148,12 +142,10 @@ pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
     };
     // SAFETY: `tstate` is the caller's, and lives until `try_leave`.
     unsafe { *tstate = saved };
-    // Errors go to the caller's own list from here on, so that an
+    // Errors go to a list of the call's own from here on, so that an
     // `:echoerr` inside the call does not reach an enclosing `:try`.
-    // SAFETY: as above -- the field's address is the caller's slot plus a
-    // constant, live for as long as the state is.
-    msg_list.set(unsafe { &raw mut (*tstate).private_msg_list });
-    current_exception.set(ptr::null_mut());
+    push_msg_list();
+    current_exception.set(None);
     got_int.set(false);
     did_throw.set(false);
     need_rethrow.set(false);
@@ -173,9 +165,9 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
     did_emsg.set(0);
     force_abort.set(false);
 
-    let list = msg_list.get();
-    // SAFETY: `msg_list` names a live slot or is null.
-    let pending = !list.is_null() && !unsafe { *list }.is_null();
+    // The call's own list, which `try_enter` started and which stays the
+    // innermost until the state is put back below.
+    let messages = take_msg_list();
 
     let mut caught = None;
     if got_int.get() {
@@ -185,26 +177,16 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
         }
         caught = Some(Error::exception(c"Keyboard interrupt"));
         got_int.set(false);
-    } else if pending {
-        let mut should_free = false;
-        // SAFETY: the slot holds a live message list, and `should_free` is
-        // this frame's.
-        let msg = unsafe {
-            let head = (*list).cast::<c_void>();
-            get_exception_string(head, ET_ERROR, ptr::null_mut(), &raw mut should_free)
-        };
-        // SAFETY: the message is a NUL-terminated string.
-        let text = unsafe { cstr::at(msg) };
-        caught = Some(Error::from_message(kErrorTypeException, text));
-        free_global_msglist();
-        if should_free {
-            // SAFETY: `msg` is the allocation `get_exception_string` made.
-            unsafe { xfree(msg.cast()) };
-        }
+    } else if !messages.entries.is_empty() {
+        let msg = error_exception_string(&messages, b"");
+        caught = Some(Error::from_message(kErrorTypeException, msg.as_cstr()));
     } else if did_throw.get() || need_rethrow.get() {
-        let ex = current_exception.get();
-        // SAFETY: either flag says `ex` is the live exception being unwound.
-        let (name, lnum, value) = unsafe { ((*ex).throw_name, (*ex).throw_lnum, (*ex).value) };
+        // Either flag says there is an exception being unwound.
+        let ex = current_exception
+            .get()
+            .expect("an exception being thrown")
+            .exception();
+        let (name, lnum, value) = (ex.throw_name, ex.throw_lnum, ex.value);
         // SAFETY: `throw_name` is NUL-terminated, empty for a throw with no
         // script to name.
         let named = unsafe { *name } != NUL as c_char;
@@ -226,7 +208,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
 
     // SAFETY: `tstate` is what the matching `try_enter` filled in.
     let saved = unsafe { *tstate };
-    msg_list.set(saved.msg_list as *mut *mut MsgList);
+    drop(pop_msg_list());
     current_exception.set(saved.current_exception);
     got_int.set(saved.got_int != 0);
     did_throw.set(saved.did_throw);

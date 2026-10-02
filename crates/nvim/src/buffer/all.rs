@@ -12,7 +12,6 @@
 
 use crate::types::CmdIdx;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::*;
 use crate::autocmd::is_aucmd_win;
@@ -28,7 +27,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{P_EA, jop_flags, p_ch, p_ea, p_tpm};
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
-use crate::types::{Cleanup, ExArg, Exception, FAIL, Failed, LineNr, OptInt};
+use crate::types::{Cleanup, ExArg, FAIL, Failed, LineNr, OptInt};
 use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -166,7 +165,7 @@ fn handled_swap_exists() {
 fn with_clean_error_state(f: impl FnOnce()) {
     let mut cs = Cleanup {
         pending: 0,
-        exception: ptr::null_mut::<Exception>(),
+        exception: None,
     };
     // SAFETY: a local the matching `leave_cleanup` below hands back.
     unsafe { enter_cleanup(&raw mut cs) };

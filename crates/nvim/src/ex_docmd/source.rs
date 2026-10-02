@@ -6,6 +6,7 @@
 use crate::buffer::buf_get_changedtick;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::types::ErrorMsgs;
 use crate::vim_snprintf;
 
 use crate::getchar::typeahead;
@@ -59,9 +60,7 @@ use crate::message_fmt::c_str;
 use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
-use crate::types::{
-    Exception, Failed, GArray, IOSIZE, LineGetter, LineNr, MsgList, OptInt, Vv, ptrdiff_t, size_t,
-};
+use crate::types::{Failed, GArray, IOSIZE, LineGetter, LineNr, OptInt, Vv, ptrdiff_t, size_t};
 
 use crate::winlayer::{Buf, Live, Win};
 
@@ -69,9 +68,6 @@ use crate::winlayer::{Buf, Live, Win};
 /// outlives the value: `save_dbg_stuff`/`restore_dbg_stuff` are handed a
 /// `SavedDebugState` the debugger's own frame owns.
 type Dbg = Live<SavedDebugState>;
-
-/// The exception `handle_did_throw` is reporting, live until it discards it.
-type Exc = Live<Exception>;
 
 /// The stored lines a `:while`/`:for` body is replayed from, owned by the
 /// frame running the loop.
@@ -92,8 +88,7 @@ pub(crate) unsafe fn save_dbg_stuff(dsp: *mut SavedDebugState) {
     trylevel.set(0);
     d.force_abort = force_abort.get() as c_int;
     force_abort.set(false);
-    d.caught_stack = caught_stack.get();
-    caught_stack.set(ptr::null_mut());
+    d.caught_stack = caught_stack.take();
     // Both of these answer the old value and clear it.
     d.vv_exception = v_exception(ptr::null_mut());
     d.vv_throwpoint = v_throwpoint(ptr::null_mut());
@@ -107,8 +102,7 @@ pub(crate) unsafe fn save_dbg_stuff(dsp: *mut SavedDebugState) {
     need_rethrow.set(false);
     d.check_cstack = check_cstack.get() as c_int;
     check_cstack.set(false);
-    d.current_exception = current_exception.get();
-    current_exception.set(ptr::null_mut());
+    d.current_exception = current_exception.take();
 }
 
 /// Put it all back.
@@ -118,11 +112,11 @@ pub(crate) unsafe fn save_dbg_stuff(dsp: *mut SavedDebugState) {
 /// `dsp` must point at a live `SavedDebugState`, unaliased for the call.
 pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut SavedDebugState) {
     // SAFETY: as `save_dbg_stuff`.
-    let d = unsafe { Dbg::new(dsp) };
+    let mut d = unsafe { Dbg::new(dsp) };
     suppress_errthrow.set(false);
     trylevel.set(d.trylevel);
     force_abort.set(d.force_abort != 0);
-    caught_stack.set(d.caught_stack);
+    caught_stack.set(core::mem::take(&mut d.caught_stack));
     v_exception(d.vv_exception);
     v_throwpoint(d.vv_throwpoint);
     did_emsg.set(d.did_emsg);
@@ -268,12 +262,10 @@ pub(crate) fn do_cmdline_end() {
 /// is what the user sees; an interrupt says nothing, because the interrupt
 /// message is given elsewhere.
 pub fn handle_did_throw() {
-    debug_assert!(!current_exception.get().is_null());
-    // SAFETY: non-null by the assert above, and live until
-    // `discard_current_exception` below.
-    let mut exception = unsafe { Exc::new(current_exception.get()) };
+    let id = current_exception.get().expect("an exception being thrown");
+    let mut exception = id.exception();
     let mut reported: *mut c_char = ptr::null_mut();
-    let mut messages: *mut MsgList = ptr::null_mut();
+    let mut messages = ErrorMsgs::default();
 
     match exception.type_0 as c_uint {
         0 => {
@@ -292,8 +284,7 @@ pub fn handle_did_throw() {
         1 => {
             // ET_ERROR: take the messages, so that discarding the
             // exception does not free them.
-            messages = exception.messages;
-            exception.messages = ptr::null_mut();
+            messages = core::mem::take(&mut exception.messages);
         }
         // ET_INTERRUPT, and anything else.
         _ => {}
@@ -311,15 +302,10 @@ pub fn handle_did_throw() {
         force_abort.set(true);
     }
 
-    if !messages.is_null() {
-        let mut m = messages;
-        while !m.is_null() {
-            let next = unsafe { (*m).next };
-            unsafe { emsg_multiline((*m).msg, Some(c"emsg"), HLF_E, (*m).multiline) };
-            unsafe { xfree((*m).msg as *mut c_void) };
-            unsafe { xfree((*m).sfile as *mut c_void) };
-            xfree(m as *mut c_void);
-            m = next;
+    if !messages.entries.is_empty() {
+        for m in &messages.entries {
+            // SAFETY: the message's own NUL-terminated text.
+            unsafe { emsg_multiline(m.msg.as_ptr(), Some(c"emsg"), HLF_E, m.multiline) };
         }
     } else if !reported.is_null() {
         // SAFETY: the message `do_cmdline` left behind, NUL-terminated.

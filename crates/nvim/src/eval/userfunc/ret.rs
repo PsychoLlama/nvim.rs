@@ -23,7 +23,7 @@ use core::ptr;
 
 use super::*;
 use crate::os::cshim::gettext_ptr;
-use crate::types::{Failed, IOSIZE};
+use crate::types::{Failed, IOSIZE, Pend};
 
 /// One call recorded by `:defer`, to be made when the function returns.
 pub struct Defer {
@@ -288,8 +288,7 @@ pub(crate) unsafe fn handle_defer_one(funccal: *mut FuncCall) {
 
             // The deferred call runs with a clean exception state, so
             // that it happens even while an exception is in flight.
-            let mut estate: ExceptionState = unsafe { core::mem::zeroed() };
-            unsafe { exception_state_save(&raw mut estate) };
+            let estate = exception_state_save();
             exception_state_clear();
 
             // SAFETY: `dr` is the deferred call's own record, so its
@@ -300,7 +299,7 @@ pub(crate) unsafe fn handle_defer_one(funccal: *mut FuncCall) {
             let exe = &raw mut funcexe;
             let _ = unsafe { call_func(name, -1, &mut rettv, args, exe) };
 
-            unsafe { exception_state_restore(&raw mut estate) };
+            exception_state_restore(&estate);
             tv_clear(&mut rettv);
             unsafe { xfree(name as *mut c_void) };
             let mut i = unsafe { (*dr).dr_argcount } - 1;
@@ -455,7 +454,7 @@ pub unsafe fn do_return(
     // is reached: the return still has to be pending until that has run.
     let idx = unsafe { cleanup_conditionals(excmd.cstack, CsFlags::NONE, true) };
     // Set when the pending slot took the value out of `result` by bit copy:
-    // the source gives it up once `report_make_pending` has rendered it.
+    // the source gives it up once `report_pending` has rendered it.
     let mut handed_over = false;
     if idx >= 0 {
         // A `:finally` is going to run first; remember the return value.
@@ -475,7 +474,7 @@ pub unsafe fn do_return(
             } else {
                 // Store the value of the pending return.  A bit copy, not
                 // a take: the pending slot owns the value from here, but
-                // `report_make_pending` below still renders `result` for
+                // `report_pending` below still renders `result` for
                 // `:debug`, and blanking it first would leave it a
                 // `VAR_UNKNOWN` the echo encoder refuses.  The source gives
                 // it up straight after that report instead.
@@ -495,7 +494,7 @@ pub unsafe fn do_return(
                 unsafe { (*(*current_fc()).fc_rettv).write_number(0) };
             }
         }
-        unsafe { report_make_pending(CSTP_RETURN, result) };
+        unsafe { report_pending(PendingAction::Made, CSTP_RETURN, Pend::Return(result)) };
         if handed_over {
             // Rendered; the pending slot is the only owner now.
             unsafe { (*result.cast::<TypVal>()).disown() };

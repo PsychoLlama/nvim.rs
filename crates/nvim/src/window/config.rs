@@ -51,15 +51,7 @@ use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::{Buf, Win};
 
 /// The zeroed `TryState` `try_enter()` fills in.
-const TRY_STATE: TryState = TryState {
-    current_exception: ptr::null_mut(),
-    private_msg_list: ptr::null_mut(),
-    msg_list: ptr::null(),
-    got_int: 0,
-    did_throw: false,
-    need_rethrow: 0,
-    did_emsg: 0,
-};
+const TRY_STATE: TryState = TryState::INIT;
 use crate::api_error;
 use crate::optionstr::OptStringRef;
 

@@ -91,6 +91,13 @@ impl<T, M: Default> SlotTable<T, M> {
         }
     }
 
+    /// Take ownership of `value` and set `meta` beside it. Answers the id and
+    /// the value's fixed address.
+    pub(crate) fn insert(&mut self, meta: M, value: T) -> (SlotId<T>, *mut T) {
+        let value = Box::new(UnsafeCell::new(ManuallyDrop::new(value)));
+        self.insert_boxed(meta, value, |_, _| {})
+    }
+
     /// Take ownership of `value`, already in its box -- for a value too big
     /// to build on the stack and move -- and set `meta` beside it; `init`
     /// finishes the value in place, knowing its id, before anything else can
@@ -144,6 +151,15 @@ impl<T, M: Default> SlotTable<T, M> {
         // Freed in place: moving a large value out only to forget it is a
         // copy for nothing.
         drop(value);
+    }
+
+    /// Empty `id`'s slot and hand its value back, for the caller to give
+    /// back what it holds.
+    ///
+    /// # Panics
+    /// When `id`'s value is gone already.
+    pub(crate) fn remove(&mut self, id: SlotId<T>) -> T {
+        ManuallyDrop::into_inner(UnsafeCell::into_inner(*self.empty(id)))
     }
 
     fn empty(&mut self, id: SlotId<T>) -> Boxed<T> {

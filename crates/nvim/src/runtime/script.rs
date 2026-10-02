@@ -27,7 +27,7 @@ use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::ex_eval::CsFlags;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL};
+use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL, Pend};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -815,7 +815,7 @@ pub fn do_finish(excmd: &mut ExArg, reanimate: bool) {
     let idx = unsafe { cleanup_conditionals(excmd.cstack, CsFlags::NONE, true) };
     if idx >= 0 {
         unsafe { (*excmd.cstack).cs_pending[idx as usize] = CSTP_FINISH as c_char };
-        unsafe { report_make_pending(CSTP_FINISH, NULL_0) };
+        unsafe { report_pending(PendingAction::Made, CSTP_FINISH, Pend::None) };
     } else {
         unsafe { (*source_cookie(excmd)).finished = true };
     }

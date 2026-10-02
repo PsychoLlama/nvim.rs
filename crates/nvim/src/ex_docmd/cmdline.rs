@@ -38,7 +38,8 @@ use crate::ex_docmd::{
 };
 use crate::ex_eval::{CsFlags, CsLoopFlags};
 use crate::ex_eval::{
-    aborting, cleanup_conditionals, do_intthrow, has_loop_cmd, report_make_pending,
+    PendingAction, aborting, cleanup_conditionals, do_intthrow, has_loop_cmd, pop_msg_list,
+    push_msg_list, report_pending,
 };
 
 use crate::ex_getln::{getexline, ui_ext_cmdline_block_leave};
@@ -48,7 +49,7 @@ use crate::ex_docmd::state::{
     did_emsg_syntax, ex_nesting_level, last_cmdline, new_last_cmdline, repeat_cmdline,
 };
 use crate::ex_eval::state::{
-    check_cstack, current_exception, did_endif, did_throw, force_abort, msg_list, need_rethrow,
+    check_cstack, current_exception, did_endif, did_throw, force_abort, need_rethrow,
     suppress_errthrow, trylevel,
 };
 use crate::garray::{ga_clear, ga_init};
@@ -70,17 +71,13 @@ use crate::runtime::{
 use crate::memory::XString;
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    CmdLine, CondStack, EsList, Failed, GArray, LineGetter, LineNr, MsgList, OptInt, size_t,
+    CmdLine, CondStack, EsList, Failed, GArray, LineGetter, LineNr, OptInt, Pend, size_t,
 };
 use crate::ui::ui_has;
 
 /// A zeroed `CondStack` with the C's `{ .cs_idx = -1 }` index.
 fn empty_cstack() -> CondStack {
-    // SAFETY: `CondStack` is a `repr(C)` aggregate of scalars, arrays and
-    // pointers; all-zero is a valid value of every one of them.
-    let mut cstack: CondStack = unsafe { core::mem::zeroed() };
-    cstack.cs_idx = -1;
-    cstack
+    CondStack::new()
 }
 
 /// Free every line a `:while`/`:for` body stored, and the array holding
@@ -638,16 +635,17 @@ impl Run {
         // `:finally` itself noticed a missing `:endif`/`:endwhile`/`:endfor`.
         if self.cstack.cs_lflags.has(CsLoopFlags::HAD_FINA) {
             self.cstack.cs_lflags.clear(CsLoopFlags::HAD_FINA);
-            // SAFETY: `current_exception` is the exception being carried, or null.
+            let carried = match current_exception.get() {
+                Some(id) if did_throw.get() => Pend::Exception(id),
+                _ => Pend::None,
+            };
+            // SAFETY: `carried` is the exception being thrown, if any.
             unsafe {
-                report_make_pending(
+                report_pending(
+                    PendingAction::Made,
                     self.cstack.cs_pending[self.cstack.cs_idx as usize] as c_int
                         & (CSTP_ERROR as c_int | CSTP_INTERRUPT as c_int | CSTP_THROW as c_int),
-                    if did_throw.get() {
-                        current_exception.get() as *mut c_void
-                    } else {
-                        ptr::null_mut()
-                    },
+                    carried,
                 )
             };
             did_emsg.set(0);
@@ -747,7 +745,7 @@ impl Run {
 
     /// Free the `:silent!` list, and ask for a return when too much output
     /// piled up to fit on the command line (with `:global`, once after the
-    /// whole command). Runs *after* `msg_list` is put back, so that what
+    /// whole command). Runs *after* the message list is put back, so that what
     /// `wait_return` says reaches the caller's list and not this run's.
     fn report(&mut self) {
         // SAFETY: the list this run's `:silent!`s built, owned here.
@@ -837,16 +835,14 @@ pub unsafe fn do_cmdline(
     // `do_errthrow` in `do_one_cmd` would join an earlier invocation's
     // messages to a later invocation's command name — which is what
     // happens when a BufWritePost autocommand runs after a write error.
-    let mut private_msg_list: *mut MsgList = ptr::null_mut();
-    let saved_msg_list = msg_list.get();
-    msg_list.set(&raw mut private_msg_list);
+    push_msg_list();
 
     if do_cmdline_start().is_err() {
         emsg(gettext(e_command_too_recursive));
         // No command name: this is not an error of any one command.
         let mut none = empty_cstack();
         do_errthrow(&mut none, None);
-        msg_list.set(saved_msg_list);
+        drop(pop_msg_list());
         return Err(Failed);
     }
 
@@ -886,7 +882,7 @@ pub unsafe fn do_cmdline(
     }
 
     // SAFETY: `debug_saved` is this frame's own.
-    let mut debug_saved: SavedDebugState = unsafe { core::mem::zeroed() };
+    let mut debug_saved = SavedDebugState::new();
     if flags.has(DoCmdOpts::EXCRESET) {
         unsafe { save_dbg_stuff(&raw mut debug_saved) };
     }
@@ -910,7 +906,7 @@ pub unsafe fn do_cmdline(
     let mut run = Run::new(first);
     while run.step(source, flags) == Pass::Again {}
     run.close(source, flags, &mut debug_saved);
-    msg_list.set(saved_msg_list);
+    drop(pop_msg_list());
     run.report();
 
     // In case `do_cmdline` was used recursively.

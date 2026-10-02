@@ -57,15 +57,7 @@ pub unsafe fn nvim_create_augroup(
 }
 
 pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
-    let mut tstate: TryState = TryState {
-        current_exception: ::core::ptr::null_mut::<Exception>(),
-        private_msg_list: ::core::ptr::null_mut::<MsgList>(),
-        msg_list: ::core::ptr::null::<*const MsgList>(),
-        got_int: 0,
-        did_throw: false,
-        need_rethrow: 0,
-        did_emsg: 0,
-    };
+    let mut tstate: TryState = TryState::INIT;
     unsafe { try_enter(&raw mut tstate) };
     let name: *mut ::core::ffi::c_char = if id == 0 as Integer {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
@@ -78,15 +70,7 @@ pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
 }
 
 pub fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
-    let mut tstate: TryState = TryState {
-        current_exception: ::core::ptr::null_mut::<Exception>(),
-        private_msg_list: ::core::ptr::null_mut::<MsgList>(),
-        msg_list: ::core::ptr::null::<*const MsgList>(),
-        got_int: 0,
-        did_throw: false,
-        need_rethrow: 0,
-        did_emsg: 0,
-    };
+    let mut tstate: TryState = TryState::INIT;
     unsafe { try_enter(&raw mut tstate) };
     unsafe { augroup_del(name.data(), false) };
     unsafe { try_leave(&raw mut tstate) }?;

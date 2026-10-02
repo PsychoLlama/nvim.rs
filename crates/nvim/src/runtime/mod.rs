@@ -44,7 +44,7 @@ use crate::eval::{eval_to_number, get_copy_id};
 use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
 use crate::ex_docmd::state::{cmdmod, ex_nesting_level, global_busy, listcmd_busy};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, getline_equal};
-use crate::ex_eval::{aborting, cleanup_conditionals, report_make_pending};
+use crate::ex_eval::{PendingAction, aborting, cleanup_conditionals, report_pending};
 use crate::garray::{ga_grow, ga_init, ga_remove_duplicate_strings};
 use crate::getchar::openscript;
 use crate::getchar::state::got_int;
@@ -116,7 +116,7 @@ pub use self::script::*;
 pub use self::search::*;
 pub use self::source::*;
 
-/// `:finish` as a pending control-flow reason, for `report_make_pending`.
+/// `:finish` as a pending control-flow reason, for `report_pending`.
 pub const CSTP_FINISH: ::core::ffi::c_int = 32;
 /// `globpath` flags.
 pub const kXDGDataDirs: XDGVarType = 6;

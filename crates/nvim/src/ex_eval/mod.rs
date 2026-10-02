@@ -70,7 +70,7 @@ use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
-use crate::types::{CondStack, EsList, EvalArg, ExArg, FAIL, Failed, OK, TypVal};
+use crate::types::{CondStack, EsList, EvalArg, ExArg, FAIL, Failed, OK, Pend, TypVal};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -121,9 +121,9 @@ crate::flag_set! {
 }
 
 pub(crate) use exception::{
-    cause_errthrow, discard_current_exception, do_errthrow, do_intthrow, exception_state_clear,
-    exception_state_restore, exception_state_save, free_global_msglist, get_exception_string,
-    report_make_pending,
+    PendingAction, cause_errthrow, discard_current_exception, do_errthrow, do_intthrow,
+    error_exception_string, exception_state_clear, exception_state_restore, exception_state_save,
+    pop_msg_list, push_msg_list, report_pending, take_msg_list,
 };
 pub(crate) use trycmd::{
     do_throw, enter_cleanup, ex_catch, ex_endtry, ex_finally, ex_throw, ex_try, leave_cleanup,
@@ -522,7 +522,7 @@ pub(crate) fn ex_continue(excmd: &mut ExArg) {
         // A try conditional not in its finally clause came first: make
         // the ":continue" pending until the ":endtry".
         unsafe { (*cstack).cs_pending[idx as usize] = CSTP_CONTINUE as c_char };
-        unsafe { report_make_pending(CSTP_CONTINUE, ptr::null_mut()) };
+        unsafe { report_pending(PendingAction::Made, CSTP_CONTINUE, Pend::None) };
     }
 }
 
@@ -540,7 +540,7 @@ pub(crate) fn ex_break(excmd: &mut ExArg) {
     let idx = unsafe { cleanup_conditionals(cstack, CsFlags::LOOP, true) };
     if idx >= 0 && !unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::LOOP) {
         unsafe { (*cstack).cs_pending[idx as usize] = CSTP_BREAK as c_char };
-        unsafe { report_make_pending(CSTP_BREAK, ptr::null_mut()) };
+        unsafe { report_pending(PendingAction::Made, CSTP_BREAK, Pend::None) };
     }
 }
 
@@ -653,9 +653,9 @@ pub(crate) unsafe fn cleanup_conditionals(
                     && unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::CAUGHT)
                     && !unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::FINISHED)
                 {
-                    unsafe {
-                        exception::finish_exception((*cstack).pending_exception(idx as usize))
-                    };
+                    exception::finish_exception(unsafe {
+                        (*cstack).pending_exception(idx as usize)
+                    });
                     unsafe { (*cstack).cs_flags[idx as usize] |= CsFlags::FINISHED };
                 }
                 // Stop here -- unless the try block never got active,
@@ -722,16 +722,12 @@ unsafe fn discard_finally_pending(cstack: *mut CondStack, idx: c_int) {
     match pending {
         CSTP_NONE => {}
         CSTP_CONTINUE | CSTP_BREAK | CSTP_FINISH => {
-            unsafe { exception::report_discard_pending(pending, ptr::null_mut()) };
+            unsafe { report_pending(PendingAction::Discarded, pending, Pend::None) };
             unsafe { (*cstack).cs_pending[idx as usize] = CSTP_NONE as c_char };
         }
         CSTP_RETURN => {
-            unsafe {
-                exception::report_discard_pending(
-                    CSTP_RETURN,
-                    (*cstack).pending_return(idx as usize),
-                )
-            };
+            let rettv = unsafe { (*cstack).pending_return(idx as usize) };
+            unsafe { report_pending(PendingAction::Discarded, CSTP_RETURN, Pend::Return(rettv)) };
             unsafe { discard_pending_return((*cstack).pending_return(idx as usize)) };
             unsafe { (*cstack).cs_pending[idx as usize] = CSTP_NONE as c_char };
         }
@@ -739,16 +735,13 @@ unsafe fn discard_finally_pending(cstack: *mut CondStack, idx: c_int) {
             if !unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::FINALLY) {
                 return;
             }
-            if pending & CSTP_THROW != 0
-                && !unsafe { (*cstack).pending_exception(idx as usize) }.is_null()
-            {
+            let exception = unsafe { (*cstack).pending_exception(idx as usize) };
+            if let Some(exception) = exception.filter(|_| pending & CSTP_THROW != 0) {
                 // Cancel the pending exception. This is in the finally
                 // clause, so the caught-exception stack is not involved.
-                unsafe {
-                    exception::discard_exception((*cstack).pending_exception(idx as usize), false)
-                };
+                exception::discard_exception(exception, false);
             } else {
-                unsafe { exception::report_discard_pending(pending, ptr::null_mut()) };
+                unsafe { report_pending(PendingAction::Discarded, pending, Pend::None) };
             }
             unsafe { (*cstack).cs_pending[idx as usize] = CSTP_NONE as c_char };
         }

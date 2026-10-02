@@ -35,14 +35,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use super::exception::Thrown;
 use super::exception::{
-    catch_exception, discard_current_exception, discard_exception, do_intthrow,
-    free_global_msglist, report_discard_pending, report_make_pending, report_resume_pending,
-    throw_exception,
+    PendingAction, catch_exception, discard_current_exception, discard_exception, do_intthrow,
+    free_global_msglist, report_pending, throw_exception,
 };
 use super::flag::{
     CSTACK_LEN, CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_NONE,
-    CSTP_RETURN, CSTP_THROW, ET_USER, THROW_ON_ERROR,
+    CSTP_RETURN, CSTP_THROW, THROW_ON_ERROR,
 };
 use super::{CsFlags, CsLoopFlags};
 use super::{
@@ -54,15 +54,16 @@ use crate::debugger::dbg_check_skipped;
 use crate::eval::eval_to_string_skip;
 use crate::eval::userfunc::do_return;
 use crate::ex_docmd::ends_excmd;
-use crate::ex_eval::state::{current_exception, did_throw, force_abort, msg_list, need_rethrow};
+use crate::ex_eval::state::{current_exception, did_throw, force_abort, need_rethrow};
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
-use crate::memory::{xfree, xmalloc};
+use crate::memory::xmalloc;
 use crate::message::e_argreq;
 use crate::message::state::{did_emsg, emsg_silent};
 use crate::message::{emsg, internal_error};
 use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
+use crate::types::Pend;
 
 use crate::regexp::{
     RE_MAGIC, RE_STRING, skip_regexp_err_at, vim_regcomp, vim_regexec_nl, vim_regfree,
@@ -89,8 +90,10 @@ pub(crate) fn ex_throw(excmd: &mut ExArg) {
     if excmd.skip || value.is_null() {
         return;
     }
-    if unsafe { throw_exception(value.cast(), ET_USER, ptr::null_mut()) }.is_err() {
-        unsafe { xfree(value.cast()) };
+    // SAFETY: the evaluated value, an owned NUL-terminated string the
+    // exception takes over (or frees, on a refused throw).
+    if unsafe { throw_exception(Thrown::User(value), ptr::null_mut()) }.is_err() {
+        // Freed with the refusal.
     } else {
         unsafe { do_throw(excmd.cstack) };
     }
@@ -265,7 +268,8 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
             did_emsg.set(0);
             got_int.set(false);
             did_throw.set(false);
-            unsafe { catch_exception((*cstack).pending_exception(idx as usize)) };
+            let caught = unsafe { (*cstack).pending_exception(idx as usize) };
+            catch_exception(caught.expect("a thrown exception at the level that catches it"));
             // The current exception must be the one in the cstack, so
             // that it can be discarded at the next ":catch", ":finally"
             // or ":endtry", or when the catch clause is left by a
@@ -324,7 +328,9 @@ fn pattern_catches(pat: &[u8]) -> bool {
     let prev_got_int = got_int.get();
     got_int.set(false);
     // SAFETY: the exception's message, NUL-terminated for its lifetime.
-    let value = unsafe { cstr::at((*current_exception.get()).value) };
+    let thrown = current_exception.get().expect("an exception being thrown");
+    // SAFETY: the exception's value, NUL-terminated for its lifetime.
+    let value = unsafe { cstr::at(thrown.exception().value) };
     let caught = vim_regexec_nl(&mut regmatch, value, 0);
     got_int.set(got_int.get() | prev_got_int);
     unsafe { vim_regfree(regmatch.regprog) };
@@ -393,7 +399,8 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
     if pending == CSTP_ERROR || did_emsg.get() != 0 || got_int.get() || did_throw.get() {
         let top = unsafe { (*cstack).cs_idx } as usize;
         if unsafe { (*cstack).cs_pending[top] } == CSTP_RETURN as c_char {
-            unsafe { report_discard_pending(CSTP_RETURN, (*cstack).pending_return(top)) };
+            let rettv = unsafe { (*cstack).pending_return(top) };
+            unsafe { report_pending(PendingAction::Discarded, CSTP_RETURN, Pend::Return(rettv)) };
             unsafe { discard_pending_return((*cstack).pending_return(top)) };
         }
         if pending == CSTP_ERROR && did_emsg.get() == 0 {
@@ -534,18 +541,14 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
     unsafe { (*cstack).cs_trylevel -= 1 };
 
     if !skip {
-        unsafe {
-            report_resume_pending(
-                pending as c_int,
-                if pending == CSTP_RETURN as c_char {
-                    rettv
-                } else if pending as c_int & CSTP_THROW != 0 {
-                    current_exception.get().cast()
-                } else {
-                    ptr::null_mut()
-                },
-            )
+        let value = if pending == CSTP_RETURN as c_char {
+            Pend::Return(rettv)
+        } else if pending as c_int & CSTP_THROW != 0 {
+            current_exception.get().map_or(Pend::None, Pend::Exception)
+        } else {
+            Pend::None
         };
+        unsafe { report_pending(PendingAction::Resumed, pending as c_int, value) };
         // Reactivate a ":continue", ":break", ":return" or ":finish"
         // pending from the try block or a catch clause. Skipped if there
         // was an error in an unskipped conditional command, an interrupt
@@ -606,7 +609,7 @@ pub(crate) unsafe fn enter_cleanup(csp: *mut Cleanup) {
     if !(did_emsg.get() != 0 || got_int.get() || did_throw.get() || need_rethrow.get()) {
         // SAFETY: caller contract.
         unsafe { (*csp).pending = CSTP_NONE };
-        unsafe { (*csp).exception = ptr::null_mut() };
+        unsafe { (*csp).exception = None };
         return;
     }
 
@@ -624,10 +627,9 @@ pub(crate) unsafe fn enter_cleanup(csp: *mut Cleanup) {
     // the autocommands needs that. `*msg_list` need not be saved: every
     // `do_cmdline` has its own.
     if did_throw.get() || need_rethrow.get() {
-        unsafe { (*csp).exception = current_exception.get() };
-        current_exception.set(ptr::null_mut());
+        unsafe { (*csp).exception = current_exception.take() };
     } else {
-        unsafe { (*csp).exception = ptr::null_mut() };
+        unsafe { (*csp).exception = None };
         if did_emsg.get() != 0 {
             force_abort.set(force_abort.get() | super::cause_abort.get());
             super::cause_abort.set(false);
@@ -642,7 +644,8 @@ pub(crate) unsafe fn enter_cleanup(csp: *mut Cleanup) {
     // here, which is still `CSTP_NONE` -- so this report never fires.
     // Kept as it is: `report_pending` returns immediately on CSTP_NONE,
     // and changing it would add 'verbose' output nothing expects.
-    unsafe { report_make_pending(CSTP_NONE, (*csp).exception.cast()) };
+    let parked = unsafe { (*csp).exception }.map_or(Pend::None, Pend::Exception);
+    unsafe { report_pending(PendingAction::Made, CSTP_NONE, parked) };
 }
 
 /// Restore what [`enter_cleanup`] parked -- unless the cleanup autocommands
@@ -666,15 +669,16 @@ pub(crate) unsafe fn leave_cleanup(csp: *mut Cleanup) {
     if aborting() || need_rethrow.get() {
         if pending & CSTP_THROW != 0 {
             // Cancel the pending exception; this reports it too.
-            unsafe { discard_exception((*csp).exception, false) };
+            match unsafe { (*csp).exception } {
+                Some(parked) => discard_exception(parked, false),
+                None => internal_error(c"discard_exception()"),
+            }
         } else {
-            unsafe { report_discard_pending(pending, ptr::null_mut()) };
+            unsafe { report_pending(PendingAction::Discarded, pending, Pend::None) };
         }
         // If an error was about to become an exception when
         // `enter_cleanup` was called, free the message list.
-        if !msg_list.get().is_null() {
-            free_global_msglist();
-        }
+        free_global_msglist();
         return;
     }
 
@@ -700,14 +704,9 @@ pub(crate) unsafe fn leave_cleanup(csp: *mut Cleanup) {
         need_rethrow.set(true);
     }
 
-    unsafe {
-        report_resume_pending(
-            pending,
-            if pending & CSTP_THROW != 0 {
-                current_exception.get().cast()
-            } else {
-                ptr::null_mut()
-            },
-        )
+    let value = match current_exception.get() {
+        Some(id) if pending & CSTP_THROW != 0 => Pend::Exception(id),
+        _ => Pend::None,
     };
+    unsafe { report_pending(PendingAction::Resumed, pending, value) };
 }

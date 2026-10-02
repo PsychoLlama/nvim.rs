@@ -67,7 +67,7 @@ use crate::normal::visual_active;
 /// A pristine `Cleanup` for [`enter_cleanup_now`] to fill in.
 const NO_CLEANUP: Cleanup = Cleanup {
     pending: 0,
-    exception: ptr::null_mut(),
+    exception: None,
 };
 
 // ---------------------------------------------------------------------------

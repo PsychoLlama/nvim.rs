@@ -193,7 +193,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buffer: Buf, dirname_start: *const c_
         // exception or `:return` has to be parked over the call.
         let mut cs = Cleanup {
             pending: 0,
-            exception: ptr::null_mut(),
+            exception: None,
         };
         unsafe { enter_cleanup(&raw mut cs) };
         wipe_buffer(buffer, true);

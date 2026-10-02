@@ -104,15 +104,7 @@ pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error>
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
-    let mut tstate: TryState = TryState {
-        current_exception: ::core::ptr::null_mut::<Exception>(),
-        private_msg_list: ::core::ptr::null_mut::<MsgList>(),
-        msg_list: ::core::ptr::null::<*const MsgList>(),
-        got_int: 0,
-        did_throw: false,
-        need_rethrow: 0,
-        did_emsg: 0,
-    };
+    let mut tstate: TryState = TryState::INIT;
     unsafe { try_enter(&raw mut tstate) };
     let is_curbuf: bool = b == Buf::current();
     let save_acd = p_acd();

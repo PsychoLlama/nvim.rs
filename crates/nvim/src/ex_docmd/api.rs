@@ -422,8 +422,7 @@ pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview
 
         // A conditional stack of its own: `:try` and friends reached
         // this way are not nested inside the caller's.
-        let mut cstack: CondStack = unsafe { core::mem::zeroed() };
-        cstack.cs_idx = -1;
+        let mut cstack = CondStack::new();
         excmd.cstack = &raw mut cstack;
 
         let _ = unsafe { execute_cmd0(&raw mut retv, excmd, &mut errormsg, preview) };

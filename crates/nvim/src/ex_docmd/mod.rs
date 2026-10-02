@@ -72,10 +72,11 @@ use crate::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
 use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
+use crate::types::ExcId;
 use crate::types::{
     Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufAction, DoBufStart, EStack, EStackArg,
-    EStackType, ExArg, ExArgt, Exception, GArray, Handle, LineGetter, LineNr, LuaRetMode, MarkGet,
-    MotionType, OptMagic, RemapValues, uint8_t, uint16_t,
+    EStackType, ExArg, ExArgt, GArray, Handle, LineGetter, LineNr, LuaRetMode, MarkGet, MotionType,
+    OptMagic, RemapValues, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -208,7 +209,7 @@ pub const DIALOG_MSG_SIZE: c_uint = 1000;
 pub struct SavedDebugState {
     pub trylevel: c_int,
     pub force_abort: c_int,
-    pub caught_stack: *mut Exception,
+    pub(crate) caught_stack: Vec<ExcId>,
     pub vv_exception: *mut c_char,
     pub vv_throwpoint: *mut c_char,
     pub did_emsg: c_int,
@@ -216,7 +217,26 @@ pub struct SavedDebugState {
     pub did_throw: bool,
     pub need_rethrow: c_int,
     pub check_cstack: c_int,
-    pub current_exception: *mut Exception,
+    pub(crate) current_exception: Option<ExcId>,
+}
+
+impl SavedDebugState {
+    /// Nothing saved yet: what `save_dbg_stuff` fills.
+    pub(crate) const fn new() -> SavedDebugState {
+        SavedDebugState {
+            trylevel: 0,
+            force_abort: 0,
+            caught_stack: Vec::new(),
+            vv_exception: ::core::ptr::null_mut(),
+            vv_throwpoint: ::core::ptr::null_mut(),
+            did_emsg: 0,
+            got_int: 0,
+            did_throw: false,
+            need_rethrow: 0,
+            check_cstack: 0,
+            current_exception: None,
+        }
+    }
 }
 pub struct LoopCookie {
     pub lines_gap: *mut GArray,

@@ -40,8 +40,8 @@ use crate::ex_docmd::state::ex_nesting_level;
 use crate::ex_docmd::{checkforcmd, do_cmdline, ends_excmd, skip_range};
 use crate::ex_eval::state::{did_throw, trylevel};
 use crate::ex_eval::{
-    aborted_in_try, aborting, cleanup_conditionals, exception_state_clear, exception_state_restore,
-    exception_state_save, report_make_pending, update_force_abort,
+    PendingAction, aborted_in_try, aborting, cleanup_conditionals, exception_state_clear,
+    exception_state_restore, exception_state_save, report_pending, update_force_abort,
 };
 use crate::ex_getln::{getcmdline, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_grow, ga_init};
@@ -92,10 +92,10 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, EStack, EvalArg, ExArg, ExceptionState, Expand, FcId, FuncCall,
-    FuncDict, FuncExe, GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch,
-    SaveRedo, String_0, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
+    Callback, Dict, DictItem, EStack, EvalArg, ExArg, Expand, FcId, FuncCall, FuncDict, FuncExe,
+    GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch, SaveRedo, String_0,
+    TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;

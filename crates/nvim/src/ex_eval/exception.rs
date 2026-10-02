@@ -41,7 +41,6 @@ use super::flag::{
     CSTP_THROW, ESTACK_NONE, ET_ERROR, ET_INTERRUPT, ET_USER,
 };
 use super::{cause_abort, message};
-use crate::ascii::ascii_isdigit;
 use crate::cstr;
 use crate::debugger::state::debug_break_level;
 use crate::drawscreen::state::cmdline_row;
@@ -50,15 +49,15 @@ use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
 use crate::ex_eval::state::{
-    caught_stack, current_exception, did_throw, force_abort, msg_list, need_rethrow,
+    EXCEPTIONS, caught_stack, current_exception, did_throw, force_abort, msg_lists, need_rethrow,
     suppress_errthrow, trylevel,
 };
 use crate::getchar::state::got_int;
 use crate::guard::{Allow, Suppress};
 use crate::memory::XString;
-use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
+use crate::memory::{xfree, xstrdup};
+use crate::message::e_interr;
 use crate::message::state::{did_emsg, emsg_silent, msg_row, msg_scroll};
-use crate::message::{e_interr, e_outofmem};
 use crate::message::{emsg, internal_error, msg_str, verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, report_msg};
 use crate::option::vars::p_verbose;
@@ -68,13 +67,13 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::strings::concat_str;
 use crate::tr_plural;
 use crate::types::{
-    CondStack, ExceptType, Exception, ExceptionState, Failed, IOSIZE, MsgList, NUL, Vv, int64_t,
-    ptrdiff_t,
+    CondStack, ErrorMsg, ErrorMsgs, ExcId, ExceptType, Exception, ExceptionState, Failed, IOSIZE,
+    NUL, Pend, Vv, int64_t, ptrdiff_t,
 };
 use crate::vim_snprintf;
 use crate::vim_snprintf_safelen;
-use ::libc::strcat;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use crate::winlayer::Live;
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// Turn an error message into a pending error exception if one is wanted
@@ -142,7 +141,7 @@ pub(crate) unsafe fn cause_errthrow(
         // SAFETY: `did_throw` implies a live `current_exception`. Resetting
         // `got_int` for an interrupt stops the same interrupt becoming an
         // exception again and discarding the error about to be thrown here.
-        if unsafe { (*current_exception.get()).type_0 } == ET_INTERRUPT {
+        if current_type() == Some(ET_INTERRUPT) {
             got_int.set(false);
         }
         discard_current_exception();
@@ -154,81 +153,83 @@ pub(crate) unsafe fn cause_errthrow(
     // to the conditional stack here, so the actual throw waits until the
     // failing command has returned. Only the first of several errors in a
     // row is thrown, unless a severe one follows.
-    if msg_list.get().is_null() {
+    if msg_lists.with(Vec::is_empty) {
         return true;
     }
-    // SAFETY: `msg_list` points at the current `do_cmdline`'s own list head.
-    unsafe { append_msg(mesg, multiline, concat, severe) }
+    // SAFETY: the caller's NUL-terminated message.
+    append_msg(unsafe { cstr::bytes_at(mesg) }, multiline, concat, severe);
+    true
 }
 
-/// Append `mesg` to the message list the error exception will be built from,
-/// or concatenate it onto the last entry. Answers whether `emsg` should stay
-/// quiet, which it always should by this point.
-///
-/// # Safety
-/// `msg_list` is non-null and `mesg` is NUL-terminated.
-unsafe fn append_msg(mesg: *const c_char, multiline: bool, concat: bool, severe: bool) -> bool {
-    // SAFETY: caller contract; the list is this `do_cmdline`'s own.
-    let head = msg_list.get();
-    let mut plist = head;
-    while !unsafe { *plist }.is_null() {
-        // Concatenate onto the last entry (a multi-part message).
-        if unsafe { (**plist).next }.is_null() && concat {
-            let (old, add) = unsafe { (cstr::bytes_at((**plist).msg), cstr::bytes_at(mesg)) };
-            let joined = old.len() + add.len() + 1;
-            unsafe { (**plist).msg = xrealloc((**plist).msg.cast(), joined).cast() };
-            unsafe { (**plist).throw_msg = strcat((**plist).msg, mesg) };
-            return true;
-        }
-        plist = unsafe { &raw mut (**plist).next };
-    }
-
-    let elem: *mut MsgList = unsafe { xmalloc(size_of::<MsgList>()) }.cast();
-    unsafe { (*elem).msg = xstrdup(mesg) };
-    unsafe { (*elem).multiline = multiline };
-    unsafe { (*elem).next = ptr::null_mut() };
-    unsafe { (*elem).throw_msg = ptr::null_mut() };
-    unsafe { *plist = elem };
-
-    if plist == head || severe {
-        // Skip the extra "Vim " prefix, as on message "E458".
-        let tmsg = unsafe { (*elem).msg };
-        let vim_prefixed = unsafe { cstr::starts_with(tmsg, b"Vim E") }
-            && ascii_isdigit(unsafe { *tmsg.add(5) } as c_int)
-            && ascii_isdigit(unsafe { *tmsg.add(6) } as c_int)
-            && ascii_isdigit(unsafe { *tmsg.add(7) } as c_int)
-            && unsafe { *tmsg.add(8) } == b':' as c_char
-            && unsafe { *tmsg.add(9) } == b' ' as c_char;
-        unsafe { (**head).throw_msg = if vim_prefixed { tmsg.add(4) } else { tmsg } };
+/// Append `mesg` to the innermost message list, the one the error exception
+/// will be built from, or concatenate it onto the last entry. There is one.
+fn append_msg(mesg: &[u8], multiline: bool, concat: bool, severe: bool) {
+    let concatenates =
+        concat && msg_lists.with(|lists| lists.last().is_some_and(|l| !l.entries.is_empty()));
+    if concatenates {
+        msg_lists.with_mut(|lists| {
+            let list = lists.last_mut().expect("a message list");
+            let last = list.entries.len() - 1;
+            list.entries[last].msg.push_bytes(mesg);
+            // Upstream points the last entry's `throw_msg` at its joined
+            // text; only the head's is ever read.
+            if last == 0 {
+                list.throw_at = (0, 0);
+            }
+        });
+        return;
     }
 
     // Take the source name and line number now: they may change before
     // `do_errthrow` runs.
-    unsafe { (*elem).sfile = estack_sfile(ESTACK_NONE) };
-    unsafe { (*elem).slnum = sourcing_lnum() };
-    true
+    let sfile = estack_sfile(ESTACK_NONE);
+    // SAFETY: `estack_sfile` answers an `xmalloc`'d string or null.
+    let sfile = (!sfile.is_null()).then(|| unsafe { XString::from_raw(sfile) });
+    let entry = ErrorMsg {
+        msg: XString::from_bytes(mesg),
+        sfile,
+        slnum: sourcing_lnum(),
+        multiline,
+    };
+    msg_lists.with_mut(|lists| {
+        let list = lists.last_mut().expect("a message list");
+        list.entries.push(entry);
+        let at = list.entries.len() - 1;
+        if at == 0 || severe {
+            // Skip the extra "Vim " prefix, as on message "E458".
+            let msg = &list.entries[at].msg[..];
+            let vim_prefixed = msg.starts_with(b"Vim E")
+                && msg
+                    .get(5..8)
+                    .is_some_and(|d| d.iter().all(u8::is_ascii_digit))
+                && msg.get(8..10) == Some(b": ");
+            list.throw_at = (at, if vim_prefixed { 4 } else { 0 });
+        }
+    });
 }
 
-/// Free a message list and everything in it.
-///
-/// # Safety
-/// `l` heads a message list this owns.
-unsafe fn free_msglist(l: *mut MsgList) {
-    let mut messages = l;
-    while !messages.is_null() {
-        let next = unsafe { (*messages).next };
-        unsafe { xfree((*messages).msg.cast()) };
-        unsafe { xfree((*messages).sfile.cast()) };
-        unsafe { xfree(messages.cast()) };
-        messages = next;
-    }
+/// Take the innermost message list's messages, leaving it empty.
+pub(crate) fn take_msg_list() -> ErrorMsgs {
+    msg_lists
+        .with_mut(|lists| lists.last_mut().map(core::mem::take))
+        .unwrap_or_default()
 }
 
-/// Free the global `*msg_list` and clear it.
+/// Drop the innermost message list's messages.
 pub(crate) fn free_global_msglist() {
-    // SAFETY: module contract.
-    unsafe { free_msglist(*msg_list.get()) };
-    unsafe { *msg_list.get() = ptr::null_mut() };
+    drop(take_msg_list());
+}
+
+/// Start an empty message list for a command line or an API call to collect
+/// its errors in, until [`pop_msg_list`]: upstream pointing `msg_list` at
+/// its own frame's list head.
+pub(crate) fn push_msg_list() {
+    msg_lists.with_mut(|lists| lists.push(ErrorMsgs::default()));
+}
+
+/// End the innermost message list, answering what is left in it.
+pub(crate) fn pop_msg_list() -> ErrorMsgs {
+    msg_lists.with_mut(Vec::pop).expect("a message list to end")
 }
 
 /// Throw what [`cause_errthrow`] collected as an error exception. With a
@@ -244,20 +245,25 @@ pub(crate) unsafe fn do_errthrow(cstack: *mut CondStack, cmdname: *mut c_char) {
         force_abort.set(true);
     }
 
-    // SAFETY: module contract.
     // Nothing to throw, or the conversion belongs to an outer
     // `do_one_cmd`.
-    if msg_list.get().is_null() || unsafe { *msg_list.get() }.is_null() {
+    let messages = msg_lists.with_mut(|lists| {
+        lists
+            .last_mut()
+            .filter(|list| !list.entries.is_empty())
+            .map(core::mem::take)
+    });
+    let Some(messages) = messages else {
         return;
-    }
-    if unsafe { throw_exception((*msg_list.get()).cast(), ET_ERROR, cmdname) }.is_err() {
-        unsafe { free_msglist(*msg_list.get()) };
+    };
+    // SAFETY: module contract; `cmdname` is null or NUL-terminated.
+    if unsafe { throw_exception(Thrown::Error(messages), cmdname) }.is_err() {
+        // The messages went with the failed throw.
     } else if !cstack.is_null() {
         unsafe { super::trycmd::do_throw(cstack) };
     } else {
         need_rethrow.set(true);
     }
-    unsafe { *msg_list.get() = ptr::null_mut() };
 }
 
 /// Replace the current exception by an interrupt exception, if an interrupt
@@ -277,66 +283,31 @@ pub(crate) unsafe fn do_intthrow(cstack: *mut CondStack) -> bool {
     // `current_exception`.
     if did_throw.get() {
         // An interrupt exception already being thrown stands.
-        if unsafe { (*current_exception.get()).type_0 } == ET_INTERRUPT {
+        if current_type() == Some(ET_INTERRUPT) {
             return false;
         }
         // Otherwise it replaces the user or error exception.
         discard_current_exception();
     }
-    if unsafe {
-        throw_exception(
-            c"Vim:Interrupt".as_ptr().cast_mut().cast(),
-            ET_INTERRUPT,
-            ptr::null_mut(),
-        )
-    }
-    .is_ok()
-    {
+    if unsafe { throw_exception(Thrown::Interrupt, ptr::null_mut()) }.is_ok() {
         unsafe { super::trycmd::do_throw(cstack) };
     }
     true
 }
 
-/// The string an exception is matched and reported by.
-///
-/// For an error exception this is built from the message list and prefixed
-/// with `Vim:` or `Vim(cmdname):`, and `should_free` is set. For the other
-/// two kinds it is `value` itself, unowned.
-///
-/// # Safety
-/// Module contract. `value` is a message list for [`ET_ERROR`] and a
-/// NUL-terminated string otherwise; `should_free` is writable.
-pub(crate) unsafe fn get_exception_string(
-    value: *mut c_void,
-    type_0: ExceptType,
-    cmdname: *mut c_char,
-    should_free: *mut bool,
-) -> *mut c_char {
-    // SAFETY: caller contract.
-    if type_0 != ET_ERROR {
-        unsafe { *should_free = false };
-        return value.cast();
-    }
-    unsafe { *should_free = true };
-
-    // SAFETY: caller contract -- an error's value is a message list whose
-    // `throw_msg` is NUL-terminated, and `cmdname` is null or a string.
-    let (message, command) = unsafe {
-        (
-            cstr::bytes_at((*value.cast::<MsgList>()).throw_msg),
-            cstr::bytes_at_or_empty(cmdname),
-        )
-    };
+/// The string an error exception is matched and reported by: the messages
+/// it was built from, prefixed with `Vim:` or `Vim(cmdname):`.
+pub(crate) fn error_exception_string(messages: &ErrorMsgs, cmdname: &[u8]) -> XString {
     let mut ret = XString::from_bytes(b"Vim");
-    if command.is_empty() {
+    if cmdname.is_empty() {
         ret.push_byte(b':');
     } else {
         ret.push_byte(b'(');
-        ret.push_bytes(command);
+        ret.push_bytes(cmdname);
         ret.push_bytes(b"):");
     }
-    ret.push_bytes(&exception_message(message));
-    ret.into_raw()
+    ret.push_bytes(&exception_message(messages.throw_msg()));
+    ret
 }
 
 /// The message as an exception value carries it: `message` itself, unless
@@ -384,76 +355,103 @@ fn error_number_at(rest: &[u8]) -> bool {
         && (colon(2) || digit(2) && (colon(3) || digit(3) && colon(4)))
 }
 
-/// Build the exception and make it the one being thrown. `value` is the
-/// string for a user or interrupt exception and a message list for an error
-/// one.
+/// What is being thrown.
+pub(crate) enum Thrown {
+    /// A `:throw`, with its value, which the exception takes over.
+    User(*mut c_char),
+    /// An error, with the messages that make its value.
+    Error(ErrorMsgs),
+    /// CTRL-C.
+    Interrupt,
+}
+
+/// The exception `self` names, as a view: its fields are ordinary reads
+/// and writes. It is valid until the exception is discarded.
+impl ExcId {
+    pub(crate) fn exception(self) -> Live<Exception> {
+        // SAFETY: the table owns the exception at a fixed address until it
+        // is discarded, which is the view's contract.
+        unsafe { Live::new(EXCEPTIONS.with(|table| table.address(self))) }
+    }
+}
+
+/// The kind of exception being thrown, if one is.
+fn current_type() -> Option<ExceptType> {
+    current_exception.get().map(|id| id.exception().type_0)
+}
+
+/// Build the exception and make it the one being thrown.
 ///
-/// Answers `Err` when out of memory or when a user exception tried to fake
-/// a `Vim` one.
+/// Answers `Err` when a user exception tried to fake a `Vim` one, having
+/// freed its value.
 ///
 /// # Safety
-/// Module contract, and `value` matches `type_0` as
-/// [`get_exception_string`] describes.
-pub(super) unsafe fn throw_exception(
-    value: *mut c_void,
-    type_0: ExceptType,
-    cmdname: *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: caller contract.
-    // Faking an interrupt or error exception as a user one is not
-    // allowed: `do_cmdline` treats the two differently when no active
-    // try block is found.
-    if type_0 == ET_USER {
-        let v = value.cast::<c_char>();
-        if unsafe { cstr::starts_with(v, b"Vim") }
-            && (unsafe { *v.add(3) } == NUL as c_char
-                || unsafe { *v.add(3) } == b':' as c_char
-                || unsafe { *v.add(3) } == b'(' as c_char)
-        {
-            emsg(c"E608: Cannot :throw exceptions with 'Vim' prefix");
-            current_exception.set(ptr::null_mut());
-            return Err(Failed);
+/// Module contract; a user value is an owned NUL-terminated string and
+/// `cmdname` is null or NUL-terminated.
+pub(super) unsafe fn throw_exception(thrown: Thrown, cmdname: *mut c_char) -> Result<(), Failed> {
+    let (type_0, value, messages) = match thrown {
+        Thrown::User(value) => {
+            // Faking an interrupt or error exception as a user one is not
+            // allowed: `do_cmdline` treats the two differently when no
+            // active try block is found.
+            // SAFETY: the caller's NUL-terminated value.
+            let text = unsafe { cstr::bytes_at(value) };
+            if text.starts_with(b"Vim") && matches!(text.get(3), None | Some(b':' | b'(')) {
+                emsg(c"E608: Cannot :throw exceptions with 'Vim' prefix");
+                current_exception.set(None);
+                unsafe { xfree(value.cast()) };
+                return Err(Failed);
+            }
+            (ET_USER, value, ErrorMsgs::default())
         }
-    }
-
-    let excp: *mut Exception = unsafe { xmalloc(size_of::<Exception>()) }.cast();
-    if type_0 == ET_ERROR {
-        // Keep the original messages; the value is prefixed below.
-        unsafe { (*excp).messages = value.cast() };
-    }
-
-    let mut should_free = false;
-    unsafe { (*excp).value = get_exception_string(value, type_0, cmdname, &raw mut should_free) };
-    if unsafe { (*excp).value }.is_null() && should_free {
-        unsafe { xfree(excp.cast()) };
-        suppress_errthrow.set(true);
-        emsg(message(e_outofmem));
-        current_exception.set(ptr::null_mut());
-        return Err(Failed);
-    }
-
-    unsafe { (*excp).type_0 = type_0 };
-    // An error exception throws from where the message was made, which
-    // is not where we are now.
-    let entry = value.cast::<MsgList>();
-    if type_0 == ET_ERROR && !unsafe { (*entry).sfile }.is_null() {
-        unsafe { (*excp).throw_name = (*entry).sfile };
-        unsafe { (*entry).sfile = ptr::null_mut() };
-        unsafe { (*excp).throw_lnum = (*entry).slnum };
-    } else {
-        unsafe { (*excp).throw_name = estack_sfile(ESTACK_NONE) };
-        if unsafe { (*excp).throw_name }.is_null() {
-            unsafe { (*excp).throw_name = xstrdup(c"".as_ptr()) };
+        Thrown::Error(messages) => {
+            // SAFETY: the caller's NUL-terminated command name, or null.
+            let cmdname = unsafe { cstr::bytes_at_or_empty(cmdname) };
+            let value = error_exception_string(&messages, cmdname).into_raw();
+            (ET_ERROR, value, messages)
         }
-        unsafe { (*excp).throw_lnum = sourcing_lnum() };
-    }
+        // A literal: never freed, see `discard_exception`.
+        Thrown::Interrupt => (
+            ET_INTERRUPT,
+            c"Vim:Interrupt".as_ptr().cast_mut(),
+            ErrorMsgs::default(),
+        ),
+    };
 
-    // The exception owns the stack trace it was thrown with.
-    unsafe { (*excp).stacktrace = stacktrace_create().map_or(ptr::null_mut(), ListRef::into_raw) };
+    // An error exception throws from where the message was made, which is
+    // not where we are now.
+    let mut messages = messages;
+    let head = messages.entries.first_mut();
+    let (throw_name, throw_lnum) = match head {
+        Some(head) if head.sfile.is_some() => {
+            let name = head.sfile.take().expect("checked");
+            (name.into_raw(), head.slnum)
+        }
+        _ => {
+            let name = estack_sfile(ESTACK_NONE);
+            let name = if name.is_null() {
+                // SAFETY: a literal.
+                unsafe { xstrdup(c"".as_ptr()) }
+            } else {
+                name
+            };
+            (name, sourcing_lnum())
+        }
+    };
+    let exception = Exception {
+        type_0,
+        value,
+        messages,
+        throw_name,
+        throw_lnum,
+        // The exception owns the stack trace it was thrown with.
+        stacktrace: stacktrace_create().map_or(ptr::null_mut(), ListRef::into_raw),
+    };
+    let (id, _) = EXCEPTIONS.with_mut(|table| table.insert((), exception));
 
-    unsafe { verbose_exception(c"Exception thrown: %s", (*excp).value) };
+    unsafe { verbose_exception(c"Exception thrown: %s", id.exception().value) };
 
-    current_exception.set(excp);
+    current_exception.set(Some(id));
     Ok(())
 }
 
@@ -496,51 +494,40 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
 /// exception whose catch clause ended normally is *finished*, anything else
 /// is *discarded*.
 ///
-/// # Safety
-/// Module contract; `excp` is owned and not on the caught stack.
-pub(super) unsafe fn discard_exception(excp: *mut Exception, was_finished: bool) {
-    if current_exception.get() == excp {
-        current_exception.set(ptr::null_mut());
-    }
-    if excp.is_null() {
-        // SAFETY: module contract.
-        internal_error(c"discard_exception()");
-        return;
+/// The caller has taken it off the caught stack, if it was there.
+pub(super) fn discard_exception(id: ExcId, was_finished: bool) {
+    if current_exception.get() == Some(id) {
+        current_exception.set(None);
     }
 
-    // SAFETY: caller contract.
     if p_verbose() >= 13 || debug_break_level.get() > 0 {
         // Upstream saves and restores `IObuff` around this, because the
         // report formatted through it and a caller may have been holding
         // a message there. Nothing shares a buffer here any more.
-        unsafe {
-            verbose_exception(
-                if was_finished {
-                    c"Exception finished: %s"
-                } else {
-                    c"Exception discarded: %s"
-                },
-                (*excp).value,
-            )
+        let wording = if was_finished {
+            c"Exception finished: %s"
+        } else {
+            c"Exception discarded: %s"
         };
+        // SAFETY: the exception's own NUL-terminated value.
+        unsafe { verbose_exception(wording, id.exception().value) };
     }
-    if unsafe { (*excp).type_0 } != ET_INTERRUPT {
+    let exception = EXCEPTIONS.with_mut(|table| table.remove(id));
+    if exception.type_0 != ET_INTERRUPT {
         // An interrupt exception's value is a string literal.
-        unsafe { xfree((*excp).value.cast()) };
+        // SAFETY: the exception's own allocation.
+        unsafe { xfree(exception.value.cast()) };
     }
-    if unsafe { (*excp).type_0 } == ET_ERROR {
-        unsafe { free_msglist((*excp).messages) };
-    }
-    unsafe { xfree((*excp).throw_name.cast()) };
-    unsafe { list_unref((*excp).stacktrace) };
-    unsafe { xfree(excp.cast()) };
+    // SAFETY: the exception's own allocation and stack trace reference.
+    unsafe { xfree(exception.throw_name.cast()) };
+    unsafe { list_unref(exception.stacktrace) };
+    // The messages go with the rest of it.
 }
 
 /// Discard the exception currently being thrown.
 pub(crate) fn discard_current_exception() {
-    if !current_exception.get().is_null() {
-        // SAFETY: module contract.
-        unsafe { discard_exception(current_exception.get(), false) };
+    if let Some(id) = current_exception.get() {
+        discard_exception(id, false);
     }
     // Everything reset here is saved and restored by
     // `exception_state_save`/`_restore`.
@@ -549,40 +536,41 @@ pub(crate) fn discard_current_exception() {
 }
 
 /// Point `v:exception`, `v:throwpoint` and `v:stacktrace` at `excp`, or
-/// clear all three when it is null.
-///
-/// # Safety
-/// Module contract; `excp`, when non-null, is a live exception.
-unsafe fn set_exception_vars(excp: *mut Exception) {
+/// clear all three when there is none.
+fn set_exception_vars(excp: Option<ExcId>) {
     // Where `v:throwpoint` is rendered; upstream shares `IObuff`.
     let mut throwpoint = [0 as c_char; IOSIZE as usize];
-    // SAFETY: caller contract.
-    if excp.is_null() {
+    let Some(id) = excp else {
+        // SAFETY: a null value clears the variable.
         unsafe { set_vim_var_string(Vv::Exception, ptr::null(), -1) };
         unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };
         set_vim_var_list(Vv::Stacktrace, None);
         return;
-    }
-    unsafe { set_vim_var_string(Vv::Exception, (*excp).value, -1) };
+    };
+    let excp = id.exception();
+    // SAFETY: the exception's own NUL-terminated value; the variable takes a
+    // copy.
+    unsafe { set_vim_var_string(Vv::Exception, excp.value, -1) };
     // SAFETY: the exception's own stack trace; `v:stacktrace` takes a
     // reference of its own.
-    unsafe { set_vim_var_list(Vv::Stacktrace, ListRef::retained((*excp).stacktrace)) };
-    if unsafe { *(*excp).throw_name } == NUL as c_char {
+    unsafe { set_vim_var_list(Vv::Stacktrace, ListRef::retained(excp.stacktrace)) };
+    // SAFETY: the exception's own NUL-terminated name.
+    if unsafe { *excp.throw_name } == NUL as c_char {
         // `throw_name` is unset for an exception from a typed command.
         unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };
         return;
     }
     let point = throwpoint.as_mut_ptr();
-    let len = if unsafe { (*excp).throw_lnum } == 0 {
-        unsafe { vim_snprintf_safelen!(point, IOSIZE as usize, c"%s".as_ptr(), (*excp).throw_name) }
+    let len = if excp.throw_lnum == 0 {
+        unsafe { vim_snprintf_safelen!(point, IOSIZE as usize, c"%s".as_ptr(), excp.throw_name) }
     } else {
         unsafe {
             vim_snprintf_safelen!(
                 point,
                 IOSIZE as usize,
                 c"%s, line %ld".as_ptr(),
-                (*excp).throw_name,
-                (*excp).throw_lnum as int64_t,
+                excp.throw_name,
+                excp.throw_lnum as int64_t,
             )
         }
     };
@@ -590,65 +578,55 @@ unsafe fn set_exception_vars(excp: *mut Exception) {
 }
 
 /// Push an exception onto the caught stack.
-///
-/// # Safety
-/// Module contract; `excp` is the exception just matched.
-pub(super) unsafe fn catch_exception(excp: *mut Exception) {
-    // SAFETY: caller contract.
-    unsafe { (*excp).caught = caught_stack.get() };
-    caught_stack.set(excp);
-    unsafe { set_exception_vars(excp) };
-    unsafe { verbose_exception(c"Exception caught: %s", (*excp).value) };
+pub(super) fn catch_exception(id: ExcId) {
+    caught_stack.with_mut(|stack| stack.push(id));
+    set_exception_vars(Some(id));
+    // SAFETY: the exception's own NUL-terminated value.
+    unsafe { verbose_exception(c"Exception caught: %s", id.exception().value) };
 }
 
 /// Pop `excp` off the caught stack and free it, restoring `v:exception` and
 /// friends to the exception below it.
-///
-/// # Safety
-/// Module contract; `excp` is the top of the caught stack.
-pub(super) unsafe fn finish_exception(excp: *mut Exception) {
-    // SAFETY: caller contract.
-    if excp != caught_stack.get() {
+pub(super) fn finish_exception(excp: Option<ExcId>) {
+    let top = caught_stack.with_mut(Vec::pop);
+    if excp != top {
         internal_error(c"finish_exception()");
     }
-    caught_stack.set(unsafe { (*caught_stack.get()).caught });
-    unsafe { set_exception_vars(caught_stack.get()) };
+    set_exception_vars(caught_stack.with(|stack| stack.last().copied()));
     // Discard it, but use the "finished" wording for 'verbose'.
-    unsafe { discard_exception(excp, true) };
+    match excp {
+        Some(id) => discard_exception(id, true),
+        None => internal_error(c"discard_exception()"),
+    }
 }
 
 /// Save the exception state, for a nested `do_cmdline` that must not see it.
-///
-/// # Safety
-/// Module contract; `estate` is writable.
-pub(crate) unsafe fn exception_state_save(estate: *mut ExceptionState) {
-    // SAFETY: caller contract.
-    unsafe { (*estate).estate_current_exception = current_exception.get() };
-    unsafe { (*estate).estate_did_throw = did_throw.get() };
-    unsafe { (*estate).estate_need_rethrow = need_rethrow.get() };
-    unsafe { (*estate).estate_trylevel = trylevel.get() };
-    unsafe { (*estate).estate_did_emsg = did_emsg.get() };
+pub(crate) fn exception_state_save() -> ExceptionState {
+    ExceptionState {
+        estate_current_exception: current_exception.get(),
+        estate_did_throw: did_throw.get(),
+        estate_need_rethrow: need_rethrow.get(),
+        estate_trylevel: trylevel.get(),
+        estate_did_emsg: did_emsg.get(),
+    }
 }
 
-/// Restore what [`exception_state_save`] stored, after handling anything
+/// Restore what [`exception_state_save`] answered, after handling anything
 /// thrown meanwhile.
-///
-/// # Safety
-/// Module contract; `estate` was filled by [`exception_state_save`].
-pub(crate) unsafe fn exception_state_restore(estate: *mut ExceptionState) {
+pub(crate) fn exception_state_restore(estate: &ExceptionState) {
     if did_throw.get() {
         handle_did_throw();
     }
-    current_exception.set(unsafe { (*estate).estate_current_exception });
-    did_throw.set(unsafe { (*estate).estate_did_throw });
-    need_rethrow.set(unsafe { (*estate).estate_need_rethrow });
-    trylevel.set(unsafe { (*estate).estate_trylevel });
-    did_emsg.set(unsafe { (*estate).estate_did_emsg });
+    current_exception.set(estate.estate_current_exception);
+    did_throw.set(estate.estate_did_throw);
+    need_rethrow.set(estate.estate_need_rethrow);
+    trylevel.set(estate.estate_trylevel);
+    did_emsg.set(estate.estate_did_emsg);
 }
 
 /// Forget the exception state entirely.
 pub(crate) fn exception_state_clear() {
-    current_exception.set(ptr::null_mut());
+    current_exception.set(None);
     did_throw.set(false);
     need_rethrow.set(false);
     trylevel.set(0);
@@ -657,9 +635,12 @@ pub(crate) fn exception_state_clear() {
 
 /// What [`report_pending`] is saying about the pending thing.
 #[derive(Clone, Copy)]
-enum PendingAction {
+pub(crate) enum PendingAction {
+    /// A finally clause made it pending.
     Made,
+    /// It is being resumed at the `:endtry`.
     Resumed,
+    /// It is being thrown away.
     Discarded,
 }
 
@@ -674,19 +655,23 @@ impl PendingAction {
     }
 }
 
-/// Report what a finally clause made pending, resumed or discarded.
-/// `value` is the return value for a pending `:return` and the exception for
-/// a pending throw.
+/// Report what a finally clause made pending, resumed or discarded, under
+/// 'verbose' >= 14 or while debugging. `value` is the return value for a
+/// pending `:return` and the exception for a pending throw.
 ///
 /// # Safety
-/// Module contract; `value` matches `pending`, and is non-null whenever
-/// `pending` carries [`CSTP_THROW`].
-unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_void) {
+/// Module contract; `value` matches `pending`: a `Pend::Return` value is null
+/// or a live typval, and `value` is an exception whenever `pending` carries
+/// [`CSTP_THROW`].
+pub(crate) unsafe fn report_pending(action: PendingAction, pending: c_int, value: Pend) {
+    if p_verbose() < 14 && debug_break_level.get() <= 0 {
+        return;
+    }
     // Where the "Exception made pending" text is built; upstream shares
     // `IObuff`, which the report it feeds writes again.
     let mut pending_msg = [0 as c_char; IOSIZE as usize];
     debug_assert!(
-        !value.is_null() || pending & CSTP_THROW == 0,
+        matches!(value, Pend::Exception(_)) || pending & CSTP_THROW == 0,
         "value || !(pending & CSTP_THROW)"
     );
     let mut mesg = action.message().as_ptr().cast_mut();
@@ -698,13 +683,21 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
         CSTP_BREAK => c":break".as_ptr().cast_mut(),
         CSTP_FINISH => c":finish".as_ptr().cast_mut(),
         // A ":return" producing a value; the text is allocated.
-        CSTP_RETURN => unsafe { get_return_cmd(value) },
+        CSTP_RETURN => unsafe {
+            get_return_cmd(match value {
+                Pend::Return(rettv) => rettv,
+                _ => ptr::null_mut(),
+            })
+        },
         _ if pending & CSTP_THROW != 0 => {
             // "%s made pending" becomes "Exception made pending: %s".
             let out = pending_msg.as_mut_ptr();
             unsafe { vim_snprintf!(out, IOSIZE as usize, mesg, c"Exception".as_ptr()) };
             mesg = unsafe { concat_str(out, c": %s".as_ptr()) };
-            unsafe { (*value.cast::<Exception>()).value }
+            match value {
+                Pend::Exception(id) => id.exception().value,
+                _ => unreachable!("a pending throw reports its exception"),
+            }
         }
         _ if pending & CSTP_ERROR != 0 && pending & CSTP_INTERRUPT != 0 => {
             c"Error and interrupt".as_ptr().cast_mut()
@@ -714,8 +707,12 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
         _ => c"Interrupt".as_ptr().cast_mut(),
     };
 
+    let quiet = debug_break_level.get() <= 0;
+    if quiet {
+        verbose_enter();
+    }
     // While debugging the messages have to be displayed.
-    let loud = (debug_break_level.get() > 0).then(Allow::messages);
+    let loud = (!quiet).then(Allow::messages);
     let no_prompt = Suppress::wait_return();
     // Always scroll up, don't overwrite.
     msg_scroll.set(1);
@@ -728,57 +725,13 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
     cmdline_row.set(msg_row.get());
     drop(no_prompt);
     drop(loud);
+    if quiet {
+        verbose_leave();
+    }
 
     if pending == CSTP_RETURN {
         unsafe { xfree(s.cast()) };
     } else if pending & CSTP_THROW != 0 {
         unsafe { xfree(mesg.cast()) };
     }
-}
-
-/// [`report_pending`] under 'verbose' >= 14 or while debugging, which is the
-/// only way any of the three wrappers below reaches it.
-///
-/// # Safety
-/// As [`report_pending`].
-unsafe fn report_if_verbose(action: PendingAction, pending: c_int, value: *mut c_void) {
-    if p_verbose() < 14 && debug_break_level.get() <= 0 {
-        return;
-    }
-    let quiet = debug_break_level.get() <= 0;
-    // SAFETY: caller contract.
-    if quiet {
-        verbose_enter();
-    }
-    unsafe { report_pending(action, pending, value) };
-    if quiet {
-        verbose_leave();
-    }
-}
-
-/// Report something a finally clause made pending.
-///
-/// # Safety
-/// As [`report_pending`].
-pub(crate) unsafe fn report_make_pending(pending: c_int, value: *mut c_void) {
-    // SAFETY: caller contract.
-    unsafe { report_if_verbose(PendingAction::Made, pending, value) }
-}
-
-/// Report something pending being resumed at the `:endtry`.
-///
-/// # Safety
-/// As [`report_pending`].
-pub(super) unsafe fn report_resume_pending(pending: c_int, value: *mut c_void) {
-    // SAFETY: caller contract.
-    unsafe { report_if_verbose(PendingAction::Resumed, pending, value) }
-}
-
-/// Report something pending being thrown away.
-///
-/// # Safety
-/// As [`report_pending`].
-pub(super) unsafe fn report_discard_pending(pending: c_int, value: *mut c_void) {
-    // SAFETY: caller contract.
-    unsafe { report_if_verbose(PendingAction::Discarded, pending, value) }
 }

@@ -148,11 +148,11 @@ use crate::types::{
     AcoSave, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod,
     CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
     CondStack, Dict, Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg,
-    ExArgt, Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
+    ExArgt, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab,
-    HistoryType, Integer, LineNr, Magic, MotionType, MsgList, Object, OpArg, OptInt, OptMagic,
-    OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
-    Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg, String_0, TryState, TypVal,
+    HistoryType, Integer, LineNr, Magic, MotionType, Object, OpArg, OptInt, OptMagic, OptSet,
+    OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Pos,
+    ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg, String_0, TryState, TypVal,
     UVarNumber, UndoLink, UndoObjectType, VarNumber, XpPrefix, size_t, time_t, uint8_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
@@ -514,15 +514,7 @@ pub(crate) const EXPAND_T_INIT: Expand = Expand {
 
 /// An all-zero [`TryState`], which is what the `TRY_WRAP` macro declares
 /// (uninitialised in the C; `try_enter` fills every field).
-pub(crate) const TRY_STATE_INIT: TryState = TryState {
-    current_exception: ::core::ptr::null_mut::<Exception>(),
-    private_msg_list: ::core::ptr::null_mut::<MsgList>(),
-    msg_list: ::core::ptr::null::<*const MsgList>(),
-    got_int: 0,
-    did_throw: false,
-    need_rethrow: 0,
-    did_emsg: 0,
-};
+pub(crate) const TRY_STATE_INIT: TryState = TryState::INIT;
 
 /// An all-zero [`SaveVEvent`], the out-parameter of `get_v_event`.
 /// C's `STATIC_CSTR_AS_OPTVAL`: a string option value borrowing a literal.

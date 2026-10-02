@@ -665,15 +665,7 @@ unsafe fn run_cmd(
     let save_msg_col = msg_col.get();
     let outer_capture = capture.then(capture_start);
 
-    let mut tstate = TryState {
-        current_exception: ptr::null_mut(),
-        private_msg_list: ptr::null_mut(),
-        msg_list: ptr::null(),
-        got_int: 0,
-        did_throw: false,
-        need_rethrow: 0,
-        did_emsg: 0,
-    };
+    let mut tstate = TryState::default();
     // SAFETY: `tstate` is paired with the `try_leave` below.
     unsafe { try_enter(&raw mut tstate) };
     // Captured output must not also reach the message grid.

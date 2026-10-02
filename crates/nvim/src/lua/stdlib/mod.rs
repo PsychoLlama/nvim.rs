@@ -30,12 +30,4 @@ pub(crate) use self::with::*;
 /// An all-zero [`TryState`], which [`try_enter`] fills.
 ///
 /// [`try_enter`]: crate::api::private::helpers::try_enter
-pub(crate) const TRY_STATE_INIT: TryState = TryState {
-    current_exception: ::core::ptr::null_mut(),
-    private_msg_list: ::core::ptr::null_mut(),
-    msg_list: ::core::ptr::null(),
-    got_int: 0,
-    did_throw: false,
-    need_rethrow: 0,
-    did_emsg: 0,
-};
+pub(crate) const TRY_STATE_INIT: TryState = TryState::INIT;
