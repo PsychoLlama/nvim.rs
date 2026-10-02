@@ -11,8 +11,10 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 use core::mem::ManuallyDrop;
 use core::{ptr, slice};
@@ -42,32 +44,34 @@ pub fn assert_error(message: &[u8]) {
     unsafe { (*get_vim_var_list(Vv::Errors)).push_string(text, len) };
 }
 
-/// The lvalue `:redir =>` is capturing into, its name (kept because the
-/// lvalue is re-resolved at the end), where its name ended, and the text
-/// collected so far.
-///
-/// A NULL `redir_lval` means no redirection is running; a NULL `redir_endp`
-/// means one is, but failed, so the teardown should only free.
-static redir_lval: GlobalCell<*mut LVal> = GlobalCell::new(ptr::null_mut());
+/// The name of the variable a running `:redir =>` captures into, `None`
+/// while none runs. The name, not the resolved lvalue, is what is kept: a
+/// Dict or List entry may move before the end, so [`var_redir_stop`] parses
+/// it again.
+static REDIR_TARGET: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// The text collected so far, without a terminator: the NUL goes on once, in
 /// [`var_redir_stop`], when the buffer has stopped growing.
 static redir_ga: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
-static redir_endp: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-static redir_varname: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
-/// Resolve the saved `:redir =>` name into the saved lvalue, answering where
-/// the name ended.
+/// Parse `target` into `lval`, answering where the name ended in `name` — a
+/// copy of `target` the caller keeps alive while it uses the answer.
 ///
-/// Both halves of the redirection parse the same name into the same lvalue,
-/// and `var_redir_stop` has to do it again because a Dict or List entry may
-/// have moved since the start.
-///
-/// # Safety
-/// `redir_varname` and `redir_lval` are the ones `var_redir_start` set.
-unsafe fn resolve_redir_lval() -> *mut c_char {
-    let (name, lv) = (redir_varname.get(), redir_lval.get());
-    // SAFETY: the caller's obligation.
-    unsafe { get_lval(name, None, lv, false, false, 0, FNE_CHECK_START) }
+/// The copy is per call because `get_lval` writes into the name and can run
+/// user code (an index expression), which may start or stop a redirection.
+fn resolve_redir_lval(name: &mut XString, lval: &mut LVal) -> *mut c_char {
+    // SAFETY: `name` is an owned, writable, NUL-terminated copy and `lval` a
+    // whole record; the result points into `name`.
+    unsafe {
+        get_lval(
+            name.as_mut_ptr(),
+            None,
+            lval,
+            false,
+            false,
+            0,
+            FNE_CHECK_START,
+        )
+    }
 }
 
 /// Start capturing messages into the variable `name`, appending to it rather
@@ -75,17 +79,18 @@ unsafe fn resolve_redir_lval() -> *mut c_char {
 ///
 /// # Safety
 /// `name` is a NUL-terminated string.
-pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Failed> {
+pub unsafe fn var_redir_start(name: *const c_char, append: bool) -> Result<(), Failed> {
+    // SAFETY: the caller's obligation.
+    let name = unsafe { CStr::from_ptr(name) };
     // Catch a bad name early.
-    if !eval_isnamec1(unsafe { *name } as c_int) {
+    if !eval_isnamec1(c_int::from(name.to_bytes().first().copied().unwrap_or(0))) {
         emsg_static(e_invarg);
         return Err(Failed);
     }
 
-    // The name is used again in `var_redir_stop`, so it is copied for as
+    // The name is parsed again in `var_redir_stop`, so it is kept for as
     // long as the redirection runs.
-    redir_varname.set(unsafe { xstrdup(name) });
-    redir_lval.set(unsafe { xcalloc(1, ::core::mem::size_of::<LVal>()) } as *mut LVal);
+    REDIR_TARGET.set(Some(XString::from_cstr(name)));
     // The output is collected here until redirection ends.
     redir_ga.with_mut(|text| {
         text.clear();
@@ -93,27 +98,23 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
     });
 
     // Parse the name, which may be a Dict or List entry.
-    // SAFETY: the copied name is NUL-terminated and the lvalue is the
-    // zeroed one just allocated, which lives until `var_redir_stop`.
-    redir_endp.set(unsafe { resolve_redir_lval() });
-    let endp = redir_endp.get();
+    let mut target = XString::from_cstr(name);
+    let mut lval = LVAL_INITIAL_VALUE;
+    let endp = resolve_redir_lval(&mut target, &mut lval);
+    // SAFETY: a non-null answer points into `target`, which is terminated.
     let trailing = (!endp.is_null()).then(|| unsafe { *endp });
-    if trailing.is_none_or(|c| c != NUL as c_char)
-        || unsafe { (*redir_lval.get()).ll_name }.is_null()
-    {
-        unsafe { clear_lval(redir_lval.get()) };
+    if trailing.is_none_or(|c| c != NUL as c_char) || lval.ll_name.is_null() {
+        // SAFETY: the record `get_lval` filled.
+        unsafe { clear_lval(&mut lval) };
         if trailing.is_some_and(|c| c != NUL as c_char) {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            // SAFETY: `endp` points into `target`, which is terminated.
             let endp = unsafe { c_str(endp) };
             semsg!("E488: Trailing characters: {endp}");
         } else {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let name = unsafe { c_str(name) };
+            let name = name.to_string_lossy();
             semsg!("E475: Invalid argument: {name}");
         }
-        // Store no value; only clean up.
-        redir_endp.set(ptr::null_mut());
-        var_redir_stop();
+        abandon_redir();
         return Err(Failed);
     }
 
@@ -124,16 +125,22 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
     // A literal, so the value must not release it.
     let mut tv = ManuallyDrop::new(TypVal::String(c"".as_ptr() as *mut c_char));
     let op = if append { c"." } else { c"=" };
-    let (lv, endp) = (redir_lval.get(), redir_endp.get());
-    // SAFETY: the lvalue just resolved, and a live local value.
-    unsafe { set_var_lval(lv, endp, &mut tv, true, false, op.as_ptr()) };
-    unsafe { clear_lval(redir_lval.get()) };
+    // SAFETY: the lvalue just resolved, whose name end points into
+    // `target`, and a live local value.
+    unsafe { set_var_lval(&mut lval, endp, &mut tv, true, false, op.as_ptr()) };
+    // SAFETY: the record `get_lval` filled.
+    unsafe { clear_lval(&mut lval) };
     if called_emsg.get() > called_emsg_before {
-        redir_endp.set(ptr::null_mut());
-        var_redir_stop();
+        abandon_redir();
         return Err(Failed);
     }
     Ok(())
+}
+
+/// End a redirection whose start failed: store nothing.
+fn abandon_redir() {
+    REDIR_TARGET.set(None);
+    redir_ga.take();
 }
 
 /// Append `value[0..value_len]` to what `:redir =>` is capturing, or the
@@ -152,7 +159,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
 /// # Safety
 /// `value` is readable for `value_len` bytes, or NUL-terminated.
 pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
-    if redir_lval.get().is_null() {
+    if REDIR_TARGET.with(Option::is_none) {
         return;
     }
     // SAFETY: the caller's `value` is readable for `value_len` bytes, or is
@@ -167,31 +174,29 @@ pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
 
 /// Stop capturing and store what was collected.
 pub fn var_redir_stop() {
-    if !redir_lval.get().is_null() {
-        // Collecting is over: take the buffer, so that a message emitted
-        // from inside `set_var_lval` appends to a fresh one instead of
-        // reallocating under the `typval` that borrows this one.
-        let mut text = redir_ga.take();
-        // Store the text, unless the start failed.
-        if !redir_endp.get().is_null() {
-            text.push(NUL as u8);
-            // The accumulated bytes stay this frame's; the store copies
-            // or appends them, so the value releases nothing.
-            let mut tv = ManuallyDrop::new(TypVal::String(text.as_mut_ptr().cast::<c_char>()));
-            // Resolve the name again: inside a Dict or List it may have
-            // moved since.
-            // SAFETY: as [`var_redir_start`] -- the saved name and lvalue.
-            redir_endp.set(unsafe { resolve_redir_lval() });
-            let (lv, endp) = (redir_lval.get(), redir_endp.get());
-            if !endp.is_null() && !unsafe { (*lv).ll_name }.is_null() {
-                unsafe { set_var_lval(lv, endp, &mut tv, false, false, c".".as_ptr()) };
-            }
-            unsafe { clear_lval(redir_lval.get()) };
-        }
-
-        unsafe { xfree(redir_lval.get().cast()) };
-        redir_lval.set(ptr::null_mut());
+    let Some(mut target) = REDIR_TARGET.with(|target| target.as_deref().map(XString::from_bytes))
+    else {
+        return;
+    };
+    // Collecting is over: take the buffer, so that a message emitted from
+    // inside `set_var_lval` appends to a fresh one instead of reallocating
+    // under the `typval` that borrows this one. The redirection stays on
+    // until the store is done, as upstream's does, and what it captures
+    // meanwhile is dropped below.
+    let mut text = redir_ga.take();
+    text.push(NUL as u8);
+    // The accumulated bytes stay this frame's; the store copies or appends
+    // them, so the value releases nothing.
+    let mut tv = ManuallyDrop::new(TypVal::String(text.as_mut_ptr().cast::<c_char>()));
+    // Resolve the name again: inside a Dict or List it may have moved since.
+    let mut lval = LVAL_INITIAL_VALUE;
+    let endp = resolve_redir_lval(&mut target, &mut lval);
+    if !endp.is_null() && !lval.ll_name.is_null() {
+        // SAFETY: the lvalue just resolved, whose name end points into
+        // `target`, and a live local value.
+        unsafe { set_var_lval(&mut lval, endp, &mut tv, false, false, c".".as_ptr()) };
     }
-    unsafe { xfree(redir_varname.get().cast()) };
-    redir_varname.set(ptr::null_mut());
+    // SAFETY: the record `get_lval` filled.
+    unsafe { clear_lval(&mut lval) };
+    abandon_redir();
 }

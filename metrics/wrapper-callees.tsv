@@ -1,13 +1,13 @@
 count	callee	no_raw	defs	def
-821	xfree	0	1	crates/nvim/src/memory/mod.rs
+819	xfree	0	1	crates/nvim/src/memory/mod.rs
 714	.add	0	3	
 440	bytes_at	0	1	crates/nvim/src/cstr.rs
 412	.offset	0	0	
-337	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
+336	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 319	at	0	3	
-282	CStr::from_ptr	0	2	
+283	CStr::from_ptr	0	2	
 224	.offset_from	0	0	
-173	xstrdup	0	1	crates/nvim/src/memory/mod.rs
+172	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 158	from_raw_parts	0	0	
@@ -52,10 +52,10 @@ count	callee	no_raw	defs	def
 34	Qi::new	0	67	
 33	os_isdir	0	1	crates/nvim/src/os/fs/mod.rs
 33	undo_write_bytes	0	1	crates/nvim/src/undo/file.rs
-33	xcalloc	0	1	crates/nvim/src/memory/mod.rs
 32	fclose	0	0	
 32	os_path_exists	0	1	crates/nvim/src/os/fs/dir.rs
 32	ptr2cells	0	1	crates/nvim/src/charset/display.rs
+32	xcalloc	0	1	crates/nvim/src/memory/mod.rs
 32	xstrlcat	0	1	crates/nvim/src/memory/mod.rs
 31	ga_init	0	1	crates/nvim/src/garray.rs
 31	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
@@ -1897,7 +1897,6 @@ count	callee	no_raw	defs	def
 2	resize	0	1	crates/nvim/src/vterm/screen/resize.rs
 2	resize_buffer	0	1	crates/nvim/src/vterm/screen/resize.rs
 2	resolve_option	0	1	crates/nvim/src/api/deprecated/options.rs
-2	resolve_redir_lval	0	1	crates/nvim/src/eval/vars/redir.rs
 2	restore_redobuff	0	1	crates/nvim/src/getchar/redo.rs
 2	reverse_text	0	1	crates/nvim/src/strings/mod.rs
 2	row_cells	0	1	crates/nvim/src/vterm/screen/mod.rs
