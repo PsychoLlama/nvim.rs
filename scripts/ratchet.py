@@ -942,7 +942,6 @@ CELL_PTR_KEEPERS = {
     "CELL": "`GlobalCell`'s own tests of `ptr`/`as_raw`; they must call them",
     "simple_diffline_change": "F-P22-37: the address goes into `diffline.changes` and is compared back",
     "highlight_attr": "the attribute table `hl_attr_active` holds; one site is its const initialiser",
-    "compl_xp": "the completion `Expand`, taken by pointer by `expand_cmdline`/`nlua_expand_pat` (S5/S6)",
     "SCRATCH": "not one cell — two unrelated statics (mark F-P22-52, quickfix) with one site each",
     "BT_STATE": "the backtracking engine's state; phase 22's S10 ruled it taken raw per match",
 }

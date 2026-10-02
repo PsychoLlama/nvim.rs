@@ -13,6 +13,7 @@
 use super::*;
 use crate::cmdexpand::Expanded;
 use crate::cstr;
+use crate::ex_getln::EXPAND_T_INIT;
 use crate::memory::XString;
 use crate::option::vars::{P_DICT, P_TSR, P_TSRFU};
 use crate::optionstr::{OptString, local_or_global};
@@ -480,38 +481,28 @@ pub(crate) fn get_next_filename_completion() {
     unsafe { tilde_replace(compl_pattern().data(), num_matches, matches) };
 
     if in_fuzzy_collect {
-        let mut fuzzy_indices = GARRAY_T_INIT;
-        unsafe { ga_init(&raw mut fuzzy_indices, size_of::<c_int>() as c_int, 10) };
-        compl_fuzzy_scores
-            .set(unsafe { xmalloc(size_of::<c_int>() * num_matches as size_t) } as *mut c_int);
-
+        // The score of every candidate that matched, by its index, and the
+        // indices that matched.
+        let mut scores = vec![FUZZY_SCORE_NONE; num_matches as usize];
+        let mut fuzzy_indices: Vec<c_int> = Vec::new();
         for i in 0..num_matches {
             // SAFETY: `matches` holds `num_matches` NUL-terminated strings,
             // and `leader` is NUL-terminated.
             let candidate = unsafe { cstr::at(*matches.offset(i as isize)) };
             let score = fuzzy_match_str(candidate, unsafe { cstr::at(leader) });
             if score != FUZZY_SCORE_NONE {
-                unsafe { ga_grow(&raw mut fuzzy_indices, 1) };
-                unsafe {
-                    *(fuzzy_indices.ga_data as *mut c_int).offset(fuzzy_indices.ga_len as isize) = i
-                };
-                fuzzy_indices.ga_len += 1;
-                unsafe { *compl_fuzzy_scores.get().offset(i as isize) = score };
+                fuzzy_indices.push(i);
+                scores[i as usize] = score;
             }
         }
 
-        if fuzzy_indices.ga_len > 0 {
-            let indices = fuzzy_indices.ga_data as *mut c_int;
-            // SAFETY: the array's `ga_len` filled indices.
-            sort_by_fuzzy_score(unsafe {
-                ::core::slice::from_raw_parts_mut(indices, fuzzy_indices.ga_len as usize)
-            });
-            for i in 0..fuzzy_indices.ga_len as isize {
-                let idx = unsafe { *indices.offset(i) } as isize;
-                let current_score = unsafe { *compl_fuzzy_scores.get().offset(idx) };
+        if !fuzzy_indices.is_empty() {
+            sort_by_fuzzy_score(&scores, &mut fuzzy_indices);
+            for (i, &idx) in fuzzy_indices.iter().enumerate() {
+                let current_score = scores[idx as usize];
                 if unsafe {
                     ins_compl_add(
-                        *matches.offset(idx),
+                        *matches.offset(idx as isize),
                         -1,
                         ptr::null_mut(),
                         ptr::null(),
@@ -537,8 +528,6 @@ pub(crate) fn get_next_filename_completion() {
             unsafe { free_wild(num_matches, matches) };
         }
 
-        unsafe { xfree(compl_fuzzy_scores.get().cast::<c_void>()) };
-        unsafe { ga_clear(&raw mut fuzzy_indices) };
         if compl_num_bests.get() > 0 && compl_get_longest.get() {
             fuzzy_longest_match();
         }
@@ -550,14 +539,11 @@ pub(crate) fn get_next_filename_completion() {
     }
 }
 
-/// Order `indices` (into `compl_fuzzy_scores`) best score first, the lower
-/// index first between equal scores. The order is total, so this is the
-/// permutation upstream's `qsort` produced.
-pub(crate) fn sort_by_fuzzy_score(indices: &mut [c_int]) {
-    let scores = compl_fuzzy_scores.get();
-    // SAFETY: every index is in range of `compl_fuzzy_scores` -- the
-    // caller's promise.
-    let score = |idx: c_int| unsafe { *scores.offset(idx as isize) };
+/// Order `indices` (into `scores`) best score first, the lower index first
+/// between equal scores. The order is total, so this is the permutation
+/// upstream's `qsort` produced.
+pub(crate) fn sort_by_fuzzy_score(scores: &[c_int], indices: &mut [c_int]) {
+    let score = |idx: c_int| scores[idx as usize];
     indices.sort_unstable_by(|&a, &b| score(b).cmp(&score(a)).then(a.cmp(&b)));
 }
 
@@ -566,16 +552,19 @@ pub(crate) fn get_next_cmdline_completion() {
     let mut matches: *mut *mut c_char = ptr::null_mut();
     let mut num_matches = 0;
     let (pattern_data, pattern_len) = compl_pattern().parts();
-    if unsafe {
+    // Moved out for the expansion, which can run a user completion function.
+    let mut xp = compl_xp.take().unwrap_or_else(|| Box::new(EXPAND_T_INIT));
+    let expanded = unsafe {
         expand_cmdline(
-            compl_xp.ptr(),
+            &mut *xp,
             pattern_data,
             pattern_len as c_int,
             &raw mut num_matches,
             &raw mut matches,
         )
-    } == Expanded::Ok
-    {
+    };
+    compl_xp.set(Some(xp));
+    if expanded == Expanded::Ok {
         unsafe { ins_compl_add_matches(num_matches, matches, 0) };
     }
 }

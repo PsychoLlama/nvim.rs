@@ -11,6 +11,7 @@
 use super::*;
 use crate::charset::skip;
 use crate::eval::typval::CallFrame;
+use crate::ex_getln::EXPAND_T_INIT;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::memline::Lines;
@@ -204,9 +205,10 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
 
 /// The pattern, column and length for command-line completion.
 pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
-    // The expansion context outlives no call here, but `set_cmd_context`
-    // and `nlua_expand_pat` both want it by pointer, so it is taken once.
-    let expand = compl_xp.ptr();
+    // The expansion context is kept for `get_next_cmdline_completion`, and
+    // moved out for the length of this call: `nlua_expand_pat` runs Lua.
+    let mut xp = compl_xp.take().unwrap_or_else(|| Box::new(EXPAND_T_INIT));
+    let expand: *mut Expand = &mut *xp;
     let pattern = {
         let mut lines = Lines::current();
         let line = lines.line(Win::current().w_cursor.lnum);
@@ -239,6 +241,7 @@ pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
         compl_col.set(off as ColNr);
     }
     compl_length.set(curs_col - compl_col.get());
+    compl_xp.set(Some(xp));
     Ok(())
 }
 

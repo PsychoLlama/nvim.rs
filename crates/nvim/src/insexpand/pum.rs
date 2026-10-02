@@ -30,17 +30,13 @@ use core::slice;
 /// leader, sorts what survives and flattens it into a `PumItem` array;
 /// [`ins_compl_show_pum`] lends that array to `pum_display`, and
 /// `pum_undisplay` gives the borrow back. Upstream keeps it as a bare
-/// `PumItem *` with `compl_match_arraysize` beside it, `xcalloc`'d in one
-/// function and `xfree`'d in three others, with "is the menu up?" spelled as
-/// a null check on the pointer.
+/// `PumItem *` with `compl_match_arraysize` beside it, with "is the menu
+/// up?" spelled as a null check on the pointer; here it is a `Vec` in
+/// [`ComplState`], empty for that null.
 ///
-/// `ComplMatchArray` is the one owner of that allocation: a boxed slice
-/// behind the two cells, handed out either as a safe `&[PumItem]` or -- for
-/// `pum_display` alone, which wants the same C-shaped pair the external UI
-/// protocol does -- as a raw address. The *strings* inside each item stay
-/// borrowed from the `ComplItem` they were read out of, so this owns the spine
-/// and nothing else; the menu must come down before the match list is freed,
-/// exactly as upstream required.
+/// The *strings* inside each item stay borrowed from the match they were
+/// read out of, so this owns the spine and nothing else; the menu must come
+/// down before the match list is freed, exactly as upstream required.
 #[derive(Clone, Copy)]
 pub(crate) struct ComplMatchArray(());
 
@@ -54,56 +50,34 @@ impl ComplMatchArray {
     /// `compl_match_array == NULL`, which is how the completion asks whether
     /// a menu is up.
     pub(crate) fn is_unset(self) -> bool {
-        COMPL_MATCH_ARRAY.get().is_null()
+        COMPL_MATCH_ARRAY.with(Vec::is_empty)
     }
 
     /// The number of items.
     pub(crate) fn len(self) -> c_int {
-        COMPL_MATCH_ARRAYSIZE.get()
+        COMPL_MATCH_ARRAY.with(Vec::len) as c_int
     }
 
-    /// The items, empty while the menu is down.
-    pub(crate) fn items(self) -> &'static [PumItem] {
-        let array = COMPL_MATCH_ARRAY.get();
-        if array.is_null() {
-            return &[];
-        }
-        // SAFETY: `set` stored a boxed slice of exactly this length and only
-        // `clear` drops it, after `pum_undisplay` has taken the menu down.
-        unsafe { ::core::slice::from_raw_parts(array, COMPL_MATCH_ARRAYSIZE.get() as usize) }
+    /// The index of the first item `pred` accepts.
+    pub(crate) fn position(self, pred: impl FnMut(&PumItem) -> bool) -> Option<usize> {
+        COMPL_MATCH_ARRAY.with(|items| items.iter().position(pred))
     }
 
-    /// The address `pum_display` borrows, null while the menu is down.
+    /// The address `pum_display` borrows. It stays put until the array is
+    /// replaced or cleared, which `pum_undisplay` comes before.
     pub(crate) fn as_mut_ptr(self) -> *mut PumItem {
-        COMPL_MATCH_ARRAY.get()
+        COMPL_MATCH_ARRAY.with_mut(Vec::as_mut_ptr)
     }
 
     /// Take `items` as the new array, dropping whatever was there. An empty
-    /// `items` leaves the array unset: a zero-length boxed slice is a
-    /// *dangling* pointer, not a null one, and `is_unset` is the null check
-    /// upstream's callers do.
+    /// `items` leaves the array unset.
     pub(crate) fn set(self, items: Vec<PumItem>) {
-        self.clear();
-        if items.is_empty() {
-            return;
-        }
-        let len = items.len() as c_int;
-        let array = Box::into_raw(items.into_boxed_slice());
-        COMPL_MATCH_ARRAY.set(array.cast::<PumItem>());
-        COMPL_MATCH_ARRAYSIZE.set(len);
+        COMPL_MATCH_ARRAY.set(items);
     }
 
     /// Drop the array. The menu must already be down.
     pub(crate) fn clear(self) {
-        let array = COMPL_MATCH_ARRAY.get();
-        let len = COMPL_MATCH_ARRAYSIZE.replace(0) as usize;
-        COMPL_MATCH_ARRAY.set(ptr::null_mut());
-        if array.is_null() {
-            return;
-        }
-        // SAFETY: the allocation is this owner's own boxed slice, of exactly
-        // `len` items; the strings inside it belong to the match list.
-        drop(unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(array, len)) });
+        COMPL_MATCH_ARRAY.set(Vec::new());
     }
 }
 
@@ -182,8 +156,7 @@ pub(crate) fn pum_enough_matches() -> bool {
 /// Fire `CompleteChanged` with `v:event.completed_item` set to match `cur`
 /// (or to an empty dict when nothing is selected).
 pub(crate) fn trigger_complete_changed_event(cur: c_int) {
-    static recursive: GlobalCell<bool> = GlobalCell::new(false);
-    if recursive.get() {
+    if complete_changed_busy.get() {
         return;
     }
 
@@ -209,7 +182,7 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
         (*v_event).set_keys_readonly();
     }
 
-    recursive.set(true);
+    complete_changed_busy.set(true);
     let locked = Lock::text();
 
     unsafe {
@@ -222,7 +195,7 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
         );
     }
     drop(locked);
-    recursive.set(false);
+    complete_changed_busy.set(false);
 
     // SAFETY: the pair of `get_v_event`, with the same saved slot.
     unsafe { restore_v_event(v_event, &raw mut save_v_event) };
@@ -363,7 +336,7 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
     let mut cur = -1;
 
     let match_count: *mut c_int = if is_cpt_completion {
-        let rows = cpt_sources().rows().len() as size_t;
+        let rows = cpt_sources().len() as size_t;
         // SAFETY: `xcalloc` answers a zeroed `c_int` per source, or aborts.
         unsafe { xcalloc(rows, size_of::<c_int>()) as *mut c_int }
     } else {
@@ -531,12 +504,11 @@ pub fn ins_compl_show_pum() {
         cur = ins_compl_build_pum();
     } else if let Some(shown) = shown_match() {
         // The menu already exists; only the current item has to be found.
-        for (i, item) in compl_match_array().items().iter().enumerate() {
-            let text = item.pum_text;
-            if text == shown.cp_str.data() || text == shown.cp_text[CPT_ABBR as usize] {
-                cur = i as c_int;
-                break;
-            }
+        let (text, abbr) = (shown.cp_str.data(), shown.cp_text[CPT_ABBR as usize]);
+        if let Some(i) =
+            compl_match_array().position(|item| item.pum_text == text || item.pum_text == abbr)
+        {
+            cur = i as c_int;
         }
     }
 

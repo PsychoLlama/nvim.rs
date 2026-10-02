@@ -566,8 +566,6 @@ pub(crate) unsafe fn ins_compl_fix_redo_buf_for_leader(ptr_arg: *mut c_char) {
 /// is true when called from `complete_check()`, where `compl_curr_match` must
 /// not be set.
 pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
-    static count: GlobalCell<c_int> = GlobalCell::new(0);
-
     // Don't check when reading keys from a script, :normal or feedkeys().
     // That would break the test scripts.  But do check for keys when
     // called from complete_check().
@@ -576,11 +574,11 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     }
 
     // Only do this at regular intervals.
-    count.set(count.get() + 1);
-    if count.get() < frequency {
+    check_keys_count.set(check_keys_count.get() + 1);
+    if check_keys_count.get() < frequency {
         return;
     }
-    count.set(0);
+    check_keys_count.set(0);
 
     // Check for a typed key.  Do use mappings, otherwise
     // vim_is_ctrl_x_key() can't do its work correctly.

@@ -95,9 +95,9 @@ impl CompleteFuncCb {
 /// This is the cached copy `:set complete=` leaves behind so a buffer that
 /// has never had `:setlocal complete=` can be given the same array; the
 /// live one a completion reads is always `curbuf`'s `b_p_cpt_cb`. Upstream
-/// keeps it as a `Callback *` with `cpt_cb_count` beside it and passes
-/// *both cells' addresses* to `copy_cpt_callbacks` as out-parameters, which
-/// is the only reason those two `.ptr()`s existed.
+/// keeps it as a `Callback *` with `cpt_cb_count` beside it; here it is a
+/// `Vec` in [`ComplState`], and a `Callback` owns what it names without a
+/// destructor, so replacing the cache frees the old slots by hand.
 #[derive(Clone, Copy)]
 pub(crate) struct CptCallbacks(());
 
@@ -107,14 +107,10 @@ pub(crate) fn cpt_cb() -> CptCallbacks {
 }
 
 impl CptCallbacks {
-    /// The array, null when `'complete'` has never been set globally.
-    pub(crate) fn slots(self) -> *mut Callback {
-        CPT_CB.get()
-    }
-
-    /// The number of slots.
+    /// The number of slots; zero when `'complete'` has never been set
+    /// globally.
     pub(crate) fn count(self) -> c_int {
-        CPT_CB_COUNT.get()
+        CPT_CB.with(Vec::len) as c_int
     }
 
     /// Replace the cached array with a copy of `src`'s `count` callbacks.
@@ -123,13 +119,54 @@ impl CptCallbacks {
     /// # Safety
     /// `src` must hold `count` live callbacks.
     pub(crate) unsafe fn replace_from(self, src: *mut Callback, count: c_int) {
-        let mut slots = CPT_CB.get();
-        let mut slot_count = CPT_CB_COUNT.get();
-        // SAFETY: the caller's promise; the out-parameters are locals, so
-        // nothing observes the cache half-written.
-        unsafe { copy_cpt_callbacks(&raw mut slots, &raw mut slot_count, src, count) };
-        CPT_CB.set(slots);
-        CPT_CB_COUNT.set(slot_count);
+        if count == 0 {
+            return;
+        }
+        let copy = |i: usize| {
+            let mut slot = Callback::None;
+            // SAFETY: the caller's `count` live callbacks.
+            unsafe {
+                let from = src.add(i);
+                if (*from).is_set() {
+                    callback_copy(&raw mut slot, from);
+                }
+            }
+            slot
+        };
+        let fresh: Vec<Callback> = (0..count as usize).map(copy).collect();
+        for mut old in CPT_CB.replace(fresh) {
+            // SAFETY: a slot of the old cache, which nothing else holds.
+            unsafe { callback_free(&raw mut old) };
+        }
+    }
+
+    /// Copy the cache into `buffer`'s array, freeing what was there.
+    pub(crate) fn copy_to_buffer(self, buffer: Buf) {
+        let raw = buffer.raw();
+        CPT_CB.with_mut(|slots| {
+            let count = slots.len() as c_int;
+            // SAFETY: a live buffer owns its callback array and count; the
+            // two fields are addressed from its raw pointer rather than
+            // through `DerefMut`, so taking the second does not invalidate
+            // the first; the cache's own slots are only read.
+            unsafe {
+                let (dst, dst_count) = (&raw mut (*raw).b_p_cpt_cb, &raw mut (*raw).b_p_cpt_count);
+                copy_cpt_callbacks(dst, dst_count, slots.as_mut_ptr(), count);
+            }
+        });
+    }
+
+    /// Mark what the cache references with `copy_id`. Answers whether to
+    /// abort.
+    pub(crate) fn set_ref(self, copy_id: c_int) -> bool {
+        CPT_CB.with_mut(|slots| {
+            // SAFETY: the cache's own slots; the two nulls say there is no
+            // containing list or dict to mark.
+            let mark = |slot: &mut Callback| unsafe {
+                set_ref_in_callback(slot, copy_id, ptr::null_mut(), ptr::null_mut())
+            };
+            slots.iter_mut().any(mark)
+        })
     }
 }
 
@@ -138,18 +175,8 @@ impl CptCallbacks {
 ///
 /// Upstream keeps this as a `CptSource *` with a hand-rolled
 /// `cpt_sources_count` beside it and `cpt_sources_index` as a third global,
-/// `xcalloc`'d by `setup_cpt_sources` and `xfree`'d by `cpt_sources_clear`;
-/// eleven sites reached a row by writing `(*cpt_sources_array.ptr()).offset(i)`
-/// and dereferencing, with the bounds carried in the reader's head.
-///
-/// `CptSources` is the one owner, in `ComplStr`'s shape: it names the cells
-/// rather than pointing into them, so it is `Copy` and forms no reference
-/// into a global. The rows are a boxed slice; `set_rows` installs the
-/// pointer and the count *together* (upstream published the array first and
-/// the count last, so the two disagreed for the length of the parse loop),
-/// and every row is read out by value or written through [`update`].
-///
-/// [`update`]: CptSources::update
+/// `xcalloc`'d by `setup_cpt_sources` and `xfree`'d by `cpt_sources_clear`.
+/// Here the rows are a `Vec` in [`ComplState`], empty for upstream's NULL.
 ///
 /// Rows are addressed by index rather than by a pointer held across a call,
 /// which matters: `prepare_cpt_compl_funcs` and `cpt_compl_refresh` write a
@@ -171,25 +198,19 @@ impl CptSources {
     /// `cpt_sources_array == NULL`, which is how the completion asks whether
     /// it is running a `'complete'`-driven scan.
     pub(crate) fn is_unset(self) -> bool {
-        CPT_SOURCES.get().is_null()
+        CPT_SOURCES.with(Vec::is_empty)
     }
 
-    /// The rows, empty while [`is_unset`](Self::is_unset).
-    pub(crate) fn rows(self) -> &'static [CptSource] {
-        let rows = CPT_SOURCES.get();
-        if rows.is_null() {
-            return &[];
-        }
-        // SAFETY: `set_rows` stored a boxed slice of exactly this length and
-        // only `clear` drops it.
-        unsafe { ::core::slice::from_raw_parts(rows, CPT_SOURCES_COUNT.get() as usize) }
+    /// The number of rows.
+    pub(crate) fn len(self) -> usize {
+        CPT_SOURCES.with(Vec::len)
     }
 
     /// Row `idx` by value, or the zeroed row when `idx` is out of range.
     pub(crate) fn row(self, idx: c_int) -> CptSource {
-        usize::try_from(idx)
-            .ok()
-            .and_then(|idx| self.rows().get(idx).copied())
+        let idx = usize::try_from(idx).ok();
+        CPT_SOURCES
+            .with(|rows| idx.and_then(|idx| rows.get(idx).copied()))
             .unwrap_or(CPT_SOURCE_INIT)
     }
 
@@ -198,39 +219,29 @@ impl CptSources {
         self.row(self.index())
     }
 
+    /// Whether any source has `refresh` set to `always`.
+    pub(crate) fn any_refresh_always(self) -> bool {
+        CPT_SOURCES.with(|rows| rows.iter().any(|row| row.cs_refresh_always))
+    }
+
     /// Change row `idx` in place; out of range does nothing.
     pub(crate) fn update(self, idx: c_int, f: impl FnOnce(&mut CptSource)) {
-        let rows = CPT_SOURCES.get();
         let Ok(idx) = usize::try_from(idx) else {
             return;
         };
-        if rows.is_null() || idx >= CPT_SOURCES_COUNT.get() as usize {
-            return;
-        }
-        // SAFETY: `idx` is in range of the boxed slice `set_rows` stored, and
-        // `f` only writes fields of the row.
-        f(unsafe { &mut *rows.add(idx) });
+        CPT_SOURCES.with_mut(|rows| rows.get_mut(idx).map(f));
     }
 
     /// Take `rows` as the new state, dropping whatever was there. The index
-    /// is left alone: the caller sets it when the scan starts. Empty `rows`
-    /// leave the state unset -- a zero-length boxed slice is a *dangling*
-    /// pointer, not a null one, and `is_unset` is the null check upstream's
-    /// callers do.
+    /// is left alone: the caller sets it when the scan starts.
     pub(crate) fn set_rows(self, rows: Vec<CptSource>) {
-        self.free_rows();
-        if rows.is_empty() {
-            return;
-        }
-        let count = rows.len() as c_int;
-        CPT_SOURCES.set(Box::into_raw(rows.into_boxed_slice()).cast::<CptSource>());
-        CPT_SOURCES_COUNT.set(count);
+        CPT_SOURCES.set(rows);
     }
 
     /// Drop the rows and forget where the scan was — C's
     /// `cpt_sources_clear()`.
     pub(crate) fn clear(self) {
-        self.free_rows();
+        CPT_SOURCES.set(Vec::new());
         CPT_SOURCES_INDEX.set(-1);
     }
 
@@ -243,18 +254,6 @@ impl CptSources {
     /// Point the scan at entry `idx`.
     pub(crate) fn set_index(self, idx: c_int) {
         CPT_SOURCES_INDEX.set(idx);
-    }
-
-    fn free_rows(self) {
-        let rows = CPT_SOURCES.get();
-        let count = CPT_SOURCES_COUNT.replace(0) as usize;
-        CPT_SOURCES.set(ptr::null_mut());
-        if rows.is_null() {
-            return;
-        }
-        // SAFETY: the allocation is this owner's own boxed slice, of exactly
-        // `count` rows, and `CptSource` owns nothing.
-        drop(unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(rows, count)) });
     }
 }
 
@@ -425,17 +424,7 @@ pub fn set_buflocal_cpt_callbacks(buffer: Buf) {
     if cpt_cb().count() == 0 {
         return;
     }
-    // SAFETY: a live buffer owns its callback array, and the cache hands back
-    // its own slots.
-    let raw = buffer.raw();
-    let (slots, count) = (cpt_cb().slots(), cpt_cb().count());
-    // SAFETY: the two fields are addressed from the buffer's raw pointer
-    // rather than through `DerefMut`, so taking the second does not
-    // invalidate the first, and the cache hands back its own slots.
-    unsafe {
-        let (dst, dst_count) = (&raw mut (*raw).b_p_cpt_cb, &raw mut (*raw).b_p_cpt_count);
-        copy_cpt_callbacks(dst, dst_count, slots, count);
-    };
+    cpt_cb().copy_to_buffer(buffer);
 }
 
 /// Parse `'complete'` and (re)build the `F{func}` callbacks; entries other
@@ -554,8 +543,7 @@ pub fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
     let mut abort = cfu_cb().set_ref(copy_id);
     abort = abort || ofu_cb().set_ref(copy_id);
     abort = abort || tsrfu_cb().set_ref(copy_id);
-    abort =
-        abort || unsafe { set_ref_in_cpt_callbacks(cpt_cb().slots(), cpt_cb().count(), copy_id) };
+    abort = abort || cpt_cb().set_ref(copy_id);
     abort
 }
 
@@ -759,7 +747,7 @@ pub(crate) fn prepare_cpt_compl_funcs() {
 /// Advance `cpt_sources_index` by one, or report E684 and fail.
 pub(crate) fn advance_cpt_sources_index_safe() -> Result<(), Failed> {
     let idx = cpt_sources().index();
-    if idx >= 0 && idx < cpt_sources().rows().len() as c_int - 1 {
+    if idx >= 0 && idx < cpt_sources().len() as c_int - 1 {
         cpt_sources().set_index(idx + 1);
         return Ok(());
     }
@@ -808,7 +796,7 @@ pub(crate) fn setup_cpt_sources() {
 
 /// Whether any completion source has `refresh` set to `always`.
 pub(crate) fn is_cpt_func_refresh_always() -> bool {
-    cpt_sources().rows().iter().any(|s| s.cs_refresh_always)
+    cpt_sources().any_refresh_always()
 }
 
 /// Collect matches through `cb` and record its `refresh:always` flag.

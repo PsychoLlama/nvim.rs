@@ -169,9 +169,7 @@ fn sort_nearest() {
 }
 
 fn order_by_fuzzy_score(scores: &mut [c_int], indices: &mut [c_int]) {
-    compl_fuzzy_scores.set(scores.as_mut_ptr());
-    sort_by_fuzzy_score(indices);
-    compl_fuzzy_scores.set(ptr::null_mut());
+    sort_by_fuzzy_score(scores, indices);
 }
 
 /// The ring is closed: the tail links to the head and back.

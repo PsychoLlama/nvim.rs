@@ -350,11 +350,10 @@ pub(crate) unsafe fn ins_compl_files(
 /// Safe: [`Buf`] is the live buffer the walk starts from, and the window it
 /// remembers between calls is vetted below rather than trusted.
 pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
-    // This outlives the call, and a completion runs user functions and Lua in
-    // between, so it stays a handle that `win_valid` vets -- a `Win` would
-    // be promising a liveness nothing here can keep.
-    static wp: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-
+    // `next_buf_window` outlives the call, and a completion runs user
+    // functions and Lua in between, so it stays a handle that `win_valid`
+    // vets -- a `Win` would be promising a liveness nothing here can keep.
+    let wp = next_buf_window;
     if flag == 'w' as c_int {
         // Just windows.
         if buffer.raw() == Buf::current_raw() || !wp.get().is_some_and(win_valid) {

@@ -50,13 +50,12 @@ use crate::ex_getln::tilde_replace;
 use crate::extmark::{extmark_apply_undo, extmark_splice_delete};
 use crate::fileio::vim_fgets;
 use crate::fuzzy::fuzzy_match_str;
-use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::getchar::state::{KeyTyped, got_int, test_disable_char_avail};
 use crate::getchar::{
     append_to_redobuff_char, append_to_redobuff_literally, char_avail, safe_vgetc, using_script,
     vgetc, vpeekc, vpeekc_any, vungetc,
 };
-use crate::global_cell::GlobalCell;
+use crate::global_cell::{GlobalCell, state_record};
 use crate::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name2attr};
 use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
@@ -117,10 +116,9 @@ use crate::tag::find_tags;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
-    BackslashEscape, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand,
-    ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos,
-    PumItem, RegMatch, SaveVEvent, ScriptCtx, String_0, TypVal, VarNumber, Vv, XpPrefix,
-    extmark_undo_vec_t, ptrdiff_t, size_t, uint8_t, uint64_t,
+    BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, ExtmarkOp, HashTab,
+    LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos, PumItem, RegMatch, SaveVEvent, String_0, TypVal,
+    VarNumber, Vv, XpPrefix, extmark_undo_vec_t, ptrdiff_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -258,14 +256,6 @@ pub const INS_COMPL_CPT_OK: ::core::ffi::c_int = 1;
 pub const INS_COMPL_CPT_END: ::core::ffi::c_int = 3;
 pub const CTRL_X_LOCAL_MSG: ::core::ffi::c_int = 15;
 pub const CTRL_X_FINISHED: ::core::ffi::c_int = 8;
-/// A zeroed `GArray`, which `ga_init` then fills in.
-pub(crate) const GARRAY_T_INIT: GArray = GArray {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: ptr::null_mut(),
-};
 /// A zeroed `InsComplNextState`: C's `CLEAR_FIELD(st)`.
 pub(crate) const INS_COMPL_NEXT_STATE_INIT: InsComplNextState = InsComplNextState {
     cpt: CptScan::EMPTY,
@@ -383,7 +373,7 @@ pub(crate) fn ctrl_x_msg(mode: c_int) -> Option<&'static CStr> {
 /// stay valid until the next [`set`](ComplStr::set) or
 /// [`replace`](ComplStr::replace), exactly as upstream's did.
 #[derive(Clone, Copy)]
-pub(crate) struct ComplStr(&'static GlobalCell<String_0>);
+pub(crate) struct ComplStr(ComplField<String_0>);
 
 impl ComplStr {
     /// The bytes, or null while the string is unset.
@@ -479,31 +469,31 @@ impl ComplStr {
 
 /// What the current completion searches for.
 pub(crate) fn compl_pattern() -> ComplStr {
-    ComplStr(&COMPL_PATTERN)
+    ComplStr(COMPL_PATTERN)
 }
 
 /// The `'complete'` source's own pattern, when its startcol differs from
 /// `compl_col`.
 pub(crate) fn cpt_compl_pattern() -> ComplStr {
-    ComplStr(&CPT_COMPL_PATTERN)
+    ComplStr(CPT_COMPL_PATTERN)
 }
 
 /// What the user has typed since the completion started, which filters the
 /// matches. Unset until the first `ins_compl_addleader`.
 pub(crate) fn compl_leader() -> ComplStr {
-    ComplStr(&COMPL_LEADER)
+    ComplStr(COMPL_LEADER)
 }
 
 /// The text that was under the cursor when the completion started, and which
 /// CTRL-E puts back.
 pub(crate) fn compl_orig_text() -> ComplStr {
-    ComplStr(&COMPL_ORIG_TEXT)
+    ComplStr(COMPL_ORIG_TEXT)
 }
 
 /// [`compl_leader`] with the text a source's earlier startcol covers
 /// prepended; the cache behind [`get_leader_for_startcol`].
 pub(crate) fn adjusted_leader() -> ComplStr {
-    ComplStr(&ADJUSTED_LEADER)
+    ComplStr(ADJUSTED_LEADER)
 }
 
 /// C's `e_hitend`.
@@ -563,106 +553,131 @@ pub(crate) fn matches_from(start: Option<Cm>) -> impl Iterator<Item = Cm> {
     })
 }
 
-static compl_num_bests: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_enter_selects: GlobalCell<bool> = GlobalCell::new(false);
-static COMPL_LEADER: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-static ADJUSTED_LEADER: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-static compl_get_longest: GlobalCell<bool> = GlobalCell::new(false);
-static compl_used_match: GlobalCell<bool> = GlobalCell::new(false);
-static compl_was_interrupted: GlobalCell<bool> = GlobalCell::new(false);
-static compl_interrupted: GlobalCell<bool> = GlobalCell::new(false);
-static compl_restarting: GlobalCell<bool> = GlobalCell::new(false);
-static compl_started: GlobalCell<bool> = GlobalCell::new(false);
-static ctrl_x_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(CTRL_X_NORMAL);
-static compl_matches: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static COMPL_PATTERN: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-static CPT_COMPL_PATTERN: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-static compl_direction: GlobalCell<Direction> = GlobalCell::new(FORWARD);
-static compl_shows_dir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
-static compl_pending: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_startpos: GlobalCell<Pos> = GlobalCell::new(POS_T_INIT);
-static compl_length: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
-static compl_col: GlobalCell<ColNr> = GlobalCell::new(0 as ColNr);
-static compl_ins_end_col: GlobalCell<ColNr> = GlobalCell::new(0 as ColNr);
-static COMPL_ORIG_TEXT: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-static COMPL_ORIG_EXTMARKS: GlobalCell<extmark_undo_vec_t> = GlobalCell::new(EXTMARK_UNDO_VEC_INIT);
-static compl_cont_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_xp: GlobalCell<Expand> = GlobalCell::new(Expand {
-    xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_context: ExpandContext::Nothing,
-    xp_pattern_len: 0,
-    xp_prefix: XP_PREFIX_NONE,
-    xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_luaref: 0,
-    xp_script_ctx: ScriptCtx::NONE,
-    xp_backslash: BackslashEscape::NONE,
-    xp_shell: false,
-    xp_numfiles: 0,
-    xp_col: 0,
-    xp_selected: 0,
-    xp_orig: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_files: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-    xp_line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_buf: [0; 1025],
-    xp_search_dir: kDirectionNotSet,
-    xp_pre_incsearch_pos: Pos {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    },
-});
-/// The window and buffer the running completion started in, as identities
-/// rather than addresses.
-///
-/// They outlive arbitrary re-entry -- a completion runs `'completefunc'`,
-/// autocommands and Lua, any of which can close the window or wipe the
-/// buffer -- so a `Win`/`Buf` here would promise a liveness nothing keeps.
-/// Upstream compares the raw pointers, which cannot tell "still here" from
-/// "freed and a new object at the same address"; a [`WinId`]/[`BufId`] can,
-/// and comparison is all `ins_compl_win_active` ever does with them. This is
-/// phase 23's re-entry rule applied to state rather than to a local: take
-/// the identity while the object is live, ask about it afterwards.
-static compl_curr_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-static compl_curr_buf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+state_record! {
+    /// The running completion: what it is completing, where, how far the
+    /// collection has got and what the menu shows -- upstream's file-scope
+    /// statics in `insexpand.c`, and the four function-scope ones.
+    ///
+    /// One cell, reached a field at a time through the selectors below, which
+    /// keep upstream's names. Nothing holds a borrow of it across a call: a
+    /// completion runs `'completefunc'`, autocommands and Lua, and all three
+    /// reach back in through `complete_add()`/`complete_info()`.
+    pub(crate) struct ComplState in COMPL as ComplField;
+    /// How many of the best fuzzy matches `'completeopt'` `longest` shares a
+    /// prefix over.
+    compl_num_bests: c_int = 0;
+    /// Enter selects the shown match rather than inserting a line break.
+    compl_enter_selects: bool = false;
+    /// See [`compl_leader`].
+    COMPL_LEADER: String_0 = String_0::NULL;
+    /// See [`adjusted_leader`].
+    ADJUSTED_LEADER: String_0 = String_0::NULL;
+    /// Still finding the longest common text (`'completeopt'` `longest`).
+    compl_get_longest: bool = false;
+    /// The selected match is in the buffer.
+    compl_used_match: bool = false;
+    /// The last collection was interrupted by a typed key.
+    compl_was_interrupted: bool = false;
+    /// The collection running now was interrupted.
+    compl_interrupted: bool = false;
+    /// Searching again without leaving CTRL-X mode: don't insert the first
+    /// match.
+    compl_restarting: bool = false;
+    /// The match list has been started.
+    compl_started: bool = false;
+    /// Which CTRL-X mode is running; `CTRL_X_*`.
+    ctrl_x_mode: c_int = CTRL_X_NORMAL;
+    /// The number of matches, once known.
+    compl_matches: c_int = 0;
+    /// See [`compl_pattern`].
+    COMPL_PATTERN: String_0 = String_0::NULL;
+    /// See [`cpt_compl_pattern`].
+    CPT_COMPL_PATTERN: String_0 = String_0::NULL;
+    /// The direction matches are collected in.
+    compl_direction: Direction = FORWARD;
+    /// The direction the shown matches run in.
+    compl_shows_dir: Direction = FORWARD;
+    /// CTRL-N/CTRL-P presses not yet acted on, while still collecting.
+    compl_pending: c_int = 0;
+    /// Where the completion started.
+    compl_startpos: Pos = POS_T_INIT;
+    /// The length of the text being completed.
+    compl_length: c_int = 0;
+    /// The line the completion started on.
+    compl_lnum: LineNr = 0;
+    /// The column the completed text starts at.
+    compl_col: ColNr = 0;
+    /// Where the inserted completion text ends.
+    compl_ins_end_col: ColNr = 0;
+    /// See [`compl_orig_text`].
+    COMPL_ORIG_TEXT: String_0 = String_0::NULL;
+    /// See [`ComplOrigExtmarks`].
+    COMPL_ORIG_EXTMARKS: extmark_undo_vec_t = EXTMARK_UNDO_VEC_INIT;
+    /// The CTRL-X mode a continued completion continues.
+    compl_cont_mode: c_int = 0;
+    /// CTRL-X CTRL-V's expansion context, kept between working out the
+    /// pattern and expanding it. Moved out for each use: the expansion runs
+    /// Lua and user completion functions.
+    compl_xp: Option<Box<Expand>> = None;
+    /// The window the running completion started in. See
+    /// [`ins_compl_win_active`]: an identity, not an address, because a
+    /// completion runs user functions, autocommands and Lua, any of which
+    /// can close the window or wipe the buffer, and comparison is all that
+    /// is ever done with it.
+    compl_curr_win: Option<WinId> = None;
+    /// The buffer it started in; see `compl_curr_win`.
+    compl_curr_buf: Option<BufId> = None;
+    /// The completion is `'autocomplete'`'s.
+    compl_autocomplete: bool = false;
+    /// The time budget of one `'complete'` source.
+    compl_timeout_ms: uint64_t = COMPL_INITIAL_TIMEOUT_MS as uint64_t;
+    /// The current source ran out of time.
+    compl_time_slice_expired: bool = false;
+    /// The completion started after a non-keyword character.
+    compl_from_nonkeyword: bool = false;
+    /// Highlight the text `'autocomplete'`'s `longest` inserted.
+    compl_hi_on_autocompl_longest: bool = false;
+    /// `CONT_*` flags: how a CTRL-X continuation proceeds.
+    compl_cont_status: c_int = 0;
+    /// The completion function answered `refresh: 'always'`.
+    compl_opt_refresh_always: bool = false;
+    /// The length of the bad word spell completion started on.
+    spell_bad_len: size_t = 0;
+    /// The menu entry selected, `-1` for none.
+    compl_selected_item: c_int = -1;
+    /// See [`CptSources`].
+    CPT_SOURCES: Vec<CptSource> = Vec::new();
+    /// The `'complete'` entry being collected from, `-1` between scans.
+    CPT_SOURCES_INDEX: c_int = -1;
+    /// See [`ComplMatchArray`].
+    COMPL_MATCH_ARRAY: Vec<PumItem> = Vec::new();
+    /// See [`CptCallbacks`].
+    CPT_CB: Vec<Callback> = Vec::new();
+    /// `CompleteChanged` is running: it does not fire again from inside.
+    complete_changed_busy: bool = false;
+    /// [`ins_compl_check_keys`]'s call count, which it only acts on every
+    /// `frequency` calls.
+    check_keys_count: c_int = 0;
+    /// The window [`ins_compl_next_buf`]'s `w` walk is at: a handle that
+    /// `win_valid` vets, because it outlives the call.
+    next_buf_window: Option<WinId> = None;
+}
+
 pub const COMPL_INITIAL_TIMEOUT_MS: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
-static compl_autocomplete: GlobalCell<bool> = GlobalCell::new(false);
-static compl_timeout_ms: GlobalCell<uint64_t> =
-    GlobalCell::new(COMPL_INITIAL_TIMEOUT_MS as uint64_t);
-static compl_time_slice_expired: GlobalCell<bool> = GlobalCell::new(false);
-static compl_from_nonkeyword: GlobalCell<bool> = GlobalCell::new(false);
-static compl_hi_on_autocompl_longest: GlobalCell<bool> = GlobalCell::new(false);
 pub const COMPL_MIN_TIMEOUT_MS: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const COMPL_FUNC_TIMEOUT_MS: ::core::ffi::c_int = 300 as ::core::ffi::c_int;
 pub const COMPL_FUNC_TIMEOUT_NON_KW_MS: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
-static compl_cont_status: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub const CONT_ADDING: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const CONT_INTRPT: ::core::ffi::c_int = 2 as ::core::ffi::c_int + 4 as ::core::ffi::c_int;
 pub const CONT_N_ADDS: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const CONT_S_IPOS: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const CONT_SOL: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 pub const CONT_LOCAL: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
-static compl_opt_refresh_always: GlobalCell<bool> = GlobalCell::new(false);
-static spell_bad_len: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-static compl_selected_item: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(-1 as ::core::ffi::c_int);
-static compl_fuzzy_scores: GlobalCell<*mut ::core::ffi::c_int> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
-static CPT_SOURCES: GlobalCell<*mut CptSource> =
-    GlobalCell::new(::core::ptr::null_mut::<CptSource>());
-static CPT_SOURCES_COUNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static CPT_SOURCES_INDEX: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(-1 as ::core::ffi::c_int);
-static COMPL_MATCH_ARRAY: GlobalCell<*mut PumItem> =
-    GlobalCell::new(::core::ptr::null_mut::<PumItem>());
-static COMPL_MATCH_ARRAYSIZE: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const DICT_FIRST: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DICT_EXACT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 static CFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 static OFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 static TSRFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback::None);
-static CPT_CB: GlobalCell<*mut Callback> = GlobalCell::new(::core::ptr::null_mut::<Callback>());
-static CPT_CB_COUNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const CI_WHAT_MODE: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const CI_WHAT_PUM_VISIBLE: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const CI_WHAT_ITEMS: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
