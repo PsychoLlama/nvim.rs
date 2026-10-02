@@ -7,6 +7,13 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fetching a buffer line zeroed a 4 KiB error-message buffer on every call,
+  which was about half of the work of redrawing a highlighted window (and of
+  any line-by-line walk: substitution, `:global`, the memline itself). Gone;
+  the screen and memline benchmarks run in roughly half the instructions.
+
 ## [2026.09.22-b91113847b]
 
 ### Fixed

@@ -139,8 +139,6 @@ pub(crate) unsafe fn ml_get_buf_impl(buffer: Buf, lnum: LineNr, will_change: boo
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = buffer;
-    // Where the E316 report's buffer name goes; upstream shares `NameBuff`.
-    let mut name = [0 as c_char; MAXPATHL as usize];
     if b.b_ml.ml_mfp.is_null() {
         // There are no lines at all.
         b.b_ml.set_cached_len(1);
@@ -174,6 +172,10 @@ pub(crate) unsafe fn ml_get_buf_impl(buffer: Buf, lnum: LineNr, will_change: boo
         if hp.is_null() {
             if ml_get_recursive.get() == 0 {
                 ml_get_recursive.set(1);
+                // Where the E316 report's buffer name goes; upstream shares
+                // `NameBuff`. Only here: zeroing 4 KiB on every line fetch
+                // was half of what a scroll through a highlighted file cost.
+                let mut name = [0 as c_char; MAXPATHL as usize];
                 get_trans_bufname(buffer, &mut name);
                 unsafe { shorten_dir(name.as_mut_ptr()) };
                 // The missing space before "in buffer" is upstream's.
