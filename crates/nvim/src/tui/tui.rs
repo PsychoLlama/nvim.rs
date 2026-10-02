@@ -108,6 +108,64 @@ pub(crate) const DEFAULT_ATTRS: HlAttrs = HlAttrs {
 
 // ------------------------------------------------------------- the lifecycle
 
+/// The running TUI, as its client holds it.
+///
+/// It owns the [`TUIData`] that libuv's handles and termkey's hooks point
+/// back into, which is why the data sits at a fixed address and is never
+/// freed: the process exits with it. The raw pointer stays here, inside the
+/// terminal layer; the client sees the methods below.
+pub struct Tui {
+    data: core::ptr::NonNull<TUIData>,
+    /// Set while [`Tui::with_state`] lends the data out, so a nested lend
+    /// panics instead of making a second `&mut`.
+    lent: core::cell::Cell<bool>,
+}
+
+impl Tui {
+    /// [`tui_start`], owned. Panics if a TUI was started before: there is
+    /// one terminal.
+    pub fn start() -> Self {
+        static STARTED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+        let again = STARTED.swap(true, core::sync::atomic::Ordering::Relaxed);
+        assert!(!again, "the TUI is started once");
+        // SAFETY: once (above). The main-thread half is the editor's cells'
+        // own check: `tui_start` reaches the main loop through one.
+        let data = unsafe { tui_start() };
+        Self {
+            data: core::ptr::NonNull::new(data).expect("tui_start answers its data"),
+            lent: core::cell::Cell::new(false),
+        }
+    }
+
+    /// [`tui_wait_ready`].
+    pub fn wait_ready(&self) -> TuiStart {
+        // SAFETY: the data this value owns, live for the process.
+        unsafe { tui_wait_ready(self.data.as_ptr()) }
+    }
+
+    /// [`tui_is_stopped`].
+    pub fn is_stopped(&self) -> bool {
+        // SAFETY: as above.
+        unsafe { tui_is_stopped(self.data.as_ptr()) }
+    }
+
+    /// [`tui_stop`].
+    pub fn stop(&self) {
+        // SAFETY: as above.
+        unsafe { tui_stop(self.data.as_ptr()) }
+    }
+
+    /// Run `f`, one of the drawing sinks, on the TUI's state.
+    pub fn with_state<R>(&self, f: impl FnOnce(&mut TUIData) -> R) -> R {
+        assert!(!self.lent.replace(true), "the TUI's state is already lent");
+        // SAFETY: the data this value owns; `lent` says no other `&mut` from
+        // here is live, and the sinks do not run the event loop.
+        let result = f(unsafe { &mut *self.data.as_ptr() });
+        self.lent.set(false);
+        result
+    }
+}
+
 /// Take over the terminal, returning the TUI that now owns it.
 ///
 /// The queries whose answers the client needs — size, name, colour depth —

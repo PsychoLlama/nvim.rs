@@ -55,7 +55,8 @@ use crate::tui::paint::{
     tui_flush, tui_grid_clear, tui_grid_cursor_goto, tui_grid_resize, tui_grid_scroll,
     tui_raw_line, tui_screenshot,
 };
-use crate::tui::tui::{tui_is_stopped, tui_start, tui_stop, tui_suspend, tui_wait_ready};
+use crate::tui::tui::Tui;
+use crate::tui::tui::tui_suspend;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
@@ -83,7 +84,17 @@ const UI_CONNECT_TIMEOUT_MS: c_int = 50;
 /// The TUI this client draws through, and the size and terminal it was
 /// started with. Attaching needs all four, and so does re-attaching after
 /// `:restart`, which is why they outlive `ui_client_run`.
-static tui: GlobalCell<*mut TUIData> = GlobalCell::new(core::ptr::null_mut());
+static tui: GlobalCell<Option<Tui>> = GlobalCell::new(None);
+
+/// Run `sink` on the started TUI's state.
+fn tui_state<R>(sink: impl FnOnce(&mut TUIData) -> R) -> R {
+    tui.with(|started| {
+        started
+            .as_ref()
+            .expect("the TUI is started")
+            .with_state(sink)
+    })
+}
 static tui_width: GlobalCell<c_int> = GlobalCell::new(0);
 static tui_height: GlobalCell<c_int> = GlobalCell::new(0);
 /// The terminal name, **owned**. `tui_wait_ready` answers a pointer into
@@ -304,8 +315,8 @@ pub(crate) fn ui_client_detach() {
 pub(crate) fn ui_client_run() -> ! {
     // Published before the loop turns: a callback that runs during
     // `tui_wait_ready` can reach `ui_client_stop`, which needs it.
-    tui.set(unsafe { tui_start() });
-    let started = unsafe { tui_wait_ready(tui.get()) };
+    tui.set(Some(Tui::start()));
+    let started = tui.with(|started| started.as_ref().expect("just set").wait_ready());
     // SAFETY: the terminal reported all four, and the channel is set.
     unsafe { ui_client_attach(started.width, started.height, started.term, started.rgb) };
 
@@ -331,9 +342,13 @@ pub(crate) fn ui_client_run() -> ! {
 /// Stops drawing, on the way out.
 pub(crate) fn ui_client_stop() {
     ui_client_attached.set(false);
-    if !unsafe { tui_is_stopped(tui.get()) } {
-        unsafe { tui_stop(tui.get()) };
-    }
+    tui.with(|started| {
+        if let Some(started) = started
+            && !started.is_stopped()
+        {
+            started.stop();
+        }
+    });
 }
 
 /// Reports a new terminal size to the server, and remembers it for a
@@ -572,7 +587,10 @@ macro_rules! forward {
             // The last repetition's `index += 1` has no reader; this is it,
             // rather than an `unused_assignments` allow per wrapper.
             let _ = index;
-            unsafe { $sink(&mut *tui.get() $(, payload!($ty, $arg))*) };
+            // Some sinks are `unsafe fn`s (their payload is a C value), some
+            // are not; one spelling serves both.
+            #[allow(unused_unsafe)]
+            let () = tui_state(|t| unsafe { $sink(t $(, payload!($ty, $arg))*) });
         }
     )*};
 }
@@ -645,7 +663,7 @@ pub(crate) unsafe fn ui_client_event_grid_resize(mut args: Array) {
         width.as_integer().expect(expect),
         height.as_integer().expect(expect),
     );
-    tui_grid_resize(unsafe { &mut *tui.get() }, grid, width, height);
+    tui_state(|t| tui_grid_resize(t, grid, width, height));
 
     // The decoder writes cells straight into these rather than
     // building an array, so they have to hold the widest grid.
@@ -682,10 +700,12 @@ pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
     );
     // SAFETY: the decoder filled `g` for this event, and the TUI is started.
     unsafe {
-        let (t, attr) = (&mut *tui.get(), Integer::from((*g).cur_attr));
-        tui_raw_line(
-            t, grid, row, startcol, endcol, clearcol, attr, flags, chars, attrs,
-        )
+        let attr = Integer::from((*g).cur_attr);
+        tui_state(|t| {
+            tui_raw_line(
+                t, grid, row, startcol, endcol, clearcol, attr, flags, chars, attrs,
+            )
+        })
     };
 }
 
@@ -711,13 +731,10 @@ pub(crate) unsafe fn ui_client_event_hl_attr_define(mut args: Array) {
         cterm.into_dict().expect(expect),
         info.into_array().expect(expect),
     );
-    tui_hl_attr_define(
-        unsafe { &mut *tui.get() },
-        id,
-        unsafe { dict_to_hlattrs(&rgb, true) },
-        unsafe { dict_to_hlattrs(&cterm, false) },
-        info,
-    );
+    // Both conversions intern URLs in the TUI, so they run before the
+    // state is lent to the definition.
+    let (rgb, cterm) = unsafe { (dict_to_hlattrs(&rgb, true), dict_to_hlattrs(&cterm, false)) };
+    tui_state(|t| tui_hl_attr_define(t, id, rgb, cterm, info));
 }
 
 /// The attribute entry `d` describes, as the server's `hl_attr_define`
@@ -748,7 +765,7 @@ unsafe fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
     // A URL is not an attribute the terminal understands; the TUI
     // interns it and the entry keeps the index.
     if let Some(url) = &dict.url {
-        attrs.url = unsafe { tui_add_url(&mut *tui.get(), url.data()) };
+        attrs.url = tui_state(|t| unsafe { tui_add_url(t, url.data()) });
     }
     attrs
 }

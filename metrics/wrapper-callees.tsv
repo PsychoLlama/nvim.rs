@@ -1417,7 +1417,6 @@ count	callee	no_raw	defs	def
 2	dict_arg	0	1	crates/nvim/src/sign/vimscript.rs
 2	dict_equal	0	0	
 2	dict_lookup	0	1	crates/nvim/src/terminal/mod.rs
-2	dict_to_hlattrs	1	1	crates/nvim/src/ui_client.rs
 2	did_set_vartabs	0	1	crates/nvim/src/optionstr/buffer.rs
 2	diff_check_sanity	0	1	crates/nvim/src/diff/block.rs
 2	diff_file	0	1	crates/nvim/src/diff/engine.rs
