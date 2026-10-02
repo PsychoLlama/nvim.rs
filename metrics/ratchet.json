@@ -44,7 +44,7 @@
   "typval_raw_params": 15,
   "exarg_raw": 0,
   "cmdarg_raw": 0,
-  "global_cells": 970,
+  "global_cells": 969,
   "cell_raw_ptr": 80,
   "api_err_params": 0,
   "char_as_c_int": 1965,

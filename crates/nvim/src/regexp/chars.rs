@@ -10,7 +10,6 @@ use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::{ByteClass, MAGIC_ALL, RF_HASNL};
-use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::types::RegProg;
 
@@ -134,10 +133,6 @@ static CHAR_CLASS_TAB: [(&CStr, CharClass); 19] = [
     (c"xdigit:]", CharClass::Xdigit),
 ];
 
-/// The entry [`take_char_class`] matched last. Collections repeat a class
-/// far more often than they vary it, and the hit skips the search.
-static LAST_CLASS: GlobalCell<usize> = GlobalCell::new(0);
-
 /// Recognise a `[:alpha:]`-style class at `*pp`, which points at the `[`.
 /// On a hit `*pp` advances past the name — the caller has already consumed
 /// the `[`, and the name carries its own `:]` — and the class is returned.
@@ -170,18 +165,12 @@ pub(crate) unsafe fn take_char_class(cursor: &mut *mut c_char) -> Option<CharCla
         }
         Ordering::Equal
     };
-    let last = LAST_CLASS.get();
-    let hit = if cmp(CHAR_CLASS_TAB[last].0).is_eq() {
-        Some(last)
-    } else {
-        // `binary_search_by` orders each entry against the needle;
-        // `cmp` reads the other way round.
-        CHAR_CLASS_TAB
-            .binary_search_by(|(entry, _)| cmp(entry).reverse())
-            .ok()
-    };
-    let i = hit?;
-    LAST_CLASS.set(i);
+    // `binary_search_by` orders each entry against the needle; `cmp` reads
+    // the other way round. (Upstream cached the last hit; nineteen entries
+    // are five comparisons, and the cache was a global.)
+    let i = CHAR_CLASS_TAB
+        .binary_search_by(|(entry, _)| cmp(entry).reverse())
+        .ok()?;
     *cursor = unsafe { p.add(2 + CHAR_CLASS_TAB[i].0.to_bytes().len()) };
     Some(CHAR_CLASS_TAB[i].1)
 }
