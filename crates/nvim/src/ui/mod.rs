@@ -50,6 +50,7 @@ use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{conceal_check_cursor_line, screen_resize};
 use crate::event::libuv::uv_cwd;
 use crate::event::multiqueue::multiqueue_put_event;
+use crate::event::multiqueue::queue_in;
 use crate::ex_getln::cmdline_ui_flush;
 use crate::getchar::state::expr_map_lock;
 use crate::global_cell::GlobalCell;
@@ -329,7 +330,7 @@ extern "C" fn ui_refresh_event(_argv: *mut *mut core::ffi::c_void) {
 
 /// Queues [`ui_refresh`] for after the current redraw.
 pub fn ui_schedule_refresh() {
-    let queue = resize_events.get();
+    let queue = queue_in(&resize_events);
     let event = crate::types::Event::new(Some(ui_refresh_event), []);
     // SAFETY: the resize queue is the editor's own and outlives the event.
     unsafe { multiqueue_put_event(queue, event) };

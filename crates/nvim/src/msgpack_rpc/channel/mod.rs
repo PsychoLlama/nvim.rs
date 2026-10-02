@@ -26,6 +26,7 @@
 //! [`packer`]: crate::msgpack_rpc::packer
 
 use crate::cstr;
+use crate::event::multiqueue::ChildQueue;
 use crate::message_fmt::{c_str, msg_addr};
 use crate::os::uv_error::UV_EPIPE;
 use crate::snprintf;
@@ -42,7 +43,7 @@ use crate::channel::{
 };
 use crate::event::libuv::uv_strerror;
 use crate::event::r#loop::{one_arg_event, process_events_until};
-use crate::event::multiqueue::{main_loop_child_queue, multiqueue_put_event};
+use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::exit_on_closed_chan;
 use crate::event::rstream::rstream_start;
 use crate::event::wstream::{wstream_release_wbuffer, wstream_write};
@@ -53,8 +54,8 @@ use crate::registry::SlotTable;
 use crate::startup::{main_loop, ui_client_channel_id, ui_client_error_exit};
 use crate::types::{
     ApiDict, Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType,
-    ClientType, Error, Integer, MessageType, MsgpackRpcRequestHandler, MultiQueue, Object,
-    Unpacker, WBuffer, kErrorTypeException, kErrorTypeValidation, uint32_t, uint64_t,
+    ClientType, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker, WBuffer,
+    kErrorTypeException, kErrorTypeValidation, uint32_t, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
@@ -102,8 +103,7 @@ use known::*;
 use crate::api_error;
 use crate::global_cell::GlobalCell;
 
-pub(crate) static ch_before_blocking_events: GlobalCell<*mut MultiQueue> =
-    GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
+pub(crate) static ch_before_blocking_events: GlobalCell<Option<ChildQueue>> = GlobalCell::new(None);
 
 /// A channel this module is working with, plus the promise that the pointer
 /// behind it stays live for as long as the handle does.
@@ -180,8 +180,7 @@ pub struct RequestEvent {
 /// Creates the queue that `nvim_get_mode` replies are answered from.
 pub fn rpc_init() {
     // SAFETY: the caller's guarantee that the loop exists.
-    let queue = main_loop_child_queue();
-    ch_before_blocking_events.set(queue);
+    ch_before_blocking_events.set(Some(ChildQueue::of_main_loop()));
 }
 
 /// Turns `channel` into an RPC endpoint and starts reading from it.

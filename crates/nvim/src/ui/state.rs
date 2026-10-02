@@ -18,8 +18,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::event::multiqueue::ChildQueue;
 use crate::global_cell::{ConstTable, GlobalCell};
-use crate::types::{MultiQueue, uint32_t, uint64_t};
+use crate::types::{uint32_t, uint64_t};
 use core::ffi::{c_char, c_int};
 
 pub(crate) static ui_ext_names: ConstTable<[*const c_char; 10]> = ConstTable::new([
@@ -40,6 +41,5 @@ pub(crate) static called_vim_beep: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static current_ui: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub(crate) static t_colors: GlobalCell<c_int> = GlobalCell::new(256 as c_int);
 pub(crate) static ui_event_ns_id: GlobalCell<uint32_t> = GlobalCell::new(0 as uint32_t);
-pub(crate) static resize_events: GlobalCell<*mut MultiQueue> =
-    GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
+pub(crate) static resize_events: GlobalCell<Option<ChildQueue>> = GlobalCell::new(None);
 pub(crate) static ui_refresh_cmdheight: GlobalCell<bool> = GlobalCell::new(true);

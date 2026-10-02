@@ -3,6 +3,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::event::multiqueue::ChildQueue;
 use crate::types::AutoEvent;
 use core::cmp::Ordering;
 use core::ffi::CStr;
@@ -27,7 +28,7 @@ use crate::eval::typval::{
 use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, set_cmdarg, set_vim_var_nr, vars_clear};
 use crate::eval::{callback_call, get_v_event, last_set_msg, restore_v_event};
-use crate::event::multiqueue::{main_loop_child_queue, multiqueue_put_event};
+use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_docmd::{do_cmdline, ends_excmd, expand_sfile, get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::{aborting, should_abort};
 use crate::fileio::{check_timestamps, file_pat_to_reg_pat, match_file_pat};
@@ -127,7 +128,7 @@ pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::
 const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";
 /// Give the deferred events their queue, a child of the main loop's.
 pub fn autocmd_init() {
-    deferred_events.set(main_loop_child_queue());
+    deferred_events.set(Some(ChildQueue::of_main_loop()));
 }
 /// Where the `VimSuspend`/`VimResume` pair has got to.
 ///

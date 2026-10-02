@@ -461,6 +461,7 @@ count	callee	no_raw	defs	def
 6	mpack_raw	0	1	crates/nvim/src/msgpack_rpc/packer/mod.rs
 6	msg_keep	0	1	crates/nvim/src/message/mod.rs
 6	msg_multiline	0	1	crates/nvim/src/message/mod.rs
+6	multiqueue_free	0	1	crates/nvim/src/event/multiqueue.rs
 6	nextwild	0	1	crates/nvim/src/cmdexpand/expandone.rs
 6	nlua_call_ref	0	1	crates/nvim/src/lua/executor/exec.rs
 6	open_line	0	2	
@@ -584,7 +585,6 @@ count	callee	no_raw	defs	def
 5	mb_copy_char	0	1	crates/nvim/src/mbyte/walk.rs
 5	mpack_tokbuf_init	0	1	crates/nvim/src/mpack/mpack_core.rs
 5	multiqueue_empty	0	1	crates/nvim/src/event/multiqueue.rs
-5	multiqueue_free	0	1	crates/nvim/src/event/multiqueue.rs
 5	operand_u32	0	1	crates/nvim/src/regexp/bt/matcher.rs
 5	os_can_exe	0	1	crates/nvim/src/os/fs/mod.rs
 5	otherfile	0	1	crates/nvim/src/buffer/name.rs

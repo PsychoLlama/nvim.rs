@@ -11,6 +11,7 @@
 // `#[unsafe(no_mangle)]` is itself an unsafe attribute.
 #![allow(unsafe_code)]
 
+use crate::event::multiqueue::ChildQueue;
 use crate::fprintf;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
@@ -37,7 +38,7 @@ use crate::eval::vars::{
 };
 use crate::eval::{eval_has_provider, eval_init, set_argv_var, timer_teardown};
 use crate::event::r#loop::{loop_close, loop_init, loop_poll_events};
-use crate::event::multiqueue::{main_loop_child_queue, multiqueue_process_events};
+use crate::event::multiqueue::multiqueue_process_events;
 use crate::event::proc::proc_teardown;
 use crate::ex_docmd::{filetype_maybe_enable, filetype_plugin_enable};
 use crate::ex_getln::cmdline_init;
@@ -110,7 +111,7 @@ pub extern "C" fn event_init() {
     // SAFETY: initialises the singleton main loop and its subsystems, once.
     unsafe { loop_init(main_loop.ptr()) };
     env_init();
-    resize_events.set(main_loop_child_queue());
+    resize_events.set(Some(ChildQueue::of_main_loop()));
     autocmd_init();
     signal_init();
     channel_init();

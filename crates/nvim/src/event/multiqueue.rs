@@ -33,6 +33,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::global_cell::GlobalCell;
 use crate::startup::main_loop;
 use crate::types::multiqueue_list::{Item, ItemList};
 use crate::types::{Event, MultiQueue, PutCallback, Refcount, size_t};
@@ -139,6 +140,36 @@ pub unsafe fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue {
 pub(crate) fn main_loop_child_queue() -> *mut MultiQueue {
     // SAFETY: the main loop's queue, live from startup to exit.
     unsafe { multiqueue_new_child((*main_loop.ptr()).events) }
+}
+
+/// A child of the main loop's queue that the editor keeps for its whole run
+/// (`resize_events`, `deferred_events`, `ch_before_blocking_events`): the
+/// owner a cell outside `event/` holds instead of the queue's address.
+/// Dropping it frees the queue.
+pub(crate) struct ChildQueue(ptr::NonNull<MultiQueue>);
+
+impl ChildQueue {
+    /// A new child of the main loop's queue; see [`main_loop_child_queue`].
+    pub(crate) fn of_main_loop() -> Self {
+        Self(ptr::NonNull::new(main_loop_child_queue()).expect("a new queue is never null"))
+    }
+
+    /// The queue, for a callee that takes one. It lives as long as `self`.
+    pub(crate) fn as_ptr(&self) -> *mut MultiQueue {
+        self.0.as_ptr()
+    }
+}
+
+impl Drop for ChildQueue {
+    fn drop(&mut self) {
+        // SAFETY: the queue this value made and owns, freed once.
+        unsafe { multiqueue_free(self.0.as_ptr()) };
+    }
+}
+
+/// The queue `cell` holds, or null before it is made.
+pub(crate) fn queue_in(cell: &GlobalCell<Option<ChildQueue>>) -> *mut MultiQueue {
+    cell.with(|queue| queue.as_ref().map_or(ptr::null_mut(), ChildQueue::as_ptr))
 }
 
 fn new_queue(parent: *mut MultiQueue, on_put: PutCallback, data: *mut c_void) -> *mut MultiQueue {

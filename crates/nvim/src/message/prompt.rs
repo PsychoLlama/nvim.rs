@@ -22,6 +22,7 @@
 )]
 
 use super::*;
+use crate::event::multiqueue::queue_in;
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, Key, NotAKey};
 use crate::log::logmsg;
@@ -349,7 +350,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
             used_typed_char = NUL;
             c
         } else {
-            unsafe { get_keystroke(resize_events.get()) }
+            unsafe { get_keystroke(queue_in(&resize_events)) }
         };
 
         let mut toscroll = 0;
@@ -403,7 +404,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                 }
                 Ok(Key::Event) => {
                     // Process the event on the main loop's queue.
-                    unsafe { multiqueue_process_events(resize_events.get()) };
+                    unsafe { multiqueue_process_events(queue_in(&resize_events)) };
                     to_redraw = true;
                     break 'scroll;
                 }

@@ -22,6 +22,7 @@
 
 use super::*;
 use crate::buffer::BufRef;
+use crate::event::multiqueue::queue_in;
 use crate::guard::Depth;
 use crate::message_fmt::msg_bytes;
 use crate::optionstr::OptString;
@@ -234,7 +235,7 @@ pub unsafe fn aucmd_defer(
     // SAFETY: the queue is the editor's own and takes ownership of `evdata`.
     unsafe {
         multiqueue_put_event(
-            deferred_events.get(),
+            queue_in(&deferred_events),
             Event {
                 handler: Some(deferred_event),
                 argv,

@@ -26,10 +26,11 @@
 #![allow(non_upper_case_globals)]
 
 use super::{AUGROUP_DEFAULT, SuspendLatch};
+use crate::event::multiqueue::ChildQueue;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::memory::XString;
 use crate::registry::{IdMap, SlotTable, id_map};
-use crate::types::{BufferRef, ColNr, LineNr, MultiQueue, Pos, Timestamp};
+use crate::types::{BufferRef, ColNr, LineNr, Pos, Timestamp};
 use crate::winlayer::WinId;
 use core::ffi::c_int;
 
@@ -96,5 +97,4 @@ state_record! {
 }
 
 /// Events deferred out of a context that could not fire them.
-pub(crate) static deferred_events: GlobalCell<*mut MultiQueue> =
-    GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
+pub(crate) static deferred_events: GlobalCell<Option<ChildQueue>> = GlobalCell::new(None);

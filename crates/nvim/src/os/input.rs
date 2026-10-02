@@ -25,6 +25,7 @@ use crate::autocmd::state::did_cursorhold;
 use crate::autocmd::{apply_autocmds, trigger_cursorhold};
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{loop_poll_events, process_events_until};
+use crate::event::multiqueue::queue_in;
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_process_events, multiqueue_put_event};
 use crate::event::rstream::{rstream_init_fd, rstream_may_close, rstream_start, rstream_stop};
 use crate::getchar::state::{ctrl_c_interrupts, got_int, mapped_ctrl_c, typebuf_was_filled};
@@ -710,7 +711,7 @@ fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> InputAvail {
             // The pending input provoked a blocking wait. Do special events
             // now. #6247
             blocking.set(true);
-            multiqueue_process_events(ch_before_blocking_events.get());
+            multiqueue_process_events(queue_in(&ch_before_blocking_events));
         }
         logmsg!(
             LOGLVL_DBG,

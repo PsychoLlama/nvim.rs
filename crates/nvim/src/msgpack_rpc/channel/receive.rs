@@ -18,6 +18,7 @@
 //! handler, a waiting call frame or a closed channel.
 
 use crate::cstr;
+use crate::event::multiqueue::queue_in;
 use crate::snprintf;
 use core::ffi::{c_char, c_void};
 use core::{mem, ptr};
@@ -266,7 +267,7 @@ fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
         // SAFETY: either queue is live, and running the event here consumes
         // `evdata` exactly once.
         if is_get_mode && !input_blocking() {
-            unsafe { multiqueue_put_event(ch_before_blocking_events.get(), event) };
+            unsafe { multiqueue_put_event(queue_in(&ch_before_blocking_events), event) };
         } else {
             let mut argv = [evdata.cast::<c_void>()];
             unsafe { request_event(argv.as_mut_ptr()) };
@@ -282,7 +283,7 @@ fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
         // however many queues reach it first.
         let ev = event_create_oneshot(event, 2);
         unsafe { multiqueue_put_event(chan.events, ev.clone()) };
-        unsafe { multiqueue_put_event(resize_events.get(), ev) };
+        unsafe { multiqueue_put_event(queue_in(&resize_events), ev) };
         return;
     }
     // SAFETY: the channel's queue is live.
