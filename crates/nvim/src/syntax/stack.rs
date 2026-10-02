@@ -87,7 +87,7 @@ pub(crate) fn syn_stack_free_all(block: SynBlockRef) {
 /// Allocate `syn_buf`'s cache, or resize it when the buffer's length has moved
 /// far enough that the current size is a poor fit.
 pub(crate) fn syn_stack_alloc() {
-    let mut block = syn_block();
+    let block = syn_block();
     let lines = syn_buffer().line_count() as c_int;
     let want = clamp_entries(lines / SST_DIST + Rows.get() * 2);
     if block.b_sst_len <= want * 2 && block.b_sst_len >= want {
@@ -95,7 +95,15 @@ pub(crate) fn syn_stack_alloc() {
     }
 
     // Allocate 50% too much, to avoid reallocating too often.
-    let mut len = clamp_entries((lines + lines / 2) / SST_DIST + Rows.get() * 2);
+    resize_cache(
+        block,
+        clamp_entries((lines + lines / 2) / SST_DIST + Rows.get() * 2),
+    );
+}
+
+/// Give `block`'s cache room for `len` entries -- more, if that many are in
+/// use -- keeping the used ones in order at the front.
+fn resize_cache(mut block: SynBlockRef, mut len: c_int) {
     if !block.b_sst_array.is_null() {
         // When shrinking, clean up the existing stack first and make sure
         // every entry that is still valid fits in the new array.
@@ -571,4 +579,281 @@ unsafe fn extmatch_equal(a: *mut RegExtMatch, b: *mut RegExtMatch, idx: c_int) -
         j += 1;
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    //! The state cache and the state stack, driven through the functions the
+    //! parser uses, over a block built here rather than a buffer's: what a
+    //! stored entry holds, what loading it gives back, when two states are
+    //! equal, and that every extmatch reference taken is given back.
+
+    use super::*;
+    use crate::drawscreen::state::display_tick;
+    use crate::global_cell::{editor_state::Held, editor_state_lock};
+    use crate::regexp::make_extmatch;
+    use crate::strings::xstrnsave;
+    use core::ffi::c_char;
+    use core::mem::MaybeUninit;
+
+    /// A syntax block with `patterns` plain match patterns, installed as the
+    /// one being parsed, with a cache of `entries` entries and an empty,
+    /// valid state stack. Dropping it puts the parser back as it found it.
+    struct Fixture {
+        /// Leaked from a `Box`, which `drop` takes back: the parser reaches
+        /// the block through `parsed_block`, and a `Box` moved after that
+        /// would assert a uniqueness the parser's pointer contradicts.
+        block: *mut SynBlock,
+        rows: c_int,
+        _held: Held,
+    }
+
+    impl Fixture {
+        fn new(patterns: usize, entries: c_int) -> Fixture {
+            let held = editor_state_lock();
+            let mut block: Box<MaybeUninit<SynBlock>> = Box::new_zeroed();
+            // SAFETY: a zeroed block is what `init_synblock` completes.
+            unsafe { init_synblock(block.as_mut_ptr()) };
+            // SAFETY: completed just above.
+            let mut block = unsafe { block.assume_init() };
+            for _ in 0..patterns {
+                let mut pattern = EMPTY_SYNPAT;
+                pattern.sp_type = SPTYPE_MATCH as c_char;
+                block.b_syn_patterns.push(pattern);
+            }
+            let block = Box::into_raw(block);
+            parsed_block.set(block);
+            // More rows than entries keeps the cleanup from asking the
+            // (absent) buffer how long it is.
+            let rows = Rows.replace(10_000);
+            invalidate_current_state();
+            validate_current_state();
+            // SAFETY: the block installed above.
+            resize_cache(syn_block(), entries);
+            Fixture {
+                block,
+                rows,
+                _held: held,
+            }
+        }
+
+        /// The line numbers of the used entries, in list order.
+        fn used_lines(&self) -> Vec<LineNr> {
+            let mut lines = Vec::new();
+            let mut p = syn_block().b_sst_first;
+            while !p.is_null() {
+                // SAFETY: a live entry of the block's cache.
+                lines.push(unsafe { (*p).sst_lnum });
+                p = unsafe { (*p).sst_next };
+            }
+            lines
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            invalidate_current_state();
+            syn_stack_free_block(syn_block());
+            parsed_block.set(::core::ptr::null_mut());
+            Rows.set(self.rows);
+            // SAFETY: the box `new` leaked, which nothing points at now.
+            drop(unsafe { Box::from_raw(self.block) });
+            current_lnum.set(0);
+            current_next_list.set(::core::ptr::null_mut());
+        }
+    }
+
+    /// A fresh extmatch whose `\z1` is `text`; the caller holds the one
+    /// reference.
+    fn extmatch(text: &str) -> *mut RegExtMatch {
+        let em = make_extmatch();
+        // SAFETY: a fresh set; its slot takes an owned copy.
+        unsafe {
+            (*em).matches[1] = xstrnsave(text.as_ptr().cast(), text.len()).cast();
+        }
+        em
+    }
+
+    fn refs(em: *mut RegExtMatch) -> int16_t {
+        // SAFETY: the test holds a reference, so it is live.
+        unsafe { (*em).refcnt }
+    }
+
+    /// Push an item for pattern `idx` with distinct flags, sequence number
+    /// and `cchar`, holding a reference to `em`.
+    fn push(idx: c_int, em: *mut RegExtMatch) {
+        push_current_state(idx);
+        // SAFETY: just pushed.
+        let mut item = unsafe { state_top() };
+        item.si_flags = SynFlags::FOLD;
+        item.si_seqnr = 100 + idx;
+        item.si_cchar = c_int::from(b'a') + idx;
+        // SAFETY: the test's own extmatch, or null.
+        item.si_extmatch = unsafe { ref_extmatch(em) };
+    }
+
+    /// The stack as `(idx, seqnr, cchar, extmatch)` rows.
+    fn stack() -> Vec<(c_int, c_int, c_int, *mut RegExtMatch)> {
+        (0..state_len())
+            .map(|i| {
+                // SAFETY: inside the stack.
+                let item = unsafe { state_at(i) };
+                (item.si_idx, item.si_seqnr, item.si_cchar, item.si_extmatch)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_stored_state_loads_back_with_its_references() {
+        let _fixture = Fixture::new(3, 20);
+        let em = extmatch("x");
+        push(0, ::core::ptr::null_mut());
+        push(1, em);
+        push(2, ::core::ptr::null_mut());
+        let before = stack();
+        assert_eq!(refs(em), 2);
+
+        current_lnum.set(5);
+        let entry = store_current_state();
+        assert!(!entry.is_null());
+        assert_eq!(refs(em), 3, "the entry holds its own reference");
+        // SAFETY: the entry just stored.
+        assert!(unsafe { syn_stack_equal(entry) });
+
+        invalidate_current_state();
+        assert_eq!(refs(em), 2, "invalidating gives the stack's back");
+        assert_eq!(syn_stack_find_entry(5), entry);
+        assert_eq!(syn_stack_find_entry(9), entry, "the last one before");
+        assert!(syn_stack_find_entry(4).is_null());
+
+        current_lnum.set(0);
+        // SAFETY: as above.
+        unsafe { load_current_state(entry) };
+        assert_eq!(current_lnum.get(), 5);
+        assert_eq!(stack(), before);
+        assert_eq!(refs(em), 3);
+        // SAFETY: as above.
+        assert!(unsafe { syn_stack_equal(entry) });
+
+        // SAFETY: inside the stack.
+        unsafe { state_at(2) }.si_idx = 1;
+        // SAFETY: as above.
+        assert!(!unsafe { syn_stack_equal(entry) }, "a different pattern");
+
+        pop_current_state();
+        assert_eq!(state_len(), 2);
+        pop_current_state();
+        assert_eq!(refs(em), 2, "popping gives the item's back");
+        // SAFETY: the test's own reference.
+        unsafe { unref_extmatch(em) };
+    }
+
+    #[test]
+    fn a_deep_stack_round_trips_through_the_heap() {
+        let _fixture = Fixture::new(1, 20);
+        let em = extmatch("deep");
+        for i in 0..SST_FIX_STATES + 3 {
+            push(
+                0,
+                if i % 2 == 0 {
+                    em
+                } else {
+                    ::core::ptr::null_mut()
+                },
+            );
+            // SAFETY: just pushed.
+            unsafe { state_top() }.si_seqnr = i;
+        }
+        let before = stack();
+        current_lnum.set(1);
+        let entry = store_current_state();
+        invalidate_current_state();
+        // SAFETY: the entry just stored.
+        unsafe { load_current_state(entry) };
+        assert_eq!(stack(), before);
+        invalidate_current_state();
+        // SAFETY: the test's own reference; the cache still holds five.
+        unsafe { unref_extmatch(em) };
+    }
+
+    #[test]
+    fn extmatches_compare_by_their_text() {
+        let _fixture = Fixture::new(1, 20);
+        let (a, b, c) = (extmatch("same"), extmatch("same"), extmatch("other"));
+        push(0, a);
+        current_lnum.set(3);
+        let entry = store_current_state();
+
+        let replace = |em: *mut RegExtMatch| {
+            // SAFETY: inside the stack; the item's old reference goes, a
+            // new one to `em` comes.
+            let mut item = unsafe { state_at(0) };
+            unsafe { unref_extmatch(item.si_extmatch) };
+            item.si_extmatch = unsafe { ref_extmatch(em) };
+        };
+        replace(b);
+        // SAFETY: the entry just stored.
+        assert!(unsafe { syn_stack_equal(entry) }, "same text, other set");
+        replace(c);
+        assert!(!unsafe { syn_stack_equal(entry) }, "other text");
+        replace(::core::ptr::null_mut());
+        assert!(!unsafe { syn_stack_equal(entry) }, "none against some");
+
+        invalidate_current_state();
+        for em in [a, b, c] {
+            // SAFETY: the test's own references.
+            unsafe { unref_extmatch(em) };
+        }
+    }
+
+    #[test]
+    fn entries_stay_sorted_and_the_cleanup_frees_the_oldest() {
+        let fixture = Fixture::new(1, 20);
+        push(0, ::core::ptr::null_mut());
+        for (lnum, tick) in [(30, 3), (10, 1), (20, 2)] {
+            current_lnum.set(lnum);
+            display_tick.set(tick);
+            store_current_state();
+        }
+        assert_eq!(fixture.used_lines(), [10, 20, 30]);
+        assert_eq!(syn_block().b_sst_freecount, 17);
+
+        // The first entry is never a candidate; of the rest, the one with
+        // the oldest tick goes.
+        syn_block().b_sst_lasttick = 3;
+        assert!(syn_stack_cleanup());
+        assert_eq!(fixture.used_lines(), [10, 30]);
+        assert_eq!(syn_block().b_sst_freecount, 18);
+
+        // Storing over an existing line reuses its entry.
+        current_lnum.set(30);
+        store_current_state();
+        assert_eq!(fixture.used_lines(), [10, 30]);
+        assert_eq!(syn_block().b_sst_freecount, 18);
+    }
+
+    #[test]
+    fn a_resize_keeps_the_used_entries_in_order() {
+        let fixture = Fixture::new(1, 20);
+        push(0, ::core::ptr::null_mut());
+        for lnum in [4, 8, 2] {
+            current_lnum.set(lnum);
+            store_current_state();
+        }
+        resize_cache(syn_block(), 40);
+        assert_eq!(syn_block().b_sst_len, 40);
+        assert_eq!(fixture.used_lines(), [2, 4, 8]);
+        assert_eq!(syn_block().b_sst_freecount, 37);
+
+        // Shrinking below what is in use first thins the cache out -- every
+        // entry after the first carries the same tick, so all of them go --
+        // and then keeps room for what is left and two more.
+        resize_cache(syn_block(), 1);
+        assert_eq!(fixture.used_lines(), [2]);
+        assert_eq!(syn_block().b_sst_len, 3);
+        assert_eq!(syn_block().b_sst_freecount, 2);
+        let entry = syn_stack_find_entry(4);
+        // SAFETY: an entry of the cache.
+        assert_eq!(unsafe { (*entry).sst_lnum }, 2);
+    }
 }
