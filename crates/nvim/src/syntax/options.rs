@@ -524,55 +524,56 @@ pub(crate) fn copy_id_list(list: &IdList) -> *mut int16_t {
     out
 }
 
-/// Is the syntax group `ssp` in the id list `list` of `cur_si`?
-///
-/// `cur_si` is the current item, or NULL when the `containedin` list is not
-/// being checked. This runs once per candidate pattern per column: keep it
-/// fast.
-///
-/// # Safety
-///
-/// `cur_si` must still be live: nothing may have pushed to, popped from or
-/// cleared the syntax state stack since it was taken, when it is `Some`.
-/// `list` must be null, `ID_LIST_ALL`, or point at a zero-terminated syntax
-/// id list the parser owns. `cont_in_list` must be null, `ID_LIST_ALL`, or
-/// point at a zero-terminated syntax id list the parser owns.
-pub(crate) unsafe fn in_id_list(
-    cur_si: Option<Item>,
-    list: *mut int16_t,
-    ssp: sp_syn,
-    cont_in_list: *mut int16_t,
-    flags: SynFlags,
-) -> bool {
-    // If the group has a `containedin` list and `cur_si` is in it, it is
-    // admitted whatever `list` says.
-    if let Some(mut si) = cur_si
-        && !cont_in_list.is_null()
-        && !si.si_flags.has(SynFlags::MATCH)
-    {
-        // Ignore transparent items without a contains argument, double
-        // checking that we don't go back past the first one.
-        let outermost = unsafe { state_at(0) }.raw();
-        while si.si_flags.has(SynFlags::TRANS_CONT) && si.raw() > outermost {
-            // SAFETY: the walk stops at the outermost item, so the step
-            // back stays inside the state stack.
-            si = unsafe { Item::new(si.raw().offset(-1)) };
-        }
-        // si_idx is -1 for keywords, which never contain anything.
-        if si.si_idx >= 0 {
-            let block = syn_block();
-            let spp = &block.patterns()[si.si_idx as usize];
-            // SAFETY: the parser's own lists.
-            if unsafe { id_list_has(cont_in_list, spp.sp_syn, spp.sp_flags, 0) } {
-                return true;
+impl SynState {
+    /// Is the syntax group `ssp` in the id list `list` of the item at
+    /// `cur_si`?
+    ///
+    /// `cur_si` is the current item, or `None` when the `containedin` list
+    /// is not being checked. This runs once per candidate pattern per column:
+    /// keep it fast.
+    ///
+    /// # Safety
+    ///
+    /// `list` must be null, `ID_LIST_ALL`, or point at a zero-terminated
+    /// syntax id list the parser owns. `cont_in_list` must be null,
+    /// `ID_LIST_ALL`, or point at a zero-terminated syntax id list the parser
+    /// owns.
+    pub(crate) unsafe fn in_id_list(
+        &self,
+        cur_si: Option<c_int>,
+        list: *mut int16_t,
+        ssp: sp_syn,
+        cont_in_list: *mut int16_t,
+        flags: SynFlags,
+    ) -> bool {
+        let block = self.block();
+        // If the group has a `containedin` list and `cur_si` is in it, it is
+        // admitted whatever `list` says.
+        if let Some(mut si) = cur_si
+            && !cont_in_list.is_null()
+            && !self.item(si).si_flags.has(SynFlags::MATCH)
+        {
+            // Ignore transparent items without a contains argument, double
+            // checking that we don't go back past the first one.
+            while self.item(si).si_flags.has(SynFlags::TRANS_CONT) && si > 0 {
+                si -= 1;
+            }
+            // si_idx is -1 for keywords, which never contain anything.
+            let si_idx = self.item(si).si_idx;
+            if si_idx >= 0 {
+                let spp = block.pattern(si_idx);
+                // SAFETY: the parser's own lists.
+                if unsafe { id_list_has(block, cont_in_list, spp.sp_syn, spp.sp_flags, 0) } {
+                    return true;
+                }
             }
         }
+        unsafe { id_list_has(block, list, ssp, flags, 0) }
     }
-    unsafe { id_list_has(list, ssp, flags, 0) }
 }
 
-/// The list half of [`in_id_list`], with the cluster recursion depth threaded
-/// through rather than kept in a static.
+/// The list half of [`SynState::in_id_list`], over `block`'s clusters, with
+/// the cluster recursion depth threaded through rather than kept in a static.
 ///
 /// A cluster that includes itself indirectly would recurse forever, so the
 /// depth is capped at 30.
@@ -581,7 +582,13 @@ pub(crate) unsafe fn in_id_list(
 ///
 /// `list` must be null, `ID_LIST_ALL`, or point at a zero-terminated syntax
 /// id list the parser owns.
-unsafe fn id_list_has(mut list: *mut int16_t, ssp: sp_syn, flags: SynFlags, depth: c_int) -> bool {
+unsafe fn id_list_has(
+    block: SynBlockRef,
+    mut list: *mut int16_t,
+    ssp: sp_syn,
+    flags: SynFlags,
+    depth: c_int,
+) -> bool {
     if list.is_null() {
         return false;
     }
@@ -631,13 +638,12 @@ unsafe fn id_list_has(mut list: *mut int16_t, ssp: sp_syn, flags: SynFlags, dept
             return retval;
         }
         if item as c_int >= SYNID_CLUSTER {
-            let block = syn_block();
             let scl_list = block.clusters()[(item as c_int - SYNID_CLUSTER) as usize]
                 .scl_list
                 .as_ptr();
             if !scl_list.is_null()
                 && depth < 30
-                && unsafe { id_list_has(scl_list, ssp, flags, depth + 1) }
+                && unsafe { id_list_has(block, scl_list, ssp, flags, depth + 1) }
             {
                 return retval;
             }

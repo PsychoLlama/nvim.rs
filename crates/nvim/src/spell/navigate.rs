@@ -81,7 +81,7 @@ fn decor_spell_nav_col(
 #[inline]
 fn can_syn_spell(window: Win, lnum: LineNr, col: c_int) -> bool {
     let mut can_spell = false;
-    unsafe { window.syntax_id(lnum, col as ColNr, 0, &raw mut can_spell, 0) };
+    window.syntax_id(lnum, col as ColNr, false, Some(&mut can_spell), false);
     can_spell
 }
 

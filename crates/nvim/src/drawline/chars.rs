@@ -322,24 +322,20 @@ impl Cells {
         at: ::core::ffi::c_int,
         can_spell: &mut bool,
     ) {
-        // SAFETY: the caller's window and byte indexes.
         // An error inside the syntax patterns turns highlighting off for
         // the buffer rather than being reported per character.
         let save_did_emsg = did_emsg.get();
         did_emsg.set(0);
 
-        self.decor_attr = unsafe {
-            get_syntax_attr(
-                window.buffer(),
-                at - 1,
-                if (*f.spv).spv_has_spell {
-                    can_spell as *mut bool
-                } else {
-                    ::core::ptr::null_mut()
-                },
-                false,
-            )
-        };
+        // SAFETY: the line's spell state, live for the line.
+        let has_spell = unsafe { (*f.spv).spv_has_spell };
+        let cell = get_syntax_attr(
+            window.buffer(),
+            at - 1,
+            has_spell.then_some(can_spell),
+            false,
+        );
+        self.decor_attr = cell.attr;
 
         if did_emsg.get() != 0 {
             unsafe { (*window.w_s).b_syn_error = true };
@@ -359,7 +355,8 @@ impl Cells {
         self.syntax_flags = if self.cell_char == 0 {
             SynFlags::NONE
         } else {
-            unsafe { get_syntax_info(&raw mut self.syntax_seqnr) }
+            self.syntax_seqnr = cell.seqnr;
+            cell.flags
         };
     }
 

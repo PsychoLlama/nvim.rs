@@ -1,14 +1,14 @@
-//! The current syntax state and the per-line driver.
+//! The per-line driver.
 //!
-//! [`syntax_start`] is the entry point every reader goes through: it points the
-//! module's statics at a window/buffer, finds a state to start from (the cache
-//! in `stack.rs`, or a `syn_sync` scan) and parses forward to the wanted line.
-//! [`syn_finish_line`] is one line of that walk, [`syn_start_line`] resets the
-//! per-line state, and [`syn_update_ends`] recomputes where the items on the
-//! stack end after the state was loaded from the cache.
+//! [`Win::syntax_start`] is the entry point every reader goes through: it
+//! points the parser at a window/buffer, finds a state to start from (the
+//! cache in `stack.rs`, or a `syn_sync` scan) and parses forward to the wanted
+//! line. [`SynState::finish_line`] is one line of that walk,
+//! [`SynState::start_line`] resets the per-line state, and
+//! [`SynState::update_ends`] recomputes where the items on the stack end
+//! after the state was loaded from the cache.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,8 +16,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use core::ffi::c_int;
 
@@ -27,56 +25,58 @@ use crate::types::NUL;
 impl Win {
     /// Start syntax recognition for a line.
     ///
-    /// Normally called from the screen update, once per displayed line. The window
-    /// and buffer are remembered in `syn_win`/`syn_buf`/`syn_block`, because
-    /// [`get_syntax_attr`] is not given them -- and careful: `curwin` and `curbuf`
-    /// are likely to point somewhere else entirely.
+    /// Normally called from the screen update, once per displayed line. The
+    /// window and buffer are remembered in the parser, because
+    /// [`get_syntax_attr`] is not given the window -- and careful: `curwin`
+    /// and `curbuf` are likely to point somewhere else entirely.
     pub(crate) fn syntax_start(self, lnum: LineNr) {
-        // The last change id we parsed at. A change may have invalidated the
-        // current state, so this is checked as if it were part of the identity
-        // of the buffer.
-        static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
+        with_parser(|parser| parser.start(self, lnum));
+    }
+}
 
-        current_sub_char.set(NUL);
-        if syn_block().raw() != self.w_s
-            || syn_buf.get() != self.buffer().try_id()
-            || changedtick.get() != buf_get_changedtick(syn_buffer())
+impl SynState {
+    /// [`Win::syntax_start`]'s body.
+    pub(crate) fn start(&mut self, window: Win, lnum: LineNr) {
+        let buffer = window.buffer();
+        self.buffer = buffer;
+        self.current.sub_char = NUL;
+        let changedtick = buf_get_changedtick(buffer);
+        if self.parsed.map(SynBlockRef::raw) != Some(window.w_s)
+            || self.buf != buffer.try_id()
+            || self.changedtick != changedtick
         {
-            invalidate_current_state();
-            syn_buf.set(self.buffer().try_id());
-            parsed_block.set(self.w_s);
+            self.invalidate_current_state();
+            self.buf = buffer.try_id();
+            self.parsed = Some(window.syntax());
         }
-        changedtick.set(buf_get_changedtick(syn_buffer()));
-        syn_win.set(Some(self.id()));
+        self.changedtick = changedtick;
+        self.win = Some(window.id());
 
-        syn_stack_alloc();
-        syn_block().b_sst_lasttick = display_tick.get();
+        self.stack_alloc();
+        let mut block = self.block();
+        block.b_sst_lasttick = display_tick.get();
 
         // If the state at the end of the previous line is useful, store it.
-        if current_state_valid()
-            && current_lnum.get() < lnum
-            && current_lnum.get() < syn_buffer().line_count()
-        {
-            syn_finish_line(false);
-            if !current_state_stored.get() {
-                current_lnum.set(current_lnum.get() + 1);
-                store_current_state();
+        if self.stack_valid && self.lnum < lnum && self.lnum < buffer.line_count() {
+            self.finish_line(false);
+            if !self.state_stored {
+                self.lnum += 1;
+                self.store_current_state();
             }
-            // If current_lnum is now "lnum", keep the current state -- which
-            // happens very often. Otherwise work it out below.
-            if current_lnum.get() != lnum {
-                invalidate_current_state();
+            // If lnum is now "lnum", keep the current state -- which happens
+            // very often. Otherwise work it out below.
+            if self.lnum != lnum {
+                self.invalidate_current_state();
             }
         } else {
-            invalidate_current_state();
+            self.invalidate_current_state();
         }
 
-        // Try to synchronise from a saved state, but only if "lnum" is neither
-        // before one nor too far beyond one.
+        // Try to synchronise from a saved state, but only if "lnum" is
+        // neither before one nor too far beyond one.
         let mut last_valid = None;
-        if !current_state_valid() {
+        if !self.stack_valid {
             let mut last_min_valid = None;
-            let block = syn_block();
             let minlines = block.b_syn_sync_minlines;
             for id in block.b_sst.used() {
                 let entry = block.b_sst.entry(id);
@@ -91,313 +91,326 @@ impl Win {
                 }
             }
             if let Some(id) = last_min_valid {
-                load_current_state(id);
+                self.load_current_state(id);
             }
         }
 
         // Still nothing: re-synchronise.
-        let first_stored = if !current_state_valid() {
-            syn_sync(self, lnum, last_valid);
-            if current_lnum.get() == 1 {
+        let first_stored = if self.stack_valid {
+            self.lnum
+        } else {
+            self.sync(window, lnum, last_valid);
+            if self.lnum == 1 {
                 1 // the first line is always valid, whatever "minlines" says
             } else {
                 // "minlines" lines have to be parsed before a state can be
                 // considered valid enough to store.
-                current_lnum.get() + syn_block().b_syn_sync_minlines
+                self.lnum + block.b_syn_sync_minlines
             }
-        } else {
-            current_lnum.get()
         };
 
         // Advance from the sync point or the saved state to the wanted line,
         // saving some entries along the way to sync with later on.
-        let dist = store_distance();
+        let dist = self.store_distance();
         let mut prev = None;
-        while current_lnum.get() < lnum {
-            syn_start_line();
-            syn_finish_line(false);
-            current_lnum.set(current_lnum.get() + 1);
-            if current_lnum.get() >= first_stored {
-                prev = record_line(prev, lnum, dist);
+        while self.lnum < lnum {
+            self.start_line();
+            self.finish_line(false);
+            self.lnum += 1;
+            if self.lnum >= first_stored {
+                prev = self.record_line(prev, lnum, dist);
             }
 
             // This can take a long time: stop when CTRL-C is pressed. The
             // current state is then wrong.
             line_breakcheck();
             if got_int.get() {
-                current_lnum.set(lnum);
+                self.lnum = lnum;
                 break;
             }
         }
-        syn_start_line();
-    }
-}
-
-/// Is the current state valid, i.e. does it describe a real position?
-///
-/// Upstream spells this `VALID_STATE`, and stores the answer in the growarray's
-/// `ga_itemsize`: `invalidate_current_state` zeroes it.
-#[inline]
-pub(crate) fn current_state_valid() -> bool {
-    current_state.with(Option::is_some)
-}
-
-/// How many lines apart to store cache entries for lines that are not
-/// displayed. Displayed lines get one each; the rest share what is left.
-pub(crate) fn store_distance() -> LineNr {
-    let entries = c_int::try_from(syn_block().b_sst.len())
-        .expect("the cache is a few thousand entries at most");
-    if entries <= Rows.get() {
-        999999
-    } else {
-        let lines = syn_buffer().line_count();
-        lines / (entries - Rows.get()) as LineNr + 1
-    }
-}
-
-/// After parsing up to `current_lnum`, either adopt the cached state for this
-/// line or store the one we just computed. Answers the cache entry to carry
-/// into the next line.
-///
-/// When the cached entry for this line matches what we parsed, every entry
-/// below it that was only waiting on a change *before* this line becomes valid
-/// again -- which is what turns one re-parse into a whole valid tail.
-fn record_line(mut prev: Option<EntryId>, lnum: LineNr, dist: LineNr) -> Option<EntryId> {
-    let parsed_lnum = current_lnum.get();
-    if prev.is_none() {
-        prev = syn_stack_find_entry(parsed_lnum - 1);
-    }
-    let mut block = syn_block();
-    let cache = &block.b_sst;
-    let mut sp = prev.or(cache.first());
-    while let Some(id) = sp
-        && cache.entry(id).lnum < parsed_lnum
-    {
-        sp = cache.next(id);
+        self.start_line();
     }
 
-    if let Some(id) = sp
-        && block.b_sst.entry(id).lnum == parsed_lnum
-        && syn_stack_equal(id)
-    {
-        let mut prev = id;
-        let mut sp = Some(id);
-        while let Some(id) = sp
-            && block.b_sst.entry(id).change_lnum <= parsed_lnum
-        {
-            let entry = block.b_sst.entry_mut(id);
-            if entry.lnum <= lnum {
-                prev = id; // a valid state before the desired line
-            } else if entry.change_lnum == 0 {
-                break; // past the states that depend on a change
-            }
-            entry.change_lnum = 0;
-            sp = block.b_sst.next(id);
+    /// How many lines apart to store cache entries for lines that are not
+    /// displayed. Displayed lines get one each; the rest share what is left.
+    pub(crate) fn store_distance(&self) -> LineNr {
+        let entries = c_int::try_from(self.block().b_sst.len())
+            .expect("the cache is a few thousand entries at most");
+        if entries <= Rows.get() {
+            999999
+        } else {
+            self.line_count() / (entries - Rows.get()) + 1
         }
-        load_current_state(prev);
-        return Some(prev);
     }
 
-    // Store the state at this line when it is the first one, the line we
-    // are parsing for, or far enough from the last stored one.
-    if prev.is_none_or(|prev| {
-        parsed_lnum == lnum || parsed_lnum >= block.b_sst.entry(prev).lnum + dist
-    }) {
-        return store_current_state();
-    }
-    prev
-}
+    /// After parsing up to `lnum`, either adopt the cached state for this
+    /// line or store the one just computed. Answers the cache entry to carry
+    /// into the next line.
+    ///
+    /// When the cached entry for this line matches what we parsed, every
+    /// entry below it that was only waiting on a change *before* this line
+    /// becomes valid again -- which is what turns one re-parse into a whole
+    /// valid tail.
+    fn record_line(
+        &mut self,
+        mut prev: Option<EntryId>,
+        lnum: LineNr,
+        dist: LineNr,
+    ) -> Option<EntryId> {
+        let parsed_lnum = self.lnum;
+        let mut block = self.block();
+        if prev.is_none() {
+            prev = block.b_sst.find(parsed_lnum - 1);
+        }
+        let cache = &block.b_sst;
+        let mut sp = prev.or(cache.first());
+        while let Some(id) = sp
+            && cache.entry(id).lnum < parsed_lnum
+        {
+            sp = cache.next(id);
+        }
 
-/// Empty the current state stack, releasing its extmatch references. The
-/// stack stays valid, as upstream's `ga_clear` leaves it.
-pub(crate) fn clear_current_state() {
-    // The items move out first and drop after: nothing runs while the cell
-    // is borrowed.
-    let items = current_state.with_mut(|stack| stack.as_mut().map(core::mem::take));
-    drop(items);
-}
-
-/// Reset the per-line state before parsing a line.
-pub(crate) fn syn_start_line() {
-    current_finished.set(false);
-    current_col.set(0);
-
-    // The end of a start/skip/end that continues from the previous line
-    // needs updating, and so do regions with "keepend".
-    if state_len() > 0 {
-        syn_update_ends(true);
-        check_state_ends();
-    }
-
-    next_match_idx.set(-1);
-    current_line_id.set(current_line_id.get() + 1);
-    next_seqnr.set(1);
-}
-
-/// Recompute where the items on the stack end.
-///
-/// `startofline` says we are at the start of a line, in which case the
-/// innermost item is always updated; otherwise the update is forced only on the
-/// items with "keepend", because they influence what they contain.
-pub(crate) fn syn_update_ends(startofline: bool) {
-    if startofline {
-        // A match carried over from a previous line with a contained
-        // region ends as soon as that region ends, so drop the end it has
-        // and mark it as continued.
-        let mut i = 0;
-        while i < state_len() {
-            let mut cur_si = unsafe { state_at(i) };
-            if cur_si.si_idx >= 0
-                && c_int::from(syn_block().pattern(cur_si.si_idx).sp_type) == SPTYPE_MATCH
-                && cur_si.si_m_endpos.lnum < current_lnum.get()
+        if let Some(id) = sp
+            && block.b_sst.entry(id).lnum == parsed_lnum
+            && self.syn_stack_equal(id)
+        {
+            let mut prev = id;
+            let mut sp = Some(id);
+            while let Some(id) = sp
+                && block.b_sst.entry(id).change_lnum <= parsed_lnum
             {
-                cur_si.si_flags |= SynFlags::MATCHCONT;
-                cur_si.si_m_endpos = LPos { lnum: 0, col: 0 };
-                cur_si.si_h_endpos = cur_si.si_m_endpos;
-                cur_si.si_ends = 1;
+                let entry = block.b_sst.entry_mut(id);
+                if entry.lnum <= lnum {
+                    prev = id; // a valid state before the desired line
+                } else if entry.change_lnum == 0 {
+                    break; // past the states that depend on a change
+                }
+                entry.change_lnum = 0;
+                sp = block.b_sst.next(id);
+            }
+            self.load_current_state(prev);
+            return Some(prev);
+        }
+
+        // Store the state at this line when it is the first one, the line we
+        // are parsing for, or far enough from the last stored one.
+        if prev.is_none_or(|prev| {
+            parsed_lnum == lnum || parsed_lnum >= block.b_sst.entry(prev).lnum + dist
+        }) {
+            return self.store_current_state();
+        }
+        prev
+    }
+
+    /// Empty the state stack. It stays valid, as upstream's `ga_clear`
+    /// leaves it.
+    pub(crate) fn clear_current_state(&mut self) {
+        self.stack.clear();
+    }
+
+    /// Reset the per-line state before parsing a line.
+    pub(crate) fn start_line(&mut self) {
+        self.finished = false;
+        self.col = 0;
+
+        // The end of a start/skip/end that continues from the previous line
+        // needs updating, and so do regions with "keepend".
+        if self.state_len() > 0 {
+            self.update_ends(true);
+            self.check_state_ends();
+        }
+
+        self.next_match.idx = -1;
+        self.line_id += 1;
+        self.next_seqnr = 1;
+    }
+
+    /// Recompute where the items on the stack end.
+    ///
+    /// `startofline` says we are at the start of a line, in which case the
+    /// innermost item is always updated; otherwise the update is forced only
+    /// on the items with "keepend", because they influence what they contain.
+    pub(crate) fn update_ends(&mut self, startofline: bool) {
+        let block = self.block();
+        if startofline {
+            // A match carried over from a previous line with a contained
+            // region ends as soon as that region ends, so drop the end it has
+            // and mark it as continued.
+            let lnum = self.lnum;
+            for cur_si in &mut self.stack {
+                if cur_si.si_idx >= 0
+                    && c_int::from(block.pattern(cur_si.si_idx).sp_type) == SPTYPE_MATCH
+                    && cur_si.si_m_endpos.lnum < lnum
+                {
+                    cur_si.si_flags |= SynFlags::MATCHCONT;
+                    cur_si.si_m_endpos = LPos { lnum: 0, col: 0 };
+                    cur_si.si_h_endpos = cur_si.si_m_endpos;
+                    cur_si.si_ends = 1;
+                }
+            }
+        }
+
+        // Start from the innermost "extend" item, as check_keepend does: a
+        // "keepend" outside it does nothing. If "extend" has just been
+        // removed (`!startofline`) the normal regions inside a "keepend" need
+        // updating too, because "extend" could have extended those as well.
+        let mut i = self.top();
+        if self.keepend_level >= 0 {
+            while i > self.keepend_level {
+                if self.item(i).si_flags.has(SynFlags::EXTEND) {
+                    break;
+                }
+                i -= 1;
+            }
+        }
+
+        let mut seen_keepend = false;
+        while i < self.state_len() {
+            let innermost = i == self.top();
+            let lnum = self.lnum;
+            let cur_si = self.item_mut(i);
+            if cur_si.si_flags.has(SynFlags::KEEPEND)
+                || (seen_keepend && !startofline)
+                || (innermost && startofline)
+            {
+                // Highlighting starts in column 0.
+                cur_si.si_h_startpos.col = 0;
+                cur_si.si_h_startpos.lnum = lnum;
+
+                let (matchcont, keepend) = (
+                    cur_si.si_flags.has(SynFlags::MATCHCONT),
+                    cur_si.si_flags.has(SynFlags::KEEPEND),
+                );
+                if !matchcont {
+                    self.update_si_end(i, self.col, !startofline);
+                }
+                if !startofline && keepend {
+                    seen_keepend = true;
+                }
             }
             i += 1;
         }
+        self.check_keepend();
     }
 
-    // Start from the innermost "extend" item, as check_keepend does: a
-    // "keepend" outside it does nothing. If "extend" has just been removed
-    // (`!startofline`) the normal regions inside a "keepend" need updating
-    // too, because "extend" could have extended those as well.
-    let mut i = state_len() - 1;
-    if keepend_level.get() >= 0 {
-        while i > keepend_level.get() {
-            if unsafe { state_at(i).si_flags }.has(SynFlags::EXTEND) {
-                break;
+    /// Throw the state away and mark it invalid.
+    pub(crate) fn invalidate_current_state(&mut self) {
+        self.clear_current_state();
+        self.stack_valid = false;
+        self.next_list = ::core::ptr::null_mut();
+        self.keepend_level = -1;
+    }
+
+    /// Mark the state valid and ready to be pushed onto. A stack that is
+    /// already valid keeps whatever it holds, as upstream's does.
+    pub(crate) fn validate_current_state(&mut self) {
+        self.stack_valid = true;
+    }
+
+    /// Parse to the end of the current line without answering any
+    /// attributes; only the state at the end of the line is wanted.
+    ///
+    /// May start anywhere in the line, as long as the state is valid. While
+    /// syncing, answers whether a sync point was found.
+    pub(crate) fn finish_line(&mut self, syncing: bool) -> bool {
+        while !self.finished {
+            self.current_attr(syncing, false, None, false);
+
+            if syncing && self.state_len() != 0 {
+                // Check for a match with a sync item.
+                let si_idx = self.item(self.top()).si_idx;
+                if si_idx >= 0
+                    && self
+                        .block()
+                        .pattern(si_idx)
+                        .sp_flags
+                        .has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE)
+                {
+                    return true;
+                }
+
+                // current_attr() skipped the check for an item that ends
+                // here; do it now. Be careful not to go past the NUL.
+                let prev_col = self.col;
+                if c_int::from(self.curline_byte(self.col)) != NUL {
+                    self.col += 1;
+                }
+                self.check_state_ends();
+                self.col = prev_col;
             }
-            i -= 1;
+            self.col += 1;
         }
+        false
     }
-
-    let mut seen_keepend = false;
-    while i < state_len() {
-        let mut cur_si = unsafe { state_at(i) };
-        let innermost = i == state_len() - 1;
-        if cur_si.si_flags.has(SynFlags::KEEPEND)
-            || (seen_keepend && !startofline)
-            || (innermost && startofline)
-        {
-            // Highlighting starts in column 0.
-            cur_si.si_h_startpos.col = 0;
-            cur_si.si_h_startpos.lnum = current_lnum.get();
-
-            if !cur_si.si_flags.has(SynFlags::MATCHCONT) {
-                update_si_end(cur_si, current_col.get(), !startofline);
-            }
-            if !startofline && cur_si.si_flags.has(SynFlags::KEEPEND) {
-                seen_keepend = true;
-            }
-        }
-        i += 1;
-    }
-    check_keepend();
 }
 
 /// Stop parsing syntax above line `lnum`.
 ///
-/// If the stored state at or below this line depended on a change before it, it
-/// now depends on the line below the last parsed one. The window looks like:
-/// the line which changed, the displayed lines, then `lnum` -- the line below
-/// the window.
+/// If the stored state at or below this line depended on a change before it,
+/// it now depends on the line below the last parsed one. The window looks
+/// like: the line which changed, the displayed lines, then `lnum` -- the line
+/// below the window.
 pub(crate) fn syntax_end_parsing(window: Win, lnum: LineNr) {
-    if syn_block().raw() != window.w_s {
-        return; // not the right window
-    }
-    let mut block = syn_block();
-    let mut sp = syn_stack_find_entry(lnum);
-    if let Some(id) = sp
-        && block.b_sst.entry(id).lnum < lnum
-    {
-        sp = block.b_sst.next(id);
-    }
-    if let Some(id) = sp
-        && block.b_sst.entry(id).change_lnum != 0
-    {
-        block.b_sst.entry_mut(id).change_lnum = lnum;
-    }
-}
-
-/// Throw the current state away and mark it invalid.
-pub(crate) fn invalidate_current_state() {
-    clear_current_state();
-    current_state.set(None); // marks current_state invalid
-    current_next_list.set(::core::ptr::null_mut());
-    keepend_level.set(-1);
-}
-
-/// Mark the current state valid and ready to be pushed onto. A stack that is
-/// already valid keeps whatever it holds, as upstream's does.
-pub(crate) fn validate_current_state() {
-    current_state.with_mut(|stack| {
-        if stack.is_none() {
-            *stack = Some(Vec::new());
+    with_parser(|parser| {
+        let Some(mut block) = parser.parsed else {
+            return;
+        };
+        if block.raw() != window.w_s {
+            return; // not the right window
+        }
+        let mut sp = block.b_sst.find(lnum);
+        if let Some(id) = sp
+            && block.b_sst.entry(id).lnum < lnum
+        {
+            sp = block.b_sst.next(id);
+        }
+        if let Some(id) = sp
+            && block.b_sst.entry(id).change_lnum != 0
+        {
+            block.b_sst.entry_mut(id).change_lnum = lnum;
         }
     });
 }
 
-/// Has the syntax at the start of `lnum` changed since last time?
-///
-/// Only called just after [`get_syntax_attr`] for the previous line, to decide
-/// whether the next line has to be redrawn too.
-pub(crate) fn syntax_check_changed(lnum: LineNr) -> bool {
-    // Only worth checking when `lnum` is just below the line we last
-    // parsed and there is a saved state for it.
-    if !current_state_valid() || lnum != current_lnum.get() + 1 {
-        return true;
-    }
-    let Some(sp) =
-        syn_stack_find_entry(lnum).filter(|&id| syn_block().b_sst.entry(id).lnum == lnum)
-    else {
-        return true;
-    };
-
-    // Finish the previous line, which is needed when not all of it was
-    // drawn, and compare with the state saved for this one.
-    syn_finish_line(false);
-    let changed = !syn_stack_equal(sp);
-
-    // Store the current state for later use.
-    current_lnum.set(current_lnum.get() + 1);
-    store_current_state();
-    changed
+/// Throw the parser's state away and mark it invalid: the items it was
+/// parsing are about to change.
+pub(crate) fn invalidate_current_state() {
+    with_parser(SynState::invalidate_current_state);
 }
 
-/// Parse to the end of the current line without answering any attributes; only
-/// the state at the end of the line is wanted.
+/// Has the syntax at the start of `lnum` changed since last time?
 ///
-/// May start anywhere in the line, as long as the current state is valid.
-/// While syncing, answers whether a sync point was found.
-pub(crate) fn syn_finish_line(syncing: bool) -> bool {
-    while !current_finished.get() {
-        unsafe { syn_current_attr(syn_buffer(), syncing, false, ::core::ptr::null_mut(), false) };
-
-        if syncing && state_len() != 0 {
-            // Check for a match with a sync item.
-            let cur_si = unsafe { state_top() };
-            if cur_si.si_idx >= 0
-                && syn_block()
-                    .pattern(cur_si.si_idx)
-                    .sp_flags
-                    .has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE)
-            {
-                return true;
-            }
-
-            // syn_current_attr() skipped the check for an item that ends
-            // here; do it now. Be careful not to go past the NUL.
-            let prev_col = current_col.get();
-            if c_int::from(syn_curline_byte(syn_buffer(), current_col.get())) != NUL {
-                current_col.set(current_col.get() + 1);
-            }
-            check_state_ends();
-            current_col.set(prev_col);
+/// Only called just after [`get_syntax_attr`] for the previous line, to
+/// decide whether the next line has to be redrawn too.
+pub(crate) fn syntax_check_changed(lnum: LineNr) -> bool {
+    with_parser(|parser| {
+        // Only worth checking when `lnum` is just below the line we last
+        // parsed and there is a saved state for it.
+        if !parser.stack_valid || lnum != parser.lnum + 1 {
+            return true;
         }
-        current_col.set(current_col.get() + 1);
-    }
-    false
+        let Some(buffer) = parser.buf.and_then(BufId::get) else {
+            return true;
+        };
+        parser.buffer = buffer;
+        let block = parser.block();
+        let Some(sp) = block
+            .b_sst
+            .find(lnum)
+            .filter(|&id| block.b_sst.entry(id).lnum == lnum)
+        else {
+            return true;
+        };
+
+        // Finish the previous line, which is needed when not all of it was
+        // drawn, and compare with the state saved for this one.
+        parser.finish_line(false);
+        let changed = !parser.syn_stack_equal(sp);
+
+        // Store the current state for later use.
+        parser.lnum += 1;
+        parser.store_current_state();
+        changed
+    })
 }

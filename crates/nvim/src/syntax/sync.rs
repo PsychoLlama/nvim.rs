@@ -22,110 +22,6 @@ use crate::regexp::RE_MAGIC;
 use crate::types::NUL;
 use crate::winlayer::graph::{switch_buffer, switch_window};
 
-/// Find a synchronisation point for line `start_lnum`, setting `current_lnum`
-/// and the current state to it.
-///
-/// One of three methods, in this order: search backwards for the end of a
-/// C comment, search backwards for the `:syntax sync match` patterns, or simply
-/// start a given number of lines above.
-///
-/// `last_valid` is the last cached state before `start_lnum` that is still
-/// trustworthy; running into it during the backward scan ends the search.
-pub(crate) fn syn_sync(window: Win, start_lnum: LineNr, last_valid: Option<EntryId>) {
-    // Clear any current state that might be hanging around.
-    invalidate_current_state();
-
-    let start_lnum = sync_backoff(start_lnum);
-    current_lnum.set(start_lnum);
-
-    let flags = syn_block().b_syn_sync_flags;
-    if flags & SF_CCOMMENT != 0 {
-        sync_by_ccomment(window, start_lnum);
-    } else if flags & SF_MATCH != 0 {
-        sync_by_match(start_lnum, last_valid);
-    }
-    validate_current_state();
-}
-
-/// How far above `start_lnum` parsing starts by default.
-///
-/// At least "minlines" back, but further, so that scrolling backwards does not
-/// resync on every line: it then resyncs one line in N, where N is minlines
-/// times 1.5 -- or times 2 when minlines is small. Watch out for overflow when
-/// minlines is MAXLNUM.
-fn sync_backoff(start_lnum: LineNr) -> LineNr {
-    let minlines = syn_block().b_syn_sync_minlines;
-    if minlines > start_lnum {
-        return 1;
-    }
-    let mut back = if minlines == 1 {
-        1
-    } else if minlines < 10 {
-        minlines * 2
-    } else {
-        minlines * 3 / 2
-    };
-    let maxlines = syn_block().b_syn_sync_maxlines;
-    if maxlines != 0 && back > maxlines {
-        back = maxlines;
-    }
-    if back >= start_lnum {
-        1
-    } else {
-        start_lnum - back
-    }
-}
-
-/// Search backwards for the end of a C-style comment, and if the start line
-/// turns out to be inside one, push the syntax item that defines it.
-fn sync_by_ccomment(mut window: Win, mut start_lnum: LineNr) {
-    // `find_start_comment` works on the current buffer, so make syn_buf it
-    // for a moment. The window moves without its buffer: the parser's buffer
-    // is `syn_buf`, which need not be the one `window` shows.
-    let saved_win = switch_window(window);
-    let saved_buf = switch_buffer(syn_buffer());
-
-    // Skip lines that end in a backslash.
-    while start_lnum > 1 {
-        let l = ml_get(start_lnum - 1);
-        if unsafe { *l } as c_int == NUL
-            || unsafe { *l.offset(ml_get_len(start_lnum - 1) as isize - 1) } as c_int
-                != '\\' as c_int
-        {
-            break;
-        }
-        start_lnum -= 1;
-    }
-    current_lnum.set(start_lnum);
-
-    // Set the cursor to the start of the search.
-    let cursor_save = window.w_cursor;
-    window.w_cursor.lnum = start_lnum;
-    window.w_cursor.col = 0;
-
-    // Restrict the search for the end of the comment to "maxlines".
-    if find_start_comment(syn_block().b_syn_sync_maxlines as c_int).is_some() {
-        let mut idx = syn_pattern_count();
-        while idx > 0 {
-            idx -= 1;
-            let block = syn_block();
-            let spp = block.pattern(idx);
-            if spp.sp_syn.id as c_int == syn_block().b_syn_sync_id as c_int
-                && spp.sp_type as c_int == SPTYPE_START
-            {
-                validate_current_state();
-                push_current_state(idx);
-                unsafe { update_si_attr(state_len() - 1) };
-                break;
-            }
-        }
-    }
-
-    window.w_cursor = cursor_save;
-    saved_win.restore();
-    saved_buf.restore();
-}
-
 /// Where a `:syntax sync match` matched, and what it said to do there.
 struct SyncPoint {
     /// The sync item's flags -- `grouphere` or `groupthere`.
@@ -139,216 +35,327 @@ struct SyncPoint {
     m_endpos: LPos,
 }
 
-/// Search backwards, one line at a time, for a `:syntax sync match`.
-fn sync_by_match(start_lnum: LineNr, last_valid: Option<EntryId>) {
-    let maxlines = syn_block().b_syn_sync_maxlines;
-    let break_lnum = if maxlines != 0 && start_lnum > maxlines {
-        start_lnum - maxlines
-    } else {
-        0
-    };
+impl SynState {
+    /// Find a synchronisation point for line `start_lnum`, setting `current_lnum`
+    /// and the current state to it.
+    ///
+    /// One of three methods, in this order: search backwards for the end of a
+    /// C comment, search backwards for the `:syntax sync match` patterns, or simply
+    /// start a given number of lines above.
+    ///
+    /// `last_valid` is the last cached state before `start_lnum` that is still
+    /// trustworthy; running into it during the backward scan ends the search.
+    pub(crate) fn sync(&mut self, window: Win, start_lnum: LineNr, last_valid: Option<EntryId>) {
+        // Clear any current state that might be hanging around.
+        self.invalidate_current_state();
 
-    let mut end_lnum = start_lnum;
-    let mut lnum = start_lnum;
-    loop {
-        lnum -= 1;
-        if lnum <= break_lnum {
-            break;
-        }
+        let start_lnum = self.sync_backoff(start_lnum);
+        self.lnum = start_lnum;
 
-        // This can take a long time: stop when CTRL-C is pressed.
-        line_breakcheck();
-        if got_int.get() {
-            invalidate_current_state();
-            current_lnum.set(start_lnum);
-            break;
+        let flags = self.block().b_syn_sync_flags;
+        if flags & SF_CCOMMENT != 0 {
+            self.sync_by_ccomment(window, start_lnum);
+        } else if flags & SF_MATCH != 0 {
+            self.sync_by_match(start_lnum, last_valid);
         }
-        // Have we run into a saved state stack that is still valid?
-        if let Some(id) = last_valid
-            && lnum == syn_block().b_sst.entry(id).lnum
-        {
-            load_current_state(id);
-            break;
-        }
-        // Does the previous line have the line-continuation pattern?
-        if lnum > 1 && syn_match_linecont(lnum - 1) {
-            continue;
-        }
+        self.validate_current_state();
+    }
 
-        // Start with nothing on the state stack.
-        validate_current_state();
-        let found = scan_for_sync_point(lnum, end_lnum, start_lnum);
-
-        let Some(found) = found else {
-            end_lnum = lnum;
-            invalidate_current_state();
-            continue;
-        };
-
-        // Put the item the sync point named on the state stack. With no
-        // item named, leave the stack empty.
-        clear_current_state();
-        if found.match_idx >= 0 {
-            push_current_state(found.match_idx);
-            unsafe { update_si_attr(state_len() - 1) };
+    /// How far above `start_lnum` parsing starts by default.
+    ///
+    /// At least "minlines" back, but further, so that scrolling backwards does not
+    /// resync on every line: it then resyncs one line in N, where N is minlines
+    /// times 1.5 -- or times 2 when minlines is small. Watch out for overflow when
+    /// minlines is MAXLNUM.
+    fn sync_backoff(&self, start_lnum: LineNr) -> LineNr {
+        let minlines = self.block().b_syn_sync_minlines;
+        if minlines > start_lnum {
+            return 1;
         }
-        if found.flags.has(SynFlags::SYNC_HERE) {
-            // "grouphere": continue from the sync point match to the end of
-            // that line, and start parsing at the next one.
-            current_lnum.set(found.m_endpos.lnum);
-            current_col.set(found.m_endpos.col);
-            if state_len() > 0 {
-                let mut cur_si = unsafe { state_top() };
-                cur_si.si_h_startpos.lnum = found.lnum;
-                cur_si.si_h_startpos.col = found.col;
-                update_si_end(cur_si, current_col.get(), true);
-                check_keepend();
-            }
-            syn_finish_line(false);
-            current_lnum.set(current_lnum.get() + 1);
+        let mut back = if minlines == 1 {
+            1
+        } else if minlines < 10 {
+            minlines * 2
         } else {
-            // "groupthere": parsing starts at the line we synced for, with
-            // the item already in effect.
-            current_lnum.set(start_lnum);
+            minlines * 3 / 2
+        };
+        let maxlines = self.block().b_syn_sync_maxlines;
+        if maxlines != 0 && back > maxlines {
+            back = maxlines;
         }
-        break;
+        if back >= start_lnum {
+            1
+        } else {
+            start_lnum - back
+        }
     }
 
-    // Ran into the start of the file, or exceeded the maximum number of
-    // lines. (Every `break` above leaves `lnum` above `break_lnum`, so this
-    // only fires on the loop's own exhaustion.)
-    if lnum <= break_lnum {
-        invalidate_current_state();
-        current_lnum.set(break_lnum + 1);
-    }
-}
+    /// Search backwards for the end of a C-style comment, and if the start line
+    /// turns out to be inside one, push the syntax item that defines it.
+    fn sync_by_ccomment(&mut self, mut window: Win, mut start_lnum: LineNr) {
+        // `find_start_comment` works on the current buffer, so make syn_buf it
+        // for a moment. The window moves without its buffer: the parser's buffer
+        // is `syn_buf`, which need not be the one `window` shows.
+        let saved_win = switch_window(window);
+        let saved_buf = switch_buffer(self.buffer);
 
-/// Parse lines `from`..`end_lnum` looking for a sync point, answering the last
-/// one found in them.
-///
-/// The scan does not stop at the first sync point: it keeps looking further on
-/// in the line, so the one that wins is the closest to `end_lnum`.
-fn scan_for_sync_point(from: LineNr, end_lnum: LineNr, start_lnum: LineNr) -> Option<SyncPoint> {
-    let mut found: Option<SyncPoint> = None;
-    current_lnum.set(from);
-    while current_lnum.get() < end_lnum {
-        syn_start_line();
-        loop {
-            let had_sync_point = syn_finish_line(true);
-            if !had_sync_point || state_len() == 0 {
+        // Skip lines that end in a backslash.
+        while start_lnum > 1 {
+            let l = ml_get(start_lnum - 1);
+            if unsafe { *l } as c_int == NUL
+                || unsafe { *l.offset(ml_get_len(start_lnum - 1) as isize - 1) } as c_int
+                    != '\\' as c_int
+            {
                 break;
             }
-            let cur_si = unsafe { state_top() };
-            if cur_si.si_m_endpos.lnum > start_lnum {
-                // Ignore a match that reaches past where we started.
-                current_lnum.set(end_lnum);
-                break;
-            }
-            let (flags, match_idx) = if cur_si.si_idx < 0 {
-                (SynFlags::NONE, KEYWORD_IDX) // cannot happen?
-            } else {
-                let block = syn_block();
-                let spp = block.pattern(cur_si.si_idx);
-                (spp.sp_flags, spp.sp_sync_idx)
-            };
-            let m_endpos = cur_si.si_m_endpos;
-            found = Some(SyncPoint {
-                flags,
-                match_idx,
-                lnum: current_lnum.get(),
-                col: current_col.get(),
-                m_endpos,
-            });
+            start_lnum -= 1;
+        }
+        self.lnum = start_lnum;
 
-            // Continue after the match, being aware of a zero-length one.
-            if m_endpos.lnum > current_lnum.get() {
-                current_lnum.set(m_endpos.lnum);
-                current_col.set(m_endpos.col);
-                if current_lnum.get() >= end_lnum {
+        // Set the cursor to the start of the search.
+        let cursor_save = window.w_cursor;
+        window.w_cursor.lnum = start_lnum;
+        window.w_cursor.col = 0;
+
+        // Restrict the search for the end of the comment to "maxlines".
+        if find_start_comment(self.block().b_syn_sync_maxlines as c_int).is_some() {
+            let mut idx = self.block().patterns().len() as c_int;
+            while idx > 0 {
+                idx -= 1;
+                let block = self.block();
+                let spp = block.pattern(idx);
+                if spp.sp_syn.id as c_int == self.block().b_syn_sync_id as c_int
+                    && spp.sp_type as c_int == SPTYPE_START
+                {
+                    self.validate_current_state();
+                    self.push_current_state(idx);
+                    self.update_si_attr(self.state_len() - 1);
                     break;
                 }
-            } else if m_endpos.col > current_col.get() {
-                current_col.set(m_endpos.col);
-            } else {
-                current_col.set(current_col.get() + 1);
             }
-
-            // syn_current_attr() skipped the check for an item that ends
-            // here; do it now. Be careful not to go past the NUL.
-            let prev_col = current_col.get();
-            if syn_curline_byte(syn_buffer(), current_col.get()) as c_int != NUL {
-                current_col.set(current_col.get() + 1);
-            }
-            check_state_ends();
-            current_col.set(prev_col);
         }
-        current_lnum.set(current_lnum.get() + 1);
-    }
-    // A sync point whose item has no flags names nothing to sync on, which
-    // upstream spells as `if (found_flags)` -- the zero case falls through
-    // to the next line back.
-    found.filter(|f| f.flags != SynFlags::NONE)
-}
 
-impl Buf {
-    /// Save `syn_buf`'s character table and install the one `syntax iskeyword` set.
+        window.w_cursor = cursor_save;
+        saved_win.restore();
+        saved_buf.restore();
+    }
+
+    /// Search backwards, one line at a time, for a `:syntax sync match`.
+    fn sync_by_match(&mut self, start_lnum: LineNr, last_valid: Option<EntryId>) {
+        let maxlines = self.block().b_syn_sync_maxlines;
+        let break_lnum = if maxlines != 0 && start_lnum > maxlines {
+            start_lnum - maxlines
+        } else {
+            0
+        };
+
+        let mut end_lnum = start_lnum;
+        let mut lnum = start_lnum;
+        loop {
+            lnum -= 1;
+            if lnum <= break_lnum {
+                break;
+            }
+
+            // This can take a long time: stop when CTRL-C is pressed.
+            line_breakcheck();
+            if got_int.get() {
+                self.invalidate_current_state();
+                self.lnum = start_lnum;
+                break;
+            }
+            // Have we run into a saved state stack that is still valid?
+            if let Some(id) = last_valid
+                && lnum == self.block().b_sst.entry(id).lnum
+            {
+                self.load_current_state(id);
+                break;
+            }
+            // Does the previous line have the line-continuation pattern?
+            if lnum > 1 && self.match_linecont(lnum - 1) {
+                continue;
+            }
+
+            // Start with nothing on the state stack.
+            self.validate_current_state();
+            let found = self.scan_for_sync_point(lnum, end_lnum, start_lnum);
+
+            let Some(found) = found else {
+                end_lnum = lnum;
+                self.invalidate_current_state();
+                continue;
+            };
+
+            // Put the item the sync point named on the state stack. With no
+            // item named, leave the stack empty.
+            self.clear_current_state();
+            if found.match_idx >= 0 {
+                self.push_current_state(found.match_idx);
+                self.update_si_attr(self.state_len() - 1);
+            }
+            if found.flags.has(SynFlags::SYNC_HERE) {
+                // "grouphere": continue from the sync point match to the end of
+                // that line, and start parsing at the next one.
+                self.lnum = found.m_endpos.lnum;
+                self.col = found.m_endpos.col;
+                if self.state_len() > 0 {
+                    let top = self.top();
+                    let cur_si = self.item_mut(top);
+                    cur_si.si_h_startpos.lnum = found.lnum;
+                    cur_si.si_h_startpos.col = found.col;
+                    self.update_si_end(top, self.col, true);
+                    self.check_keepend();
+                }
+                self.finish_line(false);
+                self.lnum += 1;
+            } else {
+                // "groupthere": parsing starts at the line we synced for, with
+                // the item already in effect.
+                self.lnum = start_lnum;
+            }
+            break;
+        }
+
+        // Ran into the start of the file, or exceeded the maximum number of
+        // lines. (Every `break` above leaves `lnum` above `break_lnum`, so this
+        // only fires on the loop's own exhaustion.)
+        if lnum <= break_lnum {
+            self.invalidate_current_state();
+            self.lnum = break_lnum + 1;
+        }
+    }
+
+    /// Parse lines `from`..`end_lnum` looking for a sync point, answering the last
+    /// one found in them.
+    ///
+    /// The scan does not stop at the first sync point: it keeps looking further on
+    /// in the line, so the one that wins is the closest to `end_lnum`.
+    fn scan_for_sync_point(
+        &mut self,
+        from: LineNr,
+        end_lnum: LineNr,
+        start_lnum: LineNr,
+    ) -> Option<SyncPoint> {
+        let mut found: Option<SyncPoint> = None;
+        self.lnum = from;
+        while self.lnum < end_lnum {
+            self.start_line();
+            loop {
+                let had_sync_point = self.finish_line(true);
+                if !had_sync_point || self.state_len() == 0 {
+                    break;
+                }
+                let cur_si = self.item(self.top());
+                if cur_si.si_m_endpos.lnum > start_lnum {
+                    // Ignore a match that reaches past where we started.
+                    self.lnum = end_lnum;
+                    break;
+                }
+                let (flags, match_idx) = if cur_si.si_idx < 0 {
+                    (SynFlags::NONE, KEYWORD_IDX) // cannot happen?
+                } else {
+                    let block = self.block();
+                    let spp = block.pattern(cur_si.si_idx);
+                    (spp.sp_flags, spp.sp_sync_idx)
+                };
+                let m_endpos = cur_si.si_m_endpos;
+                found = Some(SyncPoint {
+                    flags,
+                    match_idx,
+                    lnum: self.lnum,
+                    col: self.col,
+                    m_endpos,
+                });
+
+                // Continue after the match, being aware of a zero-length one.
+                if m_endpos.lnum > self.lnum {
+                    self.lnum = m_endpos.lnum;
+                    self.col = m_endpos.col;
+                    if self.lnum >= end_lnum {
+                        break;
+                    }
+                } else if m_endpos.col > self.col {
+                    self.col = m_endpos.col;
+                } else {
+                    self.col += 1;
+                }
+
+                // syn_current_attr() skipped the check for an item that ends
+                // here; do it now. Be careful not to go past the NUL.
+                let prev_col = self.col;
+                if c_int::from(self.curline_byte(self.col)) != NUL {
+                    self.col += 1;
+                }
+                self.check_state_ends();
+                self.col = prev_col;
+            }
+            self.lnum += 1;
+        }
+        // A sync point whose item has no flags names nothing to sync on, which
+        // upstream spells as `if (found_flags)` -- the zero case falls through
+        // to the next line back.
+        found.filter(|f| f.flags != SynFlags::NONE)
+    }
+
+    /// Save the parsed buffer's character table and install the one `syntax
+    /// iskeyword` set.
     ///
     /// A no-op when the syntax has no `iskeyword` of its own, in which case
-    /// [`Buf::restore_chartab`] is a no-op too and the saved buffer is never read.
-    pub(crate) fn install_syntax_chartab(mut self, chartab: &mut [uint64_t; 4]) {
-        if syn_block().b_syn_isk.is_unset() {
+    /// [`SynState::restore_chartab`] is a no-op too and the saved table is
+    /// never read.
+    pub(crate) fn install_syntax_chartab(&self, chartab: &mut [uint64_t; 4]) {
+        let (mut buffer, block) = (self.buffer, self.block());
+        if block.b_syn_isk.is_unset() {
             return;
         }
         // The two tables are the same 32 bytes, one typed as four `uint64_t`
         // and one as `uint8_t[32]`.
-        let installed: [uint8_t; 32] = syn_block().b_syn_chartab;
-        let buf_chartab = &mut self.b_chartab;
+        let installed: [uint8_t; 32] = block.b_syn_chartab;
+        let buf_chartab = &mut buffer.b_chartab;
         *chartab = *buf_chartab;
         *buf_chartab = ::core::array::from_fn(|i| {
             uint64_t::from_ne_bytes(installed[i * 8..i * 8 + 8].try_into().unwrap())
         });
     }
-}
 
-impl Buf {
-    /// Put back what [`Buf::install_syntax_chartab`] saved.
-    pub(crate) fn restore_chartab(mut self, chartab: &[uint64_t; 4]) {
-        if !syn_block().b_syn_isk.is_unset() {
-            self.b_chartab = *chartab;
+    /// Put back what [`SynState::install_syntax_chartab`] saved.
+    pub(crate) fn restore_chartab(&self, chartab: &[uint64_t; 4]) {
+        if !self.block().b_syn_isk.is_unset() {
+            let mut buffer = self.buffer;
+            buffer.b_chartab = *chartab;
         }
     }
-}
 
-/// Does line `lnum` match the `:syntax sync linecont` pattern, i.e. does the
-/// line after it continue it?
-pub(crate) fn syn_match_linecont(lnum: LineNr) -> bool {
-    if syn_block().b_syn_linecont_prog.is_null() {
-        return false;
+    /// Does line `lnum` match the `:syntax sync linecont` pattern, i.e. does the
+    /// line after it continue it?
+    pub(crate) fn match_linecont(&mut self, lnum: LineNr) -> bool {
+        if self.block().b_syn_linecont_prog.is_null() {
+            return false;
+        }
+        let mut buf_chartab = [0u64; 4];
+        self.install_syntax_chartab(&mut buf_chartab);
+
+        let mut regmatch = RegMMatch {
+            regprog: self.block().b_syn_linecont_prog,
+            startpos: [LPos { lnum: 0, col: 0 }; 10],
+            endpos: [LPos { lnum: 0, col: 0 }; 10],
+            rmm_matchcol: 0,
+            rmm_ic: self.block().b_syn_linecont_ic,
+            rmm_maxcol: 0,
+        };
+        let mut block = self.block();
+        let time = &mut block.b_syn_linecont_time;
+        let mut no_captures = None;
+        let io = ExtMatchIo {
+            input: None,
+            output: &mut no_captures,
+        };
+        let r = self.syn_regexec(&mut regmatch, lnum, 0, time, io);
+        self.block().b_syn_linecont_prog = regmatch.regprog;
+
+        self.restore_chartab(&buf_chartab);
+        r
     }
-    let buf = syn_buffer();
-    let mut buf_chartab = [0u64; 4];
-    buf.install_syntax_chartab(&mut buf_chartab);
-
-    let mut regmatch = RegMMatch {
-        regprog: syn_block().b_syn_linecont_prog,
-        startpos: [LPos { lnum: 0, col: 0 }; 10],
-        endpos: [LPos { lnum: 0, col: 0 }; 10],
-        rmm_matchcol: 0,
-        rmm_ic: syn_block().b_syn_linecont_ic,
-        rmm_maxcol: 0,
-    };
-    let time = syn_field!(syn_block(), b_syn_linecont_time);
-    // SAFETY: the parsed block's own `b_syn_linecont_time`.
-    let mut no_captures = None;
-    let io = ExtMatchIo {
-        input: None,
-        output: &mut no_captures,
-    };
-    let r = unsafe { syn_regexec(&raw mut regmatch, lnum, 0, time, io) };
-    syn_block().b_syn_linecont_prog = regmatch.regprog;
-
-    buf.restore_chartab(&buf_chartab);
-    r
 }
 
 /// Which counted `:syntax sync` setting a keyword names, and where its digits

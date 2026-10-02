@@ -1,8 +1,7 @@
 //! Syntax highlighting: `:syntax` and the state machine behind it.
 //!
 //! The module is the parent of sixteen children and holds what they share --
-//! the item types, the `SYN*`/`SPO_*`/`HL_*` vocabulary, and the statics that
-//! are the parser's whole state. Broadly:
+//! the item types and the `SYN*`/`SPO_*`/`HL_*` vocabulary. Broadly:
 //!
 //! - **Defining items**: [`command`] (`:syntax` itself and the per-block
 //!   modes), [`keyword`], [`define`] (`match`/`region`/`include`), [`cluster`],
@@ -12,9 +11,12 @@
 //!   [`endpos`] (finding a region's end) and [`attr`] (the per-cell answer).
 //! - **Answering**: [`query`], [`list`] (`:syntax list`) and [`syntime`].
 //!
-//! Two blocks matter and are easy to confuse: [`syn_block`] is the one being
-//! *parsed*, and [`cur_syn_block`] -- `curwin`'s -- is the one a `:syntax`
-//! command *configures*. Each has its own accessors.
+//! Two blocks matter and are easy to confuse: [`SynState::block`] is the one
+//! being *parsed*, and [`cur_syn_block`] -- `curwin`'s -- is the one a
+//! `:syntax` command *configures*. Each has its own accessors.
+//!
+//! The parser's whole state is one [`SynState`], reached through
+//! [`with_parser`]; the per-line and per-column steps are its methods.
 //!
 //! # Ownership
 //!
@@ -86,7 +88,7 @@ use crate::runtime::{do_source, source_runtime};
 use crate::types::AutoEvent;
 use crate::types::{
     ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, RegProg,
-    SynBlock, SynTime, VarNumber, int16_t, size_t, uint8_t, uint64_t,
+    SynBlock, SynTime, int16_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;
@@ -95,6 +97,8 @@ use ::libc::{qsort, strcpy};
 
 mod flags;
 pub(crate) use self::flags::*;
+mod parser;
+pub(crate) use self::parser::*;
 
 // The carve of the transpiled module; see each child's docs.
 mod state;
@@ -105,9 +109,8 @@ mod sync;
 pub(crate) use self::sync::*;
 mod attr;
 pub(crate) use self::attr::*;
-mod items;
-pub(crate) use self::items::*;
 mod endpos;
+mod items;
 pub(crate) use self::endpos::*;
 mod command;
 pub(crate) use self::command::*;
@@ -389,6 +392,9 @@ pub(crate) const SST_DIST: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 /// Whether `:syntax on|off|enable|manual` has been used, which is what stops
 /// [`syn_maybe_enable`] from overriding a deliberate choice.
 static did_syntax_onoff: GlobalCell<bool> = GlobalCell::new(false);
+/// Whether `:syntime on` is in effect. A setting rather than parser state:
+/// a parse that re-enters must not lose it.
+static syn_time_on: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const SPO_MS_OFF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const SPO_ME_OFF: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const SPO_HS_OFF: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -408,22 +414,6 @@ pub(crate) const NONE_IDX: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub(crate) const SF_CCOMMENT: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub(crate) const SF_MATCH: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub(crate) const MAXKEYWLEN: ::core::ffi::c_int = 80 as ::core::ffi::c_int;
-// What the last `syn_current_attr` decided about the current position. The
-// query API reads these back, so they outlive the call that set them.
-
-/// Attribute number of the current character.
-static current_attr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-/// Syntax id of the current character, before transparency.
-static current_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-/// Syntax id of the current character, after transparency.
-static current_trans_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-/// `HL_*` flags of the current character.
-static current_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
-/// Sequence number of the item the current character belongs to, which is what
-/// tells two runs of the same group apart.
-static current_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-/// The `cchar=` of the current character, for `conceal`.
-static current_sub_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub(crate) const CLUSTER_REPLACE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const CLUSTER_ADD: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub(crate) const CLUSTER_SUBTRACT: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
@@ -437,8 +427,6 @@ pub(crate) const MAX_CLUSTER_ID: ::core::ffi::c_int = 32767 as ::core::ffi::c_in
 static current_syn_inc_tag: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// The highest tag handed out so far, capped at [`MAX_SYN_INC_TAG`].
 static running_syn_inc_tag: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-/// Stack index of the outermost `keepend` item currently in effect, or -1.
-static keepend_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1);
 /// What every `:syntax`/`:syntime` listing answers when there is nothing to
 /// list.
 pub(crate) const MSG_NO_ITEMS: &::core::ffi::CStr = c"No Syntax items defined for this buffer";
@@ -469,10 +457,19 @@ pub(crate) fn word_at(text: &[u8]) -> (&[u8], usize) {
 }
 
 /// The syntax block being *configured* — `curwin`'s, which during a `:syntax`
-/// command is not necessarily [`syn_block`], the one being *parsed*.
+/// command is not necessarily [`SynState::block`], the one being *parsed*.
 #[inline]
 pub(crate) fn cur_syn_block() -> SynBlockRef {
     Win::current().syntax()
+}
+
+impl Buf {
+    /// The buffer's own syntax block.
+    #[inline]
+    pub(crate) fn syntax(self) -> SynBlockRef {
+        // SAFETY: a buffer's `b_s` lives as long as the buffer.
+        unsafe { SynBlockRef::new(self.syntax_block()) }
+    }
 }
 
 impl Win {
@@ -570,99 +567,11 @@ macro_rules! syn_field {
 }
 pub(crate) use syn_field;
 
-/// One item on the syntax state stack, whose holder has promised the stack
-/// has not been pushed to, popped from or cleared since it was taken.
-///
-/// The stack is a `Vec`, so a push can move every item in it: reach for one
-/// through [`items::state_at`] each time rather than holding one across a
-/// call that can parse.
-pub(crate) type Item = Live<StateItem>;
-
 /// `StateItem::si_idx` for a keyword, which has no pattern.
 pub(crate) const KEYWORD_IDX: ::core::ffi::c_int = -1;
 /// The `contains=` list of a transparent item that is not inside anything: it
 /// admits every not-`contained` group.
 pub(crate) const ID_LIST_ALL: *mut int16_t = -1 as ::core::ffi::c_int as *mut int16_t;
-/// The sequence number the next pushed item gets.
-static next_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1);
-
-// The match `syn_current_attr` found ahead of the current column and has not
-// pushed yet. `next_match_col` is MAXCOL for "nothing found" and -1 for "not
-// looked yet".
-
-/// Column the pending match starts at.
-static next_match_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static next_match_m_endpos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
-static next_match_h_startpos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
-static next_match_h_endpos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
-static next_match_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static next_match_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
-static next_match_eos_pos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
-static next_match_eoe_pos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
-static next_match_end_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static next_match_extmatch: GlobalCell<Option<ExtMatchRef>> = GlobalCell::new(None);
-// Where the parser currently is. `syntax_start` sets the first four together
-// and everything else is relative to them.
-
-/// The window being parsed for. An identity, not an address: it outlives the
-/// call that set it, and the next [`syntax_start`] compares it to decide
-/// whether the parser's state still applies.
-static syn_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-/// The buffer being parsed. [`syn_win`]'s shape, read through
-/// [`syn_buffer`].
-static syn_buf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-/// The buffer being parsed, as a handle.
-///
-/// Every caller runs after [`syntax_start`]: the parser's own position
-/// (`current_lnum`) is only meaningful once the start has been set, and
-/// setting it is what writes this. A registry lookup, so a hot loop asks
-/// once and keeps the answer for the length of the call.
-///
-/// # Panics
-///
-/// Before the first [`syntax_start`], or once the buffer it named has been
-/// wiped without a new start -- both a parser read with no parse under way.
-#[inline(always)]
-pub(crate) fn syn_buffer() -> Buf {
-    syn_buf
-        .get()
-        .and_then(BufId::get)
-        .expect("syntax_start names a live buffer")
-}
-
-/// The syntax block being parsed -- `syn_win`'s, which for `:ownsyntax` is not
-/// the buffer's. Reach it through [`syn_block`].
-static parsed_block: GlobalCell<*mut SynBlock> = GlobalCell::new(::core::ptr::null_mut());
-
-/// The syntax block being *parsed*, which during a `:syntax` command is not
-/// necessarily [`cur_syn_block`], the one being *configured*.
-///
-/// Null until [`syntax_start`] has run, which every caller of this checks for
-/// through `b_sst_array` the way upstream does.
-#[inline]
-pub(crate) fn syn_block() -> SynBlockRef {
-    // SAFETY: set from `syntax_start` to the window or buffer that owns it,
-    // and cleared when that owner goes away.
-    unsafe { SynBlockRef::new(parsed_block.get()) }
-}
-/// When parsing must give up, or NULL for no limit.
-static syn_tm: GlobalCell<*mut ProfTime> = GlobalCell::new(::core::ptr::null_mut());
-/// The line being parsed.
-static current_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
-/// The column being parsed.
-static current_col: GlobalCell<ColNr> = GlobalCell::new(0);
-/// Whether the state at `current_lnum` has been put in the cache.
-static current_state_stored: GlobalCell<bool> = GlobalCell::new(false);
-/// Whether the line has been parsed to its end.
-static current_finished: GlobalCell<bool> = GlobalCell::new(false);
-/// The syntax state stack, outermost item first: what the parser is inside
-/// at [`current_col`].
-///
-/// `None` is upstream's "invalid state", which it marks by zeroing the
-/// growarray's `ga_itemsize` — a flag about the value, so it belongs in the
-/// value's type. Reach it through [`items::state_len`]/[`items::state_at`]
-/// and the `*_current_state` family, never directly.
-static current_state: GlobalCell<Option<Vec<StateItem>>> = GlobalCell::new(None);
 
 /// A cleared state item: what upstream's `GA_APPEND_VIA_PTR` slot holds
 /// once `ga_grow` has zeroed it.
@@ -686,24 +595,6 @@ const EMPTY_STATE_ITEM: StateItem = StateItem {
     si_next_list: ::core::ptr::null_mut(),
     si_extmatch: None,
 };
-/// The `nextgroup=` list in effect, or NULL.
-static current_next_list: GlobalCell<*mut int16_t> = GlobalCell::new(::core::ptr::null_mut());
-/// The `skipwhite`/`skipnl`/`skipempty` flags that came with it.
-static current_next_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
-/// `display_tick` when the current line was parsed, which is how a `display`
-/// item knows it is being drawn rather than scanned.
-static current_line_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-/// Whether `:syntime on` is in effect.
-static syn_time_on: GlobalCell<bool> = GlobalCell::new(false);
-
-/// Set the time limit for parsing, or clear it with NULL.
-///
-/// # Safety
-///
-/// `tm` must point at a live `ProfTime`, unaliased for the call.
-pub(crate) unsafe fn syn_set_timeout(tm: *mut ProfTime) {
-    syn_tm.set(tm);
-}
 pub(crate) const ITEM_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const ITEM_SKIP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const ITEM_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

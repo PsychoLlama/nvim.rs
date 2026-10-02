@@ -18,12 +18,11 @@ use crate::types::{ExpandContext, NUL};
 
 /// Does this window's block define any syntax at all?
 pub(crate) fn syntax_present(win: Win) -> bool {
-    unsafe {
-        !(*win.w_s).b_syn_patterns.is_empty()
-            || !(*win.w_s).b_syn_clusters.is_empty()
-            || (*win.w_s).b_keywtab.ht_used > 0
-            || (*win.w_s).b_keywtab_ic.ht_used > 0
-    }
+    let block = win.syntax();
+    !block.b_syn_patterns.is_empty()
+        || !block.b_syn_clusters.is_empty()
+        || block.b_keywtab.ht_used > 0
+        || block.b_keywtab_ic.ht_used > 0
 }
 
 /// What the next `get_syntax_name` call should offer, which
@@ -168,83 +167,78 @@ impl Win {
     /// The syntax id at a buffer position, for expression evaluation.
     ///
     /// `trans` removes transparency; `spellp` answers whether spell checking
-    /// applies there; `keep_state` keeps the state of the character at `col` so
-    /// that [`syn_get_stack_item`] can be asked about it afterwards.
-    ///
-    /// # Safety
-    ///
-    /// `spellp` must point at a writable `bool` the caller owns.
-    pub(crate) unsafe fn syntax_id(
+    /// applies there; `keep_state` keeps the state of the character at `col`
+    /// so that [`syn_get_stack_item`] can be asked about it afterwards.
+    pub(crate) fn syntax_id(
         self,
         lnum: LineNr,
         col: ColNr,
-        trans: c_int,
-        spellp: *mut bool,
-        keep_state: c_int,
+        trans: bool,
+        spellp: Option<&mut bool>,
+        keep_state: bool,
     ) -> c_int {
-        // Parsing has to restart unless this position is at or after the
-        // current one, in the same line of the same window and buffer.
-        if syn_win.get() != Some(self.id())
-            || syn_buf.get() != self.buffer().try_id()
-            || lnum != current_lnum.get()
-            || col < current_col.get()
-        {
-            self.syntax_start(lnum);
-        } else if col > current_col.get() {
-            // `next_match` may be wrong when moving around, e.g. with the
-            // "skip" expression of `searchpair()`.
-            next_match_idx.set(-1);
-        }
+        with_parser(|parser| {
+            // Parsing has to restart unless this position is at or after the
+            // current one, in the same line of the same window and buffer.
+            if parser.win != Some(self.id())
+                || parser.buf != self.buffer().try_id()
+                || lnum != parser.lnum
+                || col < parser.col
+            {
+                parser.start(self, lnum);
+            } else if col > parser.col {
+                // `next_match` may be wrong when moving around, e.g. with the
+                // "skip" expression of `searchpair()`.
+                parser.next_match.idx = -1;
+            }
 
-        unsafe { get_syntax_attr(self.buffer(), col, spellp, keep_state != 0) };
-        if trans != 0 {
-            current_trans_id.get()
-        } else {
-            current_id.get()
-        }
+            parser.buffer = self.buffer();
+            parser.attr_at(col, spellp, keep_state);
+            if trans {
+                parser.current.trans_id
+            } else {
+                parser.current.id
+            }
+        })
     }
 }
 
 /// Extra information about the current syntax item: answers its flags and
-/// stores its sequence number. Must be called right after [`get_syntax_attr`].
-///
-/// # Safety
-///
-/// `seqnrp` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn get_syntax_info(seqnrp: *mut c_int) -> SynFlags {
-    unsafe { *seqnrp = current_seqnr.get() };
-    current_flags.get()
+/// its sequence number. Must be called right after [`get_syntax_attr`].
+pub(crate) fn get_syntax_info() -> (SynFlags, c_int) {
+    with_parser(|parser| (parser.current.flags, parser.current.seqnr))
 }
 
 /// The conceal substitution character of the current item.
 pub(crate) fn syn_get_sub_char() -> c_int {
-    current_sub_char.get()
+    with_parser(|parser| parser.current.sub_char)
 }
 
-/// The syntax id at position `i` of the current state stack, or -1 when `i` is
-/// out of range.
+/// The syntax id at position `i` of the state stack, or -1 when `i` is out of
+/// range.
 ///
 /// The caller must have called [`Win::syntax_id`] first, to fill the stack.
 pub(crate) fn syn_get_stack_item(i: c_int) -> c_int {
-    if i >= state_len() {
-        // The state was not properly finished for the last character
-        // (`keep_state` was true), so it has to be invalidated.
-        invalidate_current_state();
-        current_col.set(MAXCOL as ColNr);
-        return -1;
-    }
-    unsafe { state_at(i).si_id }
+    with_parser(|parser| {
+        if i >= parser.state_len() {
+            // The state was not properly finished for the last character
+            // (`keep_state` was true), so it has to be invalidated.
+            parser.invalidate_current_state();
+            parser.col = MAXCOL as ColNr;
+            return -1;
+        }
+        parser.item(i).si_id
+    })
 }
 
-/// How many `fold` items are open at the current position.
-fn syn_cur_foldlevel() -> c_int {
-    let mut level = 0;
-    for i in 0..state_len() {
-        if unsafe { state_at(i).si_flags }.has(SynFlags::FOLD) {
-            level += 1;
-        }
+impl SynState {
+    /// How many `fold` items are open at the current position.
+    fn cur_foldlevel(&self) -> c_int {
+        self.stack
+            .iter()
+            .filter(|si| si.si_flags.has(SynFlags::FOLD))
+            .count() as c_int
     }
-    level
 }
 
 /// The fold level of line `lnum`, for `'foldmethod'=syntax`.
@@ -252,31 +246,31 @@ pub(crate) fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
     let mut level = 0;
 
     // Answer quickly when there are no fold items at all.
-    if unsafe { (*window.w_s).b_syn_folditems } != 0
-        && !unsafe { (*window.w_s).b_syn_error }
-        && !unsafe { (*window.w_s).b_syn_slow }
-    {
-        window.syntax_start(lnum);
+    let block = window.syntax();
+    if block.b_syn_folditems != 0 && !block.b_syn_error && !block.b_syn_slow {
+        level = with_parser(|parser| {
+            parser.start(window, lnum);
 
-        // Start with the fold level at the start of the line.
-        level = syn_cur_foldlevel();
+            // Start with the fold level at the start of the line.
+            let mut level = parser.cur_foldlevel();
 
-        if unsafe { (*window.w_s).b_syn_foldlevel } == SYNFLD_MINIMUM {
-            // Find the lowest fold level that is followed by a higher one.
-            let mut low_level = level;
-            while !current_finished.get() {
-                unsafe {
-                    syn_current_attr(syn_buffer(), false, false, ::core::ptr::null_mut(), false)
-                };
-                let cur_level = syn_cur_foldlevel();
-                if cur_level < low_level {
-                    low_level = cur_level;
-                } else if cur_level > low_level {
-                    level = low_level;
+            if block.b_syn_foldlevel == SYNFLD_MINIMUM {
+                // Find the lowest fold level that is followed by a higher
+                // one.
+                let mut low_level = level;
+                while !parser.finished {
+                    parser.current_attr(false, false, None, false);
+                    let cur_level = parser.cur_foldlevel();
+                    if cur_level < low_level {
+                        low_level = cur_level;
+                    } else if cur_level > low_level {
+                        level = low_level;
+                    }
+                    parser.col += 1;
                 }
-                current_col.set(current_col.get() + 1);
             }
-        }
+            level
+        });
     }
 
     if level as OptInt > window.w_onebuf_opt.wo_fdn {

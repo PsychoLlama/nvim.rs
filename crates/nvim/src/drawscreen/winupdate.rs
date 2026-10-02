@@ -141,8 +141,8 @@ pub(crate) fn win_update(window: Win) {
     let save_got_int = got_int.get();
     got_int.set(false);
     // Bound syntax highlighting by 'redrawtime'.
-    let mut syntax_tm = profile_setlimit(p_rdt() as int64_t);
-    unsafe { syn_set_timeout(&raw mut syntax_tm) };
+    let syntax_tm = profile_setlimit(p_rdt() as int64_t);
+    syn_set_timeout(Some(syntax_tm));
 
     win_extmark_arr.with_mut(Vec::clear);
 
@@ -246,7 +246,7 @@ pub(crate) fn win_update(window: Win) {
         draw_vsep_win(window);
         draw_hsep_win(window);
     }
-    unsafe { syn_set_timeout(::core::ptr::null_mut()) };
+    syn_set_timeout(None);
 
     // The window has been updated.
     win.w_redr_type = 0;
