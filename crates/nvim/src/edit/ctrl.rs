@@ -232,8 +232,6 @@ pub(crate) fn ins_ctrl_hat() {
 /// forms, which must not put an ESC in the redo buffer), and `nomove` is
 /// `i_CTRL-\_CTRL-O`.
 pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
-    static disabled_redraw: GlobalCell<bool> = GlobalCell::new(false);
-
     check_spell_redraw();
 
     let temp = Win::current().w_cursor.col;

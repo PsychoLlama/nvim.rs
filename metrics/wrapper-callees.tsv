@@ -224,7 +224,7 @@ count	callee	no_raw	defs	def
 11	vim_str2nr	0	1	crates/nvim/src/charset/mod.rs
 11	vterm_alloc	0	1	crates/nvim/src/vterm/vterm.rs
 11	write	0	0	
-10	.replace	0	4	
+10	.replace	0	3	
 10	.write_bytes	0	0	
 10	Fc::new	0	67	
 10	ListRef::retained	0	1	crates/nvim/src/eval/typval/list.rs
@@ -1880,7 +1880,7 @@ count	callee	no_raw	defs	def
 2	register_closure	0	1	crates/nvim/src/eval/userfunc/lambda.rs
 2	rel_to_curdir	0	1	crates/nvim/src/file_search/resolve.rs
 2	remove_comma_item	0	1	crates/nvim/src/option/stropt.rs
-2	replace	0	4	
+2	replace	0	3	
 2	report	0	1	crates/nvim/src/option/set_cmd.rs
 2	rescore_one	0	1	crates/nvim/src/spellsuggest/collect.rs
 2	rescore_suggestions	0	1	crates/nvim/src/spellsuggest/collect.rs

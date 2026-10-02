@@ -20,40 +20,6 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::types::{Failed, NUL};
 
-/// The buffer `.` repeats, by address.
-///
-/// A handle rather than `get`/`set`: the cell owns the text, so it is read
-/// through a borrow and written by handing over a new one.
-#[derive(Clone, Copy)]
-pub(super) struct LastInsert(*mut String_0);
-
-/// The one place the last-insert buffer's address is taken.
-pub(super) fn last_insert_slot() -> LastInsert {
-    LastInsert(last_insert.ptr())
-}
-
-impl LastInsert {
-    /// The whole buffer, borrowed from the cell.
-    ///
-    /// # Safety
-    /// Nothing may [`replace`](Self::replace) the text while the borrow
-    /// lasts.
-    unsafe fn borrow<'a>(self) -> &'a String_0 {
-        // SAFETY: the only constructor names a `static`.
-        unsafe { &*self.0 }
-    }
-
-    /// Release what is there and take ownership of `text`.
-    ///
-    /// # Safety
-    /// Nothing may still be holding a [`borrow`](Self::borrow) of the old
-    /// text.
-    pub(super) unsafe fn replace(self, text: String_0) {
-        // SAFETY: the cell's own text, which the assignment releases.
-        unsafe { *self.0 = text };
-    }
-}
-
 /// Set the last inserted text to the single character `c`.
 ///
 /// Used by `r`.  What is stored is the *redo buffer* spelling: a CTRL-V in
@@ -84,8 +50,7 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
     // SAFETY: `start` is this function's own allocation, NUL-terminated at
     // `len` by the write above.
     let text = unsafe { String_0::from_owned_parts(start, len) };
-    // SAFETY: nothing borrows the old text here.
-    unsafe { last_insert_slot().replace(text) };
+    last_insert.set(text);
     last_insert_skip.set(0);
 }
 
@@ -162,15 +127,16 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
 /// A copy: both callers shorten what they get, and the stored text is not
 /// theirs to shorten.
 pub(crate) fn get_last_insert() -> String_0 {
-    // SAFETY: the borrow does not outlive this body, which stores nothing.
-    let all = unsafe { last_insert_slot().borrow() };
-    if all.is_null() {
-        return String_0::NULL;
-    }
     // `last_insert_skip` counts bytes this module put on the front, so it
     // never runs past the buffer.
     let skip = last_insert_skip.get() as size_t;
-    String_0::from_bytes(&all.as_bytes()[skip..])
+    last_insert.with(|all| {
+        if all.is_null() {
+            String_0::NULL
+        } else {
+            String_0::from_bytes(&all.as_bytes()[skip..])
+        }
+    })
 }
 
 /// The last inserted text as a fresh allocation, with the trailing `<Esc>`

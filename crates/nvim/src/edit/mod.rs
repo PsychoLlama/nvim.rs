@@ -85,7 +85,7 @@ use crate::getchar::{
     merge_mod_mask, paste_repeat, plain_vgetc, reset_redobuff, start_redo_ins, stop_redo_ins,
     stuff_empty, stuff_readbuf_char, stuff_readbuf_len, stuff_redo_readbuf, vgetc, vpeekc, vungetc,
 };
-use crate::global_cell::GlobalCell;
+use crate::global_cell::state_record;
 use crate::grid::{
     grid_line_flush, grid_line_getchar, grid_line_put_schar, grid_line_puts, grid_line_start,
 };
@@ -268,20 +268,6 @@ pub(crate) const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
 pub(crate) const CTRL_V_STR: &::core::ffi::CStr = c"\x16";
 pub(crate) const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub(crate) const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
-static compl_busy: GlobalCell<bool> = GlobalCell::new(false);
-static Insstart_textlen: GlobalCell<ColNr> = GlobalCell::new(0);
-static Insstart_blank_vcol: GlobalCell<ColNr> = GlobalCell::new(0);
-static update_Insstart_orig: GlobalCell<bool> = GlobalCell::new(true);
-static last_insert: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-static last_insert_skip: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static new_insert_skip: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static did_restart_edit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static can_cindent: GlobalCell<bool> = GlobalCell::new(false);
-static revins_on: GlobalCell<bool> = GlobalCell::new(false);
-static revins_chars: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static revins_legal: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static revins_scol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static ins_need_undo: GlobalCell<bool> = GlobalCell::new(false);
 /// Whether `i_CTRL-G_U` is holding the undoable change open across the
 /// key being handled — upstream's `dont_sync_undo`.
 ///
@@ -297,14 +283,6 @@ pub(crate) enum KeepUndo {
     Now,
 }
 
-static dont_sync_undo: GlobalCell<KeepUndo> = GlobalCell::new(KeepUndo::No);
-static o_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
-/// The Replace-mode stack of overwritten bytes -- see [`replace`].
-///
-/// A `Vec`, not klib's `kvec_t(char)`: the growth policy was the only thing
-/// the kvec provided, every operation on it is an insert or a removal in the
-/// middle, and nothing outside [`replace`] may touch it.
-static replace_stack: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 /// What the last `edit_putchar` did to the screen cell it wrote over, and so
 /// how `edit_unputchar` has to take it back.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -318,11 +296,45 @@ pub(crate) enum PutChar {
     /// A whole cell was overwritten and `pc_schar`/`pc_attr` hold it.
     Set,
 }
-static pc_status: GlobalCell<PutChar> = GlobalCell::new(PutChar::Unset);
-static pc_schar: GlobalCell<ScreenChar> = GlobalCell::new(0);
-static pc_attr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pc_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static pc_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+state_record! {
+    /// Insert mode's state between keys: upstream's `edit.c` statics, and
+    /// `ins_esc`'s function-scope one. Nothing holds a borrow of it across a
+    /// call: an insert runs autocommands, mappings and Lua.
+    pub(crate) struct EditState in EDIT as EditField;
+
+    compl_busy: bool = false;
+    Insstart_textlen: ColNr = 0;
+    Insstart_blank_vcol: ColNr = 0;
+    update_Insstart_orig: bool = true;
+    /// The text of the last insert, the redo-buffer spelling, with the
+    /// command that started it on the front -- see [`lastins`].
+    last_insert: String_0 = String_0::NULL;
+    last_insert_skip: ::core::ffi::c_int = 0;
+    new_insert_skip: ::core::ffi::c_int = 0;
+    did_restart_edit: ::core::ffi::c_int = 0;
+    can_cindent: bool = false;
+    revins_on: bool = false;
+    revins_chars: ::core::ffi::c_int = 0;
+    revins_legal: ::core::ffi::c_int = 0;
+    revins_scol: ::core::ffi::c_int = 0;
+    ins_need_undo: bool = false;
+    dont_sync_undo: KeepUndo = KeepUndo::No;
+    o_lnum: LineNr = 0;
+    /// The Replace-mode stack of overwritten bytes -- see [`replace`].
+    ///
+    /// A `Vec`, not klib's `kvec_t(char)`: the growth policy was the only
+    /// thing the kvec provided, every operation on it is an insert or a
+    /// removal in the middle, and nothing outside [`replace`] may touch it.
+    replace_stack: Vec<u8> = Vec::new();
+    pc_status: PutChar = PutChar::Unset;
+    pc_schar: ScreenChar = 0;
+    pc_attr: ::core::ffi::c_int = 0;
+    pc_row: ::core::ffi::c_int = 0;
+    pc_col: ::core::ffi::c_int = 0;
+    /// `ins_esc` took one `RedrawingDisabled` level it still has to give
+    /// back.
+    disabled_redraw: bool = false;
+}
 pub(crate) const INPUT_BUFLEN: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub(crate) const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub(crate) const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;

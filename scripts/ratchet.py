@@ -978,14 +978,12 @@ CELL_COPY_OWNER = (
     # generation check exists precisely because the pointer is borrowed --
     # and since S11 the buffer's owner is a named one, the buffer registry's
     # `Owned<Buffer>`. A `get` on this cell copies a reference, not an owner.
-    "dont_sync_undo",
     "old_sub",
     # ccline is done: `cmdline_block` and `restart_args` retired in phase 22's
     # S14 behind `CmdlineBlock`/`RestartArgs`, two owned newtypes over the
     # `Array` with a `Drop`. Neither is `Copy`, so there is no `get` on either
     # to count, and the one genuine move at each is `GlobalCell::take`.
     "CLIPBOARD",
-    "pc_status",
     "EXPAND_WHAT",
     "provider_caller_scope",
     "counted",

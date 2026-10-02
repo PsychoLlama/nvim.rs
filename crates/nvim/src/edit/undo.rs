@@ -160,7 +160,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
             - new_insert_skip.get()
     };
     if did_restart_edit.get() == 0 || added > 0 {
-        unsafe { last_insert_slot().replace(inserted) };
+        last_insert.set(inserted);
         last_insert_skip.set(if added < 0 { 0 } else { new_insert_skip.get() });
     }
 
