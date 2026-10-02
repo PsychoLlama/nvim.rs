@@ -769,7 +769,7 @@ pub fn load_plugins() {
 
 /// `TIME_MSG()`: note a startup milestone, when `--startuptime` asked for one.
 fn time_msg_now(msg: &CStr) {
-    if time_fd.get().is_null() {
+    if !startup_timing() {
         return;
     }
     // SAFETY: a literal, and the null proftime means "now".

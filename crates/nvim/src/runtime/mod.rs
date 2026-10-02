@@ -76,7 +76,7 @@ use crate::path::{
     get_past_head, path_fnamecmp, path_fnamencmp, path_tail, path_with_extension, vim_ispathsep,
     vim_ispathsep_nocolon,
 };
-use crate::profile::{do_profiling, time_fd};
+use crate::profile::{do_profiling, startup_timing};
 use crate::profile::{
     prof_child_enter, prof_child_exit, profile_add, profile_end, profile_init, profile_self,
     profile_start, profile_sub_wait, profile_zero, script_line_end, script_line_start, time_msg,

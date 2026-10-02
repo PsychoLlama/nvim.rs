@@ -29,7 +29,7 @@ use crate::os::cshim::{bindtextdomain, bump_catalogue_epoch, textdomain};
 use crate::os::env::os_setenv;
 use crate::os::shell::{ShellOpts, get_cmd_output};
 use crate::path::{path_tail, path_tail_with_sep};
-use crate::profile::time_fd;
+use crate::profile::startup_timing;
 use crate::profile::time_msg;
 use crate::semsg;
 use crate::smsg;
@@ -141,7 +141,7 @@ pub fn init_locale() {
         textdomain(PROJECT_NAME.as_ptr());
     }
 
-    if !time_fd.get().is_null() {
+    if startup_timing() {
         // SAFETY: a static message and no start time, which `time_msg`
         // documents as "report the elapsed total".
         unsafe { time_msg(c"locale set".as_ptr(), ptr::null()) };

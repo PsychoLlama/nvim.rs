@@ -36,7 +36,7 @@ use crate::lua::ffi::{
 use crate::lua::stdlib::nlua_state_add_stdlib;
 use crate::lua::treesitter::nlua_treesitter_init;
 use crate::os::cshim::{gettext, stderr};
-use crate::profile::time_fd;
+use crate::profile::startup_timing;
 use crate::runtime::runtime_search_path_validate;
 use crate::startup::os_exit;
 use crate::types::{NluaRefState, lua_Integer, lua_State, uv_thread_t};
@@ -108,7 +108,7 @@ unsafe fn nlua_state_init(lstate: *mut lua_State) -> bool {
 
         // Only `--startuptime` needs `require` wrapped, and the wrapper needs
         // the original to delegate to.
-        if !time_fd.get().is_null() {
+        if startup_timing() {
             lua_getglobal(lstate, c"require".as_ptr());
             require_ref.set(nlua_ref_global(lstate, -1));
             lua_pop(lstate, 1);

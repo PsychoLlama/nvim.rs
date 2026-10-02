@@ -28,7 +28,7 @@ use crate::lua::ffi::{
 use crate::memory::{xfree, xmalloc, xrealloc};
 use crate::message::{msg_multihl, msg_putchar};
 use crate::os::cshim::{gettext, snprintf};
-use crate::profile::time_fd;
+use crate::profile::startup_timing;
 use crate::profile::{time_msg, time_pop, time_push};
 use crate::startup::main_loop;
 use crate::strings::vim_snprintf;
@@ -194,7 +194,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_require(lstate: *mut lua_State) -> c
         nlua_pushref(lstate, require_ref.get());
         lua_insert(lstate, 1);
 
-        if time_fd.get().is_null() {
+        if !startup_timing() {
             // Not profiling: hand straight through, restoring the global
             // `require` if the stock one has taken it back.
             lua_getglobal(lstate, c"require".as_ptr());

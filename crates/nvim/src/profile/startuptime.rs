@@ -21,14 +21,12 @@ use super::{profile_start, profile_sub};
 use crate::event::libuv::uv_err_name;
 use crate::fprintf;
 use crate::global_cell::GlobalCell;
-use crate::memory::{xfree, xmalloc};
 use crate::message::e_notopen;
 use crate::os::cshim::{gettext, stderr};
-use crate::profile::time_fd;
+use crate::os::fs::CFile;
+use crate::profile::{startup_timing, time_fd};
 use crate::types::ProfTime;
-use ::libc::{fclose, fopen, setvbuf};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use std::ffi::CString;
+use core::ffi::{CStr, c_char};
 
 // ---------------------------------------------------------------------------
 // --startuptime.
@@ -37,8 +35,6 @@ use std::ffi::CString;
 static G_START_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
 /// Time of the previous event line, for the "elapsed" column.
 static G_PREV_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
-/// The setvbuf buffer handed to `time_fd`; freed at [`time_finish`].
-static STARTUPTIME_BUF: GlobalCell<*mut c_char> = GlobalCell::new(core::ptr::null_mut());
 
 /// Save the previous time before doing something that could nest (sourcing
 /// a script from a script). Returns `(rel, start)`: the time elapsed so far
@@ -64,15 +60,14 @@ fn time_diff_str(then: ProfTime, now: ProfTime) -> String {
 /// Append raw bytes to the startuptime log. No-op when `--startuptime` is
 /// off or the bytes contain a NUL.
 fn write_startup(bytes: &[u8]) {
-    let fd = time_fd.get();
-    if fd.is_null() {
+    if bytes.contains(&0) {
         return;
     }
-    if let Ok(line) = CString::new(bytes) {
-        // SAFETY: fd is the open startuptime stream; "%s" consumes the one
-        // string argument.
-        unsafe { fprintf!(fd, c"%s".as_ptr(), line.as_ptr()) };
-    }
+    time_fd.with(|log| {
+        if let Some(log) = log {
+            log.write(bytes);
+        }
+    });
 }
 
 /// Write the startuptime report header and the first message. Must be
@@ -81,7 +76,7 @@ fn write_startup(bytes: &[u8]) {
 /// # Safety
 /// `message` is NUL-terminated.
 pub unsafe fn time_start(message: *const c_char) {
-    if time_fd.get().is_null() {
+    if !startup_timing() {
         return;
     }
     let now = profile_start();
@@ -101,7 +96,7 @@ pub unsafe fn time_start(message: *const c_char) {
 /// `mesg` is NUL-terminated; `start` is null or points at a readable
 /// `ProfTime`.
 pub unsafe fn time_msg(mesg: *const c_char, start: *const ProfTime) {
-    if time_fd.get().is_null() {
+    if !startup_timing() {
         return;
     }
     let now = profile_start();
@@ -131,34 +126,20 @@ pub unsafe fn time_msg(mesg: *const c_char, start: *const ProfTime) {
 /// `fname` and `proc_name` are NUL-terminated.
 pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
     const BUFSIZE: usize = 8192; // Big enough for the entire report.
-    const _IOFBF: c_int = 0;
-    // SAFETY: the caller's path; the handle is stored in `time_fd`, which is
-    // what closes it.
-    time_fd.set(unsafe { fopen(fname, c"a".as_ptr()) });
-    if time_fd.get().is_null() {
+    // SAFETY: the caller's path.
+    let Some(mut log) = CFile::open(unsafe { CStr::from_ptr(fname) }, c"a") else {
         // SAFETY: the message is a NUL-terminated global with one %s.
         unsafe { fprintf!(stderr, gettext(e_notopen).as_ptr(), fname) };
         return;
-    }
-    // SAFETY: `xmalloc` returns `BUFSIZE + 1` owned bytes, which is exactly
-    // the size handed to `setvbuf`; the buffer outlives the stream because
-    // `time_finish` frees it after `fclose`.
-    let r = unsafe {
-        STARTUPTIME_BUF.set(xmalloc(BUFSIZE + 1).cast::<c_char>());
-        setvbuf(time_fd.get(), STARTUPTIME_BUF.get(), _IOFBF, BUFSIZE + 1)
     };
-    if r != 0 {
-        // SAFETY: the buffer and stream just set up, released here and
-        // cleared so nothing reaches them again.
-        let buf = STARTUPTIME_BUF.replace(core::ptr::null_mut());
-        unsafe { xfree(buf.cast::<c_void>()) };
-        unsafe { fclose(time_fd.get()) };
-        time_fd.set(core::ptr::null_mut());
+    if let Err(r) = log.buffer_fully(BUFSIZE + 1) {
+        drop(log);
         let fmt = c"time_init: setvbuf failed: %d %s".as_ptr();
         let why = unsafe { uv_err_name(r) };
         unsafe { fprintf!(stderr, fmt, r, why) };
         return;
     }
+    time_fd.set(Some(log));
     let mut header = b"--- Startup times for process: ".to_vec();
     // SAFETY: the caller's NUL-terminated process name.
     header.extend_from_slice(unsafe { CStr::from_ptr(proc_name) }.to_bytes());
@@ -168,15 +149,12 @@ pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
 
 /// Flush the startuptime report to disk and close the stream.
 pub fn time_finish() {
-    if time_fd.get().is_null() {
+    if !startup_timing() {
         return;
     }
-    debug_assert!(!STARTUPTIME_BUF.get().is_null());
-    // SAFETY: the stream and its buffer were set up by time_init; nothing
-    // touches them after the fd is cleared.
+    // SAFETY: a literal, and no start time.
     unsafe { time_msg(c"--- NVIM STARTED ---\n".as_ptr(), core::ptr::null()) };
-    unsafe { fclose(time_fd.get()) };
-    time_fd.set(core::ptr::null_mut());
-    let buf = STARTUPTIME_BUF.replace(core::ptr::null_mut());
-    unsafe { xfree(buf.cast::<c_void>()) };
+    if let Some(log) = time_fd.take() {
+        log.close();
+    }
 }

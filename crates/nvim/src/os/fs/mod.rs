@@ -488,50 +488,87 @@ pub unsafe fn os_fopen(path: *const c_char, flags: *const c_char) -> *mut FILE {
 /// writes them byte by byte (`:redir > file`, `'verbosefile'`). Writing
 /// takes `&self`: the stream's buffer is C's, behind the pointer, and no
 /// Rust reference reaches it.
-pub struct CFile(NonNull<FILE>);
+pub struct CFile {
+    stream: NonNull<FILE>,
+    /// The buffer [`buffer_fully`](CFile::buffer_fully) handed to
+    /// `setvbuf`. The stream writes into it until it is closed, so it is
+    /// released only after the `fclose`.
+    buffer: Option<Box<[u8]>>,
+}
 
 impl CFile {
     /// [`os_fopen`] `path` with `mode`, or `None` when it cannot be opened.
     pub fn open(path: &CStr, mode: &CStr) -> Option<Self> {
         // SAFETY: two NUL-terminated strings; a stream `os_fopen` opened is
         // this value's alone.
-        NonNull::new(unsafe { os_fopen(path.as_ptr(), mode.as_ptr()) }).map(CFile)
+        let stream = NonNull::new(unsafe { os_fopen(path.as_ptr(), mode.as_ptr()) })?;
+        Some(CFile {
+            stream,
+            buffer: None,
+        })
+    }
+
+    /// Buffer the stream fully in `size` bytes of its own, so that nothing
+    /// reaches the file before it is closed (or the buffer fills). Answers
+    /// `setvbuf`'s error code when it refuses.
+    pub fn buffer_fully(&mut self, size: usize) -> Result<(), c_int> {
+        let mut buffer = vec![0u8; size].into_boxed_slice();
+        // SAFETY: an open stream this value owns, nothing written to it yet;
+        // the buffer is `size` bytes and is kept in `self` until after the
+        // stream is closed. A boxed slice's bytes do not move with the box.
+        let status = unsafe {
+            ::libc::setvbuf(
+                self.stream.as_ptr(),
+                buffer.as_mut_ptr().cast(),
+                ::libc::_IOFBF,
+                size,
+            )
+        };
+        if status != 0 {
+            return Err(status);
+        }
+        self.buffer = Some(buffer);
+        Ok(())
     }
 
     /// The stream, for a writer that still takes a `FILE *`. It stays open
     /// for as long as `self` lives.
     pub fn as_ptr(&self) -> *mut FILE {
-        self.0.as_ptr()
+        self.stream.as_ptr()
     }
 
     /// Close the stream now, answering whether the close succeeded -- a
     /// write error the buffering hid shows up here, and dropping cannot
     /// say so.
     pub fn close(self) -> bool {
-        let stream = core::mem::ManuallyDrop::new(self);
+        let mut stream = core::mem::ManuallyDrop::new(self);
+        let buffer = stream.buffer.take();
         // SAFETY: an open stream this value owns; `ManuallyDrop` keeps
         // `drop` from closing it a second time.
-        unsafe { ::libc::fclose(stream.0.as_ptr()) == 0 }
+        let closed = unsafe { ::libc::fclose(stream.stream.as_ptr()) == 0 };
+        drop(buffer);
+        closed
     }
 
     /// Write one byte.
     pub fn putc(&self, byte: u8) {
         // SAFETY: an open stream this value owns.
-        unsafe { ::libc::fputc(c_int::from(byte), self.0.as_ptr()) };
+        unsafe { ::libc::fputc(c_int::from(byte), self.stream.as_ptr()) };
     }
 
     /// Write `bytes`, NULs and all.
     pub fn write(&self, bytes: &[u8]) {
         // SAFETY: an open stream this value owns, and `bytes` is readable
         // for its length.
-        unsafe { ::libc::fwrite(bytes.as_ptr().cast(), 1, bytes.len(), self.0.as_ptr()) };
+        unsafe { ::libc::fwrite(bytes.as_ptr().cast(), 1, bytes.len(), self.stream.as_ptr()) };
     }
 }
 
 impl Drop for CFile {
     fn drop(&mut self) {
         // SAFETY: an open stream this value owns, closed exactly once.
-        unsafe { ::libc::fclose(self.0.as_ptr()) };
+        unsafe { ::libc::fclose(self.stream.as_ptr()) };
+        // `buffer` is dropped after this, with the stream already closed.
     }
 }
 

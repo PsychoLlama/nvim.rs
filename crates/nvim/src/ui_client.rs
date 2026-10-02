@@ -39,7 +39,7 @@ use crate::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::env::{os_env_exists, os_get_pid};
-use crate::profile::time_fd;
+use crate::profile::startup_timing;
 use crate::profile::{time_finish, time_msg};
 use crate::startup::{
     main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, ui_client_attached,
@@ -282,7 +282,7 @@ fn api_version() -> ApiDict {
 
 /// Notes in `--startuptime` that `step` has been sent.
 fn log_startup_step(step: &'static CStr) {
-    if !time_fd.get().is_null() {
+    if startup_timing() {
         unsafe { time_msg(step.as_ptr(), core::ptr::null::<ProfTime>()) };
     }
 }

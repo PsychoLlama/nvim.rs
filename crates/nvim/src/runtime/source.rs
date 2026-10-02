@@ -749,12 +749,8 @@ unsafe fn source_bracket(
     cookie.level = ex_nesting_level.get();
 
     // Start measuring load time, if --startuptime opened the log.
-    let time_log = time_fd.get();
-    let (rel_time, mut start_time) = if time_log.is_null() {
-        (0, 0)
-    } else {
-        time_push()
-    };
+    let time_log = startup_timing();
+    let (rel_time, mut start_time) = if !time_log { (0, 0) } else { time_push() };
     let profiling = do_profiling.get() == PROF_YES;
     let wait_start = if profiling { prof_child_enter() } else { 0 };
 
@@ -820,7 +816,7 @@ unsafe fn source_bracket(
         }
         verbose_leave();
     }
-    if !time_log.is_null() {
+    if time_log {
         let mut label = [0 as c_char; IOSIZE as usize];
         let buf = label.as_mut_ptr();
         // SAFETY: `label` outlives all three calls.
