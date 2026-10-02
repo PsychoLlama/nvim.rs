@@ -459,3 +459,103 @@ pub(crate) fn seen_endbrace(rc: &RegCompiler, refnum: c_int) -> bool {
     rc_did_emsg.set(true);
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Run `emit` once measuring and once writing, the way `bt_regcomp`
+    /// does, and answer the text with the size the first pass charged.
+    fn both_passes(emit: impl Fn(&mut BtEmitter)) -> (usize, Vec<u8>) {
+        let mut code = BtEmitter::new();
+        code.start(None);
+        emit(&mut code);
+        let measured = code.size();
+        assert!(
+            code.take_text().is_empty(),
+            "the measuring pass writes nothing"
+        );
+        code.start(Some(measured));
+        emit(&mut code);
+        (measured, code.take_text())
+    }
+
+    #[test]
+    fn the_measuring_pass_charges_what_the_writing_pass_writes() {
+        let (measured, text) = both_passes(|code| {
+            code.byte(0o234);
+            let branch = code.node(BtOp::Branch);
+            code.char(0x20ac);
+            code.number(7);
+            code.insert_limits(BtOp::BraceLimits, 1, 3, branch);
+            code.insert_nr(BtOp::Behind, 5, branch);
+            code.insert(BtOp::Star, branch);
+            let end = code.node(BtOp::End);
+            code.tail(branch, end);
+        });
+        assert_eq!(measured, text.len());
+    }
+
+    #[test]
+    fn a_tail_points_the_last_node_of_the_chain_at_its_target() {
+        let (_, text) = both_passes(|code| {
+            code.byte(0o234);
+            let first = code.node(BtOp::Branch);
+            let second = code.node(BtOp::Nothing);
+            let end = code.node(BtOp::End);
+            code.tail(first, second);
+            code.tail(first, end);
+        });
+        // magic, then BRANCH -> +3, NOTHING -> +3, END with no next.
+        let (branch, nothing, end) = (
+            BtOp::Branch.code() as u8,
+            BtOp::Nothing.code() as u8,
+            BtOp::End.code() as u8,
+        );
+        assert_eq!(text, [0o234, branch, 0, 3, nothing, 0, 3, end, 0, 0]);
+    }
+
+    #[test]
+    fn a_back_node_counts_its_offset_backwards() {
+        let (_, text) = both_passes(|code| {
+            code.byte(0o234);
+            let target = code.node(BtOp::Nothing);
+            let back = code.node(BtOp::Back);
+            code.tail(back, target);
+        });
+        assert_eq!(&text[4..], [BtOp::Back.code() as u8, 0, 3]);
+        let mut code = BtEmitter::new();
+        code.start(Some(text.len()));
+        code.byte(0o234);
+        let target = code.node(BtOp::Nothing);
+        let back = code.node(BtOp::Back);
+        code.tail(back, target);
+        assert_eq!(code.next(back), Some(target));
+    }
+
+    #[test]
+    fn an_insert_slides_the_operand_along_and_heads_it() {
+        let (_, text) = both_passes(|code| {
+            code.byte(0o234);
+            let atom = code.node(BtOp::Any);
+            code.insert_nr(BtOp::Behind, 0x0102_0304, atom);
+        });
+        let behind = BtOp::Behind.code() as u8;
+        let any = BtOp::Any.code() as u8;
+        assert_eq!(text, [0o234, behind, 0, 0, 1, 2, 3, 4, any, 0, 0]);
+    }
+
+    #[test]
+    fn an_offset_past_sixteen_bits_marks_the_program_too_long() {
+        let mut code = BtEmitter::new();
+        code.start(Some(0));
+        let first = code.node(BtOp::Branch);
+        for _ in 0..0x10000 {
+            code.byte(0);
+        }
+        let far = code.node(BtOp::End);
+        code.tail(first, far);
+        assert!(code.too_long);
+        assert_eq!(code.next(first), None, "an overflowed chain is not walked");
+    }
+}

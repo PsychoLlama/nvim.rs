@@ -159,3 +159,37 @@ impl Postfix {
         unsafe { core::slice::from_raw_parts(self.items, self.len) }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn emitted_items_read_back_in_order_across_growth() {
+        let mut post = Postfix::new();
+        assert!(post.items().is_empty());
+        post.start(0);
+        for i in 0..5000 {
+            post.emit(i);
+        }
+        post.emit_concat(-1);
+        assert_eq!(post.len(), 5002);
+        assert_eq!(post.items()[4999], 4999);
+        assert_eq!(post.items()[5001], NfaOp::Concat.code());
+    }
+
+    #[test]
+    fn truncate_and_drop_last_rewind() {
+        let mut post = Postfix::new();
+        post.start(1);
+        post.emit(1);
+        let mark = post.len();
+        post.emit(2);
+        post.emit_op(NfaOp::Star);
+        post.truncate(mark);
+        assert_eq!(post.items(), [1]);
+        post.drop_last();
+        post.drop_last();
+        assert!(post.items().is_empty());
+    }
+}

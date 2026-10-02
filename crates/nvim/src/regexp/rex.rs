@@ -54,12 +54,11 @@ impl Rex {
     /// # Safety
     ///
     /// The caller must hold the context — [`super::api::with_rex`] reserves
-    /// it and restores any outer match's, and the compile path holds it
-    /// because no match is running — and nothing else may form a reference
-    /// into it while the handle lives, which is why every accessor below
-    /// takes and returns copies rather than handing one out. That much is
-    /// what the pattern compiler needs: it only reads `reg_buf` and writes
-    /// the `nfa_*` findings.
+    /// it and restores any outer match's — and nothing else may form a
+    /// reference into it while the handle lives, which is why every accessor
+    /// below takes and returns copies rather than handing one out. (The
+    /// compilers never touch it: they keep their own state in a
+    /// [`super::RegCompiler`].)
     ///
     /// A *match* additionally has to have been set up ([`super::context::
     /// init_regexec`] or [`super::context::init_regexec_multi`]) before any
@@ -533,7 +532,7 @@ impl Rex {
         unsafe { (*self.0).need_clear_zsubexpr = need }
     }
 
-    // ------------------------------------------- what the NFA compiler left
+    // ------------------------------------- what the NFA program says
 
     /// Did the pattern use `\ze`?
     #[inline(always)]

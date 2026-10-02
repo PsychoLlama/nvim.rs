@@ -8,8 +8,9 @@
 //!
 //! This file is what they share: the C structures the engines still pass
 //! around by pointer, the opcode enumerations, and the globals that stand
-//! in for the C file-scope statics (`rex`, the pattern cursor, the
-//! compiler's output cursor). It holds no code.
+//! in for the C file-scope statics a match still needs (`rex`, the
+//! submatch snapshot, the previous replacement). A compile keeps its state
+//! in a [`RegCompiler`] instead (see [`compiler`]). It holds no code.
 //!
 //! The globals are read through `GlobalCell::ptr` on the matching path, not
 //! `with`/`with_mut` — see [`context`] for why that distinction is
