@@ -4,7 +4,7 @@
 //! the funccall in progress, the exception being thrown -- is an id into one
 //! of these instead, and the table is the object's one owner:
 //!
-//! - a [`SlotId`] is a slot index plus the slot's generation, which moves
+//! - a [`TableId`] is a slot index plus the slot's generation, which moves
 //!   every time the slot is emptied, so an id kept past its value resolves
 //!   to a panic rather than to freed memory or to the next tenant;
 //! - a slot keeps its value in a `Box` that is filled once and never moved
@@ -19,6 +19,12 @@
 //!   through the value's pointer.
 //!
 //! The table is not itself a global: an owner keeps one in its own cell.
+//!
+//! It is not [`crate::registry`]'s `SlotTable`, which files objects under
+//! the handle the user sees, in khash's order; nor its `Owned<T>`, which
+//! always runs `T`'s destructor. Here nothing user-visible names the value,
+//! and emptying a slot drops nothing of it unless the owner asks for the
+//! value back ([`IdTable::remove`]).
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -35,32 +41,32 @@ use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
 
-/// A value's place in a [`SlotTable<T>`].
-pub(crate) struct SlotId<T> {
+/// A value's place in a [`IdTable<T>`].
+pub(crate) struct TableId<T> {
     index: u32,
     generation: NonZeroU32,
     kind: PhantomData<fn() -> T>,
 }
 
-impl<T> Clone for SlotId<T> {
+impl<T> Clone for TableId<T> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T> Copy for SlotId<T> {}
+impl<T> Copy for TableId<T> {}
 
-impl<T> PartialEq for SlotId<T> {
+impl<T> PartialEq for TableId<T> {
     fn eq(&self, other: &Self) -> bool {
         self.index == other.index && self.generation == other.generation
     }
 }
 
-impl<T> Eq for SlotId<T> {}
+impl<T> Eq for TableId<T> {}
 
-impl<T> fmt::Debug for SlotId<T> {
+impl<T> fmt::Debug for TableId<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SlotId({}#{})", self.index, self.generation)
+        write!(f, "TableId({}#{})", self.index, self.generation)
     }
 }
 
@@ -76,16 +82,16 @@ struct Slot<T, M> {
 }
 
 /// Values of type `T`, each with an `M` beside it, owned at fixed addresses.
-pub(crate) struct SlotTable<T, M = ()> {
+pub(crate) struct IdTable<T, M = ()> {
     slots: Vec<Slot<T, M>>,
     /// Empty slots, reused last-emptied first.
     vacant: Vec<u32>,
 }
 
-impl<T, M: Default> SlotTable<T, M> {
+impl<T, M: Default> IdTable<T, M> {
     /// An empty table.
     pub(crate) const fn new() -> Self {
-        SlotTable {
+        IdTable {
             slots: Vec::new(),
             vacant: Vec::new(),
         }
@@ -93,7 +99,7 @@ impl<T, M: Default> SlotTable<T, M> {
 
     /// Take ownership of `value` and set `meta` beside it. Answers the id and
     /// the value's fixed address.
-    pub(crate) fn insert(&mut self, meta: M, value: T) -> (SlotId<T>, *mut T) {
+    pub(crate) fn insert(&mut self, meta: M, value: T) -> (TableId<T>, *mut T) {
         let value = Box::new(UnsafeCell::new(ManuallyDrop::new(value)));
         self.insert_boxed(meta, value, |_, _| {})
     }
@@ -106,15 +112,15 @@ impl<T, M: Default> SlotTable<T, M> {
         &mut self,
         meta: M,
         mut value: Boxed<T>,
-        init: impl FnOnce(SlotId<T>, &mut T),
-    ) -> (SlotId<T>, *mut T) {
+        init: impl FnOnce(TableId<T>, &mut T),
+    ) -> (TableId<T>, *mut T) {
         let id = self.vacant_id();
         init(id, value.get_mut());
         self.fill(id, meta, value)
     }
 
     /// The id the next value will have.
-    fn vacant_id(&mut self) -> SlotId<T> {
+    fn vacant_id(&mut self) -> TableId<T> {
         if self.vacant.is_empty() {
             let index = u32::try_from(self.slots.len()).expect("fewer than 2^32 slots");
             self.slots.push(Slot {
@@ -125,14 +131,14 @@ impl<T, M: Default> SlotTable<T, M> {
             self.vacant.push(index);
         }
         let index = *self.vacant.last().expect("a vacant slot");
-        SlotId {
+        TableId {
             index,
             generation: self.slots[index as usize].generation,
             kind: PhantomData,
         }
     }
 
-    fn fill(&mut self, id: SlotId<T>, meta: M, value: Boxed<T>) -> (SlotId<T>, *mut T) {
+    fn fill(&mut self, id: TableId<T>, meta: M, value: Boxed<T>) -> (TableId<T>, *mut T) {
         let popped = self.vacant.pop();
         debug_assert_eq!(popped, Some(id.index));
         let slot = &mut self.slots[id.index as usize];
@@ -146,7 +152,7 @@ impl<T, M: Default> SlotTable<T, M> {
     ///
     /// # Panics
     /// When `id`'s value is gone already.
-    pub(crate) fn free(&mut self, id: SlotId<T>) {
+    pub(crate) fn free(&mut self, id: TableId<T>) {
         let value = self.empty(id);
         // Freed in place: moving a large value out only to forget it is a
         // copy for nothing.
@@ -158,11 +164,11 @@ impl<T, M: Default> SlotTable<T, M> {
     ///
     /// # Panics
     /// When `id`'s value is gone already.
-    pub(crate) fn remove(&mut self, id: SlotId<T>) -> T {
+    pub(crate) fn remove(&mut self, id: TableId<T>) -> T {
         ManuallyDrop::into_inner(UnsafeCell::into_inner(*self.empty(id)))
     }
 
-    fn empty(&mut self, id: SlotId<T>) -> Boxed<T> {
+    fn empty(&mut self, id: TableId<T>) -> Boxed<T> {
         let slot = self.live_mut(id);
         slot.generation = slot.generation.checked_add(1).unwrap_or(NonZeroU32::MIN);
         slot.meta = M::default();
@@ -172,8 +178,8 @@ impl<T, M: Default> SlotTable<T, M> {
     }
 }
 
-impl<T, M> SlotTable<T, M> {
-    fn live(&self, id: SlotId<T>) -> &Slot<T, M> {
+impl<T, M> IdTable<T, M> {
+    fn live(&self, id: TableId<T>) -> &Slot<T, M> {
         let slot = &self.slots[id.index as usize];
         assert!(
             slot.generation == id.generation && slot.value.is_some(),
@@ -182,7 +188,7 @@ impl<T, M> SlotTable<T, M> {
         slot
     }
 
-    fn live_mut(&mut self, id: SlotId<T>) -> &mut Slot<T, M> {
+    fn live_mut(&mut self, id: TableId<T>) -> &mut Slot<T, M> {
         let slot = &mut self.slots[id.index as usize];
         assert!(
             slot.generation == id.generation && slot.value.is_some(),
@@ -195,7 +201,7 @@ impl<T, M> SlotTable<T, M> {
     ///
     /// # Panics
     /// When `id`'s value is gone.
-    pub(crate) fn address(&self, id: SlotId<T>) -> *mut T {
+    pub(crate) fn address(&self, id: TableId<T>) -> *mut T {
         match &self.live(id).value {
             Some(value) => value.get().cast(),
             None => unreachable!("`live` checked the slot is full"),
@@ -203,7 +209,7 @@ impl<T, M> SlotTable<T, M> {
     }
 
     /// What was set beside `id`'s value.
-    pub(crate) fn meta(&self, id: SlotId<T>) -> &M {
+    pub(crate) fn meta(&self, id: TableId<T>) -> &M {
         &self.live(id).meta
     }
 }
@@ -218,7 +224,7 @@ mod tests {
 
     #[test]
     fn an_id_names_its_value_until_it_is_removed() {
-        let mut table: SlotTable<u64, u8> = SlotTable::new();
+        let mut table: IdTable<u64, u8> = IdTable::new();
         let (a, pa) = table.insert_boxed(1, boxed(10), |_, _| {});
         let (b, _) = table.insert_boxed(2, boxed(20), |_, _| {});
         assert_ne!(a, b);
@@ -236,7 +242,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "an id outlived its value")]
     fn a_stale_id_panics() {
-        let mut table: SlotTable<u64> = SlotTable::new();
+        let mut table: IdTable<u64> = IdTable::new();
         let (a, _) = table.insert_boxed((), boxed(1), |_, _| {});
         table.free(a);
         let _ = table.insert_boxed((), boxed(2), |_, _| {});
@@ -245,7 +251,7 @@ mod tests {
 
     #[test]
     fn a_value_stays_put_while_the_table_grows() {
-        let mut table: SlotTable<[u8; 64]> = SlotTable::new();
+        let mut table: IdTable<[u8; 64]> = IdTable::new();
         let (first, at) = table.insert_boxed((), boxed([7; 64]), |_, _| {});
         for _ in 0..100 {
             let _ = table.insert_boxed((), boxed([0; 64]), |_, _| {});

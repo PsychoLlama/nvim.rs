@@ -8,7 +8,7 @@
 //! the call stack aside to run an autocommand or a callback).
 //!
 //! Here every funccall, running or parked, is **owned by one
-//! [`SlotTable`]**, and the three globals are [`FcId`]s into it. The table
+//! [`IdTable`]**, and the three globals are [`FcId`]s into it. The table
 //! records beside each funccall the call it was made from, which is
 //! upstream's `fc_caller` chain; the parked funccalls are a `Vec` of ids,
 //! newest last, and the set-aside call stacks a `Vec` of the ids that were
@@ -30,13 +30,13 @@
 use core::ptr;
 
 use crate::global_cell::GlobalCell;
-use crate::slot_table::{Boxed, SlotTable};
+use crate::id_table::{Boxed, IdTable};
 use crate::types::{FcId, FuncCall};
 
 /// The funccalls, each beside its caller, and the three ids upstream kept as
 /// raw globals.
 struct FuncCalls {
-    table: SlotTable<FuncCall, Option<FcId>>,
+    table: IdTable<FuncCall, Option<FcId>>,
     /// The call in progress: upstream's `current_funccal`.
     current: Option<FcId>,
     /// Funccalls kept beyond their call, newest last: upstream's
@@ -48,7 +48,7 @@ struct FuncCalls {
 }
 
 static FUNC_CALLS: GlobalCell<FuncCalls> = GlobalCell::new(FuncCalls {
-    table: SlotTable::new(),
+    table: IdTable::new(),
     current: None,
     parked: Vec::new(),
     aside: Vec::new(),

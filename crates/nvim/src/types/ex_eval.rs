@@ -141,4 +141,4 @@ pub struct Exception {
 }
 
 /// An exception's place in the exception table.
-pub(crate) type ExcId = crate::slot_table::SlotId<Exception>;
+pub(crate) type ExcId = crate::id_table::TableId<Exception>;

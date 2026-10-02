@@ -24,7 +24,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::state_record;
-use crate::slot_table::SlotTable;
+use crate::id_table::IdTable;
 use crate::types::{ErrorMsgs, ExcId, Exception};
 use core::ffi::c_int;
 
@@ -36,7 +36,7 @@ state_record! {
     /// Every exception alive: being thrown, pending in a `:finally`,
     /// caught, or set aside by a nested command line. Everything else names
     /// one by id.
-    pub(crate) EXCEPTIONS: SlotTable<Exception> = SlotTable::new();
+    pub(crate) EXCEPTIONS: IdTable<Exception> = IdTable::new();
     /// The exception being thrown.
     pub(crate) current_exception: Option<ExcId> = None;
     pub(crate) did_throw: bool = false;
