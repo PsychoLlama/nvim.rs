@@ -12,8 +12,11 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::charset::skip;
 use crate::cstr;
 use crate::guard::Suppress;
+use crate::mbyte::{char_at, cluster_len};
+use crate::memline::Lines;
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
@@ -134,20 +137,10 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                 };
                 unsafe { spell_dump_compl(word, regmatch.rm_ic as c_int, &raw mut dir, 0) };
             } else if count > 0 {
-                // Avoid a warning for using "files" uninitialised.
-                let direction = &raw mut dir;
                 // SAFETY: `files` is `count` NUL-terminated names and `buf`
                 // a scratch buffer of `LSIZE`.
                 unsafe {
-                    ins_compl_files(
-                        count,
-                        files,
-                        thesaurus,
-                        flags,
-                        &mut regmatch,
-                        buf,
-                        direction,
-                    )
+                    ins_compl_files(count, files, thesaurus, flags, &mut regmatch, buf, &mut dir)
                 };
                 if flags != DICT_EXACT {
                     unsafe { free_wild(count, files) };
@@ -164,66 +157,57 @@ pub(crate) unsafe fn ins_compl_dictionaries(
     unsafe { xfree(buf.cast::<c_void>()) };
 }
 
-/// Add all the words in the line `*buf_arg` from the thesaurus file `fname`,
-/// skipping the word at `skip_word`; answers OK on success.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `buf_arg` must point at a writable `*mut c_char` slot the caller owns for
-/// the call. `skip_word` must point at a NUL-terminated string.
-pub(crate) unsafe fn thesaurus_add_words_in_line(
-    fname: *mut c_char,
-    buf_arg: *mut *mut c_char,
-    dir: c_int,
-    skip_word: *const c_char,
-) -> c_int {
+/// Add all the words in `line` from the thesaurus file `fname`, skipping the
+/// one starting at `skip_word`; answers OK on success, and where the walk
+/// stopped.
+fn thesaurus_add_words_in_line(
+    fname: Option<&CStr>,
+    line: &[u8],
+    dir: Direction,
+    skip_word: usize,
+) -> (c_int, usize) {
     let mut status = OK;
 
     // Add the other matches on the line.
-    let mut ptr = unsafe { *buf_arg };
+    let mut at = 0;
     while !got_int.get() {
         // Find the start of the next word, skipping white space and
         // punctuation.
-        ptr = unsafe { find_word_start(ptr) };
-        if unsafe { *ptr } as c_int == NUL || unsafe { *ptr } as c_int == NL {
+        at = word_start(line, at);
+        if at >= line.len() || line[at] == b'\n' {
             break;
         }
-        let wstart = ptr;
+        let wstart = at;
 
         // Find the end of the word.  Japanese words may have characters in
         // different classes, so only separate words with single-byte
         // non-word characters.
-        while unsafe { *ptr } as c_int != NUL {
-            let l = unsafe { utfc_ptr2len(ptr) };
-            if l < 2 && !unsafe { vim_iswordc(*ptr as u8 as c_int) } {
+        while at < line.len() {
+            let l = cluster_len(&line[at..]);
+            if l < 2 && !vim_iswordc(c_int::from(line[at])) {
                 break;
             }
-            ptr = unsafe { ptr.offset(l as isize) };
+            at += l;
         }
 
         // Add the word, skipping the regexp match.
-        if wstart != skip_word.cast_mut() {
-            // SAFETY: `wstart .. ptr` is one word of the line being read.
-            status = unsafe { add_scanned_word(wstart, ptr, fname, dir, FUZZY_SCORE_NONE) };
+        if wstart != skip_word {
+            status = add_scanned_word(line, wstart, at, fname, dir, FUZZY_SCORE_NONE);
             if status == FAIL {
                 break;
             }
         }
     }
-
-    unsafe { *buf_arg = ptr };
-    status
+    (status, at)
 }
 
 /// Read `count` dictionary/thesaurus `files` and add the text matching
-/// `regmatch`.
+/// `regmatch`, reading each line into `buf`.
 ///
 /// # Safety
 ///
-/// `files` must point at a writable `*mut c_char` slot the caller owns for
-/// the call. `buf` must point at a NUL-terminated string, unaliased for the
-/// call. `dir` must point at a live `Direction`, unaliased for the call.
+/// `files` must point at `count` NUL-terminated names. `buf` must have
+/// `LSIZE` writable bytes.
 pub(crate) unsafe fn ins_compl_files(
     count: c_int,
     files: *mut *mut c_char,
@@ -231,23 +215,22 @@ pub(crate) unsafe fn ins_compl_files(
     flags: c_int,
     regmatch: &mut RegMatch,
     buf: *mut c_char,
-    dir: *mut Direction,
+    dir: &mut Direction,
 ) {
     let mut progress = [0 as c_char; IOSIZE as usize];
-    let leader = if cot_fuzzy() {
-        ins_compl_leader()
-    } else {
-        ptr::null_mut()
-    };
-    let leader_len = if cot_fuzzy() {
-        ins_compl_leader_len() as c_int
-    } else {
-        0
-    };
+    // The leader is copied: the scan checks for typed keys between lines.
+    let leader = cot_fuzzy().then(|| ins_compl_leader_str().to_owned());
+    let leader = leader
+        .as_ref()
+        .map(String_0::as_cstr)
+        .filter(|l| !l.is_empty());
 
     let mut i = 0;
-    while i < count as isize && !got_int.get() && !ins_compl_interrupted() {
-        let file = unsafe { *files.offset(i) };
+    while i < count as usize && !got_int.get() && !ins_compl_interrupted() {
+        // SAFETY: the caller's `count` names.
+        let file = unsafe { *files.add(i) };
+        // SAFETY: a NUL-terminated name.
+        let fname = unsafe { cstr::at(file) };
         let fp = unsafe { os_fopen(file, c"r".as_ptr()) }; // open dictionary file
         let quiet = shortmess(ShmFlag::COMPLETIONSCAN);
         if flags != DICT_EXACT && !quiet && !compl_autocomplete.get() {
@@ -266,65 +249,58 @@ pub(crate) unsafe fn ins_compl_files(
         }
 
         // Read the dictionary file line by line, checking each for a match.
+        // SAFETY: `buf` has `LSIZE` bytes and `fp` is open.
         while !got_int.get() && !ins_compl_interrupted() && !unsafe { vim_fgets(buf, LSIZE, fp) } {
-            let mut ptr = buf;
-            if cot_fuzzy() && leader_len > 0 {
-                let line_end = unsafe { find_line_end(ptr) };
-                while ptr < line_end {
-                    let mut score = 0;
-                    let mut len = 0;
-                    let (at, out_len, out_score) = (&raw mut ptr, &raw mut len, &raw mut score);
-                    let none = ptr::null_mut();
-                    // SAFETY: `ptr` walks the line, `leader` is
-                    // NUL-terminated and the out-parameters are this frame's.
-                    if unsafe { fuzzy_match_str_in_line(at, leader, out_len, none, out_score) } {
-                        let end_ptr = if ctrl_x_mode_line_or_eval() {
-                            unsafe { find_line_end(ptr) }
-                        } else {
-                            unsafe { find_word_end(ptr) }
-                        };
-                        // SAFETY: `ptr .. end_ptr` is one word of the line.
-                        let add_r = unsafe { add_scanned_word(ptr, end_ptr, file, *dir, score) };
-                        if add_r == FAIL {
-                            break;
-                        }
-                        ptr = end_ptr; // start from the next word
-                        if compl_get_longest.get() && ctrl_x_mode_normal() && best_score_is(score) {
-                            compl_num_bests.set(compl_num_bests.get() + 1);
-                        }
+            // SAFETY: `vim_fgets` left one NUL-terminated line in `buf`,
+            // which nothing else writes while it is read here.
+            let line_cstr = unsafe { cstr::at(buf) };
+            let line = line_cstr.to_bytes();
+            if let Some(leader) = leader {
+                let end = line_end(line);
+                let mut at = 0;
+                while at < end {
+                    let Some(found) = fuzzy_match_in_line(line, at, leader) else {
+                        break;
+                    };
+                    let start = found.start;
+                    let word_end = if ctrl_x_mode_line_or_eval() {
+                        start + line_end(&line[start..])
+                    } else {
+                        word_end(line, start)
+                    };
+                    let score = found.score;
+                    if add_scanned_word(line, start, word_end, Some(fname), *dir, score) == FAIL {
+                        break;
+                    }
+                    at = word_end; // start from the next word
+                    if compl_get_longest.get() && ctrl_x_mode_normal() && best_score_is(score) {
+                        compl_num_bests.set(compl_num_bests.get() + 1);
                     }
                 }
             } else {
-                // SAFETY: `vim_fgets` left one NUL-terminated line in `buf`,
-                // and nothing below rewrites it.
-                let line = unsafe { cstr::at(buf) };
-                while vim_regexec(regmatch, line, unsafe { ptr.offset_from(buf) } as usize) {
-                    let at = regmatch.starts[0].unwrap_or(0);
-                    // SAFETY: an offset into the line just matched.
-                    let start = unsafe { buf.add(at) };
-                    ptr = if ctrl_x_mode_line_or_eval() {
-                        unsafe { find_line_end(start) }
+                let mut at = 0;
+                while vim_regexec(regmatch, line_cstr, at) {
+                    let start = regmatch.starts[0].unwrap_or(0);
+                    at = if ctrl_x_mode_line_or_eval() {
+                        start + line_end(&line[start..])
                     } else {
-                        unsafe { find_word_end(start) }
+                        word_end(line, start)
                     };
-                    // SAFETY: `start .. ptr` is one word of the line.
                     let mut add_r =
-                        unsafe { add_scanned_word(start, ptr, file, *dir, FUZZY_SCORE_NONE) };
+                        add_scanned_word(line, start, at, Some(fname), *dir, FUZZY_SCORE_NONE);
                     if thesaurus {
                         // For a thesaurus, add all the words in the line.
-                        ptr = buf;
-                        add_r =
-                            unsafe { thesaurus_add_words_in_line(file, &raw mut ptr, *dir, start) };
+                        (add_r, at) = thesaurus_add_words_in_line(Some(fname), line, *dir, start);
                     }
                     if add_r == OK {
                         // If dir was BACKWARD then honour it just once.
-                        unsafe { *dir = FORWARD };
+                        *dir = FORWARD;
                     } else if add_r == FAIL {
                         break;
                     }
                     // Avoid an expensive call to vim_regexec() at the end
                     // of the line.
-                    if unsafe { *ptr } as c_int == '\n' as c_int || got_int.get() {
+                    if line.get(at) == Some(&b'\n') || got_int.get() {
                         break;
                     }
                 }
@@ -332,6 +308,7 @@ pub(crate) unsafe fn ins_compl_files(
             line_breakcheck();
             ins_compl_check_keys(50, false);
         }
+        // SAFETY: the file opened above.
         unsafe { fclose(fp) };
         i += 1;
     }
@@ -399,114 +376,95 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
     buffer
 }
 
-/// The next word or line from `ins_buf` at `cur_match_pos`, with its length in
-/// `match_len`; `cont_s_ipos` says the next `CTRL-X <>` sets the initial
-/// position.
-///
-/// # Safety
-///
-/// `match_len` must point at a writable `int` the caller owns. `cont_s_ipos`
-/// must point at a writable `bool` the caller owns.
-pub(crate) unsafe fn ins_compl_get_next_word_or_line(
+/// Whether the character at the start of `text` belongs to a word —
+/// [`vim_iswordp`] over a slice; an empty one is the terminator, which does
+/// not.
+fn is_word_at(text: &[u8]) -> bool {
+    vim_iswordc(char_at(text))
+}
+
+/// The next word or line from `ins_buf` at `pos`, copied into `out` from its
+/// start to the end of the string it was found in (which
+/// [`ins_compl_add_infercase`] wants), with its length and whether the next
+/// `CTRL-X <>` sets the initial position; `None` when there is nothing to
+/// add.
+pub(crate) fn next_word_or_line(
     ins_buf: Buf,
-    cur_match_pos: Pos,
-    match_len: *mut c_int,
-    cont_s_ipos: *mut bool,
-    out: &mut [c_char; IOSIZE as usize],
-) -> *mut c_char {
-    // SAFETY: the caller's two out-parameters are its own locals.
-    unsafe { *match_len = 0 };
-    let (lnum, col) = (cur_match_pos.lnum, cur_match_pos.col);
-    // SAFETY: `cur_match_pos` is a position in `ins_buf`, which the caller
-    // has promised is live.
-    let (line, line_len) = unsafe { (ml_get_buf(ins_buf, lnum), ml_get_buf_len(ins_buf, lnum)) };
-    // SAFETY: `col` is inside the line.
-    let mut ptr = unsafe { line.offset(col as isize) };
-    let mut len = line_len - col;
-    let iobuff = out.as_mut_ptr();
+    pos: Pos,
+    out: &mut Vec<u8>,
+) -> Option<(usize, bool)> {
+    let mut lines = Lines::in_buffer(ins_buf);
+    let (lnum, col) = (pos.lnum, pos.col as usize);
+    let line_count = ins_buf.b_ml.ml_line_count;
+    let typed_len = compl_length.get() as usize;
+    out.clear();
 
     if ctrl_x_mode_line_or_eval() {
         if compl_status_adding() {
-            if lnum >= ins_buf.b_ml.ml_line_count {
-                return ptr::null_mut();
+            if lnum >= line_count {
+                return None;
             }
-            // SAFETY: as above -- the line after this one exists.
-            (ptr, len) = unsafe {
-                (
-                    ml_get_buf(ins_buf, lnum + 1),
-                    ml_get_buf_len(ins_buf, lnum + 1),
-                )
-            };
-            if !p_paste() {
-                let tmp_ptr = ptr;
-                ptr = unsafe { skipwhite(tmp_ptr) };
-                len -= unsafe { ptr.offset_from(tmp_ptr) } as c_int;
-            }
+            let next = lines.line(lnum + 1);
+            let skip = if p_paste() { 0 } else { skip::white(next) };
+            out.extend_from_slice(&next[skip..]);
+        } else {
+            let line = lines.line(lnum);
+            out.extend_from_slice(&line[col.min(line.len())..]);
         }
-    } else {
-        let mut tmp_ptr = ptr;
-        if compl_status_adding() && compl_length.get() <= len {
-            tmp_ptr = unsafe { tmp_ptr.offset(compl_length.get() as isize) };
-            // Skip if already inside a word.
-            if unsafe { vim_iswordp(tmp_ptr) } {
-                return ptr::null_mut();
-            }
-            // Find the start of the next word.
-            tmp_ptr = unsafe { find_word_start(tmp_ptr) };
-        }
-        // Find the end of this word.
-        tmp_ptr = unsafe { find_word_end(tmp_ptr) };
-        len = unsafe { tmp_ptr.offset_from(ptr) } as c_int;
-
-        if compl_status_adding() && len == compl_length.get() {
-            if lnum < ins_buf.b_ml.ml_line_count {
-                // Try the next line, if any: the new word will be "joined"
-                // as if the normal command "J" was used.  IOSIZE is always
-                // greater than compl_length, so the strncpy always works
-                // -- Acevedo
-                unsafe { strncpy(iobuff, ptr, len as size_t) };
-                // SAFETY: as above -- the line after this one exists.
-                ptr = unsafe { skipwhite(ml_get_buf(ins_buf, lnum + 1)) };
-                // Find the start and then the end of the next word.
-                tmp_ptr = unsafe { find_word_end(find_word_start(ptr)) };
-                if tmp_ptr > ptr {
-                    if unsafe { *ptr } as c_int != ')' as c_int
-                        && unsafe { *iobuff.offset((len - 1) as isize) } as c_int != TAB
-                    {
-                        if unsafe { *iobuff.offset((len - 1) as isize) } as c_int != ' ' as c_int {
-                            unsafe { *iobuff.offset(len as isize) = ' ' as c_char };
-                            len += 1;
-                        }
-                        // The joined line =~ "\k.* ", thus len >= 2.
-                        if p_js()
-                            && matches!(
-                                unsafe { *iobuff.offset((len - 2) as isize) } as u8,
-                                b'.' | b'?' | b'!'
-                            )
-                        {
-                            unsafe { *iobuff.offset(len as isize) = ' ' as c_char };
-                            len += 1;
-                        }
-                    }
-                    // Copy as much as possible of the new word.
-                    if unsafe { tmp_ptr.offset_from(ptr) } >= (IOSIZE - len) as isize {
-                        tmp_ptr = unsafe { ptr.offset((IOSIZE - len - 1) as isize) };
-                    }
-                    unsafe { xstrlcpy(iobuff.offset(len as isize), ptr, (IOSIZE - len) as size_t) };
-                    len += unsafe { tmp_ptr.offset_from(ptr) } as c_int;
-                    unsafe { *cont_s_ipos = true };
-                }
-                unsafe { *iobuff.offset(len as isize) = NUL as c_char };
-                ptr = iobuff;
-            }
-            if len == compl_length.get() {
-                return ptr::null_mut();
-            }
-        }
+        return Some((out.len(), false));
     }
 
-    unsafe { *match_len = len };
-    ptr
+    let line = lines.line(lnum);
+    let col = col.min(line.len());
+    out.extend_from_slice(&line[col..]);
+    let mut at = col;
+    if compl_status_adding() && typed_len <= line.len() - col {
+        at += typed_len;
+        // Skip if already inside a word.
+        if is_word_at(&line[at..]) {
+            return None;
+        }
+        // Find the start of the next word.
+        at = word_start(line, at);
+    }
+    // Find the end of this word.
+    let mut len = word_end(line, at) - col;
+    let mut cont_s_ipos = false;
+
+    if compl_status_adding() && len == typed_len {
+        if lnum < line_count {
+            // Try the next line, if any: the new word will be "joined" as
+            // if the normal command "J" was used.  IOSIZE is always greater
+            // than typed_len, so the copy always fits -- Acevedo
+            out.truncate(len);
+            let next = lines.line(lnum + 1);
+            let start = skip::white(next);
+            // Find the start and then the end of the next word.
+            let end = word_end(next, word_start(next, start));
+            if end > start {
+                if next[start] != b')' && c_int::from(out[len - 1]) != TAB {
+                    if out[len - 1] != b' ' {
+                        out.push(b' ');
+                        len += 1;
+                    }
+                    // The joined line =~ "\k.* ", thus len >= 2.
+                    if p_js() && matches!(out[len - 2], b'.' | b'?' | b'!') {
+                        out.push(b' ');
+                        len += 1;
+                    }
+                }
+                // Copy as much as possible of the new word.
+                let room = IOSIZE as usize - len - 1;
+                out.extend_from_slice(&next[start..end.min(start + room)]);
+                len = out.len();
+                cont_s_ipos = true;
+            }
+        }
+        if len == typed_len {
+            return None;
+        }
+    }
+    Some((len, cont_s_ipos))
 }
 
 /// The next set of words matching `compl_pattern` for default completion —
@@ -521,13 +479,13 @@ pub(crate) fn get_next_default_completion(
     st: &mut InsComplNextState,
     start_pos: Pos,
 ) -> Result<(), Failed> {
-    // Where a joined `CTRL-X CTRL-L` line is assembled; upstream shares
-    // `IObuff` for it, which the message machinery also writes.
-    let mut word = [0 as c_char; IOSIZE as usize];
-    let mut ptr: *mut c_char = ptr::null_mut();
+    // The match found, from its start to the end of the string it is in;
+    // upstream points into the line, or into `IObuff` for a joined line.
+    let mut found: Vec<u8> = Vec::new();
     let mut len = 0;
     let in_fuzzy_collect = !compl_status_adding() && cot_fuzzy() && compl_length.get() > 0;
-    let leader = ins_compl_leader();
+    // A copy: the add below can run code that changes it.
+    let leader = ins_compl_leader_str().to_owned();
     let mut score = FUZZY_SCORE_NONE;
     // The scan's buffer survives the timers and RPC that
     // `ins_compl_check_keys` lets run between two passes only if nothing
@@ -567,12 +525,12 @@ pub(crate) fn get_next_default_completion(
         let silenced = Suppress::messages();
         let dir = compl_direction.get();
         if in_fuzzy_collect {
-            // SAFETY: `pos` is a position in `ins_buf` and `leader` is
-            // NUL-terminated; `start_pos` is the completion's own position.
-            let hit = unsafe { search_for_fuzzy_match(ins_buf, &mut pos, leader, dir, &start_pos) };
+            let pattern = leader.as_cstr();
+            let hit =
+                search_for_fuzzy_match(ins_buf, &mut pos, pattern, dir, start_pos, &mut found);
             found_new_match = Err(Failed);
             if let Some(hit) = hit {
-                (ptr, len) = (hit.ptr, hit.len);
+                len = hit.len;
                 score = hit.score.unwrap_or(score);
                 found_new_match = Ok(());
             }
@@ -652,15 +610,14 @@ pub(crate) fn get_next_default_completion(
         }
 
         if !in_fuzzy_collect {
-            let (out_len, ipos) = (&raw mut len, &raw mut cont_s_ipos);
-            // SAFETY: `pos` is a position in `ins_buf`, and the two
-            // out-parameters are this frame's own locals.
-            ptr =
-                unsafe { ins_compl_get_next_word_or_line(ins_buf, pos, out_len, ipos, &mut word) };
+            let Some(next) = next_word_or_line(ins_buf, pos, &mut found) else {
+                continue;
+            };
+            (len, cont_s_ipos) = next;
         }
-        if ptr.is_null()
-            || (ins_compl_has_preinsert() && unsafe { cstr::eq(ptr, ins_compl_leader()) })
-        {
+        // C's `strcmp(ptr, ins_compl_leader()) == 0`: the whole rest of the
+        // string against the leader.
+        if ins_compl_has_preinsert() && ins_compl_leader_str().with_bytes(|l| *l == *found) {
             continue;
         }
 
@@ -670,17 +627,12 @@ pub(crate) fn get_next_default_completion(
         }
 
         let fname = if in_curbuf {
-            ptr::null_mut()
+            None
         } else {
-            ins_buf.name.short_ptr()
+            ins_buf.name.short()
         };
-        let ic = p_ic();
-        // SAFETY: `ptr` is `len` bytes of the match just found in a
-        // NUL-terminated line, and `fname` is null or the scanned buffer's
-        // own name.
-        let add_r = unsafe {
-            ins_compl_add_infercase(ptr, len, ic, fname, kDirectionNotSet, cont_s_ipos, score)
-        };
+        let (ic, dir) = (p_ic(), kDirectionNotSet);
+        let add_r = ins_compl_add_infercase(&found, len, ic, fname, dir, cont_s_ipos, score);
         if add_r != NOTDONE {
             if in_fuzzy_collect && best_score_is(score) {
                 compl_num_bests.set(compl_num_bests.get() + 1);
@@ -700,14 +652,20 @@ pub(crate) fn get_register_completion() {
     // Upstream's `!compl_orig_text.data || (p_ic ? STRNICMP : strncmp)(…)`:
     // a candidate counts when there is no original text to compare against,
     // or it starts with it.
-    let starts_with_orig = |s: *mut c_char| {
-        let (data, len) = compl_orig_text().parts();
-        data.is_null()
-            || if p_ic() {
-                unsafe { strncasecmp(s, data, len) == 0 }
-            } else {
-                unsafe { cstr::prefix_eq(s, data, len) }
-            }
+    let orig = (!compl_orig_text().is_unset()).then(|| compl_orig_text().to_owned());
+    let starts_with_orig = |s: &[u8]| {
+        let Some(orig) = &orig else {
+            return true;
+        };
+        let orig = orig.as_bytes();
+        if p_ic() {
+            // SAFETY: `s` runs to the end of a NUL-terminated register line,
+            // and `strncasecmp` reads `orig` no further than its length.
+            unsafe { strncasecmp(s.as_ptr().cast(), orig.as_ptr().cast(), orig.len()) == 0 }
+        } else {
+            // `strncmp` over the original's length, which holds no NUL.
+            s.starts_with(orig)
+        }
     };
 
     let mut dir = compl_direction.get();
@@ -720,75 +678,60 @@ pub(crate) fn get_register_completion() {
             continue;
         }
 
-        let reg = unsafe { copy_register(regname) };
-        if unsafe { (*reg).y_array }.is_null() || unsafe { (*reg).y_size } == 0 {
-            unsafe { free_register(reg) };
-            unsafe { xfree(reg.cast::<c_void>()) };
-            continue;
-        }
+        // The register's lines, copied: adding a match can run code that
+        // changes the register.
+        // SAFETY: a valid register name; the copy `copy_register` answers is
+        // this frame's own, read and then freed here.
+        let lines: Vec<XString> = unsafe {
+            let reg = copy_register(regname);
+            let (array, size) = ((*reg).y_array, (*reg).y_size);
+            let count = if array.is_null() { 0 } else { size };
+            let lines = (0..count)
+                .map(|j| (*array.add(j)).data())
+                .filter(|line| !line.is_null())
+                .map(|line| XString::from_cstr(cstr::at(line)))
+                .collect();
+            free_register(reg);
+            xfree(reg.cast::<c_void>());
+            lines
+        };
 
-        for j in 0..unsafe { (*reg).y_size } as isize {
-            let str = unsafe { (*(*reg).y_array.offset(j)).data() };
-            if str.is_null() {
-                continue;
-            }
-
+        for line in &lines {
             if adding_mode {
-                let str_len = unsafe { cstr::bytes_at(str) }.len() as c_int;
-                if str_len == 0 {
+                if line.is_empty() {
                     continue;
                 }
-                // SAFETY: `str` is the register line, `str_len` its length.
-                let end = unsafe { str.offset(str_len as isize) };
-                // SAFETY: as above -- a whole register line, no file name.
-                let added = starts_with_orig(str)
-                    && unsafe {
-                        add_scanned_word(str, end, ptr::null_mut(), dir, FUZZY_SCORE_NONE)
-                    } == OK;
+                let added = starts_with_orig(line)
+                    && add_scanned_word(line, 0, line.len(), None, dir, FUZZY_SCORE_NONE) == OK;
                 if added {
                     dir = FORWARD;
                 }
-            } else {
-                // The safe end of the string, to avoid NUL byte issues.
-                let str_end = unsafe { str.add(cstr::bytes_at(str).len()) };
-                let mut p = str;
-                while p < str_end && unsafe { *p } as c_int != NUL {
-                    let old_p = p;
-                    p = unsafe { find_word_start(p) };
-                    if p >= str_end || unsafe { *p } as c_int == NUL {
-                        break;
-                    }
-
-                    let mut word_end = unsafe { find_word_end(p) };
-                    if word_end <= p {
-                        word_end = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-                    }
-                    if word_end > str_end {
-                        word_end = str_end;
-                    }
-
-                    let len = unsafe { word_end.offset_from(p) } as c_int;
-                    // SAFETY: `p .. word_end` is one word of the register
-                    // line, and there is no file name.
-                    let added = len > 0
-                        && starts_with_orig(p)
-                        && unsafe {
-                            add_scanned_word(p, word_end, ptr::null_mut(), dir, FUZZY_SCORE_NONE)
-                        } == OK;
-                    if added {
-                        dir = FORWARD;
-                    }
-
-                    p = word_end;
-                    if p <= old_p {
-                        p = unsafe { old_p.offset(utfc_ptr2len(old_p) as isize) };
-                    }
+                continue;
+            }
+            let mut at = 0;
+            while at < line.len() {
+                let old = at;
+                at = word_start(line, at);
+                if at >= line.len() {
+                    break;
+                }
+                let mut end = word_end(line, at);
+                if end <= at {
+                    end = at + cluster_len(&line[at..]);
+                }
+                let end = end.min(line.len());
+                let added = end > at
+                    && starts_with_orig(&line[at..])
+                    && add_scanned_word(line, at, end, None, dir, FUZZY_SCORE_NONE) == OK;
+                if added {
+                    dir = FORWARD;
+                }
+                at = end;
+                if at <= old {
+                    at = old + cluster_len(&line[old..]);
                 }
             }
         }
-
-        unsafe { free_register(reg) };
-        unsafe { xfree(reg.cast::<c_void>()) };
     }
 }
 
@@ -800,114 +743,104 @@ fn best_score_is(score: c_int) -> bool {
         .is_some_and(|best| best.with(|m| m.score) == score)
 }
 
-/// [`ins_compl_add_infercase`] for the word `start .. end` of a scanned
-/// line, with the flags every caller in this module passes.
-///
-/// # Safety
-/// `start` and `end` bound one word of a live line, and `fname` is null or
-/// a NUL-terminated file name.
-unsafe fn add_scanned_word(
-    start: *mut c_char,
-    end: *mut c_char,
-    fname: *mut c_char,
+/// [`ins_compl_add_infercase`] for the word `start .. end` of `line` (which
+/// runs to the end of its string), with the flags every caller in this
+/// module passes.
+fn add_scanned_word(
+    line: &[u8],
+    start: usize,
+    end: usize,
+    fname: Option<&CStr>,
     dir: Direction,
     score: c_int,
 ) -> c_int {
-    // SAFETY: the caller's promise -- `end` is inside the same line as
-    // `start`, and the match is not re-anchoring the initial position.
-    unsafe {
-        let len = end.offset_from(start) as c_int;
-        ins_compl_add_infercase(start, len, p_ic(), fname, dir, false, score)
-    }
+    ins_compl_add_infercase(
+        &line[start..],
+        end - start,
+        p_ic(),
+        fname,
+        dir,
+        false,
+        score,
+    )
 }
 
 // ---------------------------------------------------------------------------
 // Finding a fuzzy match inside a line, and then inside a buffer.
-//
-// These two sat in `fuzzy.rs` and reached back into this module for
-// `find_line_end`/`find_word_start`/`find_word_end` — the scorer importing
-// its caller. Nothing else in the tree calls either of them, so they live
-// with the completion source that does.
-/// Split the line at `*ptr` into words and fuzzy match `pat` against each.
-/// On a match `*ptr` points at the matched word, `*len` is its length and
-/// `*score` its score; otherwise `*ptr` is left at the end of the line.
-///
-/// # Safety
-/// `*ptr` and `pat` must be NUL-terminated strings or NULL, and the line must
-/// be writable — a word is terminated in place while it is scored.
-pub(super) unsafe fn fuzzy_match_str_in_line(
-    cursor: *mut *mut c_char,
-    pat: *const c_char,
-    len: *mut c_int,
-    current_pos: *mut Pos,
-    score: *mut c_int,
-) -> bool {
-    let line = unsafe { *cursor };
-    if line.is_null() || pat.is_null() {
-        return false;
-    }
-    let line_end = unsafe { find_line_end(line) };
-    let mut str = line;
-    while str < line_end {
-        let start = unsafe { find_word_start(str) };
-        if unsafe { *start } == 0 {
+
+/// A fuzzy match of a word in a line: where it starts, how long it is, and
+/// its score.
+pub(super) struct WordMatch {
+    pub start: usize,
+    pub len: usize,
+    pub score: c_int,
+}
+
+/// Split `line` from `at` into words and fuzzy match `pat` against each: the
+/// first that matches, or `None` when none does before the line's end.
+pub(super) fn fuzzy_match_in_line(line: &[u8], at: usize, pat: &CStr) -> Option<WordMatch> {
+    let end_of_line = at + line_end(&line[at..]);
+    // Each word is scored as a C string of its own; upstream terminates it in
+    // place instead.
+    let mut word = Vec::new();
+    let mut s = at;
+    while s < end_of_line {
+        let start = word_start(line, s);
+        if start >= line.len() {
             break;
         }
-        let end = unsafe { find_word_end(start) };
-        let save_end = unsafe { *end };
-        unsafe { *end = 0 };
-        unsafe { *score = fuzzy_match_str(cstr::at(start), cstr::at(pat)) };
-        unsafe { *end = save_end };
-        if unsafe { *score } != FUZZY_SCORE_NONE {
-            unsafe { *len = end.offset_from(start) as c_int };
-            unsafe { *cursor = start };
-            if !current_pos.is_null() {
-                unsafe { (*current_pos).col += end.offset_from(line) as c_int };
-            }
-            return true;
+        let end = word_end(line, start);
+        word.clear();
+        word.extend_from_slice(&line[start..end]);
+        word.push(0);
+        let text = CStr::from_bytes_until_nul(&word).expect("terminated just above");
+        let score = fuzzy_match_str(text, pat);
+        if score != FUZZY_SCORE_NONE {
+            return Some(WordMatch {
+                start,
+                len: end - start,
+                score,
+            });
         }
 
         // Carry on after the word just tried.
-        str = end;
-        while unsafe { *str } != 0 && !unsafe { vim_iswordp(str) } {
-            str = unsafe { str.offset(utfc_ptr2len(str) as isize) };
+        s = end;
+        while s < line.len() && !is_word_at(&line[s..]) {
+            s += cluster_len(&line[s..]);
         }
     }
-    unsafe { *cursor = line_end };
-    false
+    None
 }
 
-/// Where a fuzzy match was found in a buffer line: its start inside the
-/// line's own buffer, its length in bytes, and its score — missing for a
-/// whole-line match, where upstream leaves the caller's score alone.
+/// Where a fuzzy match was found in a buffer line: its length in bytes, and
+/// its score — missing for a whole-line match, where upstream leaves the
+/// caller's score alone.
 pub(super) struct LineMatch {
-    pub ptr: *mut c_char,
-    pub len: c_int,
+    pub len: usize,
     pub score: Option<c_int>,
 }
 
 /// Search `buffer` for the next fuzzy match of `pattern`, starting at `pos` and
 /// going in `dir`, wrapping around to `start_pos` if `'wrapscan'` is set.
-/// `pos` is left on the match. In whole-line mode (`CTRL-X CTRL-L`) whole
-/// lines are matched rather than words.
-///
-/// # Safety
-/// `pattern` must be a NUL-terminated string, and `pos`/`start_pos` must
-/// point at valid positions in `buffer`.
-pub(super) unsafe fn search_for_fuzzy_match(
+/// `pos` is left on the match, and `out` holds the match on to the end of its
+/// line. In whole-line mode (`CTRL-X CTRL-L`) whole lines are matched rather
+/// than words.
+pub(super) fn search_for_fuzzy_match(
     buffer: Buf,
-    pos: *mut Pos,
-    pattern: *const c_char,
+    pos: &mut Pos,
+    pattern: &CStr,
     dir: c_int,
-    start_pos: *const Pos,
+    start_pos: Pos,
+    out: &mut Vec<u8>,
 ) -> Option<LineMatch> {
     let whole_line = ctrl_x_mode_whole_line();
-    let mut current_pos = unsafe { *pos };
+    let mut current_pos = *pos;
+    let mut lines = Lines::in_buffer(buffer);
 
     // Where the search has come full circle. Another buffer is walked
     // from wherever it is to its end rather than back to the start.
     let circly_end = if buffer == Buf::current() {
-        unsafe { *start_pos }
+        start_pos
     } else {
         Pos {
             lnum: buffer.b_ml.ml_line_count,
@@ -915,7 +848,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
             coladd: 0,
         }
     };
-    if whole_line && unsafe { (*start_pos).lnum } != unsafe { (*pos).lnum } {
+    if whole_line && start_pos.lnum != pos.lnum {
         current_pos.lnum += dir as LineNr;
     }
     let mut looped_around = false;
@@ -930,32 +863,33 @@ pub(super) unsafe fn search_for_fuzzy_match(
             return None;
         }
         if current_pos.lnum >= 1 && current_pos.lnum <= buffer.b_ml.ml_line_count {
-            let line = unsafe { ml_get_buf(buffer, current_pos.lnum) };
-            let mut ptr = if whole_line {
-                line
+            let at = if whole_line {
+                0
             } else {
-                unsafe { line.offset(current_pos.col as isize) }
+                current_pos.col as usize
             };
-            if !ptr.is_null() && unsafe { *ptr } != 0 {
+            let line = lines.line(current_pos.lnum);
+            if at < line.len() {
                 if whole_line {
-                    if unsafe { fuzzy_match_str(cstr::at(ptr), cstr::at(pattern)) }
-                        != FUZZY_SCORE_NONE
-                    {
-                        unsafe { *pos = current_pos };
-                        return Some(LineMatch {
-                            ptr,
-                            len: ml_get_buf_len(buffer, current_pos.lnum) as c_int,
-                            score: None,
-                        });
+                    let text = lines.line_cstr(current_pos.lnum, 0);
+                    if fuzzy_match_str(text, pattern) != FUZZY_SCORE_NONE {
+                        *pos = current_pos;
+                        out.clear();
+                        out.extend_from_slice(text.to_bytes());
+                        let len = out.len();
+                        return Some(LineMatch { len, score: None });
                     }
                 } else {
-                    let (mut len, mut score) = (0, 0);
-                    let (at, n) = (&raw mut ptr, &raw mut len);
-                    let (here, out) = (&raw mut current_pos, &raw mut score);
-                    if unsafe { fuzzy_match_str_in_line(at, pattern, n, here, out) } {
-                        unsafe { *pos = current_pos };
-                        let score = Some(score);
-                        return Some(LineMatch { ptr, len, score });
+                    if let Some(found) = fuzzy_match_in_line(line, at, pattern) {
+                        current_pos.col = (found.start + found.len) as ColNr;
+                        *pos = current_pos;
+                        out.clear();
+                        out.extend_from_slice(&line[found.start..]);
+                        let score = Some(found.score);
+                        return Some(LineMatch {
+                            len: found.len,
+                            score,
+                        });
                     }
                     if looped_around && current_pos.lnum == circly_end.lnum {
                         return None;

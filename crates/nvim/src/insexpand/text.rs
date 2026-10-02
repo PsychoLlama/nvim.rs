@@ -10,48 +10,44 @@
 
 use super::*;
 use crate::cstr;
-use crate::mbyte::cluster_len;
-use crate::memory::handoff::owned_cstr;
-use crate::types::{IOSIZE, NUL};
+use crate::mbyte::{char_at, class_at, cluster_len, encode_char};
+use crate::types::NUL;
 use crate::winlayer::buffers;
 use crate::winlayer::{Buf, Win};
-use core::slice;
 
-/// The completed text with the case of the originally typed text inferred.
-///
-/// The answer is `out` unless it did not fit, in which case `tofree` is set
-/// to the allocation the answer lives in.
-///
-/// # Safety
-///
-/// `str` must point at a NUL-terminated string. `tofree` must point at a
-/// writable `*mut c_char` slot the caller owns for the call.
-unsafe fn ins_compl_infercase_gettext(
-    str: *const c_char,
-    char_len: c_int,
-    compl_char_len: c_int,
-    min_len: c_int,
-    out: &mut [c_char; IOSIZE as usize],
-    tofree: *mut *mut c_char,
-) -> *mut c_char {
-    // The completion as wide characters, so the case rules below can
-    // rewrite it in place.
-    let mut wca: Vec<c_int> = Vec::with_capacity(char_len as usize);
-    let mut p = str;
-    for _ in 0..char_len {
-        wca.push(unsafe { mb_ptr2char_adv(&raw mut p) });
+/// The characters of `text`, one per cluster, as `mb_ptr2char_adv` walks
+/// them.
+fn chars_of(text: &[u8]) -> Vec<c_int> {
+    let mut chars = Vec::new();
+    let mut at = 0;
+    while at < text.len() {
+        chars.push(char_at(&text[at..]));
+        at += cluster_len(&text[at..]);
     }
+    chars
+}
+
+/// `text` with the case of the originally typed text inferred: what case you
+/// probably wanted the rest of the word in.
+fn infercase_text(text: &[u8], typed: &[u8]) -> Vec<u8> {
+    // The completion as characters, so the case rules below can rewrite it
+    // in place.
+    let mut wca = chars_of(text);
+    let typed = chars_of(typed);
+    let (char_len, compl_char_len) = (wca.len(), typed.len());
+    // `char_len` may be smaller than `compl_char_len` when using a
+    // thesaurus: only the minimum is compared.
+    let min_len = char_len.min(compl_char_len);
+    let rest = compl_char_len.min(char_len);
 
     // Rule 1: were any chars converted to lower?
     let mut has_lower = false;
-    let mut p = compl_orig_text().data() as *const c_char;
     for i in 0..min_len {
-        let c = unsafe { mb_ptr2char_adv(&raw mut p) };
-        if mb_islower(c) {
+        if mb_islower(typed[i]) {
             has_lower = true;
-            if mb_isupper(wca[i as usize]) {
+            if mb_isupper(wca[i]) {
                 // Rule 1 is satisfied.
-                for w in &mut wca[compl_char_len.min(char_len) as usize..] {
+                for w in &mut wca[rest..] {
                     *w = mb_tolower(*w);
                 }
                 break;
@@ -62,12 +58,11 @@ unsafe fn ins_compl_infercase_gettext(
     // Rule 2: no lower case, 2nd consecutive letter converted to upper case.
     if !has_lower {
         let mut was_letter = false;
-        let mut p = compl_orig_text().data() as *const c_char;
         for i in 0..min_len {
-            let c = unsafe { mb_ptr2char_adv(&raw mut p) };
-            if was_letter && mb_isupper(c) && mb_islower(wca[i as usize]) {
+            let c = typed[i];
+            if was_letter && mb_isupper(c) && mb_islower(wca[i]) {
                 // Rule 2 is satisfied.
-                for w in &mut wca[compl_char_len.min(char_len) as usize..] {
+                for w in &mut wca[rest..] {
                     *w = mb_toupper(*w);
                 }
                 break;
@@ -77,9 +72,7 @@ unsafe fn ins_compl_infercase_gettext(
     }
 
     // Copy the original case of the part we typed.
-    let mut p = compl_orig_text().data() as *const c_char;
-    for w in wca.iter_mut().take(min_len as usize) {
-        let c = unsafe { mb_ptr2char_adv(&raw mut p) };
+    for (w, &c) in wca.iter_mut().zip(&typed).take(min_len) {
         if mb_islower(c) {
             *w = mb_tolower(*w);
         } else if mb_isupper(c) {
@@ -87,91 +80,39 @@ unsafe fn ins_compl_infercase_gettext(
         }
     }
 
-    // Encode the wide characters back. `out` is used until a character
-    // would come within six bytes of its end (five for the widest
-    // sequence, one for the NUL), at which point everything written so far
-    // moves into an owned buffer and the rest is appended there.
-    let iobuff = out.as_mut_ptr();
-    let mut spilled: Option<Vec<u8>> = None;
-    let mut out = iobuff;
-    let mut i = 0;
-    while i < char_len {
-        if let Some(buf) = spilled.as_mut() {
-            // Room for the widest sequence, then cut back to what was
-            // written -- the shape `ga_grow(10)` plus `ga_len +=` had.
-            let at = buf.len();
-            buf.resize(at + 10, 0);
-            // SAFETY: `utf_char2bytes` writes at most six bytes, and ten
-            // were just made available at `at`.
-            let n = unsafe { utf_char2bytes(wca[i as usize], buf.as_mut_ptr().add(at).cast()) };
-            buf.truncate(at + n as usize);
-            i += 1;
-        } else if unsafe { out.offset_from(iobuff) } + 6 >= IOSIZE as isize {
-            // Add the character in the next round.
-            // SAFETY: `iobuff` holds the bytes written so far.
-            let used = unsafe { out.offset_from(iobuff) } as usize;
-            spilled = Some(unsafe { slice::from_raw_parts(iobuff.cast::<u8>(), used) }.to_vec());
-        } else {
-            out = unsafe { out.offset(utf_char2bytes(wca[i as usize], out) as isize) };
-            i += 1;
-        }
+    let mut out = Vec::with_capacity(text.len());
+    let mut buf = [0u8; 6];
+    for &w in &wca {
+        let n = encode_char(w, &mut buf);
+        out.extend_from_slice(&buf[..n]);
     }
-
-    if let Some(buf) = spilled {
-        let owned = owned_cstr(buf);
-        unsafe { *tofree = owned };
-        return owned;
-    }
-    unsafe { *out = NUL as c_char };
-    iobuff
+    out
 }
 
 /// [`ins_compl_add`], but with `'ignorecase'` and `'infercase'` set the case of
 /// the originally typed text is kept and the case of the rest is inferred —
 /// i.e. this works out what case you probably wanted the rest of the word in.
 ///
-/// `cont_s_ipos` says the next `CTRL-X <>` sets the initial position.
-///
-/// # Safety
-///
-/// `str_arg` must point at a NUL-terminated string whose first `len` bytes
-/// (or all of it, if shorter) are the match. `fname` must be null or point at
-/// a NUL-terminated string.
-pub unsafe fn ins_compl_add_infercase(
-    str_arg: *mut c_char,
-    len: c_int,
+/// The match is the first `len` bytes of `rest`, which runs on to the end of
+/// the string the match was found in: upstream re-cases all of that and then
+/// takes `len` bytes, so a case change that alters a byte length shifts
+/// which bytes those are, and this does the same. `cont_s_ipos` says the next
+/// `CTRL-X <>` sets the initial position.
+pub fn ins_compl_add_infercase(
+    rest: &[u8],
+    len: usize,
     icase: bool,
-    fname: *mut c_char,
+    fname: Option<&CStr>,
     dir: Direction,
     cont_s_ipos: bool,
     score: c_int,
 ) -> c_int {
-    // Where `'infercase'` re-cases the match; upstream shares `IObuff`.
-    let mut recased = [0 as c_char; IOSIZE as usize];
-    let mut str = str_arg;
-    let mut tofree: *mut c_char = ptr::null_mut();
-    // C's MB_PTR_ADV: step one (possibly composed) character.
-    let char_count = |mut p: *const c_char| {
-        let mut n = 0;
-        while unsafe { *p } as c_int != NUL {
-            p = unsafe { p.offset(utfc_ptr2len(p.cast_mut()) as isize) };
-            n += 1;
-        }
-        n
-    };
-
+    let recased;
+    let mut text = &rest[..len.min(rest.len())];
     if p_ic() && Buf::current().b_p_inf != 0 && len > 0 {
-        let char_len = char_count(str);
-        let compl_char_len = char_count(compl_orig_text().data());
-        // "char_len" may be smaller than "compl_char_len" when using
-        // thesaurus, only use the minimum when comparing.
-        let min_len = char_len.min(compl_char_len);
-        let free = &raw mut tofree;
-        // SAFETY: `str` is `char_len` characters, `recased` is this frame's
-        // scratch buffer and `free` its own local.
-        str = unsafe {
-            ins_compl_infercase_gettext(str, char_len, compl_char_len, min_len, &mut recased, free)
-        };
+        let typed = compl_orig_text().to_vec();
+        recased = infercase_text(rest, &typed);
+        text = &recased[..len.min(recased.len())];
     }
 
     let mut flags = 0;
@@ -181,20 +122,41 @@ pub unsafe fn ins_compl_add_infercase(
     if icase {
         flags |= CP_ICASE;
     }
+    ins_compl_add(text, fname, NO_EXTRA, None, dir, flags, false, NO_HL, score)
+}
 
-    // SAFETY: `str` is NUL-terminated (a line, a word copied into a
-    // terminated buffer, or the re-cased copy) and the scan stops at its
-    // terminator, which is also where the match is cut; `fname` is null or a
-    // NUL-terminated name.
-    let (text, fname) = unsafe {
-        (
-            cstr::prefix_at(str, len.max(0) as usize),
-            (!fname.is_null()).then(|| cstr::at(fname)),
-        )
-    };
-    let res = ins_compl_add(text, fname, NO_EXTRA, None, dir, flags, false, NO_HL, score);
-    unsafe { xfree(tofree.cast::<c_void>()) };
-    res
+/// The offset of the first character of the next word in `text` from `at`,
+/// stopping at the end or a line break -- [`find_word_start`] over a slice.
+pub(crate) fn word_start(text: &[u8], mut at: usize) -> usize {
+    while at < text.len() && text[at] != b'\n' && class_at(&text[at..]) <= 1 {
+        at += cluster_len(&text[at..]);
+    }
+    at
+}
+
+/// The offset just after the word `text[at..]` starts inside of --
+/// [`find_word_end`] over a slice.
+pub(crate) fn word_end(text: &[u8], mut at: usize) -> usize {
+    let start_class = class_at(&text[at..]);
+    if start_class > 1 {
+        while at < text.len() {
+            at += cluster_len(&text[at..]);
+            if class_at(&text[at..]) != start_class {
+                break;
+            }
+        }
+    }
+    at
+}
+
+/// The length of `text` without the CRs and NLs at its end --
+/// [`find_line_end`] over a slice.
+pub(crate) fn line_end(text: &[u8]) -> usize {
+    let mut end = text.len();
+    while end > 0 && matches!(text[end - 1], b'\r' | b'\n') {
+        end -= 1;
+    }
+    end
 }
 
 /// The first character of the next word, stopping at a NUL.

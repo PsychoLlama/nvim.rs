@@ -291,6 +291,24 @@ pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
     unsafe { mb_get_class_tab(p, &raw const (*buffer).b_chartab as *const uint64_t) }
 }
 
+/// [`mb_get_class`] over a slice: the class of its first character, judged
+/// against the current buffer's `'iskeyword'`. An empty slice is
+/// `CLASS_BLANK`, which is what the pointer form answers at a NUL.
+pub(crate) fn class_at(bytes: &[u8]) -> c_int {
+    let first = bytes.first().copied().unwrap_or(0);
+    if utf8len_tab[usize::from(first)] == 1 {
+        if first == 0 || ascii_iswhite(c_int::from(first)) {
+            return CLASS_BLANK;
+        }
+        return if crate::charset::vim_iswordc(c_int::from(first)) {
+            CLASS_WORD
+        } else {
+            CLASS_PUNCT
+        };
+    }
+    utf_class(char_at(bytes))
+}
+
 /// `charclass({string})` — the class of the string's first character.
 pub fn f_charclass(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_string_arg(args, 0).is_err() || args[0].string_or_null().is_null() {

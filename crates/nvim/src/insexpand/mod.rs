@@ -21,7 +21,7 @@ use crate::change::{
     deleted_lines_mark, ins_bytes_len, ins_char, ins_char_bytes, ins_str, open_line,
 };
 use crate::charset::{
-    ptr2cells, skipwhite, str_foldcase, vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordc,
+    ptr2cells, str_foldcase, vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordc,
     vim_iswordp, vim_strsize,
 };
 use crate::cmdexpand::{addstar, expand_cmdline, set_cmd_context};
@@ -62,12 +62,11 @@ use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
 use crate::mbyte::{
-    mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,
-    utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab,
-    utfc_ptr2len,
+    mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_tolower, mb_toupper, utf_char2bytes,
+    utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab, utfc_ptr2len,
 };
-use crate::memline::{dec, ml_delete, ml_get_buf, ml_get_buf_len};
-use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrlcpy};
+use crate::memline::{dec, ml_delete};
+use crate::memory::{strequal, xcalloc, xfree, xmalloc};
 use crate::message::state::{did_emsg, emsg_silent, in_assert_fails, msg_hist_off};
 use crate::message::{e_invarg, e_listreq, e_patnotf};
 use crate::message::{
@@ -124,7 +123,7 @@ use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
 use crate::winlayer::graph::cmdwin_type;
 use crate::winlayer::{BufId, WinId};
-use ::libc::{fclose, strncpy, strrchr};
+use ::libc::{fclose, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod mode;

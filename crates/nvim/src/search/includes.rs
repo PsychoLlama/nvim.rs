@@ -672,12 +672,14 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
         }
     }
 
-    let from_file = if walk.curr_fname == Buf::current().name.shown_ptr() {
-        ptr::null_mut()
-    } else {
-        walk.curr_fname
-    };
-    match unsafe { ins_compl_add_infercase(aux, i, p_ic(), from_file, *dir, cont_s_ipos, 0) } {
+    let fname = walk.curr_fname;
+    let from_curbuf = fname.is_null() || fname == Buf::current().name.shown_ptr();
+    // SAFETY: the file name is NUL-terminated, and `aux` is a NUL-terminated
+    // string -- the line, or `IObuff` holding the joined word.
+    let (from_file, rest) =
+        unsafe { ((!from_curbuf).then(|| cstr::at(fname)), cstr::bytes_at(aux)) };
+    let len = usize::try_from(i).unwrap_or(0);
+    match ins_compl_add_infercase(rest, len, p_ic(), from_file, *dir, cont_s_ipos, 0) {
         // If dir was BACKWARD, honour it just once.
         r if r == OK => *dir = FORWARD,
         r if r == FAIL => return After::Stop,

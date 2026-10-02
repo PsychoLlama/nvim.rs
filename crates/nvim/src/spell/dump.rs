@@ -411,11 +411,10 @@ unsafe fn dump_word(
         } else {
             unsafe { cstr::starts_with(p, cstr::bytes_at(pat)) }
         };
-        let len = unsafe { cstr::bytes_at(p) }.len() as c_int;
-        let ic = p_ic();
-        let want = unsafe { *dir };
-        let none = core::ptr::null_mut();
-        if matches && unsafe { ins_compl_add_infercase(p, len, ic, none, want, false, 0) } == OK {
+        // SAFETY: `p` is the NUL-terminated word just dumped.
+        let word = unsafe { cstr::bytes_at(p) };
+        let (ic, want) = (p_ic(), unsafe { *dir });
+        if matches && ins_compl_add_infercase(word, word.len(), ic, None, want, false, 0) == OK {
             // A BACKWARD request is honoured only for the first match.
             unsafe { *dir = FORWARD };
         }
