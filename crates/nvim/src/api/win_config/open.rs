@@ -11,6 +11,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::autocmd::fire_autocmds;
 use crate::buffer::BufRef;
 use crate::guard::Suppress;
 use crate::types::CmdIdx;
@@ -204,16 +205,7 @@ impl Opening {
         // name the window just made and the tab page it is on.
         let result = unsafe { switch_win_noblock(&raw mut switchwin, window, self.tabpage, true) };
         debug_assert!(result.is_ok(), "the window was switched to");
-        // SAFETY: an autocommand with neither a file name nor a pattern.
-        let switched = unsafe {
-            apply_autocmds(
-                AutoEvent::WinNew,
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                false,
-                Buf::current_or_none(),
-            )
-        };
+        let switched = fire_autocmds(AutoEvent::WinNew, false, Buf::current_or_none());
         if switched {
             self.tabpage = win_find_tabpage(window_id);
         }

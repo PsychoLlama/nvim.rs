@@ -23,10 +23,10 @@ count	callee	no_raw	defs	def
 77	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 77	starts_with	0	2	
 76	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
-75	apply_autocmds	0	1	crates/nvim/src/autocmd/fire.rs
 67	from_raw_parts_mut	0	0	
 62	nlua_pop_integer	0	1	crates/nvim/src/lua/converter/pop.rs
 62	prefix_eq	0	1	crates/nvim/src/cstr.rs
+60	apply_autocmds	0	1	crates/nvim/src/autocmd/fire.rs
 58	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 57	set_vim_var_string	0	1	crates/nvim/src/eval/vars/vvar.rs
 55	Live::new	0	1	crates/nvim/src/winlayer/live.rs

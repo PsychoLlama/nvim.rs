@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::autocmd::fire_autocmds;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::snprintf;
@@ -96,13 +97,7 @@ pub(crate) fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -
     if byte(get_vim_var_str(Vv::Exitreason)) == NUL {
         set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4 as ptrdiff_t);
     }
-    apply_autocmds(
-        AutoEvent::QuitPre,
-        ptr::null_mut(),
-        ptr::null_mut(),
-        false,
-        window.buffer_or_none(),
-    );
+    fire_autocmds(AutoEvent::QuitPre, false, window.buffer_or_none());
     // The buffer is read *through* `window`, and only after `win_valid`
     // has said `window` is still there — QuitPre may have closed it.
     if quit_was_cancelled(window.id(), || window.buffer()) {
@@ -111,13 +106,7 @@ pub(crate) fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -
 
     // ExitPre is only for a quit that would end the process.
     if quit_all || check_more(false, forceit) == OK && only_one_window() {
-        apply_autocmds(
-            AutoEvent::ExitPre,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            false,
-            Buf::current_or_none(),
-        );
+        fire_autocmds(AutoEvent::ExitPre, false, Buf::current_or_none());
         if quit_was_cancelled(window.id(), Buf::current) {
             return true;
         }
@@ -602,18 +591,6 @@ pub(crate) fn ex_exit(excmd: &mut ExArg) {
 /// `first_tabpage->tp_next == NULL`, which it writes out four times here.
 fn only_tab() -> bool {
     first_tab().is_none_or(|tp| tp.next().is_none())
-}
-
-/// `apply_autocmds()` as checked code.
-fn apply_autocmds(
-    event: AutoEvent,
-    fname: *mut ::core::ffi::c_char,
-    fname_io: *mut ::core::ffi::c_char,
-    force: bool,
-    buffer: Option<Buf>,
-) -> bool {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::autocmd::apply_autocmds(event, fname, fname_io, force, buffer) }
 }
 
 /// `buf_hide()` as checked code.

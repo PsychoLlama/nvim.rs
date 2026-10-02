@@ -18,6 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::autocmd::fire_autocmds;
 use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -47,16 +48,7 @@ pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
         return;
     }
     buffer.b_ro_locked += 1;
-    // SAFETY: a live buffer, and the event takes no file name.
-    unsafe {
-        apply_autocmds(
-            AutoEvent::FileChangedRO,
-            ::core::ptr::null_mut(),
-            ::core::ptr::null_mut(),
-            false,
-            Some(buffer),
-        )
-    };
+    fire_autocmds(AutoEvent::FileChangedRO, false, Some(buffer));
     buffer.b_ro_locked -= 1;
     if buffer.b_p_ro == 0 {
         // An autocommand cleared 'readonly': nothing to warn about.

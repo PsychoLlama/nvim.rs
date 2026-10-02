@@ -21,7 +21,6 @@
 #![allow(non_upper_case_globals)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::autocmd::apply_autocmds;
 use crate::autocmd::state::{autocmd_busy, last_cursormoved, last_cursormoved_win};
 use crate::buffer::{
     buf_inc_changedtick, buf_is_dontwrite, buf_is_prompt, buf_meta_total, current_buf,

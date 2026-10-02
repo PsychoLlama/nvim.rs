@@ -110,6 +110,21 @@ fn keeps_changed_flag(event: AutoEvent) -> bool {
     )
 }
 
+/// Fire `event`, in every group, with no file name: the patterns match the
+/// buffer's name, as a null `fname` asks of [`apply_autocmds`].
+pub fn fire_autocmds(event: AutoEvent, force: bool, buffer: Option<Buf>) -> bool {
+    // SAFETY: both names null, which the callee reads as "none".
+    unsafe {
+        apply_autocmds(
+            event,
+            ::core::ptr::null_mut(),
+            ::core::ptr::null_mut(),
+            force,
+            buffer,
+        )
+    }
+}
+
 /// Fire `event`, in every group.
 ///
 /// # Safety

@@ -8,9 +8,10 @@
 //! autocommand may change `'lines'` or `'columns'` again.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::autocmd::fire_autocmds;
 use crate::grid::default_grid_ref;
 use crate::guard::Suppress;
 use crate::winlayer::{self, Win};
@@ -110,7 +111,7 @@ pub fn screenclear() {
     msg_didany.set(false);
     msg_didout.set(false);
 
-    if unsafe { *hl_attr_table().add(HLF_MSG as usize) } > 0
+    if crate::statusline::hl_attr(HLF_MSG as c_int) > 0
         && msg_use_grid()
         && msg_grid_ref().is_allocated()
     {
@@ -200,15 +201,7 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
         if retry_count > 3 {
             break;
         }
-        unsafe {
-            apply_autocmds(
-                AutoEvent::VimResized,
-                ::core::ptr::null_mut(),
-                ::core::ptr::null_mut(),
-                false,
-                Buf::current_or_none(),
-            )
-        };
+        fire_autocmds(AutoEvent::VimResized, false, Buf::current_or_none());
     }
     resizing_autocmd.set(false);
 

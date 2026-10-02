@@ -342,17 +342,7 @@ pub unsafe fn do_termresponse_autocmd(sequence: String_0) {
 /// The queued half of [`may_trigger_vim_suspend_resume`]: `VimResume` has
 /// to fire from the event loop, not from the signal handler's caller.
 extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
-    // SAFETY: no file name and no buffer, so there is nothing for the event
-    // to read but the editor's own autocommand tables.
-    unsafe {
-        apply_autocmds(
-            AutoEvent::VimResume,
-            ::core::ptr::null_mut(),
-            ::core::ptr::null_mut(),
-            false,
-            None,
-        )
-    };
+    fire_autocmds(AutoEvent::VimResume, false, None);
     pending_vimresume.set(SuspendLatch::Idle);
 }
 
@@ -362,17 +352,7 @@ extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
 pub fn may_trigger_vim_suspend_resume(suspend: bool) {
     if suspend && pending_vimresume.get() == SuspendLatch::Idle {
         pending_vimresume.set(SuspendLatch::Firing);
-        // SAFETY: no file name and no buffer, so there is nothing for the
-        // event to read but the editor's own autocommand tables.
-        unsafe {
-            apply_autocmds(
-                AutoEvent::VimSuspend,
-                ::core::ptr::null_mut(),
-                ::core::ptr::null_mut(),
-                false,
-                None,
-            )
-        };
+        fire_autocmds(AutoEvent::VimSuspend, false, None);
         pending_vimresume.set(SuspendLatch::ResumeOwed);
     } else if !suspend && pending_vimresume.get() == SuspendLatch::ResumeOwed {
         pending_vimresume.set(SuspendLatch::Firing);
@@ -408,20 +388,15 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     // SAFETY: as above.
     unsafe { (*dict).set_keys_readonly() };
 
-    // SAFETY: no file name, and `curbuf` is live from startup to exit.
-    unsafe {
-        apply_autocmds(
-            if attached {
-                AutoEvent::UIEnter
-            } else {
-                AutoEvent::UILeave
-            },
-            ::core::ptr::null_mut(),
-            ::core::ptr::null_mut(),
-            false,
-            Buf::current_or_none(),
-        )
-    };
+    fire_autocmds(
+        if attached {
+            AutoEvent::UIEnter
+        } else {
+            AutoEvent::UILeave
+        },
+        false,
+        Buf::current_or_none(),
+    );
     // SAFETY: the pair `get_v_event` above opened.
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
 
@@ -436,20 +411,15 @@ pub fn do_autocmd_focusgained(gained: bool) {
     }
     focusgained_busy.set(true);
 
-    // SAFETY: no file name, and `curbuf` is live from startup to exit.
-    unsafe {
-        apply_autocmds(
-            if gained {
-                AutoEvent::FocusGained
-            } else {
-                AutoEvent::FocusLost
-            },
-            ::core::ptr::null_mut(),
-            ::core::ptr::null_mut(),
-            false,
-            Buf::current_or_none(),
-        )
-    };
+    fire_autocmds(
+        if gained {
+            AutoEvent::FocusGained
+        } else {
+            AutoEvent::FocusLost
+        },
+        false,
+        Buf::current_or_none(),
+    );
     if gained && focusgained_last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
         check_timestamps(1);
         focusgained_last_time.set(os_now());

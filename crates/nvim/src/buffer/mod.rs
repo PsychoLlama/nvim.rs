@@ -48,6 +48,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::autocmd::fire_autocmds;
 use crate::ex_cmds::EcmdFlags;
 use crate::types::AutoEvent;
 use crate::types::NL;
@@ -379,8 +380,7 @@ pub(crate) fn last_buf() -> Option<Buf> {
 /// **Everything the caller holds may be stale afterwards** -- take a
 /// [`BufRef`] first.
 pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
-    // SAFETY: a live buffer; both name arguments are optional.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, Some(buffer)) }
+    fire_autocmds(event, false, Some(buffer))
 }
 
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form

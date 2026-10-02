@@ -7,7 +7,6 @@ pub mod state;
 use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 
-use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_meta_total, maketitle};
 use crate::charset::{vim_isprintc, vim_strsize};
 use crate::cmdexpand::cmdline_pum_display;
@@ -43,7 +42,6 @@ use crate::grid::{
     grid_line_getchar, grid_line_mirror, grid_line_put_schar, grid_line_start,
     schar_cache_clear_if_full, schar_from_ascii, win_grid_alloc,
 };
-use crate::highlight::namespace::hl_attr_table;
 use crate::highlight::state::{need_highlight_changed, ns_hl_fast};
 use crate::highlight::{
     hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,

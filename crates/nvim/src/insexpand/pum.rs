@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::autocmd::fire_autocmds;
 use crate::guard::{Allow, Lock};
 use crate::memline::Lines;
 use crate::memory::XString;
@@ -180,15 +181,7 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     complete_changed_busy.set(true);
     let locked = Lock::text();
 
-    unsafe {
-        apply_autocmds(
-            AutoEvent::CompleteChanged,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            false,
-            Some(buffer),
-        );
-    }
+    fire_autocmds(AutoEvent::CompleteChanged, false, Some(buffer));
     drop(locked);
     complete_changed_busy.set(false);
 

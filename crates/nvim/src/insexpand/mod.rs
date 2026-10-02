@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 use crate::api::private::helpers::{cbuf_to_string, cstr_to_string};
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
-use crate::autocmd::{apply_autocmds, has_event};
+use crate::autocmd::has_event;
 use crate::buffer::buf_spname;
 use crate::change::{
     deleted_lines_mark, ins_bytes_len, ins_char, ins_char_bytes, ins_str, open_line,

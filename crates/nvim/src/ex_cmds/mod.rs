@@ -30,7 +30,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::autocmd::apply_autocmds;
+use crate::autocmd::fire_autocmds;
 use crate::charset::{skip, vim_is_ident_char};
 use crate::cstr;
 use crate::eval::typval::{NumBuf, list_find_str, list_iter, list_len};
@@ -187,8 +187,7 @@ pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 /// Safe: [`Buf`] is the live buffer `apply_autocmds` asks for, and the two
 /// file names it also wants are null here.
 pub(super) fn buf_autocmd(event: AutoEvent, buffer: Buf) -> bool {
-    // SAFETY: a live buffer and no file names.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, Some(buffer)) }
+    fire_autocmds(event, false, Some(buffer))
 }
 /// Refuse anything that reaches outside the editor while 'secure' is on or a
 /// sandbox is open -- shell commands, `:write`, `:cd` and friends.

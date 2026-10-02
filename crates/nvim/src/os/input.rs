@@ -21,8 +21,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::fire_autocmds;
 use crate::autocmd::state::did_cursorhold;
-use crate::autocmd::{apply_autocmds, trigger_cursorhold};
+use crate::autocmd::trigger_cursorhold;
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{loop_poll_events, process_events_until};
 use crate::event::multiqueue::queue_in;
@@ -140,7 +141,7 @@ unsafe extern "C" fn cursorhold_event(_argv: *mut *mut c_void) {
         AutoEvent::CursorHold
     } as AutoEvent;
     let __hoisted_0 = Buf::current_or_none();
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_0) };
+    fire_autocmds(event, false, __hoisted_0);
     did_cursorhold.set(true);
 }
 

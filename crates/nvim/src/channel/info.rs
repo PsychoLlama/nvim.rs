@@ -16,6 +16,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::fire_autocmds;
 use crate::types::AutoEvent;
 use crate::types::String_0;
 use crate::winlayer::Buf;
@@ -24,7 +25,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::api::private::helpers::cstr_to_string;
-use crate::autocmd::{apply_autocmds, has_event};
+use crate::autocmd::has_event;
 use crate::channel::channels;
 use crate::eval::encode::encode_tv2json;
 use crate::eval::typval::DictRef;
@@ -154,7 +155,7 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     let _ = unsafe { (*dict).add_dict(b"info", info) };
     unsafe { (*dict).set_keys_readonly() };
     let __hoisted_0 = Buf::current_or_none();
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, __hoisted_0) };
+    fire_autocmds(event, true, __hoisted_0);
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
     unsafe { channel_decref(chan) };
 }

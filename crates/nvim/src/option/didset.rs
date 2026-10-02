@@ -16,6 +16,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::fire_autocmds;
 use crate::cstr;
 use crate::keycodes::{Ctrl_C, Key};
 use crate::types::AutoEvent;
@@ -217,15 +218,7 @@ pub(crate) fn did_set_buflisted(args: &mut OptSet) -> Result<(), OptError> {
             AutoEvent::BufDelete
         };
         let __hoisted_0 = Some(f.buf);
-        unsafe {
-            apply_autocmds(
-                event as AutoEvent,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                true,
-                __hoisted_0,
-            )
-        };
+        fire_autocmds(event as AutoEvent, true, __hoisted_0);
     }
     Ok(())
 }

@@ -7,7 +7,7 @@ use crate::api::private::helpers::{
     api_typename, cstr_to_string, cstrn_to_string, find_buffer_by_handle, find_window_by_handle,
     object_to_hl_id, try_enter, try_leave,
 };
-use crate::autocmd::{apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds};
+use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
 use crate::ex_docmd::expr_map_locked;

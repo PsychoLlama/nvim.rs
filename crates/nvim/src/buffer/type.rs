@@ -19,12 +19,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::autocmd::fire_autocmds;
 use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::autocmd::apply_autocmds;
 use crate::eval::typval::{dict_find, dict_is_watched, dict_watcher_notify};
 use crate::ex_docmd::cmdmod_has;
 use crate::message::emsg;
@@ -220,7 +220,7 @@ pub fn set_buflisted(on: c_int) {
     };
     let __hoisted_0 = Buf::current_or_none();
 
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_0) };
+    fire_autocmds(event, false, __hoisted_0);
 }
 
 pub fn buf_is_empty(buffer: Buf) -> bool {

@@ -11,11 +11,11 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::autocmd::fire_autocmds;
 use crate::cstr;
 use crate::fprintf;
 use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::{apply_autocmds, block_autocmds, is_autocmd_blocked, unblock_autocmds};
@@ -228,7 +228,7 @@ fn with_autocmds_unblocked(event: AutoEvent) {
         unblock_autocmds();
     }
     let __hoisted_1 = Buf::current_or_none();
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_1) };
+    fire_autocmds(event, false, __hoisted_1);
     if blocked {
         block_autocmds();
     }
