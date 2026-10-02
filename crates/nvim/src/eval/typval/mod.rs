@@ -35,16 +35,15 @@ use crate::message::{
 use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::types::{
-    __compar_fn_t, Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float,
-    FuncExe, GArray, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue,
-    String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t,
-    ssize_t, uint8_t,
+    Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float, FuncExe,
+    GArray, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue, String_0,
+    TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VimConv,
+    int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t,
 };
 
 use crate::winlayer::Live;
-use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
+use ::libc::{abort, strcasecmp, strcoll, strcpy, strtod};
 
 // The carve of the transpiled module; see each child's docs.
 mod access;
@@ -107,10 +106,13 @@ pub struct ListSortItem {
     pub item: *mut ListItem,
     pub idx: ::core::ffi::c_int,
 }
+/// A `qsort_r` comparator over two `ListSortItem`s, its context the sort's
+/// `SortInfo`.
 pub type ListSorter = Option<
     unsafe extern "C" fn(
         *const ::core::ffi::c_void,
         *const ::core::ffi::c_void,
+        *mut ::core::ffi::c_void,
     ) -> ::core::ffi::c_int,
 >;
 pub type DictListType = ::core::ffi::c_uint;
@@ -196,7 +198,6 @@ pub static tv_empty_string: &::core::ffi::CStr = c"";
 /// How many submatches a `\=` replacement expression is handed: `\0`
 /// through `\9`.
 pub const SL_SIZE: usize = 10;
-static sortinfo: GlobalCell<*mut SortInfo> = GlobalCell::new(::core::ptr::null_mut::<SortInfo>());
 pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = 0;
 static tv_equal_recurse_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

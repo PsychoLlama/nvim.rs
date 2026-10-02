@@ -212,7 +212,6 @@ count	callee	no_raw	defs	def
 11	os_open	0	1	crates/nvim/src/os/fs/mod.rs
 11	path_is_absolute	0	0	
 11	process_events_until	0	1	crates/nvim/src/event/loop.rs
-11	qsort	0	0	
 11	same_name	0	1	crates/nvim/src/eval/funcs/runtime.rs
 11	set_ref_in_callback	0	1	crates/nvim/src/eval/callback.rs
 11	shift	0	1	crates/nvim/src/option/stropt.rs
@@ -259,6 +258,7 @@ count	callee	no_raw	defs	def
 10	option_set_callback_func	0	1	crates/nvim/src/option/query.rs
 10	os_setperm	0	0	
 10	qf_get_list	0	1	crates/nvim/src/quickfix/stack.rs
+10	qsort	0	0	
 10	schar_get_first_codepoint	1	1	crates/nvim/src/grid/schar.rs
 10	searchit	0	1	crates/nvim/src/search/find.rs
 10	set_ref_in_item	0	1	crates/nvim/src/eval/collect.rs
@@ -527,7 +527,6 @@ count	callee	no_raw	defs	def
 5	Pt::new	0	67	
 5	Range::new	0	1	crates/nvim/src/decoration/handles.rs
 5	ShlWalk::new	0	1	crates/nvim/src/match/searchhl.rs
-5	Si::new	0	67	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
 5	add_tag_field	0	1	crates/nvim/src/tag/query.rs
 5	api_dict_to_keydict	0	1	crates/nvim/src/api/private/helpers/keydict.rs
@@ -3084,7 +3083,6 @@ count	callee	no_raw	defs	def
 1	parse_retab_arg	0	1	crates/nvim/src/indent/edit.rs
 1	parse_search_pattern	0	1	crates/nvim/src/shada/parse.rs
 1	parse_sign_cmd_args	0	1	crates/nvim/src/sign/command.rs
-1	parse_sort_uniq_args	0	1	crates/nvim/src/eval/typval/sort.rs
 1	parse_sub_string	0	1	crates/nvim/src/shada/parse.rs
 1	parse_type	0	1	crates/nvim/src/eval/funcs/region.rs
 1	parse_variable	0	1	crates/nvim/src/shada/parse.rs
@@ -3179,6 +3177,7 @@ count	callee	no_raw	defs	def
 1	qf_setprop_items	0	1	crates/nvim/src/quickfix/setprops.rs
 1	qf_setprop_items_from_lines	0	1	crates/nvim/src/quickfix/setprops.rs
 1	qf_setprop_title	0	1	crates/nvim/src/quickfix/setprops.rs
+1	qsort_r	0	0	
 1	queue_insert_tail	0	1	crates/nvim/src/eval/typval/access.rs
 1	quote_line	0	1	crates/nvim/src/usercmd/expand.rs
 1	quote_meta	0	1	crates/nvim/src/insexpand/text.rs

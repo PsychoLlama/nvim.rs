@@ -6,14 +6,16 @@
 //! comparison error can stop the sort.  [`parse_sort_uniq_args`] reads the
 //! optional `{how}` and `{dict}` arguments both builtins share.
 //!
-//! The four comparators keep `extern "C"` — `qsort` calls them — and the
-//! sort keeps `qsort`.  A
+//! The four comparators keep `extern "C"` — `qsort_r` calls them — and the
+//! sort keeps the C library's.  A
 //! `sort_by` is not a provable substitute here: a user comparison function can
 //! answer inconsistently (or fail part-way), so which permutation of equal
-//! items comes out is whatever the C library's sort did.  The `_not_keeping_zero`
+//! items comes out is whatever the C library's sort did, and Rust's sorts may
+//! panic on an order that is not total.  The `_not_keeping_zero`
 //! pair exists to make ties total by original index, but only the
-//! `_keeping_zero` pair reaches `uniq`.  `sortinfo` is a global for the same
-//! reason: `qsort` has nowhere to put a context pointer.
+//! `_keeping_zero` pair reaches `uniq`.  The sort's [`SortInfo`] travels as
+//! `qsort_r`'s context argument; upstream's `qsort` had nowhere to put it and
+//! published it in a global, saved and restored around a nested `sort()`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -23,8 +25,10 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{Failed, ListWatch, NUL};
+use ::core::ffi::c_void;
+use ::libc::qsort_r;
 
-/// Compare two list items by the ordering `sortinfo` selected: numeric, float,
+/// Compare two list items by the ordering `info` selected: numeric, float,
 /// or a string comparison of their `string()` forms.
 ///
 /// With `keep_zero` clear, ties are broken by the items' original indexes,
@@ -33,18 +37,18 @@ use crate::types::{Failed, ListWatch, NUL};
 /// # Safety
 ///
 /// `s1` and `s2` must point at the two `ListSortItem`s of the array
-/// `do_sort`/`do_uniq` handed to `qsort`, live for the comparison, and
-/// `sortinfo` must still hold the `SortInfo` that sort set up.
+/// `do_sort`/`do_uniq` handed to `qsort_r`, live for the comparison, and
+/// `info` at the `SortInfo` that sort set up.
 pub(crate) unsafe fn item_compare(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
+    s1: *const c_void,
+    s2: *const c_void,
+    info: &SortInfo,
     keep_zero: bool,
 ) -> ::core::ffi::c_int {
     let si1 = s1 as *mut ListSortItem;
     let si2 = s2 as *mut ListSortItem;
     let tv1 = unsafe { &raw mut (*(*si1).item).li_tv };
     let tv2 = unsafe { &raw mut (*(*si2).item).li_tv };
-    let info = sortinfo.get();
 
     // `cmp` on three-way-compared scalars: upstream's `a == b ? 0 : a > b
     // ? 1 : -1`, which for a NaN float answers -1 as this does.
@@ -59,13 +63,11 @@ pub(crate) unsafe fn item_compare(
     };
 
     let mut res;
-    // SAFETY: the `SortInfo` the sort set up.
-    let sort_info = unsafe { Si::new(info) };
-    if sort_info.item_compare_numbers {
+    if info.item_compare_numbers {
         let v1 = unsafe { tv_get_number(&*tv1) };
         let v2 = unsafe { tv_get_number(&*tv2) };
         res = sign(v1 > v2, v1 == v2);
-    } else if sort_info.item_compare_float {
+    } else if info.item_compare_float {
         let v1 = unsafe { tv_get_float(&*tv1) };
         let v2 = unsafe { tv_get_float(&*tv2) };
         res = sign(v1 > v2, v1 == v2);
@@ -80,7 +82,7 @@ pub(crate) unsafe fn item_compare(
         // SAFETY: the two items' values, live while their lists are.
         let (a, b) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
         if a.v_type() == VAR_STRING {
-            if b.v_type() != VAR_STRING || sort_info.item_compare_numeric {
+            if b.v_type() != VAR_STRING || info.item_compare_numeric {
                 p1 = c"'".as_ptr().cast_mut();
             } else {
                 p1 = a.string_or_null();
@@ -90,7 +92,7 @@ pub(crate) unsafe fn item_compare(
             tofree1 = p1;
         }
         if b.v_type() == VAR_STRING {
-            if a.v_type() != VAR_STRING || sort_info.item_compare_numeric {
+            if a.v_type() != VAR_STRING || info.item_compare_numeric {
                 p2 = c"'".as_ptr().cast_mut();
             } else {
                 p2 = b.string_or_null();
@@ -106,10 +108,10 @@ pub(crate) unsafe fn item_compare(
             p2 = c"".as_ptr().cast_mut();
         }
 
-        if !sort_info.item_compare_numeric {
-            res = if sort_info.item_compare_lc {
+        if !info.item_compare_numeric {
+            res = if info.item_compare_lc {
                 unsafe { strcoll(p1, p2) }
-            } else if sort_info.item_compare_ic != 0 {
+            } else if info.item_compare_ic != 0 {
                 unsafe { strcasecmp(p1, p2) }
             } else {
                 unsafe { cstr::cmp(p1, p2) as ::core::ffi::c_int }
@@ -142,10 +144,11 @@ pub(crate) unsafe fn item_compare(
 ///
 /// As [`item_compare`].
 pub(crate) unsafe extern "C" fn item_compare_keeping_zero(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
+    s1: *const c_void,
+    s2: *const c_void,
+    info: *mut c_void,
 ) -> ::core::ffi::c_int {
-    unsafe { item_compare(s1, s2, true) }
+    unsafe { item_compare(s1, s2, &*info.cast::<SortInfo>(), true) }
 }
 
 /// [`item_compare`] breaking ties by index — `sort`'s comparator.
@@ -154,13 +157,14 @@ pub(crate) unsafe extern "C" fn item_compare_keeping_zero(
 ///
 /// As [`item_compare`].
 pub(crate) unsafe extern "C" fn item_compare_not_keeping_zero(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
+    s1: *const c_void,
+    s2: *const c_void,
+    info: *mut c_void,
 ) -> ::core::ffi::c_int {
-    unsafe { item_compare(s1, s2, false) }
+    unsafe { item_compare(s1, s2, &*info.cast::<SortInfo>(), false) }
 }
 
-/// Compare two list items by calling the user function `sortinfo` holds.
+/// Compare two list items by calling the user function `info` holds.
 ///
 /// A failed call sets `item_compare_func_err`, which makes every later
 /// comparison answer 0 and the driver abandon the sort.
@@ -168,27 +172,25 @@ pub(crate) unsafe extern "C" fn item_compare_not_keeping_zero(
 /// # Safety
 ///
 /// `s1` and `s2` must point at the two `ListSortItem`s of the array
-/// `do_sort`/`do_uniq` handed to `qsort`, live for the comparison, and
-/// `sortinfo` must still hold the `SortInfo` that sort set up.
+/// `do_sort`/`do_uniq` handed to `qsort_r`, live for the comparison, and
+/// `info` at the `SortInfo` that sort set up.
 pub(crate) unsafe fn item_compare2(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
+    s1: *const c_void,
+    s2: *const c_void,
+    info: &mut SortInfo,
     keep_zero: bool,
 ) -> ::core::ffi::c_int {
-    let info = sortinfo.get();
-    // SAFETY: the `SortInfo` the sort set up.
-    let mut sort_info = unsafe { Si::new(info) };
-    let partial = sort_info.item_compare_partial;
+    let partial = info.item_compare_partial;
 
     // shortcut after failure in previous call; compare all items equal
-    if sort_info.item_compare_func_err {
+    if info.item_compare_func_err {
         return 0;
     }
 
     let si1 = s1 as *mut ListSortItem;
     let si2 = s2 as *mut ListSortItem;
     let func_name = if partial.is_null() {
-        sort_info.item_compare_func
+        info.item_compare_func
     } else {
         unsafe { partial_name(partial) }
     };
@@ -203,18 +205,18 @@ pub(crate) unsafe fn item_compare2(
     let mut funcexe = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
     funcexe.fe_partial = partial;
-    funcexe.fe_selfdict = sort_info.item_compare_selfdict;
+    funcexe.fe_selfdict = info.item_compare_selfdict;
     let called = unsafe { call_func(func_name, -1, &mut rettv, &argv, &raw mut funcexe) };
     drop(argv);
 
     let mut res;
     if called.is_err() {
         res = ITEM_COMPARE_FAIL;
-        sort_info.item_compare_func_err = true;
+        info.item_compare_func_err = true;
     } else {
         let n = tv_get_number_chk(&rettv).unwrap_or_else(|_| {
             // SAFETY: the sort's own record, live for the comparison.
-            unsafe { (*info).item_compare_func_err = true };
+            info.item_compare_func_err = true;
             0
         });
         res = if n > 0 {
@@ -225,7 +227,7 @@ pub(crate) unsafe fn item_compare2(
             0
         };
     }
-    if sort_info.item_compare_func_err {
+    if info.item_compare_func_err {
         res = ITEM_COMPARE_FAIL; // return value has wrong type
     }
     tv_clear(&mut rettv);
@@ -246,10 +248,11 @@ pub(crate) unsafe fn item_compare2(
 ///
 /// As [`item_compare2`].
 pub(crate) unsafe extern "C" fn item_compare2_keeping_zero(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
+    s1: *const c_void,
+    s2: *const c_void,
+    info: *mut c_void,
 ) -> ::core::ffi::c_int {
-    unsafe { item_compare2(s1, s2, true) }
+    unsafe { item_compare2(s1, s2, &mut *info.cast::<SortInfo>(), true) }
 }
 
 /// [`item_compare2`] breaking ties by index — `sort`'s comparator.
@@ -258,23 +261,24 @@ pub(crate) unsafe extern "C" fn item_compare2_keeping_zero(
 ///
 /// As [`item_compare2`].
 pub(crate) unsafe extern "C" fn item_compare2_not_keeping_zero(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
+    s1: *const c_void,
+    s2: *const c_void,
+    info: *mut c_void,
 ) -> ::core::ffi::c_int {
-    unsafe { item_compare2(s1, s2, false) }
+    unsafe { item_compare2(s1, s2, &mut *info.cast::<SortInfo>(), false) }
 }
 
 /// Which comparator `info` selects: the built-in ordering, or the user
 /// function.
-fn sorter(info: *const SortInfo, keep_zero: bool) -> ListSorter {
-    let builtin =
-        unsafe { (*info).item_compare_func.is_null() && (*info).item_compare_partial.is_null() };
+fn sorter(info: &SortInfo, keep_zero: bool) -> ListSorter {
+    let builtin = info.item_compare_func.is_null() && info.item_compare_partial.is_null();
     Some(match (builtin, keep_zero) {
         (true, true) => {
             item_compare_keeping_zero
                 as unsafe extern "C" fn(
-                    *const ::core::ffi::c_void,
-                    *const ::core::ffi::c_void,
+                    *const c_void,
+                    *const c_void,
+                    *mut c_void,
                 ) -> ::core::ffi::c_int
         }
         (true, false) => item_compare_not_keeping_zero,
@@ -300,9 +304,8 @@ fn sort_item(item: *mut ListItem, idx: ::core::ffi::c_int) -> ListSortItem {
 ///
 /// # Safety
 ///
-/// `l` must point at a live list, unaliased for the call. `info` must point
-/// at the sort's `SortInfo`, unaliased for the call.
-pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
+/// `l` must point at a live list, unaliased for the call.
+pub(crate) unsafe fn do_sort(l: *mut List, info: &mut SortInfo) {
     // SAFETY: the caller's promise: a live list.
     let mut taken = ::core::mem::take(unsafe { &mut (*l).lv_items });
     let len = taken.len();
@@ -316,19 +319,24 @@ pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
         .map(|i| sort_item(unsafe { base.add(i) }, index_of(i)))
         .collect();
 
-    // SAFETY: the caller's `SortInfo`.
-    let mut sort_info = unsafe { Si::new(info) };
-    sort_info.item_compare_func_err = false;
+    info.item_compare_func_err = false;
     let item_compare_func = sorter(info, false);
 
     // Sort the array with item pointers.
     let itemsize = ::core::mem::size_of::<ListSortItem>();
-    let cmp = item_compare_func as __compar_fn_t;
     // SAFETY: `ptrs` holds `len` records of exactly `itemsize`, and the
-    // comparator reads two of them.
-    unsafe { qsort(ptrs.as_mut_ptr().cast(), len as size_t, itemsize, cmp) };
+    // comparator reads two of them and the caller's `info`.
+    unsafe {
+        qsort_r(
+            ptrs.as_mut_ptr().cast(),
+            len as size_t,
+            itemsize,
+            item_compare_func,
+            ::core::ptr::from_mut(info).cast(),
+        );
+    };
 
-    if sort_info.item_compare_func_err {
+    if info.item_compare_func_err {
         emsg(gettext(c"E702: Sort compare function failed"));
         // The list is left as it was.
         unsafe { (*l).lv_items = taken };
@@ -368,12 +376,9 @@ pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
 ///
 /// # Safety
 ///
-/// `l` must point at a live list, unaliased for the call. `info` must point
-/// at the sort's `SortInfo`, unaliased for the call.
-pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
-    // SAFETY: the caller's `SortInfo`.
-    let mut sort_info = unsafe { Si::new(info) };
-    sort_info.item_compare_func_err = false;
+/// `l` must point at a live list, unaliased for the call.
+pub(crate) unsafe fn do_uniq(l: *mut List, info: &mut SortInfo) {
+    info.item_compare_func_err = false;
     let compare = sorter(info, true).expect("non-null function pointer");
 
     let mut at = 1;
@@ -398,14 +403,15 @@ pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
         let prev = sort_item(&raw mut items[at - 1], 0);
         let cur = sort_item(&raw mut items[at], 1);
         // SAFETY: the two records just built.
-        let equal = unsafe { compare((&raw const prev).cast(), (&raw const cur).cast()) } == 0;
+        let (prev, cur) = ((&raw const prev).cast(), (&raw const cur).cast());
+        let equal = unsafe { compare(prev, cur, ::core::ptr::from_mut(info).cast()) } == 0;
         if equal {
             // SAFETY: a live list and an index of it.
             unsafe { (*l).remove_range(at, at) };
         } else {
             at += 1;
         }
-        if sort_info.item_compare_func_err {
+        if info.item_compare_func_err {
             emsg(gettext(c"E882: Uniq compare function failed"));
             break;
         }
@@ -418,26 +424,19 @@ pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
 /// A `{how}` given as a Number has no string of its own, so the caller lends
 /// `how` for it: `info.item_compare_func` may borrow it, and the sort
 /// reads that field long after this returns.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call. `info`
-/// must point at the sort's `SortInfo`, unaliased for the call.
-pub(crate) unsafe fn parse_sort_uniq_args(
+pub(crate) fn parse_sort_uniq_args(
     args: &[TypVal],
-    info: *mut SortInfo,
+    info: &mut SortInfo,
     how: &mut NumBuf,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's stack `SortInfo`.
-    let mut sort_info = unsafe { Si::new(info) };
-    sort_info.item_compare_ic = 0;
-    sort_info.item_compare_lc = false;
-    sort_info.item_compare_numeric = false;
-    sort_info.item_compare_numbers = false;
-    sort_info.item_compare_float = false;
-    sort_info.item_compare_func = ::core::ptr::null();
-    sort_info.item_compare_partial = ::core::ptr::null_mut();
-    sort_info.item_compare_selfdict = ::core::ptr::null_mut();
+    info.item_compare_ic = 0;
+    info.item_compare_lc = false;
+    info.item_compare_numeric = false;
+    info.item_compare_numbers = false;
+    info.item_compare_float = false;
+    info.item_compare_func = ::core::ptr::null();
+    info.item_compare_partial = ::core::ptr::null_mut();
+    info.item_compare_selfdict = ::core::ptr::null_mut();
 
     let Some(arg1) = args.get(1) else {
         return Ok(());
@@ -445,43 +444,52 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 
     // optional second argument: {func}
     if arg1.v_type() == VAR_FUNC {
-        sort_info.item_compare_func = arg1.func_name_or_null();
+        info.item_compare_func = arg1.func_name_or_null();
     } else if arg1.v_type() == VAR_PARTIAL {
-        sort_info.item_compare_partial = arg1.partial_or_null();
+        info.item_compare_partial = arg1.partial_or_null();
     } else {
         let Ok(nr) = tv_get_number_chk(&args[1]) else {
             return Err(Failed); // type error; errmsg already given
         };
         let nr = nr as ::core::ffi::c_int;
         if nr == 1 {
-            sort_info.item_compare_ic = 1;
+            info.item_compare_ic = 1;
         } else if arg1.v_type() != VAR_NUMBER {
             let name = how.string_ptr(&args[1]);
-            sort_info.item_compare_func = name;
+            info.item_compare_func = name;
         } else if nr != 0 {
             emsg(gettext(e_invarg));
             return Err(Failed);
         }
 
-        let how = sort_info.item_compare_func;
-        if !how.is_null() {
-            if unsafe { *how } as ::core::ffi::c_int == NUL {
+        let how = info.item_compare_func;
+        // SAFETY: a String argument's text or `how`'s, both NUL-terminated
+        // and live for the call; only the first two bytes are read, the
+        // second only past a non-NUL first.
+        let (first, second) = (!how.is_null())
+            .then(|| unsafe {
+                let first = *how as u8;
+                (first, if first == 0 { 0 } else { *how.add(1) as u8 })
+            })
+            .unzip();
+        if let (Some(first), Some(second)) = (first, second) {
+            if first == NUL as u8 {
                 // empty string means default sort
-                sort_info.item_compare_func = ::core::ptr::null();
-            } else if unsafe { *how.add(1) } as ::core::ffi::c_int == NUL {
+                info.item_compare_func = ::core::ptr::null();
+            } else if second == NUL as u8 {
                 // The five built-in orderings are one-character names;
                 // upstream spells each as a `strcmp` against a literal.
                 let mut builtin = true;
-                match unsafe { *how } as u8 {
-                    b'n' => sort_info.item_compare_numeric = true,
-                    b'N' => sort_info.item_compare_numbers = true,
-                    b'f' => sort_info.item_compare_float = true,
-                    b'i' => sort_info.item_compare_ic = 1,
-                    b'l' => sort_info.item_compare_lc = true,
+                match first {
+                    b'n' => info.item_compare_numeric = true,
+                    b'N' => info.item_compare_numbers = true,
+                    b'f' => info.item_compare_float = true,
+                    b'i' => info.item_compare_ic = 1,
+                    b'l' => info.item_compare_lc = true,
                     _ => builtin = false,
                 }
                 if builtin {
-                    unsafe { (*info).item_compare_func = ::core::ptr::null() };
+                    info.item_compare_func = ::core::ptr::null();
                 }
             }
         }
@@ -490,17 +498,17 @@ pub(crate) unsafe fn parse_sort_uniq_args(
     if args.len() > 2 {
         // optional third argument: {dict}
         tv_check_for_dict_arg(args, 2)?;
-        unsafe { (*info).item_compare_selfdict = args[2].dict_or_null() };
+        info.item_compare_selfdict = args[2].dict_or_null();
     }
 
     Ok(())
 }
 
-/// The body `sort()` and `uniq()` share: check the argument, publish a
-/// `sortinfo`, and run the driver.
+/// The body `sort()` and `uniq()` share: check the argument, read the
+/// ordering, and run the driver.
 ///
-/// `sortinfo` is saved and restored around the call because a user comparison
-/// function can itself call `sort()`.
+/// The ordering is this call's local: a user comparison function can itself
+/// call `sort()`, which gets its own.
 pub(crate) fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
     let mut how = NumBuf::new();
     // SAFETY: the builtin's argument array.
@@ -519,8 +527,6 @@ pub(crate) fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
     }
 
     let mut info = SORTINFO_INIT;
-    let old_sortinfo = sortinfo.get();
-    sortinfo.set(&raw mut info);
 
     let arg_errmsg = if sort {
         c"sort() argument".as_ptr()
@@ -533,17 +539,15 @@ pub(crate) fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
         // takes a second one of.
         result.write_list(unsafe { ListRef::retained(l) });
         if list_len(unsafe { l.as_ref() }) > 1
-            && unsafe { parse_sort_uniq_args(args, &raw mut info, &mut how) }.is_ok()
+            && parse_sort_uniq_args(args, &mut info, &mut how).is_ok()
         {
             if sort {
-                unsafe { do_sort(l, &raw mut info) };
+                unsafe { do_sort(l, &mut info) };
             } else {
-                unsafe { do_uniq(l, &raw mut info) };
+                unsafe { do_uniq(l, &mut info) };
             }
         }
     }
-
-    sortinfo.set(old_sortinfo);
 }
 
 /// `sort()`.
