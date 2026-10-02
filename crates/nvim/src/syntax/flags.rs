@@ -27,7 +27,7 @@
 
 crate::flag_set! {
     /// One bitmask, shared by three carriers -- see the module docs.
-    pub struct SynFlags;
+    pub(crate) struct SynFlags;
 
     /// Not matched at the top level: only inside an item that `contains=` it.
     const CONTAINED = 0x01;

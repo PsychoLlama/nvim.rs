@@ -61,7 +61,7 @@ pub use self::api::*;
 pub(crate) use self::bt::*;
 pub use self::chars::*;
 pub(crate) use self::compiler::*;
-pub use self::context::*;
+pub(crate) use self::context::*;
 pub(crate) use self::mbyte::*;
 pub(crate) use self::nfa::*;
 pub use self::parse::*;
@@ -138,6 +138,12 @@ pub struct RegExec {
     pub(crate) behind_pos: SavedInput,
     /// The bounds of the `\{n,m}` the backtracker is about to enter.
     pub(crate) brace_limits: (int64_t, int64_t),
+    /// The captures `\z1`..`\z9` read: a syntax region's start match,
+    /// borrowed from the caller for the call, or null outside one.
+    pub(crate) ext_in: *const ExtMatch,
+    /// Where a successful match leaves its own `\z(` captures: the caller's
+    /// slot, for the call, or null when nobody asked for them.
+    pub(crate) ext_out: *mut Option<ExtMatchRef>,
 }
 /// The caller's bound on how long an NFA match may run.
 #[derive(Copy, Clone)]
@@ -440,6 +446,8 @@ static rex: GlobalCell<RegExec> = GlobalCell::new(RegExec {
     zslots: ZSlots::UNSET,
     behind_pos: SavedInput::NOWHERE,
     brace_limits: (0, 0),
+    ext_in: core::ptr::null(),
+    ext_out: core::ptr::null_mut(),
 });
 static rex_in_use: GlobalCell<bool> = GlobalCell::new(false);
 static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false);

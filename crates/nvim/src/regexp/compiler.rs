@@ -71,6 +71,10 @@ pub(crate) struct RegCompiler {
     pub(crate) string_match: c_int,
     /// `RE_STRICT`: a `[` without its `]` is an error, not a literal.
     pub(crate) strict: c_int,
+    /// Which `\z` specials the pattern may use: `REX_SET` admits `\z(` (a
+    /// syntax region's start pattern), `REX_USE` admits `\z1`..`\z9` (its
+    /// skip and end patterns). The caller's, for the whole compile.
+    pub(crate) extmatch: c_int,
 
     // ------------------------------------------- what the pattern holds
     /// The next `\(` group number, and the next `\z(` one.
@@ -126,8 +130,14 @@ impl RegCompiler {
     /// The compiler keeps a pointer into `pattern` and must not outlive it:
     /// [`super::vim_regcomp`] makes one per engine attempt and drops it
     /// before returning.
-    pub(crate) fn new(pattern: &CStr, re_flags: c_int, buffer: Buf) -> RegCompiler {
+    pub(crate) fn new(
+        pattern: &CStr,
+        re_flags: c_int,
+        buffer: Buf,
+        extmatch: c_int,
+    ) -> RegCompiler {
         RegCompiler {
+            extmatch,
             pattern: pattern.as_ptr().cast_mut(),
             pattern_len: pattern.count_bytes(),
             re_flags,

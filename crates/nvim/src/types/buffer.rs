@@ -763,25 +763,10 @@ pub struct SynBlock {
     pub b_syn_topgrp: ::core::ffi::c_int,
     pub b_syn_conceal: ::core::ffi::c_int,
     pub b_syn_folditems: ::core::ffi::c_int,
-    /// OWNERSHIP -- **carve-out**. The parser's state cache is one slab of
-    /// `b_sst_len` `SynState`s, threaded into two intrusive singly-linked
-    /// lists that point *into* it: the used entries (`b_sst_first`, sorted by
-    /// line) and the recycled ones (`b_sst_firstfree`). A `Vec` cannot hold
-    /// it -- growing one moves the entries, and every `sst_next` in both
-    /// lists, plus whatever `*mut SynState` a caller is holding across a
-    /// re-parse, would dangle. Resizing is a copy-and-rethread
-    /// (`syn_stack_alloc`) and the slab is released by
-    /// `syn_stack_free_block`, the only `xfree` of it. Retiring it means
-    /// making the two lists indices into the slab -- a rewrite of the cache,
-    /// not of its ownership.
-    pub b_sst_array: *mut SynState,
-    pub b_sst_len: ::core::ffi::c_int,
-    /// The used entries, lowest line first. Points into [`Self::b_sst_array`].
-    pub b_sst_first: *mut SynState,
-    /// The recycled entries. Points into [`Self::b_sst_array`].
-    pub b_sst_firstfree: *mut SynState,
-    pub b_sst_freecount: ::core::ffi::c_int,
-    pub b_sst_check_lnum: LineNr,
+    /// The parser's state cache.
+    pub(crate) b_sst: crate::syntax::StateCache,
+    /// `display_tick` at the last parse, which the cache's cleanup ages its
+    /// entries against.
     pub b_sst_lasttick: DispTick,
     pub b_langp: GArray,
     pub b_spell_ismw: [bool; 256],

@@ -14,6 +14,8 @@
 
 use crate::cstr;
 use crate::memory::XString;
+use crate::regexp::ExtMatchIo;
+use crate::regexp::ExtMatchRef;
 use crate::regexp::RegCompiler;
 use crate::regexp::bt_regcomp;
 use crate::regexp::nfa_regcomp;
@@ -30,7 +32,6 @@ use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{P_RE, p_re, p_verbose};
 use crate::os::cshim::gettext;
 use crate::regexp::RE_AUTO;
-use crate::regexp::state::reg_do_extmatch;
 use crate::types::{
     ColNr, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch, RegProg, uint8_t,
 };
@@ -57,6 +58,14 @@ pub(crate) fn with_rex<R>(run: impl FnOnce() -> R) -> R {
 /// Answers null when the pattern does not parse, having reported why;
 /// otherwise the caller owns the program and frees it with [`vim_regfree`].
 pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
+    vim_regcomp_ext(expr_arg, re_flags, 0)
+}
+
+/// [`vim_regcomp`] for a syntax pattern: `extmatch` says which `\z`
+/// specials it may use -- `REX_SET` for a region's start pattern, which
+/// defines `\z(` groups, `REX_USE` for its skip and end patterns, which
+/// match them with `\z1`..`\z9`.
+pub(crate) fn vim_regcomp_ext(expr_arg: &CStr, re_flags: c_int, extmatch: c_int) -> *mut RegProg {
     let mut expr = expr_arg;
     let mut engine = p_re() as c_int;
     if expr.to_bytes().starts_with(b"\\%#=") {
@@ -88,9 +97,9 @@ pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
         } else {
             0
         };
-        nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf))
+        nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf, extmatch))
     } else {
-        bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf))
+        bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch))
     };
     // Only retry when the NFA engine declined quietly: an error means the
     // pattern is bad, not merely too much for that engine.
@@ -107,7 +116,7 @@ pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
             msg_str(expr);
             verbose_leave();
         }
-        prog = bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf));
+        prog = bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch));
     }
     if !prog.is_null() {
         // SAFETY: a program one of the engines just built.
@@ -156,15 +165,9 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
         msg_str(pat.as_cstr());
         verbose_leave();
     }
-    if extmatch {
-        // A buffer match may be a syntax match, whose `\z(` groups have
-        // to survive the recompile.
-        reg_do_extmatch.set(REX_ALL);
-    }
-    let new = vim_regcomp(pat.as_cstr(), re_flags);
-    if extmatch {
-        reg_do_extmatch.set(0);
-    }
+    // A buffer match may be a syntax match, whose `\z(` groups have to
+    // survive the recompile.
+    let new = vim_regcomp_ext(pat.as_cstr(), re_flags, if extmatch { REX_ALL } else { 0 });
     P_RE.set(save_p_re);
     new
 }
@@ -199,6 +202,8 @@ fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool)
         let rex = unsafe { Rex::acquire() };
         rex.set_reg_startpos(core::ptr::null_mut());
         rex.set_reg_endpos(core::ptr::null_mut());
+        // No `\z` traffic.
+        rex.set_ext(core::ptr::null(), core::ptr::null_mut());
         let exec = |rmp: *mut RegMatch| unsafe {
             (*(*(*rmp).regprog).engine)
                 .regexec_nl
@@ -312,6 +317,39 @@ pub unsafe fn vim_regexec_multi(
     tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
+    let mut no_captures = None;
+    let io = ExtMatchIo {
+        input: None,
+        output: &mut no_captures,
+    };
+    // SAFETY: the caller's promises.
+    unsafe { vim_regexec_syntax(rmp, win, buffer, lnum, col, tm, timed_out, io) }
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "vim_regexec_multi's, and the `\\z` traffic"
+)]
+/// [`vim_regexec_multi`] for a syntax pattern: `io.input` is what `\z1`..
+/// `\z9` match, and a successful match leaves its own `\z(` captures in
+/// `io.output` (or `None` when it has none). Answers the number of lines the
+/// match spans plus one, or 0 for no match.
+///
+/// # Safety
+///
+/// As for [`vim_regexec_multi`].
+pub(crate) unsafe fn vim_regexec_syntax(
+    rmp: *mut RegMMatch,
+    win: Option<Win>,
+    buffer: Buf,
+    lnum: LineNr,
+    col: ColNr,
+    tm: *mut ProfTime,
+    timed_out: *mut c_int,
+    io: ExtMatchIo<'_>,
+) -> LineNr {
+    let ext_in = io.input.map_or(core::ptr::null(), core::ptr::from_ref);
+    let ext_out: *mut Option<ExtMatchRef> = io.output;
     // SAFETY: `rmp` holds a live program; `win`/`buffer`/`tm`/`timed_out` are
     // the caller's and may be null where the engines allow it.
     if unsafe { (*(*rmp).regprog).re_in_use } {
@@ -320,6 +358,10 @@ pub unsafe fn vim_regexec_multi(
     }
     let result = with_rex(|| {
         unsafe { (*(*rmp).regprog).re_in_use = true };
+        // SAFETY: `with_rex` reserved the context. The two sets are the
+        // caller's, for the call.
+        let rex = unsafe { Rex::acquire() };
+        rex.set_ext(ext_in, ext_out);
         let exec = |rmp: *mut RegMMatch| unsafe {
             (*(*(*rmp).regprog).engine)
                 .regexec_multi
@@ -346,6 +388,8 @@ pub unsafe fn vim_regexec_multi(
                 unsafe { (*(*rmp).regprog).re_in_use = false };
             }
         }
+        // The caller's sets do not outlive the call.
+        rex.set_ext(core::ptr::null(), core::ptr::null_mut());
         result
     });
     result.max(0)

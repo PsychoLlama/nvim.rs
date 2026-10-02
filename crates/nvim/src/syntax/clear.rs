@@ -83,6 +83,7 @@ pub(crate) unsafe fn init_synblock(at: *mut SynBlock) {
         (&raw mut (*at).b_syn_patterns).write(Vec::new());
         (&raw mut (*at).b_syn_clusters).write(Vec::new());
         (&raw mut (*at).b_syn_linecont_pat).write(None);
+        (&raw mut (*at).b_sst).write(StateCache::new());
         // The block's five string options, for the reason
         // `init_buf_string_options` states: a zeroed `Option<XString>` is
         // not `None`.

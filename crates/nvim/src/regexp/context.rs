@@ -21,7 +21,7 @@
 use crate::cstr;
 use crate::option::vars::P_SEL;
 use crate::regexp::RegCompiler;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 use super::submatch::Rsm;
 use super::{
@@ -33,7 +33,6 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::memory::{xcalloc, xfree};
 use crate::message::e_re_corr;
 use crate::message::emsg;
 use crate::normal::{VisualMode, visual_ever_started, visual_selection};
@@ -44,7 +43,7 @@ use crate::pos::{MAXCOL, lt};
 use crate::regexp::RE_NOBREAK;
 use crate::regexp::state::rc_did_emsg;
 use crate::semsg;
-use crate::types::{ColNr, LPos, LineNr, RegExtMatch, RegMMatch, RegMatch, uint8_t};
+use crate::types::{ColNr, LPos, LineNr, RegMMatch, RegMatch, uint8_t};
 
 use crate::winlayer::{Buf, Win};
 /// Let the user interrupt a long match, unless the caller asked for an
@@ -138,44 +137,41 @@ pub(crate) fn reg_getline_len(rex: Rex, lnum: LineNr) -> ColNr {
     reg_line_len(rex, lnum, LineOrigin::Exec)
 }
 
-/// A fresh `\z1`..`\z9` capture set, refcounted because a syntax item
-/// hands it to a highlighter that outlives the match.
-pub(crate) fn make_extmatch() -> *mut RegExtMatch {
-    // SAFETY: xcalloc returns a zeroed allocation of the requested size.
-    let em = unsafe { xcalloc(1, size_of::<RegExtMatch>()) } as *mut RegExtMatch;
-    unsafe { (*em).refcnt = 1 };
-    em
+/// The `\z1`..`\z9` captures of a syntax region's start match.
+///
+/// A syntax item keeps them for as long as it is on the parser's state
+/// stack, and the state cache keeps a copy per cached line, so a set is
+/// shared: [`ExtMatchRef`]. The end and skip patterns of the region read
+/// them back through [`ExtMatchIo::input`].
+#[derive(Default, Debug, PartialEq, Eq)]
+pub(crate) struct ExtMatch {
+    /// Slot `n` is what `\z(` group `n` matched; slot 0 is never set.
+    pub(crate) matches: [Option<::std::ffi::CString>; NSUBEXP as usize],
 }
 
-/// Take a reference to `em`, which may be NULL.
-///
-/// # Safety
-///
-/// `em` must be null or a live [`make_extmatch`] allocation.
-pub unsafe fn ref_extmatch(em: *mut RegExtMatch) -> *mut RegExtMatch {
-    if !em.is_null() {
-        unsafe { (*em).refcnt += 1 };
+/// A shared [`ExtMatch`].
+pub(crate) type ExtMatchRef = ::std::rc::Rc<ExtMatch>;
+
+impl ExtMatch {
+    /// What `\z(` group `no` matched, if it matched on one line.
+    pub(crate) fn capture(&self, no: usize) -> Option<&CStr> {
+        self.matches[no].as_deref()
     }
-    em
+
+    /// Record `text` as group `no`'s match. The capture is a C string to
+    /// the matcher that reads it back, so it ends at a NUL in `text`.
+    pub(crate) fn set(&mut self, no: usize, text: &[u8]) {
+        let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
+        self.matches[no] = Some(cstr::owned(&text[..end]));
+    }
 }
 
-/// Drop a reference to `em`, freeing it and its captures at zero.
-///
-/// # Safety
-///
-/// `em` must be null or a live [`make_extmatch`] allocation.
-pub unsafe fn unref_extmatch(em: *mut RegExtMatch) {
-    if em.is_null() {
-        return;
-    }
-    unsafe { (*em).refcnt -= 1 };
-    if unsafe { (*em).refcnt } > 0 {
-        return;
-    }
-    for m in unsafe { (*em).matches } {
-        unsafe { xfree(m.cast()) };
-    }
-    unsafe { xfree(em.cast()) };
+/// The `\z` traffic of one syntax match: the captures of the region's
+/// start match that `\z1`..`\z9` read, and the slot the match's own `\z(`
+/// captures go to when it succeeds.
+pub(crate) struct ExtMatchIo<'a> {
+    pub(crate) input: Option<&'a ExtMatch>,
+    pub(crate) output: &'a mut Option<ExtMatchRef>,
 }
 
 /// The character class of the character before the cursor, or -1 at the

@@ -50,9 +50,6 @@ impl Win {
         syn_win.set(Some(self.id()));
 
         syn_stack_alloc();
-        if syn_block().b_sst_array.is_null() {
-            return; // out of memory
-        }
         syn_block().b_sst_lasttick = display_tick.get();
 
         // If the state at the end of the previous line is useful, store it.
@@ -76,27 +73,31 @@ impl Win {
 
         // Try to synchronise from a saved state, but only if "lnum" is neither
         // before one nor too far beyond one.
-        let mut last_valid = ::core::ptr::null_mut::<SynState>();
+        let mut last_valid = None;
         if !current_state_valid() {
-            let mut last_min_valid = ::core::ptr::null_mut::<SynState>();
-            let mut p = syn_block().b_sst_first;
-            while !p.is_null() && unsafe { (*p).sst_lnum } <= lnum {
-                if unsafe { (*p).sst_change_lnum } == 0 {
-                    last_valid = p;
-                    if unsafe { (*p).sst_lnum } >= lnum - syn_block().b_syn_sync_minlines {
-                        last_min_valid = p;
+            let mut last_min_valid = None;
+            let block = syn_block();
+            let minlines = block.b_syn_sync_minlines;
+            for id in block.b_sst.used() {
+                let entry = block.b_sst.entry(id);
+                if entry.lnum > lnum {
+                    break;
+                }
+                if entry.change_lnum == 0 {
+                    last_valid = Some(id);
+                    if entry.lnum >= lnum - minlines {
+                        last_min_valid = Some(id);
                     }
                 }
-                p = unsafe { (*p).sst_next };
             }
-            if !last_min_valid.is_null() {
-                unsafe { load_current_state(last_min_valid) };
+            if let Some(id) = last_min_valid {
+                load_current_state(id);
             }
         }
 
         // Still nothing: re-synchronise.
         let first_stored = if !current_state_valid() {
-            unsafe { syn_sync(self, lnum, last_valid) };
+            syn_sync(self, lnum, last_valid);
             if current_lnum.get() == 1 {
                 1 // the first line is always valid, whatever "minlines" says
             } else {
@@ -111,13 +112,13 @@ impl Win {
         // Advance from the sync point or the saved state to the wanted line,
         // saving some entries along the way to sync with later on.
         let dist = store_distance();
-        let mut prev = ::core::ptr::null_mut::<SynState>();
+        let mut prev = None;
         while current_lnum.get() < lnum {
             syn_start_line();
             syn_finish_line(false);
             current_lnum.set(current_lnum.get() + 1);
             if current_lnum.get() >= first_stored {
-                prev = unsafe { record_line(prev, lnum, dist) };
+                prev = record_line(prev, lnum, dist);
             }
 
             // This can take a long time: stop when CTRL-C is pressed. The
@@ -143,8 +144,9 @@ pub(crate) fn current_state_valid() -> bool {
 
 /// How many lines apart to store cache entries for lines that are not
 /// displayed. Displayed lines get one each; the rest share what is left.
-fn store_distance() -> LineNr {
-    let entries = syn_block().b_sst_len;
+pub(crate) fn store_distance() -> LineNr {
+    let entries = c_int::try_from(syn_block().b_sst.len())
+        .expect("the cache is a few thousand entries at most");
     if entries <= Rows.get() {
         999999
     } else {
@@ -160,101 +162,59 @@ fn store_distance() -> LineNr {
 /// When the cached entry for this line matches what we parsed, every entry
 /// below it that was only waiting on a change *before* this line becomes valid
 /// again -- which is what turns one re-parse into a whole valid tail.
-///
-/// # Safety
-///
-/// `prev` must point at a live syntax state, unaliased for the call.
-unsafe fn record_line(mut prev: *mut SynState, lnum: LineNr, dist: LineNr) -> *mut SynState {
-    if prev.is_null() {
-        prev = syn_stack_find_entry(current_lnum.get() - 1);
+fn record_line(mut prev: Option<EntryId>, lnum: LineNr, dist: LineNr) -> Option<EntryId> {
+    let parsed_lnum = current_lnum.get();
+    if prev.is_none() {
+        prev = syn_stack_find_entry(parsed_lnum - 1);
     }
-    let mut sp = if prev.is_null() {
-        syn_block().b_sst_first
-    } else {
-        prev
-    };
-    while !sp.is_null() && unsafe { (*sp).sst_lnum } < current_lnum.get() {
-        sp = unsafe { (*sp).sst_next };
+    let mut block = syn_block();
+    let cache = &block.b_sst;
+    let mut sp = prev.or(cache.first());
+    while let Some(id) = sp
+        && cache.entry(id).lnum < parsed_lnum
+    {
+        sp = cache.next(id);
     }
 
-    if !sp.is_null()
-        && unsafe { (*sp).sst_lnum } == current_lnum.get()
-        && unsafe { syn_stack_equal(sp) }
+    if let Some(id) = sp
+        && block.b_sst.entry(id).lnum == parsed_lnum
+        && syn_stack_equal(id)
     {
-        let parsed_lnum = current_lnum.get();
-        prev = sp;
-        while !sp.is_null() && unsafe { (*sp).sst_change_lnum } <= parsed_lnum {
-            if unsafe { (*sp).sst_lnum } <= lnum {
-                prev = sp; // a valid state before the desired line
-            } else if unsafe { (*sp).sst_change_lnum } == 0 {
+        let mut prev = id;
+        let mut sp = Some(id);
+        while let Some(id) = sp
+            && block.b_sst.entry(id).change_lnum <= parsed_lnum
+        {
+            let entry = block.b_sst.entry_mut(id);
+            if entry.lnum <= lnum {
+                prev = id; // a valid state before the desired line
+            } else if entry.change_lnum == 0 {
                 break; // past the states that depend on a change
             }
-            unsafe { (*sp).sst_change_lnum = 0 };
-            sp = unsafe { (*sp).sst_next };
+            entry.change_lnum = 0;
+            sp = block.b_sst.next(id);
         }
-        unsafe { load_current_state(prev) };
-        return prev;
+        load_current_state(prev);
+        return Some(prev);
     }
 
     // Store the state at this line when it is the first one, the line we
     // are parsing for, or far enough from the last stored one.
-    if prev.is_null()
-        || current_lnum.get() == lnum
-        || current_lnum.get() >= unsafe { (*prev).sst_lnum } + dist
-    {
+    if prev.is_none_or(|prev| {
+        parsed_lnum == lnum || parsed_lnum >= block.b_sst.entry(prev).lnum + dist
+    }) {
         return store_current_state();
     }
     prev
 }
 
-/// Release what a cached state holds: its heap arm, if it has one, and the
-/// extmatch reference of every item on it.
-///
-/// A stack of `BufState`s cannot simply be discarded -- each item may hold a
-/// reference to the submatches of the pattern that started it. Safe to call
-/// twice: the heap arm is nulled as it is released.
-///
-/// # Safety
-///
-/// `p` must point at a live syntax state, unaliased for the call.
-pub(crate) unsafe fn clear_syn_state(p: *mut SynState) {
-    let size = unsafe { (*p).sst_stacksize };
-    if size > SST_FIX_STATES {
-        // SAFETY: the heap arm is a `Box<[BufState]>` of `sst_stacksize`
-        // items (`fill_entry`), or null when the entry never got one.
-        let states = unsafe { (*p).sst_union.sst_heap };
-        if !states.is_null() {
-            unsafe { (*p).sst_union.sst_heap = ::core::ptr::null_mut() };
-            // SAFETY: as above -- this is the box `fill_entry` leaked, and
-            // nothing else holds it.
-            let len = usize::try_from(size).expect("a state stack size is never negative");
-            let states =
-                unsafe { Box::from_raw(::core::ptr::slice_from_raw_parts_mut(states, len)) };
-            for state in &states {
-                // SAFETY: the item's own reference.
-                unsafe { unref_extmatch(state.bs_extmatch) };
-            }
-        }
-    } else {
-        let mut i = 0;
-        while i < size {
-            let at = usize::try_from(i).expect("the loop counts up from zero");
-            unsafe { unref_extmatch((*p).sst_union.sst_stack[at].bs_extmatch) };
-            i += 1;
-        }
-    }
-}
-
 /// Empty the current state stack, releasing its extmatch references. The
 /// stack stays valid, as upstream's `ga_clear` leaves it.
 pub(crate) fn clear_current_state() {
-    // The items move out first: `unref_extmatch` frees, and nothing is run
-    // while the cell is borrowed.
+    // The items move out first and drop after: nothing runs while the cell
+    // is borrowed.
     let items = current_state.with_mut(|stack| stack.as_mut().map(core::mem::take));
-    for item in items.into_iter().flatten() {
-        // SAFETY: the item held its own reference to the extmatch.
-        unsafe { unref_extmatch(item.si_extmatch) };
-    }
+    drop(items);
 }
 
 /// Reset the per-line state before parsing a line.
@@ -348,12 +308,17 @@ pub(crate) fn syntax_end_parsing(window: Win, lnum: LineNr) {
     if syn_block().raw() != window.w_s {
         return; // not the right window
     }
+    let mut block = syn_block();
     let mut sp = syn_stack_find_entry(lnum);
-    if !sp.is_null() && unsafe { (*sp).sst_lnum } < lnum {
-        sp = unsafe { (*sp).sst_next };
+    if let Some(id) = sp
+        && block.b_sst.entry(id).lnum < lnum
+    {
+        sp = block.b_sst.next(id);
     }
-    if !sp.is_null() && unsafe { (*sp).sst_change_lnum } != 0 {
-        unsafe { (*sp).sst_change_lnum = lnum };
+    if let Some(id) = sp
+        && block.b_sst.entry(id).change_lnum != 0
+    {
+        block.b_sst.entry_mut(id).change_lnum = lnum;
     }
 }
 
@@ -385,15 +350,16 @@ pub(crate) fn syntax_check_changed(lnum: LineNr) -> bool {
     if !current_state_valid() || lnum != current_lnum.get() + 1 {
         return true;
     }
-    let sp = syn_stack_find_entry(lnum);
-    if sp.is_null() || unsafe { (*sp).sst_lnum } != lnum {
+    let Some(sp) =
+        syn_stack_find_entry(lnum).filter(|&id| syn_block().b_sst.entry(id).lnum == lnum)
+    else {
         return true;
-    }
+    };
 
     // Finish the previous line, which is needed when not all of it was
     // drawn, and compare with the state saved for this one.
     syn_finish_line(false);
-    let changed = !unsafe { syn_stack_equal(sp) };
+    let changed = !syn_stack_equal(sp);
 
     // Store the current state for later use.
     current_lnum.set(current_lnum.get() + 1);

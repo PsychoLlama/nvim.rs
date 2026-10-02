@@ -6,7 +6,6 @@
 #![allow(unsafe_code)]
 
 use super::list::{op, out_of, out1_of};
-use crate::cstr;
 use crate::regexp::NfaOp;
 use crate::siemsg;
 use core::ffi::{c_char, c_int, c_ushort};
@@ -20,7 +19,6 @@ use crate::mbyte::{
 };
 use crate::os::cshim::__ctype_b_loc;
 use crate::profile::profile_passed_limit;
-use crate::regexp::state::re_extmatch_in;
 use crate::regexp::{
     _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_TOO_EXPENSIVE, NfaPim,
     NfaRegProg, NfaState, RA_MATCH, RegSub, RegSubs, Rex, cleanup_subexpr, cleanup_zsubexpr,
@@ -116,20 +114,20 @@ pub(crate) fn match_backref(rex: Rex, sub: &RegSub, subidx: c_int, bytelen: &mut
 /// Match what the enclosing syntax item's `\z(` group captured.
 pub(crate) fn match_zref(rex: Rex, subidx: c_int, bytelen: &mut c_int) -> bool {
     cleanup_zsubexpr(rex);
-    // SAFETY: `re_extmatch_in` is the capture set the syntax item handed in,
-    // whose members are NUL-terminated copies.
-    let captures = re_extmatch_in.get();
-    if captures.is_null() || unsafe { (*captures).matches[subidx as usize].is_null() } {
-        *bytelen = 0;
-        return true;
-    }
-    let captured = unsafe { (*captures).matches[subidx as usize] } as *mut c_char;
-    let mut len = unsafe { cstr::bytes_at(captured) }.len() as c_int;
-    if unsafe { cstrncmp(rex, captured, rex.input_str(), &mut len) } == 0 {
-        *bytelen = len;
-        return true;
-    }
-    false
+    rex.with_ext_capture(subidx as usize, |captured| {
+        let Some(captured) = captured else {
+            *bytelen = 0;
+            return true;
+        };
+        let mut len = captured.count_bytes() as c_int;
+        // SAFETY: the capture is NUL-terminated, and the input is the line
+        // being matched.
+        if unsafe { cstrncmp(rex, captured.as_ptr().cast_mut(), rex.input_str(), &mut len) } == 0 {
+            *bytelen = len;
+            return true;
+        }
+        false
+    })
 }
 
 /// Set every state's second-generation list id aside, and clear it.

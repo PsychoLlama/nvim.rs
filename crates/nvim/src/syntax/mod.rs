@@ -22,13 +22,11 @@
 //! `b_syn_clusters` are `Vec`s of [`SynPat`]/[`SynCluster`], a pattern's
 //! text is a `CString` and its `contains=`/`containedin=`/`nextgroup=` lists
 //! are [`IdList`]s. **An `xfree` in this module is a bug** unless it is one of
-//! the three carve-outs, each of which says so at its own field:
+//! the two carve-outs, each of which says so at its own field:
 //!
 //! - [`KeyEntry`] -- one `xmalloc` block with the keyword text inside it,
 //!   which the hash tables key on by *interior address*, and the two raw id
 //!   lists [`copy_id_list`](options::copy_id_list) makes for it.
-//! - `SynBlock::b_sst_array` -- the state cache's slab, threaded into two
-//!   intrusive lists of interior pointers.
 //! - [`SynPat::sp_prog`] and `SynBlock::b_syn_linecont_prog` -- compiled
 //!   programs, which belong to `regexp/`'s allocator discipline.
 
@@ -64,7 +62,7 @@ use crate::highlight_group::{
 use crate::indent_c::find_start_comment;
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
-use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz};
+use crate::memory::{xfree, xmalloc, xmemcpyz};
 use crate::message::state::msg_col;
 use crate::message::{
     emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
@@ -80,17 +78,15 @@ use crate::pos::MAXLNUM;
 use crate::profile::{
     profile_add, profile_cmp, profile_divide, profile_end, profile_msg, profile_start, profile_zero,
 };
-use crate::regexp::state::{re_extmatch_in, re_extmatch_out, reg_do_extmatch};
 use crate::regexp::{
-    ref_extmatch, skip_regexp, unref_extmatch, vim_regcomp, vim_regcomp_had_eol, vim_regexec,
-    vim_regexec_multi, vim_regfree,
+    ExtMatch, ExtMatchIo, ExtMatchRef, skip_regexp, vim_regcomp, vim_regcomp_ext,
+    vim_regcomp_had_eol, vim_regexec, vim_regexec_syntax, vim_regfree,
 };
 use crate::runtime::{do_source, source_runtime};
 use crate::types::AutoEvent;
 use crate::types::{
-    BufState, ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegExtMatch,
-    RegMMatch, RegMatch, RegProg, SynBlock, SynState, SynTime, VarNumber, int16_t, size_t, uint8_t,
-    uint64_t,
+    ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, RegProg,
+    SynBlock, SynTime, VarNumber, int16_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;
@@ -132,8 +128,6 @@ pub(crate) use self::query::*;
 mod syntime;
 pub(crate) use self::syntime::*;
 
-/// How many `\(..\)` submatches a pattern can have.
-pub(crate) const NSUBEXP: ::core::ffi::c_uint = 10;
 /// Size of `Expand::xp_buf`, the scratch buffer a completion callback may
 /// answer from. `IOSIZE`, because the callbacks that build a name out of
 /// one bound themselves by that; upstream answers the shared `IObuff` for
@@ -243,7 +237,7 @@ pub(crate) const MAX_HL_ID: ::core::ffi::c_uint = 20000;
 pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = MAX_HL_ID as ::core::ffi::c_int;
 /// `do_source` flag: this is not a plugin or a package.
 pub(crate) const DOSO_NONE: ::core::ffi::c_uint = 0;
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub(crate) struct StateItem {
     pub si_idx: ::core::ffi::c_int,
     pub si_id: ::core::ffi::c_int,
@@ -262,7 +256,9 @@ pub(crate) struct StateItem {
     pub si_cchar: ::core::ffi::c_int,
     pub si_cont_list: *mut int16_t,
     pub si_next_list: *mut int16_t,
-    pub si_extmatch: *mut RegExtMatch,
+    /// The `\z(` captures of the start match, which the end and skip
+    /// patterns match `\z1`..`\z9` against.
+    pub si_extmatch: Option<ExtMatchRef>,
 }
 /// One `:syntax match` pattern, or one start/skip/end pattern of a
 /// `:syntax region`. Lives in its block's `b_syn_patterns`.
@@ -389,7 +385,6 @@ pub(crate) const SYNFLD_MINIMUM: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const SYNTAX_FNAME: &::core::ffi::CStr = c"$VIMRUNTIME/syntax/%s.vim";
 pub(crate) const SST_MIN_ENTRIES: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
 pub(crate) const SST_MAX_ENTRIES: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
-pub(crate) const SST_FIX_STATES: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
 pub(crate) const SST_DIST: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
 /// Whether `:syntax on|off|enable|manual` has been used, which is what stops
 /// [`syn_maybe_enable`] from overriding a deliberate choice.
@@ -605,8 +600,7 @@ static next_match_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
 static next_match_eos_pos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
 static next_match_eoe_pos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
 static next_match_end_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static next_match_extmatch: GlobalCell<*mut RegExtMatch> =
-    GlobalCell::new(::core::ptr::null_mut::<RegExtMatch>());
+static next_match_extmatch: GlobalCell<Option<ExtMatchRef>> = GlobalCell::new(None);
 // Where the parser currently is. `syntax_start` sets the first four together
 // and everything else is relative to them.
 
@@ -690,7 +684,7 @@ const EMPTY_STATE_ITEM: StateItem = StateItem {
     si_cchar: 0,
     si_cont_list: ::core::ptr::null_mut(),
     si_next_list: ::core::ptr::null_mut(),
-    si_extmatch: ::core::ptr::null_mut(),
+    si_extmatch: None,
 };
 /// The `nextgroup=` list in effect, or NULL.
 static current_next_list: GlobalCell<*mut int16_t> = GlobalCell::new(::core::ptr::null_mut());

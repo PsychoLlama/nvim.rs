@@ -74,7 +74,7 @@ pub(crate) fn push_next_match() -> Item {
         unsafe { cur_si.si_flags |= state_at(state_len() - 2).si_flags.masked(SynFlags::CONCEAL) };
     }
     cur_si.si_next_list = spp.sp_next_list.as_ptr();
-    unsafe { cur_si.si_extmatch = ref_extmatch(next_match_extmatch.get()) };
+    cur_si.si_extmatch = next_match_extmatch.with(Clone::clone);
 
     if spp.sp_type as c_int == SPTYPE_START && !spp.sp_flags.has(SynFlags::ONELINE) {
         // A start-skip-end that may cross lines: work out how much of it
@@ -350,7 +350,8 @@ pub(crate) fn update_si_end(mut sip: Item, startcol: c_int, force: bool) {
         lnum: current_lnum.get(),
         col: startcol as ColNr,
     };
-    let end = unsafe { find_endpos(sip.si_idx, startpos, sip.si_extmatch) };
+    let start_ext = sip.si_extmatch.clone();
+    let end = find_endpos(sip.si_idx, startpos, start_ext.as_deref());
     if let Some(flags) = end.flags {
         sip.si_flags = flags;
     }
@@ -398,15 +399,9 @@ pub(crate) fn push_current_state(idx: c_int) {
 
 /// Pop the innermost item off the state stack.
 pub(crate) fn pop_current_state() {
-    if state_len() > 0 {
-        // SAFETY: the stack is not empty, so `state_top` is one of its items.
-        unsafe { unref_extmatch(state_top().si_extmatch) };
-        current_state.with_mut(|stack| {
-            if let Some(items) = stack {
-                items.pop();
-            }
-        });
-    }
+    // The popped item drops after the borrow: nothing runs inside it.
+    let popped = current_state.with_mut(|stack| stack.as_mut().and_then(Vec::pop));
+    drop(popped);
     // After the end of a pattern, try matching a keyword or pattern again.
     next_match_idx.set(-1);
     // If the first "keepend" item was the one popped, there is no keepend

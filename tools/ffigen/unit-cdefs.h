@@ -22,7 +22,6 @@ typedef struct OptSet OptSet;
 typedef struct ParserLine ParserLine;
 typedef struct Partial Partial;
 typedef struct RegEngine RegEngine;
-typedef struct RegExtMatch RegExtMatch;
 typedef struct RegMMatch RegMMatch;
 typedef struct RegMatch RegMatch;
 typedef struct Scrollback Scrollback;
@@ -43,7 +42,6 @@ typedef struct __pthread_rwlock_arch_t __pthread_rwlock_arch_t;
 typedef struct termios termios;
 typedef struct winsize winsize;
 typedef struct AdditionalData AdditionalData;
-typedef struct BufState BufState;
 typedef struct Callback Callback;
 typedef struct InternalState InternalState;
 typedef struct uv__queue uv__queue;
@@ -214,7 +212,6 @@ typedef struct sockaddr sockaddr;
 typedef struct socket_watcher_uv_pipe socket_watcher_uv_pipe;
 typedef struct socket_watcher_uv_tcp socket_watcher_uv_tcp;
 typedef union socket_watcher_uv socket_watcher_uv;
-typedef union syn_state_sst_union syn_state_sst_union;
 typedef struct uv__work uv__work;
 typedef union uv_async_s_u uv_async_s_u;
 typedef struct uv_async_s uv_async_s;
@@ -400,7 +397,6 @@ typedef unsigned int StlClickDefinition_type_0;
 typedef uint8_t StlOpt;
 typedef int StlSyntax;
 typedef struct stream Stream;
-typedef int SynFlags;
 typedef Handle TabpageHandle;
 typedef unsigned int TermKeyEvent;
 typedef unsigned int TermKeyFormat;
@@ -549,13 +545,6 @@ struct AdditionalData {
   uint32_t nitems;
   uint32_t nbytes;
   char data[0];
-};
-struct BufState {
-  int bs_idx;
-  SynFlags bs_flags;
-  int bs_seqnr;
-  int bs_cchar;
-  RegExtMatch *bs_extmatch;
 };
 struct Callback {
   unsigned int tag;
@@ -1540,10 +1529,6 @@ struct socket_watcher_uv_tcp {
 union socket_watcher_uv {
   socket_watcher_uv_tcp tcp;
   socket_watcher_uv_pipe pipe;
-};
-union syn_state_sst_union {
-  BufState sst_stack[7];
-  BufState *sst_heap;
 };
 struct uv__work {
   void (*work)(uv__work *);
@@ -3717,7 +3702,6 @@ static const int SP_START = 16;
 static const int SP_SUBPAT = 32;
 static const int SP_TRUNCERROR = -1;
 static const int SST_DIST = 16;
-static const int SST_FIX_STATES = 7;
 static const int SST_MAX_ENTRIES = 1000;
 static const int SST_MIN_ENTRIES = 150;
 static const int STACK_INCR = 5;

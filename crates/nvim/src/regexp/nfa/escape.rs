@@ -14,7 +14,7 @@ use super::parse::nfa_reg;
 use super::{Parsed, Rejected};
 use crate::ascii::ascii_isdigit;
 use crate::plines::getvvcol;
-use crate::regexp::state::{rc_did_emsg, reg_do_extmatch};
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, getchr, getdecchrs, gethexchrs,
     getoctchrs, magic_prefix, pat_byte, peekchr, re_mult_next, unmagic,
@@ -47,7 +47,7 @@ pub(crate) fn z_atom(rc: &mut RegCompiler) -> Parsed {
         Ok(b'1'..=b'9') => {
             // A `\z1` back-reference only means something while a syntax
             // item's contained pattern is being matched.
-            if reg_do_extmatch.get() & REX_USE == 0 {
+            if rc.extmatch & REX_USE == 0 {
                 semsg!("E67: \\z1 - \\z9 not allowed here");
                 rc_did_emsg.set(true);
                 return Err(Rejected);
@@ -57,7 +57,7 @@ pub(crate) fn z_atom(rc: &mut RegCompiler) -> Parsed {
         }
         Ok(b'(') => {
             // And `\z(` only in the item that defines them.
-            if reg_do_extmatch.get() != REX_SET {
+            if rc.extmatch != REX_SET {
                 semsg!("E66: \\z( not allowed here");
                 rc_did_emsg.set(true);
                 return Err(Rejected);

@@ -31,11 +31,7 @@ use crate::winlayer::graph::{switch_buffer, switch_window};
 ///
 /// `last_valid` is the last cached state before `start_lnum` that is still
 /// trustworthy; running into it during the backward scan ends the search.
-///
-/// # Safety
-///
-/// `last_valid` must point at a live syntax state, unaliased for the call.
-pub(crate) unsafe fn syn_sync(window: Win, start_lnum: LineNr, last_valid: *mut SynState) {
+pub(crate) fn syn_sync(window: Win, start_lnum: LineNr, last_valid: Option<EntryId>) {
     // Clear any current state that might be hanging around.
     invalidate_current_state();
 
@@ -46,7 +42,7 @@ pub(crate) unsafe fn syn_sync(window: Win, start_lnum: LineNr, last_valid: *mut 
     if flags & SF_CCOMMENT != 0 {
         sync_by_ccomment(window, start_lnum);
     } else if flags & SF_MATCH != 0 {
-        unsafe { sync_by_match(start_lnum, last_valid) };
+        sync_by_match(start_lnum, last_valid);
     }
     validate_current_state();
 }
@@ -144,11 +140,7 @@ struct SyncPoint {
 }
 
 /// Search backwards, one line at a time, for a `:syntax sync match`.
-///
-/// # Safety
-///
-/// `last_valid` must point at a live syntax state, unaliased for the call.
-unsafe fn sync_by_match(start_lnum: LineNr, last_valid: *mut SynState) {
+fn sync_by_match(start_lnum: LineNr, last_valid: Option<EntryId>) {
     let maxlines = syn_block().b_syn_sync_maxlines;
     let break_lnum = if maxlines != 0 && start_lnum > maxlines {
         start_lnum - maxlines
@@ -172,8 +164,10 @@ unsafe fn sync_by_match(start_lnum: LineNr, last_valid: *mut SynState) {
             break;
         }
         // Have we run into a saved state stack that is still valid?
-        if !last_valid.is_null() && lnum == unsafe { (*last_valid).sst_lnum } {
-            unsafe { load_current_state(last_valid) };
+        if let Some(id) = last_valid
+            && lnum == syn_block().b_sst.entry(id).lnum
+        {
+            load_current_state(id);
             break;
         }
         // Does the previous line have the line-continuation pattern?
@@ -345,7 +339,12 @@ pub(crate) fn syn_match_linecont(lnum: LineNr) -> bool {
     };
     let time = syn_field!(syn_block(), b_syn_linecont_time);
     // SAFETY: the parsed block's own `b_syn_linecont_time`.
-    let r = unsafe { syn_regexec(&raw mut regmatch, lnum, 0, time) };
+    let mut no_captures = None;
+    let io = ExtMatchIo {
+        input: None,
+        output: &mut no_captures,
+    };
+    let r = unsafe { syn_regexec(&raw mut regmatch, lnum, 0, time, io) };
     syn_block().b_syn_linecont_prog = regmatch.regprog;
 
     buf.restore_chartab(&buf_chartab);

@@ -19,7 +19,6 @@ use crate::mbyte::{
 };
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
-use crate::regexp::state::re_extmatch_in;
 use crate::regexp::{
     ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, cleanup_subexpr, cleanup_zsubexpr,
     cstrchr, cstrncmp, kMarkBufLocal, match_with_backref, reg_getline, reg_getline_len,
@@ -456,19 +455,17 @@ fn back_reference(rex: Rex, no: c_int) -> c_int {
 /// captures match the empty string rather than failing.
 fn external_reference(rex: Rex, no: c_int) -> c_int {
     cleanup_zsubexpr(rex);
-    let captures = re_extmatch_in.get();
-    if captures.is_null() {
-        return RA_CONT;
-    }
-    // SAFETY: `re_extmatch_in`'s entries are NUL-terminated copies.
-    let text = unsafe { (*captures).matches[no as usize] };
-    if text.is_null() {
-        return RA_CONT;
-    }
-    let mut len = unsafe { cstr::bytes_at(text.cast()) }.len() as c_int;
-    if unsafe { cstrncmp(rex, text.cast(), rex.input().cast(), &mut len) } != 0 {
-        return RA_NOMATCH;
-    }
-    rex.advance(len);
-    RA_CONT
+    rex.with_ext_capture(no as usize, |text| {
+        let Some(text) = text else {
+            return RA_CONT;
+        };
+        let mut len = text.count_bytes() as c_int;
+        // SAFETY: the capture is NUL-terminated, and the input is the line
+        // being matched.
+        if unsafe { cstrncmp(rex, text.as_ptr().cast_mut(), rex.input_str(), &mut len) } != 0 {
+            return RA_NOMATCH;
+        }
+        rex.advance(len);
+        RA_CONT
+    })
 }

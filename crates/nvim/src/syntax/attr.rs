@@ -50,7 +50,7 @@ pub(crate) unsafe fn get_syntax_attr(
     if !can_spell.is_null() {
         unsafe { *can_spell = default_can_spell() };
     }
-    if syn_block().b_sst_array.is_null() {
+    if !syn_block().b_sst.is_allocated() {
         return 0; // out of memory
     }
 
@@ -150,7 +150,7 @@ pub(crate) unsafe fn syn_current_attr(
     let mut buf_chartab = [0u64; 4];
     buffer.install_syntax_chartab(&mut buf_chartab);
 
-    let mut cur_extmatch: *mut RegExtMatch = ::core::ptr::null_mut();
+    let mut cur_extmatch: Option<ExtMatchRef> = None;
     let mut zero_width_next_list = false;
     let mut cur_si: Option<Item>;
 
@@ -285,9 +285,7 @@ pub(crate) unsafe fn syn_current_attr(
     }
 
     // No longer need the external matches -- but keep next_match_extmatch.
-    unsafe { unref_extmatch(re_extmatch_out.get()) };
-    re_extmatch_out.set(::core::ptr::null_mut());
-    unsafe { unref_extmatch(cur_extmatch) };
+    drop(cur_extmatch);
 
     current_attr.get()
 }
@@ -364,14 +362,14 @@ fn try_keyword(buffer: Buf, cur_si: Option<Item>) -> Option<Item> {
 ///
 /// `cur_si`, when it is `Some`, must still be live: nothing may have pushed
 /// to, popped from or cleared the syntax state stack since it was taken.
-/// `cur_extmatch` is a slot the scan writes a new match into and needs
-/// nothing.
+/// `cur_extmatch` is a slot the scan keeps the latest start match's `\z(`
+/// captures in, until a match is chosen and takes them.
 unsafe fn scan_patterns(
     syncing: bool,
     displaying: bool,
     cur_si: Option<Item>,
     zero_width: &[c_int],
-    cur_extmatch: &mut *mut RegExtMatch,
+    cur_extmatch: &mut Option<ExtMatchRef>,
     try_next_column: &GlobalCell<bool>,
 ) {
     next_match_idx.set(0); // no match in this line yet
@@ -396,7 +394,7 @@ unsafe fn scan_patterns(
 
         let lc_col = (current_col.get() - scan.offsets.offsets[SPO_LC_OFF as usize]).max(0);
         let lnum = current_lnum.get();
-        let (matched, regmatch) = run_pattern(idx, lnum, lc_col);
+        let (matched, regmatch, captures) = run_pattern(idx, lnum, lc_col, None);
         if !matched {
             // No match in this line; try another pattern.
             syn_block().pattern_mut(idx).sp_startcol = MAXCOL as c_int;
@@ -430,11 +428,8 @@ unsafe fn scan_patterns(
         // The region start defaults to the end of the start match.
         let eos_pos = syn_add_end_off(scan.offsets, &regmatch, SPO_RS_OFF, 0);
 
-        // Grab the external submatches before they get overwritten. The
-        // reference count does not change.
-        unsafe { unref_extmatch(*cur_extmatch) };
-        *cur_extmatch = re_extmatch_out.get();
-        re_extmatch_out.set(::core::ptr::null_mut());
+        // Grab the external submatches before they get overwritten.
+        *cur_extmatch = captures;
 
         let mut flags = SynFlags::NONE;
         let mut eoe_pos = LPos { lnum: 0, col: 0 };
@@ -444,7 +439,7 @@ unsafe fn scan_patterns(
         if scan.ty == SPTYPE_START && scan.flags.has(SynFlags::ONELINE) {
             // A "oneline" must end in this line too. Look for the end after
             // the start match, and set every resulting position at once.
-            let end = unsafe { find_endpos(idx, endpos, *cur_extmatch) };
+            let end = find_endpos(idx, endpos, cur_extmatch.as_deref());
             if end.m_endpos.lnum == 0 {
                 continue; // not found
             }
@@ -485,9 +480,7 @@ unsafe fn scan_patterns(
         next_match_eos_pos.set(eos_pos);
         next_match_eoe_pos.set(eoe_pos);
         next_match_end_idx.set(end_idx);
-        unsafe { unref_extmatch(next_match_extmatch.get()) };
-        next_match_extmatch.set(*cur_extmatch);
-        *cur_extmatch = ::core::ptr::null_mut();
+        next_match_extmatch.set(cur_extmatch.take());
     }
 }
 

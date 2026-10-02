@@ -141,7 +141,7 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     let name = split_group_name(&line);
     let mut end = name.as_ref().and_then(|name| {
         let at = read_item_options(&line, name.rest, &mut opt, &mut conceal_char, args.skip)?;
-        let at = read_pattern(&line, at, &mut item)?;
+        let at = read_pattern(&line, at, &mut item, 0)?;
         if vim_regcomp_had_eol(item.sp_prog) && !opt.flags.has(SynFlags::EXCLUDENL) {
             opt.flags |= SynFlags::HAS_EOL;
         }
@@ -302,10 +302,9 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
 
         // Enable the appropriate `\z` specials: a start pattern defines the
         // external matches, skip and end patterns use them.
-        reg_do_extmatch.set(if item == ITEM_START { REX_SET } else { REX_USE });
+        let extmatch = if item == ITEM_START { REX_SET } else { REX_USE };
         let mut pat = EMPTY_SYNPAT;
-        cursor = read_pattern(line, at, &mut pat);
-        reg_do_extmatch.set(0);
+        cursor = read_pattern(line, at, &mut pat, extmatch);
         if item == ITEM_END
             && vim_regcomp_had_eol(pat.sp_prog)
             && !out.opt.flags.has(SynFlags::EXCLUDENL)
@@ -423,9 +422,15 @@ fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
 }
 
 /// Read the delimited pattern at `line[at..]`, plus its offsets, into `ci`.
+/// `extmatch` is which `\z` specials it may use ([`vim_regcomp_ext`]).
 ///
 /// Answers the offset of what follows it, or `None` after reporting an error.
-pub(crate) fn read_pattern(line: &[u8], at: usize, ci: &mut SynPat) -> Option<usize> {
+pub(crate) fn read_pattern(
+    line: &[u8],
+    at: usize,
+    ci: &mut SynPat,
+    extmatch: c_int,
+) -> Option<usize> {
     // Need at least three characters: two delimiters and something between.
     let body = line.get(at..)?;
     if body.len() < 3 {
@@ -456,7 +461,11 @@ pub(crate) fn read_pattern(line: &[u8], at: usize, ci: &mut SynPat) -> Option<us
     let pattern = cstr::owned(&tail[1..end]);
     let _cpo = SavedCpo::empty();
     // SAFETY: an owned NUL-terminated copy of the pattern text.
-    ci.sp_prog = vim_regcomp(unsafe { cstr::at(pattern.as_ptr().cast_mut()) }, RE_MAGIC);
+    ci.sp_prog = vim_regcomp_ext(
+        unsafe { cstr::at(pattern.as_ptr().cast_mut()) },
+        RE_MAGIC,
+        extmatch,
+    );
     ci.sp_pattern = Some(pattern);
     if ci.sp_prog.is_null() {
         return None;

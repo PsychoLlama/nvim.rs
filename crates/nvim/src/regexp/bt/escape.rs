@@ -16,7 +16,7 @@ use super::op::BtOp;
 use super::piece::reg;
 use crate::ascii::ascii_isdigit;
 use crate::plines::getvvcol;
-use crate::regexp::state::{rc_did_emsg, reg_do_extmatch};
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     HASLOOKBH, HASNL, HASWIDTH, INT_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, SIMPLE, SPSTART,
     getchr, getdecchrs, gethexchrs, getoctchrs, magic_prefix, pat_byte, re_mult_next, ungetchr,
@@ -31,7 +31,7 @@ pub(crate) fn z_atom(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
     match unmagic(getchr(rc)) as u8 {
         b'(' => {
             // Only a syntax pattern may *define* an external submatch.
-            if reg_do_extmatch.get() & REX_SET == 0 {
+            if rc.extmatch & REX_SET == 0 {
                 semsg!("E66: \\z( not allowed here");
                 rc_did_emsg.set(true);
                 return None;
@@ -50,7 +50,7 @@ pub(crate) fn z_atom(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
         }
         c @ b'1'..=b'9' => {
             // ...and only a pattern run inside such a region may use one.
-            if reg_do_extmatch.get() & REX_USE == 0 {
+            if rc.extmatch & REX_USE == 0 {
                 semsg!("E67: \\z1 - \\z9 not allowed here");
                 rc_did_emsg.set(true);
                 return None;

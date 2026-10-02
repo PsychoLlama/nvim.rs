@@ -49,10 +49,6 @@ pub struct RegEngine {
 
 pub type Magic = ::core::ffi::c_uint;
 pub type OptMagic = ::core::ffi::c_uint;
-pub struct RegExtMatch {
-    pub refcnt: int16_t,
-    pub matches: [*mut uint8_t; 10],
-}
 /// A pattern and where its groups landed in the string it last ran over.
 ///
 /// Upstream's `startp`/`endp` are `char *` into the matched text, which

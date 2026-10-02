@@ -52,25 +52,38 @@ impl RegionEnd {
     }
 }
 
-/// The `SynPat` at `idx` in the current syntax block's pattern array.
-///
 /// Run pattern `idx`'s program over `lnum` from `col`, into a fresh match.
+///
+/// `ext` is what the pattern's `\z1`..`\z9` match: the captures of the
+/// region's start pattern, when this is one of its skip or end patterns.
+/// Answers whether it matched, the match, and the pattern's own `\z(`
+/// captures when it is a start pattern that has some.
 ///
 /// The engine may hand back a *different* program (`vim_regexec_multi` can
 /// recompile), so the answer is written back into the pattern, and each
 /// pattern is timed into its own `sp_time`.
-pub(crate) fn run_pattern(idx: c_int, lnum: LineNr, col: ColNr) -> (bool, RegMMatch) {
+pub(crate) fn run_pattern(
+    idx: c_int,
+    lnum: LineNr,
+    col: ColNr,
+    ext: Option<&ExtMatch>,
+) -> (bool, RegMMatch, Option<ExtMatchRef>) {
     let mut regmatch = empty_regmmatch();
     let mut block = syn_block();
     let spp = block.pattern_mut(idx);
     regmatch.rmm_ic = spp.sp_ic;
     regmatch.regprog = spp.sp_prog;
     let time: *mut SynTime = &raw mut spp.sp_time;
+    let mut captures = None;
+    let io = ExtMatchIo {
+        input: ext,
+        output: &mut captures,
+    };
     // SAFETY: `time` is this pattern's own timer, live across the call, and
     // `regmatch` is the local just built.
-    let matched = unsafe { syn_regexec(&raw mut regmatch, lnum, col, time) };
+    let matched = unsafe { syn_regexec(&raw mut regmatch, lnum, col, time, io) };
     block.pattern_mut(idx).sp_prog = regmatch.regprog;
-    (matched, regmatch)
+    (matched, regmatch, captures)
 }
 
 /// Number of patterns in the current syntax block.
@@ -85,16 +98,12 @@ pub(crate) fn syn_pattern_count() -> c_int {
 /// continues into the next line and the answer is [`RegionEnd::none`]. Also
 /// handles a match item that continued from a previous line.
 ///
-/// `start_ext` are the submatches of the START pattern, which the END and SKIP
-/// patterns may refer to with `\1`..`\9`.
-///
-/// # Safety
-///
-/// `start_ext` must point at a live `RegExtMatch`, unaliased for the call.
-pub(crate) unsafe fn find_endpos(
+/// `start_ext` are the `\z(` submatches of the START pattern, which the END
+/// and SKIP patterns may refer to with `\z1`..`\z9`.
+pub(crate) fn find_endpos(
     mut idx: c_int,
     startpos: LPos,
-    start_ext: *mut RegExtMatch,
+    start_ext: Option<&ExtMatch>,
 ) -> RegionEnd {
     // Just in case we are invoked for a keyword.
     if idx < 0 {
@@ -124,21 +133,15 @@ pub(crate) unsafe fn find_endpos(
         None
     };
 
-    // Set up the external matches for syn_regexec().
-    unsafe { unref_extmatch(re_extmatch_in.get()) };
-    re_extmatch_in.set(unsafe { ref_extmatch(start_ext) });
-
     let buf = syn_buffer();
     let mut buf_chartab = [0u64; 4];
     buf.install_syntax_chartab(&mut buf_chartab);
 
     let start_idx = idx;
     let mut matchcol = startpos.col;
-    let answer = find_endpos_scan(start_idx, skip_idx, startpos, &mut matchcol);
+    let answer = find_endpos_scan(start_idx, skip_idx, startpos, &mut matchcol, start_ext);
 
     buf.restore_chartab(&buf_chartab);
-    unsafe { unref_extmatch(re_extmatch_in.get()) };
-    re_extmatch_in.set(::core::ptr::null_mut());
     answer
 }
 
@@ -149,15 +152,16 @@ fn find_endpos_scan(
     skip_idx: Option<c_int>,
     startpos: LPos,
     matchcol: &mut ColNr,
+    ext: Option<&ExtMatch>,
 ) -> RegionEnd {
     loop {
-        let Some((best_idx, best)) = best_end_match(start_idx, startpos, *matchcol) else {
+        let Some((best_idx, best)) = best_end_match(start_idx, startpos, *matchcol, ext) else {
             // All end patterns tried with no match: the item continues
             // until end-of-line.
             return RegionEnd::none();
         };
         if let Some(skip_idx) = skip_idx {
-            match skip_past(skip_idx, startpos, best.startpos[0], *matchcol) {
+            match skip_past(skip_idx, startpos, best.startpos[0], *matchcol, ext) {
                 Skipped::No => {}
                 // The skip match reaches the end of the line (or the next
                 // one): no end pattern can match in this line after all.
@@ -173,7 +177,12 @@ fn find_endpos_scan(
 }
 
 /// The END pattern that matches first at or after `matchcol`, with its match.
-fn best_end_match(start_idx: c_int, startpos: LPos, matchcol: ColNr) -> Option<(c_int, RegMMatch)> {
+fn best_end_match(
+    start_idx: c_int,
+    startpos: LPos,
+    matchcol: ColNr,
+    ext: Option<&ExtMatch>,
+) -> Option<(c_int, RegMMatch)> {
     let mut best: Option<(c_int, RegMMatch)> = None;
     let mut idx = start_idx;
     while idx < syn_pattern_count() {
@@ -184,7 +193,7 @@ fn best_end_match(start_idx: c_int, startpos: LPos, matchcol: ColNr) -> Option<(
         }
         let lc_col = (matchcol as c_int - spp.sp_offsets[SPO_LC_OFF as usize]).max(0);
 
-        let (matched, regmatch) = run_pattern(idx, startpos.lnum, lc_col as ColNr);
+        let (matched, regmatch, _) = run_pattern(idx, startpos.lnum, lc_col as ColNr, ext);
         let col = regmatch.startpos[0].col;
         if matched && best.as_ref().is_none_or(|(_, b)| col < b.startpos[0].col) {
             best = Some((idx, regmatch));
@@ -205,10 +214,16 @@ enum Skipped {
 }
 
 /// Does the SKIP pattern match before the best END pattern's match?
-fn skip_past(skip_idx: c_int, startpos: LPos, best_start: LPos, matchcol: ColNr) -> Skipped {
+fn skip_past(
+    skip_idx: c_int,
+    startpos: LPos,
+    best_start: LPos,
+    matchcol: ColNr,
+    ext: Option<&ExtMatch>,
+) -> Skipped {
     let offsets = syn_block().pattern(skip_idx).offsets();
     let lc_col = (matchcol as c_int - offsets.offsets[SPO_LC_OFF as usize]).max(0);
-    let (matched, regmatch) = run_pattern(skip_idx, startpos.lnum, lc_col as ColNr);
+    let (matched, regmatch, _) = run_pattern(skip_idx, startpos.lnum, lc_col as ColNr, ext);
     if !matched || regmatch.startpos[0].col > best_start.col {
         return Skipped::No;
     }
@@ -463,6 +478,7 @@ pub(crate) unsafe fn syn_regexec(
     lnum: LineNr,
     col: ColNr,
     st: *mut SynTime,
+    io: ExtMatchIo<'_>,
 ) -> bool {
     let timing = syn_time_on.get();
     let start = if timing { profile_start() } else { 0 };
@@ -478,7 +494,7 @@ pub(crate) unsafe fn syn_regexec(
     unsafe { (*rmp).rmm_maxcol = buf.b_p_smc as ColNr };
     let mut timed_out: c_int = 0;
     let tm = syn_tm.get();
-    let r = unsafe { vim_regexec_multi(rmp, win, buf, lnum, col, tm, &raw mut timed_out) };
+    let r = unsafe { vim_regexec_syntax(rmp, win, buf, lnum, col, tm, &raw mut timed_out, io) };
 
     if timing {
         let took = profile_end(start);

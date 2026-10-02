@@ -10,11 +10,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::regexp::ExtMatch;
+use crate::regexp::ExtMatchRef;
 use crate::regexp::RF_HAD_EOL;
 use crate::regexp::RegCompiler;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::build::{Pass, nfa_postprocess, post2nfa};
 use super::compile::{nfa_get_match_text, nfa_get_reganch, nfa_get_regstart};
@@ -26,16 +28,12 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
-use crate::regexp::state::re_extmatch_out;
 use crate::regexp::{
     NFA_TOO_EXPENSIVE, NSUBEXP, NfaRegProg, NfaState, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
     RegSubs, Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi,
-    make_extmatch, nfa_regengine, reg_getline, unref_extmatch,
+    nfa_regengine, reg_getline,
 };
-use crate::strings::xstrnsave;
-use crate::types::{
-    ColNr, LPos, LineNr, NUL, ProfTime, RegExtMatch, RegMMatch, RegMatch, RegProg, uint8_t,
-};
+use crate::types::{ColNr, LPos, LineNr, NUL, ProfTime, RegMMatch, RegMatch, RegProg, uint8_t};
 
 /// Try to match at column `col` of the current line.
 ///
@@ -81,13 +79,11 @@ fn nfa_regtry(
 
     // The `\z(` captures go to the syntax highlighter as fresh copies,
     // because it keeps them past the end of this match.
-    unsafe { unref_extmatch(re_extmatch_out.get()) };
-    re_extmatch_out.set(core::ptr::null_mut::<RegExtMatch>());
-    if unsafe { (*prog).reghasz } == REX_SET {
+    let captures = (unsafe { (*prog).reghasz } == REX_SET).then(|| {
         cleanup_zsubexpr(rex);
-        re_extmatch_out.set(make_extmatch());
-        save_z_captures(rex, &subs);
-    }
+        ExtMatchRef::new(z_captures(rex, &subs))
+    });
+    rex.put_ext_out(captures);
     1 + rex.lnum() as c_int
 }
 
@@ -147,9 +143,8 @@ fn report_string_match(rex: Rex, subs: &RegSubs, col: ColNr) {
 }
 
 /// Copy what the `\z(` groups matched into the set the highlighter reads.
-///
-/// SAFETY: `re_extmatch_out` holds a fresh capture set.
-fn save_z_captures(rex: Rex, subs: &RegSubs) {
+fn z_captures(rex: Rex, subs: &RegSubs) -> ExtMatch {
+    let mut captures = ExtMatch::default();
     // Group 0 is the whole match, which the highlighter does not want.
     for i in 1..slots(subs.synt.in_use) {
         let capture = subs.synt.list[i];
@@ -160,9 +155,12 @@ fn save_z_captures(rex: Rex, subs: &RegSubs) {
             if start.lnum < 0 || start.lnum != end.lnum || end.col < start.col {
                 continue;
             }
+            // SAFETY: the capture lies inside the line it was taken from.
             unsafe {
-                xstrnsave(
-                    reg_getline(rex, start.lnum).offset(start.col as isize),
+                core::slice::from_raw_parts(
+                    reg_getline(rex, start.lnum)
+                        .offset(start.col as isize)
+                        .cast::<u8>(),
                     (end.col - start.col) as usize,
                 )
             }
@@ -171,10 +169,12 @@ fn save_z_captures(rex: Rex, subs: &RegSubs) {
             if start.is_null() || end.is_null() {
                 continue;
             }
-            unsafe { xstrnsave(start as *mut c_char, end.offset_from(start) as usize) }
+            // SAFETY: both ends point into the string being matched.
+            unsafe { core::slice::from_raw_parts(start, end.offset_from(start) as usize) }
         };
-        unsafe { (*re_extmatch_out.get()).matches[i] = text as *mut uint8_t };
+        captures.set(i, text);
     }
+    captures
 }
 
 /// Match `prog` against a line, from `startcol`.
