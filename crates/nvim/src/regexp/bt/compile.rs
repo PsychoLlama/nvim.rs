@@ -7,11 +7,13 @@
 //! [`BtEmitter::insert`] can slide the tail of the program along to open a
 //! gap in front of one.
 //!
-//! The parser runs twice. The first pass only measures: the emitter holds
-//! no text, every write only adds to its size, and every patch is a no-op.
-//! The second pass writes the program into a `Vec` sized by the first, and
-//! [`super::piece::bt_regcomp`] copies it into the program block. A node
-//! handle is a [`Node`], the node's offset into the text.
+//! Upstream parsed every pattern twice: once only to measure, with the
+//! output cursor holding a `-1` sentinel and every patch a no-op, so that
+//! it could allocate the program, and once to write into that allocation.
+//! The writer here appends to a `Vec`, which needs no measuring, so the
+//! parser runs once and [`super::piece::bt_regcomp`] copies the text into
+//! the program block. The bytes are the writing pass's. A node handle is a
+//! [`Node`], the node's offset into the text.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -215,13 +217,10 @@ impl Node {
     }
 }
 
-/// The backtracker's program writer: see the module docs for the two
-/// passes.
+/// The backtracker's program writer.
 pub(crate) struct BtEmitter {
-    /// The program text, or `None` while the first pass only measures.
-    text: Option<Vec<u8>>,
-    /// How long the program is so far, on either pass.
-    size: usize,
+    /// The program text so far, `REGMAGIC` stamp first.
+    text: Vec<u8>,
     /// A node offset did not fit in 16 bits: the pattern is too long.
     pub(crate) too_long: bool,
 }
@@ -229,89 +228,81 @@ pub(crate) struct BtEmitter {
 impl BtEmitter {
     pub(crate) const fn new() -> BtEmitter {
         BtEmitter {
-            text: None,
-            size: 0,
+            text: Vec::new(),
             too_long: false,
         }
     }
 
-    /// Start a pass: the measuring one, or with `room` the writing one.
-    pub(crate) fn start(&mut self, room: Option<usize>) {
-        self.text = room.map(Vec::with_capacity);
-        self.size = 0;
-        self.too_long = false;
+    /// Make room for `bytes` of program up front, so that the writes do not
+    /// reallocate as the text grows.
+    pub(crate) fn reserve(&mut self, bytes: usize) {
+        self.text.reserve(bytes);
     }
 
-    /// Is this the sizing pass rather than the writing one?
-    pub(crate) fn sizing(&self) -> bool {
-        self.text.is_none()
-    }
-
-    /// How long the program is so far.
-    pub(crate) fn size(&self) -> usize {
-        self.size
-    }
-
-    /// The program the writing pass wrote.
+    /// The program written so far, leaving the emitter empty.
     pub(crate) fn take_text(&mut self) -> Vec<u8> {
-        self.text.take().unwrap_or_default()
-    }
-
-    fn push(&mut self, bytes: &[u8]) {
-        self.size += bytes.len();
-        if let Some(text) = &mut self.text {
-            text.extend_from_slice(bytes);
-        }
+        core::mem::take(&mut self.text)
     }
 
     /// Emit one byte of program. `b` is a byte, or a character below 256.
+    #[inline]
     pub(crate) fn byte(&mut self, b: c_int) {
-        self.push(&[b as uint8_t]);
+        self.text.push(b as uint8_t);
     }
 
     /// Emit one character of program, as its UTF-8 bytes.
+    #[inline]
     pub(crate) fn char(&mut self, c: c_int) {
+        if (0..0x80).contains(&c) {
+            return self.byte(c);
+        }
         let mut bytes = [0; 6];
         let len = encode_char(c, &mut bytes);
-        self.push(&bytes[..len]);
+        self.text.extend_from_slice(&bytes[..len]);
     }
 
     /// Emit a node with opcode `op` and an unset next-offset.
+    #[inline]
     pub(crate) fn node(&mut self, op: BtOp) -> Node {
         self.node_nl(op, false)
     }
 
     /// [`BtEmitter::node`], for the class opcodes that have a `\_x` form:
     /// with `crosses_lines` the node also matches a line break.
+    #[inline]
     pub(crate) fn node_nl(&mut self, op: BtOp, crosses_lines: bool) -> Node {
-        let node = Node(self.size);
-        self.push(&[op.encode(crosses_lines), NUL as uint8_t, NUL as uint8_t]);
+        let node = Node(self.text.len());
+        self.text
+            .extend_from_slice(&[op.encode(crosses_lines), NUL as uint8_t, NUL as uint8_t]);
         node
     }
 
     /// Emit a node's 32-bit operand, big-endian.
+    #[inline]
     pub(crate) fn number(&mut self, val: uint32_t) {
-        self.push(&val.to_be_bytes());
+        self.text.extend_from_slice(&val.to_be_bytes());
     }
 
     /// Change an already-emitted node's opcode. `[]` uses this to widen an
     /// `ANYOF` into its newline-accepting form once it sees a `\n` inside.
     pub(crate) fn set_opcode(&mut self, node: Node, op: BtOp, crosses_lines: bool) {
-        if let Some(text) = &mut self.text {
-            text[node.0] = op.encode(crosses_lines);
-        }
+        self.text[node.0] = op.encode(crosses_lines);
     }
 
-    /// The opcode byte of `node`; `None` on the sizing pass.
-    pub(crate) fn opcode_at(&self, node: Node) -> Option<uint8_t> {
-        self.text.as_ref().map(|text| text[node.0])
+    /// The opcode byte of `node`.
+    pub(crate) fn opcode_at(&self, node: Node) -> uint8_t {
+        self.text[node.0]
     }
 
-    /// The node after `p` in its chain. `None` at the end of the chain, on
-    /// the sizing pass, and once an offset has overflowed, since the chain
-    /// can no longer be trusted.
+    /// The node after `p` in its chain. `None` at the end of the chain, and
+    /// once an offset has overflowed, since the chain can no longer be
+    /// trusted.
+    #[inline]
     pub(crate) fn next(&self, p: Node) -> Option<Node> {
-        let text = self.text.as_ref().filter(|_| !self.too_long)?;
+        if self.too_long {
+            return None;
+        }
+        let text = &self.text;
         let offset = usize::from(u16::from_be_bytes([text[p.0 + 1], text[p.0 + 2]]));
         if offset == 0 {
             None
@@ -326,22 +317,32 @@ impl BtEmitter {
     ///
     /// A `BACK` node's offset counts backwards, which is how the compiler
     /// builds the loop in a non-simple `*`.
+    #[inline]
     pub(crate) fn tail(&mut self, p: Node, val: Node) {
-        if self.sizing() {
-            return;
+        let too_long = self.too_long;
+        let text = &mut self.text;
+        let back = BtOp::Back.code() as uint8_t;
+        // Walk to the end of the chain, as `next` does; an overflowed chain
+        // is not walked, and the patch lands on `p` itself.
+        let mut scan = p.0;
+        if !too_long {
+            loop {
+                let step = usize::from(u16::from_be_bytes([text[scan + 1], text[scan + 2]]));
+                if step == 0 {
+                    break;
+                }
+                scan = if text[scan] == back {
+                    scan - step
+                } else {
+                    scan + step
+                };
+            }
         }
-        let mut scan = p;
-        while let Some(next) = self.next(scan) {
-            scan = next;
-        }
-        let Some(text) = &mut self.text else {
-            return;
-        };
-        let (scan, val) = (scan.0 as isize, val.0 as isize);
-        let offset = if text[scan as usize] == BtOp::Back.code() as uint8_t {
-            scan - val
+        let (at, val) = (scan as isize, val.0 as isize);
+        let offset = if text[scan] == back {
+            at - val
         } else {
-            val - scan
+            val - at
         };
         // A 16-bit offset cannot reach: the pattern is too long. The caller
         // notices and gives up on the whole program.
@@ -349,8 +350,8 @@ impl BtEmitter {
             self.too_long = true;
         } else {
             let bytes = (offset as u16).to_be_bytes();
-            text[scan as usize + 1] = bytes[0];
-            text[scan as usize + 2] = bytes[1];
+            text[scan + 1] = bytes[0];
+            text[scan + 2] = bytes[1];
         }
     }
 
@@ -358,7 +359,7 @@ impl BtEmitter {
     /// operand is itself a chain: a `BRANCH` and the ten `BRACE_COMPLEX`
     /// slots.
     pub(crate) fn op_tail(&mut self, p: Node, val: Node) {
-        let Some(Ok((op, _))) = self.opcode_at(p).map(BtOp::decode) else {
+        let Ok((op, _)) = BtOp::decode(self.opcode_at(p)) else {
             return;
         };
         if op == BtOp::Branch || op.is_complex_brace() {
@@ -368,15 +369,17 @@ impl BtEmitter {
 
     /// Open a node for `op` in front of `opnd`, sliding everything written
     /// since along, with `operand` after its header.
+    #[inline]
     fn insert_with(&mut self, op: BtOp, opnd: Node, operand: &[u8]) {
-        self.size += NODE_HDR + operand.len();
-        if let Some(text) = &mut self.text {
-            let header = [op.code() as uint8_t, NUL as uint8_t, NUL as uint8_t];
-            text.splice(
-                opnd.0..opnd.0,
-                header.into_iter().chain(operand.iter().copied()),
-            );
-        }
+        let width = NODE_HDR + operand.len();
+        let text = &mut self.text;
+        let end = text.len();
+        text.resize(end + width, 0);
+        text.copy_within(opnd.0..end, opnd.0 + width);
+        text[opnd.0] = op.code() as uint8_t;
+        text[opnd.0 + 1] = NUL as uint8_t;
+        text[opnd.0 + 2] = NUL as uint8_t;
+        text[opnd.0 + NODE_HDR..opnd.0 + width].copy_from_slice(operand);
     }
 
     /// Insert an operand-less node in front of `opnd`.
@@ -464,41 +467,15 @@ pub(crate) fn seen_endbrace(rc: &RegCompiler, refnum: c_int) -> bool {
 mod tests {
     use super::*;
 
-    /// Run `emit` once measuring and once writing, the way `bt_regcomp`
-    /// does, and answer the text with the size the first pass charged.
-    fn both_passes(emit: impl Fn(&mut BtEmitter)) -> (usize, Vec<u8>) {
+    fn write(emit: impl Fn(&mut BtEmitter)) -> Vec<u8> {
         let mut code = BtEmitter::new();
-        code.start(None);
         emit(&mut code);
-        let measured = code.size();
-        assert!(
-            code.take_text().is_empty(),
-            "the measuring pass writes nothing"
-        );
-        code.start(Some(measured));
-        emit(&mut code);
-        (measured, code.take_text())
-    }
-
-    #[test]
-    fn the_measuring_pass_charges_what_the_writing_pass_writes() {
-        let (measured, text) = both_passes(|code| {
-            code.byte(0o234);
-            let branch = code.node(BtOp::Branch);
-            code.char(0x20ac);
-            code.number(7);
-            code.insert_limits(BtOp::BraceLimits, 1, 3, branch);
-            code.insert_nr(BtOp::Behind, 5, branch);
-            code.insert(BtOp::Star, branch);
-            let end = code.node(BtOp::End);
-            code.tail(branch, end);
-        });
-        assert_eq!(measured, text.len());
+        code.take_text()
     }
 
     #[test]
     fn a_tail_points_the_last_node_of_the_chain_at_its_target() {
-        let (_, text) = both_passes(|code| {
+        let text = write(|code| {
             code.byte(0o234);
             let first = code.node(BtOp::Branch);
             let second = code.node(BtOp::Nothing);
@@ -517,25 +494,18 @@ mod tests {
 
     #[test]
     fn a_back_node_counts_its_offset_backwards() {
-        let (_, text) = both_passes(|code| {
-            code.byte(0o234);
-            let target = code.node(BtOp::Nothing);
-            let back = code.node(BtOp::Back);
-            code.tail(back, target);
-        });
-        assert_eq!(&text[4..], [BtOp::Back.code() as u8, 0, 3]);
         let mut code = BtEmitter::new();
-        code.start(Some(text.len()));
         code.byte(0o234);
         let target = code.node(BtOp::Nothing);
         let back = code.node(BtOp::Back);
         code.tail(back, target);
         assert_eq!(code.next(back), Some(target));
+        assert_eq!(&code.take_text()[4..], [BtOp::Back.code() as u8, 0, 3]);
     }
 
     #[test]
     fn an_insert_slides_the_operand_along_and_heads_it() {
-        let (_, text) = both_passes(|code| {
+        let text = write(|code| {
             code.byte(0o234);
             let atom = code.node(BtOp::Any);
             code.insert_nr(BtOp::Behind, 0x0102_0304, atom);
@@ -546,9 +516,27 @@ mod tests {
     }
 
     #[test]
+    fn limits_point_past_themselves_at_the_braced_atom() {
+        let mut code = BtEmitter::new();
+        code.byte(0o234);
+        let atom = code.node(BtOp::Any);
+        code.insert_limits(BtOp::BraceLimits, 1, 3, atom);
+        // The limits node took the atom's place; the atom is 11 bytes on.
+        assert_eq!(code.next(atom), Some(Node(atom.0 + 11)));
+    }
+
+    #[test]
+    fn a_character_is_written_as_its_utf8_bytes() {
+        let text = write(|code| {
+            code.char(0x61);
+            code.char(0x20ac);
+        });
+        assert_eq!(text, b"a\xe2\x82\xac");
+    }
+
+    #[test]
     fn an_offset_past_sixteen_bits_marks_the_program_too_long() {
         let mut code = BtEmitter::new();
-        code.start(Some(0));
         let first = code.node(BtOp::Branch);
         for _ in 0..0x10000 {
             code.byte(0);

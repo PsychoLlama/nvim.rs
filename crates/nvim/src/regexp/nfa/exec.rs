@@ -10,7 +10,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::regexp::RF_HAD_EOL;
 use crate::regexp::RegCompiler;
 use crate::winlayer::Buf;
@@ -318,8 +317,7 @@ fn try_match(
 pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
     rc.nfa.count = 0;
     rc.nfa.built = 0;
-    // SAFETY: the compiler's pattern is NUL-terminated.
-    rc.post.start(unsafe { cstr::bytes_at(rc.pattern) }.len());
+    rc.post.start(rc.pattern_len);
     rc.wants_nfa = false;
     rc.has_zend = 0;
     rc.has_backref = 0;

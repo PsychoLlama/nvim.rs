@@ -397,22 +397,16 @@ fn had_endbrace_seen(rc: &mut RegCompiler, parno: c_int) {
 /// Compile `rc`'s pattern into a backtracking program, or answer null
 /// having reported why not.
 ///
-/// Twice over: the first `reg` pass only measures the program, the second
-/// writes into the block that size bought. Afterwards the head of the program
+/// One pass of `reg` writes the program (upstream's first, measuring, pass
+/// is not needed: see [`super::compile`]). Afterwards the head of the program
 /// is inspected for a required first character or a required substring, which
 /// [`super::exec`] uses to skip start positions cheaply.
 pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
     let mut flags = 0;
     rc.restart();
-    rc.code.start(None);
-    rc.code.byte(REGMAGIC);
-    if reg(rc, REG_NOPAREN, &mut flags).is_none() {
-        return core::ptr::null_mut();
-    }
-
-    let size = rc.code.size();
-    rc.restart();
-    rc.code.start(Some(size));
+    // Most patterns compile to a few bytes per pattern byte; a `[:class:]`
+    // is the outlier, and a reallocation covers it.
+    rc.code.reserve(4 * rc.pattern_len + 32);
     rc.code.byte(REGMAGIC);
     if reg(rc, REG_NOPAREN, &mut flags).is_none() || rc.code.too_long {
         if rc.code.too_long {
@@ -421,7 +415,8 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
         }
         return core::ptr::null_mut();
     }
-    let prog = BtProg::with_text(&rc.code.take_text());
+    let text = rc.code.take_text();
+    let prog = BtProg::with_text(&text);
 
     prog.set_regstart(NUL);
     prog.set_anchored(false);

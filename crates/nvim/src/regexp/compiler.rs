@@ -38,6 +38,8 @@ pub(crate) struct RegCompiler {
     /// The pattern, NUL-terminated, and the flags the compile was asked for
     /// (`RE_MAGIC`, `RE_STRING`, `RE_STRICT`, `RE_AUTO`). Only ever read.
     pub(crate) pattern: *mut c_char,
+    /// The pattern's length in bytes, terminator excluded.
+    pub(crate) pattern_len: usize,
     pub(crate) re_flags: c_int,
 
     // ---------------------------------------------------- the reader
@@ -118,12 +120,16 @@ pub(crate) struct NfaStates {
 impl RegCompiler {
     /// A compiler over `pattern`, with `\k` reading `buffer`'s 'iskeyword'.
     ///
+    /// Each engine's compiler starts with [`RegCompiler::restart`], which is
+    /// what reads the flags and 'cpoptions'.
+    ///
     /// The compiler keeps a pointer into `pattern` and must not outlive it:
     /// [`super::vim_regcomp`] makes one per engine attempt and drops it
     /// before returning.
     pub(crate) fn new(pattern: &CStr, re_flags: c_int, buffer: Buf) -> RegCompiler {
-        let mut rc = RegCompiler {
+        RegCompiler {
             pattern: pattern.as_ptr().cast_mut(),
+            pattern_len: pattern.count_bytes(),
             re_flags,
             cursor: core::ptr::null_mut(),
             token: -1,
@@ -157,14 +163,11 @@ impl RegCompiler {
                 built: 0,
                 base: core::ptr::null_mut(),
             },
-        };
-        rc.restart();
-        rc
+        }
     }
 
-    /// Put the reader back at the start of the pattern and forget what it
-    /// found: the backtracker parses the pattern twice, once to measure and
-    /// once to write.
+    /// Put the reader at the start of the pattern with nothing found yet,
+    /// the flags and 'cpoptions' read: how each engine's compiler starts.
     pub(crate) fn restart(&mut self) {
         self.cursor = self.pattern;
         self.prev_token_len = 0;

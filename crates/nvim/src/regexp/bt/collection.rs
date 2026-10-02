@@ -209,7 +209,7 @@ fn escaped(
         b'n' => {
             // A line break is not a member of the set but a widening of the
             // node itself.
-            if !rc.code.sizing() && widens_on_nl {
+            if widens_on_nl {
                 rc.code.set_opcode(ret, BtOp::Anyof, true);
                 *flagp |= HASNL;
             }

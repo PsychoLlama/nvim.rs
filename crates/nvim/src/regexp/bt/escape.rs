@@ -181,25 +181,23 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
 
     let lastbranch = rc.code.node(BtOp::Branch);
     let nothing = rc.code.node(BtOp::Nothing);
-    if !rc.code.sizing() {
-        rc.code.tail(lastnode, nothing);
-        rc.code.tail(lastbranch, nothing);
-        // Point every member's branch at the empty alternative that follows
-        // the whole sequence; a branch's operand is the member itself.
-        let mut br = ret;
-        while br != lastnode {
-            if rc.code.opcode_at(br) == Some(BtOp::Branch.code() as uint8_t) {
-                rc.code.tail(br, lastbranch);
-                if rc.code.too_long {
-                    return None;
-                }
-                br = br.operand();
-            } else {
-                let Some(next) = rc.code.next(br) else {
-                    break;
-                };
-                br = next;
+    rc.code.tail(lastnode, nothing);
+    rc.code.tail(lastbranch, nothing);
+    // Point every member's branch at the empty alternative that follows
+    // the whole sequence; a branch's operand is the member itself.
+    let mut br = ret;
+    while br != lastnode {
+        if rc.code.opcode_at(br) == BtOp::Branch.code() as uint8_t {
+            rc.code.tail(br, lastbranch);
+            if rc.code.too_long {
+                return None;
             }
+            br = br.operand();
+        } else {
+            let Some(next) = rc.code.next(br) else {
+                break;
+            };
+            br = next;
         }
     }
     *flagp &= !(HASWIDTH | SIMPLE);
