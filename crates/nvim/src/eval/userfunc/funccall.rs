@@ -16,8 +16,7 @@
 
 use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::offset_of;
-use core::ptr;
+use core::{mem::offset_of, ptr};
 
 use super::*;
 use crate::types::{DictTab, Failed, ItemSlot, NUL, Refcount};
@@ -938,17 +937,27 @@ pub fn set_ref_in_functions(copy_id: c_int) -> bool {
     false
 }
 
+/// Under `v:testing`, keep a call's `args` markable; [`pop_func_args`] undoes.
+pub(crate) fn push_func_args(args: &[TypVal]) -> usize {
+    if get_vim_var_nr(Vv::Testing) == 0 {
+        return 0;
+    }
+    // SAFETY: a `ManuallyDrop` copy, truncated away unreleased by
+    // `pop_func_args` before the caller's frame ends.
+    let copy = |tv: &TypVal| ManuallyDrop::new(unsafe { tv.bit_copy() });
+    funcargs.with_mut(|kept| kept.extend(args.iter().map(copy)));
+    args.len()
+}
+
+/// Forget the last `count` arguments [`push_func_args`] kept.
+pub(crate) fn pop_func_args(count: usize) {
+    funcargs.with_mut(|kept| kept.truncate(kept.len().saturating_sub(count)));
+}
+
 /// Mark everything reachable from an argument of a call in progress.
 pub fn set_ref_in_func_args(copy_id: c_int) -> bool {
-    // Marking only reads; nothing it reaches calls a function, so holding the
-    // borrow across the walk is sound.
-    funcargs.with(|args| {
-        args.iter().any(|&tv| {
-            // SAFETY: each entry points at a live caller's argument, which
-            // the caller only reads while it is pushed.
-            unsafe { set_ref_in_item(&*tv, copy_id, ptr::null_mut(), ptr::null_mut()) }
-        })
-    })
+    // Marking only reads and calls no function: the borrow may span it.
+    funcargs.with(|args| args.iter().any(|tv| mark_root(tv, copy_id)))
 }
 
 /// Mark every list and dictionary reachable through the function `name`, or

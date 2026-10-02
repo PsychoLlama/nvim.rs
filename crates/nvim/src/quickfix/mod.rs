@@ -45,9 +45,7 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::set_internal_string_var;
 use crate::eval::window::{find_win_by_nr_or_id, win_by_id};
-use crate::eval::{
-    callback_call, callback_from_typval, eval_expr, set_ref_in_callback, set_ref_in_item,
-};
+use crate::eval::{callback_call, callback_from_typval, eval_expr, mark_root, set_ref_in_callback};
 use crate::ex_cmds::{append_redir, check_secure, do_ecmd, do_shell, skip_vimgrep_pat};
 use crate::ex_cmds2::{autowrite_all, can_abandon};
 use crate::ex_docmd::state::cmdmod;

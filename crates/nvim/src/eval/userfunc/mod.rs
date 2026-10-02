@@ -5,7 +5,7 @@
 
 use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
-use core::mem::offset_of;
+use core::mem::{ManuallyDrop, offset_of};
 use core::{ptr, slice};
 
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
@@ -33,8 +33,8 @@ use crate::eval::vars::{
 use crate::eval::{
     LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval_isnamec,
     eval_isnamec1, eval0, eval1, fill_evalarg_from_eap, find_name_end, garbage_collect, get_id_len,
-    get_lval, handle_subscript, is_luafunc, last_set_msg, partial_name, partial_unref,
-    set_ref_in_ht, set_ref_in_item, set_ref_in_list_items, skip_expr,
+    get_lval, handle_subscript, is_luafunc, last_set_msg, mark_root, partial_name, partial_unref,
+    set_ref_in_ht, set_ref_in_list_items, skip_expr,
 };
 use crate::ex_docmd::state::ex_nesting_level;
 use crate::ex_docmd::{checkforcmd, do_cmdline, ends_excmd, skip_range};
@@ -207,11 +207,11 @@ static func_hashtab: GlobalCell<HashTab> = GlobalCell::new(HashTab::new());
 ///
 /// Only kept while `v:testing` is set: `test_garbagecollect_now()` marks
 /// through it so that a value living only in a caller's argument array is not
-/// collected. The entries are borrowed -- each points into a caller's own
-/// `argvars` -- which is why this is a `Vec` of pointers and not of values,
-/// and they are `*const` because marking only reads them: the caller holds
-/// its arguments by shared borrow for the whole call.
-static funcargs: GlobalCell<Vec<*const TypVal>> = GlobalCell::new(Vec::new());
+/// collected. Each entry is a bit copy of a caller's argument, never released
+/// (hence [`ManuallyDrop`]): the caller holds its arguments by shared borrow
+/// for the whole call, so the copy says what the original says, and marking
+/// only reads it.
+static funcargs: GlobalCell<Vec<ManuallyDrop<TypVal>>> = GlobalCell::new(Vec::new());
 static current_funccal: GlobalCell<*mut FuncCall> = GlobalCell::new(ptr::null_mut());
 static previous_funccal: GlobalCell<*mut FuncCall> = GlobalCell::new(ptr::null_mut());
 

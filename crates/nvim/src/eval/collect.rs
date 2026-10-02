@@ -104,8 +104,9 @@ fn hi2di(hi: &HashItem<DictEntry>) -> *mut DictItem {
 
 /// Mark one root's variable, with neither stack: the collector recurses
 /// into whatever it holds rather than deferring it to a caller's loop.
-fn mark_root(tv: &mut TypVal, copy_id: c_int) -> bool {
-    // SAFETY: the caller's promise; the two nulls are what say "recurse".
+pub(crate) fn mark_root(tv: &TypVal, copy_id: c_int) -> bool {
+    // SAFETY: the two nulls are what say "recurse"; a live value's
+    // containers are live.
     unsafe { set_ref_in_item(tv, copy_id, null_mut(), null_mut()) }
 }
 
@@ -159,7 +160,7 @@ pub fn garbage_collect(testing: bool) -> bool {
         let bufvar =
             buf.field_ptr::<TypVal>(offset_of!(Buffer, b_bufvar) + offset_of!(DictItem, di_tv));
         // SAFETY: `bufvar` is the buffer's own variable dictionary.
-        abort = abort || unsafe { mark_root(&mut *bufvar, copy_id) };
+        abort = abort || unsafe { mark_root(&*bufvar, copy_id) };
         // buffer callback functions
         for offset in [
             offset_of!(Buffer, b_prompt_callback),
@@ -196,7 +197,7 @@ pub fn garbage_collect(testing: bool) -> bool {
         let winvar =
             wp.field_ptr::<TypVal>(offset_of!(Window, w_winvar) + offset_of!(DictItem, di_tv));
         // SAFETY: `winvar` is the window's own variable dictionary.
-        abort = abort || unsafe { mark_root(&mut *winvar, copy_id) };
+        abort = abort || unsafe { mark_root(&*winvar, copy_id) };
     }
 
     // window-local variables in the autocommand windows
@@ -209,7 +210,7 @@ pub fn garbage_collect(testing: bool) -> bool {
             let winvar =
                 win.field_ptr::<TypVal>(offset_of!(Window, w_winvar) + offset_of!(DictItem, di_tv));
             // SAFETY: `winvar` is that window's own variable dictionary.
-            abort = abort || unsafe { mark_root(&mut *winvar, copy_id) };
+            abort = abort || unsafe { mark_root(&*winvar, copy_id) };
         }
     }
 
@@ -222,7 +223,7 @@ pub fn garbage_collect(testing: bool) -> bool {
         let tpvar =
             tp.field_ptr::<TypVal>(offset_of!(Tabpage, tp_winvar) + offset_of!(DictItem, di_tv));
         // SAFETY: `tpvar` is the tab page's own variable dictionary.
-        abort = abort || unsafe { mark_root(&mut *tpvar, copy_id) };
+        abort = abort || unsafe { mark_root(&*tpvar, copy_id) };
     }
 
     abort = abort || garbage_collect_globvars(copy_id) != 0;

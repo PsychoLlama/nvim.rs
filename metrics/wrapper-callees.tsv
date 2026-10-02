@@ -261,7 +261,6 @@ count	callee	no_raw	defs	def
 10	qsort	0	0	
 10	schar_get_first_codepoint	1	1	crates/nvim/src/grid/schar.rs
 10	searchit	0	1	crates/nvim/src/search/find.rs
-10	set_ref_in_item	0	1	crates/nvim/src/eval/collect.rs
 10	shada_pack_entry	0	1	crates/nvim/src/shada/pack.rs
 10	state_of	0	1	crates/nvim/src/vterm/state/entry.rs
 10	strchr	0	1	crates/nvim/src/os/cshim.rs
@@ -388,6 +387,7 @@ count	callee	no_raw	defs	def
 7	restore_win_noblock	0	1	crates/nvim/src/eval/window/switch.rs
 7	save_funccal	0	1	crates/nvim/src/eval/userfunc/funccall.rs
 7	set_chars_option	0	1	crates/nvim/src/optionstr/chars.rs
+7	set_ref_in_item	0	1	crates/nvim/src/eval/collect.rs
 7	set_string_default	0	1	crates/nvim/src/option/defaults.rs
 7	skip_regexp	0	1	crates/nvim/src/regexp/parse.rs
 7	strnequal	0	1	crates/nvim/src/memory/mod.rs
@@ -847,6 +847,7 @@ count	callee	no_raw	defs	def
 3	.add_item	0	1	crates/nvim/src/eval/typval/dict.rs
 3	.append_array	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
 3	.assume_init	0	0	
+3	.bit_copy	1	1	crates/nvim/src/eval/typval/access.rs
 3	.clear	1	1	crates/nvim/src/eval/typval/access.rs
 3	.compare	0	1	crates/nvim/src/ex_cmds/sort.rs
 3	.conv_func_before_self	0	0	
@@ -1247,7 +1248,6 @@ count	callee	no_raw	defs	def
 2	.add_allocated_str	0	1	crates/nvim/src/eval/typval/dict.rs
 2	.append_number	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
 2	.append_string	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
-2	.bit_copy	1	1	crates/nvim/src/eval/typval/access.rs
 2	.byte	1	1	crates/nvim/src/winlayer.rs
 2	.char_at	1	1	crates/nvim/src/eval/encode/mod.rs
 2	.color_col_attr	1	1	crates/nvim/src/drawline/state.rs

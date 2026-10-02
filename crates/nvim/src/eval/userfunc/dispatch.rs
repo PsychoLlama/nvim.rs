@@ -62,19 +62,12 @@ pub unsafe fn get_func_tv(
     if ret.is_ok() {
         // Prepare for calling `test_garbagecollect_now()`, which needs to
         // know which variables are used on the call stack.
-        let pushed = if get_vim_var_nr(Vv::Testing) != 0 {
-            funcargs.with_mut(|args| {
-                args.extend(argvars.args()[..argcount].iter().map(ptr::from_ref));
-            });
-            argcount
-        } else {
-            0
-        };
+        let pushed = push_func_args(&argvars.args()[..argcount]);
         // SAFETY: the caller's promise -- `result` is the return value.
         let rv = &mut *result;
         ret = unsafe { call_func(name, len, rv, &argvars.args()[..argcount], funcexe) };
         // The nested calls pushed and popped their own; ours are the last.
-        funcargs.with_mut(|args| args.truncate(args.len().saturating_sub(pushed)));
+        pop_func_args(pushed);
     } else if !aborting() && evaluate {
         if argcount == MAX_FUNC_ARGS as usize {
             unsafe { emsg_funcname(c"E740: Too many arguments for function %s".as_ptr(), name) };
