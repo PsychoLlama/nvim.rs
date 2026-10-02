@@ -1,7 +1,7 @@
 //! The character search: `f`, `t`, `F`, `T` and their `;`/`,` repeats.
 //!
-//! One line, one character, `cmd_arg.count1` times. The five statics are
-//! what `;` and `,` replay; `set_last_csearch` and friends exist so that
+//! One line, one character, `cmd_arg.count1` times. [`CharSearch`] is what
+//! `;` and `,` replay; `set_last_csearch` and friends exist so that
 //! `getcharsearch()`/`setcharsearch()` can read and write them.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -18,17 +18,22 @@ use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-/// The character `f`/`t` last looked for, as a byte and as its full
-/// (possibly multi-byte, possibly composed) sequence.
-///
-/// `lastc` is the first byte only; it is what the single-byte fast path
-/// compares against and what `last_csearch_*` reports. `lastc_bytelen > 1`
-/// switches the comparison over to `lastc_bytes`.
-static lastc: GlobalCell<u8> = GlobalCell::new(NUL as u8);
-static lastcdir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
-static last_t_cmd: GlobalCell<bool> = GlobalCell::new(true);
-static lastc_bytes: GlobalCell<[c_char; SCHAR_BYTES]> = GlobalCell::new([0; SCHAR_BYTES]);
-static lastc_bytelen: GlobalCell<c_int> = GlobalCell::new(1);
+state_record! {
+    /// What `;` and `,` replay: the last `f`/`t`/`F`/`T`.
+    struct CharSearch in CSEARCH as CharSearchField;
+    /// The character `f`/`t` last looked for, as a byte: the first byte
+    /// only, which the single-byte fast path compares against and
+    /// `last_csearch_*` reports.
+    lastc: u8 = NUL as u8;
+    /// Its direction.
+    lastcdir: Direction = FORWARD;
+    /// Whether it was `t`/`T`, which stop short of the character.
+    last_t_cmd: bool = true;
+    /// The full (possibly multi-byte, possibly composed) sequence, which
+    /// `lastc_bytelen > 1` switches the comparison over to.
+    lastc_bytes: [c_char; SCHAR_BYTES] = [0; SCHAR_BYTES];
+    lastc_bytelen: c_int = 1;
+}
 
 /// One `ScreenChar`'s bytes plus its NUL — what `lastc_bytes` holds.
 const SCHAR_BYTES: usize = MAX_SCHAR_SIZE as usize + 1;
