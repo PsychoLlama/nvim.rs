@@ -26,8 +26,7 @@ use crate::charset::{
 };
 use crate::cmdexpand::{addstar, expand_cmdline, set_cmd_context};
 use crate::cursor::{
-    check_cursor, dec_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_len,
-    get_cursor_pos_ptr, inc_cursor,
+    check_cursor, dec_cursor, get_cursor_line_len, get_cursor_line_ptr, inc_cursor,
 };
 use crate::drawscreen::state::{dollar_vcol, redraw_cmdline, redraw_mode, sc_col};
 use crate::drawscreen::{
@@ -62,8 +61,8 @@ use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
 use crate::mbyte::{
-    mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_tolower, mb_toupper, utf_char2bytes,
-    utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab, utfc_ptr2len,
+    mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_tolower, mb_toupper, utf_char2len,
+    utf_head_off, utf_ptr2char, utf8len_tab, utfc_ptr2len,
 };
 use crate::memline::{dec, ml_delete};
 use crate::memory::{strequal, xcalloc, xfree, xmalloc};

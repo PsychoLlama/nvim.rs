@@ -6,9 +6,7 @@
 //! one-line queries the editor asks about a completion in progress.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::guard::Suppress;
@@ -16,9 +14,7 @@ use crate::keycodes::{
     Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R,
     Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, Key, NotAKey,
 };
-use crate::optionstr::OptString;
-use crate::os::cshim::gettext_ptr;
-use crate::types::NUL;
+use crate::optionstr::OptStringRef;
 use crate::winlayer::{Buf, Win};
 
 /// The `'s'` of C's `case 's': case Ctrl_S:` in [`set_ctrl_x_mode`].  A cast
@@ -154,16 +150,14 @@ pub(crate) fn compl_shows_dir_backward() -> bool {
 /// Check that `'dictionary'` (`dict_opt`) or `'thesaurus'` can be used;
 /// complain, beep and leave CTRL-X mode when it cannot.
 pub fn check_compl_option(dict_opt: bool) -> bool {
-    // SAFETY (every read): an option string is a NUL-terminated allocation,
-    // never null.
-    let local_unset = |field: *const c_char| unsafe { *field } == NUL as c_char;
+    let buffer = Buf::current();
     let empty = if dict_opt {
-        let unset = local_unset(Buf::current().b_p_dict.value_ptr()) && p_dict(CStr::is_empty);
+        let unset = buffer.b_p_dict.bytes().is_empty() && p_dict(CStr::is_empty);
         unset && Win::current().w_onebuf_opt.wo_spell == 0
     } else {
-        local_unset(Buf::current().b_p_tsr.value_ptr())
+        buffer.b_p_tsr.bytes().is_empty()
             && p_tsr(CStr::is_empty)
-            && local_unset(Buf::current().b_p_tsrfu.value_ptr())
+            && buffer.b_p_tsrfu.bytes().is_empty()
             && p_tsrfu(CStr::is_empty)
     };
     if !empty {
@@ -171,13 +165,11 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
     }
     ctrl_x_mode.set(CTRL_X_NORMAL);
     edit_submode.set(None);
-    let msg = if dict_opt {
-        c"'dictionary' option is empty".as_ptr()
+    emsg(gettext(if dict_opt {
+        c"'dictionary' option is empty"
     } else {
-        c"'thesaurus' option is empty".as_ptr()
-    };
-    // SAFETY: a static NUL-terminated message.
-    unsafe { emsg(gettext_ptr(msg)) };
+        c"'thesaurus' option is empty"
+    }));
     if emsg_silent.get() == 0 && !in_assert_fails.get() {
         vim_beep(kOptBoFlagComplete);
         setcursor();

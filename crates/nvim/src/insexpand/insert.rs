@@ -10,9 +10,19 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::mbyte::cluster_len;
-use crate::types::{NUL, OK, VarLock};
+use crate::mbyte::{char_at, char_len, cluster_len};
+use crate::memline::Lines;
+use crate::types::{OK, VarLock};
 use crate::winlayer::{Buf, Win};
+
+/// The bytes `from .. to` of the cursor line, as a completion string.
+pub(crate) fn cursor_line_part(from: ColNr, to: ColNr) -> String_0 {
+    let mut lines = Lines::current();
+    let line = lines.line(Win::current().w_cursor.lnum);
+    let to = usize::try_from(to).unwrap_or(0).min(line.len());
+    let from = usize::try_from(from).unwrap_or(0).min(to);
+    String_0::from_bytes(&line[from..to])
+}
 
 /// Insert `text` at the cursor.
 pub(crate) fn ins_compl_insert_text(text: &[u8]) {
@@ -140,15 +150,15 @@ pub fn ins_compl_delete(new_leader: bool) {
     // appropriately.
     let mut orig_col = 0;
     if new_leader {
-        let mut orig = compl_orig_text().data();
-        let mut leader = ins_compl_leader();
-        while unsafe { *orig } as c_int != NUL
-            && unsafe { utf_ptr2char(orig) } == unsafe { utf_ptr2char(leader) }
-        {
-            leader = unsafe { leader.offset(utf_ptr2len(leader) as isize) };
-            orig = unsafe { orig.offset(utf_ptr2len(orig) as isize) };
+        // How far the original text and the leader agree, a character at a
+        // time.
+        let (orig, leader) = (compl_orig_text().to_vec(), ins_compl_leader_str().to_vec());
+        let (mut o, mut l) = (0, 0);
+        while o < orig.len() && char_at(&orig[o..]) == char_at(&leader[l..]) {
+            l += char_len(&leader[l..]);
+            o += char_len(&orig[o..]);
         }
-        orig_col = unsafe { orig.offset_from(compl_orig_text().data()) } as c_int;
+        orig_col = o as c_int;
     }
 
     // In insert mode: delete the typed part.
@@ -166,11 +176,11 @@ pub fn ins_compl_delete(new_leader: bool) {
 
     // What follows the cursor on the last line, which the line deletion
     // below would take with it; re-inserted at the end.
-    let mut remaining = String_0::NULL;
+    let mut remaining = None;
     if Win::current().w_cursor.lnum > compl_lnum.get() {
-        if Win::current().w_cursor.col < get_cursor_line_len() {
-            remaining =
-                unsafe { cbuf_to_string(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t) };
+        let line_len = get_cursor_line_len();
+        if Win::current().w_cursor.col < line_len {
+            remaining = Some(cursor_line_part(Win::current().w_cursor.col, line_len));
         }
         while Win::current().w_cursor.lnum > compl_lnum.get() {
             if ml_delete(Win::current().w_cursor.lnum).is_err() {
@@ -191,8 +201,9 @@ pub fn ins_compl_delete(new_leader: bool) {
         compl_ins_end_col.set(Win::current().w_cursor.col);
     }
 
-    if !remaining.data().is_null() {
+    if let Some(remaining) = remaining {
         orig_col = Win::current().w_cursor.col;
+        // SAFETY: the string's own bytes, for its own length.
         unsafe { ins_str(remaining.data(), remaining.len()) };
         Win::current().w_cursor.col = orig_col;
     }
@@ -222,7 +233,7 @@ pub(crate) fn ins_compl_expand_multiple(text: &[u8]) {
 }
 
 /// `ins_char_bytes` over `text`, which C hands it whole whatever it holds.
-fn insert_chars(text: &[u8]) {
+pub(crate) fn insert_chars(text: &[u8]) {
     if !text.is_empty() {
         // SAFETY: `text` is readable for its length, which is all
         // `ins_char_bytes` reads.

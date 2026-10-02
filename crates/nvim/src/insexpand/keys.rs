@@ -7,15 +7,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::keycodes::{
     Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, Key,
 };
 use crate::mbyte::head_off;
-use crate::mbyte::{char_at, cluster_len};
+use crate::mbyte::{char_at, cluster_len, encode_char};
+use crate::memline::Lines;
 use crate::types::{BsFlag, NUL, ShmFlag};
 use crate::winlayer::Win;
 
@@ -29,12 +28,19 @@ pub fn ins_compl_bs() -> c_int {
         ins_compl_delete(false);
     }
 
-    let mut line = get_cursor_line_ptr();
-    let mut p = unsafe { line.offset(Win::current().w_cursor.col as isize) };
-    // C's MB_PTR_BACK: step back over one whole character.
-    p = unsafe { p.offset(-((utf_head_off(line, p.offset(-1)) + 1) as isize)) };
-    let p_off = unsafe { p.offset_from(line) };
-    let from_start = p_off as c_int - compl_col.get();
+    // C's MB_PTR_BACK from the cursor: step back over one whole character.
+    let p_off = {
+        let mut lines = Lines::current();
+        let line = lines.line(Win::current().w_cursor.lnum);
+        let col = (Win::current().w_cursor.col as usize).min(line.len());
+        let back = if col > 0 {
+            head_off(line, col - 1) + 1
+        } else {
+            1
+        };
+        col as c_int - back as c_int
+    };
+    let from_start = p_off - compl_col.get();
 
     // Stop completion when the whole word was deleted.  For Omni
     // completion allow the word to be deleted, we won't match everything.
@@ -55,19 +61,11 @@ pub fn ins_compl_bs() -> c_int {
         ins_compl_restart();
     }
 
-    // ins_compl_restart() calls update_screen(), which may invalidate the
-    // pointer.
+    // ins_compl_restart() calls update_screen(), so the line is read
+    // afresh.
     // TODO(bfredl): get rid of random update_screen() calls deep inside
     // completion logic
-    line = get_cursor_line_ptr();
-
-    compl_leader().clear();
-    compl_leader().set(unsafe {
-        cbuf_to_string(
-            line.offset(compl_col.get() as isize),
-            (p_off - compl_col.get() as ptrdiff_t) as size_t,
-        )
-    });
+    compl_leader().set(cursor_line_part(compl_col.get(), p_off));
 
     // Clear the selection if a menu item is currently selected in
     // autocompletion.
@@ -154,12 +152,10 @@ pub fn ins_compl_addleader(c: c_int) {
     if stop_arrow().is_err() {
         return;
     }
-    let cc = utf_char2len(c);
-    if cc > 1 {
-        let mut buf = [0 as c_char; MB_MAXCHAR + 1];
-        unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
-        buf[cc as usize] = NUL as c_char;
-        unsafe { ins_char_bytes(buf.as_mut_ptr(), cc as size_t) };
+    if utf_char2len(c) > 1 {
+        let mut buf = [0u8; MB_MAXCHAR];
+        let len = encode_char(c, &mut buf);
+        insert_chars(&buf[..len]);
     } else {
         ins_char(c);
     }
@@ -169,13 +165,10 @@ pub fn ins_compl_addleader(c: c_int) {
         ins_compl_restart();
     }
 
-    compl_leader().clear();
-    compl_leader().set(unsafe {
-        cbuf_to_string(
-            get_cursor_line_ptr().offset(compl_col.get() as isize),
-            (Win::current().w_cursor.col - compl_col.get()) as size_t,
-        )
-    });
+    compl_leader().set(cursor_line_part(
+        compl_col.get(),
+        Win::current().w_cursor.col,
+    ));
     ins_compl_new_leader();
 }
 
@@ -287,11 +280,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         if !arrow_used.get() && !ins_need_undo_get() && c != Ctrl_E {
             insertchar(NUL, 0, -1);
         }
-        if prev_col > 0
-            && unsafe { *get_cursor_line_ptr().offset(Win::current().w_cursor.col as isize) }
-                as c_int
-                != NUL
-        {
+        if prev_col > 0 && Win::current().w_cursor.col < get_cursor_line_len() {
             inc_cursor();
         }
     }
