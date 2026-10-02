@@ -42,7 +42,7 @@
 //! field access that asked for it, so a `Live<T>` never holds one across a
 //! call. Taking `&mut *p` once at the head of a body instead — the tempting
 //! shorter rewrite — is **unsound here**: a `&mut` parameter is `noalias` to
-//! LLVM, and the editor reads the same `OpArg` through `current_oap` while
+//! LLVM, and the editor reads the same `OpArg` through `op_pending` while
 //! `run_operator` is away in `edit()`, in `'operatorfunc'` or in a filter.
 //! Phase 22's ruling 6 — nothing an autocommand re-enters holds a `&mut` —
 //! is a property of this API rather than of review.

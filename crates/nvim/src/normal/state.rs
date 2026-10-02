@@ -53,8 +53,8 @@ use crate::message::state::{
 };
 use crate::message::{has_keep_msg, may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::{
-    NormalState, NvFlags, check_scrollbind, clear_op, clear_op_beep, current_oap, end_visual_mode,
-    find_command, normal_execute, nv_cmds, unshift_special, visual_active,
+    NORMAL_FRAMES, NormalState, NvFlags, check_scrollbind, clear_op, clear_op_beep,
+    end_visual_mode, find_command, normal_execute, nv_cmds, unshift_special, visual_active,
 };
 use crate::option::shortmess;
 use crate::option::vars::{fdo_flags, p_smd};
@@ -82,11 +82,10 @@ use crate::r#move::{update_curswant, update_topline, validate_cursor};
 /// The normal-mode state machine's own state, which the caller has promised
 /// is live. [`Op`]'s shape.
 ///
-/// **This is why the state is not a `&mut`, and why it will not be one until
-/// `current_oap` changes.** `normal_enter` publishes the address of its own
-/// `oa` field there, and `op_pending` -- which `state()` and
-/// `may_trigger_safestate` both reach -- reads it from inside whatever the
-/// running handler re-entered. A `&mut NormalState` spanning a handler is
+/// **This is why the state is not a `&mut`.** `normal_enter`'s state lives in
+/// the normal-mode frame table, and `op_pending` -- which `state()` and
+/// `may_trigger_safestate` both reach -- reads its `oa` field from inside
+/// whatever the running handler re-entered. A `&mut NormalState` spanning a handler is
 /// `noalias` to LLVM and covers `oa`, so it is a promise the editor breaks
 /// on the first `state()` call inside an autocommand. Every borrow this
 /// hands out lives for one field access, which is the same rule
@@ -105,7 +104,7 @@ impl NormalStateRef {
         self.0
     }
 
-    /// The operator the frame carries, which is the one `current_oap` names.
+    /// The operator the frame carries, which is the one `op_pending` reads.
     ///
     /// [`Op::start`]'s trick one level up: a live state's `oa` field is a live
     /// operator, and saying where it is needs no dereference.
@@ -135,8 +134,8 @@ impl DerefMut for NormalStateRef {
 /// The operator a normal-mode command is pending on.
 ///
 /// `oap` is a raw pointer because the operator lives in a *sibling* field of
-/// the state machine's frame -- `NormalState::oa`, which `current_oap` also
-/// names -- so a `&mut` to it would have to span the handler and alias what
+/// the state machine's frame -- `NormalState::oa`, which `op_pending` also
+/// reads -- so a `&mut` to it would have to span the handler and alias what
 /// [`op_pending`] reads. [`Op`] is that promise written down; this is the one
 /// place a `CmdArg` makes one.
 impl CmdArg {
@@ -195,15 +194,25 @@ pub(crate) fn check_text_or_curbuf_locked(op: Option<Op>) -> bool {
 ///
 /// Reads the operator the innermost `normal_enter`/`normal_cmd` installed.
 pub(crate) fn op_pending() -> bool {
-    let op = current_oap.get();
-    // SAFETY: `current_oap` is null or points at a live caller's `OpArg`,
-    // and the `&&` chain only reaches the reads past the null check.
-    !(!op.is_null()
-        && !finish_op.get()
-        && unsafe { (*op).prev_opcount } == 0
-        && unsafe { (*op).prev_count0 } == 0
-        && unsafe { (*op).op_type } == OpType::Nop
-        && unsafe { (*op).regname } == NUL)
+    let Some(state) = innermost_normal_state() else {
+        return true;
+    };
+    // SAFETY: the innermost `normal_enter`'s state, which the table owns
+    // while it runs; its operator's fields are copied out, not borrowed.
+    let (prev_opcount, prev_count0, op_type, regname) = unsafe {
+        let op = &raw const (*state).oa;
+        (
+            (*op).prev_opcount,
+            (*op).prev_count0,
+            (*op).op_type,
+            (*op).regname,
+        )
+    };
+    !(!finish_op.get()
+        && prev_opcount == 0
+        && prev_count0 == 0
+        && op_type == OpType::Nop
+        && regname == NUL)
 }
 
 /// Run normal mode until something asks to leave it.
@@ -213,17 +222,27 @@ pub(crate) fn op_pending() -> bool {
 /// that is neither is "toplevel", which is what decides whether `v:count` is
 /// published.
 pub(crate) fn normal_enter(cmdwin: bool, noexmode: bool) {
-    let mut state = new_state();
-    // The innermost operator is the one `op_pending` reports on; the outer
-    // one is put back on the way out.
-    let prev_oap = current_oap.get();
-    current_oap.set(&raw mut state.oa);
-    state.cmdwin = cmdwin;
-    state.noexmode = noexmode;
-    state.toplevel = (!cmdwin || cmdwin_result.get() == 0) && !noexmode;
-    // SAFETY: `state` outlives the call.
-    state_enter(unsafe { ModeState::normal(&raw mut state) });
-    current_oap.set(prev_oap);
+    let mut fresh = new_state();
+    fresh.cmdwin = cmdwin;
+    fresh.noexmode = noexmode;
+    fresh.toplevel = (!cmdwin || cmdwin_result.get() == 0) && !noexmode;
+    // The innermost state is the one `op_pending` reports on; the outer one
+    // is put back on the way out.
+    let (id, state, outer) = NORMAL_FRAMES.with_mut(|frames| {
+        let (id, state) = frames.table.insert((), fresh);
+        (id, state, frames.current.replace(id))
+    });
+    // SAFETY: the table keeps `state` where it is until it is freed below.
+    state_enter(unsafe { ModeState::normal(state) });
+    NORMAL_FRAMES.with_mut(|frames| {
+        frames.current = outer;
+        frames.table.free(id);
+    });
+}
+
+/// The innermost `normal_enter`'s state, if one is running.
+fn innermost_normal_state() -> Option<*mut NormalState> {
+    NORMAL_FRAMES.with(|frames| frames.current.map(|id| frames.table.address(id)))
 }
 
 /// Set up `s.ca` for the command about to be read.

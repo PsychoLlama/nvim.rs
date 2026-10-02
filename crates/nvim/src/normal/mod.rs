@@ -15,6 +15,7 @@
 
 use crate::edit::BeginlineOpts;
 use crate::global_cell::GlobalCell;
+use crate::id_table::{IdTable, TableId};
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT,
     Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T,
@@ -675,7 +676,19 @@ pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[NvCmd; 188]>()
         (::core::mem::size_of::<[NvCmd; 188]>().wrapping_rem(::core::mem::size_of::<NvCmd>()) == 0)
             as c_int as usize,
     );
-static current_oap: GlobalCell<*mut OpArg> = GlobalCell::new(::core::ptr::null_mut::<OpArg>());
+/// Every running `normal_enter`'s state, owned at a fixed address, and the
+/// innermost one's id: upstream's `current_oap`, the address of that state's
+/// operator, which `op_pending` reads from inside whatever the running
+/// command re-entered.
+struct NormalFrames {
+    table: IdTable<NormalState>,
+    current: Option<TableId<NormalState>>,
+}
+
+static NORMAL_FRAMES: GlobalCell<NormalFrames> = GlobalCell::new(NormalFrames {
+    table: IdTable::new(),
+    current: None,
+});
 static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true);
 static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const INT_MAX: c_int = __INT_MAX__;

@@ -103,9 +103,9 @@ pub const MODE_NORMAL: ModeFlags = 1;
 /// The address is raw rather than a `&mut`, and the promise that it is live
 /// is booked at the constructor the way every other handle in the tree books
 /// it: a `check` or an `execute` re-enters the editor, and the frames below
-/// it reach the same state through the globals that name it — `current_oap`
-/// is the one with a comment about it — so a `&mut` spanning the loop would
-/// be a promise the editor does not keep.
+/// it reach the same state through the globals that name it — `op_pending`
+/// reads the normal-mode frame's operator — so a `&mut` spanning the loop
+/// would be a promise the editor does not keep.
 pub(crate) struct ModeState(Machine);
 
 /// [`ModeState`]'s arms. Private, so the only way to make one is through a
