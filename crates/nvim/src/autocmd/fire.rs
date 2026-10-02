@@ -3,19 +3,19 @@
 //! [`apply_autocmds_group`] is the whole event: it decides whether anything
 //! matches, saves and swaps the editor state an autocommand is allowed to
 //! see (`<afile>`, `<abuf>`, `v:event`, the search patterns, the redo
-//! buffer), pushes an `AutoPatCmd` onto `active_apc_list` and runs the
-//! matching commands through `do_cmdline`, then unwinds all of it.  The
+//! buffer), runs the matching commands through `do_cmdline` with an
+//! `AutoPatCmd` as the walk's cursor, then unwinds all of it.  The
 //! three `apply_autocmds*` entry points above it differ only in what they
 //! pass and what they return; [`block_autocmds`] is the editor-wide off
 //! switch.
 //!
-//! **`patcmd` is a stack local whose address escapes.**  It is linked onto
-//! the global `active_apc_list` for the duration of `do_cmdline`, because a
-//! handler can wipe out a buffer (`aubuflocal_remove` walks that list and
-//! clears the matching `arg_bufnr`) or fire nested events that push their
-//! own.  It cannot become owned data, cannot move, and the unlink is
-//! guarded by `active_apc_list == &patcmd` because a nested walk may
-//! already have taken it off.
+//! **`patcmd` is a stack local whose address escapes** -- into the
+//! `do_cmdline` cookie and the execution stack's frame -- so it cannot move.
+//! What upstream also published it for, a handler wiping out the buffer the
+//! walk matches `<buffer=N>` against, goes through the running walks'
+//! numbers in the autocommand state instead: the walk pushes its number when
+//! it starts running and keeps the index (`AutoPatCmd::walk`), and
+//! `aubuflocal_remove` clears the number there.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // The exports here are metrics/abi-ledger.jsonl rows (`block_autocmds`, `unblock_autocmds`), and
@@ -35,6 +35,7 @@ use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::getchar::KeyBuffer;
 use crate::guard::{Depth, Script, Suppress};
+use crate::memory::XString;
 use crate::optionstr::OptString;
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::{Buf, Win, tab_windows};
@@ -240,9 +241,6 @@ pub unsafe fn apply_autocmds_group(
     excmd: Option<&mut ExArg>,
     data: *mut Object,
 ) -> bool {
-    static nesting: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-    static filechangeshell_busy: GlobalCell<bool> = GlobalCell::new(false);
-
     let mut sfname: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
     let mut retval = false;
     let mut did_save_redobuff = false;
@@ -299,7 +297,7 @@ pub unsafe fn apply_autocmds_group(
 
         // Nesting is allowed but bounded: it is easy to write an
         // endless loop.
-        if nesting.get() == 10 {
+        if autocmd_nesting.get() == 10 {
             emsg(gettext(E_AUTOCOMMAND_NESTING_TOO_DEEP));
             break 'bypass;
         }
@@ -314,10 +312,10 @@ pub unsafe fn apply_autocmds_group(
 
         // Save the autocmd_* variables and what we know about the
         // current buffer.
-        let save_autocmd_fname = autocmd_fname.get();
+        let save_autocmd_fname = autocmd_fname.take();
         let save_autocmd_fname_full = autocmd_fname_full.get();
         let save_autocmd_bufnr = autocmd_bufnr.get();
-        let save_autocmd_match = autocmd_match.get();
+        let save_autocmd_match = autocmd_match.take();
         let save_autocmd_busy = autocmd_busy.get();
         let save_autocmd_nested = autocmd_nested.get();
         let save_changed = Buf::current().b_changed != 0;
@@ -325,7 +323,7 @@ pub unsafe fn apply_autocmds_group(
 
         // `<afile>`.  A copy, so renaming a buffer or changing
         // directory cannot invalidate it.
-        autocmd_fname.set(if !fname_io.is_null() {
+        let afile = if !fname_io.is_null() {
             fname_io
         } else if afile_is_not_a_name(event) {
             ::core::ptr::null_mut()
@@ -333,14 +331,16 @@ pub unsafe fn apply_autocmds_group(
             fname
         } else {
             buffer.map_or(::core::ptr::null_mut(), |b| b.name.full_ptr())
-        });
+        };
         // The unexpanded `<afile>`, kept for the API's `file` field.
         let mut afile_orig: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
-        if !autocmd_fname.get().is_null() {
-            afile_orig = unsafe { xstrdup(autocmd_fname.get()) };
-            // MAXPATHL, because `eval_vars` resolves the full path in
-            // place later.
-            autocmd_fname.set(unsafe { xstrnsave(autocmd_fname.get(), MAXPATHL as size_t) });
+        if !afile.is_null() {
+            afile_orig = unsafe { xstrdup(afile) };
+            // Cut at MAXPATHL, as upstream's copy is: `eval_vars` resolves
+            // the full path in that much room later.
+            let mut copy = XString::from_cstr(unsafe { ::core::ffi::CStr::from_ptr(afile) });
+            copy.truncate(MAXPATHL as usize);
+            autocmd_fname.set(Some(copy));
         }
         autocmd_fname_full.set(false);
 
@@ -384,7 +384,10 @@ pub unsafe fn apply_autocmds_group(
         }
 
         // `<amatch>`.
-        autocmd_match.set(fname);
+        // SAFETY: `fname` is this firing's NUL-terminated copy.
+        autocmd_match.set(Some(XString::from_cstr(unsafe {
+            ::core::ffi::CStr::from_ptr(fname)
+        })));
 
         // Don't redraw while running autocommands.
         let redraw_off = Suppress::redraw();
@@ -419,7 +422,7 @@ pub unsafe fn apply_autocmds_group(
         // Some commands need to know autocommands are running.
         autocmd_busy.set(true);
         filechangeshell_busy.set(event == AutoEvent::FileChangedShell);
-        let nested = Depth::of(&nesting);
+        let nested = Depth::of(autocmd_nesting);
 
         // Remembered for `did_filetype()`.
         if event == AutoEvent::FileType {
@@ -447,15 +450,18 @@ pub unsafe fn apply_autocmds_group(
             // `getnextac` fills this in from the autocommand it runs.
             script_ctx: ScriptCtx::NONE,
             arg_bufnr: autocmd_bufnr.get(),
+            walk: None,
             data: ::core::ptr::null_mut(),
-            next: ::core::ptr::null_mut(),
         };
         unsafe { aucmd_next(&raw mut patcmd) };
 
         // Something matched: run the autocommands.
         if !patcmd.lastpat.is_null() {
-            patcmd.next = active_apc_list.get();
-            active_apc_list.set(&raw mut patcmd);
+            let bufnr = patcmd.arg_bufnr;
+            patcmd.walk = Some(active_walk_bufnrs.with_mut(|nrs| {
+                nrs.push(bufnr);
+                nrs.len() - 1
+            }));
             patcmd.data = data;
 
             // `v:cmdarg`/`v:cmdbang`, only when a pattern matched.
@@ -474,7 +480,7 @@ pub unsafe fn apply_autocmds_group(
 
             // Make the cursor and topline valid.  The outermost firing
             // saves them for `reset_lnums`; a nested one only corrects.
-            if nesting.get() == 1 {
+            if autocmd_nesting.get() == 1 {
                 check_lnums(true);
             } else {
                 check_lnums_nested(true);
@@ -497,7 +503,7 @@ pub unsafe fn apply_autocmds_group(
             did_emsg.set(did_emsg.get() + save_did_emsg);
             set_pressedreturn(save_ex_pressedreturn);
 
-            if nesting.get() == 1 {
+            if autocmd_nesting.get() == 1 {
                 // Restore the cursor and topline unless they changed.
                 reset_lnums();
             }
@@ -507,10 +513,11 @@ pub unsafe fn apply_autocmds_group(
                 unsafe { set_cmdarg(None, save_cmdarg) };
                 set_vim_var_nr(Vv::Cmdbang, save_cmdbang);
             }
-            // Unlink -- guarded, because a nested walk may already
-            // have taken this node off the list.
-            if active_apc_list.get() == &raw mut patcmd {
-                active_apc_list.set(patcmd.next);
+            // The walk is over. A nested one has popped its own number
+            // already; anything above this one's would be a walk that did
+            // not, and is gone with it.
+            if let Some(at) = patcmd.walk {
+                active_walk_bufnrs.with_mut(|nrs| nrs.truncate(at));
             }
         }
 
@@ -528,7 +535,6 @@ pub unsafe fn apply_autocmds_group(
         };
         estack_pop();
         unsafe { xfree(afile_orig.cast::<::core::ffi::c_void>()) };
-        unsafe { xfree(autocmd_fname.get().cast::<::core::ffi::c_void>()) };
         autocmd_fname.set(save_autocmd_fname);
         autocmd_fname_full.set(save_autocmd_fname_full);
         autocmd_bufnr.set(save_autocmd_bufnr);

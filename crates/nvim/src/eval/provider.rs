@@ -40,14 +40,14 @@ use crate::runtime::script_autoload;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
 use crate::types::{
-    Callback, CallbackReader, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncExe, NUL,
-    ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, caller_scope, ptrdiff_t, size_t, ssize_t,
+    Callback, CallbackReader, CallerScope, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncExe,
+    NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, ptrdiff_t, size_t, ssize_t,
     uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live, Win};
 
-pub(crate) static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(caller_scope {
+pub(crate) static provider_caller_scope: GlobalCell<CallerScope> = GlobalCell::new(CallerScope {
     script_ctx: ScriptCtx::NONE,
     es_entry: EStack {
         es_lnum: 0,
@@ -55,8 +55,8 @@ pub(crate) static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::
         es_type: ETYPE_TOP,
         es_info: EstackInfo::None,
     },
-    autocmd_fname: ::core::ptr::null_mut::<c_char>(),
-    autocmd_match: ::core::ptr::null_mut::<c_char>(),
+    autocmd_fname: None,
+    autocmd_match: None,
     autocmd_fname_full: false,
     autocmd_bufnr: 0,
     funccalp: None,
@@ -225,17 +225,17 @@ pub unsafe fn eval_call_provider(
     // takes the one NUL-terminated string `provider`.
     let name_len = unsafe { snprintf!(func.as_mut_ptr(), size, fmt, provider) };
 
-    let saved_provider_caller_scope = provider_caller_scope.get();
-    let funccalp = current_fc_id();
-    provider_caller_scope.set(caller_scope {
+    let scope = CallerScope {
         script_ctx: current_sctx.get(),
         es_entry: top_estack(),
-        autocmd_fname: autocmd_fname.get(),
-        autocmd_match: autocmd_match.get(),
+        autocmd_fname: autocmd_fname.with(Clone::clone),
+        autocmd_match: autocmd_match.with(Clone::clone),
         autocmd_fname_full: autocmd_fname_full.get(),
         autocmd_bufnr: autocmd_bufnr.get(),
-        funccalp,
-    });
+        funccalp: current_fc_id(),
+    };
+    let saved_provider_caller_scope =
+        provider_caller_scope.with_mut(|current| core::mem::replace(current, scope));
     let call_stack_aside = CallStackAside::new();
     let nesting = Depth::of(&provider_call_nesting);
 

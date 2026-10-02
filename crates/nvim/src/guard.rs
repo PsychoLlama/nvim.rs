@@ -113,7 +113,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::autocmd::state::{autocmd_no_enter, autocmd_no_leave};
+use crate::autocmd::state::{AutocmdField, autocmd_no_enter, autocmd_no_leave};
 use crate::drawscreen::state::RedrawingDisabled;
 use crate::ex_getln::state::cmdline_star;
 use crate::extmark::curbuf_splice_pending;
@@ -224,6 +224,9 @@ pub(crate) type MsgBump = Bump<MsgField<c_int>>;
 /// A guard over one of
 /// [`GetcharState`](crate::getchar::state::GetcharState)'s counters.
 pub(crate) type KeyBump = Bump<GetcharField<c_int>>;
+/// A guard over one of
+/// [`AutocmdState`](crate::autocmd::state::AutocmdState)'s counters.
+pub(crate) type AutocmdBump = Bump<AutocmdField<c_int>>;
 
 /// [`Saved`] over a cell holding something other than an `int`.
 ///
@@ -440,13 +443,13 @@ impl Suppress {
     }
 
     /// `autocmd_no_enter` — no `WinEnter`/`BufEnter` fires in this scope.
-    pub(crate) fn win_enter_autocmds() -> Bump {
-        Bump::new(&autocmd_no_enter)
+    pub(crate) fn win_enter_autocmds() -> AutocmdBump {
+        Bump::new(autocmd_no_enter)
     }
 
     /// `autocmd_no_leave` — no `WinLeave`/`BufLeave` fires in this scope.
-    pub(crate) fn win_leave_autocmds() -> Bump {
-        Bump::new(&autocmd_no_leave)
+    pub(crate) fn win_leave_autocmds() -> AutocmdBump {
+        Bump::new(autocmd_no_leave)
     }
 
     /// Both of the above: the scope walks the window list and enters
@@ -570,14 +573,14 @@ impl Allow {
     /// `autocmd_no_enter -= 1` — the inverse of
     /// [`Suppress::win_enter_autocmds`], for the callee that has to let one
     /// `BufEnter` through a caller that had switched them off.
-    pub(crate) fn win_enter_autocmds() -> Bump {
-        Bump::by(&autocmd_no_enter, -1)
+    pub(crate) fn win_enter_autocmds() -> AutocmdBump {
+        Bump::by(autocmd_no_enter, -1)
     }
 
     /// `autocmd_no_leave -= 1` — the inverse of
     /// [`Suppress::win_leave_autocmds`].
-    pub(crate) fn win_leave_autocmds() -> Bump {
-        Bump::by(&autocmd_no_leave, -1)
+    pub(crate) fn win_leave_autocmds() -> AutocmdBump {
+        Bump::by(autocmd_no_leave, -1)
     }
 
     /// `no_check_timestamps = 0` — this scope checks file timestamps even
@@ -640,8 +643,8 @@ impl Lock {
 /// released together.
 #[must_use = "the counters are released as soon as the guard is dropped"]
 pub(crate) struct WinAutocmds {
-    _enter: Bump,
-    _leave: Bump,
+    _enter: AutocmdBump,
+    _leave: AutocmdBump,
 }
 
 /// Guards over how the next key read is decoded.

@@ -42,7 +42,7 @@ use crate::channel::{
 };
 use crate::event::libuv::uv_strerror;
 use crate::event::r#loop::{one_arg_event, process_events_until};
-use crate::event::multiqueue::{multiqueue_new_child, multiqueue_put_event};
+use crate::event::multiqueue::{main_loop_child_queue, multiqueue_put_event};
 use crate::event::proc::exit_on_closed_chan;
 use crate::event::rstream::rstream_start;
 use crate::event::wstream::{wstream_release_wbuffer, wstream_write};
@@ -180,7 +180,7 @@ pub struct RequestEvent {
 /// Creates the queue that `nvim_get_mode` replies are answered from.
 pub fn rpc_init() {
     // SAFETY: the caller's guarantee that the loop exists.
-    let queue = unsafe { multiqueue_new_child((*main_loop.ptr()).events) };
+    let queue = main_loop_child_queue();
     ch_before_blocking_events.set(queue);
 }
 

@@ -24,6 +24,17 @@ use crate::smsg;
 use crate::snprintf;
 use crate::types::EstackInfo;
 
+/// The buffer number `apc`'s `<buffer=N>` patterns match: its own until
+/// the walk is running, then the running walks' slot, which
+/// [`aubuflocal_remove`](super::aubuflocal_remove) clears when the buffer
+/// goes.
+fn walk_bufnr(apc: &AutoPatCmd) -> BufferHandle {
+    match apc.walk {
+        Some(at) => active_walk_bufnrs.with(|nrs| nrs.get(at).copied().unwrap_or(0)),
+        None => apc.arg_bufnr,
+    }
+}
+
 /// Advance `apc` to the next autocommand whose pattern matches, updating
 /// the execution-stack entry when the pattern changes.
 ///
@@ -81,7 +92,7 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
                     )
                 }
             } else {
-                unsafe { (*ap).buflocal_nr == (*apc).arg_bufnr }
+                unsafe { (*ap).buflocal_nr == walk_bufnr(&*apc) }
             };
             if !matched {
                 continue;
@@ -184,7 +195,10 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     );
     data.insert(
         c"match",
-        Object::string(unsafe { cstr_to_string(autocmd_match.get()) }),
+        Object::string(autocmd_match.with(|name| {
+            name.as_ref()
+                .map_or(String_0::NULL, |name| String_0::from_bytes(name))
+        })),
     );
     data.insert(c"buf", Object::integer(autocmd_bufnr.get() as Integer));
     let event_data = unsafe { (*apc).data };

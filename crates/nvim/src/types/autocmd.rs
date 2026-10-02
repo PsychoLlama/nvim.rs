@@ -43,9 +43,12 @@ pub struct AutoPatCmd {
     pub group: ::core::ffi::c_int,
     pub event: AutoEvent,
     pub script_ctx: ScriptCtx,
+    /// The buffer number `<buffer=N>` patterns match against, until the
+    /// walk is running; then its slot in the running walks' numbers, which
+    /// a buffer being freed clears.
     pub arg_bufnr: ::core::ffi::c_int,
+    pub(crate) walk: Option<usize>,
     pub data: *mut Object,
-    pub next: *mut AutoPatCmd,
 }
 pub struct AcoSave {
     pub use_aucmd_win_idx: ::core::ffi::c_int,

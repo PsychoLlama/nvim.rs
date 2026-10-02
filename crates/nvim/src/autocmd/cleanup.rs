@@ -135,13 +135,11 @@ pub fn au_get_autocmds_for_event(event: AutoEvent) -> *mut AutoCmdVec {
 pub fn aubuflocal_remove(buffer: Buf) {
     // A walk in progress may be about to match on this buffer number;
     // clear it rather than let it match a freed buffer.
-    let mut apc = active_apc_list.get();
-    while !apc.is_null() {
-        if buffer.handle == unsafe { (*apc).arg_bufnr } {
-            unsafe { (*apc).arg_bufnr = 0 };
+    active_walk_bufnrs.with_mut(|nrs| {
+        for nr in nrs.iter_mut().filter(|nr| **nr == buffer.handle) {
+            *nr = 0;
         }
-        apc = unsafe { (*apc).next };
-    }
+    });
 
     for event in AutoEvent::all() {
         let acs = au_event_vec(event);

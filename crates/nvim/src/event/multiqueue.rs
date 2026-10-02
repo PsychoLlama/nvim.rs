@@ -33,6 +33,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::startup::main_loop;
 use crate::types::multiqueue_list::{Item, ItemList};
 use crate::types::{Event, MultiQueue, PutCallback, Refcount, size_t};
 use core::ffi::c_void;
@@ -128,6 +129,16 @@ pub unsafe fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue {
     // Upstream counts a new child in the parent's size. See the field's note.
     parent.size = parent.size.wrapping_add(1);
     new_queue(parent.as_ptr(), None, ptr::null_mut())
+}
+
+/// A child of the main loop's event queue.
+///
+/// Safe for the reason the editor's other event-queue owners are: the main
+/// loop and its `events` queue are set up before anything that asks for a
+/// child runs, and live until exit.
+pub(crate) fn main_loop_child_queue() -> *mut MultiQueue {
+    // SAFETY: the main loop's queue, live from startup to exit.
+    unsafe { multiqueue_new_child((*main_loop.ptr()).events) }
 }
 
 fn new_queue(parent: *mut MultiQueue, on_put: PutCallback, data: *mut c_void) -> *mut MultiQueue {

@@ -23,7 +23,7 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::clear_local;
 use crate::eval::{Tm, Tv, callback_call, last_timer_id, timers};
-use crate::event::multiqueue::{multiqueue_free, multiqueue_new_child};
+use crate::event::multiqueue::{main_loop_child_queue, multiqueue_free};
 use crate::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
@@ -210,7 +210,8 @@ pub unsafe fn timer_start(
     // than through `DerefMut`, which would borrow the whole `Timer` and
     // pop the address the loop is holding — `winlayer::live`'s note.
     // SAFETY: as above -- the loop's queue is live and `tw` is the timer's.
-    unsafe { (*tw).events = multiqueue_new_child((*main_loop.ptr()).events) };
+    let events = main_loop_child_queue();
+    unsafe { (*tw).events = events };
     // SAFETY: as above.
     unsafe { (*tw).blockable = true };
     let repeat = timeout as uint64_t;

@@ -1,5 +1,4 @@
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -11,9 +10,12 @@ use core::ffi::CStr;
 use crate::api::private::helpers::{cstr_to_string, find_buffer_by_handle};
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::state::{
-    autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match,
-    autocmd_no_enter, autocmd_no_leave, deferred_events, did_cursorhold, last_cursormoved,
-    last_cursormoved_win,
+    active_walk_bufnrs, au_need_clean, autocmd_blocked, autocmd_bufnr, autocmd_busy, autocmd_fname,
+    autocmd_fname_full, autocmd_include_groups, autocmd_match, autocmd_nested, autocmd_nesting,
+    autocmd_no_enter, autocmd_no_leave, current_augroup, deferred_events, did_cursorhold,
+    filechangeshell_busy, focusgained_busy, focusgained_last_time, ft_recursive, last_cursormoved,
+    last_cursormoved_win, map_augroup_id_to_name, map_augroup_name_to_id, next_augroup_id,
+    pending_vimresume, termresponse_changed, uienter_busy,
 };
 use crate::buffer::{buf_is_prompt, current_buf, do_modelines, find_buf};
 use crate::charset::{skipdigits, skipwhite};
@@ -25,7 +27,7 @@ use crate::eval::typval::{
 use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, set_cmdarg, set_vim_var_nr, vars_clear};
 use crate::eval::{callback_call, get_v_event, last_set_msg, restore_v_event};
-use crate::event::multiqueue::{multiqueue_new_child, multiqueue_put_event};
+use crate::event::multiqueue::{main_loop_child_queue, multiqueue_put_event};
 use crate::ex_docmd::{do_cmdline, ends_excmd, expand_sfile, get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::{aborting, should_abort};
 use crate::fileio::{check_timestamps, file_pat_to_reg_pat, match_file_pat};
@@ -57,14 +59,12 @@ use crate::path::{full_name_save, path_fnamecmp, path_tail};
 use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
-use crate::registry::{IdMap, SlotTable, id_map};
 use crate::runtime::state::current_sctx;
 use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::startup::{main_loop, starting};
 use crate::state::mode::last_mode;
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
-use crate::strings::xstrnsave;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AcoSave, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
@@ -125,36 +125,9 @@ pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::
 /// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted
 /// byte array upstream, because c2rust had no `CStr`; nothing writes it.
 const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";
-static active_apc_list: GlobalCell<*mut AutoPatCmd> =
-    GlobalCell::new(::core::ptr::null_mut::<AutoPatCmd>());
-static next_augroup_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
-static current_augroup: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(AUGROUP_DEFAULT as ::core::ffi::c_int);
-static au_need_clean: GlobalCell<bool> = GlobalCell::new(false);
-static autocmd_blocked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static autocmd_nested: GlobalCell<bool> = GlobalCell::new(false);
-static autocmd_include_groups: GlobalCell<bool> = GlobalCell::new(false);
-static termresponse_changed: GlobalCell<bool> = GlobalCell::new(false);
-/// Group name -> id, in creation order.
-///
-/// khash, which this was, is insertion-ordered with a swap-remove, and
-/// `:augroup`'s listing walks it directly (F-P21-9). A [`SlotTable`] is that
-/// order; a key is the name plus a NUL, because the listing prints one as a
-/// C string ([`groups::group_key`]).
-static map_augroup_name_to_id: GlobalCell<SlotTable<Box<[u8]>, ::core::ffi::c_int>> =
-    GlobalCell::new(SlotTable::new());
-/// Id -> group name. Point lookups only, so a plain map will do; the name is
-/// NUL-terminated because `augroup_name` answers a `*mut c_char` into it.
-static map_augroup_id_to_name: GlobalCell<IdMap<::core::ffi::c_int, Box<[u8]>>> =
-    GlobalCell::new(id_map());
-
-/// Safe: it takes nothing, and the event loop it hangs the deferred-event
-/// queue off is live from startup to exit.
+/// Give the deferred events their queue, a child of the main loop's.
 pub fn autocmd_init() {
-    // SAFETY: `main_loop` is initialised before this is reached, so reading
-    // its `events` queue and giving it a child are both on a live loop.
-    let child = unsafe { multiqueue_new_child((*main_loop.ptr()).events) };
-    deferred_events.set(child);
+    deferred_events.set(main_loop_child_queue());
 }
 /// Where the `VimSuspend`/`VimResume` pair has got to.
 ///
@@ -171,7 +144,6 @@ pub(crate) enum SuspendLatch {
     ResumeOwed,
 }
 
-static pending_vimresume: GlobalCell<SuspendLatch> = GlobalCell::new(SuspendLatch::Idle);
 pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;

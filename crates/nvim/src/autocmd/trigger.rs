@@ -391,12 +391,10 @@ pub fn may_trigger_vim_suspend_resume(suspend: bool) {
 
 /// Fire `UIEnter`/`UILeave` for the channel that attached or detached.
 pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
-    static recursive: GlobalCell<bool> = GlobalCell::new(false);
-
-    if starting.get() == NO_SCREEN || recursive.get() {
+    if starting.get() == NO_SCREEN || uienter_busy.get() {
         return;
     }
-    recursive.set(true);
+    uienter_busy.set(true);
 
     let mut save_v_event = SaveVEvent::default();
     // SAFETY: `save_v_event` is this frame's own storage, and the dictionary
@@ -426,19 +424,16 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     // SAFETY: the pair `get_v_event` above opened.
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
 
-    recursive.set(false);
+    uienter_busy.set(false);
 }
 
 /// Fire `FocusGained`/`FocusLost`, and re-check file timestamps on a gain
 /// -- but not more often than every two seconds.
 pub fn do_autocmd_focusgained(gained: bool) {
-    static recursive: GlobalCell<bool> = GlobalCell::new(false);
-    static last_time: GlobalCell<Timestamp> = GlobalCell::new(0 as Timestamp);
-
-    if recursive.get() {
+    if focusgained_busy.get() {
         return;
     }
-    recursive.set(true);
+    focusgained_busy.set(true);
 
     // SAFETY: no file name, and `curbuf` is live from startup to exit.
     unsafe {
@@ -454,12 +449,12 @@ pub fn do_autocmd_focusgained(gained: bool) {
             Buf::current_or_none(),
         )
     };
-    if gained && last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
+    if gained && focusgained_last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
         check_timestamps(1);
-        last_time.set(os_now());
+        focusgained_last_time.set(os_now());
     }
 
-    recursive.set(false);
+    focusgained_busy.set(false);
 }
 
 /// Fire `FileType` for `buffer`, with `secure` cleared and recursion counted.
@@ -468,15 +463,13 @@ pub fn do_autocmd_focusgained(gained: bool) {
 /// then does not `force` the autocommands themselves, which is what the
 /// `ft_recursive == 1` test says.
 pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
-    static ft_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-
     if ft_recursive.get() > 0 && !force {
         return false;
     }
 
     let secure_save = secure.get();
     secure.set(0);
-    let ft_recursing = Depth::of(&ft_recursive);
+    let ft_recursing = Depth::of(ft_recursive);
 
     buffer.b_did_filetype = true;
     // SAFETY: `b_p_ft` and `b_fname` are that buffer's own NUL-terminated

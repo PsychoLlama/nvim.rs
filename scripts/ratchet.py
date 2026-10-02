@@ -984,7 +984,6 @@ CELL_COPY_OWNER = (
     # S14 behind `CmdlineBlock`/`RestartArgs`, two owned newtypes over the
     # `Array` with a `Drop`. Neither is `Copy`, so there is no `get` on either
     # to count, and the one genuine move at each is `GlobalCell::take`.
-    "pending_vimresume",
     "CLIPBOARD",
     "pc_status",
     "EXPAND_WHAT",

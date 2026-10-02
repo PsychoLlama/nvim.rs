@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 use crate::cstr;
 use crate::ex_cmds::newlnum;
+use crate::memory::XString;
 use crate::optionstr::{OptString, local_or_global};
 use crate::snprintf;
 use crate::types::CmdIdx;
@@ -42,7 +43,7 @@ use crate::ex_docmd::{
     e_no_script_file_name_to_substitute_for_script, e_no_source_file_name_to_substitute_for_sfile,
 };
 use crate::file_search::{FileNameOpts, file_name_at_cursor};
-use crate::memory::{xmemdupz, xstrdup, xstrlcpy};
+use crate::memory::{xmemdupz, xstrdup};
 use crate::message::e_usingsid;
 use crate::option::vars::{P_GP, P_MP, p_wic};
 use crate::runtime::state::current_sctx;
@@ -521,13 +522,24 @@ pub unsafe fn eval_vars(
             SPEC_AFILE => {
                 // The autocommand's file name is shortened on first use
                 // and the shortened form is kept.
-                if !autocmd_fname.get().is_null() && !autocmd_fname_full.get() {
+                if autocmd_fname.with(Option::is_some) && !autocmd_fname_full.get() {
                     autocmd_fname_full.set(true);
-                    result = unsafe { full_name_save(autocmd_fname.get(), false) };
-                    unsafe { xstrlcpy(autocmd_fname.get(), result, MAXPATHL as size_t) };
-                    xfree(result as *mut c_void);
+                    let short = autocmd_fname.with(|name| name.clone().unwrap_or_default());
+                    // SAFETY: a NUL-terminated copy of the name.
+                    let full = unsafe { full_name_save(short.as_ptr(), false) };
+                    // SAFETY: `full_name_save` answers a NUL-terminated copy.
+                    let mut name = XString::from_cstr(unsafe { CStr::from_ptr(full) });
+                    // Cut as upstream's `xstrlcpy` into the MAXPATHL buffer.
+                    name.truncate(MAXPATHL as usize - 1);
+                    autocmd_fname.set(Some(name));
+                    xfree(full as *mut c_void);
                 }
-                result = autocmd_fname.get();
+                // Points into the cell, which nothing writes before the
+                // caller has copied the expansion out.
+                result = autocmd_fname.with(|name| {
+                    name.as_ref()
+                        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
+                });
                 if result.is_null() {
                     unsafe {
                         *errormsg =
@@ -556,7 +568,11 @@ pub unsafe fn eval_vars(
                 result = &raw mut strbuf as *mut c_char;
             }
             SPEC_AMATCH => {
-                result = autocmd_match.get();
+                // As `<afile>`'s, a pointer into the cell.
+                result = autocmd_match.with(|name| {
+                    name.as_ref()
+                        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
+                });
                 if result.is_null() {
                     unsafe {
                         *errormsg =

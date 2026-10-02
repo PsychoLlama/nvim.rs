@@ -22,6 +22,7 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::nlua_exec;
+use crate::memory::XString;
 use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
 use crate::message::e_invarg;
 use crate::message::on_print_cb;
@@ -198,8 +199,8 @@ pub fn f_rpcnotify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// function call stack, not with whatever the provider left behind.
 struct ProviderScope {
     sctx: ScriptCtx,
-    autocmd_fname: *mut c_char,
-    autocmd_match: *mut c_char,
+    autocmd_fname: Option<XString>,
+    autocmd_match: Option<XString>,
     autocmd_fname_full: bool,
     autocmd_bufnr: c_int,
     /// Held for its drop, which puts the call stack back.
@@ -211,8 +212,8 @@ impl ProviderScope {
         // SAFETY throughout: the caller's obligation.
         let saved = ProviderScope {
             sctx: current_sctx.get(),
-            autocmd_fname: autocmd_fname.get(),
-            autocmd_match: autocmd_match.get(),
+            autocmd_fname: autocmd_fname.take(),
+            autocmd_match: autocmd_match.take(),
             autocmd_fname_full: autocmd_fname_full.get(),
             autocmd_bufnr: autocmd_bufnr.get(),
             _funccal: CallStackAside::new(),
@@ -227,8 +228,8 @@ impl ProviderScope {
             // Push the caller's execution-stack entry so that any message
             // names the caller's script, not the provider's.
             exestack.with_mut(|stack| stack.push(scope.es_entry));
-            autocmd_fname.set(scope.autocmd_fname);
-            autocmd_match.set(scope.autocmd_match);
+            autocmd_fname.set(scope.autocmd_fname.clone());
+            autocmd_match.set(scope.autocmd_match.clone());
             autocmd_fname_full.set(scope.autocmd_fname_full);
             autocmd_bufnr.set(scope.autocmd_bufnr);
             set_current_fc(scope.funccalp);

@@ -153,14 +153,15 @@ pub struct VirtText {
     pub capacity: size_t,
     pub items: *mut VirtTextChunk,
 }
-#[derive(Copy, Clone)]
-pub struct caller_scope {
-    pub script_ctx: ScriptCtx,
-    pub es_entry: EStack,
-    pub autocmd_fname: *mut ::core::ffi::c_char,
-    pub autocmd_match: *mut ::core::ffi::c_char,
-    pub autocmd_fname_full: bool,
-    pub autocmd_bufnr: ::core::ffi::c_int,
+/// What a provider call reaches back into: the context of the script that
+/// started it.
+pub(crate) struct CallerScope {
+    pub(crate) script_ctx: ScriptCtx,
+    pub(crate) es_entry: EStack,
+    pub(crate) autocmd_fname: Option<crate::memory::XString>,
+    pub(crate) autocmd_match: Option<crate::memory::XString>,
+    pub(crate) autocmd_fname_full: bool,
+    pub(crate) autocmd_bufnr: ::core::ffi::c_int,
     pub(crate) funccalp: Option<FcId>,
 }
 /// A dictionary item's key: its own bytes, NUL-terminated.
