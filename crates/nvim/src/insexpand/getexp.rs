@@ -15,8 +15,9 @@ use crate::cmdexpand::Expanded;
 use crate::cstr;
 use crate::ex_getln::EXPAND_T_INIT;
 use crate::memory::XString;
+use crate::option::next_option_part;
 use crate::option::vars::{P_DICT, P_TSR, P_TSRFU};
-use crate::optionstr::{OptString, local_or_global};
+use crate::optionstr::{OptString, OptStringRef, local_or_global};
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
@@ -32,76 +33,48 @@ const LOOKBACK_LINE_COUNT: LineNr = 1000;
 /// through it has got.
 ///
 /// Upstream keeps two fields for this: `st.e_cpt_copy`, the `xstrdup`ed
-/// copy, and `st.e_cpt`, a bare `char *` walking it. The copy is freed at
-/// the *start* of the next completion, which leaves it the one allocation
-/// in this family with no owner, and leaves the cursor free to outlive the
-/// bytes it points into.
-///
-/// Here the buffer is owned and the cursor is a byte offset into it, so a
-/// fresh copy frees the old one in the same step -- at exactly the point
-/// upstream's `xfree` ran -- and no cursor survives the buffer.
+/// copy, and `st.e_cpt`, a bare `char *` walking it. Here the copy is owned
+/// and the cursor is a byte offset into it, so a fresh copy frees the old
+/// one in the same step -- at exactly the point upstream's `xfree` ran --
+/// and no cursor survives the buffer.
 ///
 /// The copy is taken at all because `'complete'` belongs to a buffer, and a
 /// completion runs user code that can wipe that buffer out.
 pub(crate) struct CptScan {
-    /// The copy, or null before the first completion. Never reallocated:
-    /// `st.dict` borrows these bytes for a `k`/`s` entry's dictionary name,
-    /// and reads them after the cursor has moved on.
-    option: *mut c_char,
+    /// The copy, `None` before the first completion.
+    option: Option<XString>,
     /// Where the entry being scanned starts, as a byte offset into
     /// `option`.
     cursor: usize,
 }
 
-impl Drop for CptScan {
-    fn drop(&mut self) {
-        // SAFETY: this value's own `xstrdup`, or null, which `xfree` takes.
-        unsafe { xfree(self.option.cast::<c_void>()) };
-    }
-}
-
 impl CptScan {
     /// No copy taken yet: what C's zeroed `static` starts out as.
     pub(crate) const EMPTY: CptScan = CptScan {
-        option: ptr::null_mut(),
+        option: None,
         cursor: 0,
     };
 
-    /// Drop the copy in hand and take a fresh one of `option`, positioned on
-    /// its first entry. This is upstream's `xfree`/`xstrdup` pair at the
-    /// start of a completion.
-    ///
-    /// # Safety
-    /// `option` is a NUL-terminated string.
-    pub(crate) unsafe fn restart(&mut self, option: *const c_char) {
-        // The old copy goes first, where upstream's `xfree` was, rather than
-        // after the new one has been allocated.
-        *self = Self::EMPTY;
-        // SAFETY: the caller's contract.
-        let copy = unsafe { xstrdup(option) };
-        // SAFETY: `copy` is this value's own NUL-terminated string, and
-        // `strip_caret_numbers_in_place` only ever shortens it in place.
-        unsafe { strip_caret_numbers_in_place(copy) };
+    /// Take a fresh copy of `option`, without its `^N` max-matches suffixes,
+    /// positioned on its first entry. This is upstream's `xfree`/`xstrdup`
+    /// pair at the start of a completion.
+    pub(crate) fn restart(&mut self, option: &[u8]) {
         *self = CptScan {
-            option: copy,
+            option: Some(strip_caret_numbers(option)),
             cursor: 0,
         };
     }
 
-    /// What is left of `'complete'`: the `char *` the readers, and the
-    /// dictionary name `st.dict` keeps, want.
-    pub(crate) fn rest(&self) -> *mut c_char {
-        // Address arithmetic only -- nothing is read until `at`, and the
-        // empty scan is a null pointer with a zero cursor.
-        self.option.wrapping_add(self.cursor)
+    /// What is left of `'complete'`, empty before the first completion.
+    pub(crate) fn rest(&self) -> &[u8] {
+        self.option
+            .as_ref()
+            .map_or(&[], |option| &option[self.cursor..])
     }
 
     /// The byte the scan is on, `NUL` once `'complete'` is used up.
-    pub(crate) fn at(&self) -> c_char {
-        // SAFETY: the cursor never passes the copy's terminator, and a scan
-        // is only read once `restart` has given it a buffer -- as upstream
-        // reads `*st->e_cpt` without a null check.
-        unsafe { *self.rest() }
+    pub(crate) fn at(&self) -> u8 {
+        self.rest().first().copied().unwrap_or(NUL as u8)
     }
 
     /// Step over one byte: C's `*++st->e_cpt` reaching the name after a
@@ -113,152 +86,125 @@ impl CptScan {
     /// Step over what separates two entries -- `'complete'` allows spaces
     /// after its commas.
     pub(crate) fn skip_separators(&mut self) {
-        while self.at() as c_int == ',' as c_int || self.at() as c_int == ' ' as c_int {
+        while matches!(self.at(), b',' | b' ') {
             self.bump();
         }
     }
 
-    /// Step to the entry after this one, copying the one just left into
-    /// `buf` -- C's `copy_option_part(&st->e_cpt, ...)`.
-    ///
-    /// # Safety
-    /// `buf` has `len` writable bytes.
-    pub(crate) unsafe fn next_entry(&mut self, buf: *mut c_char, len: size_t) {
-        let mut p = self.rest();
-        // SAFETY: the caller's contract for `buf`; `p` walks this scan's own
-        // copy, which `copy_option_part` only reads.
-        unsafe { copy_option_part(&raw mut p, buf, len, c",".as_ptr().cast_mut()) };
-        // `copy_option_part` only moves the pointer forward, and stops at the
-        // terminator, so this stays within the copy.
-        self.cursor = p.addr() - self.option.addr();
+    /// Step to the entry after this one -- C's
+    /// `copy_option_part(&st->e_cpt, ...)` with the copy thrown away.
+    pub(crate) fn next_entry(&mut self) {
+        let rest = self.rest();
+        let after = next_option_part(rest, &mut Vec::new()).len();
+        self.cursor += rest.len() - after;
     }
 }
 
 /// Thesaurus completion goes through a function rather than a word list:
 /// `'thesaurusfunc'` is set.
-
 pub(crate) fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
         && (Buf::current().b_p_tsrfu.first_byte() as c_int != NUL || P_TSRFU.first_byte() != 0)
 }
 
-/// Is there another `'complete'` entry after `cpt`, so the source index should
+/// Is there another `'complete'` entry in `rest`, so the source index should
 /// move on?
-///
-/// # Safety
-///
-/// `cpt` must point at a NUL-terminated string.
-pub(crate) unsafe fn may_advance_cpt_index(cpt: *const c_char) -> bool {
-    if cpt_sources().index() == -1 {
-        return false;
-    }
-    let mut p = cpt;
-    while unsafe { *p } as c_int == ',' as c_int || unsafe { *p } as c_int == ' ' as c_int {
-        p = unsafe { p.offset(1) };
-    }
-    unsafe { *p as c_int != NUL }
+pub(crate) fn may_advance_cpt_index(rest: &[u8]) -> bool {
+    cpt_sources().index() != -1 && rest.iter().any(|&b| b != b',' && b != b' ')
 }
 
-/// Get the next entry from `'complete'` (`st.e_cpt`) and set up `st` for it.
-///
-/// Writes the CTRL-X mode the entry stands for to `compl_type_arg` and whether
-/// the source index should advance to `advance_cpt_idx`. Returns
-/// `INS_COMPL_CPT_OK` when the entry is ready to collect from,
-/// `INS_COMPL_CPT_CONT` to skip it, `INS_COMPL_CPT_END` when `'complete'` is
-/// exhausted.
-///
-/// # Safety
-///
-/// `st` must point at a live `InsComplNextState`, unaliased for the call.
-/// `compl_type_arg` must point at a writable `int` the caller owns.
-/// `start_match_pos` must point at an initialized position, unaliased for the
-/// call. `advance_cpt_idx` must point at a writable `bool` the caller owns.
-pub(crate) unsafe fn process_next_cpt_value(
-    st: *mut InsComplNextState,
-    compl_type_arg: *mut c_int,
-    start_match_pos: *mut Pos,
+/// What [`process_next_cpt_value`] makes of the next `'complete'` entry.
+pub(crate) struct CptValue {
+    /// `INS_COMPL_CPT_OK` when the entry is ready to collect from,
+    /// `INS_COMPL_CPT_CONT` to skip it, `INS_COMPL_CPT_END` when
+    /// `'complete'` is exhausted.
+    pub(crate) status: c_int,
+    /// The CTRL-X mode the entry stands for, `-1` for none.
+    pub(crate) compl_type: c_int,
+    /// Whether the source index should move on.
+    pub(crate) advance: bool,
+}
+
+/// Get the next entry from `'complete'` (`st.cpt`) and set up `st` for it.
+pub(crate) fn process_next_cpt_value(
+    st: &mut InsComplNextState,
+    start_match_pos: Pos,
     fuzzy_collect: bool,
-    advance_cpt_idx: *mut bool,
-) -> c_int {
-    // The progress message, and the throwaway `copy_option_part` writes
-    // into to step over the entry. Upstream shares `IObuff` for both.
+) -> CptValue {
+    // The progress message. Upstream shares `IObuff` for it.
     let mut scratch = [0 as c_char; IOSIZE as usize];
     let mut compl_type = -1;
     let mut status = INS_COMPL_CPT_OK;
+    let mut advance = false;
     let skip_source = compl_autocomplete.get() && compl_from_nonkeyword.get();
 
-    unsafe { (*st).found_all = false };
-    unsafe { *advance_cpt_idx = false };
-
-    unsafe { (*st).cpt.skip_separators() };
+    st.found_all = false;
+    st.cpt.skip_separators();
 
     'done: {
-        if unsafe { (*st).cpt.at() } as c_int == '.' as c_int
+        let flag = st.cpt.at();
+        if flag == b'.'
             && !Buf::current().b_scanned
             && !skip_source
             && !compl_time_slice_expired.get()
         {
-            unsafe { (*st).ins_buf = Some(Buf::current().id()) };
-            unsafe { (*st).first_match_pos = *start_match_pos };
+            st.ins_buf = Some(Buf::current().id());
+            st.first_match_pos = start_match_pos;
             // Move the cursor back one character so that CTRL-N can match
             // the word immediately after the cursor.
-            if ctrl_x_mode_normal()
-                && !fuzzy_collect
-                && unsafe { dec(&mut (*st).first_match_pos) } < 0
-            {
+            if ctrl_x_mode_normal() && !fuzzy_collect && dec(&mut st.first_match_pos) < 0 {
                 // Move to after the last character in the buffer, so that
                 // a word at the start of it is found correctly.
-                unsafe { (*st).first_match_pos.lnum = Buf::current().line_count() };
-                unsafe {
-                    (*st).first_match_pos.col =
-                        Buf::current().lines().line_len((*st).first_match_pos.lnum)
-                };
+                let lnum = Buf::current().line_count();
+                st.first_match_pos.lnum = lnum;
+                st.first_match_pos.col = Buf::current().lines().line_len(lnum);
             }
-            unsafe { (*st).last_match_pos = (*st).first_match_pos };
+            st.last_match_pos = st.first_match_pos;
             compl_type = 0;
             // Remember the first match, so the loop stops when the search
             // wraps and comes back to it a second time.
-            unsafe { (*st).set_match_pos = true };
+            st.set_match_pos = true;
         } else if !skip_source
             && !compl_time_slice_expired.get()
-            && has_char(c"buwU", unsafe { (*st).cpt.at() } as uint8_t as c_int)
+            && has_char(c"buwU", c_int::from(flag))
             && {
                 // The scan's buffer outlives every autocommand and user
                 // function a pass through this loop runs, so it may have been
                 // wiped since it was stored. Restarting the walk at the
                 // current buffer is what `ins_compl_get_exp` does for the
                 // same case one level up.
-                let from = unsafe { (*st).ins_buf }
-                    .and_then(BufId::get)
-                    .unwrap_or_else(Buf::current);
-                let next = ins_compl_next_buf(from, unsafe { (*st).cpt.at() } as c_int);
-                unsafe { (*st).ins_buf = Some(next.id()) };
+                let from = st.ins_buf.and_then(BufId::get).unwrap_or_else(Buf::current);
+                let next = ins_compl_next_buf(from, c_int::from(flag));
+                st.ins_buf = Some(next.id());
                 next != Buf::current()
             }
         {
             // Scan a buffer, but not the current one: the one just picked,
             // which nothing since has had a chance to wipe.
-            let buf = unsafe { (*st).ins_buf }
+            let buf = st
+                .ins_buf
                 .and_then(BufId::get)
                 .expect("ins_compl_next_buf answered a live buffer");
             if !buf.b_ml.ml_mfp.is_null() {
                 // Loaded buffer.
                 compl_started.set(true);
-                unsafe { (*st).first_match_pos.col = 0 };
-                unsafe { (*st).last_match_pos.col = 0 };
-                unsafe { (*st).first_match_pos.lnum = buf.line_count() + 1 };
-                unsafe { (*st).last_match_pos.lnum = 0 };
+                st.first_match_pos.col = 0;
+                st.last_match_pos.col = 0;
+                st.first_match_pos.lnum = buf.line_count() + 1;
+                st.last_match_pos.lnum = 0;
                 compl_type = 0;
             } else {
                 // Unloaded buffer: scan it like a dictionary.
-                unsafe { (*st).found_all = true };
-                if buf.name.shown_ptr().is_null() {
+                st.found_all = true;
+                let Some(name) = buf.name.shown() else {
                     status = INS_COMPL_CPT_CONT;
                     break 'done;
-                }
+                };
                 compl_type = CTRL_X_DICTIONARY;
-                unsafe { (*st).dict = buf.name.shown_ptr() };
-                unsafe { (*st).dict_f = DICT_EXACT };
+                // A copy: the progress message below can run Lua, and that
+                // can wipe the buffer the name belongs to.
+                st.dict = Some(XString::from_cstr(name));
+                st.dict_f = DICT_EXACT;
             }
             if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
                 let name = if buf.name.is_unnamed() {
@@ -276,45 +222,37 @@ pub(crate) unsafe fn process_next_cpt_value(
                 // SAFETY: `vim_snprintf` NUL-terminated `out`.
                 unsafe { scan_progress(out) };
             }
-        } else if unsafe { (*st).cpt.at() } as c_int == NUL {
+        } else if flag == NUL as u8 {
             status = INS_COMPL_CPT_END;
         } else {
             if ctrl_x_mode_line_or_eval() {
                 // compl_type stays -1.
-            } else if unsafe { (*st).cpt.at() } as c_int == 'F' as c_int
-                || unsafe { (*st).cpt.at() } as c_int == 'o' as c_int
-            {
+            } else if flag == b'F' || flag == b'o' {
                 compl_type = CTRL_X_FUNCTION;
-                unsafe {
-                    (*st).func_cb =
-                        get_callback_if_cpt_func((*st).cpt.rest(), cpt_sources().index())
-                };
-                if unsafe { (*st).func_cb }.is_null() {
+                st.func_cb = get_callback_if_cpt_func(st.cpt.rest(), cpt_sources().index());
+                if st.func_cb.is_null() {
                     compl_type = -1;
                 }
             } else if !skip_source {
-                let flag = unsafe { (*st).cpt.at() } as c_int;
-                if flag == 'k' as c_int || flag == 's' as c_int {
-                    compl_type = if flag == 'k' as c_int {
+                if flag == b'k' || flag == b's' {
+                    compl_type = if flag == b'k' {
                         CTRL_X_DICTIONARY
                     } else {
                         CTRL_X_THESAURUS
                     };
                     // C's `*++st->e_cpt`: a name may follow the flag.
-                    unsafe { (*st).cpt.bump() };
-                    if unsafe { (*st).cpt.at() } as c_int != ',' as c_int
-                        && unsafe { (*st).cpt.at() } as c_int != NUL
-                    {
-                        unsafe { (*st).dict = (*st).cpt.rest() };
-                        unsafe { (*st).dict_f = DICT_FIRST };
+                    st.cpt.bump();
+                    if !matches!(st.cpt.at(), b',' | 0) {
+                        st.dict = Some(XString::from_bytes(st.cpt.rest()));
+                        st.dict_f = DICT_FIRST;
                     }
-                } else if flag == 'i' as c_int {
+                } else if flag == b'i' {
                     compl_type = CTRL_X_PATH_PATTERNS;
-                } else if flag == 'd' as c_int {
+                } else if flag == b'd' {
                     compl_type = CTRL_X_PATH_DEFINES;
-                } else if flag == 'f' as c_int {
+                } else if flag == b'f' {
                     compl_type = CTRL_X_BUFNAMES;
-                } else if flag == ']' as c_int || flag == 't' as c_int {
+                } else if flag == b']' || flag == b't' {
                     compl_type = CTRL_X_TAGS;
                     if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
                         let text = gettext(c"Scanning tags.");
@@ -328,18 +266,21 @@ pub(crate) unsafe fn process_next_cpt_value(
             }
 
             // In any case the scan advances to the next entry.
-            unsafe { (*st).cpt.next_entry(scratch.as_mut_ptr(), IOSIZE as size_t) };
-            unsafe { *advance_cpt_idx = may_advance_cpt_index((*st).cpt.rest()) };
+            st.cpt.next_entry();
+            advance = may_advance_cpt_index(st.cpt.rest());
 
-            unsafe { (*st).found_all = true };
+            st.found_all = true;
             if compl_type == -1 {
                 status = INS_COMPL_CPT_CONT;
             }
         }
     }
 
-    unsafe { *compl_type_arg = compl_type };
-    status
+    CptValue {
+        status,
+        compl_type,
+        advance,
+    }
 }
 
 /// Identifiers (`i`) or defines (`d`) from included files.
@@ -363,36 +304,34 @@ pub(crate) fn get_next_include_file_completion(compl_type: c_int) {
     };
 }
 
-/// Words from `'dictionary'` (`k`) or `'thesaurus'` (`s`) files.
-///
-/// # Safety
-///
-/// `dict` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn get_next_dict_tsr_completion(
+/// Words from `'dictionary'` (`k`) or `'thesaurus'` (`s`) files: `dict`, or
+/// the option's value when the entry names none.
+pub(crate) fn get_next_dict_tsr_completion(
     compl_type: c_int,
-    dict: *mut c_char,
+    dict: Option<XString>,
     dict_f: c_int,
 ) {
-    let pattern = compl_pattern().data();
     if thesaurus_func_complete(compl_type) {
-        unsafe { expand_by_function(compl_type, pattern, ptr::null_mut()) };
+        // SAFETY: the running completion's NUL-terminated pattern, and no
+        // `'complete'` callback.
+        unsafe { expand_by_function(compl_type, compl_pattern().data(), ptr::null_mut()) };
         return;
     }
-    // SAFETY (all three): `curbuf` is live and its option values are
-    // NUL-terminated.
-    let owned = if !dict.is_null() {
-        XString::from_cstr(unsafe { cstr::at(dict) })
-    } else if compl_type == CTRL_X_THESAURUS {
-        local_or_global(&Buf::current().b_p_tsr, P_TSR).get()
-    } else {
-        local_or_global(&Buf::current().b_p_dict, P_DICT).get()
-    };
-    let files = owned.as_ptr().cast_mut();
-    let flags = if dict.is_null() { 0 } else { dict_f };
     let thesaurus = compl_type == CTRL_X_THESAURUS;
+    let flags = if dict.is_none() { 0 } else { dict_f };
+    let files = dict.unwrap_or_else(|| {
+        if thesaurus {
+            local_or_global(&Buf::current().b_p_tsr, P_TSR).get()
+        } else {
+            local_or_global(&Buf::current().b_p_dict, P_DICT).get()
+        }
+    });
+    // A copy: the scan checks for typed keys, and what that runs can reset
+    // the completion's pattern.
+    let pattern = compl_pattern().to_owned();
     // SAFETY: `files` is a NUL-terminated option-style list and `pattern`
-    // the running completion's NUL-terminated pattern.
-    unsafe { ins_compl_dictionaries(files, pattern, flags, thesaurus) };
+    // a NUL-terminated copy of the completion's pattern.
+    unsafe { ins_compl_dictionaries(files.as_ptr().cast_mut(), pattern.data(), flags, thesaurus) };
 }
 
 /// Tag names matching `compl_pattern`, up to `TAG_MANY` of them.
@@ -570,18 +509,14 @@ pub(crate) fn get_next_spell_completion(lnum: LineNr) {
     }
 }
 
-/// Collect one source's worth of matches for `type_0`.
+/// Collect one source's worth of matches for `type_0`, `ini` being where
+/// the completion started.
 ///
 /// Returns true when a new match was found.
-///
-/// # Safety
-///
-/// `st` must point at a live `InsComplNextState`, unaliased for the call.
-/// `ini` must point at an initialized position, unaliased for the call.
-pub(crate) unsafe fn get_next_completion_match(
+pub(crate) fn get_next_completion_match(
     type_0: c_int,
-    st: *mut InsComplNextState,
-    ini: *mut Pos,
+    st: &mut InsComplNextState,
+    ini: Pos,
 ) -> bool {
     let mut found_new_match = Err(Failed);
     match type_0 {
@@ -591,8 +526,7 @@ pub(crate) unsafe fn get_next_completion_match(
             get_next_include_file_completion(type_0);
         }
         CTRL_X_DICTIONARY | CTRL_X_THESAURUS => {
-            unsafe { get_next_dict_tsr_completion(type_0, (*st).dict, (*st).dict_f) };
-            unsafe { (*st).dict = ptr::null_mut() };
+            get_next_dict_tsr_completion(type_0, st.dict.take(), st.dict_f);
         }
         CTRL_X_TAGS => get_next_tag_completion(),
         CTRL_X_FILES => get_next_filename_completion(),
@@ -600,22 +534,25 @@ pub(crate) unsafe fn get_next_completion_match(
         CTRL_X_FUNCTION => {
             if ctrl_x_mode_normal() {
                 // Invoked by an `F`/`o` entry in 'complete'.
-                unsafe { get_cpt_func_completion_matches((*st).func_cb) };
+                // SAFETY: the callback `process_next_cpt_value` found.
+                unsafe { get_cpt_func_completion_matches(st.func_cb) };
             } else {
+                // SAFETY: the running completion's NUL-terminated pattern.
                 unsafe { expand_by_function(type_0, compl_pattern().data(), ptr::null_mut()) };
             }
         }
         CTRL_X_OMNI => {
+            // SAFETY: as above.
             unsafe { expand_by_function(type_0, compl_pattern().data(), ptr::null_mut()) };
         }
-        CTRL_X_SPELL => unsafe { get_next_spell_completion((*st).first_match_pos.lnum) },
+        CTRL_X_SPELL => get_next_spell_completion(st.first_match_pos.lnum),
         CTRL_X_BUFNAMES => get_next_bufname_token(),
         CTRL_X_REGISTER => get_register_completion(),
         // Normal CTRL-P/CTRL-N and CTRL-X CTRL-L.
         _ => {
-            found_new_match = unsafe { get_next_default_completion(st, ini) };
-            if found_new_match.is_err() && unsafe { (*st).ins_buf } == Some(Buf::current().id()) {
-                unsafe { (*st).found_all = true };
+            found_new_match = get_next_default_completion(st, ini);
+            if found_new_match.is_err() && st.ins_buf == Some(Buf::current().id()) {
+                st.found_all = true;
             }
         }
     }
@@ -642,16 +579,30 @@ pub(crate) fn compl_source_start_timer(source_idx: c_int) {
 /// found; the answer is the total number of matches, or −1 while that is still
 /// unknown. -- Acevedo
 pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
-    // Upstream's function-scope `static InsComplNextState st`: the
-    // scan is collected over many calls, so the state outlives each one.
-    // The pointer is taken once, here, because `st.cur_match_pos` points
-    // *into* `st` — the address has to stay put for the whole call — and
-    // because `process_next_cpt_value` and `get_next_completion_match`
-    // want it by pointer anyway.
-    static st_cell: GlobalCell<InsComplNextState> = GlobalCell::new(INS_COMPL_NEXT_STATE_INIT);
-    static st_cleared: GlobalCell<bool> = GlobalCell::new(false);
-    let st = st_cell.ptr();
+    // Upstream's function-scope `static InsComplNextState st`: the scan is
+    // collected over many calls, so it outlives each one. Moved out for
+    // this one, as the sources run user code: a nested collection (which
+    // nothing reaches today) would start from a fresh scan rather than
+    // write into this one.
+    let mut st = SCAN.replace(INS_COMPL_NEXT_STATE_INIT);
+    let count = collect_matches(&mut st, ini);
+    SCAN.set(st);
+    count
+}
 
+impl InsComplNextState {
+    /// The position the search moves.
+    pub(crate) fn cur_match_pos(&mut self) -> &mut Pos {
+        if self.cur_is_last {
+            &mut self.last_match_pos
+        } else {
+            &mut self.first_match_pos
+        }
+    }
+}
+
+/// [`ins_compl_get_exp`] over its scan state.
+fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> c_int {
     let mut found_new_match;
     let mut type_0 = ctrl_x_mode.get();
     let mut may_advance_cpt_idx = false;
@@ -663,47 +614,30 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
         for mut buf in buffers() {
             buf.b_scanned = false;
         }
-        if !st_cleared.get() {
-            st_cell.set(INS_COMPL_NEXT_STATE_INIT);
-            st_cleared.set(true);
-        }
-        unsafe { (*st).found_all = false };
-        unsafe { (*st).ins_buf = Some(Buf::current().id()) };
+        st.found_all = false;
+        st.ins_buf = Some(Buf::current().id());
         // Copy 'complete', in case the buffer is wiped out.
-        let option = if compl_cont_status.get() & CONT_LOCAL != 0 {
-            c".".as_ptr()
+        if compl_cont_status.get() & CONT_LOCAL != 0 {
+            st.cpt.restart(b".");
         } else {
-            Buf::current().b_p_cpt.value_ptr()
-        };
-        // SAFETY: `st` is the scan state cell, and `option` is a
-        // NUL-terminated option string.
-        unsafe { (*st).cpt.restart(option) };
+            st.cpt.restart(Buf::current().b_p_cpt.bytes());
+        }
 
         if compl_autocomplete.get() && is_nearest_active() {
             start_pos.lnum = (start_pos.lnum - LOOKBACK_LINE_COUNT).max(1);
             start_pos.col = 0;
         }
-        unsafe { (*st).first_match_pos = start_pos };
-        unsafe { (*st).last_match_pos = start_pos };
-    } else if unsafe { (*st).ins_buf }.and_then(BufId::get).is_none() {
+        st.first_match_pos = start_pos;
+        st.last_match_pos = start_pos;
+    } else if st.ins_buf.and_then(BufId::get).is_none() {
         // In case the buffer was wiped out.
-        unsafe { (*st).ins_buf = Some(Buf::current().id()) };
+        st.ins_buf = Some(Buf::current().id());
     }
-    debug_assert!(unsafe { (*st).ins_buf }.is_some());
+    debug_assert!(st.ins_buf.is_some());
 
     // Remember the last current match.
     compl_old_match.set(compl_curr_match.get());
-    // SAFETY: the address of one of the scan state's own two position
-    // fields, taken from the raw pointer rather than through a borrow -- the
-    // state is written through `st` again below, and a `&mut` to it would
-    // invalidate this pointer.
-    unsafe {
-        (*st).cur_match_pos = if compl_dir_forward() {
-            &raw mut (*st).last_match_pos
-        } else {
-            &raw mut (*st).first_match_pos
-        }
-    };
+    st.cur_is_last = compl_dir_forward();
 
     let normal_mode_strict = ctrl_x_mode_normal()
         && !ctrl_x_mode_line_or_eval()
@@ -726,24 +660,18 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
     // 'complete'.
     loop {
         found_new_match = FAIL;
-        unsafe { (*st).set_match_pos = false };
+        st.set_match_pos = false;
 
         // For CTRL-N/CTRL-P pick a new entry from `e_cpt` when
         // `compl_started` is off, or when `found_all` says this entry is
         // done. For CTRL-X CTRL-L only the entries that look in loaded
         // buffers are used.
         if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval())
-            && (!compl_started.get() || unsafe { (*st).found_all })
+            && (!compl_started.get() || st.found_all)
         {
-            let status = unsafe {
-                process_next_cpt_value(
-                    st,
-                    &raw mut type_0,
-                    &raw mut start_pos,
-                    cot_fuzzy(),
-                    &raw mut may_advance_cpt_idx,
-                )
-            };
+            let value = process_next_cpt_value(st, start_pos, cot_fuzzy());
+            let status = value.status;
+            (type_0, may_advance_cpt_idx) = (value.compl_type, value.advance);
             if status == INS_COMPL_CPT_END {
                 break;
             }
@@ -776,8 +704,7 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
             });
         }
 
-        found_new_match =
-            c_int::from(unsafe { get_next_completion_match(type_0, st, &raw mut start_pos) });
+        found_new_match = c_int::from(get_next_completion_match(type_0, st, start_pos));
 
         // If complete() was called then `compl_pattern` has been reset and
         // the rest of this cannot work; bail out.
@@ -810,7 +737,7 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
         } else {
             // Mark a buffer scanned when it has been scanned completely.
             if type_0 == 0 || type_0 == CTRL_X_PATH_PATTERNS {
-                if let Some(mut buf) = unsafe { (*st).ins_buf }.and_then(BufId::get) {
+                if let Some(mut buf) = st.ins_buf.and_then(BufId::get) {
                     buf.b_scanned = true;
                 }
             }
@@ -842,9 +769,7 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
     cpt_sources().set_index(-1);
     compl_started.set(true);
 
-    if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval())
-        && unsafe { (*st).cpt.at() } as c_int == NUL
-    {
+    if (ctrl_x_mode_normal() || ctrl_x_mode_line_or_eval()) && st.cpt.at() == NUL as u8 {
         // Got to the end of 'complete'.
         found_new_match = FAIL;
     }

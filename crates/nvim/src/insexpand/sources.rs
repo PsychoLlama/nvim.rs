@@ -19,7 +19,7 @@ use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
 use crate::vim_snprintf;
 use crate::winlayer::BufId;
-use crate::winlayer::{Buf, PosRef, Win, first_buffer, first_window};
+use crate::winlayer::{Buf, Win, first_buffer, first_window};
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
 /// `dict_start` to the completions.
@@ -409,7 +409,7 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
 /// must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn ins_compl_get_next_word_or_line(
     ins_buf: Buf,
-    cur_match_pos: PosRef,
+    cur_match_pos: Pos,
     match_len: *mut c_int,
     cont_s_ipos: *mut bool,
     out: &mut [c_char; IOSIZE as usize],
@@ -512,17 +512,14 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
 /// The next set of words matching `compl_pattern` for default completion —
 /// normal `^P`/`^N` and `^X^L`.
 ///
-/// Searches `st->ins_buf` from `start_pos` in the `compl_direction` direction;
-/// with `st->set_match_pos` set, `st->first_match_pos` and `st->last_match_pos`
-/// are set too. Answers `Ok` if a new match was found, otherwise `Err`.
-///
-/// # Safety
-///
-/// `st` must point at a live `InsComplNextState`, unaliased for the call.
-/// `start_pos` must point at an initialized position, unaliased for the call.
-pub(crate) unsafe fn get_next_default_completion(
-    st: *mut InsComplNextState,
-    start_pos: *mut Pos,
+/// Searches `st.ins_buf` from its current match position in the
+/// `compl_direction` direction, `start_pos` being where the completion
+/// started; with `st.set_match_pos` set, `st.first_match_pos` and
+/// `st.last_match_pos` are set too. Answers `Ok` if a new match was found,
+/// otherwise `Err`.
+pub(crate) fn get_next_default_completion(
+    st: &mut InsComplNextState,
+    start_pos: Pos,
 ) -> Result<(), Failed> {
     // Where a joined `CTRL-X CTRL-L` line is assembled; upstream shares
     // `IObuff` for it, which the message machinery also writes.
@@ -532,21 +529,11 @@ pub(crate) unsafe fn get_next_default_completion(
     let in_fuzzy_collect = !compl_status_adding() && cot_fuzzy() && compl_length.get() > 0;
     let leader = ins_compl_leader();
     let mut score = FUZZY_SCORE_NONE;
-    // SAFETY: `st` is the caller's live scan state; `cur_match_pos`
-    // addresses one of the state's own two position fields. Neither changes
-    // while this scan runs.
-    let (ins_buf, match_pos, start) = unsafe {
-        (
-            (*st).ins_buf,
-            PosRef::new((*st).cur_match_pos),
-            PosRef::new(start_pos),
-        )
-    };
     // The scan's buffer survives the timers and RPC that
     // `ins_compl_check_keys` lets run between two passes only if nothing
     // wiped it. A wiped one has nothing more to give: the caller then marks
     // this source done and moves on to the next in 'complete'.
-    let Some(ins_buf) = ins_buf.and_then(BufId::get) else {
+    let Some(ins_buf) = st.ins_buf.and_then(BufId::get) else {
         return Err(Failed);
     };
     let in_curbuf = Some(ins_buf) == Buf::current_or_none();
@@ -564,10 +551,13 @@ pub(crate) unsafe fn get_next_default_completion(
     let save_p_ws = p_ws();
     if !in_curbuf {
         P_WS.set(false);
-    } else if unsafe { (*st).cpt.at() } as c_int == '.' as c_int {
+    } else if st.cpt.at() == b'.' {
         P_WS.set(true);
     }
 
+    // The position the search moves, held here and written back after each
+    // search: it is one of `st`'s two match positions.
+    let mut pos = *st.cur_match_pos();
     let mut looped_around = false;
     let mut found_new_match;
     loop {
@@ -575,11 +565,11 @@ pub(crate) unsafe fn get_next_default_completion(
 
         // Don't want messages for wrapscan.
         let silenced = Suppress::messages();
+        let dir = compl_direction.get();
         if in_fuzzy_collect {
-            let (at, dir) = (match_pos.raw(), compl_direction.get());
-            // SAFETY: `at` is a position in `buf` and `leader` is
-            // NUL-terminated; `start_pos` is the caller's own position.
-            let hit = unsafe { search_for_fuzzy_match(ins_buf, at, leader, dir, start_pos) };
+            // SAFETY: `pos` is a position in `ins_buf` and `leader` is
+            // NUL-terminated; `start_pos` is the completion's own position.
+            let hit = unsafe { search_for_fuzzy_match(ins_buf, &mut pos, leader, dir, &start_pos) };
             found_new_match = Err(Failed);
             if let Some(hit) = hit {
                 (ptr, len) = (hit.ptr, hit.len);
@@ -592,23 +582,25 @@ pub(crate) unsafe fn get_next_default_completion(
         {
             // ctrl_x_mode_line_or_eval(), or a word-wise search that has
             // added a word that was at the beginning of the line.
-            let (at, dir) = (match_pos.raw(), compl_direction.get());
             let pat = compl_pattern().data();
-            // SAFETY: `at` is a position in `ins_buf` and `pat` is the
+            // SAFETY: `pos` is a position in `ins_buf` and `pat` is the
             // running completion's NUL-terminated pattern.
-            found_new_match = unsafe { search_for_exact_line(ins_buf, at, dir, pat) };
+            found_new_match = unsafe { search_for_exact_line(ins_buf, &raw mut pos, dir, pat) };
         } else {
+            let (pat, pat_len) = compl_pattern().parts();
+            let flags = SEARCH_KEEP + SEARCH_NFMSG;
+            // SAFETY: as above, with the pattern's own length.
             let found = unsafe {
                 searchit(
                     None,
                     ins_buf,
-                    match_pos.raw(),
+                    &raw mut pos,
                     ptr::null_mut(),
-                    compl_direction.get(),
-                    compl_pattern().data(),
-                    compl_pattern().len(),
+                    dir,
+                    pat,
+                    pat_len,
                     1,
-                    SEARCH_KEEP + SEARCH_NFMSG,
+                    flags,
                     RE_LAST,
                     ptr::null_mut(),
                 )
@@ -616,33 +608,22 @@ pub(crate) unsafe fn get_next_default_completion(
             found_new_match = if found == FAIL { Err(Failed) } else { Ok(()) };
         }
         drop(silenced);
+        *st.cur_match_pos() = pos;
 
-        // SAFETY: `st` is the caller's live scan state, and `cur_match_pos`
-        // addresses one of its two position fields.
-        let (pos, set_match_pos, first, last) = unsafe {
-            (
-                *match_pos,
-                (*st).set_match_pos,
-                (*st).first_match_pos,
-                (*st).last_match_pos,
-            )
-        };
-        if !compl_started.get() || set_match_pos {
+        if !compl_started.get() || st.set_match_pos {
             // Set "compl_started" even on failure.
             compl_started.set(true);
-            // SAFETY: as above.
-            unsafe {
-                (*st).first_match_pos = pos;
-                (*st).last_match_pos = pos;
-                (*st).set_match_pos = false;
-            }
-        } else if first.lnum == last.lnum && first.col == last.col {
+            st.first_match_pos = pos;
+            st.last_match_pos = pos;
+            st.set_match_pos = false;
+        } else if st.first_match_pos.lnum == st.last_match_pos.lnum
+            && st.first_match_pos.col == st.last_match_pos.col
+        {
             found_new_match = Err(Failed);
         } else {
             // Passing the previous match going forwards (or backwards) is
             // the wrap-around; the second time round there is nothing new.
-            // SAFETY: `st` is the caller's live scan state.
-            let prev = unsafe { (*st).prev_match_pos };
+            let prev = st.prev_match_pos;
             let passed = if compl_dir_forward() {
                 prev.lnum > pos.lnum || (prev.lnum == pos.lnum && prev.col >= pos.col)
             } else {
@@ -656,7 +637,7 @@ pub(crate) unsafe fn get_next_default_completion(
                 }
             }
         }
-        unsafe { (*st).prev_match_pos = pos };
+        st.prev_match_pos = pos;
         if found_new_match.is_err() {
             break;
         }
@@ -664,19 +645,18 @@ pub(crate) unsafe fn get_next_default_completion(
         // When ADDING, the text before the cursor matches: skip it.
         if compl_status_adding()
             && in_curbuf
-            && start.lnum == match_pos.lnum
-            && start.col == match_pos.col
+            && start_pos.lnum == pos.lnum
+            && start_pos.col == pos.col
         {
             continue;
         }
 
         if !in_fuzzy_collect {
             let (out_len, ipos) = (&raw mut len, &raw mut cont_s_ipos);
-            // SAFETY: `match_pos` is a position in `ins_buf`, and the two
+            // SAFETY: `pos` is a position in `ins_buf`, and the two
             // out-parameters are this frame's own locals.
-            ptr = unsafe {
-                ins_compl_get_next_word_or_line(ins_buf, match_pos, out_len, ipos, &mut word)
-            };
+            ptr =
+                unsafe { ins_compl_get_next_word_or_line(ins_buf, pos, out_len, ipos, &mut word) };
         }
         if ptr.is_null()
             || (ins_compl_has_preinsert() && unsafe { cstr::eq(ptr, ins_compl_leader()) })
@@ -685,7 +665,7 @@ pub(crate) unsafe fn get_next_default_completion(
         }
 
         if is_nearest_active() && in_curbuf {
-            score = (match_pos.lnum - Win::current().w_cursor.lnum) as c_int;
+            score = (pos.lnum - Win::current().w_cursor.lnum) as c_int;
             score = score.abs();
         }
 
@@ -695,8 +675,9 @@ pub(crate) unsafe fn get_next_default_completion(
             ins_buf.name.short_ptr()
         };
         let ic = p_ic();
-        // SAFETY: `ptr` is `len` readable bytes of the match just found, and
-        // `fname` is null or the scanned buffer's own name.
+        // SAFETY: `ptr` is `len` bytes of the match just found in a
+        // NUL-terminated line, and `fname` is null or the scanned buffer's
+        // own name.
         let add_r = unsafe {
             ins_compl_add_infercase(ptr, len, ic, fname, kDirectionNotSet, cont_s_ipos, score)
         };

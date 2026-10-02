@@ -395,6 +395,38 @@ pub(crate) unsafe fn copy_option_part(
     len
 }
 
+/// One part of a comma-separated option, appended to `part`, with the rest of
+/// the option answered back.
+///
+/// [`copy_option_part`] over slices, with `,` the separator and no length
+/// limit: a backslash before a comma makes it a literal, a leading `.` is taken
+/// whatever it is, and the separator and the blanks behind it are dropped.
+/// One `part` buffer serves a whole walk.
+pub(crate) fn next_option_part<'a>(option: &'a [u8], part: &mut Vec<u8>) -> &'a [u8] {
+    part.clear();
+    let mut i = 0;
+    // A leading '.' is copied without being tested against the separators.
+    if option.first() == Some(&b'.') {
+        part.push(b'.');
+        i = 1;
+    }
+    while i < option.len() && option[i] != b',' {
+        // A backslash escapes the separator, and is dropped.
+        if option[i] == b'\\' && option.get(i + 1) == Some(&b',') {
+            i += 1;
+        }
+        part.push(option[i]);
+        i += 1;
+    }
+    if i < option.len() {
+        i += 1; // the separator itself
+    }
+    while option.get(i) == Some(&b' ') {
+        i += 1;
+    }
+    &option[i..]
+}
+
 /// Whether 'shell' is a csh derivative, which needs its own quoting.
 pub(crate) fn csh_like_shell() -> bool {
     // SAFETY: an option value is a C string, and `path_tail` answers a

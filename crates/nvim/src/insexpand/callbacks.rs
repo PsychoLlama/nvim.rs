@@ -15,10 +15,10 @@ use crate::option::vars::P_TSRFU;
 use crate::optionstr::{OptString, local_or_global};
 
 use crate::guard::Lock;
+use crate::option::next_option_part;
 use crate::optionstr::OptStringRef;
 use crate::semsg;
-use crate::strings::vim_strchr;
-use crate::types::{Failed, IOSIZE, NUL, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
+use crate::types::{Failed, NUL, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
 use crate::winlayer::{Buf, Win};
 
 /// One of the three global completion-function callbacks.
@@ -257,35 +257,60 @@ impl CptSources {
     }
 }
 
-/// Step over the `,` and ` ` that separate two `'complete'` entries.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn skip_cpt_delims(mut p: *mut c_char) -> *mut c_char {
-    while unsafe { *p } as c_int == ',' as c_int || unsafe { *p } as c_int == ' ' as c_int {
-        p = unsafe { p.offset(1) };
+/// One entry of `'complete'`, as the walks over the option see it.
+pub(crate) struct CptEntry<'a> {
+    /// The option from this entry on.
+    pub(crate) at: &'a [u8],
+    /// The entry's text, as `copy_option_part` copies it into an `LSIZE`
+    /// buffer: a backslash before a comma dropped, cut at `LSIZE - 1` bytes.
+    pub(crate) part: Vec<u8>,
+    /// The option after this entry.
+    pub(crate) after: &'a [u8],
+}
+
+/// The entries of `'complete'` value `option`, in order: every non-empty
+/// comma-separated segment, the `,` and ` ` between them skipped.
+pub(crate) fn cpt_entries(mut option: &[u8]) -> impl Iterator<Item = CptEntry<'_>> {
+    ::core::iter::from_fn(move || {
+        let start = option.iter().position(|&b| b != b',' && b != b' ')?;
+        let at = &option[start..];
+        let mut part = Vec::new();
+        let after = next_option_part(at, &mut part);
+        part.truncate(LSIZE as usize - 1);
+        option = after;
+        Some(CptEntry { at, part, after })
+    })
+}
+
+/// C's `atoi` over the start of `text`: blanks, a sign, then digits.
+pub(crate) fn leading_number(text: &[u8]) -> c_int {
+    let start = text
+        .iter()
+        .position(|b| !matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        .unwrap_or(text.len());
+    let text = &text[start..];
+    let (negative, digits) = match text.first() {
+        Some(b'-') => (true, &text[1..]),
+        Some(b'+') => (false, &text[1..]),
+        _ => (false, text),
+    };
+    let value = digits
+        .iter()
+        .take_while(|b| b.is_ascii_digit())
+        .fold(0 as c_int, |n, &d| {
+            n.wrapping_mul(10).wrapping_add(c_int::from(d - b'0'))
+        });
+    if negative {
+        value.wrapping_neg()
+    } else {
+        value
     }
-    p
 }
 
 /// The number of entries in `'complete'` — every non-empty comma-separated
 /// segment counts as one.
 pub(crate) fn get_cpt_sources_count() -> c_int {
-    let mut dummy = [0 as c_char; LSIZE as usize];
-    let mut count = 0;
-    // The walk reads the option's own buffer, as upstream's does.
-    let mut p = Buf::current().b_p_cpt.value_ptr();
-    while unsafe { *p } as c_int != NUL {
-        p = unsafe { skip_cpt_delims(p) };
-        if unsafe { *p } as c_int != NUL {
-            // Advance p.
-            // SAFETY: `p` walks `'complete'` and `dummy` has `LSIZE` bytes.
-            unsafe { next_cpt_part(&raw mut p, dummy.as_mut_ptr(), LSIZE as size_t) };
-            count += 1;
-        }
-    }
-    count
+    cpt_entries(Buf::current().b_p_cpt.bytes()).count() as c_int
 }
 
 /// Copy a global callback function to a buffer-local callback.
@@ -452,28 +477,22 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
         unsafe { xcalloc(count as size_t, size_of::<Callback>()) }.cast::<Callback>();
     Buf::current().b_p_cpt_count = count;
 
-    let mut part = [0 as c_char; LSIZE as usize];
-    let mut idx: isize = 0;
-    // The walk reads the option's own buffer, as upstream's does.
-    let mut p = Buf::current().b_p_cpt.value_ptr();
-    while unsafe { *p } as c_int != NUL {
-        p = unsafe { skip_cpt_delims(p) };
-        if unsafe { *p } as c_int != NUL {
-            // Advance p.
-            // SAFETY: `p` walks `'complete'` and `part` has `LSIZE` bytes.
-            let slen = unsafe { next_cpt_part(&raw mut p, part.as_mut_ptr(), LSIZE as size_t) };
-            if slen > 0 && part[0] as c_int == 'F' as c_int && part[1] as c_int != NUL {
-                // Drop the `^N` max-matches suffix.
-                let caret = unsafe { vim_strchr(part.as_mut_ptr(), '^' as c_int) };
-                if !caret.is_null() {
-                    unsafe { *caret = NUL as c_char };
-                }
-                let slot = unsafe { Buf::current().b_p_cpt_cb.offset(idx) };
-                if unsafe { option_set_callback_func(part.as_mut_ptr().offset(1), slot) }.is_err() {
-                    unsafe { *slot = Callback::None };
-                }
+    // A copy: the walk writes the buffer's callback array.
+    let option = Buf::current().b_p_cpt.bytes().to_vec();
+    for (idx, entry) in cpt_entries(&option).enumerate() {
+        let part = entry.part;
+        if part.first() == Some(&b'F') && part.len() > 1 {
+            // Drop the `^N` max-matches suffix.
+            let end = part.iter().position(|&b| b == b'^').unwrap_or(part.len());
+            let name = XString::from_bytes(&part[1..end]);
+            // SAFETY: `idx` counts the entries, which is the array's length.
+            let slot = unsafe { Buf::current().b_p_cpt_cb.add(idx) };
+            // SAFETY: a NUL-terminated name, and a slot of the array just
+            // allocated.
+            if unsafe { option_set_callback_func(name.as_ptr().cast_mut(), slot) }.is_err() {
+                // SAFETY: as above.
+                unsafe { *slot = Callback::None };
             }
-            idx += 1;
         }
     }
 
@@ -671,77 +690,57 @@ pub(crate) unsafe fn get_user_highlight_attr(hlname: *const c_char) -> c_int {
     -1
 }
 
-/// The callback `p` names if it refers to a user-defined function in
-/// `'complete'`; `idx` indexes the callback array.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn get_callback_if_cpt_func(mut p: *mut c_char, idx: c_int) -> *mut Callback {
-    if unsafe { *p } as c_int == 'o' as c_int {
-        return unsafe { &raw mut (*Buf::current_raw()).b_ofu_cb };
-    }
-    if unsafe { *p } as c_int == 'F' as c_int {
-        p = unsafe { p.offset(1) };
-        if unsafe { *p } as c_int != ',' as c_int && unsafe { *p } as c_int != NUL {
+/// The callback the `'complete'` entry at the start of `entry` names, if it
+/// refers to a user-defined function; `idx` indexes the callback array.
+pub(crate) fn get_callback_if_cpt_func(entry: &[u8], idx: c_int) -> *mut Callback {
+    let buffer = Buf::current_raw();
+    match entry.first() {
+        // SAFETY: the current buffer's own callback field.
+        Some(b'o') => unsafe { &raw mut (*buffer).b_ofu_cb },
+        Some(b'F') if !matches!(entry.get(1), None | Some(b',')) => {
             // 'F{func}' case.
+            // SAFETY: the entry's index is in range of the array
+            // `set_cpt_callbacks` sized to the entries.
             let slot = unsafe { Buf::current().b_p_cpt_cb.offset(idx as isize) };
-            return if unsafe { &*slot }.is_set() {
+            // SAFETY: a slot of that array.
+            if unsafe { &*slot }.is_set() {
                 slot
             } else {
                 ptr::null_mut()
-            };
+            }
         }
-        return unsafe { &raw mut (*Buf::current_raw()).b_cfu_cb }; // 'cfu'
+        // SAFETY: as for `o`.
+        Some(b'F') => unsafe { &raw mut (*buffer).b_cfu_cb }, // 'cfu'
+        _ => ptr::null_mut(),
     }
-    ptr::null_mut()
 }
 
 /// Call the functions named in `'complete'` with `findstart=1` and record the
 /// start column each answers.
 pub(crate) fn prepare_cpt_compl_funcs() {
-    // The throwaway `copy_option_part` steps the entry into.
-    let mut skipped = [0 as c_char; IOSIZE as usize];
     // Make a copy of 'cpt' in case the buffer gets wiped out.
-    let cpt = {
-        let value = Buf::current().b_p_cpt.value_ptr();
-        // SAFETY: the buffer's own option value, NUL-terminated.
-        unsafe { xstrdup(value) }
-    };
-    unsafe { strip_caret_numbers_in_place(cpt) };
-
-    let mut idx = 0;
-    let mut p = cpt;
-    while unsafe { *p } != 0 {
-        p = unsafe { skip_cpt_delims(p) };
-        if unsafe { *p } as c_int == NUL {
-            break;
-        }
-
-        let cb = unsafe { get_callback_if_cpt_func(p, idx) };
+    let cpt = strip_caret_numbers(Buf::current().b_p_cpt.bytes());
+    for (idx, entry) in cpt_entries(&cpt).enumerate() {
+        let idx = idx as c_int;
+        let cb = get_callback_if_cpt_func(entry.at, idx);
         if cb.is_null() {
             cpt_sources().update(idx, |source| source.cs_startcol = -3);
-        } else {
-            let mut startcol = 0;
-            let col = Win::current().w_cursor.col;
-            if unsafe { get_userdefined_compl_info(col, cb, &raw mut startcol) }.is_err() {
-                if startcol == -3 {
-                    cpt_sources().update(idx, |source| source.cs_refresh_always = false);
-                } else {
-                    startcol = -2;
-                }
-            } else if startcol < 0 || startcol > Win::current().w_cursor.col {
-                startcol = Win::current().w_cursor.col;
-            }
-            cpt_sources().update(idx, |source| source.cs_startcol = startcol);
+            continue;
         }
-
-        // Advance p.
-        // SAFETY: `p` walks `'complete'` and `skipped` has `IOSIZE` bytes.
-        unsafe { next_cpt_part(&raw mut p, skipped.as_mut_ptr(), IOSIZE as size_t) };
-        idx += 1;
+        let mut startcol = 0;
+        let col = Win::current().w_cursor.col;
+        // SAFETY: a live callback, and `startcol` is this frame's own.
+        if unsafe { get_userdefined_compl_info(col, cb, &raw mut startcol) }.is_err() {
+            if startcol == -3 {
+                cpt_sources().update(idx, |source| source.cs_refresh_always = false);
+            } else {
+                startcol = -2;
+            }
+        } else if startcol < 0 || startcol > Win::current().w_cursor.col {
+            startcol = Win::current().w_cursor.col;
+        }
+        cpt_sources().update(idx, |source| source.cs_startcol = startcol);
     }
-    unsafe { xfree(cpt.cast::<c_void>()) };
 }
 
 /// Advance `cpt_sources_index` by one, or report E684 and fail.
@@ -758,39 +757,21 @@ pub(crate) fn advance_cpt_sources_index_safe() -> Result<(), Failed> {
 /// Build the per-`'complete'`-entry state: the source letter and its `^N`
 /// max-matches limit.
 pub(crate) fn setup_cpt_sources() {
-    cpt_sources().clear();
-
-    let count = get_cpt_sources_count();
-    if count == 0 {
-        return;
-    }
-
-    let mut rows = Vec::with_capacity(count as usize);
-    let mut part = [0 as c_char; LSIZE as usize];
-    // The walk reads the option's own buffer, as upstream's does.
-    let mut p = Buf::current().b_p_cpt.value_ptr();
-    while unsafe { *p } != 0 {
-        p = unsafe { skip_cpt_delims(p) };
-        if unsafe { *p } != 0 {
-            // If not end of string, count this segment.
+    let option = Buf::current().b_p_cpt.bytes().to_vec();
+    let rows = cpt_entries(&option)
+        .map(|entry| {
             let mut source = CptSource {
-                cs_flag: unsafe { *p },
+                cs_flag: entry.at[0] as c_char,
                 ..CPT_SOURCE_INIT
             };
-            part.fill(0);
-            // Advance p.
-            // SAFETY: `p` walks `'complete'` and `part` has `LSIZE` bytes.
-            let slen = unsafe { next_cpt_part(&raw mut p, part.as_mut_ptr(), LSIZE as size_t) };
-            if slen > 0 {
-                let caret = unsafe { vim_strchr(part.as_mut_ptr(), '^' as c_int) };
-                if !caret.is_null() {
-                    source.cs_max_matches = unsafe { atoi(caret.offset(1)) };
-                }
+            if let Some(caret) = entry.part.iter().position(|&b| b == b'^') {
+                source.cs_max_matches = leading_number(&entry.part[caret + 1..]);
             }
-            rows.push(source);
-        }
-    }
-    debug_assert_eq!(rows.len(), count as usize);
+            source
+        })
+        .collect();
+    // No rows leaves the state unset, as clearing it does.
+    cpt_sources().clear();
     cpt_sources().set_rows(rows);
 }
 
@@ -834,74 +815,47 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
 /// Re-collect matches from the `'complete'` functions that set
 /// `refresh:always`.
 pub(crate) fn cpt_compl_refresh() {
-    // The throwaway `copy_option_part` steps the entry into.
-    let mut skipped = [0 as c_char; IOSIZE as usize];
     // Make the completion list linear (non-cyclic).
     ins_compl_make_linear();
     // Make a copy of 'cpt' in case the buffer gets wiped out.
-    let cpt = {
-        let value = Buf::current().b_p_cpt.value_ptr();
-        // SAFETY: the buffer's own option value, NUL-terminated.
-        unsafe { xstrdup(value) }
-    };
-    unsafe { strip_caret_numbers_in_place(cpt) };
+    let cpt = strip_caret_numbers(Buf::current().b_p_cpt.bytes());
 
     cpt_sources().set_index(0);
-    let mut p = cpt;
-    while unsafe { *p } != 0 {
-        p = unsafe { skip_cpt_delims(p) };
-        if unsafe { *p } as c_int == NUL {
-            break;
-        }
-
+    for entry in cpt_entries(&cpt) {
         let idx = cpt_sources().index();
-        if cpt_sources().row(idx).cs_refresh_always {
-            let cb = unsafe { get_callback_if_cpt_func(p, idx) };
-            if !cb.is_null() {
-                remove_old_matches();
-                let mut startcol = 0;
-                let ret = unsafe {
-                    get_userdefined_compl_info(Win::current().w_cursor.col, cb, &raw mut startcol)
-                };
-                if ret.is_err() {
-                    if startcol == -3 {
-                        cpt_sources().update(idx, |source| source.cs_refresh_always = false);
-                    } else {
-                        startcol = -2;
-                    }
-                } else if startcol < 0 || startcol > Win::current().w_cursor.col {
-                    startcol = Win::current().w_cursor.col;
+        let cb = if cpt_sources().row(idx).cs_refresh_always {
+            get_callback_if_cpt_func(entry.at, idx)
+        } else {
+            ptr::null_mut()
+        };
+        if !cb.is_null() {
+            remove_old_matches();
+            let mut startcol = 0;
+            let col = Win::current().w_cursor.col;
+            // SAFETY: a live callback, and `startcol` is this frame's own.
+            let ret = unsafe { get_userdefined_compl_info(col, cb, &raw mut startcol) };
+            if ret.is_err() {
+                if startcol == -3 {
+                    cpt_sources().update(idx, |source| source.cs_refresh_always = false);
+                } else {
+                    startcol = -2;
                 }
-                cpt_sources().update(idx, |source| source.cs_startcol = startcol);
-                if ret.is_ok() {
-                    compl_source_start_timer(idx);
-                    unsafe { get_cpt_func_completion_matches(cb) };
-                }
+            } else if startcol < 0 || startcol > Win::current().w_cursor.col {
+                startcol = Win::current().w_cursor.col;
+            }
+            cpt_sources().update(idx, |source| source.cs_startcol = startcol);
+            if ret.is_ok() {
+                compl_source_start_timer(idx);
+                // SAFETY: as above.
+                unsafe { get_cpt_func_completion_matches(cb) };
             }
         }
-
-        // Advance p.
-        // SAFETY: `p` walks `'complete'` and `skipped` has `IOSIZE` bytes.
-        unsafe { next_cpt_part(&raw mut p, skipped.as_mut_ptr(), IOSIZE as size_t) };
-        if unsafe { may_advance_cpt_index(p) } {
+        if may_advance_cpt_index(entry.after) {
             let _ = advance_cpt_sources_index_safe();
         }
     }
     cpt_sources().set_index(-1);
 
-    unsafe { xfree(cpt.cast::<c_void>()) };
     // Make the list cyclic.
     compl_matches.set(ins_compl_make_cyclic());
-}
-
-/// C's `copy_option_part(&p, buf, len, ",")`: step `p` past one entry of
-/// `'complete'`, copying what it stepped over into `buf`.
-///
-/// # Safety
-/// `p` addresses a cursor into a NUL-terminated option string, and `buf` has
-/// `len` writable bytes.
-unsafe fn next_cpt_part(p: *mut *mut c_char, buf: *mut c_char, len: size_t) -> size_t {
-    let comma = c",".as_ptr().cast_mut();
-    // SAFETY: the caller's promise.
-    unsafe { copy_option_part(p, buf, len, comma) }
 }

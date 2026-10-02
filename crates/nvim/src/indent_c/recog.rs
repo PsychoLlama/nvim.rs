@@ -37,39 +37,8 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::option::next_option_part;
 use crate::optionstr::OptString;
-
-/// One part of a comma-separated option, appended to `part`, with the rest of
-/// the option answered back.
-///
-/// `copy_option_part` over slices, for the two options this file reads:
-/// a backslash before a comma makes it a literal, a leading `.` is taken
-/// whatever it is, and the separator and the blanks behind it are dropped.
-/// One `part` buffer serves a whole walk.
-fn next_option_part<'a>(option: &'a [u8], part: &mut Vec<u8>) -> &'a [u8] {
-    part.clear();
-    let mut i = 0;
-    // A leading '.' is copied without being tested against the separators.
-    if option.first() == Some(&b'.') {
-        part.push(b'.');
-        i = 1;
-    }
-    while i < option.len() && option[i] != b',' {
-        // A backslash escapes the separator, and is dropped.
-        if option[i] == b'\\' && option.get(i + 1) == Some(&b',') {
-            i += 1;
-        }
-        part.push(option[i]);
-        i += 1;
-    }
-    if i < option.len() {
-        i += 1; // the separator itself
-    }
-    while option.get(i) == Some(&b' ') {
-        i += 1;
-    }
-    &option[i..]
-}
 
 /// Whether `line` starts with a word from 'cinwords' -- `if`, `else`,
 /// `while`, `do`, `for`, `switch` by default.

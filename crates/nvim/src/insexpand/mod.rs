@@ -14,7 +14,7 @@ use core::ptr;
 use std::rc::Rc;
 
 use crate::api::private::helpers::{cbuf_to_string, cstr_to_string};
-use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
+use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::buf_spname;
 use crate::change::{
@@ -67,7 +67,7 @@ use crate::mbyte::{
     utfc_ptr2len,
 };
 use crate::memline::{dec, ml_delete, ml_get_buf, ml_get_buf_len};
-use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup, xstrlcpy};
+use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrlcpy};
 use crate::message::state::{did_emsg, emsg_silent, in_assert_fails, msg_hist_off};
 use crate::message::{e_invarg, e_listreq, e_patnotf};
 use crate::message::{
@@ -116,7 +116,7 @@ use crate::textformat::auto_format;
 use crate::types::{
     BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, ExtmarkOp, HashTab,
     LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos, PumItem, RegMatch, SaveVEvent, String_0, TypVal,
-    VarNumber, Vv, XpPrefix, extmark_undo_vec_t, ptrdiff_t, size_t, uint8_t, uint64_t,
+    VarNumber, Vv, XpPrefix, extmark_undo_vec_t, ptrdiff_t, size_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -124,7 +124,7 @@ use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
 use crate::winlayer::graph::cmdwin_type;
 use crate::winlayer::{BufId, WinId};
-use ::libc::{atoi, fclose, strncpy, strrchr};
+use ::libc::{fclose, strncpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod mode;
@@ -250,7 +250,9 @@ pub(crate) const CPT_SOURCE_INIT: CptSource = CptSource {
     cs_flag: 0,
 };
 pub const CP_EQUAL: ::core::ffi::c_int = 8;
-pub struct InsComplNextState {
+/// Where [`ins_compl_get_exp`] is up to in `'complete'` and in the buffer it
+/// is scanning.
+pub(crate) struct InsComplNextState {
     /// The copy of `'complete'` being walked, and where the walk is up to.
     /// Owning, which is why this struct is no longer `Copy`.
     pub(crate) cpt: CptScan,
@@ -259,13 +261,17 @@ pub struct InsComplNextState {
     /// [`crate::winlayer::Buf`] would be promising. Each use resolves it
     /// where it needs the buffer, and copes with it having been wiped.
     pub ins_buf: Option<BufId>,
-    pub cur_match_pos: *mut Pos,
+    /// Which of the two match positions the search moves: the last going
+    /// forward, the first going backward. Upstream points at it.
+    pub cur_is_last: bool,
     pub prev_match_pos: Pos,
     pub set_match_pos: bool,
     pub first_match_pos: Pos,
     pub last_match_pos: Pos,
     pub found_all: bool,
-    pub dict: *mut ::core::ffi::c_char,
+    /// The dictionary a `k`/`s` entry names, or an unloaded buffer's file
+    /// name: a copy, because the scan runs code that can wipe the buffer.
+    pub dict: Option<XString>,
     pub dict_f: ::core::ffi::c_int,
     pub func_cb: *mut Callback,
 }
@@ -289,13 +295,13 @@ pub const CTRL_X_FINISHED: ::core::ffi::c_int = 8;
 pub(crate) const INS_COMPL_NEXT_STATE_INIT: InsComplNextState = InsComplNextState {
     cpt: CptScan::EMPTY,
     ins_buf: None,
-    cur_match_pos: ptr::null_mut(),
+    cur_is_last: false,
     prev_match_pos: POS_T_INIT,
     set_match_pos: false,
     first_match_pos: POS_T_INIT,
     last_match_pos: POS_T_INIT,
     found_all: false,
-    dict: ptr::null_mut(),
+    dict: None,
     dict_f: 0,
     func_cb: ptr::null_mut(),
 };
@@ -837,6 +843,9 @@ state_record! {
     /// The window [`ins_compl_next_buf`]'s `w` walk is at: a handle that
     /// `win_valid` vets, because it outlives the call.
     next_buf_window: Option<WinId> = None;
+    /// [`ins_compl_get_exp`]'s scan through `'complete'`, which upstream
+    /// keeps in a function-scope static: collected over many calls.
+    SCAN: InsComplNextState = INS_COMPL_NEXT_STATE_INIT;
 }
 
 pub const COMPL_INITIAL_TIMEOUT_MS: ::core::ffi::c_int = 80 as ::core::ffi::c_int;

@@ -11,6 +11,7 @@
 use super::*;
 use crate::eval::typval::dict_find;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
+use crate::memory::xstrdup;
 use crate::options::kOptCotFlagNearest;
 use crate::os::input::reset_breakcheck_count;
 use crate::types::{FAIL, OK};
@@ -632,4 +633,52 @@ fn the_free_takes_every_match_and_what_it_owns() {
     assert!(texts().is_empty());
     // A second free of an empty list is a no-op.
     ins_compl_free();
+}
+
+#[test]
+fn complete_option_entries_split_as_copy_option_part_does() {
+    let entries: Vec<(Vec<u8>, Vec<u8>)> = cpt_entries(b".,w^5, b,,u,k/a\\,b,Ffunc^3")
+        .map(|entry| (entry.part, entry.after.to_vec()))
+        .collect();
+    let parts: Vec<&[u8]> = entries.iter().map(|(part, _)| &part[..]).collect();
+    assert_eq!(parts, [&b"."[..], b"w^5", b"b", b"u", b"k/a,b", b"Ffunc^3"]);
+    assert_eq!(entries[1].1, b"b,,u,k/a\\,b,Ffunc^3");
+    assert!(entries[5].1.is_empty());
+    assert_eq!(cpt_entries(b" , ,").count(), 0);
+    // A long entry is cut where upstream's `LSIZE` buffer ends.
+    let long = vec![b'x'; LSIZE as usize + 10];
+    let entry = cpt_entries(&long).next().expect("one entry");
+    assert_eq!(entry.part.len(), LSIZE as usize - 1);
+    assert!(entry.after.is_empty());
+}
+
+#[test]
+fn caret_counts_go_and_other_carets_stay() {
+    assert_eq!(&*strip_caret_numbers(b".^3,w,b^12,u"), b".,w,b,u");
+    assert_eq!(&*strip_caret_numbers(b"k^x,t^,F^3f"), b"k^x,t^,F^3f");
+    assert_eq!(&*strip_caret_numbers(b"o^7"), b"o");
+}
+
+#[test]
+fn the_next_entry_is_only_there_past_separators() {
+    let _f = Fixture::new(0);
+    cpt_sources().set_index(0);
+    assert!(may_advance_cpt_index(b", ,w"));
+    assert!(!may_advance_cpt_index(b", , "));
+    cpt_sources().set_index(-1);
+    assert!(!may_advance_cpt_index(b", ,w"));
+}
+
+#[test]
+fn a_max_matches_count_reads_as_atoi_does() {
+    for (text, value) in [
+        (&b"3"[..], 3),
+        (b" 12x", 12),
+        (b"-2", -2),
+        (b"+7", 7),
+        (b"", 0),
+        (b"x", 0),
+    ] {
+        assert_eq!(leading_number(text), value);
+    }
 }

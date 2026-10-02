@@ -263,38 +263,29 @@ pub(crate) fn get_next_bufname_token() {
     }
 }
 
-/// Strip carets followed by numbers — the `'complete'` `^N` max-matches
-/// suffix — in place.
-///
-/// # Safety
-///
-/// `str` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn strip_caret_numbers_in_place(str: *mut c_char) {
-    if str.is_null() {
-        return;
-    }
-    let mut read = str;
-    let mut write = str;
-    while unsafe { *read } != 0 {
-        if unsafe { *read } as c_int == '^' as c_int {
-            let mut p = unsafe { read.offset(1) };
-            while ascii_isdigit(unsafe { *p } as c_int) {
-                p = unsafe { p.offset(1) };
-            }
+/// `option` without the carets followed by numbers — the `'complete'` `^N`
+/// max-matches suffix — that end an entry.
+pub(crate) fn strip_caret_numbers(option: &[u8]) -> XString {
+    let mut out = Vec::with_capacity(option.len());
+    let mut read = 0;
+    while read < option.len() {
+        if option[read] == b'^' {
+            let digits = option[read + 1..]
+                .iter()
+                .take_while(|b| b.is_ascii_digit())
+                .count();
+            let after = read + 1 + digits;
             // A caret with at least one digit after it and nothing but the
             // next source's separator beyond: drop the whole run.
-            if (unsafe { *p } as c_int == ',' as c_int || unsafe { *p } as c_int == '\0' as c_int)
-                && p != unsafe { read.offset(1) }
-            {
-                read = p;
+            if digits > 0 && matches!(option.get(after), None | Some(b',')) {
+                read = after;
                 continue;
             }
         }
-        unsafe { *write = *read };
-        write = unsafe { write.offset(1) };
-        read = unsafe { read.offset(1) };
+        out.push(option[read]);
+        read += 1;
     }
-    unsafe { *write = '\0' as c_char };
+    XString::from_bytes(&out)
 }
 
 /// The longest common prefix among the current matches: the match it was
