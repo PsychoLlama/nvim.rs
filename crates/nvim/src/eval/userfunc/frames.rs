@@ -7,23 +7,16 @@
 //! `funccal_stack` (a list of `funccal_entry_T`s in the frames of whoever set
 //! the call stack aside to run an autocommand or a callback).
 //!
-//! Here every funccall, running or parked, is **owned by one slot table**,
-//! and the three globals are ids into it:
+//! Here every funccall, running or parked, is **owned by one
+//! [`SlotTable`]**, and the three globals are [`FcId`]s into it. The table
+//! records beside each funccall the call it was made from, which is
+//! upstream's `fc_caller` chain; the parked funccalls are a `Vec` of ids,
+//! newest last, and the set-aside call stacks a `Vec` of the ids that were
+//! current, innermost last.
 //!
-//! - a [`FcId`] is a slot index plus the slot's generation, so an id kept
-//!   past its funccall's end resolves to a panic, not to freed memory or to
-//!   whatever reused the slot;
-//! - a slot holds its funccall in a `Box` that never moves once filled, and
-//!   every pointer into the funccall -- the `l:` dictionary a value refers
-//!   to, a closure's `uf_scoped` -- is derived through the `UnsafeCell`, so
-//!   none of them is a borrow of the box;
-//! - the box holds the funccall in a [`ManuallyDrop`]: a funccall's contents
-//!   are given back by hand ([`super::free_funccal`]), as upstream's `xfree`
-//!   gives back only the block;
-//! - each slot records the call its funccall was made from, which is
-//!   upstream's `fc_caller` chain;
-//! - the parked funccalls are a `Vec` of ids, newest last, and the set-aside
-//!   call stacks a `Vec` of the ids that were current, innermost last.
+//! A funccall's contents are given back by hand ([`super::free_funccal`]),
+//! as upstream's `xfree` gave back only the block, which is what the
+//! table's `ManuallyDrop` hand-back is for.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -34,33 +27,16 @@
     clippy::ptr_as_ptr
 )]
 
-use core::cell::UnsafeCell;
-use core::mem::ManuallyDrop;
-use core::num::NonZeroU32;
 use core::ptr;
 
 use crate::global_cell::GlobalCell;
+use crate::slot_table::{Boxed, SlotTable};
 use crate::types::{FcId, FuncCall};
 
-/// One funccall's storage. It is filled once and emptied once; the box
-/// itself is never moved in between, so the funccall's address is fixed.
-type Frame = Box<UnsafeCell<ManuallyDrop<FuncCall>>>;
-
-/// A slot of the table.
-struct Slot {
-    /// Bumped every time the slot is emptied, so an id of an earlier tenant
-    /// does not match.
-    generation: NonZeroU32,
-    frame: Option<Frame>,
-    /// The call this one was made from: upstream's `fc_caller`.
-    caller: Option<FcId>,
-}
-
-/// The funccalls and the three ids upstream kept as raw globals.
+/// The funccalls, each beside its caller, and the three ids upstream kept as
+/// raw globals.
 struct FuncCalls {
-    slots: Vec<Slot>,
-    /// Empty slots, reused last-freed first.
-    vacant: Vec<u32>,
+    table: SlotTable<FuncCall, Option<FcId>>,
     /// The call in progress: upstream's `current_funccal`.
     current: Option<FcId>,
     /// Funccalls kept beyond their call, newest last: upstream's
@@ -72,30 +48,11 @@ struct FuncCalls {
 }
 
 static FUNC_CALLS: GlobalCell<FuncCalls> = GlobalCell::new(FuncCalls {
-    slots: Vec::new(),
-    vacant: Vec::new(),
+    table: SlotTable::new(),
     current: None,
     parked: Vec::new(),
     aside: Vec::new(),
 });
-
-impl FuncCalls {
-    fn slot(&self, id: FcId) -> &Slot {
-        let slot = &self.slots[id.0 as usize];
-        assert!(
-            slot.generation == id.1 && slot.frame.is_some(),
-            "a funccall id outlived its funccall"
-        );
-        slot
-    }
-
-    fn funccall(&self, id: FcId) -> *mut FuncCall {
-        match &self.slot(id).frame {
-            Some(frame) => frame.get().cast(),
-            None => unreachable!(),
-        }
-    }
-}
 
 impl FcId {
     /// The funccall `self` names.
@@ -103,57 +60,40 @@ impl FcId {
     /// # Panics
     /// When that funccall has been freed.
     pub(crate) fn funccall(self) -> *mut FuncCall {
-        FUNC_CALLS.with(|calls| calls.funccall(self))
+        FUNC_CALLS.with(|calls| calls.table.address(self))
     }
 
     /// The call `self` was made from: upstream's `fc_caller`.
     pub(crate) fn caller(self) -> Option<FcId> {
-        FUNC_CALLS.with(|calls| calls.slot(self).caller)
+        FUNC_CALLS.with(|calls| *calls.table.meta(self))
     }
 }
 
 /// `top` and every call below it, innermost first: one call stack.
 pub(crate) fn call_chain(top: Option<FcId>) -> Vec<FcId> {
-    FUNC_CALLS.with(|calls| ::core::iter::successors(top, |&id| calls.slot(id).caller).collect())
+    FUNC_CALLS.with(|calls| ::core::iter::successors(top, |&id| *calls.table.meta(id)).collect())
 }
 
-/// Take ownership of `fc`, a call made from `caller`, and answer its id and
-/// its fixed address. Its `fc_id` is set here.
-pub(crate) fn adopt_funccal(mut fc: FuncCall, caller: Option<FcId>) -> (FcId, *mut FuncCall) {
+/// Take ownership of `frame`, a call made from `caller`, which `init`
+/// finishes in place once its `fc_id` is set, and answer its id and its
+/// fixed address.
+pub(crate) fn adopt_funccal(
+    frame: Boxed<FuncCall>,
+    caller: Option<FcId>,
+    init: impl FnOnce(&mut FuncCall),
+) -> (FcId, *mut FuncCall) {
     FUNC_CALLS.with_mut(|calls| {
-        let index = calls.vacant.pop().unwrap_or_else(|| {
-            let index = u32::try_from(calls.slots.len()).expect("fewer than 2^32 funccalls");
-            calls.slots.push(Slot {
-                generation: NonZeroU32::MIN,
-                frame: None,
-                caller: None,
-            });
-            index
-        });
-        let slot = &mut calls.slots[index as usize];
-        let id = FcId(index, slot.generation);
-        fc.fc_id = Some(id);
-        slot.caller = caller;
-        let frame = slot
-            .frame
-            .insert(Box::new(UnsafeCell::new(ManuallyDrop::new(fc))));
-        (id, frame.get().cast())
+        calls.table.insert_boxed(caller, frame, |id, frame| {
+            frame.fc_id = Some(id);
+            init(frame);
+        })
     })
 }
 
 /// Give back `id`'s storage. What the funccall held must have been given
 /// back already; nothing of it is dropped here.
 pub(crate) fn release_funccal(id: FcId) {
-    let frame = FUNC_CALLS.with_mut(|calls| {
-        let slot = &mut calls.slots[id.0 as usize];
-        assert!(slot.generation == id.1, "a funccall freed twice");
-        slot.generation = slot.generation.checked_add(1).unwrap_or(NonZeroU32::MIN);
-        calls.vacant.push(id.0);
-        slot.caller = None;
-        slot.frame.take()
-    });
-    // Freed outside the borrow; the `ManuallyDrop` keeps it to the block.
-    drop(frame);
+    FUNC_CALLS.with_mut(|calls| calls.table.free(id));
 }
 
 /// The call in progress, or null.
@@ -161,7 +101,7 @@ pub(crate) fn current_fc() -> *mut FuncCall {
     FUNC_CALLS.with(|calls| {
         calls
             .current
-            .map_or(ptr::null_mut(), |id| calls.funccall(id))
+            .map_or(ptr::null_mut(), |id| calls.table.address(id))
     })
 }
 

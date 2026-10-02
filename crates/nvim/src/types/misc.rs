@@ -161,7 +161,7 @@ pub struct caller_scope {
     pub autocmd_match: *mut ::core::ffi::c_char,
     pub autocmd_fname_full: bool,
     pub autocmd_bufnr: ::core::ffi::c_int,
-    pub funccalp: Option<FcId>,
+    pub(crate) funccalp: Option<FcId>,
 }
 /// A dictionary item's key: its own bytes, NUL-terminated.
 ///

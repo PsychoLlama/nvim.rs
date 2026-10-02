@@ -298,6 +298,7 @@ typedef unsigned int ExprVarScope;
 typedef struct ExtmarkNs ExtmarkNs;
 typedef unsigned int ExtmarkOp;
 typedef unsigned int ExtmarkType;
+typedef struct FcId FcId;
 typedef const KeySetLink *(*FieldHashfn)(const char *, size_t);
 typedef unsigned int FileComparison;
 typedef long off_t;

@@ -15,8 +15,10 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use core::cell::UnsafeCell;
 use core::ffi::{c_char, c_int, c_void};
-use core::{mem::offset_of, ptr};
+use core::mem::{ManuallyDrop, offset_of};
+use core::ptr;
 
 use super::*;
 use crate::types::{DictTab, Failed, ItemSlot, NUL, Refcount};
@@ -369,20 +371,24 @@ pub(crate) unsafe fn func_clear_free(func: *mut UserFunc, force: bool) {
 /// # Safety
 /// `func` is a live function and `result` outlives the call.
 pub unsafe fn create_funccal(func: *mut UserFunc, result: &mut TypVal) -> *mut FuncCall {
-    // What upstream's `xcalloc` hands back. All-zero is a valid value for
+    // What upstream's `xcalloc` hands back, allocated in place: the value is
+    // too big to build on the stack and move. All-zero is a valid value for
     // every field but `a:000`'s item array, a `Vec`, which is given a real
     // empty one before the value is read; `call_user_func` initialises the
     // list properly.
-    let mut fresh = core::mem::MaybeUninit::<FuncCall>::zeroed();
+    let mut fresh = Box::<UnsafeCell<ManuallyDrop<FuncCall>>>::new_zeroed();
+    let at = fresh.as_mut_ptr().cast::<FuncCall>();
     // SAFETY: a field of the zeroed value, written without reading it; then
     // every field holds a valid value.
-    let mut fresh = unsafe {
-        (&raw mut (*fresh.as_mut_ptr()).fc_l_varlist).write(crate::types::List::empty());
+    let fresh = unsafe {
+        (&raw mut (*at).fc_l_varlist).write(crate::types::List::empty());
         fresh.assume_init()
     };
-    fresh.fc_func = func;
-    fresh.fc_rettv = result;
-    let (id, fc) = adopt_funccal(fresh, current_fc_id());
+    let rettv: *mut TypVal = result;
+    let (id, fc) = adopt_funccal(fresh, current_fc_id(), |frame| {
+        frame.fc_func = func;
+        frame.fc_rettv = rettv;
+    });
     set_current_fc(Some(id));
     // SAFETY: the caller's promise -- `func` is live.
     unsafe { func_ptr_ref(func) };

@@ -109,6 +109,7 @@ pub mod search;
 pub mod sha256;
 pub mod shada;
 pub(crate) mod sign;
+pub(crate) mod slot_table;
 pub mod spell;
 pub mod spellfile;
 pub(crate) mod spellsuggest;
