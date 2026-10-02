@@ -10,34 +10,47 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
-use crate::strings::has_char;
+use crate::mbyte::cluster_len;
 use crate::types::{NUL, OK, VarLock};
 use crate::winlayer::{Buf, Win};
 
-/// Insert `len` bytes of `p` at the cursor, `-1` meaning up to its NUL.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn ins_compl_insert_bytes(p: *mut c_char, mut len: c_int) {
-    if len == -1 {
-        len = unsafe { cstr::bytes_at(p) }.len() as c_int;
-    }
-    debug_assert!(len >= 0);
-    unsafe { ins_bytes_len(p, len as size_t) };
+/// Insert `text` at the cursor.
+pub(crate) fn ins_compl_insert_text(text: &[u8]) {
+    // SAFETY: `text` is readable for its length, which is all
+    // `ins_bytes_len` reads; it writes nothing through the pointer.
+    unsafe { ins_bytes_len(text.as_ptr().cast_mut().cast(), text.len()) };
     compl_ins_end_col.set(Win::current().w_cursor.col);
 }
 
+/// `text` from where the typed part of it ends: the part a completion
+/// still has to insert. Upstream offsets the pointer unchecked.
+pub(crate) fn untyped_part(text: &[u8]) -> &[u8] {
+    &text[(get_compl_len() as usize).min(text.len())..]
+}
+
 /// Insert `prefix` as the completion, and redraw.
-///
-/// # Safety
-///
-/// `prefix` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn ins_compl_longest_insert(prefix: *mut c_char) {
+pub(crate) fn ins_compl_longest_insert(prefix: &[u8]) {
     ins_compl_delete(false);
-    unsafe { ins_compl_insert_bytes(prefix.offset(get_compl_len() as isize), -1) };
+    ins_compl_insert_text(untyped_part(prefix));
     ins_redraw(false);
+}
+
+/// The byte length of what `prefix` and `text` share, counted the way
+/// upstream counts it -- in *characters*, compared a character at a time
+/// and stopping after `limit` of them -- which is then used as a byte
+/// length. Kept: it only ever shortens the prefix.
+fn shared_char_count(prefix: &[u8], text: &[u8], limit: usize) -> usize {
+    let (mut p, mut m, mut count) = (0, 0, 0);
+    while count < limit && p < prefix.len() && m < text.len() {
+        let step = cluster_len(&prefix[p..]);
+        if !text[m..].starts_with(&prefix[p..p + step]) {
+            break;
+        }
+        p += step;
+        m += cluster_len(&text[m..]);
+        count += 1;
+    }
+    count
 }
 
 /// Insert the longest common prefix of the best fuzzy matches as `'longest'`.
@@ -52,81 +65,39 @@ pub(crate) fn fuzzy_longest_match() {
     let second = first.next().expect("a fuzzy completion has a second match");
     let more_candidates = second.next().is_some_and(|nn| nn != first);
 
-    let mut compl = Some(if ctrl_x_mode_whole_line() {
+    let start = if ctrl_x_mode_whole_line() {
         first
     } else {
         second
-    });
+    };
     if num_bests == 1 {
         // No more candidates: insert the match string itself.
         if !more_candidates {
-            let text = compl.expect("just set").cp_str.data();
-            // SAFETY: a match's text is NUL-terminated, and a completion is
-            // running.
-            unsafe { ins_compl_longest_insert(text) };
+            ins_compl_longest_insert(&start.text_copy());
         }
         compl_num_bests.set(0);
         return;
     }
 
-    // Upstream keeps these in an `xmalloc`ed array in a static that no
-    // other function reads; the walk fills it from a list made cyclic by
-    // `ins_compl_make_cyclic`, so `compl` is never null and every slot is
-    // written. Collecting instead means the shorter-than-expected list
-    // upstream would read uninitialised simply yields fewer candidates.
-    let mut best: Vec<Cm> = Vec::with_capacity(num_bests as usize);
-    while let Some(node) = compl {
-        if best.len() >= num_bests as usize {
-            break;
-        }
-        best.push(node);
-        compl = node.next();
-    }
-
-    let prefix = best[0].cp_str.data();
-    let mut prefix_len = best[0].cp_str.len() as c_int;
-    for &m in &best[1..] {
-        let mut prefix_ptr = prefix;
-        let mut match_ptr = m.cp_str.data();
-        let mut j: c_int = 0;
-        while j < prefix_len {
-            // SAFETY: both pointers walk a match's NUL-terminated text and
-            // stop at its NUL.
-            let (at_match_end, at_prefix_end) =
-                unsafe { (*match_ptr as c_int == NUL, *prefix_ptr as c_int == NUL) };
-            if at_match_end || at_prefix_end {
-                break;
+    // The best matches, from a list `ins_compl_make_cyclic` has closed; a
+    // shorter list than expected simply yields fewer candidates.
+    let best: Vec<MatchId> = ::core::iter::successors(Some(start), |m| m.next())
+        .take(num_bests as usize)
+        .collect();
+    let prefix = best[0].text_copy();
+    let prefix_len = MATCHES.with(|list| {
+        best[1..].iter().fold(prefix.len(), |len, &m| {
+            match shared_char_count(&prefix, &list.get(m).text, len) {
+                0 => len,
+                shared => shared,
             }
-            // SAFETY: as above -- one whole character of each.
-            let (prefix_step, match_step) =
-                unsafe { (utfc_ptr2len(prefix_ptr), utfc_ptr2len(match_ptr)) };
-            // SAFETY: as above.
-            if !unsafe { cstr::prefix_eq(prefix_ptr, match_ptr, prefix_step as size_t) } {
-                break;
-            }
-            // SAFETY: as above -- the step lands on the next character.
-            prefix_ptr = unsafe { prefix_ptr.offset(prefix_step as isize) };
-            // SAFETY: as above.
-            match_ptr = unsafe { match_ptr.offset(match_step as isize) };
-            j += 1;
-        }
-        if j > 0 {
-            prefix_len = j;
-        }
-    }
+        })
+    });
 
     // Skip non-consecutive prefixes.
-    let leader_len = ins_compl_leader_len();
-    // SAFETY: the leader is readable for `leader_len` bytes and `prefix` is
-    // a match's NUL-terminated text.
-    let consecutive = unsafe { cstr::prefix_eq(prefix, ins_compl_leader(), leader_len) };
-    if leader_len == 0 || consecutive {
-        // SAFETY: `prefix_len` bytes of `prefix`, copied with a NUL added.
-        let copy = unsafe { xmemdupz(prefix.cast(), prefix_len as size_t) }.cast::<c_char>();
-        // SAFETY: a NUL-terminated string, and a completion is running.
-        unsafe { ins_compl_longest_insert(copy) };
-        // SAFETY: the copy just made, which nothing else holds.
-        unsafe { xfree(copy.cast::<c_void>()) };
+    let leader = ins_compl_leader_str().to_vec();
+    if leader.is_empty() || prefix.starts_with(&leader) {
+        ins_compl_longest_insert(&prefix[..prefix_len.min(prefix.len())]);
     }
     compl_num_bests.set(0);
 }
@@ -139,43 +110,27 @@ pub(crate) fn ins_compl_update_shown_match() {
     let mut shown = shown_match().expect("a running completion has a shown match");
     let mut leader = get_leader_for_startcol(shown, true);
 
-    loop {
-        // SAFETY: the leader is readable for its own length.
-        let hidden = unsafe { leader_hides(leader, shown, shown.next()) };
-        if !hidden {
-            break;
-        }
+    while leader_hides(leader, shown, shown.next()) {
         shown = shown.next().expect("`leader_hides` checked the link");
-        compl_shown_match.set(shown.raw());
+        compl_shown_match.set(Some(shown));
         leader = get_leader_for_startcol(shown, true);
     }
 
     // If we didn't find it searching forward, and compl_shows_dir is
     // backward, find the last match.
-    // SAFETY: as above.
-    let equal = unsafe { ins_compl_equal(shown, leader.data(), leader.len()) };
-    if compl_shows_dir_backward() && !equal && shown.next().is_none_or(Cm::is_first) {
-        loop {
-            // SAFETY: as above.
-            let hidden = unsafe { leader_hides(leader, shown, shown.prev()) };
-            if !hidden {
-                break;
-            }
+    let equal = ins_compl_equal(shown, leader);
+    if compl_shows_dir_backward() && !equal && shown.next().is_none_or(MatchId::is_first) {
+        while leader_hides(leader, shown, shown.prev()) {
             shown = shown.prev().expect("`leader_hides` checked the link");
-            compl_shown_match.set(shown.raw());
+            compl_shown_match.set(Some(shown));
             leader = get_leader_for_startcol(shown, true);
         }
     }
 }
 
 /// True while `leader` hides `shown` and the walk can take one more `step`.
-///
-/// # Safety
-/// `leader` is readable for its own length.
-unsafe fn leader_hides(leader: ComplStr, shown: Cm, step: Option<Cm>) -> bool {
-    // SAFETY: the caller's promise.
-    let equal = unsafe { ins_compl_equal(shown, leader.data(), leader.len()) };
-    !equal && step.is_some_and(|step| !step.is_first())
+fn leader_hides(leader: ComplStr, shown: MatchId, step: Option<MatchId>) -> bool {
+    !ins_compl_equal(shown, leader) && step.is_some_and(|step| !step.is_first())
 }
 
 /// Delete the old text being completed.
@@ -250,36 +205,29 @@ pub fn ins_compl_delete(new_leader: bool) {
 }
 
 /// Insert a completion string that contains newlines, line by line.
-///
-/// # Safety
-///
-/// `str` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn ins_compl_expand_multiple(str: *mut c_char) {
-    let mut start = str;
-    let mut curr = str;
+pub(crate) fn ins_compl_expand_multiple(text: &[u8]) {
     let base_indent = get_indent();
-    while unsafe { *curr } as c_int != NUL {
-        if unsafe { *curr } as c_int == '\n' as c_int {
-            if curr > start {
-                unsafe { ins_char_bytes(start, curr.offset_from(start) as size_t) };
-            }
-            unsafe {
-                open_line(
-                    FORWARD,
-                    OPENLINE_KEEPTRAIL | OPENLINE_FORCE_INDENT,
-                    base_indent,
-                    ptr::null_mut(),
-                )
-            };
-            start = unsafe { curr.offset(1) };
-        }
-        curr = unsafe { curr.offset(1) };
+    let mut lines = text.split(|&b| b == b'\n');
+    let mut line = lines.next().unwrap_or_default();
+    for next in lines {
+        insert_chars(line);
+        // SAFETY: no comment leader is asked for.
+        let flags = OPENLINE_KEEPTRAIL | OPENLINE_FORCE_INDENT;
+        unsafe { open_line(FORWARD, flags, base_indent, ptr::null_mut()) };
+        line = next;
     }
     // Handle remaining text after the last newline (if any).
-    if curr > start {
-        unsafe { ins_char_bytes(start, curr.offset_from(start) as size_t) };
-    }
+    insert_chars(line);
     compl_ins_end_col.set(Win::current().w_cursor.col);
+}
+
+/// `ins_char_bytes` over `text`, which C hands it whole whatever it holds.
+fn insert_chars(text: &[u8]) {
+    if !text.is_empty() {
+        // SAFETY: `text` is readable for its length, which is all
+        // `ins_char_bytes` reads.
+        unsafe { ins_char_bytes(text.as_ptr().cast_mut().cast(), text.len()) };
+    }
 }
 
 /// Insert the new text being completed.
@@ -290,34 +238,33 @@ pub(crate) unsafe fn ins_compl_expand_multiple(str: *mut c_char) {
 pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
     // Upstream dereferences `compl_shown_match` here without checking.
     let shown = shown_match().expect("a running completion has a shown match");
-    let compl_len = get_compl_len();
+    let compl_len = get_compl_len() as usize;
     let preinsert = ins_compl_has_preinsert();
-    let mut cp_str = shown.cp_str.data();
-    let mut cp_str_len = shown.cp_str.len();
     let leader_len = ins_compl_leader_len();
-    let has_multiple = has_char(unsafe { cstr::at(cp_str) }, '\n' as c_int);
+    // What to insert: `len` bytes of `text` from `start`. A copy, because
+    // inserting runs buffer callbacks.
+    let mut text = shown.text_copy();
+    let has_multiple = text.contains(&b'\n');
+    let (mut start, mut len) = (0, text.len());
 
     if insert_prefix {
-        cp_str = unsafe { find_common_prefix(&raw mut cp_str_len, false) };
-        if cp_str.is_null() {
-            cp_str = unsafe { find_common_prefix(&raw mut cp_str_len, true) };
-            if cp_str.is_null() {
-                cp_str = shown.cp_str.data();
-                cp_str_len = shown.cp_str.len();
-            }
+        if let Some((prefix, prefix_len)) =
+            find_common_prefix(false).or_else(|| find_common_prefix(true))
+        {
+            (text, len) = (prefix, prefix_len);
         }
     } else if !cpt_sources().is_unset() {
         // Since completion sources may provide matches with varying start
         // positions, insert only the portion of the match that corresponds
         // to the intended replacement range.
-        let cpt_idx = shown.cp_cpt_source_idx;
+        let cpt_idx = shown.with(|m| m.cpt_source_idx);
         if cpt_idx >= 0 && compl_col.get() >= 0 {
             let startcol = cpt_sources().row(cpt_idx).cs_startcol;
             if startcol >= 0 && startcol < compl_col.get() {
-                let skip = compl_col.get() - startcol;
-                if skip as size_t <= cp_str_len {
-                    cp_str_len -= skip as size_t;
-                    cp_str = unsafe { cp_str.offset(skip as isize) };
+                let skip = (compl_col.get() - startcol) as usize;
+                if skip <= len {
+                    len -= skip;
+                    start = skip;
                 }
             }
         }
@@ -325,34 +272,34 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
 
     // Make sure we don't go over the end of the string, this can happen
     // with illegal bytes.
-    if compl_len < cp_str_len as c_int {
+    if compl_len < len {
+        // Several lines go in up to the text's end, as upstream's walk to
+        // the NUL does even for a prefix.
+        let rest = &text[start + compl_len..];
         if has_multiple {
-            unsafe { ins_compl_expand_multiple(cp_str.offset(compl_len as isize)) };
+            ins_compl_expand_multiple(rest);
         } else {
-            unsafe {
-                ins_compl_insert_bytes(
-                    cp_str.offset(compl_len as isize),
-                    if insert_prefix {
-                        cp_str_len as c_int - compl_len
-                    } else {
-                        -1
-                    },
-                )
-            };
+            ins_compl_insert_text(if insert_prefix {
+                &rest[..len - compl_len]
+            } else {
+                rest
+            });
             if (preinsert || insert_prefix) && move_cursor {
                 // `wrapping_sub` as the transpile has it: nothing here
                 // proves the match is longer than the leader (a fuzzy
                 // match need not start with it), and upstream's `size_t`
                 // underflow narrows to a negative `ColNr`, i.e. the
                 // cursor moves the other way.
-                Win::current().w_cursor.col -= cp_str_len.wrapping_sub(leader_len) as ColNr;
+                Win::current().w_cursor.col -= len.wrapping_sub(leader_len) as ColNr;
             }
         }
     }
-    compl_used_match.set(!(shown.is_original() || (preinsert && !insert_prefix)));
 
-    // SAFETY: `shown` is a live node, and the fresh dict is handed over.
-    unsafe { set_vim_var_dict(Vv::CompletedItem, Some(ins_compl_dict_alloc(shown.raw()))) };
+    // Upstream reads the shown match afresh: inserting ran buffer callbacks.
+    if let Some(shown) = shown_match() {
+        compl_used_match.set(!(shown.is_original() || (preinsert && !insert_prefix)));
+        set_vim_var_dict(Vv::CompletedItem, Some(ins_compl_dict_alloc(shown)));
+    }
     compl_hi_on_autocompl_longest.set(insert_prefix && move_cursor);
 }
 
@@ -364,18 +311,14 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
 /// `advance` moves to the first match rather than showing the original text.
 ///
 /// Answers `OK`, or `-1` when the number of matches is still unknown.
-///
-/// # Safety
-///
-/// `num_matches` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn find_next_completion_match(
+pub(crate) fn find_next_completion_match(
     allow_get_expansion: bool,
     mut todo: c_int,
     advance: bool,
-    num_matches: *mut c_int,
+    num_matches: &mut c_int,
 ) -> c_int {
     let mut found_end;
-    let mut found_compl: Option<Cm> = None;
+    let mut found_compl: Option<MatchId> = None;
     let has_preinsert = ins_compl_has_preinsert();
     let compl_no_select = completeopt_flags() & kOptCotFlagNoselect as c_uint != 0
         || compl_autocomplete.get() && !has_preinsert;
@@ -387,21 +330,22 @@ pub(crate) unsafe fn find_next_completion_match(
         }
         // Upstream dereferences `compl_shown_match` here without checking.
         let shown = shown_match().expect("a running completion has a shown match");
-        if compl_shows_dir_forward() && !shown.cp_next.is_null() {
+        let (next, prev) = shown.with(|m| (m.next, m.prev));
+        if compl_shows_dir_forward() && next.is_some() {
             let next = if !compl_match_array().is_unset() {
-                find_next_match_in_menu().raw()
+                Some(find_next_match_in_menu())
             } else {
-                shown.cp_next
+                next
             };
             compl_shown_match.set(next);
-            let now = shown_match().expect("just set from a non-null link");
-            found_end = first_match().is_some() && (is_first_match(now.cp_next) || now.is_first());
-        } else if compl_shows_dir_backward() && !shown.cp_prev.is_null() {
+            let now = shown_match().expect("just set from a link");
+            found_end = first_match().is_some() && (is_first_match(now.next()) || now.is_first());
+        } else if compl_shows_dir_backward() && prev.is_some() {
             found_end = shown.is_first();
             let prev = if !compl_match_array().is_unset() {
-                find_next_match_in_menu().raw()
+                Some(find_next_match_in_menu())
             } else {
-                shown.cp_prev
+                prev
             };
             compl_shown_match.set(prev);
             found_end |= is_first_match(compl_shown_match.get());
@@ -425,8 +369,14 @@ pub(crate) unsafe fn find_next_completion_match(
                 }
             }
 
-            // Find matches.
-            unsafe { *num_matches = ins_compl_get_exp(compl_startpos.get()) };
+            // Find matches. That runs user code, which can free the list
+            // (`complete()` from a timer) and leave a remembered match
+            // naming nothing.
+            let list = match_list_generation();
+            *num_matches = ins_compl_get_exp(compl_startpos.get());
+            if match_list_generation() != list {
+                found_compl = None;
+            }
 
             // Handle any pending completions.
             while compl_pending.get() != 0
@@ -435,11 +385,12 @@ pub(crate) unsafe fn find_next_completion_match(
             {
                 // Upstream dereferences `compl_shown_match` here unchecked.
                 let shown = shown_match().expect("a running completion has a shown match");
-                if compl_pending.get() > 0 && !shown.cp_next.is_null() {
-                    compl_shown_match.set(shown.cp_next);
+                let (next, prev) = shown.with(|m| (m.next, m.prev));
+                if compl_pending.get() > 0 && next.is_some() {
+                    compl_shown_match.set(next);
                     compl_pending.set(compl_pending.get() - 1);
-                } else if compl_pending.get() < 0 && !shown.cp_prev.is_null() {
-                    compl_shown_match.set(shown.cp_prev);
+                } else if compl_pending.get() < 0 && prev.is_some() {
+                    compl_shown_match.set(prev);
                     compl_pending.set(compl_pending.get() + 1);
                 } else {
                     break;
@@ -450,11 +401,10 @@ pub(crate) unsafe fn find_next_completion_match(
 
         let shown = shown_match().expect("a running completion has a shown match");
         let leader = get_leader_for_startcol(shown, false);
-        // SAFETY: the leader is readable for its own length.
         let hidden = !shown.is_original()
-            && !leader.data().is_null()
-            && !unsafe { ins_compl_equal(shown, leader.data(), leader.len()) }
-            && !(cot_fuzzy() && shown.cp_score != FUZZY_SCORE_NONE);
+            && !leader.is_unset()
+            && !ins_compl_equal(shown, leader)
+            && !(cot_fuzzy() && shown.with(|m| m.score) != FUZZY_SCORE_NONE);
         if hidden {
             todo += 1;
         } else {
@@ -465,7 +415,7 @@ pub(crate) unsafe fn find_next_completion_match(
         // Stop at the end of the list when we found a usable match.
         if found_end {
             if let Some(found) = found_compl {
-                compl_shown_match.set(found.raw());
+                compl_shown_match.set(Some(found));
                 break;
             }
             todo = 1; // use first usable match after wrapping around
@@ -524,10 +474,7 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
 
     // Repeat this for when <PageUp> or <PageDown> is typed.  But don't
     // wrap around.
-    if unsafe {
-        find_next_completion_match(allow_get_expansion, count, advance, &raw mut num_matches)
-    } == -1
-    {
+    if find_next_completion_match(allow_get_expansion, count, advance, &mut num_matches) == -1 {
         return -1;
     }
 
@@ -538,37 +485,34 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
     }
 
     // Insert the text of the new completion, or the compl_leader.
-    // SAFETY: no precondition left; still an `unsafe fn` for its call sites
-    // outside this family.
     if !started && ins_compl_preinsert_longest() {
         ins_compl_insert(true, true);
         if has_autocomplete_delay {
             let _ = update_screen(); // Show the inserted text right away
         }
     } else if compl_no_insert && !started && !compl_preinsert {
-        unsafe {
-            ins_compl_insert_bytes(
-                compl_orig_text().data().offset(get_compl_len() as isize),
-                -1,
-            )
-        };
+        ins_compl_insert_text(untyped_part(&compl_orig_text().to_vec()));
         compl_used_match.set(false);
         compl_orig_extmarks().restore();
     } else if insert_match {
         if !compl_get_longest.get() || compl_used_match.get() {
             // None selected.
             let preinsert_longest =
-                ins_compl_preinsert_longest() && shown_match().is_some_and(Cm::is_original);
+                ins_compl_preinsert_longest() && shown_match().is_some_and(MatchId::is_original);
             ins_compl_insert(compl_preinsert || preinsert_longest, preinsert_longest);
         } else {
             debug_assert!(!compl_leader().is_unset());
-            unsafe {
-                ins_compl_insert_bytes(compl_leader().data().offset(get_compl_len() as isize), -1)
-            };
+            ins_compl_insert_text(untyped_part(&compl_leader().to_vec()));
         }
-        let shown_text = shown_match().map_or(ptr::null_mut(), |shown| shown.cp_str.data());
-        // SAFETY: both are NUL-terminated or null, which `strequal` takes.
-        if unsafe { strequal(shown_text, compl_orig_text().data()) } {
+        // C's `strequal(compl_shown_match->cp_str.data, compl_orig_text.data)`.
+        let orig = compl_orig_text();
+        let shown_is_orig_text = match shown_match() {
+            Some(shown) => {
+                !orig.is_unset() && orig.with_bytes(|orig| shown.with(|m| *m.text == *orig))
+            }
+            None => orig.is_unset(),
+        };
+        if shown_is_orig_text {
             compl_orig_extmarks().restore();
         }
     } else {
@@ -589,7 +533,7 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
 
     // Enter will select a match when the match wasn't inserted and the
     // popup menu is visible.
-    let shown_is_orig = shown_match().is_some_and(Cm::is_original);
+    let shown_is_orig = shown_match().is_some_and(MatchId::is_original);
     if compl_no_insert && !started && !shown_is_orig {
         compl_enter_selects.set(true);
     } else {
@@ -597,7 +541,7 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
     }
 
     // Show the file name for the match (if any).
-    if shown_match().is_some_and(|shown| !shown.cp_fname.is_null()) {
+    if shown_match().is_some_and(|shown| shown.with(|m| m.fname.is_some())) {
         ins_compl_show_filename();
     }
 

@@ -2021,7 +2021,6 @@ static const int CPT_MENU = 2;
 static const int CP_CONT_S_IPOS = 4;
 static const int CP_EQUAL = 8;
 static const int CP_FAST = 32;
-static const int CP_FREE_FNAME = 2;
 static const int CP_ICASE = 16;
 static const int CP_ORIGINAL_TEXT = 1;
 static const int CREAD = 128;

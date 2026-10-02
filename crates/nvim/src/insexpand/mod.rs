@@ -11,6 +11,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
+use std::rc::Rc;
 
 use crate::api::private::helpers::{cbuf_to_string, cstr_to_string};
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
@@ -66,10 +67,7 @@ use crate::mbyte::{
     utfc_ptr2len,
 };
 use crate::memline::{dec, ml_delete, ml_get_buf, ml_get_buf_len};
-use crate::memory::{
-    MergeSortCompareFunc, MergeSortGetFunc, MergeSortSetFunc, mergesort_list, strequal, xcalloc,
-    xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy,
-};
+use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup, xstrlcpy};
 use crate::message::state::{did_emsg, emsg_silent, in_assert_fails, msg_hist_off};
 use crate::message::{e_invarg, e_listreq, e_patnotf};
 use crate::message::{
@@ -178,26 +176,57 @@ pub const CTRL_X_SPELL: ::core::ffi::c_int = 14;
 pub const CTRL_X_EVAL: ::core::ffi::c_int = 16;
 pub const CTRL_X_REGISTER: ::core::ffi::c_int = 19;
 pub const CTRL_X_BUFNAMES: ::core::ffi::c_int = 18;
-pub struct ComplItem {
-    pub cp_next: *mut ComplItem,
-    pub cp_prev: *mut ComplItem,
-    pub cp_match_next: *mut ComplItem,
-    pub cp_str: String_0,
-    pub cp_text: [*mut ::core::ffi::c_char; 4],
-    pub cp_user_data: TypVal,
-    pub cp_fname: *mut ::core::ffi::c_char,
-    pub cp_flags: ::core::ffi::c_int,
-    pub cp_number: ::core::ffi::c_int,
-    pub cp_score: ::core::ffi::c_int,
-    pub cp_in_match_array: bool,
-    pub cp_user_abbr_hlattr: ::core::ffi::c_int,
-    pub cp_user_kind_hlattr: ::core::ffi::c_int,
-    pub cp_cpt_source_idx: ::core::ffi::c_int,
+/// One match: the text it inserts and what the menu and `complete_info()`
+/// show for it.
+///
+/// It owns everything it holds. The list it is linked into is
+/// [`ComplMatches`]: `next`/`prev` name neighbours by [`MatchId`], never by
+/// address, so a match added while another is being looked at (a
+/// `complete_add()` from inside a completion function) cannot move anything
+/// out from under the reader -- only the storage `Vec` grows, and each
+/// string here is a heap block of its own that stays where it is.
+pub(crate) struct ComplItem {
+    /// The match after this one, `None` past the tail of an opened list.
+    pub(crate) next: Option<MatchId>,
+    /// The match before this one, `None` before the head of an opened list.
+    pub(crate) prev: Option<MatchId>,
+    /// The text the match inserts.
+    pub(crate) text: XString,
+    /// `abbr`, `kind`, `menu` and `info`, indexed by `CPT_*`; never empty.
+    pub(crate) extra: [Option<XString>; CPT_COUNT as usize],
+    /// The `user_data` a completion function handed over.
+    pub(crate) user_data: TypVal,
+    /// The file the match came from. Shared with the match added before it
+    /// when that came from the same file, which is upstream's `fname`
+    /// sharing without its `CP_FREE_FNAME` bookkeeping.
+    pub(crate) fname: Option<Rc<XString>>,
+    /// `CP_*` flags.
+    pub(crate) flags: c_int,
+    /// The position "match 3 of 17" reports, `-1` until numbered.
+    pub(crate) number: c_int,
+    /// The fuzzy score, or under `nearest` the distance from the cursor.
+    pub(crate) score: c_int,
+    /// The match is in the popup menu's item array.
+    pub(crate) in_match_array: bool,
+    /// The highlight attributes of the `abbr` and `kind` columns, `-1` for
+    /// the default.
+    pub(crate) user_abbr_hlattr: c_int,
+    pub(crate) user_kind_hlattr: c_int,
+    /// The `'complete'` entry it came from, `-1` for none.
+    pub(crate) cpt_source_idx: c_int,
+}
+
+impl ComplItem {
+    /// Whether this is the original text the completion began with — C's
+    /// `match_at_original_text`.
+    #[inline(always)]
+    pub(crate) fn is_original(&self) -> bool {
+        self.flags & CP_ORIGINAL_TEXT != 0
+    }
 }
 pub const CP_ICASE: ::core::ffi::c_int = 16;
 pub const CP_ORIGINAL_TEXT: ::core::ffi::c_int = 1;
 pub const CPT_COUNT: ::core::ffi::c_int = 4;
-pub const CP_FREE_FNAME: ::core::ffi::c_int = 2;
 pub const CP_FAST: ::core::ffi::c_int = 32;
 pub const CP_CONT_S_IPOS: ::core::ffi::c_int = 4;
 pub const CPT_INFO: ::core::ffi::c_int = 3;
@@ -392,6 +421,23 @@ impl ComplStr {
         self.0.with(|s| (s.data(), s.len()))
     }
 
+    /// Look at the bytes (empty while unset). `f` must not reach back into
+    /// the editor.
+    pub(crate) fn with_bytes<R>(self, f: impl FnOnce(&[u8]) -> R) -> R {
+        self.0.with(|s| f(s.as_bytes()))
+    }
+
+    /// Look at the string as a C string (`c""` while unset). `f` must not
+    /// reach back into the editor.
+    pub(crate) fn with_cstr<R>(self, f: impl FnOnce(&CStr) -> R) -> R {
+        self.0.with(|s| f(s.as_cstr()))
+    }
+
+    /// A copy of the bytes.
+    pub(crate) fn to_vec(self) -> Vec<u8> {
+        self.with_bytes(<[u8]>::to_vec)
+    }
+
     /// A copy of the string, with its own allocation.
     pub(crate) fn to_owned(self) -> String_0 {
         self.0.with(String_0::clone)
@@ -502,33 +548,163 @@ pub(crate) const E_HITEND: &CStr = c"Hit end of paragraph";
 /// C's `e_compldel`.
 pub(crate) const E_COMPLDEL: &CStr = c"E840: Completion function deleted text";
 
-static compl_first_match: GlobalCell<*mut ComplItem> =
-    GlobalCell::new(::core::ptr::null_mut::<ComplItem>());
-static compl_curr_match: GlobalCell<*mut ComplItem> =
-    GlobalCell::new(::core::ptr::null_mut::<ComplItem>());
-static compl_shown_match: GlobalCell<*mut ComplItem> =
-    GlobalCell::new(::core::ptr::null_mut::<ComplItem>());
-static compl_old_match: GlobalCell<*mut ComplItem> =
-    GlobalCell::new(::core::ptr::null_mut::<ComplItem>());
+/// A match: its slot in [`ComplMatches`]'s storage.
+///
+/// This is what a caller holds instead of a pointer. It is `Copy`, it names
+/// no borrow, and the slot it names keeps its match until the list is freed
+/// or the match is removed (a `'complete'` source refreshing): nothing is
+/// ever moved between slots. So a `MatchId` taken before a call that runs
+/// user code still names the same match after it, however many matches the
+/// user code added -- which is the one thing upstream's `compl_T *` could
+/// not promise and every walk here needs. Reading a removed slot panics
+/// where upstream would read freed memory.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct MatchId(u32);
+
+state_record! {
+    /// The match list: a doubly linked chain over a `Vec`, which
+    /// [`ins_compl_make_cyclic`] closes into a ring and
+    /// [`ins_compl_make_linear`] opens again, and the four places a
+    /// completion is at in it.
+    ///
+    /// Its own cell, apart from [`ComplState`], so a walk that holds the
+    /// list can still ask the completion's other state; nothing holds it
+    /// across a call that can run user code (see [`MatchId`]).
+    pub(crate) struct ComplMatches in MATCHES as MatchesField;
+    /// One slot per match added since the list was last freed; `None` once
+    /// its match is removed.
+    #[allow(dead_code, reason = "the slots are reached through the whole list, not by selector")]
+    MATCH_SLOTS: Vec<Option<ComplItem>> = Vec::new();
+    /// The head of the list, `None` while there is no completion.
+    compl_first_match: Option<MatchId> = None;
+    /// The match a CTRL-N/CTRL-P walk has reached; while collecting, where
+    /// the next match is linked.
+    compl_curr_match: Option<MatchId> = None;
+    /// The match the popup menu highlights.
+    compl_shown_match: Option<MatchId> = None;
+    /// The current match before the collection that is running.
+    compl_old_match: Option<MatchId> = None;
+    /// How many times the list has been freed: a [`MatchId`] taken before
+    /// a call that ran user code is stale when this moved.
+    MATCH_GENERATION: u32 = 0;
+}
+
+/// The list's [`MATCH_GENERATION`].
+pub(crate) fn match_list_generation() -> u32 {
+    MATCH_GENERATION.get()
+}
+
+impl ComplMatches {
+    /// The match `id` names.
+    #[inline(always)]
+    pub(crate) fn get(&self, id: MatchId) -> &ComplItem {
+        self.MATCH_SLOTS[id.0 as usize]
+            .as_ref()
+            .expect("a match of the live list")
+    }
+
+    /// The match `id` names, to change.
+    #[inline(always)]
+    pub(crate) fn get_mut(&mut self, id: MatchId) -> &mut ComplItem {
+        self.MATCH_SLOTS[id.0 as usize]
+            .as_mut()
+            .expect("a match of the live list")
+    }
+
+    /// Store `item` in a new slot, linked to nothing yet.
+    pub(crate) fn push(&mut self, item: ComplItem) -> MatchId {
+        let id = MatchId(u32::try_from(self.MATCH_SLOTS.len()).expect("fewer than 2^32 matches"));
+        self.MATCH_SLOTS.push(Some(item));
+        id
+    }
+
+    /// Empty `id`'s slot, answering its match.
+    pub(crate) fn take(&mut self, id: MatchId) -> ComplItem {
+        self.MATCH_SLOTS[id.0 as usize]
+            .take()
+            .expect("a match of the live list")
+    }
+
+    /// Whether `id` is the head — C's `is_first_match`, which compares
+    /// addresses, so `None` is the head of an empty list.
+    #[inline(always)]
+    pub(crate) fn is_first(&self, id: Option<MatchId>) -> bool {
+        id == self.compl_first_match
+    }
+}
+
+impl MatchId {
+    /// Look at the match. `f` must not reach back into the editor.
+    #[inline(always)]
+    pub(crate) fn with<R>(self, f: impl FnOnce(&ComplItem) -> R) -> R {
+        MATCHES.with(|list| f(list.get(self)))
+    }
+
+    /// Change the match. `f` must not reach back into the editor.
+    #[inline(always)]
+    pub(crate) fn update<R>(self, f: impl FnOnce(&mut ComplItem) -> R) -> R {
+        MATCHES.with_mut(|list| f(list.get_mut(self)))
+    }
+
+    /// The match after this one, `None` past the tail of an opened list.
+    #[inline(always)]
+    pub(crate) fn next(self) -> Option<Self> {
+        self.with(|m| m.next)
+    }
+
+    /// The match before this one, `None` before the head of an opened list.
+    #[inline(always)]
+    pub(crate) fn prev(self) -> Option<Self> {
+        self.with(|m| m.prev)
+    }
+
+    /// Whether this is the head of the list — C's `is_first_match`.
+    #[inline(always)]
+    pub(crate) fn is_first(self) -> bool {
+        compl_first_match.get() == Some(self)
+    }
+
+    /// Whether this is the original text the completion began with.
+    #[inline(always)]
+    pub(crate) fn is_original(self) -> bool {
+        self.with(ComplItem::is_original)
+    }
+
+    #[inline(always)]
+    pub(crate) fn in_match_array(self) -> bool {
+        self.with(|m| m.in_match_array)
+    }
+
+    /// The text's length in bytes.
+    pub(crate) fn text_len(self) -> usize {
+        self.with(|m| m.text.len())
+    }
+
+    /// A copy of the text, for a caller about to run something that could
+    /// free the match.
+    pub(crate) fn text_copy(self) -> XString {
+        self.with(|m| m.text.clone())
+    }
+}
 
 /// The head of the match list, `None` while there is no completion.
-pub(crate) fn first_match() -> Option<Cm> {
-    Cm::at(compl_first_match.get())
+pub(crate) fn first_match() -> Option<MatchId> {
+    compl_first_match.get()
 }
 
 /// The match a CTRL-N/CTRL-P walk has reached.
-pub(crate) fn curr_match() -> Option<Cm> {
-    Cm::at(compl_curr_match.get())
+pub(crate) fn curr_match() -> Option<MatchId> {
+    compl_curr_match.get()
 }
 
 /// The match the popup menu highlights.
-pub(crate) fn shown_match() -> Option<Cm> {
-    Cm::at(compl_shown_match.get())
+pub(crate) fn shown_match() -> Option<MatchId> {
+    compl_shown_match.get()
 }
 
-/// The match that was shown before the last walk step.
-pub(crate) fn old_match() -> Option<Cm> {
-    Cm::at(compl_old_match.get())
+/// The match that was current before the collection that is running.
+pub(crate) fn old_match() -> Option<MatchId> {
+    compl_old_match.get()
 }
 
 /// The list from `start` onwards, stopping at the end of an opened list or
@@ -541,9 +717,9 @@ pub(crate) fn old_match() -> Option<Cm> {
 /// The link is read when the *next* item is asked for, not when the current
 /// one is handed out, so a body that relinks the node it was given walks the
 /// list it left behind — which is the timing the hand-written loops have.
-pub(crate) fn matches_from(start: Option<Cm>) -> impl Iterator<Item = Cm> {
+pub(crate) fn matches_from(start: Option<MatchId>) -> impl Iterator<Item = MatchId> {
     let mut start = start;
-    let mut current: Option<Cm> = None;
+    let mut current: Option<MatchId> = None;
     ::core::iter::from_fn(move || {
         current = match current {
             None => start.take(),

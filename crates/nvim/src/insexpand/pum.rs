@@ -105,7 +105,7 @@ pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
 
     let start_col = compl_col.get() + ins_compl_leader_len() as c_int;
     // SAFETY: the caller's promise -- a completion with a shown match.
-    if !unsafe { ins_compl_has_multiple() } {
+    if !ins_compl_has_multiple() {
         return if col >= start_col && col < compl_ins_end_col.get() {
             attr
         } else {
@@ -160,14 +160,11 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
         return;
     }
 
-    // SAFETY: a running completion's current match, and the dicts are fresh
-    // allocations `v:event` takes over.
-    let item_held = unsafe {
-        if cur < 0 {
-            tv_dict_alloc()
-        } else {
-            ins_compl_dict_alloc(compl_curr_match.get())
-        }
+    // The dict is a fresh allocation `v:event` takes over.
+    let item_held = if cur < 0 {
+        tv_dict_alloc()
+    } else {
+        ins_compl_dict_alloc(curr_match().expect("a selected item is the current match"))
     };
     let mut save_v_event = SAVE_V_EVENT_INIT;
     // SAFETY: `save_v_event` is this frame's, and lives until the restore
@@ -245,12 +242,12 @@ pub(crate) fn clear_adjusted_leader() {
 /// A source whose startcol is *before* `compl_col` matches text the leader
 /// does not contain, so the leader has that text prepended; the result is
 /// cached in `adjusted_leader`, which [`clear_adjusted_leader`] drops.
-pub(crate) fn get_leader_for_startcol(match_0: Cm, cached: bool) -> ComplStr {
+pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplStr {
     'theend: {
         if cpt_sources().is_unset() {
             break 'theend;
         }
-        let cpt_idx = match_0.cp_cpt_source_idx;
+        let cpt_idx = match_0.with(|m| m.cpt_source_idx);
         if cpt_idx < 0 {
             break 'theend;
         }
@@ -307,14 +304,14 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
     let compl_no_select = completeopt_flags() & kOptCotFlagNoselect != 0
         || (compl_autocomplete.get() && !has_preinsert);
 
-    let mut match_head: Option<Cm> = None;
-    let mut match_tail: Option<Cm> = None;
+    // The matches the menu shows, in list order.
+    let mut shown_in_menu: Vec<MatchId> = Vec::new();
     let is_forward = compl_shows_dir_forward();
     let is_cpt_completion = !cpt_sources().is_unset();
 
     // If the current match is the original text, don't find the first
     // match after it and don't highlight anything.
-    let mut shown_match_ok = shown_match().is_some_and(Cm::is_original);
+    let mut shown_match_ok = shown_match().is_some_and(MatchId::is_original);
 
     // SAFETY: both strings are NUL-terminated or null, which `strequal`
     // takes.
@@ -323,83 +320,72 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
         // Upstream dereferences `compl_first_match` here without checking.
         let head = first_match().expect("a menu is built from a non-empty list");
         compl_shown_match.set(if compl_no_select {
-            head.raw()
+            Some(head)
         } else {
-            head.cp_next
+            head.next()
         });
     }
 
-    let mut match_arraysize = 0;
     let mut did_find_shown_match = false;
-    let mut shown_compl: Option<Cm> = None;
+    let mut shown_compl: Option<MatchId> = None;
     let mut i = 0;
     let mut cur = -1;
 
-    let match_count: *mut c_int = if is_cpt_completion {
-        let rows = cpt_sources().len() as size_t;
-        // SAFETY: `xcalloc` answers a zeroed `c_int` per source, or aborts.
-        unsafe { xcalloc(rows, size_of::<c_int>()) as *mut c_int }
-    } else {
-        ptr::null_mut()
-    };
+    // How many matches each `'complete'` source has in the menu so far.
+    let mut match_count = vec![
+        0;
+        if is_cpt_completion {
+            cpt_sources().len()
+        } else {
+            0
+        }
+    ];
 
     clear_adjusted_leader();
 
-    for mut comp in matches_from(first_match()) {
-        comp.cp_in_match_array = false;
+    for comp in matches_from(first_match()) {
+        comp.update(|m| m.in_match_array = false);
 
         let leader = get_leader_for_startcol(comp, true);
 
         // Apply 'smartcase' behaviour during normal mode.
         if ctrl_x_mode_normal()
             && !p_inf()
-            && !leader.data().is_null()
+            && !leader.is_unset()
             // SAFETY: the leader is a NUL-terminated string.
             && !unsafe { ignorecase(leader.data()) }
             && !cot_fuzzy()
         {
-            comp.cp_flags &= !CP_ICASE;
+            comp.update(|m| m.flags &= !CP_ICASE);
         }
 
-        // SAFETY: the leader is readable for `leader.len()` bytes.
         let displayed = !comp.is_original()
-            && (leader.data().is_null()
-                || unsafe { ins_compl_equal(comp, leader.data(), leader.len()) }
-                || (cot_fuzzy() && comp.cp_score != FUZZY_SCORE_NONE));
+            && (leader.is_unset()
+                || ins_compl_equal(comp, leader)
+                || (cot_fuzzy() && comp.with(|m| m.score) != FUZZY_SCORE_NONE));
         if displayed {
             // Limit the number of items from each source where
             // `cs_max_matches` is set.
             let mut match_limit_exceeded = false;
-            let cur_source = comp.cp_cpt_source_idx;
+            let cur_source = comp.with(|m| m.cpt_source_idx);
             if is_forward && cur_source != -1 && is_cpt_completion {
-                // SAFETY: `match_count` holds one `c_int` per `'complete'`
-                // source, and `cur_source` names one of them.
-                let slot = unsafe { match_count.offset(cur_source as isize) };
-                // SAFETY: as above.
-                let count = unsafe { *slot } + 1;
-                // SAFETY: as above.
-                unsafe { *slot = count };
+                let count = &mut match_count[cur_source as usize];
+                *count += 1;
                 let max_matches = cpt_sources().row(cur_source).cs_max_matches;
-                if max_matches > 0 && count > max_matches {
+                if max_matches > 0 && *count > max_matches {
                     match_limit_exceeded = true;
                 }
             }
 
             if !match_limit_exceeded {
-                match_arraysize += 1;
-                comp.cp_in_match_array = true;
-                if match_head.is_none() {
-                    match_head = Some(comp);
-                } else if let Some(mut tail) = match_tail {
-                    tail.cp_match_next = comp.raw();
-                }
-                match_tail = Some(comp);
+                comp.update(|m| m.in_match_array = true);
+                shown_in_menu.push(comp);
 
                 if !shown_match_ok && !cot_fuzzy() {
                     if shown_match() == Some(comp) || did_find_shown_match {
                         // This item is the shown match, or the first
                         // displayed item after it.
-                        compl_shown_match.set(comp.raw());
+                        compl_shown_match.set(Some(comp));
                         did_find_shown_match = true;
                         shown_match_ok = true;
                     } else {
@@ -431,52 +417,50 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
             if !shown_match_ok && let Some(prev) = shown_compl {
                 // The shown match isn't displayed; use the previously
                 // displayed match instead.
-                compl_shown_match.set(prev.raw());
+                compl_shown_match.set(Some(prev));
                 shown_match_ok = true;
             }
         }
     }
 
-    // SAFETY: this function's own allocation, and `xfree` takes null.
-    unsafe { xfree(match_count.cast::<c_void>()) };
-
-    if match_arraysize == 0 {
+    if shown_in_menu.is_empty() {
         compl_match_array().clear();
         return -1;
     }
 
     if cot_fuzzy() && !compl_no_select && !shown_match_ok {
-        compl_shown_match.set(shown_compl.map_or(ptr::null_mut(), Cm::raw));
+        compl_shown_match.set(shown_compl);
         shown_match_ok = true;
         cur = 0;
     }
 
-    let mut array = Vec::with_capacity(match_arraysize as usize);
-    let mut comp = match_head;
-    while let Some(mut node) = comp {
-        array.push(PumItem {
-            pum_text: if node.cp_text[CPT_ABBR as usize].is_null() {
-                node.cp_str.data()
-            } else {
-                node.cp_text[CPT_ABBR as usize]
-            },
-            pum_kind: node.cp_text[CPT_KIND as usize],
-            pum_info: node.cp_text[CPT_INFO as usize],
-            pum_cpt_source_idx: node.cp_cpt_source_idx,
-            pum_user_abbr_hlattr: node.cp_user_abbr_hlattr,
-            pum_user_kind_hlattr: node.cp_user_kind_hlattr,
-            pum_extra: if node.cp_text[CPT_MENU as usize].is_null() {
-                node.cp_fname
-            } else {
-                node.cp_text[CPT_MENU as usize]
-            },
-        });
-
-        let match_next = node.match_next();
-        node.cp_match_next = ptr::null_mut();
-        comp = match_next;
-    }
-    debug_assert_eq!(array.len(), match_arraysize as usize);
+    // The strings stay the matches': each is a heap block of its own, which
+    // the list growing does not move, and the menu comes down before a match
+    // is freed.
+    let array: Vec<PumItem> = MATCHES.with(|list| {
+        let item = |id: MatchId| {
+            let m = list.get(id);
+            let extra = |which: c_int| {
+                m.extra[which as usize]
+                    .as_ref()
+                    .map(|text| text.as_ptr().cast_mut())
+            };
+            PumItem {
+                pum_text: extra(CPT_ABBR).unwrap_or(m.text.as_ptr().cast_mut()),
+                pum_kind: extra(CPT_KIND).unwrap_or(ptr::null_mut()),
+                pum_info: extra(CPT_INFO).unwrap_or(ptr::null_mut()),
+                pum_cpt_source_idx: m.cpt_source_idx,
+                pum_user_abbr_hlattr: m.user_abbr_hlattr,
+                pum_user_kind_hlattr: m.user_kind_hlattr,
+                pum_extra: extra(CPT_MENU).unwrap_or_else(|| {
+                    m.fname
+                        .as_ref()
+                        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
+                }),
+            }
+        };
+        shown_in_menu.iter().map(|&id| item(id)).collect()
+    });
     compl_match_array().set(array);
 
     if !shown_match_ok {
@@ -504,9 +488,15 @@ pub fn ins_compl_show_pum() {
         cur = ins_compl_build_pum();
     } else if let Some(shown) = shown_match() {
         // The menu already exists; only the current item has to be found.
-        let (text, abbr) = (shown.cp_str.data(), shown.cp_text[CPT_ABBR as usize]);
-        if let Some(i) =
-            compl_match_array().position(|item| item.pum_text == text || item.pum_text == abbr)
+        let (text, abbr) = shown.with(|m| {
+            let abbr = m.extra[CPT_ABBR as usize].as_ref();
+            (
+                m.text.as_ptr(),
+                abbr.map_or(ptr::null(), |abbr| abbr.as_ptr()),
+            )
+        });
+        if let Some(i) = compl_match_array()
+            .position(|item| ptr::eq(item.pum_text, text) || ptr::eq(item.pum_text, abbr))
         {
             cur = i as c_int;
         }
@@ -554,7 +544,7 @@ pub fn compl_match_curr_select(selected: c_int) -> bool {
         if match_0.is_original() {
             continue;
         }
-        if curr_match().is_some_and(|curr| curr.cp_number == match_0.cp_number) {
+        if curr_match().is_some_and(|curr| curr.with(|m| m.number) == match_0.with(|m| m.number)) {
             selected_idx = list_idx;
             break;
         }
@@ -574,10 +564,13 @@ pub(crate) fn ins_compl_show_filename() {
         return;
     }
 
-    // Find `s` such that `s..e` fits in `space` cells.
-    // SAFETY: the caller's promise -- a shown match, whose `cp_fname` is a
-    // NUL-terminated file name.
-    let fname = unsafe { (*compl_shown_match.get()).cp_fname };
+    // Find `s` such that `s..e` fits in `space` cells. The name is held here
+    // for the rest of the function, so its address stays good.
+    let shown = shown_match().expect("the file name of a shown match");
+    let Some(name) = shown.with(|m| m.fname.clone()) else {
+        return;
+    };
+    let fname = name.as_ptr().cast_mut();
     let mut s = fname;
     let mut e = fname;
     loop {
@@ -627,21 +620,20 @@ pub(crate) fn ins_compl_show_filename() {
 
 /// The next match that is actually in the menu, in the direction the menu is
 /// being walked.
-pub(crate) fn find_next_match_in_menu() -> Cm {
+pub(crate) fn find_next_match_in_menu() -> MatchId {
     let is_forward = compl_shows_dir_forward();
-    let mut match_0 = shown_match().expect("the menu is walked from a shown match");
-    loop {
-        let step = if is_forward {
-            match_0.next()
-        } else {
-            match_0.prev()
-        };
-        match_0 = step.expect("the ring closes, so neither link is null");
-        if match_0.cp_next.is_null() || match_0.cp_in_match_array || match_0.is_original() {
-            break;
+    let mut at = shown_match().expect("the menu is walked from a shown match");
+    MATCHES.with(|list| {
+        loop {
+            let m = list.get(at);
+            let step = if is_forward { m.next } else { m.prev };
+            at = step.expect("the ring closes, so neither link is null");
+            let m = list.get(at);
+            if m.next.is_none() || m.in_match_array || m.is_original() {
+                break at;
+            }
         }
-    }
-    match_0
+    })
 }
 
 /// The "match 3 of 17" / "Back at original" line under the menu.
@@ -649,7 +641,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
     // Show a message about what (completion) mode we're in.
     // Upstream dereferences `compl_first_match` here without checking.
     let head = first_match().expect("a completion showing a message has matches");
-    if is_first_match(head.cp_next) {
+    if is_first_match(head.next()) {
         let text = if compl_status_adding() && compl_length.get() > 1 {
             E_HITEND
         } else {
@@ -660,24 +652,25 @@ pub(crate) fn ins_compl_show_statusmsg() {
     }
 
     if edit_submode_extra.with(Option::is_none) {
-        let mut curr = curr_match().expect("a running completion has a current match");
+        let curr = curr_match().expect("a running completion has a current match");
         if curr.is_original() {
             edit_submode_extra.set(Some(XString::from_cstr(gettext(c"Back at original"))));
             edit_submode_highl.set(HLF_W);
         } else if compl_cont_status.get() & CONT_S_IPOS != 0 {
             edit_submode_extra.set(Some(XString::from_cstr(gettext(c"Word from other line"))));
             edit_submode_highl.set(HLF_COUNT);
-        } else if curr.cp_next == curr.cp_prev {
+        } else if curr.next() == curr.prev() {
             edit_submode_extra.set(Some(XString::from_cstr(gettext(c"The only match"))));
             edit_submode_highl.set(HLF_COUNT);
-            curr.cp_number = 1;
+            curr.update(|m| m.number = 1);
         } else {
-            // Update `cp_number`, it is used in `msg_ext_set_kind`.
-            if curr.cp_number == -1 {
+            // Update the number, it is used in `msg_ext_set_kind`.
+            if curr.with(|m| m.number) == -1 {
                 ins_compl_update_sequence_numbers();
             }
-            if curr.cp_number != -1 {
-                let msg = match_position_message(curr.cp_number, compl_matches.get());
+            let number = curr.with(|m| m.number);
+            if number != -1 {
+                let msg = match_position_message(number, compl_matches.get());
                 edit_submode_extra.set(Some(msg));
                 edit_submode_highl.set(HLF_R);
                 if dollar_vcol.get() >= 0 {

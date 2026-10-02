@@ -500,22 +500,12 @@ pub(crate) fn get_next_filename_completion() {
             sort_by_fuzzy_score(&scores, &mut fuzzy_indices);
             for (i, &idx) in fuzzy_indices.iter().enumerate() {
                 let current_score = scores[idx as usize];
-                if unsafe {
-                    ins_compl_add(
-                        *matches.offset(idx as isize),
-                        -1,
-                        ptr::null_mut(),
-                        ptr::null(),
-                        false,
-                        None,
-                        dir,
-                        CP_FAST | if p_fic() || p_wic() { CP_ICASE } else { 0 },
-                        false,
-                        ptr::null(),
-                        current_score,
-                    )
-                } == OK
-                {
+                // SAFETY: `matches` holds `num_matches` NUL-terminated
+                // strings, and `idx` is one of their indices.
+                let text = unsafe { cstr::bytes_at(*matches.offset(idx as isize)) };
+                let flags = CP_FAST | if p_fic() || p_wic() { CP_ICASE } else { 0 };
+                let (none, score) = (NO_EXTRA, current_score);
+                if ins_compl_add(text, None, none, None, dir, flags, false, NO_HL, score) == OK {
                     dir = FORWARD;
                 }
                 if need_collect_bests && (i == 0 || current_score == max_score) {
@@ -845,7 +835,7 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
             while let Some(prev) = curr.prev().filter(|prev| !prev.is_original()) {
                 curr = prev;
             }
-            compl_curr_match.set(curr.raw());
+            compl_curr_match.set(Some(curr));
         }
     }
 
@@ -878,13 +868,13 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
         } else {
             old.prev()
         };
-        compl_curr_match.set(next.unwrap_or(old).raw());
+        compl_curr_match.set(Some(next.unwrap_or(old)));
     }
     may_trigger_modechanged();
 
     if match_count > 0 && !ctrl_x_mode_spell() {
         if is_nearest_active() && !ins_compl_has_preinsert() {
-            sort_compl_match_list(Some(cp_compare_nearest));
+            sort_compl_match_list(MatchOrder::Nearest);
         }
         if cot_fuzzy() && ins_compl_leader_len() > 0 {
             ins_compl_fuzzy_sort();

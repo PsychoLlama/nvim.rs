@@ -289,11 +289,7 @@ pub(crate) unsafe fn ins_compl_files(
                             break;
                         }
                         ptr = end_ptr; // start from the next word
-                        if compl_get_longest.get()
-                            && ctrl_x_mode_normal()
-                            && !unsafe { (*compl_first_match.get()).cp_next }.is_null()
-                            && score == unsafe { (*(*compl_first_match.get()).cp_next).cp_score }
-                        {
+                        if compl_get_longest.get() && ctrl_x_mode_normal() && best_score_is(score) {
                             compl_num_bests.set(compl_num_bests.get() + 1);
                         }
                     }
@@ -705,9 +701,7 @@ pub(crate) unsafe fn get_next_default_completion(
             ins_compl_add_infercase(ptr, len, ic, fname, kDirectionNotSet, cont_s_ipos, score)
         };
         if add_r != NOTDONE {
-            if in_fuzzy_collect
-                && score == unsafe { (*(*compl_first_match.get()).cp_next).cp_score }
-            {
+            if in_fuzzy_collect && best_score_is(score) {
                 compl_num_bests.set(compl_num_bests.get() + 1);
             }
             found_new_match = Ok(());
@@ -815,6 +809,14 @@ pub(crate) fn get_register_completion() {
         unsafe { free_register(reg) };
         unsafe { xfree(reg.cast::<c_void>()) };
     }
+}
+
+/// Whether `score` is the score of the match after the head: the best so
+/// far, the fuzzy matches being kept sorted.
+fn best_score_is(score: c_int) -> bool {
+    first_match()
+        .and_then(MatchId::next)
+        .is_some_and(|best| best.with(|m| m.score) == score)
 }
 
 /// [`ins_compl_add_infercase`] for the word `start .. end` of a scanned

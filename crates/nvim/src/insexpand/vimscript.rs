@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{DictRef, NumBuf, dict_get_string_alloc, list_items, list_iter};
+use crate::eval::typval::{DictRef, NumBuf, dict_get_string_buf, list_items, list_iter};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, Key};
 use crate::types::{
@@ -25,52 +25,43 @@ use crate::types::{
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
-/// Fire `CompleteDone` with `v:event` describing how the completion ended.
-///
-/// # Safety
-///
-/// `word` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char) {
+/// Fire `CompleteDone` with `v:event` describing how the completion ended:
+/// `word` is the match accepted, if any.
+pub(crate) fn do_autocmd_completedone(c: c_int, mode: c_int, word: Option<&CStr>) {
     let mut save_v_event = SAVE_V_EVENT_INIT;
+    // SAFETY: `save_v_event` is this frame's, and lives until the restore
+    // below hands the saved dict back.
     let v_event = unsafe { get_v_event(&raw mut save_v_event) };
+    // SAFETY: `v_event` is the dict just built, and every value is a
+    // NUL-terminated string.
     let add_str =
-        |key: &str, val: *const c_char| unsafe { (*v_event).add_str(key.as_bytes(), val) };
+        |key: &str, val: &CStr| unsafe { (*v_event).add_str(key.as_bytes(), val.as_ptr()) };
 
-    let mode_str = match CTRL_X_MODE_NAMES[(mode & !CTRL_X_WANT_IDENT) as usize] {
-        Some(name) => name.as_ptr(),
-        None => c"".as_ptr(),
+    let mode_name = CTRL_X_MODE_NAMES[(mode & !CTRL_X_WANT_IDENT) as usize].unwrap_or(c"");
+    let _ = add_str("complete_word", word.unwrap_or(c""));
+    let _ = add_str("complete_type", mode_name);
+    let reason = if c == Ctrl_Y || word.is_some() {
+        c"accept"
+    } else if c == Ctrl_E {
+        c"cancel"
+    } else {
+        c"discard"
     };
-    let _ = add_str(
-        "complete_word",
-        if word.is_null() { c"".as_ptr() } else { word },
-    );
-    let _ = add_str("complete_type", mode_str);
-    let _ = add_str(
-        "reason",
-        if c == Ctrl_Y || !word.is_null() {
-            c"accept".as_ptr()
-        } else if c == Ctrl_E {
-            c"cancel".as_ptr()
-        } else {
-            c"discard".as_ptr()
-        },
-    );
+    let _ = add_str("reason", reason);
+    // SAFETY: as above.
     unsafe { (*v_event).set_keys_readonly() };
 
     ins_apply_autocmds(AutoEvent::CompleteDone);
+    // SAFETY: the pair of `get_v_event`, with the same saved slot.
     unsafe { restore_v_event(v_event, &raw mut save_v_event) };
 }
 
 /// One match as a locked `v:completed_item` dict.
-///
-/// # Safety
-///
-/// `match_0` must point at a live `ComplItem`, unaliased for the call.
-pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut ComplItem) -> DictRef {
+pub(crate) fn ins_compl_dict_alloc(m: MatchId) -> DictRef {
     // { word, abbr, menu, kind, info, user_data } — the same keys and the
     // same order `complete_info()` fills in, minus its "match" flag.
-    let dict = tv_dict_alloc_lock(VarLock::Fixed);
-    unsafe { fill_complete_info_dict(dict.as_ptr(), match_0, false) };
+    let mut dict = tv_dict_alloc_lock(VarLock::Fixed);
+    fill_complete_info_dict(&mut dict, m, false);
     dict
 }
 
@@ -87,24 +78,30 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int
     let mut dup = false;
     let mut empty = false;
     let mut flags = if fast { CP_FAST } else { 0 };
-    let mut cptext: [*mut c_char; CPT_COUNT as usize] = [ptr::null_mut(); CPT_COUNT as usize];
-    let mut user_hl: [c_int; 2] = [-1, -1];
+    let mut extra = NO_EXTRA;
+    let mut user_hl = NO_HL;
     let mut user_data = TYPVAL_T_INIT;
 
     if (*tv).v_type() == VAR_DICT && (*tv).dict_ref().is_some() {
-        // The four cptext strings are copied and owned by the match from
+        // The four extra strings are copied and owned by the match from
         // here on; the two highlight names and `word` are borrowed, so
         // each borrowing answer renders into a scratch of its own —
         // `word` outlives all of them.
         let d = (*tv).dict_ref();
         let borrowed = |key: &CStr, b: &mut NumBuf| b.dict_string(d, key.to_bytes());
         let get_nr = |key: &CStr| dict_get_number(d, key.to_bytes());
+        let owned = |key: &[u8]| {
+            let mut scratch = NumBuf::new();
+            let text = dict_get_string_buf(d, key, &mut scratch);
+            // SAFETY: a non-null answer is a NUL-terminated string.
+            (!text.is_null()).then(|| XString::from_cstr(unsafe { cstr::at(text) }))
+        };
 
         word = borrowed(c"word", &mut numbuf);
-        cptext[CPT_ABBR as usize] = dict_get_string_alloc(d, b"abbr");
-        cptext[CPT_MENU as usize] = dict_get_string_alloc(d, b"menu");
-        cptext[CPT_KIND as usize] = dict_get_string_alloc(d, b"kind");
-        cptext[CPT_INFO as usize] = dict_get_string_alloc(d, b"info");
+        extra[CPT_ABBR as usize] = owned(b"abbr");
+        extra[CPT_MENU as usize] = owned(b"menu");
+        extra[CPT_KIND as usize] = owned(b"kind");
+        extra[CPT_INFO as usize] = owned(b"info");
 
         user_hl[0] = unsafe { get_user_highlight_attr(borrowed(c"abbr_hlgroup", &mut numbuf2)) };
         user_hl[1] = unsafe { get_user_highlight_attr(borrowed(c"kind_hlgroup", &mut numbuf2)) };
@@ -124,28 +121,17 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int
     }
 
     if word.is_null() || (!empty && unsafe { *word } as c_int == NUL) {
-        unsafe { free_cptext(cptext.as_ptr()) };
-        tv_clear(&mut user_data);
         return FAIL;
     }
 
-    let (text, cpt) = (word.cast_mut(), cptext.as_ptr());
-    let (data, hl) = (&raw mut user_data, user_hl.as_ptr());
-    let (none, score) = (ptr::null_mut(), FUZZY_SCORE_NONE);
-    // SAFETY: `text` is NUL-terminated (`len < 0`), `cpt` is the four
-    // allocated strings this call hands over, `data` and `hl` are this
-    // frame's own locals, and there is no file name.
-    // SAFETY: the user data this frame owns until the add takes it.
-    let data = unsafe { Some(&mut *data) };
-    let status =
-        unsafe { ins_compl_add(text, -1, none, cpt, true, data, dir, flags, dup, hl, score) };
+    // SAFETY: a non-null word is a NUL-terminated string, borrowed from the
+    // value or rendered into `numbuf`, both of which outlive the add.
+    let text = unsafe { cstr::bytes_at(word) };
+    let score = FUZZY_SCORE_NONE;
+    let data = Some(&mut user_data);
     // Anything but `OK` leaves the value with this frame -- `NOTDONE` (the
-    // word was already in the list) included, which the transpile read as
-    // success and leaked.
-    if status != OK {
-        tv_clear(&mut user_data);
-    }
-    status
+    // word was already in the list) included -- which drops it.
+    ins_compl_add(text, None, extra, data, dir, flags, dup, user_hl, score)
 }
 
 /// Add every entry of `list` as a match.
@@ -285,7 +271,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
         ins_compl_prep(' ' as c_int);
     }
     ins_compl_clear();
-    unsafe { ins_compl_free() };
+    ins_compl_free();
     compl_get_longest.set(compl_longest);
 
     compl_direction.set(FORWARD);
@@ -374,40 +360,34 @@ pub fn f_complete_check(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     result.write_number(ins_compl_interrupted() as VarNumber);
 }
 
-/// Fill `di` with one match, as `complete_info()` reports it.
-///
-/// # Safety
-///
-/// `di` must point at a live dictionary, unaliased for the call. `match_0`
-/// must point at a live `ComplItem`, unaliased for the call.
-pub(crate) unsafe fn fill_complete_info_dict(
-    di: *mut Dict,
-    match_0: *mut ComplItem,
-    add_match: bool,
-) {
-    let add_str = |key: &str, val: *const c_char| unsafe { (*di).add_str(key.as_bytes(), val) };
-
-    let _ = add_str("word", unsafe { (*match_0).cp_str.data() });
-    let _ = add_str("abbr", unsafe { (*match_0).cp_text[CPT_ABBR as usize] });
-    let _ = add_str("menu", unsafe { (*match_0).cp_text[CPT_MENU as usize] });
-    let _ = add_str("kind", unsafe { (*match_0).cp_text[CPT_KIND as usize] });
-    let _ = add_str("info", unsafe { (*match_0).cp_text[CPT_INFO as usize] });
-    if add_match {
-        // SAFETY: `match_0` is a live match.
-        let in_array = unsafe { (*match_0).cp_in_match_array } as BoolVarValue;
-        let (key, klen) = ("match".as_ptr().cast(), "match".len());
-        // SAFETY: `di` is the dict being built and `key` a static name.
-        let _ = unsafe { (*di).add_bool(cstr::slice_at(key, klen), in_array) };
-    }
-    if unsafe { (*match_0).cp_user_data.v_type() } == VAR_UNKNOWN {
-        // Add an empty string for backwards compatibility.
-        let _ = add_str("user_data", c"".as_ptr());
-    } else {
-        let (key, klen) = ("user_data".as_ptr().cast(), "user_data".len());
-        // SAFETY: `di` is the dict being built, and the value is the address
-        // of one of the live match's fields, taken from its raw pointer.
-        let _ = unsafe { (*di).add_tv(cstr::slice_at(key, klen), &(*match_0).cp_user_data) };
-    }
+/// Fill `di` with match `m`, as `complete_info()` reports it.
+pub(crate) fn fill_complete_info_dict(di: &mut Dict, m: MatchId, add_match: bool) {
+    m.with(|item| {
+        let null = ptr::null();
+        let extra = |which: c_int| {
+            item.extra[which as usize]
+                .as_ref()
+                .map_or(null, |s| s.as_ptr())
+        };
+        // SAFETY: each value is null or a NUL-terminated string of the match's.
+        let add_str = |di: &mut Dict, key: &str, val: *const c_char| unsafe {
+            let _ = di.add_str(key.as_bytes(), val);
+        };
+        add_str(di, "word", item.text.as_ptr());
+        add_str(di, "abbr", extra(CPT_ABBR));
+        add_str(di, "menu", extra(CPT_MENU));
+        add_str(di, "kind", extra(CPT_KIND));
+        add_str(di, "info", extra(CPT_INFO));
+        if add_match {
+            let _ = di.add_bool(b"match", item.in_match_array as BoolVarValue);
+        }
+        if item.user_data.v_type() == VAR_UNKNOWN {
+            // Add an empty string for backwards compatibility.
+            add_str(di, "user_data", c"".as_ptr());
+        } else {
+            let _ = di.add_tv(b"user_data", &item.user_data);
+        }
+    });
 }
 
 /// Fill `retdict` with whatever of `complete_info()` `what_list` asked for.
@@ -491,8 +471,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
     }
     if ret.is_ok()
         && what_flag & CI_WHAT_SELECTED != 0
-        && !compl_curr_match.get().is_null()
-        && unsafe { (*compl_curr_match.get()).cp_number } == -1
+        && curr_match().is_some_and(|curr| curr.with(|m| m.number) == -1)
     {
         ins_compl_update_sequence_numbers();
     }
@@ -502,20 +481,19 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
             if match_0.is_original() {
                 continue;
             }
-            if has_items || (has_matches && match_0.cp_in_match_array) {
-                // SAFETY: a fresh dict, taken over by the list, and
-                // `match_0` is a live match.
-                unsafe {
-                    let di_held = tv_dict_alloc();
-                    let di = di_held.as_ptr();
-                    (*li).push_dict(Some(di_held));
-                    fill_complete_info_dict(di, match_0.raw(), has_matches && has_items);
-                }
+            let in_array = match_0.in_match_array();
+            if has_items || (has_matches && in_array) {
+                let mut di_held = tv_dict_alloc();
+                fill_complete_info_dict(&mut di_held, match_0, has_matches && has_items);
+                // SAFETY: the list just made, which `retdict` holds.
+                unsafe { (*li).push_dict(Some(di_held)) };
             }
-            if curr_match().is_some_and(|curr| curr.cp_number == match_0.cp_number) {
+            if curr_match()
+                .is_some_and(|curr| curr.with(|m| m.number) == match_0.with(|m| m.number))
+            {
                 selected_idx = list_idx;
             }
-            if !has_matches || match_0.cp_in_match_array {
+            if !has_matches || in_array {
                 list_idx += 1;
             }
         }
@@ -528,9 +506,9 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
         }
     }
     if ret.is_ok() && selected_idx != -1 && has_completed {
-        let di_held = tv_dict_alloc();
-        let di = di_held.as_ptr();
-        unsafe { fill_complete_info_dict(di, compl_curr_match.get(), false) };
+        let mut di_held = tv_dict_alloc();
+        let curr = curr_match().expect("a selected item is the current match");
+        fill_complete_info_dict(&mut di_held, curr, false);
         let (key, klen) = ("completed".as_ptr().cast(), "completed".len());
         let _ = unsafe { (*retdict).add_dict(cstr::slice_at(key, klen), Some(di_held)) };
     }

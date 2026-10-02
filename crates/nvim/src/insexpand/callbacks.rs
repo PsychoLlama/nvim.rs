@@ -817,7 +817,7 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
     // This prevents flicker when `func` (e.g. an LSP client) is slow and
     // calls 'sleep', which triggers ui_flush().
     if !cpt_sources().row(idx).cs_refresh_always {
-        unsafe { ins_compl_insert_bytes(ins_compl_leader(), -1) };
+        ins_compl_insert_text(&ins_compl_leader_str().to_vec());
     }
 
     unsafe { expand_by_function(0, cpt_compl_pattern().data(), cb) };
@@ -858,7 +858,7 @@ pub(crate) fn cpt_compl_refresh() {
         if cpt_sources().row(idx).cs_refresh_always {
             let cb = unsafe { get_callback_if_cpt_func(p, idx) };
             if !cb.is_null() {
-                unsafe { remove_old_matches() };
+                remove_old_matches();
                 let mut startcol = 0;
                 let ret = unsafe {
                     get_userdefined_compl_info(Win::current().w_cursor.col, cb, &raw mut startcol)

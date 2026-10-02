@@ -11,7 +11,6 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::cstr;
 use crate::guard::Suppress;
 use crate::keycodes::{
     Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R,
@@ -19,7 +18,6 @@ use crate::keycodes::{
 };
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext_ptr;
-use crate::strings::has_char;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 
@@ -245,9 +243,11 @@ pub fn vim_is_ctrl_x_key(c: c_int) -> bool {
     }
 }
 
-/// True if `match_0` is the first match in the completion list.
-pub(crate) fn is_first_match(match_0: *const ComplItem) -> bool {
-    ptr::eq(match_0, compl_first_match.get())
+/// True if `m` is the first match in the completion list — C's
+/// `is_first_match`, which compares addresses, so `None` is the head of an
+/// empty list.
+pub(crate) fn is_first_match(m: Option<MatchId>) -> bool {
+    m == compl_first_match.get()
 }
 
 /// Is `c` part of the item being completed?  Decides whether typing it
@@ -313,6 +313,15 @@ pub fn ins_compl_leader() -> *mut c_char {
     }
 }
 
+/// [`ins_compl_leader`] as the string itself.
+pub(crate) fn ins_compl_leader_str() -> ComplStr {
+    if compl_leader().is_unset() {
+        compl_orig_text()
+    } else {
+        compl_leader()
+    }
+}
+
 pub(crate) fn ins_compl_leader_len() -> size_t {
     if compl_leader().is_unset() {
         compl_orig_text().len()
@@ -323,28 +332,24 @@ pub(crate) fn ins_compl_leader_len() -> size_t {
 
 /// The shown match spans more than one line.
 ///
-/// # Safety
-/// A completion with a shown match is running: upstream dereferences
-/// `compl_shown_match` here without checking it.
-pub(crate) unsafe fn ins_compl_has_multiple() -> bool {
-    // SAFETY: the caller's promise, and a match's text is NUL-terminated.
-    unsafe { has_char(cstr::at((*compl_shown_match.get()).cp_str.data()), NL) }
+/// Upstream dereferences `compl_shown_match` here without checking it; no
+/// shown match answers false.
+pub(crate) fn ins_compl_has_multiple() -> bool {
+    shown_match().is_some_and(|shown| shown.with(|m| m.text.contains(&(NL as u8))))
 }
 
 /// `lnum` is one of the lines a multi-line match is being inserted over.
 ///
-/// # Safety
-/// As [`ins_compl_has_multiple`], which this asks first.
-pub unsafe fn ins_compl_lnum_in_range(lnum: LineNr) -> bool {
-    // SAFETY: the caller's promise, passed straight on.
-    let multiple = unsafe { ins_compl_has_multiple() };
-    multiple && lnum >= compl_lnum.get() && lnum <= Win::current().w_cursor.lnum
+/// A completion with a shown match is running, as for
+/// [`ins_compl_has_multiple`], which this asks first.
+pub fn ins_compl_lnum_in_range(lnum: LineNr) -> bool {
+    ins_compl_has_multiple() && lnum >= compl_lnum.get() && lnum <= Win::current().w_cursor.lnum
 }
 
 pub fn ins_compl_has_shown_match() -> bool {
     match shown_match() {
         None => true,
-        Some(shown) => shown.cp_next != shown.raw(),
+        Some(shown) => shown.next() != Some(shown),
     }
 }
 
@@ -354,7 +359,7 @@ pub fn ins_compl_long_shown_match() -> bool {
         return false;
     };
     let typed = Win::current().w_cursor.col - compl_col.get();
-    !shown.cp_str.data().is_null() && shown.cp_str.len() as ColNr > typed
+    shown.text_len() as ColNr > typed
 }
 
 /// `'completeopt'`, buffer-local value first.

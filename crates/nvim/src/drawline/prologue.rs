@@ -158,7 +158,7 @@ pub(crate) unsafe fn prepare_line(
     // Insert-mode completion highlights the text it inserted.
     if State.get() & MODE_INSERT != 0
         && ins_compl_win_active(window)
-        && (s.in_curline || unsafe { ins_compl_lnum_in_range(lnum) })
+        && (s.in_curline || ins_compl_lnum_in_range(lnum))
     {
         s.area_highlighting = true;
     }

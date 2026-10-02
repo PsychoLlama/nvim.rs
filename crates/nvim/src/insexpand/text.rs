@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::mbyte::cluster_len;
 use crate::memory::handoff::owned_cstr;
 use crate::types::{IOSIZE, NUL};
 use crate::winlayer::buffers;
@@ -133,9 +134,9 @@ unsafe fn ins_compl_infercase_gettext(
 ///
 /// # Safety
 ///
-/// `str_arg` must point at `len` bytes the caller owns, readable and
-/// writable, unaliased for the call. `fname` must point at a NUL-terminated
-/// string, unaliased for the call.
+/// `str_arg` must point at a NUL-terminated string whose first `len` bytes
+/// (or all of it, if shorter) are the match. `fname` must be null or point at
+/// a NUL-terminated string.
 pub unsafe fn ins_compl_add_infercase(
     str_arg: *mut c_char,
     len: c_int,
@@ -181,15 +182,17 @@ pub unsafe fn ins_compl_add_infercase(
         flags |= CP_ICASE;
     }
 
-    let (no_cptext, no_hl) = (ptr::null(), ptr::null());
-    let no_data = None;
-    // SAFETY: `str` is `len` readable bytes and `fname` null or a
-    // NUL-terminated name; there is no `cptext`, user data or highlight pair.
-    let res = unsafe {
-        ins_compl_add(
-            str, len, fname, no_cptext, false, no_data, dir, flags, false, no_hl, score,
+    // SAFETY: `str` is NUL-terminated (a line, a word copied into a
+    // terminated buffer, or the re-cased copy) and the scan stops at its
+    // terminator, which is also where the match is cut; `fname` is null or a
+    // NUL-terminated name.
+    let (text, fname) = unsafe {
+        (
+            cstr::prefix_at(str, len.max(0) as usize),
+            (!fname.is_null()).then(|| cstr::at(fname)),
         )
     };
+    let res = ins_compl_add(text, fname, NO_EXTRA, None, dir, flags, false, NO_HL, score);
     unsafe { xfree(tofree.cast::<c_void>()) };
     res
 }
@@ -252,19 +255,10 @@ pub(crate) fn get_next_bufname_token() {
         let (orig_data, orig_len) = compl_orig_text().parts();
         if unsafe { cstr::prefix_eq(tail, orig_data, orig_len) } {
             let flags = if p_ic() { CP_ICASE } else { 0 };
-            let no_name = ptr::null_mut();
-            let _no_data: Option<&mut TypVal> = None;
-            let (no_cptext, no_hl) = (ptr::null(), ptr::null());
             let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
-            // SAFETY: `tail` is a NUL-terminated buffer name, and there is
-            // no `cptext`, user data or highlight pair.
-            unsafe {
-                let len = cstr::bytes_at(tail).len() as c_int;
-                let no_dup = false;
-                ins_compl_add(
-                    tail, len, no_name, no_cptext, false, None, dir, flags, no_dup, no_hl, score,
-                )
-            };
+            // SAFETY: `tail` is a NUL-terminated buffer name.
+            let tail = unsafe { cstr::bytes_at(tail) };
+            ins_compl_add(tail, None, NO_EXTRA, None, dir, flags, false, NO_HL, score);
         }
     }
 }
@@ -303,127 +297,121 @@ pub(crate) unsafe fn strip_caret_numbers_in_place(str: *mut c_char) {
     unsafe { *write = '\0' as c_char };
 }
 
-/// The longest common prefix among the current matches, with `prefix_len` set
-/// to its length; null when there is none longer than the leader.
+/// The longest common prefix among the current matches: the match it was
+/// taken from (whose text runs on past it) and the prefix's length; `None`
+/// when there is none longer than the leader.
 ///
 /// With `curbuf_only` only matches from the `'complete'` `.` source count.
-///
-/// # Safety
-///
-/// `prefix_len` must point at a writable `size_t` the caller owns.
-pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bool) -> *mut c_char {
+pub(crate) fn find_common_prefix(curbuf_only: bool) -> Option<(XString, usize)> {
     if cpt_sources().is_unset() {
-        return ptr::null_mut();
+        return None;
     }
-
-    // C's MB_BYTE2LEN: bytes in the sequence this byte starts.
-    let byte2len = |b: c_char| utf8len_tab[b as u8 as usize] as c_int;
 
     let mut match_count: Vec<c_int> = vec![0; cpt_sources().len()];
     clear_adjusted_leader();
+    let typed = ins_compl_leader_str().to_vec();
 
-    let mut first: *mut c_char = ptr::null_mut();
-    let mut len: c_int = -1;
-    for mut compl in matches_from(first_match()) {
+    let mut first: Option<XString> = None;
+    let mut len = 0;
+    for compl in matches_from(first_match()) {
         let leader = get_leader_for_startcol(compl, true);
 
         // Apply 'smartcase' behavior during normal mode.
         if ctrl_x_mode_normal()
             && !p_inf()
-            && !leader.data().is_null()
+            && !leader.is_unset()
             // SAFETY: the leader is a NUL-terminated string.
             && !unsafe { ignorecase(leader.data()) }
         {
-            compl.cp_flags &= !CP_ICASE;
+            compl.update(|m| m.flags &= !CP_ICASE);
         }
 
-        // SAFETY: the leader is readable for its own length.
-        let displayed = !compl.is_original()
-            && (leader.data().is_null()
-                || unsafe { ins_compl_equal(compl, leader.data(), leader.len()) });
-        if displayed {
-            // Limit the number of items from each source if max_items is set.
-            let mut match_limit_exceeded = false;
-            let cur_source = compl.cp_cpt_source_idx;
-            if cur_source != -1 {
-                match_count[cur_source as usize] += 1;
-                let max_matches = cpt_sources().row(cur_source).cs_max_matches;
-                if max_matches > 0 && match_count[cur_source as usize] > max_matches {
-                    match_limit_exceeded = true;
+        let displayed =
+            !compl.is_original() && (leader.is_unset() || ins_compl_equal(compl, leader));
+        if !displayed {
+            continue;
+        }
+        // Limit the number of items from each source if max_items is set.
+        let mut match_limit_exceeded = false;
+        let cur_source = compl.with(|m| m.cpt_source_idx);
+        if cur_source != -1 {
+            match_count[cur_source as usize] += 1;
+            let max_matches = cpt_sources().row(cur_source).cs_max_matches;
+            if max_matches > 0 && match_count[cur_source as usize] > max_matches {
+                match_limit_exceeded = true;
+            }
+        }
+
+        let from_curbuf =
+            cur_source != -1 && cpt_sources().row(cur_source).cs_flag as c_int == '.' as c_int;
+        if match_limit_exceeded || (curbuf_only && !from_curbuf) {
+            continue;
+        }
+        match &first {
+            None => {
+                let text = compl.text_copy();
+                if text.starts_with(&typed) {
+                    len = text.len();
+                    first = Some(text);
                 }
             }
-
-            let from_curbuf =
-                cur_source != -1 && cpt_sources().row(cur_source).cs_flag as c_int == '.' as c_int;
-            if !match_limit_exceeded && (!curbuf_only || from_curbuf) {
-                let text = compl.cp_str.data();
-                // SAFETY: the leader is readable for its own length and a
-                // match's text is NUL-terminated.
-                let starts_with_leader =
-                    unsafe { cstr::prefix_eq(ins_compl_leader(), text, ins_compl_leader_len()) };
-                if first.is_null() && starts_with_leader {
-                    first = text;
-                    // SAFETY: as above.
-                    len = unsafe { cstr::bytes_at(first) }.len() as c_int;
-                } else if !first.is_null() {
-                    // Shorten the prefix to what this match still agrees on.
-                    let mut j: c_int = 0; // count in bytes
-                    let mut s1 = first;
-                    let mut s2 = text;
-                    while j < len {
-                        // SAFETY: both walk NUL-terminated strings and stop
-                        // at the first NUL.
-                        let (b1, b2) = unsafe { (*s1, *s2) };
-                        if b1 as c_int == NUL || b2 as c_int == NUL {
-                            break;
-                        }
-                        // SAFETY: as above -- `byte2len(b1)` bytes of a
-                        // character that starts at both pointers.
-                        let n = byte2len(b1) as size_t;
-                        let differ = byte2len(b1) != byte2len(b2)
-                            || unsafe { cstr::slice_at(s1, n) != cstr::slice_at(s2, n) };
-                        if differ {
-                            break;
-                        }
-                        j += byte2len(b1);
-                        // SAFETY: as above -- the step lands on the next
-                        // character or on the NUL.
-                        s1 = unsafe { s1.offset(utfc_ptr2len(s1) as isize) };
-                        // SAFETY: as above.
-                        s2 = unsafe { s2.offset(utfc_ptr2len(s2) as isize) };
-                    }
-                    len = j;
-                    if len == 0 {
-                        break;
-                    }
+            Some(prefix) => {
+                // Shorten the prefix to what this match still agrees on.
+                len = compl.with(|m| shared_prefix_len(prefix, len, &m.text));
+                if len == 0 {
+                    break;
                 }
             }
         }
     }
 
-    if len <= ins_compl_leader_len() as c_int {
-        return ptr::null_mut();
+    if len <= typed.len() {
+        return None;
     }
-    debug_assert!(!first.is_null());
+    let first = first.expect("a prefix longer than the leader came from a match");
     // Avoid inserting text that duplicates the text already after the cursor.
-    if len == unsafe { cstr::bytes_at(first) }.len() as c_int {
-        let p = unsafe { get_cursor_line_ptr().offset(Win::current().w_cursor.col as isize) };
+    if len == first.len() {
+        let line = get_cursor_line_ptr();
+        // SAFETY: the cursor column is inside the cursor line.
+        let p = unsafe { line.offset(Win::current().w_cursor.col as isize) };
         if !p.is_null() && !ascii_iswhite_or_nul(unsafe { *p } as c_int) {
             // SAFETY: `find_word_end` answers a pointer into the same line.
-            let text_len = unsafe { find_word_end(p).offset_from(p) } as c_int;
+            let text_len = unsafe { find_word_end(p).offset_from(p) } as usize;
+            // SAFETY: `p` has `text_len` bytes of the word.
+            let word = unsafe { cstr::slice_at(p, text_len) };
             if text_len > 0
-                && text_len < len - ins_compl_leader_len() as c_int
-                && unsafe {
-                    let tail = first.offset((len - text_len) as isize);
-                    cstr::prefix_eq(tail, p, text_len as size_t)
-                }
+                && text_len < len - typed.len()
+                && first[len - text_len..].starts_with(word)
             {
                 len -= text_len;
             }
         }
     }
-    unsafe { *prefix_len = len as size_t };
-    first
+    Some((first, len))
+}
+
+/// How many of the first `len` bytes of `prefix` `text` shares: upstream's
+/// walk, which counts the bytes of each base character but steps a whole
+/// cluster at a time.
+fn shared_prefix_len(prefix: &[u8], len: usize, text: &[u8]) -> usize {
+    // C's MB_BYTE2LEN: bytes in the sequence this byte starts.
+    let byte2len = |b: u8| usize::from(utf8len_tab[usize::from(b)]);
+    let (mut j, mut s1, mut s2) = (0, 0, 0);
+    while j < len && s1 < prefix.len() && s2 < text.len() {
+        let n = byte2len(prefix[s1]);
+        let same = n == byte2len(text[s2])
+            && matches!(
+                (prefix.get(s1..s1 + n), text.get(s2..s2 + n)),
+                (Some(a), Some(b)) if a == b
+            );
+        if !same {
+            break;
+        }
+        j += n;
+        s1 += cluster_len(&prefix[s1..]);
+        s2 += cluster_len(&text[s2..]);
+    }
+    j
 }
 
 /// Look in the first `len` characters of `src` for search metacharacters.

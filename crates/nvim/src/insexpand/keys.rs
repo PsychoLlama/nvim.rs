@@ -14,6 +14,8 @@ use super::*;
 use crate::keycodes::{
     Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, Key,
 };
+use crate::mbyte::head_off;
+use crate::mbyte::{char_at, cluster_len};
 use crate::types::{BsFlag, NUL, ShmFlag};
 use crate::winlayer::Win;
 
@@ -69,13 +71,12 @@ pub fn ins_compl_bs() -> c_int {
 
     // Clear the selection if a menu item is currently selected in
     // autocompletion.
-    if compl_autocomplete.get() && !compl_first_match.get().is_null() && !ins_compl_has_preinsert()
-    {
+    if compl_autocomplete.get() && compl_first_match.get().is_some() && !ins_compl_has_preinsert() {
         compl_shown_match.set(compl_first_match.get());
     }
 
     ins_compl_new_leader();
-    if !compl_shown_match.get().is_null() {
+    if compl_shown_match.get().is_some() {
         // Make sure the current match is not a hidden item.
         compl_curr_match.set(compl_shown_match.get());
     }
@@ -87,7 +88,7 @@ pub fn ins_compl_bs() -> c_int {
 pub(crate) fn ins_compl_new_leader() {
     ins_compl_del_pum();
     ins_compl_delete(true);
-    unsafe { ins_compl_insert_bytes(compl_leader().data().offset(get_compl_len() as isize), -1) };
+    ins_compl_insert_text(untyped_part(&compl_leader().to_vec()));
     compl_used_match.set(false);
 
     if p_acl() > 0 {
@@ -98,7 +99,7 @@ pub(crate) fn ins_compl_new_leader() {
     }
 
     if compl_started.get() {
-        unsafe { ins_compl_set_original_text(compl_leader().data(), compl_leader().len()) };
+        ins_compl_set_original_text(&compl_leader().to_vec());
         if is_cpt_func_refresh_always() {
             cpt_compl_refresh();
         }
@@ -184,7 +185,7 @@ pub(crate) fn ins_compl_restart() {
     // Update the screen before restarting, so that if completion is
     // blocked we stay at the last popup menu and reduce flicker.
     let _ = update_screen(); // TODO(bfredl): no.
-    unsafe { ins_compl_free() };
+    ins_compl_free();
     compl_started.set(false);
     compl_matches.set(0);
     compl_cont_status.set(0);
@@ -195,13 +196,8 @@ pub(crate) fn ins_compl_restart() {
     compl_num_bests.set(0);
 }
 
-/// Replace the first match — the original text — with `str`.
-///
-/// # Safety
-///
-/// `str` must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call.
-pub(crate) unsafe fn ins_compl_set_original_text(str: *mut c_char, len: size_t) {
+/// Replace the first match — the original text — with `text`.
+pub(crate) fn ins_compl_set_original_text(text: &[u8]) {
     // The CP_ORIGINAL_TEXT flag is at the first item, or possibly at the
     // last one for backward completion.
     // Upstream dereferences `compl_first_match` here without checking.
@@ -212,47 +208,39 @@ pub(crate) unsafe fn ins_compl_set_original_text(str: *mut c_char, len: size_t) 
     } else {
         first.prev().filter(|prev| prev.is_original())
     };
-    if let Some(mut m) = original {
+    if let Some(m) = original {
         // The assignment releases the text the match already had.
-        // SAFETY: `str` is readable for `len` bytes -- the caller's promise.
-        m.cp_str = unsafe { cbuf_to_string(str, len) };
+        m.update(|m| m.text = XString::from_bytes(text));
     }
 }
 
 /// Append the next character of the shown match to the leader.
 pub fn ins_compl_addfrommatch() {
     let shown = shown_match().expect("a running completion has a shown match");
-    let len = Win::current().w_cursor.col - compl_col.get();
-    let mut p = shown.cp_str.data();
-    if shown.cp_str.len() as c_int <= len {
+    let len = (Win::current().w_cursor.col - compl_col.get()) as usize;
+    let text = if shown.text_len() <= len {
         // The match is too short. When still at the original match use the
         // first entry that matches the leader.
         if !shown.is_original() {
             return;
         }
-        p = ptr::null_mut();
-        let mut plen: size_t = 0;
+        let mut found = None;
         let mut next = shown.next().filter(|cp| !cp.is_first());
         while let Some(cp) = next {
-            let (leader_data, leader_len) = compl_leader().parts();
-            // SAFETY: the leader is readable for its own length.
-            let equal =
-                unsafe { leader_data.is_null() || ins_compl_equal(cp, leader_data, leader_len) };
-            if equal {
-                p = cp.cp_str.data();
-                plen = cp.cp_str.len();
+            if compl_leader().is_unset() || ins_compl_equal(cp, compl_leader()) {
+                found = Some(cp.text_copy());
                 break;
             }
             next = cp.next().filter(|cp| !cp.is_first());
         }
-        if p.is_null() || plen as c_int <= len {
-            return;
+        match found {
+            Some(text) if text.len() > len => text,
+            _ => return,
         }
-    }
-    // SAFETY: `p` is a match's NUL-terminated text and `len` bytes of the
-    // leader are already in it.
-    let c = unsafe { utf_ptr2char(p.offset(len as isize)) };
-    ins_compl_addleader(c);
+    } else {
+        shown.text_copy()
+    };
+    ins_compl_addleader(char_at(&text[len..]));
 }
 
 /// Stop insert completion mode.
@@ -265,18 +253,17 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     // Get here when we have finished typing a sequence of ^N and ^P or
     // other completion characters in CTRL-X mode.  Free up memory that was
     // used, and make sure we can redo the insert.
-    if !compl_curr_match.get().is_null() || !compl_leader().is_unset() || c == Ctrl_E {
+    if compl_curr_match.get().is_some() || !compl_leader().is_unset() || c == Ctrl_E {
         // If any of the original typed text has been changed, e.g. when
         // 'ignorecase' is set, we must add back-spaces to the redo buffer.
         // We add as few as necessary to delete just the part of the
         // original text that has changed. When using the longest match,
         // when the match was edited or when CTRL-E was used, don't use the
         // current match.
-        let mut ptr: *mut c_char = ptr::null_mut();
-        if !compl_curr_match.get().is_null() && compl_used_match.get() && c != Ctrl_E {
-            ptr = unsafe { (*compl_curr_match.get()).cp_str.data() };
-        }
-        unsafe { ins_compl_fix_redo_buf_for_leader(ptr) };
+        let used = curr_match()
+            .filter(|_| compl_used_match.get() && c != Ctrl_E)
+            .map(MatchId::text_copy);
+        ins_compl_fix_redo_buf_for_leader(used.as_deref());
     }
 
     let mut want_cindent = get_can_cindent() && cindent_on();
@@ -312,12 +299,12 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     // If the popup menu is displayed, pressing CTRL-Y means accepting the
     // selection without inserting anything.  When compl_enter_selects is
     // set the Enter key does the same.
-    let mut word: *mut c_char = ptr::null_mut();
+    let mut word: Option<XString> = None;
     if (c == Ctrl_Y
         || (compl_enter_selects.get() && (c == CAR || c == Key::Kenter.code() || c == NL)))
         && pum_visible()
     {
-        word = unsafe { xstrdup((*compl_shown_match.get()).cp_str.data()) };
+        word = shown_match().map(MatchId::text_copy);
         retval = true;
         // May need to remove ComplMatchIns highlight.
         redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
@@ -327,36 +314,25 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     // one match with 'completeopt' "menu" without "menuone"), the user had
     // no opportunity to explicitly accept or dismiss it, so treat this as
     // an implicit accept (#38160).
-    if word.is_null()
-        && c != Ctrl_E
-        && compl_used_match.get()
-        && compl_match_array().is_unset()
-        && !compl_curr_match.get().is_null()
-        && !unsafe { (*compl_curr_match.get()).cp_str.data() }.is_null()
-    {
-        word = unsafe { xstrdup((*compl_curr_match.get()).cp_str.data()) };
+    if word.is_none() && c != Ctrl_E && compl_used_match.get() && compl_match_array().is_unset() {
+        word = curr_match().map(MatchId::text_copy);
     }
 
     // CTRL-E means completion is Ended: go back to the typed text, but
     // only if the popup is still visible.
     if c == Ctrl_E {
         ins_compl_delete(false);
-        let (text_data, text_len) = if !compl_leader().is_unset() {
-            compl_leader().parts()
-        } else if !compl_first_match.get().is_null() {
-            compl_orig_text().parts()
+        let text = if !compl_leader().is_unset() {
+            Some(compl_leader())
+        } else if compl_first_match.get().is_some() && !compl_orig_text().is_unset() {
+            Some(compl_orig_text())
         } else {
-            (ptr::null_mut(), 0)
+            None
         };
-        if !text_data.is_null() {
-            let compl_len = get_compl_len();
-            if text_len as c_int > compl_len {
-                unsafe {
-                    ins_compl_insert_bytes(
-                        text_data.offset(compl_len as isize),
-                        text_len as c_int - compl_len,
-                    )
-                };
+        if let Some(text) = text.map(ComplStr::to_vec) {
+            let compl_len = get_compl_len() as usize;
+            if text.len() > compl_len {
+                ins_compl_insert_text(&text[compl_len..]);
             }
         }
         compl_orig_extmarks().restore();
@@ -371,7 +347,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     ctrl_x_mode.set(prev_mode);
     ins_apply_autocmds(AutoEvent::CompleteDonePre);
 
-    unsafe { ins_compl_free() };
+    ins_compl_free();
     compl_started.set(false);
     compl_matches.set(0);
     if !shortmess(ShmFlag::COMPLETIONMENU) {
@@ -400,8 +376,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     }
     // Trigger the CompleteDone event to give scripts a chance to act upon
     // the end of completion.
-    unsafe { do_autocmd_completedone(c, prev_mode, word) };
-    unsafe { xfree(word.cast::<c_void>()) };
+    do_autocmd_completedone(c, prev_mode, word.as_ref().map(XString::as_cstr));
 
     retval
 }
@@ -503,7 +478,7 @@ pub fn ins_compl_prep(c: c_int) -> bool {
     } else if ctrl_x_mode.get() == CTRL_X_LOCAL_MSG {
         // Trigger the CompleteDone event to give scripts a chance to act
         // upon the (possibly failed) completion.
-        unsafe { do_autocmd_completedone(c, ctrl_x_mode.get(), ptr::null_mut()) };
+        do_autocmd_completedone(c, ctrl_x_mode.get(), None);
     }
 
     may_trigger_modechanged();
@@ -521,41 +496,41 @@ pub fn ins_compl_prep(c: c_int) -> bool {
 /// Fix the redo buffer for the completion leader replacing some of the typed
 /// text: insert backspaces and append the changed text.
 ///
-/// `ptr_arg` is the known leader text, or null to use `compl_leader`.
-///
-/// # Safety
-///
-/// `ptr_arg` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn ins_compl_fix_redo_buf_for_leader(ptr_arg: *mut c_char) {
-    let mut len = 0;
-    let mut ptr = ptr_arg;
-    if ptr.is_null() {
-        if compl_leader().is_unset() {
-            return; // nothing to do
+/// `known` is the known leader text, or `None` to use `compl_leader`.
+pub(crate) fn ins_compl_fix_redo_buf_for_leader(known: Option<&[u8]>) {
+    let leader;
+    let text = match known {
+        Some(text) => text,
+        None if compl_leader().is_unset() => return, // nothing to do
+        None => {
+            leader = compl_leader().to_vec();
+            &leader
         }
-        ptr = compl_leader().data();
-    }
+    };
+    let mut len = 0;
     if !compl_orig_text().is_unset() {
-        let mut p = compl_orig_text().data();
+        // Kept terminated: `head_off` may look past the last byte.
+        let orig = compl_orig_text().to_owned();
+        let orig = orig.as_bytes();
         // Length of the common prefix between the original text and the
         // new completion.
-        while unsafe { *p.offset(len as isize) } as c_int != NUL
-            && unsafe { *p.offset(len as isize) } == unsafe { *ptr.offset(len as isize) }
-        {
+        while len < orig.len() && text.get(len) == Some(&orig[len]) {
             len += 1;
         }
         // Don't break inside a multi-byte character.
         if len > 0 {
-            len -= unsafe { utf_head_off(p, p.offset(len as isize)) };
+            len -= head_off(orig, len);
         }
         // A backspace for each remaining character of the original text.
-        p = unsafe { p.offset(len as isize) };
-        while unsafe { *p } as c_int != NUL {
+        let mut p = len;
+        while p < orig.len() {
             append_to_redobuff_char(Key::Bs.code());
-            p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+            p += cluster_len(&orig[p..]);
         }
     }
-    unsafe { append_to_redobuff_literally(ptr.offset(len as isize), -1) };
+    let rest = &text[len..];
+    // SAFETY: `rest` is readable for its length, which is all that is read.
+    unsafe { append_to_redobuff_literally(rest.as_ptr().cast(), rest.len() as c_int) };
 }
 
 /// While collecting matches, watch for a key that should change what is shown

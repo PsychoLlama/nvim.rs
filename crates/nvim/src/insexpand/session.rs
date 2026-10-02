@@ -549,7 +549,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
 
     // If any of the original typed text has been changed we need to fix
     // the redo buffer.
-    unsafe { ins_compl_fix_redo_buf_for_leader(ptr::null_mut()) };
+    ins_compl_fix_redo_buf_for_leader(None);
 
     // Always add a completion for the original text.
     compl_orig_text().clear();
@@ -641,7 +641,9 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
     }
 
     // We found no match if the list has only the "compl_orig_text" entry.
-    let no_matches_found = is_first_match(unsafe { (*compl_first_match.get()).cp_next });
+    // Upstream dereferences `compl_first_match` here without checking.
+    let head = first_match().expect("a completion has its original text");
+    let no_matches_found = is_first_match(head.next());
     if no_matches_found {
         // Remove the N_ADDS flag, so the next ^X<> won't try to go to
         // ADDING mode, because we couldn't expand anything in the first
@@ -658,7 +660,8 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
         }
     }
 
-    if unsafe { (*compl_curr_match.get()).cp_flags } & CP_CONT_S_IPOS != 0 {
+    let curr = curr_match().expect("a running completion has a current match");
+    if curr.with(|m| m.flags) & CP_CONT_S_IPOS != 0 {
         compl_cont_status.set(compl_cont_status.get() | CONT_S_IPOS);
     } else {
         compl_cont_status.set(compl_cont_status.get() & !CONT_S_IPOS);

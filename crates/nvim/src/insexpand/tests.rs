@@ -45,8 +45,7 @@ impl Drop for Fixture {
 }
 
 fn reset() {
-    // SAFETY: nothing outside the list holds one of its nodes.
-    unsafe { ins_compl_free() };
+    ins_compl_free();
     compl_orig_text().clear();
     cpt_sources().clear();
     compl_direction.set(FORWARD);
@@ -60,25 +59,18 @@ fn reset() {
 /// Add `text` as a match: `dir` side of the current one, `adup` allowing a
 /// duplicate, scored `score`.
 fn add_with(text: &str, dir: Direction, flags: c_int, adup: bool, score: c_int) -> c_int {
-    let text = CString::new(text).expect("no NUL in a test word");
-    let (none, no_cptext, no_hl) = (ptr::null_mut(), ptr::null(), ptr::null());
-    // SAFETY: a NUL-terminated word; no file name, cptext, user data or
-    // highlight pair.
-    unsafe {
-        ins_compl_add(
-            text.as_ptr().cast_mut(),
-            -1,
-            none,
-            no_cptext,
-            false,
-            None,
-            dir,
-            flags | CP_FAST,
-            adup,
-            no_hl,
-            score,
-        )
-    }
+    let flags = flags | CP_FAST;
+    ins_compl_add(
+        text.as_bytes(),
+        None,
+        NO_EXTRA,
+        None,
+        dir,
+        flags,
+        adup,
+        NO_HL,
+        score,
+    )
 }
 
 fn add(text: &str) -> c_int {
@@ -106,20 +98,20 @@ fn ring(orig: &str, words: &[&str]) {
     compl_matches.set(ins_compl_make_cyclic());
 }
 
-fn text_of(m: Cm) -> String {
-    String::from_utf8_lossy(m.cp_str.as_bytes()).into_owned()
+fn text_of(m: MatchId) -> String {
+    String::from_utf8_lossy(&m.text_copy()).into_owned()
 }
 
-fn score_of(m: Cm) -> c_int {
-    m.cp_score
+fn score_of(m: MatchId) -> c_int {
+    m.with(|m| m.score)
 }
 
-fn number_of(m: Cm) -> c_int {
-    m.cp_number
+fn number_of(m: MatchId) -> c_int {
+    m.with(|m| m.number)
 }
 
-fn set_in_array(mut m: Cm, in_array: bool) {
-    m.cp_in_match_array = in_array;
+fn set_in_array(m: MatchId, in_array: bool) {
+    m.update(|m| m.in_match_array = in_array);
 }
 
 /// The texts in list order, from the head; the original text is `"<o>"`.
@@ -136,14 +128,14 @@ fn texts() -> Vec<String> {
 }
 
 /// The match at list position `at`.
-fn nth(at: usize) -> Cm {
+fn nth(at: usize) -> MatchId {
     matches_from(first_match())
         .nth(at)
         .expect("a match at that position")
 }
 
 /// The list position of `m`.
-fn position(m: Option<Cm>) -> Option<usize> {
+fn position(m: Option<MatchId>) -> Option<usize> {
     let m = m?;
     matches_from(first_match()).position(|x| x == m)
 }
@@ -155,17 +147,16 @@ fn shown_at() -> Option<usize> {
 /// One `<C-N>`/`<C-P>` press of `todo` steps, in `compl_shows_dir`.
 fn step(todo: c_int) {
     let mut num_matches = -1;
-    // SAFETY: `num_matches` is this frame's own.
-    let status = unsafe { find_next_completion_match(false, todo, true, &raw mut num_matches) };
+    let status = find_next_completion_match(false, todo, true, &mut num_matches);
     assert_eq!(status, OK);
 }
 
 fn sort_fuzzy() {
-    sort_compl_match_list(Some(cp_compare_fuzzy));
+    sort_compl_match_list(MatchOrder::Fuzzy);
 }
 
 fn sort_nearest() {
-    sort_compl_match_list(Some(cp_compare_nearest));
+    sort_compl_match_list(MatchOrder::Nearest);
 }
 
 fn order_by_fuzzy_score(scores: &mut [c_int], indices: &mut [c_int]) {
@@ -224,64 +215,51 @@ fn backward_adds_go_before_the_current_match() {
 /// Add `text` with the extras a source can hand over: a file name, the four
 /// `abbr`/`kind`/`menu`/`info` strings (an empty one is dropped) and a string
 /// as user data.
-fn add_full(text: &str, fname: Option<&str>, cptext: [&str; 4], user_data: Option<&str>) -> c_int {
-    let text = CString::new(text).expect("no NUL in a test word");
+fn add_full(text: &str, fname: Option<&str>, extra: [&str; 4], user_data: Option<&str>) -> c_int {
     let fname = fname.map(|f| CString::new(f).expect("no NUL in a test name"));
-    let fname = fname
-        .as_ref()
-        .map_or(ptr::null_mut(), |f| f.as_ptr().cast_mut());
-    let dup = |s: &str| {
-        let s = CString::new(s).expect("no NUL in a test string");
-        // SAFETY: a NUL-terminated string; the copy is handed over.
-        unsafe { xstrdup(s.as_ptr()) }
-    };
-    let cptext: [*mut c_char; CPT_COUNT as usize] = cptext.map(dup);
-    let mut data = user_data.map(|d| TypVal::String(dup(d)));
-    // SAFETY: a NUL-terminated word and name, four allocated strings the add
-    // takes over, and user data this frame owns until the add takes it.
-    unsafe {
-        ins_compl_add(
-            text.as_ptr().cast_mut(),
-            -1,
-            fname,
-            cptext.as_ptr(),
-            true,
-            data.as_mut(),
-            kDirectionNotSet,
-            CP_FAST,
-            false,
-            ptr::null(),
-            FUZZY_SCORE_NONE,
-        )
-    }
+    let extra = extra.map(|s| Some(XString::from(s)));
+    let mut data = user_data.map(|d| {
+        let d = CString::new(d).expect("no NUL in test data");
+        // SAFETY: a NUL-terminated string; the copy is the value's own.
+        TypVal::String(unsafe { xstrdup(d.as_ptr()) })
+    });
+    let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
+    let fname = fname.as_deref();
+    ins_compl_add(
+        text.as_bytes(),
+        fname,
+        extra,
+        data.as_mut(),
+        dir,
+        CP_FAST,
+        false,
+        NO_HL,
+        score,
+    )
 }
 
 /// Point `compl_shown_match` at list position `at`.
 fn set_shown(at: usize) {
-    compl_shown_match.set(nth(at).raw());
+    compl_shown_match.set(Some(nth(at)));
 }
 
 /// Point `compl_curr_match` at list position `at`.
 fn set_curr(at: usize) {
-    compl_curr_match.set(nth(at).raw());
+    compl_curr_match.set(Some(nth(at)));
 }
 
 /// `m`'s file name: its address (shared or not) and its text.
-fn fname_of(m: Cm) -> Option<(*const c_char, String)> {
-    let name = m.cp_fname;
-    // SAFETY: a match's file name is null or NUL-terminated.
-    (!name.is_null()).then(|| unsafe {
-        (
-            name.cast_const(),
-            String::from_utf8_lossy(CStr::from_ptr(name).to_bytes()).into_owned(),
-        )
+fn fname_of(m: MatchId) -> Option<(*const c_char, String)> {
+    m.with(|m| {
+        m.fname
+            .as_ref()
+            .map(|name| (name.as_ptr(), String::from_utf8_lossy(name).into_owned()))
     })
 }
 
 /// `m` as `v:completed_item` reads it.
-fn completed_item(m: Cm) -> crate::eval::typval::DictRef {
-    // SAFETY: a live match.
-    unsafe { ins_compl_dict_alloc(m.raw()) }
+fn completed_item(m: MatchId) -> crate::eval::typval::DictRef {
+    ins_compl_dict_alloc(m)
 }
 
 /// A string member of `dict`: `None` when absent, `"<null>"` for a NULL
@@ -566,8 +544,7 @@ fn a_refresh_drops_one_source_and_keeps_the_rest_in_place() {
     }
     set_shown(3);
     cpt_sources().set_index(1);
-    // SAFETY: nothing outside the list holds one of the nodes.
-    unsafe { remove_old_matches() };
+    remove_old_matches();
     assert_eq!(texts(), ["<o>", "a0", "b0", "a2"]);
     // The shown match went with its source; the walk restarts at the head,
     // and the current match is the last one from an earlier source.
@@ -642,11 +619,10 @@ fn the_free_takes_every_match_and_what_it_owns() {
     assert_eq!(add("fig"), OK);
     ins_compl_make_cyclic();
     set_shown(2);
-    compl_old_match.set(nth(1).raw());
+    compl_old_match.set(Some(nth(1)));
     compl_leader().set(String_0::from_bytes(b"fo"));
     compl_pattern().set(String_0::from_bytes(b"\\<fo"));
-    // SAFETY: nothing outside the list holds one of its nodes.
-    unsafe { ins_compl_free() };
+    ins_compl_free();
     assert!(first_match().is_none());
     assert!(curr_match().is_none());
     assert!(shown_match().is_none());
@@ -655,6 +631,5 @@ fn the_free_takes_every_match_and_what_it_owns() {
     assert!(compl_pattern().is_unset());
     assert!(texts().is_empty());
     // A second free of an empty list is a no-op.
-    // SAFETY: as above.
-    unsafe { ins_compl_free() };
+    ins_compl_free();
 }
