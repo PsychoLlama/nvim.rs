@@ -38,7 +38,7 @@ use crate::fileio::vim_fgets;
 use crate::fold::{fold_open_cursor, has_folding};
 use crate::getchar::char_avail;
 use crate::getchar::state::{KeyStuffed, KeyTyped, got_int};
-use crate::global_cell::GlobalCell;
+use crate::global_cell::{GlobalCell, state_record};
 use crate::indent_c::is_pos_in_string;
 use crate::insexpand::{
     compl_status_adding, compl_status_sol, ctrl_x_mode_not_default, find_word_end, find_word_start,
@@ -50,7 +50,7 @@ use crate::mbyte::{
     utf_iscomposing_first, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memline::{Lines, decl, inc, incl, ml_get, ml_get_len};
-use crate::memory::{xfree, xmalloc, xstrlcpy};
+use crate::memory::{XString, xfree, xmalloc, xstrlcpy};
 use crate::message::state::{
     bot_top_msg, called_emsg, cmd_silent, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row,
     msg_scrolled, msg_silent, top_bot_msg,
@@ -84,7 +84,7 @@ use crate::search::state::{
 };
 use crate::state::MODE_SHOWMATCH;
 use crate::state::mode::State;
-use crate::strings::{reverse_text, xstrnsave};
+use crate::strings::{reverse_text, reversed_text, xstrnsave};
 use crate::tag::state::g_do_tagpreview;
 use crate::types::AutoEvent;
 use crate::types::TAB;

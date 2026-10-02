@@ -157,10 +157,8 @@ fn a_right_to_left_pattern_is_reversed_bytewise() {
     };
     assert_eq!(rc, Ok(()), "the reversed pattern still compiles");
 
-    // SAFETY: `get_search_pat` answers the buffer `search_regcomp` just
-    // filled; it belongs to the search module, so it is only read here.
-    let compiled = unsafe { CStr::from_ptr(get_search_pat()) };
-    assert_eq!(compiled.to_bytes(), b"\xc0a", "the pattern was reversed");
+    let compiled = get_search_pat();
+    assert_eq!(&compiled[..], b"\xc0a", "the pattern was reversed");
 
     // SAFETY: the program came from the `search_regcomp` above and is not
     // referenced anywhere else.
@@ -190,13 +188,8 @@ fn only_a_rightleftcmd_of_s_reverses_the_pattern() {
     };
     assert_eq!(rc, Ok(()));
 
-    // SAFETY: as in the case above.
-    let compiled = unsafe { CStr::from_ptr(get_search_pat()) };
-    assert_eq!(
-        compiled.to_bytes(),
-        b"a\xc0",
-        "the pattern was kept as typed"
-    );
+    let compiled = get_search_pat();
+    assert_eq!(&compiled[..], b"a\xc0", "the pattern was kept as typed");
 
     // SAFETY: as in the case above.
     unsafe { vim_regfree(regmatch.regprog) };

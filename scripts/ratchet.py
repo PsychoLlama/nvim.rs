@@ -990,7 +990,6 @@ CELL_COPY_OWNER = (
     "pc_status",
     "EXPAND_WHAT",
     "provider_caller_scope",
-    "saved_last_search_spat",
     "counted",
     # The `Object` cells, from phase 22's F-P22-53 audit at the close: every
     # `GlobalCell<String_0>` and `GlobalCell<Object>` in the tree, listed

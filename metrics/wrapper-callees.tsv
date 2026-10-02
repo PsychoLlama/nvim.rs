@@ -1,11 +1,11 @@
 count	callee	no_raw	defs	def
-839	xfree	0	1	crates/nvim/src/memory/mod.rs
+838	xfree	0	1	crates/nvim/src/memory/mod.rs
 717	.add	0	3	
 449	.offset	0	0	
 443	bytes_at	0	1	crates/nvim/src/cstr.rs
-340	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
+337	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 319	at	0	3	
-280	CStr::from_ptr	0	2	
+281	CStr::from_ptr	0	2	
 235	.offset_from	0	0	
 179	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
@@ -42,8 +42,8 @@ count	callee	no_raw	defs	def
 44	eq	0	1	crates/nvim/src/cstr.rs
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 42	key_bytes	0	1	crates/nvim/src/api/private/dispatch/mod.rs
-42	xstrnsave	0	1	crates/nvim/src/strings/mod.rs
 40	copy_option_part	0	1	crates/nvim/src/option/query.rs
+40	xstrnsave	0	1	crates/nvim/src/strings/mod.rs
 39	strcpy	0	0	
 39	tv_copy	0	0	
 38	Tv::new	0	67	
@@ -448,7 +448,6 @@ count	callee	no_raw	defs	def
 6	find_word	1	1	crates/nvim/src/spell/lookup.rs
 6	find_word_start	0	1	crates/nvim/src/insexpand/text.rs
 6	flag_in_afflist	0	1	crates/nvim/src/spellfile/flags.rs
-6	free_spat	1	1	crates/nvim/src/search/pattern.rs
 6	free_string_option	0	1	crates/nvim/src/optionstr/check.rs
 6	free_xfmark	1	1	crates/nvim/src/mark/mod.rs
 6	fseeko	0	0	
@@ -571,6 +570,7 @@ count	callee	no_raw	defs	def
 5	find_tags	0	1	crates/nvim/src/tag/scan.rs
 5	find_var_in_ht	0	1	crates/nvim/src/eval/vars/lookup.rs
 5	free_luaref	1	1	crates/nvim/src/usercmd/mod.rs
+5	free_spat	1	1	crates/nvim/src/search/pattern.rs
 5	func_unref	0	1	crates/nvim/src/eval/userfunc/funccall.rs
 5	fuzzy_match_str	0	0	
 5	ga_append_via_ptr	0	1	crates/nvim/src/garray.rs
@@ -1158,7 +1158,6 @@ count	callee	no_raw	defs	def
 3	resolve_symlink	0	1	crates/nvim/src/memline/swapname.rs
 3	restore_start_dir	0	1	crates/nvim/src/quickfix/dummy.rs
 3	restore_typeahead	0	1	crates/nvim/src/getchar/typeahead.rs
-3	reverse_text	0	1	crates/nvim/src/strings/mod.rs
 3	rl_mirror_ascii	0	1	crates/nvim/src/charset/display.rs
 3	rstream_init	0	1	crates/nvim/src/event/rstream.rs
 3	runtime_search_path_free	1	1	crates/nvim/src/runtime/cache.rs
@@ -1939,6 +1938,7 @@ count	callee	no_raw	defs	def
 2	resolve_option	0	1	crates/nvim/src/api/deprecated/options.rs
 2	resolve_redir_lval	0	1	crates/nvim/src/eval/vars/redir.rs
 2	restore_redobuff	0	1	crates/nvim/src/getchar/redo.rs
+2	reverse_text	0	1	crates/nvim/src/strings/mod.rs
 2	row_cells	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	rpc_send_call	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 2	run	0	4	

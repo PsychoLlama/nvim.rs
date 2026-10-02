@@ -275,30 +275,37 @@ pub unsafe fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_cha
     out[a.len()..].copy_from_slice(b);
     dest
 }
-/// Reverse `s` character by character into freshly allocated memory.
+/// `text` reversed character by character.
 ///
-/// Composing sequences move as a unit — `utfc_ptr2len` gives the length of
+/// Composing sequences move as a unit — [`cluster_len`] gives the length of
 /// the whole character at each position — so the source is walked forwards
 /// while the destination is filled from the back.
+pub(crate) fn reversed_text(text: &[u8]) -> Vec<u8> {
+    let len = text.len();
+    let mut out = vec![0; len];
+    let mut at = len;
+    let mut i = 0;
+    while i < len {
+        let char_len = cluster_len(&text[i..]);
+        at -= char_len;
+        out[at..at + char_len].copy_from_slice(&text[i..i + char_len]);
+        i += char_len;
+    }
+    out
+}
+
+/// Reverse `s` character by character into freshly allocated memory; see
+/// [`reversed_text`].
 ///
 /// # Safety
 ///
 /// `s` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
-    let len = unsafe { CStr::from_ptr(s) }.to_bytes().len();
+    let src = unsafe { CStr::from_ptr(s) }.to_bytes();
+    let reversed = reversed_text(src);
     // `xmallocz` writes the terminator the C wrote by hand.
-    let rev = unsafe { xmallocz(len) as *mut c_char };
-    let src = unsafe { slice::from_raw_parts(s as *const u8, len) };
-    let dst = unsafe { slice::from_raw_parts_mut(rev as *mut u8, len) };
-    let mut at = len;
-    let mut i = 0;
-    while i < len {
-        // Never past the terminator: the slice ends there.
-        let char_len = cluster_len(&src[i..]);
-        at -= char_len;
-        dst[at..at + char_len].copy_from_slice(&src[i..i + char_len]);
-        i += char_len;
-    }
+    let rev = unsafe { xmallocz(reversed.len()) as *mut c_char };
+    unsafe { slice::from_raw_parts_mut(rev as *mut u8, reversed.len()) }.copy_from_slice(&reversed);
     rev
 }
 

@@ -45,7 +45,7 @@ use crate::mbyte::cluster_len;
 use crate::memory::xfree;
 use crate::message::e_interr;
 use crate::message::{emsg, msg};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::r#move::changed_window_setting;
 use crate::option::set_option_direct;
 use crate::option::vars::{p_ch, p_cwh, p_icm};
@@ -616,8 +616,9 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
                 msg(c"", 0 as c_int);
             }
         } else if subflags.with(|flags| flags.do_error) {
-            // Nothing found. // SAFETY: the search pattern is a live C string.
-            let arg0 = unsafe { c_str(get_search_pat()) };
+            // Nothing found.
+            let pattern = get_search_pat();
+            let arg0 = msg_bytes(&pattern);
             semsg!("E486: Pattern not found: {arg0}");
         }
     }

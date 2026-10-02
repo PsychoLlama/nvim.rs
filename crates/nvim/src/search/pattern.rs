@@ -69,27 +69,33 @@ pub(crate) static last_idx: GlobalCell<c_int> = GlobalCell::new(RE_SEARCH);
 /// Kept separately from [`spats`] because `'rightleft'` reverses it and
 /// because `SEARCH_KEEP` compiles patterns that are never remembered. The
 /// "not found" messages quote this one.
-static compiled_pat: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-static compiled_patlen: GlobalCell<size_t> = GlobalCell::new(0);
+static compiled_pat: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
-/// Copies of the above, kept while autocommands and user functions run.
-static saved_spats: GlobalCell<[SearchPattern; 2]> = GlobalCell::new([no_pattern(false, 0); 2]);
-static saved_compiled_pat: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-static saved_compiled_patlen: GlobalCell<size_t> = GlobalCell::new(0);
-static saved_spats_last_idx: GlobalCell<c_int> = GlobalCell::new(0);
-static saved_spats_no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
-/// Nesting depth of [`save_search_patterns`]; only the outermost saves.
-static save_level: GlobalCell<c_int> = GlobalCell::new(0);
-
-/// A second, independent copy of `spats[RE_SEARCH]`, for incremental
-/// search — which has to be able to put the pattern back even when it was
-/// cancelled from inside a user function.
-static saved_last_search_spat: GlobalCell<SearchPattern> = GlobalCell::new(no_pattern(false, 0));
-static did_save_last_search_spat: GlobalCell<c_int> = GlobalCell::new(0);
-static saved_last_idx: GlobalCell<c_int> = GlobalCell::new(0);
-static saved_no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
-static saved_search_match_endcol: GlobalCell<ColNr> = GlobalCell::new(0);
-static saved_search_match_lines: GlobalCell<LineNr> = GlobalCell::new(0);
+state_record! {
+    /// What the save/restore pairs put aside while autocommands, user
+    /// functions and incremental search run a search of their own.
+    struct SavedSearch in SAVED as SavedField;
+    /// [`spats`], kept while autocommands and user functions run. The
+    /// slots own their `pat`; `additional_data` aliases the live slot's.
+    saved_spats: [SearchPattern; 2] = [no_pattern(false, 0); 2];
+    /// [`compiled_pat`], kept alongside.
+    saved_compiled_pat: Option<XString> = None;
+    saved_spats_last_idx: c_int = 0;
+    saved_spats_no_hlsearch: bool = false;
+    /// Nesting depth of [`save_search_patterns`]; only the outermost saves.
+    save_level: c_int = 0;
+    /// A second, independent copy of `spats[RE_SEARCH]`, for incremental
+    /// search — which has to be able to put the pattern back even when it
+    /// was cancelled from inside a user function.
+    saved_last_search_spat: SearchPattern = no_pattern(false, 0);
+    /// Nesting depth of [`save_last_search_pattern`].
+    did_save_last_search_spat: c_int = 0;
+    saved_last_idx: c_int = 0;
+    saved_no_hlsearch: bool = false;
+    /// The incremental-search highlight range, kept across `searchcount()`.
+    saved_search_match_endcol: ColNr = 0;
+    saved_search_match_lines: LineNr = 0;
+}
 
 /// The remembered pattern at `idx`, copied out.
 ///
@@ -195,15 +201,16 @@ pub unsafe fn search_regcomp(
         unsafe { *used_pat = pat };
     }
 
-    unsafe { xfree(compiled_pat.get() as *mut c_void) };
     let rightleft_reverse = Win::current().w_onebuf_opt.wo_rl != 0
         && Win::current().w_onebuf_opt.wo_rlc.first_byte() as c_int == 's' as c_int;
-    compiled_pat.set(if rightleft_reverse {
-        unsafe { reverse_text(pat) }
+    // SAFETY: the caller's pattern, readable for `patlen` bytes and
+    // NUL-terminated.
+    let compiled = if rightleft_reverse {
+        reversed_text(unsafe { CStr::from_ptr(pat) }.to_bytes())
     } else {
-        unsafe { xstrnsave(pat, patlen) }
-    });
-    compiled_patlen.set(patlen);
+        unsafe { core::slice::from_raw_parts(pat.cast::<u8>(), patlen) }.to_vec()
+    };
+    compiled_pat.set(Some(XString::from_bytes(&compiled)));
 
     // Remember the pattern, unless the caller or `:keeppatterns` asked
     // us not to.
@@ -226,10 +233,10 @@ pub unsafe fn search_regcomp(
     }
 }
 
-/// The pattern [`search_regcomp`] last compiled, valid until the next call
-/// to it.
-pub fn get_search_pat() -> *mut c_char {
-    compiled_pat.get()
+/// The pattern [`search_regcomp`] last compiled, copied out; empty before
+/// the first compile.
+pub fn get_search_pat() -> XString {
+    compiled_pat.with(|pat| pat.clone().unwrap_or_default())
 }
 
 /// Remember `pat` as the pattern at `idx`, and as the last one used.
@@ -268,17 +275,8 @@ pub fn save_search_patterns() {
     if save_level.replace(save_level.get() + 1) != 0 {
         return;
     }
-    for idx in [RE_SEARCH, RE_SUBST] {
-        let clone = clone_spat(idx);
-        saved_spats.with_mut(|slots| slots[idx as usize] = clone);
-    }
-    if compiled_pat.get().is_null() {
-        saved_compiled_pat.set(ptr::null_mut());
-        saved_compiled_patlen.set(0);
-    } else {
-        saved_compiled_pat.set(unsafe { xstrnsave(compiled_pat.get(), compiled_patlen.get()) });
-        saved_compiled_patlen.set(compiled_patlen.get());
-    }
+    saved_spats.set([clone_spat(RE_SEARCH), clone_spat(RE_SUBST)]);
+    saved_compiled_pat.set(compiled_pat.with(Clone::clone));
     saved_spats_last_idx.set(last_idx.get());
     saved_spats_no_hlsearch.set(no_hlsearch.get());
 }
@@ -295,9 +293,7 @@ pub fn restore_search_patterns() {
         put_spat(idx, saved_spats.get()[idx as usize]);
     }
     set_vv_searchforward();
-    unsafe { xfree(compiled_pat.get() as *mut c_void) };
-    compiled_pat.set(saved_compiled_pat.get());
-    compiled_patlen.set(saved_compiled_patlen.get());
+    compiled_pat.set(saved_compiled_pat.take());
     last_idx.set(saved_spats_last_idx.get());
     set_no_hlsearch(saved_spats_no_hlsearch.get());
 }
@@ -528,7 +524,9 @@ pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, set
         last_idx.set(idx);
     }
     if save_level.get() != 0 {
-        unsafe { free_spat(&saved_spats.get()[idx as usize]) };
+        // SAFETY: the saved slot owns its `pat`; `additional_data` is the
+        // live slot's, which was just freed above.
+        unsafe { xfree(saved_spats.get()[idx as usize].pat as *mut c_void) };
         // Upstream takes the flags from slot 0 whichever slot is being
         // set, then overwrites only the string. Preserved.
         let mut saved = spat(RE_SEARCH);

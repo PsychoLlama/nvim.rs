@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::message_fmt::{c_str, emsg_text};
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_SEARCH;
@@ -408,8 +408,8 @@ pub unsafe fn searchit(
     .is_err()
     {
         if options & SEARCH_MSG != 0 && !rc_did_emsg.get() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(get_search_pat()) };
+            let pattern = get_search_pat();
+            let arg0 = msg_bytes(&pattern);
             semsg!("E383: Invalid search string: {arg0}");
         }
         return FAIL;
@@ -647,8 +647,8 @@ pub unsafe fn searchit(
             } else {
                 gettext(c"E385: Search hit BOTTOM without match for: %s")
             };
-            // SAFETY: the pattern the search reported, NUL-terminated.
-            let pat = unsafe { c_str(get_search_pat()) };
+            let pattern = get_search_pat();
+            let pat = msg_bytes(&pattern);
             emsg_text(tr_plural!(msg, pat));
         }
         return FAIL;
