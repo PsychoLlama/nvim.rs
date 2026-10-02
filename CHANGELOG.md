@@ -7,6 +7,15 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote how insert-mode completion keeps its matches: a list the
+  completion owns, indexed rather than linked by pointer, so a completion
+  function or autocommand that adds matches while the list is being walked
+  can no longer leave the walk pointing at freed memory. No completion
+  changed what it offers or in which order. Keyword completion over a large
+  buffer takes about a sixth fewer instructions.
+
 ### Fixed
 
 - Fetching a buffer line zeroed a 4 KiB error-message buffer on every call,
