@@ -532,7 +532,7 @@ pub fn ins_compl_show_pum() {
 }
 
 /// Is `selected` (a menu index) the match `compl_curr_match` points at?
-pub fn compl_match_curr_select(selected: c_int) -> bool {
+pub(crate) fn compl_match_curr_select(selected: c_int) -> bool {
     if selected < 0 {
         return false;
     }

@@ -283,7 +283,7 @@ pub(crate) fn is_nearest_active() -> bool {
     (compl_autocomplete.get() || completeopt_flags() & kOptCotFlagNearest != 0) && !cot_fuzzy()
 }
 
-pub fn ins_compl_is_match_selected() -> bool {
+pub(crate) fn ins_compl_is_match_selected() -> bool {
     shown_match().is_some_and(|shown| !shown.is_first())
 }
 
@@ -334,11 +334,11 @@ pub(crate) fn ins_compl_has_multiple() -> bool {
 ///
 /// A completion with a shown match is running, as for
 /// [`ins_compl_has_multiple`], which this asks first.
-pub fn ins_compl_lnum_in_range(lnum: LineNr) -> bool {
+pub(crate) fn ins_compl_lnum_in_range(lnum: LineNr) -> bool {
     ins_compl_has_multiple() && lnum >= compl_lnum.get() && lnum <= Win::current().w_cursor.lnum
 }
 
-pub fn ins_compl_has_shown_match() -> bool {
+pub(crate) fn ins_compl_has_shown_match() -> bool {
     match shown_match() {
         None => true,
         Some(shown) => shown.next() != Some(shown),
@@ -346,7 +346,7 @@ pub fn ins_compl_has_shown_match() -> bool {
 }
 
 /// The shown match is longer than what has been inserted so far.
-pub fn ins_compl_long_shown_match() -> bool {
+pub(crate) fn ins_compl_long_shown_match() -> bool {
     let Some(shown) = shown_match() else {
         return false;
     };

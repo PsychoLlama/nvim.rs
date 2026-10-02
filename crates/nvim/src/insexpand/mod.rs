@@ -604,7 +604,6 @@ pub(crate) fn match_list_generation() -> u32 {
 
 impl ComplMatches {
     /// The match `id` names.
-    #[inline(always)]
     pub(crate) fn get(&self, id: MatchId) -> &ComplItem {
         self.MATCH_SLOTS[id.0 as usize]
             .as_ref()
@@ -612,7 +611,6 @@ impl ComplMatches {
     }
 
     /// The match `id` names, to change.
-    #[inline(always)]
     pub(crate) fn get_mut(&mut self, id: MatchId) -> &mut ComplItem {
         self.MATCH_SLOTS[id.0 as usize]
             .as_mut()
@@ -635,12 +633,15 @@ impl ComplMatches {
 
     /// Whether `id` is the head — C's `is_first_match`, which compares
     /// addresses, so `None` is the head of an empty list.
-    #[inline(always)]
     pub(crate) fn is_first(&self, id: Option<MatchId>) -> bool {
         id == self.compl_first_match
     }
 }
 
+// Only the generic accessors are `#[inline]`: a non-generic `#[inline]` fn
+// that names `MATCHES` makes the static exported (read through the GOT),
+// whatever the fn's own visibility. LLVM inlines the small ones in-crate
+// anyway.
 impl MatchId {
     /// Look at the match. `f` must not reach back into the editor.
     #[inline(always)]
@@ -655,30 +656,25 @@ impl MatchId {
     }
 
     /// The match after this one, `None` past the tail of an opened list.
-    #[inline(always)]
     pub(crate) fn next(self) -> Option<Self> {
         self.with(|m| m.next)
     }
 
     /// The match before this one, `None` before the head of an opened list.
-    #[inline(always)]
     pub(crate) fn prev(self) -> Option<Self> {
         self.with(|m| m.prev)
     }
 
     /// Whether this is the head of the list — C's `is_first_match`.
-    #[inline(always)]
     pub(crate) fn is_first(self) -> bool {
         compl_first_match.get() == Some(self)
     }
 
     /// Whether this is the original text the completion began with.
-    #[inline(always)]
     pub(crate) fn is_original(self) -> bool {
         self.with(ComplItem::is_original)
     }
 
-    #[inline(always)]
     pub(crate) fn in_match_array(self) -> bool {
         self.with(|m| m.in_match_array)
     }
