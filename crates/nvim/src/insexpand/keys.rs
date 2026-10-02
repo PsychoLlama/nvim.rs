@@ -256,7 +256,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         let used = curr_match()
             .filter(|_| compl_used_match.get() && c != Ctrl_E)
             .map(MatchId::text_copy);
-        ins_compl_fix_redo_buf_for_leader(used.as_deref());
+        ins_compl_fix_redo_buf_for_leader(used.as_ref().map(XString::as_cstr));
     }
 
     let mut want_cindent = get_can_cindent() && cindent_on();
@@ -486,16 +486,17 @@ pub fn ins_compl_prep(c: c_int) -> bool {
 /// text: insert backspaces and append the changed text.
 ///
 /// `known` is the known leader text, or `None` to use `compl_leader`.
-pub(crate) fn ins_compl_fix_redo_buf_for_leader(known: Option<&[u8]>) {
+pub(crate) fn ins_compl_fix_redo_buf_for_leader(known: Option<&CStr>) {
     let leader;
     let text = match known {
         Some(text) => text,
         None if compl_leader().is_unset() => return, // nothing to do
         None => {
-            leader = compl_leader().to_vec();
-            &leader
+            leader = compl_leader().to_owned();
+            leader.as_cstr()
         }
     };
+    let bytes = text.to_bytes();
     let mut len = 0;
     if !compl_orig_text().is_unset() {
         // Kept terminated: `head_off` may look past the last byte.
@@ -503,7 +504,7 @@ pub(crate) fn ins_compl_fix_redo_buf_for_leader(known: Option<&[u8]>) {
         let orig = orig.as_bytes();
         // Length of the common prefix between the original text and the
         // new completion.
-        while len < orig.len() && text.get(len) == Some(&orig[len]) {
+        while len < orig.len() && bytes.get(len) == Some(&orig[len]) {
             len += 1;
         }
         // Don't break inside a multi-byte character.
@@ -517,9 +518,12 @@ pub(crate) fn ins_compl_fix_redo_buf_for_leader(known: Option<&[u8]>) {
             p += cluster_len(&orig[p..]);
         }
     }
-    let rest = &text[len..];
-    // SAFETY: `rest` is readable for its length, which is all that is read.
-    unsafe { append_to_redobuff_literally(rest.as_ptr().cast(), rest.len() as c_int) };
+    // The append reads up to the terminator, one byte past what it appends,
+    // so it is handed the rest of the terminated string.
+    let rest = CStr::from_bytes_with_nul(&text.to_bytes_with_nul()[len..])
+        .expect("a tail of a C string is one");
+    // SAFETY: a NUL-terminated string.
+    unsafe { append_to_redobuff_literally(rest.as_ptr(), -1) };
 }
 
 /// While collecting matches, watch for a key that should change what is shown
