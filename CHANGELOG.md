@@ -15,9 +15,17 @@ and this project adheres to [CalVer](https://calver.org/).
   can no longer leave the walk pointing at freed memory. No completion
   changed what it offers or in which order. Keyword completion over a large
   buffer takes about a sixth fewer instructions.
+- Rewrote how Vimscript's call frames and exceptions are kept: each user
+  function call and each thrown exception is owned in one place and named
+  by an id, instead of being shared by pointer between the call stack, the
+  `:try` stack and the saved states of nested commands. A frame or exception
+  freed while something still names it now stops the editor with an error
+  instead of reading freed memory.
 
 ### Fixed
 
+- Insert-mode completion could crash when a completion function changed
+  `'complete'` while matches from the old value were still listed.
 - Fetching a buffer line zeroed a 4 KiB error-message buffer on every call,
   which was about half of the work of redrawing a highlighted window (and of
   any line-by-line walk: substitution, `:global`, the memline itself). Gone;
