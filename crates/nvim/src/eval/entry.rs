@@ -31,7 +31,7 @@ use crate::eval::typval::{
     NumBuf, list_join, list_last, list_len, list_set_lock, tv_clear, tv_dict_free_contents,
     tv_get_number_chk, tv_list_alloc,
 };
-use crate::eval::userfunc::{call_func, func_init, restore_funccal, save_funccal};
+use crate::eval::userfunc::{CallStackAside, call_func, func_init};
 use crate::eval::vars::clear_local;
 use crate::eval::vars::{evalvars_init, get_vim_var_dict, get_vim_var_partial, set_vim_var_list};
 use crate::eval::{
@@ -48,10 +48,9 @@ use crate::optionstr::OptString;
 use crate::runtime::sourcing_a_script;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    Dict, EvalArg, ExArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, NUL, Object,
-    OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t, size_t,
-    ssize_t, uint8_t,
+    Dict, EvalArg, ExArg, Failed, FuncExe, GArray, HashTab, NUL, Object, OptionSetFlags, Partial,
+    SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t, size_t, ssize_t, uint8_t,
 };
 use crate::winlayer::Live;
 use ::libc::atol;
@@ -492,15 +491,11 @@ pub unsafe fn eval_to_string_safe(
     use_sandbox: bool,
     use_simple_function: bool,
 ) -> *mut c_char {
-    let mut funccal_entry = FuncCallEntry {
-        top_funccal: null_mut(),
-        next: null_mut(),
-    };
-    unsafe { save_funccal(&raw mut funccal_entry) };
+    let call_stack_aside = CallStackAside::new();
     let _sandboxed = use_sandbox.then(Lock::sandbox);
     let _locked = Lock::text();
     let retval = unsafe { eval_to_string(arg, false, use_simple_function) };
-    unsafe { restore_funccal() };
+    drop(call_stack_aside);
     retval
 }
 
@@ -722,11 +717,7 @@ pub fn eval_foldtext(window: Win) -> Object {
 
     let use_sandbox = was_set_insecurely(window, kOptFoldtext, OptionSetFlags::LOCAL);
     let arg = window.w_onebuf_opt.wo_fdt.value_ptr();
-    let mut funccal_entry = FuncCallEntry {
-        top_funccal: null_mut(),
-        next: null_mut(),
-    };
-    unsafe { save_funccal(&raw mut funccal_entry) };
+    let call_stack_aside = CallStackAside::new();
     let _sandboxed = use_sandbox.then(Lock::sandbox);
     let _locked = Lock::text();
 
@@ -745,7 +736,7 @@ pub fn eval_foldtext(window: Win) -> Object {
     };
 
     unsafe { clear_evalarg(&raw mut evalarg, None) };
-    unsafe { restore_funccal() };
+    drop(call_stack_aside);
     retval
 }
 

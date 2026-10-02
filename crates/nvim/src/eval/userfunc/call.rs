@@ -29,6 +29,13 @@ use crate::eval::typval::di_tv;
 use crate::eval::typval::{DictEntry, DictRef, DictTab, ListRef};
 use crate::types::{DictKey, Failed, Refcount};
 
+/// The function of the call `frame` was made from, if it was made from one.
+fn caller_func(frame: Fc) -> Option<*mut UserFunc> {
+    let caller = frame.fc_id.and_then(FcId::caller)?;
+    // SAFETY: the caller is running, so its funccall is live.
+    Some(unsafe { Fc::new(caller.funccall()) }.fc_func)
+}
+
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
 /// and terminated with a newline.
 ///
@@ -338,8 +345,7 @@ pub unsafe fn call_user_func(
     }
     let func_or_func_caller_profiling = do_profiling_yes
         && (f.uf_profiling != 0
-            || (!frame.fc_caller.is_null()
-                && unsafe { (*(*(*fc).fc_caller).fc_func).uf_profiling } != 0));
+            || caller_func(frame).is_some_and(|caller| unsafe { (*caller).uf_profiling } != 0));
     let mut call_start = 0;
     let mut wait_start = 0;
     if func_or_func_caller_profiling {
@@ -373,7 +379,7 @@ pub unsafe fn call_user_func(
     }
 
     // Invoke functions added with `:defer`.
-    unsafe { handle_defer_one(current_funccal.get()) };
+    unsafe { handle_defer_one(current_fc()) };
 
     drop(redraw_off);
 
@@ -388,9 +394,9 @@ pub unsafe fn call_user_func(
         call_start = profile_sub_wait(wait_start, call_start);
         f.uf_tm_total = profile_add(f.uf_tm_total, call_start);
         f.uf_tm_self = profile_self(f.uf_tm_self, call_start, f.uf_tm_children);
-        if !frame.fc_caller.is_null() && unsafe { (*(*(*fc).fc_caller).fc_func).uf_profiling } != 0
+        if let Some(caller) = caller_func(frame)
+            && unsafe { (*caller).uf_profiling } != 0
         {
-            let caller = unsafe { (*(*fc).fc_caller).fc_func };
             unsafe { (*caller).uf_tm_children = profile_add((*caller).uf_tm_children, call_start) };
             unsafe {
                 (*caller).uf_tml_children = profile_add((*caller).uf_tml_children, call_start)

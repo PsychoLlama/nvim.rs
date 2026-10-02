@@ -38,7 +38,7 @@ use crate::eval::typval::{
     dict_copy, dict_find, dict_get_string_alloc, tv_check_for_opt_dict_arg, tv_dict_alloc,
     tv_dict_alloc_lock, tv_get_number_chk, tv_ht_iter, tv_list_alloc, tv_list_alloc_ret,
 };
-use crate::eval::userfunc::{func_tbl_get, restore_funccal, save_funccal};
+use crate::eval::userfunc::{CallStackAside, func_tbl_get};
 use crate::eval::vars::new_script_vars;
 use crate::eval::{eval_to_number, get_copy_id};
 use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
@@ -88,11 +88,10 @@ use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, EStack,
-    EStackArg, EStackType, Error, EstackInfo, EvalFuncData, ExArg, Expand, FILE, FuncCallEntry,
-    GArray, Integer, LineGetter, LineGetterFn, LineNr, List, LuaRetMode, Object, OptSet, OptVal,
-    ProfTime, RegMatch, ScriptCtx, ScriptId, ScriptItem, String_0, TypVal, UV_MUTEX_INIT, UserFunc,
-    VAR_DICT, VarLock, VarNumber, VimConv, XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t, size_t,
-    uv_mutex_t,
+    EStackArg, EStackType, Error, EstackInfo, EvalFuncData, ExArg, Expand, FILE, GArray, Integer,
+    LineGetter, LineGetterFn, LineNr, List, LuaRetMode, Object, OptSet, OptVal, ProfTime, RegMatch,
+    ScriptCtx, ScriptId, ScriptItem, String_0, TypVal, UV_MUTEX_INIT, UserFunc, VAR_DICT, VarLock,
+    VarNumber, VimConv, XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t, size_t, uv_mutex_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};

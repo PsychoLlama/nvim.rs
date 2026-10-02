@@ -23,9 +23,7 @@ use crate::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::eval::typval::{
     ListRef, callback_free, dict_get_callback, dict_get_number, tv_list_alloc,
 };
-use crate::eval::userfunc::{
-    call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
-};
+use crate::eval::userfunc::{CallStackAside, call_func, current_fc_id, find_func};
 use crate::eval::vars::eval_variable;
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::{FUNCEXE_INIT, Tv, callback_call, kChannelStreamProc};
@@ -42,9 +40,9 @@ use crate::runtime::script_autoload;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
 use crate::types::{
-    Callback, CallbackReader, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncCallEntry,
-    FuncExe, NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, caller_scope, ptrdiff_t,
-    size_t, ssize_t, uint64_t,
+    Callback, CallbackReader, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncExe, NUL,
+    ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, caller_scope, ptrdiff_t, size_t, ssize_t,
+    uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live, Win};
@@ -61,7 +59,7 @@ pub(crate) static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::
     autocmd_match: ::core::ptr::null_mut::<c_char>(),
     autocmd_fname_full: false,
     autocmd_bufnr: 0,
-    funccalp: ::core::ptr::null_mut::<c_void>(),
+    funccalp: None,
 });
 pub(crate) static provider_call_nesting: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
@@ -228,7 +226,7 @@ pub unsafe fn eval_call_provider(
     let name_len = unsafe { snprintf!(func.as_mut_ptr(), size, fmt, provider) };
 
     let saved_provider_caller_scope = provider_caller_scope.get();
-    let funccalp = get_current_funccal() as *mut c_void;
+    let funccalp = current_fc_id();
     provider_caller_scope.set(caller_scope {
         script_ctx: current_sctx.get(),
         es_entry: top_estack(),
@@ -238,12 +236,7 @@ pub unsafe fn eval_call_provider(
         autocmd_bufnr: autocmd_bufnr.get(),
         funccalp,
     });
-    let mut funccal_entry = FuncCallEntry {
-        top_funccal: null_mut(),
-        next: null_mut(),
-    };
-    // SAFETY: `funccal_entry` is this frame's and outlives the save.
-    unsafe { save_funccal(&raw mut funccal_entry) };
+    let call_stack_aside = CallStackAside::new();
     let nesting = Depth::of(&provider_call_nesting);
 
     // The argument array holds the two values, so the caller's reference is
@@ -265,9 +258,7 @@ pub unsafe fn eval_call_provider(
     // `rettv` and `funcexe` are this frame's.
     let _ = unsafe { call_func(name, name_len, &mut rettv, &argvars, &raw mut funcexe) };
     drop(argvars);
-
-    // SAFETY: this undoes the save above.
-    unsafe { restore_funccal() };
+    drop(call_stack_aside);
     provider_caller_scope.set(saved_provider_caller_scope);
     drop(nesting);
     debug_assert!(provider_call_nesting.get() >= 0);

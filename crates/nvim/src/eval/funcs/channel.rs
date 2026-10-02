@@ -17,7 +17,7 @@ use crate::cstr;
 use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{NumBuf, blob_bytes, dict_get_bool, dict_get_callback, dict_get_number};
-use crate::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
+use crate::eval::userfunc::{CallStackAside, set_current_fc};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
@@ -37,9 +37,8 @@ use crate::runtime::state::current_sctx;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, ArenaMem, Array, CallbackReader, ChannelPart, Error, EvalFuncData, FuncCall,
-    FuncCallEntry, Object, ScriptCtx, String_0, TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING,
-    VarNumber, uint64_t,
+    Arena, ArenaMem, Array, CallbackReader, ChannelPart, Error, EvalFuncData, Object, ScriptCtx,
+    String_0, TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber, uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -203,24 +202,21 @@ struct ProviderScope {
     autocmd_match: *mut c_char,
     autocmd_fname_full: bool,
     autocmd_bufnr: c_int,
-    funccal: FuncCallEntry,
+    /// Held for its drop, which puts the call stack back.
+    _funccal: CallStackAside,
 }
 
 impl ProviderScope {
     fn enter() -> Self {
         // SAFETY throughout: the caller's obligation.
-        let mut saved = ProviderScope {
+        let saved = ProviderScope {
             sctx: current_sctx.get(),
             autocmd_fname: autocmd_fname.get(),
             autocmd_match: autocmd_match.get(),
             autocmd_fname_full: autocmd_fname_full.get(),
             autocmd_bufnr: autocmd_bufnr.get(),
-            funccal: FuncCallEntry {
-                top_funccal: ptr::null_mut(),
-                next: ptr::null_mut(),
-            },
+            _funccal: CallStackAside::new(),
         };
-        unsafe { save_funccal(&raw mut saved.funccal) };
 
         // The scope is *read*, field by field, and nothing here writes it
         // back -- `exestack` is a different cell and `set_current_funccal`
@@ -235,7 +231,7 @@ impl ProviderScope {
             autocmd_match.set(scope.autocmd_match);
             autocmd_fname_full.set(scope.autocmd_fname_full);
             autocmd_bufnr.set(scope.autocmd_bufnr);
-            unsafe { set_current_funccal(scope.funccalp.cast::<FuncCall>()) };
+            set_current_fc(scope.funccalp);
         });
         saved
     }
@@ -253,7 +249,7 @@ impl ProviderScope {
         autocmd_match.set(self.autocmd_match);
         autocmd_fname_full.set(self.autocmd_fname_full);
         autocmd_bufnr.set(self.autocmd_bufnr);
-        unsafe { restore_funccal() };
+        // Dropping `self._funccal` last puts the call stack back.
     }
 }
 

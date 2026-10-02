@@ -22,7 +22,7 @@ use crate::drawscreen::state::need_maketitle;
 use crate::eval::typval::{
     TV_INITIAL_VALUE, callback_copy, callback_free, callback_to_string, tv_clear,
 };
-use crate::eval::userfunc::{restore_funccal, save_funccal};
+use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, set_cmdarg, set_vim_var_nr, vars_clear};
 use crate::eval::{callback_call, get_v_event, last_set_msg, restore_v_event};
 use crate::event::multiqueue::{multiqueue_new_child, multiqueue_put_event};
@@ -68,8 +68,8 @@ use crate::strings::xstrnsave;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AcoSave, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
-    Event, ExArg, Expand, FuncCallEntry, Integer, LuaRetMode, Object, OptVal, ProfTime, SaveRedo,
-    SaveVEvent, ScriptCtx, String_0, Timestamp, VarNumber, Vv, int64_t, size_t, uint64_t,
+    Event, ExArg, Expand, Integer, LuaRetMode, Object, OptVal, ProfTime, SaveRedo, SaveVEvent,
+    ScriptCtx, String_0, Timestamp, VarNumber, Vv, int64_t, size_t, uint64_t,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

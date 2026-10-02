@@ -355,7 +355,7 @@ impl Definition<'_> {
             };
             self.flags |= flag;
             self.cursor.bump(word.len());
-            if flag == FuncFlags::CLOSURE && current_funccal.get().is_null() {
+            if flag == FuncFlags::CLOSURE && current_fc().is_null() {
                 let what = if self.name.is_null() {
                     c"".as_ptr()
                 } else {

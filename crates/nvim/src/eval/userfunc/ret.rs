@@ -52,7 +52,7 @@ pub fn ex_return(excmd: &mut ExArg) {
     let mut rettv = TV_INITIAL_VALUE;
     let mut returning = false;
 
-    if current_funccal.get().is_null() {
+    if current_fc().is_null() {
         emsg(gettext(c"E133: :return not inside a function"));
         return;
     }
@@ -164,7 +164,7 @@ unsafe fn ex_defer_inner(
     let mut partial_argc = 0;
     let mut argcount = 0;
 
-    if current_funccal.get().is_null() {
+    if current_fc().is_null() {
         let arg0 = "defer";
         semsg!("E193: {arg0} not inside a function");
         return Err(Failed);
@@ -245,7 +245,7 @@ pub unsafe fn add_defer(name: *mut c_char, args: &mut [TypVal]) {
     let saved_name = unsafe { xstrdup(name) };
     let mut argcount = args.len() as c_int;
 
-    let fc = current_funccal.get();
+    let fc = current_fc();
     if unsafe { (*fc).fc_defer.ga_itemsize } == 0 {
         unsafe { ga_init(&raw mut (*fc).fc_defer, size_of::<Defer>() as c_int, 10) };
     }
@@ -318,19 +318,10 @@ pub(crate) unsafe fn handle_defer_one(funccal: *mut FuncCall) {
 
 /// Make every deferred call on every funccall, which is what an exit does.
 pub fn invoke_all_defer() {
-    let mut fc = current_funccal.get();
-    while !fc.is_null() {
-        unsafe { handle_defer_one(fc) };
-        fc = unsafe { (*fc).fc_caller };
-    }
-    let mut fce = funccal_stack.get();
-    while !fce.is_null() {
-        let mut fc = unsafe { (*fce).top_funccal } as *mut FuncCall;
-        while !fc.is_null() {
-            unsafe { handle_defer_one(fc) };
-            fc = unsafe { (*fc).fc_caller };
-        }
-        fce = unsafe { (*fce).next };
+    let stacks = ::core::iter::once(current_fc_id()).chain(set_aside_call_stacks());
+    for id in stacks.flat_map(call_chain) {
+        // SAFETY: every funccall on a call stack is running, so live.
+        unsafe { handle_defer_one(id.funccall()) };
     }
 }
 
@@ -457,7 +448,7 @@ pub unsafe fn do_return(
 
     if reanimate {
         // Undo the return.
-        unsafe { (*current_funccal.get()).fc_returned = 0 };
+        unsafe { (*current_fc()).fc_returned = 0 };
     }
 
     // Cleanup (and inactivate) conditionals, but stop when a `:finally`
@@ -476,8 +467,8 @@ pub unsafe fn do_return(
             unsafe { (*cstack).set_pending_return(idx as usize, result) };
         } else {
             if reanimate {
-                debug_assert!(!unsafe { (*current_funccal.get()).fc_rettv }.is_null());
-                result = unsafe { (*current_funccal.get()).fc_rettv } as *mut c_void;
+                debug_assert!(!unsafe { (*current_fc()).fc_rettv }.is_null());
+                result = unsafe { (*current_fc()).fc_rettv } as *mut c_void;
             }
             if result.is_null() {
                 unsafe { (*cstack).set_pending_return(idx as usize, ptr::null_mut()) };
@@ -501,7 +492,7 @@ pub unsafe fn do_return(
             }
             if reanimate {
                 // The return value is not available yet.
-                unsafe { (*(*current_funccal.get()).fc_rettv).write_number(0) };
+                unsafe { (*(*current_fc()).fc_rettv).write_number(0) };
             }
         }
         unsafe { report_make_pending(CSTP_RETURN, result) };
@@ -510,10 +501,10 @@ pub unsafe fn do_return(
             unsafe { (*result.cast::<TypVal>()).disown() };
         }
     } else {
-        unsafe { (*current_funccal.get()).fc_returned = 1 };
+        unsafe { (*current_fc()).fc_returned = 1 };
         if !reanimate && !result.is_null() {
-            unsafe { tv_clear(&mut *(*current_funccal.get()).fc_rettv) };
-            unsafe { *(*current_funccal.get()).fc_rettv = (*(result as *mut TypVal)).take() };
+            unsafe { tv_clear(&mut *(*current_fc()).fc_rettv) };
+            unsafe { *(*current_fc()).fc_rettv = (*(result as *mut TypVal)).take() };
             if !is_cmd {
                 unsafe { xfree(result) };
             }
@@ -684,5 +675,5 @@ pub unsafe fn func_level(cookie: *mut c_void) -> c_int {
 
 /// Whether the function running has already returned.
 pub fn current_func_returned() -> c_int {
-    unsafe { (*current_funccal.get()).fc_returned }
+    unsafe { (*current_fc()).fc_returned }
 }

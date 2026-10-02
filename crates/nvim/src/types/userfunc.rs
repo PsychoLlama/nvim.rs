@@ -12,10 +12,10 @@
 use super::*;
 
 pub type ArgvFunc = Option<unsafe fn(&[TypVal], usize, *mut UserFunc) -> usize>;
-pub struct FuncCallEntry {
-    pub top_funccal: *mut ::core::ffi::c_void,
-    pub next: *mut FuncCallEntry,
-}
+/// A funccall's place in the funccall table: the slot index and the slot's
+/// generation, so an id kept past its funccall does not name the next one.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct FcId(pub(crate) u32, pub(crate) ::core::num::NonZeroU32);
 pub struct FuncDict {
     pub fd_dict: *mut Dict,
     pub fd_newkey: *mut ::core::ffi::c_char,

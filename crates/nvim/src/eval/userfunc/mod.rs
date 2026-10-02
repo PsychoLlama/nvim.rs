@@ -68,7 +68,7 @@ use crate::message::{
     e_invarg2, e_invrange, e_toofewarg, e_toomanyarg, e_unknown_function_str, e_usingsid,
 };
 use crate::message::{
-    emsg, iemsg, internal_error, message_filtered, msg_clr_eos, msg_ext_set_kind, msg_outnum,
+    emsg, internal_error, message_filtered, msg_clr_eos, msg_ext_set_kind, msg_outnum,
     msg_prt_line, msg_putchar, msg_start, msg_str, trunc_string, verbose_enter_scroll,
     verbose_leave_scroll,
 };
@@ -92,11 +92,10 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, EStack, EvalArg, ExArg, ExceptionState, Expand, FuncCall,
-    FuncCallEntry, FuncDict, FuncExe, GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt,
-    Partial, RegMatch, SaveRedo, String_0, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, Vv, size_t,
+    Callback, Dict, DictItem, EStack, EvalArg, ExArg, ExceptionState, Expand, FcId, FuncCall,
+    FuncDict, FuncExe, GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch,
+    SaveRedo, String_0, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
@@ -109,6 +108,7 @@ mod body;
 mod call;
 mod define;
 mod dispatch;
+mod frames;
 mod funccall;
 mod lambda;
 mod listing;
@@ -120,6 +120,7 @@ pub use self::body::*;
 pub use self::call::*;
 pub use self::define::*;
 pub use self::dispatch::*;
+pub(crate) use self::frames::*;
 pub use self::funccall::*;
 pub use self::lambda::*;
 pub use self::listing::*;
@@ -212,8 +213,6 @@ static func_hashtab: GlobalCell<HashTab> = GlobalCell::new(HashTab::new());
 /// for the whole call, so the copy says what the original says, and marking
 /// only reads it.
 static funcargs: GlobalCell<Vec<ManuallyDrop<TypVal>>> = GlobalCell::new(Vec::new());
-static current_funccal: GlobalCell<*mut FuncCall> = GlobalCell::new(ptr::null_mut());
-static previous_funccal: GlobalCell<*mut FuncCall> = GlobalCell::new(ptr::null_mut());
 
 crate::flag_set! {
     /// `UserFunc::uf_flags`: how a user function was defined and what has

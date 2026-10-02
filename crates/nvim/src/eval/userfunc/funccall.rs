@@ -154,16 +154,16 @@ unsafe fn free_funccal(fc: *mut FuncCall) {
     // collector keeps its function undeletable until then.
     // SAFETY: as above -- the function is this call's own.
     unsafe { func_ptr_unref(frame.fc_func) };
-    // The `a:000` array's own allocation: `xfree` runs no destructor.
+    // The `a:000` array's own allocation: the table runs no destructor.
     drop(core::mem::take(&mut frame.fc_l_varlist.lv_items));
-    unsafe { xfree(fc as *mut c_void) };
+    release_funccal(frame.fc_id.expect("a funccall in the table"));
 }
 
 /// Free `fc` and everything in it.  Only for a funccall that was kept beyond
 /// its call, i.e. after [`cleanup_function_call`] has run on it.
 ///
 /// # Safety
-/// `fc` is a parked funccall, already unlinked from `previous_funccal`.
+/// `fc` is a parked funccall, already taken off the parked list.
 unsafe fn free_funccal_contents(fc: *mut FuncCall) {
     // All l: variables, then all a: variables, then the a:000 items.
     // SAFETY: the caller's promise -- `fc` is a parked funccall, so the two
@@ -181,14 +181,15 @@ unsafe fn free_funccal_contents(fc: *mut FuncCall) {
 /// unless a closure, a returned `a:000` or an escaped `l:` is still using it.
 ///
 /// # Safety
-/// `fc` is the funccall that has just finished, and is `current_funccal`.
+/// `fc` is the funccall that has just finished, and is the current one.
 pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
     let mut free_fc = true;
     // SAFETY: the caller's promise -- `fc` is the funccall that has just
     // finished, and every scope below is its own.
     let mut frame = unsafe { Fc::new(fc) };
     let may_free_fc = frame.fc_refcount <= Refcount::ZERO;
-    current_funccal.set(frame.fc_caller);
+    let id = frame.fc_id.expect("a funccall in the table");
+    set_current_fc(id.caller());
 
     // Free all l: variables if not referred to.
     if may_free_fc && frame.fc_l_vars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
@@ -228,8 +229,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
     // assigning "l:" to a global variable, or defining a closure.  Link
     // it into the list for garbage collection later.
     static made_copy: GlobalCell<c_int> = GlobalCell::new(0);
-    frame.fc_caller = previous_funccal.get();
-    previous_funccal.set(fc);
+    park_funccal(id);
 
     if want_garbage_collect.get() {
         // The collector is ready anyway; clear the count.
@@ -369,67 +369,29 @@ pub(crate) unsafe fn func_clear_free(func: *mut UserFunc, force: bool) {
 /// # Safety
 /// `func` is a live function and `result` outlives the call.
 pub unsafe fn create_funccal(func: *mut UserFunc, result: &mut TypVal) -> *mut FuncCall {
-    // SAFETY: a fresh, zeroed allocation of the right size, and the
-    // caller's promise that `func` is live and `result` outlives the call.
-    let fc = unsafe { xcalloc(1, size_of::<FuncCall>()) } as *mut FuncCall;
-    let mut frame = unsafe { Fc::new(fc) };
-    frame.fc_caller = current_funccal.get();
-    current_funccal.set(fc);
-    frame.fc_func = func;
+    // What upstream's `xcalloc` hands back. All-zero is a valid value for
+    // every field but `a:000`'s item array, a `Vec`, which is given a real
+    // empty one before the value is read; `call_user_func` initialises the
+    // list properly.
+    let mut fresh = core::mem::MaybeUninit::<FuncCall>::zeroed();
+    // SAFETY: a field of the zeroed value, written without reading it; then
+    // every field holds a valid value.
+    let mut fresh = unsafe {
+        (&raw mut (*fresh.as_mut_ptr()).fc_l_varlist).write(crate::types::List::empty());
+        fresh.assume_init()
+    };
+    fresh.fc_func = func;
+    fresh.fc_rettv = result;
+    let (id, fc) = adopt_funccal(fresh, current_fc_id());
+    set_current_fc(Some(id));
+    // SAFETY: the caller's promise -- `func` is live.
     unsafe { func_ptr_ref(func) };
-    frame.fc_rettv = result;
     fc
-}
-
-/// The stack of saved call stacks: what `save_funccal` pushes when something
-/// (an autocommand, a callback) has to run outside the call in progress.
-pub(crate) static funccal_stack: GlobalCell<*mut FuncCallEntry> = GlobalCell::new(ptr::null_mut());
-
-/// Put the call stack aside, so that what runs next starts from nothing.
-///
-/// # Safety
-/// `entry` outlives the matching [`restore_funccal`].
-pub unsafe fn save_funccal(entry: *mut FuncCallEntry) {
-    // SAFETY: the caller's promise -- `entry` outlives the restore.
-    let mut saved = unsafe { Live::new(entry) };
-    saved.top_funccal = current_funccal.get() as *mut c_void;
-    saved.next = funccal_stack.get();
-    funccal_stack.set(entry);
-    current_funccal.set(ptr::null_mut());
-}
-
-/// Put back what [`save_funccal`] set aside.
-///
-/// # Safety
-///
-/// A [`save_funccal`] must be outstanding and the `FuncCallEntry` it was
-/// handed still live: this reads that entry back and pops it.
-pub unsafe fn restore_funccal() {
-    let top = funccal_stack.get();
-    if top.is_null() {
-        iemsg(c"INTERNAL: restore_funccal()");
-        return;
-    }
-    // SAFETY: `save_funccal`'s caller promised the entry outlives this, and
-    // the stack is this module's own.
-    let saved = unsafe { Live::new(top) };
-    current_funccal.set(saved.top_funccal as *mut FuncCall);
-    funccal_stack.set(saved.next);
 }
 
 /// The call in progress, or null.
 pub fn get_current_funccal() -> *mut FuncCall {
-    current_funccal.get()
-}
-
-/// Make `fc` the call in progress.
-///
-/// # Safety
-///
-/// `fc` must be null, or point at a funccall that stays live until something
-/// else is made current — every reader of `current_funccal` dereferences it.
-pub unsafe fn set_current_funccal(fc: *mut FuncCall) {
-    current_funccal.set(fc);
+    current_fc()
 }
 
 /// Drop a reference held by *name*, which only the numbered functions and
@@ -551,76 +513,53 @@ enum Sweep {
     All,
 }
 
-/// Unlink and free every parked funccall `doomed` accepts; answers whether
-/// any went.
+/// Unpark and free every parked funccall `doomed` accepts, newest first;
+/// answers whether any went.
 ///
-/// The C threads a `FuncCall **` through the list so that the head and an
-/// interior link are written the same way. The head here is a cell, so the
-/// walk carries the *previous* node instead and writes through whichever of
-/// the two is right.
-///
-/// **The cursor is re-read from the list on every step, never carried across
-/// the free.** Freeing a parked funccall runs the destructors of everything
-/// it holds, and a closure among them re-enters this walk through
-/// `funccal_unref`, which can unlink and free nodes *after* the one being
-/// freed here. A successor read before `free_funccal_contents` is a dangling
-/// pointer by the time the walk steps onto it. The C gets this for free: its
-/// `*pfc` is a load from the list itself, and the re-entrant walk writes
-/// through the very link it would read next.
+/// **The cursor is asked of the list afresh on every step, never carried
+/// across the free.** Freeing a parked funccall runs the destructors of
+/// everything it holds, and a closure among them re-enters this walk through
+/// `funccal_unref`, which can unpark and free others. The walk remembers the
+/// last funccall it *kept* and asks for the one after it; should that one
+/// have gone meanwhile, it starts again from the newest, which only asks
+/// `doomed` again about funccalls it already kept.
 ///
 /// # Safety
-/// Every node of the parked list must be live, which is the list's own
-/// invariant.
+/// `doomed` may dereference what it is handed: every parked funccall is
+/// live, which is the list's own invariant.
 unsafe fn unlink_parked_funccals(
     stop: Sweep,
     mut doomed: impl FnMut(*mut FuncCall) -> bool,
 ) -> bool {
     let mut freed = false;
-    let mut prev = ptr::null_mut::<FuncCall>();
-    loop {
-        // The cursor, re-loaded from the list rather than remembered: see
-        // the note above.
-        // SAFETY: `prev` is null or a live node of the list.
-        let fc = if prev.is_null() {
-            previous_funccal.get()
-        } else {
-            unsafe { (*prev).fc_caller }
-        };
-        if fc.is_null() {
-            return freed;
-        }
+    let mut kept = None;
+    while let Some(id) = parked_after(kept) {
+        let fc = id.funccall();
         if !doomed(fc) {
-            prev = fc;
+            kept = Some(id);
             continue;
         }
-        // SAFETY: a live node of the list, read before it is freed.
-        let next = unsafe { (*fc).fc_caller };
-        if prev.is_null() {
-            previous_funccal.set(next);
-        } else {
-            // SAFETY: `prev` is the live node before `fc`.
-            unsafe { (*prev).fc_caller = next };
-        }
-        // SAFETY: unlinked above, so nothing reaches it any more.
+        unpark_funccal(id);
+        // SAFETY: unparked above, so nothing reaches it any more.
         unsafe { free_funccal_contents(fc) };
         freed = true;
         if matches!(stop, Sweep::First) {
-            return freed;
+            break;
         }
     }
+    freed
 }
 
 /// The funccall the debugger is looking at, which `:backtrace` moves.
 pub fn get_funccal() -> *mut FuncCall {
-    let mut funccal = current_funccal.get();
+    let Some(mut funccal) = current_fc_id() else {
+        return ptr::null_mut();
+    };
     // The bound is re-read every step on purpose: the overflow arm below
     // lowers it, and that is what ends the walk.
     let mut i = 0;
     while i < debug_backtrace_level.get() {
-        // SAFETY: the walk starts at the call in progress and steps only to
-        // callers, every one of which is live for as long as it is.
-        let caller = unsafe { (*funccal).fc_caller };
-        if !caller.is_null() {
+        if let Some(caller) = funccal.caller() {
             funccal = caller;
         } else {
             // Backtrace level overflow; reset it to the maximum.
@@ -628,13 +567,13 @@ pub fn get_funccal() -> *mut FuncCall {
         }
         i += 1;
     }
-    funccal
+    funccal.funccall()
 }
 
 /// Whether there is a `l:` scope to read at all.
 fn have_funccal_scope() -> bool {
-    let fc = current_funccal.get();
-    // SAFETY: `current_funccal` is null or the live call in progress.
+    let fc = current_fc();
+    // SAFETY: null or the live call in progress.
     !fc.is_null() && unsafe { (*fc).fc_l_vars.dv_refcount } != Refcount::ZERO
 }
 
@@ -695,11 +634,11 @@ pub fn get_funccal_args_var() -> *mut DictItem {
 /// # Safety
 /// `first` is writable.
 pub unsafe fn list_func_vars(first: *mut c_int) {
-    let fc = current_funccal.get();
+    let fc = current_fc();
     if fc.is_null() {
         return;
     }
-    // SAFETY: `current_funccal` is the live call in progress, and `first` is
+    // SAFETY: the current funccall is the live call in progress, and `first` is
     // the caller's own.
     let frame = unsafe { Fc::new(fc) };
     if frame.fc_l_vars.dv_refcount > Refcount::ZERO {
@@ -713,11 +652,11 @@ pub unsafe fn list_func_vars(first: *mut c_int) {
 /// # Safety
 /// `ht` is a live hashtab.
 pub unsafe fn get_current_funccal_dict(ht: *mut DictTab) -> *mut Dict {
-    let fc = current_funccal.get();
+    let fc = current_fc();
     if fc.is_null() {
         return ptr::null_mut();
     }
-    // SAFETY: `current_funccal` is the live call in progress; both are the
+    // SAFETY: the current funccall is the live call in progress; both are the
     // addresses of its fields, taken without reading the object.
     if ht == unsafe { &raw mut (*fc).fc_l_vars.dv_hashtab } {
         return unsafe { &raw mut (*fc).fc_l_vars };
@@ -726,30 +665,33 @@ pub unsafe fn get_current_funccal_dict(ht: *mut DictTab) -> *mut Dict {
 }
 
 /// Walk the chain of captured scopes a closure body can see, running `probe`
-/// on each in turn with `current_funccal` set to it, and stop at the first
+/// on each in turn with it made the current call, and stop at the first
 /// that answers.
 fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Option<T> {
-    // The scope a live call's function closed over, which is a live funccall
-    // or null.
+    // The id of the scope a live call's function closed over: a live
+    // funccall, kept alive by the closure's reference, or none.
     //
-    // SAFETY: the caller's promise -- a call is in progress, so
-    // `current_funccal` and its `fc_func` are both live.
-    let scope_of_current = || unsafe { (*(*current_funccal.get()).fc_func).uf_scoped };
-    let old_current_funccal = current_funccal.get();
+    // SAFETY: the caller's promise -- a call is in progress, so the current
+    // funccall and its `fc_func` are both live, and so is the scope.
+    let scope_of_current = || unsafe {
+        let scoped = (*(*current_fc()).fc_func).uf_scoped;
+        (!scoped.is_null()).then(|| (*scoped).fc_id).flatten()
+    };
+    let old_current = current_fc_id();
     let mut found = None;
-    current_funccal.set(scope_of_current());
-    while !current_funccal.get().is_null() {
+    set_current_fc(scope_of_current());
+    while current_fc_id().is_some() {
         found = probe();
         if found.is_some() {
             break;
         }
         let scoped = scope_of_current();
-        if current_funccal.get() == scoped {
+        if current_fc_id() == scoped {
             break;
         }
-        current_funccal.set(scoped);
+        set_current_fc(scoped);
     }
-    current_funccal.set(old_current_funccal);
+    set_current_fc(old_current);
     found
 }
 
@@ -758,11 +700,9 @@ fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Option<T> {
 /// # Safety
 /// `name` is NUL-terminated and `ht` is writable.
 pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, ht: *mut *mut DictTab) -> Option<ItemSlot> {
-    // SAFETY: `current_funccal` is null or the live call in progress, whose
+    // SAFETY: the current funccall is null or the live call in progress, whose
     // `fc_func` is live too; `name` is the caller's NUL-terminated string.
-    if current_funccal.get().is_null()
-        || unsafe { (*(*current_funccal.get()).fc_func).uf_scoped }.is_null()
-    {
+    if current_fc().is_null() || unsafe { (*(*current_fc()).fc_func).uf_scoped }.is_null() {
         return None;
     }
     let namelen = unsafe { cstr::bytes_at(name) }.len();
@@ -799,12 +739,10 @@ pub unsafe fn find_var_in_scoped_ht(
     namelen: size_t,
     no_autoload: c_int,
 ) -> *mut DictItem {
-    // SAFETY: `current_funccal` is null or the live call in progress, whose
+    // SAFETY: the current funccall is null or the live call in progress, whose
     // `fc_func` is live too; `name` has `namelen` readable bytes and
     // `varname` is a tail of it.
-    if current_funccal.get().is_null()
-        || unsafe { (*(*current_funccal.get()).fc_func).uf_scoped }.is_null()
-    {
+    if current_fc().is_null() || unsafe { (*(*current_fc()).fc_func).uf_scoped }.is_null() {
         return ptr::null_mut();
     }
     let probe = || {
@@ -827,9 +765,8 @@ pub unsafe fn find_var_in_scoped_ht(
 /// Mark the parked funccalls with `copyID + 1`, so that the collector can
 /// tell "reachable from a live value" from "merely parked".
 pub fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
-    let mut fc = previous_funccal.get();
     let mark = copy_id + 1;
-    while !fc.is_null() {
+    for fc in parked_funccals().into_iter().map(FcId::funccall) {
         // SAFETY: every node of the parked list is live, which is the list's
         // own invariant, and the three scopes are that node's own.
         unsafe { (*fc).fc_copy_id = mark };
@@ -842,7 +779,6 @@ pub fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
         if reached {
             return true;
         }
-        fc = unsafe { (*fc).fc_caller };
     }
     false
 }
@@ -886,31 +822,13 @@ unsafe fn set_ref_in_funccal(fc: *mut FuncCall, copy_id: c_int) -> bool {
 }
 
 /// Mark every local and argument on the call stack, including the stacks
-/// `save_funccal` set aside.
+/// set aside.
 pub fn set_ref_in_call_stack(copy_id: c_int) -> bool {
-    // SAFETY: every funccall on the current stack and on each set-aside
-    // stack is live, which is what `save_funccal`'s caller promised. That
-    // holds for every dereference below.
-    let mut fc = current_funccal.get();
-    while !fc.is_null() {
-        if unsafe { set_ref_in_funccal(fc, copy_id) } {
-            return true;
-        }
-        fc = unsafe { (*fc).fc_caller };
-    }
-
-    let mut entry = funccal_stack.get();
-    while !entry.is_null() {
-        let mut fc = unsafe { (*entry).top_funccal } as *mut FuncCall;
-        while !fc.is_null() {
-            if unsafe { set_ref_in_funccal(fc, copy_id) } {
-                return true;
-            }
-            fc = unsafe { (*fc).fc_caller };
-        }
-        entry = unsafe { (*entry).next };
-    }
-    false
+    let stacks = ::core::iter::once(current_fc_id()).chain(set_aside_call_stacks());
+    // SAFETY: every funccall on a call stack is running, so live.
+    stacks
+        .flat_map(call_chain)
+        .any(|id| unsafe { set_ref_in_funccal(id.funccall(), copy_id) })
 }
 
 /// Mark everything reachable from a function that is still available by name.

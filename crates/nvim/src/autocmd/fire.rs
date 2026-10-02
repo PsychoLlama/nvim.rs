@@ -392,7 +392,7 @@ pub unsafe fn apply_autocmds_group(
         // `es_name` and `es_lnum` are filled in by `aucmd_next`.
         estack_push(ETYPE_AUCMD, ::core::ptr::null_mut(), 0);
 
-        // Restored below, in the run of teardown before `restore_funccal`;
+        // Restored below, in the run of teardown before the call stack is;
         // the handlers this fires each point it at themselves.
         let sctx = Script::saved();
 
@@ -403,11 +403,7 @@ pub unsafe fn apply_autocmds_group(
         }
 
         // Don't use the caller's function-local variables.
-        let mut funccal_entry = FuncCallEntry {
-            top_funccal: ::core::ptr::null_mut(),
-            next: ::core::ptr::null_mut(),
-        };
-        unsafe { save_funccal(&raw mut funccal_entry) };
+        let call_stack_aside = CallStackAside::new();
 
         // Only the outermost firing saves the search patterns and the
         // redo buffer.
@@ -538,7 +534,7 @@ pub unsafe fn apply_autocmds_group(
         autocmd_bufnr.set(save_autocmd_bufnr);
         autocmd_match.set(save_autocmd_match);
         drop(sctx);
-        unsafe { restore_funccal() };
+        drop(call_stack_aside);
         if do_profiling.get() == PROF_YES {
             prof_child_exit(wait_time);
         }

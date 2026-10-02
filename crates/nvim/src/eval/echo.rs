@@ -15,7 +15,7 @@ use crate::api::private::helpers::cstr_to_string;
 use crate::charset::skipwhite;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::typval::NumBuf;
-use crate::eval::userfunc::{restore_funccal, save_funccal};
+use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::clear_local;
 use crate::eval::vars::set_var;
 use crate::eval::{clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap};
@@ -38,8 +38,8 @@ use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    EvalArg, ExArg, FuncCallEntry, LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT,
-    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VarFlavour, size_t,
+    EvalArg, ExArg, LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION,
+    VAR_FLAVOUR_SHADA, VAR_STRING, VarFlavour, size_t,
 };
 use crate::ui::ui_has;
 
@@ -278,17 +278,11 @@ pub unsafe fn var_flavour(varname: *mut c_char) -> VarFlavour {
 /// # Safety
 /// `name` must be NUL-terminated; `vartv`'s ownership moves here.
 pub unsafe fn var_set_global(name: *const c_char, mut vartv: TypVal) {
-    let mut funccall_entry = FuncCallEntry {
-        top_funccal: null_mut(),
-        next: null_mut(),
-    };
-    // SAFETY: `funccall_entry` is this frame's and outlives the save.
-    unsafe { save_funccal(&raw mut funccall_entry) };
+    let call_stack_aside = CallStackAside::new();
     // SAFETY: the caller's promise about `name`; `vartv` is this frame's
     // copy, whose ownership moves into the variable.
     unsafe { set_var(name, cstr::bytes_at(name).len(), &mut vartv, false) };
-    // SAFETY: this undoes the save above.
-    unsafe { restore_funccal() };
+    drop(call_stack_aside);
 }
 
 /// The ":verbose" tail saying where something was last set.

@@ -33,11 +33,11 @@ use crate::types::{Failed, Refcount};
 pub(crate) unsafe fn register_closure(func: *mut UserFunc) {
     // SAFETY: the caller's promise -- `func` is a live function.
     let mut f = unsafe { Uf::new(func) };
-    if f.uf_scoped == current_funccal.get() {
+    if f.uf_scoped == current_fc() {
         return; // no change
     }
     unsafe { funccal_unref(f.uf_scoped, func, false) };
-    let fc = current_funccal.get();
+    let fc = current_fc();
     f.uf_scoped = fc;
     unsafe { (*fc).fc_refcount.retain() };
     unsafe { ga_grow(&raw mut (*fc).fc_ufuncs, 1) };
@@ -218,7 +218,7 @@ pub unsafe fn get_lambda_tv(
             let slot = size_of::<*mut c_char>() as c_int;
             unsafe { ga_init(&raw mut (*fp).uf_def_args, slot, 1) };
             f.uf_lines = newlines;
-            if !current_funccal.get().is_null() && uses_locals {
+            if !current_fc().is_null() && uses_locals {
                 flags |= FuncFlags::CLOSURE;
                 unsafe { register_closure(fp) };
             } else {

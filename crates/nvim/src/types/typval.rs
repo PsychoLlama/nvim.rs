@@ -392,7 +392,8 @@ pub struct FuncCall {
     pub fc_level: ::core::ffi::c_int,
     pub fc_defer: GArray,
     pub fc_prof_child: ProfTime,
-    pub fc_caller: *mut FuncCall,
+    /// Its own place in the funccall table, which also knows its caller.
+    pub fc_id: Option<FcId>,
     pub fc_refcount: Refcount,
     pub fc_copy_id: ::core::ffi::c_int,
     pub fc_ufuncs: GArray,

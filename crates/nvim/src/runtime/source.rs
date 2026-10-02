@@ -759,12 +759,7 @@ unsafe fn source_bracket(
     let wait_start = if profiling { prof_child_enter() } else { 0 };
 
     // Don't use the calling function's local variables.
-    let mut funccalp_entry = FuncCallEntry {
-        top_funccal: ptr::null_mut(),
-        next: ptr::null_mut(),
-    };
-    // SAFETY: the entry lives on this frame until `restore_funccal` below.
-    unsafe { save_funccal(&raw mut funccalp_entry) };
+    let call_stack_aside = CallStackAside::new();
     let script_ctx = Script::saved();
 
     // Always use a new sequence number.
@@ -843,10 +838,7 @@ unsafe fn source_bracket(
         debug_break_level.set(debug_break_level.get() + 1);
     }
     drop(script_ctx);
-
-    // SAFETY: paired with the `save_funccal`/`prof_child_enter` above; the
-    // cookie is done being read from.
-    unsafe { restore_funccal() };
+    drop(call_stack_aside);
     if profiling {
         prof_child_exit(wait_start);
     }
