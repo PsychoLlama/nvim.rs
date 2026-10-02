@@ -167,11 +167,11 @@ impl ExtMatch {
 }
 
 /// The `\z` traffic of one syntax match: the captures of the region's
-/// start match that `\z1`..`\z9` read, and the slot the match's own `\z(`
-/// captures go to when it succeeds.
+/// start match that `\z1`..`\z9` read, and the slot, if any, the match's own
+/// `\z(` captures go to when it succeeds.
 pub(crate) struct ExtMatchIo<'a> {
     pub(crate) input: Option<&'a ExtMatch>,
-    pub(crate) output: &'a mut Option<ExtMatchRef>,
+    pub(crate) output: Option<&'a mut Option<ExtMatchRef>>,
 }
 
 /// The character class of the character before the cursor, or -1 at the

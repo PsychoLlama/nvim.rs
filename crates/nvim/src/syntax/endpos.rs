@@ -79,7 +79,7 @@ impl SynState {
         let mut captures = None;
         let io = ExtMatchIo {
             input: ext,
-            output: &mut captures,
+            output: Some(&mut captures),
         };
         let matched = self.syn_regexec(&mut regmatch, lnum, col, time, io);
         block.pattern_mut(idx).sp_prog = regmatch.regprog;

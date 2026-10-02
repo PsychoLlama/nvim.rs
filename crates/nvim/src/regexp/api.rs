@@ -202,8 +202,6 @@ fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool)
         let rex = unsafe { Rex::acquire() };
         rex.set_reg_startpos(core::ptr::null_mut());
         rex.set_reg_endpos(core::ptr::null_mut());
-        // No `\z` traffic.
-        rex.set_ext(core::ptr::null(), core::ptr::null_mut());
         let exec = |rmp: *mut RegMatch| unsafe {
             (*(*(*rmp).regprog).engine)
                 .regexec_nl
@@ -317,39 +315,6 @@ pub unsafe fn vim_regexec_multi(
     tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
-    let mut no_captures = None;
-    let io = ExtMatchIo {
-        input: None,
-        output: &mut no_captures,
-    };
-    // SAFETY: the caller's promises.
-    unsafe { vim_regexec_syntax(rmp, win, buffer, lnum, col, tm, timed_out, io) }
-}
-
-#[allow(
-    clippy::too_many_arguments,
-    reason = "vim_regexec_multi's, and the `\\z` traffic"
-)]
-/// [`vim_regexec_multi`] for a syntax pattern: `io.input` is what `\z1`..
-/// `\z9` match, and a successful match leaves its own `\z(` captures in
-/// `io.output` (or `None` when it has none). Answers the number of lines the
-/// match spans plus one, or 0 for no match.
-///
-/// # Safety
-///
-/// As for [`vim_regexec_multi`].
-pub(crate) unsafe fn vim_regexec_syntax(
-    rmp: *mut RegMMatch,
-    win: Option<Win>,
-    buffer: Buf,
-    lnum: LineNr,
-    col: ColNr,
-    tm: *mut ProfTime,
-    timed_out: *mut c_int,
-    io: ExtMatchIo<'_>,
-) -> LineNr {
-    let ext_in = io.input.map_or(core::ptr::null(), core::ptr::from_ref);
-    let ext_out: *mut Option<ExtMatchRef> = io.output;
     // SAFETY: `rmp` holds a live program; `win`/`buffer`/`tm`/`timed_out` are
     // the caller's and may be null where the engines allow it.
     if unsafe { (*(*rmp).regprog).re_in_use } {
@@ -358,10 +323,6 @@ pub(crate) unsafe fn vim_regexec_syntax(
     }
     let result = with_rex(|| {
         unsafe { (*(*rmp).regprog).re_in_use = true };
-        // SAFETY: `with_rex` reserved the context. The two sets are the
-        // caller's, for the call.
-        let rex = unsafe { Rex::acquire() };
-        rex.set_ext(ext_in, ext_out);
         let exec = |rmp: *mut RegMMatch| unsafe {
             (*(*(*rmp).regprog).engine)
                 .regexec_multi
@@ -388,9 +349,46 @@ pub(crate) unsafe fn vim_regexec_syntax(
                 unsafe { (*(*rmp).regprog).re_in_use = false };
             }
         }
-        // The caller's sets do not outlive the call.
-        rex.set_ext(core::ptr::null(), core::ptr::null_mut());
         result
     });
     result.max(0)
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "vim_regexec_multi's, and the `\\z` traffic"
+)]
+/// [`vim_regexec_multi`] for a syntax pattern: `io.input` is what `\z1`..
+/// `\z9` match, and a successful match leaves its own `\z(` captures in
+/// `io.output` (or `None` when it has none).
+///
+/// The two are aimed at for the match and cleared after, outside the context
+/// reservation: a syntax match never runs inside another match (the matcher
+/// runs no user code), and every other match finds them cleared, so the plain
+/// entry point pays nothing for them.
+///
+/// # Safety
+///
+/// As for [`vim_regexec_multi`].
+pub(crate) unsafe fn vim_regexec_syntax(
+    rmp: *mut RegMMatch,
+    win: Option<Win>,
+    buffer: Buf,
+    lnum: LineNr,
+    col: ColNr,
+    tm: *mut ProfTime,
+    timed_out: *mut c_int,
+    io: ExtMatchIo<'_>,
+) -> LineNr {
+    debug_assert!(!rex_in_use.get(), "a syntax match inside another match");
+    let ext_in = io.input.map_or(core::ptr::null(), core::ptr::from_ref);
+    let ext_out: *mut Option<ExtMatchRef> = io.output.map_or(core::ptr::null_mut(), |out| out);
+    super::rex.with_mut(|rex| (rex.ext_in, rex.ext_out) = (ext_in, ext_out));
+    // SAFETY: the caller's promises; the two sets are its borrows, live
+    // until the fields are cleared below.
+    let result = unsafe { vim_regexec_multi(rmp, win, buffer, lnum, col, tm, timed_out) };
+    super::rex.with_mut(|rex| {
+        (rex.ext_in, rex.ext_out) = (core::ptr::null(), core::ptr::null_mut());
+    });
+    result
 }

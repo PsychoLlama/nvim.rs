@@ -36,7 +36,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::marker::PhantomData;
 
 use super::pos::{MatchPos, PosKind, SavedInput};
-use super::{ExtMatch, ExtMatchRef, NSUBEXP, RegExec, TimeBudget, ZSlots, rex};
+use super::{ExtMatchRef, NSUBEXP, RegExec, TimeBudget, ZSlots, rex};
 use crate::charset::vim_iswordp_buf;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::types::{ColNr, LPos, LineNr, RegMMatch, RegMatch, RegProg, uint8_t};
@@ -88,7 +88,7 @@ impl Rex {
     ///   [`super::NSUBEXP`] entries each.
     ///
     /// - `ext_in` and `ext_out` are null or the caller's, live and otherwise
-    ///   untouched until the match returns ([`Rex::set_ext`]).
+    ///   untouched until the match returns ([`super::vim_regexec_syntax`]).
     ///
     /// The handle must not outlive the match: the line pointers dangle the
     /// moment the memline moves underneath it.
@@ -677,28 +677,13 @@ impl Rex {
 
     // ------------------------------------------ a syntax item's `\z` sets
 
-    /// Aim the match at a syntax item's `\z` traffic: `input` for
-    /// `\z1`..`\z9` to read, `output` for a success to fill, either null
-    /// for none. Every match entry point sets both before the engine runs
-    /// and clears them after, so a match outside the syntax engine sees
-    /// neither. Each must be null or the caller's, live and otherwise
-    /// untouched until the match returns: that is part of what holding the
-    /// handle claims ([`Rex::acquire`]).
-    #[inline(always)]
-    pub(crate) fn set_ext(self, input: *const ExtMatch, output: *mut Option<ExtMatchRef>) {
-        unsafe {
-            (*ctx()).ext_in = input;
-            (*ctx()).ext_out = output;
-        }
-    }
-
     /// Run `f` over what `\z{no}` matches: the text the enclosing syntax
     /// region's start match captured for it, or `None` -- which matches the
     /// empty string.
     #[inline(always)]
     pub(crate) fn with_ext_capture<R>(self, no: usize, f: impl FnOnce(Option<&CStr>) -> R) -> R {
         // SAFETY: `ext_in` is null or the caller's set, live and untouched
-        // until the match returns (`set_ext`), which outlasts `f`.
+        // until the match returns (`vim_regexec_syntax`), which outlasts `f`.
         let ext = unsafe { (*ctx()).ext_in.as_ref() };
         f(ext.and_then(|ext| ext.capture(no)))
     }
@@ -707,7 +692,7 @@ impl Rex {
     /// for them; dropped when nobody did.
     #[inline(always)]
     pub(crate) fn put_ext_out(self, captures: Option<ExtMatchRef>) {
-        // SAFETY: `ext_out` is null or the caller's slot (`set_ext`).
+        // SAFETY: `ext_out` is null or the caller's slot (`vim_regexec_syntax`).
         if let Some(out) = unsafe { (*ctx()).ext_out.as_mut() } {
             *out = captures;
         }

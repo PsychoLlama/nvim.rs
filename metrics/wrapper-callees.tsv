@@ -201,7 +201,6 @@ count	callee	no_raw	defs	def
 11	Dt::new	0	67	
 11	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
 11	Qfe::new	0	67	
-11	Rex::acquire	1	1	crates/nvim/src/regexp/rex.rs
 11	Screen::of	0	1	crates/nvim/src/vterm/screen/mod.rs
 11	call_func	0	1	crates/nvim/src/eval/userfunc/dispatch.rs
 11	dispatch_fast	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
@@ -234,6 +233,7 @@ count	callee	no_raw	defs	def
 10	Pe::new	0	67	
 10	PosRef::new	0	1	crates/nvim/src/winlayer.rs
 10	Queue::new	0	1	crates/nvim/src/event/multiqueue.rs
+10	Rex::acquire	1	1	crates/nvim/src/regexp/rex.rs
 10	Scan::new	0	4	
 10	Screen::at	0	1	crates/nvim/src/vterm/screen/mod.rs
 10	Tk::of	0	1	crates/nvim/src/tui/termkey/termkey.rs
@@ -510,6 +510,7 @@ count	callee	no_raw	defs	def
 6	utfc_ptr2schar	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 6	var2fpos	0	1	crates/nvim/src/eval/pos.rs
 6	vim_isfilec	0	0	
+6	vim_regexec_multi	0	1	crates/nvim/src/regexp/api.rs
 6	vim_vsnprintf_typval	0	1	crates/nvim/src/strings/printf/emit.rs
 6	window_langs	1	1	crates/nvim/src/spellsuggest/mod.rs
 6	wordtree_compress	0	1	crates/nvim/src/spellfile/wordtree.rs
@@ -644,7 +645,6 @@ count	callee	no_raw	defs	def
 5	utf_ptr2char_info_impl	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 5	vars_clear	0	1	crates/nvim/src/eval/vars/lifecycle.rs
 5	vim_iswordp_buf	0	1	crates/nvim/src/charset/mod.rs
-5	vim_regexec_multi	0	1	crates/nvim/src/regexp/api.rs
 5	vim_strnsize	0	1	crates/nvim/src/charset/display.rs
 5	vterm_scroll_rect	0	1	crates/nvim/src/vterm/vterm.rs
 5	wildmenu_match_len	0	1	crates/nvim/src/cmdexpand/pum.rs
@@ -2119,7 +2119,6 @@ count	callee	no_raw	defs	def
 2	vim_dialog_yesno	0	1	crates/nvim/src/message/dialog.rs
 2	vim_findfile	0	1	crates/nvim/src/file_search/mod.rs
 2	vim_findfile_stopdir	0	1	crates/nvim/src/file_search/init.rs
-2	vim_regexec_syntax	0	1	crates/nvim/src/regexp/api.rs
 2	vim_regsub_both	0	1	crates/nvim/src/regexp/substitute.rs
 2	vim_regsub_multi	0	1	crates/nvim/src/regexp/substitute.rs
 2	vim_setenv_ext	0	1	crates/nvim/src/os/env/mod.rs
@@ -3701,6 +3700,7 @@ count	callee	no_raw	defs	def
 1	vim_is_fname_char	0	0	
 1	vim_isblankline	0	1	crates/nvim/src/charset/walk.rs
 1	vim_mkdir_emsg	0	1	crates/nvim/src/ex_docmd/argopt.rs
+1	vim_regexec_syntax	0	1	crates/nvim/src/regexp/api.rs
 1	vim_regsub	0	1	crates/nvim/src/regexp/substitute.rs
 1	vim_settempdir	0	1	crates/nvim/src/fileio/tempfile.rs
 1	vim_strcpy_up	0	1	crates/nvim/src/strings/case.rs

@@ -345,10 +345,9 @@ impl SynState {
         };
         let mut block = self.block();
         let time = &mut block.b_syn_linecont_time;
-        let mut no_captures = None;
         let io = ExtMatchIo {
             input: None,
-            output: &mut no_captures,
+            output: None,
         };
         let r = self.syn_regexec(&mut regmatch, lnum, 0, time, io);
         self.block().b_syn_linecont_prog = regmatch.regprog;
