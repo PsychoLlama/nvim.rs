@@ -254,12 +254,14 @@ fn set_init_expand_env() {
 /// The encoding a file with no 'fileencodings' match is read as, taken from
 /// the locale.
 fn set_init_fenc_default() {
-    // SAFETY: both branches produce an owned NUL-terminated string.
-    let mut enc = unsafe { enc_locale() };
-    if enc.is_null() {
-        enc = unsafe { xmemdupz(c"utf-8".as_ptr().cast::<c_void>(), 5) }.cast::<c_char>();
-    }
-    fenc_default.set(enc);
+    // SAFETY: `enc_locale` answers null or a string the caller owns.
+    let enc = unsafe { enc_locale() };
+    let enc = if enc.is_null() {
+        XString::from("utf-8")
+    } else {
+        unsafe { XString::from_raw(enc) }
+    };
+    fenc_default.set(Some(enc));
 }
 
 /// The first startup pass: compute every default that depends on the

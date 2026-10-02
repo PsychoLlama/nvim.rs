@@ -345,11 +345,7 @@ pub(crate) fn put_cell(
 
 /// The scratch buffer `win_line` renders a fold text or a `'listchars'`
 /// replacement into. One allocation for the process, grown as needed.
-static extra_buf: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-
-/// How many bytes [`extra_buf`] holds.
-static extra_buf_size: GlobalCell<size_t> = GlobalCell::new(0);
+static extra_buf: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 
 /// A scratch buffer of at least `size` bytes, valid until the next call.
 ///
@@ -357,14 +353,14 @@ static extra_buf_size: GlobalCell<size_t> = GlobalCell::new(0);
 /// The answer may not be held across another call.
 pub(crate) unsafe fn get_extra_buf(size: size_t) -> *mut ::core::ffi::c_char {
     let size = size.max(64);
-    // SAFETY: the buffer is only ever reached through this function, so
-    // nothing can hold the old pointer across the reallocation.
-    if extra_buf_size.get() < size {
-        unsafe { xfree(extra_buf.get().cast::<::core::ffi::c_void>()) };
-        extra_buf.set(unsafe { xmalloc(size) }.cast::<::core::ffi::c_char>());
-        extra_buf_size.set(size);
-    }
-    extra_buf.get()
+    // The buffer is only ever reached through this function, so nothing can
+    // hold the old pointer across the reallocation.
+    extra_buf.with_mut(|buf| {
+        if buf.len() < size {
+            *buf = vec![0; size];
+        }
+        buf.as_mut_ptr().cast()
+    })
 }
 
 /// The `'listchars'` "extends" character for `window`, or NUL if it should not be

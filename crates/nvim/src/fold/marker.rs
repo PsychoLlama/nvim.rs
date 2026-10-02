@@ -49,7 +49,14 @@ pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
                 window.w_onebuf_opt.wo_fmr.value_ptr(),
                 foldstartmarkerlen.get(),
             ),
-            cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()),
+            cstr::slice_at(
+                window
+                    .w_onebuf_opt
+                    .wo_fmr
+                    .value_ptr()
+                    .wrapping_add(foldstartmarkerlen.get() + 1),
+                foldendmarkerlen.get(),
+            ),
         )
     };
     fold_add_marker(buf, start, open);
@@ -140,7 +147,14 @@ pub(super) fn delete_fold_markers(window: Win, fold: FoldRef, recursive: bool, l
                 window.w_onebuf_opt.wo_fmr.value_ptr(),
                 foldstartmarkerlen.get(),
             ),
-            cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()),
+            cstr::slice_at(
+                window
+                    .w_onebuf_opt
+                    .wo_fmr
+                    .value_ptr()
+                    .wrapping_add(foldstartmarkerlen.get() + 1),
+                foldendmarkerlen.get(),
+            ),
         )
     };
     fold_del_marker(window.buffer(), fold.top() + lnum_off, open);
@@ -210,11 +224,11 @@ pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
     );
 }
 
-/// Parse 'foldmarker' and set "foldendmarker", "foldstartmarkerlen" and
-/// "foldendmarkerlen".
+/// Parse 'foldmarker' and set "foldstartmarkerlen" and "foldendmarkerlen".
+/// The end marker starts just past the comma, at `foldstartmarkerlen + 1`.
 /// Relies on the option value to have been checked for correctness already.
 ///
-/// Note that `foldendmarker` points *into* 'foldmarker', so it dangles the
+/// The lengths describe the value as it is now, so they go stale the
 /// moment the option is set again — which is why every caller re-runs this.
 ///
 pub(super) fn parse_marker(window: Win) {
@@ -224,12 +238,11 @@ pub(super) fn parse_marker(window: Win) {
     let comma = unsafe { vim_strchr(foldmarker, ',' as c_int) };
     foldstartmarkerlen.set(unsafe { comma.offset_from(foldmarker) } as size_t);
     let end = unsafe { comma.offset(1) };
-    foldendmarker.set(end);
     foldendmarkerlen.set(unsafe { cstr::bytes_at(end) }.len());
 }
 
 /// Low level function to get the foldlevel for the "marker" method.
-/// "foldendmarker", "foldstartmarkerlen" and "foldendmarkerlen" must have been
+/// "foldstartmarkerlen" and "foldendmarkerlen" must have been
 /// set before calling this.
 /// Requires that flp->lvl is set to the fold level of the previous line!
 /// Careful: This means you can't call this function twice on the same line.
@@ -246,7 +259,16 @@ pub(super) fn foldlevel_marker(line: FLine) {
             foldstartmarkerlen.get(),
         )
     };
-    let endmarker = unsafe { cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()) };
+    let endmarker = unsafe {
+        cstr::slice_at(
+            window
+                .w_onebuf_opt
+                .wo_fmr
+                .value_ptr()
+                .wrapping_add(foldstartmarkerlen.get() + 1),
+            foldendmarkerlen.get(),
+        )
+    };
     unsafe { (*flp).start = 0 };
     unsafe { (*flp).lvl_next = (*flp).lvl };
 

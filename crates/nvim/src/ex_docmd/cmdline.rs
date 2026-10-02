@@ -210,7 +210,9 @@ fn replay_stored_line(source: &Source, lines: &GArray, current_line: c_int) -> O
     set_sourcing_lnum(unsafe { (*stored).lnum });
 
     if source.breakpoint_due(sourcing_lnum()) {
-        dbg_breakpoint(source.fname, sourcing_lnum());
+        // SAFETY: a due breakpoint means this is a function or a script, whose
+        // name `fname` is.
+        dbg_breakpoint(unsafe { CStr::from_ptr(source.fname) }, sourcing_lnum());
         source.read_breakpoint(sourcing_lnum());
     }
     if do_profiling.get() == PROF_YES {

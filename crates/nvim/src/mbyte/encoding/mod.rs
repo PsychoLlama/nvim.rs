@@ -233,7 +233,8 @@ fn to_owned_cstring(bytes: &[u8]) -> *mut c_char {
 pub unsafe fn enc_canonize(enc: *mut c_char) -> *mut c_char {
     let enc = unsafe { CStr::from_ptr(enc) }.to_bytes();
     if enc == b"default" {
-        return unsafe { xstrdup(fenc_default.get()) };
+        let enc = fenc_default.with(|enc| enc.clone().expect("set at startup"));
+        return enc.into_raw();
     }
 
     let normalised = normalise_spelling(enc);

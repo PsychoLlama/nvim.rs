@@ -10,6 +10,7 @@
 use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::guard::Lock;
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::semsg;
@@ -228,7 +229,10 @@ pub(crate) fn get_prevdir(scope: CdScope) -> *mut c_char {
     match scope as c_int {
         s if s == kCdScopeTabpage as c_int => TabPage::current().tp_prevdir,
         s if s == kCdScopeWindow as c_int => Win::current().w_prevdir,
-        _ => prev_dir.get(),
+        _ => prev_dir.with(|dir| {
+            dir.as_ref()
+                .map_or(ptr::null_mut(), |dir| dir.as_ptr().cast_mut())
+        }),
     }
 }
 
@@ -306,11 +310,9 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
         new_dir = pdir;
     }
 
-    let pdir = if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t).is_ok() {
-        xstrdup(dir.as_mut_ptr())
-    } else {
-        ptr::null_mut()
-    };
+    let pdir = os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t)
+        .is_ok()
+        .then(|| XString::from_cstr(cstr::in_chars(&dir)));
 
     // `:cd` with no argument means home, when 'cdhome' is set.
     if byte(new_dir) == NUL && p_cdh() {
@@ -318,32 +320,30 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
         new_dir = dir.as_mut_ptr();
     }
 
-    let dir_differs = pdir.is_null() || unsafe { pathcmp(pdir, new_dir, -1) } != 0;
+    let dir_differs = pdir
+        .as_ref()
+        .is_none_or(|pdir| unsafe { pathcmp(pdir.as_ptr(), new_dir, -1) } != 0);
     if dir_differs {
         do_autocmd_dirchanged(new_dir, scope, kCdCauseManual, true);
         if unsafe { vim_chdir(new_dir) } != 0 {
             emsg(gettext(e_failed));
-            xfree(pdir as *mut c_void);
             return false;
         }
     }
 
-    // The global slot is written back through a copy, so that the one
-    // place that can hold the address is this frame rather than a
-    // caller of the cell.
-    let mut global_prevdir = prev_dir.get();
-    let pp: *mut *mut c_char = match scope as c_int {
-        // SAFETY: `curtab`/`curwin` are set from startup to exit, and the
-        // address of a field is not a read of the object.
-        s if s == kCdScopeTabpage as c_int => unsafe {
-            &raw mut (*TabPage::current_raw()).tp_prevdir
-        },
-        s if s == kCdScopeWindow as c_int => unsafe { &raw mut (*Win::current_raw()).w_prevdir },
-        _ => &raw mut global_prevdir,
-    };
-    unsafe { xfree(*pp as *mut c_void) };
-    unsafe { *pp = pdir };
-    prev_dir.set(global_prevdir);
+    match scope as c_int {
+        s if s == kCdScopeTabpage as c_int => {
+            let mut tab = TabPage::current();
+            xfree(tab.tp_prevdir as *mut c_void);
+            tab.tp_prevdir = pdir.map_or(ptr::null_mut(), XString::into_raw);
+        }
+        s if s == kCdScopeWindow as c_int => {
+            let mut window = Win::current();
+            xfree(window.w_prevdir as *mut c_void);
+            window.w_prevdir = pdir.map_or(ptr::null_mut(), XString::into_raw);
+        }
+        _ => prev_dir.set(pdir),
+    }
 
     post_chdir(scope, dir_differs);
     true

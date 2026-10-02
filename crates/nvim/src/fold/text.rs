@@ -217,7 +217,15 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
             foldstartmarkerlen.get(),
         ) {
             len = foldstartmarkerlen.get();
-        } else if ncmp(s, foldendmarker.get(), foldendmarkerlen.get()) {
+        } else if ncmp(
+            s,
+            Win::current()
+                .w_onebuf_opt
+                .wo_fmr
+                .value_ptr()
+                .wrapping_add(foldstartmarkerlen.get() + 1),
+            foldendmarkerlen.get(),
+        ) {
             len = foldendmarkerlen.get();
         }
         if len > 0 {

@@ -154,7 +154,6 @@ static prev_lnum_lvl: GlobalCell<c_int> = GlobalCell::new(-1);
 
 /// 'foldmarker' split into its two halves, refreshed by `parse_marker`.
 static foldstartmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
-static foldendmarker: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 static foldendmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
 
 /// A window's toplevel fold list.

@@ -48,7 +48,7 @@ use crate::mbyte::{
     utf_ptr2char_info, utf_ptr2str_char_info, utfc_next, utfc_ptr2len, utfc_ptr2schar,
 };
 use crate::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
-use crate::memory::{xfree, xmalloc};
+use crate::memory::xfree;
 use crate::message::state::did_emsg;
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off2};
 use crate::option::kOptFlagInsecure;

@@ -31,11 +31,13 @@
 pub use crate::options::vars::*;
 
 use crate::global_cell::GlobalCell;
+use crate::memory::XString;
 use crate::types::{BreakAt, OptInt, uint8_t};
-use core::ffi::{c_char, c_uint};
+use core::ffi::c_uint;
 
-pub(crate) static fenc_default: GlobalCell<*mut c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<c_char>());
+/// The encoding a file with no 'fileencodings' match is read as; set once
+/// at startup.
+pub(crate) static fenc_default: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 pub(crate) static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
 pub(crate) static bkc_flags: GlobalCell<c_uint> = GlobalCell::new(0);

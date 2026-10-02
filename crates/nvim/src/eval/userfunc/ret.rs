@@ -609,7 +609,8 @@ pub unsafe fn get_func_line(
     // Did we encounter a breakpoint?
     if frame.fc_breakpoint != 0 && frame.fc_breakpoint <= sourcing_lnum() {
         let at = sourcing_lnum();
-        dbg_breakpoint(name, at);
+        // SAFETY: the running function's name, live with it.
+        dbg_breakpoint(unsafe { CStr::from_ptr(name) }, at);
         // Find the next breakpoint.
         frame.fc_breakpoint = unsafe { dbg_find_breakpoint(false, name, at) };
         frame.fc_dbg_tick = debug_tick.get();

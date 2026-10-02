@@ -537,7 +537,7 @@ pub unsafe fn getsourceline(
     let breakpoint = unsafe { (*sp).breakpoint };
     if !from_buf_or_str && breakpoint != 0 && breakpoint <= sourcing_lnum() {
         // SAFETY: as above; `fname` is the script's path.
-        dbg_breakpoint(unsafe { (*sp).fname }, sourcing_lnum());
+        dbg_breakpoint(unsafe { CStr::from_ptr((*sp).fname) }, sourcing_lnum());
         unsafe { refresh_breakpoint(sp) };
     }
 

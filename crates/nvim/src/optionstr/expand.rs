@@ -38,7 +38,7 @@ use crate::cmdexpand::expand_generic;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::get_highlight_name;
 use crate::mbyte::get_encoding_name;
-use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
+use crate::memory::{XString, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::options::{
     kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
 };
@@ -174,7 +174,7 @@ pub unsafe fn expand_set_str_generic(
 
 /// The option's current value, offered as completion index 0 ahead of
 /// whatever the real enumerator produces.
-static ORIGINAL_VALUE: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+static ORIGINAL_VALUE: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 /// The real enumerator, for as long as `expand_generic` is running.
 static ENUMERATOR: GlobalCell<CompleteListItemGetter> = GlobalCell::new(None);
@@ -188,12 +188,13 @@ static ENUMERATOR: GlobalCell<CompleteListItemGetter> = GlobalCell::new(None);
 /// [`expand_set_opt_generic`].
 unsafe fn expand_set_opt_callback(expand: *mut Expand, idx: c_int) -> *mut c_char {
     if idx == 0 {
-        let original = ORIGINAL_VALUE.get();
-        return if original.is_null() {
-            c"".as_ptr().cast_mut()
-        } else {
+        // `expand_generic` copies what it keeps, before the next call.
+        return ORIGINAL_VALUE.with(|original| {
             original
-        };
+                .as_ref()
+                .map_or(c"".as_ptr(), XString::as_ptr)
+                .cast_mut()
+        });
     }
     let next = ENUMERATOR.get().expect("enumerator set for the whole call");
     // SAFETY: the enumerator this call installed, with its own index.
@@ -212,13 +213,10 @@ pub(crate) unsafe fn expand_set_opt_generic(
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's frame.
-    ORIGINAL_VALUE.set(unsafe {
-        if (*args).oe_include_orig_val {
-            (*args).oe_opt_value
-        } else {
-            ptr::null_mut()
-        }
-    });
+    let original = unsafe { (*args).oe_include_orig_val.then_some((*args).oe_opt_value) }
+        .filter(|value| !value.is_null());
+    // SAFETY: the option's value, a C string.
+    ORIGINAL_VALUE.set(original.map(|value| XString::from_cstr(unsafe { CStr::from_ptr(value) })));
     ENUMERATOR.set(func);
 
     // Not fuzzy: ExpandContext::StringSetting does not use fuzzy matching.
@@ -236,7 +234,7 @@ pub(crate) unsafe fn expand_set_opt_generic(
         )
     };
 
-    ORIGINAL_VALUE.set(ptr::null_mut());
+    ORIGINAL_VALUE.set(None);
     ENUMERATOR.set(None);
     Ok(())
 }

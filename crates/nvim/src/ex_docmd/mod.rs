@@ -49,6 +49,7 @@ use crate::lua::secure::ex_trust;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::mark::{ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks};
 use crate::r#match::ex_match;
+use crate::memory::XString;
 use crate::menu::{ex_emenu, ex_menu, ex_menutranslate};
 use crate::message::ex_messages;
 use crate::message::{
@@ -311,7 +312,7 @@ static quitmore: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false);
 static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
-static prev_dir: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
+static prev_dir: GlobalCell<Option<XString>> = GlobalCell::new(None);
 static filetype_detect: GlobalCell<Option<bool>> = GlobalCell::new(None);
 static filetype_plugin: GlobalCell<Option<bool>> = GlobalCell::new(None);
 static filetype_indent: GlobalCell<Option<bool>> = GlobalCell::new(None);

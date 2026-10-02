@@ -12,6 +12,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::c_str_len;
 use crate::semsg;
 use crate::winlayer::TabPage;
@@ -29,28 +30,23 @@ use crate::types::{Failed, NUL};
 ///
 /// One buffer for the whole completion walk: every name it produces is read
 /// and copied before the next call, which is what lets it be reused.
-static varnamebuf: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-static varnamebuflen: GlobalCell<size_t> = GlobalCell::new(0);
+static varnamebuf: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 /// `"<prefix>:<name>"`, in a buffer that lives until the next call.
 ///
 /// # Safety
 /// `name` is a NUL-terminated string.
 pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's obligation -- a NUL-terminated name -- and the
-    // buffer below is grown to hold the prefix, the name and its NUL.
-    let mut len = unsafe { cstr::bytes_at(name) }.len() + 3;
-    if len > varnamebuflen.get() {
-        unsafe { xfree(varnamebuf.get().cast()) };
-        len += 10;
-        varnamebuf.set(unsafe { xmalloc(len) } as *mut c_char);
-        varnamebuflen.set(len);
-    }
-    let buf = varnamebuf.get();
-    unsafe { *buf = prefix as c_char };
-    unsafe { *buf.add(1) = b':' as c_char };
-    unsafe { strcpy(buf.add(2), name) };
-    buf
+    // SAFETY: the caller's obligation -- a NUL-terminated name.
+    let name = unsafe { cstr::bytes_at(name) };
+    varnamebuf.with_mut(|slot| {
+        let buf = slot.get_or_insert_with(XString::new);
+        buf.truncate(0);
+        buf.push_byte(prefix as u8);
+        buf.push_byte(b':');
+        buf.push_bytes(name);
+        buf.as_mut_ptr()
+    })
 }
 
 /// The `idx`-th variable name for command-line completion, or NULL when
@@ -132,9 +128,7 @@ pub unsafe fn get_user_var_name(expand: *mut Expand, idx: c_int) -> *mut c_char 
         return unsafe { cat_prefix_varname(b'v' as c_int, get_vim_var_name(vv)) };
     }
 
-    unsafe { xfree(varnamebuf.get().cast()) };
-    varnamebuf.set(ptr::null_mut());
-    varnamebuflen.set(0);
+    varnamebuf.set(None);
     ptr::null_mut()
 }
 

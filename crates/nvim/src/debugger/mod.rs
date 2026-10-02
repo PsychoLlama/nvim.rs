@@ -56,7 +56,7 @@ use crate::message::msg_starthere;
 use crate::message::state::{
     cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
 };
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::os::env::{expand_env_save, home_replace};
 use crate::path::fix_fname;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regfree};
@@ -211,13 +211,13 @@ impl BreakList {
 
 /// The breakpoint `dbg_breakpoint` recorded, waiting for `do_one_cmd` to
 /// reach a command that is actually executed.
-static debug_breakpoint_name: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+static debug_breakpoint_name: GlobalCell<Option<XString>> = GlobalCell::new(None);
 static debug_breakpoint_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
 /// A prompt that was owed but not shown, because the command it belonged to
 /// was skipped (an untaken `:if` branch, say). A skipped command that decides
 /// to run something itself calls [`dbg_check_skipped`] to collect it.
 static debug_skipped: GlobalCell<bool> = GlobalCell::new(false);
-static debug_skipped_name: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+static debug_skipped_name: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 /// Enter debug mode if a breakpoint was hit, or if `ex_nesting_level` is at
 /// or below the level the last `>` command asked to stop at -- but only if
@@ -228,49 +228,39 @@ pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
     debug_skipped.set(false);
     // SAFETY: caller contract.
     let skip = excmd.skip;
-    let name = debug_breakpoint_name.get();
-
-    if name.is_null() {
+    let Some(name) = debug_breakpoint_name.take() else {
         if ex_nesting_level.get() > debug_break_level.get() {
             return;
         }
         if skip {
             debug_skipped.set(true);
-            debug_skipped_name.set(ptr::null_mut());
+            debug_skipped_name.set(None);
             return;
         }
         // SAFETY: caller contract.
         unsafe { do_debug(excmd.cmd_ptr()) };
         return;
-    }
+    };
 
     if skip {
         debug_skipped.set(true);
-        debug_skipped_name.set(name);
-        debug_breakpoint_name.set(ptr::null_mut());
+        debug_skipped_name.set(Some(name));
         return;
     }
 
     // A script-local function's name is stored with `K_SNR` in front of it;
     // announce it the way the user spells it.
-    // SAFETY: `name` is the NUL-terminated function or file name the
-    // breakpoint matched.
-    let is_snr = unsafe { *name } as uint8_t as c_int == K_SPECIAL
-        && unsafe { *name.offset(1) } as uint8_t as c_int == KS_EXTRA
-        && unsafe { *name.offset(2) } as c_int == KE_SNR as c_int;
-    let (prefix, rest) = if is_snr {
-        (c"<SNR>".as_ptr(), unsafe { name.offset(3) })
-    } else {
-        (c"".as_ptr(), name)
+    let snr = [K_SPECIAL as u8, KS_EXTRA as u8, KE_SNR as u8];
+    let (prefix, rest) = match name.strip_prefix(&snr[..]) {
+        Some(rest) => ("<SNR>", rest),
+        None => ("", &name[..]),
     };
-    // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-    let (prefix, rest) = unsafe { (c_str(prefix), c_str(rest)) };
+    let rest = msg_bytes(rest);
     smsg!(
         0,
         "Breakpoint in \"{prefix}{rest}\" line {}",
         debug_breakpoint_lnum.get() as int64_t
     );
-    debug_breakpoint_name.set(ptr::null_mut());
     unsafe { do_debug(excmd.cmd_ptr()) };
 }
 
@@ -284,7 +274,7 @@ pub fn dbg_check_skipped(excmd: &mut ExArg) -> bool {
     // `CTRL-C` typed at it counts.
     let prev_got_int = got_int.get();
     got_int.set(false);
-    debug_breakpoint_name.set(debug_skipped_name.get());
+    debug_breakpoint_name.set(debug_skipped_name.take());
     // SAFETY: caller contract; `args.skip` is true on entry, and is put back.
     excmd.skip = false;
     dbg_check_breakpoint(excmd);
@@ -295,8 +285,8 @@ pub fn dbg_check_skipped(excmd: &mut ExArg) -> bool {
 
 /// Record that `name` has a breakpoint on `lnum`. Whether it is announced is
 /// [`dbg_check_breakpoint`]'s decision, since the line may not be executed.
-pub fn dbg_breakpoint(name: *mut c_char, lnum: LineNr) {
-    debug_breakpoint_name.set(name);
+pub fn dbg_breakpoint(name: &CStr, lnum: LineNr) {
+    debug_breakpoint_name.set(Some(XString::from_cstr(name)));
     debug_breakpoint_lnum.set(lnum);
 }
 

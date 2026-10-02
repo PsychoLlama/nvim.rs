@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::narrow::len_as_int;
 use crate::option::vars::P_CDPATH;
@@ -330,15 +331,19 @@ unsafe fn find_along_option(
     file_to_findlen: size_t,
     search_ctx: *mut *mut FindContext,
 ) -> *mut c_char {
-    // Where the last call had got to in the option.
-    static DIR: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+    // A copy of the option, and how far into it the last call had got: the
+    // walk outlives the call, and the option's own value may not.
+    static DIR: GlobalCell<Option<(XString, usize)>> = GlobalCell::new(None);
     // Whether `*search_ctx` is a context a `vim_findfile` may resume.
     static INITIALIZED: GlobalCell<bool> = GlobalCell::new(false);
 
     if first {
         // vim_findfile_free_visited can handle a possible NULL pointer
         unsafe { vim_findfile_free_visited((*search_ctx).cast()) };
-        DIR.set(path_option);
+        // SAFETY: the caller's NUL-terminated option value.
+        let value = (!path_option.is_null())
+            .then(|| XString::from_cstr(unsafe { CStr::from_ptr(path_option) }));
+        DIR.set(value.map(|value| (value, 0)));
         INITIALIZED.set(false);
     }
 
@@ -352,16 +357,20 @@ unsafe fn find_along_option(
             continue;
         }
 
-        if DIR.get().is_null() || unsafe { *DIR.get() } == 0 {
+        let rest = DIR.with(|dir| {
+            let (value, at) = dir.as_ref()?;
+            (*at < value.len()).then(|| value[*at..].as_ptr())
+        });
+        let Some(rest) = rest else {
             // We searched all paths of the option, now we can free the
             // search context.
             unsafe { vim_findfile_cleanup((*search_ctx).cast()) };
             unsafe { *search_ctx = ptr::null_mut() };
             return ptr::null_mut();
-        }
+        };
 
         let mut buf = vec![0 as c_char; MAXPATHL as usize];
-        let mut dir = DIR.get();
+        let mut dir = rest.cast::<c_char>().cast_mut();
         unsafe {
             copy_option_part(
                 &raw mut dir,
@@ -370,7 +379,13 @@ unsafe fn find_along_option(
                 c" ,".as_ptr().cast_mut(),
             )
         };
-        DIR.set(dir);
+        // `copy_option_part` only reads the option, and only advances `dir`.
+        let advanced = dir.addr() - rest.addr();
+        DIR.with_mut(|dir| {
+            if let Some((_, at)) = dir {
+                *at += advanced;
+            }
+        });
         // Splits the entry at an unescaped ';', leaving the entry in
         // `buf` and answering the stop directories after it.
         let stopdirs = unsafe { vim_findfile_stopdir(buf.as_mut_ptr()) };

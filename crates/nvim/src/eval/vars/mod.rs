@@ -99,7 +99,7 @@ use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
 use crate::winlayer::Live;
 use crate::winlayer::graph::lastused_tabpage;
-use ::libc::{abort, memchr, strcpy};
+use ::libc::{abort, memchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod assign;
