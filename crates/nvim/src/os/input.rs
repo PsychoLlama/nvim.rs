@@ -295,6 +295,13 @@ pub(crate) fn os_breakcheck() {
 const BREAKCHECK_SKIP: c_int = 1000;
 static breakcheck_count: GlobalCell<c_int> = GlobalCell::new(0);
 
+/// Start the [`fast_breakcheck`] count over, so a lib test that adds matches
+/// never reaches the event loop it has not got.
+#[cfg(test)]
+pub(crate) fn reset_breakcheck_count() {
+    breakcheck_count.set(0);
+}
+
 /// [`os_breakcheck`], but only once every `every` calls.
 fn breakcheck_every(every: c_int) {
     let count = breakcheck_count.get() + 1;

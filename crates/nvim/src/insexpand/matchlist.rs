@@ -568,31 +568,6 @@ pub(crate) unsafe fn cp_compare_nearest(a: *const c_void, b: *const c_void) -> c
     score_a.cmp(&score_b) as c_int
 }
 
-/// Order two indices into `compl_fuzzy_scores` by score, highest first, with
-/// the index itself as the tie-break — so the order is total and the sort is
-/// the permutation upstream's `qsort` produced.
-///
-/// # Safety
-/// `a` and `b` are `c_int` indices in range of `compl_fuzzy_scores`, which
-/// is what `qsort` hands back out of the array it was given.
-pub(crate) unsafe extern "C" fn compare_scores(a: *const c_void, b: *const c_void) -> c_int {
-    // SAFETY: the caller's two indices.
-    let (idx_a, idx_b) = unsafe { (*(a as *const c_int), *(b as *const c_int)) };
-    let scores = compl_fuzzy_scores.get();
-    // SAFETY: both indices are in range of `compl_fuzzy_scores`.
-    let (score_a, score_b) = unsafe {
-        (
-            *scores.offset(idx_a as isize),
-            *scores.offset(idx_b as isize),
-        )
-    };
-    if score_a == score_b {
-        idx_a.cmp(&idx_b) as c_int
-    } else {
-        score_b.cmp(&score_a) as c_int
-    }
-}
-
 /// Score every match against the leader (or, with no leader, against the
 /// original text).
 pub(crate) fn set_fuzzy_score() {

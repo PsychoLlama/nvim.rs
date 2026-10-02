@@ -502,14 +502,10 @@ pub(crate) fn get_next_filename_completion() {
 
         if fuzzy_indices.ga_len > 0 {
             let indices = fuzzy_indices.ga_data as *mut c_int;
-            unsafe {
-                qsort(
-                    indices.cast::<c_void>(),
-                    fuzzy_indices.ga_len as size_t,
-                    size_of::<c_int>(),
-                    Some(compare_scores),
-                )
-            };
+            // SAFETY: the array's `ga_len` filled indices.
+            sort_by_fuzzy_score(unsafe {
+                ::core::slice::from_raw_parts_mut(indices, fuzzy_indices.ga_len as usize)
+            });
             for i in 0..fuzzy_indices.ga_len as isize {
                 let idx = unsafe { *indices.offset(i) } as isize;
                 let current_score = unsafe { *compl_fuzzy_scores.get().offset(idx) };
@@ -552,6 +548,17 @@ pub(crate) fn get_next_filename_completion() {
     if num_matches > 0 {
         unsafe { ins_compl_add_matches(num_matches, matches, c_int::from(p_fic() || p_wic())) };
     }
+}
+
+/// Order `indices` (into `compl_fuzzy_scores`) best score first, the lower
+/// index first between equal scores. The order is total, so this is the
+/// permutation upstream's `qsort` produced.
+pub(crate) fn sort_by_fuzzy_score(indices: &mut [c_int]) {
+    let scores = compl_fuzzy_scores.get();
+    // SAFETY: every index is in range of `compl_fuzzy_scores` -- the
+    // caller's promise.
+    let score = |idx: c_int| unsafe { *scores.offset(idx as isize) };
+    indices.sort_unstable_by(|&a, &b| score(b).cmp(&score(a)).then(a.cmp(&b)));
 }
 
 /// Vim command-line completion (`CTRL-X CTRL-V`).

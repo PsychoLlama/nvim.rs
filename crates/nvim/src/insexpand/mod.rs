@@ -128,7 +128,7 @@ use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
 use crate::winlayer::graph::cmdwin_type;
 use crate::winlayer::{BufId, WinId};
-use ::libc::{atoi, fclose, qsort, strncpy, strrchr};
+use ::libc::{atoi, fclose, strncpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod mode;
@@ -153,6 +153,8 @@ mod session;
 pub use self::session::*;
 mod keys;
 pub use self::keys::*;
+#[cfg(test)]
+mod tests;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: XpPrefix = 0;
 pub const kExtmarkUndo: ExtmarkOp = 1;

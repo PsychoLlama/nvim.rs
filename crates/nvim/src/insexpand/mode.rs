@@ -359,9 +359,10 @@ pub fn ins_compl_long_shown_match() -> bool {
 
 /// `'completeopt'`, buffer-local value first.
 ///
-/// Safe: both halves are ordinary reads of live editor state.
+/// With no current buffer (a lib test drives the match list without one)
+/// the global value answers alone; the editor always has one.
 pub(crate) fn completeopt_flags() -> c_uint {
-    let local = Buf::current().b_cot_flags;
+    let local = Buf::current_or_none().map_or(0, |buf| buf.b_cot_flags);
     if local != 0 { local } else { cot_flags.get() }
 }
 
