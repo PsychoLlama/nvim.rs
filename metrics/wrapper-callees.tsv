@@ -97,7 +97,6 @@ count	callee	no_raw	defs	def
 21	Fmark::new	0	1	crates/nvim/src/mark/store.rs
 21	aucmd_prepbuf	0	1	crates/nvim/src/autocmd/aucmdwin.rs
 21	eval1	0	1	crates/nvim/src/eval/expr/level.rs
-21	free_wild	0	1	crates/nvim/src/path/expand.rs
 21	init_charsize_arg	0	1	crates/nvim/src/plines/mod.rs
 21	mf_put	0	1	crates/nvim/src/memfile/mod.rs
 21	nlua_push_dict	0	1	crates/nvim/src/lua/converter/push_object.rs
@@ -107,6 +106,7 @@ count	callee	no_raw	defs	def
 21	win_charsize	0	1	crates/nvim/src/plines/mod.rs
 20	aucmd_restbuf	0	1	crates/nvim/src/autocmd/aucmdwin.rs
 20	find	0	5	
+20	free_wild	0	1	crates/nvim/src/path/expand.rs
 20	home_replace	0	1	crates/nvim/src/os/env/dirs.rs
 20	nlua_push_integer	0	1	crates/nvim/src/lua/converter/push_object.rs
 20	nlua_push_object	0	1	crates/nvim/src/lua/converter/push_object.rs
@@ -2630,7 +2630,6 @@ count	callee	no_raw	defs	def
 1	foldtext_cleanup	0	1	crates/nvim/src/fold/text.rs
 1	for_each_window	0	0	
 1	for_next_item	0	1	crates/nvim/src/ex_eval/mod.rs
-1	forget_matches	1	1	crates/nvim/src/tag/command.rs
 1	forkpty	0	0	
 1	format_progress_message	0	1	crates/nvim/src/message/progress.rs
 1	fputc	0	0	

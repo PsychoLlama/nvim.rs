@@ -76,11 +76,43 @@ impl PtagEntry {
     }
 }
 
-/// The matches of the tag last looked up. Owned; `free_wild`d when replaced.
-static matches: GlobalCell<*mut *mut c_char> = GlobalCell::new(ptr::null_mut());
+/// The matches of the tag last looked up: the array `find_tags` answered,
+/// which this owns and `free_wild`s when it is replaced or dropped. An entry
+/// is not one C string but several fields with NULs between them, which is
+/// why it stays the array `parse_match` reads rather than a `Vec` of strings.
+struct TagMatches {
+    list: *mut *mut c_char,
+    len: c_int,
+}
 
-/// How many of them there are.
-static num_matches: GlobalCell<c_int> = GlobalCell::new(0);
+impl TagMatches {
+    const NONE: Self = Self {
+        list: ptr::null_mut(),
+        len: 0,
+    };
+
+    /// Match `i`, which must be one of them.
+    fn entry(&self, i: c_int) -> *mut c_char {
+        let i = usize::try_from(i).expect("a match index");
+        assert!(i < self.len as usize, "a match index");
+        // SAFETY: `list` holds `len` entries, and `i` is below it.
+        unsafe { *self.list.add(i) }
+    }
+}
+
+impl Drop for TagMatches {
+    fn drop(&mut self) {
+        // SAFETY: `find_tags`' array of `len` allocations, owned by this.
+        unsafe { free_wild(self.len, self.list) };
+    }
+}
+
+static TAG_MATCHES: GlobalCell<TagMatches> = GlobalCell::new(TagMatches::NONE);
+
+/// How many matches there are.
+fn match_count() -> c_int {
+    TAG_MATCHES.with(|found| found.len)
+}
 
 /// The limit the last search used. `MAXCOL` means every match was found,
 /// so there is no point looking again for a later one.
@@ -230,7 +262,7 @@ impl DoTag {
             },
             buf_ffname: Buf::current().name.full_ptr(),
             owned_name: None,
-            prev_num_matches: num_matches.get(),
+            prev_num_matches: match_count(),
         };
         drop(nofile_fname.take());
         cmd
@@ -437,7 +469,7 @@ impl DoTag {
         }
 
         // The remembered matches are for a tag we have left.
-        unsafe { forget_matches() };
+        forget_matches();
         unsafe { tag_freematch() };
         false
     }
@@ -550,15 +582,14 @@ impl DoTag {
             // before a leading '/' is stepped over.
             let other = unsafe { self.other_name(name) };
             if (self.new_tag
-                || (self.cur_match >= num_matches.get()
-                    && max_num_matches.get() != MAXCOL as c_int)
+                || (self.cur_match >= match_count() && max_num_matches.get() != MAXCOL as c_int)
                 || other)
                 && !unsafe { self.search(&mut name, other) }
             {
                 return;
             }
 
-            if num_matches.get() <= 0 {
+            if match_count() <= 0 {
                 if self.verbose {
                     // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
                     let name = unsafe { c_str(name) };
@@ -659,9 +690,10 @@ impl DoTag {
         if !self.new_tag && !other {
             unsafe { reorder_matches(new_matches, new_num_matches) };
         }
-        unsafe { free_wild(num_matches.get(), matches.get()) };
-        num_matches.set(new_num_matches);
-        matches.set(new_matches);
+        TAG_MATCHES.set(TagMatches {
+            list: new_matches,
+            len: new_num_matches,
+        });
         true
     }
 
@@ -680,16 +712,25 @@ impl DoTag {
     /// Settle on which match to jump to, listing them and asking when the
     /// command is `:tselect` or an ambiguous `:tjump`.
     fn choose(&mut self) -> bool {
-        let found = num_matches.get();
+        let found = match_count();
         let mut ask = false;
         if self.kind == DT_TAG as c_int && unsafe { *self.tag } != 0 {
             // A count on ":tag <name>" picks that match.
             self.cur_match = (self.count - 1).max(0);
         } else if self.kind == DT_SELECT as c_int || (self.kind == DT_JUMP as c_int && found > 1) {
-            unsafe { print_tag_list(self.new_tag, self.use_tagstack, found, matches.get()) };
+            unsafe {
+                print_tag_list(
+                    self.new_tag,
+                    self.use_tagstack,
+                    found,
+                    TAG_MATCHES.with(|found| found.list),
+                )
+            };
             ask = true;
         } else if self.kind == DT_LTAG as c_int {
-            if unsafe { add_llist_tags(self.tag, found, matches.get()) }.is_err() {
+            if unsafe { add_llist_tags(self.tag, found, TAG_MATCHES.with(|found| found.list)) }
+                .is_err()
+            {
                 return false;
             }
             // Jump to the first tag.
@@ -748,8 +789,12 @@ impl DoTag {
             return;
         }
         let mut tp = TagParts::default();
-        if !unsafe { parse_match(*matches.get().offset(self.cur_match as isize), &mut tp) }
-            || tp.user_data.is_null()
+        if !unsafe {
+            parse_match(
+                TAG_MATCHES.with(|found| found.entry(self.cur_match)),
+                &mut tp,
+            )
+        } || tp.user_data.is_null()
         {
             return;
         }
@@ -783,7 +828,7 @@ impl DoTag {
             smsg!(0, "File \"{arg0}\" does not exist");
         }
 
-        let entry = unsafe { *matches.get().offset(self.cur_match as isize) };
+        let entry = TAG_MATCHES.with(|found| found.entry(self.cur_match));
         let ignored_case = unsafe { *entry } as c_int & MT_IC_OFF as c_int != 0;
         self.report_count(ignored_case);
 
@@ -809,7 +854,7 @@ impl DoTag {
         let more = (self.kind == DT_PREV as c_int && self.cur_match > 0)
             || (matches!(self.kind as c_uint, DT_TAG | DT_NEXT | DT_FIRST)
                 && (max_num_matches.get() != MAXCOL as c_int
-                    || self.cur_match < num_matches.get() - 1));
+                    || self.cur_match < match_count() - 1));
         if !more {
             let missing = nofile_fname.with(Clone::clone).unwrap_or_default();
             // SAFETY: the message macros expand to a `vim_snprintf` over
@@ -833,7 +878,7 @@ impl DoTag {
 
     /// Say which of how many matches this is, when that is worth saying.
     fn report_count(&self, ignored_case: bool) {
-        let found = num_matches.get();
+        let found = match_count();
         if self.selecting()
             || self.kind == DT_TAG as c_int
             || (found <= 1 && !ignored_case)
@@ -891,8 +936,8 @@ unsafe fn reorder_matches(new_matches: *mut *mut c_char, new_num_matches: c_int)
     let mut at = 0;
     let mut old = TagParts::default();
     let mut new = TagParts::default();
-    for j in 0..num_matches.get() {
-        unsafe { parse_match(*matches.get().offset(j as isize), &mut old) };
+    for j in 0..match_count() {
+        unsafe { parse_match(TAG_MATCHES.with(|found| found.entry(j)), &mut old) };
         for i in at..new_num_matches {
             unsafe { parse_match(*new_matches.offset(i as isize), &mut new) };
             if !unsafe { cstr::eq(old.tagname, new.tagname) } {
@@ -909,12 +954,7 @@ unsafe fn reorder_matches(new_matches: *mut *mut c_char, new_num_matches: c_int)
     }
 }
 
-/// Throw the remembered matches away.
-///
-/// # Safety
-/// Must not be called while a match is still being read.
-pub(crate) unsafe fn forget_matches() {
-    // SAFETY: the caller's promise; the list is ours.
-    unsafe { free_wild(num_matches.get(), matches.get()) };
-    num_matches.set(0);
+/// Throw the remembered matches away. Nothing may still be reading one.
+pub(crate) fn forget_matches() {
+    TAG_MATCHES.set(TagMatches::NONE);
 }
