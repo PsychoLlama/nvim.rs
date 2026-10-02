@@ -103,7 +103,12 @@ pub(crate) fn version() {
 pub(crate) unsafe fn print_mainerr(msg1: *const c_char, msg2: *const c_char, msg3: *const c_char) {
     // SAFETY: the three messages are NUL-terminated or null, and `argv0` is
     // set before any caller can reach this.
-    let (prgname, text) = unsafe { (path_tail(argv0.get()), gettext_ptr(msg1).as_ptr()) };
+    let (prgname, text) = unsafe {
+        (
+            path_tail(argv0.get().map_or(ptr::null(), CStr::as_ptr)),
+            gettext_ptr(msg1).as_ptr(),
+        )
+    };
     // Nothing beyond this point should be interrupted by a handler that
     // expects a running editor.
     signal_stop();

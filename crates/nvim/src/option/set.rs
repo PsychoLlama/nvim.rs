@@ -27,7 +27,7 @@ use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::OptStr;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::mem::ManuallyDrop;
 use core::ptr;
 
@@ -40,7 +40,7 @@ use crate::eval::vars::{
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
 use crate::lua::executor::nlua_set_sctx;
-use crate::memory::{XString, xfree, xmalloc, xstrdup};
+use crate::memory::{XString, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
 use crate::message_fmt::msg_cstr;
@@ -219,9 +219,9 @@ pub(crate) fn get_tty_option(name: &CStr) -> OptVal {
                 buf
             }
         } else if name == c"term" {
-            xstrdup(TERM.or(c"nvim"))
+            TERM.or(c"nvim").into_raw()
         } else if name == c"ttytype" {
-            xstrdup(TTYTYPE.or(c"nvim"))
+            TTYTYPE.or(c"nvim").into_raw()
         } else if is_tty_option(name) {
             xstrdup(c"".as_ptr())
         } else {
@@ -244,7 +244,7 @@ pub(crate) unsafe fn set_tty_option(name: &CStr, value: *mut c_char) -> bool {
     for (spelling, cell) in [(c"term", &TERM), (c"ttytype", &TTYTYPE)] {
         if name == spelling {
             // SAFETY: `value` is ours now.
-            unsafe { cell.replace(value) };
+            cell.0.set(Some(unsafe { XString::from_raw(value) }));
             return true;
         }
     }
@@ -252,37 +252,19 @@ pub(crate) unsafe fn set_tty_option(name: &CStr, value: *mut c_char) -> bool {
 }
 
 /// The `term`/`ttytype` a script last set, if any.
-static TERM: TtyName = TtyName(GlobalCell::new(ptr::null_mut()));
-static TTYTYPE: TtyName = TtyName(GlobalCell::new(ptr::null_mut()));
+static TERM: TtyName = TtyName(GlobalCell::new(None));
+static TTYTYPE: TtyName = TtyName(GlobalCell::new(None));
 
-/// An owned, nullable C string kept only so that a script setting `term` or
-/// `ttytype` reads back what it wrote.
-struct TtyName(GlobalCell<*mut c_char>);
+/// A string kept only so that a script setting `term` or `ttytype` reads
+/// back what it wrote.
+struct TtyName(GlobalCell<Option<XString>>);
 
 impl TtyName {
-    /// What was stored, or `fallback` if nothing ever was.
-    fn or(&self, fallback: &'static CStr) -> *const c_char {
-        let stored = self.0.get();
-        if stored.is_null() {
-            fallback.as_ptr()
-        } else {
-            stored
-        }
-    }
-
-    /// Store `value`, releasing whatever was there.
-    ///
-    /// # Safety
-    ///
-    /// `value` must be an allocation this module may free.
-    unsafe fn replace(&self, value: *mut c_char) {
-        let stored = self.0.get();
-        if !stored.is_null() {
-            // SAFETY: only this function writes the cell, and only an
-            // allocation we own.
-            unsafe { xfree(stored.cast::<c_void>()) };
-        }
-        self.0.set(value);
+    /// A copy of what was stored, or of `fallback` if nothing ever was.
+    fn or(&self, fallback: &'static CStr) -> XString {
+        self.0
+            .with(|stored| stored.clone())
+            .unwrap_or_else(|| XString::from_cstr(fallback))
     }
 }
 

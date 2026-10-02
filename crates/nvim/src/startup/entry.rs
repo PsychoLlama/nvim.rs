@@ -161,11 +161,7 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
     eval_init();
     set_vim_var_nr(Vv::Starttime, os_realtime());
 
-    let exename = if !argv0.get().is_null() {
-        argv0.get() as *const c_char
-    } else {
-        c"nvim".as_ptr()
-    };
+    let exename = argv0.get().unwrap_or(c"nvim").as_ptr();
     unsafe { init_path(exename) };
     runtime_init();
     highlight_init();
@@ -203,7 +199,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     // SAFETY: `argv[0..argc]` are the process arguments and live for the
     // whole process; `params` lives for the whole of this function, which
     // never returns while anything still holds a pointer into it.
-    argv0.set(unsafe { *argv });
+    argv0.set(unsafe { cstr::at_opt(*argv) });
     if !appname_is_valid() {
         let msg = c"$NVIM_APPNAME must be a name or relative path.\n".as_ptr();
         unsafe { fprintf!(stderr, msg) };

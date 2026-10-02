@@ -112,7 +112,9 @@ pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static vim_ignored: GlobalCell<c_int> = GlobalCell::new(0);
 pub static embedded_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub static headless_mode: GlobalCell<bool> = GlobalCell::new(false);
-static argv0: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
+/// The name the process was started by: `argv[0]`, which lives as long as
+/// the process does.
+static argv0: GlobalCell<Option<&'static CStr>> = GlobalCell::new(None);
 // The five wordings `mainerr` prints when the command line does not parse.
 // Nothing writes them, so they are constants rather than cells; they are
 // module-private because argument parsing is the only thing that can fail

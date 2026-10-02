@@ -62,7 +62,7 @@ use crate::message::{
 use crate::message::{emsg, msg};
 use crate::option::vars::swb_flags;
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::terminal::terminal_check_size;
 use crate::types::{
     AlignTextPos, BlnFlags, CdCause, Direction, DoBufAction, DoBufStart, Error, GetFileFlags,
@@ -184,8 +184,7 @@ pub const NOWIN: *mut Window = -1 as ::core::ffi::c_int as *mut Window;
 static e_cannot_close_last_window: &::core::ffi::CStr = c"E444: Cannot close last window";
 static e_cannot_split_window_when_closing_buffer: &::core::ffi::CStr =
     c"E1159: Cannot split a window when closing the buffer";
-static m_onlyone: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(c"Already only one window".as_ptr() as *mut ::core::ffi::c_char);
+const m_onlyone: &::core::ffi::CStr = c"Already only one window";
 static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static close_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static frame_locked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -385,8 +384,8 @@ fn err_raw(msg: &::core::ffi::CStr) {
 /// "Already only one window", the answer to `:only` and CTRL-W T when there is
 /// nothing to do.
 fn only_one_message() {
-    // SAFETY: a static message; zero means "no highlight attribute".
-    unsafe { msg(gettext_ptr(m_onlyone.get()), 0) };
+    // Zero means "no highlight attribute".
+    msg(gettext(m_onlyone), 0);
 }
 
 /// Whether `win` is one of the hidden windows autocommands are executed in.
