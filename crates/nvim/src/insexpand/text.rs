@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::mbyte::{char_at, class_at, cluster_len, encode_char};
+use crate::mbyte::{char_at, class_in, cluster_len, encode_char};
 use crate::types::NUL;
 use crate::winlayer::buffers;
 use crate::winlayer::{Buf, Win};
@@ -128,7 +128,8 @@ pub fn ins_compl_add_infercase(
 /// The offset of the first character of the next word in `text` from `at`,
 /// stopping at the end or a line break -- [`find_word_start`] over a slice.
 pub(crate) fn word_start(text: &[u8], mut at: usize) -> usize {
-    while at < text.len() && text[at] != b'\n' && class_at(&text[at..]) <= 1 {
+    let buffer = Buf::current();
+    while at < text.len() && text[at] != b'\n' && class_in(&text[at..], buffer) <= 1 {
         at += cluster_len(&text[at..]);
     }
     at
@@ -137,11 +138,12 @@ pub(crate) fn word_start(text: &[u8], mut at: usize) -> usize {
 /// The offset just after the word `text[at..]` starts inside of --
 /// [`find_word_end`] over a slice.
 pub(crate) fn word_end(text: &[u8], mut at: usize) -> usize {
-    let start_class = class_at(&text[at..]);
+    let buffer = Buf::current();
+    let start_class = class_in(&text[at..], buffer);
     if start_class > 1 {
         while at < text.len() {
             at += cluster_len(&text[at..]);
-            if class_at(&text[at..]) != start_class {
+            if class_in(&text[at..], buffer) != start_class {
                 break;
             }
         }

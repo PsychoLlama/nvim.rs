@@ -481,7 +481,7 @@ pub(crate) fn get_next_default_completion(
 ) -> Result<(), Failed> {
     // The match found, from its start to the end of the string it is in;
     // upstream points into the line, or into `IObuff` for a joined line.
-    let mut found: Vec<u8> = Vec::new();
+    let mut found = ::core::mem::take(&mut st.found);
     let mut len = 0;
     let in_fuzzy_collect = !compl_status_adding() && cot_fuzzy() && compl_length.get() > 0;
     // A copy: the add below can run code that changes it.
@@ -644,6 +644,7 @@ pub(crate) fn get_next_default_completion(
 
     P_SCS.set(save_p_scs);
     P_WS.set(save_p_ws);
+    st.found = found;
     found_new_match
 }
 

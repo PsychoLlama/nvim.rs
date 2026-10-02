@@ -273,6 +273,9 @@ pub(crate) struct InsComplNextState {
     pub dict: Option<XString>,
     pub dict_f: ::core::ffi::c_int,
     pub func_cb: *mut Callback,
+    /// Where [`get_next_default_completion`] copies the match it found,
+    /// kept so its allocation serves the whole scan.
+    pub(crate) found: Vec<u8>,
 }
 pub const NUM_REGISTERS: ::core::ffi::c_int = 39;
 pub const TAG_MANY: ::core::ffi::c_int = 300;
@@ -303,6 +306,7 @@ pub(crate) const INS_COMPL_NEXT_STATE_INIT: InsComplNextState = InsComplNextStat
     dict: None,
     dict_f: 0,
     func_cb: ptr::null_mut(),
+    found: Vec::new(),
 };
 /// An unset `TypVal`, which the transpile writes out at every declaration
 /// (C leaves these uninitialised and has the callee fill them in).

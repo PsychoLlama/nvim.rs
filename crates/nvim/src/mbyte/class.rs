@@ -291,21 +291,28 @@ pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
     unsafe { mb_get_class_tab(p, &raw const (*buffer).b_chartab as *const uint64_t) }
 }
 
-/// [`mb_get_class`] over a slice: the class of its first character, judged
-/// against the current buffer's `'iskeyword'`. An empty slice is
-/// `CLASS_BLANK`, which is what the pointer form answers at a NUL.
-pub(crate) fn class_at(bytes: &[u8]) -> c_int {
+/// [`mb_get_class_tab`] over a slice: the class of its first character,
+/// judged against `buffer`'s `'iskeyword'`. An empty slice is `CLASS_BLANK`,
+/// which is what the pointer form answers at a NUL.
+///
+/// A walk resolves the buffer once and hands it to every call, which is
+/// what the pointer form's `chartab` parameter is for. `buffer` must be the
+/// current buffer: a multibyte character is judged against that one.
+#[inline]
+pub(crate) fn class_in(bytes: &[u8], buffer: Buf) -> c_int {
     let first = bytes.first().copied().unwrap_or(0);
     if utf8len_tab[usize::from(first)] == 1 {
         if first == 0 || ascii_iswhite(c_int::from(first)) {
             return CLASS_BLANK;
         }
-        return if crate::charset::vim_iswordc(c_int::from(first)) {
+        return if crate::charset::vim_iswordc_buf(c_int::from(first), buffer) {
             CLASS_WORD
         } else {
             CLASS_PUNCT
         };
     }
+    // `utf_class` asks the current buffer, which is the one every caller
+    // hands in; a multibyte character is rare enough not to pass it down.
     utf_class(char_at(bytes))
 }
 
