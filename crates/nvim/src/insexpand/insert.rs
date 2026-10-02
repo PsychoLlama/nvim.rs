@@ -268,9 +268,11 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
         // Since completion sources may provide matches with varying start
         // positions, insert only the portion of the match that corresponds
         // to the intended replacement range.
-        let cpt_idx = shown.with(|m| m.cpt_source_idx);
-        if cpt_idx >= 0 && compl_col.get() >= 0 {
-            let startcol = cpt_sources().row(cpt_idx).cs_startcol;
+        let cpt_idx = shown.with(ComplItem::cpt_source);
+        if let Some(cpt_idx) = cpt_idx
+            && compl_col.get() >= 0
+        {
+            let startcol = cpt_sources().row(cpt_idx as c_int).cs_startcol;
             if startcol >= 0 && startcol < compl_col.get() {
                 let skip = (compl_col.get() - startcol) as usize;
                 if skip <= len {

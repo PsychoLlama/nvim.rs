@@ -245,11 +245,10 @@ pub(crate) fn get_leader_for_startcol(match_0: MatchId, cached: bool) -> ComplSt
         if cpt_sources().is_unset() {
             break 'theend;
         }
-        let cpt_idx = match_0.with(|m| m.cpt_source_idx);
-        if cpt_idx < 0 {
+        let Some(cpt_idx) = match_0.with(ComplItem::cpt_source) else {
             break 'theend;
-        }
-        let startcol = cpt_sources().row(cpt_idx).cs_startcol;
+        };
+        let startcol = cpt_sources().row(cpt_idx as c_int).cs_startcol;
 
         if compl_leader().is_unset() {
             // The leader is not set yet (`'autocomplete'` fires before
@@ -365,11 +364,12 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
             // Limit the number of items from each source where
             // `cs_max_matches` is set.
             let mut match_limit_exceeded = false;
-            let cur_source = comp.with(|m| m.cpt_source_idx);
-            if is_forward && cur_source != -1 && is_cpt_completion {
-                let count = &mut match_count[cur_source as usize];
+            let cur_source = comp.with(ComplItem::cpt_source);
+            if let Some(source) = cur_source.filter(|_| is_forward && is_cpt_completion)
+                && let Some(count) = match_count.get_mut(source)
+            {
                 *count += 1;
-                let max_matches = cpt_sources().row(cur_source).cs_max_matches;
+                let max_matches = cpt_sources().row(source as c_int).cs_max_matches;
                 if max_matches > 0 && *count > max_matches {
                     match_limit_exceeded = true;
                 }

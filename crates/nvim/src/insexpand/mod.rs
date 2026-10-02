@@ -212,6 +212,9 @@ pub(crate) struct ComplItem {
     pub(crate) user_kind_hlattr: c_int,
     /// The `'complete'` entry it came from, `-1` for none.
     pub(crate) cpt_source_idx: c_int,
+    /// The `'complete'` rows' generation when it was added; see
+    /// [`ComplItem::cpt_source`].
+    pub(crate) cpt_generation: u64,
 }
 
 impl ComplItem {
@@ -220,6 +223,13 @@ impl ComplItem {
     #[inline(always)]
     pub(crate) fn is_original(&self) -> bool {
         self.flags & CP_ORIGINAL_TEXT != 0
+    }
+
+    /// The `'complete'` row this match came from, `None` for none — and
+    /// for a row index left over from rows that have been rebuilt since,
+    /// which upstream reads out of the freed array.
+    pub(crate) fn cpt_source(&self) -> Option<usize> {
+        cpt_sources().live_index(self.cpt_source_idx, self.cpt_generation)
     }
 }
 pub const CP_ICASE: ::core::ffi::c_int = 16;
@@ -829,6 +839,10 @@ state_record! {
     CPT_SOURCES: Vec<CptSource> = Vec::new();
     /// The `'complete'` entry being collected from, `-1` between scans.
     CPT_SOURCES_INDEX: c_int = -1;
+    /// How many times [`CPT_SOURCES`] was rebuilt or cleared: a match's
+    /// source index is only good for the rows of the generation it was
+    /// added under.
+    CPT_GENERATION: u64 = 0;
     /// See [`ComplMatchArray`].
     COMPL_MATCH_ARRAY: Vec<PumItem> = Vec::new();
     /// See [`CptCallbacks`].

@@ -682,3 +682,31 @@ fn a_max_matches_count_reads_as_atoi_does() {
         assert_eq!(leading_number(text), value);
     }
 }
+
+#[test]
+fn a_match_from_rebuilt_complete_rows_counts_against_no_source() {
+    let _f = Fixture::new(0);
+    // Three rows, the last capped at one match, as `'complete'` was when
+    // the first match came in...
+    let capped = CptSource {
+        cs_max_matches: 1,
+        ..CPT_SOURCE_INIT
+    };
+    cpt_sources().set_rows(vec![CPT_SOURCE_INIT, CPT_SOURCE_INIT, capped]);
+    start("");
+    cpt_sources().set_index(2);
+    assert_eq!(add("a2"), OK);
+    assert_eq!(add("b2"), OK);
+    // ...and a single uncapped row after a `:set complete=` rebuilt them.
+    cpt_sources().set_rows(vec![CPT_SOURCE_INIT]);
+    cpt_sources().set_index(0);
+    assert_eq!(add("a0"), OK);
+
+    assert_eq!(nth(1).with(ComplItem::cpt_source), None);
+    assert_eq!(nth(3).with(ComplItem::cpt_source), Some(0));
+    // Upstream indexes its per-source counts with the stale row number.
+    // Here the old matches count against no row, so the old cap is gone.
+    ins_compl_build_pum();
+    assert_eq!(compl_match_array().len(), 3);
+    assert_eq!(find_common_prefix(false), None);
+}

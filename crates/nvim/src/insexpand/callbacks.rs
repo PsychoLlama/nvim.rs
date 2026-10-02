@@ -206,6 +206,20 @@ impl CptSources {
         CPT_SOURCES.with(Vec::len)
     }
 
+    /// The generation of the rows: bumped by every rebuild and clear.
+    pub(crate) fn generation(self) -> u64 {
+        CPT_GENERATION.get()
+    }
+
+    /// Row `idx` of generation `generation` as an index into the rows that
+    /// are live now: `None` when it is −1, out of range, or names a row of
+    /// an earlier generation (a user function can `:set complete=` and the
+    /// completion rebuild the rows while older matches are in the list).
+    pub(crate) fn live_index(self, idx: c_int, generation: u64) -> Option<usize> {
+        let idx = usize::try_from(idx).ok()?;
+        (generation == self.generation() && idx < self.len()).then_some(idx)
+    }
+
     /// Row `idx` by value, or the zeroed row when `idx` is out of range.
     pub(crate) fn row(self, idx: c_int) -> CptSource {
         let idx = usize::try_from(idx).ok();
@@ -236,6 +250,7 @@ impl CptSources {
     /// is left alone: the caller sets it when the scan starts.
     pub(crate) fn set_rows(self, rows: Vec<CptSource>) {
         CPT_SOURCES.set(rows);
+        CPT_GENERATION.update(|generation| *generation += 1);
     }
 
     /// Drop the rows and forget where the scan was — C's
@@ -243,6 +258,7 @@ impl CptSources {
     pub(crate) fn clear(self) {
         CPT_SOURCES.set(Vec::new());
         CPT_SOURCES_INDEX.set(-1);
+        CPT_GENERATION.update(|generation| *generation += 1);
     }
 
     /// The `'complete'` entry the scan is collecting from, or −1 between

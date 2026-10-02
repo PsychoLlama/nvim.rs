@@ -288,17 +288,22 @@ pub(crate) fn find_common_prefix(curbuf_only: bool) -> Option<(XString, usize)> 
         }
         // Limit the number of items from each source if max_items is set.
         let mut match_limit_exceeded = false;
-        let cur_source = compl.with(|m| m.cpt_source_idx);
-        if cur_source != -1 {
-            match_count[cur_source as usize] += 1;
-            let max_matches = cpt_sources().row(cur_source).cs_max_matches;
-            if max_matches > 0 && match_count[cur_source as usize] > max_matches {
+        // A match from rows rebuilt since it was added counts against no
+        // source.
+        let cur_source = compl.with(ComplItem::cpt_source);
+        if let Some(source) = cur_source
+            && let Some(count) = match_count.get_mut(source)
+        {
+            *count += 1;
+            let max_matches = cpt_sources().row(source as c_int).cs_max_matches;
+            if max_matches > 0 && *count > max_matches {
                 match_limit_exceeded = true;
             }
         }
 
-        let from_curbuf =
-            cur_source != -1 && cpt_sources().row(cur_source).cs_flag as c_int == '.' as c_int;
+        let from_curbuf = cur_source.is_some_and(|source| {
+            cpt_sources().row(source as c_int).cs_flag as c_int == '.' as c_int
+        });
         if match_limit_exceeded || (curbuf_only && !from_curbuf) {
             continue;
         }

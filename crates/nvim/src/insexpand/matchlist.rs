@@ -100,6 +100,7 @@ pub(crate) fn ins_compl_add(
         user_abbr_hlattr: user_hl[0],
         user_kind_hlattr: user_hl[1],
         cpt_source_idx: cpt_sources().index(),
+        cpt_generation: cpt_sources().generation(),
     };
     // The direction is ignored under `longest` + `fuzzy`, because matches
     // are inserted sorted by score.
