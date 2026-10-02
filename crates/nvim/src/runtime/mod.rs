@@ -270,8 +270,18 @@ static last_current_SID_seq: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
 static runtime_search_path_valid: GlobalCell<bool> = GlobalCell::new(false);
 static runtime_search_path_valid_thread: GlobalCell<bool> = GlobalCell::new(false);
-static runtime_search_path_ref: GlobalCell<*mut ::core::ffi::c_int> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
+/// Who owns the cached search path: see [`cache::runtime_search_path_get_cached`].
+struct SearchPathOwner {
+    /// The number of the borrow that owns the cache; `None` while unowned.
+    owner: Option<u64>,
+    /// How many owning borrows have been numbered.
+    issued: u64,
+}
+
+static runtime_search_path_owner: GlobalCell<SearchPathOwner> = GlobalCell::new(SearchPathOwner {
+    owner: None,
+    issued: 0,
+});
 static runtime_search_path: GlobalCell<RuntimeSearchPath> = GlobalCell::new(RuntimeSearchPath {
     size: 0,
     capacity: 0,

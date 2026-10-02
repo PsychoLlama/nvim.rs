@@ -516,12 +516,11 @@ pub fn runtime_inspect() -> Array {
 /// `nvim__get_runtime()`: the readable files named by `pat` along the cached
 /// search path.
 pub fn runtime_get_named(lua: bool, pat: &Array, all: bool) -> Array {
-    let mut ref_0: c_int = 0;
-    // SAFETY: the reference is released below, before this frame ends.
-    let path = unsafe { runtime_search_path_get_cached(&raw mut ref_0) };
+    // The borrow is released below, before this frame ends.
+    let (path, borrow) = runtime_search_path_get_cached();
     let mut buf = [0 as c_char; MAXPATHL as usize];
     let rv = runtime_get_named_common(lua, pat, all, path, &mut buf);
-    unsafe { runtime_search_path_unref(path, &raw const ref_0) };
+    unsafe { runtime_search_path_unref(path, borrow) };
     rv
 }
 

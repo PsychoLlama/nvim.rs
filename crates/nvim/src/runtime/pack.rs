@@ -443,7 +443,8 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> Result<(), F
                 !runtime_search_path_valid.get(),
                 "!runtime_search_path_valid"
             );
-            if was_valid && !is_pack && runtime_search_path_ref.get().is_null() {
+            if was_valid && !is_pack && runtime_search_path_owner.with(|slot| slot.owner.is_none())
+            {
                 unsafe {
                     splice_cached_path(
                         fname,

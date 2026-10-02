@@ -16,9 +16,9 @@
 //!
 //! # The refcount
 //!
-//! `runtime_search_path_ref` is a single borrow slot, not a count: the first
-//! reader of an unowned cache parks the address of its own `int` there and
-//! becomes the owner.  A rebuild while somebody owns the cache leaves the old
+//! `runtime_search_path_owner` is a single borrow slot, not a count: the
+//! first reader of an unowned cache gets a fresh borrow number, parks it
+//! there and becomes the owner.  A rebuild while somebody owns the cache leaves the old
 //! copy alone and gives the new readers a fresh one, and whoever owns it frees
 //! it on the way out ([`runtime_search_path_unref`]).  That is what lets
 //! `do_in_cached_path` source files that themselves change 'runtimepath'.
@@ -119,24 +119,23 @@ impl RuntimeSearchPath {
 
 /// Borrow the cached search path, validating it first.
 ///
-/// The `ref_0` out-parameter is the caller's borrow token; it must be handed
-/// back to [`runtime_search_path_unref`] before the caller's frame ends.
-///
-/// # Safety
-/// `ref_0` must point at a local `int` that outlives the borrow.
-pub(crate) unsafe fn runtime_search_path_get_cached(ref_0: *mut c_int) -> RuntimeSearchPath {
+/// The second answer is the caller's borrow token -- `Some` when this
+/// borrow took ownership of the cache -- and must be handed back to
+/// [`runtime_search_path_unref`] with the path.
+pub(crate) fn runtime_search_path_get_cached() -> (RuntimeSearchPath, Option<u64>) {
     runtime_search_path_validate();
 
-    // SAFETY: the caller's local.
-    unsafe { *ref_0 = 0 };
-    if runtime_search_path_ref.get().is_null() {
+    let token = runtime_search_path_owner.with_mut(|slot| {
+        if slot.owner.is_some() {
+            return None;
+        }
         // The cache was unreferenced: take it, so a rebuild underneath us
         // does not free what we are about to walk.
-        // SAFETY: as above.
-        unsafe { *ref_0 += 1 };
-        runtime_search_path_ref.set(ref_0);
-    }
-    runtime_search_path.get()
+        slot.issued += 1;
+        slot.owner = Some(slot.issued);
+        slot.owner
+    });
+    (runtime_search_path.get(), token)
 }
 
 /// A deep copy of `src`, paths included.
@@ -158,16 +157,20 @@ fn copy_runtime_search_path(src: RuntimeSearchPath) -> RuntimeSearchPath {
 /// path when this borrow outlived a rebuild.
 ///
 /// # Safety
-/// `ref_0` must be the same token, and `path` the same value, the matching
-/// `get_cached` handed out.
-pub(crate) unsafe fn runtime_search_path_unref(path: RuntimeSearchPath, ref_0: *const c_int) {
-    // SAFETY: the caller's token.
-    if unsafe { *ref_0 } == 0 {
+/// `path` and `token` must be the pair the matching `get_cached` handed out.
+pub(crate) unsafe fn runtime_search_path_unref(path: RuntimeSearchPath, token: Option<u64>) {
+    let Some(token) = token else {
         return;
-    }
-    if runtime_search_path_ref.get() == ref_0.cast_mut() {
-        // Still the live cache: hand it back unowned.
-        runtime_search_path_ref.set(ptr::null_mut());
+    };
+    let still_owner = runtime_search_path_owner.with_mut(|slot| {
+        let mine = slot.owner == Some(token);
+        if mine {
+            slot.owner = None;
+        }
+        mine
+    });
+    if still_owner {
+        // Still the live cache: it is unowned again.
     } else {
         // A rebuild replaced it while we were reading; this copy is ours.
         // SAFETY: nothing else refers to it any more.
@@ -200,9 +203,8 @@ pub(crate) unsafe fn do_in_cached_path(
 
     let visitor = Visitor { callback, cookie };
     let mut buf = [0 as c_char; MAXPATHL as usize];
-    let mut ref_0: c_int = 0;
-    // SAFETY: `ref_0` is this frame's borrow token, released below.
-    let path = unsafe { runtime_search_path_get_cached(&raw mut ref_0) };
+    // `borrow` is this frame's token, released below.
+    let (path, borrow) = runtime_search_path_get_cached();
     let do_all = flags.has(RuntimeOpts::ALL);
     let ew_flags = wildcard_flags(flags) | ExpandFlags::NOBREAK;
     let mut did_one = false;
@@ -263,7 +265,7 @@ pub(crate) unsafe fn do_in_cached_path(
     }
 
     // SAFETY: the token this frame took above.
-    unsafe { runtime_search_path_unref(path, &raw const ref_0) };
+    unsafe { runtime_search_path_unref(path, borrow) };
     if did_one { OK } else { FAIL }
 }
 
@@ -604,14 +606,14 @@ pub fn runtime_search_path_validate() {
     if !nlua_is_deferred_safe() || runtime_search_path_valid.get() {
         return;
     }
-    if runtime_search_path_ref.get().is_null() {
+    if runtime_search_path_owner.with(|slot| slot.owner.is_none()) {
         msg_ext_ui_flush();
         unsafe { runtime_search_path_free(runtime_search_path.get()) };
     }
     runtime_search_path.set(runtime_search_path_build());
     runtime_search_path_valid.set(true);
     // Initially unowned.
-    runtime_search_path_ref.set(ptr::null_mut());
+    runtime_search_path_owner.with_mut(|slot| slot.owner = None);
     update_runtime_search_path_thread(true);
 }
 

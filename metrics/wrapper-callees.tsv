@@ -1891,8 +1891,7 @@ count	callee	no_raw	defs	def
 2	row_cells	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	rpc_send_call	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 2	run	0	4	
-2	runtime_search_path_get_cached	0	1	crates/nvim/src/runtime/cache.rs
-2	runtime_search_path_unref	0	1	crates/nvim/src/runtime/cache.rs
+2	runtime_search_path_unref	1	1	crates/nvim/src/runtime/cache.rs
 2	sal_rescore	0	1	crates/nvim/src/spellsuggest/collect.rs
 2	same_directory	0	1	crates/nvim/src/path/compare.rs
 2	save_function_name	0	1	crates/nvim/src/eval/userfunc/name.rs
