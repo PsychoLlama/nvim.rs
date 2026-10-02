@@ -12,10 +12,11 @@
     clippy::ptr_as_ptr
 )]
 
+use super::compile::Node;
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
-use super::compile::{regc, regmbc, regnode, regnode_nl, use_multibytecode};
+use super::compile::use_multibytecode;
 use super::op::BtOp;
 use crate::mbyte::{utf_composinglike, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len};
 use crate::message::e_nopresub;
@@ -27,7 +28,7 @@ use crate::regexp::{
     reg_prev_sub, skipchr, ungetchr, unmagic,
 };
 use crate::semsg;
-use crate::types::{GraphemeState, NUL, uint8_t};
+use crate::types::{GraphemeState, NUL};
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
 /// (`classchars` and `classcodes`) paired them. The `\_x` form of each is the
@@ -78,7 +79,7 @@ pub(crate) fn class_shorthand(
     flagp: &mut c_int,
     c: c_int,
     crosses_lines: bool,
-) -> *mut uint8_t {
+) -> Option<Node> {
     let Some(&(_, code)) = CLASS_SHORTHANDS
         .iter()
         .find(|(name, _)| c_int::from(*name) == unmagic(c))
@@ -87,7 +88,7 @@ pub(crate) fn class_shorthand(
         // a class.
         semsg!("E63: Invalid use of \\_");
         rc_did_emsg.set(true);
-        return core::ptr::null_mut();
+        return None;
     };
 
     // `.` followed by a combining character is that grapheme, not the "any"
@@ -97,18 +98,18 @@ pub(crate) fn class_shorthand(
         return multibyte_node(rc, flagp, c);
     }
 
-    let ret = regnode_nl(rc, code, crosses_lines);
+    let ret = rc.code.node_nl(code, crosses_lines);
     *flagp |= HASWIDTH | SIMPLE;
-    ret
+    Some(ret)
 }
 
 /// A single character that has to be matched as a whole rather than as
 /// bytes, because a multi may follow it or it can carry combining marks.
-fn multibyte_node(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> *mut uint8_t {
-    let ret = regnode(rc, BtOp::Multibytecode);
-    regmbc(rc, c);
+fn multibyte_node(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Option<Node> {
+    let ret = rc.code.node(BtOp::Multibytecode);
+    rc.code.char(c);
     *flagp |= HASWIDTH | SIMPLE;
-    ret
+    Some(ret)
 }
 
 /// A run of ordinary characters, emitted as one `EXACTLY` node.
@@ -117,12 +118,12 @@ fn multibyte_node(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> *mut uin
 /// repeats only the `c`: everything but the last character of the run is
 /// safe to swallow. `one_exactly` — set while parsing a `\%[...]` member —
 /// caps the run at one character.
-pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int) -> *mut uint8_t {
+pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int) -> Option<Node> {
     if use_multibytecode(rc, c) {
         return multibyte_node(rc, flagp, c);
     }
 
-    let ret = regnode(rc, BtOp::Exactly);
+    let ret = rc.code.node(BtOp::Exactly);
     let mut len = 0;
     // A negative `c` is a metacharacter, which only the first iteration may
     // take (as a literal): stopping before one is what leaves it for the
@@ -130,25 +131,25 @@ pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int)
     while c != NUL
         && (len == 0 || (re_multi_type(peekchr(rc)) == NOT_MULTI && rc.one_exactly == 0 && c >= 0))
     {
-        regmbc(rc, unmagic(c));
+        rc.code.char(unmagic(c));
         emit_combining_marks(rc);
         c = getchr(rc);
         len += 1;
     }
     ungetchr(rc);
-    regc(rc, NUL);
+    rc.code.byte(NUL);
     *flagp |= HASWIDTH;
     if len == 1 {
         *flagp |= SIMPLE;
     }
-    ret
+    Some(ret)
 }
 
 /// Swallow the combining characters that belong with the character just
 /// emitted, so that the grapheme stays one `EXACTLY` operand.
 fn emit_combining_marks(rc: &mut RegCompiler) {
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    // SAFETY: `regparse` points into the NUL-terminated pattern, and
+    // SAFETY: the cursor points into the NUL-terminated pattern, and
     // `utf_composinglike` stops the walk at its end.
     loop {
         let len = unsafe { utf_ptr2len(rc.cursor) };
@@ -156,29 +157,29 @@ fn emit_combining_marks(rc: &mut RegCompiler) {
         if !unsafe { utf_composinglike(rc.cursor, rc.cursor.add(len), &mut state) } {
             break;
         }
-        regmbc(rc, unsafe { utf_ptr2char(rc.cursor) });
+        rc.code.char(unsafe { utf_ptr2char(rc.cursor) });
         skipchr(rc);
     }
 }
 
 /// `\~`: the text of the last `:substitute` replacement, as literal
 /// characters.
-pub(crate) fn previous_substitute(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
+pub(crate) fn previous_substitute(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
     let Some(sub) = reg_prev_sub.with(Clone::clone) else {
         emsg(gettext(e_nopresub));
         rc_did_emsg.set(true);
-        return core::ptr::null_mut();
+        return None;
     };
-    let ret = regnode(rc, BtOp::Exactly);
+    let ret = rc.code.node(BtOp::Exactly);
     for &byte in sub.iter() {
-        regc(rc, c_int::from(byte));
+        rc.code.byte(c_int::from(byte));
     }
-    regc(rc, NUL);
+    rc.code.byte(NUL);
     if !sub.is_empty() {
         *flagp |= HASWIDTH;
         if sub.len() == 1 {
             *flagp |= SIMPLE;
         }
     }
-    ret
+    Some(ret)
 }

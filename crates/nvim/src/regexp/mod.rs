@@ -57,7 +57,7 @@ mod submatch;
 mod substitute;
 
 pub use self::api::*;
-pub use self::bt::*;
+pub(crate) use self::bt::*;
 pub use self::chars::*;
 pub(crate) use self::compiler::*;
 pub use self::context::*;
@@ -456,7 +456,6 @@ pub const SPSTART: c_int = 0x4 as c_int;
 pub const HASNL: c_int = 0x8 as c_int;
 pub const HASLOOKBH: c_int = 0x10 as c_int;
 pub const WORST: c_int = 0;
-pub const JUST_CALC_SIZE: *mut uint8_t = -1i64 as *mut uint8_t;
 pub const REGSTACK_INITIAL: c_int = 2048;
 pub const BACKPOS_INITIAL: c_int = 64;
 /// How far a postponed lookaround has got -- upstream's `NFA_PIM_*`, which

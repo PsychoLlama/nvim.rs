@@ -6,41 +6,42 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use super::compile::Node;
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
 use super::atom::{denied_in_optional_sequence, regatom};
-use super::compile::{chain_next, regc, regmbc, regnode, regnr, regtail, use_multibytecode};
+use super::compile::use_multibytecode;
 use super::op::BtOp;
 use super::piece::reg;
 use crate::ascii::ascii_isdigit;
 use crate::plines::getvvcol;
 use crate::regexp::state::{rc_did_emsg, reg_do_extmatch};
 use crate::regexp::{
-    HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE,
-    SIMPLE, SPSTART, getchr, getdecchrs, gethexchrs, getoctchrs, magic_prefix, pat_byte,
-    re_mult_next, ungetchr, unmagic,
+    HASLOOKBH, HASNL, HASWIDTH, INT_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, SIMPLE, SPSTART,
+    getchr, getdecchrs, gethexchrs, getoctchrs, magic_prefix, pat_byte, re_mult_next, ungetchr,
+    unmagic,
 };
 use crate::semsg;
 use crate::types::{ColNr, NUL, int64_t, uint8_t, uint32_t};
 
 use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.
-pub(crate) fn z_atom(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
+pub(crate) fn z_atom(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
     match unmagic(getchr(rc)) as u8 {
         b'(' => {
             // Only a syntax pattern may *define* an external submatch.
             if reg_do_extmatch.get() & REX_SET == 0 {
                 semsg!("E66: \\z( not allowed here");
                 rc_did_emsg.set(true);
-                return core::ptr::null_mut();
+                return None;
             }
             if denied_in_optional_sequence(rc) {
-                return core::ptr::null_mut();
+                return None;
             }
             let mut flags = 0;
             let ret = reg(rc, REG_ZPAREN, &mut flags);
-            if ret.is_null() {
+            if ret.is_none() {
                 return ret;
             }
             *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
@@ -52,34 +53,34 @@ pub(crate) fn z_atom(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
             if reg_do_extmatch.get() & REX_USE == 0 {
                 semsg!("E67: \\z1 - \\z9 not allowed here");
                 rc_did_emsg.set(true);
-                return core::ptr::null_mut();
+                return None;
             }
-            let ret = regnode(rc, BtOp::ZREF[usize::from(c - b'0')]);
+            let ret = rc.code.node(BtOp::ZREF[usize::from(c - b'0')]);
             rc.has_z = REX_USE;
-            ret
+            Some(ret)
         }
         // `\zs`/`\ze` move the reported match start/end without consuming
         // anything, so they are the group-0 open and close nodes.
         b's' => {
-            let ret = regnode(rc, BtOp::Mopen);
+            let ret = rc.code.node(BtOp::Mopen);
             if re_mult_next(rc, "\\zs") {
-                ret
+                Some(ret)
             } else {
-                core::ptr::null_mut()
+                None
             }
         }
         b'e' => {
-            let ret = regnode(rc, BtOp::Mclose);
+            let ret = rc.code.node(BtOp::Mclose);
             if re_mult_next(rc, "\\ze") {
-                ret
+                Some(ret)
             } else {
-                core::ptr::null_mut()
+                None
             }
         }
         _ => {
             semsg!("E68: Invalid character after \\z");
             rc_did_emsg.set(true);
-            core::ptr::null_mut()
+            None
         }
     }
 }
@@ -93,22 +94,22 @@ pub(crate) fn percent_atom(
     rc: &mut RegCompiler,
     flagp: &mut c_int,
     save_prev_at_start: c_int,
-) -> *mut uint8_t {
+) -> Option<Node> {
     let c = unmagic(getchr(rc));
     match c as u8 {
         b'(' => {
             if denied_in_optional_sequence(rc) {
-                return core::ptr::null_mut();
+                return None;
             }
             let mut flags = 0;
             let ret = reg(rc, REG_NPAREN, &mut flags);
-            if !ret.is_null() {
+            if !ret.is_none() {
                 *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
             }
             ret
         }
-        b'^' => regnode(rc, BtOp::ReBof),
-        b'$' => regnode(rc, BtOp::ReEof),
+        b'^' => Some(rc.code.node(BtOp::ReBof)),
+        b'$' => Some(rc.code.node(BtOp::ReEof)),
         b'#' => {
             // `\%#=1` selects an engine and is only legal at the very start
             // of the pattern, where `vim_regcomp` strips it; getting here
@@ -116,12 +117,12 @@ pub(crate) fn percent_atom(
             if pat_byte(rc, 0) == b'=' && matches!(pat_byte(rc, 1), b'0'..=b'2') {
                 let which = pat_byte(rc, 1) as char;
                 semsg!("E1281: Atom '\\%#={which}' must be at the start of the pattern");
-                return core::ptr::null_mut();
+                return None;
             }
-            regnode(rc, BtOp::Cursor)
+            Some(rc.code.node(BtOp::Cursor))
         }
-        b'V' => regnode(rc, BtOp::ReVisual),
-        b'C' => regnode(rc, BtOp::ReComposing),
+        b'V' => Some(rc.code.node(BtOp::ReVisual)),
+        b'C' => Some(rc.code.node(BtOp::ReComposing)),
         b'[' => optional_sequence(rc, flagp),
         b'd' | b'o' | b'x' | b'u' | b'U' => character_escape(rc, flagp, c),
         _ => position_atom(rc, c, save_prev_at_start),
@@ -134,12 +135,12 @@ pub(crate) fn percent_atom(
 /// Built as a chain of branches: each member's branch falls through to the
 /// next, and every branch's tail lands on the same trailing `NOTHING`, so
 /// stopping early is always an option.
-fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
+fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
     if denied_in_optional_sequence(rc) {
-        return core::ptr::null_mut();
+        return None;
     }
-    let mut ret: *mut uint8_t = core::ptr::null_mut();
-    let mut lastnode: *mut uint8_t = core::ptr::null_mut();
+    let mut first: Option<Node> = None;
+    let mut last: Option<Node> = None;
 
     loop {
         let c = getchr(rc);
@@ -150,64 +151,64 @@ fn optional_sequence(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
             let prefix = magic_prefix(rc);
             semsg!("E69: Missing ] after {prefix}%[");
             rc_did_emsg.set(true);
-            return core::ptr::null_mut();
+            return None;
         }
-        let br = regnode(rc, BtOp::Branch);
-        if ret.is_null() {
-            ret = br;
-        } else {
-            regtail(rc, lastnode, br);
-            if rc.code.too_long != 0 {
-                return core::ptr::null_mut();
+        let br = rc.code.node(BtOp::Branch);
+        match last {
+            None => first = Some(br),
+            Some(prev) => {
+                rc.code.tail(prev, br);
+                if rc.code.too_long {
+                    return None;
+                }
             }
         }
         ungetchr(rc);
         // Each member is exactly one atom; `one_exactly` is what stops a
         // literal run from swallowing the rest of the sequence.
         rc.one_exactly = 1;
-        lastnode = regatom(rc, flagp);
+        last = regatom(rc, flagp);
         rc.one_exactly = 0;
-        if lastnode.is_null() {
-            return core::ptr::null_mut();
-        }
+        last?;
     }
 
-    if ret.is_null() {
+    let (Some(ret), Some(lastnode)) = (first, last) else {
         let prefix = magic_prefix(rc);
         semsg!("E70: Empty {prefix}%[]");
         rc_did_emsg.set(true);
-        return core::ptr::null_mut();
-    }
+        return None;
+    };
 
-    let lastbranch = regnode(rc, BtOp::Branch);
-    let mut br = regnode(rc, BtOp::Nothing);
-    if ret != JUST_CALC_SIZE {
-        regtail(rc, lastnode, br);
-        regtail(rc, lastbranch, br);
+    let lastbranch = rc.code.node(BtOp::Branch);
+    let nothing = rc.code.node(BtOp::Nothing);
+    if !rc.code.sizing() {
+        rc.code.tail(lastnode, nothing);
+        rc.code.tail(lastbranch, nothing);
         // Point every member's branch at the empty alternative that follows
-        // the whole sequence.
-        br = ret;
-        // SAFETY: `br` walks nodes of the program just written; stepping
-        // three bytes past a branch lands on its operand.
+        // the whole sequence; a branch's operand is the member itself.
+        let mut br = ret;
         while br != lastnode {
-            if unsafe { *br } == BtOp::Branch.code() as uint8_t {
-                regtail(rc, br, lastbranch);
-                if rc.code.too_long != 0 {
-                    return core::ptr::null_mut();
+            if rc.code.opcode_at(br) == Some(BtOp::Branch.code() as uint8_t) {
+                rc.code.tail(br, lastbranch);
+                if rc.code.too_long {
+                    return None;
                 }
-                br = unsafe { br.add(3) };
+                br = br.operand();
             } else {
-                br = chain_next(rc, br);
+                let Some(next) = rc.code.next(br) else {
+                    break;
+                };
+                br = next;
             }
         }
     }
     *flagp &= !(HASWIDTH | SIMPLE);
-    ret
+    Some(ret)
 }
 
 /// `\%d123`, `\%o40`, `\%x2f`, `\%u1234`, `\%U1234abcd`: one character named
 /// by its code point.
-fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> *mut uint8_t {
+fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> Option<Node> {
     let i = match c as u8 {
         b'd' => getdecchrs(rc),
         b'o' => getoctchrs(rc),
@@ -220,29 +221,29 @@ fn character_escape(rc: &mut RegCompiler, flagp: &mut c_int, c: c_int) -> *mut u
         let prefix = magic_prefix(rc);
         semsg!("E678: Invalid character after {prefix}%[dxouU]");
         rc_did_emsg.set(true);
-        return core::ptr::null_mut();
+        return None;
     }
     let i = i as c_int;
     let ret = if use_multibytecode(rc, i) {
-        regnode(rc, BtOp::Multibytecode)
+        rc.code.node(BtOp::Multibytecode)
     } else {
-        regnode(rc, BtOp::Exactly)
+        rc.code.node(BtOp::Exactly)
     };
     // A NUL in the pattern stands for a newline: the program is a C string,
     // so it cannot hold a NUL byte.
     if i == 0 {
-        regc(rc, 0xa);
+        rc.code.byte(0xa);
     } else {
-        regmbc(rc, i);
+        rc.code.char(i);
     }
-    regc(rc, NUL);
+    rc.code.byte(NUL);
     *flagp |= HASWIDTH;
-    ret
+    Some(ret)
 }
 
 /// The position assertions: `\%23l`, `\%<23c`, `\%>23v`, `\%.l` (the cursor's
 /// own line/column) and `\%'m` (a mark).
-fn position_atom(rc: &mut RegCompiler, first: c_int, save_prev_at_start: c_int) -> *mut uint8_t {
+fn position_atom(rc: &mut RegCompiler, first: c_int, save_prev_at_start: c_int) -> Option<Node> {
     if (ascii_isdigit(first) || matches!(first as u8, b'<' | b'>' | b'\'' | b'.'))
         && let Some(node) = compare_atom(rc, first, save_prev_at_start)
     {
@@ -251,16 +252,17 @@ fn position_atom(rc: &mut RegCompiler, first: c_int, save_prev_at_start: c_int) 
     let prefix = magic_prefix(rc);
     semsg!("E71: Invalid character after {prefix}%");
     rc_did_emsg.set(true);
-    core::ptr::null_mut()
+    None
 }
 
 /// The body of [`position_atom`]: `None` means the escape did not turn out to
-/// be a position assertion after all, and E71 is the answer.
+/// be a position assertion after all, and E71 is the answer; `Some(None)` an
+/// error already reported.
 fn compare_atom(
     rc: &mut RegCompiler,
     first: c_int,
     save_prev_at_start: c_int,
-) -> Option<*mut uint8_t> {
+) -> Option<Option<Node>> {
     // `<` and `>` make the test "before" and "after"; the node stores the
     // character itself as the comparison.
     let cmp = first;
@@ -287,10 +289,10 @@ fn compare_atom(
     if unmagic(c) == b'\'' as c_int && n == 0 {
         // `\%'m`: the position of mark m.
         let c = getchr(rc);
-        let ret = regnode(rc, BtOp::ReMark);
-        regc(rc, c);
-        regc(rc, cmp);
-        return Some(ret);
+        let ret = rc.code.node(BtOp::ReMark);
+        rc.code.byte(c);
+        rc.code.byte(cmp);
+        return Some(Some(ret));
     }
     if !matches!(c as u8, b'l' | b'c' | b'v') || !(cur || got_digit) {
         return None;
@@ -299,7 +301,7 @@ fn compare_atom(
         let c = unmagic(c) as u8 as char;
         semsg!("E1204: No Number allowed after .: '\\%{c}'");
         rc_did_emsg.set(true);
-        return Some(core::ptr::null_mut());
+        return Some(None);
     }
 
     let ret = match c as u8 {
@@ -307,7 +309,7 @@ fn compare_atom(
             if cur {
                 n = cursor_value(b'l');
             }
-            let ret = regnode(rc, BtOp::ReLnum);
+            let ret = rc.code.node(BtOp::ReLnum);
             // A line assertion matches an empty string, so a `^` after it is
             // still at the start of the pattern.
             if save_prev_at_start != 0 {
@@ -319,18 +321,18 @@ fn compare_atom(
             if cur {
                 n = cursor_value(b'c');
             }
-            regnode(rc, BtOp::ReCol)
+            rc.code.node(BtOp::ReCol)
         }
         _ => {
             if cur {
                 n = cursor_value(b'v');
             }
-            regnode(rc, BtOp::ReVcol)
+            rc.code.node(BtOp::ReVcol)
         }
     };
-    regnr(rc, n);
-    regc(rc, cmp);
-    Some(ret)
+    rc.code.number(n);
+    rc.code.byte(cmp);
+    Some(Some(ret))
 }
 
 /// The cursor's own line, column or virtual column, as `\%.l`, `\%.c` and

@@ -1,12 +1,12 @@
 count	callee	no_raw	defs	def
-840	xfree	0	1	crates/nvim/src/memory/mod.rs
-725	.add	0	3	
+839	xfree	0	1	crates/nvim/src/memory/mod.rs
+717	.add	0	3	
 449	.offset	0	0	
 444	bytes_at	0	1	crates/nvim/src/cstr.rs
 340	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 319	at	0	3	
 280	CStr::from_ptr	0	2	
-237	.offset_from	0	0	
+235	.offset_from	0	0	
 179	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
@@ -36,8 +36,8 @@ count	callee	no_raw	defs	def
 51	utf_char2bytes	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 51	vim_regfree	0	1	crates/nvim/src/regexp/api.rs
 50	Xp::new	0	67	
-47	.sub	0	0	
 46	copy_nonoverlapping	0	0	
+45	.sub	0	0	
 45	fprintf	0	0	
 44	eq	0	1	crates/nvim/src/cstr.rs
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
@@ -59,9 +59,9 @@ count	callee	no_raw	defs	def
 32	os_path_exists	0	1	crates/nvim/src/os/fs/dir.rs
 32	ptr2cells	0	1	crates/nvim/src/charset/display.rs
 32	xstrlcat	0	1	crates/nvim/src/memory/mod.rs
-31	.copy_from_nonoverlapping	0	0	
 31	ga_grow	0	1	crates/nvim/src/garray.rs
 31	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
+30	.copy_from_nonoverlapping	0	0	
 30	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 30	f	0	0	
 29	.as_mut	0	0	

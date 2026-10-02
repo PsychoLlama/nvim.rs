@@ -171,7 +171,7 @@ impl Stack {
 /// Which of the two passes is running.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Pass {
-    /// Only add up the states the program needs, into `nstate`.
+    /// Only add up the states the program needs, into `count`.
     Count,
     /// Build into the program's state array.
     Build,
@@ -284,7 +284,7 @@ fn nfa_max_width(startstate: *mut NfaState, depth: c_int) -> c_int {
 
 /// Run the postfix program.
 ///
-/// [`Pass::Count`] only adds up `nstate` and returns null; [`Pass::Build`]
+/// [`Pass::Count`] only adds up `count` and returns null; [`Pass::Build`]
 /// returns the machine's entry state, or null once it has said why not.
 pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> *mut NfaState {
     let counting = pass == Pass::Count;
@@ -311,7 +311,7 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> *
         };
 
         if counting {
-            states.count = states.count + count_for(item, operand);
+            states.count += count_for(item, operand);
             i += 1;
             continue;
         }
@@ -569,7 +569,7 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> *
 
     if counting {
         // One more for the accepting state added below.
-        states.count = states.count + 1;
+        states.count += 1;
         return core::ptr::null_mut();
     }
 
@@ -590,7 +590,7 @@ pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> *
     }
     // The accepting state, taken by hand rather than through `state`: it
     // must have id 0, which is how the matcher recognises it.
-    // SAFETY: `istate` is below `nstate`, checked just above.
+    // SAFETY: `built` is below `count`, checked just above.
     let matchstate = unsafe { states.base.offset(states.built as isize) };
     states.built += 1;
     unsafe { (*matchstate).c = NfaOp::Match.code() };

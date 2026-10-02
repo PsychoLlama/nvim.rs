@@ -34,7 +34,7 @@ pub(crate) const fn magic(c: u8) -> c_int {
 /// The backslash an error message has to print in front of a metacharacter
 /// for the message to echo what the user typed: none under `\v`, where
 /// every metacharacter is bare, one otherwise.
-pub(crate) fn magic_prefix(rc: &mut RegCompiler) -> &'static str {
+pub(crate) fn magic_prefix(rc: &RegCompiler) -> &'static str {
     if rc.magic == MAGIC_ALL { "" } else { "\\" }
 }
 

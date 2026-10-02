@@ -287,7 +287,7 @@ fn bracketed_item(rc: &mut RegCompiler) -> Bracketed {
 /// the `\r`/`\t` abbreviations only when 'cpoptions' does not contain `l`.
 ///
 /// `end` bounds it: a backslash as the collection's last byte is literal.
-fn escapes_here(rc: &mut RegCompiler, end: *mut c_char) -> bool {
+fn escapes_here(rc: &RegCompiler, end: *mut c_char) -> bool {
     if pat_byte(rc, 0) != b'\\' || cursor::here(rc).wrapping_add(1) > end {
         return false;
     }

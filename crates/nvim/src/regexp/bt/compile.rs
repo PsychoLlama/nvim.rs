@@ -1,16 +1,17 @@
-//! Emitting the program: the node writer and the `regtail`/`reginsert`
+//! Emitting the program: the node writer and the `tail`/`insert`
 //! surgery the parser performs on what it has already written.
 //!
 //! A node is three bytes — an opcode and a big-endian 16-bit offset to the
 //! next node — followed by whatever operand the opcode carries. The offset
-//! is relative, so a node is position-independent and [`reginsert`] can slide
-//! the tail of the program along to open a gap in front of one.
+//! is relative, so a node is position-independent and
+//! [`BtEmitter::insert`] can slide the tail of the program along to open a
+//! gap in front of one.
 //!
-//! The parser runs twice. The first pass only measures: [`regcode`] holds the
-//! [`JUST_CALC_SIZE`] sentinel, every write becomes an addition to
-//! [`regsize`], and every node handle the parser gets back is that same
-//! sentinel, which makes all the patching below a no-op. The second pass
-//! writes into the block sized by the first.
+//! The parser runs twice. The first pass only measures: the emitter holds
+//! no text, every write only adds to its size, and every patch is a no-op.
+//! The second pass writes the program into a `Vec` sized by the first, and
+//! [`super::piece::bt_regcomp`] copies it into the program block. A node
+//! handle is a [`Node`], the node's offset into the text.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -20,12 +21,12 @@ use core::ffi::{c_int, c_uint};
 use core::mem::offset_of;
 
 use super::op::BtOp;
-use crate::mbyte::{utf_char2bytes, utf_char2len, utf_iscomposing_legacy};
-use crate::memory::{xfree, xmalloc};
+use crate::mbyte::{encode_char, utf_char2len, utf_iscomposing_legacy};
+use crate::memory::xmalloc;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::state::rc_did_emsg;
-use crate::regexp::{BtRegProg, JUST_CALC_SIZE, NOT_MULTI, REX_SET, Rex, peekchr, re_multi_type};
+use crate::regexp::{BtRegProg, NOT_MULTI, REX_SET, Rex, peekchr, re_multi_type};
 use crate::types::{NUL, RegEngine, RegProg, int64_t, uint8_t, uint32_t};
 
 /// The fixed part of a node: the opcode plus the offset to the next one.
@@ -62,7 +63,7 @@ impl BtProg {
     ///
     /// Only the fields [`bt_regcomp`](super::piece::bt_regcomp) does not go
     /// on to write are initialised here.
-    pub(crate) fn alloc(nodes: usize) -> BtProg {
+    fn alloc(nodes: usize) -> BtProg {
         // SAFETY: `xmalloc` returns a block of the size asked for or does not
         // return, so the head is inside it.
         let prog = unsafe { xmalloc(offset_of!(BtRegProg, program) + nodes) }.cast::<BtRegProg>();
@@ -70,16 +71,23 @@ impl BtProg {
         BtProg(prog)
     }
 
+    /// A fresh program holding `text`, which starts with the `REGMAGIC`
+    /// stamp. Only the fields `bt_regcomp` does not go on to write are
+    /// initialised.
+    pub(crate) fn with_text(text: &[u8]) -> BtProg {
+        let prog = BtProg::alloc(text.len());
+        // SAFETY: `alloc` made room for `text.len()` bytes of program.
+        unsafe {
+            prog.text()
+                .copy_from_nonoverlapping(text.as_ptr(), text.len())
+        };
+        prog
+    }
+
     /// Hand the block back to the caller of `bt_regcomp`, as the engine's
     /// shared shape.
     pub(crate) fn into_regprog(self) -> *mut RegProg {
         self.0.cast()
-    }
-
-    /// Free a program that turned out not to compile after all.
-    pub(crate) fn discard(self) {
-        // SAFETY: one `xmalloc` block, with nothing owned inside it.
-        unsafe { xfree(self.0.cast()) };
     }
 
     // ------------------------------------------------- what the compiler wrote
@@ -194,14 +202,206 @@ impl BtProg {
     }
 }
 
-/// Is this the sizing pass rather than the writing one?
-fn sizing(rc: &mut RegCompiler) -> bool {
-    rc.code.code == JUST_CALC_SIZE
+/// A node of the program being written: its offset into the program text,
+/// whose first byte is the `REGMAGIC` stamp.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct Node(usize);
+
+impl Node {
+    /// Where the node's operand starts, after its three-byte header. The
+    /// operand of a `BRANCH` or a complex brace is itself a chain.
+    pub(crate) fn operand(self) -> Node {
+        Node(self.0 + NODE_HDR)
+    }
 }
 
-/// Charge `n` bytes to the size the sizing pass is accumulating.
-fn charge(rc: &mut RegCompiler, n: usize) {
-    rc.code.size = rc.code.size + n as int64_t;
+/// The backtracker's program writer: see the module docs for the two
+/// passes.
+pub(crate) struct BtEmitter {
+    /// The program text, or `None` while the first pass only measures.
+    text: Option<Vec<u8>>,
+    /// How long the program is so far, on either pass.
+    size: usize,
+    /// A node offset did not fit in 16 bits: the pattern is too long.
+    pub(crate) too_long: bool,
+}
+
+impl BtEmitter {
+    pub(crate) const fn new() -> BtEmitter {
+        BtEmitter {
+            text: None,
+            size: 0,
+            too_long: false,
+        }
+    }
+
+    /// Start a pass: the measuring one, or with `room` the writing one.
+    pub(crate) fn start(&mut self, room: Option<usize>) {
+        self.text = room.map(Vec::with_capacity);
+        self.size = 0;
+        self.too_long = false;
+    }
+
+    /// Is this the sizing pass rather than the writing one?
+    pub(crate) fn sizing(&self) -> bool {
+        self.text.is_none()
+    }
+
+    /// How long the program is so far.
+    pub(crate) fn size(&self) -> usize {
+        self.size
+    }
+
+    /// The program the writing pass wrote.
+    pub(crate) fn take_text(&mut self) -> Vec<u8> {
+        self.text.take().unwrap_or_default()
+    }
+
+    fn push(&mut self, bytes: &[u8]) {
+        self.size += bytes.len();
+        if let Some(text) = &mut self.text {
+            text.extend_from_slice(bytes);
+        }
+    }
+
+    /// Emit one byte of program. `b` is a byte, or a character below 256.
+    pub(crate) fn byte(&mut self, b: c_int) {
+        self.push(&[b as uint8_t]);
+    }
+
+    /// Emit one character of program, as its UTF-8 bytes.
+    pub(crate) fn char(&mut self, c: c_int) {
+        let mut bytes = [0; 6];
+        let len = encode_char(c, &mut bytes);
+        self.push(&bytes[..len]);
+    }
+
+    /// Emit a node with opcode `op` and an unset next-offset.
+    pub(crate) fn node(&mut self, op: BtOp) -> Node {
+        self.node_nl(op, false)
+    }
+
+    /// [`BtEmitter::node`], for the class opcodes that have a `\_x` form:
+    /// with `crosses_lines` the node also matches a line break.
+    pub(crate) fn node_nl(&mut self, op: BtOp, crosses_lines: bool) -> Node {
+        let node = Node(self.size);
+        self.push(&[op.encode(crosses_lines), NUL as uint8_t, NUL as uint8_t]);
+        node
+    }
+
+    /// Emit a node's 32-bit operand, big-endian.
+    pub(crate) fn number(&mut self, val: uint32_t) {
+        self.push(&val.to_be_bytes());
+    }
+
+    /// Change an already-emitted node's opcode. `[]` uses this to widen an
+    /// `ANYOF` into its newline-accepting form once it sees a `\n` inside.
+    pub(crate) fn set_opcode(&mut self, node: Node, op: BtOp, crosses_lines: bool) {
+        if let Some(text) = &mut self.text {
+            text[node.0] = op.encode(crosses_lines);
+        }
+    }
+
+    /// The opcode byte of `node`; `None` on the sizing pass.
+    pub(crate) fn opcode_at(&self, node: Node) -> Option<uint8_t> {
+        self.text.as_ref().map(|text| text[node.0])
+    }
+
+    /// The node after `p` in its chain. `None` at the end of the chain, on
+    /// the sizing pass, and once an offset has overflowed, since the chain
+    /// can no longer be trusted.
+    pub(crate) fn next(&self, p: Node) -> Option<Node> {
+        let text = self.text.as_ref().filter(|_| !self.too_long)?;
+        let offset = usize::from(u16::from_be_bytes([text[p.0 + 1], text[p.0 + 2]]));
+        if offset == 0 {
+            None
+        } else if text[p.0] == BtOp::Back.code() as uint8_t {
+            Some(Node(p.0 - offset))
+        } else {
+            Some(Node(p.0 + offset))
+        }
+    }
+
+    /// Point the last node of the chain starting at `p` at `val`.
+    ///
+    /// A `BACK` node's offset counts backwards, which is how the compiler
+    /// builds the loop in a non-simple `*`.
+    pub(crate) fn tail(&mut self, p: Node, val: Node) {
+        if self.sizing() {
+            return;
+        }
+        let mut scan = p;
+        while let Some(next) = self.next(scan) {
+            scan = next;
+        }
+        let Some(text) = &mut self.text else {
+            return;
+        };
+        let (scan, val) = (scan.0 as isize, val.0 as isize);
+        let offset = if text[scan as usize] == BtOp::Back.code() as uint8_t {
+            scan - val
+        } else {
+            val - scan
+        };
+        // A 16-bit offset cannot reach: the pattern is too long. The caller
+        // notices and gives up on the whole program.
+        if offset > 0xffff {
+            self.too_long = true;
+        } else {
+            let bytes = (offset as u16).to_be_bytes();
+            text[scan as usize + 1] = bytes[0];
+            text[scan as usize + 2] = bytes[1];
+        }
+    }
+
+    /// [`BtEmitter::tail`] on the *operand* of `p`, for the node kinds whose
+    /// operand is itself a chain: a `BRANCH` and the ten `BRACE_COMPLEX`
+    /// slots.
+    pub(crate) fn op_tail(&mut self, p: Node, val: Node) {
+        let Some(Ok((op, _))) = self.opcode_at(p).map(BtOp::decode) else {
+            return;
+        };
+        if op == BtOp::Branch || op.is_complex_brace() {
+            self.tail(p.operand(), val);
+        }
+    }
+
+    /// Open a node for `op` in front of `opnd`, sliding everything written
+    /// since along, with `operand` after its header.
+    fn insert_with(&mut self, op: BtOp, opnd: Node, operand: &[u8]) {
+        self.size += NODE_HDR + operand.len();
+        if let Some(text) = &mut self.text {
+            let header = [op.code() as uint8_t, NUL as uint8_t, NUL as uint8_t];
+            text.splice(
+                opnd.0..opnd.0,
+                header.into_iter().chain(operand.iter().copied()),
+            );
+        }
+    }
+
+    /// Insert an operand-less node in front of `opnd`.
+    pub(crate) fn insert(&mut self, op: BtOp, opnd: Node) {
+        self.insert_with(op, opnd, &[]);
+    }
+
+    /// Insert a node carrying one 32-bit number in front of `opnd`.
+    pub(crate) fn insert_nr(&mut self, op: BtOp, val: int64_t, opnd: Node) {
+        debug_assert!((0..=uint32_t::MAX as int64_t).contains(&val));
+        self.insert_with(op, opnd, &(val as uint32_t).to_be_bytes());
+    }
+
+    /// Insert a `BRACE_LIMITS`-shaped node — two 32-bit numbers — in front
+    /// of `opnd`, and point it at the end of itself so the matcher can find
+    /// the braced atom.
+    pub(crate) fn insert_limits(&mut self, op: BtOp, minval: int64_t, maxval: int64_t, opnd: Node) {
+        debug_assert!((0..=uint32_t::MAX as int64_t).contains(&minval));
+        debug_assert!((0..=uint32_t::MAX as int64_t).contains(&maxval));
+        let mut operand = [0; 8];
+        operand[..4].copy_from_slice(&(minval as uint32_t).to_be_bytes());
+        operand[4..].copy_from_slice(&(maxval as uint32_t).to_be_bytes());
+        self.insert_with(op, opnd, &operand);
+        self.tail(opnd, Node(opnd.0 + NODE_HDR + operand.len()));
+    }
 }
 
 /// Should `c` be emitted as a `MULTIBYTECODE` node rather than as bytes?
@@ -213,80 +413,10 @@ pub(crate) fn use_multibytecode(rc: &mut RegCompiler, c: c_int) -> bool {
     utf_char2len(c) > 1 && (re_multi_type(peekchr(rc)) != NOT_MULTI || utf_iscomposing_legacy(c))
 }
 
-/// Emit one byte of program.
-pub(crate) fn regc(rc: &mut RegCompiler, b: c_int) {
-    if sizing(rc) {
-        charge(rc, 1);
-        return;
-    }
-    // SAFETY: the writing pass sized the block with the same call sequence,
-    // so there is room for this byte.
-    let at = rc.code.code;
-    rc.code.code = unsafe { at.add(1) };
-    unsafe { *at = b as uint8_t };
-}
-
-/// Emit one character of program, as its UTF-8 bytes.
-pub(crate) fn regmbc(rc: &mut RegCompiler, c: c_int) {
-    if sizing(rc) {
-        charge(rc, utf_char2len(c) as usize);
-        return;
-    }
-    // SAFETY: as `regc`; `utf_char2bytes` writes at most `utf_char2len(c)`
-    // bytes, which is what the sizing pass charged.
-    let at = rc.code.code;
-    rc.code.code = unsafe { at.add(utf_char2bytes(c, at.cast()) as usize) };
-}
-
-/// Emit a node with opcode `op` and an unset next-offset, and hand back a
-/// handle to it — or [`JUST_CALC_SIZE`] during the sizing pass.
-pub(crate) fn regnode(rc: &mut RegCompiler, op: BtOp) -> *mut uint8_t {
-    regnode_nl(rc, op, false)
-}
-
-/// [`regnode`], for the class opcodes that have a `\_x` form: with
-/// `crosses_lines` the node also matches a line break.
-pub(crate) fn regnode_nl(rc: &mut RegCompiler, op: BtOp, crosses_lines: bool) -> *mut uint8_t {
-    let node = rc.code.code;
-    if sizing(rc) {
-        charge(rc, NODE_HDR);
-        return node;
-    }
-    // SAFETY: as `regc`, three bytes' worth.
-    rc.code.code = unsafe { node.add(NODE_HDR) };
-    unsafe { *node = op.encode(crosses_lines) };
-    unsafe { *node.add(1) = NUL as uint8_t };
-    unsafe { *node.add(2) = NUL as uint8_t };
-    node
-}
-
-/// Store `val` big-endian at `p` and return the byte after it. `p` must have
-/// four writable bytes, which every caller here has just charged for.
-fn put_uint32(p: *mut uint8_t, val: uint32_t) -> *mut uint8_t {
-    // SAFETY: the four bytes were charged by the sizing pass.
-    unsafe { p.copy_from_nonoverlapping(val.to_be_bytes().as_ptr(), 4) };
-    unsafe { p.add(4) }
-}
-
-/// Change an already-emitted node's opcode. `[]` uses this to widen an
-/// `ANYOF` into its newline-accepting form once it sees a `\n` inside.
-pub(crate) fn set_opcode(node: *mut uint8_t, op: BtOp, crosses_lines: bool) {
-    // SAFETY: `node` is a node in the program under construction.
-    unsafe { *node = op.encode(crosses_lines) };
-}
-
-/// Emit a node's 32-bit operand, big-endian.
-pub(crate) fn regnr(rc: &mut RegCompiler, val: uint32_t) {
-    if sizing(rc) {
-        charge(rc, 4);
-        return;
-    }
-    rc.code.code = put_uint32(rc.code.code, val);
-}
-
-/// The node after `p` in its chain, or null if `p` is the last one.
+/// The node after `p` in a finished program's chain, or null if `p` is the
+/// last one.
 ///
-/// `p` must be a node of a finished program, or of the one being written.
+/// `p` must be a node of a finished program.
 pub(crate) fn regnext(p: *mut uint8_t) -> *mut uint8_t {
     // SAFETY: `p` is a node in the program, so its two offset bytes are
     // readable.
@@ -302,143 +432,17 @@ pub(crate) fn regnext(p: *mut uint8_t) -> *mut uint8_t {
     }
 }
 
-/// [`regnext`] while the program is being written: nothing during the sizing
-/// pass, and nothing once an offset has overflowed, since the chain can no
-/// longer be trusted.
-pub(crate) fn chain_next(rc: &mut RegCompiler, p: *mut uint8_t) -> *mut uint8_t {
-    if p == JUST_CALC_SIZE || rc.code.too_long != 0 {
-        return core::ptr::null_mut();
-    }
-    regnext(p)
-}
-
-/// Point the last node of the chain starting at `p` at `val`.
-///
-/// A `BACK` node's offset counts backwards, which is how the compiler builds
-/// the loop in a non-simple `*`.
-pub(crate) fn regtail(rc: &mut RegCompiler, p: *mut uint8_t, val: *const uint8_t) {
-    if p == JUST_CALC_SIZE {
-        return;
-    }
-    let mut scan = p;
-    loop {
-        let next = chain_next(rc, scan);
-        if next.is_null() {
-            break;
-        }
-        scan = next;
-    }
-    // SAFETY: `scan` is a node in the program and `val` another node in the
-    // same allocation, so the difference is well defined.
-    let offset = if unsafe { *scan } == BtOp::Back.code() as uint8_t {
-        unsafe { scan.offset_from(val) }
-    } else {
-        unsafe { val.offset_from(scan) }
-    };
-    // A 16-bit offset cannot reach: the pattern is too long. The caller
-    // notices via `reg_toolong` and gives up on the whole program.
-    if offset > 0xffff {
-        rc.code.too_long = 1;
-    } else {
-        let bytes = (offset as u16).to_be_bytes();
-        unsafe { *scan.add(1) = bytes[0] };
-        unsafe { *scan.add(2) = bytes[1] };
-    }
-}
-
-/// [`regtail`] on the *operand* of `p`, for the node kinds whose operand is
-/// itself a chain: a `BRANCH` and the ten `BRACE_COMPLEX` slots.
-pub(crate) fn regoptail(rc: &mut RegCompiler, p: *mut uint8_t, val: *mut uint8_t) {
-    if p.is_null() || p == JUST_CALC_SIZE {
-        return;
-    }
-    // SAFETY: `p` is a node in the program, so its opcode is readable and a
-    // node of either kind is followed by its operand.
-    let Ok((op, _)) = BtOp::decode(unsafe { *p }) else {
-        return;
-    };
-    if op != BtOp::Branch && !op.is_complex_brace() {
-        return;
-    }
-    regtail(rc, unsafe { p.add(NODE_HDR) }, val);
-}
-
-/// Open `len` bytes in front of `opnd`, sliding everything written since it
-/// along, and lay a node header for `op` in the gap.
-///
-/// Returns the first byte after the header, which is where the caller writes
-/// the new node's operand.
-fn open_before(rc: &mut RegCompiler, op: BtOp, opnd: *mut uint8_t, len: usize) -> *mut uint8_t {
-    // SAFETY: `opnd` is a node in the program and everything from it to
-    // `regcode` was written by this pass; the sizing pass charged `len` extra
-    // bytes for this call, so the destination is in the same allocation.
-    let mut src = rc.code.code;
-    rc.code.code = unsafe { src.add(len) };
-    let mut dst = rc.code.code;
-    while src > opnd {
-        src = unsafe { src.sub(1) };
-        dst = unsafe { dst.sub(1) };
-        unsafe { *dst = *src };
-    }
-    unsafe { *opnd = op.code() as uint8_t };
-    unsafe { *opnd.add(1) = NUL as uint8_t };
-    unsafe { *opnd.add(2) = NUL as uint8_t };
-    unsafe { opnd.add(NODE_HDR) }
-}
-
-/// Insert an operand-less node in front of `opnd`.
-pub(crate) fn reginsert(rc: &mut RegCompiler, op: BtOp, opnd: *mut uint8_t) {
-    if sizing(rc) {
-        charge(rc, NODE_HDR);
-        return;
-    }
-    open_before(rc, op, opnd, NODE_HDR);
-}
-
-/// Insert a node carrying one 32-bit number in front of `opnd`.
-pub(crate) fn reginsert_nr(rc: &mut RegCompiler, op: BtOp, val: int64_t, opnd: *mut uint8_t) {
-    if sizing(rc) {
-        charge(rc, NODE_HDR + 4);
-        return;
-    }
-    let place = open_before(rc, op, opnd, NODE_HDR + 4);
-    debug_assert!((0..=uint32_t::MAX as int64_t).contains(&val));
-    put_uint32(place, val as uint32_t);
-}
-
-/// Insert a `BRACE_LIMITS`-shaped node — two 32-bit numbers — in front of
-/// `opnd`, and point it at the end of itself so the matcher can find the
-/// braced atom.
-pub(crate) fn reginsert_limits(
-    rc: &mut RegCompiler,
-    op: BtOp,
-    minval: int64_t,
-    maxval: int64_t,
-    opnd: *mut uint8_t,
-) {
-    if sizing(rc) {
-        charge(rc, NODE_HDR + 8);
-        return;
-    }
-    let mut place = open_before(rc, op, opnd, NODE_HDR + 8);
-    debug_assert!((0..=uint32_t::MAX as int64_t).contains(&minval));
-    debug_assert!((0..=uint32_t::MAX as int64_t).contains(&maxval));
-    place = put_uint32(place, minval as uint32_t);
-    place = put_uint32(place, maxval as uint32_t);
-    regtail(rc, opnd, place);
-}
-
 /// Is a `\1`..`\9` back-reference to group `refnum` legal here?
 ///
 /// Normally the group must already have closed. The exception is a
 /// look-behind: `\(...\)\@<=` runs the group after the reference in the
 /// program, so a reference forward into one is fine as long as some `\@<=`
 /// or `\@<!` is still to come in the pattern.
-pub(crate) fn seen_endbrace(rc: &mut RegCompiler, refnum: c_int) -> bool {
+pub(crate) fn seen_endbrace(rc: &RegCompiler, refnum: c_int) -> bool {
     if rc.closed_groups[refnum as usize] != 0 {
         return true;
     }
-    // SAFETY: `regparse` points into the NUL-terminated pattern, so the walk
+    // SAFETY: the cursor points into the NUL-terminated pattern, so the walk
     // stops at its end; the message is a static NUL-terminated string.
     let mut p = rc.cursor.cast::<uint8_t>();
     while unsafe { *p } as c_int != NUL {

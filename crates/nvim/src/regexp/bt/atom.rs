@@ -7,11 +7,12 @@
 
 #![forbid(unsafe_code)]
 
+use super::compile::Node;
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
 use super::collection::{Collection, collection};
-use super::compile::{regc, regnode, seen_endbrace};
+use super::compile::seen_endbrace;
 use super::escape::{percent_atom, z_atom};
 use super::literal::{class_shorthand, is_class_shorthand, literal_run, previous_substitute};
 use super::op::BtOp;
@@ -22,7 +23,7 @@ use crate::regexp::{
     magic, magic_prefix, unmagic,
 };
 use crate::semsg;
-use crate::types::{NUL, uint8_t};
+use crate::types::NUL;
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');
@@ -51,7 +52,7 @@ const M_9: c_int = magic(b'9');
 /// `\%[abc]` compiles each of its members as a single atom, so a member that
 /// is itself a group or an alternation cannot work. Reports E369 and returns
 /// true when we are inside one.
-pub(crate) fn denied_in_optional_sequence(rc: &mut RegCompiler) -> bool {
+pub(crate) fn denied_in_optional_sequence(rc: &RegCompiler) -> bool {
     if rc.one_exactly == 0 {
         return false;
     }
@@ -64,7 +65,7 @@ pub(crate) fn denied_in_optional_sequence(rc: &mut RegCompiler) -> bool {
 /// Parse one atom, emit its nodes and describe it in `*flagp`.
 ///
 /// Returns null when an error has already been reported.
-pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
+pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> Option<Node> {
     // `\%23l` restores the "still at the start of the pattern" flag, because
     // a position assertion consumes no input; [`percent_atom`] needs the
     // value from before this atom was read.
@@ -77,10 +78,10 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
     if c == M_UNDERSCORE {
         c = unmagic(getchr(rc));
         return match c as u8 {
-            b'^' => regnode(rc, BtOp::Bol),
+            b'^' => Some(rc.code.node(BtOp::Bol)),
             b'$' => {
                 rc.had_eol = 1;
-                regnode(rc, BtOp::Eol)
+                Some(rc.code.node(BtOp::Eol))
             }
             _ => {
                 *flagp |= HASNL;
@@ -94,37 +95,37 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
     }
 
     match c {
-        M_CARET => regnode(rc, BtOp::Bol),
+        M_CARET => Some(rc.code.node(BtOp::Bol)),
         M_DOLLAR => {
             rc.had_eol = 1;
-            regnode(rc, BtOp::Eol)
+            Some(rc.code.node(BtOp::Eol))
         }
-        M_LT => regnode(rc, BtOp::Bow),
-        M_GT => regnode(rc, BtOp::Eow),
+        M_LT => Some(rc.code.node(BtOp::Bow)),
+        M_GT => Some(rc.code.node(BtOp::Eow)),
 
         // `\n` is a line break, except in a string match, where there are no
         // lines and it is just the byte.
         M_N => {
             if rc.string_match != 0 {
-                let ret = regnode(rc, BtOp::Exactly);
-                regc(rc, NL);
-                regc(rc, NUL);
+                let ret = rc.code.node(BtOp::Exactly);
+                rc.code.byte(NL);
+                rc.code.byte(NUL);
                 *flagp |= HASWIDTH | SIMPLE;
-                ret
+                Some(ret)
             } else {
-                let ret = regnode(rc, BtOp::Newl);
+                let ret = rc.code.node(BtOp::Newl);
                 *flagp |= HASWIDTH | HASNL;
-                ret
+                Some(ret)
             }
         }
 
         M_PAREN_OPEN => {
             if denied_in_optional_sequence(rc) {
-                return core::ptr::null_mut();
+                return None;
             }
             let mut flags = 0;
             let ret = reg(rc, REG_PAREN, &mut flags);
-            if !ret.is_null() {
+            if !ret.is_none() {
                 *flagp |= flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
             }
             ret
@@ -134,11 +135,11 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
         // stopped; reaching one here means the parser lost track.
         NUL | M_BAR | M_AMP | M_PAREN_CLOSE => {
             if denied_in_optional_sequence(rc) {
-                return core::ptr::null_mut();
+                return None;
             }
             semsg!("E473: Internal error in regexp");
             rc_did_emsg.set(true);
-            core::ptr::null_mut()
+            None
         }
 
         // A multi with no atom in front of it.
@@ -155,7 +156,7 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
             let c = c as u8 as char;
             semsg!("E64: {prefix}{c} follows nothing");
             rc_did_emsg.set(true);
-            core::ptr::null_mut()
+            None
         }
 
         M_TILDE => previous_substitute(rc, flagp),
@@ -163,9 +164,9 @@ pub(crate) fn regatom(rc: &mut RegCompiler, flagp: &mut c_int) -> *mut uint8_t {
         M_1..=M_9 => {
             let refnum = c - M_0;
             if !seen_endbrace(rc, refnum) {
-                return core::ptr::null_mut();
+                return None;
             }
-            regnode(rc, BtOp::BACKREF[group_index(refnum)])
+            Some(rc.code.node(BtOp::BACKREF[group_index(refnum)]))
         }
 
         M_Z => z_atom(rc, flagp),
@@ -187,10 +188,10 @@ fn bracketed(
     flagp: &mut c_int,
     crosses_lines: bool,
     c: c_int,
-) -> *mut uint8_t {
+) -> Option<Node> {
     match collection(rc, flagp, crosses_lines) {
-        Collection::Node(node) => node,
-        Collection::Failed => core::ptr::null_mut(),
+        Collection::Node(node) => Some(node),
+        Collection::Failed => None,
         Collection::Literal => literal_run(rc, flagp, c),
     }
 }

@@ -114,7 +114,7 @@ pub(crate) fn nfa_regatom(rc: &mut RegCompiler) -> Parsed {
                 rc.post.emit(NL);
             } else {
                 rc.post.emit_op(NfaOp::Newl);
-                rc.flags = rc.flags | RF_HASNL as u32;
+                rc.flags |= RF_HASNL as u32;
             }
             Ok(())
         }

@@ -75,7 +75,7 @@
 //!
 //! What the ratchet's `mbyte_raw` counts beyond those 33 is a *caller* whose
 //! own cursor is still a pointer, and two things hold them there. `regexp/`'s
-//! 63 are the two engines' `regparse` and `rex.input`; they move when `Rex`
+//! 63 are the compiler's cursor and the matcher's `rex.input`; they move when `Rex`
 //! carries a length, so that `reg_nextline`/`reg_getline` can answer a slice.
 //! The rest -- `spell/`, `insexpand/`, `spellsuggest/`, `search/` -- wait on
 //! [`utf_ptr2char`] and [`utfc_ptr2len`] growing slice siblings, and that is a

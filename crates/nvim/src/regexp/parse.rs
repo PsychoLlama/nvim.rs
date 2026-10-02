@@ -1,8 +1,8 @@
 //! The pattern cursor both engines parse through.
 //!
-//! Everything below reads one shared cursor, `regparse`, and the
-//! one-character lookbehind/lookahead around it (`prevchr`, `curchr`,
-//! `nextchr` and the `at_start` flags). [`peekchr`] is where a pattern
+//! Everything below reads the compile's one cursor,
+//! [`RegCompiler::cursor`], and the one-token lookbehind/lookahead around
+//! it (`prev_token`, `token`, `next_token` and the `at_start` flags). [`peekchr`] is where a pattern
 //! byte becomes a token: a metacharacter is returned as its byte minus
 //! 256, so callers can tell `*` (a repeat) from `\*` (a literal) by sign,
 //! and which characters are metacharacters depends on 'magic' — which is
@@ -254,21 +254,21 @@ pub unsafe fn skip_regexp_ex(
 }
 
 /// The byte `off` bytes past the cursor.
-pub(crate) fn pat_byte(rc: &mut RegCompiler, off: usize) -> u8 {
-    // SAFETY: the cursor points into the pattern `initchr` was given, and
+pub(crate) fn pat_byte(rc: &RegCompiler, off: usize) -> u8 {
+    // SAFETY: the cursor points into the compiler's pattern, and
     // every caller here has already established that `off` is at or before
     // its NUL.
     unsafe { *rc.cursor.add(off) as u8 }
 }
 
 /// The character `off` bytes past the cursor.
-pub(crate) fn pat_char(rc: &mut RegCompiler, off: usize) -> c_int {
+pub(crate) fn pat_char(rc: &RegCompiler, off: usize) -> c_int {
     // SAFETY: as `pat_byte`.
     unsafe { utf_ptr2char(rc.cursor.add(off)) }
 }
 
 /// The encoded length of the character `off` bytes past the cursor.
-pub(crate) fn pat_charlen(rc: &mut RegCompiler, off: usize) -> c_int {
+pub(crate) fn pat_charlen(rc: &RegCompiler, off: usize) -> c_int {
     // SAFETY: as `pat_byte`.
     unsafe { utf_ptr2len(rc.cursor.add(off)) }
 }
@@ -334,14 +334,14 @@ pub(crate) fn peekchr(rc: &mut RegCompiler) -> c_int {
         b'.' | b'[' | b'~' => {
             // Magic as soon as 'magic' is on.
             if rc.magic >= MAGIC_ON {
-                rc.token = rc.token - 256;
+                rc.token -= 256;
             }
         }
         b'(' | b')' | b'{' | b'%' | b'+' | b'=' | b'?' | b'@' | b'!' | b'&' | b'|' | b'<'
         | b'>' | b'#' | b'"' | b'\'' | b',' | b'-' | b':' | b';' | b'`' | b'/' => {
             // Magic only under `\v`.
             if rc.magic == MAGIC_ALL {
-                rc.token = rc.token - 256;
+                rc.token -= 256;
             }
         }
         b'*' => {
@@ -446,7 +446,7 @@ pub(crate) fn skipchr(rc: &mut RegCompiler) {
     // A `\` and the byte after it are one token, so skip both.
     rc.prev_token_len = if pat_byte(rc, 0) == b'\\' { 1 } else { 0 };
     if pat_byte(rc, rc.prev_token_len as usize) != 0 {
-        rc.prev_token_len = rc.prev_token_len + pat_charlen(rc, rc.prev_token_len as usize);
+        rc.prev_token_len += pat_charlen(rc, rc.prev_token_len as usize);
     }
     pat_seek(rc, rc.prev_token_len as isize);
     rc.prev_at_start = rc.at_start;

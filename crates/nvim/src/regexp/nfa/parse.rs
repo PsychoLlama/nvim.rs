@@ -260,15 +260,15 @@ pub(crate) fn nfa_regconcat(rc: &mut RegCompiler) -> Parsed {
             // Anything that ends a concatenation is left for the caller.
             NUL | M_BAR | M_AMP | M_PAREN_CLOSE => return Ok(()),
             M_Z_UPPER => {
-                rc.flags = rc.flags | RF_ICOMBINE as u32;
+                rc.flags |= RF_ICOMBINE as u32;
                 skipchr_keepstart(rc);
             }
             M_C_LOWER => {
-                rc.flags = rc.flags | RF_ICASE as u32;
+                rc.flags |= RF_ICASE as u32;
                 skipchr_keepstart(rc);
             }
             M_C_UPPER => {
-                rc.flags = rc.flags | RF_NOICASE as u32;
+                rc.flags |= RF_NOICASE as u32;
                 skipchr_keepstart(rc);
             }
             // A 'magic' change alters what the *next* byte means, so the

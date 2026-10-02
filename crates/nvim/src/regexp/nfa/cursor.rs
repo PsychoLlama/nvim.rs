@@ -25,7 +25,7 @@ use crate::mbyte::{utf_head_off, utf_iscomposing_legacy, utf_ptr2char, utfc_ptr2
 use crate::regexp::{CharClass, NfaOp, pat_seek, skip_anyof, take_bracketed, take_char_class};
 
 /// The cursor, to hand back to the functions here as a saved position.
-pub(crate) fn here(rc: &mut RegCompiler) -> *mut c_char {
+pub(crate) fn here(rc: &RegCompiler) -> *mut c_char {
     rc.cursor
 }
 
@@ -36,13 +36,13 @@ pub(crate) fn seek_to(rc: &mut RegCompiler, p: *mut c_char) {
 }
 
 /// Is the cursor still before `end`?
-pub(crate) fn before(rc: &mut RegCompiler, end: *mut c_char) -> bool {
+pub(crate) fn before(rc: &RegCompiler, end: *mut c_char) -> bool {
     rc.cursor < end
 }
 
 /// Where the collection at the cursor ends: its closing `]`, or the
 /// pattern's NUL if it has none.
-pub(crate) fn collection_end(rc: &mut RegCompiler) -> *mut c_char {
+pub(crate) fn collection_end(rc: &RegCompiler) -> *mut c_char {
     // SAFETY: the cursor points into the NUL-terminated pattern and
     // `skip_anyof` stops at the terminator.
     unsafe { skip_anyof(rc.cursor, rc.cpo_lit) }
@@ -106,7 +106,7 @@ pub(crate) fn take_cursor_bracketed(rc: &mut RegCompiler, delim: u8) -> c_int {
 /// Is the collection between the cursor and `end` one of the character
 /// classes? See [`nfa_recognize_char_class`].
 pub(crate) fn recognize_char_class(
-    rc: &mut RegCompiler,
+    rc: &RegCompiler,
     end: *mut c_char,
     accepts_newline: bool,
 ) -> Option<(NfaOp, bool)> {

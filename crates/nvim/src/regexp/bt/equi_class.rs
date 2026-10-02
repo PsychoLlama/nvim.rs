@@ -12,7 +12,6 @@
 use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
-use super::compile::regmbc;
 use crate::regexp::equi_class;
 
 /// Produce the bytes for the equivalence class `c` belongs to.
@@ -24,9 +23,9 @@ pub(crate) fn reg_equi_class(rc: &mut RegCompiler, c: c_int) {
     match equi_class::backtracking_class_of(c) {
         Some(class) => {
             for member in class.backtracking_members() {
-                regmbc(rc, member);
+                rc.code.char(member);
             }
         }
-        None => regmbc(rc, c),
+        None => rc.code.char(c),
     }
 }

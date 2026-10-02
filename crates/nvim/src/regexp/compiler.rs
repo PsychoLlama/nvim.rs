@@ -15,7 +15,7 @@
 //! each engine's own output — the backtracker's [`BtEmitter`] and the NFA's
 //! postfix program and state counters.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -26,6 +26,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
+use super::bt::BtEmitter;
 use super::nfa::Postfix;
 use super::{MAGIC_OFF, MAGIC_ON, Magic, NSUBEXP, NfaState, RE_MAGIC, RE_STRICT, RE_STRING};
 use crate::option::cpo_has;
@@ -114,18 +115,6 @@ pub(crate) struct NfaStates {
     pub(crate) base: *mut NfaState,
 }
 
-/// The backtracker's output cursor.
-///
-/// Its program is written twice: the first pass only measures (`code` holds
-/// [`super::JUST_CALC_SIZE`] and every write adds to `size`), the second
-/// writes into the block that size bought.
-pub(crate) struct BtEmitter {
-    pub(crate) code: *mut uint8_t,
-    pub(crate) size: i64,
-    /// A node offset did not fit in 16 bits.
-    pub(crate) too_long: c_int,
-}
-
 impl RegCompiler {
     /// A compiler over `pattern`, with `\k` reading `buffer`'s 'iskeyword'.
     ///
@@ -157,11 +146,7 @@ impl RegCompiler {
             closed_groups: [0; NSUBEXP as usize],
             one_exactly: 0,
             buf: buffer,
-            code: BtEmitter {
-                code: core::ptr::null_mut(),
-                size: 0,
-                too_long: 0,
-            },
+            code: BtEmitter::new(),
             complex_braces: 0,
             wants_nfa: false,
             has_zend: 0,
@@ -202,8 +187,6 @@ impl RegCompiler {
         self.closed_groups = [0; NSUBEXP as usize];
         self.next_zgroup = 1;
         self.has_z = 0;
-        self.code.size = 0;
-        self.code.too_long = 0;
         self.flags = 0;
         self.had_eol = 0;
     }

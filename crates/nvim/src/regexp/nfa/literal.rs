@@ -3,8 +3,7 @@
 //! `:substitute` replacement — and an ordinary character, which may be a
 //! grapheme with combining marks on it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -101,7 +100,7 @@ pub(crate) fn class_shorthand(rc: &mut RegCompiler, c: c_int, accepts_newline: b
     if accepts_newline {
         rc.post.emit_op(NfaOp::Newl);
         rc.post.emit_op(NfaOp::Or);
-        rc.flags = rc.flags | RF_HASNL as u32;
+        rc.flags |= RF_HASNL as u32;
     }
     Ok(())
 }
