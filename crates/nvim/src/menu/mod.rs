@@ -33,6 +33,7 @@
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
+use core::mem::offset_of;
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 use std::ffi::CString;
@@ -72,8 +73,17 @@ pub(crate) use self::info::*;
 pub(crate) use self::name::*;
 pub(crate) use self::tree::*;
 
-pub(crate) static root_menu: GlobalCell<*mut VimMenu> =
-    GlobalCell::new(::core::ptr::null_mut::<VimMenu>());
+/// The menu tree: the head of the top-level sibling list, each node owning
+/// its `children` list in turn. A record rather than a bare pointer so the
+/// tree has an owner to name; the nodes stay the intrusive `VimMenu` lists
+/// the whole layer walks through [`Link`]s.
+pub(crate) struct MenuTree {
+    first: *mut VimMenu,
+}
+
+pub(crate) static root_menu: GlobalCell<MenuTree> = GlobalCell::new(MenuTree {
+    first: ptr::null_mut(),
+});
 pub(crate) static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
 
 /// How deep a menu path may go, and so how many priority components
@@ -357,7 +367,12 @@ impl Link {
 /// first top-level menu is created or the last one is removed.
 pub(crate) fn root_link() -> Link {
     // SAFETY: a static list head, live for the whole process.
-    unsafe { Link::new(root_menu.ptr()) }
+    // A field's address is the record's plus a constant; nothing is read.
+    let head = root_menu
+        .ptr()
+        .wrapping_byte_add(offset_of!(MenuTree, first))
+        .cast();
+    unsafe { Link::new(head) }
 }
 
 /// The first top-level menu, if there is one.

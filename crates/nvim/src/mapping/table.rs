@@ -4,7 +4,7 @@
 //! lists, hashed by [`map_hash`] on the first byte of its LHS and on whether
 //! the mode is a Normal-side or an Insert-side one; abbreviations live on one
 //! unhashed list instead.  Both tables exist twice: once globally, in
-//! [`MAPHASH`] and [`FIRST_ABBR`], and once per buffer in `b_maphash` and
+//! [`GLOBAL_MAPS`], and once per buffer in `b_maphash` and
 //! `b_first_abbr`.
 //!
 //! The functions here create ([`map_add`]), destroy ([`mapblock_free`],
@@ -94,12 +94,18 @@ impl Drop for MapCallback {
     }
 }
 
-/// The global abbreviation list; `b_first_abbr` is its per-buffer twin.
-pub(crate) static FIRST_ABBR: GlobalCell<*mut MapBlock> = GlobalCell::new(ptr::null_mut());
+/// The global mapping table and abbreviation list: the heads of
+/// `MAX_MAPHASH + 1` intrusive lists, the global twin of a buffer's
+/// `b_maphash` and `b_first_abbr`.
+pub(crate) struct GlobalMaps {
+    hash: [*mut MapBlock; MAX_MAPHASH],
+    abbr: *mut MapBlock,
+}
 
-/// The global mapping table; `b_maphash` is its per-buffer twin.
-pub(crate) static MAPHASH: GlobalCell<[*mut MapBlock; MAX_MAPHASH]> =
-    GlobalCell::new([ptr::null_mut(); MAX_MAPHASH]);
+pub(crate) static GLOBAL_MAPS: GlobalCell<GlobalMaps> = GlobalCell::new(GlobalMaps {
+    hash: [ptr::null_mut(); MAX_MAPHASH],
+    abbr: ptr::null_mut(),
+});
 
 /// The global mapping table as a row of list *heads*, one per hash bucket.
 ///
@@ -108,12 +114,20 @@ pub(crate) static MAPHASH: GlobalCell<[*mut MapBlock; MAX_MAPHASH]> =
 /// invalidate a cursor that points into it — which is what
 /// [`map_clear_mode`] does when a re-hash moves an entry.
 pub(crate) fn global_map_heads() -> *mut *mut MapBlock {
-    MAPHASH.ptr().cast()
+    // A field's address is the record's plus a constant; nothing is read.
+    GLOBAL_MAPS
+        .ptr()
+        .wrapping_byte_add(offset_of!(GlobalMaps, hash))
+        .cast()
 }
 
 /// The head of the global abbreviation list. See [`global_map_heads`].
 pub(crate) fn global_abbr_head() -> *mut *mut MapBlock {
-    FIRST_ABBR.ptr()
+    // As [`global_map_heads`].
+    GLOBAL_MAPS
+        .ptr()
+        .wrapping_byte_add(offset_of!(GlobalMaps, abbr))
+        .cast()
 }
 
 /// The modes whose mappings hash on the LHS byte itself.
@@ -137,7 +151,7 @@ pub(crate) fn map_hash(mode: c_int, c1: c_int) -> usize {
 
 /// Get the start of the hashed map list for `state` and first character `c`.
 pub fn get_maphash_list(state: c_int, c: c_int) -> *mut MapBlock {
-    MAPHASH.with(|table| table[map_hash(state, c)])
+    GLOBAL_MAPS.with(|maps| maps.hash[map_hash(state, c)])
 }
 
 /// Get the buffer-local hashed map list for `state` and first character `c`.
@@ -160,8 +174,8 @@ impl MapTable {
     /// buffer by [`Buf`]'s promise.
     fn head(self, hash: usize, abbr: bool) -> *mut MapBlock {
         match (self, abbr) {
-            (MapTable::Global, true) => FIRST_ABBR.get(),
-            (MapTable::Global, false) => MAPHASH.with(|table| table[hash]),
+            (MapTable::Global, true) => GLOBAL_MAPS.with(|maps| maps.abbr),
+            (MapTable::Global, false) => GLOBAL_MAPS.with(|maps| maps.hash[hash]),
             (MapTable::Buffer(buf), true) => buf.b_first_abbr,
             (MapTable::Buffer(buf), false) => buf.b_maphash[hash],
         }
