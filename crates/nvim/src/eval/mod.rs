@@ -195,8 +195,12 @@ pub(crate) const e_cannot_use_partial_here: &CStr = c"E1265: Cannot use a partia
 /// The scope letters a `x:` variable prefix may use.
 pub(crate) const namespace_char: &CStr = c"abglstvw";
 
-pub static eval_lavars_used: GlobalCell<*mut bool> =
-    GlobalCell::new(::core::ptr::null_mut::<bool>());
+/// Whether the lambda being parsed reads a function-local variable or an
+/// argument, which makes it a closure; `None` while no evaluating lambda is
+/// being parsed. Each evaluating lambda starts its own `Some(false)` and puts
+/// back the enclosing one's value when it ends — upstream's
+/// `eval_lavars_used`, a pointer to a flag in that call's frame.
+pub(crate) static LAMBDA_USES_LOCALS: GlobalCell<Option<bool>> = GlobalCell::new(None);
 static echo_hl_id: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static last_timer_id: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
 /// Every live timer, by `timer_id`. See [`crate::registry`] for the order

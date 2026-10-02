@@ -178,13 +178,13 @@ pub unsafe fn eval_variable(
     Ok(())
 }
 
-/// Note in `eval_lavars_used` that `name[0..len]` is a function-local
+/// Note in [`LAMBDA_USES_LOCALS`] that `name[0..len]` is a function-local
 /// variable or an argument, which is what makes a lambda capture it.
 ///
 /// # Safety
 /// `name` points at `len` readable bytes.
 pub unsafe fn check_vars(name: *const c_char, len: size_t) {
-    if eval_lavars_used.get().is_null() {
+    if LAMBDA_USES_LOCALS.get().is_none() {
         return;
     }
     let mut varname: *const c_char = ptr::null();
@@ -192,7 +192,7 @@ pub unsafe fn check_vars(name: *const c_char, len: size_t) {
     if (ht == get_funccal_local_ht() || ht == get_funccal_args_ht())
         && !unsafe { find_var(name, len, ptr::null_mut(), true) }.is_null()
     {
-        unsafe { *eval_lavars_used.get() = true };
+        LAMBDA_USES_LOCALS.set(Some(true));
     }
 }
 

@@ -31,9 +31,9 @@ use crate::eval::vars::{
     list_hashtable_vars, skip_var_list, vars_clear, vars_clear_ext,
 };
 use crate::eval::{
-    callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval_isnamec, eval_isnamec1,
-    eval_lavars_used, eval0, eval1, fill_evalarg_from_eap, find_name_end, garbage_collect,
-    get_id_len, get_lval, handle_subscript, is_luafunc, last_set_msg, partial_name, partial_unref,
+    LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval_isnamec,
+    eval_isnamec1, eval0, eval1, fill_evalarg_from_eap, find_name_end, garbage_collect, get_id_len,
+    get_lval, handle_subscript, is_luafunc, last_set_msg, partial_name, partial_unref,
     set_ref_in_ht, set_ref_in_item, set_ref_in_list_items, skip_expr,
 };
 use crate::ex_docmd::state::ex_nesting_level;

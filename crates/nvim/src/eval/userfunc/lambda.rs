@@ -112,8 +112,11 @@ pub unsafe fn get_lambda_tv(
     let evaluate = !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE != 0;
     let mut newargs = GARRAY_EMPTY;
     let mut varargs = 0;
-    let old_eval_lavars = eval_lavars_used.get();
-    let mut eval_lavars = false;
+    // The enclosing lambda's capture flag, put back when this one is done.
+    // Only an evaluating lambda starts its own: a skipped one leaves the
+    // flag alone, so what it reads still counts for the enclosing lambda.
+    let enclosing_uses_locals = LAMBDA_USES_LOCALS.get();
+    let mut uses_locals = false;
     let mut tofree: *mut c_char = ptr::null_mut();
 
     // First, check whether this is a lambda expression at all: an "->"
@@ -148,7 +151,7 @@ pub unsafe fn get_lambda_tv(
 
         // Set up a flag for checking local variables and arguments.
         if evaluate {
-            eval_lavars_used.set(&raw mut eval_lavars);
+            LAMBDA_USES_LOCALS.set(Some(false));
         }
 
         // Get the start and the end of the expression.
@@ -158,6 +161,9 @@ pub unsafe fn get_lambda_tv(
         let end = unsafe { *arg };
         if ret.is_err() {
             break 'errret false;
+        }
+        if evaluate {
+            uses_locals = LAMBDA_USES_LOCALS.get() == Some(true);
         }
         if !evalarg.is_null() {
             // Avoid that the expression gets freed when another line
@@ -212,7 +218,7 @@ pub unsafe fn get_lambda_tv(
             let slot = size_of::<*mut c_char>() as c_int;
             unsafe { ga_init(&raw mut (*fp).uf_def_args, slot, 1) };
             f.uf_lines = newlines;
-            if !current_funccal.get().is_null() && eval_lavars {
+            if !current_funccal.get().is_null() && uses_locals {
                 flags |= FuncFlags::CLOSURE;
                 unsafe { register_closure(fp) };
             } else {
@@ -242,7 +248,9 @@ pub unsafe fn get_lambda_tv(
     if !parsed {
         unsafe { ga_clear_strings(&raw mut newargs) };
     }
-    eval_lavars_used.set(old_eval_lavars);
+    if evaluate {
+        LAMBDA_USES_LOCALS.set(enclosing_uses_locals);
+    }
     if !evalarg.is_null() && unsafe { (*evalarg).eval_tofree }.is_null() {
         unsafe { (*evalarg).eval_tofree = tofree };
     } else {

@@ -36,7 +36,7 @@ use crate::eval::userfunc::{
 };
 use crate::eval::window::{find_win_by_nr, restore_win, switch_win};
 use crate::eval::{
-    clear_evalarg, clear_lval, eval_expr_ext, eval_isnamec1, eval_lavars_used, eval_option,
+    LAMBDA_USES_LOCALS, clear_evalarg, clear_lval, eval_expr_ext, eval_isnamec1, eval_option,
     eval_to_bool, eval_to_string, eval0, eval1, fill_evalarg_from_eap, find_name_end,
     find_option_var_end, get_env_len, get_lval, get_name_len, handle_subscript,
     may_call_simple_func, num_divide, num_modulus, set_ref_in_ht, set_var_lval, skip_expr,
