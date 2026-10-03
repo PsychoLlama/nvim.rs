@@ -7,7 +7,7 @@ use super::wrappers::{
     arg_bool_chk, arg_number, arg_number_chk, arg_string, arg_string_chk, blob_alloc_ret,
     list_alloc_ret, non_zero_arg,
 };
-use super::{GA_EMPTY_INIT_VALUE, NSUBEXP, VSE_NONE};
+use super::{NSUBEXP, VSE_NONE};
 use crate::cstr;
 use crate::cursor::get_cursor_pos_ptr;
 use crate::eval::do_string_sub;
@@ -16,7 +16,6 @@ use crate::eval::typval::{
     tv_check_for_string_arg, tv_check_num,
 };
 use crate::ex_getln::vim_strsave_fnameescape;
-use crate::garray::ga_clear;
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::keycodes::vim_strsave_escape_ks;
 use crate::mbyte::{
@@ -42,7 +41,7 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    CONV_NONE, EvalFuncData, GArray, Hlf, List, NUL, RegMatch, RegProg, TypVal, VAR_BLOB, VAR_LIST,
+    CONV_NONE, EvalFuncData, Hlf, List, NUL, RegMatch, RegProg, TypVal, VAR_BLOB, VAR_LIST,
     VAR_STRING, VarNumber, VimConv, kListLenMayKnow, time_t, tm,
 };
 use crate::winlayer::{Buf, Win};
@@ -260,19 +259,7 @@ pub fn f_sha256(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_empty(VAR_STRING);
     let hash = if args[0].v_type() == VAR_BLOB {
-        let blob = args[0].blob_or_null();
-        let ga = if blob.is_null() {
-            GA_EMPTY_INIT_VALUE
-        } else {
-            unsafe { (*blob).bv_ga }
-        };
-        let bytes = if ga.ga_data.is_null() {
-            &[][..]
-        } else {
-            let data = ga.ga_data.cast::<u8>();
-            unsafe { core::slice::from_raw_parts(data, ga.ga_len as usize) }
-        };
-        hex_digest(bytes)
+        hex_digest(args[0].blob_ref().map_or(&[][..], |b| b.bytes()))
     } else {
         // SAFETY throughout: `tv_get_string` hands back a NUL-terminated buffer.
         let p = arg_string(&mut numbuf, &args[0]);
@@ -382,7 +369,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 /// `spellsuggest({word} [, {max} [, {capital}]])`.
 pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut ga: GArray = GA_EMPTY_INIT_VALUE;
+    let mut found: Vec<XString> = Vec::new();
     let mut reported = false;
     with_spell(|| {
         reported = true;
@@ -403,22 +390,17 @@ pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
             }
             (maxcount, need_capital)
         };
-        let (out, word) = (&raw mut ga, str as *mut c_char);
-        // SAFETY: `ga` is a local garray that `spell_suggest_list` fills and
-        // `ga_clear` frees, and `word` is the NUL-terminated argument.
-        unsafe { spell_suggest_list(out, word, maxcount, need_capital, false) };
+        // SAFETY: `str` is the NUL-terminated argument.
+        found = unsafe { spell_suggest_list(str as *mut c_char, maxcount, need_capital, false) };
     });
     if !reported {
         return;
     }
-    let list = list_alloc_ret(result, ga.ga_len as isize);
-    for i in 0..ga.ga_len {
-        // SAFETY: the garray holds `ga_len` allocated strings, and the list
-        // takes each one over.
-        let word = unsafe { *ga.ga_data.cast::<*mut c_char>().offset(i as isize) };
-        unsafe { (*list).push_allocated_string(word) };
+    let list = list_alloc_ret(result, found.len() as isize);
+    for word in found {
+        // SAFETY: the list takes the string over.
+        unsafe { (*list).push_allocated_string(word.into_raw()) };
     }
-    unsafe { ga_clear(&raw mut ga) };
 }
 
 /// `split({string} [, {pattern} [, {keepempty}]])`.

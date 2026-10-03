@@ -284,10 +284,7 @@ pub fn tv2bool(tv: &TypVal) -> bool {
         }
         VAR_BOOL => tv.as_bool() == Some(kBoolVarTrue),
         VAR_SPECIAL => tv.as_special().is_some_and(|s| s != kSpecialVarNull),
-        VAR_BLOB => {
-            let b = tv.blob_or_null();
-            !b.is_null() && unsafe { (*b).bv_ga.ga_len } > 0
-        }
+        VAR_BLOB => tv.blob_ref().is_some_and(|b| !b.is_empty()),
         _ => false,
     }
 }

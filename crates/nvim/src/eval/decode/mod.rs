@@ -17,14 +17,13 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_char;
 
 use crate::eval::typval::{
     Di, ListRef, TV_INITIAL_VALUE, di_tv, tv_blob_alloc_ret, tv_dict_alloc, tv_dict_item_alloc_len,
     tv_list_alloc,
 };
 use crate::eval::vars::msgpack_type_list;
-use crate::garray::ga_concat_len;
 use crate::memory::xmemdupz;
 use crate::types::{DictItem, List, MessagePackType, TypVal, VAR_LIST, VarLock, ptrdiff_t, size_t};
 use ::libc::memchr;
@@ -110,15 +109,16 @@ pub unsafe fn decode_string(
     if force_blob || (!s.is_null() && !unsafe { memchr(s.cast(), 0, len) }.is_null()) {
         let mut tv = TV_INITIAL_VALUE;
         let b = tv_blob_alloc_ret(&mut tv);
-        if s_allocated {
+        if s_allocated && !s.is_null() {
             // The caller's allocation becomes the blob's, sized exactly to
             // `len`: nothing is copied and nothing is left to grow into.
-            b.bv_ga.ga_data = s.cast_mut().cast::<c_void>();
-            b.bv_ga.ga_len = len as c_int;
-            b.bv_ga.ga_maxlen = len as c_int;
-        } else {
+            // SAFETY: an `xmalloc` block of at least `len` bytes, whose
+            // ownership the caller handed over; the global allocator is
+            // libc's, so a `Vec` may adopt it.
+            b.bv_data = unsafe { Vec::from_raw_parts(s.cast_mut().cast::<u8>(), len, len) };
+        } else if len > 0 {
             // SAFETY: the caller's promise: `len` readable bytes at `s`.
-            unsafe { ga_concat_len(&raw mut b.bv_ga, s, len) };
+            b.extend(unsafe { core::slice::from_raw_parts(s.cast::<u8>(), len) });
         }
         return tv;
     }

@@ -12,10 +12,11 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::semsg;
 use crate::types::Failed;
-use crate::types::NUL;
+use core::ffi::CStr;
 
 /// Resolve the first index of `l[n1:n2]`, clamping a negative one that fell
 /// off the front and raising `E684` when there is no such item.
@@ -302,107 +303,46 @@ pub fn list_slice_or_index(
     Ok(())
 }
 
-/// `join()`'s two passes: stringify every item into `join_gap`, then
-/// concatenate them into `gap` with `sep` between.
+/// `join()`: append `l`'s items to `out`, separated by `sep`.
 ///
-/// Splitting it in two is what lets `gap` be grown to its final size once.
-///
-/// # Safety
-///
-/// `gap` and `join_gap` must point at live growable arrays the caller owns
-/// and `sep` at a NUL-terminated separator; all live for the call.
-pub(crate) unsafe fn list_join_inner(
-    gap: *mut GArray,
-    l: Option<&List>,
-    sep: *const ::core::ffi::c_char,
-    join_gap: *mut GArray,
-) -> Result<(), Failed> {
-    let mut sumlen: size_t = 0;
-    let mut first = true;
-
-    // Stringify each item in the list.
+/// Two passes: stringify every item, then concatenate them, so the output is
+/// grown once. An interrupt stops either pass where it is.
+pub fn list_join(out: &mut XString, l: Option<&List>, sep: &CStr) -> Result<(), Failed> {
+    if list_len(l) == 0 {
+        return Ok(());
+    }
+    let mut joined: Vec<String_0> = Vec::with_capacity(list_len(l).cast_unsigned() as usize);
     for item in list_iter(l) {
         if got_int.get() {
             break;
         }
         let mut len: size_t = 0;
+        // SAFETY: a live item of the caller's list.
         let data = unsafe { encode_tv2echo(&item.li_tv, &raw mut len) };
         if data.is_null() {
             return Err(Failed);
         }
         // SAFETY: `encode_tv2echo` answers its own NUL-terminated block.
-        let s = unsafe { String_0::from_owned_parts(data, len) };
-
-        sumlen += s.len();
-
-        let p = unsafe { ga_append_via_ptr(join_gap, ::core::mem::size_of::<Join>()) } as *mut Join;
-        // SAFETY: the entry `ga_append_via_ptr` just made room for.
-        let mut joined = unsafe { Live::<Join>::new(p) };
-        joined.s = s;
-
+        joined.push(unsafe { String_0::from_owned_parts(data, len) });
         line_breakcheck();
     }
 
-    // Allocate result buffer with its total size, avoid re-allocation and
-    // multiple copy operations.  Add 2 for a tailing ']' and NUL.
-    let seplen = unsafe { cstr::bytes_at(sep) }.len();
-    // SAFETY: the caller's stack garray.
-    let ga = unsafe { Ga::new(join_gap) };
-    if ga.ga_len >= 2 {
-        sumlen += seplen * (ga.ga_len - 1) as size_t;
-    }
-    unsafe { ga_grow(gap, sumlen as ::core::ffi::c_int + 2) };
-
-    let mut i = 0;
-    while i < ga.ga_len && !got_int.get() {
-        if first {
-            first = false;
-        } else {
-            unsafe { ga_concat_len(gap, sep, seplen) };
+    let sep = sep.to_bytes();
+    let total: usize = joined.iter().map(String_0::len).sum::<usize>()
+        + sep.len() * joined.len().saturating_sub(1);
+    let mut text = Vec::with_capacity(total);
+    for (i, s) in joined.iter().enumerate() {
+        if got_int.get() {
+            break;
         }
-        let p = unsafe { (ga.ga_data as *const Join).offset(i as isize) };
-        if !unsafe { (*p).s.data() }.is_null() {
-            unsafe { ga_concat_len(gap, (*p).s.data(), (*p).s.len()) };
+        if i > 0 {
+            text.extend_from_slice(sep);
         }
+        text.extend_from_slice(s.as_bytes());
         line_breakcheck();
-        i += 1;
     }
-
+    out.push_bytes(&text);
     Ok(())
-}
-
-/// `join()`: append `l`'s items to `gap`, separated by `sep`.
-///
-/// # Safety
-///
-/// `gap` must point at a live growable array the caller owns and `sep` at a
-/// NUL-terminated separator; both live for the call.
-pub unsafe fn list_join(
-    gap: *mut GArray,
-    l: Option<&List>,
-    sep: *const ::core::ffi::c_char,
-) -> Result<(), Failed> {
-    if list_len(l) == 0 {
-        return Ok(());
-    }
-
-    let mut join_ga = GARRAY_EMPTY;
-    let itemsize = ::core::mem::size_of::<Join>() as ::core::ffi::c_int;
-    let growsize = list_len(l);
-    unsafe { ga_init(&raw mut join_ga, itemsize, growsize) };
-    let retval = unsafe { list_join_inner(gap, l, sep, &raw mut join_ga) };
-
-    // GA_DEEP_CLEAR: each entry owns its string, so the clear is a drop.
-    if !join_ga.ga_data.is_null() {
-        for i in 0..join_ga.ga_len {
-            let joined = join_ga.ga_data as *mut Join;
-            // SAFETY: the garray holds `ga_len` initialised entries.
-            unsafe { joined.offset(i as isize).drop_in_place() };
-        }
-    }
-    unsafe { ga_clear(&raw mut join_ga) };
-
-    retval
 }
 
 /// `join()` the builtin.
@@ -424,12 +364,11 @@ pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut ga = GARRAY_EMPTY;
-    let itemsize = ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int;
-    unsafe { ga_init(&raw mut ga, itemsize, 80) };
-    let _ = unsafe { list_join(&raw mut ga, args[0].list_ref(), sep) };
-    unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    result.write_string(ga.ga_data as *mut ::core::ffi::c_char);
+    let mut text = XString::new();
+    // SAFETY: `string_ptr_chk` answered a NUL-terminated separator.
+    let sep = unsafe { cstr::at(sep) };
+    let _ = list_join(&mut text, args[0].list_ref(), sep);
+    result.write_string(text.into_raw());
 }
 
 /// `list2str()`: a list of codepoints as a string.
@@ -446,16 +385,14 @@ pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut ga = GARRAY_EMPTY;
-    unsafe { ga_init(&raw mut ga, 1, 80) };
+    let mut text = XString::new();
     let mut buf: [::core::ffi::c_char; 22] = [0; 22];
     // SAFETY: the builtin's own argument, borrowed for the walk.
     for li in list_iter(args.list_ref()) {
         let n = tv_get_number(&li.li_tv);
-        let buflen = unsafe { utf_char2bytes(n as ::core::ffi::c_int, buf.as_mut_ptr()) } as size_t;
-        buf[buflen as usize] = '\0' as ::core::ffi::c_char;
-        unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), buflen) };
+        let buflen = unsafe { utf_char2bytes(n as ::core::ffi::c_int, buf.as_mut_ptr()) } as usize;
+        // A NUL ends the string there, as it did in the C buffer.
+        text.push_bytes(&buf.map(|c| c.cast_unsigned())[..buflen]);
     }
-    unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    result.write_string(ga.ga_data as *mut ::core::ffi::c_char);
+    result.write_string(text.into_raw());
 }

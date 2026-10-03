@@ -487,13 +487,8 @@ pub(crate) fn get_next_cmdline_completion() {
 
 /// Spelling suggestions for the bad word at `lnum`.
 pub(crate) fn get_next_spell_completion(lnum: LineNr) {
-    let mut matches: *mut *mut c_char = ptr::null_mut();
-    let num_matches = unsafe { expand_spelling(lnum, compl_pattern().data(), &raw mut matches) };
-    if num_matches > 0 {
-        unsafe { ins_compl_add_matches(num_matches, matches, c_int::from(p_ic())) };
-    } else {
-        unsafe { xfree(matches.cast::<c_void>()) };
-    }
+    let matches = unsafe { expand_spelling(lnum, compl_pattern().data()) };
+    ins_compl_add_match_list(&matches, p_ic());
 }
 
 /// Collect one source's worth of matches for `type_0`, `ini` being where

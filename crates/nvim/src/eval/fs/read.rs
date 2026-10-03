@@ -25,7 +25,6 @@
 use super::{__S_IFMT, SEEK_END, SEEK_SET, no_fileinfo, str_arg};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{list_len, tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret};
-use crate::garray::ga_grow;
 use crate::memory::{xfree, xmemdupz, xrealloc};
 use crate::message::{e_cant_read_file_str, e_isadir2, e_notopen};
 use crate::message_fmt::{c_str, emsg_text};
@@ -114,20 +113,15 @@ impl BlobOut {
 
     /// Grow to `len` bytes and fill them from `fd`; false on a short read.
     ///
-    /// The read is asked for the count *as the garray holds it*: upstream
-    /// stores the length in `ga_len`, an `int`, and then reads it back, so a
-    /// size that does not fit in one asks `fread` for a nonsense count
-    /// against a buffer `ga_grow` never allocated -- an inherited overrun,
-    /// reproduced rather than fixed, which is what the round trip through
-    /// `c_int` below is.
+    /// Upstream stored the length in `ga_len`, an `int`, and read it back,
+    /// so a size past `INT_MAX` asked `fread` for a nonsense count against a
+    /// buffer `ga_grow` never allocated. The blob is a `Vec` now and is
+    /// asked for exactly `len`.
     fn fill(self, fd: &File, len: usize) -> bool {
-        let want = len as c_int as size_t;
-        // SAFETY: a live blob; `ga_grow` makes room for `len` items past the
-        // `ga_len` of zero a fresh blob has, so `ga_data` is writable for as
-        // many bytes as `want` asks for -- whenever `len` fits in an `int`.
-        unsafe { ga_grow(&raw mut (*self.0).bv_ga, len as c_int) };
-        unsafe { (*self.0).bv_ga.ga_len = len as c_int };
-        unsafe { fd.read_into((*self.0).bv_ga.ga_data, want) }
+        // SAFETY: a live blob, the result slot's own.
+        let room = unsafe { (*self.0).claim(len) };
+        // SAFETY: `room` is `len` writable bytes.
+        unsafe { fd.read_into(room.as_mut_ptr().cast(), len) }
     }
 }
 

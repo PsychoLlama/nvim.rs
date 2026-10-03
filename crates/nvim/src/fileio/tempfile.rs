@@ -212,7 +212,7 @@ fn vim_mktempdir() {
     unsafe { umask(umask_save) };
 }
 
-/// Core part of the `readdir()` function: list `path` into `gap`.
+/// Core part of the `readdir()` function: the names in `path`, sorted.
 ///
 /// `checkitem` filters the entries; it returns zero to skip one and a
 /// negative number to stop the walk.
@@ -221,18 +221,16 @@ fn vim_mktempdir() {
 ///
 /// # Safety
 ///
-/// `gap` must point at a live growable array, unaliased for the call. `path`
-/// must point at a NUL-terminated string. `context` must be the payload this
+/// `path` must point at a NUL-terminated string. `context` must be the payload this
 /// callback was registered with, live for the call. `checkitem` must be an
 /// initialized `CheckItem` whose pointer fields point at live data for the
 /// call.
 pub unsafe fn readdir_core(
-    gap: *mut GArray,
     path: *const c_char,
     context: *mut c_void,
     checkitem: CheckItem,
-) -> Result<(), Failed> {
-    unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, 20) };
+) -> Result<Vec<CString>, Failed> {
+    let mut names = Vec::new();
 
     let mut dir = Directory::default();
     if !unsafe { os_scandir(&mut dir, cstr::at(path)) } {
@@ -259,20 +257,15 @@ pub unsafe fn readdir_core(
         }
 
         if !ignore {
-            unsafe { ga_grow(gap, 1) };
-            let at = unsafe { (*gap).ga_len };
-            unsafe { (*gap).ga_len += 1 };
-            unsafe { *((*gap).ga_data as *mut *mut c_char).add(at as usize) = xstrdup(p) };
+            names.push(CString::from(unsafe { CStr::from_ptr(p) }));
         }
     }
 
     os_closedir(&mut dir);
 
-    if unsafe { (*gap).ga_len } > 0 {
-        unsafe { sort_strings((*gap).ga_data as *mut *mut c_char, (*gap).ga_len) };
-    }
-
-    Ok(())
+    // Byte order, as `sort_strings`' `strcmp` gave.
+    names.sort();
+    Ok(names)
 }
 
 /// Delete `name` and everything in it, recursively.
@@ -299,26 +292,23 @@ fn delete_tree(name: &[u8]) -> c_int {
         return if os_remove(&path) == 0 { 0 } else { -1 };
     }
 
-    let mut ga = GArray::default();
-    if unsafe { readdir_core(&raw mut ga, path.as_ptr(), ptr::null_mut(), None) }.is_err() {
+    let Ok(names) = (unsafe { readdir_core(path.as_ptr(), ptr::null_mut(), None) }) else {
         return -1;
-    }
+    };
 
     let mut result = 0;
     let mut child = name.to_vec();
     child.push(b'/');
     let stem = child.len();
-    for at in 0..ga.ga_len as usize {
+    for entry in &names {
         child.truncate(stem);
-        let entry = unsafe { *(ga.ga_data as *mut *mut c_char).add(at) };
-        child.extend_from_slice(unsafe { CStr::from_ptr(entry) }.to_bytes());
+        child.extend_from_slice(entry.to_bytes());
         if delete_tree(&child) != 0 {
             // Remember the failure but continue deleting any further
             // entries.
             result = -1;
         }
     }
-    unsafe { ga_clear_strings(&raw mut ga) };
     if os_rmdir(&path) != 0 {
         result = -1;
     }

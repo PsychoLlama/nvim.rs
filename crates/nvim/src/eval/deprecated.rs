@@ -36,19 +36,12 @@ use crate::message::{e_api_spawn_failed, e_invarg};
 use crate::semsg;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    Callback, CallbackReader, ChannelPart, EvalFuncData, GArray, List, ListItem, TypVal, VAR_DICT,
+    Callback, CallbackReader, ChannelPart, EvalFuncData, List, ListItem, TypVal, VAR_DICT,
     VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue, uint64_t,
 };
 use crate::winlayer::buffers;
 
 pub const kChannelPartRpc: ChannelPart = 3;
-pub const GA_EMPTY_INIT_VALUE: GArray = GArray {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 1,
-    ga_data: core::ptr::null_mut(),
-};
 
 /// `CALLBACK_NONE`: no callback at all.
 const CALLBACK_NONE: Callback = Callback::None;

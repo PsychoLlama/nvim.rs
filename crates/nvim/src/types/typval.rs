@@ -350,8 +350,9 @@ mod refcount_tests {
     }
 }
 
+/// A `Blob`: a byte vector with a reference count and a lock.
 pub struct Blob {
-    pub bv_ga: GArray,
+    pub bv_data: Vec<u8>,
     pub bv_refcount: Refcount,
     pub bv_lock: VarLock,
 }

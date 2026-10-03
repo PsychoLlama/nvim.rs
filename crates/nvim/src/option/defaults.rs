@@ -16,6 +16,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::optionstr::OptString;
 use crate::snprintf;
 use crate::strings::has_char;
@@ -31,12 +32,11 @@ use crate::buffer::buf_is_empty;
 use crate::change::save_file_ff;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
 use crate::drawscreen::comp_col;
-use crate::garray::{ga_grow, ga_init};
 use crate::indent_c::parse_cino;
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
-use crate::memory::{XString, xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
+use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
 use crate::message_fmt::c_str;
 use crate::option::vars::{P_CH, P_HLG, P_ICON, P_TITLE, P_WINDOW, fenc_default};
 use crate::option::vars::{mark_option_defaults_set, p_enc, p_rtp, p_sh};
@@ -55,9 +55,7 @@ use crate::path::{after_pathsep, invocation_path_tail, path_fnamecmp, vim_ispath
 use crate::runtime::runtimepath_default;
 use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
-use crate::types::{
-    GArray, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, size_t, uint32_t,
-};
+use crate::types::{NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, size_t, uint32_t};
 use crate::ui::state::Rows;
 use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};
@@ -132,16 +130,8 @@ fn set_init_default_backupskip() {
     // An empty name stands for `/tmp`, which has no environment variable.
     const SOURCES: [&CStr; 4] = [c"", c"TMPDIR", c"TEMP", c"TMP"];
 
-    let mut ga = GArray {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    // SAFETY: the garray is ours, and every string here is either a literal
-    // or an owned result of `vim_getenv`.
-    unsafe { ga_init(&raw mut ga, 1, 100) };
+    // The value built so far; nothing until the first directory is found.
+    let mut value: Option<XString> = None;
     let flags = get_option(kOptBackupskip).flags;
 
     for name in SOURCES {
@@ -166,14 +156,15 @@ fn set_init_default_backupskip() {
             let itemlen =
                 unsafe { vim_snprintf!(item, itemsize, c"%s%s*".as_ptr(), dir, sep) } as size_t;
 
-            if unsafe { find_dup_item(ga.ga_data.cast::<c_char>(), item, itemlen, flags) }.is_null()
-            {
-                let seplen = size_t::from(ga.ga_len != 0);
-                unsafe { ga_grow(&raw mut ga, (seplen + itemlen + 1) as c_int) };
-                let comma = if seplen > 0 { c"," } else { c"" };
-                let at = unsafe { ga.ga_data.cast::<c_char>().offset(ga.ga_len as isize) };
-                let (room, sep) = (seplen + itemlen + 1, comma.as_ptr());
-                ga.ga_len += unsafe { vim_snprintf!(at, room, c"%s%s".as_ptr(), sep, item) };
+            let so_far = value.as_ref().map_or(ptr::null(), XString::as_ptr);
+            if unsafe { find_dup_item(so_far, item, itemlen, flags) }.is_null() {
+                let value = value.get_or_insert_with(XString::new);
+                if !value.is_empty() {
+                    value.push_byte(b',');
+                }
+                // SAFETY: `vim_snprintf` wrote `itemlen` bytes at `item`.
+                value
+                    .push_bytes(unsafe { core::slice::from_raw_parts(item.cast::<u8>(), itemlen) });
             }
             unsafe { xfree(item.cast::<c_void>()) };
         }
@@ -182,8 +173,9 @@ fn set_init_default_backupskip() {
         }
     }
 
-    if !ga.ga_data.is_null() {
-        unsafe { set_string_default(kOptBackupskip, ga.ga_data.cast::<c_char>(), true) };
+    if let Some(value) = value {
+        // SAFETY: an owned string the option takes over.
+        unsafe { set_string_default(kOptBackupskip, value.into_raw(), true) };
     }
 }
 

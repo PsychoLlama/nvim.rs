@@ -38,11 +38,10 @@ use crate::eval::userfunc::{CallStackAside, call_func, func_init};
 use crate::eval::vars::clear_local;
 use crate::eval::vars::{evalvars_init, get_vim_var_dict, get_vim_var_partial, set_vim_var_list};
 use crate::eval::{
-    EVAL_EVALUATE, FUNCEXE_INIT, NL, Tv, check_luafunc_name, clear_evalarg, eval0,
+    EVAL_EVALUATE, FUNCEXE_INIT, Tv, check_luafunc_name, clear_evalarg, eval0,
     eval0_simple_funccal, eval1, may_call_simple_func, partial_name,
 };
 use crate::ex_eval::aborting;
-use crate::garray::{ga_append, ga_init};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::{called_emsg, did_emsg};
 use crate::option::was_set_insecurely;
@@ -51,9 +50,9 @@ use crate::optionstr::OptString;
 use crate::runtime::sourcing_a_script;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    Dict, EvalArg, ExArg, Failed, FuncExe, GArray, HashTab, NUL, Object, OptionSetFlags, Partial,
+    Dict, EvalArg, ExArg, Failed, FuncExe, HashTab, NUL, Object, OptionSetFlags, Partial,
     SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t, size_t, ssize_t, uint8_t,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t, size_t, ssize_t,
 };
 use crate::winlayer::Live;
 use ::libc::atol;
@@ -74,14 +73,6 @@ const UNSET_EVALARG: EvalArg = EvalArg {
 type Ev = Live<EvalArg>;
 
 /// An empty growable array.
-const UNSET_GA: GArray = GArray {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: null_mut(),
-};
-
 /// Reserve `v:event` for the duration of one autocommand, saving whatever
 /// a surrounding one had put there.
 ///
@@ -415,22 +406,14 @@ pub(crate) unsafe fn typval2string(tv: &mut TypVal, join_list: bool) -> *mut c_c
     // `VAR_LIST` says the value holds a List.
     let value = unsafe { Tv::new(tv) };
     if join_list && value.v_type() == VAR_LIST {
-        let mut ga = UNSET_GA;
-        // SAFETY: `ga` is this frame's.
-        unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 80) };
-        let l = value.list_or_null();
-        if !l.is_null() {
-            // SAFETY: `l` is the typval's live List.
-            let _ = unsafe { list_join(&raw mut ga, l.as_ref(), c"\n".as_ptr()) };
-            // SAFETY: as above.
-            if list_len(unsafe { l.as_ref() }) > 0 {
-                // SAFETY: `ga` is this frame's.
-                unsafe { ga_append(&raw mut ga, NL as uint8_t) };
-            }
+        let mut text = XString::new();
+        // SAFETY: the typval's live List, or null.
+        let l = unsafe { value.list_or_null().as_ref() };
+        let _ = list_join(&mut text, l, c"\n");
+        if list_len(l) > 0 {
+            text.push_byte(b'\n');
         }
-        // SAFETY: `ga` is this frame's.
-        unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-        return ga.ga_data as *mut c_char;
+        return text.into_raw();
     }
     if value.v_type() == VAR_LIST || value.v_type() == VAR_DICT {
         // SAFETY: the caller's typval.

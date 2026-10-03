@@ -41,7 +41,6 @@ use std::fs::File;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::getchar::state::got_int;
 use crate::memline::ml_append_buf;
 use crate::memory::XString;
@@ -52,7 +51,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{languages, open_spellbuf, slang_free, spell_soundfold};
-use crate::types::{ColNr, Failed, GArray, LineNr, NUL, SpellIdx, SpellLang, int16_t, uint16_t};
+use crate::types::{ColNr, Failed, LineNr, NUL, SpellIdx, SpellLang, int16_t, uint16_t};
 
 use super::wordtree::{WordNode, tree_add_word, wordtree_alloc, wordtree_compress};
 use super::write::{SplWriter, clear_node, put_node};
@@ -225,16 +224,13 @@ unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<()
 fn sug_maketable(spin: &mut SpellInfo) -> c_int {
     spin.si_spellbuf = Some(open_spellbuf());
 
-    let mut ga: GArray = unsafe { core::mem::zeroed() };
-    unsafe { ga_init(&raw mut ga, 1, 100) };
+    let mut line: Vec<u8> = Vec::with_capacity(100);
     let root = unsafe { (*spin.si_foldroot).wn_sibling };
-    let res = if unsafe { sug_filltable(spin, root, 0, &raw mut ga) } == -1 {
+    if unsafe { sug_filltable(spin, root, 0, &mut line) } == -1 {
         FAIL
     } else {
         OK
-    };
-    unsafe { ga_clear(&raw mut ga) };
-    res
+    }
 }
 
 /// Walk the sound-fold tree, and for each run of word ends write one line
@@ -248,22 +244,21 @@ fn sug_maketable(spin: &mut SpellInfo) -> c_int {
 ///
 /// # Safety
 ///
-/// `node` must be null or head a live sibling chain of the sound-fold tree,
-/// and `gap` an initialised one-byte-item garray.
+/// `node` must be null or head a live sibling chain of the sound-fold tree.
+/// `line` is scratch the caller lends for each line built.
 unsafe fn sug_filltable(
     spin: &mut SpellInfo,
     node: *mut WordNode,
     startwordnr: c_int,
-    gap: *mut GArray,
+    line: &mut Vec<u8>,
 ) -> c_int {
-    // SAFETY: the caller promises the chain and the garray; `ga_grow(10)`
-    // covers the at-most-five bytes each iteration appends.
+    // SAFETY: the caller promises the chain.
     let mut wordnr = startwordnr;
     let mut p = node;
     let spellbuf = spin.spellbuf();
     while !p.is_null() {
         if unsafe { (*p).wn_byte } as c_int != NUL {
-            wordnr = unsafe { sug_filltable(spin, (*p).wn_child, wordnr, gap) };
+            wordnr = unsafe { sug_filltable(spin, (*p).wn_child, wordnr, line) };
             if wordnr == -1 {
                 return -1;
             }
@@ -271,32 +266,23 @@ unsafe fn sug_filltable(
             continue;
         }
 
-        unsafe { (*gap).ga_len = 0 };
+        line.clear();
         let mut prev_nr = 0;
         let mut np = p;
         while !np.is_null() && unsafe { (*np).wn_byte } as c_int == NUL {
-            unsafe { ga_grow(gap, 10) };
             let nr = ((unsafe { (*np).wn_flags } as c_int) << 16)
                 + (unsafe { (*np).wn_region } as c_int & 0xffff);
             let mut bytes = [0u8; 4];
             let n = offset2bytes(nr - prev_nr, &mut bytes);
             prev_nr = nr;
-            let dest = unsafe { (*gap).ga_data.cast::<u8>().offset((*gap).ga_len as isize) };
-            unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), dest, n) };
-            unsafe { (*gap).ga_len += n as c_int };
+            line.extend_from_slice(&bytes[..n]);
             np = unsafe { (*np).wn_sibling };
         }
-        let end = unsafe {
-            (*gap)
-                .ga_data
-                .cast::<c_char>()
-                .offset((*gap).ga_len as isize)
-        };
-        unsafe { *end = NUL as c_char };
-        unsafe { (*gap).ga_len += 1 };
+        line.push(0);
 
         let at = wordnr as LineNr;
-        let (text, len) = unsafe { ((*gap).ga_data.cast::<c_char>(), (*gap).ga_len as ColNr) };
+        let (text, len) = (line.as_mut_ptr().cast::<c_char>(), line.len() as ColNr);
+        // SAFETY: `len` bytes of this line, its NUL among them.
         if unsafe { ml_append_buf(spellbuf, at, text, len, true) }.is_err() {
             return -1;
         }

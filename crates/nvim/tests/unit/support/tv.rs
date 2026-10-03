@@ -31,7 +31,6 @@ use neovim::eval::typval::{
     BlobRef, DictRef, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear, tv_copy,
     tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
 };
-use neovim::garray::ga_append;
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
     Blob, Callback, Dict, DictItem, DictWatcher, List, ListItem, Object, Partial, Refcount, TypVal,
@@ -144,7 +143,7 @@ impl Tv {
                 let held = tv_blob_alloc();
                 let b = held.as_ptr();
                 for byte in bytes {
-                    unsafe { ga_append(&raw mut (*b).bv_ga, *byte) };
+                    unsafe { (*b).push(*byte) };
                 }
                 blob_tv(Some(held))
             }
@@ -651,19 +650,6 @@ pub(crate) fn blob_tv(handle: Option<BlobRef>) -> TypVal {
 /// The partial half of [`list_tv`].
 pub(crate) fn partial_tv(handle: Option<PartialRef>) -> TypVal {
     TypVal::Partial(ManuallyDrop::new(handle))
-}
-
-pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> neovim::types::GArray {
-    let mut ga = neovim::types::GArray {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    // SAFETY: `ga` is this frame's and `ga_init` only writes the header.
-    unsafe { neovim::garray::ga_init(&raw mut ga, itemsize, growsize) };
-    ga
 }
 
 /// The spec's `eval0`: evaluate an expression, answering the value or

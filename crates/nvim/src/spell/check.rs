@@ -28,6 +28,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::spell::WordFlags;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
@@ -43,7 +44,7 @@ use crate::options::kOptSpoFlagCamel;
 use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
-use crate::types::{ColNr, GArray, Hlf, LangP, LineNr, RegMatch, size_t, uint8_t};
+use crate::types::{ColNr, Hlf, LangP, LineNr, RegMatch, size_t, uint8_t};
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
@@ -546,23 +547,13 @@ pub fn spell_expand_check_cap(col: ColNr) {
     ));
 }
 
-/// Insert-mode completion `CTRL-X ?`: fill `matchp` with suggestions for
-/// `pat` and return how many there are.
+/// Insert-mode completion `CTRL-X ?`: the suggestions for `pat`.
 ///
 /// # Safety
 ///
 /// `pat` must point at a NUL-terminated string, unaliased for the call.
-/// `matchp` must point at a writable `*mut *mut c_char` slot the caller owns
-/// for the call.
-pub unsafe fn expand_spelling(
-    _lnum: LineNr,
-    pat: *mut c_char,
-    matchp: *mut *mut *mut c_char,
-) -> c_int {
-    let mut ga: GArray = unsafe { mem::zeroed() };
-    unsafe { spell_suggest_list(&raw mut ga, pat, 100, spell_expand_need_cap.get(), true) };
-    unsafe { *matchp = ga.ga_data as *mut *mut c_char };
-    ga.ga_len
+pub unsafe fn expand_spelling(_lnum: LineNr, pat: *mut c_char) -> Vec<XString> {
+    unsafe { spell_suggest_list(pat, 100, spell_expand_need_cap.get(), true) }
 }
 
 #[cfg(test)]

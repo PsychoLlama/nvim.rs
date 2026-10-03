@@ -612,7 +612,7 @@ impl BlobArg {
     /// Length in bytes; a NULL blob is empty.
     #[inline(always)]
     pub(crate) fn len(self) -> c_int {
-        self.get().map_or(0, |b| b.bv_ga.ga_len)
+        self.get().map_or(0, |b| b.len_int())
     }
 
     #[inline(always)]

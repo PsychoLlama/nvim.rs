@@ -58,7 +58,6 @@ pub(crate) use sps::spell_check_sps;
 use sps::{spell_suggest_expr, spell_suggest_file};
 
 use crate::charset::{skiptowhite, skipwhite};
-use crate::garray::{ga_grow, ga_init};
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::global_cell::GlobalCell;
@@ -79,7 +78,7 @@ use crate::spellsuggest::soundalike::{
     suggest_try_soundalike, suggest_try_soundalike_finish, suggest_try_soundalike_prep,
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
-use crate::types::{GArray, HashTab, Hlf, LangP, MAXPATHL, NUL, SpellLang};
+use crate::types::{HashTab, Hlf, LangP, MAXPATHL, NUL, SpellLang};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -375,22 +374,20 @@ pub(crate) unsafe fn badword_captype(word: *mut c_char, end: *mut c_char) -> Wor
     flags
 }
 
-/// Find suggestions for `word` and return them in `gap` as a list of
-/// allocated strings.
+/// Find suggestions for `word`, at most `maxcount` of them.
 ///
 /// This is what the `spellsuggest()` Vimscript function is built on.
 ///
 /// # Safety
 ///
-/// `gap` must be an uninitialised garray, `word` NUL-terminated, and the
+/// `word` must be NUL-terminated, and the
 /// current window must have its languages loaded.
 pub(crate) unsafe fn spell_suggest_list(
-    gap: *mut GArray,
     word: *mut c_char,
     maxcount: c_int,
     need_cap: bool,
     interactive: bool,
-) {
+) -> Vec<XString> {
     // SAFETY: the caller guarantees the pointers; each string built below
     // is sized from the two pieces copied into it.
     let mut sug = SugInfo::new();
@@ -398,9 +395,7 @@ pub(crate) unsafe fn spell_suggest_list(
     let su = unsafe { Sug::new(&raw mut sug) };
     unsafe { spell_find_suggest(word, 0, su, maxcount, false, need_cap, interactive) };
 
-    let found = sug.su_ga.len() as c_int;
-    unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, found + 1) };
-    unsafe { ga_grow(gap, found) };
+    let mut found = Vec::with_capacity(sug.su_ga.len());
     for stp in &sug.su_ga {
         // A suggestion may replace only part of `word`; what it does
         // not replace goes on the end.
@@ -413,14 +408,11 @@ pub(crate) unsafe fn spell_suggest_list(
             word.push_bytes(cstr::bytes_at(sug.su_badptr.offset(stp.st_orglen as isize)));
             word
         };
-        unsafe {
-            *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) =
-                suggested.into_raw();
-        };
-        unsafe { (*gap).ga_len += 1 };
+        found.push(suggested);
     }
 
     unsafe { spell_find_cleanup(su) };
+    found
 }
 
 /// Find suggestions for the word at the start of `badptr` and leave them

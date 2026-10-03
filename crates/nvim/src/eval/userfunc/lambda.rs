@@ -110,7 +110,7 @@ pub unsafe fn get_lambda_tv(
 ) -> Result<Parsed, Failed> {
     let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
     let evaluate = !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE != 0;
-    let mut newargs = GARRAY_EMPTY;
+    let mut newargs = GArray::EMPTY;
     let mut varargs = 0;
     // The enclosing lambda's capture flag, put back when this one is done.
     // Only an evaluating lambda starts its own: a skipped one leaves the
@@ -191,7 +191,7 @@ pub unsafe fn get_lambda_tv(
             let (mut f, mut part) = unsafe { (Uf::new(fp), Live::new(pt)) };
             let mut rv = unsafe { Tv::new(result) };
 
-            let mut newlines = GARRAY_EMPTY;
+            let mut newlines = GArray::EMPTY;
             unsafe { ga_init(&raw mut newlines, size_of::<*mut c_char>() as c_int, 1) };
             unsafe { ga_grow(&raw mut newlines, 1) };
 

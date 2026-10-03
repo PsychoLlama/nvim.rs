@@ -30,7 +30,6 @@ use crate::eval::{
     get_env_len,
 };
 use crate::eval::{Cur, Tv};
-use crate::garray::ga_append;
 use crate::keycodes::{find_special_key, trans_special};
 use crate::mbyte::{mb_copy_char, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc};
@@ -286,7 +285,7 @@ pub(crate) unsafe fn eval_number(
             if !blob.is_null() {
                 let pair = (hex2nr(c_int::from(bp.byte())) << 4) + hex2nr(c_int::from(bp.at(1)));
                 // SAFETY: as above -- `blob` is this call's own.
-                unsafe { ga_append(&raw mut (*blob).bv_ga, pair as uint8_t) };
+                unsafe { (*blob).push(pair as uint8_t) };
             }
             // A dot may separate byte pairs: `0z00.11.22`.
             if bp.at(2) == b'.' && ascii_isxdigit(c_int::from(bp.at(3))) {

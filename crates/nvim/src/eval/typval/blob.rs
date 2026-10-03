@@ -12,7 +12,7 @@
 use super::*;
 use crate::message::emsg;
 use crate::semsg;
-use crate::types::Failed;
+use crate::types::{Failed, Refcount};
 use ::core::ptr::NonNull;
 
 /// One reference to a [`Blob`], given back when the handle goes.
@@ -113,45 +113,35 @@ impl ::core::ops::DerefMut for BlobRef {
 }
 
 /// The byte vector a [`Blob`] is.
-///
-/// The bytes live in a [`GArray`](crate::types::GArray) because the C
-/// reached them through one; an array that never grew has a null
-/// `ga_data`, which is the empty slice.
 impl Blob {
     /// The blob's bytes.
     #[inline]
     pub fn bytes(&self) -> &[u8] {
-        if self.bv_ga.ga_data.is_null() {
-            return &[];
-        }
-        let len = self.len();
-        // SAFETY: the blob's own byte array, `ga_len` bytes long -- the
-        // invariant of every `Blob` the allocator hands out.
-        unsafe { ::core::slice::from_raw_parts(self.bv_ga.ga_data.cast::<u8>(), len) }
+        &self.bv_data
     }
 
     /// The blob's bytes, writable.
     #[inline]
     pub(crate) fn bytes_mut(&mut self) -> &mut [u8] {
-        if self.bv_ga.ga_data.is_null() {
-            return &mut [];
-        }
-        let len = self.len();
-        // SAFETY: as [`Blob::bytes`], and `&mut self` is the exclusive
-        // borrow the slice needs.
-        unsafe { ::core::slice::from_raw_parts_mut(self.bv_ga.ga_data.cast::<u8>(), len) }
+        &mut self.bv_data
     }
 
     /// How many bytes the blob holds.
     #[inline]
     pub(crate) fn len(&self) -> usize {
-        usize::try_from(self.bv_ga.ga_len).unwrap_or(0)
+        self.bv_data.len()
+    }
+
+    /// How many bytes the blob holds, as the `int` upstream counted in.
+    #[inline]
+    pub(crate) fn len_int(&self) -> ::core::ffi::c_int {
+        ::core::ffi::c_int::try_from(self.len()).expect("a blob shorter than 2 GiB")
     }
 
     /// Whether the blob holds no bytes at all.
     #[inline]
     pub(crate) fn is_empty(&self) -> bool {
-        self.bv_ga.ga_len <= 0
+        self.bv_data.is_empty()
     }
 
     /// The byte at `idx`, which must name one.
@@ -171,10 +161,11 @@ impl Blob {
     /// just past the end.  Anything further out is silently ignored, which
     /// is upstream's `tv_blob_set_append`.
     pub(crate) fn set_or_append(&mut self, idx: ::core::ffi::c_int, byte: u8) {
-        if idx > self.bv_ga.ga_len {
+        let len = self.len_int();
+        if idx > len {
             return;
         }
-        if idx == self.bv_ga.ga_len {
+        if idx == len {
             self.claim(1);
         }
         self.set_byte(idx, byte);
@@ -182,44 +173,40 @@ impl Blob {
 
     /// Append `byte` to the blob.
     #[inline]
-    pub(crate) fn push(&mut self, byte: u8) {
-        // SAFETY: the blob's own byte array, which this grows by one.
-        unsafe { ga_append(&raw mut self.bv_ga, byte) };
+    pub fn push(&mut self, byte: u8) {
+        self.bv_data.push(byte);
+    }
+
+    /// Append `bytes` to the blob.
+    #[inline]
+    pub(crate) fn extend(&mut self, bytes: &[u8]) {
+        self.bv_data.extend_from_slice(bytes);
     }
 
     /// Make room for `n` more bytes, declare them live and answer the run
-    /// just claimed.
-    ///
-    /// The bytes are whatever the allocator left there, so every caller
-    /// overwrites the whole run.
+    /// just claimed. The run is zeroed; every caller overwrites it.
     pub(crate) fn claim(&mut self, n: usize) -> &mut [u8] {
         let was = self.len();
-        let n = ::core::ffi::c_int::try_from(n).expect("a short blob");
-        // SAFETY: the blob's own byte array.
-        unsafe { ga_grow(&raw mut self.bv_ga, n) };
-        self.bv_ga.ga_len += n;
+        self.bv_data.resize(was + n, 0);
         &mut self.bytes_mut()[was..]
     }
 
     /// Take the bytes `first..=last` out, closing the gap.
     pub(crate) fn drain(&mut self, first: usize, last: usize) {
-        let taken = ::core::ffi::c_int::try_from(last - first + 1).expect("a short blob");
-        self.bytes_mut().copy_within(last + 1.., first);
-        self.bv_ga.ga_len -= taken;
+        self.bv_data.drain(first..=last);
     }
 
     /// Drop every byte, leaving the blob empty and its storage released.
     #[inline]
     pub(crate) fn clear(&mut self) {
-        // SAFETY: the blob's own byte array.
-        unsafe { ga_clear(&raw mut self.bv_ga) };
+        self.bv_data = Vec::new();
     }
 }
 
 /// Length of `b`'s data in bytes; a NULL blob is empty.
 #[inline]
 pub(crate) fn blob_len(b: Option<&Blob>) -> ::core::ffi::c_int {
-    b.map_or(0, |b| b.bv_ga.ga_len)
+    b.map_or(0, Blob::len_int)
 }
 
 /// The bytes of `b`; a NULL blob is empty.
@@ -312,13 +299,16 @@ impl TypVal {
 /// zero: a caller that stores it nowhere drops the handle, and that is the
 /// free.
 pub fn tv_blob_alloc() -> BlobRef {
-    let blob = unsafe { xcalloc(1, ::core::mem::size_of::<Blob>()) } as *mut Blob;
-    unsafe { ga_init(&raw mut (*blob).bv_ga, 1, 100) };
-    // SAFETY: freshly allocated, and the count starts at the handle's one.
-    unsafe { Bl::new(blob) }.bv_refcount.retain();
-    // SAFETY: `xcalloc` never answers null, and the reference is this
-    // handle's own.
-    unsafe { BlobRef::from_owned(NonNull::new_unchecked(blob)) }
+    let mut blob = Box::new(Blob {
+        bv_data: Vec::new(),
+        bv_refcount: Refcount::ZERO,
+        bv_lock: VarLock::Unlocked,
+    });
+    // The count starts at the handle's one.
+    blob.bv_refcount.retain();
+    // SAFETY: the reference is this handle's own, and `blob_free` is the
+    // `Box` it came from going back.
+    unsafe { BlobRef::from_owned(NonNull::from(Box::leak(blob))) }
 }
 
 /// Free `b` and its bytes.
@@ -327,9 +317,9 @@ pub fn tv_blob_alloc() -> BlobRef {
 ///
 /// `b` must point at a live blob, unaliased for the call.
 pub unsafe fn blob_free(b: *mut Blob) {
-    // SAFETY: the caller's promise: a live, unaliased blob.
-    unsafe { &mut *b }.clear();
-    unsafe { xfree(b.cast()) };
+    // SAFETY: the caller's promise: a live, unaliased blob, which
+    // `tv_blob_alloc` made as a `Box`.
+    drop(unsafe { Box::from_raw(b) });
 }
 
 /// Drop a reference to `b`, freeing it when the last one goes.
@@ -660,7 +650,7 @@ mod tests {
     fn an_untouched_blob_is_the_empty_slice() {
         let _held = editor_state_lock();
         let mut b = tv_blob_alloc();
-        assert!(b.bv_ga.ga_data.is_null());
+        assert_eq!(b.bv_data.capacity(), 0);
         assert_eq!(b.bytes(), b"");
         assert_eq!(b.bytes_mut(), b"");
         assert_eq!(b.len(), 0);

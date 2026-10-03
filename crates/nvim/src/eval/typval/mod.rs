@@ -16,7 +16,6 @@ use crate::eval::{
     callback_call, callback_from_typval, func_equal, partial_name, partial_unref, set_selfdict,
     var_item_copy, var2fpos,
 };
-use crate::garray::{ga_append, ga_append_via_ptr, ga_clear, ga_concat_len, ga_grow, ga_init};
 use crate::getchar::state::got_int;
 use crate::global_cell::{ConstTable, GlobalCell};
 use crate::hashtab::{
@@ -36,8 +35,8 @@ use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::types::{
     Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float, FuncExe,
-    GArray, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue, String_0,
-    TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
+    LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue, String_0, TypVal,
+    UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
     VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VimConv,
     int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t,
 };
@@ -88,9 +87,6 @@ pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 /// `tofree`, because its `String` did not own anything -- and clears the
 /// array with `FREE_JOIN_TOFREE`. The string owns its bytes here, so there
 /// is one field and the array's own clear releases it.
-pub struct Join {
-    pub s: String_0,
-}
 pub struct SortInfo {
     pub item_compare_ic: ::core::ffi::c_int,
     pub item_compare_lc: bool,
@@ -172,16 +168,6 @@ pub const SORTINFO_INIT: SortInfo = SortInfo {
     item_compare_partial: ::core::ptr::null_mut(),
     item_compare_selfdict: ::core::ptr::null_mut(),
     item_compare_func_err: false,
-};
-/// A zeroed `GArray`, which is what a bare `GArray ga;` declaration is
-/// before `ga_init` fills it in.  c2rust wrote the five fields out at every
-/// such declaration.
-pub const GARRAY_EMPTY: GArray = GArray {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: ::core::ptr::null_mut(),
 };
 /// `TV_INITIAL_VALUE`: the `VAR_UNKNOWN` a `TypVal` is initialised to and
 /// left as after being moved out of.  c2rust wrote the designated

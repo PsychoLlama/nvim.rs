@@ -19,3 +19,14 @@ pub struct GArray {
     pub ga_growsize: ::core::ffi::c_int,
     pub ga_data: *mut ::core::ffi::c_void,
 }
+
+impl GArray {
+    /// The uninitialised array: no items, no item size, no storage.
+    pub const EMPTY: GArray = GArray {
+        ga_len: 0,
+        ga_maxlen: 0,
+        ga_itemsize: 0,
+        ga_growsize: 0,
+        ga_data: ::core::ptr::null_mut(),
+    };
+}

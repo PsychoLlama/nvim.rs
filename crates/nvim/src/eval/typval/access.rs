@@ -49,8 +49,6 @@ pub(crate) type Dt = Live<Dict>;
 pub(crate) type Di = Live<DictItem>;
 /// A live `Blob`; see [`Tv`].
 pub(crate) type Bl = Live<Blob>;
-/// A live `GArray`; see [`Tv`].
-pub(crate) type Ga = Live<GArray>;
 /// A live `Partial`; see [`Tv`].
 pub(crate) type Pt = Live<Partial>;
 /// A live `DictWatcher`; see [`Tv`].

@@ -277,13 +277,6 @@ pub const FIND_IDENT: c_uint = 1;
 pub const INT32_MAX: c_int = 2147483647 as c_int;
 pub const NULL_1: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const EXIT_FAILURE: c_int = 1 as c_int;
-pub const GA_EMPTY_INIT_VALUE: GArray = GArray {
-    ga_len: 0 as c_int,
-    ga_maxlen: 0 as c_int,
-    ga_itemsize: 0 as c_int,
-    ga_growsize: 1 as c_int,
-    ga_data: NULL_1,
-};
 pub const BAD_KEEP: c_int = -1 as c_int;
 pub const BAD_DROP: c_int = -2 as c_int;
 pub const FORCE_BIN: c_int = 1 as c_int;

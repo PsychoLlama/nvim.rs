@@ -35,9 +35,8 @@ use neovim::eval::typval::{
     list_find_nr, list_find_str, list_first, list_free, list_free_contents, list_free_list,
     list_join, list_last, list_len, list_unref, tv_clear, tv_list_alloc,
 };
-use neovim::garray::ga_clear;
 use neovim::mbyte::convert_setup;
-use neovim::memory::xstrdup;
+use neovim::memory::{XString, xstrdup};
 use neovim::types::{List, ListWatch, Refcount, TypVal, VAR_LIST, VarLock, VimConv};
 
 use crate::support::alloc::{self, AllocLog};
@@ -1540,20 +1539,9 @@ fn joining_a_list_renders_every_item() {
     // SAFETY: each list and its growarray are this case's own.
     unsafe {
         let join = |l: *mut List, sep: &str| -> String {
-            let mut ga = tv::ga_alloc(1, 80);
-            assert_eq!(
-                list_join(&raw mut ga, l.as_ref(), cstr(sep).as_ptr()),
-                Ok(())
-            );
-            let out = if ga.ga_data.is_null() {
-                String::new()
-            } else {
-                CStr::from_ptr(ga.ga_data.cast())
-                    .to_string_lossy()
-                    .into_owned()
-            };
-            ga_clear(&raw mut ga);
-            out
+            let mut out = XString::new();
+            assert_eq!(list_join(&mut out, l.as_ref(), &cstr(sep)), Ok(()));
+            out.as_cstr().to_string_lossy().into_owned()
         };
 
         let l = tv::new_list(&[Tv::s("boo"), Tv::s("far")]);

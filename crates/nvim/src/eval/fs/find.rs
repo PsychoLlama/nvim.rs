@@ -15,10 +15,9 @@
 //!
 //! # What holds the results
 //!
-//! [`Expander`] is the wildcard expander and [`StrArray`] the `GArray` of
-//! owned strings `globpath()` and `readdir_core` fill; both hand out their
-//! names as a slice, and [`StrArray`] frees itself, which is upstream's
-//! `ga_clear_strings` on every path out.  **The order of those names is
+//! [`Expander`] is the wildcard expander, and `readdir_core` answers a
+//! `Vec` of owned names; both hand out their names as a slice and free
+//! them on every path out.  **The order of those names is
 //! behaviour** -- `readdir_core` and `gen_expand_wildcards` sort them
 //! themselves -- so nothing here re-orders anything.
 //!
@@ -36,18 +35,17 @@ use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
 use crate::fileio::readdir_core;
-use crate::garray::{ga_clear_strings, ga_init};
 use crate::memory::{XString, xfree};
 use crate::option::vars::p_wic;
 use crate::optionstr::OptString;
 use crate::path::buffer_path;
 use crate::types::{
-    EvalFuncData, Expand, ExpandContext, GArray, TypVal, VAR_LIST, VAR_STRING, VarNumber, Vv,
+    EvalFuncData, Expand, ExpandContext, TypVal, VAR_LIST, VAR_STRING, VarNumber, Vv,
     kListLenUnknown, ptrdiff_t, size_t,
 };
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{ptr, slice};
+use core::ptr;
 
 // ---------------------------------------------------------------------
 // The two things that hold the names found
@@ -84,45 +82,6 @@ impl Expander {
 
     fn cleanup(&mut self) {
         expand_cleanup(&mut self.0);
-    }
-}
-
-/// A `GArray` of owned strings -- what `globpath()` and `readdir_core`
-/// fill, and what frees them.
-struct StrArray(GArray);
-
-impl Drop for StrArray {
-    fn drop(&mut self) {
-        // SAFETY: an initialised array whose items are all owned strings.
-        unsafe { ga_clear_strings(&raw mut self.0) };
-    }
-}
-
-impl StrArray {
-    fn new() -> Self {
-        let mut ga = GArray {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ptr::null_mut(),
-        };
-        // SAFETY: a fresh local.
-        unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10) };
-        Self(ga)
-    }
-
-    fn raw(&mut self) -> *mut GArray {
-        &raw mut self.0
-    }
-
-    /// The names, in the order they were put in.
-    fn names(&self) -> &[*const c_char] {
-        if self.0.ga_len <= 0 {
-            return &[];
-        }
-        // SAFETY: the array holds `ga_len` items of one pointer each.
-        unsafe { slice::from_raw_parts(self.0.ga_data.cast(), self.0.ga_len as usize) }
     }
 }
 
@@ -413,13 +372,11 @@ pub fn f_readdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         .get(1)
         .map_or(ptr::null_mut(), |tv| ptr::from_ref(tv).cast_mut().cast());
 
-    let mut found = StrArray::new();
-    // SAFETY: `path` is NUL-terminated, `expr` is null or the argument the
-    // filter reads back through, and the array is a fresh one to fill.
-    let ret = unsafe { readdir_core(found.raw(), path, expr, Some(readdir_checkitem)) };
-    if ret.is_ok() {
-        for &name in found.names() {
-            list.push(name);
+    // SAFETY: `path` is NUL-terminated, and `expr` is null or the argument
+    // the filter reads back through.
+    if let Ok(found) = unsafe { readdir_core(path, expr, Some(readdir_checkitem)) } {
+        for name in &found {
+            list.push(name.as_ptr());
         }
     }
 }

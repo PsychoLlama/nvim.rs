@@ -23,11 +23,10 @@
 use crate::eval::typval::BlobRef;
 use crate::eval::typval::{ListRef, NumBuf, list_extend, tv_clear, tv_get_number};
 use crate::eval::{Tv, grow_string_tv, num_divide, num_modulus};
-use crate::garray::ga_grow;
 use crate::strings::concat_str;
 use crate::types::{
     Blob, Failed, Float, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, uint8_t,
+    VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber,
 };
 use ::libc::abort;
 use core::ffi::{CStr, c_char};
@@ -80,20 +79,10 @@ unsafe fn tv_op_blob(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
         lhs.write_blob(unsafe { BlobRef::retained(b2) });
         return Ok(());
     }
-    // SAFETY: `b2` is live.
-    let len = unsafe { (*b2).bv_ga.ga_len };
-    if len > 0 {
-        // SAFETY (every region below): both Blobs are live, `ga` is the
-        // left-hand one's own array, and `ga_grow` has made room for `len`
-        // bytes past `ga_len` before the move. `len > 0`, so the narrowing
-        // cannot lose a sign.
-        let ga = unsafe { &raw mut (*b1).bv_ga };
-        unsafe { ga_grow(ga, len) };
-        let at = unsafe { (*ga).ga_len } as isize;
-        let end = unsafe { (*ga).ga_data.cast::<uint8_t>().offset(at) };
-        let n = len.unsigned_abs() as usize;
-        unsafe { end.cast::<u8>().copy_from((*b2).bv_ga.ga_data.cast(), n) };
-        unsafe { (*ga).ga_len += len };
+    // SAFETY: both Blobs are live; `b1 += b1` appends a copy of itself.
+    unsafe {
+        let tail = (*b2).bytes().to_vec();
+        (*b1).extend(&tail);
     }
     Ok(())
 }

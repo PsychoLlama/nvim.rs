@@ -29,7 +29,6 @@ use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::ex_eval::aborting;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps, no_check_timestamps};
 use crate::fold::{fold_update_all, foldmethod_is_manual};
-use crate::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::getchar::state::got_int;
 use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
@@ -84,16 +83,15 @@ use crate::snprintf;
 use crate::startup::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored};
 use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
-use crate::strings::sort_strings;
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, BlnFlags, CheckItem, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo,
-    FileOffset, GArray, IOSIZE, LineNr, OK, OptInt, OptStr, OptVal, OptionSetFlags, RegMatch,
-    RegProg, ScriptId, ShmFlag, iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t,
-    uintmax_t, uv_gid_t, uv_uid_t,
+    FileOffset, IOSIZE, LineNr, OK, OptInt, OptStr, OptVal, OptionSetFlags, RegMatch, RegProg,
+    ScriptId, ShmFlag, iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t,
+    uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

@@ -12,11 +12,12 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::handoff::owned_cstr;
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_void};
-use core::{ptr, slice};
+use core::ptr;
+use core::slice;
 
-use crate::garray::{ga_grow, ga_init};
 use crate::mbyte::{
     cluster_len, mb_tolower, utf_char2bytes, utf_char2cells, utf_char2len, utf_ptr2cells,
     utf_ptr2char, utf_ptr2len, utfc_ptr2len,
@@ -24,7 +25,7 @@ use crate::mbyte::{
 use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
 use crate::option::vars::dy_flags;
-use crate::types::{GArray, NUL, StringBuilder, size_t, ssize_t, uint8_t};
+use crate::types::{NUL, StringBuilder, size_t, ssize_t, uint8_t};
 use crate::winlayer::Buf;
 
 use super::{
@@ -332,40 +333,41 @@ pub unsafe fn str_foldcase(
     buf: *mut c_char,
     buflen: c_int,
 ) -> *mut c_char {
-    let mut ga = GArray::default();
+    // With no `buf`, the folding happens in a copy this call owns: the text
+    // and its terminator, grown as a character's lowercase form gets longer.
+    let mut owned: Vec<u8> = Vec::new();
     let mut len = orglen;
     if buf.is_null() {
-        // SAFETY: `ga` is a local, and `str` holds `orglen` readable bytes.
-        unsafe {
-            ga_init(&raw mut ga, 1, 10);
-            ga_grow(&raw mut ga, len + 1);
-            ptr::copy(str, ga.ga_data as *mut c_char, len as usize);
-        }
-        ga.ga_len = len;
+        // SAFETY: `str` holds `orglen` readable bytes.
+        owned.extend_from_slice(unsafe { slice::from_raw_parts(str.cast::<u8>(), len as usize) });
+        owned.push(0);
     } else {
         if len >= buflen {
             len = buflen - 1;
         }
         // SAFETY: `buf` holds `buflen` bytes and `str` holds `len`.
         unsafe { ptr::copy(str, buf, len as usize) };
+        // SAFETY: index `len` is inside `buf`.
+        unsafe { *buf.add(len as usize) = NUL as c_char };
     }
 
     // From here on `at(i)` is the one place that knows which buffer is in
-    // play; `ga.ga_data` moves under us whenever the collection grows.
-    let at = |ga: &GArray, i: c_int| -> *mut c_char {
+    // play; the copy moves whenever it grows.
+    let at = |owned: &mut Vec<u8>, i: c_int| -> *mut c_char {
         if buf.is_null() {
-            (ga.ga_data as *mut c_char).wrapping_offset(i as isize)
+            owned
+                .as_mut_ptr()
+                .cast::<c_char>()
+                .wrapping_offset(i as isize)
         } else {
             buf.wrapping_offset(i as isize)
         }
     };
-    // SAFETY: index `len` is the terminator's, inside either buffer.
-    unsafe { *at(&ga, len) = NUL as c_char };
 
     let mut i: c_int = 0;
     loop {
         // SAFETY: the walk stops at the terminator written above.
-        let cursor = unsafe { Chars::new(at(&ga, i)) };
+        let cursor = unsafe { Chars::new(at(&mut owned, i)) };
         if cursor.byte() == 0 {
             break;
         }
@@ -379,8 +381,7 @@ pub unsafe fn str_foldcase(
             if olen != nlen {
                 if nlen > olen {
                     if buf.is_null() {
-                        // SAFETY: `ga` is a live growable array.
-                        unsafe { ga_grow(&raw mut ga, nlen - olen + 1) };
+                        owned.resize(owned.len() + (nlen - olen) as usize, 0);
                     } else if len + nlen - olen >= buflen {
                         // No room to grow: keep the original character.
                         lc = c;
@@ -391,25 +392,29 @@ pub unsafe fn str_foldcase(
                     // SAFETY: the tail, terminator included, still fits: the
                     // buffer either grew or the character did not.
                     unsafe {
-                        let src = at(&ga, i + olen);
-                        ptr::copy(src, at(&ga, i + nlen), cstr::bytes_at(src).len() + 1);
+                        let src = at(&mut owned, i + olen);
+                        let dst = at(&mut owned, i + nlen);
+                        ptr::copy(src, dst, cstr::bytes_at(src).len() + 1);
                     }
                     if buf.is_null() {
-                        ga.ga_len += nlen - olen;
+                        if nlen < olen {
+                            owned.truncate(owned.len() - (olen - nlen) as usize);
+                        }
                     } else {
                         len += nlen - olen;
                     }
                 }
             }
             // SAFETY: `nlen` bytes were just made available at `i`.
-            unsafe { utf_char2bytes(lc, at(&ga, i)) };
+            unsafe { utf_char2bytes(lc, at(&mut owned, i)) };
         }
         // SAFETY: the character at `i` is inside the buffer.
-        i += unsafe { Chars::new(at(&ga, i)) }.char_len() as c_int;
+        i += unsafe { Chars::new(at(&mut owned, i)) }.char_len() as c_int;
     }
 
     if buf.is_null() {
-        ga.ga_data as *mut c_char
+        owned.pop();
+        owned_cstr(owned)
     } else {
         buf
     }

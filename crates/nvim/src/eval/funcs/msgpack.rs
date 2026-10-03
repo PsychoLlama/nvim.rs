@@ -117,11 +117,12 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         // The Blob adopts the packer's allocation as-is, capacity and
         // all; nothing copies, so the string gives the block up rather than
         // releasing it on the way out.
-        let (len, maxlen) = (data.len() as c_int, packer.capacity() as c_int);
+        let (len, capacity) = (data.len(), packer.capacity());
         let b = blob_alloc_ret(result);
-        b.bv_ga.ga_data = data.into_raw().cast::<c_void>();
-        b.bv_ga.ga_len = len;
-        b.bv_ga.ga_maxlen = maxlen;
+        // SAFETY: the packer's own `capacity`-byte allocation holding `len`
+        // bytes, which the string gives up; the global allocator is libc's,
+        // so a `Vec` may adopt it.
+        b.bv_data = unsafe { Vec::from_raw_parts(data.into_raw().cast::<u8>(), len, capacity) };
     } else {
         let l = list_alloc_ret(result, kListLenMayKnow as isize);
         unsafe { encode_list_write(l as *mut c_void, data.data(), data.len()) };
