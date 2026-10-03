@@ -8,6 +8,8 @@
 //! breakcheck count reset, and `'completeopt'` is the global value, which is
 //! what [`completeopt_flags`] answers with no current buffer.
 
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use super::*;
 use crate::eval::typval::dict_find;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
