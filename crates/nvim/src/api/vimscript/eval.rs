@@ -135,7 +135,6 @@ unsafe fn call_function_with(
         let _ = unsafe { call_func(name, name_len, &mut rettv, argv, fe) };
         // SAFETY: `tstate` is what the `try_enter` above filled in.
         rv = match unsafe { try_leave(&raw mut tstate) } {
-            // SAFETY: `rettv` is this frame's and `arena` the caller's.
             // SAFETY: `ret` is this frame's return slot.
             Ok(()) => Ok(Object::from(unsafe { &*ret })),
             Err(e) => Err(e),
@@ -147,7 +146,7 @@ unsafe fn call_function_with(
 }
 
 pub fn nvim_call_function(fn_0: String_0, args: Array) -> Result<Object, Error> {
-    // SAFETY: `fn_0`/`args`/`arena` are the caller's; a null self dictionary
+    // SAFETY: `fn_0`/`args` are the caller's; a null self dictionary
     // means a plain function call.
     unsafe { call_function_with(fn_0, args, ptr::null_mut::<Dict>()) }
 }
@@ -196,8 +195,7 @@ pub fn nvim_call_dict_function(
     // A non-dictionary answers NULL, which `call_in_dict` reads as "no
     // `self`".
     let self_dict: *mut Dict = rettv.dict_or_null();
-    // SAFETY: `rettv` is this frame's, and `fn_0`/`args`/`arena` are the
-    // caller's.
+    // SAFETY: `rettv` is this frame's, and `fn_0`/`args` are the caller's.
     let rv = unsafe { call_in_dict(&mut fn_0, dict_given, args, self_dict, &rettv) };
     if mustfree {
         tv_clear(&mut rettv);

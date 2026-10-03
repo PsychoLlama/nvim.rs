@@ -86,15 +86,15 @@ pub fn nvim_get_mark(name: String_0, _opts: &mut KeyDict_empty) -> Result<Array,
         col = Integer::from(pos.col);
     }
     let mut rv = Array::with_capacity(4 as size_t);
-    // SAFETY: `filename` is NUL-terminated and `arena` is the caller's, so
-    // the copy outlives the answer.
+    // SAFETY: `filename` is NUL-terminated; the answer owns its copy.
     let path = unsafe { Object::string(cstr_to_string(filename)) };
     rv.push(Object::integer(row));
     rv.push(Object::integer(col));
     rv.push(Object::integer(Integer::from(bufnr)));
     rv.push(path);
     if allocated {
-        // SAFETY: as above -- the arena has its own copy now.
+        // SAFETY: `filename` is this frame's allocation, and the answer
+        // holds its own copy now.
         unsafe { xfree(filename.cast()) };
     }
     Ok(rv)

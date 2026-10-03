@@ -66,8 +66,6 @@ pub fn nvim_get_var(name: String_0) -> Result<Object, Error> {
         error = key_not_found(&name);
         return Object::Nil.reported(error);
     }
-    // SAFETY: `di` is the live dictionary item just found, and `arena` is the
-    // caller's.
     // SAFETY: `di` is the live item the lookup found.
     Object::from(unsafe { &(*di).di_tv }).reported(error)
 }
@@ -92,8 +90,8 @@ fn key_not_found(name: &String_0) -> Error {
 /// Set the global variable `name` to `value`.
 pub fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
     let dict = get_globvar_dict();
-    // SAFETY: the caller's promise, and `error` is this frame's own slot. The
-    // null arena means the value is copied rather than borrowed.
+    // SAFETY: the global dictionary is live from startup to exit; the value
+    // is copied into it.
     unsafe { dict_set_var(dict, &name, value, false, false) }.map(|_| ())
 }
 

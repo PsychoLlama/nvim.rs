@@ -88,8 +88,6 @@ fn border_array(fconfig: WinCfg) -> Array {
         };
         let name = syn_id2name(fconfig.border_hl_ids[i]);
         let highlighted = !name.is_empty();
-        // SAFETY: `arena` is the caller's, and both strings live as long as
-        // it does.
         if highlighted {
             let mut tuple = Array::with_capacity(2);
             tuple.push(Object::string(cell));

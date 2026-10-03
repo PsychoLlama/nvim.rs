@@ -24,7 +24,7 @@ pub fn buffer_insert(buffer: BufferHandle, lnum: Integer, lines: Array) -> Resul
 pub fn buffer_get_line(buffer: BufferHandle, index: Integer) -> Result<String_0, Error> {
     let index = convert_index(index as int64_t) as Integer;
     let no_lua = ::core::ptr::null_mut::<lua_State>();
-    // SAFETY: `arena` is the caller's; a null `lua_State` asks for the API
+    // SAFETY: a null `lua_State` asks for the API
     // representation rather than a Lua one.
     let slice: Array = unsafe { nvim_buf_get_lines(0, buffer, index, index + 1, true, no_lua) }?;
     if slice.is_empty() {

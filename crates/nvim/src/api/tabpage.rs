@@ -38,8 +38,7 @@ pub fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Error> {
     let Some(tab) = find_tab_by_handle(tabpage)?.filter(|&t| valid_tabpage(t.id())) else {
         return Ok(rv);
     };
-    // Counted first, because the arena block has to be sized before it is
-    // filled and `array_add` asserts against its capacity.
+    // Counted first, so the array is allocated once.
     let n = windows_in_tab(tab).count() as size_t;
     rv = Array::with_capacity(n);
     for wp in windows_in_tab(tab) {
@@ -54,7 +53,7 @@ pub fn nvim_tabpage_get_var(tabpage: TabpageHandle, name: String_0) -> Result<Ob
         return Ok(Object::Nil);
     };
     // SAFETY: `tab` is a live tabpage, so `tp_vars` is its own dictionary;
-    // `name` and `arena` are the caller's, per this function's contract.
+    // `name` is the caller's.
     unsafe { dict_get_value(tab.tp_vars, &name) }
 }
 

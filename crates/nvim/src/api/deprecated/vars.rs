@@ -28,8 +28,7 @@ pub fn buffer_set_var(
         return Ok(Object::Nil);
     };
     let vars = buf.b_vars;
-    // SAFETY: `vars` is that buffer's own dictionary, `arena` the caller's
-    // and `error` this frame's slot.
+    // SAFETY: `vars` is that buffer's own dictionary.
     unsafe { dict_set_var(vars, &name, value, false, true) }
 }
 

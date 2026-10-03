@@ -280,7 +280,8 @@ fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
                 }
             }
             handler @ (Callback::Funcref(_) | Callback::Partial(_)) => {
-                // SAFETY: the caller's promise about a partial, and `arena`.
+                // SAFETY: the caller's promise about a partial; the name is
+                // copied out.
                 let name = unsafe { cstr_to_string(callback_to_string(handler)) };
                 info.insert(c"callback", Object::string(name));
             }

@@ -157,8 +157,8 @@ pub fn nvim_win_get_var(win: WindowHandle, name: String_0) -> Result<Object, Err
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Object::Nil);
     };
-    // SAFETY: `w` is live, so `w_vars` is its own dictionary; `name` and
-    // `arena` are the caller's, per this function's contract.
+    // SAFETY: `w` is live, so `w_vars` is its own dictionary; `name` is the
+    // caller's.
     unsafe { dict_get_value(w.w_vars, &name) }
 }
 

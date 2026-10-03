@@ -138,8 +138,7 @@ pub fn nvim_parse_expression(
     unsafe { xfree(heap) };
 
     let mut ast = Object::Nil;
-    // SAFETY: `east.root` and `ast` are this frame's, and `arena` the
-    // caller's.
+    // SAFETY: `east.root` and `ast` are this frame's.
     unsafe { convert_ast(&raw mut east.root, &raw mut ast) };
     ret.insert(c"ast", ast);
     debug_assert!(ret.len() == ret.capacity(), "ret.len() == ret.capacity()");
@@ -341,7 +340,8 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
         kExprNodeDoubleQuotedString | kExprNodeSingleQuotedString => {
             let str = string_body(data.string().value, data.string().size);
             put(ret_node, c"svalue", str);
-            // SAFETY: the body was just copied into the arena.
+            // SAFETY: the body was just copied into the answer, and the
+            // node's own copy is freed exactly once, here.
             unsafe { xfree(data.string().value.cast()) };
         }
         kExprNodeOption => {
