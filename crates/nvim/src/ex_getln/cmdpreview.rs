@@ -161,35 +161,10 @@ pub(crate) fn cmdpreview_restore_undo(cp_undoinfo: &CpUndoInfo, mut buffer: Buf)
 /// Save the state of every window and buffer in the current tab page, and put
 /// the options the preview must not be disturbed by out of the way.
 pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
-    // C's `kv_push` onto one of `CpInfo`'s two kvecs. A macro rather than
-    // a function because `CpBufInfoVec` and `CpWinInfoVec` are separate
-    // structs differing only in element type, with nothing relating
-    // their fields to be generic over.
-    macro_rules! kv_push {
-        ($vec:expr, $value:expr) => {{
-            let value = $value;
-            let v = &raw mut $vec;
-            // SAFETY: `v` addresses a kvec field of the live `CpInfo`, whose
-            // `items` is its own allocation of `capacity` elements.
-            if unsafe { (*v).size } == unsafe { (*v).capacity } {
-                let grown = unsafe { (*v).capacity };
-                unsafe { (*v).capacity = if grown != 0 { grown << 1 } else { 8 } };
-                unsafe {
-                    (*v).items = xrealloc(
-                        (*v).items as *mut ::core::ffi::c_void,
-                        ::core::mem::size_of_val(&value) * (*v).capacity,
-                    ) as *mut _
-                };
-            }
-            unsafe { *(*v).items.add((*v).size) = value };
-            unsafe { (*v).size += 1 };
-        }};
-    }
-
     let mut saved_bufs: IdSet<*mut Buffer> = id_set();
 
-    cpinfo.buf_info = CP_INFO_INIT.buf_info;
-    cpinfo.win_info = CP_INFO_INIT.win_info;
+    cpinfo.buf_info = Vec::new();
+    cpinfo.win_info = Vec::new();
 
     // C's FOR_ALL_WINDOWS_IN_TAB(win, curtab).
     for mut win in windows_in_tab(TabPage::current()) {
@@ -212,7 +187,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
             cp_bufinfo.save_b_op_end = buf.b_op_end;
             cp_bufinfo.save_changedtick = buf_get_changedtick(buf);
             cmdpreview_save_undo(&mut cp_bufinfo.undo_info, buf);
-            kv_push!(cpinfo.buf_info, cp_bufinfo);
+            cpinfo.buf_info.push(cp_bufinfo);
             saved_bufs.insert(buf.raw());
 
             u_clearall(buf);
@@ -228,7 +203,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
         // Save 'cursorline' and 'cursorcolumn'.
         cp_wininfo.save_w_p_cul = win.w_onebuf_opt.wo_cul;
         cp_wininfo.save_w_p_cuc = win.w_onebuf_opt.wo_cuc;
-        kv_push!(cpinfo.win_info, cp_wininfo);
+        cpinfo.win_info.push(cp_wininfo);
 
         // Both would otherwise mess up the preview's highlights.
         win.w_onebuf_opt.wo_cul = 0;
@@ -255,9 +230,8 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
 /// Put back everything [`cmdpreview_prepare`] saved, undoing the preview's
 /// changes to every buffer it touched.
 pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
-    for i in 0..cpinfo.buf_info.size {
-        // SAFETY: `buf_info` holds `size` initialised entries.
-        let cp_bufinfo: CpBufInfo = unsafe { *cpinfo.buf_info.items.add(i) };
+    // Taken out: the undo below runs the editor, which may reach `cpinfo`.
+    for cp_bufinfo in core::mem::take(&mut cpinfo.buf_info) {
         // Autocommands were blocked throughout the preview, but its Lua
         // callback was not: a buffer it wiped has nothing to restore.
         let Some(mut buf) = cp_bufinfo.buf.and_then(BufId::get) else {
@@ -309,9 +283,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
         buf.b_p_ma = cp_bufinfo.save_b_p_ma;
     }
 
-    for i in 0..cpinfo.win_info.size {
-        // SAFETY: `win_info` holds `size` initialised entries.
-        let cp_wininfo: CpWinInfo = unsafe { *cpinfo.win_info.items.add(i) };
+    for cp_wininfo in core::mem::take(&mut cpinfo.win_info) {
         // As the buffers above: a window the callback closed is skipped.
         let Some(mut win) = cp_wininfo.win.and_then(WinId::get) else {
             continue;
@@ -329,12 +301,6 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
     restore_search_patterns();
     win_size_restore(&cpinfo.save_view);
     cpinfo.save_view = Vec::new();
-
-    // SAFETY: both `items` are this `CpInfo`'s own allocations.
-    unsafe { xfree(cpinfo.win_info.items as *mut ::core::ffi::c_void) };
-    unsafe { xfree(cpinfo.buf_info.items as *mut ::core::ffi::c_void) };
-    cpinfo.win_info = CP_INFO_INIT.win_info;
-    cpinfo.buf_info = CP_INFO_INIT.buf_info;
 }
 
 /// Run the command being typed as a preview, if it supports one.

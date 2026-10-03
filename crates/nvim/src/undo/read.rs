@@ -69,16 +69,23 @@ pub unsafe fn u_read_undo(name: Option<&CStr>, hash: *const uint8_t, orig_name: 
         let file_name = unsafe { c_str(file_name) };
         smsg!(0, "Reading undo file: {file_name}");
     });
-    let fp: *mut FILE = unsafe { os_fopen(file_name, c"r".as_ptr()) };
-    if fp.is_null() {
-        if !name.is_null() || p_verbose() > 0 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let file_name = unsafe { c_str(file_name) };
-            semsg!("E822: Cannot open undo file for reading: {file_name}");
+    // SAFETY: a NUL-terminated path.
+    let path = <std::ffi::OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(
+        unsafe { cstr::at(file_name) }.to_bytes(),
+    );
+    match std::fs::File::open(path) {
+        Err(_) => {
+            if !name.is_null() || p_verbose() > 0 {
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let file_name = unsafe { c_str(file_name) };
+                semsg!("E822: Cannot open undo file for reading: {file_name}");
+            }
         }
-    } else {
-        unsafe { read_undo_file(fp, file_name, name.is_null(), hash) };
-        unsafe { fclose(fp) };
+        Ok(file) => {
+            let mut bi = BufInfo::reader(Buf::current(), file);
+            // SAFETY: the caller's name and hash.
+            unsafe { read_undo_file(&mut bi, file_name, name.is_null(), hash) };
+        }
     }
     if !ptr::eq(file_name, name) {
         unsafe { xfree(file_name.cast()) };
@@ -94,7 +101,6 @@ pub unsafe fn u_read_undo(name: Option<&CStr>, hash: *const uint8_t, orig_name: 
 ///
 /// Both names are NUL-terminated.
 unsafe fn owner_matches(file_name: *const c_char, orig_name: *const c_char) -> bool {
-    // SAFETY: NUL-terminated names, by the contract above.
     let mut edited = FileInfo::default();
     let mut undo = FileInfo::default();
     if !(unsafe { os_fileinfo(orig_name, &raw mut edited) }
@@ -117,42 +123,33 @@ unsafe fn owner_matches(file_name: *const c_char, orig_name: *const c_char) -> b
 ///
 /// # Safety
 ///
-/// `stream` is open for reading on `file_name`, there is a live current buffer,
-/// and `hash` points at [`UNDO_HASH_SIZE`] readable bytes.
+/// `file_name` is NUL-terminated and `hash` points at [`UNDO_HASH_SIZE`]
+/// readable bytes.
 unsafe fn read_undo_file(
-    stream: *mut FILE,
+    bi: &mut BufInfo,
     file_name: *const c_char,
     automatic: bool,
     hash: *const uint8_t,
 ) {
-    // SAFETY: an open file and a live current buffer, by the contract above.
-    let mut bi = BufInfo {
-        bi_buf: Buf::current(),
-        bi_fp: stream,
-    };
-    let bi = &raw mut bi;
-
     let mut magic = [0u8; UF_START_MAGIC.len()];
-    if unsafe { fread(magic.as_mut_ptr().cast(), magic.len(), 1, stream) } != 1
-        || magic != UF_START_MAGIC
-    {
+    if !bi.read(&mut magic) || magic != UF_START_MAGIC {
         // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
         let file_name = unsafe { c_str(file_name) };
         semsg!("E823: Not an undo file: {file_name}");
         return;
     }
-    if unsafe { get2c(stream) } != UF_VERSION {
+    if bi.read_2c() != UF_VERSION {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let file_name = unsafe { c_str(file_name) };
         semsg!("E824: Incompatible undo file: {file_name}");
         return;
     }
     let mut read_hash = [0u8; UNDO_HASH_SIZE as usize];
-    if !unsafe { undo_read(bi, read_hash.as_mut_ptr(), read_hash.len()) } {
+    if !bi.read(&mut read_hash) {
         unsafe { corruption_error(c"hash".as_ptr(), file_name) };
         return;
     }
-    let line_count = unsafe { undo_read_4c(bi) } as LineNr;
+    let line_count = bi.read_4c() as LineNr;
     // The tree describes text; a buffer holding different text cannot
     // have it applied.
     if unsafe { core::slice::from_raw_parts(hash, read_hash.len()) } != read_hash
@@ -211,20 +208,19 @@ struct FileHeader {
 /// # Safety
 ///
 /// `bi` is open for reading and positioned at the shadow-line length.
-unsafe fn read_file_header(bi: *mut BufInfo, file_name: *const c_char) -> Option<FileHeader> {
-    // SAFETY: an open undo file, by the contract above.
-    let str_len = unsafe { undo_read_4c(bi) };
+unsafe fn read_file_header(bi: &mut BufInfo, file_name: *const c_char) -> Option<FileHeader> {
+    let str_len = bi.read_4c();
     if str_len < 0 {
         return None;
     }
     let line_ptr = if str_len > 0 {
         let len = usize::try_from(str_len).expect("the branch above proves it positive");
-        unsafe { undo_read_string(bi, len) }
+        undo_read_string(bi, len)
     } else {
         ptr::null_mut()
     };
-    let line_lnum = unsafe { undo_read_4c(bi) } as LineNr;
-    let line_colnr = unsafe { undo_read_4c(bi) };
+    let line_lnum = bi.read_4c() as LineNr;
+    let line_colnr = bi.read_4c();
     if line_lnum < 0 || line_colnr < 0 {
         unsafe { corruption_error(c"line lnum/col".as_ptr(), file_name) };
         unsafe { xfree(line_ptr.cast()) };
@@ -234,18 +230,18 @@ unsafe fn read_file_header(bi: *mut BufInfo, file_name: *const c_char) -> Option
         line_ptr,
         line_lnum,
         line_colnr,
-        old_head: unsafe { undo_read_4c(bi) },
-        new_head: unsafe { undo_read_4c(bi) },
-        cur_head: unsafe { undo_read_4c(bi) },
-        num_head: unsafe { undo_read_4c(bi) },
-        seq_last: unsafe { undo_read_4c(bi) },
-        seq_cur: unsafe { undo_read_4c(bi) },
-        seq_time: unsafe { undo_read_time(bi) },
+        old_head: bi.read_4c(),
+        new_head: bi.read_4c(),
+        cur_head: bi.read_4c(),
+        num_head: bi.read_4c(),
+        seq_last: bi.read_4c(),
+        seq_cur: bi.read_4c(),
+        seq_time: bi.read_time(),
         last_save_nr: 0,
     };
     // A truncated trailer is not an error here: upstream stops at EOF and
     // keeps whatever it had.
-    for (what, value) in unsafe { optional_fields(bi) }.unwrap_or_default() {
+    for (what, value) in optional_fields(bi).unwrap_or_default() {
         if what == UF_LAST_SAVE_NR {
             header.last_save_nr = value;
         }
@@ -263,14 +259,14 @@ unsafe fn read_file_header(bi: *mut BufInfo, file_name: *const c_char) -> Option
 ///
 /// `bi` is open for reading and positioned at the first header record.
 unsafe fn read_headers(
-    bi: *mut BufInfo,
+    bi: &mut BufInfo,
     file_name: *const c_char,
     num_head: c_int,
 ) -> Option<Vec<*mut UndoHeader>> {
     let mut headers: Vec<*mut UndoHeader> = Vec::new();
     // SAFETY: an open undo file, by the contract above.
     loop {
-        let c = unsafe { undo_read_2c(bi) };
+        let c = bi.read_2c();
         if c != UF_HEADER_MAGIC {
             // The file claims a count of its own; a run that stops short
             // of it, or an end marker that is not one, is corruption.
@@ -323,11 +319,6 @@ unsafe fn graft(
     header: &FileHeader,
     file_name: *const c_char,
 ) -> bool {
-    // SAFETY: live headers and a live current buffer, by the contract above.
-    // A sequence number is a header's name, so two headers carrying the
-    // same one are indistinguishable: corrupt. Collecting them also
-    // answers "is there a header for this link?" in one lookup, which is
-    // what the transpiled code's five O(n^2) scans worked out to.
     let mut seqs: HashSet<c_int> = HashSet::with_capacity(headers.len());
     for &uhp in headers {
         if !seqs.insert(unsafe { (*uhp).uh_seq }) {

@@ -33,7 +33,7 @@ use crate::ex_docmd::expr_map_locked;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::extmark::{extmark_apply_undo, extmark_splice_cols};
-use crate::fileio::{get2c, get4c, get8ctime, read_eintr};
+use crate::fileio::read_eintr;
 use crate::fold::fold_open_cursor;
 use crate::getchar::beep_flush;
 use crate::getchar::state::{KeyTyped, got_int};
@@ -43,7 +43,7 @@ use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::MlFlags;
 use crate::memline::{ml_append_flags, ml_delete, ml_replace, resolve_symlink};
-use crate::memory::{time_to_bytes, xfree, xmalloc, xmallocz, xrealloc, xstrdup};
+use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{e_modifiable, e_sandbox, e_textlock};
 use crate::message::{
     emsg, give_warning, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind,
@@ -52,10 +52,10 @@ use crate::message::{
 use crate::option::copy_option_part;
 use crate::option::vars::{fdo_flags, p_fs, p_ul, p_verbose};
 use crate::options::kOptFdoFlagUndo;
-use crate::os::cshim::{getc, gettext, ngettext};
+use crate::os::cshim::{gettext, ngettext};
 use crate::os::fs::{
-    os_fchown, os_fileinfo, os_fopen, os_free_acl, os_fsync, os_get_acl, os_getperm, os_isdir,
-    os_mkdir_recurse, os_open, os_path_exists, os_remove, os_set_acl, os_setperm,
+    os_fchown, os_fileinfo, os_free_acl, os_get_acl, os_getperm, os_isdir, os_mkdir_recurse,
+    os_open, os_path_exists, os_remove, os_set_acl, os_setperm,
 };
 use crate::os::input::fast_breakcheck;
 use crate::os::time::{os_localtime_r, os_time, tm_zeroed};
@@ -68,7 +68,7 @@ use crate::types::Failed;
 use crate::types::*;
 use crate::vim_snprintf;
 use crate::winlayer::Win;
-use ::libc::{close, fclose, fdopen, fflush, fread, fwrite, getuid, strftime, time};
+use ::libc::{close, getuid, strftime, time};
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
 
@@ -100,6 +100,7 @@ mod header {
 use header::*;
 
 mod apply;
+mod bufinfo;
 mod eval;
 mod file;
 pub mod format;
@@ -113,6 +114,7 @@ use store::{Header, header_adopt, header_chain};
 use tree::*;
 
 pub use apply::{u_redo, u_undo, u_undo_and_forget, undo_time};
+pub(crate) use bufinfo::BufInfo;
 pub use eval::{ex_undolist, f_undofile, f_undotree, u_force_get_undo_header};
 pub use file::{u_compute_hash, u_get_undo_file_name};
 pub use read::u_read_undo;
@@ -147,10 +149,6 @@ pub(crate) fn verbosely(automatic: bool, say: impl FnOnce()) {
     }
 }
 
-pub struct BufInfo {
-    pub bi_buf: Buf,
-    pub bi_fp: *mut FILE,
-}
 pub const NO_LOCAL_UNDOLEVEL: c_int = -123456;
 static u_newcount: GlobalCell<c_int> = GlobalCell::new(0);
 static u_oldcount: GlobalCell<c_int> = GlobalCell::new(0);
@@ -177,7 +175,6 @@ impl From<Failed> for UndoFailed {
 ///
 /// Safe: as [`u_save`], over the cursor's line.
 pub fn u_save_cursor() -> Result<(), Failed> {
-    // SAFETY: a live current window, by the contract above.
     let cur: LineNr = Win::current().w_cursor.lnum;
     // SAFETY: a live current buffer, by the contract above.
     u_save((cur - 1).max(0), cur + 1)
@@ -447,7 +444,6 @@ fn start_new_header(mut b: Buf) -> bool {
 /// Only the ten newest entries are looked at: this is a fast path for typing,
 /// not a search.
 fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bool {
-    // SAFETY: a live buffer, by the contract above.
     let mut uep = u_get_headentry(b);
     let Some(mut newhead) = b.header(b.b_u_newhead) else {
         return false;

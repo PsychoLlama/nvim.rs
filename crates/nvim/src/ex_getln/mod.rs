@@ -72,7 +72,7 @@ use crate::mbyte::{
     utf8len_tab_zero, utfc_ptr2len,
 };
 use crate::memline::{decl, incl, ml_append, ml_replace};
-use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
+use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
 use crate::message::state::{
     cmd_silent, cmdmsg_rl, did_emsg, emsg_on_display, lines_left, msg_col, msg_didout, msg_no_more,
     msg_row, msg_scroll, msg_scrolled, need_wait_return, quit_more, redir_off,
@@ -345,17 +345,11 @@ pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
 pub const MAX_CB_ERRORS: ::core::ffi::c_int = 1;
 #[derive(Clone)]
 pub struct CpInfo {
-    pub win_info: CpWinInfoVec,
-    pub buf_info: CpBufInfoVec,
+    pub win_info: Vec<CpWinInfo>,
+    pub buf_info: Vec<CpBufInfo>,
     pub save_hls: bool,
     pub save_cmdmod: CmdMod,
     pub save_view: Vec<::core::ffi::c_int>,
-}
-#[derive(Copy, Clone)]
-pub struct CpBufInfoVec {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut CpBufInfo,
 }
 #[derive(Copy, Clone)]
 pub struct CpBufInfo {
@@ -385,12 +379,6 @@ pub struct CpUndoInfo {
     pub save_b_u_line_ptr: *mut ::core::ffi::c_char,
     pub save_b_u_line_lnum: LineNr,
     pub save_b_u_line_colnr: ColNr,
-}
-#[derive(Copy, Clone)]
-pub struct CpWinInfoVec {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut CpWinInfo,
 }
 #[derive(Copy, Clone)]
 pub struct CpWinInfo {
@@ -579,18 +567,10 @@ pub(crate) const CP_WIN_INFO_INIT: CpWinInfo = CpWinInfo {
     save_w_p_cuc: 0,
 };
 
-/// An all-zero [`CpInfo`], C's two `kv_init`s plus an unset save area.
+/// An empty [`CpInfo`]: nothing saved yet.
 pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
-    win_info: CpWinInfoVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<CpWinInfo>(),
-    },
-    buf_info: CpBufInfoVec {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<CpBufInfo>(),
-    },
+    win_info: Vec::new(),
+    buf_info: Vec::new(),
     save_hls: false,
     save_cmdmod: CmdMod::NONE,
     save_view: Vec::new(),

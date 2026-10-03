@@ -126,27 +126,15 @@ unsafe fn write_undo_file(
     // SAFETY: the descriptor just opened on that path, and a live buffer.
     unsafe { match_group(fd, file_name, perm, buffer) };
 
-    // SAFETY: our own descriptor, and a NUL-terminated mode.
-    let fp: *mut FILE = unsafe { fdopen(fd, c"w".as_ptr()) };
-    if fp.is_null() {
-        // SAFETY: a NUL-terminated path, and a descriptor that `fdopen` did
-        // not take over.
-        let shown = unsafe { c_str(file_name) };
-        semsg!("E828: Cannot open undo file for writing: {shown}");
-        unsafe { close(fd) };
-        unsafe { os_remove(cstr::at(file_name)) };
-        return;
-    }
+    // SAFETY: the descriptor just opened, which the file takes over and
+    // closes when the record drops.
+    let file = unsafe { <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(fd) };
     u_sync(true);
-    let mut bi = BufInfo {
-        bi_buf: buffer,
-        bi_fp: fp,
-    };
-    // SAFETY: an open undo file on a live buffer, and `hash` readable for
-    // [`UNDO_HASH_SIZE`] bytes by the contract above.
-    let write_ok = unsafe { write_tree(&raw mut bi, buffer, hash, fd, fp) };
-    // SAFETY: the stream opened just above, closed once.
-    unsafe { fclose(fp) };
+    let mut bi = BufInfo::writer(buffer, file);
+    // SAFETY: `hash` readable for [`UNDO_HASH_SIZE`] bytes by the contract
+    // above.
+    let write_ok = unsafe { write_tree(&mut bi, buffer, hash) };
+    drop(bi);
     if !write_ok {
         // SAFETY: a NUL-terminated literal and path.
         let file_name = unsafe { c_str(file_name) };
@@ -236,16 +224,8 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buffer: Bu
 ///
 /// # Safety
 ///
-/// `bi` is open on `buffer`'s undo file, `buffer` points at a live buffer, `hash`
-/// at [`UNDO_HASH_SIZE`] readable bytes, and `fd`/`stream` are the same open
-/// file as `bi`.
-unsafe fn write_tree(
-    bi: *mut BufInfo,
-    buffer: Buf,
-    hash: *mut uint8_t,
-    fd: c_int,
-    stream: *mut FILE,
-) -> bool {
+/// `hash` points at [`UNDO_HASH_SIZE`] readable bytes.
+unsafe fn write_tree(bi: &mut BufInfo, buffer: Buf, hash: *mut uint8_t) -> bool {
     // SAFETY: an open undo file, and `hash` readable for [`UNDO_HASH_SIZE`]
     // bytes, both by the contract above.
     if !unsafe { serialize_header(bi, hash) } {
@@ -263,8 +243,7 @@ unsafe fn write_tree(
             return false;
         }
     }
-    // SAFETY: an open undo file, by the contract above.
-    let mut write_ok = unsafe { undo_write_bytes(bi, UF_HEADER_END_MAGIC as uintmax_t, 2) };
+    let mut write_ok = bi.write_bytes(UF_HEADER_END_MAGIC as uintmax_t, 2);
     // 'fsync' asks for the bytes to be on the disk before we call the
     // write done.
     let fsync_wanted = if buffer.b_p_fs >= 0 {
@@ -272,9 +251,7 @@ unsafe fn write_tree(
     } else {
         p_fs()
     };
-    // SAFETY: `stream` and `fd` are the same open file as `bi`, by the contract
-    // above.
-    if fsync_wanted && unsafe { fflush(stream) } == 0 && unsafe { os_fsync(fd) } != 0 {
+    if fsync_wanted && !bi.sync() {
         write_ok = false;
     }
     write_ok
