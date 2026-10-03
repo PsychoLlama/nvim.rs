@@ -38,7 +38,7 @@ fn is_ascii_letter(c: c_int) -> bool {
 
 /// The index of the slot `""` currently points at, or -1 when nothing has
 /// been written yet.
-pub fn get_unname_register() -> c_int {
+pub(crate) fn get_unname_register() -> c_int {
     y_previous.get().unwrap_or(-1)
 }
 

@@ -396,7 +396,7 @@ pub unsafe fn create_funccal(func: *mut UserFunc, result: &mut TypVal) -> *mut F
 }
 
 /// The call in progress, or null.
-pub fn get_current_funccal() -> *mut FuncCall {
+pub(crate) fn get_current_funccal() -> *mut FuncCall {
     current_fc()
 }
 
@@ -662,7 +662,7 @@ pub unsafe fn list_func_vars(first: *mut c_int) {
 ///
 /// # Safety
 /// `ht` is a live hashtab.
-pub unsafe fn get_current_funccal_dict(ht: *mut DictTab) -> *mut Dict {
+pub(crate) unsafe fn get_current_funccal_dict(ht: *mut DictTab) -> *mut Dict {
     let fc = current_fc();
     if fc.is_null() {
         return ptr::null_mut();

@@ -68,9 +68,10 @@ pub mod namespace;
 
 pub use blend::{hl_blend_attrs, hl_invalidate_blends};
 pub use dict::{HLATTRS_DICT_SIZE, dict2hlattrs, hl_get_attr_by_id, hlattrs2dict};
+pub(crate) use namespace::win_hl_attr;
 pub use namespace::{
     hl_check_ns, hl_get_ui_attr, hl_ns_get_attrs, ns_get_hl, ns_hl_def, update_ns_hl,
-    update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,
+    update_window_hl, win_bg_attr, win_check_ns_hl,
 };
 
 crate::flag_set! {

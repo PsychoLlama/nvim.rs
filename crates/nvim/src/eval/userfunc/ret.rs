@@ -674,6 +674,6 @@ pub unsafe fn func_level(cookie: *mut c_void) -> c_int {
 }
 
 /// Whether the function running has already returned.
-pub fn current_func_returned() -> c_int {
+pub(crate) fn current_func_returned() -> c_int {
     unsafe { (*current_fc()).fc_returned }
 }

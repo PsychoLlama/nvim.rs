@@ -527,7 +527,7 @@ pub fn win_bg_attr(window: Win) -> c_int {
 /// The attribute the window resolves builtin highlight group `hlf` to: its
 /// own namespace's table when one is active, otherwise the global one.
 #[inline]
-pub fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
+pub(crate) fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     // SAFETY: the caller's window. `w_ns_hl_attr` may still be null if
     // highlights are checked before the first redraw.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail if a state record's cell is exported from the binary.
+"""Fail if a state record's cell, or another hot cell, is exported from the binary.
 
 A state record is one `GlobalCell` holding a whole namespace of editor state
 (`global_cell::state_record!`, and the option table apigen writes). Every
@@ -24,6 +24,11 @@ leave the guard watching nothing.
 The records are found in the source: every `state_record!` invocation names
 its cell (`struct R in CELL as F;`), and the module path comes from the
 file. `EXTRA` lists the ones a macro other than `state_record!` declares.
+
+The same holds for any other cell read on a hot path, so the guard watches
+those too: every `static X: GlobalCell<T>` whose `T` is an `id_table::IdTable`
+or a struct holding one (an owner table every lookup by id goes through),
+found in the source the same way, and the hand-picked cells in `HOT`.
 """
 
 import pathlib
@@ -41,6 +46,23 @@ EXTRA = [
     ("OPTIONS", f"{CRATE}::options::vars::OPTIONS"),
 ]
 
+# Other cells read on a hot path, as `(label, path as nm -C spells it)`: the
+# current funccall (every variable lookup), the active highlight table (every
+# drawn cell) and the unnamed-register index (every put and yank).
+HOT = [
+    ("FUNC_CALLS", f"{CRATE}::eval::userfunc::frames::FUNC_CALLS"),
+    ("hl_attr_active", f"{CRATE}::highlight::state::hl_attr_active"),
+    ("y_previous", f"{CRATE}::register::y_previous"),
+]
+
+# `static NAME: GlobalCell<TYPE>` at item level.
+CELL = re.compile(
+    r"^\s*(?:pub(?:\([^)]*\))?\s+)?static\s+(\w+)\s*:\s*GlobalCell<(.*)>\s*=", re.M
+)
+# A struct with named fields; the body is matched to its first closing brace,
+# which is enough for the flat owner structs this looks for.
+STRUCT = re.compile(r"\bstruct\s+(\w+)(?:<[^>]*>)?\s*\{([^}]*)\}", re.S)
+
 RECORD = re.compile(
     r"state_record!\s*\{.*?\bstruct\s+(\w+)\s+in\s+(\w+)\s+as\s+\w+\s*;", re.S
 )
@@ -53,17 +75,34 @@ def module_path(file: pathlib.Path) -> str:
     return "::".join([CRATE, *parts])
 
 
+def table_cells(file: pathlib.Path, text: str):
+    """`(label, path)` for every cell in `text` that owns an `IdTable`."""
+    if "IdTable<" not in text:
+        return []
+    owners = {name for name, body in STRUCT.findall(text) if "IdTable<" in body}
+    found = []
+    for cell, ty in CELL.findall(text):
+        head = ty.strip().split("<")[0].split("::")[-1]
+        if head == "IdTable" or head in owners:
+            found.append((cell, f"{module_path(file)}::{cell}"))
+    return found
+
+
 def records():
-    """`(label, path)` for every record the source declares."""
-    found = list(EXTRA)
+    """`(label, path)` for every record and watched cell the source declares."""
+    found = list(EXTRA) + list(HOT)
     for file in sorted(SRC.rglob("*.rs")):
         if file.name == "global_cell.rs":
             # The macro's own definition and its doc example.
             continue
-        for match in RECORD.finditer(file.read_text()):
+        text = file.read_text()
+        for match in RECORD.finditer(text):
             record, cell = match.groups()
             found.append((record, f"{module_path(file)}::{cell}"))
-    return found
+        if file.name != "id_table.rs":
+            found.extend(table_cells(file, text))
+    # A hand-picked cell the scan also finds is watched once.
+    return list(dict.fromkeys(found))
 
 
 def data_symbols(binary: pathlib.Path):
