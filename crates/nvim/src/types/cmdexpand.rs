@@ -298,6 +298,11 @@ pub struct Expand {
     /// Where the text to complete starts in [`line`](Self::line):
     /// upstream's `xp_pattern`, as an offset.
     pub pattern: usize,
+    /// Whether [`pattern`](Self::pattern) names anything: upstream's
+    /// `xp_pattern != NULL`. A fresh completion has none, a search line
+    /// only gets one when it is completed, and `:scriptnames {nr}` drops
+    /// it; `getcmdcomplpat()` answers empty without one.
+    pub has_pattern: bool,
     /// How long the text to complete is: upstream's `xp_pattern_len`.
     pub pattern_len: usize,
     /// For a boolean option name, the `no`/`inv` it was typed with.
@@ -341,6 +346,7 @@ impl Expand {
             line: XString::new(),
             col: 0,
             pattern: 0,
+            has_pattern: false,
             pattern_len: 0,
             prefix: XpPrefix::None,
             arg: None,

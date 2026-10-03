@@ -110,11 +110,14 @@ pub fn f_getcmdcomplpat(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     // what upstream's `xp_pattern` pointed into: after a match was
     // inserted, the match.
     let pattern = cmdline_completion_state(|cc, xpc, _| {
-        cc.text_bytes()
-            .get(xpc.pattern..)
-            .unwrap_or_default()
-            .to_vec()
-    });
+        xpc.has_pattern.then(|| {
+            cc.text_bytes()
+                .get(xpc.pattern..)
+                .unwrap_or_default()
+                .to_vec()
+        })
+    })
+    .flatten();
     *result = match pattern {
         Some(pattern) => string_tv(&pattern),
         None => TypVal::String(::core::ptr::null_mut()),

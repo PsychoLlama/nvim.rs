@@ -115,6 +115,7 @@ pub fn set_expand_context(expand: &mut Expand) {
         };
         expand.line = owned(ccline.text_bytes());
         expand.pattern = 0;
+        expand.has_pattern = true;
         expand.pattern_len = usize::try_from(ccline.cmdpos).unwrap_or(0);
         search_first_line.set(0); // Search entire buffer
         return;
@@ -613,6 +614,7 @@ pub(crate) fn set_context_in_scriptnames_cmd(
 ) -> Option<usize> {
     let t = text.to_bytes();
     expand.context = ExpandContext::Nothing;
+    expand.has_pattern = false;
 
     let p = skipwhite(t, arg);
     if ascii_isdigit(c_int::from(byte(t, p))) {
@@ -621,6 +623,7 @@ pub(crate) fn set_context_in_scriptnames_cmd(
 
     expand.context = ExpandContext::Scriptnames;
     expand.pattern = p;
+    expand.has_pattern = true;
 
     None
 }

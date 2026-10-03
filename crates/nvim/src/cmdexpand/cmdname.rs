@@ -388,6 +388,7 @@ pub(crate) fn set_one_cmd_context(expand: &mut Expand, text: &CStr, buff: usize)
     let mut usefilter = false; // Filter instead of file name.
 
     expand.reset_keeping_line();
+    expand.has_pattern = true;
     expand.context = ExpandContext::Commands; // Default until we get past command
     ea.argt = ExArgt::NONE;
 
@@ -579,9 +580,11 @@ pub fn set_cmd_context(expand: &mut Expand, line: &[u8], col: c_int, use_ccline:
     if use_ccline && ccline.cmdfirstc == c_int::from(b'=') {
         // Pass CmdIdx::SIZE because there is no real command.
         set_context_for_expression(expand, 0, CmdIdx::SIZE);
+        expand.has_pattern = true;
     } else if use_ccline && ccline.input_fn != 0 {
         expand.context = ccline.xp_context;
         expand.pattern = 0;
+        expand.has_pattern = true;
         expand.arg = ccline.xp_arg.clone();
         if expand.context == ExpandContext::ShellCmdLine {
             let mut context = expand.context;
