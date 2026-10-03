@@ -165,8 +165,8 @@ fn hgr_search_in_rtp(qfl: Qfl, prog: &mut OwnedProg, lang: Option<&[u8]>) {
 }
 
 /// The `@xx` language specifier at the end of a `:helpgrep` argument: the
-/// pattern without it, and the two letters. Upstream's `check_help_lang`
-/// cuts the command line itself.
+/// pattern without it, and the two letters — upstream's `check_help_lang`,
+/// minus the cut, which the caller makes.
 fn split_help_lang(arg: &[u8]) -> (&[u8], Option<&[u8]>) {
     let len = arg.len();
     if len >= 3
@@ -207,10 +207,16 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
 
     let busy = QuickfixBusy::hold();
 
-    // Check for a specified language.
+    // Check for a specified language. Upstream cuts it off the command
+    // line itself, which is why the list's title, made from the line below,
+    // does not show it; the cut is made here too.
     let (pattern, lang) = split_help_lang(excmd.line.arg());
     let pattern = XString::from_bytes(pattern);
     let lang = lang.map(<[u8]>::to_vec);
+    if lang.is_some() {
+        let at = excmd.line.arg + pattern.len();
+        excmd.line.buffer_mut()[at] = 0;
+    }
     let prog = OwnedProg::compile(pattern.as_cstr(), RE_MAGIC + RE_STRING);
     let updated = prog.is_some();
     if let Some(mut prog) = prog {
