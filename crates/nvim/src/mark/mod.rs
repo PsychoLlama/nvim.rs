@@ -117,7 +117,7 @@ pub const NMARK_LOCAL_MAX: c_int = 126;
 pub const JUMPLISTSIZE: c_int = 100;
 
 use crate::global_cell::GlobalCell;
-use crate::quickfix::{BUF_HAS_LL_ENTRY, BUF_HAS_QF_ENTRY, qf_mark_adjust};
+use crate::quickfix::{BUF_HAS_LL_ENTRY, BUF_HAS_QF_ENTRY};
 
 /// An unset entry of [`namedfm`]; a `const` because `XFileMark` is not `Copy`.
 const UNSET_NAMED_MARK: XFileMark = XFileMark {

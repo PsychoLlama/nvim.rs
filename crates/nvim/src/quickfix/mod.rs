@@ -116,7 +116,7 @@ mod stack;
 pub use self::stack::*;
 pub(crate) use crate::winlayer::{Buf, Win};
 mod list;
-pub use self::list::*;
+pub(crate) use self::list::*;
 mod entry;
 pub use self::entry::*;
 mod switchbuf;

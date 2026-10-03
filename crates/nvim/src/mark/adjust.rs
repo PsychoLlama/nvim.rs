@@ -287,12 +287,13 @@ pub fn mark_adjust_buf(
         // The quickfix list is asked once for the buffer and then once per
         // window for that window's location list; a buffer with no surviving
         // entry in either loses the corresponding flag.
-        if !qf_mark_adjust(buffer, None, line1, line2, amount, amount_after) {
+        if !buffer.adjust_quickfix_entries(None, line1, line2, amount, amount_after) {
             buffer.b_has_qf_entry &= !BUF_HAS_QF_ENTRY;
         }
         let mut found_one = false;
         for win in tab_windows() {
-            found_one |= qf_mark_adjust(buffer, Some(win), line1, line2, amount, amount_after);
+            found_one |=
+                buffer.adjust_quickfix_entries(Some(win), line1, line2, amount, amount_after);
         }
         if !found_one {
             buffer.b_has_qf_entry &= !BUF_HAS_LL_ENTRY;
