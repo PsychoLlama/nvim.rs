@@ -12,7 +12,7 @@ use crate::api::private::helpers::{
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::charset::{skiptowhite, skipwhite};
 use crate::ex_docmd::{
-    excmd_get_argt, execute_cmd, find_ex_command, get_cmd_default_range, get_command_name,
+    builtin_command_name, excmd_get_argt, execute_cmd, find_ex_command, get_cmd_default_range,
     getargcmd, getargopt, invalid_range, is_cmd_ni, is_map_cmd, parse_cmdline, replace_makeprg,
     set_cmd_addr_type, set_cmd_count, set_cmd_dflall_range, undo_cmdmod,
 };
@@ -28,7 +28,7 @@ use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
 use crate::types::{
     ApiDict, Arena, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction,
-    Error, ExArg, Expand, Integer, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
+    Error, ExArg, Integer, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
     KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty, KeyDict_get_commands,
     KeyDict_user_command, LineNr, LuaRef, Object, String_0, TryState, UserCmd, int64_t,
     kErrorTypeException, kErrorTypeValidation, kObjectTypeLuaRef, kObjectTypeString, size_t,

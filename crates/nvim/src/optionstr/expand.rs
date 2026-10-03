@@ -28,10 +28,11 @@
 )]
 
 use crate::cstr;
-use crate::snprintf;
 use crate::strings::has_char;
+use crate::types::Candidate;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use crate::autocmd::get_event_name_no_group;
 use crate::cmdexpand::expand_generic;
@@ -42,7 +43,6 @@ use crate::memory::{XString, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::options::{
     kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
 };
-use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{CompleteListItemGetter, Expand, Failed, NUL, OptExpand, size_t};
 
 use super::{
@@ -177,28 +177,21 @@ pub unsafe fn expand_set_str_generic(
 static ORIGINAL_VALUE: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 /// The real enumerator, for as long as `expand_generic` is running.
-static ENUMERATOR: GlobalCell<CompleteListItemGetter> = GlobalCell::new(None);
+static ENUMERATOR: GlobalCell<Option<CompleteListItemGetter>> = GlobalCell::new(None);
 
 /// The enumerator `expand_generic` sees: index 0 is the current value (or the
 /// empty string, which `expand_generic` ignores), and everything above it is
 /// the real enumerator shifted by one.
-///
-/// # Safety
-/// Only reached from `expand_generic`, between the two assignments in
-/// [`expand_set_opt_generic`].
-unsafe fn expand_set_opt_callback(expand: *mut Expand, idx: c_int) -> *mut c_char {
+fn expand_set_opt_callback(expand: &Expand, idx: usize) -> Option<Candidate> {
     if idx == 0 {
-        // `expand_generic` copies what it keeps, before the next call.
-        return ORIGINAL_VALUE.with(|original| {
-            original
-                .as_ref()
-                .map_or(c"".as_ptr(), XString::as_ptr)
-                .cast_mut()
-        });
+        return Some(ORIGINAL_VALUE.with(|original| {
+            original.as_ref().map_or(Candidate::Borrowed(c""), |value| {
+                Candidate::Owned(value.as_cstr().to_owned())
+            })
+        }));
     }
     let next = ENUMERATOR.get().expect("enumerator set for the whole call");
-    // SAFETY: the enumerator this call installed, with its own index.
-    unsafe { next(expand, idx - 1) }
+    next(expand, idx - 1)
 }
 
 /// Complete an option from an editor-side enumerator rather than from a
@@ -217,7 +210,7 @@ pub(crate) unsafe fn expand_set_opt_generic(
         .filter(|value| !value.is_null());
     // SAFETY: the option's value, a C string.
     ORIGINAL_VALUE.set(original.map(|value| XString::from_cstr(unsafe { CStr::from_ptr(value) })));
-    ENUMERATOR.set(func);
+    ENUMERATOR.set(Some(func));
 
     // Not fuzzy: ExpandContext::StringSetting does not use fuzzy matching.
     // SAFETY: the caller's frame supplies the expansion context and the
@@ -229,7 +222,7 @@ pub(crate) unsafe fn expand_set_opt_generic(
             &mut *(*args).oe_regmatch,
             matches,
             num_matches,
-            Some(expand_set_opt_callback),
+            expand_set_opt_callback,
             false,
         )
     };
@@ -311,7 +304,7 @@ pub unsafe fn expand_set_chars_option(
     } else {
         get_fillchars_name
     };
-    unsafe { expand_set_opt_generic(args, Some(names), num_matches, matches) }
+    unsafe { expand_set_opt_generic(args, names, num_matches, matches) }
 }
 
 /// # Safety
@@ -422,7 +415,7 @@ pub unsafe fn expand_set_encoding(
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
-    unsafe { expand_set_opt_generic(args, Some(get_encoding_name), num_matches, matches) }
+    unsafe { expand_set_opt_generic(args, get_encoding_name, num_matches, matches) }
 }
 
 /// # Safety
@@ -432,7 +425,7 @@ pub unsafe fn expand_set_winhighlight(
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
-    unsafe { expand_set_opt_generic(args, Some(get_highlight_name), num_matches, matches) }
+    unsafe { expand_set_opt_generic(args, get_highlight_name, num_matches, matches) }
 }
 
 /// Whether the option being completed is a window-local 'eventignorewin'
@@ -442,35 +435,22 @@ static WINDOW_EVENTS: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Enumerate the autocommand event names 'eventignore' accepts, with "all"
 /// ahead of them, and each one prefixed by "-" when the user is subtracting.
-///
-/// # Safety
-/// Called by `expand_generic` with its expansion context.
-pub(crate) unsafe fn get_eventignore_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
-    // SAFETY: the expansion context's pattern is a C string.
-    let subtract = unsafe { *(*expand).xp_pattern } == b'-'.cast_signed();
+pub(crate) fn get_eventignore_name(expand: &Expand, idx: usize) -> Option<Candidate> {
+    let subtract = expand.pattern_starts_with(b"-");
     if !subtract && idx == 0 {
-        return c"all".as_ptr().cast_mut();
+        return Some(Candidate::Borrowed(c"all"));
     }
-    let name =
-        get_event_name_no_group(expand, idx - 1 + c_int::from(subtract), WINDOW_EVENTS.get());
-    if name.is_null() {
-        return ptr::null_mut();
+    // Without the "-", index 0 was "all" above.
+    let name = get_event_name_no_group(idx + usize::from(subtract) - 1, WINDOW_EVENTS.get())?;
+    if !subtract {
+        return Some(Candidate::Borrowed(name));
     }
-    // SAFETY: `xp_buf` is the expansion context's own scratch, which
-    // `expand_generic` reads back before it asks for the next name, and
-    // `name` is a C string.
-    let buffer = unsafe { (*expand).xp_buf.as_mut_ptr() };
-    let dash = if subtract { c"-" } else { c"" };
-    unsafe {
-        snprintf!(
-            buffer,
-            EXPAND_BUF_LEN as size_t,
-            c"%s%s".as_ptr(),
-            dash.as_ptr(),
-            name,
-        )
-    };
-    buffer
+    let mut text = Vec::with_capacity(name.count_bytes() + 1);
+    text.push(b'-');
+    text.extend_from_slice(name.to_bytes());
+    Some(Candidate::Owned(
+        CString::new(text).expect("an event name holds no NUL"),
+    ))
 }
 
 /// # Safety
@@ -484,17 +464,12 @@ pub unsafe fn expand_set_eventignore(
     // second one completes the window events.
     // SAFETY: the caller's frame.
     WINDOW_EVENTS.set(unsafe { (*args).oe_idx } != kOptEventignore);
-    unsafe { expand_set_opt_generic(args, Some(get_eventignore_name), num_matches, matches) }
+    unsafe { expand_set_opt_generic(args, get_eventignore_name, num_matches, matches) }
 }
 
 /// Enumerate the values 'fileformat' accepts.
-///
-/// # Safety
-/// Called by `expand_generic`.
-pub unsafe fn get_fileformat_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
-    // A null past the end is how `expand_generic` learns the list has ended.
-    usize::try_from(idx)
-        .ok()
-        .and_then(|idx| opt_ff_values.get(idx))
-        .map_or(ptr::null_mut(), |value| value.as_ptr().cast_mut())
+pub fn get_fileformat_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    opt_ff_values
+        .get(idx)
+        .map(|&value| Candidate::Borrowed(value))
 }

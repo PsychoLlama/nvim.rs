@@ -27,7 +27,8 @@ use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
-use crate::types::{Expand, ExpandContext};
+use crate::types::{Candidate, Expand, ExpandContext};
+use std::ffi::CString;
 
 /// How much of a submenu name the generator can answer with, separator
 /// included. Upstream's `TBUFFER_LEN`.
@@ -200,7 +201,7 @@ impl Generator {
     /// The names to skip, restart, and the node to answer for -- shared by
     /// both generators.
     fn next(
-        idx: c_int,
+        idx: usize,
         menu: &GlobalCell<Option<Menu>>,
         advance: &GlobalCell<bool>,
         skip: impl Fn(Menu) -> bool,
@@ -223,19 +224,22 @@ impl Generator {
 
     /// The display name to answer with, and the bookkeeping that decides
     /// whether the next call moves on.
-    fn pick(&self, advance: &GlobalCell<bool>) -> *mut c_char {
+    fn pick(&self, advance: &GlobalCell<bool>) -> &CStr {
         if !self.node.in_modes(EXPAND_MODES.get()) {
             // Not in these modes: an empty candidate, and no bookkeeping.
-            return c"".as_ptr().cast_mut();
+            return c"";
         }
-        if self.advance {
+        let name = if self.advance {
             self.node.en_dname
         } else {
             if self.node.en_dname.is_null() {
                 advance.set(true);
             }
             self.node.dname
-        }
+        };
+        // SAFETY: a live node's display names are NUL-terminated, and the
+        // borrow ends before anything can change the menu tree.
+        unsafe { cstr::at_opt(name) }.unwrap_or(c"")
     }
 
     fn step(self, menu: &GlobalCell<Option<Menu>>, advance: &GlobalCell<bool>) {
@@ -247,62 +251,46 @@ impl Generator {
 }
 
 /// `expand_generic()`'s source for the list of (sub)menus, not entries.
-pub(crate) fn get_menu_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_menu_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 
     // Skip PopUp[nvoci], separators and leaves.
-    let Some(item) = Generator::next(idx, &MENU, &ADVANCE, |node| {
+    let item = Generator::next(idx, &MENU, &ADVANCE, |node| {
         is_hidden(node.dname()) || is_separator(node.dname()) || node.children().is_none()
-    }) else {
-        // At the end of the linked list.
-        return ptr::null_mut();
-    };
-    let name = item.pick(&ADVANCE);
+    })?; // At the end of the linked list.
+    let name = Candidate::Owned(item.pick(&ADVANCE).to_owned());
     item.step(&MENU, &ADVANCE);
-    name
+    Some(name)
 }
 
-/// `expand_generic()`'s source for the list of menus *and* menu entries.
-///
-/// # Safety
-/// As [`get_menu_name`].
-pub(crate) unsafe fn get_menu_names(expand: *mut Expand, idx: c_int) -> *mut c_char {
+/// `expand_generic()`'s source for the menu entries `:emenu` and friends
+/// take. A submenu comes back with [`SUBMENU_MARK`] appended, which the
+/// caller turns back into the `.` it stands for.
+pub(crate) fn get_menu_names(_expand: &Expand, idx: usize) -> Option<Candidate> {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 
     // Skip Browse-style entries, popup menus and separators.
-    let Some(item) = Generator::next(idx, &MENU, &ADVANCE, |node| {
+    let item = Generator::next(idx, &MENU, &ADVANCE, |node| {
         is_hidden(node.dname())
             || (EXPAND_EMENU.get() && is_separator(node.dname()))
             || node.dname().to_bytes().last() == Some(&b'.')
-    }) else {
-        return ptr::null_mut();
-    };
+    })?;
 
     let name = item.pick(&ADVANCE);
     let name = if item.node.children().is_some() && item.node.in_modes(EXPAND_MODES.get()) {
         // Mark it as a submenu with a magic byte. Upstream copies up to the
         // whole buffer and then appends, overrunning it by one for a
         // 255-byte name; the separator is reserved for here.
-        // SAFETY: `name` is one of the node's display names.
-        let bytes = unsafe { CStr::from_ptr(name) }.to_bytes();
-        let kept = bytes.len().min(TBUFFER_LEN - 2);
-        // The generator's contract is a borrowed string, so this answers
-        // from the expansion context's own scratch, which `expand_generic`
-        // copies before it asks for the next name.
-        // SAFETY: the caller's live expansion context.
-        let out = unsafe { &mut (*expand).xp_buf };
-        for (dst, src) in out.iter_mut().zip(&bytes[..kept]) {
-            *dst = src.cast_signed();
-        }
-        out[kept] = SUBMENU_MARK.cast_signed();
-        out[kept + 1] = 0;
-        out.as_mut_ptr()
+        let bytes = name.to_bytes();
+        let mut marked = bytes[..bytes.len().min(TBUFFER_LEN - 2)].to_vec();
+        marked.push(SUBMENU_MARK);
+        CString::new(marked).expect("a menu name holds no NUL")
     } else {
-        name
+        name.to_owned()
     };
 
     item.step(&MENU, &ADVANCE);
-    name
+    Some(Candidate::Owned(name))
 }

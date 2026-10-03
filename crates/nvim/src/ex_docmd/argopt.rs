@@ -5,6 +5,7 @@
 use crate::cstr;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::source::ex_errmsg;
+use crate::types::Candidate;
 use crate::types::CmdIdx;
 use crate::vim_snprintf;
 use crate::window::tab_index;
@@ -104,14 +105,9 @@ pub(crate) unsafe fn get_bad_opt(p: *const c_char, excmd: &mut ExArg) -> Result<
 }
 
 /// The completion candidates for `++bad=`.
-///
-/// Keeps the raw signature: installed as a `CompleteListItemGetter`.
-pub(crate) fn get_bad_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_bad_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     const VALUES: [&CStr; 3] = [c"?", c"keep", c"drop"];
-    match VALUES.get(idx as usize) {
-        Some(v) => v.as_ptr() as *mut c_char,
-        None => ptr::null_mut(),
-    }
+    VALUES.get(idx).map(|&v| Candidate::Borrowed(v))
 }
 
 /// Read one `++opt` or `++opt=value` argument off the front of `args.arg`.
@@ -239,9 +235,7 @@ fn skip_arg_at(line: &mut CmdLine, at: usize, rembs: bool) -> usize {
 }
 
 /// The completion candidates for `++`.
-///
-/// Keeps the raw signature: installed as a `CompleteListItemGetter`.
-pub(crate) fn get_argopt_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_argopt_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     const VALUES: [&CStr; 7] = [
         c"fileformat=",
         c"encoding=",
@@ -251,10 +245,7 @@ pub(crate) fn get_argopt_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
         c"edit",
         c"p",
     ];
-    match VALUES.get(idx as usize) {
-        Some(v) => v.as_ptr() as *mut c_char,
-        None => ptr::null_mut(),
-    }
+    VALUES.get(idx).map(|&v| Candidate::Borrowed(v))
 }
 
 /// Complete a `++opt` argument: the option names, or the values of the one
@@ -288,17 +279,14 @@ pub unsafe fn expand_argopt(
             }
         };
         let cb: CompleteListItemGetter = if ends_with(c"ff") || ends_with(c"fileformat") {
-            Some(get_fileformat_name)
+            get_fileformat_name
         } else if ends_with(c"enc") || ends_with(c"encoding") {
-            Some(get_encoding_name)
+            get_encoding_name
         } else if ends_with(c"bad") {
-            Some(get_bad_name)
+            get_bad_name
         } else {
-            None
-        };
-        if cb.is_none() {
             return Err(Failed);
-        }
+        };
         expand_generic(pat, expand, rmp, matches, num_matches, cb, false);
         return Ok(());
     }
@@ -315,7 +303,7 @@ pub unsafe fn expand_argopt(
         rmp,
         matches,
         num_matches,
-        Some(get_argopt_name),
+        get_argopt_name,
         false,
     );
     Ok(())

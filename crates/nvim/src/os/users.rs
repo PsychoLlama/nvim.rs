@@ -27,6 +27,7 @@ use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xstrdup, xstrlcpy};
 use crate::os::env::{env_buf, os_getenv_into};
+use crate::types::Candidate;
 use crate::types::{Expand, Failed, GArray, size_t, uv_uid_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -101,14 +102,9 @@ fn init_users() {
 }
 
 /// Given to `expand_generic()` to obtain user names. NULL past the end.
-pub fn get_users(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_users(_expand: &Expand, idx: usize) -> Option<Candidate> {
     init_users();
-    COMPLETION_USERS.with(|users| {
-        usize::try_from(idx)
-            .ok()
-            .and_then(|i| users.get(i))
-            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
-    })
+    COMPLETION_USERS.with(|users| users.get(idx).map(|name| Candidate::Owned(name.clone())))
 }
 
 /// Whether `name` matches a user name, exactly or as a prefix.

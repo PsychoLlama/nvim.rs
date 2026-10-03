@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::types::Candidate;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::charset::{skiptowhite, skipwhite, vim_strsize};
@@ -353,15 +354,11 @@ pub(crate) unsafe fn set_context_in_highlight_cmd(expand: *mut Expand, arg: *con
 }
 
 /// `expand_generic`'s callback: the `idx`th completion candidate.
-///
-/// Keeps the raw signature because cmdexpand's generator table holds it as a
-/// function pointer of that shape.
-///
-/// # Safety
-/// Main thread only.
-pub(crate) unsafe fn get_highlight_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
-    // SAFETY: as the callee.
-    unsafe { get_highlight_name_ext(expand, idx, true).cast_mut() }
+pub(crate) fn get_highlight_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    let idx = c_int::try_from(idx).ok()?;
+    // SAFETY: a group's name or a literal; NUL-terminated, null past the end.
+    let name = unsafe { cstr::at_opt(get_highlight_name_ext(idx, true)) }?;
+    Some(Candidate::Owned(name.to_owned()))
 }
 
 /// The `idx`th completion candidate: the group names first, then whichever of
@@ -372,11 +369,7 @@ pub(crate) unsafe fn get_highlight_name(expand: *mut Expand, idx: c_int) -> *mut
 ///
 /// # Safety
 /// Main thread only.
-pub(crate) unsafe fn get_highlight_name_ext(
-    _expand: *mut Expand,
-    idx: c_int,
-    skip_cleared: bool,
-) -> *const c_char {
+pub(crate) unsafe fn get_highlight_name_ext(idx: c_int, skip_cleared: bool) -> *const c_char {
     if idx < 0 {
         return core::ptr::null();
     }

@@ -17,8 +17,10 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::memory::XString;
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::c_str;
+use crate::os::env::dirs::home_replace_in;
 use crate::semsg;
 use crate::snprintf;
 use crate::vim_snprintf;
@@ -69,6 +71,17 @@ pub(crate) fn script_item(sid: ScriptId) -> *mut ScriptItem {
 /// Is `sid` a script the editor has sourced -- upstream's `SCRIPT_ID_VALID`?
 pub(crate) fn script_id_valid(sid: c_int) -> bool {
     sid > 0 && sid <= script_count()
+}
+
+/// Script `sid`'s file name with the home directory as `~`, cut to `room`
+/// bytes; `None` for an id with no script or a script with no name.
+pub(crate) fn script_display_name(sid: ScriptId, room: usize) -> Option<XString> {
+    if !script_id_valid(sid) {
+        return None;
+    }
+    // SAFETY: a valid id's item is live, and its name NUL-terminated or null.
+    let name = unsafe { cstr::at_opt((*script_item(sid)).sn_name) }?;
+    Some(home_replace_in(None, name, room, true))
 }
 
 /// Was script `sid` written in Lua?

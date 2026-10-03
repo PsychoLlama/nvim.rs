@@ -10,7 +10,7 @@
 
 use crate::cstr;
 use crate::types::CmdIdx;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use crate::eval::typval::NumBuf;
@@ -22,8 +22,10 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::startup::getout;
 
-use crate::types::{CmdAddr, CmdLine, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, size_t};
-use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
+use crate::types::{
+    Candidate, CmdAddr, CmdLine, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, size_t,
+};
+use crate::usercmd::{find_ucmd, get_user_command_name, get_user_commands};
 
 /// Is this index a *user* command rather than a row of `cmdnames`?
 ///
@@ -366,19 +368,18 @@ pub fn excmd_get_argt(idx: CmdIdx) -> ExArgt {
 }
 
 /// The `idx`'th command name, for command-line completion. Indices past
-/// the table are user commands.
-///
-/// Keeps the raw signature: cmdexpand's generator table holds it as an
-/// `ItemGetter`.
-///
-/// # Safety
-///
-/// `_expand` must point at a live `Expand` context, unaliased for the call.
-pub unsafe fn get_command_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
-    if idx >= CmdIdx::SIZE.code() {
-        return unsafe { expand_user_command_name(idx) };
+/// the built-in table are user commands.
+pub(crate) fn get_command_name(expand: &Expand, idx: usize) -> Option<Candidate> {
+    match cmdnames.get(idx) {
+        // SAFETY: the table's names are string literals.
+        Some(row) => Some(Candidate::Borrowed(unsafe { CStr::from_ptr(row.cmd_name) })),
+        None => get_user_commands(expand, idx - cmdnames.len()),
     }
-    cmdnames[idx as usize].cmd_name
+}
+
+/// The name of built-in command `idx`.
+pub(crate) fn builtin_command_name(idx: CmdIdx) -> *mut c_char {
+    cmdnames[idx.index()].cmd_name
 }
 
 /// Whether two NUL-terminated strings agree over their first `n` bytes --

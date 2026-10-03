@@ -37,6 +37,7 @@
 
 use crate::cstr;
 use crate::global_cell::field;
+use crate::types::Candidate;
 use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -736,22 +737,19 @@ pub fn did_set_chars_option(args: &mut OptSet) -> Result<(), OptError> {
 }
 
 /// Enumerate the field names of 'fillchars', for completion.
-pub fn get_fillchars_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_fillchars_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     field_name(&FCS_TAB, idx)
 }
 
 /// Enumerate the field names of 'listchars', for completion.
-pub fn get_listchars_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_listchars_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     field_name(&LCS_TAB, idx)
 }
 
 /// The `idx`th field name, or null once the table has run out — which is
 /// how `expand_generic` learns the list has ended.
-fn field_name(tab: &'static [Field], idx: c_int) -> *mut c_char {
-    usize::try_from(idx)
-        .ok()
-        .and_then(|idx| tab.get(idx))
-        .map_or(ptr::null_mut(), |field| field.name.as_ptr().cast_mut())
+fn field_name(tab: &'static [Field], idx: usize) -> Option<Candidate> {
+    tab.get(idx).map(|field| Candidate::Borrowed(field.name))
 }
 
 /// Would the current 'fillchars' and 'listchars' still be accepted?

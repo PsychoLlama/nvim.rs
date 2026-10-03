@@ -20,7 +20,9 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{ExpandContext, IOSIZE, NUL};
+use crate::types::{Candidate, ExpandContext, IOSIZE, NUL};
+use core::ffi::CStr;
+use std::ffi::CString;
 
 /// Print the head of every function, or of the ones `pattern` matches.
 pub(crate) fn list_functions(mut pattern: Option<&mut RegMatch>) {
@@ -207,12 +209,9 @@ pub unsafe fn function_exists(name: *const c_char, no_deref: bool) -> bool {
 /// Completion over the user functions: answers the `idx`th name, resuming
 /// from where the last call stopped.
 ///
-/// Keeps the raw signature because a completion table holds a pointer to it.
-///
-/// # Safety
-/// Called with `idx` 0 first, then increasing, with no change to the
-/// function table in between.
-pub unsafe fn get_user_func_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
+/// Called with `idx` 0 first, then increasing; a change to the function
+/// table in between ends the walk.
+pub fn get_user_func_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     static done: GlobalCell<size_t> = GlobalCell::new(0);
     static changed: GlobalCell<c_int> = GlobalCell::new(0);
     // The cursor is a slot *index*: it is parked in a `static` across calls
@@ -226,7 +225,7 @@ pub unsafe fn get_user_func_name(expand: *mut Expand, idx: c_int) -> *mut c_char
         changed.set(func_table().changed());
     }
     if changed.get() != func_table().changed() || done.get() >= func_table().used() {
-        return ptr::null_mut();
+        return None;
     }
 
     if done.get() > 0 {
@@ -239,36 +238,35 @@ pub unsafe fn get_user_func_name(expand: *mut Expand, idx: c_int) -> *mut c_char
     // The key *is* the function's trailing name member, so the function is
     // that many bytes before it.
     let key = func_table().slot(slot.get()).hi_key;
+    // SAFETY: a kept slot's key is the name member of a live function.
     let fp = unsafe { key.sub(offset_of!(UserFunc, uf_name)) } as *mut UserFunc;
+    // SAFETY: as above.
+    let f = unsafe { Uf::new(fp) };
+    // SAFETY: a live function's name is NUL-terminated.
+    let name = unsafe { CStr::from_ptr(uf_name_ptr(fp)) };
 
-    if unsafe { (*fp).uf_flags }.has(FuncFlags::DICT)
-        || unsafe { cstr::starts_with(uf_name_ptr(fp), b"<lambda>") }
-    {
+    if f.uf_flags.has(FuncFlags::DICT) || name.to_bytes().starts_with(b"<lambda>") {
         // Don't show dict and lambda functions.
-        return c"".as_ptr() as *mut c_char;
+        return Some(Candidate::Borrowed(c""));
     }
-    if unsafe { (*fp).uf_namelen } + 4 >= IOSIZE as size_t {
+    if f.uf_namelen + 4 >= IOSIZE as size_t {
         // Prevent overflow.
-        return uf_name_ptr(fp);
+        return Some(Candidate::Owned(name.to_owned()));
     }
 
-    let buf = unsafe { (*expand).xp_buf.as_mut_ptr() };
-    let mut len = unsafe { cat_func_name(buf, IOSIZE as size_t, fp) };
-    if unsafe { (*expand).xp_context } != ExpandContext::UserFunc {
-        // SAFETY: `buf` is the completion buffer of `IOSIZE` bytes, of
-        // which `len` are used, and `fp` is the live function.
-        let at = unsafe { buf.offset(len as isize) };
-        let left = (IOSIZE as size_t).wrapping_sub(len as size_t);
-        unsafe { xstrlcpy(at, c"(".as_ptr(), left) };
-        let f = unsafe { Uf::new(fp) };
+    let mut buf = [0 as c_char; IOSIZE as usize];
+    // SAFETY: `buf` is `IOSIZE` bytes and `fp` the live function.
+    let len = unsafe { cat_func_name(buf.as_mut_ptr(), IOSIZE as size_t, fp) };
+    let mut text = cstr::as_bytes(&buf[..len as usize]).to_vec();
+    if expand.xp_context != ExpandContext::UserFunc {
+        text.push(b'(');
         if f.uf_varargs == 0 && f.uf_args.ga_len <= 0 {
-            len += 1;
-            let at = unsafe { buf.offset(len as isize) };
-            let left = (IOSIZE as size_t).wrapping_sub(len as size_t);
-            unsafe { xstrlcpy(at, c")".as_ptr(), left) };
+            text.push(b')');
         }
     }
-    buf
+    Some(Candidate::Owned(
+        CString::new(text).expect("a function name holds no NUL"),
+    ))
 }
 
 /// `:delfunction`.

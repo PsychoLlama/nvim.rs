@@ -46,10 +46,11 @@ use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
 use crate::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::startup::nvim_testing;
 use crate::strings::striequal;
-use crate::types::{Expand, IOSIZE, MAXPATHL, int64_t, size_t};
+use crate::types::{Candidate, Expand, IOSIZE, MAXPATHL, int64_t, size_t};
 use ::libc::{getpid, strcasecmp, strcpy, strpbrk, uname, utsname};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 // The libuv error codes this file distinguishes, retyped from the `c_int`
 // anonymous enum c2rust emitted.
@@ -430,22 +431,21 @@ fn os_uv_homedir(buf: &mut EnvBuf) -> *mut c_char {
     }
 }
 
-/// `expand_generic` source for environment variable names.
-///
-/// # Safety
-/// Called through the `ItemGetter` table; `expand` must be a live [`Expand`].
-pub unsafe fn get_env_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
-    debug_assert!(idx >= 0);
-    // SAFETY: the caller's contract; `xp_buf` is `EXPAND_BUF_LEN` bytes.
-    unsafe {
-        let envname = os_getenvname_at_index(idx as size_t);
-        if envname.is_null() {
-            return ptr::null_mut();
-        }
-        xstrlcpy((*expand).xp_buf.as_mut_ptr(), envname, EXPAND_BUF_LEN);
-        xfree(envname.cast());
-        (*expand).xp_buf.as_mut_ptr()
+/// The `idx`th environment variable's name, for completion, cut to the
+/// length upstream's scratch buffer held.
+pub fn get_env_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    let envname = os_getenvname_at_index(idx as size_t);
+    if envname.is_null() {
+        return None;
     }
+    // SAFETY: `os_getenvname_at_index` answers an owned, NUL-terminated
+    // name, copied and then given back.
+    let name = unsafe { CStr::from_ptr(envname) }.to_bytes();
+    let kept = name.len().min(EXPAND_BUF_LEN as usize - 1);
+    let name = CString::new(&name[..kept]).expect("a variable name holds no NUL");
+    // SAFETY: as above.
+    unsafe { xfree(envname.cast()) };
+    Some(Candidate::Owned(name))
 }
 
 /// Append the directory holding `fname` to `$PATH`. Answers whether it was.

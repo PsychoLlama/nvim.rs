@@ -260,8 +260,22 @@ impl TryFrom<::core::ffi::c_int> for ExpandContext {
     }
 }
 
-pub type CompleteListItemGetter =
-    Option<unsafe fn(*mut Expand, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>;
+/// One completion candidate, as a generator answers it: a name out of a
+/// table the program carries, or a copy of one out of the editor's state.
+///
+/// An empty one is skipped but still counts, which is how a generator keeps
+/// its numbering across an entry it does not want offered.
+pub type Candidate = ::std::borrow::Cow<'static, ::core::ffi::CStr>;
+
+/// A completion generator: the `idx`th candidate for `expand`, or `None` once
+/// `idx` is past the last one. Called with `idx` 0 first and rising by one,
+/// which several generators rely on to restart a walk they keep a cursor
+/// for.
+///
+/// Upstream answers a `char *` borrowed from wherever the name lives --
+/// often the context's own scratch buffer, so the caller had to copy it
+/// before asking again. The answer owns or borrows for `'static` instead.
+pub type CompleteListItemGetter = fn(&Expand, usize) -> Option<Candidate>;
 pub struct Expand {
     pub xp_pattern: *mut ::core::ffi::c_char,
     pub xp_context: ExpandContext,

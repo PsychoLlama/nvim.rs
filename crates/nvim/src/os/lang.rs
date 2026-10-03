@@ -33,6 +33,7 @@ use crate::profile::startup_timing;
 use crate::profile::time_msg;
 use crate::semsg;
 use crate::smsg;
+use crate::types::Candidate;
 use crate::types::{ExArg, Expand, MAXPATHL, Vv};
 use ::libc::setlocale;
 use core::ffi::{CStr, c_char, c_int};
@@ -320,29 +321,26 @@ fn init_locales() {
 
 /// The `idx`th known locale name, or NULL past the end — the shape
 /// `expand_generic` walks.
-fn locale_name(idx: c_int) -> *mut c_char {
+fn locale_name(idx: usize) -> Option<Candidate> {
     init_locales();
-    let idx = usize::try_from(idx).ok();
-    match (LOCALES.get(), idx) {
-        // The slice is leaked, so the pointer outlives this borrow.
-        (Some(locales), Some(idx)) => locales
-            .get(idx)
-            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut()),
-        _ => ptr::null_mut(),
-    }
+    // The slice is leaked, so the borrow outlives this one.
+    LOCALES
+        .get()
+        .and_then(|locales| locales.get(idx))
+        .map(|name| Candidate::Borrowed(name.as_c_str()))
 }
 
 /// `expand_generic` source for `:language`'s argument: the four sub-commands
 /// first, then every locale (because `:language {name}` takes one directly).
-pub fn get_lang_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
-    match SELECTORS.get(idx as usize) {
-        Some((name, ..)) => name.as_ptr().cast::<c_char>().cast_mut(),
-        None => locale_name(idx - SELECTORS.len() as c_int),
+pub fn get_lang_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    match SELECTORS.get(idx) {
+        Some((name, ..)) => Some(Candidate::Borrowed(name)),
+        None => locale_name(idx - SELECTORS.len()),
     }
 }
 
 /// `expand_generic` source for `:language`'s locale names alone.
-pub fn get_locales(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_locales(_expand: &Expand, idx: usize) -> Option<Candidate> {
     locale_name(idx)
 }
 

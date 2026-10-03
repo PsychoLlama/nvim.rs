@@ -32,7 +32,7 @@ use crate::memory::{xmalloc, xstrdup};
 use crate::menu::set_context_in_menu_cmd;
 use crate::snprintf;
 use crate::types::CmdIdx;
-use crate::types::{ExArgt, Expand, ExpandContext, NUL};
+use crate::types::{Candidate, ExArgt, Expand, ExpandContext, NUL, UserCmd};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -196,40 +196,31 @@ pub(crate) unsafe fn set_context_in_user_cmdarg(
     ptr::null()
 }
 
-/// The `idx`th user command name, for the built-in command table's own
-/// completion -- where user commands come after the `CmdIdx::SIZE` built-ins.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn expand_user_command_name(idx: c_int) -> *mut c_char {
-    // SAFETY: caller contract.
-    unsafe { get_user_commands(ptr::null_mut(), idx - CmdIdx::SIZE.code()) }
-}
-
 /// The `idx`th user command name: buffer-local ones first, then global.
 ///
 /// A global command shadowed by a buffer-local one of the same name is
 /// answered as the empty string rather than skipped, so that the caller's
-/// index keeps counting.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn get_user_commands(_expand: *mut Expand, idx: c_int) -> *mut c_char {
-    // SAFETY: module contract.
+/// index keeps counting. The built-in command table's own completion
+/// reaches this past its last built-in.
+pub(crate) fn get_user_commands(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    // SAFETY: the borrow ends before anything can add or remove a command.
     let (local, global) = unsafe { (Scope::Buffer.list(), Scope::Global.list()) };
-    let idx = idx as usize;
-    if idx < local.len() {
-        return local[idx].uc_name;
+    if let Some(cmd) = local.get(idx) {
+        return Some(name_candidate(cmd));
     }
-    let Some(cmd) = global.get(idx - local.len()) else {
-        return ptr::null_mut();
-    };
+    let cmd = global.get(idx - local.len())?;
     let shadowed = local.iter().any(|l| ucmd_name(l) == ucmd_name(cmd));
-    if shadowed {
-        c"".as_ptr().cast_mut()
+    Some(if shadowed {
+        Candidate::Borrowed(c"")
     } else {
-        cmd.uc_name
-    }
+        name_candidate(cmd)
+    })
+}
+
+/// A copy of a command's name, which lives no longer than the command.
+fn name_candidate(cmd: &UserCmd) -> Candidate {
+    // SAFETY: `uc_name` is NUL-terminated for the life of the entry.
+    Candidate::Owned(unsafe { CStr::from_ptr(cmd.uc_name) }.to_owned())
 }
 
 /// The name of user command `idx` in the table `cmdidx` names.
@@ -248,17 +239,20 @@ pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: CmdIdx) -> *mut c
         .map_or(ptr::null_mut(), |cmd| cmd.uc_name)
 }
 
-/// `expand_generic()` item getter: the `-addr=` values.
-pub(crate) fn get_user_cmd_addr_type(_expand: *mut Expand, idx: c_int) -> *mut c_char {
-    ADDR_TYPES
-        .get(idx as usize)
-        .map_or(ptr::null_mut(), |row| row.name.as_ptr().cast_mut())
+/// The `idx`th of a fixed list.
+fn nth(list: &[&'static CStr], idx: usize) -> Option<Candidate> {
+    list.get(idx).map(|&name| Candidate::Borrowed(name))
 }
 
-/// `expand_generic()` item getter: the attribute names.
-pub(crate) fn get_user_cmd_flags(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+/// `expand_generic()` item getter: the `-addr=` values.
+pub(crate) fn get_user_cmd_addr_type(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    ADDR_TYPES.get(idx).map(|row| Candidate::Borrowed(row.name))
+}
+
+/// `expand_generic()` item getter: the attribute names `:command` takes.
+pub(crate) fn get_user_cmd_flags(_expand: &Expand, idx: usize) -> Option<Candidate> {
     /// Must stay alphabetical bar the last, which upstream appended.
-    static USER_CMD_FLAGS: [&CStr; 10] = [
+    const USER_CMD_FLAGS: [&CStr; 10] = [
         c"addr",
         c"bang",
         c"bar",
@@ -270,35 +264,30 @@ pub(crate) fn get_user_cmd_flags(_expand: *mut Expand, idx: c_int) -> *mut c_cha
         c"register",
         c"keepscript",
     ];
-    USER_CMD_FLAGS
-        .get(idx as usize)
-        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
+    nth(&USER_CMD_FLAGS, idx)
 }
 
 /// `expand_generic()` item getter: the `-nargs=` values.
-pub(crate) fn get_user_cmd_nargs(_expand: *mut Expand, idx: c_int) -> *mut c_char {
-    static USER_CMD_NARGS: [&CStr; 5] = [c"0", c"1", c"*", c"?", c"+"];
-    USER_CMD_NARGS
-        .get(idx as usize)
-        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
+pub(crate) fn get_user_cmd_nargs(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    nth(&[c"0", c"1", c"*", c"?", c"+"], idx)
 }
 
 /// `expand_generic()` item getter: the `-complete=` values.
 ///
 /// The holes in [`COMMAND_COMPLETE`], and the Lua context that has a name
-/// only for display, are answered as the empty string: the getter's null is
-/// the end of the list, not a gap in it.
-pub(crate) fn get_user_cmd_complete(_expand: *mut Expand, idx: c_int) -> *mut c_char {
-    if idx >= COMMAND_COMPLETE.len() as c_int {
-        return ptr::null_mut();
+/// only for display, are answered as the empty string: the getter's `None`
+/// is the end of the list, not a gap in it.
+pub(crate) fn get_user_cmd_complete(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    if idx >= COMMAND_COMPLETE.len() {
+        return None;
     }
-    match ExpandContext::try_from(idx)
+    let context = c_int::try_from(idx)
         .ok()
-        .and_then(command_complete_name)
-    {
-        Some(name) if idx != ExpandContext::UserLua as c_int => name.as_ptr().cast_mut(),
-        _ => c"".as_ptr().cast_mut(),
-    }
+        .and_then(|i| ExpandContext::try_from(i).ok());
+    Some(match context.and_then(command_complete_name) {
+        Some(name) if context != Some(ExpandContext::UserLua) => Candidate::Borrowed(name),
+        _ => Candidate::Borrowed(c""),
+    })
 }
 
 /// The name of completion type `expand`, as an allocated string, or null

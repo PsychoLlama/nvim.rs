@@ -133,14 +133,10 @@ pub(crate) fn sign_defs() -> Vec<SignRef> {
     })
 }
 
-/// The name of the `idx`'th defined sign, or null past the end — the
+/// The name of the `idx`'th defined sign, or `None` past the end — the
 /// `:sign list` / `:sign undefine` completion source.
-pub(crate) fn sign_nth_name(idx: usize) -> *mut c_char {
-    SIGNS.with(|signs| {
-        signs
-            .get(idx)
-            .map_or(::core::ptr::null_mut(), |e| e.name.as_ptr().cast_mut())
-    })
+pub(crate) fn sign_nth_name(idx: usize) -> Option<CString> {
+    SIGNS.with(|signs| signs.get(idx).map(|e| e.name.clone()))
 }
 
 /// The namespace of the `idx`'th sign group, or `None` past the end — the

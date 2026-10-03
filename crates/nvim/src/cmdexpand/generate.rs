@@ -21,7 +21,8 @@ use crate::types::String_0;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::types::{ArrayBuf, BackslashEscape, ExpandContext, Failed};
+use crate::runtime::script_display_name;
+use crate::types::{ArrayBuf, BackslashEscape, Candidate, ExpandContext, Failed};
 
 /// Expand a file or directory pattern.
 ///
@@ -117,22 +118,19 @@ pub(crate) unsafe fn expand_files_and_dirs(
     ret
 }
 
-/// Answer `list[idx]` as a C string, or NULL when `idx` is out of range.
+/// Answer `list[idx]`, or `None` when `idx` is out of range.
 ///
-/// Every generator below is called with rising indices until it answers NULL,
-/// so "past the end" is how the loop terminates.
-fn nth_option(list: &[&'static CStr], idx: c_int) -> *mut c_char {
-    match usize::try_from(idx).ok().and_then(|i| list.get(i)) {
-        Some(text) => text.as_ptr().cast_mut(),
-        None => ptr::null_mut(),
-    }
+/// Every generator below is called with rising indices until it answers
+/// `None`, so "past the end" is how the loop terminates.
+fn nth_option(list: &[&'static CStr], idx: usize) -> Option<Candidate> {
+    list.get(idx).map(|&text| Candidate::Borrowed(text))
 }
 
 /// The possible arguments of the `":filetype {plugin,indent}"` command.
 ///
 /// Which of them apply depends on how much of the command has been typed,
 /// which `set_context_in_filetype_cmd` recorded in `filetype_expand_what`.
-pub(crate) fn get_filetypecmd_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_filetypecmd_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     nth_option(
         match filetype_expand_what.get() {
             FiletypeWhat::All => &[c"indent", c"plugin", c"on", c"off"],
@@ -149,7 +147,7 @@ pub(crate) fn get_filetypecmd_arg(_expand: *mut Expand, idx: c_int) -> *mut c_ch
 /// The three share the tail of one list: `:breakadd` takes all four,
 /// `:breakdel` everything but "expr", and `:profdel` only the two that name
 /// something already being profiled.
-pub(crate) fn get_breakadd_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_breakadd_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     const OPTS: [&CStr; 4] = [c"expr", c"file", c"func", c"here"];
     nth_option(
         match breakpt_expand_what.get() {
@@ -161,68 +159,41 @@ pub(crate) fn get_breakadd_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char 
     )
 }
 
-/// The sourced scripts, for `":scriptnames"`.
-///
-/// Answers a pointer into the expansion context's own scratch, so the
-/// caller must copy it before asking for the next one — which
-/// `expand_generic` does. Upstream answers the shared `NameBuff` instead.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-pub(crate) unsafe fn get_scriptnames_arg(expand: *mut Expand, idx: c_int) -> *mut c_char {
-    let sid = idx + 1;
+/// The sourced scripts, for `":scriptnames"`, with the home directory as
+/// `~`. Upstream answers the shared `NameBuff`.
+pub(crate) fn get_scriptnames_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    let sid = c_int::try_from(idx).ok()? + 1;
     if !script_id_valid(sid) {
-        return ptr::null_mut();
+        return None;
     }
-    let si = script_item(sid);
-    // SAFETY: the caller's contract -- `expand` is the live expansion context,
-    // whose `xp_buf` is `EXPAND_BUF_LEN` bytes of scratch. `&raw mut` takes
-    // the field's address without reading the context, so the pointer is
-    // into the context itself and not into a copy of it.
-    let out = unsafe { &raw mut (*expand).xp_buf }.cast::<c_char>();
-    let room = EXPAND_BUF_LEN as size_t;
-    // SAFETY: `si` is a live script item and `out` has `room` bytes.
-    unsafe { home_replace(None, (*si).sn_name, out, room, true) };
-    out
+    let name = script_display_name(sid, EXPAND_BUF_LEN as usize).unwrap_or_default();
+    Some(Candidate::Owned(name.as_cstr().to_owned()))
 }
 
 /// The possible arguments of the `":retab {-indentonly}"` option.
-pub(crate) fn get_retab_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_retab_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     nth_option(&[c"-indentonly"], idx)
 }
 
 /// The possible arguments of the `":messages {clear}"` command.
-pub(crate) fn get_messages_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_messages_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     nth_option(&[c"clear"], idx)
 }
 
 /// The possible arguments of the `":mapclear"` command.
-pub(crate) fn get_mapclear_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_mapclear_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     nth_option(&[c"<buffer>"], idx)
 }
 
 /// The `idx`th entry of a cached Lua answer, when it is a string.
 ///
 /// Both Lua-backed generators cache one [`Object`] across the whole
-/// completion and index into it per call; this is the indexing half.
-///
-/// # Safety
-///
-/// The answer borrows the cached object's bytes, which stay live until the
-/// cache is replaced.
-fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char {
+/// completion and index into it per call; this is the indexing half. An
+/// entry that is not a string ends the list, as upstream's NULL did.
+fn nth_lua_string(names: &GlobalCell<Object>, idx: usize) -> Option<Candidate> {
     names.with(|names| {
-        let Some(array) = names.as_array() else {
-            return ptr::null_mut();
-        };
-        let Ok(idx) = usize::try_from(idx) else {
-            return ptr::null_mut();
-        };
-        match array.get(idx).and_then(Object::as_string) {
-            Some(name) => name.data(),
-            None => ptr::null_mut(),
-        }
+        let name = names.as_array()?.get(idx)?.as_string()?;
+        Some(Candidate::Owned(name.as_cstr().to_owned()))
     })
 }
 
@@ -253,14 +224,11 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
 ///
 /// Asked of Lua once per command line — `get_cmdline_last_prompt_id` changes
 /// when a new one is opened — and cached for the rest of it.
-///
-/// # Safety
-///
-/// `_expand` must point at a live `Expand` context, unaliased for the call.
-pub(crate) unsafe fn get_healthcheck_names(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_healthcheck_names(_expand: &Expand, idx: usize) -> Option<Candidate> {
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
     if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 {
+        // SAFETY: an empty argument list.
         unsafe { cache_lua_answer(&names, c"return vim.health._complete()", ARRAY_DICT_INIT) };
         last_gen.set(get_cmdline_last_prompt_id());
     }
@@ -271,26 +239,19 @@ pub(crate) unsafe fn get_healthcheck_names(_expand: *mut Expand, idx: c_int) -> 
 ///
 /// Unlike `:checkhealth` the answer depends on the whole command line, so the
 /// cache is keyed on that as well as on the prompt id.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-pub(crate) unsafe fn get_lsp_arg(expand: *mut Expand, idx: c_int) -> *mut c_char {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
+pub(crate) fn get_lsp_arg(expand: &Expand, idx: usize) -> Option<Candidate> {
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_xp_line: GlobalCell<Option<XString>> = GlobalCell::new(None);
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
-    // SAFETY: the context's command line, a C string.
-    let line = unsafe { cstr::at(expand.xp_line) };
+    let line = expand.line_cstr();
     if last_xp_line.with(|last| last.as_ref().is_none_or(|last| last.as_cstr() != line))
         || last_gen.get() != get_cmdline_last_prompt_id()
     {
         last_xp_line.set(Some(XString::from_cstr(line)));
         // The current command line, as the Lua function's one argument.
         let mut args = ArrayBuf::<1>::new();
-        args.push(Object::string(unsafe { cstr_to_string(expand.xp_line) }));
+        args.push(Object::string(String_0::from_bytes(line.to_bytes())));
+        // SAFETY: a well-formed one-element array.
         unsafe {
             cache_lua_answer(
                 &names,
@@ -308,7 +269,7 @@ pub(crate) unsafe fn get_lsp_arg(expand: *mut Expand, idx: c_int) -> *mut c_char
 /// The contexts whose matches come from walking a list one item at a time.
 /// Everything else has a generator of its own in
 /// [`super::fromcontext::expand_from_context`].
-const GENERATORS: [(ExpandContext, ItemGetter, bool, bool); 33] = [
+const GENERATORS: [(ExpandContext, CompleteListItemGetter, bool, bool); 33] = [
     (ExpandContext::Commands, get_command_name, false, true),
     (ExpandContext::FiletypeCmd, get_filetypecmd_arg, true, true),
     (ExpandContext::Mapclear, get_mapclear_arg, true, true),
@@ -392,16 +353,6 @@ pub(crate) unsafe fn expand_other(
     if ic {
         rmp.rm_ic = true;
     }
-    unsafe {
-        expand_generic(
-            pat,
-            expand.raw(),
-            rmp,
-            matches,
-            num_matches,
-            Some(func),
-            escaped,
-        )
-    };
+    unsafe { expand_generic(pat, expand.raw(), rmp, matches, num_matches, func, escaped) };
     Ok(())
 }

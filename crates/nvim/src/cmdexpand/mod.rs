@@ -6,7 +6,6 @@ pub(crate) mod state;
 use crate::arglist::get_arglist_name;
 use crate::types::TAB;
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::autocmd::{expand_get_augroup_name, expand_get_event_name, set_context_in_autocmd};
 use crate::buffer::expand_buf_names;
@@ -16,6 +15,7 @@ use crate::charset::{
 };
 use crate::cmdexpand::state::{save_p_ls, save_p_wmh, wild_menu_showing};
 use crate::cmdhist::get_history_arg;
+use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_status};
 use crate::eval::funcs::{get_expr_name, get_function_name};
@@ -93,7 +93,7 @@ use crate::regexp::{
 use crate::runtime::state::current_sctx;
 use crate::runtime::{
     RuntimeOpts, expand_packadd_dir, expand_runtime_cmd, expand_runtime_dir, script_id_valid,
-    script_item, set_context_in_runtime_cmd,
+    set_context_in_runtime_cmd,
 };
 use crate::search::state::{search_first_line, search_last_line};
 use crate::search::{
@@ -170,6 +170,26 @@ mod tests;
 /// second borrow pops the first -- so a caller wanting `&raw mut` on a field
 /// takes it off [`Live::field_ptr`] instead.
 pub(crate) type Xp = Live<Expand>;
+
+impl Expand {
+    /// Whether the text being completed starts with `prefix`.
+    pub(crate) fn pattern_starts_with(&self, prefix: &[u8]) -> bool {
+        // SAFETY: a set `xp_pattern` is NUL-terminated.
+        !self.xp_pattern.is_null() && unsafe { cstr::starts_with(self.xp_pattern, prefix) }
+    }
+
+    /// Whether there is no text to complete: everything matches.
+    pub(crate) fn pattern_is_empty(&self) -> bool {
+        // SAFETY: as above.
+        self.xp_pattern.is_null() || unsafe { *self.xp_pattern } == 0
+    }
+
+    /// The command line the context was worked out from.
+    pub(crate) fn line_cstr(&self) -> &CStr {
+        // SAFETY: a set `xp_line` is NUL-terminated and outlives the context.
+        unsafe { cstr::at_opt(self.xp_line) }.unwrap_or(c"")
+    }
+}
 
 pub const XP_PREFIX_INV: XpPrefix = 2;
 pub const XP_PREFIX_NO: XpPrefix = 1;

@@ -14,6 +14,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::fs::modify_fname;
 use crate::eval::vars::get_vim_var_str;
+use crate::memory::XString;
 use crate::memory::xmemrchr;
 use crate::option::vars::{P_HF, p_hf};
 use crate::os::cshim::strchr;
@@ -420,6 +421,16 @@ pub unsafe fn home_replace(
         }
         dst_p.offset_from(dst) as size_t
     }
+}
+
+/// [`home_replace`] of `src` into a `room`-byte buffer, answered owned: the
+/// home directory as `~`, cut where upstream's fixed buffer would cut it.
+/// `one` treats `src` as one file name rather than a list.
+pub(crate) fn home_replace_in(buffer: Option<Buf>, src: &CStr, room: usize, one: bool) -> XString {
+    let mut dst = vec![0 as c_char; room.max(1)];
+    // SAFETY: `dst` is `room` writable bytes and `src` NUL-terminated.
+    let len = unsafe { home_replace(buffer, src.as_ptr(), dst.as_mut_ptr(), room, one) };
+    XString::from_bytes(cstr::as_bytes(&dst[..len]))
 }
 
 /// [`home_replace`] into newly allocated memory.

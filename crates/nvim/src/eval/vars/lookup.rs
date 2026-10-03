@@ -12,44 +12,29 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
-use crate::memory::XString;
 use crate::message_fmt::c_str_len;
 use crate::semsg;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
+use std::ffi::CString;
 
 use super::*;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::NumBuf;
-use crate::types::{Failed, NUL};
+use crate::types::{Candidate, Failed, NUL};
 
-/// The buffer [`cat_prefix_varname`] hands its answer back in, and its size.
-///
-/// One buffer for the whole completion walk: every name it produces is read
-/// and copied before the next call, which is what lets it be reused.
-static varnamebuf: GlobalCell<Option<XString>> = GlobalCell::new(None);
-
-/// `"<prefix>:<name>"`, in a buffer that lives until the next call.
-///
-/// # Safety
-/// `name` is a NUL-terminated string.
-pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's obligation -- a NUL-terminated name.
-    let name = unsafe { cstr::bytes_at(name) };
-    varnamebuf.with_mut(|slot| {
-        let buf = slot.get_or_insert_with(XString::new);
-        buf.truncate(0);
-        buf.push_byte(prefix as u8);
-        buf.push_byte(b':');
-        buf.push_bytes(name);
-        buf.as_mut_ptr()
-    })
+/// `"<prefix>:<name>"`, as a completion candidate.
+pub(crate) fn cat_prefix_varname(prefix: u8, name: &CStr) -> Candidate {
+    let mut out = Vec::with_capacity(name.count_bytes() + 3);
+    out.extend_from_slice(&[prefix, b':']);
+    out.extend_from_slice(name.to_bytes());
+    Candidate::Owned(CString::new(out).expect("a variable name holds no NUL"))
 }
 
-/// The `idx`-th variable name for command-line completion, or NULL when
+/// The `idx`-th variable name for command-line completion, or `None` when
 /// there are no more.
 ///
 /// This is a generator, not a function: `idx == 0` restarts the walk and
@@ -57,10 +42,7 @@ pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_c
 /// `static`.  The five scopes are visited in turn -- `g:`, `b:`, `w:`, `t:`,
 /// then the whole `v:` table -- and only `g:` answers a bare name, because
 /// that is the scope an unprefixed one completes in.
-///
-/// # Safety
-/// `expand` is a live expansion context.
-pub unsafe fn get_user_var_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     static gdone: GlobalCell<size_t> = GlobalCell::new(0);
     static bdone: GlobalCell<size_t> = GlobalCell::new(0);
     static wdone: GlobalCell<size_t> = GlobalCell::new(0);
@@ -85,26 +67,32 @@ pub unsafe fn get_user_var_name(expand: *mut Expand, idx: c_int) -> *mut c_char 
     // One step through `ht`: the first call starts at the array, every
     // later one advances past the slot the previous call answered and
     // then skips the empty and removed ones.
-    let step = |done: &GlobalCell<size_t>, ht: *const DictTab| -> Option<*mut c_char> {
+    let step = |done: &GlobalCell<size_t>, ht: *const DictTab| -> Option<&CStr> {
         let n = done.get();
+        // SAFETY: a live scope's table.
         if n >= unsafe { (*ht).ht_used } {
             return None;
         }
         done.set(n + 1);
         slot.set(if n == 0 { 0 } else { slot.get() + 1 });
         // SAFETY: the caller's table, which holds `ht_used > n` live items,
-        // so a kept slot is still ahead of the cursor.
-        while !unsafe { (*ht).slot(slot.get()) }.is_kept() {
-            slot.set(slot.get() + 1);
+        // so a kept slot is still ahead of the cursor; a kept slot's item is
+        // a live variable, whose key is NUL-terminated.
+        unsafe {
+            while !(*ht).slot(slot.get()).is_kept() {
+                slot.set(slot.get() + 1);
+            }
+            Some(CStr::from_ptr(
+                (*(*ht).slot(slot.get()).hi_key.item()).di_key.as_ptr(),
+            ))
         }
-        Some(unsafe { (*(*ht).slot(slot.get()).hi_key.item()).di_key.as_ptr() }.cast_mut())
     };
 
     if let Some(key) = step(&gdone, get_globvar_ht()) {
-        if unsafe { cstr::starts_with((*expand).xp_pattern, b"g:") } {
-            return unsafe { cat_prefix_varname(b'g' as c_int, key) };
+        if expand.pattern_starts_with(b"g:") {
+            return Some(cat_prefix_varname(b'g', key));
         }
-        return key;
+        return Some(Candidate::Owned(key.to_owned()));
     }
     // The window this completes for is the one the command line was
     // opened over, which is `prevwin` while the command-line window is
@@ -113,23 +101,24 @@ pub unsafe fn get_user_var_name(expand: *mut Expand, idx: c_int) -> *mut c_char 
     // SAFETY: a live window's buffer and variable dictionaries are live.
     let bvars = unsafe { &raw const (*win.buffer().b_vars).dv_hashtab };
     if let Some(key) = step(&bdone, bvars) {
-        return unsafe { cat_prefix_varname(b'b' as c_int, key) };
+        return Some(cat_prefix_varname(b'b', key));
     }
+    // SAFETY: as above.
     if let Some(key) = step(&wdone, unsafe { &raw const (*win.w_vars).dv_hashtab }) {
-        return unsafe { cat_prefix_varname(b'w' as c_int, key) };
+        return Some(cat_prefix_varname(b'w', key));
     }
+    // SAFETY: as above, for the current tab page.
     let tvars = unsafe { &raw const (*TabPage::current().tp_vars).dv_hashtab };
     if let Some(key) = step(&tdone, tvars) {
-        return unsafe { cat_prefix_varname(b't' as c_int, key) };
+        return Some(cat_prefix_varname(b't', key));
     }
     let v = vidx.get();
-    if let Ok(vv) = Vv::try_from(v) {
-        vidx.set(v + 1);
-        return unsafe { cat_prefix_varname(b'v' as c_int, get_vim_var_name(vv)) };
-    }
-
-    varnamebuf.set(None);
-    ptr::null_mut()
+    let vv = Vv::try_from(v).ok()?;
+    vidx.set(v + 1);
+    // SAFETY: a `v:` variable's name is NUL-terminated.
+    Some(cat_prefix_varname(b'v', unsafe {
+        CStr::from_ptr(get_vim_var_name(vv))
+    }))
 }
 
 /// Read the variable `name[0..len]` into `result`, reporting E121 if it does

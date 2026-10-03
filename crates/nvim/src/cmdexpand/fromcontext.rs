@@ -19,10 +19,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
 
-/// The bare function type behind [`CompleteListItemGetter`], for the one
-/// place that compares a generator against a particular function.
-pub(crate) type ItemGetter = unsafe fn(*mut Expand, c_int) -> *mut c_char;
-
 /// The `WILD_*` options that name an `EW_*` flag one-for-one.
 const WILDOPT_TO_EW: [(WildOpts, ExpandFlags); 6] = [
     (WildOpts::LIST_NOTFOUND, ExpandFlags::NOTFOUND),
@@ -279,7 +275,7 @@ pub unsafe fn expand_generic(
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
-    let get_item = func.expect("expand_generic needs a generator");
+    let get_item = func;
     let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
     unsafe { *matches = ptr::null_mut() };
     unsafe { *num_matches = 0 };
@@ -298,39 +294,36 @@ pub unsafe fn expand_generic(
     };
     unsafe { ga_init(&raw mut ga, itemsize as c_int, 30) };
 
+    // `expand` is re-read each pass, as upstream does: the generator is
+    // handed it, and the pattern is what decides "match everything".
     for i in 0.. {
-        let mut str = unsafe { get_item(expand.raw(), i) };
-        if str.is_null() {
+        let Some(candidate) = get_item(&expand, i) else {
             break; // end of list
-        }
-        if unsafe { *str } == 0 {
+        };
+        if candidate.is_empty() {
             continue; // skip empty strings
         }
 
         // An empty pattern matches everything; otherwise every
         // candidate is tested, and under 'wildoptions'=fuzzy also scored.
-        // `xp_pattern` is re-read each pass, as upstream does: the
-        // generator is handed `expand` and a user-defined one can move it.
         let mut score = 0;
-        let matched = if unsafe { *expand.xp_pattern } == 0 {
+        let matched = if expand.pattern_is_empty() {
             true
         } else if fuzzy {
-            // SAFETY: both are NUL-terminated: `str` is a generated
-            // candidate and `pat` the caller's pattern.
-            score = unsafe { fuzzy_match_str(cstr::at(str), cstr::at(pat)) };
+            // SAFETY: `pat` is the caller's NUL-terminated pattern.
+            score = fuzzy_match_str(&candidate, unsafe { cstr::at(pat) });
             score != FUZZY_SCORE_NONE
         } else {
-            // SAFETY: `str` is a generated candidate, NUL-terminated.
-            vim_regexec(regmatch, unsafe { cstr::at(str) }, 0)
+            vim_regexec(regmatch, &candidate, 0)
         };
         if !matched {
             continue;
         }
 
-        str = if escaped {
-            unsafe { vim_strsave_escaped(str, c" \t\\.".as_ptr()) }
+        let str = if escaped {
+            unsafe { vim_strsave_escaped(candidate.as_ptr(), c" \t\\.".as_ptr()) }
         } else {
-            unsafe { xstrdup(str) }
+            unsafe { xstrdup(candidate.as_ptr()) }
         };
 
         unsafe { ga_grow(&raw mut ga, 1) };
@@ -352,7 +345,7 @@ pub unsafe fn expand_generic(
         }
         ga.ga_len += 1;
 
-        if ptr::fn_addr_eq(get_item, get_menu_names as ItemGetter) {
+        if ptr::fn_addr_eq(get_item, get_menu_names as CompleteListItemGetter) {
             // Undo the separator get_menu_names() added, in the copy that
             // is now in the array.
             let last = unsafe { str.add(cstr::bytes_at(str).len() - 1) };

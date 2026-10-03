@@ -17,6 +17,7 @@ use super::*;
 use crate::getchar::typeahead;
 use crate::memory::XString;
 use crate::option::vars::P_EI;
+use crate::types::Candidate;
 use crate::types::{Failed, OptionSetFlags};
 
 /// The [`EVENT_NAMES`] row an event number names.
@@ -250,46 +251,36 @@ pub fn trigger_cursorhold() -> bool {
 
 /// Completion source for `:autocmd`'s event argument: the augroup names
 /// first (when [`autocmd_include_groups`] is set), then every event name.
-pub fn expand_get_event_name(
-    _expand: *mut Expand,
-    idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+pub fn expand_get_event_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    let idx = ::core::ffi::c_int::try_from(idx).ok()?;
     // `augroup_name` answers null once `idx` walks past the last group.
     let name = augroup_name(idx + 1);
     if !name.is_null() {
         // Skip the group, but keep it in the numbering: the caller
-        // walks `idx` up until this answers null.
+        // walks `idx` up until this answers `None`.
         if !autocmd_include_groups.get() || name.cast_const() == get_deleted_augroup() {
-            return c"".as_ptr().cast_mut();
+            return Some(Candidate::Borrowed(c""));
         }
-        return name;
+        // SAFETY: a group's name, NUL-terminated while the group lives.
+        return Some(Candidate::Owned(unsafe { CStr::from_ptr(name) }.to_owned()));
     }
-    match usize::try_from(idx - next_augroup_id.get()) {
-        Ok(i) if i < EVENT_NAMES.len() => EVENT_NAMES[i].name.as_ptr().cast_mut(),
-        _ => ::core::ptr::null_mut(),
-    }
+    let row = usize::try_from(idx - next_augroup_id.get()).ok()?;
+    EVENT_NAMES
+        .get(row)
+        .map(|row| Candidate::Borrowed(row.name))
 }
 
 /// Completion source for an 'eventignore' item: every event name, or --
 /// for 'eventignorewin' (`win`) -- only the window-local ones.
-pub fn get_event_name_no_group(
-    _expand: *mut Expand,
-    idx: ::core::ffi::c_int,
-    win: bool,
-) -> *mut ::core::ffi::c_char {
-    let Ok(idx) = usize::try_from(idx) else {
-        return ::core::ptr::null_mut();
-    };
-    if idx >= EVENT_NAMES.len() {
-        return ::core::ptr::null_mut();
-    }
+pub fn get_event_name_no_group(idx: usize, win: bool) -> Option<&'static CStr> {
     if !win {
-        return EVENT_NAMES[idx].name.as_ptr().cast_mut();
+        return EVENT_NAMES.get(idx).map(|row| row.name);
     }
-    match EVENT_NAMES.iter().filter(|row| row.win_local).nth(idx) {
-        Some(row) => row.name.as_ptr().cast_mut(),
-        None => ::core::ptr::null_mut(),
-    }
+    EVENT_NAMES
+        .iter()
+        .filter(|row| row.win_local)
+        .nth(idx)
+        .map(|row| row.name)
 }
 
 /// Whether `event` -- a NUL-terminated name -- is an event nvim has.

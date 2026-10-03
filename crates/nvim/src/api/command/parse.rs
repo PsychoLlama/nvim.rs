@@ -130,7 +130,7 @@ unsafe fn command_name(excmd: &ExArg, cmd: *const UserCmd) -> *const c_char {
         return unsafe { (*cmd).uc_name };
     }
     // SAFETY: `cmdidx` is a built-in index, checked against `CmdIdx::SIZE` above.
-    unsafe { get_command_name(ptr::null_mut::<Expand>(), excmd.cmdidx.code()) }
+    builtin_command_name(excmd.cmdidx)
 }
 
 /// How the command's range is counted, as the `addr` field's string.

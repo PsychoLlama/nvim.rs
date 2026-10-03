@@ -421,9 +421,8 @@ fn delete_arg_range(excmd: &mut ExArg) {
 }
 
 /// Completion source for `:argedit` and `:argdelete`: the argument names.
-pub fn get_arglist_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
-    if idx >= argcount() {
-        return ptr::null_mut();
-    }
-    arg_name(idx)
+pub fn get_arglist_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    let idx = c_int::try_from(idx).ok().filter(|&idx| idx < argcount())?;
+    // SAFETY: an argument's name, NUL-terminated while the list stands.
+    unsafe { cstr::at_opt(arg_name(idx)) }.map(|name| Candidate::Owned(name.to_owned()))
 }

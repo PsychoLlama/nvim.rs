@@ -44,6 +44,7 @@ use crate::os::fs::CFile;
 use crate::os::time::os_hrtime;
 use crate::runtime::state::current_sctx;
 use crate::runtime::{script_count, script_id_valid, script_item};
+use crate::types::Candidate;
 use crate::types::{
     ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, ScriptItem, SnPrl, UserFunc,
     VarNumber, Vv, int64_t,
@@ -331,11 +332,11 @@ const PEXPAND_CMDS: [&[u8]; 7] = [
 
 /// expand_generic callback for `:profile` subcommands (fn pointer in the
 /// cmdexpand context table).
-pub fn get_profile_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
-    usize::try_from(idx)
-        .ok()
-        .and_then(|i| PEXPAND_CMDS.get(i))
-        .map_or(core::ptr::null_mut(), |s| s.as_ptr() as *mut c_char)
+pub fn get_profile_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    let name = PEXPAND_CMDS.get(idx)?;
+    Some(Candidate::Borrowed(
+        CStr::from_bytes_with_nul(name).expect("a NUL-terminated literal"),
+    ))
 }
 
 /// Command-line completion context for `:profile`.

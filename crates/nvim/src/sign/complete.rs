@@ -22,7 +22,7 @@ use super::*;
 use crate::cstr;
 use crate::narrow::number_as_int;
 use crate::strings::vim_strchr;
-use crate::types::ExpandContext;
+use crate::types::{Candidate, ExpandContext};
 
 /// What [`get_sign_name`] should enumerate.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -52,29 +52,14 @@ enum ExpandWhat {
 /// context, not this one.
 static EXPAND_WHAT: GlobalCell<ExpandWhat> = GlobalCell::new(ExpandWhat::Subcmd);
 
-/// `expand_generic`'s index as a list position; a negative one is 0, which
-/// is what `idx.max(0)` said before the completion lists were slices.
-fn at(idx: c_int) -> usize {
-    usize::try_from(idx).unwrap_or(0)
-}
-
-/// The `idx`'th element of a completion list, or null past its end.
-///
-/// `expand_generic` walks upwards until it gets a null, which is what the
-/// NULL terminator on each of these arrays upstream is for.
-fn nth(list: &[&CStr], idx: c_int) -> *mut c_char {
-    usize::try_from(idx)
-        .ok()
-        .and_then(|i| list.get(i))
-        .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut())
+/// The `idx`'th element of a completion list, or `None` past its end.
+fn nth(list: &[&'static CStr], idx: usize) -> Option<Candidate> {
+    list.get(idx).map(|&name| Candidate::Borrowed(name))
 }
 
 /// The `expand_generic` callback: the `idx`'th completion of whatever
 /// [`set_context_in_sign_cmd`] decided this `:sign` line wants.
-///
-/// # Safety
-/// None; `expand` is unused.
-pub(crate) unsafe fn get_sign_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_sign_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     match EXPAND_WHAT.get() {
         ExpandWhat::Subcmd => nth(&CMDS, idx),
         ExpandWhat::Define => nth(
@@ -104,12 +89,14 @@ pub(crate) unsafe fn get_sign_name(_expand: *mut Expand, idx: c_int) -> *mut c_c
         // neither `line=` nor `name=`; `:sign unplace` and `:sign jump` take
         // the same three.
         ExpandWhat::List | ExpandWhat::Unplace => nth(&[c"group=", c"file=", c"buffer="], idx),
-        ExpandWhat::SignNames => sign_nth_name(at(idx)),
-        ExpandWhat::SignGroups => match sign_nth_group(at(idx)).map(number_as_int) {
-            Some(ns) => describe_ns(ns, c"".as_ptr()).cast_mut(),
-            None => ::core::ptr::null_mut(),
-        },
-        ExpandWhat::Nothing => ::core::ptr::null_mut(),
+        ExpandWhat::SignNames => sign_nth_name(idx).map(Candidate::Owned),
+        ExpandWhat::SignGroups => {
+            let ns = number_as_int(sign_nth_group(idx)?);
+            // SAFETY: a namespace's name, or the empty literal; NUL-terminated.
+            let name = unsafe { CStr::from_ptr(describe_ns(ns, c"".as_ptr())) };
+            Some(Candidate::Owned(name.to_owned()))
+        }
+        ExpandWhat::Nothing => None,
     }
 }
 

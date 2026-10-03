@@ -21,6 +21,7 @@ use super::*;
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::Candidate;
 
 /// The table key for `name`, borrowed.
 ///
@@ -303,11 +304,11 @@ pub fn do_augroup(arg: &CStr, del_group: bool) {
 
 /// Completion source for a group name: [`augroup_name`] answers null once
 /// `idx` runs past the last id.
-pub fn expand_get_augroup_name(
-    _expand: *mut Expand,
-    idx: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    augroup_name(idx + 1)
+pub fn expand_get_augroup_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    let group = ::core::ffi::c_int::try_from(idx).ok()? + 1;
+    // SAFETY: a group's name, or the literals for the special groups;
+    // null past the last one.
+    unsafe { cstr::at_opt(augroup_name(group)) }.map(|name| Candidate::Owned(name.to_owned()))
 }
 
 /// Take a leading group name off `*argp`, answering its id.

@@ -10,6 +10,7 @@
 use crate::cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
+use crate::types::Candidate;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -49,12 +50,9 @@ fn syntime_clear() {
 }
 
 /// The arguments `:syntime` takes, for command-line completion.
-pub(crate) fn get_syntime_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_syntime_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     const ARGS: [&CStr; 4] = [c"on", c"off", c"clear", c"report"];
-    match ARGS.get(idx as usize) {
-        Some(s) => s.as_ptr().cast_mut(),
-        None => ::core::ptr::null_mut(),
-    }
+    ARGS.get(idx).map(|&arg| Candidate::Borrowed(arg))
 }
 
 /// One row of the `:syntime report` table: a pattern's accumulated timings,

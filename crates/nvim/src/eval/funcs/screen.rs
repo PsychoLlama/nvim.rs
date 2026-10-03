@@ -253,7 +253,7 @@ pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
     let p = match attr_selector(unsafe { CStr::from_ptr(what) }.to_bytes()) {
         Some(Attr::Color) => unsafe { highlight_color(id, what, modec, &mut color) },
-        Some(Attr::Name) => unsafe { get_highlight_name_ext(ptr::null_mut(), id - 1, false) },
+        Some(Attr::Name) => unsafe { get_highlight_name_ext(id - 1, false) },
         Some(Attr::Bit(bit)) => highlight_has_attr(id, bit, modec),
         None => ptr::null(),
     };

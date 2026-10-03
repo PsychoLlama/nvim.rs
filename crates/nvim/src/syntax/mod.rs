@@ -513,12 +513,6 @@ impl SynBlockRef {
         &mut self.b_syn_patterns[idx as usize]
     }
 
-    /// The cluster at `idx`, which must be one the block has.
-    #[inline]
-    pub(crate) fn cluster(&self, idx: ::core::ffi::c_int) -> &SynCluster {
-        &self.b_syn_clusters[idx as usize]
-    }
-
     /// The block's clusters, on [`SynBlock::patterns`]' terms.
     #[inline]
     pub(crate) fn clusters(&self) -> &[SynCluster] {

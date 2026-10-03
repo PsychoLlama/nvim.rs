@@ -20,8 +20,10 @@ mod ring;
 
 use crate::cstr;
 use crate::snprintf;
+use crate::types::Candidate;
 use ring::{EMPTY_RING, to_cstring};
 pub use ring::{HistEntry, Ring};
+use std::ffi::CString;
 
 use crate::charset::vim_strsize;
 use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk};
@@ -569,29 +571,19 @@ fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
 
 /// Completion source for `:history` arguments: the one-character names,
 /// the long names, then "all".
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-pub unsafe fn get_history_arg(expand: *mut Expand, idx: c_int) -> *mut c_char {
-    let short_count = SHORT_NAMES.len() as c_int;
-    if (0..short_count).contains(&idx) {
-        // SAFETY: caller contract; `xp_buf` is the completion scratch buffer,
-        // far longer than the character and terminator written here.
-        return unsafe {
-            (*expand).xp_buf[0] = SHORT_NAMES[idx as usize] as c_char;
-            (*expand).xp_buf[1] = 0;
-            (*expand).xp_buf.as_mut_ptr()
-        };
+pub fn get_history_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    if let Some(&short) = SHORT_NAMES.get(idx) {
+        return Some(Candidate::Owned(
+            CString::new([short]).expect("a history name is not NUL"),
+        ));
     }
-    let i = (idx - short_count) as usize;
-    if i < HIST_COUNT {
-        return HISTORY_NAMES[i].as_ptr() as *mut c_char;
+    let i = idx - SHORT_NAMES.len();
+    if let Some(name) = HISTORY_NAMES.get(i) {
+        return Some(Candidate::Borrowed(
+            CStr::from_bytes_with_nul(name).expect("a NUL-terminated literal"),
+        ));
     }
-    if i == HIST_COUNT {
-        return c"all".as_ptr() as *mut c_char;
-    }
-    core::ptr::null_mut()
+    (i == HIST_COUNT).then_some(Candidate::Borrowed(c"all"))
 }
 
 /// One history entry crossing the shada boundary.

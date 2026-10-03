@@ -35,14 +35,17 @@ use crate::option::vars::{P_MAGIC, p_magic};
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
+use crate::types::Candidate;
 use crate::types::{
     Arena, Array, Blob, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List,
     MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
     VarNumber, WrongArity, kBoolVarTrue, ptrdiff_t,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
+use std::ffi::CString;
 
 // -- Reading an argument, writing a return value ----------------------------
 //
@@ -261,75 +264,60 @@ pub unsafe fn call_internal_method(
 ///
 /// The user's own functions come first, then the builtins, and `idx == 0`
 /// starts the walk over. The answer for a builtin is `name(` -- or `name()`
-/// when it takes no arguments -- in the expansion context's own scratch.
-///
-/// # Safety
-/// `expand` is a live expansion context.
-pub unsafe fn get_function_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
+/// when it takes no arguments.
+pub fn get_function_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     /// How far into the builtin table the walk has got. Negative while the
     /// user's own functions are still being offered.
     static BUILTIN_IDX: GlobalCell<c_int> = GlobalCell::new(-1);
 
-    // SAFETY throughout: the caller's obligation; `xp_buf` is the context's own scratch
-    // and every builtin name plus three bytes fits in it.
     if idx == 0 {
         BUILTIN_IDX.set(-1);
     }
-    if BUILTIN_IDX.get() < 0 {
-        let name = unsafe { get_user_func_name(expand, idx) };
-        if !name.is_null() {
-            // A plain global name completed after a `g:` prefix has to
-            // come back with the prefix on it.
-            if unsafe { *name } as c_int != NUL
-                && unsafe { *name } as u8 != b'<'
-                && unsafe { cstr::starts_with((*expand).xp_pattern, b"g:") }
-            {
-                return unsafe { cat_prefix_varname('g' as c_int, name) };
-            }
-            return name;
+    if BUILTIN_IDX.get() < 0
+        && let Some(name) = get_user_func_name(expand, idx)
+    {
+        // A plain global name completed after a `g:` prefix has to come
+        // back with the prefix on it.
+        let first = name.to_bytes().first().copied();
+        if first.is_some_and(|c| c != b'<') && expand.pattern_starts_with(b"g:") {
+            return Some(cat_prefix_varname(b'g', &name));
         }
+        return Some(name);
     }
 
     BUILTIN_IDX.set(BUILTIN_IDX.get() + 1);
-    let key = BUILTINS[BUILTIN_IDX.get() as usize].name;
-    if key.is_null() {
-        return ptr::null_mut();
+    let builtin = &BUILTINS[BUILTIN_IDX.get() as usize];
+    if builtin.name.is_null() {
+        return None;
     }
-    let key_len = unsafe { cstr::bytes_at(key) }.len();
-    let buf = unsafe { &raw mut (*expand).xp_buf };
-    unsafe { ptr::copy_nonoverlapping(key, buf as *mut c_char, key_len) };
-    unsafe { (*buf)[key_len] = b'(' as c_char };
-    if BUILTINS[BUILTIN_IDX.get() as usize].arity.max() == Some(0) {
-        unsafe { (*buf)[key_len + 1] = b')' as c_char };
-        unsafe { (*buf)[key_len + 2] = NUL as c_char };
-    } else {
-        unsafe { (*buf)[key_len + 1] = NUL as c_char };
+    // SAFETY: a builtin's name is a string literal.
+    let mut name = unsafe { CStr::from_ptr(builtin.name) }.to_bytes().to_vec();
+    name.push(b'(');
+    if builtin.arity.max() == Some(0) {
+        name.push(b')');
     }
-    buf as *mut c_char
+    Some(Candidate::Owned(
+        CString::new(name).expect("a function name holds no NUL"),
+    ))
 }
 
 /// Command-line completion over anything an expression may name: the
 /// functions above, then the user's variables.
-///
-/// # Safety
-/// `expand` is a live expansion context.
-pub unsafe fn get_expr_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_expr_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     /// How far into the variable list the walk has got. Negative while the
     /// functions are still being offered.
     static VAR_IDX: GlobalCell<c_int> = GlobalCell::new(-1);
 
-    // SAFETY throughout: the caller's obligation.
     if idx == 0 {
         VAR_IDX.set(-1);
     }
-    if VAR_IDX.get() < 0 {
-        let name = unsafe { get_function_name(expand, idx) };
-        if !name.is_null() {
-            return name;
-        }
+    if VAR_IDX.get() < 0
+        && let Some(name) = get_function_name(expand, idx)
+    {
+        return Some(name);
     }
     VAR_IDX.set(VAR_IDX.get() + 1);
-    unsafe { get_user_var_name(expand, VAR_IDX.get()) }
+    get_user_var_name(expand, VAR_IDX.get() as usize)
 }
 
 /// Whether a builtin's first argument is "true" in the loose sense the

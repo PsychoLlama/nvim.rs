@@ -9,12 +9,12 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::vim_snprintf;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{ExpandContext, NUL};
+use crate::types::{Candidate, ExpandContext, NUL};
+use std::ffi::CString;
 
 /// Does this window's block define any syntax at all?
 pub(crate) fn syntax_present(win: Win) -> bool {
@@ -127,38 +127,29 @@ const SYNC_ARGS: [&CStr; 10] = [
     c"region",
 ];
 
-/// `expand_generic`'s callback: the `idx`th completion candidate, or NULL past
-/// the end.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-pub(crate) unsafe fn get_syntax_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
-    let nth = |names: &[&CStr]| {
-        usize::try_from(idx)
-            .ok()
-            .and_then(|i| names.get(i))
-            .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut())
-    };
+/// `expand_generic`'s callback: the `idx`th completion candidate, or `None`
+/// past the end.
+pub(crate) fn get_syntax_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
+    let nth = |names: &[&'static CStr]| names.get(idx).map(|&name| Candidate::Borrowed(name));
     match EXPAND_WHAT.get() {
-        ExpandWhat::SubCmd => usize::try_from(idx)
-            .ok()
-            .and_then(|i| SUBCOMMANDS.get(i))
-            .map_or(::core::ptr::null_mut(), |s| s.name.as_ptr().cast_mut()),
+        ExpandWhat::SubCmd => SUBCOMMANDS
+            .get(idx)
+            .map(|sub| Candidate::Borrowed(sub.name)),
         ExpandWhat::Case => nth(&CASE_ARGS),
         ExpandWhat::Spell => nth(&SPELL_ARGS),
         ExpandWhat::Sync => nth(&SYNC_ARGS),
         ExpandWhat::Cluster => {
-            if idx >= cur_cluster_count() {
-                return ::core::ptr::null_mut();
+            if c_int::try_from(idx).ok()? >= cur_cluster_count() {
+                return None;
             }
-            // SAFETY: the caller's completion state.
-            let buf = unsafe { &raw mut (*expand).xp_buf }.cast::<c_char>();
             let block = cur_syn_block();
-            let name = block.cluster(idx).scl_name.as_ptr();
-            // SAFETY: the buffer is `EXPAND_BUF_LEN` bytes.
-            unsafe { vim_snprintf!(buf, EXPAND_BUF_LEN as size_t, c"@%s".as_ptr(), name) };
-            unsafe { &raw mut (*expand).xp_buf as *mut c_char }
+            let name = &block.clusters()[idx].scl_name;
+            let mut text = Vec::with_capacity(name.count_bytes() + 1);
+            text.push(b'@');
+            text.extend_from_slice(name.to_bytes());
+            Some(Candidate::Owned(
+                CString::new(text).expect("a cluster name holds no NUL"),
+            ))
         }
     }
 }
