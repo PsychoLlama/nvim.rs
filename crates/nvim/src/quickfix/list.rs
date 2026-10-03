@@ -307,6 +307,10 @@ impl Buf {
     /// `window` names the window whose location list to walk, or is `None`
     /// for the quickfix stack. Answers whether any entry named the buffer at
     /// all — the caller clears the buffer's "has entries" flag when none did.
+    ///
+    /// Every edit asks, once for the quickfix stack and once per window, so
+    /// the flag test is the inlined part and the walk is not.
+    #[inline]
     pub(crate) fn adjust_quickfix_entries(
         self,
         window: Option<Win>,
@@ -315,47 +319,57 @@ impl Buf {
         amount: LineNr,
         amount_after: LineNr,
     ) -> bool {
-        let buffer = self;
         let wanted = if window.is_none() {
             BUF_HAS_QF_ENTRY
         } else {
             BUF_HAS_LL_ENTRY
         };
-        if buffer.b_has_qf_entry & wanted == 0 {
-            return false;
-        }
-        let mut qi = match window {
-            None => Qi::global(),
-            Some(wp) => match wp.w_llist {
-                Some(id) => id.stack(),
-                None => return false,
-            },
-        };
+        self.b_has_qf_entry & wanted != 0
+            && adjust_entries(self, window, line1, line2, amount, amount_after)
+    }
+}
 
-        // Nothing below can run user code, so the stack is borrowed whole.
-        let stack: &mut QfStack = &mut qi;
-        let count = usize::try_from(stack.list_count).unwrap_or(0);
-        let mut found_one = false;
-        for list in &mut stack.lists[..count] {
-            for entry in &mut list.entries {
-                if got_int.get() {
-                    break;
+/// [`Buf::adjust_quickfix_entries`]'s walk, for a buffer that has entries.
+#[inline(never)]
+fn adjust_entries(
+    buffer: Buf,
+    window: Option<Win>,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
+) -> bool {
+    let mut qi = match window {
+        None => Qi::global(),
+        Some(wp) => match wp.w_llist {
+            Some(id) => id.stack(),
+            None => return false,
+        },
+    };
+
+    // Nothing below can run user code, so the stack is borrowed whole.
+    let stack: &mut QfStack = &mut qi;
+    let count = usize::try_from(stack.list_count).unwrap_or(0);
+    let mut found_one = false;
+    for list in &mut stack.lists[..count] {
+        for entry in &mut list.entries {
+            if got_int.get() {
+                break;
+            }
+            if entry.fnum != buffer.handle {
+                continue;
+            }
+            found_one = true;
+            if entry.lnum >= line1 && entry.lnum <= line2 {
+                if amount == MAXLNUM {
+                    entry.cleared = true;
+                } else {
+                    entry.lnum += amount;
                 }
-                if entry.fnum != buffer.handle {
-                    continue;
-                }
-                found_one = true;
-                if entry.lnum >= line1 && entry.lnum <= line2 {
-                    if amount == MAXLNUM {
-                        entry.cleared = true;
-                    } else {
-                        entry.lnum += amount;
-                    }
-                } else if amount_after != 0 && entry.lnum > line2 {
-                    entry.lnum += amount_after;
-                }
+            } else if amount_after != 0 && entry.lnum > line2 {
+                entry.lnum += amount_after;
             }
         }
-        found_one
     }
+    found_one
 }
