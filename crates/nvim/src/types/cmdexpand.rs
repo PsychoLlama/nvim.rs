@@ -426,7 +426,7 @@ impl Expand {
     }
 
     /// The offset of `at` in [`line`](Self::line), for a parser that walked
-    /// it through [`line_ptr`](Self::line_ptr).
+    /// it through [`line_ptr_at`](Self::line_ptr_at).
     ///
     /// # Panics
     ///
