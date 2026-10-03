@@ -10,7 +10,9 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
+use crate::path::{free_wild, take_wild};
 use crate::pos::MAXCOL;
 use crate::smsg;
 use crate::types::{Failed, MAXPATHL};
@@ -59,6 +61,50 @@ pub unsafe fn expand_tags(
         }
     }
     ret
+}
+
+/// The tags `pat` matches, owned: [`expand_tags`] for the command line.
+///
+/// Without `tagnames` each match is `<name>NUL<kind>NUL<file name>`, and the
+/// string keeps all three.
+pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Result<Vec<XString>, Failed> {
+    // A copy the search may write to.
+    let mut owned = pat.to_bytes_with_nul().to_vec();
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ptr::null_mut();
+    // SAFETY: a NUL-terminated copy and two locals to fill in.
+    unsafe {
+        expand_tags(
+            tagnames,
+            owned.as_mut_ptr().cast(),
+            &raw mut count,
+            &raw mut files,
+        )
+    }?;
+    if tagnames {
+        // SAFETY: what the search answered, taken over once.
+        return Ok(unsafe { take_wild(count, files) });
+    }
+    let mut found = Vec::with_capacity(usize::try_from(count).unwrap_or(0));
+    for at in 0..usize::try_from(count).unwrap_or(0) {
+        // SAFETY: each match was reshaped into three NUL-terminated parts.
+        let entry = unsafe { *files.add(at) };
+        let mut packed = Vec::new();
+        let mut part = entry;
+        for _ in 0..3 {
+            // SAFETY: as above.
+            let bytes = unsafe { CStr::from_ptr(part) }.to_bytes_with_nul();
+            packed.extend_from_slice(bytes);
+            part = part.wrapping_add(bytes.len());
+        }
+        packed.pop();
+        let mut text = XString::with_capacity(packed.len());
+        text.push_bytes(&packed);
+        found.push(text);
+    }
+    // SAFETY: the array and its matches, given back once.
+    unsafe { free_wild(count, files) };
+    Ok(found)
 }
 
 /// Rewrite one match in place as `<name>NUL<kind>NUL<file name>NUL`.

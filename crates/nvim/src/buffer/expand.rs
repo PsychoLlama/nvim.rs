@@ -20,12 +20,13 @@
 )]
 
 use crate::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
+use crate::memory::XString;
+use crate::path::take_wild;
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
 
 use super::*;
 use crate::cmdexpand::cmdline_fuzzy_complete;
-use crate::cmdexpand::fuzzymatches_to_strmatches;
 use crate::cstr;
 use crate::diff::diff_mode_buf;
 use crate::fuzzy::fuzzy_match_str;
@@ -73,7 +74,37 @@ fn set_at<T>(array: *mut T, i: c_int, value: T) {
 /// Whether the pattern asks for fuzzy matching (`'wildoptions'`).
 fn wants_fuzzy(pat: *const c_char) -> bool {
     // SAFETY: a NUL-terminated pattern.
-    unsafe { cmdline_fuzzy_complete(pat) }
+    cmdline_fuzzy_complete(unsafe { cstr::bytes_at(pat) })
+}
+
+/// Sort `fuzmatch` by fuzzy score and hand its strings to `matches`, freeing
+/// `fuzmatch` itself.
+///
+/// # Safety
+/// `fuzmatch` must be an allocated array of `count` entries naming allocated
+/// strings, and `matches` must be writable.
+unsafe fn fuzzymatches_to_strmatches(
+    fuzmatch: *mut FuzMatchStr,
+    matches: *mut *mut *mut c_char,
+    count: c_int,
+) {
+    if count > 0 {
+        let count = usize::try_from(count).expect("the guard above rejected a negative count");
+        // SAFETY: the caller's `count` entries.
+        let found = unsafe { slice::from_raw_parts_mut(fuzmatch, count) };
+        // Best score first, `idx` breaking ties: callers number `idx` as they
+        // fill the array, so no two entries compare equal.
+        found.sort_by(|a, b| b.score.cmp(&a.score).then(a.idx.cmp(&b.idx)));
+        let strings = alloc_array::<*mut c_char>(c_int::try_from(count).unwrap_or(0));
+        for (i, m) in found.iter().enumerate() {
+            // SAFETY: `strings` has room for `count` pointers.
+            unsafe { *strings.add(i) = m.str };
+        }
+        // SAFETY: the caller's writable slot.
+        unsafe { *matches = strings };
+    }
+    // SAFETY: the caller's array, handed over.
+    unsafe { xfree(fuzmatch.cast()) };
 }
 
 fn regcomp(pat: *const c_char, flags: c_int) -> *mut RegProg {
@@ -274,11 +305,31 @@ pub unsafe fn expand_buf_names(
         }
     } else {
         // SAFETY: the array filled above, and the caller's out-parameter.
-        unsafe { fuzzymatches_to_strmatches(fuzmatch, file, count, false) };
+        unsafe { fuzzymatches_to_strmatches(fuzmatch, file, count) };
     }
 
     *num_file = count;
     if count == 0 { Err(Failed) } else { Ok(()) }
+}
+
+/// The buffer names `pat` matches, owned: [`expand_buf_names`] for the
+/// command line.
+pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Result<Vec<XString>, Failed> {
+    // A copy the walk may write to.
+    let mut owned = pat.to_bytes_with_nul().to_vec();
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ptr::null_mut();
+    // SAFETY: a NUL-terminated copy and two locals to fill in; what the walk
+    // answered is taken over once.
+    unsafe {
+        expand_buf_names(
+            owned.as_mut_ptr().cast(),
+            &raw mut count,
+            &raw mut files,
+            options,
+        )?;
+        Ok(take_wild(count, files))
+    }
 }
 
 impl LastUsed for BufMatch {

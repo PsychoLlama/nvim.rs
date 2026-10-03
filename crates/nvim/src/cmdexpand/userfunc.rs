@@ -4,169 +4,113 @@
 //! [`globpath`] walks a comma-separated directory list; and the
 //! `custom,`/`customlist,`/Lua completion functions of `:command` are called
 //! through [`expand_user_defined`], [`expand_user_list`] and [`expand_user_lua`].
+//!
+//! The user's functions are called with copies of what they are told -- the
+//! pattern, the line, the cursor -- and the context they complete for is
+//! never one they can reach: the command line's is moved out of its state for
+//! the length of the call, and every other caller's is a local.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cmdexpand::WildOpts;
-use crate::cstr;
-use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{CallFrame, list_iter};
-use crate::memory::handoff::owned_cstr_array;
-use crate::path::ExpandFlags;
-use crate::strings::vim_strchr;
-use crate::types::{ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST};
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
-use std::ffi::{CStr, CString};
+use crate::eval::list::string_tv;
+use crate::eval::typval::list_iter;
+use crate::eval::{call_func_retlist, call_func_retstr};
+use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
+use crate::lua::executor::nlua_call_user_expand_func;
+use crate::option::next_option_part;
+use crate::os::env::vim_getenv_owned;
+use crate::path::{ExpandFlags, expand_wildcards_one, path_is_absolute, vim_ispathsep};
+use crate::regexp::vim_regexec;
+use crate::runtime::state::current_sctx;
+use crate::types::{ExpandContext, Failed, MAXPATHL, RegMatch, TypVal, VarNumber};
+use core::ffi::CStr;
+use std::collections::HashSet;
+use std::ffi::CString;
 
-/// A `:command -complete=custom,…` callback: `f(arg, argc, argv)`.
-///
-/// Only [`call_user_expand_func`] takes one, and both of its callers pass a
-/// real function, so this is the bare pointer rather than upstream's nullable
-/// `user_expand_func_T`.
-type UserExpandFunc = unsafe fn(*const c_char, &[TypVal]) -> *mut c_void;
-
-/// Upstream's `STRLEN_LITERAL(PATHSEPSTR)`.
-const PATHSEP_LEN: size_t = PATHSEPSTR.count_bytes() as size_t;
+/// `name` as a C string; a NUL inside ends it, as it would a C caller's.
+fn c_string(name: &[u8]) -> CString {
+    let end = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+    CString::new(&name[..end]).expect("cut at the first NUL")
+}
 
 /// Expand shell command matches in one directory of `$PATH`.
 ///
-/// `pathed_pattern` is the fully pathed pattern and `pathlen` the length of
-/// its path portion (0 if there is no path).  New names are appended to
-/// `found` and remembered in `ht` so a later directory cannot offer them
-/// again -- the `ht` entries borrow `found`'s strings, so the table must not
-/// outlive it.
-///
-/// # Safety
-///
-/// `pathed_pattern` must point at a NUL-terminated string, unaliased for the
-/// call. `matches` must point at a writable `*mut *mut c_char` slot the
-/// caller owns for the call. `num_matches` must point at a writable `int` the
-/// caller owns. `ht` must point at a live hash table, unaliased for the call.
-pub(crate) unsafe fn expand_shellcmd_onedir(
-    pathed_pattern: *mut c_char,
-    pathlen: size_t,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
+/// `pathed` is the fully pathed pattern and `pathlen` the length of its path
+/// portion (0 if there is no path).  New names, without the path, are
+/// appended to `found` and remembered in `seen` so a later directory cannot
+/// offer them again.
+fn expand_shellcmd_onedir(
+    pathed: &CStr,
+    pathlen: usize,
     flags: ExpandFlags,
-    ht: *mut HashTab,
-    found: &mut Vec<CString>,
+    seen: &mut HashSet<Vec<u8>>,
+    found: &mut Vec<XString>,
 ) {
-    let mut pathed_pattern = pathed_pattern;
-    if unsafe { expand_wildcards(1, &raw mut pathed_pattern, num_matches, matches, flags) }.is_err()
-    {
+    let Ok(names) = expand_wildcards_one(pathed, flags) else {
         return;
-    }
-
-    found.reserve(usize::try_from(unsafe { *num_matches }).unwrap_or(0));
-
-    for i in 0..unsafe { *num_matches } {
-        let mut name = unsafe { *(*matches).offset(i as isize) };
-        let namelen = unsafe { cstr::bytes_at(name) }.len();
-
-        if namelen > pathlen {
-            // Check if this name was already found.
-            let hash = unsafe { hash_hash(name.add(pathlen)) };
-            let hi = unsafe { hash_lookup(ht, name.add(pathlen), namelen - pathlen, hash) };
-            if !hi.is_kept() {
-                // Remove the path that was prepended (+1 for the NUL).
-                let into = name.cast::<u8>();
-                unsafe { into.copy_from(name.add(pathlen).cast(), namelen - pathlen + 1) };
-                // SAFETY: `expand_wildcards` answers owned, NUL-terminated
-                // strings, and this is the only reference to this one.
-                let owned = unsafe { CString::from_raw(name) };
-                // The key borrows the string `found` now owns: the address
-                // an `xmalloc` block has does not change when the `Vec` does.
-                unsafe { hash_add_item(ht, hi, owned.as_ptr().cast_mut(), hash) };
-                found.push(owned);
-                name = ptr::null_mut();
+    };
+    for name in names {
+        if name.len() > pathlen {
+            // Remove the path that was prepended.
+            let tail = &name[pathlen..];
+            if seen.insert(tail.to_vec()) {
+                found.push(owned(tail));
             }
         }
-        unsafe { xfree(name as *mut c_void) };
     }
-    unsafe { xfree(*matches as *mut c_void) };
 }
 
 /// Complete a shell command.
 ///
-/// `filepat` is a pattern to match with command names; `matches` and
-/// `num_matches` return the answer, with `*matches` either NULL or allocated.
-/// `flagsarg` is the caller's [`ExpandFlags`] set.
-///
-/// # Safety
-///
-/// `filepat` must point at a NUL-terminated string, unaliased for the call.
-/// `matches` must point at a writable `*mut *mut c_char` slot the caller owns
-/// for the call. `num_matches` must point at a writable `int` the caller
-/// owns.
-pub(crate) unsafe fn expand_shellcmd(
-    filepat: *mut c_char,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
-    flagsarg: ExpandFlags,
-) {
-    let buf = unsafe { xmalloc(MAXPATHL as size_t) } as *mut c_char;
+/// `filepat` is a pattern to match with command names; `flagsarg` is the
+/// caller's [`ExpandFlags`] set.
+pub(crate) fn expand_shellcmd(filepat: &CStr, flagsarg: ExpandFlags) -> Vec<XString> {
     let mut flags = flagsarg;
     let mut did_curdir = false;
 
     // For ":set path=" and ":set tags=" halve backslashes for escaped
-    // space.
-    let mut patlen = unsafe { cstr::bytes_at(filepat) }.len();
-    let pat = unsafe { xmemdupz(filepat as *const c_void, patlen) } as *mut c_char;
-    // Replace "\ " with " ".
-    let mut e = unsafe { pat.add(patlen) };
-    let mut s = pat;
-    while unsafe { *s } as c_int != NUL {
-        if unsafe { *s } as c_int == '\\' as c_int {
-            let p = unsafe { s.add(1) };
-            if unsafe { *p } as c_int == ' ' as c_int {
-                let into = s.cast::<u8>();
-                unsafe { into.copy_from(p.cast(), e.offset_from(p) as size_t + 1) };
-                e = unsafe { e.sub(1) };
-            }
+    // space: replace "\ " with " ".
+    let mut pat = filepat.to_bytes().to_vec();
+    let mut s = 0;
+    while s < pat.len() {
+        if pat[s] == b'\\' && pat.get(s + 1) == Some(&b' ') {
+            pat.remove(s);
         }
-        s = unsafe { s.add(1) };
+        s += 1;
     }
-    patlen = unsafe { e.offset_from(pat) } as size_t;
 
     flags |= ExpandFlags::FILE | ExpandFlags::EXEC | ExpandFlags::SHELLCMD;
 
-    let mut mustfree = false; // Track memory allocation for `path`.
-    let mut path;
-    if unsafe { *pat } as c_int == '.' as c_int
-        && (vim_ispathsep(unsafe { *pat.add(1) } as c_int)
-            || (unsafe { *pat.add(1) } as c_int == '.' as c_int
-                && vim_ispathsep(unsafe { *pat.add(2) } as c_int)))
+    let at = |i: usize| pat.get(i).copied().unwrap_or(0);
+    let path: Vec<u8> = if at(0) == b'.'
+        && (vim_ispathsep(c_int::from(at(1)))
+            || (at(1) == b'.' && vim_ispathsep(c_int::from(at(2)))))
     {
-        path = c".".as_ptr() as *mut c_char;
-    } else {
+        b".".to_vec()
+    } else if path_is_absolute(&c_string(&pat)) {
         // For an absolute name we don't use $PATH.
-        path = if unsafe { path_is_absolute(cstr::at(pat)) } {
-            ptr::null_mut()
-        } else {
-            unsafe { vim_getenv(c"PATH".as_ptr()) }
-        };
-        if path.is_null() {
-            path = c"".as_ptr() as *mut c_char;
-        } else {
-            mustfree = true;
-        }
-    }
+        Vec::new()
+    } else {
+        vim_getenv_owned(c"PATH")
+            .map(|path| path.to_vec())
+            .unwrap_or_default()
+    };
 
     // Go over all directories in $PATH.  Expand matches in that directory
     // and collect them in `found`.  When "." is not in $PATH also expand for
     // the current directory, to find "subdir/cmd".
-    let mut found = Vec::<CString>::new();
-    let mut found_ht = HashTab::init();
-    let mut s = path;
+    let mut found = Vec::new();
+    let mut seen = HashSet::new();
+    let mut s = 0;
     loop {
-        // Length of the path portion of buf, including trailing slash.
-        let mut pathlen;
+        // Where this entry ends, and the length of the path portion of the
+        // pathed pattern, including the trailing slash.
+        let e;
+        let pathlen;
         let seplen;
 
-        if unsafe { *s } as c_int == NUL {
+        if s >= path.len() {
             if did_curdir {
                 break;
             }
@@ -179,13 +123,13 @@ pub(crate) unsafe fn expand_shellcmd(
             pathlen = 0;
             seplen = 0;
         } else {
-            e = unsafe { vim_strchr(s, ENV_SEPCHAR) };
-            if e.is_null() {
-                e = unsafe { s.add(cstr::bytes_at(s).len()) };
-            }
+            e = path[s..]
+                .iter()
+                .position(|&c| c == b':')
+                .map_or(path.len(), |at| s + at);
 
-            pathlen = unsafe { e.offset_from(s) } as size_t;
-            if unsafe { cstr::prefix_eq(s, c".".as_ptr(), pathlen) } {
+            pathlen = e - s;
+            if pathlen == 0 || &path[s..e] == b"." {
                 did_curdir = true;
                 flags |= ExpandFlags::DIR;
             } else {
@@ -193,411 +137,183 @@ pub(crate) unsafe fn expand_shellcmd(
                 flags.clear(ExpandFlags::DIR);
             }
 
-            seplen = if unsafe { after_pathsep(s, e) } == 0 {
-                PATHSEP_LEN
-            } else {
-                0
-            };
+            // Upstream's `after_pathsep`: does the entry already end in one?
+            seplen = usize::from(pathlen == 0 || path[e - 1] != b'/');
         }
 
         // Make sure that the pathed pattern (ie the path and pattern
         // concatenated together) will fit inside the buffer.  If not skip
         // it and move on to the next path.
         // Upstream's `+ 1 <= MAXPATHL` — the one byte is the NUL.
-        if pathlen + seplen + patlen < MAXPATHL as size_t {
-            if pathlen > 0 {
-                unsafe { xmemcpyz(buf as *mut c_void, s as *const c_void, pathlen) };
-                if seplen > 0 {
-                    unsafe {
-                        xmemcpyz(
-                            buf.add(pathlen) as *mut c_void,
-                            c"/".as_ptr() as *const c_void,
-                            PATHSEP_LEN,
-                        )
-                    };
-                    pathlen += seplen;
-                }
+        if pathlen + seplen + pat.len() < MAXPATHL as usize {
+            let mut pathed = path[s..s + pathlen].to_vec();
+            if pathlen > 0 && seplen > 0 {
+                pathed.push(b'/');
             }
-            unsafe {
-                xmemcpyz(
-                    buf.add(pathlen) as *mut c_void,
-                    pat as *const c_void,
-                    patlen,
-                )
-            };
-
-            unsafe {
-                expand_shellcmd_onedir(
-                    buf,
-                    pathlen,
-                    matches,
-                    num_matches,
-                    flags,
-                    &raw mut found_ht,
-                    &mut found,
-                )
-            };
+            let pathlen = pathed.len();
+            pathed.extend_from_slice(&pat);
+            expand_shellcmd_onedir(&c_string(&pathed), pathlen, flags, &mut seen, &mut found);
         }
 
-        if unsafe { *e } as c_int != NUL {
-            e = unsafe { e.add(1) };
-        }
-        s = e;
+        s = if e < path.len() { e + 1 } else { e };
     }
-    // The keys borrowed `found`'s strings; the table dies here, first.
-    drop(found_ht);
-    unsafe { *num_matches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
-    unsafe { *matches = owned_cstr_array(found) };
-
-    unsafe { xfree(buf as *mut c_void) };
-    unsafe { xfree(pat as *mut c_void) };
-    if mustfree {
-        unsafe { xfree(path as *mut c_void) };
-    }
+    found
 }
 
-/// Call `user_expand_func` to invoke a user defined Vim script function.
-///
-/// Returns its result — a string, a List or NULL.  The function is handed the
-/// pattern, the whole command line and the cursor column.
-///
-/// # Safety
-///
-/// `user_expand_func` must be an initialized `UserExpandFunc` whose pointer
-/// fields point at live data for the call. `expand` must point at a live
-/// `Expand` context, unaliased for the call.
-pub(crate) unsafe fn call_user_expand_func(
-    user_expand_func: UserExpandFunc,
-    expand: *mut Expand,
-) -> *mut c_void {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
+/// The pattern, the whole line and the cursor column, as the arguments a
+/// user's completion function takes -- copies, so that nothing the function
+/// does reaches back into the context.
+fn user_expand_args(expand: &Expand) -> [TypVal; 3] {
+    [
+        string_tv(expand.pattern_span()),
+        string_tv(expand.line_cstr().to_bytes()),
+        TypVal::Number(VarNumber::from(expand.col)),
+    ]
+}
+
+/// Call the user's Vimscript completion function through `call`, with the
+/// script context it was defined in. `None` when there is no function to
+/// call.
+fn call_user_expand_func<R>(
+    call: impl FnOnce(&CStr, &[TypVal]) -> Option<R>,
+    expand: &Expand,
+) -> Option<R> {
+    let name = expand.arg.as_ref().filter(|name| !name.is_empty())?;
+    let name = c_string(name);
+    let args = user_expand_args(expand);
+
     let save_current_sctx = current_sctx.get();
-
-    if expand.xp_arg.is_null()
-        || unsafe { *expand.xp_arg } as c_int == NUL
-        || expand.xp_line.is_null()
-    {
-        return ptr::null_mut();
-    }
-
-    // Upstream saves `cmdbuff[cmdlen]` here and puts a NUL in its place
-    // for the duration of the callback. The command line's terminator is
-    // `CmdBuff`'s invariant now, so the byte it saved is always the NUL it
-    // wrote, and both halves are gone.
-    let pat = unsafe { xstrnsave(expand.xp_pattern, expand.xp_pattern_len) };
-    // The pattern copy is freed by hand below and the command line is the
-    // context's own, so the frame names both rather than owning them.
-    let args = CallFrame::naming([
-        TypVal::String(pat),
-        TypVal::String(expand.xp_line),
-        TypVal::Number(expand.xp_col as VarNumber),
-    ]);
-
-    current_sctx.set(expand.xp_script_ctx);
-
-    let ret = unsafe { user_expand_func(expand.xp_arg, args.args()) };
-
+    current_sctx.set(expand.script_ctx);
+    let ret = call(&name, &args);
     current_sctx.set(save_current_sctx);
-    unsafe { xfree(pat as *mut c_void) };
     ret
 }
 
 /// Expand names with a function defined by the user
-/// (`ExpandContext::UserDefined` and `ExpandContext::UserList`).
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string. `expand` must point at a live
-/// `Expand` context, unaliased for the call. `regmatch` must point at a live
-/// `RegMatch`, unaliased for the call. `matches` must point at a writable
-/// `*mut *mut c_char` slot the caller owns for the call. `num_matches` must
-/// point at a writable `int` the caller owns.
-pub(crate) unsafe fn expand_user_defined(
-    pat: *const c_char,
-    expand: *mut Expand,
+/// (`ExpandContext::UserDefined`): one candidate per line of what it answers,
+/// filtered by `regmatch` (or scored, under `'wildoptions'`=fuzzy).
+pub(crate) fn expand_user_defined(
+    pat: &CStr,
+    expand: &Expand,
     regmatch: &mut RegMatch,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
-    unsafe { *matches = ptr::null_mut() };
-    unsafe { *num_matches = 0 };
-
-    let retstr = unsafe { call_user_expand_func(call_func_retstr, expand.raw()) } as *mut c_char;
-    if retstr.is_null() {
-        return Err(Failed);
-    }
+) -> Result<Vec<XString>, Failed> {
+    let fuzzy = cmdline_fuzzy_complete(pat.to_bytes());
+    let retstr = call_user_expand_func(call_func_retstr, expand).ok_or(Failed)?;
 
     // Exactly one of these fills: `fuzzy` is fixed for the whole call.
-    let mut scored = Vec::<FuzMatchStr>::new();
-    let mut found = Vec::<CString>::new();
+    let mut scored = Vec::new();
+    let mut found = Vec::new();
 
-    // The answer is one match per line.
-    let mut s = retstr;
-    while unsafe { *s } as c_int != NUL {
-        let mut e = unsafe { vim_strchr(s, '\n' as c_int) };
-        if e.is_null() {
-            e = unsafe { s.add(cstr::bytes_at(s).len()) };
-        }
-        let keep = unsafe { *e };
-        unsafe { *e = NUL as c_char };
+    // The answer is one match per line; an empty line is a match like any
+    // other, but a last newline does not start another one.
+    let mut s = 0;
+    while s < retstr.len() {
+        let e = retstr[s..]
+            .iter()
+            .position(|&c| c == b'\n')
+            .map_or(retstr.len(), |at| s + at);
+        let line = &retstr[s..e];
+        s = if e < retstr.len() { e + 1 } else { e };
+        let candidate = c_string(line);
 
         let mut score = 0;
-        let matched = if unsafe { *expand.xp_pattern } as c_int == NUL {
+        let matched = if expand.pattern_is_empty() {
             true // match everything
         } else if fuzzy {
-            // SAFETY: `s` was just NUL-terminated at `e`, and `pat` is the
-            // caller's NUL-terminated pattern.
-            score = unsafe { fuzzy_match_str(cstr::at(s), cstr::at(pat)) };
+            score = fuzzy_match_str(&candidate, pat);
             score != FUZZY_SCORE_NONE
         } else {
-            // SAFETY: `s` was just NUL-terminated at `e`.
-            vim_regexec(regmatch, unsafe { cstr::at(s) }, 0)
+            vim_regexec(regmatch, &candidate, 0)
         };
 
-        unsafe { *e = keep };
-
         if matched {
-            let p =
-                unsafe { xmemdupz(s as *const c_void, e.offset_from(s) as size_t) } as *mut c_char;
-
+            let text = owned(line);
             if fuzzy {
-                let idx = c_int::try_from(scored.len()).expect("a match count fits a c_int");
-                scored.push(FuzMatchStr { idx, str: p, score });
+                let idx = scored.len();
+                scored.push(Scored { text, score, idx });
             } else {
-                // SAFETY: `xmemdupz` answers a fresh NUL-terminated string.
-                found.push(unsafe { CString::from_raw(p) });
+                found.push(text);
             }
         }
-
-        if unsafe { *e } as c_int != NUL {
-            e = unsafe { e.add(1) };
-        }
-        s = e;
     }
-    unsafe { xfree(retstr as *mut c_void) };
 
-    let count = if fuzzy { scored.len() } else { found.len() };
-    if count == 0 {
-        return Ok(());
-    }
-    let count = c_int::try_from(count).expect("a match count fits a c_int");
-
-    if fuzzy {
-        // `fuzzymatches_to_strmatches` takes the array over and `xfree`s it,
-        // which a boxed slice may cross (`allocator.rs`).
-        let raw = Box::into_raw(scored.into_boxed_slice()).cast::<FuzMatchStr>();
-        // SAFETY: `count` live entries at `raw`, and the caller's slot.
-        unsafe { fuzzymatches_to_strmatches(raw, matches, count, false) };
+    Ok(if fuzzy {
+        fuzzy_sorted(scored, false)
     } else {
-        unsafe { *matches = owned_cstr_array(found) };
-    }
-    unsafe { *num_matches = count };
-    Ok(())
+        found
+    })
 }
 
-/// Copy the strings of a `customlist,` answer into a fresh match array.
-///
-/// # Safety
-///
-/// `retlist` must point at a live list, unaliased for the call. `matches`
-/// must point at a writable `*mut *mut c_char` slot the caller owns for the
-/// call. `num_matches` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn process_user_list(
-    retlist: *mut List,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
-) {
-    let mut found = Vec::<CString>::new();
-
-    // Loop over the items in the list.
-    if !retlist.is_null() {
-        for li in list_iter(unsafe { retlist.as_ref() }) {
-            // Skip non-string items and empty strings.
-            let s = li.li_tv.string_or_null();
-            if !s.is_null() {
-                // SAFETY: the item is a live, NUL-terminated string.
-                found.push(unsafe { CStr::from_ptr(s) }.to_owned());
-            }
-        }
-    }
-    unsafe { list_unref(retlist) };
-
-    unsafe { *num_matches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
-    unsafe { *matches = owned_cstr_array(found) };
+/// The strings of a `customlist,` answer, the rest skipped.
+fn user_list_strings(list: &TypVal) -> Vec<XString> {
+    list_iter(list.list_ref())
+        .filter_map(|li| li.li_tv.string_cstr())
+        .map(XString::from_cstr)
+        .collect()
 }
 
 /// Expand names with a list returned by a function defined by the user.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `matches` must point at a writable `*mut *mut c_char` slot the caller owns
-/// for the call. `num_matches` must point at a writable `int` the caller
-/// owns.
-pub(crate) unsafe fn expand_user_list(
-    expand: *mut Expand,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    unsafe { *matches = ptr::null_mut() };
-    unsafe { *num_matches = 0 };
-    let retlist = unsafe { call_user_expand_func(call_func_retlist, expand.raw()) } as *mut List;
-    if retlist.is_null() {
-        return Err(Failed);
-    }
-
-    unsafe { process_user_list(retlist, matches, num_matches) };
-    Ok(())
+pub(crate) fn expand_user_list(expand: &Expand) -> Result<Vec<XString>, Failed> {
+    let retlist = call_user_expand_func(call_func_retlist, expand).ok_or(Failed)?;
+    Ok(user_list_strings(&retlist))
 }
 
 /// Expand names with a Lua completion function.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `num_matches` must point at a writable `int` the caller owns. `matches`
-/// must point at a writable `*mut *mut c_char` slot the caller owns for the
-/// call.
-pub(crate) unsafe fn expand_user_lua(
-    expand: *mut Expand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    let mut rettv = TV_INITIAL_VALUE;
-    unsafe { nlua_call_user_expand_func(expand.raw(), &mut rettv) };
-    if rettv.v_type() != VAR_LIST {
-        tv_clear(&mut rettv);
+pub(crate) fn expand_user_lua(expand: &Expand) -> Result<Vec<XString>, Failed> {
+    let rettv = nlua_call_user_expand_func(
+        expand.luaref,
+        &c_string(expand.pattern_text()),
+        expand.line_cstr(),
+        expand.col,
+    );
+    if !matches!(rettv, TypVal::List(_)) {
         return Err(Failed);
     }
-
-    // `process_user_list` takes the list over, so the value gives it up.
-    let list = rettv.list_or_null();
-    rettv.disown();
-    unsafe { process_user_list(list, matches, num_matches) };
-    Ok(())
+    Ok(user_list_strings(&rettv))
 }
 
-/// Expand `file` for all comma-separated directories in `path`, adding the
-/// matches to `ga`.
+/// Expand `file` for all comma-separated directories in `path`, answering
+/// the matches.
 ///
 /// If `dirs` is true only directory names are expanded.
-///
-/// # Safety
-///
-/// `path` must point at a NUL-terminated string, unaliased for the call.
-/// `file` must point at a NUL-terminated string, unaliased for the call. `ga`
-/// must point at a live growable array, unaliased for the call.
-pub unsafe fn globpath(
-    path: *mut c_char,
-    file: *mut c_char,
-    ga: *mut GArray,
-    expand_options: WildOpts,
-    dirs: bool,
-) {
-    let buf = unsafe { xmalloc(MAXPATHL as size_t) } as *mut c_char;
-
-    let mut xpc: Expand = unsafe { core::mem::zeroed() };
-    unsafe { expand_init(&raw mut xpc) };
-    xpc.xp_context = if dirs {
+pub fn globpath(path: &CStr, file: &CStr, expand_options: WildOpts, dirs: bool) -> Vec<XString> {
+    let mut xpc = Expand::new();
+    xpc.context = if dirs {
         ExpandContext::Directories
     } else {
         ExpandContext::Files
     };
 
-    let filelen = unsafe { cstr::bytes_at(file) }.len();
+    let file = file.to_bytes();
+    let options = WildOpts::SILENT | expand_options;
+    let mut found = Vec::new();
+    let mut part = Vec::new();
 
     // Loop over all entries in {path}.
-    let mut path = path;
-    while unsafe { *path } as c_int != NUL {
-        // Copy one item of the path to buf[] and concatenate the file
-        // name.  `pathlen` is the length of the path portion of buf,
-        // including the trailing slash.
-        let mut pathlen = unsafe {
-            copy_option_part(
-                &raw mut path,
-                buf,
-                MAXPATHL as size_t,
-                c",".as_ptr() as *mut c_char,
-            )
-        };
-        let seplen = if unsafe { *buf } as c_int != NUL
-            && unsafe { after_pathsep(buf, buf.add(pathlen)) } == 0
-        {
-            PATHSEP_LEN
-        } else {
-            0
-        };
+    let mut rest = path.to_bytes();
+    while !rest.is_empty() {
+        // Copy one item of the path and concatenate the file name.
+        rest = next_option_part(rest, &mut part);
+        // `copy_option_part`'s room, terminator included.
+        part.truncate(MAXPATHL as usize - 1);
+        let seplen = usize::from(!part.is_empty() && part.last() != Some(&b'/'));
 
         // Upstream's `+ 1 <= MAXPATHL` — the one byte is the NUL.
-        if pathlen + seplen + filelen < MAXPATHL as size_t {
+        if part.len() + seplen + file.len() < MAXPATHL as usize {
             if seplen > 0 {
-                unsafe {
-                    xmemcpyz(
-                        buf.add(pathlen) as *mut c_void,
-                        c"/".as_ptr() as *const c_void,
-                        PATHSEP_LEN,
-                    )
-                };
-                pathlen += seplen;
+                part.push(b'/');
             }
-            unsafe {
-                xmemcpyz(
-                    buf.add(pathlen) as *mut c_void,
-                    file as *const c_void,
-                    filelen,
-                )
-            };
+            part.extend_from_slice(file);
+            let pattern = c_string(&part);
 
-            let mut p: *mut *mut c_char = ptr::null_mut();
-            let mut num_p = 0;
-            let _ = unsafe {
-                expand_from_context(
-                    &raw mut xpc,
-                    buf,
-                    &raw mut p,
-                    &raw mut num_p,
-                    WildOpts::SILENT | expand_options,
-                )
-            };
-            if num_p > 0 {
-                unsafe {
-                    escape_matches(
-                        &raw mut xpc,
-                        buf,
-                        core::slice::from_raw_parts_mut(p, num_p as usize),
-                        WildOpts::SILENT | expand_options,
-                    )
-                };
-
-                // Concatenate new results to previous ones, taking over
-                // the pointers.
-                unsafe { ga_grow(ga, num_p) };
-                for i in 0..num_p {
-                    // SAFETY: `ga_grow` above made room for `num_p` more
-                    // pointers, and `p` holds that many.
-                    unsafe {
-                        let slot = ((*ga).ga_data as *mut *mut c_char)
-                            .wrapping_offset((*ga).ga_len as isize);
-                        slot.write(*p.offset(i as isize));
-                        (*ga).ga_len += 1;
-                    }
-                }
-                unsafe { xfree(p as *mut c_void) };
+            let mut matches = expand_from_context(&mut xpc, &pattern, options).unwrap_or_default();
+            if !matches.is_empty() {
+                escape_matches(&mut xpc, pattern.to_bytes(), &mut matches, options);
+                // Concatenate new results to previous ones.
+                found.append(&mut matches);
             }
         }
     }
 
-    unsafe { xfree(buf as *mut c_void) };
+    found
 }

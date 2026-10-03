@@ -12,7 +12,9 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::strings::has_char;
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
@@ -50,6 +52,15 @@ pub(crate) fn unquote(src: &[u8], emit: &mut impl FnMut(u8)) {
 /// a NUL-terminated string.
 pub unsafe fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
     unsafe { vim_strsave_escaped_ext(string, esc_chars, b'\\' as c_char, false) }
+}
+
+/// [`vim_strsave_escaped`] of a string the caller owns: a copy of `text`
+/// with a backslash before every byte in `chars`, multibyte characters
+/// copied whole.
+pub(crate) fn escaped_bytes(text: &CStr, chars: &CStr) -> XString {
+    // SAFETY: two NUL-terminated strings; the answer is owned and taken
+    // over once.
+    unsafe { XString::from_raw(vim_strsave_escaped(text.as_ptr(), chars.as_ptr())) }
 }
 
 /// Copy `string`, prefixing `cc` to every byte in `esc_chars` (and, with

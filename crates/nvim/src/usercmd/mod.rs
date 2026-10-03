@@ -65,7 +65,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::replace_termcodes;
 use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
-use crate::memory::{xfree, xstrdup};
+use crate::memory::{XString, xfree, xstrdup};
 use crate::message::emsg;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::option::vars::p_cpo;
@@ -196,17 +196,13 @@ pub(crate) fn ucmd_name(cmd: &UserCmd) -> &[u8] {
 /// already skipped. Answers `None` when nothing matched.
 ///
 /// `full` is set when the match was exact, `expand` filled in for completion
-/// and `complp` given the command's completion type; the last two may be null.
-///
-/// # Safety
-/// Module contract; `excmd` must be the command being looked up, and
-/// `expand` and `complp` null or writable.
-pub(crate) unsafe fn find_ucmd(
+/// and `complp` given the command's completion type.
+pub(crate) fn find_ucmd(
     excmd: &mut ExArg,
     end: usize,
     full: Option<&mut bool>,
-    expand: *mut Expand,
-    complp: *mut ExpandContext,
+    mut expand: Option<&mut Expand>,
+    mut complp: Option<&mut ExpandContext>,
 ) -> Option<usize> {
     let cmd = excmd.line.cmd;
     let typed = excmd.line.slice_at(cmd, end - cmd);
@@ -221,7 +217,8 @@ pub(crate) unsafe fn find_ucmd(
     let mut amb_local = false;
 
     for scope in Scope::BOTH {
-        // SAFETY: module contract.
+        // SAFETY: the slice is only read below, and nothing in the loop can
+        // add or remove a command.
         let cmds = unsafe { scope.list() };
         let mut exact = false;
         for (j, uc) in cmds.iter().enumerate() {
@@ -254,16 +251,16 @@ pub(crate) unsafe fn find_ucmd(
             excmd.argt = uc.uc_argt;
             excmd.useridx = j as c_int;
             excmd.addr_type = uc.uc_addr_type;
-            if !complp.is_null() {
-                // SAFETY: caller contract.
-                unsafe { *complp = uc.uc_compl };
+            if let Some(complp) = complp.as_deref_mut() {
+                *complp = uc.uc_compl;
             }
-            if !expand.is_null() {
-                // SAFETY: caller contract.
-                unsafe { (*expand).xp_luaref = uc.uc_compl_luaref };
-                unsafe { (*expand).xp_arg = uc.uc_compl_arg };
-                unsafe { (*expand).xp_script_ctx = uc.uc_script_ctx };
-                unsafe { (*expand).xp_script_ctx.sc_lnum += sourcing_lnum() };
+            if let Some(expand) = expand.as_deref_mut() {
+                expand.luaref = uc.uc_compl_luaref;
+                // SAFETY: a command's completion argument is null or a
+                // NUL-terminated string it owns.
+                expand.arg = unsafe { cstr::at_opt(uc.uc_compl_arg) }.map(XString::from_cstr);
+                expand.script_ctx = uc.uc_script_ctx;
+                expand.script_ctx.sc_lnum += sourcing_lnum();
             }
             // Do not look for further abbreviations of an exact match.
             matchlen = k;
@@ -286,9 +283,8 @@ pub(crate) unsafe fn find_ucmd(
         *full = true;
     }
     if amb_local {
-        if !expand.is_null() {
-            // SAFETY: caller contract.
-            unsafe { (*expand).xp_context = ExpandContext::Unsuccessful };
+        if let Some(expand) = expand {
+            expand.context = ExpandContext::Unsuccessful;
         }
         return None;
     }

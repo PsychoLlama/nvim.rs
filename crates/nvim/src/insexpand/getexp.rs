@@ -11,7 +11,6 @@
 use super::*;
 use crate::cmdexpand::Expanded;
 use crate::cstr;
-use crate::ex_getln::EXPAND_T_INIT;
 use crate::memory::XString;
 use crate::option::next_option_part;
 use crate::option::vars::{P_DICT, P_TSR, P_TSRFU};
@@ -476,23 +475,13 @@ pub(crate) fn sort_by_fuzzy_score(scores: &[c_int], indices: &mut [c_int]) {
 
 /// Vim command-line completion (`CTRL-X CTRL-V`).
 pub(crate) fn get_next_cmdline_completion() {
-    let mut matches: *mut *mut c_char = ptr::null_mut();
-    let mut num_matches = 0;
-    let (pattern_data, pattern_len) = compl_pattern().parts();
+    let col = compl_pattern().len() as c_int;
     // Moved out for the expansion, which can run a user completion function.
-    let mut xp = compl_xp.take().unwrap_or_else(|| Box::new(EXPAND_T_INIT));
-    let expanded = unsafe {
-        expand_cmdline(
-            &mut *xp,
-            pattern_data,
-            pattern_len as c_int,
-            &raw mut num_matches,
-            &raw mut matches,
-        )
-    };
+    let mut xp = compl_xp.take().unwrap_or_default();
+    let (expanded, matches) = expand_cmdline(&mut xp, col);
     compl_xp.set(Some(xp));
     if expanded == Expanded::Ok {
-        unsafe { ins_compl_add_matches(num_matches, matches, 0) };
+        ins_compl_add_match_list(&matches, false);
     }
 }
 

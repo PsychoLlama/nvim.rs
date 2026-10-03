@@ -625,6 +625,12 @@ pub unsafe fn get_special_key_code(name: *const c_char) -> c_int {
     code_for_name(unsafe { slice::from_raw_parts(name.raw().cast::<u8>(), len as usize) })
 }
 
+/// [`get_special_key_code`] of a name the caller owns.
+pub(crate) fn special_key_code(name: &CStr) -> c_int {
+    // SAFETY: a NUL-terminated name.
+    unsafe { get_special_key_code(name.as_ptr()) }
+}
+
 /// Which button a mouse pseudo-code is about, and whether it was a click or a
 /// drag. Answers 0 for a code that is not a mouse event, leaving the flags
 /// untouched.

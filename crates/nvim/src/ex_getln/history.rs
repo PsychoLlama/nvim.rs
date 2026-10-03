@@ -103,7 +103,7 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
     let mut hist_sep = NUL;
 
     dealloc_cmdbuff();
-    unsafe { (*s).xpc.xp_context = ExpandContext::Nothing };
+    unsafe { (*s).xpc.context = ExpandContext::Nothing };
     if unsafe { (*s).hiscnt } == get_hislen() {
         p = unsafe { (*s).lookfor }; // back to the old one
         plen = unsafe { (*s).lookforlen };

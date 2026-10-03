@@ -52,18 +52,33 @@ impl Cls {
         unsafe { Is::new(self.field_ptr(core::mem::offset_of!(CommandLineState, is_state))) }
     }
 
-    /// `&s->xpc`, for the completion machinery that still takes a pointer.
+    /// `&s->xpc`, for the command line's `xpc` pointer that the completion
+    /// readers (`cmdcomplete_info()`, `getcmdcomplpat()`) go through.
     pub(crate) fn xpc(self) -> *mut Expand {
         self.field_ptr(core::mem::offset_of!(CommandLineState, xpc))
+    }
+
+    /// Run `f` on the command line's completion, moved out of this state
+    /// for the length of the call.
+    ///
+    /// The completion runs user code -- `customlist` functions, Lua
+    /// `ui_attach` callbacks, backtick expressions in file names -- and
+    /// that code can ask about the command line's completion through
+    /// `ccline.xpc`. While `f` holds the completion it finds an empty one
+    /// in its place instead of one this code holds mutably, which is what
+    /// upstream's own readers would mostly have seen mid-expansion anyway.
+    pub(crate) fn with_xpc<R>(mut self, f: impl FnOnce(&mut Expand) -> R) -> R {
+        let mut xpc = core::mem::take(&mut self.xpc);
+        let answer = f(&mut xpc);
+        self.xpc = xpc;
+        answer
     }
 
     /// C's `nextwild(&s->xpc, mode, options, s->firstc != '@')`, which every
     /// wildmenu key spells with the same two trailing arguments.
     pub(crate) fn next_wild(self, mode: WildMode, options: WildOpts) -> ::core::ffi::c_int {
         let escape = self.firstc != '@' as ::core::ffi::c_int;
-        // SAFETY: `xpc()` addresses the completion state inside this live
-        // `CommandLineState`, which is what `nextwild` asks for.
-        unsafe { nextwild(self.xpc(), mode, options, escape) }
+        self.with_xpc(|xpc| nextwild(xpc, mode, options, escape))
     }
 
     /// C's `showmatches(&s->xpc, …)`.
@@ -73,52 +88,50 @@ impl Cls {
         display_list: bool,
         noselect: bool,
     ) -> Expanded {
-        // SAFETY: as [`Cls::next_wild`].
-        unsafe { showmatches(self.xpc(), display_wildmenu, display_list, noselect) }
+        self.with_xpc(|xpc| showmatches(xpc, display_wildmenu, display_list, noselect))
     }
 
     /// C's `expand_one(&s->xpc, NULL, NULL, options, mode)`.
-    pub(crate) fn expand(self, options: WildOpts, mode: WildMode) -> *mut ::core::ffi::c_char {
-        let nothing = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        // SAFETY: as [`Cls::next_wild`]; a null `str`/`orig` is what C passes
-        // for the modes that do not answer with the original text.
-        unsafe { expand_one(self.xpc(), nothing, nothing, options, mode) }
+    pub(crate) fn expand(self, options: WildOpts, mode: WildMode) -> Option<XString> {
+        self.with_xpc(|xpc| expand_one(xpc, None, None, options, mode))
     }
 }
 
 /// An all-zero [`CommandLineState`]: the fields C's designated initialiser
 /// leaves out, which the C zeroes for it.
-const COMMAND_LINE_STATE_INIT: CommandLineState = CommandLineState {
-    firstc: 0,
-    count: 0,
-    indent: 0,
-    c: 0,
-    gotesc: false,
-    do_abbr: false,
-    lookfor: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    lookforlen: 0,
-    hiscnt: 0,
-    save_hiscnt: 0,
-    histype: 0,
-    is_state: INCSEARCH_STATE_INIT,
-    did_wild_list: false,
-    wim_index: 0,
-    save_msg_scroll: 0,
-    save_state: 0,
-    prev_cmdpos: 0,
-    prev_cmdbuff: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    save_p_icm: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    skip_pum_redraw: false,
-    some_key_typed: false,
-    ignore_drag_release: false,
-    break_ctrl_c: false,
-    xpc: EXPAND_T_INIT,
-    b_im_ptr: ::core::ptr::null_mut::<OptInt>(),
-    b_im_ptr_buf: None,
-    cmdline_type: 0,
-    event_cmdlineleavepre_triggered: false,
-    did_hist_navigate: false,
-};
+fn command_line_state_init() -> CommandLineState {
+    CommandLineState {
+        firstc: 0,
+        count: 0,
+        indent: 0,
+        c: 0,
+        gotesc: false,
+        do_abbr: false,
+        lookfor: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        lookforlen: 0,
+        hiscnt: 0,
+        save_hiscnt: 0,
+        histype: 0,
+        is_state: INCSEARCH_STATE_INIT,
+        did_wild_list: false,
+        wim_index: 0,
+        save_msg_scroll: 0,
+        save_state: 0,
+        prev_cmdpos: 0,
+        prev_cmdbuff: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        save_p_icm: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        skip_pum_redraw: false,
+        some_key_typed: false,
+        ignore_drag_release: false,
+        break_ctrl_c: false,
+        xpc: Expand::new(),
+        b_im_ptr: ::core::ptr::null_mut::<OptInt>(),
+        b_im_ptr_buf: None,
+        cmdline_type: 0,
+        event_cmdlineleavepre_triggered: false,
+        did_hist_navigate: false,
+    }
+}
 
 /// Initialize the current command-line info.
 pub(crate) fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi::c_int) {
@@ -204,7 +217,7 @@ pub(crate) fn command_line_enter(
         save_state: State.get(),
         prev_cmdpos: -1,
         ignore_drag_release: true,
-        ..COMMAND_LINE_STATE_INIT
+        ..command_line_state_init()
     };
     // SAFETY: `state` lives in this frame for the whole of the key loop.
     let mut s = unsafe { Cls::new(&raw mut state) };
@@ -245,7 +258,7 @@ pub(crate) fn command_line_enter(
         // out. (C's `goto theend`.)
         emsg(gettext(e_command_too_recursive));
     } else {
-        unsafe { expand_init(s.xpc()) };
+        s.xpc = Expand::new();
         cc.xpc = s.xpc();
         clear_cmdline_orig();
 
@@ -264,14 +277,14 @@ pub(crate) fn command_line_enter(
             redrawcmdprompt(); // draw the prompt or the indent
             cc.cmdspos = cmd_startcol();
         }
-        s.xpc.xp_context = ExpandContext::Nothing;
-        s.xpc.xp_backslash = BackslashEscape::NONE;
-        s.xpc.xp_shell = false;
+        s.xpc.context = ExpandContext::Nothing;
+        s.xpc.backslash = BackslashEscape::NONE;
+        s.xpc.shell = false;
 
         if cc.input_fn != 0 {
-            s.xpc.xp_context = cc.xp_context;
-            s.xpc.xp_pattern = cc.text();
-            s.xpc.xp_arg = cc.xp_arg;
+            s.xpc.context = cc.xp_context;
+            s.xpc.pattern = 0;
+            s.xpc.arg = cc.xp_arg.clone();
         }
 
         // Avoid scrolling when called by a recursive do_cmdline(), e.g.
@@ -424,7 +437,7 @@ pub(crate) fn command_line_enter(
         s.did_wild_list = false;
         s.wim_index = 0;
 
-        unsafe { expand_cleanup(s.xpc()) };
+        expand_cleanup(&mut s.xpc);
         cc.xpc = ::core::ptr::null_mut::<Expand>();
         clear_cmdline_orig();
 
@@ -569,7 +582,7 @@ pub(crate) unsafe fn command_line_check(state: *mut CommandLineState) -> ::core:
     }
 
     // Trigger SafeState if nothing is pending.
-    may_trigger_safestate(s.xpc.xp_numfiles <= 0);
+    may_trigger_safestate(s.xpc.match_count() <= 0);
 
     if cc.in_use() {
         s.prev_cmdbuff = unsafe { xstrdup(cc.text()) };
@@ -669,7 +682,8 @@ pub unsafe fn getcmdline_prompt(
     cc.cmdprompt = prompt as *mut ::core::ffi::c_char;
     cc.hl_id = hl_id;
     cc.xp_context = xp_context;
-    cc.xp_arg = xp_arg as *mut ::core::ffi::c_char;
+    // SAFETY: the caller's NUL-terminated argument, or null.
+    cc.xp_arg = unsafe { cstr::at_opt(xp_arg) }.map(XString::from_cstr);
     cc.input_fn = (firstc == '@' as ::core::ffi::c_int) as ::core::ffi::c_int;
     cc.highlight_callback = highlight_callback;
     cc.one_key = one_key;

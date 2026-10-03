@@ -6,20 +6,28 @@
 //! completion layer's differential oracle.  All three are rows in the
 //! generated eval function table.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cmdexpand::{WildMode, WildOpts};
-use crate::cstr;
-use crate::eval::typval::NumBuf;
-use crate::message_fmt::c_str;
+use crate::eval::list::{cstr_of, string_tv};
+use crate::eval::typval::{
+    NumBuf, tv_check_for_string_arg, tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc,
+    tv_list_alloc_ret,
+};
+use crate::lua::executor::nlua_expand_pat;
+use crate::menu::set_context_in_menu_cmd;
+use crate::message::{e_invarg, emsg};
+use crate::message_fmt::msg_cstr;
+use crate::option::vars::p_wic;
+use crate::os::cshim::gettext;
+use crate::popupmenu::pum_visible;
+use crate::runtime::set_context_in_runtime_cmd;
 use crate::semsg;
-use crate::types::{ExpandContext, VAR_STRING};
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+use crate::sign::set_context_in_sign_cmd;
+use crate::types::{EvalFuncData, ExpandContext, TypVal, VAR_STRING, VarNumber, ptrdiff_t};
+use crate::usercmd::{cmdcomplete_str_to_type, cmdcomplete_type_to_str};
+use crate::winlayer::Cc;
 
-/// `getcompletion()`: expand `{pattern}` as `{type}` and answer the matches.
 /// What `getcompletion()` asks of every expansion: newline-separated so the
 /// caller can split it, quiet, and with `~/` restored.
 const GETCOMPLETION: WildOpts = WildOpts::SILENT
@@ -28,20 +36,18 @@ const GETCOMPLETION: WildOpts = WildOpts::SILENT
     .or(WildOpts::NO_BEEP)
     .or(WildOpts::HOME_REPLACE);
 
-/// `expand_one`'s `orig` argument, which this caller never has.
-const NO_ORIG: *mut c_char = ptr::null_mut();
-
+/// `getcompletion()`: expand `{pattern}` as `{type}` and answer the matches.
 pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let mut xpc: Expand = unsafe { core::mem::zeroed() };
+    let mut xpc = Expand::new();
     let mut filtered = false;
     let mut options = GETCOMPLETION;
 
     if tv_check_for_string_arg(args, 1).is_err() {
         return;
     }
-    let type_0 = numbuf.string_ptr(&args[1]);
+    let type_0 = cstr_of(&args[1], &mut numbuf);
 
     if args.len() > 2 {
         filtered = tv_get_number_chk(&args[2]).unwrap_or(-1) != 0;
@@ -60,190 +66,169 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         emsg(gettext(e_invarg));
         return;
     }
-    let pattern = numbuf2.string_ptr(&args[0]);
-    let mut pattern_start = pattern;
+    let pattern = cstr_of(&args[0], &mut numbuf2).to_bytes();
+    // Where the pattern started before a context moved it on.
+    let pattern_start;
 
     // C's `goto theend`: the "cmdline" type takes the whole classifier and
     // skips the per-type switch entirely.
-    if unsafe { cstr::eq_bytes(type_0, b"cmdline") } {
-        let cmdline_len = unsafe { cstr::bytes_at(pattern) }.len() as c_int;
-        unsafe {
-            set_cmd_context(
-                &raw mut xpc,
-                pattern as *mut c_char,
-                cmdline_len,
-                cmdline_len,
-                false,
-            )
-        };
-        pattern_start = xpc.xp_pattern;
-        xpc.xp_pattern_len = unsafe { cstr::bytes_at(xpc.xp_pattern) }.len();
-        xpc.xp_col = cmdline_len;
+    if type_0.to_bytes() == b"cmdline" {
+        let cmdline_len = as_count(pattern.len());
+        set_cmd_context(&mut xpc, pattern, cmdline_len, false);
+        pattern_start = xpc.pattern;
+        xpc.pattern_len = xpc.pattern_text().len();
+        xpc.col = cmdline_len;
     } else {
-        unsafe { expand_init(&raw mut xpc) };
-        xpc.xp_pattern = pattern as *mut c_char;
-        xpc.xp_pattern_len = unsafe { cstr::bytes_at(xpc.xp_pattern) }.len();
-        xpc.xp_line = pattern as *mut c_char;
+        xpc.line = owned(pattern);
+        xpc.pattern = 0;
+        xpc.pattern_len = pattern.len();
+        pattern_start = 0;
 
-        xpc.xp_context = unsafe { cmdcomplete_str_to_type(type_0) };
-        match xpc.xp_context {
+        xpc.context = cmdcomplete_str_to_type(type_0);
+        let arg_after = |prefix: &[u8]| type_0.to_bytes().strip_prefix(prefix).map(owned);
+        match xpc.context {
             ExpandContext::Nothing => {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let arg0 = unsafe { c_str(type_0) };
+                let arg0 = msg_cstr(type_0);
                 semsg!("E475: Invalid argument: {arg0}");
                 return;
             }
             ExpandContext::UserDefined => {
                 // Must be "custom,funcname" pattern.
-                if !unsafe { cstr::starts_with(type_0, b"custom,") } {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let arg0 = unsafe { c_str(type_0) };
+                let Some(func) = arg_after(b"custom,") else {
+                    let arg0 = msg_cstr(type_0);
                     semsg!("E475: Invalid argument: {arg0}");
                     return;
-                }
-                xpc.xp_arg = unsafe { type_0.add(7) } as *mut c_char;
+                };
+                xpc.arg = Some(func);
             }
             ExpandContext::UserList => {
                 // Must be "customlist,funcname" pattern.
-                if !unsafe { cstr::starts_with(type_0, b"customlist,") } {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let arg0 = unsafe { c_str(type_0) };
+                let Some(func) = arg_after(b"customlist,") else {
+                    let arg0 = msg_cstr(type_0);
                     semsg!("E475: Invalid argument: {arg0}");
                     return;
-                }
-                xpc.xp_arg = unsafe { type_0.add(11) } as *mut c_char;
+                };
+                xpc.arg = Some(func);
             }
-            // The four generators below move `xp_pattern` forward inside
+            // The four generators below move the pattern forward inside
             // the string, so the length has to follow it.
             ExpandContext::Menus => {
-                unsafe {
-                    set_context_in_menu_cmd(&raw mut xpc, c"menu".as_ptr(), xpc.xp_pattern, false)
-                };
-                xpc.xp_pattern_len -=
-                    unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
+                set_context_in_menu_cmd(&mut xpc, c"menu", 0, false);
+                xpc.pattern_len -= xpc.pattern - pattern_start;
             }
             ExpandContext::Sign => {
-                unsafe { set_context_in_sign_cmd(&raw mut xpc, xpc.xp_pattern) };
-                xpc.xp_pattern_len -=
-                    unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
+                set_context_in_sign_cmd(&mut xpc, 0);
+                xpc.pattern_len -= xpc.pattern - pattern_start;
             }
             ExpandContext::Runtime => {
-                unsafe { set_context_in_runtime_cmd(&raw mut xpc, xpc.xp_pattern) };
-                xpc.xp_pattern_len -=
-                    unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
+                set_context_in_runtime_cmd(&mut xpc, 0);
+                xpc.pattern_len -= xpc.pattern - pattern_start;
             }
             ExpandContext::ShellCmdLine => {
                 let mut context = ExpandContext::ShellCmdLine;
-                unsafe {
-                    set_context_for_wildcard_arg(
-                        None,
-                        xpc.xp_pattern,
-                        false,
-                        &raw mut xpc,
-                        &raw mut context,
-                    )
-                };
-                xpc.xp_pattern_len -=
-                    unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
+                let text = xpc.line.clone();
+                set_context_for_wildcard_arg(
+                    None,
+                    text.as_cstr(),
+                    0,
+                    false,
+                    &mut xpc,
+                    &mut context,
+                );
+                xpc.pattern_len -= xpc.pattern - pattern_start;
             }
             ExpandContext::FiletypeCmd => filetype_expand_what.set(FiletypeWhat::All),
             _ => {}
         }
     }
 
-    if xpc.xp_context == ExpandContext::Lua {
-        xpc.xp_col = unsafe { cstr::bytes_at(xpc.xp_line) }.len() as c_int;
-        unsafe { nlua_expand_pat(&raw mut xpc) };
-        xpc.xp_pattern_len -= unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
+    if xpc.context == ExpandContext::Lua {
+        xpc.col = as_count(xpc.line_cstr().count_bytes());
+        nlua_expand_pat(&mut xpc);
+        xpc.pattern_len -= xpc.pattern - pattern_start;
     }
 
-    let pat = if unsafe { cmdline_fuzzy_completion_supported(&raw mut xpc) } {
+    let pat = if cmdline_fuzzy_completion_supported(&xpc) {
         // When fuzzy matching, don't modify the search string.
-        unsafe { xmemdupz(xpc.xp_pattern as *const c_void, xpc.xp_pattern_len) as *mut c_char }
+        owned(xpc.pattern_span())
     } else {
-        unsafe { addstar(xpc.xp_pattern, xpc.xp_pattern_len, xpc.xp_context) }
+        addstar(xpc.pattern_span(), xpc.context)
     };
 
-    unsafe { expand_one(&raw mut xpc, pat, NO_ORIG, options, WildMode::AllKeep) };
-    tv_list_alloc_ret(result, xpc.xp_numfiles as ptrdiff_t);
-
-    // SAFETY: the frame's return slot, holding the list just allocated.
-    let retlist = result.list_or_null();
-    for i in 0..xpc.xp_numfiles {
-        unsafe { (*retlist).push_string(*xpc.xp_files.offset(i as isize), -1) };
+    expand_one(
+        &mut xpc,
+        Some(pat.as_cstr()),
+        None,
+        options,
+        WildMode::AllKeep,
+    );
+    let retlist = tv_list_alloc_ret(result, xpc.match_count() as ptrdiff_t);
+    for name in xpc.matches() {
+        retlist.push(string_tv(name.as_cstr().to_bytes()));
     }
-    unsafe { xfree(pat as *mut c_void) };
-    unsafe { expand_cleanup(&raw mut xpc) };
+    expand_cleanup(&mut xpc);
 }
 
 /// `getcompletiontype()`: the completion type name a command line would use.
 pub fn f_getcompletiontype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string(ptr::null_mut());
+    result.write_string(core::ptr::null_mut());
 
     if tv_check_for_string_arg(args, 0).is_err() {
         return;
     }
 
-    let pat = numbuf.string_ptr(&args[0]);
-    let mut xpc: Expand = unsafe { core::mem::zeroed() };
-    unsafe { expand_init(&raw mut xpc) };
+    let pat = cstr_of(&args[0], &mut numbuf).to_bytes();
+    let mut xpc = Expand::new();
 
-    let cmdline_len = unsafe { cstr::bytes_at(pat) }.len() as c_int;
-    unsafe {
-        set_cmd_context(
-            &raw mut xpc,
-            pat as *mut c_char,
-            cmdline_len,
-            cmdline_len,
-            false,
-        )
-    };
-    unsafe { (*result).write_string(cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg)) };
+    let cmdline_len = as_count(pat.len());
+    set_cmd_context(&mut xpc, pat, cmdline_len, false);
+    let name = cmdcomplete_type_to_str(xpc.context, xpc.arg.as_ref().map(XString::as_cstr));
+    *result = name.map_or(TypVal::String(core::ptr::null_mut()), |name| {
+        string_tv(&name)
+    });
 
-    unsafe { expand_cleanup(&raw mut xpc) };
+    expand_cleanup(&mut xpc);
 }
 
 /// `cmdcomplete_info()`: the state of the completion in progress.
 pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let xpc = Cc::current().xpc();
+    // What the command line's completion holds, copied out: building the
+    // answer allocates, which is no place to hold the completion borrowed.
+    let state = Cc::current().with_xpc(|xpc| {
+        let xpc = xpc?;
+        xpc.found_any
+            .then(|| (xpc.selected, xpc.matches().to_vec()))
+    });
 
     tv_dict_alloc_ret(result);
-    if xpc.is_null() || unsafe { (*xpc).xp_files }.is_null() {
+    let Some((selected, matches)) = state else {
         return;
-    }
-    let retdict: *mut Dict = result.dict_or_null();
-
-    // C's S_LEN(): `tv_dict_add_*` copies exactly `key_len` bytes, so the
-    // key type is a plain `&str`.
-    let add_str = |k: &str, v| unsafe { (*retdict).add_str(k.as_bytes(), v) };
-    let add_nr = |k: &str, v| unsafe { (*retdict).add_number(k.as_bytes(), v) };
-    let add_list = |k: &str, v| unsafe { (*retdict).add_list(k.as_bytes(), v) };
+    };
+    let Some(retdict) = result.dict_mut() else {
+        return;
+    };
 
     // Upstream's null pointer -- nothing expanded yet -- is a null entry,
     // not an empty string, so the `None` case is spelled out.
-    let mut ret = cmdline_orig.with(|line| {
-        add_str(
-            "cmdline_orig",
-            line.as_ref().map_or(ptr::null(), |v| v.as_ptr()),
-        )
+    let orig = cmdline_orig.with(|line| {
+        line.as_ref()
+            .map_or(TypVal::String(core::ptr::null_mut()), |line| {
+                string_tv(line)
+            })
     });
+    let mut ret = retdict.add_tv(b"cmdline_orig", &orig);
     if ret.is_ok() {
-        ret = add_nr("pum_visible", pum_visible() as VarNumber);
+        ret = retdict.add_number(b"pum_visible", VarNumber::from(pum_visible()));
     }
     if ret.is_ok() {
-        ret = add_nr("selected", unsafe { (*xpc).xp_selected } as VarNumber);
+        ret = retdict.add_number(b"selected", VarNumber::from(selected));
     }
     if ret.is_ok() {
-        let li = tv_list_alloc(unsafe { (*xpc).xp_numfiles } as ptrdiff_t);
-        // A borrow of the list the dictionary is about to own: the matches
-        // go in after it is in place, as upstream's did.
-        let into = li.as_ptr();
-        ret = add_list("matches", Some(li));
-        let mut idx = 0;
-        while ret.is_ok() && idx < unsafe { (*xpc).xp_numfiles } {
-            unsafe { (*into).push_string(*(*xpc).xp_files.offset(idx as isize), -1) };
-            idx += 1;
+        let mut li = tv_list_alloc(as_count(matches.len()) as ptrdiff_t);
+        for name in &matches {
+            li.push(string_tv(name.as_cstr().to_bytes()));
         }
+        let _ = retdict.add_list(b"matches", Some(li));
     }
 }

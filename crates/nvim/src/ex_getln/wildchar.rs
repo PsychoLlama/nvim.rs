@@ -31,9 +31,10 @@ pub(crate) fn wim_has(idx: ::core::ffi::c_int, flag: OptWimFlags) -> bool {
 /// `s` must point at a live `CommandLineState`, unaliased for the call.
 pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) -> KeyOutcome {
     let cc = Cc::current();
+    // SAFETY: the caller's live state, for the length of this call.
+    let cls = unsafe { Cls::new(s) };
     let res;
     let mut options = WildOpts::NO_BEEP;
-    let escape = unsafe { (*s).firstc } != '@' as ::core::ffi::c_int;
     let redraw_if_menu_empty = unsafe { (*s).c } == Key::Wild.code();
     let wim_noselect = p_wmnu() && wim_has(0, kOptWimFlagNoselect);
 
@@ -41,21 +42,21 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
         options |= WildOpts::BUFLASTUSED;
     }
 
-    if unsafe { (*s).xpc.xp_numfiles } > 0 {
+    if cls.xpc.match_count() > 0 {
         // Typed 'wildchar' at least twice. If "list" is present, list the
         // matches unless they are already listed.
-        if unsafe { (*s).xpc.xp_numfiles } > 1
+        if cls.xpc.match_count() > 1
             && !unsafe { (*s).did_wild_list }
             && wim_has(unsafe { (*s).wim_index }, kOptWimFlagList)
         {
-            unsafe { showmatches(&raw mut (*s).xpc, false, true, wim_noselect) };
+            cls.show_matches(false, true, wim_noselect);
             redrawcmd();
             unsafe { (*s).did_wild_list = true };
         }
         if wim_has(unsafe { (*s).wim_index }, kOptWimFlagLongest) {
-            res = unsafe { nextwild(&raw mut (*s).xpc, WildMode::Longest, options, escape) };
+            res = cls.next_wild(WildMode::Longest, options);
         } else if wim_has(unsafe { (*s).wim_index }, kOptWimFlagFull) {
-            res = unsafe { nextwild(&raw mut (*s).xpc, WildMode::Next, options, escape) };
+            res = cls.next_wild(WildMode::Next, options);
         } else {
             res = OK; // don't insert 'wildchar' now
         }
@@ -75,23 +76,23 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
             if unsafe { (*s).c } == Key::Wild.code() {
                 options |= WildOpts::FUNC_TRIGGER;
             }
-            unsafe { (*s).xpc.xp_pre_incsearch_pos = (*s).is_state.search_start };
+            unsafe { (*s).xpc.pre_incsearch_pos = (*s).is_state.search_start };
         }
         let cmdpos_before = cc.cmdpos;
 
         // If 'wildmode' starts with "longest", get the longest common
         // part.
         if wim_longest {
-            res = unsafe { nextwild(&raw mut (*s).xpc, WildMode::Longest, options, escape) };
+            res = cls.next_wild(WildMode::Longest, options);
         } else {
             if wim_noselect || wim_list {
                 options |= WildOpts::NOSELECT;
             }
-            res = unsafe { nextwild(&raw mut (*s).xpc, WildMode::ExpandKeep, options, escape) };
+            res = cls.next_wild(WildMode::ExpandKeep, options);
         }
 
         // Remove the popup menu if no completion items are available.
-        if redraw_if_menu_empty && unsafe { (*s).xpc.xp_numfiles } <= 0 {
+        if redraw_if_menu_empty && cls.xpc.match_count() <= 0 {
             pum_check_clear();
         }
 
@@ -99,25 +100,17 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
         if got_int.get() {
             vpeekc(); // remove <C-C> from the input stream
             got_int.set(false); // don't abandon the command line
-            unsafe {
-                expand_one(
-                    &raw mut (*s).xpc,
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    WildOpts::NONE,
-                    WildMode::Free,
-                )
-            };
-            unsafe { (*s).xpc.xp_context = ExpandContext::Nothing };
+            cls.expand(WildOpts::NONE, WildMode::Free);
+            unsafe { (*s).xpc.context = ExpandContext::Nothing };
             return KeyOutcome::Changed;
         }
 
         // Display the matches.
-        if res == OK && unsafe { (*s).xpc.xp_numfiles } > if wim_noselect { 0 } else { 1 } {
+        if res == OK && cls.xpc.match_count() > if wim_noselect { 0 } else { 1 } {
             if wim_longest {
                 let found_longest_prefix = cc.cmdpos != cmdpos_before;
                 if wim_list || (p_wmnu() && wim_full) {
-                    unsafe { showmatches(&raw mut (*s).xpc, p_wmnu(), wim_list, true) };
+                    cls.show_matches(p_wmnu(), wim_list, true);
                 } else if !found_longest_prefix {
                     // Nothing was inserted, so look at what the *next*
                     // 'wildmode' stage asks for and do that now.
@@ -126,16 +119,9 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                     let wim_noselect_next = wim_has(1, kOptWimFlagNoselect);
                     if wim_list_next || (p_wmnu() && (wim_full_next || wim_noselect_next)) {
                         if wim_full_next && !wim_noselect_next {
-                            unsafe { nextwild(&raw mut (*s).xpc, WildMode::Next, options, escape) };
+                            cls.next_wild(WildMode::Next, options);
                         } else {
-                            unsafe {
-                                showmatches(
-                                    &raw mut (*s).xpc,
-                                    p_wmnu(),
-                                    wim_list_next,
-                                    wim_noselect_next,
-                                )
-                            };
+                            cls.show_matches(p_wmnu(), wim_list_next, wim_noselect_next);
                         }
                         if wim_list_next {
                             unsafe { (*s).did_wild_list = true };
@@ -143,7 +129,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                     }
                 }
             } else if wim_list || (p_wmnu() && (wim_full || wim_noselect)) {
-                unsafe { showmatches(&raw mut (*s).xpc, p_wmnu(), wim_list, wim_noselect) };
+                cls.show_matches(p_wmnu(), wim_list, wim_noselect);
             } else {
                 vim_beep(kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint);
             }
@@ -152,8 +138,8 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
             if wim_list {
                 unsafe { (*s).did_wild_list = true };
             }
-        } else if unsafe { (*s).xpc.xp_numfiles } == -1 {
-            unsafe { (*s).xpc.xp_context = ExpandContext::Nothing };
+        } else if cls.xpc.match_count() == -1 {
+            unsafe { (*s).xpc.context = ExpandContext::Nothing };
         }
     }
 

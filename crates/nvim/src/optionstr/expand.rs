@@ -1,9 +1,8 @@
 //! Command-line completion of a string option's value.
 //!
 //! Every entry point here has the same shape: the option table hands over an
-//! `OptExpand` describing what the user has typed so far, and the
-//! completer fills an `xmalloc`ed `char *` array plus its length. The three
-//! ways to produce one:
+//! [`OptExpand`] describing what the user has typed so far, and the
+//! completer answers the matches. The three ways to produce them:
 //!
 //! - [`expand_set_opt_string`] over the accepted words the generated table
 //!   already carries, filtered by the command line's regexp;
@@ -17,8 +16,7 @@
 //! completion, so that `<Tab>` on a bare `:set opt=` starts from what is
 //! already there.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -27,11 +25,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
-use crate::strings::has_char;
-use crate::types::Candidate;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use crate::autocmd::get_event_name_no_group;
@@ -39,137 +33,68 @@ use crate::cmdexpand::expand_generic;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::get_highlight_name;
 use crate::mbyte::get_encoding_name;
-use crate::memory::{XString, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::memory::XString;
 use crate::options::{
     kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
 };
-use crate::types::{CompleteListItemGetter, Expand, Failed, NUL, OptExpand, size_t};
+use crate::types::{Candidate, CompleteListItemGetter, Expand, Failed, OptExpand};
 
 use super::{
     COCU_ALL, CPO_VI, FO_ALL, MOUSE_ALL, SHM_ALL, WW_ALL, get_fillchars_name, get_listchars_name,
     opt_values, vim_regexec,
 };
 
-/// The completion result under construction: an `xmalloc`ed `char *` array
-/// and how much of it is used.
-///
-/// Upstream sizes the array for the largest possible answer up front rather
-/// than measuring first, because every list here is a fixed enumeration of
-/// at most a few dozen entries.
-struct Matches {
-    into: *mut *mut c_char,
-    count: c_int,
+/// The option's current value, when the caller asked for it to be offered
+/// and there is one.
+fn original_value<'a>(args: &'a OptExpand<'_>) -> Option<&'a XString> {
+    (args.include_orig_val && !args.value.is_empty()).then_some(&args.value)
 }
 
-impl Matches {
-    /// # Safety
-    /// At most `capacity` calls to [`Matches::push`] may follow.
-    unsafe fn with_capacity(capacity: size_t) -> Self {
-        let bytes = size_of::<*mut c_char>() * (capacity + 1);
-        // SAFETY: `xmalloc` returns an allocation of that size or aborts.
-        let into = unsafe { xmalloc(bytes) }.cast::<*mut c_char>();
-        Matches { into, count: 0 }
+/// The matches, or `Err` when there are none.
+fn found_or_failed(found: Vec<XString>) -> Result<Vec<XString>, Failed> {
+    if found.is_empty() {
+        Err(Failed)
+    } else {
+        Ok(found)
     }
-
-    /// Take ownership of one already-allocated completion.
-    ///
-    /// # Safety
-    /// Fewer than `capacity` pushes have happened, and `owned` is an
-    /// allocation whoever consumes the array will free.
-    unsafe fn push(&mut self, owned: *mut c_char) {
-        // SAFETY: the count is below the capacity, as documented above.
-        unsafe { *self.into.offset(self.count as isize) = owned };
-        self.count += 1;
-    }
-
-    /// Hand the array to the caller, or free it and report `Err` when
-    /// nothing matched — in which case the out-parameter is left null.
-    ///
-    /// # Safety
-    /// `matches` and `num` are the completer's out-parameters.
-    unsafe fn finish(self, matches: *mut *mut *mut c_char, num: *mut c_int) -> Result<(), Failed> {
-        if self.count == 0 {
-            // SAFETY: the array this owns, and the caller's out-parameter.
-            unsafe { xfree(self.into.cast::<c_void>()) };
-            unsafe { *matches = ptr::null_mut() };
-            return Err(Failed);
-        }
-        // SAFETY: the caller's out-parameters.
-        unsafe { *matches = self.into };
-        unsafe { *num = self.count };
-        Ok(())
-    }
-}
-
-/// Is the option's current value worth offering as the first completion?
-/// Only when the caller asked for it and there is one.
-///
-/// # Safety
-/// `args` points at the option table's completion frame.
-unsafe fn original_value(args: *mut OptExpand) -> Option<*mut c_char> {
-    // SAFETY: the caller's frame; `oe_opt_value` is a C string.
-    let value = unsafe { (*args).oe_opt_value };
-    (unsafe { (*args).oe_include_orig_val } && c_int::from(unsafe { *value }) != NUL)
-        .then_some(value)
 }
 
 /// Complete an option whose accepted words the generated table lists.
-///
-/// # Safety
-/// `args` points at the completion frame.
-pub(crate) unsafe fn expand_set_opt_string(
-    args: *mut OptExpand,
+pub(crate) fn expand_set_opt_string(
+    args: &mut OptExpand<'_>,
     values: &[&CStr],
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's frame.
-    let regex_match = unsafe { &mut *(*args).oe_regmatch };
-    let original = unsafe { original_value(args) };
-
-    // SAFETY: at most one push per word, plus the original value.
-    let mut out = unsafe { Matches::with_capacity(values.len()) };
-    if let Some(value) = original {
-        // SAFETY: `value` is a C string, and `xstrdup` hands over an
-        // allocation the consumer frees.
-        unsafe { out.push(xstrdup(value)) };
+) -> Result<Vec<XString>, Failed> {
+    let original = original_value(args).cloned();
+    let mut found = Vec::with_capacity(values.len() + 1);
+    if let Some(value) = &original {
+        found.push(value.clone());
     }
 
     for entry in values {
         if entry.is_empty() {
             continue; // Ignore an empty accepted word.
         }
-        let word = entry.as_ptr();
         // The current value is already the first completion; do not repeat
         // it.
-        // SAFETY: both are C strings.
-        if let Some(value) = original
-            && unsafe { cstr::eq(word, value) }
+        if original
+            .as_ref()
+            .is_some_and(|value| value.as_cstr() == *entry)
         {
             continue;
         }
-        // SAFETY: `entry` is a C string.
-        if vim_regexec(regex_match, entry, 0) {
-            unsafe { out.push(xstrdup(word)) };
+        if vim_regexec(args.regmatch, entry, 0) {
+            found.push(XString::from_cstr(entry));
         }
     }
 
-    unsafe { out.finish(matches, num_matches) }
+    found_or_failed(found)
 }
 
 /// Complete an option whose accepted words the generated table lists, found
 /// through the option's own index.
-///
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_str_generic(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's frame.
-    let values = opt_values(unsafe { (*args).oe_idx });
-    unsafe { expand_set_opt_string(args, values, num_matches, matches) }
+pub fn expand_set_str_generic(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    let values = opt_values(args.idx);
+    expand_set_opt_string(args, values)
 }
 
 /// The option's current value, offered as completion index 0 ahead of
@@ -196,236 +121,122 @@ fn expand_set_opt_callback(expand: &Expand, idx: usize) -> Option<Candidate> {
 
 /// Complete an option from an editor-side enumerator rather than from a
 /// fixed list.
-///
-/// # Safety
-/// `args` points at the completion frame; `func` enumerates C strings.
-pub(crate) unsafe fn expand_set_opt_generic(
-    args: *mut OptExpand,
+pub(crate) fn expand_set_opt_generic(
+    args: &mut OptExpand<'_>,
     func: CompleteListItemGetter,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's frame.
-    let original = unsafe { (*args).oe_include_orig_val.then_some((*args).oe_opt_value) }
-        .filter(|value| !value.is_null());
-    // SAFETY: the option's value, a C string.
-    ORIGINAL_VALUE.set(original.map(|value| XString::from_cstr(unsafe { CStr::from_ptr(value) })));
+) -> Result<Vec<XString>, Failed> {
+    let original = args.include_orig_val.then(|| args.value.clone());
+    ORIGINAL_VALUE.set(original);
     ENUMERATOR.set(Some(func));
 
     // Not fuzzy: ExpandContext::StringSetting does not use fuzzy matching.
-    // SAFETY: the caller's frame supplies the expansion context and the
-    // command line's compiled pattern.
-    unsafe {
-        expand_generic(
-            c"".as_ptr(),
-            (*args).oe_xp,
-            &mut *(*args).oe_regmatch,
-            matches,
-            num_matches,
-            expand_set_opt_callback,
-            false,
-        )
-    };
+    let found = expand_generic(c"", args.xp, args.regmatch, expand_set_opt_callback, false);
 
     ORIGINAL_VALUE.set(None);
     ENUMERATOR.set(None);
-    Ok(())
+    Ok(found)
 }
 
 /// Complete an option that is a set of flag letters: one completion per
 /// letter that is not already spoken for.
-///
-/// # Safety
-/// `args` points at the completion frame; `flags` is a C string.
-pub(crate) unsafe fn expand_set_opt_listflag(
-    args: *mut OptExpand,
-    flags: *const c_char,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's frame; `oe_opt_value` and `oe_set_arg` are C
-    // strings.
-    let (option_val, cmdline_val, append) =
-        unsafe { ((*args).oe_opt_value, (*args).oe_set_arg, (*args).oe_append) };
-    let original = unsafe { original_value(args) };
-    // SAFETY: a C string.
-    let flags = unsafe { CStr::from_ptr(flags) }.to_bytes();
+pub(crate) fn expand_set_opt_listflag(
+    args: &mut OptExpand<'_>,
+    flags: &CStr,
+) -> Result<Vec<XString>, Failed> {
+    let option_val = &args.value[..];
+    let cmdline_val = args.typed();
+    let original = original_value(args);
 
-    // SAFETY: at most one push per letter, plus the current value.
-    let mut out = unsafe { Matches::with_capacity(flags.len()) };
+    let mut found = Vec::with_capacity(flags.count_bytes() + 1);
     if let Some(value) = original {
-        // SAFETY: a C string.
-        unsafe { out.push(xstrdup(value)) };
+        found.push(value.clone());
     }
 
-    for (at, &flag) in flags.iter().enumerate() {
+    for &flag in flags.to_bytes() {
         // With `+=`, a letter the value already carries cannot be added
         // again.
-        // SAFETY: the option's value is a C string, only read here.
-        if append && has_char(unsafe { cstr::at(option_val) }, c_int::from(flag)) {
+        if args.append && option_val.contains(&flag) {
             continue;
         }
-        if has_char(unsafe { cstr::at(cmdline_val) }, c_int::from(flag)) {
+        if cmdline_val.contains(&flag) {
             continue;
         }
         // A one-letter value is already the first completion; do not offer
         // the same letter twice.
-        // SAFETY: `original` being set means `option_val` is non-empty, so
-        // it has a second byte (its terminator at worst).
-        if original.is_some()
-            && unsafe { c_int::from(*option_val.add(1)) } == NUL
-            && unsafe { *option_val }.cast_unsigned() == flag
-        {
+        if original.is_some() && option_val == [flag] {
             continue;
         }
-        // SAFETY: one byte of `flags`, copied with a terminator.
-        let one = unsafe { xmemdupz(flags.as_ptr().add(at).cast::<c_void>(), 1) };
-        unsafe { out.push(one.cast::<c_char>()) };
+        found.push(XString::from_bytes(&[flag]));
     }
 
-    unsafe { out.finish(matches, num_matches) }
+    found_or_failed(found)
 }
 
 /// Complete 'fillchars' or 'listchars'. Which one is decided by the variable
 /// being set, since the two share every entry point.
-///
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_chars_option(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
+pub fn expand_set_chars_option(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
     // 'listchars' and 'fillchars' share this callback; which one is being
     // completed is the row, at either scope.
-    // SAFETY: the caller's frame.
-    let names = if unsafe { (*args).oe_idx } == kOptListchars {
+    let names = if args.idx == kOptListchars {
         get_listchars_name
     } else {
         get_fillchars_name
     };
-    unsafe { expand_set_opt_generic(args, names, num_matches, matches) }
+    expand_set_opt_generic(args, names)
 }
 
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_concealcursor(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    unsafe { expand_set_opt_listflag(args, COCU_ALL.as_ptr(), num_matches, matches) }
+pub fn expand_set_concealcursor(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    expand_set_opt_listflag(args, COCU_ALL)
 }
 
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_cpoptions(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    unsafe { expand_set_opt_listflag(args, CPO_VI.as_ptr(), num_matches, matches) }
+pub fn expand_set_cpoptions(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    expand_set_opt_listflag(args, CPO_VI)
 }
 
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_formatoptions(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    unsafe { expand_set_opt_listflag(args, FO_ALL.as_ptr(), num_matches, matches) }
+pub fn expand_set_formatoptions(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    expand_set_opt_listflag(args, FO_ALL)
 }
 
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_mouse(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    unsafe { expand_set_opt_listflag(args, MOUSE_ALL.as_ptr(), num_matches, matches) }
+pub fn expand_set_mouse(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    expand_set_opt_listflag(args, MOUSE_ALL)
 }
 
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_shortmess(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    unsafe { expand_set_opt_listflag(args, SHM_ALL.as_ptr(), num_matches, matches) }
+pub fn expand_set_shortmess(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    expand_set_opt_listflag(args, SHM_ALL)
 }
 
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_whichwrap(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    unsafe { expand_set_opt_listflag(args, WW_ALL.as_ptr(), num_matches, matches) }
-}
-
-/// Does the word being completed sit directly after `prefix` inside the
-/// `:set` argument?
-///
-/// # Safety
-/// `at` points into the C string starting at `start`.
-unsafe fn directly_after(at: *const c_char, start: *const c_char, prefix: &CStr) -> bool {
-    let len = prefix.to_bytes().len();
-    let room = len.cast_signed();
-    // SAFETY: both point into the same string, as documented above, and the
-    // length test is what puts the `sub` in range.
-    unsafe { at.offset_from(start) >= room && cstr::prefix_eq(at.sub(len), prefix.as_ptr(), len) }
+pub fn expand_set_whichwrap(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    expand_set_opt_listflag(args, WW_ALL)
 }
 
 /// Complete 'diffopt', whose "algorithm:" and "inline:" fields each have
 /// their own list of accepted words. Anything else after a `:` has no
 /// completions at all.
-///
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_diffopt(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's frame; `xp_pattern` points into `oe_set_arg`.
-    let (expand, start) = unsafe { ((*args).oe_xp, (*args).oe_set_arg) };
-    let at = unsafe { (*expand).xp_pattern };
-    if at <= start || unsafe { *at.sub(1) } != b':'.cast_signed() {
-        return unsafe { expand_set_str_generic(args, num_matches, matches) };
+pub fn expand_set_diffopt(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    // What stands between the start of the value and the pattern.
+    let before = args
+        .xp
+        .line
+        .get(args.set_arg..args.xp.pattern)
+        .unwrap_or_default();
+    if before.last() != Some(&b':') {
+        return expand_set_str_generic(args);
     }
-    let field =
-        |values: &[&CStr]| unsafe { expand_set_opt_string(args, values, num_matches, matches) };
-    if unsafe { directly_after(at, start, c"algorithm:") } {
-        return field(&opt_dip_algorithm_values);
+    if before.ends_with(b"algorithm:") {
+        return expand_set_opt_string(args, &opt_dip_algorithm_values);
     }
-    if unsafe { directly_after(at, start, c"inline:") } {
-        return field(&opt_dip_inline_values);
+    if before.ends_with(b"inline:") {
+        return expand_set_opt_string(args, &opt_dip_inline_values);
     }
     Err(Failed)
 }
 
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_encoding(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    unsafe { expand_set_opt_generic(args, get_encoding_name, num_matches, matches) }
+pub fn expand_set_encoding(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    expand_set_opt_generic(args, get_encoding_name)
 }
 
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_winhighlight(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    unsafe { expand_set_opt_generic(args, get_highlight_name, num_matches, matches) }
+pub fn expand_set_winhighlight(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
+    expand_set_opt_generic(args, get_highlight_name)
 }
 
 /// Whether the option being completed is a window-local 'eventignorewin'
@@ -453,18 +264,11 @@ pub(crate) fn get_eventignore_name(expand: &Expand, idx: usize) -> Option<Candid
     ))
 }
 
-/// # Safety
-/// `args` points at the completion frame.
-pub unsafe fn expand_set_eventignore(
-    args: *mut OptExpand,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
+pub fn expand_set_eventignore(args: &mut OptExpand<'_>) -> Result<Vec<XString>, Failed> {
     // 'eventignore' and 'eventignorewin' share this callback, and only the
     // second one completes the window events.
-    // SAFETY: the caller's frame.
-    WINDOW_EVENTS.set(unsafe { (*args).oe_idx } != kOptEventignore);
-    unsafe { expand_set_opt_generic(args, get_eventignore_name, num_matches, matches) }
+    WINDOW_EVENTS.set(args.idx != kOptEventignore);
+    expand_set_opt_generic(args, get_eventignore_name)
 }
 
 /// Enumerate the values 'fileformat' accepts.

@@ -258,7 +258,7 @@ pub fn get_user_func_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     // SAFETY: `buf` is `IOSIZE` bytes and `fp` the live function.
     let len = unsafe { cat_func_name(buf.as_mut_ptr(), IOSIZE as size_t, fp) };
     let mut text = cstr::as_bytes(&buf[..len as usize]).to_vec();
-    if expand.xp_context != ExpandContext::UserFunc {
+    if expand.context != ExpandContext::UserFunc {
         text.push(b'(');
         if f.uf_varargs == 0 && f.uf_args.ga_len <= 0 {
             text.push(b')');

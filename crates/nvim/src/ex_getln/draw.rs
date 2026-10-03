@@ -303,6 +303,13 @@ pub unsafe fn put_on_cmdline(
     }
 }
 
+/// [`put_on_cmdline`] of `text`, which need not be terminated.
+pub(crate) fn put_on_cmdline_bytes(text: &[u8], redraw: bool) {
+    let len = ::core::ffi::c_int::try_from(text.len()).expect("a command line fits a c_int");
+    // SAFETY: `len` readable bytes, not in the command line's own buffer.
+    unsafe { put_on_cmdline(text.as_ptr().cast(), len, redraw) };
+}
+
 /// Redraw the command line after a screen size change, an incremental search
 /// or anything else that may have overwritten it.
 pub fn redrawcmdline() {

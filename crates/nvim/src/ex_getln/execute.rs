@@ -134,12 +134,12 @@ pub(crate) fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: ::core::
         }
         cmdline_pum_remove(c != -1 && s.skip_pum_redraw);
     }
-    if s.xpc.xp_numfiles != -1 {
+    if s.xpc.matches.is_some() {
         s.expand(WildOpts::NONE, WildMode::Free);
     }
     s.did_wild_list = false;
     if !p_wmnu() || (c != Key::Up.code() && c != Key::Down.code()) {
-        s.xpc.xp_context = ExpandContext::Nothing;
+        s.xpc.context = ExpandContext::Nothing;
     }
     s.wim_index = 0;
     wildmenu_cleanup(Cc::current());
@@ -168,7 +168,7 @@ pub(crate) unsafe fn command_line_execute(
     // If the cmdline was replaced externally (e.g. by setcmdline() during
     // an <expr> mapping), clean up the wildmenu completion state so that
     // stale completion data is not used.
-    if cc.cmdbuff_replaced && s.xpc.xp_numfiles > 0 {
+    if cc.cmdbuff_replaced && s.xpc.match_count() > 0 {
         command_line_end_wildmenu(s, false, -1);
     }
     cc.cmdbuff_replaced = false;
@@ -269,7 +269,7 @@ pub(crate) unsafe fn command_line_execute(
         && s.c != Key::Kpageup.code()
         && s.c != Key::Left.code()
         && s.c != Key::Right.code()
-        && (s.xpc.xp_numfiles > 0 || (s.c != Ctrl_P && s.c != Ctrl_N))
+        && (s.xpc.match_count() > 0 || (s.c != Ctrl_P && s.c != Ctrl_N))
     {
         unsafe { xfree(s.lookfor as *mut ::core::ffi::c_void) };
         s.lookfor = ::core::ptr::null_mut();
@@ -278,12 +278,12 @@ pub(crate) unsafe fn command_line_execute(
 
     // When there are matching completions to select, <S-Tab> works like
     // CTRL-P (unless 'wildchar' is <S-Tab>).
-    if s.c as OptInt != p_wc() && s.c == Key::STab.code() && s.xpc.xp_numfiles > 0 {
+    if s.c as OptInt != p_wc() && s.c == Key::STab.code() && s.xpc.match_count() > 0 {
         s.c = Ctrl_P;
     }
 
     if p_wmnu() {
-        s.c = unsafe { wildmenu_translate_key(cc, s.c, s.xpc(), s.did_wild_list) };
+        s.c = wildmenu_translate_key(cc, s.c, &s.xpc, s.did_wild_list);
     }
 
     // Which wildmenu gesture, if any, the key was already used for.
@@ -291,7 +291,7 @@ pub(crate) unsafe fn command_line_execute(
     let key_is_wc = (s.c as OptInt == p_wc() && KeyTyped.get()) || s.c as OptInt == p_wcm();
     if (cmdline_pum_active() || wild_menu_showing.get() != 0 || s.did_wild_list)
         && !key_is_wc
-        && s.xpc.xp_numfiles > 0
+        && s.xpc.match_count() > 0
         && let Some(mode) = wildmenu_gesture(s.c)
     {
         wild_type = Some(mode);
@@ -336,7 +336,7 @@ pub(crate) unsafe fn command_line_execute(
     }
 
     if p_wmnu() {
-        s.c = unsafe { wildmenu_process_key(cc, s.c, s.xpc()) };
+        s.c = s.with_xpc(|xpc| wildmenu_process_key(cc, s.c, xpc));
     }
 
     // CTRL-\ CTRL-N or CTRL-\ CTRL-G goes to Normal mode, CTRL-\ e
@@ -421,7 +421,7 @@ pub(crate) unsafe fn command_line_execute(
         && KeyTyped.get()
         && s.next_wild(WildMode::ExpandKeep, WildOpts::NONE) == OK
     {
-        if s.xpc.xp_numfiles > 1
+        if s.xpc.match_count() > 1
             && ((!s.did_wild_list && wim_has(s.wim_index, kOptWimFlagList)) || p_wmnu())
         {
             // Trigger the popup menu when wildoptions=pum.
@@ -527,7 +527,7 @@ pub(crate) fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
             // which will trigger at the next wait-for-input.
             let _ = update_screen(); // clear the 'inccommand' preview
         }
-        if s.xpc.xp_context == ExpandContext::Nothing && (KeyTyped.get() || vpeekc() == NUL) {
+        if s.xpc.context == ExpandContext::Nothing && (KeyTyped.get() || vpeekc() == NUL) {
             may_do_incsearch_highlighting(s.firstc, s.count, s.is_state());
         }
     }

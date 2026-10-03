@@ -20,8 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -70,27 +69,24 @@ impl Context {
     };
 }
 
-/// Work out what to complete in a half-typed menu command.
-///
-/// # Safety
-/// `expand` must be live, `cmd` a NUL-terminated string, and `arg` a position in
-/// the command line being completed.
-pub(crate) unsafe fn set_context_in_menu_cmd(
-    expand: *mut Expand,
-    cmd: *const c_char,
-    arg: *mut c_char,
+/// Work out what to complete in a half-typed menu command `cmd`, whose
+/// argument starts at `arg` in the completion's line. Answers no next
+/// command: a menu command takes the rest of the line.
+pub(crate) fn set_context_in_menu_cmd(
+    expand: &mut Expand,
+    cmd: &CStr,
+    arg: usize,
     forceit: bool,
-) -> *mut c_char {
-    // SAFETY: the caller's obligation.
-    let context = unsafe { menu_context(CStr::from_ptr(cmd), CText::new(arg), forceit) };
-    // SAFETY: the caller's obligation; the pattern is a position in the
-    // command line `expand` already describes.
-    unsafe { (*expand).xp_context = context.xp_context };
+) -> Option<usize> {
+    let arg = expand.line_ptr_at(arg);
+    // SAFETY: a position in the completion's NUL-terminated line, which is
+    // not replaced while the context is worked out.
+    let context = menu_context(cmd, unsafe { CText::new(arg) }, forceit);
+    expand.context = context.xp_context;
     if let Some(pattern) = context.pattern {
-        // SAFETY: as above.
-        unsafe { (*expand).xp_pattern = pattern.raw() };
+        expand.set_pattern_at(pattern.raw());
     }
-    ptr::null_mut()
+    None
 }
 
 fn white(byte: u8) -> bool {

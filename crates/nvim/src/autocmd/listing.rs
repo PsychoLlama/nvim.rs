@@ -294,22 +294,15 @@ pub unsafe fn has_autocmd(
 /// Command-line completion for `:autocmd` (`doautocmd` false) and
 /// `:doautocmd`/`:doautoall` (true).
 ///
-/// Answers a pointer at the next command to expand instead, or null when
-/// it has set `expand` itself.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `arg` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn set_context_in_autocmd(
-    expand: *mut Expand,
-    mut arg: *mut ::core::ffi::c_char,
-    doautocmd: bool,
-) -> *mut ::core::ffi::c_char {
+/// The argument starts at `arg` in the completion's line. Answers where the
+/// next command to expand starts instead, or `None` when it has set
+/// `expand` itself.
+pub fn set_context_in_autocmd(expand: &mut Expand, arg: usize, doautocmd: bool) -> Option<usize> {
+    let mut arg = expand.line_ptr_at(arg);
     // Skip a group name if there is one.
     autocmd_include_groups.set(false);
     let start = arg;
-    // SAFETY: `arg` is the caller's NUL-terminated command line, and
+    // SAFETY: `arg` is in the completion's NUL-terminated line, and
     // `arg_augroup_get` only advances it over a name within that line.
     let mut group = unsafe { arg_augroup_get(&raw mut arg) };
 
@@ -341,11 +334,9 @@ pub unsafe fn set_context_in_autocmd(
         if group == AUGROUP_ALL {
             autocmd_include_groups.set(true);
         }
-        // SAFETY: `expand` is the caller's completion state, and `arg` points
-        // into the line it is completing.
-        unsafe { (*expand).xp_context = ExpandContext::Events };
-        unsafe { (*expand).xp_pattern = arg };
-        return ::core::ptr::null_mut();
+        expand.context = ExpandContext::Events;
+        expand.set_pattern_at(arg);
+        return None;
     }
 
     // Skip over the pattern, whose whitespace may be backslash-escaped.
@@ -361,7 +352,7 @@ pub unsafe fn set_context_in_autocmd(
     }
     if unsafe { *arg } != 0 {
         // What follows is the command, which the caller expands.
-        return arg;
+        return Some(expand.offset_of(arg));
     }
 
     let context = if doautocmd {
@@ -369,9 +360,8 @@ pub unsafe fn set_context_in_autocmd(
     } else {
         ExpandContext::Nothing
     };
-    // SAFETY: `expand` is the caller's completion state.
-    unsafe { (*expand).xp_context = context };
-    ::core::ptr::null_mut()
+    expand.context = context;
+    None
 }
 
 /// `exists('#…')`, in all four shapes: `#Group`, `#Event`, `#Event#pat`

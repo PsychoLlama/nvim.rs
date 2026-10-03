@@ -8,7 +8,7 @@ use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::autocmd::has_autocmd;
 use crate::buffer::{buf_is_help, buflist_findname_exp, buflist_getfile, find_buf};
 use crate::charset::{ptr2cells, skipdigits, vim_isblankline};
-use crate::cmdexpand::{expand_init, expand_one};
+use crate::cmdexpand::expand_one;
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_VALID, redraw_later};
 use crate::eval::typval::{

@@ -8,11 +8,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::charset::skip;
 use crate::cstr;
 use crate::types::Candidate;
 use core::ffi::{CStr, c_char, c_int};
 
-use crate::charset::{skiptowhite, skipwhite, vim_strsize};
+use crate::charset::vim_strsize;
 use crate::eval::last_set_msg;
 use crate::getchar::state::got_int;
 use crate::highlight::HlAttrFlags;
@@ -295,61 +296,59 @@ fn is_prefix(word: &[u8], full: &[u8]) -> bool {
 }
 
 /// Completion for `:highlight`: group names, plus the subcommand words that
-/// could still be typed at this position.
-///
-/// # Safety
-/// `arg` is the NUL-terminated rest of the command line, which `expand` is
-/// pointed into; main thread only.
-pub(crate) unsafe fn set_context_in_highlight_cmd(expand: *mut Expand, arg: *const c_char) {
-    // SAFETY: the caller's expansion state and command line.
+/// could still be typed at this position. The argument starts at `arg` in
+/// the completion's line.
+pub(crate) fn set_context_in_highlight_cmd(expand: &mut Expand, arg: usize) {
     // Default: expand group names.
-    unsafe { (*expand).xp_context = ExpandContext::Highlight };
-    unsafe { (*expand).xp_pattern = arg.cast_mut() };
+    expand.context = ExpandContext::Highlight;
+    expand.pattern = arg;
     include_link.set(2);
     include_default.set(1);
 
-    if unsafe { *arg } == 0 {
+    let line = expand.line_cstr().to_bytes().to_vec();
+    let at = |i: usize| line.get(i).copied().unwrap_or(0);
+    let skipwhite = |i: usize| i + skip::white(line.get(i..).unwrap_or_default());
+    let skiptowhite = |i: usize| i + skip::to_white(line.get(i..).unwrap_or_default());
+
+    if at(arg) == 0 {
         return;
     }
 
     // (Part of) a subcommand already typed.
     let mut arg = arg;
-    let mut p = unsafe { skiptowhite(arg) };
-    if unsafe { *p } == 0 {
+    let mut p = skiptowhite(arg);
+    if at(p) == 0 {
         return;
     }
 
     // Past "default" or the group name.
     include_default.set(0);
-    let word = |arg: *const c_char, p: *const c_char| unsafe {
-        core::slice::from_raw_parts(arg.cast::<u8>(), p.offset_from(arg) as usize)
-    };
-    if is_prefix(word(arg, p), b"default") {
-        arg = unsafe { skipwhite(p) };
-        unsafe { (*expand).xp_pattern = arg.cast_mut() };
-        p = unsafe { skiptowhite(arg) };
+    if is_prefix(&line[arg..p], b"default") {
+        arg = skipwhite(p);
+        expand.pattern = arg;
+        p = skiptowhite(arg);
     }
-    if unsafe { *p } == 0 {
+    if at(p) == 0 {
         return;
     }
 
     // Past the group name.
     include_link.set(0);
-    if unsafe { *arg.add(1) } == b'i' as c_char && unsafe { *arg } == b'N' as c_char {
+    if at(arg + 1) == b'i' && at(arg) == b'N' {
         highlight_list();
     }
-    if is_prefix(word(arg, p), b"link") || is_prefix(word(arg, p), b"clear") {
-        unsafe { (*expand).xp_pattern = skipwhite(p) };
-        p = unsafe { skiptowhite((*expand).xp_pattern) };
-        if unsafe { *p } != 0 {
+    if is_prefix(&line[arg..p], b"link") || is_prefix(&line[arg..p], b"clear") {
+        expand.pattern = skipwhite(p);
+        p = skiptowhite(expand.pattern);
+        if at(p) != 0 {
             // Past the first group name.
-            unsafe { (*expand).xp_pattern = skipwhite(p) };
-            p = unsafe { skiptowhite((*expand).xp_pattern) };
+            expand.pattern = skipwhite(p);
+            p = skiptowhite(expand.pattern);
         }
     }
-    if unsafe { *p } != 0 {
+    if at(p) != 0 {
         // Past the group name(s).
-        unsafe { (*expand).xp_context = ExpandContext::Nothing };
+        expand.context = ExpandContext::Nothing;
     }
 }
 

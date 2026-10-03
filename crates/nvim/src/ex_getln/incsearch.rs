@@ -16,7 +16,7 @@ use crate::strings::vim_strchr;
 use crate::winlayer::{Buf, Win};
 
 use crate::guard::Suppress;
-use crate::types::{ExpandContext, Failed, NUL};
+use crate::types::{Failed, NUL};
 use core::ffi::CStr;
 
 /// Fire a `Cmdline*` / `Cmdwin*` autocommand whose `<afile>` and `<amatch>`
@@ -153,14 +153,7 @@ pub unsafe fn parse_pattern_and_range(
     let _ = parse_command_modifiers(&mut ea, &mut dummy, &mut dummy_cmdmod, true);
 
     // Skip over the range to find the command.
-    // SAFETY: a null context is "not completing".
-    let at_cmd = ea.line.cmd
-        + unsafe {
-            skip_range(
-                ea.line.tail(ea.line.cmd),
-                ::core::ptr::null_mut::<ExpandContext>(),
-            )
-        };
+    let at_cmd = ea.line.cmd + skip_range(ea.line.tail(ea.line.cmd), None);
     let cmd = ea.line.ptr_at(at_cmd);
     if !has_char(c"sgvlu", at(cmd) as uint8_t as ::core::ffi::c_int) {
         return false;
@@ -293,6 +286,25 @@ pub unsafe fn parse_pattern_and_range(
 
     Win::current().w_cursor = save_cursor;
     true
+}
+
+/// [`parse_pattern_and_range`] for a caller that wants only where the
+/// pattern starts and how long it is: `None` when the command line has no
+/// pattern in it.
+pub(crate) fn parse_pattern_and_range_of(
+    incsearch_start: Pos,
+) -> Option<(::core::ffi::c_int, ::core::ffi::c_int)> {
+    let (mut delim, mut skiplen, mut patlen) = (0, 0, 0);
+    // SAFETY: three locals this frame owns.
+    let found = unsafe {
+        parse_pattern_and_range(
+            incsearch_start,
+            &raw mut delim,
+            &raw mut skiplen,
+            &raw mut patlen,
+        )
+    };
+    found.then_some((skiplen, patlen))
 }
 
 /// Whether `'incsearch'` highlighting should be done for this command line,

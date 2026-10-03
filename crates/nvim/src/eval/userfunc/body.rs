@@ -266,7 +266,7 @@ pub(crate) unsafe fn get_function_body(
                 // Check for ":append", ":change", ":insert", which run
                 // until a line holding only a dot.
                 // SAFETY: `p` is NUL-terminated; a null context is "not completing".
-                p = unsafe { p.add(skip_range(cstr::bytes_at(p), ptr::null_mut())) };
+                p = unsafe { p.add(skip_range(cstr::bytes_at(p), None)) };
                 let tp = p;
                 let ranged = unsafe {
                     checkforcmd(&raw mut p, c"append".as_ptr(), 1)

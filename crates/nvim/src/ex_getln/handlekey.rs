@@ -430,7 +430,7 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             if s.next_wild(WildMode::All, WildOpts::NONE) == FAIL {
                 return None;
             }
-            s.xpc.xp_context = ExpandContext::Nothing;
+            s.xpc.context = ExpandContext::Nothing;
             s.did_wild_list = false;
             Some(command_line_changed(s))
         }
@@ -460,7 +460,7 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             | Key::Kpagedown,
         )
         | Err(NotAKey(Ctrl_N | Ctrl_P)) => {
-            if (s.c == Ctrl_N || s.c == Ctrl_P) && s.xpc.xp_numfiles > 0 {
+            if (s.c == Ctrl_N || s.c == Ctrl_P) && s.xpc.match_count() > 0 {
                 let wild_type = if s.c == Ctrl_P {
                     WildMode::Prev
                 } else {

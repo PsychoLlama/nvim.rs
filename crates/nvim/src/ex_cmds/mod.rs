@@ -67,6 +67,7 @@ use crate::types::{
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
+use core::ffi::CStr;
 use core::ptr;
 
 // The carve of the transpiled module; see each child's docs.
@@ -339,6 +340,17 @@ pub unsafe fn skip_vimgrep_pat(
         n += 1;
     }
     end.wrapping_add(n)
+}
+
+/// [`skip_vimgrep_pat`] of a pattern the caller owns, writing nothing:
+/// how many bytes the pattern and its flags take, or `None` when a
+/// delimited pattern is not closed.
+pub(crate) fn skip_vimgrep_pat_at(text: &CStr) -> Option<usize> {
+    let start = text.as_ptr().cast_mut();
+    // SAFETY: a NUL-terminated string; with no out-parameters nothing is
+    // written, and the answer is inside the string or null.
+    let end = unsafe { skip_vimgrep_pat(start, ::core::ptr::null_mut(), ::core::ptr::null_mut()) };
+    (!end.is_null()).then(|| end.addr() - start.addr())
 }
 /// `:oldfiles` -- list `v:oldfiles`, numbered; under `:browse`, then ask for
 /// a number and edit that file.

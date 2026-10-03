@@ -1,134 +1,24 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+//! Command-line completion: working out what the text before the cursor
+//! wants completed, finding the matches, and showing them.
+//!
+//! An [`Expand`] carries one completion from start to finish. It owns a copy
+//! of the text it was worked out from, so the pattern is an offset into that
+//! copy -- which is the same offset into the command line, the one caller
+//! that edits a line in place. The command line moves its context out of
+//! its own state for the length of each call in here, so user code that runs
+//! meanwhile (a `customlist` function, a Lua `ui_attach` callback, a
+//! backtick expression in a file name) sees no completion in progress
+//! rather than one this code holds mutably.
+
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 pub(crate) mod state;
-use crate::arglist::get_arglist_name;
-use crate::types::TAB;
 
-use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
-use crate::autocmd::{expand_get_augroup_name, expand_get_event_name, set_context_in_autocmd};
-use crate::buffer::expand_buf_names;
-use crate::charset::{
-    backslash_halve_save, ptr2cells, rem_backslash, skipdigits, skiptowhite, skipwhite, transchar,
-    transchar_byte, vim_is_ident_char, vim_isfilec_or_wc, vim_strsize,
-};
-use crate::cmdexpand::state::{save_p_ls, save_p_wmh, wild_menu_showing};
-use crate::cmdhist::get_history_arg;
-use crate::cstr;
-use crate::drawscreen::state::cmdline_row;
-use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_status};
-use crate::eval::funcs::{get_expr_name, get_function_name};
-use crate::eval::typval::{
-    list_unref, tv_check_for_string_arg, tv_clear, tv_dict_alloc_ret, tv_get_number_chk,
-    tv_list_alloc, tv_list_alloc_ret,
-};
-use crate::eval::userfunc::get_user_func_name;
-use crate::eval::vars::get_user_var_name;
-use crate::eval::{call_func_retlist, call_func_retstr, set_context_for_expression};
-use crate::ex_cmds::skip_vimgrep_pat;
-use crate::ex_docmd::{
-    ends_excmd, excmd_get_argt, excmd_get_cmdidx, expand_argopt, expand_findfunc, find_nextcmd,
-    get_command_name, set_no_hlsearch, skip_cmd_arg, skip_range,
-};
-use crate::ex_getln::{
-    cmd_screencol, cursorcmd, escape_fname, get_cmdline_last_prompt_id, parse_pattern_and_range,
-    put_on_cmdline, realloc_cmdbuff, redrawcmd, tilde_replace, vim_strsave_fnameescape,
-};
-use crate::fuzzy::fuzzy_match_str;
-use crate::garray::{ga_grow, ga_init};
-use crate::getchar::state::{KeyTyped, got_int};
-use crate::getchar::{beep_flush, char_avail, vpeekc};
 use crate::global_cell::GlobalCell;
-use crate::grid::{grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start};
-use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
-use crate::help::{cleanup_help_tags, find_help_tags};
-use crate::highlight::namespace::hl_attr_table;
-use crate::highlight::win_hl_attr;
-use crate::highlight_group::{
-    HLF_D, HLF_NONE, HLF_T, HLF_WM, get_highlight_name, set_context_in_highlight_cmd,
-};
-use crate::insexpand::find_word_end;
-use crate::lua::executor::{
-    nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
-};
-use crate::mapping::{expand_mappings, set_context_in_map_cmd};
-use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
-use crate::memline::{ml_get, ml_get_len};
-use crate::memory::{XString, xfree, xmalloc, xmemcpyz, xmemdupz, xstpcpy, xstrdup};
-use crate::menu::{get_menu_name, get_menu_names, menu_is_separator, set_context_in_menu_cmd};
-use crate::message::state::{cmd_silent, msg_col, msg_didany, msg_row, msg_scrolled};
-use crate::message::{e_invarg, e_toomany};
-use crate::message::{
-    emsg, msg_advance, msg_clr_eos, msg_display, msg_display_elided, msg_ext_set_kind,
-    msg_grid_view, msg_putchar, msg_scroll_up, msg_start, msg_str, msg_str_hl,
-};
-use crate::option::vars::{
-    P_LS, P_WMH, p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, wop_flags,
-};
-use crate::option::{
-    copy_option_part, csh_like_shell, expand_old_setting, expand_setting_subtract, expand_settings,
-    expand_string_setting, get_findfunc, magic_isset, set_context_in_set_cmd,
-};
-use crate::options::{
-    kOptBoFlagWildmode, kOptWopFlagExacttext, kOptWopFlagFuzzy, kOptWopFlagPum, kOptWopFlagTagfile,
-};
-use crate::os::cshim::gettext;
-use crate::os::env::{expand_env_save_opt, get_env_name, home_replace, vim_getenv};
-use crate::os::fs::os_isdir;
-use crate::os::lang::{get_lang_arg, get_locales};
-use crate::os::users::{UserMatch, get_users, match_user};
-use crate::path::{
-    after_pathsep, expand_wildcards, expand_wildcards_eval, free_wild, match_suffix,
-    path_is_absolute, path_tail, vim_ispathsep,
-};
-use crate::popupmenu::state::pum_want;
-use crate::popupmenu::{pum_clear, pum_display, pum_get_height, pum_undisplay, pum_visible};
-use crate::pos::ltoreq;
-use crate::profile::{get_profile_name, set_context_in_profile_cmd};
-use crate::regexp::{
-    RE_LAST, RE_MAGIC, RE_STRING, skip_regexp, vim_regcomp, vim_regexec, vim_regexec_nl,
-    vim_regfree,
-};
-use crate::runtime::state::current_sctx;
-use crate::runtime::{
-    RuntimeOpts, expand_packadd_dir, expand_runtime_cmd, expand_runtime_dir, script_id_valid,
-    set_context_in_runtime_cmd,
-};
-use crate::search::state::{search_first_line, search_last_line};
-use crate::search::{
-    BACKWARD, FORWARD, SEARCH_NFMSG, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
-    ignorecase, pat_has_uppercase, searchit,
-};
-use crate::sign::{get_sign_name, set_context_in_sign_cmd};
-use crate::statusline::fillchar_status;
-use crate::strings::{
-    sort_function_names, sort_strings, strcase_save, vim_strsave_escaped, xstrnsave,
-};
-use crate::syntax::{
-    get_syntax_name, get_syntime_arg, reset_expand_highlight, set_context_in_echohl_cmd,
-    set_context_in_syntax_cmd,
-};
-use crate::tag::expand_tags;
-use crate::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
-use crate::types::{
-    Arena, Array, CmdAddr, ColNr, CompleteListItemGetter, Dict, Direction, EvalFuncData, ExArg,
-    Expand, FuzMatchStr, GArray, HashTab, Hlf, List, LuaRetMode, Object, OptInt, Pos, PumItem,
-    RegMatch, TypVal, VarNumber, XpPrefix, ptrdiff_t, size_t, ssize_t,
-};
-use crate::ui::state::{Columns, Rows};
-use crate::ui::{ui_flush, ui_has, vim_beep};
-use crate::usercmd::{
-    cmdcomplete_str_to_type, cmdcomplete_type_to_str, find_ucmd, get_user_cmd_addr_type,
-    get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs, get_user_commands,
-    set_context_in_user_cmd, set_context_in_user_cmdarg,
-};
-use crate::window::{global_stl_height, last_status};
-use crate::winlayer::current_topframe;
-use crate::winlayer::graph::cmdline_win;
-use crate::winlayer::{Cc, Live};
-use ::libc::{strcpy, strncpy};
-use core::ffi::{CStr, c_char, c_int};
+use crate::memory::XString;
+use crate::types::{Expand, Pos, PumItem};
+use core::ffi::c_int;
 
 // The carve of the transpiled module; see each child's docs.
 mod escape;
@@ -157,43 +47,7 @@ mod bufpat;
 pub(crate) use self::bufpat::*;
 #[cfg(test)]
 mod tests;
-/// The completion context an expansion is running in, whose caller has
-/// promised it outlives the value.
-///
-/// The promise is discharged by the frame that owns the `Expand`: the
-/// command line's own `xpc`, or a caller's local. Wrapping is the unsafe
-/// step, once per entry point, and every `(*expand).field` after it is ordinary
-/// checked code -- which also stops the 1 KiB struct being *copied* every
-/// time a field is read, as `unsafe { (*expand).xp_context }` does.
-///
-/// Two addresses may not be taken off one [`Deref`](core::ops::Deref) -- the
-/// second borrow pops the first -- so a caller wanting `&raw mut` on a field
-/// takes it off [`Live::field_ptr`] instead.
-pub(crate) type Xp = Live<Expand>;
 
-impl Expand {
-    /// Whether the text being completed starts with `prefix`.
-    pub(crate) fn pattern_starts_with(&self, prefix: &[u8]) -> bool {
-        // SAFETY: a set `xp_pattern` is NUL-terminated.
-        !self.xp_pattern.is_null() && unsafe { cstr::starts_with(self.xp_pattern, prefix) }
-    }
-
-    /// Whether there is no text to complete: everything matches.
-    pub(crate) fn pattern_is_empty(&self) -> bool {
-        // SAFETY: as above.
-        self.xp_pattern.is_null() || unsafe { *self.xp_pattern } == 0
-    }
-
-    /// The command line the context was worked out from.
-    pub(crate) fn line_cstr(&self) -> &CStr {
-        // SAFETY: a set `xp_line` is NUL-terminated and outlives the context.
-        unsafe { cstr::at_opt(self.xp_line) }.unwrap_or(c"")
-    }
-}
-
-pub const XP_PREFIX_INV: XpPrefix = 2;
-pub const XP_PREFIX_NO: XpPrefix = 1;
-pub const XP_PREFIX_NONE: XpPrefix = 0;
 /// Not a `WILD_*` at all — `buffer.h`'s, and `expand_buf_names` reads it out
 /// of the same `options` word, so it is spelled as one of them.
 pub const BUF_DIFF_FILTER: WildOpts = WildOpts::from_bits(8192);
@@ -290,22 +144,23 @@ crate::flag_set! {
     /// The completion was asked for by `'wildmode'`'s function trigger.
     const FUNC_TRIGGER = 65536;
 }
-pub const VSE_NONE: ::core::ffi::c_int = 0;
-pub const VSE_BUFFER: ::core::ffi::c_int = 2;
-pub const VSE_SHELL: ::core::ffi::c_int = 1;
-pub const kRetObject: LuaRetMode = 0;
-pub const EXP_BREAKPT_DEL: BreakpointExpandKind = 1;
-pub type BreakpointExpandKind = ::core::ffi::c_uint;
-pub const EXP_PROFDEL: BreakpointExpandKind = 2;
-pub const EXP_BREAKPT_ADD: BreakpointExpandKind = 0;
-pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
-pub const TAG_MANY: ::core::ffi::c_int = 300;
-pub const WM_SCROLLED: ::core::ffi::c_int = 2;
-pub const WM_SHOWN: ::core::ffi::c_int = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: Array = Array::EMPTY;
-pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
+/// Which of the `:breakadd` family's arguments to offer: upstream's
+/// `EXP_BREAKPT_*`.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum BreakptWhat {
+    /// `:breakadd`: all four.
+    Add,
+    /// `:breakdel`: all but `expr`.
+    Del,
+    /// `:profdel`: the two that name something being profiled.
+    ProfDel,
+}
+
+/// The wildmenu was drawn over scrolled message output.
+pub(crate) const WM_SCROLLED: c_int = 2;
+/// The wildmenu was drawn over a status line.
+pub(crate) const WM_SHOWN: c_int = 1;
+
 static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);
 static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false);
 static pre_incsearch_pos: GlobalCell<Pos> = GlobalCell::new(Pos {
@@ -314,9 +169,13 @@ static pre_incsearch_pos: GlobalCell<Pos> = GlobalCell::new(Pos {
     coladd: 0,
 });
 /// The popup menu's rows for the matches; `None` while there is no menu.
-static compl_match_array: GlobalCell<Option<Vec<PumItem>>> = GlobalCell::new(None);
-static compl_startcol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static compl_selected: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+///
+/// Each row's text points into the matches of the command line's
+/// [`Expand`], which keeps them until [`cmdline_pum_remove`] drops the rows:
+/// every path that frees the matches removes the menu first.
+static compl_match_array: GlobalCell<Option<CmdlinePum>> = GlobalCell::new(None);
+static compl_startcol: GlobalCell<c_int> = GlobalCell::new(0);
+static compl_selected: GlobalCell<c_int> = GlobalCell::new(0);
 /// The command line as it stood before the last expansion inserted a
 /// match, for `:h getcompletion()`'s `cmdline_orig`. Owned: the cell frees
 /// the previous copy when it takes a new one, and `None` is upstream's
@@ -337,46 +196,27 @@ pub(crate) enum FiletypeWhat {
 }
 
 static filetype_expand_what: GlobalCell<FiletypeWhat> = GlobalCell::new(FiletypeWhat::All);
-static breakpt_expand_what: GlobalCell<BreakpointExpandKind> = GlobalCell::new(EXP_BREAKPT_ADD);
-pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
+static breakpt_expand_what: GlobalCell<BreakptWhat> = GlobalCell::new(BreakptWhat::Add);
 
-// ---------------------------------------------------------------------------
-// Handing a scored candidate list to the expansion machinery.
-//
-// This sat in `fuzzy.rs`, which knows nothing about `FuzMatchStr` beyond
-// its score field; every caller is an expansion, and four of the five are in
-// this module's own family.
-/// Sort `fuzmatch` by fuzzy score and hand its strings to `matches`, freeing
-/// `fuzmatch` itself. With `funcsort`, `<SNR>` functions sort to the end.
+/// A match `fuzzy_match_str` scored, numbered in the order it was found.
+pub(crate) struct Scored {
+    pub(crate) text: XString,
+    pub(crate) score: c_int,
+    pub(crate) idx: usize,
+}
+
+/// The scored matches best first, the order found breaking ties. With
+/// `funcsort`, `<SNR>` functions sort to the end whatever they scored.
 ///
-/// # Safety
-/// `fuzmatch` must be an allocated array of `count` entries naming allocated
-/// strings, and `matches` must be writable.
-pub(crate) unsafe fn fuzzymatches_to_strmatches(
-    fuzmatch: *mut FuzMatchStr,
-    matches: *mut *mut *mut c_char,
-    count: c_int,
-    funcsort: bool,
-) {
-    if count > 0 {
-        let count = usize::try_from(count).expect("the guard above rejected a negative count");
-        let found = unsafe { core::slice::from_raw_parts_mut(fuzmatch, count) };
-        // Best score first, `idx` breaking ties — and with `funcsort`,
-        // `<SNR>` functions after everything else whatever they scored.
-        // Callers number `idx` as they fill the array, so no two entries
-        // compare equal and the sort needs no stability of its own.
-        let snr = |m: &FuzMatchStr| funcsort && unsafe { *m.str } == b'<'.cast_signed();
-        found.sort_by(|a, b| {
-            snr(a)
-                .cmp(&snr(b))
-                .then(b.score.cmp(&a.score))
-                .then(a.idx.cmp(&b.idx))
-        });
-        let strings: *mut *mut c_char = unsafe { xmalloc(count * size_of::<*mut c_char>()) }.cast();
-        for (i, m) in found.iter().enumerate() {
-            unsafe { *strings.add(i) = m.str };
-        }
-        unsafe { *matches = strings };
-    }
-    unsafe { xfree(fuzmatch.cast()) };
+/// Callers number `idx` as they collect, so no two entries compare equal
+/// and the sort needs no stability of its own.
+pub(crate) fn fuzzy_sorted(mut found: Vec<Scored>, funcsort: bool) -> Vec<XString> {
+    let snr = |m: &Scored| funcsort && m.text.first() == Some(&b'<');
+    found.sort_by(|a, b| {
+        snr(a)
+            .cmp(&snr(b))
+            .then(b.score.cmp(&a.score))
+            .then(a.idx.cmp(&b.idx))
+    });
+    found.into_iter().map(|m| m.text).collect()
 }

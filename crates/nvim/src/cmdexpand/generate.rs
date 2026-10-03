@@ -6,116 +6,110 @@
 //! `:retab`, `:messages`, `:mapclear`, `:filetype`, `:checkhealth` and the
 //! LSP list.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::cmdexpand::WildOpts;
-use crate::cstr;
-use crate::memory::XString;
-use crate::path::ExpandFlags;
-use crate::syntax::EXPAND_BUF_LEN;
-use crate::types::String_0;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
+use crate::arglist::get_arglist_name;
+use crate::autocmd::{expand_get_augroup_name, expand_get_event_name};
+use crate::cmdhist::get_history_arg;
+use crate::eval::funcs::{get_expr_name, get_function_name};
+use crate::eval::userfunc::get_user_func_name;
+use crate::eval::vars::get_user_var_name;
+use crate::ex_docmd::{expand_findfunc_matches, get_command_name};
+use crate::ex_getln::get_cmdline_last_prompt_id;
+use crate::highlight_group::get_highlight_name;
+use crate::lua::executor::nlua_exec_object;
+use crate::menu::{get_menu_name, get_menu_names};
+use crate::os::env::get_env_name;
+use crate::os::lang::{get_lang_arg, get_locales};
+use crate::os::users::get_users;
+use crate::path::{ExpandFlags, expand_wildcards_eval_list};
+use crate::profile::get_profile_name;
+use crate::runtime::{script_display_name, script_id_valid};
+use crate::sign::get_sign_name;
+use crate::syntax::{EXPAND_BUF_LEN, get_syntax_name, get_syntime_arg};
+use crate::types::{
+    Array, ArrayBuf, BackslashEscape, Candidate, CompleteListItemGetter, ExpandContext, Failed,
+    Object, RegMatch, String_0,
+};
+use crate::usercmd::{
+    get_user_cmd_addr_type, get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs,
+    get_user_commands,
+};
+use core::ffi::{CStr, c_int, c_uint};
+use std::ffi::CString;
 
-use crate::runtime::script_display_name;
-use crate::types::{ArrayBuf, BackslashEscape, Candidate, ExpandContext, Failed};
-
-/// Expand a file or directory pattern.
-///
-/// For `":set path="` and `":set tags="` the escaped spaces have to be
-/// un-escaped first, which is what `xp_backslash` records — and that has to
-/// happen on a copy, because the caller still owns `pat`.
 /// A context that wants directories and not plain files.
 const fn dirs_only(flags: ExpandFlags) -> ExpandFlags {
     flags.without(ExpandFlags::FILE).or(ExpandFlags::DIR)
 }
 
-/// # Safety
+/// Expand a file or directory pattern.
 ///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-/// `matches` must point at a writable `*mut *mut c_char` slot the caller owns
-/// for the call. `num_matches` must point at a writable `int` the caller
-/// owns.
-pub(crate) unsafe fn expand_files_and_dirs(
-    expand: *mut Expand,
-    pat: *mut c_char,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
+/// For `":set path="` and `":set tags="` the escaped spaces have to be
+/// un-escaped first, which is what [`Expand::backslash`] records — on a
+/// copy, because the caller still owns `pat`.
+pub(crate) fn expand_files_and_dirs(
+    expand: &Expand,
+    pat: &CStr,
     flags: ExpandFlags,
     options: WildOpts,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    let mut pat = pat;
+) -> Result<Vec<XString>, Failed> {
     let mut flags = flags;
-    let free_pat = expand.xp_backslash != BackslashEscape::NONE;
-    if free_pat {
+    let unescaped;
+    let pat = if expand.backslash == BackslashEscape::NONE {
+        pat
+    } else {
         // Halve the backslashes of an escaped space (or comma).
-        let pat_len = unsafe { cstr::bytes_at(pat) }.len();
-        pat = unsafe { xstrnsave(pat, pat_len) };
-        let mut pat_end = unsafe { pat.add(pat_len) };
-        let mut p = pat;
-        while unsafe { *p } != 0 {
-            if unsafe { *p } == b'\\' as c_char {
+        let mut text = pat.to_bytes().to_vec();
+        let mut p = 0;
+        while p < text.len() {
+            if text[p] == b'\\' {
+                let after = |n: usize| text.get(p + n).copied().unwrap_or(0);
                 // How many bytes of escaping to drop, if any.  Each arm
-                // is a distinct `xp_backslash` mode; upstream's
+                // is a distinct `backslash` mode; upstream's
                 // BACKSLASH_IN_FILENAME arm of the comma case is not
                 // compiled on any platform this port builds for.
-                let drop = if expand.xp_backslash.has(BackslashEscape::THREE)
-                    && unsafe { *p.add(1) } == b'\\' as c_char
-                    && unsafe { *p.add(2) } == b'\\' as c_char
-                    && unsafe { *p.add(3) } == b' ' as c_char
+                let drop = if expand.backslash.has(BackslashEscape::THREE)
+                    && after(1) == b'\\'
+                    && after(2) == b'\\'
+                    && after(3) == b' '
                 {
                     3
-                } else if expand.xp_backslash.has(BackslashEscape::ONE)
-                    && unsafe { *p.add(1) } == b' ' as c_char
-                {
+                } else if expand.backslash.has(BackslashEscape::ONE) && after(1) == b' ' {
                     1
-                } else if expand.xp_backslash.has(BackslashEscape::COMMA)
-                    && unsafe { *p.add(1) } == b'\\' as c_char
-                    && unsafe { *p.add(2) } == b',' as c_char
+                } else if expand.backslash.has(BackslashEscape::COMMA)
+                    && after(1) == b'\\'
+                    && after(2) == b','
                 {
                     2
                 } else {
                     0
                 };
-                if drop > 0 {
-                    let from = unsafe { p.add(drop) };
-                    // +1 for the NUL.
-                    unsafe { ptr::copy(from, p, pat_end.offset_from(from) as usize + 1) };
-                    pat_end = unsafe { pat_end.sub(drop) };
-                }
+                text.drain(p..p + drop);
             }
-            p = unsafe { p.add(1) };
+            p += 1;
         }
-    }
-
-    let ret = if expand.xp_context == ExpandContext::Findfunc {
-        unsafe { expand_findfunc(pat, matches, num_matches) }
-    } else {
-        flags = match expand.xp_context {
-            ExpandContext::Files => flags | ExpandFlags::FILE,
-            ExpandContext::FilesInPath => flags | ExpandFlags::FILE | ExpandFlags::PATH,
-            ExpandContext::DirsInCdpath => dirs_only(flags) | ExpandFlags::CDPATH,
-            _ => dirs_only(flags),
-        };
-        if options.has(WildOpts::ICASE) {
-            flags |= ExpandFlags::ICASE;
-        }
-        // Expand wildcards, supporting %:h and the like.
-        unsafe { expand_wildcards_eval(&raw mut pat, num_matches, matches, flags) }
+        unescaped = CString::new(text).expect("a pattern holds no NUL");
+        unescaped.as_c_str()
     };
 
-    if free_pat {
-        unsafe { xfree(pat as *mut c_void) };
+    if expand.context == ExpandContext::Findfunc {
+        return expand_findfunc_matches(pat);
     }
-    ret
+    flags = match expand.context {
+        ExpandContext::Files => flags | ExpandFlags::FILE,
+        ExpandContext::FilesInPath => flags | ExpandFlags::FILE | ExpandFlags::PATH,
+        ExpandContext::DirsInCdpath => dirs_only(flags) | ExpandFlags::CDPATH,
+        _ => dirs_only(flags),
+    };
+    if options.has(WildOpts::ICASE) {
+        flags |= ExpandFlags::ICASE;
+    }
+    // Expand wildcards, supporting %:h and the like.
+    expand_wildcards_eval_list(pat, flags)
 }
 
 /// Answer `list[idx]`, or `None` when `idx` is out of range.
@@ -151,9 +145,9 @@ pub(crate) fn get_breakadd_arg(_expand: &Expand, idx: usize) -> Option<Candidate
     const OPTS: [&CStr; 4] = [c"expr", c"file", c"func", c"here"];
     nth_option(
         match breakpt_expand_what.get() {
-            EXP_BREAKPT_ADD => &OPTS,
-            EXP_BREAKPT_DEL => &OPTS[1..4],
-            _ => &OPTS[1..3],
+            BreakptWhat::Add => &OPTS,
+            BreakptWhat::Del => &OPTS[1..4],
+            BreakptWhat::ProfDel => &OPTS[1..3],
         },
         idx,
     )
@@ -198,22 +192,9 @@ fn nth_lua_string(names: &GlobalCell<Object>, idx: usize) -> Option<Candidate> {
 }
 
 /// Replace the cached answer with a fresh one, dropping the old.
-///
-/// # Safety
-///
-/// `args` must be a well-formed API array, its `size` elements initialized.
-unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, args: Array) {
+fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, args: Array) {
     // A failed lookup caches nil, as it did when the error was dropped.
-    let res = unsafe {
-        nlua_exec(
-            &String_0::from_cstr(script),
-            ptr::null(),
-            args,
-            kRetObject,
-            ptr::null_mut::<Arena>(),
-        )
-    }
-    .unwrap_or(Object::Nil);
+    let res = nlua_exec_object(script, args).unwrap_or(Object::Nil);
     // The swap happens inside the borrow and the old answer is released
     // outside it: it must not be reachable through the cell while it is
     // being freed.
@@ -228,8 +209,7 @@ pub(crate) fn get_healthcheck_names(_expand: &Expand, idx: usize) -> Option<Cand
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
     if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 {
-        // SAFETY: an empty argument list.
-        unsafe { cache_lua_answer(&names, c"return vim.health._complete()", ARRAY_DICT_INIT) };
+        cache_lua_answer(&names, c"return vim.health._complete()", Array::EMPTY);
         last_gen.set(get_cmdline_last_prompt_id());
     }
     nth_lua_string(&names, idx)
@@ -251,14 +231,11 @@ pub(crate) fn get_lsp_arg(expand: &Expand, idx: usize) -> Option<Candidate> {
         // The current command line, as the Lua function's one argument.
         let mut args = ArrayBuf::<1>::new();
         args.push(Object::string(String_0::from_bytes(line.to_bytes())));
-        // SAFETY: a well-formed one-element array.
-        unsafe {
-            cache_lua_answer(
-                &names,
-                c"return require'vim._core.ex_cmd'.lsp_complete(...)",
-                args.array(),
-            )
-        };
+        cache_lua_answer(
+            &names,
+            c"return require'vim._core.ex_cmd'.lsp_complete(...)",
+            args.array(),
+        );
         last_gen.set(get_cmdline_last_prompt_id());
     }
     nth_lua_string(&names, idx)
@@ -320,39 +297,25 @@ const GENERATORS: [(ExpandContext, CompleteListItemGetter, bool, bool); 33] = [
     (ExpandContext::Lsp, get_lsp_arg, true, false),
 ];
 
-/// Do the expansion based on `expand.xp_context` and `rmp`.
+/// Do the expansion based on `expand.context` and `rmp`.
 ///
 /// Answers `Err` for a context that is not in the table, which is how
 /// [`super::fromcontext::expand_from_context`] reports "nothing to complete".
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `rmp` must point at a live `RegMatch`, unaliased for the call. `matches`
-/// must point at a writable `*mut *mut c_char` slot the caller owns for the
-/// call. `num_matches` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn expand_other(
-    pat: *mut c_char,
-    expand: *mut Expand,
+pub(crate) fn expand_other(
+    pat: &CStr,
+    expand: &Expand,
     rmp: &mut RegMatch,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
+) -> Result<Vec<XString>, Failed> {
     // Find the context in the table and call expand_generic() with the
     // right function to do the expansion.
     let Some(&(_, func, ic, escaped)) = GENERATORS
         .iter()
-        .find(|&&(context, ..)| context == expand.xp_context)
+        .find(|&&(context, ..)| context == expand.context)
     else {
         return Err(Failed);
     };
     if ic {
         rmp.rm_ic = true;
     }
-    unsafe { expand_generic(pat, expand.raw(), rmp, matches, num_matches, func, escaped) };
-    Ok(())
+    Ok(expand_generic(pat, expand, rmp, func, escaped))
 }

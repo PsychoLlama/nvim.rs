@@ -424,6 +424,27 @@ pub unsafe fn pum_display(
     pum_redraw();
 }
 
+/// [`pum_display`] of `items`.
+pub(crate) fn pum_display_items(
+    items: &mut [PumItem],
+    selected: c_int,
+    array_changed: bool,
+    cmd_startcol: c_int,
+) {
+    let size = c_int::try_from(items.len()).expect("a menu fits a c_int");
+    // SAFETY: the caller's items, whose texts point into strings that the
+    // caller keeps for as long as the menu shows them.
+    unsafe {
+        pum_display(
+            items.as_mut_ptr(),
+            size,
+            selected,
+            array_changed,
+            cmd_startcol,
+        )
+    }
+}
+
 /// The popup menu's own grid, as a handle.
 ///
 /// One acquisition per path. The grid is registered with the compositor and

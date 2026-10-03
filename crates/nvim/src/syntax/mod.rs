@@ -41,8 +41,8 @@ use crate::ascii::ascii_iswhite;
 use crate::autocmd::apply_autocmds;
 use crate::buffer::buf_get_changedtick;
 use crate::charset::{
-    buf_init_chartab, getdigits_int_at, getdigits_int32, skip, skiptowhite, skipwhite,
-    str_foldcase, vim_isprintc, vim_iswordp_buf,
+    buf_init_chartab, getdigits_int_at, getdigits_int32, skip, str_foldcase, vim_isprintc,
+    vim_iswordp_buf,
 };
 use crate::cstr;
 use crate::drawscreen::state::display_tick;

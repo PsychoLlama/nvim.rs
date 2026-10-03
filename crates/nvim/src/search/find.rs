@@ -23,6 +23,7 @@ use crate::semsg;
 use crate::tr_plural;
 use crate::types::{CpoFlag, FAIL, Failed, NUL, ShmFlag};
 use crate::winlayer::{Buf, Win};
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -664,6 +665,40 @@ pub unsafe fn searchit(
     }
 
     submatch + 1
+}
+
+/// [`searchit`] once, for `pat` in `buffer` from `pos`, with no window and
+/// no extra arguments. Answers whether it found one, with the match at `pos`
+/// and its end at `end_pos`.
+pub(crate) fn searchit_buf(
+    buffer: Buf,
+    pos: &mut Pos,
+    end_pos: &mut Pos,
+    dir: Direction,
+    pat: &CStr,
+    options: c_int,
+    pat_use: c_int,
+) -> bool {
+    // A copy the search may write to.
+    let mut owned = pat.to_bytes_with_nul().to_vec();
+    // SAFETY: two positions this call holds, a NUL-terminated copy of the
+    // pattern with its length, and no extra arguments.
+    let status = unsafe {
+        searchit(
+            None,
+            buffer,
+            pos,
+            end_pos,
+            dir,
+            owned.as_mut_ptr().cast(),
+            pat.count_bytes(),
+            1,
+            options,
+            pat_use,
+            ptr::null_mut(),
+        )
+    };
+    status != FAIL
 }
 
 /// The number of the first sub-pattern that matched, or zero if none of

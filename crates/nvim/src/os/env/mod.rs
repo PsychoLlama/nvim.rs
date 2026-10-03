@@ -25,6 +25,8 @@ pub use dirs::{
     home_replace, home_replace_save, vim_env_iter, vim_env_iter_rev, vim_get_prefix_from_exepath,
     vim_getenv,
 };
+pub(crate) use dirs::{home_replace_in, vim_getenv_owned};
+pub(crate) use expand::expand_env_save_opt_of;
 pub use expand::{
     expand_env, expand_env_esc, expand_env_into, expand_env_save, expand_env_save_opt,
 };

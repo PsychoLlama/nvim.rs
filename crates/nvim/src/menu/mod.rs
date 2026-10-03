@@ -655,16 +655,6 @@ pub(crate) fn is_hidden(name: &CStr) -> bool {
     bytes.first() == Some(&MNU_HIDDEN_CHAR) || (is_popup(name) && bytes.len() > 5)
 }
 
-/// [`is_separator`] for the callers outside this module, which hold a node's
-/// raw `dname` or a completion candidate.
-///
-/// # Safety
-/// `name` must name a NUL-terminated string.
-pub(crate) unsafe fn menu_is_separator(name: *const c_char) -> bool {
-    // SAFETY: the caller's obligation.
-    is_separator(unsafe { CStr::from_ptr(name) })
-}
-
 // ---------------------------------------------------------------------------
 // The mode the editor is in
 // ---------------------------------------------------------------------------

@@ -6,54 +6,67 @@
 //! [`set_cmd_context`] / [`expand_cmdline`] are the two entry points over
 //! both.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cmdexpand::WildOpts;
+use crate::ascii::ascii_isspace;
+use crate::autocmd::set_context_in_autocmd;
 use crate::cstr;
-use crate::ex_docmd::is_user_cmd;
+use crate::eval::set_context_for_expression;
+use crate::ex_docmd::{excmd_get_argt, is_user_cmd, skip_cmd_arg_at, skip_range};
+use crate::getchar::beep_flush;
+use crate::highlight_group::set_context_in_highlight_cmd;
 use crate::keycodes::Ctrl_V;
-use crate::os::cshim::strchr;
-use crate::strings::has_char;
-use crate::strings::vim_strchr;
-use crate::types::CmdIdx;
-use crate::types::{ExArgt, ExpandContext, NUL, OptionSetFlags};
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::ptr;
+use crate::mapping::set_context_in_map_cmd;
+use crate::menu::set_context_in_menu_cmd;
+use crate::option::get_findfunc;
+use crate::option::set_context_in_set_cmd;
+use crate::option::vars::{p_wic, wop_flags};
+use crate::options::kOptWopFlagTagfile;
+use crate::profile::set_context_in_profile_cmd;
+use crate::runtime::set_context_in_runtime_cmd;
+use crate::sign::set_context_in_sign_cmd;
+use crate::syntax::{set_context_in_echohl_cmd, set_context_in_syntax_cmd};
+use crate::types::{CmdAddr, CmdIdx, ExArg, ExArgt, ExpandContext, OptionSetFlags, TAB};
+use crate::usercmd::{set_context_in_user_cmd, set_context_in_user_cmdarg};
+use crate::winlayer::Cc;
+use core::ffi::{CStr, c_int, c_uint};
 
 /// Set the completion context in `expand` for command `cmd` with index `cmdidx`.
 ///
-/// The argument to the command is `arg` and the argument flags are `argt`.
-/// For user-defined commands and for environment variables, `context` carries
-/// the completion type.
+/// The argument to the command starts at `arg` and the argument flags are
+/// `argt`. For user-defined commands and for environment variables, `context`
+/// carries the completion type.
 ///
-/// Returns a pointer to the next command, or NULL if there is no next command.
-///
-/// # Safety
-///
-/// `cmd` must point at a NUL-terminated string. `cmdidx` must be an
-/// initialized `CmdIdx` whose pointer fields point at live data for the call.
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `arg` must point at a NUL-terminated string. `context` must be an
-/// initialized `ExpandContext` whose pointer fields point at live data for
-/// the call.
-pub(crate) unsafe fn set_context_by_cmdname(
-    cmd: *const c_char,
+/// Returns where the next command starts, or `None` when there is none.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn set_context_by_cmdname(
+    text: &CStr,
+    cmd: usize,
     cmdidx: CmdIdx,
-    expand: *mut Expand,
-    mut arg: *const c_char,
+    expand: &mut Expand,
+    arg: usize,
     argt: ExArgt,
     context: ExpandContext,
     forceit: bool,
-) -> *const c_char {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let mut expand = unsafe { Xp::new(expand) };
+) -> Option<usize> {
+    let t = text.to_bytes();
+    let cmd_name = cstr::suffix(text, cmd);
+    // Many commands complete their whole argument in one context.
+    let whole_argument = |expand: &mut Expand, context| {
+        expand.context = context;
+        expand.pattern = arg;
+    };
+    // A command that takes several names completes only the one the cursor
+    // is in, the last.
+    let last_word = |from: usize| match t[from..].iter().rposition(|&c| c == b' ') {
+        Some(space) => from + space + 1,
+        None => from,
+    };
     match cmdidx {
         CmdIdx::find | CmdIdx::sfind | CmdIdx::tabfind => {
-            if expand.xp_context == ExpandContext::Files {
-                expand.xp_context = if !get_findfunc().is_empty() {
+            if expand.context == ExpandContext::Files {
+                expand.context = if !get_findfunc().is_empty() {
                     ExpandContext::Findfunc
                 } else {
                     ExpandContext::FilesInPath
@@ -66,14 +79,11 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::lchdir
         | CmdIdx::tcd
         | CmdIdx::tchdir => {
-            if expand.xp_context == ExpandContext::Files {
-                expand.xp_context = ExpandContext::DirsInCdpath;
+            if expand.context == ExpandContext::Files {
+                expand.context = ExpandContext::DirsInCdpath;
             }
         }
-        CmdIdx::help => {
-            expand.xp_context = ExpandContext::Help;
-            expand.xp_pattern = arg as *mut c_char;
-        }
+        CmdIdx::help => whole_argument(expand, ExpandContext::Help),
 
         // Command modifiers: return the argument.  Also for commands with
         // an argument that is a command.
@@ -112,33 +122,30 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::verbose
         | CmdIdx::vertical
         | CmdIdx::windo => {
-            return arg;
+            return Some(arg);
         }
 
-        CmdIdx::filter => return unsafe { set_context_in_filter_cmd(expand.raw(), arg) },
+        CmdIdx::filter => return set_context_in_filter_cmd(expand, text, arg),
 
-        CmdIdx::r#match => return unsafe { set_context_in_match_cmd(expand.raw(), arg) },
+        CmdIdx::r#match => return set_context_in_match_cmd(expand, text, arg),
 
         // All completion for the +cmdline_compl feature goes here.
-        CmdIdx::command => return unsafe { set_context_in_user_cmd(expand.raw(), arg) },
+        CmdIdx::command => return set_context_in_user_cmd(expand, arg),
 
-        CmdIdx::delcommand => {
-            expand.xp_context = ExpandContext::UserCommands;
-            expand.xp_pattern = arg as *mut c_char;
-        }
+        CmdIdx::delcommand => whole_argument(expand, ExpandContext::UserCommands),
 
         CmdIdx::global | CmdIdx::vglobal => {
-            let nextcmd = unsafe { find_cmd_after_global_cmd(arg) };
-            if nextcmd.is_null() && may_expand_pattern.get() {
-                unsafe { set_context_with_pattern(expand.raw()) };
+            let nextcmd = find_cmd_after_global_cmd(text, arg);
+            if nextcmd.is_none() && may_expand_pattern.get() {
+                set_context_with_pattern(expand);
             }
             return nextcmd;
         }
 
         CmdIdx::and | CmdIdx::substitute => {
-            let nextcmd = unsafe { find_cmd_after_substitute_cmd(arg) };
-            if nextcmd.is_null() && may_expand_pattern.get() {
-                unsafe { set_context_with_pattern(expand.raw()) };
+            let nextcmd = find_cmd_after_substitute_cmd(text, arg);
+            if nextcmd.is_none() && may_expand_pattern.get() {
+                set_context_with_pattern(expand);
             }
             return nextcmd;
         }
@@ -152,26 +159,17 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::djump
         | CmdIdx::isplit
         | CmdIdx::dsplit => {
-            return unsafe { find_cmd_after_isearch_cmd(expand.raw(), arg) };
+            return find_cmd_after_isearch_cmd(expand, text, arg);
         }
 
-        CmdIdx::autocmd => {
-            return unsafe { set_context_in_autocmd(expand.raw(), arg as *mut c_char, false) };
-        }
-
+        CmdIdx::autocmd => return set_context_in_autocmd(expand, arg, false),
         CmdIdx::doautocmd | CmdIdx::doautoall => {
-            return unsafe { set_context_in_autocmd(expand.raw(), arg as *mut c_char, true) };
+            return set_context_in_autocmd(expand, arg, true);
         }
 
-        CmdIdx::set => unsafe {
-            set_context_in_set_cmd(expand.raw(), arg as *mut c_char, OptionSetFlags::NONE)
-        },
-        CmdIdx::setglobal => unsafe {
-            set_context_in_set_cmd(expand.raw(), arg as *mut c_char, OptionSetFlags::GLOBAL)
-        },
-        CmdIdx::setlocal => unsafe {
-            set_context_in_set_cmd(expand.raw(), arg as *mut c_char, OptionSetFlags::LOCAL)
-        },
+        CmdIdx::set => set_context_in_set_cmd(expand, arg, OptionSetFlags::NONE),
+        CmdIdx::setglobal => set_context_in_set_cmd(expand, arg, OptionSetFlags::GLOBAL),
+        CmdIdx::setlocal => set_context_in_set_cmd(expand, arg, OptionSetFlags::LOCAL),
 
         CmdIdx::tag
         | CmdIdx::stag
@@ -183,20 +181,17 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::tjump
         | CmdIdx::stjump
         | CmdIdx::ptjump => {
-            expand.xp_context = if wop_flags.get() & kOptWopFlagTagfile as c_uint != 0 {
+            let context = if wop_flags.get() & kOptWopFlagTagfile as c_uint != 0 {
                 ExpandContext::TagsListFiles
             } else {
                 ExpandContext::Tags
             };
-            expand.xp_pattern = arg as *mut c_char;
+            whole_argument(expand, context);
         }
 
-        CmdIdx::augroup => {
-            expand.xp_context = ExpandContext::Augroup;
-            expand.xp_pattern = arg as *mut c_char;
-        }
+        CmdIdx::augroup => whole_argument(expand, ExpandContext::Augroup),
 
-        CmdIdx::syntax => unsafe { set_context_in_syntax_cmd(&mut expand, arg) },
+        CmdIdx::syntax => set_context_in_syntax_cmd(expand, arg),
 
         CmdIdx::r#const
         | CmdIdx::r#let
@@ -216,50 +211,34 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::cgetexpr
         | CmdIdx::lexpr
         | CmdIdx::laddexpr
-        | CmdIdx::lgetexpr => {
-            unsafe { set_context_for_expression(expand.raw(), arg as *mut c_char, cmdidx) };
-        }
+        | CmdIdx::lgetexpr => set_context_for_expression(expand, arg, cmdidx),
 
-        CmdIdx::unlet => return unsafe { set_context_in_unlet_cmd(expand.raw(), arg) },
+        CmdIdx::unlet => return set_context_in_unlet_cmd(expand, text, arg),
 
-        CmdIdx::function | CmdIdx::delfunction => {
-            expand.xp_context = ExpandContext::UserFunc;
-            expand.xp_pattern = arg as *mut c_char;
-        }
+        CmdIdx::function | CmdIdx::delfunction => whole_argument(expand, ExpandContext::UserFunc),
 
-        CmdIdx::echohl => set_context_in_echohl_cmd(&mut expand, arg),
-        CmdIdx::highlight => unsafe { set_context_in_highlight_cmd(expand.raw(), arg) },
-        CmdIdx::sign => unsafe { set_context_in_sign_cmd(expand.raw(), arg as *mut c_char) },
+        CmdIdx::echohl => set_context_in_echohl_cmd(expand, arg),
+        CmdIdx::highlight => set_context_in_highlight_cmd(expand, arg),
+        CmdIdx::sign => set_context_in_sign_cmd(expand, arg),
 
         CmdIdx::bdelete | CmdIdx::bwipeout | CmdIdx::bunload => {
             // Only the argument the cursor is in is completed.  Upstream
             // falls through into the buffer-name arm below.
-            loop {
-                expand.xp_pattern = unsafe { strchr(arg, ' ' as c_int) };
-                if expand.xp_pattern.is_null() {
-                    break;
-                }
-                arg = unsafe { expand.xp_pattern.add(1) };
-            }
-            expand.xp_context = ExpandContext::Buffers;
-            expand.xp_pattern = arg as *mut c_char;
+            expand.context = ExpandContext::Buffers;
+            expand.pattern = last_word(arg);
         }
         CmdIdx::buffer | CmdIdx::sbuffer | CmdIdx::pbuffer | CmdIdx::checktime => {
-            expand.xp_context = ExpandContext::Buffers;
-            expand.xp_pattern = arg as *mut c_char;
+            whole_argument(expand, ExpandContext::Buffers);
         }
 
         CmdIdx::diffget | CmdIdx::diffput => {
             // If current buffer is in diff mode, complete buffer names
             // which are in diff mode, and different than current buffer.
-            expand.xp_context = ExpandContext::DiffBuffers;
-            expand.xp_pattern = arg as *mut c_char;
+            whole_argument(expand, ExpandContext::DiffBuffers);
         }
 
         CmdIdx::USER | CmdIdx::USER_BUF => {
-            return unsafe {
-                set_context_in_user_cmdarg(cmd, arg, argt, context, expand.raw(), forceit)
-            };
+            return set_context_in_user_cmdarg(expand, cmd_name, arg, argt, context, forceit);
         }
 
         CmdIdx::map
@@ -280,17 +259,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::snoremap
         | CmdIdx::xmap
         | CmdIdx::xnoremap => {
-            return unsafe {
-                set_context_in_map_cmd(
-                    expand.raw(),
-                    cmd as *mut c_char,
-                    arg as *mut c_char,
-                    forceit,
-                    false,
-                    false,
-                    cmdidx,
-                )
-            };
+            return set_context_in_map_cmd(expand, cmd_name, arg, forceit, false, false, cmdidx);
         }
         CmdIdx::unmap
         | CmdIdx::nunmap
@@ -301,17 +270,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::lunmap
         | CmdIdx::sunmap
         | CmdIdx::xunmap => {
-            return unsafe {
-                set_context_in_map_cmd(
-                    expand.raw(),
-                    cmd as *mut c_char,
-                    arg as *mut c_char,
-                    forceit,
-                    false,
-                    true,
-                    cmdidx,
-                )
-            };
+            return set_context_in_map_cmd(expand, cmd_name, arg, forceit, false, true, cmdidx);
         }
         CmdIdx::mapclear
         | CmdIdx::nmapclear
@@ -321,10 +280,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::cmapclear
         | CmdIdx::lmapclear
         | CmdIdx::smapclear
-        | CmdIdx::xmapclear => {
-            expand.xp_context = ExpandContext::Mapclear;
-            expand.xp_pattern = arg as *mut c_char;
-        }
+        | CmdIdx::xmapclear => whole_argument(expand, ExpandContext::Mapclear),
 
         CmdIdx::abbreviate
         | CmdIdx::noreabbrev
@@ -332,30 +288,10 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::cnoreabbrev
         | CmdIdx::iabbrev
         | CmdIdx::inoreabbrev => {
-            return unsafe {
-                set_context_in_map_cmd(
-                    expand.raw(),
-                    cmd as *mut c_char,
-                    arg as *mut c_char,
-                    forceit,
-                    true,
-                    false,
-                    cmdidx,
-                )
-            };
+            return set_context_in_map_cmd(expand, cmd_name, arg, forceit, true, false, cmdidx);
         }
         CmdIdx::unabbreviate | CmdIdx::cunabbrev | CmdIdx::iunabbrev => {
-            return unsafe {
-                set_context_in_map_cmd(
-                    expand.raw(),
-                    cmd as *mut c_char,
-                    arg as *mut c_char,
-                    forceit,
-                    true,
-                    true,
-                    cmdidx,
-                )
-            };
+            return set_context_in_map_cmd(expand, cmd_name, arg, forceit, true, true, cmdidx);
         }
 
         CmdIdx::menu
@@ -386,83 +322,47 @@ pub(crate) unsafe fn set_context_by_cmdname(
         | CmdIdx::tunmenu
         | CmdIdx::popup
         | CmdIdx::emenu => {
-            return unsafe {
-                set_context_in_menu_cmd(expand.raw(), cmd, arg as *mut c_char, forceit)
-            };
+            return set_context_in_menu_cmd(expand, cmd_name, arg, forceit);
         }
 
-        CmdIdx::colorscheme => {
-            expand.xp_context = ExpandContext::Colors;
-            expand.xp_pattern = arg as *mut c_char;
-        }
-        CmdIdx::compiler => {
-            expand.xp_context = ExpandContext::Compiler;
-            expand.xp_pattern = arg as *mut c_char;
-        }
-        CmdIdx::ownsyntax => {
-            expand.xp_context = ExpandContext::Ownsyntax;
-            expand.xp_pattern = arg as *mut c_char;
-        }
-        CmdIdx::setfiletype => {
-            expand.xp_context = ExpandContext::Filetype;
-            expand.xp_pattern = arg as *mut c_char;
-        }
-        CmdIdx::packadd => {
-            expand.xp_context = ExpandContext::Packadd;
-            expand.xp_pattern = arg as *mut c_char;
-        }
+        CmdIdx::colorscheme => whole_argument(expand, ExpandContext::Colors),
+        CmdIdx::compiler => whole_argument(expand, ExpandContext::Compiler),
+        CmdIdx::ownsyntax => whole_argument(expand, ExpandContext::Ownsyntax),
+        CmdIdx::setfiletype => whole_argument(expand, ExpandContext::Filetype),
+        CmdIdx::packadd => whole_argument(expand, ExpandContext::Packadd),
 
-        CmdIdx::runtime => unsafe { set_context_in_runtime_cmd(expand.raw(), arg) },
+        CmdIdx::runtime => set_context_in_runtime_cmd(expand, arg),
 
-        CmdIdx::language => return unsafe { set_context_in_lang_cmd(expand.raw(), arg) },
+        CmdIdx::language => return set_context_in_lang_cmd(expand, text, arg),
 
-        CmdIdx::profile => unsafe { set_context_in_profile_cmd(expand.raw(), arg) },
+        CmdIdx::profile => set_context_in_profile_cmd(expand, arg),
 
-        CmdIdx::checkhealth => expand.xp_context = ExpandContext::Checkhealth,
-        CmdIdx::lsp => expand.xp_context = ExpandContext::Lsp,
+        CmdIdx::checkhealth => expand.context = ExpandContext::Checkhealth,
+        CmdIdx::lsp => expand.context = ExpandContext::Lsp,
 
-        CmdIdx::retab => {
-            expand.xp_context = ExpandContext::Retab;
-            expand.xp_pattern = arg as *mut c_char;
-        }
-        CmdIdx::messages => {
-            expand.xp_context = ExpandContext::Messages;
-            expand.xp_pattern = arg as *mut c_char;
-        }
-        CmdIdx::history => {
-            expand.xp_context = ExpandContext::History;
-            expand.xp_pattern = arg as *mut c_char;
-        }
-        CmdIdx::syntime => {
-            expand.xp_context = ExpandContext::Syntime;
-            expand.xp_pattern = arg as *mut c_char;
-        }
+        CmdIdx::retab => whole_argument(expand, ExpandContext::Retab),
+        CmdIdx::messages => whole_argument(expand, ExpandContext::Messages),
+        CmdIdx::history => whole_argument(expand, ExpandContext::History),
+        CmdIdx::syntime => whole_argument(expand, ExpandContext::Syntime),
 
         CmdIdx::argdelete => {
-            loop {
-                expand.xp_pattern = unsafe { vim_strchr(arg, ' ' as c_int) };
-                if expand.xp_pattern.is_null() {
-                    break;
-                }
-                arg = unsafe { expand.xp_pattern.add(1) };
-            }
-            expand.xp_context = ExpandContext::Arglist;
-            expand.xp_pattern = arg as *mut c_char;
+            expand.context = ExpandContext::Arglist;
+            expand.pattern = last_word(arg);
         }
 
         CmdIdx::breakadd | CmdIdx::profdel | CmdIdx::breakdel => {
-            return unsafe { set_context_in_breakadd_cmd(expand.raw(), arg, cmdidx) };
+            return set_context_in_breakadd_cmd(expand, text, arg, cmdidx);
         }
 
-        CmdIdx::scriptnames => return unsafe { set_context_in_scriptnames_cmd(expand.raw(), arg) },
+        CmdIdx::scriptnames => return set_context_in_scriptnames_cmd(expand, text, arg),
 
-        CmdIdx::filetype => return unsafe { set_context_in_filetype_cmd(expand.raw(), arg) },
+        CmdIdx::filetype => return set_context_in_filetype_cmd(expand, text, arg),
 
-        CmdIdx::lua | CmdIdx::equal => expand.xp_context = ExpandContext::Lua,
+        CmdIdx::lua | CmdIdx::equal => expand.context = ExpandContext::Lua,
 
         _ => {}
     }
-    ptr::null()
+    None
 }
 
 /// Walk one command's arguments and set the context for the one the cursor is
@@ -474,19 +374,10 @@ pub(crate) unsafe fn set_context_by_cmdname(
 /// perfectly compatible with each other, but then the command line syntax
 /// probably won't change that much -- webb.
 ///
-/// `buff` is the command string.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `buff` must point at a NUL-terminated string.
-pub(crate) unsafe fn set_one_cmd_context(
-    expand: *mut Expand,
-    buff: *const c_char,
-) -> *const c_char {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let mut expand = unsafe { Xp::new(expand) };
+/// The command starts at `buff` in `text`. Returns where the next command
+/// starts, when there is one before the cursor.
+pub(crate) fn set_one_cmd_context(expand: &mut Expand, text: &CStr, buff: usize) -> Option<usize> {
+    let t = text.to_bytes();
     let mut ea = ExArg {
         cmdidx: CmdIdx::append,
         addr_type: CmdAddr::Lines,
@@ -496,62 +387,50 @@ pub(crate) unsafe fn set_one_cmd_context(
     let mut forceit = false;
     let mut usefilter = false; // Filter instead of file name.
 
-    unsafe { expand_init(expand.raw()) };
-    expand.xp_pattern = buff as *mut c_char;
-    expand.xp_line = buff as *mut c_char;
-    expand.xp_context = ExpandContext::Commands; // Default until we get past command
+    expand.reset_keeping_line();
+    expand.context = ExpandContext::Commands; // Default until we get past command
     ea.argt = ExArgt::NONE;
 
     // 1. skip comment lines and leading space, colons or bars
-    let mut cmd: *const c_char = buff;
-    while has_char(c" \t:|", unsafe { *cmd } as u8 as c_int) {
-        cmd = unsafe { cmd.add(1) };
+    let mut cmd = buff;
+    while is_one_of(c" \t:|", t, cmd) {
+        cmd += 1;
     }
-    expand.xp_pattern = cmd as *mut c_char;
+    expand.pattern = cmd;
 
-    if unsafe { *cmd } as c_int == NUL {
-        return ptr::null();
+    if byte(t, cmd) == 0 {
+        return None;
     }
-    if unsafe { *cmd } as c_int == '"' as c_int {
+    if byte(t, cmd) == b'"' {
         // Ignore comment lines.
-        expand.xp_context = ExpandContext::Nothing;
-        return ptr::null();
+        expand.context = ExpandContext::Nothing;
+        return None;
     }
 
     // 3. skip over a range specifier of the form: addr [,addr] [;addr] ..
-    // `field_ptr`, not `&raw mut expand.xp_context`: an address taken off a
-    // `Deref` dies at the next field write, and `skip_range` writes through
-    // this one while the walk below keeps reading `expand`.
-    let context_field = expand.field_ptr(core::mem::offset_of!(Expand, xp_context));
-    // SAFETY: `cmd` is inside the command line and `context` is the live
-    // context's own field.
-    // SAFETY: `cmd` is NUL-terminated and `context_field` is the caller's.
-    cmd = unsafe { cmd.add(skip_range(cstr::bytes_at(cmd), context_field)) };
-    expand.xp_pattern = cmd as *mut c_char;
-    if unsafe { *cmd } as c_int == NUL {
-        return ptr::null();
+    cmd += skip_range(&t[cmd..], Some(&mut expand.context));
+    expand.pattern = cmd;
+    if byte(t, cmd) == 0 {
+        return None;
     }
-    if unsafe { *cmd } as c_int == '"' as c_int {
-        expand.xp_context = ExpandContext::Nothing;
-        return ptr::null();
+    if byte(t, cmd) == b'"' {
+        expand.context = ExpandContext::Nothing;
+        return None;
     }
 
-    if unsafe { *cmd } as c_int == '|' as c_int || unsafe { *cmd } as c_int == '\n' as c_int {
-        return unsafe { cmd.add(1) }; // There's another command
+    if byte(t, cmd) == b'|' || byte(t, cmd) == b'\n' {
+        return Some(cmd + 1); // There's another command
     }
 
     // Get the command index.
-    let mut p = unsafe { set_cmd_index(cmd, &mut ea, expand.raw(), &raw mut context) };
-    if p.is_null() {
-        return ptr::null();
-    }
+    let mut p = set_cmd_index(text, cmd, &mut ea, expand, &mut context)?;
 
-    expand.xp_context = ExpandContext::Nothing; // Default now that we're past command
+    expand.context = ExpandContext::Nothing; // Default now that we're past command
 
-    if unsafe { *p } as c_int == '!' as c_int {
+    if byte(t, p) == b'!' {
         // Forced commands.
         forceit = true;
-        p = unsafe { p.add(1) };
+        p += 1;
     }
 
     // 6. parse arguments
@@ -559,70 +438,70 @@ pub(crate) unsafe fn set_one_cmd_context(
         ea.argt = excmd_get_argt(ea.cmdidx);
     }
 
-    let mut arg = unsafe { skipwhite(p) };
+    let mut arg = skipwhite(t, p);
 
     // Does command allow "++argopt" argument?
     if ea.argt.has(ExArgt::ARGOPT) {
-        while unsafe { *arg } as c_int != NUL && unsafe { cstr::starts_with(arg, b"++") } {
-            p = unsafe { arg.add(2) };
-            while unsafe { *p } != 0 && !ascii_isspace(unsafe { *p } as c_int) {
-                p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        while byte(t, arg) != 0 && t[arg..].starts_with(b"++") {
+            p = arg + 2;
+            while byte(t, p) != 0 && !ascii_isspace(c_int::from(byte(t, p))) {
+                p += char_len(t, p);
             }
 
             // Still touching the command after "++"?
-            if unsafe { *p } as c_int == NUL && ea.argt.has(ExArgt::ARGOPT) {
-                return unsafe { set_context_in_argopt(expand.raw(), arg.add(2)) };
+            if byte(t, p) == 0 && ea.argt.has(ExArgt::ARGOPT) {
+                return set_context_in_argopt(expand, text, arg + 2);
             }
 
-            arg = unsafe { skipwhite(p) };
+            arg = skipwhite(t, p);
         }
     }
 
     if ea.cmdidx == CmdIdx::write || ea.cmdidx == CmdIdx::update {
-        if unsafe { *arg } as c_int == '>' as c_int {
+        if byte(t, arg) == b'>' {
             // Append.
-            arg = unsafe { arg.add(1) };
-            if unsafe { *arg } as c_int == '>' as c_int {
-                arg = unsafe { arg.add(1) };
+            arg += 1;
+            if byte(t, arg) == b'>' {
+                arg += 1;
             }
-            arg = unsafe { skipwhite(arg) };
-        } else if unsafe { *arg } as c_int == '!' as c_int && ea.cmdidx == CmdIdx::write {
+            arg = skipwhite(t, arg);
+        } else if byte(t, arg) == b'!' && ea.cmdidx == CmdIdx::write {
             // :w !filter
-            arg = unsafe { arg.add(1) };
+            arg += 1;
             usefilter = true;
         }
     }
 
     if ea.cmdidx == CmdIdx::read {
         usefilter = forceit; // :r! filter if forced
-        if unsafe { *arg } as c_int == '!' as c_int {
+        if byte(t, arg) == b'!' {
             // :r !filter
-            arg = unsafe { arg.add(1) };
+            arg += 1;
             usefilter = true;
         }
     }
 
     if ea.cmdidx == CmdIdx::lshift || ea.cmdidx == CmdIdx::rshift {
         // Allow any number of '>' or '<'.
-        while unsafe { *arg } as c_int == unsafe { *cmd } as c_int {
-            arg = unsafe { arg.add(1) };
+        while byte(t, arg) == byte(t, cmd) {
+            arg += 1;
         }
-        arg = unsafe { skipwhite(arg) };
+        arg = skipwhite(t, arg);
     }
 
     // Does command allow "+command"?
-    if ea.argt.has(ExArgt::CMDARG) && !usefilter && unsafe { *arg } as c_int == '+' as c_int {
+    if ea.argt.has(ExArgt::CMDARG) && !usefilter && byte(t, arg) == b'+' {
         // Check if we're in the +command.
-        p = unsafe { arg.add(1) };
-        arg = unsafe { skip_cmd_arg(arg as *mut c_char, false) };
+        p = arg + 1;
+        arg = skip_cmd_arg_at(t, arg);
 
         // Still touching the command after '+'?
-        if unsafe { *arg } as c_int == NUL {
-            return p;
+        if byte(t, arg) == 0 {
+            return Some(p);
         }
 
         // Skip space(s) after +command to get to the real argument.
-        arg = unsafe { skipwhite(arg) };
+        arg = skipwhite(t, arg);
     }
 
     // Check for '|' to separate commands and '"' to start comments.
@@ -630,150 +509,104 @@ pub(crate) unsafe fn set_one_cmd_context(
     if ea.argt.has(ExArgt::TRLBAR) && !usefilter {
         p = arg;
         // ":redir @" is not the start of a comment.
-        if ea.cmdidx == CmdIdx::redir
-            && unsafe { *p } as c_int == '@' as c_int
-            && unsafe { *p.add(1) } as c_int == '"' as c_int
-        {
-            p = unsafe { p.add(2) };
+        if ea.cmdidx == CmdIdx::redir && byte(t, p) == b'@' && byte(t, p + 1) == b'"' {
+            p += 2;
         }
-        while unsafe { *p } != 0 {
-            if unsafe { *p } as c_int == Ctrl_V {
-                if unsafe { *p.add(1) } as c_int != NUL {
-                    p = unsafe { p.add(1) };
+        while byte(t, p) != 0 {
+            if c_int::from(byte(t, p)) == Ctrl_V {
+                if byte(t, p + 1) != 0 {
+                    p += 1;
                 }
-            } else if ((unsafe { *p } as c_int == '"' as c_int && !ea.argt.has(ExArgt::NOTRLCOM))
-                || unsafe { *p } as c_int == '|' as c_int
-                || unsafe { *p } as c_int == '\n' as c_int)
-                && unsafe { *p.sub(1) } as c_int != '\\' as c_int
+            } else if ((byte(t, p) == b'"' && !ea.argt.has(ExArgt::NOTRLCOM))
+                || byte(t, p) == b'|'
+                || byte(t, p) == b'\n')
+                && byte(t, p - 1) != b'\\'
             {
-                if unsafe { *p } as c_int == '|' as c_int || unsafe { *p } as c_int == '\n' as c_int
-                {
-                    return unsafe { p.add(1) };
+                if byte(t, p) == b'|' || byte(t, p) == b'\n' {
+                    return Some(p + 1);
                 }
-                return ptr::null(); // It's a comment
+                return None; // It's a comment
             }
-            p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+            p += char_len(t, p);
         }
     }
 
-    if !ea.argt.has(ExArgt::EXTRA)
-        && unsafe { *arg } as c_int != NUL
-        && !has_char(c"|\"", unsafe { *arg } as c_int)
-    {
+    if !ea.argt.has(ExArgt::EXTRA) && byte(t, arg) != 0 && !is_one_of(c"|\"", t, arg) {
         // No arguments allowed but there is something.
-        return ptr::null();
+        return None;
     }
 
     // Find start of last argument (argument just before cursor).
     p = buff;
-    expand.xp_pattern = p as *mut c_char;
-    let len = unsafe { cstr::bytes_at(buff) }.len();
-    while unsafe { *p } != 0 && p < unsafe { buff.add(len) } {
-        if unsafe { *p } as c_int == ' ' as c_int || unsafe { *p } as c_int == TAB {
+    expand.pattern = p;
+    while byte(t, p) != 0 {
+        if byte(t, p) == b' ' || c_int::from(byte(t, p)) == TAB {
             // Argument starts after a space.
-            p = unsafe { p.add(1) };
-            expand.xp_pattern = p as *mut c_char;
+            p += 1;
+            expand.pattern = p;
         } else {
-            if unsafe { *p } as c_int == '\\' as c_int && unsafe { *p.add(1) } as c_int != NUL {
-                p = unsafe { p.add(1) }; // Skip over escaped character.
+            if byte(t, p) == b'\\' && byte(t, p + 1) != 0 {
+                p += 1; // Skip over escaped character.
             }
-            p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+            p += char_len(t, p);
         }
     }
 
     if ea.argt.has(ExArgt::XFILE) {
-        unsafe {
-            set_context_for_wildcard_arg(
-                Some(&mut ea),
-                arg,
-                usefilter,
-                expand.raw(),
-                &raw mut context,
-            )
-        };
+        set_context_for_wildcard_arg(Some(ea.cmdidx), text, arg, usefilter, expand, &mut context);
     }
 
     // Switch on command name.
-    unsafe { set_context_by_cmdname(cmd, ea.cmdidx, expand.raw(), arg, ea.argt, context, forceit) }
+    set_context_by_cmdname(text, cmd, ea.cmdidx, expand, arg, ea.argt, context, forceit)
 }
 
-/// Set the completion context in `expand` for command line `str`.
+/// Set the completion context in `expand` for the command line `line`, with
+/// the cursor at `col`; `use_ccline` asks for the command line being edited
+/// to be consulted for what kind of line it is.
 ///
-/// `len` is the length of the command line excluding the NUL, `col` the cursor
-/// position, and `use_ccline` asks for the command line info to be consulted.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `str` must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call.
-pub unsafe fn set_cmd_context(
-    expand: *mut Expand,
-    str: *mut c_char,
-    len: c_int,
-    col: c_int,
-    use_ccline: bool,
-) {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let mut expand = unsafe { Xp::new(expand) };
+/// `expand` keeps a copy of `line` as [`Expand::line`]: while the context is
+/// worked out the copy stops at the cursor, as upstream's NUL poked into the
+/// caller's string did, and the rest is put back once it is.
+pub fn set_cmd_context(expand: &mut Expand, line: &[u8], col: c_int, use_ccline: bool) {
     let ccline = Cc::current();
-    let mut old_char = NUL as c_char;
+    let cut = usize::try_from(col).unwrap_or(0).min(line.len());
+    expand.line = owned(&line[..cut]);
+    // The text the walk reads; the context's own copy is what the parsers
+    // of other modules read, and the two are the same bytes.
+    let snapshot = expand.line.clone();
+    let text = snapshot.as_cstr();
 
-    // Avoid a UMR warning from Purify, only save the character if it has
-    // been written before.
-    if col < len {
-        old_char = unsafe { *str.offset(col as isize) };
-    }
-    unsafe { *str.offset(col as isize) = NUL as c_char };
-
-    if use_ccline && ccline.cmdfirstc == '=' as c_int {
+    if use_ccline && ccline.cmdfirstc == c_int::from(b'=') {
         // Pass CmdIdx::SIZE because there is no real command.
-        unsafe { set_context_for_expression(expand.raw(), str, CmdIdx::SIZE) };
+        set_context_for_expression(expand, 0, CmdIdx::SIZE);
     } else if use_ccline && ccline.input_fn != 0 {
-        expand.xp_context = ccline.xp_context;
-        expand.xp_pattern = ccline.text();
-        expand.xp_arg = ccline.xp_arg;
-        if expand.xp_context == ExpandContext::ShellCmdLine {
-            let mut context = expand.xp_context;
-            unsafe {
-                set_context_for_wildcard_arg(
-                    None,
-                    expand.xp_pattern,
-                    false,
-                    expand.raw(),
-                    &raw mut context,
-                )
-            };
+        expand.context = ccline.xp_context;
+        expand.pattern = 0;
+        expand.arg = ccline.xp_arg.clone();
+        if expand.context == ExpandContext::ShellCmdLine {
+            let mut context = expand.context;
+            set_context_for_wildcard_arg(None, text, 0, false, expand, &mut context);
         }
     } else {
-        let mut nextcomm: *const c_char = str;
-        while !nextcomm.is_null() {
-            nextcomm = unsafe { set_one_cmd_context(expand.raw(), nextcomm) };
+        let mut nextcomm = Some(0);
+        while let Some(at) = nextcomm {
+            nextcomm = set_one_cmd_context(expand, text, at);
         }
     }
 
-    // Store the string here so that call_user_expand_func() can get to
-    // them easily.
-    expand.xp_line = str;
-    expand.xp_col = col;
-
-    unsafe { *str.offset(col as isize) = old_char };
+    // Store the whole line so that call_user_expand_func() can get to it
+    // easily.
+    expand.line.push_bytes(&line[cut..]);
+    expand.col = col;
 }
 
-/// Expand the command line `str` from context `expand`, which must have been set
-/// by [`set_cmd_context`].
-///
-/// `expand.xp_pattern` points into `str`, to where the text that is to be
-/// expanded starts.  `matchcount` and `matches` return the answer.
-///
 /// What an expansion attempt came to.
 ///
 /// Upstream answers through the same `int` as an `xp_context` and reuses
 /// three of its names, one of which (`EXPAND_OK`) is not a context at all.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Expanded {
-    /// The matches are in the out-parameters.
+    /// The matches came back.
     Ok,
     /// Nothing to expand — the caller may insert the key that triggered the
     /// expansion literally.
@@ -782,49 +615,30 @@ pub enum Expanded {
     Unsuccessful,
 }
 
-/// Expand the command line `str` from context `expand`, which must have been set
-/// by [`set_cmd_context`].
-///
-/// `expand.xp_pattern` points into `str`, to where the text that is to be
-/// expanded starts.  `matchcount` and `matches` return the answer.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `str` must point at a NUL-terminated string. `matchcount` must point at a
-/// writable `int` the caller owns. `matches` must point at a writable `*mut
-/// *mut c_char` slot the caller owns for the call.
-pub unsafe fn expand_cmdline(
-    expand: *mut Expand,
-    str: *const c_char,
-    col: c_int,
-    matchcount: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Expanded {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let mut expand = unsafe { Xp::new(expand) };
+/// Expand the line in `expand` with the cursor at `col`, the context having
+/// been set by [`set_cmd_context`]. Answers what the attempt came to and,
+/// for `Expanded::Ok`, the matches.
+pub fn expand_cmdline(expand: &mut Expand, col: c_int) -> (Expanded, Vec<XString>) {
     let mut options = WildOpts::ADD_SLASH | WildOpts::SILENT;
 
-    if expand.xp_context == ExpandContext::Unsuccessful {
+    if expand.context == ExpandContext::Unsuccessful {
         beep_flush();
-        return Expanded::Unsuccessful; // Something illegal on command line
+        return (Expanded::Unsuccessful, Vec::new()); // Something illegal on command line
     }
-    if expand.xp_context == ExpandContext::Nothing {
+    if expand.context == ExpandContext::Nothing {
         // Caller can use the character as a normal char instead.
-        return Expanded::Nothing;
+        return (Expanded::Nothing, Vec::new());
     }
 
     // Add star to file name, or convert to regexp if not expanding files.
-    debug_assert!(unsafe { str.offset(col as isize).offset_from(expand.xp_pattern) } >= 0);
-    unsafe {
-        expand.xp_pattern_len = str.offset(col as isize).offset_from(expand.xp_pattern) as size_t
-    };
-    let file_str = if unsafe { cmdline_fuzzy_completion_supported(expand.raw()) } {
+    let col = usize::try_from(col).unwrap_or(0);
+    debug_assert!(col >= expand.pattern);
+    expand.pattern_len = col.saturating_sub(expand.pattern);
+    let file_str = if cmdline_fuzzy_completion_supported(expand) {
         // If fuzzy matching, don't modify the search string.
-        unsafe { xstrdup(expand.xp_pattern) }
+        owned(expand.pattern_text())
     } else {
-        unsafe { addstar(expand.xp_pattern, expand.xp_pattern_len, expand.xp_context) }
+        addstar(expand.pattern_span(), expand.context)
     };
 
     if p_wic() {
@@ -832,12 +646,6 @@ pub unsafe fn expand_cmdline(
     }
 
     // Find all files that match the description.
-    if unsafe { expand_from_context(expand.raw(), file_str, matches, matchcount, options) }.is_err()
-    {
-        unsafe { *matchcount = 0 };
-        unsafe { *matches = ptr::null_mut() };
-    }
-    unsafe { xfree(file_str as *mut c_void) };
-
-    Expanded::Ok
+    let found = expand_from_context(expand, file_str.as_cstr(), options).unwrap_or_default();
+    (Expanded::Ok, found)
 }

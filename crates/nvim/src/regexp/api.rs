@@ -456,3 +456,45 @@ impl Drop for OwnedProg {
         unsafe { vim_regfree(self.0) };
     }
 }
+
+/// A [`RegMatch`] that owns its program: compiled on the way in, freed when
+/// it goes. For a caller that hands the match structure itself on, as the
+/// completion generators take it.
+pub(crate) struct OwnedMatch(RegMatch);
+
+impl OwnedMatch {
+    /// [`vim_regcomp`] into a match structure. `None` when the pattern does
+    /// not compile.
+    pub(crate) fn compile(expr: &CStr, re_flags: c_int, ignore_case: bool) -> Option<OwnedMatch> {
+        let prog = vim_regcomp(expr, re_flags);
+        (!prog.is_null()).then(|| OwnedMatch(RegMatch::new(prog, ignore_case)))
+    }
+
+    /// A match structure with no program, for a caller that matches some
+    /// other way but has to hand one on.
+    pub(crate) fn none() -> OwnedMatch {
+        OwnedMatch(RegMatch::new(ptr::null_mut(), false))
+    }
+}
+
+impl core::ops::Deref for OwnedMatch {
+    type Target = RegMatch;
+
+    fn deref(&self) -> &RegMatch {
+        &self.0
+    }
+}
+
+impl core::ops::DerefMut for OwnedMatch {
+    fn deref_mut(&mut self) -> &mut RegMatch {
+        &mut self.0
+    }
+}
+
+impl Drop for OwnedMatch {
+    fn drop(&mut self) {
+        // SAFETY: this holder's program -- the one it compiled, or the one an
+        // engine switch put in its place -- or null.
+        unsafe { vim_regfree(self.0.regprog) };
+    }
+}

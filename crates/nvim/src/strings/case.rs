@@ -11,6 +11,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::slice;
 
@@ -136,4 +137,12 @@ pub unsafe fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char {
     }
     unsafe { *res.add(res_index) = 0 };
     res
+}
+
+/// [`strcase_save`] of a string the caller owns: a copy with every character
+/// upper- (`upper`) or lower-cased.
+pub(crate) fn strcase_copy(text: &CStr, upper: bool) -> XString {
+    // SAFETY: a NUL-terminated string; the answer is owned and taken over
+    // once.
+    unsafe { XString::from_raw(strcase_save(text.as_ptr(), upper)) }
 }

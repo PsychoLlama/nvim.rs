@@ -8,12 +8,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
-use core::ffi::{CStr, c_char, c_int};
+use crate::charset::skip;
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{Candidate, ExpandContext, NUL};
+use crate::types::{Candidate, ExpandContext};
 use std::ffi::CString;
 
 /// Does this window's block define any syntax at all?
@@ -52,43 +52,44 @@ pub(crate) fn reset_expand_highlight() {
 }
 
 /// Command-line completion for `:match` and `:echohl`: highlight group names,
-/// plus `None`.
-pub(crate) fn set_context_in_echohl_cmd(expand: &mut Expand, arg: *const c_char) {
-    expand.xp_context = ExpandContext::Highlight;
-    expand.xp_pattern = arg.cast_mut();
+/// plus `None`. The argument starts at `arg` in the completion's line.
+pub(crate) fn set_context_in_echohl_cmd(expand: &mut Expand, arg: usize) {
+    expand.context = ExpandContext::Highlight;
+    expand.pattern = arg;
     include_none.set(1);
 }
 
-/// Command-line completion for `:syntax`.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string.
-pub(crate) unsafe fn set_context_in_syntax_cmd(expand: &mut Expand, arg: *const c_char) {
+/// Command-line completion for `:syntax`, whose argument starts at `arg` in
+/// the completion's line.
+pub(crate) fn set_context_in_syntax_cmd(expand: &mut Expand, arg: usize) {
     // Default: expand subcommands.
-    expand.xp_context = ExpandContext::Syntax;
+    expand.context = ExpandContext::Syntax;
     EXPAND_WHAT.set(ExpandWhat::SubCmd);
-    expand.xp_pattern = arg.cast_mut();
+    expand.pattern = arg;
     include_link.set(0);
     include_default.set(0);
-    if unsafe { *arg } as c_int == NUL {
+
+    let line = expand.line_cstr().to_bytes().to_vec();
+    let at = |i: usize| line.get(i).copied().unwrap_or(0);
+    let skipwhite = |i: usize| i + skip::white(line.get(i..).unwrap_or_default());
+    let skiptowhite = |i: usize| i + skip::to_white(line.get(i..).unwrap_or_default());
+    if at(arg) == 0 {
         return;
     }
 
     // (Part of) the subcommand has been typed.
-    let mut p = unsafe { skiptowhite(arg) };
-    if unsafe { *p } as c_int == NUL {
+    let mut p = skiptowhite(arg);
+    if at(p) == 0 {
         return;
     }
 
     // Past the first word.
-    expand.xp_pattern = unsafe { skipwhite(p) };
-    // SAFETY: both pointers are into the command line, `arg` first.
-    let word = unsafe { cstr::slice_at(arg, p.offset_from(arg) as usize) };
+    expand.pattern = skipwhite(p);
+    let word = &line[arg..p];
     let first_word_is = |name: &CStr| word.eq_ignore_ascii_case(name.to_bytes());
 
-    if unsafe { *skiptowhite(expand.xp_pattern) } as c_int != NUL {
-        expand.xp_context = ExpandContext::Nothing;
+    if at(skiptowhite(expand.pattern)) != 0 {
+        expand.context = ExpandContext::Nothing;
     } else if first_word_is(c"case") {
         EXPAND_WHAT.set(ExpandWhat::Case);
     } else if first_word_is(c"spell") {
@@ -96,16 +97,16 @@ pub(crate) unsafe fn set_context_in_syntax_cmd(expand: &mut Expand, arg: *const 
     } else if first_word_is(c"sync") {
         EXPAND_WHAT.set(ExpandWhat::Sync);
     } else if first_word_is(c"list") {
-        p = unsafe { skipwhite(p) };
-        if unsafe { *p } as c_int == '@' as c_int {
+        p = skipwhite(p);
+        if at(p) == b'@' {
             EXPAND_WHAT.set(ExpandWhat::Cluster);
         } else {
-            expand.xp_context = ExpandContext::Highlight;
+            expand.context = ExpandContext::Highlight;
         }
     } else if first_word_is(c"keyword") || first_word_is(c"region") || first_word_is(c"match") {
-        expand.xp_context = ExpandContext::Highlight;
+        expand.context = ExpandContext::Highlight;
     } else {
-        expand.xp_context = ExpandContext::Nothing;
+        expand.context = ExpandContext::Nothing;
     }
 }
 

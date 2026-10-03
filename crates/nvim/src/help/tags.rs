@@ -24,7 +24,7 @@
 
 use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_iswhite};
 use crate::charset::skipwhite;
-use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
+use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::cstr;
 use crate::fileio::vim_fgets;
 use crate::fprintf;
@@ -36,7 +36,8 @@ use crate::message_fmt::c_str;
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_RTP;
 use crate::os::cshim::{gettext, putc, strchr};
-use crate::os::fs::{os_fopen, os_isdir};
+use crate::os::fs::dir_exists;
+use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::path::{ExpandFlags, add_pathsep, free_wild, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{RuntimeOpts, do_in_path};
@@ -47,6 +48,7 @@ use crate::strings::{sort_strings, vim_strchr};
 use crate::types::{ExArg, Expand, ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, size_t, uint8_t};
 use crate::vim_snprintf;
 use ::libc::{fclose, fputs, strcasecmp};
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -88,22 +90,23 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
         return;
     }
 
-    let mut xpc: Expand = unsafe { core::mem::zeroed() };
-    unsafe { expand_init(&raw mut xpc) };
-    xpc.xp_context = ExpandContext::Directories;
-    let arg = excmd.arg_ptr();
+    let mut xpc = Expand::new();
+    xpc.context = ExpandContext::Directories;
+    // SAFETY: the command's own NUL-terminated argument.
+    let arg = unsafe { CStr::from_ptr(excmd.arg_ptr()) };
     let opts = WildOpts::LIST_NOTFOUND | WildOpts::SILENT;
-    let (orig, mode) = (ptr::null_mut(), WildMode::ExpandFree);
-    // SAFETY: `xpc` was just initialised and `arg` is the command's own.
-    let dirname = unsafe { expand_one(&raw mut xpc, arg, orig, opts, mode) };
-    if dirname.is_null() || !unsafe { os_isdir(dirname) } {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = msg_bytes(excmd.line.arg());
-        semsg!("E150: Not a directory: {arg}");
-    } else {
-        unsafe { do_helptags(dirname, add_help_tags, false) };
+    let dirname = expand_one(&mut xpc, Some(arg), None, opts, WildMode::ExpandFree);
+    match dirname {
+        Some(dirname) if dir_exists(dirname.as_cstr()) => {
+            let mut dirname = dirname.into_vec();
+            // SAFETY: a NUL-terminated directory name this frame owns.
+            unsafe { do_helptags(dirname.as_mut_ptr().cast(), add_help_tags, false) };
+        }
+        _ => {
+            let arg = msg_bytes(excmd.line.arg());
+            semsg!("E150: Not a directory: {arg}");
+        }
     }
-    unsafe { xfree(dirname.cast::<c_void>()) };
 }
 
 /// `do_in_path` callback for `:helptags ALL`: generate tags in each `doc`

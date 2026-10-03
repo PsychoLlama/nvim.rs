@@ -11,8 +11,10 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::eval::list::string_tv;
 use crate::eval::typval::NumBuf;
 use crate::keycodes::KE_WILD;
+use crate::memory::XString;
 use crate::types::{ExpandContext, NUL};
 
 /// Whether a command line is being edited at all: C's
@@ -82,44 +84,52 @@ pub(crate) fn get_cmdline_str() -> *mut ::core::ffi::c_char {
 ///
 /// `None` means there is nothing to report: no command line, an obscured one
 /// (`inputsecret()`), or `ExpandContext::Unsuccessful`.
-fn cmdline_completion_state() -> Option<(*mut Expand, ExpandContext)> {
+fn cmdline_completion_state<R>(f: impl FnOnce(Cc, &Expand, ExpandContext) -> R) -> Option<R> {
     if cmdline_star.get() > 0 {
         return None;
     }
-    let xpc = get_ccline_ptr().map_or(::core::ptr::null_mut(), |p| p.xpc);
-    if xpc.is_null() {
-        return None;
-    }
-    let mut xp_context = unsafe { (*xpc).xp_context };
-    if xp_context == ExpandContext::Nothing {
-        unsafe { set_expand_context(xpc) };
-        xp_context = unsafe { (*xpc).xp_context };
-        unsafe { (*xpc).xp_context = ExpandContext::Nothing };
-    }
-    if xp_context == ExpandContext::Unsuccessful {
-        return None;
-    }
-    Some((xpc, xp_context))
+    let cc = get_ccline_ptr()?;
+    cc.with_xpc(|xpc| {
+        let xpc = xpc?;
+        let mut xp_context = xpc.context;
+        if xp_context == ExpandContext::Nothing {
+            set_expand_context(xpc);
+            xp_context = xpc.context;
+            xpc.context = ExpandContext::Nothing;
+        }
+        if xp_context == ExpandContext::Unsuccessful {
+            return None;
+        }
+        Some(f(cc, xpc, xp_context))
+    })
 }
 
 /// `getcmdcomplpat()` function: the pattern completion would expand.
 pub fn f_getcmdcomplpat(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(::core::ptr::null_mut::<::core::ffi::c_char>());
-    if let Some((xpc, _)) = cmdline_completion_state() {
-        let compl_pat = unsafe { (*xpc).xp_pattern };
-        if !compl_pat.is_null() {
-            unsafe { (*result).write_string(xstrdup(compl_pat)) };
-        }
-    }
+    // The pattern is read against the command line as it stands, which is
+    // what upstream's `xp_pattern` pointed into: after a match was
+    // inserted, the match.
+    let pattern = cmdline_completion_state(|cc, xpc, _| {
+        cc.text_bytes()
+            .get(xpc.pattern..)
+            .unwrap_or_default()
+            .to_vec()
+    });
+    *result = match pattern {
+        Some(pattern) => string_tv(&pattern),
+        None => TypVal::String(::core::ptr::null_mut()),
+    };
 }
 
 /// `getcmdcompltype()` function: the completion type's name.
 pub fn f_getcmdcompltype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe {
-        (*result).write_string(match cmdline_completion_state() {
-            Some((xpc, xp_context)) => cmdcomplete_type_to_str(xp_context, (*xpc).xp_arg),
-            None => ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        })
+    let name = cmdline_completion_state(|_, xpc, xp_context| {
+        cmdcomplete_type_to_str(xp_context, xpc.arg.as_ref().map(XString::as_cstr))
+    })
+    .flatten();
+    *result = match name {
+        Some(name) => string_tv(&name),
+        None => TypVal::String(::core::ptr::null_mut()),
     };
 }
 

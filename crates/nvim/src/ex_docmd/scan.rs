@@ -344,6 +344,18 @@ pub unsafe fn skip_cmd_arg(p: *mut c_char, rembs: bool) -> *mut c_char {
     p
 }
 
+/// [`skip_cmd_arg`] over a slice, from `at`, removing nothing: where the
+/// whitespace-delimited argument at `at` ends.
+pub(crate) fn skip_cmd_arg_at(text: &[u8], mut at: usize) -> usize {
+    while at < text.len() && !ascii_isspace(c_int::from(text[at])) {
+        if text[at] == b'\\' && at + 1 < text.len() {
+            at += 1;
+        }
+        at += crate::mbyte::cluster_len(&text[at..]).max(1);
+    }
+    at
+}
+
 /// Does this character end an Ex command? Answers a `c_int` rather than a
 /// `bool` because a dozen still-transpiled callers compare it against 0.
 pub fn ends_excmd(c: c_int) -> c_int {

@@ -58,6 +58,7 @@ pub use display::{
     transchar_hex, transchar_nonprint, transstr, transstr_buf, transstr_len, vim_strnsize,
     vim_strsize,
 };
+pub(crate) use display::{ptr2cells_at, vim_strsize_cstr};
 
 // The pointer walkers were split out for size. The module itself is private:
 // only the names the unit suite reaches by their `charset::` path are

@@ -312,14 +312,13 @@ pub(crate) unsafe fn expand_tag_fname(
         && unsafe { path_has_wildcard(fname) }
         && !has_char(unsafe { cstr::at(fname) }, '`' as c_int)
     {
-        let mut xpc: Expand = unsafe { core::mem::zeroed() };
-        unsafe { expand_init(&raw mut xpc) };
-        xpc.xp_context = ExpandContext::Files;
-        let option2 = &raw mut xpc;
-        let maxlen = ptr::null_mut();
-        let sep_chars = WildOpts::LIST_NOTFOUND | WildOpts::SILENT;
-        let mode = WildMode::ExpandFree;
-        expanded = unsafe { expand_one(option2, fname, maxlen, sep_chars, mode) };
+        let mut xpc = Expand::new();
+        xpc.context = ExpandContext::Files;
+        let options = WildOpts::LIST_NOTFOUND | WildOpts::SILENT;
+        // SAFETY: the caller's NUL-terminated name.
+        let pattern = unsafe { CStr::from_ptr(fname) };
+        expanded = expand_one(&mut xpc, Some(pattern), None, options, WildMode::ExpandFree)
+            .map_or(ptr::null_mut(), XString::into_raw);
     }
     let fname = if expanded.is_null() { fname } else { expanded };
 

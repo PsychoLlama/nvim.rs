@@ -1,75 +1,108 @@
 //! Showing the matches: the command-line popup menu and the wildmenu.
 //!
-//! The two renderings of the same match array.  [`cmdline_pum_create`] turns
+//! The two renderings of the same match list.  [`cmdline_pum_create`] turns
 //! it into `pum_display` items; [`redraw_wildmenu`] draws the one-line
 //! statusline form instead.  [`cmdline_compl_use_pum`] is the choice between
-//! them, and the `cmdline_compl_*` accessors are what `cmdcomplete_info()`
-//! and the `ext_cmdline` UI read.
+//! them, and the `cmdline_compl_*` accessors are what the popup menu's own
+//! drawing reads.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::charset::{ptr2cells_at, transchar, transchar_byte};
+use crate::cmdexpand::state::{save_p_ls, save_p_wmh, wild_menu_showing};
 use crate::cstr;
-use crate::grid::default_gridview;
-use crate::types::{ExpandContext, MB_MAXBYTES, NUL};
-use crate::winlayer::Win;
-use crate::winlayer::last_window;
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::ptr;
+use crate::drawscreen::state::cmdline_row;
+use crate::drawscreen::win_redraw_last_status;
+use crate::ex_getln::cmd_screencol;
+use crate::grid::{
+    default_gridview, grid_line_fill, grid_line_flush, grid_line_puts_bytes, grid_line_start,
+};
+use crate::highlight::win_hl_attr;
+use crate::highlight_group::HLF_WM;
+use crate::mbyte::cluster_len;
+use crate::menu::is_separator;
+use crate::message::state::msg_scrolled;
+use crate::message::{msg_grid_view, msg_scroll_up};
+use crate::option::csh_like_shell;
+use crate::option::vars::{P_LS, P_WMH, p_ls, p_wmh, wop_flags};
+use crate::options::kOptWopFlagPum;
+use crate::popupmenu::{pum_display_items, pum_undisplay, pum_visible};
+use crate::statusline::{fillchar_status_of, hl_attr};
+use crate::types::ui::{kUICmdline, kUIPopupmenu, kUIWildmenu};
+use crate::types::{ExpandContext, OptInt};
+use crate::ui::state::{Columns, Rows};
+use crate::ui::ui_has;
+use crate::window::{global_stl_height, last_status};
+use crate::winlayer::graph::cmdline_win;
+use crate::winlayer::{Cc, Win, current_topframe, last_window};
+use core::ffi::{CStr, c_int, c_uint};
 
-/// Create the completion popup menu with items from `matches`.
+/// The command line's completion popup menu: the rows, and what the menu's
+/// drawing asks about the completion while it is up.
 ///
-/// # Safety
-///
-/// `ccline` must be an initialized `Cc` whose pointer fields point at live
-/// data for the call. `expand` must point at a live `Expand` context,
-/// unaliased for the call. `matches` must point at a writable `*mut c_char`
-/// slot the caller owns for the call.
-pub(crate) unsafe fn cmdline_pum_create(
+/// The rows' text points into the matches, so the menu keeps whichever list
+/// it was built from alive: the completion's own (which the completion only
+/// drops after removing the menu) or, for a listing nothing kept, its own
+/// copy.
+pub(crate) struct CmdlinePum {
+    rows: Vec<PumItem>,
+    /// The matches the rows point into, when the completion did not keep
+    /// them itself.
+    _kept: Vec<XString>,
+    /// The text the matches replaced, which the menu highlights in each
+    /// item: upstream reads it as the command line's `xp_orig`.
+    orig: Option<XString>,
+    /// The context completed, for whether its matches were fuzzy.
+    context: ExpandContext,
+}
+
+/// Create the completion popup menu with items from `matches`, or from the
+/// completion's own matches when `matches` is `None`.
+pub(crate) fn cmdline_pum_create(
     ccline: Cc,
-    expand: *mut Expand,
-    matches: *mut *mut c_char,
-    num_matches: c_int,
+    expand: &Expand,
+    matches: Option<Vec<XString>>,
     showtail: bool,
     noselect: bool,
 ) {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    debug_assert!(num_matches >= 0);
+    let list = matches.as_deref().unwrap_or(expand.matches());
     // Add all the completion matches.
-    let mut rows = Vec::with_capacity(num_matches as usize);
-    for i in 0..num_matches {
-        let m = unsafe { *matches.offset(i as isize) };
-        let item = PumItem {
+    let rows = list
+        .iter()
+        .map(|m| PumItem {
             // C's SHOW_MATCH(i).
-            pum_text: if showtail {
-                // SAFETY: `m` is one of the caller's `num_matches` matches.
-                unsafe { showmatches_gettail(m, false) }
+            pum_text: m.as_ptr().cast_mut().wrapping_add(if showtail {
+                showmatches_gettail(m, false)
             } else {
-                m
-            },
-            pum_info: ptr::null_mut(),
-            pum_extra: ptr::null_mut(),
-            pum_kind: ptr::null_mut(),
+                0
+            }),
+            pum_info: core::ptr::null_mut(),
+            pum_extra: core::ptr::null_mut(),
+            pum_kind: core::ptr::null_mut(),
             pum_cpt_source_idx: 0,
             pum_user_abbr_hlattr: -1,
             pum_user_kind_hlattr: -1,
-        };
-        rows.push(item);
-    }
-    compl_match_array.set(Some(rows));
+        })
+        .collect();
+    compl_match_array.set(Some(CmdlinePum {
+        rows,
+        _kept: matches.unwrap_or_default(),
+        orig: expand.orig.clone(),
+        context: expand.context,
+    }));
 
     // Compute the popup menu starting column.
+    let line = ccline.text_bytes();
+    let from = expand.pattern.min(line.len());
     let endpos = if showtail {
-        unsafe { showmatches_gettail(expand.xp_pattern, noselect) }
+        from + showmatches_gettail(&line[from..], noselect)
     } else {
-        expand.xp_pattern
+        from
     };
-    let col = unsafe { endpos.offset_from(ccline.text()) } as c_int;
+    let col = as_count(endpos);
     compl_startcol.set(if ui_has(kUICmdline) && cmdline_win.get().is_none() {
         col
     } else {
@@ -79,16 +112,14 @@ pub(crate) unsafe fn cmdline_pum_create(
 
 pub fn cmdline_pum_display(changed_array: bool) {
     // A copy: placing the menu can run autocommands that remove it.
-    let mut rows = compl_match_array.with(Clone::clone).unwrap_or_default();
-    unsafe {
-        pum_display(
-            rows.as_mut_ptr(),
-            rows.len() as c_int,
-            compl_selected.get(),
-            changed_array,
-            compl_startcol.get(),
-        )
-    };
+    let mut rows = compl_match_array.with(|pum| pum.as_ref().map(|pum| pum.rows.clone()));
+    let rows = rows.get_or_insert_default();
+    pum_display_items(
+        rows,
+        compl_selected.get(),
+        changed_array,
+        compl_startcol.get(),
+    );
 }
 
 /// True if the cmdline completion popup menu is being displayed.
@@ -108,22 +139,21 @@ pub(crate) fn cmdline_pum_cleanup(cclp: Cc) {
     wildmenu_cleanup(cclp);
 }
 
-/// The current cmdline completion pattern.
-pub fn cmdline_compl_pattern() -> *mut c_char {
-    let expand = Cc::current().xpc();
-    if expand.is_null() {
-        ptr::null_mut()
-    } else {
-        // SAFETY: just tested non-null; `xpc` is the command line's own
-        // completion context, live for as long as the command line is.
-        unsafe { (*expand).xp_orig }
-    }
+/// The text the cmdline completion's matches replaced, for the popup menu to
+/// highlight in each item; `None` when there is no cmdline menu.
+pub fn cmdline_compl_pattern() -> Option<XString> {
+    compl_match_array.with(|pum| pum.as_ref().and_then(|pum| pum.orig.clone()))
 }
 
-/// True if fuzzy cmdline completion is active.
+/// True if the cmdline completion popup menu's matches are fuzzy ones.
 pub fn cmdline_compl_is_fuzzy() -> bool {
-    let expand = Cc::current().xpc();
-    !expand.is_null() && unsafe { cmdline_fuzzy_completion_supported(expand) }
+    compl_match_array.with(|pum| {
+        pum.as_ref().is_some_and(|pum| {
+            let mut context = Expand::new();
+            context.context = pum.context;
+            cmdline_fuzzy_completion_supported(&context)
+        })
+    })
 }
 
 /// Whether the popup menu should be used for the cmdline completion wildmenu.
@@ -137,37 +167,24 @@ pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
         || (ui_has(kUICmdline) && ui_has(kUIPopupmenu))
 }
 
-/// The number of characters that should be skipped in the wildmenu.
+/// The number of bytes that should be skipped in the wildmenu at the start
+/// of `s`.
 ///
 /// These are backslashes used for escaping.  Backslashes *are* shown in help
 /// tags and in search pattern completion matches.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `s` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn skip_wildmenu_char(expand: *mut Expand, s: *mut c_char) -> c_int {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    let ctx = expand.xp_context;
-    if (unsafe { rem_backslash(s) }
-        && ctx != ExpandContext::Help
-        && ctx != ExpandContext::PatternInBuf)
+pub(crate) fn skip_wildmenu_char(expand: &Expand, s: &[u8]) -> usize {
+    let at = |i: usize| s.get(i).copied().unwrap_or(0);
+    let ctx = expand.context;
+    let escaped = at(0) == b'\\' && at(1) != 0;
+    if (escaped && ctx != ExpandContext::Help && ctx != ExpandContext::PatternInBuf)
         || ((ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames)
-            && (unsafe { *s } as c_int == '\t' as c_int
-                || (unsafe { *s } as c_int == '\\' as c_int
-                    && unsafe { *s.add(1) } as c_int != NUL)))
+            && (at(0) == b'\t' || escaped))
     {
         // TODO(bfredl): Why in the actual fuck are we special casing the
         // shell variety deep in the redraw logic?  Shell special
         // snowflakiness should already be eliminated multiple layers
         // before reaching the screen infrastructure.
-        if expand.xp_shell
-            && csh_like_shell()
-            && unsafe { *s.add(1) } as c_int == '\\' as c_int
-            && unsafe { *s.add(2) } as c_int == '!' as c_int
-        {
+        if expand.shell && csh_like_shell() && at(1) == b'\\' && at(2) == b'!' {
             return 2;
         }
         return 1;
@@ -176,29 +193,25 @@ pub(crate) unsafe fn skip_wildmenu_char(expand: *mut Expand, s: *mut c_char) -> 
 }
 
 /// The length of an item as it will be shown in the status line.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `s` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn wildmenu_match_len(expand: *mut Expand, s: *mut c_char) -> c_int {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    let ctx = expand.xp_context;
+pub(crate) fn wildmenu_match_len(expand: &Expand, s: &CStr) -> c_int {
+    let ctx = expand.context;
     let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
 
     // Check for menu separators - replace with '|'.
-    if emenu && unsafe { menu_is_separator(s) } {
+    if emenu && is_separator(s) {
         return 1;
     }
 
+    let s = s.to_bytes();
     let mut len = 0;
-    let mut s = s;
-    while unsafe { *s } as c_int != NUL {
-        s = unsafe { s.add(skip_wildmenu_char(expand.raw(), s) as usize) };
-        len += unsafe { ptr2cells(s) };
-        s = unsafe { s.add(utfc_ptr2len(s) as usize) };
+    let mut p = 0;
+    while p < s.len() {
+        p += skip_wildmenu_char(expand, &s[p..]);
+        if p >= s.len() {
+            break;
+        }
+        len += ptr2cells_at(&s[p..]);
+        p += cluster_len(&s[p..]);
     }
 
     len
@@ -209,50 +222,33 @@ pub(crate) unsafe fn wildmenu_match_len(expand: *mut Expand, s: *mut c_char) -> 
 /// At least the `match_idx` item is shown.  We start at item `first_match` in
 /// the list and show all matches that fit; if inversion is possible we use it,
 /// else `=` characters are used.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `matches` must point at a writable `*mut c_char` slot the caller owns for
-/// the call.
-pub(crate) unsafe fn redraw_wildmenu(
-    expand: *mut Expand,
-    num_matches: c_int,
-    matches: *mut *mut c_char,
+pub(crate) fn redraw_wildmenu(
+    expand: &Expand,
+    matches: &[XString],
     match_idx: c_int,
     showtail: bool,
 ) {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
     // Where the listing starts, remembered across redraws so that paging
     // through the matches does not jump.
     static first_match: GlobalCell<c_int> = GlobalCell::new(0);
 
-    if matches.is_null() {
-        // Interrupted completion?
-        return;
-    }
-
+    let num_matches = as_count(matches.len());
     // C's SHOW_MATCH().
-    let show_match = |i: c_int| {
-        let m = unsafe { *matches.offset(i as isize) };
-        if showtail {
-            unsafe { showmatches_gettail(m, false) }
+    let show_match = |i: c_int| -> &CStr {
+        let m = &matches[usize::try_from(i).unwrap_or(0)];
+        let tail = if showtail {
+            showmatches_gettail(m, false)
         } else {
-            m
-        }
+            0
+        };
+        cstr::suffix(m.as_cstr(), tail)
     };
 
     let mut highlight = true;
-    let mut selstart: *mut c_char = ptr::null_mut();
-    let mut selstart_col = 0;
-    let mut selend: *mut c_char = ptr::null_mut();
+    let mut selection: Option<(usize, c_int)> = None;
+    let mut selend = 0;
     let mut add_left = false;
     let mut i;
-    let mut l;
-
-    let buf = unsafe { xmalloc(Columns.get() as size_t * MB_MAXBYTES + 1) } as *mut c_char;
 
     let mut match_idx = match_idx;
     if match_idx == -1 {
@@ -261,7 +257,7 @@ pub(crate) unsafe fn redraw_wildmenu(
         highlight = false;
     }
     // Length in screen cells; count 1 for the ending ">".
-    let mut clen = unsafe { wildmenu_match_len(expand.raw(), show_match(match_idx)) } + 3;
+    let mut clen = wildmenu_match_len(expand, show_match(match_idx)) + 3;
     if match_idx == 0 {
         first_match.set(0);
     } else if match_idx < first_match.get() {
@@ -272,7 +268,7 @@ pub(crate) unsafe fn redraw_wildmenu(
         // Check if match fits on the screen.
         i = first_match.get();
         while i < match_idx {
-            clen += unsafe { wildmenu_match_len(expand.raw(), show_match(i)) } + 2;
+            clen += wildmenu_match_len(expand, show_match(i)) + 2;
             i += 1;
         }
         if first_match.get() > 0 {
@@ -285,7 +281,7 @@ pub(crate) unsafe fn redraw_wildmenu(
             clen = 2;
             i = match_idx;
             while i < num_matches {
-                clen += unsafe { wildmenu_match_len(expand.raw(), show_match(i)) } + 2;
+                clen += wildmenu_match_len(expand, show_match(i)) + 2;
                 if clen >= Columns.get() {
                     break;
                 }
@@ -298,8 +294,7 @@ pub(crate) unsafe fn redraw_wildmenu(
     }
     if add_left {
         while first_match.get() > 0 {
-            clen +=
-                unsafe { wildmenu_match_len(expand.raw(), show_match(first_match.get() - 1)) } + 2;
+            clen += wildmenu_match_len(expand, show_match(first_match.get() - 1)) + 2;
             if clen >= Columns.get() {
                 break;
             }
@@ -307,61 +302,55 @@ pub(crate) unsafe fn redraw_wildmenu(
         }
     }
 
-    let mut group: Hlf = HLF_NONE;
-    let fillchar = unsafe { fillchar_status(&raw mut group, Win::current()) };
+    let (group, fillchar) = fillchar_status_of(Win::current());
     let attr = win_hl_attr(Win::current(), group as c_int);
 
-    let mut len;
-    if first_match.get() == 0 {
-        unsafe { *buf = NUL as c_char };
-        len = 0;
-    } else {
-        unsafe { strcpy(buf, c"< ".as_ptr()) };
-        len = 2;
+    let mut buf = Vec::new();
+    if first_match.get() > 0 {
+        buf.extend_from_slice(b"< ");
     }
-    clen = len;
+    clen = as_count(buf.len());
 
     i = first_match.get();
-    while clen + unsafe { wildmenu_match_len(expand.raw(), show_match(i)) } + 2 < Columns.get() {
+    while clen + wildmenu_match_len(expand, show_match(i)) + 2 < Columns.get() {
         if i == match_idx {
-            selstart = unsafe { buf.offset(len as isize) };
-            selstart_col = clen;
+            selection = Some((buf.len(), clen));
         }
 
-        let mut s = show_match(i);
+        let s = show_match(i);
         // Check for menu separators - replace with '|'.
-        let ctx = expand.xp_context;
+        let ctx = expand.context;
         let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
-        if emenu && unsafe { menu_is_separator(s) } {
-            unsafe { strcpy(buf.offset(len as isize), transchar('|' as c_int).as_ptr()) };
-            l = unsafe { cstr::bytes_at(buf.offset(len as isize)) }.len() as c_int;
-            len += l;
-            clen += l;
+        if emenu && is_separator(s) {
+            let bar = transchar(c_int::from(b'|'));
+            let bar = cstr::in_chars(&bar).to_bytes();
+            buf.extend_from_slice(bar);
+            clen += as_count(bar.len());
         } else {
-            while unsafe { *s } as c_int != NUL {
-                s = unsafe { s.add(skip_wildmenu_char(expand.raw(), s) as usize) };
-                clen += unsafe { ptr2cells(s) };
-                l = unsafe { utfc_ptr2len(s) };
-                if l > 1 {
-                    unsafe { strncpy(buf.offset(len as isize), s, l as size_t) };
-                    s = unsafe { s.add(l as usize - 1) };
-                    len += l;
-                } else {
-                    let out = unsafe { buf.offset(len as isize) };
-                    unsafe { strcpy(out, transchar_byte(*s as u8 as c_int).as_ptr()) };
-                    len += unsafe { cstr::bytes_at(buf.offset(len as isize)) }.len() as c_int;
+            let s = s.to_bytes();
+            let mut p = 0;
+            while p < s.len() {
+                p += skip_wildmenu_char(expand, &s[p..]);
+                if p >= s.len() {
+                    break;
                 }
-                s = unsafe { s.add(1) };
+                clen += ptr2cells_at(&s[p..]);
+                let l = cluster_len(&s[p..]);
+                if l > 1 {
+                    buf.extend_from_slice(&s[p..p + l]);
+                    p += l;
+                } else {
+                    let shown = transchar_byte(c_int::from(s[p]));
+                    buf.extend_from_slice(cstr::in_chars(&shown).to_bytes());
+                    p += 1;
+                }
             }
         }
         if i == match_idx {
-            selend = unsafe { buf.offset(len as isize) };
+            selend = buf.len();
         }
 
-        unsafe { *buf.offset(len as isize) = ' ' as c_char };
-        len += 1;
-        unsafe { *buf.offset(len as isize) = ' ' as c_char };
-        len += 1;
+        buf.extend_from_slice(b"  ");
         clen += 2;
         i += 1;
         if i == num_matches {
@@ -370,12 +359,9 @@ pub(crate) unsafe fn redraw_wildmenu(
     }
 
     if i != num_matches {
-        unsafe { *buf.offset(len as isize) = '>' as c_char };
-        len += 1;
+        buf.push(b'>');
         clen += 1;
     }
-
-    unsafe { *buf.offset(len as isize) = NUL as c_char };
 
     let mut row = cmdline_row.get() - 1;
     if row >= 0 {
@@ -417,17 +403,15 @@ pub(crate) unsafe fn redraw_wildmenu(
             row,
         );
 
-        unsafe { grid_line_puts(0, buf, -1, attr) };
-        if !selstart.is_null() && highlight {
-            unsafe { *selend = NUL as c_char };
-            unsafe {
-                grid_line_puts(
-                    selstart_col,
-                    selstart,
-                    -1,
-                    *hl_attr_table().offset(HLF_WM as isize),
-                )
-            };
+        grid_line_puts_bytes(0, &buf, attr);
+        if let Some((selstart, selstart_col)) = selection
+            && highlight
+        {
+            grid_line_puts_bytes(
+                selstart_col,
+                &buf[selstart..selend],
+                hl_attr(HLF_WM as c_int),
+            );
         }
 
         grid_line_fill(clen, Columns.get(), fillchar, attr);
@@ -436,7 +420,6 @@ pub(crate) unsafe fn redraw_wildmenu(
     }
 
     win_redraw_last_status(current_topframe());
-    unsafe { xfree(buf as *mut c_void) };
 }
 
 /// Whether the wildmenu has to turn 'laststatus' on to get a line to draw

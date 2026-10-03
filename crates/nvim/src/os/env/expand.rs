@@ -12,9 +12,10 @@
 
 use super::*;
 use crate::charset::{vim_is_ident_char, vim_isfilec};
-use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
+use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::cstr;
 use crate::eval::skip_expr;
+use crate::memory::XString;
 use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;
 use crate::strings::has_char;
@@ -45,6 +46,14 @@ pub unsafe fn expand_env_save_opt(src: *mut c_char, one: bool) -> *mut c_char {
         expand_env_esc(src, p, MAXPATHL as c_int, false, one, ptr::null_mut());
         p
     }
+}
+
+/// [`expand_env_save_opt`] of a string the caller owns, owned.
+pub(crate) fn expand_env_save_opt_of(src: &CStr, one: bool) -> XString {
+    // A copy the expansion may write to.
+    let mut owned = src.to_bytes_with_nul().to_vec();
+    // SAFETY: a NUL-terminated copy; the answer is owned and taken over once.
+    unsafe { XString::from_raw(expand_env_save_opt(owned.as_mut_ptr().cast(), one)) }
 }
 
 /// Expand `$VAR` and a leading `~` in a path.
@@ -154,16 +163,16 @@ unsafe fn resolve_user_dir(src: *const c_char, dst: *mut c_char, dstlen: c_int) 
         if var.is_null() {
             // Not a known user: let the shell expand `~user`, which is slower
             // and may fail on an old /bin/sh.
-            let mut xpc: Expand = core::mem::zeroed();
-            expand_init(&raw mut xpc);
-            xpc.xp_context = ExpandContext::Files;
+            let mut xpc = Expand::new();
+            xpc.context = ExpandContext::Files;
             var = expand_one(
-                &raw mut xpc,
-                dst,
-                ptr::null_mut(),
+                &mut xpc,
+                Some(CStr::from_ptr(dst)),
+                None,
                 WildOpts::ADD_SLASH | WildOpts::SILENT,
                 WildMode::ExpandFree,
-            );
+            )
+            .map_or(ptr::null_mut(), XString::into_raw);
         }
         Expansion {
             var,

@@ -10,7 +10,7 @@ use super::{
     ENV_SEPCHAR, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome,
     kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
 };
-use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one};
+use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one};
 use crate::cstr;
 use crate::eval::typval::{NumBuf, dict_get_bool, dict_has_key, tv_list_alloc};
 use crate::ex_cmds::check_secure;
@@ -150,30 +150,25 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         return;
     }
-    let mut xpc: Expand = unsafe { core::mem::zeroed() };
-    unsafe { expand_init(&raw mut xpc) };
-    xpc.xp_context = ExpandContext::Files;
+    let mut xpc = Expand::new();
+    xpc.context = ExpandContext::Files;
     if p_wic() {
         options |= WildOpts::ICASE;
     }
+    // SAFETY: the NUL-terminated argument.
+    let pat = unsafe { CStr::from_ptr(s) };
     if result.v_type() == VAR_STRING {
-        let (expand, pat) = (&raw mut xpc, s as *mut c_char);
-        let nul = ptr::null_mut();
-        // SAFETY: `xpc` is a local the `expand_cleanup` below tidies, and
-        // `s` is the NUL-terminated argument.
-        result.write_string(unsafe { expand_one(expand, pat, nul, options, WildMode::All) });
+        let all = expand_one(&mut xpc, Some(pat), None, options, WildMode::All);
+        result.write_string(all.map_or(ptr::null_mut(), XString::into_raw));
     } else {
-        let (expand, pat) = (&raw mut xpc, s as *mut c_char);
-        let nul = ptr::null_mut();
-        // SAFETY: as above.
-        unsafe { expand_one(expand, pat, nul, options, WildMode::AllKeep) };
-        list_alloc_ret(result, xpc.xp_numfiles as isize);
-        for i in 0..xpc.xp_numfiles {
+        expand_one(&mut xpc, Some(pat), None, options, WildMode::AllKeep);
+        list_alloc_ret(result, xpc.match_count() as isize);
+        for name in xpc.matches() {
             let list = result.list_or_null();
-            let name = unsafe { *xpc.xp_files.offset(i as isize) };
-            unsafe { (*list).push_string(name, -1) };
+            // SAFETY: the List just allocated, and a NUL-terminated name.
+            unsafe { (*list).push_string(name.as_ptr(), -1) };
         }
-        unsafe { expand_cleanup(&raw mut xpc) };
+        expand_cleanup(&mut xpc);
     }
 }
 

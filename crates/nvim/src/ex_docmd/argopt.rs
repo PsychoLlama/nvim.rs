@@ -2,9 +2,11 @@
 //! argument, and opening the file a command will write to.
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+use crate::cmdexpand::expand_generic;
 use crate::cstr;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::source::ex_errmsg;
+use crate::memory::XString;
 use crate::types::Candidate;
 use crate::types::CmdIdx;
 use crate::vim_snprintf;
@@ -14,10 +16,9 @@ use crate::winlayer::last_used_tab;
 
 use crate::semsg;
 use crate::tr_plural;
-use crate::winlayer::{Buf, Live, Win};
+use crate::winlayer::{Buf, Win};
 
 /// The completion context, whose caller has promised it outlives the value.
-type Xp = Live<Expand>;
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 
@@ -35,7 +36,6 @@ use crate::ex_docmd::{
     quitmore,
 };
 use crate::mbyte::{get_encoding_name, utf8len_tab};
-use crate::memory::{xmalloc, xstrdup};
 use crate::message::vim_dialog_yesno;
 use crate::message::{e_invarg2, e_invargval, e_invrange};
 use crate::message_fmt::{c_str, emsg_text};
@@ -250,63 +250,32 @@ pub(crate) fn get_argopt_name(_expand: &Expand, idx: usize) -> Option<Candidate>
 
 /// Complete a `++opt` argument: the option names, or the values of the one
 /// already typed.
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `rmp` must point at a live `RegMatch`, unaliased for the call. `matches`
-/// must point at a writable `*mut *mut c_char` slot the caller owns for the
-/// call. `num_matches` must point at a writable `int` the caller owns.
-pub unsafe fn expand_argopt(
-    pat: *mut c_char,
-    expand: *mut Expand,
+pub fn expand_argopt(
+    pat: &CStr,
+    expand: &Expand,
     rmp: &mut RegMatch,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
-) -> Result<(), Failed> {
-    // SAFETY: the completion context is the caller's, live for the call.
-    let x = unsafe { Xp::new(expand) };
+) -> Result<Vec<XString>, Failed> {
     // Past an `=`: complete the value, by whichever option name ends
     // right before it.
-    if x.xp_pattern > x.xp_line && byte_at(x.xp_pattern, -1) == '=' as c_int {
-        let name_end = unsafe { x.xp_pattern.offset(-1) };
-        let ends_with = |word: &CStr| {
-            let n = word.to_bytes().len() as isize;
-            unsafe {
-                name_end.offset_from(x.xp_line) >= n
-                    && prefix_eq(name_end.offset(-n), word.as_ptr(), n as size_t)
-            }
-        };
-        let cb: CompleteListItemGetter = if ends_with(c"ff") || ends_with(c"fileformat") {
+    let at = expand.pattern;
+    if at > 0 && expand.line.get(at - 1) == Some(&b'=') {
+        let name = &expand.line[..at - 1];
+        let cb: CompleteListItemGetter = if name.ends_with(b"ff") || name.ends_with(b"fileformat") {
             get_fileformat_name
-        } else if ends_with(c"enc") || ends_with(c"encoding") {
+        } else if name.ends_with(b"enc") || name.ends_with(b"encoding") {
             get_encoding_name
-        } else if ends_with(c"bad") {
+        } else if name.ends_with(b"bad") {
             get_bad_name
         } else {
             return Err(Failed);
         };
-        expand_generic(pat, expand, rmp, matches, num_matches, cb, false);
-        return Ok(());
+        return Ok(expand_generic(pat, expand, rmp, cb, false));
     }
     // `++ff` is the only abbreviation worth finishing on its own.
-    if x.xp_pattern_len == 2 && starts_with(x.xp_pattern, b"ff") {
-        unsafe { *matches = xmalloc(size_of::<*mut c_char>()) as *mut *mut c_char };
-        unsafe { *num_matches = 1 };
-        unsafe { **matches = xstrdup(c"fileformat=".as_ptr()) };
-        return Ok(());
+    if expand.pattern_len == 2 && expand.pattern_starts_with(b"ff") {
+        return Ok(vec![XString::from_cstr(c"fileformat=")]);
     }
-    expand_generic(
-        pat,
-        expand,
-        rmp,
-        matches,
-        num_matches,
-        get_argopt_name,
-        false,
-    );
-    Ok(())
+    Ok(expand_generic(pat, expand, rmp, get_argopt_name, false))
 }
 
 /// Which tab page a `:tab…` command means.
@@ -558,36 +527,6 @@ pub unsafe fn dialog_msg(buff: *mut c_char, format: *mut c_char, fname: *mut c_c
         fname
     };
     unsafe { vim_snprintf!(buff, DIALOG_MSG_SIZE as size_t, format, fname) };
-}
-
-/// Whether two NUL-terminated strings agree over their first `n` bytes --
-/// `cstr::prefix_eq(a, b, n)` -- as checked code.
-fn prefix_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
-    // SAFETY: two NUL-terminated strings; each scan stops at its terminator.
-    unsafe { cstr::prefix_eq(a, b, n) }
-}
-
-/// `strncmp()`'s prefix test as checked code.
-fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
-    // SAFETY: a NUL-terminated string; the scan stops at its terminator.
-    unsafe { cstr::starts_with(p, prefix) }
-}
-
-/// `expand_generic()` as checked code.
-#[allow(clippy::too_many_arguments)]
-fn expand_generic(
-    pat: *const c_char,
-    expand: *mut Expand,
-    regmatch: &mut RegMatch,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
-    func: CompleteListItemGetter,
-    escaped: bool,
-) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe {
-        crate::cmdexpand::expand_generic(pat, expand, regmatch, matches, num_matches, func, escaped)
-    }
 }
 
 /// `gettext()` as checked code.

@@ -31,6 +31,7 @@ pub mod startuptime;
 pub use report::profile_dump;
 pub use startuptime::{time_finish, time_init, time_msg, time_pop, time_push, time_start};
 
+use crate::charset::skip;
 use crate::charset::{skiptowhite, skipwhite};
 use crate::debugger::ex_breakadd;
 use crate::eval::userfunc::{func_tbl_get, get_current_funccal};
@@ -339,39 +340,29 @@ pub fn get_profile_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     ))
 }
 
-/// Command-line completion context for `:profile`.
-///
-/// # Safety
-/// `expand` is the live expansion context; `arg` is NUL-terminated and outlives
-/// it (it is stored in `xp_pattern`).
-pub unsafe fn set_context_in_profile_cmd(expand: *mut Expand, arg: *const c_char) {
-    // SAFETY: the caller's context.
-    let expand = unsafe { &mut *expand };
+/// Command-line completion context for `:profile`, whose argument starts at
+/// `arg` in the completion's line.
+pub fn set_context_in_profile_cmd(expand: &mut Expand, arg: usize) {
     // Default: expand subcommands.
-    expand.xp_context = ExpandContext::Profile;
-    expand.xp_pattern = arg as *mut c_char;
+    expand.context = ExpandContext::Profile;
+    expand.pattern = arg;
 
-    // SAFETY: `arg` is NUL-terminated, so the walk stays inside it and
-    // `subcmd` borrows from it.
-    let (subcmd, rest) = unsafe {
-        let end_subcmd = skiptowhite(arg);
-        if *end_subcmd == 0 {
-            return;
-        }
-        let len = end_subcmd.offset_from(arg) as usize;
-        (
-            core::slice::from_raw_parts(arg as *const u8, len),
-            skipwhite(end_subcmd),
-        )
-    };
+    let line = expand.line_cstr().to_bytes();
+    let tail = line.get(arg..).unwrap_or_default();
+    let end_subcmd = skip::to_white(tail);
+    if end_subcmd == tail.len() {
+        return;
+    }
+    let subcmd = &tail[..end_subcmd];
+    let rest = arg + end_subcmd + skip::white(&tail[end_subcmd..]);
     if subcmd == b"start" || subcmd == b"file" {
-        expand.xp_context = ExpandContext::Files;
-        expand.xp_pattern = rest;
+        expand.context = ExpandContext::Files;
+        expand.pattern = rest;
     } else if subcmd == b"func" {
-        expand.xp_context = ExpandContext::UserFunc;
-        expand.xp_pattern = rest;
+        expand.context = ExpandContext::UserFunc;
+        expand.pattern = rest;
     } else {
-        expand.xp_context = ExpandContext::Nothing;
+        expand.context = ExpandContext::Nothing;
     }
 }
 

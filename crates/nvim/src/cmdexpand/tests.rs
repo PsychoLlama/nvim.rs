@@ -20,12 +20,13 @@
 use super::*;
 use crate::buffer::{bare_buffer, free_bare_buffer};
 use crate::eval::list::{string_bytes, string_tv};
-use crate::eval::typval::list_items;
+use crate::eval::typval::{list_items, tv_clear};
+use crate::getchar::state::got_int;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::memory::XString;
-use crate::option::vars::{P_CPO, P_PP, P_RTP, P_SU, P_WIC, P_WIG};
+use crate::option::vars::{P_CPO, P_PP, P_RTP, P_SU, P_WIC, P_WIG, p_wic, wop_flags};
 use crate::options::kOptWopFlagFuzzy;
-use crate::types::{EvalFuncData, ExpandContext};
+use crate::types::{EvalFuncData, ExpandContext, TypVal};
 use crate::window::{bare_window, free_bare_window};
 use crate::winlayer::graph::{leave_curbuf, leave_curwin};
 use crate::winlayer::{Buf, Win};
@@ -132,14 +133,11 @@ fn command_names_complete_from_the_table() {
         strings(&["tabnew", "tabnext"])
     );
     assert_eq!(complete("tabn", "cmdline"), complete("|tabn", "cmdline"));
-    // After a bar, the next command is the one completed. (Skipping the
-    // expression calls libc's `strpbrk`, which Miri cannot.)
-    if !cfg!(miri) {
-        assert_eq!(
-            complete("echo 1 | tabn", "cmdline"),
-            strings(&["tabnew", "tabnext"])
-        );
-    }
+    // After a bar, the next command is the one completed.
+    assert_eq!(
+        complete("echo 1 | tabn", "cmdline"),
+        strings(&["tabnew", "tabnext"])
+    );
 }
 
 #[test]
@@ -208,9 +206,7 @@ fn fixed_argument_lists() {
     assert_eq!(complete("retab -", "cmdline"), strings(&["-indentonly"]));
     assert_eq!(complete_type("breakadd "), "breakpoint");
     assert_eq!(complete_type("filetype "), "filetypecmd");
-    if !cfg!(miri) {
-        assert_eq!(complete_type("echo "), "expression");
-    }
+    assert_eq!(complete_type("echo "), "expression");
     assert_eq!(complete_type("unknowncmd "), "");
 }
 
@@ -631,11 +627,6 @@ fn argument_contexts_of_other_modules() {
         ("scriptnames ", &[], "scriptnames"),
     ];
     for &(line, matches, kind) in cases {
-        // 'eventignore' formats its names with a two-`%s` `snprintf`, which
-        // the Miri stand-in does not take.
-        if cfg!(miri) && line.contains("eventignore") {
-            continue;
-        }
         assert_eq!(complete(line, "cmdline"), strings(matches), "{line:?}");
         assert_eq!(complete_type(line), kind, "{line:?}");
     }

@@ -12,6 +12,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -607,6 +608,16 @@ pub unsafe fn ptr2cells(p_in: *const c_char) -> c_int {
     table_cells(byte)
 }
 
+/// [`ptr2cells`] over a slice: the cells the character at the start of
+/// `bytes` takes. An empty slice reads as the NUL the pointer form stops at.
+pub(crate) fn ptr2cells_at(bytes: &[u8]) -> c_int {
+    let first = bytes.first().copied().unwrap_or(0);
+    if first >= 0x80 {
+        return crate::mbyte::cells_at(bytes);
+    }
+    table_cells(first)
+}
+
 /// The display width of the whole string `s`.
 ///
 /// # Safety
@@ -614,6 +625,12 @@ pub unsafe fn ptr2cells(p_in: *const c_char) -> c_int {
 pub unsafe fn vim_strsize(s: *const c_char) -> c_int {
     // SAFETY: forwarded to the caller's contract.
     unsafe { vim_strnsize(s, MAXCOL) }
+}
+
+/// [`vim_strsize`] of a string the caller owns.
+pub(crate) fn vim_strsize_cstr(s: &CStr) -> c_int {
+    // SAFETY: a NUL-terminated string.
+    unsafe { vim_strsize(s.as_ptr()) }
 }
 
 /// The display width of at most `len` bytes of `s`.

@@ -114,7 +114,7 @@ use crate::textformat::auto_format;
 use crate::types::{
     BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, ExtmarkOp, HashTab,
     LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos, PumItem, RegMatch, SaveVEvent, String_0, TypVal,
-    VarNumber, Vv, XpPrefix, extmark_undo_vec_t, ptrdiff_t, size_t, uint64_t,
+    VarNumber, Vv, extmark_undo_vec_t, ptrdiff_t, size_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -150,7 +150,6 @@ pub use self::keys::*;
 #[cfg(test)]
 mod tests;
 pub const kDirectionNotSet: Direction = 0;
-pub const XP_PREFIX_NONE: XpPrefix = 0;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const OPENLINE_FORCE_INDENT: ::core::ffi::c_int = 64;
 pub const OPENLINE_KEEPTRAIL: ::core::ffi::c_int = 4;

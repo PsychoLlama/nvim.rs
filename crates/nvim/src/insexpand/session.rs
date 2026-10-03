@@ -11,7 +11,6 @@
 use super::*;
 use crate::charset::skip;
 use crate::eval::typval::CallFrame;
-use crate::ex_getln::EXPAND_T_INIT;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::memline::Lines;
@@ -193,13 +192,15 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
 
     compl_col.set(compl_col.get() + startcol);
     compl_length.set(curs_col - startcol);
-    compl_pattern().set(unsafe {
-        cstr_to_string(addstar(
-            line.offset(compl_col.get() as isize),
+    // SAFETY: the column and length are inside the cursor line, which is
+    // still where `line` points.
+    let typed = unsafe {
+        core::slice::from_raw_parts(
+            line.offset(compl_col.get() as isize).cast::<u8>(),
             compl_length.get() as size_t,
-            ExpandContext::Files,
-        ))
-    });
+        )
+    };
+    compl_pattern().set(String_0::from_bytes(&addstar(typed, ExpandContext::Files)));
     Ok(())
 }
 
@@ -207,8 +208,7 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
 pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
     // The expansion context is kept for `get_next_cmdline_completion`, and
     // moved out for the length of this call: `nlua_expand_pat` runs Lua.
-    let mut xp = compl_xp.take().unwrap_or_else(|| Box::new(EXPAND_T_INIT));
-    let expand: *mut Expand = &mut *xp;
+    let mut xp = compl_xp.take().unwrap_or_default();
     let pattern = {
         let mut lines = Lines::current();
         let line = lines.line(Win::current().w_cursor.lnum);
@@ -216,29 +216,19 @@ pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
         String_0::from_bytes(&line[..to])
     };
     compl_pattern().set(pattern);
-    unsafe {
-        set_cmd_context(
-            expand,
-            compl_pattern().data(),
-            compl_pattern().len() as c_int,
-            curs_col,
-            false,
-        )
-    };
-    if unsafe { (*expand).xp_context } == ExpandContext::Lua {
-        unsafe { nlua_expand_pat(expand) };
+    let line = compl_pattern().to_vec();
+    set_cmd_context(&mut xp, &line, curs_col, false);
+    if xp.context == ExpandContext::Lua {
+        nlua_expand_pat(&mut xp);
     }
-    if unsafe { (*expand).xp_context } == ExpandContext::Unsuccessful
-        || unsafe { (*expand).xp_context } == ExpandContext::Nothing
-    {
+    if xp.context == ExpandContext::Unsuccessful || xp.context == ExpandContext::Nothing {
         // No completion possible: use an empty pattern to get a
         // "pattern not found" message.
         compl_col.set(curs_col);
     } else {
-        // SAFETY: `xp_pattern` points into `compl_pattern`, which
-        // `set_cmd_context` was given.
-        let off = unsafe { (*expand).xp_pattern.offset_from(compl_pattern().data()) };
-        compl_col.set(off as ColNr);
+        // The pattern is an offset into the context's copy of
+        // `compl_pattern`, which is the same offset into it.
+        compl_col.set(xp.pattern as ColNr);
     }
     compl_length.set(curs_col - compl_col.get());
     compl_xp.set(Some(xp));

@@ -27,11 +27,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::{
-    FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, kDirectionNotSet, nr_arg, str_arg,
-    str_arg_chk,
-};
-use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one, globpath};
+use super::{FINDFILE_DIR, FINDFILE_FILE, RetList, nr_arg, str_arg, str_arg_chk};
+use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one, globpath};
 use crate::eval::eval_expr_typval;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::NumBuf;
@@ -39,14 +36,14 @@ use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
 use crate::fileio::readdir_core;
-use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
-use crate::memory::xfree;
+use crate::garray::{ga_clear_strings, ga_init};
+use crate::memory::{XString, xfree};
 use crate::option::vars::p_wic;
 use crate::optionstr::OptString;
 use crate::path::buffer_path;
 use crate::types::{
-    BackslashEscape, EvalFuncData, Expand, ExpandContext, GArray, Pos, ScriptCtx, TypVal, VAR_LIST,
-    VAR_STRING, VarNumber, Vv, kListLenUnknown, ptrdiff_t, size_t,
+    EvalFuncData, Expand, ExpandContext, GArray, TypVal, VAR_LIST, VAR_STRING, VarNumber, Vv,
+    kListLenUnknown, ptrdiff_t, size_t,
 };
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -60,68 +57,33 @@ use core::{ptr, slice};
 struct Expander(Expand);
 
 impl Expander {
-    /// A fresh expander with 'wildignorecase' folded into the caller's
-    /// options, as `glob()` wants it.
+    /// A fresh expander for file names.
     fn new() -> Self {
-        let mut xpc = Expand {
-            xp_pattern: ptr::null_mut(),
-            xp_context: ExpandContext::Nothing,
-            xp_pattern_len: 0,
-            xp_prefix: XP_PREFIX_NONE,
-            xp_arg: ptr::null_mut(),
-            xp_luaref: 0,
-            xp_script_ctx: ScriptCtx::NONE,
-            xp_backslash: BackslashEscape::NONE,
-            xp_shell: false,
-            xp_numfiles: 0,
-            xp_col: 0,
-            xp_selected: 0,
-            xp_orig: ptr::null_mut(),
-            xp_files: ptr::null_mut(),
-            xp_line: ptr::null_mut(),
-            xp_buf: [0; 1025],
-            xp_search_dir: kDirectionNotSet,
-            xp_pre_incsearch_pos: Pos {
-                lnum: 0,
-                col: 0,
-                coladd: 0,
-            },
-        };
-        // SAFETY: a fresh local, which is all `expand_init` writes over.
-        unsafe { expand_init(&raw mut xpc) };
-        xpc.xp_context = ExpandContext::Files;
+        let mut xpc = Expand::new();
+        xpc.context = ExpandContext::Files;
         Self(xpc)
     }
 
     /// Expand `pat`.  `WildMode::All` answers the matches joined into the string
-    /// this returns; `WildMode::AllKeep` leaves them in [`Expand::files`].
-    fn one(&mut self, pat: &CStr, options: WildOpts, mode: WildMode) -> *mut c_char {
-        let (p, orig) = (pat.as_ptr().cast_mut(), ptr::null_mut());
-        // SAFETY: an initialised expander and a NUL-terminated pattern, which
-        // `expand_one` only reads; a NULL `orig` asks for no old match.
-        unsafe { expand_one(&raw mut self.0, p, orig, options, mode) }
+    /// this returns; `WildMode::AllKeep` leaves them in [`Expander::files`].
+    fn one(&mut self, pat: &CStr, options: WildOpts, mode: WildMode) -> Option<XString> {
+        expand_one(&mut self.0, Some(pat), None, options, mode)
     }
 
     /// The names a `WildMode::AllKeep` expansion left behind, in the order
     /// `gen_expand_wildcards` sorted them into.
-    fn files(&self) -> &[*mut c_char] {
-        if self.0.xp_numfiles <= 0 {
-            return &[];
-        }
-        // SAFETY: `xp_numfiles` is how many names `xp_files` holds, and it is
-        // positive here.
-        unsafe { slice::from_raw_parts(self.0.xp_files, self.0.xp_numfiles as usize) }
+    fn files(&self) -> &[XString] {
+        self.0.matches()
     }
 
     /// How many names the last expansion left: -1 until one succeeds, which
     /// is `kListLenUnknown` and what the List is then allocated with.
     fn count(&self) -> c_int {
-        self.0.xp_numfiles
+        self.0.match_count()
     }
 
     fn cleanup(&mut self) {
-        // SAFETY: an initialised expander.
-        unsafe { expand_cleanup(&raw mut self.0) };
+        expand_cleanup(&mut self.0);
     }
 }
 
@@ -161,16 +123,6 @@ impl StrArray {
         }
         // SAFETY: the array holds `ga_len` items of one pointer each.
         unsafe { slice::from_raw_parts(self.0.ga_data.cast(), self.0.ga_len as usize) }
-    }
-
-    fn len(&self) -> c_int {
-        self.0.ga_len
-    }
-
-    /// The names joined by `sep`, as one owned string.
-    fn joined(&self, sep: &CStr) -> *mut c_char {
-        // SAFETY: an initialised array of NUL-terminated strings.
-        unsafe { ga_concat_strings(&raw const self.0, sep.as_ptr()) }
     }
 }
 
@@ -349,13 +301,16 @@ pub fn f_glob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let pat = str_arg(args, 0, &mut numbuf);
     if result.v_type() == VAR_STRING {
-        result.write_string(xpc.one(pat, options, WildMode::All));
+        result.write_string(
+            xpc.one(pat, options, WildMode::All)
+                .map_or(ptr::null_mut(), XString::into_raw),
+        );
         return;
     }
     xpc.one(pat, options, WildMode::AllKeep);
     let list = RetList::alloc(result, xpc.count() as ptrdiff_t);
-    for &name in xpc.files() {
-        list.push(name);
+    for name in xpc.files() {
+        list.push(name.as_ptr());
     }
     xpc.cleanup();
 }
@@ -389,19 +344,23 @@ pub fn f_globpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
 
-    let mut found = StrArray::new();
-    let path = str_arg(args, 0, &mut numbuf).as_ptr().cast_mut();
-    // SAFETY: two NUL-terminated strings, which `globpath` only reads, and an
-    // initialised array for it to append the matches to.
-    unsafe { globpath(path, file.as_ptr().cast_mut(), found.raw(), flags, false) };
+    let path = str_arg(args, 0, &mut numbuf);
+    let found = globpath(path, file, flags, false);
 
     if result.v_type() == VAR_STRING {
-        result.write_string(found.joined(c"\n"));
+        let mut joined = XString::new();
+        for (i, name) in found.iter().enumerate() {
+            if i > 0 {
+                joined.push_byte(b'\n');
+            }
+            joined.push_cstr(name.as_cstr());
+        }
+        result.write_string(joined.into_raw());
         return;
     }
-    let list = RetList::alloc(result, found.len() as ptrdiff_t);
-    for &name in found.names() {
-        list.push(name);
+    let list = RetList::alloc(result, ptrdiff_t::try_from(found.len()).unwrap_or(0));
+    for name in &found {
+        list.push(name.as_ptr());
     }
 }
 

@@ -92,41 +92,40 @@ pub fn ex_runtime(excmd: &mut ExArg) {
     let _ = source_runtime(unsafe { cstr::at(arg) }, flags);
 }
 
-/// Set the completion context for the `:runtime` command.
+/// Set the completion context for the `:runtime` command, whose argument
+/// starts at `arg` in the completion's line.
 ///
 /// The `[where]` qualifier is only offered for a single-argument command line;
 /// past the first argument [`runtime_expand_flags`] is forced non-zero so
 /// [`expand_runtime_cmd`] stops proposing the qualifiers.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `arg` must point at a NUL-terminated string.
-pub unsafe fn set_context_in_runtime_cmd(expand: *mut Expand, arg: *const c_char) {
-    // SAFETY: `arg` is the NUL-terminated command line tail and `expand` is the
-    // live expansion context.
-    let mut arg = arg.cast_mut();
-    let mut p = unsafe { skiptowhite(arg) };
-    runtime_expand_flags.set(if unsafe { *p } != 0 {
-        unsafe { get_runtime_cmd_flags(&raw mut arg, p.offset_from(arg) as size_t) }
-    } else {
-        RuntimeOpts::NONE
-    });
-    // Skip to the last argument.
-    loop {
-        p = unsafe { skiptowhite_esc(arg) };
-        if unsafe { *p } == 0 {
-            break;
+pub fn set_context_in_runtime_cmd(expand: &mut Expand, arg: usize) {
+    let mut arg = expand.line_ptr_at(arg);
+    // SAFETY: a position in the completion's NUL-terminated line, which the
+    // walks below stay inside and only read, and which is not replaced
+    // while they run.
+    unsafe {
+        let mut p = skiptowhite(arg);
+        runtime_expand_flags.set(if *p != 0 {
+            get_runtime_cmd_flags(&raw mut arg, p.offset_from(arg) as size_t)
+        } else {
+            RuntimeOpts::NONE
+        });
+        // Skip to the last argument.
+        loop {
+            p = skiptowhite_esc(arg);
+            if *p == 0 {
+                break;
+            }
+            if runtime_expand_flags.get() == RuntimeOpts::NONE {
+                // With multiple arguments and no [where], an unrelated
+                // non-zero flag keeps [where] out of the completion.
+                runtime_expand_flags.set(RuntimeOpts::ALL);
+            }
+            arg = skipwhite(p);
         }
-        if runtime_expand_flags.get() == RuntimeOpts::NONE {
-            // With multiple arguments and no [where], an unrelated
-            // non-zero flag keeps [where] out of the completion.
-            runtime_expand_flags.set(RuntimeOpts::ALL);
-        }
-        arg = unsafe { skipwhite(p) };
     }
-    unsafe { (*expand).xp_context = ExpandContext::Runtime };
-    unsafe { (*expand).xp_pattern = arg };
+    expand.context = ExpandContext::Runtime;
+    expand.set_pattern_at(arg);
 }
 
 /// Source every name `accept` picks out, stopping after the first unless

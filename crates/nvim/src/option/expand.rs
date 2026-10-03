@@ -17,20 +17,16 @@
 
 use crate::optionstr::OptString;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::ptr;
-use core::slice;
+use core::ffi::{CStr, c_char, c_uint};
 use std::ffi::CString;
 
-use crate::cmdexpand::cmdline_fuzzy_complete;
-use crate::cmdexpand::fuzzymatches_to_strmatches;
+use crate::cmdexpand::{Scored, cmdline_fuzzy_complete, fuzzy_sorted};
 use crate::cstr;
 use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::fuzzy::fuzzy_match_str;
-use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::keycodes::get_special_key_code;
-use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
+use crate::keycodes::special_key_code;
+use crate::memory::XString;
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptCdpath, kOptCount, kOptDirectory, kOptFiletype, kOptInvalid,
     kOptKeymap, kOptPackpath, kOptPath, kOptRuntimepath, kOptSpellsuggest, kOptSyntax, kOptTags,
@@ -38,18 +34,16 @@ use crate::options::{
 };
 use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
-use crate::strings::{vim_strchr, vim_strsave_escaped};
+use crate::strings::escaped_bytes;
 use crate::types::{
-    BackslashEscape, Expand, ExpandContext, Failed, FuzMatchStr, GArray, MAXPATHL, NUL, OptExpand,
-    OptIndex, OptionSetFlags, RegMatch, XpPrefix, size_t, uint32_t,
+    BackslashEscape, Expand, ExpandContext, Failed, MAXPATHL, OptExpand, OptIndex, OptionSetFlags,
+    RegMatch, XpPrefix, size_t, uint32_t,
 };
-use crate::winlayer::Live;
 
 use super::{
-    FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,
-    get_varp_scope_from, is_option_hidden, kOptFlagColon, kOptFlagComma, kOptFlagExpand,
-    kOptFlagFlagList, kOptValTypeBoolean, kOptValTypeNumber, option_has_type, option_value2string,
-    option_var,
+    FUZZY_SCORE_NONE, find_option, find_option_len, get_option, get_varp_scope_from,
+    is_option_hidden, kOptFlagColon, kOptFlagComma, kOptFlagExpand, kOptFlagFlagList,
+    kOptValTypeBoolean, kOptValTypeNumber, option_has_type, option_value2string, option_var,
 };
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.
@@ -59,7 +53,7 @@ use super::{
 /// first two are always `t_` and the last is the terminator.
 static IDX: GlobalCell<OptIndex> = GlobalCell::new(kOptInvalid);
 static NAME: GlobalCell<[c_char; 5]> = GlobalCell::new([b't' as c_char, b'_' as c_char, 0, 0, 0]);
-static START_COL: GlobalCell<c_int> = GlobalCell::new(0);
+static START_COL: GlobalCell<usize> = GlobalCell::new(0);
 static FLAGS: GlobalCell<OptionSetFlags> = GlobalCell::new(OptionSetFlags::NONE);
 /// Whether the operator was `+=` or `^=`, which means the current value is
 /// not a candidate to offer back.
@@ -98,7 +92,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Opt
     // is a path.
     let one_prefix = match opt_idx {
         kOptSpellsuggest => c"file:".as_ptr() as *mut c_char,
-        _ => ptr::null_mut(),
+        _ => core::ptr::null_mut(),
     };
     unsafe { expand_env_esc(val, expanded.as_mut_ptr(), MAXPATHL, esc, false, one_prefix) };
     if unsafe { cstr::eq(expanded.as_ptr(), val) } {
@@ -107,34 +101,29 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Opt
     Some(cstr::in_chars(&expanded).to_owned())
 }
 
-/// Work out what the cursor is sitting on in a `:set` command line, and
-/// leave `expand` describing what to complete.
-///
-/// # Safety
-///
-/// `expand` must be the command line's expansion state and `arg` a
-/// NUL-terminated cursor into `expand.xp_line`.
-pub(crate) unsafe fn set_context_in_set_cmd(
-    expand: *mut Expand,
-    arg: *mut c_char,
-    opt_flags: OptionSetFlags,
-) {
+/// Work out what the cursor is sitting on in a `:set` command line whose
+/// argument starts at `arg`, and leave `expand` describing what to complete.
+pub(crate) fn set_context_in_set_cmd(expand: &mut Expand, arg: usize, opt_flags: OptionSetFlags) {
     FLAGS.set(opt_flags);
+    // The line as it stands while the context is worked out: cut at the
+    // cursor.
+    let line = expand.line.to_vec();
+    let at = |i: usize| line.get(i).copied().unwrap_or(0);
 
-    // SAFETY: the caller's expansion state and command line.
-    unsafe { (*expand).xp_context = ExpandContext::Settings };
-    if unsafe { *arg } == NUL as c_char {
-        unsafe { (*expand).xp_pattern = arg };
+    expand.context = ExpandContext::Settings;
+    if at(arg) == 0 {
+        expand.pattern = arg;
         return;
     }
 
-    let argend = unsafe { arg.add(cstr::bytes_at(arg).len()) };
+    let argend = line[arg..]
+        .iter()
+        .position(|&c| c == 0)
+        .map_or(line.len(), |end| arg + end);
     // A trailing unescaped space starts a fresh argument.
-    let last = unsafe { argend.sub(1) };
-    if unsafe { *last } as c_int == ' ' as c_int
-        && unsafe { *last.sub(1) } as c_int != '\\' as c_int
-    {
-        unsafe { (*expand).xp_pattern = last.add(1) };
+    let last = argend - 1;
+    if at(last) == b' ' && (last == 0 || at(last - 1) != b'\\') {
+        expand.pattern = last + 1;
         return;
     }
 
@@ -142,36 +131,31 @@ pub(crate) unsafe fn set_context_in_set_cmd(
     // first space with an even number of backslashes before it.
     let mut p = last;
     while p > arg {
-        let unescaped =
-            if unsafe { *p } as c_int == ' ' as c_int || unsafe { *p } as c_int == ',' as c_int {
-                (unsafe { backslashes_before(arg, p) }) & 1 == 0
-            } else {
-                false
-            };
-        if unsafe { *p } as c_int == ' ' as c_int && unescaped {
-            p = unsafe { p.add(1) };
+        let unescaped = if at(p) == b' ' || at(p) == b',' {
+            backslashes_before(&line, arg, p) & 1 == 0
+        } else {
+            false
+        };
+        if at(p) == b' ' && unescaped {
+            p += 1;
             break;
         }
-        p = unsafe { p.sub(1) };
+        p -= 1;
     }
 
-    for (spelling, prefix) in [
-        (c"no", XP_PREFIX_NO as XpPrefix),
-        (c"inv", XP_PREFIX_INV as XpPrefix),
-    ] {
-        let len = spelling.count_bytes();
-        if unsafe { cstr::prefix_eq(p, spelling.as_ptr(), len) } {
-            unsafe { (*expand).xp_context = ExpandContext::BoolSettings };
-            unsafe { (*expand).xp_prefix = prefix };
-            p = unsafe { p.add(len) };
+    for (spelling, prefix) in [(&b"no"[..], XpPrefix::No), (&b"inv"[..], XpPrefix::Inv)] {
+        if line[p..].starts_with(spelling) {
+            expand.context = ExpandContext::BoolSettings;
+            expand.prefix = prefix;
+            p += spelling.len();
             break;
         }
     }
-    unsafe { (*expand).xp_pattern = p };
+    expand.pattern = p;
     let arg = p;
 
     let Some((nextchar, opt_idx, flags, is_term_option)) =
-        (unsafe { take_option_name(expand, arg, &mut p) })
+        take_option_name(expand, &line, arg, &mut p)
     else {
         return;
     };
@@ -181,24 +165,21 @@ pub(crate) unsafe fn set_context_in_set_cmd(
     let mut nextchar = nextchar;
     APPEND.set(false);
     let mut subtract = false;
-    if matches!(nextchar as u8, b'-' | b'+' | b'^') && unsafe { *p.add(1) } as c_int == '=' as c_int
-    {
-        subtract = nextchar as u8 == b'-';
-        APPEND.set(matches!(nextchar as u8, b'+' | b'^'));
-        p = unsafe { p.add(1) };
-        nextchar = '=' as c_char;
+    if matches!(nextchar, b'-' | b'+' | b'^') && at(p + 1) == b'=' {
+        subtract = nextchar == b'-';
+        APPEND.set(matches!(nextchar, b'+' | b'^'));
+        p += 1;
+        nextchar = b'=';
     }
-    if (nextchar as c_int != '=' as c_int && nextchar as c_int != ':' as c_int)
-        || unsafe { (*expand).xp_context } == ExpandContext::BoolSettings
-    {
-        unsafe { (*expand).xp_context = ExpandContext::Unsuccessful };
+    if (nextchar != b'=' && nextchar != b':') || expand.context == ExpandContext::BoolSettings {
+        expand.context = ExpandContext::Unsuccessful;
         return;
     }
 
     // Everything below completes the *value*, after the `=` or `:`.
     IDX.set(if is_term_option { kOptInvalid } else { opt_idx });
-    unsafe { (*expand).xp_pattern = p.add(1) };
-    START_COL.set(unsafe { p.add(1).offset_from((*expand).xp_line) } as c_int);
+    expand.pattern = p + 1;
+    START_COL.set(p + 1);
 
     // Three options reuse another command's completion wholesale.
     let borrowed = match opt_idx {
@@ -208,20 +189,20 @@ pub(crate) unsafe fn set_context_in_set_cmd(
         _ => None,
     };
     if let Some(context) = borrowed {
-        unsafe { (*expand).xp_context = context };
+        expand.context = context;
         return;
     }
 
     if subtract {
-        unsafe { (*expand).xp_context = ExpandContext::SettingSubtract };
+        expand.context = ExpandContext::SettingSubtract;
         return;
     } else if IDX.get() != kOptInvalid && get_option(IDX.get()).opt_expand_cb.is_some() {
-        unsafe { (*expand).xp_context = ExpandContext::StringSetting };
-    } else if unsafe { *(*expand).xp_pattern } == NUL as c_char {
-        unsafe { (*expand).xp_context = ExpandContext::OldSetting };
+        expand.context = ExpandContext::StringSetting;
+    } else if at(expand.pattern) == 0 {
+        expand.context = ExpandContext::OldSetting;
         return;
     } else {
-        unsafe { (*expand).xp_context = ExpandContext::Nothing };
+        expand.context = ExpandContext::Nothing;
     }
 
     if is_term_option || option_has_type(opt_idx, kOptValTypeNumber) {
@@ -230,39 +211,34 @@ pub(crate) unsafe fn set_context_in_set_cmd(
 
     // Only string options from here.
     if flags & kOptFlagExpand as uint32_t != 0 {
-        unsafe { set_file_context(expand, opt_idx, flags) };
+        set_file_context(expand, opt_idx, flags);
     }
     if flags & (kOptFlagExpand | kOptFlagComma | kOptFlagColon) as uint32_t != 0 {
-        unsafe { seek_item_start(expand, argend, flags) };
+        seek_item_start(expand, &line, argend, flags);
     }
     // A set of one-letter flags has no words to complete, so the
     // pattern is always empty and the whole set is offered.
     if flags & kOptFlagFlagList as uint32_t != 0 {
-        unsafe { (*expand).xp_pattern = argend };
+        expand.pattern = argend;
     }
     // 'spellsuggest' takes `file:<name>`, whose tail is a file name.
     if opt_idx == kOptSpellsuggest {
-        if unsafe { cstr::starts_with((*expand).xp_pattern, b"file:") } {
-            unsafe { (*expand).xp_pattern = (*expand).xp_pattern.add(5) };
+        if line[expand.pattern..].starts_with(b"file:") {
+            expand.pattern += 5;
         } else if get_option(IDX.get()).opt_expand_cb.is_some() {
-            unsafe { (*expand).xp_context = ExpandContext::StringSetting };
+            expand.context = ExpandContext::StringSetting;
         }
     }
 }
 
 /// How many backslashes immediately precede `at`, not counting past
 /// `start`.
-///
-/// # Safety
-///
-/// `start..=at` must be one string.
-unsafe fn backslashes_before(start: *const c_char, at: *const c_char) -> isize {
-    let mut s = at;
-    // SAFETY: the caller's span.
-    while s > start && unsafe { *s.sub(1) } as c_int == '\\' as c_int {
-        s = unsafe { s.sub(1) };
-    }
-    unsafe { at.offset_from(s) }
+fn backslashes_before(line: &[u8], start: usize, at: usize) -> usize {
+    line[start..at]
+        .iter()
+        .rev()
+        .take_while(|&&c| c == b'\\')
+        .count()
 }
 
 /// Consume the option name at `arg`, leaving `*p` on the character after
@@ -271,32 +247,30 @@ unsafe fn backslashes_before(start: *const c_char, at: *const c_char) -> isize {
 ///
 /// Returns the character after the name, the option, its flags, and whether
 /// it was one of the `t_xx` terminal names — which have no table row.
-///
-/// # Safety
-///
-/// `expand` must be the expansion state and `arg` a NUL-terminated cursor.
-unsafe fn take_option_name(
-    expand: *mut Expand,
-    arg: *mut c_char,
-    p: &mut *mut c_char,
-) -> Option<(c_char, OptIndex, uint32_t, bool)> {
-    // SAFETY: the caller's command line and expansion state.
+fn take_option_name(
+    expand: &mut Expand,
+    line: &[u8],
+    arg: usize,
+    p: &mut usize,
+) -> Option<(u8, OptIndex, uint32_t, bool)> {
+    let at = |i: usize| line.get(i).copied().unwrap_or(0);
     // `<t_xx>` and `<Key>` spellings.
-    if unsafe { *arg } as c_int == '<' as c_int {
-        while unsafe { **p } as c_int != '>' as c_int {
-            let c = unsafe { **p };
-            *p = unsafe { p.add(1) };
-            if c == NUL as c_char {
+    if at(arg) == b'<' {
+        while at(*p) != b'>' {
+            let c = at(*p);
+            *p += 1;
+            if c == 0 {
                 return None;
             }
         }
-        let key = unsafe { get_special_key_code(arg.add(1)) };
+        let name = CString::new(&line[arg + 1..*p]).unwrap_or_default();
+        let key = special_key_code(&name);
         if key == 0 {
-            unsafe { (*expand).xp_context = ExpandContext::Nothing };
+            expand.context = ExpandContext::Nothing;
             return None;
         }
-        *p = unsafe { p.add(1) };
-        let nextchar = unsafe { **p };
+        *p += 1;
+        let nextchar = at(*p);
         // The two termcap bytes the key code packs.
         let lo = (-key & 0xff) as c_char;
         let hi = ((-key) as c_uint >> 8 & 0xff) as c_char;
@@ -305,21 +279,21 @@ unsafe fn take_option_name(
     }
 
     // A bare `t_xx` spelling.
-    if unsafe { **p } as c_int == 't' as c_int && unsafe { *p.add(1) } as c_int == '_' as c_int {
-        *p = unsafe { p.add(2) };
-        if unsafe { **p } != NUL as c_char {
-            *p = unsafe { p.add(1) };
+    if at(*p) == b't' && at(*p + 1) == b'_' {
+        *p += 2;
+        if at(*p) != 0 {
+            *p += 1;
         }
-        if unsafe { **p } == NUL as c_char {
+        if at(*p) == 0 {
             return None;
         }
-        *p = unsafe { p.add(1) };
-        let nextchar = unsafe { **p };
+        *p += 1;
+        let nextchar = at(*p);
         NAME.set([
             b't' as c_char,
             b'_' as c_char,
-            unsafe { *p.sub(2) },
-            unsafe { *p.sub(1) },
+            at(*p - 2) as c_char,
+            at(*p - 1) as c_char,
             0,
         ]);
         return Some((nextchar, kOptAleph, 0, true));
@@ -327,25 +301,21 @@ unsafe fn take_option_name(
 
     // An ordinary name. `*` is allowed as a wildcard for the name
     // completion that follows.
-    while (unsafe { **p } as u8).is_ascii_alphanumeric()
-        || unsafe { **p } as c_int == '_' as c_int
-        || unsafe { **p } as c_int == '*' as c_int
-    {
-        *p = unsafe { p.add(1) };
+    while at(*p).is_ascii_alphanumeric() || at(*p) == b'_' || at(*p) == b'*' {
+        *p += 1;
     }
-    if unsafe { **p } == NUL as c_char {
+    if at(*p) == 0 {
         return None;
     }
-    let nextchar = unsafe { **p };
-    let len = unsafe { p.offset_from(arg) } as usize;
-    let opt_idx = find_option_len(unsafe { slice::from_raw_parts(arg.cast::<u8>(), len) });
+    let nextchar = at(*p);
+    let opt_idx = find_option_len(&line[arg..*p]);
     if opt_idx == kOptInvalid || is_option_hidden(opt_idx) {
-        unsafe { (*expand).xp_context = ExpandContext::Nothing };
+        expand.context = ExpandContext::Nothing;
         return None;
     }
     // A boolean takes no value, so there is nothing after the name.
     if option_has_type(opt_idx, kOptValTypeBoolean) {
-        unsafe { (*expand).xp_context = ExpandContext::Nothing };
+        expand.context = ExpandContext::Nothing;
         return None;
     }
     Some((nextchar, opt_idx, get_option(opt_idx).flags, false))
@@ -353,12 +323,7 @@ unsafe fn take_option_name(
 
 /// A `kOptFlagExpand` option's value is a file or directory name; say which,
 /// and how many backslashes escape a space in it.
-///
-/// # Safety
-///
-/// `expand` must be the expansion state.
-unsafe fn set_file_context(expand: *mut Expand, opt_idx: OptIndex, flags: uint32_t) {
-    // SAFETY: the caller's expansion state, and the option table.
+fn set_file_context(expand: &mut Expand, opt_idx: OptIndex, flags: uint32_t) {
     // 'path', 'cdpath' and 'tags' need three backslashes for a space,
     // because their own parsers unescape one layer first.
     let three = matches!(opt_idx, kOptPath | kOptCdpath | kOptTags);
@@ -372,247 +337,130 @@ unsafe fn set_file_context(expand: *mut Expand, opt_idx: OptIndex, flags: uint32
             | kOptCdpath
             | kOptViewdir
     );
-    let context = if directories {
+    expand.context = if directories {
         ExpandContext::Directories
     } else {
         ExpandContext::Files
     };
-    let backslash = if three {
+    expand.backslash = if three {
         BackslashEscape::THREE
     } else {
         BackslashEscape::ONE
     };
-    unsafe { (*expand).xp_context = context };
-    unsafe { (*expand).xp_backslash = backslash };
     if flags & kOptFlagComma as uint32_t != 0 {
-        unsafe { (*expand).xp_backslash |= BackslashEscape::COMMA };
+        expand.backslash |= BackslashEscape::COMMA;
     }
 }
 
-/// Move `expand.xp_pattern` forward to the start of the item the cursor is in,
-/// for a value that is a list.
-///
-/// # Safety
-///
-/// `expand` must be the expansion state and `argend` the end of its argument.
-unsafe fn seek_item_start(expand: *mut Expand, argend: *mut c_char, flags: uint32_t) {
+/// Move `expand.pattern` forward to the start of the item the cursor is in,
+/// for a value that is a list ending at `argend`.
+fn seek_item_start(expand: &mut Expand, line: &[u8], argend: usize, flags: uint32_t) {
     let comma_list = flags & kOptFlagComma as uint32_t != 0;
     let colon_list = flags & kOptFlagColon as uint32_t != 0;
 
-    // SAFETY: the caller's expansion state and argument.
-    let mut p = unsafe { argend.sub(1) };
-    while p > unsafe { (*expand).xp_pattern } {
-        let c = unsafe { *p } as c_int;
-        let separator = c == ' ' as c_int || c == ',' as c_int || (c == ':' as c_int && colon_list);
+    let mut p = argend - 1;
+    while p > expand.pattern {
+        let c = line[p];
+        let separator = c == b' ' || c == b',' || (c == b':' && colon_list);
         if separator {
-            let bs = unsafe { backslashes_before((*expand).xp_pattern, p) };
+            let bs = backslashes_before(line, expand.pattern, p);
             // A space only separates a triple-escaped value, a comma
             // needs fewer than two backslashes, and a colon in a
             // colon-list is never escaped.
-            let splits = (c == ' ' as c_int
-                && unsafe { (*expand).xp_backslash }.has(BackslashEscape::THREE)
-                && bs < 3)
-                || (c == ',' as c_int && comma_list && bs < 2)
-                || (c == ':' as c_int && colon_list);
+            let splits = (c == b' ' && expand.backslash.has(BackslashEscape::THREE) && bs < 3)
+                || (c == b',' && comma_list && bs < 2)
+                || (c == b':' && colon_list);
             if splits {
-                unsafe { (*expand).xp_pattern = p.add(1) };
+                expand.pattern = p + 1;
                 break;
             }
         }
-        p = unsafe { p.sub(1) };
+        p -= 1;
     }
-}
-
-/// Where one completion pass puts what it matches, and how it matches.
-///
-/// `match_str` used to take these alongside the candidate and the index,
-/// which is what its `too_many_arguments` allow was for; a pass sees one
-/// set of them throughout, so it builds the value once. The match state
-/// stays a parameter: it is written to, so it cannot ride in a `Copy`
-/// bundle.
-#[derive(Clone, Copy)]
-struct Matcher {
-    /// The plain array of names.
-    matches: *mut *mut c_char,
-    /// The scored array, used instead when `fuzzy`.
-    fuzmatch: *mut FuzMatchStr,
-    /// What a fuzzy pass matches against.
-    fuzzystr: *const c_char,
-    fuzzy: bool,
-}
-
-/// Whether `str` matches, recording it as match `idx` unless only the count
-/// is wanted. The fuzzy form records a score instead.
-///
-/// # Safety
-///
-/// `matches`/`fuzmatch` must have room for `idx`, and the strings must be
-/// NUL-terminated.
-unsafe fn match_str(
-    str: *mut c_char,
-    idx: c_int,
-    test_only: bool,
-    regex_match: &mut RegMatch,
-    m: Matcher,
-) -> bool {
-    // SAFETY: the caller's strings and output arrays.
-    if !m.fuzzy {
-        if !vim_regexec(regex_match, unsafe { cstr::at(str) }, 0) {
-            return false;
-        }
-        if !test_only {
-            unsafe { *m.matches.offset(idx as isize) = xstrdup(str) };
-        }
-        return true;
-    }
-    let score = unsafe { fuzzy_match_str(cstr::at(str), cstr::at(m.fuzzystr)) };
-    if score == FUZZY_SCORE_NONE {
-        return false;
-    }
-    if !test_only {
-        // SAFETY: the caller promised room for `idx`. The handle borrows
-        // the slot for the one field write that asked and no longer -- a
-        // `&mut *p` here would write into a discarded copy of the slot.
-        let mut slot = unsafe { Live::new(m.fuzmatch.offset(idx as isize)) };
-        slot.idx = idx;
-        slot.str = unsafe { xstrdup(str) };
-        slot.score = score;
-    }
-    true
 }
 
 /// Complete an option *name*.
 ///
-/// Two passes: the first counts the matches so the array can be sized, the
-/// second fills it.
-///
-/// # Safety
-///
-/// The out-parameters must be writable, and `regmatch`/`fuzzystr` valid.
-pub(crate) unsafe fn expand_settings(
-    expand: *mut Expand,
+/// Every option the pattern matches, by its full name or (outside fuzzy
+/// matching) its short one, plus `all` where a non-boolean name would do.
+pub(crate) fn expand_settings(
+    expand: &Expand,
     regmatch: &mut RegMatch,
-    fuzzystr: *mut c_char,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
+    fuzzystr: &CStr,
     can_fuzzy: bool,
-) -> Result<(), Failed> {
-    let mut num_normal = 0;
-    let mut count = 0;
-    let mut fuzmatch: *mut FuzMatchStr = ptr::null_mut();
+) -> Result<Vec<XString>, Failed> {
+    let fuzzy = can_fuzzy && cmdline_fuzzy_complete(fuzzystr.to_bytes());
+    let booleans_only = expand.context == ExpandContext::BoolSettings;
+    let mut found = Vec::new();
+    let mut scored = Vec::new();
 
-    // SAFETY: the caller's expansion state and out-parameters, and the
-    // option table.
-    let ic = regmatch.rm_ic;
-    let fuzzy = can_fuzzy && unsafe { cmdline_fuzzy_complete(fuzzystr) };
-    let booleans_only = unsafe { (*expand).xp_context } == ExpandContext::BoolSettings;
-
-    for pass in 0..2 {
-        let counting = pass == 0;
-        regmatch.rm_ic = ic;
-        // Both output arrays are allocated at the end of the counting
-        // pass, so one matcher stands for the whole of this one.
-        let m = Matcher {
-            // SAFETY: the caller's out-parameter.
-            matches: unsafe { *matches },
-            fuzmatch,
-            fuzzystr,
-            fuzzy,
-        };
-
-        // "all" is a `:set` keyword rather than an option, so it is
-        // only offered where a non-boolean name would be.
-        let all = c"all".as_ptr() as *mut c_char;
-        if !booleans_only && unsafe { match_str(all, count, counting, regmatch, m) } {
-            if counting {
-                num_normal += 1;
-            } else {
-                count += 1;
+    // Whether `name` matches; a match is kept in `found`, or scored into
+    // `scored` when fuzzy. The two lists are parameters so the loop below
+    // can still push to `found` itself.
+    let try_name = |found: &mut Vec<XString>,
+                    scored: &mut Vec<Scored>,
+                    name: &CStr,
+                    regmatch: &mut RegMatch|
+     -> bool {
+        if !fuzzy {
+            if !vim_regexec(regmatch, name, 0) {
+                return false;
             }
+            found.push(XString::from_cstr(name));
+            return true;
         }
-
-        for opt_idx in kOptAleph..kOptCount as OptIndex {
-            let opt = get_option(opt_idx);
-            if is_option_hidden(opt_idx)
-                || (booleans_only && !option_has_type(opt_idx, kOptValTypeBoolean))
-            {
-                continue;
-            }
-            if unsafe {
-                match_str(
-                    opt.fullname.as_ptr().cast_mut(),
-                    count,
-                    counting,
-                    regmatch,
-                    m,
-                )
-            } {
-                if counting {
-                    num_normal += 1;
-                } else {
-                    count += 1;
-                }
-            } else if !fuzzy
-                && opt
-                    .shortname
-                    .is_some_and(|short| vim_regexec(regmatch, short, 0))
-            {
-                // A short name matches, but what is offered is the
-                // full one.
-                if counting {
-                    num_normal += 1;
-                } else {
-                    unsafe { *(*matches).offset(count as isize) = xstrdup(opt.fullname.as_ptr()) };
-                    count += 1;
-                }
-            }
+        let score = fuzzy_match_str(name, fuzzystr);
+        if score == FUZZY_SCORE_NONE {
+            return false;
         }
+        let idx = scored.len();
+        scored.push(Scored {
+            text: XString::from_cstr(name),
+            score,
+            idx,
+        });
+        true
+    };
 
-        if counting {
-            if num_normal == 0 {
-                return Ok(());
-            }
-            unsafe { *num_matches = num_normal };
-            if fuzzy {
-                let room = (num_normal as size_t).wrapping_mul(size_of::<FuzMatchStr>());
-                fuzmatch = unsafe { xmalloc(room) }.cast::<FuzMatchStr>();
-            } else {
-                let room = (num_normal as size_t).wrapping_mul(size_of::<*mut c_char>());
-                let array = unsafe { xmalloc(room) }.cast::<*mut c_char>();
-                unsafe { *matches = array };
-            }
+    // "all" is a `:set` keyword rather than an option, so it is only
+    // offered where a non-boolean name would be.
+    if !booleans_only {
+        try_name(&mut found, &mut scored, c"all", regmatch);
+    }
+
+    for opt_idx in kOptAleph..kOptCount as OptIndex {
+        let opt = get_option(opt_idx);
+        if is_option_hidden(opt_idx)
+            || (booleans_only && !option_has_type(opt_idx, kOptValTypeBoolean))
+        {
+            continue;
+        }
+        if try_name(&mut found, &mut scored, opt.fullname, regmatch) {
+            continue;
+        }
+        if !fuzzy
+            && let Some(short) = opt.shortname
+            && vim_regexec(regmatch, short, 0)
+        {
+            // A short name matches, but what is offered is the full one.
+            found.push(XString::from_cstr(opt.fullname));
         }
     }
 
-    if fuzzy {
-        unsafe { fuzzymatches_to_strmatches(fuzmatch, matches, count, false) };
-    }
-    Ok(())
+    Ok(if fuzzy {
+        fuzzy_sorted(scored, false)
+    } else {
+        found
+    })
 }
 
 /// A value escaped the way the command line needs it back.
-///
-/// # Safety
-///
-/// `var` must be NUL-terminated. The result is owned by the caller.
-pub(crate) unsafe fn escape_option_str_cmdline(var: *mut c_char) -> *mut c_char {
-    // SAFETY: the caller's string.
-    unsafe { vim_strsave_escaped(var, ESCAPE_CHARS.as_ptr()) }
+pub(crate) fn escape_option_str_cmdline(var: &CStr) -> XString {
+    escaped_bytes(var, ESCAPE_CHARS)
 }
 
 /// Offer the option's current value as the one completion.
-///
-/// # Safety
-///
-/// The out-parameters must be writable.
-pub(crate) unsafe fn expand_old_setting(
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's out-parameters, and the option table.
-    unsafe { *num_matches = 0 };
-    unsafe { *matches = xmalloc(size_of::<*mut c_char>()).cast::<*mut c_char>() };
-
+pub(crate) fn expand_old_setting() -> Result<Vec<XString>, Failed> {
     // A terminal option has no table row, so it is looked up by the
     // name `set_context_in_set_cmd` spelled out.
     if IDX.get() == kOptInvalid {
@@ -620,29 +468,19 @@ pub(crate) unsafe fn expand_old_setting(
     }
     let mut rendered = [0 as c_char; MAXPATHL as usize];
     let var = if IDX.get() == kOptInvalid {
-        c"".as_ptr() as *mut c_char
+        c""
     } else {
         option_value2string(IDX.get(), FLAGS.get(), &mut rendered);
-        rendered.as_mut_ptr()
+        cstr::in_chars(&rendered)
     };
-    unsafe { *(*matches) = escape_option_str_cmdline(var) };
-    unsafe { *num_matches = 1 };
-    Ok(())
+    Ok(vec![escape_option_str_cmdline(var)])
 }
 
 /// Complete a value through the option's own `opt_expand_cb`.
-///
-/// # Safety
-///
-/// The out-parameters must be writable and `expand`/`regmatch` valid.
-pub(crate) unsafe fn expand_string_setting(
-    expand: *mut Expand,
+pub(crate) fn expand_string_setting(
+    expand: &Expand,
     regmatch: &mut RegMatch,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's expansion state and out-parameters, and the
-    // option table.
+) -> Result<Vec<XString>, Failed> {
     let opt_idx = IDX.get();
     if opt_idx == kOptInvalid {
         return Err(Failed);
@@ -653,128 +491,88 @@ pub(crate) unsafe fn expand_string_setting(
 
     let mut rendered = [0 as c_char; MAXPATHL as usize];
     option_value2string(opt_idx, FLAGS.get(), &mut rendered);
-    let escaped = unsafe { escape_option_str_cmdline(rendered.as_mut_ptr()) };
+    let value = escape_option_str_cmdline(cstr::in_chars(&rendered));
 
-    let set_arg = unsafe { (*expand).xp_line.offset(START_COL.get() as isize) };
+    let set_arg = START_COL.get();
     let mut args = OptExpand {
-        oe_idx: opt_idx,
-        oe_opt_value: escaped,
-        oe_append: APPEND.get(),
+        idx: opt_idx,
+        value,
+        append: APPEND.get(),
         // The current value is only worth offering back when nothing
         // has been typed yet and it is not being appended to.
-        oe_include_orig_val: !APPEND.get() && unsafe { *set_arg } == NUL as c_char,
-        oe_regmatch: regmatch,
-        oe_xp: expand,
-        oe_set_arg: set_arg,
+        include_orig_val: !APPEND.get() && expand.line.get(set_arg).is_none_or(|&c| c == 0),
+        regmatch,
+        xp: expand,
+        set_arg,
     };
-    let num_ret = unsafe { expand_cb(&raw mut args, num_matches, matches) };
-    unsafe { xfree(escaped.cast::<c_void>()) };
-    num_ret
+    expand_cb(&mut args)
 }
 
 /// Complete a `-=` value: only what the option already holds can be
 /// removed, so the candidates are its own items.
-///
-/// # Safety
-///
-/// The out-parameters must be writable and `expand`/`regmatch` valid.
-pub(crate) unsafe fn expand_setting_subtract(
-    expand: *mut Expand,
+pub(crate) fn expand_setting_subtract(
+    expand: &Expand,
     regmatch: &mut RegMatch,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's expansion state and out-parameters, and the
-    // option table.
+) -> Result<Vec<XString>, Failed> {
     let opt_idx = IDX.get();
     if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
-        return unsafe { expand_old_setting(num_matches, matches) };
+        return expand_old_setting();
     }
     let (buf, win) = (Buf::current(), Win::current());
     let varp = get_varp_scope_from(opt_idx, FLAGS.get(), buf, win);
-    let value = varp.string_var().value_ptr();
+    let value = varp.string_var().get();
     let flags = get_option(opt_idx).flags;
 
     if flags & kOptFlagComma as uint32_t != 0 {
-        if unsafe { *value } == NUL as c_char {
+        if value.is_empty() {
             return Err(Failed);
         }
-        // The split is destructive, so it runs on a copy.
-        let copy = unsafe { xstrdup(value) };
-        let mut ga = GArray {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ptr::null_mut(),
-        };
-        unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10) };
-        let mut next = copy;
+        let mut found = Vec::new();
+        let mut rest = &value[..];
         loop {
-            let item = next;
-            let mut comma = unsafe { vim_strchr(next, ',' as c_int) };
             // An escaped comma is part of the item.
-            while !comma.is_null()
-                && comma != next
-                && unsafe { *comma.sub(1) } as c_int == '\\' as c_int
-            {
-                comma = unsafe { vim_strchr(comma.add(1), ',' as c_int) };
-            }
-            if comma.is_null() {
-                next = ptr::null_mut();
-            } else {
-                unsafe { *comma = NUL as c_char };
-                next = unsafe { comma.add(1) };
-            }
-            // SAFETY: `item` is a NUL-terminated piece of the option value.
-            if unsafe { *item } != NUL as c_char
-                && vim_regexec(regmatch, unsafe { cstr::at(item) }, 0)
-            {
-                unsafe { ga_grow(&raw mut ga, 1) };
-                let slot = ga.ga_data.cast::<*mut c_char>();
-                let escaped = unsafe { escape_option_str_cmdline(item) };
-                unsafe { *slot.offset(ga.ga_len as isize) = escaped };
-                ga.ga_len += 1;
-            }
-            if next.is_null() {
+            let mut comma = None;
+            let mut from = 0;
+            while let Some(at) = rest[from..].iter().position(|&c| c == b',') {
+                let at = from + at;
+                if at != 0 && rest[at - 1] == b'\\' {
+                    from = at + 1;
+                    continue;
+                }
+                comma = Some(at);
                 break;
             }
+            let item = &rest[..comma.unwrap_or(rest.len())];
+            if !item.is_empty() {
+                let item = CString::new(item).unwrap_or_default();
+                if vim_regexec(regmatch, &item, 0) {
+                    found.push(escape_option_str_cmdline(&item));
+                }
+            }
+            match comma {
+                Some(at) => rest = &rest[at + 1..],
+                None => break,
+            }
         }
-        unsafe { xfree(copy.cast::<c_void>()) };
-        unsafe { *matches = ga.ga_data.cast::<*mut c_char>() };
-        unsafe { *num_matches = ga.ga_len };
-        return Ok(());
+        return Ok(found);
     }
 
     if flags & kOptFlagFlagList as uint32_t != 0 {
         // A set of one-letter flags: offer the whole set first, then
         // each letter. Nothing may have been typed, since a flag set
         // has no word boundary to complete from.
-        if unsafe { *(*expand).xp_pattern } != NUL as c_char {
+        if !expand.pattern_is_empty() {
             return Err(Failed);
         }
-        let num_flags = unsafe { cstr::bytes_at(value) }.len();
-        if num_flags == 0 {
+        if value.is_empty() {
             return Err(Failed);
         }
-        let room = size_of::<*mut c_char>().wrapping_mul(num_flags.wrapping_add(1));
-        let array = unsafe { xmalloc(room) }.cast::<*mut c_char>();
-        unsafe { *matches = array };
-        let mut count = 0;
-        unsafe { *(*matches) = xmemdupz(value.cast::<c_void>(), num_flags).cast::<c_char>() };
-        count += 1;
-        if num_flags > 1 {
-            let mut flag = value;
-            while unsafe { *flag } != NUL as c_char {
-                let copy = unsafe { xmemdupz(flag.cast::<c_void>(), 1) }.cast::<c_char>();
-                unsafe { *(*matches).offset(count as isize) = copy };
-                count += 1;
-                flag = unsafe { flag.add(1) };
-            }
+        let mut found = vec![XString::from_bytes(&value)];
+        if value.len() > 1 {
+            found.extend(value.iter().map(|&flag| XString::from_bytes(&[flag])));
         }
-        unsafe { *num_matches = count };
-        return Ok(());
+        return Ok(found);
     }
 
-    unsafe { expand_old_setting(num_matches, matches) }
+    expand_old_setting()
 }

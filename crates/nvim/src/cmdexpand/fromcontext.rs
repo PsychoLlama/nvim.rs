@@ -1,23 +1,35 @@
-//! Turning a context into a match array.
+//! Turning a context into a match list.
 //!
 //! [`expand_from_context`] is the dispatcher: file-like contexts go to
 //! `expand_wildcards`, everything else to a generator, and the answer is
-//! sorted, deduplicated and escaped.  [`expand_generic`] is the generic
-//! generator loop every `get_*_name` callback is driven by, and
-//! [`map_wildopts_to_ewflags`] translates `'wildoptions'` into `EW_*`.
+//! sorted and escaped.  [`expand_generic`] is the generic generator loop
+//! every `get_*_name` callback is driven by, and [`map_wildopts_to_ewflags`]
+//! translates the `WILD_*` options into `EW_*`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cmdexpand::WildOpts;
-use crate::cstr;
+use crate::buffer::buf_name_matches;
+use crate::ex_docmd::expand_argopt;
+use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
+use crate::help::help_tag_matches;
+use crate::lua::executor::nlua_expand_matches;
+use crate::mapping::expand_mappings;
+use crate::menu::get_menu_names;
+use crate::option::{
+    expand_old_setting, expand_setting_subtract, expand_settings, expand_string_setting,
+    magic_isset,
+};
 use crate::path::ExpandFlags;
-use crate::snprintf;
-use crate::types::{ExpandContext, Failed};
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
-use core::ptr;
+use crate::regexp::{OwnedMatch, RE_MAGIC, vim_regexec};
+use crate::runtime::{RuntimeOpts, packadd_dir_matches, runtime_cmd_matches, runtime_dir_matches};
+use crate::search::ignorecase_of;
+use crate::strings::escaped_bytes;
+use crate::syntax::reset_expand_highlight;
+use crate::tag::tag_matches;
+use crate::types::{CompleteListItemGetter, ExpandContext, Failed, RegMatch};
+use core::ffi::CStr;
+use std::ffi::CString;
 
 /// The `WILD_*` options that name an `EW_*` flag one-for-one.
 const WILDOPT_TO_EW: [(WildOpts, ExpandFlags); 6] = [
@@ -43,35 +55,21 @@ pub(crate) fn map_wildopts_to_ewflags(options: WildOpts) -> ExpandFlags {
 /// as it stands, no package trees and no `after/` filter. Upstream's bare `0`.
 const RTP_ONLY: RuntimeOpts = RuntimeOpts::NONE;
 
-/// Do the expansion based on `expand.xp_context` and `pat`.
+/// Do the expansion based on `expand.context` and `pat`.
 ///
 /// `options` is a set of `WILD_*` flags.  Most contexts have a generator of
 /// their own; the ones that do not fall through to [`expand_other`]'s table,
 /// and all of those run against a compiled regexp (or, under
 /// `'wildoptions'`=fuzzy, against `fuzzy_match_str`).
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-/// `matches` must point at a writable `*mut *mut c_char` slot the caller owns
-/// for the call. `num_matches` must point at a writable `int` the caller
-/// owns.
-pub(crate) unsafe fn expand_from_context(
-    expand: *mut Expand,
-    pat: *mut c_char,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
+pub(crate) fn expand_from_context(
+    expand: &mut Expand,
+    pat: &CStr,
     options: WildOpts,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    let mut pat = pat;
+) -> Result<Vec<XString>, Failed> {
     let flags = map_wildopts_to_ewflags(options);
-    let fuzzy = unsafe { cmdline_fuzzy_complete(pat) }
-        && unsafe { cmdline_fuzzy_completion_supported(expand.raw()) };
-    let context = expand.xp_context;
+    let fuzzy =
+        cmdline_fuzzy_complete(pat.to_bytes()) && cmdline_fuzzy_completion_supported(expand);
+    let context = expand.context;
 
     if matches!(
         context,
@@ -81,223 +79,103 @@ pub(crate) unsafe fn expand_from_context(
             | ExpandContext::Findfunc
             | ExpandContext::DirsInCdpath
     ) {
-        return unsafe {
-            expand_files_and_dirs(expand.raw(), pat, matches, num_matches, flags, options)
-        };
+        return expand_files_and_dirs(expand, pat, flags, options);
     }
 
-    unsafe { *matches = ptr::null_mut() };
-    unsafe { *num_matches = 0 };
-
-    // The contexts with a generator of their own.  Each `expand_runtime_dir`
-    // arm builds the NULL-terminated `char *[]` it wants in this frame.
+    // The contexts with a generator of their own.
     match context {
         ExpandContext::Help => {
             // With an empty argument we would get all the help tags,
             // which is very slow.  Get matches for "help" instead.
-            let arg = if unsafe { *pat } == 0 {
-                c"help".as_ptr()
-            } else {
-                pat as *const c_char
-            };
-            unsafe { find_help_tags(arg, num_matches, matches, false) }?;
-            unsafe { cleanup_help_tags(*num_matches, *matches) };
-            return Ok(());
+            let arg = if pat.is_empty() { c"help" } else { pat };
+            return help_tag_matches(arg);
         }
-        ExpandContext::ShellCmd => {
-            unsafe { expand_shellcmd(pat, matches, num_matches, flags) };
-            return Ok(());
-        }
-        ExpandContext::OldSetting => return unsafe { expand_old_setting(num_matches, matches) },
-        ExpandContext::Buffers => {
-            return unsafe { expand_buf_names(pat, num_matches, matches, options) };
-        }
-        ExpandContext::DiffBuffers => {
-            return unsafe {
-                expand_buf_names(pat, num_matches, matches, options | BUF_DIFF_FILTER)
-            };
-        }
+        ExpandContext::ShellCmd => return Ok(expand_shellcmd(pat, flags)),
+        ExpandContext::OldSetting => return expand_old_setting(),
+        ExpandContext::Buffers => return buf_name_matches(pat, options),
+        ExpandContext::DiffBuffers => return buf_name_matches(pat, options | BUF_DIFF_FILTER),
         ExpandContext::Tags | ExpandContext::TagsListFiles => {
-            return unsafe {
-                expand_tags(context == ExpandContext::Tags, pat, num_matches, matches)
-            };
+            return tag_matches(context == ExpandContext::Tags, pat);
         }
         ExpandContext::Colors => {
-            let mut dirs = [c"colors".as_ptr() as *mut c_char, ptr::null_mut()];
-            return unsafe {
-                expand_runtime_dir(
-                    pat,
-                    RuntimeOpts::START | RuntimeOpts::OPT,
-                    num_matches,
-                    matches,
-                    dirs.as_mut_ptr(),
-                )
-            };
+            let opts = RuntimeOpts::START | RuntimeOpts::OPT;
+            return runtime_dir_matches(pat, opts, &[c"colors"]);
         }
-        ExpandContext::Compiler => {
-            let mut dirs = [c"compiler".as_ptr() as *mut c_char, ptr::null_mut()];
-            return unsafe {
-                expand_runtime_dir(pat, RTP_ONLY, num_matches, matches, dirs.as_mut_ptr())
-            };
-        }
-        ExpandContext::Ownsyntax => {
-            let mut dirs = [c"syntax".as_ptr() as *mut c_char, ptr::null_mut()];
-            return unsafe {
-                expand_runtime_dir(pat, RTP_ONLY, num_matches, matches, dirs.as_mut_ptr())
-            };
-        }
+        ExpandContext::Compiler => return runtime_dir_matches(pat, RTP_ONLY, &[c"compiler"]),
+        ExpandContext::Ownsyntax => return runtime_dir_matches(pat, RTP_ONLY, &[c"syntax"]),
         ExpandContext::Filetype => {
-            let mut dirs = [
-                c"syntax".as_ptr() as *mut c_char,
-                c"indent".as_ptr() as *mut c_char,
-                c"ftplugin".as_ptr() as *mut c_char,
-                ptr::null_mut(),
-            ];
-            return unsafe {
-                expand_runtime_dir(pat, RTP_ONLY, num_matches, matches, dirs.as_mut_ptr())
-            };
+            let dirs = [c"syntax", c"indent", c"ftplugin"];
+            return runtime_dir_matches(pat, RTP_ONLY, &dirs);
         }
-        ExpandContext::Keymap => {
-            let mut dirs = [c"keymap".as_ptr() as *mut c_char, ptr::null_mut()];
-            return unsafe {
-                expand_runtime_dir(pat, RTP_ONLY, num_matches, matches, dirs.as_mut_ptr())
-            };
-        }
-        ExpandContext::UserList => {
-            return unsafe { expand_user_list(expand.raw(), matches, num_matches) };
-        }
-        ExpandContext::UserLua => {
-            return unsafe { expand_user_lua(expand.raw(), num_matches, matches) };
-        }
-        ExpandContext::Packadd => return unsafe { expand_packadd_dir(pat, num_matches, matches) },
-        ExpandContext::Runtime => return unsafe { expand_runtime_cmd(pat, num_matches, matches) },
-        ExpandContext::PatternInBuf => {
-            return unsafe {
-                expand_pattern_in_buf(pat, expand.xp_search_dir, matches, num_matches)
-            };
-        }
+        ExpandContext::Keymap => return runtime_dir_matches(pat, RTP_ONLY, &[c"keymap"]),
+        ExpandContext::UserList => return expand_user_list(expand),
+        ExpandContext::UserLua => return expand_user_lua(expand),
+        ExpandContext::Packadd => return packadd_dir_matches(pat),
+        ExpandContext::Runtime => return runtime_cmd_matches(pat),
+        ExpandContext::PatternInBuf => return expand_pattern_in_buf(pat, expand.search_dir),
         _ => {}
     }
 
     // When expanding a function name starting with s:, match the <SNR>nr_
     // prefix.
-    let mut tofree = ptr::null_mut::<c_char>();
-    if context == ExpandContext::UserFunc && unsafe { cstr::starts_with(pat, b"^s:") } {
-        let len = unsafe { cstr::bytes_at(pat) }.len() + 20;
-        tofree = unsafe { xmalloc(len) } as *mut c_char;
-        unsafe { snprintf!(tofree, len, c"^<SNR>\\d\\+_%s".as_ptr(), pat.add(3)) };
-        pat = tofree;
-    }
-
-    if context == ExpandContext::Lua {
-        // `tofree` is still NULL here: only ExpandContext::UserFunc sets it.
-        return unsafe { nlua_expand_get_matches(num_matches, matches) };
-    }
-
-    let mut regmatch = RegMatch::new(ptr::null_mut(), false);
-    if !fuzzy {
-        regmatch.regprog = vim_regcomp(
-            unsafe { cstr::at(pat) },
-            if magic_isset() { RE_MAGIC } else { 0 },
-        );
-        if regmatch.regprog.is_null() {
-            unsafe { xfree(tofree as *mut c_void) };
-            return Err(Failed);
+    let snr;
+    let pat = match pat.to_bytes().strip_prefix(b"^s:") {
+        Some(name) if context == ExpandContext::UserFunc => {
+            let mut text = b"^<SNR>\\d\\+_".to_vec();
+            text.extend_from_slice(name);
+            snr = CString::new(text).expect("a pattern holds no NUL");
+            snr.as_c_str()
         }
-        // Set ignore-case according to 'ignorecase', 'smartcase' and pat.
-        regmatch.rm_ic = unsafe { ignorecase(pat) };
-    }
-
-    let ret = match context {
-        ExpandContext::Settings | ExpandContext::BoolSettings => unsafe {
-            expand_settings(
-                expand.raw(),
-                &mut regmatch,
-                pat,
-                num_matches,
-                matches,
-                fuzzy,
-            )
-        },
-        ExpandContext::StringSetting => unsafe {
-            expand_string_setting(expand.raw(), &mut regmatch, num_matches, matches)
-        },
-        ExpandContext::SettingSubtract => unsafe {
-            expand_setting_subtract(expand.raw(), &mut regmatch, num_matches, matches)
-        },
-        ExpandContext::Mappings => unsafe {
-            expand_mappings(pat, &mut regmatch, num_matches, matches)
-        },
-        ExpandContext::Argopt => unsafe {
-            expand_argopt(pat, expand.raw(), &mut regmatch, matches, num_matches)
-        },
-        ExpandContext::UserDefined => unsafe {
-            expand_user_defined(pat, expand.raw(), &mut regmatch, matches, num_matches)
-        },
-        _ => unsafe { expand_other(pat, expand.raw(), &mut regmatch, matches, num_matches) },
+        _ => pat,
     };
 
-    if !fuzzy {
-        unsafe { vim_regfree(regmatch.regprog) };
+    if context == ExpandContext::Lua {
+        return nlua_expand_matches();
     }
-    unsafe { xfree(tofree as *mut c_void) };
-    ret
+
+    let mut regmatch = if fuzzy {
+        OwnedMatch::none()
+    } else {
+        let flags = if magic_isset() { RE_MAGIC } else { 0 };
+        // Set ignore-case according to 'ignorecase', 'smartcase' and pat.
+        OwnedMatch::compile(pat, flags, ignorecase_of(pat)).ok_or(Failed)?
+    };
+    let regmatch: &mut RegMatch = &mut regmatch;
+
+    match context {
+        ExpandContext::Settings | ExpandContext::BoolSettings => {
+            expand_settings(expand, regmatch, pat, fuzzy)
+        }
+        ExpandContext::StringSetting => expand_string_setting(expand, regmatch),
+        ExpandContext::SettingSubtract => expand_setting_subtract(expand, regmatch),
+        ExpandContext::Mappings => expand_mappings(pat, regmatch),
+        ExpandContext::Argopt => expand_argopt(pat, expand, regmatch),
+        ExpandContext::UserDefined => expand_user_defined(pat, expand, regmatch),
+        _ => expand_other(pat, expand, regmatch),
+    }
 }
 
 /// Expand a list of names.
 ///
 /// The generic command-line completion loop: `func` is called with rising
-/// indices until it answers NULL, each string is matched against `regmatch`
-/// (or scored by `fuzzy_match_str`), and the survivors are copied into a new
-/// array.
+/// indices until it answers `None`, each name is matched against `regmatch`
+/// (or scored by `fuzzy_match_str`), and the survivors are copied out.
 ///
 /// `escaped` asks for spaces, tabs, backslashes and dots to be escaped in
 /// each match.
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string. `expand` must point at a live
-/// `Expand` context, unaliased for the call. `regmatch` must point at a live
-/// `RegMatch`, unaliased for the call. `matches` must point at a writable
-/// `*mut *mut c_char` slot the caller owns for the call. `num_matches` must
-/// point at a writable `int` the caller owns. `func` must be an initialized
-/// `CompleteListItemGetter` whose pointer fields point at live data for the
-/// call.
-pub unsafe fn expand_generic(
-    pat: *const c_char,
-    expand: *mut Expand,
+pub fn expand_generic(
+    pat: &CStr,
+    expand: &Expand,
     regmatch: &mut RegMatch,
-    matches: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
     func: CompleteListItemGetter,
     escaped: bool,
-) {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    let get_item = func;
-    let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
-    unsafe { *matches = ptr::null_mut() };
-    unsafe { *num_matches = 0 };
+) -> Vec<XString> {
+    let fuzzy = cmdline_fuzzy_complete(pat.to_bytes());
+    let mut found = Vec::new();
+    let mut scored = Vec::new();
 
-    let mut ga = GArray {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    let itemsize = if fuzzy {
-        size_of::<FuzMatchStr>()
-    } else {
-        size_of::<*mut c_char>()
-    };
-    unsafe { ga_init(&raw mut ga, itemsize as c_int, 30) };
-
-    // `expand` is re-read each pass, as upstream does: the generator is
-    // handed it, and the pattern is what decides "match everything".
     for i in 0.. {
-        let Some(candidate) = get_item(&expand, i) else {
+        let Some(candidate) = func(expand, i) else {
             break; // end of list
         };
         if candidate.is_empty() {
@@ -310,8 +188,7 @@ pub unsafe fn expand_generic(
         let matched = if expand.pattern_is_empty() {
             true
         } else if fuzzy {
-            // SAFETY: `pat` is the caller's NUL-terminated pattern.
-            score = fuzzy_match_str(&candidate, unsafe { cstr::at(pat) });
+            score = fuzzy_match_str(&candidate, pat);
             score != FUZZY_SCORE_NONE
         } else {
             vim_regexec(regmatch, &candidate, 0)
@@ -320,43 +197,31 @@ pub unsafe fn expand_generic(
             continue;
         }
 
-        let str = if escaped {
-            unsafe { vim_strsave_escaped(candidate.as_ptr(), c" \t\\.".as_ptr()) }
+        let mut text = if escaped {
+            escaped_bytes(&candidate, c" \t\\.")
         } else {
-            unsafe { xstrdup(candidate.as_ptr()) }
+            XString::from_cstr(&candidate)
         };
 
-        unsafe { ga_grow(&raw mut ga, 1) };
-        if fuzzy {
-            let scored = FuzMatchStr {
-                idx: ga.ga_len,
-                str,
-                score,
-            };
-            let slot = (ga.ga_data as *mut FuzMatchStr).wrapping_offset(ga.ga_len as isize);
-            // SAFETY: `ga_grow` above made room for one more entry.
-            unsafe { slot.write(scored) };
-        } else {
-            unsafe {
-                (ga.ga_data as *mut *mut c_char)
-                    .offset(ga.ga_len as isize)
-                    .write(str)
-            };
-        }
-        ga.ga_len += 1;
-
-        if ptr::fn_addr_eq(get_item, get_menu_names as CompleteListItemGetter) {
+        if core::ptr::fn_addr_eq(func, get_menu_names as CompleteListItemGetter)
+            && text.last() == Some(&1)
+        {
             // Undo the separator get_menu_names() added, in the copy that
-            // is now in the array.
-            let last = unsafe { str.add(cstr::bytes_at(str).len() - 1) };
-            if unsafe { *last } == 1 {
-                unsafe { *last = b'.' as c_char };
-            }
+            // is kept.
+            text.truncate(text.len() - 1);
+            text.push_byte(b'.');
+        }
+
+        if fuzzy {
+            let idx = scored.len();
+            scored.push(Scored { text, score, idx });
+        } else {
+            found.push(text);
         }
     }
 
-    if ga.ga_len == 0 {
-        return;
+    if found.is_empty() && scored.is_empty() {
+        return Vec::new();
     }
 
     // Sort the matches when using regular expression matching and sorting
@@ -364,7 +229,7 @@ pub unsafe fn expand_generic(
     // kept in the order they were given in.
     let sort_matches = !fuzzy
         && !matches!(
-            expand.xp_context,
+            expand.context,
             ExpandContext::Menunames
                 | ExpandContext::StringSetting
                 | ExpandContext::Menus
@@ -373,28 +238,28 @@ pub unsafe fn expand_generic(
         );
     // <SNR> functions should be sorted to the end.
     let funcsort = matches!(
-        expand.xp_context,
+        expand.context,
         ExpandContext::Expression | ExpandContext::Functions | ExpandContext::UserFunc
     );
 
     if sort_matches {
         if funcsort {
-            unsafe { sort_function_names(ga.ga_data as *mut *mut c_char, ga.ga_len) };
+            found.sort_unstable_by(|a: &XString, b: &XString| {
+                (a.first() == Some(&b'<'), &a[..]).cmp(&(b.first() == Some(&b'<'), &b[..]))
+            });
         } else {
-            unsafe { sort_strings(ga.ga_data as *mut *mut c_char, ga.ga_len) };
+            found.sort_unstable_by(|a: &XString, b: &XString| a[..].cmp(&b[..]));
         }
     }
 
-    if fuzzy {
-        unsafe {
-            fuzzymatches_to_strmatches(ga.ga_data as *mut FuzMatchStr, matches, ga.ga_len, funcsort)
-        };
+    let found = if fuzzy {
+        fuzzy_sorted(scored, funcsort)
     } else {
-        unsafe { *matches = ga.ga_data as *mut *mut c_char };
-    }
-    unsafe { *num_matches = ga.ga_len };
+        found
+    };
 
     // Reset the variables used for special highlight names expansion, so
     // that they don't show up when getting normal highlight names by ID.
     reset_expand_highlight();
+    found
 }

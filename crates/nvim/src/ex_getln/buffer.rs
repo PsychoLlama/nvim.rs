@@ -18,7 +18,9 @@ use super::*;
 use crate::cstr;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_V, Ctrl_W};
-use crate::types::{ExpandContext, NUL};
+use crate::memory::XString;
+use crate::types::NUL;
+use core::ffi::CStr;
 
 // ---------------------------------------------------------------------------
 // The command line being edited.
@@ -54,9 +56,38 @@ impl Cc {
         !self.mouse_used.is_null()
     }
 
-    /// C's `xpc`: the completion in progress, NULL when there is none.
-    pub(crate) fn xpc(self) -> *mut Expand {
-        self.xpc
+    /// Run `f` on the completion in progress, or on `None` when there is
+    /// none.
+    ///
+    /// The command line moves its completion out of `xpc` for the length of
+    /// every call into the completion machinery, so what `f` is handed here
+    /// is never one that machinery holds.
+    pub(crate) fn with_xpc<R>(self, f: impl FnOnce(Option<&mut Expand>) -> R) -> R {
+        // SAFETY: `xpc` is null or the completion inside the live
+        // `CommandLineState` that set it, which clears it before that state
+        // goes; and nothing else holds that completion while `f` runs.
+        f(unsafe { self.xpc.as_mut() })
+    }
+
+    /// The command line's own bytes, as bytes: [`Cc::bytes`] for a slice
+    /// reader.
+    pub(crate) fn text_bytes<'a>(self) -> &'a [u8] {
+        cstr::as_bytes(self.bytes())
+    }
+
+    /// Replace `[from, to)` of the text with `with`, moving the rest of the
+    /// line along, after making room for `extra` more bytes than the line
+    /// has: one completion inserted over the word it completes. The cursor
+    /// is the caller's to move.
+    pub(crate) fn replace_range(
+        mut self,
+        from: ::core::ffi::c_int,
+        to: ::core::ffi::c_int,
+        with: &[u8],
+        extra: ::core::ffi::c_int,
+    ) {
+        realloc_cmdbuff(self, self.len() + extra);
+        self.cmdbuff.splice(from, to, with);
     }
 
     /// The command line's own bytes: C's `cmdbuff[..cmdlen]`.
@@ -270,33 +301,7 @@ pub(crate) fn dealloc_cmdbuff() {
 /// text across a call is a bug, which is why the completion code keeps
 /// indices.
 pub(crate) fn realloc_cmdbuff(cc: Cc, len: ::core::ffi::c_int) {
-    let old = cc.text();
     cc.reserve(len);
-    if cc.text() != old {
-        move_xp_pattern(cc, old);
-    }
-}
-
-/// If `xp_pattern` pointed inside the old text it has to be adjusted to point
-/// into the newly allocated memory.
-fn move_xp_pattern(mut cc: Cc, old: *mut ::core::ffi::c_char) {
-    if cc.xpc.is_null() {
-        return;
-    }
-    // SAFETY: a live completion context.
-    let xpc = unsafe { &mut *cc.xpc };
-    if xpc.xp_pattern.is_null()
-        || xpc.xp_context == ExpandContext::Nothing
-        || xpc.xp_context == ExpandContext::Unsuccessful
-    {
-        return;
-    }
-    // SAFETY: as upstream -- `xp_pattern` either points into `old` or into
-    // something else entirely, and the difference decides which.
-    let i = unsafe { xpc.xp_pattern.offset_from(old) } as ::core::ffi::c_int;
-    if i >= 0 && i <= cc.len() {
-        xpc.xp_pattern = cc.at(i);
-    }
 }
 
 /// Suspend `ccline` onto the saved stack, because obtaining the `=` register
@@ -591,6 +596,30 @@ fn with_backslash(name: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     copy_str(p.wrapping_add(1), name);
     free(name);
     p
+}
+
+/// [`vim_strsave_fnameescape`] of a name the caller owns.
+pub(crate) fn fnameescape(fname: &CStr, what: ::core::ffi::c_int) -> XString {
+    // SAFETY: a NUL-terminated name; the answer is owned and taken over
+    // once.
+    unsafe { XString::from_raw(vim_strsave_fnameescape(fname.as_ptr(), what)) }
+}
+
+/// If `orig_pat` starts with `~/`, put the home directory back as `~` in
+/// each of `files`: [`tilde_replace`] over owned names.
+pub(crate) fn tilde_replace_matches(orig_pat: &[u8], files: &mut [XString]) {
+    if orig_pat.first() != Some(&b'~')
+        || !vim_ispathsep(::core::ffi::c_int::from(
+            orig_pat.get(1).copied().unwrap_or(0),
+        ))
+    {
+        return;
+    }
+    for file in files {
+        // A name is at most as long as its expansion, plus the `~/`.
+        let room = file.len() + 3;
+        *file = crate::os::env::home_replace_in(None, file.as_cstr(), room, true);
+    }
 }
 
 /// For each name in `files[..num_files]`: if `orig_pat` starts with `~/`,

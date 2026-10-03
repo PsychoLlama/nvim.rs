@@ -20,8 +20,8 @@ use crate::charset::{
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::cmdexpand::{
     clear_cmdline_orig, cmdline_pum_active, cmdline_pum_cleanup, cmdline_pum_remove,
-    expand_cleanup, expand_init, expand_one, nextwild, set_expand_context, showmatches,
-    wildmenu_cleanup, wildmenu_process_key, wildmenu_translate_key,
+    expand_cleanup, expand_one, nextwild, set_expand_context, showmatches, wildmenu_cleanup,
+    wildmenu_process_key, wildmenu_translate_key,
 };
 use crate::cmdhist::{
     add_to_history, get_hisidx, get_hislen, hist_char2type, hist_entry_ref, init_history,
@@ -145,15 +145,15 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    AcoSave, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod,
-    CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
-    CondStack, Dict, Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg,
-    ExArgt, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
-    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab,
-    HistoryType, Integer, LineNr, Magic, MotionType, Object, OpArg, OptInt, OptMagic, OptSet,
-    OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Pos,
-    ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg, String_0, TryState, TypVal,
-    UVarNumber, UndoLink, UndoObjectType, VarNumber, XpPrefix, size_t, time_t, uint8_t, uint32_t,
+    AcoSave, Array, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod, CmdParseInfo,
+    CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline, CondStack,
+    Dict, Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand,
+    ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy,
+    ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer,
+    LineNr, Magic, MotionType, Object, OpArg, OptInt, OptMagic, OptSet, OptVal, ParserHighlight,
+    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Pos, ProfTime, RemapValues,
+    SaveVEvent, SearchItArg, String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType,
+    VarNumber, size_t, time_t, uint8_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -210,7 +210,6 @@ pub use self::prompt::*;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kDirectionNotSet: Direction = 0;
-pub const XP_PREFIX_NONE: XpPrefix = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const OPTION_MAGIC_NOT_SET: OptMagic = 0;
@@ -230,6 +229,7 @@ pub const HIST_SEARCH: HistoryType = 1;
 pub const HIST_CMD: HistoryType = 0;
 pub const HIST_INVALID: HistoryType = -1;
 pub const REMAP_NONE: RemapValues = -1;
+pub const VSE_NONE: ::core::ffi::c_int = 0;
 pub const VSE_BUFFER: ::core::ffi::c_int = 2;
 pub const VSE_SHELL: ::core::ffi::c_int = 1;
 pub struct CommandLineState {
@@ -444,7 +444,7 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     overstrike: 0,
     xpc: ::core::ptr::null_mut::<Expand>(),
     xp_context: ExpandContext::Nothing,
-    xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    xp_arg: None,
     input_fn: 0,
     cmdbuff_replaced: false,
     prompt_id: 0,
@@ -488,28 +488,6 @@ pub(crate) const INCSEARCH_STATE_INIT: IncsearchState = IncsearchState {
     did_incsearch: false,
     incsearch_postponed: false,
     magic_overruled_save: OPTION_MAGIC_NOT_SET,
-};
-
-/// An all-zero [`Expand`]; `expand_init` fills the fields that matter.
-pub(crate) const EXPAND_T_INIT: Expand = Expand {
-    xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_context: ExpandContext::Nothing,
-    xp_pattern_len: 0,
-    xp_prefix: XP_PREFIX_NONE,
-    xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_luaref: 0,
-    xp_script_ctx: ScriptCtx::NONE,
-    xp_backslash: BackslashEscape::NONE,
-    xp_shell: false,
-    xp_numfiles: 0,
-    xp_col: 0,
-    xp_selected: 0,
-    xp_orig: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_files: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-    xp_line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    xp_buf: [0; 1025],
-    xp_search_dir: kDirectionNotSet,
-    xp_pre_incsearch_pos: POS_INIT,
 };
 
 /// An all-zero [`TryState`], which is what the `TRY_WRAP` macro declares

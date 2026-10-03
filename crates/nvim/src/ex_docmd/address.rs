@@ -110,7 +110,7 @@ pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> Option<usize> {
     let cmd = excmd.line.cmd;
     // SAFETY: `cmd` walks the command's own NUL-terminated line.
     // SAFETY: a null context is "not completing".
-    excmd.line.cmd = cmd + unsafe { skip_range(excmd.line.tail(cmd), ptr::null_mut()) };
+    excmd.line.cmd = cmd + skip_range(excmd.line.tail(cmd), None);
     let end = find_ex_command(excmd, None);
     excmd.line.cmd = cmd;
     end
@@ -297,18 +297,13 @@ fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
 /// [`find_excmd_after_range`].
 ///
 /// The walk stops at the first NUL, so `text` may be a command line's cheap
-/// tail rather than one measured string.
-///
-/// # Safety
-///
-/// `ctx` must be null or point at a live `ExpandContext`, unaliased for the
-/// call.
-pub unsafe fn skip_range(text: &[u8], ctx: *mut ExpandContext) -> usize {
+/// tail rather than one measured string. `ctx`, when completing, is told
+/// when the range leaves nothing to complete.
+pub fn skip_range(text: &[u8], mut ctx: Option<&mut ExpandContext>) -> usize {
     let byte = |at: usize| text.get(at).copied().unwrap_or(0);
-    let nothing = || {
-        if !ctx.is_null() {
-            // SAFETY: the caller's promise.
-            unsafe { *ctx = ExpandContext::Nothing };
+    let mut nothing = || {
+        if let Some(ctx) = ctx.as_deref_mut() {
+            *ctx = ExpandContext::Nothing;
         }
     };
     let mut at = 0;

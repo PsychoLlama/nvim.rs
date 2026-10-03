@@ -12,6 +12,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::memory::XString;
 use crate::types::Failed;
 
 use crate::global_cell::GlobalCell;
@@ -204,7 +205,7 @@ pub enum OptError {
     /// One of the message statics, already translated.
     Static(&'static ::core::ffi::CStr),
     /// A message the callback formatted, naming the value it disliked.
-    Owned(crate::memory::XString),
+    Owned(XString),
 }
 
 impl OptError {
@@ -229,8 +230,8 @@ impl From<&'static ::core::ffi::CStr> for OptError {
     }
 }
 
-impl From<crate::memory::XString> for OptError {
-    fn from(message: crate::memory::XString) -> Self {
+impl From<XString> for OptError {
+    fn from(message: XString) -> Self {
         OptError::Owned(message)
     }
 }
@@ -238,28 +239,45 @@ impl From<crate::memory::XString> for OptError {
 /// What the option table names for an option that has just been set: a
 /// callback that vets the new value and reports why it does not like it.
 pub type OptDidSetCb = Option<unsafe fn(&mut OptSet) -> Result<(), OptError>>;
-pub type OptExpandCb = Option<
-    unsafe fn(
-        *mut OptExpand,
-        *mut ::core::ffi::c_int,
-        *mut *mut *mut ::core::ffi::c_char,
-    ) -> Result<(), Failed>,
->;
-pub struct OptExpand {
+/// A string option's completer: the option table's `opt_expand_cb`, which
+/// answers the matches for what has been typed after `:set {option}=`.
+pub type OptExpandCb = Option<fn(&mut OptExpand<'_>) -> Result<Vec<XString>, Failed>>;
+
+/// What an option's completer is told: which option, its value, and what the
+/// command line has typed for it -- upstream's `optexpand_T`.
+pub struct OptExpand<'a> {
     // Upstream carries an `oe_varp` here, and its two readers -- the
     // 'listchars'/'fillchars' and 'eventignore'/'eventignorewin' expansions
     // -- used it to tell one of a callback's two options from the other by
-    // comparing addresses. Both ask `oe_idx` instead, which is what the
-    // option *is* rather than where it happens to live, so nothing reads a
-    // variable here at all.
-    pub oe_idx: OptIndex,
-    pub oe_opt_value: *mut ::core::ffi::c_char,
-    pub oe_append: bool,
-    pub oe_include_orig_val: bool,
-    pub oe_regmatch: *mut RegMatch,
-    pub oe_xp: *mut Expand,
-    pub oe_set_arg: *mut ::core::ffi::c_char,
+    // comparing addresses. Both ask `idx` instead, which is what the option
+    // *is* rather than where it happens to live, so nothing reads a variable
+    // here at all.
+    /// The option being completed.
+    pub idx: OptIndex,
+    /// Its current value, escaped the way the command line spells it.
+    pub value: XString,
+    /// Whether the value is being added to (`+=`, `^=`).
+    pub append: bool,
+    /// Whether to offer the current value as the first match.
+    pub include_orig_val: bool,
+    /// The pattern the matches have to match.
+    pub regmatch: &'a mut RegMatch,
+    /// The completion this is part of: its line, and the pattern in it.
+    pub xp: &'a Expand,
+    /// Where the value being typed starts in the completion's line.
+    pub set_arg: usize,
 }
+
+impl OptExpand<'_> {
+    /// What has been typed for the value, to the end of the line.
+    pub fn typed(&self) -> &[u8] {
+        let line = &self.xp.line[..];
+        let tail = line.get(self.set_arg..).unwrap_or_default();
+        let end = tail.iter().position(|&c| c == 0).unwrap_or(tail.len());
+        &tail[..end]
+    }
+}
+
 pub struct OptSet {
     /// The option's storage in the scope being set, with the type its row
     /// declares. `pub(crate)` because [`OptSlot`] is: every `did_set_*`

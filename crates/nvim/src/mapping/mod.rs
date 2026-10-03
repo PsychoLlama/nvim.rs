@@ -36,7 +36,6 @@ use crate::api::private::helpers::{
 use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::charset::{skipwhite, transchar, vim_iswordp};
 use crate::cmdexpand::cmdline_fuzzy_complete;
-use crate::cmdexpand::fuzzymatches_to_strmatches;
 use crate::eval::typval::{
     dict_find, dict_get_bool, dict_get_number, dict_get_string_alloc, tv_check_for_dict_arg,
     tv_dict_alloc_ret, tv_get_bool, tv_get_number, tv_list_alloc_ret,
@@ -79,12 +78,11 @@ use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
     MODE_TERMINAL, MODE_VISUAL,
 };
-use crate::strings::sort_strings;
 use crate::types::{
-    ApiDict, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, FILE, FuzMatchStr,
-    Integer, KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs, MapStr,
-    Object, OptSet, RegMatch, RemapValues, ScriptId, String_0, TypVal, VarNumber, ptrdiff_t,
-    size_t, uint64_t,
+    ApiDict, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, FILE, Integer,
+    KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs, MapStr, Object,
+    OptSet, RegMatch, RemapValues, ScriptId, String_0, TypVal, VarNumber, ptrdiff_t, size_t,
+    uint64_t,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, fputc, fputs, strcasecmp};

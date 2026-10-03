@@ -189,7 +189,7 @@ pub(crate) fn parse_command_modifiers(
         // name is looked for past one — but `args.cmd` only moves for
         // the modifiers that accept that.
         // SAFETY: a null context is "not completing".
-        let mut at = cmd + unsafe { skip_range(excmd.line.tail(cmd), ptr::null_mut()) };
+        let mut at = cmd + skip_range(excmd.line.tail(cmd), None);
         match excmd.line.byte_at(at) {
             b'a' => {
                 if !takes(excmd, b"aboveleft", 3) {

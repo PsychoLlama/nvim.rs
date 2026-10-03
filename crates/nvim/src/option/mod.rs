@@ -39,9 +39,7 @@
 
 use crate::highlight::HlAttrFlags;
 use crate::optionstr::set_chars_option;
-use crate::types::{
-    CharsOption, HlAttrs, OptScope, OptValType, RgbValue, XpPrefix, int16_t, int32_t,
-};
+use crate::types::{CharsOption, HlAttrs, OptScope, OptValType, RgbValue, int16_t, int32_t};
 use core::ffi::{c_int, c_uint};
 
 mod check;
@@ -85,8 +83,6 @@ pub(crate) use self::stropt::*;
 pub(crate) use self::validate::*;
 pub(crate) use self::value::*;
 pub(crate) const NUMBUFLEN: c_uint = 65;
-pub(crate) const XP_PREFIX_INV: XpPrefix = 2;
-pub(crate) const XP_PREFIX_NO: XpPrefix = 1;
 /// What the generated table's `flags` column can say about an option.
 pub(crate) type OptFlags = c_uint;
 pub(crate) const kOptFlagColon: OptFlags = 33554432;

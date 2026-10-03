@@ -20,7 +20,7 @@ use super::*;
 use crate::memory::XString;
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::c_str;
-use crate::os::env::dirs::home_replace_in;
+use crate::os::env::home_replace_in;
 use crate::semsg;
 use crate::snprintf;
 use crate::vim_snprintf;

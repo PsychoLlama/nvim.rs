@@ -13,11 +13,14 @@
 
 use crate::cstr;
 use crate::eval::Parsed;
+use crate::eval::list::cstr_of;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::{Lock, Suppress};
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::winlayer::Win;
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::null_mut;
@@ -631,39 +634,30 @@ pub unsafe fn call_vim_function(
     ret
 }
 
-/// `call_vim_function`, answering an owned copy of the result's String.
-///
-/// # Safety
-/// As `call_vim_function`.
-pub unsafe fn call_func_retstr(func: *const c_char, argv: &[TypVal]) -> *mut c_void {
+/// [`call_vim_function`] of the function named `func`, answering a copy of
+/// its result as a String (a Number spelled out); `None` when the call
+/// failed.
+pub(crate) fn call_func_retstr(func: &CStr, argv: &[TypVal]) -> Option<XString> {
     let mut numbuf = NumBuf::new();
     let mut rettv = UNSET_TV;
-    if unsafe { call_vim_function(func, argv, &mut rettv) }.is_err() {
-        return null_mut();
-    }
-    let retval = unsafe { xstrdup(numbuf.string_ptr(&rettv)) };
+    // SAFETY: a NUL-terminated function name.
+    unsafe { call_vim_function(func.as_ptr(), argv, &mut rettv) }.ok()?;
+    let retval = XString::from_cstr(cstr_of(&rettv, &mut numbuf));
     clear_local(&mut rettv);
-    retval as *mut c_void
+    Some(retval)
 }
 
-/// `call_vim_function`, answering the result's List — which the caller then
-/// owns the reference to. Null for anything else.
-///
-/// # Safety
-/// As `call_vim_function`.
-pub unsafe fn call_func_retlist(func: *const c_char, argv: &[TypVal]) -> *mut c_void {
+/// [`call_vim_function`] of the function named `func`, answering its result
+/// when that is a List; `None` for anything else.
+pub(crate) fn call_func_retlist(func: &CStr, argv: &[TypVal]) -> Option<TypVal> {
     let mut rettv = UNSET_TV;
-    if unsafe { call_vim_function(func, argv, &mut rettv) }.is_err() {
-        return null_mut();
-    }
+    // SAFETY: a NUL-terminated function name.
+    unsafe { call_vim_function(func.as_ptr(), argv, &mut rettv) }.ok()?;
     if rettv.v_type() != VAR_LIST {
         clear_local(&mut rettv);
-        return null_mut();
+        return None;
     }
-    // The reference goes to the caller, which unreferences the list itself.
-    let list = rettv.list_or_null();
-    rettv.disown();
-    list as *mut c_void
+    Some(rettv)
 }
 
 /// Run 'foldexpr' for the window's current line. `marker` comes back holding

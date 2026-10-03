@@ -12,6 +12,8 @@
 
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::garray::ga_append_owned;
+use crate::memory::XString;
 use crate::option::vars::{P_CDPATH, P_PATH, P_WIG};
 use crate::optionstr::{OptString, local_or_global};
 use crate::strings::has_char;
@@ -161,14 +163,16 @@ pub(crate) unsafe fn expand_in_path(
     if flags.has(ExpandFlags::ADDSLASH) {
         glob_flags |= WildOpts::ADD_SLASH;
     }
+    // SAFETY: two NUL-terminated strings, and the caller's array of owned
+    // names, which takes the matches over.
     unsafe {
-        globpath(
-            paths,
-            pattern,
-            gap,
+        let found = globpath(
+            cstr::at(paths),
+            cstr::at(pattern),
             glob_flags,
             flags.has(ExpandFlags::CDPATH),
-        )
+        );
+        ga_append_owned(gap, found);
     };
     unsafe { xfree(paths.cast()) };
 
@@ -383,10 +387,7 @@ pub unsafe fn gen_expand_wildcards(
 
 /// [`gen_expand_wildcards`] of one pattern, into names the caller owns.
 /// `None` when the expansion failed; an empty list when it found nothing.
-pub(crate) fn expand_wildcards_list(
-    pattern: &CStr,
-    flags: ExpandFlags,
-) -> Option<Vec<crate::memory::XString>> {
+pub(crate) fn expand_wildcards_list(pattern: &CStr, flags: ExpandFlags) -> Option<Vec<XString>> {
     // A copy the expansion may write to.
     let mut owned = pattern.to_bytes_with_nul().to_vec();
     let mut pat: *mut c_char = owned.as_mut_ptr().cast();
@@ -400,11 +401,73 @@ pub(crate) fn expand_wildcards_list(
     }
     let names = (0..usize::try_from(count).unwrap_or(0))
         // SAFETY: `count` NUL-terminated names in the array just answered.
-        .map(|at| crate::memory::XString::from_cstr(unsafe { CStr::from_ptr(*files.add(at)) }))
+        .map(|at| XString::from_cstr(unsafe { CStr::from_ptr(*files.add(at)) }))
         .collect();
     // SAFETY: the array and names the expansion answered, given back once.
     unsafe { free_wild(count, files) };
     Some(names)
+}
+
+/// Take the `count` names an expansion answered as owned strings, giving the
+/// array and the names back.
+///
+/// # Safety
+/// `files` must be NULL, or an allocated array of `count` allocated,
+/// NUL-terminated strings, which nothing else will free.
+pub(crate) unsafe fn take_wild(count: c_int, files: *mut *mut c_char) -> Vec<XString> {
+    if files.is_null() {
+        return Vec::new();
+    }
+    let names = (0..usize::try_from(count).unwrap_or(0))
+        // SAFETY: the caller's `count` NUL-terminated names.
+        .map(|at| XString::from_cstr(unsafe { CStr::from_ptr(*files.add(at)) }))
+        .collect();
+    // SAFETY: the caller's array and names, given back once.
+    unsafe { free_wild(count, files) };
+    names
+}
+
+/// [`expand_wildcards`] of one pattern, into names the caller owns.
+pub(crate) fn expand_wildcards_one(
+    pattern: &CStr,
+    flags: ExpandFlags,
+) -> Result<Vec<XString>, Failed> {
+    // A copy the expansion may write to.
+    let mut owned = pattern.to_bytes_with_nul().to_vec();
+    let mut pat: *mut c_char = owned.as_mut_ptr().cast();
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ::core::ptr::null_mut();
+    // SAFETY: one NUL-terminated pattern and two locals to fill in; what the
+    // expansion answered is taken over once.
+    unsafe {
+        expand_wildcards(1, &raw mut pat, &raw mut count, &raw mut files, flags)?;
+        Ok(take_wild(count, files))
+    }
+}
+
+/// [`expand_wildcards_eval`] of one pattern, into names the caller owns.
+pub(crate) fn expand_wildcards_eval_list(
+    pattern: &CStr,
+    flags: ExpandFlags,
+) -> Result<Vec<XString>, Failed> {
+    // A copy the expansion may write to.
+    let mut owned = pattern.to_bytes_with_nul().to_vec();
+    let mut pat: *mut c_char = owned.as_mut_ptr().cast();
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ::core::ptr::null_mut();
+    // SAFETY: as [`expand_wildcards_one`].
+    unsafe {
+        expand_wildcards_eval(&raw mut pat, &raw mut count, &raw mut files, flags)?;
+        Ok(take_wild(count, files))
+    }
+}
+
+/// [`match_suffix`] of a name the caller owns.
+pub(crate) fn match_suffix_name(fname: &CStr) -> bool {
+    // A copy, for the pointer the walk takes.
+    let mut owned = fname.to_bytes_with_nul().to_vec();
+    // SAFETY: a NUL-terminated copy this call owns.
+    unsafe { match_suffix(owned.as_mut_ptr().cast()) }
 }
 
 /// Free the `count` names [`expand_wildcards`] and its neighbours answer.

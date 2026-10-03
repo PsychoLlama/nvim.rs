@@ -32,7 +32,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::message_fmt::c_str_len;
 use crate::os::cshim::gettext;
 use crate::types::{
-    Arena, Array, Error, ErrorType, Expand, IOSIZE, LuaRef, LuaRetMode, Object, String_0, TypVal,
+    Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, TypVal,
     VAR_UNKNOWN, VarNumber, kErrorTypeException, kErrorTypeValidation, lua_Integer, lua_State,
     size_t,
 };
@@ -127,24 +127,46 @@ pub unsafe fn nlua_typval_call(
     }
 }
 
-/// The `customlist,v:lua.…` completion callback.
-///
-/// # Safety
-/// `xp` must carry a live `xp_luaref`, and `ret_tv` be writable.
-pub unsafe fn nlua_call_user_expand_func(xp: *mut Expand, ret_tv: &mut TypVal) {
+/// The `customlist,v:lua.…` completion callback: the function `luaref`
+/// called with the pattern, the whole line and the cursor column, answering
+/// what it returned (or zero, once a failure has reported itself).
+pub fn nlua_call_user_expand_func(
+    luaref: LuaRef,
+    pattern: &CStr,
+    line: &CStr,
+    col: c_int,
+) -> TypVal {
+    // SAFETY: the global Lua state, used on the main thread, and three
+    // NUL-terminated strings.
     unsafe {
         let lstate = get_global_lstate();
-        nlua_pushref(lstate, (*xp).xp_luaref);
-        lua_pushstring(lstate, (*xp).xp_pattern);
-        lua_pushstring(lstate, (*xp).xp_line);
-        lua_pushinteger(lstate, (*xp).xp_col as lua_Integer);
+        nlua_pushref(lstate, luaref);
+        lua_pushstring(lstate, pattern.as_ptr());
+        lua_pushstring(lstate, line.as_ptr());
+        lua_pushinteger(lstate, col as lua_Integer);
         if nlua_pcall(lstate, 3, 1) != 0 {
             nlua_error(lstate, gettext(c"E5108: Lua function: %.*s").as_ptr());
-            return;
+            return TypVal::Number(0);
         }
-        // A refusal has reported itself; the caller's slot then answers the
-        // zero upstream left in it.
-        ret_tv.overwrite(nlua_pop_typval(lstate).unwrap_or(TypVal::Number(0)));
+        // A refusal has reported itself; the answer is then the zero
+        // upstream left in the caller's slot.
+        nlua_pop_typval(lstate).unwrap_or(TypVal::Number(0))
+    }
+}
+
+/// Run the Lua chunk `code` with `args`, answering its value as an
+/// [`Object`].
+pub(crate) fn nlua_exec_object(code: &CStr, args: Array) -> Result<Object, Error> {
+    // SAFETY: an owned argument array, no chunk name and no arena: the
+    // answer is allocated, not borrowed.
+    unsafe {
+        nlua_exec(
+            &String_0::from_cstr(code),
+            ptr::null(),
+            args,
+            kRetObject,
+            ptr::null_mut(),
+        )
     }
 }
 

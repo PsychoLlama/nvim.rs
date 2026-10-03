@@ -149,8 +149,12 @@ unsafe fn pum_compute_text_attrs(
         return None;
     }
 
+    let cmdline_leader;
     let leader = if State.get() & MODE_CMDLINE != 0 {
-        cmdline_compl_pattern()
+        cmdline_leader = cmdline_compl_pattern();
+        cmdline_leader
+            .as_ref()
+            .map_or(core::ptr::null_mut(), |leader| leader.as_ptr().cast_mut())
     } else {
         ins_compl_leader()
     };

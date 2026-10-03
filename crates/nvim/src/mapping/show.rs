@@ -8,16 +8,17 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cmdexpand::Scored;
+use crate::cmdexpand::fuzzy_sorted;
 use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_J, Ctrl_V, Key, key_unescape};
-use crate::memory::handoff::owned_cstr;
+use crate::memory::XString;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::{CpoFlag, ExpandContext, Failed, NUL};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 /// What [`set_context_in_map_cmd`] worked out for the completion that
 /// follows: which modes to list, whether the command was an abbreviation
@@ -178,30 +179,28 @@ const CONTEXT_ARGS: [&[u8]; 7] = [
 /// offered.
 const CONTEXT_ARG_BUFFER: usize = 0;
 
-/// Work out what to complete when completing a mapping or abbreviation name.
-///
-/// # Safety
-/// `expand`, `cmd` and `arg` must be live.
+/// Work out what to complete when completing a mapping or abbreviation name,
+/// for command `cmd` whose argument starts at `arg` in the completion's
+/// line. Answers no next command.
 #[allow(clippy::too_many_arguments)] // upstream's `set_context_in_*` shape
-pub unsafe fn set_context_in_map_cmd(
-    expand: *mut Expand,
-    mut cmd: *mut c_char,
-    arg: *mut c_char,
+pub fn set_context_in_map_cmd(
+    expand: &mut Expand,
+    cmd: &CStr,
+    arg: usize,
     forceit: bool,
     isabbrev: bool,
     isunmap: bool,
     cmdidx: CmdIdx,
-) -> *mut c_char {
-    // SAFETY: the caller's promise — `expand` is a live `Expand`.
-    let mut expand = unsafe { Live::new(expand) };
+) -> Option<usize> {
     if forceit && cmdidx != CmdIdx::map && cmdidx != CmdIdx::unmap {
-        expand.xp_context = ExpandContext::Nothing;
-        return ptr::null_mut();
+        expand.context = ExpandContext::Nothing;
+        return None;
     }
 
     if isunmap {
-        // SAFETY: the caller's promise — `cmd` is a live command name.
-        let mode = unsafe { get_map_mode(&raw mut cmd, forceit || isabbrev) };
+        let mut name = cmd.as_ptr().cast_mut();
+        // SAFETY: a NUL-terminated command name, which the walk only reads.
+        let mode = unsafe { get_map_mode(&raw mut name, forceit || isabbrev) };
         EXPAND_MAPMODES.set(mode);
     } else {
         let mut modes = MODE_INSERT | MODE_CMDLINE;
@@ -211,12 +210,11 @@ pub unsafe fn set_context_in_map_cmd(
         EXPAND_MAPMODES.set(modes);
     }
     EXPAND_ISABBREV.set(isabbrev);
-    expand.xp_context = ExpandContext::Mappings;
+    expand.context = ExpandContext::Mappings;
     EXPAND_BUFFER.set(false);
 
     // Skip the map arguments; only `<buffer>` changes what is offered.
-    // SAFETY: the caller's promise — `arg` is NUL-terminated.
-    let all = unsafe { cstr::bytes_at(arg) };
+    let all = expand.line_cstr().to_bytes().get(arg..).unwrap_or_default();
     let mut rest = all;
     'skip: loop {
         for (i, word) in CONTEXT_ARGS.into_iter().enumerate() {
@@ -229,10 +227,9 @@ pub unsafe fn set_context_in_map_cmd(
         }
         break;
     }
-    // SAFETY: `rest` is a tail of `arg`'s own bytes.
-    expand.xp_pattern = unsafe { arg.add(all.len() - rest.len()) };
+    expand.pattern = arg + all.len() - rest.len();
 
-    ptr::null_mut()
+    None
 }
 
 /// The map arguments `:map <Tab>` offers, in upstream's order.  `<buffer>` is
@@ -254,49 +251,31 @@ const EXPAND_ARG_BUFFER: usize = 4;
 /// completion of `:[un]map` and `:[un]abbrev` in all modes.
 ///
 /// Answers `Ok` if any matched, `Err` otherwise.
-///
-/// # Safety
-/// Every pointer argument must be live; `matches` and `num_matches` are
-/// written unconditionally.
-pub unsafe fn expand_mappings(
-    pat: *mut c_char,
-    regmatch: &mut RegMatch,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's promise — `pat` is a live, NUL-terminated pattern.
-    let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
-
-    // SAFETY: the caller's promise — both out-parameters are writable.
-    unsafe {
-        *num_matches = 0; // return values in case of FAIL
-        *matches = ptr::null_mut();
-    }
+pub fn expand_mappings(pat: &CStr, regmatch: &mut RegMatch) -> Result<Vec<XString>, Failed> {
+    let fuzzy = cmdline_fuzzy_complete(pat.to_bytes());
 
     // Exactly one of these fills: `fuzzy` is fixed for the whole call.
-    let mut scored = Vec::<FuzMatchStr>::new();
-    let mut plain = Vec::<*mut c_char>::new();
+    let mut scored = Vec::<Scored>::new();
+    let mut plain = Vec::<XString>::new();
 
     // Whether `p` matches, and with what fuzzy score.
-    let matched = |regex_match: &mut RegMatch, p: *mut c_char| -> Option<c_int> {
+    let matched = |regex_match: &mut RegMatch, p: &CStr| -> Option<c_int> {
         if fuzzy {
-            // SAFETY: `p` and `pat` are both live and NUL-terminated.
-            let score = unsafe { fuzzy_match_str(cstr::at(p), cstr::at(pat)) };
+            let score = fuzzy_match_str(p, pat);
             (score != FUZZY_SCORE_NONE).then_some(score)
         } else {
-            // SAFETY: `p` is NUL-terminated.
-            vim_regexec(regex_match, unsafe { cstr::at(p) }, 0).then_some(0)
+            vim_regexec(regex_match, p, 0).then_some(0)
         }
     };
-    // C's `GA_APPEND`, in whichever of the two element shapes is in use.
-    // The two vectors are parameters rather than captures so the loops below
-    // can still read them.
-    let push = |scored: &mut Vec<FuzMatchStr>, plain: &mut Vec<*mut c_char>, s, score| {
+    // In whichever of the two shapes is in use. The two vectors are
+    // parameters rather than captures so the loops below can still read
+    // them.
+    let push = |scored: &mut Vec<Scored>, plain: &mut Vec<XString>, text: XString, score| {
         if fuzzy {
-            let idx = c_int::try_from(scored.len()).expect("a match count fits a c_int");
-            scored.push(FuzMatchStr { idx, str: s, score });
+            let idx = scored.len();
+            scored.push(Scored { text, score, idx });
         } else {
-            plain.push(s);
+            plain.push(text);
         }
     };
 
@@ -305,15 +284,8 @@ pub unsafe fn expand_mappings(
         if i == EXPAND_ARG_BUFFER && EXPAND_BUFFER.get() {
             continue;
         }
-        let p = word.as_ptr().cast_mut();
-        if let Some(score) = matched(regmatch, p) {
-            // The copy is owned by the growarray from here on.
-            push(
-                &mut scored,
-                &mut plain,
-                owned_cstr(word.to_bytes().to_vec()),
-                score,
-            );
+        if let Some(score) = matched(regmatch, word) {
+            push(&mut scored, &mut plain, XString::from_cstr(word), score);
         }
     }
 
@@ -330,17 +302,15 @@ pub unsafe fn expand_mappings(
         if mp.m_simplified || mp.m_mode & EXPAND_MAPMODES.get() == 0 {
             return None;
         }
-        // SAFETY: `'cpoptions'` is NUL-terminated.
         let mut rendering = p_cpo(|cpo| translate_mapping(mp.keys(), cpo));
         if rendering.is_empty() {
             return None; // nothing to match against
         }
-        // Matched as a C string out of this frame's own buffer, and only
-        // handed to the growarray -- which owns it from then on -- if it hit.
+        // Matched as a C string, which stops at a NUL the keys may hold.
         rendering.push(0);
-        if let Some(score) = matched(regmatch, rendering.as_mut_ptr().cast()) {
-            rendering.pop();
-            push(&mut scored, &mut plain, owned_cstr(rendering), score);
+        let text = XString::from_cstr(cstr::in_bytes(&rendering));
+        if let Some(score) = matched(regmatch, text.as_cstr()) {
+            push(&mut scored, &mut plain, text, score);
         }
         None
     };
@@ -348,52 +318,20 @@ pub unsafe fn expand_mappings(
     // entry.
     unsafe { map_walk::<()>(table, abbr, collect) };
 
-    let found = if fuzzy { scored.len() } else { plain.len() };
-    if found == 0 {
-        return Err(Failed);
-    }
-    let found = c_int::try_from(found).expect("a match count fits a c_int");
-
-    // Both handovers give the receiver a boxed slice, which is `xfree`-able
-    // because the tree's allocator is libc's (`allocator.rs`).
-    // SAFETY: both out-parameters are the caller's writable slots.
-    let mut count = unsafe {
-        if fuzzy {
-            let raw = Box::into_raw(scored.into_boxed_slice()).cast::<FuzMatchStr>();
-            fuzzymatches_to_strmatches(raw, matches, found, false);
-        } else {
-            *matches = Box::into_raw(plain.into_boxed_slice()).cast::<*mut c_char>();
-        }
-        *num_matches = found;
-        found
+    let mut found = if fuzzy {
+        // Fuzzy matching sorts them by score.
+        fuzzy_sorted(scored, false)
+    } else {
+        // Sort the matches.
+        plain.sort_unstable_by(|a: &XString, b: &XString| a[..].cmp(&b[..]));
+        plain
     };
-    if count > 1 {
-        // SAFETY: `*matches` now holds `count` NUL-terminated strings, which
-        // is what the sort and the comparison below read.
-        unsafe {
-            // Sort the matches; fuzzy matching already sorted them.
-            if !fuzzy {
-                sort_strings(*matches, count);
-            }
-            // Remove duplicate entries, keeping the first of each run.  The
-            // one `xfree` this module still makes: past the handover above the
-            // array and its strings belong to the *caller*, and `xfree` is the
-            // release its own code will use on the rest of them.
-            let items = core::slice::from_raw_parts_mut(*matches, count as usize);
-            let mut kept = 0;
-            for read in 1..items.len() {
-                if !cstr::eq(items[kept], items[read]) {
-                    kept += 1;
-                    items[kept] = items[read];
-                } else {
-                    xfree(items[read].cast());
-                    count -= 1;
-                }
-            }
-        }
-    }
+    // Remove duplicate entries, keeping the first of each run.
+    found.dedup_by(|a, b| a == b);
 
-    // SAFETY: the caller's writable out-parameter.
-    unsafe { *num_matches = count };
-    if count == 0 { Err(Failed) } else { Ok(()) }
+    if found.is_empty() {
+        Err(Failed)
+    } else {
+        Ok(found)
+    }
 }

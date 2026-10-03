@@ -279,6 +279,15 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
     }
 }
 
+/// [`vim_getenv`], owned: the value of environment variable `name`, with
+/// the editor's own fallbacks for `$VIM` and `$VIMRUNTIME`.
+pub(crate) fn vim_getenv_owned(name: &CStr) -> Option<XString> {
+    // SAFETY: a NUL-terminated name; the answer is owned or null, and taken
+    // over once.
+    let value = unsafe { vim_getenv(name.as_ptr()) };
+    (!value.is_null()).then(|| unsafe { XString::from_raw(value) })
+}
+
 /// Replace the home directory with `~` in each file name of `src`.
 ///
 /// `buffer`, when not NULL, is checked for being a help buffer — in which case

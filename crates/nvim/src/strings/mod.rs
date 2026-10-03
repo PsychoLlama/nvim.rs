@@ -229,26 +229,6 @@ pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
     }
 }
 
-/// [`sort_strings`] for function names: byte order, except that a name
-/// starting with `<` -- an `<SNR>` script-local one -- sorts after the rest.
-///
-/// # Safety
-///
-/// As [`sort_strings`].
-pub(crate) unsafe fn sort_function_names(files: *mut *mut c_char, count: c_int) {
-    let Ok(count) = usize::try_from(count) else {
-        return;
-    };
-    if count == 0 {
-        return;
-    }
-    // SAFETY: the caller's `count` slots, each a NUL-terminated string.
-    unsafe { slice::from_raw_parts_mut(files, count) }.sort_unstable_by_key(|&name| {
-        let name = unsafe { CStr::from_ptr(name) };
-        (name.to_bytes().first() == Some(&b'<'), name)
-    });
-}
-
 /// Sort `count` strings at `files` bytewise, as `strcmp` orders them.
 ///
 /// # Safety

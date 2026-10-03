@@ -24,7 +24,7 @@ use crate::arglist::arg_all;
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::buffer::find_buf;
 use crate::charset::{backslash_halve, getdigits_int};
-use crate::cmdexpand::{expand_init, expand_one};
+use crate::cmdexpand::expand_one;
 use crate::eval::fs::modify_fname;
 use crate::eval::skip_expr;
 use crate::eval::typval::NumBuf;
@@ -265,36 +265,20 @@ pub(crate) fn expand_filename(
         return Ok(());
     }
 
-    // SAFETY: `Expand` is a `repr(C)` aggregate of scalars and pointers;
-    // all-zero is a valid value of every one of them, and `expand_init`
-    // writes the rest.
-    let mut xpc: Expand = unsafe { core::mem::zeroed() };
-    // SAFETY: `xpc` is this frame's own.
-    unsafe { expand_init(&raw mut xpc) };
-    xpc.xp_context = ExpandContext::Files;
+    let mut xpc = Expand::new();
+    xpc.context = ExpandContext::Files;
     let mut options = WildOpts::LIST_NOTFOUND | WildOpts::NOERROR | WildOpts::ADD_SLASH;
     if p_wic() {
         options |= WildOpts::ICASE;
     }
-    let arg = excmd.line.ptr_at(excmd.line.arg);
-    // SAFETY: as above, over the command's own argument.
-    let expanded = unsafe {
-        expand_one(
-            &raw mut xpc,
-            arg,
-            ptr::null_mut(),
-            options,
-            WildMode::ExpandFree,
-        )
-    };
-    if expanded.is_null() {
+    let arg = CString::new(excmd.line.rest_of(excmd.line.arg)).unwrap_or_default();
+    let Some(expanded) = expand_one(&mut xpc, Some(&arg), None, options, WildMode::ExpandFree)
+    else {
         return Err(Failed);
-    }
-    // SAFETY: `expand_one` answers a NUL-terminated block this call owns.
-    let text = unsafe { cstr::bytes_at(expanded) }.to_vec();
+    };
+    let text = expanded.as_cstr().to_bytes().to_vec();
     let (start, len) = (excmd.line.arg, excmd.line.rest_of(excmd.line.arg).len());
     repl_cmdline(excmd, start, len, &text);
-    xfree(expanded as *mut c_void);
     Ok(())
 }
 

@@ -6,198 +6,176 @@
 //! half of the same question — what the pattern looked like before the
 //! matches were found.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::charset::vim_strsize_cstr;
 use crate::cstr;
-use crate::strings::has_char;
-use crate::types::{ExpandContext, MAXPATHL, NUL};
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+use crate::drawscreen::state::cmdline_row;
+use crate::getchar::state::got_int;
+use crate::highlight_group::{HLF_D, HLF_T};
+use crate::lua::executor::nlua_expand_pat;
+use crate::message::state::{msg_col, msg_didany, msg_row};
+use crate::message::{
+    msg_advance, msg_clr_eos, msg_display, msg_display_elided, msg_ext_set_kind, msg_putchar,
+    msg_start, msg_str, msg_str_hl,
+};
+use crate::os::cshim::gettext;
+use crate::os::env::{expand_env_save_opt_of, home_replace_in};
+use crate::os::fs::dir_exists;
+use crate::path::{tail_index, vim_ispathsep};
+use crate::popupmenu::pum_clear;
+use crate::types::ui::kUIMessages;
+use crate::types::{ExpandContext, MAXPATHL};
+use crate::ui::state::Columns;
+use crate::ui::{ui_flush, ui_has};
+use crate::winlayer::Cc;
+use core::ffi::c_int;
+
+/// Whether the match is a name the listing highlights when it is a
+/// directory, and shows `~` in.
+fn lists_paths(expand: &Expand) -> bool {
+    matches!(
+        expand.context,
+        ExpandContext::Files | ExpandContext::ShellCmd | ExpandContext::Buffers
+    )
+}
+
+/// `name` with each backslash that escapes something taken out: upstream's
+/// `backslash_halve`.
+fn backslash_halved(name: &[u8]) -> XString {
+    let mut out = Vec::with_capacity(name.len());
+    let mut p = 0;
+    while p < name.len() {
+        if name[p] == b'\\' && p + 1 < name.len() {
+            p += 1;
+        }
+        out.push(name[p]);
+        p += 1;
+    }
+    owned(&out)
+}
 
 /// One line of the match listing.
 ///
 /// `matches[linenr]`, `matches[linenr + lines]`, … are the entries that share
 /// a line; `maxlen` is the column width and `showtail` asks for file names to
 /// be shown as their tail alone.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-/// `matches` must point at a writable `*mut c_char` slot the caller owns for
-/// the call.
-pub(crate) unsafe fn showmatches_oneline(
-    expand: *mut Expand,
-    matches: *mut *mut c_char,
-    num_matches: c_int,
+pub(crate) fn showmatches_oneline(
+    expand: &Expand,
+    matches: &[XString],
     lines: c_int,
     linenr: c_int,
     maxlen: c_int,
     showtail: bool,
 ) {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    // `msg_display` runs the message machinery, which is why the shortened
-    // name it is handed is this frame's and not the shared `NameBuff`.
-    let mut shown = [0 as c_char; MAXPATHL as usize];
+    let num_matches = as_count(matches.len());
     // C's SHOW_MATCH().
-    let show_match = |i: c_int| {
-        let m = unsafe { *matches.offset(i as isize) };
-        if showtail {
-            unsafe { showmatches_gettail(m, false) }
+    let show_match = |m: &XString| -> XString {
+        let tail = if showtail {
+            showmatches_gettail(m, false)
         } else {
-            m
-        }
+            0
+        };
+        owned(&m[tail..])
     };
 
     let mut lastlen = 999;
     let mut j = linenr;
     while j < num_matches {
-        if expand.xp_context == ExpandContext::TagsListFiles {
-            msg_display(
-                unsafe { cstr::at(*matches.offset(j as isize)) },
-                HLF_D,
-                false,
-            );
-            let name = unsafe { *matches.offset(j as isize) };
-            // SAFETY: the tag file name follows the tag's own NUL, which is
-            // how `ExpandContext::TagsListFiles` packs the two.
-            let p = unsafe { name.add(cstr::bytes_at(name).len() + 1) };
+        let m = &matches[usize::try_from(j).unwrap_or(0)];
+        if expand.context == ExpandContext::TagsListFiles {
+            // The tag's kind and file follow its name, each after a NUL,
+            // which is how `ExpandContext::TagsListFiles` packs the three.
+            let name = m.as_cstr();
+            msg_display(name, HLF_D, false);
+            let kind_at = name.count_bytes() + 1;
             msg_advance(maxlen + 1);
-            msg_str(unsafe { cstr::at(p) });
+            msg_str(m.cstr_at(kind_at));
             msg_advance(maxlen + 3);
-            msg_display_elided(unsafe { cstr::at(p.add(2)) }, HLF_D);
+            msg_display_elided(m.cstr_at(kind_at + 2), HLF_D);
             break;
         }
         for _ in 0..(maxlen - lastlen).max(0) {
-            msg_putchar(' ' as c_int);
+            msg_putchar(c_int::from(b' '));
         }
-        let isdir;
-        let p;
-        if expand.xp_context == ExpandContext::Files
-            || expand.xp_context == ExpandContext::ShellCmd
-            || expand.xp_context == ExpandContext::Buffers
-        {
+        let (isdir, shown) = if lists_paths(expand) {
             // Highlight directories.
-            if expand.xp_numfiles != -1 {
+            let isdir = if expand.matches.is_some() {
                 // Expansion was done before and special characters were
                 // escaped, need to halve backslashes.  Also $HOME has been
                 // replaced with ~/.
-                let exp_path = unsafe { expand_env_save_opt(*matches.offset(j as isize), true) };
-                let path = if !exp_path.is_null() {
-                    exp_path
-                } else {
-                    unsafe { *matches.offset(j as isize) }
-                };
-                let halved_slash = unsafe { backslash_halve_save(path) };
-                isdir = unsafe { os_isdir(halved_slash) };
-                unsafe { xfree(exp_path as *mut c_void) };
-                if halved_slash != path {
-                    unsafe { xfree(halved_slash as *mut c_void) };
-                }
+                let path = expand_env_save_opt_of(m.as_cstr(), true);
+                dir_exists(backslash_halved(&path).as_cstr())
             } else {
                 // Expansion was done here, file names are literal.
-                isdir = unsafe { os_isdir(*matches.offset(j as isize)) };
-            }
-            if showtail {
-                p = show_match(j);
+                dir_exists(m.as_cstr())
+            };
+            let shown = if showtail {
+                show_match(m)
             } else {
-                unsafe {
-                    home_replace(
-                        None,
-                        *matches.offset(j as isize),
-                        shown.as_mut_ptr(),
-                        MAXPATHL as size_t,
-                        true,
-                    )
-                };
-                p = shown.as_mut_ptr();
-            }
+                home_replace_in(None, m.as_cstr(), MAXPATHL as usize, true)
+            };
+            (isdir, shown)
         } else {
-            isdir = false;
-            p = show_match(j);
-        }
-        lastlen = msg_display(unsafe { cstr::at(p) }, if isdir { HLF_D } else { 0 }, false);
+            (false, show_match(m))
+        };
+        lastlen = msg_display(shown.as_cstr(), if isdir { HLF_D } else { 0 }, false);
         j += lines;
     }
     if msg_col.get() > 0 {
         // When not wrapped around.
         msg_clr_eos();
-        msg_putchar('\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
     }
 }
 
 /// Display completion matches.
 ///
-/// Answers `Expanded::Nothing` when the character that triggered expansion should
-/// be inserted as a normal character.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-pub unsafe fn showmatches(
-    expand: *mut Expand,
+/// Answers `Expanded::Nothing` when the character that triggered expansion
+/// should be inserted as a normal character.
+pub fn showmatches(
+    expand: &mut Expand,
     display_wildmenu: bool,
     display_list: bool,
     noselect: bool,
 ) -> Expanded {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
-    let mut shown = [0 as c_char; MAXPATHL as usize];
     let ccline = Cc::current();
-    let mut num_matches = 0;
-    let mut matches = ptr::null_mut();
+    // The matches when nothing was expanded yet: found here, for this
+    // listing only.
+    let mut found = None;
     let showtail;
 
-    if expand.xp_numfiles == -1 {
-        unsafe { set_expand_context(expand.raw()) };
-        if expand.xp_context == ExpandContext::Lua {
-            unsafe { nlua_expand_pat(expand.raw()) };
+    if expand.matches.is_none() {
+        set_expand_context(expand);
+        if expand.context == ExpandContext::Lua {
+            nlua_expand_pat(expand);
         }
-        let retval = unsafe {
-            expand_cmdline(
-                expand.raw(),
-                ccline.text(),
-                ccline.cmdpos,
-                &raw mut num_matches,
-                &raw mut matches,
-            )
-        };
+        let (retval, matches) = expand_cmdline(expand, ccline.cmdpos);
         if retval != Expanded::Ok {
             return retval;
         }
-        showtail = unsafe { expand_showtail(expand.raw()) };
+        found = Some(matches);
+        showtail = expand_showtail(expand);
     } else {
-        num_matches = expand.xp_numfiles;
-        matches = expand.xp_files;
         showtail = cmd_showtail.get();
     }
 
     if cmdline_compl_use_pum(display_wildmenu && !display_list) {
-        unsafe {
-            cmdline_pum_create(
-                Cc::current(),
-                expand.raw(),
-                matches,
-                num_matches,
-                showtail,
-                noselect,
-            )
-        };
+        cmdline_pum_create(Cc::current(), expand, found, showtail, noselect);
         compl_selected.set(if noselect { -1 } else { 0 });
         pum_clear();
         cmdline_pum_display(true);
         return Expanded::Ok;
     }
 
+    let matches = found.as_deref().unwrap_or(expand.matches());
+
     if display_list {
         msg_didany.set(false); // lines_left will be set
         msg_start(); // prepare for paging
         if !ui_has(kUIMessages) {
-            msg_putchar('\n' as c_int);
+            msg_putchar(c_int::from(b'\n'));
         }
         ui_flush();
         cmdline_row.set(msg_row.get());
@@ -210,51 +188,32 @@ pub unsafe fn showmatches(
         got_int.set(false); // only interrupt the completion, not the cmd line
     } else if display_wildmenu && !display_list {
         // Display statusbar menu.
-        unsafe {
-            redraw_wildmenu(
-                expand.raw(),
-                num_matches,
-                matches,
-                if noselect { -1 } else { 0 },
-                showtail,
-            )
-        };
+        redraw_wildmenu(expand, matches, if noselect { -1 } else { 0 }, showtail);
     } else if display_list {
         // C's SHOW_MATCH().
-        let show_match = |i: c_int| {
-            let m = unsafe { *matches.offset(i as isize) };
-            if showtail {
-                unsafe { showmatches_gettail(m, false) }
+        let show_match = |m: &XString| -> XString {
+            let tail = if showtail {
+                showmatches_gettail(m, false)
             } else {
-                m
-            }
+                0
+            };
+            XString::from_cstr(cstr::suffix(m.as_cstr(), tail))
         };
 
         // Find the length of the longest file name.
         let mut maxlen = 0;
-        for i in 0..num_matches {
-            let len = if !showtail
-                && (expand.xp_context == ExpandContext::Files
-                    || expand.xp_context == ExpandContext::ShellCmd
-                    || expand.xp_context == ExpandContext::Buffers)
-            {
-                unsafe {
-                    home_replace(
-                        None,
-                        *matches.offset(i as isize),
-                        shown.as_mut_ptr(),
-                        MAXPATHL as size_t,
-                        true,
-                    )
-                };
-                unsafe { vim_strsize(shown.as_ptr()) }
+        for m in matches {
+            let len = if !showtail && lists_paths(expand) {
+                let shown = home_replace_in(None, m.as_cstr(), MAXPATHL as usize, true);
+                vim_strsize_cstr(shown.as_cstr())
             } else {
-                unsafe { vim_strsize(show_match(i)) }
+                vim_strsize_cstr(show_match(m).as_cstr())
             };
             maxlen = maxlen.max(len);
         }
 
-        let lines = if expand.xp_context == ExpandContext::TagsListFiles {
+        let num_matches = as_count(matches.len());
+        let lines = if expand.context == ExpandContext::TagsListFiles {
             num_matches
         } else {
             // Compute the number of columns and lines for the listing.
@@ -263,7 +222,7 @@ pub unsafe fn showmatches(
             (num_matches + columns - 1) / columns
         };
 
-        if expand.xp_context == ExpandContext::TagsListFiles {
+        if expand.context == ExpandContext::TagsListFiles {
             msg_str_hl(gettext(c"tagname"), HLF_T, false);
             msg_clr_eos();
             msg_advance(maxlen - 3);
@@ -272,17 +231,7 @@ pub unsafe fn showmatches(
 
         // List the files line by line.
         for i in 0..lines {
-            unsafe {
-                showmatches_oneline(
-                    expand.raw(),
-                    matches,
-                    num_matches,
-                    lines,
-                    i,
-                    maxlen,
-                    showtail,
-                )
-            };
+            showmatches_oneline(expand, matches, lines, i, maxlen, showtail);
             if got_int.get() {
                 got_int.set(false);
                 break;
@@ -294,30 +243,22 @@ pub unsafe fn showmatches(
         cmdline_row.set(msg_row.get()); // will put it back later
     }
 
-    if expand.xp_numfiles == -1 {
-        unsafe { free_wild(num_matches, matches) };
-    }
-
     Expanded::Ok
 }
 
-/// [`path_tail`] for [`showmatches`] and [`redraw_wildmenu`]: the tail of file
-/// name path `s`, ignoring a trailing `/`.
+/// `path_tail` for [`showmatches`] and [`redraw_wildmenu`]: where the tail of
+/// file name path `s` starts, ignoring a trailing `/`.
 ///
 /// `eager` takes the text after the last separator even when it is empty.
-///
-/// # Safety
-///
-/// `s` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_char {
-    let mut t = s;
+pub(crate) fn showmatches_gettail(s: &[u8], eager: bool) -> usize {
+    let mut t = 0;
     let mut had_sep = false;
 
-    let mut p = s;
-    while unsafe { *p } as c_int != NUL {
-        if vim_ispathsep(unsafe { *p } as c_int) {
+    let mut p = 0;
+    while p < s.len() && s[p] != 0 {
+        if vim_ispathsep(c_int::from(s[p])) {
             if eager {
-                t = unsafe { p.add(1) };
+                t = p + 1;
             } else {
                 had_sep = true;
             }
@@ -325,7 +266,7 @@ pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_
             t = p;
             had_sep = false;
         }
-        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        p += char_len(s, p);
     }
     t
 }
@@ -334,38 +275,32 @@ pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_
 ///
 /// When not completing file names, or when there is a wildcard in the path,
 /// false is returned.
-///
-/// # Safety
-///
-/// `expand` must point at a live `Expand` context, unaliased for the call.
-pub(crate) unsafe fn expand_showtail(expand: *mut Expand) -> bool {
-    // SAFETY: the caller's contract -- `expand` is the live expansion
-    // context, which outlives this call.
-    let expand = unsafe { Xp::new(expand) };
+pub(crate) fn expand_showtail(expand: &Expand) -> bool {
     // When not completing file names a "/" may mean something different.
-    if expand.xp_context != ExpandContext::Files
-        && expand.xp_context != ExpandContext::ShellCmd
-        && expand.xp_context != ExpandContext::Directories
-    {
+    if !matches!(
+        expand.context,
+        ExpandContext::Files | ExpandContext::ShellCmd | ExpandContext::Directories
+    ) {
         return false;
     }
 
-    let end = unsafe { path_tail(expand.xp_pattern) };
-    if end == expand.xp_pattern {
+    let pattern = expand.pattern_text();
+    let end = tail_index(pattern);
+    if end == 0 {
         // There is no path separator.
         return false;
     }
 
-    let mut s = expand.xp_pattern;
+    let mut s = 0;
     while s < end {
         // Skip escaped wildcards.  Only when the backslash is not a path
         // separator, on DOS the '*' "path\*\file" must not be skipped.
-        if unsafe { rem_backslash(s) } {
-            s = unsafe { s.add(1) };
-        } else if has_char(c"*?[", unsafe { *s } as u8 as c_int) {
+        if pattern[s] == b'\\' && s + 1 < pattern.len() {
+            s += 1;
+        } else if b"*?[".contains(&pattern[s]) {
             return false;
         }
-        s = unsafe { s.add(1) };
+        s += 1;
     }
     true
 }
@@ -373,121 +308,85 @@ pub(crate) unsafe fn expand_showtail(expand: *mut Expand) -> bool {
 /// Prepare a string for expansion.
 ///
 /// When expanding file names the string will be used with
-/// `expand_wildcards()`: `fname[len]` is copied into allocated memory and a
-/// `*` is added at the end.  When expanding other names it will be used with
-/// `vim_regcomp()`: the name is copied and `^` prepended, with the
-/// file-matching wildcards converted to regexp ones.
+/// `expand_wildcards()`: `fname` is copied and a `*` is added at the end.
+/// When expanding other names it will be used with `vim_regcomp()`: the name
+/// is copied and `^` prepended, with the file-matching wildcards converted to
+/// regexp ones.
 ///
-/// `context` is the `EXPAND_*` the pattern came from.  The answer is never
-/// NULL.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `context` must be an initialized `ExpandContext` whose pointer fields
-/// point at live data for the call.
-pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: ExpandContext) -> *mut c_char {
-    if context != ExpandContext::Files
-        && context != ExpandContext::FilesInPath
-        && context != ExpandContext::ShellCmd
-        && context != ExpandContext::Directories
-        && context != ExpandContext::DirsInCdpath
-    {
+/// `context` is the `EXPAND_*` the pattern came from.
+pub fn addstar(fname: &[u8], context: ExpandContext) -> XString {
+    let len = fname.len();
+    if !matches!(
+        context,
+        ExpandContext::Files
+            | ExpandContext::FilesInPath
+            | ExpandContext::ShellCmd
+            | ExpandContext::Directories
+            | ExpandContext::DirsInCdpath
+    ) {
         // Matching will be done internally (on something other than
         // files).  So we convert the file-matching-type wildcards into our
-        // kind for use with vim_regcomp().  First work out how long it
-        // will be.
+        // kind for use with vim_regcomp().
 
         // For help tags the translation is done in find_help_tags().
         // For a tag pattern starting with "/" no translation is needed.
-        if context == ExpandContext::Findfunc
-            || context == ExpandContext::Help
-            || context == ExpandContext::Colors
-            || context == ExpandContext::Compiler
-            || context == ExpandContext::Ownsyntax
-            || context == ExpandContext::Filetype
-            || context == ExpandContext::Keymap
-            || context == ExpandContext::Packadd
-            || context == ExpandContext::Runtime
-            || ((context == ExpandContext::TagsListFiles || context == ExpandContext::Tags)
-                && unsafe { *fname } as c_int == '/' as c_int)
-            || context == ExpandContext::Checkhealth
-            || context == ExpandContext::Lsp
-            || context == ExpandContext::Lua
+        if matches!(
+            context,
+            ExpandContext::Findfunc
+                | ExpandContext::Help
+                | ExpandContext::Colors
+                | ExpandContext::Compiler
+                | ExpandContext::Ownsyntax
+                | ExpandContext::Filetype
+                | ExpandContext::Keymap
+                | ExpandContext::Packadd
+                | ExpandContext::Runtime
+                | ExpandContext::Checkhealth
+                | ExpandContext::Lsp
+                | ExpandContext::Lua
+        ) || (matches!(context, ExpandContext::TagsListFiles | ExpandContext::Tags)
+            && fname.first() == Some(&b'/'))
         {
-            return unsafe { xstrnsave(fname, len) };
+            return owned(fname);
         }
 
         // Custom expansion takes care of special things, and matches
         // backslashes literally.
         let custom = context == ExpandContext::UserDefined || context == ExpandContext::UserList;
 
-        let mut new_len = len + 2; // +2 for '^' at start, NUL at end
-        for i in 0..len {
-            let c = unsafe { *fname.add(i) } as u8;
-            // '*' needs to be replaced by ".*", '~' by "\~".
-            if c == b'*' || c == b'~' {
-                new_len += 1;
-            }
-            // Buffer names are like file names.  "." should be literal.
-            if context == ExpandContext::Buffers && c == b'.' {
-                new_len += 1;
-            }
-            if custom && c == b'\\' {
-                new_len += 1;
-            }
-        }
-
-        let retval = unsafe { xmalloc(new_len) } as *mut c_char;
-        unsafe { *retval = '^' as c_char };
-        let mut j: size_t = 1;
-        let mut i: size_t = 0;
+        let mut out = Vec::with_capacity(len + 2);
+        out.push(b'^');
+        let mut i = 0;
         while i < len {
             // Skip backslash.  But why?  At least keep it for custom
             // expansion.
-            if !custom && unsafe { *fname.add(i) } as u8 == b'\\' {
+            if !custom && fname[i] == b'\\' {
                 i += 1;
                 if i == len {
                     break;
                 }
             }
 
-            'copy: {
-                match unsafe { *fname.add(i) } as u8 {
-                    b'*' => {
-                        unsafe { *retval.add(j) = '.' as c_char };
-                        j += 1;
-                    }
-                    b'~' => {
-                        unsafe { *retval.add(j) = '\\' as c_char };
-                        j += 1;
-                    }
-                    b'?' => {
-                        // The one case that does not copy the source byte.
-                        unsafe { *retval.add(j) = '.' as c_char };
-                        break 'copy;
-                    }
-                    b'.' if context == ExpandContext::Buffers => {
-                        unsafe { *retval.add(j) = '\\' as c_char };
-                        j += 1;
-                    }
-                    b'\\' if custom => {
-                        unsafe { *retval.add(j) = '\\' as c_char };
-                        j += 1;
-                    }
-                    _ => {}
+            match fname[i] {
+                b'*' => out.push(b'.'),
+                b'~' => out.push(b'\\'),
+                b'?' => {
+                    // The one case that does not copy the source byte.
+                    out.push(b'.');
+                    i += 1;
+                    continue;
                 }
-                unsafe { *retval.add(j) = *fname.add(i) };
+                b'.' if context == ExpandContext::Buffers => out.push(b'\\'),
+                b'\\' if custom => out.push(b'\\'),
+                _ => {}
             }
+            out.push(fname[i]);
             i += 1;
-            j += 1;
         }
-        unsafe { *retval.add(j) = NUL as c_char };
-        return retval;
+        return owned(&out);
     }
 
-    let retval = unsafe { xmalloc(len + 4) } as *mut c_char;
-    unsafe { xmemcpyz(retval as *mut c_void, fname as *const c_void, len) };
+    let mut out = fname.to_vec();
 
     // Don't add a star to *, ~, ~user, $var or `cmd`.
     // * would become **, which walks the whole tree.
@@ -495,27 +394,23 @@ pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: ExpandContex
     // $ could be anywhere in the tail.
     // ` could be anywhere in the file name.
     // When the name ends in '$' don't add a star, remove the '$'.
-    let tail = unsafe { path_tail(retval) };
-    let mut ends_in_star = len > 0 && unsafe { *retval.add(len - 1) } as c_int == '*' as c_int;
+    let tail = tail_index(&out);
+    let mut ends_in_star = out.last() == Some(&b'*');
     // An odd number of backslashes before it escapes the star.
-    let mut k = len as ssize_t - 2;
-    while k >= 0 {
-        if unsafe { *retval.add(k as usize) } as c_int != '\\' as c_int {
+    for &c in out[..len.saturating_sub(1)].iter().rev() {
+        if c != b'\\' {
             break;
         }
         ends_in_star = !ends_in_star;
-        k -= 1;
     }
-    if (unsafe { *retval } as c_int != '~' as c_int || tail != retval)
+    if (out.first() != Some(&b'~') || tail != 0)
         && !ends_in_star
-        && !has_char(unsafe { cstr::at(tail) }, '$' as c_int)
-        && !has_char(unsafe { cstr::at(retval) }, '`' as c_int)
+        && !out[tail..].contains(&b'$')
+        && !out.contains(&b'`')
     {
-        unsafe { *retval.add(len) = '*' as c_char };
-        len += 1;
-    } else if len > 0 && unsafe { *retval.add(len - 1) } as c_int == '$' as c_int {
-        len -= 1;
+        out.push(b'*');
+    } else if out.last() == Some(&b'$') {
+        out.pop();
     }
-    unsafe { *retval.add(len) = NUL as c_char };
-    retval
+    owned(&out)
 }

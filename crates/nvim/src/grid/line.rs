@@ -314,6 +314,15 @@ pub unsafe fn grid_line_puts(
     col - start_col
 }
 
+/// [`grid_line_puts`] of `text`, which need not be terminated. Answers the
+/// width drawn.
+pub(crate) fn grid_line_puts_bytes(col: c_int, text: &[u8], attr: c_int) -> c_int {
+    let len = c_int::try_from(text.len()).expect("a screen line fits a c_int");
+    // SAFETY: `len` readable bytes; a line is being drawn, which is the
+    // batch's own promise.
+    unsafe { grid_line_puts(col, text.as_ptr().cast(), len, attr) }
+}
+
 /// Fill `start_col..end_col` with one glyph, answering where it stopped.
 ///
 /// # Safety

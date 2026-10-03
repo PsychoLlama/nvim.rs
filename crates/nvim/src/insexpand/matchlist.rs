@@ -15,8 +15,9 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::mbyte::{char_at, cluster_len};
+use crate::memory::XString;
+use crate::path::take_wild;
 use crate::types::{FAIL, Failed, OK, VarLock};
 use crate::winlayer::Win;
 use core::cmp::Ordering;
@@ -558,12 +559,18 @@ pub(crate) unsafe fn ins_compl_add_matches(
     matches: *mut *mut c_char,
     icase: c_int,
 ) {
+    // SAFETY: the caller hands the array over.
+    let matches = unsafe { take_wild(num_matches, matches) };
+    ins_compl_add_match_list(&matches, icase != 0);
+}
+
+/// [`ins_compl_add_matches`] over owned matches: add each in turn, the
+/// first in the completion's direction and the rest forwards.
+pub(crate) fn ins_compl_add_match_list(matches: &[XString], icase: bool) {
     let mut dir = compl_direction.get();
-    let flags = CP_FAST | if icase != 0 { CP_ICASE } else { 0 };
-    for i in 0..num_matches as usize {
-        // SAFETY: the caller's array holds `num_matches` NUL-terminated
-        // strings.
-        let text = unsafe { cstr::bytes_at(*matches.add(i)) };
+    let flags = CP_FAST | if icase { CP_ICASE } else { 0 };
+    for text in matches {
+        let text = text.as_cstr().to_bytes();
         let score = FUZZY_SCORE_NONE;
         let add_r = ins_compl_add(text, None, NO_EXTRA, None, dir, flags, false, NO_HL, score);
         if add_r == FAIL {
@@ -573,8 +580,6 @@ pub(crate) unsafe fn ins_compl_add_matches(
             dir = FORWARD;
         }
     }
-    // SAFETY: the caller handed the array over.
-    unsafe { free_wild(num_matches, matches) };
 }
 
 /// Close the list into a ring; returns the number of matches after the first.

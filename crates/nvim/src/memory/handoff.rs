@@ -23,7 +23,6 @@
 )]
 
 use core::ffi::c_char;
-use std::ffi::CString;
 
 /// `text` as a NUL-terminated string the caller owns and `xfree`s.
 ///
@@ -32,14 +31,4 @@ use std::ffi::CString;
 pub(crate) fn owned_cstr(mut text: Vec<u8>) -> *mut c_char {
     text.push(0);
     Box::into_raw(text.into_boxed_slice()).cast::<c_char>()
-}
-
-/// `strings` as a `char **` of that many owned strings, all of which the
-/// caller `xfree`s. Empty answers as a null pointer.
-pub(crate) fn owned_cstr_array(strings: Vec<CString>) -> *mut *mut c_char {
-    if strings.is_empty() {
-        return core::ptr::null_mut();
-    }
-    let raw: Vec<*mut c_char> = strings.into_iter().map(CString::into_raw).collect();
-    Box::into_raw(raw.into_boxed_slice()).cast::<*mut c_char>()
 }

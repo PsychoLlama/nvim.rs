@@ -153,6 +153,16 @@ impl XString {
         CStr::from_bytes_until_nul(&self.0).expect("an XString always ends with a NUL")
     }
 
+    /// The C string at byte `at`: from there to the next NUL. Past the end
+    /// it is the empty string.
+    ///
+    /// For a string that packs several, as a tag completion keeps a tag's
+    /// name, kind and file.
+    pub fn cstr_at(&self, at: usize) -> &CStr {
+        let tail = self.0.get(at..).unwrap_or(&[0]);
+        CStr::from_bytes_until_nul(tail).expect("an XString always ends with a NUL")
+    }
+
     /// The buffer's address, for a C callee that takes a `const char *`.
     ///
     /// The pointer is valid until the string is dropped, moved out of, or

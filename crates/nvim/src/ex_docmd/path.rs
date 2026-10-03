@@ -18,6 +18,7 @@ use crate::smsg;
 use crate::types::CmdIdx;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -34,7 +35,6 @@ use crate::file_search::vim_chdir;
 
 use crate::fileio::shorten_fnames;
 use crate::getchar::state::KeyTyped;
-use crate::memory::xmalloc;
 use crate::message::{e_failed, e_invalid_return_type_from_findfunc, e_invarg};
 use crate::option::vars::{p_cdh, p_ffu, p_verbose};
 use crate::os::state::{globaldir, last_chdir_reason};
@@ -121,40 +121,18 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> Opti
     retlist
 }
 
-/// Complete a `:find` argument through 'findfunc'.
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-/// `files` must point at a writable `*mut *mut c_char` slot the caller owns
-/// for the call. `num_matches` must point at a writable `int` the caller
-/// owns.
-pub unsafe fn expand_findfunc(
-    pat: *mut c_char,
-    files: *mut *mut *mut c_char,
-    num_matches: *mut c_int,
-) -> Result<(), Failed> {
-    unsafe { *num_matches = 0 };
-    unsafe { *files = ptr::null_mut() };
-    let Some(held) = call_findfunc(pat, kBoolVarTrue) else {
-        return Err(Failed);
-    };
-    let len = list_len(Some(&held));
-    if len == 0 {
+/// Complete a `:find` argument through 'findfunc': the strings in the list
+/// it answers, the rest skipped.
+pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
+    // The function only reads the pattern; the frame names it.
+    let held = call_findfunc(pat.as_ptr().cast_mut(), kBoolVarTrue).ok_or(Failed)?;
+    if list_len(Some(&held)) == 0 {
         return Err(Failed);
     }
-    // Sized by the list length, filled only with the entries that are
-    // strings — so the count answered may be smaller.
-    unsafe { *files = xmalloc(size_of::<*mut c_char>() * len as size_t) as *mut *mut c_char };
-    let mut idx = 0;
-    for li in list_iter(Some(&held)) {
-        if li.li_tv.v_type() as c_uint == VAR_STRING as c_uint {
-            unsafe { *(*files).offset(idx as isize) = xstrdup(li.li_tv.string_or_null()) };
-            idx += 1;
-        }
-    }
-    unsafe { *num_matches = idx };
-    Ok(())
+    Ok(list_iter(Some(&held))
+        .filter_map(|li| li.li_tv.string_cstr())
+        .map(XString::from_cstr)
+        .collect())
 }
 
 /// Resolve the `count`'th name 'findfunc' answers for `findarg`.

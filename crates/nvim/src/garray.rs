@@ -359,6 +359,26 @@ pub unsafe fn ga_append_via_ptr(gap: *mut GArray, item_size: usize) -> *mut c_vo
     mem.cast::<c_void>()
 }
 
+/// Append `names` to the string array `gap`, which takes them over.
+///
+/// # Safety
+/// `gap` must be a live, initialised array of `*mut c_char` items whose
+/// strings it owns.
+pub(crate) unsafe fn ga_append_owned(gap: *mut GArray, names: Vec<crate::memory::XString>) {
+    let n = c_int::try_from(names.len()).expect("a match count fits a c_int");
+    // SAFETY: the caller's array, grown to hold `n` more pointers, each
+    // written once into the room just made.
+    unsafe {
+        ga_grow(gap, n);
+        let base = (*gap).ga_data.cast::<*mut c_char>();
+        let len = usize::try_from((*gap).ga_len).unwrap_or(0);
+        for (i, name) in names.into_iter().enumerate() {
+            base.add(len + i).write(name.into_raw());
+        }
+        (*gap).ga_len += n;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -43,6 +43,7 @@ use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::getchar::state::KeyTyped;
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
+use crate::memory::XString;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::e_noident;
 use crate::message::{emsg, emsg_multiline};
@@ -55,6 +56,7 @@ use crate::optionstr::check_buf_options;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
 use crate::path::free_wild;
+use crate::path::take_wild;
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
@@ -626,6 +628,20 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
                 unsafe { *tag.offset(len as isize) = NUL as c_char };
             }
         }
+    }
+}
+
+/// The help tags `arg` matches, cleaned up the way the command line offers
+/// them -- [`find_help_tags`] then [`cleanup_help_tags`], owned.
+pub(crate) fn help_tag_matches(arg: &CStr) -> Result<Vec<XString>, Failed> {
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ptr::null_mut();
+    // SAFETY: a NUL-terminated pattern and two locals to fill in; the
+    // matches are cleaned up in place, then taken over once.
+    unsafe {
+        find_help_tags(arg.as_ptr(), &raw mut count, &raw mut files, false)?;
+        cleanup_help_tags(count, files);
+        Ok(take_wild(count, files))
     }
 }
 

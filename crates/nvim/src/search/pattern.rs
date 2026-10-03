@@ -426,6 +426,22 @@ pub unsafe fn ignorecase(pat: *mut c_char) -> bool {
     unsafe { ignorecase_opt(pat, p_ic(), p_scs()) }
 }
 
+/// [`ignorecase`] of a pattern the caller owns.
+pub(crate) fn ignorecase_of(pat: &CStr) -> bool {
+    // A copy, for the pointer the walk takes.
+    let mut owned = pat.to_bytes_with_nul().to_vec();
+    // SAFETY: a NUL-terminated copy this call owns.
+    unsafe { ignorecase(owned.as_mut_ptr().cast()) }
+}
+
+/// [`pat_has_uppercase`] of a pattern the caller owns.
+pub(crate) fn pat_has_uppercase_of(pat: &CStr) -> bool {
+    // A copy, for the pointer the walk takes.
+    let mut owned = pat.to_bytes_with_nul().to_vec();
+    // SAFETY: a NUL-terminated copy this call owns.
+    unsafe { pat_has_uppercase(owned.as_mut_ptr().cast()) }
+}
+
 /// As [`ignorecase`] but with the `'ignorecase'`/`'smartcase'` values
 /// passed in.
 ///

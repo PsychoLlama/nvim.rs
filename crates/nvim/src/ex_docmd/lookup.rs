@@ -200,7 +200,7 @@ pub fn find_ex_command(excmd: &mut ExArg, mut full: Option<&mut bool>) -> Option
         while excmd.line.byte_at(at).is_ascii_alphanumeric() {
             at += 1;
         }
-        end = unsafe { find_ucmd(excmd, at, full, ptr::null_mut(), ptr::null_mut()) };
+        end = find_ucmd(excmd, at, full, None, None);
     }
     if end == Some(cmd) {
         excmd.cmdidx = CmdIdx::SIZE;
@@ -305,7 +305,7 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         name = unsafe { name.add(1) };
     }
     // SAFETY: `name` is NUL-terminated; a null context is "not completing".
-    name = unsafe { name.add(skip_range(cstr::bytes_at(name), ptr::null_mut())) };
+    name = unsafe { name.add(skip_range(cstr::bytes_at(name), None)) };
     let mut ea = blank_exarg();
     // SAFETY: `name` walks the NUL-terminated argument.
     ea.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(name) });
@@ -359,6 +359,31 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> CmdIdx {
         }
         row += 1;
     }
+    CmdIdx::at_row(row)
+}
+
+/// [`excmd_get_cmdidx`] over a slice: the command whose name `text` starts
+/// with, the name being its first `len` bytes. What follows the name is read
+/// for the one-letter commands, as the C read past it; the end of `text`
+/// reads as the NUL.
+pub(crate) fn excmd_get_cmdidx_bytes(text: &[u8], len: usize) -> CmdIdx {
+    let name = &text[..len];
+    if name == b"def" {
+        return CmdIdx::SIZE;
+    }
+    if let Some(idx) = one_letter_cmd(|n| text.get(n).copied().unwrap_or(0)) {
+        return idx;
+    }
+    // A linear scan from the head of the table, not the `cmdidxs`
+    // shortcut: this entry point is not on the hot path.
+    let row = (0..ROWS)
+        // SAFETY: the table's names are string literals.
+        .position(|row| {
+            unsafe { CStr::from_ptr(cmdnames[row].cmd_name) }
+                .to_bytes()
+                .starts_with(name)
+        })
+        .unwrap_or(ROWS);
     CmdIdx::at_row(row)
 }
 

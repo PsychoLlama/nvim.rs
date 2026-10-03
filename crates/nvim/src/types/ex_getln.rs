@@ -130,6 +130,24 @@ impl CmdBuff {
         self.text[n] = 0;
     }
 
+    /// Replace `text[from..to]` with `with`, moving the rest of the line --
+    /// terminator included -- along. [`CmdBuff::reserve`] must have made the
+    /// room.
+    pub(crate) fn splice(&mut self, from: ::core::ffi::c_int, to: ::core::ffi::c_int, with: &[u8]) {
+        let (from, to) = (CmdBuff::index(from), CmdBuff::index(to));
+        assert!(from <= to && to <= self.len, "a span of the command line");
+        let new_len = self.len - (to - from) + with.len();
+        assert!(
+            new_len < self.text.len(),
+            "command line longer than its buffer"
+        );
+        self.text.copy_within(to..=self.len, from + with.len());
+        for (dst, &src) in self.text[from..from + with.len()].iter_mut().zip(with) {
+            *dst = src.cast_signed();
+        }
+        self.len = new_len;
+    }
+
     /// Replace the text with `bytes`, opening a command line if none was in
     /// use.
     pub(crate) fn set(&mut self, bytes: &[::core::ffi::c_char]) {
@@ -234,7 +252,7 @@ pub struct CmdlineInfo {
     pub overstrike: ::core::ffi::c_int,
     pub xpc: *mut Expand,
     pub xp_context: ExpandContext,
-    pub xp_arg: *mut ::core::ffi::c_char,
+    pub xp_arg: Option<crate::memory::XString>,
     pub input_fn: ::core::ffi::c_int,
     pub cmdbuff_replaced: bool,
     pub prompt_id: ::core::ffi::c_uint,

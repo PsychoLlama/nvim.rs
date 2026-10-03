@@ -18,6 +18,9 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::garray::ga_append_owned;
+use crate::memory::XString;
+use crate::path::take_wild;
 use crate::snprintf;
 
 use crate::types::Failed;
@@ -89,7 +92,7 @@ unsafe fn glob_rounds(
     loop {
         if !flags.has(RuntimeOpts::NORTP) {
             p_rtp(|value| unsafe {
-                globpath(value.as_ptr().cast_mut(), buf, gap, glob_flags, expand_dirs)
+                ga_append_owned(gap, globpath(value, cstr::at(buf), glob_flags, expand_dirs))
             });
         }
         let suffix = if expand_dirs { ANYTHING } else { SCRIPTS };
@@ -97,7 +100,7 @@ unsafe fn glob_rounds(
             for prefix in [c"pack/*/start/*/", c"start/*/"] {
                 unsafe { build_pattern(buf, buf_len, prefix, dir, pat, suffix) };
                 p_pp(|value| unsafe {
-                    globpath(value.as_ptr().cast_mut(), buf, gap, glob_flags, expand_dirs)
+                    ga_append_owned(gap, globpath(value, cstr::at(buf), glob_flags, expand_dirs))
                 });
             }
         }
@@ -105,7 +108,7 @@ unsafe fn glob_rounds(
             for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
                 unsafe { build_pattern(buf, buf_len, prefix, dir, pat, suffix) };
                 p_pp(|value| unsafe {
-                    globpath(value.as_ptr().cast_mut(), buf, gap, glob_flags, expand_dirs)
+                    ga_append_owned(gap, globpath(value, cstr::at(buf), glob_flags, expand_dirs))
                 });
             }
         }
@@ -345,12 +348,9 @@ pub unsafe fn expand_packadd_dir(
     for fmt in [c"pack/*/opt/%s*", c"opt/%s*"] {
         unsafe { snprintf!(s, buflen, fmt.as_ptr(), pat) };
         p_pp(|value| unsafe {
-            globpath(
-                value.as_ptr().cast_mut(),
-                s,
+            ga_append_owned(
                 &raw mut ga,
-                WildOpts::NONE,
-                true,
+                globpath(value, cstr::at(s), WildOpts::NONE, true),
             )
         });
     }
@@ -369,4 +369,54 @@ pub unsafe fn expand_packadd_dir(
     // Sort and remove the duplicates the two patterns can produce.
     unsafe { ga_remove_duplicate_strings(&raw mut ga) };
     unsafe { take_matches(ga, num_file, file) }
+}
+
+/// The files under `dirs` in the runtime path `pat` matches, owned:
+/// [`expand_runtime_dir`] for the command line.
+pub(crate) fn runtime_dir_matches(
+    pat: &CStr,
+    flags: RuntimeOpts,
+    dirs: &[&CStr],
+) -> Result<Vec<XString>, Failed> {
+    let mut owned = pat.to_bytes_with_nul().to_vec();
+    let mut dirnames: Vec<*mut c_char> = dirs.iter().map(|d| d.as_ptr().cast_mut()).collect();
+    dirnames.push(ptr::null_mut());
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ptr::null_mut();
+    // SAFETY: a NUL-terminated copy, a NULL-terminated array of names the
+    // walk only reads, and two locals to fill in.
+    unsafe {
+        expand_runtime_dir(
+            owned.as_mut_ptr().cast(),
+            flags,
+            &raw mut count,
+            &raw mut files,
+            dirnames.as_mut_ptr(),
+        )?;
+        Ok(take_wild(count, files))
+    }
+}
+
+/// The packages `pat` matches, owned: [`expand_packadd_dir`].
+pub(crate) fn packadd_dir_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
+    let mut owned = pat.to_bytes_with_nul().to_vec();
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ptr::null_mut();
+    // SAFETY: a NUL-terminated copy and two locals to fill in.
+    unsafe {
+        expand_packadd_dir(owned.as_mut_ptr().cast(), &raw mut count, &raw mut files)?;
+        Ok(take_wild(count, files))
+    }
+}
+
+/// The `:runtime` arguments `pat` matches, owned: [`expand_runtime_cmd`].
+pub(crate) fn runtime_cmd_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
+    let mut owned = pat.to_bytes_with_nul().to_vec();
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ptr::null_mut();
+    // SAFETY: a NUL-terminated copy and two locals to fill in.
+    unsafe {
+        expand_runtime_cmd(owned.as_mut_ptr().cast(), &raw mut count, &raw mut files)?;
+        Ok(take_wild(count, files))
+    }
 }
