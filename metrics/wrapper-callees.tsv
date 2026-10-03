@@ -3036,6 +3036,7 @@ count	callee	no_raw	defs	def
 1	scan	0	1	crates/nvim/src/regexp/nfa/matcher.rs
 1	scan_fmt_types	0	1	crates/nvim/src/strings/printf/spec.rs
 1	scan_help_file	0	1	crates/nvim/src/help/tags.rs
+1	schar_from_cache	0	1	crates/nvim/src/grid/schar.rs
 1	schar_from_char	0	0	
 1	schar_in_arabic_block	1	1	crates/nvim/src/grid/schar.rs
 1	score_combine	0	1	crates/nvim/src/spellsuggest/collect.rs

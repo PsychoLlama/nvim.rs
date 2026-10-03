@@ -174,6 +174,10 @@ impl Walk<'_> {
 
     /// Do the language's compounding rules allow this word to be glued to
     /// the next one?
+    // Pinned inline, with `split_penalty` and `try_deeper`: the inliner's
+    // own choice for these drifted with edits nowhere near the walk, and
+    // outlined they cost spellbench 1.4 %.
+    #[inline(always)]
     fn may_compound(&mut self, flags: WordFlags) -> bool {
         let level = self.depth as usize;
         let split_off = self.stack[level].split_off as usize;
@@ -203,6 +207,7 @@ impl Walk<'_> {
     ///
     /// Returns `None` when the words collected so far could not stand as
     /// separate words, which ends this NUL byte's turn.
+    #[inline(always)]
     fn split_penalty(&mut self, flags: WordFlags, mut newscore: c_int) -> Option<c_int> {
         let level = self.depth as usize;
 

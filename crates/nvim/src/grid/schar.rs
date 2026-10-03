@@ -114,15 +114,31 @@ pub unsafe fn schar_from_str(str: *const c_char) -> ScreenChar {
 /// `len` must be below [`MAX_SCHAR_SIZE`] -- below, not at, because the cache
 /// needs room for a terminator. That bound is checked in a debug build only,
 /// as upstream's `assert()` is (`v0.12.4:src/nvim/grid.c:85`).
+///
+/// The short form is inline and the cache lookup is not: `win_line` reaches
+/// this once per cell, and whether the inliner kept it whole there used to
+/// swing with edits nowhere near the screen code (scrbench +1.2 %).
+#[inline]
 pub unsafe fn schar_from_buf(buf: *const c_char, len: size_t) -> ScreenChar {
     debug_assert!(len < MAX_SCHAR_SIZE as size_t, "len < MAX_SCHAR_SIZE");
     if len <= 4 {
         let mut sc: ScreenChar = 0;
         let into = (&raw mut sc).cast::<u8>();
+        // SAFETY: the caller's promise -- `len` readable bytes at `buf`,
+        // and `len` fits the four bytes of `sc`.
         unsafe { into.copy_from_nonoverlapping(buf.cast(), len) };
         return sc;
     }
+    // SAFETY: the caller's promise.
+    unsafe { schar_from_cache(buf, len) }
+}
 
+/// [`schar_from_buf`]'s long form: intern the glyph in the cache.
+///
+/// # Safety
+/// As [`schar_from_buf`].
+#[inline(never)]
+unsafe fn schar_from_cache(buf: *const c_char, len: size_t) -> ScreenChar {
     // SAFETY: the caller's promise -- `len` readable bytes at `buf`.
     let str = unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), len) };
     let mut status: MHPutStatus = kMHExisting;

@@ -123,6 +123,11 @@ impl Win {
     /// point. The unmangled `win_col_off` symbol the ABI ledger carries is a
     /// separate C-ABI shim over this, in `winlayer::graph` beside the `curwin`
     /// static `test/functional/lua/ffi_spec.lua` pairs it with.
+    ///
+    /// Kept out of line: `win_line` asks it a handful of times per screen
+    /// row, and inlining all of them there spilled registers across the
+    /// per-cell loops (scrbench +0.7 %).
+    #[inline(never)]
     pub(crate) fn col_off(self) -> c_int {
         self.number_col()
             + (cmdwin_win.get() == Some(self.id())) as c_int

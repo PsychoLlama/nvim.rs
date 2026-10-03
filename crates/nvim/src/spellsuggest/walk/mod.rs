@@ -455,7 +455,7 @@ impl Walk<'_> {
     /// Would going one level deeper stay inside the stack and under the
     /// score ceiling? A change that cannot beat the worst suggestion
     /// already found is not worth trying.
-    #[inline]
+    #[inline(always)]
     fn try_deeper(&self, score_add: c_int) -> bool {
         // SAFETY: the caller guarantees `su`.
         self.depth < MAXWLEN as c_int - 1

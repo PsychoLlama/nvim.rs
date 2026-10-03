@@ -144,6 +144,11 @@ fn map_class(slang: &SpellLang, c: c_int) -> c_int {
 /// # Safety
 ///
 /// `word` must be a NUL-terminated string.
+///
+/// Forced inline, as the walk's split helpers are: left to the inliner, it
+/// fell out of `suggest_trie_walk` once those were pinned (spellbench
+/// +0.9 %).
+#[inline(always)]
 pub(super) unsafe fn score_wordcount_adj(
     slang: &SpellLang,
     score: c_int,
