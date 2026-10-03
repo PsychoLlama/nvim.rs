@@ -222,14 +222,32 @@ pub unsafe extern "C" fn xcalloc(count: usize, size: usize) -> *mut c_void {
     } else {
         (1, 1)
     };
-    // SAFETY: the platform allocator, the retry after freeing, and a
-    // NUL-terminated static for the exit message.
+    // SAFETY: the platform allocator.
     let ret = unsafe { seam_calloc(allocated_count, allocated_size) };
     if !ret.is_null() {
         return ret;
     }
+    // SAFETY: the caller's promise.
+    unsafe { xcalloc_retry(allocated_count, allocated_size) }
+}
+
+/// [`xcalloc`] after the allocator said no: free what can be freed, try
+/// once more, and exit if that fails too.
+///
+/// Out of line so `xcalloc` stays small enough to inline: with the retry
+/// in it, the allocator seam folded in and every list and dict allocation
+/// paid a call (evalbench +0.3 %).
+///
+/// # Safety
+///
+/// As [`try_malloc`].
+#[cold]
+#[inline(never)]
+unsafe fn xcalloc_retry(count: usize, size: usize) -> *mut c_void {
+    // SAFETY: the retry after freeing, and a NUL-terminated static for the
+    // exit message.
     unsafe { try_to_free_memory() };
-    let ret = unsafe { seam_calloc(allocated_count, allocated_size) };
+    let ret = unsafe { seam_calloc(count, size) };
     if ret.is_null() {
         unsafe { preserve_exit(e_outofmem.as_ptr()) };
     }

@@ -367,6 +367,9 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> CmdIdx {
 /// for the one-letter commands, as the C read past it; the end of `text`
 /// reads as the NUL.
 pub(crate) fn excmd_get_cmdidx_bytes(text: &[u8], len: usize) -> CmdIdx {
+    // An empty name would match the table's first row from the head and
+    // `:!` from the shortcut; the caller rejects it first, as upstream's does.
+    debug_assert!(len > 0, "an empty command name");
     let name = &text[..len];
     if name == b"def" {
         return CmdIdx::SIZE;
@@ -374,16 +377,15 @@ pub(crate) fn excmd_get_cmdidx_bytes(text: &[u8], len: usize) -> CmdIdx {
     if let Some(idx) = one_letter_cmd(|n| text.get(n).copied().unwrap_or(0)) {
         return idx;
     }
-    // A linear scan from the head of the table, not the `cmdidxs`
-    // shortcut: this entry point is not on the hot path.
-    let row = (0..ROWS)
-        // SAFETY: the table's names are string literals.
-        .position(|row| {
-            unsafe { CStr::from_ptr(cmdnames[row].cmd_name) }
-                .to_bytes()
-                .starts_with(name)
-        })
-        .unwrap_or(ROWS);
+    // From the `cmdidxs` shortcut, as `find_ex_command` scans: insert-mode
+    // command-line completion (CTRL-X CTRL-V) asks this per keystroke, and
+    // the scan from the head of the table cost inbench 1 %. No row before
+    // the shortcut's can share the name's first two letters, so the first
+    // match is the same one.
+    let mut row = start_index(name);
+    while row < ROWS && !name_matches(cmdnames[row].cmd_name, name) {
+        row += 1;
+    }
     CmdIdx::at_row(row)
 }
 
