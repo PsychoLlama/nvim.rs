@@ -15,9 +15,8 @@
 //! The drawing code cannot afford that lookup per cell, so each namespace
 //! also gets a resolved table — one attribute id per `HLF_*` builtin — built
 //! by [`update_ns_hl`] and cached until the provider invalidates it.
-//! `hl_attr_ns` names the one `HL_ATTR` reads (by namespace, resolved by
-//! [`hl_attr_table`]), and each window's `w_ns_hl_attr` points at the one
-//! [`win_hl_attr`] reads. That is why the tables are boxed and handed out as
+//! `hl_attr_active` refers to the one `HL_ATTR` reads, and each window's
+//! `w_ns_hl_attr` points at the one [`win_hl_attr`] reads. That is why the tables are boxed and handed out as
 //! raw pointers — the pointers outlive
 //! any borrow of the map, and nothing ever removes an entry.
 //!
@@ -38,7 +37,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{
-    hl_attr_ns, need_highlight_changed, ns_hl_active, ns_hl_fast, ns_hl_global, ns_hl_win,
+    HlAttrTable, highlight_attr, hl_attr_active, need_highlight_changed, ns_hl_active, ns_hl_fast,
+    ns_hl_global, ns_hl_win,
 };
 use crate::highlight_group::{
     HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, hlf_names,
@@ -95,42 +95,30 @@ static NS_HL_ATTR: GlobalCell<Table<c_int, NsHlTable>> =
 
 /// One namespace's builtin-group table: `HLF_COUNT` attribute ids.
 ///
-/// Owned here, but reached through a raw pointer that escapes into
-/// every window's `w_ns_hl_attr`. Those outlive any
-/// borrow of [`NS_HL_ATTR`], which is why the storage is a separate
-/// allocation rather than inline in the map. Nothing removes an entry, so the
-/// address is good for the process's life — `Drop` is here for completeness
-/// and never runs.
-struct NsHlTable(*mut [c_int; HLF_COUNT as usize]);
+/// Owned here, but reached from [`hl_attr_active`] and, by address, from
+/// every window's `w_ns_hl_attr`. Those outlive any borrow of
+/// [`NS_HL_ATTR`], which is why the storage is a separate allocation rather
+/// than inline in the map. Nothing removes an entry, so the table is leaked
+/// on purpose: it lives for the process, as its `'static` says.
+struct NsHlTable(&'static HlAttrTable);
 
 impl NsHlTable {
     fn as_ptr(&self) -> *mut c_int {
-        self.0.cast()
+        self.0.ptr().cast()
     }
 }
 
 impl Default for NsHlTable {
     fn default() -> Self {
-        Self(Box::into_raw(Box::new([0; HLF_COUNT as usize])))
+        Self(Box::leak(Box::new(GlobalCell::new(
+            [0; HLF_COUNT as usize],
+        ))))
     }
 }
 
-impl Drop for NsHlTable {
-    fn drop(&mut self) {
-        // SAFETY: `self.0` came from `Box::into_raw` and is dropped once.
-        drop(unsafe { Box::from_raw(self.0) });
-    }
-}
-
-/// The `HLF_*` table in force: the built-in one, or the table of the
-/// namespace [`hl_attr_ns`] names. Tables are never freed, so the address is
-/// good for the process's life; the built-in case, which is every editor
-/// without a highlight namespace, reads no map.
+/// The `HLF_*` table in force, by address.
 pub(crate) fn hl_attr_table() -> *mut c_int {
-    match hl_attr_ns.get() {
-        None => default_hl_attr_table(),
-        Some(ns) => NS_HL_ATTR.with(|tables| tables[&ns].as_ptr()),
-    }
+    hl_attr_active.get().ptr().cast()
 }
 
 /// Forgets every namespace's group definitions. Only the free-all-memory
@@ -318,11 +306,11 @@ pub fn hl_check_ns() -> bool {
     }
 
     ns_hl_active.set(ns);
-    hl_attr_ns.set(None);
+    hl_attr_active.set(&highlight_attr);
     if ns > 0 {
         update_ns_hl(ns);
-        if NS_HL_ATTR.with(|tables| tables.contains_key(&ns)) {
-            hl_attr_ns.set(Some(ns));
+        if let Some(table) = NS_HL_ATTR.with(|tables| tables.get(&ns).map(|table| table.0)) {
+            hl_attr_active.set(table);
         }
     }
     need_highlight_changed.set(true);

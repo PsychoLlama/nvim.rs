@@ -43,6 +43,12 @@ pub(crate) static ns_hl_global: GlobalCell<NS> = GlobalCell::new(0 as NS);
 pub(crate) static ns_hl_win: GlobalCell<NS> = GlobalCell::new(-1 as NS);
 pub(crate) static ns_hl_fast: GlobalCell<NS> = GlobalCell::new(-1 as NS);
 pub(crate) static ns_hl_active: GlobalCell<NS> = GlobalCell::new(0 as NS);
-/// The namespace whose `HLF_*` table is in force (what `HL_ATTR` reads), or
-/// `None` for the built-in one. See [`hl_attr_table`](super::namespace::hl_attr_table).
-pub(crate) static hl_attr_ns: GlobalCell<Option<NS>> = GlobalCell::new(None);
+/// One `HLF_*` attribute table: the built-in [`highlight_attr`] or a
+/// namespace's. None is ever freed, which is what lets them be `'static`.
+pub(crate) type HlAttrTable = GlobalCell<[c_int; 76]>;
+/// The table in force, what `HL_ATTR` reads: [`highlight_attr`] or the
+/// active namespace's. A reference rather than a namespace id resolved per
+/// read, because the drawing code reads it per cell: the resolving branch
+/// cost scrbench 0.34 %.
+pub(crate) static hl_attr_active: GlobalCell<&'static HlAttrTable> =
+    GlobalCell::new(&highlight_attr);
