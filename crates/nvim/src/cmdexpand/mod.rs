@@ -102,7 +102,9 @@ use crate::search::{
 };
 use crate::sign::{get_sign_name, set_context_in_sign_cmd};
 use crate::statusline::fillchar_status;
-use crate::strings::{sort_strings, strcase_save, vim_strsave_escaped, xstrnsave};
+use crate::strings::{
+    sort_function_names, sort_strings, strcase_save, vim_strsave_escaped, xstrnsave,
+};
 use crate::syntax::{
     get_syntax_name, get_syntime_arg, reset_expand_highlight, set_context_in_echohl_cmd,
     set_context_in_syntax_cmd,
@@ -125,7 +127,7 @@ use crate::window::{global_stl_height, last_status};
 use crate::winlayer::current_topframe;
 use crate::winlayer::graph::cmdline_win;
 use crate::winlayer::{Cc, Live};
-use ::libc::{qsort, strcpy, strncpy};
+use ::libc::{strcpy, strncpy};
 use core::ffi::{CStr, c_char, c_int};
 
 // The carve of the transpiled module; see each child's docs.
@@ -153,6 +155,8 @@ mod eval;
 pub use self::eval::*;
 mod bufpat;
 pub(crate) use self::bufpat::*;
+#[cfg(test)]
+mod tests;
 /// The completion context an expansion is running in, whose caller has
 /// promised it outlives the value.
 ///

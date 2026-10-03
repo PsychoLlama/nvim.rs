@@ -707,3 +707,40 @@ pub unsafe fn expand_cleanup(expand: *mut Expand) {
 pub fn clear_cmdline_orig() {
     cmdline_orig.set(None);
 }
+
+/// One expansion of `pattern` in `context` with `first`, then each of `then`
+/// on the match list it left: every step's answer, and the selection after
+/// it. The oracle's way into [`expand_one`].
+#[cfg(test)]
+pub(super) fn expand_one_walk(
+    context: ExpandContext,
+    pattern: &[u8],
+    orig: &[u8],
+    options: WildOpts,
+    first: WildMode,
+    then: &[WildMode],
+) -> Vec<(Option<Vec<u8>>, c_int)> {
+    let mut xpc: Expand = crate::ex_getln::EXPAND_T_INIT;
+    // SAFETY: a fresh local, which is all `expand_init` writes over.
+    unsafe { expand_init(&raw mut xpc) };
+    xpc.xp_context = context;
+    let answer = |p: *mut c_char| {
+        // SAFETY: `expand_one` answers an owned string or NULL.
+        (!p.is_null()).then(|| unsafe { XString::from_raw(p) }.to_vec())
+    };
+    let pat = XString::from_bytes(pattern);
+    xpc.xp_pattern = pat.as_ptr().cast_mut();
+    let orig = XString::from_bytes(orig).into_raw();
+    let mut steps = Vec::new();
+    // SAFETY: the local context and two strings; `orig` is handed over.
+    let p = unsafe { expand_one(&raw mut xpc, pat.as_ptr().cast_mut(), orig, options, first) };
+    steps.push((answer(p), xpc.xp_selected));
+    for &mode in then {
+        // SAFETY: as above, for a mode that reads neither string.
+        let p = unsafe { expand_one(&raw mut xpc, NO_PATTERN, NO_PATTERN, options, mode) };
+        steps.push((answer(p), xpc.xp_selected));
+    }
+    // SAFETY: the local context.
+    unsafe { expand_cleanup(&raw mut xpc) };
+    steps
+}

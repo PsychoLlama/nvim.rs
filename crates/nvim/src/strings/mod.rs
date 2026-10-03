@@ -9,7 +9,7 @@ use crate::memory::{xmalloc, xmallocz};
 use crate::os::cshim::strchr;
 use crate::semsg;
 use crate::types::{KeyValue, MB_MAXCHAR, TypVal, size_t};
-use ::libc::{qsort, strcasecmp};
+use ::libc::strcasecmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -229,28 +229,43 @@ pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
     }
 }
 
+/// [`sort_strings`] for function names: byte order, except that a name
+/// starting with `<` -- an `<SNR>` script-local one -- sorts after the rest.
+///
 /// # Safety
 ///
-/// As `qsort`'s comparator over an array of `*mut c_char`: `s1` and `s2` must
-/// each point at one of those elements, and each element must be a NUL-
-/// terminated string.
-unsafe extern "C" fn sort_compare(
-    s1: *const ::core::ffi::c_void,
-    s2: *const ::core::ffi::c_void,
-) -> c_int {
-    unsafe { cstr::cmp(*(s1 as *const *const c_char), *(s2 as *const *const c_char)) as c_int }
+/// As [`sort_strings`].
+pub(crate) unsafe fn sort_function_names(files: *mut *mut c_char, count: c_int) {
+    let Ok(count) = usize::try_from(count) else {
+        return;
+    };
+    if count == 0 {
+        return;
+    }
+    // SAFETY: the caller's `count` slots, each a NUL-terminated string.
+    unsafe { slice::from_raw_parts_mut(files, count) }.sort_unstable_by_key(|&name| {
+        let name = unsafe { CStr::from_ptr(name) };
+        (name.to_bytes().first() == Some(&b'<'), name)
+    });
 }
 
+/// Sort `count` strings at `files` bytewise, as `strcmp` orders them.
+///
 /// # Safety
 ///
-/// `files` must point at a writable `*mut c_char` slot the caller owns for
-/// the call.
+/// `files` must point at `count` writable slots, each holding a NUL-terminated
+/// string.
 pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {
-    type Compare = unsafe extern "C" fn(*const c_void, *const c_void) -> c_int;
-    let base = files as *mut c_void;
-    let count = count as size_t;
-    let width = ::core::mem::size_of::<*mut c_char>();
-    unsafe { qsort(base, count, width, Some(sort_compare as Compare)) };
+    let Ok(count) = usize::try_from(count) else {
+        return;
+    };
+    if count == 0 {
+        return;
+    }
+    // SAFETY: the caller's `count` slots.
+    let files = unsafe { slice::from_raw_parts_mut(files, count) };
+    // SAFETY: each slot holds a NUL-terminated string.
+    files.sort_unstable_by(|&a, &b| unsafe { CStr::from_ptr(a).cmp(CStr::from_ptr(b)) });
 }
 
 /// # Safety

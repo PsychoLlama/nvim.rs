@@ -72,29 +72,6 @@ pub unsafe fn cmdline_fuzzy_complete(fuzzystr: *const c_char) -> bool {
     wop_flags.get() & kOptWopFlagFuzzy != 0 && unsafe { *fuzzystr } != 0
 }
 
-/// `qsort` comparator for the completion matches: plain `strcmp`, except that
-/// `<SNR>` functions sort to the end.
-///
-/// Stays `extern "C"`: it is handed to `qsort`.
-///
-/// # Safety
-///
-/// As `qsort`'s comparator: `s1` and `s2` must each point at an element of
-/// the array being sorted, and the elements must be of the type this reads
-/// them at.
-pub(crate) unsafe extern "C" fn sort_func_compare(s1: *const c_void, s2: *const c_void) -> c_int {
-    let p1 = unsafe { *s1.cast::<*mut c_char>() };
-    let p2 = unsafe { *s2.cast::<*mut c_char>() };
-    match (
-        unsafe { *p1 } == b'<' as c_char,
-        unsafe { *p2 } == b'<' as c_char,
-    ) {
-        (false, true) => -1,
-        (true, false) => 1,
-        _ => unsafe { cstr::cmp(p1, p2) as c_int },
-    }
-}
-
 /// Escape special characters in the cmdline completion matches.
 ///
 /// `str` is the pattern that produced them, needed only for its leading
@@ -207,4 +184,13 @@ pub(crate) unsafe fn escape_matches(
     if options.has(WildOpts::ESCAPE) {
         unsafe { wildescape(expand.raw(), str, matches) };
     }
+}
+
+/// [`cmdline_fuzzy_completion_supported`] for a bare context, for the oracle.
+#[cfg(test)]
+pub(super) fn fuzzy_supported(context: ExpandContext) -> bool {
+    let mut xpc: Expand = crate::ex_getln::EXPAND_T_INIT;
+    xpc.xp_context = context;
+    // SAFETY: a live local.
+    unsafe { cmdline_fuzzy_completion_supported(&raw mut xpc) }
 }

@@ -290,8 +290,28 @@ pub(crate) fn os_breakcheck() {
     if got_int.get() {
         return;
     }
+    let uv_loop = main_loop.ptr();
+    #[cfg(test)]
+    if !test_loop_up(uv_loop) {
+        return;
+    }
     // SAFETY: `main_loop` is the process's event loop, always live.
-    unsafe { loop_poll_events(main_loop.ptr(), 0) };
+    unsafe { loop_poll_events(uv_loop, 0) };
+}
+
+/// Bring the event loop up the first time a lib test polls it: nothing ran
+/// startup there, and a directory walk breaks out to check for CTRL-C.
+/// Under Miri there is no libuv to bring up, and nothing to poll.
+#[cfg(test)]
+fn test_loop_up(uv_loop: *mut crate::types::Loop) -> bool {
+    if cfg!(miri) {
+        return false;
+    }
+    static UP: std::sync::Once = std::sync::Once::new();
+    // SAFETY: the process's loop storage, which does not move, initialised
+    // once and never closed.
+    UP.call_once(|| unsafe { crate::event::r#loop::loop_init(uv_loop) });
+    true
 }
 
 const BREAKCHECK_SKIP: c_int = 1000;

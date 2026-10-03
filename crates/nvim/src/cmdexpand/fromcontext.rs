@@ -386,14 +386,7 @@ pub unsafe fn expand_generic(
 
     if sort_matches {
         if funcsort {
-            unsafe {
-                qsort(
-                    ga.ga_data,
-                    ga.ga_len as size_t,
-                    size_of::<*mut c_char>(),
-                    Some(sort_func_compare),
-                )
-            };
+            unsafe { sort_function_names(ga.ga_data as *mut *mut c_char, ga.ga_len) };
         } else {
             unsafe { sort_strings(ga.ga_data as *mut *mut c_char, ga.ga_len) };
         }
