@@ -9,6 +9,21 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rewrote where the editor keeps its own state: the message, mode,
+  typeahead, command-line, search, autocommand and insert-mode variables
+  that upstream keeps as hundreds of separate globals are now a handful of
+  records, one per subsystem, and the syntax highlighter and the regexp
+  compiler carry their working state as values passed down a call rather
+  than as globals. A syntax match or `synID()` reached from inside another
+  one (a message handler, a statusline expression) now starts on its own
+  state instead of clobbering the outer one.
+- Rewrote command-line completion: the expansion owns a copy of the line it
+  completes and its matches, so a `customlist` function, a Lua completion
+  or a UI event that runs during completion can no longer leave it pointing
+  into a command line that has since changed.
+- The RPC and Lua API handlers no longer thread a scratch arena through
+  every call, and option dictionaries (`opts`) are decoded through one typed
+  table per keyset instead of field offsets.
 - Rewrote how insert-mode completion keeps its matches: a list the
   completion owns, indexed rather than linked by pointer, so a completion
   function or autocommand that adds matches while the list is being walked
@@ -29,6 +44,7 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Fixed
 
+- `nvim_put` leaked a copy of every line it was given.
 - Freeing a quickfix list's `context` value released its memory through a
   reference the freeing call still held, which Miri reports as undefined
   behaviour.
