@@ -30,9 +30,7 @@ pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
 
 /// # Safety
 ///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive. `lstate` must point at the Lua state this
-/// call runs on.
+/// `lstate` must point at the Lua state this call runs on.
 pub unsafe fn nvim_buf_get_lines(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -71,19 +69,29 @@ pub unsafe fn nvim_buf_get_lines(
     rv.reported(error)
 }
 
-/// # Safety
-///
-/// `replacement` must be a well-formed API array, its `size` elements
-/// initialized. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
-pub unsafe fn nvim_buf_set_lines(
+/// An API string as a buffer line: NUL-terminated, with each NUL it holds
+/// turned back into the newline it stands for.
+pub(crate) fn api_line(text: &[u8]) -> Vec<u8> {
+    let mut line = Vec::with_capacity(text.len() + 1);
+    api_text_into(&mut line, text);
+    line.push(0);
+    line
+}
+
+/// Append an API string's bytes to a buffer line, each NUL turned back into
+/// the newline it stands for.
+pub(crate) fn api_text_into(line: &mut Vec<u8>, text: &[u8]) {
+    line.extend(text.iter().map(|&b| if b == 0 { b'\n' } else { b }));
+}
+
+/// Replace lines `start..end` of `buf` with `replacement`.
+pub fn nvim_buf_set_lines(
     channel_id: uint64_t,
     buf: BufferHandle,
     mut start: Integer,
     mut end: Integer,
     strict_indexing: Boolean,
     replacement: Array,
-    arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = Error::none();
     let Some(buffer) = api_buf_ensure_loaded(buf)? else {
@@ -103,37 +111,25 @@ pub unsafe fn nvim_buf_set_lines(
         return ().reported(error);
     }
     let disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
-    // SAFETY: `replacement` is the caller's array.
     check_string_array(&replacement, c"replacement string", disallow_nl)?;
     let new_len: size_t = replacement.len();
     let old_len: size_t = (end - start) as size_t;
     let mut extra: ptrdiff_t = 0 as ptrdiff_t;
-    let bytes = new_len.wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>());
-    let lines: *mut *mut ::core::ffi::c_char = (if new_len != 0 as size_t {
-        // SAFETY: `arena` is the caller's.
-        unsafe { arena_alloc(arena, bytes, true) }
-    } else {
-        NULL
-    }) as *mut *mut ::core::ffi::c_char;
-    // `memchrsub` turns embedded NULs back into the newlines they stand for.
-    let nul = NUL as ::core::ffi::c_char;
-    let nl = NL as ::core::ffi::c_char;
-    let mut i: size_t = 0 as size_t;
-    while i < new_len {
-        // Every item is a String: `check_string_array` above turned anything
-        // else into an error.
-        // SAFETY: `i` is below `replacement.size`.
-        let l: String_0 = replacement[i]
-            .as_string()
-            .expect("check_string_array accepted only Strings")
-            .clone();
-        unsafe { *lines.add(i) = arena_memdupz(arena, l.data(), l.len()) };
-        // SAFETY: `i` is below `new_len`, so the slot was just written.
-        let line = unsafe { *lines.add(i) } as *mut ::core::ffi::c_void;
-        // SAFETY: `line` holds `l.len()` bytes.
-        unsafe { memchrsub(line, nul, nl, l.len()) };
-        i = i.wrapping_add(1);
-    }
+    // Every item is a String: `check_string_array` above turned anything
+    // else into an error. The memline borrows each line (`noalloc`), so they
+    // live in this frame until the edit is done.
+    let mut owned: Vec<Vec<u8>> = (0..new_len)
+        .map(|i| {
+            let l = replacement[i].as_string();
+            api_line(
+                l.expect("check_string_array accepted only Strings")
+                    .as_bytes(),
+            )
+        })
+        .collect();
+    let line_ptrs: Vec<*mut ::core::ffi::c_char> =
+        owned.iter_mut().map(|l| l.as_mut_ptr().cast()).collect();
+    let lines = line_ptrs.as_ptr();
     let mut tstate: TryState = TryState::INIT;
     unsafe { try_enter(&raw mut tstate) };
     let buf = buffer;
@@ -277,10 +273,7 @@ pub unsafe fn nvim_buf_set_lines(
 
 /// # Safety
 ///
-/// `_opts` must point at the `KeyDict_empty` the dispatcher filled in, live
-/// for the call. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive. `lstate` must point at the
-/// Lua state this call runs on.
+/// `lstate` must point at the Lua state this call runs on.
 pub unsafe fn nvim_buf_get_text(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -288,7 +281,7 @@ pub unsafe fn nvim_buf_get_text(
     start_col: Integer,
     mut end_row: Integer,
     end_col: Integer,
-    _opts: *mut KeyDict_empty,
+    _opts: &mut KeyDict_empty,
     lstate: *mut lua_State,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
@@ -372,10 +365,8 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
 
 /// # Safety
 ///
-/// `lstate` must point at the Lua state this call runs on. `a` must point at
-/// an API array the caller owns, unaliased for the call. `arena` must point
-/// at a live arena, which the memory this answers with is taken from and must
-/// outlive.
+/// `lstate` must point at the Lua state this call runs on. `a` must point at an
+/// API array the caller owns, unaliased for the call.
 #[inline]
 unsafe fn init_line_array(lstate: *mut lua_State, a: *mut Array, size: size_t) {
     if !lstate.is_null() {
@@ -387,10 +378,9 @@ unsafe fn init_line_array(lstate: *mut lua_State, a: *mut Array, size: size_t) {
 
 /// # Safety
 ///
-/// `lstate` must point at the Lua state this call runs on. `a` must point at
-/// an API array the caller owns, unaliased for the call. `s` must point at
-/// `len` readable bytes. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
+/// `lstate` must point at the Lua state this call runs on. `a` must point at an
+/// API array the caller owns, unaliased for the call. `s` must point at `len`
+/// readable bytes.
 unsafe fn push_linestr(
     lstate: *mut lua_State,
     a: *mut Array,
@@ -443,9 +433,7 @@ unsafe fn push_linestr(
 /// # Safety
 ///
 /// `l` must point at an API array the caller owns, unaliased for the call.
-/// `lstate` must point at the Lua state this call runs on. `arena` must point
-/// at a live arena, which the memory this answers with is taken from and must
-/// outlive.
+/// `lstate` must point at the Lua state this call runs on.
 pub unsafe fn buf_collect_lines(
     buffer: Buf,
     n: size_t,

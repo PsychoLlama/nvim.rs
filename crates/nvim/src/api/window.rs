@@ -31,8 +31,8 @@ use crate::os::cshim::gettext_ptr;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, BufferHandle, Error, Integer, KeyDict_win_text_height, LineNr,
-    LuaRef, Object, String_0, SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t, size_t,
+    ApiDict, Array, Boolean, BufferHandle, Error, Integer, KeyDict_win_text_height, LineNr, LuaRef,
+    Object, String_0, SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t, size_t,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -67,11 +67,7 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
 }
 
 /// `win`'s cursor, as a `[line, column]` pair.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_win_get_cursor(win: WindowHandle) -> Result<Array, Error> {
+pub fn nvim_win_get_cursor(win: WindowHandle) -> Result<Array, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Array::EMPTY);
     };
@@ -185,11 +181,7 @@ pub fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), Error> 
 }
 
 /// `win`'s top-left corner, as a `[row, column]` pair of screen cells.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_win_get_position(win: WindowHandle) -> Result<Array, Error> {
+pub fn nvim_win_get_position(win: WindowHandle) -> Result<Array, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Array::EMPTY);
     };
@@ -289,10 +281,9 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
         // can reach it.
         let switched = unsafe { win_execute_before(&raw mut switch_args, w, tabpage) };
         if switched {
-            let no_arena = ptr::null_mut::<Arena>();
             let name = ptr::null::<::core::ffi::c_char>();
             // SAFETY: the call runs Lua, which `api_try` catches.
-            res = unsafe { nlua_call_ref(fun, name, Array::EMPTY, kRetLuaref, no_arena) };
+            res = unsafe { nlua_call_ref(fun, name, Array::EMPTY, kRetLuaref) };
         }
         // SAFETY: the matching restore of the switch above.
         unsafe { win_execute_after(&raw mut switch_args) };
@@ -318,13 +309,9 @@ pub fn nvim_win_set_hl_ns(win: WindowHandle, ns_id: Integer) -> Result<(), Error
 
 /// How many screen lines a range of `win`'s buffer occupies once wrapping,
 /// folds and virtual lines are taken into account.
-///
-/// # Safety
-/// `opts` must point at a filled-in `KeyDict_win_text_height`, and `arena`
-/// must be the caller's.
-pub unsafe fn nvim_win_text_height(
+pub fn nvim_win_text_height(
     win: WindowHandle,
-    opts: *mut KeyDict_win_text_height,
+    opts: &mut KeyDict_win_text_height,
 ) -> Result<ApiDict, Error> {
     // Upstream asks for two and writes four (`all`, `fill`, `end_row`,
     // `end_vcol`), so every successful call overruns the arena block by two
@@ -336,8 +323,7 @@ pub unsafe fn nvim_win_text_height(
     let buf = w.buffer();
     let line_count: LineNr = w.buffer().line_count();
 
-    // SAFETY: `opts` is the caller's, per this function's contract.
-    let opts = unsafe { &*opts };
+    let opts = &*opts;
     let mut start_lnum: LineNr = 1 as LineNr;
     let mut end_lnum: LineNr = line_count;
     let mut oob: bool = false;

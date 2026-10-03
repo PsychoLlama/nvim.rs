@@ -32,9 +32,8 @@ use crate::memory::{xfree, xmalloc};
 use crate::message_fmt::c_str_len;
 use crate::os::cshim::gettext;
 use crate::types::{
-    Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, TypVal,
-    VAR_UNKNOWN, VarNumber, kErrorTypeException, kErrorTypeValidation, lua_Integer, lua_State,
-    size_t,
+    Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, TypVal, VAR_UNKNOWN,
+    VarNumber, kErrorTypeException, kErrorTypeValidation, lua_Integer, lua_State, size_t,
 };
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
@@ -159,15 +158,7 @@ pub fn nlua_call_user_expand_func(
 pub(crate) fn nlua_exec_object(code: &CStr, args: Array) -> Result<Object, Error> {
     // SAFETY: an owned argument array, no chunk name and no arena: the
     // answer is allocated, not borrowed.
-    unsafe {
-        nlua_exec(
-            &String_0::from_cstr(code),
-            ptr::null(),
-            args,
-            kRetObject,
-            ptr::null_mut(),
-        )
-    }
+    unsafe { nlua_exec(&String_0::from_cstr(code), ptr::null(), args, kRetObject) }
 }
 
 /// Load and run one chunk with `args` as its arguments.
@@ -285,7 +276,6 @@ pub unsafe fn nlua_exec(
     chunkname: *const c_char,
     mut args: Array,
     mode: LuaRetMode,
-    arena: *mut Arena,
 ) -> Result<Object, Error> {
     unsafe {
         let lstate = get_global_lstate();
@@ -305,7 +295,7 @@ pub unsafe fn nlua_exec(
         if nlua_pcall(lstate, argc, 1) != 0 {
             return Err(lua_error_of(kErrorTypeException, lstate));
         }
-        nlua_call_pop_retval(lstate, mode, arena, top)
+        nlua_call_pop_retval(lstate, mode, top)
     }
 }
 
@@ -331,9 +321,8 @@ pub unsafe fn nlua_call_ref(
     name: *const c_char,
     args: Array,
     mode: LuaRetMode,
-    arena: *mut Arena,
 ) -> Result<Object, Error> {
-    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, arena, true) }
+    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, true) }
 }
 
 /// [`nlua_call_ref`] for a caller with nowhere to report to: a failing
@@ -346,11 +335,9 @@ pub unsafe fn nlua_call_ref_quiet(
     name: *const c_char,
     args: Array,
     mode: LuaRetMode,
-    arena: *mut Arena,
 ) -> Object {
     // SAFETY: the caller's.
-    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, arena, false) }
-        .unwrap_or(Object::Nil)
+    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, false) }.unwrap_or(Object::Nil)
 }
 
 /// How many results `mode` wants off the call.
@@ -373,7 +360,6 @@ pub unsafe fn nlua_call_ref_ctx(
     name: *const c_char,
     mut args: Array,
     mode: LuaRetMode,
-    arena: *mut Arena,
     reports: bool,
 ) -> Result<Object, Error> {
     unsafe {
@@ -404,7 +390,7 @@ pub unsafe fn nlua_call_ref_ctx(
             }
             return Err(lua_error_of(kErrorTypeException, lstate));
         }
-        nlua_call_pop_retval(lstate, mode, arena, top)
+        nlua_call_pop_retval(lstate, mode, top)
     }
 }
 
@@ -418,7 +404,6 @@ pub unsafe fn nlua_call_ref_ctx(
 unsafe fn nlua_call_pop_retval(
     lstate: *mut lua_State,
     mode: LuaRetMode,
-    arena: *mut Arena,
     pretop: c_int,
 ) -> Result<Object, Error> {
     unsafe {
@@ -437,7 +422,7 @@ unsafe fn nlua_call_pop_retval(
                 lua_pop(lstate, 1);
                 Ok(Object::luaref(ref_0))
             }
-            kRetObject => nlua_pop_object(lstate, false, arena),
+            kRetObject => nlua_pop_object(lstate, false),
             kRetMulti => {
                 // The results come off the stack top-down, so they are stored
                 // back-to-front.
@@ -446,7 +431,7 @@ unsafe fn nlua_call_pop_retval(
                 // collected and then turned back into call order.
                 let mut res: Vec<Object> = Vec::with_capacity(nres as size_t);
                 for _ in 0..nres {
-                    res.push(nlua_pop_object(lstate, false, arena)?);
+                    res.push(nlua_pop_object(lstate, false)?);
                 }
                 res.reverse();
                 Ok(Object::array(Array::from(res)))

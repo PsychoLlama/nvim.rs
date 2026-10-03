@@ -517,7 +517,6 @@ unsafe fn register_script(
 ) -> *mut ScriptItem {
     if *sid > 0 {
         // Loading the same script again.
-        // SAFETY: a positive `sid` names a registered script.
         return script_item(*sid);
     }
     if req.is(Origin::Str) {
@@ -595,8 +594,7 @@ fn range_is_lua(excmd: Option<&ExArg>) -> bool {
     let script = String_0::from_cstr(src);
     // SAFETY: `items` and `err` live on this frame and outlive the call,
     // which retains neither.
-    let nil = ptr::null_mut();
-    let result = match unsafe { nlua_exec(&script, ptr::null(), excmd, kRetNilBool, nil) } {
+    let result = match unsafe { nlua_exec(&script, ptr::null(), excmd, kRetNilBool) } {
         Ok(value) => value,
         Err(e) => {
             err = e;

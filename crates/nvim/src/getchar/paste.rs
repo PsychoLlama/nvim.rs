@@ -138,25 +138,15 @@ pub fn paste_repeat(count: c_int) {
     drop(unmapped);
 
     let str = String_0::from_bytes(&pasted);
-    let mut arena: Arena = ARENA_EMPTY;
     let mut err = Error::none();
     let mut i = 0;
     while !aborted && i < count {
         // A copy per pass: the call takes the text over.
-        if let Err(e) = unsafe {
-            nvim_paste(
-                LUA_INTERNAL_CALL,
-                str.clone(),
-                false,
-                -1 as Integer,
-                &raw mut arena,
-            )
-        } {
+        if let Err(e) = nvim_paste(LUA_INTERNAL_CALL, str.clone(), false, -1 as Integer) {
             err = e;
         }
         aborted = err.is_set();
         i += 1;
     }
     err.clear();
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }

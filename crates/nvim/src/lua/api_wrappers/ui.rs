@@ -33,9 +33,9 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_ui_send(lstate: *mut lua_State) ->
     /// on: `lstate` is the running Lua state with this binding's arguments
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
-        let Call { arena, err_param } = call;
+        let Call { err_param, .. } = call;
         // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate, arena) }
+        let arg_1 = unsafe { nlua_pop_string(lstate) }
             .inspect_err(|_| *err_param = c"content".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         nvim_ui_send(LUA_INTERNAL_CALL, arg_1);

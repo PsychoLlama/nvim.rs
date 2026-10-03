@@ -10,17 +10,14 @@
 
 use super::*;
 use crate::api::private::validate::err_out_of_range;
+use crate::memline::Lines;
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
-use crate::types::NUL;
 use crate::winlayer::{Buf, PosRef, Win, tab_windows};
 
-/// # Safety
-///
-/// `replacement` must be a well-formed API array, its `size` elements
-/// initialized. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
-pub unsafe fn nvim_buf_set_text(
+/// Replace the text from (`start_row`, `start_col`) to (`end_row`,
+/// `end_col`) of `buf` with `replacement`'s lines.
+pub fn nvim_buf_set_text(
     channel_id: uint64_t,
     buf: BufferHandle,
     mut start_row: Integer,
@@ -28,7 +25,6 @@ pub unsafe fn nvim_buf_set_text(
     mut end_row: Integer,
     mut end_col: Integer,
     mut replacement: Array,
-    arena: *mut Arena,
 ) -> Result<(), Error> {
     if replacement.is_empty() {
         // An empty replacement deletes the range, which is the same as
@@ -48,9 +44,8 @@ pub unsafe fn nvim_buf_set_text(
     if oob {
         return Err(err_out_of_range(c"end_row"));
     }
-    let mut str_at_start: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, start_row as LineNr) };
-    let len_at_start: ColNr = ml_get_buf_len(b, start_row as LineNr);
-    str_at_start = unsafe { arena_memdupz(arena, str_at_start, len_at_start as size_t) };
+    let at_start: Vec<u8> = Lines::in_buffer(b).line(start_row as LineNr).to_vec();
+    let len_at_start = at_start.len() as ColNr;
     start_col = if start_col < 0 as Integer {
         len_at_start as Integer + start_col + 1 as Integer
     } else {
@@ -59,9 +54,8 @@ pub unsafe fn nvim_buf_set_text(
     if !(start_col >= 0 as Integer && start_col <= len_at_start as Integer) {
         return Err(err_out_of_range(c"start_col"));
     }
-    let mut str_at_end: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, end_row as LineNr) };
-    let len_at_end: ColNr = ml_get_buf_len(b, end_row as LineNr);
-    str_at_end = unsafe { arena_memdupz(arena, str_at_end, len_at_end as size_t) };
+    let at_end: Vec<u8> = Lines::in_buffer(b).line(end_row as LineNr).to_vec();
+    let len_at_end = at_end.len() as ColNr;
     end_col = if end_col < 0 as Integer {
         len_at_end as Integer + end_col + 1 as Integer
     } else {
@@ -74,7 +68,6 @@ pub unsafe fn nvim_buf_set_text(
         return Err(Error::validation(c"'start' is higher than 'end'"));
     }
     let disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
-    // SAFETY: `replacement` is the caller's array.
     check_string_array(&replacement, c"replacement string", disallow_nl)?;
     let new_len: size_t = replacement.len();
     let mut new_byte: BCount = 0 as BCount;
@@ -97,85 +90,40 @@ pub unsafe fn nvim_buf_set_text(
     // Every item is a String: `check_string_array` above turned anything else
     // into an error.
     let only_strings = "check_string_array accepted only Strings";
-    // SAFETY: `replacement` is a non-empty array, so both indices are in it.
     let first_item: String_0 = replacement[0].as_string().expect(only_strings).clone();
     // SAFETY: as above.
     let last_item: String_0 = replacement[last_index]
         .as_string()
         .expect(only_strings)
         .clone();
-    let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.len());
-    let last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
-    if replacement.len() == 1 as size_t {
-        firstlen = firstlen.wrapping_add(last_part_len);
+    // The new lines, each NUL-terminated: the first keeps the old start
+    // line's head and the last the old end line's tail, which are one line
+    // when the replacement is.
+    let head = &at_start[..start_col as usize];
+    let tail = &at_end[end_col as usize..];
+    let mut lines: Vec<Vec<u8>> = Vec::with_capacity(new_len);
+    let mut first = head.to_vec();
+    api_text_into(&mut first, first_item.as_bytes());
+    if new_len > 1 {
+        first.push(0);
     }
-    let first: *mut ::core::ffi::c_char = unsafe { arena_allocz(arena, firstlen) };
-    let mut last: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    // `memchrsub` turns embedded NULs back into the newlines they stand for.
-    let nul = NUL as ::core::ffi::c_char;
-    let nl = NL as ::core::ffi::c_char;
-    // SAFETY: `first` has `firstlen` writable bytes, and `start_col` is
-    // within the line it was measured against.
-    let head = unsafe { first.offset(start_col as isize) } as *mut ::core::ffi::c_void;
-    // SAFETY: `first` holds `start_col` bytes of the old line's head.
-    let into = first.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(str_at_start.cast(), start_col as size_t) };
-    let src = first_item.data() as *const ::core::ffi::c_void;
-    // SAFETY: `head` has `first_item.len()` writable bytes after `start_col`.
-    let into = head.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(src.cast(), first_item.len()) };
-    // SAFETY: as above.
-    unsafe { memchrsub(head, nul, nl, first_item.len()) };
-    // SAFETY: `end_col` is within the line `str_at_end` copied.
-    let tail = unsafe { str_at_end.offset(end_col as isize) } as *const ::core::ffi::c_void;
-    if replacement.len() == 1 as size_t {
-        // SAFETY: `firstlen` counted `last_part_len` in as well.
-        let after = unsafe { first.offset(start_col as isize).add(first_item.len()) };
-        let after = after as *mut ::core::ffi::c_void;
-        // SAFETY: `after` has `last_part_len` writable bytes.
-        let into = after.cast::<u8>();
-        unsafe { into.copy_from_nonoverlapping(tail.cast(), last_part_len) };
-    } else {
-        let lastlen = last_item.len().wrapping_add(last_part_len);
-        // SAFETY: the arena hands back `lastlen` writable bytes.
-        last = unsafe { arena_allocz(arena, lastlen) };
-        let src = last_item.data() as *const ::core::ffi::c_void;
-        // SAFETY: `last` has `lastlen` writable bytes.
-        let into = last.cast::<u8>();
-        unsafe { into.copy_from_nonoverlapping(src.cast(), last_item.len()) };
-        // SAFETY: as above.
-        unsafe { memchrsub(last.cast(), nul, nl, last_item.len()) };
-        // SAFETY: the tail sits after the item, still inside `lastlen`.
-        let after = unsafe { last.add(last_item.len()) } as *mut ::core::ffi::c_void;
-        // SAFETY: `after` has `last_part_len` writable bytes.
-        let into = after.cast::<u8>();
-        unsafe { into.copy_from_nonoverlapping(tail.cast(), last_part_len) };
-    }
-    let lines: *mut *mut ::core::ffi::c_char = unsafe {
-        arena_alloc(
-            arena,
-            new_len.wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
-            true,
-        )
-    } as *mut *mut ::core::ffi::c_char;
-    unsafe { *lines = first };
     new_byte += first_item.len() as BCount;
-    let mut i_0: size_t = 1 as size_t;
-    while i_0 < new_len.wrapping_sub(1 as size_t) {
-        // SAFETY: `i_0` is below `replacement.size`.
-        let l: String_0 = replacement[i_0].as_string().expect(only_strings).clone();
-        unsafe { *lines.add(i_0) = arena_memdupz(arena, l.data(), l.len()) };
-        // SAFETY: `i_0` is below `new_len`, so the slot was just written.
-        let line = unsafe { *lines.add(i_0) } as *mut ::core::ffi::c_void;
-        // SAFETY: `line` holds `l.len()` bytes.
-        unsafe { memchrsub(line, nul, nl, l.len()) };
+    lines.push(first);
+    for i in 1..new_len.saturating_sub(1) {
+        // SAFETY: `i` is below `replacement.size`.
+        let l = replacement[i].as_string().expect(only_strings);
+        lines.push(api_line(l.as_bytes()));
         new_byte += l.len() as BCount + 1 as BCount;
-        i_0 = i_0.wrapping_add(1);
     }
-    if replacement.len() > 1 as size_t {
-        unsafe { *lines.add(replacement.len().wrapping_sub(1 as size_t)) = last };
+    if new_len > 1 {
+        let mut last = Vec::with_capacity(last_item.len() + tail.len() + 1);
+        api_text_into(&mut last, last_item.as_bytes());
+        lines.push(last);
         new_byte += last_item.len() as BCount + 1 as BCount;
     }
+    let last = lines.last_mut().expect("the replacement has a first line");
+    last.extend_from_slice(tail);
+    last.push(0);
     let mut tstate: TryState = TryState::INIT;
     unsafe { try_enter(&raw mut tstate) };
     let edit = Replacement {
@@ -185,14 +133,11 @@ pub unsafe fn nvim_buf_set_text(
         end_row,
         end_col,
         lines,
-        new_len,
         last_len: last_item.len() as ColNr,
         old_byte,
         new_byte,
     };
-    // SAFETY: `lines` names the `new_len` arena strings filled in above, and
-    // `buffer` is the loaded buffer they belong to.
-    let outcome = unsafe { edit.apply() };
+    let outcome = edit.apply();
     // The bracket outranks whatever the body answered, which is the order the
     // two had when both went through one slot.
     unsafe { try_leave(&raw mut tstate) }?;
@@ -207,10 +152,8 @@ struct Replacement {
     start_col: Integer,
     end_row: Integer,
     end_col: Integer,
-    /// The lines that replace the range, each a NUL-terminated arena string.
-    lines: *mut *mut ::core::ffi::c_char,
-    /// How many of them there are.
-    new_len: size_t,
+    /// The lines that replace the range, each NUL-terminated.
+    lines: Vec<Vec<u8>>,
     /// How long the last one is: where the range's tail ends up.
     last_len: ColNr,
     /// How many bytes the range held, and how many replace them.
@@ -221,11 +164,7 @@ struct Replacement {
 impl Replacement {
     /// Write the lines in, then tell the marks, the extmarks and every
     /// window's cursor where the text moved.
-    ///
-    /// # Safety
-    /// `lines` must name `new_len` live C strings and `buffer` be a loaded
-    /// buffer.
-    unsafe fn apply(&self) -> Result<(), Error> {
+    fn apply(mut self) -> Result<(), Error> {
         let b = self.buffer;
         if b.b_p_ma == 0 {
             return Err(Error::exception(c"Buffer is not 'modifiable'"));
@@ -234,8 +173,8 @@ impl Replacement {
         if u_save_buf(self.buffer, from, to).is_err() {
             return Err(Error::exception(c"Failed to save undo information"));
         }
-        // SAFETY: the caller's promise, carried through.
-        let extra = unsafe { self.write_lines() }?;
+        let extra = self.write_lines()?;
+        let new_len = self.lines.len();
 
         let col_extent: ColNr = (self.end_col
             - if self.end_row == self.start_row {
@@ -269,7 +208,7 @@ impl Replacement {
                     self.start_col as ColNr,
                     self.end_row as LineNr,
                     self.end_col as ColNr,
-                    self.new_len as LineNr,
+                    new_len as LineNr,
                     self.last_len,
                     1,
                 )
@@ -284,7 +223,7 @@ impl Replacement {
             (self.end_row - self.start_row) as ::core::ffi::c_int,
             col_extent,
             self.old_byte,
-            self.new_len as ::core::ffi::c_int - 1,
+            new_len as ::core::ffi::c_int - 1,
             self.last_len,
             self.new_byte,
             kExtmarkUndo,
@@ -309,7 +248,7 @@ impl Replacement {
                     self.start_col as ColNr,
                     self.end_row as LineNr,
                     self.end_col as ColNr,
-                    self.new_len as LineNr,
+                    new_len as LineNr,
                     self.last_len,
                 );
             } else {
@@ -322,41 +261,39 @@ impl Replacement {
 
     /// Delete, replace and append until the range holds the new lines,
     /// answering how many lines the buffer grew by.
-    ///
-    /// # Safety
-    /// As [`Replacement::apply`].
-    unsafe fn write_lines(&self) -> Result<ptrdiff_t, Error> {
+    fn write_lines(&mut self) -> Result<ptrdiff_t, Error> {
         let b = self.buffer;
         let mut extra: ptrdiff_t = 0;
         let old_len: size_t = (self.end_row - self.start_row + 1) as size_t;
-        let to_delete = old_len.saturating_sub(self.new_len);
+        let new_len = self.lines.len();
+        let to_delete = old_len.saturating_sub(new_len);
         for _ in 0..to_delete {
             if ml_delete_buf(b, self.start_row as LineNr, false).is_err() {
                 return Err(Error::exception(c"Failed to delete line"));
             }
         }
         extra -= to_delete as ptrdiff_t;
-        let to_replace = old_len.min(self.new_len);
+        let to_replace = old_len.min(new_len);
         for i in 0..to_replace {
             let lnum: int64_t = self.start_row as int64_t + i as int64_t;
             if lnum >= MAXLNUM as int64_t {
                 return Err(Error::validation(c"Index out of bounds"));
             }
-            // SAFETY: the caller's promise -- `i` is below `new_len`.
-            let line = unsafe { *self.lines.add(i) };
-            // SAFETY: a loaded buffer, and a line that is still in it.
+            let line = self.lines[i].as_mut_ptr().cast();
+            // SAFETY: a loaded buffer and a line that is still in it; the
+            // memline borrows `line` (`noalloc`) and flushes it straight out.
             if unsafe { ml_replace_buf(b, lnum as LineNr, line, false, true) }.is_err() {
                 return Err(Error::exception(c"Failed to replace line"));
             }
         }
-        for i in to_replace..self.new_len {
+        for i in to_replace..new_len {
             let lnum: int64_t = self.start_row as int64_t + i as int64_t - 1;
             if lnum >= MAXLNUM as int64_t {
                 return Err(Error::validation(c"Index out of bounds"));
             }
-            // SAFETY: as above.
-            let line = unsafe { *self.lines.add(i) };
-            // SAFETY: as above.
+            let line = self.lines[i].as_mut_ptr().cast();
+            // SAFETY: a loaded buffer; the append copies the NUL-terminated
+            // `line`.
             if unsafe { ml_append_buf(b, lnum as LineNr, line, 0, false) }.is_err() {
                 return Err(Error::exception(c"Failed to insert line"));
             }

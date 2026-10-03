@@ -67,7 +67,6 @@ pub(super) unsafe fn receive_msgpack(
     // SAFETY: as above; the reference is dropped at the end.
     unsafe { channel_incref(chan.as_ptr()) };
     let id = chan.id;
-    // SAFETY: the verbs match the arguments.
     let from = stream.cast::<c_void>();
     logmsg!(
         LOGLVL_DBG,
@@ -94,8 +93,6 @@ pub(super) unsafe fn receive_msgpack(
     }
     if eof {
         let mut buf = [0 as c_char; CLOSE_MSG_MAX];
-        // SAFETY: the buffer is `CLOSE_MSG_MAX` writable bytes, the verbs
-        // match, and the result is NUL-terminated.
         let (into, cap) = (buf.as_mut_ptr(), buf.len());
         let fmt = c"ch %lu was closed by the peer".as_ptr();
         unsafe { snprintf!(into, cap, fmt, id) };
@@ -170,8 +167,6 @@ fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
     };
     let Some(frame) = frame else {
         let mut buf = [0 as c_char; CLOSE_MSG_MAX];
-        // SAFETY: the buffer is `CLOSE_MSG_MAX` writable bytes and the verbs
-        // match the arguments.
         let (into, cap) = (buf.as_mut_ptr(), buf.len());
         let fmt = c"ch %lu (type=%u) returned a response with an unknown request id %u. Ensure the client is properly synchronized"
             .as_ptr();
@@ -279,8 +274,6 @@ fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
     // first, and run only once; a one-shot event does exactly that.
     let is_resize = ptr::fn_addr_eq(handler_fn, handle_nvim_ui_try_resize as ApiDispatchFn);
     if is_resize {
-        // SAFETY: both queues are live, and the one-shot runs the event once
-        // however many queues reach it first.
         let ev = event_create_oneshot(event, 2);
         unsafe { multiqueue_put_event(chan.events, ev.clone()) };
         unsafe { multiqueue_put_event(queue_in(&resize_events), ev) };
@@ -320,23 +313,22 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
     // A channel closed while the request sat on a queue is simply dropped —
     // there is nowhere left to send the answer.
     if !chan.rpc.closed {
-        // SAFETY: the handler was resolved from the method name, and the
-        // arena and error slot are this call's own.
-        let mem = unsafe { &raw mut (*e).used_mem };
+        // SAFETY: the event's own arena, which nothing else reaches while
+        // the handler runs.
+        let mem = unsafe { &mut (*e).used_mem };
         // A refused call answers nil, as every wrapper's own refusal paths
         // did, and the failure travels in `error` for the response below.
-        let mut answer =
-            match unsafe { handler.fn_0.expect("dispatched with a handler")(chan.id, args, mem) } {
-                Ok(rv) => rv,
-                Err(e) => {
-                    error = e;
-                    Object::Nil
-                }
-            };
+        let mut answer = match handler.fn_0.expect("dispatched with a handler")(chan.id, args, mem)
+        {
+            Ok(rv) => rv,
+            Err(e) => {
+                error = e;
+                Object::Nil
+            }
+        };
         // A notification is only answered when it failed, and then with
         // `nvim_error_event` rather than a response.
         if type_0 == kMessageTypeRequest || error.is_set() {
-            // SAFETY: the channel is live and both slots are stack locals.
             let (to, out) = (chan.as_ptr(), &raw mut answer);
             unsafe { serialize_response(to, handler, type_0, request_id, &error, out) };
         }

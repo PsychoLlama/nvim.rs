@@ -14,16 +14,7 @@ use crate::types::OptionSetFlags;
 use crate::winlayer::Buf;
 use crate::winlayer::Live;
 
-/// # Safety
-///
-/// `event` must be a well-formed API object the caller owns for the call.
-/// `opts` must point at the `KeyDict_exec_autocmds` the dispatcher filled in,
-/// live for the call. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_exec_autocmds(
-    event: Object,
-    opts: *mut KeyDict_exec_autocmds,
-) -> Result<(), Error> {
+pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Result<(), Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_exec_autocmds>::new(opts) };
     let mut error = Error::none();
@@ -46,7 +37,6 @@ pub unsafe fn nvim_exec_autocmds(
         Object::String(group) => {
             au_group = unsafe { augroup_find(group.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
-                // SAFETY: the value the keyset carried, live for this call.
                 error = err_bad_value(c"group", group.as_cstr());
                 return ().reported(error);
             }
@@ -107,7 +97,6 @@ pub unsafe fn nvim_exec_autocmds(
             .as_string()
             .expect("`unpack_string_or_array` answers Strings only");
         let Some(event_nr) = event_name2nr_str(event_str) else {
-            // SAFETY: the value the keyset carried, live for this call.
             error = err_bad_value(c"event", event_str.as_cstr());
             return ().reported(error);
         };

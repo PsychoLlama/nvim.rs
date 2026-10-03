@@ -33,15 +33,15 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_call_dict_function(lstate: *mut lu
     /// on: `lstate` is the running Lua state with this binding's arguments
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
-        let Call { arena, err_param } = call;
+        let Call { err_param, .. } = call;
         // SAFETY: as above.
-        let arg_3 = unsafe { nlua_pop_array(lstate, arena) }
+        let arg_3 = unsafe { nlua_pop_array(lstate) }
             .inspect_err(|_| *err_param = c"args".as_ptr().cast_mut())?;
         // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_string(lstate, arena) }
+        let arg_2 = unsafe { nlua_pop_string(lstate) }
             .inspect_err(|_| *err_param = c"fn".as_ptr().cast_mut())?;
         // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_object(lstate, true, arena) }
+        let arg_1 = unsafe { nlua_pop_object(lstate, true) }
             .inspect_err(|_| *err_param = c"dict".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         let mut ret = nvim_call_dict_function(arg_1, arg_2, arg_3)?;
@@ -70,12 +70,12 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_call_function(lstate: *mut lua_Sta
     /// on: `lstate` is the running Lua state with this binding's arguments
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
-        let Call { arena, err_param } = call;
+        let Call { err_param, .. } = call;
         // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_array(lstate, arena) }
+        let arg_2 = unsafe { nlua_pop_array(lstate) }
             .inspect_err(|_| *err_param = c"args".as_ptr().cast_mut())?;
         // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate, arena) }
+        let arg_1 = unsafe { nlua_pop_string(lstate) }
             .inspect_err(|_| *err_param = c"fn".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         let mut ret = nvim_call_function(arg_1, arg_2)?;
@@ -104,9 +104,9 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_command(lstate: *mut lua_State) ->
     /// on: `lstate` is the running Lua state with this binding's arguments
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
-        let Call { arena, err_param } = call;
+        let Call { err_param, .. } = call;
         // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate, arena) }
+        let arg_1 = unsafe { nlua_pop_string(lstate) }
             .inspect_err(|_| *err_param = c"cmd".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         nvim_command(arg_1)?;
@@ -133,9 +133,9 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_eval(lstate: *mut lua_State) -> c_
     /// on: `lstate` is the running Lua state with this binding's arguments
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
-        let Call { arena, err_param } = call;
+        let Call { err_param, .. } = call;
         // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate, arena) }
+        let arg_1 = unsafe { nlua_pop_string(lstate) }
             .inspect_err(|_| *err_param = c"expr".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         let mut ret = nvim_eval(arg_1)?;
@@ -164,16 +164,15 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_exec2(lstate: *mut lua_State) -> c
     /// on: `lstate` is the running Lua state with this binding's arguments
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
-        let Call { arena, err_param } = call;
+        let Call { err_param, .. } = call;
         let mut arg_2 = KeyDictArg::<KeyDict_exec_opts>::unset();
         // SAFETY: as above.
-        unsafe { pop_keydict(lstate, &mut arg_2, arena, err_param) }?;
+        unsafe { pop_keydict(lstate, &mut arg_2, err_param) }?;
         // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate, arena) }
+        let arg_1 = unsafe { nlua_pop_string(lstate) }
             .inspect_err(|_| *err_param = c"src".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = unsafe { nvim_exec2(LUA_INTERNAL_CALL, arg_1, &raw mut arg_2.dict) }?;
+        let mut ret = nvim_exec2(LUA_INTERNAL_CALL, arg_1, &mut arg_2.dict)?;
         // SAFETY: as above.
         unsafe { nlua_push_dict(lstate, &mut ret, PUSH) };
         Ok(())
@@ -199,15 +198,15 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_parse_expression(lstate: *mut lua_
     /// on: `lstate` is the running Lua state with this binding's arguments
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
-        let Call { arena, err_param } = call;
+        let Call { err_param, .. } = call;
         // SAFETY: as above.
-        let arg_3 = unsafe { nlua_pop_boolean(lstate, arena) }
+        let arg_3 = unsafe { nlua_pop_boolean(lstate) }
             .inspect_err(|_| *err_param = c"hl".as_ptr().cast_mut())?;
         // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_string(lstate, arena) }
+        let arg_2 = unsafe { nlua_pop_string(lstate) }
             .inspect_err(|_| *err_param = c"flags".as_ptr().cast_mut())?;
         // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate, arena) }
+        let arg_1 = unsafe { nlua_pop_string(lstate) }
             .inspect_err(|_| *err_param = c"expr".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         let mut ret = nvim_parse_expression(arg_1, arg_2, arg_3)?;

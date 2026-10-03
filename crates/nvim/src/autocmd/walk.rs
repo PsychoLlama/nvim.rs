@@ -224,15 +224,8 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
 
     // SAFETY: the reference is the row's own; `args` stands for the length
     // of the call.
-    let result = unsafe {
-        nlua_call_ref_quiet(
-            luaref,
-            ::core::ptr::null(),
-            args.array(),
-            kRetNilBool,
-            ::core::ptr::null_mut(),
-        )
-    };
+    let result =
+        unsafe { nlua_call_ref_quiet(luaref, ::core::ptr::null(), args.array(), kRetNilBool) };
     matches!(result, Object::Boolean(true))
 }
 
@@ -253,9 +246,6 @@ pub unsafe fn getnextac(
     _indent: ::core::ffi::c_int,
     _do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
-    // SAFETY: by the contract `cookie` is the `AutoPatCmd` that
-    // `apply_autocmds_group` handed `do_cmdline`, and it stands for as long
-    // as the walk does; `acs` is the event table's own row for its event.
     let apc = cookie.cast::<AutoPatCmd>();
     let acs = au_event_vec(unsafe { (*apc).event });
 

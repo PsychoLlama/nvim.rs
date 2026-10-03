@@ -22,15 +22,10 @@ use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected}
 use crate::narrow::number_as_int;
 use crate::winlayer::Live;
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `opts` must point at the `KeyDict_create_augroup` the
-/// dispatcher filled in, live for the call.
-pub unsafe fn nvim_create_augroup(
+pub fn nvim_create_augroup(
     channel_id: uint64_t,
     name: String_0,
-    opts: *mut KeyDict_create_augroup,
+    opts: &mut KeyDict_create_augroup,
 ) -> Result<Integer, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_create_augroup>::new(opts) };

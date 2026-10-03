@@ -27,7 +27,7 @@ use crate::lua::ffi::{
 };
 use crate::message_fmt::c_str_len;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
+    ApiDict, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
     Object, String_0, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, lua_Integer,
@@ -90,7 +90,6 @@ pub unsafe fn nlua_pop_keydict(
     retval: *mut c_void,
     hashy: FieldHashfn,
     err_opt: *mut *mut c_char,
-    arena: *mut Arena,
 ) -> Result<(), Error> {
     /// Record the value the pop produced, which is also what records that
     /// the caller named the key. Defined out here so that its own lines are
@@ -128,7 +127,7 @@ pub unsafe fn nlua_pop_keydict(
             // Storing `Some` is what records that the caller named the key.
             let popped: Result<(), Error> = (|| {
                 match (*field).type_0 as ObjectTypeInt {
-                    T_ANY => store!(mem, Object, nlua_pop_object(lstate, true, arena)?),
+                    T_ANY => store!(mem, Object, nlua_pop_object(lstate, true)?),
                     T_INTEGER => {
                         // A highlight-group field takes the group's *name* as
                         // well as its id.
@@ -146,18 +145,18 @@ pub unsafe fn nlua_pop_keydict(
                             };
                             store!(mem, Integer, id);
                         } else {
-                            store!(mem, Integer, nlua_pop_integer(lstate, arena)?);
+                            store!(mem, Integer, nlua_pop_integer(lstate)?);
                         }
                     }
                     T_BOOLEAN => store!(mem, Boolean, nlua_pop_boolean_strict(lstate)?),
-                    T_STRING => store!(mem, String_0, nlua_pop_string(lstate, arena)?),
-                    T_FLOAT => store!(mem, Float, nlua_pop_float(lstate, arena)?),
+                    T_STRING => store!(mem, String_0, nlua_pop_string(lstate)?),
+                    T_FLOAT => store!(mem, Float, nlua_pop_float(lstate)?),
                     T_BUFFER | T_WINDOW | T_TABPAGE => {
-                        store!(mem, Handle, nlua_pop_handle(lstate, arena)?);
+                        store!(mem, Handle, nlua_pop_handle(lstate)?);
                     }
-                    T_ARRAY => store!(mem, Array, nlua_pop_array(lstate, arena)?),
-                    T_DICT => store!(mem, ApiDict, nlua_pop_dict(lstate, false, arena)?),
-                    T_LUAREF => store!(mem, LuaRef, nlua_pop_luaref(lstate, arena)?),
+                    T_ARRAY => store!(mem, Array, nlua_pop_array(lstate)?),
+                    T_DICT => store!(mem, ApiDict, nlua_pop_dict(lstate, false)?),
+                    T_LUAREF => store!(mem, LuaRef, nlua_pop_luaref(lstate)?),
                     _ => abort(),
                 }
                 Ok(())

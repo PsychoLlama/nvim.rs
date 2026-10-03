@@ -13,16 +13,10 @@ use super::*;
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_create_user_command(
+pub fn handle_nvim_buf_create_user_command(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -53,9 +47,7 @@ pub unsafe fn handle_nvim_buf_create_user_command(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_buf_create_user_command(channel_id, arg_1, arg_2, arg_3, &raw mut arg_4) }?;
+    nvim_buf_create_user_command(channel_id, arg_1, arg_2, arg_3, &mut arg_4)?;
     Ok(Object::Nil)
 }
 
@@ -64,16 +56,10 @@ pub unsafe fn handle_nvim_buf_create_user_command(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_del_user_command(
+pub fn handle_nvim_buf_del_user_command(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -100,16 +86,10 @@ pub unsafe fn handle_nvim_buf_del_user_command(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_get_commands(
+pub fn handle_nvim_buf_get_commands(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -136,9 +116,7 @@ pub unsafe fn handle_nvim_buf_get_commands(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_commands(arg_1, &raw mut arg_2) }?;
+    let rv = nvim_buf_get_commands(arg_1, &mut arg_2)?;
     Ok(Object::dict(rv))
 }
 
@@ -147,16 +125,10 @@ pub unsafe fn handle_nvim_buf_get_commands(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_cmd(
+pub fn handle_nvim_cmd(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -183,9 +155,7 @@ pub unsafe fn handle_nvim_cmd(
                 return Err(wrong_type(2, c"nvim_cmd", c"Dict(cmd_opts) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_cmd(channel_id, &raw mut arg_1, &raw mut arg_2) }?;
+    let rv = nvim_cmd(channel_id, &mut arg_1, &mut arg_2)?;
     Ok(Object::string(rv))
 }
 
@@ -194,16 +164,10 @@ pub unsafe fn handle_nvim_cmd(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_create_user_command(
+pub fn handle_nvim_create_user_command(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -231,9 +195,7 @@ pub unsafe fn handle_nvim_create_user_command(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_create_user_command(channel_id, arg_1, arg_2, &raw mut arg_3) }?;
+    nvim_create_user_command(channel_id, arg_1, arg_2, &mut arg_3)?;
     Ok(Object::Nil)
 }
 
@@ -242,16 +204,10 @@ pub unsafe fn handle_nvim_create_user_command(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_del_user_command(
+pub fn handle_nvim_del_user_command(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -275,16 +231,10 @@ pub unsafe fn handle_nvim_del_user_command(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_commands(
+pub fn handle_nvim_get_commands(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -304,9 +254,7 @@ pub unsafe fn handle_nvim_get_commands(
                 return Err(wrong_type(1, c"nvim_get_commands", c"Dict(get_commands) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_commands(&raw mut arg_1) }?;
+    let rv = nvim_get_commands(&mut arg_1)?;
     Ok(Object::dict(rv))
 }
 
@@ -315,16 +263,10 @@ pub unsafe fn handle_nvim_get_commands(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_parse_cmd(
+pub fn handle_nvim_parse_cmd(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -347,9 +289,7 @@ pub unsafe fn handle_nvim_parse_cmd(
                 return Err(wrong_type(2, c"nvim_parse_cmd", c"Dict(empty) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let mut rv = unsafe { nvim_parse_cmd(arg_1, &raw mut arg_2, arena) }?;
+    let mut rv = nvim_parse_cmd(arg_1, &mut arg_2)?;
     // SAFETY: `rv` is a `KeyDict_cmd`, whose field table is
     // `cmd_table` and whose length is 12.
     let dict =

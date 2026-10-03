@@ -161,7 +161,6 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
 
     // Reading a context's ShaDa blobs must not be filtered by whatever the
     // user's 'shada' says.
-    // SAFETY: main-thread editor call; the option value is owned here.
     let op_shada = get_option_value(kOptShada, OptionSetFlags::GLOBAL);
     let _ = set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
 
@@ -231,8 +230,7 @@ fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         cmd.push(0);
         let mut opts = KeyDict_exec_opts { output: Some(true) };
         let src = unsafe { cstr_to_string(cmd.as_ptr() as *const c_char) };
-        let o = &raw mut opts;
-        if let Ok(func_body) = unsafe { exec_impl(VIML_INTERNAL_CALL, src, o) } {
+        if let Ok(func_body) = exec_impl(VIML_INTERNAL_CALL, src, &mut opts) {
             ctx.funcs.push(Object::string(func_body));
         }
     }

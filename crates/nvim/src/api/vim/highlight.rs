@@ -17,38 +17,25 @@ pub fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
     syn_check_group(name.as_bytes()) as Integer
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_get_highlight` the dispatcher filled in,
-/// live for the call. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_get_hl(
-    ns_id: Integer,
-    opts: *mut KeyDict_get_highlight,
-) -> Result<ApiDict, Error> {
-    unsafe { ns_get_hl_defs(ns_id as NS, opts) }
+pub fn nvim_get_hl(ns_id: Integer, opts: &mut KeyDict_get_highlight) -> Result<ApiDict, Error> {
+    ns_get_hl_defs(ns_id as NS, opts)
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `val` must point at the `KeyDict_highlight` the
-/// dispatcher filled in, live for the call.
-pub unsafe fn nvim_set_hl(
+pub fn nvim_set_hl(
     channel_id: uint64_t,
     ns_id: Integer,
     name: String_0,
-    val: *mut KeyDict_highlight,
+    val: &mut KeyDict_highlight,
 ) -> Result<(), Error> {
     let hl_id: ::core::ffi::c_int = syn_check_group(name.as_bytes());
     if !(hl_id != 0 as ::core::ffi::c_int) {
         return Err(err_bad_value(c"highlight name", name.as_cstr()));
     }
     let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    if unsafe { (*val).url.as_ref() }.is_some() {
+    if val.url.as_ref().is_some() {
         return Err(Error::validation(c"Invalid key: 'url'"));
     }
-    let update: bool = unsafe { (*val).update }.unwrap_or(false);
+    let update: bool = val.update.unwrap_or(false);
     let mut base: Option<&HlAttrs> = None;
     let base_attrs: HlAttrs;
     if update && let Some(attrs) = hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None) {
@@ -57,16 +44,12 @@ pub unsafe fn nvim_set_hl(
     }
     let attrs: HlAttrs = unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base) }?;
     let _sctx = api_set_sctx(channel_id);
-    unsafe { ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val)) };
+    ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val));
     Ok(())
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_get_ns` the dispatcher filled in, live
-/// for the call.
-pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error> {
-    let winid = unsafe { (*opts).winid };
+pub fn nvim_get_hl_ns(opts: &mut KeyDict_get_ns) -> Result<Integer, Error> {
+    let winid = opts.winid;
     let Some(winid) = winid else {
         return Ok(ns_hl_global.get() as Integer);
     };
@@ -98,10 +81,7 @@ pub fn nvim_get_color_by_name(name: String_0) -> Integer {
     name_to_color(unsafe { ::core::ffi::CStr::from_ptr(name.data()) }).0 as Integer
 }
 
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_get_color_map() -> ApiDict {
+pub fn nvim_get_color_map() -> ApiDict {
     let mut colors: ApiDict = ApiDict::with_capacity(COLOR_NAMES.len() as size_t);
     for entry in &COLOR_NAMES {
         let color = Object::integer(entry.color as Integer);

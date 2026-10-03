@@ -543,13 +543,9 @@ impl Refloat {
 }
 
 /// Reconfigure `win` from the `config` dictionary.
-///
-/// # Safety
-/// `config` must be the caller's decoded keyset -- NUL-terminated strings and
-/// arrays that name their own items.
-pub unsafe fn nvim_win_set_config(
+pub fn nvim_win_set_config(
     win: WindowHandle,
-    config: *mut KeyDict_win_config,
+    config: &mut KeyDict_win_config,
 ) -> Result<(), Error> {
     // SAFETY: `config` is the caller's keyset, live for the whole call.
     let keys = unsafe { CfgKeys::new(config) };

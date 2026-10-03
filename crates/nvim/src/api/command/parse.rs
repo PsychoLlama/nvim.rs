@@ -26,9 +26,7 @@ use core::slice;
 ///
 /// # Safety
 ///
-/// `arg_str` must point at a NUL-terminated string. `arena` must point at a
-/// live arena, which the memory this answers with is taken from and must
-/// outlive.
+/// `arg_str` must point at a NUL-terminated string.
 unsafe fn parse_map_cmd(arg_str: *const c_char) -> Array {
     let mut args: Array = Array::with_capacity(2);
     let lhs_start: *mut c_char = arg_str.cast_mut();
@@ -57,11 +55,9 @@ unsafe fn parse_map_cmd(arg_str: *const c_char) -> Array {
 }
 
 /// The command's arguments, split the way the command itself would have them.
-///
-/// # Safety
-/// As [`parse_map_cmd`]; `arena` must be the dispatcher's.
-unsafe fn parse_args(excmd: &mut ExArg, arena: *mut Arena) -> Array {
-    // SAFETY: caller contract.
+/// The line `excmd` holds is NUL-terminated, which is what the splitters
+/// below walk to.
+fn parse_args(excmd: &mut ExArg) -> Array {
     let (length, empty) = (
         excmd.line.arg().len(),
         excmd.line.byte_at(excmd.line.arg) == 0,
@@ -71,7 +67,7 @@ unsafe fn parse_args(excmd: &mut ExArg, arena: *mut Arena) -> Array {
     // guard has to stay in front of it rather than be hoisted alongside.
     // SAFETY: `cmdidx` is in range, checked immediately to its left.
     if excmd.cmdidx != CmdIdx::SIZE && is_map_cmd(excmd.cmdidx) && !empty {
-        // SAFETY: caller contract.
+        // SAFETY: the argument runs to the line's NUL.
         return unsafe { parse_map_cmd(excmd.arg_ptr()) };
     }
     if excmd.argt.has(ExArgt::NOSPC) {
@@ -89,17 +85,10 @@ unsafe fn parse_args(excmd: &mut ExArg, arena: *mut Arena) -> Array {
 
     // `uc_split_args_iter` unescapes into `buf`, one NUL-separated argument
     // per call, so the whole split fits in one `length + 1` block.
-    // SAFETY: `args` is reserved for the upper bound the splitter itself
-    // computes, and `buf` advances by exactly what each call wrote.
-    // SAFETY: `arena_alloc` answers a block of the size asked for, and the
-    // upper bound is what the splitter itself computes.
-    let (mut buf, mut args) = unsafe {
-        let buf: *mut c_char = arena_alloc(arena, length + 1, false).cast();
-        (
-            buf,
-            Array::with_capacity(uc_nargs_upper_bound(excmd.arg_ptr(), length)),
-        )
-    };
+    let mut block = vec![0 as c_char; length + 1];
+    let mut buf = block.as_mut_ptr();
+    // SAFETY: the upper bound is what the splitter itself computes.
+    let mut args = Array::with_capacity(unsafe { uc_nargs_upper_bound(excmd.arg_ptr(), length) });
     let (mut end, mut len): (size_t, size_t) = (0, 0);
     let mut done = false;
     while !done {
@@ -214,17 +203,7 @@ fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
     ])
 }
 
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `_opts` must point at the `KeyDict_empty` the dispatcher
-/// filled in, live for the call. `arena` must point at a live arena, which
-/// the memory this answers with is taken from and must outlive.
-pub unsafe fn nvim_parse_cmd(
-    str: String_0,
-    _opts: *mut KeyDict_empty,
-    arena: *mut Arena,
-) -> Result<KeyDict_cmd, Error> {
+pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDict_cmd, Error> {
     let mut error = Error::none();
     // Every key unset; the answer names only what the parse found.
     let mut result = KeyDict_cmd::default();
@@ -263,8 +242,8 @@ pub unsafe fn nvim_parse_cmd(
             .get(useridx)
             .map_or(ptr::null_mut(), |cmd| ptr::from_ref(cmd).cast_mut())
     };
-    // SAFETY: `parse_args` reads the arguments `parse_cmdline` left in `excmd`.
-    let args = unsafe { parse_args(&mut excmd, arena) };
+    // The arguments `parse_cmdline` left in `excmd`.
+    let args = parse_args(&mut excmd);
     let cmd: *mut UserCmd = match excmd.cmdidx {
         CmdIdx::USER => nth(Table::Global),
         CmdIdx::USER_BUF => nth(Table::Buffer(Buf::current())),
@@ -322,13 +301,11 @@ pub unsafe fn nvim_parse_cmd(
     } else {
         c"*"
     };
-    // SAFETY: the arena copy is what the reply keeps; `nargs` is a literal.
     let nargs = String_0::from_cstr(nargs);
     result.nargs = Some(Object::string(nargs));
     result.addr = Some(String_0::from_cstr(addr_type_name(excmd.addr_type)));
     let next = excmd.line.next_cmd().unwrap_or_default();
     result.nextcmd = Some(String_0::from_bytes(next));
-    // SAFETY: `cmdinfo.cmdmod` is what `parse_cmdline` filled in.
     result.mods = Some(parse_mods(&cmdinfo.cmdmod));
     result.magic = Some(dict_of([
         (c"file", Object::boolean(cmdinfo.magic.file)),

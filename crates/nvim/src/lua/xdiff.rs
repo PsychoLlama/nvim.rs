@@ -29,8 +29,8 @@ use crate::lua::ffi::{
     luaL_error, luaL_prepbuffer, luaL_pushresult, luaL_where,
 };
 use crate::types::{
-    Arena, Error, KeyDict_xdl_diff, LineNr, Object, int64_t, kErrorTypeException, lua_Integer,
-    lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, size_t, xdemitcb_t, xdemitconf_t, xpparam_t,
+    Error, KeyDict_xdl_diff, LineNr, Object, int64_t, kErrorTypeException, lua_Integer, lua_State,
+    luaL_Buffer, mmbuffer_t, mmfile_t, size_t, xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
@@ -349,7 +349,6 @@ unsafe fn process_xdl_diff_opts(
             (&raw mut opts).cast::<c_void>(),
             Some(key_dict_xdl_diff_get_field),
             &raw mut err_param,
-            ptr::null_mut::<Arena>(),
         )
     };
 
@@ -497,7 +496,6 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(lstate: *mut lua_State) -> c_int {
             // SAFETY: as above.
             return unsafe { luaL_argerror(lstate, 3, c"expected table".as_ptr()) };
         }
-        // SAFETY: as above, with a table at index 3.
         let why;
         (mode, why) =
             unsafe { process_xdl_diff_opts(lstate, &mut cfg, &mut params, &mut linematch) };

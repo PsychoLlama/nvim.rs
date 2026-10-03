@@ -29,34 +29,21 @@ fn cursor_line() -> (BufferHandle, Integer) {
 }
 
 /// The line the cursor is on.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_get_current_line() -> Result<String_0, Error> {
+pub fn nvim_get_current_line() -> Result<String_0, Error> {
     let (buf, lnum) = cursor_line();
-    // SAFETY: `arena` is the caller's, and the pair names the cursor's line.
-    unsafe { buffer_get_line(buf, lnum) }
+    buffer_get_line(buf, lnum)
 }
 
 /// Replace the line the cursor is on with `line`.
-///
-/// # Safety
-/// `line` must name its own bytes and `arena` must be the caller's.
-pub unsafe fn nvim_set_current_line(line: String_0, arena: *mut Arena) -> Result<(), Error> {
+pub fn nvim_set_current_line(line: String_0) -> Result<(), Error> {
     let (buf, lnum) = cursor_line();
-    // SAFETY: the caller's promise, and the pair names the cursor's line.
-    unsafe { buffer_set_line(buf, lnum, line, arena) }
+    buffer_set_line(buf, lnum, line)
 }
 
 /// Delete the line the cursor is on.
-///
-/// # Safety
-/// `arena` must be the caller's.
-pub unsafe fn nvim_del_current_line(arena: *mut Arena) -> Result<(), Error> {
+pub fn nvim_del_current_line() -> Result<(), Error> {
     let (buf, lnum) = cursor_line();
-    // SAFETY: `arena` is the caller's, and the pair names the cursor's line.
-    unsafe { buffer_del_line(buf, lnum, arena) }
+    buffer_del_line(buf, lnum)
 }
 
 /// The global variable `name`, autoloading the script that defines it if it
@@ -98,7 +85,6 @@ unsafe fn find_globvar(name: &String_0) -> *mut DictItem {
 
 /// "Key not found: `name`".
 fn key_not_found(name: &String_0) -> Error {
-    // SAFETY: the caller's promise.
     let name = msg_cstr(name.as_cstr());
     api_error!(kErrorTypeValidation, "Key not found: {name}")
 }

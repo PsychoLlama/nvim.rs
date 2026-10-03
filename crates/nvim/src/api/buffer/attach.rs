@@ -23,15 +23,11 @@ pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle) -> Result<Option<Buf>,
     Ok(Some(b))
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_buf_attach` the dispatcher filled in,
-/// live for the call.
-pub unsafe fn nvim_buf_attach(
+pub fn nvim_buf_attach(
     channel_id: uint64_t,
     buf: BufferHandle,
     send_buffer: Boolean,
-    opts: *mut KeyDict_buf_attach,
+    opts: &mut KeyDict_buf_attach,
 ) -> Result<Boolean, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let mut opts = unsafe { Live::<KeyDict_buf_attach>::new(opts) };
@@ -86,7 +82,6 @@ pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
             ::core::ptr::null::<::core::ffi::c_char>(),
             args,
             kRetLuaref,
-            ::core::ptr::null_mut::<Arena>(),
         )
     };
     unsafe { aucmd_restbuf(&raw mut aco) };
@@ -96,41 +91,26 @@ pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
     res
 }
 
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
 // `nvim__buf_stats` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
+pub fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(ApiDict::EMPTY);
     };
     let buffer = b;
     let mut rv: ApiDict = ApiDict::with_capacity(7 as size_t);
-    // SAFETY: a live pointer the code around it already holds.
     let d_flush_count = Object::integer(b.flush_count as Integer);
-    // SAFETY: the collection is this call's own.
     rv.insert(c"flush_count", d_flush_count);
-    // SAFETY: a live pointer the code around it already holds.
     let d_current_lnum = Object::integer(b.b_ml.cached_lnum() as Integer);
-    // SAFETY: the collection is this call's own.
     rv.insert(c"current_lnum", d_current_lnum);
-    // SAFETY: a live pointer the code around it already holds.
     let d_line_dirty = Object::boolean(b.b_ml.line_is_dirty());
-    // SAFETY: the collection is this call's own.
     rv.insert(c"line_dirty", d_line_dirty);
-    // SAFETY: a live pointer the code around it already holds.
     let d_dirty_bytes = Object::integer(b.deleted_bytes as Integer);
-    // SAFETY: the collection is this call's own.
     rv.insert(c"dirty_bytes", d_dirty_bytes);
-    // SAFETY: a live pointer the code around it already holds.
     let d_dirty_bytes2 = Object::integer(b.deleted_bytes2 as Integer);
-    // SAFETY: the collection is this call's own.
     rv.insert(c"dirty_bytes2", d_dirty_bytes2);
     let total = buf_meta_total(buffer, kMTMetaLines);
     let d_virt_blocks = Object::integer(total as Integer);
-    // SAFETY: the collection is this call's own.
     rv.insert(c"virt_blocks", d_virt_blocks);
     let tip = buffer;
     if let Some(uhp) = tip
@@ -138,7 +118,6 @@ pub unsafe fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
         .or_else(|| tip.header(tip.b_u_newhead))
     {
         let d_uhp_extmark_size = Object::integer(uhp.uh_extmark.size as Integer);
-        // SAFETY: the collection is this call's own.
         rv.insert(c"uhp_extmark_size", d_uhp_extmark_size);
     }
     Ok(rv)

@@ -20,10 +20,7 @@ use super::*;
 use crate::api::private::helpers::Reported;
 use crate::cstr;
 
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_get_api_info(channel_id: uint64_t) -> Array {
+pub fn nvim_get_api_info(channel_id: uint64_t) -> Array {
     let mut rv: Array = Array::with_capacity(2 as size_t);
     debug_assert!(
         channel_id <= 9223372036854775807 as uint64_t,
@@ -71,10 +68,7 @@ pub fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<()
     ().reported(error)
 }
 
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_get_chan_info(channel_id: uint64_t, mut chan: Integer) -> ApiDict {
+pub fn nvim_get_chan_info(channel_id: uint64_t, mut chan: Integer) -> ApiDict {
     if chan < 0 as Integer {
         return ApiDict::EMPTY;
     }
@@ -88,16 +82,10 @@ pub unsafe fn nvim_get_chan_info(channel_id: uint64_t, mut chan: Integer) -> Api
     channel_info(chan.cast_unsigned())
 }
 
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_list_chans() -> Array {
+pub fn nvim_list_chans() -> Array {
     channel_all_info()
 }
 
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_list_uis() -> Array {
+pub fn nvim_list_uis() -> Array {
     ui_array()
 }

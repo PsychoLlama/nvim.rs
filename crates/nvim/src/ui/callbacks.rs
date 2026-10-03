@@ -36,7 +36,7 @@ use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
-use crate::types::{Arena, Array, LuaRef, LuaRetMode};
+use crate::types::{Array, LuaRef, LuaRetMode};
 use crate::ui::state::ui_event_ns_id;
 use core::ffi::{CStr, c_char};
 
@@ -189,20 +189,10 @@ fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
         ui_event_ns_id.set(ns_id);
         let fast = is_fast(name, args);
         let event = name.as_ptr().cast_mut();
-        let no_arena = core::ptr::null_mut::<Arena>();
         // SAFETY: `name` is a static protocol name; the callee takes over
         // the copy it is handed.
-        let res = unsafe {
-            nlua_call_ref_ctx(
-                fast,
-                callback,
-                event,
-                args.clone(),
-                kRetNilBool,
-                no_arena,
-                true,
-            )
-        };
+        let res =
+            unsafe { nlua_call_ref_ctx(fast, callback, event, args.clone(), kRetNilBool, true) };
         ui_event_ns_id.set(0);
         match res {
             Ok(res) => {

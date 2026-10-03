@@ -57,19 +57,16 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         }
         is_abbr = abbr != 0;
     } else {
-        // SAFETY: as above.
         which = buf.string_ptr_chk(&args[0]);
         if which.is_null() {
             return;
         }
         // An absent argument reads as upstream's empty slot did: E685, false.
-        // SAFETY: as above.
         is_abbr = tv_get_bool(args.get(1).unwrap_or(&TypVal::Unknown)) != 0;
         // SAFETY: as above.
         if tv_check_for_dict_arg(args, 2).is_err() {
             return;
         }
-        // SAFETY: `tv_check_for_dict_arg` just said slot 2 is a dict.
         d = args[2].dict_ref();
     }
 
@@ -184,7 +181,6 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     unmap_args.buffer = buffer;
     let unmap_lhs = MAPTYPE_UNMAP_LHS as c_int;
     let cur = Buf::current();
-    // SAFETY: as above.
     buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur);
     drop(unmap_args);
 
@@ -225,18 +221,15 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 /// `buffer` is a buffer handle, 0 for the current buffer, or -1 for "all
 /// buffers", i.e. the global tables.  `is_unmap` removes the mapping matching
 /// `lhs` instead of adding one.
-///
-/// # Safety
-/// Every pointer argument must be live.
 #[allow(clippy::too_many_arguments)] // the API dispatcher's own signature
-pub unsafe fn modify_keymap(
+pub fn modify_keymap(
     channel_id: uint64_t,
     mut buffer: BufferHandle,
     is_unmap: bool,
     mode: String_0,
     lhs: String_0,
     rhs: String_0,
-    opts: *mut KeyDict_keymap,
+    opts: Option<&mut KeyDict_keymap>,
 ) -> Result<(), Error> {
     let mut lua_funcref = LUA_NOREF;
     let global = buffer == -1;
@@ -252,10 +245,8 @@ pub unsafe fn modify_keymap(
     let sctx = api_set_sctx(channel_id);
 
     let mut parsed_args = MapArguments::default();
-    if !opts.is_null() {
-        // SAFETY: the caller's promise -- a non-null `opts` is a live keyset,
-        // whose `desc` string this copies and whose `callback` it takes over.
-        let mut o = unsafe { Live::new(opts) };
+    if let Some(o) = opts {
+        // `desc` is copied out of the keyset and `callback` taken over.
         parsed_args.nowait = o.nowait.unwrap_or(false);
         parsed_args.noremap = o.noremap.unwrap_or(false);
         parsed_args.silent = o.silent.unwrap_or(false);
@@ -293,7 +284,6 @@ pub unsafe fn modify_keymap(
             || parsed_args.lhs_len > MAXMAPLEN as size_t
             || parsed_args.alt_lhs_len > MAXMAPLEN as size_t
         {
-            // SAFETY: `lhs` is a live API string.
             let lhs = msg_cstr(lhs.as_cstr());
             failed = Some(api_error!(
                 kErrorTypeValidation,
@@ -312,7 +302,6 @@ pub unsafe fn modify_keymap(
         // of it was consumed.
         let consumed = unsafe { p.offset_from(mode.data()) } as size_t;
         if !mode.is_empty() && consumed != mode.len() {
-            // SAFETY: `mode` is a live API string.
             let mode = msg_cstr(mode.as_cstr());
             failed = Some(api_error!(
                 kErrorTypeValidation,
@@ -370,7 +359,6 @@ pub unsafe fn modify_keymap(
         // The four "already exists" texts hold a `%s`, so their literals are
         // written out here rather than shared with `domap`'s copies, which
         // still hand them to a `printf`.
-        // SAFETY: `lhs` is a live API string.
         let lhs = msg_cstr(lhs.as_cstr());
         let refused = match (answer, is_abbrev) {
             (1, _) => Some(Error::exception(e_invarg)),

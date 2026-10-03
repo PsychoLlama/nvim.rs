@@ -33,11 +33,7 @@ use crate::winlayer::{Win, windows_in_tab};
 use ::libc::abort;
 
 /// The windows of `tabpage`, oldest first.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Error> {
+pub fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Error> {
     let mut rv = Array::EMPTY;
     let Some(tab) = find_tab_by_handle(tabpage)?.filter(|&t| valid_tabpage(t.id())) else {
         return Ok(rv);
@@ -144,13 +140,10 @@ pub fn nvim_tabpage_is_valid(tabpage: TabpageHandle) -> Boolean {
 }
 
 /// Open a new tab page showing `buf`.
-///
-/// # Safety
-/// `config` must point at a filled-in `KeyDict_tabpage_config`.
-pub unsafe fn nvim_open_tabpage(
+pub fn nvim_open_tabpage(
     buf: BufferHandle,
     enter: Boolean,
-    config: *mut KeyDict_tabpage_config,
+    config: &mut KeyDict_tabpage_config,
 ) -> Result<TabpageHandle, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(0 as TabpageHandle);
@@ -158,11 +151,9 @@ pub unsafe fn nvim_open_tabpage(
     if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(b.id()) {
         return Err(Error::exception(e_cmdwin));
     }
-    // SAFETY: `config` is the caller's, per this function's contract.
-    let after = unsafe { (*config).after }.map_or(-1, number_as_int);
+    let after = config.after.map_or(-1, number_as_int);
 
     let mut wp: Option<Win> = None;
-    // SAFETY: `wp` is this frame's own out-parameter and `b` is live.
     let tp = api_try(|| win_new_tabpage(after + 1, None, enter, Some(&mut wp)))?;
     let Some(tp) = tp else {
         return Err(Error::exception(c"Failed to create new tabpage"));

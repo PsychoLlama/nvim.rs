@@ -89,10 +89,7 @@ pub fn nvim_create_namespace(name: String_0) -> Integer {
     id as Integer
 }
 
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_get_namespaces() -> ApiDict {
+pub fn nvim_get_namespaces() -> ApiDict {
     namespace_ids.with(|ids| {
         let mut retval: ApiDict = ApiDict::with_capacity(ids.len() as size_t);
         for (name, id) in ids.entries() {
@@ -130,20 +127,16 @@ pub fn ns_initialized(ns: uint32_t) -> bool {
     ns < next_namespace_id.get() as uint32_t
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_ns_opts` the dispatcher filled in, live
-/// for the call.
 // `nvim__ns_set` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result<(), Error> {
+pub fn nvim__ns_set(ns_id: Integer, opts: &mut KeyDict_ns_opts) -> Result<(), Error> {
     let mut error = Error::none();
     if !ns_initialized(ns_id as uint32_t) {
         error = err_bad_number(c"ns_id", ns_id);
         return ().reported(error);
     }
     let mut set_scoped: bool = true;
-    if let Some(wins) = unsafe { (*opts).wins.as_ref() } {
+    if let Some(wins) = opts.wins.as_ref() {
         if wins.len() == 0 as size_t {
             set_scoped = false;
         }
@@ -195,13 +188,9 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
     ().reported(error)
 }
 
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
 // `nvim__ns_get` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
+pub fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
     let mut error = Error::none();
     let mut opts = KeyDict_ns_opts::default();
     let mut windows: Array = Array::EMPTY;

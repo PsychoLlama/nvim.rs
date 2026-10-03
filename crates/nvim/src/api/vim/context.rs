@@ -27,16 +27,9 @@ const FLAGS: [::core::ffi::c_int; 6] = [
     kCtxFuncs as ::core::ffi::c_int,
 ];
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_context` the dispatcher filled in, live
-/// for the call. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
-pub unsafe fn nvim_get_context(opts: *mut KeyDict_context) -> Result<ApiDict, Error> {
+pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
     let mut error = Error::none();
-    let types: Array = unsafe { (*opts).types.as_ref() }
-        .unwrap_or(&Array::EMPTY)
-        .clone();
+    let types: Array = opts.types.as_ref().unwrap_or(&Array::EMPTY).clone();
     let mut int_types: ::core::ffi::c_int = if types.len() > 0 as size_t {
         0 as ::core::ffi::c_int
     } else {
@@ -45,7 +38,6 @@ pub unsafe fn nvim_get_context(opts: *mut KeyDict_context) -> Result<ApiDict, Er
     if types.len() > 0 as size_t {
         let mut i: size_t = 0 as size_t;
         while i < types.len() {
-            // SAFETY: `types` names its own `size` items.
             let item = &types[i];
             let named = item.as_string().map(|s| s.data());
             if let Some(s) = named {
@@ -69,11 +61,7 @@ pub unsafe fn nvim_get_context(opts: *mut KeyDict_context) -> Result<ApiDict, Er
     dict.reported(error)
 }
 
-/// # Safety
-///
-/// `dict` must be a well-formed API dictionary, its `size` entries
-/// initialized.
-pub unsafe fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
+pub fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
     let mut ctx: Context = CONTEXT_INIT;
     let save_did_emsg: ::core::ffi::c_int = did_emsg.get();
     did_emsg.set(0);
@@ -87,20 +75,18 @@ pub unsafe fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
     read.map(|_| Object::Nil)
 }
 
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
-pub unsafe fn nvim_get_mode(arena: *mut Arena) -> ApiDict {
+/// The current mode's short name, and whether the editor is blocked waiting
+/// for input.
+pub fn nvim_get_mode() -> ApiDict {
     let mut rv: ApiDict = ApiDict::with_capacity(2 as size_t);
-    let modestr: *mut ::core::ffi::c_char =
-        unsafe { arena_alloc(arena, MODE_MAX_LENGTH as size_t, false) } as *mut ::core::ffi::c_char;
-    // The name is copied into the arena because the `ApiDict` borrows it;
-    // `get_mode` answers exactly `MODE_MAX_LENGTH` NUL-padded bytes.
-    unsafe { modestr.copy_from_nonoverlapping(get_mode().as_ptr(), MODE_MAX_LENGTH as size_t) };
+    // `get_mode` answers the name NUL-padded to `MODE_MAX_LENGTH` bytes.
+    let modestr = get_mode().map(|c| c.cast_unsigned());
+    let len = modestr
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(modestr.len());
     let blocked: bool = input_blocking();
-    // SAFETY: `modestr` is the NUL-padded buffer filled just above.
-    let mode = unsafe { cstr_to_string(modestr) };
+    let mode = String_0::from_bytes(&modestr[..len]);
     rv.insert(c"mode", Object::string(mode));
     rv.insert(c"blocking", Object::boolean(blocked));
     rv

@@ -73,11 +73,7 @@ fn config_put_bordertext(
 
 /// The eight border cells as the `border` key takes them: a bare string per
 /// cell, or a `[char, highlight]` pair for a cell that carries one.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-unsafe fn border_array(fconfig: WinCfg) -> Array {
+fn border_array(fconfig: WinCfg) -> Array {
     let mut border = Array::with_capacity(8);
     for i in 0..8 {
         // SAFETY: the cell is one of the config's own eight, and holds at
@@ -107,11 +103,7 @@ unsafe fn border_array(fconfig: WinCfg) -> Array {
 }
 
 /// `win`'s configuration, as the dictionary `nvim_open_win` would take.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Error> {
+pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Error> {
     let mut rv = KeyDict_win_config::default();
     let Some(wp) = find_window_by_handle(win)? else {
         return Ok(rv);
@@ -148,9 +140,7 @@ pub unsafe fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_confi
             rv.zindex = Some(Integer::from(config.zindex));
         }
         if config.border {
-            // SAFETY: `arena` is the caller's, and outlives the answer along
-            // with the window's config.
-            rv.border = Some(Object::array(unsafe { border_array(config) }));
+            rv.border = Some(Object::array(border_array(config)));
             if config.title {
                 config_put_bordertext(&mut rv, config, kBorderTextTitle);
             }

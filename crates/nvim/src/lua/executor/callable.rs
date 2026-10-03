@@ -38,7 +38,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;
 use crate::strings::{printf_string, vim_snprintf};
-use crate::types::{Arena, Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST, size_t};
+use crate::types::{Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST, size_t};
 
 /// An all-zero [`lua_Debug`], which `lua_getinfo` fills.
 const LUA_DEBUG_INIT: lua_Debug = lua_Debug {
@@ -220,7 +220,6 @@ pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
             ptr::null::<c_char>(),
             args,
             kRetNilBool,
-            ptr::null_mut::<Arena>(),
         );
         xfree(str.cast::<c_void>());
         result.is_ok_and(|value| value.as_boolean() == Some(true))

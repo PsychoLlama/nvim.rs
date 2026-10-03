@@ -29,8 +29,8 @@
 //!   editor globals the `ex_docmd` entry points consult (`curbuf`, the
 //!   command table, the register table) are live for the whole call.
 //!
-//! What is left `unsafe fn` is what those two do not cover: the raw `arena`,
-//! and `excmd.arg` pointing into a command line only the caller can vouch for.
+//! What is left `unsafe fn` is what those two do not cover: `excmd.arg`
+//! pointing into a command line only the caller can vouch for.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -83,21 +83,12 @@ fn sub_keyset<K: Default>(dict: &ApiDict, get_field: FieldHashfn) -> Result<K, E
     Ok(out)
 }
 
-/// # Safety
-///
-/// `cmd` must point at the `KeyDict_cmd` the dispatcher filled in, live for
-/// the call. `opts` must point at the `KeyDict_cmd_opts` the dispatcher
-/// filled in, live for the call. `arena` must point at a live arena, which
-/// the memory this answers with is taken from and must outlive.
-pub unsafe fn nvim_cmd(
+pub fn nvim_cmd(
     channel_id: uint64_t,
-    cmd: *mut KeyDict_cmd,
-    opts: *mut KeyDict_cmd_opts,
+    cmd: &mut KeyDict_cmd,
+    opts: &mut KeyDict_cmd_opts,
 ) -> Result<String_0, Error> {
-    // SAFETY: the dispatcher decodes both keydicts onto its own frame and
-    // keeps them alive across the call; neither is reachable from anything
-    // this function runs, so a shared borrow of each holds throughout.
-    let (cmd, opts) = unsafe { (&*cmd, &*opts) };
+    let (cmd, opts) = (&*cmd, &*opts);
     let output = opts.output.unwrap_or(false);
 
     let mut excmd = ExArg::default();
@@ -108,7 +99,7 @@ pub unsafe fn nvim_cmd(
     prepare_cmd(cmd, &mut excmd, &mut cmdinfo).and_then(|prepared| match prepared {
         // SAFETY: `prepare_cmd` answering true means `excmd`/`cmdinfo`
         // describe a resolved, validated command.
-        true => unsafe { run_cmd(channel_id, &mut excmd, &mut cmdinfo, output) },
+        true => run_cmd(channel_id, &mut excmd, &mut cmdinfo, output),
         false => Ok(String_0::NULL),
     })
 }
@@ -162,7 +153,6 @@ fn prepare_cmd(
     unsafe { build_cmdline_str(excmd, cmdinfo, args) };
     apply_argopt(excmd)?;
     if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
-        // SAFETY: as above.
         excmd.do_ecmd_cmd = getargcmd(excmd);
     }
     Ok(true)
@@ -651,11 +641,7 @@ fn apply_argopt(excmd: &mut ExArg) -> Result<(), Error> {
 }
 
 /// Run the prepared command, capturing its messages when asked.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-unsafe fn run_cmd(
+fn run_cmd(
     channel_id: uint64_t,
     excmd: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,

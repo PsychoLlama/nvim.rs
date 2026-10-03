@@ -26,42 +26,26 @@ pub fn nvim_exec(channel_id: uint64_t, src: String_0, output: Boolean) -> Result
     let mut opts = KeyDict_exec_opts {
         output: Some(output),
     };
-    // SAFETY: `src` is the caller's and `opts`/`error` are this frame's.
-    unsafe { exec_impl(channel_id, src, &raw mut opts) }
+    exec_impl(channel_id, src, &mut opts)
 }
 
 pub fn nvim_command_output(channel_id: uint64_t, command: String_0) -> Result<String_0, Error> {
     let mut opts = KeyDict_exec_opts { output: Some(true) };
-    // SAFETY: as `nvim_exec`.
-    unsafe { exec_impl(channel_id, command, &raw mut opts) }
+    exec_impl(channel_id, command, &mut opts)
 }
 
-/// # Safety
-///
-/// `code` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `args` must be a well-formed API array, its `size`
-/// elements initialized. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_execute_lua(
-    code: String_0,
-    args: Array,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
-    // The old name of `nvim_exec_lua`, and nothing else: the two had the same
-    // transpiled body.
-    // SAFETY: every argument is the caller's, live for the call.
-    unsafe { nvim_exec_lua(code, args, arena) }
+/// The old name of [`nvim_exec_lua`], and nothing else: the two had the same
+/// transpiled body.
+pub fn nvim_execute_lua(code: String_0, args: Array) -> Result<Object, Error> {
+    nvim_exec_lua(code, args)
 }
 
-/// # Safety
-///
-/// `calls` must be a well-formed API array, its `size` elements initialized.
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
-pub unsafe fn nvim_call_atomic(
+/// Run each `[name, args]` pair of `calls` through the dispatcher, stopping
+/// at the first that fails.
+pub fn nvim_call_atomic(
     channel_id: uint64_t,
     calls: Array,
-    arena: *mut Arena,
+    arena: &mut Arena,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
     // "results" and the error report, and one result per call.
@@ -110,9 +94,7 @@ pub unsafe fn nvim_call_atomic(
                     }
                 };
             let dispatch = handler.fn_0.expect("non-null function pointer");
-            // SAFETY: the handler is the generated wrapper for `name`, which
-            // reads `args`.
-            let result = match unsafe { dispatch(channel_id, args.clone(), arena) } {
+            let result = match dispatch(channel_id, args.clone(), arena) {
                 Ok(rv) => rv,
                 Err(e) => {
                     nested_error = e;

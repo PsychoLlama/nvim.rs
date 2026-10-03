@@ -23,8 +23,6 @@ use core::ptr;
 /// # Safety
 ///
 /// `obj` must be a well-formed API object the caller owns for the call.
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
 // `nvim__id` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__id(obj: Object) -> Object {
@@ -34,22 +32,15 @@ pub fn nvim__id(obj: Object) -> Object {
 /// # Safety
 ///
 /// `arr` must be a well-formed API array, its `size` elements initialized.
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
 // `nvim__id_array` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__id_array(arr: Array) -> Array {
     arr.clone()
 }
 
-/// # Safety
-///
-/// `dct` must be a well-formed API dictionary, its `size` entries
-/// initialized. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
 // `nvim__id_dict` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__id_dict(dct: ApiDict) -> ApiDict {
+pub fn nvim__id_dict(dct: ApiDict) -> ApiDict {
     dct.clone()
 }
 
@@ -61,12 +52,9 @@ pub fn nvim__id_float(flt: Float) -> Float {
 
 /// The counters the test suite asserts on: syncs, skipped log lines, live
 /// Lua references, redraws and arena allocations.
-///
-/// # Safety
-/// `arena` must be the caller's, and live for as long as the answer is.
 // `nvim__stats` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__stats() -> ApiDict {
+pub fn nvim__stats() -> ApiDict {
     let stats = g_stats.get();
     let lua_refcount = nlua_get_global_ref_count();
     let entries = [
@@ -90,11 +78,8 @@ pub unsafe fn nvim__stats() -> ApiDict {
     rv
 }
 
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
-pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<Array, Error> {
+/// The pids of `pid`'s child processes.
+pub fn nvim_get_proc_children(pid: Integer) -> Result<Array, Error> {
     let mut error = Error::none();
     let mut rv: ::core::ffi::c_int = 0;
     let mut rvobj: Array = Array::EMPTY;
@@ -120,9 +105,9 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             a.push(Object::integer(pid));
             let code = String_0::from_cstr(c"return vim._os_proc_children(...)");
             let name = ::core::ptr::null::<::core::ffi::c_char>();
-            // SAFETY: `a` is the one-slot block above, `arena` is the
-            // caller's and `error` this frame's own slot.
-            let o = match unsafe { nlua_exec(&code, name, a, kRetObject, arena) } {
+            // SAFETY: `code` and `a` are this frame's own, and there is no
+            // chunk name.
+            let o = match unsafe { nlua_exec(&code, name, a, kRetObject) } {
                 Ok(value) => value,
                 Err(e) => {
                     error = e;
@@ -148,11 +133,8 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
     rvobj.reported(error)
 }
 
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
-pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, Error> {
+/// What the OS says about process `pid`, or nil when there is none.
+pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
     let mut error = Error::none();
     let mut rvobj: Object = Object::Nil;
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
@@ -165,9 +147,8 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     a.push(Object::integer(pid));
     let code = String_0::from_cstr(c"return vim._os_proc_info(...)");
     let name = ::core::ptr::null::<::core::ffi::c_char>();
-    // SAFETY: `a` is the one-slot block above, `arena` is the caller's and
-    // `error` this frame's own slot.
-    let o = match unsafe { nlua_exec(&code, name, a, kRetObject, arena) } {
+    // SAFETY: `code` and `a` are this frame's own, and there is no chunk name.
+    let o = match unsafe { nlua_exec(&code, name, a, kRetObject) } {
         Ok(value) => value,
         Err(e) => {
             error = e;
@@ -184,18 +165,10 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     rvobj.reported(error)
 }
 
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The text, attributes and highlight of one screen cell.
 // `nvim__inspect_cell` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__inspect_cell(
-    grid: Integer,
-    row: Integer,
-    col: Integer,
-    arena: *mut Arena,
-) -> Result<Array, Error> {
+pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<Array, Error> {
     let mut error = Error::none();
     let mut ret: Array = Array::EMPTY;
     let mut g: GridRef = default_grid_ref();
@@ -221,11 +194,11 @@ pub unsafe fn nvim__inspect_cell(
     }
     ret = Array::with_capacity(3 as size_t);
     let off: size_t = g.cell_offset(row as ::core::ffi::c_int, col as ::core::ffi::c_int);
-    let sc_buf: *mut ::core::ffi::c_char =
-        unsafe { arena_alloc(arena, MAX_SCHAR_SIZE as size_t, false) } as *mut ::core::ffi::c_char;
-    unsafe { schar_get(sc_buf, g.char_at(off)) };
+    let mut sc_buf = [0 as ::core::ffi::c_char; MAX_SCHAR_SIZE as usize];
+    // SAFETY: `sc_buf` has room for any cell's text and its NUL.
+    unsafe { schar_get(sc_buf.as_mut_ptr(), g.char_at(off)) };
     // SAFETY: `sc_buf` is the NUL-terminated cell buffer filled above.
-    ret.push(Object::string(unsafe { cstr_to_string(sc_buf) }));
+    ret.push(Object::string(unsafe { cstr_to_string(sc_buf.as_ptr()) }));
     let attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
     let hl = Object::dict(hl_get_attr_by_id(attr as Integer, true)?);
     ret.push(hl);
@@ -250,9 +223,8 @@ pub fn nvim__invalidate_glyph_cache() {
 
 /// # Safety
 ///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// `str` must be a well-formed API string: `size` readable bytes with a NUL at
+/// `data[size]`.
 // `nvim__unpack` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__unpack(str: String_0) -> Result<Object, Error> {

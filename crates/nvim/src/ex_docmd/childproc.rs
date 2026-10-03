@@ -134,17 +134,8 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
 pub(crate) fn ex_lsp(excmd: &mut ExArg) {
     let excmd = Array::from(vec![Object::string(String_0::from_bytes(excmd.line.arg()))]);
     const CHUNK: &CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
-    let ran = unsafe {
-        nlua_exec(
-            &String_0::from_cstr(CHUNK),
-            ptr::null(),
-            excmd,
-            kRetNilBool,
-            ptr::null_mut(),
-        )
-    };
+    let ran = unsafe { nlua_exec(&String_0::from_cstr(CHUNK), ptr::null(), excmd, kRetNilBool) };
     if let Err(e) = ran {
-        // SAFETY: the refusal owns its message.
         let why = e.message_or_empty().as_ptr();
         unsafe { emsg_multiline(why, Some(c"lua_error"), HLF_E, true) };
     }

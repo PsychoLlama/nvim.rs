@@ -82,18 +82,15 @@ struct OptionRequest {
 /// `opts` must point at a filled-in `KeyDict_option`, `name` must be a C
 /// string.
 unsafe fn option_target(
-    opts: *mut KeyDict_option,
+    opts: &mut KeyDict_option,
     name: *mut c_char,
 ) -> Result<OptionRequest, Error> {
-    // SAFETY: `opts` is the caller's, per this function's contract.
-    let (given_scope, given_win, given_buf, given_filetype) = unsafe {
-        (
-            (*opts).scope.as_ref(),
-            (*opts).win,
-            (*opts).buf,
-            (*opts).filetype.as_ref(),
-        )
-    };
+    let (given_scope, given_win, given_buf, given_filetype) = (
+        opts.scope.as_ref(),
+        opts.win,
+        opts.buf,
+        opts.filetype.as_ref(),
+    );
     let mut opt_flags = OptionSetFlags::NONE;
     if let Some(given) = given_scope {
         // SAFETY: as above; `scope` is a NUL-terminated key of `opts`.
@@ -217,7 +214,6 @@ unsafe fn do_ft_buf(
         let why = Error::exception(c"Could not load internal buffer");
         return (Some(ftbuf), Err(why));
     }
-    // SAFETY: `aco` is the caller's and `ftbuf` is live until it is wiped.
     let bufref = BufRef::of(ftbuf);
     unsafe { aucmd_prepbuf(aco, ftbuf) };
     unsafe { *aco_used = true };
@@ -287,14 +283,7 @@ fn wipe_ft_buf(mut buffer: Buf) {
 }
 
 /// The value of option `name`, at whatever scope `opts` names.
-///
-/// # Safety
-/// `name` must point at its own bytes and `opts` at a filled-in
-/// `KeyDict_option`.
-pub unsafe fn nvim_get_option_value(
-    name: String_0,
-    opts: *mut KeyDict_option,
-) -> Result<Object, Error> {
+pub fn nvim_get_option_value(name: String_0, opts: &mut KeyDict_option) -> Result<Object, Error> {
     // SAFETY: `name` and `opts` are the caller's, per this function's
     // contract.
     let target = unsafe { option_target(opts, name.data()) }?;
@@ -343,15 +332,11 @@ pub unsafe fn nvim_get_option_value(
 }
 
 /// Set option `name` to `value`, at whatever scope `opts` names.
-///
-/// # Safety
-/// `name` and `value` must own their bytes, and `opts` must point at a
-/// filled-in `KeyDict_option`.
-pub unsafe fn nvim_set_option_value(
+pub fn nvim_set_option_value(
     channel_id: uint64_t,
     name: String_0,
     value: Object,
-    opts: *mut KeyDict_option,
+    opts: &mut KeyDict_option,
 ) -> Result<(), Error> {
     // SAFETY: as `nvim_get_option_value`.
     let target = unsafe { option_target(opts, name.data()) }?;
@@ -377,23 +362,12 @@ pub unsafe fn nvim_set_option_value(
 }
 
 /// Every option's metadata, keyed by name.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_get_all_options_info() -> ApiDict {
+pub fn nvim_get_all_options_info() -> ApiDict {
     get_all_vimoptions()
 }
 
 /// Option `name`'s metadata, as seen at whatever scope `opts` names.
-///
-/// # Safety
-/// `name` must point at its own bytes, `opts` at a filled-in
-/// `KeyDict_option`, and `arena` must be the caller's.
-pub unsafe fn nvim_get_option_info2(
-    name: String_0,
-    opts: *mut KeyDict_option,
-) -> Result<ApiDict, Error> {
+pub fn nvim_get_option_info2(name: String_0, opts: &mut KeyDict_option) -> Result<ApiDict, Error> {
     // SAFETY: as `nvim_get_option_value`.
     let target = unsafe { option_target(opts, name.data()) }?;
     // The metadata is read off a buffer and a window whatever the scope, so

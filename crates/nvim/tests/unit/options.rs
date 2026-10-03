@@ -65,14 +65,12 @@ fn on_current_win() -> KeyDict_option {
 
 /// Read option `name` at whatever scope `opts` names.
 fn get(_editor: &Editor, name: &str, mut opts: KeyDict_option) -> Result<Object, Error> {
-    // SAFETY: the name owns its bytes and `opts` is this frame's own.
-    unsafe { nvim_get_option_value(String_0::from(name), &raw mut opts) }
+    nvim_get_option_value(String_0::from(name), &mut opts)
 }
 
 /// Write option `name` at whatever scope `opts` names.
 fn set(_editor: &Editor, name: &str, value: Object, mut opts: KeyDict_option) -> Result<(), Error> {
-    // SAFETY: as `get`; `value` owns its payload.
-    unsafe { nvim_set_option_value(SELF, String_0::from(name), value, &raw mut opts) }
+    nvim_set_option_value(SELF, String_0::from(name), value, &mut opts)
 }
 
 /// The text of a string option, or a panic naming what came back instead.

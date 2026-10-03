@@ -21,20 +21,13 @@ use crate::cstr;
 use crate::guard::Suppress;
 use core::ffi::c_char;
 
-/// # Safety
-///
-/// `src` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `opts` must point at the `KeyDict_exec_opts` the
-/// dispatcher filled in, live for the call.
-pub unsafe fn nvim_exec2(
+pub fn nvim_exec2(
     channel_id: uint64_t,
     src: String_0,
-    opts: *mut KeyDict_exec_opts,
+    opts: &mut KeyDict_exec_opts,
 ) -> Result<ApiDict, Error> {
-    // SAFETY: `src`/`opts` are the caller's.
-    let output: String_0 = unsafe { exec_impl(channel_id, src, opts) }?;
-    // SAFETY: `opts` is the caller's keydict, live for the call.
-    if !unsafe { (*opts).output }.unwrap_or(false) {
+    let output: String_0 = (exec_impl(channel_id, src, opts))?;
+    if !opts.output.unwrap_or(false) {
         return Ok(ApiDict::EMPTY);
     }
     // Heap-allocated rather than arena-allocated: the caller frees this
@@ -46,21 +39,14 @@ pub unsafe fn nvim_exec2(
 
 /// Source `src` as an anonymous script, answering whatever it printed when
 /// `opts.output` asked for it (and the empty string otherwise, or on error).
-///
-/// # Safety
-///
-/// `src` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `opts` must point at the `KeyDict_exec_opts` the
-/// dispatcher filled in, live for the call.
-pub unsafe fn exec_impl(
+pub fn exec_impl(
     channel_id: uint64_t,
     src: String_0,
-    opts: *mut KeyDict_exec_opts,
+    opts: &mut KeyDict_exec_opts,
 ) -> Result<String_0, Error> {
     // Read once: `opts` is the dispatcher's own copy of the keyword
     // arguments, which nothing the sourced script can do reaches.
-    // SAFETY: `opts` is the caller's keydict, live for the call.
-    let capture = unsafe { (*opts).output }.unwrap_or(false);
+    let capture = opts.output.unwrap_or(false);
     let save_redir_off = redir_off.get();
     let save_msg_col = msg_col.get();
     let outer_capture = capture.then(capture_start);

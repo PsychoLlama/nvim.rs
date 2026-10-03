@@ -24,11 +24,7 @@ const BUFLOCAL_PAT_LEN: usize = 25;
 /// How many keys one command's Dict can grow to.
 const DICT_KEYS: size_t = 12;
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_get_autocmds` the dispatcher filled in,
-/// live for the call.
-pub unsafe fn nvim_get_autocmds(opts: *mut KeyDict_get_autocmds) -> Result<Array, Error> {
+pub fn nvim_get_autocmds(opts: &mut KeyDict_get_autocmds) -> Result<Array, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_autocmds>::new(opts) };
     let group = group_filter(&opts)?;
@@ -74,8 +70,7 @@ pub unsafe fn nvim_get_autocmds(opts: *mut KeyDict_get_autocmds) -> Result<Array
             if !patterns.is_empty() && !matches_pattern(ap, &patterns) {
                 continue;
             }
-            // SAFETY: `arena` is the caller's.
-            autocmd_list.push(Object::dict(unsafe { autocmd_dict(event, ac, ap) }));
+            autocmd_list.push(Object::dict(autocmd_dict(event, ac, ap)));
         }
     }
     Ok(autocmd_list)
@@ -89,7 +84,6 @@ fn group_filter(opts: &Opts) -> Result<::core::ffi::c_int, Error> {
             // SAFETY: the value the keyset carried, live for this call.
             let group = unsafe { augroup_find(group_name.data()) };
             if group < 0 {
-                // SAFETY: as above.
                 return Err(err_bad_value(c"group", group_name.as_cstr()));
             }
             Ok(group)
@@ -126,7 +120,6 @@ fn event_filter(opts: &Opts) -> Result<Option<[bool; EVENT_COUNT]>, Error> {
     let mut wanted = [false; EVENT_COUNT];
     if let Some(event_name) = given.as_string() {
         let Some(event) = event_name2nr_str(event_name) else {
-            // SAFETY: the value the keyset carried, live for this call.
             return Err(err_bad_value(c"event", event_name.as_cstr()));
         };
         wanted[event.index()] = true;
@@ -142,7 +135,6 @@ fn event_filter(opts: &Opts) -> Result<Option<[bool; EVENT_COUNT]>, Error> {
             return Err(err_expected(c"event item", want, Some(got)));
         };
         let Some(event) = event_name2nr_str(event_name) else {
-            // SAFETY: the value the keyset carried, live for this call.
             return Err(err_bad_value(c"event", event_name.as_cstr()));
         };
         wanted[event.index()] = true;
@@ -262,10 +254,7 @@ fn matches_pattern(ap: &AutoPat, filters: &[&::core::ffi::CStr]) -> bool {
 }
 
 /// One command, as the Dict `nvim_get_autocmds` reports it.
-///
-/// # Safety
-/// A `Partial` handler's pointer must name a live partial.
-unsafe fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
+fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
     // Every C string read below is either a row's own or a static name, so
     // each `cstr_to_string` copies out of a live one.
     let mut info = ApiDict::with_capacity(DICT_KEYS);
@@ -309,7 +298,6 @@ unsafe fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict 
         c"pattern",
         Object::string(unsafe { cstr_to_string(ap.pat) }),
     );
-    // SAFETY: `event_nr2name` answers a static C string.
     let event = String_0::from_cstr(event_nr2name(event));
     info.insert(c"event", Object::string(event));
     info.insert(c"once", Object::boolean(ac.once));

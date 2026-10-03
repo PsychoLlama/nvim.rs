@@ -25,7 +25,7 @@ use crate::os::env::{env_buf, os_getenv_into};
 use crate::startup::exit::os_exit;
 use crate::startup::{MainParams, WIN_TABS, ui_client_channel_id};
 use crate::types::{
-    ApiDict, Arena, Array, CallbackReader, Error, Integer, Object, String_0, size_t, uint64_t,
+    ApiDict, Array, CallbackReader, Error, Integer, Object, String_0, size_t, uint64_t,
 };
 
 /// How long to wait for the server to answer the connection, in ms.
@@ -72,7 +72,6 @@ pub(crate) unsafe fn server_connect(
 
 /// Complain that `vim._cs_remote` answered with the wrong shape, and exit 2.
 fn bad_reply_type(key: &CStr) -> ! {
-    // SAFETY: writes one message to stderr and does not return.
     let fmt = c"vim._cs_remote returned an unexpected type for '%s'\n".as_ptr();
     unsafe { fprintf!(stderr, fmt, key.as_ptr()) };
     os_exit(2)
@@ -157,8 +156,7 @@ pub(crate) unsafe fn remote_request(
 
     let mut err = Error::none();
     let script = String_0::from_cstr(CS_REMOTE);
-    let no_arena = ptr::null_mut::<Arena>();
-    let ran = unsafe { nlua_exec(&script, ptr::null(), call_args, kRetObject, no_arena) };
+    let ran = unsafe { nlua_exec(&script, ptr::null(), call_args, kRetObject) };
     let reply = match ran {
         Ok(value) => value,
         Err(e) => {

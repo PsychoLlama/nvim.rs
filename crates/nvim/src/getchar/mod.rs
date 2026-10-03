@@ -48,9 +48,7 @@ use crate::mbyte::{
 use crate::memfile::did_swapwrite_msg;
 use crate::memline::ml_sync_all;
 use crate::memory::did_outofmem_msg;
-use crate::memory::{
-    ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc, xmemcpyz, xmemdupz,
-};
+use crate::memory::{strequal, xfree, xmalloc, xmemcpyz, xmemdupz};
 use crate::message::state::{
     called_emsg, cmd_silent, did_emsg, emsg_silent, msg_col, msg_didout, msg_row, msg_scroll,
     msg_silent, need_wait_return,
@@ -87,9 +85,9 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Arena, Array, CharsizeArg, ColNr, Error, EvalFuncData, FileDescriptor, FlushBuffers, Integer,
-    LuaRef, LuaRetMode, MotionType, MultiQueue, OpArg, OptInt, RemapValues, SaveRedo, String_0,
-    TypVal, TypeaheadSave, VarNumber, Vv, ptrdiff_t, size_t, uint8_t, uint64_t,
+    Array, CharsizeArg, ColNr, Error, EvalFuncData, FileDescriptor, FlushBuffers, Integer, LuaRef,
+    LuaRetMode, MotionType, MultiQueue, OpArg, OptInt, RemapValues, SaveRedo, String_0, TypVal,
+    TypeaheadSave, VarNumber, Vv, ptrdiff_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;

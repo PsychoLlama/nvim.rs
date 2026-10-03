@@ -142,26 +142,15 @@ pub fn nvim_err_writeln(str: String_0) {
     write_msg(str, true, true);
 }
 
-/// # Safety
-///
-/// `msg_0` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `opts` must be a well-formed API dictionary, its `size`
-/// entries initialized. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_notify(
-    msg_0: String_0,
-    log_level: Integer,
-    opts: ApiDict,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
+/// Hand the message to `vim.notify`.
+pub fn nvim_notify(msg_0: String_0, log_level: Integer, opts: ApiDict) -> Result<Object, Error> {
     let mut args = ArrayBuf::<3>::new();
     args.push(Object::string(msg_0));
     args.push(Object::integer(log_level));
     args.push(Object::dict(opts));
     let code = String_0::from_cstr(c"return vim.notify(...)");
     let (args, no_name) = (args.array(), ::core::ptr::null());
-    // SAFETY: `code` borrows a static, `args` borrows this frame's buffer
-    // for the length of the call, and `arena`/`error` are the caller's and
-    // this frame's slot.
-    unsafe { nlua_exec(&code, no_name, args, kRetObject, arena) }
+    // SAFETY: `code` and `args` are this frame's own, and there is no chunk
+    // name.
+    unsafe { nlua_exec(&code, no_name, args, kRetObject) }
 }

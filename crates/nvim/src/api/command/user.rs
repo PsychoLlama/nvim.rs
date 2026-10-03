@@ -29,38 +29,25 @@ use crate::winlayer::graph::switch_buffer;
 /// `opts.field` after the wrap is ordinary code.
 type UserCmdOpts = Live<KeyDict_user_command>;
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `cmd` must be a well-formed API object the caller owns
-/// for the call. `opts` must point at the `KeyDict_user_command` the
-/// dispatcher filled in, live for the call.
-pub unsafe fn nvim_create_user_command(
+pub fn nvim_create_user_command(
     channel_id: uint64_t,
     name: String_0,
     cmd: Object,
-    opts: *mut KeyDict_user_command,
+    opts: &mut KeyDict_user_command,
 ) -> Result<(), Error> {
-    // SAFETY: `opts` is the caller's keydict.
-    unsafe { create_user_command(channel_id, name, cmd, opts, 0) }
+    create_user_command(channel_id, name, cmd, opts, 0)
 }
 
 pub fn nvim_del_user_command(name: String_0) -> Result<(), Error> {
     nvim_buf_del_user_command(-1, name)
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `cmd` must be a well-formed API object the caller owns
-/// for the call. `opts` must point at the `KeyDict_user_command` the
-/// dispatcher filled in, live for the call.
-pub unsafe fn nvim_buf_create_user_command(
+pub fn nvim_buf_create_user_command(
     channel_id: uint64_t,
     buf: BufferHandle,
     name: String_0,
     cmd: Object,
-    opts: *mut KeyDict_user_command,
+    opts: &mut KeyDict_user_command,
 ) -> Result<(), Error> {
     let Some(target_buf) = find_buffer_by_handle(buf)? else {
         return Ok(());
@@ -69,8 +56,7 @@ pub unsafe fn nvim_buf_create_user_command(
     // answer stands in for the caller's for the length of the call.
     let saved = switch_buffer(target_buf);
     let flags = UC_BUFFER as ::core::ffi::c_int;
-    // SAFETY: `opts` is the caller's keydict.
-    let made = unsafe { create_user_command(channel_id, name, cmd, opts, flags) };
+    let made = create_user_command(channel_id, name, cmd, opts, flags);
     saved.restore();
     made
 }
@@ -98,26 +84,18 @@ pub fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<()
         unsafe { uc_del_command(table, idx) };
         return ().reported(error);
     }
-    // SAFETY: `name` names its own NUL-terminated bytes.
     let name = msg_cstr(name.as_cstr());
     error = api_error!(kErrorTypeException, "Invalid command (not found): {name}");
     ().reported(error)
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `cmd` must be a well-formed API object the caller owns
-/// for the call. `opts` must point at the `KeyDict_user_command` the
-/// dispatcher filled in, live for the call.
-pub unsafe fn create_user_command(
+pub fn create_user_command(
     channel_id: uint64_t,
     name: String_0,
     cmd: Object,
-    opts: *mut KeyDict_user_command,
+    opts: &mut KeyDict_user_command,
     flags: ::core::ffi::c_int,
 ) -> Result<(), Error> {
-    // SAFETY: `opts` is the caller's keydict, live for the call.
     let mut opts = unsafe { UserCmdOpts::new(opts) };
     let force: bool;
     let mut argt = ExArgt::NONE;
@@ -388,28 +366,16 @@ pub unsafe fn create_user_command(
     }
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_get_commands` the dispatcher filled in,
-/// live for the call. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_get_commands(opts: *mut KeyDict_get_commands) -> Result<ApiDict, Error> {
-    // SAFETY: `opts` and `arena` are the caller's.
-    unsafe { nvim_buf_get_commands(-1, opts) }
+pub fn nvim_get_commands(opts: &mut KeyDict_get_commands) -> Result<ApiDict, Error> {
+    nvim_buf_get_commands(-1, opts)
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_get_commands` the dispatcher filled in,
-/// live for the call. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_buf_get_commands(
+pub fn nvim_buf_get_commands(
     buf: BufferHandle,
-    opts: *mut KeyDict_get_commands,
+    opts: &mut KeyDict_get_commands,
 ) -> Result<ApiDict, Error> {
     let mut error = Error::none();
-    // SAFETY: `opts` is the caller's keydict, live for the call.
-    let builtin = unsafe { (*opts).builtin }.unwrap_or(false);
+    let builtin = opts.builtin.unwrap_or(false);
     if buf == -1 {
         if builtin {
             error = Error::validation(c"builtin=true not implemented");

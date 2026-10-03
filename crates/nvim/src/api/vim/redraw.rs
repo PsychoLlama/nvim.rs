@@ -59,13 +59,9 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
 }
 
 /// Mark stale whatever `opts` names, and flush the UI if it asks.
-///
-/// # Safety
-/// `opts` must be the caller's decoded keyset, whose `range` array names its
-/// own items.
 // `nvim__redraw` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
+pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
     // SAFETY: the caller's keyset, live for the whole call.
     let opts = unsafe { Redraw::new(opts) };
     let mut win: Option<Win> = None;
@@ -105,7 +101,6 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         }
     }
     if let Some(range) = opts.range.as_ref() {
-        // SAFETY: the caller's keyset -- `range` names its own items.
         let pair = (range.len() == 2).then(|| (&range[0], &range[1]));
         let range = pair
             .and_then(|(begin, end)| begin.as_integer().zip(end.as_integer()))

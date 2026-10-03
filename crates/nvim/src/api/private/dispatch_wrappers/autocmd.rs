@@ -4,7 +4,6 @@
 //! run `just apigen`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 
 use super::*;
 
@@ -13,16 +12,10 @@ use super::*;
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_clear_autocmds(
+pub fn handle_nvim_clear_autocmds(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -46,9 +39,7 @@ pub unsafe fn handle_nvim_clear_autocmds(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_clear_autocmds(&raw mut arg_1) }?;
+    nvim_clear_autocmds(&mut arg_1)?;
     Ok(Object::Nil)
 }
 
@@ -57,16 +48,10 @@ pub unsafe fn handle_nvim_clear_autocmds(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_create_augroup(
+pub fn handle_nvim_create_augroup(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -93,9 +78,7 @@ pub unsafe fn handle_nvim_create_augroup(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_create_augroup(channel_id, arg_1, &raw mut arg_2) }?;
+    let rv = nvim_create_augroup(channel_id, arg_1, &mut arg_2)?;
     Ok(Object::Integer(rv))
 }
 
@@ -104,16 +87,10 @@ pub unsafe fn handle_nvim_create_augroup(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_create_autocmd(
+pub fn handle_nvim_create_autocmd(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -138,9 +115,7 @@ pub unsafe fn handle_nvim_create_autocmd(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_create_autocmd(channel_id, arg_1, &raw mut arg_2) }?;
+    let rv = nvim_create_autocmd(channel_id, arg_1, &mut arg_2)?;
     Ok(Object::Integer(rv))
 }
 
@@ -149,16 +124,10 @@ pub unsafe fn handle_nvim_create_autocmd(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_del_augroup_by_id(
+pub fn handle_nvim_del_augroup_by_id(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -182,16 +151,10 @@ pub unsafe fn handle_nvim_del_augroup_by_id(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_del_augroup_by_name(
+pub fn handle_nvim_del_augroup_by_name(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -215,16 +178,10 @@ pub unsafe fn handle_nvim_del_augroup_by_name(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_del_autocmd(
+pub fn handle_nvim_del_autocmd(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -248,16 +205,10 @@ pub unsafe fn handle_nvim_del_autocmd(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_exec_autocmds(
+pub fn handle_nvim_exec_autocmds(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -282,9 +233,7 @@ pub unsafe fn handle_nvim_exec_autocmds(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_exec_autocmds(arg_1, &raw mut arg_2) }?;
+    nvim_exec_autocmds(arg_1, &mut arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -293,16 +242,10 @@ pub unsafe fn handle_nvim_exec_autocmds(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_autocmds(
+pub fn handle_nvim_get_autocmds(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -322,8 +265,6 @@ pub unsafe fn handle_nvim_get_autocmds(
                 return Err(wrong_type(1, c"nvim_get_autocmds", c"Dict(get_autocmds) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_autocmds(&raw mut arg_1) }?;
+    let rv = nvim_get_autocmds(&mut arg_1)?;
     Ok(Object::array(rv))
 }

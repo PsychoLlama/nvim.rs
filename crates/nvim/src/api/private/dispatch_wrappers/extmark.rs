@@ -13,18 +13,12 @@ use super::*;
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
 // `handle_nvim__buf_debug_extmarks` is derived from an API method's own name.
 #[allow(non_snake_case)]
-pub unsafe fn handle_nvim__buf_debug_extmarks(
+pub fn handle_nvim__buf_debug_extmarks(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -54,18 +48,12 @@ pub unsafe fn handle_nvim__buf_debug_extmarks(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
 // `handle_nvim__ns_get` is derived from an API method's own name.
 #[allow(non_snake_case)]
-pub unsafe fn handle_nvim__ns_get(
+pub fn handle_nvim__ns_get(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -80,9 +68,7 @@ pub unsafe fn handle_nvim__ns_get(
     let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim__ns_get", c"Integer"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let mut rv = unsafe { nvim__ns_get(arg_1) }?;
+    let mut rv = nvim__ns_get(arg_1)?;
     // SAFETY: `rv` is a `KeyDict_ns_opts`, whose field table is
     // `ns_opts_table` and whose length is 2.
     let dict =
@@ -95,18 +81,12 @@ pub unsafe fn handle_nvim__ns_get(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
 // `handle_nvim__ns_set` is derived from an API method's own name.
 #[allow(non_snake_case)]
-pub unsafe fn handle_nvim__ns_set(
+pub fn handle_nvim__ns_set(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -129,9 +109,7 @@ pub unsafe fn handle_nvim__ns_set(
                 return Err(wrong_type(2, c"nvim__ns_set", c"Dict(ns_opts) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim__ns_set(arg_1, &raw mut arg_2) }?;
+    nvim__ns_set(arg_1, &mut arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -140,16 +118,10 @@ pub unsafe fn handle_nvim__ns_set(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_clear_namespace(
+pub fn handle_nvim_buf_clear_namespace(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -182,16 +154,10 @@ pub unsafe fn handle_nvim_buf_clear_namespace(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_del_extmark(
+pub fn handle_nvim_buf_del_extmark(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -221,16 +187,10 @@ pub unsafe fn handle_nvim_buf_del_extmark(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_get_extmark_by_id(
+pub fn handle_nvim_buf_get_extmark_by_id(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -263,9 +223,7 @@ pub unsafe fn handle_nvim_buf_get_extmark_by_id(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &raw mut arg_4) }?;
+    let rv = nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &mut arg_4)?;
     Ok(Object::array(rv))
 }
 
@@ -274,16 +232,10 @@ pub unsafe fn handle_nvim_buf_get_extmark_by_id(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_get_extmarks(
+pub fn handle_nvim_buf_get_extmarks(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -315,9 +267,7 @@ pub unsafe fn handle_nvim_buf_get_extmarks(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) }?;
+    let rv = nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     Ok(Object::array(rv))
 }
 
@@ -326,16 +276,10 @@ pub unsafe fn handle_nvim_buf_get_extmarks(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_set_extmark(
+pub fn handle_nvim_buf_set_extmark(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -371,9 +315,7 @@ pub unsafe fn handle_nvim_buf_set_extmark(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_set_extmark(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) }?;
+    let rv = nvim_buf_set_extmark(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     Ok(Object::Integer(rv))
 }
 
@@ -382,16 +324,10 @@ pub unsafe fn handle_nvim_buf_set_extmark(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_create_namespace(
+pub fn handle_nvim_create_namespace(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -415,16 +351,10 @@ pub unsafe fn handle_nvim_create_namespace(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_namespaces(
+pub fn handle_nvim_get_namespaces(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     log_invoke(
         c"handle_nvim_get_namespaces",
@@ -435,8 +365,6 @@ pub unsafe fn handle_nvim_get_namespaces(
     if !args.is_empty() {
         return Err(wrong_arity(0, args.len()));
     }
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_namespaces() };
+    let rv = nvim_get_namespaces();
     Ok(Object::dict(rv))
 }

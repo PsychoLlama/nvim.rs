@@ -34,14 +34,10 @@ type EchoOpts = Live<KeyDict_echo_opts>;
 const PROGRESS_STATUS: [&CStr; 4] = [c"success", c"failed", c"running", c"cancel"];
 
 /// Print `chunks` as one message, `history` to record it in `:messages`.
-///
-/// # Safety
-/// `chunks` must name its own items and `opts` must be the caller's decoded
-/// keyset, whose strings are NUL-terminated.
-pub unsafe fn nvim_echo(
+pub fn nvim_echo(
     chunks: Array,
     history: Boolean,
-    opts: *mut KeyDict_echo_opts,
+    opts: &mut KeyDict_echo_opts,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.

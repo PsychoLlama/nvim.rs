@@ -52,17 +52,17 @@ use crate::api_error;
 use crate::global_cell::ConstTable;
 use crate::message_fmt::c_str_len;
 use crate::types::{
-    Arena, Array, Error, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
-    KeyDict__shada_search_pat, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds,
-    KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts,
-    KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
-    KeyDict_echo_opts, KeyDict_eval_statusline, KeyDict_exec_autocmds, KeyDict_exec_opts,
-    KeyDict_get_autocmds, KeyDict_get_commands, KeyDict_get_extmark, KeyDict_get_extmarks,
-    KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_highlight_cterm,
-    KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw,
-    KeyDict_runtime, KeyDict_set_decoration_provider, KeyDict_set_extmark, KeyDict_tabpage_config,
-    KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, KeyDict_xdl_diff,
-    KeySetLink, MsgpackRpcRequestHandler, Object, size_t, uint64_t,
+    ApiDispatchFn, Error, KeyDict__shada_buflist_item, KeyDict__shada_mark,
+    KeyDict__shada_register, KeyDict__shada_search_pat, KeyDict_buf_attach, KeyDict_buf_delete,
+    KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
+    KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context,
+    KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_eval_statusline,
+    KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands,
+    KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns,
+    KeyDict_highlight, KeyDict_highlight_cterm, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term,
+    KeyDict_option, KeyDict_redraw, KeyDict_runtime, KeyDict_set_decoration_provider,
+    KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
+    KeyDict_win_text_height, KeyDict_xdl_diff, KeySetLink, MsgpackRpcRequestHandler, size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 
@@ -139,11 +139,7 @@ unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
 /// One row of [`method_handlers`]: the name a client calls the method by, the
 /// wrapper that serves it, whether it may run straight from the RPC read
 /// callback instead of being deferred to the main loop, and whether its result
-const fn handler(
-    name: &'static CStr,
-    f: unsafe fn(uint64_t, Array, *mut Arena) -> Result<Object, Error>,
-    fast: bool,
-) -> MsgpackRpcRequestHandler {
+const fn handler(name: &'static CStr, f: ApiDispatchFn, fast: bool) -> MsgpackRpcRequestHandler {
     MsgpackRpcRequestHandler {
         name: name.as_ptr(),
         fn_0: Some(f),

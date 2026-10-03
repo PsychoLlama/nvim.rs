@@ -4,7 +4,6 @@
 //! run `just apigen`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 
 use super::*;
 
@@ -13,16 +12,10 @@ use super::*;
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_all_options_info(
+pub fn handle_nvim_get_all_options_info(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     log_invoke(
         c"handle_nvim_get_all_options_info",
@@ -33,9 +26,7 @@ pub unsafe fn handle_nvim_get_all_options_info(
     if !args.is_empty() {
         return Err(wrong_arity(0, args.len()));
     }
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_all_options_info() };
+    let rv = nvim_get_all_options_info();
     Ok(Object::dict(rv))
 }
 
@@ -44,16 +35,10 @@ pub unsafe fn handle_nvim_get_all_options_info(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_option_info2(
+pub fn handle_nvim_get_option_info2(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -76,9 +61,7 @@ pub unsafe fn handle_nvim_get_option_info2(
                 return Err(wrong_type(2, c"nvim_get_option_info2", c"Dict(option) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_option_info2(arg_1, &raw mut arg_2) }?;
+    let rv = nvim_get_option_info2(arg_1, &mut arg_2)?;
     Ok(Object::dict(rv))
 }
 
@@ -87,16 +70,10 @@ pub unsafe fn handle_nvim_get_option_info2(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_option_value(
+pub fn handle_nvim_get_option_value(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -119,9 +96,7 @@ pub unsafe fn handle_nvim_get_option_value(
                 return Err(wrong_type(2, c"nvim_get_option_value", c"Dict(option) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_get_option_value(arg_1, &raw mut arg_2) }
+    nvim_get_option_value(arg_1, &mut arg_2)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_set_option_value`.
@@ -129,16 +104,10 @@ pub unsafe fn handle_nvim_get_option_value(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_set_option_value(
+pub fn handle_nvim_set_option_value(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -162,8 +131,6 @@ pub unsafe fn handle_nvim_set_option_value(
                 return Err(wrong_type(3, c"nvim_set_option_value", c"Dict(option) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_set_option_value(channel_id, arg_1, arg_2, &raw mut arg_3) }?;
+    nvim_set_option_value(channel_id, arg_1, arg_2, &mut arg_3)?;
     Ok(Object::Nil)
 }

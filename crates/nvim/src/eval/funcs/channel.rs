@@ -5,8 +5,8 @@
 
 use super::wrappers::{arg_string, list_alloc_ret};
 use super::{
-    ARENA_EMPTY, kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin,
-    kChannelPartStdout, kRetObject,
+    kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
+    kRetObject,
 };
 use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
@@ -23,7 +23,7 @@ use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::nlua_exec;
 use crate::memory::XString;
-use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
+use crate::memory::{arena_mem_free, xfree, xmemdup, xstrdup};
 use crate::message::e_invarg;
 use crate::message::on_print_cb;
 use crate::message::{emsg, emsg_ptr};
@@ -38,8 +38,8 @@ use crate::runtime::state::current_sctx;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, ArenaMem, Array, CallbackReader, ChannelPart, Error, EvalFuncData, Object, ScriptCtx,
-    String_0, TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber, uint64_t,
+    ArenaMem, Array, CallbackReader, ChannelPart, Error, EvalFuncData, Object, ScriptCtx, String_0,
+    TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber, uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -313,7 +313,6 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 "Invoking '{method}' on channel {chan_id}:\n{msg}"
             );
         } else {
-            // SAFETY: as above, plus the client name the channel answered.
             let why = err.message_or_empty();
             // SAFETY: both names are NUL-terminated.
             let (method, name) = unsafe { (c_str(method), c_str(name)) };
@@ -338,7 +337,6 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // and the strings in it are handed to the List one at a time.
     let mut n = 0usize;
     let addrs = unsafe { server_address_list(&raw mut n) };
-    let mut arena: Arena = ARENA_EMPTY;
     // The same addresses twice: once handed to the List, once copied
     // into the Array the Lua helper is passed.
     let mut addrs_arr = Array::with_capacity(n);
@@ -357,8 +355,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let mut err = Error::none();
         const PEERS: &str = "return require('vim._core.server').serverlist(...)";
         let code = String_0::from(PEERS);
-        let mem = &raw mut arena;
-        let rv = match unsafe { nlua_exec(&code, ptr::null(), lua_args, kRetObject, mem) } {
+        let rv = match unsafe { nlua_exec(&code, ptr::null(), lua_args, kRetObject) } {
             Ok(value) => value,
             Err(e) => {
                 err = e;
@@ -391,7 +388,6 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     unsafe { xfree(addrs as *mut c_void) };
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }
 
 /// `serverstart([{address}])`

@@ -17,14 +17,7 @@ use crate::guard::Lock;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::winlayer::Win;
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_open_term` the dispatcher filled in,
-/// live for the call.
-pub unsafe fn nvim_open_term(
-    buf: BufferHandle,
-    opts: *mut KeyDict_open_term,
-) -> Result<Integer, Error> {
+pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result<Integer, Error> {
     let mut slot = Error::none();
     let Some(buffer) = api_buf_ensure_loaded(buf)? else {
         return Ok(0 as Integer);
@@ -50,7 +43,7 @@ pub unsafe fn nvim_open_term(
     }
     // The channel takes the callback's reference over, so the keyset must
     // not release it too.
-    let cb: LuaRef = unsafe { (*opts).on_input.take() }.unwrap_or(LUA_NOREF);
+    let cb: LuaRef = opts.on_input.take().unwrap_or(LUA_NOREF);
     let chan: *mut Channel = unsafe { channel_alloc(kChannelStreamInternal) };
     unsafe { (*channel_internal(chan)).cb = cb };
     unsafe { (*channel_internal(chan)).closed = false };
@@ -73,7 +66,7 @@ pub unsafe fn nvim_open_term(
         ),
         resume_cb: Some(term_resume as unsafe fn(*mut ::core::ffi::c_void) -> ()),
         close_cb: Some(term_close as unsafe fn(*mut ::core::ffi::c_void) -> ()),
-        force_crlf: unsafe { (*opts).force_crlf }.unwrap_or(true),
+        force_crlf: opts.force_crlf.unwrap_or(true),
     };
     let mut contents: StringBuilder = StringBuilder {
         size: 0 as size_t,
@@ -130,11 +123,11 @@ unsafe fn term_write(
         args.push(Object::string(text));
     }
     let _locked = Lock::text();
-    let (name, no_arena) = (c"input".as_ptr(), ::core::ptr::null_mut::<Arena>());
+    let name = c"input".as_ptr();
 
     // SAFETY: `cb` is a live Lua reference and `args` this frame's own; the
     // handler reports nothing, so it is given no error slot.
-    unsafe { nlua_call_ref_quiet(cb, name, args, kRetNilBool, no_arena) };
+    unsafe { nlua_call_ref_quiet(cb, name, args, kRetNilBool) };
 }
 
 fn term_resize(mut _width: uint16_t, mut _height: uint16_t, mut _data: *mut ::core::ffi::c_void) {}

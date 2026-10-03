@@ -12,8 +12,8 @@ the migration's debt, counted by the ratchet as
 `unsafe_stmts_outside_perimeter` and shrink-only like every other metric. That
 number is the one to drive to zero.
 
-Today: **7,474** unchecked statements inside the perimeter (137 files),
-**24,631** outside it (791 files, of 1,360 measured). It was 138,877 when this
+Today: **7,399** unchecked statements inside the perimeter (137 files),
+**24,444** outside it (782 files, of 1,359 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
 

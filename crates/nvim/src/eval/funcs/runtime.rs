@@ -40,8 +40,8 @@ use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::has_char;
 use crate::syntax::syntax_present;
 use crate::types::{
-    Arena, Array, ColNr, Error, EvalFuncData, NUL, Object, String_0, TypVal, VAR_STRING, VarNumber,
-    Vv, kListLenMayKnow,
+    Array, ColNr, Error, EvalFuncData, NUL, Object, String_0, TypVal, VAR_STRING, VarNumber, Vv,
+    kListLenMayKnow,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
@@ -244,9 +244,7 @@ fn has_wsl() -> bool {
         // argument list is empty, and `err` is a live out-parameter.
         let code = String_0::from(PROBE);
         let no_args = Array::EMPTY;
-        let arena = ptr::null_mut::<Arena>();
-        let o: Object = match unsafe { nlua_exec(&code, ptr::null(), no_args, kRetNilBool, arena) }
-        {
+        let o: Object = match unsafe { nlua_exec(&code, ptr::null(), no_args, kRetNilBool) } {
             Ok(value) => value,
             Err(e) => {
                 err = e;
@@ -302,13 +300,11 @@ pub fn f_api_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `did_filetype()` — whether a FileType autocommand has fired for this
 /// buffer since it was last loaded.
 pub fn f_did_filetype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `curbuf` is live and `result` is the cleared return value.
     result.write_number(Buf::current().b_did_filetype as VarNumber);
 }
 
 /// `eventhandler()` — whether we are inside a `vgetc()` from an event.
 pub fn f_eventhandler(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value.
     result.write_number(vgetc_busy.get() as VarNumber);
 }
 
@@ -317,13 +313,11 @@ pub fn f_foreground(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
 
 /// `getfontname()` — always empty; nvim has no font.
 pub fn f_getfontname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value.
     result.write_string(ptr::null_mut());
 }
 
 /// `getpid()`
 pub fn f_getpid(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value.
     result.write_number(os_get_pid() as VarNumber);
 }
 

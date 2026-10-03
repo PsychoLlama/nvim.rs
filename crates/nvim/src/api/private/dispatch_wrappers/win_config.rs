@@ -13,16 +13,10 @@ use super::*;
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_open_win(
+pub fn handle_nvim_open_win(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -51,9 +45,7 @@ pub unsafe fn handle_nvim_open_win(
     if textlock.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_open_win(arg_1, arg_2, &raw mut arg_3) }?;
+    let rv = nvim_open_win(arg_1, arg_2, &mut arg_3)?;
     Ok(Object::Window(rv as Integer))
 }
 
@@ -62,16 +54,10 @@ pub unsafe fn handle_nvim_open_win(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_win_get_config(
+pub fn handle_nvim_win_get_config(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -86,9 +72,7 @@ pub unsafe fn handle_nvim_win_get_config(
     let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_config", c"Window"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let mut rv = unsafe { nvim_win_get_config(arg_1) }?;
+    let mut rv = nvim_win_get_config(arg_1)?;
     // SAFETY: `rv` is a `KeyDict_win_config`, whose field table is
     // `win_config_table` and whose length is 25.
     let dict = unsafe {
@@ -106,16 +90,10 @@ pub unsafe fn handle_nvim_win_get_config(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_win_set_config(
+pub fn handle_nvim_win_set_config(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -138,8 +116,6 @@ pub unsafe fn handle_nvim_win_set_config(
                 return Err(wrong_type(2, c"nvim_win_set_config", c"Dict(win_config) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_win_set_config(arg_1, &raw mut arg_2) }?;
+    nvim_win_set_config(arg_1, &mut arg_2)?;
     Ok(Object::Nil)
 }

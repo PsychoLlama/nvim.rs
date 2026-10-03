@@ -173,8 +173,8 @@ impl RetType {
 /// the hand-written layer is converted one function at a time:
 ///
 /// ```ignore
-/// pub unsafe extern "C" fn nvim_x(args.., arena: *mut Arena, err: *mut Error) -> T
-/// pub [unsafe] fn nvim_x(args.., arena: *mut Arena) -> Result<T, Error>
+/// pub unsafe extern "C" fn nvim_x(args.., arena: &mut Arena, err: *mut Error) -> T
+/// pub [unsafe] fn nvim_x(args.., arena: &mut Arena) -> Result<T, Error>
 /// ```
 ///
 /// The first reports failure through an out-parameter the caller has to
@@ -365,6 +365,7 @@ fn option_inner(ty: &syn::Type) -> Option<String> {
 fn pointee_name(ty: &syn::Type) -> Option<String> {
     match ty {
         syn::Type::Ptr(p) => type_name(&p.elem),
+        syn::Type::Reference(r) if r.mutability.is_some() => type_name(&r.elem),
         _ => None,
     }
 }
@@ -1054,10 +1055,12 @@ fn emit_fn(
         }
     }
 
-    // The `# Safety` section. It is the same contract for all 213 wrappers --
-    // they differ only in what they decode -- and writing it here is the only
-    // way it can exist at all: hand-written sections in generated files are
-    // gone the next time `just apigen` runs.
+    // The doc is the same for every wrapper -- they differ only in what they
+    // decode -- and writing it here is the only way it can exist at all:
+    // hand-written docs in generated files are gone the next time `just
+    // apigen` runs. A wrapper is safe to call: the argument array is its own,
+    // each value it uses is taken out of its slot and whatever is left drops
+    // with the array, and the arena is a borrow for the call.
     writeln!(out, "/// The msgpack-RPC dispatch wrapper for `{name}`.").unwrap();
     writeln!(out, "///").unwrap();
     writeln!(
@@ -1067,23 +1070,13 @@ fn emit_fn(
          /// `Object`."
     )
     .unwrap();
-    writeln!(out, "///").unwrap();
-    writeln!(out, "/// # Safety").unwrap();
-    writeln!(
-        out,
-        "/// The dispatcher's contract, which is what every `unsafe` below rests\n\
-         /// on: `arena` is the caller's own and live for the call. The argument\n\
-         /// array is this wrapper's: each value it uses is taken out of its slot\n\
-         /// and whatever is left drops with the array."
-    )
-    .unwrap();
     write!(out, "{}", snake_case_allow(&handler)).unwrap();
-    writeln!(out, "pub unsafe fn {handler}(").unwrap();
+    writeln!(out, "pub fn {handler}(").unwrap();
     writeln!(out, "    channel_id: uint64_t,").unwrap();
     writeln!(out, "    args: Array,").unwrap();
     writeln!(
         out,
-        "    {}arena: *mut Arena,",
+        "    {}arena: &mut Arena,",
         if takes_arena { "" } else { "_" }
     )
     .unwrap();
@@ -1153,7 +1146,6 @@ fn emit_fn(
     // The two locks a wrapper may be refused by. Reading them touches editor
     // globals, which only the main loop -- where a wrapper runs -- has set up.
     if spec.textlock {
-        writeln!(out, "    // SAFETY: a wrapper runs on the main loop.").unwrap();
         writeln!(out, "    if text_locked() {{").unwrap();
         writeln!(out, "        return Err(text_locked_error());").unwrap();
         writeln!(out, "    }}").unwrap();
@@ -1176,7 +1168,7 @@ fn emit_fn(
                 index,
                 ty: ApiType::KeyDict(_),
                 ..
-            } => format!("&raw mut arg_{}", index + 1),
+            } => format!("&mut arg_{}", index + 1),
             Param::Value { index, .. } => format!("arg_{}", index + 1),
         })
         .collect();
@@ -1190,8 +1182,7 @@ fn emit_fn(
     if f.is_unsafe {
         writeln!(
             out,
-            "    // SAFETY: each argument was checked against the type the signature declares,\n\
-             \x20   // and `arena` is the dispatcher's own."
+            "    // SAFETY: each argument was checked against the type the signature declares."
         )
         .unwrap();
     }
@@ -1931,7 +1922,7 @@ unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
 /// callback instead of being deferred to the main loop, and whether its result
 const fn handler(
     name: &'static CStr,
-    f: unsafe fn(uint64_t, Array, *mut Arena) -> Result<Object, Error>,
+    f: ApiDispatchFn,
     fast: bool,
 ) -> MsgpackRpcRequestHandler {
     MsgpackRpcRequestHandler {
@@ -2280,14 +2271,11 @@ fn generate_tables(
         writeln!(out, "use {path};").unwrap();
     }
     let mut types: Vec<String> = [
-        "Arena",
-        "Array",
+        "ApiDispatchFn",
         "Error",
         "KeySetLink",
         "MsgpackRpcRequestHandler",
-        "Object",
         "size_t",
-        "uint64_t",
     ]
     .iter()
     .map(|s| (*s).to_string())
@@ -2389,9 +2377,8 @@ const PUSH_SPECIAL: c_int = kNluaPushSpecial | kNluaPushFreeRefs;
 
 /// What one binding carries from its first conversion to its last release.
 struct Call {
-    /// Where the conversions and the API function allocate. Released once
-    /// every argument has been, since the values the releases walk live in
-    /// it.
+    /// The scratch arena an API function that takes one allocates in.
+    /// Released once the result has been handed back.
     arena: Arena,
     /// The parameter a failed conversion blamed, named in the message.
     err_param: *mut c_char,
@@ -2453,25 +2440,16 @@ impl<K: KeySet> KeyDictArg<K> {
 /// `*err_param` names the key that failed.
 ///
 /// # Safety
-/// `lstate` is the running Lua state with the argument on top; `arena` and
-/// `err_param` are the binding's own.
+/// `lstate` is the running Lua state with the argument on top; `err_param`
+/// is the binding's own.
 unsafe fn pop_keydict<K: KeySet>(
     lstate: *mut lua_State,
     arg: &mut KeyDictArg<K>,
-    arena: &mut Arena,
     err_param: &mut *mut c_char,
 ) -> Result<(), Error> {
     // SAFETY: the caller's stack, and `K::GET_FIELD` is `K`'s own lookup per
     // `KeySet`'s contract, which is what the decoder needs of it.
-    unsafe {
-        nlua_pop_keydict(
-            lstate,
-            (&raw mut arg.dict).cast(),
-            K::GET_FIELD,
-            err_param,
-            arena,
-        )
-    }
+    unsafe { nlua_pop_keydict(lstate, (&raw mut arg.dict).cast(), K::GET_FIELD, err_param) }
 }
 
 /// Hand a keyset result back as a Lua table.
@@ -2684,8 +2662,8 @@ fn popper(ty: &ApiType) -> (String, &'static str) {
         ApiType::Array => ("nlua_pop_array".into(), ""),
         // The flag says whether to keep Lua references to the functions the
         // value holds. Only a `DictOf(LuaRef)` parameter wants them.
-        ApiType::Dict => ("nlua_pop_dict".into(), "false, "),
-        ApiType::Object => ("nlua_pop_object".into(), "true, "),
+        ApiType::Dict => ("nlua_pop_dict".into(), ", false"),
+        ApiType::Object => ("nlua_pop_object".into(), ", true"),
         ApiType::LuaRef => ("nlua_pop_luaref".into(), ""),
         ApiType::Handle(_) => ("nlua_pop_handle".into(), ""),
         ApiType::KeyDict(_) => unreachable!("keysets are filled in place"),
@@ -2750,15 +2728,16 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     let value = |index: usize, ty: &ApiType| {
         let slot = index + 1;
         match ty {
-            ApiType::KeyDict(_) => format!("&raw mut arg_{slot}.dict"),
+            ApiType::KeyDict(_) => format!("&mut arg_{slot}.dict"),
             _ if guard(ty).is_some() => format!("arg_{slot}.value"),
             _ => format!("arg_{slot}"),
         }
     };
 
-    // Which of `Call`'s fields the body reads. A conversion needs both; with
-    // no arguments to convert only the call itself is left.
-    let uses_arena = argc > 0 || f.params.contains(&Param::Arena);
+    // Which of `Call`'s fields the body reads: a conversion names the
+    // parameter it blamed, and only an API function that takes the arena
+    // reads that.
+    let uses_arena = f.params.contains(&Param::Arena);
     let fields: Vec<&str> = [("arena", uses_arena), ("err_param", argc > 0)]
         .into_iter()
         .filter_map(|(name, used)| used.then_some(name))
@@ -2832,7 +2811,6 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     }
 
     if spec.textlock {
-        writeln!(out, "        // SAFETY: as above.").unwrap();
         writeln!(out, "        if text_locked() {{").unwrap();
         writeln!(out, "            return Err(text_locked_error());").unwrap();
         writeln!(out, "        }}").unwrap();
@@ -2864,7 +2842,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
             // The keyset pop names the offending key itself.
             writeln!(
                 out,
-                "        unsafe {{ pop_keydict(lstate, &mut arg_{slot}, arena, err_param) }}?;"
+                "        unsafe {{ pop_keydict(lstate, &mut arg_{slot}, err_param) }}?;"
             )
             .unwrap();
             continue;
@@ -2875,7 +2853,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         // the message `run` stages; the failure itself passes through.
         writeln!(
             out,
-            "        let arg_{slot} = unsafe {{ {pop}(lstate, {extra}arena) }}\n\
+            "        let arg_{slot} = unsafe {{ {pop}(lstate{extra}) }}\n\
              \x20           .inspect_err(|_| *err_param = c\"{param}\".as_ptr().cast_mut())?;"
         )
         .unwrap();

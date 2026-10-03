@@ -404,14 +404,10 @@ pub(crate) unsafe fn ui_client_get_redraw_handler(
 /// Its address is also what the decoder compares against to recognise the
 /// `redraw` method at all, which is why this exists rather than a null
 /// entry in the dispatch table.
-///
-/// # Safety
-///
-/// Takes the dispatcher's contract, which it uses none of.
-pub(crate) unsafe fn handle_ui_client_redraw(
+pub(crate) fn handle_ui_client_redraw(
     _channel_id: u64,
     _args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     Err(Error::validation(c"'redraw' cannot be sent as a request"))
 }
@@ -890,7 +886,6 @@ static restart_pending: GlobalCell<bool> = GlobalCell::new(false);
 /// `args` must be the array the decoder produced for this event.
 pub(crate) unsafe fn ui_client_event_restart(args: Array) {
     // `set` drops what the cell held, which frees the previous copy.
-    // SAFETY: the caller's promise -- the decoder's array for this event.
     let copied = args.clone();
     restart_args.set(RestartArgs(copied));
     restart_pending.set(true);

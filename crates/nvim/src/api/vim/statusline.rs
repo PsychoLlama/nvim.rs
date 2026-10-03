@@ -20,6 +20,7 @@ use crate::cstr;
 use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
+use std::ffi::CString;
 
 use super::*;
 use crate::api::private::helpers::Reported;
@@ -47,21 +48,12 @@ struct Context {
     scl_hl_id: c_int,
 }
 
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `opts` must point at the `KeyDict_eval_statusline` the
-/// dispatcher filled in, live for the call. `arena` must point at a live
-/// arena, which the memory this answers with is taken from and must outlive.
-pub unsafe fn nvim_eval_statusline(
+pub fn nvim_eval_statusline(
     str: String_0,
-    opts: *mut KeyDict_eval_statusline,
-    arena: *mut Arena,
+    opts: &mut KeyDict_eval_statusline,
 ) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     let empty = ApiDict::EMPTY;
-    // SAFETY: the API dispatcher's own frame; `str` is a checked string.
-    let opts = unsafe { &mut *opts };
     // `%!` is an expression producing the real format, so there is nothing
     // to check until it has been evaluated.
     // SAFETY: `str` holds `size` readable bytes.
@@ -83,16 +75,9 @@ pub unsafe fn nvim_eval_statusline(
     }; SIGN_SHOW_MAX as usize];
     let ctx = Context::of(opts, &mut statuscol, &mut sattrs)?;
 
-    // SAFETY: an arena the caller owns, whose allocations outlive the reply.
-    let (mut result, buf) = unsafe {
-        (
-            ApiDict::with_capacity(3),
-            arena_alloc(arena, MAXPATHL as size_t, false).cast::<c_char>(),
-        )
-    };
-    // SAFETY: `buf` is the `MAXPATHL` allocation just made, and is not
-    // `NameBuff`.
-    let out = unsafe { ::core::slice::from_raw_parts_mut(buf, MAXPATHL as usize) };
+    let mut result = ApiDict::with_capacity(3);
+    // The expander's output, which is not `NameBuff`.
+    let mut out = vec![0 as c_char; MAXPATHL as usize];
 
     // Temporarily reset 'cursorbind' to prevent side effects from moving the
     // cursor away and back.
@@ -117,7 +102,8 @@ pub unsafe fn nvim_eval_statusline(
         stcp: (ctx.statuscol_lnum != 0).then_some(&mut statuscol),
     };
     // SAFETY: the expander re-enters the editor; nothing is held across it.
-    let built = unsafe { job.run(out) };
+    let built = unsafe { job.run(&mut out) };
+    let buf = out.as_ptr();
     put(
         &mut result,
         c"width",
@@ -126,11 +112,10 @@ pub unsafe fn nvim_eval_statusline(
     win.w_onebuf_opt.wo_crb = crb_save;
 
     if let Some(runs) = built.hl {
-        let hl = highlight_dicts(&ctx, opts, arena, buf, runs, built.hl_len);
+        let hl = highlight_dicts(&ctx, opts, buf, runs, built.hl_len);
         put(&mut result, c"highlights", Object::array(hl));
     }
-    // SAFETY: `buf` is NUL-terminated by the expander and lives in the
-    // arena, which outlives the reply.
+    // SAFETY: `buf` is NUL-terminated by the expander.
     put(
         &mut result,
         c"str",
@@ -286,7 +271,6 @@ fn statuscol_state(
 fn highlight_dicts(
     ctx: &Context,
     opts: &KeyDict_eval_statusline,
-    arena: *mut Arena,
     buf: *const c_char,
     runs: HlRuns,
     runs_len: size_t,
@@ -318,6 +302,9 @@ fn highlight_dicts(
     }
 
     let mut user_group = [0 as c_char; 15]; // "User" + "2147483647" + NUL
+    // The `User%d` names, each kept for the rest of the walk: a group is
+    // compared by address below, so each needs one of its own.
+    let mut user_names: Vec<CString> = Vec::new();
     for run in runs.iter() {
         let grpname = if run.userhl == 0 {
             get_default_stl_hl(ctxwin, opts.use_winbar.unwrap_or(false), ctx.stc_hl_id)
@@ -329,10 +316,11 @@ fn highlight_dicts(
                 user_group.len(),
                 c"User%d".as_ptr(),
             );
-            // SAFETY: a local buffer with room for the widest `%d`, and an
-            // arena copy of it that outlives the reply.
+            // SAFETY: a local buffer with room for the widest `%d`.
             unsafe { snprintf!(out, room, fmt, run.userhl) };
-            unsafe { arena_strdup(arena, out) }
+            // SAFETY: `snprintf` NUL-terminated it.
+            user_names.push(unsafe { CStr::from_ptr(out) }.to_owned());
+            user_names.last().expect("just pushed").as_ptr().cast_mut()
         };
         // The sign column's own group combines with the sign's highlight,
         // the fold column's with nothing, everything else with the default.
@@ -364,21 +352,15 @@ fn highlight_dicts(
     values
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_complete_set` the dispatcher filled in,
-/// live for the call. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
 // `nvim__complete_set` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__complete_set(
+pub fn nvim__complete_set(
     index: Integer,
-    opts: *mut KeyDict_complete_set,
+    opts: &mut KeyDict_complete_set,
 ) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     let mut rv = ApiDict::with_capacity(2);
-    // SAFETY: the API dispatcher's own frame.
-    let opts = unsafe { &*opts };
+    let opts = &*opts;
     if get_cot_flags() & kOptCotFlagPopup as c_int as ::core::ffi::c_uint == 0 {
         error = Error::exception(c"completeopt option does not include popup");
         return rv.reported(error);

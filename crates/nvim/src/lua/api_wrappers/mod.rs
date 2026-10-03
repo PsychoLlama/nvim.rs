@@ -211,9 +211,8 @@ const PUSH_SPECIAL: c_int = kNluaPushSpecial | kNluaPushFreeRefs;
 
 /// What one binding carries from its first conversion to its last release.
 struct Call {
-    /// Where the conversions and the API function allocate. Released once
-    /// every argument has been, since the values the releases walk live in
-    /// it.
+    /// The scratch arena an API function that takes one allocates in.
+    /// Released once the result has been handed back.
     arena: Arena,
     /// The parameter a failed conversion blamed, named in the message.
     err_param: *mut c_char,
@@ -273,25 +272,16 @@ impl<K: KeySet> KeyDictArg<K> {
 /// `*err_param` names the key that failed.
 ///
 /// # Safety
-/// `lstate` is the running Lua state with the argument on top; `arena` and
-/// `err_param` are the binding's own.
+/// `lstate` is the running Lua state with the argument on top; `err_param`
+/// is the binding's own.
 unsafe fn pop_keydict<K: KeySet>(
     lstate: *mut lua_State,
     arg: &mut KeyDictArg<K>,
-    arena: &mut Arena,
     err_param: &mut *mut c_char,
 ) -> Result<(), Error> {
     // SAFETY: the caller's stack, and `K::GET_FIELD` is `K`'s own lookup per
     // `KeySet`'s contract, which is what the decoder needs of it.
-    unsafe {
-        nlua_pop_keydict(
-            lstate,
-            (&raw mut arg.dict).cast(),
-            K::GET_FIELD,
-            err_param,
-            arena,
-        )
-    }
+    unsafe { nlua_pop_keydict(lstate, (&raw mut arg.dict).cast(), K::GET_FIELD, err_param) }
 }
 
 /// Hand a keyset result back as a Lua table.

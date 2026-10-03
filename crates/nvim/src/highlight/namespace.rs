@@ -209,7 +209,6 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
         syn_id: hl_id,
     };
 
-    // SAFETY: the editor's own tables, plus a Lua callback that may re-enter.
     let mut item = NS_HLS.with(|hls| hls.get(&key).copied()).unwrap_or(UNSET);
     let hl_def = provider_field(ns_id, |p| p.hl_def);
     let mut valid = item.version >= provider_field(ns_id, |p| p.hl_valid);
@@ -222,10 +221,10 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
 
         let recursing = Depth::of(&RECURSIVE);
         let name = c"hl_def".as_ptr();
-        let (args, arena) = (args.array(), ::core::ptr::null_mut());
+        let args = args.array();
         // SAFETY: the namespace's own callback reference. A callback that
         // failed is a callback that declined, which the fallback below is.
-        let ret = unsafe { nlua_call_ref(hl_def, name, args, kRetObject, arena) };
+        let ret = unsafe { nlua_call_ref(hl_def, name, args, kRetObject) };
         let ret = ret.unwrap_or(Object::Nil);
         drop(recursing);
 
@@ -389,7 +388,6 @@ pub fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool)
 /// `invalid` forces the work even when the window has not asked for it.
 pub fn update_window_hl(mut window: Win, invalid: bool) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    // SAFETY: the caller's window and the editor's own tables.
     let ns_id = window.w_ns_hl;
     update_ns_hl(ns_id);
     if ns_id != window.w_ns_hl_active || window.w_ns_hl_attr.is_null() {

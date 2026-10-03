@@ -39,7 +39,7 @@ use crate::message::e_outofmem;
 use crate::os::cshim::stderr;
 use crate::runtime::runtime_get_named_thread;
 use crate::startup::{main_loop, preserve_exit};
-use crate::types::{Arena, Array, Event, lua_CFunction, lua_State, size_t};
+use crate::types::{Array, Event, lua_CFunction, lua_State, size_t};
 use ::libc::{fprintf, pthread_exit};
 
 /// `lua_pcall`'s "out of memory" status, the one failure that is not a
@@ -223,7 +223,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
         let all = lua_toboolean(lstate, -1) != 0;
         lua_pop(lstate, 1);
 
-        let pat: Array = match nlua_pop_array(lstate, ptr::null_mut::<Arena>()) {
+        let pat: Array = match nlua_pop_array(lstate) {
             Ok(pat) => pat,
             Err(e) => {
                 luaL_where(lstate, 1);

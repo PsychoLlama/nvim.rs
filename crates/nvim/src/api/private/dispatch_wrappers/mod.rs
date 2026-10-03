@@ -20,7 +20,6 @@
 
 mod autocmd;
 mod buffer;
-mod buffer_2;
 mod command;
 mod deprecated;
 mod deprecated_2;
@@ -38,7 +37,6 @@ mod window;
 
 pub use self::autocmd::*;
 pub use self::buffer::*;
-pub use self::buffer_2::*;
 pub use self::command::*;
 pub use self::deprecated::*;
 pub use self::deprecated_2::*;

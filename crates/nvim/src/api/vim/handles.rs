@@ -25,15 +25,10 @@ fn string_optval(value: &'static CStr) -> OptVal {
 }
 
 /// Every listed and unlisted buffer's handle.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_list_bufs() -> Array {
+pub fn nvim_list_bufs() -> Array {
     let n: size_t = buffers().count();
     let mut rv: Array = Array::with_capacity(n);
     for buf in buffers() {
-        // SAFETY: `rv` is the block `arena` just sized for every buffer.
         rv.push(Object::buffer(buf.handle));
     }
     rv
@@ -63,15 +58,10 @@ pub fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
 }
 
 /// Every window of the current tab page, in layout order.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_list_wins() -> Array {
+pub fn nvim_list_wins() -> Array {
     let n: size_t = tab_windows().count();
     let mut rv: Array = Array::with_capacity(n);
     for win in tab_windows() {
-        // SAFETY: `rv` is the block `arena` just sized for every window.
         rv.push(Object::window(win.handle));
     }
     rv
@@ -150,8 +140,6 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     }
     unblock_autocmds();
     let bufref = BufRef::of_opt(Some(b));
-    // SAFETY: `buf` is live, and the event has neither a file name nor a
-    // pattern. A handler may wipe the buffer, which is what `bufref` checks.
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     let event = AutoEvent::BufNew;
     let wiped =
@@ -171,15 +159,10 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
 }
 
 /// Every tab page's handle, in order.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_list_tabpages() -> Array {
+pub fn nvim_list_tabpages() -> Array {
     let n: size_t = tabs().count();
     let mut rv: Array = Array::with_capacity(n);
     for tp in tabs() {
-        // SAFETY: `rv` is the block `arena` just sized for every tab page.
         rv.push(Object::tabpage(tp.handle));
     }
     rv

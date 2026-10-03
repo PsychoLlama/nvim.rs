@@ -35,15 +35,11 @@ fn cur_buf_terminal() -> *mut Terminal {
 /// a middle and the last chunk of a streamed one. The answer is whether the
 /// paste is still wanted: a handler that answers `false` cancels the rest,
 /// and every later chunk is dropped until the next `-1` or `1`.
-///
-/// # Safety
-/// `data` must name its own bytes and `arena` must be the caller's.
-pub unsafe fn nvim_paste(
+pub fn nvim_paste(
     channel_id: uint64_t,
     data: String_0,
     crlf: Boolean,
     phase: Integer,
-    arena: *mut Arena,
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
     /// Whether the handler declined this paste: set until the next one
@@ -72,9 +68,9 @@ pub unsafe fn nvim_paste(
         args.push(Object::integer(phase));
         let handler = String_0::from_cstr(c"return vim.paste(...)");
         let name = ::core::ptr::null::<::core::ffi::c_char>();
-        // SAFETY: `args` is this frame's own and `arena`/`error` the caller's
-        // and this frame's; the handler re-enters the editor through Lua.
-        let rv = match unsafe { nlua_exec(&handler, name, args, kRetNilBool, arena) } {
+        // SAFETY: `handler` and `args` are this frame's own, and there is no
+        // chunk name; the handler re-enters the editor through Lua.
+        let rv = match unsafe { nlua_exec(&handler, name, args, kRetNilBool) } {
             Ok(value) => value,
             Err(e) => {
                 error = e;
@@ -114,16 +110,11 @@ pub unsafe fn nvim_paste(
 
 /// Insert `lines` at the cursor the way a register paste would, `type_0`
 /// naming the motion type (`""`, `"v"`, `"V"` or `"b"`).
-///
-/// # Safety
-/// `lines` must name its own items, `type_0` its own bytes, and `arena` must
-/// be the caller's.
-pub unsafe fn nvim_put(
+pub fn nvim_put(
     lines: Array,
     type_0: String_0,
     after: Boolean,
     follow: Boolean,
-    arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = Error::none();
     let mut reg = YankReg {
@@ -137,43 +128,40 @@ pub unsafe fn nvim_put(
     // SAFETY: `reg` is this frame's own, and `type_0` names its own bytes.
     let typed = unsafe { prepare_yankreg_from_object(&raw mut reg, &type_0, lines.len()) };
     if !typed {
-        // SAFETY: `err` is this frame's own slot and `type_0` NUL-terminated.
         error = err_bad_value(c"type", type_0.as_cstr());
         return ().reported(error);
     }
     if lines.is_empty() {
         return ().reported(error);
     }
-    let bytes = lines.len().wrapping_mul(::core::mem::size_of::<String_0>());
-    // SAFETY: `arena` is the caller's, and outlives the register below. The
-    // block is zeroed: a slot the walk below assigns into has to hold a
-    // releasable string, and all-zero is the null one.
-    reg.y_array = unsafe { arena_alloc(arena, bytes, true) }.cast::<String_0>();
-    unsafe { reg.y_array.write_bytes(0, lines.len()) };
-    reg.y_size = lines.len();
+    // The register's lines, which this frame owns and releases once the put
+    // is done: the register only borrows them.
+    let mut owned: Vec<String_0> = Vec::with_capacity(lines.len());
     for i in 0..lines.len() {
-        // SAFETY: `lines` names its own `size` items.
         let item = &lines[i];
         let Some(line) = item.as_string() else {
             let (want, got) = (api_typename(kObjectTypeString), api_typename(item.kind()));
-            // SAFETY: `err` is this frame's own slot, and both type names are
-            // static strings.
             error = err_expected(c"line", want, Some(got));
             return ().reported(error);
         };
         let nul = ::core::ffi::c_char::try_from(NUL).expect("NUL is zero");
         let nl = ::core::ffi::c_char::try_from(NL).expect("NL is an ASCII byte");
-        // SAFETY: `reg.y_array` is the `size`-slot block just allocated. A NUL
-        // in an API string stands for a newline, as it does in every buffer
-        // line.
+        // A NUL in an API string stands for a newline, as it does in every
+        // buffer line.
+        let copy = line.clone();
+        // SAFETY: `copy` owns its `len()` bytes.
         unsafe {
-            let copy = line.clone();
-            let text = copy.data().cast::<::core::ffi::c_void>();
-            let len = copy.len();
-            *reg.y_array.add(i) = copy;
-            memchrsub(text, nul, nl, len);
-        }
+            memchrsub(
+                copy.data().cast::<::core::ffi::c_void>(),
+                nul,
+                nl,
+                copy.len(),
+            )
+        };
+        owned.push(copy);
     }
+    reg.y_array = owned.as_mut_ptr();
+    reg.y_size = owned.len();
     // SAFETY: `reg` is this frame's own, now holding `y_size` lines.
     unsafe { finish_yankreg_from_object(&raw mut reg, false) };
     let dir = if after { FORWARD } else { BACKWARD };

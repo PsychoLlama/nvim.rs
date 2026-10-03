@@ -37,7 +37,7 @@ use crate::lua::ffi::{
 use crate::lua::state::nlua_global_refs;
 use crate::narrow::{float_as_i64, len_as_int};
 use crate::types::{
-    ApiDict, Arena, Array, DictKey, Error, Object, String_0, kObjectTypeArray, kObjectTypeDict,
+    ApiDict, Array, DictKey, Error, Object, String_0, kObjectTypeArray, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeNil, lua_Number, lua_State, size_t,
 };
 use ::libc::abort;
@@ -290,17 +290,9 @@ fn walk(lua: &LuaStack, as_ref: bool, stack: &mut Vec<OpenValue>) -> Result<Obje
 ///
 /// With `as_ref`, a Lua function becomes a `LuaRef` rather than a refusal.
 ///
-/// `_arena` is vestigial: the api value types own their storage since the
-/// arena left them, and nothing here allocates into one. Every caller is
-/// generated, so the parameter goes when `tools/apigen` stops emitting it.
-///
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top.
-pub unsafe fn nlua_pop_object(
-    lstate: *mut lua_State,
-    as_ref: bool,
-    _arena: *mut Arena,
-) -> Result<Object, Error> {
+pub unsafe fn nlua_pop_object(lstate: *mut lua_State, as_ref: bool) -> Result<Object, Error> {
     // The caller's promise, and the whole of what makes the walk safe: a
     // state that stays live for as long as this handle.
     let lua = LuaStack { lstate };

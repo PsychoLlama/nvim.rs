@@ -27,9 +27,9 @@ use crate::lua::ffi::{
 use crate::lua::state::nlua_global_refs;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, DictKey, Error, Float, Handle, Integer, LuaRef, ObjectType,
-    String_0, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeNil, lua_Number, lua_State, size_t,
+    ApiDict, Array, Boolean, DictKey, Error, Float, Handle, Integer, LuaRef, ObjectType, String_0,
+    kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
+    lua_Number, lua_State, size_t,
 };
 use ::libc::memchr;
 
@@ -274,10 +274,7 @@ pub(crate) unsafe fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top.
-pub unsafe fn nlua_pop_string(
-    lstate: *mut lua_State,
-    _arena: *mut Arena,
-) -> Result<String_0, Error> {
+pub unsafe fn nlua_pop_string(lstate: *mut lua_State) -> Result<String_0, Error> {
     unsafe {
         if lua_type(lstate, -1) != LUA_TSTRING {
             lua_pop(lstate, 1);
@@ -298,10 +295,7 @@ pub unsafe fn nlua_pop_string(
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_integer(
-    lstate: *mut lua_State,
-    _arena: *mut Arena,
-) -> Result<Integer, Error> {
+pub unsafe fn nlua_pop_integer(lstate: *mut lua_State) -> Result<Integer, Error> {
     unsafe {
         if lua_type(lstate, -1) != LUA_TNUMBER {
             lua_pop(lstate, 1);
@@ -323,10 +317,7 @@ pub unsafe fn nlua_pop_integer(
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_boolean(
-    lstate: *mut lua_State,
-    _arena: *mut Arena,
-) -> Result<Boolean, Error> {
+pub unsafe fn nlua_pop_boolean(lstate: *mut lua_State) -> Result<Boolean, Error> {
     unsafe {
         let ret = lua_toboolean(lstate, -1) != 0;
         lua_pop(lstate, 1);
@@ -402,7 +393,7 @@ unsafe fn nlua_check_type(
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_float(lstate: *mut lua_State, _arena: *mut Arena) -> Result<Float, Error> {
+pub unsafe fn nlua_pop_float(lstate: *mut lua_State) -> Result<Float, Error> {
     unsafe {
         if lua_type(lstate, -1) == LUA_TNUMBER {
             let ret = lua_tonumber(lstate, -1);
@@ -428,7 +419,6 @@ pub unsafe fn nlua_pop_float(lstate: *mut lua_State, _arena: *mut Arena) -> Resu
 unsafe fn nlua_pop_array_unchecked(
     lstate: *mut lua_State,
     table_props: LuaTableProps,
-    arena: *mut Arena,
 ) -> Result<Array, Error> {
     unsafe {
         let mut ret = Array::with_capacity(table_props.maxidx);
@@ -439,7 +429,7 @@ unsafe fn nlua_pop_array_unchecked(
 
         for i in 1..=table_props.maxidx {
             lua_rawgeti(lstate, -1, i as c_int);
-            let val = match nlua_pop_object(lstate, false, arena) {
+            let val = match nlua_pop_object(lstate, false) {
                 Ok(val) => val,
                 Err(e) => {
                     lua_pop(lstate, 1);
@@ -457,7 +447,7 @@ unsafe fn nlua_pop_array_unchecked(
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_array(lstate: *mut lua_State, arena: *mut Arena) -> Result<Array, Error> {
+pub unsafe fn nlua_pop_array(lstate: *mut lua_State) -> Result<Array, Error> {
     unsafe {
         let (table_props, why) = nlua_check_type(lstate, true, kObjectTypeArray);
         if let Some(why) = why {
@@ -466,7 +456,7 @@ pub unsafe fn nlua_pop_array(lstate: *mut lua_State, arena: *mut Arena) -> Resul
         if table_props.type_0 != kObjectTypeArray {
             return Ok(Array::EMPTY);
         }
-        nlua_pop_array_unchecked(lstate, table_props, arena)
+        nlua_pop_array_unchecked(lstate, table_props)
     }
 }
 
@@ -478,7 +468,6 @@ unsafe fn nlua_pop_dict_unchecked(
     lstate: *mut lua_State,
     table_props: LuaTableProps,
     ref_0: bool,
-    arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     unsafe {
         let mut ret = ApiDict::with_capacity(table_props.string_keys_num);
@@ -505,7 +494,7 @@ unsafe fn nlua_pop_dict_unchecked(
             debug_assert!(!key_data.is_null());
             let key = DictKey::new(slice::from_raw_parts(key_data.cast::<u8>(), key_len));
             lua_pop(lstate, 1);
-            let value = match nlua_pop_object(lstate, ref_0, arena) {
+            let value = match nlua_pop_object(lstate, ref_0) {
                 Ok(value) => value,
                 Err(e) => {
                     lua_pop(lstate, 3);
@@ -525,11 +514,7 @@ unsafe fn nlua_pop_dict_unchecked(
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_dict(
-    lstate: *mut lua_State,
-    ref_0: bool,
-    arena: *mut Arena,
-) -> Result<ApiDict, Error> {
+pub unsafe fn nlua_pop_dict(lstate: *mut lua_State, ref_0: bool) -> Result<ApiDict, Error> {
     unsafe {
         let (table_props, why) = nlua_check_type(lstate, true, kObjectTypeDict);
         if table_props.type_0 != kObjectTypeDict {
@@ -539,7 +524,7 @@ pub unsafe fn nlua_pop_dict(
                 None => Ok(ApiDict::EMPTY),
             };
         }
-        nlua_pop_dict_unchecked(lstate, table_props, ref_0, arena)
+        nlua_pop_dict_unchecked(lstate, table_props, ref_0)
     }
 }
 
@@ -547,7 +532,7 @@ pub unsafe fn nlua_pop_dict(
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_luaref(lstate: *mut lua_State, _arena: *mut Arena) -> Result<LuaRef, Error> {
+pub unsafe fn nlua_pop_luaref(lstate: *mut lua_State) -> Result<LuaRef, Error> {
     unsafe {
         let rv = nlua_ref_global(lstate, -1);
         lua_pop(lstate, 1);
@@ -559,7 +544,7 @@ pub unsafe fn nlua_pop_luaref(lstate: *mut lua_State, _arena: *mut Arena) -> Res
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_handle(lstate: *mut lua_State, _arena: *mut Arena) -> Result<Handle, Error> {
+pub unsafe fn nlua_pop_handle(lstate: *mut lua_State) -> Result<Handle, Error> {
     unsafe {
         let ret = if lua_type(lstate, -1) != LUA_TNUMBER {
             Err(Error::validation(c"Expected Lua number"))

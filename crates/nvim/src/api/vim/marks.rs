@@ -54,10 +54,7 @@ pub fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
 ///
 /// A mark that names nothing, or names a line that is gone, answers
 /// `[0, 0, 0, ""]` rather than an error.
-///
-/// # Safety
-/// `name` must name its own bytes and `arena` must be the caller's.
-pub unsafe fn nvim_get_mark(name: String_0, _opts: *mut KeyDict_empty) -> Result<Array, Error> {
+pub fn nvim_get_mark(name: String_0, _opts: &mut KeyDict_empty) -> Result<Array, Error> {
     let mark = global_mark_name(&name)?;
     // SAFETY: `mark_get_global` answers a live global mark for every name
     // this one accepts -- the slot exists whether or not it is set.

@@ -32,8 +32,8 @@ use crate::memory::xstrdup;
 use crate::message::e_command_too_recursive;
 use crate::option::vars::p_mfd;
 use crate::types::{
-    Arena, Callback, CallbackReader, DictRef, FAIL, FuncExe, HtStack, ListStack, NUL, OK, OptInt,
-    Partial, TypVal, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, Vv,
+    Callback, CallbackReader, DictRef, FAIL, FuncExe, HtStack, ListStack, NUL, OK, OptInt, Partial,
+    TypVal, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, Vv,
 };
 use crate::winlayer::Win;
 
@@ -50,16 +50,11 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: &TypVal) -> boo
     // SAFETY: the caller's promise -- both pointees outlive the call. `arg`
     // is only ever read through, which is what makes casting its `const`
     // away sound.
-    // SAFETY: the caller's promise -- both pointees outlive the call. `arg`
-    // is only ever read through, which is what makes casting its `const`
-    // away sound.
     let tv = arg;
     let mut r = OK;
     // Every union read below is guarded by the `v_type` that names the live
     // member, which is the promise each SAFETY note restates.
     let cb = if tv.v_type() == VAR_PARTIAL && !tv.partial_or_null().is_null() {
-        // SAFETY: `VAR_PARTIAL` says `v_partial` is the live member, and the
-        // typval holds a live partial the callback becomes a second owner of.
         let partial = tv.partial_or_null();
         unsafe { (*partial).pt_refcount.retain() };
         Callback::Partial(partial)
@@ -118,7 +113,6 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: &TypVal) -> boo
     unsafe { *callback = cb };
 
     if r == FAIL {
-        // SAFETY: the message is a NUL-terminated literal.
         emsg_static(c"E921: Invalid callback argument");
         return false;
     }
@@ -168,7 +162,6 @@ const VLUA: &CStr = c"v:lua.";
 /// `callback` must be valid.
 pub unsafe fn callback_call(callback: *mut Callback, args: &[TypVal], result: &mut TypVal) -> bool {
     if OptInt::from(callback_depth.get()) > p_mfd() {
-        // SAFETY: the message is a NUL-terminated literal.
         emsg_static(e_command_too_recursive);
         return false;
     }
@@ -205,10 +198,9 @@ pub unsafe fn callback_call(callback: *mut Callback, args: &[TypVal], result: &m
             // this is the "is it still wanted" question, not a
             // general-purpose call.
             let no_args = ARRAY_DICT_INIT;
-            let arena = null_mut::<Arena>();
             // SAFETY: the reference is the one the callback owns, and the
             // call is handed no arguments, no arena and no error sink.
-            let rv = unsafe { nlua_call_ref_quiet(*luaref, null(), no_args, kRetNilBool, arena) };
+            let rv = unsafe { nlua_call_ref_quiet(*luaref, null(), no_args, kRetNilBool) };
             return rv.as_boolean().unwrap_or(false);
         }
         Callback::None => return false,

@@ -61,7 +61,7 @@ use crate::mark::mark_get_global;
 use crate::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::memline::ml_open;
 use crate::memory::arena_alloc_count;
-use crate::memory::{arena_alloc, arena_strdup, memchrsub, strequal, xfree};
+use crate::memory::{memchrsub, strequal, xfree};
 use crate::message::state::{
     did_emsg, lines_left, msg_didany, msg_no_more, msg_scroll, need_wait_return,
 };
@@ -96,9 +96,9 @@ use crate::terminal::{
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
-    AdditionalData, ApiDict, Arena, Array, BlnFlags, Boolean, BufferHandle, Channel,
-    ChannelStreamType, Context, DictItem, DoBufAction, DoBufStart, Error, Float, FoldInfo, Handle,
-    HlAttrs, Integer, KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
+    AdditionalData, ApiDict, Array, BlnFlags, Boolean, BufferHandle, Channel, ChannelStreamType,
+    Context, DictItem, DoBufAction, DoBufStart, Error, Float, FoldInfo, Handle, HlAttrs, Integer,
+    KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
     KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
     KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, LineNr, LuaRef, LuaRetMode,
     MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal, RemapValues, ScreenChar,
@@ -152,9 +152,9 @@ pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
 pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
+/// What `nvim_get_runtime_file`'s walk collects into.
 pub struct RuntimeCookie {
     pub rv: Array,
-    pub arena: *mut Arena,
 }
 pub const DOSO_NONE: ::core::ffi::c_uint = 0;
 pub const DOBUF_FIRST: DoBufStart = 1;

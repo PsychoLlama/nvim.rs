@@ -35,7 +35,7 @@ use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::startup::starting;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
-use crate::types::{Arena, Array, ExArg, OptInt, ShmFlag};
+use crate::types::{Array, ExArg, OptInt, ShmFlag};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
@@ -224,7 +224,6 @@ fn version_msg(s: &CStr) {
 /// by column, with `items[current]` in brackets. `:args` lists the argument
 /// list this way, with the current file bracketed.
 pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
-    // SAFETY: every item is NUL-terminated by construction.
     let count = items.len() as c_int;
     // The widest item, plus the gap that separates two columns.
     let width = 1 + items
@@ -290,12 +289,9 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
 pub(crate) fn list_lua_version() {
     const CODE: &CStr = c"return ((jit and jit.version) and jit.version or _VERSION)";
 
-    // SAFETY: the caller's obligation. `CODE` is borrowed, not owned, by the
-    // `String_0`; `nlua_exec` only reads it.
     let no_args = Array::EMPTY;
     let (chunk, name) = (String_0::from_cstr(CODE), ptr::null());
-    let arena = ptr::null_mut::<Arena>();
-    let ret = unsafe { nlua_exec(&chunk, name, no_args, kRetObject, arena) }
+    let ret = unsafe { nlua_exec(&chunk, name, no_args, kRetObject) }
         .expect("a literal chunk cannot fail");
     let version = ret.as_string().expect("_VERSION is a string");
     msg_str(unsafe { cstr::at(version.data()) });
@@ -305,7 +301,6 @@ pub(crate) fn list_lua_version() {
 /// The `:version` screen. `nvim -v` prints the same thing, and `nvim -V1 -v`
 /// (or `:verbose version`) adds the build and path details.
 pub(crate) fn list_version() {
-    // SAFETY: the caller's obligation.
     msg_ext_set_kind(c"list_cmd");
     msg_str(LONG_VERSION);
     msg_putchar(b'\n' as c_int);
@@ -431,9 +426,6 @@ fn news_line() -> CString {
 /// Draw the intro screen, unless the window is too small to hold it --
 /// `:intro` (`colon`) asks for it regardless.
 pub(crate) fn intro_message(colon: bool) {
-    // SAFETY: the caller's obligation.
-    // Centre the block vertically, ignoring the line the empty entry
-    // above the version costs.
     let mut blanklines = Rows.get() - (INTRO_LINES.len() as c_int - 1);
     if p_ls() > 1 as OptInt {
         blanklines -= Rows.get() - current_topframe().fr_height;

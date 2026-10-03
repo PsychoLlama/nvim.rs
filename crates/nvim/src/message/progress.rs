@@ -150,7 +150,7 @@ pub unsafe fn msg_progress(
 
     // Nothing here can report: the chunks are strings and the options
     // are this frame's. The message is freed if one ever does.
-    if let Err(mut e) = unsafe { nvim_echo(chunks.array(), false, &raw mut opts) } {
+    if let Err(mut e) = nvim_echo(chunks.array(), false, &mut opts) {
         e.clear();
     }
     ui_flush();

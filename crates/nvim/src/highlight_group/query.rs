@@ -69,7 +69,6 @@ fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
         assert!(link <= highlight_num_groups(), "link out of bounds");
         // SAFETY: the group's own name, which outlives the answer.
         let value = Object::string(unsafe { cstr_to_string(group(link).name.as_ptr()) });
-        // SAFETY: the arena dict has room for one more entry.
         put(hl, c"link", value);
     }
     let mut cterm = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
@@ -86,19 +85,15 @@ fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
 /// `name`/`id` pick a single group — `name` with `create` set adds it if it
 /// does not exist — and `link` chooses between reporting the link and
 /// following it.
-///
-/// # Safety
-/// `opts` and `arena` are live; main thread only.
-pub(crate) unsafe fn ns_get_hl_defs(
+pub(crate) fn ns_get_hl_defs(
     ns_id: NS,
-    opts: *mut KeyDict_get_highlight,
+    opts: &mut KeyDict_get_highlight,
 ) -> Result<ApiDict, Error> {
-    // SAFETY: the caller's keydict and arena.
-    let link = unsafe { (*opts).link }.unwrap_or(true);
+    let link = opts.link.unwrap_or(true);
 
     let mut id = -1;
-    if let Some(name) = unsafe { (*opts).name.as_ref() } {
-        let create = unsafe { (*opts).create }.unwrap_or(true);
+    if let Some(name) = opts.name.as_ref() {
+        let create = opts.create.unwrap_or(true);
         let name = name.as_bytes();
         id = if create {
             syn_check_group(name)
@@ -108,7 +103,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
         if id == 0 && !create {
             return Ok(NO_DICT);
         }
-    } else if let Some(given) = unsafe { (*opts).id } {
+    } else if let Some(given) = opts.id {
         id = number_as_int(given);
     }
 

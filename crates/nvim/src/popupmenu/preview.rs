@@ -43,7 +43,6 @@ fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
 /// # Safety
 /// The item array must be the live one.
 unsafe fn pum_selected_info() -> Option<*mut c_char> {
-    // SAFETY: the array outlives the menu.
     let selected = pum_selected.get();
     let items = unsafe { pum_items() };
     if selected < 0 || selected as usize >= items.len() {
@@ -104,26 +103,14 @@ unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_in
     let lnum = lines.len() as LineNr;
     let replacement = Array::from(lines);
 
-    let mut arena = ARENA_EMPTY;
     // Setting the lines is the editor's own doing, not a plugin's.
     let unlocked = Allow::text_changes();
-    let set = unsafe {
-        nvim_buf_set_lines(
-            0,
-            buf.handle() as BufferHandle,
-            0,
-            -1,
-            false,
-            replacement,
-            &raw mut arena,
-        )
-    };
+    let set = nvim_buf_set_lines(0, buf.handle() as BufferHandle, 0, -1, false, replacement);
     drop(unlocked);
     if let Err(mut err) = set {
         emsg(err.message_or_empty());
         err.clear();
     }
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     buf.b_p_ma = 0;
 
     (lnum, max_width)
@@ -478,8 +465,6 @@ fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bool) -> 
 /// Answers true when a window was resized, so the caller must recompute the
 /// menu's placement.
 pub(crate) fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
-    // SAFETY: the array outlives the menu; every window pointer is
-    // re-validated after anything that can run autocommands.
     let prev_selected = pum_selected.replace(n);
     let cot_flags = get_cot_flags();
     let use_float = cot_flags & kOptCotFlagPopup != 0;

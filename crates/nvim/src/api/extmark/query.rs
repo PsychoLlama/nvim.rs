@@ -106,16 +106,11 @@ fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) ->
     rv
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_get_extmark` the dispatcher filled in,
-/// live for the call. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_buf_get_extmark_by_id(
+pub fn nvim_buf_get_extmark_by_id(
     buf: BufferHandle,
     ns_id: Integer,
     id: Integer,
-    opts: *mut KeyDict_get_extmark,
+    opts: &mut KeyDict_get_extmark,
 ) -> Result<Array, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
@@ -137,19 +132,12 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     extmark_to_array(extmark, false, details, hl_name).reported(error)
 }
 
-/// # Safety
-///
-/// `start` must be a well-formed API object the caller owns for the call.
-/// `end` must be a well-formed API object the caller owns for the call.
-/// `opts` must point at the `KeyDict_get_extmarks` the dispatcher filled in,
-/// live for the call. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_buf_get_extmarks(
+pub fn nvim_buf_get_extmarks(
     buf: BufferHandle,
     ns_id: Integer,
     start: Object,
     end: Object,
-    opts: *mut KeyDict_get_extmarks,
+    opts: &mut KeyDict_get_extmarks,
 ) -> Result<Array, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };

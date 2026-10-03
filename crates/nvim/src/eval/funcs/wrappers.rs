@@ -250,8 +250,6 @@ pub unsafe fn call_internal_method(
     let mut frame = CallFrame::<{ MAX_FUNC_ARGS as usize + 1 }>::new();
     let (before, after) = args.split_at(base_index);
     frame.extend_borrowed(before);
-    // SAFETY: the caller's promise -- `base` is a live typval, named the
-    // same way.
     frame.push_borrowed(&*base);
     frame.extend_borrowed(after);
 
@@ -390,10 +388,7 @@ pub fn api_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     let array: Array = args.iter().map(Object::from).collect();
 
     let call = handler.fn_0.expect("non-null function pointer");
-    let mem = &raw mut arena;
-    // SAFETY: `array` is the Array built above, which the handler takes over,
-    // and `arena` is this frame's.
-    match unsafe { call(VIML_INTERNAL_CALL, array, mem) } {
+    match call(VIML_INTERNAL_CALL, array, &mut arena) {
         Ok(rv) => {
             // The answer is this frame's, so the conversion takes the Lua
             // references below it rather than making new ones.

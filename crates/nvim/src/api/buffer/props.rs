@@ -43,22 +43,15 @@ pub fn nvim_buf_get_keymap(buf: BufferHandle, mode: String_0) -> Result<Array, E
     Ok(keymap_array(mode, Some(b)))
 }
 
-/// # Safety
-///
-/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `lhs` must be a well-formed API string: `size` readable
-/// bytes with a NUL at `data[size]`. `rhs` must be a well-formed API string:
-/// `size` readable bytes with a NUL at `data[size]`. `opts` must point at the
-/// `KeyDict_keymap` the dispatcher filled in, live for the call.
-pub unsafe fn nvim_buf_set_keymap(
+pub fn nvim_buf_set_keymap(
     channel_id: uint64_t,
     buf: BufferHandle,
     mode: String_0,
     lhs: String_0,
     rhs: String_0,
-    opts: *mut KeyDict_keymap,
+    opts: &mut KeyDict_keymap,
 ) -> Result<(), Error> {
-    unsafe { modify_keymap(channel_id, buf, false, mode, lhs, rhs, opts) }
+    modify_keymap(channel_id, buf, false, mode, lhs, rhs, Some(opts))
 }
 
 pub fn nvim_buf_del_keymap(
@@ -68,9 +61,7 @@ pub fn nvim_buf_del_keymap(
     lhs: String_0,
 ) -> Result<(), Error> {
     let rhs: String_0 = String_0::from_cstr(c"");
-    let no_opts = ::core::ptr::null_mut::<KeyDict_keymap>();
-    // SAFETY: the mapping is deleted, so it takes no options.
-    unsafe { modify_keymap(channel_id, buf, true, mode, lhs, rhs, no_opts) }
+    modify_keymap(channel_id, buf, true, mode, lhs, rhs, None)
 }
 
 pub fn nvim_buf_set_var(buf: BufferHandle, name: String_0, value: Object) -> Result<(), Error> {
@@ -137,18 +128,11 @@ pub fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
     b.is_some_and(|b| !b.b_ml.ml_mfp.is_null())
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_buf_delete` the dispatcher filled in,
-/// live for the call.
-pub unsafe fn nvim_buf_delete(
-    buf: BufferHandle,
-    opts: *mut KeyDict_buf_delete,
-) -> Result<(), Error> {
+pub fn nvim_buf_delete(buf: BufferHandle, opts: &mut KeyDict_buf_delete) -> Result<(), Error> {
     let mut error = Error::none();
     let b = find_buffer_by_handle(buf)?.expect("a resolved handle names a live buffer");
-    let force: bool = unsafe { (*opts).force }.unwrap_or(false);
-    let unload: bool = unsafe { (*opts).unload }.unwrap_or(false);
+    let force: bool = opts.force.unwrap_or(false);
+    let unload: bool = opts.unload.unwrap_or(false);
     let result: Result<(), Failed> = do_buffer(
         if ::core::ffi::c_int::from(unload) != 0 {
             DOBUF_UNLOAD.cast_signed()

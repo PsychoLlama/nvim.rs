@@ -115,7 +115,6 @@ pub fn nvim_buf_add_highlight(
     if hl_group.is_empty() {
         return ns_id.reported(error);
     }
-    // SAFETY: `hl_group` names its own bytes.
     let hl_id = syn_check_group(hl_group.as_bytes());
 
     // A highlight that runs to the end of the line is one that ends at
@@ -143,17 +142,12 @@ pub fn nvim_buf_add_highlight(
     ns_id.reported(error)
 }
 
-/// # Safety
-///
-/// `chunks` must be a well-formed API array, its `size` elements initialized.
-/// `_opts` must point at the `KeyDict_empty` the dispatcher filled in, live
-/// for the call.
-pub unsafe fn nvim_buf_set_virtual_text(
+pub fn nvim_buf_set_virtual_text(
     buffer: BufferHandle,
     mut src_id: Integer,
     line: Integer,
     chunks: Array,
-    _opts: *mut KeyDict_empty,
+    _opts: &mut KeyDict_empty,
 ) -> Result<Integer, Error> {
     let mut error = Error::none();
     let Some(buf) = find_buffer_by_handle(buffer)? else {

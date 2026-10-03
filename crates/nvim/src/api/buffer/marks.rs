@@ -52,17 +52,12 @@ pub fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, E
     (res as Boolean).reported(error)
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `_opts` must point at the `KeyDict_empty` the dispatcher
-/// filled in, live for the call.
-pub unsafe fn nvim_buf_set_mark(
+pub fn nvim_buf_set_mark(
     buf: BufferHandle,
     name: String_0,
     line: Integer,
     col: Integer,
-    _opts: *mut KeyDict_empty,
+    _opts: &mut KeyDict_empty,
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
     let mut res: bool = false;

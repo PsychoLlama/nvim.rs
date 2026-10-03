@@ -101,8 +101,6 @@ fn set_state(idx: usize, state: DecorProvider_state) {
 /// # Safety
 /// `name` and `msg` must be NUL-terminated.
 unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_char) {
-    // SAFETY: the caller's NUL-terminated strings, plus the editor's own
-    // namespace table.
     let ns = describe_ns(ns_id, c"(UNKNOWN PLUGIN)".as_ptr());
     // SAFETY: the caller's strings and the namespace name.
     let (shown_name, shown_ns, shown_msg) = unsafe { (c_str(name), c_str(ns), c_str(msg)) };
@@ -137,16 +135,14 @@ unsafe fn decor_provider_invoke(
     default_true: bool,
     res: Option<&mut Array>,
 ) -> bool {
-    // SAFETY: the caller's arguments; `nlua_call_ref` owns `args` from here.
     let mut err = Error::none();
     let want_list = res.is_some();
 
     let locked = Lock::text();
     let mode = if want_list { kRetMulti } else { kRetNilBool };
-    let no_arena = ptr::null_mut();
     // SAFETY: the caller's callback and name; `nlua_call_ref` owns `args`
     // from here, and `err` is this frame's own.
-    let ret = match unsafe { nlua_call_ref(callback, name, args, mode, no_arena) } {
+    let ret = match unsafe { nlua_call_ref(callback, name, args, mode) } {
         Ok(value) => value,
         Err(e) => {
             err = e;

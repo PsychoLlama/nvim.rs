@@ -245,7 +245,6 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
             ptr::null(),
             argv,
             kRetNilBool,
-            ptr::null_mut(),
         )
     };
     let Err(err) = ran else {

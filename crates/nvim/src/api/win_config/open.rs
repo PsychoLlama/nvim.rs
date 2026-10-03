@@ -235,14 +235,10 @@ impl Opening {
 
 /// Create a window showing `buf` from the `config` dictionary: a float, a
 /// split, or an external window.
-///
-/// # Safety
-/// `config` must be the caller's decoded keyset -- NUL-terminated strings and
-/// arrays that name their own items.
-pub unsafe fn nvim_open_win(
+pub fn nvim_open_win(
     buf: BufferHandle,
     enter: Boolean,
-    config: *mut KeyDict_win_config,
+    config: &mut KeyDict_win_config,
 ) -> Result<WindowHandle, Error> {
     // SAFETY: `config` is the caller's keyset, live for the whole call.
     let keys = unsafe { CfgKeys::new(config) };

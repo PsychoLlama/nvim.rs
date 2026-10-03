@@ -129,15 +129,7 @@ pub fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
         repeat_luaref.set(luaref);
     }
 
-    let called = unsafe {
-        nlua_call_ref(
-            luaref,
-            ptr::null(),
-            ARRAY_DICT_INIT,
-            kRetNilBool,
-            ptr::null_mut(),
-        )
-    };
+    let called = unsafe { nlua_call_ref(luaref, ptr::null(), ARRAY_DICT_INIT, kRetNilBool) };
     if let Err(e) = called {
         // SAFETY: the refusal owns its message as a NUL-terminated string.
         let msg = unsafe { c_str(e.message_or_empty().as_ptr()) };

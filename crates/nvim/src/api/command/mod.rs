@@ -21,18 +21,17 @@ use crate::types::AutoEvent;
 
 use crate::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::mbyte::mb_islower;
-use crate::memory::{arena_alloc, xfree};
+use crate::memory::xfree;
 use crate::message::state::{msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
 use crate::types::{
-    ApiDict, Arena, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction,
-    Error, ExArg, Integer, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
-    KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty, KeyDict_get_commands,
-    KeyDict_user_command, LineNr, LuaRef, Object, String_0, TryState, UserCmd, int64_t,
-    kErrorTypeException, kErrorTypeValidation, kObjectTypeLuaRef, kObjectTypeString, size_t,
-    uint8_t, uint64_t,
+    ApiDict, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction, Error,
+    ExArg, Integer, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter,
+    KeyDict_cmd_opts, KeyDict_empty, KeyDict_get_commands, KeyDict_user_command, LineNr, LuaRef,
+    Object, String_0, TryState, UserCmd, int64_t, kErrorTypeException, kErrorTypeValidation,
+    kObjectTypeLuaRef, kObjectTypeString, size_t, uint8_t, uint64_t,
 };
 use crate::usercmd::{
     Table, commands_array, get_user_command_name, parse_addr_type_arg, parse_compl_arg,

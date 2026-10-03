@@ -218,38 +218,27 @@ pub fn nvim_get_keymap(mode: String_0) -> Array {
     keymap_array(mode, None)
 }
 
-/// # Safety
-///
-/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `lhs` must be a well-formed API string: `size` readable
-/// bytes with a NUL at `data[size]`. `rhs` must be a well-formed API string:
-/// `size` readable bytes with a NUL at `data[size]`. `opts` must point at the
-/// `KeyDict_keymap` the dispatcher filled in, live for the call.
-pub unsafe fn nvim_set_keymap(
+pub fn nvim_set_keymap(
     channel_id: uint64_t,
     mode: String_0,
     lhs: String_0,
     rhs: String_0,
-    opts: *mut KeyDict_keymap,
+    opts: &mut KeyDict_keymap,
 ) -> Result<(), Error> {
     // `-1` is the API's "every buffer" spelling of the buffer argument.
     let all_buffers: BufferHandle = -1;
-    unsafe { modify_keymap(channel_id, all_buffers, false, mode, lhs, rhs, opts) }
+    modify_keymap(channel_id, all_buffers, false, mode, lhs, rhs, Some(opts))
 }
 
 pub fn nvim_del_keymap(channel_id: uint64_t, mode: String_0, lhs: String_0) -> Result<(), Error> {
     nvim_buf_del_keymap(channel_id, -1 as BufferHandle, mode, lhs)
 }
 
-/// # Safety
-///
-/// `_opts` must point at the `KeyDict_empty` the dispatcher filled in, live
-/// for the call.
-pub unsafe fn nvim_select_popupmenu_item(
+pub fn nvim_select_popupmenu_item(
     item: Integer,
     mut insert: Boolean,
     finish: Boolean,
-    _opts: *mut KeyDict_empty,
+    _opts: &mut KeyDict_empty,
 ) {
     if finish {
         insert = true;

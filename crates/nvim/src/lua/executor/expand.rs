@@ -63,12 +63,12 @@ pub fn nlua_expand_pat(expand: &mut Expand) {
         }
 
         let mut arena: Arena = ARENA_EMPTY;
-        let prefix = nlua_pop_integer(lstate, &raw mut arena)
+        let prefix = nlua_pop_integer(lstate)
             .ok()
             .and_then(|n| usize::try_from(n).ok())
             .filter(|&n| n <= patlen);
         if let Some(prefix) = prefix {
-            let completions = nlua_pop_array(lstate, &raw mut arena);
+            let completions = nlua_pop_array(lstate);
             if let Ok(completions) = completions {
                 let strings: Option<Vec<XString>> = (0..completions.len())
                     .map(|i| {

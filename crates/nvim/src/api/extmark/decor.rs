@@ -56,14 +56,7 @@ pub fn nvim_buf_clear_namespace(
     ().reported(error)
 }
 
-/// # Safety
-///
-/// `opts` must point at the `KeyDict_set_decoration_provider` the dispatcher
-/// filled in, live for the call.
-pub unsafe fn nvim_set_decoration_provider(
-    ns_id: Integer,
-    opts: *mut KeyDict_set_decoration_provider,
-) {
+pub fn nvim_set_decoration_provider(ns_id: Integer, opts: &mut KeyDict_set_decoration_provider) {
     let p: *mut DecorProvider = get_decor_provider(ns_id as NS, true);
     debug_assert!(!p.is_null(), "p != NULL");
     unsafe { decor_provider_clear(p) };
@@ -75,15 +68,15 @@ pub unsafe fn nvim_set_decoration_provider(
     // cleared; both are live for the call.
     unsafe {
         let callbacks: [(&mut Option<LuaRef>, &mut LuaRef); 9] = [
-            (&mut (*opts).on_start, &mut (*p).redraw_start),
-            (&mut (*opts).on_buf, &mut (*p).redraw_buf),
-            (&mut (*opts).on_win, &mut (*p).redraw_win),
-            (&mut (*opts).on_line, &mut (*p).redraw_line),
-            (&mut (*opts).on_range, &mut (*p).redraw_range),
-            (&mut (*opts).on_end, &mut (*p).redraw_end),
-            (&mut (*opts)._on_hl_def, &mut (*p).hl_def),
-            (&mut (*opts)._on_spell_nav, &mut (*p).spell_nav),
-            (&mut (*opts)._on_conceal_line, &mut (*p).conceal_line),
+            (&mut opts.on_start, &mut (*p).redraw_start),
+            (&mut opts.on_buf, &mut (*p).redraw_buf),
+            (&mut opts.on_win, &mut (*p).redraw_win),
+            (&mut opts.on_line, &mut (*p).redraw_line),
+            (&mut opts.on_range, &mut (*p).redraw_range),
+            (&mut opts.on_end, &mut (*p).redraw_end),
+            (&mut opts._on_hl_def, &mut (*p).hl_def),
+            (&mut opts._on_spell_nav, &mut (*p).spell_nav),
+            (&mut opts._on_conceal_line, &mut (*p).conceal_line),
         ];
         for (source, dest) in callbacks {
             if source.is_some_and(|reference| reference > 0) {

@@ -207,11 +207,10 @@ fn textlock_wrap<R>(f: impl FnOnce() -> R) -> R {
 /// One callback invocation, inside [`textlock_wrap`] as upstream has it.
 fn call_ref(cb: LuaRef, name: &'static CStr, args: Array, mode: LuaRetMode) -> Object {
     textlock_wrap(|| {
-        let no_arena = ptr::null_mut();
         // SAFETY: `cb` is a reference this buffer owns, `args` borrows the
         // caller's frame, and a null arena and error are what upstream
         // passes — the callee treats both as "not interested".
-        unsafe { nlua_call_ref_quiet(cb, name.as_ptr(), args, mode, no_arena) }
+        unsafe { nlua_call_ref_quiet(cb, name.as_ptr(), args, mode) }
     })
 }
 

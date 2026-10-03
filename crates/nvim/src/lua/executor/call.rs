@@ -181,7 +181,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
         'check_err: {
             for i in 0..nargs {
                 lua_pushvalue(lstate, i + 3);
-                let popped = nlua_pop_object(lstate, false, &raw mut arena);
+                let popped = nlua_pop_object(lstate, false);
                 let Ok(value) = popped.inspect_err(|e| err = e.clone()) else {
                     break 'check_err;
                 };

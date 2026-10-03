@@ -15,37 +15,19 @@ use crate::types::NUL;
 use crate::winlayer::Live;
 use core::ffi::CStr;
 
-/// # Safety
-///
-/// `code` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `args` must be a well-formed API array, its `size`
-/// elements initialized. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_exec_lua(
-    code: String_0,
-    args: Array,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
+/// Run `code` as a Lua chunk with `args` as its `...`.
+pub fn nvim_exec_lua(code: String_0, args: Array) -> Result<Object, Error> {
     let name = ::core::ptr::null::<::core::ffi::c_char>();
-    // SAFETY: `code` and `args` are the caller's, and `arena` is the
-    // caller's own.
-    unsafe { nlua_exec(&code, name, args, kRetObject, arena) }
+    // SAFETY: `code` and `args` are this call's own, and there is no chunk
+    // name.
+    unsafe { nlua_exec(&code, name, args, kRetObject) }
 }
 
-/// # Safety
-///
-/// `code` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `args` must be a well-formed API array, its `size`
-/// elements initialized. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
+/// [`nvim_exec_lua`], marked fast for the RPC dispatcher.
 // `nvim__exec_lua_fast` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__exec_lua_fast(
-    code: String_0,
-    args: Array,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
-    unsafe { nvim_exec_lua(code, args, arena) }
+pub fn nvim__exec_lua_fast(code: String_0, args: Array) -> Result<Object, Error> {
+    nvim_exec_lua(code, args)
 }
 
 pub fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
@@ -55,38 +37,21 @@ pub fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
     Ok(unsafe { mb_string2cells(text.data()) } as Integer)
 }
 
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
-pub unsafe fn nvim_list_runtime_paths(arena: *mut Arena) -> Result<Array, Error> {
-    unsafe { nvim_get_runtime_file(String_0::NULL, true, arena) }
+/// Every directory of 'runtimepath'.
+pub fn nvim_list_runtime_paths() -> Result<Array, Error> {
+    nvim_get_runtime_file(String_0::NULL, true)
 }
 
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
 // `nvim__runtime_inspect` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__runtime_inspect() -> Array {
+pub fn nvim__runtime_inspect() -> Array {
     runtime_inspect()
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
-pub unsafe fn nvim_get_runtime_file(
-    name: String_0,
-    all: Boolean,
-    arena: *mut Arena,
-) -> Result<Array, Error> {
-    let mut cookie = RuntimeCookie {
-        rv: Array::EMPTY,
-        arena,
-    };
+/// The files matching `name` under 'runtimepath': the first, or with `all`
+/// every one.
+pub fn nvim_get_runtime_file(name: String_0, all: Boolean) -> Result<Array, Error> {
+    let mut cookie = RuntimeCookie { rv: Array::EMPTY };
     let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all);
     let pat = if name.is_empty() {
         c"".as_ptr().cast_mut()
@@ -126,8 +91,7 @@ unsafe fn find_runtime_cb(
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < num_fnames {
         // SAFETY: `fnames` names `num_fnames` C strings, and `cookie` is the
-        // `RuntimeCookie` this walk was started with -- the copy the arena
-        // takes is what outlives it.
+        // `RuntimeCookie` this walk was started with.
         let name = unsafe {
             let found = cstr_to_string(*fnames.offset(i as isize));
             Object::string(found.clone())
@@ -150,18 +114,12 @@ pub fn nvim__get_lib_dir() -> String_0 {
     unsafe { cstr_to_string(get_lib_dir()) }
 }
 
-/// # Safety
-///
-/// `pat` must be a well-formed API array, its `size` elements initialized.
-/// `opts` must point at the `KeyDict_runtime` the dispatcher filled in, live
-/// for the call. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
 // `nvim__get_runtime` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__get_runtime(
+pub fn nvim__get_runtime(
     pat: Array,
     all: Boolean,
-    opts: *mut KeyDict_runtime,
+    opts: &mut KeyDict_runtime,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.

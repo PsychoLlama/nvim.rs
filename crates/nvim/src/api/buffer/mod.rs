@@ -25,9 +25,7 @@ use crate::memline::{
     ml_append_buf, ml_delete_buf, ml_find_line_or_offset, ml_get_buf, ml_get_buf_len,
     ml_replace_buf,
 };
-use crate::memory::{
-    arena_alloc, arena_allocz, arena_memdupz, memchrsub, strchrsub, xfree, xmemdupz,
-};
+use crate::memory::{strchrsub, xfree, xmemdupz};
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::ops::get_region_bytecount;
 use crate::option::vars::{P_ACD, p_acd};
@@ -36,11 +34,11 @@ use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::types::{
-    AcoSave, AlignTextPos, ApiDict, Arena, Array, BCount, Boolean, BufUpdateCallbacks,
-    BufferHandle, ColNr, DoBufAction, DoBufStart, Error, ExtmarkOp, FileMark, Integer,
-    KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, LineNr, LuaRef,
-    MarkAdjustMode, MarkGet, Object, Pos, String_0, TryState, UndoObjectType, WinSplit, WinStyle,
-    int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t, uint64_t,
+    AcoSave, AlignTextPos, ApiDict, Array, BCount, Boolean, BufUpdateCallbacks, BufferHandle,
+    ColNr, DoBufAction, DoBufStart, Error, ExtmarkOp, FileMark, Integer, KeyDict_buf_attach,
+    KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, LineNr, LuaRef, MarkAdjustMode, MarkGet,
+    Object, Pos, String_0, TryState, UndoObjectType, WinSplit, WinStyle, int64_t, kErrorTypeNone,
+    lua_State, ptrdiff_t, size_t, uint64_t,
 };
 use crate::undo::u_save_buf;
 

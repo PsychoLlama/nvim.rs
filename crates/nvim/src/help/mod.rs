@@ -124,8 +124,6 @@ const fn cstr_optval(value: &'static CStr) -> OptVal {
 /// instead of taking a subject.
 ///
 pub(crate) fn ex_help(excmd: &mut ExArg) {
-    // SAFETY: the command's `arg` is its own writable, NUL-terminated
-    // command line.
     open_help(Some(excmd));
 }
 
@@ -140,7 +138,6 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
     let mut arg = match excmd {
         None => c"".as_ptr().cast_mut(),
         Some(command) => {
-            // SAFETY: caller contract; the command line is writable.
             split_off_next_cmd(command);
             if command.skip {
                 return;
@@ -175,7 +172,6 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
 
     let mut num_matches: c_int = 0;
     let mut matches: *mut *mut c_char = ptr::null_mut();
-    // SAFETY: `arg` is NUL-terminated; the two out-parameters are ours.
     let (out_n, out_m) = (&raw mut num_matches, &raw mut matches);
     let n = unsafe { find_help_tags(arg, out_n, out_m, forceit) };
 
@@ -253,7 +249,6 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
 /// A `:help` command ends at the first LF, or at a `|` followed by some
 /// text. Terminate the argument there and point `nextcmd` at the rest.
 fn split_off_next_cmd(excmd: &mut ExArg) {
-    // SAFETY: caller contract.
     let mut arg = excmd.arg_ptr();
     while unsafe { *arg } != NUL as c_char {
         if unsafe { *arg } == b'\n' as c_char
@@ -297,10 +292,9 @@ unsafe fn trim_trailing_blanks(arg: *mut c_char) -> *mut c_char {
 /// Runs Lua: main thread only.
 unsafe fn resolve_tag_at_cursor() -> *mut c_char {
     let mut err = Error::none();
-    // SAFETY: a static chunk, an empty argument array, and our error slot.
     let chunk = String_0::from_cstr(c"return require'vim._core.help'.resolve_tag()");
-    let (name, arena) = (ptr::null(), ptr::null_mut());
-    let res = match unsafe { nlua_exec(&chunk, name, Array::EMPTY, kRetObject, arena) } {
+    let name = ptr::null();
+    let res = match unsafe { nlua_exec(&chunk, name, Array::EMPTY, kRetObject) } {
         Ok(value) => value,
         Err(e) => {
             err = e;
@@ -404,19 +398,16 @@ pub(crate) fn ex_helpclose(excmd: &mut ExArg) {
     let Some(win) = windows().find(|wp| buf_is_help(wp.buffer_or_none())) else {
         return;
     };
-    // SAFETY: caller contract; a live window.
     win_close(win, false, excmd.forceit);
 }
 
 /// `:exusage`.
 pub(crate) fn ex_exusage(_excmd: &mut ExArg) {
-    // SAFETY: a static command line.
     let _ = do_cmdline_cmd(c"help ex-cmd-index");
 }
 
 /// `:viusage`.
 pub(crate) fn ex_viusage(_excmd: &mut ExArg) {
-    // SAFETY: a static command line.
     let _ = do_cmdline_cmd(c"help normal-index");
 }
 
@@ -523,11 +514,9 @@ pub(crate) unsafe fn find_help_tags(
     // SAFETY: `arg` is NUL-terminated and outlives the call, which only
     // reads it.
     args.push(Object::string(unsafe { cstr_to_string(arg) }));
-    // SAFETY: a static chunk, an argument array borrowing `args`, and our
-    // own error slot.
     let chunk = String_0::from_cstr(c"return require'vim._core.help'.escape_subject(...)");
-    let (name, arena) = (ptr::null(), ptr::null_mut());
-    let res = match unsafe { nlua_exec(&chunk, name, args.array(), kRetObject, arena) } {
+    let name = ptr::null();
+    let res = match unsafe { nlua_exec(&chunk, name, args.array(), kRetObject) } {
         Ok(value) => value,
         Err(e) => {
             err = e;
@@ -693,10 +682,9 @@ pub(crate) fn prepare_help_buffer() {
 /// Populate `*local-additions*` in `help.txt`.
 pub(crate) fn get_local_additions() {
     let mut err = Error::none();
-    // SAFETY: a static chunk, no arguments, and our own error slot.
     let chunk = String_0::from_cstr(c"return require'vim._core.help'.local_additions()");
-    let (name, arena) = (ptr::null(), ptr::null_mut());
-    let res = match unsafe { nlua_exec(&chunk, name, Array::EMPTY, kRetNilBool, arena) } {
+    let name = ptr::null();
+    let res = match unsafe { nlua_exec(&chunk, name, Array::EMPTY, kRetNilBool) } {
         Ok(value) => value,
         Err(e) => {
             err = e;

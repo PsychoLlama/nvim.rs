@@ -4,7 +4,6 @@
 //! run `just apigen`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 
 use super::*;
 
@@ -13,16 +12,10 @@ use super::*;
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_buffer_del_line(
+pub fn handle_buffer_del_line(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -40,9 +33,7 @@ pub unsafe fn handle_buffer_del_line(
     let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"buffer_del_line", c"Integer"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { buffer_del_line(arg_1, arg_2, arena) }?;
+    buffer_del_line(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -51,16 +42,10 @@ pub unsafe fn handle_buffer_del_line(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_buffer_del_var(
+pub fn handle_buffer_del_var(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -86,16 +71,10 @@ pub unsafe fn handle_buffer_del_var(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_buffer_get_line(
+pub fn handle_buffer_get_line(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -113,9 +92,7 @@ pub unsafe fn handle_buffer_get_line(
     let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"buffer_get_line", c"Integer"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { buffer_get_line(arg_1, arg_2) }?;
+    let rv = buffer_get_line(arg_1, arg_2)?;
     Ok(Object::string(rv))
 }
 
@@ -124,16 +101,10 @@ pub unsafe fn handle_buffer_get_line(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_buffer_get_line_slice(
+pub fn handle_buffer_get_line_slice(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -160,9 +131,7 @@ pub unsafe fn handle_buffer_get_line_slice(
     let Some(arg_5) = as_boolean(args[4].take()) else {
         return Err(wrong_type(5, c"buffer_get_line_slice", c"Boolean"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { buffer_get_line_slice(arg_1, arg_2, arg_3, arg_4, arg_5) }?;
+    let rv = buffer_get_line_slice(arg_1, arg_2, arg_3, arg_4, arg_5)?;
     Ok(Object::array(rv))
 }
 
@@ -171,16 +140,10 @@ pub unsafe fn handle_buffer_get_line_slice(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_buffer_insert(
+pub fn handle_buffer_insert(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -201,9 +164,7 @@ pub unsafe fn handle_buffer_insert(
     let Some(arg_3) = as_array(args[2].take()) else {
         return Err(wrong_type(3, c"buffer_insert", c"ArrayOf(String)"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { buffer_insert(arg_1, arg_2, arg_3, arena) }?;
+    buffer_insert(arg_1, arg_2, arg_3)?;
     Ok(Object::Nil)
 }
 
@@ -212,16 +173,10 @@ pub unsafe fn handle_buffer_insert(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_buffer_set_line(
+pub fn handle_buffer_set_line(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -242,9 +197,7 @@ pub unsafe fn handle_buffer_set_line(
     let Some(arg_3) = as_string(args[2].take()) else {
         return Err(wrong_type(3, c"buffer_set_line", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { buffer_set_line(arg_1, arg_2, arg_3, arena) }?;
+    buffer_set_line(arg_1, arg_2, arg_3)?;
     Ok(Object::Nil)
 }
 
@@ -253,16 +206,10 @@ pub unsafe fn handle_buffer_set_line(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_buffer_set_line_slice(
+pub fn handle_buffer_set_line_slice(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -292,9 +239,7 @@ pub unsafe fn handle_buffer_set_line_slice(
     let Some(arg_6) = as_array(args[5].take()) else {
         return Err(wrong_type(6, c"buffer_set_line_slice", c"ArrayOf(String)"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { buffer_set_line_slice(arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arena) }?;
+    buffer_set_line_slice(arg_1, arg_2, arg_3, arg_4, arg_5, arg_6)?;
     Ok(Object::Nil)
 }
 
@@ -303,16 +248,10 @@ pub unsafe fn handle_buffer_set_line_slice(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_buffer_set_var(
+pub fn handle_buffer_set_var(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -339,16 +278,10 @@ pub unsafe fn handle_buffer_set_var(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_add_highlight(
+pub fn handle_nvim_buf_add_highlight(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -387,16 +320,10 @@ pub unsafe fn handle_nvim_buf_add_highlight(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_clear_highlight(
+pub fn handle_nvim_buf_clear_highlight(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -429,16 +356,10 @@ pub unsafe fn handle_nvim_buf_clear_highlight(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_get_number(
+pub fn handle_nvim_buf_get_number(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -462,16 +383,10 @@ pub unsafe fn handle_nvim_buf_get_number(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_get_option(
+pub fn handle_nvim_buf_get_option(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -497,16 +412,10 @@ pub unsafe fn handle_nvim_buf_get_option(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_set_option(
+pub fn handle_nvim_buf_set_option(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -534,16 +443,10 @@ pub unsafe fn handle_nvim_buf_set_option(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_buf_set_virtual_text(
+pub fn handle_nvim_buf_set_virtual_text(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -579,9 +482,7 @@ pub unsafe fn handle_nvim_buf_set_virtual_text(
                 ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_set_virtual_text(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) }?;
+    let rv = nvim_buf_set_virtual_text(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     Ok(Object::Integer(rv))
 }
 
@@ -590,16 +491,10 @@ pub unsafe fn handle_nvim_buf_set_virtual_text(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_call_atomic(
+pub fn handle_nvim_call_atomic(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -614,9 +509,7 @@ pub unsafe fn handle_nvim_call_atomic(
     let Some(arg_1) = as_array(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_call_atomic", c"Array"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_call_atomic(channel_id, arg_1, arena) }?;
+    let rv = nvim_call_atomic(channel_id, arg_1, arena)?;
     Ok(Object::array(rv))
 }
 
@@ -625,16 +518,10 @@ pub unsafe fn handle_nvim_call_atomic(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_command_output(
+pub fn handle_nvim_command_output(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -658,16 +545,10 @@ pub unsafe fn handle_nvim_command_output(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_err_write(
+pub fn handle_nvim_err_write(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -691,16 +572,10 @@ pub unsafe fn handle_nvim_err_write(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_err_writeln(
+pub fn handle_nvim_err_writeln(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -724,16 +599,10 @@ pub unsafe fn handle_nvim_err_writeln(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_exec(
+pub fn handle_nvim_exec(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -760,16 +629,10 @@ pub unsafe fn handle_nvim_exec(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_execute_lua(
+pub fn handle_nvim_execute_lua(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -787,9 +650,7 @@ pub unsafe fn handle_nvim_execute_lua(
     let Some(arg_2) = as_array(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_execute_lua", c"Array"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_execute_lua(arg_1, arg_2, arena) }
+    nvim_execute_lua(arg_1, arg_2)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_get_hl_by_id`.
@@ -797,16 +658,10 @@ pub unsafe fn handle_nvim_execute_lua(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_hl_by_id(
+pub fn handle_nvim_get_hl_by_id(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -833,16 +688,10 @@ pub unsafe fn handle_nvim_get_hl_by_id(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_hl_by_name(
+pub fn handle_nvim_get_hl_by_name(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -869,16 +718,10 @@ pub unsafe fn handle_nvim_get_hl_by_name(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_option(
+pub fn handle_nvim_get_option(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -901,16 +744,10 @@ pub unsafe fn handle_nvim_get_option(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_get_option_info(
+pub fn handle_nvim_get_option_info(
     channel_id: uint64_t,
     args: Array,
-    _arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -934,16 +771,10 @@ pub unsafe fn handle_nvim_get_option_info(
 /// Decodes the argument array against the signature, answers `Err` if
 /// the arity or a type is wrong, and encodes the answer as an
 /// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_notify(
+pub fn handle_nvim_notify(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: &mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -964,7 +795,174 @@ pub unsafe fn handle_nvim_notify(
     let Some(arg_3) = as_dict(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_notify", c"Dict"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_notify(arg_1, arg_2, arg_3, arena) }
+    nvim_notify(arg_1, arg_2, arg_3)
+}
+
+/// The msgpack-RPC dispatch wrapper for `nvim_out_write`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_nvim_out_write(
+    channel_id: uint64_t,
+    args: Array,
+    _arena: &mut Arena,
+) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_nvim_out_write",
+        c"nvim_out_write",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        return Err(wrong_arity(1, args.len()));
+    }
+    let Some(arg_1) = as_string(args[0].take()) else {
+        return Err(wrong_type(1, c"nvim_out_write", c"String"));
+    };
+    nvim_out_write(arg_1);
+    Ok(Object::Nil)
+}
+
+/// The msgpack-RPC dispatch wrapper for `nvim_set_option`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_nvim_set_option(
+    channel_id: uint64_t,
+    args: Array,
+    _arena: &mut Arena,
+) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_nvim_set_option",
+        c"nvim_set_option",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        return Err(wrong_arity(2, args.len()));
+    }
+    let Some(arg_1) = as_string(args[0].take()) else {
+        return Err(wrong_type(1, c"nvim_set_option", c"String"));
+    };
+    let arg_2 = args[1].take();
+    nvim_set_option(channel_id, arg_1, arg_2)?;
+    Ok(Object::Nil)
+}
+
+/// The msgpack-RPC dispatch wrapper for `nvim_subscribe`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_nvim_subscribe(
+    channel_id: uint64_t,
+    args: Array,
+    _arena: &mut Arena,
+) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_nvim_subscribe",
+        c"nvim_subscribe",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        return Err(wrong_arity(1, args.len()));
+    }
+    let Some(arg_1) = as_string(args[0].take()) else {
+        return Err(wrong_type(1, c"nvim_subscribe", c"String"));
+    };
+    nvim_subscribe(channel_id, arg_1);
+    Ok(Object::Nil)
+}
+
+/// The msgpack-RPC dispatch wrapper for `nvim_unsubscribe`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_nvim_unsubscribe(
+    channel_id: uint64_t,
+    args: Array,
+    _arena: &mut Arena,
+) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_nvim_unsubscribe",
+        c"nvim_unsubscribe",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 1 {
+        return Err(wrong_arity(1, args.len()));
+    }
+    let Some(arg_1) = as_string(args[0].take()) else {
+        return Err(wrong_type(1, c"nvim_unsubscribe", c"String"));
+    };
+    nvim_unsubscribe(channel_id, arg_1);
+    Ok(Object::Nil)
+}
+
+/// The msgpack-RPC dispatch wrapper for `nvim_win_get_option`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_nvim_win_get_option(
+    channel_id: uint64_t,
+    args: Array,
+    _arena: &mut Arena,
+) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_nvim_win_get_option",
+        c"nvim_win_get_option",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        return Err(wrong_arity(2, args.len()));
+    }
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+        return Err(wrong_type(1, c"nvim_win_get_option", c"Window"));
+    };
+    let Some(arg_2) = as_string(args[1].take()) else {
+        return Err(wrong_type(2, c"nvim_win_get_option", c"String"));
+    };
+    nvim_win_get_option(arg_1, arg_2)
+}
+
+/// The msgpack-RPC dispatch wrapper for `nvim_win_set_option`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_nvim_win_set_option(
+    channel_id: uint64_t,
+    args: Array,
+    _arena: &mut Arena,
+) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_nvim_win_set_option",
+        c"nvim_win_set_option",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        return Err(wrong_arity(3, args.len()));
+    }
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
+        return Err(wrong_type(1, c"nvim_win_set_option", c"Window"));
+    };
+    let Some(arg_2) = as_string(args[1].take()) else {
+        return Err(wrong_type(2, c"nvim_win_set_option", c"String"));
+    };
+    let arg_3 = args[2].take();
+    nvim_win_set_option(channel_id, arg_1, arg_2, arg_3)?;
+    Ok(Object::Nil)
 }
