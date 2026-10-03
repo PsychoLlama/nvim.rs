@@ -361,6 +361,24 @@ fn new_buffer() -> Owned<Buffer> {
     owned
 }
 
+/// A registered buffer holding nothing — no memline, no `b:` dictionary —
+/// for a lib test that needs a current buffer. Its number is far above any
+/// the editor hands out. [`free_bare_buffer`] gives it back.
+#[cfg(test)]
+pub(crate) fn bare_buffer() -> Buf {
+    // One at a time: a test holds the editor lock while it has one.
+    const HANDLE: Handle = 1 << 24;
+    let owned = alloc_unregistered_buffer();
+    Buf::owned_by(&owned).handle = HANDLE;
+    register_buffer(HANDLE, owned)
+}
+
+/// Give back what [`bare_buffer`] made.
+#[cfg(test)]
+pub(crate) fn free_bare_buffer(buffer: Buf) {
+    drop(crate::winlayer::forget_buffer(buffer.handle));
+}
+
 /// A `Buffer` that lives **outside** the handle registry and off the buffer
 /// list: scratch storage whose only real content is a memline.
 ///

@@ -186,6 +186,14 @@ pub(crate) fn leave_curbuf() {
     curbuf.set(::core::ptr::null_mut::<Buffer>());
 }
 
+/// Leave the editor with no current window: what a lib test that made a
+/// bare window current puts back before freeing it.
+#[cfg(test)]
+pub(crate) fn leave_curwin() {
+    CURRENT_WIN.set(None);
+    curwin.set(::core::ptr::null_mut::<Window>());
+}
+
 // ---------------------------------------------------------------------------
 // Reading which one is current
 //

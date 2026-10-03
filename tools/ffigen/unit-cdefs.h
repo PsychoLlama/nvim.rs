@@ -3039,6 +3039,7 @@ static const int MAX_TYPENR = 65535;
 static const int MAX_UI_COUNT = 16;
 static const int MAX_WINDOW_PASSES = 1000;
 static const int MAX_XDIFF_SIZE = 1072693248;
+static const int MAY_KNOW = -3;
 static const int MB_FILLER_CHAR = 60;
 static const int MB_MAXBYTES = 21;
 static const int MB_MAXCHAR = 6;

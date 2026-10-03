@@ -171,6 +171,8 @@ mod setprops;
 pub use self::setprops::*;
 mod eval;
 pub use self::eval::*;
+#[cfg(test)]
+mod tests;
 
 /// The names `:ls` and the status line give the two list buffers. Upstream
 /// keeps them in `char *` globals; nothing has ever written to either.

@@ -485,6 +485,7 @@ count	callee	no_raw	defs	def
 6	schar_cells	1	1	crates/nvim/src/grid/schar.rs
 6	schar_from_buf	0	1	crates/nvim/src/grid/schar.rs
 6	set_context	0	1	crates/nvim/src/usercmd/complete.rs
+6	set_errorlist	0	1	crates/nvim/src/quickfix/setprops.rs
 6	set_internal_string_var	0	1	crates/nvim/src/eval/vars/lifecycle.rs
 6	set_option_varp	1	1	crates/nvim/src/option/value.rs
 6	skip_regexp_ex	0	1	crates/nvim/src/regexp/parse.rs
@@ -1854,6 +1855,7 @@ count	callee	no_raw	defs	def
 2	qf_fill_buffer	0	1	crates/nvim/src/quickfix/fill.rs
 2	qf_free_list_stack_items	0	1	crates/nvim/src/quickfix/stack.rs
 2	qf_free_lists	0	1	crates/nvim/src/quickfix/stack.rs
+2	qf_get_properties	0	1	crates/nvim/src/quickfix/getprops.rs
 2	qf_getprop_qfbufnr	0	1	crates/nvim/src/quickfix/getprops.rs
 2	qf_jump_newwin	0	1	crates/nvim/src/quickfix/jump.rs
 2	qf_pop_stack	0	1	crates/nvim/src/quickfix/stack.rs
@@ -1923,7 +1925,6 @@ count	callee	no_raw	defs	def
 2	set_context_with_pattern	0	1	crates/nvim/src/cmdexpand/context.rs
 2	set_decor	1	1	crates/nvim/src/api/deprecated/bufhl.rs
 2	set_entry_bottom	0	1	crates/nvim/src/undo/mod.rs
-2	set_errorlist	0	1	crates/nvim/src/quickfix/setprops.rs
 2	set_get	0	1	crates/nvim/src/map/mod.rs
 2	set_newval	0	0	
 2	set_oldval	0	0	
@@ -3130,7 +3131,6 @@ count	callee	no_raw	defs	def
 1	qf_add_entry_from_dict	0	1	crates/nvim/src/quickfix/setprops.rs
 1	qf_buf_add_line	0	1	crates/nvim/src/quickfix/fill.rs
 1	qf_get_list_from_lines	0	1	crates/nvim/src/quickfix/getprops.rs
-1	qf_get_properties	0	1	crates/nvim/src/quickfix/getprops.rs
 1	qf_getprop_ctx	0	1	crates/nvim/src/quickfix/getprops.rs
 1	qf_getprop_defaults	0	1	crates/nvim/src/quickfix/getprops.rs
 1	qf_getprop_filewinid	0	1	crates/nvim/src/quickfix/getprops.rs
