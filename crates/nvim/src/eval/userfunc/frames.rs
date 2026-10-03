@@ -39,6 +39,12 @@ struct FuncCalls {
     table: IdTable<FuncCall, Option<FcId>>,
     /// The call in progress: upstream's `current_funccal`.
     current: Option<FcId>,
+    /// `current`'s funccall, by its fixed address (null when there is
+    /// none): every variable lookup asks for it, and a table lookup per ask
+    /// showed in `evalbench`. Kept in step with `current` by the only two
+    /// writers, [`set_current_fc`] and [`CallStackAside`]; the current call
+    /// is never freed while it is current.
+    current_frame: *mut FuncCall,
     /// Funccalls kept beyond their call, newest last: upstream's
     /// `previous_funccal` list.
     parked: Vec<FcId>,
@@ -47,9 +53,18 @@ struct FuncCalls {
     aside: Vec<Option<FcId>>,
 }
 
+impl FuncCalls {
+    /// Make `id` the call in progress.
+    fn make_current(&mut self, id: Option<FcId>) {
+        self.current = id;
+        self.current_frame = id.map_or(ptr::null_mut(), |id| self.table.address(id));
+    }
+}
+
 static FUNC_CALLS: GlobalCell<FuncCalls> = GlobalCell::new(FuncCalls {
     table: IdTable::new(),
     current: None,
+    current_frame: ptr::null_mut(),
     parked: Vec::new(),
     aside: Vec::new(),
 });
@@ -98,11 +113,7 @@ pub(crate) fn release_funccal(id: FcId) {
 
 /// The call in progress, or null.
 pub(crate) fn current_fc() -> *mut FuncCall {
-    FUNC_CALLS.with(|calls| {
-        calls
-            .current
-            .map_or(ptr::null_mut(), |id| calls.table.address(id))
-    })
+    FUNC_CALLS.with(|calls| calls.current_frame)
 }
 
 /// The id of the call in progress.
@@ -112,7 +123,7 @@ pub(crate) fn current_fc_id() -> Option<FcId> {
 
 /// Make `id` the call in progress.
 pub(crate) fn set_current_fc(id: Option<FcId>) {
-    FUNC_CALLS.with_mut(|calls| calls.current = id);
+    FUNC_CALLS.with_mut(|calls| calls.make_current(id));
 }
 
 /// Keep `id` beyond its call, for the garbage collector to free later.
@@ -165,7 +176,8 @@ impl CallStackAside {
     /// Put the call stack aside.
     pub(crate) fn new() -> CallStackAside {
         FUNC_CALLS.with_mut(|calls| {
-            let current = calls.current.take();
+            let current = calls.current;
+            calls.make_current(None);
             calls.aside.push(current);
         });
         CallStackAside(())
@@ -179,7 +191,7 @@ impl Drop for CallStackAside {
                 .aside
                 .pop()
                 .expect("a set-aside call stack to restore");
-            calls.current = saved;
+            calls.make_current(saved);
         });
     }
 }

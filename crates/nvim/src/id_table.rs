@@ -114,34 +114,25 @@ impl<T, M: Default> IdTable<T, M> {
         mut value: Boxed<T>,
         init: impl FnOnce(TableId<T>, &mut T),
     ) -> (TableId<T>, *mut T) {
-        let id = self.vacant_id();
-        init(id, value.get_mut());
-        self.fill(id, meta, value)
-    }
-
-    /// The id the next value will have.
-    fn vacant_id(&mut self) -> TableId<T> {
-        if self.vacant.is_empty() {
+        // One pass: take a vacant slot (or add one), name it, fill it. A
+        // funccall goes through here on every call.
+        let index = self.vacant.pop().unwrap_or_else(|| {
             let index = u32::try_from(self.slots.len()).expect("fewer than 2^32 slots");
             self.slots.push(Slot {
                 generation: NonZeroU32::MIN,
                 value: None,
                 meta: M::default(),
             });
-            self.vacant.push(index);
-        }
-        let index = *self.vacant.last().expect("a vacant slot");
-        TableId {
+            index
+        });
+        let slot = &mut self.slots[index as usize];
+        debug_assert!(slot.value.is_none(), "a vacant slot is empty");
+        let id = TableId {
             index,
-            generation: self.slots[index as usize].generation,
+            generation: slot.generation,
             kind: PhantomData,
-        }
-    }
-
-    fn fill(&mut self, id: TableId<T>, meta: M, value: Boxed<T>) -> (TableId<T>, *mut T) {
-        let popped = self.vacant.pop();
-        debug_assert_eq!(popped, Some(id.index));
-        let slot = &mut self.slots[id.index as usize];
+        };
+        init(id, value.get_mut());
         slot.meta = meta;
         let value = slot.value.insert(value);
         (id, value.get().cast())

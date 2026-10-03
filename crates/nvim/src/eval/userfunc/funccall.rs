@@ -558,6 +558,11 @@ unsafe fn unlink_parked_funccals(
 
 /// The funccall the debugger is looking at, which `:backtrace` moves.
 pub fn get_funccal() -> *mut FuncCall {
+    // Every variable lookup lands here; without a backtrace level it is the
+    // call in progress, which is one load.
+    if debug_backtrace_level.get() == 0 {
+        return current_fc();
+    }
     let Some(mut funccal) = current_fc_id() else {
         return ptr::null_mut();
     };
