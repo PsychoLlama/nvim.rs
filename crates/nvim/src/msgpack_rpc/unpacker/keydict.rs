@@ -17,6 +17,7 @@
 //! every entry it reads — but they live beside [`super`] because they share
 //! its token reader and its keyset layout.
 
+use crate::api::private::keyset::{KeySet, Slot};
 use crate::printf_string;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -24,15 +25,12 @@ use crate::memory::{xrealloc, xstrdup};
 use crate::mpack::mpack_core::mpack_rtoken;
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, Boolean, FieldHashfn, Integer, KeySetLink, String_0,
-    StringArray, mpack_parser_t, mpack_token_t, mpack_walk_cb, size_t, ssize_t, uint32_t,
+    AdditionalData, AdditionalDataBuilder, Integer, String_0, StringArray, mpack_parser_t,
+    mpack_token_t, mpack_walk_cb, size_t, ssize_t, uint32_t,
 };
-use ::libc::abort;
 
 use super::protocol;
-use super::{
-    TOKEN_ARRAY, TOKEN_BIN, TOKEN_MAP, TOKEN_STR, field_type, parse_nop, unpack_integer_token,
-};
+use super::{TOKEN_ARRAY, TOKEN_BIN, TOKEN_MAP, TOKEN_STR, parse_nop, unpack_integer_token};
 
 /// Reads a string or binary token, returning a borrow of the buffer rather
 /// than a copy. An empty result means the next token was not one.
@@ -198,12 +196,10 @@ unsafe fn reserve(ad: *mut AdditionalDataBuilder, extra: size_t) {
 /// set to an owned message on failure.
 ///
 /// # Safety
-/// `retval` points at the keyset `hashy` describes, `ad` is null or a live
-/// builder, `data`/`size` are a cursor over a live buffer, and `error` points
-/// at a writable slot.
-pub unsafe fn unpack_keydict(
-    retval: *mut c_void,
-    hashy: FieldHashfn,
+/// `ad` is null or a live builder, `data`/`size` are a cursor over a live
+/// buffer, and `error` points at a writable slot.
+pub(crate) unsafe fn unpack_keydict(
+    retval: &mut dyn KeySet,
     ad: *mut AdditionalDataBuilder,
     data: *mut *const c_char,
     size: *mut size_t,
@@ -219,10 +215,10 @@ pub unsafe fn unpack_keydict(
         tok
     };
 
-    // The rows filled so far, for the duplicate-key check below. One entry
+    // The fields filled so far, for the duplicate-key check below. One entry
     // per key of the keyset, and the walk stops at the first repeat, so the
     // array can never fill.
-    let mut filled: [*const KeySetLink; 32] = [::core::ptr::null(); 32];
+    let mut filled = [0usize; 32];
     let mut filled_len = 0usize;
     for _ in 0..tok.length {
         // SAFETY: the caller's cursor, keyset and error slot; `key` borrows
@@ -238,9 +234,7 @@ pub unsafe fn unpack_keydict(
             return false;
         }
 
-        let field: *const KeySetLink =
-            unsafe { hashy.expect("keyset has no hash function")(key.data(), key.len()) };
-        if field.is_null() {
+        let Some(field) = retval.find(key.as_bytes()) else {
             if unsafe { unpack_skip(data, size) } != 0 {
                 return false;
             }
@@ -248,7 +242,7 @@ pub unsafe fn unpack_keydict(
                 unsafe { push_additional_data(ad, item_start, (*data).addr() - item_start.addr()) };
             }
             continue;
-        }
+        };
 
         // A map that names the same key twice is malformed. The *field*
         // cannot answer that: a keyset the caller pre-filled -- a ShaDa
@@ -263,9 +257,7 @@ pub unsafe fn unpack_keydict(
         filled[filled_len] = field;
         filled_len += 1;
 
-        // SAFETY: the row's offset names a field of `retval`.
-        let mem = unsafe { retval.cast::<c_char>().add((*field).ptr_off) };
-        if let Err(message) = unsafe { unpack_field(mem, (*field).type_0, data, size) } {
+        if let Err(message) = unsafe { unpack_field(retval.slot(field), data, size) } {
             unsafe { *error = fail(message, key) };
             return false;
         }
@@ -273,48 +265,45 @@ pub unsafe fn unpack_keydict(
     true
 }
 
-/// Decodes one keyset field's value into the slot at `mem`.
+/// Decodes one keyset field's value into `slot`.
 ///
 /// The error is the complaint's format string; the caller turns it into an
 /// owned message naming the key.
 ///
 /// # Safety
-/// [`unpack_keydict`]'s contract, and `mem` points at storage of the kind
-/// `type_0` names.
+/// [`unpack_keydict`]'s contract for the cursor.
 unsafe fn unpack_field(
-    mem: *mut c_char,
-    type_0: c_int,
+    slot: Slot<'_>,
     data: *mut *const c_char,
     size: *mut size_t,
 ) -> Result<(), &'static core::ffi::CStr> {
-    // SAFETY: the caller's slot and cursor; each arm writes the kind
-    // `type_0` names.
-    match type_0 {
-        field_type::BOOLEAN => {
+    // SAFETY: the caller's cursor.
+    match slot {
+        Slot::Boolean(slot) => {
             // Read straight off the wire: both boolean encodings differ
             // only in their low bit.
             if unsafe { *size } == 0 || c_int::from(unsafe { **data }) & 0xfe != 0xc2 {
                 return Err(c"has %.*s key value which is not a boolean");
             }
-            unsafe { *mem.cast::<Option<Boolean>>() = Some(c_int::from(**data) & 0x1 != 0) };
+            *slot = Some(c_int::from(unsafe { **data }) & 0x1 != 0);
             unsafe { *data = (*data).add(1) };
             unsafe { *size -= 1 };
         }
-        field_type::INTEGER => {
+        Slot::Integer(slot) => {
             let mut number: Integer = 0;
             if !unsafe { unpack_integer(data, size, &raw mut number) } {
                 return Err(c"has %.*s key value which is not an integer");
             }
-            unsafe { *mem.cast::<Option<Integer>>() = Some(number) };
+            *slot = Some(number);
         }
-        field_type::STRING => {
+        Slot::String(slot) => {
             let val = unsafe { unpack_string(data, size) };
             if val.data().is_null() {
                 return Err(c"has %.*s key value which is not a binary");
             }
-            unsafe { *mem.cast::<Option<String_0>>() = Some(val) };
+            *slot = Some(val);
         }
-        field_type::STRING_ARRAY => {
+        Slot::StringArray(slot) => {
             let len = unsafe { unpack_array(data, size) };
             if len < 0 {
                 return Err(c"has %.*s key with non-array value");
@@ -323,10 +312,10 @@ unsafe fn unpack_field(
             // this reaches is unset, so there is nothing there to append to.
             let mut array = StringArray::EMPTY;
             let read = unsafe { unpack_string_array(&mut array, len.cast_unsigned(), data, size) };
-            unsafe { *mem.cast::<Option<StringArray>>() = Some(array) };
+            *slot = Some(array);
             return read;
         }
-        _ => unsafe { abort() },
+        _ => unreachable!("ShaDa's keysets hold booleans, integers and strings"),
     }
     Ok(())
 }

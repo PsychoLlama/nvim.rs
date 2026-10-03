@@ -4,8 +4,8 @@
 //! `crate::types::keysets` plus `tools/apigen/functions.txt`. Do
 //! not edit; run `just apigen` (`just apigen --check` fails on drift).
 //!
-//! Two lookups live here. `key_dict_<name>_get_field` turns an options-dict
-//! key into the table row that says where the value goes, and
+//! Two lookups live here. Each keyset's `KeySet` impl turns an options-dict
+//! key into the field it fills, borrowed as its typed `Slot`, and
 //! `msgpack_rpc_get_handler_for` turns a method name into the wrapper that
 //! serves it.
 //!
@@ -39,15 +39,13 @@ mod keysets;
 mod keysets_2;
 
 pub use self::handlers::*;
-pub use self::keysets::*;
-pub use self::keysets_2::*;
 
-use core::ffi::{CStr, c_char, c_int};
-use core::mem::offset_of;
+use core::ffi::{CStr, c_char};
 use core::{ptr, slice};
 
 // Every generated wrapper; the handler table names most of them.
 use crate::api::private::dispatch_wrappers::*;
+use crate::api::private::keyset::{FieldKind, KeyField, KeySet, Slot};
 use crate::api_error;
 use crate::global_cell::ConstTable;
 use crate::message_fmt::c_str_len;
@@ -56,13 +54,14 @@ use crate::types::{
     KeyDict__shada_register, KeyDict__shada_search_pat, KeyDict_buf_attach, KeyDict_buf_delete,
     KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
     KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context,
-    KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_eval_statusline,
-    KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands,
-    KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns,
-    KeyDict_highlight, KeyDict_highlight_cterm, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term,
-    KeyDict_option, KeyDict_redraw, KeyDict_runtime, KeyDict_set_decoration_provider,
-    KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
-    KeyDict_win_text_height, KeyDict_xdl_diff, KeySetLink, MsgpackRpcRequestHandler, size_t,
+    KeyDict_create_augroup, KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty,
+    KeyDict_eval_statusline, KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds,
+    KeyDict_get_commands, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight,
+    KeyDict_get_ns, KeyDict_highlight, KeyDict_highlight_cterm, KeyDict_keymap, KeyDict_ns_opts,
+    KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
+    KeyDict_set_decoration_provider, KeyDict_set_extmark, KeyDict_tabpage_config,
+    KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height, KeyDict_xdl_diff,
+    MsgpackRpcRequestHandler, size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 
@@ -71,57 +70,10 @@ use crate::ui_client::handle_ui_client_redraw;
 /// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
 /// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {
-    use core::ffi::c_int;
-
     pub(crate) use crate::types::kErrorTypeException;
-
-    // `KeySetLink::type_0`: the `ObjectType` a key's value must arrive as, as
-    // the `c_int` that field holds.
-    pub(crate) const TAG_STRING_ARRAY: c_int = -1; // ShaDa's own unpacked-in-place array of strings
-    pub(crate) const TAG_NIL: c_int = 0; // any Object
-    pub(crate) const TAG_BOOLEAN: c_int = 1;
-    pub(crate) const TAG_INTEGER: c_int = 2;
-    pub(crate) const TAG_FLOAT: c_int = 3;
-    pub(crate) const TAG_STRING: c_int = 4;
-    pub(crate) const TAG_ARRAY: c_int = 5;
-    pub(crate) const TAG_DICT: c_int = 6;
-    pub(crate) const TAG_LUAREF: c_int = 7;
-    pub(crate) const TAG_BUFFER: c_int = 8;
-    pub(crate) const TAG_WINDOW: c_int = 9;
 }
 
 use known::*;
-
-/// One row of a keyset table: the key's name, the offset of the `Option`
-/// field its value lands in, and the tag that value must arrive as.
-const fn key(name: &'static CStr, ptr_off: usize, type_0: c_int) -> KeySetLink {
-    KeySetLink {
-        str: name.as_ptr().cast_mut(),
-        ptr_off,
-        type_0,
-        is_hlgroup: false,
-    }
-}
-
-/// A row whose value names a highlight group. It arrives as a String and is
-/// stored as the id the converter resolves it to, so its tag is an Integer.
-const fn hl_key(name: &'static CStr, ptr_off: usize) -> KeySetLink {
-    KeySetLink {
-        str: name.as_ptr().cast_mut(),
-        ptr_off,
-        type_0: TAG_INTEGER,
-        is_hlgroup: true,
-    }
-}
-
-/// The null row every keyset table ends with: `api_keydict_to_dict` walks a
-/// table until it sees one.
-const END: KeySetLink = KeySetLink {
-    str: ptr::null_mut(),
-    ptr_off: 0,
-    type_0: TAG_NIL,
-    is_hlgroup: false,
-};
 
 /// The key bytes a lookup was handed. An empty key carries no pointer worth
 /// dereferencing — and may carry a null one — so length zero short-circuits.

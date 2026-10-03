@@ -23,7 +23,6 @@
 
 use crate::api::private::metadata::PACKED_API_METADATA;
 use crate::api::private::validate::{err_bad_value, err_expected};
-use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, highlight_num_groups, syn_check_group};
 use crate::lua::executor::{api_free_luaref, api_new_luaref};
@@ -236,13 +235,9 @@ pub(crate) fn api_typename(t: ObjectType) -> &'static CStr {
 
 /// `obj` as a boolean. An integer is true when nonzero and nil takes
 /// `nil_value`; anything else refuses, naming `what`.
-///
-/// # Safety
-///
-/// `what` must point at a NUL-terminated string.
-pub(crate) unsafe fn api_object_to_bool(
+pub(crate) fn api_object_to_bool(
     obj: &Object,
-    what: *const c_char,
+    what: &CStr,
     nil_value: bool,
 ) -> Result<bool, Error> {
     if let Some(on) = obj.as_boolean() {
@@ -254,17 +249,12 @@ pub(crate) unsafe fn api_object_to_bool(
     if obj.is_nil() {
         return Ok(nil_value);
     }
-    // SAFETY: the names and values are NUL-terminated strings.
-    Err(err_expected(unsafe { cstr::at(what) }, c"boolean", None))
+    Err(err_expected(what, c"boolean", None))
 }
 
 /// `obj` as a highlight group id, defining the group if it was named and does
 /// not exist yet. Zero for the empty name and for an id out of range.
-///
-/// # Safety
-///
-/// `what` must point at a NUL-terminated string.
-pub(crate) unsafe fn object_to_hl_id(obj: &Object, what: *const c_char) -> Result<c_int, Error> {
+pub(crate) fn object_to_hl_id(obj: &Object, what: &CStr) -> Result<c_int, Error> {
     if let Some(str) = obj.as_string() {
         if str.is_empty() {
             return Ok(0);
@@ -277,8 +267,7 @@ pub(crate) unsafe fn object_to_hl_id(obj: &Object, what: *const c_char) -> Resul
         let id = number_as_int(number);
         return Ok(if (1..=known).contains(&id) { id } else { 0 });
     }
-    // SAFETY: the names and values are NUL-terminated strings.
-    Err(err_bad_value(c"hl_group", unsafe { cstr::at(what) }))
+    Err(err_bad_value(c"hl_group", what))
 }
 
 /// `kv_push` for a plain kvec, which starts empty and doubles from 8.
@@ -322,8 +311,7 @@ pub(crate) fn parse_hl_msg(
         };
         let text = text.clone();
         let hl_id = if chunk.len() == 2 {
-            // SAFETY: the name is a NUL-terminated literal.
-            unsafe { object_to_hl_id(&chunk[1], c"text highlight".as_ptr()) }?
+            object_to_hl_id(&chunk[1], c"text highlight")?
         } else if is_err {
             HLF_E
         } else {

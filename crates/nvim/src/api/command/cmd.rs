@@ -44,7 +44,7 @@ use crate::guard::Suppress;
 use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
 use crate::snprintf;
 use crate::types::CmdIdx;
-use crate::types::{CmdLine, ExArgt, FieldHashfn, NUL};
+use crate::types::{CmdLine, ExArgt, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -69,17 +69,14 @@ fn err_expected_at(name: &CStr, expected: &CStr, actual: *const c_char) -> Error
 
 /// Decode one of `cmd`'s sub-keyset Dicts (`magic`, `mods`, `mods.filter`)
 /// into a fresh `K`.
-///
-/// `get_field` must be `K`'s own generated field lookup: the decoder writes
-/// through the offsets it hands back, so pairing it with a different keyset
-/// would write outside `K`.
-fn sub_keyset<K: Default>(dict: &ApiDict, get_field: FieldHashfn) -> Result<K, Error> {
+fn sub_keyset<K: crate::api::private::keyset::KeySet + Default>(
+    dict: &ApiDict,
+) -> Result<K, Error> {
     // Every key unset, which is what the decoder expects to start from.
     let mut out = K::default();
     // The keyset takes its fields over, and the caller's dictionary is a
     // borrow of the outer keyset's -- so the copy is the sub-keyset's.
-    // SAFETY: as above.
-    unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict.clone()) }?;
+    api_dict_to_keydict(&mut out, dict.clone())?;
     Ok(out)
 }
 
@@ -496,8 +493,7 @@ fn apply_magic(
         return Ok(());
     };
 
-    let get_field = Some(key_dict_cmd_magic_get_field as _);
-    let magic = sub_keyset::<KeyDict_cmd_magic>(given, get_field)?;
+    let magic = sub_keyset::<KeyDict_cmd_magic>(given)?;
 
     cmdinfo.magic.file = magic.file.unwrap_or(argt_file);
     cmdinfo.magic.bar = magic.bar.unwrap_or(argt_bar);
@@ -517,8 +513,7 @@ fn apply_mods(cmd: &KeyDict_cmd, excmd: &ExArg, cmdinfo: &mut CmdParseInfo) -> R
         return Ok(());
     };
 
-    let get_field = Some(key_dict_cmd_mods_get_field as _);
-    let mods = sub_keyset::<KeyDict_cmd_mods>(given, get_field)?;
+    let mods = sub_keyset::<KeyDict_cmd_mods>(given)?;
     let mods = &mods;
 
     if mods.filter.is_some() {
@@ -600,11 +595,8 @@ fn split_direction(name: &CStr) -> Option<Option<c_int>> {
 
 /// Unpack `mods.filter` and compile its pattern.
 fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Result<(), Error> {
-    let get_field = Some(key_dict_cmd_mods_filter_get_field as _);
-    let filter = sub_keyset::<KeyDict_cmd_mods_filter>(
-        mods.filter.as_ref().unwrap_or(&ApiDict::EMPTY),
-        get_field,
-    )?;
+    let filter =
+        sub_keyset::<KeyDict_cmd_mods_filter>(mods.filter.as_ref().unwrap_or(&ApiDict::EMPTY))?;
     let Some(pattern) = filter.pattern.as_ref() else {
         return Ok(());
     };

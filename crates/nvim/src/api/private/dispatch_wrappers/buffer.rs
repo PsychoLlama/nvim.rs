@@ -63,14 +63,13 @@ pub fn handle_nvim_buf_attach(
     let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_buf_attach", c"Boolean"));
     };
-    let mut arg_3: KeyDict_buf_attach =
-        match read_keydict(Some(key_dict_buf_attach_get_field), args[2].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(3, c"nvim_buf_attach", c"Dict(buf_attach) *"));
-            }
-        };
+    let mut arg_3: KeyDict_buf_attach = match read_keydict(args[2].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(3, c"nvim_buf_attach", c"Dict(buf_attach) *"));
+        }
+    };
     let rv = nvim_buf_attach(channel_id, arg_1, arg_2, &mut arg_3)?;
     Ok(Object::Boolean(rv))
 }
@@ -191,14 +190,13 @@ pub fn handle_nvim_buf_delete(
     let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
         return Err(wrong_type(1, c"nvim_buf_delete", c"Buffer"));
     };
-    let mut arg_2: KeyDict_buf_delete =
-        match read_keydict(Some(key_dict_buf_delete_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_buf_delete", c"Dict(buf_delete) *"));
-            }
-        };
+    let mut arg_2: KeyDict_buf_delete = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_buf_delete", c"Dict(buf_delete) *"));
+        }
+    };
     if text_locked() {
         return Err(text_locked_error());
     }
@@ -458,14 +456,13 @@ pub fn handle_nvim_buf_get_text(
     let Some(arg_5) = as_integer(args[4].take()) else {
         return Err(wrong_type(5, c"nvim_buf_get_text", c"Integer"));
     };
-    let mut arg_6: KeyDict_empty =
-        match read_keydict(Some(key_dict_empty_get_field), args[5].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(6, c"nvim_buf_get_text", c"Dict(empty) *"));
-            }
-        };
+    let mut arg_6: KeyDict_empty = match read_keydict(args[5].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(6, c"nvim_buf_get_text", c"Dict(empty) *"));
+        }
+    };
     // SAFETY: each argument was checked against the type the signature declares.
     let rv = unsafe {
         nvim_buf_get_text(
@@ -624,14 +621,13 @@ pub fn handle_nvim_buf_set_keymap(
     let Some(arg_4) = as_string(args[3].take()) else {
         return Err(wrong_type(4, c"nvim_buf_set_keymap", c"String"));
     };
-    let mut arg_5: KeyDict_keymap =
-        match read_keydict(Some(key_dict_keymap_get_field), args[4].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(5, c"nvim_buf_set_keymap", c"Dict(keymap) *"));
-            }
-        };
+    let mut arg_5: KeyDict_keymap = match read_keydict(args[4].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(5, c"nvim_buf_set_keymap", c"Dict(keymap) *"));
+        }
+    };
     nvim_buf_set_keymap(channel_id, arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     Ok(Object::Nil)
 }
@@ -710,14 +706,13 @@ pub fn handle_nvim_buf_set_mark(
     let Some(arg_4) = as_integer(args[3].take()) else {
         return Err(wrong_type(4, c"nvim_buf_set_mark", c"Integer"));
     };
-    let mut arg_5: KeyDict_empty =
-        match read_keydict(Some(key_dict_empty_get_field), args[4].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(5, c"nvim_buf_set_mark", c"Dict(empty) *"));
-            }
-        };
+    let mut arg_5: KeyDict_empty = match read_keydict(args[4].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(5, c"nvim_buf_set_mark", c"Dict(empty) *"));
+        }
+    };
     let rv = nvim_buf_set_mark(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     Ok(Object::Boolean(rv))
 }

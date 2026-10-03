@@ -53,14 +53,13 @@ pub fn handle_nvim_get_option_info2(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_get_option_info2", c"String"));
     };
-    let mut arg_2: KeyDict_option =
-        match read_keydict(Some(key_dict_option_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_get_option_info2", c"Dict(option) *"));
-            }
-        };
+    let mut arg_2: KeyDict_option = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_get_option_info2", c"Dict(option) *"));
+        }
+    };
     let rv = nvim_get_option_info2(arg_1, &mut arg_2)?;
     Ok(Object::dict(rv))
 }
@@ -88,14 +87,13 @@ pub fn handle_nvim_get_option_value(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_get_option_value", c"String"));
     };
-    let mut arg_2: KeyDict_option =
-        match read_keydict(Some(key_dict_option_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_get_option_value", c"Dict(option) *"));
-            }
-        };
+    let mut arg_2: KeyDict_option = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_get_option_value", c"Dict(option) *"));
+        }
+    };
     nvim_get_option_value(arg_1, &mut arg_2)
 }
 
@@ -123,14 +121,13 @@ pub fn handle_nvim_set_option_value(
         return Err(wrong_type(1, c"nvim_set_option_value", c"String"));
     };
     let arg_2 = args[1].take();
-    let mut arg_3: KeyDict_option =
-        match read_keydict(Some(key_dict_option_get_field), args[2].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(3, c"nvim_set_option_value", c"Dict(option) *"));
-            }
-        };
+    let mut arg_3: KeyDict_option = match read_keydict(args[2].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(3, c"nvim_set_option_value", c"Dict(option) *"));
+        }
+    };
     nvim_set_option_value(channel_id, arg_1, arg_2, &mut arg_3)?;
     Ok(Object::Nil)
 }

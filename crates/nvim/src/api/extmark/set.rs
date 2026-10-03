@@ -102,12 +102,10 @@ impl Decoration {
             return Ok(());
         };
         match given.as_array() {
-            // SAFETY: the name is a NUL-terminated literal.
-            None => self.hl.hl_id = unsafe { object_to_hl_id(given, c"hl_group".as_ptr()) }?,
+            None => self.hl.hl_id = object_to_hl_id(given, c"hl_group")?,
             Some(groups) => {
                 for (n, group) in groups.iter().enumerate() {
-                    // SAFETY: as above.
-                    let hl_id = unsafe { object_to_hl_id(group, c"hl_group item".as_ptr()) }?;
+                    let hl_id = object_to_hl_id(group, c"hl_group item")?;
                     if n == 0 {
                         self.hl.hl_id = hl_id;
                     } else if hl_id != 0 {
@@ -403,8 +401,7 @@ impl Decoration {
                 // The same objects resolved above, so a refusal here is
                 // impossible; zero is the id an unresolvable name would have
                 // got.
-                // SAFETY: the name is a NUL-terminated literal.
-                let hl_id = unsafe { object_to_hl_id(group, c"hl_group item".as_ptr()) };
+                let hl_id = object_to_hl_id(group, c"hl_group item");
                 let hl_id = hl_id.unwrap_or(0);
                 if hl_id > 0 {
                     let mut sh: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;

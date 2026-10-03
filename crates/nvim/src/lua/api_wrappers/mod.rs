@@ -97,28 +97,7 @@ use crate::api::extmark::{
 use crate::api::options::{
     nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
 };
-use crate::api::private::dispatch::{
-    buf_attach_table, buf_delete_table, clear_autocmds_table, cmd_opts_table, cmd_table,
-    complete_set_table, context_table, create_augroup_table, create_autocmd_table, echo_opts_table,
-    empty_table, eval_statusline_table, exec_autocmds_table, exec_opts_table, get_autocmds_table,
-    get_commands_table, get_extmark_table, get_extmarks_table, get_highlight_table, get_ns_table,
-    highlight_table, key_dict_buf_attach_get_field, key_dict_buf_delete_get_field,
-    key_dict_clear_autocmds_get_field, key_dict_cmd_get_field, key_dict_cmd_opts_get_field,
-    key_dict_complete_set_get_field, key_dict_context_get_field, key_dict_create_augroup_get_field,
-    key_dict_create_autocmd_get_field, key_dict_echo_opts_get_field, key_dict_empty_get_field,
-    key_dict_eval_statusline_get_field, key_dict_exec_autocmds_get_field,
-    key_dict_exec_opts_get_field, key_dict_get_autocmds_get_field, key_dict_get_commands_get_field,
-    key_dict_get_extmark_get_field, key_dict_get_extmarks_get_field,
-    key_dict_get_highlight_get_field, key_dict_get_ns_get_field, key_dict_highlight_get_field,
-    key_dict_keymap_get_field, key_dict_ns_opts_get_field, key_dict_open_term_get_field,
-    key_dict_option_get_field, key_dict_redraw_get_field, key_dict_runtime_get_field,
-    key_dict_set_decoration_provider_get_field, key_dict_set_extmark_get_field,
-    key_dict_tabpage_config_get_field, key_dict_user_command_get_field,
-    key_dict_win_config_get_field, key_dict_win_text_height_get_field, keymap_table, ns_opts_table,
-    open_term_table, option_table, redraw_table, runtime_table, set_decoration_provider_table,
-    set_extmark_table, tabpage_config_table, user_command_table, win_config_table,
-    win_text_height_table,
-};
+use crate::api::private::keyset::KeySet;
 use crate::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
     nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
@@ -157,7 +136,6 @@ use crate::api::window::{
 use crate::api_error;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
-use crate::global_cell::ConstTable;
 use crate::guard::Restore;
 use crate::guard::textlock;
 use crate::lua::converter::{
@@ -177,15 +155,15 @@ use crate::lua::ffi::{
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{e_fast_api_disabled, e_textlock};
 use crate::types::{
-    Arena, Error, FieldHashfn, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds,
-    KeyDict_cmd, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup,
+    Arena, Error, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd,
+    KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup,
     KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
     KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands,
     KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns,
     KeyDict_highlight, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term, KeyDict_option,
     KeyDict_redraw, KeyDict_runtime, KeyDict_set_decoration_provider, KeyDict_set_extmark,
     KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height,
-    KeySetLink, LuaRef, lua_State,
+    LuaRef, lua_State,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -236,32 +214,14 @@ type Convert = unsafe fn(*mut lua_State, &mut Call) -> Result<(), Error>;
 
 // -- keysets ---------------------------------------------------------------
 
-/// A generated keyset, tied to the two generated items that describe it.
-///
-/// # Safety
-/// `GET_FIELD` must be `Self`'s own field lookup and [`table`](Self::table)
-/// answer `Self`'s own key table: the decoder writes through the offsets the
-/// first hands back and the release walks the second, so either one belonging
-/// to a different keyset would read and write outside `Self`.
-unsafe trait KeySet: Sized + Default {
-    const GET_FIELD: FieldHashfn;
-
-    fn table() -> *const KeySetLink;
-}
-
-/// A keyset's generated table, as the code that walks one takes it.
-fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *const KeySetLink {
-    table.as_ptr()
-}
-
 /// A keyset argument. A keyset owns its fields, so this is a name for the
 /// decoder's target rather than a guard -- what a half-filled keyset took
 /// before it stopped is released by dropping it.
-struct KeyDictArg<K: KeySet> {
+struct KeyDictArg<K: KeySet + Default> {
     dict: K,
 }
 
-impl<K: KeySet> KeyDictArg<K> {
+impl<K: KeySet + Default> KeyDictArg<K> {
     /// Every key absent, which is where a keyset argument starts out.
     fn unset() -> Self {
         KeyDictArg { dict: K::default() }
@@ -274,25 +234,22 @@ impl<K: KeySet> KeyDictArg<K> {
 /// # Safety
 /// `lstate` is the running Lua state with the argument on top; `err_param`
 /// is the binding's own.
-unsafe fn pop_keydict<K: KeySet>(
+unsafe fn pop_keydict<K: KeySet + Default>(
     lstate: *mut lua_State,
     arg: &mut KeyDictArg<K>,
     err_param: &mut *mut c_char,
 ) -> Result<(), Error> {
-    // SAFETY: the caller's stack, and `K::GET_FIELD` is `K`'s own lookup per
-    // `KeySet`'s contract, which is what the decoder needs of it.
-    unsafe { nlua_pop_keydict(lstate, (&raw mut arg.dict).cast(), K::GET_FIELD, err_param) }
+    // SAFETY: the caller's stack.
+    unsafe { nlua_pop_keydict(lstate, &mut arg.dict, err_param) }
 }
 
 /// Hand a keyset result back as a Lua table.
 ///
 /// # Safety
-/// `lstate` is the running Lua state and `value` points at the binding's own
-/// result.
-unsafe fn push_keydict<K: KeySet>(lstate: *mut lua_State, value: *mut K) {
-    // SAFETY: the caller's stack, and `K::table()` describes `K`'s fields per
-    // `KeySet`'s contract.
-    unsafe { nlua_push_keydict(lstate, value.cast(), K::table()) };
+/// `lstate` is the running Lua state.
+unsafe fn push_keydict(lstate: *mut lua_State, value: &mut dyn KeySet) {
+    // SAFETY: the caller's stack.
+    unsafe { nlua_push_keydict(lstate, value) };
 }
 
 // -- argument guards -------------------------------------------------------
@@ -466,337 +423,4 @@ fn text_locked_error() -> Error {
 /// alone would have allowed.
 fn expr_map_locked_error() -> Error {
     Error::from_message(kErrorTypeException, e_textlock)
-}
-
-// The keysets the bindings name, each tied to its own generated table
-// and lookup.
-
-// SAFETY: `buf_attach_table` and `key_dict_buf_attach_get_field` are the
-// generated table and lookup for `KeyDict_buf_attach`.
-unsafe impl KeySet for KeyDict_buf_attach {
-    const GET_FIELD: FieldHashfn = Some(key_dict_buf_attach_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&buf_attach_table)
-    }
-}
-
-// SAFETY: `buf_delete_table` and `key_dict_buf_delete_get_field` are the
-// generated table and lookup for `KeyDict_buf_delete`.
-unsafe impl KeySet for KeyDict_buf_delete {
-    const GET_FIELD: FieldHashfn = Some(key_dict_buf_delete_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&buf_delete_table)
-    }
-}
-
-// SAFETY: `clear_autocmds_table` and `key_dict_clear_autocmds_get_field` are the
-// generated table and lookup for `KeyDict_clear_autocmds`.
-unsafe impl KeySet for KeyDict_clear_autocmds {
-    const GET_FIELD: FieldHashfn = Some(key_dict_clear_autocmds_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&clear_autocmds_table)
-    }
-}
-
-// SAFETY: `cmd_table` and `key_dict_cmd_get_field` are the
-// generated table and lookup for `KeyDict_cmd`.
-unsafe impl KeySet for KeyDict_cmd {
-    const GET_FIELD: FieldHashfn = Some(key_dict_cmd_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&cmd_table)
-    }
-}
-
-// SAFETY: `cmd_opts_table` and `key_dict_cmd_opts_get_field` are the
-// generated table and lookup for `KeyDict_cmd_opts`.
-unsafe impl KeySet for KeyDict_cmd_opts {
-    const GET_FIELD: FieldHashfn = Some(key_dict_cmd_opts_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&cmd_opts_table)
-    }
-}
-
-// SAFETY: `complete_set_table` and `key_dict_complete_set_get_field` are the
-// generated table and lookup for `KeyDict_complete_set`.
-unsafe impl KeySet for KeyDict_complete_set {
-    const GET_FIELD: FieldHashfn = Some(key_dict_complete_set_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&complete_set_table)
-    }
-}
-
-// SAFETY: `context_table` and `key_dict_context_get_field` are the
-// generated table and lookup for `KeyDict_context`.
-unsafe impl KeySet for KeyDict_context {
-    const GET_FIELD: FieldHashfn = Some(key_dict_context_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&context_table)
-    }
-}
-
-// SAFETY: `create_augroup_table` and `key_dict_create_augroup_get_field` are the
-// generated table and lookup for `KeyDict_create_augroup`.
-unsafe impl KeySet for KeyDict_create_augroup {
-    const GET_FIELD: FieldHashfn = Some(key_dict_create_augroup_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&create_augroup_table)
-    }
-}
-
-// SAFETY: `create_autocmd_table` and `key_dict_create_autocmd_get_field` are the
-// generated table and lookup for `KeyDict_create_autocmd`.
-unsafe impl KeySet for KeyDict_create_autocmd {
-    const GET_FIELD: FieldHashfn = Some(key_dict_create_autocmd_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&create_autocmd_table)
-    }
-}
-
-// SAFETY: `echo_opts_table` and `key_dict_echo_opts_get_field` are the
-// generated table and lookup for `KeyDict_echo_opts`.
-unsafe impl KeySet for KeyDict_echo_opts {
-    const GET_FIELD: FieldHashfn = Some(key_dict_echo_opts_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&echo_opts_table)
-    }
-}
-
-// SAFETY: `empty_table` and `key_dict_empty_get_field` are the
-// generated table and lookup for `KeyDict_empty`.
-unsafe impl KeySet for KeyDict_empty {
-    const GET_FIELD: FieldHashfn = Some(key_dict_empty_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&empty_table)
-    }
-}
-
-// SAFETY: `eval_statusline_table` and `key_dict_eval_statusline_get_field` are the
-// generated table and lookup for `KeyDict_eval_statusline`.
-unsafe impl KeySet for KeyDict_eval_statusline {
-    const GET_FIELD: FieldHashfn = Some(key_dict_eval_statusline_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&eval_statusline_table)
-    }
-}
-
-// SAFETY: `exec_autocmds_table` and `key_dict_exec_autocmds_get_field` are the
-// generated table and lookup for `KeyDict_exec_autocmds`.
-unsafe impl KeySet for KeyDict_exec_autocmds {
-    const GET_FIELD: FieldHashfn = Some(key_dict_exec_autocmds_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&exec_autocmds_table)
-    }
-}
-
-// SAFETY: `exec_opts_table` and `key_dict_exec_opts_get_field` are the
-// generated table and lookup for `KeyDict_exec_opts`.
-unsafe impl KeySet for KeyDict_exec_opts {
-    const GET_FIELD: FieldHashfn = Some(key_dict_exec_opts_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&exec_opts_table)
-    }
-}
-
-// SAFETY: `get_autocmds_table` and `key_dict_get_autocmds_get_field` are the
-// generated table and lookup for `KeyDict_get_autocmds`.
-unsafe impl KeySet for KeyDict_get_autocmds {
-    const GET_FIELD: FieldHashfn = Some(key_dict_get_autocmds_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&get_autocmds_table)
-    }
-}
-
-// SAFETY: `get_commands_table` and `key_dict_get_commands_get_field` are the
-// generated table and lookup for `KeyDict_get_commands`.
-unsafe impl KeySet for KeyDict_get_commands {
-    const GET_FIELD: FieldHashfn = Some(key_dict_get_commands_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&get_commands_table)
-    }
-}
-
-// SAFETY: `get_extmark_table` and `key_dict_get_extmark_get_field` are the
-// generated table and lookup for `KeyDict_get_extmark`.
-unsafe impl KeySet for KeyDict_get_extmark {
-    const GET_FIELD: FieldHashfn = Some(key_dict_get_extmark_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&get_extmark_table)
-    }
-}
-
-// SAFETY: `get_extmarks_table` and `key_dict_get_extmarks_get_field` are the
-// generated table and lookup for `KeyDict_get_extmarks`.
-unsafe impl KeySet for KeyDict_get_extmarks {
-    const GET_FIELD: FieldHashfn = Some(key_dict_get_extmarks_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&get_extmarks_table)
-    }
-}
-
-// SAFETY: `get_highlight_table` and `key_dict_get_highlight_get_field` are the
-// generated table and lookup for `KeyDict_get_highlight`.
-unsafe impl KeySet for KeyDict_get_highlight {
-    const GET_FIELD: FieldHashfn = Some(key_dict_get_highlight_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&get_highlight_table)
-    }
-}
-
-// SAFETY: `get_ns_table` and `key_dict_get_ns_get_field` are the
-// generated table and lookup for `KeyDict_get_ns`.
-unsafe impl KeySet for KeyDict_get_ns {
-    const GET_FIELD: FieldHashfn = Some(key_dict_get_ns_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&get_ns_table)
-    }
-}
-
-// SAFETY: `highlight_table` and `key_dict_highlight_get_field` are the
-// generated table and lookup for `KeyDict_highlight`.
-unsafe impl KeySet for KeyDict_highlight {
-    const GET_FIELD: FieldHashfn = Some(key_dict_highlight_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&highlight_table)
-    }
-}
-
-// SAFETY: `keymap_table` and `key_dict_keymap_get_field` are the
-// generated table and lookup for `KeyDict_keymap`.
-unsafe impl KeySet for KeyDict_keymap {
-    const GET_FIELD: FieldHashfn = Some(key_dict_keymap_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&keymap_table)
-    }
-}
-
-// SAFETY: `ns_opts_table` and `key_dict_ns_opts_get_field` are the
-// generated table and lookup for `KeyDict_ns_opts`.
-unsafe impl KeySet for KeyDict_ns_opts {
-    const GET_FIELD: FieldHashfn = Some(key_dict_ns_opts_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&ns_opts_table)
-    }
-}
-
-// SAFETY: `open_term_table` and `key_dict_open_term_get_field` are the
-// generated table and lookup for `KeyDict_open_term`.
-unsafe impl KeySet for KeyDict_open_term {
-    const GET_FIELD: FieldHashfn = Some(key_dict_open_term_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&open_term_table)
-    }
-}
-
-// SAFETY: `option_table` and `key_dict_option_get_field` are the
-// generated table and lookup for `KeyDict_option`.
-unsafe impl KeySet for KeyDict_option {
-    const GET_FIELD: FieldHashfn = Some(key_dict_option_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&option_table)
-    }
-}
-
-// SAFETY: `redraw_table` and `key_dict_redraw_get_field` are the
-// generated table and lookup for `KeyDict_redraw`.
-unsafe impl KeySet for KeyDict_redraw {
-    const GET_FIELD: FieldHashfn = Some(key_dict_redraw_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&redraw_table)
-    }
-}
-
-// SAFETY: `runtime_table` and `key_dict_runtime_get_field` are the
-// generated table and lookup for `KeyDict_runtime`.
-unsafe impl KeySet for KeyDict_runtime {
-    const GET_FIELD: FieldHashfn = Some(key_dict_runtime_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&runtime_table)
-    }
-}
-
-// SAFETY: `set_decoration_provider_table` and `key_dict_set_decoration_provider_get_field` are the
-// generated table and lookup for `KeyDict_set_decoration_provider`.
-unsafe impl KeySet for KeyDict_set_decoration_provider {
-    const GET_FIELD: FieldHashfn = Some(key_dict_set_decoration_provider_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&set_decoration_provider_table)
-    }
-}
-
-// SAFETY: `set_extmark_table` and `key_dict_set_extmark_get_field` are the
-// generated table and lookup for `KeyDict_set_extmark`.
-unsafe impl KeySet for KeyDict_set_extmark {
-    const GET_FIELD: FieldHashfn = Some(key_dict_set_extmark_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&set_extmark_table)
-    }
-}
-
-// SAFETY: `tabpage_config_table` and `key_dict_tabpage_config_get_field` are the
-// generated table and lookup for `KeyDict_tabpage_config`.
-unsafe impl KeySet for KeyDict_tabpage_config {
-    const GET_FIELD: FieldHashfn = Some(key_dict_tabpage_config_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&tabpage_config_table)
-    }
-}
-
-// SAFETY: `user_command_table` and `key_dict_user_command_get_field` are the
-// generated table and lookup for `KeyDict_user_command`.
-unsafe impl KeySet for KeyDict_user_command {
-    const GET_FIELD: FieldHashfn = Some(key_dict_user_command_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&user_command_table)
-    }
-}
-
-// SAFETY: `win_config_table` and `key_dict_win_config_get_field` are the
-// generated table and lookup for `KeyDict_win_config`.
-unsafe impl KeySet for KeyDict_win_config {
-    const GET_FIELD: FieldHashfn = Some(key_dict_win_config_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&win_config_table)
-    }
-}
-
-// SAFETY: `win_text_height_table` and `key_dict_win_text_height_get_field` are the
-// generated table and lookup for `KeyDict_win_text_height`.
-unsafe impl KeySet for KeyDict_win_text_height {
-    const GET_FIELD: FieldHashfn = Some(key_dict_win_text_height_get_field);
-
-    fn table() -> *const KeySetLink {
-        keyset_table(&win_text_height_table)
-    }
 }

@@ -46,9 +46,8 @@ pub mod keydict;
 pub mod protocol;
 pub mod redraw;
 
-pub use keydict::{
-    push_additional_data, unpack_array, unpack_integer, unpack_keydict, unpack_skip, unpack_string,
-};
+pub(crate) use keydict::unpack_keydict;
+pub use keydict::{push_additional_data, unpack_array, unpack_integer, unpack_skip, unpack_string};
 
 use redraw::unpacker_parse_redraw;
 
@@ -62,17 +61,6 @@ pub const kMessageTypeRedrawEvent: MessageType = 3;
 pub const kMessageTypeNotification: MessageType = 2;
 pub const kMessageTypeResponse: MessageType = 1;
 pub const kUnpackTypeStringArray: c_int = -1;
-
-/// The value kinds a generated keyset field can hold. Three are `ObjectType`
-/// values; the fourth is the keyset layer's own.
-mod field_type {
-    use core::ffi::c_int;
-
-    pub(super) const BOOLEAN: c_int = 1;
-    pub(super) const INTEGER: c_int = 2;
-    pub(super) const STRING: c_int = 4;
-    pub(super) const STRING_ARRAY: c_int = super::kUnpackTypeStringArray;
-}
 
 /// libmpack's parse results: ok, ran out of input, malformed, too deep.
 ///

@@ -17,7 +17,6 @@
 //! whole reason a keyset's fields are `Option`s.
 
 use super::{HLATTRS_INIT, attr_entry_count, syn_attr2entry};
-use crate::api::private::dispatch::key_dict_highlight_cterm_get_field;
 use crate::api::private::helpers::api_dict_to_keydict;
 use crate::api::private::validate::{err_bad_value, err_expected, err_out_of_range};
 use crate::api_error;
@@ -25,9 +24,8 @@ use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    ApiDict, Boolean, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
-    KeyDict_highlight_cterm, Object, int16_t, int32_t, kErrorTypeException, kErrorTypeValidation,
-    size_t,
+    ApiDict, Boolean, Error, HlAttrs, Integer, KeyDict_highlight, KeyDict_highlight_cterm, Object,
+    int16_t, int32_t, kErrorTypeException, kErrorTypeValidation, size_t,
 };
 use ::libc::strcasecmp;
 use core::ffi::{CStr, c_int};
@@ -363,13 +361,9 @@ pub unsafe fn dict2hlattrs(
     // amending them: what it does not name is off.
     if let Some(given) = &dict.cterm {
         let mut cterm = KeyDict_highlight_cterm::default();
-        let field: FieldHashfn = Some(key_dict_highlight_cterm_get_field);
-        let target = (&raw mut cterm).cast();
         // The sub-dict is copied: `dict` is the caller's and goes on holding
         // it. It is a handful of booleans.
-        // SAFETY: `field` is `KeyDict_highlight_cterm`'s own lookup, and
-        // `target` is that keydict.
-        unsafe { api_dict_to_keydict(target, field, given.clone()) }?;
+        api_dict_to_keydict(&mut cterm, given.clone())?;
         cterm_mask_provided = true;
         cterm_mask = HlAttrFlags::NONE;
         let bits = [

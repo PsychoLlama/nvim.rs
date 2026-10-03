@@ -127,12 +127,7 @@ unsafe fn parse_search_pattern(
     error: &mut *mut c_char,
 ) -> Result<uint32_t, Malformed> {
     let it = unsafe { (*entry).data.search_pattern_mut() };
-    if !cursor.keydict(
-        (&raw mut *it).cast::<c_void>(),
-        Some(key_dict__shada_search_pat_get_field),
-        extra,
-        error,
-    ) {
+    if !cursor.keydict(&mut *it, extra, error) {
         malformed_entry_because(
             c"E575: Error while reading ShaDa file: search pattern entry at position %lu %s",
             pos,
@@ -164,12 +159,7 @@ unsafe fn parse_mark(
 ) -> Result<uint32_t, Malformed> {
     let pos = header.fpos;
     let mut it = KeyDict__shada_mark::default();
-    if !cursor.keydict(
-        (&raw mut it).cast::<c_void>(),
-        Some(key_dict__shada_mark_get_field),
-        extra,
-        error,
-    ) {
+    if !cursor.keydict(&mut it, extra, error) {
         malformed_entry_because(
             c"E575: Error while reading ShaDa file: mark entry at position %lu %s",
             pos,
@@ -227,12 +217,7 @@ unsafe fn parse_register(
     error: &mut *mut c_char,
 ) -> Result<uint32_t, Malformed> {
     let mut it = KeyDict__shada_register::default();
-    let ok = cursor.keydict(
-        (&raw mut it).cast::<c_void>(),
-        Some(key_dict__shada_register_get_field),
-        extra,
-        error,
-    );
+    let ok = cursor.keydict(&mut it, extra, error);
     // The contents array is the keyset's own either way.
     let contents = it.rc.take().unwrap_or(StringArray::EMPTY);
     let lines: &[String_0] = &contents;
@@ -432,12 +417,7 @@ unsafe fn parse_buffer_list(
         list.size += 1;
         let mut it = KeyDict__shada_buflist_item::default();
         let mut item_extra = KV_INITIAL_VALUE;
-        if !cursor.keydict(
-            (&raw mut it).cast::<c_void>(),
-            Some(key_dict__shada_buflist_item_get_field),
-            &mut item_extra,
-            error,
-        ) {
+        if !cursor.keydict(&mut it, &mut item_extra, error) {
             malformed_entry_because(c"E575: Error while reading ShaDa file: buffer list at position %lu contains entry that %s", pos, *error);
             unsafe { xfree(item_extra.items.cast::<c_void>()) };
             return Err(Malformed);

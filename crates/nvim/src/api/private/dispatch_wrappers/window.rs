@@ -556,18 +556,17 @@ pub fn handle_nvim_win_text_height(
     let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_text_height", c"Window"));
     };
-    let mut arg_2: KeyDict_win_text_height =
-        match read_keydict(Some(key_dict_win_text_height_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    2,
-                    c"nvim_win_text_height",
-                    c"Dict(win_text_height) *",
-                ));
-            }
-        };
+    let mut arg_2: KeyDict_win_text_height = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                2,
+                c"nvim_win_text_height",
+                c"Dict(win_text_height) *",
+            ));
+        }
+    };
     let rv = nvim_win_text_height(arg_1, &mut arg_2)?;
     Ok(Object::dict(rv))
 }

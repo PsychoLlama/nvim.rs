@@ -136,7 +136,7 @@ fn push_chunk(
         let why = c"Invalid chunk: expected Array with 1 or 2 Strings";
         return Err(Error::validation(why));
     };
-    let what = c"virt_text highlight".as_ptr();
+    let what = c"virt_text highlight";
     let mut hl_id = -1;
     if let Some(hl) = chunk.get(1) {
         match hl.as_array() {
@@ -144,16 +144,14 @@ fn push_chunk(
             // its own with no text, and the last is this chunk's.
             Some(groups) => {
                 for (n, group) in groups.iter().enumerate() {
-                    // SAFETY: `what` is a NUL-terminated literal.
-                    hl_id = unsafe { object_to_hl_id(group, what) }?;
+                    hl_id = object_to_hl_id(group, what)?;
                     if n + 1 < groups.len() {
                         let text = ::core::ptr::null_mut();
                         push(into, VirtTextChunk { text, hl_id });
                     }
                 }
             }
-            // SAFETY: as above.
-            None => hl_id = unsafe { object_to_hl_id(hl, what) }?,
+            None => hl_id = object_to_hl_id(hl, what)?,
         }
     }
     let src = if str.is_empty() {

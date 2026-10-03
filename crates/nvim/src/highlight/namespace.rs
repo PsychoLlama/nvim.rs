@@ -29,7 +29,6 @@ use super::{
     hl_get_syn_attr, kHlUI, syn_attr2entry,
 };
 use super::{default_hl_attr, default_hl_attr_table};
-use crate::api::private::dispatch::key_dict_highlight_get_field;
 use crate::api::private::helpers::api_dict_to_keydict;
 use crate::cstr;
 use crate::decoration_provider::with_decor_provider;
@@ -51,8 +50,8 @@ use crate::popupmenu::pum_drawn;
 use crate::popupmenu::state::must_redraw_pum;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    ColorItem, ColorKey, DecorProvider, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
-    LuaRetMode, NS, Object, String_0,
+    ColorItem, ColorKey, DecorProvider, HlAttrs, HlEntry, KeyDict_highlight, LuaRetMode, NS,
+    Object, String_0,
 };
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -238,9 +237,7 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
         if let Some(answer) = ret.into_dict() {
             fallback = false;
             let mut dict = KeyDict_highlight::default();
-            let field: FieldHashfn = Some(key_dict_highlight_get_field);
-            let target = (&raw mut dict).cast();
-            if unsafe { api_dict_to_keydict(target, field, answer) }.is_ok() {
+            if api_dict_to_keydict(&mut dict, answer).is_ok() {
                 let link_id = &mut item.link_id;
                 attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None) }.unwrap_or(attrs);
                 fallback = dict.fallback.unwrap_or(true);

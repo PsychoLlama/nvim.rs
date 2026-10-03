@@ -470,18 +470,17 @@ pub fn handle_nvim_buf_set_virtual_text(
     let Some(arg_4) = as_array(args[3].take()) else {
         return Err(wrong_type(4, c"nvim_buf_set_virtual_text", c"Array"));
     };
-    let mut arg_5: KeyDict_empty =
-        match read_keydict(Some(key_dict_empty_get_field), args[4].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    5,
-                    c"nvim_buf_set_virtual_text",
-                    c"Dict(empty) *",
-                ));
-            }
-        };
+    let mut arg_5: KeyDict_empty = match read_keydict(args[4].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                5,
+                c"nvim_buf_set_virtual_text",
+                c"Dict(empty) *",
+            ));
+        }
+    };
     let rv = nvim_buf_set_virtual_text(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     Ok(Object::Integer(rv))
 }

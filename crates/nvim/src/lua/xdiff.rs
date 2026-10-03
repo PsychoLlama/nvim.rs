@@ -15,7 +15,6 @@
 //! *string* (the default, assembled in a `luaL_Buffer`), *nothing* with an
 //! `on_hunk` callback run per hunk, or a *list* of `{start_a, count_a, //! start_b, count_b}` tuples (`result_type = 'indices'`).
 
-use crate::api::private::dispatch::key_dict_xdl_diff_get_field;
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::{ptr, slice};
 
@@ -343,14 +342,7 @@ unsafe fn process_xdl_diff_opts(
     let mut err_param: *mut c_char = ptr::null_mut::<c_char>();
     // SAFETY: the caller's state and table; `opts` is a live keydict and
     // owns whatever the pop puts in it, which is freed at the end.
-    let popped = unsafe {
-        nlua_pop_keydict(
-            lstate,
-            (&raw mut opts).cast::<c_void>(),
-            Some(key_dict_xdl_diff_get_field),
-            &raw mut err_param,
-        )
-    };
+    let popped = unsafe { nlua_pop_keydict(lstate, &mut opts, &mut err_param) };
 
     // SAFETY: the keydict's two string fields are NUL-terminated or null.
     // A bad option outranks a failed pop, which is the order the two had

@@ -4,7 +4,6 @@
 //! run `just apigen`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 
 use super::*;
 
@@ -34,14 +33,13 @@ pub fn handle_nvim_open_win(
     let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_open_win", c"Boolean"));
     };
-    let mut arg_3: KeyDict_win_config =
-        match read_keydict(Some(key_dict_win_config_get_field), args[2].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(3, c"nvim_open_win", c"Dict(win_config) *"));
-            }
-        };
+    let mut arg_3: KeyDict_win_config = match read_keydict(args[2].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(3, c"nvim_open_win", c"Dict(win_config) *"));
+        }
+    };
     if textlock.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
@@ -73,16 +71,7 @@ pub fn handle_nvim_win_get_config(
         return Err(wrong_type(1, c"nvim_win_get_config", c"Window"));
     };
     let mut rv = nvim_win_get_config(arg_1)?;
-    // SAFETY: `rv` is a `KeyDict_win_config`, whose field table is
-    // `win_config_table` and whose length is 25.
-    let dict = unsafe {
-        api_keydict_to_dict(
-            (&raw mut rv).cast(),
-            win_config_table.as_ptr(),
-            25 as size_t,
-        )
-    };
-    Ok(Object::dict(dict))
+    Ok(Object::dict(api_keydict_to_dict(&mut rv)))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_config`.
@@ -108,14 +97,13 @@ pub fn handle_nvim_win_set_config(
     let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_set_config", c"Window"));
     };
-    let mut arg_2: KeyDict_win_config =
-        match read_keydict(Some(key_dict_win_config_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_win_set_config", c"Dict(win_config) *"));
-            }
-        };
+    let mut arg_2: KeyDict_win_config = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_win_set_config", c"Dict(win_config) *"));
+        }
+    };
     nvim_win_set_config(arg_1, &mut arg_2)?;
     Ok(Object::Nil)
 }

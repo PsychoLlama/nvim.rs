@@ -20,8 +20,8 @@ use crate::semsg;
 use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
+use crate::api::private::keyset::KeySet;
 use crate::msgpack_rpc::unpacker::{MPACK_EOF, MPACK_OK};
-use crate::types::FieldHashfn;
 
 use super::*;
 use crate::os::cshim::gettext;
@@ -107,25 +107,15 @@ impl Cursor {
         unsafe { unpack_skip(&raw mut self.at, &raw mut self.left) }
     }
 
-    /// A map, into the keyset `into` describes. Keys the keyset does not
+    /// A map, into the keyset `into`. Keys the keyset does not
     /// name are pushed onto `extra` to be written back out unchanged.
     pub(crate) fn keydict(
         &mut self,
-        into: *mut c_void,
-        field: FieldHashfn,
+        into: &mut dyn KeySet,
         extra: &mut AdditionalDataBuilder,
         error: &mut *mut c_char,
     ) -> bool {
-        unsafe {
-            unpack_keydict(
-                into,
-                field,
-                extra,
-                &raw mut self.at,
-                &raw mut self.left,
-                error,
-            )
-        }
+        unsafe { unpack_keydict(into, extra, &raw mut self.at, &raw mut self.left, error) }
     }
 
     /// One value as a Vimscript value. Answers an `MPACK_*` status.

@@ -33,18 +33,17 @@ pub fn handle_nvim_open_tabpage(
     let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_open_tabpage", c"Boolean"));
     };
-    let mut arg_3: KeyDict_tabpage_config =
-        match read_keydict(Some(key_dict_tabpage_config_get_field), args[2].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    3,
-                    c"nvim_open_tabpage",
-                    c"Dict(tabpage_config) *",
-                ));
-            }
-        };
+    let mut arg_3: KeyDict_tabpage_config = match read_keydict(args[2].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                3,
+                c"nvim_open_tabpage",
+                c"Dict(tabpage_config) *",
+            ));
+        }
+    };
     if textlock.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }

@@ -7,5 +7,6 @@ pub mod converter;
 pub mod dispatch;
 pub mod dispatch_wrappers;
 pub mod helpers;
+pub(crate) mod keyset;
 pub mod metadata;
 pub mod validate;

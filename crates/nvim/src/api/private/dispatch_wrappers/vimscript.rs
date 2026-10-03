@@ -142,14 +142,13 @@ pub fn handle_nvim_exec2(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_exec2", c"String"));
     };
-    let mut arg_2: KeyDict_exec_opts =
-        match read_keydict(Some(key_dict_exec_opts_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_exec2", c"Dict(exec_opts) *"));
-            }
-        };
+    let mut arg_2: KeyDict_exec_opts = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_exec2", c"Dict(exec_opts) *"));
+        }
+    };
     let rv = nvim_exec2(channel_id, arg_1, &mut arg_2)?;
     Ok(Object::dict(rv))
 }

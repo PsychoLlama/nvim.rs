@@ -314,11 +314,10 @@ struct Key {
     wire: String,
     /// The Rust field it fills in.
     field: String,
-    /// `KeySetLink::type_0`, as one of the `TAG_*` constants the generated
-    /// module defines.
-    tag: &'static str,
-    /// A highlight-group name, which the converter resolves to an id.
-    is_hlgroup: bool,
+    /// The `FieldKind` variant that says what the field holds.
+    kind: &'static str,
+    /// The `Slot` variant the field is borrowed as.
+    slot: &'static str,
 }
 
 /// One `KeyDict_*` struct: an options dict the API takes by name.
@@ -326,13 +325,6 @@ struct Keyset {
     name: String,
     /// In table order, which is not declaration order — see [`table_order`].
     keys: Vec<Key>,
-}
-
-impl Keyset {
-    /// Elements of the emitted table: one per key plus the null terminator.
-    fn len(&self) -> usize {
-        self.keys.len() + 1
-    }
 }
 
 // ---------------------------------------------------------------- parsing
@@ -607,27 +599,27 @@ fn collect_api_fns(root: &Path, specs: &[Spec]) -> Result<BTreeMap<String, ApiFn
     Ok(out)
 }
 
-/// The `TAG_*` constant naming the `ObjectType` a value of this Rust type
-/// must arrive as, and whether the type marks a highlight group.
-fn key_tag(ty: &str) -> Option<(&'static str, bool)> {
+/// The `FieldKind` a field of this Rust type has, and the `Slot` variant it
+/// is borrowed as.
+fn key_kind(ty: &str) -> Option<(&'static str, &'static str)> {
     Some(match ty {
         // A highlight group travels as a name but is stored as the id the
         // converter resolves it to, so its slot is an Integer.
-        "HLGroupID" => ("TAG_INTEGER", true),
-        "Boolean" => ("TAG_BOOLEAN", false),
-        "Integer" => ("TAG_INTEGER", false),
-        "Float" => ("TAG_FLOAT", false),
-        "String_0" => ("TAG_STRING", false),
-        "Array" => ("TAG_ARRAY", false),
-        "ApiDict" => ("TAG_DICT", false),
-        "LuaRef" => ("TAG_LUAREF", false),
-        "BufferHandle" => ("TAG_BUFFER", false),
-        "WindowHandle" => ("TAG_WINDOW", false),
-        "TabpageHandle" => ("TAG_TABPAGE", false),
+        "HLGroupID" => ("HlGroup", "Integer"),
+        "Boolean" => ("Boolean", "Boolean"),
+        "Integer" => ("Integer", "Integer"),
+        "Float" => ("Float", "Float"),
+        "String_0" => ("String", "String"),
+        "Array" => ("Array", "Array"),
+        "ApiDict" => ("Dict", "Dict"),
+        "LuaRef" => ("LuaRef", "LuaRef"),
+        "BufferHandle" => ("Buffer", "Handle"),
+        "WindowHandle" => ("Window", "Handle"),
+        "TabpageHandle" => ("Tabpage", "Handle"),
         // Anything goes.
-        "Object" => ("TAG_NIL", false),
+        "Object" => ("Any", "Any"),
         // ShaDa's own unpacked-in-place array of strings.
-        "StringArray" => ("TAG_STRING_ARRAY", false),
+        "StringArray" => ("StringArray", "StringArray"),
         _ => return None,
     })
 }
@@ -694,13 +686,13 @@ fn collect_keysets(root: &Path) -> Result<Vec<Keyset>, String> {
             let ty = option_inner(&field.ty).ok_or_else(|| {
                 format!("KeyDict_{name}.{field_name}: every keyset field must be an `Option<T>`")
             })?;
-            let (tag, is_hlgroup) = key_tag(&ty)
+            let (kind, slot) = key_kind(&ty)
                 .ok_or_else(|| format!("KeyDict_{name}.{field_name}: unmapped type `{ty}`"))?;
             keys.push(Key {
                 wire: wire_key_override(&field.attrs).unwrap_or_else(|| field_name.clone()),
                 field: field_name,
-                tag,
-                is_hlgroup,
+                kind,
+                slot,
             });
         }
         let order = table_order(&keys.iter().map(|k| k.wire.clone()).collect::<Vec<_>>());
@@ -1028,12 +1020,7 @@ fn with_cast_deny(text: &str) -> String {
     panic!("a generated chunk has no unsafe attribute to hang the cast deny on")
 }
 
-fn emit_fn(
-    out: &mut String,
-    f: &ApiFn,
-    spec: &Spec,
-    tables: &BTreeMap<String, usize>,
-) -> Result<(), String> {
+fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     let name = &f.name;
     let handler = format!("handle_{name}");
     let values: Vec<(usize, &ApiType)> = f
@@ -1116,13 +1103,8 @@ fn emit_fn(
                 writeln!(out, "    let arg_{slot} = args[{index}].take();").unwrap();
             }
             ApiType::KeyDict(keyset) => {
-                let get_field = format!("key_dict_{keyset}_get_field");
                 writeln!(out, "    let mut arg_{slot}: KeyDict_{keyset} =").unwrap();
-                writeln!(
-                    out,
-                    "        match read_keydict(Some({get_field}), args[{index}].take()) {{"
-                )
-                .unwrap();
+                writeln!(out, "        match read_keydict(args[{index}].take()) {{").unwrap();
                 writeln!(out, "            KeySetArg::Read(v) => v,").unwrap();
                 writeln!(out, "            KeySetArg::Refused(e) => return Err(e),").unwrap();
                 writeln!(out, "            KeySetArg::WrongType => {{").unwrap();
@@ -1226,25 +1208,7 @@ fn emit_fn(
         RetType::Handle(tag) => {
             format!("Object::{tag}(rv as Integer)")
         }
-        RetType::KeyDict(keyset) => {
-            let size = tables
-                .get(keyset.as_str())
-                .ok_or_else(|| format!("{name}: no {keyset}_table to bound the conversion"))?;
-            writeln!(
-                out,
-                "    // SAFETY: `rv` is a `KeyDict_{keyset}`, whose field table is\n\
-                 \x20   // `{keyset}_table` and whose length is {size}."
-            )
-            .unwrap();
-            writeln!(out, "    let dict = unsafe {{").unwrap();
-            writeln!(
-                out,
-                "        api_keydict_to_dict((&raw mut rv).cast(), {keyset}_table.as_ptr(), {size} as size_t)"
-            )
-            .unwrap();
-            writeln!(out, "    }};").unwrap();
-            "Object::dict(dict)".into()
-        }
+        RetType::KeyDict(_) => "Object::dict(api_keydict_to_dict(&mut rv))".into(),
     };
     writeln!(out, "    Ok({boxed})").unwrap();
     writeln!(out, "}}").unwrap();
@@ -1464,11 +1428,7 @@ enum KeySetArg<K> {
 }
 
 /// Decode one keyset argument into a fresh `K`.
-///
-/// `get_field` must be `K`'s own generated field lookup: the decoder writes
-/// through the offsets it hands back, so pairing it with a different keyset
-/// would write outside `K`.
-fn read_keydict<K: Default>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
+fn read_keydict<K: KeySet + Default>(item: Object) -> KeySetArg<K> {
     if is_empty_array(&item) {
         // An empty list is an empty dict: it sets no key.
         return KeySetArg::Read(K::default());
@@ -1480,9 +1440,7 @@ fn read_keydict<K: Default>(get_field: FieldHashfn, item: Object) -> KeySetArg<K
     // them `None`. Zeroing would be the *opposite* answer for the booleans:
     // `Option<bool>` is niche-packed, so all-zero reads as `Some(false)`.
     let mut out = K::default();
-    // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
-    // offsets it hands back are inside `out`.
-    match unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict) } {
+    match api_dict_to_keydict(&mut out, dict) {
         Ok(()) => KeySetArg::Read(out),
         Err(e) => KeySetArg::Refused(e),
     }
@@ -1538,7 +1496,6 @@ const TYPE_NAMES: &[&str] = &[
     "Boolean",
     "Error",
     "ErrorType",
-    "FieldHashfn",
     "Float",
     "Integer",
     "LuaRef",
@@ -1606,7 +1563,6 @@ fn split_items(text: &str) -> Vec<String> {
 fn generate(
     api: &BTreeMap<String, ApiFn>,
     specs: &[Spec],
-    tables: &BTreeMap<String, usize>,
     config: &Path,
 ) -> Result<Vec<Emitted>, String> {
     // API source file stem -> the wrappers it gets, in name order so the
@@ -1635,7 +1591,7 @@ fn generate(
     for (module, fns) in &by_module {
         let mut all = String::new();
         for (f, spec) in fns {
-            emit_fn(&mut all, f, spec, tables)?;
+            emit_fn(&mut all, f, spec)?;
             all.push('\n');
         }
         let mut chunk = String::new();
@@ -1722,18 +1678,8 @@ fn generate(
             names.iter().cloned().collect::<Vec<_>>().join(", ")
         ));
     }
-    // The keyset tables and their perfect-hash lookups still live in the
-    // hand-maintained dispatch module.
-    let dispatch: Vec<String> = referenced
-        .iter()
-        .filter(|n| n.ends_with("_get_field") || n.ends_with("_table"))
-        .cloned()
-        .collect();
-    if !dispatch.is_empty() {
-        uses.push(format!(
-            "use crate::api::private::dispatch::{{{}}};",
-            dispatch.join(", ")
-        ));
+    if referenced.contains("KeySet") {
+        uses.push("use crate::api::private::keyset::KeySet;".into());
     }
     let helpers: Vec<&str> = ["api_dict_to_keydict", "api_keydict_to_dict"]
         .into_iter()
@@ -1821,8 +1767,8 @@ const TABLES_HEADER: &str = r#"//! The msgpack-RPC dispatch tables.
 //! `crate::types::keysets` plus `tools/apigen/functions.txt`. Do
 //! not edit; run `just apigen` (`just apigen --check` fails on drift).
 //!
-//! Two lookups live here. `key_dict_<name>_get_field` turns an options-dict
-//! key into the table row that says where the value goes, and
+//! Two lookups live here. Each keyset's `KeySet` impl turns an options-dict
+//! key into the field it fills, borrowed as its typed `Slot`, and
 //! `msgpack_rpc_get_handler_for` turns a method name into the wrapper that
 //! serves it.
 //!
@@ -1870,40 +1816,9 @@ fn tables_child_header(what: &str, body: &str) -> String {
     )
 }
 
-/// Shared support for the tables. `key`/`hl_key`/`END` build the rows;
-/// `key_bytes` is how every lookup gets at the bytes it was handed.
+/// Shared support for the tables. `key_bytes` is how the method lookup gets
+/// at the bytes it was handed.
 const TABLES_SUPPORT: &str = r#"
-/// One row of a keyset table: the key's name, the offset of the `Option`
-/// field its value lands in, and the tag that value must arrive as.
-const fn key(name: &'static CStr, ptr_off: usize, type_0: c_int) -> KeySetLink {
-    KeySetLink {
-        str: name.as_ptr().cast_mut(),
-        ptr_off,
-        type_0,
-        is_hlgroup: false,
-    }
-}
-
-/// A row whose value names a highlight group. It arrives as a String and is
-/// stored as the id the converter resolves it to, so its tag is an Integer.
-const fn hl_key(name: &'static CStr, ptr_off: usize) -> KeySetLink {
-    KeySetLink {
-        str: name.as_ptr().cast_mut(),
-        ptr_off,
-        type_0: TAG_INTEGER,
-        is_hlgroup: true,
-    }
-}
-
-/// The null row every keyset table ends with: `api_keydict_to_dict` walks a
-/// table until it sees one.
-const END: KeySetLink = KeySetLink {
-    str: ptr::null_mut(),
-    ptr_off: 0,
-    type_0: TAG_NIL,
-    is_hlgroup: false,
-};
-
 /// The key bytes a lookup was handed. An empty key carries no pointer worth
 /// dereferencing — and may carry a null one — so length zero short-circuits.
 ///
@@ -1967,118 +1882,67 @@ pub unsafe fn msgpack_rpc_get_handler_for(
 }
 "#;
 
-/// The `TAG_*` constants, in tag order. Only the referenced ones are emitted.
-const TAGS: &[(&str, &str, &str)] = &[
-    (
-        "TAG_STRING_ARRAY",
-        "-1",
-        "ShaDa's own unpacked-in-place array of strings",
-    ),
-    ("TAG_NIL", "0", "any Object"),
-    ("TAG_BOOLEAN", "1", ""),
-    ("TAG_INTEGER", "2", ""),
-    ("TAG_FLOAT", "3", ""),
-    ("TAG_STRING", "4", ""),
-    ("TAG_ARRAY", "5", ""),
-    ("TAG_DICT", "6", ""),
-    ("TAG_LUAREF", "7", ""),
-    ("TAG_BUFFER", "8", ""),
-    ("TAG_WINDOW", "9", ""),
-    ("TAG_TABPAGE", "10", ""),
-];
-
-/// One keyset's table plus the lookup that indexes it.
+/// One keyset's `KeySet` implementation: its field table, the lookup from
+/// key to field, and each field borrowed as its typed `Slot`. A `match` per
+/// method, so no walker reaches a field by offset.
 fn emit_keyset(out: &mut String, k: &Keyset) {
+    // No blank line inside the impl: the chunker splits files on them.
     let name = &k.name;
-    // A keyset with no keys has no `offset_of!`, so it needs neither the type
-    // alias nor the block that would hold it.
-    let (open, close) = if k.keys.is_empty() {
-        ("", "")
-    } else {
-        ("{", "}")
-    };
-    writeln!(
-        out,
-        "pub static {name}_table: ConstTable<[KeySetLink; {}]> = ConstTable::new({open}",
-        k.len()
-    )
-    .unwrap();
-    if !k.keys.is_empty() {
-        writeln!(out, "    type K = KeyDict_{name};").unwrap();
-    }
-    writeln!(out, "    [").unwrap();
+    let n = k.keys.len();
+    writeln!(out, "impl KeySet for KeyDict_{name} {{").unwrap();
+    writeln!(out, "    fn fields(&self) -> &'static [KeyField] {{").unwrap();
+    writeln!(out, "        const FIELDS: &[KeyField] = &[").unwrap();
     for key in &k.keys {
-        let (ctor, tag) = if key.is_hlgroup {
-            ("hl_key", String::new())
-        } else {
-            ("key", format!(", {}", key.tag))
-        };
         writeln!(
             out,
-            "        {ctor}(c\"{}\", offset_of!(K, {}){tag}),",
-            key.wire, key.field
+            "            KeyField::new(c\"{}\", FieldKind::{}),",
+            key.wire, key.kind
         )
         .unwrap();
     }
-    writeln!(out, "        END,").unwrap();
-    writeln!(out, "    ]").unwrap();
-    writeln!(out, "{close});").unwrap();
-    out.push('\n');
-
-    writeln!(out, "/// Look a key up in [`{name}_table`].").unwrap();
-    writeln!(out, "///").unwrap();
-    writeln!(out, "/// # Safety").unwrap();
-    writeln!(out, "/// `str` points at `len` readable bytes.").unwrap();
+    writeln!(out, "        ];").unwrap();
+    writeln!(out, "        FIELDS").unwrap();
+    writeln!(out, "    }}").unwrap();
     if k.keys.is_empty() {
-        write!(
-            out,
-            "{}",
-            snake_case_allow(&format!("key_dict_{name}_get_field"))
-        )
-        .unwrap();
+        writeln!(out, "    fn find(&self, _key: &[u8]) -> Option<usize> {{").unwrap();
+        writeln!(out, "        None").unwrap();
+        writeln!(out, "    }}").unwrap();
+        writeln!(out, "    fn slot(&mut self, index: usize) -> Slot<'_> {{").unwrap();
         writeln!(
             out,
-            "pub unsafe fn key_dict_{name}_get_field(_str: *const c_char, _len: size_t) -> *const KeySetLink {{"
+            "        unreachable!(\"KeyDict_{name} has no field {{index}}\")"
         )
         .unwrap();
-        writeln!(out, "    // The keyset has no keys, so nothing matches.").unwrap();
-        writeln!(out, "    ptr::null()").unwrap();
+        writeln!(out, "    }}").unwrap();
         writeln!(out, "}}").unwrap();
         out.push('\n');
         return;
     }
-    write!(
-        out,
-        "{}",
-        snake_case_allow(&format!("key_dict_{name}_get_field"))
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "pub unsafe fn key_dict_{name}_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {{"
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    // SAFETY: the caller passes a key of `len` bytes."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    let index: usize = match unsafe {{ key_bytes(str, len) }} {{"
-    )
-    .unwrap();
+    writeln!(out, "    fn find(&self, key: &[u8]) -> Option<usize> {{").unwrap();
+    writeln!(out, "        Some(match key {{").unwrap();
     for (i, key) in k.keys.iter().enumerate() {
-        writeln!(out, "        b\"{}\" => {i},", key.wire).unwrap();
+        writeln!(out, "            b\"{}\" => {i},", key.wire).unwrap();
     }
-    writeln!(out, "        _ => return ptr::null(),").unwrap();
-    writeln!(out, "    }};").unwrap();
+    writeln!(out, "            _ => return None,").unwrap();
+    writeln!(out, "        }})").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "    fn slot(&mut self, index: usize) -> Slot<'_> {{").unwrap();
+    writeln!(out, "        match index {{").unwrap();
+    for (i, key) in k.keys.iter().enumerate() {
+        writeln!(
+            out,
+            "            {i} => Slot::{}(&mut self.{}),",
+            key.slot, key.field
+        )
+        .unwrap();
+    }
     writeln!(
         out,
-        "    let table: *const KeySetLink = {name}_table.as_ptr();"
+        "            _ => unreachable!(\"KeyDict_{name} has {n} fields, not {{index}}\"),"
     )
     .unwrap();
-    writeln!(out, "    table.wrapping_add(index)").unwrap();
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    }}").unwrap();
     writeln!(out, "}}").unwrap();
     out.push('\n');
 }
@@ -2211,7 +2075,7 @@ fn generate_tables(
             format!("{stem}_{part}.rs")
         };
         let what = match *stem {
-            "keysets" => "The keyset tables: which key fills which field.",
+            "keysets" => "The keyset codecs: which key fills which field.",
             _ => "The handler table: which method calls which wrapper.",
         };
         body.push_str(chunk);
@@ -2221,27 +2085,14 @@ fn generate_tables(
         });
     }
 
-    let referenced = idents(&format!("{TABLES_SUPPORT}{body}"));
-    let mut tags = String::new();
-    for (name, value, note) in TAGS {
-        if !referenced.contains(*name) {
-            continue;
-        }
-        let note = if note.is_empty() {
-            String::new()
-        } else {
-            format!(" // {note}")
-        };
-        writeln!(tags, "    pub(crate) const {name}: c_int = {value};{note}").unwrap();
-    }
-
     let mut out = String::from(TABLES_HEADER);
     out.push('\n');
     for file in &files {
         writeln!(out, "mod {};", file.name.strip_suffix(".rs").unwrap()).unwrap();
     }
     out.push('\n');
-    for file in &files {
+    // The keyset chunks hold only trait impls, which need no re-export.
+    for file in files.iter().filter(|f| !f.name.starts_with("keysets")) {
         writeln!(
             out,
             "pub use self::{}::*;",
@@ -2250,8 +2101,7 @@ fn generate_tables(
         .unwrap();
     }
     out.push('\n');
-    out.push_str("use core::ffi::{CStr, c_char, c_int};\n");
-    out.push_str("use core::mem::offset_of;\n");
+    out.push_str("use core::ffi::{CStr, c_char};\n");
     out.push_str("use core::{ptr, slice};\n");
     out.push('\n');
     out.push_str("// Every generated wrapper; the handler table names most of them.\n");
@@ -2259,6 +2109,7 @@ fn generate_tables(
     out.push_str("use crate::api_error;\n");
     out.push_str("use crate::message_fmt::c_str_len;\n");
     out.push_str("use crate::global_cell::ConstTable;\n");
+    out.push_str("use crate::api::private::keyset::{FieldKind, KeyField, KeySet, Slot};\n");
     // Handlers the spec names outright, which live outside the generated
     // wrappers.
     let mut externs: BTreeSet<&str> = BTreeSet::new();
@@ -2273,18 +2124,12 @@ fn generate_tables(
     let mut types: Vec<String> = [
         "ApiDispatchFn",
         "Error",
-        "KeySetLink",
         "MsgpackRpcRequestHandler",
         "size_t",
     ]
     .iter()
     .map(|s| (*s).to_string())
-    .chain(
-        keysets
-            .iter()
-            .filter(|k| !k.keys.is_empty())
-            .map(|k| format!("KeyDict_{}", k.name)),
-    )
+    .chain(keysets.iter().map(|k| format!("KeyDict_{}", k.name)))
     .collect();
     types.sort();
     writeln!(out, "use crate::types::{{{}}};", types.join(", ")).unwrap();
@@ -2296,13 +2141,8 @@ fn generate_tables(
 /// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
 /// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {{
-    use core::ffi::c_int;
-
     pub(crate) use crate::types::kErrorTypeException;
-
-    // `KeySetLink::type_0`: the `ObjectType` a key's value must arrive as, as
-    // the `c_int` that field holds.
-{tags}}}
+}}
 
 use known::*;
 "#
@@ -2402,32 +2242,14 @@ type Convert = unsafe fn(*mut lua_State, &mut Call) -> Result<(), Error>;
 
 // -- keysets ---------------------------------------------------------------
 
-/// A generated keyset, tied to the two generated items that describe it.
-///
-/// # Safety
-/// `GET_FIELD` must be `Self`'s own field lookup and [`table`](Self::table)
-/// answer `Self`'s own key table: the decoder writes through the offsets the
-/// first hands back and the release walks the second, so either one belonging
-/// to a different keyset would read and write outside `Self`.
-unsafe trait KeySet: Sized + Default {
-    const GET_FIELD: FieldHashfn;
-
-    fn table() -> *const KeySetLink;
-}
-
-/// A keyset's generated table, as the code that walks one takes it.
-fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *const KeySetLink {
-    table.as_ptr()
-}
-
 /// A keyset argument. A keyset owns its fields, so this is a name for the
 /// decoder's target rather than a guard -- what a half-filled keyset took
 /// before it stopped is released by dropping it.
-struct KeyDictArg<K: KeySet> {
+struct KeyDictArg<K: KeySet + Default> {
     dict: K,
 }
 
-impl<K: KeySet> KeyDictArg<K> {
+impl<K: KeySet + Default> KeyDictArg<K> {
     /// Every key absent, which is where a keyset argument starts out.
     fn unset() -> Self {
         KeyDictArg {
@@ -2442,25 +2264,22 @@ impl<K: KeySet> KeyDictArg<K> {
 /// # Safety
 /// `lstate` is the running Lua state with the argument on top; `err_param`
 /// is the binding's own.
-unsafe fn pop_keydict<K: KeySet>(
+unsafe fn pop_keydict<K: KeySet + Default>(
     lstate: *mut lua_State,
     arg: &mut KeyDictArg<K>,
     err_param: &mut *mut c_char,
 ) -> Result<(), Error> {
-    // SAFETY: the caller's stack, and `K::GET_FIELD` is `K`'s own lookup per
-    // `KeySet`'s contract, which is what the decoder needs of it.
-    unsafe { nlua_pop_keydict(lstate, (&raw mut arg.dict).cast(), K::GET_FIELD, err_param) }
+    // SAFETY: the caller's stack.
+    unsafe { nlua_pop_keydict(lstate, &mut arg.dict, err_param) }
 }
 
 /// Hand a keyset result back as a Lua table.
 ///
 /// # Safety
-/// `lstate` is the running Lua state and `value` points at the binding's own
-/// result.
-unsafe fn push_keydict<K: KeySet>(lstate: *mut lua_State, value: *mut K) {
-    // SAFETY: the caller's stack, and `K::table()` describes `K`'s fields per
-    // `KeySet`'s contract.
-    unsafe { nlua_push_keydict(lstate, value.cast(), K::table()) };
+/// `lstate` is the running Lua state.
+unsafe fn push_keydict(lstate: *mut lua_State, value: &mut dyn KeySet) {
+    // SAFETY: the caller's stack.
+    unsafe { nlua_push_keydict(lstate, value) };
 }
 
 // -- argument guards -------------------------------------------------------
@@ -2927,7 +2746,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     };
     let push = match &f.ret {
         RetType::Void => String::new(),
-        RetType::KeyDict(_) => "unsafe { push_keydict(lstate, &raw mut ret) };".to_string(),
+        RetType::KeyDict(_) => "unsafe { push_keydict(lstate, &mut ret) };".to_string(),
         ret => {
             let (push, value) = pusher(ret);
             format!("unsafe {{ {push}(lstate, {value}, {flags}) }};")
@@ -3130,46 +2949,10 @@ fn generate_lua(
             .insert(f.name.as_str());
     }
 
-    // Every keyset a binding names, whether as a parameter or as a result.
-    let mut keysets: BTreeSet<&str> = BTreeSet::new();
-    for (f, _) in &bound {
-        for param in &f.params {
-            if let Param::Value {
-                ty: ApiType::KeyDict(keyset),
-                ..
-            } = param
-            {
-                keysets.insert(keyset.as_str());
-            }
-        }
-        if let RetType::KeyDict(keyset) = &f.ret {
-            keysets.insert(keyset.as_str());
-        }
-    }
-    let mut impls = String::from(
-        "\n// The keysets the bindings name, each tied to its own generated table\n\
-         // and lookup.\n",
-    );
-    for keyset in &keysets {
-        writeln!(
-            impls,
-            "\n// SAFETY: `{keyset}_table` and `key_dict_{keyset}_get_field` are the\n\
-             // generated table and lookup for `KeyDict_{keyset}`.\n\
-             unsafe impl KeySet for KeyDict_{keyset} {{\n\
-             \x20   const GET_FIELD: FieldHashfn = Some(key_dict_{keyset}_get_field);\n\
-             \n\
-             \x20   fn table() -> *const KeySetLink {{\n\
-             \x20       keyset_table(&{keyset}_table)\n\
-             \x20   }}\n\
-             }}"
-        )
-        .unwrap();
-    }
-
     // Support code only some bindings need, swept until nothing new turns up.
     let mut extras = String::new();
     loop {
-        let seen = idents(&format!("{LUA_SUPPORT}{extras}{impls}{body}"));
+        let seen = idents(&format!("{LUA_SUPPORT}{extras}{body}"));
         let Some((_, code)) = LUA_READERS
             .iter()
             .find(|(name, code)| seen.contains(*name) && !extras.contains(code))
@@ -3178,7 +2961,7 @@ fn generate_lua(
         };
         extras.push_str(code);
     }
-    let support = format!("{LUA_SUPPORT}{extras}{impls}\n");
+    let support = format!("{LUA_SUPPORT}{extras}\n");
 
     let referenced = idents(&format!("{support}{body}"));
     let referenced_names = |names: &[&str]| -> Vec<String> {
@@ -3197,18 +2980,8 @@ fn generate_lua(
             names.iter().copied().collect::<Vec<_>>().join(", ")
         ));
     }
-    // `keyset_table` is the support code's own; every other `_table` is a
-    // generated keyset table.
-    let dispatch: Vec<String> = referenced
-        .iter()
-        .filter(|n| n.ends_with("_get_field") || (n.ends_with("_table") && *n != "keyset_table"))
-        .cloned()
-        .collect();
-    if !dispatch.is_empty() {
-        uses.push(format!(
-            "use crate::api::private::dispatch::{{{}}};",
-            dispatch.join(", ")
-        ));
+    if referenced.contains("KeySet") {
+        uses.push("use crate::api::private::keyset::KeySet;".into());
     }
     uses.push(format!(
         "use crate::api::private::helpers::{{{}}};",
@@ -3284,26 +3057,17 @@ fn generate_lua(
             uses.push(format!("use crate::{module}::{{{}}};", names.join(", ")));
         }
     }
-    uses.push("use crate::global_cell::ConstTable;".into());
     uses.push("use crate::guard::Restore;".into());
     uses.push("use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};".into());
-    let types: Vec<String> = referenced_names(&[
-        "Arena",
-        "Error",
-        "FieldHashfn",
-        "KeySetLink",
-        "LuaRef",
-        "Object",
-        "lua_State",
-    ])
-    .into_iter()
-    .chain(
-        referenced
-            .iter()
-            .filter(|n| n.starts_with("KeyDict_"))
-            .cloned(),
-    )
-    .collect();
+    let types: Vec<String> = referenced_names(&["Arena", "Error", "LuaRef", "Object", "lua_State"])
+        .into_iter()
+        .chain(
+            referenced
+                .iter()
+                .filter(|n| n.starts_with("KeyDict_"))
+                .cloned(),
+        )
+        .collect();
     uses.push(format!("use crate::types::{{{}}};", types.join(", ")));
 
     let mut out = String::from(LUA_HEADER);
@@ -4066,8 +3830,6 @@ fn run() -> Result<(), String> {
     let api = collect_api_fns(&root, &specs)?;
     let keysets = collect_keysets(&root)?;
     let sidecar = parse_sidecar(&metadata_spec)?;
-    let sizes: BTreeMap<String, usize> =
-        keysets.iter().map(|k| (k.name.clone(), k.len())).collect();
     // Each tree carries the reason its files give for `#![allow(unsafe_code)]`
     // (see `with_unsafe_code_allow`). Only the Lua binding is on the unsafe
     // perimeter; the rest is ordinary generated crate source, and its unsafe
@@ -4080,7 +3842,7 @@ fn run() -> Result<(), String> {
     let trees = [
         (
             out_dir,
-            generate(&api, &specs, &sizes, &config)?,
+            generate(&api, &specs, &config)?,
             "wrappers",
             "",
             false,

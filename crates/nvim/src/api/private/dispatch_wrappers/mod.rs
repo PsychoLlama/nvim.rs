@@ -16,7 +16,6 @@
 //! overflow the tree's 1,000-line file cap is split into numbered parts.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 
 mod autocmd;
 mod buffer;
@@ -87,22 +86,8 @@ use crate::api::extmark::{
 use crate::api::options::{
     nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
 };
-use crate::api::private::dispatch::{
-    cmd_table, key_dict_buf_attach_get_field, key_dict_buf_delete_get_field,
-    key_dict_clear_autocmds_get_field, key_dict_cmd_get_field, key_dict_cmd_opts_get_field,
-    key_dict_complete_set_get_field, key_dict_context_get_field, key_dict_create_augroup_get_field,
-    key_dict_create_autocmd_get_field, key_dict_echo_opts_get_field, key_dict_empty_get_field,
-    key_dict_eval_statusline_get_field, key_dict_exec_autocmds_get_field,
-    key_dict_exec_opts_get_field, key_dict_get_autocmds_get_field, key_dict_get_commands_get_field,
-    key_dict_get_extmark_get_field, key_dict_get_extmarks_get_field,
-    key_dict_get_highlight_get_field, key_dict_get_ns_get_field, key_dict_highlight_get_field,
-    key_dict_keymap_get_field, key_dict_ns_opts_get_field, key_dict_open_term_get_field,
-    key_dict_option_get_field, key_dict_redraw_get_field, key_dict_runtime_get_field,
-    key_dict_set_extmark_get_field, key_dict_tabpage_config_get_field,
-    key_dict_user_command_get_field, key_dict_win_config_get_field,
-    key_dict_win_text_height_get_field, ns_opts_table, win_config_table,
-};
 use crate::api::private::helpers::{api_dict_to_keydict, api_keydict_to_dict};
+use crate::api::private::keyset::KeySet;
 use crate::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
     nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
@@ -150,7 +135,7 @@ use crate::log::logmsg_line;
 use crate::message::e_textlock;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeyDict_buf_attach,
+    ApiDict, Arena, Array, Boolean, Error, Float, Handle, Integer, KeyDict_buf_attach,
     KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
     KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
     KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
@@ -158,7 +143,7 @@ use crate::types::{
     KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap,
     KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
     KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
-    KeyDict_win_text_height, Object, ObjectType, String_0, size_t, uint64_t,
+    KeyDict_win_text_height, Object, ObjectType, String_0, uint64_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -280,11 +265,7 @@ enum KeySetArg<K> {
 }
 
 /// Decode one keyset argument into a fresh `K`.
-///
-/// `get_field` must be `K`'s own generated field lookup: the decoder writes
-/// through the offsets it hands back, so pairing it with a different keyset
-/// would write outside `K`.
-fn read_keydict<K: Default>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
+fn read_keydict<K: KeySet + Default>(item: Object) -> KeySetArg<K> {
     if is_empty_array(&item) {
         // An empty list is an empty dict: it sets no key.
         return KeySetArg::Read(K::default());
@@ -296,9 +277,7 @@ fn read_keydict<K: Default>(get_field: FieldHashfn, item: Object) -> KeySetArg<K
     // them `None`. Zeroing would be the *opposite* answer for the booleans:
     // `Option<bool>` is niche-packed, so all-zero reads as `Some(false)`.
     let mut out = K::default();
-    // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
-    // offsets it hands back are inside `out`.
-    match unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict) } {
+    match api_dict_to_keydict(&mut out, dict) {
         Ok(()) => KeySetArg::Read(out),
         Err(e) => KeySetArg::Refused(e),
     }

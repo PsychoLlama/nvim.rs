@@ -27,18 +27,17 @@ pub fn handle_nvim_clear_autocmds(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let mut arg_1: KeyDict_clear_autocmds =
-        match read_keydict(Some(key_dict_clear_autocmds_get_field), args[0].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    1,
-                    c"nvim_clear_autocmds",
-                    c"Dict(clear_autocmds) *",
-                ));
-            }
-        };
+    let mut arg_1: KeyDict_clear_autocmds = match read_keydict(args[0].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                1,
+                c"nvim_clear_autocmds",
+                c"Dict(clear_autocmds) *",
+            ));
+        }
+    };
     nvim_clear_autocmds(&mut arg_1)?;
     Ok(Object::Nil)
 }
@@ -66,18 +65,17 @@ pub fn handle_nvim_create_augroup(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_create_augroup", c"String"));
     };
-    let mut arg_2: KeyDict_create_augroup =
-        match read_keydict(Some(key_dict_create_augroup_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    2,
-                    c"nvim_create_augroup",
-                    c"Dict(create_augroup) *",
-                ));
-            }
-        };
+    let mut arg_2: KeyDict_create_augroup = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                2,
+                c"nvim_create_augroup",
+                c"Dict(create_augroup) *",
+            ));
+        }
+    };
     let rv = nvim_create_augroup(channel_id, arg_1, &mut arg_2)?;
     Ok(Object::Integer(rv))
 }
@@ -103,18 +101,17 @@ pub fn handle_nvim_create_autocmd(
         return Err(wrong_arity(2, args.len()));
     }
     let arg_1 = args[0].take();
-    let mut arg_2: KeyDict_create_autocmd =
-        match read_keydict(Some(key_dict_create_autocmd_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    2,
-                    c"nvim_create_autocmd",
-                    c"Dict(create_autocmd) *",
-                ));
-            }
-        };
+    let mut arg_2: KeyDict_create_autocmd = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                2,
+                c"nvim_create_autocmd",
+                c"Dict(create_autocmd) *",
+            ));
+        }
+    };
     let rv = nvim_create_autocmd(channel_id, arg_1, &mut arg_2)?;
     Ok(Object::Integer(rv))
 }
@@ -221,18 +218,17 @@ pub fn handle_nvim_exec_autocmds(
         return Err(wrong_arity(2, args.len()));
     }
     let arg_1 = args[0].take();
-    let mut arg_2: KeyDict_exec_autocmds =
-        match read_keydict(Some(key_dict_exec_autocmds_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    2,
-                    c"nvim_exec_autocmds",
-                    c"Dict(exec_autocmds) *",
-                ));
-            }
-        };
+    let mut arg_2: KeyDict_exec_autocmds = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                2,
+                c"nvim_exec_autocmds",
+                c"Dict(exec_autocmds) *",
+            ));
+        }
+    };
     nvim_exec_autocmds(arg_1, &mut arg_2)?;
     Ok(Object::Nil)
 }
@@ -257,14 +253,13 @@ pub fn handle_nvim_get_autocmds(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let mut arg_1: KeyDict_get_autocmds =
-        match read_keydict(Some(key_dict_get_autocmds_get_field), args[0].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(1, c"nvim_get_autocmds", c"Dict(get_autocmds) *"));
-            }
-        };
+    let mut arg_1: KeyDict_get_autocmds = match read_keydict(args[0].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(1, c"nvim_get_autocmds", c"Dict(get_autocmds) *"));
+        }
+    };
     let rv = nvim_get_autocmds(&mut arg_1)?;
     Ok(Object::array(rv))
 }

@@ -61,18 +61,17 @@ pub fn handle_nvim__complete_set(
     let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim__complete_set", c"Integer"));
     };
-    let mut arg_2: KeyDict_complete_set =
-        match read_keydict(Some(key_dict_complete_set_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    2,
-                    c"nvim__complete_set",
-                    c"Dict(complete_set) *",
-                ));
-            }
-        };
+    let mut arg_2: KeyDict_complete_set = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                2,
+                c"nvim__complete_set",
+                c"Dict(complete_set) *",
+            ));
+        }
+    };
     let rv = nvim__complete_set(arg_1, &mut arg_2)?;
     Ok(Object::dict(rv))
 }
@@ -161,14 +160,13 @@ pub fn handle_nvim__get_runtime(
     let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim__get_runtime", c"Boolean"));
     };
-    let mut arg_3: KeyDict_runtime =
-        match read_keydict(Some(key_dict_runtime_get_field), args[2].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(3, c"nvim__get_runtime", c"Dict(runtime) *"));
-            }
-        };
+    let mut arg_3: KeyDict_runtime = match read_keydict(args[2].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(3, c"nvim__get_runtime", c"Dict(runtime) *"));
+        }
+    };
     let rv = nvim__get_runtime(arg_1, arg_2, &mut arg_3)?;
     Ok(Object::array(rv))
 }
@@ -368,14 +366,13 @@ pub fn handle_nvim__redraw(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let mut arg_1: KeyDict_redraw =
-        match read_keydict(Some(key_dict_redraw_get_field), args[0].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(1, c"nvim__redraw", c"Dict(redraw) *"));
-            }
-        };
+    let mut arg_1: KeyDict_redraw = match read_keydict(args[0].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(1, c"nvim__redraw", c"Dict(redraw) *"));
+        }
+    };
     nvim__redraw(&mut arg_1)?;
     Ok(Object::Nil)
 }
@@ -687,14 +684,13 @@ pub fn handle_nvim_echo(
     let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_echo", c"Boolean"));
     };
-    let mut arg_3: KeyDict_echo_opts =
-        match read_keydict(Some(key_dict_echo_opts_get_field), args[2].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(3, c"nvim_echo", c"Dict(echo_opts) *"));
-            }
-        };
+    let mut arg_3: KeyDict_echo_opts = match read_keydict(args[2].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(3, c"nvim_echo", c"Dict(echo_opts) *"));
+        }
+    };
     nvim_echo(arg_1, arg_2, &mut arg_3)
 }
 
@@ -721,18 +717,17 @@ pub fn handle_nvim_eval_statusline(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_eval_statusline", c"String"));
     };
-    let mut arg_2: KeyDict_eval_statusline =
-        match read_keydict(Some(key_dict_eval_statusline_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    2,
-                    c"nvim_eval_statusline",
-                    c"Dict(eval_statusline) *",
-                ));
-            }
-        };
+    let mut arg_2: KeyDict_eval_statusline = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                2,
+                c"nvim_eval_statusline",
+                c"Dict(eval_statusline) *",
+            ));
+        }
+    };
     let rv = nvim_eval_statusline(arg_1, &mut arg_2)?;
     Ok(Object::dict(rv))
 }
@@ -919,14 +914,13 @@ pub fn handle_nvim_get_context(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let mut arg_1: KeyDict_context =
-        match read_keydict(Some(key_dict_context_get_field), args[0].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(1, c"nvim_get_context", c"Dict(context) *"));
-            }
-        };
+    let mut arg_1: KeyDict_context = match read_keydict(args[0].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(1, c"nvim_get_context", c"Dict(context) *"));
+        }
+    };
     let rv = nvim_get_context(&mut arg_1)?;
     Ok(Object::dict(rv))
 }

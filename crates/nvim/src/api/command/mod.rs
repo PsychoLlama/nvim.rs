@@ -2,9 +2,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::dispatch::{
-    key_dict_cmd_magic_get_field, key_dict_cmd_mods_filter_get_field, key_dict_cmd_mods_get_field,
-};
 use crate::api::private::helpers::{
     api_dict_to_keydict, api_set_sctx, api_typename, cstr_to_string, cstrn_to_string,
     find_buffer_by_handle, string_to_cstr, try_enter, try_leave,

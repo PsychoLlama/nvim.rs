@@ -191,8 +191,7 @@ fn parse_border_item(item: &Object) -> Result<(String_0, c_int), Error> {
         if arr.len() < 2 {
             return Ok((string.clone(), 0));
         }
-        // SAFETY: the name is a NUL-terminated literal.
-        let hl = unsafe { object_to_hl_id(&arr[1], c"border char highlight".as_ptr()) };
+        let hl = object_to_hl_id(&arr[1], c"border char highlight");
         return hl.map(|hl_id| (string.clone(), hl_id));
     }
     if let Some(string) = item.as_string() {

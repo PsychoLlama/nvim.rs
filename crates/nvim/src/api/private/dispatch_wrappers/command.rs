@@ -4,7 +4,6 @@
 //! run `just apigen`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 
 use super::*;
 
@@ -35,18 +34,17 @@ pub fn handle_nvim_buf_create_user_command(
         return Err(wrong_type(2, c"nvim_buf_create_user_command", c"String"));
     };
     let arg_3 = args[2].take();
-    let mut arg_4: KeyDict_user_command =
-        match read_keydict(Some(key_dict_user_command_get_field), args[3].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    4,
-                    c"nvim_buf_create_user_command",
-                    c"Dict(user_command) *",
-                ));
-            }
-        };
+    let mut arg_4: KeyDict_user_command = match read_keydict(args[3].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                4,
+                c"nvim_buf_create_user_command",
+                c"Dict(user_command) *",
+            ));
+        }
+    };
     nvim_buf_create_user_command(channel_id, arg_1, arg_2, arg_3, &mut arg_4)?;
     Ok(Object::Nil)
 }
@@ -104,18 +102,17 @@ pub fn handle_nvim_buf_get_commands(
     let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
         return Err(wrong_type(1, c"nvim_buf_get_commands", c"Buffer"));
     };
-    let mut arg_2: KeyDict_get_commands =
-        match read_keydict(Some(key_dict_get_commands_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    2,
-                    c"nvim_buf_get_commands",
-                    c"Dict(get_commands) *",
-                ));
-            }
-        };
+    let mut arg_2: KeyDict_get_commands = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                2,
+                c"nvim_buf_get_commands",
+                c"Dict(get_commands) *",
+            ));
+        }
+    };
     let rv = nvim_buf_get_commands(arg_1, &mut arg_2)?;
     Ok(Object::dict(rv))
 }
@@ -140,21 +137,20 @@ pub fn handle_nvim_cmd(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let mut arg_1: KeyDict_cmd = match read_keydict(Some(key_dict_cmd_get_field), args[0].take()) {
+    let mut arg_1: KeyDict_cmd = match read_keydict(args[0].take()) {
         KeySetArg::Read(v) => v,
         KeySetArg::Refused(e) => return Err(e),
         KeySetArg::WrongType => {
             return Err(wrong_type(1, c"nvim_cmd", c"Dict(cmd) *"));
         }
     };
-    let mut arg_2: KeyDict_cmd_opts =
-        match read_keydict(Some(key_dict_cmd_opts_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_cmd", c"Dict(cmd_opts) *"));
-            }
-        };
+    let mut arg_2: KeyDict_cmd_opts = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_cmd", c"Dict(cmd_opts) *"));
+        }
+    };
     let rv = nvim_cmd(channel_id, &mut arg_1, &mut arg_2)?;
     Ok(Object::string(rv))
 }
@@ -183,18 +179,17 @@ pub fn handle_nvim_create_user_command(
         return Err(wrong_type(1, c"nvim_create_user_command", c"String"));
     };
     let arg_2 = args[1].take();
-    let mut arg_3: KeyDict_user_command =
-        match read_keydict(Some(key_dict_user_command_get_field), args[2].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    3,
-                    c"nvim_create_user_command",
-                    c"Dict(user_command) *",
-                ));
-            }
-        };
+    let mut arg_3: KeyDict_user_command = match read_keydict(args[2].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                3,
+                c"nvim_create_user_command",
+                c"Dict(user_command) *",
+            ));
+        }
+    };
     nvim_create_user_command(channel_id, arg_1, arg_2, &mut arg_3)?;
     Ok(Object::Nil)
 }
@@ -246,14 +241,13 @@ pub fn handle_nvim_get_commands(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let mut arg_1: KeyDict_get_commands =
-        match read_keydict(Some(key_dict_get_commands_get_field), args[0].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(1, c"nvim_get_commands", c"Dict(get_commands) *"));
-            }
-        };
+    let mut arg_1: KeyDict_get_commands = match read_keydict(args[0].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(1, c"nvim_get_commands", c"Dict(get_commands) *"));
+        }
+    };
     let rv = nvim_get_commands(&mut arg_1)?;
     Ok(Object::dict(rv))
 }
@@ -281,18 +275,13 @@ pub fn handle_nvim_parse_cmd(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_parse_cmd", c"String"));
     };
-    let mut arg_2: KeyDict_empty =
-        match read_keydict(Some(key_dict_empty_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_parse_cmd", c"Dict(empty) *"));
-            }
-        };
+    let mut arg_2: KeyDict_empty = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_parse_cmd", c"Dict(empty) *"));
+        }
+    };
     let mut rv = nvim_parse_cmd(arg_1, &mut arg_2)?;
-    // SAFETY: `rv` is a `KeyDict_cmd`, whose field table is
-    // `cmd_table` and whose length is 12.
-    let dict =
-        unsafe { api_keydict_to_dict((&raw mut rv).cast(), cmd_table.as_ptr(), 12 as size_t) };
-    Ok(Object::dict(dict))
+    Ok(Object::dict(api_keydict_to_dict(&mut rv)))
 }

@@ -26,7 +26,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::dispatch::key_dict_highlight_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, api_metadata, cstr_to_string};
 use crate::channel::{channel_connect, channel_job_start};
 use crate::event::r#loop::process_events;
@@ -744,15 +743,7 @@ unsafe fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
     // over -- and the only one that lets `dict2hlattrs` tell "the UI said
     // `bold = false`" from "the UI said nothing about `bold`".
     let mut dict = KeyDict_highlight::default();
-    if unsafe {
-        api_dict_to_keydict(
-            (&raw mut dict).cast::<c_void>(),
-            Some(key_dict_highlight_get_field),
-            d.clone(),
-        )
-    }
-    .is_err()
-    {
+    if api_dict_to_keydict(&mut dict, d.clone()).is_err() {
         return HLATTRS_INIT;
     }
     let Ok(mut attrs) = (unsafe { dict2hlattrs(&dict, rgb, None, None) }) else {

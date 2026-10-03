@@ -3,10 +3,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::dispatch::{
-    key_dict__shada_buflist_item_get_field, key_dict__shada_mark_get_field,
-    key_dict__shada_register_get_field, key_dict__shada_search_pat_get_field,
-};
 use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_is_quickfix, buf_is_terminal, buflist_new, buflist_setfpos, find_buf};

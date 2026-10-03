@@ -159,9 +159,7 @@ unsafe fn decor_provider_invoke(
             *res = ret.into_array().unwrap_or(Array::EMPTY);
             return true;
         }
-        let what = c"provider %s retval".as_ptr();
-        // SAFETY: the name is a NUL-terminated format string.
-        match unsafe { api_object_to_bool(&ret, what, default_true) } {
+        match api_object_to_bool(&ret, c"provider %s retval", default_true) {
             Ok(true) => return true,
             Ok(false) => {}
             Err(e) => err = e,

@@ -33,14 +33,13 @@ pub fn handle_nvim_set_hl(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_set_hl", c"String"));
     };
-    let mut arg_3: KeyDict_highlight =
-        match read_keydict(Some(key_dict_highlight_get_field), args[2].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(3, c"nvim_set_hl", c"Dict(highlight) *"));
-            }
-        };
+    let mut arg_3: KeyDict_highlight = match read_keydict(args[2].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(3, c"nvim_set_hl", c"Dict(highlight) *"));
+        }
+    };
     nvim_set_hl(channel_id, arg_1, arg_2, &mut arg_3)?;
     Ok(Object::Nil)
 }
@@ -128,14 +127,13 @@ pub fn handle_nvim_set_keymap(
     let Some(arg_3) = as_string(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_set_keymap", c"String"));
     };
-    let mut arg_4: KeyDict_keymap =
-        match read_keydict(Some(key_dict_keymap_get_field), args[3].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(4, c"nvim_set_keymap", c"Dict(keymap) *"));
-            }
-        };
+    let mut arg_4: KeyDict_keymap = match read_keydict(args[3].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(4, c"nvim_set_keymap", c"Dict(keymap) *"));
+        }
+    };
     nvim_set_keymap(channel_id, arg_1, arg_2, arg_3, &mut arg_4)?;
     Ok(Object::Nil)
 }

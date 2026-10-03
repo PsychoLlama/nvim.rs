@@ -219,7 +219,6 @@ pub struct ExtmarkInfoArray {
     pub capacity: size_t,
     pub items: *mut MTPair,
 }
-pub type FieldHashfn = Option<unsafe fn(*const ::core::ffi::c_char, size_t) -> *const KeySetLink>;
 pub type HLGroupID = Integer;
 /// Not `Copy`: a kvec of chunks, each owning its text. A `clone` aliases
 /// the same array — which several message paths do deliberately, handing
@@ -231,12 +230,6 @@ pub struct HlMessage {
     pub items: *mut HlMessageChunk,
 }
 pub type Integer = int64_t;
-pub struct KeySetLink {
-    pub str: *mut ::core::ffi::c_char,
-    pub ptr_off: size_t,
-    pub type_0: ::core::ffi::c_int,
-    pub is_hlgroup: bool,
-}
 pub type KeyValuePair = key_value_pair;
 pub type LuaRef = ::core::ffi::c_int;
 pub type MessageType = ::core::ffi::c_int;

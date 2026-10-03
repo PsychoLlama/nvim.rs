@@ -4,7 +4,6 @@
 //! run `just apigen`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 
 use super::*;
 
@@ -69,11 +68,7 @@ pub fn handle_nvim__ns_get(
         return Err(wrong_type(1, c"nvim__ns_get", c"Integer"));
     };
     let mut rv = nvim__ns_get(arg_1)?;
-    // SAFETY: `rv` is a `KeyDict_ns_opts`, whose field table is
-    // `ns_opts_table` and whose length is 2.
-    let dict =
-        unsafe { api_keydict_to_dict((&raw mut rv).cast(), ns_opts_table.as_ptr(), 2 as size_t) };
-    Ok(Object::dict(dict))
+    Ok(Object::dict(api_keydict_to_dict(&mut rv)))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__ns_set`.
@@ -101,14 +96,13 @@ pub fn handle_nvim__ns_set(
     let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim__ns_set", c"Integer"));
     };
-    let mut arg_2: KeyDict_ns_opts =
-        match read_keydict(Some(key_dict_ns_opts_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim__ns_set", c"Dict(ns_opts) *"));
-            }
-        };
+    let mut arg_2: KeyDict_ns_opts = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim__ns_set", c"Dict(ns_opts) *"));
+        }
+    };
     nvim__ns_set(arg_1, &mut arg_2)?;
     Ok(Object::Nil)
 }
@@ -211,18 +205,17 @@ pub fn handle_nvim_buf_get_extmark_by_id(
     let Some(arg_3) = as_integer(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_buf_get_extmark_by_id", c"Integer"));
     };
-    let mut arg_4: KeyDict_get_extmark =
-        match read_keydict(Some(key_dict_get_extmark_get_field), args[3].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    4,
-                    c"nvim_buf_get_extmark_by_id",
-                    c"Dict(get_extmark) *",
-                ));
-            }
-        };
+    let mut arg_4: KeyDict_get_extmark = match read_keydict(args[3].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                4,
+                c"nvim_buf_get_extmark_by_id",
+                c"Dict(get_extmark) *",
+            ));
+        }
+    };
     let rv = nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &mut arg_4)?;
     Ok(Object::array(rv))
 }
@@ -255,18 +248,17 @@ pub fn handle_nvim_buf_get_extmarks(
     };
     let arg_3 = args[2].take();
     let arg_4 = args[3].take();
-    let mut arg_5: KeyDict_get_extmarks =
-        match read_keydict(Some(key_dict_get_extmarks_get_field), args[4].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    5,
-                    c"nvim_buf_get_extmarks",
-                    c"Dict(get_extmarks) *",
-                ));
-            }
-        };
+    let mut arg_5: KeyDict_get_extmarks = match read_keydict(args[4].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                5,
+                c"nvim_buf_get_extmarks",
+                c"Dict(get_extmarks) *",
+            ));
+        }
+    };
     let rv = nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     Ok(Object::array(rv))
 }
@@ -303,18 +295,17 @@ pub fn handle_nvim_buf_set_extmark(
     let Some(arg_4) = as_integer(args[3].take()) else {
         return Err(wrong_type(4, c"nvim_buf_set_extmark", c"Integer"));
     };
-    let mut arg_5: KeyDict_set_extmark =
-        match read_keydict(Some(key_dict_set_extmark_get_field), args[4].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    5,
-                    c"nvim_buf_set_extmark",
-                    c"Dict(set_extmark) *",
-                ));
-            }
-        };
+    let mut arg_5: KeyDict_set_extmark = match read_keydict(args[4].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                5,
+                c"nvim_buf_set_extmark",
+                c"Dict(set_extmark) *",
+            ));
+        }
+    };
     let rv = nvim_buf_set_extmark(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     Ok(Object::Integer(rv))
 }

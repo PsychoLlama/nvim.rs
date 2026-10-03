@@ -76,14 +76,13 @@ pub fn handle_nvim_get_hl(
     let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_get_hl", c"Integer"));
     };
-    let mut arg_2: KeyDict_get_highlight =
-        match read_keydict(Some(key_dict_get_highlight_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_get_hl", c"Dict(get_highlight) *"));
-            }
-        };
+    let mut arg_2: KeyDict_get_highlight = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_get_hl", c"Dict(get_highlight) *"));
+        }
+    };
     let rv = nvim_get_hl(arg_1, &mut arg_2)?;
     Ok(Object::dict(rv))
 }
@@ -135,14 +134,13 @@ pub fn handle_nvim_get_hl_ns(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let mut arg_1: KeyDict_get_ns =
-        match read_keydict(Some(key_dict_get_ns_get_field), args[0].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(1, c"nvim_get_hl_ns", c"Dict(get_ns) *"));
-            }
-        };
+    let mut arg_1: KeyDict_get_ns = match read_keydict(args[0].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(1, c"nvim_get_hl_ns", c"Dict(get_ns) *"));
+        }
+    };
     let rv = nvim_get_hl_ns(&mut arg_1)?;
     Ok(Object::Integer(rv))
 }
@@ -197,14 +195,13 @@ pub fn handle_nvim_get_mark(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_get_mark", c"String"));
     };
-    let mut arg_2: KeyDict_empty =
-        match read_keydict(Some(key_dict_empty_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_get_mark", c"Dict(empty) *"));
-            }
-        };
+    let mut arg_2: KeyDict_empty = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_get_mark", c"Dict(empty) *"));
+        }
+    };
     let rv = nvim_get_mark(arg_1, &mut arg_2)?;
     Ok(Object::array(rv))
 }
@@ -623,14 +620,13 @@ pub fn handle_nvim_open_term(
     let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
         return Err(wrong_type(1, c"nvim_open_term", c"Buffer"));
     };
-    let mut arg_2: KeyDict_open_term =
-        match read_keydict(Some(key_dict_open_term_get_field), args[1].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(2, c"nvim_open_term", c"Dict(open_term) *"));
-            }
-        };
+    let mut arg_2: KeyDict_open_term = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_open_term", c"Dict(open_term) *"));
+        }
+    };
     if textlock.get() != 0 || expr_map_locked() {
         return Err(expr_map_locked_error());
     }
@@ -778,18 +774,17 @@ pub fn handle_nvim_select_popupmenu_item(
     let Some(arg_3) = as_boolean(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_select_popupmenu_item", c"Boolean"));
     };
-    let mut arg_4: KeyDict_empty =
-        match read_keydict(Some(key_dict_empty_get_field), args[3].take()) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused(e) => return Err(e),
-            KeySetArg::WrongType => {
-                return Err(wrong_type(
-                    4,
-                    c"nvim_select_popupmenu_item",
-                    c"Dict(empty) *",
-                ));
-            }
-        };
+    let mut arg_4: KeyDict_empty = match read_keydict(args[3].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(
+                4,
+                c"nvim_select_popupmenu_item",
+                c"Dict(empty) *",
+            ));
+        }
+    };
     nvim_select_popupmenu_item(arg_1, arg_2, arg_3, &mut arg_4);
     Ok(Object::Nil)
 }

@@ -81,7 +81,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim__ns_get(lstate: *mut lua_State) ->
         let _lstate = Restore::of(&active_lstate, lstate);
         let mut ret = nvim__ns_get(arg_1)?;
         // SAFETY: as above.
-        unsafe { push_keydict(lstate, &raw mut ret) };
+        unsafe { push_keydict(lstate, &mut ret) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
