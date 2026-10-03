@@ -125,6 +125,35 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: &TypVal) -> boo
     true
 }
 
+impl Callback {
+    /// The callback `arg` describes — [`Callback::None`] for `v:null` and
+    /// the Number 0 — or `None`, after E921, when it describes none.
+    pub fn from_typval(arg: &TypVal) -> Option<Callback> {
+        let mut cb = Callback::None;
+        // SAFETY: a fresh slot and the caller's value.
+        unsafe { callback_from_typval(&mut cb, arg) }.then_some(cb)
+    }
+
+    /// Call this callback with `args`, answering whether it ran.
+    ///
+    /// The `&mut` is the point: the call runs user code, which must not be
+    /// able to reach the callback being called. Call a
+    /// [`duplicate`](Callback::duplicate) of one that user code can also
+    /// reach — an option's, a list's.
+    pub fn call(&mut self, args: &[TypVal], result: &mut TypVal) -> bool {
+        // SAFETY: a `&mut` is a live callback nothing else can reach.
+        unsafe { callback_call(self, args, result) }
+    }
+
+    /// Mark what this callback keeps alive for the collector, answering
+    /// whether the walk should be given up.
+    pub fn mark(&self, copy_id: c_int) -> bool {
+        let this = ::core::ptr::from_ref(self).cast_mut();
+        // SAFETY: a live callback, only read; no stacks, as for a root.
+        unsafe { set_ref_in_callback(this, copy_id, null_mut(), null_mut()) }
+    }
+}
+
 /// How deep the callback nesting currently is.
 pub fn get_callback_depth() -> c_int {
     callback_depth.get()

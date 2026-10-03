@@ -126,7 +126,8 @@ pub(crate) use exception::{
     pop_msg_list, push_msg_list, report_pending, take_msg_list,
 };
 pub(crate) use trycmd::{
-    do_throw, enter_cleanup, ex_catch, ex_endtry, ex_finally, ex_throw, ex_try, leave_cleanup,
+    CleanupGuard, do_throw, enter_cleanup, ex_catch, ex_endtry, ex_finally, ex_throw, ex_try,
+    leave_cleanup,
 };
 
 /// Constants the transpiler copied in from the headers this module includes.

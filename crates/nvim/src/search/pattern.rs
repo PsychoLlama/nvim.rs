@@ -18,13 +18,15 @@ use super::*;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
+use crate::memory::XString;
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::types::{CmdModFlags, FAIL, Failed, NUL, Vv};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::CStr;
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 /// The offset ShaDa does not store, and the one a zeroed slot has.
@@ -356,6 +358,14 @@ pub fn last_search_pattern() -> *mut c_char {
 
 pub fn last_search_pattern_len() -> size_t {
     spat(RE_SEARCH).patlen
+}
+
+/// A copy of the last search pattern, or `None` when there is none yet.
+pub(crate) fn last_pattern_owned() -> Option<XString> {
+    let pat = last_search_pat();
+    // SAFETY: a stored pattern is NUL-terminated; it is copied before
+    // anything can change it.
+    (!pat.is_null()).then(|| XString::from_cstr(unsafe { CStr::from_ptr(pat) }))
 }
 
 /// Whichever of the two patterns was used last.

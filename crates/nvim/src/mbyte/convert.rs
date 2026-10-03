@@ -28,7 +28,7 @@ use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::types::Failed;
 use ::libc::{EILSEQ, EINVAL};
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// Has the host's iconv been proved to work?
 ///
@@ -575,5 +575,56 @@ mod tests {
     fn latin9_encodes_the_euro() {
         assert_eq!(latin9_to_utf8(&[0xa4]), "€".as_bytes());
         assert_eq!(latin9_to_utf8(b"a"), b"a");
+    }
+}
+
+/// A conversion from one encoding to another, torn down when dropped.
+pub(crate) struct Converter(VimConv);
+
+impl Converter {
+    /// The conversion from `from` to `to`, or `None` when none is needed or
+    /// possible.
+    pub(crate) fn new(from: &CStr, to: &CStr) -> Option<Converter> {
+        let mut conv = Converter(VimConv {
+            vc_type: CONV_NONE,
+            vc_factor: 0,
+            vc_fd: core::ptr::null_mut(),
+            vc_fail: false,
+        });
+        // SAFETY: a zeroed plan of this value's own, and two NUL-terminated
+        // names the setup only reads.
+        let _ = unsafe {
+            convert_setup(
+                &mut conv.0,
+                from.as_ptr().cast_mut(),
+                to.as_ptr().cast_mut(),
+            )
+        };
+        (conv.0.vc_type != CONV_NONE).then_some(conv)
+    }
+
+    /// `text` converted, or `None` when it would not convert.
+    pub(crate) fn convert(&self, text: &[u8]) -> Option<Vec<u8>> {
+        let mut copy = text.to_vec();
+        copy.push(0);
+        let mut len = text.len();
+        // SAFETY: `len` readable bytes of a copy this call owns; the answer
+        // is a fresh allocation of `len` bytes, or null.
+        let converted = unsafe { string_convert(&self.0, copy.as_mut_ptr().cast(), &mut len) };
+        if converted.is_null() {
+            return None;
+        }
+        // SAFETY: as above.
+        let bytes = unsafe { core::slice::from_raw_parts(converted.cast::<u8>(), len) }.to_vec();
+        // SAFETY: the allocation just read, given back once.
+        unsafe { xfree(converted.cast()) };
+        Some(bytes)
+    }
+}
+
+impl Drop for Converter {
+    fn drop(&mut self) {
+        // SAFETY: this value's own plan, torn down once.
+        let _ = unsafe { convert_setup(&mut self.0, core::ptr::null_mut(), core::ptr::null_mut()) };
     }
 }

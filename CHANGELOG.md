@@ -21,9 +21,17 @@ and this project adheres to [CalVer](https://calver.org/).
   `:try` stack and the saved states of nested commands. A frame or exception
   freed while something still names it now stops the editor with an error
   instead of reading freed memory.
+- Rewrote how quickfix and location lists are kept: every list stack is
+  owned in one table and named by an id, and a list's entries are a vector
+  its users walk by position. An autocommand, `'quickfixtextfunc'` or
+  `setqflist()` call that changes or empties a list while a command is
+  walking it now ends the walk instead of leaving it on freed entries.
 
 ### Fixed
 
+- Freeing a quickfix list's `context` value released its memory through a
+  reference the freeing call still held, which Miri reports as undefined
+  behaviour.
 - Insert-mode completion could crash when a completion function changed
   `'complete'` while matches from the old value were still listed.
 - Fetching a buffer line zeroed a 4 KiB error-message buffer on every call,

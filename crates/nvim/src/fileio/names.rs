@@ -27,6 +27,14 @@ use crate::winlayer::buffers;
 /// `S_IFLNK`: the file type bits of a symbolic link.
 const S_IFLNK: u64 = 0o120000;
 
+/// [`shorten_buf_fname`] against a directory name the caller holds.
+pub(crate) fn shorten_buf_fname_in(buffer: Buf, dirname: &CStr, force: bool) {
+    // A copy: the callee takes the name as writable.
+    let mut copy = dirname.to_bytes_with_nul().to_vec();
+    // SAFETY: a NUL-terminated copy this call owns.
+    unsafe { shorten_buf_fname(buffer, copy.as_mut_ptr().cast(), c_int::from(force)) };
+}
+
 /// Shorten `buffer`'s displayed file name to be relative to `dirname`.
 ///
 /// # Safety

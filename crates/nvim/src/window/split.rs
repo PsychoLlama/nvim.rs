@@ -34,9 +34,8 @@ use crate::option::vars::{
     P_WH, P_WIW, p_ch, p_ea, p_ead, p_ls, p_sb, p_spk, p_spr, p_wh, p_wiw, p_wmh, p_wmw,
 };
 use crate::option::win_copy_options;
-use crate::quickfix::copy_loclist_stack;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Failed, Integer, OptInt, QfInfo};
+use crate::types::{FAIL, Failed, Integer, OptInt};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -788,10 +787,10 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     copy_jumplist(oldp, newp);
     if flags & WSP_NEWLOC as c_int != 0 {
         // Don't copy the location list.
-        newp.w_llist = ptr::null_mut::<QfInfo>();
-        newp.w_llist_ref = ptr::null_mut::<QfInfo>();
+        newp.w_llist = None;
+        newp.w_llist_ref = None;
     } else {
-        copy_loclist_stack(oldp, newp);
+        oldp.copy_location_lists_to(newp);
     }
     newp.w_localdir = dup(oldp.w_localdir);
     newp.w_prevdir = dup(oldp.w_prevdir);

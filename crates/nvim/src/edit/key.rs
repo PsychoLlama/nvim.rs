@@ -494,7 +494,7 @@ fn key_eol(s: &mut InsertState) -> Next {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // In a quickfix or location-list window, `<CR>` jumps to the entry.
     if buf_is_quickfix(current_buf()) && s.c == CAR {
-        if Win::current().w_llist_ref.is_null() {
+        if Win::current().w_llist_ref.is_none() {
             let _ = do_cmdline_cmd(c".cc");
         } else {
             let _ = do_cmdline_cmd(c".ll");

@@ -542,6 +542,12 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
     retval
 }
 
+/// [`msg_strtrunc`] for a message the caller holds.
+pub(crate) fn msg_strtrunc_text(s: &CStr, force: c_int) -> Option<XString> {
+    // SAFETY: a NUL-terminated message.
+    unsafe { msg_strtrunc(s.as_ptr(), force) }
+}
+
 /// Truncate `s` so it prints without causing a scroll.
 ///
 /// Answers an allocated string, or null when no truncation was needed.
@@ -580,6 +586,17 @@ pub(crate) unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> Option<XStr
         }
     }
     truncated
+}
+
+/// [`trunc_string`] into a buffer of `buflen` bytes of its own: `s` cut to
+/// fit `room` cells, answered without its NUL.
+pub(crate) fn trunc_to(s: &CStr, room: c_int, buflen: usize) -> Vec<u8> {
+    let mut buf = vec![0 as c_char; buflen];
+    let len = c_int::try_from(buflen).expect("a message buffer smaller than INT_MAX");
+    // SAFETY: a NUL-terminated message, and a buffer of exactly the length
+    // passed.
+    unsafe { trunc_string(s.as_ptr(), buf.as_mut_ptr(), room, len) };
+    cstr::in_chars(&buf).to_bytes().to_vec()
 }
 
 /// Truncate `s` into `buf` at cell width `room`, replacing the middle with

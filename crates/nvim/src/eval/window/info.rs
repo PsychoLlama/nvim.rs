@@ -49,7 +49,7 @@ fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {
     nr(c"quickfix", VarNumber::from(quickfix));
     nr(
         c"loclist",
-        VarNumber::from(quickfix && !window.w_llist_ref.is_null()),
+        VarNumber::from(quickfix && !window.w_llist_ref.is_none()),
     );
     // SAFETY: a live dictionary and the window's own variable dictionary.
     let vars = c"variables";
@@ -245,7 +245,7 @@ pub fn f_win_gettype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     } else if cmdwin_win.get() == Some(wp.id()) {
         c"command"
     } else if buf_is_quickfix(wp.buffer_or_none()) {
-        if wp.w_llist_ref.is_null() {
+        if wp.w_llist_ref.is_none() {
             c"quickfix"
         } else {
             c"loclist"

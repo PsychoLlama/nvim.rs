@@ -225,6 +225,31 @@ pub unsafe fn callback_copy(dest: *mut Callback, src: *mut Callback) {
     unsafe { *dest = copy };
 }
 
+impl Callback {
+    /// Release what this holds and leave it [`Callback::None`]: the safe
+    /// spelling of [`callback_free`] for a callback the caller owns.
+    pub fn clear(&mut self) {
+        // SAFETY: a `&mut` is a live, unaliased callback.
+        unsafe { callback_free(self) };
+    }
+
+    /// A second owner of what this holds: [`callback_copy`] into a fresh
+    /// value.
+    pub fn duplicate(&self) -> Callback {
+        let mut copy = Callback::None;
+        // SAFETY: both are live; the source is only read.
+        unsafe { callback_copy(&mut copy, ::core::ptr::from_ref(self).cast_mut()) };
+        copy
+    }
+
+    /// Store this callback in `tv` as a Vimscript value, taking a reference
+    /// of the value's own: [`callback_put`].
+    pub fn put(&self, tv: &mut TypVal) {
+        // SAFETY: as [`Callback::duplicate`]; `tv` is a `&mut`.
+        unsafe { callback_put(::core::ptr::from_ref(self).cast_mut(), tv) };
+    }
+}
+
 /// A freshly allocated description of `cb`, as `string()` prints it.
 ///
 /// # Safety

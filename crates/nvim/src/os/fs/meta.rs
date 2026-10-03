@@ -273,6 +273,14 @@ pub unsafe fn os_fileinfo(path: *const c_char, file_info: *mut FileInfo) -> bool
     unsafe { os_stat(path, &raw mut (*file_info).stat) == LIBUV_SUCCESS }
 }
 
+/// Whether `path` names anything, a symbolic link included:
+/// [`os_fileinfo_link`] answering only that.
+pub(crate) fn link_exists(path: &CStr) -> bool {
+    let mut info = FileInfo::default();
+    // SAFETY: a NUL-terminated path and a local to fill in.
+    unsafe { os_fileinfo_link(path.as_ptr(), &mut info) }
+}
+
 /// [`os_fileinfo`] without following a symlink — the link's own metadata.
 ///
 /// # Safety

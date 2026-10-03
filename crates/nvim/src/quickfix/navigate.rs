@@ -8,8 +8,7 @@
 //! All three end in `qf_jump`, which takes the *number* of an entry, so the
 //! search here answers a number rather than an entry.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -23,19 +22,10 @@ use crate::types::CmdIdx;
 use core::cmp::Ordering;
 use core::ffi::c_int;
 
-/// One entry of a list together with its number, which the adjacency search
-/// tracks in step with the entry it walks to.
-struct At {
-    entry: *mut QfLine,
-    /// The entry's position in the list, counted from 1.
-    nr: c_int,
-}
-
 /// `:cc`, `:ll`, `:crewind`, `:cfirst`, `:clast` and their `:l…` twins,
 /// plus `:cdo`/`:cfdo`, which start by jumping to the entry they run on.
 pub fn ex_cc(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    let Some(qi) = qf_cmd_stack(excmd.cmdidx, true) else {
+    let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
 
@@ -64,18 +54,17 @@ pub fn ex_cc(excmd: &mut ExArg) {
             1
         };
         let per_file = matches!(excmd.cmdidx, CmdIdx::cfdo | CmdIdx::lfdo);
-        let valid_entry = qf_get_nth_valid_entry(qf_current_list(qi), n, per_file);
+        let valid_entry = qf_get_nth_valid_entry(qi.current_list(), n, per_file);
         errornr = c_int::try_from(valid_entry).expect("a quickfix list is shorter than INT_MAX");
     }
 
-    qf_goto(qi, 0, errornr, c_int::from(excmd.forceit));
+    qf_jump(qi, 0, errornr, excmd.forceit);
 }
 
 /// `:cnext`, `:cprevious`, `:cnfile`, `:cpfile` and their `:l…` twins, plus
 /// the `:cdo`/`:cfdo` family's step to the next entry or file.
 pub fn ex_cnext(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    let Some(qi) = qf_cmd_stack(excmd.cmdidx, true) else {
+    let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
 
@@ -101,249 +90,196 @@ pub fn ex_cnext(excmd: &mut ExArg) {
         _ => FORWARD,
     };
 
-    qf_goto(qi, dir, errornr, c_int::from(excmd.forceit));
+    qf_jump(qi, dir, errornr, excmd.forceit);
 }
 
-/// The first entry of the list that belongs to buffer `bnr`.
-///
-/// # Safety
-///
-/// `qfl` must be a live list.
-unsafe fn first_entry_in_buf(qfl: *mut QfList, bnr: c_int) -> Option<At> {
-    // SAFETY: the caller's promise -- a live `QfList`.
-    let qfl = unsafe { Qfl::new(qfl) };
-    // SAFETY: forwarded from the caller.
-    let mut at = At {
-        entry: qfl.qf_start,
-        nr: 1,
-    };
-    while !got_int.get() && at.nr <= qfl.qf_count && !at.entry.is_null() {
-        if unsafe { (*at.entry).qf_fnum } == bnr {
+/// The entries of one list, and the position the adjacency search compares
+/// them with. Nothing in the search can run user code, so it borrows the
+/// list. An entry is named by its position; its number is one more.
+struct Adjacent<'a> {
+    entries: &'a [QfEntry],
+    bnr: c_int,
+    pos: Pos,
+    linewise: bool,
+}
+
+impl Adjacent<'_> {
+    /// The entry after `at`, if there is one.
+    fn next(&self, at: usize) -> Option<usize> {
+        (at + 1 < self.entries.len()).then_some(at + 1)
+    }
+
+    /// The entry before `at`, if there is one.
+    fn prev(&self, at: usize) -> Option<usize> {
+        at.checked_sub(1)
+    }
+
+    /// Whether two entries are in the same file.
+    fn same_file(&self, a: usize, b: usize) -> bool {
+        self.entries[a].fnum == self.entries[b].fnum
+    }
+
+    /// Whether two entries are on the same line of the same file.
+    fn same_line(&self, a: usize, b: usize) -> bool {
+        self.same_file(a, b) && self.entries[a].lnum == self.entries[b].lnum
+    }
+
+    /// The first entry of the list that belongs to the buffer.
+    fn first_in_buf(&self) -> Option<usize> {
+        self.entries
+            .iter()
+            .take_while(|_| !got_int.get())
+            .position(|entry| entry.fnum == self.bnr)
+    }
+
+    /// Where an entry sits relative to the position: `Greater` is after it.
+    ///
+    /// Linewise the column is not compared at all, which is how
+    /// `:cabove`/`:cbelow` treat every entry on a line as one.
+    fn compare(&self, at: usize) -> Ordering {
+        let entry = &self.entries[at];
+        let cols = if self.linewise {
+            (0, 0)
+        } else {
+            (entry.col, self.pos.col)
+        };
+        (entry.lnum, cols.0).cmp(&(self.pos.lnum, cols.1))
+    }
+
+    /// The first entry on the same line of the same file as `at`.
+    ///
+    /// The entries of a list are in line order, so the run of entries
+    /// sharing a line is contiguous.
+    fn first_on_line(&self, mut at: usize) -> usize {
+        while !got_int.get()
+            && let Some(prev) = self.prev(at)
+            && self.same_line(prev, at)
+        {
+            at = prev;
+        }
+        at
+    }
+
+    /// The last entry on the same line of the same file as `at`.
+    fn last_on_line(&self, mut at: usize) -> usize {
+        while !got_int.get()
+            && let Some(next) = self.next(at)
+            && self.same_line(next, at)
+        {
+            at = next;
+        }
+        at
+    }
+
+    /// The first entry of the buffer after the position, starting the walk
+    /// at `at`, which must be the buffer's first entry.
+    fn after_pos(&self, mut at: usize) -> Option<usize> {
+        if self.compare(at) == Ordering::Greater {
+            // The buffer's first entry is already after the position.
             return Some(at);
         }
-        at.nr += 1;
-        at.entry = unsafe { (*at.entry).qf_next };
-    }
-    None
-}
-
-/// The first entry on the same line of the same file as `at`.
-///
-/// The entries of a list are in line order, so the run of entries sharing a
-/// line is contiguous.
-fn first_entry_on_line(mut at: At) -> At {
-    // SAFETY: forwarded from the caller.
-    while !got_int.get() && !unsafe { (*at.entry).qf_prev.is_null() } {
-        let prev = unsafe { (*at.entry).qf_prev };
-        if unsafe { (*prev).qf_fnum } != unsafe { (*at.entry).qf_fnum }
-            || unsafe { (*prev).qf_lnum } != unsafe { (*at.entry).qf_lnum }
-        {
-            break;
+        // Walk past the entries on or before the position; the first one
+        // that is not is the answer, and running out of them means there is
+        // none.
+        loop {
+            let next = self.next(at)?;
+            if self.entries[next].fnum != self.bnr {
+                return None;
+            }
+            at = next;
+            if self.compare(next) == Ordering::Greater {
+                return Some(at);
+            }
         }
-        at = At {
-            entry: prev,
-            nr: at.nr - 1,
-        };
     }
-    at
-}
 
-/// The last entry on the same line of the same file as `at`.
-fn last_entry_on_line(mut at: At) -> At {
-    // SAFETY: forwarded from the caller.
-    while !got_int.get() && !unsafe { (*at.entry).qf_next.is_null() } {
-        let next = unsafe { (*at.entry).qf_next };
-        if unsafe { (*next).qf_fnum } != unsafe { (*at.entry).qf_fnum }
-            || unsafe { (*next).qf_lnum } != unsafe { (*at.entry).qf_lnum }
+    /// The last entry of the buffer before the position, starting the walk
+    /// at `at`, which must be the buffer's first entry.
+    fn before_pos(&self, mut at: usize) -> Option<usize> {
+        while let Some(next) = self.next(at)
+            && self.entries[next].fnum == self.bnr
+            && self.compare(next) == Ordering::Less
         {
-            break;
+            at = next;
         }
-        at = At {
-            entry: next,
-            nr: at.nr + 1,
-        };
-    }
-    at
-}
-
-/// Where an entry sits relative to a position: `Greater` is after it.
-///
-/// With `linewise` the column is not compared at all, which is how
-/// `:cabove`/`:cbelow` treat every entry on a line as one.
-///
-/// # Safety
-///
-/// `qfp` and `pos` must be live.
-unsafe fn compare_to_pos(qfp: *const QfLine, pos: *const Pos, linewise: bool) -> Ordering {
-    // SAFETY: the caller's promise -- a live `QfLine`.
-    let qfp = unsafe { Qfe::new(qfp.cast_mut()) };
-    // SAFETY: forwarded from the caller.
-    let cols = if linewise {
-        (0, 0)
-    } else {
-        (qfp.qf_col, unsafe { (*pos).col })
-    };
-    (qfp.qf_lnum, cols.0).cmp(&(unsafe { (*pos).lnum }, cols.1))
-}
-
-/// The first entry of buffer `bnr` after `pos`, starting the walk at `at`,
-/// which must be the buffer's first entry.
-///
-/// # Safety
-///
-/// `at.entry` must be a live entry and `pos` a live position.
-unsafe fn entry_after_pos(bnr: c_int, pos: *const Pos, linewise: bool, mut at: At) -> Option<At> {
-    // SAFETY: forwarded from the caller.
-    if unsafe { compare_to_pos(at.entry, pos, linewise) } == Ordering::Greater {
-        // The buffer's first entry is already after the position.
-        return Some(at);
-    }
-    // Walk past the entries on or before the position; the first one
-    // that is not is the answer, and running out of them means there is
-    // none.
-    loop {
-        let next = unsafe { (*at.entry).qf_next };
-        if next.is_null() || unsafe { (*next).qf_fnum } != bnr {
+        if self.compare(at) != Ordering::Less {
             return None;
         }
-        at = At {
-            entry: next,
-            nr: at.nr + 1,
-        };
-        if unsafe { compare_to_pos(next, pos, linewise) } == Ordering::Greater {
-            return Some(at);
+        if self.linewise {
+            // Entries on one line count as one, so answer the first.
+            at = self.first_on_line(at);
         }
+        Some(at)
     }
-}
 
-/// The last entry of buffer `bnr` before `pos`, starting the walk at `at`,
-/// which must be the buffer's first entry.
-///
-/// # Safety
-///
-/// `at.entry` must be a live entry and `pos` a live position.
-unsafe fn entry_before_pos(bnr: c_int, pos: *const Pos, linewise: bool, mut at: At) -> Option<At> {
-    // SAFETY: forwarded from the caller.
-    while !unsafe { (*at.entry).qf_next.is_null() } {
-        let next = unsafe { (*at.entry).qf_next };
-        if unsafe { (*next).qf_fnum } != bnr
-            || unsafe { compare_to_pos(next, pos, linewise) } != Ordering::Less
-        {
-            break;
-        }
-        at = At {
-            entry: next,
-            nr: at.nr + 1,
-        };
-    }
-    if unsafe { compare_to_pos(at.entry, pos, linewise) } != Ordering::Less {
-        return None;
-    }
-    if linewise {
-        // Entries on one line count as one, so answer the first.
-        at = first_entry_on_line(at);
-    }
-    Some(at)
-}
-
-/// The entry of buffer `bnr` closest to `pos` in the direction `dir`.
-///
-/// # Safety
-///
-/// `qfl` must be a live list and `pos` a live position.
-unsafe fn closest_entry(
-    qfl: *mut QfList,
-    bnr: c_int,
-    pos: *const Pos,
-    dir: Direction,
-    linewise: bool,
-) -> Option<At> {
-    // SAFETY: forwarded from the caller.
-    let first = unsafe { first_entry_in_buf(qfl, bnr) }?;
-    if dir == FORWARD {
-        unsafe { entry_after_pos(bnr, pos, linewise, first) }
-    } else {
-        unsafe { entry_before_pos(bnr, pos, linewise, first) }
-    }
-}
-
-/// The number of the `n`th entry of the same file below `at`, or of the
-/// last one there is.
-fn nth_entry_below(mut at: At, n: LineNr, linewise: bool) -> c_int {
-    // SAFETY: forwarded from the caller.
-    let mut left = n;
-    while left > 0 && !got_int.get() {
-        left -= 1;
-        let first_nr = at.nr;
-        if linewise {
-            // Treat all the entries on one line of this file as one.
-            at = last_entry_on_line(at);
-        }
-        let next = unsafe { (*at.entry).qf_next };
-        if next.is_null() || unsafe { (*next).qf_fnum } != unsafe { (*at.entry).qf_fnum } {
-            if linewise {
-                at.nr = first_nr;
-            }
-            break;
-        }
-        at = At {
-            entry: next,
-            nr: at.nr + 1,
-        };
-    }
-    at.nr
-}
-
-/// The number of the `n`th entry of the same file above `at`, or of the
-/// first one there is.
-fn nth_entry_above(mut at: At, n: LineNr, linewise: bool) -> c_int {
-    // SAFETY: forwarded from the caller.
-    let mut left = n;
-    while left > 0 && !got_int.get() {
-        left -= 1;
-        let prev = unsafe { (*at.entry).qf_prev };
-        if prev.is_null() || unsafe { (*prev).qf_fnum } != unsafe { (*at.entry).qf_fnum } {
-            break;
-        }
-        at = At {
-            entry: prev,
-            nr: at.nr - 1,
-        };
-        if linewise {
-            at = first_entry_on_line(at);
-        }
-    }
-    at.nr
-}
-
-/// The number of the `n`th entry adjacent to `pos` in buffer `bnr`, or 0
-/// when there is none.
-///
-/// # Safety
-///
-/// `qfl` must be a live list and `pos` a live position.
-unsafe fn nth_adjacent_entry(
-    qfl: *mut QfList,
-    bnr: c_int,
-    pos: *const Pos,
-    n: LineNr,
-    dir: Direction,
-    linewise: bool,
-) -> c_int {
-    // SAFETY: forwarded from the caller.
-    let closest = unsafe { closest_entry(qfl, bnr, pos, dir, linewise) };
-    let Some(at) = closest else {
-        return 0;
-    };
-    // The closest entry is the first one; a count asks for further ones
-    // in the same file.
-    if n - 1 > 0 {
+    /// The entry of the buffer closest to the position in `dir`.
+    fn closest(&self, dir: Direction) -> Option<usize> {
+        let first = self.first_in_buf()?;
         if dir == FORWARD {
-            return nth_entry_below(at, n - 1, linewise);
+            self.after_pos(first)
+        } else {
+            self.before_pos(first)
         }
-        return nth_entry_above(at, n - 1, linewise);
     }
-    at.nr
+
+    /// The `n`th entry of the same file below `at`, or the last one there
+    /// is.
+    fn nth_below(&self, mut at: usize, n: LineNr) -> usize {
+        let mut left = n;
+        while left > 0 && !got_int.get() {
+            left -= 1;
+            let first = at;
+            if self.linewise {
+                // Treat all the entries on one line of this file as one.
+                at = self.last_on_line(at);
+            }
+            let Some(next) = self.next(at).filter(|&next| self.same_file(next, at)) else {
+                if self.linewise {
+                    at = first;
+                }
+                break;
+            };
+            at = next;
+        }
+        at
+    }
+
+    /// The `n`th entry of the same file above `at`, or the first one there
+    /// is.
+    fn nth_above(&self, mut at: usize, n: LineNr) -> usize {
+        let mut left = n;
+        while left > 0 && !got_int.get() {
+            left -= 1;
+            let Some(prev) = self.prev(at).filter(|&prev| self.same_file(prev, at)) else {
+                break;
+            };
+            at = prev;
+            if self.linewise {
+                at = self.first_on_line(at);
+            }
+        }
+        at
+    }
+
+    /// The number of the `n`th entry adjacent to the position, or 0 when
+    /// there is none.
+    fn nth(&self, n: LineNr, dir: Direction) -> c_int {
+        let Some(closest) = self.closest(dir) else {
+            return 0;
+        };
+        // The closest entry is the first one; a count asks for further ones
+        // in the same file.
+        let at = if n - 1 > 0 {
+            if dir == FORWARD {
+                self.nth_below(closest, n - 1)
+            } else {
+                self.nth_above(closest, n - 1)
+            }
+        } else {
+            closest
+        };
+        c_int::try_from(at + 1).unwrap_or(c_int::MAX)
+    }
 }
 
 /// `:cabove`, `:cbelow`, `:cbefore`, `:cafter` and their `:l…` twins: jump
@@ -352,10 +288,8 @@ unsafe fn nth_adjacent_entry(
 /// `:cabove`/`:cbelow` work in whole lines, `:cbefore`/`:cafter` in
 /// line-and-column positions.
 pub fn ex_cbelow(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    // SAFETY: forwarded from the caller.
     if excmd.addr_count > 0 && excmd.line2 <= 0 {
-        qf_emsg(e_invrange.as_ptr());
+        qf_emsg(e_invrange);
         return;
     }
 
@@ -370,16 +304,15 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
         BUF_HAS_LL_ENTRY
     };
     if Buf::current().b_has_qf_entry & buf_has_flag == 0 {
-        qf_emsg(e_no_errors.as_ptr());
+        qf_emsg(e_no_errors);
         return;
     }
 
-    let Some(qi) = qf_cmd_stack(excmd.cmdidx, true) else {
+    let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
-    let qfl = qf_current_list(qi);
-    if !unsafe { qf_list_has_valid_entries(qfl.raw().cast_const()) } {
-        qf_emsg(e_no_errors.as_ptr());
+    if !qi.current_list().has_valid_entries() {
+        qf_emsg(e_no_errors);
         return;
     }
 
@@ -399,14 +332,18 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
     let mut pos = Win::current().w_cursor;
     // An entry's column is 1 based where the cursor's is 0 based.
     pos.col += 1;
-    let bnr2 = Buf::current().handle;
-    let pos2 = &raw const pos;
-    let n2 = if excmd.addr_count > 0 { excmd.line2 } else { 0 };
-    let errornr = unsafe { nth_adjacent_entry(qfl.raw(), bnr2, pos2, n2, dir, linewise) };
+    let n = if excmd.addr_count > 0 { excmd.line2 } else { 0 };
+    let errornr = Adjacent {
+        entries: &qi.current_list().entries,
+        bnr: Buf::current().handle,
+        pos,
+        linewise,
+    }
+    .nth(n, dir);
 
     if errornr > 0 {
-        qf_goto(qi, 0, errornr, c_int::from(false));
+        qf_jump(qi, 0, errornr, false);
     } else {
-        qf_emsg(E_NO_MORE_ITEMS.as_ptr());
+        qf_emsg(E_NO_MORE_ITEMS);
     }
 }

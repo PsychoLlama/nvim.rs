@@ -5,11 +5,20 @@
 //! then reads that file as an error file. `:grep` with
 //! `'grepprg'` set to `internal` is handled by `:vimgrep` instead.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
+use crate::ex_cmds::do_shell_cmd;
+use crate::fileio::temp_name;
+use crate::memory::XString;
 use crate::option::vars::P_GEFM;
 use crate::option::vars::P_GP;
 use crate::option::vars::P_MENC;
@@ -17,10 +26,10 @@ use crate::option::vars::P_SHQ;
 use crate::option::vars::P_SP;
 use crate::option::vars::{P_EFM, P_MEF};
 use crate::optionstr::{OptString, local_or_global};
+use crate::os::fs::link_exists;
 use crate::os::shell::ShellOpts;
-use crate::snprintf;
 use crate::types::CmdIdx;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 /// True when `:grep` is to be run by `:vimgrep`, which is what `'grepprg'`
@@ -53,16 +62,10 @@ fn make_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 /// Form the complete command line to invoke `'makeprg'`/`'grepprg'`: quote
 /// it with `'shellquote'` and append the `'shellpipe'` redirection to
 /// `fname`. Echoes the result, so that the user sees what is being run.
-///
-/// # Safety
-///
-/// Both strings must be NUL-terminated.
-unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> CString {
+fn make_get_fullcmd(makecmd: &[u8], fname: &CStr) -> CString {
     // Copies of the two option values: the command line is built out of
     // them and `append_redir` reads one past the end of a projection.
     let (shq, sp) = (P_SHQ.get(), P_SP.get());
-    // SAFETY: forwarded from the caller.
-    let (makecmd, fname) = unsafe { (cstr::bytes_at(makecmd), cstr::at(fname)) };
     // If 'shellpipe' is empty the output is not redirected at all.
     let (redirect, pipe) = (!sp.is_empty(), sp.as_cstr());
     let quote = &*shq;
@@ -91,8 +94,6 @@ unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> CStr
 
 /// `:make`, `:lmake`, `:grep`, `:lgrep`, `:grepadd` and `:lgrepadd`.
 pub fn ex_make(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    // SAFETY: forwarded from the caller.
     // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
     if grep_internal(excmd.cmdidx) {
         ex_vimgrep(excmd);
@@ -112,20 +113,18 @@ pub fn ex_make(excmd: &mut ExArg) {
     let wp = is_loclist_cmd(excmd.cmdidx).then(Win::current);
 
     autowrite_all();
-    let fname = unsafe { get_mef_name() };
-    if fname.is_null() {
+    let Some(fname) = get_mef_name() else {
         return;
-    }
+    };
     // In case the name is not unique after all.
-    unsafe { os_remove(cstr::at(fname)) };
+    os_remove(fname.as_cstr());
 
-    let cmd = unsafe { make_get_fullcmd(excmd.arg_ptr(), fname) };
-    unsafe { do_shell(cmd.as_ptr().cast_mut(), ShellOpts::NONE) };
+    let cmd = make_get_fullcmd(excmd.line.arg(), fname.as_cstr());
+    do_shell_cmd(&cmd, ShellOpts::NONE);
 
-    incr_quickfix_busy();
+    let busy = QuickfixBusy::hold();
 
     let is_make = matches!(excmd.cmdidx, CmdIdx::make | CmdIdx::lmake);
-    // SAFETY: a live buffer's option value is NUL-terminated.
     let errorformat = if is_make {
         P_EFM.get()
     } else {
@@ -133,70 +132,56 @@ pub fn ex_make(excmd: &mut ExArg) {
     };
     let newlist = !matches!(excmd.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
 
-    let newlist2 = newlist as c_int;
     let title = qf_cmdtitle(excmd.line.line());
-    let qf_title = title.as_ptr();
-    let res = unsafe {
-        qf_init(
-            wp,
-            fname,
-            errorformat.as_ptr().cast_mut(),
-            // `:make` reads the global 'errorformat'; `:grep` reads
-            // 'grepformat', which is never the buffer's own.
-            is_make,
-            newlist2,
-            qf_title,
-            enc.as_ptr().cast_mut(),
-        )
-    };
+    let res = qf_init(
+        wp,
+        fname.as_cstr(),
+        errorformat.as_cstr(),
+        // `:make` reads the global 'errorformat'; `:grep` reads
+        // 'grepformat', which is never the buffer's own.
+        is_make,
+        newlist,
+        Some(&title),
+        Some(enc.as_cstr()),
+    );
 
     // A location list command may have found no list to add to, in
     // which case there is nothing left to do but clean up.
-    let stack = match wp {
-        Some(wp) => qf_win_loclist(wp),
-        None => Some(qf_global()),
-    };
-    if let Some(qi) = stack {
+    if let Some(qi) = stack_of(wp) {
         if res >= 0 {
-            qfl_changed(qf_current_list(qi));
+            qi.current_slot().changed();
         }
         // Remember the current quickfix list identifier, so that a
         // QuickFixCmdPost autocommand changing the list is noticed.
-        let save_qfid = qf_current_list(qi).qf_id;
+        let save_qfid = qi.current_list().id;
         if let Some(name) = au_name {
             fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         }
-        if res > 0 && !excmd.forceit && qf_list_still_valid(wp, save_qfid) {
+        if res > 0 && !excmd.forceit && qflist_valid(wp, save_qfid) {
             // Display the first error.
-            unsafe { qf_jump_first(qi.raw(), save_qfid, false as c_int) };
+            qf_jump_first(qi, save_qfid, false);
         }
     }
 
-    qf_busy_end();
-    unsafe { os_remove(cstr::at(fname)) };
-    unsafe { xfree(fname.cast()) };
+    drop(busy);
+    os_remove(fname.as_cstr());
     drop(cmd);
 }
 
-/// The name of the error file `:make` redirects into, in allocated memory,
-/// or null when there is none to be had. An empty `'makeef'` asks for a
-/// temporary name; a `'makeef'` holding `##` has that replaced by a number
-/// pair chosen so that the file does not exist yet.
-///
-/// # Safety
-///
-/// Reads the options, so the editor must be initialised.
-unsafe fn get_mef_name() -> *mut c_char {
+/// The name of the error file `:make` redirects into, or `None` when there
+/// is none to be had. An empty `'makeef'` asks for a temporary name; a
+/// `'makeef'` holding `##` has that replaced by a number pair chosen so that
+/// the file does not exist yet.
+fn get_mef_name() -> Option<XString> {
     /// The process id, picked up once and then reused, with `off` counting
     /// up so that repeated calls in one session choose different names.
     static START: GlobalCell<c_int> = GlobalCell::new(-1);
     static OFF: GlobalCell<c_int> = GlobalCell::new(0);
 
-    // SAFETY: the option strings are NUL-terminated.
     if p_mef(CStr::is_empty) {
-        let name = vim_tempname();
-        if name.is_null() {
-            qf_emsg(e_notmp.as_ptr());
+        let name = temp_name();
+        if name.is_none() {
+            qf_emsg(e_notmp);
         }
         return name;
     }
@@ -205,41 +190,36 @@ unsafe fn get_mef_name() -> *mut c_char {
     let mef = P_MEF.get();
     let makeef = &*mef;
     let Some(at) = makeef.windows(2).position(|pair| pair == b"##") else {
-        // SAFETY: the copy is NUL-terminated.
-        return unsafe { xstrdup(mef.as_ptr()) };
+        return Some(mef);
     };
 
     // Keep trying until the name doesn't exist yet.
     loop {
         if START.get() == -1 {
+            // Upstream's `(int)` narrowing of the process id.
+            #[allow(clippy::cast_possible_truncation)]
             START.set(os_get_pid() as c_int);
         } else {
             OFF.set(OFF.get() + 19);
         }
 
-        let mut digits = [0u8; 32];
-        let s2 = digits.as_mut_ptr().cast();
-        let fmt = c"%d%d".as_ptr();
-        let qf_title = OFF.get();
-        let written = unsafe { snprintf!(s2, digits.len(), fmt, START.get(), qf_title) };
-        debug_assert!(written > 0 && (written as usize) < digits.len());
+        let digits = format!("{}{}", START.get(), OFF.get());
         // Upstream writes the digits into the copy of 'makeef' with
         // `strlen(name)` as the bound, i.e. the length of 'makeef'
         // itself rather than the room left at `at`, so the pair is
         // truncated to one byte short of that. `'makeef'` of "##" thus
         // names a file after the first digit of the process id alone.
-        let kept = (written as usize).min(makeef.len() - 1);
+        let kept = digits.len().min(makeef.len() - 1);
 
         let mut name = Vec::with_capacity(makeef.len() + 30);
         name.extend_from_slice(&makeef[..at]);
-        name.extend_from_slice(&digits[..kept]);
+        name.extend_from_slice(&digits.as_bytes()[..kept]);
         name.extend_from_slice(&makeef[at + 2..]);
-        name.push(0);
+        let name = XString::from_bytes(&name);
 
         // Don't accept a symbolic link, it's a security risk.
-        let mut file_info = FileInfo::default();
-        if !unsafe { os_fileinfo_link(name.as_ptr().cast(), &raw mut file_info) } {
-            return unsafe { xstrdup(name.as_ptr().cast()) };
+        if !link_exists(name.as_cstr()) {
+            return Some(name);
         }
     }
 }

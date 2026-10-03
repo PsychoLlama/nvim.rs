@@ -134,3 +134,17 @@ pub(super) fn perror_msg(message: &'static CStr) {
         );
     }
 }
+
+impl Buf {
+    /// The name of the buffer's swap file, if it has a memfile with one.
+    pub(crate) fn swap_file_name(self) -> Option<CString> {
+        let mfp = self.b_ml.ml_mfp;
+        if mfp.is_null() {
+            return None;
+        }
+        // SAFETY: the buffer's own live memfile.
+        let name = unsafe { mf_fname(mfp) };
+        // SAFETY: a memfile's name is NUL-terminated; it is copied out.
+        (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.to_owned())
+    }
+}

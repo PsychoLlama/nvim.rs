@@ -720,7 +720,7 @@ fn dispatch_action(a: Action, win: Win) {
         // Ctrl-Mouse click or double click in a quickfix window jumps to the
         // error under the mouse pointer.  A null location list means it is a
         // quickfix window rather than a location list one.
-        let cmd = if win.w_llist_ref.is_null() {
+        let cmd = if win.w_llist_ref.is_none() {
             c".cc"
         } else {
             c".ll"

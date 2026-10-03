@@ -529,6 +529,23 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> Va
     }
 }
 
+/// Evaluate the command's argument as an expression: [`eval_expr`] over
+/// `excmd`'s own text. `None` when it failed.
+pub(crate) fn eval_cmd_arg(excmd: &mut ExArg) -> Option<TypVal> {
+    let arg = excmd.arg_ptr();
+    // SAFETY: the command line's own NUL-terminated text, which the
+    // evaluator reads alongside the command it was given.
+    let tv = unsafe { eval_expr(arg, Some(excmd)) };
+    if tv.is_null() {
+        return None;
+    }
+    // SAFETY: the block `eval_expr` just answered, holding a value: the
+    // value moves out and the block goes back without dropping it.
+    let value = unsafe { tv.read() };
+    unsafe { xfree(tv as *mut c_void) };
+    Some(value)
+}
+
 /// Evaluate `arg` into a heap typval the caller owns; null on failure.
 ///
 /// # Safety

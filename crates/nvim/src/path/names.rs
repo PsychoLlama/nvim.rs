@@ -212,6 +212,16 @@ pub unsafe fn concat_fnames(
     unsafe { do_concat_fnames(dest, len1 as size_t, fname2, len2 as size_t, sep) }
 }
 
+/// [`concat_fnames`] into a string the caller owns.
+pub(crate) fn join_fnames(fname1: &CStr, fname2: &CStr, sep: bool) -> crate::memory::XString {
+    // SAFETY: two NUL-terminated names; the answer is a fresh `xmalloc`
+    // block, which the string adopts.
+    unsafe {
+        let joined = concat_fnames(fname1.as_ptr(), fname2.as_ptr(), sep);
+        crate::memory::XString::from_raw(joined)
+    }
+}
+
 /// [`concat_fnames`], but growing `fname1` in place rather than allocating.
 ///
 /// # Safety

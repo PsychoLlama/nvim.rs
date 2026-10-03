@@ -22,6 +22,7 @@ use crate::regexp::nfa_regcomp;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
+use core::ptr;
 
 use super::{
     AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg,
@@ -200,8 +201,8 @@ fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool)
         // context holds itself.
         // SAFETY: `with_rex` reserved the context for this match.
         let rex = unsafe { Rex::acquire() };
-        rex.set_reg_startpos(core::ptr::null_mut());
-        rex.set_reg_endpos(core::ptr::null_mut());
+        rex.set_reg_startpos(ptr::null_mut());
+        rex.set_reg_endpos(ptr::null_mut());
         let exec = |rmp: *mut RegMatch| unsafe {
             (*(*(*rmp).regprog).engine)
                 .regexec_nl
@@ -381,14 +382,77 @@ pub(crate) unsafe fn vim_regexec_syntax(
     io: ExtMatchIo<'_>,
 ) -> LineNr {
     debug_assert!(!rex_in_use.get(), "a syntax match inside another match");
-    let ext_in = io.input.map_or(core::ptr::null(), core::ptr::from_ref);
-    let ext_out: *mut Option<ExtMatchRef> = io.output.map_or(core::ptr::null_mut(), |out| out);
+    let ext_in = io.input.map_or(ptr::null(), ptr::from_ref);
+    let ext_out: *mut Option<ExtMatchRef> = io.output.map_or(ptr::null_mut(), |out| out);
     super::rex.with_mut(|rex| (rex.ext_in, rex.ext_out) = (ext_in, ext_out));
     // SAFETY: the caller's promises; the two sets are its borrows, live
     // until the fields are cleared below.
     let result = unsafe { vim_regexec_multi(rmp, win, buffer, lnum, col, tm, timed_out) };
     super::rex.with_mut(|rex| {
-        (rex.ext_in, rex.ext_out) = (core::ptr::null(), core::ptr::null_mut());
+        (rex.ext_in, rex.ext_out) = (ptr::null(), ptr::null_mut());
     });
     result
+}
+
+/// A compiled pattern its holder owns: freed when dropped, and replaced in
+/// place when the engine falls back to the other one.
+pub(crate) struct OwnedProg(*mut RegProg);
+
+impl OwnedProg {
+    /// [`vim_regcomp`], owned. `None` when the pattern does not compile.
+    pub(crate) fn compile(expr: &CStr, re_flags: c_int) -> Option<OwnedProg> {
+        let prog = vim_regcomp(expr, re_flags);
+        (!prog.is_null()).then_some(OwnedProg(prog))
+    }
+
+    /// [`vim_regexec`] of this pattern over `line` from byte `col`: the
+    /// match, or `None`.
+    pub(crate) fn exec(&mut self, line: &CStr, col: usize, ignore_case: bool) -> Option<RegMatch> {
+        if self.0.is_null() {
+            return None;
+        }
+        let mut matches = RegMatch::new(self.0, ignore_case);
+        let matched = vim_regexec_string(&mut matches, line, col, false);
+        self.0 = matches.regprog;
+        matched.then_some(matches)
+    }
+
+    /// [`vim_regexec_multi`] of this pattern over `buffer` from line `lnum`,
+    /// column `col`, with `rmp`'s other settings. Answers the number of
+    /// lines the match spans plus one, or 0.
+    pub(crate) fn exec_multi(
+        &mut self,
+        rmp: &mut RegMMatch,
+        win: Option<Win>,
+        buffer: Buf,
+        lnum: LineNr,
+        col: ColNr,
+    ) -> c_int {
+        if self.0.is_null() {
+            return 0;
+        }
+        rmp.regprog = self.0;
+        // SAFETY: a match record of the caller's own holding this live
+        // program, and no time limit.
+        let lines = unsafe {
+            vim_regexec_multi(
+                rmp,
+                win,
+                buffer,
+                lnum,
+                col,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
+        };
+        self.0 = rmp.regprog;
+        lines
+    }
+}
+
+impl Drop for OwnedProg {
+    fn drop(&mut self) {
+        // SAFETY: this holder's own program, or null.
+        unsafe { vim_regfree(self.0) };
+    }
 }

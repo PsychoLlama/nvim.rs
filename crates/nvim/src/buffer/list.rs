@@ -167,6 +167,17 @@ fn check_cursor_line(win: Win) {
 // ---------------------------------------------------------------------------
 // Creating an entry
 
+/// [`buflist_new`] for a name the caller holds, or for none: list the file
+/// as `name` with no separate short name.
+///
+/// Listing a buffer fires `BufNew`; the name is copied before anything runs.
+pub(crate) fn buflist_add_name(name: Option<&CStr>, lnum: LineNr, flags: c_int) -> Option<Buf> {
+    let name = name.map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
+    // SAFETY: a NUL-terminated name or null; `fname_expand` makes the
+    // copies the list keeps before anything can run, and writes to neither.
+    unsafe { buflist_new(name, ptr::null_mut(), lnum, flags) }
+}
+
 /// Add a file to the buffer list, or answer the entry it already has.
 ///
 /// `lnum` is the line to remember for it and `flags` the `BLN_*` set. The
@@ -746,6 +757,12 @@ pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> Option<Buf> {
     let buf = unsafe { buflist_findname(ffname) };
     free(ffname);
     buf
+}
+
+/// [`buflist_findname_exp`] for a name the caller holds.
+pub(crate) fn find_buffer_by_name(fname: &CStr) -> Option<Buf> {
+    // SAFETY: a NUL-terminated name, which the lookup only reads.
+    unsafe { buflist_findname_exp(fname.as_ptr().cast_mut()) }
 }
 
 /// The buffer whose full name is `ffname`, or whose file id matches it.

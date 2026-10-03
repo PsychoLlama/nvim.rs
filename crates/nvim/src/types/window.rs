@@ -321,8 +321,10 @@ pub struct Window {
     pub w_nrwidth_line_count: LineNr,
     pub w_statuscol_line_count: LineNr,
     pub w_nrwidth_width: ::core::ffi::c_int,
-    pub w_llist: *mut QfInfo,
-    pub w_llist_ref: *mut QfInfo,
+    /// The window's own location list stack.
+    pub(crate) w_llist: Option<QfId>,
+    /// The location list stack this location list window shows.
+    pub(crate) w_llist_ref: Option<QfId>,
     pub w_status_click_defs: *mut StlClickDefinition,
     pub w_status_click_defs_size: size_t,
     pub w_winbar_click_defs: *mut StlClickDefinition,

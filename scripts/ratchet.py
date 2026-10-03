@@ -215,8 +215,7 @@ plus these whole-tree metrics, which are not per-file:
                     address (the NFA postfix program, the backtracking
                     engine's state, `GlobalCell`'s own tests of `ptr`), and a
                     receiver that is not one cell at all (`cell` is a local
-                    bound from an option slot or a grid; `SCRATCH` names two
-                    unrelated statics with one site each). Without the list
+                    bound from an option slot or a grid). Without the list
                     these would trip the accessor cap, and the cap is worth
                     more than the exemption costs: the regression it forbids
                     is a family reaching for the escape hatch at nine sites
@@ -942,7 +941,6 @@ CELL_PTR_KEEPERS = {
     "CELL": "`GlobalCell`'s own tests of `ptr`/`as_raw`; they must call them",
     "simple_diffline_change": "F-P22-37: the address goes into `diffline.changes` and is compared back",
     "highlight_attr": "the attribute table `hl_attr_active` holds; one site is its const initialiser",
-    "SCRATCH": "not one cell — two unrelated statics (mark F-P22-52, quickfix) with one site each",
     "BT_STATE": "the backtracking engine's state; phase 22's S10 ruled it taken raw per match",
 }
 # Every `.ptr()`/`.as_raw()` site with its receiver, for the partition. The

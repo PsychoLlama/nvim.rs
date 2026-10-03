@@ -18,7 +18,6 @@ use crate::types::{Failed, IOSIZE, MAXPATHL};
 use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 /// The column the kind, name and command text line up at.
 const INFO_COLUMN: c_int = 15;
@@ -407,15 +406,13 @@ pub(crate) unsafe fn add_llist_tags(
         )
     };
     // Answers `Ok` for a plain entry list; upstream discarded it too.
-    let _ = unsafe {
-        set_errorlist(
-            Win::current_or_none(),
-            list,
-            ' ' as c_int,
-            title.as_mut_ptr(),
-            ptr::null_mut(),
-        )
-    };
+    let _ = set_errorlist(
+        Win::current_or_none(),
+        Some(held),
+        b' ',
+        cstr::in_chars(&title),
+        None,
+    );
     Ok(())
 }
 

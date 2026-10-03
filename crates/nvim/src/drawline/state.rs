@@ -560,7 +560,7 @@ impl WinLineVars {
             self.line_attr_lowprio = self.cursorline_attr;
         } else if State.get() & MODE_INSERT == 0
             && buf_is_quickfix(window.buffer_or_none())
-            && qf_current_entry(window) == self.lnum
+            && window.quickfix_current_line() == self.lnum
         {
             // A quickfix window's current-entry highlight keeps its own
             // colours; CursorLine goes underneath it.

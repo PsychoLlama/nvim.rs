@@ -4,217 +4,219 @@
 //! [`qf_age`] is `:colder`/`:cnewer`, [`qf_history`] is `:chistory` and
 //! [`qf_view_result`] is what `CTRL-W_<Enter>` does in the quickfix window.
 //!
-//! The text of one line is built by [`build_line`] in a buffer shared with
-//! the quickfix window ([`qf_buf_add_line`]) and the jump message
-//! (`qf_jump_print_msg`) so that listing a long list does not allocate per
-//! entry.
+//! Printing can run user code — a Lua `ui_attach` handler sees every
+//! message — so an entry is copied out of its list before any of it is
+//! shown, and `:clist` re-finds the next one by position.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
+use crate::cstr;
 use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
-use crate::message_fmt::c_str;
+use crate::memory::XString;
+use crate::message::trunc_to;
+use crate::message_fmt::msg_bytes;
+use crate::path::tail_index;
 use crate::semsg;
-use crate::snprintf;
-use crate::types::CmdIdx;
-use crate::types::IOSIZE;
-use crate::vim_snprintf;
-use crate::vim_snprintf_safelen;
-use core::ffi::{CStr, c_char, c_int};
+use crate::tr;
+use crate::types::{CmdIdx, IOSIZE};
+use core::ffi::c_int;
 use std::ffi::CString;
 
-use crate::cstr;
-use core::{ptr, slice};
-
-/// The shared line buffer. See [`build_line`].
-static SCRATCH: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
-
-/// Build one line of text in the shared buffer and answer it, NUL included,
-/// as its last byte.
-///
-/// The answer stays good until the next line is built, which is what `fill`
-/// must not cause: it may not print, run an autocommand or evaluate an
-/// expression, because those build lines of their own through this same
-/// buffer.
-pub(crate) fn build_line(fill: impl FnOnce(&mut Vec<u8>)) -> &'static [u8] {
-    // SAFETY: `fill` cannot reach the buffer (see above), so this is the
-    // only live borrow. The answer outlives it because the buffer is a
-    // static, and stays valid until the next line replaces it.
-    let out = unsafe { &mut *SCRATCH.ptr() };
-    out.clear();
-    fill(out);
-    out.push(0);
-    unsafe { slice::from_raw_parts(out.as_ptr(), out.len()) }
+/// The bytes of `text` after any leading spaces and tabs.
+pub(crate) fn skip_white(text: &[u8]) -> &[u8] {
+    let start = text.iter().position(|&b| b != b' ' && b != b'\t');
+    &text[start.unwrap_or(text.len())..]
 }
 
-/// Give back the memory of a buffer that grew large; a modest one is kept
-/// for the next command.
-pub(crate) fn release_scratch() {
-    SCRATCH.with_mut(|out| {
-        if out.capacity() > 1000 {
-            *out = Vec::new();
+/// Append an error message with its newlines, and the whitespace following
+/// them, squeezed into single spaces.
+pub(crate) fn qf_fmt_text(out: &mut Vec<u8>, text: &[u8]) {
+    let mut bytes = text.iter().copied().take_while(|&b| b != 0).peekable();
+    while let Some(b) = bytes.next() {
+        if b == b'\n' {
+            out.push(b' ');
+            while bytes
+                .peek()
+                .is_some_and(|&next| ascii_iswhite(c_int::from(next)) || next == b'\n')
+            {
+                bytes.next();
+            }
         } else {
-            out.clear();
+            out.push(b);
         }
-    });
+    }
 }
 
-/// Append a C string.
-///
-/// # Safety
-///
-/// `text` must be a live NUL-terminated string.
-#[inline]
-pub(crate) unsafe fn push_cstr(out: &mut Vec<u8>, text: *const c_char) {
-    // SAFETY: forwarded from the caller.
-    out.extend_from_slice(unsafe { CStr::from_ptr(text) }.to_bytes())
+/// Append an entry's position: the line, the end line, and the columns when
+/// the entry has them.
+pub(crate) fn qf_range_text(out: &mut Vec<u8>, entry: &QfEntry) {
+    let mut range = format!("{}", entry.lnum);
+    if entry.end_lnum > 0 && entry.lnum != entry.end_lnum {
+        range.push_str(&format!("-{}", entry.end_lnum));
+    }
+    if entry.col > 0 {
+        range.push_str(&format!(" col {}", entry.col));
+        if entry.end_col > 0 && entry.col != entry.end_col {
+            range.push_str(&format!("-{}", entry.end_col));
+        }
+    }
+    out.extend_from_slice(range.as_bytes());
+}
+
+/// What `:clist` shows of one entry, copied out of the list.
+struct Listed {
+    module: Option<XString>,
+    /// The file name as shown: the entry's own, or its buffer's, or the
+    /// tail of either for a help entry.
+    fname: Option<Vec<u8>>,
+    pattern: Option<XString>,
+    text: XString,
+    /// The position and type, as [`qf_range_text`] and [`qf_types`] spell
+    /// them.
+    position: Vec<u8>,
+    has_lnum: bool,
+}
+
+impl Listed {
+    fn of(entry: &QfEntry) -> Listed {
+        let module = entry.module.clone().filter(|m| !m.is_empty());
+        let mut fname = None;
+        if module.is_none()
+            && entry.fnum != 0
+            && let Some(buf) = find_buf(entry.fnum)
+        {
+            let name = match &entry.fname {
+                Some(own) => Some(own.to_vec()),
+                None => buf.name.shown().map(|name| name.to_bytes().to_vec()),
+            };
+            // :helpgrep entries name the help file only.
+            fname = name.map(|name| {
+                if entry.kind == 1 {
+                    name[tail_index(&name)..].to_vec()
+                } else {
+                    name
+                }
+            });
+        }
+        let mut position = Vec::new();
+        if entry.lnum != 0 {
+            qf_range_text(&mut position, entry);
+        }
+        position.extend_from_slice(qf_types(c_int::from(entry.kind), entry.nr).to_bytes());
+        Listed {
+            module,
+            fname,
+            pattern: entry.pattern.clone(),
+            text: entry.text.clone(),
+            position,
+            has_lnum: entry.lnum != 0,
+        }
+    }
+}
+
+/// A NUL-terminated copy of `bytes`, up to any NUL in them.
+fn owned_cstr(bytes: &[u8]) -> CString {
+    cstr::owned(bytes)
 }
 
 /// Print one entry of `:clist`, unless `:filter` rejects it.
-///
-/// # Safety
-///
-/// `qfp` must be a live entry.
-unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
-    // SAFETY: the caller's promise -- a live `QfLine`.
-    let qfp = unsafe { Qfe::new(qfp) };
-    // The heading. Upstream assembles it in `IObuff` and then calls
-    // `message_filtered` and `msg_display`, both of which re-enter the
-    // message machinery.
-    let mut heading = [0 as c_char; IOSIZE as usize];
-    let mut fname = ptr::null_mut::<c_char>();
-    let module = qfp.qf_module;
-    if !module.is_null() && unsafe { *module } != 0 {
-        let heading = heading.as_mut_ptr();
-        let size = IOSIZE as size_t;
-        let fmt = c"%2d %s".as_ptr();
-        unsafe { vim_snprintf!(heading, size, fmt, qf_idx, module) };
-    } else {
-        let buf = if qfp.qf_fnum != 0 {
-            find_buf(qfp.qf_fnum).map_or(ptr::null_mut(), |b| b.raw())
-        } else {
-            ptr::null_mut()
-        };
-        if !buf.is_null() {
-            fname = if qfp.qf_fname.is_null() {
-                unsafe { (*buf).name.shown_ptr() }
-            } else {
-                qfp.qf_fname
-            };
-            if qfp.qf_type as c_int == 1 {
-                // :helpgrep entries name the help file only.
-                fname = unsafe { path_tail(fname) };
-            }
-        }
-        if fname.is_null() {
-            let heading = heading.as_mut_ptr();
-            let size = IOSIZE as size_t;
-            let fmt = c"%2d".as_ptr();
-            unsafe { snprintf!(heading, size, fmt, qf_idx) };
-        } else {
-            let heading = heading.as_mut_ptr();
-            let size = IOSIZE as size_t;
-            let fmt = c"%2d %s".as_ptr();
-            unsafe { vim_snprintf!(heading, size, fmt, qf_idx, fname) };
-        }
-    }
+fn qf_list_entry(entry: &Listed, qf_idx: c_int, cursel: bool) {
+    // "%2d %s": bytes, because a file name need not be UTF-8.
+    let heading = match (&entry.module, &entry.fname) {
+        (Some(module), _) => [format!("{qf_idx:2} ").as_bytes(), module].concat(),
+        (None, Some(fname)) => [format!("{qf_idx:2} ").as_bytes(), fname.as_slice()].concat(),
+        (None, None) => format!("{qf_idx:2}").into_bytes(),
+    };
 
     // `:filter /pat/ clist` matches the module name, the file name, the
     // search pattern and the text; the entry is dropped only when every
     // one of them is filtered out.
     let mut filtered = true;
-    if !module.is_null() && unsafe { *module } != 0 {
-        filtered = message_filtered(unsafe { cstr::at(module) });
+    if let Some(module) = &entry.module {
+        filtered = message_filtered(module.as_cstr());
     }
-    if filtered && !fname.is_null() {
-        filtered = message_filtered(unsafe { cstr::at(fname) });
+    if filtered && let Some(fname) = &entry.fname {
+        filtered = message_filtered(&owned_cstr(fname));
     }
-    if filtered && !qfp.qf_pattern.is_null() {
-        filtered = message_filtered(unsafe { cstr::at(qfp.qf_pattern) });
+    if filtered && let Some(pattern) = &entry.pattern {
+        filtered = message_filtered(pattern.as_cstr());
     }
     if filtered {
-        filtered = message_filtered(unsafe { cstr::at(qfp.qf_text) });
+        filtered = message_filtered(entry.text.as_cstr());
     }
     if filtered {
         return;
     }
 
     if msg_col.get() > 0 {
-        msg_putchar('\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
     }
     let cursel = if cursel { HLF_QFL } else { qfFile_hl_id.get() };
-    msg_display(unsafe { cstr::at(heading.as_mut_ptr()) }, cursel, false);
+    msg_display(&owned_cstr(&heading), cursel, false);
 
     // The position: "<lnum>[-<end>][ col <col>[-<end>]][ <type> <nr>]".
-    if qfp.qf_lnum != 0 {
+    if entry.has_lnum {
         msg_str_hl(c":", qfSep_hl_id.get(), false);
     }
-    let position = build_line(|out| {
-        if qfp.qf_lnum != 0 {
-            unsafe { qf_range_text(out, qfp.raw().cast_const()) };
-        }
-        let types = qf_types(qfp.qf_type as c_int, qfp.qf_nr);
-        unsafe { push_cstr(out, types.as_ptr()) };
-    });
-    if position[0] != 0 {
-        msg_str_hl(cstr::in_bytes(position), qfLine_hl_id.get(), false);
+    if !entry.position.is_empty() {
+        msg_str_hl(&owned_cstr(&entry.position), qfLine_hl_id.get(), false);
     }
     msg_str_hl(c":", qfSep_hl_id.get(), false);
 
-    if !qfp.qf_pattern.is_null() {
-        let pattern = build_line(|out| unsafe { qf_fmt_text(out, qfp.qf_pattern) });
-        msg_str(cstr::in_bytes(pattern));
+    if let Some(pattern) = &entry.pattern {
+        let mut out = Vec::new();
+        qf_fmt_text(&mut out, pattern);
+        msg_str(&owned_cstr(&out));
         msg_str_hl(c":", qfSep_hl_id.get(), false);
     }
     msg_str(c" ");
 
     // The message itself. An unrecognized line keeps its indent, since
     // the compiler may be marking a word with "^^^^".
-    let text = if !fname.is_null() || qfp.qf_lnum != 0 {
-        unsafe { skipwhite(qfp.qf_text) }
+    let text: &[u8] = if entry.fname.is_some() || entry.has_lnum {
+        skip_white(&entry.text)
     } else {
-        qfp.qf_text
+        &entry.text
     };
-    let line = build_line(|out| unsafe { qf_fmt_text(out, text) });
-    let line = CStr::from_bytes_with_nul(line).expect("build_line terminates its answer");
-    msg_prt_line(line, false);
+    let mut line = Vec::new();
+    qf_fmt_text(&mut line, text);
+    msg_prt_line(&owned_cstr(&line), false);
 }
 
 /// `:clist`/`:llist`: print the entries of the current list.
 pub fn qf_list(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    let Some(qi) = qf_cmd_stack(excmd.cmdidx, true) else {
+    let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
-    if qf_is_empty(qi) || qfl_is_empty(qf_current_list(qi)) {
-        qf_emsg(e_no_errors.as_ptr());
+    if qi.is_empty() || qi.current_list().is_empty() {
+        qf_emsg(e_no_errors);
         return;
     }
 
     // "+N" lists N entries from the current one; otherwise the argument
     // is a range, counted from the end when negative.
-    let mut arg = excmd.arg_ptr();
-    let plus = unsafe { *arg } == b'+' as c_char;
-    if plus {
-        arg = unsafe { arg.add(1) };
-    }
-    let mut idx1: c_int = 1;
-    let mut idx2: c_int = -1;
-    if unsafe { get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2) }.is_err()
-        || unsafe { *arg } != 0
-    {
-        // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
-        let arg = unsafe { c_str(arg) };
+    let arg = excmd.line.arg();
+    let plus = arg.first() == Some(&b'+');
+    let range = if plus { &arg[1..] } else { arg };
+    let Some((mut idx1, mut idx2)) = parse_list_range(range) else {
+        let arg = msg_bytes(range);
         semsg!("E488: Trailing characters: {arg}");
         return;
-    }
-    let qfl = qf_current_list(qi);
+    };
+    let qfl = qi.current_slot();
     if plus {
-        idx2 = qfl.qf_index + idx1;
-        idx1 = qfl.qf_index;
+        idx2 = qfl.index + idx1;
+        idx1 = qfl.index;
     } else {
-        let count = qfl.qf_count;
+        let count = qfl.count();
         if idx1 < 0 {
             idx1 = if -idx1 > count { 0 } else { idx1 + count + 1 };
         }
@@ -224,7 +226,7 @@ pub fn qf_list(excmd: &mut ExArg) {
     }
 
     // Shorten all the file names, so that it is easy to read.
-    shorten_fnames(false as c_int);
+    shorten_fnames(c_int::from(false));
 
     // The highlighting comes from the qf.vim syntax file.
     qfFile_hl_id.set(syn_name2id(c"qfFileName"));
@@ -242,132 +244,109 @@ pub fn qf_list(excmd: &mut ExArg) {
 
     // Without "!" only recognised entries are listed — unless none of
     // them is recognised, when they all are.
-    let all = excmd.forceit || qfl.qf_nonevalid;
+    let all = excmd.forceit || qfl.no_valid;
     msg_ext_set_kind(c"list_cmd");
     let mut i: c_int = 1;
-    let mut qfp = qfl.qf_start;
-    while !got_int.get() && i <= qfl.qf_count && !qfp.is_null() {
-        if (unsafe { (*qfp).qf_valid } != 0 || all) && idx1 <= i && i <= idx2 {
-            unsafe { qf_list_entry(qfp, i, i == qfl.qf_index) };
+    while !got_int.get() {
+        // Re-found every time round: printing and the break check can
+        // both run user code, which may have changed the list.
+        let wanted = {
+            let Some(entry) = qfl.nth(i) else {
+                break;
+            };
+            ((entry.valid || all) && idx1 <= i && i <= idx2)
+                .then(|| (Listed::of(entry), i == qfl.index))
+        };
+        if let Some((listed, current)) = wanted {
+            qf_list_entry(&listed, i, current);
         }
         os_breakcheck();
         i += 1;
-        qfp = unsafe { (*qfp).qf_next };
-    }
-    release_scratch();
-}
-
-/// Append an error message with its newlines, and the whitespace following
-/// them, squeezed into single spaces.
-///
-/// # Safety
-///
-/// `text` must be a live NUL-terminated string.
-pub(crate) unsafe fn qf_fmt_text(out: &mut Vec<u8>, text: *const c_char) {
-    let mut p = text.cast::<u8>();
-    while unsafe { *p } != 0 {
-        if unsafe { *p } == b'\n' {
-            out.push(b' ');
-            loop {
-                p = unsafe { p.add(1) };
-                if unsafe { *p } == 0
-                    || !ascii_iswhite(unsafe { *p } as c_int) && unsafe { *p } != b'\n'
-                {
-                    break;
-                }
-            }
-        } else {
-            out.push(unsafe { *p });
-            p = unsafe { p.add(1) };
-        }
     }
 }
 
-/// Append an entry's position: the line, the end line, and the columns when
-/// the entry has them.
-///
-/// # Safety
-///
-/// `qfp` must be a live entry.
-pub(crate) unsafe fn qf_range_text(out: &mut Vec<u8>, qfp: *const QfLine) {
-    // SAFETY: the caller's promise -- a live `QfLine`.
-    let qfp = unsafe { Qfe::new(qfp.cast_mut()) };
-    let mut range = [0 as c_char; IOSIZE as usize];
-    // SAFETY: forwarded from the caller. Each `vim_snprintf_safelen`
-    // answers what it wrote, so the next one appends where it stopped.
-    let buf = range.as_mut_ptr();
-    let size = IOSIZE as size_t;
-    let fmt = c"%d".as_ptr();
-    let lnum = qfp.qf_lnum;
-    let mut len = unsafe { vim_snprintf_safelen!(buf, size, fmt, lnum) };
-    if qfp.qf_end_lnum > 0 && qfp.qf_lnum != qfp.qf_end_lnum {
-        let at = unsafe { buf.add(len) };
-        let room = IOSIZE as size_t - len;
-        let fmt = c"-%d".as_ptr();
-        let end_lnum = qfp.qf_end_lnum;
-        len += unsafe { vim_snprintf_safelen!(at, room, fmt, end_lnum) };
+/// The range `:clist` takes — one number, two numbers separated by a comma,
+/// or none, defaulting to `1,-1` — as upstream's `get_list_range()` parses
+/// it. `None` when the range is bad or something follows it.
+fn parse_list_range(arg: &[u8]) -> Option<(c_int, c_int)> {
+    let (mut first, mut last): (c_int, c_int) = (1, -1);
+    let mut have_first = false;
+    let mut at = skip_white(arg);
+    if at.first().is_some_and(|&b| b == b'-' || b.is_ascii_digit()) {
+        let (n, len) = decimal(at);
+        first = n?;
+        have_first = true;
+        at = &at[len..];
     }
-    if qfp.qf_col > 0 {
-        let at = unsafe { buf.add(len) };
-        let room = IOSIZE as size_t - len;
-        let fmt = c" col %d".as_ptr();
-        let col = qfp.qf_col;
-        len += unsafe { vim_snprintf_safelen!(at, room, fmt, col) };
-        if qfp.qf_end_col > 0 && qfp.qf_col != qfp.qf_end_col {
-            let at = unsafe { buf.add(len) };
-            let room = IOSIZE as size_t - len;
-            let fmt = c"-%d".as_ptr();
-            let end_col = qfp.qf_end_col;
-            len += unsafe { vim_snprintf_safelen!(at, room, fmt, end_col) };
+    at = skip_white(at);
+    if let Some(rest) = at.strip_prefix(b",") {
+        at = skip_white(rest);
+        let (n, len) = decimal(at);
+        if len > 0 {
+            at = skip_white(&at[len..]);
+            last = n?;
+        } else if !have_first {
+            return None;
         }
+    } else if have_first {
+        last = first;
     }
-    out.extend_from_slice(unsafe { slice::from_raw_parts(buf.cast::<u8>(), len) });
+    at.is_empty().then_some((first, last))
+}
+
+/// The decimal number, possibly negative, at the start of `text` — `None`
+/// past `INT_MAX` — and how many bytes it took, as `vim_str2nr()` reads one
+/// with no other bases: a lone `-` is a zero one byte long.
+fn decimal(text: &[u8]) -> (Option<c_int>, usize) {
+    let negative = text.first() == Some(&b'-');
+    let digits = &text[usize::from(negative)..];
+    let count = digits.iter().take_while(|b| b.is_ascii_digit()).count();
+    let len = count + usize::from(negative);
+    let mut n: i64 = 0;
+    for &d in &digits[..count] {
+        n = n.saturating_mul(10).saturating_add(i64::from(d - b'0'));
+    }
+    if negative {
+        n = -n;
+    }
+    let n = if n > i64::from(c_int::MAX) {
+        None
+    } else {
+        Some(c_int::try_from(n).unwrap_or(c_int::MIN))
+    };
+    (n, len)
 }
 
 /// Print the number, size and title of one list in the stack.
-///
-/// # Safety
-///
-/// `qi` must be a live stack holding a list at `which`, and `lead` a live
-/// string.
-unsafe fn qf_msg(qi: *mut QfInfo, which: c_int, lead: *const c_char) {
-    // SAFETY: the caller's promise -- a live `QfInfo`.
-    let qi = unsafe { Qi::new(qi) };
-    let qfl = qf_nth_list(qi, which);
-    let mut buf: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
-    let size = IOSIZE as size_t;
-    let fmt = gettext(c"%serror list %d of %d; %d errors ");
-    let listcount = qi.qf_listcount;
-    let count = qfl.qf_count;
-    let len = unsafe {
-        vim_snprintf_safelen!(
-            buf.as_mut_ptr(),
-            size,
-            fmt.as_ptr(),
-            lead,
-            which + 1,
-            listcount,
-            count,
-        )
+fn qf_msg(qi: Qi, which: c_int, lead: &str) {
+    let (listcount, count, title) = {
+        let qfl = qi.slot(which);
+        (qi.list_count, qfl.count(), qfl.title.clone())
     };
-    if !qfl.qf_title.is_null() {
+    let mut line = tr!(
+        "{}error list {} of {}; {} errors ",
+        lead,
+        which + 1,
+        listcount,
+        count
+    )
+    .into_bytes();
+    if let Some(title) = title {
         // The title starts at a fixed column, when there is room.
-        if len < 34 {
-            buf[len..34].fill(b' ' as c_char);
-            buf[34] = 0;
+        if line.len() < 34 {
+            line.resize(34, b' ');
         }
-        unsafe { xstrlcat(buf.as_mut_ptr(), qfl.qf_title, IOSIZE as size_t) };
+        line.extend_from_slice(&title);
     }
-    let title = buf.as_mut_ptr();
-    let room = Columns.get() - 1;
-    unsafe { trunc_string(title, buf.as_mut_ptr(), room, IOSIZE) };
-    msg(cstr::in_chars(&buf), 0);
+    // Upstream builds this in an `IOSIZE` buffer.
+    line.truncate(IOSIZE as usize - 1);
+    let text = trunc_to(&owned_cstr(&line), Columns.get() - 1, IOSIZE as usize);
+    msg(&owned_cstr(&text), 0);
 }
 
 /// `:colder`/`:cnewer`/`:lolder`/`:lnewer`: move up or down the stack.
 pub fn qf_age(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    let Some(mut qi) = qf_cmd_stack(excmd.cmdidx, true) else {
+    let Some(mut qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
     let count = if excmd.addr_count != 0 {
@@ -378,57 +357,48 @@ pub fn qf_age(excmd: &mut ExArg) {
     let older = excmd.cmdidx == CmdIdx::colder || excmd.cmdidx == CmdIdx::lolder;
     for _ in 0..count {
         if older {
-            if qi.qf_curlist == 0 {
-                qf_emsg(c"E380: At bottom of quickfix stack".as_ptr());
+            if qi.current == 0 {
+                qf_emsg(c"E380: At bottom of quickfix stack");
                 break;
             }
-            qi.qf_curlist -= 1;
+            qi.current -= 1;
         } else {
-            if qi.qf_curlist >= qi.qf_listcount - 1 {
-                qf_emsg(c"E381: At top of quickfix stack".as_ptr());
+            if qi.current >= qi.list_count - 1 {
+                qf_emsg(c"E381: At top of quickfix stack");
                 break;
             }
-            qi.qf_curlist += 1;
+            qi.current += 1;
         }
     }
-    unsafe { qf_msg(qi.raw(), qi.qf_curlist, c"".as_ptr()) };
-    qf_redraw(qi, ptr::null_mut());
+    qf_msg(qi, qi.current, "");
+    qf_update_buffer(qi, None);
 }
 
 /// `:chistory`/`:lhistory`: print every list in the stack, or with a count,
 /// go to one of them.
 pub fn qf_history(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    let stack = qf_cmd_stack(excmd.cmdidx, false);
+    let stack = stack_for_cmd(excmd.cmdidx, false);
     if excmd.addr_count > 0 {
         match stack {
-            None => qf_emsg(e_loclist.as_ptr()),
-            Some(mut qi) if excmd.line2 > 0 && excmd.line2 <= qi.qf_listcount as LineNr => {
-                qi.qf_curlist = (excmd.line2 - 1) as c_int;
-                // SAFETY: `qi` is live and `qf_curlist` names one of its
-                // lists, which is the whole of `qf_msg`'s precondition.
-                unsafe { qf_msg(qi.raw(), qi.qf_curlist, c"".as_ptr()) };
-                qf_redraw(qi, ptr::null_mut());
+            None => qf_emsg(e_loclist),
+            Some(mut qi) if excmd.line2 > 0 && excmd.line2 <= LineNr::from(qi.list_count) => {
+                qi.current = (excmd.line2 - 1) as c_int;
+                qf_msg(qi, qi.current, "");
+                qf_update_buffer(qi, None);
             }
-            Some(_) => qf_emsg(e_invrange.as_ptr()),
+            Some(_) => qf_emsg(e_invrange),
         }
         return;
     }
-    // No location list at all counts as an empty stack, which is what
-    // `qf_stack_empty` answered for the null pointer this used to hold.
-    match stack.filter(|qi| !qf_is_empty(*qi)) {
+    // No location list at all counts as an empty stack.
+    match stack.filter(|qi| !qi.is_empty()) {
         None => {
             msg(gettext(c"No entries"), 0);
         }
         Some(qi) => {
-            for i in 0..qi.qf_listcount {
-                let lead = if i == qi.qf_curlist {
-                    c"> ".as_ptr()
-                } else {
-                    c"  ".as_ptr()
-                };
-                // SAFETY: a live stack, and `i` is one of its lists.
-                unsafe { qf_msg(qi.raw(), i, lead) };
+            for i in 0..qi.list_count {
+                let lead = if i == qi.current { "> " } else { "  " };
+                qf_msg(qi, i, lead);
             }
         }
     }
@@ -455,7 +425,7 @@ pub(crate) fn qf_types(c: c_int, nr: c_int) -> CString {
         E | LOWER_E => b" error",
         0 if nr > 0 => b" error",
         0 | 1 => b"",
-        other => return numbered(&[b' ', other as u8], nr),
+        other => return numbered(&[b' ', other.to_le_bytes()[0]], nr),
     };
     numbered(name, nr)
 }
@@ -473,22 +443,25 @@ fn numbered(name: &[u8], nr: c_int) -> CString {
 /// Open the entry under the cursor in the quickfix window, in a new window
 /// when `split`.
 pub fn qf_view_result(split: bool) {
-    let in_ll_window = is_ll_window(Win::current());
-    // SAFETY: a location list window always references a live stack, which
-    // is what `is_ll_window` just established.
+    let window = Win::current();
+    let in_ll_window = window.is_location_list_window();
     let qi = if in_ll_window {
-        unsafe { Qi::new(Win::current().w_llist_ref) }
+        window
+            .w_llist_ref
+            .expect("a location list window shows a stack")
+            .stack()
     } else {
-        qf_global()
+        Qi::global()
     };
-    if qfl_is_empty(qf_current_list(qi)) {
-        qf_emsg(e_no_errors.as_ptr());
+    if qi.current_list().is_empty() {
+        qf_emsg(e_no_errors);
         return;
     }
     if split {
-        unsafe { qf_jump_newwin(qi.raw(), 0, Win::current().w_cursor.lnum as c_int, 0, true) };
+        let lnum = Win::current().w_cursor.lnum as c_int;
+        qf_jump_newwin(qi, 0, lnum, false, true);
         let _ = do_cmdline_cmd(c"clearjumps");
         return;
     }
-    let _ = { do_cmdline_cmd(if in_ll_window { c".ll" } else { c".cc" }) };
+    let _ = do_cmdline_cmd(if in_ll_window { c".ll" } else { c".cc" });
 }

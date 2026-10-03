@@ -570,6 +570,14 @@ fn report_filtered(linecount: LineNr) {
     }
 }
 
+/// [`do_shell`] for a command line the caller holds: run on a copy, which
+/// the shell code may rewrite.
+pub(crate) fn do_shell_cmd(cmd: &CStr, flags: ShellOpts) {
+    let mut copy = cmd.to_bytes_with_nul().to_vec();
+    // SAFETY: a NUL-terminated copy this call owns.
+    unsafe { do_shell(copy.as_mut_ptr().cast(), flags) };
+}
+
 /// Call a shell to execute `cmd`; a NULL `cmd` starts an interactive shell.
 ///
 /// `flags` may be [`ShellOpts::DO_OUT`] when the output is redirected.

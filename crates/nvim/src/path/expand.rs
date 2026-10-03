@@ -381,6 +381,32 @@ pub unsafe fn gen_expand_wildcards(
     }
 }
 
+/// [`gen_expand_wildcards`] of one pattern, into names the caller owns.
+/// `None` when the expansion failed; an empty list when it found nothing.
+pub(crate) fn expand_wildcards_list(
+    pattern: &CStr,
+    flags: ExpandFlags,
+) -> Option<Vec<crate::memory::XString>> {
+    // A copy the expansion may write to.
+    let mut owned = pattern.to_bytes_with_nul().to_vec();
+    let mut pat: *mut c_char = owned.as_mut_ptr().cast();
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ::core::ptr::null_mut();
+    // SAFETY: one NUL-terminated pattern, and two locals to fill in.
+    let expanded =
+        unsafe { gen_expand_wildcards(1, &raw mut pat, &raw mut count, &raw mut files, flags) };
+    if expanded.is_err() {
+        return None;
+    }
+    let names = (0..usize::try_from(count).unwrap_or(0))
+        // SAFETY: `count` NUL-terminated names in the array just answered.
+        .map(|at| crate::memory::XString::from_cstr(unsafe { CStr::from_ptr(*files.add(at)) }))
+        .collect();
+    // SAFETY: the array and names the expansion answered, given back once.
+    unsafe { free_wild(count, files) };
+    Some(names)
+}
+
 /// Free the `count` names [`expand_wildcards`] and its neighbours answer.
 ///
 /// # Safety

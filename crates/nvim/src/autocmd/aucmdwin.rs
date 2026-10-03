@@ -360,3 +360,27 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         with_visual_anchor(|anchor| check_pos(Buf::current(), anchor));
     }
 }
+
+/// A buffer made current for the length of a value: [`aucmd_prepbuf`] when
+/// it is made, [`aucmd_restbuf`] when it is dropped.
+pub(crate) struct AucmdBuf {
+    aco: AcoSave,
+}
+
+impl AucmdBuf {
+    /// Make `buffer` current — in a window showing it, or in an autocommand
+    /// window — saving what is needed to put things back.
+    pub(crate) fn enter(buffer: Buf) -> AucmdBuf {
+        let mut aco = AcoSave::default();
+        // SAFETY: a local the guard owns; the restore reads it back.
+        unsafe { aucmd_prepbuf(&mut aco, buffer) };
+        AucmdBuf { aco }
+    }
+}
+
+impl Drop for AucmdBuf {
+    fn drop(&mut self) {
+        // SAFETY: the record `enter` filled in, restored once.
+        unsafe { aucmd_restbuf(&mut self.aco) };
+    }
+}

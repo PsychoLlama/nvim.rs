@@ -59,7 +59,7 @@ use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
 use crate::optionstr::{OptString, OptStringRef, check_signcolumn};
 use crate::os::cshim::gettext;
 use crate::popupmenu::{pum_drawn, pum_redraw};
-use crate::quickfix::{ll_resize_stack, qf_resize_stack};
+use crate::quickfix::qf_resize_stack;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::spell::parse_spelllang;
 use crate::startup::{full_screen, readonlymode, starting};
@@ -691,7 +691,7 @@ pub(crate) fn did_set_xhistory(args: &mut OptSet) -> Result<(), OptError> {
     if f.varp == option_var(kOptChistory) {
         qf_resize_stack(arg.get() as c_int);
     } else {
-        ll_resize_stack(f.win, arg.get() as c_int);
+        f.win.resize_location_list_stack(arg.get() as c_int);
     }
     Ok(())
 }

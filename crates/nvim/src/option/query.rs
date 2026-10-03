@@ -146,6 +146,20 @@ pub(crate) fn magic_isset() -> bool {
     }
 }
 
+/// The callback a function option's value names: `Ok(None)` for an empty
+/// value, which clears the option's callback, and `Err` — the option keeping
+/// the one it has — when the value names none.
+pub(crate) fn callback_from_option(optval: &CStr) -> Result<Option<Callback>, Failed> {
+    if optval.is_empty() {
+        return Ok(None);
+    }
+    let mut cb = Callback::None;
+    // SAFETY: a NUL-terminated value the parse only reads, and a fresh
+    // slot of this call's own.
+    unsafe { option_set_callback_func(optval.as_ptr().cast_mut(), &mut cb) }?;
+    Ok(Some(cb))
+}
+
 /// Parse a `'*func'` option's value into `optcb`. An empty value clears the
 /// callback; anything that does not resolve to one leaves `optcb` alone.
 ///

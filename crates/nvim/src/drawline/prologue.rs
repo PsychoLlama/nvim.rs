@@ -544,7 +544,7 @@ impl LineSetup {
         }
 
         // The quickfix window highlights the entry the cursor is on.
-        if is_qf_buffer(window) && qf_current_entry(window) == wlv.lnum {
+        if window.shows_quickfix_buffer() && window.quickfix_current_line() == wlv.lnum {
             wlv.line_attr = win_hl_attr(window, HLF_QFL);
         }
         if wlv.line_attr_lowprio != 0 || wlv.line_attr != 0 {

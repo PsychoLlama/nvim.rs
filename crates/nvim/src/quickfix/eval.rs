@@ -5,8 +5,7 @@
 //! [`set_ref_in_quickfix`] is the other half: every list's context and
 //! every entry's user data is a `TypVal` the collector has to see.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,85 +15,63 @@
 )]
 
 use super::*;
+use crate::eval::list::cstr_of_chk;
 use crate::eval::typval::NumBuf;
 use crate::guard::Depth;
-use crate::message_fmt::c_str;
+use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::{
-    NUL, Refcount, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, kListLenMayKnow,
+    Refcount, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, kListLenMayKnow,
 };
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
-use core::ptr;
-
-/// The parsed global `'quickfixtextfunc'`. A list-local one lives in
-/// `QfInfo::qf_qftf_cb`.
-///
-/// The address, because every operation the tree has on a callback —
-/// parsing an option into it, marking it for the collector, copying it,
-/// calling it — takes a `*mut Callback`.
-pub(super) fn global_qftf() -> *mut Callback {
-    qftf_cb.ptr()
-}
+use core::ffi::c_int;
 
 /// Whether a value can hold a reference at all. Numbers, strings and floats
 /// own nothing, so the collector never has to walk into one.
 fn holds_references(tv: &TypVal) -> bool {
-    // SAFETY: the caller's value.
-    !matches!((*tv).v_type(), VAR_NUMBER | VAR_STRING | VAR_FLOAT)
+    !matches!(tv.v_type(), VAR_NUMBER | VAR_STRING | VAR_FLOAT)
 }
 
-/// Mark the `user_data` of every entry of every list on the stack. Answers
+/// Mark the `user_data` of every entry, and the context value and the
+/// `'quickfixtextfunc'` callback, of every list on the stack. Answers
 /// whether the walk should be given up, which is what `set_ref_in_item`
 /// reports when it finds a cycle it cannot follow.
 ///
-/// # Safety
-///
-/// `qi` must be a live stack.
-unsafe fn mark_quickfix_user_data(qi: *mut QfInfo, copy_id: c_int) -> bool {
+/// Marking runs no user code, so the stack is borrowed for the walk.
+fn mark_stack(stack: &QfStack, copy_id: c_int) -> bool {
     let mut aborted = false;
-    let mut i = 0;
-    while i < unsafe { (*qi).max_count() } && !aborted {
-        let qfl = unsafe { qf_get_list(qi, i) };
-        if unsafe { (*qfl).qf_has_user_data } {
-            let mut qfp = unsafe { (*qfl).qf_start };
-            let mut j = 1;
-            while !got_int.get() && j <= unsafe { (*qfl).qf_count } && !qfp.is_null() {
-                // The value is inline in the entry, so it is always
-                // there; only its type says whether to walk into it.
-                let user_data = unsafe { &raw mut (*qfp).qf_user_data };
-                if unsafe { holds_references(&*user_data) } {
-                    let data = unsafe { &*user_data };
-                    aborted = aborted || mark_root(data, copy_id);
-                }
-                j += 1;
-                qfp = unsafe { (*qfp).qf_next };
+    for list in &stack.lists {
+        if aborted {
+            break;
+        }
+        if let Some(ctx) = list.context.as_deref()
+            && holds_references(ctx)
+        {
+            aborted = mark_root(ctx, copy_id);
+        }
+        aborted = aborted || list.text_func.mark(copy_id);
+    }
+    if aborted {
+        return true;
+    }
+    for list in &stack.lists {
+        if aborted {
+            break;
+        }
+        if !list.has_user_data {
+            continue;
+        }
+        for entry in &list.entries {
+            if got_int.get() {
+                break;
+            }
+            // The value is inline in the entry, so it is always there; only
+            // its type says whether to walk into it.
+            if holds_references(&entry.user_data) {
+                aborted = aborted || mark_root(&entry.user_data, copy_id);
             }
         }
-        i += 1;
-    }
-    aborted
-}
-
-/// Mark the context value and the `'quickfixtextfunc'` callback of every
-/// list on the stack.
-///
-/// # Safety
-///
-/// `qi` must be a live stack.
-unsafe fn mark_quickfix_ctx(qi: *mut QfInfo, copy_id: c_int) -> bool {
-    let mut aborted = false;
-    let mut i = 0;
-    while i < unsafe { (*qi).max_count() } && !aborted {
-        let ctx = unsafe { (*qf_get_list(qi, i)).qf_ctx };
-        if !ctx.is_null() && unsafe { holds_references(&*ctx) } {
-            // SAFETY: the list's own context value.
-            aborted = mark_root(unsafe { &*ctx }, copy_id);
-        }
-        let cb = unsafe { &raw mut (*qf_get_list(qi, i)).qf_qftf_cb };
-        aborted = aborted
-            || unsafe { set_ref_in_callback(cb, copy_id, ptr::null_mut(), ptr::null_mut()) };
-        i += 1;
     }
     aborted
 }
@@ -102,29 +79,25 @@ unsafe fn mark_quickfix_ctx(qi: *mut QfInfo, copy_id: c_int) -> bool {
 /// Mark everything the quickfix stack and every location list stack hold,
 /// so that the garbage collector does not free it.
 pub fn set_ref_in_quickfix(copy_id: c_int) -> bool {
-    // SAFETY: the stacks and window lists are only read.
-    let ql = QfStack::Global.raw();
-    if unsafe { mark_quickfix_ctx(ql, copy_id) }
-        || unsafe { mark_quickfix_user_data(ql, copy_id) }
-        || unsafe { set_ref_in_callback(global_qftf(), copy_id, ptr::null_mut(), ptr::null_mut()) }
-    {
+    if mark_stack(&Qi::global(), copy_id) || qftf_cb.with(|cb| cb.mark(copy_id)) {
         return true;
     }
 
     // Every window may own a location list, and a location list window
     // may be the last thing referring to one.
     let aborting = |win: Win| {
-        let own = win.w_llist;
-        if !own.is_null()
-            && (unsafe { mark_quickfix_ctx(own, copy_id) }
-                || unsafe { mark_quickfix_user_data(own, copy_id) })
+        if let Some(own) = win.w_llist
+            && mark_stack(&own.stack(), copy_id)
         {
             return true;
         }
-        let shown = win.w_llist_ref;
-        if is_ll_window(win) && unsafe { (*shown).qf_refcount } == Refcount::ONE {
-            return unsafe { mark_quickfix_ctx(shown, copy_id) }
-                || unsafe { mark_quickfix_user_data(shown, copy_id) };
+        if win.is_location_list_window()
+            && let Some(shown) = win.w_llist_ref
+        {
+            let shown = shown.stack();
+            if shown.refcount == Refcount::ONE {
+                return mark_stack(&shown, copy_id);
+            }
         }
         false
     };
@@ -139,13 +112,13 @@ fn get_qf_loc_list(
     what_arg: Option<&TypVal>,
     result: &mut TypVal,
 ) {
-    // SAFETY: forwarded from the caller.
     let Some(what_arg) = what_arg else {
         tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
-        if is_qf || window.is_some() {
+        if (is_qf || window.is_some())
+            && let Some(list) = result.list_mut()
+        {
             // No list, or an empty one, is an empty answer, not an error.
-            let _ =
-                unsafe { get_errorlist(ptr::null_mut(), window, -1, 0, (*result).list_or_null()) };
+            let _ = get_errorlist_of(window, list);
         }
         return;
     };
@@ -158,11 +131,12 @@ fn get_qf_loc_list(
         emsg(gettext(e_dictreq));
         return;
     }
-    let d = what_arg.dict_or_null();
-    if !d.is_null() {
+    if let Some(what) = what_arg.dict_ref()
+        && let Some(answer) = result.dict_mut()
+    {
         // A request that names nothing readable answers the empty
         // dictionary that is already in `result`.
-        let _ = unsafe { qf_get_properties(window, d, (*result).dict_or_null()) };
+        let _ = qf_get_properties(window, what, answer);
     }
 }
 
@@ -179,20 +153,13 @@ pub fn f_getqflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// The body of `setqflist()` and `setloclist()`: a list of entries, an
 /// optional action character, and an optional title or `what` dictionary.
 /// Answers through `result`, which is −1 for every rejection.
-///
-/// # Safety
-///
-/// `window` must be null or a live window, and `args` hold three values.
-unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypVal) {
-    let mut numbuf = NumBuf::new();
-    let mut numbuf2 = NumBuf::new();
+fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypVal) {
     /// Set while `set_errorlist` runs, because an autocommand it fires may
     /// call `setqflist()` again and the list would be pulled out from under
     /// the outer call.
     static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
-    // SAFETY: forwarded from the caller.
-    (*result).write_number(-1);
+    result.write_number(-1);
 
     let list_arg = &args[0];
     if list_arg.v_type() != VAR_LIST {
@@ -204,38 +171,38 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypV
         return;
     }
 
-    let mut action = ' ' as c_char;
-    let mut title: *const c_char = ptr::null();
-    let mut what: *mut Dict = ptr::null_mut();
+    let mut action = b' ';
+    let mut title: Option<XString> = None;
+    let mut what: Option<&Dict> = None;
 
     if let Some(action_arg) = args.get(1) {
         if action_arg.v_type() != VAR_STRING {
             emsg(gettext(e_string_required));
             return;
         }
-        // Never null: the value is a string, which is what
+        let mut numbuf = NumBuf::new();
+        // Never `None`: the value is a string, which is what
         // `tv_get_string_chk` fails on anything else for.
-        let act = numbuf.string_ptr_chk(action_arg);
-        let known = matches!(
-            unsafe { *act }.cast_unsigned(),
-            b'a' | b'r' | b'u' | b' ' | b'f'
-        );
-        if !known || c_int::from(unsafe { *act.add(1) }) != NUL {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let act = unsafe { c_str(act) };
+        let act = cstr_of_chk(action_arg, &mut numbuf).map_or(&b""[..], CStr::to_bytes);
+        let known = matches!(act.first(), Some(b'a' | b'r' | b'u' | b' ' | b'f'));
+        if !known || act.len() != 1 {
+            let act = msg_bytes(act);
             semsg!("E927: Invalid action: '{act}'");
             return;
         }
-        action = unsafe { *act };
+        action = act[0];
 
         if let Some(what_arg) = args.get(2) {
             if what_arg.v_type() == VAR_STRING {
-                title = numbuf2.string_ptr_chk(what_arg);
-                if title.is_null() {
+                let mut numbuf = NumBuf::new();
+                let Some(text) = cstr_of_chk(what_arg, &mut numbuf) else {
                     return;
-                }
-            } else if what_arg.v_type() == VAR_DICT && !what_arg.dict_or_null().is_null() {
-                what = what_arg.dict_or_null();
+                };
+                title = Some(XString::from_cstr(text));
+            } else if what_arg.v_type() == VAR_DICT
+                && let Some(d) = what_arg.dict_ref()
+            {
+                what = Some(d);
             } else {
                 emsg(gettext(e_dictreq));
                 return;
@@ -243,32 +210,30 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypV
         }
     }
 
-    if title.is_null() {
-        title = if window.is_none() {
-            c":setqflist()".as_ptr()
+    let title = title.unwrap_or_else(|| {
+        XString::from_cstr(if window.is_none() {
+            c":setqflist()"
         } else {
-            c":setloclist()".as_ptr()
-        };
-    }
+            c":setloclist()"
+        })
+    });
 
     let _recursing = Depth::of(&RECURSIVE);
-    let l = list_arg.list_or_null();
-    if unsafe { set_errorlist(window, l, c_int::from(action), title.cast_mut(), what) }.is_ok() {
-        (*result).write_number(0);
+    let list = list_of(list_arg);
+    if set_errorlist(window, list, action, title.as_cstr(), what).is_ok() {
+        result.write_number(0);
     }
 }
 
 /// `setloclist({winnr}, {list} [, {action} [, {what}]])`.
 pub fn f_setloclist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the caller's argument array holds at least four values.
     result.write_number(-1);
     if let Some(win) = find_win_by_nr_or_id(&args[0]) {
-        unsafe { set_qf_ll_list(Some(win), &args[1..], result) };
+        set_qf_ll_list(Some(win), &args[1..], result);
     }
 }
 
 /// `setqflist({list} [, {action} [, {what}]])`.
 pub fn f_setqflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the caller's argument array holds at least three values.
-    unsafe { set_qf_ll_list(None, args, result) }
+    set_qf_ll_list(None, args, result)
 }

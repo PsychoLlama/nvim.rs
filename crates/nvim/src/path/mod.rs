@@ -440,6 +440,16 @@ pub unsafe fn fix_fname(fname: *const c_char) -> *mut c_char {
     unsafe { full_name_save(fname, true) }
 }
 
+/// [`fix_fname`] into a string the caller owns; `None` when the name cannot
+/// be resolved.
+pub(crate) fn fixed_fname(fname: &CStr) -> Option<crate::memory::XString> {
+    // SAFETY: a NUL-terminated name; the answer is a fresh allocation or
+    // null.
+    let fixed = unsafe { fix_fname(fname.as_ptr()) };
+    // SAFETY: a fresh `xmalloc` block, which the string adopts.
+    (!fixed.is_null()).then(|| unsafe { crate::memory::XString::from_raw(fixed) })
+}
+
 /// Put the absolute name of the directory `directory` — relative to the
 /// current one — in `buffer`, which holds `len` bytes.
 ///

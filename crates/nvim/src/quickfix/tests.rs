@@ -7,8 +7,7 @@
 //! does not exist. What is left is the stack itself — how many lists it
 //! keeps, which one is current, the entries and the current one among them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -27,8 +26,8 @@ use crate::option::vars::{P_CPO, P_EFM};
 use crate::types::{DictRef, ListRef, kListLenMayKnow};
 use crate::window::{bare_window, free_bare_window};
 use crate::winlayer::graph::{leave_curbuf, leave_curwin};
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
+use std::ffi::CString;
 
 /// `kListLenMayKnow`, as the length hint `tv_list_alloc` takes.
 const MAY_KNOW: ptrdiff_t = -3;
@@ -138,63 +137,31 @@ fn what(numbers: &[(&str, VarNumber)], strings: &[(&str, &str)]) -> DictRef {
     d
 }
 
-fn title_of(title: &str) -> Vec<c_char> {
-    let mut bytes: Vec<c_char> = title.bytes().map(u8::cast_signed).collect();
-    bytes.push(0);
-    bytes
+fn title_of(title: &str) -> CString {
+    CString::new(title).expect("a title without a NUL")
 }
 
 /// `setqflist(entries, action, title)`.
 fn set_list(entries: &[Item], action: u8, title: &str) {
-    let list = items(entries);
-    let mut title = title_of(title);
-    let done = unsafe {
-        set_errorlist(
-            None,
-            list.as_ptr(),
-            c_int::from(action),
-            title.as_mut_ptr(),
-            ptr::null_mut(),
-        )
-    };
+    let done = set_errorlist(None, Some(items(entries)), action, &title_of(title), None);
     assert!(done.is_ok());
 }
 
 /// `setqflist(entries, action, what)`, answering whether it was done.
 fn set_what(entries: &[Item], action: u8, what: &DictRef) -> bool {
-    let list = items(entries);
-    let mut title = title_of(":setqflist()");
-    unsafe {
-        set_errorlist(
-            None,
-            list.as_ptr(),
-            c_int::from(action),
-            title.as_mut_ptr(),
-            what.as_ptr(),
-        )
-    }
-    .is_ok()
+    let title = title_of(":setqflist()");
+    set_errorlist(None, Some(items(entries)), action, &title, Some(what)).is_ok()
 }
 
 /// `setqflist([], 'f')`.
 fn free_stack() {
-    let list = tv_list_alloc(0);
-    let mut title = title_of("");
-    let _ = unsafe {
-        set_errorlist(
-            None,
-            list.as_ptr(),
-            c_int::from(b'f'),
-            title.as_mut_ptr(),
-            ptr::null_mut(),
-        )
-    };
+    let _ = set_errorlist(None, Some(tv_list_alloc(0)), b'f', c"", None);
 }
 
 /// `getqflist(what)`.
 fn get(what: &DictRef) -> DictRef {
-    let answer = tv_dict_alloc();
-    let _ = unsafe { qf_get_properties(None, what.as_ptr(), answer.as_ptr()) };
+    let mut answer = tv_dict_alloc();
+    let _ = qf_get_properties(None, what, &mut answer);
     answer
 }
 
@@ -249,7 +216,8 @@ fn bytes(texts: &[&str]) -> Vec<Vec<u8>> {
 /// `dir`, or entry `errornr` itself when `dir` is 0.
 fn walk(errornr: c_int, dir: c_int) -> Option<c_int> {
     let mut idx = 0;
-    qf_get_entry(qf_current_list(qf_global()), errornr, dir, &mut idx).map(|_| idx)
+    let found = qf_get_entry(Qi::global().current_list(), errornr, dir, &mut idx);
+    found.ok().map(|_| idx)
 }
 
 #[test]
@@ -305,7 +273,6 @@ fn setqflist_starts_at_the_first_entry_valid_or_not() {
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "the number conversions are libc's `atol`")]
 fn a_parsed_list_starts_at_its_first_valid_entry() {
     let _f = Fixture::new(10);
     let mut lines = tv_list_alloc(MAY_KNOW);
@@ -389,10 +356,6 @@ fn the_change_tick_moves_with_each_change() {
 }
 
 #[test]
-#[cfg_attr(
-    miri,
-    ignore = "freeing a context hands `tv_free` a `&mut` to the block it frees"
-)]
 fn context_and_user_data_come_back() {
     let _f = Fixture::new(10);
     let mut list = tv_list_alloc(MAY_KNOW);
@@ -400,16 +363,7 @@ fn context_and_user_data_come_back() {
     d.add_tv(b"text", &string_tv(b"e")).unwrap();
     d.add_number(b"user_data", 42).unwrap();
     list.push_dict(Some(d));
-    let mut title = title_of("t");
-    let done = unsafe {
-        set_errorlist(
-            None,
-            list.as_ptr(),
-            c_int::from(b' '),
-            title.as_mut_ptr(),
-            ptr::null_mut(),
-        )
-    };
+    let done = set_errorlist(None, Some(list), b' ', &title_of("t"), None);
     assert!(done.is_ok());
     assert!(set_what(&[], b'a', &what(&[("context", 7)], &[])));
 
@@ -440,7 +394,6 @@ fn freeing_the_stack_leaves_nothing() {
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "the number conversions are libc's `atol`")]
 fn lines_parse_into_a_throwaway_list() {
     let _f = Fixture::new(10);
     set_list(&[item("kept", 1)], b' ', "t");
@@ -474,7 +427,6 @@ fn lines_parse_into_a_throwaway_list() {
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "the number conversions are libc's `atol`")]
 fn a_multiline_message_folds_into_one_entry() {
     let _f = Fixture::new(10);
     let mut lines = tv_list_alloc(MAY_KNOW);

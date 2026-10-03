@@ -288,6 +288,15 @@ pub unsafe fn os_dirname(buf: *mut c_char, mut len: size_t) -> Result<(), Failed
     }
 }
 
+/// The name of the current directory, or `None` when the system will not
+/// say: [`os_dirname`] into a buffer of its own.
+pub(crate) fn current_dir() -> Option<crate::memory::XString> {
+    let mut buf = vec![0 as c_char; crate::types::MAXPATHL as usize];
+    // SAFETY: the buffer holds exactly the length passed.
+    let ok = unsafe { os_dirname(buf.as_mut_ptr(), buf.len()) }.is_ok();
+    ok.then(|| crate::memory::XString::from_cstr(cstr::in_chars(&buf)))
+}
+
 /// Whether `name` is a directory and *not* a symlink to one.
 pub fn os_isrealdir(name: &CStr) -> bool {
     // `lstat`, not `stat`: a symlink to a directory is not one, though
@@ -885,4 +894,19 @@ mod tests {
         assert!(!is_dir(S_IFREG | 0o755));
         assert!(!is_dir(0o40000 - 1));
     }
+}
+
+/// The editor's standard input as a file of the caller's own, for a reader
+/// that names it `-`: [`os_open_stdin_fd`]'s descriptor, which the file
+/// closes when dropped — the saved `--` descriptor included, as upstream's
+/// `fdopen` and `fclose` close it.
+pub(crate) fn stdin_file() -> Option<std::fs::File> {
+    use std::os::fd::FromRawFd;
+    let fd = os_open_stdin_fd();
+    if fd < 0 {
+        return None;
+    }
+    // SAFETY: a descriptor of this process that `os_open_stdin_fd` hands
+    // over to its reader, exactly as upstream's `fdopen` takes it.
+    Some(unsafe { std::fs::File::from_raw_fd(fd) })
 }

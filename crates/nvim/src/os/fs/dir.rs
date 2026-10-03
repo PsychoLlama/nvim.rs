@@ -52,6 +52,13 @@ pub unsafe fn os_path_exists(path: *const c_char) -> bool {
     unsafe { os_stat(path, &raw mut statbuf) == LIBUV_SUCCESS }
 }
 
+/// Whether `path` names anything at all: [`os_path_exists`] for a name the
+/// caller holds.
+pub(crate) fn path_exists(path: &CStr) -> bool {
+    // SAFETY: a NUL-terminated path.
+    unsafe { os_path_exists(path.as_ptr()) }
+}
+
 /// Renames `path` to `new_path`. Answers `OK` or `FAIL`.
 pub fn os_rename(path: &CStr, new_path: &CStr) -> c_int {
     // SAFETY: both are NUL-terminated and outlive the call.

@@ -4,155 +4,157 @@
 //! [`qf_add_entries`] and [`qf_add_entry_from_dict`], and a `what`
 //! dictionary through [`qf_set_properties`] and the `qf_setprop_*`
 //! helpers.
+//!
+//! Adding an entry that names a file lists a buffer, which fires `BufNew`,
+//! and the caller's list and dictionaries are Vimscript values an
+//! autocommand can change. So the `what` dictionary is copied into a
+//! [`What`] before anything is set, the entries are walked by index and
+//! each one copied out of its dictionary before it is added, and the list
+//! is held as a view.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
-use crate::cstr;
+use crate::eval::list::{cstr_of, string_bytes};
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{NumBuf, dict_has_key, list_items};
-use crate::message_fmt::c_str;
+use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_EFM;
 use crate::semsg;
-use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING};
-use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
+use crate::types::{ListRef, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
-/// The `what` entry under `key`, or null. `dict_find` copies exactly the
-/// length it is given, so a Rust `&str` is the key type.
-///
-/// # Safety
-///
-/// `what` must be null or a live dictionary.
-unsafe fn find<'a>(what: *const Dict, key: &str) -> Option<&'a DictItem> {
-    // SAFETY: the caller's dictionary, which the answer borrows -- the
-    // contract this signature passes on.
-    dict_find(unsafe { what.as_ref() }, key.as_bytes())
-}
-
-/// [`find`] with the entry writable.
-///
-/// # Safety
-///
-/// `what` must be null or a live dictionary; the answer borrows it.
-unsafe fn find_mut<'a>(what: *const Dict, key: &str) -> Option<&'a mut DictItem> {
-    // SAFETY: the caller's dictionary. `find_ptr` answers the table's own
-    // pointer to the item, not one cast out of a shared borrow, so writing
-    // through it is sound; the lifetime is the contract this passes on.
-    let at = unsafe { what.as_ref() }?.find_ptr(key.as_bytes());
-    // SAFETY: as above -- a non-null answer is a live item of `what`.
-    (!at.is_null()).then(|| unsafe { &mut *at })
-}
-
-/// Set the list's `'quickfixtextfunc'` callback from `di`.
-fn qf_setprop_qftf(mut qfl: Qfl, di: &DictItem) -> Result<(), QfError> {
-    if check_secure() {
-        return Err(QfError::Forbidden);
+/// A reference of the caller's own to the list `tv` holds, if it holds one.
+pub(crate) fn list_of(tv: &TypVal) -> Option<ListRef> {
+    match tv {
+        TypVal::List(list) => (**list).clone(),
+        _ => None,
     }
-    let mut cb = Callback::None;
-    // SAFETY: the list's own callback slot, and the caller's entry.
-    unsafe { callback_free(&raw mut qfl.qf_qftf_cb) };
-    // A value that is not a callable leaves the list without one.
-    if unsafe { callback_from_typval(&raw mut cb, &di.di_tv) } {
-        qfl.qf_qftf_cb = cb;
-    }
-    Ok(())
 }
 
-/// Add one entry described by a `setqflist()` dictionary. `first_entry`
-/// resets the "already complained about a bad buffer number" flag, so that
-/// each call to `setqflist()` reports E92 once rather than once per entry.
-/// `valid_entry` is set when the entry names a real position.
-///
-/// # Safety
-///
-/// `qfl` must be a live list and `d` a live dictionary.
-unsafe fn qf_add_entry_from_dict(
-    qfl: *mut QfList,
-    d: *mut Dict,
-    first_entry: bool,
-    valid_entry: &mut bool,
-) {
+/// `tv` as a string the caller owns.
+fn string_of(tv: &TypVal) -> XString {
     let mut numbuf = NumBuf::new();
+    XString::from_cstr(cstr_of(tv, &mut numbuf))
+}
+
+/// `d[key]` as a string the caller owns, or `None` for a missing key.
+fn dict_string(d: &Dict, key: &[u8]) -> Option<XString> {
+    d.find(key).map(|di| string_of(&di.di_tv))
+}
+
+/// `d[key]` as a number, wrapped to a C `int` the way upstream's cast does.
+fn dict_int(d: &Dict, key: &[u8]) -> c_int {
+    #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]
+    let n = dict_get_number(Some(d), key) as c_int;
+    n
+}
+
+/// One entry described by a `setqflist()` dictionary, copied out of it.
+struct DictEntry {
+    filename: Option<XString>,
+    module: Option<XString>,
+    bufnum: c_int,
+    lnum: LineNr,
+    end_lnum: LineNr,
+    col: c_int,
+    end_col: c_int,
+    vcol: c_char,
+    nr: c_int,
+    kind: c_char,
+    pattern: Option<XString>,
+    text: XString,
+    user_data: TypVal,
+    valid: Option<bool>,
+}
+
+impl DictEntry {
+    fn of(d: &Dict) -> DictEntry {
+        let kind = dict_string(d, b"type").map_or(0, |kind| kind.first().copied().unwrap_or(0));
+        let mut user_data = TV_INITIAL_VALUE;
+        let _ = dict_get_tv(Some(d), b"user_data", &mut user_data);
+        DictEntry {
+            filename: dict_string(d, b"filename"),
+            module: dict_string(d, b"module"),
+            bufnum: dict_int(d, b"bufnr"),
+            lnum: dict_int(d, b"lnum"),
+            end_lnum: dict_int(d, b"end_lnum"),
+            col: dict_int(d, b"col"),
+            end_col: dict_int(d, b"end_col"),
+            // Not narrowed to a bool: `setqflist({'vcol': 5})` stores the 5
+            // and `getqflist()` reports it back. The low byte, as C's
+            // `(char)` keeps.
+            vcol: c_char::from_le_bytes([dict_get_number(Some(d), b"vcol").to_le_bytes()[0]]),
+            nr: dict_int(d, b"nr"),
+            kind: kind.cast_signed(),
+            pattern: dict_string(d, b"pattern"),
+            text: dict_string(d, b"text").unwrap_or_default(),
+            user_data,
+            valid: dict_has_key(Some(d), b"valid")
+                .then(|| dict_get_bool(Some(d), b"valid", c_int::from(false)) != 0),
+        }
+    }
+}
+
+/// Add one entry described by a `setqflist()` dictionary, already copied out
+/// of it. `first_entry` resets the "already complained about a bad buffer
+/// number" flag, so that each call to `setqflist()` reports E92 once rather
+/// than once per entry. Answers whether the entry names a real position.
+fn qf_add_entry_from_dict(qfl: Qfl, mut from: DictEntry, first_entry: bool) -> bool {
     static DID_BUFNR_EMSG: GlobalCell<bool> = GlobalCell::new(false);
 
     if first_entry {
         DID_BUFNR_EMSG.set(false);
     }
 
-    // SAFETY: the caller's live dictionary.
-    let d = unsafe { d.as_ref() };
-    let filename = dict_get_string_alloc(d, b"filename");
-    let module = dict_get_string_alloc(d, b"module");
-    let mut bufnum = dict_get_number(d, b"bufnr") as c_int;
-    let lnum = dict_get_number(d, b"lnum") as LineNr;
-    let end_lnum = dict_get_number(d, b"end_lnum") as LineNr;
-    let col = dict_get_number(d, b"col") as c_int;
-    let end_col = dict_get_number(d, b"end_col") as c_int;
-    // Not narrowed to a bool: `setqflist({'vcol': 5})` stores the 5 and
-    // `getqflist()` reports it back.
-    let vcol = dict_get_number(d, b"vcol") as c_char;
-    let nr = dict_get_number(d, b"nr") as c_int;
-    let kind = numbuf.dict_string(d, b"type");
-    let pattern = dict_get_string_alloc(d, b"pattern");
-    let mut text = dict_get_string_alloc(d, b"text");
-    if text.is_null() {
-        text = unsafe { xcalloc(1, 1) }.cast();
-    }
-    let mut user_data = TV_INITIAL_VALUE;
-    let _ = dict_get_tv(d, b"user_data", &mut user_data);
-
     // An entry that names neither a file nor a position cannot be
     // jumped to.
-    let mut valid = !(filename.is_null() && bufnum == 0 || lnum == 0 && pattern.is_null());
+    let mut valid =
+        !(from.filename.is_none() && from.bufnum == 0 || from.lnum == 0 && from.pattern.is_none());
 
-    if bufnum != 0 && find_buf(bufnum).is_none() {
+    if from.bufnum != 0 && find_buf(from.bufnum).is_none() {
         // Ignore the buffer number, and report it once per call.
         if !DID_BUFNR_EMSG.get() {
             DID_BUFNR_EMSG.set(true);
-            semsg!("E92: Buffer {} not found", bufnum);
+            semsg!("E92: Buffer {} not found", from.bufnum);
         }
         valid = false;
-        bufnum = 0;
+        from.bufnum = 0;
     }
 
     // An explicit "valid" overrides all of that.
-    if dict_has_key(d, b"valid") {
-        valid = dict_get_bool(d, b"valid", false as c_int) != 0;
+    if let Some(explicit) = from.valid {
+        valid = explicit;
     }
 
-    unsafe {
-        qf_add_entry(
-            qfl,
-            &NewEntry {
-                fname: filename,
-                module,
-                bufnum,
-                lnum,
-                end_lnum,
-                col,
-                end_col,
-                vis_col: vcol,
-                pattern,
-                nr,
-                kind: if kind.is_null() { 0 } else { *kind },
-                user_data: &raw mut user_data,
-                valid,
-                ..NewEntry::new(text)
-            },
-        )
-    };
-
-    unsafe { xfree(filename.cast()) };
-    unsafe { xfree(module.cast()) };
-    unsafe { xfree(pattern.cast()) };
-    unsafe { xfree(text.cast()) };
-    tv_clear(&mut user_data);
-
-    if valid {
-        *valid_entry = true;
-    }
+    qf_add_entry(
+        qfl,
+        &NewEntry {
+            fname: from.filename.as_ref().map(XString::as_cstr),
+            module: from.module.as_ref().map(XString::as_cstr),
+            bufnum: from.bufnum,
+            lnum: from.lnum,
+            end_lnum: from.end_lnum,
+            col: from.col,
+            end_col: from.end_col,
+            vis_col: from.vcol,
+            pattern: from.pattern.as_ref().map(XString::as_cstr),
+            nr: from.nr,
+            kind: from.kind,
+            user_data: Some(&from.user_data),
+            valid,
+            ..NewEntry::new(from.text.as_cstr())
+        },
+    );
+    valid
 }
 
 /// Whether `entry` is a better match for the position the list was on than
@@ -160,26 +162,18 @@ unsafe fn qf_add_entry_from_dict(
 /// then the nearer column. A target of zero at any level ends the
 /// comparison, which is how `setqflist(…, 'u')` keeps the cursor put when
 /// there is nothing to compare against.
-///
-/// C's `abs()` on an `int`, which is pure arithmetic: it reads no memory,
-/// so the one region it needs is here rather than at each use.
-fn abs_c(n: c_int) -> c_int {
-    // SAFETY: arithmetic on a value; no pointer is involved.
-    unsafe { abs(n) }
-}
-
 fn entry_is_closer_to_target(
-    entry: Qfe,
-    other_entry: Qfe,
+    entry: &QfEntry,
+    other_entry: &QfEntry,
     target_fnum: c_int,
-    target_lnum: c_int,
+    target_lnum: LineNr,
     target_col: c_int,
 ) -> bool {
     if target_fnum == 0 {
         return false;
     }
-    let is_target_file = entry.qf_fnum != 0 && entry.qf_fnum == target_fnum;
-    let other_is_target_file = other_entry.qf_fnum != 0 && other_entry.qf_fnum == target_fnum;
+    let is_target_file = entry.fnum != 0 && entry.fnum == target_fnum;
+    let other_is_target_file = other_entry.fnum != 0 && other_entry.fnum == target_fnum;
     if is_target_file != other_is_target_file {
         return is_target_file;
     }
@@ -188,9 +182,9 @@ fn entry_is_closer_to_target(
         return false;
     }
     // An entry without a line number is infinitely far away.
-    let distance = |qfp: Qfe| {
-        if qfp.qf_lnum != 0 {
-            abs_c(qfp.qf_lnum as c_int - target_lnum)
+    let distance = |entry: &QfEntry| {
+        if entry.lnum != 0 {
+            (entry.lnum - target_lnum).abs()
         } else {
             INT_MAX
         }
@@ -203,9 +197,9 @@ fn entry_is_closer_to_target(
     if target_col == 0 {
         return false;
     }
-    let distance = |qfp: Qfe| {
-        if qfp.qf_col != 0 {
-            abs_c(qfp.qf_col - target_col)
+    let distance = |entry: &QfEntry| {
+        if entry.col != 0 {
+            (entry.col - target_col).abs()
         } else {
             INT_MAX
         }
@@ -219,82 +213,76 @@ fn entry_is_closer_to_target(
 /// replaces them while keeping the cursor on the nearest entry.
 ///
 /// Cannot fail: a member of `list` that is not a dictionary is skipped, not
-/// refused, and every other decision here is unconditional. Upstream declared
-/// it `int` and answered `OK` on every path, which made `setqflist()` look as
-/// though adding entries could be rejected.
-///
-/// # Safety
-///
-/// `qi` must be a live stack, `list` null or a live list, and `title`
-/// NUL-terminated.
-unsafe fn qf_add_entries(
-    qi: *mut QfInfo,
+/// refused, and every other decision here is unconditional.
+fn qf_add_entries(
+    qi: Qi,
     mut qf_idx: c_int,
-    list: *mut List,
-    title: *mut c_char,
-    action: c_int,
+    list: Option<ListRef>,
+    title: Option<&CStr>,
+    action: u8,
 ) {
-    // SAFETY: forwarded from the caller.
-    let mut qfl = unsafe { qf_get_list(qi, qf_idx) };
-    let mut old_last: *mut QfLine = ptr::null_mut();
+    let mut qfl = qi.slot(qf_idx);
+    let mut old_last = None;
 
     // Where the list was, so that 'u' can find the nearest entry again.
-    let (mut prev_fnum, mut prev_lnum, mut prev_col) = (0, 0, 0);
-    if !unsafe { (*qfl).qf_ptr }.is_null() {
-        prev_fnum = unsafe { (*(*qfl).qf_ptr).qf_fnum };
-        prev_lnum = unsafe { (*(*qfl).qf_ptr).qf_lnum } as c_int;
-        prev_col = unsafe { (*(*qfl).qf_ptr).qf_col };
-    }
+    let (prev_fnum, prev_lnum, prev_col) = qfl
+        .current()
+        .map_or((0, 0, 0), |entry| (entry.fnum, entry.lnum, entry.col));
 
     let mut select_first_entry = false;
     let mut select_nearest_entry = false;
-    if action == ' ' as c_int || qf_idx == unsafe { (*qi).qf_listcount } {
+    if action == b' ' || qf_idx == qi.list_count {
         // Make a new list.
         select_first_entry = true;
-        unsafe { qf_new_list(qi, title) };
-        qf_idx = unsafe { (*qi).qf_curlist };
-        qfl = unsafe { qf_get_list(qi, qf_idx) };
-    } else if action == 'a' as c_int {
-        if unsafe { qf_list_empty(qfl) } {
+        qf_new_list(qi, title);
+        qf_idx = qi.current;
+        qfl = qi.slot(qf_idx);
+    } else if action == b'a' {
+        if qfl.is_empty() {
             // Appending to an empty list is starting one.
             select_first_entry = true;
         } else {
             // Adding to an existing list, so use the last entry.
-            old_last = unsafe { (*qfl).qf_last };
+            old_last = Some(qfl.entries.len() - 1);
         }
-    } else if action == 'r' as c_int {
-        select_first_entry = true;
-        unsafe { qf_free_items(qfl) };
-        unsafe { qf_store_title(qfl, title) };
-    } else if action == 'u' as c_int {
-        select_nearest_entry = true;
-        unsafe { qf_free_items(qfl) };
-        unsafe { qf_store_title(qfl, title) };
+    } else if action == b'r' || action == b'u' {
+        select_first_entry = action == b'r';
+        select_nearest_entry = action == b'u';
+        qf_free_items(&mut qfl);
+        qfl.title = title.map(XString::from_cstr);
     }
 
     let mut valid_entry = false;
-    let mut entry_to_select: Option<Qfe> = None;
-    let mut entry_to_select_index = 0;
-    if !list.is_null() {
-        // An index: `qf_add_entry_from_dict` reads a user dictionary and
-        // can re-enter.
+    // The chosen entry, by position.
+    let mut entry_to_select: Option<usize> = None;
+    if let Some(list) = list {
+        // An index, and the list asked again each time round: adding an
+        // entry can run an autocommand, which can change the list. Each
+        // entry is copied out of its dictionary before it is added, for the
+        // same reason.
         let mut at = 0;
-        // SAFETY: a live list.
-        while at < list_items(unsafe { list.as_ref() }).len() {
-            let item = &list_items(unsafe { list.as_ref() })[at].li_tv;
-            if item.v_type() == VAR_DICT && !item.dict_or_null().is_null() {
-                let d = item.dict_or_null();
-                unsafe { qf_add_entry_from_dict(qfl, d, at == 0, &mut valid_entry) };
-
-                let entry = unsafe { Qfe::new((*qfl).qf_last) };
+        while let Some(item) = list_items(Some(&list)).get(at) {
+            let from = (item.li_tv.v_type() == VAR_DICT)
+                .then(|| item.li_tv.dict_ref().map(DictEntry::of))
+                .flatten();
+            if let Some(from) = from {
+                if qf_add_entry_from_dict(qfl, from, at == 0) {
+                    valid_entry = true;
+                }
+                let added = qfl.entries.len() - 1;
                 let wanted = select_first_entry && entry_to_select.is_none()
                     || select_nearest_entry
                         && entry_to_select.is_none_or(|chosen| {
-                            entry_is_closer_to_target(entry, chosen, prev_fnum, prev_lnum, prev_col)
+                            entry_is_closer_to_target(
+                                &qfl.entries[added],
+                                &qfl.entries[chosen],
+                                prev_fnum,
+                                prev_lnum,
+                                prev_col,
+                            )
                         });
                 if wanted {
-                    entry_to_select = Some(entry);
-                    entry_to_select_index = unsafe { (*qfl).qf_count };
+                    entry_to_select = Some(added);
                 }
             }
             at += 1;
@@ -302,64 +290,78 @@ unsafe fn qf_add_entries(
     }
 
     if valid_entry {
-        unsafe { (*qfl).qf_nonevalid = false };
-    } else if unsafe { (*qfl).qf_index } == 0 {
-        unsafe { (*qfl).qf_nonevalid = true };
+        qfl.no_valid = false;
+    } else if qfl.index == 0 {
+        qfl.no_valid = true;
     }
-    if let Some(entry_to_select) = entry_to_select {
-        unsafe { (*qfl).qf_ptr = entry_to_select.raw() };
-        unsafe { (*qfl).qf_index = entry_to_select_index };
+    if let Some(chosen) = entry_to_select.filter(|&chosen| chosen < qfl.entries.len()) {
+        qfl.cursor = chosen;
+        qfl.index = c_int::try_from(chosen + 1).unwrap_or(c_int::MAX);
     }
 
     // Don't update the cursor in quickfix window when appending entries.
-    unsafe { qf_update_buffer(qi, old_last) };
+    qf_update_buffer(qi, old_last);
+}
+
+/// What a `setqflist()` `what` dictionary holds under each key it knows,
+/// copied out of it: setting a list runs autocommands, and those can change
+/// the dictionary.
+struct What {
+    nr: Option<TypVal>,
+    id: Option<TypVal>,
+    title: Option<TypVal>,
+    items: Option<TypVal>,
+    lines: Option<TypVal>,
+    efm: Option<TypVal>,
+    context: Option<TypVal>,
+    idx: Option<TypVal>,
+    text_func: Option<TypVal>,
+}
+
+impl What {
+    fn of(what: &Dict) -> What {
+        let get = |key: &[u8]| what.find(key).map(|di| di.di_tv.clone());
+        What {
+            nr: get(b"nr"),
+            id: get(b"id"),
+            title: get(b"title"),
+            items: get(b"items"),
+            lines: get(b"lines"),
+            efm: get(b"efm"),
+            context: get(b"context"),
+            idx: get(b"idx"),
+            text_func: get(b"quickfixtextfunc"),
+        }
+    }
 }
 
 /// Which list a `setqflist()` `what` names, through its `nr` or `id` key, or
-/// `None` for one that is not on the stack — upstream's `INVALID_QFIDX`
-/// sentinel.
+/// `None` for one that is not on the stack.
 ///
 /// `newlist` is both an input — whether a new list is being started — and an
 /// output, since an `nr` one past the end asks for one.
-///
-/// # Safety
-///
-/// `qi` must be a live stack and `what` null or a live dictionary.
-unsafe fn qf_setprop_get_qfidx(
-    qi: *const QfInfo,
-    what: *const Dict,
-    action: c_int,
-    newlist: &mut bool,
-) -> Option<c_int> {
-    // SAFETY: forwarded from the caller.
-    let mut qf_idx = unsafe { (*qi).qf_curlist };
+fn qf_setprop_get_qfidx(qi: Qi, what: &What, action: u8, newlist: &mut bool) -> Option<c_int> {
+    let mut qf_idx = qi.current;
 
-    if let Some(di) = unsafe { find(what, "nr") } {
-        if di.di_tv.v_type() == VAR_NUMBER {
+    if let Some(nr) = &what.nr {
+        if nr.v_type() == VAR_NUMBER {
             // For zero use the current list.
-            if di.di_tv.number_or_zero() != 0 {
-                qf_idx = di.di_tv.number_or_zero() as c_int - 1;
+            let nr = nr.number_or_zero();
+            if nr != 0 {
+                qf_idx = c_int::try_from(nr - 1).ok()?;
             }
-            if (action == ' ' as c_int || action == 'a' as c_int)
-                && qf_idx == unsafe { (*qi).qf_listcount }
-            {
+            if (action == b' ' || action == b'a') && qf_idx == qi.list_count {
                 // Create a new list.
                 *newlist = true;
-                qf_idx = if unsafe { qf_stack_empty(qi) } {
-                    0
-                } else {
-                    unsafe { (*qi).qf_listcount - 1 }
-                };
-            } else if qf_idx < 0 || qf_idx >= unsafe { (*qi).qf_listcount } {
+                qf_idx = if qi.is_empty() { 0 } else { qi.list_count - 1 };
+            } else if qf_idx < 0 || qf_idx >= qi.list_count {
                 return None;
-            } else if action != ' ' as c_int {
+            } else if action != b' ' {
                 *newlist = false;
             }
-        } else if di.di_tv.v_type() == VAR_STRING
-            && unsafe { strequal(di.di_tv.string_or_null(), c"$".as_ptr()) }
-        {
-            if !unsafe { qf_stack_empty(qi) } {
-                qf_idx = unsafe { (*qi).qf_listcount } - 1;
+        } else if nr.v_type() == VAR_STRING && string_bytes(nr) == b"$" {
+            if !qi.is_empty() {
+                qf_idx = qi.list_count - 1;
             } else if *newlist {
                 qf_idx = 0;
             } else {
@@ -372,276 +374,241 @@ unsafe fn qf_setprop_get_qfidx(
 
     // An id names a list outright, but only when a new one is not being
     // started.
-    if !*newlist && let Some(di) = unsafe { find(what, "id") } {
-        if di.di_tv.v_type() != VAR_NUMBER {
+    if !*newlist && let Some(id) = &what.id {
+        if id.v_type() != VAR_NUMBER {
             return None;
         }
-        let by_id = unsafe { qf_id2nr(qi, di.di_tv.number_or_zero() as c_uint) };
-        return (by_id != INVALID_QFIDX).then_some(by_id);
+        return c_uint::try_from(id.number_or_zero())
+            .ok()
+            .and_then(|id| qi.find_list(id));
     }
     Some(qf_idx)
 }
 
 /// Set the list's title.
-///
-/// # Safety
-///
-/// `qi` must be a live stack, `what` and `di` live.
-unsafe fn qf_setprop_title(
-    qi: *mut QfInfo,
-    qf_idx: c_int,
-    what: *const Dict,
-    di: &DictItem,
-) -> Result<(), QfError> {
-    // SAFETY: forwarded from the caller.
-    if di.di_tv.v_type() != VAR_STRING {
+fn qf_setprop_title(qi: Qi, qf_idx: c_int, title: &TypVal) -> Result<(), QfError> {
+    if title.v_type() != VAR_STRING {
         return Err(QfError::BadValue);
     }
-    let qfl = unsafe { qf_get_list(qi, qf_idx) };
-    unsafe { xfree((*qfl).qf_title.cast()) };
-    unsafe { (*qfl).qf_title = dict_get_string_alloc((what).as_ref(), b"title") };
-    if qf_idx == unsafe { (*qi).qf_curlist } {
-        qf_update_win_titlevar(unsafe { Qi::new(qi) });
+    qi.slot(qf_idx).title = Some(string_of(title));
+    if qf_idx == qi.current {
+        qf_update_win_titlevar(qi);
     }
     Ok(())
 }
 
-/// Replace the list's entries with the dictionaries in `di`.
-///
-/// # Safety
-///
-/// `qi` must be a live stack and `di` a live entry.
-unsafe fn qf_setprop_items(
-    qi: *mut QfInfo,
-    qf_idx: c_int,
-    di: &mut DictItem,
-    action: c_int,
-) -> Result<(), QfError> {
-    // SAFETY: forwarded from the caller.
-    if di.di_tv.v_type() != VAR_LIST {
+/// Replace the list's entries with the dictionaries in `items`.
+fn qf_setprop_items(qi: Qi, qf_idx: c_int, items: &TypVal, action: u8) -> Result<(), QfError> {
+    if items.v_type() != VAR_LIST {
         return Err(QfError::BadValue);
     }
-    // The title survives the entries being replaced, so it has to be
-    // copied out before `qf_add_entries` frees them.
-    let title_save = unsafe { xstrdup((*qf_get_list(qi, qf_idx)).qf_title) };
-    let action = if action == ' ' as c_int {
-        'a' as c_int
-    } else {
-        action
-    };
-    unsafe { qf_add_entries(qi, qf_idx, di.di_tv.list_or_null(), title_save, action) };
-    unsafe { xfree(title_save.cast()) };
+    // The title survives the entries being replaced, so it is copied out
+    // before `qf_add_entries` frees them.
+    let title_save = qi.slot(qf_idx).title.clone();
+    let action = if action == b' ' { b'a' } else { action };
+    let list = list_of(items);
+    qf_add_entries(
+        qi,
+        qf_idx,
+        list,
+        title_save.as_ref().map(XString::as_cstr),
+        action,
+    );
     Ok(())
 }
 
-/// Replace the list's entries with the result of parsing the lines in `di`
-/// with `'errorformat'` — or with the `what` dictionary's `efm`.
-///
-/// # Safety
-///
-/// `qi` must be a live stack, and `what` and `di` live.
-unsafe fn qf_setprop_items_from_lines(
-    qi: *mut QfInfo,
+/// Replace the list's entries with the result of parsing `lines` with
+/// `'errorformat'` — or with the `what` dictionary's `efm`.
+fn qf_setprop_items_from_lines(
+    qi: Qi,
     qf_idx: c_int,
-    what: *const Dict,
-    di: &mut DictItem,
-    action: c_int,
+    what: &What,
+    lines: &TypVal,
+    action: u8,
 ) -> Result<(), QfError> {
-    // A copy: the cursor below walks past the end of a projection's borrow.
-    let efm = P_EFM.get();
-    let mut errorformat = efm.as_ptr().cast_mut();
-    if let Some(efm_di) = unsafe { find(what, "efm") } {
-        if efm_di.di_tv.v_type() != VAR_STRING || efm_di.di_tv.string_or_null().is_null() {
-            return Err(QfError::BadValue);
+    let errorformat = match &what.efm {
+        None => P_EFM.get(),
+        Some(efm) => {
+            if efm.v_type() != VAR_STRING || efm.string_or_null().is_null() {
+                return Err(QfError::BadValue);
+            }
+            XString::from_bytes(string_bytes(efm))
         }
-        errorformat = efm_di.di_tv.string_or_null();
-    }
+    };
 
     // Only a List value is supported.
-    if di.di_tv.v_type() != VAR_LIST || di.di_tv.list_or_null().is_null() {
+    if lines.v_type() != VAR_LIST || lines.list_ref().is_none() {
         return Err(QfError::BadValue);
     }
 
-    if action == 'r' as c_int || action == 'u' as c_int {
-        unsafe { qf_free_items(qf_get_list(qi, qf_idx)) };
+    if action == b'r' || action == b'u' {
+        qf_free_items(&mut qi.slot(qf_idx));
     }
-    let parsed = unsafe {
-        qf_init_ext(
-            qi,
-            qf_idx,
-            ptr::null(),
-            None,
-            Some(&mut di.di_tv),
-            errorformat,
-            // Only reached with a value, which never reads the buffer's own.
-            true,
-            false,
-            0,
-            0,
-            ptr::null(),
-            ptr::null_mut(),
-        )
-    } >= 0;
+    let parsed = qf_init_ext(
+        qi,
+        qf_idx,
+        Input::Value(lines),
+        None,
+        errorformat.as_cstr(),
+        // Only reached with a value, which never reads the buffer's own.
+        true,
+        false,
+        None,
+        None,
+    ) >= 0;
     parsed.then_some(()).ok_or(QfError::Unparsable)
 }
 
 /// Attach an arbitrary value to the list, which `getqflist({'context': 1})`
 /// hands back.
-///
-/// Cannot fail: any value at all is a legal context. Upstream declared it
-/// `int` and answered `OK`.
-fn qf_setprop_context(mut qfl: Qfl, di: &DictItem) {
-    // SAFETY: the list's own context slot, and the caller's entry.
-    let ctx: *mut TypVal = unsafe {
-        tv_free(qfl.qf_ctx.as_mut());
-        let ctx: *mut TypVal = xcalloc(1, size_of::<TypVal>()).cast();
-        tv_copy(&di.di_tv, &mut *ctx);
-        ctx
-    };
-    qfl.qf_ctx = ctx;
+fn qf_setprop_context(mut qfl: Qfl, context: &TypVal) {
+    let mut ctx = Box::new(TypVal::Unknown);
+    tv_copy(context, &mut ctx);
+    let old = qfl.context.replace(ctx);
+    drop(old);
 }
 
-/// Move the list's cursor to entry `di`, or to the last entry for `"$"`.
-fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: &DictItem) -> Result<(), QfError> {
-    // SAFETY: forwarded from the caller -- a live dictionary entry.
-    let mut newidx = unsafe {
-        if di.di_tv.v_type() == VAR_STRING
-            && !di.di_tv.string_or_null().is_null()
-            && cstr::eq_bytes(di.di_tv.string_or_null(), b"$")
-        {
-            // Select the last entry in the list.
-            qfl.qf_count
-        } else {
-            let Ok(idx) = tv_get_number_chk(&di.di_tv) else {
-                return Err(QfError::BadValue);
-            };
-            idx as c_int
-        }
+/// Move the list's cursor to entry `idx`, or to the last entry for `"$"`.
+fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, idx: &TypVal) -> Result<(), QfError> {
+    let mut newidx = if idx.v_type() == VAR_STRING
+        && !idx.string_or_null().is_null()
+        && string_bytes(idx) == b"$"
+    {
+        // Select the last entry in the list.
+        qfl.count()
+    } else {
+        let Ok(n) = tv_get_number_chk(idx) else {
+            return Err(QfError::BadValue);
+        };
+        c_int::try_from(n).unwrap_or(if n < 0 { c_int::MIN } else { c_int::MAX })
     };
 
     if newidx < 1 {
         return Err(QfError::BadValue);
     }
-    newidx = newidx.min(qfl.qf_count);
+    newidx = newidx.min(qfl.count());
 
-    let old_qfidx = qfl.qf_index;
-    // SAFETY: a live list and an index inside it.
-    let Some(qf_ptr) = get_nth_entry(qfl, newidx, &mut newidx) else {
+    let old_qfidx = qfl.index;
+    let Ok(at) = get_nth_entry(&qfl, newidx, &mut newidx) else {
         return Err(QfError::BadValue);
     };
-    qfl.qf_ptr = qf_ptr.raw();
-    qfl.qf_index = newidx;
+    qfl.cursor = at;
+    qfl.index = newidx;
 
     // Update the displayed quickfix list.
-    // SAFETY: a live stack always has a current list.
-    if unsafe { (*qf_get_curlist(qi.raw())).qf_id } == qfl.qf_id {
+    if qi.current_list().id == qfl.id {
         qf_win_pos_update(qi, old_qfidx);
     }
     Ok(())
 }
 
+/// Set the list's `'quickfixtextfunc'` callback from `value`.
+fn qf_setprop_qftf(mut qfl: Qfl, value: &TypVal) -> Result<(), QfError> {
+    if check_secure() {
+        return Err(QfError::Forbidden);
+    }
+    // Made before the list's is let go: making one can evaluate a name.
+    let cb = Callback::from_typval(value);
+    let mut old = core::mem::replace(&mut qfl.text_func, Callback::None);
+    old.clear();
+    // A value that is not a callable leaves the list without one.
+    if let Some(cb) = cb {
+        qfl.text_func = cb;
+    }
+    Ok(())
+}
+
 /// `setqflist(…, {what})`: apply each property `what` names.
-///
-/// # Safety
-///
-/// `qi` must be a live stack, `what` live and `title` NUL-terminated.
-unsafe fn qf_set_properties(
-    qi: *mut QfInfo,
-    what: *const Dict,
-    action: c_int,
-    title: *mut c_char,
-) -> Result<(), QfError> {
-    // SAFETY: forwarded from the caller.
-    let mut newlist = action == ' ' as c_int || unsafe { qf_stack_empty(qi) };
-    let found = unsafe { qf_setprop_get_qfidx(qi, what, action, &mut newlist) };
+fn qf_set_properties(mut qi: Qi, what: &What, action: u8, title: &CStr) -> Result<(), QfError> {
+    let mut newlist = action == b' ' || qi.is_empty();
+    let found = qf_setprop_get_qfidx(qi, what, action, &mut newlist);
     let Some(mut qf_idx) = found else {
         return Err(QfError::NoSuchList);
     };
 
     if newlist {
-        unsafe { (*qi).qf_curlist = qf_idx };
-        unsafe { qf_new_list(qi, title) };
-        qf_idx = unsafe { (*qi).qf_curlist };
+        qi.current = qf_idx;
+        qf_new_list(qi, Some(title));
+        qf_idx = qi.current;
     }
-    let qfl = unsafe { Qfl::new(qf_get_list(qi, qf_idx)) };
+    let mut qfl = qi.slot(qf_idx);
 
     // Each key that is present overwrites the answer, so what is
     // reported is the last one's result, not the worst. A `what` that
     // named none of them is `NothingToSet` — upstream's initial `FAIL`,
     // which is why `setqflist([], 'r', {})` answers -1.
     let mut retval = Err(QfError::NothingToSet);
-    if let Some(di) = unsafe { find(what, "title") } {
-        retval = unsafe { qf_setprop_title(qi, qf_idx, what, di) };
+    if let Some(title) = &what.title {
+        retval = qf_setprop_title(qi, qf_idx, title);
     }
-    if let Some(di) = unsafe { find_mut(what, "items") } {
-        retval = unsafe { qf_setprop_items(qi, qf_idx, di, action) };
+    if let Some(items) = &what.items {
+        retval = qf_setprop_items(qi, qf_idx, items, action);
     }
-    if let Some(di) = unsafe { find_mut(what, "lines") } {
-        retval = unsafe { qf_setprop_items_from_lines(qi, qf_idx, what, di, action) };
+    if let Some(lines) = &what.lines {
+        retval = qf_setprop_items_from_lines(qi, qf_idx, what, lines, action);
     }
-    if let Some(di) = unsafe { find(what, "context") } {
-        qf_setprop_context(qfl, di);
+    if let Some(context) = &what.context {
+        qf_setprop_context(qfl, context);
         retval = Ok(());
     }
-    if let Some(di) = unsafe { find(what, "idx") } {
-        // SAFETY: the caller's live stack.
-        retval = qf_setprop_curidx(unsafe { Qi::new(qi) }, qfl, di);
+    if let Some(idx) = &what.idx {
+        retval = qf_setprop_curidx(qi, qfl, idx);
     }
-    if let Some(di) = unsafe { find(what, "quickfixtextfunc") } {
-        retval = qf_setprop_qftf(qfl, di);
+    if let Some(text_func) = &what.text_func {
+        retval = qf_setprop_qftf(qfl, text_func);
     }
 
     if newlist || retval.is_ok() {
-        unsafe { qf_list_changed(qfl.raw()) };
+        qfl.changed();
     }
     if newlist {
-        unsafe { qf_update_buffer(qi, ptr::null_mut()) };
+        qf_update_buffer(qi, None);
     }
     retval
 }
 
-/// `setqflist()` and `setloclist()`. A null `wp` means the quickfix stack.
-/// An `action` of `'f'` frees the whole stack; otherwise either `list` or
+/// `setqflist()` and `setloclist()`. `None` means the quickfix stack. An
+/// `action` of `'f'` frees the whole stack; otherwise either `list` or
 /// `what` says what to write, never both.
-///
-/// # Safety
-///
-/// `list`, `title` and `what` must be null or live.
-pub unsafe fn set_errorlist(
+pub fn set_errorlist(
     window: Option<Win>,
-    list: *mut List,
-    action: c_int,
-    title: *mut c_char,
-    what: *mut Dict,
+    list: Option<ListRef>,
+    action: u8,
+    title: &CStr,
+    what: Option<&Dict>,
 ) -> Result<(), QfError> {
     let qi = match window {
-        Some(wp) => ll_get_or_alloc_list(wp),
-        None => QfStack::Global.raw(),
+        Some(wp) => wp.location_list_or_new(),
+        None => Qi::global(),
     };
-    debug_assert!(!qi.is_null());
 
-    if action == 'f' as c_int {
+    if action == b'f' {
         // Free the entire quickfix or location list stack.
-        qf_free_stack(window, unsafe { Qi::new(qi) });
+        qf_free_stack(window, qi);
         return Ok(());
     }
 
-    if !list.is_null() && list_len(unsafe { list.as_ref() }) != 0 && !what.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    if list.as_ref().is_some_and(|list| list_len(Some(list)) != 0) && what.is_some() {
         let arg0 =
-            unsafe { c_str(gettext(c"cannot have both a list and a \"what\" argument").as_ptr()) };
+            msg_bytes(gettext(c"cannot have both a list and a \"what\" argument").to_bytes());
         semsg!("E475: Invalid argument: {arg0}");
         return Err(QfError::BadValue);
     }
 
-    incr_quickfix_busy();
-    let retval = if what.is_null() {
-        unsafe { qf_add_entries(qi, (*qi).qf_curlist, list, title, action) };
-        unsafe { qf_list_changed(qf_get_curlist(qi)) };
-        Ok(())
-    } else {
-        unsafe { qf_set_properties(qi, what, action, title) }
+    // Copies, made before anything runs: the keys of `what`, the title. The
+    // list is the caller's reference of its own.
+    let what = what.map(What::of);
+    let title = title.to_owned();
+
+    let busy = QuickfixBusy::hold();
+    let retval = match &what {
+        None => {
+            qf_add_entries(qi, qi.current, list, Some(&title), action);
+            qi.current_slot().changed();
+            Ok(())
+        }
+        Some(what) => qf_set_properties(qi, what, action, &title),
     };
-    decr_quickfix_busy();
+    drop(busy);
     retval
 }

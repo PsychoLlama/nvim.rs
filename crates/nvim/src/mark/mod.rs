@@ -79,8 +79,6 @@ use store::{Fmark, GlobalMarks, NO_VIEW, NUL_BYTE, Xfmark, mark_name};
 
 pub const GETF_SETMARK: GetFileFlags = 1;
 pub const AUGROUP_ALL: c_int = -3;
-pub const BUF_HAS_QF_ENTRY: c_int = 1;
-pub const BUF_HAS_LL_ENTRY: c_int = 2;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMTCharWise: MotionType = 0;
 pub const ARRAY_DICT_INIT: ApiDict = ApiDict::EMPTY;
@@ -119,7 +117,7 @@ pub const NMARK_LOCAL_MAX: c_int = 126;
 pub const JUMPLISTSIZE: c_int = 100;
 
 use crate::global_cell::GlobalCell;
-use crate::quickfix::qf_mark_adjust;
+use crate::quickfix::{BUF_HAS_LL_ENTRY, BUF_HAS_QF_ENTRY, qf_mark_adjust};
 
 /// An unset entry of [`namedfm`]; a `const` because `XFileMark` is not `Copy`.
 const UNSET_NAMED_MARK: XFileMark = XFileMark {

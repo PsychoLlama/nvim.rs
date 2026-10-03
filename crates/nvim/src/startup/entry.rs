@@ -70,7 +70,7 @@ use crate::os::signal::{signal_init, signal_teardown};
 use crate::os::stdpaths::appname_is_valid;
 use crate::os::time::os_realtime;
 use crate::profile::time_msg_at;
-use crate::quickfix::{qf_init_stack, qf_jump};
+use crate::quickfix::{qf_init_stack, qf_jump_to_current};
 use crate::register::get_default_register_name;
 use crate::runtime::{estack_init, load_plugins, runtime_init};
 use crate::shada::shada_read_everything;
@@ -94,7 +94,7 @@ use crate::startup::{
 use crate::state::mode::{exmode_active, restart_edit};
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
-use crate::types::{CallbackReader, IOSIZE, LineNr, List, OptInt, QfInfo, VarNumber, Vv, int64_t};
+use crate::types::{CallbackReader, IOSIZE, LineNr, List, OptInt, VarNumber, Vv, int64_t};
 use crate::ui::state::{Rows, resize_events};
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
@@ -456,7 +456,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     setpcmark();
 
     if params.edit_type == EDIT_QF as c_int {
-        unsafe { qf_jump(ptr::null_mut::<QfInfo>(), 0, 0, 0) };
+        qf_jump_to_current();
         time_msg_at(c"jump to first error");
     }
 

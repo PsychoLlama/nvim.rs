@@ -391,6 +391,14 @@ pub unsafe fn path_try_shorten_fname(full_path: *mut c_char) -> *mut c_char {
     }
 }
 
+/// [`path_try_shorten_fname`] for a name the caller holds: the part of it
+/// relative to the current directory, or the whole name.
+pub(crate) fn try_shorten_fname(full_path: &CStr) -> &CStr {
+    // SAFETY: a NUL-terminated name, which the callee only reads; it answers
+    // the name or a pointer into it, before its NUL.
+    unsafe { CStr::from_ptr(path_try_shorten_fname(full_path.as_ptr().cast_mut())) }
+}
+
 /// The part of `full_path` that names it relative to `dir_name`, or NULL
 /// when it is not under that directory at all.
 ///

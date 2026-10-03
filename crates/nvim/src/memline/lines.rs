@@ -423,6 +423,17 @@ pub unsafe fn ml_append_flags(
     unsafe { ml_append_flush(Buf::current(), lnum, line, len, flags) }
 }
 
+/// [`ml_append_buf`] for a line the caller holds: append `line` after line
+/// `lnum` of `buffer`.
+pub(crate) fn ml_append_bytes(buffer: Buf, lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
+    // A terminated copy: the length the memline takes counts the NUL.
+    let mut copy = line.to_vec();
+    copy.push(0);
+    let len = ColNr::try_from(copy.len()).expect("a line shorter than INT_MAX");
+    // SAFETY: `len` bytes, the NUL among them, owned by this call.
+    unsafe { ml_append_buf(buffer, lnum, copy.as_mut_ptr().cast(), len, false) }
+}
+
 /// [`ml_append`] for an arbitrary buffer, which must already have a memline.
 ///
 /// # Safety

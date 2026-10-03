@@ -55,6 +55,28 @@ pub(crate) struct How {
     pub set_options: bool,
 }
 
+/// Read all of `fname` into the current buffer as a new file, for a
+/// buffer that exists only to be searched (`READ_NEW | READ_DUMMY`).
+pub(crate) fn read_dummy_file(fname: &CStr) -> Result<Loaded, Failed> {
+    // A copy: the reader keeps the name it is given as writable.
+    let mut copy = fname.to_bytes_with_nul().to_vec();
+    let flags = c_int::try_from(READ_NEW | READ_DUMMY).expect("two small flags");
+    // SAFETY: a NUL-terminated copy this call owns, no short name and no
+    // command.
+    unsafe {
+        readfile(
+            copy.as_mut_ptr().cast(),
+            ptr::null_mut(),
+            0,
+            0,
+            MAXLNUM,
+            None,
+            flags,
+            false,
+        )
+    }
+}
+
 /// Read the lines of `fname` into the current buffer, after line `from`.
 ///
 /// The caller must check that `fname` is not NULL unless `READ_STDIN` is

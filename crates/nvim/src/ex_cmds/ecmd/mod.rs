@@ -217,6 +217,28 @@ enum Target {
     Editing(bool),
 }
 
+/// [`do_ecmd`] for buffer `fnum` — or a new, empty one for 0 — with no
+/// file name and no command: what the quickfix code edits with.
+pub(crate) fn edit_buffer_number(
+    fnum: c_int,
+    newlnum: LineNr,
+    flags: EcmdFlags,
+    oldwin: Option<WinId>,
+) -> Result<(), Failed> {
+    // SAFETY: both names null, which the callee reads as "none".
+    unsafe {
+        do_ecmd(
+            fnum,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            None,
+            newlnum,
+            flags,
+            oldwin,
+        )
+    }
+}
+
 /// Start editing a new file.
 ///
 /// `fnum` is the file number, or zero to use `ffname`/`sfname`.  `ffname` is

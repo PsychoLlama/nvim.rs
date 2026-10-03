@@ -6,22 +6,24 @@
 //! show. [`qf_find_win`]/[`qf_find_buf`] are how the rest of the quickfix
 //! code asks whether the window (or just its buffer) exists, and
 //! [`qf_win_pos_update`] keeps its cursor on the current entry.
-//!
-//! The window half of all this is `winlayer`'s: [`Win`] carries the window
-//! and the walks carry the lists. The quickfix half is still transpiled, so
-//! the stack and the list get a wrapper apiece here.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::buffer::find_buf;
 use crate::cursor::check_cursor;
-use crate::ex_cmds::EcmdFlags;
-use crate::ex_cmds::newlnum;
-use crate::option::boolean_optval;
-use crate::types::CmdIdx;
-use crate::types::{Failed, OptError, OptionSetFlags};
+use crate::eval::vars::set_internal_string_var_to;
+use crate::ex_cmds::{EcmdFlags, edit_buffer_number};
+use crate::option::vars::P_QFTF;
+use crate::option::{boolean_optval, callback_from_option};
+use crate::types::{OptError, OptionSetFlags};
 use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
     setwidth_win, split, tabline_rows, valid_win,
@@ -29,86 +31,11 @@ use crate::window::{
 use crate::winlayer::TabPage;
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win, tab_windows, windows};
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
-
-// ---------------------------------------------------------------------------
-// The stack and the list, which the rest of the quickfix code still hands
-// around as raw pointers.
-
-impl Qi {
-    /// `IS_QF_STACK()`: the quickfix stack, rather than a location list.
-    fn is_quickfix_stack(self) -> bool {
-        self.qfl_type == QFLT_QUICKFIX
-    }
-
-    /// `qf_get_curlist()`: the list the stack is currently on.
-    fn curlist(self) -> Qfl {
-        // SAFETY: a live stack, which always has a current list.
-        unsafe { Qfl::new(qf_get_curlist(self.raw())) }
-    }
-
-    /// `qf_stack_empty()`.
-    fn is_empty(self) -> bool {
-        // SAFETY: a live stack.
-        unsafe { qf_stack_empty(self.raw()) }
-    }
-}
-
-impl Qfl {
-    /// `qf_list_empty()`.
-    fn is_empty(self) -> bool {
-        // SAFETY: a live list.
-        unsafe { qf_list_empty(self.raw()) }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// The neighbours that are still transpiled, one wrapper each.
+use core::ffi::{CStr, c_int};
 
 /// An option value holding a string constant.
 pub(crate) const fn string_optval(text: &'static CStr) -> OptVal {
     OptVal::static_string(text)
-}
-
-/// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer
-/// when it is zero, without entering the window.
-fn load_buffer(fnum: c_int, flags: EcmdFlags, oldwin: Option<Win>) -> Result<(), Failed> {
-    let no_name = ptr::null_mut();
-    let one = newlnum::ONE as LineNr;
-    let oldwin = oldwin.map(Win::id);
-    // SAFETY: a buffer number the caller has just looked up.
-    unsafe { do_ecmd(fnum, no_name, no_name, None, one, flags, oldwin) }
-}
-
-fn set_title_var(title: *mut c_char) {
-    // SAFETY: a NUL-terminated title, into a window variable.
-    unsafe { set_internal_string_var(c"w:quickfix_title".as_ptr(), title) };
-}
-
-fn busy_end() {
-    decr_quickfix_busy();
-}
-
-/// `qf_fill_buffer()`: rewrite `buffer` from `qfl`.
-fn fill_buffer(qfl: Qfl, buffer: Buf, win: Win) {
-    // SAFETY: a live list, buffer and window handle.
-    unsafe { qf_fill_buffer(qfl.raw(), buffer, ptr::null_mut(), win.handle) };
-}
-
-fn is_location_list_window(window: Win) -> bool {
-    is_ll_window(window)
-}
-
-fn clamp_cursor(window: Win) {
-    // SAFETY: a live window.
-    check_cursor(window);
-}
-
-/// The stack the command `cmdidx` names, or none when there is not one.
-fn stack_of(cmdidx: CmdIdx, print_emsg: bool) -> Option<Qi> {
-    let qi = qf_cmd_get_stack(cmdidx, print_emsg);
-    (!qi.is_null()).then_some(unsafe { Qi::new(qi) })
 }
 
 /// Call `wanted` on every window of every tab page, answering the first one
@@ -123,12 +50,12 @@ pub(crate) fn find_tab_win(mut wanted: impl FnMut(Win) -> bool) -> Option<Win> {
 /// Whether `win` is showing the stack `qi`.
 ///
 /// A window showing the quickfix buffer has no `w_llist_ref`; one showing a
-/// location list buffer points at the list it shows.
+/// location list buffer names the stack it shows.
 fn is_qf_win(win: Win, qi: Qi) -> bool {
     win.surviving_buffer().is_some()
-        && is_qf_buffer(win)
-        && (qi.is_quickfix_stack() && win.w_llist_ref.is_null()
-            || qi.qfl_type == QFLT_LOCATION && ptr::eq(win.w_llist_ref, qi.raw()))
+        && win.shows_quickfix_buffer()
+        && (qi.is_quickfix() && win.w_llist_ref.is_none()
+            || qi.kind == QFLT_LOCATION && win.w_llist_ref == Some(qi.id()))
 }
 
 /// The window showing `qi` in the current tab page, if there is one.
@@ -138,12 +65,12 @@ pub(crate) fn qf_find_win(qi: Qi) -> Option<Win> {
 
 /// The buffer the stack is shown in, from any tab page, if there is one.
 pub(crate) fn qf_find_buf(mut qi: Qi) -> Option<Buf> {
-    if qi.qf_bufnr != INVALID_QFBUFNR {
-        if let Some(qfbuf) = find_buf(qi.qf_bufnr) {
+    if qi.bufnr != INVALID_QFBUFNR {
+        if let Some(qfbuf) = find_buf(qi.bufnr) {
             return Some(qfbuf);
         }
         // The buffer is no longer present.
-        qi.qf_bufnr = INVALID_QFBUFNR;
+        qi.bufnr = INVALID_QFBUFNR;
     }
     tab_windows()
         .find(|&win| is_qf_win(win, qi))
@@ -188,9 +115,9 @@ fn set_cwindow_options() {
     set_option_value_give_err(kOptBufhidden, string_optval(c"hide"), local);
     // RESET_BINDING: no 'scrollbind'/'cursorbind', and never a diff.
     let mut win = Win::current();
-    win.w_onebuf_opt.wo_scb = false as c_int;
-    win.w_onebuf_opt.wo_crb = false as c_int;
-    win.w_onebuf_opt.wo_diff = false as c_int;
+    win.w_onebuf_opt.wo_scb = c_int::from(false);
+    win.w_onebuf_opt.wo_crb = c_int::from(false);
+    win.w_onebuf_opt.wo_diff = c_int::from(false);
     set_option_value_give_err(kOptFoldmethod, string_optval(c"manual"), local);
 }
 
@@ -201,8 +128,8 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     let prevtab = TabPage::current_raw();
     // Looked up before the split, and read after it: upstream does the same,
     // so an autocommand that wipes the quickfix buffer during `win_split`
-    // leaves this reading a freed buffer either way.
-    let qf_buf = qf_find_buf(qi);
+    // leaves this naming a buffer that is gone either way.
+    let qf_buf = qf_find_buf(qi).map(|buf| buf.handle);
     // The current window becomes the previous window afterwards.
     let win = Win::current().id();
 
@@ -211,38 +138,37 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     }
     // RESET_BINDING.
     let mut new = Win::current();
-    new.w_onebuf_opt.wo_scb = false as c_int;
-    new.w_onebuf_opt.wo_crb = false as c_int;
+    new.w_onebuf_opt.wo_scb = c_int::from(false);
+    new.w_onebuf_opt.wo_crb = c_int::from(false);
 
-    if qi.qfl_type == QFLT_LOCATION {
+    if qi.kind == QFLT_LOCATION {
         // The location list window references the stack it shows.
-        new.w_llist_ref = qi.raw();
-        qi.qf_refcount.retain();
+        new.w_llist_ref = Some(qi.id());
+        qi.refcount.retain();
     }
 
     // Don't store info when the split above left us in another window.
-    let oldwin = (oldwin == Win::current()).then_some(oldwin);
+    let oldwin = (oldwin == Win::current()).then(|| oldwin.id());
     let hide = EcmdFlags::HIDE | EcmdFlags::NOWINENTER;
     match qf_buf {
         // Use the existing quickfix buffer.
-        Some(buf) => {
-            let flags = hide | EcmdFlags::OLDBUF;
-            if load_buffer(buf.handle, flags, oldwin).is_err() {
+        Some(bufnr) => {
+            if edit_buffer_number(bufnr, 1, hide | EcmdFlags::OLDBUF, oldwin).is_err() {
                 return false;
             }
         }
         // Create a new quickfix buffer and remember its number.
         None => {
-            if load_buffer(0, hide, oldwin).is_err() {
+            if edit_buffer_number(0, 1, hide, oldwin).is_err() {
                 return false;
             }
-            qi.qf_bufnr = Buf::current().handle;
+            qi.bufnr = Buf::current().handle;
         }
     }
 
     // Set the options for the quickfix buffer/window even if the buffer
     // was already present: an autocommand may have :bdeleted it since.
-    if !is_qf_buffer(Win::current()) {
+    if !Win::current().shows_quickfix_buffer() {
         set_cwindow_options();
     }
 
@@ -251,7 +177,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     if TabPage::current_raw() == prevtab && Win::current().w_width == Columns.get() {
         setheight_win(height, Win::current());
     }
-    Win::current().w_onebuf_opt.wo_wfh = true as c_int; // 'winfixheight'
+    Win::current().w_onebuf_opt.wo_wfh = c_int::from(true); // 'winfixheight'
     if let Some(win) = valid_win(win) {
         prevwin.set(Some(win.id()));
     }
@@ -267,38 +193,40 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
 fn split_flags(qi: Qi) -> c_int {
     let mut flags = if cmdmod.with(|m| m.cmod_split) != 0 {
         0
-    } else if qi.is_quickfix_stack() {
-        WSP_BOT as c_int
+    } else if qi.is_quickfix() {
+        WSP_BOT.cast_signed()
     } else {
-        WSP_BELOW as c_int
+        WSP_BELOW.cast_signed()
     };
-    flags |= WSP_NEWLOC as c_int;
-    if qi.is_quickfix_stack() {
-        flags |= WSP_QUICKFIX as c_int;
+    flags |= WSP_NEWLOC.cast_signed();
+    if qi.is_quickfix() {
+        flags |= WSP_QUICKFIX.cast_signed();
     }
     flags
 }
 
-/// Set `w:quickfix_title` from the list's title, if it has one.
+/// Set `w:quickfix_title` from the title of `qi`'s current list, if it has
+/// one.
 ///
 /// Must be called with the quickfix window current.
-fn set_list_title(qfl: Qfl) {
-    if !qfl.qf_title.is_null() {
-        set_title_var(qfl.qf_title);
+fn set_list_title(qi: Qi) {
+    // A copy: setting a variable can run a watcher.
+    let title = qi.current_list().title.clone();
+    if let Some(title) = title {
+        set_internal_string_var_to(c"w:quickfix_title", title.as_cstr());
     }
 }
 
 /// Set `w:quickfix_title` in every window showing the stack, in every tab
 /// page.
 pub(crate) fn qf_update_win_titlevar(qi: Qi) {
-    let qfl = qi.curlist();
     let save_curwin = Win::current();
     // `set_list_title` only writes a window variable, so the window list is
     // stable across the walk.
     for win in tab_windows() {
         if is_qf_win(win, qi) {
             win.make_current();
-            set_list_title(qfl);
+            set_list_title(qi);
         }
     }
     save_curwin.make_current();
@@ -306,70 +234,71 @@ pub(crate) fn qf_update_win_titlevar(qi: Qi) {
 
 /// `:copen`/`:lopen`: open a window showing the list.
 pub fn ex_copen(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = stack_of(excmd.cmdidx, true) else {
+    let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
-    incr_quickfix_busy();
+    let busy = QuickfixBusy::hold();
 
-    // SAFETY: the caller's promise -- a live command.
     let (addr_count, line2) = (excmd.addr_count, excmd.line2);
     let height = if addr_count != 0 {
         line2 as c_int
     } else {
-        QF_WINHEIGHT as c_int
+        QF_WINHEIGHT.cast_signed()
     };
     reset_visual_and_resel(); // stop Visual mode
 
     // Find an existing quickfix window, or open a new one.
-    let vertical = cmdmod.with(|m| m.cmod_split) & WSP_VERT as c_int != 0;
+    let vertical = cmdmod.with(|m| m.cmod_split) & WSP_VERT.cast_signed() != 0;
     let found =
         cmdmod.with(|m| m.cmod_tab) == 0 && goto_cwindow(qi, addr_count != 0, height, vertical);
     if !found && !open_new_cwindow(qi, height) {
-        busy_end();
+        drop(busy);
         return;
     }
 
-    let qfl = qi.curlist();
-    set_list_title(qfl);
+    set_list_title(qi);
     // Save the current index here: updating the buffer may free the list.
-    let lnum = qfl.qf_index;
+    let lnum = qi.current_list().index;
 
-    fill_buffer(qfl, Buf::current(), Win::current());
+    qf_fill_buffer(
+        qi.current_slot(),
+        Buf::current(),
+        None,
+        Win::current().handle,
+    );
 
-    busy_end();
+    drop(busy);
 
     let mut win = Win::current();
-    win.w_cursor.lnum = lnum as LineNr;
+    win.w_cursor.lnum = LineNr::from(lnum);
     win.w_cursor.col = 0;
-    clamp_cursor(win);
+    check_cursor(win);
     win.update_topline(); // scroll to show the line
 }
 
 /// `:cwindow`/`:lwindow`: open the window if there is something to show,
 /// close it if there is not.
 pub fn ex_cwindow(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = stack_of(excmd.cmdidx, true) else {
+    let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
-    let qfl = qi.curlist();
     let win = qf_find_win(qi);
-    if qi.is_empty() || qfl.qf_nonevalid || qfl.is_empty() {
+    let nothing = {
+        let qfl = qi.current_list();
+        qi.is_empty() || qfl.no_valid || qfl.is_empty()
+    };
+    if nothing {
         if win.is_some() {
-            // SAFETY: the caller's promise -- a live command.
             ex_cclose(excmd);
         }
     } else if win.is_none() {
-        // SAFETY: the caller's promise -- a live command.
         ex_copen(excmd);
     }
 }
 
 /// `:cclose`/`:lclose`: close the window showing the list.
 pub fn ex_cclose(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = stack_of(excmd.cmdidx, false) else {
+    let Some(qi) = stack_for_cmd(excmd.cmdidx, false) else {
         return;
     };
     if let Some(win) = qf_find_win(qi) {
@@ -396,8 +325,7 @@ fn win_goto_line(mut win: Win, lnum: LineNr) {
 
 /// `:cbottom`/`:lbottom`: put the cursor on the last line of the window.
 pub fn ex_cbottom(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = stack_of(excmd.cmdidx, true) else {
+    let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
     if let Some(win) = qf_find_win(qi) {
@@ -408,42 +336,46 @@ pub fn ex_cbottom(excmd: &mut ExArg) {
     }
 }
 
-/// The line of the quickfix window holding the current entry, which is what
-/// the display code highlights.
-///
-/// `window` must be showing a quickfix buffer.
-pub fn qf_current_entry(window: Win) -> LineNr {
-    let mut qi = QfStack::Global.qi();
-    if is_location_list_window(window) {
-        // In the location list window, the referenced list is the one.
-        qi = QfStack::Local(window.w_llist_ref.cast()).qi();
+impl Win {
+    /// The line of this quickfix window holding the current entry, which is
+    /// what the display code highlights. The window must be showing a
+    /// quickfix buffer.
+    pub(crate) fn quickfix_current_line(self) -> LineNr {
+        let qi = match self.w_llist_ref {
+            // In a location list window, the referenced list is the one.
+            Some(shown) if self.is_location_list_window() => shown.stack(),
+            _ => Qi::global(),
+        };
+        LineNr::from(qi.current_list().index)
     }
-    qi.curlist().qf_index as LineNr
 }
 
 /// Put the cursor of the quickfix window on the current entry, answering
 /// whether there is such a window.
 pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
-    let qf_index = qi.curlist().qf_index;
+    let qf_index = qi.current_list().index;
     let Some(mut win) = qf_find_win(qi) else {
         return false;
     };
-    if qf_index as LineNr <= win.buffer().b_ml.ml_line_count && old_qf_index != qf_index {
+    if LineNr::from(qf_index) <= win.buffer().b_ml.ml_line_count && old_qf_index != qf_index {
         // Both the old and the new line need redrawing.
-        win.w_redraw_top = old_qf_index.min(qf_index) as LineNr;
-        win.w_redraw_bot = old_qf_index.max(qf_index) as LineNr;
-        win_goto_line(win, qf_index as LineNr);
+        win.w_redraw_top = LineNr::from(old_qf_index.min(qf_index));
+        win.w_redraw_bot = LineNr::from(old_qf_index.max(qf_index));
+        win_goto_line(win, LineNr::from(qf_index));
     }
     true
 }
 
 /// Process the `'quickfixtextfunc'` option value.
 pub fn did_set_quickfixtextfunc(_args: &mut OptSet) -> Result<(), OptError> {
-    // SAFETY: the option's own value and its callback slot.
-    if p_qftf(|value| unsafe { option_set_callback_func(value.as_ptr().cast_mut(), global_qftf()) })
-        .is_err()
-    {
+    // A copy, and a fresh callback swapped in afterwards: the value can be
+    // an expression, and evaluating it can run user code that sets the
+    // option again.
+    let value = P_QFTF.get();
+    let Ok(cb) = callback_from_option(value.as_cstr()) else {
         return Err((e_invarg).into());
-    }
+    };
+    let mut old = qftf_cb.with_mut(|slot| core::mem::replace(slot, cb.unwrap_or(Callback::None)));
+    old.clear();
     Ok(())
 }

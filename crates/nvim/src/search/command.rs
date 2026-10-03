@@ -440,6 +440,30 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
     1
 }
 
+/// Search forward for `pattern` from the cursor, as `/pattern/` would but
+/// keeping the last search pattern and its direction (`SEARCH_KEEP`).
+/// Answers whether it was found; the cursor is on the match when it was.
+pub(crate) fn search_forward_keep(pattern: &[u8]) -> bool {
+    // A copy, terminated: the search may cut the pattern at a delimiter.
+    let mut copy = pattern.to_vec();
+    copy.push(0);
+    // SAFETY: a NUL-terminated copy this call owns, its length, and no
+    // operator or search state.
+    let found = unsafe {
+        do_search(
+            ptr::null_mut(),
+            c_int::from(b'/'),
+            c_int::from(b'/'),
+            copy.as_mut_ptr().cast(),
+            pattern.len(),
+            1,
+            SEARCH_KEEP,
+            ptr::null_mut(),
+        )
+    };
+    found != 0
+}
+
 /// Search for `pat`, `count` times, from the cursor.
 ///
 /// `dirc` is `'/'` or `'?'`, or 0 to reuse the direction of the previous

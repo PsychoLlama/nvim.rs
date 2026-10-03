@@ -80,6 +80,7 @@
 
 use core::ops::{Deref, DerefMut};
 
+use crate::id_table::{IdTable, TableId};
 use crate::types::CmdlineInfo;
 
 /// A `*mut T` the caller has promised is live, with checked field access.
@@ -162,6 +163,24 @@ impl<T> DerefMut for Live<T> {
     fn deref_mut(&mut self) -> &mut T {
         // SAFETY: as [`Live::deref`].
         unsafe { &mut *self.0 }
+    }
+}
+
+impl<T, M> IdTable<T, M> {
+    /// A view of `id`'s value, at the fixed address the table keeps it at.
+    ///
+    /// The registries' bargain, for a table: a value the table holds is
+    /// live, so looking one up is safe, and a view kept past the value's
+    /// removal is what the re-entry rule in [`crate::winlayer`]'s docs is
+    /// there to prevent — re-find the value by its id after anything that
+    /// can run user code, as for a [`Win`](crate::winlayer::Win).
+    ///
+    /// # Panics
+    /// When `id`'s value is gone.
+    pub(crate) fn view(&self, id: TableId<T>) -> Live<T> {
+        // SAFETY: the table owns the value at this address until `id`'s slot
+        // is emptied -- see above.
+        unsafe { Live::new(self.address(id)) }
     }
 }
 

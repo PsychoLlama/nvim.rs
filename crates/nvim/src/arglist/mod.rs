@@ -43,14 +43,14 @@ use crate::fileio::file_pat_to_reg_pat;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mark::{setmark, setpcmark};
-use crate::memory::{xcalloc, xfree, xstrdup};
+use crate::memory::{XString, xcalloc, xfree, xstrdup};
 use crate::normal::reset_visual_and_resel;
 use crate::option::magic_isset;
 use crate::option::vars::{P_EA, p_ea, p_fic, p_tpm};
 use crate::os::input::os_breakcheck;
 use crate::path::{
-    ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,
-    path_full_compare,
+    ExpandFlags, expand_wildcards, fix_fname, free_wild, full_name_save, gen_expand_wildcards,
+    path_fnamecmp, path_full_compare,
 };
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{Failed, *};
@@ -457,6 +457,33 @@ const ANY_NAME: ExpandFlags = ExpandFlags::DIR
     .or(ExpandFlags::FILE)
     .or(ExpandFlags::ADDSLASH)
     .or(ExpandFlags::NOTFOUND);
+
+/// [`get_arglist_exp`] over a copy of `arg`, with `'wildignore'` applied:
+/// the file names the arguments expand to, or `None` when the expansion
+/// failed.
+pub(crate) fn expand_file_args(arg: &CStr) -> Option<Vec<XString>> {
+    // A copy: the split terminates each argument in place.
+    let mut copy = arg.to_bytes_with_nul().to_vec();
+    let mut count: c_int = 0;
+    let mut names: *mut *mut c_char = ptr::null_mut();
+    // SAFETY: a NUL-terminated copy this call owns, and two locals.
+    unsafe {
+        get_arglist_exp(
+            copy.as_mut_ptr().cast(),
+            &raw mut count,
+            &raw mut names,
+            true,
+        )
+    }
+    .ok()?;
+    let files = (0..usize::try_from(count).unwrap_or(0))
+        // SAFETY: `count` NUL-terminated names in the array just answered.
+        .map(|at| XString::from_cstr(unsafe { CStr::from_ptr(*names.add(at)) }))
+        .collect();
+    // SAFETY: the array and names the expansion answered, given back once.
+    unsafe { free_wild(count, names) };
+    Some(files)
+}
 
 /// # Safety
 ///

@@ -136,12 +136,8 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
     let title = cstr::owned(&title);
     // Copies: `qf_init` reads a file and fires autocommands.
     let (ef, efm, enc) = (P_EF.get(), P_EFM.get(), P_MENC.get());
-    let (ef, efm, enc) = (
-        ef.as_ptr().cast_mut(),
-        efm.as_ptr().cast_mut(),
-        enc.as_ptr().cast_mut(),
-    );
-    if unsafe { qf_init(None, ef, efm, true, 1, title.as_ptr().cast_mut(), enc) } < 0 {
+    let (ef, efm, enc) = (ef.as_cstr(), efm.as_cstr(), enc.as_cstr());
+    if qf_init(None, ef, efm, true, true, Some(&title), Some(enc)) < 0 {
         msg_putchar('\n' as c_int);
         os_exit(3);
     }

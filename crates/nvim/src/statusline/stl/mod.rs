@@ -277,7 +277,7 @@ impl Env {
         if !buf_is_quickfix(Some(self.buf)) {
             return;
         }
-        let msg = if self.win.w_llist_ref.is_null() {
+        let msg = if self.win.w_llist_ref.is_none() {
             msg_qflist.as_ptr().cast_mut()
         } else {
             msg_loclist.as_ptr().cast_mut()

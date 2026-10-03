@@ -32,7 +32,7 @@ use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_
 use crate::path::PATHSEP;
 use crate::path::path_full_compare;
 use crate::profile::time_msg_at;
-use crate::quickfix::qf_jump;
+use crate::quickfix::qf_jump_to_current;
 use crate::runtime::state::{
     DOSO_NONE, DOSO_VIMRC, ETYPE_ARGS, SID_CARG, SID_CMDARG, current_sctx,
 };
@@ -40,7 +40,7 @@ use crate::runtime::{do_source, estack_pop, estack_push};
 use crate::startup::args::execute_env;
 use crate::startup::{EDIT_QF, MainParams, SYS_VIMRC_FILE, VIMRC_FILE, silent_mode};
 use crate::state::mode::exmode_active;
-use crate::types::{FAIL, OK, QfInfo, ScriptId, lua_State, size_t};
+use crate::types::{FAIL, OK, ScriptId, lua_State, size_t};
 
 /// The parameter block `main` filled in, which outlives every call here.
 type Mp = Live<MainParams>;
@@ -120,7 +120,7 @@ pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
     }
     if parm.edit_type == EDIT_QF as c_int {
         // `-q`: the commands may have changed the quickfix list.
-        unsafe { qf_jump(ptr::null_mut::<QfInfo>(), 0, 0, 0) };
+        qf_jump_to_current();
     }
 
     time_msg_at(c"executing command arguments");

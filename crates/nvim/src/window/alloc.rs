@@ -33,7 +33,6 @@ use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
 use crate::option::vars::p_ch;
 use crate::option::{clear_winopt, init_winopt_strings};
-use crate::quickfix::qf_free_all;
 use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
@@ -328,7 +327,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     clear_matches(window);
     // SAFETY: as above.
     unsafe { free_jumplist(window) };
-    qf_free_all(Some(window));
+    window.free_location_lists();
     free(window.w_p_cc_cols);
     free_grid(window, false);
     if win_valid_any_tab(window.id()) {

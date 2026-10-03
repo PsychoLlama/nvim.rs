@@ -50,7 +50,7 @@ use crate::mbyte::{
     utf_iscomposing_first, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memline::{Lines, decl, inc, incl, ml_get, ml_get_len};
-use crate::memory::{XString, xfree, xmalloc, xstrlcpy};
+use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::state::{
     bot_top_msg, called_emsg, cmd_silent, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row,
     msg_scrolled, msg_silent, top_bot_msg,

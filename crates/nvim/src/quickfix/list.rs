@@ -1,18 +1,14 @@
 //! One list, and the entries in it.
 //!
 //! [`qf_new_list`] pushes a list onto a stack and [`qf_add_entry`] appends
-//! an entry to it. The entries are a doubly linked list of `QfLine`
-//! hanging off `qf_start`/`qf_last`, with `qf_ptr`/`qf_index` marking the
-//! one `:cc` would jump to.
+//! an entry to it. A list's entries are a `Vec`, with the list's `cursor`
+//! and `index` marking the one `:cc` would jump to.
 //!
 //! [`copy_loclist`] is what makes a location list follow a window that was
 //! split, and [`qf_mark_adjust`] moves entry line numbers when the buffer
 //! they point into is edited.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -22,60 +18,15 @@
 )]
 
 use super::*;
-use crate::cstr;
+use crate::memory::XString;
+use crate::path::{fixed_fname, try_shorten_fname};
 use crate::types::VAR_UNKNOWN;
-use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
-
-/// The id the next list created is given. Ids are never reused, so a
-/// caller that saved one can tell whether the list it saw is still there.
-static last_qf_id: GlobalCell<c_uint> = GlobalCell::new(0);
-
-/// A list slot that has never been used.
-pub(crate) fn empty_list() -> QfList {
-    // SAFETY: every field is an integer, a bool, a raw pointer, or the
-    // `Callback` whose zero discriminant is `Callback::None` and whose payload
-    // is a pointer either way.
-    unsafe { core::mem::zeroed() }
-}
-
-/// Whether the list holds no entries. A null list counts as empty.
-///
-/// # Safety
-///
-/// `qfl` must point at a live `QfList`.
-#[inline]
-pub(crate) unsafe fn qf_list_empty(qfl: *const QfList) -> bool {
-    // SAFETY: the caller's list, which may be null.
-    unsafe { qfl.is_null() || (*qfl).qf_count <= 0 }
-}
-
-/// Whether the list holds at least one entry naming a real position.
-///
-/// # Safety
-///
-/// `qfl` must point at a live `QfList`.
-#[inline]
-pub(crate) unsafe fn qf_list_has_valid_entries(qfl: *const QfList) -> bool {
-    // SAFETY: forwarded from the caller.
-    unsafe { !qf_list_empty(qfl) && !(*qfl).qf_nonevalid }
-}
-
-/// Note that the list changed, so that a command holding a pointer into it
-/// can tell it has to start over.
-///
-/// # Safety
-///
-/// `qfl` must be a live list.
-pub(crate) unsafe fn qf_list_changed(qfl: *mut QfList) {
-    // SAFETY: forwarded from the caller.
-    unsafe { (*qfl).qf_changedtick += 1 };
-}
+use core::ffi::{CStr, c_char, c_int};
 
 /// Report that the list moved under a command that was in the middle of
 /// using it: E925 for a quickfix list, E926 for a location list.
-pub(crate) fn emsg_list_changed(qfl_type: QfListType) {
-    if qfl_type == QFLT_QUICKFIX {
+pub(crate) fn emsg_list_changed(kind: QfListType) {
+    if kind == QFLT_QUICKFIX {
         emsg(gettext(E_QUICKFIX_LIST_CHANGED));
     } else {
         emsg(gettext(E_LOCATION_LIST_CHANGED));
@@ -87,51 +38,43 @@ pub(crate) fn emsg_list_changed(qfl_type: QfListType) {
 /// Lists newer than the current one are dropped first, so that `:colder`
 /// followed by a fresh `:grep` browses like a tree rather than growing a
 /// second branch. When the stack is full the oldest list goes instead.
-///
-/// # Safety
-///
-/// `qi` must be a live stack, and `qf_title` null or NUL-terminated.
-pub(crate) unsafe fn qf_new_list(qi: *mut QfInfo, qf_title: *const c_char) {
-    // SAFETY: forwarded from the caller.
-    while unsafe { (*qi).qf_listcount } > unsafe { (*qi).qf_curlist } + 1 {
-        unsafe { (*qi).qf_listcount -= 1 };
-        unsafe { qf_free(qf_get_list(qi, (*qi).qf_listcount)) };
+pub(crate) fn qf_new_list(mut qi: Qi, title: Option<&CStr>) {
+    while qi.list_count > qi.current + 1 {
+        qi.list_count -= 1;
+        qf_free(qi.slot(qi.list_count));
     }
-    if unsafe { (*qi).qf_listcount } == unsafe { (*qi).max_count() } {
-        unsafe { qf_pop_stack(qi, false) };
-        unsafe { (*qi).qf_curlist = (*qi).qf_listcount - 1 };
+    if qi.list_count == qi.max_count() {
+        pop_stack(qi, false);
+        qi.current = qi.list_count - 1;
     } else {
-        unsafe { (*qi).qf_curlist = (*qi).qf_listcount };
-        unsafe { (*qi).qf_listcount += 1 };
+        qi.current = qi.list_count;
+        qi.list_count += 1;
     }
-    let qfl = unsafe { qf_get_curlist(qi) };
-    unsafe { *qfl = empty_list() };
-    unsafe { qf_store_title(qfl, qf_title) };
-    unsafe { (*qfl).qfl_type = (*qi).qfl_type };
-    last_qf_id.set(last_qf_id.get().wrapping_add(1));
-    unsafe { (*qfl).qf_id = last_qf_id.get() };
-    unsafe { (*qfl).qf_has_user_data = false };
+    let kind = qi.kind;
+    let mut qfl = qi.current_slot();
+    *qfl = QfList::new();
+    qfl.title = title.map(XString::from_cstr);
+    qfl.kind = kind;
+    qfl.id = next_list_id();
 }
 
 /// Everything one new entry is made of.
 ///
 /// This is the borrowed form: the strings are the caller's and are copied
-/// into the entry, so nothing here is freed. [`Fields::entry`] builds one
-/// from a parsed line; the other producers — `:vimgrep`, `:helpgrep`,
-/// `setqflist()` and [`copy_loclist_entries`] — fill it in themselves,
-/// because their names and messages come from buffers and dictionaries
-/// rather than from the fixed field buffers a parse writes into.
-pub(crate) struct NewEntry {
-    /// The directory `fname` is relative to, from a `%D` line; may be null.
-    pub(crate) dir: *mut c_char,
-    /// The file the entry names, or null. Ignored when `bufnum` is set.
-    pub(crate) fname: *mut c_char,
-    /// The module name to show instead of the file name; may be null.
-    pub(crate) module: *mut c_char,
+/// into the entry. [`Fields::entry`] builds one from a parsed line; the
+/// other producers — `:vimgrep`, `:helpgrep` and `setqflist()` — fill it in
+/// themselves.
+pub(crate) struct NewEntry<'a> {
+    /// The directory `fname` is relative to, from a `%D` line.
+    pub(crate) dir: Option<&'a CStr>,
+    /// The file the entry names. Ignored when `bufnum` is set.
+    pub(crate) fname: Option<&'a CStr>,
+    /// The module name to show instead of the file name.
+    pub(crate) module: Option<&'a CStr>,
     /// The buffer the entry names, or 0 to resolve `dir`/`fname` instead.
     pub(crate) bufnum: c_int,
-    /// The text shown for the entry. Never null.
-    pub(crate) mesg: *mut c_char,
+    /// The text shown for the entry.
+    pub(crate) mesg: &'a CStr,
     pub(crate) lnum: LineNr,
     pub(crate) end_lnum: LineNr,
     pub(crate) col: c_int,
@@ -141,24 +84,24 @@ pub(crate) struct NewEntry {
     /// caller gave and `getqflist()` reports it back.
     pub(crate) vis_col: c_char,
     /// A search pattern to find the position with, instead of `lnum`.
-    pub(crate) pattern: *mut c_char,
+    pub(crate) pattern: Option<&'a CStr>,
     /// The error number, from `%n`.
     pub(crate) nr: c_int,
     /// The error type: `e`, `w`, `i`, `n`, or 1 for a help entry.
     pub(crate) kind: c_char,
-    /// Arbitrary value a `setqflist()` caller attached; may be null.
-    pub(crate) user_data: *mut TypVal,
+    /// Arbitrary value a `setqflist()` caller attached.
+    pub(crate) user_data: Option<&'a TypVal>,
     /// The entry names a real position and can be jumped to.
     pub(crate) valid: bool,
 }
 
-impl NewEntry {
+impl<'a> NewEntry<'a> {
     /// An entry naming nothing, for the callers that set only a few fields.
-    pub(crate) fn new(mesg: *mut c_char) -> NewEntry {
+    pub(crate) fn new(mesg: &'a CStr) -> NewEntry<'a> {
         NewEntry {
-            dir: ptr::null_mut(),
-            fname: ptr::null_mut(),
-            module: ptr::null_mut(),
+            dir: None,
+            fname: None,
+            module: None,
             bufnum: 0,
             mesg,
             lnum: 0,
@@ -166,12 +109,58 @@ impl NewEntry {
             col: 0,
             end_col: 0,
             vis_col: 0,
-            pattern: ptr::null_mut(),
+            pattern: None,
             nr: 0,
             kind: 0,
-            user_data: ptr::null_mut(),
+            user_data: None,
             valid: true,
         }
+    }
+
+    /// The entry, with every string copied — but not yet the buffer it
+    /// names, which takes listing a buffer and so running autocommands.
+    fn to_entry(&self) -> QfEntry {
+        let mut user_data = TypVal::Unknown;
+        if let Some(data) = self.user_data.filter(|data| data.v_type() != VAR_UNKNOWN) {
+            tv_copy(data, &mut user_data);
+        }
+        QfEntry {
+            lnum: self.lnum,
+            end_lnum: self.end_lnum,
+            fnum: 0,
+            col: self.col,
+            end_col: self.end_col,
+            nr: self.nr,
+            module: dup_unless_empty(self.module),
+            fname: None,
+            pattern: dup_unless_empty(self.pattern),
+            text: XString::from_cstr(self.mesg),
+            viscol: self.vis_col,
+            cleared: false,
+            // 1 marks a help entry; anything else that cannot be printed is
+            // reported as no type at all.
+            kind: if self.kind != 1 && !vim_isprintc(c_int::from(self.kind)) {
+                0
+            } else {
+                self.kind
+            },
+            user_data,
+            valid: self.valid,
+        }
+    }
+}
+
+/// A copy of the string, or nothing when it is absent or empty.
+fn dup_unless_empty(s: Option<&CStr>) -> Option<XString> {
+    s.filter(|s| !s.is_empty()).map(XString::from_cstr)
+}
+
+/// Which of a buffer's `b_has_qf_entry` bits a list's entries set.
+pub(crate) fn has_entry_flag(kind: QfListType) -> c_int {
+    if kind == QFLT_QUICKFIX {
+        BUF_HAS_QF_ENTRY
+    } else {
+        BUF_HAS_LL_ENTRY
     }
 }
 
@@ -181,285 +170,141 @@ impl NewEntry {
 /// that a bare `:cc` after `:make` lands on the first error rather than on
 /// a compiler banner.
 ///
-/// # Safety
-///
-/// `qfl` must be a live list, and every string in `new` null or
-/// NUL-terminated.
-pub(crate) unsafe fn qf_add_entry(qfl: *mut QfList, new: &NewEntry) {
-    // SAFETY: forwarded from the caller.
-    let qfp: *mut QfLine = unsafe { xmalloc(size_of::<QfLine>()) }.cast();
+/// Naming the file lists a buffer, which fires `BufNew`; everything the
+/// entry is made of is copied first, and the list is written only once that
+/// is over.
+pub(crate) fn qf_add_entry(mut qfl: Qfl, new: &NewEntry) {
+    let mut entry = new.to_entry();
+    let flag = has_entry_flag(qfl.kind);
     let buf = if new.bufnum != 0 {
-        unsafe { (*qfp).qf_fnum = new.bufnum };
+        entry.fnum = new.bufnum;
         let buf = find_buf(new.bufnum);
         if let Some(mut buf) = buf {
-            buf.b_has_qf_entry |= unsafe { has_entry_flag(qfl) };
+            buf.b_has_qf_entry |= flag;
         }
         buf
     } else {
-        unsafe { (*qfp).qf_fnum = qf_get_fnum(qfl, new.dir, new.fname) };
-        find_buf(unsafe { (*qfp).qf_fnum })
+        entry.fnum = qf_get_fnum(qfl, new.dir, new.fname);
+        find_buf(entry.fnum)
     };
 
     // The entry shows a shortened name only when it differs from the
     // buffer's own, which is what the quickfix window would print.
-    unsafe { (*qfp).qf_fname = ptr::null_mut() };
-    let fullname = if new.fname.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { fix_fname(new.fname) }
-    };
-    // C's `buf != NULL && buf->b_ffname != NULL && …`, in that order.
-    let buf_ffname = buf.map(|buf| buf.name.full_ptr()).filter(|p| !p.is_null());
-    if let Some(buf_ffname) = buf_ffname
-        && !fullname.is_null()
-        && unsafe { path_fnamecmp(cstr::at(fullname), cstr::at(buf_ffname)) } != 0
+    if let Some(fname) = new.fname
+        && let Some(full) = fixed_fname(fname)
+        && let Some(buf_ffname) = buf.and_then(|buf| buf.name.full().map(CStr::to_owned))
+        && path_fnamecmp(full.as_cstr(), &buf_ffname) != 0
     {
-        let short = unsafe { path_try_shorten_fname(fullname) };
-        if !short.is_null() {
-            unsafe { (*qfp).qf_fname = xstrdup(short) };
-        }
+        entry.fname = Some(XString::from_cstr(try_shorten_fname(full.as_cstr())));
     }
-    unsafe { xfree(fullname.cast()) };
 
-    unsafe { (*qfp).qf_text = xstrdup(new.mesg) };
-    unsafe { (*qfp).qf_lnum = new.lnum };
-    unsafe { (*qfp).qf_end_lnum = new.end_lnum };
-    unsafe { (*qfp).qf_col = new.col };
-    unsafe { (*qfp).qf_end_col = new.end_col };
-    unsafe { (*qfp).qf_viscol = new.vis_col };
-    if new.user_data.is_null() || unsafe { (*new.user_data).v_type() } == VAR_UNKNOWN {
-        unsafe { (*qfp).qf_user_data.write_empty(VAR_UNKNOWN) };
-    } else {
-        unsafe { tv_copy(&*new.user_data, &mut (*qfp).qf_user_data) };
-        unsafe { (*qfl).qf_has_user_data = true };
+    let has_user_data = new
+        .user_data
+        .is_some_and(|data| data.v_type() != VAR_UNKNOWN);
+    let valid = entry.valid;
+    if qfl.is_empty() {
+        qfl.cursor = 0;
+        qfl.index = 0;
     }
-    unsafe { (*qfp).qf_pattern = dup_unless_empty(new.pattern) };
-    unsafe { (*qfp).qf_module = dup_unless_empty(new.module) };
-    unsafe { (*qfp).qf_nr = new.nr };
-    // 1 marks a help entry; anything else that cannot be printed is
-    // reported as no type at all.
-    unsafe {
-        (*qfp).qf_type = if new.kind != 1 && !vim_isprintc(c_int::from(new.kind)) {
-            0
-        } else {
-            new.kind
-        }
-    };
-    unsafe { (*qfp).qf_valid = c_char::from(new.valid) };
-    unsafe { (*qfp).qf_next = ptr::null_mut() };
-    unsafe { (*qfp).qf_cleared = 0 };
-
-    if unsafe { qf_list_empty(qfl) } {
-        unsafe { (*qfl).qf_start = qfp };
-        unsafe { (*qfl).qf_ptr = qfp };
-        unsafe { (*qfl).qf_index = 0 };
-        unsafe { (*qfp).qf_prev = ptr::null_mut() };
-    } else {
-        let last = unsafe { (*qfl).qf_last };
-        debug_assert!(!last.is_null());
-        unsafe { (*qfp).qf_prev = last };
-        unsafe { (*last).qf_next = qfp };
+    qfl.entries.push(entry);
+    if has_user_data {
+        qfl.has_user_data = true;
     }
-    unsafe { (*qfl).qf_last = qfp };
-    unsafe { (*qfl).qf_count += 1 };
-    if unsafe { (*qfl).qf_index } == 0 && unsafe { (*qfp).qf_valid } != 0 {
-        unsafe { (*qfl).qf_index = (*qfl).qf_count };
-        unsafe { (*qfl).qf_ptr = qfp };
+    if qfl.index == 0 && valid {
+        qfl.index = qfl.count();
+        qfl.cursor = qfl.entries.len() - 1;
     }
 }
 
-/// Which of a buffer's `b_has_qf_entry` bits a list's entries set.
-///
-/// # Safety
-///
-/// `qfl` must be a live list.
-#[inline]
-pub(crate) unsafe fn has_entry_flag(qfl: *const QfList) -> c_int {
-    // SAFETY: forwarded from the caller.
-    if unsafe { (*qfl).qfl_type } == QFLT_QUICKFIX {
-        BUF_HAS_QF_ENTRY
-    } else {
-        BUF_HAS_LL_ENTRY
+/// A copy of an entry for another window's location list: what
+/// `qf_add_entry` would make of it, which leaves out the shortened file
+/// name, since that is not passed on.
+fn copy_entry(from: &QfEntry) -> QfEntry {
+    let mut user_data = TypVal::Unknown;
+    if from.user_data.v_type() != VAR_UNKNOWN {
+        tv_copy(&from.user_data, &mut user_data);
+    }
+    QfEntry {
+        lnum: from.lnum,
+        end_lnum: from.end_lnum,
+        fnum: from.fnum,
+        col: from.col,
+        end_col: from.end_col,
+        nr: from.nr,
+        module: from.module.clone(),
+        fname: None,
+        pattern: from.pattern.clone(),
+        text: from.text.clone(),
+        viscol: from.viscol,
+        cleared: false,
+        kind: from.kind,
+        user_data,
+        valid: from.valid,
     }
 }
 
-/// A copy of the string, or null when it is null or empty.
-///
-/// # Safety
-///
-/// `s` must be null or NUL-terminated.
-#[inline]
-unsafe fn dup_unless_empty(s: *const c_char) -> *mut c_char {
-    // SAFETY: forwarded from the caller.
-    if s.is_null() || unsafe { *s } == 0 {
-        ptr::null_mut()
-    } else {
-        unsafe { xstrdup(s) }
-    }
-}
+/// Copy one location list, entries and all, into an unused slot.
+pub(crate) fn copy_loclist(from: &QfList, to: &mut QfList) {
+    to.kind = from.kind;
+    to.no_valid = from.no_valid;
+    to.has_user_data = from.has_user_data;
+    to.title = from.title.clone();
+    to.context = from.context.as_ref().map(|ctx| {
+        let mut copy = Box::new(TypVal::Unknown);
+        tv_copy(ctx, &mut copy);
+        copy
+    });
+    to.text_func = from.text_func.duplicate();
 
-/// Copy every entry of one list into another.
-///
-/// `qf_add_entry` cannot work out the buffer number, because the file name
-/// is not passed on; it is copied field by field afterwards instead.
-///
-/// # Safety
-///
-/// Both lists must be live, and `to_qfl` empty.
-unsafe fn copy_loclist_entries(from_qfl: *const QfList, to_qfl: *mut QfList) {
-    let mut i = 1;
-    let mut from = unsafe { (*from_qfl).qf_start };
-    while !got_int.get() && i <= unsafe { (*from_qfl).qf_count } && !from.is_null() {
-        unsafe {
-            qf_add_entry(
-                to_qfl,
-                &NewEntry {
-                    module: (*from).qf_module,
-                    lnum: (*from).qf_lnum,
-                    end_lnum: (*from).qf_end_lnum,
-                    col: (*from).qf_col,
-                    end_col: (*from).qf_end_col,
-                    vis_col: (*from).qf_viscol,
-                    pattern: (*from).qf_pattern,
-                    nr: (*from).qf_nr,
-                    user_data: &raw mut (*from).qf_user_data,
-                    valid: (*from).qf_valid != 0,
-                    ..NewEntry::new((*from).qf_text)
-                },
-            )
-        };
-        let copy = unsafe { (*to_qfl).qf_last };
-        unsafe { (*copy).qf_fnum = (*from).qf_fnum };
-        unsafe { (*copy).qf_type = (*from).qf_type };
-        if unsafe { (*from_qfl).qf_ptr } == from {
-            unsafe { (*to_qfl).qf_ptr = copy };
+    to.entries = Vec::with_capacity(from.entries.len());
+    to.cursor = 0;
+    for (at, entry) in from.entries.iter().enumerate() {
+        if got_int.get() {
+            break;
         }
-        i += 1;
-        from = unsafe { (*from).qf_next };
-    }
-}
-
-/// Copy one location list, entries and all.
-///
-/// # Safety
-///
-/// Both lists must be live, and `to_qfl` an unused slot.
-pub(crate) unsafe fn copy_loclist(from_qfl: *mut QfList, to_qfl: *mut QfList) {
-    // SAFETY: forwarded from the caller.
-    // The entry fields are filled in by `qf_add_entry`.
-    unsafe { (*to_qfl).qfl_type = (*from_qfl).qfl_type };
-    unsafe { (*to_qfl).qf_nonevalid = (*from_qfl).qf_nonevalid };
-    unsafe { (*to_qfl).qf_has_user_data = (*from_qfl).qf_has_user_data };
-    unsafe { (*to_qfl).qf_count = 0 };
-    unsafe { (*to_qfl).qf_index = 0 };
-    unsafe { (*to_qfl).qf_start = ptr::null_mut() };
-    unsafe { (*to_qfl).qf_last = ptr::null_mut() };
-    unsafe { (*to_qfl).qf_ptr = ptr::null_mut() };
-    unsafe {
-        (*to_qfl).qf_title = if (*from_qfl).qf_title.is_null() {
-            ptr::null_mut()
-        } else {
-            xstrdup((*from_qfl).qf_title)
+        to.entries.push(copy_entry(entry));
+        if from.cursor == at {
+            to.cursor = at;
         }
-    };
-    unsafe {
-        (*to_qfl).qf_ctx = if (*from_qfl).qf_ctx.is_null() {
-            ptr::null_mut()
-        } else {
-            let ctx: *mut TypVal = xcalloc(1, size_of::<TypVal>()).cast();
-            tv_copy(&*(*from_qfl).qf_ctx, &mut *ctx);
-            ctx
-        }
-    };
-    unsafe {
-        callback_copy(
-            &raw mut (*to_qfl).qf_qftf_cb,
-            &raw mut (*from_qfl).qf_qftf_cb,
-        )
-    };
-
-    if unsafe { (*from_qfl).qf_count } != 0 {
-        unsafe { copy_loclist_entries(from_qfl, to_qfl) };
     }
 
-    unsafe { (*to_qfl).qf_index = (*from_qfl).qf_index };
-    last_qf_id.set(last_qf_id.get().wrapping_add(1));
-    unsafe { (*to_qfl).qf_id = last_qf_id.get() };
-    unsafe { (*to_qfl).qf_changedtick = 0 };
+    to.index = from.index;
+    to.id = next_list_id();
+    to.changedtick = 0;
     // With nothing valid to point at, the current entry is the first.
-    if unsafe { (*to_qfl).qf_nonevalid } {
-        unsafe { (*to_qfl).qf_ptr = (*to_qfl).qf_start };
-        unsafe { (*to_qfl).qf_index = 1 };
+    if to.no_valid {
+        to.cursor = 0;
+        to.index = 1;
     }
 }
 
 /// Free every entry in a list, leaving its title and context alone.
-///
-/// # Safety
-///
-/// `qfl` must be a live list.
-pub(crate) unsafe fn qf_free_items(qfl: *mut QfList) {
-    let mut stop = false;
-    while unsafe { (*qfl).qf_count } != 0 && !unsafe { (*qfl).qf_start }.is_null() {
-        let qfp = unsafe { (*qfl).qf_start };
-        let next = unsafe { (*qfp).qf_next };
-        if !stop {
-            unsafe { xfree((*qfp).qf_fname.cast()) };
-            unsafe { xfree((*qfp).qf_module.cast()) };
-            unsafe { xfree((*qfp).qf_text.cast()) };
-            unsafe { xfree((*qfp).qf_pattern.cast()) };
-            unsafe { tv_clear(&mut (*qfp).qf_user_data) };
-            stop = qfp == next;
-            unsafe { xfree(qfp.cast()) };
-            if stop {
-                // `qf_count` can be wrong; setting it to one here stops
-                // the loop rather than walking off the freed entry.
-                // TODO(vim): Avoid qf_count being incorrect.
-                unsafe { (*qfl).qf_count = 1 };
-            } else {
-                unsafe { (*qfl).qf_start = next };
-            }
-        }
-        unsafe { (*qfl).qf_count -= 1 };
-    }
-    unsafe { (*qfl).qf_start = ptr::null_mut() };
-    unsafe { (*qfl).qf_last = ptr::null_mut() };
-    unsafe { (*qfl).qf_ptr = ptr::null_mut() };
-    unsafe { (*qfl).qf_index = 0 };
-    unsafe { (*qfl).qf_nonevalid = true };
-
-    unsafe { qf_clean_dir_stack(&raw mut (*qfl).qf_dir_stack) };
-    unsafe { (*qfl).qf_directory = ptr::null_mut() };
-    unsafe { qf_clean_dir_stack(&raw mut (*qfl).qf_file_stack) };
-    unsafe { (*qfl).qf_currfile = ptr::null_mut() };
-    unsafe { (*qfl).qf_multiline = false };
-    unsafe { (*qfl).qf_multiignore = false };
-    unsafe { (*qfl).qf_multiscan = false };
+pub(crate) fn qf_free_items(qfl: &mut QfList) {
+    qfl.entries = Vec::new();
+    qfl.cursor = 0;
+    qfl.index = 0;
+    qfl.no_valid = true;
+    qfl.dir_stack.dirs.clear();
+    qfl.file_stack.dirs.clear();
+    qfl.multiline = false;
+    qfl.multiignore = false;
+    qfl.multiscan = false;
 }
 
-/// Free a list: its entries, its title and its context.
-///
-/// # Safety
-///
-/// `qfl` must be a live list.
-pub(crate) unsafe fn qf_free(qfl: *mut QfList) {
-    // SAFETY: forwarded from the caller.
-    unsafe { qf_free_items(qfl) };
-    unsafe { xfree((*qfl).qf_title.cast()) };
-    unsafe { (*qfl).qf_title = ptr::null_mut() };
-    unsafe { tv_free((*qfl).qf_ctx.as_mut()) };
-    unsafe { (*qfl).qf_ctx = ptr::null_mut() };
-    unsafe { callback_free(&raw mut (*qfl).qf_qftf_cb) };
-    unsafe { (*qfl).qf_id = 0 };
-    unsafe { (*qfl).qf_changedtick = 0 };
+/// Free a list: its entries, its title and its context. What kind of list
+/// the slot held is kept, for a command that reports the list went away.
+pub(crate) fn qf_free(mut qfl: Qfl) {
+    let kind = qfl.kind;
+    let old = core::mem::take(&mut *qfl);
+    qfl.kind = kind;
+    drop(old);
 }
 
 /// Move the line numbers of every entry naming `buffer` after an edit.
 ///
-/// `buffer` is the buffer that changed; `wp` names the window whose location
-/// list to walk, or is `None` for the quickfix stack. Answers whether any
-/// entry named the buffer at all — the caller clears the buffer's
-/// "has entries" flag when none did.
+/// `window` names the window whose location list to walk, or is `None` for
+/// the quickfix stack. Answers whether any entry named the buffer at all —
+/// the caller clears the buffer's "has entries" flag when none did.
 pub fn qf_mark_adjust(
     buffer: Buf,
     window: Option<Win>,
@@ -476,32 +321,36 @@ pub fn qf_mark_adjust(
     if buffer.b_has_qf_entry & wanted == 0 {
         return false;
     }
-    let qi = match window {
-        None => QfStack::Global.raw(),
-        Some(wp) if wp.w_llist.is_null() => return false,
-        Some(wp) => wp.w_llist,
+    let mut qi = match window {
+        None => Qi::global(),
+        Some(wp) => match wp.w_llist {
+            Some(id) => id.stack(),
+            None => return false,
+        },
     };
 
+    // Nothing below can run user code, so the stack is borrowed whole.
+    let stack: &mut QfStack = &mut qi;
+    let count = usize::try_from(stack.list_count).unwrap_or(0);
     let mut found_one = false;
-    for idx in 0..unsafe { (*qi).qf_listcount } {
-        let qfl = unsafe { qf_get_list(qi, idx) };
-        let mut i = 1;
-        let mut qfp = unsafe { (*qfl).qf_start };
-        while !got_int.get() && i <= unsafe { (*qfl).qf_count } && !qfp.is_null() {
-            if unsafe { (*qfp).qf_fnum } == buffer.handle {
-                found_one = true;
-                if unsafe { (*qfp).qf_lnum } >= line1 && unsafe { (*qfp).qf_lnum } <= line2 {
-                    if amount == MAXLNUM {
-                        unsafe { (*qfp).qf_cleared = 1 };
-                    } else {
-                        unsafe { (*qfp).qf_lnum += amount };
-                    }
-                } else if amount_after != 0 && unsafe { (*qfp).qf_lnum } > line2 {
-                    unsafe { (*qfp).qf_lnum += amount_after };
-                }
+    for list in &mut stack.lists[..count] {
+        for entry in &mut list.entries {
+            if got_int.get() {
+                break;
             }
-            i += 1;
-            qfp = unsafe { (*qfp).qf_next };
+            if entry.fnum != buffer.handle {
+                continue;
+            }
+            found_one = true;
+            if entry.lnum >= line1 && entry.lnum <= line2 {
+                if amount == MAXLNUM {
+                    entry.cleared = true;
+                } else {
+                    entry.lnum += amount;
+                }
+            } else if amount_after != 0 && entry.lnum > line2 {
+                entry.lnum += amount_after;
+            }
         }
     }
     found_one

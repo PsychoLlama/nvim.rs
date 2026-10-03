@@ -11,8 +11,7 @@
 //! matched, and every other character is copied with the regexp atoms
 //! escaped.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -23,10 +22,9 @@
 
 use super::*;
 use crate::cstr;
-use crate::regexp::{RE_MAGIC, RE_STRING};
+use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::semsg;
-use core::ffi::{CStr, c_char};
-use core::ptr;
+use core::ffi::CStr;
 
 /// How many `%` conversions there are. Each may appear at most once in one
 /// format, and [`Format::addr`] has a slot per conversion.
@@ -59,9 +57,9 @@ pub(crate) static FMT_PAT: [(u8, &[u8]); FMT_PATTERNS] = [
 
 /// One part of `'errorformat'`, compiled.
 pub(crate) struct Format {
-    /// The compiled pattern. Owned: freed when the `Format` is dropped, and
-    /// replaced in place by [`Format::exec`] when the engine rewrites it.
-    prog: *mut RegProg,
+    /// The compiled pattern, which the engine may replace when it is first
+    /// used.
+    prog: Option<OwnedProg>,
     /// Which submatch each `%` conversion captured, 1-based; 0 when the
     /// conversion does not appear in this format.
     addr: [u8; FMT_PATTERNS],
@@ -76,17 +74,10 @@ pub(crate) struct Format {
     conthere: bool,
 }
 
-impl Drop for Format {
-    fn drop(&mut self) {
-        // SAFETY: `prog` is this format's own compiled pattern, or null.
-        unsafe { vim_regfree(self.prog) };
-    }
-}
-
 impl Format {
     const fn new() -> Format {
         Format {
-            prog: ptr::null_mut(),
+            prog: None,
             addr: [0; FMT_PATTERNS],
             prefix: 0,
             flags: 0,
@@ -112,25 +103,13 @@ impl Format {
     /// The submatch conversion `idx` captured, or 0 if it is not in this
     /// format. `idx` indexes [`FMT_PAT`].
     pub(crate) fn submatch(&self, idx: usize) -> usize {
-        self.addr[idx] as usize
+        usize::from(self.addr[idx])
     }
 
-    /// Run this format's pattern over `line`, answering the match.
-    ///
-    /// Case is always ignored when looking for an error. The engine may
-    /// hand back a different `RegProg` than it was given (a pattern is
-    /// recompiled the first time it is used with different settings), so
-    /// the answer is stored back.
-    ///
+    /// Run this format's pattern over `line`, answering the match. Case is
+    /// always ignored when looking for an error.
     pub(crate) fn exec(&mut self, line: &CStr) -> Option<RegMatch> {
-        let mut regmatch = RegMatch {
-            regprog: self.prog,
-            rm_ic: true,
-            ..Default::default()
-        };
-        let matched = vim_regexec(&mut regmatch, line, 0);
-        self.prog = regmatch.regprog;
-        matched.then_some(regmatch)
+        self.prog.as_mut()?.exec(line, 0, true)
     }
 }
 
@@ -145,34 +124,33 @@ pub(crate) struct Efm {
 
 impl Efm {
     /// Compile `'errorformat'`, or answer `None` if any part is bad.
-    ///
-    /// # Safety
-    ///
-    /// `efm` must be NUL-terminated.
-    pub(crate) unsafe fn compile(efm: *const c_char) -> Option<Efm> {
-        // SAFETY: the caller's option value is NUL-terminated.
-        let mut rest = unsafe { CStr::from_ptr(efm) };
+    pub(crate) fn compile(efm: &CStr) -> Option<Efm> {
+        // Everything from a part's start through the option's terminating
+        // NUL: the walk reads one byte past the part in several places,
+        // exactly as upstream does.
+        let all = efm.to_bytes_with_nul();
+        let mut at = 0;
         let mut formats = Vec::new();
 
-        while !rest.is_empty() {
-            // Everything from this part's start through the option's
-            // terminating NUL: the walk reads one byte past the part in
-            // several places, exactly as upstream does.
-            let part = rest.to_bytes_with_nul();
+        while all[at] != 0 {
+            let part = &all[at..];
             let len = option_part_len(part);
             let mut fmt = Format::new();
             let pat = fmt.compile_regpat(part, len)?;
             // `compile_regpat` NUL-terminates what it builds.
-            fmt.prog = vim_regcomp(cstr::in_bytes(&pat), RE_MAGIC + RE_STRING);
-            if fmt.prog.is_null() {
-                return None;
-            }
+            fmt.prog = Some(OwnedProg::compile(
+                cstr::in_bytes(&pat),
+                RE_MAGIC + RE_STRING,
+            )?);
             formats.push(fmt);
-            // SAFETY: `len` indexes within the part, so the remainder is
-            // still NUL-terminated.
-            let after = unsafe { skip_to_option_part(part.as_ptr().add(len).cast()) };
-            // SAFETY: ditto.
-            rest = unsafe { CStr::from_ptr(after) };
+            // Step over the separator and any padding before the next part.
+            at += len;
+            if all[at] == b',' {
+                at += 1;
+            }
+            while all[at] == b' ' {
+                at += 1;
+            }
         }
 
         if formats.is_empty() {

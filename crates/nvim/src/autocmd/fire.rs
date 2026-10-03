@@ -125,6 +125,24 @@ pub fn fire_autocmds(event: AutoEvent, force: bool, buffer: Option<Buf>) -> bool
     }
 }
 
+/// Fire `event`, in every group, matching the patterns against `pattern`
+/// (or the buffer's name, for `None`) with `afile` as `<afile>`.
+///
+/// Both names are copied before any autocommand runs, so the caller may
+/// hand in a name an autocommand could change.
+pub(crate) fn fire_autocmds_for(
+    event: AutoEvent,
+    pattern: Option<&CStr>,
+    afile: Option<&CStr>,
+    force: bool,
+    buffer: Option<Buf>,
+) -> bool {
+    let name = |s: Option<&CStr>| s.map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut());
+    // SAFETY: two NUL-terminated names or null; `apply_autocmds_group`
+    // copies both before it runs anything, and writes to neither.
+    unsafe { apply_autocmds(event, name(pattern), name(afile), force, buffer) }
+}
+
 /// Fire `event`, in every group.
 ///
 /// # Safety

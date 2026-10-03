@@ -376,9 +376,7 @@ pub(crate) enum Thrown {
 /// and writes. It is valid until the exception is discarded.
 impl ExcId {
     pub(crate) fn exception(self) -> Live<Exception> {
-        // SAFETY: the table owns the exception at a fixed address until it
-        // is discarded, which is the view's contract.
-        unsafe { Live::new(EXCEPTIONS.with(|table| table.address(self))) }
+        EXCEPTIONS.with(|table| table.view(self))
     }
 }
 

@@ -710,3 +710,27 @@ pub(crate) unsafe fn leave_cleanup(csp: *mut Cleanup) {
     };
     unsafe { report_pending(PendingAction::Resumed, pending, value) };
 }
+
+/// A pending exception, error or `:return` parked for the length of a
+/// value: [`enter_cleanup`] when it is made, [`leave_cleanup`] when it is
+/// dropped. For code that has to run autocommands while one is pending.
+pub(crate) struct CleanupGuard(Cleanup);
+
+impl CleanupGuard {
+    pub(crate) fn enter() -> CleanupGuard {
+        let mut cs = Cleanup {
+            pending: 0,
+            exception: None,
+        };
+        // SAFETY: a record of the guard's own, read back by the drop.
+        unsafe { enter_cleanup(&mut cs) };
+        CleanupGuard(cs)
+    }
+}
+
+impl Drop for CleanupGuard {
+    fn drop(&mut self) {
+        // SAFETY: the record `enter` filled in, left once.
+        unsafe { leave_cleanup(&mut self.0) };
+    }
+}

@@ -163,6 +163,12 @@ pub fn garbage_collect_scriptvars(copy_id: c_int) -> bool {
     abort
 }
 
+/// [`set_internal_string_var`] for a name and value the caller holds.
+pub(crate) fn set_internal_string_var_to(name: &CStr, value: &CStr) {
+    // SAFETY: two NUL-terminated strings; the store copies the value.
+    unsafe { set_internal_string_var(name.as_ptr(), value.as_ptr().cast_mut()) };
+}
+
 /// Set the variable `name` to the string `value`, taking ownership of it.
 ///
 /// # Safety

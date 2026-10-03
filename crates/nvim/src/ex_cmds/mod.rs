@@ -97,6 +97,32 @@ use core::ffi::c_int;
 pub(crate) static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
 pub(crate) static sub_nlines: GlobalCell<LineNr> = GlobalCell::new(0);
 
+/// [`skip_vimgrep_pat`] over a copy of `arg`: the pattern, the `g`/`j`/`f`
+/// flags after it, and where in `arg` what follows starts. `None` when the
+/// closing delimiter is missing.
+pub(crate) fn split_vimgrep_pat(arg: &[u8]) -> Option<(Vec<u8>, ::core::ffi::c_int, usize)> {
+    let mut copy = arg.to_vec();
+    copy.push(0);
+    let base: *mut ::core::ffi::c_char = copy.as_mut_ptr().cast();
+    let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
+    let mut flags = 0;
+    // SAFETY: a NUL-terminated copy this call owns and may have terminated
+    // in place, and two locals.
+    let end = unsafe { skip_vimgrep_pat(base, &raw mut pattern, &raw mut flags) };
+    if end.is_null() {
+        return None;
+    }
+    // SAFETY: both answers point into the copy, the pattern at a string the
+    // walk terminated.
+    let (pattern, rest) = unsafe {
+        (
+            ::core::ffi::CStr::from_ptr(pattern).to_bytes().to_vec(),
+            end.offset_from(base),
+        )
+    };
+    Some((pattern, flags, usize::try_from(rest).ok()?))
+}
+
 pub const _ISalpha: ::core::ffi::c_uint = 1024;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
