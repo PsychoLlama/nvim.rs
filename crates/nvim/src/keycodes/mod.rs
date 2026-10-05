@@ -31,18 +31,18 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::{ptr, slice};
 
 use crate::ascii::{ascii_isdigit, ascii_isident};
-use crate::charset::{transchar, vim_isprintc, vim_str2nr};
+use crate::charset::{str2nr_in, transchar, vim_isprintc};
 use crate::eval::typval::NumBuf;
 use crate::eval::vars::get_var_value;
 use crate::mbyte::{
-    utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len,
+    char_at, cluster_len, utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len_len,
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_usingsid};
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::runtime::state::current_sctx;
-use crate::types::{CpoFlag, KeyExtra, MB_MAXBYTES, NUL, ScriptId, UVarNumber, VarNumber, size_t};
+use crate::types::{CpoFlag, KeyExtra, MB_MAXBYTES, NUL, ScriptId, size_t};
 
 mod codes;
 pub use self::codes::*;
@@ -154,26 +154,6 @@ fn starts_with(p: Cursor, lit: &CStr) -> bool {
     let n = lit.to_bytes().len();
     // SAFETY: as [`starts_with_ignoring_case`].
     unsafe { cstr::prefix_eq(p.raw(), lit.as_ptr(), n) }
-}
-
-/// [`vim_str2nr`] as the `<>` parsers ask for it: the unsigned value at `p`
-/// and the number of bytes it spans, zero when there is no number there.
-///
-/// # Safety
-/// `p` must point at a NUL-terminated string.
-unsafe fn number_at(p: Cursor) -> (UVarNumber, c_int) {
-    let mut number: UVarNumber = 0;
-    let mut len: c_int = 0;
-    // Bound out here so the call itself fits on one line; nine arguments
-    // spread over nine lines would be nine unchecked lines.
-    let (start, prep, lenp) = (p.raw(), ptr::null_mut(), &raw mut len);
-    let (nptr, unptr) = (ptr::null_mut::<VarNumber>(), &raw mut number);
-    let (overflow, all) = (ptr::null_mut(), Str2NrBases::ALL);
-    // SAFETY: the caller's promise, and every out-parameter is a live local
-    // or null. Upstream passes null for `unptr` at the one call site that
-    // does not want the value; writing a local it then ignores is the same.
-    unsafe { vim_str2nr(start, prep, lenp, all, nptr, unptr, 0, true, overflow) };
-    (number, len)
 }
 
 /// Fold `modifiers` into `key` where the terminal has a code for the
@@ -395,7 +375,8 @@ unsafe fn put_bytes(dst: *mut c_char, at: usize, bytes: &[u8]) -> usize {
 ///
 /// # Safety
 /// `srcp` must point at a readable pointer into a buffer of `src_len` bytes,
-/// and `modp` at a writable `c_int`.
+/// `modp` at a writable `c_int`, and `did_simplify` at a writable `bool` or
+/// be null.
 pub unsafe fn find_special_key(
     srcp: *mut *const c_char,
     src_len: size_t,
@@ -403,116 +384,140 @@ pub unsafe fn find_special_key(
     flags: c_int,
     did_simplify: *mut bool,
 ) -> c_int {
-    if src_len == 0 {
-        return 0;
+    // SAFETY: the caller's promise -- `*srcp` is readable for `src_len`
+    // bytes, and the out-parameters are writable (`did_simplify` or null).
+    unsafe {
+        let text = slice::from_raw_parts((*srcp).cast::<u8>(), src_len);
+        let Some((key, modifiers, used)) = special_key_at(text, flags, did_simplify.as_mut())
+        else {
+            return 0;
+        };
+        *modp = modifiers;
+        *srcp = text[used..].as_ptr().cast();
+        key
     }
+}
+
+/// The length of the character (with its composing marks) at `text[i]`,
+/// zero on a NUL or at the end -- `utfc_ptr2len`'s answer for a NUL.
+fn cluster_len_at(text: &[u8], i: usize) -> usize {
+    match text.get(i..) {
+        Some(rest @ [first, ..]) if *first != NUL as u8 => cluster_len(rest),
+        _ => 0,
+    }
+}
+
+/// C's `STRNICMP(p, lit, strlen(lit)) == 0` over a slice: does `text` open
+/// with `lit`, ASCII case ignored?
+fn opens_with_ignoring_case(text: &[u8], lit: &[u8]) -> bool {
+    text.get(..lit.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(lit))
+}
+
+/// One `<>` name at the start of `text`: the key code, the modifiers that
+/// could not be folded into it, and how many bytes of `text` the name took.
+/// `None` when `text` does not start with a name this understands.
+///
+/// The end of `text` reads as a NUL, which is where the pointer form's
+/// readers stopped. `did_simplify`, when given, is set if `FSK_SIMPLIFY`
+/// collapsed a Ctrl modifier into the key.
+pub(crate) fn special_key_at(
+    text: &[u8],
+    flags: c_int,
+    did_simplify: Option<&mut bool>,
+) -> Option<(c_int, ModMask, usize)> {
+    let at = |i: usize| cstr::byte_at(text, i);
+    // The offset of the last byte; the walk below never steps past it.
+    let end = text.len().checked_sub(1)?;
+    // How many bytes past `bp` the last one is -- the C's `end - bp`, which
+    // is never asked once `bp` has passed it.
+    let gap = |bp: usize| end.saturating_sub(bp);
     let in_string = flags & FSK_IN_STRING != 0;
-    // SAFETY: the caller's promise -- `*srcp` names a readable buffer of
-    // `src_len` bytes, NUL-terminated, which is what bounds the walk below.
-    let mut src = unsafe { Cursor::new(*srcp) };
-    let end = src.skip(src_len as isize - 1);
-    if src.byte() != b'<' as c_char {
-        return 0;
+    let mut src = 0;
+    if at(src) != b'<' {
+        return None;
     }
-    if src.at(1) == b'*' as c_char {
-        src = src.skip(1); // <*xxx>: do not simplify
+    if at(src + 1) == b'*' {
+        src += 1; // <*xxx>: do not simplify
     }
 
     // Find the end of the modifier list.
     let mut last_dash = src;
-    let mut bp = src.skip(1);
-    let mut len: c_int;
-    while bp <= end && (bp.byte() == b'-' as c_char || ascii_isident(c_int::from(bp.byte()))) {
-        if bp.byte() == b'-' as c_char {
+    let mut bp = src + 1;
+    while bp <= end && (at(bp) == b'-' || ascii_isident(c_int::from(at(bp)))) {
+        if at(bp) == b'-' {
             last_dash = bp;
-            if bp.skip(1) <= end {
-                let (after_dash, left) = (bp.skip(1).raw(), end.gap(bp) as c_int + 1);
-                // SAFETY: `after_dash` is inside the caller's buffer and
-                // `left` is what is left of it from there.
-                len = unsafe { utfc_ptr2len_len(after_dash, left) };
+            if bp < end {
+                let len = cluster_len_at(text, bp + 1);
                 // Anything is accepted, as in <C-?>. In a string <C-"> and
                 // <M-"> are not, because " ends the string; <M-\"> works.
-                if end.gap(bp) > len as isize
-                    && !(in_string && bp.at(1) == b'"' as c_char)
-                    && bp.at((len + 1) as isize) == b'>' as c_char
-                {
-                    bp = bp.skip(len as isize);
-                } else if end.gap(bp) > 2
+                if gap(bp) > len && !(in_string && at(bp + 1) == b'"') && at(bp + len + 1) == b'>' {
+                    bp += len;
+                } else if gap(bp) > 2
                     && in_string
-                    && bp.at(1) == b'\\' as c_char
-                    && bp.at(2) == b'"' as c_char
-                    && bp.at(3) == b'>' as c_char
+                    && at(bp + 1) == b'\\'
+                    && at(bp + 2) == b'"'
+                    && at(bp + 3) == b'>'
                 {
-                    bp = bp.skip(2);
+                    bp += 2;
                 }
             }
         }
-        if end.gap(bp) > 3 && bp.byte() == b't' as c_char && bp.at(1) == b'_' as c_char {
-            bp = bp.skip(3); // skip t_xx; xx may be '-' or '>'
-        } else if end.gap(bp) > 4 && starts_with_ignoring_case(bp, c"char-") {
-            // SAFETY: `bp + 5` is inside the caller's NUL-terminated buffer.
-            len = unsafe { number_at(bp.skip(5)) }.1;
-            if len == 0 {
+        if gap(bp) > 3 && at(bp) == b't' && at(bp + 1) == b'_' {
+            bp += 3; // skip t_xx; xx may be '-' or '>'
+        } else if gap(bp) > 4 && opens_with_ignoring_case(&text[bp..], b"char-") {
+            let digits = str2nr_in(&text[bp + 5..], Str2NrBases::ALL, true).len;
+            if digits == 0 {
                 emsg(gettext(e_invarg));
-                return 0;
+                return None;
             }
-            bp = bp.skip((len + 5) as isize);
+            bp += digits + 5;
             break;
         }
-        bp = bp.skip(1);
+        bp += 1;
     }
 
-    if bp > end || bp.byte() != b'>' as c_char {
-        return 0;
+    if bp > end || at(bp) != b'>' {
+        return None;
     }
-    let end_of_name = bp.skip(1);
+    let end_of_name = bp + 1;
 
     // Which modifiers are given?
     let mut modifiers = ModMask::NONE;
-    bp = src.skip(1);
-    while bp < last_dash {
-        if bp.byte() != b'-' as c_char {
-            let bit = name_to_mod_mask(c_int::from(bp.byte() as u8));
+    for &byte in &text[src + 1..last_dash.max(src + 1)] {
+        if byte != b'-' {
+            let bit = name_to_mod_mask(c_int::from(byte));
             if bit.is_empty() {
-                return 0; // illegal modifier name
+                return None; // illegal modifier name
             }
             modifiers |= bit;
         }
-        bp = bp.skip(1);
     }
 
-    let mut key = if starts_with_ignoring_case(last_dash.skip(1), c"char-")
-        && ascii_isdigit(c_int::from(last_dash.at(6)))
+    let after_dash = &text[last_dash + 1..];
+    let mut key = if opens_with_ignoring_case(after_dash, b"char-")
+        && ascii_isdigit(c_int::from(at(last_dash + 6)))
     {
         // <Char-123>, <Char-033> or <Char-0x33>.
-        // SAFETY: `last_dash + 6` is inside the caller's NUL-terminated
-        // buffer -- the five bytes of "char-" and a digit precede it.
-        let (number, digits) = unsafe { number_at(last_dash.skip(6)) };
-        len = digits;
-        if len == 0 {
+        let number = str2nr_in(&text[last_dash + 6..], Str2NrBases::ALL, true);
+        if number.len == 0 {
             emsg(gettext(e_invarg));
-            return 0;
+            return None;
         }
-        number as c_int
+        number.magnitude as c_int
     } else {
         // A single-letter modifier, or a special key name.
-        let mut off = 1;
-        if in_string && last_dash.at(1) == b'\\' as c_char && last_dash.at(2) == b'"' as c_char {
+        let (len, off) = if in_string && at(last_dash + 1) == b'\\' && at(last_dash + 2) == b'"' {
             // In a double-quoted string, `"` is written `\"`.
-            len = 2;
-            off = 2;
+            (2, 2)
         } else {
-            // SAFETY: `last_dash + 1` is inside the caller's buffer, whose
-            // NUL bounds the character `utfc_ptr2len` measures.
-            len = unsafe { utfc_ptr2len(last_dash.skip(1).raw()) };
-        }
-        if !modifiers.is_empty() && last_dash.at((len + 1) as isize) == b'>' as c_char {
-            // SAFETY: as above -- a character inside the caller's buffer.
-            unsafe { utf_ptr2char(last_dash.skip(off).raw()) }
+            (cluster_len_at(text, last_dash + 1), 1)
+        };
+        let name = &text[last_dash + off..];
+        if !modifiers.is_empty() && at(last_dash + len + 1) == b'>' {
+            char_at(name)
         } else {
-            // SAFETY: as above; `get_special_key_code` stops at the first
-            // byte that cannot be part of a name.
-            let code = unsafe { get_special_key_code(last_dash.skip(off).raw()) };
+            let code = special_key_code(name);
             if flags & FSK_KEEP_X_KEY == 0 {
                 handle_x_keys(code)
             } else {
@@ -521,9 +526,9 @@ pub unsafe fn find_special_key(
         }
     };
 
-    // get_special_key_code() answers NUL for a name it does not know.
+    // The name lookup answers NUL for a name it does not know.
     if key == NUL {
-        return 0;
+        return None;
     }
     // Only keep a modifier that no key code already includes.
     key = simplify_key(key, &mut modifiers);
@@ -538,17 +543,10 @@ pub unsafe fn find_special_key(
     // A normal character with a modifier: try to make one byte of the two,
     // Alt and Meta excepted.
     if key >= 0 {
-        let (modp_local, simplify) = (&raw mut modifiers, flags & FSK_SIMPLIFY != 0);
-        // SAFETY: `modp_local` is a live local and `did_simplify` is the
-        // caller's, which they promised is writable or null.
-        key = unsafe { extract_modifiers(key, modp_local, simplify, did_simplify) };
+        let simplify = flags & FSK_SIMPLIFY != 0;
+        key = extract_modifiers(key, &mut modifiers, simplify, did_simplify);
     }
-    // SAFETY: the caller's promise -- both out-parameters are writable.
-    unsafe {
-        *modp = modifiers;
-        *srcp = end_of_name.raw();
-    }
-    key
+    Some((key, modifiers, end_of_name))
 }
 
 /// Fold the modifiers a single byte can carry into `key`: `Shift-a` becomes
@@ -557,17 +555,13 @@ pub unsafe fn find_special_key(
 /// With `simplify` clear the Ctrl half is skipped, which is how a caller
 /// keeps both spellings of `<C-H>`; `did_simplify` says whether it happened.
 ///
-/// # Safety
-/// `modp` must point at a writable `c_int`, and `did_simplify` at a writable
-/// `bool` or be null.
-unsafe fn extract_modifiers(
+fn extract_modifiers(
     key: c_int,
-    modp: *mut ModMask,
+    modifiers: &mut ModMask,
     simplify: bool,
-    did_simplify: *mut bool,
+    did_simplify: Option<&mut bool>,
 ) -> c_int {
     let mut key = key;
-    let mut modifiers = unsafe { *modp };
 
     if modifiers.has(ModMask::SHIFT) && is_ascii_alpha(key) {
         key = to_upper_ascii(key);
@@ -589,46 +583,29 @@ unsafe fn extract_modifiers(
         if key == NUL {
             key = Key::Zero.code(); // <C-@> is <Nul>
         }
-        if !did_simplify.is_null() {
-            unsafe { *did_simplify = true };
+        if let Some(did_simplify) = did_simplify {
+            *did_simplify = true;
         }
     }
-
-    unsafe { *modp = modifiers };
     key
 }
 
-/// The code of the special key called `name`, or 0 when there is no such key.
+/// The code of the special key whose name `text` starts with, or 0 when
+/// there is no such key.
 ///
-/// The name ends at the first non-identifier byte rather than at the NUL, so
-/// a caller may point this into the middle of a larger string. A `t_xx` name
-/// is a raw termcap code and never reaches the table.
-///
-/// # Safety
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn get_special_key_code(name: *const c_char) -> c_int {
-    // SAFETY: the caller's promise -- a NUL-terminated string, whose NUL
-    // stops both the `t_xx` peek and the identifier walk below.
-    let name = unsafe { Cursor::new(name) };
-    if name.byte() == b't' as c_char
-        && name.at(1) == b'_' as c_char
-        && name.at(2) != 0
-        && name.at(3) != 0
-    {
-        return termcap_key([name.at(2) as u8, name.at(3) as u8]);
+/// The name ends at the first non-identifier byte or at the end of `text`,
+/// so a caller may hand this the middle of a larger string. A `t_xx` name is
+/// a raw termcap code and never reaches the table.
+pub fn special_key_code(text: &[u8]) -> c_int {
+    let at = |i: usize| cstr::byte_at(text, i);
+    if at(0) == b't' && at(1) == b'_' && at(2) != NUL as u8 && at(3) != NUL as u8 {
+        return termcap_key([at(2), at(3)]);
     }
-    let mut len = 0;
-    while ascii_isident(c_int::from(name.at(len))) {
-        len += 1;
-    }
-    // SAFETY: `len` bytes of identifier were just read one at a time.
-    code_for_name(unsafe { slice::from_raw_parts(name.raw().cast::<u8>(), len as usize) })
-}
-
-/// [`get_special_key_code`] of a name the caller owns.
-pub(crate) fn special_key_code(name: &CStr) -> c_int {
-    // SAFETY: a NUL-terminated name.
-    unsafe { get_special_key_code(name.as_ptr()) }
+    let len = text
+        .iter()
+        .take_while(|&&b| ascii_isident(c_int::from(b)))
+        .count();
+    code_for_name(&text[..len])
 }
 
 /// Which button a mouse pseudo-code is about, and whether it was a click or a

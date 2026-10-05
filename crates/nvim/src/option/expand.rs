@@ -264,7 +264,7 @@ fn take_option_name(
             }
         }
         let name = CString::new(&line[arg + 1..*p]).unwrap_or_default();
-        let key = special_key_code(&name);
+        let key = special_key_code(name.as_bytes());
         if key == 0 {
             expand.context = ExpandContext::Nothing;
             return None;

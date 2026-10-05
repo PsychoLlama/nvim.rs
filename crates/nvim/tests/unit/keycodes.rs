@@ -9,7 +9,7 @@
 //!   x the four `replace_termcodes` flag combinations `nvim_replace_termcodes`
 //!   can ask for), lifted verbatim from that sweep's pre-batch baseline.
 //! * [`KEY_CODES`] is one row per entry of `key_names_table` — every name the
-//!   table carries, the code `get_special_key_code` answers for it, and the
+//!   table carries, the code `special_key_code` answers for it, and the
 //!   name `get_special_key_name` gives that code back. Together those pin the
 //!   name -> code direction, the code -> preferred-name direction (which is
 //!   what the `is_alt` column selects), and the table's alternative names.
@@ -19,7 +19,7 @@ use std::ptr;
 
 use neovim::keycodes::{
     FSK_IN_STRING, ModMask, REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SPECIAL, find_special_key,
-    get_special_key_code, get_special_key_name, replace_termcodes,
+    get_special_key_name, replace_termcodes, special_key_code,
 };
 
 use crate::support::{cstr, take_bytes};
@@ -151,7 +151,7 @@ const TERMCODES: &[Encodings] = &[
     ("", b"<>", b"<>", b"<>", b"<>"),
 ];
 
-/// `(name, get_special_key_code(name), get_special_key_name(code, ModMask::NONE))`, one row
+/// `(name, special_key_code(name), get_special_key_name(code, ModMask::NONE))`, one row
 /// per distinct name in `key_names_table`. Two entries share the name `Tab`
 /// (`TAB` and `K_TAB`); only the first is reachable by name, so it appears once.
 const KEY_CODES: &[(&str, c_int, &str)] = &[
@@ -374,8 +374,7 @@ fn termcodes(src: &str, from_part: bool, do_lt: bool, special: bool) -> Vec<u8> 
 
 /// The code `name` resolves to, and the name that code prints as.
 fn key_code(name: &str) -> c_int {
-    let s = cstr(name);
-    unsafe { get_special_key_code(s.as_ptr()) }
+    special_key_code(name.as_bytes())
 }
 
 fn key_name(code: c_int, modifiers: ModMask) -> String {
@@ -511,7 +510,7 @@ fn key_names_table_is_case_insensitive() {
 /// The name is delimited by the first non-identifier byte, not by the NUL, and
 /// a `t_xx` name bypasses the table for a raw termcap code.
 #[test]
-fn get_special_key_code_delimits_and_takes_termcaps() {
+fn special_key_code_delimits_and_takes_termcaps() {
     assert_eq!(key_code("Esc"), key_code("Esc>rest"));
     assert_eq!(key_code("Esc"), key_code("Esc-"));
     assert_eq!(0, key_code("Escape2"));

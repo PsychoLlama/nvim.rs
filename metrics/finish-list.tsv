@@ -114,9 +114,9 @@ channel/	channel/mod.rs	1	88	19	43	deref:34 expr:11	other:16 pp_str:2 str:2 pp:1
 channel/	channel/open.rs	1	96	8	53	deref:36 expr:7	other:6 pp_str:3 str:3 void:2 value:1	other:1	rpc_start:5 rstream_start:4 rstream_init:3 dup2:2 fcntl:2 tv_dict_free:2 wstream_init:2 proc_spawn:1
 channel/	channel/reader.rs	1	59	13	28	deref:24 expr:5 ref:2	other:18 str:4 void:2 pp:1	-	xstrdup:2 bytes_at:1 callback_call:1 callback_free:1 dict_find:1 encode_list_write:1 from_raw_parts:1 multiqueue_put_event:1
 channel/	channel/term.rs	1	26	7	13	deref:9 expr:4	void:5 other:1 pp:1 str:1	-	multiqueue_put_event:2 proc_stop:1 pty_proc_resize:1 pty_proc_resume:1 rstream_start_inner:1 rstream_stop_inner:1 terminal_destroy:1 wstream_write:1
-charset/	*	3	105	44	66	deref:18 expr:5 compound:2	str:40 other:8 pp_str:5	str:14	from_raw_parts:3 from_raw_parts_mut:3 utf_ptr2char:2 xmalloc:2 .add:1 abort:1 bytes_at:1 copy:1
+charset/	*	3	106	44	67	deref:18 expr:5 compound:2	str:40 other:8 pp_str:5	str:14	from_raw_parts:3 from_raw_parts_mut:3 utf_ptr2char:2 xmalloc:2 .add:1 abort:1 bytes_at:1 copy:1
 charset/	charset/display.rs	1	38	14	28	deref:5 expr:2 compound:1	str:17 other:1	str:3	from_raw_parts_mut:3 from_raw_parts:2 bytes_at:1 copy:1 copy_nonoverlapping:1 utf_char2bytes:1 utf_ptr2cells:1 utf_ptr2char:1
-charset/	charset/mod.rs	1	46	15	23	deref:10 compound:1 expr:1	str:13 other:6	str:2	abort:1 mb_ptr2char_adv:1 utf_class_tab:1 utf_ptr2char:1 xmalloc:1
+charset/	charset/mod.rs	1	47	15	24	deref:10 compound:1 expr:1	str:13 other:6	str:2	abort:1 mb_ptr2char_adv:1 utf_class_tab:1 utf_ptr2char:1 xmalloc:1
 charset/	charset/walk.rs	1	21	15	15	deref:3 expr:2	str:10 pp_str:5 other:1	str:9	.add:1 from_raw_parts:1 xstrchrnul:1
 clipboard.rs	*	1	51	3	14	deref:33 ref:2	other:2	other:1	xfree:3 eval_call_provider:2 .as_ref:1 bytes_at:1 eval_has_provider:1 free_register:1 update_yankreg_width:1
 clipboard.rs	clipboard.rs	1	51	3	14	deref:33 ref:2	other:2	other:1	xfree:3 eval_call_provider:2 .as_ref:1 bytes_at:1 eval_has_provider:1 free_register:1 update_yankreg_width:1
@@ -441,10 +441,10 @@ indent/	indent/breakindent.rs	1	25	6	24	expr:1	str:8	-	.add:2 xfree:2 xstrdup:2 
 indent/	indent/edit.rs	1	71	6	49	deref:13 expr:7	str:4 other:1	-	xfree:5 ml_replace:3 .add:2 xmalloc:2 xstrnsave:2 .copy_from:1 .offset:1 .offset_from:1
 indent/	indent/expr.rs	1	38	3	20	deref:15 expr:3	str:3	-	win_charsize:4 utfc_next:3 .add:2 CStr::from_ptr:1 copy_option_part:1 init_charsize_arg:1 prefix_eq:1 utf_ptr2char_info:1
 indent/	indent/mod.rs	1	57	12	29	deref:17 expr:6	other:13 str:2 pp:1	-	.add:6 .offset_from:2 skipwhite:2 CStr::from_ptr:1 abort:1 c_str:1 get_leader_len:1 getvcol:1
-indent_c/	*	4	63	2	33	deref:16 compound:3 expr:3 ref:1	str:1	-	.add:16 bytes_at:2 .offset:1 .offset_from:1 .sub:1 CStr::from_ptr:1 atoi:1 copy_option_part:1
+indent_c/	*	4	63	2	33	deref:16 compound:3 expr:3 ref:1	str:1	-	.add:16 bytes_at:3 .offset:1 .offset_from:1 .sub:1 CStr::from_ptr:1 atoi:1 copy_option_part:1
 indent_c/	indent_c/cino.rs	1	7	1	2	compound:1 ref:1	-	-	CStr::from_ptr:1 atoi:1
 indent_c/	indent_c/incomment.rs	1	11	0	7	deref:4	-	-	.add:4 copy_option_part:1 getdigits_int:1 vim_strsize:1
-indent_c/	indent_c/keys.rs	1	43	1	22	deref:12 expr:3 compound:2	str:1	-	.add:12 .offset:1 .offset_from:1 .sub:1 get_special_key_code:1 mb_prevptr:1 prefix_eq:1 skip_to_option_part:1
+indent_c/	indent_c/keys.rs	1	43	1	22	deref:12 expr:3 compound:2	str:1	-	.add:12 .offset:1 .offset_from:1 .sub:1 bytes_at:1 mb_prevptr:1 prefix_eq:1 skip_to_option_part:1
 indent_c/	indent_c/recog.rs	1	2	0	2	-	-	-	bytes_at:2
 input.rs	*	1	14	3	5	compound:3	other:2 str:1	-	fix_input_buffer:1 getcmdline_prompt:1 input_get:1 utf_ptr2char:1
 input.rs	input.rs	1	14	3	5	compound:3	other:2 str:1	-	fix_input_buffer:1 getcmdline_prompt:1 input_get:1 utf_ptr2char:1
@@ -461,8 +461,8 @@ insexpand/	insexpand/sources.rs	1	44	2	29	deref:5 compound:1 expr:1	str:3 pp_str
 insexpand/	insexpand/tests.rs	1	6	0	2	compound:1	-	str:1	CStr::from_ptr:1 xstrdup:1
 insexpand/	insexpand/text.rs	1	30	4	19	deref:10 expr:1	str:5	str:3	.offset:9 mb_get_class:3 bytes_at:1 ignorecase:1 path_tail:1 prefix_eq:1 slice_at:1 utfc_ptr2len:1
 insexpand/	insexpand/vimscript.rs	1	32	5	21	deref:9 expr:2	value:5	-	.as_ref:4 .offset:1 CStr::from_ptr:1 bytes_at:1 eq_bytes:1 extmark_apply_undo:1 extmark_splice_delete:1 get_v_event:1
-keycodes/	*	1	66	13	45	deref:18 expr:2	str:9 other:8 pp_str:3	str:4 pp_str:1	utf_char2bytes:3 bytes_at:2 copy_nonoverlapping:2 get_var_value:2 utfc_ptr2len_len:2 xmalloc:2 .add:1 .offset_from:1
-keycodes/	keycodes/mod.rs	1	66	13	45	deref:18 expr:2	str:9 other:8 pp_str:3	str:4 pp_str:1	utf_char2bytes:3 bytes_at:2 copy_nonoverlapping:2 get_var_value:2 utfc_ptr2len_len:2 xmalloc:2 .add:1 .offset_from:1
+keycodes/	*	1	55	10	33	deref:14 expr:2 compound:1	str:8 other:6 pp_str:3	str:4 pp_str:1	utf_char2bytes:3 bytes_at:2 copy_nonoverlapping:2 get_var_value:2 xmalloc:2 .add:1 .offset_from:1 CStr::from_ptr:1
+keycodes/	keycodes/mod.rs	1	55	10	33	deref:14 expr:2 compound:1	str:8 other:6 pp_str:3	str:4 pp_str:1	utf_char2bytes:3 bytes_at:2 copy_nonoverlapping:2 get_var_value:2 xmalloc:2 .add:1 .offset_from:1 CStr::from_ptr:1
 kvec.rs	*	1	28	3	3	compound:4	other:2	other:1 void:1	from_raw_parts:1 from_raw_parts_mut:1 xfree:1
 kvec.rs	kvec.rs	1	28	3	3	compound:4	other:2	other:1 void:1	from_raw_parts:1 from_raw_parts_mut:1 xfree:1
 map/	*	2	40	17	24	ref:5 compound:4 deref:1 expr:1	other:21 pp:3	other:6	xrealloc:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 strequal:1

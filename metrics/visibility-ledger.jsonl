@@ -175,9 +175,9 @@
 {"path":"neovim::keycodes::REPTERM_FROM_PART","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
 {"path":"neovim::keycodes::REPTERM_NO_SPECIAL","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
 {"path":"neovim::keycodes::find_special_key","kind":"fn","file":"crates/nvim/src/keycodes/mod.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
-{"path":"neovim::keycodes::get_special_key_code","kind":"fn","file":"crates/nvim/src/keycodes/mod.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
 {"path":"neovim::keycodes::get_special_key_name","kind":"fn","file":"crates/nvim/src/keycodes/mod.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
 {"path":"neovim::keycodes::replace_termcodes","kind":"fn","file":"crates/nvim/src/keycodes/mod.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
+{"path":"neovim::keycodes::special_key_code","kind":"fn","file":"crates/nvim/src/keycodes/mod.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
 {"path":"neovim::linematch::linematch_nbuffers","kind":"fn","file":"crates/nvim/src/linematch.rs","tests":["crates/nvim/tests/unit/linematch.rs"]}
 {"path":"neovim::log::LOGLVL_DBG","kind":"const","file":"crates/nvim/src/log.rs","tests":["crates/nvim/tests/unit/log.rs"]}
 {"path":"neovim::log::LOGLVL_ERR","kind":"const","file":"crates/nvim/src/log.rs","tests":["crates/nvim/tests/unit/log.rs"]}

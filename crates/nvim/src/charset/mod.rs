@@ -681,6 +681,50 @@ pub unsafe fn vim_str2nr(
     }
 }
 
+/// What [`str2nr_in`] read: the number of bytes the number took (zero when
+/// there was none, or a strict parse rejected it), its value signed and
+/// unsigned, and whether the signed value was clamped.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct ParsedNumber {
+    pub(crate) len: usize,
+    pub(crate) value: VarNumber,
+    pub(crate) magnitude: UVarNumber,
+    pub(crate) overflow: bool,
+}
+
+/// [`vim_str2nr`] over a slice: the number at the start of `text`, read in
+/// the bases `what` allows. The end of the slice ends the number, as the NUL
+/// did for the pointer form; `strict` rejects one followed by a letter or a
+/// digit.
+pub(crate) fn str2nr_in(text: &[u8], what: Str2NrBases, strict: bool) -> ParsedNumber {
+    let mut parsed = ParsedNumber::default();
+    // Zero would mean "to the NUL", and an empty slice has no first byte to
+    // read; neither holds a number.
+    let Ok(maxlen @ 1..) = c_int::try_from(text.len()) else {
+        return parsed;
+    };
+    let mut len: c_int = 0;
+    let (start, lenp, prep) = (
+        text.as_ptr().cast::<c_char>(),
+        &raw mut len,
+        core::ptr::null_mut(),
+    );
+    let (nptr, unptr, overflow) = (
+        &raw mut parsed.value,
+        &raw mut parsed.magnitude,
+        &raw mut parsed.overflow,
+    );
+    // SAFETY: `maxlen` is the slice's own length, so the scan stays inside
+    // it, and every out-parameter is a local of this frame or null.
+    unsafe {
+        vim_str2nr(
+            start, prep, lenp, what, nptr, unptr, maxlen, strict, overflow,
+        )
+    };
+    parsed.len = usize::try_from(len).unwrap_or(0);
+    parsed
+}
+
 /// The value of the hexadecimal digit `c`. Anything else is nonsense.
 pub fn hex2nr(c: c_int) -> c_int {
     if (b'a' as c_int..=b'f' as c_int).contains(&c) {

@@ -157,7 +157,7 @@ pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
                     return true;
                 }
                 // SAFETY: as above.
-                if keytyped == unsafe { get_special_key_code(look.add(1)) } {
+                if keytyped == special_key_code(unsafe { cstr::bytes_at(look.add(1)) }) {
                     return true;
                 }
             }
