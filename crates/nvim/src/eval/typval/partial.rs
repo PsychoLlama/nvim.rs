@@ -17,6 +17,7 @@
 )]
 
 use super::*;
+use crate::eval::partial_name;
 use ::core::ptr::NonNull;
 
 /// One reference to a [`Partial`], given back when the handle goes.
@@ -131,5 +132,43 @@ impl TypVal {
             TypVal::Partial(pt) => pt.take(),
             _ => None,
         }
+    }
+
+    /// The name of the function a Funcref or partial calls; `None` for any
+    /// other value, and for a name that is empty, which is how "no
+    /// function" reads.
+    pub(crate) fn callable_name(&self) -> Option<&::core::ffi::CStr> {
+        let name = match self {
+            TypVal::Func(name) => *name,
+            // SAFETY: the partial is null or live, which is what
+            // `partial_name` takes.
+            TypVal::Partial(_) => unsafe { partial_name(self.partial_or_null()) },
+            _ => return None,
+        };
+        // SAFETY: a Funcref owns its NUL-terminated name, or holds none; a
+        // partial's name is owned by the partial, or by the function it holds
+        // a reference to. Either lives as long as this value does.
+        let name = unsafe { crate::cstr::at_opt(name) }?;
+        (!name.is_empty()).then_some(name)
+    }
+
+    /// What a partial binds: its dictionary and its arguments. Neither for a
+    /// Funcref, a NULL partial or anything else.
+    pub(crate) fn partial_binding(&self) -> (Option<&Dict>, &[TypVal]) {
+        let pt = self.partial_or_null();
+        if pt.is_null() {
+            return (None, &[]);
+        }
+        // SAFETY: a partial value holds a reference to a live partial, which
+        // owns its dictionary reference (or none) and its `pt_argc`
+        // arguments for as long as this value holds it.
+        let pt = unsafe { &*pt };
+        let args = match usize::try_from(pt.pt_argc) {
+            // SAFETY: as above -- `pt_argv` holds `argc` values.
+            Ok(argc @ 1..) => unsafe { ::core::slice::from_raw_parts(pt.pt_argv, argc) },
+            _ => &[],
+        };
+        // SAFETY: as above.
+        (unsafe { pt.pt_dict.as_ref() }, args)
     }
 }

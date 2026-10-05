@@ -116,7 +116,8 @@ unsafe fn assert_match_common(args: &[TypVal], atype: AssertType) -> c_int {
     let text = buf2.string_ptr_chk(&args[1]);
     if pat.is_null()
         || text.is_null()
-        || unsafe { pattern_match(pat, text, false) } == (atype == AssertType::Match)
+        || unsafe { pattern_match(cstr::at(pat), cstr::at(text), false) }
+            == (atype == AssertType::Match)
     {
         return 0;
     }

@@ -36,6 +36,14 @@ pub type wint_t = ::core::ffi::c_uint;
 #[cfg(not(miri))]
 pub use ::libc::{memmove, snprintf, strchr, strncasecmp, strncmp, strstr};
 
+/// The character-class bits glibc's table holds for byte `c` in the process
+/// locale -- what `isalnum(c)` and friends test, `_ISalnum` and the rest.
+pub(crate) fn ctype_bits(c: u8) -> ::core::ffi::c_ushort {
+    // SAFETY: the table `__ctype_b_loc` answers is valid for every `unsigned
+    // char` (and EOF) for the life of the thread.
+    unsafe { *(*__ctype_b_loc()).add(usize::from(c)) }
+}
+
 unsafe extern "C" {
     /// glibc's character-class table, which `isalpha` and friends index.
     pub fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;

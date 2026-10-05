@@ -22,6 +22,7 @@ use crate::mbyte::{
     convert_setup, enc_locale, string_convert, utf_char2bytes, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memory::XString;
+use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
 use crate::message::e_no_spell;
 use crate::message::state::did_emsg;
@@ -635,15 +636,17 @@ pub fn f_substitute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if str.is_null() || pat.is_null() || (sub.is_null() && expr.is_none()) || flg.is_null() {
             ptr::null_mut()
         } else {
-            let str = str as *mut c_char;
-            let pat = pat as *mut c_char;
-            let sub = sub as *mut c_char;
-            let flg = flg as *mut c_char;
-            let out = ptr::null_mut();
             // SAFETY: every string is NUL-terminated and outlives the call,
-            // and `expr` is null or argument 2.
-            let len = unsafe { cstr::bytes_at(str) }.len();
-            unsafe { do_string_sub(str, len, pat, sub, expr, flg, out) }
+            // and `sub` is null exactly when `expr` is argument 2.
+            let (str, pat, sub, flg) = unsafe {
+                (
+                    cstr::at(str),
+                    cstr::at(pat),
+                    cstr::at_opt(sub),
+                    cstr::at(flg),
+                )
+            };
+            owned_cstr(do_string_sub(str, pat, sub, expr, flg))
         },
     );
 }

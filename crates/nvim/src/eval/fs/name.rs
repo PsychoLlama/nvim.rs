@@ -31,9 +31,11 @@
 #![allow(unsafe_code)]
 
 use super::{Owned, VALID_HEAD, VALID_PATH, at, from, is_sep, str_arg_chk};
+use crate::cstr;
 use crate::eval::do_string_sub;
 use crate::eval::typval::NumBuf;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
+use crate::memory::handoff::owned_cstr;
 use crate::memory::xfree;
 use crate::os::env::{expand_env_save, home_replace};
 use crate::os::fs::{os_dirname, os_isdir};
@@ -287,21 +289,14 @@ fn find_char(s: &CStr, c: u8) -> Option<usize> {
 }
 
 /// `text` with `pat` replaced by `sub`, and the length of the answer.
-fn string_sub(
-    text: &Owned,
-    len: usize,
-    pat: &Owned,
-    sub: &Owned,
-    global: bool,
-) -> (*mut c_char, usize) {
+fn string_sub(text: &Owned, pat: &Owned, sub: &Owned, global: bool) -> (*mut c_char, usize) {
     let flags = if global { c"g" } else { c"" };
-    let mut out_len: size_t = 0;
-    let (n, fl, ret) = (len as size_t, flags.as_ptr(), &raw mut out_len);
-    // SAFETY: `text` has `len` readable bytes -- it was copied from exactly
-    // that many -- and the rest are NUL-terminated strings; a NULL `expr` is
-    // what asks for a plain replacement rather than a `\=` one.
-    let out = unsafe { do_string_sub(text.0, n, pat.0, sub.0, None, fl, ret) };
-    (out, out_len as usize)
+    // SAFETY: all three are NUL-terminated copies this caller owns.
+    let (text, pat, sub) = unsafe { (cstr::at(text.0), cstr::at(pat.0), cstr::at(sub.0)) };
+    // No `expr`: a plain replacement rather than a `\=` one.
+    let out = do_string_sub(text, pat, Some(sub), None, flags);
+    let len = out.len();
+    (owned_cstr(out), len)
 }
 
 /// The name, single-quoted for the shell.
@@ -534,7 +529,7 @@ fn subst_stage(mods: Mods, f: Fname) -> bool {
     let subject = unsafe { Owned::dupz(f.name(), f.len()) };
 
     mods.set_used(j + sub_len + 1);
-    let (out, out_len) = string_sub(&subject, f.len(), &pat, &sub, global);
+    let (out, out_len) = string_sub(&subject, &pat, &sub, global);
     f.adopt(out);
     f.set_len(out_len);
     true

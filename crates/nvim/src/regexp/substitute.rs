@@ -375,6 +375,47 @@ pub(crate) unsafe fn vim_regsub(
     })
 }
 
+/// [`vim_regsub`] into an owned buffer: what `source` -- or `expr`, when
+/// the replacement is an expression -- stands for after the string match
+/// `matches` over `line`. Both passes run here. `None` when the measuring
+/// pass answered no length, which is how the expansion reports a failure.
+///
+/// `source` is lent exclusively because a `\=` replacement is evaluated
+/// in place, and the evaluator may cut it while it runs.
+pub(crate) fn regsub_to_vec(
+    matches: &mut RegMatch,
+    line: &CStr,
+    source: Option<&mut XString>,
+    expr: Option<&TypVal>,
+) -> Option<Vec<u8>> {
+    let source = source.map_or(core::ptr::null_mut(), |text| text.as_mut_ptr());
+    let magic = REGSUB_MAGIC as c_int;
+    // The measuring pass writes nothing, but wants somewhere to not write.
+    let mut nowhere: c_char = 0;
+    // SAFETY: `source` is null or an owned NUL-terminated buffer the caller
+    // lent for the call; `expr` is the caller's; the measuring pass writes
+    // nothing through `nowhere`.
+    let len = unsafe { vim_regsub(matches, line, source, expr, &raw mut nowhere, 0, magic) };
+    let size = usize::try_from(len).ok().filter(|&size| size > 0)?;
+    let mut out = vec![0u8; size];
+    let copy = REGSUB_COPY as c_int | magic;
+    // SAFETY: as above, and `out` holds the `len` bytes the measuring pass
+    // asked for, terminator included.
+    unsafe {
+        vim_regsub(
+            matches,
+            line,
+            source,
+            expr,
+            out.as_mut_ptr().cast(),
+            len,
+            copy,
+        )
+    };
+    out.truncate(size - 1);
+    Some(out)
+}
+
 /// [`vim_regsub`] for a buffer match, whose captures can span lines from
 /// `lnum` on.
 ///

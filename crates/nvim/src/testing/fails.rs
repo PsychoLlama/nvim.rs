@@ -140,7 +140,7 @@ unsafe fn check_reported_error(
             if expected.is_null() {
                 return FailsCheck::Abandon;
             }
-            if !unsafe { pattern_match(expected, actual, false) } {
+            if !unsafe { pattern_match(cstr::at(expected), cstr::at(actual), false) } {
                 return FailsCheck::Mismatch(FailsMismatch {
                     expected_str: expected,
                     index: 1,
@@ -159,7 +159,7 @@ unsafe fn check_reported_error(
             if expected.is_null() {
                 return FailsCheck::Abandon;
             }
-            if unsafe { pattern_match(expected, actual, false) } {
+            if unsafe { pattern_match(cstr::at(expected), cstr::at(actual), false) } {
                 return FailsCheck::Matched;
             }
             FailsCheck::Mismatch(FailsMismatch {
@@ -203,7 +203,9 @@ unsafe fn check_error_position(args: &[TypVal], context: &CStr) -> FailsCheck {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FIFTH_ARGUMENT);
     }
     let want_context = args[4].string_or_null();
-    if want_context.is_null() || unsafe { pattern_match(want_context, context.as_ptr(), false) } {
+    if want_context.is_null()
+        || unsafe { pattern_match(cstr::at(want_context), cstr::at(context.as_ptr()), false) }
+    {
         return FailsCheck::Matched;
     }
     FailsCheck::Mismatch(FailsMismatch {

@@ -5,8 +5,7 @@
 //! comparison a Blob comparison, then List, then Dict, then Funcref, then
 //! Float, then Number, and only what is left compares as a String.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -15,32 +14,29 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::cmp::Ordering;
+use core::ffi::{CStr, c_int, c_uint};
 
 use crate::eval::typval::{
     NumBuf, blob_equal, dict_equal, list_equal, tv_clear, tv_equal, tv_get_float, tv_get_number,
 };
 use crate::eval::{
     _ISalnum, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH, EXPR_NEQUAL,
-    EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, Tv, e_invalblob, partial_name,
-    pattern_match,
+    EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, e_invalblob, pattern_match,
 };
-use crate::mbyte::mb_strcmp_ic;
+use crate::mbyte::strnicmp_in;
 use crate::message::emsg;
-use crate::os::cshim::{__ctype_b_loc, gettext};
+use crate::os::cshim::{ctype_bits, gettext};
 use crate::types::{
-    Dict, ExprType, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VarNumber,
+    ExprType, Failed, Float, TypVal, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VarNumber,
 };
 
 /// `isalnum` in the process locale, which is what decides whether `is` and
 /// `isnot` stand as whole words. nvim calls `setlocale(LC_ALL, "")` at
 /// startup, so this is deliberately not the ASCII test.
 fn isalnum_locale(c: u8) -> bool {
-    // SAFETY: `__ctype_b_loc` yields a table valid over the whole byte range.
-    let flags = unsafe { *(*__ctype_b_loc()).offset(c as isize) };
-    c_uint::from(flags) & _ISalnum != 0
+    c_uint::from(ctype_bits(c)) & _ISalnum != 0
 }
 
 /// Recognise a comparison operator, answering it and how many bytes it took.
@@ -81,81 +77,25 @@ pub(crate) fn comparison_at(at: impl Fn(usize) -> u8) -> (ExprType, c_int) {
     }
 }
 
-/// The name a Funcref or partial calls, with `""` read as "none".
-///
-/// # Safety
-/// `tv` must be a `VAR_FUNC` or `VAR_PARTIAL` typval.
-unsafe fn callable_name(tv: &TypVal) -> *mut c_char {
-    // SAFETY: the caller's promise -- the tag says which union member holds
-    // the callable, and a partial is null or live.
-    let name = if (*tv).v_type() == VAR_FUNC {
-        (*tv).func_name_or_null()
-    } else {
-        unsafe { partial_name((*tv).partial_or_null()) }
-    };
-    if !name.is_null() && c_int::from(unsafe { *name }) == NUL {
-        return core::ptr::null_mut();
-    }
-    name
-}
-
 /// Are two Funcrefs — or two partials, or one of each — the same callable?
 ///
 /// Equal names, equal bound dictionaries and equal bound arguments. A name
 /// that is present but empty counts as absent, which is how a partial with
 /// no function compares against a null Funcref.
 pub(crate) fn func_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
-    let s1 = unsafe { callable_name(tv1) };
-    let s2 = unsafe { callable_name(tv2) };
-    if s1.is_null() || s2.is_null() {
-        if s1 != s2 {
-            return false;
-        }
-    } else if !unsafe { cstr::eq(s1, s2) } {
+    if tv1.callable_name() != tv2.callable_name() {
         return false;
     }
-
     // A plain Funcref carries neither a bound dictionary nor arguments.
-    let dict_of = |tv: &TypVal| -> *mut Dict {
-        if tv.v_type() == VAR_FUNC {
-            core::ptr::null_mut()
-        } else {
-            unsafe { (*tv.partial_or_null()).pt_dict }
-        }
+    let ((d1, args1), (d2, args2)) = (tv1.partial_binding(), tv2.partial_binding());
+    let same_dict = match (d1, d2) {
+        (None, None) => true,
+        (Some(_), Some(_)) => dict_equal(d1, d2, ic),
+        _ => false,
     };
-    let d1 = dict_of(tv1);
-    let d2 = dict_of(tv2);
-    if d1.is_null() || d2.is_null() {
-        if d1 != d2 {
-            return false;
-        }
-    } else if !unsafe { dict_equal((d1).as_ref(), (d2).as_ref(), ic) } {
-        return false;
-    }
-
-    let argc_of = |tv: &TypVal| -> c_int {
-        if tv.v_type() == VAR_FUNC {
-            0
-        } else {
-            unsafe { (*(*tv).partial_or_null()).pt_argc }
-        }
-    };
-    let argc = argc_of(tv1);
-    if argc != argc_of(tv2) {
-        return false;
-    }
-    if argc == 0 {
-        // Neither side has an argument vector to compare -- and a plain
-        // Funcref carries its *name*, so a partial must not be read
-        // at all here. Upstream reaches the reads only from inside the loop
-        // body, which a zero count never enters.
-        return true;
-    }
-    // SAFETY: the count is non-zero, so both unions hold a partial with an
-    // argument vector of `argc` values.
-    let (p1, p2) = ((*tv1).partial_or_null(), (*tv2).partial_or_null());
-    let (a1, a2) = unsafe { ((*p1).pt_argv, (*p2).pt_argv) };
-    (0..argc).all(|i| unsafe { tv_equal(&*a1.offset(i as isize), &*a2.offset(i as isize), ic) })
+    same_dict
+        && args1.len() == args2.len()
+        && args1.iter().zip(args2).all(|(a1, a2)| tv_equal(a1, a2, ic))
 }
 
 /// The shared shape of the Blob, List and Dict arms.
@@ -203,6 +143,15 @@ fn from_ordering(op: ExprType, i: c_int) -> VarNumber {
     })
 }
 
+/// `strcmp`'s answer for an ordering.
+fn sign_of(ordering: Ordering) -> c_int {
+    match ordering {
+        Ordering::Less => -1,
+        Ordering::Equal => 0,
+        Ordering::Greater => 1,
+    }
+}
+
 /// Evaluate `typ1 <op> typ2`, leaving the Number answer in `typ1`.
 pub(crate) fn typval_compare(
     typ1: &mut TypVal,
@@ -224,9 +173,7 @@ pub(crate) fn typval_compare(
         let same = || b1.map(::core::ptr::from_ref) == b2.map(::core::ptr::from_ref);
         let eq = || blob_equal(b1, b2);
         let wrong_type = c"E977: Can only compare Blob with Blob";
-        // SAFETY: a message constant is a NUL-terminated literal.
-        let wrong_op = unsafe { CStr::from_ptr(e_invalblob.as_ptr()) };
-        let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);
+        let cmp = compare_container(op, same_type, same, eq, wrong_type, e_invalblob);
         match cmp {
             Some(n) => n,
             None => {
@@ -250,10 +197,9 @@ pub(crate) fn typval_compare(
             }
         }
     } else if t1 == VAR_DICT || t2 == VAR_DICT {
-        // SAFETY: as the Blob arm.
-        let (d1, d2) = (typ1.dict_or_null(), typ2.dict_or_null());
-        let same = || d1 == d2;
-        let eq = || unsafe { dict_equal((d1).as_ref(), (d2).as_ref(), ic) };
+        // As the Blob arm.
+        let same = || typ1.dict_or_null() == typ2.dict_or_null();
+        let eq = || dict_equal(typ1.dict_ref(), typ2.dict_ref(), ic);
         let wrong_type = c"E735: Can only compare Dictionary with Dictionary";
         let wrong_op = c"E736: Invalid operation for Dictionary";
         let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);
@@ -309,19 +255,19 @@ pub(crate) fn typval_compare(
     } else {
         let mut buf1 = NumBuf::new();
         let mut buf2 = NumBuf::new();
-        let s1 = buf1.string_ptr(typ1);
-        let s2 = buf2.string_ptr(typ2);
+        let s1 = buf1.string(typ1);
+        let s2 = buf2.string(typ2);
         if op == EXPR_MATCH || op == EXPR_NOMATCH {
             // The pattern is the right-hand side and the subject the left.
-            VarNumber::from(unsafe { pattern_match(s2, s1, ic) } == (op == EXPR_MATCH))
+            VarNumber::from(pattern_match(s2, s1, ic) == (op == EXPR_MATCH))
+        } else if ic {
+            from_ordering(op, strnicmp_in(s1.to_bytes(), s2.to_bytes()))
         } else {
-            from_ordering(op, unsafe { mb_strcmp_ic(ic, s1, s2) })
+            from_ordering(op, sign_of(s1.cmp(s2)))
         }
     };
 
-    // SAFETY: the caller's promise -- `typ1` is a valid typval.
-    let mut one = unsafe { Tv::new(typ1) };
     tv_clear(typ1);
-    one.write_number(answer);
+    typ1.write_number(answer);
     Ok(())
 }
