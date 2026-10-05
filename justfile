@@ -105,11 +105,13 @@ benchmark *args: build
 drop-glue binary='target/release/nvim':
   scripts/drop-glue.py {{ binary }}
 
-# Fail if a state record's cell (`state_record!`, the option table) is an
-# exported (`D`/`B`) symbol. An exported static is read through the GOT, one
-# more load on every access; a `pub` inlinable body that names the record is
-# enough to export it, and nothing in the source shows it (the option table's
-# cost spellbench 0.7 %). Wants a `--release` binary, like `drop-glue`.
+# Fail if a state record's cell (`state_record!`, the option table) or a hot
+# cell is an exported (`D`/`B`) symbol, or if any other `GlobalCell` is and
+# docs/exported-cells.md (shrink-only) does not list it. An exported static is
+# read through the GOT, one more load on every access; a `pub` inlinable body
+# that names the cell is enough to export it, and nothing in the source shows
+# it (the option table's cost spellbench 0.7 %). Wants a `--release` binary,
+# like `drop-glue`; run it on a `codegen-units = 1` build too.
 state-exports binary='target/release/nvim':
   scripts/state-exports.py {{ binary }}
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail if a state record's cell, or another hot cell, is exported from the binary.
+"""Fail if a state record's cell, a hot cell, or any new cell is exported from the binary.
 
 A state record is one `GlobalCell` holding a whole namespace of editor state
 (`global_cell::state_record!`, and the option table apigen writes). Every
@@ -29,6 +29,15 @@ The same holds for any other cell read on a hot path, so the guard watches
 those too: every `static X: GlobalCell<T>` whose `T` is an `id_table::IdTable`
 or a struct holding one (an owner table every lookup by id goes through),
 found in the source the same way, and the hand-picked cells in `HOT`.
+
+Every other `GlobalCell`/`SharedCell` static is watched as well, against a
+shrink-only allowlist (docs/exported-cells.md, one row per exported cell,
+grouped under its owning module): a cell exported and not on the list fails,
+and so does a row whose cell is local now or gone from the binary -- the list
+only ever loses rows. A cell the binary does not hold at all (unused, or a
+test's) is not an error unless it is one of the watched ones above. Run it on
+a `codegen-units = 1` binary as well as the default one: which bodies are
+shippable is decided per crate, but the inliner's choices are not.
 """
 
 import pathlib
@@ -54,6 +63,17 @@ HOT = [
     ("hl_attr_active", f"{CRATE}::highlight::state::hl_attr_active"),
     ("y_previous", f"{CRATE}::register::y_previous"),
 ]
+
+# Every `GlobalCell`/`SharedCell` static, at any depth (a fn-local one is
+# `module::fn::NAME` to `nm`), however its type is spelled or wrapped.
+ANY_CELL = re.compile(
+    r"\bstatic\s+(\w+)\s*:\s*(?:[\w:]*::)?(?:GlobalCell|SharedCell)\s*<"
+)
+# The allowlist, and one row of it: a heading per owning module, then
+# "- `neovim::path::NAME`" rows.
+ALLOWLIST = REPO / "docs/exported-cells.md"
+ALLOW_HEADING = re.compile(r"^## `(\w+)`\s*$")
+ALLOW_ROW = re.compile(r"^- `(neovim::[\w:]+)`")
 
 # `static NAME: GlobalCell<TYPE>` at item level.
 CELL = re.compile(
@@ -105,6 +125,51 @@ def records():
     return list(dict.fromkeys(found))
 
 
+def all_cells():
+    """`(module path, name)` for every cell static the source declares."""
+    found = []
+    for file in sorted(SRC.rglob("*.rs")):
+        if file.name == "global_cell.rs":
+            continue
+        for name in ANY_CELL.findall(file.read_text()):
+            found.append((module_path(file), name))
+    return found
+
+
+def owner(path: str) -> str:
+    """The top-level module a `neovim::` path belongs to."""
+    return path.split("::")[1]
+
+
+def allowlist():
+    """The allowlist's rows, failing on a row filed under the wrong module."""
+    rows, misfiled, module = [], [], None
+    for number, line in enumerate(ALLOWLIST.read_text().splitlines(), 1):
+        if heading := ALLOW_HEADING.match(line):
+            module = heading.group(1)
+        elif row := ALLOW_ROW.match(line):
+            if owner(row.group(1)) != module:
+                misfiled.append(
+                    f"line {number}: {row.group(1)} is not under `{module}`"
+                )
+            rows.append(row.group(1))
+    return rows, misfiled
+
+
+def exported_cells(kinds):
+    """Every exported data symbol that is a cell the source declares."""
+    cells = all_cells()
+    out = set()
+    for symbol, kind in kinds.items():
+        if not kind.isupper() or not symbol.startswith(CRATE + "::"):
+            continue
+        for module, name in cells:
+            if symbol.endswith("::" + name) and symbol.startswith(module + "::"):
+                out.add(symbol)
+                break
+    return out
+
+
 def data_symbols(binary: pathlib.Path):
     """Demangled name -> `nm` kind, for every data symbol."""
     out = subprocess.run(
@@ -148,6 +213,33 @@ def main() -> int:
             failed = True
         else:
             print(f"state-exports: {label} is local ({kind})")
+
+    watched = {path for _, path in records()}
+    rows, misfiled = allowlist()
+    for problem in misfiled:
+        print(f"state-exports: {ALLOWLIST.name} {problem}", file=sys.stderr)
+        failed = True
+    exported = exported_cells(kinds) - watched
+    for path in sorted(exported - set(rows)):
+        print(
+            f"state-exports: {path} is exported ({kinds[path]}) and not on\n"
+            f"  {ALLOWLIST.relative_to(REPO)}. Make the body that names it\n"
+            "  unshippable (see above); the list only shrinks.",
+            file=sys.stderr,
+        )
+        failed = True
+    for path in sorted(set(rows) - exported):
+        state = "local" if path in kinds else "not in the binary"
+        print(
+            f"state-exports: {path} is {state}; drop its row from "
+            f"{ALLOWLIST.relative_to(REPO)}.",
+            file=sys.stderr,
+        )
+        failed = True
+    print(
+        f"state-exports: {len(exported)} other exported cells, "
+        f"{len(rows)} allowlist rows"
+    )
     return 1 if failed else 0
 
 
