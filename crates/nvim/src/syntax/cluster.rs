@@ -102,10 +102,6 @@ pub(crate) fn syn_scl_namen2id(name: &[u8]) -> c_int {
 /// Like [`syn_scl_namen2id`], but create the cluster when it does not exist.
 ///
 /// Answers 0 only when there is no room for another cluster.
-///
-/// # Safety
-///
-/// `name` must point at `len` readable bytes.
 pub(crate) fn syn_check_cluster(name: &[u8]) -> c_int {
     let name = name_in(name);
     match scl_name2id(&name) {
@@ -153,10 +149,6 @@ const CLUSTER_OPS: [(&CStr, c_int); 3] = [
 ///
 /// A keyword must be followed by white space or `=`, and a failed test falls
 /// through to the next candidate rather than claiming the argument.
-///
-/// # Safety
-///
-/// `rest` must point at a NUL-terminated string.
 fn cluster_op(rest: &[u8]) -> Option<(usize, c_int)> {
     for (name, op) in CLUSTER_OPS {
         let name = name.to_bytes();

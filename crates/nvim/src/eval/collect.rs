@@ -735,9 +735,6 @@ pub unsafe fn var_item_copy(
 }
 
 /// The copy this list was last given under the current `copy_id`.
-///
-/// # Safety
-/// `l` must be valid.
 #[inline]
 pub(crate) fn list_latest_copy(l: &List) -> *mut List {
     l.lv_copylist

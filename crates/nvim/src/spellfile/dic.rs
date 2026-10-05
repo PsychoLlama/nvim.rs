@@ -69,11 +69,6 @@ use super::{
 
 /// Read a `.dic` file: a count line, then one stem per line with the affix
 /// flags it takes after a `/`.
-///
-/// # Safety
-///
-/// `fname` must be a NUL-terminated path and `affile` the affix file that
-/// goes with it.
 pub(super) fn spell_read_dic(
     spin: &mut SpellInfo,
     fname: &CStr,

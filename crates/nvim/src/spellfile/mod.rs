@@ -628,10 +628,6 @@ unsafe fn output_name(
 }
 
 /// Can `:mkspell` write here? Reports why not, if not.
-///
-/// # Safety
-///
-/// `wfname` must be a NUL-terminated path.
 fn output_is_writable(wfname: &CStr, incount: ::core::ffi::c_int, over_write: bool) -> bool {
     // SAFETY: the caller promises the path.
     if incount <= 0 {

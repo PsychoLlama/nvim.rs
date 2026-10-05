@@ -485,9 +485,6 @@ fn dict_obj(dict: ApiDict) -> Object {
 ///
 /// The strings are copies: the answer owns its whole tree and outlives the
 /// cache it was read out of.
-///
-/// # Safety
-/// The cache must be live, which it is once `runtime_init` has run.
 pub fn runtime_inspect() -> Array {
     let path = runtime_search_path.get();
     let mut rv = Array::with_capacity(path.size);
@@ -739,9 +736,6 @@ pub unsafe fn do_in_runtimepath(
 
 /// Source the file `name` from all directories in 'runtimepath'.  `name` may
 /// contain wildcards; `RuntimeOpts::ALL` sources every match rather than the first.
-///
-/// # Safety
-/// `name` must be NUL-terminated.
 pub fn source_runtime(name: &CStr, flags: RuntimeOpts) -> Result<(), Failed> {
     // SAFETY: a NUL-terminated name; `source_callback` takes a null cookie.
     unsafe {

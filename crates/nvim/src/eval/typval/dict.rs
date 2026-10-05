@@ -845,10 +845,6 @@ pub fn tv_dict_alloc_lock(lock: VarLock) -> DictRef {
 }
 
 /// Allocate an empty dictionary and store it in `ret_tv` as the return value.
-///
-/// # Safety
-/// `ret_tv` must point at a writable `TypVal` that holds no value yet —
-/// whatever was there is overwritten, not cleared.
 pub fn tv_dict_alloc_ret(ret_tv: &mut TypVal) {
     // SAFETY: the allocator is the editor's own, on its own thread.
     ret_tv.write_dict(Some(tv_dict_alloc_lock(VarLock::Unlocked)));

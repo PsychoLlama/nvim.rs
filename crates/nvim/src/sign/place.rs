@@ -295,9 +295,6 @@ unsafe fn buf_delete_signs(buffer: Buf, group: *const c_char, id: c_int, atlnum:
 }
 
 /// Whether `buffer` carries any sign at all — text or highlight.
-///
-/// # Safety
-/// `buffer` must be live.
 pub(crate) fn buf_has_signs(buffer: Buf) -> bool {
     buffer.meta_total(kMTMetaSignHL) + buffer.meta_total(kMTMetaSignText) != 0
 }

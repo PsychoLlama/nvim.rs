@@ -337,9 +337,6 @@ fn after_hash(line: &[u8], hash: usize) -> &[u8] {
 
 /// Walk lines looking for the `#if`/`#else`/`#endif` that partners the
 /// one the cursor is on.
-///
-/// # Safety
-/// `pos` must address the current buffer.
 fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option<Pos> {
     let mut count = 0;
     pos.col = 0;
@@ -438,9 +435,6 @@ struct Walk {
 impl Walk {
     /// Step one character backwards, answering false at the start of the
     /// buffer or when the travel limit is reached.
-    ///
-    /// # Safety
-    /// The current buffer must be the one `self.pos` addresses.
     fn step_back(&mut self, comment_dir: c_int) -> bool {
         // The character to match is inside a comment; don't look
         // outside it.
@@ -477,9 +471,6 @@ impl Walk {
 
     /// Step one character forwards, answering false at the end of the
     /// buffer or when the travel limit is reached.
-    ///
-    /// # Safety
-    /// As [`Walk::step_back`].
     fn step_forward(&mut self) -> bool {
         let line = self.lines.line(self.pos.lnum);
         let col = self.pos.col as usize;
@@ -517,9 +508,6 @@ impl Walk {
     /// or of a raw string.
     ///
     /// Comments do not nest, and quotes inside them are ignored.
-    ///
-    /// # Safety
-    /// As [`Walk::step_back`].
     fn comment_step(&mut self, target: &Target) -> Step {
         let col = self.pos.col;
         let line = self.lines.line(self.pos.lnum);
@@ -596,10 +584,9 @@ impl Walk {
     /// string onto the next one, which is what rescues the odd case.
     /// Complicated, isn't it?
     ///
-    /// # Safety
-    /// As [`Walk::step_back`]. Only called with `do_quotes == -1`, which
-    /// is also where the count starts: after N quotes it holds `N - 1`,
-    /// so masking with 1 answers "the count was even".
+    /// Only called with `do_quotes == -1`, which is also where the count
+    /// starts: after N quotes it holds `N - 1`, so masking with 1 answers
+    /// "the count was even".
     fn count_quotes(&mut self) {
         // A walk that never reaches the start position leaves
         // `at_start` at -1, i.e. *true*. Upstream.
@@ -667,9 +654,6 @@ impl Walk {
     /// Careful with a lone single quote, as in "jon's". Things like
     /// `'\233'` and `'\x3f'` are not skipped — there is never a brace in
     /// them. Answers whether the position moved.
-    ///
-    /// # Safety
-    /// As [`Walk::step_back`].
     fn skip_char_constant(&mut self) -> bool {
         let col = self.pos.col;
         let line = self.lines.line(self.pos.lnum);

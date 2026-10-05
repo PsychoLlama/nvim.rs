@@ -252,10 +252,6 @@ pub unsafe fn augroup_exists(name: *const ::core::ffi::c_char) -> bool {
 }
 
 /// `:augroup`: switch to a group, leave one, delete one, or list them.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string, unaliased for the call.
 pub fn do_augroup(arg: &CStr, del_group: bool) {
     let arg = arg.as_ptr().cast_mut();
     // SAFETY, for every region in this function: `arg` is the caller's

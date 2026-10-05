@@ -114,11 +114,6 @@ impl SplWriter {
 }
 
 /// Write the whole `.spl` file.
-///
-/// # Safety
-///
-/// `fname` must be a NUL-terminated path and `spin` must hold finished,
-/// compressed trees.
 pub(super) fn write_vim_spell(spin: &mut SpellInfo, fname: &CStr) -> Result<(), Failed> {
     // SAFETY: the caller promises the path.
     let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname.as_ptr()) }));

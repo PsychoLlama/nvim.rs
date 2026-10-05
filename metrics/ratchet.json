@@ -53,6 +53,7 @@
   "lua_raw_stack": 837,
   "raw_variadic_calls": 123,
   "long_fns": 65,
+  "safety_on_safe_fns": 0,
   "dup_consts": 1211,
   "types_files": 114,
   "untested_dirs": 33,

@@ -441,9 +441,6 @@ pub(crate) unsafe fn check_stl_option(s: *mut c_char) -> Result<(), OptError> {
 
 /// Does `val` hold a character an option marked as a file or directory name
 /// refuses? The set is wider while 'secure' is on.
-///
-/// # Safety
-/// `val` is a C string.
 pub fn check_illegal_path_names(val: &CStr, flags: uint32_t) -> bool {
     let val = val.to_bytes();
     let holds = |set: &[u8]| val.iter().any(|b| set.contains(b));

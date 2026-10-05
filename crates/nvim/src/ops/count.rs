@@ -35,9 +35,6 @@ use crate::types::NUL;
 /// `cc`, because every caller is accumulating. A word is a run of
 /// non-white-space, which is what `wc(1)` counts too. Reaching the end of the
 /// line before `limit` adds `eol_size` for the line break itself.
-///
-/// # Safety
-/// `line` must be NUL-terminated.
 fn line_count_info(
     line: &[u8],
     wc: &mut VarNumber,

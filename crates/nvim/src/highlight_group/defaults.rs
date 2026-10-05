@@ -564,9 +564,6 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
 /// A recursive call answers `Ok` without doing anything: it means the scheme
 /// being sourced set `'background'`, which reloaded the highlighting, which
 /// is proof enough that it is working.
-///
-/// # Safety
-/// Sources a script and fires autocommands; main thread only.
 pub(crate) fn load_colors(name: &CStr) -> Result<(), Failed> {
     let name = name.as_ptr().cast_mut();
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);

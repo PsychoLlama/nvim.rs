@@ -302,9 +302,6 @@ impl Simplify<'_> {
 
     /// Ask `question` about the name cut short at `at`, which is put back
     /// afterwards.
-    ///
-    /// # Safety
-    /// `at` must index into the name.
     fn terminated_at(&mut self, at: usize, question: impl FnOnce(*const c_char) -> bool) -> bool {
         let saved = core::mem::replace(&mut self.name[at], 0);
         let answer = question(self.name.as_ptr().cast());

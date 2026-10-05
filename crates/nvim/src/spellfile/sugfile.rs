@@ -65,10 +65,6 @@ use super::{
 /// The `.spl` is re-read rather than reusing what is still in memory: the
 /// word numbers have to match the order the *reader* will see, and the
 /// tree in memory has been compressed since.
-///
-/// # Safety
-///
-/// `wfname` must be the NUL-terminated path of a readable `.spl`.
 pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
     // SAFETY: `wfname` is a valid path and every pointer below is either
     // from `spin` or from the language just loaded.
@@ -334,10 +330,6 @@ fn offset2bytes(nr: c_int, buf: &mut [u8; 4]) -> usize {
 
 /// Write the `.sug` file: the sound-fold trie, then one line of word
 /// numbers per word end.
-///
-/// # Safety
-///
-/// `fname` must be a NUL-terminated path.
 fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
     // SAFETY: the caller promises the path.
     let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname.as_ptr()) }));

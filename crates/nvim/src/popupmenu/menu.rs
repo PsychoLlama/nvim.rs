@@ -273,9 +273,6 @@ fn set_mousemoveevent(on: bool) {
 }
 
 /// `:popup` -- show the menu at `path_name`, at the mouse or at the cursor.
-///
-/// # Safety
-/// `path_name` must be NUL-terminated. Pumps the event loop.
 pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
     if use_mouse_pos == 0 {
         // Put the mouse where the cursor is, so the menu pops up there.

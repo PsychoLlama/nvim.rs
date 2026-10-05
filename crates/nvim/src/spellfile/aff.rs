@@ -256,10 +256,6 @@ const CASE_RULES: &[(&CStr, CaseTable)] = &[
 
 /// Does this line start with `rulename` and carry the right number of
 /// items? Trailing items are allowed when the first of them is a comment.
-///
-/// # Safety
-///
-/// `items` must hold live NUL-terminated strings.
 fn is_aff_rule(items: &[&CStr], rulename: &CStr, mincount: usize) -> bool {
     items[0] == rulename
         && (items.len() == mincount
@@ -462,10 +458,6 @@ fn split_items(line: &mut [uint8_t]) -> Vec<&CStr> {
 }
 
 /// Handle one line. Returns false to stop reading the file.
-///
-/// # Safety
-///
-/// `aff` and `spin` must be live.
 fn handle_line(
     spin: &mut SpellInfo,
     aff: &mut AffFile,
@@ -772,10 +764,6 @@ pub(super) fn is_digit_byte(c: c_char) -> bool {
 }
 
 /// `FLAG`: how flags are spelled in the rest of the file.
-///
-/// # Safety
-///
-/// As [`handle_line`].
 fn handle_flag_type(aff: &mut AffFile, items: &[&CStr], fname: &CStr, lnum: c_int) {
     if items[1] == c"long" {
         aff.af_flagtype = AFT_LONG;
@@ -809,10 +797,6 @@ fn handle_flag_type(aff: &mut AffFile, items: &[&CStr], fname: &CStr, lnum: c_in
 
 /// Apply what the file collected, checking it against what earlier `.aff`
 /// files of the same run already set.
-///
-/// # Safety
-///
-/// `spin`, `aff` and the state must be live.
 fn finish_aff(spin: &mut SpellInfo, aff: &mut AffFile, st: &mut AffState, fname: &CStr) {
     // The case tables are only used to decide whether the word characters
     // need rebuilding; their contents are not kept.

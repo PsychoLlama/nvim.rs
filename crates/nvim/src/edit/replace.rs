@@ -156,9 +156,6 @@ pub(crate) fn replace_pop_if_nul() -> c_int {
 }
 
 /// Join the top two entries by removing the `off`'th NUL from the top.
-///
-/// # Safety
-/// Must run with a live replace stack.
 pub(crate) fn replace_join(mut off: c_int) {
     replace_stack.with_mut(|stack| {
         for i in (0..stack.len()).rev() {

@@ -222,11 +222,6 @@ pub(crate) unsafe fn shada_pack_entry(
 /// The file header: whatever `shada_write` chose to record about the Nvim
 /// that wrote it. Nvim has never read it back — it is there for anyone
 /// looking at the file by hand.
-///
-/// # Safety
-///
-/// `header` must be a well-formed API dictionary, its `size` entries
-/// initialized.
 fn pack_header(header: &ApiDict, sbuf: &mut PackerBuffer) {
     mpack_map(sbuf.cursor_mut(), header.len() as uint32_t);
     for item in header {

@@ -23,9 +23,6 @@ const NO_ERROR: Error = Error::none();
 
 /// The `{index}` argument the `ctxget`/`ctxset` pair share: absent means 0,
 /// a Number is taken as-is, anything else is rejected with `what`.
-///
-/// # Safety
-/// `tv` is a live typval from the call frame.
 fn context_index(tv: Option<&TypVal>, what: &str) -> Option<usize> {
     match tv {
         None => Some(0),

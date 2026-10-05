@@ -693,9 +693,6 @@ pub(crate) fn win_float_find_preview() -> Option<Win> {
 /// which is `win`'s original tabpage or `None` for the current one -- the
 /// window to switch to when `win` is current and is then closed or moved
 /// away. `None` when there is no window to fall back to.
-///
-/// # Safety
-/// `win` must be a live window.
 pub(crate) fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -> Option<Win> {
     let Some(tp) = tabpage else {
         return prev_window()

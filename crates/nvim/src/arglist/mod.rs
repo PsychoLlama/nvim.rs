@@ -719,11 +719,6 @@ pub unsafe fn set_arglist(str: *mut c_char) {
 // Where the window sits in its list.
 
 /// Is `win` editing the file at its own argument index?
-///
-/// # Safety
-///
-/// Safe: the index is checked against the window's own argument list before
-/// anything reads an entry.
 pub fn editing_arg_idx(win: Win) -> bool {
     let idx = win.w_arg_idx;
     if idx >= wargcount(win) {
@@ -739,10 +734,6 @@ pub fn editing_arg_idx(win: Win) -> bool {
 /// Refresh `win`'s "am I on the argument I think I am" state, and remember
 /// when the last argument has been reached — `arg_had_last` is how `:next`
 /// knows there is nothing after it.
-///
-/// # Safety
-///
-/// Safe: a [`Win`] carries the whole of the promise this needs.
 pub fn check_arg_idx(mut win: Win) {
     let (editing, idx) = (editing_arg_idx(win), win.w_arg_idx);
     if wargcount(win) <= 1 || editing {

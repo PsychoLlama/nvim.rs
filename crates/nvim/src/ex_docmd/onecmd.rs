@@ -809,10 +809,6 @@ pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
 /// Truncates to fit, and spells U+00A0 as `<a0>` — it is white space that
 /// would otherwise be invisible in the report, and it is a common paste
 /// accident.
-///
-/// # Safety
-///
-/// `cmd` must point at a NUL-terminated string.
 pub(crate) fn append_command(msg: &CStr, cmd: &[u8]) -> CString {
     // The walk below still steps a `char *`, one character at a time; the
     // slice bounds it, and a NUL inside it ends it as the pointer form's

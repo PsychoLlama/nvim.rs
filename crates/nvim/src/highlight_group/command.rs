@@ -120,9 +120,6 @@ fn is_prefix(word: &[u8], full: &[u8]) -> bool {
 /// settings; `init` marks the compiled-in defaults and colour schemes, which
 /// do not overwrite anything the user set. `:highlight clear` calls back in
 /// with both set for every group.
-///
-/// # Safety
-/// Runs messages, autocommands and redraws; main thread only.
 pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
     // SAFETY: a NUL-terminated command line, live for the parse -- `Line`
     // takes a pointer until p32-8 gives the highlight parse a slice.

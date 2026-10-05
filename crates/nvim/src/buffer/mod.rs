@@ -308,14 +308,6 @@ impl BufRef {
 /// Whether `buffer` is still in the buffer list.
 ///
 /// Can be slow when there are many buffers; prefer [`BufRef`].
-///
-/// # Safety
-/// `buffer` may be any pointer, live or dangling: it is only ever compared.
-///
-/// The null test is a short circuit and nothing more: no buffer in the list
-/// has a null address, so removing it changes no answer. That is why the
-/// "NULL is not a valid buffer" case cannot fail — it states the contract
-/// callers rely on rather than covering a branch.
 pub fn buf_valid(buffer: BufId) -> bool {
     // Assume that we more often have a recent buffer, start with the last one.
     buffers_back().any(|b| b.id() == buffer)

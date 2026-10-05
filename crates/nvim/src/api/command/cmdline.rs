@@ -18,11 +18,6 @@ use core::ffi::{CStr, c_char, c_int};
 ///
 /// Upstream also breaks out of the scan on a NUL, which cannot happen:
 /// `ascii_iswhite` has already answered false for one and returned.
-///
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
 pub(crate) fn string_iswhite(str: &String_0) -> bool {
     str.as_bytes()
         .iter()

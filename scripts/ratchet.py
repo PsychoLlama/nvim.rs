@@ -630,6 +630,12 @@ plus these whole-tree metrics, which are not per-file:
                         counted — `-> *mut c_void` is a contract without
                         needing a row — and the four classes that are keep
                         one: see the allowlist. Phase 31.
+                      safety_on_safe_fns  a `fn` *without* the `unsafe`
+                        keyword whose doc comment still carries a `# Safety`
+                        heading — the section outlived the keyword when a
+                        retype made the function safe. A `# Safety` section is
+                        a contract; on a safe function it promises nothing and
+                        misleads the next reader. At zero, phase 34.
                       wrappers  single-call `unsafe {}` regions, tree-wide: a
                         region whose whole body, bar whitespace and one
                         trailing `;`, is one call. Such a region exists
@@ -1593,6 +1599,7 @@ CONST_DECL = re.compile(r"\bconst\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^=;{}]+=([^;
 INSTRUMENT_KEYS = (
     "unsafe_fns",
     "unsafe_fns_without_raw_params",
+    "safety_on_safe_fns",
     "wrappers",
     "stored_addr_handles",
     "raw_ptr_params",
@@ -2831,6 +2838,18 @@ def sync_finish_list(content, check):
         FINISH_LIST.write_text(content)
 
 
+def safety_on_safe_fns(text, masked, declarations):
+    """Safe `fn` definitions whose doc comment has a `# Safety` section."""
+    lines = text.splitlines()
+    found = 0
+    for sig in declarations:
+        line_start = masked.rfind("\n", 0, sig.start) + 1
+        if UNSAFE_WORD.search(masked, line_start, sig.start):
+            continue
+        found += has_safety_doc(lines, masked.count("\n", 0, sig.start))
+    return found
+
+
 def missing_safety_doc(text, masked):
     """`unsafe fn`s whose doc comment has no `# Safety` section."""
     lines = text.splitlines()
@@ -3173,6 +3192,8 @@ def instrument_sites(tree, sources, wrappers=None):
             sites["unsafe_fns"][file] = found
         if found := unsafe_fns_without_raw(masked, file, allow, aliases):
             sites["unsafe_fns_without_raw_params"][file] = found
+        if found := safety_on_safe_fns(source, masked, declarations):
+            sites["safety_on_safe_fns"][file] = found
         if found := sum(
             1 for m in CHAR_AS_C_INT.finditer(source) if masked[m.start(1)] == "a"
         ):
@@ -3440,6 +3461,7 @@ WHOLE_TREE_LABEL = {
     "lua_raw_stack": "raw lua_State stack calls outside the Stack module",
     "raw_variadic_calls": "printf-family variadic calls outside the CArg-checked macros",
     "long_fns": f"functions over {LONG_FN_LINES} lines outside generated files",
+    "safety_on_safe_fns": "safe fns whose doc comment still has a `# Safety` section",
     "dup_consts": "redundant copies of a constant declared in another file",
     "types_files": "files under types/",
     "untested_dirs": "top-level modules with no test of any kind",
@@ -4520,6 +4542,18 @@ SELF_TEST_INSTRUMENTS = [
             "crates/nvim/src/d.rs": "fn f() {\n" + "    g();\n" * 10 + "}\n",
         },
         {"long_fns": 2},
+    ),
+    # A `# Safety` section on a safe fn is stale; on an `unsafe fn`, however
+    # its qualifiers are spelled, it is the contract.
+    (
+        {
+            "crates/nvim/src/a.rs": "/// Does it.\n///\n/// # Safety\n/// None.\n"
+            "pub(crate) fn f() {}\n"
+            "/// # Safety\n/// `p` is live.\n#[inline]\npub const unsafe fn g(p: *mut u8) {}\n"
+            '/// # Safety\n/// Real.\nunsafe extern "C" fn h() {}\n'
+            "/// Plain.\nfn k() {}\n",
+        },
+        {"safety_on_safe_fns": 1},
     ),
     # A module with a `#[test]` anywhere beneath it is not untested; a
     # top-level *file* is not a directory and is not asked.

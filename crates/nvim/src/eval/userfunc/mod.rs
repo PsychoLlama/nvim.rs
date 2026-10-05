@@ -276,17 +276,11 @@ pub(crate) fn uf_name_ptr(func: *mut UserFunc) -> *mut c_char {
 
 /// The innermost entry of the `:source`/function call stack: what C's
 /// `SOURCING_LNUM` and `SOURCING_NAME` macros read.
-///
-/// # Safety
-/// The exec stack is non-empty, which it is whenever anything is running.
 pub(crate) fn sourcing_entry() -> EStack {
     crate::runtime::innermost_frame()
 }
 
 /// The line number the innermost exec-stack entry is on.
-///
-/// # Safety
-/// As [`sourcing_entry`].
 pub(crate) fn sourcing_lnum() -> LineNr {
     sourcing_entry().es_lnum
 }

@@ -70,10 +70,6 @@ pub(super) fn add_comppat(spin: &mut SpellInfo, items: &[&CStr]) {
 }
 
 /// A `REP`/`REPSAL` pair. `_` stands for a space in both halves.
-///
-/// # Safety
-///
-/// As [`handle_line`].
 pub(super) fn add_rep_entry(
     spin: &mut SpellInfo,
     st: &AffState,
@@ -115,10 +111,6 @@ pub(super) fn add_rep_entry(
 }
 
 /// `MAP`: a group of characters that count as near-equivalent.
-///
-/// # Safety
-///
-/// As [`handle_line`].
 pub(super) fn handle_map(
     spin: &mut SpellInfo,
     st: &mut AffState,

@@ -76,10 +76,6 @@ fn is_ex_cmdchar(cmd_arg: &CmdArg) -> bool {
 /// `old_col` is the column to return to when 'startofline' is off.
 /// `gui_yank` marks the yank the clipboard does behind the user's back: it
 /// must not clear the selection, redraw, or leave a `.` behind.
-///
-/// # Safety
-/// `cmd_arg` must point to a live `CmdArg` whose `op` describes a region of the
-/// current buffer.
 pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool) {
     let mut op = cmd_arg.op();
     let lbr_saved = Win::current().w_onebuf_opt.wo_lbr;

@@ -322,10 +322,6 @@ pub fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
 ///
 /// Sent by `:restart`, where the server this UI is talking to is about to
 /// be replaced by one listening elsewhere.
-///
-/// # Safety
-///
-/// `server_addr` a valid C string.
 pub fn remote_ui_connect(channel_id: u64, server_addr: &CStr) -> Result<(), Error> {
     let ui = get_ui_or_err(channel_id)?;
     let mut args = ArrayBuf::<1>::new();

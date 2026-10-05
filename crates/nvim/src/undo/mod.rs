@@ -132,10 +132,6 @@ pub const UNDO_HASH_SIZE: c_int = 32;
 /// A read or write the editor decided on by itself (`automatic`) reports
 /// only under `'verbose'`, and inside a `verbose_enter`/`verbose_leave` pair;
 /// one the user asked for by name reports outright.
-///
-/// # Safety
-///
-/// Safe: the editor's message state is live from startup to exit.
 pub(crate) fn verbosely(automatic: bool, say: impl FnOnce()) {
     if automatic && p_verbose() <= 0 {
         return;
@@ -283,10 +279,6 @@ fn zero_fmark_additional_data(fmarks: &mut [FileMark; NMARKS as usize]) {
 /// the region; zero means work it out afterwards. `reload` is a change the
 /// editor is making on the user's behalf (a file reload), which skips the
 /// "may this buffer be changed" question and marks the header.
-///
-/// # Safety
-///
-/// `buffer` points at a live buffer, and there is a live current window.
 pub fn u_savecommon(
     buffer: Buf,
     top: LineNr,

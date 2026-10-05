@@ -431,10 +431,6 @@ fn unwrap_loop_getter(fgetline: LineGetter, cookie: *mut c_void) -> (LineGetter,
 /// raising a second error before the first is reported cannot overwrite it.
 /// Upstream shared two static buffers here (`IObuff` and `ex_error_buf`)
 /// and `emsg` runs autocommands, so the overwrite was reachable.
-///
-/// # Safety
-///
-/// `msg` must be NUL-terminated.
 pub(crate) fn ex_msg(msg: &'static CStr) -> CString {
     gettext(msg).to_owned()
 }

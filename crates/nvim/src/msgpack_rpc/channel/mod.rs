@@ -444,9 +444,6 @@ pub unsafe fn rpc_send_call(
 /// The wire form is either a bare string or the `[type, message]` pair the
 /// protocol prescribes; anything else, including a type outside the two the
 /// API defines, is reported as "unknown error" rather than trusted.
-///
-/// # Safety
-/// `result` is a live decoded object.
 fn call_error(result: &Object) -> Error {
     if let Some(text) = result.as_string() {
         return Error::from_message(kErrorTypeException, text.as_cstr());

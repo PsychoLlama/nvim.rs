@@ -46,9 +46,6 @@ use crate::winlayer::graph::topframe;
 use crate::winlayer::{TabPage, buffers, tabs, windows_in_tab};
 
 /// The window whose buffer names tab page `tabpage`.
-///
-/// # Safety
-/// A live tab page's cursor window must be live, which it is.
 fn current_window_of(tabpage: TabPage) -> Win {
     // As with [`windows_in_tab`], the current tab page's cursor window is the
     // `curwin` global rather than its own `tp_curwin`, which is only recorded

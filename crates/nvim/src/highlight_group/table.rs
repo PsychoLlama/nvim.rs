@@ -323,9 +323,6 @@ fn upper_key(name: &[u8]) -> CString {
 ///
 /// A leading `@` goes through [`syn_check_group`] instead, because
 /// `@aaa.bbb` has to consider `@aaa` as well.
-///
-/// # Safety
-/// `name` is NUL-terminated; may add a group; main thread only.
 pub(crate) fn syn_name2id(name: &CStr) -> c_int {
     let name = name.to_bytes();
     if name.first() == Some(&b'@') {

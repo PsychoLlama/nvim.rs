@@ -182,9 +182,6 @@ fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
 }
 
 /// Whether `tv` holds a non-null dictionary.
-///
-/// # Safety
-/// `tv` is a live typval.
 fn is_dict(tv: &TypVal) -> bool {
     tv.v_type() == VAR_DICT && !tv.dict_or_null().is_null()
 }

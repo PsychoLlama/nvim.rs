@@ -324,9 +324,6 @@ pub(crate) fn grid_line_puts_bytes(col: c_int, text: &[u8], attr: c_int) -> c_in
 }
 
 /// Fill `start_col..end_col` with one glyph, answering where it stopped.
-///
-/// # Safety
-/// A batch must be in progress.
 pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: ScreenChar, attr: c_int) -> c_int {
     let mut b = batch();
     end_col = end_col.min(b.maxcol);

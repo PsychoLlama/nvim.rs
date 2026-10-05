@@ -163,9 +163,6 @@ impl Walk<'_> {
 
 /// Shift the text after a replacement so that `to_len` bytes fit where
 /// `from_len` were, terminator included.
-///
-/// # Safety
-///
 fn move_tail(word: &mut [u8], from_len: usize, to_len: usize) {
     // Everything up to and including the word's terminator moves. A
     // replacement that grows the word can push that past the buffer,

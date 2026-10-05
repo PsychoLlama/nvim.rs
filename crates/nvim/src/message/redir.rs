@@ -27,9 +27,6 @@ fn verbosefile_set() -> bool {
 }
 
 /// [`msg_keep`] inside a `verbose_enter`/`verbose_leave` pair.
-///
-/// # Safety
-/// `s` must be a valid C string.
 pub fn verb_msg(s: &CStr) -> c_int {
     verbose_enter();
     let n = msg(s, 0) as c_int;

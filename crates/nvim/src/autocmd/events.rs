@@ -60,11 +60,6 @@ pub unsafe fn event_name2nr(
 }
 
 /// [`event_name2nr`] over a counted string, which is the whole name.
-///
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
 pub fn event_name2nr_str(str: &String_0) -> Option<AutoEvent> {
     event_name_index(str.as_bytes()).map(|at| EVENT_NAMES[at].event)
 }

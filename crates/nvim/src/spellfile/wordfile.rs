@@ -32,10 +32,6 @@ use super::{MAXLINELEN, MAXREGIONS, SpellInfo, spell_message_fmt};
 
 /// Read a plain word list: one word per line, with optional `/` flags, and
 /// `/encoding=` and `/regions=` header lines.
-///
-/// # Safety
-///
-/// `fname` must be a NUL-terminated path.
 pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<(), Failed> {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, which is
     // the bound `vim_fgets` is given.
@@ -161,10 +157,6 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
 /// Handle a `/`-prefixed header line of a word file.
 ///
 /// `line` points just past the `/`.
-///
-/// # Safety
-///
-/// `line` and `fname` must be NUL-terminated.
 fn read_wordfile_header(
     spin: &mut SpellInfo,
     mut line: *mut c_char,

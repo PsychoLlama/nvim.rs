@@ -556,9 +556,6 @@ fn slot(number: c_int) -> usize {
 
 /// The opcode of the node at `p`, or `None` when `p` is null or holds no
 /// opcode.
-///
-/// # Safety
-/// Only called on nodes of a program this module has just written.
 fn opcode_at(p: *const uint8_t) -> Option<BtOp> {
     if p.is_null() {
         return None;

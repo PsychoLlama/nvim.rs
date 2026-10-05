@@ -737,9 +737,6 @@ pub(crate) fn save_typebuf() {
 }
 
 /// Put back the typeahead [`save_typebuf`] displaced for script `script`.
-///
-/// # Safety
-/// The typeahead the script was reading must already have been freed.
 pub(crate) fn restore_saved_typebuf(script: c_int) {
     let saved = SAVED_TYPEBUF.with_mut(|slots| core::mem::take(&mut slots[script as usize]));
     typeahead().set(saved);

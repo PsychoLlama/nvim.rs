@@ -20,18 +20,12 @@ use crate::popupmenu::pum_grid_ref;
 use crate::winlayer::Win;
 use core::ptr;
 
-/// # Safety
-///
-/// `obj` must be a well-formed API object the caller owns for the call.
 // `nvim__id` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__id(obj: Object) -> Object {
     obj.clone()
 }
 
-/// # Safety
-///
-/// `arr` must be a well-formed API array, its `size` elements initialized.
 // `nvim__id_array` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__id_array(arr: Array) -> Array {
@@ -221,10 +215,6 @@ pub fn nvim__invalidate_glyph_cache() {
     must_redraw.set(UPD_CLEAR);
 }
 
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL at
-/// `data[size]`.
 // `nvim__unpack` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__unpack(str: String_0) -> Result<Object, Error> {

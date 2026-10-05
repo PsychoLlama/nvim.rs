@@ -747,11 +747,6 @@ pub fn ui_has(ext: UIExtension) -> bool {
 }
 
 /// Describes every attached UI, for `nvim_list_uis()`.
-///
-/// # Safety
-///
-/// Reaches the UI table; main thread only. Nothing is taken from `_arena`
-/// any more: the answer owns its entries.
 pub fn ui_array() -> Array {
     let mut all_uis = Array::with_capacity(ui_count());
     for ui in each_ui() {

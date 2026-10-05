@@ -707,10 +707,6 @@ fn read_tree_node(
 
 /// Re-read every loaded language that came from `fname`, and redraw the
 /// windows that were spell-checking with it.
-///
-/// # Safety
-///
-/// `fname` must be a NUL-terminated path.
 pub(super) fn spell_reload_one(fname: &CStr, added_word: bool) {
     // SAFETY: the caller promises the path; the language list is global
     // and only walked here.

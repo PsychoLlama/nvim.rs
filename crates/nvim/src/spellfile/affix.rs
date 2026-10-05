@@ -45,10 +45,6 @@ use super::{
 use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 
 /// The header line of a `PFX`/`SFX` block. Returns false to stop reading.
-///
-/// # Safety
-///
-/// As [`handle_line`].
 pub(super) fn handle_affix_header(
     spin: &mut SpellInfo,
     aff: &mut AffFile,
@@ -159,10 +155,6 @@ pub(super) fn handle_affix_header(
 }
 
 /// One entry of a `PFX`/`SFX` block.
-///
-/// # Safety
-///
-/// As [`handle_line`].
 pub(super) fn handle_affix_entry(
     spin: &mut SpellInfo,
     aff: &mut AffFile,
@@ -235,10 +227,6 @@ pub(super) fn handle_affix_entry(
 }
 
 /// File a prefix in the prefix tree instead of expanding it into words.
-///
-/// # Safety
-///
-/// As [`handle_affix_entry`].
 pub(super) fn postpone_prefix(
     spin: &mut SpellInfo,
     st: &mut AffState,
@@ -309,10 +297,6 @@ pub(super) fn postpone_prefix(
 }
 
 /// Put one postponed prefix into the prefix tree.
-///
-/// # Safety
-///
-/// As [`postpone_prefix`].
 pub(super) fn file_postponed_prefix(
     spin: &mut SpellInfo,
     st: &mut AffState,

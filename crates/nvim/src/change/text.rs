@@ -81,10 +81,6 @@ pub fn ins_char(c: c_int) {
 /// a TAB, because what is being matched is screen cells. Overshooting the
 /// column the new character ends at means the difference has to be filled with
 /// spaces, which is what the returned `newlen` carries.
-///
-/// # Safety
-/// `oldp` must be the current line and `col` a byte offset into it; `buf` must
-/// hold the character about to be inserted.
 fn vreplace_extent(buf: *mut c_char, col: size_t, charlen: size_t) -> (size_t, size_t) {
     // Disable 'list' while measuring, unless 'cpo' has the `L` flag: it
     // changes how wide a TAB looks.
