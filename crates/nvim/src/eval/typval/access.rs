@@ -467,6 +467,28 @@ impl TypVal {
         unsafe { ::core::ptr::write(self, value) };
     }
 
+    /// Append `tail` to this String in place, growing its allocation. False,
+    /// leaving the value alone, for anything that is not a String with an
+    /// allocation to grow.
+    pub(crate) fn append_to_string(&mut self, tail: &[u8]) -> bool {
+        let TypVal::String(old) = *self else {
+            return false;
+        };
+        if old.is_null() {
+            return false;
+        }
+        // SAFETY: a String value owns its payload, an `xmalloc`ed
+        // NUL-terminated string, which it gives up here to be grown and
+        // takes back below; `tail` is borrowed from elsewhere, since `self`
+        // is exclusive.
+        let mut bytes = unsafe { crate::memory::XString::from_raw(old) }.into_vec();
+        bytes.pop(); // the terminator, which `owned_cstr` puts back
+        bytes.reserve_exact(tail.len() + 1);
+        bytes.extend_from_slice(tail);
+        self.write_string(crate::memory::handoff::owned_cstr(bytes));
+        true
+    }
+
     /// Give up what this slot holds **without releasing it**: the payload
     /// has been handed to a new owner by pointer, and this slot must not
     /// free it.

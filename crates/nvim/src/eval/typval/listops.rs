@@ -284,6 +284,16 @@ pub unsafe fn list_concat(l1: *mut List, l2: *mut List, tv: &mut TypVal) -> Resu
     Ok(())
 }
 
+/// [`list_concat`] of two List values: `tv1 + tv2` into `tv`.
+pub(crate) fn list_concat_values(
+    tv1: &TypVal,
+    tv2: &TypVal,
+    tv: &mut TypVal,
+) -> Result<(), Failed> {
+    // SAFETY: a List value holds a reference to a live list, or none.
+    unsafe { list_concat(tv1.list_or_null(), tv2.list_or_null(), tv) }
+}
+
 /// `remove()` over a list: move one item, or the range `[idx, end]`, into
 /// `result`.
 ///

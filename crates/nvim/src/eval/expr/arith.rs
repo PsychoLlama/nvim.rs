@@ -5,23 +5,20 @@
 //! Every operator here therefore uses Rust's `wrapping_*`, which is the
 //! same answer without the debug-build abort the transpile had.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use core::ffi::{c_char, c_int};
-use core::ptr::copy;
+use crate::memory::handoff::owned_cstr;
+use core::ffi::c_int;
 
 use crate::eval::typval::{
-    NumBuf, blob_bytes, list_concat, tv_blob_alloc, tv_blob_set_ret, tv_clear, tv_get_number_chk,
+    NumBuf, blob_bytes, list_concat_values, tv_blob_alloc, tv_blob_set_ret, tv_clear,
+    tv_get_number_chk,
 };
-use crate::eval::{Tv, VARNUMBER_MAX, VARNUMBER_MIN};
-use crate::memory::xrealloc;
+use crate::eval::{VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::strings::concat_str;
-use crate::types::{Float, TypVal, VAR_FLOAT, VAR_STRING, VarNumber};
+use crate::types::{Float, TypVal, VAR_FLOAT, VarNumber};
 
 /// `n1 / n2`, with the two cases a machine divide cannot answer.
 ///
@@ -79,10 +76,7 @@ pub(crate) fn eval_addblob(tv1: &mut TypVal, tv2: &TypVal) {
 /// helper here does — the caller has already given up ownership.
 pub(crate) fn eval_addlist(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     let mut joined = TV_INITIAL_VALUE;
-    // SAFETY: the caller's promise -- both operands are Lists, so each
-    // union holds a live `List`, and `joined` is this frame's own.
-    let (l1, l2) = ((*tv1).list_or_null(), (*tv2).list_or_null());
-    if unsafe { list_concat(l1, l2, &mut joined) }.is_err() {
+    if list_concat_values(tv1, tv2, &mut joined).is_err() {
         tv_clear(tv1);
         tv_clear(tv2);
         return false;
@@ -92,55 +86,28 @@ pub(crate) fn eval_addlist(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     true
 }
 
-/// Append `s2` to a String typval in place, reusing its allocation.
-///
-/// Answers false — leaving `tv1` alone — for anything that is not a String
-/// with an allocation to grow, which is the caller's cue to build a fresh
-/// one.
-///
-/// # Safety
-/// `tv1` must be a valid typval and `s2` a NUL-terminated string that does
-/// not point into `tv1`'s own allocation.
-pub(crate) unsafe fn grow_string_tv(tv1: &mut TypVal, s2: *const c_char) -> bool {
-    // SAFETY: the caller's promise -- `tv1` is a valid typval.
-    let mut one = unsafe { Tv::new(tv1) };
-    let old = one.string_or_null();
-    if one.v_type() != VAR_STRING || old.is_null() {
-        return false;
-    }
-    // SAFETY: `old` is that String's allocation and `s2` is NUL-terminated
-    // and outside it, so the copy does not overlap what `xrealloc` moved.
-    let len1 = unsafe { cstr::bytes_at(old) }.len();
-    let len2 = unsafe { cstr::bytes_at(s2) }.len();
-    let grown = unsafe { xrealloc(old.cast(), len1 + len2 + 1) } as *mut c_char;
-    // The terminator moves with the bytes.
-    unsafe { copy(s2, grown.add(len1), len2 + 1) };
-    one.write_string(grown);
-    true
-}
-
 /// `..` (and `.`): the string concatenation `eval5` performs.
+///
+/// `eval5` has already checked that `tv1` has a string form, so reading it
+/// reports nothing; `tv2` may still be refused.
 pub(crate) fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
-    let mut buf1 = NumBuf::new();
     let mut buf2 = NumBuf::new();
-    // SAFETY: the caller's promise -- both operands are valid typvals, and
-    // the two scratch buffers are this frame's own.
-    let mut one = unsafe { Tv::new(tv1) };
-    let s1 = buf1.string_ptr(tv1);
-    let s2 = buf2.string_ptr_chk(tv2);
-    if s2.is_null() {
+    let Some(s2) = buf2.string_chk(tv2) else {
         tv_clear(tv1);
         tv_clear(tv2);
         return false;
-    }
-    // `s2` is `buf2` or `tv2`'s own allocation, never `tv1`'s.
-    if unsafe { grow_string_tv(tv1, s2) } {
+    };
+    // A String with an allocation grows in place.
+    if tv1.append_to_string(s2.to_bytes()) {
         return true;
     }
-    // `s1` may point into `buf1`, so build the result before clearing.
-    let joined = unsafe { concat_str(s1, s2) };
+    let mut buf1 = NumBuf::new();
+    let s1 = buf1.string(tv1).to_bytes();
+    let mut joined = Vec::with_capacity(s1.len() + s2.to_bytes().len() + 1);
+    joined.extend_from_slice(s1);
+    joined.extend_from_slice(s2.to_bytes());
     tv_clear(tv1);
-    one.write_string(joined);
+    tv1.write_string(owned_cstr(joined));
     true
 }
 
@@ -151,12 +118,9 @@ pub(crate) fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> 
     let mut f1: Float = 0.0;
     let mut f2: Float = 0.0;
 
-    // SAFETY: the caller's promise -- both operands are valid typvals.
-    let (mut one, two) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
-
-    if one.v_type() == VAR_FLOAT {
-        // SAFETY: the kind says the value holds a Float.
-        f1 = one.float_or_zero();
+    if tv1.v_type() == VAR_FLOAT {
+        // The kind says the value holds a Float.
+        f1 = tv1.float_or_zero();
     } else {
         let Ok(left) = tv_get_number_chk(tv1) else {
             // Only reachable for "list + non-list" or "blob + non-blob":
@@ -167,13 +131,13 @@ pub(crate) fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> 
             return false;
         };
         n1 = left;
-        if two.v_type() == VAR_FLOAT {
+        if tv2.v_type() == VAR_FLOAT {
             f1 = n1 as Float;
         }
     }
-    if two.v_type() == VAR_FLOAT {
-        // SAFETY: as above, for the right operand.
-        f2 = two.float_or_zero();
+    if tv2.v_type() == VAR_FLOAT {
+        // As above, for the right operand.
+        f2 = tv2.float_or_zero();
     } else {
         let Ok(right) = tv_get_number_chk(tv2) else {
             tv_clear(tv1);
@@ -181,7 +145,7 @@ pub(crate) fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> 
             return false;
         };
         n2 = right;
-        if one.v_type() == VAR_FLOAT {
+        if tv1.v_type() == VAR_FLOAT {
             f2 = n2 as Float;
         }
     }
@@ -190,13 +154,13 @@ pub(crate) fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> 
     // answer while `tv_clear` left the kind behind and is not now: a
     // cleared value is `Unknown`, so `1.234 - 8` would take the integer
     // branch and answer -8.
-    let use_float = one.v_type() == VAR_FLOAT || two.v_type() == VAR_FLOAT;
+    let use_float = tv1.v_type() == VAR_FLOAT || tv2.v_type() == VAR_FLOAT;
     tv_clear(tv1);
 
     if use_float {
-        one.write_float(if op == b'+' { f1 + f2 } else { f1 - f2 });
+        tv1.write_float(if op == b'+' { f1 + f2 } else { f1 - f2 });
     } else {
-        one.write_number(if op == b'+' {
+        tv1.write_number(if op == b'+' {
             n1.wrapping_add(n2)
         } else {
             n1.wrapping_sub(n2)
@@ -212,13 +176,11 @@ pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) ->
     let mut n2: VarNumber = 0;
     let mut f1: Float = 0.0;
     let mut f2: Float = 0.0;
-    // SAFETY: the caller's promise -- both operands are valid typvals.
-    let (mut one, two) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
-    let mut use_float = one.v_type() == VAR_FLOAT;
+    let mut use_float = tv1.v_type() == VAR_FLOAT;
 
     if use_float {
-        // SAFETY: the kind says the value holds a Float.
-        f1 = one.float_or_zero();
+        // The kind says the value holds a Float.
+        f1 = tv1.float_or_zero();
     } else {
         n1 = tv_get_number_chk(tv1).unwrap_or_else(|_| {
             error = true;
@@ -234,13 +196,13 @@ pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) ->
         return false;
     }
 
-    if two.v_type() == VAR_FLOAT {
+    if tv2.v_type() == VAR_FLOAT {
         if !use_float {
             f1 = n1 as Float;
             use_float = true;
         }
-        // SAFETY: as above, for the right operand.
-        f2 = two.float_or_zero();
+        // As above, for the right operand.
+        f2 = tv2.float_or_zero();
     } else {
         let read = tv_get_number_chk(tv2);
         tv_clear(tv2);
@@ -273,9 +235,9 @@ pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) ->
                 return false;
             }
         };
-        one.write_float(result);
+        tv1.write_float(result);
     } else {
-        one.write_number(match op {
+        tv1.write_number(match op {
             b'*' => n1.wrapping_mul(n2),
             b'/' => num_divide(n1, n2),
             _ => num_modulus(n1, n2),

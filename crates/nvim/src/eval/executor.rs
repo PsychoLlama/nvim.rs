@@ -22,7 +22,7 @@
 
 use crate::eval::typval::BlobRef;
 use crate::eval::typval::{ListRef, NumBuf, list_extend, tv_clear, tv_get_number};
-use crate::eval::{Tv, grow_string_tv, num_divide, num_modulus};
+use crate::eval::{Tv, num_divide, num_modulus};
 use crate::strings::concat_str;
 use crate::types::{
     Blob, Failed, Float, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
@@ -187,7 +187,9 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
     // An owned string is extended in place -- unless the right operand *is*
     // the left one (`:let l[0:1] .= l`), whose bytes growing it would move.
     // SAFETY: as above; when the two differ, `s2` is not `tv1`'s.
-    if !core::ptr::eq(tv1.cast_const(), tv2) && unsafe { grow_string_tv(&mut *tv1, s2) } {
+    if !core::ptr::eq(tv1.cast_const(), tv2)
+        && unsafe { (*tv1).append_to_string(crate::cstr::bytes_at(s2)) }
+    {
         return Ok(());
     }
     // SAFETY: as above.
