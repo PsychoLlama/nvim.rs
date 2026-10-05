@@ -649,9 +649,16 @@ plus these whole-tree metrics, which are not per-file:
                         answer to the name (`defs`, and `def` when exactly one
                         file holds them), and `no_raw` — whether every one of
                         them is an `unsafe fn` the needle above would count.
-                        That column is the work order: a `no_raw` row's
-                        `count` is the wrappers a slice deletes when it drops
-                        the keyword. Phases 31-33.
+                        A `no_raw` row's `count` is the wrappers a slice
+                        deletes when it drops the keyword. Phases 31-33. The
+                        work order from phase 34 on is the finish list
+                        instead (metrics/finish-list.tsv, written and checked
+                        the same way): per module, each file outside the
+                        perimeter that still allows unsafe code, with its
+                        unchecked statements, `unsafe fn`s, wrappers, other
+                        regions by shape, raw signature pointers by what they
+                        point at, and the wrapped callees its module does not
+                        define. See `finish_list`.
                       stored_addr_handles  `Win::new`/`Buf::new`/
                         `TabPage::new`/`FrameRef::new`/`::at`/`::from_raw`
                         whose argument is not `<expr>.raw()`. See
@@ -868,6 +875,43 @@ UNSAFE_FN_ALLOW_DOC = ROOT / "docs" / "unsafe-fn-allowlist.md"
 # still diffs a moved count cleanly, which is the property that mattered.
 WRAPPER_TABLE = ROOT / "metrics" / "wrapper-callees.tsv"
 WRAPPER_TABLE_HEADER = "count\tcallee\tno_raw\tdefs\tdef\n"
+# The finish list: the work order for the phases that finish modules -- per
+# module, each file outside the perimeter still allowing unsafe code and what
+# keeps it there. Written and checked the way the wrapper table is; see
+# `finish_list`.
+FINISH_LIST = ROOT / "metrics" / "finish-list.tsv"
+FINISH_LIST_HEADER = (
+    "module\tfile\tfiles\tunsafe_stmts\tunsafe_fns\twrappers\tregions"
+    "\traw_params\traw_returns\toutside_callees\n"
+)
+FILE_ALLOWS_UNSAFE = "#![allow(unsafe_code)]"
+# A raw pointer in a signature: the `*mut`/`*const` levels past the first,
+# then the pointee's (possibly qualified) name.
+FINISH_RAW = re.compile(
+    r"\*\s*(?:mut|const)\s+((?:\*\s*(?:mut|const)\s+)*)([A-Za-z_][A-Za-z0-9_:]*)"
+)
+FINISH_STRING = frozenset({"c_char", "u8", "uint8_t", "c_uchar"})
+FINISH_VALUE = frozenset(
+    {
+        "TypVal",
+        "List",
+        "ListItem",
+        "Dict",
+        "DictItem",
+        "Blob",
+        "Partial",
+        "Callback",
+        "HashTab",
+        "HashItem",
+        "ScriptVar",
+        "UserFunc",
+        "FuncCall",
+        "Object",
+    }
+)
+FINISH_HANDLE = frozenset({"Window", "Buffer", "Tabpage", "Frame"})
+FINISH_REF_DEREF = re.compile(r"^\(?\s*&\s*(?:mut\s+)?\*")
+FINISH_DEREF = re.compile(r"^\(?\s*\*")
 # apigen's attribute spec: one line per method the API exposes. It is the
 # list the generator dispatches, so it is also the list of signatures whose
 # parameter names are the RPC surface's -- see API_EXPORTED below.
@@ -2640,6 +2684,153 @@ def sync_wrapper_table(content, check):
         WRAPPER_TABLE.write_text(content)
 
 
+def finish_module(file):
+    """The module a file belongs to on the finish list: its top-level
+    directory under the crate's `src/` (`eval/`), or the file itself when it
+    sits at that level (`context.rs`). Another crate's files are that crate's."""
+    crate, _, rest = file.removeprefix("crates/").partition("/")
+    rest = rest.removeprefix("src/")
+    head, slash, _ = rest.partition("/")
+    module = head + slash
+    return module if crate == "nvim" else f"{crate}:{module}"
+
+
+def raw_family(nested, name):
+    """The finish list's class for one raw pointer in a signature."""
+    name = name.split("::")[-1]
+    if nested:
+        return "pp_str" if name in FINISH_STRING else "pp"
+    if name in FINISH_STRING:
+        return "str"
+    if name == "c_void":
+        return "void"
+    if name in FINISH_VALUE:
+        return "value"
+    if name in FINISH_HANDLE:
+        return "handle"
+    return "other"
+
+
+def region_kind(body):
+    """A non-wrapper region's shape: a dereference read or write (`*p`,
+    `(*p).f = x`), a reference made through one (`&*p`, `&mut *p`), one other
+    expression, or several statements."""
+    text = body.strip()
+    if FINISH_REF_DEREF.match(text):
+        return "ref"
+    if FINISH_DEREF.match(text):
+        return "deref"
+    return "compound" if ";" in text.rstrip(";") else "expr"
+
+
+def finish_row(masked, module_fns):
+    """(unsafe fns, wrappers, region kinds, raw params, raw returns, callees
+    defined outside the module) for one file."""
+    kinds = collections.Counter()
+    outside = collections.Counter()
+    wrappers = 0
+    for match in UNSAFE_WORD.finditer(masked):
+        at = WHITESPACE.match(masked, match.end()).end()
+        if at >= len(masked) or masked[at] != "{":
+            continue
+        close = matching_brace(masked, at)
+        body = masked[at + 1 : close]
+        callee = wrapper_callee(body)
+        if callee is None:
+            kinds[region_kind(body)] += 1
+            continue
+        wrappers += 1
+        if callee.split("::")[-1].lstrip(".") not in module_fns:
+            outside[callee] += 1
+    params = collections.Counter()
+    returns = collections.Counter()
+    for sig in fn_signatures(masked):
+        for where, text in ((params, sig.params), (returns, sig.returns)):
+            for ptr in FINISH_RAW.finditer(text):
+                where[raw_family(bool(ptr.group(1)), ptr.group(2))] += 1
+    return (
+        sum(1 for _ in unsafe_fn_items(masked)),
+        wrappers,
+        kinds,
+        params,
+        returns,
+        outside,
+    )
+
+
+def tally(counter, limit=None):
+    """`name:n` pairs, biggest first, ties by name; `-` when empty."""
+    pairs = sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
+    return " ".join(f"{name}:{n}" for name, n in pairs) or "-"
+
+
+def finish_list(stats, tree):
+    """The finish list: per module, every file outside the perimeter that
+    still carries `#![allow(unsafe_code)]` -- or holds unchecked code under a
+    parent's allow, which reaches a child module declared inside it -- and
+    what keeps it there.
+
+    The work order for the phases that finish modules. A module's rollup row
+    (`file` = `*`, `files` = how many of its files are listed) leads
+    its files. Columns: the file's `unsafe_stmts`; its `unsafe fn` items; its
+    single-call wrappers; its other `unsafe {}` regions by shape (`deref` a
+    `*p` read or write, `ref` a `&*p`/`&mut *p`, `expr` one other
+    expression, `compound` several statements); the raw pointers in its
+    signatures by what they point at, parameters and returns apart (`pp` a
+    pointer to a pointer, `pp_str` the string cursor, `str` a `c_char`/`u8`,
+    `value` an interpreter value or container, `handle` a window/buffer/
+    frame, `void`, `other`); and the wrapped callees no file of the module
+    defines -- the fronts it needs from its neighbours (the top eight; std
+    and libc names are outside too, since the module cannot change them).
+
+    Sorted by module then file, so a row moves only when its file does.
+    """
+    by_module = collections.defaultdict(list)
+    for file, masked in tree.items():
+        if not in_perimeter(file):
+            by_module[finish_module(file)].append(file)
+    rows = [FINISH_LIST_HEADER]
+    for module in sorted(by_module):
+        files = by_module[module]
+        module_fns = {sig.name for file in files for sig in fn_signatures(tree[file])}
+        listed = []
+        for file in sorted(files):
+            masked = tree[file]
+            if FILE_ALLOWS_UNSAFE not in masked and not stats[file]["unsafe_stmts"]:
+                continue
+            listed.append(
+                (file, stats[file]["unsafe_stmts"], *finish_row(masked, module_fns))
+            )
+        if not listed:
+            continue
+        total = [sum(row[i] for row in listed) for i in (1, 2, 3)] + [
+            sum((row[i] for row in listed), collections.Counter()) for i in (4, 5, 6, 7)
+        ]
+        for file, *columns in [("*", *total), *listed]:
+            stmts, fns, wrappers, kinds, params, returns, outside = columns
+            count = len(listed) if file == "*" else 1
+            rows.append(
+                f"{module}\t{file.removeprefix(CRATE_SRC)}\t{count}\t{stmts}\t"
+                f"{fns}\t{wrappers}\t{tally(kinds)}\t{tally(params)}\t"
+                f"{tally(returns)}\t{tally(outside, 8)}\n"
+            )
+    return "".join(rows)
+
+
+def sync_finish_list(content, check):
+    """Write metrics/finish-list.tsv, or fail when it is stale."""
+    committed = FINISH_LIST.read_text() if FINISH_LIST.exists() else None
+    if check:
+        if committed != content:
+            sys.exit(
+                f"ratchet: {FINISH_LIST.relative_to(ROOT)} is stale; run "
+                "`just refresh` and commit the result."
+            )
+        return
+    if committed != content:
+        FINISH_LIST.write_text(content)
+
+
 def missing_safety_doc(text, masked):
     """`unsafe fn`s whose doc comment has no `# Safety` section."""
     lines = text.splitlines()
@@ -3499,6 +3690,24 @@ SELF_TEST_FILE_ALLOWS = [
     ("// Not `#![allow(unsafe_code)]`: this module is finished.\n", set()),
 ]
 # (source, expected number of lines exempted from the line cap)
+# (source, the finish list's (unsafe fns, wrappers, region kinds, raw params,
+# raw returns, outside callees) for it, with `local` the module's own fns).
+SELF_TEST_FINISH = [
+    (
+        "unsafe fn local(p: *mut *mut c_char, d: *mut Dict) -> *const u8 {}\n"
+        "fn g(w: *mut Window) { unsafe { local(p, d) }; unsafe { xfree(p) };"
+        " unsafe { *p = 1 }; unsafe { &mut *p }; unsafe { a(); b() };"
+        " unsafe { x.offset(1) as usize } }",
+        (
+            1,
+            2,
+            {"deref": 1, "ref": 1, "compound": 1, "expr": 1},
+            {"pp_str": 1, "value": 1, "handle": 1},
+            {"str": 1},
+            {"xfree": 1},
+        ),
+    ),
+]
 SELF_TEST_TEST_MODULE = [
     ("#[cfg(test)]\nmod tests {\n    fn t() {}\n}\n", 4),
     ("fn f() {}\n#[cfg(test)]\nmod tests {\n    fn t() {}\n}\nfn g() {}\n", 4),
@@ -4369,6 +4578,10 @@ def self_test():
         assert got == expected, (
             f"file allows={sorted(got)}, want {sorted(expected)}, for {source!r}"
         )
+    for source, expected in SELF_TEST_FINISH:
+        got = finish_row(mask(source), {"local", "g"})
+        got = tuple(dict(x) if isinstance(x, dict) else x for x in got)
+        assert got == expected, f"finish_row={got}, want {expected}, for {source!r}"
     for source, expected in SELF_TEST_TEST_MODULE:
         got = len(test_module_lines(mask(source)))
         assert got == expected, (
@@ -4586,6 +4799,7 @@ def main():
     check_unsafe_fn_allowlist(index, unsafe_fn_allowlist())
     sync_perimeter_doc(stats, "--check" in args)
     sync_wrapper_table(wrapper_table(by_callee, index), "--check" in args)
+    sync_finish_list(finish_list(stats, tree), "--check" in args)
     counts = {**ledgers(), **whole_tree(stats, tree, sites)}
     content = render(stats, counts, without_deny, without_casts, allowing)
     committed = BASELINE.read_text() if BASELINE.exists() else None
