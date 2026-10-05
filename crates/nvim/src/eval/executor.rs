@@ -184,9 +184,10 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
     // SAFETY: as above.
     // SAFETY: as above.
     let s2 = numbuf.string_ptr(unsafe { &*tv2 });
-    // An owned string with room to spare is extended in place.
-    // SAFETY: as above.
-    if unsafe { grow_string_tv(&mut *tv1, s2) } {
+    // An owned string is extended in place -- unless the right operand *is*
+    // the left one (`:let l[0:1] .= l`), whose bytes growing it would move.
+    // SAFETY: as above; when the two differ, `s2` is not `tv1`'s.
+    if !core::ptr::eq(tv1.cast_const(), tv2) && unsafe { grow_string_tv(&mut *tv1, s2) } {
         return Ok(());
     }
     // SAFETY: as above.

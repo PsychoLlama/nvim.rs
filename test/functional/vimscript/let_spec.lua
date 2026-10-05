@@ -113,6 +113,15 @@ describe(':let', function()
     command('let &equalalways %= 1')
     eq(false, api.nvim_get_option_value('equalalways', {}))
   end)
+
+  it('concatenates a range with itself', function()
+    -- Each item is both operands; growing the left one in place must not
+    -- read the right one from where it used to be.
+    for _, len in ipairs({ 10, 100, 1000, 100000 }) do
+      command(('let l = [repeat("a", %d), "b"] | let l[0:1] .= l'):format(len))
+      eq({ 2 * len, 'bb' }, eval('[len(l[0]), l[1]]'))
+    end
+  end)
 end)
 
 describe(':let and :const', function()
