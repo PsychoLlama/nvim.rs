@@ -6,7 +6,7 @@ nothing runs them but a person asking whether a change cost something.
 
 | bench        | what it drives                                                                    |
 | ------------ | --------------------------------------------------------------------------------- |
-| `evalbench`  | the eval substrate: typval allocation, copy, encode/decode, function calls        |
+| `evalbench`  | the eval substrate: typval allocation, copy, encode/decode, calls, the parser     |
 | `inbench`    | input and the command line: typeahead, mappings, termcodes, completion, messages  |
 | `mlbench`    | the memline hot path: `ml_get`, `ml_append`, `ml_delete`, byte/line offsets       |
 | `scrbench`   | the screen pipeline: grid diffing, `win_line`, syntax, statusline, the popup menu |

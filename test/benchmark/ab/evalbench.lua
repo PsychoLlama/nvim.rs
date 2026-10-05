@@ -55,7 +55,40 @@
 --                                  plain :function
 --   funcref    eval/userfunc.rs -- the same through a funcref and a
 --                                  partial with bound arguments
+--
+-- The parser phases (added with the expression cursor's rewrite in view;
+-- before them only funccall/funcref/lambda reached `eval0` at all, and
+-- through a one-line body):
+--   exprparse  eval/expr/        -- eval0..eval7 over long lines that
+--                                  mix every operator level, literals,
+--                                  subscripts, method calls, lambdas and
+--                                  `$"..{}.."`, re-parsed every iteration
+--   letloop    eval/lval*, vars/ -- `:let` over every lvalue shape: plain,
+--                                  `+=`/`..=`, list index and slice, dict
+--                                  key and `.key`, `[a, b] =`, `$ENV`,
+--                                  `&option`, `@r`
+--   strindex   eval/expr/index.rs -- string subscripts and slices over
+--                                  multibyte text, `strcharpart`,
+--                                  `charidx`/`byteidx`: the multibyte
+--                                  readers the cursor is moving onto
+--   skipexpr   eval/expr/        -- the same parser with evaluation off:
+--                                  `:if 0` bodies, a taken `:if`'s
+--                                  `:elseif`, `0 && ..`/`1 || ..`, the
+--                                  `skip_expr` path of `:while`/`:for`
+--
+-- Groups.  EVALBENCH_GROUP picks what runs: `old` is every phase above the
+-- parser ones -- the set every number recorded before them measured, so
+-- an `old` Ir stays comparable with those -- `parser` is the four parser
+-- phases alone, and `all` (the default) is both.  `evalbench.sh
+-- --cachegrind` reports `old` and `parser` as two numbers.
+--
+-- Noise of the `parser` group, measured: three cachegrind runs of one
+-- codegen-units = 1 release binary came out 9,673.3M-9,676.7M Ir, a spread
+-- of 355 ppm (0.036 %) -- a tenth of the `old` group's 0.36 %, since these
+-- phases barely touch LuaJIT.  Read a `parser` difference under ~0.05 % as
+-- none.
 local NROUND = tonumber(os.getenv('EVALBENCH_SCALE') or '1')
+local GROUP = os.getenv('EVALBENCH_GROUP') or 'all'
 
 -- A quiet, fixed editor.  Every option a phase can be slowed down by is
 -- set explicitly: a canary whose baseline moves when a default does is
@@ -76,7 +109,11 @@ local function ms(f, rounds)
 end
 
 local out = {}
+local current = 'old'
 local function phase(name, rounds, f)
+  if GROUP ~= 'all' and GROUP ~= current then
+    return
+  end
   out[#out + 1] = ('EVALBENCH\t%s\t%.1f'):format(name, ms(f, rounds))
 end
 
@@ -307,6 +344,88 @@ phase('lambda', 2000, function()
     let s:t = 0
     for s:i in range(100)
       let s:t += s:f(s:i)
+    endfor
+  ]==])
+end)
+
+-- ----------------------------------------------------------- parser
+current = 'parser'
+
+-- Their fixture is built only when they run, so an `old` run is the same
+-- process it was before they existed.
+if GROUP ~= 'old' then
+  vim.cmd([==[
+  let g:pl = [10, 20, 30, 40, 50]
+  let g:pd = {'alpha': 1, 'beta': [2, 3], 'gamma': {'delta': 4}}
+  let g:mb = repeat('aé日😀b', 40)
+  let g:ascii = repeat('abcdefghij', 40)
+  let $EVALBENCH_ENV = 'env'
+]==])
+end
+
+phase('exprparse', 300, function()
+  vim.cmd([==[
+    for s:i in range(40)
+      let s:x = (s:i + 3) * 2 - s:i / 3 % 7 + (s:i > 10 ? -1 : 1) + len(g:pl) * g:pl[s:i % 5]
+      let s:y = 'abc' . s:i .. "d	e" == 'x' || s:i >= 20 && s:i <= 30 || g:pd.gamma.delta == 4
+      let s:z = [s:i, s:i + 1, {'k': s:i, 'v': [g:pd['beta'][1], g:pd.alpha]}][2].v[0] + 0x1F + 0b101
+      let s:w = g:pl->copy()->map({_, v -> v + s:i})->filter({_, v -> v % 20 == 0})->len()
+      let s:v = $"{s:i} and {g:pd.alpha + s:i} and {g:pl[1]}" . toupper('x') . string(1.5e2)
+    endfor
+  ]==])
+end)
+
+phase('letloop', 500, function()
+  vim.cmd([==[
+    let s:l = range(10)
+    let s:d = {'a': 0, 'b': 0}
+    let s:s = ''
+    let s:n = 0
+    for s:i in range(40)
+      let s:n = s:i
+      let s:n += 2
+      let s:l[s:i % 10] = s:i
+      let s:l[2:3] = [s:i, s:i]
+      let s:d.a = s:i
+      let s:d['b'] += 1
+      let s:d['k' . s:i % 4] = s:i
+      let [s:p, s:q] = [s:i, s:n]
+      let [s:p; s:rest] = [s:i, 1, 2]
+      let s:s ..= s:i % 10 ? '' : 'x'
+      let $EVALBENCH_ENV = 'e' . s:i % 3
+      let &l:textwidth = 70 + s:i % 2
+      let @r = 'r' . s:i % 3
+    endfor
+  ]==])
+end)
+
+phase('strindex', 500, function()
+  vim.cmd([==[
+    for s:i in range(40)
+      let s:a = g:mb[s:i] . g:mb[s:i : s:i + 7] . g:mb[-5 :]
+      let s:b = strcharpart(g:mb, s:i, 6) . slice(g:mb, s:i, s:i + 4)
+      let s:c = charidx(g:mb, s:i * 2) + byteidx(g:mb, s:i) + strchars(g:mb[: s:i * 3])
+      let s:e = g:ascii[s:i] . g:ascii[s:i : s:i + 9] . strpart(g:ascii, s:i, 5)
+      let s:f = char2nr(g:mb[s:i * 2 :]) + strdisplaywidth(g:mb[: s:i])
+    endfor
+  ]==])
+end)
+
+phase('skipexpr', 450, function()
+  vim.cmd([==[
+    for s:i in range(40)
+      if s:i < 0
+        let s:x = (s:i + 3) * 2 - s:i / 3 % 7 + (s:i > 10 ? -1 : 1) + len(g:pl) * g:pl[s:i % 5]
+        let s:y = g:pl->copy()->map({_, v -> v + s:i})->filter({_, v -> v % 20 == 0})->len()
+        echo $"{s:i} and {g:pd.alpha + s:i}" g:mb[s:i : s:i + 7] strcharpart(g:mb, s:i, 6)
+      elseif s:i >= 0 || [s:i, {'k': s:i, 'v': [g:pd['beta'][1]]}][1].v[0] == 3
+        let s:z = 0 && (s:i + 3) * 2 - g:pd.gamma.delta / len(g:pl) + strchars(g:mb)
+        let s:w = 1 || g:pl->copy()->map({_, v -> v + s:i})->filter({_, v -> v % 20 == 0})
+      elseif s:i == 99 && g:pd.gamma.delta == 4 && toupper('x') ==# 'X' && $"{s:i}" != ''
+        let s:never = 1
+      endif
+      while s:i < 0 && g:pd.alpha + len(g:pl) * 2 > 0
+      endwhile
     endfor
   ]==])
 end)

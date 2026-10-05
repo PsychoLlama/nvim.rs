@@ -12,6 +12,12 @@
 # percentage stays comparable, but the *noise floor* does not -- do not
 # compare a scaled run's percentages against an unscaled run's floor.
 #
+# `--cachegrind` answers TWO numbers: `evalbench` is the phases that
+# existed before the parser ones (EVALBENCH_GROUP=old), so it stays
+# comparable with every Ir recorded before them, and `evalbench-parser` is
+# the four parser phases alone (EVALBENCH_GROUP=parser). Wall-clock mode
+# runs every phase; set EVALBENCH_GROUP to narrow it.
+#
 # `--headless -c`, not `-l`: see the header of evalbench.lua.
 set -uo pipefail
 
@@ -21,10 +27,17 @@ ROUNDS_DEFAULT=8
 
 run() {
   EVALBENCH_SCALE="${EVALBENCH_SCALE:-1}" VIMRUNTIME="$RUNTIME" \
+    EVALBENCH_GROUP="${EVALBENCH_GROUP:-all}" \
     $RUNNER "$1" --headless -u NONE -i NONE \
     -c "luafile $HERE/evalbench.lua" -c 'qa!' \
     </dev/null 2>/dev/null |
     sed -n 's/^EVALBENCH\t//p'
 }
 
-ab_run evalbench
+if [ "$MODE" = cachegrind ]; then
+  # Each in a subshell: ab_run's EXIT trap removes its own scratch.
+  (EVALBENCH_GROUP=old ab_run evalbench)
+  (EVALBENCH_GROUP=parser ab_run evalbench-parser)
+else
+  ab_run evalbench
+fi
