@@ -61,6 +61,31 @@ v:count
 g:curly{g:n}x
 g:cur{'y'}
 g:{'n'}
+# -- names, options and environment at their edges
+&tw.'x'
+&l:tw . &g:tw
+&t_Co
+&nosuchopt
+&l:nosuch
+$NVIMTEST.'x'
+$NVIMTEST$NVIMTEST
+$NVIMNOSUCH . 'z'
+exists('&l:tw') . exists('+tw') . exists('$NVIMTEST') . exists('$NVIMNOSUCH')
+has('+tw') . has('+nosuch') . exists('&g:nosuch')
+g:{'cur'}{'y'}
+g:curly{g:n}x . g:cu{'r'}y
+g:{"cu" . "ry"}
+g:cu{'r'}y{'z'}
+# -- string escapes at their edges
+"\101\1018\7\400"
+"\xg\x4\u00e9\U1F600!"
+"\<*C-a>\<C->>\<M-\">\<Nul>"
+"\<C-"
+"a\<NoSuchKey>b\<"
+'ü''€'
+"日\t本\"
+$"{g:n}\<Esc>{{x}}"
+$'{g:s}''}}'
 # -- calls, funcrefs, lambdas, methods
 g:F('abc')
 g:P(1)
