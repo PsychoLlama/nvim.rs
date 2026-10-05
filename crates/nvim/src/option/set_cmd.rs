@@ -28,7 +28,6 @@ use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-use core::slice;
 
 use super::{OptSlot, SetOp, boolean_optval, option_last_set, ui_refresh_options};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -38,14 +37,12 @@ use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
 use crate::guard::sandbox;
-use crate::memory::{strequal, xstrlcpy};
+use crate::memory::xstrlcpy;
 use crate::message::state::info_message;
 use crate::message::{e_invarg, e_sandbox, e_trailing};
 use crate::message::{emsg_ptr, msg_ext_set_kind, msg_putchar};
 use crate::option::vars::{p_mle, p_verbose};
-use crate::options::{
-    kOptAleph, kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap,
-};
+use crate::options::{kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap};
 use crate::os::cshim::gettext_ptr;
 use crate::startup::silent_mode;
 use crate::types::{
@@ -178,74 +175,49 @@ unsafe fn validate_opt_idx(
     Ok(())
 }
 
-/// The end of a terminal option's name at `arg`, or null when `arg` does not
-/// start with one. `term` and `ttytype` are spelled out; the rest are
-/// `t_xx`, optionally wrapped in `<>`.
+/// How long the terminal option's name at the start of `text` is, or `None`
+/// when `text` does not start with one. `term` and `ttytype` are spelled
+/// out and must be all of `text`; the rest are `t_xx`, optionally wrapped in
+/// `<>`.
 ///
-/// # Safety
-///
-/// `arg` must be NUL-terminated.
-pub(crate) unsafe fn find_tty_option_end(arg: *const c_char) -> *const c_char {
-    // SAFETY: the caller's string. Every read below is guarded by the one
-    // before it, so the walk stops at the terminator.
-    for name in [c"term", c"ttytype"] {
-        if unsafe { strequal(arg, name.as_ptr()) } {
-            return unsafe { arg.add(name.count_bytes()) };
-        }
+/// The end of the slice reads as the terminator, as it did when this walked
+/// a C string.
+pub(crate) fn tty_option_end(text: &[u8]) -> Option<usize> {
+    if text == b"term" || text == b"ttytype" {
+        return Some(text.len());
     }
-
-    let mut p = arg;
-    let delimit = unsafe { *arg } as c_int == '<' as c_int;
-    if delimit {
-        p = unsafe { p.add(1) };
-    }
-    if unsafe { *p } as c_int == 't' as c_int
-        && unsafe { *p.add(1) } as c_int == '_' as c_int
-        && unsafe { *p.add(2) } != 0
-        && unsafe { *p.add(3) } != 0
-    {
-        p = unsafe { p.add(4) };
+    let at = |i: usize| cstr::byte_at(text, i);
+    let delimit = at(0) == b'<';
+    let mut p = usize::from(delimit);
+    if at(p) == b't' && at(p + 1) == b'_' && at(p + 2) != NUL as u8 && at(p + 3) != NUL as u8 {
+        p += 4;
     } else if delimit {
-        while unsafe { *p } != NUL as c_char && unsafe { *p } as c_int != '>' as c_int {
-            p = unsafe { p.add(1) };
+        while at(p) != NUL as u8 && at(p) != b'>' {
+            p += 1;
         }
     }
     if delimit {
-        if unsafe { *p } as c_int != '>' as c_int {
-            return ptr::null();
+        if at(p) != b'>' {
+            return None;
         }
-        p = unsafe { p.add(1) };
+        p += 1;
     }
-    if arg == p { ptr::null() } else { p }
+    (p != 0).then_some(p)
 }
 
-/// The end of the option name at `arg`, and the option it names. A terminal
-/// option ends where it ends but resolves to `kOptInvalid`; anything that
-/// does not start with a letter is not a name at all.
-///
-/// # Safety
-///
-/// `arg` must be NUL-terminated, and `opt_idxp` writable.
-pub(crate) unsafe fn find_option_end(arg: *const c_char, opt_idxp: *mut OptIndex) -> *const c_char {
-    // SAFETY: the caller's string and out-parameter.
-    let tty_end = unsafe { find_tty_option_end(arg) };
-    if !tty_end.is_null() {
-        unsafe { *opt_idxp = kOptInvalid };
-        return tty_end;
+/// How long the option name at the start of `text` is, and the option it
+/// names. A terminal option ends where it ends but resolves to
+/// `kOptInvalid`; anything that does not start with a letter is not a name
+/// at all, and answers `None` with `kOptInvalid`.
+pub(crate) fn option_end(text: &[u8]) -> (OptIndex, Option<usize>) {
+    if let Some(end) = tty_option_end(text) {
+        return (kOptInvalid, Some(end));
     }
-    let mut p = arg;
-    while (unsafe { *p } as u8).is_ascii_alphabetic() {
-        p = unsafe { p.add(1) };
+    let len = text.iter().take_while(|b| b.is_ascii_alphabetic()).count();
+    if len == 0 {
+        return (kOptInvalid, None);
     }
-    if p == arg {
-        unsafe { *opt_idxp = kOptInvalid };
-        return ptr::null();
-    }
-    // The name runs from `arg` up to the cursor.
-    let len = unsafe { p.offset_from(arg) } as usize;
-    let name = unsafe { slice::from_raw_parts(arg.cast::<u8>(), len) };
-    unsafe { *opt_idxp = super::find_option_len(name) };
-    p
+    (super::find_option_len(&text[..len]), Some(len))
 }
 
 /// The value `nextchar` and what follows it ask for, in the option's own
@@ -422,17 +394,18 @@ unsafe fn do_one_set_option(
     let prefix = unsafe { get_option_prefix(argp) };
     let arg = *argp;
 
-    // SAFETY: the caller's string and error buffer.
-    let mut opt_idx: OptIndex = kOptAleph;
-    let option_end = unsafe { find_option_end(arg, &raw mut opt_idx) };
+    // SAFETY: the caller's string.
+    let text = unsafe { cstr::bytes_at(arg) };
+    let (opt_idx, name_len) = option_end(text);
     if opt_idx == kOptInvalid {
         // A terminal option is accepted and discarded.
-        if !is_tty_option(unsafe { CStr::from_ptr(arg) }) {
+        if !is_tty_option(text) {
             *errmsg = E_UNKNOWN_OPTION.as_ptr();
         }
         return;
     }
-    debug_assert!(option_end >= arg);
+    // A known option always has a name.
+    let option_end = arg.wrapping_add(name_len.unwrap_or(0));
 
     // What ends the name decides whether a trailing character is an
     // error; `:set ai  ?` is allowed, `:set ai?x` is not.

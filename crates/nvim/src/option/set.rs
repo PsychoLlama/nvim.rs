@@ -65,12 +65,12 @@ use crate::window::set_winbar;
 
 use super::{
     NO_LOCAL_UNDOLEVEL, NUMBUFLEN, OptSlot, SID_NONE, boolean_optval, check_redraw,
-    do_spelllang_source, do_syntax_autocmd, find_tty_option_end, get_varp, get_varp_scope,
-    insecure_flag, is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagRedrAll,
-    kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, kOptValTypeString,
-    mark_option_was_set, option_has_scope, option_has_type, option_is_global_local,
-    option_is_global_only, option_scope_idx, option_var, optval_copy, optval_equal, optval_free,
-    optval_from_varp, set_option_last_set, set_option_varp, validate_option_value,
+    do_spelllang_source, do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag,
+    is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagRedrAll, kOptFlagSecure,
+    kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, kOptValTypeString, mark_option_was_set,
+    option_has_scope, option_has_type, option_is_global_local, option_is_global_only,
+    option_scope_idx, option_var, optval_copy, optval_equal, optval_free, optval_from_varp,
+    set_option_last_set, set_option_varp, tty_option_end, validate_option_value,
 };
 use crate::pos::MAXCOL;
 use crate::winlayer::Buf;
@@ -199,18 +199,17 @@ fn apply_optionset_autocmd(
 /// Whether the name is one of the terminal options nvim keeps only to stay
 /// compatible with scripts that set them.
 ///
-pub(crate) fn is_tty_option(name: &CStr) -> bool {
-    // SAFETY: `name` is NUL-terminated, which is all the walk needs.
-    !unsafe { find_tty_option_end(name.as_ptr()) }.is_null()
+pub(crate) fn is_tty_option(name: &[u8]) -> bool {
+    tty_option_end(name).is_some()
 }
 
 /// What a terminal option reads back as. Only `t_Co`, `term` and `ttytype`
 /// have anything to say; the rest answer with the empty string.
 ///
-pub(crate) fn get_tty_option(name: &CStr) -> OptVal {
-    // SAFETY: `name` is NUL-terminated, and every arm allocates its answer.
+pub(crate) fn get_tty_option(name: &[u8]) -> OptVal {
+    // SAFETY: every arm allocates its answer.
     let value = unsafe {
-        if name == c"t_Co" {
+        if name == b"t_Co" {
             if t_colors.get() <= 1 {
                 xstrdup(c"".as_ptr())
             } else {
@@ -218,9 +217,9 @@ pub(crate) fn get_tty_option(name: &CStr) -> OptVal {
                 snprintf!(buf, NUMBUFLEN as size_t, c"%d".as_ptr(), t_colors.get());
                 buf
             }
-        } else if name == c"term" {
+        } else if name == b"term" {
             TERM.or(c"nvim").into_raw()
-        } else if name == c"ttytype" {
+        } else if name == b"ttytype" {
             TTYTYPE.or(c"nvim").into_raw()
         } else if is_tty_option(name) {
             xstrdup(c"".as_ptr())
@@ -704,7 +703,7 @@ pub(crate) unsafe fn set_option_value_handle_tty(
     }
     // SAFETY: the caller's `name` is NUL-terminated.
     let name = unsafe { CStr::from_ptr(name) };
-    if is_tty_option(name) {
+    if is_tty_option(name.to_bytes()) {
         return Ok(());
     }
     let name = msg_cstr(name);

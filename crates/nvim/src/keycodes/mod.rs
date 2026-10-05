@@ -549,6 +549,25 @@ pub(crate) fn special_key_at(
     Some((key, modifiers, end_of_name))
 }
 
+/// [`trans_special`] over a slice: append the encoding of the `<>` name at
+/// the start of `text` to `out` and answer how many bytes of `text` the name
+/// took. `None`, appending nothing, when `text` does not start with a name
+/// this understands.
+pub(crate) fn trans_special_into(
+    text: &[u8],
+    flags: c_int,
+    escape_ks: bool,
+    out: &mut Vec<u8>,
+) -> Option<usize> {
+    let (key, modifiers, used) = special_key_at(text, flags, None)?;
+    let mut encoded = [0u8; 3 * MB_MAXBYTES];
+    // SAFETY: `encoded` has the room `special_to_buf` asks for, with
+    // `escape_ks` or without.
+    let written = unsafe { special_to_buf(key, modifiers, escape_ks, encoded.as_mut_ptr().cast()) };
+    out.extend_from_slice(&encoded[..written as usize]);
+    Some(used)
+}
+
 /// Fold the modifiers a single byte can carry into `key`: `Shift-a` becomes
 /// `A`, `Ctrl-@` becomes `<Nul>`. Alt and Meta are never folded.
 ///

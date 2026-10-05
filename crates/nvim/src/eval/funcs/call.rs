@@ -21,7 +21,7 @@ use crate::eval::userfunc::{
     get_scriptlocal_funcname, save_function_name, trans_function_name, translated_function_exists,
 };
 use crate::eval::vars::var_exists;
-use crate::eval::{eval_option, eval1, partial_name, script_host_eval};
+use crate::eval::{Cursor, eval_option, eval1, partial_name, script_host_eval};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{DoCmdOpts, cmd_exists, do_cmdline, do_cmdline_cmd};
 use crate::ex_eval::aborting;
@@ -287,7 +287,7 @@ pub fn f_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the frame is live and `p` walks a string an argument owns.
-    let mut p = arg_string(&mut numbuf, &args[0]);
+    let p = arg_string(&mut numbuf, &args[0]);
     // Not a bool: the `:` arm answers 2 for an exact command name, and
     // that grading is part of `exists()`'s contract.
     let found: c_int = match unsafe { *p } as u8 {
@@ -303,8 +303,13 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         b'&' | b'+' => {
             // An option, and nothing may follow it.
-            (unsafe { eval_option(&raw mut p, None, true) }.is_ok()
-                && unsafe { *skipwhite(p) } as c_int == NUL) as c_int
+            // SAFETY: `p` is the caller's NUL-terminated text.
+            let mut cursor = Cursor::new(unsafe { cstr::bytes_at(p) });
+            let found = eval_option(&mut cursor, None, true).is_ok() && {
+                cursor.skip_white();
+                cursor.byte() == NUL as u8
+            };
+            c_int::from(found)
         }
         b'*' => {
             if unsafe { strnequal(p, c"*v:lua.".as_ptr(), 7) } {

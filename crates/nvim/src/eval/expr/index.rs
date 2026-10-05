@@ -322,7 +322,7 @@ pub(crate) unsafe fn eval_index_inner(
                     semsg!("E716: Key not present in Dictionary: \"{key}\"");
                 }
             }
-            if item.is_null() || unsafe { tv_is_luafunc(&mut (*item).di_tv) } {
+            if item.is_null() || tv_is_luafunc(unsafe { &(*item).di_tv }) {
                 return Err(Failed);
             }
             // The copy is taken before `result` — which owns the Dict the
@@ -478,12 +478,12 @@ pub(crate) unsafe fn handle_subscript(
         } else {
             cur.bump(1);
             lua_funcname = cur.get();
-            let len = unsafe { check_luafunc_name(cur.get(), true) };
+            let len = check_luafunc_name(unsafe { cstr::bytes_at(cur.get()) }, true);
             if len == 0 {
                 tv_clear(result);
                 ret = Err(Failed);
             }
-            cur.bump(len as usize);
+            cur.bump(len);
         }
     }
 

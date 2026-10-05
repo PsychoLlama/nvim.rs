@@ -397,15 +397,18 @@ pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_
 /// `var` is a NUL-terminated string.
 pub unsafe fn var_exists(mut var: *const c_char) -> bool {
     let mut evalarg = EVALARG_EVALUATE;
-    let mut tofree: *mut c_char = ptr::null_mut();
     let mut n = false;
     let mut name = var;
     // Get the variable name, expanding a `{curly}` name into `tofree`.
-    let len = unsafe { get_name_len(&raw mut var, &raw mut tofree, true, false) };
+    // SAFETY: the caller's obligation -- `var` is NUL-terminated.
+    let mut cursor = Cursor::new(unsafe { cstr::bytes_at(var) });
+    let (len, tofree) = get_name_len(&mut cursor, true, false);
+    // The scan stays inside the text.
+    var = var.wrapping_add(cursor.offset());
     if len > 0 {
         let mut tv = TV_INITIAL_VALUE;
-        if !tofree.is_null() {
-            name = tofree;
+        if let Some(expanded) = &tofree {
+            name = expanded.as_ptr();
         }
         n = unsafe { eval_variable(name, len, Some(&mut tv), ptr::null_mut(), false, true) }
             .is_ok();
@@ -420,6 +423,6 @@ pub unsafe fn var_exists(mut var: *const c_char) -> bool {
     if unsafe { *var } != NUL as c_char {
         n = false;
     }
-    unsafe { xfree(tofree.cast()) };
+    drop(tofree);
     n
 }

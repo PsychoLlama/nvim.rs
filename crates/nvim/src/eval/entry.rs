@@ -467,6 +467,19 @@ pub unsafe fn eval_to_string(
     unsafe { eval_to_string_eap(arg, join_list, None, use_simple_function) }
 }
 
+/// [`eval_to_string`] of text the caller lends: the expression is evaluated
+/// from a terminated copy, and the answer is owned. `None` when the
+/// evaluation failed.
+pub(crate) fn eval_text_to_string(expr: &[u8], join_list: bool) -> Option<XString> {
+    let mut copy = XString::from_bytes(expr);
+    // SAFETY: `copy` is a NUL-terminated expression of this frame's own; the
+    // answer is null or an owned string, taken over once.
+    unsafe {
+        let value = eval_to_string(copy.as_mut_ptr(), join_list, false);
+        (!value.is_null()).then(|| XString::from_raw(value))
+    }
+}
+
 /// `eval_to_string` with the text locked and, optionally, the sandbox on,
 /// and with the function-call stack saved across it.
 ///
@@ -594,7 +607,7 @@ pub unsafe fn call_vim_function(
             // left is still inside the NUL-terminated name.
             func = unsafe { func.add(6) };
             // SAFETY: as above.
-            len = unsafe { check_luafunc_name(func, false) };
+            len = check_luafunc_name(unsafe { cstr::bytes_at(func) }, false) as c_int;
             if len == 0 {
                 break 'fail;
             }

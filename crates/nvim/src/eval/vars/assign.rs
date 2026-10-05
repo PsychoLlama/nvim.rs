@@ -22,7 +22,7 @@ use super::*;
 use crate::eval::typval::{NumBuf, list_items, list_items_mut};
 use crate::option::boolean_optval;
 use crate::os::cshim::gettext_owned;
-use crate::types::{Failed, NUL, OptStr, OptionSetFlags};
+use crate::types::{Failed, NUL, OptStr};
 
 /// The compound assignment operators, as they appear before the `=`.
 const OPERATORS: &CStr = c"+-*/%.";
@@ -372,9 +372,8 @@ unsafe fn skip_var_one(arg: *const c_char) -> *const c_char {
         arg
     };
     let flags = FNE_INCL_BR | FNE_CHECK_START;
-    let (nil1, nil2) = (ptr::null_mut(), ptr::null_mut());
-    // SAFETY: a NUL-terminated name, with neither out-parameter wanted.
-    unsafe { find_name_end(name, nil1, nil2, flags) }
+    // SAFETY: a NUL-terminated name, whose end is inside it.
+    unsafe { name.add(name_end(cstr::bytes_at(name), flags).end) }
 }
 
 /// `:let $VAR = …`.  Answers the character past the name, or NULL.
@@ -401,7 +400,9 @@ unsafe fn ex_let_env(
     // SAFETY: `arg` points at the `$` of a NUL-terminated name.
     arg = unsafe { arg.add(1) };
     let name = arg;
-    let len = unsafe { get_env_len(&raw mut arg as *mut *const c_char) };
+    // SAFETY: the name is NUL-terminated, and its end is inside it.
+    let len = env_name_len(unsafe { cstr::bytes_at(arg) });
+    arg = arg.wrapping_add(len);
     if len == 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 = unsafe { c_str(name.sub(1)) };
@@ -415,9 +416,9 @@ unsafe fn ex_let_env(
     } else if !check_secure() {
         // Terminate the name in place: `arg` has already moved past it.
         let mut tofree: *mut c_char = ptr::null_mut();
-        // SAFETY: `len` is the length `get_env_len` measured from `name`, so
+        // SAFETY: `len` is the length `env_name_len` measured from `name`, so
         // the byte at it is the name's own terminator or separator.
-        let end = unsafe { name.offset(len as isize) };
+        let end = unsafe { name.add(len) };
         let c1 = unsafe { *end };
         unsafe { *end = NUL as c_char };
 
@@ -467,13 +468,18 @@ unsafe fn ex_let_option(
     let opch = unsafe { op_char(op) };
 
     // Find the end of the name.
-    let mut opt_idx: OptIndex = kOptAleph;
-    let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
-    let namep = &raw mut arg as *mut *const c_char;
-    let (idxp, flagsp) = (&raw mut opt_idx, &raw mut opt_flags);
-    // SAFETY: `arg` points at the `&` of a NUL-terminated name, and the two
-    // out-parameters are live locals of this frame.
-    let p = unsafe { find_option_var_end(namep, idxp, flagsp) } as *mut c_char;
+    // SAFETY: `arg` points at the `&` of a NUL-terminated name.
+    let option = option_var_end(unsafe { cstr::bytes_at(arg) });
+    let (opt_idx, opt_flags) = (option.index, option.flags);
+    // The name proper starts after the scope, once there is one.
+    let p = match option.end {
+        Some(end) => {
+            let p = arg.wrapping_add(end);
+            arg = arg.wrapping_add(option.start);
+            p
+        }
+        None => ptr::null_mut(),
+    };
     if p.is_null() || !unsafe { ends_target(endchars, p) } {
         emsg_static(e_letunexp);
         return ptr::null_mut();
@@ -484,10 +490,10 @@ unsafe fn ex_let_option(
     unsafe { *p = NUL as c_char };
 
     let arg_name = unsafe { CStr::from_ptr(arg) };
-    let is_tty_opt = is_tty_option(arg_name);
+    let is_tty_opt = is_tty_option(arg_name.to_bytes());
     let hidden = is_option_hidden(opt_idx);
     let curval = if is_tty_opt {
-        get_tty_option(arg_name)
+        get_tty_option(arg_name.to_bytes())
     } else {
         get_option_value(opt_idx, opt_flags)
     };

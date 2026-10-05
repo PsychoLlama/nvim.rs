@@ -725,6 +725,35 @@ pub(crate) fn str2nr_in(text: &[u8], what: Str2NrBases, strict: bool) -> ParsedN
     parsed
 }
 
+/// Read a Float out of `text`, answering it and how many bytes it consumed.
+/// The three named values are recognised ahead of `strtod`, which does not
+/// know them in every locale.
+///
+/// Upstream writes the value through an out-parameter and returns only the
+/// length; a pair says the same thing without handing anyone the address of
+/// a typval's union arm.
+///
+/// # Safety
+/// `text` must be NUL-terminated.
+pub(crate) unsafe fn string2float(text: *const c_char) -> (crate::types::Float, usize) {
+    for (name, len, value) in [
+        (c"inf", 3, f64::INFINITY),
+        (c"-inf", 4, f64::NEG_INFINITY),
+        (c"nan", 3, f64::NAN),
+    ] {
+        let (lhs, rhs) = (text.cast_mut(), name.as_ptr().cast_mut());
+        // SAFETY: the caller's promise -- `text` is NUL-terminated and
+        // `name` is a literal.
+        if unsafe { crate::os::cshim::strncasecmp(lhs, rhs, len) } == 0 {
+            return (value, len);
+        }
+    }
+    let mut end: *mut c_char = core::ptr::null_mut();
+    // SAFETY: as above; `strtod` leaves `end` inside `text`.
+    let value = unsafe { ::libc::strtod(text, &raw mut end) };
+    (value, end.addr() - text.addr())
+}
+
 /// The value of the hexadecimal digit `c`. Anything else is nonsense.
 pub fn hex2nr(c: c_int) -> c_int {
     if (b'a' as c_int..=b'f' as c_int).contains(&c) {

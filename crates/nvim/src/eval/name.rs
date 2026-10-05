@@ -4,425 +4,245 @@
 //! same: `eval_isnamec1` is what may *start* one, `eval_isnamec` what may
 //! continue it (which includes `:` and `#`), and `eval_isdictc` what a
 //! `.key` may contain (which includes neither).
+//!
+//! The scanners read a slice and answer lengths and offsets. The end of the
+//! slice reads as the terminator the C strings had, so a scan over the rest
+//! of a line stops exactly where the pointer form stopped.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-
-use crate::cstr;
-use crate::message_fmt::c_str;
-use crate::semsg;
-use crate::strings::has_char;
-use crate::vim_snprintf;
-use core::ffi::{c_char, c_int, c_void};
+#![forbid(unsafe_code)]
 
 use crate::ascii::ascii_isdigit;
-use crate::charset::{skipwhite, vim_is_ident_char};
-use crate::eval::userfunc::eval_fname_script;
+use crate::charset::vim_is_ident_char;
+use crate::cstr::byte_at;
+use crate::eval::userfunc::fname_script_len;
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::{
-    AUTOLOAD_CHAR, FNE_CHECK_START, FNE_INCL_BR, KS_EXTRA, eval_to_string, namespace_char,
+    AUTOLOAD_CHAR, Cursor, FNE_CHECK_START, FNE_INCL_BR, eval_text_to_string, namespace_char,
 };
-use crate::keycodes::{K_SPECIAL, KE_SNR};
-use crate::mbyte::utfc_ptr2len;
-use crate::memory::{xfree, xmalloc};
-use crate::option::find_option_end;
-use crate::types::{
-    NUL, OptIndex, OptionSetFlags, Partial, TypVal, VAR_PARTIAL, Vv, size_t, uint8_t,
-};
+use crate::keycodes::{K_SPECIAL, KE_SNR, KS_EXTRA};
+use crate::mbyte::cluster_len;
+use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
+use crate::option::option_end;
+use crate::semsg;
+use crate::strings::has_char;
+use crate::types::{NUL, OptIndex, OptionSetFlags, Partial, TypVal, VAR_PARTIAL, Vv};
+use core::ffi::c_int;
 
-/// The length of the environment-variable name at the cursor, which is
-/// left after it. Zero when there is none.
-///
-/// # Safety
-/// `arg` must point at a cursor into a NUL-terminated string.
-pub unsafe fn get_env_len(arg: *mut *const c_char) -> c_int {
-    // SAFETY: the caller's promise -- `arg` holds a cursor into a
-    // NUL-terminated string. The walk stops at the terminator, which is not
-    // an identifier character, so it never leaves the string.
-    let start = unsafe { *arg };
-    let mut p = start;
-    while unsafe { vim_is_ident_char(*p as uint8_t as c_int) } {
-        p = unsafe { p.add(1) };
-    }
-    if p == start {
-        return 0;
-    }
-    // SAFETY: both cursors are into the one string.
-    let len = unsafe { p.offset_from(start) } as c_int;
-    // SAFETY: the caller's promise about `arg`.
-    unsafe { *arg = p };
-    len
+/// The NUL byte, as the scans below compare it.
+const END: u8 = NUL as u8;
+
+/// How long the environment-variable name `text` starts with is. Zero when
+/// there is none.
+pub(crate) fn env_name_len(text: &[u8]) -> usize {
+    text.iter()
+        .take_while(|&&b| vim_is_ident_char(c_int::from(b)))
+        .count()
 }
 
-/// The length of the plain identifier at the cursor, which is left on the
-/// first non-blank after it. Zero when there is none.
+/// How long the plain identifier `text` starts with is. Zero when there is
+/// none.
 ///
 /// A `:` is part of the name only as a leading namespace letter; anywhere
 /// else it ends it.
-///
-/// # Safety
-/// As `get_env_len`.
-pub unsafe fn get_id_len(arg: *mut *const c_char) -> c_int {
-    // SAFETY: the caller's promise -- a cursor into a NUL-terminated
-    // string. The terminator is not a name character, so the walk stops at
-    // it.
-    let start = unsafe { *arg };
-    let mut p = start;
+pub(crate) fn id_len(text: &[u8]) -> usize {
+    let mut p = 0;
     loop {
-        // SAFETY: `p` is inside the string.
-        let c = unsafe { *p };
-        if !eval_isnamec(c as c_int) {
+        let c = byte_at(text, p);
+        if !eval_isnamec(c_int::from(c)) {
             break;
         }
-        if c == b':' as c_char {
-            // SAFETY: both cursors are into the one string.
-            let len = unsafe { p.offset_from(start) } as c_int;
-            // SAFETY: the string's first byte is readable.
-            let scope = unsafe { *start } as uint8_t as c_int;
-            let scoped = !has_char(namespace_char, scope);
-            if len > 1 || (len == 1 && scoped) {
+        if c == b':' {
+            let scoped = !has_char(namespace_char, c_int::from(text[0]));
+            if p > 1 || (p == 1 && scoped) {
                 break;
             }
         }
-        // SAFETY: `c` is not the terminator, so the next byte is inside.
-        p = unsafe { p.add(1) };
+        p += 1;
     }
-    if p == start {
-        return 0;
+    p
+}
+
+/// The identifier at the cursor, which is left on the first non-blank after
+/// it: its length, zero (and the cursor unmoved) when there is none.
+fn take_id(cursor: &mut Cursor<'_>) -> usize {
+    let len = id_len(cursor.rest());
+    if len > 0 {
+        cursor.bump(len);
+        cursor.skip_white();
     }
-    // SAFETY: both cursors are into the one string.
-    let len = unsafe { p.offset_from(start) } as c_int;
-    // SAFETY: `p` is inside the string, and so is what follows its blanks.
-    unsafe { *arg = skipwhite(p) };
     len
 }
 
-/// The length of the name at the cursor, expanding a `{...}` in it.
+/// A name's length as the callers count it, which a name never overflows.
+fn name_len(len: usize) -> c_int {
+    c_int::try_from(len).unwrap_or(c_int::MAX)
+}
+
+/// The length of the name at the cursor, expanding a `{...}` in it. The
+/// cursor is left on the first non-blank after the name.
 ///
-/// When the name held curly braces and `evaluate` is set, `alias` comes
-/// back owning the expanded spelling and the answer is *its* length rather
-/// than the source text's. -1 means the expansion failed.
-///
-/// # Safety
-/// As `get_env_len`; `alias` must be valid.
-pub unsafe fn get_name_len(
-    arg: *mut *const c_char,
-    alias: *mut *mut c_char,
+/// When the name held curly braces and `evaluate` is set, the expanded
+/// spelling comes back as well and the answer is *its* length rather than
+/// the source text's. -1 means the expansion failed.
+pub(crate) fn get_name_len(
+    cursor: &mut Cursor<'_>,
     evaluate: bool,
     verbose: bool,
-) -> c_int {
-    // SAFETY: the caller's promise about `alias`.
-    unsafe { *alias = core::ptr::null_mut() };
-
+) -> (c_int, Option<XString>) {
     // A `<SNR>` prefix arrives as the three-byte key encoding.
-    // SAFETY: the caller's promise -- a cursor into a NUL-terminated
-    // string. The three bytes are compared in order, so the second and the
-    // third are only read once the ones before them matched, which is what
-    // keeps the reads inside the string.
-    let snr = unsafe { *(*arg).add(0) } == K_SPECIAL as c_char
-        && unsafe { *(*arg).add(1) } == KS_EXTRA as c_char
-        && unsafe { *(*arg).add(2) } == KE_SNR as c_char;
-    if snr {
-        // SAFETY: the prefix is three bytes of the same string.
-        unsafe { *arg = (*arg).add(3) };
-        // SAFETY: `arg` is still a cursor into it.
-        return unsafe { get_id_len(arg) } + 3;
+    let snr = [K_SPECIAL, KS_EXTRA, KE_SNR as c_int];
+    if (0..3).all(|i| c_int::from(cursor.at(i)) == snr[i]) {
+        cursor.bump(3);
+        return (name_len(take_id(cursor) + 3), None);
     }
 
     // `s:` and `<SID>` are a prefix on top of the name proper.
-    // SAFETY: as above.
-    let mut len = unsafe { eval_fname_script(*arg) };
-    if len > 0 {
-        // SAFETY: the answer is the length of a prefix of the string.
-        unsafe { *arg = (*arg).offset(len as isize) };
-    }
+    let prefix = fname_script_len(cursor.rest());
+    cursor.bump(prefix);
+    let flags = if prefix > 0 { 0 } else { FNE_CHECK_START };
+    let found = name_end(cursor.rest(), flags);
 
-    let mut expr_start: *mut c_char = core::ptr::null_mut();
-    let mut expr_end: *mut c_char = core::ptr::null_mut();
-    let (starts, ends) = (
-        (&raw mut expr_start).cast::<*const c_char>(),
-        (&raw mut expr_end).cast::<*const c_char>(),
-    );
-    let start_flags = if len > 0 { 0 } else { FNE_CHECK_START };
-    // SAFETY: the cursor names a NUL-terminated string, and the two
-    // out-parameters are this frame's.
-    let p = unsafe { find_name_end(*arg, starts, ends, start_flags) };
-
-    if !expr_start.is_null() {
-        if !evaluate {
-            // SAFETY: `p` and the cursor are into the one string.
-            len += unsafe { p.offset_from(*arg) } as c_int;
-            // SAFETY: as above.
-            unsafe { *arg = skipwhite(p) };
-            return len;
+    if let Some(open) = found.brace_open {
+        if evaluate {
+            // The prefix is part of the name being expanded.
+            let start = cursor.offset() - prefix;
+            let name = &cursor.text()[start..cursor.offset() + found.end];
+            let close = found.brace_close.map(|close| prefix + close);
+            let Some(expanded) = expanded_name(name, prefix + open, close) else {
+                return (-1, None);
+            };
+            cursor.bump(found.end);
+            cursor.skip_white();
+            return (name_len(expanded.len()), Some(expanded));
         }
-        // The prefix is part of the name being expanded, so the start
-        // is stepped back over it.
-        // SAFETY: the prefix was stepped over above, so stepping back over
-        // it lands inside the same string.
-        let from = unsafe { (*arg).offset(-(len as isize)) };
-        let at = p as *mut c_char;
-        // SAFETY: all four cursors are into one writable, NUL-terminated
-        // string, with the braces and the end where `find_name_end` left
-        // them.
-        let temp_string = unsafe { make_expanded_name(from, expr_start, expr_end, at) };
-        if temp_string.is_null() {
-            return -1;
-        }
-        // SAFETY: the caller's promise about `alias`, which takes the
-        // expansion over.
-        unsafe { *alias = temp_string };
-        // SAFETY: `p` is into the source string.
-        unsafe { *arg = skipwhite(p) };
-        // SAFETY: the expansion is NUL-terminated.
-        return unsafe { cstr::bytes_at(temp_string) }.len() as c_int;
+        cursor.bump(found.end);
+        cursor.skip_white();
+        return (name_len(prefix + found.end), None);
     }
 
-    // SAFETY: `arg` is still a cursor into the string.
-    len += unsafe { get_id_len(arg) };
-    // SAFETY: as above.
-    if len == 0 && verbose && unsafe { **arg } as c_int != NUL {
-        // SAFETY: the format takes one string, which the cursor names.
-        let arg0 = unsafe { c_str(*arg) };
-        semsg!("E15: Invalid expression: \"{arg0}\"");
+    let len = prefix + take_id(cursor);
+    if len == 0 && verbose && cursor.byte() != END {
+        let rest = msg_bytes(cursor.rest());
+        semsg!("E15: Invalid expression: \"{rest}\"");
     }
-    len
+    (name_len(len), None)
 }
 
-/// The cursor stepped over one whole character.
-///
-/// # Safety
-/// `p` must be on a character of a NUL-terminated string, and not on the
-/// terminator.
-#[inline]
-unsafe fn step_char(p: *const c_char) -> *const c_char {
-    // SAFETY: the caller's promise; `utfc_ptr2len` answers at least one and
-    // never counts past the terminator.
-    unsafe { p.offset(utfc_ptr2len(p as *mut c_char) as isize) }
+/// Where a name ends, and where its outermost pair of curly braces is.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct NameEnd {
+    /// The offset of the first byte after the name.
+    pub(crate) end: usize,
+    /// The first `{`, when the name has one.
+    pub(crate) brace_open: Option<usize>,
+    /// The `}` that closes the outermost pair, when it was reached.
+    pub(crate) brace_close: Option<usize>,
 }
 
-/// The end of the name starting at `arg`, stepping over `{...}` and, with
-/// `FNE_INCL_BR`, over `[...]` and `.key` subscripts too. `expr_start` and
-/// `expr_end` come back on the outermost pair of curly braces, when there
-/// was one.
-///
-/// # Safety
-/// `arg` must be NUL-terminated; the two out-parameters both null or both
-/// valid.
-pub unsafe fn find_name_end(
-    arg: *const c_char,
-    expr_start: *mut *const c_char,
-    expr_end: *mut *const c_char,
-    flags: c_int,
-) -> *const c_char {
-    if !expr_start.is_null() {
-        // SAFETY: the caller's promise -- both out-parameters are valid
-        // when the first one is.
-        unsafe { *expr_start = core::ptr::null() };
-        // SAFETY: as above.
-        unsafe { *expr_end = core::ptr::null() };
-    }
-    // SAFETY: the caller's promise -- `arg` is NUL-terminated, so its first
-    // byte is readable.
-    let first = unsafe { *arg };
-    if flags & FNE_CHECK_START != 0 && !eval_isnamec1(first as c_int) && first != b'{' as c_char {
-        return arg;
+/// The end of the name `text` starts with, stepping over `{...}` and, with
+/// `FNE_INCL_BR`, over `[...]` and `.key` subscripts too. With
+/// `FNE_CHECK_START`, `text` must start with a name character or a `{`.
+pub(crate) fn name_end(text: &[u8], flags: c_int) -> NameEnd {
+    let at = |i: usize| byte_at(text, i);
+    let mut found = NameEnd::default();
+    let first = at(0);
+    if flags & FNE_CHECK_START != 0 && !eval_isnamec1(c_int::from(first)) && first != b'{' {
+        return found;
     }
 
     let incl_br = flags & FNE_INCL_BR != 0;
     let mut mb_nest = 0;
     let mut br_nest = 0;
-    let mut p = arg;
+    let mut p = 0;
     loop {
         // The byte under the cursor, read once per turn. The two
         // string-skipping arms below leave `p` on the closing quote, which
         // is the byte this already holds, so the bracket and brace tests
         // further down may use it rather than reading again.
-        // SAFETY: `p` walks the NUL-terminated string and every step below
-        // stops at the terminator, so this byte is inside it.
-        let c = unsafe { *p };
-        if c as c_int == NUL {
+        let c = at(p);
+        if c == END {
             break;
         }
-        // SAFETY: `c` is not the terminator, so the byte after it is still
-        // inside the string. The closure keeps the read where the original
-        // condition had it: only a `.` under `FNE_INCL_BR` looks ahead.
-        let dict_key = || c == b'.' as c_char && eval_isdictc(unsafe { *p.add(1) } as c_int);
-        let in_name = eval_isnamec(c as c_int)
-            || c == b'{' as c_char
-            || (incl_br && (c == b'[' as c_char || dict_key()))
+        // Only a `.` under `FNE_INCL_BR` looks ahead.
+        let dict_key = || c == b'.' && eval_isdictc(c_int::from(at(p + 1)));
+        let in_name = eval_isnamec(c_int::from(c))
+            || c == b'{'
+            || (incl_br && (c == b'[' || dict_key()))
             || mb_nest != 0
             || br_nest != 0;
         if !in_name {
             break;
         }
 
-        if c == b'\'' as c_char {
-            // A literal string inside `[...]`.
-            // SAFETY: `c` is not the terminator.
-            p = unsafe { p.add(1) };
-            loop {
-                // SAFETY: `p` is inside the NUL-terminated string.
-                let q = unsafe { *p };
-                if q as c_int == NUL || q == b'\'' as c_char {
-                    break;
+        if c == b'\'' || c == b'"' {
+            // A string inside `[...]`; a double-quoted one's escapes are
+            // stepped over.
+            p += 1;
+            while at(p) != END && at(p) != c {
+                if c == b'"' && at(p) == b'\\' && at(p + 1) != END {
+                    p += 1;
                 }
-                // SAFETY: `q` is not the terminator, so `p` is on a
-                // character.
-                p = unsafe { step_char(p) };
+                p += cluster_len(&text[p..]);
             }
-            // SAFETY: `p` is inside the string.
-            if unsafe { *p } as c_int == NUL {
+            if at(p) == END {
                 break;
             }
-        } else if c == b'"' as c_char {
-            // A double-quoted string, whose escapes must be stepped over.
-            // SAFETY: `c` is not the terminator.
-            p = unsafe { p.add(1) };
-            loop {
-                // SAFETY: `p` is inside the NUL-terminated string.
-                let q = unsafe { *p };
-                if q as c_int == NUL || q == b'"' as c_char {
-                    break;
-                }
-                // SAFETY: `q` is not the terminator, so the byte after it
-                // is inside the string.
-                if q == b'\\' as c_char && unsafe { *p.add(1) } as c_int != NUL {
-                    p = unsafe { p.add(1) };
-                }
-                // SAFETY: `p` is on a character of the string.
-                p = unsafe { step_char(p) };
-            }
-            // SAFETY: `p` is inside the string.
-            if unsafe { *p } as c_int == NUL {
-                break;
-            }
-        } else if br_nest == 0 && mb_nest == 0 && c == b':' as c_char {
+        } else if br_nest == 0 && mb_nest == 0 && c == b':' {
             // A `:` ends the name unless it is the namespace one — or
             // unless a `}` came just before it, which is a curly-braces
             // name that produced the scope letter itself.
-            // SAFETY: `p` and `arg` are cursors into the one string.
-            let len = unsafe { p.offset_from(arg) } as c_int;
-            // SAFETY: `len > 1`, so the byte before `p` is inside it.
-            let after_brace = len > 1 && unsafe { *p.offset(-1) } != b'}' as c_char;
-            // SAFETY: the string's first byte is readable.
-            let scope = unsafe { *arg } as uint8_t as c_int;
-            let scoped = !has_char(namespace_char, scope);
-            if after_brace || (len == 1 && scoped) {
+            let not_after_brace = p > 1 && text[p - 1] != b'}';
+            let scoped = !has_char(namespace_char, c_int::from(text[0]));
+            if not_after_brace || (p == 1 && scoped) {
                 break;
             }
         }
 
         if mb_nest == 0 {
-            if c == b'[' as c_char {
+            if c == b'[' {
                 br_nest += 1;
-            } else if c == b']' as c_char {
+            } else if c == b']' {
                 br_nest -= 1;
             }
         }
         if br_nest == 0 {
-            if c == b'{' as c_char {
+            if c == b'{' {
                 mb_nest += 1;
-                // SAFETY: the caller's promise about the out-parameters.
-                if !expr_start.is_null() && unsafe { *expr_start }.is_null() {
-                    // SAFETY: as above.
-                    unsafe { *expr_start = p };
+                if found.brace_open.is_none() {
+                    found.brace_open = Some(p);
                 }
-            } else if c == b'}' as c_char {
+            } else if c == b'}' {
                 mb_nest -= 1;
-                // SAFETY: the caller's promise about the out-parameters.
-                if !expr_start.is_null() && mb_nest == 0 && unsafe { *expr_end }.is_null() {
-                    // SAFETY: as above.
-                    unsafe { *expr_end = p };
+                if mb_nest == 0 && found.brace_close.is_none() {
+                    found.brace_close = Some(p);
                 }
             }
         }
-        // SAFETY: `c` is not the terminator, so `p` is on a character.
-        p = unsafe { step_char(p) };
+        p += cluster_len(&text[p..]);
     }
-    p
+    found.end = p;
+    found
 }
 
-/// Expand the `{expr}` between `expr_start` and `expr_end` and answer the
-/// whole name with it substituted in, or null when the expression failed.
-/// The result is re-scanned, so nested curly braces expand too.
-///
-/// # Safety
-/// All four pointers must be into one writable, NUL-terminated string;
-/// `expr_start`/`expr_end` on the braces and `in_end` at the name's end.
-pub(crate) unsafe fn make_expanded_name(
-    in_start: *const c_char,
-    expr_start: *mut c_char,
-    expr_end: *mut c_char,
-    in_end: *mut c_char,
-) -> *mut c_char {
-    if expr_end.is_null() || in_end.is_null() {
-        return core::ptr::null_mut();
+/// The name `name` spells once the `{expr}` from `open` to `close` is
+/// evaluated and put in its place, or `None` when there is no closing brace
+/// or the expression failed. The result is re-scanned, so nested curly
+/// braces expand too.
+pub(crate) fn expanded_name(name: &[u8], open: usize, close: Option<usize>) -> Option<XString> {
+    let close = close?;
+    let value = eval_text_to_string(&name[open + 1..close], false)?;
+    let mut expanded = Vec::with_capacity(open + value.len() + name.len() - close);
+    expanded.extend_from_slice(&name[..open]);
+    expanded.extend_from_slice(&value);
+    expanded.extend_from_slice(&name[close + 1..]);
+
+    // The expansion may itself hold curly braces.
+    let inner = name_end(&expanded, 0);
+    match inner.brace_open {
+        Some(open) => expanded_name(&expanded[..inner.end], open, inner.brace_close),
+        None => Some(XString::from_bytes(&expanded)),
     }
-
-    // The three pieces are cut apart in place — the braces and the end
-    // become terminators — and put back before returning.
-    // SAFETY: the caller's promise -- all four point into one writable
-    // NUL-terminated string.
-    let c1 = unsafe { *in_end };
-    // SAFETY: as above -- the three cuts, put back before returning.
-    unsafe { *expr_start = NUL as c_char };
-    // SAFETY: as above.
-    unsafe { *expr_end = NUL as c_char };
-    // SAFETY: as above.
-    unsafe { *in_end = NUL as c_char };
-
-    let mut retval: *mut c_char = core::ptr::null_mut();
-    // SAFETY: the text after the opening brace is its own NUL-terminated
-    // string now that the closing one has been overwritten.
-    let temp_result = unsafe { eval_to_string(expr_start.add(1), false, false) };
-    if !temp_result.is_null() {
-        // SAFETY: all four cursors are into the one string, and
-        // `temp_result` is NUL-terminated.
-        let before = unsafe { expr_start.offset_from(in_start) } as size_t;
-        // SAFETY: as above.
-        let after = unsafe { in_end.offset_from(expr_end) } as size_t;
-        // SAFETY: `temp_result` is NUL-terminated.
-        let retvalsize = before + unsafe { cstr::bytes_at(temp_result) }.len() + after + 1;
-        // SAFETY: `xmalloc` never answers NULL.
-        retval = unsafe { xmalloc(retvalsize) as *mut c_char };
-        // SAFETY: the tail begins after the closing brace.
-        let tail = unsafe { expr_end.add(1) };
-        let fmt = c"%s%s%s".as_ptr();
-        // SAFETY: three NUL-terminated pieces into a buffer sized for them.
-        unsafe { vim_snprintf!(retval, retvalsize, fmt, in_start, temp_result, tail) };
-    }
-    // SAFETY: the expression's result is an owned string, and null is fine.
-    unsafe { xfree(temp_result as *mut c_void) };
-
-    // SAFETY: the three bytes cut out above are put back where they were.
-    unsafe { *in_end = c1 };
-    // SAFETY: as above.
-    unsafe { *expr_start = b'{' as c_char };
-    // SAFETY: as above.
-    unsafe { *expr_end = b'}' as c_char };
-
-    if !retval.is_null() {
-        // The expansion may itself hold curly braces.
-        let mut inner_start: *mut c_char = core::ptr::null_mut();
-        let mut inner_end: *mut c_char = core::ptr::null_mut();
-        let (starts, ends) = (
-            (&raw mut inner_start).cast::<*const c_char>(),
-            (&raw mut inner_end).cast::<*const c_char>(),
-        );
-        // SAFETY: `retval` is the NUL-terminated expansion and the two
-        // out-parameters are this frame's.
-        let name_end = unsafe { find_name_end(retval, starts, ends, 0) } as *mut c_char;
-        if !inner_start.is_null() {
-            // SAFETY: all four cursors are into `retval`, which is
-            // writable and NUL-terminated.
-            let expanded = unsafe { make_expanded_name(retval, inner_start, inner_end, name_end) };
-            // SAFETY: the expansion copied what it needed.
-            unsafe { xfree(retval as *mut c_void) };
-            retval = expanded;
-        }
-    }
-    retval
 }
 
 /// An ASCII letter, tested on the code point rather than on a byte: the
@@ -453,96 +273,110 @@ pub fn eval_isdictc(c: c_int) -> bool {
     is_alpha(c) || ascii_isdigit(c) || c == b'_' as c_int
 }
 
-/// Is this partial the one `v:lua` stands for?
-///
-/// # Safety
-/// `partial` must be null or valid.
-pub unsafe fn is_luafunc(partial: *mut Partial) -> bool {
+/// Is this partial the one `v:lua` stands for? A comparison of addresses;
+/// nothing is read through `partial`.
+pub fn is_luafunc(partial: *mut Partial) -> bool {
     partial == get_vim_var_partial(Vv::Lua)
 }
 
 /// Is this typval `v:lua`?
-pub(crate) fn tv_is_luafunc(tv: &mut TypVal) -> bool {
-    unsafe { (*tv).v_type() == VAR_PARTIAL && is_luafunc((*tv).partial_or_null()) }
+pub(crate) fn tv_is_luafunc(tv: &TypVal) -> bool {
+    tv.v_type() == VAR_PARTIAL && is_luafunc(tv.partial_or_null())
 }
 
-/// The end of a `v:lua.` function name, which may hold `.`, `-` and `'`
-/// as well as the usual name characters.
-///
-/// # Safety
-/// `p` must be NUL-terminated.
-pub unsafe fn skip_luafunc_name(p: *const c_char) -> *const c_char {
-    let mut p = p;
-    loop {
-        // SAFETY: the caller's promise -- `p` walks a NUL-terminated
-        // string, and the terminator is none of the accepted bytes, so the
-        // walk stops on it.
-        let b = unsafe { *p } as u8;
-        if !(b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'\'')) {
-            return p;
-        }
-        // SAFETY: `b` is not the terminator.
-        p = unsafe { p.add(1) };
+/// The end of the `v:lua.` function name `text` starts with, which may hold
+/// `.`, `-` and `'` as well as the usual name characters.
+pub(crate) fn luafunc_name_end(text: &[u8]) -> usize {
+    text.iter()
+        .take_while(|&&b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'\''))
+        .count()
+}
+
+/// The length of the `v:lua.` function name `text` starts with, or zero
+/// when what follows it is not a `(` (with `paren`) or the end of `text`.
+pub(crate) fn check_luafunc_name(text: &[u8], paren: bool) -> usize {
+    let end = luafunc_name_end(text);
+    let want = if paren { b'(' } else { END };
+    if byte_at(text, end) == want { end } else { 0 }
+}
+
+/// An option name after its `&` or `+`, as [`option_var_end`] finds it.
+#[derive(Debug)]
+pub(crate) struct OptionVarName {
+    /// Where the name proper starts: after the sigil and any `g:`/`l:`.
+    pub(crate) start: usize,
+    /// The offset of the first byte after it, `None` when there is no name.
+    pub(crate) end: Option<usize>,
+    /// Which option, `kOptInvalid` for none or a terminal option.
+    pub(crate) index: OptIndex,
+    /// Which scope the `g:`/`l:` asked for.
+    pub(crate) flags: OptionSetFlags,
+}
+
+/// The option name in `text`, which starts on the `&` or `+`.
+pub(crate) fn option_var_end(text: &[u8]) -> OptionVarName {
+    let at = |i: usize| byte_at(text, i);
+    let scope = at(1);
+    let (start, flags) = match scope {
+        b'g' | b'l' if at(2) == b':' => (
+            3,
+            if scope == b'g' {
+                OptionSetFlags::GLOBAL
+            } else {
+                OptionSetFlags::LOCAL
+            },
+        ),
+        _ => (1, OptionSetFlags::NONE),
+    };
+    let (index, len) = option_end(text.get(start..).unwrap_or_default());
+    OptionVarName {
+        start,
+        end: len.map(|len| start + len),
+        index,
+        flags,
     }
 }
 
-/// The length of the `v:lua.` function name at `str`, or zero when what
-/// follows it is not the expected terminator.
-///
-/// # Safety
-/// `str` must be NUL-terminated.
-pub unsafe fn check_luafunc_name(str: *const c_char, paren: bool) -> c_int {
-    // SAFETY: the caller's promise -- `str` is NUL-terminated.
-    let p = unsafe { skip_luafunc_name(str) };
-    let want = if paren { b'(' as c_char } else { NUL as c_char };
-    // SAFETY: `p` is inside the same string.
-    if unsafe { *p } != want {
-        return 0;
-    }
-    // SAFETY: both cursors are into the one string.
-    unsafe { p.offset_from(str) as c_int }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// The end of the option name at the cursor, with `opt_idxp` and
-/// `opt_flags` describing which option and which scope. The cursor is left
-/// after any `g:`/`l:` prefix, but only when a name was found.
-///
-/// # Safety
-/// `arg` must point at a cursor on the `&` or `+`; the out-parameters
-/// valid.
-pub unsafe fn find_option_var_end(
-    arg: *mut *const c_char,
-    opt_idxp: *mut OptIndex,
-    opt_flags: *mut OptionSetFlags,
-) -> *const c_char {
-    // SAFETY: the caller's promise -- the cursor is on the `&` or `+` of a
-    // NUL-terminated string, so the byte after it is inside it.
-    let start = unsafe { *arg };
-    let mut p = unsafe { start.add(1) };
-    // SAFETY: `p` is inside the string.
-    let scope = unsafe { *p };
-    let scoped = scope == b'g' as c_char || scope == b'l' as c_char;
-    // SAFETY: a scope letter is not the terminator, so the byte after it is
-    // inside the string too. The second read happens exactly where the
-    // original `&&` chain had it.
-    if scoped && unsafe { *p.add(1) } == b':' as c_char {
-        let flags = if scope == b'g' as c_char {
-            OptionSetFlags::GLOBAL
-        } else {
-            OptionSetFlags::LOCAL
-        };
-        // SAFETY: the caller's promise about `opt_flags`.
-        unsafe { *opt_flags = flags };
-        // SAFETY: the two bytes just matched are inside the string.
-        p = unsafe { p.add(2) };
-    } else {
-        // SAFETY: the caller's promise about `opt_flags`.
-        unsafe { *opt_flags = OptionSetFlags::NONE };
+    #[test]
+    fn name_end_steps_over_braces_and_subscripts() {
+        assert_eq!(name_end(b"abc def", 0).end, 3);
+        let curly = name_end(b"a{b}c rest", 0);
+        assert_eq!(
+            (curly.end, curly.brace_open, curly.brace_close),
+            (5, Some(1), Some(3))
+        );
+        assert_eq!(name_end(b"d['k']x y", FNE_INCL_BR).end, 7);
+        assert_eq!(name_end(b"d.key+1", FNE_INCL_BR).end, 5);
+        assert_eq!(name_end(b"d.key+1", 0).end, 1);
+        let open = name_end(b"a{b", 0);
+        assert_eq!(
+            (open.end, open.brace_open, open.brace_close),
+            (3, Some(1), None)
+        );
+        assert_eq!(name_end(b"1x", FNE_CHECK_START), NameEnd::default());
     }
-    // SAFETY: `p` is a cursor into the same string, and `opt_idxp` is the
-    // caller's.
-    let end = unsafe { find_option_end(p, opt_idxp) };
-    // SAFETY: the caller's promise about `arg`.
-    unsafe { *arg = if end.is_null() { start } else { p } };
-    end
+
+    #[test]
+    fn a_colon_ends_a_name_unless_it_is_a_scope() {
+        assert_eq!(name_end(b"g:x:y", 0).end, 3);
+        assert_eq!(name_end(b"q:x", 0).end, 1);
+        assert_eq!(id_len(b"g:abc"), 5);
+        assert_eq!(id_len(b"ab:c"), 2);
+        assert_eq!(id_len(b"x"), 1);
+        assert_eq!(id_len(b""), 0);
+    }
+
+    #[test]
+    fn the_lua_scanners_stop_at_the_end() {
+        assert_eq!(luafunc_name_end(b"a.b-c'd(x"), 7);
+        assert_eq!(check_luafunc_name(b"f.g(", true), 3);
+        assert_eq!(check_luafunc_name(b"f.g", false), 3);
+        assert_eq!(check_luafunc_name(b"f.g ", false), 0);
+        // `env_name_len` reads 'isident', which a lib test has not set up.
+        assert_eq!(env_name_len(b""), 0);
+    }
 }

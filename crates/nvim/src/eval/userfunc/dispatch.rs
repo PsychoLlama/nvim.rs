@@ -291,7 +291,7 @@ pub unsafe fn call_func(
             result.write_number(0);
             error = FCERR_UNKNOWN;
 
-            if unsafe { is_luafunc(partial) } {
+            if is_luafunc(partial) {
                 if len > 0 {
                     error = FCERR_NONE;
                     // SAFETY: `funcexe`'s base is null or a live typval.

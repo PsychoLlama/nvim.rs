@@ -16,7 +16,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
-use crate::eval::Walk;
+use crate::eval::Cur;
 use crate::eval::typval::DictEntry;
 use crate::types::DictKey;
 use crate::types::{Failed, NUL};
@@ -31,18 +31,19 @@ use crate::types::{Failed, NUL};
 /// `arg` is a NUL-terminated, *writable* string -- the name is terminated in
 /// place while it is copied.  `newargs`, when non-null, is a `char *` garray.
 unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut GArray, skip: bool) -> *mut c_char {
+    let mut end = arg;
     // SAFETY: the caller's promise -- `arg` is NUL-terminated and writable,
     // and the walk stops at the first byte that is not an identifier one.
-    let mut p = unsafe { Walk::new(arg) };
+    let p = unsafe { Cur::new(&raw mut end) };
     while ascii_isident(c_int::from(p.byte())) {
-        p.step(1);
+        p.bump(1);
     }
-    let len = unsafe { p.since(arg) };
+    let len = p.get().addr() - arg.addr();
     // `isdigit()` is one of the ctype predicates the C standard fixes to
     // ASCII in every locale, so this really is the same test.
     let named = (len == 9 && unsafe { cstr::starts_with(arg, b"firstline") })
         || (len == 8 && unsafe { cstr::starts_with(arg, b"lastline") });
-    if arg == p.raw() || unsafe { *arg as u8 }.is_ascii_digit() || named {
+    if arg == p.get() || unsafe { *arg as u8 }.is_ascii_digit() || named {
         if !skip {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = unsafe { c_str(arg) };
@@ -54,9 +55,8 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut GArray, skip: bool) -
         // SAFETY: the caller's promise -- `newargs` is a `char *` garray,
         // which `ga_grow` has just made room in.
         unsafe { ga_grow(newargs, 1) };
-        let c = p.chr();
-        p.set(NUL as c_char);
-        let arg_copy = unsafe { xstrdup(arg) };
+        // SAFETY: `len` bytes of identifier were just read.
+        let arg_copy = unsafe { xmemdupz(arg as *const c_void, len) } as *mut c_char;
         for &earlier in ga_strings(unsafe { &*newargs }) {
             if unsafe { cstr::eq(earlier, arg_copy) } {
                 // SAFETY: `xstrdup` answered a NUL-terminated copy.
@@ -69,9 +69,8 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut GArray, skip: bool) -
             }
         }
         unsafe { ga_push_string(newargs, arg_copy) };
-        p.set(c);
     }
-    p.raw()
+    p.get()
 }
 
 /// Parse a definition's argument list, up to and including `endchar`.
@@ -97,7 +96,8 @@ pub(crate) unsafe fn get_function_args(
     // SAFETY: the caller's promise -- `*argp` is NUL-terminated and
     // writable, and the three out-parameters are null or writable. The walk
     // below never steps past the terminator.
-    let mut p = unsafe { Walk::new(*argp) };
+    let mut cursor = unsafe { *argp };
+    let p = unsafe { Cur::new(&raw mut cursor) };
     if !newargs.is_null() {
         unsafe { ga_init(newargs, slot, 3) };
     }
@@ -111,40 +111,42 @@ pub(crate) unsafe fn get_function_args(
     // Isolate the arguments: "arg1, arg2, ...)".
     let mut any_default = false;
     let closed = 'parse: {
-        while p.chr() != endchar {
+        while p.byte() != endchar as u8 {
             if p.byte() == b'.' && p.at(1) == b'.' && p.at(2) == b'.' {
                 if !varargs.is_null() {
                     unsafe { *varargs = 1 };
                 }
-                p.step(3);
+                p.bump(3);
                 mustend = true;
             } else {
-                let arg = p.raw();
-                p = unsafe { Walk::new(one_function_arg(arg, newargs, skip)) };
-                if p.raw() == arg {
+                let arg = p.get();
+                p.set(unsafe { one_function_arg(arg, newargs, skip) });
+                if p.get() == arg {
                     break;
                 }
-                if unsafe { *skipwhite(p.raw()) } == b'=' as c_char && !default_args.is_null() {
+                if unsafe { *skipwhite(p.get()) } == b'=' as c_char && !default_args.is_null() {
                     let mut rettv = TV_INITIAL_VALUE;
                     any_default = true;
-                    let eq = unsafe { skipwhite(p.raw()).add(1) };
-                    p = unsafe { Walk::new(skipwhite(eq)) };
-                    let mut expr = p.raw();
-                    // SAFETY: `&raw mut p` is this frame's own walk, which
-                    // `eval1` advances in place.
-                    let parsed = unsafe { eval1((&raw mut p).cast(), &mut rettv, ptr::null_mut()) };
+                    p.skip(0);
+                    p.skip(1);
+                    let expr = p.get();
+                    // SAFETY: `p` is this frame's own cursor, which `eval1`
+                    // advances in place.
+                    let parsed = unsafe { eval1(p.raw(), &mut rettv, ptr::null_mut()) };
                     if parsed.is_ok() {
                         unsafe { ga_grow(default_args, 1) };
-                        while p.raw() > expr && ascii_iswhite(c_int::from(p.behind(1))) {
-                            p.step_back(1);
+                        let mut end = p.get();
+                        // SAFETY: `end` only steps back over what `eval1`
+                        // read, and stops at `expr`.
+                        while end > expr && ascii_iswhite(c_int::from(unsafe { *end.sub(1) })) {
+                            end = end.wrapping_sub(1);
                         }
-                        // The default is kept as source, so it is copied
-                        // out from under a temporary terminator.
-                        let c = p.chr();
-                        p.set(NUL as c_char);
-                        expr = unsafe { xstrdup(expr) };
-                        unsafe { ga_push_string(default_args, expr) };
-                        p.set(c);
+                        // The default is kept as source, and the walk goes
+                        // on from its end: the blanks are read again below.
+                        p.set(end);
+                        let len = end.addr() - expr.addr();
+                        let copy = unsafe { xmemdupz(expr as *const c_void, len) } as *mut c_char;
+                        unsafe { ga_push_string(default_args, copy) };
                     } else {
                         mustend = true;
                     }
@@ -154,24 +156,24 @@ pub(crate) unsafe fn get_function_args(
                     mustend = true;
                 }
                 let comma_after_white = ascii_iswhite(c_int::from(p.byte()))
-                    && unsafe { *skipwhite(p.raw()) } == b',' as c_char;
+                    && unsafe { *skipwhite(p.get()) } == b',' as c_char;
                 if comma_after_white {
                     if !skip {
                         // SAFETY: `p` walks the caller's argument list.
-                        let at = unsafe { c_str(p.raw()) };
+                        let at = unsafe { c_str(p.get()) };
                         semsg!("E1068: No white space allowed before ',': {at}");
                         break 'parse false;
                     }
-                    p = unsafe { Walk::new(skipwhite(p.raw())) };
+                    p.skip(0);
                 }
                 if p.byte() == b',' {
-                    p.step(1);
+                    p.bump(1);
                 } else {
                     mustend = true;
                 }
             }
-            p = unsafe { Walk::new(skipwhite(p.raw())) };
-            if mustend && p.chr() != endchar {
+            p.skip(0);
+            if mustend && p.byte() != endchar as u8 {
                 if !skip {
                     let at = unsafe { *argp };
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -181,10 +183,10 @@ pub(crate) unsafe fn get_function_args(
                 break;
             }
         }
-        p.chr() == endchar
+        p.byte() == endchar as u8
     };
     if closed {
-        unsafe { *argp = p.raw().add(1) };
+        unsafe { *argp = p.get().add(1) };
         return Ok(());
     }
 
@@ -213,19 +215,20 @@ pub(crate) unsafe fn get_func_arguments(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `*arg` is on the `(` of a
     // NUL-terminated argument list.
-    let mut argp = unsafe { Walk::new(*arg) };
+    let mut cursor = unsafe { *arg };
+    let argp = unsafe { Cur::new(&raw mut cursor) };
     let mut ret = Ok(());
     let room = (MAX_FUNC_ARGS - partial_argc) as usize;
     while *argcount < room {
         // skip the '(' or ','
-        argp = unsafe { Walk::new(skipwhite(argp.raw().add(1))) };
+        argp.skip(1);
         if matches!(argp.byte(), b')' | b',') || argp.byte() == NUL as u8 {
             break;
         }
-        // SAFETY: `&raw mut argp` is this frame's own walk, which `eval1`
-        // advances in place.
+        // SAFETY: `argp` is this frame's own cursor, which `eval1` advances
+        // in place.
         let slot = &mut args[*argcount];
-        if unsafe { eval1((&raw mut argp).cast(), slot, evalarg) }.is_err() {
+        if unsafe { eval1(argp.raw(), slot, evalarg) }.is_err() {
             ret = Err(Failed);
             break;
         }
@@ -234,13 +237,13 @@ pub(crate) unsafe fn get_func_arguments(
             break;
         }
     }
-    argp = unsafe { Walk::new(skipwhite(argp.raw())) };
+    argp.skip(0);
     if argp.byte() == b')' {
-        argp.step(1);
+        argp.bump(1);
     } else {
         ret = Err(Failed);
     }
-    unsafe { *arg = argp.raw() };
+    unsafe { *arg = argp.get() };
     ret
 }
 

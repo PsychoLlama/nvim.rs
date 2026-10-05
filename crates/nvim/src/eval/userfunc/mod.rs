@@ -32,9 +32,9 @@ use crate::eval::vars::{
 };
 use crate::eval::{
     LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval_isnamec,
-    eval_isnamec1, eval0, eval1, fill_evalarg_from_eap, find_name_end, garbage_collect, get_id_len,
-    get_lval, handle_subscript, is_luafunc, last_set_msg, mark_root, partial_name, partial_unref,
-    set_ref_in_ht, set_ref_in_list_items, skip_expr,
+    eval_isnamec1, eval0, eval1, fill_evalarg_from_eap, garbage_collect, get_lval,
+    handle_subscript, id_len, is_luafunc, last_set_msg, mark_root, name_end, partial_name,
+    partial_unref, set_ref_in_ht, set_ref_in_list_items, skip_expr,
 };
 use crate::ex_docmd::state::ex_nesting_level;
 use crate::ex_docmd::{checkforcmd, do_cmdline, ends_excmd, skip_range};
@@ -57,7 +57,6 @@ use crate::keycodes::K_SPECIAL;
 use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
-use crate::mbyte::mb_strnicmp;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcpy,
 };

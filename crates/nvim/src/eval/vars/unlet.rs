@@ -17,6 +17,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
+use crate::cstr;
 use crate::types::{Failed, NUL};
 
 /// `:unlet`.
@@ -77,7 +78,10 @@ unsafe fn ex_unletlock(
             lv.ll_name = arg;
             lv.ll_tv = ptr::null_mut();
             arg = unsafe { arg.add(1) };
-            if unsafe { get_env_len(&raw mut arg as *mut *const c_char) } == 0 {
+            // SAFETY: the name is NUL-terminated, and its end is inside it.
+            let len = env_name_len(unsafe { cstr::bytes_at(arg) });
+            arg = arg.wrapping_add(len);
+            if len == 0 {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let arg0 = unsafe { c_str(arg.sub(1)) };
                 semsg!("E475: Invalid argument: {arg0}");

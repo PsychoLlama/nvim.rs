@@ -11,6 +11,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::mbyte::strnicmp_in;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::semsg;
 use crate::snprintf;
@@ -410,7 +411,13 @@ pub unsafe fn trans_function_name(
         && unsafe { *(*cursor).add(2) } as c_int == KE_SNR as c_int
     {
         unsafe { *cursor = (*cursor).add(3) };
-        len = unsafe { get_id_len(cursor as *mut *const c_char) } + 3;
+        // SAFETY: the name is NUL-terminated.
+        let id = id_len(unsafe { cstr::bytes_at(*cursor) });
+        if id > 0 {
+            // SAFETY: the identifier and the blanks after it are inside it.
+            unsafe { *cursor = skipwhite((*cursor).add(id)) };
+        }
+        len = id as c_int + 3;
         return unsafe { xmemdupz(start as *const c_void, len as size_t) } as *mut c_char;
     }
 
@@ -447,10 +454,12 @@ pub unsafe fn trans_function_name(
                     semsg!("E475: Invalid argument: {start}");
                 }
             } else {
+                // SAFETY: `start` is NUL-terminated, and the name's end is
+                // inside it.
                 unsafe {
-                    *cursor = find_name_end(start, ptr::null_mut(), ptr::null_mut(), FNE_INCL_BR)
-                        as *mut c_char
-                };
+                    let end = name_end(cstr::bytes_at(start), FNE_INCL_BR).end;
+                    *cursor = start.add(end).cast_mut();
+                }
             }
             break 'theend;
         }
@@ -470,10 +479,10 @@ pub unsafe fn trans_function_name(
             } else if unsafe { (*lv.ll_tv).v_type() } == VAR_PARTIAL
                 && !unsafe { (*lv.ll_tv).partial_or_null() }.is_null()
             {
-                if unsafe { is_luafunc((*lv.ll_tv).partial_or_null()) }
+                if is_luafunc(unsafe { (*lv.ll_tv).partial_or_null() })
                     && unsafe { *end } == b'.' as c_char
                 {
-                    len = unsafe { check_luafunc_name(end.add(1), true) };
+                    len = check_luafunc_name(unsafe { cstr::bytes_at(end.add(1)) }, true) as c_int;
                     if len == 0 {
                         let arg0 = "v:lua";
                         semsg!("E15: Invalid expression: \"{arg0}\"");
@@ -627,15 +636,23 @@ pub unsafe fn save_function_name(
 /// # Safety
 /// `p` is NUL-terminated.
 pub unsafe fn eval_fname_script(p: *const c_char) -> c_int {
+    // SAFETY: the caller's promise; the prefix stops at the terminator.
+    fname_script_len(unsafe { cstr::prefix_at(p, 5) }) as c_int
+}
+
+/// How long the script-local prefix `text` starts with is: 5 for
+/// `<SID>`/`<SNR>`, 2 for `s:`, 0 for neither.
+pub(crate) fn fname_script_len(text: &[u8]) -> usize {
     // Writing `s:` instead of `<SID>` is allowed, and `<SNR>` is what a
-    // name that has already been translated looks like.
-    if unsafe { *p } == b'<' as c_char
-        && (unsafe { mb_strnicmp(p.add(1), c"SID>".as_ptr(), 4) } == 0
-            || unsafe { mb_strnicmp(p.add(1), c"SNR>".as_ptr(), 4) } == 0)
-    {
-        return 5;
+    // name that has already been translated looks like. The comparison
+    // folds case the way the rest of the name lookup does.
+    if let [b'<', rest @ ..] = text {
+        let rest = &rest[..rest.len().min(4)];
+        if strnicmp_in(rest, b"SID>") == 0 || strnicmp_in(rest, b"SNR>") == 0 {
+            return 5;
+        }
     }
-    if unsafe { *p } == b's' as c_char && unsafe { *p.add(1) } == b':' as c_char {
+    if text.starts_with(b"s:") {
         return 2;
     }
     0

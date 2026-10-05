@@ -14,6 +14,7 @@ use crate::cstr;
 use crate::eval::Parsed;
 use crate::eval::typval::PartialRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::memory::XString;
 use crate::semsg;
 use crate::winlayer::{Live, Win};
 use core::ffi::{c_char, c_int, c_void};
@@ -28,7 +29,7 @@ use crate::eval::userfunc::{
 use crate::eval::vars::{check_vars, get_vim_var_partial};
 use crate::eval::{
     Cur, EVAL_EVALUATE, FUNCEXE_INIT, Tv, e_cannot_use_partial_here, e_empty_function_name,
-    e_nowhitespace, eval7, get_name_len, is_luafunc, skip_luafunc_name,
+    e_nowhitespace, eval7, get_name_len, is_luafunc, luafunc_name_end,
 };
 use crate::ex_eval::aborting;
 use crate::memory::{strnequal, xfree, xmemdupz, xstrdup};
@@ -150,7 +151,7 @@ pub(crate) unsafe fn call_func_rettv(
             // SAFETY: the kind says the value holds a partial, which
             // `is_luafunc` and `partial_name` both take null or valid.
             pt = functv.partial_or_null();
-            is_lua = unsafe { is_luafunc(pt) };
+            is_lua = is_luafunc(pt);
             funcname = if is_lua {
                 lua_funcname
             } else {
@@ -268,17 +269,19 @@ pub(crate) unsafe fn eval_method(
     let mut len: c_int;
     let mut name: *mut c_char = cur.get();
     let mut lua_funcname: *mut c_char = null_mut();
-    let mut alias: *mut c_char = null_mut();
+    let mut alias: Option<XString> = None;
     if unsafe { strnequal(name, c"v:lua.".as_ptr(), 6 as size_t) } {
         lua_funcname = unsafe { name.add(6) };
-        cur.set(unsafe { skip_luafunc_name(lua_funcname) } as *mut c_char);
+        let end = luafunc_name_end(unsafe { cstr::bytes_at(lua_funcname) });
+        cur.set(lua_funcname.wrapping_add(end));
         cur.skip(0); // so trailing whitespace is detectable
         len = unsafe { cur.get().offset_from(lua_funcname) } as c_int;
     } else {
-        let aliasp = &raw mut alias;
-        len = unsafe { get_name_len(cur.raw().cast(), aliasp, evaluate, true) };
-        if !alias.is_null() {
-            name = alias;
+        // SAFETY: the name scan writes nothing into the text, and a
+        // curly-brace name's expression is evaluated from a copy.
+        (len, alias) = unsafe { cur.with_cursor(|c| get_name_len(c, evaluate, true)) };
+        if let Some(alias) = &alias {
+            name = alias.as_ptr().cast_mut();
         }
     }
 
@@ -302,7 +305,7 @@ pub(crate) unsafe fn eval_method(
         // "dict.Func()", "list[nr]" and so on. Anything where the `(`
         // is part of the expression itself is not handled.
         let mut paren: *mut c_char = null_mut();
-        let indirect = cur.byte() != b'(' && lua_funcname.is_null() && alias.is_null() && {
+        let indirect = cur.byte() != b'(' && lua_funcname.is_null() && alias.is_none() && {
             paren = unsafe { vim_strchr(cur.get(), '(' as c_int) };
             !paren.is_null()
         };
@@ -404,9 +407,7 @@ pub(crate) unsafe fn eval_method(
     }
     // SAFETY: both are null or this call's own allocations.
     unsafe { xfree(tofree as *mut c_void) };
-    if !alias.is_null() {
-        unsafe { xfree(alias as *mut c_void) };
-    }
+    drop(alias);
     ret
 }
 

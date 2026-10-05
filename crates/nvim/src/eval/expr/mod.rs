@@ -3,6 +3,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+mod cursor;
+pub(crate) use self::cursor::*;
 mod level;
 pub use self::level::*;
 mod arith;

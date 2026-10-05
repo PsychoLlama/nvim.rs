@@ -43,7 +43,7 @@ const SWITCHWIN_INITIAL_VALUE: SwitchWin = SwitchWin {
 /// `result` is writable and holds nothing; `deftv` is a live value;
 /// `tabpage`/`win`/`buffer` are live or NULL.
 unsafe fn get_var_from(
-    mut varname: *const c_char,
+    varname: *const c_char,
     result: &mut TypVal,
     deftv: Option<&TypVal>,
     htname: c_int,
@@ -90,7 +90,14 @@ unsafe fn get_var_from(
                         result.write_dict(Some(opts));
                         done = true;
                     }
-                } else if unsafe { eval_option(&raw mut varname, Some(result), true) }.is_ok() {
+                } else if eval_option(
+                    // SAFETY: `varname` is NUL-terminated.
+                    &mut Cursor::new(unsafe { cstr::bytes_at(varname) }),
+                    Some(result),
+                    true,
+                )
+                .is_ok()
+                {
                     done = true;
                 }
                 if let Some(scoped) = scoped {
@@ -170,7 +177,7 @@ pub(crate) unsafe fn tv_to_optval(
     // SAFETY: the caller's obligation -- a live value and a NUL-terminated
     // option name.
     let tvh = tv;
-    let is_tty_opt = is_tty_option(unsafe { CStr::from_ptr(option) });
+    let is_tty_opt = is_tty_option(unsafe { CStr::from_ptr(option) }.to_bytes());
     let option_has_bool = !is_tty_opt && option_has_type(opt_idx, kOptValTypeBoolean);
     let option_has_num = !is_tty_opt && option_has_type(opt_idx, kOptValTypeNumber);
     let option_has_str = is_tty_opt || option_has_type(opt_idx, kOptValTypeString);

@@ -22,9 +22,9 @@ use crate::eval::typval::{
     NumBuf, blob_equal, dict_equal, list_equal, tv_clear, tv_equal, tv_get_float, tv_get_number,
 };
 use crate::eval::{
-    _ISalnum, Cur, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH,
-    EXPR_NEQUAL, EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, Tv, e_invalblob,
-    partial_name, pattern_match,
+    _ISalnum, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH, EXPR_NEQUAL,
+    EXPR_NOMATCH, EXPR_SEQUAL, EXPR_SMALLER, EXPR_UNKNOWN, Tv, e_invalblob, partial_name,
+    pattern_match,
 };
 use crate::mbyte::mb_strcmp_ic;
 use crate::message::emsg;
@@ -44,16 +44,15 @@ fn isalnum_locale(c: u8) -> bool {
 }
 
 /// Recognise a comparison operator, answering it and how many bytes it took.
+/// `at(i)` is the byte `i` past the cursor, NUL at the end of the text.
 ///
 /// The second byte is read *inside* each arm, never before the `match`:
 /// `eval5` may well have left the cursor on the terminating NUL, and the
 /// first byte matching an operator character is the only thing that proves
 /// there is a second one.
-///
-/// Safe because [`Cur`] carries the promise that its bytes are readable.
-pub(crate) fn comparison_at(cur: Cur) -> (ExprType, c_int) {
-    let next = || cur.at(1);
-    match cur.byte() {
+pub(crate) fn comparison_at(at: impl Fn(usize) -> u8) -> (ExprType, c_int) {
+    let next = || at(1);
+    match at(0) {
         b'=' => match next() {
             b'=' => (EXPR_EQUAL, 2),
             b'~' => (EXPR_MATCH, 2),
@@ -69,9 +68,9 @@ pub(crate) fn comparison_at(cur: Cur) -> (ExprType, c_int) {
         b'<' if next() == b'=' => (EXPR_SEQUAL, 2),
         b'<' => (EXPR_SMALLER, 1),
         b'i' if next() == b's' => {
-            let isnot = cur.at(2) == b'n' && cur.at(3) == b'o' && cur.at(4) == b't';
+            let isnot = at(2) == b'n' && at(3) == b'o' && at(4) == b't';
             // `isnothing` is a name, not `isnot` followed by `hing`.
-            let after = cur.at(if isnot { 5 } else { 2 });
+            let after = at(if isnot { 5 } else { 2 });
             if !isalnum_locale(after) && after != b'_' {
                 if isnot { (EXPR_ISNOT, 5) } else { (EXPR_IS, 2) }
             } else {

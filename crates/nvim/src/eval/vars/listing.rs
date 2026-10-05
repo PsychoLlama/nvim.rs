@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::winlayer::TabPage;
@@ -137,9 +138,9 @@ pub(crate) unsafe fn list_arg_vars(
             // Nothing is being printed any more; just check that what is
             // left parses as names.
             let flags = FNE_INCL_BR | FNE_CHECK_START;
-            let (nil1, nil2) = (ptr::null_mut(), ptr::null_mut());
-            // SAFETY: the caller's obligation -- `arg` is NUL-terminated.
-            arg = unsafe { find_name_end(arg, nil1, nil2, flags) };
+            // SAFETY: the caller's obligation -- `arg` is NUL-terminated,
+            // and the name's end is inside it.
+            arg = unsafe { arg.add(name_end(cstr::bytes_at(arg), flags).end) };
             let c = c_int::from(unsafe { *arg });
             if !ascii_iswhite(c) && ends_excmd(c) == 0 {
                 emsg_severe.set(true);
@@ -155,8 +156,11 @@ pub(crate) unsafe fn list_arg_vars(
         let name_start = arg;
         let mut name = arg;
         // A `{curly}` name is expanded into `tofree`.
-        let mut tofree: *mut c_char = ptr::null_mut();
-        let len = unsafe { get_name_len(&raw mut arg, &raw mut tofree, true, true) };
+        // SAFETY: the caller's obligation -- `arg` is NUL-terminated.
+        let mut cursor = Cursor::new(unsafe { cstr::bytes_at(arg) });
+        let (len, tofree) = get_name_len(&mut cursor, true, true);
+        // The scan stays inside the text.
+        arg = arg.wrapping_add(cursor.offset());
         'done: {
             if len <= 0 {
                 if len < 0 && !aborting() {
@@ -164,14 +168,13 @@ pub(crate) unsafe fn list_arg_vars(
                     // SAFETY: `arg` is the NUL-terminated rest of the line.
                     let shown = unsafe { c_str(arg) };
                     semsg!("E475: Invalid argument: {shown}");
-                    unsafe { xfree(tofree.cast()) };
                     return arg;
                 }
                 error = true;
                 break 'done;
             }
-            if !tofree.is_null() {
-                name = tofree;
+            if let Some(expanded) = &tofree {
+                name = expanded.as_ptr();
             }
 
             let mut tv = TV_INITIAL_VALUE;
@@ -215,7 +218,8 @@ pub(crate) unsafe fn list_arg_vars(
                 // looked up; with one, the command line's own text is
                 // what should be shown.
                 let used_name = if arg == arg_subsc { name } else { name_start };
-                let name_size = if ptr::eq(used_name, tofree) {
+                let expanded = tofree.as_ref().map(XString::as_ptr);
+                let name_size = if expanded == Some(used_name) {
                     unsafe { cstr::bytes_at(used_name).len() as ptrdiff_t }
                 } else {
                     unsafe { arg.offset_from(used_name) }
@@ -229,7 +233,7 @@ pub(crate) unsafe fn list_arg_vars(
             }
             clear_local(&mut tv);
         }
-        unsafe { xfree(tofree.cast()) };
+        drop(tofree);
         arg = unsafe { skipwhite(arg) };
     }
     arg

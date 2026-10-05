@@ -13,6 +13,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::Cursor;
 use crate::eval::typval::PartialRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::XString;
@@ -31,7 +32,7 @@ use crate::eval::vars::{check_vars, eval_variable, get_vim_var_partial};
 use crate::eval::{
     EVAL_EVALUATE, EXPR_UNKNOWN, Parsed, Tv, comparison_at, eval_dict, eval_env_var, eval_func,
     eval_interp_string, eval_list, eval_lit_dict, eval_lit_string, eval_number, eval_option,
-    eval_string, get_name_len, handle_subscript, kGRegExprSrc, skip_luafunc_name, to_name_end,
+    eval_string, get_name_len, handle_subscript, kGRegExprSrc, luafunc_name_end, to_name_end,
     typval_compare,
 };
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
@@ -139,6 +140,24 @@ impl Cur {
     /// The pointer back, for the callees that still take one.
     pub(crate) fn raw(self) -> *mut *mut c_char {
         self.0
+    }
+
+    /// **A temporary bridge**, for the levels that still walk by pointer:
+    /// run `f` over a [`Cursor`] on the text from here to the terminator,
+    /// then move this cursor on by what `f` consumed. It goes when the
+    /// levels take `&mut Cursor` themselves.
+    ///
+    /// # Safety
+    /// Nothing may write into the expression while `f` runs: `f` must not
+    /// re-enter the evaluator over this same text.
+    pub(crate) unsafe fn with_cursor<R>(self, f: impl FnOnce(&mut Cursor<'_>) -> R) -> R {
+        // SAFETY: the constructor's promise -- the text is NUL-terminated
+        // and live -- and the caller's: it is not written while borrowed.
+        let text = unsafe { cstr::bytes_at(self.get()) };
+        let mut cursor = Cursor::new(text);
+        let answer = f(&mut cursor);
+        self.bump(cursor.offset());
+        answer
     }
 }
 
@@ -290,7 +309,7 @@ pub(crate) unsafe fn may_call_simple_func(
     // SAFETY: as above, for every walk of `arg` below.
     if unsafe { strnequal(arg, c"v:lua.".as_ptr(), 6) } {
         let p = unsafe { arg.add(6) };
-        if p != parens && unsafe { skip_luafunc_name(p) } == parens {
+        if p != parens && unsafe { p.add(luafunc_name_end(cstr::bytes_at(p))) } == parens {
             let len = unsafe { parens.offset_from(p) } as size_t;
             return Parsed::done(unsafe { call_simple_luafunc(p, len, result) });
         }
@@ -546,7 +565,7 @@ pub(crate) unsafe fn eval4(
     // expression, and `result`/`evalarg` are the caller's own.
     let cur = unsafe { Cur::new(arg) };
     unsafe { eval5(arg, result, evalarg) }?;
-    let (op, mut len) = comparison_at(cur);
+    let (op, mut len) = comparison_at(|i| cur.at(i));
     if op == EXPR_UNKNOWN {
         return Ok(());
     }
@@ -717,9 +736,13 @@ pub(crate) unsafe fn eval7(
     // The un-bump is the guard's, so that an early exit cannot skip it.
     let _depth = Depth::of(&RECURSE);
 
+    // SAFETY, for every `with_cursor` below: a literal's scan runs no user
+    // code over this text -- an interpolated string's `{expr}` and a
+    // curly-brace name's expression are evaluated from a copy.
     match cur.byte() {
         b'0'..=b'9' => {
-            ret = Parsed::done(unsafe { eval_number(arg, result, evaluate, want_string) });
+            let number = |c: &mut Cursor<'_>| eval_number(c, result, evaluate, want_string);
+            ret = Parsed::done(unsafe { cur.with_cursor(number) });
             // A number applies its prefixes here, where `-` still means
             // arithmetic negation rather than "negate what follows".
             if ret.is_ok() && evaluate && end_leader > start_leader {
@@ -727,8 +750,14 @@ pub(crate) unsafe fn eval7(
                 ret = Parsed::done(unsafe { eval7_leader(result, true, start_leader, endp) });
             }
         }
-        b'"' => ret = Parsed::done(unsafe { eval_string(arg, result, evaluate, false) }),
-        b'\'' => ret = Parsed::done(unsafe { eval_lit_string(arg, result, evaluate, false) }),
+        b'"' => {
+            let string = |c: &mut Cursor<'_>| eval_string(c, result, evaluate, false);
+            ret = Parsed::done(unsafe { cur.with_cursor(string) });
+        }
+        b'\'' => {
+            let string = |c: &mut Cursor<'_>| eval_lit_string(c, result, evaluate, false);
+            ret = Parsed::done(unsafe { cur.with_cursor(string) });
+        }
         b'[' => ret = Parsed::done(unsafe { eval_list(arg, result, evalarg) }),
         b'#' => ret = unsafe { eval_lit_dict(arg, result, evalarg) },
         b'{' => {
@@ -739,14 +768,16 @@ pub(crate) unsafe fn eval7(
             }
         }
         b'&' => {
-            let argp = arg as *mut *const c_char;
-            ret = Parsed::done(unsafe { eval_option(argp, Some(result), evaluate) });
+            let option = |c: &mut Cursor<'_>| eval_option(c, Some(result), evaluate);
+            ret = Parsed::done(unsafe { cur.with_cursor(option) });
         }
         b'$' => {
             ret = Parsed::done(if matches!(cur.at(1), b'"' | b'\'') {
-                unsafe { eval_interp_string(arg, result, evaluate) }
+                let string = |c: &mut Cursor<'_>| eval_interp_string(c, result, evaluate);
+                unsafe { cur.with_cursor(string) }
             } else {
-                unsafe { eval_env_var(arg, result, evaluate) }
+                let env = |c: &mut Cursor<'_>| eval_env_var(c, result, evaluate);
+                unsafe { cur.with_cursor(env) }
             });
         }
         b'@' => {
@@ -781,11 +812,12 @@ pub(crate) unsafe fn eval7(
     if ret == Ok(Parsed::NotThis) {
         // Not a literal: it must be a name, and then either a call or a
         // variable.
-        let mut alias: *mut c_char = null_mut();
         let start = cur.get();
-        let aliasp = &raw mut alias;
-        let len = unsafe { get_name_len(cur.raw().cast(), aliasp, evaluate, true) };
-        let name = if alias.is_null() { start } else { alias };
+        let scan = |c: &mut Cursor<'_>| get_name_len(c, evaluate, true);
+        let (len, alias) = unsafe { cur.with_cursor(scan) };
+        let name = alias
+            .as_ref()
+            .map_or(start, |alias| alias.as_ptr().cast_mut());
         if len <= 0 {
             ret = Err(Failed);
         } else {
@@ -821,8 +853,7 @@ pub(crate) unsafe fn eval7(
                 ret = Ok(Parsed::Done);
             }
         }
-        // SAFETY: `alias` is null or the buffer `get_name_len` allocated.
-        unsafe { xfree(alias.cast()) };
+        drop(alias);
     }
 
     cur.skip(0);

@@ -36,10 +36,10 @@ use crate::eval::userfunc::{
 };
 use crate::eval::window::{find_win_by_nr, restore_win, switch_win};
 use crate::eval::{
-    LAMBDA_USES_LOCALS, clear_evalarg, clear_lval, eval_expr_ext, eval_isnamec1, eval_option,
-    eval_to_bool, eval_to_string, eval0, eval1, fill_evalarg_from_eap, find_name_end,
-    find_option_var_end, get_env_len, get_lval, get_name_len, handle_subscript,
-    may_call_simple_func, num_divide, num_modulus, set_ref_in_ht, set_var_lval, skip_expr,
+    Cursor, LAMBDA_USES_LOCALS, clear_evalarg, clear_lval, env_name_len, eval_expr_ext,
+    eval_isnamec1, eval_option, eval_to_bool, eval_to_string, eval0, eval1, fill_evalarg_from_eap,
+    get_lval, get_name_len, handle_subscript, may_call_simple_func, name_end, num_divide,
+    num_modulus, option_var_end, set_ref_in_ht, set_var_lval, skip_expr,
 };
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
@@ -71,9 +71,7 @@ use crate::option::{
     is_option_hidden, is_tty_option, kOptFlagFunc, option_has_type, option_last_set, optval_free,
     set_option_value_handle_tty,
 };
-use crate::options::{
-    kOptAleph, kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest,
-};
+use crate::options::{kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest};
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::os::env::{vim_getenv, vim_setenv_ext, vim_unsetenv_ext};
 use crate::pos::MAXCOL;

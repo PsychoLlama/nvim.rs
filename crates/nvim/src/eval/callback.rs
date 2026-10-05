@@ -182,7 +182,7 @@ pub unsafe fn callback_call(callback: *mut Callback, args: &[TypVal], result: &m
                 // is left is still inside the name.
                 name = unsafe { name.add(6) };
                 // SAFETY: `name` is NUL-terminated.
-                if unsafe { check_luafunc_name(name, false) } == 0 {
+                if check_luafunc_name(unsafe { cstr::bytes_at(name) }, false) == 0 {
                     return false;
                 }
                 partial = get_vim_var_partial(Vv::Lua);

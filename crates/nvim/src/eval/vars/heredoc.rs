@@ -72,6 +72,27 @@ pub unsafe fn eval_one_expr_in_str(
     unsafe { block_end.add(1) }
 }
 
+/// [`eval_one_expr_in_str`] over text the caller lends: `text` starts at the
+/// `{`, and the answer is how many bytes of it the substitution took, or
+/// `None` after an error.
+///
+/// The evaluation runs over a terminated copy, which is what lets the
+/// expression be cut off in place without writing into the caller's text.
+pub(crate) fn eval_one_expr_in_text(
+    text: &[u8],
+    gap: &mut Vec<u8>,
+    evaluate: bool,
+) -> Option<usize> {
+    let mut copy = Vec::with_capacity(text.len() + 1);
+    copy.extend_from_slice(text);
+    copy.push(NUL as u8);
+    let start = copy.as_mut_ptr().cast::<c_char>();
+    // SAFETY: `copy` is a NUL-terminated buffer of this frame's own, which
+    // the callee may write into.
+    let end = unsafe { eval_one_expr_in_str(start, gap, evaluate) };
+    (!end.is_null()).then(|| end.addr() - start.addr())
+}
+
 /// Evaluate every `{expr}` in `str` and answer the result as an allocated
 /// string, or NULL.  `{{` and `}}` are the escapes for a literal brace.
 ///

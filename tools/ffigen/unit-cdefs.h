@@ -2292,6 +2292,7 @@ static const int ENC_MACROMAN = 2048;
 static const int ENC_SINGLE_94 = 1;
 static const int ENC_UNICODE = 4;
 static const int ENC_UTF8 = 0;
+static const int END = 0;
 static const int END_OF_FILE_PENALTY = 21;
 static const int ENOTSUP = 95;
 static const int ENVELOPE_MAX = 16;

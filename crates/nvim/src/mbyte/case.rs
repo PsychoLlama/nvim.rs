@@ -209,6 +209,13 @@ pub unsafe fn mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: size_t) -> c
     unsafe { utf_strnicmp(s1, s2, nn, nn) }
 }
 
+/// [`utf_strnicmp`] over two slices, each compared to its own end.
+pub(crate) fn strnicmp_in(s1: &[u8], s2: &[u8]) -> c_int {
+    let (p1, p2) = (s1.as_ptr().cast::<c_char>(), s2.as_ptr().cast::<c_char>());
+    // SAFETY: each pointer is readable for its slice's length.
+    unsafe { utf_strnicmp(p1, p2, s1.len(), s2.len()) }
+}
+
 /// [`utf_strnicmp`] over two NUL-terminated strings.
 ///
 /// # Safety

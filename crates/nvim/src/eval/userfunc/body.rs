@@ -19,7 +19,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
-use crate::eval::Walk;
+use crate::eval::Cur;
 use crate::types::{FAIL, NUL, OK};
 
 /// How many `:function` definitions may nest inside one another.
@@ -177,11 +177,10 @@ pub(crate) unsafe fn get_function_body(
                 // Skip ':' and blanks.
                 p = theline;
                 // SAFETY: `theline` is NUL-terminated, so the walk stops.
-                let mut w = unsafe { Walk::new(p) };
+                let w = unsafe { Cur::new(&raw mut p) };
                 while ascii_iswhite(c_int::from(w.byte())) || w.byte() == b':' {
-                    w.step(1);
+                    w.bump(1);
                 }
-                p = w.raw();
 
                 // Check for "endfunction".  The count is decremented on
                 // every one seen; only the outermost ends the body.
@@ -191,11 +190,10 @@ pub(crate) unsafe fn get_function_body(
                     outermost
                 } {
                     // SAFETY: `p` is inside the NUL-terminated line.
-                    let mut w = unsafe { Walk::new(p) };
+                    let w = unsafe { Cur::new(&raw mut p) };
                     if w.byte() == b'!' {
-                        w.step(1);
+                        w.bump(1);
                     }
-                    p = w.raw();
                     let mut nextcmd: *mut c_char = ptr::null_mut();
                     if w.byte() == b'|' {
                         nextcmd = unsafe { p.add(1) };
@@ -274,7 +272,7 @@ pub(crate) unsafe fn get_function_body(
                         || checkforcmd(&raw mut p, c"insert".as_ptr(), 1)
                 };
                 // SAFETY: `p` is inside the NUL-terminated line.
-                let after = unsafe { Walk::new(p) };
+                let after = unsafe { Cur::new(&raw mut p) };
                 if ranged
                     && (after.byte() == b'!'
                         || after.byte() == b'|'

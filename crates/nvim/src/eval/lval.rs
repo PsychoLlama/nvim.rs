@@ -53,13 +53,13 @@ use crate::eval::vars::{
 use crate::eval::{Cur, Lv, Tv};
 use crate::eval::{
     FNE_INCL_BR, GLV_FAIL, GLV_NO_AUTOLOAD, GLV_OK, GLV_QUIET, GLV_READ_ONLY, GLV_STOP, GlvStatus,
-    e_cannot_slice_dictionary, e_missbrac, eval_isnamec, eval_isnamec1, eval1, find_name_end,
-    make_expanded_name, tv_is_luafunc,
+    e_cannot_slice_dictionary, e_missbrac, eval_isnamec, eval_isnamec1, eval1, expanded_name,
+    name_end, tv_is_luafunc,
 };
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
 use crate::mbyte::utfc_ptr2len;
-use crate::memory::{xfree, xmemdupz, xstrdup};
+use crate::memory::{XString, xfree, xmemdupz, xstrdup};
 use crate::message::state::emsg_severe;
 use crate::types::EvalArg;
 use crate::types::{
@@ -204,7 +204,7 @@ pub(crate) unsafe fn get_lval_dict_item(
 
     // SAFETY: a non-null `ll_di` is a live dictionary item.
     let lua_key = !lval.ll_di.is_null()
-        && unsafe { tv_is_luafunc(&mut (*lval.ll_di).di_tv) }
+        && tv_is_luafunc(unsafe { &(*lval.ll_di).di_tv })
         && len == -1
         && result.is_none();
     if lua_key {
@@ -704,22 +704,16 @@ pub unsafe fn get_lval(
         // Only the name matters; nothing is resolved.
         lval.ll_name = name;
         let fne = FNE_INCL_BR | fne_flags;
-        // SAFETY: `name` is NUL-terminated and the walk wants no braces.
-        return unsafe { find_name_end(name, null_mut(), null_mut(), fne) } as *mut c_char;
+        // SAFETY: `name` is NUL-terminated, and the name's end is inside it.
+        return unsafe { name.add(name_end(cstr::bytes_at(name), fne).end) };
     }
 
-    // `find_name_end` writes `*const` and `make_expanded_name` wants
-    // `*mut`; the two spell the same bytes of `name`, which is writable.
-    let mut expr_start = null_mut::<c_char>();
-    let mut expr_end = null_mut::<c_char>();
-    let (starts, ends) = (
-        (&raw mut expr_start).cast::<*const c_char>(),
-        (&raw mut expr_end).cast::<*const c_char>(),
-    );
-    // SAFETY: `name` is NUL-terminated and the two out-parameters are this frame's.
-    let mut p = unsafe { find_name_end(name, starts, ends, fne_flags) } as *mut c_char;
+    // SAFETY: `name` is NUL-terminated.
+    let text = unsafe { cstr::bytes_at(name) };
+    let found = name_end(text, fne_flags);
+    let mut p = name.wrapping_add(found.end);
 
-    if !expr_start.is_null() {
+    if let Some(open) = found.brace_open {
         // A curly-braces name: expand it.
         // SAFETY: `p` is a cursor into the NUL-terminated `name`.
         let after = unsafe { *p };
@@ -734,8 +728,8 @@ pub unsafe fn get_lval(
             semsg!("E488: Trailing characters: {p}");
             return null_mut();
         }
-        // SAFETY: all four cursors are into the one writable string.
-        lval.ll_exp_name = unsafe { make_expanded_name(name, expr_start, expr_end, p) };
+        let expanded = expanded_name(&text[..found.end], open, found.brace_close);
+        lval.ll_exp_name = expanded.map_or(null_mut(), XString::into_raw);
         lval.ll_name = lval.ll_exp_name;
         if lval.ll_exp_name.is_null() {
             if !aborting() && !quiet {
@@ -786,7 +780,7 @@ pub unsafe fn get_lval(
     lval.ll_tv = unsafe { &raw mut (*v).di_tv };
     lval.ll_lock = di_lock(v);
     // SAFETY: `ll_tv` is that item's typval.
-    if unsafe { tv_is_luafunc(&mut *lval.ll_tv) } {
+    if tv_is_luafunc(unsafe { &*lval.ll_tv }) {
         return p;
     }
 

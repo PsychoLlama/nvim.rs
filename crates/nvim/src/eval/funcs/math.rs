@@ -6,7 +6,7 @@
 use super::VARNUMBER_MAX;
 use super::wrappers::{arg_number_chk, arg_string, list_alloc_ret, tv_get_float_chk};
 use crate::charset::skipwhite;
-use crate::eval::string2float;
+use crate::charset::string2float;
 use crate::eval::typval::{NumBuf, list_find, list_len};
 use crate::event::libuv::uv_random;
 use crate::global_cell::GlobalCell;
