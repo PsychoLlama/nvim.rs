@@ -4,7 +4,7 @@
 
 use super::{CONTEXT_INIT, kCtxBufs, kCtxFuncs, kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs};
 use crate::context::{
-    ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict, kCtxAll,
+    CTX_ALL, ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict,
 };
 use crate::eval::typval::list_iter;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
@@ -67,7 +67,7 @@ pub fn f_ctxget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `ctxpop()` — restore and drop the context on top of the stack.
 pub fn f_ctxpop(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: restores from the context stack; main thread only.
-    if !unsafe { ctx_restore(ptr::null_mut(), kCtxAll.get()) } {
+    if !unsafe { ctx_restore(ptr::null_mut(), CTX_ALL) } {
         semsg!("Context stack is empty");
     }
 }
@@ -100,7 +100,7 @@ pub fn f_ctxpush(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
             }
             types
         }
-        VAR_UNKNOWN => kCtxAll.get(),
+        VAR_UNKNOWN => CTX_ALL,
         _ => {
             semsg!("E475: Invalid argument: expected nothing or a List as an argument");
             return;
@@ -150,6 +150,6 @@ pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 /// `ctxsize()` — how many contexts are on the stack.
-pub fn f_ctxsize(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_ctxsize(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(ctx_size() as VarNumber);
 }

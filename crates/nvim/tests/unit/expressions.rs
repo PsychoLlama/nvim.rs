@@ -17,9 +17,7 @@ use neovim::types::{
     ExprAST, ExprASTNode, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
     ParserState,
 };
-use neovim::viml::parser::expressions::{
-    east_node_type_tab, viml_pexpr_free_ast, viml_pexpr_parse,
-};
+use neovim::viml::parser::expressions::{NODE_TYPE_NAMES, viml_pexpr_free_ast, viml_pexpr_parse};
 use neovim::viml::parser::parser::{
     PARSER_STATE_INIT, highlight_vec, parser_simple_get_line, reader_line, viml_parser_destroy,
     viml_parser_init,
@@ -40,8 +38,7 @@ const MULTI: c_int = 1;
 const PARSE_LET: c_int = 4;
 
 fn node_name(node: *const ExprASTNode) -> &'static str {
-    let name = east_node_type_tab.with(|tab| tab[unsafe { (*node).type_0 } as usize]);
-    unsafe { CStr::from_ptr(name) }
+    NODE_TYPE_NAMES[unsafe { (*node).type_0 } as usize]
         .to_str()
         .expect("node type names are ASCII")
 }
@@ -770,7 +767,7 @@ fn a_parse_reports_how_much_it_consumed() {
 /// is off here rather than the constants renamed.
 #[allow(non_upper_case_globals)]
 mod lexer {
-    use std::ffi::{CStr, c_char, c_int, c_void};
+    use std::ffi::{CStr, c_int, c_void};
     use std::{fmt, ptr, slice};
 
     use neovim::types::{
@@ -778,8 +775,8 @@ mod lexer {
         ParserPosition, ParserState,
     };
     use neovim::viml::parser::expressions::{
-        LexExprToken, LexExprTokenData, LexExprTokenNumberValue, LexExprTokenType, ccs_tab,
-        eltkn_cmp_type_tab, expr_asgn_type_tab, kELFlagAllowFloat, kELFlagForbidEOC,
+        ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, LexExprToken, LexExprTokenData,
+        LexExprTokenNumberValue, LexExprTokenType, kELFlagAllowFloat, kELFlagForbidEOC,
         kELFlagForbidScope, kELFlagIsNotCmp, kELFlagPeek, kExprLexAnd, kExprLexArrow,
         kExprLexAssignment, kExprLexBracket, kExprLexColon, kExprLexComma, kExprLexComparison,
         kExprLexDot, kExprLexDoubleQuotedString, kExprLexEOC, kExprLexEnv, kExprLexFigureBrace,
@@ -985,25 +982,20 @@ mod lexer {
     /// One of the parser's own `Nvim*` name tables, which is where the token
     /// types' spellings come from — the same tables `nvim_parse_expression`
     /// reports through.
-    fn tab_name(entry: *const c_char) -> String {
-        assert!(!entry.is_null(), "the name table has no entry for that");
-        // SAFETY: a non-null entry of a table of static C strings.
-        unsafe { CStr::from_ptr(entry) }
-            .to_str()
-            .expect("names are ASCII")
-            .to_owned()
+    fn tab_name(entry: &CStr) -> String {
+        entry.to_str().expect("names are ASCII").to_owned()
     }
 
     fn cmp_name(kind: ExprComparisonType) -> String {
-        tab_name(eltkn_cmp_type_tab.with(|tab| tab[kind as usize]))
+        tab_name(COMPARISON_NAMES[kind as usize])
     }
 
     fn ccs_name(ccs: ExprCaseCompareStrategy) -> String {
-        tab_name(ccs_tab.with(|tab| tab[ccs as usize]))
+        tab_name(CASE_STRATEGY_NAMES[ccs as usize].expect("the name table has no entry for that"))
     }
 
     fn asgn_name(kind: ExprAssignmentType) -> String {
-        tab_name(expr_asgn_type_tab.with(|tab| tab[kind as usize]))
+        tab_name(ASSIGNMENT_NAMES[kind as usize])
     }
 
     fn kind_name(kind: LexExprTokenType) -> &'static str {

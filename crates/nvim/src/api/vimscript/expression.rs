@@ -312,10 +312,7 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
         dict.insert(key, value);
     };
     // The three name tables hold static C strings.
-    let table_name = |name: *const c_char| {
-        // SAFETY: as above.
-        Object::string(unsafe { cstr_to_string(name) })
-    };
+    let table_name = |name: &CStr| Object::string(String_0::from_cstr(name));
     // The string body is the node's; the answer gets a copy, since the node
     // itself is about to go.
     let string_body = |value: *mut c_char, size: size_t| {
@@ -324,7 +321,7 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
         Object::string(unsafe { String_0::from_raw_bytes(value, size) })
     };
 
-    let type_name = east_node_type_tab.with(|tab| tab[type_0 as usize]);
+    let type_name = NODE_TYPE_NAMES[type_0 as usize];
     put(ret_node, c"type", table_name(type_name));
 
     let mut start_array: Array = Array::with_capacity(2);
@@ -381,10 +378,14 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
             );
         }
         kExprNodeComparison => {
-            let cmp = eltkn_cmp_type_tab.with(|tab| tab[data.comparison().type_0 as usize]);
+            let cmp = COMPARISON_NAMES[data.comparison().type_0 as usize];
             put(ret_node, c"cmp_type", table_name(cmp));
-            let ccs = ccs_tab.with(|tab| tab[data.comparison().ccs as usize]);
-            put(ret_node, c"ccs_strategy", table_name(ccs));
+            let ccs = CASE_STRATEGY_NAMES[data.comparison().ccs as usize];
+            put(
+                ret_node,
+                c"ccs_strategy",
+                ccs.map_or(Object::string(String_0::NULL), table_name),
+            );
             put(ret_node, c"invert", Object::boolean(data.comparison().inv));
         }
         kExprNodeFloat => {
@@ -402,7 +403,7 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
             let augmentation = if asgn_type == kExprAsgnPlain {
                 Object::string(String_0::NULL)
             } else {
-                table_name(expr_asgn_type_tab.with(|tab| tab[asgn_type as usize]))
+                table_name(ASSIGNMENT_NAMES[asgn_type as usize])
             };
             put(ret_node, c"augmentation", augmentation);
         }

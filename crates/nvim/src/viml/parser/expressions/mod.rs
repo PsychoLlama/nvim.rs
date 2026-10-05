@@ -26,7 +26,7 @@ mod strings;
 mod values;
 
 pub use ast::{
-    ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
+    ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_free_ast,
 };
 pub use lexer::viml_pexpr_next_token;
 pub use parse::viml_pexpr_parse;
@@ -40,7 +40,6 @@ use ast::{
 use strings::{parse_quoted_string, shifted_pos};
 
 use crate::charset::{hex2nr, vim_str2nr};
-use crate::global_cell::GlobalCell;
 use crate::keycodes::trans_special;
 use crate::mbyte::{utf_char2len, utfc_ptr2len_len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz};

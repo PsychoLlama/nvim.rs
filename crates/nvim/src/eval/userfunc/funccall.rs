@@ -114,7 +114,7 @@ pub fn func_init() {
 }
 
 /// The function table itself, for the callers outside this family.
-pub fn func_tbl_get() -> *mut HashTab {
+pub(crate) fn func_tbl_get() -> *mut HashTab {
     func_table().raw()
 }
 

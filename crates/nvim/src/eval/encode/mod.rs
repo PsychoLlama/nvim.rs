@@ -43,6 +43,7 @@ use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
 use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc};
+use crate::message::emsg;
 use crate::message_fmt::{c_str, emsg_text, msg_bytes, msg_cstr};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::tr_c;
@@ -72,14 +73,25 @@ pub const SURROGATE_LO_START: c_int = 0xdc00;
 pub const SURROGATE_LO_END: c_int = 0xdfff;
 pub const SURROGATE_FIRST_CHAR: c_int = 0x10000;
 
-pub static encode_bool_var_names: GlobalCell<[*const c_char; 2]> =
-    GlobalCell::new([c"v:false".as_ptr(), c"v:true".as_ptr()]);
-pub static encode_special_var_names: GlobalCell<[*const c_char; 1]> =
-    GlobalCell::new([c"v:null".as_ptr()]);
+/// How `string()` spells a `v:false`/`v:true`, by `BoolVarValue`.
+pub(crate) const BOOL_VAR_NAMES: [&CStr; 2] = [c"v:false", c"v:true"];
+/// How `string()` spells a `v:null`, by `SpecialVarValue`.
+pub(crate) const SPECIAL_VAR_NAMES: [&CStr; 1] = [c"v:null"];
 
 /// Set once a `string()`/`echo` dump has reported a self-reference, so the
 /// user is told once rather than once per cycle.
-pub(crate) static did_echo_string_emsg: GlobalCell<bool> = GlobalCell::new(false);
+static did_echo_string_emsg: GlobalCell<bool> = GlobalCell::new(false);
+
+/// Report a self-referencing container, once per dump: a cycle usually shows
+/// up many times over.
+pub(crate) fn report_self_reference() {
+    if !did_echo_string_emsg.get() {
+        did_echo_string_emsg.set(true);
+        emsg(gettext(
+            c"E724: unable to correctly dump variable with self-referencing container",
+        ));
+    }
+}
 
 /// `_()`: the translation of a message, which is always a literal here.
 #[inline(always)]

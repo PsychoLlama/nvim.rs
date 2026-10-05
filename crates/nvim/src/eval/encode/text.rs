@@ -32,11 +32,10 @@
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-use crate::eval::encode::did_echo_string_emsg;
+use crate::eval::encode::report_self_reference;
 use crate::eval::typval::DictSlot;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
-use crate::message::{emsg, internal_error};
-use crate::os::cshim::gettext;
+use crate::message::internal_error;
 use crate::types::{Float, TypVal, int64_t, ptrdiff_t, size_t};
 use crate::vim_snprintf_safelen;
 
@@ -47,8 +46,6 @@ const NUMBUFLEN: usize = 65;
 /// Upstream's `char ebuf[NUMBUFLEN + 7]`, sized for the longest marker.
 const MARKERBUFLEN: usize = NUMBUFLEN + 7;
 
-const E724_SELF_REFERENCE: &CStr =
-    c"E724: unable to correctly dump variable with self-referencing container";
 const NULL_FUNC_NAME: &CStr = c"string(): NULL function name";
 
 /// The `string()`/`:echo` sink.
@@ -58,11 +55,6 @@ const NULL_FUNC_NAME: &CStr = c"string(): NULL function name";
 /// exactly the code its macro expansion was, with no branch left at run time.
 struct TextSink<'a, const ECHO: bool> {
     gap: &'a mut Vec<u8>,
-}
-
-/// Raise `msg`, which carries no arguments.
-fn err(msg: &'static CStr) {
-    emsg(gettext(msg));
 }
 
 impl<const ECHO: bool> TextSink<'_, ECHO> {
@@ -330,9 +322,8 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         conv_type: ConvType,
         path: &ConvPath,
     ) -> Flow {
-        if !ECHO && !did_echo_string_emsg.get() {
-            did_echo_string_emsg.set(true);
-            err(E724_SELF_REFERENCE);
+        if !ECHO {
+            report_self_reference();
         }
         let backref = Self::backref(path, val, conv_type);
         let fmt = if !ECHO {

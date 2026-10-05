@@ -3,9 +3,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::charset::vim_str2nr;
-use crate::eval::encode::{
-    encode_bool_var_names, encode_special_var_names, encode_tv2echo, encode_tv2string,
-};
+use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES, encode_tv2echo, encode_tv2string};
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
 use crate::eval::userfunc::{call_func, func_ref, func_unref, get_funccal_local_ht};
@@ -178,9 +176,9 @@ pub const SORTINFO_INIT: SortInfo = SortInfo {
 /// needs a constant on its left, the element type not being `Copy`.
 pub const TV_INITIAL_VALUE: TypVal = TypVal::Unknown;
 
-pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub static tv_empty_string: &::core::ffi::CStr = c"";
+pub(crate) static tv_empty_string: &::core::ffi::CStr = c"";
 /// How many submatches a `\=` replacement expression is handed: `\0`
 /// through `\9`.
 pub const SL_SIZE: usize = 10;

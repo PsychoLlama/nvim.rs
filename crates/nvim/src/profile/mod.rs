@@ -29,7 +29,8 @@ pub mod startuptime;
 // The report and the startuptime log were split out of this file; callers
 // name them where they have always been named.
 pub use report::profile_dump;
-pub use startuptime::{time_finish, time_init, time_msg, time_pop, time_push, time_start};
+pub(crate) use startuptime::time_pop;
+pub use startuptime::{time_finish, time_init, time_msg, time_push, time_start};
 
 use crate::charset::skip;
 use crate::charset::{skiptowhite, skipwhite};
@@ -167,7 +168,7 @@ pub fn profile_self(self_: ProfTime, total: ProfTime, children: ProfTime) -> Pro
 
 /// `tma` minus the wait time accumulated since the [`PROF_WAIT_TIME`]
 /// snapshot `tm`.
-pub fn profile_sub_wait(tm: ProfTime, tma: ProfTime) -> ProfTime {
+pub(crate) fn profile_sub_wait(tm: ProfTime, tma: ProfTime) -> ProfTime {
     let waited = profile_sub(PROF_WAIT_TIME.get(), tm);
     profile_sub(tma, waited)
 }

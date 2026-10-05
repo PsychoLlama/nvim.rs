@@ -25,7 +25,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::eval::encode::{
-    conv_error, convert_to_json_string, did_echo_string_emsg, encode_check_json_key,
+    conv_error, convert_to_json_string, encode_check_json_key, report_self_reference,
 };
 use crate::eval::typval::DictSlot;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
@@ -44,8 +44,6 @@ const E474_NAN: &CStr = c"E474: Unable to represent NaN value in JSON";
 const E474_INFINITY: &CStr = c"E474: Unable to represent infinity in JSON";
 const E474_EXT: &CStr = c"E474: Unable to convert EXT string to JSON";
 const E474_INVALID_KEY: &CStr = c"E474: Invalid key in special dictionary";
-const E724_SELF_REFERENCE: &CStr =
-    c"E724: unable to correctly dump variable with self-referencing container";
 
 struct JsonSink<'a> {
     gap: &'a mut Vec<u8>,
@@ -250,11 +248,7 @@ impl TypvalSink for JsonSink<'_> {
         _conv_type: ConvType,
         _path: &ConvPath,
     ) -> Flow {
-        if !did_echo_string_emsg.get() {
-            // Only once per dump: a cycle usually shows up many times over.
-            did_echo_string_emsg.set(true);
-            err(E724_SELF_REFERENCE);
-        }
+        report_self_reference();
         Flow::Go
     }
 }

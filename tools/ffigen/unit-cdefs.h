@@ -2068,6 +2068,7 @@ static const int CTRL_X_TAGS = 261;
 static const int CTRL_X_THESAURUS = 266;
 static const int CTRL_X_WANT_IDENT = 256;
 static const int CTRL_X_WHOLE_LINE = 3;
+static const int CTX_ALL = 63;
 static const int CT_CELL_MASK = 7;
 static const int CT_FNAME_CHAR = 64;
 static const int CT_ID_CHAR = 32;

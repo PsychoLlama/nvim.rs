@@ -432,5 +432,5 @@ const msgpack_type_names: [&CStr; 8] = [
 
 /// The eight `v:msgpack_types` lists themselves, which the msgpack encoder
 /// and decoder compare against by identity.
-pub static eval_msgpack_type_lists: GlobalCell<[*const List; 8]> =
+pub(crate) static eval_msgpack_type_lists: GlobalCell<[*const List; 8]> =
     GlobalCell::new([::core::ptr::null(); 8]);

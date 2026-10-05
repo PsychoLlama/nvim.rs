@@ -159,7 +159,7 @@ pub fn ex_echohl(excmd: &mut ExArg) {
 }
 
 /// The highlight group `:echohl` last named.
-pub fn get_echo_hl_id() -> c_int {
+pub(crate) fn get_echo_hl_id() -> c_int {
     echo_hl_id.get()
 }
 

@@ -216,25 +216,17 @@ impl NumBuf {
                 if s.is_null() { c"".as_ptr() } else { s }
             }
             VAR_BOOL => {
-                let names = (&raw const encode_bool_var_names).cast::<*const ::core::ffi::c_char>();
                 let which = tv.as_bool().unwrap_or(crate::types::kBoolVarFalse);
-                // SAFETY: the table has one name per `BoolVarValue`, and
-                // `which` is one; the names are shorter than `NUMBUFLEN`.
-                unsafe {
-                    let name = *names.offset(which as isize);
-                    strcpy(buf, name);
-                }
+                let name = BOOL_VAR_NAMES[which as usize];
+                // SAFETY: the names are shorter than `NUMBUFLEN`.
+                unsafe { strcpy(buf, name.as_ptr()) };
                 buf
             }
             VAR_SPECIAL => {
-                let names =
-                    (&raw const encode_special_var_names).cast::<*const ::core::ffi::c_char>();
                 let which = tv.as_special().unwrap_or(kSpecialVarNull);
-                // SAFETY: as `VAR_BOOL`, for the special-value table.
-                unsafe {
-                    let name = *names.offset(which as isize);
-                    strcpy(buf, name);
-                }
+                let name = SPECIAL_VAR_NAMES[which as usize];
+                // SAFETY: as `VAR_BOOL`.
+                unsafe { strcpy(buf, name.as_ptr()) };
                 buf
             }
             VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {

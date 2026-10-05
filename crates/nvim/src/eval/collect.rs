@@ -90,7 +90,7 @@ const EXESTACK_GROWSIZE: usize = 50;
 
 /// The next mark. Two apart, so `set_ref_in_previous_funccal` can use the
 /// odd value in between.
-pub fn get_copy_id() -> c_int {
+pub(crate) fn get_copy_id() -> c_int {
     static CURRENT_COPY_ID: GlobalCell<c_int> = GlobalCell::new(0);
     CURRENT_COPY_ID.set(CURRENT_COPY_ID.get() + COPYID_INC);
     CURRENT_COPY_ID.get()

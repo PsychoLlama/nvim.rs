@@ -33,7 +33,7 @@ pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
     let mut int_types: ::core::ffi::c_int = if types.len() > 0 as size_t {
         0 as ::core::ffi::c_int
     } else {
-        kCtxAll.get()
+        CTX_ALL
     };
     if types.len() > 0 as size_t {
         let mut i: size_t = 0 as size_t;
@@ -68,7 +68,7 @@ pub fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
     let read = unsafe { ctx_from_dict(dict, &raw mut ctx) };
     if read.is_ok() {
         // SAFETY: `ctx` is this frame's own, filled in above.
-        unsafe { ctx_restore(&raw mut ctx, kCtxAll.get()) };
+        unsafe { ctx_restore(&raw mut ctx, CTX_ALL) };
     }
     unsafe { ctx_free(&raw mut ctx) };
     did_emsg.set(save_did_emsg);

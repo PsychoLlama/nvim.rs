@@ -58,14 +58,13 @@ const SHADA_RESTORE: c_int = kShaDaWantInfo as c_int | kShaDaForceit as c_int;
 /// the buffer list.
 const SHADA_WHILE_RESTORING: &CStr = c"!,'100,%";
 
-pub static kCtxAll: GlobalCell<c_int> = GlobalCell::new(
-    kCtxRegs as c_int
-        | kCtxJumps as c_int
-        | kCtxBufs as c_int
-        | kCtxGVars as c_int
-        | kCtxSFuncs as c_int
-        | kCtxFuncs as c_int,
-);
+/// Every part a context can save: what `ctxpush()` with no argument takes.
+pub const CTX_ALL: c_int = kCtxRegs as c_int
+    | kCtxJumps as c_int
+    | kCtxBufs as c_int
+    | kCtxGVars as c_int
+    | kCtxSFuncs as c_int
+    | kCtxFuncs as c_int;
 
 const ARRAY_INIT: Array = Array::EMPTY;
 const CONTEXT_INIT: Context = Context {
@@ -81,13 +80,13 @@ const CONTEXT_INIT: Context = Context {
 static CTX_STACK: GlobalCell<Vec<Context>> = GlobalCell::new(Vec::new());
 
 /// How many contexts are on the stack.
-pub fn ctx_size() -> size_t {
+pub(crate) fn ctx_size() -> size_t {
     CTX_STACK.with(Vec::len)
 }
 
 /// The context `index` places below the top of the stack, or null when the
 /// index is out of bounds.
-pub fn ctx_get(index: size_t) -> *mut Context {
+pub(crate) fn ctx_get(index: size_t) -> *mut Context {
     CTX_STACK.with_mut(|stack| match stack.len().checked_sub(index + 1) {
         Some(at) => &raw mut stack[at],
         None => core::ptr::null_mut(),

@@ -194,18 +194,18 @@ pub fn del_menutrans_vars() {
 }
 
 /// The `g:` scope, as a dictionary.
-pub fn get_globvar_dict() -> *mut Dict {
+pub(crate) fn get_globvar_dict() -> *mut Dict {
     globvardict.ptr()
 }
 
 /// The `g:` scope, as a hashtab.
-pub fn get_globvar_ht() -> *mut DictTab {
+pub(crate) fn get_globvar_ht() -> *mut DictTab {
     // SAFETY: a field of the dictionary above, never dereferenced here.
     unsafe { &raw mut (*get_globvar_dict()).dv_hashtab }
 }
 
 /// The `v:` scope, as a dictionary.
-pub fn get_vimvar_dict() -> *mut Dict {
+pub(crate) fn get_vimvar_dict() -> *mut Dict {
     vimvardict.ptr()
 }
 

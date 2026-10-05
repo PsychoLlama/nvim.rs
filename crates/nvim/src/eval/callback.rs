@@ -149,7 +149,7 @@ impl Callback {
 }
 
 /// How deep the callback nesting currently is.
-pub fn get_callback_depth() -> c_int {
+pub(crate) fn get_callback_depth() -> c_int {
     callback_depth.get()
 }
 

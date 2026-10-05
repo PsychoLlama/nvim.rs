@@ -506,7 +506,7 @@ pub fn ex_debug(excmd: &mut ExArg) {
 }
 
 /// `:debuggreedy`, whose `0` argument turns it back off.
-pub fn ex_debuggreedy(excmd: &mut ExArg) {
+pub(crate) fn ex_debuggreedy(excmd: &mut ExArg) {
     // SAFETY: caller contract.
     let (addr_count, line2) = (excmd.addr_count, excmd.line2);
     debug_greedy.set(addr_count == 0 || line2 != 0 as LineNr);

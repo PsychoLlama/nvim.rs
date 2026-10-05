@@ -18,7 +18,7 @@ count	callee	no_raw	defs	def
 93	snprintf	0	1	crates/nvim/src/os/cshim.rs
 86	nlua_pop_string	0	1	crates/nvim/src/lua/converter/pop.rs
 79	nlua_pop_handle	0	1	crates/nvim/src/lua/converter/pop.rs
-74	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
+73	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 71	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
 70	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
 68	from_raw_parts_mut	0	0	
@@ -41,10 +41,10 @@ count	callee	no_raw	defs	def
 38	Tv::new	0	67	
 38	shada_free_shada_entry	0	1	crates/nvim/src/shada/read.rs
 37	eq	0	1	crates/nvim/src/cstr.rs
+37	strcpy	0	0	
 37	tv_copy	0	0	
 36	.sub	0	0	
 36	copy_option_part	0	1	crates/nvim/src/option/query.rs
-35	strcpy	0	0	
 35	utf_head_off	0	1	crates/nvim/src/mbyte/walk.rs
 31	at_opt	0	2	
 31	getdigits_int	0	1	crates/nvim/src/charset/walk.rs

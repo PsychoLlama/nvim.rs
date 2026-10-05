@@ -48,7 +48,7 @@ pub fn time_push() -> (ProfTime, ProfTime) {
 
 /// Subtract the nested duration `time` (from [`time_push`]) from the
 /// previous-event time.
-pub fn time_pop(time: ProfTime) {
+pub(crate) fn time_pop(time: ProfTime) {
     G_PREV_TIME.set(G_PREV_TIME.get().wrapping_sub(time));
 }
 

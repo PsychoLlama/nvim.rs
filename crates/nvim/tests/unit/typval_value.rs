@@ -10,13 +10,13 @@ use std::ffi::{CStr, CString, c_char, c_int};
 use std::mem::ManuallyDrop;
 use std::ptr;
 
-use neovim::eval::list::kTVCstring;
 use neovim::eval::typval::{
     BlobRef, DictRef, ListRef, NumBuf, PartialRef, Unconvertible, list_first, tv_check_lock,
     tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal,
     tv_get_bool, tv_get_bool_chk, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk,
     tv_islocked, tv_item_lock, tv_list_alloc_ret, value_check_lock,
 };
+use neovim::eval::userfunc::TV_CSTRING;
 use neovim::memory::{xfree, xmalloc};
 use neovim::types::{
     TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
@@ -635,7 +635,7 @@ fn a_value_is_locked_by_its_own_lock_or_its_containers() {
 
 /// `describe('check_lock()') itp('works')`, spec line 2893.
 ///
-/// `name_len` is a length *or* the sentinel `kTVCstring`, which means "the
+/// `name_len` is a length *or* the sentinel `TV_CSTRING`, which means "the
 /// whole NUL-terminated name" — the difference between `tes` and `test` in
 /// the last two rows.
 #[test]
@@ -644,7 +644,7 @@ fn checking_a_lock_names_what_is_locked() {
     // SAFETY: every name is this frame's and NUL-terminated.
     unsafe {
         let test = cstr("test");
-        let cstring = kTVCstring.get();
+        let cstring = TV_CSTRING;
         let check = |lock, name: *const c_char, len, msg| {
             check_emsg(log.editor(), || value_check_lock(lock, name, len), msg)
         };
@@ -823,7 +823,7 @@ fn checking_a_lock_reads_the_value_and_then_its_container() {
     // SAFETY: every value is this case's own; the name outlives the calls.
     unsafe {
         let name = cstr("v");
-        let cstring = kTVCstring.get();
+        let cstring = TV_CSTRING;
         let check = |slot: &Slot, msg| {
             check_emsg(
                 log.editor(),

@@ -129,17 +129,17 @@ pub fn set_vim_var_tv(idx: Vv, tv: &mut TypVal) {
 }
 
 /// The name of `v:` variable `idx`, without the `v:`.
-pub fn get_vim_var_name(idx: Vv) -> *mut c_char {
+pub(crate) fn get_vim_var_name(idx: Vv) -> *mut c_char {
     vimvar(idx).vv_name
 }
 
 /// The value of `v:` variable `idx`, which the caller may write through.
-pub fn get_vim_var_tv(idx: Vv) -> *mut TypVal {
+pub(crate) fn get_vim_var_tv(idx: Vv) -> *mut TypVal {
     vimvar_val(idx).raw()
 }
 
 /// `v:` variable `idx` as a Number.  The caller knows its declared type.
-pub fn get_vim_var_nr(idx: Vv) -> VarNumber {
+pub(crate) fn get_vim_var_nr(idx: Vv) -> VarNumber {
     vimvar_val(idx).number_or_zero()
 }
 
@@ -160,7 +160,7 @@ pub fn get_vim_var_dict(idx: Vv) -> *mut Dict {
 /// an assignment of another type, so there is nothing to convert and nothing
 /// to convert it into: the answer lives as long as the variable does, which
 /// is what the callers holding it across a call need.
-pub fn get_vim_var_str(idx: Vv) -> *mut c_char {
+pub(crate) fn get_vim_var_str(idx: Vv) -> *mut c_char {
     let tv = vimvar_val(idx);
     debug_assert_eq!(
         tv.v_type(),
@@ -269,7 +269,7 @@ pub fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is a live partial whose reference the caller
 /// hands over.
-pub unsafe fn set_vim_var_partial(idx: Vv, val: *mut Partial) {
+pub(crate) unsafe fn set_vim_var_partial(idx: Vv, val: *mut Partial) {
     let mut tv = vimvar_val(idx);
     // SAFETY: the caller's promise -- a live partial whose reference the
     // slot takes over.
@@ -302,7 +302,7 @@ pub fn set_reg_var(c: c_int) {
 ///
 /// # Safety
 /// `oldval` is NULL or a string this took out earlier.
-pub unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
+pub(crate) unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Exception);
     if oldval.is_null() {
         // SAFETY: `v:exception` is declared a String.
@@ -316,7 +316,7 @@ pub unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
 ///
 /// # Safety
 /// As [`v_exception`].
-pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
+pub(crate) unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Throwpoint);
     if oldval.is_null() {
         // SAFETY: `v:throwpoint` is declared a String.
@@ -445,7 +445,7 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
 
 /// Set `v:count` and `v:count1`, and `v:prevcount` from the old `v:count`
 /// first when asked.
-pub fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
+pub(crate) fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
     if set_prevcount {
         let old = vimvar_val(Vv::Count).number_or_zero();
         let mut prev = vimvar_val(Vv::Prevcount);

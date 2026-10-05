@@ -20,7 +20,7 @@ use crate::channel::{
     channel_all_info, channel_alloc, channel_decref, channel_incref, channel_info,
     channel_internal, channel_send, find_channel,
 };
-use crate::context::{ctx_free, ctx_from_dict, ctx_restore, ctx_save, ctx_to_dict, kCtxAll};
+use crate::context::{CTX_ALL, ctx_free, ctx_from_dict, ctx_restore, ctx_save, ctx_to_dict};
 use crate::cursor::get_cursor_rel_lnum;
 use crate::decoration::decor_redraw_signs;
 use crate::drawline::use_cursor_line_highlight;
