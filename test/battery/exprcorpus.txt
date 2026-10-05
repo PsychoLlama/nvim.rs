@@ -1,0 +1,124 @@
+# Expressions for exprsweep.vim: one per line, run whole and cut at every
+# byte.  Every name is g:-scoped, since the driver evaluates inside a
+# function.  A line starting with # is a comment; so is an empty one.
+# -- operators and precedence
+1 + 2 * 3
+(1 + 2) * 3 - -1
+!0 || 0 && 1
+1 ? 'a' : 0 ? 'b' : 'c'
+0 ?? 'dflt'
+'' ?? 'x'
+"a" . "b" .. 'c'
+10 / 3 . '' . 10 % 3 . -10 / 3
+1.5e3 + .5
+1.0 / 0
+0x1F + 0o17 + 017 + 0b101
+5 == 5.0
+'abc' ==# 'ABC'
+'abc' ==? 'ABC'
+'abc' =~ '^a' && 'abc' !~# 'B'
+[1, 2] is [1, 2]
+g:l isnot copy(g:l)
+1 < 2 && 'a' > 'B' && 3 >= 3 && 2 <= 1
+# -- literals
+'it''s'
+"tab\there\n\x41é\U0001F600\<Esc>"
+"\<C-a>\<S-Up>\<lt>"
+0z01.02.0304
+0zXY
+{'a': 1, 'b': [2]}
+#{a: 1, b-c: 2}
+{1: 'one', 2.5: 'x'}
+[1, [2, [3, [4]]]]
+[1, 2,]
+{'a':1,}
+v:true
+v:null
+# -- indexing and slices
+g:l[0]
+g:l[1][0]
+g:l[-1].k
+g:l[1:]
+g:l[:1]
+g:l[0:-2]
+g:s[1]
+g:s[1:3]
+g:s[-3:]
+g:d.a
+g:d['c d']
+g:d.b[1]
+g:b[0]
+g:b[0:1]
+# -- variables of every kind
+$NVIMTEST
+$NVIMTEST . '!'
+&tw
+&l:tw
+&g:tabstop + 1
+@r
+@" . @r
+v:count
+g:curly{g:n}x
+g:cur{'y'}
+g:{'n'}
+# -- calls, funcrefs, lambdas, methods
+g:F('abc')
+g:P(1)
+function('add')
+funcref('len')
+{x -> x * 2}(21)
+{x, y -> x .. y}('a', 'b')
+{-> 'noargs'}()
+{x -> {y -> x + y}}(1)(2)
+map([1, 2, 3], {_, v -> v * v})
+filter(copy(g:l), 'type(v:val) == v:t_number')
+g:l->len()
+'abc'->toupper()->strlen()
+[3, 1, 2]->sort()->reverse()
+g:d->keys()->sort()
+g:s->strcharpart(1, 3)
+1->{x -> x + 1}()
+g:obj.method()
+g:obj['method']()
+g:Id(g:Id(1))
+call('g:Id', [7])
+get(g:d, 'zz', 'default')
+has_key(g:d, 'a') ? g:d.a : -1
+type(g:F) == v:t_func
+string(g:P)
+eval('1 + ' . '2')
+execute('echo 1')
+# -- interpolation
+$"value: {g:n} and {g:s}"
+$'single {g:n} {{}}'
+$"nested {$"{g:n}"}"
+$"{g:l[1]}{g:d.a}"
+# -- multibyte text
+"multi: " .. 'byte' .. 'ü€😀'
+strlen('ü€😀') . strchars('ü€😀')
+'ü€😀'[1]
+'ü€😀'[0:2]
+toupper('ä') ==# 'Ä'
+'日本語' =~ '本'
+# -- filename modifiers
+fnamemodify('/a/b/c.d.txt', ':t:r')
+fnamemodify('/a/b/c.d.txt', ':h:h')
+fnamemodify('/a/b/c.d.txt', ':e:e')
+fnamemodify('/a/b/c.d.txt', ':s?b?B?')
+fnamemodify('/a/b/c.d.txt', ':gs?/?|?')
+fnamemodify('rel/x.txt', ':p:~:.')
+expand('%:t')
+expand('%:p:h:t')
+# -- errors and unfinished text
+1 2
+g:nosuchvar
+nosuchfunc()
+g:d.zz
+g:l[99]
+"\%x"
+'a' + 1
+[] + 1
+{} == {}
+g:l[1:2:3]
+{x -> x
+(1

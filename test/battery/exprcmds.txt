@@ -1,0 +1,71 @@
+# Commands for exprsweep.vim: one per line, run whole and cut at every byte,
+# through execute().  <NL> is a newline.  # starts a comment line.
+# -- lvalues
+let g:x = 1
+let g:x += 2
+let g:x = 'a' | let g:x .= 'b' | let g:x ..= 'c'
+let [g:a, g:b2] = [1, 2]
+let [g:a; g:rest] = [1, 2, 3]
+let g:l[0] = 'z'
+let g:l[1][1] = 9
+let g:l[0:1] = ['p', 'q']
+let g:l[1:] = []
+let g:l[-1] = 0
+let g:d.a = 5
+let g:d['new key'] = 6
+let g:d.b[0] += 10
+let g:b[0] = 255
+let g:b[1:1] = 0z0910
+let g:s[0] = 'x'
+let $NVIMTEST = 'changed'
+let $NVIMTEST .= 'more'
+let &tw = 33
+let &l:sw = 2
+let &g:ts += 1
+let @r = 'set'
+let @r .= 'app'
+let g:curly{g:n}x = 'cb'
+let g:{'dyn'} = 'dynamic'
+const g:K = 1 | let g:K = 2
+let g:x = 1 " comment
+let g:x = "a\"b" | let g:y = 2
+let g:x = 'a|b' | let g:y = 3
+# -- unlet and locks
+unlet g:n
+unlet! g:nosuch
+unlet g:l[0]
+unlet g:l[0:1]
+unlet g:d.a
+unlet g:d['c d']
+unlet $NVIMTEST
+lockvar g:l | call add(g:l, 1)
+lockvar 1 g:d | let g:d.a = 2
+lockvar! g:n | unlockvar g:n | let g:n = 1
+# -- calls and echo
+call g:Id(1)
+call g:obj.method()
+call add(g:l, 4)
+call {x -> x}(1)
+echo 1 2 3
+echo 'a' | echon 'b'
+echo g:l[0] g:d.a
+execute 'let g:x = 1' | let g:y = 2
+execute "echo 'x'" | echo 'y'
+# -- control flow
+if g:n > 1 | let g:x = 1 | elseif g:nosuch | let g:x = 2 | else | let g:x = 3 | endif
+while 0 | echo 'never' | endwhile
+for g:v in [1, 2] | let g:acc += g:v | endfor
+for [g:k, g:w] in items({'a': 1}) | let g:acc = g:w | endfor
+try | throw 'oops' | catch /oo/ | let g:x = v:exception | endtry
+# -- functions, argument lists and defaults
+function! g:T1(a, b = 2, ...) abort<NL>return a:a + a:b + len(a:000)<NL>endfunction<NL>let g:x = g:T1(1) + g:T1(1, 2, 3)
+function! g:T2(x = [1, 2], y = {'k': 1}) range<NL>return a:x<NL>endfunction<NL>let g:x = g:T2()
+function! g:T3(a,<NL>endfunction
+function! g:obj.m2() dict<NL>return self.v<NL>endfunction<NL>let g:x = g:obj.m2()
+let g:lam = {a, b -> a + b} | let g:x = g:lam(1, 2)
+echo {x -> x}(1) | echo 'after'
+# -- heredocs
+let g:h =<< END<NL>line1<NL>  line2<NL>END
+let g:h =<< trim END<NL>    a<NL>      b<NL>    END
+let g:h =<< eval END<NL>{g:n} {1 + 1}<NL>END
+let g:h =<< trim eval END<NL>  x{g:s}y<NL>  END

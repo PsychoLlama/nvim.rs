@@ -126,7 +126,7 @@ state-exports binary='target/release/nvim':
 bench-ab bench *args:
   @test/benchmark/ab/{{ bench }}.sh {{ args }}
 
-# Thirty-two differential oracles plus the startup probe, run over the binary
+# Thirty-four differential oracles plus the startup probe, run over the binary
 # this tree builds. Every row must say IDENTICAL and the last line must be
 # `BATTERY_EXIT=0`; anything else is a behaviour change, intended or not, and
 # the pin it is measured against (test/battery/BASE) moves in a commit of its

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run all thirty-two baselined differentials + the paired startup probe.
+# Run all thirty-four baselined differentials + the paired startup probe.
 #
 # THIS IS THE CANONICAL COPY.  Every close before phase 20 kept the
 # battery in its own session scratchpad and copied it forward, which is
@@ -259,6 +259,16 @@ run decodesweep "$T/decodeverify.sh"
 # standing, twelve in i91), all reaped before their row is printed;
 # `aborted=0` is the baseline, so ANY abort is a regression.
 run inssweep   "$T/insverify.sh"
+
+# The interpreter's own two rows.  `cont` is the three container corpora
+# (lists, dictionaries -- slot order included -- and blobs) that each served
+# one container rewrite as a hand-run comparison; ~1 s.  `expr` is the
+# expression parser's oracle: every corpus line AND EVERY PREFIX of it
+# through eval(), `:let`, `:echo`, `:execute`, `:call` and skip mode, the
+# lvalue and `:function` commands the same way, and the re-entrant cases
+# where an expression changes the text being evaluated; ~45 s.
+run contsweep  "$T/contverify.sh"
+run exprsweep  "$T/exprverify.sh"
 
 echo "=== startup probe (paired)"
 # The probe's baseline, like every row's, is CUT from the binary
