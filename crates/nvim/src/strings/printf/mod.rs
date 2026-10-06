@@ -89,7 +89,9 @@ pub(crate) fn tv_str(
     };
     if matches!(tv.v_type(), VAR_STRING | VAR_NUMBER) {
         *tofree = ptr::null_mut();
-        numbuf.string_ptr_chk(tv)
+        numbuf
+            .string_chk(tv)
+            .map_or(ptr::null(), ::core::ffi::CStr::as_ptr)
     } else {
         // SAFETY: a live value; the rendering is a fresh allocation.
         *tofree = unsafe { encode_tv2echo(tv, ptr::null_mut()) };

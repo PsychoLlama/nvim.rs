@@ -10,7 +10,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::eval::typval::CallFrame;
 use crate::option::vars::P_TSRFU;
 use crate::optionstr::{OptString, local_or_global};
 
@@ -619,9 +618,8 @@ pub(crate) fn get_insert_callback(type_0: c_int) -> *mut Callback {
 ///
 /// # Safety
 ///
-/// `base` must point at a NUL-terminated string, unaliased for the call. `cb`
-/// must point at an initialized callback, unaliased for the call.
-pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb: *mut Callback) {
+/// `cb` must point at an initialized callback, unaliased for the call.
+pub(crate) unsafe fn expand_by_function(type_0: c_int, base: ComplStr, mut cb: *mut Callback) {
     debug_assert!(Buf::current_or_none().is_some());
 
     let is_cpt_function = !cb.is_null();
@@ -633,15 +631,8 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     }
 
     // Call the function to obtain the list of matches.
-    // The base is the caller's string, so the frame names it.
-    let args = CallFrame::naming([
-        TypVal::Number(0),
-        TypVal::string_raw(if base.is_null() {
-            c"".as_ptr().cast_mut()
-        } else {
-            base
-        }),
-    ]);
+    // The argument owns a copy of the base, released with it.
+    let args = [TypVal::Number(0), base.with_bytes(TypVal::string_from)];
 
     let mut matchlist: *mut List = ptr::null_mut();
     let mut matchdict: *mut Dict = ptr::null_mut();
@@ -653,7 +644,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     // switching to another window: it should not be needed and may end up
     // in Insert mode in another buffer.
     let locked = Lock::text();
-    if unsafe { callback_call(cb, args.args(), &mut rettv) } {
+    if unsafe { callback_call(cb, &args, &mut rettv) } {
         // The two container arms take the reference out of `rettv` and
         // give it back by hand below.
         match rettv.v_type() {
@@ -817,7 +808,7 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
         ins_compl_insert_text(&ins_compl_leader_str().to_vec());
     }
 
-    unsafe { expand_by_function(0, cpt_compl_pattern().data(), cb) };
+    unsafe { expand_by_function(0, cpt_compl_pattern(), cb) };
 
     if !cpt_sources().row(idx).cs_refresh_always {
         ins_compl_delete(false);

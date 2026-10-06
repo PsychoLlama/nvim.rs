@@ -14,6 +14,7 @@ use crate::eval::typval::{ListRef, NumBuf, list_items, list_iter};
 use crate::semsg;
 use crate::types::{Failed, VAR_DICT, VAR_LIST, kListLenMayKnow};
 use crate::winlayer::Win;
+use core::ffi::CStr;
 
 /// How many `posN` keys a saved position match can carry.
 ///
@@ -72,8 +73,9 @@ unsafe fn matchadd_dict_arg(
 
     // SAFETY: the value's own dictionary.
     if let Some(di) = unsafe { find(dict, "conceal") } {
+        let conceal = numbuf.string(&di.di_tv).as_ptr();
         // SAFETY: the caller's out-parameter.
-        unsafe { *conceal_char = numbuf.string_ptr(&di.di_tv) };
+        unsafe { *conceal_char = conceal };
     }
 
     // SAFETY: as above.
@@ -237,11 +239,13 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         // frame lends below — and none may be reused before its value is.
         // SAFETY: the caller's dictionary.
         let d_ref = unsafe { d.as_ref() };
-        let group = group_buf.dict_string(d_ref, b"group");
+        let group = group_buf
+            .dict_string(d_ref, b"group")
+            .map_or(::core::ptr::null(), CStr::as_ptr);
         let priority = dict_get_number(d_ref, b"priority") as c_int;
         let id = dict_get_number(d_ref, b"id") as c_int;
         let conceal = match dict_find(d_ref, b"conceal") {
-            Some(di) => numbuf.string_ptr(&di.di_tv),
+            Some(di) => numbuf.string(&di.di_tv).as_ptr(),
             None => ::core::ptr::null(),
         };
 
@@ -249,7 +253,9 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
             .as_ref()
             .map_or(::core::ptr::null_mut(), ListRef::as_ptr);
         let added = if positions.is_null() {
-            let pattern = numbuf2.dict_string(d_ref, b"pattern");
+            let pattern = numbuf2
+                .dict_string(d_ref, b"pattern")
+                .map_or(::core::ptr::null(), CStr::as_ptr);
             let no_pos = ::core::ptr::null_mut();
             // SAFETY: the caller's window and the arguments checked above.
             unsafe { match_add(win, group, pattern, priority, id, no_pos, conceal) }
@@ -321,13 +327,14 @@ pub(crate) fn f_matchadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     let mut patbuf = NumBuf::new();
     let mut concealbuf = NumBuf::new();
     // SAFETY: the evaluator's slots.
-    let grp = grpbuf.string_ptr_chk(&args[0]);
-    let pat = patbuf.string_ptr_chk(&args[1]);
+    let grp = grpbuf.string_chk(&args[0]);
+    let pat = patbuf.string_chk(&args[1]);
 
     result.write_number(-1);
-    if grp.is_null() || pat.is_null() {
+    let (Some(grp), Some(pat)) = (grp, pat) else {
         return;
-    }
+    };
+    let (grp, pat) = (grp.as_ptr(), pat.as_ptr());
     let Some((prio, id, conceal_char, win)) = (unsafe { optional_args(args, &mut concealbuf) })
     else {
         return;
@@ -349,10 +356,10 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
     // SAFETY: the evaluator's slots.
     result.write_number(-1);
 
-    let group = buf.string_ptr_chk(&args[0]);
-    if group.is_null() {
+    let Some(group) = buf.string_chk(&args[0]) else {
         return;
-    }
+    };
+    let group = group.as_ptr();
     if args[1].v_type() != VAR_LIST {
         semsg!("E686: Argument of {} must be a List", "matchaddpos()");
         return;

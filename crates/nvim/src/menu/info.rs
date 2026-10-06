@@ -239,24 +239,21 @@ pub(crate) fn f_menu_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     tv_dict_alloc_ret(result);
-    let (retdict, menu_name) = (result.dict_or_null(), numbuf.string_ptr_chk(&args[0]));
-    if menu_name.is_null() {
+    let (retdict, menu_name) = (result.dict_or_null(), numbuf.string_chk(&args[0]));
+    let Some(menu_name) = menu_name else {
         // Before the second argument is looked at: `tv_get_string_chk`
         // answers a shared scratch buffer, so converting one argument can
         // invalidate the other, and a bad first argument must report once.
         return;
-    }
-    // SAFETY: the caller's obligation; the second argument if there is one.
-    let which = match args.get(1) {
-        Some(second) => numbuf2.string_ptr_chk(second),
-        // The default is the modes of plain ":menu".
-        None => c"".as_ptr(),
     };
-    if which.is_null() {
+    let which = match args.get(1) {
+        Some(second) => numbuf2.string_chk(second),
+        // The default is the modes of plain ":menu".
+        None => Some(c""),
+    };
+    let Some(which) = which else {
         return;
-    }
-    // SAFETY: `tv_get_string_chk` answers a NUL-terminated string or null.
-    let (menu_name, which) = unsafe { (CStr::from_ptr(menu_name), CStr::from_ptr(which)) };
+    };
 
     let modes = cmd_modes(which.to_bytes(), which.to_bytes().first() == Some(&b'!')).0;
     if let Some(menu) = find_by_name(menu_name)

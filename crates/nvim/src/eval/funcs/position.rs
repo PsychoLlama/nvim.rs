@@ -522,8 +522,8 @@ pub fn f_setcharsearch(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
     let Some(d) = args[0].dict_ref() else {
         return;
     };
-    let csearch = numbuf.dict_string(Some(d), b"char");
-    if !csearch.is_null() {
+    if let Some(csearch) = numbuf.dict_string(Some(d), b"char") {
+        let csearch = csearch.as_ptr();
         unsafe { set_last_csearch(utf_ptr2char(csearch), csearch, utfc_ptr2len(csearch)) };
     }
     if let Some(di) = d.find(b"forward") {

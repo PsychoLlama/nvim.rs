@@ -42,7 +42,7 @@ use crate::lua::ffi::{
     LUA_TUSERDATA,
 };
 use crate::lua::state::nlua_global_refs;
-use crate::memory::xstrdup;
+use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::narrow::{float_as_i64, len_as_int};
 use crate::os::cshim::gettext;
@@ -233,12 +233,14 @@ fn convert_top(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted> 
         LUA_TTABLE => convert_table(lua, stack),
         LUA_TFUNCTION => {
             // SAFETY: the function on top of the stack, registered under a
-            // name the value takes over.
+            // NUL-terminated name the registry owns, copied for the value.
             let name = unsafe {
                 let func = nlua_ref_global(lua.lstate, -1);
-                xstrdup(register_luafunc(func))
+                CStr::from_ptr(register_luafunc(func))
             };
-            Some(Converted::Value(TypVal::func_raw(name)))
+            Some(Converted::Value(TypVal::func(Some(
+                ThinCString::from_cstr(name),
+            ))))
         }
         LUA_TUSERDATA => {
             // TODO(bfredl): check mt.__call and convert to a function?

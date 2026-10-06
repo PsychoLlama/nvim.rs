@@ -252,10 +252,8 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         // SAFETY: as above.
         let d_ref = unsafe { d.as_ref() };
-        let stropt = numbuf2.dict_string(d_ref, b"regtype");
-        if !stropt.is_null() {
-            // SAFETY: a dictionary string, NUL-terminated.
-            let text = unsafe { cstr::bytes_at(stropt) };
+        if let Some(stropt) = numbuf2.dict_string(d_ref, b"regtype") {
+            let text = stropt.to_bytes();
             let mut at = 0;
             // The type must be exactly one letter (plus a width), so
             // the byte after what was consumed has to be the
@@ -269,9 +267,8 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
         }
         if regname == b'"' as c_char {
-            let stropt = numbuf3.dict_string(d_ref, b"points_to");
-            if !stropt.is_null() {
-                pointreg = unsafe { *stropt };
+            if let Some(stropt) = numbuf3.dict_string(d_ref, b"points_to") {
+                pointreg = cstr::byte_at(stropt.to_bytes(), 0) as c_char;
                 regname = pointreg;
             }
         } else if dict_get_number(d_ref, b"isunnamed") != 0 {

@@ -14,6 +14,7 @@
 )]
 
 use super::*;
+use crate::memory::ThinCString;
 use crate::narrow::number_as_int;
 use crate::types::VAR_NUMBER;
 use crate::winlayer::Win;
@@ -103,10 +104,13 @@ pub fn f_argv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // every index is out of range.
     let (entries, count) =
         unsafe { selected_arglist(args.get(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     let idx = number_as_int(tv_get_number_chk(&args[0]).unwrap_or(-1));
     if !entries.is_null() && idx >= 0 && idx < count {
-        unsafe { (*result).write_string_raw(xstrdup(alist_name(entries.offset(idx as isize)))) };
+        // SAFETY: an entry of the list, in range; its name is a
+        // NUL-terminated string the entry or its buffer holds.
+        let name = unsafe { CStr::from_ptr(alist_name(entries.offset(idx as isize))) };
+        result.write_string(Some(ThinCString::from_cstr(name)));
     } else if idx == -1 {
         unsafe { arglist_as_rettv(entries, count, result) };
     }

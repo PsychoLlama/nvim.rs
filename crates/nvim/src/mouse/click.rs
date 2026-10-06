@@ -16,9 +16,10 @@
 use crate::eval::typval::TV_INITIAL_VALUE;
 
 use super::*;
+use crate::cstr;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later, setcursor, update_screen};
 use crate::eval::call_vim_function;
-use crate::eval::typval::{CallFrame, tv_clear};
+use crate::eval::typval::tv_clear;
 use crate::getchar::state::mod_mask;
 use crate::menu::show_popupmenu;
 use crate::mouse::state::{mouse_grid, mouse_row};
@@ -33,23 +34,22 @@ use crate::ui::ui_flush;
 /// `click_defs`, for button `which_button`.
 pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_button: c_int) {
     let def = click_defs.at(col);
-    let mut modifiers = modifier_letters(mod_mask.get());
+    let modifiers = modifier_letters(mod_mask.get());
     // Upstream builds these argument slots `VAR_FIXED`; an argument vector's
     // lock is never read, and with the lock on the slot there is none to set.
-    // The two strings are a literal and this frame's own buffer, so the
-    // frame releases nothing.
-    let argv = CallFrame::naming([
+    // The two strings are copies the array owns and releases.
+    let argv = [
         TypVal::Number(def.tabnr as VarNumber),
         TypVal::Number(click_count(mod_mask.get())),
-        TypVal::string_raw(button_name(which_button).as_ptr().cast_mut()),
-        TypVal::string_raw(modifiers.as_mut_ptr()),
-    ]);
+        TypVal::string_from(button_name(which_button).to_bytes()),
+        TypVal::string_from(cstr::in_chars(&modifiers).to_bytes()),
+    ];
     let mut rettv = TV_INITIAL_VALUE;
 
     // SAFETY: `func` is the NUL-terminated name the statusline parser
     // recorded.
     let func = unsafe { CStr::from_ptr(def.func) };
-    let _ = call_vim_function(func, argv.args(), &mut rettv);
+    let _ = call_vim_function(func, &argv, &mut rettv);
     tv_clear(&mut rettv);
 
     // Make sure next click does not register as drag when callback absorbs

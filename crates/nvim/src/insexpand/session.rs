@@ -10,7 +10,6 @@
 
 use super::*;
 use crate::charset::skip;
-use crate::eval::typval::CallFrame;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::memline::Lines;
@@ -293,15 +292,12 @@ pub(crate) unsafe fn get_userdefined_compl_info(
         cb = get_insert_callback(ctrl_x_mode.get());
     }
 
-    // A static empty string, which the frame names rather than owning.
-    let args = CallFrame::naming([
-        TypVal::Number(1),
-        TypVal::string_raw(c"".as_ptr().cast_mut()),
-    ]);
+    // The empty string is the argument's own, released with it.
+    let args = [TypVal::Number(1), TypVal::string_from(b"")];
 
     let pos = Win::current().w_cursor;
     let locked = Lock::text();
-    let col = unsafe { callback_call_retnr(cb, args.args()) } as ColNr;
+    let col = unsafe { callback_call_retnr(cb, &args) } as ColNr;
     drop(locked);
 
     State.set(save_state);

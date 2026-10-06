@@ -221,11 +221,7 @@ fn backward_adds_go_before_the_current_match() {
 fn add_full(text: &str, fname: Option<&str>, extra: [&str; 4], user_data: Option<&str>) -> c_int {
     let fname = fname.map(|f| CString::new(f).expect("no NUL in a test name"));
     let extra = extra.map(|s| Some(XString::from(s)));
-    let mut data = user_data.map(|d| {
-        let d = CString::new(d).expect("no NUL in test data");
-        // SAFETY: a NUL-terminated string; the copy is the value's own.
-        TypVal::string_raw(unsafe { xstrdup(d.as_ptr()) })
-    });
+    let mut data = user_data.map(|d| TypVal::string_from(d.as_bytes()));
     let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
     let fname = fname.as_deref();
     ins_compl_add(
@@ -269,12 +265,9 @@ fn completed_item(m: MatchId) -> crate::eval::typval::DictRef {
 /// string.
 fn member(dict: &Dict, key: &[u8]) -> Option<String> {
     let item = dict_find(Some(dict), key)?;
-    let text = item.di_tv.string_or_null();
-    Some(if text.is_null() {
-        "<null>".to_owned()
-    } else {
-        // SAFETY: a dict string is NUL-terminated.
-        String::from_utf8_lossy(unsafe { CStr::from_ptr(text) }.to_bytes()).into_owned()
+    Some(match item.di_tv.string_ref() {
+        None => "<null>".to_owned(),
+        Some(text) => String::from_utf8_lossy(text.as_bytes()).into_owned(),
     })
 }
 

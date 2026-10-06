@@ -15,7 +15,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{in_fast_callback, nlua_error, nlua_pcall, nlua_pushref, require_ref};
-use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE, tv_clear};
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::{get_user_input, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
@@ -25,7 +25,7 @@ use crate::lua::ffi::{
     lua_setfield, lua_settop, lua_toboolean, lua_tocfunction, lua_tolstring, luaL_checkstring,
     luaL_loadbuffer,
 };
-use crate::memory::{xfree, xmalloc, xrealloc};
+use crate::memory::{ThinCString, xfree, xmalloc, xrealloc};
 use crate::message::{msg_multihl, msg_putchar};
 use crate::os::cshim::{gettext, snprintf};
 use crate::profile::startup_timing;
@@ -35,7 +35,7 @@ use crate::strings::vim_snprintf;
 use crate::types::ui::kUICmdline;
 use crate::types::{
     Event, HlMessage, HlMessageChunk, IOSIZE, MessageData, Object, ProfTime, String_0, TypVal,
-    VAR_STRING, intptr_t, lua_State, size_t,
+    intptr_t, lua_State, size_t,
 };
 use crate::ui::ui_has;
 
@@ -233,42 +233,42 @@ pub(crate) unsafe extern "C-unwind" fn nlua_require(lstate: *mut lua_State) -> c
 pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_int {
     let mut line = [0 as c_char; IOSIZE as usize];
     unsafe {
-        // The prompt is a literal, so the frame must not release it.
-        let input_args =
-            CallFrame::naming([TypVal::string_raw(c"lua_debug> ".as_ptr().cast_mut())]);
+        // The prompt is a copy the array owns and releases.
+        let input_args = [TypVal::string_from(b"lua_debug> ")];
         loop {
             lua_settop(lstate, 0);
             let mut input = TV_INITIAL_VALUE;
-            get_user_input(input_args.args(), &mut input, false, false);
+            get_user_input(&input_args, &mut input, false, false);
 
             if ui_has(kUICmdline) {
                 snprintf(
                     line.as_mut_ptr(),
                     IOSIZE as size_t,
                     c"lua_debug> %s".as_ptr(),
-                    input.string_or_null(),
+                    // A null `%s` is printed the way the C library prints it.
+                    input.string_ref().map_or(ptr::null(), ThinCString::as_ptr),
                 );
                 ui_ext_cmdline_block_append(0, cstr::in_chars(&line).to_bytes());
             } else {
                 msg_putchar(b'\n' as c_int);
             }
 
-            let done = input.v_type() != VAR_STRING
-                || input.string_or_null().is_null()
-                || *input.string_or_null() == 0
-                || cstr::eq_bytes(input.string_or_null(), b"cont");
-            if done {
+            // Done on anything but a String with text other than "cont".
+            let Some(text) = input
+                .string_ref()
+                .filter(|s| !s.is_empty() && s.as_bytes() != b"cont")
+            else {
                 tv_clear(&mut input);
                 if ui_has(kUICmdline) {
                     ui_ext_cmdline_block_leave();
                 }
                 return 0;
-            }
+            };
 
             if luaL_loadbuffer(
                 lstate,
-                input.string_or_null(),
-                cstr::bytes_at(input.string_or_null()).len(),
+                text.as_ptr(),
+                text.as_bytes().len(),
                 c"=(debug command)".as_ptr(),
             ) != 0
             {

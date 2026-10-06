@@ -429,7 +429,7 @@ fn qf_setprop_items_from_lines(
     let errorformat = match &what.efm {
         None => P_EFM.get(),
         Some(efm) => {
-            if efm.v_type() != VAR_STRING || efm.string_or_null().is_null() {
+            if efm.string_ref().is_none() {
                 return Err(QfError::BadValue);
             }
             XString::from_bytes(string_bytes(efm))
@@ -470,10 +470,7 @@ fn qf_setprop_context(mut qfl: Qfl, context: &TypVal) {
 
 /// Move the list's cursor to entry `idx`, or to the last entry for `"$"`.
 fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, idx: &TypVal) -> Result<(), QfError> {
-    let mut newidx = if idx.v_type() == VAR_STRING
-        && !idx.string_or_null().is_null()
-        && string_bytes(idx) == b"$"
-    {
+    let mut newidx = if idx.string_ref().is_some_and(|s| s.as_bytes() == b"$") {
         // Select the last entry in the list.
         qfl.count()
     } else {

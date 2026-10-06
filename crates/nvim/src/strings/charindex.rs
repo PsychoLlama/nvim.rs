@@ -16,8 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 
 use super::strict_bool_arg;
 use crate::eval::typval::{
@@ -25,8 +24,8 @@ use crate::eval::typval::{
     tv_check_for_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
 };
 use crate::mbyte::{char_at, char_len, cluster_len, mb_cptr2char_adv, mb_ptr2char_adv};
-use crate::memory::xmemdupz;
-use crate::types::{EvalFuncData, TypVal, VAR_STRING, VarNumber, int64_t, size_t};
+use crate::memory::ThinCString;
+use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t, size_t};
 
 /// The character-length rule a `countcc`/`comp` flag selects: composing
 /// characters counted separately, or folded into their base.
@@ -75,11 +74,11 @@ fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
     let mut numbuf = NumBuf::new();
     (*result).write_number(-1);
 
-    let str = numbuf.string_ptr_chk(&args[0]);
+    let bytes = numbuf.bytes_chk(&args[0]);
     let mut idx = tv_get_number_chk(&args[1]).unwrap_or(-1);
-    if str.is_null() || idx < 0 {
+    let Some(bytes) = bytes.filter(|_| idx >= 0) else {
         return;
-    }
+    };
 
     let utf16idx = if args.len() > 2 {
         match strict_bool_arg(&args[2]) {
@@ -91,8 +90,6 @@ fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
     };
 
     let char_len = CharLen::new(comp);
-    // SAFETY: `string_chk` answered a NUL-terminated string.
-    let bytes = unsafe { cstr::bytes_at(str) };
     let mut at = 0;
     while idx > 0 {
         let Some(rest) = bytes.get(at..).filter(|rest| !rest.is_empty()) else {
@@ -139,11 +136,11 @@ pub fn f_charidx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let str = numbuf.string_ptr_chk(&args[0]);
+    let bytes = numbuf.bytes_chk(&args[0]);
     let mut idx = tv_get_number_chk(&args[1]).unwrap_or(-1);
-    if str.is_null() || idx < 0 {
+    let Some(bytes) = bytes.filter(|_| idx >= 0) else {
         return;
-    }
+    };
 
     let mut countcc = false;
     let mut utf16idx = false;
@@ -155,9 +152,6 @@ pub fn f_charidx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let char_len = CharLen::new(countcc);
-    // SAFETY: the argument was checked to be a string, so it is
-    // NUL-terminated.
-    let bytes = unsafe { cstr::bytes_at(str) };
     let mut at: VarNumber = 0;
     let mut len: c_int = 0;
     while if utf16idx { idx >= 0 } else { at <= idx } {
@@ -188,16 +182,13 @@ pub fn f_strgetchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
 
-    let str = numbuf.string_ptr_chk(&args[0]);
-    if str.is_null() {
+    let Some(bytes) = numbuf.bytes_chk(&args[0]) else {
         return;
-    }
+    };
     let Ok(mut charidx) = tv_get_number_chk(&args[1]) else {
         return;
     };
 
-    // SAFETY: `string_chk` answered a NUL-terminated string.
-    let bytes = unsafe { cstr::bytes_at(str) };
     let mut byteidx: size_t = 0;
     while charidx >= 0 && byteidx < bytes.len() {
         if charidx == 0 {
@@ -225,7 +216,7 @@ pub fn f_strutf16len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         mb_ptr2char_adv
     };
 
-    let mut s = numbuf.string_ptr(&args[0]);
+    let mut s = numbuf.string(&args[0]).as_ptr();
     let mut len: VarNumber = 0;
     while unsafe { *s } != 0 {
         // Anything over U+FFFF is a surrogate pair: two units.
@@ -237,9 +228,7 @@ pub fn f_strutf16len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// "strcharpart()" function: a substring measured in characters.
 pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let p = numbuf.string_ptr(&args[0]);
-    // SAFETY: the argument was converted to a NUL-terminated string.
-    let bytes = unsafe { cstr::bytes_at(p) };
+    let bytes = numbuf.bytes(&args[0]);
     let slen = bytes.len();
 
     let mut nbyte: c_int = 0;
@@ -296,19 +285,15 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         len = slen as c_int - nbyte;
     }
 
-    result.write_empty(VAR_STRING);
-    let from = unsafe { p.offset(nbyte as isize) } as *const c_void;
-    let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
-    result.write_string_raw(part);
+    let part = &bytes[nbyte as usize..(nbyte + len) as usize];
+    result.write_string(Some(ThinCString::from_bytes(part)));
 }
 
 /// "strpart()" function: a substring measured in bytes, or -- with the
 /// fourth argument -- in characters starting from a byte offset.
 pub fn f_strpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let p = numbuf.string_ptr(&args[0]);
-    // SAFETY: the argument was converted to a NUL-terminated string.
-    let bytes = unsafe { cstr::bytes_at(p) };
+    let bytes = numbuf.bytes(&args[0]);
     let slen = bytes.len() as VarNumber;
 
     let start = tv_get_number_chk(&args[1]);
@@ -344,10 +329,8 @@ pub fn f_strpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         len = (off - n as int64_t) as VarNumber;
     }
 
-    result.write_empty(VAR_STRING);
-    let from = unsafe { p.offset(n as isize) } as *const c_void;
-    let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
-    result.write_string_raw(part);
+    let part = &bytes[n as usize..(n + len) as usize];
+    result.write_string(Some(ThinCString::from_bytes(part)));
 }
 
 /// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.
@@ -363,11 +346,11 @@ pub fn f_utf16idx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let str = numbuf.string_ptr_chk(&args[0]);
+    let bytes = numbuf.bytes_chk(&args[0]);
     let mut idx = tv_get_number_chk(&args[1]).unwrap_or(-1);
-    if str.is_null() || idx < 0 {
+    let Some(bytes) = bytes.filter(|_| idx >= 0) else {
         return;
-    }
+    };
 
     let mut countcc = false;
     let mut charidx = false;
@@ -379,9 +362,6 @@ pub fn f_utf16idx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let char_len = CharLen::new(countcc);
-    // SAFETY: the argument was checked to be a string, so it is
-    // NUL-terminated.
-    let bytes = unsafe { cstr::bytes_at(str) };
     let mut len: c_int = 0;
     // The answer is the index of the *start* of the character the offset
     // lands in, so it trails `len` by one iteration.

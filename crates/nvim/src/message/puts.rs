@@ -11,7 +11,6 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::ex_docmd::cmdmod_filters_out;
 use crate::fprintf;
@@ -439,12 +438,11 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
         // copy is what gives it a terminator of its own. Upstream handed
         // over the *pointer* instead, so a caller that asked for a prefix
         // of a longer string had the whole of it printed.
-        let text = cstr::owned(bytes);
-        // The frame names the copy above, which this frame frees.
-        let argv = CallFrame::naming([TypVal::string_raw(text.as_ptr().cast_mut())]);
+        // The array owns the copy and releases it.
+        let argv = [TypVal::string_from(bytes)];
         let mut rettv = TV_INITIAL_VALUE;
         // SAFETY: one argument, and `rettv` is a live unset value.
-        unsafe { callback_call(on_print_cb(), argv.args(), &mut rettv) };
+        unsafe { callback_call(on_print_cb(), &argv, &mut rettv) };
         tv_clear(&mut rettv);
         return;
     }

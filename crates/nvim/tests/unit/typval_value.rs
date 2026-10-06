@@ -1430,16 +1430,18 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
         let two = Tv::Int(2).build();
         let mut first = NumBuf::new();
         let mut second = NumBuf::new();
-        let a = first.string_ptr(&one);
-        let b = second.string_ptr(&two);
-        assert_ne!(a, b);
-        assert_eq!(CStr::from_ptr(a).to_bytes(), b"1");
-        assert_eq!(CStr::from_ptr(b).to_bytes(), b"2");
+        let a = first.string(&one);
+        let b = second.string(&two);
+        assert_ne!(a.as_ptr(), b.as_ptr());
+        assert_eq!(a.to_bytes(), b"1");
+        assert_eq!(b.to_bytes(), b"2");
 
         // The caller's buffer is this frame's, so allocating it does not
         // land in the log the rows below assert over.
         let mut buffer = NumBuf::new();
-        let scratch: *const c_char = buffer.as_mut_ptr().cast_const();
+        // A Number is formatted at the start of the buffer, so its answer's
+        // address is the buffer's own.
+        let scratch: *const c_char = buffer.string(&TypVal::Number(0)).as_ptr();
 
         for (name, checked, in_buffer) in [
             ("string_buf", false, scratch),
@@ -1451,8 +1453,8 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 let got = check_emsg(
                     log.editor(),
                     || match name {
-                        "string_buf" => buffer.string_ptr(tv),
-                        _ => buffer.string_ptr_chk(tv),
+                        "string_buf" => buffer.string(tv).as_ptr(),
+                        _ => buffer.string_chk(tv).map_or(ptr::null(), CStr::as_ptr),
                     },
                     *emsg,
                 );

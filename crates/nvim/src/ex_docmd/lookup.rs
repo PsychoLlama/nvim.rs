@@ -11,13 +11,12 @@
 use crate::cstr;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 use crate::eval::typval::NumBuf;
 use crate::ex_docmd::address::skip_range;
 use crate::ex_docmd::modifier::{CMDMODS, shared_prefix};
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_PRINT, cmdidxs1, cmdidxs2, cmdnames, command_count};
-use crate::memory::xstrdup;
+use crate::memory::ThinCString;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::startup::getout;
@@ -310,28 +309,27 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 /// literally.
 pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut name = numbuf.string_ptr(&args[0]) as *mut c_char;
-    result.write_string_raw(ptr::null_mut());
-    while byte(name) == ':' as c_int {
-        name = unsafe { name.add(1) };
-    }
-    // SAFETY: `name` is NUL-terminated; a null context is "not completing".
-    name = unsafe { name.add(skip_range(cstr::bytes_at(name), None)) };
+    let name = numbuf.bytes(&args[0]);
+    result.write_string(None);
+    let name = &name[name.iter().take_while(|&&b| b == b':').count()..];
+    // A null context is "not completing".
+    let name = &name[skip_range(name, None)..];
     let mut ea = blank_exarg();
-    // SAFETY: `name` walks the NUL-terminated argument.
-    ea.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(name) });
+    ea.line = CmdLine::from_bytes(name);
     // `:2match`/`:3match` carry their count in the name.
-    ea.line.cmd = usize::from(byte(name) == '2' as c_int || byte(name) == '3' as c_int);
+    ea.line.cmd = usize::from(matches!(name.first(), Some(b'2' | b'3')));
     if find_ex_command(&mut ea, None).is_none() || ea.cmdidx == CmdIdx::SIZE {
         return;
     }
-    unsafe {
-        (*result).write_string_raw(xstrdup(if is_user_cmd(ea.cmdidx) {
-            get_user_command_name(ea.useridx, ea.cmdidx)
-        } else {
-            cmdnames[ea.cmdidx.index()].cmd_name
-        }))
+    let full = if is_user_cmd(ea.cmdidx) {
+        unsafe { get_user_command_name(ea.useridx, ea.cmdidx) }
+    } else {
+        cmdnames[ea.cmdidx.index()].cmd_name
     };
+    // SAFETY: a command's NUL-terminated name, live for the copy.
+    result.write_string(Some(ThinCString::from_cstr(unsafe {
+        CStr::from_ptr(full)
+    })));
 }
 
 /// A zeroed `ExArg` with the two fields a lookup needs set the way
@@ -431,12 +429,6 @@ fn prefix_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
 fn skipwhite(p: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::charset::skipwhite(p) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
 }
 
 /// The byte at `p[i]`, as the C's `*(p + i)` reads it.

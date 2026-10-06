@@ -6,8 +6,7 @@
 //! to own ([`TypVal::string`], [`TypVal::write_string`]); the takers move it
 //! back out and leave the null string behind.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -136,43 +135,6 @@ impl TypVal {
     #[inline(always)]
     pub(crate) fn write_func_name(&mut self, name: Option<ThinCString>) {
         self.overwrite(TypVal::func(name));
-    }
-
-    // TRANSIENT: the pointer forms below go once their callers convert.
-
-    /// TRANSIENT.
-    #[inline(always)]
-    pub(crate) fn string_or_null(&self) -> *mut ::core::ffi::c_char {
-        self.string_ref()
-            .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut())
-    }
-
-    /// TRANSIENT.
-    #[inline(always)]
-    pub(crate) fn func_name_or_null(&self) -> *mut ::core::ffi::c_char {
-        self.func_name()
-            .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut())
-    }
-
-    /// TRANSIENT.
-    #[inline(always)]
-    pub(crate) fn write_string_raw(&mut self, raw: *mut ::core::ffi::c_char) {
-        // SAFETY: TRANSIENT -- the callers hand over an owned block.
-        self.write_string(unsafe { ThinCString::from_raw(raw) });
-    }
-
-    /// TRANSIENT.
-    #[inline(always)]
-    pub(crate) fn string_raw(raw: *mut ::core::ffi::c_char) -> TypVal {
-        // SAFETY: TRANSIENT -- the callers hand over an owned block.
-        TypVal::string(unsafe { ThinCString::from_raw(raw) })
-    }
-
-    /// TRANSIENT.
-    #[inline(always)]
-    pub(crate) fn func_raw(raw: *mut ::core::ffi::c_char) -> TypVal {
-        // SAFETY: TRANSIENT -- the callers hand over an owned block.
-        TypVal::func(unsafe { ThinCString::from_raw(raw) })
     }
 
     /// Append `tail` to this String in place, growing its allocation. False,

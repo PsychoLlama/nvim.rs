@@ -19,7 +19,6 @@
 use crate::cstr;
 use crate::strings::has_bytes;
 use core::ffi::{CStr, c_char, c_int};
-use core::mem::ManuallyDrop;
 use core::ptr;
 
 use crate::eval::pattern_match;
@@ -32,7 +31,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{suppress_errthrow, trylevel};
 use crate::getchar::state::got_int;
 use crate::guard::{MsgBump, Suppress};
-use crate::memory::{XString, xfree, xstrdup};
+use crate::memory::{ThinCString, XString, xfree, xstrdup};
 use crate::message::state::{
     called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
     emsg_assert_fails_msg, emsg_on_display, in_assert_fails, lines_left, msg_col, need_wait_return,
@@ -66,9 +65,11 @@ enum FailsCheck {
 
 /// The mismatch a failed `assert_fails()` describes.
 struct FailsMismatch {
-    /// The pattern the caller gave, quoted in the message. Null when the
-    /// expectation is printed from the argument itself instead.
-    expected_str: *const c_char,
+    /// The pattern the caller gave, quoted in the message, copied out of
+    /// the scratch buffer it may have been rendered into (a Number item),
+    /// which does not outlive the check. `None` when the expectation is
+    /// printed from the argument itself instead.
+    expected_str: Option<ThinCString>,
     /// Which `argvars` slot the unmet expectation came from: 1, 3 or 4.
     index: usize,
     /// The error text that actually arrived, for `index == 1`.
@@ -117,12 +118,12 @@ unsafe fn check_reported_error(
 
     match args.get(1).map_or(VAR_UNKNOWN, TypVal::v_type) {
         VAR_STRING => {
-            let expected = buf.string_ptr_chk(&args[1]);
-            if !expected.is_null() && unsafe { has_bytes(reported, cstr::bytes_at(expected)) } {
+            let expected = buf.string_chk(&args[1]);
+            if expected.is_some_and(|expected| has_bytes(reported, expected.to_bytes())) {
                 return FailsCheck::Matched;
             }
             FailsCheck::Mismatch(FailsMismatch {
-                expected_str: ptr::null(),
+                expected_str: None,
                 index: 1,
                 actual,
             })
@@ -136,13 +137,12 @@ unsafe fn check_reported_error(
             let items = list_items(unsafe { list.as_ref() });
             let mut tv: *const TypVal = &raw const items[0].li_tv;
             // SAFETY: an item of the list borrowed above.
-            let mut expected = buf.string_ptr_chk(unsafe { &*tv });
-            if expected.is_null() {
+            let Some(expected) = buf.string_chk(unsafe { &*tv }) else {
                 return FailsCheck::Abandon;
-            }
-            if !unsafe { pattern_match(cstr::at(expected), cstr::at(actual), false) } {
+            };
+            if !unsafe { pattern_match(expected, cstr::at(actual), false) } {
                 return FailsCheck::Mismatch(FailsMismatch {
-                    expected_str: expected,
+                    expected_str: Some(ThinCString::from_cstr(expected)),
                     index: 1,
                     actual,
                 });
@@ -155,15 +155,14 @@ unsafe fn check_reported_error(
             *tofree = actual;
             tv = &raw const items[1].li_tv;
             // SAFETY: as above.
-            expected = buf.string_ptr_chk(unsafe { &*tv });
-            if expected.is_null() {
+            let Some(expected) = buf.string_chk(unsafe { &*tv }) else {
                 return FailsCheck::Abandon;
-            }
-            if unsafe { pattern_match(cstr::at(expected), cstr::at(actual), false) } {
+            };
+            if unsafe { pattern_match(expected, cstr::at(actual), false) } {
                 return FailsCheck::Matched;
             }
             FailsCheck::Mismatch(FailsMismatch {
-                expected_str: expected,
+                expected_str: Some(ThinCString::from_cstr(expected)),
                 index: 1,
                 actual,
             })
@@ -191,7 +190,7 @@ unsafe fn check_error_position(args: &[TypVal], context: &CStr) -> FailsCheck {
     let want_lnum = args[3].number_or_zero();
     if want_lnum >= 0 && want_lnum != emsg_assert_fails_lnum.get() as VarNumber {
         return FailsCheck::Mismatch(FailsMismatch {
-            expected_str: ptr::null(),
+            expected_str: None,
             index: 3,
             actual: ptr::null_mut(),
         });
@@ -202,14 +201,12 @@ unsafe fn check_error_position(args: &[TypVal], context: &CStr) -> FailsCheck {
     if !args.get(4).is_some_and(|arg| arg.v_type() == VAR_STRING) {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FIFTH_ARGUMENT);
     }
-    let want_context = args[4].string_or_null();
-    if want_context.is_null()
-        || unsafe { pattern_match(cstr::at(want_context), cstr::at(context.as_ptr()), false) }
-    {
+    let want_context = args[4].string_cstr();
+    if want_context.is_none_or(|want| pattern_match(want, context, false)) {
         return FailsCheck::Matched;
     }
     FailsCheck::Mismatch(FailsMismatch {
-        expected_str: ptr::null(),
+        expected_str: None,
         index: 4,
         actual: ptr::null_mut(),
     })
@@ -225,19 +222,22 @@ unsafe fn report_fails_mismatch(
     context: &CStr,
     mismatch: &FailsMismatch,
 ) {
-    // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
-    let actual_tv = ManuallyDrop::new(match mismatch.index {
+    // SAFETY: the caller's arguments; `actual_tv` holds a copy of its own.
+    let actual_tv = match mismatch.index {
         3 => TypVal::Number(emsg_assert_fails_lnum.get() as VarNumber),
-        4 => TypVal::string_raw(context.as_ptr().cast_mut()),
-        _ => TypVal::string_raw(mismatch.actual),
-    });
+        4 => TypVal::string_from(context.to_bytes()),
+        _ => TypVal::string(unsafe { cstr::at_opt(mismatch.actual) }.map(ThinCString::from_cstr)),
+    };
     let mut ga = prepare_assert_error();
     let gap = &mut ga;
     unsafe {
         fill_assert_error(
             gap,
             args.get(2),
-            mismatch.expected_str,
+            mismatch
+                .expected_str
+                .as_ref()
+                .map_or(ptr::null(), ThinCString::as_ptr),
             Some(&args[mismatch.index]),
             &actual_tv,
             AssertType::Fails,
@@ -297,10 +297,10 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     // hit-enter prompt.
     let no_prompt = Suppress::wait_return();
 
-    let cmd = numbuf.string_ptr_chk(&args[0]);
-    // SAFETY: the argument's own NUL-terminated string, or the number
-    // formatted into `numbuf`.
-    let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
+    // An argument with no string form has reported itself and runs as the
+    // empty command.
+    let cmd = numbuf.string_chk(&args[0]).unwrap_or(c"");
+    let _ = do_cmdline_cmd(cmd);
 
     // Reset here for any errors reported below.
     trylevel.set(save_trylevel);
@@ -309,7 +309,7 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     if called_emsg.get() == called_emsg_before {
         let mut ga = prepare_assert_error();
         ga_concat_lit(&mut ga, c"command did not fail: ");
-        unsafe { assert_append_cmd_or_arg(&mut ga, args, cmd) };
+        unsafe { assert_append_cmd_or_arg(&mut ga, args, cmd.as_ptr()) };
         report_assert_error(&ga);
         result.write_number(1);
     } else if args.len() > 1 {
@@ -327,7 +327,7 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
             FailsCheck::Matched | FailsCheck::Abandon => {}
             FailsCheck::BadArg(msg) => wrong_arg_msg = Some(msg),
             FailsCheck::Mismatch(mismatch) => {
-                unsafe { report_fails_mismatch(args, cmd, context, &mismatch) };
+                unsafe { report_fails_mismatch(args, cmd.as_ptr(), context, &mismatch) };
                 result.write_number(1);
             }
         }

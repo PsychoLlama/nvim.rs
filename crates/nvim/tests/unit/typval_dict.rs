@@ -20,7 +20,7 @@ use neovim::eval::typval::{
 use neovim::guard::{Suppress, sandbox};
 use neovim::mbyte::convert_setup;
 use neovim::memory::{ThinCString, xfree, xmalloc, xstrdup};
-use neovim::types::{Callback, Dict, Failed, VarLock, VimConv};
+use neovim::types::{Callback, Dict, Failed, TypVal, VarLock, VimConv};
 use std::ffi::c_int;
 
 use crate::support::alloc::{self, AllocLog};
@@ -464,7 +464,9 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
     // SAFETY: the buffer and the dict are this case's own.
     unsafe {
         let mut scratch = NumBuf::new();
-        let buf: *mut c_char = scratch.as_mut_ptr();
+        // A Number is formatted at the start of the buffer, so its answer's
+        // address is the buffer's own.
+        let buf: *const c_char = scratch.string(&TypVal::Number(0)).as_ptr();
         let mut get = |d: *const Dict, key: &str, is_float: bool| -> Option<(String, bool)> {
             log.clear();
             let ret = check_emsg(
@@ -486,7 +488,7 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
             (!ret.is_null()).then(|| {
                 (
                     CStr::from_ptr(ret).to_string_lossy().into_owned(),
-                    ret == buf.cast_const(),
+                    ret == buf,
                 )
             })
         };
@@ -531,7 +533,9 @@ fn getting_a_checked_string_falls_back_to_the_default() {
     // SAFETY: the buffer, the default and the dict are this case's own.
     unsafe {
         let mut scratch = NumBuf::new();
-        let buf: *mut c_char = scratch.as_mut_ptr();
+        // A Number is formatted at the start of the buffer, so its answer's
+        // address is the buffer's own.
+        let buf: *const c_char = scratch.string(&TypVal::Number(0)).as_ptr();
         let def = xstrdup(cstr("DEFAULT").as_ptr());
         let mut get =
             |d: *const Dict, key: &[u8], is_float: bool| -> Option<(String, bool, bool)> {
@@ -560,7 +564,7 @@ fn getting_a_checked_string_falls_back_to_the_default() {
                 (!ret.is_null()).then(|| {
                     (
                         CStr::from_ptr(ret).to_string_lossy().into_owned(),
-                        ret == buf.cast_const(),
+                        ret == buf,
                         ret == def.cast_const(),
                     )
                 })

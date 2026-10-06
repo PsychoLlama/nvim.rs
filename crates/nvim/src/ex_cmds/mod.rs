@@ -409,11 +409,10 @@ unsafe fn list_oldfiles(list: *mut List) {
         }
         nr += 1;
         let value = &item.li_tv;
-        // SAFETY: `value` is that item's own.
-        if !message_filtered(unsafe { cstr::at(number.string_ptr(value)) }) {
+        if !message_filtered(number.string(value)) {
             msg_outnum(nr);
             say::puts(c": ");
-            msg_display(unsafe { cstr::at(text.string_ptr(value)) }, 0, false);
+            msg_display(text.string(value), 0, false);
             say::clear_eos();
             say::putchar('\n' as ::core::ffi::c_int);
             os_breakcheck();

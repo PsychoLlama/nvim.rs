@@ -172,9 +172,9 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
                 numbuf.dict_string(d, b"type"),
             )
         }
-        None => (exclusive_by_default, ptr::null()),
+        None => (exclusive_by_default, None),
     };
-    let spec: *const c_char = if spec.is_null() { c"v".as_ptr() } else { spec };
+    let spec: *const c_char = spec.unwrap_or(c"v").as_ptr();
     let (region_type, block_width) = unsafe { parse_type(spec) }?;
 
     let findbuf = if fnum1 != 0 {

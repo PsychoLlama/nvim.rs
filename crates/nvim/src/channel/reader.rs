@@ -17,7 +17,7 @@
 
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::memory::xstrdup;
+use crate::memory::ThinCString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_void};
@@ -255,16 +255,18 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
 
     // SAFETY: the caller's live channel and reader. Every slot is this
     // frame's own value, released when the array goes out of scope --
-    // which is why the stream name is duplicated rather than borrowed.
+    // which is why the stream name is copied rather than borrowed.
     argv[0].write_number(unsafe { (*chan).id }.cast_signed());
     let cb = if reader.is_null() {
         argv[1].write_number(VarNumber::from(unsafe { (*chan).exit_status }));
-        argv[2].write_string_raw(unsafe { xstrdup(c"exit".as_ptr()) });
+        argv[2].write_string(Some(ThinCString::from_cstr(c"exit")));
         unsafe { &raw mut (*chan).on_exit }
     } else {
         argv[1].write_list(Some(unsafe { reader_lines(reader) }));
         unsafe { (*reader).buffer.clear() };
-        argv[2].write_string_raw(unsafe { xstrdup((*reader).type_0) });
+        argv[2].write_string(Some(ThinCString::from_bytes(unsafe {
+            cstr::bytes_at((*reader).type_0)
+        })));
         unsafe { &raw mut (*reader).cb }
     };
 

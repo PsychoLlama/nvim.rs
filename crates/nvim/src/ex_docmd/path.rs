@@ -8,8 +8,8 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::eval::typval::CallFrame;
 use crate::guard::Lock;
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -41,7 +41,7 @@ use crate::os::state::{globaldir, last_chdir_reason};
 use crate::runtime::state::current_sctx;
 
 use crate::message::msg_ptr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 
 use crate::option::{cpo_has, option_last_set};
 
@@ -83,11 +83,10 @@ pub(crate) fn get_findfunc_callback() -> *mut Callback {
 /// `cmdcomplete` tells the callback whether this is completion (which may
 /// answer many names) or a real `:find` (which wants the one at `count`).
 /// The text lock is held across the call: the callback must not edit.
-pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> Option<ListRef> {
+pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<ListRef> {
     let saved_sctx: ScriptCtx = current_sctx.get();
-    // The pattern is the caller's, so the frame names it rather than
-    // owning it.
-    let args = CallFrame::naming([TypVal::string_raw(pat), TypVal::Bool(cmdcomplete)]);
+    // The arguments own a copy of the pattern, released when they drop.
+    let args = [TypVal::string_from(pat), TypVal::Bool(cmdcomplete)];
 
     let locked = Lock::text();
     // Errors are reported against the script that *set* the option, not
@@ -96,7 +95,7 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> Opti
     let cb = get_findfunc_callback();
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_empty(VAR_UNKNOWN);
-    let called = unsafe { callback_call(cb, args.args(), &mut rettv) };
+    let called = unsafe { callback_call(cb, &args, &mut rettv) };
     current_sctx.set(saved_sctx);
     drop(locked);
 
@@ -124,8 +123,7 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> Opti
 /// Complete a `:find` argument through 'findfunc': the strings in the list
 /// it answers, the rest skipped.
 pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
-    // The function only reads the pattern; the frame names it.
-    let held = call_findfunc(pat.as_ptr().cast_mut(), kBoolVarTrue).ok_or(Failed)?;
+    let held = call_findfunc(pat.to_bytes(), kBoolVarTrue).ok_or(Failed)?;
     if list_len(Some(&held)) == 0 {
         return Err(Failed);
     }
@@ -145,22 +143,23 @@ pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Result<Vec<XString>, Failed
 pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> *mut c_char {
     let mut ret_fname: *mut c_char = ptr::null_mut();
     let findarg = cstr::owned(findarg);
-    let findarg = findarg.as_ptr().cast_mut();
 
-    let mut held = call_findfunc(findarg, kBoolVarFalse);
+    let mut held = call_findfunc(findarg.to_bytes(), kBoolVarFalse);
     let fname_count = list_len(held.as_deref());
     if fname_count == 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let findarg = unsafe { c_str(findarg) };
+        let findarg = msg_cstr(&findarg);
         semsg!("E345: Can't find file \"{findarg}\" in path");
     } else if count > fname_count {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let findarg = unsafe { c_str(findarg) };
+        let findarg = msg_cstr(&findarg);
         semsg!("E347: No more file \"{findarg}\" found in path");
     } else {
         let li = list_find(held.as_deref_mut(), count - 1);
         if !li.is_null() && unsafe { (*li).li_tv.v_type() } as c_uint == VAR_STRING as c_uint {
-            ret_fname = unsafe { xstrdup((*li).li_tv.string_or_null()) };
+            // SAFETY: the item `list_find` found in the list held above.
+            // The null string, which upstream's `xstrdup` crashed on, reads
+            // as the empty one.
+            let name = unsafe { (*li).li_tv.string_cstr() }.unwrap_or(c"");
+            ret_fname = ThinCString::from_cstr(name).into_raw();
         }
     }
     drop(held);

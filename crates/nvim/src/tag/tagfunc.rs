@@ -17,7 +17,7 @@ use crate::eval::typval::{CallFrame, DictRef, list_iter};
 use crate::optionstr::OptString;
 use crate::types::TypVal;
 use crate::types::{
-    FAIL, OK, OptError, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, kSpecialVarNull,
+    FAIL, OK, OptError, OptionSetFlags, VAR_DICT, VAR_LIST, VarLock, kSpecialVarNull,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -109,8 +109,8 @@ pub(crate) unsafe fn find_tagfunc_tags(
     flags: c_int,
     buf_ffname: *mut c_char,
 ) -> c_int {
-    // SAFETY: the caller's promise. `flag_string` and `info` outlive the
-    // call they are arguments to, and the list the callback answers is
+    // SAFETY: the caller's promise. `info` outlives the call it is an
+    // argument to, and the list the callback answers is
     // cleared before returning.
     // The tag stack entry the jump came from, whose `user_data` the
     // function may want. One past the top means nothing was popped, so
@@ -130,7 +130,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
 
     // Which of "c" (the tag is at the cursor), "i" (insert-mode
     // completion) and "r" (the pattern is a regexp) apply.
-    let mut flag_string = [0 as c_char; 4];
+    let mut flag_string = [0u8; 3];
     let mut at = 0;
     for (wanted, flag) in [
         (g_tag_at_cursor.get(), b'c'),
@@ -138,7 +138,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
         (flags & TAG_REGEXP as c_int != 0, b'r'),
     ] {
         if wanted {
-            flag_string[at] = flag as c_char;
+            flag_string[at] = flag;
             at += 1;
         }
     }
@@ -154,15 +154,15 @@ pub(crate) unsafe fn find_tagfunc_tags(
     if !buf_ffname.is_null() {
         unsafe { add_str(info, c"buf_ffname", buf_ffname) };
     }
-    // Two of the caller's strings and the dictionary allocated above: the
-    // frame names all three and releases none, so the handle outlives it.
+    // Copies of the pattern and the flags, which the frame owns and
+    // releases, and the dictionary allocated above, which it only names,
+    // so the handle outlives it.
     // SAFETY: the dictionary this body owns, live for the call.
     let named = unsafe { DictRef::owning(info) };
-    let args = CallFrame::naming([
-        TypVal::string_raw(pat),
-        TypVal::string_raw(flag_string.as_mut_ptr()),
-        TypVal::dict(named),
-    ]);
+    let mut args = CallFrame::<3>::new();
+    args.push_owned(TypVal::string_from(unsafe { cstr::bytes_at(pat) }));
+    args.push_owned(TypVal::string_from(&flag_string[..at]));
+    args.push_naming(TypVal::dict(named));
 
     let mut rettv = TV_INITIAL_VALUE;
     let save_pos = Win::current().w_cursor;
@@ -230,13 +230,13 @@ pub(crate) unsafe fn find_tagfunc_tags(
 /// # Safety
 /// `d` must be a live dictionary.
 unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
-    // SAFETY: the caller's promise; every value is a NUL-terminated
-    // string, and the buffer is sized before anything is written.
-    let fields = unsafe { string_fields(d) };
-    let mut name = ptr::null_mut::<c_char>();
-    let mut fname = ptr::null_mut::<c_char>();
-    let mut cmd = ptr::null_mut::<c_char>();
-    let mut kind = ptr::null_mut::<c_char>();
+    // SAFETY: the caller's promise; every field borrows the dictionary,
+    // which outlives the walk.
+    let fields = string_fields(unsafe { &*d });
+    let mut name = None;
+    let mut fname = None;
+    let mut cmd = None;
+    let mut kind = None;
     let mut has_extra = false;
 
     // Upstream's own sizing: two for the leading bytes, then a
@@ -244,14 +244,14 @@ unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
     // key and colon, plus two for the `;"`.
     let mut len = 2;
     for field in &fields {
-        len += unsafe { cstr::bytes_at(field.value) }.len() + 1;
-        match field.key().to_bytes() {
-            b"name" => name = field.value,
-            b"filename" => fname = field.value,
-            b"cmd" => cmd = field.value,
+        len += field.value.count_bytes() + 1;
+        match field.key {
+            b"name" => name = Some(field.value),
+            b"filename" => fname = Some(field.value),
+            b"cmd" => cmd = Some(field.value),
             b"kind" => {
                 has_extra = true;
-                kind = field.value;
+                kind = Some(field.value);
             }
             key => {
                 has_extra = true;
@@ -262,13 +262,13 @@ unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
     if has_extra {
         len += 2;
     }
-    if name.is_null() || fname.is_null() || cmd.is_null() {
+    let (Some(name), Some(fname), Some(cmd)) = (name, fname, cmd) else {
         return None;
-    }
+    };
 
     if flags & TAG_NAMES as c_int != 0 {
         // Only the name is wanted.
-        let bytes = unsafe { CStr::from_ptr(name) }.to_bytes_with_nul();
+        let bytes = name.to_bytes_with_nul();
         let mut mfp = Match::zeroed(bytes.len());
         mfp.bytes().copy_from_slice(bytes);
         return Some(mfp);
@@ -279,28 +279,25 @@ unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
     // and it names no tags file.
     out.push(MT_GL_OTH as u8 + 1);
     out.push(TAG_SEP as u8);
-    out.extend_from_slice(unsafe { CStr::from_ptr(name) }.to_bytes());
+    out.extend_from_slice(name.to_bytes());
     out.push(b'\t');
-    out.extend_from_slice(unsafe { CStr::from_ptr(fname) }.to_bytes());
+    out.extend_from_slice(fname.to_bytes());
     out.push(b'\t');
-    out.extend_from_slice(unsafe { CStr::from_ptr(cmd) }.to_bytes());
+    out.extend_from_slice(cmd.to_bytes());
     if has_extra {
         out.extend_from_slice(b";\"");
-        if !kind.is_null() {
+        if let Some(kind) = kind {
             out.push(b'\t');
-            out.extend_from_slice(unsafe { CStr::from_ptr(kind) }.to_bytes());
+            out.extend_from_slice(kind.to_bytes());
         }
         for field in &fields {
-            if matches!(
-                field.key().to_bytes(),
-                b"name" | b"filename" | b"cmd" | b"kind"
-            ) {
+            if matches!(field.key, b"name" | b"filename" | b"cmd" | b"kind") {
                 continue;
             }
             out.push(b'\t');
-            out.extend_from_slice(field.key().to_bytes());
+            out.extend_from_slice(field.key);
             out.push(b':');
-            out.extend_from_slice(unsafe { CStr::from_ptr(field.value) }.to_bytes());
+            out.extend_from_slice(field.value.to_bytes());
         }
     }
     out.push(0);
@@ -311,18 +308,11 @@ unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
     Some(mfp)
 }
 
-/// One string-valued entry of a `'tagfunc'` result dictionary.
-struct Field {
-    /// Points into the dictionary item, which outlives the walk.
-    key: *const c_char,
-    value: *mut c_char,
-}
-
-impl Field {
-    fn key(&self) -> &CStr {
-        // SAFETY: the caller's promise; a dict key is NUL-terminated.
-        unsafe { CStr::from_ptr(self.key) }
-    }
+/// One string-valued entry of a `'tagfunc'` result dictionary, borrowed
+/// from the item.
+struct Field<'a> {
+    key: &'a [u8],
+    value: &'a CStr,
 }
 
 /// The string-valued entries of a dictionary, in hash order.
@@ -330,24 +320,15 @@ impl Field {
 /// Collected once because upstream walks the same table twice — first to
 /// size the match, then to write it — and both walks skip anything that is
 /// not a string.
-///
-/// # Safety
-/// `d` must be a live dictionary.
-unsafe fn string_fields(d: *mut Dict) -> Vec<Field> {
-    let mut fields = Vec::new();
-    // SAFETY: the caller's promise; every live item's key and value are
-    // part of the dictionary, which outlives the borrows taken here.
-    let d = unsafe { &*d };
-    for item in d.items() {
-        let value = item.di_tv.string_or_null();
-        if item.di_tv.v_type() == VAR_STRING && !value.is_null() {
-            fields.push(Field {
-                key: item.di_key.as_ptr(),
+fn string_fields(d: &Dict) -> Vec<Field<'_>> {
+    d.items()
+        .filter_map(|item| {
+            item.di_tv.string_cstr().map(|value| Field {
+                key: item.di_key.bytes(),
                 value,
-            });
-        }
-    }
-    fields
+            })
+        })
+        .collect()
 }
 
 /// [`tv_dict_add_str`] with the key's length taken from the literal.

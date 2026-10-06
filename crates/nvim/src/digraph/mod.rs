@@ -31,7 +31,7 @@ use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::Key;
 use crate::mapping::do_map;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
-use crate::memory::{xfree, xmemdupz};
+use crate::memory::{ThinCString, xfree};
 use crate::message::state::msg_col;
 use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
 use crate::normal::add_to_showcmd;
@@ -512,14 +512,10 @@ fn set_bool_ret(result: &mut TypVal, value: bool) {
 /// `digraph_get()`.
 pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string_raw(core::ptr::null_mut());
-    let digraphs = numbuf.string_ptr_chk(&args[0]);
-    if digraphs.is_null() {
+    result.write_string(None);
+    let Some(bytes) = numbuf.bytes_chk(&args[0]) else {
         return;
-    }
-    // SAFETY: a non-null `tv_get_string_chk` result is a NUL-terminated
-    // string owned by the typval, which outlives this call.
-    let bytes = unsafe { CStr::from_ptr(digraphs).to_bytes() };
+    };
     if bytes.len() != 2 {
         crate::semsg!(
             "E1214: Digraph must be just two characters: {}",
@@ -530,12 +526,9 @@ pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // The chars go through `char` in C, hence the sign extension.
     let code = digraph_get(bytes[0] as i8 as c_int, bytes[1] as i8 as c_int, false);
     let mut buf = [0u8; 7];
-    // SAFETY: `utf_char2bytes` writes at most six bytes into `buf`, and
-    // `xmemdupz` copies exactly the `len` it wrote.
+    // SAFETY: `utf_char2bytes` writes at most six bytes into `buf`.
     let len = unsafe { utf_char2bytes(code, buf.as_mut_ptr() as *mut c_char) } as usize;
-    unsafe {
-        (*result).write_string_raw(xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char)
-    };
+    result.write_string(Some(ThinCString::from_bytes(&buf[..len])));
 }
 
 /// `digraph_getlist()`.

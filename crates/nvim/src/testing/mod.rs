@@ -110,15 +110,13 @@ unsafe fn assert_equal_common(args: &[TypVal], atype: AssertType) -> c_int {
 unsafe fn assert_match_common(args: &[TypVal], atype: AssertType) -> c_int {
     let mut buf1 = NumBuf::new();
     let mut buf2 = NumBuf::new();
-    // SAFETY: the caller's arguments, and two scratch buffers of the size the
-    // `_buf_chk` contract asks for.
-    let pat = buf1.string_ptr_chk(&args[0]);
-    let text = buf2.string_ptr_chk(&args[1]);
-    if pat.is_null()
-        || text.is_null()
-        || unsafe { pattern_match(cstr::at(pat), cstr::at(text), false) }
-            == (atype == AssertType::Match)
-    {
+    // Both arguments are read, so two bad ones report two errors.
+    let pat = buf1.string_chk(&args[0]);
+    let text = buf2.string_chk(&args[1]);
+    let (Some(pat), Some(text)) = (pat, text) else {
+        return 0;
+    };
+    if pattern_match(pat, text, false) == (atype == AssertType::Match) {
         return 0;
     }
     let mut ga = prepare_assert_error();
@@ -183,13 +181,14 @@ unsafe fn assert_append_cmd_or_arg(gap: &mut Vec<u8>, args: &[TypVal], cmd: *con
 /// `args` has one slot.
 unsafe fn assert_beeps(args: &[TypVal], no_beep: bool) -> c_int {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's arguments; `do_cmdline_cmd` runs user code, which
-    // is the whole point, and the flags around it are restored below.
-    let cmd = numbuf.string_ptr_chk(&args[0]);
+    // `do_cmdline_cmd` runs user code, which is the whole point, and the
+    // flags around it are restored below. An argument with no string form
+    // has reported itself and runs as the empty command.
+    let cmd = numbuf.string_chk(&args[0]).unwrap_or(c"");
     called_vim_beep.set(false);
     suppress_errthrow.set(true);
     emsg_silent.set(0);
-    let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
+    let _ = do_cmdline_cmd(cmd);
 
     let mut ret = 0;
     if called_vim_beep.get() == no_beep {
@@ -202,7 +201,7 @@ unsafe fn assert_beeps(args: &[TypVal], no_beep: bool) -> c_int {
                 c"command did not beep: "
             },
         );
-        unsafe { ga_concat_cstr(&mut ga, cmd) };
+        ga.extend_from_slice(cmd.to_bytes());
         report_assert_error(&ga);
         ret = 1;
     }
@@ -338,15 +337,14 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
 unsafe fn assert_equalfile(args: &[TypVal]) -> c_int {
     let mut buf1 = NumBuf::new();
     let mut buf2 = NumBuf::new();
-    // SAFETY: the caller's arguments and two scratch buffers of the size the
-    // `_buf_chk` contract asks for.
-    let fname1 = buf1.string_ptr_chk(&args[0]);
-    let fname2 = buf2.string_ptr_chk(&args[1]);
-    if fname1.is_null() || fname2.is_null() {
+    // Both arguments are read, so two bad ones report two errors.
+    let fname1 = buf1.string_chk(&args[0]);
+    let fname2 = buf2.string_chk(&args[1]);
+    let (Some(fname1), Some(fname2)) = (fname1, fname2) else {
         return 0;
-    }
+    };
 
-    let mut diff = unsafe { compare_files(fname1, fname2) };
+    let mut diff = unsafe { compare_files(fname1.as_ptr(), fname2.as_ptr()) };
     if diff.verdict_len == 0 {
         return 0;
     }
@@ -480,15 +478,14 @@ pub(crate) fn f_assert_equalfile(args: &[TypVal], result: &mut TypVal, _fptr: Ev
 /// `assert_exception(string[, msg])`.
 pub(crate) fn f_assert_exception(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the evaluator's argument vector and return slot.
-    let error = numbuf.string_ptr_chk(&args[0]);
+    let error = numbuf.string_chk(&args[0]);
     let thrown = unsafe { cstr::at(get_vim_var_str(Vv::Exception)) };
     if thrown.is_empty() {
         let mut ga = prepare_assert_error();
         ga_concat_lit(&mut ga, c"v:exception is not set");
         report_assert_error(&ga);
         result.write_number(1);
-    } else if !error.is_null() && !has_bytes(thrown, unsafe { cstr::bytes_at(error) }) {
+    } else if error.is_some_and(|error| !has_bytes(thrown, error.to_bytes())) {
         let mut ga = prepare_assert_error();
         unsafe {
             fill_assert_error(
@@ -546,7 +543,7 @@ pub(crate) fn f_assert_notmatch(args: &[TypVal], result: &mut TypVal, _fptr: Eva
 pub(crate) fn f_assert_report(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut ga = prepare_assert_error();
-    unsafe { ga_concat_cstr(&mut ga, numbuf.string_ptr(&args[0])) };
+    ga.extend_from_slice(numbuf.bytes(&args[0]));
     report_assert_error(&ga);
     result.write_number(1);
 }
@@ -577,6 +574,5 @@ pub(crate) fn f_test_garbagecollect_now(
 /// reported.
 pub(crate) fn f_test_write_list_log(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the evaluator's argument vector.
-    numbuf.string_ptr_chk(&args[0]);
+    let _ = numbuf.string_chk(&args[0]);
 }

@@ -603,7 +603,9 @@ unsafe fn item_string(
     match request.source {
         Source::Item => ptr::null(),
         // SAFETY: the key the option dictionary held, NUL-terminated.
-        Source::Key(key) => numbuf.dict_string((*tv).dict_ref(), unsafe { cstr::bytes_at(key) }),
+        Source::Key(key) => numbuf
+            .dict_string((*tv).dict_ref(), unsafe { cstr::bytes_at(key) })
+            .map_or(ptr::null(), CStr::as_ptr),
         Source::Callback(cb) => {
             // The callback is handed the dict, which it must not be able
             // to free out from under this loop.

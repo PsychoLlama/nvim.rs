@@ -94,14 +94,14 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
     let items = list_items(unsafe { argv_list.as_ref() });
     let mut at = 0;
     while at < items.len() {
-        let arg = numbuf.string_ptr(&items[at].li_tv);
+        let arg = numbuf.string(&items[at].li_tv);
         // `-- [files…]` is dropped: it is almost never wanted, and
         // `:mksession` is the way to carry a session over.
-        if i > 0 && strequal(arg, c"--".as_ptr()) {
+        if i > 0 && arg == c"--" {
             break;
         }
         // `-s <scriptfile>` is dropped, script file and all.
-        if i > 0 && strequal(arg, c"-s".as_ptr()) {
+        if i > 0 && arg == c"-s" {
             if at + 1 >= items.len() {
                 break;
             }
@@ -110,26 +110,21 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
         }
         // The address after `--listen` is in use by *this* server, so
         // it has to be released before the new one can take it.
-        if i > 0 && strequal(arg, c"--listen".as_ptr()) {
-            // SAFETY: the list entry is live and `string` answers a
-            // NUL-terminated buffer that outlives the loop.
+        if i > 0 && arg == c"--listen" {
+            // The address is kept as a pointer: it names the entry's own
+            // string or `numbuf2`, both of which outlive the loop.
             if let Some(next_li) = items.get(at + 1)
-                && let addr = numbuf2.string_ptr(&next_li.li_tv)
-                && let text = unsafe { cstr::at(addr) }
+                && let text = numbuf2.string(&next_li.li_tv)
                 && (has_bytes(text, b":") || has_bytes(text, b"/") || has_bytes(text, b"\\"))
             {
-                listen_arg = addr;
+                listen_arg = text.as_ptr();
             }
         }
         // `--embed`, `--headless` and `-` are replaced by exactly one
         // `--embed` (plus `--headless` when there is no UI), inserted
         // right after argv[0].
-        if i == 0
-            || !strequal(arg, c"--embed".as_ptr())
-                && !strequal(arg, c"--headless".as_ptr())
-                && !strequal(arg, c"-".as_ptr())
-        {
-            unsafe { *argv.add(i as usize) = xstrdup(arg) };
+        if i == 0 || arg != c"--embed" && arg != c"--headless" && arg != c"-" {
+            unsafe { *argv.add(i as usize) = xstrdup(arg.as_ptr()) };
             i += 1;
             if i == 1 {
                 unsafe { *argv.add(i as usize) = xstrdup(c"--embed".as_ptr()) };
@@ -422,12 +417,6 @@ fn rpc_send_call(
 fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::eval::vars::set_vim_var_string(idx, val, len) }
-}
-
-/// `strequal()` as checked code.
-fn strequal(a: *const c_char, b: *const c_char) -> bool {
-    // SAFETY: two NUL-terminated strings, or null.
-    unsafe { crate::memory::strequal(a, b) }
 }
 
 /// `xstrdup()` as checked code.

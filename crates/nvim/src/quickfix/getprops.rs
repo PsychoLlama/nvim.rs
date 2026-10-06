@@ -141,7 +141,7 @@ fn qf_get_list_from_lines(what: &Dict, lines: &TypVal, retdict: &mut Dict) -> Re
     let errorformat = match what.find(b"efm") {
         None => P_EFM.get(),
         Some(efm_di) => {
-            if efm_di.di_tv.v_type() != VAR_STRING || efm_di.di_tv.string_or_null().is_null() {
+            if efm_di.di_tv.string_ref().is_none() {
                 return Err(QfError::BadValue);
             }
             crate::memory::XString::from_bytes(crate::eval::list::string_bytes(&efm_di.di_tv))

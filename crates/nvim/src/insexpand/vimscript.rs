@@ -20,7 +20,7 @@ use crate::eval::typval::{DictRef, NumBuf, dict_get_string_buf, list_items, list
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, Key};
 use crate::types::{
-    FAIL, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow,
+    FAIL, OK, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow,
 };
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -74,7 +74,7 @@ pub(crate) fn ins_compl_dict_alloc(m: MatchId) -> DictRef {
 pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let word: *const c_char;
+    let word: Option<&CStr>;
     let mut dup = false;
     let mut empty = false;
     let mut flags = if fast { CP_FAST } else { 0 };
@@ -88,21 +88,27 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int
         // each borrowing answer renders into a scratch of its own —
         // `word` outlives all of them.
         let d = (*tv).dict_ref();
-        let borrowed = |key: &CStr, b: &mut NumBuf| b.dict_string(d, key.to_bytes());
         let get_nr = |key: &CStr| dict_get_number(d, key.to_bytes());
         let owned = |key: &[u8]| {
             let mut scratch = NumBuf::new();
             dict_get_string_buf(d, key, &mut scratch).map(XString::from_cstr)
         };
 
-        word = borrowed(c"word", &mut numbuf);
+        word = numbuf.dict_string(d, b"word");
         extra[CPT_ABBR as usize] = owned(b"abbr");
         extra[CPT_MENU as usize] = owned(b"menu");
         extra[CPT_KIND as usize] = owned(b"kind");
         extra[CPT_INFO as usize] = owned(b"info");
 
-        user_hl[0] = unsafe { get_user_highlight_attr(borrowed(c"abbr_hlgroup", &mut numbuf2)) };
-        user_hl[1] = unsafe { get_user_highlight_attr(borrowed(c"kind_hlgroup", &mut numbuf2)) };
+        let mut highlight = |key: &[u8]| {
+            let name = numbuf2
+                .dict_string(d, key)
+                .map_or(ptr::null(), CStr::as_ptr);
+            // SAFETY: null or a NUL-terminated name, live for the call.
+            unsafe { get_user_highlight_attr(name) }
+        };
+        user_hl[0] = highlight(b"abbr_hlgroup");
+        user_hl[1] = highlight(b"kind_hlgroup");
 
         let _ = dict_get_tv(d, b"user_data", &mut user_data);
 
@@ -111,20 +117,18 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int
         }
         dup = get_nr(c"dup") != 0;
         empty = get_nr(c"empty") != 0;
-        if !borrowed(c"equal", &mut numbuf2).is_null() && get_nr(c"equal") != 0 {
+        if numbuf2.dict_string(d, b"equal").is_some() && get_nr(c"equal") != 0 {
             flags |= CP_EQUAL;
         }
     } else {
-        word = numbuf.string_ptr_chk(tv);
+        word = numbuf.string_chk(tv);
     }
 
-    if word.is_null() || (!empty && unsafe { *word } as c_int == NUL) {
+    let Some(word) = word.filter(|word| empty || !word.is_empty()) else {
         return FAIL;
-    }
+    };
 
-    // SAFETY: a non-null word is a NUL-terminated string, borrowed from the
-    // value or rendered into `numbuf`, both of which outlive the add.
-    let text = unsafe { cstr::bytes_at(word) };
+    let text = word.to_bytes();
     let score = FUZZY_SCORE_NONE;
     let data = Some(&mut user_data);
     // Anything but `OK` leaves the value with this frame -- `NOTDONE` (the
@@ -172,12 +176,9 @@ pub(crate) unsafe fn ins_compl_add_dict(dict: *mut Dict) {
     compl_opt_refresh_always.set(false);
     if let Some(di) = find(b"refresh")
         && di.di_tv.v_type() == VAR_STRING
+        && di.di_tv.string_bytes() == b"always"
     {
-        let v = di.di_tv.string_or_null();
-        // SAFETY: a non-null string of the item's own.
-        if !v.is_null() && unsafe { cstr::eq_bytes(v, b"always") } {
-            compl_opt_refresh_always.set(true);
-        }
+        compl_opt_refresh_always.set(true);
     }
 
     // Add completions from a "words" list.
@@ -404,10 +405,8 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
     } else {
         what_flag = 0;
         for item in list_iter(unsafe { what_list.as_ref() }) {
-            // `tv_get_string` answers "" rather than NULL for anything it
-            // cannot render, so this is never a null pointer.
-            let what = unsafe { CStr::from_ptr(numbuf.string_ptr(&item.li_tv)) };
-            what_flag |= match what.to_bytes() {
+            // `tv_get_string` answers "" for anything it cannot render.
+            what_flag |= match numbuf.bytes(&item.li_tv) {
                 b"mode" => CI_WHAT_MODE,
                 b"pum_visible" => CI_WHAT_PUM_VISIBLE,
                 b"items" => CI_WHAT_ITEMS,

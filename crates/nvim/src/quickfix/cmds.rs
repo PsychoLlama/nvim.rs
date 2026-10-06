@@ -272,8 +272,8 @@ fn cexpr_core(excmd: &mut ExArg, tv: &TypVal) -> Result<(), Failed> {
     // unusable.
     let (qi, wp) = stack_or_new_for_cmd(excmd);
 
-    // A non-string reads as a NULL string, so the tag test is the accessor's.
-    let usable = !tv.string_or_null().is_null() || tv.v_type() == VAR_LIST;
+    // A non-string reads as no string, so the tag test is the accessor's.
+    let usable = tv.string_ref().is_some() || tv.v_type() == VAR_LIST;
     if !usable {
         qf_emsg(c"E777: String or List expected");
         return Err(Failed);

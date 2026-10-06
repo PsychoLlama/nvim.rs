@@ -19,7 +19,6 @@ use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext_ptr;
 use crate::tr_plural;
 use crate::types::{NUL, VAR_LIST};
-use core::mem::ManuallyDrop;
 
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0.
@@ -183,9 +182,10 @@ msg_putchar('\n' as ::core::ffi::c_int);
     }
 
     let mut arg_allocated = false;
-    // Either the command line's own text or, once `arg_allocated`, a copy
-    // this frame frees below; the value releases neither.
-    let mut arg = ManuallyDrop::new(TypVal::string_raw(colored_ccline.text()));
+    // A copy of the command line, the callback's argument. `arg_allocated`
+    // is C's record that the line was not terminated at its length, so its
+    // copy (rather than the line) is what gets cached below.
+    let mut arg = TypVal::string(None);
     let mut tv = TV_INITIAL_VALUE;
 
     // Both are C function-level statics. `prev_prompt_id` starts at
@@ -241,13 +241,8 @@ msg_putchar('\n' as ::core::ffi::c_int);
         }
         if unsafe { *colored_ccline.at(colored_ccline.len()) } as ::core::ffi::c_int != NUL {
             arg_allocated = true;
-            arg.write_string_raw(unsafe {
-                xmemdupz(
-                    colored_ccline.text() as *const ::core::ffi::c_void,
-                    colored_ccline.len() as size_t,
-                )
-            } as *mut ::core::ffi::c_char);
         }
+        arg = TypVal::string_from(colored_ccline.text_bytes());
         // msg_start(), called by e.g. :echo, may shift the command line to
         // the first column even under msg_silent. Two ways round it
         // without altering message.c: use full_screen, or save and restore
@@ -343,15 +338,13 @@ msg_putchar('\n' as ::core::ffi::c_int);
             }
 
             prev_end = end;
-            let group = numbuf.string_ptr_chk(&chunk[2].li_tv);
-            if group.is_null() {
+            let Some(group) = numbuf.string_chk(&chunk[2].li_tv) else {
                 break 'body Label::Error;
-            }
+            };
             let coloured = CmdlineColorChunk {
                 start: start as ::core::ffi::c_int,
                 end: end as ::core::ffi::c_int,
-                // SAFETY: a NUL-terminated group name.
-                hl_id: syn_name2id(unsafe { cstr::at(group) }),
+                hl_id: syn_name2id(group),
             };
             // SAFETY: the command line's own chunk list, taken above.
             unsafe { (*ccline_colors).push(coloured) };
@@ -398,15 +391,16 @@ msg_putchar('\n' as ::core::ffi::c_int);
     // when one was made -- the line as the callback saw it, which the
     // callback may since have edited -- and the line itself otherwise.
     // C took ownership of `arg`'s copy here; the cache owns its bytes
-    // now, so the copy is released instead.
+    // now, so the copy is released with `arg` instead.
     let id = colored_ccline.prompt_id;
     if arg_allocated {
-        let s = arg.string_or_null();
-        // SAFETY: `arg` holds this frame's own NUL-terminated copy.
-        let text = unsafe { ::core::slice::from_raw_parts(s, cstr::bytes_at(s).len()) };
+        let text = arg.string_bytes();
+        // SAFETY: `c_char` and `u8` share a layout; the span is `arg`'s.
+        let text = unsafe {
+            ::core::slice::from_raw_parts(text.as_ptr().cast::<::core::ffi::c_char>(), text.len())
+        };
         // SAFETY: the command line's own chunk list, taken above.
         unsafe { (*ccline_colors).remember(id, text) };
-        unsafe { xfree(s as *mut ::core::ffi::c_void) };
     } else {
         let text = colored_ccline.bytes();
         // SAFETY: the command line's own chunk list, taken above.

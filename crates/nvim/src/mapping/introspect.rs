@@ -11,9 +11,9 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
-use crate::memory::handoff::owned_cstr;
+use crate::memory::ThinCString;
 use crate::option::vars::P_CPO;
-use crate::types::{NUL, VAR_DICT, kListLenUnknown};
+use crate::types::{VAR_DICT, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -23,12 +23,11 @@ use core::ptr;
 pub fn f_hasmapto(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = NumBuf::new();
-    // SAFETY: the Vimscript call convention — `args` is a live argument
-    // vector, and `numbuf` outlives the string it lends back.
-    let name = numbuf.string_ptr(&args[0]);
+    // `numbuf` outlives the string it lends back.
+    let name = numbuf.string(&args[0]).as_ptr();
     let mode = match args.get(1) {
-        // SAFETY: `buf` is the scratch `tv_get_string_buf` may answer with.
-        Some(tv) => buf.string_ptr(tv),
+        // `buf` is the scratch `tv_get_string_buf` may answer with.
+        Some(tv) => buf.string(tv).as_ptr(),
         None => c"nvo".as_ptr(),
     };
     let number = |n: usize| args.get(n).map(tv_get_number);
@@ -187,29 +186,29 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     // SAFETY: the caller's promise — `result` is the writable answer slot.
     let mut ret = unsafe { Live::new(result) };
     // Return an empty string on failure.
-    ret.write_string_raw(ptr::null_mut());
+    ret.write_string(None);
 
-    // SAFETY: the Vimscript call convention — `args` is a live argument
-    // vector whose first entry is the keys, NUL-terminated.
-    let keys = numbuf.string_ptr(&args[0]).cast_mut();
-    // SAFETY: as above.
-    if unsafe { c_int::from(*keys) } == NUL {
+    let keys = numbuf.string(&args[0]);
+    if keys.is_empty() {
         return;
     }
+    let keys = keys.as_ptr();
 
     let mut buf = NumBuf::new();
     // SAFETY: as above.
     let number = |n: usize| args.get(n).map(tv_get_number);
     let abbr = number(2).is_some_and(|n| n != 0);
     let get_dict = number(3).is_some_and(|n| n != 0);
-    let mut which: *mut c_char = match args.get(1) {
-        // SAFETY: `buf` is `tv_get_string_buf_chk`'s scratch.
-        Some(tv) => buf.string_ptr_chk(tv).cast_mut(),
-        None => c"".as_ptr().cast_mut(),
+    let which = match args.get(1) {
+        // `buf` is `tv_get_string_buf_chk`'s scratch.
+        Some(tv) => buf.string_chk(tv),
+        None => Some(c""),
     };
-    if which.is_null() {
+    let Some(which) = which else {
         return;
-    }
+    };
+    // `get_map_mode` only steps the pointer along; it writes nothing.
+    let mut which: *mut c_char = which.as_ptr().cast_mut();
 
     let mut keys_buf: *mut c_char = ptr::null_mut();
     let mut alt_keys_buf: *mut c_char = ptr::null_mut();
@@ -257,14 +256,16 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
         // Return a string.
         if let Some((mp, _)) = found {
             let rhs = &mp.m_rhs;
-            ret.write_string_raw(if rhs.luaref() != LUA_NOREF {
-                // SAFETY: `mp` is the matching mapping, still linked.
-                unsafe { nlua_funcref_str(rhs.luaref()) }
+            ret.write_string(if rhs.luaref() != LUA_NOREF {
+                // SAFETY: `mp` is the matching mapping, still linked; the
+                // answer is an `xmalloc`ed block the value takes over.
+                unsafe { ThinCString::from_raw(nlua_funcref_str(rhs.luaref())) }
             } else if rhs.str.is_empty() {
-                owned_cstr(b"<Nop>".to_vec())
+                Some(ThinCString::from_bytes(b"<Nop>"))
             } else {
-                // SAFETY: the matching mapping's NUL-terminated RHS.
-                unsafe { str2special_save(rhs.str.as_ptr(), false, false) }
+                // SAFETY: the matching mapping's NUL-terminated RHS; the
+                // answer is an `xmalloc`ed block the value takes over.
+                unsafe { ThinCString::from_raw(str2special_save(rhs.str.as_ptr(), false, false)) }
             });
         }
     } else if let Some((mp, local)) = found {

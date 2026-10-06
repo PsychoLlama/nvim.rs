@@ -310,7 +310,7 @@ impl Reader {
         let items = list_items(Some(list));
         while items
             .get(*at)
-            .is_some_and(|li| li.li_tv.string_or_null().is_null())
+            .is_some_and(|li| li.li_tv.string_ref().is_none())
         {
             *at += 1;
         }

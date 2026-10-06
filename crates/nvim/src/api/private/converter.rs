@@ -45,7 +45,6 @@ use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_ty
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
-use crate::memory::xstrdup;
 use crate::types::{
     ApiDict, Array, BoolVarValue, DictItem, DictKey, Float, Integer, KeyValuePair, ListItem,
     Object, String_0, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
@@ -418,8 +417,9 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
                 api_new_luaref(borrowed)
             };
             // SAFETY: `register_luafunc` answers a NUL-terminated name owned
-            // by the registry, and `xstrdup` copies it.
-            TypVal::func_raw(unsafe { xstrdup(register_luafunc(reference)) })
+            // by the registry, copied here for the value to own.
+            let name = unsafe { CStr::from_ptr(register_luafunc(reference)) };
+            TypVal::func(Some(crate::memory::ThinCString::from_cstr(name)))
         }
         // `kind()` answers one of the eleven above.
         _ => unreachable!("an Object carries one of the eleven tags"),

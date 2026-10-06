@@ -18,15 +18,12 @@ use crate::eval::typval::tv_get_lnum;
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str};
 use crate::global_cell::GlobalCell;
 use crate::memline::Lines;
-use crate::memory::XString;
-use crate::memory::xmalloc;
+use crate::memory::{ThinCString, XString};
 use crate::os::cshim::ngettext;
 use crate::search::linewhite;
 use crate::snprintf;
 use crate::winlayer::{Buf, Live};
-use ::libc::strcat;
 use core::ffi::{c_char, c_int, c_ulong};
-use core::ptr;
 
 use super::text::*;
 use super::*;
@@ -72,7 +69,7 @@ pub fn f_foldlevel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- a live typval.
     let mut rv = unsafe { Tv::new(result) };
-    rv.write_string_raw(ptr::null_mut());
+    rv.write_string(None);
     // SAFETY: reading three `v:` variables the fold drawing has just set.
     let (start, end, dash) = (Vv::Foldstart, Vv::Foldend, Vv::Folddashes);
     let (foldstart, foldend, dashes) = (
@@ -118,20 +115,33 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let title = &lines.line(which)[at..];
 
     let count = foldend - foldstart + 1;
-    // SAFETY: three static format strings, and the NUL-terminated strings
-    // `dashes` and `s` -- `s` is the tail of a buffer line, so the line's own
-    // terminator ends it; `r` is an allocation big enough for all of them.
-    let s = title.as_ptr().cast::<c_char>();
     let one = c"+-%s%3d line: ";
     let many = c"+-%s%3d lines: ";
     let txt = ngettext(one, many, count as c_ulong);
-    let mut len = txt.count_bytes() + unsafe { cstr::bytes_at(dashes) }.len() + 20 + title.len();
-    let r = unsafe { xmalloc(len) } as *mut c_char;
-    unsafe { snprintf!(r, len, txt.as_ptr(), dashes, count) };
-    len = unsafe { cstr::bytes_at(r) }.len();
-    unsafe { strcat(r, s) };
-    unsafe { foldtext_cleanup(r.add(len)) };
-    rv.write_string_raw(r);
+    // SAFETY: `dashes` is a `v:` variable's NUL-terminated string.
+    let dashes_len = unsafe { cstr::bytes_at(dashes) }.len();
+    // The prefix, then the title, then the cleanup, all in one buffer with
+    // room for the widest count.
+    let mut text = vec![0u8; txt.count_bytes() + dashes_len + 20 + title.len() + 1];
+    // SAFETY: a static format string, the NUL-terminated `dashes`, and a
+    // buffer big enough for both and the count.
+    unsafe {
+        snprintf!(
+            text.as_mut_ptr().cast::<c_char>(),
+            text.len(),
+            txt.as_ptr(),
+            dashes,
+            count
+        )
+    };
+    let prefix_len = cstr::in_bytes(&text).count_bytes();
+    text.truncate(prefix_len);
+    text.extend_from_slice(title);
+    text.push(0);
+    // SAFETY: `text` is NUL-terminated and writable, and `prefix_len` is
+    // inside it; the current window is live.
+    unsafe { foldtext_cleanup(text.as_mut_ptr().cast::<c_char>().add(prefix_len)) };
+    rv.write_string(Some(ThinCString::from_cstr(cstr::in_bytes(&text))));
 }
 
 /// "foldtextresult(lnum)" function
@@ -141,7 +151,7 @@ pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     static entered: GlobalCell<bool> = GlobalCell::new(false);
     // SAFETY: the caller's promise -- a live typval.
     let mut rv = unsafe { Tv::new(result) };
-    rv.write_string_raw(ptr::null_mut());
+    rv.write_string(None);
     if entered.get() {
         return;
     }
@@ -182,7 +192,7 @@ pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
         }
         // SAFETY: `vt` is this frame's virtual text.
         unsafe { clear_virttext(&raw mut vt) };
-        rv.write_string_raw(text.into_raw());
+        rv.write_string(Some(text.into()));
     }
     entered.set(false);
 }

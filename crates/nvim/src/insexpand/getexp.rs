@@ -311,7 +311,7 @@ pub(crate) fn get_next_dict_tsr_completion(
     if thesaurus_func_complete(compl_type) {
         // SAFETY: the running completion's NUL-terminated pattern, and no
         // `'complete'` callback.
-        unsafe { expand_by_function(compl_type, compl_pattern().data(), ptr::null_mut()) };
+        unsafe { expand_by_function(compl_type, compl_pattern(), ptr::null_mut()) };
         return;
     }
     let thesaurus = compl_type == CTRL_X_THESAURUS;
@@ -520,12 +520,12 @@ pub(crate) fn get_next_completion_match(
                 unsafe { get_cpt_func_completion_matches(st.func_cb) };
             } else {
                 // SAFETY: the running completion's NUL-terminated pattern.
-                unsafe { expand_by_function(type_0, compl_pattern().data(), ptr::null_mut()) };
+                unsafe { expand_by_function(type_0, compl_pattern(), ptr::null_mut()) };
             }
         }
         CTRL_X_OMNI => {
             // SAFETY: as above.
-            unsafe { expand_by_function(type_0, compl_pattern().data(), ptr::null_mut()) };
+            unsafe { expand_by_function(type_0, compl_pattern(), ptr::null_mut()) };
         }
         CTRL_X_SPELL => get_next_spell_completion(st.first_match_pos.lnum),
         CTRL_X_BUFNAMES => get_next_bufname_token(),

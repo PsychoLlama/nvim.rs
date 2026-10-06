@@ -14,7 +14,7 @@ use super::*;
 use crate::eval::list::string_tv;
 use crate::eval::typval::NumBuf;
 use crate::keycodes::KE_WILD;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::types::{ExpandContext, NUL};
 
 /// Whether a command line is being edited at all: C's
@@ -120,7 +120,7 @@ pub fn f_getcmdcomplpat(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     .flatten();
     *result = match pattern {
         Some(pattern) => string_tv(&pattern),
-        None => TypVal::string_raw(::core::ptr::null_mut()),
+        None => TypVal::string(None),
     };
 }
 
@@ -132,13 +132,15 @@ pub fn f_getcmdcompltype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     .flatten();
     *result = match name {
         Some(name) => string_tv(&name),
-        None => TypVal::string_raw(::core::ptr::null_mut()),
+        None => TypVal::string(None),
     };
 }
 
 /// `getcmdline()` function.
 pub fn f_getcmdline(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(get_cmdline_str());
+    // SAFETY: `get_cmdline_str` answers a copy of its own, or NULL, which
+    // the answer takes over.
+    result.write_string(unsafe { ThinCString::from_raw(get_cmdline_str()) });
 }
 
 /// `getcmdpos()` function.
@@ -148,13 +150,13 @@ pub fn f_getcmdpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `getcmdprompt()` function.
 pub fn f_getcmdprompt(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe {
-        (*result).write_string_raw(
-            get_ccline_ptr()
-                .filter(|p| !p.cmdprompt.is_null())
-                .map_or(::core::ptr::null_mut(), |p| xstrdup(p.cmdprompt)),
-        )
-    };
+    result.write_string(
+        get_ccline_ptr()
+            .filter(|p| !p.cmdprompt.is_null())
+            // SAFETY: a command line's prompt, tested non-null, is a
+            // NUL-terminated string it holds for as long as it is current.
+            .map(|p| ThinCString::from_cstr(unsafe { ::core::ffi::CStr::from_ptr(p.cmdprompt) })),
+    );
 }
 
 /// `getcmdscreenpos()` function.
@@ -164,9 +166,10 @@ pub fn f_getcmdscreenpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
 
 /// `getcmdtype()` function.
 pub fn f_getcmdtype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // One character plus the terminator `xmallocz` appends.
-    unsafe { (*result).write_string_raw(xmallocz(1) as *mut ::core::ffi::c_char) };
-    unsafe { *(*result).string_or_null().offset(0) = get_cmdline_type() as ::core::ffi::c_char };
+    // One character, NUL outside a command line -- kept byte-for-byte, so
+    // that answer reads as the empty string.
+    let kind = get_cmdline_type() as u8;
+    result.write_string(Some(ThinCString::from_bytes(&[kind])));
 }
 
 /// Replace the command line with `str` and put the cursor at `pos`.
@@ -241,7 +244,7 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // tv_get_string() so that a NULL string reads as an empty one.
     unsafe {
-        (*result).write_number(set_cmdline_str(numbuf.string_ptr(&args[0]), pos) as VarNumber)
+        (*result).write_number(set_cmdline_str(numbuf.string(&args[0]).as_ptr(), pos) as VarNumber)
     };
 }
 

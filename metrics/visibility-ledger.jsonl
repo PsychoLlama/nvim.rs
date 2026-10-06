@@ -614,7 +614,7 @@
 {"path":"neovim::types::TermKeyMouseEvent","kind":"type","file":"crates/nvim/src/types/termkey.rs","tests":["crates/nvim/tests/unit/termkey.rs"]}
 {"path":"neovim::types::TermKeyResult","kind":"type","file":"crates/nvim/src/types/termkey.rs","tests":["crates/nvim/tests/unit/termkey.rs"]}
 {"path":"neovim::types::TermKeyType","kind":"type","file":"crates/nvim/src/types/termkey.rs","tests":["crates/nvim/tests/unit/termkey.rs"]}
-{"path":"neovim::types::TypVal","kind":"enum","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/encode_sinks.rs","crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/eval_encode.rs","crates/nvim/tests/unit/support.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_list.rs","crates/nvim/tests/unit/typval_value.rs"]}
+{"path":"neovim::types::TypVal","kind":"enum","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/encode_sinks.rs","crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/eval_encode.rs","crates/nvim/tests/unit/support.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_list.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::UndoLink","kind":"struct","file":"crates/nvim/src/types/undo.rs","tests":["crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::types::Unpacker","kind":"struct","file":"crates/nvim/src/types/channel.rs","tests":["crates/nvim/tests/unit/msgpack.rs"]}
 {"path":"neovim::types::VAR_BLOB","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}

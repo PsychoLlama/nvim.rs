@@ -26,6 +26,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::memory::ThinCString;
 use crate::types::Failed;
 use ::libc::{EILSEQ, EINVAL};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -198,24 +199,31 @@ unsafe fn iconv_string(
 /// `iconv({string}, {from}, {to})`.
 pub fn f_iconv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string_raw(core::ptr::null_mut());
+    result.write_string(None);
 
-    let str = numbuf.string_ptr(&args[0]);
+    let str = numbuf.string(&args[0]);
     let mut buf1 = NumBuf::new();
-    let from = unsafe { enc_canonize(enc_skip(buf1.string_ptr(&args[1]).cast_mut())) };
+    let from = unsafe { enc_canonize(enc_skip(buf1.string(&args[1]).as_ptr().cast_mut())) };
     let mut buf2 = NumBuf::new();
-    let to = unsafe { enc_canonize(enc_skip(buf2.string_ptr(&args[2]).cast_mut())) };
+    let to = unsafe { enc_canonize(enc_skip(buf2.string(&args[2]).as_ptr().cast_mut())) };
 
     let mut vimconv = CONV_NONE_INIT;
     let _ = unsafe { convert_setup(&raw mut vimconv, from, to) };
-    unsafe {
-        (*result).write_string_raw(if vimconv.vc_type == CONV_NONE {
-            // Same encoding both ways: hand back a copy unchanged.
-            xstrdup(str)
-        } else {
-            string_convert(&raw mut vimconv, str.cast_mut(), core::ptr::null_mut())
-        })
-    };
+    result.write_string(if vimconv.vc_type == CONV_NONE {
+        // Same encoding both ways: hand back a copy unchanged.
+        Some(ThinCString::from_cstr(str))
+    } else {
+        // SAFETY: `str` is NUL-terminated and only read; `string_convert`
+        // answers an allocation of its own, or NULL, which the answer takes
+        // over.
+        unsafe {
+            ThinCString::from_raw(string_convert(
+                &raw mut vimconv,
+                str.as_ptr().cast_mut(),
+                core::ptr::null_mut(),
+            ))
+        }
+    });
 
     // Closes the descriptor.
     let _ = unsafe {

@@ -32,6 +32,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::getchar::state::{got_int, maptick};
 use crate::global_cell::GlobalCell;
+use crate::memory::ThinCString;
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{
     message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_title, trunc_string,
@@ -40,7 +41,6 @@ use crate::option::vars::p_hi;
 use crate::os::cshim::gettext;
 use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
-use crate::strings::xstrnsave;
 use crate::types::{
     AdditionalData, CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt,
     RegMatch, Timestamp, TypVal, VAR_NUMBER, VarNumber, size_t,
@@ -306,16 +306,9 @@ fn del_history_idx(histype: c_int, num: c_int) -> bool {
 /// own error).
 fn arg_histtype(arg: &TypVal) -> HistoryType {
     let mut numbuf = NumBuf::new();
-    // SAFETY: caller contract; a non-null result is a NUL-terminated string
-    // owned by the typval, which outlives the lookup.
-    unsafe {
-        let name = numbuf.string_ptr_chk(arg);
-        if name.is_null() {
-            HIST_INVALID
-        } else {
-            get_histtype(CStr::from_ptr(name).to_bytes(), false)
-        }
-    }
+    numbuf
+        .bytes_chk(arg)
+        .map_or(HIST_INVALID, |name| get_histtype(name, false))
 }
 
 /// "histadd()" function
@@ -331,15 +324,11 @@ pub fn f_histadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let mut buf = NumBuf::new();
-    // SAFETY: `histadd()` takes two arguments; the entry is NUL-terminated
-    // and lives in the typval or in `buf`, both of which outlive the add.
-    let added = unsafe {
-        let entry = buf.string_ptr(&args[1]);
-        *entry != 0 && {
-            init_history();
-            add_to_history(histype, CStr::from_ptr(entry).to_bytes(), false, 0);
-            true
-        }
+    let entry = buf.bytes(&args[1]);
+    let added = !entry.is_empty() && {
+        init_history();
+        add_to_history(histype, entry, false, 0);
+        true
     };
     if added {
         // SAFETY: eval-function contract.
@@ -350,14 +339,10 @@ pub fn f_histadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// "histdel()" function
 pub fn f_histdel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
-    // the second argument is only read once its type says it is present.
-    let n = unsafe {
-        let name = numbuf.string_ptr_chk(&args[0]);
-        if name.is_null() {
-            0
-        } else {
-            let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
+    let n = {
+        let name = numbuf.bytes_chk(&args[0]);
+        if let Some(name) = name {
+            let histype = get_histtype(name, false);
             let Some(arg) = args.get(1) else {
                 // Only one argument: clear the whole history.
                 return result.write_number(VarNumber::from(clr_history(histype).is_ok() as c_int));
@@ -368,8 +353,11 @@ pub fn f_histdel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             } else {
                 // Delete by regex.
                 let mut buf = NumBuf::new();
-                del_history_entry(histype, buf.string_ptr(arg)) as c_int
+                // SAFETY: a NUL-terminated pattern, live for the call.
+                c_int::from(unsafe { del_history_entry(histype, buf.string(arg).as_ptr()) })
             }
+        } else {
+            0
         }
     };
     // SAFETY: eval-function contract.
@@ -379,30 +367,22 @@ pub fn f_histdel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// "histget()" function
 pub fn f_histget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: eval-function contract.
-    let name = numbuf.string_ptr_chk(&args[0]);
-    let text = if name.is_null() {
-        core::ptr::null_mut()
-    } else {
-        // SAFETY: a non-null name is NUL-terminated; the optional second
-        // argument is only read once its type says it is present, and
-        // `xstrnsave` copies the entry text before returning.
-        unsafe {
-            let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
-            let num = if args.len() <= 1 {
-                get_history_idx(histype)
-            } else {
-                tv_get_number_chk(&args[1]).unwrap_or(-1) as c_int
-            };
-            let idx = calc_hist_idx(histype, num);
-            match hist_entry_ref(histype, idx) {
-                None => xstrnsave(c"".as_ptr(), 0),
-                Some(e) => xstrnsave(e.text, e.len),
-            }
+    let text = numbuf.bytes_chk(&args[0]).map(|name| {
+        let histype = get_histtype(name, false);
+        let num = if args.len() <= 1 {
+            get_history_idx(histype)
+        } else {
+            tv_get_number_chk(&args[1]).unwrap_or(-1) as c_int
+        };
+        let idx = calc_hist_idx(histype, num);
+        match hist_entry_ref(histype, idx) {
+            None => ThinCString::empty(),
+            // SAFETY: the entry's text is `len` readable bytes, copied
+            // before anything can remove the entry.
+            Some(e) => ThinCString::from_bytes(unsafe { cstr::slice_at(e.text, e.len) }),
         }
-    };
-    // SAFETY: eval-function contract.
-    result.write_string_raw(text);
+    });
+    result.write_string(text);
 }
 
 /// "histnr()" function

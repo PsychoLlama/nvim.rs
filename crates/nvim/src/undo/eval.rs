@@ -21,6 +21,7 @@ use super::store::Marks;
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::highlight_group::HLF_T;
+use crate::memory::ThinCString;
 use crate::types::{VAR_STRING, kListLenMayKnow};
 use crate::winlayer::Buf;
 
@@ -130,19 +131,17 @@ pub fn f_undofile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the eval-function contract, by the contract above.
     result.write_empty(VAR_STRING);
-    // SAFETY: as above.
-    let fname: *const c_char = numbuf.string_ptr(&args[0]);
-    // SAFETY: a NUL-terminated name.
-    if unsafe { *fname } == 0 {
-        // SAFETY: the return value to fill in.
-        result.write_string_raw(ptr::null_mut());
+    let fname = numbuf.string(&args[0]);
+    if fname.is_empty() {
+        result.write_string(None);
         return;
     }
     // SAFETY: a NUL-terminated name.
-    let ffname: *mut c_char = unsafe { full_name_save(fname, true) };
+    let ffname: *mut c_char = unsafe { full_name_save(fname.as_ptr(), true) };
     if !ffname.is_null() {
-        // SAFETY: a NUL-terminated absolute path, and the return value.
-        unsafe { (*result).write_string_raw(u_get_undo_file_name(ffname, false)) };
+        // SAFETY: a NUL-terminated absolute path; the undo file's name is an
+        // allocation of its own, or NULL, which the answer takes over.
+        result.write_string(unsafe { ThinCString::from_raw(u_get_undo_file_name(ffname, false)) });
     }
     // SAFETY: NULL, or `full_name_save`'s allocation.
     unsafe { xfree(ffname.cast()) };

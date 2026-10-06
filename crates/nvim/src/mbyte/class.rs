@@ -318,10 +318,14 @@ pub(crate) fn class_in(bytes: &[u8], buffer: Buf) -> c_int {
 
 /// `charclass({string})` — the class of the string's first character.
 pub fn f_charclass(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    if tv_check_for_string_arg(args, 0).is_err() || args[0].string_or_null().is_null() {
+    if tv_check_for_string_arg(args, 0).is_err() {
         return;
     }
-    unsafe { (*result).write_number(mb_get_class(args[0].string_or_null()) as VarNumber) };
+    let Some(text) = args[0].string_ref() else {
+        return;
+    };
+    // SAFETY: the argument's own NUL-terminated string.
+    unsafe { (*result).write_number(mb_get_class(text.as_ptr()) as VarNumber) };
 }
 
 #[cfg(test)]

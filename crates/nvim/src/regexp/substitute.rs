@@ -41,7 +41,7 @@ use crate::keycodes::{Ctrl_H, K_SPECIAL};
 use crate::mbyte::{
     mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
-use crate::memory::{XString, xfree, xmalloc, xstrdup};
+use crate::memory::{ThinCString, XString, xfree, xmalloc};
 use crate::message::{e_null, e_re_damg, e_resulting_text_too_long};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
@@ -616,17 +616,21 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
     let argv = CallFrame::naming([TypVal::list(names_it)]);
 
     let mut rettv = TV_INITIAL_VALUE;
-    rettv.write_string_raw(core::ptr::null_mut());
+    rettv.write_string(None);
 
     let mut funcexe = FUNCEXE_INIT;
     funcexe.fe_argv_func = Some(fill_submatch_list);
     funcexe.fe_evaluate = true;
     let name = if (*expr).v_type() == VAR_FUNC {
-        Some((*expr).func_name_or_null())
+        Some(
+            (*expr)
+                .func_name()
+                .map_or(core::ptr::null(), ThinCString::as_ptr),
+        )
     } else if (*expr).v_type() == VAR_PARTIAL {
         let partial: *mut Partial = (*expr).partial_or_null();
         funcexe.fe_partial = partial;
-        Some(unsafe { partial_name(partial) })
+        Some(unsafe { partial_name(partial) }.cast_const())
     } else {
         None
     };
@@ -641,12 +645,9 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
         core::ptr::null_mut()
     } else {
         let mut buf = NumBuf::new();
-        let s = buf.string_ptr_chk(&rettv);
-        if s.is_null() {
-            core::ptr::null_mut()
-        } else {
-            unsafe { xstrdup(s) }
-        }
+        buf.string_chk(&rettv).map_or(core::ptr::null_mut(), |s| {
+            ThinCString::from_cstr(s).into_raw()
+        })
     };
     tv_clear(&mut rettv);
     text

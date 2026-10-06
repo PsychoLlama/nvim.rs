@@ -8,15 +8,15 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::eval::typval::{NumBuf, Unconvertible};
 use crate::guard::{Keys, Suppress};
 use crate::keycodes::{Key, key_escape};
-use crate::message_fmt::c_str;
+use crate::memory::ThinCString;
+use crate::message_fmt::msg_cstr;
 use crate::semsg;
 use crate::types::{NUL, VAR_DICT, VAR_STRING};
 use crate::winlayer::windows;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 /// What the `cursor` option asked for while the key is awaited.
@@ -75,19 +75,16 @@ fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
         let d = unsafe { d.as_ref() };
         opts.simplify = dict_get_bool(d, b"simplify", 1) != 0;
 
-        let cursor = numbuf.dict_string(d, b"cursor");
-        if !cursor.is_null() {
-            opts.cursor = if unsafe { cstr::eq_bytes(cursor, b"hide") } {
-                CursorFlag::Hide
-            } else if unsafe { cstr::eq_bytes(cursor, b"keep") } {
-                CursorFlag::Keep
-            } else if unsafe { cstr::eq_bytes(cursor, b"msg") } {
-                CursorFlag::Msg
-            } else {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let cursor = unsafe { c_str(cursor) };
-                semsg!("E475: Invalid value for argument {}: {cursor}", "cursor");
-                CursorFlag::Default
+        if let Some(cursor) = numbuf.dict_string(d, b"cursor") {
+            opts.cursor = match cursor.to_bytes() {
+                b"hide" => CursorFlag::Hide,
+                b"keep" => CursorFlag::Keep,
+                b"msg" => CursorFlag::Msg,
+                _ => {
+                    let cursor = msg_cstr(cursor);
+                    semsg!("E475: Invalid value for argument {}: {cursor}", "cursor");
+                    CursorFlag::Default
+                }
             };
         }
     }
@@ -212,26 +209,23 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
     if n != 0 && (!opts.allow_number || n < 0 || !mod_mask.get().is_empty()) {
         // Render the key as a string: modifier prefix, then either the
         // key code's three bytes or the character's UTF-8 ones.
-        let mut temp = [0 as c_char; 10]; // modifier 3 + mbyte char 6 + NUL
+        let mut temp = [0u8; 10]; // modifier 3 + mbyte char 6 + NUL
         let mut i = 0;
         if !mod_mask.get().is_empty() {
-            temp[0] = K_SPECIAL as c_char;
-            temp[1] = KS_MODIFIER as c_char;
-            temp[2] = mod_mask.get().bits() as c_char;
+            temp[0] = K_SPECIAL as u8;
+            temp[1] = KS_MODIFIER as u8;
+            temp[2] = mod_mask.get().bits() as u8;
             i = 3;
         }
         if n < 0 {
-            for (at, byte) in key_escape(n as c_int).into_iter().enumerate() {
-                temp[i + at] = byte as c_char;
-            }
+            temp[i..i + 3].copy_from_slice(&key_escape(n as c_int));
             i += 3;
         } else {
-            i += unsafe { utf_char2bytes(n as c_int, temp.as_mut_ptr().add(i)) } as usize;
+            i += unsafe { utf_char2bytes(n as c_int, temp.as_mut_ptr().add(i).cast()) } as usize;
         }
         debug_assert!(i < temp.len());
-        temp[i] = 0;
 
-        unsafe { (*result).write_string_raw(xmemdupz(temp.as_ptr().cast(), i).cast()) };
+        (*result).write_string(Some(ThinCString::from_bytes(&temp[..i])));
 
         if is_mouse_key(n as c_int) {
             set_mouse_vars();

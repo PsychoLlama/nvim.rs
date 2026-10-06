@@ -10,11 +10,10 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{NumBuf, list_iter};
+use crate::memory::ThinCString;
 use crate::memory::handoff::owned_cstr;
 use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT};
-use core::mem::ManuallyDrop;
 
 /// Read the script body of a command that takes either `:command script` or a
 /// heredoc:
@@ -59,10 +58,7 @@ pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::f
     let mut text = Vec::<u8>::new();
     for li in list_iter(unsafe { l.as_ref() }) {
         if !skip {
-            // SAFETY: the item's rendering is NUL-terminated and outlives
-            // the copy.
-            let line = numbuf.string_ptr(&li.li_tv);
-            text.extend_from_slice(unsafe { cstr::bytes_at(line) });
+            text.extend_from_slice(numbuf.bytes(&li.li_tv));
             text.push(b'\n');
         }
     }
@@ -85,7 +81,7 @@ pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::f
 /// third means completion for `input()` and the cancel value for
 /// `inputdialog()`.
 pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, secret: bool) {
-    (*result).write_string_raw(::core::ptr::null_mut::<::core::ffi::c_char>());
+    result.write_string(None);
 
     if cmdpreview.get() {
         return;
@@ -94,9 +90,9 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     let prompt: *const ::core::ffi::c_char;
     let mut defstr: *const ::core::ffi::c_char = c"".as_ptr();
     let mut cancelreturn: *mut TypVal = ::core::ptr::null_mut::<TypVal>();
-    // Names the argument's own string or the scratch buffer below, never
-    // its own: `tv_copy` is what puts a copy in the answer.
-    let mut cancelreturn_strarg2 = ManuallyDrop::new(TV_INITIAL_VALUE);
+    // A copy of the positional cancel value; `tv_copy` puts another copy
+    // in the answer, and this one is released with the frame.
+    let mut cancelreturn_strarg2: TypVal;
     let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut input_callback = Callback::None;
     let mut prompt_buf = NumBuf::new();
@@ -156,25 +152,24 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             return;
         }
     } else {
-        prompt = prompt_buf.string_ptr_chk(&args[0]);
-        if prompt.is_null() {
+        let Some(text) = prompt_buf.string_chk(&args[0]) else {
             return;
-        }
+        };
+        prompt = text.as_ptr();
         if args.len() > 1 {
-            defstr = defstr_buf.string_ptr_chk(&args[1]);
-            if defstr.is_null() {
+            let Some(text) = defstr_buf.string_chk(&args[1]) else {
                 return;
-            }
+            };
+            defstr = text.as_ptr();
             if args.len() > 2 {
-                let strarg2 = cancelreturn_buf.string_ptr_chk(&args[2]);
-                if strarg2.is_null() {
+                let Some(strarg2) = cancelreturn_buf.string_chk(&args[2]) else {
                     return;
-                }
+                };
                 if inputdialog {
-                    cancelreturn_strarg2.write_string_raw(strarg2 as *mut ::core::ffi::c_char);
-                    cancelreturn = &raw mut *cancelreturn_strarg2;
+                    cancelreturn_strarg2 = TypVal::string_from(strarg2.to_bytes());
+                    cancelreturn = &raw mut cancelreturn_strarg2;
                 } else {
-                    xp_name = strarg2;
+                    xp_name = strarg2.as_ptr();
                 }
             }
         }
@@ -216,8 +211,10 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
 
     let save_ex_normal_busy = ex_normal_busy.get();
     ex_normal_busy.set(0);
-    unsafe {
-        (*result).write_string_raw(getcmdline_prompt(
+    // SAFETY: `getcmdline_prompt` answers an allocation of its own, or
+    // NULL, which the answer takes over.
+    result.write_string(unsafe {
+        ThinCString::from_raw(getcmdline_prompt(
             if secret {
                 NUL
             } else {
@@ -234,11 +231,11 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             false,
             ::core::ptr::null_mut::<bool>(),
         ))
-    };
+    });
     ex_normal_busy.set(save_ex_normal_busy);
     unsafe { callback_free(&raw mut input_callback) };
 
-    if (*result).string_or_null().is_null() && !cancelreturn.is_null() {
+    if result.string_ref().is_none() && !cancelreturn.is_null() {
         unsafe { tv_copy(&*cancelreturn, result) };
     }
 

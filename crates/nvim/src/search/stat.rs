@@ -395,10 +395,10 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         // SAFETY: the caller's dictionary.
         let dict_ref = unsafe { dict.as_ref() };
         if let Some(di) = dict_find(dict_ref, b"pattern") {
-            pattern = numbuf.string_ptr_chk(&di.di_tv) as *mut c_char;
-            if pattern.is_null() {
+            let Some(text) = numbuf.string_chk(&di.di_tv) else {
                 return;
-            }
+            };
+            pattern = text.as_ptr().cast_mut();
         }
 
         if let Some(di) = dict_find(dict_ref, b"pos") {

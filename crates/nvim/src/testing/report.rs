@@ -18,9 +18,9 @@ use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::typval::{tv_dict_alloc, tv_equal};
 use crate::eval::vars::assert_error;
 use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
-use crate::memory::xfree;
+use crate::memory::{ThinCString, xfree};
 use crate::runtime::estack_sfile;
-use crate::types::{LineNr, TypVal, VAR_DICT, VAR_STRING};
+use crate::types::{LineNr, TypVal, VAR_DICT};
 
 use super::{AssertType, ESTACK_NONE};
 
@@ -169,12 +169,11 @@ fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
     let Some(msg) = opt_msg_tv else {
         return;
     };
-    // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
-    let blank = msg.v_type() == VAR_STRING
-        && (msg.string_or_null().is_null() || unsafe { *msg.string_or_null() } == 0);
+    let blank = msg.is_string() && msg.string_ref().is_none_or(ThinCString::is_empty);
     if blank {
         return;
     }
+    // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
     let tofree = unsafe { encode_tv2echo(msg, ptr::null_mut()) };
     unsafe { ga_concat_cstr(gap, tofree) };
     unsafe { xfree(tofree.cast()) };

@@ -13,7 +13,6 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::cstr_to_string;
-use crate::cstr;
 use crate::eval::typval::{list_first, list_iter, list_last, list_len, tv_list_alloc};
 use crate::eval::{eval_call_provider, eval_has_provider};
 use crate::global_cell::GlobalCell;
@@ -192,11 +191,13 @@ pub(crate) unsafe fn get_clipboard(
             if unsafe { (*list_last(res.as_mut())).li_tv.v_type() } != VAR_STRING {
                 break 'err;
             }
-            let regtype = unsafe { (*list_last(res.as_mut())).li_tv.string_or_null() };
-            if regtype.is_null() || unsafe { cstr::bytes_at(regtype) }.len() > 1 {
+            let Some(regtype) = (unsafe { (*list_last(res.as_mut())).li_tv.string_ref() }) else {
+                break 'err;
+            };
+            if regtype.as_bytes().len() > 1 {
                 break 'err;
             }
-            match regtype_of(unsafe { *regtype } as u8) {
+            match regtype_of(regtype.first()) {
                 Some(ty) => unsafe { (*reg).y_type = ty },
                 None => break 'err,
             }
@@ -222,11 +223,8 @@ pub(crate) unsafe fn get_clipboard(
                 if li.li_tv.v_type() != VAR_STRING {
                     break 'err;
                 }
-                let s = li.li_tv.string_or_null();
-                unsafe {
-                    *(*reg).y_array.add(tv_idx) =
-                        cstr_to_string(if !s.is_null() { s } else { c"".as_ptr() })
-                };
+                let s = li.li_tv.string_cstr().unwrap_or(c"");
+                unsafe { *(*reg).y_array.add(tv_idx) = cstr_to_string(s.as_ptr()) };
                 tv_idx += 1;
             }
         }

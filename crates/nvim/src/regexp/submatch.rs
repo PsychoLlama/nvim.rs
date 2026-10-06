@@ -19,7 +19,6 @@ use super::{
     LineOrigin, RegMMatch, RegMatch, RegSubMatch, Rex, can_f_submatch, reg_line, reg_line_len, rsm,
 };
 use crate::eval::typval::{ListRef, SL_SIZE, tv_list_alloc};
-use crate::strings::xstrnsave;
 use crate::types::{ColNr, LineNr, ListItem, TypVal, UserFunc, VarLock};
 use crate::winlayer::Live;
 
@@ -146,13 +145,12 @@ pub(crate) unsafe fn fill_submatch_list(
     // SAFETY: the running string match is the caller's structure.
     let line = unsafe { Rsm::acquire() }.line();
     for i in 0..SL_SIZE {
-        let text = match match_.group_bytes(i, line) {
-            None => core::ptr::null_mut(),
-            // SAFETY: a borrow of the line the match ran over.
-            Some(bytes) => unsafe { xstrnsave(bytes.as_ptr().cast(), bytes.len()) },
+        let li_tv = match match_.group_bytes(i, line) {
+            None => TypVal::string(None),
+            Some(bytes) => TypVal::string_from(bytes),
         };
         items.push(ListItem {
-            li_tv: TypVal::string_raw(text),
+            li_tv,
             li_lock: VarLock::Fixed,
         });
     }

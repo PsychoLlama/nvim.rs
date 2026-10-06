@@ -186,7 +186,7 @@ pub(crate) unsafe fn option_set_callback_func(
     {
         eval_expr(&text).ok_or(Failed)?
     } else {
-        TypVal::string_raw(text.into_raw())
+        TypVal::string(Some(text.into()))
     };
     let mut cb = Callback::None;
     if !unsafe { callback_from_typval(&raw mut cb, &tv) } || !cb.is_set() {

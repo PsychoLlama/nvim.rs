@@ -20,7 +20,7 @@ use super::*;
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::memory::handoff::owned_cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::env::home_replace_in;
 use crate::semsg;
 use crate::snprintf;
@@ -385,8 +385,7 @@ unsafe fn script_query(
             return ScriptQuery::Rejected;
         };
         if sid <= 0 {
-            // SAFETY: the message borrows the item's string form.
-            let arg1 = unsafe { c_str(numbuf.string_ptr(&sid_di.di_tv)) };
+            let arg1 = msg_cstr(numbuf.string(&sid_di.di_tv));
             semsg!("E475: Invalid value for argument {}: {arg1}", "sid");
             return ScriptQuery::Rejected;
         }

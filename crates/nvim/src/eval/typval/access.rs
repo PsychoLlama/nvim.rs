@@ -915,8 +915,8 @@ mod tests {
         assert!(num.dict_or_null().is_null());
         assert!(num.blob_or_null().is_null());
         assert!(num.partial_or_null().is_null());
-        assert!(num.string_or_null().is_null());
-        assert!(num.func_name_or_null().is_null());
+        assert!(num.string_ref().is_none());
+        assert!(num.func_name().is_none());
         assert!(num.text_or_name().is_none());
     }
 

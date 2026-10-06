@@ -593,10 +593,10 @@ pub fn f_has_key(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 impl NumBuf {
-    /// `d[key]` as a string, NULL for a missing key. The borrowing half of
+    /// `d[key]` as a string, `None` for a missing key. The borrowing half of
     /// the C's `tv_dict_get_string`; [`dict_get_string_alloc`] is the other
     /// one.
-    pub fn dict_string(&mut self, d: Option<&Dict>, key: &[u8]) -> *const ::core::ffi::c_char {
-        dict_get_string_buf(d, key, self).map_or(::core::ptr::null(), CStr::as_ptr)
+    pub fn dict_string<'a>(&'a mut self, d: Option<&'a Dict>, key: &[u8]) -> Option<&'a CStr> {
+        dict_get_string_buf(d, key, self)
     }
 }

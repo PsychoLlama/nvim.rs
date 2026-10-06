@@ -6,8 +6,7 @@
 //! caller-supplied `NUMBUFLEN` buffer so the result never needs freeing.
 //! [`tv2bool`] is the truthiness `if` and `while` ask for.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::charset::{Str2NrBases, str2nr_in};
@@ -208,22 +207,6 @@ impl NumBuf {
         let _ = ::core::fmt::write(&mut cursor, args);
         let len = cursor.1;
         self.terminated(len)
-    }
-
-    /// TRANSIENT.
-    pub fn string_ptr_chk(&mut self, tv: &TypVal) -> *const ::core::ffi::c_char {
-        self.string_chk(tv)
-            .map_or(::core::ptr::null(), CStr::as_ptr)
-    }
-
-    /// TRANSIENT.
-    pub fn string_ptr(&mut self, tv: &TypVal) -> *const ::core::ffi::c_char {
-        self.string(tv).as_ptr()
-    }
-
-    /// TRANSIENT.
-    pub fn as_mut_ptr(&mut self) -> *mut ::core::ffi::c_char {
-        self.0.as_mut_ptr().cast()
     }
 
     /// `name` copied into the buffer. A static name would do for reading,

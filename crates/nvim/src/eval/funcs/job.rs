@@ -2,7 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::{NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty};
+use super::{f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty};
 use crate::api::private::helpers::dict_set_var;
 use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_close_terminal, setfname};
@@ -436,13 +436,13 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         overlapped = dict_get_number(job_opts, b"overlapped") != 0;
 
         // An unrecognised `stdin` is a warning, not a failure.
-        let s = numbuf.dict_string(job_opts, b"stdin");
-        if !s.is_null() {
-            if unsafe { cstr::prefix_eq(s, c"null".as_ptr(), NUMBUFLEN as usize) } {
+        // `strncmp` over NUMBUFLEN bytes against a shorter literal is an
+        // exact comparison.
+        if let Some(s) = numbuf.dict_string(job_opts, b"stdin") {
+            if s == c"null" {
                 stdin_mode = kChannelStdinNull;
-            } else if !unsafe { cstr::prefix_eq(s, c"pipe".as_ptr(), NUMBUFLEN as usize) } {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (arg0, s) = unsafe { (msg_cstr(c"stdin"), c_str(s)) };
+            } else if s != c"pipe" {
+                let (arg0, s) = (msg_cstr(c"stdin"), msg_cstr(s));
                 semsg!("E475: Invalid value for argument {arg0}: {s}");
             }
         }
@@ -465,9 +465,10 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             bail!();
         }
 
-        let new_cwd = numbuf2.dict_string(job_opts, b"cwd");
-        if !new_cwd.is_null() && unsafe { *new_cwd } as c_int != NUL {
-            cwd = new_cwd;
+        if let Some(new_cwd) = numbuf2.dict_string(job_opts, b"cwd")
+            && !new_cwd.is_empty()
+        {
+            cwd = new_cwd.as_ptr();
             if !unsafe { os_isdir(cwd) } {
                 let what = c"expected valid directory".as_ptr();
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -541,10 +542,10 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
     if pty && term_name.is_null() {
-        term_name = numbuf3.dict_string(job_opts, b"TERM");
-        if term_name.is_null() {
-            term_name = c"ansi".as_ptr();
-        }
+        term_name = numbuf3
+            .dict_string(job_opts, b"TERM")
+            .unwrap_or(c"ansi")
+            .as_ptr();
     }
 
     let env = unsafe { create_environment(job_env, clear_env, pty, term_name) };

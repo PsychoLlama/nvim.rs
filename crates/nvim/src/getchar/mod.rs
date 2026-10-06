@@ -48,7 +48,7 @@ use crate::mbyte::{
 use crate::memfile::did_swapwrite_msg;
 use crate::memline::ml_sync_all;
 use crate::memory::did_outofmem_msg;
-use crate::memory::{strequal, xfree, xmalloc, xmemcpyz, xmemdupz};
+use crate::memory::{strequal, xfree, xmalloc, xmemcpyz};
 use crate::message::state::{
     called_emsg, cmd_silent, did_emsg, emsg_silent, msg_col, msg_didout, msg_row, msg_scroll,
     msg_silent, need_wait_return,

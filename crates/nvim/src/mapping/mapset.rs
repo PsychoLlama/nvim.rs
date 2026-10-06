@@ -9,7 +9,6 @@
 
 use super::*;
 use crate::api_error;
-use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::FuncFlags;
 use crate::message_fmt::{c_str, msg_cstr};
@@ -17,7 +16,7 @@ use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 /// The two `nvim_set_keymap` validation messages that carry a quote, hoisted
@@ -39,7 +38,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let mut buf = NumBuf::new();
-    let which: *const c_char;
+    let which: &CStr;
     let is_abbr: bool;
     let d: Option<&Dict>;
 
@@ -49,18 +48,19 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // there, and `buf` is the scratch `tv_get_string_buf_chk` may answer with.
     if args[0].v_type() == VAR_DICT as _ {
         d = args[0].dict_ref();
-        which = numbuf.dict_string(d, b"mode");
+        let mode = numbuf.dict_string(d, b"mode");
         let abbr = dict_get_bool(d, b"abbr", -1);
-        if which.is_null() || abbr < 0 {
+        let Some(mode) = mode.filter(|_| abbr >= 0) else {
             emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT));
             return;
-        }
+        };
+        which = mode;
         is_abbr = abbr != 0;
     } else {
-        which = buf.string_ptr_chk(&args[0]);
-        if which.is_null() {
+        let Some(mode) = buf.string_chk(&args[0]) else {
             return;
-        }
+        };
+        which = mode;
         // An absent argument reads as upstream's empty slot did: E685, false.
         is_abbr = tv_get_bool(args.get(1).unwrap_or(&TypVal::Unknown)) != 0;
         // SAFETY: as above.
@@ -70,11 +70,9 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         d = args[2].dict_ref();
     }
 
-    // SAFETY: `which` is a NUL-terminated mode string.
-    let mode = get_map_mode_string(unsafe { cstr::bytes_at(which) }, is_abbr);
+    let mode = get_map_mode_string(which.to_bytes(), is_abbr);
     if mode == 0 {
-        // SAFETY: a static format whose one conversion is `which`.
-        let which = unsafe { c_str(which) };
+        let which = msg_cstr(which);
         semsg!("E1276: Illegal map mode string: '{which}'");
         return;
     }
@@ -91,16 +89,20 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if let Some(di) = dict_find(d, b"callback")
         && di.di_tv.v_type() == VAR_FUNC as _
     {
+        let name = di
+            .di_tv
+            .func_name()
+            .map_or(&b""[..], |name| name.as_bytes());
         // SAFETY: `find_func` answers null or a live `UserFunc`.
         unsafe {
-            let fp = find_func(cstr::bytes_at(di.di_tv.func_name_or_null()));
+            let fp = find_func(name);
             if !fp.is_null() && (*fp).uf_flags.has(FuncFlags::LUAREF) {
                 rhs_lua = api_new_luaref((*fp).uf_luaref);
-                orig_rhs = c"".as_ptr().cast_mut();
+                orig_rhs = Some(c"");
             }
         }
     }
-    if lhs.is_null() || lhsraw.is_null() || orig_rhs.is_null() {
+    let (Some(lhs), Some(lhsraw), Some(orig_rhs)) = (lhs, lhsraw, orig_rhs) else {
         // SAFETY: a static NUL-terminated message, and `rhs_lua` is the
         // reference taken just above, if any.
         unsafe {
@@ -108,7 +110,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
             api_free_luaref(rhs_lua);
         }
         return;
-    }
+    };
 
     let number = |key: &CStr| dict_get_number(d, key.to_bytes());
 
@@ -141,10 +143,17 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // A copy, because the unmap below is past the end of a projection's
     // borrow.
     let cpo = P_CPO.get();
+    let rhs_len = orig_rhs.count_bytes();
     // SAFETY: `orig_rhs` is NUL-terminated.
     unsafe {
-        let rhs_len = cstr::bytes_at(orig_rhs).len();
-        set_maparg_rhs(orig_rhs, rhs_len, rhs_lua, sid, cpo.as_cstr(), &mut args);
+        set_maparg_rhs(
+            orig_rhs.as_ptr(),
+            rhs_len,
+            rhs_lua,
+            sid,
+            cpo.as_cstr(),
+            &mut args,
+        );
     }
 
     // SAFETY: `curbuf` is set from startup to exit; `&raw` reads nothing, and
@@ -165,11 +174,11 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 
     // Delete any existing mapping for this lhs and mode.
     let mut unmap_args = MapArguments::default();
+    let lhs_len = lhs.count_bytes();
     // SAFETY: `lhs` is NUL-terminated.
     unsafe {
-        let lhs_len = cstr::bytes_at(lhs).len();
         set_maparg_lhs_rhs(
-            lhs,
+            lhs.as_ptr(),
             lhs_len,
             c"".as_ptr(),
             0,
@@ -194,13 +203,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
             )
         }
     };
-    // SAFETY: both are the dict's own NUL-terminated LHS strings.
-    let (lhsraw, lhsrawalt) = unsafe {
-        (
-            cstr::bytes_at(lhsraw),
-            (!lhsrawalt.is_null()).then(|| cstr::bytes_at(lhsrawalt)),
-        )
-    };
+    let (lhsraw, lhsrawalt) = (lhsraw.to_bytes(), lhsrawalt.map(CStr::to_bytes));
     mp_result[0] = add(lhsraw, false);
     if let Some(alt) = lhsrawalt {
         mp_result[1] = add(alt, true);
