@@ -4,18 +4,18 @@
 #![allow(unsafe_code)]
 
 use super::VARNUMBER_MAX;
-use super::wrappers::{arg_number_chk, arg_string, list_alloc_ret, tv_get_float_chk};
-use crate::charset::skipwhite;
+use super::wrappers::{arg_number_chk, list_alloc_ret, tv_get_float_chk};
+use crate::charset::skip;
 use crate::charset::string2float;
 use crate::eval::typval::{NumBuf, list_find, list_len};
 use crate::event::libuv::uv_random;
 use crate::global_cell::GlobalCell;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::env::os_get_pid;
 use crate::os::time::os_hrtime;
 use crate::semsg;
 use crate::types::{EvalFuncData, Float, TypVal, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VarNumber};
-use core::ffi::{c_char, c_double, c_int, c_void};
+use core::ffi::{c_double, c_int, c_void};
 use core::ptr;
 
 /// `abs({expr})` — magnitude, as a Float for a Float and as a Number
@@ -252,14 +252,7 @@ pub fn f_rand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         draw
     } else {
         let Some(seed) = seed_list(&args[0]) else {
-            // Kept on the variadic message call rather than moved to
-            // `semsg!`: the argument is arbitrary user bytes, and a Rust
-            // format string can only carry UTF-8.
-            // SAFETY throughout: `&args[0]` is a live typval, and `tv_get_string`
-            // hands back a NUL-terminated buffer that outlives the call.
-            let what = arg_string(&mut numbuf, &args[0]);
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let what = unsafe { c_str(what) };
+            let what = msg_cstr(numbuf.string(&args[0]));
             semsg!("E475: Invalid argument: {what}");
             result.write_number(-1);
             return;
@@ -392,17 +385,18 @@ pub fn f_range(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// consumed here; `string2float` parses what is left.
 pub fn f_str2float(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: `&args[0]` is a live typval; `tv_get_string` hands back a
-    // NUL-terminated buffer that outlives this call, and `skipwhite` only
-    // walks forward over it.
-    let mut p = unsafe { skipwhite(arg_string(&mut numbuf, &args[0])) };
+    let text = numbuf.string(&args[0]);
+    let bytes = text.to_bytes();
+    let mut at = skip::white(bytes);
     // Only one sign is consumed, and the whitespace skip after it is
     // what makes `"- 1"` parse as -1.
-    let negate = unsafe { *p } == b'-' as c_char;
-    if unsafe { *p } == b'+' as c_char || unsafe { *p } == b'-' as c_char {
-        p = unsafe { skipwhite(p.add(1)) };
+    let sign = bytes.get(at).copied();
+    let negate = sign == Some(b'-');
+    if matches!(sign, Some(b'+' | b'-')) {
+        at += 1;
+        at += skip::white(&bytes[at..]);
     }
-    // SAFETY: `p` walks inside the NUL-terminated argument string.
-    let (parsed, _) = unsafe { string2float(p) };
+    // SAFETY: a tail of the NUL-terminated argument string.
+    let (parsed, _) = unsafe { string2float(text[at..].as_ptr()) };
     result.write_float(if negate { -parsed } else { parsed });
 }

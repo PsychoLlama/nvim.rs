@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_string, list_alloc_ret};
+use super::wrappers::list_alloc_ret;
 use super::{
     kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
     kRetObject,
@@ -13,7 +13,6 @@ use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, au
 use crate::channel::{
     channel_close, channel_connect, channel_from_stdio, channel_send, find_channel,
 };
-use crate::cstr;
 use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{NumBuf, blob_bytes, dict_get_bool, dict_get_callback, dict_get_number};
@@ -23,7 +22,7 @@ use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::nlua_exec;
 use crate::memory::{ThinCString, XString};
-use crate::memory::{arena_mem_free, xfree, xmemdup, xstrdup};
+use crate::memory::{arena_mem_free, xfree, xmemdup};
 use crate::message::e_invarg;
 use crate::message::on_print_cb;
 use crate::message::{emsg, emsg_ptr};
@@ -82,15 +81,12 @@ pub fn f_chanclose(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut part = kChannelPartAll;
     if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
-        let stream = arg_string(&mut numbuf, &args[1]);
-        let found = CHANNEL_PARTS
-            .iter()
-            .find(|(name, _)| unsafe { cstr::eq(stream, name.as_ptr()) });
+        let stream = numbuf.string(&args[1]);
+        let found = CHANNEL_PARTS.iter().find(|&&(name, _)| name == stream);
         match found {
             Some(&(_, p)) => part = p,
             None => {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let stream = unsafe { c_str(stream) };
+                let stream = msg_cstr(stream);
                 semsg!("Invalid channel stream \"{stream}\"");
                 return;
             }
@@ -179,7 +175,7 @@ pub fn f_rpcnotify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let event_args = trailing_args(args, 2);
     let id = args[0].number_or_zero() as uint64_t;
-    let event = arg_string(&mut numbuf, &args[1]);
+    let event = numbuf.string(&args[1]).as_ptr();
     let ok = unsafe { rpc_send_event(id, event, event_args) };
     if !ok {
         let what = c"Channel doesn't exist".as_ptr();
@@ -287,7 +283,7 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let scope = (nesting != 0).then(ProviderScope::enter);
 
     let chan_id = args[0].number_or_zero() as uint64_t;
-    let method = arg_string(&mut numbuf, &args[1]);
+    let method = numbuf.string(&args[1]).as_ptr();
     let mut res_mem: ArenaMem = ptr::null_mut();
     let called = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem) };
 
@@ -405,7 +401,7 @@ pub fn f_serverstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         emsg(gettext(e_invarg));
         return;
     } else {
-        unsafe { xstrdup(arg_string(&mut numbuf, &args[0])) }
+        ThinCString::from_cstr(numbuf.string(&args[0])).into_raw()
     };
 
     let status = unsafe { server_start(address) };
@@ -471,11 +467,11 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         return;
     }
 
-    let mode = arg_string(&mut numbuf, &args[0]);
-    let address = arg_string(&mut numbuf2, &args[1]);
-    let tcp = if unsafe { cstr::eq_bytes(mode, b"tcp") } {
+    let mode = numbuf.bytes(&args[0]);
+    let address = numbuf2.string(&args[1]).as_ptr();
+    let tcp = if mode == b"tcp" {
         true
-    } else if unsafe { cstr::eq_bytes(mode, b"pipe") } {
+    } else if mode == b"pipe" {
         false
     } else {
         let arg0 = "invalid mode";

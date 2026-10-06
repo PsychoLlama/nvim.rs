@@ -4,7 +4,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, list_alloc_ret};
+use super::wrappers::{arg_number_chk, list_alloc_ret};
 use super::{
     NSUBEXP, SomeMatchType, kSomeMatch, kSomeMatchEnd, kSomeMatchList, kSomeMatchStr,
     kSomeMatchStrPos, tv_get_buf,
@@ -52,13 +52,9 @@ struct Regprog(RegMatch);
 impl Regprog {
     /// Compile `pat` the way the whole family does. `None` when it did not
     /// compile — `vim_regcomp` has already reported why.
-    ///
-    /// # Safety
-    /// `pat` is NUL-terminated.
-    unsafe fn compile(pat: *const c_char) -> Option<Self> {
+    fn compile(pat: &CStr) -> Option<Self> {
         let mut rm = EMPTY_REGMATCH;
-        // SAFETY: the caller's obligation.
-        rm.regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
+        rm.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
         if rm.regprog.is_null() {
             return None;
         }
@@ -137,16 +133,16 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 break 'theend;
             }
         } else {
-            str = arg_string(&mut numbuf, &args[0]) as *mut c_char;
+            let subject = numbuf.string(&args[0]);
+            str = subject.as_ptr().cast_mut();
             expr = str;
-            len = unsafe { cstr::bytes_at(str) }.len() as i64;
+            len = subject.count_bytes() as i64;
         }
 
         let mut patbuf = NumBuf::new();
-        let pat = arg_string_chk(&mut patbuf, &args[1]);
-        if pat.is_null() {
+        let Some(pat) = patbuf.string_chk(&args[1]) else {
             break 'theend;
-        }
+        };
 
         if args.len() > 2 {
             let mut error = false;
@@ -186,7 +182,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
             }
         }
 
-        let Some(mut prog) = (unsafe { Regprog::compile(pat) }) else {
+        let Some(mut prog) = Regprog::compile(pat) else {
             break 'theend;
         };
         let regmatch = &mut prog.0;
@@ -399,9 +395,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let Some(buf) = buf else {
         // Only report the name when `tv_get_buf` was silent about it.
         if did_emsg.get() == prev_did_emsg {
-            let what = arg_string(&mut numbuf, &args[0]);
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let what = unsafe { c_str(what) };
+            let what = msg_cstr(numbuf.string(&args[0]));
             semsg!("E158: Invalid buffer name: {what}");
         }
         return;
@@ -411,7 +405,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         return;
     }
     let mut patbuf = NumBuf::new();
-    let pat = arg_string(&mut patbuf, &args[1]);
+    let pat = patbuf.string(&args[1]);
 
     let did_emsg_before = did_emsg.get();
     let mut slnum: LineNr = tv_get_lnum_buf(&args[2], Some(buf));
@@ -439,7 +433,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     };
 
     let _cpo = SavedCpo::empty();
-    let Some(mut prog) = (unsafe { Regprog::compile(pat) }) else {
+    let Some(mut prog) = Regprog::compile(pat) else {
         return;
     };
     while slnum <= elnum {
@@ -510,12 +504,11 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         return;
     }
     let mut patbuf = NumBuf::new();
-    let pat = arg_string_chk(&mut patbuf, &args[1]);
-    if pat.is_null() {
+    let Some(pat) = patbuf.string_chk(&args[1]) else {
         return;
-    }
+    };
     let _cpo = SavedCpo::empty();
-    let Some(mut prog) = (unsafe { Regprog::compile(pat) }) else {
+    let Some(mut prog) = Regprog::compile(pat) else {
         return;
     };
     // The `{dict}` is only read once the pattern compiled, as upstream

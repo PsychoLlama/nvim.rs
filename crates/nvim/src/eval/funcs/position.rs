@@ -3,9 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{
-    arg_bool, arg_lnum, arg_number, arg_number_chk, arg_string, arg_string_chk, list_alloc_ret,
-};
+use super::wrappers::{arg_bool, arg_lnum, arg_number, arg_number_chk, list_alloc_ret};
 use crate::cursor::check_cursor;
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
@@ -18,7 +16,7 @@ use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
 use crate::message::e_invarg;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::r#move::{WinValid, update_curswant};
 use crate::option::vars::P_SPK;
 use crate::os::cshim::gettext;
@@ -37,7 +35,7 @@ use crate::types::{
 use crate::window::state::skip_update_topline;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
 /// "End of line", the column sentinel. `MAXCOL` is spelled as an unsigned
@@ -399,12 +397,9 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
     {
         let mut lnum = arg_lnum(&args[0]);
         if lnum < 0 {
-            // Kept on the variadic message call: the argument is
-            // arbitrary user bytes. Note that this reports and then
-            // carries on to the range check below.
-            let what = arg_string(&mut numbuf, &args[0]);
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let what = unsafe { c_str(what) };
+            // Note that this reports and then carries on to the range
+            // check below.
+            let what = msg_cstr(numbuf.string(&args[0]));
             semsg!("E475: Invalid argument: {what}");
         } else if lnum == 0 {
             lnum = Win::current().w_cursor.lnum;
@@ -456,12 +451,11 @@ pub fn f_setcharpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: `pos`, `fnum` and `curswant` are
-    // live locals the List parser fills, and `name` is NUL-terminated.
+    // live locals the List parser fills.
     result.write_number(-1);
-    let name = arg_string_chk(&mut numbuf, &args[0]);
-    if name.is_null() {
+    let Some(name) = numbuf.bytes_chk(&args[0]) else {
         return;
-    }
+    };
     let mut pos = NOWHERE;
     let mut fnum: c_int = 0;
     let mut curswant: ColNr = -1;
@@ -473,7 +467,7 @@ fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
     if pos.col != END_OF_LINE {
         pos.col = (pos.col - 1).max(0);
     }
-    match unsafe { CStr::from_ptr(name) }.to_bytes() {
+    match name {
         b"." => {
             Win::current().w_cursor = pos;
             if curswant >= 0 {

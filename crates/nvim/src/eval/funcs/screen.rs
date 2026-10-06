@@ -3,10 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{
-    arg_lnum, arg_number, arg_number_chk, arg_string, list_alloc_ret, list_set_ret,
-};
-use crate::cstr;
+use super::wrappers::{arg_lnum, arg_number, arg_number_chk, list_alloc_ret, list_set_ret};
 use crate::winlayer::{Buf, Win};
 
 use crate::eval::typval::NumBuf;
@@ -158,18 +155,16 @@ pub fn f_screenstring(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 /// `hlID({name})` — the highlight group's id, or 0.
 pub fn f_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the frame is live.
-    // SAFETY: the argument's NUL-terminated string.
-    let name = unsafe { cstr::at(arg_string(&mut numbuf, &args[0])) };
+    let name = numbuf.string(&args[0]);
     result.write_number(syn_name2id(name) as VarNumber);
 }
 
 /// `hlexists({name})` — whether the group is defined.
 pub fn f_hlexists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the frame is live.
-    result
-        .write_number(unsafe { highlight_exists(arg_string(&mut numbuf, &args[0])) } as VarNumber);
+    let name = numbuf.string(&args[0]).as_ptr();
+    // SAFETY: `name` is the argument's NUL-terminated string.
+    result.write_number(unsafe { highlight_exists(name) } as VarNumber);
 }
 
 /// What a `synIDattr()` `{what}` argument selects.
@@ -237,14 +232,14 @@ pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // outlives the `highlight_color` call, and `modebuf` outlives the string
     // `tv_get_string_buf` may park in it.
     let id = arg_number(&args[0]) as c_int;
-    let what = arg_string(&mut numbuf, &args[1]);
+    let what = numbuf.string(&args[1]);
 
     // "cterm" or "gui"; anything else, including an absent argument,
     // means whatever the attached UI is.
     let modec = if args.len() > 2 {
         let mut modebuf = NumBuf::new();
-        let mode = arg_string(&mut modebuf, &args[2]);
-        match (unsafe { *mode } as u8).to_ascii_lowercase() {
+        let mode = modebuf.bytes(&args[2]);
+        match mode.first().copied().unwrap_or(0).to_ascii_lowercase() {
             c @ (b'c' | b'g') => c as c_int,
             _ => 0,
         }
@@ -254,8 +249,8 @@ pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         'c' as c_int
     };
 
-    let p = match attr_selector(unsafe { CStr::from_ptr(what) }.to_bytes()) {
-        Some(Attr::Color) => unsafe { highlight_color(id, what, modec, &mut color) },
+    let p = match attr_selector(what.to_bytes()) {
+        Some(Attr::Color) => unsafe { highlight_color(id, what.as_ptr(), modec, &mut color) },
         Some(Attr::Name) => unsafe { get_highlight_name_ext(id - 1, false) },
         Some(Attr::Bit(bit)) => highlight_has_attr(id, bit, modec),
         None => ptr::null(),

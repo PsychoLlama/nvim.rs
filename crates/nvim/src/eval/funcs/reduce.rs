@@ -2,7 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_copy, arg_string};
+use super::wrappers::arg_copy;
 use super::{
     VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument, e_string_list_or_blob_required,
 };
@@ -12,7 +12,7 @@ use crate::eval::typval::{
     tv_check_for_number_arg, tv_check_for_string_arg, tv_copy, tv_get_number_chk,
 };
 use crate::eval::{eval_expr_typval, partial_name};
-use crate::mbyte::utfc_ptr2len;
+use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message::state::called_emsg;
@@ -23,17 +23,8 @@ use crate::types::{
     EvalFuncData, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING,
     VAR_UNKNOWN, VarLock, VarNumber,
 };
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::mem::ManuallyDrop;
-
-/// A one-character String typval owning a copy of `len` bytes at `p`.
-///
-/// # Safety
-/// `p` has at least `len` readable bytes.
-unsafe fn owned_str(p: *const c_char, len: c_int) -> TypVal {
-    // SAFETY: the caller's obligation.
-    TypVal::string_from(unsafe { core::slice::from_raw_parts(p.cast::<u8>(), len as usize) })
-}
 
 /// A Number typval.
 const fn number_tv(n: VarNumber) -> TypVal {
@@ -213,12 +204,12 @@ fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
 /// `reduce()` over a String, one composed character at a time.
 fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the caller's obligation. `p` walks a NUL-terminated string
-    // owned by the argument, which the fold cannot modify.
-    let mut p = arg_string(&mut numbuf, &args[0]);
+    // The argument's own string, which the fold cannot modify.
+    let text = numbuf.bytes(&args[0]);
+    let mut at = 0;
     let called_emsg_start = called_emsg.get();
     if args.len() <= 2 {
-        if unsafe { *p } as c_int == NUL {
+        if text.is_empty() {
             semsg!(
                 "E998: Reduce of an empty {} with no initial value",
                 "String"
@@ -226,25 +217,22 @@ fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
             return;
         }
         // With no initial value the first character is it.
-        let len = unsafe { utfc_ptr2len(p) };
-        *result = unsafe { owned_str(p, len) };
-        p = unsafe { p.add(len as usize) };
+        at = cluster_len(text);
+        *result = TypVal::string_from(&text[..at]);
     } else if tv_check_for_string_arg(args, 2).is_err() {
         return;
     } else {
         arg_copy(&args[2], result);
     }
-    while unsafe { *p } as c_int != NUL {
-        let len = unsafe { utfc_ptr2len(p) };
+    while at < text.len() {
+        let len = cluster_len(&text[at..]);
         // The fold takes the character over -- `STRING_CLEANUP` clears
         // `argv[1]` -- so this must not release it a second time.
-        let item = ManuallyDrop::new(unsafe { owned_str(p, len) });
-        // SAFETY: `expr` is the caller's callback and `result` the running
-        // accumulator; `item` is the character just measured.
+        let item = ManuallyDrop::new(TypVal::string_from(&text[at..at + len]));
         if !fold_step(expr, result, &item, STRING_CLEANUP, called_emsg_start) {
             break;
         }
-        p = unsafe { p.add(len as usize) };
+        at += len;
     }
 }
 
@@ -296,7 +284,7 @@ pub fn f_reduce(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             .func_name()
             .map_or(core::ptr::null(), ThinCString::as_ptr),
         VAR_PARTIAL => unsafe { partial_name(args[1].partial_or_null()) },
-        _ => arg_string(&mut numbuf, &args[1]),
+        _ => numbuf.string(&args[1]).as_ptr(),
     };
     if func_name.is_null() || unsafe { *func_name } as c_int == NUL {
         emsg(gettext(e_missing_function_argument));

@@ -4,7 +4,7 @@
 #![allow(unsafe_code)]
 
 use super::TV_TRANSLATE;
-use super::wrappers::{arg_copy, arg_number_chk, arg_string, dict_alloc_ret, list_alloc_ret};
+use super::wrappers::{arg_copy, arg_number_chk, dict_alloc_ret, list_alloc_ret};
 use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
@@ -23,7 +23,7 @@ use crate::memory::ThinCString;
 use crate::message::e_listblobreq;
 use crate::message::state::{called_emsg, did_emsg};
 use crate::message::{emsg, internal_error};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
@@ -238,9 +238,10 @@ fn get_from_dict(args: &[TypVal]) -> *mut TypVal {
     if d.is_null() {
         return ptr::null_mut();
     }
-    // SAFETY: the argument's own dictionary and a NUL-terminated key. The
-    // pointer form is the answer: the caller writes through the value.
-    let di = unsafe { (*d).find_ptr(cstr::bytes_at(arg_string(&mut numbuf, &args[1]))) };
+    let key = numbuf.bytes(&args[1]);
+    // SAFETY: the argument's own dictionary. The pointer form is the
+    // answer: the caller writes through the value.
+    let di = unsafe { (*d).find_ptr(key) };
     if di.is_null() {
         return ptr::null_mut();
     }
@@ -273,19 +274,19 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
         &raw mut fref
     };
-    let what = arg_string(&mut numbuf, &args[1]);
-    match unsafe { CStr::from_ptr(what) }.to_bytes() {
+    let what = numbuf.bytes(&args[1]);
+    match what {
         b"func" | b"name" => {
             let mut name: *const c_char = unsafe { partial_name(pt) };
             // "func" hands back a Funcref, "name" a plain String.
-            let as_funcref = unsafe { *what } == b'f' as c_char;
+            let as_funcref = what == b"func";
             debug_assert!(!name.is_null());
             if as_funcref {
                 unsafe { func_ref(name as *mut c_char) };
             }
             // A lambda has no name of its own; "name" shows the
             // printable form instead.
-            if unsafe { *what } == b'n' as c_char
+            if what == b"name"
                 && unsafe { (*pt).pt_name }.is_null()
                 && !unsafe { (*pt).pt_func }.is_null()
             {
@@ -321,8 +322,7 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
         _ => {
             // Kept on the variadic message call: `what` is arbitrary
             // user bytes and a Rust format string can only carry UTF-8.
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let what = unsafe { c_str(what) };
+            let what = msg_bytes(what);
             semsg!("E475: Invalid argument: {what}");
         }
     }
@@ -584,10 +584,7 @@ pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: every union read is guarded by the type tag above it, and a
     // Number is measured through its String spelling.
     result.write_number(match tv.v_type() {
-        VAR_STRING | VAR_NUMBER => {
-            let s = arg_string(&mut numbuf, &args[0]);
-            unsafe { cstr::bytes_at(s).len() as VarNumber }
-        }
+        VAR_STRING | VAR_NUMBER => numbuf.bytes(&args[0]).len() as VarNumber,
         VAR_BLOB => VarNumber::from(blob_len(tv.blob_ref())),
         VAR_LIST => list_len(tv.list_ref()) as VarNumber,
         VAR_DICT => dict_len(tv.dict_ref()) as VarNumber,

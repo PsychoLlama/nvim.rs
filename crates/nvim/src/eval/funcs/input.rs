@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_number, arg_number_chk, arg_string, arg_string_chk};
+use super::wrappers::{arg_number, arg_number_chk};
 use super::{
     SIGINT, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING, tv_get_buf_from_arg,
 };
@@ -33,11 +33,11 @@ use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
-use crate::types::{EvalFuncData, FAIL, NUL, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
+use crate::types::{EvalFuncData, FAIL, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 /// `{type}` spellings `confirm()` recognises, by their first letter.
@@ -55,7 +55,7 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buttons_buf = NumBuf::new();
     let mut type_buf = NumBuf::new();
-    let mut buttons = ptr::null::<c_char>();
+    let mut buttons = None;
     let mut default = 1;
     let mut kind = VIM_GENERIC as c_int;
     let mut error = false;
@@ -63,40 +63,42 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the frame is live; the two scratch buffers outlive the
     // strings `tv_get_string_buf_chk` may park in them and the dialog runs
     // before they go out of scope.
-    let message = arg_string_chk(&mut numbuf, &args[0]);
-    if message.is_null() {
+    let message = numbuf.string_chk(&args[0]);
+    if message.is_none() {
         error = true;
     }
     // Each optional argument is only read when the one before it was
     // supplied, and a coercion failure anywhere cancels the dialog --
     // but not the rest of the parse.
     if args.len() > 1 {
-        buttons = arg_string_chk(&mut buttons_buf, &args[1]);
-        if buttons.is_null() {
+        buttons = buttons_buf.string_chk(&args[1]);
+        if buttons.is_none() {
             error = true;
         }
         if args.len() > 2 {
             default = arg_number_chk(&args[2], Some(&mut error)) as c_int;
             if args.len() > 3 {
-                let typestr = arg_string_chk(&mut type_buf, &args[3]);
-                if typestr.is_null() {
-                    error = true;
-                } else {
-                    let first = (unsafe { *typestr } as u8).to_ascii_uppercase();
+                let typestr = type_buf.bytes_chk(&args[3]);
+                if let Some(typestr) = typestr {
+                    let first = typestr.first().copied().unwrap_or(0).to_ascii_uppercase();
                     if let Some(&(_, found)) =
                         DIALOG_TYPES.iter().find(|&&(letter, _)| letter == first)
                     {
                         kind = found;
                     }
+                } else {
+                    error = true;
                 }
             }
         }
     }
     // No {choices}, or an empty one, means a single "Ok".
-    if buttons.is_null() || unsafe { *buttons } as c_int == NUL {
-        buttons = gettext(c"&Ok").as_ptr();
-    }
-    if !error {
+    let buttons = buttons
+        .filter(|buttons| !buttons.is_empty())
+        .unwrap_or_else(|| gettext(c"&Ok"))
+        .as_ptr();
+    if !error && let Some(message) = message {
+        let message = message.as_ptr();
         let chosen =
             unsafe { do_dialog(kind, ptr::null(), message, buttons, default, ptr::null(), 0) };
         result.write_number(chosen as VarNumber);
@@ -125,13 +127,11 @@ pub fn f_feedkeys(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if check_secure() {
         return;
     }
-    let keys = arg_string(&mut numbuf, &args[0]);
+    let keys = numbuf.string(&args[0]).as_ptr();
     // A missing {mode} is spelled as a null string, not as "".
-    let mode = if args.len() > 1 {
-        arg_string(&mut mode_buf, &args[1])
-    } else {
-        ptr::null()
-    };
+    let mode = args
+        .get(1)
+        .map_or(ptr::null(), |mode| mode_buf.string(mode).as_ptr());
     unsafe { nvim_feedkeys(cstr_to_string(keys), cstr_to_string(mode), true) };
 }
 

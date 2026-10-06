@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, list_alloc_ret};
+use super::wrappers::{arg_number_chk, list_alloc_ret};
 use crate::cstr;
 use crate::option::SavedCpo;
 
@@ -17,7 +17,7 @@ use crate::eval::typval::NumBuf;
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
 use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::normal::find_decl;
 use crate::option::vars::{P_WS, p_ws};
 
@@ -162,7 +162,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     // SAFETY throughout: the frame's arguments and the current window are live for the
     // whole call; `pos`/`firstpos`/`tm` are locals handed to `searchit` by
     // pointer and outlive it.
-    let pat = arg_string(&mut numbuf, &args[0]);
+    let pat = numbuf.string(&args[0]);
     // May set 'wrapscan'.
     let dir = search_direction(args.get(1), flagsp);
     if dir == 0 {
@@ -202,9 +202,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     if flags & (SP_REPEAT | SP_RETCOUNT) != 0
         || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
     {
-        let what = arg_string(&mut numbuf2, &args[1]);
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let what = unsafe { c_str(what) };
+        let what = msg_cstr(numbuf2.string(&args[1]));
         semsg!("E475: Invalid argument: {what}");
         return 0;
     }
@@ -222,14 +220,14 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
         sa_timed_out: 0,
         sa_wrapped: 0,
     };
-    let patlen = unsafe { cstr::bytes_at(pat) }.len();
+    let patlen = pat.count_bytes();
 
     // Repeat until {skip} answers false.
     let mut subpatnum;
     loop {
         let at = &raw mut pos;
         let sa = &raw mut sia;
-        let text = pat as *mut c_char;
+        let text = pat.as_ptr().cast_mut();
         // SAFETY: `pos` and `sia` are locals and `pat` is `patlen` bytes.
         subpatnum = unsafe { search_here(at, dir as Direction, text, patlen, options, sa) };
         // Coming back to the first match means every match was skipped.
@@ -327,17 +325,16 @@ pub fn f_searchdecl(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // SAFETY throughout: the frame's arguments are live typvals and `name` is the
     // string one of them owns, which outlives the `find_decl` call.
-    let name = arg_string_chk(&mut numbuf, &args[0]);
+    let name = numbuf.string_chk(&args[0]);
     if args.len() > 1 {
         locally = arg_number_chk(&args[1], Some(&mut error)) == 0;
         if !error && args.len() > 2 {
             thisblock = arg_number_chk(&args[2], Some(&mut error)) != 0;
         }
     }
-    if !error && !name.is_null() {
-        let word = name as *mut c_char;
-        // SAFETY: `name` is the NUL-terminated argument.
-        let len = unsafe { cstr::bytes_at(name) }.len();
+    if !error && let Some(name) = name {
+        let word = name.as_ptr().cast_mut();
+        let len = name.count_bytes();
         let keep = SEARCH_KEEP as c_int;
         let found = unsafe { find_decl(word, len, locally, thisblock, keep) };
         result.write_number((found as c_int == FAIL) as VarNumber);
@@ -361,13 +358,13 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
     // and the three patterns outlive the `do_searchpair` call.
     let mut nbuf1 = NumBuf::new();
     let mut nbuf2 = NumBuf::new();
-    let spat = arg_string_chk(&mut numbuf, &args[0]);
-    let mpat = arg_string_chk(&mut nbuf1, &args[1]);
-    let epat = arg_string_chk(&mut nbuf2, &args[2]);
-    if spat.is_null() || mpat.is_null() || epat.is_null() {
+    let spat = numbuf.string_chk(&args[0]);
+    let mpat = nbuf1.string_chk(&args[1]);
+    let epat = nbuf2.string_chk(&args[2]);
+    let (Some(spat), Some(mpat), Some(epat)) = (spat, mpat, epat) else {
         // Type error, already reported.
         return 0;
-    }
+    };
 
     // May set 'wrapscan'.
     let dir = search_direction(args.get(3), &mut flags);
@@ -377,9 +374,7 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
 
     // `e` and `p` belong to search(); `n` and `s` contradict each other.
     if flags & (SP_END | SP_SUBPAT) != 0 || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0) {
-        let what = arg_string(&mut numbuf2, &args[3]);
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let what = unsafe { c_str(what) };
+        let what = msg_cstr(numbuf2.string(&args[3]));
         semsg!("E475: Invalid argument: {what}");
         return 0;
     }
@@ -398,18 +393,14 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
         if args.len() > 5 {
             lnum_stop = arg_number_chk(&args[5], None) as LineNr;
             if lnum_stop < 0 {
-                let what = arg_string(&mut numbuf3, &args[5]);
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let what = unsafe { c_str(what) };
+                let what = msg_cstr(numbuf3.string(&args[5]));
                 semsg!("E475: Invalid argument: {what}");
                 return 0;
             }
             if args.len() > 6 {
                 time_limit = arg_number_chk(&args[6], None) as int64_t;
                 if time_limit < 0 {
-                    let what = arg_string(&mut numbuf4, &args[6]);
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let what = unsafe { c_str(what) };
+                    let what = msg_cstr(numbuf4.string(&args[6]));
                     semsg!("E475: Invalid argument: {what}");
                     return 0;
                 }
@@ -422,6 +413,7 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
     let (stop, tm) = (lnum_stop, time_limit);
     // SAFETY: the three patterns are NUL-terminated, `skip` is null or
     // argument 4, and `at` is null or the caller's position.
+    let (spat, mpat, epat) = (spat.as_ptr(), mpat.as_ptr(), epat.as_ptr());
     unsafe { do_searchpair(spat, mpat, epat, dir, skip, flags, at, stop, tm) }
 }
 

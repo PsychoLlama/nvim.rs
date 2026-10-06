@@ -3,7 +3,7 @@
 #![allow(unsafe_code)]
 
 use super::tv_get_buf;
-use super::wrappers::{arg_number, arg_string, arg_string_chk, dict_alloc_ret, list_alloc_ret};
+use super::wrappers::{arg_number, dict_alloc_ret, list_alloc_ret};
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_alloc, tv_list_alloc,
     tv_list_alloc_ret,
@@ -11,16 +11,16 @@ use crate::eval::typval::{
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::guard::Suppress;
 use crate::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::startup::vim_ignored;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
-    Dict, EvalFuncData, List, NUL, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
+    Dict, EvalFuncData, List, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
 /// `changenr()` — the sequence number of the change the undo tree is at.
@@ -169,15 +169,13 @@ pub fn f_settagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         if tv_check_for_string_arg(args, 2).is_err() {
             return;
         }
-        let actstr = arg_string_chk(&mut numbuf, &args[2]);
-        if actstr.is_null() {
+        let Some(actstr) = numbuf.bytes_chk(&args[2]) else {
             return;
-        }
-        match unsafe { CStr::from_ptr(actstr) }.to_bytes() {
-            b"r" | b"a" | b"t" => action = unsafe { *actstr },
+        };
+        match actstr {
+            &[letter @ (b'r' | b'a' | b't')] => action = letter as c_char,
             _ => {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let actstr = unsafe { c_str(actstr) };
+                let actstr = msg_bytes(actstr);
                 semsg!("E962: Invalid action: '{actstr}'");
                 return;
             }
@@ -205,18 +203,16 @@ pub fn f_taglist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf2 = NumBuf::new();
     // SAFETY throughout: the arguments and `result` are live typvals; both strings are
     // NUL-terminated and outlive the search.
-    let pattern = arg_string(&mut numbuf, &args[0]);
+    let pattern = numbuf.string(&args[0]);
     // An empty pattern answers 0 — a Number, not an empty List.
     result.write_number(0);
-    if unsafe { *pattern } == NUL as c_char {
+    if pattern.is_empty() {
         return;
     }
-    let fname = if args.len() > 1 {
-        arg_string(&mut numbuf2, &args[1])
-    } else {
-        ptr::null()
-    };
+    let fname = args
+        .get(1)
+        .map_or(ptr::null(), |fname| numbuf2.string(fname).as_ptr());
     let list = list_alloc_ret(result, kListLenUnknown as isize);
-    let (pat, file) = (pattern as *mut c_char, fname as *mut c_char);
+    let (pat, file) = (pattern.as_ptr().cast_mut(), fname.cast_mut());
     let _ = unsafe { get_tags(list, pat, file) };
 }

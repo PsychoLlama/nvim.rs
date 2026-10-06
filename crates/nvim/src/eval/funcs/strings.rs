@@ -4,8 +4,7 @@
 #![allow(unsafe_code)]
 
 use super::wrappers::{
-    arg_bool_chk, arg_number, arg_number_chk, arg_string, arg_string_chk, blob_alloc_ret,
-    list_alloc_ret, non_zero_arg,
+    arg_bool_chk, arg_number, arg_number_chk, blob_alloc_ret, list_alloc_ret, non_zero_arg,
 };
 use super::{NSUBEXP, VSE_NONE};
 use crate::cstr;
@@ -78,15 +77,16 @@ pub fn f_char2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args.len() > 1 && !tv_check_num(&args[1]) {
         return;
     }
-    result.write_number(unsafe { utf_ptr2char(arg_string(&mut numbuf, &args[0])) } as VarNumber);
+    let text = numbuf.string(&args[0]).as_ptr();
+    result.write_number(unsafe { utf_ptr2char(text) } as VarNumber);
 }
 
 /// `escape({string}, {chars})` — backslash every byte listed in `chars`.
 pub fn f_escape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = NumBuf::new();
-    let str = arg_string(&mut numbuf, &args[0]);
-    let chars = arg_string(&mut buf, &args[1]);
+    let str = numbuf.string(&args[0]).as_ptr();
+    let chars = buf.string(&args[1]).as_ptr();
     // SAFETY: both are NUL-terminated and outlive the call, `chars` because
     // `buf` does; the escaper answers an `xmalloc`ed string, which the
     // result adopts.
@@ -96,7 +96,7 @@ pub fn f_escape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `fnameescape({string})`.
 pub fn f_fnameescape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let name = arg_string(&mut numbuf, &args[0]);
+    let name = numbuf.string(&args[0]).as_ptr();
     // SAFETY: `name` is NUL-terminated and outlives the call; the escaper
     // answers an `xmalloc`ed string, which the result adopts.
     result.write_string(unsafe {
@@ -178,7 +178,7 @@ pub fn f_printf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // the arguments after the format. The `dummy_ap` va_list is never read
     // because a typval slice is what selects the Vimscript overload, which is
     // how every caller of this entry point uses it.
-    let fmt = arg_string(&mut buf, &args[0]);
+    let fmt = buf.string(&args[0]).as_ptr();
     let rest = Some(&args[1..]);
     let len = unsafe { vim_vsnprintf_typval(ptr::null_mut(), 0, fmt, dummy_ap(), rest) };
     if did_emsg.get() == 0 {
@@ -279,7 +279,7 @@ pub fn f_shellescape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut numbuf = NumBuf::new();
     // SAFETY: the arguments are live typvals.
     let do_special = args.get(1).is_some_and(non_zero_arg);
-    let str = arg_string(&mut numbuf, &args[0]);
+    let str = numbuf.string(&args[0]).as_ptr();
     // SAFETY: `str` is NUL-terminated and outlives the call; the escaper
     // answers an `xmalloc`ed string, which the result adopts.
     result.write_string(unsafe {
@@ -290,11 +290,10 @@ pub fn f_shellescape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// `soundfold({word})`.
 pub fn f_soundfold(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
+    let word = numbuf.string(&args[0]).as_ptr();
     // SAFETY: the word is NUL-terminated and outlives the call; the folder
     // answers an `xmalloc`ed string, which the result adopts.
-    result.write_string(unsafe {
-        ThinCString::from_raw(eval_soundfold(arg_string(&mut numbuf, &args[0])))
-    });
+    result.write_string(unsafe { ThinCString::from_raw(eval_soundfold(word)) });
 }
 
 /// Turn 'spell' on for the duration of `body`, loading the spell languages
@@ -339,18 +338,20 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
                 Win::current().w_set_curswant = true;
             }
         } else if Buf::current().b_s.b_p_spl.first_byte() != 0 {
-            let mut str = arg_string_chk(&mut numbuf, &args[0]);
+            let text = numbuf.string_chk(&args[0]);
             let mut capcol: c_int = -1;
-            if !str.is_null() {
-                while unsafe { *str } != NUL as c_char {
-                    let p = str as *mut c_char;
+            if let Some(text) = text {
+                let end = text.count_bytes();
+                let mut offset = 0;
+                while offset < end {
+                    let p = text[offset..].as_ptr().cast_mut();
                     let (at, cap) = (&raw mut attr, &raw mut capcol);
                     len = unsafe { spell_check(Win::current(), p, at, cap, false) };
                     if attr != HLF_COUNT {
-                        word = str;
+                        word = p;
                         break;
                     }
-                    str = unsafe { str.add(len) };
+                    offset += len;
                     capcol -= len as c_int;
                     len = 0;
                 }
@@ -383,7 +384,7 @@ pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let mut reported = false;
     with_spell(|| {
         reported = true;
-        let str = arg_string(&mut numbuf, &args[0]);
+        let str = numbuf.string(&args[0]);
         let mut typeerr = false;
         let (maxcount, need_capital) = if args.len() <= 1 {
             (25, false)
@@ -401,7 +402,8 @@ pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
             (maxcount, need_capital)
         };
         // SAFETY: `str` is the NUL-terminated argument.
-        found = unsafe { spell_suggest_list(str as *mut c_char, maxcount, need_capital, false) };
+        let word = str.as_ptr().cast_mut();
+        found = unsafe { spell_suggest_list(word, maxcount, need_capital, false) };
     });
     if !reported {
         return;
@@ -422,13 +424,13 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let _cpo = SavedCpo::empty();
     // SAFETY throughout: the arguments are live typvals, `patbuf` outlives the calls
     // that may fill it, and the compiled program is freed before returning.
-    let str = arg_string(&mut numbuf, &args[0]);
+    let str = numbuf.string(&args[0]);
     let mut typeerr = false;
     let mut keepempty = false;
-    let mut pat: *const c_char = ptr::null();
+    let mut pat = None;
     if args.len() > 1 {
-        pat = arg_string_chk(&mut patbuf, &args[1]);
-        if pat.is_null() {
+        pat = patbuf.string_chk(&args[1]);
+        if pat.is_none() {
             typeerr = true;
         }
         if args.len() > 2 {
@@ -436,12 +438,10 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
     // An absent or empty pattern splits on runs of whitespace.
-    if pat.is_null() || unsafe { *pat } == NUL as c_char {
-        pat = c"[\\x01- ]\\+".as_ptr();
-    }
+    let pat = pat.filter(|pat| !pat.is_empty()).unwrap_or(c"[\\x01- ]\\+");
     let list = list_alloc_ret(result, kListLenMayKnow as isize);
     if !typeerr {
-        let prog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
+        let prog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
         if !prog.is_null() {
             unsafe { split_into(list, str, prog, keepempty) };
             unsafe { vim_regfree(prog) };
@@ -459,11 +459,8 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// form.
 ///
 /// # Safety
-/// `list` is a live list, `str` is NUL-terminated, and `prog` is a compiled
-/// program the caller frees.
-unsafe fn split_into(list: *mut List, str: *const c_char, prog: *mut RegProg, keepempty: bool) {
-    // SAFETY: the caller's obligation -- `str` is NUL-terminated.
-    let subject = unsafe { cstr::at(str) };
+/// `list` is a live list and `prog` is a compiled program the caller frees.
+unsafe fn split_into(list: *mut List, subject: &CStr, prog: *mut RegProg, keepempty: bool) {
     let mut regmatch: RegMatch = RegMatch::new(prog, false);
     // Where the piece being cut starts, and how far into it the next match
     // may begin. The pattern is run against the *tail* rather than the whole
@@ -513,7 +510,7 @@ pub fn f_strftime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the arguments are live typvals; the two conversion
     // descriptors are opened and closed here, and `enc` is freed on every
     // path out.
-    let mut p = arg_string(&mut numbuf, &args[0]) as *mut c_char;
+    let mut p = numbuf.string(&args[0]).as_ptr().cast_mut();
     let seconds: time_t = if args.len() > 1 {
         arg_number(&args[1]) as time_t
     } else {
@@ -571,8 +568,8 @@ pub fn f_strptime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the arguments are live typvals, the two scratch buffers
     // outlive the calls that may fill them, and `enc` and the converted
     // format are freed on every path out.
-    let mut fmt = arg_string(&mut fmt_buf, &args[0]) as *mut c_char;
-    let str = arg_string(&mut str_buf, &args[1]) as *mut c_char;
+    let mut fmt = fmt_buf.string(&args[0]).as_ptr().cast_mut();
+    let str = str_buf.string(&args[1]);
     let mut conv: VimConv = CONV_NONE_INIT;
     let enc = unsafe { enc_locale() };
     let _ = p_enc(|value| unsafe { convert_setup(&raw mut conv, value.as_ptr().cast_mut(), enc) });
@@ -581,13 +578,8 @@ pub fn f_strptime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     // `mktime` reporting -1 is indistinguishable from a genuine
     // timestamp of -1, and upstream treats both as failure.
-    let parsed = !fmt.is_null()
-        && !os_strptime(
-            unsafe { CStr::from_ptr(str) },
-            unsafe { CStr::from_ptr(fmt) },
-            &mut tmval,
-        )
-        .is_null();
+    let parsed =
+        !fmt.is_null() && !os_strptime(str, unsafe { CStr::from_ptr(fmt) }, &mut tmval).is_null();
     result.write_number(match parsed {
         true => unsafe { mktime(&raw mut tmval) as VarNumber },
         false => -1,

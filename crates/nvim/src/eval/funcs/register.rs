@@ -5,7 +5,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::wrappers::{arg_number_chk, arg_string_chk, dict_alloc_ret};
+use super::wrappers::{arg_number_chk, dict_alloc_ret};
 use super::{
     YREG_YANK, kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown,
 };
@@ -39,18 +39,15 @@ type TypeBuf = [c_char; 67];
 /// means the unnamed register.
 fn regname(args: &[TypVal]) -> Option<c_int> {
     let mut numbuf = NumBuf::new();
-    let name = if !args.is_empty() {
-        let name = arg_string_chk(&mut numbuf, &args[0]);
-        if name.is_null() {
-            return None;
-        }
-        name
+    let first = if let Some(arg) = args.first() {
+        numbuf.bytes_chk(arg)?.first().copied().unwrap_or(0)
     } else {
-        get_vim_var_str(Vv::Register)
+        // SAFETY: the v:register string, NUL-terminated.
+        (unsafe { *get_vim_var_str(Vv::Register) }) as u8
     };
-    Some(match unsafe { *name } {
+    Some(match first {
         0 => b'"' as c_int,
-        c => c as u8 as c_int,
+        c => c_int::from(c),
     })
 }
 
@@ -220,13 +217,12 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Non-zero means "did not set anything", which is what every early
     // return leaves behind.
     result.write_number(1);
-    let strregname = arg_string_chk(&mut numbuf, &args[0]);
-    if strregname.is_null() {
+    let Some(strregname) = numbuf.bytes_chk(&args[0]) else {
         return;
-    }
-    let mut regname = match unsafe { *strregname } as u8 {
+    };
+    let mut regname = match strregname.first().copied().unwrap_or(0) {
         0 | b'@' => b'"' as c_char,
-        _ => unsafe { *strregname },
+        c => c as c_char,
     };
 
     let mut yank_type: MotionType = kMTUnknown;
@@ -288,12 +284,9 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             semsg!("E118: Too many arguments for function: {arg0}");
             return;
         }
-        let opts = arg_string_chk(&mut numbuf4, &args[2]);
-        if opts.is_null() {
+        let Some(opts) = numbuf4.bytes_chk(&args[2]) else {
             return;
-        }
-        // SAFETY: the argument's NUL-terminated string.
-        let opts = unsafe { cstr::bytes_at(opts) };
+        };
         let mut at = 0;
         while at < opts.len() {
             match opts[at] {

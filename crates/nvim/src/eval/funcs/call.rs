@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_number, arg_string, arg_string_chk};
+use super::wrappers::arg_number;
 use super::{AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
 use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
@@ -28,12 +28,12 @@ use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
 };
 use crate::memory::{ThinCString, XString};
-use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
+use crate::memory::{xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::message::state::{emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off};
 use crate::message::{capture_finish, capture_start, e_toomanyarg, e_unknown_function_str};
 use crate::message_fmt::c_str;
-use crate::message_fmt::{msg_bytes, msg_cstr_opt};
+use crate::message_fmt::{msg_bytes, msg_cstr, msg_cstr_opt};
 use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::{expand_env_save, os_env_exists};
@@ -88,7 +88,7 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             owned = true;
             unsafe { nlua_register_table_as_callable(&args[0]) }
         }
-        _ => arg_string(&mut numbuf, &args[0]) as *mut c_char,
+        _ => numbuf.string(&args[0]).as_ptr().cast_mut(),
     };
     if func.is_null() || unsafe { *func } as c_int == NUL {
         // Upstream returns here without releasing an owned name.
@@ -208,19 +208,18 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
 
     if args.len() > silent_idx {
         let mut buf = NumBuf::new();
-        let s = arg_string_chk(&mut buf, &args[silent_idx]);
-        if s.is_null() {
+        let Some(s) = buf.bytes_chk(&args[silent_idx]) else {
             return;
-        }
+        };
         // An explicit empty {silent} means "not silent", and is the
         // only spelling that leaves the cursor column alone.
-        if unsafe { *s } as c_int == NUL {
+        if s.is_empty() {
             echo_output = true;
         }
         // Any prefix of "silent" silences; only the exact "silent!"
         // also silences errors.
-        silence = unsafe { cstr::starts_with(s, b"silent") };
-        if unsafe { cstr::eq_bytes(s, b"silent!") } {
+        silence = s.starts_with(b"silent");
+        if s == b"silent!" {
             emsg_silent.set(1);
             emsg_noredir.set(true);
         }
@@ -239,10 +238,7 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
         .get(cmd_idx)
         .is_some_and(|arg| arg.v_type() == VAR_LIST)
     {
-        let cmd = arg_string(&mut numbuf, &args[cmd_idx]);
-        // SAFETY: the argument's own NUL-terminated string, or the number
-        // formatted into `numbuf`.
-        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
+        let _ = do_cmdline_cmd(numbuf.string(&args[cmd_idx]));
     } else if !args[cmd_idx].list_or_null().is_null() {
         let list = args[cmd_idx].list_or_null();
         // The List is held across the run: a command may drop the
@@ -277,25 +273,26 @@ pub fn f_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `exists({expr})` — the sigil in front of the name picks the namespace.
 pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the frame is live and `p` walks a string an argument owns.
-    let p = arg_string(&mut numbuf, &args[0]);
+    // SAFETY throughout: the callees read the argument's NUL-terminated
+    // string, or a tail of it.
+    let p = numbuf.string(&args[0]);
+    let bytes = p.to_bytes();
     // Not a bool: the `:` arm answers 2 for an exact command name, and
     // that grading is part of `exists()`'s contract.
-    let found: c_int = match unsafe { *p } as u8 {
+    let found: c_int = match bytes.first().copied().unwrap_or(0) {
         b'$' => {
             // The environment, or a name that expands to something
             // other than itself.
-            (if unsafe { os_env_exists(p.add(1), false) } {
+            (if unsafe { os_env_exists(p[1..].as_ptr(), false) } {
                 true
             } else {
-                let expanded = Owned(unsafe { expand_env_save(p as *mut c_char) });
+                let expanded = Owned(unsafe { expand_env_save(p.as_ptr().cast_mut()) });
                 !expanded.0.is_null() && unsafe { *expanded.0 } as u8 != b'$'
             }) as c_int
         }
         b'&' | b'+' => {
             // An option, and nothing may follow it.
-            // SAFETY: `p` is the caller's NUL-terminated text.
-            let mut cursor = Cursor::new(unsafe { cstr::bytes_at(p) });
+            let mut cursor = Cursor::new(bytes);
             let found = eval_option(&mut cursor, None, true).is_ok() && {
                 cursor.skip_white();
                 cursor.byte() == NUL as u8
@@ -303,22 +300,20 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             c_int::from(found)
         }
         b'*' => {
-            if unsafe { strnequal(p, c"*v:lua.".as_ptr(), 7) } {
-                unsafe { nlua_func_exists(p.add(7)) as c_int }
+            if bytes.starts_with(b"*v:lua.") {
+                unsafe { nlua_func_exists(p[7..].as_ptr()) as c_int }
             } else {
-                // SAFETY: the caller's NUL-terminated text.
-                c_int::from(function_exists(unsafe { cstr::bytes_at(p.add(1)) }, false))
+                c_int::from(function_exists(&bytes[1..], false))
             }
         }
-        b':' => unsafe { cmd_exists(p.add(1)) },
+        b':' => unsafe { cmd_exists(p[1..].as_ptr()) },
         // `##event` asks whether the event name is known at all;
         // `#event` asks whether an autocommand is defined for it.
-        b'#' if unsafe { *p.add(1) } as u8 == b'#' => {
-            (unsafe { autocmd_supported(p.add(2)) }) as c_int
+        b'#' if bytes.get(1) == Some(&b'#') => {
+            (unsafe { autocmd_supported(p[2..].as_ptr()) }) as c_int
         }
-        b'#' => unsafe { au_exists(p.add(1)) as c_int },
-        // SAFETY: `p` is the caller's NUL-terminated text.
-        _ => c_int::from(var_exists(unsafe { cstr::bytes_at(p) })),
+        b'#' => unsafe { au_exists(p[1..].as_ptr()) as c_int },
+        _ => c_int::from(var_exists(bytes)),
     };
     result.write_number(found as VarNumber);
 }
@@ -347,7 +342,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         // function('MyFunc', [arg], dict)
         _ => {
             use_string = true;
-            arg_string(&mut numbuf, &args[0]) as *mut c_char
+            numbuf.string(&args[0]).as_ptr().cast_mut()
         }
     };
 
@@ -375,12 +370,11 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         || (is_funcref && trans_name.is_none())
     {
         let what = if use_string {
-            arg_string(&mut numbuf2, &args[0])
+            msg_cstr(numbuf2.string(&args[0]))
         } else {
-            s as *const c_char
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            unsafe { c_str(s) }
         };
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let what = unsafe { c_str(what) };
         semsg!("E475: Invalid argument: {what}");
         return;
     }
@@ -599,15 +593,14 @@ pub fn f_libcallnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_luaeval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the frame is live and the chunk outlives the call.
-    let chunk = arg_string_chk(&mut numbuf, &args[0]);
-    if chunk.is_null() {
+    let Some(chunk) = numbuf.string_chk(&args[0]) else {
         return;
-    }
+    };
     // Lua sees `_A`; with no second argument that is upstream's empty slot,
     // which `nlua_push_typval` reads as nil.
     let absent = TypVal::Unknown;
     let arg = args.get(1).unwrap_or(&absent);
-    unsafe { nlua_typval_eval(cstr_to_string(chunk), arg, result) };
+    unsafe { nlua_typval_eval(cstr_to_string(chunk.as_ptr()), arg, result) };
 }
 
 /// `py3eval({expr})`

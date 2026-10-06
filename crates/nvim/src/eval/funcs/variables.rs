@@ -2,9 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::arg_string_chk;
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
-use crate::cstr;
 use crate::eval::typval::{NumBuf, callback_free, tv_islocked};
 use crate::eval::vars::with_var;
 use crate::eval::{Target, callback_from_typval, get_lval};
@@ -44,11 +42,9 @@ pub fn f_dictwatcheradd(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
         semsg!("E475: Invalid argument: key");
         return;
     }
-    let key_pattern = arg_string_chk(&mut numbuf, &args[1]);
-    if key_pattern.is_null() {
+    let Some(key_pattern) = numbuf.bytes_chk(&args[1]) else {
         return;
-    }
-    let key_pattern_len = unsafe { cstr::bytes_at(key_pattern) }.len();
+    };
     let mut callback = NO_CALLBACK;
     if !unsafe { callback_from_typval(&raw mut callback, &args[2]) } {
         semsg!("E475: Invalid argument: funcref");
@@ -57,7 +53,7 @@ pub fn f_dictwatcheradd(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
     // SAFETY: the kind checked above says the value holds a Dict pointer;
     // the watcher takes the callback over.
     let d = args[0].dict_or_null();
-    unsafe { (*d).watcher_add(cstr::slice_at(key_pattern, key_pattern_len), callback) };
+    unsafe { (*d).watcher_add(key_pattern, callback) };
 }
 
 /// `dictwatcherdel({dict}, {pattern}, {callback})`.
@@ -77,10 +73,9 @@ pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
         semsg!("E475: Invalid argument: funcref");
         return;
     }
-    let key_pattern = arg_string_chk(&mut numbuf, &args[1]);
-    if key_pattern.is_null() {
+    let Some(key_pattern) = numbuf.bytes_chk(&args[1]) else {
         return;
-    }
+    };
     let mut callback = NO_CALLBACK;
     if !unsafe { callback_from_typval(&raw mut callback, &args[2]) } {
         return;
@@ -89,13 +84,9 @@ pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
     // watcher here and is freed below.
     // `v:_null_dict` is a `VAR_DICT` holding nothing, and has no watchers:
     // upstream's own entry point tested the pointer, and this is that test.
-    // SAFETY: the argument's own dictionary, or none, and a NUL-terminated
-    // pattern.
     let d = args[0].dict_or_null();
-    // SAFETY: the argument's own dictionary, or none, and a NUL-terminated
-    // pattern.
-    let removed =
-        !d.is_null() && unsafe { (*d).watcher_remove(cstr::bytes_at(key_pattern), &callback) };
+    // SAFETY: the argument's own dictionary, or none.
+    let removed = !d.is_null() && unsafe { (*d).watcher_remove(key_pattern, &callback) };
     if !removed {
         semsg!("Couldn't find a watcher matching key and callback");
     }

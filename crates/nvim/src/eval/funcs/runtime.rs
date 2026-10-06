@@ -3,9 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{
-    arg_lnum, arg_number, arg_number_chk, arg_string, list_alloc_ret, non_zero_arg,
-};
+use super::wrappers::{arg_lnum, arg_number, arg_number_chk, list_alloc_ret, non_zero_arg};
 use super::{MENU_ALL_MODES, kRetNilBool};
 use crate::api::private::helpers::api_metadata;
 use crate::ascii::ascii_isdigit;
@@ -261,7 +259,7 @@ fn has_wsl() -> bool {
 pub fn f_has(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the frame is live and `name` is the string an argument owns.
-    let name = arg_string(&mut numbuf, &args[0]);
+    let name = numbuf.string(&args[0]).as_ptr();
     let known = unsafe { special_feature(name) }.or_else(|| {
         FEATURES
             .iter()
@@ -339,7 +337,7 @@ pub fn f_menu_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // A non-String second argument is not an error: it just leaves the
     // mode set at "all".
     let modes = if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
-        let which = arg_string(&mut numbuf, &args[1]);
+        let which = numbuf.string(&args[1]).as_ptr();
         let noremap = ptr::null_mut();
         let unmenu = ptr::null_mut();
         // SAFETY: `which` is the NUL-terminated argument.
@@ -347,7 +345,7 @@ pub fn f_menu_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         MENU_ALL_MODES as c_int
     };
-    let path = arg_string(&mut numbuf2, &args[0]) as *mut c_char;
+    let path = numbuf2.string(&args[0]).as_ptr().cast_mut();
     // SAFETY: `path` is the NUL-terminated argument and `list` the list
     // allocated into `result`.
     unsafe { menu_get(path, modes, list) };
@@ -367,16 +365,10 @@ pub fn f_mode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// a `:sleep`, filtered by `{what}` if it was given.
 pub fn f_state(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY (this body): the frame is live, and `result` adopts the buffer
-    // at the end.
     let mut flags = Vec::<u8>::new();
-    let include = if !args.is_empty() {
-        arg_string(&mut numbuf, &args[0])
-    } else {
-        ptr::null()
-    };
+    let include = args.first().map(|arg| numbuf.string(arg));
     let mut add = |c: u8| {
-        if include.is_null() || has_char(unsafe { cstr::at(include) }, c as c_int) {
+        if include.is_none_or(|include| has_char(include, c as c_int)) {
             flags.push(c);
         }
     };

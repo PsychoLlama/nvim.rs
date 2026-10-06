@@ -98,19 +98,6 @@ pub(crate) fn arg_lnum(tv: &TypVal) -> LineNr {
     tv_get_lnum(tv)
 }
 
-/// Argument `tv` as a string, the empty string for a value that has none.
-pub(crate) fn arg_string(buf: &mut NumBuf, tv: &TypVal) -> *const c_char {
-    // A Number is formatted into `buf`, which outlives the borrow the caller
-    // holds it through.
-    buf.string(tv).as_ptr()
-}
-
-/// As [`arg_string`], but NULL rather than the empty string for a value that
-/// has none.
-pub(crate) fn arg_string_chk(buf: &mut NumBuf, tv: &TypVal) -> *const c_char {
-    buf.string_chk(tv).map_or(ptr::null(), CStr::as_ptr)
-}
-
 /// Copy argument `tv` into `to`, taking a reference on what it points at.
 pub(crate) fn arg_copy(tv: &TypVal, to: &mut TypVal) {
     tv_copy(tv, to)

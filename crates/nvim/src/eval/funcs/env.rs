@@ -3,9 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{
-    arg_number_chk, arg_string, arg_string_chk, dict_alloc_ret, list_alloc_ret, list_set_ret,
-};
+use super::wrappers::{arg_number_chk, dict_alloc_ret, list_alloc_ret, list_set_ret};
 use super::{
     ENV_SEPCHAR, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome,
     kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
@@ -21,7 +19,7 @@ use crate::memline::{recover_names, swapfile_dict};
 use crate::memory::ThinCString;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::{emsg, emsg_ptr};
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::{p_verbose, p_wic};
 use crate::os::cshim::strchr;
 use crate::os::env::{
@@ -85,9 +83,10 @@ pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `getenv({name})` — the variable's value, or `v:null` when it is unset.
 pub fn f_getenv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: `vim_getenv` returns an `xmalloc`ed string, adopted here, or
-    // null.
-    match unsafe { ThinCString::from_raw(vim_getenv(arg_string(&mut numbuf, &args[0]))) } {
+    let name = numbuf.string(&args[0]).as_ptr();
+    // SAFETY: `name` is NUL-terminated; `vim_getenv` returns an `xmalloc`ed
+    // string, adopted here, or null.
+    match unsafe { ThinCString::from_raw(vim_getenv(name)) } {
         None => result.write_special(kSpecialVarNull),
         Some(value) => result.write_string(Some(value)),
     }
@@ -107,20 +106,20 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     {
         list_set_ret(result, ptr::null_mut::<List>());
     }
-    let s = arg_string(&mut numbuf, &args[0]);
-    if matches!(unsafe { *s } as u8, b'%' | b'#' | b'<') {
+    let s = numbuf.string(&args[0]);
+    if matches!(s.to_bytes().first(), Some(b'%' | b'#' | b'<')) {
         // A `%`/`#`/`<` item is resolved by the Ex-command machinery,
         // whose own errors are suppressed unless 'verbose' is set.
         let quiet = p_verbose() == 0 as OptInt;
         let no_emsg = quiet.then(Suppress::emsg);
         let mut len: usize = 0;
         let mut errormsg: *const c_char = ptr::null();
-        let src = s as *mut c_char;
+        let (src, start) = (s.as_ptr().cast_mut(), s.as_ptr());
         let (used, msg) = (&raw mut len, &raw mut errormsg);
         let nul = ptr::null_mut();
         // SAFETY: `s` is the NUL-terminated argument and the two
         // out-parameters are locals.
-        let expanded = unsafe { eval_vars(src, s, used, nul, msg, nul, false) };
+        let expanded = unsafe { eval_vars(src, start, used, nul, msg, nul, false) };
         drop(no_emsg);
         if !quiet && !errormsg.is_null() {
             unsafe { emsg_ptr(errormsg) };
@@ -156,8 +155,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if p_wic() {
         options |= WildOpts::ICASE;
     }
-    // SAFETY: the NUL-terminated argument.
-    let pat = unsafe { CStr::from_ptr(s) };
+    let pat = s;
     if result.v_type() == VAR_STRING {
         let all = expand_one(&mut xpc, Some(pat), None, options, WildMode::All);
         result.write_string(all.map(ThinCString::from));
@@ -189,9 +187,7 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         dict_get_bool(unsafe { (d).as_ref() }, b"errmsg", no) != 0
     };
     let quiet = !errmsg;
-    // SAFETY: `arg_string` answers a NUL-terminated string that lives for
-    // the call.
-    let line = unsafe { cstr::bytes_at(arg_string(&mut numbuf, &args[0])) }.to_vec();
+    let line = numbuf.bytes(&args[0]).to_vec();
     let mut eap = ExArg {
         line: CmdLine::from_bytes(&line),
         cmdidx: CmdIdx::USER,
@@ -219,14 +215,15 @@ pub fn f_setenv(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut valbuf = NumBuf::new();
     // Coerced before the sandbox check, as upstream has it: the
     // coercion can report an error of its own.
-    let name = arg_string(&mut namebuf, &args[0]);
+    let name = namebuf.string(&args[0]).as_ptr();
     if check_secure() {
         return;
     }
     if args[1].as_special() == Some(kSpecialVarNull) {
         unsafe { vim_unsetenv_ext(name) };
     } else {
-        unsafe { vim_setenv_ext(name, arg_string(&mut valbuf, &args[1])) };
+        let val = valbuf.string(&args[1]).as_ptr();
+        unsafe { vim_setenv_ext(name, val) };
     }
 }
 
@@ -235,30 +232,25 @@ pub fn f_setenv(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(0);
-    // SAFETY throughout: both strings are coerced from the frame and NUL-terminated;
-    // the nine bytes read below are covered by the length check.
-    let fname = arg_string_chk(&mut numbuf, &args[0]);
-    if fname.is_null() {
+    let Some(fname) = numbuf.string_chk(&args[0]) else {
         return;
-    }
+    };
     let mut modebuf = NumBuf::new();
-    let mode_str = arg_string_chk(&mut modebuf, &args[1]);
-    if mode_str.is_null() {
+    let Some(mode_str) = modebuf.string_chk(&args[1]) else {
         return;
-    }
-    if unsafe { cstr::bytes_at(mode_str) }.len() != 9 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let mode_str = unsafe { c_str(mode_str) };
+    };
+    let Ok(mode_bytes) = <&[u8; 9]>::try_from(mode_str.to_bytes()) else {
+        let mode_str = msg_cstr(mode_str);
         semsg!("E475: Invalid argument: {mode_str}");
         return;
-    }
+    };
     let mut mode: c_int = 0;
-    for i in (0..9).rev() {
-        if unsafe { *mode_str.offset(i) } != b'-' as c_char {
+    for (i, &byte) in mode_bytes.iter().enumerate().rev() {
+        if byte != b'-' {
             mode |= 1 << (8 - i);
         }
     }
-    result.write_number((unsafe { os_setperm(cstr::at(fname), mode) } == OK) as VarNumber);
+    result.write_number((os_setperm(fname, mode) == OK) as VarNumber);
 }
 
 /// The `config_dirs`/`data_dirs` answer: every directory in the XDG search
@@ -340,7 +332,8 @@ pub fn f_swapinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the dict is allocated into the return value first, so
     // `swapfile_dict` has somewhere to write.
     dict_alloc_ret(result);
-    unsafe { swapfile_dict(arg_string(&mut numbuf, &args[0]), result.dict_or_null()) };
+    let fname = numbuf.string(&args[0]).as_ptr();
+    unsafe { swapfile_dict(fname, result.dict_or_null()) };
 }
 
 /// `swapname({buf})` — the swap file a buffer is using, if any.

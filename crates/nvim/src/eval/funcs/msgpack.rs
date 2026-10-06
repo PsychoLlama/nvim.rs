@@ -2,9 +2,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_string, arg_string_chk, blob_alloc_ret, list_alloc_ret};
+use super::wrappers::{blob_alloc_ret, list_alloc_ret};
 use super::{ARENA_BLOCK_SIZE, MPACK_EOF, MPACK_ERROR, MPACK_OK};
-use crate::cstr;
 use crate::eval::decode::{
     json_decode_string, mpack_parse_typval, typval_parser_error_free, unpack_typval,
 };
@@ -14,7 +13,7 @@ use crate::eval::encode::{
 };
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{NumBuf, blob_bytes, list_items, list_len};
-use crate::memory::{ThinCString, alloc_block, free_block, strequal, xfree};
+use crate::memory::{ThinCString, alloc_block, free_block, xfree};
 use crate::message_fmt::c_str_len;
 use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
@@ -55,12 +54,11 @@ pub fn f_json_decode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             tofree
         }
     } else {
-        let s = arg_string_chk(&mut numbuf, &args[0]);
-        if s.is_null() {
+        let Some(s) = numbuf.string_chk(&args[0]) else {
             return;
-        }
-        len = unsafe { cstr::bytes_at(s) }.len();
-        s
+        };
+        len = s.count_bytes();
+        s.as_ptr()
     };
     if unsafe { json_decode_string(s, len, result) }.is_err() {
         // SAFETY: `s` is the caller's string and `len` its length.
@@ -115,7 +113,7 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     }
     // SAFETY: the buffer is this function's own `packer_string_buffer`.
     let data = unsafe { packer_take_string(&packer) };
-    if args.len() > 1 && unsafe { strequal(arg_string(&mut numbuf, &args[1]), c"B".as_ptr()) } {
+    if args.len() > 1 && numbuf.bytes(&args[1]) == b"B" {
         // The Blob adopts the packer's allocation as-is, capacity and
         // all; nothing copies, so the string gives the block up rather than
         // releasing it on the way out.
