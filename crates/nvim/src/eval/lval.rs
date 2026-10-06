@@ -814,3 +814,87 @@ pub(crate) fn get_lval<'a>(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::eval::typval::tv_list_alloc;
+    use crate::global_cell::editor_state_lock;
+    use crate::types::VarNumber;
+
+    /// The number in `slot`, or `None` when the slot has gone. A List or
+    /// Dict slot never looks a variable up, so the name is not read.
+    fn read(slot: &mut Slot) -> Option<VarNumber> {
+        slot_value(slot, b"", true, |tv, _| tv.number_or_zero())
+    }
+
+    /// Write `n` into `slot`, answering whether it was still there.
+    fn write(slot: &mut Slot, n: VarNumber) -> bool {
+        slot_value(slot, b"", true, |tv, lock| {
+            *tv = TypVal::Number(n);
+            *lock = VarLock::Unlocked;
+        })
+        .is_some()
+    }
+
+    /// The item array moving -- the List growing past its capacity, an item
+    /// before it going -- is what used to leave a target pointing at freed
+    /// memory. The slot holds the List and an index, so it reads whatever
+    /// is at that index now, and nothing once the List is shorter.
+    #[test]
+    fn a_list_slot_is_found_again_after_its_items_move() {
+        let _held = editor_state_lock();
+        let mut list = tv_list_alloc(2);
+        list.push_number(1);
+        list.push_number(2);
+        let mut slot = Slot::Item {
+            list: list.clone(),
+            index: 1,
+        };
+        for n in 0..100 {
+            list.push_number(n);
+        }
+        assert_eq!(read(&mut slot), Some(2));
+        assert!(write(&mut slot, 20));
+        assert_eq!(
+            list_items_mut(Some(&mut list))[1].li_tv.number_or_zero(),
+            20
+        );
+
+        list.remove_at(0);
+        assert_eq!(
+            read(&mut slot),
+            Some(0),
+            "the index names the next item now"
+        );
+
+        let last = list.len() - 1;
+        list.remove_range(0, last);
+        assert_eq!(read(&mut slot), None);
+        assert!(!write(&mut slot, 5));
+    }
+
+    /// A Dict slot holds a reference of its own: the item going is a miss,
+    /// and every other reference going leaves the dictionary alive for the
+    /// slot to find the key again in.
+    #[test]
+    fn a_dict_slot_outlives_its_item_and_the_other_references() {
+        let _held = editor_state_lock();
+        let mut dict = tv_dict_alloc();
+        dict.add_number(b"a", 7).expect("a fresh key");
+        let mut slot = Slot::Key {
+            dict: dict.clone(),
+            key: b"a".to_vec(),
+        };
+        assert_eq!(read(&mut slot), Some(7));
+
+        assert!(dict.remove_key(b"a"));
+        assert_eq!(read(&mut slot), None);
+
+        dict.add_number(b"a", 8).expect("the key is free again");
+        drop(dict);
+        assert_eq!(read(&mut slot), Some(8));
+        assert!(write(&mut slot, 9));
+        assert_eq!(read(&mut slot), Some(9));
+    }
+}

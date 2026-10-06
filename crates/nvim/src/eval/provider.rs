@@ -336,14 +336,17 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
     // SAFETY (every call below): `bp` names this frame's `NAMEBUF` bytes,
     // `nm` the NUL-terminated provider name, and `tv` is this frame's.
     let mut len = unsafe { loaded_var(bp, nm) };
-    if unsafe { eval_variable(bp, len, Some(&mut tv), null_mut(), false, true) }.is_err() {
+    let loaded = |buf: &[c_char], len: c_int| {
+        cstr::as_bytes(&buf[..usize::try_from(len).unwrap_or(0)]).to_vec()
+    };
+    if eval_variable(&loaded(&buf, len), Some(&mut tv), false, true).is_err() {
         // Not loaded yet: sourcing any function in the provider's
         // autoload namespace is what pulls the script in.
         len = unsafe { provider_fn(bp, nm, c"provider#%s#bogus") };
         unsafe { script_autoload(bp, len as size_t, false) };
 
         len = unsafe { loaded_var(bp, nm) };
-        if unsafe { eval_variable(bp, len, Some(&mut tv), null_mut(), false, true) }.is_err() {
+        if eval_variable(&loaded(&buf, len), Some(&mut tv), false, true).is_err() {
             unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
             // SAFETY: `bp` holds the NUL-terminated function name.
             let defined = !unsafe { find_func(bp) }.is_null();

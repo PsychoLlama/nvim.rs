@@ -12,7 +12,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
-use crate::message_fmt::c_str_len;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
@@ -121,65 +121,32 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     }))
 }
 
-/// Read the variable `name[0..len]` into `result`, reporting E121 if it does
-/// not exist.
+/// Read the variable `name` into `result`, reporting E121 if it does not
+/// exist.
 ///
-/// `result` may be NULL to ask only whether the variable exists, and `dip`
-/// takes the item it was found in.  `verbose` allows the error; the message
-/// is suppressed for a lookup that is allowed to fail.
-///
-/// # Safety
-/// `name` points at `len` readable bytes; `result`/`dip` are writable or
-/// NULL.
-pub unsafe fn eval_variable(
-    name: *const c_char,
-    len: c_int,
-    result: Option<&mut TypVal>,
-    dip: *mut *mut DictItem,
-    verbose: bool,
-    no_autoload: bool,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation -- `len` readable bytes and `dip`
-    // writable or NULL.
-    let v = unsafe { find_var(name, len as size_t, ptr::null_mut(), no_autoload) };
-    if v.is_null() {
-        if result.is_some() && verbose {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let name = unsafe { c_str_len(name, len as usize) };
-            semsg!("E121: Undefined variable: {name}");
-        }
-        return Err(Failed);
-    }
-    if !dip.is_null() {
-        unsafe { *dip = v };
-    }
-    if let Some(result) = result {
-        let item = unsafe { Di::new(v) };
-        let value = item.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
-        unsafe { tv_copy(&*value, result) };
-    }
-    Ok(())
-}
-
-/// [`eval_variable`] of the name `name` spells, with no item asked back.
-pub(crate) fn eval_variable_named(
+/// `result` may be `None` to ask only whether the variable exists.
+/// `verbose` allows the error; the message is suppressed for a lookup that
+/// is allowed to fail.
+pub(crate) fn eval_variable(
     name: &[u8],
     result: Option<&mut TypVal>,
     verbose: bool,
     no_autoload: bool,
 ) -> Result<(), Failed> {
-    let len = c_int::try_from(name.len()).unwrap_or(c_int::MAX);
-    // SAFETY: `name` names its `len` bytes, and no item is asked for.
-    unsafe {
-        eval_variable(
-            name.as_ptr().cast(),
-            len,
-            result,
-            ptr::null_mut(),
-            verbose,
-            no_autoload,
-        )
+    let wanted = result.is_some();
+    let found = with_var(name, no_autoload, |item| {
+        if let Some(result) = result {
+            tv_copy(&item.di_tv, result);
+        }
+    });
+    if found.is_none() {
+        if wanted && verbose {
+            let name = msg_bytes(name);
+            semsg!("E121: Undefined variable: {name}");
+        }
+        return Err(Failed);
     }
+    Ok(())
 }
 
 /// [`check_vars`] of the name `name` spells.
@@ -445,23 +412,20 @@ pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_
 
 /// `exists()` over a variable name: whether `var` names something, including
 /// everything a subscript on it reaches.
-///
-/// # Safety
-/// `var` is a NUL-terminated string.
-pub unsafe fn var_exists(var: *const c_char) -> bool {
+pub(crate) fn var_exists(var: &[u8]) -> bool {
     let mut n = false;
-    let mut name = var;
-    // Get the variable name, expanding a `{curly}` name into `tofree`.
-    // SAFETY: the caller's obligation -- `var` is NUL-terminated.
-    let mut cursor = Cursor::new(unsafe { cstr::bytes_at(var) });
-    let (len, tofree) = get_name_len(&mut cursor, true, false);
-    if len > 0 {
+    // Get the variable name, expanding a `{curly}` name into `expanded`.
+    let mut cursor = Cursor::new(var);
+    let (len, expanded) = get_name_len(&mut cursor, true, false);
+    if let Ok(len) = usize::try_from(len)
+        && len > 0
+    {
         let mut tv = TV_INITIAL_VALUE;
-        if let Some(expanded) = &tofree {
-            name = expanded.as_ptr();
-        }
-        n = unsafe { eval_variable(name, len, Some(&mut tv), ptr::null_mut(), false, true) }
-            .is_ok();
+        let name: &[u8] = match &expanded {
+            Some(expanded) => expanded.get(..len).unwrap_or(expanded),
+            None => &var[..len],
+        };
+        n = eval_variable(name, Some(&mut tv), false, true).is_ok();
         if n {
             // Handle `d.key`, `l[idx]` and `Func()`.
             n = handle_subscript(&mut cursor, &mut tv, true, false).is_ok();
@@ -473,6 +437,5 @@ pub unsafe fn var_exists(var: *const c_char) -> bool {
     if cursor.byte() != NUL as u8 {
         n = false;
     }
-    drop(tofree);
     n
 }

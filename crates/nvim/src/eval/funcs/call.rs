@@ -321,7 +321,8 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             (unsafe { autocmd_supported(p.add(2)) }) as c_int
         }
         b'#' => unsafe { au_exists(p.add(1)) as c_int },
-        _ => unsafe { var_exists(p) as c_int },
+        // SAFETY: `p` is the caller's NUL-terminated text.
+        _ => c_int::from(var_exists(unsafe { cstr::bytes_at(p) })),
     };
     result.write_number(found as VarNumber);
 }

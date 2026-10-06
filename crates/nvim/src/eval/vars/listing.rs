@@ -156,7 +156,7 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut c_int) -> usize
             };
 
             let mut tv = TV_INITIAL_VALUE;
-            if eval_variable_named(name, Some(&mut tv), true, false).is_err() {
+            if eval_variable(name, Some(&mut tv), true, false).is_err() {
                 error = true;
                 break 'done;
             }
