@@ -152,7 +152,7 @@ struct Definition<'a> {
     line_arg: *mut c_char,
     /// The buffer `get_function_body` read the body into, which is this
     /// frame's to release however the definition ends.
-    line_to_free: *mut c_char,
+    line_to_free: Option<XString>,
     /// The argument names, their defaults, and the body: filled in here and
     /// handed to the function, which is why every refusal below has to say
     /// whether they were.
@@ -343,10 +343,9 @@ impl Definition<'_> {
 
         // Do not define the function when reading the body fails, and not
         // when skipping.
-        let (lines, freep) = (&raw mut self.newlines, &raw mut self.line_to_free);
+        let (lines, freep) = (&raw mut self.newlines, &mut self.line_to_free);
         let (line_arg, block) = (self.line_arg, self.show_block);
-        // SAFETY: both out-parameters are this record's own fields, and
-        // neither is the command.
+        // SAFETY: `lines` is this record's own array, and not the command.
         let read = unsafe { get_function_body(self.excmd, lines, line_arg, freep, block) };
         if read == FAIL || self.excmd.skip {
             return Err(Refusal::Unwind);
@@ -768,7 +767,7 @@ pub fn ex_function(excmd: &mut ExArg) {
         name: name.map_or(ptr::null_mut(), XString::into_raw),
         fudi: dict,
         line_arg: ptr::null_mut(),
-        line_to_free: ptr::null_mut(),
+        line_to_free: None,
         newargs: GArray::EMPTY,
         default_args: GArray::EMPTY,
         newlines: GArray::EMPTY,
@@ -782,10 +781,7 @@ pub fn ex_function(excmd: &mut ExArg) {
     definition.define(paren);
 
     // ret_free: what every path above leaves for this frame to release.
-    // SAFETY: all three are the definition's own, and null is fine for
-    // `xfree`.
-    unsafe { xfree(definition.line_to_free as *mut c_void) };
-    // SAFETY: as above.
+    // SAFETY: the definition's own name, and null is fine for `xfree`.
     unsafe { xfree(definition.name as *mut c_void) };
     did_emsg.set(did_emsg.get() | saved_did_emsg);
     if definition.show_block {

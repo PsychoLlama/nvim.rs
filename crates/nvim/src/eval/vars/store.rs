@@ -93,9 +93,9 @@ pub unsafe fn set_var_const(
     copy: bool,
     is_const: bool,
 ) {
-    let mut varname: *const c_char = ptr::null();
     let mut dict: *mut Dict = ptr::null_mut();
-    let ht = unsafe { find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict) };
+    let (ht, varname) = unsafe { find_var_ht_dict(name, name_len, &raw mut dict) };
+    let varname = name.wrapping_add(varname);
     let watched = dict_is_watched(unsafe { (dict).as_ref() });
 
     // The name, measured: nothing below reads past its length, so a caller

@@ -325,34 +325,29 @@ unsafe extern "C-unwind" fn typval_parse_exit(
 
 /// One step of `mpack_parse()` with the typval callbacks bound in.
 ///
-/// `data`/`size` are advanced past whatever was consumed; the answer is
-/// `MPACK_OK` when a whole object came out, `MPACK_EOF` when the bytes ran
-/// out mid-object, or an error status.
+/// `data` is advanced past whatever was consumed; the answer is `MPACK_OK`
+/// when a whole object came out, `MPACK_EOF` when the bytes ran out
+/// mid-object, or an error status.
 ///
 /// # Safety
 /// `parser` was initialised with its `data.p` pointing at the destination
-/// typval, and `data`/`size` describe a live buffer.
-pub unsafe fn mpack_parse_typval(
-    parser: *mut mpack_parser_t,
-    data: *mut *const c_char,
-    size: *mut size_t,
-) -> c_int {
+/// typval.
+pub unsafe fn mpack_parse_typval(parser: *mut mpack_parser_t, data: &mut &[u8]) -> c_int {
     let (enter, exit) = (Some(typval_parse_enter as _), Some(typval_parse_exit as _));
-    unsafe { mpack_parse(parser, data, size, enter, exit) }
+    let mut at = data.as_ptr().cast::<c_char>();
+    let mut size: size_t = data.len();
+    // SAFETY: `at` and `size` describe the caller's slice, and the parser
+    // only reads within them, moving both on together.
+    let status = unsafe { mpack_parse(parser, &raw mut at, &raw mut size, enter, exit) };
+    *data = &data[data.len() - size..];
+    status
 }
 
 /// Decode one complete msgpack object from `data` into `ret`.
 ///
-/// `data` and `size` are advanced past the object.  On any status but
-/// `MPACK_OK` the half-built value is released and `ret` is left cleared.
-///
-/// # Safety
-/// `data`/`size` describe a live buffer and `ret` is writable.
-pub unsafe fn unpack_typval(
-    data: *mut *const c_char,
-    size: *mut size_t,
-    ret: &mut TypVal,
-) -> c_int {
+/// `data` is advanced past the object.  On any status but `MPACK_OK` the
+/// half-built value is released and `ret` is left cleared.
+pub fn unpack_typval(data: &mut &[u8], ret: &mut TypVal) -> c_int {
     (*ret).write_empty(VAR_UNKNOWN);
     // `mpack_parser_init` writes every field this parser will be read
     // through, `items` included, so the C leaves the declaration
@@ -363,7 +358,7 @@ pub unsafe fn unpack_typval(
     let parser = storage.as_mut_ptr();
     unsafe { mpack_parser_init(parser, 0) };
     unsafe { (*parser).data.p = ::core::ptr::from_mut(ret).cast() };
-    let status = unsafe { mpack_parse_typval(parser, data, size) };
+    let status = unsafe { mpack_parse_typval(parser, data) };
     if status != MPACK_OK {
         unsafe { typval_parser_error_free(parser) };
         tv_clear(ret);

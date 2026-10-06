@@ -355,9 +355,9 @@ unsafe fn unlet_terminated(
     name_len: size_t,
     forceit: bool,
 ) -> Result<(), Failed> {
-    let mut varname: *const c_char = ptr::null();
     let mut dict: *mut Dict = ptr::null_mut();
-    let mut ht = unsafe { find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict) };
+    let (mut ht, varname) = unsafe { find_var_ht_dict(name, name_len, &raw mut dict) };
+    let varname = name.wrapping_add(varname);
 
     if !ht.is_null() && unsafe { *varname } != NUL as c_char {
         // The dictionary whose lock decides whether the item may go.

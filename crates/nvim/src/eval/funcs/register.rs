@@ -9,8 +9,6 @@ use super::wrappers::{arg_number_chk, arg_string_chk, dict_alloc_ret};
 use super::{
     YREG_YANK, kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown,
 };
-use crate::ascii::ascii_isdigit;
-use crate::charset::getdigits_int;
 use crate::cstr;
 use crate::eval::typval::{
     ListRef, NumBuf, dict_get_number, dict_len, list_iter, list_len, tv_list_alloc,
@@ -173,35 +171,35 @@ pub fn f_reg_recorded(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     return_register(reg_recorded.get(), &mut *result);
 }
 
-/// Read a register-type letter, advancing `cursor` past the width digits a
-/// blockwise type may carry.
+/// Read the register-type letter at `text[*at]`, moving `at` past the width
+/// digits a blockwise type may carry.
 ///
-/// `cursor` is left on the *last* byte consumed, not one past it, because both
+/// `at` is left on the *last* byte consumed, not one past it, because both
 /// callers step it forward themselves.
-///
-/// # Safety
-/// `*pp` points into a NUL-terminated string.
-unsafe fn get_yank_type(
-    cursor: &mut *const c_char,
+fn get_yank_type(
+    text: &[u8],
+    at: &mut usize,
     yank_type: &mut MotionType,
     block_len: &mut c_int,
 ) -> Result<(), Failed> {
-    // SAFETY throughout: the caller's obligation; `getdigits_int` only walks forward
-    // and stops at the first non-digit.
-    let mut p = *cursor;
-    match unsafe { *p } as u8 {
+    match cstr::byte_at(text, *at) {
         b'v' | b'c' => *yank_type = kMTCharWise,
         b'V' | b'l' => *yank_type = kMTLineWise,
         b'b' => *yank_type = kMTBlockWise,
-        c if c as c_int == Ctrl_V => *yank_type = kMTBlockWise,
+        c if c_int::from(c) == Ctrl_V => *yank_type = kMTBlockWise,
         _ => return Err(Failed),
     }
-    if *yank_type == kMTBlockWise && ascii_isdigit(unsafe { *p.add(1) } as c_int) {
-        let mut q = unsafe { p.add(1) } as *mut c_char;
-        *block_len = unsafe { getdigits_int(&raw mut q, false, 0) } - 1;
-        p = unsafe { q.sub(1) };
+    let digits = &text[(*at + 1).min(text.len())..];
+    let count = crate::charset::skip::digits(digits);
+    if *yank_type == kMTBlockWise && count > 0 {
+        // `getdigits_int` with no default: a width that does not fit an
+        // `int` reads as 0.
+        let width = digits[..count].iter().try_fold(0 as c_int, |n, &d| {
+            n.checked_mul(10)?.checked_add(c_int::from(d - b'0'))
+        });
+        *block_len = width.unwrap_or(0) - 1;
+        *at += count;
     }
-    *cursor = p;
     Ok(())
 }
 
@@ -251,12 +249,14 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let d_ref = unsafe { d.as_ref() };
         let stropt = numbuf2.dict_string(d_ref, b"regtype");
         if !stropt.is_null() {
-            let mut p: *const c_char = stropt;
+            // SAFETY: a dictionary string, NUL-terminated.
+            let text = unsafe { cstr::bytes_at(stropt) };
+            let mut at = 0;
             // The type must be exactly one letter (plus a width), so
             // the byte after what was consumed has to be the
             // terminator.
-            if unsafe { get_yank_type(&mut p, &mut yank_type, &mut block_len) }.is_err()
-                || unsafe { *p.add(1) } != NUL as c_char
+            if get_yank_type(text, &mut at, &mut yank_type, &mut block_len).is_err()
+                || cstr::byte_at(text, at + 1) != NUL as u8
             {
                 let arg0 = "value";
                 semsg!("E475: Invalid value for argument {arg0}");
@@ -290,18 +290,20 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if opts.is_null() {
             return;
         }
-        let mut p = opts;
-        while unsafe { *p } != NUL as c_char {
-            match unsafe { *p } as u8 {
+        // SAFETY: the argument's NUL-terminated string.
+        let opts = unsafe { cstr::bytes_at(opts) };
+        let mut at = 0;
+        while at < opts.len() {
+            match opts[at] {
                 b'a' | b'A' => append = true,
                 b'u' | b'"' => set_unnamed = true,
                 // Anything else is a register type, and an
                 // unrecognised one is silently ignored.
                 _ => {
-                    let _ = unsafe { get_yank_type(&mut p, &mut yank_type, &mut block_len) };
+                    let _ = get_yank_type(opts, &mut at, &mut yank_type, &mut block_len);
                 }
             }
-            p = unsafe { p.add(1) };
+            at += 1;
         }
     }
 

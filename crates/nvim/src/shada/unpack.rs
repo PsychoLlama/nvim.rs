@@ -19,6 +19,7 @@ use crate::message_fmt::{c_str, emsg_text};
 use crate::semsg;
 use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::slice;
 
 use crate::api::private::keyset::KeySet;
 use crate::msgpack_rpc::unpacker::{MPACK_EOF, MPACK_OK};
@@ -120,7 +121,16 @@ impl Cursor {
 
     /// One value as a Vimscript value. Answers an `MPACK_*` status.
     pub(crate) fn typval(&mut self, into: &mut TypVal) -> c_int {
-        unsafe { unpack_typval(&raw mut self.at, &raw mut self.left, into) }
+        let mut data: &[u8] = if self.left == 0 {
+            &[]
+        } else {
+            // SAFETY: the reader's `left` bytes at `at`.
+            unsafe { slice::from_raw_parts(self.at.cast::<u8>(), self.left) }
+        };
+        let status = unpack_typval(&mut data, into);
+        self.at = data.as_ptr().cast();
+        self.left = data.len();
+        status
     }
 }
 

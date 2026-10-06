@@ -734,8 +734,8 @@ pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, ht: *mut *mut DictTab) -
     // leaves the length of what is left of it. That holds for every
     // dereference in the probe.
     let probe = || {
-        let mut varname: *const c_char = ptr::null();
-        let found = unsafe { find_var_ht(name, namelen, &raw mut varname) };
+        let (found, varname) = unsafe { find_var_ht(name, namelen) };
+        let varname = name.wrapping_add(varname);
         if !found.is_null() && unsafe { *varname } != NUL as c_char {
             let past = unsafe { varname.offset_from(name) } as size_t;
             let hi = unsafe { hash_find_len(found, varname, namelen.wrapping_sub(past)) };
@@ -767,8 +767,8 @@ pub unsafe fn find_var_in_scoped_ht(
         return ptr::null_mut();
     }
     let probe = || {
-        let mut varname: *const c_char = ptr::null();
-        let ht = unsafe { find_var_ht(name, namelen, &raw mut varname) };
+        let (ht, varname) = unsafe { find_var_ht(name, namelen) };
+        let varname = name.wrapping_add(varname);
         if !ht.is_null() && unsafe { *varname } != NUL as c_char {
             let past = unsafe { varname.offset_from(name) } as size_t;
             let left = namelen.wrapping_sub(past);

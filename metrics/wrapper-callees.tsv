@@ -1,7 +1,7 @@
 count	callee	no_raw	defs	def
-679	xfree	0	1	crates/nvim/src/memory/mod.rs
-542	.add	0	3	
-401	bytes_at	0	1	crates/nvim/src/cstr.rs
+677	xfree	0	1	crates/nvim/src/memory/mod.rs
+539	.add	0	3	
+403	bytes_at	0	1	crates/nvim/src/cstr.rs
 389	.offset	0	0	
 291	CStr::from_ptr	0	2	
 279	at	0	3	
@@ -9,7 +9,7 @@ count	callee	no_raw	defs	def
 180	.offset_from	0	0	
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 157	.as_ref	0	0	
-148	from_raw_parts	0	0	
+150	from_raw_parts	0	0	
 138	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 122	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 109	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
@@ -31,8 +31,8 @@ count	callee	no_raw	defs	def
 47	copy	0	1	crates/nvim/src/strings/printf/emit.rs
 46	abort	0	0	
 46	vim_regfree	0	1	crates/nvim/src/regexp/api.rs
+45	Live::new	0	1	crates/nvim/src/winlayer/live.rs
 45	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
-44	Live::new	0	1	crates/nvim/src/winlayer/live.rs
 44	fprintf	0	0	
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 43	copy_nonoverlapping	0	0	
@@ -44,12 +44,12 @@ count	callee	no_raw	defs	def
 35	strcpy	0	0	
 34	utf_head_off	0	1	crates/nvim/src/mbyte/walk.rs
 33	eq	0	1	crates/nvim/src/cstr.rs
-32	.sub	0	0	
+31	.sub	0	0	
 31	tv_copy	0	0	
 30	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 30	f	0	0	
-30	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
 30	ptr2cells	0	1	crates/nvim/src/charset/display.rs
+29	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
 29	ml_replace	0	1	crates/nvim/src/memline/lines.rs
 29	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
 29	os_fileinfo	0	1	crates/nvim/src/os/fs/meta.rs
@@ -1353,7 +1353,6 @@ count	callee	no_raw	defs	def
 2	get_pfxlist	0	1	crates/nvim/src/spellfile/dic.rs
 2	get_rel_pos	0	1	crates/nvim/src/buffer/info.rs
 2	get_user_highlight_attr	0	1	crates/nvim/src/insexpand/callbacks.rs
-2	get_yank_type	0	1	crates/nvim/src/eval/funcs/register.rs
 2	getc	0	0	
 2	getcell	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	getcmdline_prompt	0	1	crates/nvim/src/ex_getln/enter.rs
@@ -1717,7 +1716,6 @@ count	callee	no_raw	defs	def
 2	unpack_array	0	1	crates/nvim/src/msgpack_rpc/unpacker/keydict.rs
 2	unpack_integer	0	1	crates/nvim/src/msgpack_rpc/unpacker/keydict.rs
 2	unpack_skip	0	1	crates/nvim/src/msgpack_rpc/unpacker/keydict.rs
-2	unpack_typval	0	1	crates/nvim/src/eval/decode/msgpack.rs
 2	unref_var_dict	0	1	crates/nvim/src/eval/vars/lifecycle.rs
 2	update_yankreg_width	0	1	crates/nvim/src/register/store.rs
 2	use_midword	0	1	crates/nvim/src/spell/lang.rs

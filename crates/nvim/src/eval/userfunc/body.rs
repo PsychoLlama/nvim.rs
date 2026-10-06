@@ -15,7 +15,7 @@ use crate::ex_docmd::check_for_word_in;
 use crate::memory::XString;
 use crate::semsg;
 use crate::swmsg;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
@@ -33,12 +33,12 @@ pub const MAX_FUNC_NESTING: c_int = 50;
 ///
 /// # Safety
 /// `excmd` is a live `:function` command, `newlines` an initialised `char *`
-/// garray, and `line_to_free` owns whatever the last read handed back.
+/// garray. `line_to_free` keeps whatever the last read handed back.
 pub(crate) unsafe fn get_function_body(
     excmd: &mut ExArg,
     newlines: *mut GArray,
     line_arg_in: *mut c_char,
-    line_to_free: *mut *mut c_char,
+    line_to_free: &mut Option<XString>,
     show_block: bool,
 ) -> c_int {
     // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
@@ -105,14 +105,15 @@ pub(crate) unsafe fn get_function_body(
                     }
                 }
             } else {
-                unsafe { xfree(*line_to_free as *mut c_void) };
+                *line_to_free = None;
                 theline = match excmd.ea_getline {
                     None => getcmdline(b':' as c_int, 0, indent, do_concat),
                     Some(getline) => unsafe {
                         getline(b':' as c_int, excmd.cookie, indent, do_concat)
                     },
                 };
-                unsafe { *line_to_free = theline };
+                // SAFETY: a getter answers null or an allocation of its own.
+                *line_to_free = (!theline.is_null()).then(|| unsafe { XString::from_raw(theline) });
             }
             if KeyTyped.get() {
                 lines_left.set(Rows.get() - 1);
@@ -200,16 +201,12 @@ pub(crate) unsafe fn get_function_body(
                         if excmd.line.contains(nextcmd) {
                             excmd.line.next = Some(excmd.line.offset_of(nextcmd));
                         } else {
-                            // SAFETY: `nextcmd` is inside the line the last
-                            // read handed back, an `xmalloc` block.
-                            let base = unsafe { *line_to_free };
-                            let at = nextcmd.addr() - base.addr();
-                            // SAFETY: as above.
-                            let taken = unsafe { XString::from_raw(base) };
+                            // `nextcmd` is inside the line the last read
+                            // handed back, which the command takes over.
+                            let at = nextcmd.addr() - theline.addr();
+                            let taken = line_to_free.take().expect("the line just read");
                             excmd.line.take_over(taken.into_vec());
                             excmd.line.next = Some(at);
-                            // SAFETY: the caller's slot, now empty.
-                            unsafe { *line_to_free = ptr::null_mut() };
                         }
                     }
                     break;

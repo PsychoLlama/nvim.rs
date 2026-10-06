@@ -25,7 +25,7 @@ use crate::types::{
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::fmt::Write as _;
-use core::ptr;
+use core::{ptr, slice};
 
 /// A cleared typval, the shape the decoders write their result into.
 const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
@@ -179,23 +179,28 @@ unsafe fn msgpackparse_unpack_list(list: *const List, ret_list: *mut List) {
             break;
         }
         buf_size += read_bytes;
-        let mut cursor: *const c_char = buf;
-        while buf_size != 0 {
-            status =
-                unsafe { mpack_parse_typval(&raw mut parser, &raw mut cursor, &raw mut buf_size) };
+        // SAFETY: the block's first `buf_size` bytes are the ones read.
+        let mut cursor: &[u8] = unsafe { slice::from_raw_parts(buf.cast::<u8>(), buf_size) };
+        while !cursor.is_empty() {
+            status = unsafe { mpack_parse_typval(&raw mut parser, &mut cursor) };
             if status != MPACK_OK as c_int {
                 break;
             }
             unsafe { (*ret_list).push(cur_item.take()) };
         }
+        let consumed = buf_size - cursor.len();
+        buf_size = cursor.len();
         if rlret == Ok(ListRead::Drained) {
             break;
         }
         if status == MPACK_EOF as c_int {
             // Shuffle the partial object back to the front so the next
             // read tops it up.
-            if buf_size != 0 && cursor > buf as *const c_char {
-                unsafe { buf.cast::<u8>().copy_from(cursor.cast(), buf_size) };
+            if buf_size != 0 && consumed > 0 {
+                unsafe {
+                    buf.cast::<u8>()
+                        .copy_from(buf.add(consumed).cast(), buf_size)
+                };
             }
         } else if status != MPACK_OK as c_int {
             break;
@@ -217,12 +222,11 @@ unsafe fn msgpackparse_unpack_blob(blob: Option<&Blob>, ret_list: *mut List) {
     if bytes.is_empty() {
         return;
     }
-    // `unpack_typval` advances the cursor and the remaining count together.
-    let mut data = bytes.as_ptr().cast::<c_char>();
-    let mut remaining = bytes.len();
-    while remaining != 0 {
+    // `unpack_typval` advances the cursor past each object.
+    let mut data = bytes;
+    while !data.is_empty() {
         let mut tv = EMPTY_TV;
-        let status = unsafe { unpack_typval(&raw mut data, &raw mut remaining, &mut tv) };
+        let status = unpack_typval(&mut data, &mut tv);
         if status != MPACK_OK as c_int {
             emsg_mpack_error(status);
             return;

@@ -174,8 +174,7 @@ pub unsafe fn check_vars(name: *const c_char, len: size_t) {
     if LAMBDA_USES_LOCALS.get().is_none() {
         return;
     }
-    let mut varname: *const c_char = ptr::null();
-    let ht = unsafe { find_var_ht(name, len, &raw mut varname) };
+    let (ht, _) = unsafe { find_var_ht(name, len) };
     if (ht == get_funccal_local_ht() || ht == get_funccal_args_ht())
         && !unsafe { find_var(name, len, ptr::null_mut(), true) }.is_null()
     {
@@ -197,8 +196,8 @@ pub unsafe fn find_var(
     htp: *mut *mut DictTab,
     no_autoload: bool,
 ) -> *mut DictItem {
-    let mut varname: *const c_char = ptr::null();
-    let ht = unsafe { find_var_ht(name, name_len, &raw mut varname) };
+    let (ht, varname) = unsafe { find_var_ht(name, name_len) };
+    let varname = name.wrapping_add(varname);
     if !htp.is_null() {
         unsafe { *htp = ht };
     }
@@ -305,35 +304,37 @@ pub unsafe fn find_var_in_ht(
 /// Lua or `:execute` chunk is given a script id, so that it can have script
 /// variables at all (#15994).
 ///
+/// Answers the hashtab and where in `name` the variable's own name starts:
+/// past the `x:` prefix, or 0 without one.
+///
 /// # Safety
-/// `name` points at `name_len` readable bytes; `varname` and `d` are
-/// writable.
+/// `name` points at `name_len` readable bytes; `d` is writable.
 pub(crate) unsafe fn find_var_ht_dict(
     name: *const c_char,
     name_len: size_t,
-    varname: *mut *const c_char,
     d: *mut *mut Dict,
-) -> *mut DictTab {
-    // SAFETY: the caller's obligation -- `name_len` readable bytes, and two
-    // writable out-parameters that are the caller's own locals.
-    let (mut dict, mut vname) = unsafe { (Live::new(d), Live::new(varname)) };
+) -> (*mut DictTab, usize) {
+    // SAFETY: the caller's obligation -- `name_len` readable bytes, and a
+    // writable out-parameter that is the caller's own local.
+    let mut dict = unsafe { Live::new(d) };
     *dict = ptr::null_mut();
     if name_len == 0 {
-        return ptr::null_mut();
+        return (ptr::null_mut(), 0);
     }
+    // Where the variable's own name starts.
+    let mut varname = 0;
 
     let lead = unsafe { *name };
     if name_len == 1 || unsafe { *name.add(1) } != b':' as c_char {
         // An implicit scope. The name must not start with a colon or a
         // '#'.
         if lead == b':' as c_char || lead == AUTOLOAD_CHAR {
-            return ptr::null_mut();
+            return (ptr::null_mut(), varname);
         }
-        *vname = name;
 
         // "version" is "v:version" in every scope.
         if unsafe { hash_find_len(get_compat_ht(), name, name_len) }.is_kept() {
-            return get_compat_ht();
+            return (get_compat_ht(), varname);
         }
 
         *dict = get_funccal_local_dict();
@@ -341,7 +342,7 @@ pub(crate) unsafe fn find_var_ht_dict(
             *dict = get_globvar_dict();
         }
     } else {
-        *vname = unsafe { name.add(2) };
+        varname = 2;
         if lead == b'g' as c_char {
             *dict = get_globvar_dict();
         } else if name_len > 2
@@ -350,7 +351,7 @@ pub(crate) unsafe fn find_var_ht_dict(
                     .is_null())
         {
             // Without `g:` there must be no ':' or '#' in the rest.
-            return ptr::null_mut();
+            return (ptr::null_mut(), varname);
         }
 
         match lead as u8 {
@@ -385,20 +386,17 @@ pub(crate) unsafe fn find_var_ht_dict(
 
     // SAFETY: the dictionary just chosen is live or NULL, and its hashtab
     // is a field of it.
-    unsafe { (*dict).as_mut() }.map_or(ptr::null_mut(), |d| &raw mut d.dv_hashtab)
+    let ht = unsafe { (*dict).as_mut() }.map_or(ptr::null_mut(), |d| &raw mut d.dv_hashtab);
+    (ht, varname)
 }
 
 /// [`find_var_ht_dict`] without the dictionary.
 ///
 /// # Safety
 /// As [`find_var_ht_dict`].
-pub unsafe fn find_var_ht(
-    name: *const c_char,
-    name_len: size_t,
-    varname: *mut *const c_char,
-) -> *mut DictTab {
+pub unsafe fn find_var_ht(name: *const c_char, name_len: size_t) -> (*mut DictTab, usize) {
     let mut d: *mut Dict = ptr::null_mut();
-    unsafe { find_var_ht_dict(name, name_len, varname, &raw mut d) }
+    unsafe { find_var_ht_dict(name, name_len, &raw mut d) }
 }
 
 /// The string value of the variable `name`, or NULL when it does not exist.
