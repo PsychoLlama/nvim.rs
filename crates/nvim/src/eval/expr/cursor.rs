@@ -22,6 +22,7 @@
 )]
 
 use crate::cstr::byte_at;
+use crate::mbyte::cluster_len;
 
 /// A position in an expression's text.
 #[derive(Debug, PartialEq, Eq)]
@@ -75,6 +76,19 @@ impl<'a> Cursor<'a> {
     }
 }
 
+/// The length of the character (with its composing marks) at `text[p]`,
+/// which must not be the end: `cluster_len`'s answer, with the one for an
+/// ASCII byte followed by another -- what names and most literals are made
+/// of -- given without the call.
+#[inline(always)]
+pub(crate) fn char_len_at(text: &[u8], p: usize) -> usize {
+    if text[p] < 0x80 && byte_at(text, p + 1) < 0x80 {
+        1
+    } else {
+        cluster_len(&text[p..])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,6 +132,17 @@ mod tests {
         cursor.bump(3);
         assert_eq!(cursor.rest(), b" def");
         assert_eq!(cursor.text(), b"abc def");
+    }
+
+    #[test]
+    fn char_len_at_agrees_with_cluster_len() {
+        let text = "aé日😀b\u{301}c".as_bytes();
+        let mut p = 0;
+        while p < text.len() {
+            assert_eq!(char_len_at(text, p), cluster_len(&text[p..]), "at {p}");
+            p += char_len_at(text, p);
+        }
+        assert_eq!(char_len_at(b"x", 0), 1);
     }
 
     #[test]

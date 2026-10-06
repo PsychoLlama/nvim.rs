@@ -17,10 +17,10 @@ use crate::cstr::byte_at;
 use crate::eval::userfunc::fname_script_len;
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::{
-    AUTOLOAD_CHAR, Cursor, FNE_CHECK_START, FNE_INCL_BR, eval_text_to_string, namespace_char,
+    AUTOLOAD_CHAR, Cursor, FNE_CHECK_START, FNE_INCL_BR, char_len_at, eval_text_to_string,
+    namespace_char,
 };
 use crate::keycodes::{K_SPECIAL, KE_SNR, KS_EXTRA};
-use crate::mbyte::cluster_len;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::option::option_end;
@@ -46,21 +46,13 @@ pub(crate) fn env_name_len(text: &[u8]) -> usize {
 /// A `:` is part of the name only as a leading namespace letter; anywhere
 /// else it ends it.
 pub(crate) fn id_len(text: &[u8]) -> usize {
-    let mut p = 0;
-    loop {
-        let c = byte_at(text, p);
-        if !eval_isnamec(c_int::from(c)) {
-            break;
+    for (p, &c) in text.iter().enumerate() {
+        let scope_ends = || p > 1 || (p == 1 && !has_char(namespace_char, c_int::from(text[0])));
+        if !eval_isnamec(c_int::from(c)) || (c == b':' && scope_ends()) {
+            return p;
         }
-        if c == b':' {
-            let scoped = !has_char(namespace_char, c_int::from(text[0]));
-            if p > 1 || (p == 1 && scoped) {
-                break;
-            }
-        }
-        p += 1;
     }
-    p
+    text.len()
 }
 
 /// The identifier at the cursor, which is left on the first non-blank after
@@ -160,10 +152,10 @@ pub(crate) fn name_end(text: &[u8], flags: c_int) -> NameEnd {
         // string-skipping arms below leave `p` on the closing quote, which
         // is the byte this already holds, so the bracket and brace tests
         // further down may use it rather than reading again.
-        let c = at(p);
-        if c == END {
-            break;
-        }
+        let c = match text.get(p) {
+            Some(&c) if c != END => c,
+            _ => break,
+        };
         // Only a `.` under `FNE_INCL_BR` looks ahead.
         let dict_key = || c == b'.' && eval_isdictc(c_int::from(at(p + 1)));
         let in_name = eval_isnamec(c_int::from(c))
@@ -183,7 +175,7 @@ pub(crate) fn name_end(text: &[u8], flags: c_int) -> NameEnd {
                 if c == b'"' && at(p) == b'\\' && at(p + 1) != END {
                     p += 1;
                 }
-                p += cluster_len(&text[p..]);
+                p += char_len_at(text, p);
             }
             if at(p) == END {
                 break;
@@ -219,7 +211,7 @@ pub(crate) fn name_end(text: &[u8], flags: c_int) -> NameEnd {
                 }
             }
         }
-        p += cluster_len(&text[p..]);
+        p += char_len_at(text, p);
     }
     found.end = p;
     found

@@ -15,11 +15,11 @@ use crate::charset::{Str2NrBases, hex2nr, str2nr_in};
 use crate::cstr::byte_at;
 use crate::eval::typval::{tv_blob_alloc, tv_blob_set_ret};
 use crate::eval::vars::{eval_one_expr_in_text, optval_as_tv};
-use crate::eval::{Cursor, env_name_len, option_var_end};
+use crate::eval::{Cursor, char_len_at, env_name_len, option_var_end};
 use crate::keycodes::{
     FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, special_key_at, trans_special_into,
 };
-use crate::mbyte::{cluster_len, encode_char};
+use crate::mbyte::encode_char;
 use crate::memory::XString;
 use crate::memory::handoff::owned_cstr;
 use crate::message::{emsg, iemsg};
@@ -256,7 +256,7 @@ fn string_body(
             }
             extra -= 1; // `{{` becomes `{`, `}}` becomes `}`
         }
-        p += cluster_len(&text[p..]);
+        p += char_len_at(text, p);
     }
 
     if at(p) != b'"' && !(interpolate && at(p) == b'{') {
@@ -273,7 +273,7 @@ fn string_body(
     // pass sized it at, terminator included.
     let room = p.saturating_add_signed(extra);
     let base = out.len();
-    out.reserve(room);
+    reserve(out, room);
     let mut p = off;
     while at(p) != END && at(p) != b'"' {
         if at(p) != b'\\' {
@@ -282,8 +282,11 @@ fn string_body(
                     break; // start of an expression
                 }
                 p += 1; // reduce `{{` to `{` and `}}` to `}`
+                p = copy_char(text, p, out);
+            } else {
+                let specials: &[u8] = if interpolate { b"\\\"{}" } else { b"\\\"" };
+                p = copy_run(text, p, specials, out);
             }
-            p = copy_char(text, p, out);
             continue;
         }
 
@@ -386,8 +389,37 @@ fn key_flags(after_lt: u8) -> c_int {
 /// Copy the character (with its composing marks) at `text[p]` to `out` and
 /// answer the offset after it — nothing at the end of `text`.
 fn copy_char(text: &[u8], p: usize, out: &mut Vec<u8>) -> usize {
-    let rest = text.get(p..).unwrap_or_default();
-    let len = cluster_len(rest);
+    if p >= text.len() {
+        return p;
+    }
+    let len = char_len_at(text, p);
+    out.extend_from_slice(&text[p..p + len]);
+    p + len
+}
+
+/// Make room for `len` more bytes: exactly, for a string about to be handed
+/// over whole (so the handover does not shrink it again); with the usual
+/// slack, for an interpolated string still being assembled.
+fn reserve(out: &mut Vec<u8>, len: usize) {
+    if out.is_empty() {
+        out.reserve_exact(len);
+    } else {
+        out.reserve(len);
+    }
+}
+
+/// Copy the run of bytes at `text[p]` up to the next byte of `specials` or
+/// NUL across to `out`, and answer the offset after it.
+///
+/// The same bytes a character-by-character copy would move: every special
+/// is ASCII, and no character's bytes include an ASCII byte past its first,
+/// so the run never ends inside one.
+fn copy_run(text: &[u8], p: usize, specials: &[u8], out: &mut Vec<u8>) -> usize {
+    let rest = &text[p..];
+    let len = rest
+        .iter()
+        .position(|byte| *byte == END || specials.contains(byte))
+        .unwrap_or(rest.len());
     out.extend_from_slice(&rest[..len]);
     p + len
 }
@@ -443,7 +475,7 @@ fn lit_string_body(
                 }
             }
         }
-        p += cluster_len(&text[p..]);
+        p += char_len_at(text, p);
     }
 
     if at(p) != b'\'' && !(interpolate && at(p) == b'{') {
@@ -456,7 +488,7 @@ fn lit_string_body(
         return Ok(());
     };
 
-    out.reserve(p);
+    reserve(out, p);
     let mut p = off;
     while at(p) != END {
         if at(p) == b'\'' {
@@ -469,6 +501,10 @@ fn lit_string_body(
                 break; // start of an expression
             }
             p += 1;
+        } else {
+            let specials: &[u8] = if interpolate { b"'{}" } else { b"'" };
+            p = copy_run(text, p, specials, out);
+            continue;
         }
         p = copy_char(text, p, out);
     }
