@@ -168,14 +168,18 @@ pub(crate) unsafe fn get_function_body(
 
                 // Check for "endfunction".  The count is decremented on
                 // every one seen; only the outermost ends the body.
-                if let Some(after) = check_for_word_in(line, p, b"endfunction", 4)
-                    && {
-                        let outermost = nesting == 0;
-                        nesting -= 1;
-                        outermost
-                    }
-                {
-                    let mut after = after;
+                // A nested one is stepped over like any other matched word,
+                // so the indent test below reads what follows it.
+                let endfunction = check_for_word_in(line, p, b"endfunction", 4);
+                if let Some(after) = endfunction {
+                    p = after;
+                }
+                if endfunction.is_some() && {
+                    let outermost = nesting == 0;
+                    nesting -= 1;
+                    outermost
+                } {
+                    let mut after = p;
                     if byte_at(line, after) == b'!' {
                         after += 1;
                     }
