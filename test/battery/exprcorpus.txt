@@ -113,6 +113,8 @@ type(g:F) == v:t_func
 string(g:P)
 eval('1 + ' . '2')
 execute('echo 1')
+1 ? 'a' : v:lua.require'vim.inspect'.inspect(1)
+0 ? 'a' : v:lua.require'vim.inspect'.inspect([1])
 # -- methods through a name that is not yet a call: the callee is read up
 # -- to the `(` and no further
 'abc'->g:fd.f()
