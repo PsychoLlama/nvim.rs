@@ -769,4 +769,52 @@ mod tests {
 
         tv_clear(&mut to);
     }
+
+    /// The reference count of the blob `b` points at.
+    fn refs(b: *mut Blob) -> i32 {
+        // SAFETY: a live blob the case holds.
+        unsafe { (*b).bv_refcount.get() }
+    }
+
+    /// `tv_copy` of a blob shares it: one more reference, the same bytes,
+    /// and a write through either value is seen through the other.
+    #[test]
+    fn a_copied_blob_value_shares_the_blob() {
+        let _held = editor_state_lock();
+        let b = blob_of(b"ab");
+        let at = b.as_ptr();
+        let mut one = TypVal::blob(Some(b.clone()));
+        let mut two = TypVal::Unknown;
+        tv_copy(&one, &mut two);
+        assert_eq!(two.blob_or_null(), at);
+        assert_eq!(refs(at), 3);
+        two.blob_mut().expect("a blob").push(b'c');
+        assert_eq!(blob_bytes(one.blob_ref()), b"abc");
+        tv_clear(&mut one);
+        assert_eq!(refs(at), 2);
+        tv_clear(&mut two);
+        assert_eq!(refs(at), 1);
+        assert_eq!(b.bytes(), b"abc");
+    }
+
+    /// The handle is the count: a clone retains, a drop releases, and the
+    /// last drop frees (under Miri, a missed one is a leak).
+    #[test]
+    fn a_blob_handle_counts_its_references() {
+        let _held = editor_state_lock();
+        let b = tv_blob_alloc();
+        let at = b.as_ptr();
+        assert_eq!(refs(at), 1);
+        let c = b.clone();
+        assert_eq!(refs(at), 2);
+        drop(b);
+        assert_eq!(refs(at), 1);
+        // SAFETY: a live blob, which the handle takes a second reference to.
+        let d = unsafe { BlobRef::retained(at) }.expect("not null");
+        assert_eq!(refs(at), 2);
+        drop(c);
+        drop(d);
+        // SAFETY: null is no blob.
+        assert!(unsafe { BlobRef::retained(::core::ptr::null_mut()) }.is_none());
+    }
 }

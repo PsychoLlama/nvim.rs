@@ -564,3 +564,245 @@ pub fn f_sort(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_uniq(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     do_sort_uniq(args, result, false);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::eval::list::string_tv;
+    use crate::global_cell::editor_state_lock;
+    use crate::types::EvalFuncData;
+
+    use V::{F, N, Str};
+
+    /// One item of a test list, as the case wrote it.
+    #[derive(Clone, Debug, PartialEq)]
+    enum V {
+        N(VarNumber),
+        Str(String),
+        F(f64),
+    }
+
+    /// A string item.
+    #[allow(non_snake_case)]
+    fn S(text: &str) -> V {
+        Str(text.to_owned())
+    }
+
+    impl V {
+        fn tv(&self) -> TypVal {
+            match self {
+                N(n) => TypVal::Number(*n),
+                Str(s) => string_tv(s.as_bytes()),
+                F(f) => TypVal::Float(*f),
+            }
+        }
+
+        fn of(tv: &TypVal) -> V {
+            match tv {
+                TypVal::Number(n) => N(*n),
+                TypVal::Float(f) => F(*f),
+                _ => {
+                    let text = tv.string_ref().map(|s| s.to_bytes().to_vec());
+                    Str(String::from_utf8(text.unwrap_or_default()).expect("ASCII"))
+                }
+            }
+        }
+    }
+
+    fn list_of(items: &[V]) -> ListRef {
+        let mut l = tv_list_alloc(ptrdiff_t::try_from(items.len()).expect("short"));
+        for v in items {
+            let mut tv = v.tv();
+            l.push_copy(&tv);
+            tv_clear(&mut tv);
+        }
+        l
+    }
+
+    fn contents(l: &ListRef) -> Vec<V> {
+        l.items().iter().map(|li| V::of(&li.li_tv)).collect()
+    }
+
+    /// `sort(l, how)` or `uniq(l, how)` in place, through the builtin.
+    fn run(l: &ListRef, how: Option<V>, sort: bool) {
+        let mut argv = vec![TypVal::list(Some(l.clone()))];
+        if let Some(how) = how {
+            argv.push(how.tv());
+        }
+        let mut result = TypVal::Number(0);
+        if sort {
+            f_sort(&argv, &mut result, EvalFuncData::None);
+        } else {
+            f_uniq(&argv, &mut result, EvalFuncData::None);
+        }
+        assert_eq!(
+            result.list_or_null(),
+            l.as_ptr(),
+            "the answer is the list itself"
+        );
+        tv_clear(&mut result);
+        for tv in &mut argv {
+            tv_clear(tv);
+        }
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "qsort_r is a foreign function")]
+    fn sorting_numbers_by_the_default_and_the_numeric_orders() {
+        let _serial = editor_state_lock();
+        let l = list_of(&[N(10), N(9), N(-2), N(100)]);
+        // The default compares string forms.
+        run(&l, None, true);
+        assert_eq!(contents(&l), [N(-2), N(10), N(100), N(9)]);
+        run(&l, Some(S("N")), true);
+        assert_eq!(contents(&l), [N(-2), N(9), N(10), N(100)]);
+        let l = list_of(&[S("10"), S("9"), N(3), S("x")]);
+        run(&l, Some(S("N")), true);
+        assert_eq!(contents(&l), [S("x"), N(3), S("9"), S("10")]);
+        // An `n` sort orders numbers and floats; every string is `'`.
+        run(&l, Some(S("n")), true);
+        assert_eq!(contents(&l), [S("x"), S("9"), S("10"), N(3)]);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "qsort_r is a foreign function")]
+    fn sorting_floats_and_ignoring_case() {
+        let _serial = editor_state_lock();
+        let l = list_of(&[F(2.5), N(1), F(-0.5), F(1e10)]);
+        run(&l, Some(S("f")), true);
+        assert_eq!(contents(&l), [F(-0.5), N(1), F(2.5), F(1e10)]);
+        let l = list_of(&[S("b"), S("A"), S("a"), S("B")]);
+        run(&l, Some(S("i")), true);
+        assert_eq!(contents(&l), [S("A"), S("a"), S("b"), S("B")]);
+        run(&l, Some(N(1)), true);
+        assert_eq!(contents(&l), [S("A"), S("a"), S("b"), S("B")]);
+        run(&l, None, true);
+        assert_eq!(contents(&l), [S("A"), S("B"), S("a"), S("b")]);
+    }
+
+    /// A `:for` cursor on a list being sorted stands on an *item*: it goes
+    /// where the item went.
+    #[test]
+    #[cfg_attr(miri, ignore = "qsort_r is a foreign function")]
+    fn a_watcher_follows_its_item_through_a_sort() {
+        let _serial = editor_state_lock();
+        let mut l = list_of(&[N(3), N(0), N(2), N(1)]);
+        let mut on_two = Box::new(ListWatch {
+            lw_index: 2,
+            lw_next: ::core::ptr::null_mut(),
+        });
+        let mut on_three = Box::new(ListWatch {
+            lw_index: 0,
+            lw_next: ::core::ptr::null_mut(),
+        });
+        let (two, three) = (&raw mut *on_two, &raw mut *on_three);
+        // SAFETY: both boxes outlive their registration, ended below.
+        unsafe {
+            l.watch_add(two);
+            l.watch_add(three);
+        }
+        run(&l, Some(S("N")), true);
+        assert_eq!(contents(&l), [N(0), N(1), N(2), N(3)]);
+        // SAFETY: the two watchers, still registered.
+        assert_eq!(unsafe { ((*two).lw_index, (*three).lw_index) }, (2, 3));
+        // An ended cursor stays ended.
+        // SAFETY: as above.
+        unsafe { (*three).lw_index = ListWatch::ENDED };
+        run(&l, None, true);
+        // SAFETY: as above.
+        assert_eq!(unsafe { (*three).lw_index }, ListWatch::ENDED);
+        // SAFETY: as above.
+        unsafe {
+            l.watch_remove(two);
+            l.watch_remove(three);
+        }
+        drop(on_two);
+        drop(on_three);
+    }
+
+    #[test]
+    fn uniq_drops_each_item_equal_to_the_one_before() {
+        let _serial = editor_state_lock();
+        let l = list_of(&[N(1), N(1), N(2), N(1), N(1), N(3), N(3)]);
+        run(&l, Some(S("N")), false);
+        assert_eq!(contents(&l), [N(1), N(2), N(1), N(3)]);
+        // Strings by their bytes.
+        let l = list_of(&[S("a"), S("a"), S("A"), S("b"), S("b")]);
+        run(&l, None, false);
+        assert_eq!(contents(&l), [S("a"), S("A"), S("b")]);
+        // By number, 1 and '1' and '01' are one.  (A Float here would be
+        // E805, which needs an execution stack to report against.)
+        let l = list_of(&[N(1), S("1"), S("1"), S("01")]);
+        run(&l, Some(S("N")), false);
+        assert_eq!(contents(&l), [N(1)]);
+        let l = list_of(&[F(1.0), N(1), F(1.5)]);
+        run(&l, Some(S("f")), false);
+        assert_eq!(contents(&l), [F(1.0), F(1.5)]);
+    }
+
+    /// The default ordering compares `string()` forms, so a number and the
+    /// string of its digits differ: one is quoted.
+    ///
+    /// That comparison is `encode_tv2string(&TypVal)`, whose walk
+    /// (`encode_typval_read`) casts the shared borrow to `*mut` and hands
+    /// each hook `tv.as_mut()` -- a `&mut` retag of a `SharedReadOnly`
+    /// pointer, which Stacked Borrows rejects before anything is written.
+    /// Every `string()` of a non-string value through that entry point
+    /// does the same.
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in current code: encode_typval_read retags a &TypVal as &mut \
+                  (Stacked Borrows: Unique retag of a SharedReadOnly tag)"
+    )]
+    fn uniq_by_string_form_tells_a_number_from_its_digits() {
+        let _serial = editor_state_lock();
+        let l = list_of(&[N(1), N(1), S("1"), S("1"), S("01")]);
+        run(&l, None, false);
+        assert_eq!(contents(&l), [N(1), S("1"), S("01")]);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
+    fn uniq_ignoring_case() {
+        let _serial = editor_state_lock();
+        let l = list_of(&[S("a"), S("A"), S("b"), S("B"), S("a")]);
+        run(&l, Some(S("i")), false);
+        assert_eq!(contents(&l), [S("a"), S("b"), S("a")]);
+    }
+
+    /// A watcher on an item `uniq` removes lands on the next one, as for any
+    /// removal.
+    #[test]
+    fn a_watcher_on_a_duplicate_lands_on_what_followed_it() {
+        let _serial = editor_state_lock();
+        let mut l = list_of(&[N(1), N(1), N(2), N(2), N(3)]);
+        let mut lw = Box::new(ListWatch {
+            lw_index: 3,
+            lw_next: ::core::ptr::null_mut(),
+        });
+        let w = &raw mut *lw;
+        // SAFETY: the box outlives its registration, ended below.
+        unsafe { l.watch_add(w) };
+        run(&l, Some(S("N")), false);
+        assert_eq!(contents(&l), [N(1), N(2), N(3)]);
+        // SAFETY: the watcher, still registered.
+        assert_eq!(unsafe { (*w).lw_index }, 2);
+        // SAFETY: as above.
+        unsafe { l.watch_remove(w) };
+        drop(lw);
+    }
+
+    /// A list of one, or none, is answered without parsing `{how}`: even a
+    /// nonsense ordering is no error then.
+    #[test]
+    fn a_short_list_is_answered_untouched() {
+        let _serial = editor_state_lock();
+        for items in [vec![], vec![N(5)]] {
+            let l = list_of(&items);
+            run(&l, Some(S("no-such-function")), true);
+            run(&l, Some(S("no-such-function")), false);
+            assert_eq!(contents(&l), items);
+        }
+    }
+}

@@ -1175,4 +1175,122 @@ mod tests {
         }
         assert_eq!(slot_order(&d), slot_order(&refilled));
     }
+
+    /// The reference count of the dictionary `d` points at.
+    fn refs(d: *mut Dict) -> i32 {
+        // SAFETY: a live dictionary the case holds.
+        unsafe { (*d).dv_refcount.get() }
+    }
+
+    /// Hold `tv_in_free_unref_items` up for a scope, and put it down even
+    /// when an assertion unwinds through it.
+    struct Collecting;
+    impl Collecting {
+        fn start() -> Collecting {
+            tv_in_free_unref_items.set(true);
+            Collecting
+        }
+    }
+    impl Drop for Collecting {
+        fn drop(&mut self) {
+            tv_in_free_unref_items.set(false);
+        }
+    }
+
+    /// A deep copy of a list and a dictionary that hold each other: the
+    /// copy's cycle runs through the two *copies*, and the originals'
+    /// counts are untouched.
+    #[test]
+    fn a_deep_copy_of_a_list_dict_cycle_stays_inside_the_copy() {
+        let _held = editor_state_lock();
+        let mut d = dict_of(&["n"]);
+        let mut l = tv_list_alloc(1);
+        l.push_dict(Some(d.clone()));
+        d.add_list(b"l", Some(l.clone())).expect("a key used once");
+        let (lp, dp) = (l.as_ptr(), d.as_ptr());
+        let before = (
+            // SAFETY: the list the handle holds.
+            unsafe { (*lp).lv_refcount.get() },
+            refs(dp),
+        );
+        assert_eq!(before, (2, 2));
+
+        let from = TypVal::list(Some(l.clone()));
+        let mut to = TypVal::Unknown;
+        let copy_id = crate::eval::get_copy_id();
+        // SAFETY: two live values, no conversion, a fresh copy id.
+        let copied = unsafe { var_item_copy(::core::ptr::null(), &from, &mut to, true, copy_id) };
+        assert_eq!(copied, Ok(()));
+        let cl = to.list_or_null();
+        // SAFETY: the copy `to` holds.
+        let cd = list_items(unsafe { cl.as_ref() })[0].li_tv.dict_or_null();
+        assert_ne!(cl, lp);
+        assert_ne!(cd, dp);
+        // SAFETY: the copied dictionary, which the copied list holds.
+        let back = unsafe { &*cd }
+            .find(b"l")
+            .expect("the copy kept the key")
+            .di_tv
+            .list_or_null();
+        assert_eq!(back, cl, "the cycle followed the original");
+        // SAFETY: as above.
+        assert_eq!(number_at(unsafe { &*cd }, b"n"), Some(0));
+        // SAFETY: the list the handle holds.
+        assert_eq!((unsafe { (*lp).lv_refcount.get() }, refs(dp)), (3, 2));
+
+        // Break both cycles at the dictionary, then let everything go.
+        // SAFETY: two live dictionaries nothing walks.
+        unsafe {
+            dict_clear(dp);
+            dict_clear(cd);
+        }
+        let mut from = from;
+        tv_clear(&mut from);
+        tv_clear(&mut to);
+        drop(l);
+        drop(d);
+    }
+
+    /// While the collector is freeing, the last reference going does not
+    /// free the dictionary; the collector's two passes do.
+    #[test]
+    fn a_dict_cycle_is_freed_by_the_collectors_two_passes() {
+        let _held = editor_state_lock();
+        let mut d = dict_of(&["n"]);
+        // SAFETY: a live dictionary, which the value takes a reference to.
+        let held = unsafe { DictRef::retained(d.as_ptr()) };
+        d.add_dict(b"self", held).expect("a key used once");
+        let dp = d.as_ptr();
+        drop(d);
+        assert_eq!(refs(dp), 1, "the cycle keeps it alive");
+
+        let collecting = Collecting::start();
+        // SAFETY: a dictionary nothing else is walking.
+        unsafe { tv_dict_free_contents(dp) };
+        // Released to zero by its own item, and still allocated.
+        assert_eq!(refs(dp), 0);
+        // SAFETY: as above, now empty.
+        assert_eq!(unsafe { &*dp }.len(), 0);
+        // SAFETY: as above.
+        unsafe { tv_dict_free_dict(dp) };
+        drop(collecting);
+    }
+
+    /// `tv_dict_unref` to zero under the flag leaves the dictionary for the
+    /// collector, which frees it explicitly afterwards.
+    #[test]
+    fn a_dict_released_mid_collection_waits_for_the_collector() {
+        let _held = editor_state_lock();
+        let d = dict_of(&["a", "b"]);
+        let dp = d.as_ptr();
+        {
+            let _collecting = Collecting::start();
+            drop(d);
+            assert_eq!(refs(dp), 0);
+            // SAFETY: unreferenced but not freed.
+            assert_eq!(number_at(unsafe { &*dp }, b"b"), Some(1));
+        }
+        // SAFETY: as above; `tv_dict_free` is the pair of passes.
+        unsafe { tv_dict_free(dp) };
+    }
 }

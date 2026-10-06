@@ -408,3 +408,233 @@ pub unsafe fn dict_watcher_notify(
     }
     unsafe { tv_dict_unref(dict) };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::global_cell::editor_state_lock;
+
+    // Every case that registers a watcher is ignored under Miri: the first
+    // `Dict::watcher_add` on a dictionary links the new node through the
+    // queue head's `prev`, which points back at the head with the
+    // allocation's own provenance, and that write lands while the
+    // `&mut self` the method runs under is protected.
+
+    /// A callback naming a function nothing defines. No case here fires
+    /// one: only the bookkeeping is under test.
+    fn never_called(name: &CStr) -> Callback {
+        // SAFETY: a NUL-terminated name, copied into a block the callback
+        // owns and `callback_free` releases.
+        Callback::Funcref(unsafe { xstrdup(name.as_ptr()) })
+    }
+
+    /// The watchers of `d`, in registration order, as their patterns.
+    fn patterns(d: &DictRef) -> Vec<Vec<u8>> {
+        let head = dv_watchers(d.as_ptr());
+        let mut out = Vec::new();
+        // SAFETY: the dictionary's own queue head.
+        let mut w = unsafe { (*head).next };
+        while w != head {
+            // SAFETY: an entry of the dictionary's watcher queue.
+            let watcher = unsafe { &*tv_dict_watcher_node_data(w) };
+            // SAFETY: the watcher's own pattern, that many bytes of it.
+            out.push(
+                unsafe { cstr::slice_at(watcher.key_pattern, watcher.key_pattern_len) }.to_vec(),
+            );
+            // SAFETY: as above.
+            w = unsafe { (*w).next };
+        }
+        out
+    }
+
+    /// The first watcher of `d` whose pattern is `pattern`.
+    fn watcher_of(d: &DictRef, pattern: &[u8]) -> *mut DictWatcher {
+        let head = dv_watchers(d.as_ptr());
+        // SAFETY: the dictionary's own queue head.
+        let mut w = unsafe { (*head).next };
+        while w != head {
+            // SAFETY: an entry of the dictionary's watcher queue.
+            let watcher = unsafe { tv_dict_watcher_node_data(w) };
+            // SAFETY: as above.
+            let wd = unsafe { &*watcher };
+            // SAFETY: the watcher's own pattern, that many bytes of it.
+            if unsafe { cstr::slice_at(wd.key_pattern, wd.key_pattern_len) } == pattern {
+                return watcher;
+            }
+            // SAFETY: as above.
+            w = unsafe { (*w).next };
+        }
+        panic!("no watcher on {pattern:?}");
+    }
+
+    /// Whether `pattern` (as a registered watcher) matches `key`.
+    fn matches(d: &DictRef, pattern: &[u8], key: &CStr) -> bool {
+        // SAFETY: a registered watcher and a NUL-terminated key.
+        unsafe { tv_dict_watcher_matches(watcher_of(d, pattern), key.as_ptr()) }
+    }
+
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in current code: Dict::watcher_add writes the queue head's self-link \
+                  under a protected &mut Dict (Stacked Borrows: strongly protected Unique)"
+    )]
+    fn removing_a_watcher_takes_only_the_exact_registration() {
+        let _serial = editor_state_lock();
+        let mut d = tv_dict_alloc();
+        d.watcher_add(b"a*", never_called(c"NeverCalledA"));
+        d.watcher_add(b"abc", never_called(c"NeverCalledB"));
+        d.watcher_add(b"*", never_called(c"NeverCalledA"));
+        assert_eq!(
+            patterns(&d),
+            [b"a*".to_vec(), b"abc".to_vec(), b"*".to_vec()]
+        );
+
+        let mut a = never_called(c"NeverCalledA");
+        let mut b = never_called(c"NeverCalledB");
+        // The pattern matches but the callback does not, and vice versa.
+        assert!(!d.watcher_remove(b"abc", &a));
+        assert!(!d.watcher_remove(b"zz", &a));
+        assert!(!d.watcher_remove(b"a", &a), "a prefix of the pattern");
+        assert_eq!(patterns(&d).len(), 3);
+
+        assert!(d.watcher_remove(b"abc", &b));
+        assert_eq!(patterns(&d), [b"a*".to_vec(), b"*".to_vec()]);
+        assert!(!d.watcher_remove(b"abc", &b), "already gone");
+        assert!(d.watcher_remove(b"*", &a));
+        assert_eq!(patterns(&d), [b"a*".to_vec()]);
+
+        // The probes stay the caller's.
+        a.clear();
+        b.clear();
+        // The last one goes with the dictionary.
+        drop(d);
+    }
+
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in current code: Dict::watcher_add writes the queue head's self-link \
+                  under a protected &mut Dict (Stacked Borrows: strongly protected Unique)"
+    )]
+    fn a_pattern_matches_exactly_or_by_its_prefix() {
+        let _serial = editor_state_lock();
+        let mut d = tv_dict_alloc();
+        for pattern in [&b"*"[..], b"a*", b"abc", b""] {
+            d.watcher_add(pattern, Callback::None);
+        }
+        assert!(matches(&d, b"*", c"anything"));
+        assert!(matches(&d, b"*", c""));
+        assert!(matches(&d, b"a*", c"a"));
+        assert!(matches(&d, b"a*", c"abd"));
+        assert!(!matches(&d, b"a*", c"ba"));
+        assert!(matches(&d, b"abc", c"abc"));
+        assert!(!matches(&d, b"abc", c"abcd"));
+        assert!(!matches(&d, b"abc", c"ab"));
+        assert!(matches(&d, b"", c""));
+        assert!(!matches(&d, b"", c"a"));
+        // `Callback::None` equals itself, so it can be removed by pattern.
+        assert!(d.watcher_remove(b"", &Callback::None));
+        assert_eq!(patterns(&d).len(), 3);
+    }
+
+    /// A dictionary freed with its watchers still registered frees them:
+    /// under Miri, a watcher left behind is a leak.
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in current code: Dict::watcher_add writes the queue head's self-link \
+                  under a protected &mut Dict (Stacked Borrows: strongly protected Unique)"
+    )]
+    fn freeing_a_watched_dict_frees_its_watchers() {
+        let _serial = editor_state_lock();
+        let mut d = tv_dict_alloc();
+        d.watcher_add(b"*", never_called(c"NeverCalledA"));
+        d.watcher_add(b"k", never_called(c"NeverCalledB"));
+        d.add_number(b"k", 1).expect("a key used once");
+        drop(d);
+    }
+
+    /// While any watcher is mid-callback, removing one only marks it: the
+    /// walk that is running unlinks it when it finishes.  Nothing fires a
+    /// callback here, so the walk is simulated by setting `busy`.
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in current code: Dict::watcher_add writes the queue head's self-link \
+                  under a protected &mut Dict (Stacked Borrows: strongly protected Unique)"
+    )]
+    fn removing_a_watcher_while_one_is_busy_defers_the_free() {
+        let _serial = editor_state_lock();
+        let mut d = tv_dict_alloc();
+        d.watcher_add(b"x", never_called(c"NeverCalledA"));
+        d.watcher_add(b"y", never_called(c"NeverCalledB"));
+        let busy = watcher_of(&d, b"x");
+        // SAFETY: a registered watcher.
+        unsafe { (*busy).busy = true };
+
+        let mut probe = never_called(c"NeverCalledB");
+        assert!(d.watcher_remove(b"y", &probe));
+        // Still on the queue, marked.
+        assert_eq!(patterns(&d), [b"x".to_vec(), b"y".to_vec()]);
+        // SAFETY: the watcher just marked, still registered.
+        assert!(unsafe { (*watcher_of(&d, b"y")).needs_free });
+        // A second removal finds it again and marks it again.
+        assert!(d.watcher_remove(b"y", &probe));
+
+        // With nothing busy, a removal unlinks at once.
+        // SAFETY: as above.
+        unsafe { (*busy).busy = false };
+        let mut a = never_called(c"NeverCalledA");
+        assert!(d.watcher_remove(b"x", &a));
+        assert_eq!(patterns(&d), [b"y".to_vec()]);
+
+        probe.clear();
+        a.clear();
+        // The marked watcher is the dictionary's to free.
+        drop(d);
+    }
+
+    /// A notification no pattern matches runs nothing, and leaves a
+    /// deferred removal deferred: only a walk that fired the marked watcher
+    /// knows to unlink it.
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in current code: Dict::watcher_add writes the queue head's self-link \
+                  under a protected &mut Dict (Stacked Borrows: strongly protected Unique)"
+    )]
+    fn a_notification_nothing_matches_leaves_the_queue_alone() {
+        let _serial = editor_state_lock();
+        let mut d = tv_dict_alloc();
+        d.watcher_add(b"x", never_called(c"NeverCalledA"));
+        let w = watcher_of(&d, b"x");
+        // SAFETY: a registered watcher.
+        unsafe { (*w).needs_free = true };
+        let refs = d.dv_refcount.get();
+        notify_watchers(&d, c"other", Some(&TypVal::Number(1)), None);
+        assert_eq!(d.dv_refcount.get(), refs);
+        assert_eq!(patterns(&d), [b"x".to_vec()]);
+        drop(d);
+    }
+
+    /// `duplicate` takes a reference of its own, and two copies of one
+    /// callback are equal.
+    #[test]
+    fn a_duplicated_callback_equals_its_source() {
+        let _serial = editor_state_lock();
+        let mut a = never_called(c"NeverCalledA");
+        let mut b = a.duplicate();
+        // SAFETY: two live callbacks.
+        assert!(unsafe { tv_callback_equal(&a, &b) });
+        // SAFETY: as above.
+        assert!(!unsafe { tv_callback_equal(&a, &Callback::None) });
+        let (Callback::Funcref(pa), Callback::Funcref(pb)) = (&a, &b) else {
+            panic!("a funcref copies to a funcref");
+        };
+        assert_ne!(pa, pb, "the name is copied, not shared");
+        a.clear();
+        b.clear();
+        assert!(!a.is_set());
+    }
+}
