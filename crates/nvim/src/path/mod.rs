@@ -141,6 +141,13 @@ pub unsafe fn full_name_save(fname: *const c_char, force: bool) -> *mut c_char {
     buf
 }
 
+/// [`full_name_save`] of a name the caller holds, owned.
+pub(crate) fn full_name_of(name: &CStr, force: bool) -> crate::memory::XString {
+    // SAFETY: `name` is NUL-terminated, so the answer is an allocation of
+    // its own, taken over once.
+    unsafe { crate::memory::XString::from_raw(full_name_save(name.as_ptr(), force)) }
+}
+
 /// [`full_name_save`] for a name that may already be absolute, in which case
 /// it is only copied.
 ///

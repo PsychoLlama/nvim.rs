@@ -297,6 +297,22 @@ pub(crate) fn current_dir() -> Option<crate::memory::XString> {
     ok.then(|| crate::memory::XString::from_cstr(cstr::in_chars(&buf)))
 }
 
+/// What [`os_dirname`] leaves in a `MAXPATHL` buffer: the name of the
+/// current directory or, when the system will not say, the error message.
+/// The reader that ignores the failure and goes on with the buffer.
+pub(crate) fn dirname_text() -> crate::memory::XString {
+    let mut buf = vec![0 as c_char; crate::types::MAXPATHL as usize];
+    // SAFETY: the buffer holds exactly the length passed.
+    let _ = unsafe { os_dirname(buf.as_mut_ptr(), buf.len()) };
+    crate::memory::XString::from_cstr(cstr::in_chars(&buf))
+}
+
+/// [`os_isdir`] of a name the caller holds.
+pub(crate) fn os_isdir_of(name: &CStr) -> bool {
+    // SAFETY: `name` is NUL-terminated.
+    unsafe { os_isdir(name.as_ptr()) }
+}
+
 /// Whether `name` is a directory and *not* a symlink to one.
 pub fn os_isrealdir(name: &CStr) -> bool {
     // `lstat`, not `stat`: a symlink to a directory is not one, though

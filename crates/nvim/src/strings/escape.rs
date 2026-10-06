@@ -144,6 +144,19 @@ pub unsafe fn vim_strnsave_unquoted(string: *const c_char, length: size_t) -> *m
     ret
 }
 
+/// [`vim_strsave_shellescape`] of a string the caller holds, owned.
+pub(crate) fn shellescape_of(string: &CStr, do_special: bool, do_newline: bool) -> XString {
+    // SAFETY: `string` is NUL-terminated; the answer is an allocation of its
+    // own, taken over once.
+    unsafe {
+        XString::from_raw(vim_strsave_shellescape(
+            string.as_ptr(),
+            do_special,
+            do_newline,
+        ))
+    }
+}
+
 /// Single-quote `string` for the shell, doubling embedded quotes
 /// (`'` → `'\''`) and — depending on the shell flavor and flags — escaping
 /// newlines, `!`, `\`, and `%`/`#` cmdline specials.

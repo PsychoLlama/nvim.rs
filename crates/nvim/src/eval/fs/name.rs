@@ -11,13 +11,14 @@
 //!
 //! # What the stages thread through
 //!
-//! Upstream carries six parameters -- three of them out -- and a `goto
-//! repeat` between them.  [`Mods`] is the modifier text and the cursor into
-//! it; [`Fname`] is the name, the buffer it lives in and its length, which is
-//! *not* its NUL-terminated length: `:h` shortens the name by moving an
-//! offset, leaving the tail in the buffer where the next `:e` still reads it.
-//! Every stage is a function over those two, and the `goto` is the loop in
-//! [`modify_fname`].
+//! Upstream carries six parameters -- three of them out, two of them a
+//! pointer to a pointer -- and a `goto repeat` between them. [`Mods`] is the
+//! modifier text and how much of it has been read; [`Fname`] is the string
+//! the name lives in (the caller's, or one a stage made), where in it the
+//! name starts, and its length, which is *not* its NUL-terminated length:
+//! `:h` shortens the name by moving an offset, leaving the tail in the
+//! string where the next `:e` still reads it. Every stage is a function over
+//! those two, and the `goto` is the loop in [`modify_fname`].
 //!
 //! The `:h`/`:t`/`:e`/`:r` group does no allocation (bar the `"."` an emptied
 //! `:h` falls back to), so [`trim_stages`] works in byte offsets from the
@@ -27,300 +28,139 @@
 //!
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::{Owned, VALID_HEAD, VALID_PATH, at, from, is_sep, str_arg_chk};
-use crate::cstr;
+use super::{VALID_HEAD, VALID_PATH, at, is_sep, str_arg_chk};
 use crate::eval::do_string_sub;
 use crate::eval::typval::NumBuf;
-use crate::mbyte::{utf_head_off, utfc_ptr2len};
+use crate::mbyte::{cluster_len, head_off};
+use crate::memory::XString;
 use crate::memory::handoff::owned_cstr;
-use crate::memory::xfree;
-use crate::os::env::{expand_env_save, home_replace};
-use crate::os::fs::{os_dirname, os_isdir};
-use crate::path::{
-    add_pathsep, after_pathsep, full_name_save, get_past_head, path_fnamencmp, path_tail,
-    vim_is_abs_name,
-};
-use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
-use crate::types::{EvalFuncData, MAXPATHL, TypVal, size_t};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::replace;
-use core::ptr;
-
-/// A `MAXPATHL` scratch, which is what `os_dirname` and `home_replace` write
-/// into.
-type PathBuf = [c_char; MAXPATHL as usize];
+use crate::os::env::{expand_env_save_opt_of, home_replace_in};
+use crate::os::fs::{dirname_text, os_isdir_of};
+use crate::path::{full_name_of, path_fnamencmp, tail_index, vim_is_abs_name};
+use crate::strings::find_char;
+use crate::strings::shellescape_of;
+use crate::types::{EvalFuncData, MAXPATHL, TypVal};
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 // ---------------------------------------------------------------------
 // The two things every stage is written against
 // ---------------------------------------------------------------------
 
 /// The modifier text and how much of it has been read.
-#[derive(Clone, Copy)]
-struct Mods {
-    src: *const c_char,
-    usedlen: *mut size_t,
+struct Mods<'a> {
+    text: &'a CStr,
+    used: &'a mut usize,
 }
 
-impl Mods {
-    /// # Safety
-    /// `src` is NUL-terminated and `usedlen` a live cursor into it.
-    unsafe fn new(src: *const c_char, usedlen: *mut size_t) -> Self {
-        Self { src, usedlen }
+impl Mods<'_> {
+    fn advance(&mut self, n: usize) {
+        *self.used += n;
     }
 
-    fn text<'a>(self) -> &'a CStr {
-        // SAFETY: the constructor's obligation.
-        unsafe { CStr::from_ptr(self.src) }
-    }
-
-    fn used(self) -> usize {
-        // SAFETY: the constructor's obligation.
-        unsafe { *self.usedlen }
-    }
-
-    fn set_used(self, n: usize) {
-        // SAFETY: the constructor's obligation.
-        unsafe { *self.usedlen = n as size_t };
-    }
-
-    fn advance(self, n: usize) {
-        self.set_used(self.used() + n);
-    }
-
-    /// Byte `i` past the cursor, or 0 past the end.
-    fn at(self, i: usize) -> u8 {
-        at(self.text().to_bytes(), self.used() + i)
+    /// Byte `i` past what has been read, or 0 past the end.
+    fn at(&self, i: usize) -> u8 {
+        at(self.text.to_bytes(), *self.used + i)
     }
 
     /// Whether the next modifier is `:c`.
-    fn is(self, c: u8) -> bool {
+    fn is(&self, c: u8) -> bool {
         self.at(0) == b':' && self.at(1) == c
     }
 }
 
-/// The name being modified: the pointer to it, the buffer this call
-/// allocated for it (which the *caller* frees), and its length.
-///
-/// The length is the answer's, not the buffer's: `:h` leaves the tail in
-/// place and just shortens it, which is what makes `:h:e` work.
-#[derive(Clone, Copy)]
-struct Fname {
-    fnamep: *mut *mut c_char,
-    bufp: *mut *mut c_char,
-    fnamelen: *mut size_t,
+/// Where the name being modified lives.
+enum Storage<'a> {
+    /// The caller's own string.
+    Borrowed(&'a CStr),
+    /// One a stage made, with its NUL. A `:s` can put a NUL inside it,
+    /// which every reader but the final copy stops at.
+    Owned(Vec<u8>),
 }
 
-impl Fname {
-    /// # Safety
-    /// The three are the caller's own out-parameters, all live, with `*bufp`
-    /// either NULL or an owned string.
-    unsafe fn new(fnamep: *mut *mut c_char, bufp: *mut *mut c_char, fnamelen: *mut size_t) -> Self {
-        Self {
-            fnamep,
-            bufp,
-            fnamelen,
+/// The name being modified: the string it lives in, where in it the name
+/// starts, and its length.
+///
+/// The length is the answer's, not the string's: `:h` leaves the tail in
+/// place and just shortens it, which is what makes `:h:e` work.
+struct Fname<'a> {
+    storage: Storage<'a>,
+    start: usize,
+    len: usize,
+}
+
+impl Fname<'_> {
+    /// The whole string the name lives in, its NUL included.
+    fn with_nul(&self) -> &[u8] {
+        match &self.storage {
+            Storage::Borrowed(text) => text.to_bytes_with_nul(),
+            Storage::Owned(text) => text,
         }
     }
 
-    fn name(self) -> *mut c_char {
-        // SAFETY: the constructor's obligation.
-        unsafe { *self.fnamep }
+    /// The name and everything after it, up to the NUL: what a callee that
+    /// takes the C string reads.
+    fn cstr(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.with_nul()[self.start..]).expect("a NUL-terminated name")
     }
 
-    fn set_name(self, p: *mut c_char) {
-        // SAFETY: the constructor's obligation.
-        unsafe { *self.fnamep = p };
+    /// Byte `i` of the name; `i` may be past its length.
+    fn byte(&self, i: usize) -> u8 {
+        at(self.with_nul(), self.start + i)
     }
 
-    fn cstr<'a>(self) -> &'a CStr {
-        cstr_at(self.name())
+    /// The name's own `len` bytes.
+    fn bytes(&self) -> &[u8] {
+        let text = self.with_nul();
+        let start = self.start.min(text.len());
+        &text[start..(start + self.len).min(text.len())]
     }
 
-    fn len(self) -> usize {
-        // SAFETY: the constructor's obligation.
-        unsafe { *self.fnamelen }
+    /// Adopt `text` -- with its NUL -- as the string, with the name at
+    /// `start` in it.
+    fn adopt_at(&mut self, text: Vec<u8>, start: usize) {
+        self.storage = Storage::Owned(text);
+        self.start = start;
     }
 
-    fn set_len(self, n: usize) {
-        // SAFETY: the constructor's obligation.
-        unsafe { *self.fnamelen = n as size_t };
-    }
-
-    /// Byte `i` of the name; `i` may be the one past its length, which is
-    /// what `:S` reads and puts back.
-    fn byte(self, i: usize) -> u8 {
-        // SAFETY: the name has at least `*fnamelen` bytes and a terminator.
-        unsafe { *self.name().add(i) as u8 }
-    }
-
-    fn set_byte(self, i: usize, b: u8) {
-        // SAFETY: as [`Fname::byte`].
-        unsafe { *self.name().add(i) = b as c_char };
-    }
-
-    /// Adopt `p` as both the name and the buffer, freeing the buffer this
-    /// call had allocated before it.
-    fn adopt(self, p: *mut c_char) {
-        self.set_name(p);
-        self.adopt_buf(p);
-    }
-
-    /// Adopt `p` as the buffer only -- `:.` leaves the name pointing *into*
-    /// it rather than at its start.
-    fn adopt_buf(self, p: *mut c_char) {
-        // SAFETY: the constructor's obligation.  `p` is always a fresh
-        // allocation, so it is never the buffer being freed.
-        let old = unsafe { replace(&mut *self.bufp, p) };
-        // SAFETY: `*bufp` was NULL or a string this call had allocated.
-        unsafe { xfree(old.cast::<c_void>()) };
+    /// Adopt `text` as both the string and the name.
+    fn adopt(&mut self, text: XString) {
+        self.adopt_at(text.into_vec(), 0);
     }
 }
 
-// ---------------------------------------------------------------------
-// One-line views of what the stages call
-// ---------------------------------------------------------------------
-
-fn cstr_at<'a>(p: *const c_char) -> &'a CStr {
-    // SAFETY: every pointer this module holds is into a NUL-terminated name.
-    unsafe { CStr::from_ptr(p) }
+/// `text` up to its first NUL.
+fn until_nul(text: &[u8]) -> &[u8] {
+    &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())]
 }
 
-fn offset(p: *mut c_char, n: usize) -> *mut c_char {
-    // SAFETY: `n` is an offset within the NUL-terminated string at `p`.
-    unsafe { p.add(n) }
+/// Where the part of `s` that may be stripped begins -- past a leading `/`,
+/// which `:h` never removes.
+fn past_head_off(s: &[u8]) -> usize {
+    s.iter().position(|&b| b != b'/').unwrap_or(s.len())
 }
 
-/// The length of the character `s` starts with, combining characters
-/// included.  Never 0 here: the callers stop at the terminator.
-fn char_len(s: &CStr) -> usize {
-    // SAFETY: `s` is NUL-terminated, which is where the scan stops.
-    unsafe { utfc_ptr2len(s.as_ptr()) as usize }
-}
-
-/// How far back the start of the character ending at byte `i` of `s` is.
-fn head_off(s: &CStr, i: usize) -> usize {
-    // SAFETY: `i` indexes `s`, so both pointers are inside it.
-    unsafe { utf_head_off(s.as_ptr(), s.as_ptr().add(i)) as usize }
-}
-
-/// Where the last component of `s` starts.
-fn tail_off(s: &CStr) -> usize {
-    // SAFETY: `s` is NUL-terminated, and the answer is inside it.
-    unsafe { path_tail(s.as_ptr()).offset_from(s.as_ptr()) as usize }
-}
-
-/// Where the part of `s` that may be stripped begins -- past a leading `/`
-/// or a drive letter, neither of which `:h` removes.
-fn past_head_off(s: &CStr) -> usize {
-    // SAFETY: as [`tail_off`].
-    unsafe { get_past_head(s.as_ptr()).offset_from(s.as_ptr()) as usize }
-}
-
-/// Whether byte `i` of `s` follows a path separator that is not the whole of
-/// a root, looking back no further than byte `from`.
-fn after_sep(s: &CStr, from: usize, i: usize) -> bool {
-    // SAFETY: both index `s` or are its terminator.
-    unsafe { after_pathsep(s.as_ptr().add(from), s.as_ptr().add(i)) != 0 }
-}
-
-/// `$VAR` and a leading `~` expanded; NULL when the expansion failed.
-fn expand_env(p: *mut c_char) -> *mut c_char {
-    // SAFETY: `p` is a NUL-terminated name.
-    unsafe { expand_env_save(p) }
-}
-
-/// The name as a full path; NULL when the current directory is unreadable.
-/// `force` asks for it even when the name already looks absolute, which is
-/// how an embedded `/.` or `/..` is removed.
-fn full_name(p: *mut c_char, force: bool) -> *mut c_char {
-    // SAFETY: `p` is a NUL-terminated name.
-    unsafe { full_name_save(p, force) }
-}
-
-fn is_dir(s: &CStr) -> bool {
-    // SAFETY: `s` is NUL-terminated.
-    unsafe { os_isdir(s.as_ptr()) }
-}
-
-/// A copy of `s` with `extra` spare bytes after it, for the separator `:p`
-/// appends to a directory.
-fn grown_copy(s: &CStr, extra: usize) -> *mut c_char {
-    // SAFETY: `s` is NUL-terminated; `xstrnsave` allocates the length asked
-    // for plus a terminator and zero-fills what it does not copy.
-    unsafe { xstrnsave(s.as_ptr(), (s.to_bytes().len() + extra) as size_t) }
-}
-
-/// Append a path separator if there is not one already.
-fn append_sep(p: *mut c_char) {
-    // SAFETY: only called on a buffer [`grown_copy`] left room in.
-    unsafe { add_pathsep(p) };
-}
-
-/// The current directory, into `buf`.
-fn get_dirname(buf: &mut PathBuf) {
-    // SAFETY: `buf` is exactly the `MAXPATHL` writable bytes claimed.
-    let _ = unsafe { os_dirname(buf.as_mut_ptr(), MAXPATHL as size_t) };
-}
-
-/// `src` with the home directory replaced by `~`, into `buf`.
-fn home_rel(src: &CStr, buf: &mut PathBuf) {
-    let (from, into, room) = (src.as_ptr(), buf.as_mut_ptr(), MAXPATHL as size_t);
-    // SAFETY: `src` is NUL-terminated and `buf` is `MAXPATHL` writable bytes;
-    // a NULL buffer means no 'path'-relative shortening.
-    unsafe { home_replace(None, from, into, room, true) };
-}
-
-/// What a scratch holds, which both fillers above NUL-terminate.
-fn scratch(buf: &PathBuf) -> &CStr {
-    // SAFETY: both fillers write a terminator within `MAXPATHL`.
-    unsafe { CStr::from_ptr(buf.as_ptr()) }
-}
-
-/// Where the character `c` next appears in `s`.  A character, not a byte:
-/// a separator above 0x7f is matched as the multibyte sequence it encodes.
-fn find_char(s: &CStr, c: u8) -> Option<usize> {
-    // SAFETY: `s` is NUL-terminated, which is where the search stops.
-    let found = unsafe { vim_strchr(s.as_ptr(), c as c_int) };
-    // SAFETY: a hit is inside `s`, and no offset is taken from a miss.
-    (!found.is_null()).then(|| unsafe { found.offset_from(s.as_ptr()) as usize })
-}
-
-/// `text` with `pat` replaced by `sub`, and the length of the answer.
-fn string_sub(text: &Owned, pat: &Owned, sub: &Owned, global: bool) -> (*mut c_char, usize) {
-    let flags = if global { c"g" } else { c"" };
-    // SAFETY: all three are NUL-terminated copies this caller owns.
-    let (text, pat, sub) = unsafe { (cstr::at(text.0), cstr::at(pat.0), cstr::at(sub.0)) };
-    // No `expr`: a plain replacement rather than a `\=` one.
-    let out = do_string_sub(text, pat, Some(sub), None, flags);
-    let len = out.len();
-    (owned_cstr(out), len)
-}
-
-/// The name, single-quoted for the shell.
-fn shellescape(s: &CStr) -> *mut c_char {
-    // SAFETY: `s` is NUL-terminated; neither flag asks for cmdline-special
-    // or newline escaping.
-    unsafe { vim_strsave_shellescape(s.as_ptr(), false, false) }
+/// Whether byte `i` of `s` follows a path separator that is not the
+/// trailing byte of a multibyte character, looking back no further than
+/// byte `from`.
+fn after_sep(s: &[u8], from: usize, i: usize) -> bool {
+    i > from && is_sep(s, i - 1) && head_off(&s[from..], i - 1 - from) == 0
 }
 
 // ---------------------------------------------------------------------
 // The stages
 // ---------------------------------------------------------------------
 
-/// `:p` -- the full path.  None when the expansion failed, which is
-/// [`modify_fname`]'s `-1`.
-fn full_path_stage(f: Fname, tilde_file: bool) -> Option<()> {
+/// `:p` -- the full path.
+fn full_path_stage(f: &mut Fname<'_>, tilde_file: bool) {
     // Expand a leading "~", unless the name is literally "~" and the caller
     // says that is a file rather than $HOME.
     let b = f.cstr().to_bytes();
     if at(b, 0) == b'~' && !(tilde_file && at(b, 1) == 0) {
-        f.adopt(expand_env(f.name()));
-        if f.name().is_null() {
-            return None;
-        }
+        let expanded = expand_env_save_opt_of(f.cstr(), false);
+        f.adopt(expanded);
     }
 
     // A "/." or "/.." anywhere forces the expansion, which is what removes
@@ -336,28 +176,34 @@ fn full_path_stage(f: Fname, tilde_file: bool) -> Option<()> {
         {
             break;
         }
-        i += char_len(from(f.cstr(), i));
+        i += cluster_len(&b[i..]);
     }
     let has_dot = at(b, i) != 0;
     if has_dot || !vim_is_abs_name(f.cstr()) {
-        f.adopt(full_name(f.name(), has_dot));
-        if f.name().is_null() {
-            return None;
-        }
+        let full = full_name_of(f.cstr(), has_dot);
+        f.adopt(full);
     }
 
-    // A directory answers with a trailing separator.
-    if is_dir(f.cstr()) {
-        f.adopt(grown_copy(f.cstr(), 2));
-        append_sep(f.name());
+    // A directory answers with a trailing separator, room permitting.
+    if os_isdir_of(f.cstr()) {
+        let mut dir = f.cstr().to_bytes().to_vec();
+        let len = dir.len();
+        if len != 0 && !after_sep(&dir, 0, len) && len + 2 <= MAXPATHL as usize {
+            dir.push(b'/');
+        }
+        dir.push(0);
+        f.adopt_at(dir, 0);
     }
-    Some(())
 }
 
 /// `:.` -- relative to the current directory; `:~` -- relative to the home
 /// one; `:8` -- the short name, which this platform has none of.
-fn home_stages(mods: Mods, f: Fname, has_fullname: &mut bool, has_homerelative: &mut bool) {
-    let mut dirname: PathBuf = [0; MAXPATHL as usize];
+fn home_stages(
+    mods: &mut Mods<'_>,
+    f: &mut Fname<'_>,
+    has_fullname: &mut bool,
+    has_homerelative: &mut bool,
+) {
     while mods.at(0) == b':' && matches!(mods.at(1), b'.' | b'~' | b'8') {
         let which = mods.at(1);
         mods.advance(2);
@@ -367,50 +213,41 @@ fn home_stages(mods: Mods, f: Fname, has_fullname: &mut bool, has_homerelative: 
 
         // The full path first, so that the comparison below has something to
         // compare; `expand_env_save` is what removes a leading "~".
-        let mut owned = None;
-        let p = if !*has_fullname && !*has_homerelative {
-            let made = if f.byte(0) == b'~' {
-                expand_env(f.name())
+        let made = if !*has_fullname && !*has_homerelative {
+            Some(if f.byte(0) == b'~' {
+                expand_env_save_opt_of(f.cstr(), false)
             } else {
-                full_name(f.name(), false)
-            };
-            owned = Some(Owned(made));
-            made
+                full_name_of(f.cstr(), false)
+            })
         } else {
-            f.name()
+            None
         };
         *has_fullname = false;
-        if p.is_null() {
-            continue;
-        }
+        let p = made.as_ref().map_or(f.cstr(), |made| made.as_cstr());
 
         if which == b'.' {
-            get_dirname(&mut dirname);
+            let mut dirname = dirname_text();
             if *has_homerelative {
-                let saved = Owned::dup(scratch(&dirname));
-                home_rel(saved.cstr(), &mut dirname);
+                dirname = home_replace_in(None, dirname.as_cstr(), MAXPATHL as usize, true);
             }
-            let namelen = scratch(&dirname).to_bytes().len();
+            let namelen = dirname.len();
             // Not `shorten_fname`: that removes the prefix even when the path
             // does not have one.
-            if path_fnamencmp(cstr_at(p), scratch(&dirname), namelen as size_t) == 0 {
-                let rest = from(cstr_at(p), namelen).to_bytes();
+            if path_fnamencmp(p, dirname.as_cstr(), namelen) == 0 {
+                let rest = p.to_bytes().get(namelen..).unwrap_or_default();
                 if is_sep(rest, 0) {
-                    let mut skip = 0;
-                    while at(rest, skip) != 0 && is_sep(rest, skip) {
-                        skip += 1;
-                    }
-                    f.set_name(offset(p, namelen + skip));
-                    if let Some(pbuf) = owned.take() {
-                        f.adopt_buf(pbuf.into_raw());
+                    let skip = (0..).take_while(|&i| is_sep(rest, i)).count();
+                    match made {
+                        Some(made) => f.adopt_at(made.into_vec(), namelen + skip),
+                        None => f.start += namelen + skip,
                     }
                 }
             }
         } else {
-            home_rel(cstr_at(p), &mut dirname);
+            let home = home_replace_in(None, p, MAXPATHL as usize, true);
             // Only replace it when it did start with the home directory.
-            if scratch(&dirname).to_bytes().first() == Some(&b'~') {
-                f.adopt(Owned::dup(scratch(&dirname)).into_raw());
+            if home.first() == Some(&b'~') {
+                f.adopt(home);
                 *has_homerelative = true;
             }
         }
@@ -419,17 +256,19 @@ fn home_stages(mods: Mods, f: Fname, has_fullname: &mut bool, has_homerelative: 
 
 /// `:h` `:8` `:t` `:e` `:r` -- head, tail, root and extension, all of them
 /// offsets into the name the group starts with.
-fn trim_stages(mods: Mods, f: Fname, valid: &mut c_int) {
-    let mut base = f.name();
-    let mut tail = tail_off(f.cstr());
+fn trim_stages(mods: &mut Mods<'_>, f: &mut Fname<'_>, valid: &mut c_int) {
+    // `base` is where in the string the group started; every offset below
+    // is from there.
+    let mut base = f.start;
+    let mut tail = tail_index(f.cstr().to_bytes());
     let mut start = 0usize;
     let mut len = f.cstr().to_bytes().len();
 
-    // ":h" -- drop "/name", repeatable.  Never the leading "/" or "c:\".
+    // ":h" -- drop "/name", repeatable.  Never the leading "/".
     while mods.is(b'h') {
         *valid |= VALID_HEAD as c_int;
         mods.advance(2);
-        let s = cstr_at(base);
+        let s = until_nul(&f.with_nul()[base..]);
         let head = past_head_off(s);
         while tail > head && after_sep(s, head, tail) {
             tail -= head_off(s, tail - 1) + 1;
@@ -437,9 +276,8 @@ fn trim_stages(mods: Mods, f: Fname, valid: &mut c_int) {
         len = tail - start;
         if len == 0 {
             // The result is empty: make it "." so that `:cd %:h` works.
-            let dot = Owned::dup(c".").into_raw();
-            f.adopt(dot);
-            base = dot;
+            f.adopt_at(b".\0".to_vec(), 0);
+            base = 0;
             (tail, start, len) = (0, 0, 1);
         } else {
             while tail > head && !after_sep(s, head, tail) {
@@ -464,7 +302,7 @@ fn trim_stages(mods: Mods, f: Fname, valid: &mut c_int) {
     // second ":e" looks for the dot *before* what the first one left.
     while mods.is(b'e') || mods.is(b'r') {
         let want_ext = mods.at(1) == b'e';
-        let b = cstr_at(base).to_bytes();
+        let b = until_nul(&f.with_nul()[base..]);
         let second_e = start > tail;
         let mut s = if want_ext && second_e {
             start as isize - 2
@@ -493,20 +331,19 @@ fn trim_stages(mods: Mods, f: Fname, valid: &mut c_int) {
         mods.advance(2);
     }
 
-    f.set_name(offset(base, start));
-    f.set_len(len);
+    f.start = base + start;
+    f.len = len;
 }
 
 /// `:s?pat?sub?` and `:gs?pat?sub?`.  True when a substitution happened, in
 /// which case every modifier is offered the result again.
-fn subst_stage(mods: Mods, f: Fname) -> bool {
+fn subst_stage(mods: &mut Mods<'_>, f: &mut Fname<'_>) -> bool {
     let global = mods.at(0) == b':' && mods.at(1) == b'g' && mods.at(2) == b's';
     if !(mods.is(b's') || global) {
         return false;
     }
-    let text = mods.text();
-    let b = text.to_bytes();
-    let mut i = mods.used() + 2 + usize::from(global);
+    let b = mods.text.to_bytes();
+    let mut i = *mods.used + 2 + usize::from(global);
     let sep = at(b, i);
     i += 1;
     if sep == 0 {
@@ -514,45 +351,43 @@ fn subst_stage(mods: Mods, f: Fname) -> bool {
     }
 
     // The pattern, then the replacement, each up to the next separator.
-    let Some(pat_len) = find_char(from(text, i), sep) else {
+    let Some(pat_len) = find_char(&b[i..], c_int::from(sep)) else {
         return false;
     };
-    // SAFETY: `pat_len` bytes from `i` are inside `text`.
-    let pat = unsafe { Owned::dupz(text.as_ptr().add(i), pat_len) };
+    let pat = owned_copy(&b[i..i + pat_len]);
     let j = i + pat_len + 1;
-    let Some(sub_len) = find_char(from(text, j), sep) else {
+    let Some(sub_len) = find_char(&b[j..], c_int::from(sep)) else {
         return false;
     };
-    // SAFETY: as above, from `j`.
-    let sub = unsafe { Owned::dupz(text.as_ptr().add(j), sub_len) };
-    // SAFETY: the name has `*fnamelen` readable bytes by [`Fname`]'s contract.
-    let subject = unsafe { Owned::dupz(f.name(), f.len()) };
+    let sub = owned_copy(&b[j..j + sub_len]);
+    let subject = owned_copy(f.bytes());
 
-    mods.set_used(j + sub_len + 1);
-    let (out, out_len) = string_sub(&subject, &pat, &sub, global);
-    f.adopt(out);
-    f.set_len(out_len);
+    *mods.used = j + sub_len + 1;
+    let flags = if global { c"g" } else { c"" };
+    // No `expr`: a plain replacement rather than a `\=` one.
+    let mut out = do_string_sub(&subject, &pat, Some(&sub), None, flags);
+    let out_len = out.len();
+    out.push(0);
+    f.adopt_at(out, 0);
+    f.len = out_len;
     true
 }
 
+/// `bytes` as a C string the way the C's `xstrnsave` copy read it: up to
+/// its first NUL.
+fn owned_copy(bytes: &[u8]) -> CString {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    CString::new(&bytes[..end]).expect("cut at its first NUL")
+}
+
 /// `:S` -- the name quoted for the shell.
-fn shell_stage(mods: Mods, f: Fname) {
+fn shell_stage(mods: &mut Mods<'_>, f: &mut Fname<'_>) {
     if !mods.is(b'S') {
         return;
     }
-    // The escaper wants a NUL-terminated string, so the byte after the name
-    // is borrowed for the call and put back afterwards.
-    let len = f.len();
-    let cut = f.byte(len);
-    if cut != 0 {
-        f.set_byte(len, 0);
-    }
-    let escaped = shellescape(f.cstr());
-    if cut != 0 {
-        f.set_byte(len, cut);
-    }
+    let escaped = shellescape_of(&owned_copy(f.bytes()), false, false);
+    f.len = escaped.len();
     f.adopt(escaped);
-    f.set_len(cstr_at(escaped).to_bytes().len());
     mods.advance(2);
 }
 
@@ -560,28 +395,25 @@ fn shell_stage(mods: Mods, f: Fname) {
 // The entry points
 // ---------------------------------------------------------------------
 
-/// Apply the modifiers at `src[*usedlen]` to the name in `*fnamep`.
+/// Apply the modifiers at `mods[*used..]` to the name `fname[..len]`, whose
+/// string the stages may read past `len` up to its NUL (`<cword>`'s line).
 ///
 /// Answers which of `VALID_PATH`/`VALID_HEAD` were reached -- `eval_vars`
-/// needs both before it will accept an empty `%` -- or -1 when an expansion
-/// failed, in which case `*fnamep` is NULL.
-///
-/// # Safety
-/// `src` is NUL-terminated and `*usedlen` a cursor within it; `*fnamep` is a
-/// NUL-terminated name with at least `*fnamelen` bytes; `*bufp` is NULL or an
-/// owned string, and the caller frees whatever it holds afterwards.
-pub unsafe fn modify_fname(
-    src: *mut c_char,
+/// needs both before it will accept an empty `%` -- and the name: the
+/// caller's own bytes when no stage replaced them.
+pub(crate) fn modify_fname(
+    mods: &CStr,
+    used: &mut usize,
     tilde_file: bool,
-    usedlen: *mut size_t,
-    fnamep: *mut *mut c_char,
-    bufp: *mut *mut c_char,
-    fnamelen: *mut size_t,
-) -> c_int {
-    // SAFETY: the caller's contract.
-    let mods = unsafe { Mods::new(src, usedlen) };
-    // SAFETY: the caller's contract.
-    let f = unsafe { Fname::new(fnamep, bufp, fnamelen) };
+    fname: &CStr,
+    len: usize,
+) -> (c_int, Vec<u8>) {
+    let mut mods = Mods { text: mods, used };
+    let mut f = Fname {
+        storage: Storage::Borrowed(fname),
+        start: 0,
+        len,
+    };
 
     let mut valid = 0;
     let mut has_fullname = false;
@@ -591,20 +423,18 @@ pub unsafe fn modify_fname(
             has_fullname = true;
             valid |= VALID_PATH as c_int;
             mods.advance(2);
-            if full_path_stage(f, tilde_file).is_none() {
-                return -1;
-            }
+            full_path_stage(&mut f, tilde_file);
         }
-        home_stages(mods, f, &mut has_fullname, &mut has_homerelative);
-        trim_stages(mods, f, &mut valid);
+        home_stages(&mut mods, &mut f, &mut has_fullname, &mut has_homerelative);
+        trim_stages(&mut mods, &mut f, &mut valid);
         // A ":s" that did something offers the result to every modifier
         // again -- upstream's `goto repeat`.
-        if !subst_stage(mods, f) {
+        if !subst_stage(&mut mods, &mut f) {
             break;
         }
     }
-    shell_stage(mods, f);
-    valid
+    shell_stage(&mut mods, &mut f);
+    (valid, f.bytes().to_vec())
 }
 
 /// `fnamemodify({fname}, {mods})`.
@@ -616,27 +446,13 @@ pub fn f_fnamemodify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         str_arg_chk(args, 1, &mut buf),
     );
     let (Some(fname), Some(mods)) = (fname, mods) else {
-        result.write_string(ptr::null_mut());
+        result.write_string(core::ptr::null_mut());
         return;
     };
-
-    // `modify_fname` may replace the name with something it allocated, which
-    // it hands back through `owned` for this call to free.
-    let mut name = fname.as_ptr().cast_mut();
-    let mut len = fname.to_bytes().len();
-    let mut owned = Owned(ptr::null_mut());
-    if !mods.to_bytes().is_empty() {
-        let mut used: size_t = 0;
-        let (m, u) = (mods.as_ptr().cast_mut(), &raw mut used);
-        let (n, b, l) = (&raw mut name, &raw mut owned.0, &raw mut len);
-        // SAFETY: `mods` and `name` are NUL-terminated, `len` is the name's
-        // own length, and the three out-parameters are this call's locals.
-        unsafe { modify_fname(m, false, u, n, b, l) };
-    }
-    result.write_string(if name.is_null() {
-        ptr::null_mut()
+    let name = if mods.is_empty() {
+        fname.to_bytes().to_vec()
     } else {
-        // SAFETY: `name` has `len` readable bytes.
-        unsafe { Owned::dupz(name, len) }.into_raw()
-    });
+        modify_fname(mods, &mut 0, false, fname, fname.to_bytes().len()).1
+    };
+    result.write_string(owned_cstr(name));
 }

@@ -39,7 +39,7 @@ use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
     tv_list_alloc_ret,
 };
-use crate::memory::{xfree, xmallocz, xmemdupz, xstrdup};
+use crate::memory::{xfree, xmallocz, xstrdup};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fileio::FileOpenFlags;
@@ -204,17 +204,6 @@ impl Owned {
     pub(crate) fn dup(s: &CStr) -> Self {
         // SAFETY: `s` is NUL-terminated, which is all `xstrdup` reads.
         Self(unsafe { xstrdup(s.as_ptr()) })
-    }
-
-    /// A fresh NUL-terminated copy of `len` bytes at `p`, which need not be
-    /// NUL-terminated themselves -- the name a modifier has shortened is
-    /// exactly that case.
-    ///
-    /// # Safety
-    /// `p` has `len` readable bytes.
-    pub(crate) unsafe fn dupz(p: *const c_char, len: usize) -> Self {
-        // SAFETY: the caller's contract.
-        Self(unsafe { xmemdupz(p.cast::<c_void>(), len).cast::<c_char>() })
     }
 
     /// `len` zeroed bytes plus a terminator slot after them.

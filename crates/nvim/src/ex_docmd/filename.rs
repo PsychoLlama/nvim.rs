@@ -380,6 +380,8 @@ pub unsafe fn eval_vars(
 ) -> *mut c_char {
     let mut result: *mut c_char = c"".as_ptr() as *mut c_char;
     let mut resultbuf: *mut c_char = ptr::null_mut();
+    // The name the filename modifiers made, which `result` points into.
+    let mut modified: Vec<u8>;
     let mut resultlen: size_t;
     let mut valid = VALID_HEAD as c_int | VALID_PATH as c_int;
     let mut tilde_file = false;
@@ -647,20 +649,15 @@ pub unsafe fn eval_vars(
                 resultlen = unsafe { dot.offset_from(result) } as size_t;
             }
         } else if !skip_mod {
-            valid |= unsafe {
-                modify_fname(
-                    src,
-                    tilde_file,
-                    usedlen,
-                    &raw mut result,
-                    &raw mut resultbuf,
-                    &raw mut resultlen,
-                )
-            };
-            if result.is_null() {
-                unsafe { *errormsg = c"".as_ptr() };
-                return ptr::null_mut();
-            }
+            // SAFETY: the caller's text and the NUL-terminated name `result`
+            // points at; `usedlen` is the caller's.
+            let (mods, name, used) =
+                unsafe { (CStr::from_ptr(src), CStr::from_ptr(result), &mut *usedlen) };
+            let reached;
+            (reached, modified) = modify_fname(mods, used, tilde_file, name, resultlen);
+            valid |= reached;
+            result = modified.as_mut_ptr().cast();
+            resultlen = modified.len();
         }
     }
 

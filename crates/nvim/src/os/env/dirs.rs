@@ -328,27 +328,19 @@ pub unsafe fn home_replace(
 
         let homedir_env = os_getenv(c"HOME".as_ptr());
         let mut homedir_env_mod = homedir_env;
-        let mut must_free = false;
+        // The full path of a $HOME that is itself relative to a home
+        // directory, which `homedir_env_mod` points into while it lives.
+        let mut full_home = None;
         if !homedir_env_mod.is_null() && *homedir_env_mod == b'~' as c_char {
-            // A $HOME that is itself relative to a home directory.
-            must_free = true;
-            let mut usedlen: size_t = 0;
-            let mut flen = cstr::bytes_at(homedir_env_mod).len();
-            let mut fbuf: *mut c_char = ptr::null_mut();
-            modify_fname(
-                c":p".as_ptr().cast_mut(),
-                false,
-                &raw mut usedlen,
-                &raw mut homedir_env_mod,
-                &raw mut fbuf,
-                &raw mut flen,
-            );
-            flen = cstr::bytes_at(homedir_env_mod).len();
-            debug_assert!(homedir_env_mod != homedir_env);
-            if vim_ispathsep(*homedir_env_mod.add(flen - 1) as c_int) {
+            let home = CStr::from_ptr(homedir_env_mod);
+            let mut full = modify_fname(c":p", &mut 0, false, home, home.count_bytes()).1;
+            // The name up to its first NUL, as the C measured it.
+            full.truncate(full.iter().position(|&b| b == 0).unwrap_or(full.len()));
+            if full.last().is_some_and(|&b| vim_ispathsep(c_int::from(b))) {
                 // Drop the '/' that gets added to a directory.
-                *homedir_env_mod.add(flen - 1) = 0;
+                full.pop();
             }
+            homedir_env_mod = full_home.insert(XString::from_bytes(&full)).as_mut_ptr();
         }
         let envlen = if homedir_env_mod.is_null() {
             0
@@ -425,9 +417,7 @@ pub unsafe fn home_replace(
         *dst_p = 0;
 
         xfree(homedir_env.cast());
-        if must_free {
-            xfree(homedir_env_mod.cast());
-        }
+        drop(full_home);
         dst_p.offset_from(dst) as size_t
     }
 }
