@@ -564,3 +564,49 @@ pub(crate) fn fname_script_len(text: &[u8]) -> usize {
     }
     0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn script_local_prefixes() {
+        assert_eq!(fname_script_len(b"s:Foo"), 2);
+        assert_eq!(fname_script_len(b"<SID>Foo"), 5);
+        assert_eq!(fname_script_len(b"<snr>12_Foo"), 5);
+        assert_eq!(fname_script_len(b"<SI"), 0);
+        assert_eq!(fname_script_len(b"g:Foo"), 0);
+    }
+
+    #[test]
+    fn builtin_names() {
+        assert!(builtin_function(b"len"));
+        assert!(!builtin_function(b"Len"));
+        assert!(!builtin_function(b"s:len"));
+        assert!(!builtin_function(b"pkg#len"));
+        // The scope test reads the byte after a one-byte name, as the C did.
+        assert!(!builtin_function_in(b"f:x", 1));
+        assert!(builtin_function_in(b"fx", 1));
+    }
+
+    #[test]
+    fn refcounted_names() {
+        assert!(func_name_refcount(b"12"));
+        assert!(func_name_refcount(b"<lambda>3"));
+        assert!(!func_name_refcount(b"<SNR>1_f"));
+        assert!(!func_name_refcount(b""));
+    }
+
+    /// `<lambda>N` is taken as written, `strtoimax`'s way: blanks and a
+    /// sign before the digits, or nothing without digits.
+    #[test]
+    fn lambda_names() {
+        let read = |text: &[u8]| {
+            let found = save_function_name(text, true, 0, false);
+            (found.name.map(|name| name.to_vec()), found.end)
+        };
+        assert_eq!(read(b"<lambda>12(x)"), (Some(b"<lambda>12".to_vec()), 10));
+        assert_eq!(read(b"<lambda> -3"), (Some(b"<lambda> -3".to_vec()), 11));
+        assert_eq!(read(b"<lambda>x"), (Some(b"<lambda>".to_vec()), 8));
+    }
+}

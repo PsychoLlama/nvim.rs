@@ -456,3 +456,57 @@ pub fn f_fnamemodify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     };
     result.write_string(owned_cstr(name));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::modify_fname;
+    use std::ffi::CString;
+
+    /// `fnamemodify(name, mods)` for the modifiers that touch neither the
+    /// file system nor an option, and how much of `mods` was read.
+    fn modified(name: &str, mods: &str) -> (Vec<u8>, usize) {
+        let (name, mods) = (CString::new(name).unwrap(), CString::new(mods).unwrap());
+        let mut used = 0;
+        let len = name.as_bytes().len();
+        let (_, answer) = modify_fname(&mods, &mut used, false, &name, len);
+        (answer, used)
+    }
+
+    /// Answers cut from the reference binary's `fnamemodify()`.
+    #[test]
+    fn head_tail_root_and_extension() {
+        for (name, mods, want) in [
+            ("/a/b/c.d.txt", ":t:r", "c.d"),
+            ("/a/b/c.d.txt", ":h:h", "/a"),
+            ("/a/b/c.d.txt", ":e:e", "d.txt"),
+            ("/a/b/c.d.txt", ":r:r:r", "/a/b/c"),
+            ("/a/b/c.d.txt", ":e:e:e", "d.txt"),
+            ("/a/b/", ":h:t", "b"),
+            ("a", ":h", "."),
+            ("/", ":h", "/"),
+            ("x/y.tar.gz", ":t:e:e:r", "tar"),
+            ("a.b", ":8:t", "a.b"),
+            ("ü/ö.c", ":h:t:e", ""),
+        ] {
+            let (answer, used) = modified(name, mods);
+            assert_eq!(answer, want.as_bytes(), "{name} {mods}");
+            assert_eq!(used, mods.len(), "{name} {mods}");
+        }
+    }
+
+    /// The name's length, not its terminator, bounds the answer; a stage
+    /// still reads past it to the NUL (`:e` after `:h`).
+    #[test]
+    fn a_shortened_name_keeps_its_tail() {
+        let name = CString::new("/a/b.c/d").unwrap();
+        let mods = CString::new(":h:e").unwrap();
+        let mut used = 0;
+        let (_, answer) = modify_fname(&mods, &mut used, false, &name, 8);
+        assert_eq!(answer, b"c");
+        // An unknown modifier stops the walk where it is.
+        let mods = CString::new(":t:x").unwrap();
+        let mut used = 0;
+        let (_, answer) = modify_fname(&mods, &mut used, false, &name, 8);
+        assert_eq!((answer.as_slice(), used), (&b"d"[..], 2));
+    }
+}
