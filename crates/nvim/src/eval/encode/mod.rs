@@ -796,7 +796,7 @@ pub(crate) fn tv2string_bytes(tv: &TypVal) -> Vec<u8> {
     ga
 }
 
-/// [`tv2string_bytes`] as an owned C string.
+/// `tv2string_bytes` as an owned C string.
 ///
 /// # Safety
 /// `len` must be NULL or writable.
@@ -827,7 +827,7 @@ pub(crate) fn tv2echo_bytes(tv: &TypVal) -> Vec<u8> {
     ga
 }
 
-/// [`tv2echo_bytes`] as an owned C string.
+/// `tv2echo_bytes` as an owned C string.
 ///
 /// # Safety
 /// As [`encode_tv2string`].

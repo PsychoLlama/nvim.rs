@@ -551,8 +551,10 @@ pub(crate) fn eval7(
             } else {
                 check_vars_named(name);
                 // While skipping, `v:lua.x` still has to come out as
-                // something callable.
-                if result.v_type() == VAR_UNKNOWN && name.starts_with(b"v:lua.") {
+                // something callable. The name is `v:lua`: the `.x` is the
+                // text after it, which is what is looked at.
+                let after = alias.as_deref().unwrap_or(&text[start..]);
+                if result.v_type() == VAR_UNKNOWN && after.starts_with(b"v:lua.") {
                     result.write_partial(lua_partial());
                 }
                 ret = Ok(Parsed::Done);
