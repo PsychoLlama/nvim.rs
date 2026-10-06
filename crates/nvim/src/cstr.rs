@@ -413,12 +413,18 @@ pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
 /// in-place terminator this replaces cost two stores.
 pub(crate) fn with_terminated<R>(bytes: &[u8], f: impl FnOnce(&CStr) -> R) -> R {
     const ROOM: usize = 64;
-    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
     if bytes.len() < ROOM {
         let mut buf = [0u8; ROOM];
         buf[..bytes.len()].copy_from_slice(bytes);
-        f(CStr::from_bytes_until_nul(&buf).expect("the buffer ends in a NUL"))
+        // One scan: an interior NUL ends the string early, as it would have
+        // in the C.
+        let terminated = &buf[..=bytes.len()];
+        let string = CStr::from_bytes_with_nul(terminated)
+            .or_else(|_| CStr::from_bytes_until_nul(terminated))
+            .expect("the buffer ends in a NUL");
+        f(string)
     } else {
+        let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
         f(&owned(bytes))
     }
 }

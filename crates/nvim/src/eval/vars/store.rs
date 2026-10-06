@@ -65,8 +65,8 @@ pub(crate) fn clear_local(tv: &mut TypVal) {
 /// Store `tv` in the variable `name`.
 ///
 /// # Safety
-/// `name` points at `name_len` readable bytes and is NUL-terminated there;
-/// `tv` is a live value.
+/// `name` points at `name_len` readable bytes, which need not be followed by
+/// a NUL; `tv` is a live value.
 pub unsafe fn set_var(name: *const c_char, name_len: size_t, tv: &mut TypVal, copy: bool) {
     unsafe { set_var_const(name, name_len, tv, copy, false) }
 }
@@ -98,16 +98,22 @@ pub unsafe fn set_var_const(
     let ht = unsafe { find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict) };
     let watched = dict_is_watched(unsafe { (dict).as_ref() });
 
-    if ht.is_null() || unsafe { *varname } == NUL as c_char {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let name = unsafe { c_str(name) };
+    // The name, measured: nothing below reads past its length, so a caller
+    // may hand a slice of a longer line.
+    // SAFETY: the caller's `name_len` readable bytes.
+    let name_bytes = unsafe { cstr::slice_at(name, name_len) };
+    // `varname` is `name` itself or `name + 2`, inside the name.
+    let varname_len = if ht.is_null() {
+        0
+    } else {
+        name_len - unsafe { varname.offset_from(name) } as size_t
+    };
+    if ht.is_null() || varname_len == 0 {
+        let name = msg_bytes(name_bytes);
         semsg!("E461: Illegal variable name: {name}");
         return;
     }
-    // `varname` is `name` itself or `name + 2`, so this cannot go
-    // negative; a name that is nothing but a scope prefix was caught by
-    // the NUL test above.
-    let varname_len = name_len - unsafe { varname.offset_from(name) } as size_t;
+    let varname_bytes = &name_bytes[name_len - varname_len..];
 
     let mut di = unsafe { find_var_in_ht(ht, 0, varname, varname_len, true) };
     if di.is_null() {
@@ -117,7 +123,7 @@ pub unsafe fn set_var_const(
 
     // SAFETY: the caller's obligation -- a live value.
     let mut tvh = unsafe { Tv::new(tv) };
-    if tvh.is_func() && unsafe { var_wrong_func_name(name, di.is_null()) } {
+    if tvh.is_func() && var_wrong_func_name_named(name_bytes, di.is_null()) {
         return;
     }
 
@@ -146,11 +152,12 @@ pub unsafe fn set_var_const(
         // answers false when it has already done the store itself.
         let mut type_error = false;
         let err = &raw mut type_error;
-        if ht == get_vimvar_ht() && !unsafe { before_set_vvar(varname, di, tv, copy, watched, err) }
-        {
+        // The item's own key is the name without the `v:`, terminated.
+        let key = unsafe { (*di).di_key.as_ptr() };
+        if ht == get_vimvar_ht() && !unsafe { before_set_vvar(key, di, tv, copy, watched, err) } {
             if type_error {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let varname = unsafe { c_str(varname) };
+                // SAFETY: the item's NUL-terminated key.
+                let varname = unsafe { c_str(key) };
                 semsg!("E963: Setting v:{varname} to value with wrong type");
             }
             return;
@@ -164,12 +171,11 @@ pub unsafe fn set_var_const(
     } else {
         // A new variable. `v:` and `a:` do not take one.
         if ht == get_vimvar_ht() || ht == get_funccal_args_ht() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let name = unsafe { c_str(name) };
+            let name = msg_bytes(name_bytes);
             semsg!("E461: Illegal variable name: {name}");
             return;
         }
-        if !unsafe { valid_varname(varname) } {
+        if !valid_varname_named(varname_bytes) {
             return;
         }
         debug_assert!(!dict.is_null());
@@ -233,10 +239,8 @@ pub unsafe fn set_var_const(
 /// [`set_var_const`] of the variable `name` spells, which need not be
 /// terminated where it ends.
 pub(crate) fn set_var_const_named(name: &[u8], tv: &mut TypVal, copy: bool, is_const: bool) {
-    cstr::with_terminated(name, |c| {
-        // SAFETY: `c` is NUL-terminated at its own length.
-        unsafe { set_var_const(c.as_ptr(), c.count_bytes(), tv, copy, is_const) }
-    });
+    // SAFETY: `name` names its own bytes, which is all the callee reads.
+    unsafe { set_var_const(name.as_ptr().cast(), name.len(), tv, copy, is_const) }
 }
 
 /// [`var_check_ro`] naming the variable `name`, measured.

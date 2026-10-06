@@ -133,18 +133,28 @@ pub(crate) fn eval_variable(
     verbose: bool,
     no_autoload: bool,
 ) -> Result<(), Failed> {
-    let wanted = result.is_some();
-    let found = with_var(name, no_autoload, |item| {
-        if let Some(result) = result {
-            tv_copy(&item.di_tv, result);
-        }
-    });
-    if found.is_none() {
-        if wanted && verbose {
+    // The lookup every variable an expression names goes through, so it
+    // calls `find_var` directly rather than through `with_var`'s closure,
+    // which the compiler lays out less well here.
+    // SAFETY: `name` names its own bytes, and no table is asked back.
+    let v = unsafe {
+        find_var(
+            name.as_ptr().cast(),
+            name.len(),
+            ptr::null_mut(),
+            no_autoload,
+        )
+    };
+    if v.is_null() {
+        if result.is_some() && verbose {
             let name = msg_bytes(name);
             semsg!("E121: Undefined variable: {name}");
         }
         return Err(Failed);
+    }
+    if let Some(result) = result {
+        // SAFETY: a live item of a live scope, read before anything runs.
+        tv_copy(unsafe { &(*v).di_tv }, result);
     }
     Ok(())
 }

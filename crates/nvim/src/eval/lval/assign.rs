@@ -121,16 +121,15 @@ pub(crate) fn set_var_lval(
         return;
     }
 
-    match &lval.target {
+    let key_slot = match &lval.target {
         Target::NewKey { dict, key } => {
-            let (dict, key) = (dict.clone(), key.clone());
-            add_key(&dict, &key, value, copy, op);
+            add_key(dict, key, value, copy, op);
+            return;
         }
         Target::Slot {
             slot: Slot::Key { dict, key },
             ..
         } => {
-            let (dict, key) = (dict.clone(), key.clone());
             // Writing an *existing* key of the `v:` scope dictionary is a
             // write to a `v:` variable, and has to pass the same type
             // enforcement the unsubscripted spelling does. Upstream stores
@@ -138,23 +137,23 @@ pub(crate) fn set_var_lval(
             // variable and, for `v:oldfiles`, crashes the next reader
             // (docket O-B14-10).
             if dict.as_ptr() == get_vimvar_dict() {
-                set_vvar_key(&key, value, copy, op);
+                set_vvar_key(key, value, copy, op);
                 return;
             }
-            let watched = dict_is_watched(Some(&dict));
-            let mut oldtv = UNSET_TV;
-            if watched {
-                lval.with_slot(|tv, _| tv_copy(tv, &mut oldtv));
-            }
-            write_slot(lval, value, copy, op);
-            if watched {
-                notify_key(&dict, &key, lval, &oldtv);
-            }
-            clear_local(&mut oldtv);
+            // Only a watched dictionary needs them after the write.
+            dict_is_watched(Some(dict)).then(|| (dict.clone(), key.clone()))
         }
-        Target::Slot { .. } => write_slot(lval, value, copy, op),
-        Target::Variable | Target::Blob { .. } => {}
-    }
+        _ => None,
+    };
+    let Some((dict, key)) = key_slot else {
+        write_slot(lval, value, copy, op);
+        return;
+    };
+    let mut oldtv = UNSET_TV;
+    lval.with_slot(|tv, _| tv_copy(tv, &mut oldtv));
+    write_slot(lval, value, copy, op);
+    notify_key(&dict, &key, lval, &oldtv);
+    clear_local(&mut oldtv);
 }
 
 /// Store `value` in the slot `lval` names: in place for a compound

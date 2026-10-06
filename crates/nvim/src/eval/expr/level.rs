@@ -99,7 +99,21 @@ pub(crate) fn eval0_in_cmd(
     result: &mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
-    let (ret, consumed) = eval0(excmd.line.rest_of(at), result, evaluate);
+    let end = excmd.line.end_of(at);
+    eval0_in_cmd_until(excmd, at, end, result, evaluate)
+}
+
+/// [`eval0_in_cmd`] for a caller that already measured where the string
+/// `at` is in ends: `end`, the offset of its terminator.
+pub(crate) fn eval0_in_cmd_until(
+    excmd: &mut ExArg,
+    at: usize,
+    end: usize,
+    result: &mut TypVal,
+    evaluate: bool,
+) -> Result<(), Failed> {
+    let text = &excmd.line.tail(at)[..end - at];
+    let (ret, consumed) = eval0(text, result, evaluate);
     let next = excmd.line.check_next(at + consumed);
     match (&ret, next) {
         (Ok(()), _) => excmd.line.next = next,

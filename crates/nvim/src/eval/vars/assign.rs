@@ -34,8 +34,8 @@ use super::{
 use crate::charset::skip;
 use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE, list_len, tv_copy, tv_list_alloc};
 use crate::eval::{
-    FNE_CHECK_START, FNE_INCL_BR, env_name_len, eval_isnamec1, eval0_in_cmd, get_lval, num_divide,
-    num_modulus, option_var_end, set_var_lval,
+    FNE_CHECK_START, FNE_INCL_BR, env_name_len, eval_isnamec1, eval0_in_cmd_until, get_lval,
+    num_divide, num_modulus, option_var_end, set_var_lval,
 };
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::ends_excmd;
@@ -101,7 +101,10 @@ pub fn ex_let(excmd: &mut ExArg) {
     let arg = excmd.line.arg;
     let mut first: c_int = 1;
 
-    let Some(targets) = skip_var_list(excmd.line.rest_of(arg), false) else {
+    // The targets' text, measured once: nothing below writes into the line
+    // before it is read again (the here-document cuts only after them).
+    let text_len = excmd.line.rest_of(arg).len();
+    let Some(targets) = skip_var_list(&excmd.line.tail(arg)[..text_len], false) else {
         return;
     };
     let line = &excmd.line;
@@ -172,11 +175,11 @@ pub fn ex_let(excmd: &mut ExArg) {
 
     let skipping = excmd.skip.then(Suppress::emsg_skip);
     let evaluate = !excmd.skip;
-    let eval_res = eval0_in_cmd(excmd, expr, &mut rettv, evaluate);
+    let eval_res = eval0_in_cmd_until(excmd, expr, arg + text_len, &mut rettv, evaluate);
     drop(skipping);
 
     if evaluate && eval_res.is_ok() {
-        let text = excmd.line.rest_of(arg);
+        let text = &excmd.line.tail(arg)[..text_len];
         let _ = ex_let_vars(text, &mut rettv, false, targets, is_const, Some(op));
     }
     if eval_res.is_ok() {

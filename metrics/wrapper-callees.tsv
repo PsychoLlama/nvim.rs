@@ -5,7 +5,7 @@ count	callee	no_raw	defs	def
 392	.offset	0	0	
 294	CStr::from_ptr	0	2	
 282	at	0	3	
-261	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
+259	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 182	.offset_from	0	0	
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 157	.as_ref	0	0	
@@ -75,10 +75,10 @@ count	callee	no_raw	defs	def
 23	callback_free	0	1	crates/nvim/src/eval/typval/watcher.rs
 23	ml_append	0	1	crates/nvim/src/memline/lines.rs
 23	os_fopen	0	1	crates/nvim/src/os/fs/mod.rs
+23	slice_at	0	1	crates/nvim/src/cstr.rs
 23	strequal	0	1	crates/nvim/src/memory/mod.rs
 23	utf_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 22	os_remove	0	0	
-22	slice_at	0	1	crates/nvim/src/cstr.rs
 22	utf_ptr2cells	0	1	crates/nvim/src/mbyte/cells.rs
 22	utfc_next	1	1	crates/nvim/src/mbyte/walk.rs
 21	Fmark::new	0	1	crates/nvim/src/mark/store.rs
@@ -394,6 +394,7 @@ count	callee	no_raw	defs	def
 6	expand_env_save	0	1	crates/nvim/src/os/env/expand.rs
 6	filemess	0	1	crates/nvim/src/fileio/mod.rs
 6	fill_assert_error	0	1	crates/nvim/src/testing/report.rs
+6	find_var	0	1	crates/nvim/src/eval/vars/lookup.rs
 6	find_word	1	1	crates/nvim/src/spell/lookup.rs
 6	flag_in_afflist	0	1	crates/nvim/src/spellfile/flags.rs
 6	free_string_option	0	1	crates/nvim/src/optionstr/check.rs
@@ -492,7 +493,6 @@ count	callee	no_raw	defs	def
 5	find_first_blank	0	1	crates/nvim/src/textobject/sent.rs
 5	find_internal_func	0	1	crates/nvim/src/eval/funcs/wrappers.rs
 5	find_tags	0	1	crates/nvim/src/tag/scan.rs
-5	find_var	0	1	crates/nvim/src/eval/vars/lookup.rs
 5	find_var_in_ht	0	1	crates/nvim/src/eval/vars/lookup.rs
 5	free_luaref	1	1	crates/nvim/src/usercmd/mod.rs
 5	free_spat	1	1	crates/nvim/src/search/pattern.rs
@@ -734,7 +734,6 @@ count	callee	no_raw	defs	def
 4	utf_ptr2cells_len	0	1	crates/nvim/src/mbyte/cells.rs
 4	utf_strnicmp	0	1	crates/nvim/src/mbyte/case.rs
 4	uv_timer_start	0	0	
-4	valid_varname	0	1	crates/nvim/src/eval/vars/store.rs
 4	valid_word_prefix	0	1	crates/nvim/src/spell/lookup.rs
 4	var_item_copy	0	1	crates/nvim/src/eval/collect.rs
 4	verbose_try_malloc	0	1	crates/nvim/src/memory/mod.rs
@@ -1063,8 +1062,8 @@ count	callee	no_raw	defs	def
 3	uv_mutex_unlock	0	0	
 3	uv_pipe_init	0	0	
 3	uv_timer_stop	0	0	
+3	valid_varname	0	1	crates/nvim/src/eval/vars/store.rs
 3	var_check_fixed	0	1	crates/nvim/src/eval/vars/store.rs
-3	var_wrong_func_name	0	1	crates/nvim/src/eval/vars/store.rs
 3	verbose_exception	0	1	crates/nvim/src/ex_eval/exception.rs
 3	vim_env_iter	0	1	crates/nvim/src/os/env/dirs.rs
 3	vim_iswordc	0	0	
@@ -1749,6 +1748,7 @@ count	callee	no_raw	defs	def
 2	uv_sleep	0	0	
 2	valid_spell_word	0	1	crates/nvim/src/spellfile/wordtree.rs
 2	var_shada_iter	0	1	crates/nvim/src/shada/collect.rs
+2	var_wrong_func_name	0	1	crates/nvim/src/eval/vars/store.rs
 2	vars_clear_ext	0	1	crates/nvim/src/eval/vars/lifecycle.rs
 2	verbose_source_msg	0	1	crates/nvim/src/runtime/source.rs
 2	vim_backtick	0	1	crates/nvim/src/path/expand.rs
