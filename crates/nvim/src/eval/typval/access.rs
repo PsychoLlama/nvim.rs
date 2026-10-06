@@ -514,30 +514,6 @@ impl TypVal {
     pub(crate) fn take(&mut self) -> TypVal {
         ::core::mem::replace(self, TypVal::Unknown)
     }
-
-    /// Duplicate the value's bits, **sharing** whatever it points at.
-    ///
-    /// This is not a copy of the *value*: no string is duplicated and no
-    /// reference count moves, so the payload now has two holders — and, with
-    /// `Drop` live, two would-be releasers.  Every use of this is a place
-    /// where upstream relies on two typvals naming one object for a bounded
-    /// window: an argument vector that borrows the caller's values for the
-    /// length of a call, a slot packed for output while the original is still
-    /// the owner.
-    ///
-    /// A real copy — one that duplicates the string and takes the
-    /// reference — is [`Clone`].
-    ///
-    /// # Safety
-    /// The duplicate must not be released: exactly one of the two holders
-    /// may, and it is the original. In practice the duplicate goes into a
-    /// [`ManuallyDrop`](core::mem::ManuallyDrop) frame that outlives nothing.
-    #[inline(always)]
-    pub(crate) unsafe fn bit_copy(&self) -> TypVal {
-        // SAFETY: the caller's promise above -- the duplicate is not released,
-        // so the payload keeps its one owner.
-        unsafe { ::core::ptr::read(self) }
-    }
 }
 
 /// Where a dictionary pointer *lives*, for the walk that has to clear it.
@@ -829,34 +805,6 @@ pub unsafe fn tv_dict_watcher_node_data(q: *mut QUEUE) -> *mut DictWatcher {
             .sub(::core::mem::offset_of!(DictWatcher, node))
     }
     .cast::<DictWatcher>()
-}
-
-/// The one step of a [`CallFrame`] that is not the frame's own business:
-/// duplicating a value the caller keeps, so that the frame can *name* it.
-///
-/// It lives here rather than beside the type because `bit_copy` is this
-/// module's, and a frame that never takes one is safe code end to end.
-impl<const N: usize> CallFrame<N> {
-    /// Append a bit copy of a value the caller keeps.
-    pub(crate) fn push_borrowed(&mut self, tv: &TypVal) {
-        // SAFETY: the duplicate is never released -- the slot's bit is
-        // clear, so `truncate` disowns it rather than clearing it.
-        self.push_naming(unsafe { tv.bit_copy() });
-    }
-
-    /// Append a bit copy of each of the caller's values.
-    pub(crate) fn extend_borrowed(&mut self, tvs: &[TypVal]) {
-        for tv in tvs {
-            self.push_borrowed(tv);
-        }
-    }
-
-    /// Put a bit copy of `tv` in front of everything already in the frame,
-    /// which is what makes `base->Method(a)` a call of `Method(base, a)`.
-    pub(crate) fn insert_borrowed_front(&mut self, tv: &TypVal) {
-        self.push_borrowed(tv);
-        self.rotate_last_to_front();
-    }
 }
 
 #[cfg(test)]

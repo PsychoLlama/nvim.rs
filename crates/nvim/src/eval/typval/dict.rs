@@ -26,293 +26,12 @@
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
 use ::core::ffi::CStr;
-use ::core::ptr::NonNull;
 
 use super::*;
 use crate::cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::types::{CONV_NONE, Failed, Refcount};
-
-impl Dict {
-    /// How many entries the dictionary holds.
-    pub fn len(&self) -> usize {
-        self.dv_hashtab.ht_used
-    }
-
-    /// Whether the dictionary holds no entries.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Every entry, in slot order -- which is the order Vim shows.
-    ///
-    /// The walk borrows the dictionary, so nothing can add to or remove from
-    /// it while the walk is live. A body that edits the table wants
-    /// [`tv_dict_iter`](super::tv_dict_iter), which is a slot index.
-    pub fn items(&self) -> impl Iterator<Item = &DictItem> {
-        // SAFETY: a kept slot of a live dictionary names a live item, and
-        // the borrow of the dictionary keeps it alive for the walk.
-        self.dv_hashtab
-            .items()
-            .map(|hi| unsafe { &*hi.hi_key.item() })
-    }
-
-    /// Every entry, writable, in slot order.
-    ///
-    /// The items are not in the table's storage, so handing out `&mut` to
-    /// each of them in turn does not alias the table itself; what the
-    /// exclusive borrow of the dictionary rules out is a body that adds or
-    /// removes entries, which is the same rule the table has always had.
-    pub fn items_mut(&mut self) -> impl Iterator<Item = &mut DictItem> {
-        self.dv_hashtab
-            .slots()
-            .iter()
-            .filter(|hi| hi.is_kept())
-            .map(|hi| hi.hi_key.item())
-            .collect::<Vec<_>>()
-            .into_iter()
-            // SAFETY: a kept slot names a live item, no two slots name the
-            // same one, and the exclusive borrow keeps the set fixed.
-            .map(|di| unsafe { &mut *di })
-    }
-}
-
-/// An owning reference to a heap-allocated [`Dict`].
-///
-/// [`ListRef`]'s counterpart, and the same statement about a reference
-/// count: [`Clone`] takes one, [`Drop`] gives one back and the last one
-/// frees the dictionary. See [`ListRef`] for the whole of it -- the
-/// refcount-zero idiom it retires, why `v:_null_dict` is
-/// `TypVal::dict(None)` rather than a null handle, and why [`Deref`] is
-/// [`Live`](crate::winlayer::Live)'s rather than a borrow held across a
-/// call.
-///
-/// **The scope dictionaries are not heap dictionaries.** `b:`, `w:`, `t:`,
-/// `g:`, `v:` and a funccall's `l:`/`a:` live inside the structure that owns
-/// them, are seeded with `DO_NOT_FREE_CNT`, and carry `RootId::NONE` because
-/// the allocator never handed them out. A handle over one of those is a
-/// *borrow* spelled as a handle -- [`DictRef::owning`] -- and the count it
-/// takes over is one of the sentinel's; nothing can drive it to zero, and
-/// `unref_var_dict` is what gives the whole block back.
-///
-/// [`ListRef`]: crate::eval::typval::ListRef
-/// [`Deref`]: core::ops::Deref
-#[repr(transparent)]
-pub struct DictRef(NonNull<Dict>);
-
-impl DictRef {
-    /// Take over a reference the caller already holds and will not release.
-    ///
-    /// # Safety
-    ///
-    /// `d` must point at a live dictionary, and the caller must hold a
-    /// reference to it -- one this handle now owns and eventually gives
-    /// back.
-    #[inline(always)]
-    pub unsafe fn from_owned(at: NonNull<Dict>) -> DictRef {
-        DictRef(at)
-    }
-
-    /// Take over the caller's reference to `d`, or answer `None` for a NULL
-    /// dictionary.  See [`DictRef::from_owned`].
-    ///
-    /// # Safety
-    ///
-    /// As [`DictRef::from_owned`], for a pointer that may be null.
-    #[inline(always)]
-    pub unsafe fn owning(d: *mut Dict) -> Option<DictRef> {
-        NonNull::new(d).map(DictRef)
-    }
-
-    /// Take *another* reference to `d`: the caller keeps its own.
-    ///
-    /// This is `tv_dict_ref`, with the handle that owes the matching release
-    /// as its answer.  `None` for a NULL dictionary, which is
-    /// `v:_null_dict` and counts nothing.
-    ///
-    /// # Safety
-    ///
-    /// `d` is null or points at a live dictionary.
-    #[inline(always)]
-    pub unsafe fn retained(d: *mut Dict) -> Option<DictRef> {
-        let at = NonNull::new(d)?;
-        // SAFETY: the caller's promise: a live dictionary.
-        unsafe { Dt::new(d) }.dv_refcount.retain();
-        Some(DictRef(at))
-    }
-
-    /// The dictionary, as the pointer most of the family still takes.
-    ///
-    /// A **borrow**: it is live only while the handle is.
-    #[inline(always)]
-    pub fn as_ptr(&self) -> *mut Dict {
-        self.0.as_ptr()
-    }
-
-    /// Give the reference up without releasing it: something else owns it
-    /// now.
-    #[inline(always)]
-    pub fn into_raw(self) -> *mut Dict {
-        let at = self.0;
-        ::core::mem::forget(self);
-        at.as_ptr()
-    }
-}
-
-impl Clone for DictRef {
-    /// One more owner of the same dictionary.
-    #[inline(always)]
-    fn clone(&self) -> DictRef {
-        // SAFETY: this handle names a live dictionary, since it holds a
-        // reference to it.
-        unsafe { Dt::new(self.as_ptr()) }.dv_refcount.retain();
-        DictRef(self.0)
-    }
-}
-
-impl Drop for DictRef {
-    /// Give the reference back, freeing the dictionary with the last one.
-    #[inline(always)]
-    fn drop(&mut self) {
-        // SAFETY: this handle names a live dictionary, and is giving up the
-        // reference that kept it so.
-        unsafe { tv_dict_unref(self.as_ptr()) };
-    }
-}
-
-impl ::core::ops::Deref for DictRef {
-    type Target = Dict;
-
-    #[inline(always)]
-    fn deref(&self) -> &Dict {
-        // SAFETY: the handle holds a reference, so the dictionary is live;
-        // the borrow lasts only as long as the field access that asked for
-        // it.
-        unsafe { self.0.as_ref() }
-    }
-}
-
-impl ::core::ops::DerefMut for DictRef {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Dict {
-        // SAFETY: as [`DictRef::deref`].
-        unsafe { self.0.as_mut() }
-    }
-}
-
-/// Allocate an empty dictionary, **owned by the handle it answers**.
-///
-/// The dictionary arrives at a reference count of **one**, held by the
-/// [`DictRef`]; upstream handed one back at zero and relied on the first
-/// storer to raise it.
-///
-/// Safe, as [`tv_list_alloc`](super::tv_list_alloc) is: the collector's
-/// registry is a `GlobalCell`, so the editor's own thread is the only
-/// caller by construction.
-pub fn tv_dict_alloc() -> DictRef {
-    let d = unsafe { xcalloc(1, ::core::mem::size_of::<Dict>()) } as *mut Dict;
-
-    let at = NonNull::new(d).expect("xcalloc never answers null");
-    // The collector reaches every live dictionary through its registry.
-    let root = root_dict(at);
-
-    unsafe { hash_init(&raw mut (*d).dv_hashtab) };
-    // SAFETY: freshly allocated just above.
-    let mut dict = unsafe { Dt::new(d) };
-    dict.dv_lock = VarLock::Unlocked;
-    dict.dv_scope = VAR_NO_SCOPE;
-    dict.dv_refcount = Refcount::ONE;
-    dict.dv_copy_id = 0;
-    dict.dv_root = root;
-    unsafe { queue_init(&raw mut (*d).watchers) };
-    dict.lua_table_ref = LUA_NOREF as LuaRef;
-    // SAFETY: the reference just seeded is the one this handle owns.
-    unsafe { DictRef::from_owned(at) }
-}
-
-/// Free every item and watcher of `d`, leaving the `Dict` itself allocated
-/// and empty.
-///
-/// # Safety
-/// `d` must point at a live dictionary that nothing else is walking: the
-/// hashtab is locked for the walk, so a re-entrant call through a watcher
-/// callback would see a half-emptied dictionary.
-pub unsafe fn tv_dict_free_contents(d: *mut Dict) {
-    // Lock the hashtab so `hash_remove` below cannot rehash it under the
-    // walk.
-    unsafe { hash_lock(&raw mut (*d).dv_hashtab) };
-    // SAFETY: the caller's promise: a live dictionary.
-    let mut dict = unsafe { Dt::new(d) };
-    debug_assert!(dict.dv_hashtab.ht_locked > 0);
-    for hi in unsafe { tv_dict_iter(d) } {
-        // Remove the item before freeing it, so that a callback that
-        // reaches this dictionary does not see a freed value.
-        let di = tv_dict_hi2di(hi);
-        unsafe { hash_remove(&raw mut (*d).dv_hashtab, hi) };
-        unsafe { tv_dict_item_free(di) };
-    }
-
-    while !unsafe { queue_empty(&raw mut (*d).watchers) } {
-        let w = dict.watchers.next;
-        unsafe { queue_remove(w) };
-        unsafe { tv_dict_watcher_free(tv_dict_watcher_node_data(w)) };
-    }
-
-    dict.dv_hashtab.ht_locked -= 1;
-    // SAFETY: the caller's dictionary, now empty of items.
-    hash_reset(unsafe { &mut (*d).dv_hashtab });
-}
-
-/// Unlink `d` from the garbage collector's chain and free the `Dict` itself.
-///
-/// # Safety
-/// `d` must point at a live dictionary whose contents have already been
-/// freed ([`tv_dict_free_contents`]), and the caller must own the
-/// collector's registry, which this takes it out of. `d` is dangling
-/// afterwards.
-pub unsafe fn tv_dict_free_dict(d: *mut Dict) {
-    // Out of the collector's registry. A scope dictionary initialised in
-    // place was never in it, and carries `RootId::NONE`.
-    // SAFETY: the caller's promise: a live dictionary.
-    let mut dict = unsafe { Dt::new(d) };
-    unroot_dict(dict.dv_root);
-    dict.dv_root = RootId::NONE;
-
-    // NLUA_CLEAR_REF
-    if dict.lua_table_ref != LUA_NOREF {
-        unsafe { api_free_luaref((*d).lua_table_ref) };
-        dict.lua_table_ref = LUA_NOREF as LuaRef;
-    }
-    unsafe { xfree(d.cast()) };
-}
-
-/// Free `d` and everything in it.  A no-op while `free_unref_items()` is
-/// walking, which frees the whole graph itself.
-///
-/// # Safety
-/// `d` must point at a live dictionary that nothing still references.
-pub unsafe fn tv_dict_free(d: *mut Dict) {
-    if tv_in_free_unref_items.get() {
-        return;
-    }
-    unsafe { tv_dict_free_contents(d) };
-    unsafe { tv_dict_free_dict(d) };
-}
-
-/// Drop a reference to `d`, freeing it when the last one goes.
-///
-/// # Safety
-/// `d` is null, or points at a live dictionary of which the caller holds a
-/// reference. That reference is given up here, so the caller must not use
-/// `d` again.
-pub unsafe fn tv_dict_unref(d: *mut Dict) {
-    if let Some(dict) = unsafe { d.as_mut() }
-        && dict.dv_refcount.release() <= 0
-    {
-        unsafe { tv_dict_free(d) };
-    }
-}
+use crate::types::{CONV_NONE, Failed};
 
 impl Dict {
     /// Add `item`, which the dictionary takes over.  `Err` when the key is
@@ -926,6 +645,39 @@ pub unsafe fn tv_dict_remove(
         // SAFETY: as above.
         unsafe { dict_watcher_notify(d, key, None, Some(result)) };
     }
+}
+
+/// Free every item and watcher of `d`, leaving the `Dict` itself allocated
+/// and empty.
+///
+/// # Safety
+/// `d` must point at a live dictionary that nothing else is walking: the
+/// hashtab is locked for the walk, so a re-entrant call through a watcher
+/// callback would see a half-emptied dictionary.
+pub unsafe fn tv_dict_free_contents(d: *mut Dict) {
+    // Lock the hashtab so `hash_remove` below cannot rehash it under the
+    // walk.
+    unsafe { hash_lock(&raw mut (*d).dv_hashtab) };
+    // SAFETY: the caller's promise: a live dictionary.
+    let mut dict = unsafe { Dt::new(d) };
+    debug_assert!(dict.dv_hashtab.ht_locked > 0);
+    for hi in unsafe { tv_dict_iter(d) } {
+        // Remove the item before freeing it, so that a callback that
+        // reaches this dictionary does not see a freed value.
+        let di = tv_dict_hi2di(hi);
+        unsafe { hash_remove(&raw mut (*d).dv_hashtab, hi) };
+        unsafe { tv_dict_item_free(di) };
+    }
+
+    while !unsafe { queue_empty(&raw mut (*d).watchers) } {
+        let w = dict.watchers.next;
+        unsafe { queue_remove(w) };
+        unsafe { tv_dict_watcher_free(tv_dict_watcher_node_data(w)) };
+    }
+
+    dict.dv_hashtab.ht_locked -= 1;
+    // SAFETY: the caller's dictionary, now empty of items.
+    hash_reset(unsafe { &mut (*d).dv_hashtab });
 }
 
 #[cfg(test)]

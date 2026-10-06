@@ -41,6 +41,8 @@ use ::libc::{abort, strcasecmp, strcoll, strtod};
 // The carve of the transpiled module; see each child's docs.
 mod access;
 pub use self::access::*;
+mod handle;
+pub use self::handle::*;
 mod frame;
 pub(crate) use self::frame::CallFrame;
 mod list;
@@ -60,7 +62,7 @@ pub use self::dictitem::*;
 mod blob;
 pub use self::blob::*;
 mod partial;
-pub use self::partial::*;
+pub(crate) use self::partial::*;
 mod value;
 pub use self::value::*;
 mod check;

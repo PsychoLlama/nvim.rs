@@ -35,63 +35,13 @@
 
 use super::*;
 use crate::cstr;
-use crate::hashtab::removed_sentinel;
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::semsg;
 use crate::snprintf;
-use crate::types::{DictKey, Failed, HashTab, SlotEntry};
+use crate::types::{DictKey, Failed, HashTab};
 use core::ffi::CStr;
-
-/// What a dictionary's hash table holds in an occupied slot: the item.
-///
-/// `Copy`, and a raw pointer, for the same reason the slots of every other
-/// table are: the table names its items, and which of them it is responsible
-/// for freeing is the item's own `DI_FLAGS_ALLOC`.
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct DictEntry(*mut DictItem);
-
-impl DictEntry {
-    /// The entry for `item`.
-    pub fn new(item: *mut DictItem) -> Self {
-        DictEntry(item)
-    }
-
-    /// The item this entry names. Meaningless for an empty or removed slot.
-    pub fn item(self) -> *mut DictItem {
-        self.0
-    }
-}
-
-// SAFETY: `EMPTY` is the null pointer and `is_empty` is the null test; the
-// tombstone is the hash table's own private sentinel address, which no item
-// can be allocated at and which is never dereferenced; `key` reads the key
-// of an item the caller has promised is live, and a `DictItem` owns its key
-// for as long as it is alive.
-unsafe impl SlotEntry for DictEntry {
-    const EMPTY: Self = DictEntry(::core::ptr::null_mut());
-
-    fn is_empty(self) -> bool {
-        self.0.is_null()
-    }
-
-    fn is_removed(self) -> bool {
-        self.0 == removed_sentinel().cast::<DictItem>()
-    }
-
-    fn removed() -> Self {
-        DictEntry(removed_sentinel().cast::<DictItem>())
-    }
-
-    /// # Safety
-    ///
-    /// As the trait's: a live entry, whose item is still alive.
-    unsafe fn key(self) -> *const ::core::ffi::c_char {
-        // SAFETY: the caller's promise -- a live item, which owns its key.
-        unsafe { (*self.0).di_key.as_ptr() }
-    }
-}
 
 /// A dictionary's hash table.
 pub type DictTab = HashTab<DictEntry>;
@@ -153,25 +103,6 @@ pub unsafe fn tv_dict_item_alloc_len(
 /// result.
 pub unsafe fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut DictItem {
     unsafe { tv_dict_item_alloc_len(key, cstr::bytes_at(key).len()) }
-}
-
-/// Clear `item`'s value and free it, if it was allocated (rather than
-/// embedded in a `FuncCall`'s fixed-variable array, a scope dictionary, a
-/// buffer's `b:changedtick` or a `v:` row).
-///
-/// # Safety
-/// `item` must be a live item that is **not** in any hashtab -- remove it
-/// first, or the hashtab is left pointing at freed memory. An item with
-/// `DI_FLAGS_ALLOC` is dangling afterwards; an embedded one is merely
-/// emptied, keeping its key: the storage is not this call's to release.
-pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
-    if unsafe { (*item).di_flags } as ::core::ffi::c_uint & DI_FLAGS_ALLOC != 0 {
-        // The value and the key go with the item.
-        // SAFETY: the caller's live item, which this allocated.
-        drop(unsafe { Box::from_raw(item) });
-    } else {
-        unsafe { tv_clear(&mut (*item).di_tv) };
-    }
 }
 
 /// A fresh item holding a copy of `di`'s key and value.
@@ -257,71 +188,6 @@ pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
 }
 
 impl Dict {
-    /// The item under `key`, or `None` when there is none.
-    ///
-    /// The key is bytes, not a NUL-terminated string: the table hashes and
-    /// compares exactly the bytes it is given, and the two spellings the C
-    /// had (`hash_find` and `hash_find_len`) agree on every key a dictionary
-    /// can hold, since a key that reaches the table is NUL-terminated and so
-    /// has no NUL among its bytes.  A caller holding a `&CStr` says
-    /// `key.to_bytes()`; one holding a `c"..."` literal pays nothing for it.
-    ///
-    /// **The answer borrows the dictionary, not the slot.** An item is its
-    /// own allocation, so a rehash moves the slot and leaves the item where
-    /// it was; what invalidates the borrow is the item being *removed*,
-    /// which needs the exclusive borrow this one rules out.
-    #[inline]
-    pub fn find(&self, key: &[u8]) -> Option<&DictItem> {
-        let at = self.find_ptr(key);
-        // SAFETY: a non-null answer is one of this dictionary's own items,
-        // which the borrow of the dictionary keeps alive.
-        (!at.is_null()).then(|| unsafe { &*at })
-    }
-
-    /// [`Dict::find`] with the item writable.
-    #[inline]
-    pub fn find_mut(&mut self, key: &[u8]) -> Option<&mut DictItem> {
-        let at = self.find_ptr(key);
-        // SAFETY: a non-null answer is one of this dictionary's own items;
-        // no two slots name the same one, and the exclusive borrow of the
-        // dictionary keeps the set of them fixed.
-        (!at.is_null()).then(|| unsafe { &mut *at })
-    }
-
-    /// The lookup both borrow forms are built on: the item under `key`, or
-    /// null.
-    ///
-    /// **The answer is not derived from the borrow.** The table's slot holds
-    /// a `*mut DictItem` that came from the item's own allocation, and this
-    /// copies it out, so writing through it is sound where casting a shared
-    /// borrow's address would not be.
-    ///
-    /// It is the escape hatch for the two bodies that must hold an item
-    /// *while* they reach the dictionary again -- `extend()`'s overwrite
-    /// branch, which re-enters through `value_check_lock`, and `remove()`,
-    /// which takes the value out and then unlinks the item. Everything else
-    /// wants [`Dict::find`].
-    #[inline]
-    pub(crate) fn find_ptr(&self, key: &[u8]) -> *mut DictItem {
-        // SAFETY: a live table of this dictionary's own, and `key` is a
-        // slice, so it is readable for its length. The two spellings the C
-        // had agree here: a key that reaches the table is NUL-terminated, so
-        // it has no NUL among its bytes, which is the only input the
-        // length-taking hash treats differently.
-        let hi = unsafe {
-            hash_find_len(
-                &raw const self.dv_hashtab,
-                key.as_ptr().cast::<::core::ffi::c_char>(),
-                key.len(),
-            )
-        };
-        if hi.is_kept() {
-            tv_dict_hi2di(hi)
-        } else {
-            ::core::ptr::null_mut()
-        }
-    }
-
     /// Remove the item under `key`, freeing it and its value. False when
     /// there is none.
     pub(crate) fn remove_key(&mut self, key: &[u8]) -> bool {
