@@ -1,9 +1,11 @@
 //! Performing the assignment [`get_lval`](super::get_lval) resolved.
 //!
-//! The write half of the pair: `set_var_lval` takes the [`LVal`] the
-//! resolver filled in and stores the value through it, splitting by what
-//! kind of target the record describes -- a whole variable by name, a Blob
-//! byte or range, a List slice, or one item of a List or Dictionary.
+//! The write half of the pair: [`set_var_lval`] stores the value through the
+//! [`LValue`] the resolver answered, splitting by what kind of target it
+//! is -- a whole variable by name, a Blob byte or range, a List slice, a key
+//! to add, or the value in a slot. The slot is found again here, by the
+//! handle and the index or key the resolver kept; nothing ran in between,
+//! so it is where the resolver left it.
 //!
 //! The ownership rule that matters, and the one a tidier rewrite gets
 //! wrong: `oldtv` here is a *separate* typval from the value being written.
@@ -13,7 +15,7 @@
 //! Merging it with anything would notify with the wrong value and then clear
 //! it twice.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -22,344 +24,273 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::message_fmt::c_str;
+use crate::cstr;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use core::ffi::{c_char, c_int};
-use core::ptr::null_mut;
 
-use crate::eval::executor::eexe_mod_op;
+use super::{LValue, Slot, Span, Target, UNSET_TV};
+use crate::eval::executor::mod_op;
 use crate::eval::typval::{
-    blob_len, blob_set_range, di_lock, dict_is_watched, dict_watcher_notify, list_assign_range,
-    tv_check_lock, tv_clear, tv_copy, tv_dict_item_alloc, tv_dict_item_free, tv_get_number_chk,
-    value_check_lock,
+    BlobRef, DictRef, assign_range, blob_len, dict_is_watched, notify_watchers, set_range,
+    tv_check_lock_named, tv_copy, tv_get_number_chk, value_check_lock_named,
 };
-use crate::eval::userfunc::TV_CSTRING;
-use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{
-    eval_variable, get_vimvar_dict, set_var, set_var_const, set_vvar_item, var_check_ro,
+    clear_local, emsg_static, get_vimvar_dict, set_var_const_named, set_vvar_key,
+    var_check_ro_named, with_var,
 };
-use crate::eval::{Lv, Tv};
 use crate::message::{e_cannot_mod, e_listreq};
-use crate::types::{DictItem, LVal, TypVal, VAR_BLOB, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber};
+use crate::types::{TypVal, VAR_BLOB, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber};
 
-use super::UNSET_TV;
+/// Whether `op` is one of the compound operators rather than `=` or none.
+fn is_compound(op: Option<u8>) -> bool {
+    op.is_some_and(|op| op != b'=')
+}
 
-/// Perform the assignment `get_lval` resolved. `endp` is the cursor after
-/// the left-hand side, which is terminated in place while a message might
-/// name the variable.
-///
-/// # Safety
-/// `lval` must come from `get_lval`; `endp` must point into the same writable
-/// string; `result` must be valid.
-pub unsafe fn set_var_lval(
-    lval: *mut LVal,
-    endp: *mut c_char,
-    result: &mut TypVal,
+/// The value to store: a copy of `value`, or `value` itself, which is left
+/// empty.
+fn stored(value: &mut TypVal, copy: bool) -> TypVal {
+    if copy {
+        let mut tv = UNSET_TV;
+        tv_copy(value, &mut tv);
+        tv
+    } else {
+        value.take()
+    }
+}
+
+/// Perform the assignment `lval` resolved, of `value` with the compound
+/// operator `op` (`+`, `-`, `*`, `/`, `%` or `.`), or plain when that is
+/// `=` or absent. `copy` stores a copy and leaves `value` alone; otherwise
+/// the value is moved where it can be. `is_const` is `:const`.
+pub(crate) fn set_var_lval(
+    lval: &mut LValue<'_>,
+    value: &mut TypVal,
     copy: bool,
     is_const: bool,
-    op: *const c_char,
+    op: Option<u8>,
 ) {
-    // SAFETY, for every region in this body and in the two helpers below:
-    // the caller's promise is that `lval` is the record `get_lval` filled in
-    // and outlives the call, that `result` is the value being assigned, and
-    // that `endp` points into the same writable NUL-terminated string. Each
-    // union member read is the one the `v_type` just tested names; a
-    // non-null `op` is NUL-terminated; `oldtv` and `tv` are frame locals;
-    // and every message named is a literal or a shared `e_*` text. The
-    // notes below add only what is local to a site.
-    let (mut lval, value) = unsafe { (Lv::new(lval), Tv::new(result)) };
-    if lval.ll_tv.is_null() {
-        // SAFETY: as above; `endp` points into the same writable string.
-        unsafe { set_whole_var(lval.raw(), endp, result, copy, is_const, op) };
-        return;
+    match &lval.target {
+        Target::Variable => return set_whole_var(lval, value, copy, is_const, op),
+        Target::Blob { blob, span } => {
+            set_blob_var(lval, blob, *span, value, op);
+            return;
+        }
+        Target::Slot { .. } | Target::NewKey { .. } => {}
     }
 
     // A locked container refuses the write; the lock to test is the
     // Dict's own when a key is being added to it.
-    // SAFETY: a pending new key means `ll_tv` holds the Dict it goes into.
-    let target = unsafe { Tv::new(lval.ll_tv) };
-    let lock = if lval.ll_newkey.is_null() {
-        // SAFETY: `ll_lock` is the lock of the slot `ll_tv` points into,
-        // set beside it whenever it is.
-        unsafe { *lval.ll_lock }
-    } else {
-        // SAFETY: as above -- the Dict the key is being added to.
-        unsafe { (*target.dict_or_null()).dv_lock }
+    let lock = match &lval.target {
+        Target::NewKey { dict, .. } => Some(dict.dv_lock),
+        _ => lval.with_slot(|_, lock| *lock),
     };
-    if unsafe { value_check_lock(lock, lval.ll_name, TV_CSTRING) } {
+    // The slot was found a moment ago and nothing has run since.
+    let Some(lock) = lock else { return };
+    if value_check_lock_named(lock, lval.name_and_rest()) {
         return;
     }
 
-    if lval.ll_range {
+    if let Target::Slot {
+        slot: Slot::Item { list, .. },
+        span: span @ Span { range: true, .. },
+    } = &lval.target
+    {
         if is_const {
             emsg_static(c"E996: Cannot lock a range");
             return;
         }
         // Crash fix, upstream reads the union the wrong way here: the
         // lval resolver accepts a Blob value for a `[:]` because the
-        // *target* may be a Blob, but a Blob target leaves `ll_tv`
-        // null and never reaches this branch. So a Blob reaching it
-        // means a List target, and upstream hands its `v_blob` to
-        // `list_assign_range` through `vval.v_list` — walking a
-        // `Blob` as a `List`. `let l = [1,2] | let l[0:] = 0z11`
-        // is enough. Report what the assignment actually needs.
+        // *target* may be a Blob, but a Blob target never reaches this
+        // branch. So a Blob reaching it means a List target, and upstream
+        // hands its `v_blob` to `list_assign_range` through `vval.v_list`
+        // -- walking a `Blob` as a `List`. `let l = [1,2] | let l[0:] =
+        // 0z11` is enough. Report what the assignment actually needs.
         if value.v_type() != VAR_LIST {
             emsg_static(e_listreq);
             return;
         }
-        let src = value.list_or_null();
-        let (list, n1, n2) = (lval.ll_list, lval.ll_n1, lval.ll_n2);
-        let (empty2, name) = (lval.ll_empty2, lval.ll_name);
-        // SAFETY: as above.
-        let _ = unsafe { list_assign_range(list, src, n1, n2, empty2, op, name) };
+        let src = value.list_handle();
+        let name = lval.name_and_rest();
+        let _ = assign_range(list, src.as_ref(), span.n1, span.n2, span.empty2, op, name);
         return;
     }
-
-    // The value the watchers are told the key used to have. It stays
-    // unset for a key that did not exist, and that is how the
-    // notification below tells the two cases apart — see the module
-    // docs. It must never be the same typval as the new value.
-    let mut oldtv = UNSET_TV;
-    let dict = lval.ll_dict;
-    let watched = dict_is_watched(unsafe { (dict).as_ref() });
 
     if is_const {
         emsg_static(c"E996: Cannot lock a list or dict");
         return;
     }
 
-    // Writing an *existing* key of the `v:` scope dictionary is a write
-    // to a `v:` variable, and has to pass the same type enforcement the
-    // unsubscripted spelling does. Upstream stores straight into the
-    // item, which permanently re-types the variable and, for
-    // `v:oldfiles`, crashes the next reader (docket O-B14-10). A new key
-    // cannot happen here: `get_lval` refuses to add one to `v:`.
-    if dict == get_vimvar_dict() && lval.ll_newkey.is_null() {
-        // SAFETY: `ll_di` is the existing item, and `result` the caller's.
-        unsafe { set_vvar_item(lval.ll_di, result, copy, op) };
-        return;
-    }
-
-    // Whether the value still has to be stored: `+=` and friends modify the
-    // target in place and leave nothing to assign.
-    let assign;
-    if !lval.ll_newkey.is_null() {
-        // The key has to be added to the Dictionary first.
-        if !op.is_null() && unsafe { *op } != b'='.cast_signed() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let ll_newkey = unsafe { c_str(lval.ll_newkey) };
-            semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
-            return;
+    match &lval.target {
+        Target::NewKey { dict, key } => {
+            let (dict, key) = (dict.clone(), key.clone());
+            add_key(&dict, &key, value, copy, op);
         }
-        // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
-        let target = unsafe { Tv::new(lval.ll_tv).dict_or_null() };
-        // The builtin-name check upstream runs here is `add_item`'s own, and
-        // it runs on the item rather than on a key this would have had to
-        // spell twice; a refusal frees the item and leaves the dictionary
-        // alone, which is what the early return did.
-        // SAFETY: the value's own dictionary and the owned key text.
-        let di = unsafe { tv_dict_item_alloc(lval.ll_newkey) };
-        if unsafe { (*target).add_item(di) }.is_err() {
-            unsafe { tv_dict_item_free(di) };
-            return;
+        Target::Slot {
+            slot: Slot::Key { dict, key },
+            ..
+        } => {
+            let (dict, key) = (dict.clone(), key.clone());
+            // Writing an *existing* key of the `v:` scope dictionary is a
+            // write to a `v:` variable, and has to pass the same type
+            // enforcement the unsubscripted spelling does. Upstream stores
+            // straight into the item, which permanently re-types the
+            // variable and, for `v:oldfiles`, crashes the next reader
+            // (docket O-B14-10).
+            if dict.as_ptr() == get_vimvar_dict() {
+                set_vvar_key(&key, value, copy, op);
+                return;
+            }
+            let watched = dict_is_watched(Some(&dict));
+            let mut oldtv = UNSET_TV;
+            if watched {
+                lval.with_slot(|tv, _| tv_copy(tv, &mut oldtv));
+            }
+            write_slot(lval, value, copy, op);
+            if watched {
+                notify_key(&dict, &key, lval, &oldtv);
+            }
+            clear_local(&mut oldtv);
         }
-        // SAFETY: `di` belongs to the Dict; its typval is the target.
-        (lval.ll_tv, lval.ll_lock) = unsafe { (&raw mut (*di).di_tv, di_lock(di)) };
-        assign = true;
-    } else {
-        if watched {
-            // SAFETY: this frame's separate record of the old value.
-            unsafe { tv_copy(&*lval.ll_tv, &mut oldtv) };
-        }
-        assign = op.is_null() || unsafe { *op } == b'='.cast_signed();
-        if assign {
-            unsafe { tv_clear(&mut *lval.ll_tv) };
-        } else {
-            // SAFETY: the live target and the caller's value.
-            let _ = unsafe { eexe_mod_op(lval.ll_tv, result, op) };
-        }
-    }
-
-    if assign {
-        if copy {
-            unsafe { tv_copy(result, &mut *lval.ll_tv) };
-        } else {
-            // SAFETY: the value moves out of `result`, which is reset after it.
-            let mut target = unsafe { Tv::new(lval.ll_tv) };
-            // SAFETY: as above -- the take resets `result`, so nothing
-            // frees the value twice.
-            *target = (*result).take();
-        }
-        // Upstream leaves the assigned value unlocked, by hand on one branch
-        // and through `tv_copy` on the other; the lock is the slot's own.
-        unsafe { *lval.ll_lock = VarLock::Unlocked };
-    }
-
-    if !watched {
-        return;
-    }
-    if oldtv.v_type() == VAR_UNKNOWN {
-        // Nothing was saved, so this is the new-key case.
-        debug_assert!(!lval.ll_newkey.is_null());
-        // SAFETY: the watched Dict, its new key, and the value just written.
-        unsafe {
-            dict_watcher_notify(
-                dict,
-                ::core::ffi::CStr::from_ptr(lval.ll_newkey),
-                Some(&*lval.ll_tv),
-                None,
-            )
-        };
-    } else {
-        let di = lval.ll_di;
-        // SAFETY: an item of the dictionary being written to, which owns its
-        // key for as long as it is in the table.
-        let key = unsafe { (*di).di_key.as_ptr() }.cast_mut();
-        // SAFETY: the watched Dict, its key, the new value and the old copy.
-        let new = unsafe { &*lval.ll_tv };
-        unsafe {
-            dict_watcher_notify(
-                dict,
-                ::core::ffi::CStr::from_ptr(key),
-                Some(new),
-                Some(&oldtv),
-            )
-        };
-        clear_local(&mut oldtv);
+        Target::Slot { .. } => write_slot(lval, value, copy, op),
+        Target::Variable | Target::Blob { .. } => {}
     }
 }
 
-/// The `ll_tv == NULL` half of `set_var_lval`: the target is a whole
-/// variable by name, or a Blob byte or byte range.
-///
-/// # Safety
-/// As `set_var_lval`.
-unsafe fn set_whole_var(
-    lval: *mut LVal,
-    endp: *mut c_char,
-    result: &mut TypVal,
+/// Store `value` in the slot `lval` names: in place for a compound
+/// operator, replacing what is there otherwise.
+fn write_slot(lval: &mut LValue<'_>, value: &mut TypVal, copy: bool, op: Option<u8>) {
+    let Some(op) = op.filter(|&op| op != b'=') else {
+        let new = stored(value, copy);
+        lval.with_slot(move |tv, lock| {
+            *tv = new;
+            // Upstream leaves the assigned value unlocked, by hand on one
+            // branch and through `tv_copy` on the other; the lock is the
+            // slot's own.
+            *lock = VarLock::Unlocked;
+        });
+        return;
+    };
+    // The operator works on a copy of the current value -- which shares
+    // its List, Dict or Blob, so `+=` still extends the one in the slot --
+    // and the result goes back. The slot itself stays put while the
+    // operator reads the value: `:let l[0] += l` reads the List that holds
+    // the slot.
+    let mut current = UNSET_TV;
+    if lval.with_slot(|tv, _| tv_copy(tv, &mut current)).is_none() {
+        return;
+    }
+    if mod_op(&mut current, value, op).is_ok() {
+        lval.with_slot(move |tv, _| *tv = current);
+    } else {
+        clear_local(&mut current);
+    }
+}
+
+/// Add `key` to `dict`, holding `value`.
+fn add_key(dict: &DictRef, key: &[u8], value: &mut TypVal, copy: bool, op: Option<u8>) {
+    if is_compound(op) {
+        let key = msg_bytes(key);
+        semsg!("E716: Key not present in Dictionary: \"{key}\"");
+        return;
+    }
+    let mut target = dict.clone();
+    // The builtin-name check upstream runs here is the add's own; a
+    // refusal leaves the dictionary alone.
+    if target.add_value(key, stored(value, copy)).is_err() {
+        return;
+    }
+    if dict_is_watched(Some(dict)) {
+        // Nothing was saved, so this is the new-key case.
+        let mut newtv = UNSET_TV;
+        if let Some(item) = target.find(key) {
+            tv_copy(&item.di_tv, &mut newtv);
+        }
+        cstr::with_terminated(key, |key| notify_watchers(dict, key, Some(&newtv), None));
+        clear_local(&mut newtv);
+    }
+}
+
+/// Tell `dict`'s watchers that `key` changed from `oldtv` to what the slot
+/// holds now.
+fn notify_key(dict: &DictRef, key: &[u8], lval: &mut LValue<'_>, oldtv: &TypVal) {
+    let mut newtv = UNSET_TV;
+    lval.with_slot(|tv, _| tv_copy(tv, &mut newtv));
+    // An old value of `VAR_UNKNOWN` is how the C told a new key; a key that
+    // existed always has one.
+    let old = (oldtv.v_type() != VAR_UNKNOWN).then_some(oldtv);
+    cstr::with_terminated(key, |key| notify_watchers(dict, key, Some(&newtv), old));
+    clear_local(&mut newtv);
+}
+
+/// The whole-variable half of `set_var_lval`: the target is a variable,
+/// by name.
+fn set_whole_var(
+    lval: &LValue<'_>,
+    value: &mut TypVal,
     copy: bool,
     is_const: bool,
-    op: *const c_char,
+    op: Option<u8>,
 ) {
-    let lval = unsafe { Lv::new(lval) };
-    // Terminate the left-hand side in place: the messages below name the
-    // variable and would otherwise print the rest of the command too.
-    // SAFETY: the caller's promise -- `endp` points into the same writable NUL-terminated string.
-    let cc = unsafe { *endp };
-    // SAFETY: as above -- the byte is put back before returning.
-    unsafe { *endp = 0 };
-
-    if !lval.ll_blob.is_null() {
-        // Upstream's three early returns here leave the left-hand side
-        // terminated in place rather than putting `cc` back. Preserved:
-        // anything that reads the command line after a rejected Blob
-        // assignment sees the truncated form.
-        // SAFETY: `lval` has `ll_blob` set, and `result` is the caller's.
-        if !unsafe { set_blob_var(lval.raw(), result, op) } {
-            return;
-        }
-    } else if !op.is_null() && unsafe { *op } != b'='.cast_signed() {
-        // `+=`, `-=`, `*=`, `/=`, `%=` and `..=`.
-        if is_const {
-            emsg_static(e_cannot_mod);
-            unsafe { *endp = cc };
-            return;
-        }
-        let mut tv = UNSET_TV;
-        let mut di: *mut DictItem = null_mut();
-        let (name, name_len) = (lval.ll_name, lval.ll_name_len);
-        // SAFETY: the name is the one `get_lval` resolved, and `tv` and `di` are this frame's.
-        let dip = &raw mut di;
-        let found = unsafe {
-            eval_variable(
-                name,
-                c_int::try_from(name_len).expect("a variable name"),
-                Some(&mut tv),
-                dip,
-                true,
-                false,
-            )
-        };
-        if found.is_ok() {
-            // SAFETY: a non-null `di` is live; `tv` is this frame's copy.
-            let (n, dtv, dlock) = if di.is_null() {
-                (0, null_mut(), VarLock::Unlocked)
-            } else {
-                // SAFETY: `di` is live, so naming its typval reads nothing,
-                // and its lock is the slot's.
-                (
-                    c_int::from(unsafe { (*di).di_flags }),
-                    unsafe { &raw mut (*di).di_tv },
-                    unsafe { *di_lock(di) },
-                )
-            };
-            let writable = di.is_null()
-                || (!unsafe { var_check_ro(n, name, TV_CSTRING) }
-                    && !unsafe { tv_check_lock(dlock, &*dtv, name, TV_CSTRING) });
-            if writable && unsafe { eexe_mod_op(&raw mut tv, result, op) }.is_ok() {
-                // SAFETY: as above -- the folded value goes back by name.
-                unsafe { set_var(name, name_len, &mut tv, false) };
-            }
-            clear_local(&mut tv);
-        }
-    } else {
-        let (name, name_len) = (lval.ll_name, lval.ll_name_len);
-        // SAFETY: the name is the one `get_lval` resolved, and `result` is the caller's value.
-        unsafe { set_var_const(name, name_len, result, copy, is_const) };
+    let name = lval.name();
+    let Some(op) = op.filter(|&op| op != b'=') else {
+        set_var_const_named(name, value, copy, is_const);
+        return;
+    };
+    // `+=`, `-=`, `*=`, `/=`, `%=` and `..=`.
+    if is_const {
+        emsg_static(e_cannot_mod);
+        return;
     }
-
-    unsafe { *endp = cc };
+    // A lookup that may source an autoload script, as `eval_variable` is.
+    let found = with_var(name, false, |item| {
+        let mut tv = UNSET_TV;
+        tv_copy(&item.di_tv, &mut tv);
+        (tv, item.di_flags, item.di_lock)
+    });
+    let Some((mut tv, flags, lock)) = found else {
+        let name = msg_bytes(name);
+        semsg!("E121: Undefined variable: {name}");
+        return;
+    };
+    let writable = !var_check_ro_named(flags.into(), name) && !tv_check_lock_named(lock, &tv, name);
+    if writable && mod_op(&mut tv, value, op).is_ok() {
+        // The folded value goes back by name.
+        set_var_const_named(name, &mut tv, false, false);
+    }
+    clear_local(&mut tv);
 }
 
-/// Write a byte or a byte range into the Blob `lval` resolved. Answers
-/// whether the caller should put the terminated left-hand side back — the
-/// three refusal paths say no, which is upstream's.
-///
-/// # Safety
-/// As `set_var_lval`, with `lval->ll_blob` set.
-unsafe fn set_blob_var(lval: *mut LVal, result: &mut TypVal, op: *const c_char) -> bool {
-    // SAFETY: the caller's promise -- both outlive the call.
-    let (mut lval, value) = unsafe { (Lv::new(lval), Tv::new(result)) };
-    if !op.is_null() && unsafe { *op } != b'='.cast_signed() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let op = unsafe { c_str(op) };
+/// Write a byte or a byte range into the Blob `lval` resolved.
+fn set_blob_var(lval: &LValue<'_>, blob: &BlobRef, span: Span, value: &TypVal, op: Option<u8>) {
+    if let Some(op) = op.filter(|&op| op != b'=') {
+        let op = char::from(op);
         semsg!("E734: Wrong variable type for {op}=");
-        return false;
+        return;
     }
-    // SAFETY: the caller's promise: `ll_blob` is live, the name resolved.
-    let lock = unsafe { (*lval.ll_blob).bv_lock };
-    // SAFETY: `ll_name` is the resolved name, NUL-terminated.
-    let locked = unsafe { value_check_lock(lock, lval.ll_name, TV_CSTRING) };
-    if locked {
-        return false;
+    if value_check_lock_named(blob.bv_lock, lval.name()) {
+        return;
     }
 
-    if lval.ll_range && value.v_type() == VAR_BLOB {
-        if lval.ll_empty2 {
-            // SAFETY: as above.
-            lval.ll_n2 = blob_len(unsafe { lval.ll_blob.as_ref() }) - 1;
-        }
-        let (n1, n2) = (VarNumber::from(lval.ll_n1), VarNumber::from(lval.ll_n2));
-        // SAFETY: as above -- and `result` may hold that very blob, which
-        // is why this takes the pointer.
-        if unsafe { blob_set_range(lval.ll_blob, n1, n2, result) }.is_err() {
-            return false;
-        }
-        return true;
+    if span.range && value.v_type() == VAR_BLOB {
+        let n2 = if span.empty2 {
+            blob_len(Some(blob)) - 1
+        } else {
+            span.n2
+        };
+        // `value` may hold that very blob, which the callee allows.
+        let _ = set_range(blob, VarNumber::from(span.n1), VarNumber::from(n2), value);
+        return;
     }
 
-    if let Ok(val) = tv_get_number_chk(result) {
+    if let Ok(val) = tv_get_number_chk(value) {
         if !(0..=255).contains(&val) {
             // Upstream's text is `"E1239: Invalid value for blob: 0x" PRIX64`,
             // which is missing the `%`: `val` has never reached the message.
-            let _ = val;
             semsg!("E1239: Invalid value for blob: 0xlX");
         } else {
-            // SAFETY: as above.
-            unsafe { &mut *lval.ll_blob }
-                .set_or_append(lval.ll_n1, u8::try_from(val).expect("a byte, just checked"));
+            let byte = u8::try_from(val).expect("a byte, just checked");
+            blob.clone().set_or_append(span.n1, byte);
         }
     }
-    true
 }

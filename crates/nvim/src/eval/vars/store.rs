@@ -26,7 +26,7 @@ use core::ptr;
 use super::*;
 use crate::eval::typval::{DictEntry, tv_dict_item_free};
 use crate::message::emsg;
-use crate::message_fmt::{c_str, c_str_len, emsg_text};
+use crate::message_fmt::{c_str, c_str_len, emsg_text, msg_bytes};
 use crate::os::cshim::gettext_ptr;
 use crate::types::NUL;
 
@@ -228,6 +228,53 @@ pub unsafe fn set_var_const(
         // literal values are locked.
         unsafe { tv_item_lock(di_lock(di), &mut *cur, DICT_MAXNEST, true, true) };
     }
+}
+
+/// [`set_var_const`] of the variable `name` spells, which need not be
+/// terminated where it ends.
+pub(crate) fn set_var_const_named(name: &[u8], tv: &mut TypVal, copy: bool, is_const: bool) {
+    cstr::with_terminated(name, |c| {
+        // SAFETY: `c` is NUL-terminated at its own length.
+        unsafe { set_var_const(c.as_ptr(), c.count_bytes(), tv, copy, is_const) }
+    });
+}
+
+/// [`var_check_ro`] naming the variable `name`, measured.
+pub(crate) fn var_check_ro_named(flags: c_int, name: &[u8]) -> bool {
+    let error_message = if flags & DI_FLAGS_RO as c_int != 0 {
+        e_cannot_change_readonly_variable_str
+    } else if flags & DI_FLAGS_RO_SBX as c_int != 0 && sandbox.get() != 0 {
+        e_cannot_set_variable_in_sandbox_str
+    } else {
+        return false;
+    };
+    let len = crate::narrow::len_as_int(name.len());
+    emsg_text(tr_plural!(gettext(error_message), len, msg_bytes(name)));
+    true
+}
+
+/// [`var_check_lock`] naming the variable `name`, measured.
+pub(crate) fn var_check_lock_named(flags: c_int, name: &[u8]) -> bool {
+    if flags & DI_FLAGS_LOCK as c_int == 0 {
+        return false;
+    }
+    let name = msg_bytes(name);
+    semsg!("E1122: Variable is locked: {name}");
+    true
+}
+
+/// [`var_wrong_func_name`] of the name `name` spells.
+pub(crate) fn var_wrong_func_name_named(name: &[u8], new_var: bool) -> bool {
+    // SAFETY: `c` is NUL-terminated.
+    cstr::with_terminated(name, |c| unsafe {
+        var_wrong_func_name(c.as_ptr(), new_var)
+    })
+}
+
+/// [`valid_varname`] of the name `name` spells.
+pub(crate) fn valid_varname_named(name: &[u8]) -> bool {
+    // SAFETY: `c` is NUL-terminated.
+    cstr::with_terminated(name, |c| unsafe { valid_varname(c.as_ptr()) })
 }
 
 /// Whether `flags` says the variable may not be written, reporting E46 or

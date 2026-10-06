@@ -641,10 +641,7 @@ pub fn get_funccal_args_var() -> *mut DictItem {
 }
 
 /// List the `l:` variables, when there is a function running.
-///
-/// # Safety
-/// `first` is writable.
-pub unsafe fn list_func_vars(first: *mut c_int) {
+pub fn list_func_vars(first: &mut c_int) {
     let fc = current_fc();
     if fc.is_null() {
         return;

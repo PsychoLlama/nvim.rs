@@ -49,7 +49,8 @@ pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::f
     }
     cmd = unsafe { cmd.offset(2) };
 
-    let Some(held) = (unsafe { heredoc_get(excmd, cmd, true) }) else {
+    let at = excmd.line.offset_of(cmd);
+    let Some(held) = heredoc_get(excmd, at, true) else {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     };
     let l = held.as_ptr();

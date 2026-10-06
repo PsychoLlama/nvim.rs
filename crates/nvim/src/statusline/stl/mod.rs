@@ -427,7 +427,7 @@ fn itoa(value: c_int) -> [c_char; 12] {
 /// `:unlet!` a variable this expansion published.
 fn unlet(name: &CStr) {
     // SAFETY: `name` is a NUL-terminated string with its own length.
-    let _ = unsafe { do_unlet(name.as_ptr(), name.to_bytes().len() as size_t, true) };
+    let _ = do_unlet(name.to_bytes(), true);
 }
 
 /// `v:lnum`, `v:relnum` and `v:virtnum`, which `'statuscolumn'` items read.

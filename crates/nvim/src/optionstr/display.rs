@@ -97,7 +97,7 @@ pub fn did_set_background(args: &mut OptSet) -> Result<(), OptError> {
     {
         let name = c"g:colors_name";
         // SAFETY: the name is a C string of the length given.
-        let _ = unsafe { do_unlet(name.as_ptr(), name.to_bytes().len(), true) };
+        let _ = do_unlet(name.to_bytes(), true);
         P_BG.set(XString::from_cstr(if dark { c"dark" } else { c"light" }));
         init_highlight(false, false);
     }

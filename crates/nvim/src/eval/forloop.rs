@@ -14,13 +14,14 @@
 #![allow(unsafe_code)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use core::ffi::{c_char, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
-use core::ptr::null_mut;
 
-use crate::eval::typval::{blob_copy, blob_len, blob_unref, index_of, list_items_mut, list_unref};
+use crate::eval::typval::{
+    blob_copy, blob_len, blob_unref, index_of, list_items_mut, list_unref, tv_copy,
+};
+use crate::eval::vars::{VarList, ex_let_vars, skip_var_list};
 use crate::eval::vars::{clear_local, emsg_static};
-use crate::eval::vars::{ex_let_vars, skip_var_list};
 use crate::eval::{Fi, ForInfo, e_string_list_or_blob_required, eval0_in_cmd};
 use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
@@ -46,17 +47,14 @@ pub unsafe fn eval_for_line(excmd: &mut ExArg, errp: *mut bool, skip: bool) -> *
     // SAFETY: the caller's promise about `errp`.
     unsafe { *errp = true };
 
-    let varcount = fi.field_ptr(offset_of!(ForInfo, fi_varcount));
-    let semicolon = fi.field_ptr(offset_of!(ForInfo, fi_semicolon));
-    let arg = excmd.arg_ptr();
-    // SAFETY: the command's own NUL-terminated argument; the two
-    // out-parameters are the `ForInfo`'s own fields.
-    let expr = unsafe { skip_var_list(arg, varcount, semicolon, false) };
-    if expr.is_null() {
+    let arg = excmd.line.arg;
+    let Some(targets) = skip_var_list(excmd.line.rest_of(arg), false) else {
         return fi.raw() as *mut c_void;
-    }
+    };
+    fi.fi_varcount = targets.count;
+    fi.fi_semicolon = c_int::from(targets.semicolon);
     let line = &excmd.line;
-    let at = line.skip_white(line.offset_of(expr));
+    let at = line.skip_white(arg + targets.end);
     if !line.starts_with(at, b"in") || !matches!(line.byte_at(at + 2), 0 | b' ' | b'\t') {
         // SAFETY: the message is a NUL-terminated literal.
         emsg_static(c"E690: Missing \"in\" after :for");
@@ -142,9 +140,9 @@ pub unsafe fn eval_for_line(excmd: &mut ExArg, errp: *mut bool, skip: bool) -> *
 /// over, or when the assignment failed.
 ///
 /// # Safety
-/// `fi_void` must be a `ForInfo` from `eval_for_line`; `arg` the loop's
+/// `fi_void` must be a `ForInfo` from `eval_for_line`; `arg` is the loop's
 /// variable list.
-pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
+pub unsafe fn next_for_item(fi_void: *mut c_void, arg: &[u8]) -> bool {
     // `eval_for_line` handed the List the address of `fi_lw`, so the List
     // is holding a pointer into this record for as long as the loop runs.
     // Every write below therefore goes through `rec` rather than through
@@ -165,8 +163,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         tv.write_number(VarNumber::from(blob.byte(fi.fi_bi)));
         // SAFETY: `rec` is the caller's record.
         unsafe { (*rec).fi_bi += 1 };
-        // SAFETY: `tv` is this frame's, and `arg` the caller's list.
-        return unsafe { assign(fi, arg, &mut tv) };
+        return assign(&fi, arg, &mut tv);
     }
 
     if !fi.fi_string.is_null() {
@@ -183,11 +180,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         tv.write_string(unsafe { xmemdupz(at as *const c_void, len as size_t) as *mut c_char });
         // SAFETY: `rec` is the caller's record.
         unsafe { (*rec).fi_byte_idx += len };
-        // SAFETY: `tv` is this frame's, and `arg` the caller's list.
-        let ok = unsafe { assign(fi, arg, &mut tv) };
-        // The typval was never handed over, so its String is ours.
-        clear_local(&mut tv);
-        return ok;
+        return assign(&fi, arg, &mut tv);
     }
 
     // The cursor is an index into the list, which
@@ -203,27 +196,31 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
     let Some(item) = items.get_mut(at) else {
         return false;
     };
-    let value = &raw mut item.li_tv;
+    // The item is copied out: assigning it runs the targets' index
+    // expressions, which may edit the List being walked.
+    let mut value = UNSET_TV;
+    tv_copy(&item.li_tv, &mut value);
     let next = if at + 1 >= items.len() {
         ListWatch::ENDED
     } else {
         index_of(at + 1)
     };
-    // SAFETY: `rec` is the caller's record, and the item's typval is the
-    // List's own.
+    // SAFETY: `rec` is the caller's record.
     unsafe { (*rec).fi_lw.lw_index = next };
-    unsafe { assign(fi, arg, &mut *value) }
+    assign(&fi, arg, &mut value)
 }
 
-/// Hand one item to the loop's variable list, copying it.
-///
-/// # Safety
-/// As `next_for_item`.
-unsafe fn assign(fi: Fi, arg: *mut c_char, tv: &mut TypVal) -> bool {
-    let (semicolon, varcount) = (fi.fi_semicolon, fi.fi_varcount);
-    // SAFETY: the caller's promise -- `arg` is the loop's variable list and
-    // `tv` the item being assigned.
-    unsafe { ex_let_vars(arg, tv, true, semicolon, varcount, false, null_mut()).is_ok() }
+/// Hand one item to the loop's variable list, which takes it over.
+fn assign(fi: &Fi, arg: &[u8], tv: &mut TypVal) -> bool {
+    let targets = VarList {
+        end: 0,
+        count: fi.fi_varcount,
+        semicolon: fi.fi_semicolon != 0,
+    };
+    let ok = ex_let_vars(arg, tv, false, targets, false, None).is_ok();
+    // Whatever the targets did not take is this frame's to release.
+    clear_local(tv);
+    ok
 }
 
 /// Release the iteration.

@@ -122,6 +122,53 @@ describe(':let', function()
       eq({ 2 * len, 'bb' }, eval('[len(l[0]), l[1]]'))
     end
   end)
+
+  describe('when an index expression changes what it indexes', function()
+    -- The target is found again after the index runs, so these answer an
+    -- error or write where the C would have read freed memory.
+    it('grows the outer list past its capacity', function()
+      command('let l = [[1], [2]] | let l[0][len(extend(l, range(100))) * 0] = 7')
+      eq({ { 7 }, { 2 }, 0 }, eval('l[0:2]'))
+    end)
+
+    it('removes the dictionary item being indexed', function()
+      command("let d = {'a': {'x': 1}}")
+      eq(
+        'Vim(let):E716: Key not present in Dictionary: "a"',
+        t.pcall_err(command, "let d.a[remove(d, 'a') is 0 ? 'x' : 'x'] = 5")
+      )
+      eq({}, eval('d'))
+    end)
+
+    it('unlets the variable being indexed', function()
+      command('let d = {}')
+      eq(
+        'Vim(let):E121: Undefined variable: d',
+        t.pcall_err(command, "let d[execute('unlet d')] = 1")
+      )
+      eq(0, eval('exists("d")'))
+      command("let e = {'a': {}}")
+      eq(
+        'Vim(let):E716: Key not present in Dictionary: "a"',
+        t.pcall_err(command, "let e.a[execute('unlet e.a')] = 1")
+      )
+    end)
+
+    it('assigns loop targets while the loop edits its list', function()
+      command('let l = [0, 0, 0] | let d = {}')
+      command('for d[len(d) + 0 * len(add(l, 9))] in l | if len(d) > 4 | break | endif | endfor')
+      eq({ ['0'] = 0, ['1'] = 0, ['2'] = 0, ['3'] = 9, ['4'] = 9 }, eval('d'))
+      command('let l = [[1, 2], [3, 4]] | let out = []')
+      command('for [a, b] in l | call add(out, a . b) | call remove(l, -1) | endfor')
+      eq({ '12' }, eval('out'))
+    end)
+  end)
+
+  it('names a locked curly-brace target by its expansion', function()
+    command("let x = [1] | lockvar x | let y = {'a': 1} | lockvar y")
+    eq('Vim(unlet):E741: Value is locked: x', t.pcall_err(command, "unlet {'x'}[0]"))
+    eq('Vim(unlet):E741: Value is locked: y', t.pcall_err(command, "unlet {'y'}.a"))
+  end)
 end)
 
 describe(':let and :const', function()

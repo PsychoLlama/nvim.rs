@@ -70,6 +70,36 @@ pub fn list_check_range_index_two(
     Ok(())
 }
 
+/// [`list_assign_range`] over two handles, naming the target `varname` in a
+/// lock error. `dest` and `src` may be the same list.
+pub(crate) fn assign_range(
+    dest: &ListRef,
+    src: Option<&ListRef>,
+    idx1: ::core::ffi::c_int,
+    idx2: ::core::ffi::c_int,
+    empty_idx2: bool,
+    op: Option<u8>,
+    varname: &[u8],
+) -> Result<(), Failed> {
+    let op = op.map(|op| [op.cast_signed(), 0]);
+    let src = src.map_or(::core::ptr::null_mut(), ListRef::as_ptr);
+    cstr::with_terminated(varname, |varname| {
+        // SAFETY: two lists the handles keep alive, which the callee allows
+        // to be the same one; a terminated operator and name.
+        unsafe {
+            list_assign_range(
+                dest.as_ptr(),
+                src,
+                idx1,
+                idx2,
+                empty_idx2,
+                op.as_ref().map_or(::core::ptr::null(), |op| op.as_ptr()),
+                varname.as_ptr(),
+            )
+        }
+    })
+}
+
 /// `dest[idx1:idx2] = src`, or `dest[idx1:idx2] op= src` when `op` is given.
 ///
 /// `empty_idx2` means the range had no upper bound (`dest[idx1:]`).

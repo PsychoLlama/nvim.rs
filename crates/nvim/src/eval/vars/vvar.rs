@@ -149,6 +149,12 @@ pub fn get_vim_var_list(idx: Vv) -> *mut List {
     vimvar_val(idx).list_or_null()
 }
 
+/// Another reference to the List `v:` variable `idx` holds, `None` when it
+/// holds none.
+pub(crate) fn get_vim_var_list_handle(idx: Vv) -> Option<ListRef> {
+    vimvar_val(idx).list_handle()
+}
+
 /// `v:` variable `idx` as a Dict.
 pub fn get_vim_var_dict(idx: Vv) -> *mut Dict {
     vimvar_val(idx).dict_or_null()
@@ -574,6 +580,20 @@ pub unsafe fn before_set_vvar(
         return false;
     }
     true
+}
+
+/// [`set_vvar_item`] for the existing `v:` variable `key`, with `op` the
+/// compound operator's byte. Nothing happens for a key `v:` does not have.
+pub(crate) fn set_vvar_key(key: &[u8], tv: &mut TypVal, copy: bool, op: Option<u8>) {
+    // SAFETY: the `v:` scope dictionary is a static.
+    let item = unsafe { (*get_vimvar_dict()).find_ptr(key) };
+    if item.is_null() {
+        return;
+    }
+    let op = op.map(|op| [op.cast_signed(), 0]);
+    let op = op.as_ref().map_or(ptr::null(), |op| op.as_ptr());
+    // SAFETY: an item of the `v:` dictionary, and a terminated operator.
+    unsafe { set_vvar_item(item, tv, copy, op) };
 }
 
 /// A write to a `v:` variable that reached the scope dictionary directly:

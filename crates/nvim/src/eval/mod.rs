@@ -30,7 +30,7 @@ use crate::types::NL;
 pub(crate) use crate::message::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, Blob, ChannelStreamType, Dict, ExprType, Failed, FuncExe, GRegFlags, LVal, LineNr, List,
+    Array, Blob, ChannelStreamType, Dict, ExprType, Failed, FuncExe, GRegFlags, LineNr, List,
     ListWatch, LuaRetMode, MarkGet, MotionType, Partial, Timer, TypVal, uint64_t,
 };
 use crate::winlayer::Live;
@@ -39,7 +39,7 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 mod entry;
 pub use self::entry::*;
 mod lval;
-pub use self::lval::*;
+pub(crate) use self::lval::*;
 mod forloop;
 pub use self::forloop::*;
 mod collect;
@@ -89,9 +89,6 @@ pub(crate) type Tm = Live<Timer>;
 
 /// One `:for` loop's iteration state, owned by the `:endfor` that frees it.
 pub(crate) type Fi = Live<ForInfo>;
-
-/// The left-hand side [`get_lval`] parsed, owned by the caller's frame.
-pub(crate) type Lv = Live<LVal>;
 
 pub const _ISalnum: c_uint = 8;
 pub const REGSUB_MAGIC: c_uint = 2;

@@ -137,9 +137,8 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         if append {
             at += 1;
         }
-        let name = excmd.line.ptr_at(excmd.line.skip_white(at));
-        // SAFETY: the variable name, inside the command's own line.
-        if unsafe { var_redir_start(name, append) }.is_ok() {
+        let name = excmd.line.rest_of(excmd.line.skip_white(at));
+        if var_redir_start(name, append).is_ok() {
             redir_vname.set(true);
         }
     } else {

@@ -425,6 +425,16 @@ impl TypVal {
         self.overwrite(TypVal::list(list));
     }
 
+    /// Another reference to the list this value holds -- `None` for every
+    /// other kind and for `v:_null_list`.
+    #[inline(always)]
+    pub(crate) fn list_handle(&self) -> Option<ListRef> {
+        match self {
+            TypVal::List(list) => (**list).clone(),
+            _ => None,
+        }
+    }
+
     /// Move the list out of this slot, leaving `v:_null_list` behind.
     ///
     /// The caller owns the reference now: dropping the answer is what

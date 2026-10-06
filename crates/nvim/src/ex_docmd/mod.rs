@@ -169,6 +169,23 @@ pub(crate) fn sourcing_entry() -> EStack {
     crate::runtime::innermost_frame()
 }
 
+/// The next line `excmd`'s source answers -- upstream's
+/// `eap->ea_getline(c, eap->cookie, indent, do_concat)` -- or `None` at the
+/// end of the input, or when the command was given no source.
+pub(crate) fn exarg_getline(
+    excmd: &ExArg,
+    c: c_int,
+    indent: c_int,
+    do_concat: bool,
+) -> Option<XString> {
+    let getline = excmd.ea_getline?;
+    // SAFETY: a command's getter and cookie are set together, by the frame
+    // that runs it and outlives it.
+    let line = unsafe { getline(c, excmd.cookie, indent, do_concat) };
+    // SAFETY: an allocated line, or null, which this takes over once.
+    (!line.is_null()).then(|| unsafe { XString::from_raw(line) })
+}
+
 /// The line number the message and breakpoint machinery reports.
 pub(crate) fn sourcing_lnum() -> LineNr {
     crate::runtime::innermost_frame().es_lnum

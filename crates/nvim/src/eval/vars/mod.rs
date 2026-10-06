@@ -12,10 +12,9 @@ use core::mem::ManuallyDrop;
 use crate::eval::gc::RootId;
 
 use crate::api::private::helpers::cstr_to_string;
-use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
+use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::charset::skip;
-use crate::charset::{getdigits_int, skiptowhite, skipwhite};
 use crate::drawscreen::state::sc_col;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
@@ -23,11 +22,11 @@ use crate::eval::executor::eexe_mod_op;
 use crate::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    TV_INITIAL_VALUE, di_lock, di_tv, dict_is_watched, dict_watcher_notify, list_find_nr,
-    list_find_str, list_len, list_locked, list_set_lock, queue_init, tv_check_str_or_nr, tv_clear,
-    tv_copy, tv_dict_alloc, tv_dict_alloc_lock, tv_dict_hi2di, tv_dict_item_alloc,
-    tv_dict_item_alloc_len, tv_dict_item_remove, tv_dict_unref, tv_get_bool_chk, tv_get_number,
-    tv_get_number_chk, tv_ht_iter, tv_item_lock, tv_list_alloc, value_check_lock,
+    TV_INITIAL_VALUE, di_lock, dict_is_watched, dict_watcher_notify, list_find_nr, list_find_str,
+    list_len, list_set_lock, queue_init, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc,
+    tv_dict_alloc_lock, tv_dict_hi2di, tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_unref,
+    tv_get_bool_chk, tv_get_number, tv_get_number_chk, tv_ht_iter, tv_item_lock, tv_list_alloc,
+    value_check_lock,
 };
 use crate::eval::userfunc::{
     find_hi_in_scoped_ht, find_var_in_scoped_ht, function_exists, get_current_funccal_dict,
@@ -36,13 +35,11 @@ use crate::eval::userfunc::{
 };
 use crate::eval::window::{find_win_by_nr, restore_win, switch_win};
 use crate::eval::{
-    Cursor, LAMBDA_USES_LOCALS, clear_lval, env_name_len, eval_expr_ext, eval_isnamec1,
-    eval_option, eval_to_bool, eval_to_string, eval0_in_cmd, eval1, get_lval, get_name_len,
-    handle_subscript, may_call_simple_func, name_end, num_divide, num_modulus, option_var_end,
-    set_ref_in_ht, set_var_lval,
+    Cursor, LAMBDA_USES_LOCALS, eval_expr_ext, eval_isnamec1, eval_option, eval_to_bool, eval1,
+    get_name_len, handle_subscript, may_call_simple_func, name_end, set_ref_in_ht,
 };
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::{check_nextcmd, ends_excmd};
+use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
@@ -54,13 +51,11 @@ use crate::hashtab::{
 use crate::lua::executor::nlua_set_sctx;
 use crate::mbyte::utf_char2bytes;
 use crate::memory::XString;
-use crate::memory::{
-    xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrlcat, xstrlcpy, xstrndup,
-};
-use crate::message::state::{called_emsg, did_emsg, emsg_severe};
+use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy, xstrndup};
+use crate::message::state::emsg_severe;
 use crate::message::{
     e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,
-    e_invarg, e_listreq, e_string_required,
+    e_string_required,
 };
 use crate::message::{
     emsg, internal_error, message_filtered, msg_advance, msg_bytes, msg_clr_eos, msg_display,
@@ -68,31 +63,27 @@ use crate::message::{
 };
 use crate::option::vars::{p_ccv, p_dex, p_pex, p_verbose};
 use crate::option::{
-    find_option, get_option, get_option_value, get_tty_option, get_winbuf_options,
-    is_option_hidden, is_tty_option, kOptFlagFunc, option_has_type, option_last_set, optval_free,
-    set_option_value_handle_tty,
+    find_option, get_option, get_winbuf_options, is_tty_option, kOptFlagFunc, option_has_type,
+    option_last_set, optval_free, set_option_value_handle_tty,
 };
 use crate::options::{kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest};
-use crate::os::cshim::{__ctype_b_loc, gettext};
-use crate::os::env::{vim_getenv, vim_setenv_ext, vim_unsetenv_ext};
+use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
-use crate::register::{get_reg_contents, write_reg_contents};
 use crate::runtime::state::current_sctx;
 use crate::runtime::{
     new_script_item, script_autoload, script_count, script_id_valid, script_item,
 };
 use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
-use crate::strings::concat_str;
 use crate::types::{
-    AcoSave, BoolVarValue, Dict, DictItem, DictKey, EvalFuncData, ExArg, Expand, Failed, GRegFlags,
-    LVal, List, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount, ScopeDictItem, ScopeType,
-    ScriptId, ScriptVar, SpecialVarValue, SwitchWin, TypVal, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE,
-    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
-    VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT,
-    VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, VarType, VimVarFlags, Vv, int64_t, kBoolVarFalse, kBoolVarTrue, kListLenUnknown,
-    kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t, uint32_t,
+    AcoSave, BoolVarValue, Dict, DictItem, DictKey, EvalFuncData, ExArg, Expand, GRegFlags, List,
+    OptIndex, OptVal, Partial, QUEUE, Refcount, ScopeDictItem, ScopeType, ScriptId, ScriptVar,
+    SpecialVarValue, SwitchWin, TypVal, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT,
+    VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING,
+    VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST,
+    VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, VimVarFlags, Vv,
+    int64_t, kBoolVarFalse, kBoolVarTrue, kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t,
+    uint8_t, uint32_t,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
@@ -115,7 +106,7 @@ mod vvar;
 
 pub use self::assign::*;
 pub use self::external::*;
-pub use self::heredoc::*;
+pub(crate) use self::heredoc::*;
 pub use self::lifecycle::*;
 pub use self::listing::*;
 pub use self::lookup::*;
@@ -126,7 +117,7 @@ pub use self::unlet::*;
 pub use self::vvar::*;
 /// One of the `list_*_vars` scope listers: everything a bare `g:`/`b:`/`w:`/
 /// ... can name, whether on a `:let` line or as the whole of one.
-pub(crate) type ScopeLister = unsafe fn(*mut c_int);
+pub(crate) type ScopeLister = fn(&mut c_int);
 
 /// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
 pub const _ISlower: c_uint = 512;
@@ -172,21 +163,7 @@ pub(crate) type Tv = Live<TypVal>;
 /// every caller.
 pub(crate) type Vvr = Live<VimVar>;
 
-/// A resolved assignment target, whose caller has promised it outlives the
-/// value.
-///
-/// The promise is discharged by the frame that owns the `LVal` and calls
-/// `clear_lval` on it: `get_lval` fills in a local of the caller's, and
-/// every callee below is handed a pointer to that local.
-pub(crate) type Lv = Live<LVal>;
-
 pub const kGRegExprSrc: GRegFlags = 2;
-
-/// What `ex_unletlock` does to each argument it resolves: `do_unlet_var` or
-/// `do_lock_var`.  The two are written together because the walk that finds
-/// the arguments is what makes `:unlet` and `:lockvar` agree.
-pub type UnletLockCallback =
-    unsafe fn(*mut LVal, *mut c_char, &mut ExArg, c_int) -> Result<(), Failed>;
 
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;
@@ -209,25 +186,6 @@ pub const AUTOLOAD_CHAR: c_char = b'#'.cast_signed();
 /// a real length: translate the name and measure it, or just measure it.
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX - 1;
-
-/// A zeroed `LVal`, which is what `get_lval` expects to be handed.
-pub(crate) const LVAL_INITIAL_VALUE: LVal = LVal {
-    ll_name: ::core::ptr::null(),
-    ll_name_len: 0,
-    ll_exp_name: ::core::ptr::null_mut(),
-    ll_tv: ::core::ptr::null_mut(),
-    ll_lock: ::core::ptr::null_mut(),
-    ll_li: 0,
-    ll_list: ::core::ptr::null_mut(),
-    ll_range: false,
-    ll_empty2: false,
-    ll_n1: 0,
-    ll_n2: 0,
-    ll_dict: ::core::ptr::null_mut(),
-    ll_di: ::core::ptr::null_mut(),
-    ll_newkey: ::core::ptr::null_mut(),
-    ll_blob: ::core::ptr::null_mut(),
-};
 
 /// How deep `:const` locks the value it stores.
 pub const DICT_MAXNEST: c_int = 100;

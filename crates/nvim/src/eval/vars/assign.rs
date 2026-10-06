@@ -5,97 +5,121 @@
 //! of target: a variable, an environment variable, an option and a register.
 //! The last three implement the compound operators themselves and never
 //! reach `set_var_lval`.
+//!
+//! Every target is read out of the command line by offset: the line is not
+//! written to, so a name is measured where it stands rather than cut there.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::cstr;
+use crate::cstr::{self, byte_at};
 use crate::guard::Suppress;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::strings::has_char;
 use crate::types::CmdIdx;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
-use super::*;
-use crate::eval::typval::{NumBuf, list_items, list_items_mut};
-use crate::option::boolean_optval;
+use super::{
+    ScopeLister, clear_local, e_double_semicolon_in_list_of_variables, e_letunexp, emsg_static,
+    heredoc_get, kGRegExprSrc, list_arg_vars, list_buf_vars, list_func_vars, list_glob_vars,
+    list_script_vars, list_tab_vars, list_vim_vars, list_win_vars, tv_to_optval_named,
+};
+use crate::charset::skip;
+use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE, list_len, tv_copy, tv_list_alloc};
+use crate::eval::{
+    FNE_CHECK_START, FNE_INCL_BR, env_name_len, eval_isnamec1, eval0_in_cmd, get_lval, num_divide,
+    num_modulus, option_var_end, set_var_lval,
+};
+use crate::ex_cmds::check_secure;
+use crate::ex_docmd::ends_excmd;
+use crate::message::{e_invarg, e_listreq, emsg, internal_error};
+use crate::option::{
+    boolean_optval, get_option_value, get_tty_option, is_option_hidden, is_tty_option,
+    optval_concat, optval_free, set_option_value_handle_tty_named,
+};
 use crate::os::cshim::gettext_owned;
-use crate::types::{Failed, NUL, OptStr};
+use crate::os::env::{vim_getenv_owned, vim_setenv_named};
+use crate::register::{get_reg_contents_owned, write_reg_contents_bytes};
+use crate::types::{ExArg, Failed, OptInt, OptVal, TypVal, VAR_LIST, VarNumber};
 
 /// The compound assignment operators, as they appear before the `=`.
-const OPERATORS: &CStr = c"+-*/%.";
+const OPERATORS: &[u8] = b"+-*/%.";
 
 /// The arithmetic ones, which an environment variable and a register refuse.
-const ARITHMETIC: &CStr = c"+-*/%";
+const ARITHMETIC: &[u8] = b"+-*/%";
 
 /// One `:let` target parser, dispatched on the sigil the target starts with.
-type LetTarget =
-    unsafe fn(*mut c_char, &mut TypVal, bool, *const c_char, *const c_char) -> *mut c_char;
-
-/// The assignment's operator character: `None` when there is none, which is
-/// the `op == NULL` every caller below tests for first.
-///
-/// # Safety
-/// `op` is NULL or points at a readable byte.
-unsafe fn op_char(op: *const c_char) -> Option<u8> {
-    // SAFETY: the caller's obligation.
-    (!op.is_null()).then(|| unsafe { *op } as u8)
-}
+type LetTarget = fn(&[u8], &mut TypVal, bool, Option<&[u8]>, Option<u8>) -> Option<usize>;
 
 /// Whether the operator is an arithmetic one, which an environment variable
 /// and a register both refuse with E734.
 fn is_arithmetic(op: Option<u8>) -> bool {
-    op.is_some_and(|c| has_char(ARITHMETIC, c.into()))
+    op.is_some_and(|c| ARITHMETIC.contains(&c))
 }
 
-/// Whether what follows the target is one of the characters that may.
-///
-/// # Safety
-/// `endchars` is NULL or NUL-terminated, and `p` is NUL-terminated.
-unsafe fn ends_target(endchars: *const c_char, p: *const c_char) -> bool {
-    if endchars.is_null() {
-        return true;
-    }
-    // SAFETY: the caller's obligation; `skipwhite` stops at the NUL.
-    let (set, byte) = unsafe { (cstr::at(endchars), *skipwhite(p)) };
-    has_char(set, c_int::from(byte as uint8_t))
+/// Report E734 for the operator `op`.
+fn wrong_type(op: Option<u8>) {
+    let op = char::from(op.unwrap_or(b'='));
+    semsg!("E734: Wrong variable type for {op}=");
+}
+
+/// Past the white space at `text[at]`.
+fn skip_white(text: &[u8], at: usize) -> usize {
+    at + skip::white(text.get(at..).unwrap_or_default())
+}
+
+/// Whether what follows the target at `text[at]` is one of the characters
+/// that may. The end of the text is not one of them.
+fn ends_target(endchars: Option<&[u8]>, text: &[u8], at: usize) -> bool {
+    endchars.is_none_or(|set| {
+        let byte = byte_at(text, skip_white(text, at));
+        byte != 0 && set.contains(&byte)
+    })
+}
+
+/// What [`skip_var_list`] found.
+#[derive(Clone, Copy)]
+pub(crate) struct VarList {
+    /// Where the target, or the `[...]` of them, ends.
+    pub(crate) end: usize,
+    /// How many targets a `[...]` holds; 0 for a single one.
+    pub(crate) count: c_int,
+    /// Whether a `[...]` has a `; rest` target.
+    pub(crate) semicolon: bool,
 }
 
 /// `:let`, `:const` and (with no `=`) the listing forms.
 pub fn ex_let(excmd: &mut ExArg) {
-    // SAFETY: the caller's obligation -- a live `:let`, which the
-    // `do_cmdline` frame that owns the `ExArg` outlives.
     let is_const = excmd.cmdidx == CmdIdx::r#const;
-    let mut arg = excmd.arg_ptr();
-    let mut var_count = 0;
-    let mut semicolon = 0;
+    let arg = excmd.line.arg;
     let mut first: c_int = 1;
 
-    // SAFETY: `arg` is the command's own NUL-terminated argument text, and
-    // the two counters are live locals of this frame.
-    let argend = unsafe { skip_var_list(arg, &raw mut var_count, &raw mut semicolon, false) };
-    if argend.is_null() {
+    let Some(targets) = skip_var_list(excmd.line.rest_of(arg), false) else {
         return;
-    }
-    // SAFETY: `argend` points inside `arg`, so it is NUL-terminated too.
-    let mut expr = unsafe { skipwhite(argend) };
-    let concat = unsafe { cstr::starts_with(expr, b"..=") };
-    let lead = unsafe { *expr } as u8;
-    let has_assign = lead == b'='
-        || (has_char(OPERATORS, lead.into()) && unsafe { *expr.add(1) } == b'=' as c_char);
+    };
+    let line = &excmd.line;
+    let mut expr = line.skip_white(arg + targets.end);
+    let concat = line.starts_with(expr, b"..=");
+    let lead = line.byte_at(expr);
+    let has_assign =
+        lead == b'=' || (lead != 0 && OPERATORS.contains(&lead) && line.byte_at(expr + 1) == b'=');
 
     if !has_assign && !concat {
         // ":let" with no "=": list variables.
-        // SAFETY: `arg` is NUL-terminated and every lister below walks the
-        // editor's own scope dictionaries.
-        let head = unsafe { *arg } as u8;
+        let head = line.byte_at(arg);
+        let mut end = arg;
         if head == b'[' {
             emsg_static(e_invarg);
-        } else if ends_excmd(c_int::from(head.cast_signed())) == 0 {
+        } else if ends_excmd(c_int::from(head)) == 0 {
             // ":let var1 var2"
-            arg = unsafe { list_arg_vars(excmd, arg, &raw mut first) } as *mut c_char;
+            end = arg + list_arg_vars(line.rest_of(arg), excmd.skip, &mut first);
         } else if !excmd.skip {
             // ":let" on its own.
             const SCOPES: [ScopeLister; 7] = [
@@ -108,173 +132,138 @@ pub fn ex_let(excmd: &mut ExArg) {
                 list_vim_vars,
             ];
             for lister in SCOPES {
-                // SAFETY: `first` is a live local of this frame, and each
-                // lister walks the editor's own scope dictionary.
-                unsafe { lister(&raw mut first) };
+                lister(&mut first);
             }
         }
-        excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
+        excmd.line.next = excmd.line.check_next(end);
         return;
     }
 
-    // Assign to the target or targets, whatever produced the value. The
-    // command's argument text is read again here rather than reused from
-    // above, because the listing branch moves the local `arg`; it is read
-    // *now* rather than inside the closure because the command itself is
-    // lent to `heredoc_get` and to the evaluator below, neither of which
-    // touches `arg`.
-    let arg = excmd.arg_ptr();
-    let assign = |tv: &mut TypVal, op: *const c_char| {
-        // SAFETY: the command's own argument text, and a live value.
-        let _ = unsafe { ex_let_vars(arg, tv, false, semicolon, var_count, is_const, op) };
-    };
-
     let mut rettv = TV_INITIAL_VALUE;
-    // SAFETY: `expr` is NUL-terminated, so a byte past a NUL is never read.
-    if lead == b'='
-        && unsafe { *expr.add(1) } == b'<' as c_char
-        && unsafe { *expr.add(2) } == b'<' as c_char
-    {
+    if lead == b'=' && line.byte_at(expr + 1) == b'<' && line.byte_at(expr + 2) == b'<' {
         // A here-document.
-        // SAFETY: a live command and the text past the "=<<".
-        let l = unsafe { heredoc_get(excmd, expr.add(3), false) };
-        if let Some(l) = l {
-            rettv.write_list(Some(l));
+        if let Some(list) = heredoc_get(excmd, expr + 3, false) {
+            rettv.write_list(Some(list));
             if !excmd.skip {
-                let op = [b'=' as c_char, NUL as c_char];
-                assign(&mut rettv, op.as_ptr());
+                let text = excmd.line.rest_of(arg);
+                let _ = ex_let_vars(text, &mut rettv, false, targets, is_const, Some(b'='));
             }
-            // SAFETY: a live local.
             clear_local(&mut rettv);
         }
         return;
     }
 
     // The operator, if any, and the expression past it.
-    let mut op = [b'=' as c_char, NUL as c_char];
-    if lead != b'=' {
-        if has_char(OPERATORS, lead.into()) {
+    let mut op = b'=';
+    if lead == b'=' {
+        expr += 1;
+    } else {
+        if OPERATORS.contains(&lead) {
             // "+=", "-=", "*=", "/=", "%=" or ".="
-            op[0] = lead as c_char;
-            // SAFETY: `lead` is not the terminator, so `expr[1]` is readable.
-            if lead == b'.' && unsafe { *expr.add(1) } == b'.' as c_char {
+            op = lead;
+            if lead == b'.' && line.byte_at(expr + 1) == b'.' {
                 // "..=" -- one character longer than the rest.
-                expr = unsafe { expr.add(1) };
+                expr += 1;
             }
         }
-        expr = unsafe { expr.add(2) };
-    } else {
-        expr = unsafe { expr.add(1) };
+        expr += 2;
     }
-    expr = unsafe { skipwhite(expr) };
+    let expr = line.skip_white(expr);
 
-    let skipping = (excmd.skip).then(Suppress::emsg_skip);
-    let (at, evaluate) = (excmd.line.offset_of(expr), !excmd.skip);
-    let eval_res = eval0_in_cmd(excmd, at, &mut rettv, evaluate);
+    let skipping = excmd.skip.then(Suppress::emsg_skip);
+    let evaluate = !excmd.skip;
+    let eval_res = eval0_in_cmd(excmd, expr, &mut rettv, evaluate);
     drop(skipping);
 
-    if !excmd.skip && eval_res.is_ok() {
-        assign(&mut rettv, op.as_ptr());
+    if evaluate && eval_res.is_ok() {
+        let text = excmd.line.rest_of(arg);
+        let _ = ex_let_vars(text, &mut rettv, false, targets, is_const, Some(op));
     }
     if eval_res.is_ok() {
-        // SAFETY: a live local.
         clear_local(&mut rettv);
     }
 }
 
-/// Assign `tv` to the target or targets at `arg_start`: one name, or the
-/// `[v1, v2]` / `[v1, v2; rest]` unpack of a List.
+/// Assign `tv` to the target or targets `text` starts with: one name, or
+/// the `[v1, v2]` / `[v1, v2; rest]` unpack of a List, as [`skip_var_list`]
+/// counted them.
 ///
-/// `op` points at the characters that must follow the target(s), and names
-/// the operator: `"+"`, `"-"` or `"."` for add, subtract or concatenate.
-/// `semicolon` and `var_count` come from [`skip_var_list`].
-///
-/// # Safety
-/// `arg_start` is a NUL-terminated string and `tv` a live value.
-pub unsafe fn ex_let_vars(
-    arg_start: *mut c_char,
+/// `op` is the operator -- `+`, `-`, `*`, `/`, `%`, `.` or `=` -- and a
+/// single target must be followed by it; `None` (`:for`) assigns plainly
+/// and lets anything follow.
+pub(crate) fn ex_let_vars(
+    text: &[u8],
     tv: &mut TypVal,
     copy: bool,
-    semicolon: c_int,
-    var_count: c_int,
+    targets: VarList,
     is_const: bool,
-    op: *const c_char,
+    op: Option<u8>,
 ) -> Result<(), Failed> {
-    let mut arg = arg_start;
-    // SAFETY: the caller's obligation -- `arg` is NUL-terminated and `tv` is
-    // a live value.
-    if unsafe { *arg } != b'[' as c_char {
+    if byte_at(text, 0) != b'[' {
         // ":let var = expr" or ":for var in list"
-        if unsafe { ex_let_one(arg, tv, copy, is_const, op, op) }.is_null() {
-            return Err(Failed);
-        }
-        return Ok(());
+        let endchars = op.map(|op| [op]);
+        let endchars = endchars.as_ref().map(<[u8; 1]>::as_slice);
+        return ex_let_one(text, tv, copy, is_const, endchars, op)
+            .map(drop)
+            .ok_or(Failed);
     }
 
     // ":let [v1, v2] = list" or ":for [v1, v2] in listlist"
-    // SAFETY: the caller's obligation -- a live value.
-    let mut tv = unsafe { Tv::new(tv) };
     if tv.v_type() != VAR_LIST {
         emsg_static(e_listreq);
         return Err(Failed);
     }
-    // SAFETY: the kind says the value holds a List, and the list
-    // is the caller's for the whole walk below.
-    let l = tv.list_or_null();
     let len = list_len(tv.list_ref());
-    if semicolon == 0 && var_count < len {
+    let semicolon = c_int::from(targets.semicolon);
+    if semicolon == 0 && targets.count < len {
         emsg_static(c"E687: Less targets than List items");
         return Err(Failed);
     }
-    if var_count - semicolon > len {
+    if targets.count - semicolon > len {
         emsg_static(c"E688: More targets than List items");
         return Err(Failed);
     }
-    // `l` may really be NULL, but `:let [] = v:_null_list` fails with
-    // E688 or earlier before it can get here.
-    debug_assert!(!l.is_null());
+    // `:let [] = v:_null_list` fails with E688 or earlier before it can get
+    // here, so the list is there.
+    let list = tv.list_handle().ok_or(Failed)?;
 
-    // An index, not an address: `ex_let_one` runs the evaluator, which may
-    // edit the very list being unpacked.
+    // An index, not an address: each target's subscripts run the
+    // evaluator, which may edit the very list being unpacked. Each item is
+    // copied out before its target is resolved.
     let mut at: usize = 0;
-    let mut rest_len = list_len(tv.list_ref()) as size_t;
-    while unsafe { *arg } != b']' as c_char {
+    let mut pos: usize = 0;
+    while byte_at(text, pos) != b']' {
         // Skip the whitespace after the '[', ',' or ';'.
-        // SAFETY: `arg` is inside the caller's NUL-terminated string, and
-        // `at` is inside `l` -- the length checks above are what keep the
-        // walk inside it.
-        let itv = &raw mut list_items_mut(tv.list_mut())[at].li_tv;
-        let next = unsafe { skipwhite(arg.add(1)) };
-        arg = unsafe { ex_let_one(next, &mut *itv, true, is_const, c",;]".as_ptr(), op) };
-        if arg.is_null() {
+        let next = skip_white(text, pos + 1);
+        let mut item = TV_INITIAL_VALUE;
+        let Some(source) = list.items().get(at) else {
+            // The list lost items while an earlier target was resolved.
+            emsg_static(c"E688: More targets than List items");
             return Err(Failed);
-        }
-        rest_len -= 1;
+        };
+        tv_copy(&source.li_tv, &mut item);
+        let end = ex_let_one(&text[next..], &mut item, false, is_const, Some(b",;]"), op);
+        clear_local(&mut item);
+        let Some(end) = end else {
+            return Err(Failed);
+        };
         at += 1;
 
-        arg = unsafe { skipwhite(arg) };
-        let sep = unsafe { *arg } as u8;
+        pos = skip_white(text, next + end);
+        let sep = byte_at(text, pos);
         if sep == b';' {
             // The rest of the list, which may be empty, goes to the
             // variable after the ';', as a list of its own.
-            let rest_list = tv_list_alloc(rest_len as ptrdiff_t);
-            let into = rest_list.as_ptr();
-            // SAFETY: a live list, re-read each step.
-            while at < list_items(tv.list_ref()).len() {
-                let tv = &raw const list_items(tv.list_ref())[at].li_tv;
-                unsafe { (*into).push_copy(&*tv) };
-                at += 1;
+            let rest = list.items().get(at..).unwrap_or_default();
+            let mut rest_list = tv_list_alloc(rest.len().try_into().unwrap_or(0));
+            for item in rest {
+                rest_list.push_copy(&item.li_tv);
             }
             let mut ltv = TypVal::list(Some(rest_list));
-
-            // SAFETY: `arg` is inside the caller's string and `ltv` a live
-            // local.
-            let rest_arg = unsafe { skipwhite(arg.add(1)) };
-            arg = unsafe { ex_let_one(rest_arg, &mut ltv, false, is_const, c"]".as_ptr(), op) };
-            tv_clear(&mut ltv);
-            if arg.is_null() {
-                return Err(Failed);
-            }
+            let rest_at = skip_white(text, pos + 1);
+            let end = ex_let_one(&text[rest_at..], &mut ltv, false, is_const, Some(b"]"), op);
+            clear_local(&mut ltv);
+            end.ok_or(Failed)?;
             break;
         } else if sep != b',' && sep != b']' {
             internal_error(c"ex_let_vars()");
@@ -284,229 +273,178 @@ pub unsafe fn ex_let_vars(
     Ok(())
 }
 
-/// Skip an assignable variable, or the `[var, var]` list of them, answering
-/// the character past it or NULL on an error.
-///
-/// `var_count` counts the variables in a list and `semicolon` records
-/// whether one carried a `;`.  `silent` suppresses E475.
-///
-/// # Safety
-/// `arg` is a NUL-terminated string; `var_count` and `semicolon` are
-/// writable.
-pub unsafe fn skip_var_list(
-    arg: *const c_char,
-    var_count: *mut c_int,
-    semicolon: *mut c_int,
-    silent: bool,
-) -> *const c_char {
-    // SAFETY: the caller's obligation -- `arg` is NUL-terminated and the two
-    // counters are writable locals of the caller's frame.
-    if unsafe { *arg } != b'[' as c_char {
-        return unsafe { skip_var_one(arg) };
+/// Skip an assignable variable, or the `[var, var]` list of them, at the
+/// start of `text`. `None` after an error, which `silent` keeps from being
+/// reported.
+pub(crate) fn skip_var_list(text: &[u8], silent: bool) -> Option<VarList> {
+    let mut list = VarList {
+        end: 0,
+        count: 0,
+        semicolon: false,
+    };
+    if byte_at(text, 0) != b'[' {
+        list.end = skip_var_one(text, 0);
+        return Some(list);
     }
     // "[var, var]": find the matching ']'.
-    let mut p = arg;
+    let mut p = 0;
+    let invalid = |at: usize| {
+        if !silent {
+            let rest = msg_bytes(text.get(at..).unwrap_or_default());
+            semsg!("E475: Invalid argument: {rest}");
+        }
+    };
     loop {
         // Skip the whitespace after the '[', ';' or ','.
-        p = unsafe { skipwhite(p.add(1)) };
-        let s = unsafe { skip_var_one(p) };
+        p = skip_white(text, p + 1);
+        let s = skip_var_one(text, p);
         if s == p {
-            if !silent {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let p = unsafe { c_str(p) };
-                semsg!("E475: Invalid argument: {p}");
-            }
-            return ptr::null();
+            invalid(p);
+            return None;
         }
-        unsafe { *var_count += 1 };
+        list.count += 1;
 
-        p = unsafe { skipwhite(s) };
-        match unsafe { *p } as u8 {
-            b']' => return unsafe { p.add(1) },
-            b';' if unsafe { *semicolon } == 1 => {
+        p = skip_white(text, s);
+        match byte_at(text, p) {
+            b']' => {
+                list.end = p + 1;
+                return Some(list);
+            }
+            b';' if list.semicolon => {
                 if !silent {
                     emsg_static(e_double_semicolon_in_list_of_variables);
                 }
-                return ptr::null();
+                return None;
             }
-            b';' => unsafe { *semicolon = 1 },
+            b';' => list.semicolon = true,
             b',' => {}
             _ => {
-                if !silent {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let p = unsafe { c_str(p) };
-                    semsg!("E475: Invalid argument: {p}");
-                }
-                return ptr::null();
+                invalid(p);
+                return None;
             }
         }
     }
 }
 
-/// Skip one assignable name, including `@r`, `$VAR`, `&option`, `d.key` and
-/// `l[idx]`.
-///
-/// # Safety
-/// `arg` is a NUL-terminated string.
-unsafe fn skip_var_one(arg: *const c_char) -> *const c_char {
-    // SAFETY: the caller's obligation -- `arg` is NUL-terminated, so the
-    // second byte is only read once the first has proved not to be one.
-    let sigil = unsafe { *arg } as u8;
-    if sigil == b'@' && unsafe { *arg.add(1) } != NUL as c_char {
-        return unsafe { arg.add(2) };
+/// Past the one assignable name at `text[at]`, including `@r`, `$VAR`,
+/// `&option`, `d.key` and `l[idx]`.
+fn skip_var_one(text: &[u8], at: usize) -> usize {
+    let sigil = byte_at(text, at);
+    if sigil == b'@' && byte_at(text, at + 1) != 0 {
+        return at + 2;
     }
     let name = if sigil == b'$' || sigil == b'&' {
-        unsafe { arg.add(1) }
+        at + 1
     } else {
-        arg
+        at
     };
-    let flags = FNE_INCL_BR | FNE_CHECK_START;
-    // SAFETY: a NUL-terminated name, whose end is inside it.
-    unsafe { name.add(name_end(cstr::bytes_at(name), flags).end) }
+    let rest = text.get(name..).unwrap_or_default();
+    name + crate::eval::name_end(rest, FNE_INCL_BR | FNE_CHECK_START).end
 }
 
-/// `:let $VAR = …`.  Answers the character past the name, or NULL.
-///
-/// # Safety
-/// `arg` points at the `$`; `tv` is a live value.
-unsafe fn ex_let_env(
-    mut arg: *mut c_char,
+/// `:let $VAR = …`, `text` starting at the `$`. Answers where the name
+/// ends, or `None`.
+fn ex_let_env(
+    text: &[u8],
     tv: &mut TypVal,
     is_const: bool,
-    endchars: *const c_char,
-    op: *const c_char,
-) -> *mut c_char {
+    endchars: Option<&[u8]>,
+    op: Option<u8>,
+) -> Option<usize> {
     let mut numbuf = NumBuf::new();
     if is_const {
         emsg_static(c"E996: Cannot lock an environment variable");
-        return ptr::null_mut();
+        return None;
     }
-    // SAFETY: the caller's obligation -- `op` is NULL or NUL-terminated.
-    let opch = unsafe { op_char(op) };
 
     // Find the end of the name.
-    let mut arg_end: *mut c_char = ptr::null_mut();
-    // SAFETY: `arg` points at the `$` of a NUL-terminated name.
-    arg = unsafe { arg.add(1) };
-    let name = arg;
-    // SAFETY: the name is NUL-terminated, and its end is inside it.
-    let len = env_name_len(unsafe { cstr::bytes_at(arg) });
-    arg = arg.wrapping_add(len);
+    let len = env_name_len(&text[1..]);
+    let end = 1 + len;
     if len == 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe { c_str(name.sub(1)) };
-        semsg!("E475: Invalid argument: {arg0}");
-    } else if is_arithmetic(opch) {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let op = unsafe { c_str(op) };
-        semsg!("E734: Wrong variable type for {op}=");
-    } else if !unsafe { ends_target(endchars, arg) } {
+        let text = msg_bytes(text);
+        semsg!("E475: Invalid argument: {text}");
+    } else if is_arithmetic(op) {
+        wrong_type(op);
+    } else if !ends_target(endchars, text, end) {
         emsg_static(e_letunexp);
     } else if !check_secure() {
-        // Terminate the name in place: `arg` has already moved past it.
-        let mut tofree: *mut c_char = ptr::null_mut();
-        // SAFETY: `len` is the length `env_name_len` measured from `name`, so
-        // the byte at it is the name's own terminator or separator.
-        let end = unsafe { name.add(len) };
-        let c1 = unsafe { *end };
-        unsafe { *end = NUL as c_char };
-
-        // SAFETY: the caller's obligation -- `tv` is a live value.
-        let mut p = numbuf.string_ptr_chk(tv);
-        if !p.is_null() && opch == Some(b'.') {
-            // SAFETY: a NUL-terminated name and value.
-            let s = unsafe { vim_getenv(name) };
-            if !s.is_null() {
-                tofree = unsafe { concat_str(s, p) };
-                p = tofree;
-                unsafe { xfree(s.cast()) };
-            }
+        let name = &text[1..end];
+        let value = numbuf.string_chk(tv)?;
+        let joined;
+        let mut value: &CStr = value;
+        if op == Some(b'.')
+            && let Some(old) = cstr::with_terminated(name, vim_getenv_owned)
+        {
+            joined = join(&old, value.to_bytes());
+            value = &joined;
         }
-        if !p.is_null() {
-            // SAFETY: a NUL-terminated name and value.
-            unsafe { vim_setenv_ext(name, p) };
-            arg_end = arg;
-        }
-        unsafe { *end = c1 };
-        unsafe { xfree(tofree.cast()) };
+        cstr::with_terminated(name, |name| vim_setenv_named(name, value));
+        return Some(end);
     }
-    arg_end
+    None
 }
 
-/// `:let &opt = …`.  Answers the character past the name, or NULL.
+/// `head` and `tail` as one C string.
+fn join(head: &[u8], tail: &[u8]) -> CString {
+    let mut joined = Vec::with_capacity(head.len() + tail.len() + 1);
+    joined.extend_from_slice(head);
+    joined.extend_from_slice(tail);
+    cstr::owned(&joined)
+}
+
+/// `:let &opt = …`, `text` starting at the `&`. Answers where the name
+/// ends, or `None`.
 ///
 /// The compound operators are implemented here rather than through
 /// `eexe_mod_op`, because an option's value is an `OptVal` and not a
 /// `TypVal`: the current value is read, combined, and set back.
-///
-/// # Safety
-/// `arg` points at the `&`; `tv` is a live value.
-unsafe fn ex_let_option(
-    mut arg: *mut c_char,
+fn ex_let_option(
+    text: &[u8],
     tv: &mut TypVal,
     is_const: bool,
-    endchars: *const c_char,
-    op: *const c_char,
-) -> *mut c_char {
+    endchars: Option<&[u8]>,
+    op: Option<u8>,
+) -> Option<usize> {
     if is_const {
-        // SAFETY: a NUL-terminated literal.
         emsg_static(c"E996: Cannot lock an option");
-        return ptr::null_mut();
+        return None;
     }
-    // SAFETY: the caller's obligation -- `op` is NULL or NUL-terminated.
-    let opch = unsafe { op_char(op) };
 
     // Find the end of the name.
-    // SAFETY: `arg` points at the `&` of a NUL-terminated name.
-    let option = option_var_end(unsafe { cstr::bytes_at(arg) });
+    let option = option_var_end(text);
     let (opt_idx, opt_flags) = (option.index, option.flags);
-    // The name proper starts after the scope, once there is one.
-    let p = match option.end {
-        Some(end) => {
-            let p = arg.wrapping_add(end);
-            arg = arg.wrapping_add(option.start);
-            p
-        }
-        None => ptr::null_mut(),
-    };
-    if p.is_null() || !unsafe { ends_target(endchars, p) } {
+    let Some(end) = option.end.filter(|&end| ends_target(endchars, text, end)) else {
         emsg_static(e_letunexp);
-        return ptr::null_mut();
-    }
+        return None;
+    };
+    // The name proper starts after the scope, if there is one.
+    let name = &text[option.start..end];
 
-    // Terminate the name in place; every exit below puts it back.
-    let c1 = unsafe { *p };
-    unsafe { *p = NUL as c_char };
-
-    let arg_name = unsafe { CStr::from_ptr(arg) };
-    let is_tty_opt = is_tty_option(arg_name.to_bytes());
+    let is_tty_opt = is_tty_option(name);
     let hidden = is_option_hidden(opt_idx);
     let curval = if is_tty_opt {
-        get_tty_option(arg_name.to_bytes())
+        get_tty_option(name)
     } else {
         get_option_value(opt_idx, opt_flags)
     };
     let mut newval = OptVal::Nil;
-    let mut arg_end: *mut c_char = ptr::null_mut();
+    let mut arg_end = None;
 
     'theend: {
         if curval.is_nil() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(arg) };
-            semsg!("E355: Unknown option: {arg}");
+            let name = msg_bytes(name);
+            semsg!("E355: Unknown option: {name}");
             break 'theend;
         }
-        let compound = opch.is_some_and(|c| c != b'=');
+        let compound = op.is_some_and(|c| c != b'=');
         let is_string = matches!(curval, OptVal::String(_));
-        if compound && opch.is_some_and(|c| (c == b'.') != is_string) {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let op = unsafe { c_str(op) };
-            semsg!("E734: Wrong variable type for {op}=");
+        if compound && op.is_some_and(|c| (c == b'.') != is_string) {
+            wrong_type(op);
             break 'theend;
         }
 
-        let mut error = false;
-        newval = unsafe { tv_to_optval(tv, opt_idx, arg, &raw mut error) };
+        let error;
+        (newval, error) = tv_to_optval_named(tv, opt_idx, name);
         if error {
             break 'theend;
         }
@@ -514,10 +452,9 @@ unsafe fn ex_let_option(
         debug_assert!(curval.kind() == newval.kind());
 
         if compound && !hidden {
-            // A Number or Boolean `OptVal` as a number; a closure, so that
-            // the two reads are written once. Only those two variants get
-            // this far: the `if` just below is the guard that keeps a
-            // String or a Nil out, and both calls are inside it.
+            // A Number or Boolean `OptVal` as a number. Only those two
+            // variants get this far: the `if` just below is the guard that
+            // keeps a String or a Nil out, and both calls are inside it.
             let as_int = |v: OptVal| -> OptInt {
                 match v {
                     OptVal::Number(number) => number,
@@ -532,12 +469,12 @@ unsafe fn ex_let_option(
             if matches!(curval, OptVal::Number(_) | OptVal::Boolean(_)) {
                 let cur_n = as_int(curval);
                 let new_n = as_int(newval);
-                let new_n = match opch.unwrap_or(b'=') {
+                let new_n = match op.unwrap_or(b'=') {
                     b'+' => cur_n + new_n,
                     b'-' => cur_n - new_n,
                     b'*' => cur_n * new_n,
-                    b'/' => num_divide(cur_n as VarNumber, new_n as VarNumber) as OptInt,
-                    b'%' => num_modulus(cur_n as VarNumber, new_n as VarNumber) as OptInt,
+                    b'/' => num_divide(VarNumber::from(cur_n), VarNumber::from(new_n)),
+                    b'%' => num_modulus(VarNumber::from(cur_n), VarNumber::from(new_n)),
                     // No other operator reaches here: `.` was refused
                     // above for a non-String option.
                     _ => new_n,
@@ -547,30 +484,19 @@ unsafe fn ex_let_option(
                 } else {
                     boolean_optval(tristate_from_int(new_n))
                 };
-            } else if let (OptVal::String(cur), OptVal::String(new)) = (curval, newval) {
-                // The two are Strings together, the assertion above having
-                // given `newval` `curval`'s type.
-                let (curval_data, newval_data) = (cur.data(), new.data());
-                if !curval_data.is_null() && !newval_data.is_null() {
-                    let newval_old = newval;
-                    // `concat_str` answers its own NUL-terminated block,
-                    // which the option value takes over.
-                    let joined = unsafe { concat_str(curval_data, newval_data) };
-                    let len = unsafe { cstr::bytes_at(joined) }.len();
-                    newval = OptVal::String(OptStr::from_raw_parts(joined, len));
-                    optval_free(newval_old);
-                }
+            } else if let Some(joined) = optval_concat(&curval, &newval) {
+                optval_free(newval);
+                newval = joined;
             }
         }
 
-        let err = unsafe { set_option_value_handle_tty(arg, opt_idx, newval, opt_flags) };
-        arg_end = p;
+        let err = set_option_value_handle_tty_named(name, opt_idx, newval, opt_flags);
+        arg_end = Some(end);
         if let Err(err) = err {
             emsg(&gettext_owned(err.as_cstr()));
         }
     }
 
-    unsafe { *p = c1 };
     optval_free(curval);
     optval_free(newval);
     arg_end
@@ -588,90 +514,64 @@ pub(crate) fn tristate_from_int(n: OptInt) -> Option<bool> {
     }
 }
 
-/// `:let @r = …`.  Answers the character past the register, or NULL.
-///
-/// # Safety
-/// `arg` points at the `@`; `tv` is a live value.
-unsafe fn ex_let_register(
-    mut arg: *mut c_char,
+/// `:let @r = …`, `text` starting at the `@`. Answers where the register
+/// name ends, or `None`.
+fn ex_let_register(
+    text: &[u8],
     tv: &mut TypVal,
     is_const: bool,
-    endchars: *const c_char,
-    op: *const c_char,
-) -> *mut c_char {
+    endchars: Option<&[u8]>,
+    op: Option<u8>,
+) -> Option<usize> {
     let mut numbuf = NumBuf::new();
     if is_const {
-        // SAFETY: a NUL-terminated literal.
         emsg_static(c"E996: Cannot lock a register");
-        return ptr::null_mut();
+        return None;
     }
-    // SAFETY: the caller's obligation -- `op` is NULL or NUL-terminated.
-    let opch = unsafe { op_char(op) };
-
-    let mut arg_end: *mut c_char = ptr::null_mut();
-    // SAFETY: `arg` points at the `@` of a NUL-terminated name.
-    arg = unsafe { arg.add(1) };
-    if is_arithmetic(opch) {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let op = unsafe { c_str(op) };
-        semsg!("E734: Wrong variable type for {op}=");
-        return arg_end;
+    if is_arithmetic(op) {
+        wrong_type(op);
+        return None;
     }
-    // SAFETY: the register name is one byte, so the byte past it is inside
-    // the caller's string.
-    let past = unsafe { arg.add(1) };
-    if !unsafe { ends_target(endchars, past) } {
+    // The register name is one byte.
+    let past = 2;
+    if !ends_target(endchars, text, past) {
         emsg_static(e_letunexp);
-        return arg_end;
+        return None;
     }
 
     // A bare "@" is the unnamed register.
-    // SAFETY: `arg` is inside the caller's NUL-terminated string.
-    let regname = match unsafe { *arg } as u8 {
-        b'@' => b'"' as c_int,
+    let regname = match byte_at(text, 1) {
+        b'@' => c_int::from(b'"'),
         // Sign-extended, as the C's `*arg` is: a register name is ASCII, but
         // the byte is what upstream passes on.
         c => c_int::from(c.cast_signed()),
     };
-    let mut ptofree: *mut c_char = ptr::null_mut();
-    // SAFETY: the caller's obligation -- `tv` is a live value.
-    let mut p = numbuf.string_ptr_chk(tv);
-    if !p.is_null() && opch == Some(b'.') {
-        // SAFETY: a register name and a NUL-terminated value.
-        let s = get_reg_contents(regname, kGRegExprSrc as c_int) as *mut c_char;
-        if !s.is_null() {
-            ptofree = unsafe { concat_str(s, p) };
-            p = ptofree;
-            unsafe { xfree(s.cast()) };
-        }
+    let value = numbuf.string_chk(tv)?.to_bytes();
+    let joined;
+    let mut value = value;
+    if op == Some(b'.')
+        && let Some(old) = get_reg_contents_owned(regname, kGRegExprSrc.cast_signed())
+    {
+        joined = join(&old, value);
+        value = joined.to_bytes();
     }
-    if !p.is_null() {
-        // SAFETY: a register name and a NUL-terminated value.
-        unsafe { write_reg_contents(regname, p, cstr::bytes_at(p).len() as ssize_t, 0) };
-        arg_end = past;
-    }
-    // SAFETY: `ptofree` is NULL or this frame's own allocation.
-    unsafe { xfree(ptofree.cast()) };
-    arg_end
+    write_reg_contents_bytes(regname, value, false);
+    Some(past)
 }
 
-/// One assignment target, dispatched on what it starts with.  Answers the
-/// character past it, or NULL on an error.
-///
-/// # Safety
-/// `arg` is a NUL-terminated string; `tv` is a live value.
-unsafe fn ex_let_one(
-    arg: *mut c_char,
+/// One assignment target, dispatched on what `text` starts with. Answers
+/// where it ends, or `None` on an error.
+fn ex_let_one(
+    text: &[u8],
     tv: &mut TypVal,
     copy: bool,
     is_const: bool,
-    endchars: *const c_char,
-    op: *const c_char,
-) -> *mut c_char {
-    // SAFETY: the caller's obligation -- `arg` is NUL-terminated.
-    let sigil = unsafe { *arg } as u8;
+    endchars: Option<&[u8]>,
+    op: Option<u8>,
+) -> Option<usize> {
+    let sigil = byte_at(text, 0);
     // The three sigils each have a parser of their own, which reads the
-    // sigil back off `arg`.
+    // sigil back off `text`.
     let target: Option<LetTarget> = match sigil {
         b'$' => Some(ex_let_env),
         b'&' => Some(ex_let_option),
@@ -679,30 +579,21 @@ unsafe fn ex_let_one(
         _ => None,
     };
     if let Some(target) = target {
-        // SAFETY: the caller's obligation, passed straight on.
-        return unsafe { target(arg, tv, is_const, endchars, op) };
+        return target(text, tv, is_const, endchars, op);
     }
-    if !eval_isnamec1(c_int::from(sigil.cast_signed())) && sigil != b'{' {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E475: Invalid argument: {arg}");
-        return ptr::null_mut();
+    if !eval_isnamec1(c_int::from(sigil)) && sigil != b'{' {
+        let text = msg_bytes(text);
+        semsg!("E475: Invalid argument: {text}");
+        return None;
     }
 
     // A variable, a List or Dict item, or a Blob byte.
-    let mut arg_end: *mut c_char = ptr::null_mut();
-    let mut lv = LVAL_INITIAL_VALUE;
-    let lvp = &raw mut lv;
-    // SAFETY: the caller's obligation, and `lv` is a live local.
-    let p = unsafe { get_lval(arg, Some(tv), lvp, false, false, 0, FNE_CHECK_START) };
-    if !p.is_null() && !lv.ll_name.is_null() {
-        if !unsafe { ends_target(endchars, p) } {
-            emsg_static(e_letunexp);
-        } else {
-            unsafe { set_var_lval(lvp, p, tv, copy, is_const, op) };
-            arg_end = p;
-        }
+    let (mut lval, end) = get_lval(text, Some(tv), false, false, 0, FNE_CHECK_START);
+    let end = end.filter(|_| lval.has_name())?;
+    if !ends_target(endchars, text, end) {
+        emsg_static(e_letunexp);
+        return None;
     }
-    unsafe { clear_lval(lvp) };
-    arg_end
+    set_var_lval(&mut lval, tv, copy, is_const, op);
+    Some(end)
 }

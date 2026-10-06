@@ -26,11 +26,11 @@ use crate::eval::typval::{
     tv_dict_unref, tv_get_number_chk, value_check_lock,
 };
 use crate::eval::vars::{
-    LVAL_INITIAL_VALUE, find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict,
-    list_hashtable_vars, skip_var_list, vars_clear, vars_clear_ext,
+    find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars,
+    skip_var_list, vars_clear, vars_clear_ext,
 };
 use crate::eval::{
-    Cur, Cursor, LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, clear_lval, eval_isnamec,
+    Cur, Cursor, LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, eval_isnamec,
     eval_isnamec1, eval0_in_cmd, eval1, garbage_collect, get_lval, handle_subscript, id_len,
     is_luafunc, last_set_msg, mark_root, name_end, partial_name, partial_unref, set_ref_in_ht,
     set_ref_in_list_items,
@@ -93,7 +93,7 @@ use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
     Callback, Dict, DictItem, EStack, ExArg, Expand, FcId, FuncCall, FuncDict, FuncExe, GArray,
-    HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch, SaveRedo, String_0, TypVal,
+    HashTab, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch, SaveRedo, String_0, TypVal,
     UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
     VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
 };

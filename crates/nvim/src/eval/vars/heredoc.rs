@@ -4,24 +4,31 @@
 //! two `eval_*_expr_in_str` implement `eval`'s `{expr}` interpolation, which
 //! is the only thing in the file that evaluates its own input.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::cstr;
-use crate::eval::typval::ListRef;
-use crate::memory::handoff::owned_cstr;
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
+use crate::cstr::byte_at;
+use crate::eval::typval::{ListRef, TV_INITIAL_VALUE, tv_list_alloc};
+use crate::eval::{Cursor, eval_to_string, eval1};
+use crate::ex_docmd::exarg_getline;
+use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
+use crate::os::cshim::is_lower_in_locale;
 use crate::semsg;
-use crate::strings::vim_strchr;
-use core::ffi::{c_char, c_int};
-use core::ptr;
-use core::slice;
+use crate::types::{ExArg, TypVal};
+use core::ffi::c_int;
 
-use super::*;
-use crate::types::NUL;
+use super::{e_cannot_use_heredoc_here, emsg_static};
 
 /// The comment character a marker line may carry after it.
-const COMMENT_CHAR: c_char = b'"' as c_char;
+const COMMENT_CHAR: u8 = b'"';
 
 /// Evaluate the `{expr}` block `text` starts with and append its value to
 /// `gap`. Answers how many bytes of `text` the block took, closing brace
@@ -42,7 +49,7 @@ pub(crate) fn eval_one_expr_in_text(
     cursor.bump(1);
     cursor.skip_white();
     let block_start = cursor.offset();
-    if cursor.byte() == NUL as u8 {
+    if cursor.byte() == 0 {
         missing();
         return None;
     }
@@ -61,60 +68,47 @@ pub(crate) fn eval_one_expr_in_text(
     Some(block_end + 1)
 }
 
-/// Evaluate every `{expr}` in `str` and answer the result as an allocated
-/// string, or NULL.  `{{` and `}}` are the escapes for a literal brace.
-///
-/// # Safety
-/// `str` is a NUL-terminated string, writable in place.
-unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
+/// Every `{expr}` in `line` evaluated into the text around it, or `None`
+/// after an error. `{{` and `}}` are the escapes for a literal brace.
+fn eval_all_expr_in_str(line: &[u8]) -> Option<Vec<u8>> {
     let mut text = Vec::<u8>::new();
-    let mut p = str;
-
-    // SAFETY: the caller's obligation throughout -- `str` is NUL-terminated
-    // and writable in place, and every walk below stops at that NUL.
-    while unsafe { *p } != NUL as c_char {
+    let mut p = 0;
+    while byte_at(line, p) != 0 {
         let mut escaped_brace = false;
 
         // Everything up to the next brace is literal.
         let lit_start = p;
-        while !matches!(unsafe { *p } as u8, b'{' | b'}' | 0) {
-            p = unsafe { p.add(1) };
+        while !matches!(byte_at(line, p), b'{' | b'}' | 0) {
+            p += 1;
         }
 
-        let here = unsafe { *p } as u8;
-        if here != 0 && here == unsafe { *p.add(1) } as u8 {
+        let here = byte_at(line, p);
+        if here != 0 && here == byte_at(line, p + 1) {
             // A doubled brace: keep one of the pair in the literal part
             // and skip the other below.
-            p = unsafe { p.add(1) };
+            p += 1;
             escaped_brace = true;
         } else if here == b'}' {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(str) };
-            semsg!("E1278: Stray '}}' without a matching '{{': {arg0}");
-            return ptr::null_mut();
+            let line = msg_bytes(line);
+            semsg!("E1278: Stray '}}' without a matching '{{': {line}");
+            return None;
         }
 
-        let lit_len = unsafe { p.offset_from(lit_start) } as usize;
-        text.extend_from_slice(unsafe { slice::from_raw_parts(lit_start.cast::<u8>(), lit_len) });
+        text.extend_from_slice(&line[lit_start..p]);
         if here == 0 {
             break;
         }
         if escaped_brace {
-            p = unsafe { p.add(1) };
+            p += 1;
             continue;
         }
 
-        // SAFETY: `p` is inside `str`, which is NUL-terminated.
-        let Some(used) = eval_one_expr_in_text(unsafe { cstr::bytes_at(p) }, &mut text, true)
-        else {
-            return ptr::null_mut();
-        };
-        p = p.wrapping_add(used);
+        p += eval_one_expr_in_text(&line[p..], &mut text, true)?;
     }
-    owned_cstr(text)
+    Some(text)
 }
 
-/// Collect the lines of a here-document into a List, or answer NULL.
+/// Collect the lines of a here-document into a List, or answer `None`.
 ///
 /// ```text
 ///     cmd << {marker}
@@ -124,66 +118,55 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
 ///     {marker}
 /// ```
 ///
-/// `trim` before the marker strips the leading indentation the *first* body
-/// line has, and strips the `:let` line's own indentation when looking for
-/// the end marker.  `eval` runs `{expr}` interpolation over every line.
-/// `script_get` is an embedded script (`:lua <<`, `:python <<` and friends):
-/// a missing marker is then `.`, a lower-case marker is allowed, and a
-/// missing end marker is not an error.
+/// `at` is where the command line continues after the `<<`. `trim` before
+/// the marker strips the leading indentation the *first* body line has, and
+/// strips the `:let` line's own indentation when looking for the end
+/// marker. `eval` runs `{expr}` interpolation over every line. `script_get`
+/// is an embedded script (`:lua <<`, `:python <<` and friends): a missing
+/// marker is then `.`, a lower-case marker is allowed, and a missing end
+/// marker is not an error.
 ///
-/// # Safety
-/// `excmd` is a live command and `cmd` points into its argument, writable in
-/// place.
-pub unsafe fn heredoc_get(
-    excmd: &mut ExArg,
-    mut cmd: *mut c_char,
-    script_get: bool,
-) -> Option<ListRef> {
-    // SAFETY: the caller's obligation -- a live command, which the
-    // `do_cmdline` frame that owns the `ExArg` outlives.
-    let mut marker_indent_len: c_int = 0;
-    let mut text_indent_len: c_int = 0;
-    let mut text_indent: *mut c_char = ptr::null_mut();
-    let dot = [b'.' as c_char, NUL as c_char];
+/// A here-document inside a string (`execute "let x =<< END\n...\nEND"`) is
+/// its own body, newline-separated; the marker and each body line are
+/// terminated in the command line where they end, as the C did, so that
+/// whatever reads the line after this sees them cut.
+pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Option<ListRef> {
+    let mut marker_indent_len = 0;
+    // `trim` asks for the first body line's indent; this is it once known.
+    let mut text_indent: Option<Vec<u8>> = None;
+    let mut want_text_indent = false;
 
     // A here-document inside a string argument is the whole body,
     // newline-separated, rather than lines read from the source.
-    let mut line_arg: *mut c_char = ptr::null_mut();
-    let nl_ptr = unsafe { vim_strchr(cmd, b'\n' as c_int) };
-    let heredoc_in_string = !nl_ptr.is_null();
-    if heredoc_in_string {
-        line_arg = unsafe { nl_ptr.add(1) };
-        unsafe { *nl_ptr = NUL as c_char };
+    let mut line_arg = None;
+    if let Some(nl) = excmd.line.rest_of(at).iter().position(|&b| b == b'\n') {
+        excmd.line.set_byte(at + nl, 0);
+        line_arg = Some(at + nl + 1);
     } else if excmd.ea_getline.is_none() {
         emsg_static(e_cannot_use_heredoc_here);
         return None;
     }
 
     // Whether `at` starts with the four-letter `word` as a whole word.
-    // A closure, so that it stays inside this function's one `unsafe`
-    // block.
-    let is_word = |at: *const c_char, word: &CStr| -> bool {
-        debug_assert!(word.to_bytes().len() == 4);
-        // SAFETY: `at` is NUL-terminated, so the fifth byte is only read
-        // once the first four have proved not to hold the terminator.
-        let same = unsafe { cstr::prefix_eq(at, word.as_ptr(), 4) };
-        same && ascii_iswhite_or_nul(c_int::from(unsafe { *at.add(4) }))
+    let is_word = |excmd: &ExArg, at: usize, word: &[u8]| {
+        excmd.line.starts_with(at, word)
+            && ascii_iswhite_or_nul(c_int::from(excmd.line.byte_at(at + 4)))
     };
 
     // The optional `trim` and `eval` words before the marker, in either
     // order and either number.
-    cmd = unsafe { skipwhite(cmd) };
+    let mut cmd = excmd.line.skip_white(at);
     let mut evalstr = false;
     loop {
-        if is_word(cmd, c"trim") {
-            cmd = unsafe { skipwhite(cmd.add(4)) };
+        if is_word(excmd, cmd, b"trim") {
+            cmd = excmd.line.skip_white(cmd + 4);
             // The end marker is matched with the `:let` line's own
             // indentation stripped; the body's comes from its first
-            // line, which `text_indent_len == -1` asks for below.
-            marker_indent_len += excmd.line.skip_white(0) as c_int;
-            text_indent_len = -1;
-        } else if is_word(cmd, c"eval") {
-            cmd = unsafe { skipwhite(cmd.add(4)) };
+            // line.
+            marker_indent_len += excmd.line.skip_white(0);
+            want_text_indent = true;
+        } else if is_word(excmd, cmd, b"eval") {
+            cmd = excmd.line.skip_white(cmd + 4);
             evalstr = true;
         } else {
             break;
@@ -191,83 +174,85 @@ pub unsafe fn heredoc_get(
     }
 
     // The marker is the next word.
-    let marker;
-    let lead = unsafe { *cmd };
-    if lead != NUL as c_char && lead != COMMENT_CHAR {
-        marker = unsafe { skipwhite(cmd) };
-        let p = unsafe { skiptowhite(marker) };
-        let after = unsafe { *skipwhite(p) };
-        if after != NUL as c_char && after != COMMENT_CHAR {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let p = unsafe { c_str(p) };
-            semsg!("E488: Trailing characters: {p}");
+    let lead = excmd.line.byte_at(cmd);
+    let marker: Vec<u8> = if lead != 0 && lead != COMMENT_CHAR {
+        let p = excmd.line.skip_to_white(cmd);
+        let after = excmd.line.byte_at(excmd.line.skip_white(p));
+        if after != 0 && after != COMMENT_CHAR {
+            let rest = msg_bytes(excmd.line.rest_of(p));
+            semsg!("E488: Trailing characters: {rest}");
             return None;
         }
-        unsafe { *p = NUL as c_char };
-        // `islower` here is the locale's, not ASCII's: `_ISlower` is the
-        // bit `__ctype_b_loc()`'s table sets, which in a non-C locale
+        excmd.line.set_byte(p, 0);
+        let marker = excmd.line.rest_of(cmd).to_vec();
+        // `islower` here is the locale's, not ASCII's: in a non-C locale it
         // covers more than a-z.
-        let class = unsafe { *(*__ctype_b_loc()).offset(*marker as uint8_t as isize) };
-        if !script_get && c_int::from(class) & _ISlower as c_int != 0 {
-            let msg = c"E221: Marker cannot start with lower case letter";
-            emsg_static(msg);
+        if !script_get && is_lower_in_locale(marker[0]) {
+            emsg_static(c"E221: Marker cannot start with lower case letter");
             return None;
         }
+        marker
     } else if script_get {
         // An embedded script with no marker takes '.'.
-        marker = dot.as_ptr() as *mut c_char;
+        b".".to_vec()
     } else {
         emsg_static(c"E172: Missing marker");
         return None;
-    }
+    };
+    // A line shorter than the indent it is asked for never matches it.
+    let indent = excmd
+        .line
+        .line()
+        .get(..marker_indent_len)
+        .map(<[u8]>::to_vec);
 
-    let mut theline: *mut c_char = ptr::null_mut();
     let mut eval_failed = false;
-    let list = tv_list_alloc(0);
-    let l = list.as_ptr();
+    let mut list = tv_list_alloc(0);
     loop {
-        if heredoc_in_string {
-            if unsafe { *line_arg } == NUL as c_char {
-                if !script_get {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let marker = unsafe { c_str(marker) };
-                    semsg!("E990: Missing end marker '{marker}'");
+        let theline = match line_arg {
+            Some(next) => {
+                if excmd.line.byte_at(next) == 0 {
+                    if !script_get {
+                        let marker = msg_bytes(&marker);
+                        semsg!("E990: Missing end marker '{marker}'");
+                    }
+                    break;
                 }
-                break;
-            }
-            theline = line_arg;
-            let next_line = unsafe { vim_strchr(theline, b'\n' as c_int) };
-            if next_line.is_null() {
-                line_arg = unsafe { line_arg.add(cstr::bytes_at(line_arg).len()) };
-            } else {
-                unsafe { *next_line = NUL as c_char };
-                line_arg = unsafe { next_line.add(1) };
-            }
-        } else {
-            unsafe { xfree(theline.cast()) };
-            // SAFETY: a live command, whose line getter reads its own
-            // cookie.
-            let getline = excmd.ea_getline.expect("non-null function pointer");
-            theline = unsafe { getline(NUL as c_int, excmd.cookie, 0, false) };
-            if theline.is_null() {
-                if !script_get {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let marker = unsafe { c_str(marker) };
-                    semsg!("E990: Missing end marker '{marker}'");
+                let rest = excmd.line.rest_of(next);
+                let (len, after) = match rest.iter().position(|&b| b == b'\n') {
+                    Some(nl) => (nl, next + nl + 1),
+                    None => (rest.len(), next + rest.len()),
+                };
+                if after != next + len {
+                    excmd.line.set_byte(next + len, 0);
                 }
-                break;
+                line_arg = Some(after);
+                excmd.line.rest_of(next).to_vec()
             }
-        }
+            None => match exarg_getline(excmd, 0, 0, false) {
+                Some(line) => line.to_vec(),
+                None => {
+                    if !script_get {
+                        let marker = msg_bytes(&marker);
+                        semsg!("E990: Missing end marker '{marker}'");
+                    }
+                    break;
+                }
+            },
+        };
 
         // With `trim`, skip the indent matching the `:let` line before
         // looking for the marker.
-        let mut mi = 0;
-        let indent = marker_indent_len as size_t;
-        let line = excmd.line_ptr();
-        if marker_indent_len > 0 && unsafe { cstr::prefix_eq(theline, line, indent) } {
-            mi = marker_indent_len;
-        }
-        if unsafe { cstr::eq(marker, theline.offset(mi as isize)) } {
+        let mi = if marker_indent_len > 0
+            && indent
+                .as_ref()
+                .is_some_and(|indent| theline.starts_with(indent))
+        {
+            marker_indent_len
+        } else {
+            0
+        };
+        if theline[mi..] == marker[..] {
             break;
         }
 
@@ -277,52 +262,47 @@ pub unsafe fn heredoc_get(
             continue;
         }
 
-        if text_indent_len == -1 && unsafe { *theline } != NUL as c_char {
+        if want_text_indent && !theline.is_empty() {
             // The body's indent is the first non-empty line's.
-            let mut p = theline;
-            text_indent_len = 0;
-            while ascii_iswhite(c_int::from(unsafe { *p })) {
-                p = unsafe { p.add(1) };
-                text_indent_len += 1;
-            }
-            text_indent =
-                unsafe { xmemdupz(theline.cast(), text_indent_len as size_t) } as *mut c_char;
+            let len = theline
+                .iter()
+                .take_while(|&&b| ascii_iswhite(c_int::from(b)))
+                .count();
+            text_indent = Some(theline[..len].to_vec());
+            want_text_indent = false;
         }
         // With `trim`, skip as much of that indent as this line matches.
-        let mut ti = 0;
-        if !text_indent.is_null() {
-            while ti < text_indent_len
-                && unsafe { *theline.offset(ti as isize) == *text_indent.offset(ti as isize) }
-            {
-                ti += 1;
-            }
-        }
+        let ti = text_indent.as_ref().map_or(0, |indent| {
+            indent
+                .iter()
+                .zip(&theline)
+                .take_while(|(a, b)| a == b)
+                .count()
+        });
 
-        let str = unsafe { theline.offset(ti as isize) };
+        let line = &theline[ti..];
         if evalstr && !excmd.skip {
-            let evaluated = unsafe { eval_all_expr_in_str(str) };
-            if evaluated.is_null() {
+            let Some(evaluated) = eval_all_expr_in_str(line) else {
                 eval_failed = true;
                 continue;
-            }
-            unsafe { (*l).push_allocated_string(evaluated) };
+            };
+            list.push(owned_string(&evaluated));
         } else {
-            unsafe { (*l).push_string(str, -1) };
+            list.push(owned_string(line));
         }
     }
 
-    if heredoc_in_string {
+    if let Some(next) = line_arg {
         // The next command follows the here-document in the string.
-        excmd.set_nextcmd_ptr(line_arg);
-    } else {
-        unsafe { xfree(theline.cast()) };
+        excmd.line.next = Some(next);
     }
-    unsafe { xfree(text_indent.cast()) };
 
-    if eval_failed {
-        // The partly built list goes with the handle, which is its only
-        // reference.
-        return None;
-    }
-    Some(list)
+    // The partly built list goes with the handle, which is its only
+    // reference.
+    (!eval_failed).then_some(list)
+}
+
+/// A String value owning a copy of `text`.
+fn owned_string(text: &[u8]) -> TypVal {
+    TypVal::String(XString::from_bytes(text).into_raw())
 }

@@ -405,6 +405,24 @@ pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
     s.get(i).copied().unwrap_or(0)
 }
 
+/// Run `f` over `bytes` as a C string, up to the first NUL among them.
+///
+/// For a callee that still reads a NUL-terminated name, handed a slice of a
+/// line that has no terminator where the name ends. A short name is copied
+/// into a buffer on the stack, so the common case allocates nothing -- the
+/// in-place terminator this replaces cost two stores.
+pub(crate) fn with_terminated<R>(bytes: &[u8], f: impl FnOnce(&CStr) -> R) -> R {
+    const ROOM: usize = 64;
+    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
+    if bytes.len() < ROOM {
+        let mut buf = [0u8; ROOM];
+        buf[..bytes.len()].copy_from_slice(bytes);
+        f(CStr::from_bytes_until_nul(&buf).expect("the buffer ends in a NUL"))
+    } else {
+        f(&owned(bytes))
+    }
+}
+
 /// `bytes` as an owned C string.
 ///
 /// # Panics

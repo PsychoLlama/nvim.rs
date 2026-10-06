@@ -1,19 +1,21 @@
 //! Resolving the left-hand side of an assignment.
 //!
-//! `get_lval` walks a name and its subscripts down to the container and key
-//! that [`set_var_lval`](assign::set_var_lval) will write through. The two
-//! halves communicate only through `LVal`, and which of its fields are set
-//! is what says *what kind* of assignment this is:
+//! [`get_lval`] walks a name and its subscripts down to the place a value
+//! is written, and answers it as an [`LValue`]; [`set_var_lval`] performs
+//! the assignment, `:unlet` and `:lockvar` delete or lock through it, and
+//! `islocked()` and the function-name parser read it.
 //!
-//! | `ll_tv` | `ll_blob` | `ll_newkey` | `ll_range` | the target |
-//! | --- | --- | --- | --- | --- |
-//! | null | null | — | — | a plain variable, by name |
-//! | null | set | — | — | a Blob byte or byte range |
-//! | set | — | null | false | an existing List or Dict item |
-//! | set | — | set | false | a Dict key that does not exist yet |
-//! | set | — | null | true | a List slice |
+//! **The place is held, not pointed at.** A subscript's index expression is
+//! user code, and it may remove the item being indexed, grow the List that
+//! holds it past its capacity, unlet the variable, or replace the container
+//! outright. So a [`Target`] keeps the *container* by a counted handle and
+//! the item by its index or key, and finds the item again whenever it is
+//! read or written: a removed item is an error, not freed memory. The
+//! container a subscript selects into is read out of its slot *after* that
+//! subscript's index expression ran, which is what the C does too (a
+//! replaced List is the one written; see the `vars` battery row).
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,493 +23,447 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-#![allow(unsafe_code)]
 
 // The write half, which reads the record this one fills in.
 mod assign;
-pub use self::assign::*;
+pub(crate) use self::assign::*;
 
-use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::message_fmt::{c_str, c_str_len};
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::{offset_of, size_of};
+use core::ffi::c_int;
 use core::ops::ControlFlow;
-use core::ptr::null_mut;
 
-use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::eval::typval::DictTab;
+use crate::ascii::ascii_iswhite;
+use crate::cstr::byte_at;
 use crate::eval::typval::{
-    NumBuf, blob_check_index, blob_check_range, blob_len, di_lock, index_of,
+    BlobRef, DictRef, ListRef, NumBuf, blob_check_index, blob_check_range, blob_len, index_of,
     list_check_range_index_one, list_check_range_index_two, list_items_mut, tv_blob_alloc_ret,
     tv_check_str, tv_dict_alloc, tv_get_number, tv_list_alloc_ret,
 };
-use crate::eval::userfunc::get_funccal_args_ht;
-use crate::eval::vars::{clear_local, emsg_static};
+use crate::eval::userfunc::get_funccal_args_dict;
 use crate::eval::vars::{
-    find_var, get_vimvar_dict, valid_varname, var_check_lock, var_check_ro, var_wrong_func_name,
+    clear_local, emsg_static, get_vimvar_dict, valid_varname_named, var_check_lock_named,
+    var_check_ro_named, var_wrong_func_name_named, with_var,
 };
-use crate::eval::{Cur, Lv, Tv};
 use crate::eval::{
-    FNE_INCL_BR, GLV_FAIL, GLV_NO_AUTOLOAD, GLV_OK, GLV_QUIET, GLV_READ_ONLY, GLV_STOP, GlvStatus,
-    e_cannot_slice_dictionary, e_missbrac, eval1, expanded_name, name_end, tv_is_luafunc,
+    Cursor, FNE_INCL_BR, GLV_NO_AUTOLOAD, GLV_QUIET, GLV_READ_ONLY, e_cannot_slice_dictionary,
+    e_missbrac, eval1, expanded_name, name_end, tv_is_luafunc,
 };
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
-use crate::memory::{XString, xfree, xmemdupz, xstrdup};
+use crate::memory::XString;
 use crate::message::state::emsg_severe;
 use crate::types::{
-    Dict, DictItem, Failed, LVal, List, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST,
-    VAR_UNKNOWN, VarNumber, kListLenUnknown, ptrdiff_t, size_t,
+    DictItem, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock, kListLenUnknown,
 };
 
 /// A freshly declared typval.
 pub(super) const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
-/// Resolve one `.key` or `[key]` subscript against the Dictionary in
-/// `lval->ll_tv`. `key` is the text for a `.key`; for a `[key]` it is taken
-/// from `var1` and `len` is -1.
-///
-/// Answers `GLV_STOP` when the key does not exist yet and may be added —
-/// `ll_newkey` then holds it — and `GLV_FAIL` when it may not.
-///
-/// # Safety
-/// `lval` must be valid with `ll_tv` a Dict; the rest as `get_lval`'s.
-#[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn get_lval_dict_item(
-    lval: *mut LVal,
-    name: *mut c_char,
-    key: *mut c_char,
-    len: c_int,
-    key_end: *mut *mut c_char,
-    var1: &mut TypVal,
-    flags: c_int,
-    unlet: bool,
-    result: Option<&mut TypVal>,
-) -> GlvStatus {
-    let mut numbuf = NumBuf::new();
-    let quiet = flags & GLV_QUIET.cast_signed() != 0;
-    // SAFETY: the caller's promise; `key_end` holds a cursor into `name`.
-    let (mut lval, p) = unsafe { (Lv::new(lval), *key_end) };
-    // SAFETY: the caller's promise: `ll_tv` holds a Dict, so `v_dict` is live.
-    let mut container = unsafe { Tv::new(lval.ll_tv) };
-    // "[key]": the key is `var1`'s string, which is a Number or String.
-    let key = if len == -1 {
-        numbuf.string_ptr(var1).cast_mut()
-    } else {
-        key
-    };
-    lval.ll_list = null_mut::<List>();
+/// The part of a List or Blob a subscript named: one index, or a range.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Span {
+    /// The index, or the range's first; a List's is made non-negative.
+    pub(crate) n1: c_int,
+    /// The range's last index, when it has one.
+    pub(crate) n2: c_int,
+    /// `[n1:n2]` rather than `[n1]`.
+    pub(crate) range: bool,
+    /// `[n1:]`: the range runs to the end.
+    pub(crate) empty2: bool,
+}
 
-    // A null Dict is an empty Dict; allocate one now.
-    // SAFETY: as above.
-    if container.dict_or_null().is_null() {
-        // SAFETY: the allocator is the editor's own; the typval takes the
-        // handle over.
-        container.write_dict(Some(tv_dict_alloc()));
+/// Where a value lives, held so that it can be found again after user code
+/// has run.
+pub(crate) enum Slot {
+    /// The variable the name resolved to, found again by name.
+    Variable,
+    /// Item `index` of a List.
+    Item { list: ListRef, index: usize },
+    /// The item under `key` in a Dictionary.
+    Key { dict: DictRef, key: Vec<u8> },
+}
+
+/// What a left-hand side resolved to.
+pub(crate) enum Target {
+    /// A whole variable, by name: nothing was subscripted.
+    Variable,
+    /// The value in a slot -- a List item (the first of a slice when
+    /// `span.range`), a Dictionary item, or the variable itself when a
+    /// `.` after its name selected nothing (`v:lua.name`, `x.=`).
+    Slot { slot: Slot, span: Span },
+    /// A key a Dictionary does not have yet.
+    NewKey { dict: DictRef, key: Vec<u8> },
+    /// A Blob byte, or a byte range.
+    Blob { blob: BlobRef, span: Span },
+}
+
+/// A resolved left-hand side.
+pub(crate) struct LValue<'a> {
+    /// The text it was read from: its first byte to the end of the string
+    /// that holds it.
+    text: &'a [u8],
+    /// The curly-brace name's expansion, when the name had braces.
+    expanded: Option<XString>,
+    /// Whether there is a name at all. A curly-brace name whose expression
+    /// failed quietly has none, and its caller carries on parsing.
+    named: bool,
+    /// The variable name's length in `text`, before any subscript.
+    root_len: usize,
+    /// Where in `text` the left-hand side ends.
+    end: usize,
+    /// The place.
+    pub(crate) target: Target,
+}
+
+impl<'a> LValue<'a> {
+    /// A left-hand side read from `text` that names nothing yet.
+    const fn new(text: &'a [u8]) -> Self {
+        LValue {
+            text,
+            expanded: None,
+            named: false,
+            root_len: 0,
+            end: 0,
+            target: Target::Variable,
+        }
     }
-    lval.ll_dict = container.dict_or_null();
-    // A negative `len` means the key runs to its terminator; anything else
-    // is exactly that many bytes, terminator or not.
-    //
-    // SAFETY: the caller's promise about `key` and `len`, and `ll_dict` is
-    // the live Dict just resolved. The pointer form is what `ll_di` is: the
-    // caller assigns through the item and then reaches the dictionary again
-    // to fire its watchers.
-    lval.ll_di = unsafe {
-        (*lval.ll_dict).find_ptr(match usize::try_from(len) {
-            Ok(len) => cstr::slice_at(key, len),
-            Err(_) => cstr::bytes_at(key),
-        })
-    };
-    // The one field this needs, read through the pointer.
-    // SAFETY: `ll_dict` is the live Dict just resolved.
-    let dv_scope = unsafe { (*lval.ll_dict).dv_scope };
 
-    // Assigning into a scope dictionary: check that the name is a valid
-    // variable name, and a valid *function* name too unless the scope is
-    // `l:` or `g:`. Overwriting a builtin function is not allowed.
-    if let Some(value) = result.as_deref()
-        && dv_scope != 0
-    {
-        // The two checks want a NUL-terminated key, so a `.key` is
-        // terminated in place and put back.
-        // SAFETY: a `.key`'s `len` bytes are inside the writable `name`.
-        let prevval = if len != -1 {
-            unsafe { *key.offset(len as isize) }
-        } else {
-            0
+    /// The whole variable that the first `len` bytes of `text` name, which
+    /// is how `:unlet $ENV` hands an environment variable to the same
+    /// callbacks as the rest.
+    pub(crate) const fn variable(text: &'a [u8], len: usize) -> Self {
+        LValue {
+            text,
+            expanded: None,
+            named: true,
+            root_len: len,
+            end: len,
+            target: Target::Variable,
+        }
+    }
+
+    /// Whether there is a name.
+    pub(crate) const fn has_name(&self) -> bool {
+        self.named
+    }
+
+    /// The left-hand side as a message names it: the expansion of a
+    /// curly-brace name, or the text from the name to the last subscript.
+    pub(crate) fn name(&self) -> &[u8] {
+        match &self.expanded {
+            Some(expanded) => expanded,
+            None => &self.text[..self.end],
+        }
+    }
+
+    /// The left-hand side and everything after it on the line: what the C
+    /// printed where it quoted the name up to its terminator without
+    /// cutting it first.
+    pub(crate) fn name_and_rest(&self) -> &[u8] {
+        match &self.expanded {
+            Some(expanded) => expanded,
+            None => self.text,
+        }
+    }
+
+    /// The curly-brace name's expansion.
+    pub(crate) const fn expanded(&self) -> Option<&XString> {
+        self.expanded.as_ref()
+    }
+
+    /// Run `f` over the value in the target's slot and the lock that slot
+    /// carries, or answer `None` when the target is not a slot or the slot
+    /// has gone. `f` must not run user code: see [`with_var`].
+    pub(crate) fn with_slot<R>(
+        &mut self,
+        f: impl FnOnce(&mut TypVal, &mut VarLock) -> R,
+    ) -> Option<R> {
+        let Target::Slot { slot, .. } = &mut self.target else {
+            return None;
         };
-        if len != -1 {
-            // SAFETY: as above.
-            unsafe { *key.add(usize::try_from(len).expect("a key length")) = 0 };
-        }
-        // SAFETY: `key` is NUL-terminated either way now.
-        let existing = lval.ll_di.is_null();
-        let wrong = (dv_scope == VAR_DEF_SCOPE
-            && value.is_func()
-            && unsafe { var_wrong_func_name(key, existing) })
-            || !unsafe { valid_varname(key) };
-        if len != -1 {
-            // SAFETY: as above -- the byte cut out is put back.
-            unsafe { *key.offset(len as isize) = prevval };
-        }
-        if wrong {
-            return GLV_FAIL;
-        }
-    }
-
-    // SAFETY: a non-null `ll_di` is a live dictionary item.
-    let lua_key = !lval.ll_di.is_null()
-        && tv_is_luafunc(unsafe { &(*lval.ll_di).di_tv })
-        && len == -1
-        && result.is_none();
-    if lua_key {
-        let what = c"v:['lua']".as_ptr();
-        // SAFETY: the format takes one NUL-terminated string.
-        let what = unsafe { c_str(what) };
-        semsg!("E461: Illegal variable name: {what}");
-        return GLV_FAIL;
-    }
-
-    if lval.ll_di.is_null() {
-        // A "v:" or "a:" variable cannot be added.
-        // SAFETY: naming a live Dict's hashtab reads nothing.
-        let ht = unsafe { &raw mut (*lval.ll_dict).dv_hashtab };
-        let args_ht = get_funccal_args_ht();
-        if lval.ll_dict == get_vimvar_dict() || ht == args_ht {
-            // SAFETY: the format takes one NUL-terminated string.
-            let name = unsafe { c_str(name) };
-            semsg!("E461: Illegal variable name: {name}");
-            return GLV_FAIL;
-        }
-        // The key does not exist. It may be added — unless something
-        // follows it to subscript, or this is an `:unlet`.
-        // SAFETY: `p` is a cursor into the NUL-terminated `name`.
-        let after = unsafe { *p };
-        if after == b'['.cast_signed() || after == b'.'.cast_signed() || unlet {
-            if !quiet {
-                // SAFETY: the format takes one NUL-terminated string.
-                let key = unsafe { c_str(key) };
-                semsg!("E716: Key not present in Dictionary: \"{key}\"");
-            }
-            return GLV_FAIL;
-        }
-        // SAFETY: `key` is NUL-terminated when `len` is -1, and `len` bytes long otherwise.
-        lval.ll_newkey = if len == -1 {
-            unsafe { xstrdup(key) }
-        } else {
-            let len = usize::try_from(len).expect("a key length");
-            unsafe { xmemdupz(key.cast::<c_void>(), len).cast::<c_char>() }
+        let name = match &self.expanded {
+            Some(expanded) => expanded,
+            None => &self.text[..self.root_len],
         };
-        // SAFETY: the caller's promise about `key_end`.
-        unsafe { *key_end = p };
-        return GLV_STOP;
+        slot_value(slot, name, true, |tv, lock| f(tv, lock))
     }
-
-    // An existing item: check it may be changed.
-    // SAFETY: `ll_di` is a live item, and `p` and `name` are cursors into the one string.
-    let di_flags = c_int::from(unsafe { (*lval.ll_di).di_flags });
-    // SAFETY: as above.
-    let name_len = unsafe { p.offset_from(name) }.cast_unsigned();
-    let refused = flags & GLV_READ_ONLY.cast_signed() == 0
-        && (unsafe { var_check_ro(di_flags, name, name_len) }
-            || unsafe { var_check_lock(di_flags, name, name_len) });
-    if refused {
-        return GLV_FAIL;
-    }
-
-    // SAFETY: `ll_di` is a live item, whose typval is the target.
-    lval.ll_tv = unsafe { &raw mut (*lval.ll_di).di_tv };
-    lval.ll_lock = di_lock(lval.ll_di);
-    GLV_OK
 }
 
-/// Resolve a `[n]` or `[n:m]` subscript against the Blob in `lval.ll_tv`.
-/// Leaves `ll_tv` null, which is what tells `set_var_lval` this is a Blob.
-///
-/// # Safety
-/// `lval` must be valid with `ll_tv` a Blob; `var1`/`var2` valid.
-pub(crate) unsafe fn get_lval_blob(
-    lval: *mut LVal,
-    var1: &mut TypVal,
-    var2: &mut TypVal,
-    empty1: bool,
-    quiet: bool,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's promise: `ll_tv` holds a Blob, so `v_blob` is live.
-    let mut lval = unsafe { Lv::new(lval) };
-    // SAFETY: as above.
-    let bloblen = blob_len(unsafe { (*lval.ll_tv).blob_ref() });
-    lval.ll_n1 = if empty1 {
-        0
-    } else {
-        index_of(tv_get_number(var1))
-    };
-    let n1 = VarNumber::from(lval.ll_n1);
-    blob_check_index(bloblen, n1, quiet)?;
-    if lval.ll_range && !lval.ll_empty2 {
-        lval.ll_n2 = index_of(tv_get_number(var2));
-        let n2 = VarNumber::from(lval.ll_n2);
-        blob_check_range(bloblen, n1, n2, quiet)?;
+/// Run `f` over the value `slot` holds and the slot's lock, or answer `None`
+/// when it holds none any more: the variable `name` is gone, the List is
+/// shorter, or the key was removed.
+fn slot_value<R>(
+    slot: &mut Slot,
+    name: &[u8],
+    no_autoload: bool,
+    f: impl FnOnce(&mut TypVal, &mut VarLock) -> R,
+) -> Option<R> {
+    match slot {
+        Slot::Variable => with_var(name, no_autoload, |item| item_value(item, f)),
+        Slot::Item { list, index } => list_items_mut(Some(list))
+            .get_mut(*index)
+            .map(|item| f(&mut item.li_tv, &mut item.li_lock)),
+        Slot::Key { dict, key } => dict.find_mut(key).map(|item| item_value(item, f)),
     }
-    // SAFETY: as above -- the typval still holds the Blob.
-    lval.ll_blob = unsafe { Tv::new(lval.ll_tv).blob_or_null() };
-    lval.ll_tv = null_mut();
-    lval.ll_lock = null_mut();
-    Ok(())
 }
 
-/// Resolve a `[n]` or `[n:m]` subscript against the List in `lval.ll_tv`,
-/// leaving `ll_tv` on the item it selected.
-///
-/// # Safety
-/// `lval` must be valid with `ll_tv` a List; `var1`/`var2` valid.
-pub(crate) unsafe fn get_lval_list(
-    lval: *mut LVal,
-    var1: &mut TypVal,
-    var2: &mut TypVal,
-    empty1: bool,
-    _flags: c_int,
-    quiet: bool,
-) -> Result<(), Failed> {
-    // The two range callees write back through the addresses of `ll_n1` and
-    // `ll_n2`, so those addresses are live across the rest of this body.
-    // Every field written below therefore goes through the pointer rather
-    // than through `DerefMut`, which would borrow the whole record and pop
-    // them — `winlayer::live`'s note, and the bug it names in
-    // `set_buflocal_cpt_callbacks`.
-    // SAFETY: the caller's promise: `lval` outlives the call with `ll_tv`
-    // holding a List.
-    let lval = unsafe { Lv::new(lval) };
-    let (rec, n1, n2) = (
-        lval.raw(),
-        lval.field_ptr::<c_int>(offset_of!(LVal, ll_n1)),
-        lval.field_ptr::<c_int>(offset_of!(LVal, ll_n2)),
-    );
-    let first = if empty1 {
-        0
-    } else {
-        index_of(tv_get_number(var1))
-    };
-    // SAFETY: `VAR_LIST` says the value holds a List, and
-    // `rec` is the caller's record.
-    unsafe {
-        *n1 = first;
-        (*rec).ll_dict = null_mut::<Dict>();
-        (*rec).ll_list = Tv::new((*rec).ll_tv).list_or_null();
-    };
-    // SAFETY: `ll_list` is the typval's List and `n1` is `lval`'s own field.
-    let (list, at) = unsafe {
-        let list = (*rec).ll_list;
-        let at = list_check_range_index_one(list.as_ref(), &mut *n1, quiet);
-        (*rec).ll_li = at.unwrap_or(0);
-        (list, at)
-    };
-    let Some(at) = at else {
-        return Err(Failed);
-    };
-    // SAFETY: `rec` is the caller's record.
-    let ranged = unsafe { (*rec).ll_range && !(*rec).ll_empty2 };
-    if ranged {
-        // SAFETY: `var2` is the caller's second index expression, and both
-        // indexes are `lval`'s own fields.
-        unsafe { *n2 = index_of(tv_get_number(var2)) };
-        // SAFETY: `at` is the index one selected.
-        unsafe { list_check_range_index_two(list.as_ref(), &mut *n1, at, &mut *n2, quiet) }?;
-    }
-    // SAFETY: `ll_li` is an index of the list, whose item is the target.
-    let item = &raw mut list_items_mut(unsafe { list.as_mut() })[at];
-    unsafe { (*rec).ll_tv = &raw mut (*item).li_tv };
-    unsafe { (*rec).ll_lock = &raw mut (*item).li_lock };
-    Ok(())
+/// A dictionary item's value and lock, borrowed apart.
+fn item_value<R>(item: &mut DictItem, f: impl FnOnce(&mut TypVal, &mut VarLock) -> R) -> R {
+    f(&mut item.di_tv, &mut item.di_lock)
 }
 
-/// The subscript walk's per-call state: everything one turn of it needs.
-///
-/// The same shape as [`Live<T>`](crate::winlayer::Live), and for the same
-/// reason -- **construction is the one unsafe step**. Whoever builds one
-/// promises that `lval` outlives it with `ll_tv` on a live typval, that
-/// `name` is a writable NUL-terminated string with `cursor` pointing into
-/// it, and that `result` is the value about to be assigned; every method
-/// below is ordinary checked code resting on that, and each union member it
-/// reads is the one the `v_type` it just tested names.
-struct Subscripts<'a> {
-    /// The record being filled in. Its `ll_tv` names the container the next
-    /// subscript selects into, and moves down to whatever that selected.
-    lval: Lv,
-    /// The whole left-hand side, for the messages that name it.
-    name: *mut c_char,
-    /// Where in `name` the walk has got to. The caller reads it back.
-    cursor: Cur,
-    /// The value about to be assigned, or `None` for an `:unlet`, which
-    /// assigns nothing.
-    result: Option<&'a mut TypVal>,
+/// A container, as a subscript sees it.
+enum Container {
+    List(Option<ListRef>),
+    Dict(Option<DictRef>),
+    Blob(Option<BlobRef>),
+    /// Anything else: a subscript on it is refused.
+    Other,
+}
+
+impl Container {
+    fn of(tv: &TypVal) -> Self {
+        match tv.v_type() {
+            VAR_LIST => Container::List(tv.list_handle()),
+            VAR_DICT => Container::Dict(tv.dict_handle()),
+            VAR_BLOB => Container::Blob(tv.blob_handle()),
+            _ => Container::Other,
+        }
+    }
+}
+
+/// How the slot the walk starts at answered.
+enum Opened {
+    /// The container is ready to be subscripted.
+    Ready,
+    /// The variable is `v:lua`, which only a function name subscripts.
+    LuaFunc,
+}
+
+/// What one subscript's key text came to.
+enum Key {
+    /// A `.key`: the bytes from `start` for `len`.
+    Text { start: usize, len: usize },
+    /// A `[key]`: the first index expression, as a string.
+    Value,
+}
+
+/// The subscript walk's state: where the walk is, and the slot holding the
+/// container the next subscript selects into.
+struct Walk<'t, 'v> {
+    text: &'t [u8],
+    /// The variable's name, to find it again by.
+    root: &'t [u8],
+    /// Where in `text` the walk has got to.
+    at: usize,
+    /// The value about to be assigned, or `None` for an `:unlet` and the
+    /// readers, which assign nothing.
+    value: Option<&'v mut TypVal>,
     unlet: bool,
     flags: c_int,
     /// `GLV_QUIET`: resolve, but report nothing.
     quiet: bool,
+    /// Whether finding the variable the first time may source an autoload
+    /// script. A second look never does.
+    no_autoload: bool,
+    /// Where the container being subscripted lives.
+    slot: Slot,
+    /// The container in `slot`, as last read.
+    container: Container,
+    /// Whether user code may have run since `container` was read out of
+    /// `slot`: an index expression was evaluated.
+    stale: bool,
+    /// The last List or Blob subscript.
+    span: Span,
 }
 
-/// What one subscript's index text came to.
-struct Index {
-    /// A `.key`'s text, or null when the key is `var1`'s string.
-    key: *mut c_char,
-    /// `key`'s length, or -1 when the key is `var1`'s string.
-    len: c_int,
-    /// Whether a `[:m]` left the first half out.
-    empty1: bool,
-}
-
-impl Subscripts<'_> {
-    /// Which subscript the cursor opens -- `.` for a key, `[` for an index
-    /// -- or `None` when it opens none and the walk is over. `.=` and `..`
-    /// are the concat operators, not a key.
+impl Walk<'_, '_> {
+    /// Which subscript `at` opens -- `.` for a key, `[` for an index -- or
+    /// `None` when it opens none and the walk is over. `.=` and `..` are
+    /// the concat operators, not a key.
     fn opener(&self) -> Option<u8> {
-        let c = self.cursor.byte();
-        let opens =
-            c == b'[' || (c == b'.' && self.cursor.at(1) != b'=' && self.cursor.at(1) != b'.');
+        let c = byte_at(self.text, self.at);
+        let next = byte_at(self.text, self.at + 1);
+        let opens = c == b'[' || (c == b'.' && next != b'=' && next != b'.');
         opens.then_some(c)
     }
 
-    /// The container `ll_tv` names, which every step reads afresh:
-    /// evaluating an index expression runs user code, and that may have
-    /// replaced what the name resolved to.
-    fn container(&self) -> Tv {
-        // SAFETY: `ll_tv` is the live container being subscripted.
-        unsafe { Tv::new(self.lval.ll_tv) }
+    /// The text from `at` on, for the messages that quote the rest.
+    fn rest(&self, at: usize) -> &[u8] {
+        self.text.get(at..).unwrap_or_default()
+    }
+
+    /// Run `f` over the slot's value, reporting a slot that has gone.
+    fn with_slot<R>(&mut self, f: impl FnOnce(&mut TypVal, &mut VarLock) -> R) -> Option<R> {
+        let found = slot_value(&mut self.slot, self.root, self.no_autoload, f);
+        self.no_autoload = true;
+        if found.is_none() && !self.quiet {
+            match &self.slot {
+                Slot::Variable => {
+                    let name = msg_bytes(self.root);
+                    semsg!("E121: Undefined variable: {name}");
+                }
+                Slot::Item { index, .. } => {
+                    let index = i64::from(index_of(*index));
+                    semsg!("E684: List index out of range: {index}");
+                }
+                Slot::Key { key, .. } => {
+                    let key = msg_bytes(key);
+                    semsg!("E716: Key not present in Dictionary: \"{key}\"");
+                }
+            }
+        }
+        found
+    }
+
+    /// Read the container out of the slot again if an index expression has
+    /// run since it was last read.
+    fn refresh(&mut self) -> Option<()> {
+        if self.stale {
+            self.container = self.with_slot(|tv, _| Container::of(tv))?;
+            self.stale = false;
+        }
+        Some(())
     }
 
     /// The checks a container has to pass before a subscript may select
     /// into it, and the empty List or Blob that a null one stands in for.
-    ///
-    /// `None` refuses, with the reason already reported.
-    fn open_container(&mut self, opener: u8) -> Option<()> {
-        let container = self.container();
-        if opener == b'.' && container.v_type() != VAR_DICT {
-            if !self.quiet {
-                // SAFETY: a shared message, whose format takes one
-                // NUL-terminated string.
-                let name = unsafe { c_str(self.name) };
-                semsg!("E1203: Dot can only be used on a dictionary: {name}");
+    /// The first call is the one that finds the variable, and the one that
+    /// notices `v:lua`.
+    fn open(&mut self, opener: u8, first: bool) -> Option<Opened> {
+        enum Refused {
+            Dot,
+            Index,
+        }
+        let checked = self.with_slot(|tv, _| {
+            if first && tv_is_luafunc(tv) {
+                return Ok(None);
             }
-            return None;
-        }
-        if container.v_type() != VAR_LIST
-            && container.v_type() != VAR_DICT
-            && container.v_type() != VAR_BLOB
-        {
-            if !self.quiet {
-                emsg_static(c"E689: Can only index a List, Dictionary or Blob");
+            let kind = tv.v_type();
+            if opener == b'.' && kind != VAR_DICT {
+                return Err(Refused::Dot);
             }
-            return None;
-        }
+            if kind != VAR_LIST && kind != VAR_DICT && kind != VAR_BLOB {
+                return Err(Refused::Index);
+            }
+            // A null List or Blob works like an empty one; allocate now.
+            if kind == VAR_LIST && tv.list_ref().is_none() {
+                tv_list_alloc_ret(tv, kListLenUnknown.try_into().unwrap_or(-1));
+            } else if kind == VAR_BLOB && tv.blob_ref().is_none() {
+                tv_blob_alloc_ret(tv);
+            }
+            Ok(Some(Container::of(tv)))
+        })?;
+        let container = match checked {
+            Ok(Some(container)) => container,
+            Ok(None) => return Some(Opened::LuaFunc),
+            Err(Refused::Dot) => {
+                if !self.quiet {
+                    let name = msg_bytes(self.text);
+                    semsg!("E1203: Dot can only be used on a dictionary: {name}");
+                }
+                return None;
+            }
+            Err(Refused::Index) => {
+                if !self.quiet {
+                    emsg_static(c"E689: Can only index a List, Dictionary or Blob");
+                }
+                return None;
+            }
+        };
+        self.container = container;
+        self.stale = false;
 
-        // A null List or Blob works like an empty one; allocate now.
-        // SAFETY: `ll_tv` is the live container being subscripted.
-        let target = unsafe { &mut *self.lval.ll_tv };
-        if container.v_type() == VAR_LIST && container.list_or_null().is_null() {
-            tv_list_alloc_ret(target, kListLenUnknown as ptrdiff_t);
-        } else if container.v_type() == VAR_BLOB && container.blob_or_null().is_null() {
-            tv_blob_alloc_ret(target);
-        }
-
-        if self.lval.ll_range {
+        if self.span.range {
             if !self.quiet {
                 emsg_static(c"E708: [:] must come last");
             }
             return None;
         }
-        Some(())
+        Some(Opened::Ready)
     }
 
-    /// The `.key` at the cursor, which is a run of name characters taken
-    /// out of the command line where it stands.
-    fn parse_key(&mut self) -> Option<Index> {
-        // SAFETY, for every region below: the cursor is inside the
-        // NUL-terminated name, so the byte after the `.` is inside it too,
-        // and the walk stops at the first byte that is not a name
-        // character -- the terminator included.
-        let key = unsafe { self.cursor.get().add(1) };
-        let mut len: c_int = 0;
-        loop {
-            let b =
-                unsafe { *key.add(usize::try_from(len).expect("a key length")) }.cast_unsigned();
-            if !(b.is_ascii_alphabetic() || ascii_isdigit(b.into()) || b == b'_') {
-                break;
-            }
-            len += 1;
-        }
+    /// The `.key` at `at`: a run of name characters.
+    fn parse_key(&mut self) -> Option<Key> {
+        let start = self.at + 1;
+        let len = self.text[start.min(self.text.len())..]
+            .iter()
+            .take_while(|b| b.is_ascii_alphanumeric() || **b == b'_')
+            .count();
         if len == 0 {
             if !self.quiet {
                 emsg_static(c"E713: Cannot use empty key after .");
             }
             return None;
         }
-        // SAFETY: as above.
-        self.cursor.set(unsafe { key.offset(len as isize) });
-        Some(Index {
-            key,
-            len,
-            empty1: false,
-        })
+        self.at = start + len;
+        Some(Key::Text { start, len })
     }
 
-    /// The `[expr]` or `[expr : expr]` at the cursor, evaluated into `var1`
-    /// and `var2`. A range sets `ll_range`, and `ll_empty2` for a `[n:]`.
-    fn parse_index(&mut self, var1: &mut TypVal, var2: &mut TypVal) -> Option<Index> {
-        // `skip` steps past the `[` and then past the white space.
-        self.cursor.skip(1);
-        let empty1 = self.cursor.byte() == b':';
-        if !empty1 {
+    /// Step past the white space at `at`.
+    fn skip_white(&mut self) {
+        self.at += crate::charset::skip::white(self.rest(self.at));
+    }
+
+    /// The `[expr]` or `[expr : expr]` at `at`, evaluated into `var1` and
+    /// `var2`. A range sets `span.range`, and `span.empty2` for a `[n:]`.
+    fn parse_index(
+        &mut self,
+        var1: &mut TypVal,
+        var2: &mut TypVal,
+        empty1: &mut bool,
+    ) -> Option<Key> {
+        self.at += 1;
+        self.skip_white();
+        *empty1 = byte_at(self.text, self.at) == b':';
+        if !*empty1 {
             self.eval_into(var1)?;
-            self.cursor.skip(0);
+            self.skip_white();
         }
 
-        if self.cursor.byte() == b':' {
+        if byte_at(self.text, self.at) == b':' {
             self.parse_range(var2)?;
         } else {
-            self.lval.ll_range = false;
+            self.span.range = false;
         }
 
-        if self.cursor.byte() != b']' {
+        if byte_at(self.text, self.at) != b']' {
             if !self.quiet {
                 emsg_static(e_missbrac);
             }
             return None;
         }
-        self.cursor.bump(1);
-        Some(Index {
-            key: null_mut(),
-            len: -1,
-            empty1,
-        })
+        self.at += 1;
+        Some(Key::Value)
     }
 
-    /// One index expression, evaluated at the cursor into `var` and checked
-    /// for being usable as a string.
+    /// One index expression, evaluated at `at` into `var` and checked for
+    /// being usable as a string.
     fn eval_into(&mut self, var: &mut TypVal) -> Option<()> {
-        // SAFETY: the cursor walks the text the lvalue was handed -- a
-        // command line or a function's argument, the caller's own -- which
-        // no code the index expression runs can reach.
-        let evaluated = unsafe { self.cursor.with_cursor(|cursor| eval1(cursor, var, true)) };
+        let mut cursor = Cursor::new(self.text);
+        cursor.set_offset(self.at);
+        let evaluated = eval1(&mut cursor, var, true);
+        self.at = cursor.offset();
+        self.stale = true;
         (evaluated.is_ok() && tv_check_str(var)).then_some(())
     }
 
-    /// The `: expr]` half of a `[n : m]`, with the cursor on the colon.
+    /// The `: expr]` half of a `[n : m]`, with `at` on the colon.
     fn parse_range(&mut self, var2: &mut TypVal) -> Option<()> {
-        if self.container().v_type() == VAR_DICT {
+        self.refresh()?;
+        if matches!(self.container, Container::Dict(_)) {
             if !self.quiet {
                 emsg_static(e_cannot_slice_dictionary);
             }
             return None;
         }
-        // The value being assigned has to be sliceable too. No `result` is
+        // The value being assigned has to be sliceable too. No value is
         // `:unlet`, which assigns nothing.
-        let sliceable = self.result.as_deref().is_none_or(|v| {
-            (v.v_type() == VAR_LIST && !v.list_or_null().is_null())
-                || (v.v_type() == VAR_BLOB && !v.blob_or_null().is_null())
+        let sliceable = self.value.as_deref().is_none_or(|v| {
+            (v.v_type() == VAR_LIST && v.list_ref().is_some())
+                || (v.v_type() == VAR_BLOB && v.blob_ref().is_some())
         });
         if !sliceable {
             if !self.quiet {
@@ -516,111 +472,322 @@ impl Subscripts<'_> {
             return None;
         }
         // Past the `:` and the white space after it.
-        self.cursor.skip(1);
-        if self.cursor.byte() == b']' {
-            self.lval.ll_empty2 = true;
+        self.at += 1;
+        self.skip_white();
+        if byte_at(self.text, self.at) == b']' {
+            self.span.empty2 = true;
         } else {
-            self.lval.ll_empty2 = false;
+            self.span.empty2 = false;
             self.eval_into(var2)?;
         }
-        self.lval.ll_range = true;
+        self.span.range = true;
         Some(())
     }
 
-    /// Select `index` out of the container `ll_tv` names, leaving `ll_tv`
-    /// on what it selected. `Break` when there is nothing left to descend
-    /// into: a Blob byte, or a Dictionary key that does not exist yet.
+    /// Select what the subscript just parsed names out of the container,
+    /// moving the slot onto it. `Break` with the target when there is
+    /// nothing left to descend into: a Blob byte, or a key that does not
+    /// exist yet.
     fn descend(
         &mut self,
-        index: &Index,
-        var1: &mut TypVal,
-        var2: &mut TypVal,
-    ) -> Option<ControlFlow<()>> {
-        let kind = self.container().v_type();
-        let (rec, name) = (self.lval.raw(), self.name);
-        let (flags, unlet, quiet) = (self.flags, self.unlet, self.quiet);
-        let (key, len, empty1) = (index.key, index.len, index.empty1);
-        if kind == VAR_DICT {
-            let value = self.result.as_deref_mut();
-            let end = self.cursor.raw();
-            // SAFETY: the promise `Subscripts` records, and `end` names
-            // this walk's own cursor.
-            let status =
-                unsafe { get_lval_dict_item(rec, name, key, len, end, var1, flags, unlet, value) };
-            match status {
-                GLV_FAIL => None,
-                // The key is new: `ll_newkey` holds it and there is nothing
-                // left to descend into.
-                GLV_STOP => Some(ControlFlow::Break(())),
-                _ => Some(ControlFlow::Continue(())),
+        key: &Key,
+        var1: &TypVal,
+        var2: &TypVal,
+        empty1: bool,
+    ) -> Option<ControlFlow<Target>> {
+        self.refresh()?;
+        match core::mem::replace(&mut self.container, Container::Other) {
+            Container::Dict(dict) => self.dict_item(dict, key, var1),
+            Container::Blob(blob) => {
+                let blob = match blob {
+                    Some(blob) => blob,
+                    None => self.with_slot(|tv, _| {
+                        tv_blob_alloc_ret(tv);
+                        tv.blob_handle().expect("a blob, just allocated")
+                    })?,
+                };
+                self.blob(&blob, var1, var2, empty1)?;
+                // A Blob byte is never a container, so this is the end.
+                Some(ControlFlow::Break(Target::Blob {
+                    blob,
+                    span: self.span,
+                }))
             }
-        } else if kind == VAR_BLOB {
-            // SAFETY: as above.
-            unsafe { get_lval_blob(rec, var1, var2, empty1, quiet) }.ok()?;
-            // A Blob byte is never a container, so this is the end.
-            Some(ControlFlow::Break(()))
-        } else {
-            // SAFETY: as above.
-            unsafe { get_lval_list(rec, var1, var2, empty1, flags, quiet) }.ok()?;
-            Some(ControlFlow::Continue(()))
+            Container::List(list) => self.list_item(list, var1, var2, empty1),
+            // The index expression put something else in the slot: no
+            // List has that index.
+            Container::Other => self.list_item(None, var1, var2, empty1),
         }
     }
 
-    /// Every subscript at the cursor, one container at a time.
-    ///
-    /// `var1` and `var2` are the caller's, so that a refusal part-way
-    /// through still leaves whichever was evaluated for it to release.
-    fn walk(&mut self, var1: &mut TypVal, var2: &mut TypVal) -> Option<()> {
-        while let Some(opener) = self.opener() {
-            self.open_container(opener)?;
-            let index = if opener == b'.' {
+    /// Resolve one `.key` or `[key]` against `dict`.
+    fn dict_item(
+        &mut self,
+        dict: Option<DictRef>,
+        key: &Key,
+        var1: &TypVal,
+    ) -> Option<ControlFlow<Target>> {
+        let mut numbuf = NumBuf::new();
+        let key_bytes: Vec<u8> = match *key {
+            Key::Text { start, len } => self.text[start..start + len].to_vec(),
+            Key::Value => numbuf.string(var1).to_bytes().to_vec(),
+        };
+        // A null Dict is an empty Dict; allocate one into the slot now.
+        let dict = match dict {
+            Some(dict) => dict,
+            None => {
+                let fresh = tv_dict_alloc();
+                let held = fresh.clone();
+                self.with_slot(|tv, _| tv.write_dict(Some(fresh)))?;
+                held
+            }
+        };
+        let existing = dict
+            .find(&key_bytes)
+            .map(|item| (item.di_flags, tv_is_luafunc(&item.di_tv)));
+
+        // Assigning into a scope dictionary: check that the name is a valid
+        // variable name, and a valid *function* name too unless the scope is
+        // `l:` or `g:`. Overwriting a builtin function is not allowed.
+        let scope = dict.dv_scope;
+        if let Some(value) = self.value.as_deref()
+            && scope != 0
+        {
+            let wrong = (scope == VAR_DEF_SCOPE
+                && value.is_func()
+                && var_wrong_func_name_named(&key_bytes, existing.is_none()))
+                || !valid_varname_named(&key_bytes);
+            if wrong {
+                return None;
+            }
+        }
+
+        let is_value_key = matches!(key, Key::Value);
+        if existing.is_some_and(|(_, lua)| lua) && is_value_key && self.value.is_none() {
+            semsg!("E461: Illegal variable name: v:['lua']");
+            return None;
+        }
+
+        let Some((flags, _)) = existing else {
+            // A "v:" or "a:" variable cannot be added.
+            if dict.as_ptr() == get_vimvar_dict() || dict.as_ptr() == get_funccal_args_dict() {
+                let name = msg_bytes(self.text);
+                semsg!("E461: Illegal variable name: {name}");
+                return None;
+            }
+            // The key does not exist. It may be added -- unless something
+            // follows it to subscript, or this is an `:unlet`.
+            let after = byte_at(self.text, self.at);
+            if after == b'[' || after == b'.' || self.unlet {
+                if !self.quiet {
+                    // A `.key` is quoted to the end of the line, as the C
+                    // quoted it straight out of the command.
+                    let shown = match *key {
+                        Key::Text { start, .. } => self.rest(start),
+                        Key::Value => &key_bytes,
+                    };
+                    let shown = msg_bytes(shown);
+                    semsg!("E716: Key not present in Dictionary: \"{shown}\"");
+                }
+                return None;
+            }
+            return Some(ControlFlow::Break(Target::NewKey {
+                dict,
+                key: key_bytes,
+            }));
+        };
+
+        // An existing item: check it may be changed.
+        let flags = c_int::from(flags);
+        let named = &self.text[..self.at];
+        let refused = self.flags & GLV_READ_ONLY.cast_signed() == 0
+            && (var_check_ro_named(flags, named) || var_check_lock_named(flags, named));
+        if refused {
+            return None;
+        }
+        self.slot = Slot::Key {
+            dict,
+            key: key_bytes,
+        };
+        Some(ControlFlow::Continue(()))
+    }
+
+    /// Resolve a `[n]` or `[n:m]` against `blob`.
+    fn blob(&mut self, blob: &BlobRef, var1: &TypVal, var2: &TypVal, empty1: bool) -> Option<()> {
+        let bloblen = blob_len(Some(blob));
+        self.span.n1 = if empty1 {
+            0
+        } else {
+            index_of(tv_get_number(var1))
+        };
+        let n1 = i64::from(self.span.n1);
+        blob_check_index(bloblen, n1, self.quiet).ok()?;
+        if self.span.range && !self.span.empty2 {
+            self.span.n2 = index_of(tv_get_number(var2));
+            let n2 = i64::from(self.span.n2);
+            blob_check_range(bloblen, n1, n2, self.quiet).ok()?;
+        }
+        Some(())
+    }
+
+    /// Resolve a `[n]` or `[n:m]` against `list`, moving the slot onto the
+    /// item it selected.
+    fn list_item(
+        &mut self,
+        list: Option<ListRef>,
+        var1: &TypVal,
+        var2: &TypVal,
+        empty1: bool,
+    ) -> Option<ControlFlow<Target>> {
+        self.span.n1 = if empty1 {
+            0
+        } else {
+            index_of(tv_get_number(var1))
+        };
+        let quiet = self.quiet;
+        let at = list_check_range_index_one(list.as_deref(), &mut self.span.n1, quiet)?;
+        if self.span.range && !self.span.empty2 {
+            self.span.n2 = index_of(tv_get_number(var2));
+            let span = &mut self.span;
+            list_check_range_index_two(list.as_deref(), &mut span.n1, at, &mut span.n2, quiet)
+                .ok()?;
+        }
+        let list = list.expect("an index of the list was found");
+        self.slot = Slot::Item { list, index: at };
+        Some(ControlFlow::Continue(()))
+    }
+
+    /// Every subscript from `at` on, one container at a time. `var1` and
+    /// `var2` are the caller's, so that a refusal part-way through still
+    /// leaves whichever was evaluated for it to release.
+    fn walk(&mut self, var1: &mut TypVal, var2: &mut TypVal) -> Option<ControlFlow<(), Target>> {
+        // The variable is looked up whatever follows its name: an undefined
+        // one is E121 even before a `.=`, and `v:lua` stops the walk.
+        let Some(mut opener) = self.opener() else {
+            if self.with_slot(|tv, _| tv_is_luafunc(tv))? {
+                return Some(ControlFlow::Break(()));
+            }
+            return Some(ControlFlow::Continue(Target::Slot {
+                slot: Slot::Variable,
+                span: self.span,
+            }));
+        };
+        let mut first = true;
+        loop {
+            if let Opened::LuaFunc = self.open(opener, first)? {
+                return Some(ControlFlow::Break(()));
+            }
+            first = false;
+            let mut empty1 = false;
+            let key = if opener == b'.' {
                 self.parse_key()?
             } else {
-                self.parse_index(var1, var2)?
+                self.parse_index(var1, var2, &mut empty1)?
             };
-            if self.descend(&index, var1, var2)?.is_break() {
-                break;
+            if let ControlFlow::Break(target) = self.descend(&key, var1, var2, empty1)? {
+                return Some(ControlFlow::Continue(target));
             }
             clear_local(var1);
             clear_local(var2);
-            var1.write_empty(VAR_UNKNOWN);
-            var2.write_empty(VAR_UNKNOWN);
+            match self.opener() {
+                Some(next) => opener = next,
+                None => break,
+            }
         }
-        Some(())
+        let slot = core::mem::replace(&mut self.slot, Slot::Variable);
+        Some(ControlFlow::Continue(Target::Slot {
+            slot,
+            span: self.span,
+        }))
     }
 }
 
-/// Walk every `[idx]` and `.key` following the name, descending `lval.ll_tv`
-/// one container at a time. Answers the cursor after the last subscript, or
-/// null on an error.
+/// Resolve the left-hand side `text` starts with, for an assignment of
+/// `value` or (with none) an `:unlet` or a reader. Answers what it resolved
+/// and where it ended in `text`; an end of `None` is an error already
+/// reported, and the left-hand side may still have a name, which is how a
+/// caller tells "carry on parsing" from "stop".
 ///
-/// # Safety
-/// `lval` must be valid with `ll_tv` set; `p` must point into the
-/// NUL-terminated `name`.
-#[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn get_lval_subscript(
-    lval: *mut LVal,
-    mut p: *mut c_char,
-    name: *mut c_char,
-    result: Option<&mut TypVal>,
-    _ht: *mut DictTab,
-    _v: *mut DictItem,
+/// `skip` only finds the end of the name: nothing is evaluated or looked
+/// up.
+pub(crate) fn get_lval<'a>(
+    text: &'a [u8],
+    value: Option<&mut TypVal>,
     unlet: bool,
+    skip: bool,
     flags: c_int,
-) -> *mut c_char {
-    let mut walk = Subscripts {
-        // SAFETY: the caller's promise, which is the one `Subscripts`
-        // records -- `lval` outlives the call with `ll_tv` on a live
-        // typval, and `p` is a cursor into the writable NUL-terminated
-        // left-hand side `name`.
-        lval: unsafe { Lv::new(lval) },
-        name,
-        // SAFETY: as above -- `p` is this frame's own from here on.
-        cursor: unsafe { Cur::new(&raw mut p) },
-        result,
+    fne_flags: c_int,
+) -> (LValue<'a>, Option<usize>) {
+    let quiet = flags & GLV_QUIET.cast_signed() != 0;
+    let mut lval = LValue::new(text);
+
+    if skip {
+        // Only the name matters; nothing is resolved.
+        let end = name_end(text, FNE_INCL_BR | fne_flags).end;
+        lval.named = true;
+        lval.root_len = end;
+        lval.end = end;
+        return (lval, Some(end));
+    }
+
+    let found = name_end(text, fne_flags);
+    let p = found.end;
+    let after = byte_at(text, p);
+    if let Some(open) = found.brace_open {
+        // A curly-braces name: expand it, unless there is an error
+        // already.
+        if unlet
+            && !ascii_iswhite(c_int::from(after))
+            && ends_excmd(c_int::from(after)) == 0
+            && after != b'['
+            && after != b'.'
+        {
+            let rest = msg_bytes(&text[p..]);
+            semsg!("E488: Trailing characters: {rest}");
+            return (lval, None);
+        }
+        lval.expanded = expanded_name(&text[..p], open, found.brace_close);
+        if lval.expanded.is_none() {
+            if !aborting() && !quiet {
+                emsg_severe.set(true);
+                let name = msg_bytes(text);
+                semsg!("E475: Invalid argument: {name}");
+                return (lval, None);
+            }
+        } else {
+            lval.named = true;
+        }
+    } else {
+        lval.named = true;
+    }
+    lval.root_len = p;
+    lval.end = p;
+
+    // Nothing is subscripted: the name is the whole left-hand side.
+    if (after != b'[' && after != b'.') || !lval.named {
+        return (lval, Some(p));
+    }
+
+    let LValue { expanded, .. } = &lval;
+    let root = match expanded {
+        Some(expanded) => expanded,
+        None => &text[..p],
+    };
+    let mut walk = Walk {
+        text,
+        root,
+        at: p,
+        value,
         unlet,
         flags,
-        quiet: flags & GLV_QUIET.cast_signed() != 0,
+        quiet,
+        // Only a write keeps the lookup from sourcing an autoload script.
+        no_autoload: flags & (GLV_NO_AUTOLOAD | GLV_READ_ONLY).cast_signed()
+            != GLV_READ_ONLY.cast_signed(),
+        slot: Slot::Variable,
+        container: Container::Other,
+        stale: false,
+        span: Span::default(),
     };
     // The two index expressions. They outlive the walk, so a refusal
     // part-way through still releases whichever of them was evaluated.
@@ -629,134 +796,21 @@ pub(crate) unsafe fn get_lval_subscript(
     let walked = walk.walk(&mut var1, &mut var2);
     clear_local(&mut var1);
     clear_local(&mut var2);
-    // `p` is where the walk's cursor left it.
-    if walked.is_some() { p } else { null_mut() }
-}
-
-/// Resolve the left-hand side of an assignment or an `:unlet` into `lval`,
-/// and answer the cursor after it.
-///
-/// # Safety
-/// `name` must be a writable, NUL-terminated string; `lval` must be valid;
-/// `result` null or the value about to be assigned.
-pub unsafe fn get_lval(
-    name: *mut c_char,
-    result: Option<&mut TypVal>,
-    lval: *mut LVal,
-    unlet: bool,
-    skip: bool,
-    flags: c_int,
-    fne_flags: c_int,
-) -> *mut c_char {
-    let quiet = flags & GLV_QUIET.cast_signed() != 0;
-    // SAFETY: the caller's promise; every field is written before it is read.
-    let mut lval = unsafe { Lv::new(lval) };
-    // SAFETY: as above -- the whole record is the caller's.
-    unsafe { lval.raw().cast::<u8>().write_bytes(0, size_of::<LVal>()) };
-
-    if skip {
-        // Only the name matters; nothing is resolved.
-        lval.ll_name = name;
-        let fne = FNE_INCL_BR | fne_flags;
-        // SAFETY: `name` is NUL-terminated, and the name's end is inside it.
-        return unsafe { name.add(name_end(cstr::bytes_at(name), fne).end) };
-    }
-
-    // SAFETY: `name` is NUL-terminated.
-    let text = unsafe { cstr::bytes_at(name) };
-    let found = name_end(text, fne_flags);
-    let mut p = name.wrapping_add(found.end);
-
-    if let Some(open) = found.brace_open {
-        // A curly-braces name: expand it.
-        // SAFETY: `p` is a cursor into the NUL-terminated `name`.
-        let after = unsafe { *p };
-        if unlet
-            && !ascii_iswhite(c_int::from(after))
-            && ends_excmd(c_int::from(after)) == 0
-            && after != b'['.cast_signed()
-            && after != b'.'.cast_signed()
-        {
-            // SAFETY: the format takes one NUL-terminated string.
-            let p = unsafe { c_str(p) };
-            semsg!("E488: Trailing characters: {p}");
-            return null_mut();
+    let end = walk.at;
+    match walked {
+        None => (lval, None),
+        Some(ControlFlow::Break(())) => {
+            // `v:lua`: the `.` and the name after it are the caller's.
+            lval.target = Target::Slot {
+                slot: Slot::Variable,
+                span: Span::default(),
+            };
+            (lval, Some(p))
         }
-        let expanded = expanded_name(&text[..found.end], open, found.brace_close);
-        lval.ll_exp_name = expanded.map_or(null_mut(), XString::into_raw);
-        lval.ll_name = lval.ll_exp_name;
-        if lval.ll_exp_name.is_null() {
-            if !aborting() && !quiet {
-                emsg_severe.set(true);
-                // SAFETY: the format takes one NUL-terminated string.
-                let name = unsafe { c_str(name) };
-                semsg!("E475: Invalid argument: {name}");
-                return null_mut();
-            }
-            lval.ll_name_len = 0 as size_t;
-        } else {
-            // SAFETY: the expansion is NUL-terminated.
-            lval.ll_name_len = unsafe { cstr::bytes_at(lval.ll_name) }.len();
+        Some(ControlFlow::Continue(target)) => {
+            lval.target = target;
+            lval.end = end;
+            (lval, Some(end))
         }
-    } else {
-        lval.ll_name = name;
-        // SAFETY: `p` and the name are cursors into the one string.
-        lval.ll_name_len = unsafe { p.offset_from(lval.ll_name) }.cast_unsigned();
     }
-
-    // Nothing is subscripted: the name is the whole left-hand side.
-    // SAFETY: `p` is a cursor into the NUL-terminated `name`.
-    let after = unsafe { *p };
-    if (after != b'['.cast_signed() && after != b'.'.cast_signed()) || lval.ll_name.is_null() {
-        return p;
-    }
-
-    let mut ht: *mut DictTab = null_mut();
-    let htp = if flags & GLV_READ_ONLY.cast_signed() != 0 {
-        null_mut()
-    } else {
-        &raw mut ht
-    };
-    let no_autoload = flags & GLV_NO_AUTOLOAD.cast_signed() != 0;
-    // SAFETY: the name is NUL-terminated and `ht` is this frame's.
-    let v = unsafe { find_var(lval.ll_name, lval.ll_name_len, htp, no_autoload) };
-    if v.is_null() {
-        if !quiet {
-            let (n, s) = (lval.ll_name_len, lval.ll_name);
-            // SAFETY: as above.
-            let s = unsafe { c_str_len(s, n) };
-            semsg!("E121: Undefined variable: {s}");
-        }
-        return null_mut();
-    }
-
-    // SAFETY: `v` is the live dictionary item the name resolved to.
-    lval.ll_tv = unsafe { &raw mut (*v).di_tv };
-    lval.ll_lock = di_lock(v);
-    // SAFETY: `ll_tv` is that item's typval.
-    if tv_is_luafunc(unsafe { &*lval.ll_tv }) {
-        return p;
-    }
-
-    // SAFETY: `lval` has `ll_tv` set, `p` points into `name`, and `ht` and `v` are this frame's.
-    p = unsafe { get_lval_subscript(lval.raw(), p, name, result, ht, v, unlet, flags) };
-    if p.is_null() {
-        return null_mut();
-    }
-    // SAFETY: `p` and the name are cursors into the one string.
-    lval.ll_name_len = unsafe { p.offset_from(lval.ll_name) }.cast_unsigned();
-    p
-}
-
-/// Release what `get_lval` allocated into `lval`.
-///
-/// # Safety
-/// `lval` must be valid.
-pub unsafe fn clear_lval(lval: *mut LVal) {
-    // SAFETY: the caller's promise; both strings are `get_lval`'s own.
-    let lval = unsafe { Lv::new(lval) };
-    // SAFETY: as above -- both are owned, and null is fine for `xfree`.
-    unsafe { xfree(lval.ll_exp_name.cast::<c_void>()) };
-    // SAFETY: as above.
-    unsafe { xfree(lval.ll_newkey.cast::<c_void>()) };
 }

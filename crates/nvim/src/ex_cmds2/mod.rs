@@ -685,13 +685,8 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
         let cmd = c"command -nargs=* -keepscript CompilerSet setlocal <args>";
         let _ = do_cmdline_cmd(cmd);
     }
-    let (name, len) = (CURRENT_COMPILER.as_ptr(), CURRENT_COMPILER.count_bytes());
-    let _ = unsafe { do_unlet(name, len, true) };
-    let (name, len) = (
-        B_CURRENT_COMPILER.as_ptr(),
-        B_CURRENT_COMPILER.count_bytes(),
-    );
-    let _ = unsafe { do_unlet(name, len, true) };
+    let _ = do_unlet(CURRENT_COMPILER.to_bytes(), true);
+    let _ = do_unlet(B_CURRENT_COMPILER.to_bytes(), true);
 
     let mut pattern = Vec::with_capacity(excmd.line.arg().len() + 12);
     pattern.extend_from_slice(b"compiler/");
@@ -714,13 +709,7 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     // Restore "current_compiler" for ":compiler {name}".
     if !excmd.forceit {
         if old_cur_comp.is_null() {
-            let _ = unsafe {
-                do_unlet(
-                    CURRENT_COMPILER.as_ptr(),
-                    CURRENT_COMPILER.count_bytes(),
-                    true,
-                )
-            };
+            let _ = do_unlet(CURRENT_COMPILER.to_bytes(), true);
         } else {
             unsafe { set_internal_string_var(CURRENT_COMPILER.as_ptr(), old_cur_comp) };
             unsafe { xfree(old_cur_comp.cast()) };

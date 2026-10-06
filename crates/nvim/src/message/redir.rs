@@ -65,8 +65,7 @@ pub(crate) fn redir_write(bytes: &[u8]) {
             // SAFETY: a one-byte literal.
             unsafe { write_reg_contents(redir_reg.get(), c" ".as_ptr(), 1, 1) };
         } else if redir_vname.get() {
-            // SAFETY: as above.
-            unsafe { var_redir_str(c" ".as_ptr(), -1) };
+            var_redir_str(b" ");
         } else {
             redir_fd.with(|file| file.as_ref().map(|file| file.putc(b' ')));
         }
@@ -89,8 +88,7 @@ pub(crate) fn redir_write(bytes: &[u8]) {
         unsafe { write_reg_contents(redir_reg.get(), text, len as ssize_t, 1) };
     }
     if redir_vname.get() {
-        // SAFETY: as above.
-        unsafe { var_redir_str(text, len as c_int) };
+        var_redir_str(bytes);
     }
 
     // Write and adjust the current column. The file sinks are fed byte by

@@ -299,6 +299,17 @@ pub(crate) unsafe fn tv_dict_watcher_matches(
     unsafe { cstr::eq(key, (*watcher).key_pattern) }
 }
 
+/// [`dict_watcher_notify`] for the dictionary `dict` holds.
+pub(crate) fn notify_watchers(
+    dict: &DictRef,
+    key: &CStr,
+    newtv: Option<&TypVal>,
+    oldtv: Option<&TypVal>,
+) {
+    // SAFETY: a dictionary the handle keeps alive across the call.
+    unsafe { dict_watcher_notify(dict.as_ptr(), key, newtv, oldtv) }
+}
+
 /// Fire every watcher of `dict` that matches `key`, handing each
 /// `(dict, key, {old, new})`.
 ///

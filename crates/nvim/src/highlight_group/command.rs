@@ -169,7 +169,7 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
         name = line.word_then_space();
         if name.is_empty() {
             // ":highlight clear": back to the compiled-in defaults.
-            let _ = unsafe { do_unlet(c"g:colors_name".as_ptr(), 13, true) };
+            let _ = do_unlet(b"g:colors_name", true);
             restore_cterm_colors();
             for id in 1..=highlight_num_groups() {
                 highlight_clear(id);

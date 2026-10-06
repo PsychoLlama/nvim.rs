@@ -288,6 +288,14 @@ pub unsafe fn eexe_mod_op(
     retval
 }
 
+/// [`eexe_mod_op`] over two values that are not the same typval: `op` is
+/// the operator's one byte (`+`, `-`, `*`, `/`, `%` or `.`).
+pub(crate) fn mod_op(target: &mut TypVal, value: &TypVal, op: u8) -> Result<(), Failed> {
+    let op = [op.cast_signed(), 0];
+    // SAFETY: two typvals the borrows keep apart, and a terminated operator.
+    unsafe { eexe_mod_op(target, value, op.as_ptr()) }
+}
+
 /// Report `E734` naming the operator that was refused.
 fn report_wrong_type(op: &CStr) {
     crate::semsg!("E734: Wrong variable type for {}=", op.to_string_lossy());

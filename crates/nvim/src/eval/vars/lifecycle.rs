@@ -14,8 +14,11 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::{DictEntry, DictRef, DictTab, ListRef, tv_dict_item_free};
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::MessagePackType;
 use crate::types::{DictKey, Refcount};
+use crate::types::{Failed, NUL};
 
 /// Build the `g:` and `v:` scopes and fill the `v:` table.  Called once, at
 /// startup.
@@ -332,6 +335,105 @@ pub unsafe fn vars_clear_ext(ht: *mut DictTab, free_val: bool) {
     }
     // SAFETY: the caller's table, whose items have all been freed.
     hash_reset(unsafe { &mut *ht });
+}
+
+/// Delete the variable `name`, reporting E108 if it does not exist and
+/// `forceit` is not set.
+pub(crate) fn do_unlet(name: &[u8], forceit: bool) -> Result<(), Failed> {
+    // SAFETY: `name` is NUL-terminated at its own length.
+    cstr::with_terminated(name, |name| unsafe {
+        unlet_terminated(name.as_ptr(), name.count_bytes(), forceit)
+    })
+}
+
+/// [`do_unlet`] of a terminated name.
+///
+/// # Safety
+/// `name` points at `name_len` readable bytes and is NUL-terminated there.
+unsafe fn unlet_terminated(
+    name: *const c_char,
+    name_len: size_t,
+    forceit: bool,
+) -> Result<(), Failed> {
+    let mut varname: *const c_char = ptr::null();
+    let mut dict: *mut Dict = ptr::null_mut();
+    let mut ht = unsafe { find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict) };
+
+    if !ht.is_null() && unsafe { *varname } != NUL as c_char {
+        // The dictionary whose lock decides whether the item may go.
+        let mut d = unsafe { get_current_funccal_dict(ht) };
+        if d.is_null() {
+            if ht == get_globvar_ht() {
+                d = get_globvar_dict();
+            } else if ht == get_compat_ht() {
+                d = get_vimvar_dict();
+            } else {
+                // The scope's own dictionary item holds it.
+                let di = unsafe { find_var_in_ht(ht, *name as c_int, c"".as_ptr(), 0, false) };
+                d = unsafe { (*di).di_tv.dict_or_null() };
+            }
+            if d.is_null() {
+                internal_error(c"do_unlet()");
+                return Err(Failed);
+            }
+        }
+
+        let found = unsafe { hash_find(ht, varname) };
+        let hi = if found.is_kept() {
+            Some(found)
+        } else {
+            unsafe { find_hi_in_scoped_ht(name, &raw mut ht) }
+        };
+        if let Some(hi) = hi.filter(|hi| hi.is_kept()) {
+            // SAFETY: a kept item of a live variable hashtab.
+            let di = unsafe { Di::new(tv_dict_hi2di(hi)) };
+            let flags = di.di_flags as c_int;
+            let (len, lock) = (TV_CSTRING as size_t, unsafe { (*d).dv_lock });
+            if unsafe { var_check_fixed(flags, name, len) }
+                || unsafe { var_check_ro(flags, name, len) }
+                || unsafe { value_check_lock(lock, name, len) }
+            {
+                return Err(Failed);
+            }
+            // Upstream asks the same question a second time here. It can
+            // only answer the same way -- nothing above it changes
+            // `dv_lock` -- so the repetition is dead; kept because
+            // deleting it is a change no gate could confirm.
+            if unsafe { value_check_lock((*d).dv_lock, name, len) } {
+                return Err(Failed);
+            }
+
+            let mut oldtv = TV_INITIAL_VALUE;
+            let watched = dict_is_watched(unsafe { (dict).as_ref() });
+            if watched {
+                let tv = di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
+                unsafe { tv_copy(&*tv, &mut oldtv) };
+            }
+
+            unsafe { delete_var(ht, hi) };
+
+            if watched {
+                unsafe {
+                    dict_watcher_notify(
+                        dict,
+                        ::core::ffi::CStr::from_ptr(varname),
+                        None,
+                        Some(&oldtv),
+                    )
+                };
+                clear_local(&mut oldtv);
+            }
+            return Ok(());
+        }
+    }
+
+    if forceit {
+        return Ok(());
+    }
+    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    let name = unsafe { c_str(name) };
+    semsg!("E108: No such variable: \"{name}\"");
+    Err(Failed)
 }
 
 /// Remove the variable `hi` names from `ht` and free it.

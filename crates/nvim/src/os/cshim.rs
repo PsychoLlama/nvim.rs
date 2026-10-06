@@ -570,6 +570,17 @@ pub(crate) fn bump_catalogue_epoch() {
     MIRI_CATALOGUE_EPOCH.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed);
 }
 
+/// The C library's `islower()` of `byte`, under the current locale -- which
+/// in a non-C locale covers more than `a`-`z`.
+pub(crate) fn is_lower_in_locale(byte: u8) -> bool {
+    /// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
+    const IS_LOWER: ::core::ffi::c_ushort = 512;
+    // SAFETY: glibc's table is indexed by any `unsigned char`, and the
+    // pointer it answers is the thread's own and live.
+    let class = unsafe { *(*__ctype_b_loc()).add(usize::from(byte)) };
+    class & IS_LOWER != 0
+}
+
 /// The translation of `msgid` in the current message catalogue -- C's `_()`.
 ///
 /// Answers `msgid` itself when the catalogue has no entry for it, which is

@@ -371,6 +371,46 @@ pub unsafe fn value_check_lock(
     true
 }
 
+/// [`value_check_lock`] naming the value with `name`, measured.
+pub(crate) fn value_check_lock_named(lock: VarLock, name: &[u8]) -> bool {
+    let error_message = match lock {
+        VarLock::Unlocked => return false,
+        VarLock::Locked => e_value_is_locked_str,
+        VarLock::Fixed => e_cannot_change_value_of_str,
+    };
+    let error_message = gettext(error_message);
+    emsg_text(tr_plural!(
+        error_message,
+        crate::narrow::len_as_int(name.len()),
+        crate::message_fmt::msg_bytes(name)
+    ));
+    true
+}
+
+/// [`tv_check_lock`] naming the value with `name`, measured.
+pub(crate) fn tv_check_lock_named(slot_lock: VarLock, tv: &TypVal, name: &[u8]) -> bool {
+    let lock = match tv.v_type() {
+        VAR_BLOB => tv.blob_ref().map_or(VarLock::Unlocked, |b| b.bv_lock),
+        VAR_LIST => tv.list_ref().map_or(VarLock::Unlocked, |l| l.lv_lock),
+        VAR_DICT => tv.dict_ref().map_or(VarLock::Unlocked, |d| d.dv_lock),
+        _ => VarLock::Unlocked,
+    };
+    value_check_lock_named(slot_lock, name)
+        || (lock.is_locked() && value_check_lock_named(lock, name))
+}
+
+/// [`tv_item_lock`] for a slot whose lock and value are borrowed apart.
+pub(crate) fn item_lock(
+    slot_lock: &mut VarLock,
+    tv: &mut TypVal,
+    deep: ::core::ffi::c_int,
+    lock: bool,
+    check_refcount: bool,
+) {
+    // SAFETY: the two borrows are the slot's own lock and value.
+    unsafe { tv_item_lock(slot_lock, tv, deep, lock, check_refcount) }
+}
+
 /// Whether `tv1` and `tv2` are equal, `ic` ignoring case in strings.
 ///
 /// Containers are compared structurally.  Two values of different types are

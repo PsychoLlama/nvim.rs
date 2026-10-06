@@ -229,6 +229,16 @@ impl TypVal {
         self.overwrite(TypVal::dict(dict));
     }
 
+    /// Another reference to the dictionary this value holds; see
+    /// [`TypVal::list_handle`].
+    #[inline(always)]
+    pub(crate) fn dict_handle(&self) -> Option<DictRef> {
+        match self {
+            TypVal::Dict(dict) => (**dict).clone(),
+            _ => None,
+        }
+    }
+
     /// Move the dictionary out of this slot, leaving `v:_null_dict` behind.
     /// See [`TypVal::take_list`].
     #[inline(always)]

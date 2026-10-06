@@ -241,6 +241,32 @@ pub unsafe fn find_var(
     unsafe { find_var_in_scoped_ht(name, name_len, no_autoload as c_int) }
 }
 
+/// Run `f` over the item holding the variable `name`, answering `None` when
+/// there is none.
+///
+/// The borrow is [`Dict::find_mut`]'s: the item lives in its scope's table
+/// for as long as nothing removes it, and nothing does while `f` only reads
+/// and writes the item itself. `f` must not run user code -- what a
+/// handle's `DerefMut` asks of its borrow, and the reason this takes a
+/// closure rather than answering the item.
+pub(crate) fn with_var<R>(
+    name: &[u8],
+    no_autoload: bool,
+    f: impl FnOnce(&mut DictItem) -> R,
+) -> Option<R> {
+    // SAFETY: `name` names its own bytes, and no table is asked back.
+    let item = unsafe {
+        find_var(
+            name.as_ptr().cast(),
+            name.len(),
+            ptr::null_mut(),
+            no_autoload,
+        )
+    };
+    // SAFETY: a live item of a live scope, or null; the borrow ends with `f`.
+    unsafe { item.as_mut() }.map(f)
+}
+
 /// The item holding `varname[0..varname_len]` in `ht`, or NULL.
 ///
 /// An empty name is the scope itself (`let g:` and friends), and answers the

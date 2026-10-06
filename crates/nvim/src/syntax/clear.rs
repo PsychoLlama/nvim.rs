@@ -164,9 +164,9 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
         } else {
             unsafe { syntax_clear(cur_syn_block().raw()) };
             if cur_syn_block().raw() == Win::current().buffer().syntax_block() {
-                let _ = unsafe { do_unlet(c"b:current_syntax".as_ptr(), 16, true) };
+                let _ = do_unlet(b"b:current_syntax", true);
             }
-            let _ = unsafe { do_unlet(c"w:current_syntax".as_ptr(), 16, true) };
+            let _ = do_unlet(b"w:current_syntax", true);
         }
     } else {
         // Clear the groups and clusters the argument names.

@@ -11,8 +11,10 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::lval::{LValue, Slot as LvalSlot, Target};
 use crate::eval::typval::PartialRef;
 use crate::mbyte::strnicmp_in;
+use crate::memory::XString;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::semsg;
 use crate::snprintf;
@@ -299,16 +301,21 @@ pub unsafe fn printable_func_name(func: *mut UserFunc) -> *mut c_char {
 /// prepend the `<SNR>` mangling when the name is script-local, and reject
 /// the two spellings that cannot be function names.
 ///
-/// `lead` comes in as `eval_fname_script`'s answer (0, 2 or 5) and is
-/// reworked here into the *number of bytes* to prepend: 0 for a global name,
-/// 3 for `<SNR>` alone, or 3 plus the script id for `s:`/`<SID>`.
+/// `name`/`name_len` are the lvalue's name, which is `expanded` when the
+/// name had curly braces (null otherwise). `lead` comes in as
+/// `eval_fname_script`'s answer (0, 2 or 5) and is reworked here into the
+/// *number of bytes* to prepend: 0 for a global name, 3 for `<SNR>` alone,
+/// or 3 plus the script id for `s:`/`<SID>`.
 ///
 /// # Safety
-/// `lv` is a resolved lvalue with a non-null `ll_name`, and `start`/`end`
-/// bracket the name in the command line.
+/// `name` points at `name_len` readable bytes, `expanded` is null or
+/// NUL-terminated, and `start`/`end` bracket the name in the command line.
+#[allow(clippy::too_many_arguments)]
 unsafe fn mangle_function_name(
     cursor: *mut *mut c_char,
-    lv: &mut LVal,
+    mut name: *const c_char,
+    mut name_len: size_t,
+    expanded: *const c_char,
     start: *const c_char,
     end: *const c_char,
     mut lead: c_int,
@@ -316,35 +323,30 @@ unsafe fn mangle_function_name(
     flags: c_int,
 ) -> *mut c_char {
     let mut len;
-    if !lv.ll_exp_name.is_null() {
-        len = unsafe { cstr::bytes_at(lv.ll_exp_name) }.len() as c_int;
-        if lead <= 2
-            && core::ptr::eq(lv.ll_name, lv.ll_exp_name)
-            && lv.ll_name_len >= 2
-            && unsafe { cstr::starts_with(lv.ll_name, b"s:") }
-        {
+    if !expanded.is_null() {
+        len = unsafe { cstr::bytes_at(expanded) }.len() as c_int;
+        if lead <= 2 && name_len >= 2 && unsafe { cstr::starts_with(name, b"s:") } {
             // When there was "s:" already, or the name expanded to get a
             // leading "s:", remove it.
-            lv.ll_name = unsafe { lv.ll_name.add(2) };
-            lv.ll_name_len = lv.ll_name_len.wrapping_sub(2);
+            name = unsafe { name.add(2) };
+            name_len = name_len.wrapping_sub(2);
             len -= 2;
             lead = 2;
         }
     } else {
         // Skip over "s:" and "g:".  The length subtraction wraps, and
-        // upstream's does too: `get_lval` in *skip* mode leaves
-        // `ll_name_len` 0, which `:function s:Name()` inside a false
-        // `:if` reaches.  Nothing reads the wrapped length on that path
+        // upstream's does too: `get_lval` in *skip* mode leaves the
+        // length 0, which `:function s:Name()` inside a false `:if`
+        // reaches.  Nothing reads the wrapped length on that path
         // (`skip` forces `lead` to 0 and gates the E884 check), but a
         // plain `-=` aborts a debug build there.
         if lead == 2
-            || (unsafe { *lv.ll_name } == b'g' as c_char
-                && unsafe { *lv.ll_name.add(1) } == b':' as c_char)
+            || (unsafe { *name } == b'g' as c_char && unsafe { *name.add(1) } == b':' as c_char)
         {
-            lv.ll_name = unsafe { lv.ll_name.add(2) };
-            lv.ll_name_len = lv.ll_name_len.wrapping_sub(2);
+            name = unsafe { name.add(2) };
+            name_len = name_len.wrapping_sub(2);
         }
-        len = unsafe { end.offset_from(lv.ll_name) } as c_int;
+        len = unsafe { end.offset_from(name) } as c_int;
     }
     let mut sid_buf: [c_char; 20] = [0; 20];
     let mut sid_buflen: size_t = 0;
@@ -355,7 +357,7 @@ unsafe fn mangle_function_name(
         lead = 0; // do nothing
     } else if lead > 0 {
         lead = 3;
-        if (!lv.ll_exp_name.is_null() && unsafe { eval_fname_sid(lv.ll_exp_name) })
+        if (!expanded.is_null() && unsafe { eval_fname_sid(expanded) })
             || unsafe { eval_fname_sid(*cursor) }
         {
             // It's "s:" or "<SID>".
@@ -368,9 +370,7 @@ unsafe fn mangle_function_name(
             sid_buflen = unsafe { snprintf!(into, cap, c"%d_".as_ptr(), sid) } as size_t;
             lead += sid_buflen as c_int;
         }
-    } else if flags & TFN_INT == 0
-        && unsafe { builtin_function(lv.ll_name, lv.ll_name_len as c_int) }
-    {
+    } else if flags & TFN_INT == 0 && unsafe { builtin_function(name, name_len as c_int) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let start = unsafe { c_str(start) };
         semsg!("E128: Function name must start with a capital or \"s:\": {start}");
@@ -385,7 +385,7 @@ unsafe fn mangle_function_name(
         // `xmemrchr` is already bounded by `ll_name_len`, so every colon
         // it finds is inside the name and the extra test adds nothing but
         // the coin flip (O-B14-12).
-        let cp = unsafe { xmemrchr(lv.ll_name as *const c_void, b':', lv.ll_name_len) };
+        let cp = unsafe { xmemrchr(name as *const c_void, b':', name_len) };
         if !cp.is_null() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let start = unsafe { c_str(start) };
@@ -394,6 +394,7 @@ unsafe fn mangle_function_name(
         }
     }
 
+    let from = name;
     let name = unsafe { xmalloc(len as size_t + lead as size_t + 1) } as *mut c_char;
     if !skip && lead > 0 {
         unsafe { *name = K_SPECIAL as c_char };
@@ -408,9 +409,111 @@ unsafe fn mangle_function_name(
     }
     let into = unsafe { name.offset(lead as isize) } as *mut c_void;
     let into = into.cast::<u8>();
-    unsafe { into.copy_from(lv.ll_name.cast(), len as size_t) };
+    unsafe { into.copy_from(from.cast(), len as size_t) };
     unsafe { *name.offset((lead + len) as isize) = NUL as c_char };
     unsafe { *cursor = end as *mut c_char };
+    name
+}
+
+/// The function a name that selects a value names -- `dict.func`,
+/// `list[i]`, `v:lua.name` -- with what `fdp` and `partial` record of it.
+///
+/// # Safety
+/// As [`trans_function_name`], with `end` the end of the name `lv` was
+/// resolved from.
+unsafe fn trans_selected(
+    lv: &mut LValue<'_>,
+    cursor: *mut *mut c_char,
+    end: *const c_char,
+    skip: bool,
+    flags: c_int,
+    fdp: *mut FuncDict,
+    partial: *mut *mut Partial,
+) -> *mut c_char {
+    let name: *mut c_char;
+    let len: c_int;
+    // The dictionary a `dict.func` names, the key it adds and the
+    // item it replaces, by address: `FuncDict` holds them so.
+    let dict = match &lv.target {
+        Target::Slot {
+            slot: LvalSlot::Key { dict, .. },
+            ..
+        }
+        | Target::NewKey { dict, .. } => dict.as_ptr(),
+        _ => ptr::null_mut(),
+    };
+    if !fdp.is_null() {
+        let (newkey, item) = match &lv.target {
+            Target::NewKey { key, .. } => (XString::from_bytes(key).into_raw(), ptr::null_mut()),
+            Target::Slot {
+                slot: LvalSlot::Key { dict, key },
+                ..
+            } => (ptr::null_mut(), dict.find_ptr(key)),
+            _ => (ptr::null_mut(), ptr::null_mut()),
+        };
+        unsafe { (*fdp).fd_dict = dict };
+        unsafe { (*fdp).fd_newkey = newkey };
+        unsafe { (*fdp).fd_di = item };
+    }
+    /// What the selected value is, as far as a function name goes.
+    enum Selected {
+        Func(*mut c_char),
+        Partial(*mut Partial),
+        Other,
+    }
+    let selected = lv
+        .with_slot(|tv, _| {
+            let (func, pt) = (tv.func_name_or_null(), tv.partial_or_null());
+            if tv.v_type() == VAR_FUNC && !func.is_null() {
+                // SAFETY: a funcref's name is NUL-terminated.
+                Selected::Func(unsafe { xstrdup(func) })
+            } else if tv.v_type() == VAR_PARTIAL && !pt.is_null() {
+                Selected::Partial(pt)
+            } else {
+                Selected::Other
+            }
+        })
+        .unwrap_or(Selected::Other);
+    match selected {
+        Selected::Func(func) => {
+            name = func;
+            unsafe { *cursor = end as *mut c_char };
+        }
+        // The partial stays where it is, in the container the
+        // name selected it from; the answer borrows it.
+        Selected::Partial(pt) => {
+            if is_luafunc(pt) && unsafe { *end } == b'.' as c_char {
+                len = check_luafunc_name(unsafe { cstr::bytes_at(end.add(1)) }, true) as c_int;
+                if len == 0 {
+                    let arg0 = "v:lua";
+                    semsg!("E15: Invalid expression: \"{arg0}\"");
+                    return ptr::null_mut();
+                }
+                name = unsafe { xmallocz(len as size_t) } as *mut c_char;
+                let from = unsafe { end.add(1) } as *const c_void;
+                let into = name.cast::<u8>();
+                unsafe { into.copy_from_nonoverlapping(from.cast(), len as size_t) };
+                unsafe { *cursor = (end as *mut c_char).add(1).offset(len as isize) };
+            } else {
+                name = unsafe { xstrdup(partial_name(pt)) };
+                unsafe { *cursor = end as *mut c_char };
+            }
+            if !partial.is_null() {
+                unsafe { *partial = pt };
+            }
+        }
+        Selected::Other => {
+            if !skip
+                && flags & TFN_QUIET == 0
+                && (fdp.is_null() || dict.is_null() || unsafe { (*fdp).fd_newkey }.is_null())
+            {
+                emsg(gettext(E_FUNCREF));
+            } else {
+                unsafe { *cursor = end as *mut c_char };
+            }
+            name = ptr::null_mut();
+        }
+    }
     name
 }
 
@@ -429,7 +532,6 @@ pub unsafe fn trans_function_name(
 ) -> *mut c_char {
     let mut name: *mut c_char = ptr::null_mut();
     let mut len;
-    let mut lv = LVAL_INITIAL_VALUE;
 
     if !fdp.is_null() {
         unsafe { fdp.cast::<u8>().write_bytes(0, size_of::<FuncDict>()) };
@@ -461,21 +563,26 @@ pub unsafe fn trans_function_name(
     }
 
     // The TFN_ flags use the same values as the GLV_ ones.
-    let (lvp, glv) = (&raw mut lv, flags | GLV_READ_ONLY);
+    let glv = flags | GLV_READ_ONLY;
     let fne = if lead > 2 { 0 } else { FNE_CHECK_START };
-    let at = start as *mut c_char;
-    // SAFETY: `start` is inside the caller's command line and `lv` is this
-    // frame's own left-hand side.
-    let end: *const c_char = unsafe { get_lval(at, None, lvp, false, skip, glv, fne) };
+    // SAFETY: `start` is inside the caller's NUL-terminated command line.
+    let text = unsafe { cstr::bytes_at(start) };
+    let (mut lv, end_at) = get_lval(text, None, false, skip, glv, fne);
+    // SAFETY: an end `get_lval` answers is inside `text`.
+    let end: *const c_char = end_at.map_or(ptr::null(), |end| unsafe { start.add(end) });
+    // Upstream's `ll_tv != NULL`: the name selected a value rather than
+    // naming a whole variable.
+    let selects = matches!(lv.target, Target::Slot { .. } | Target::NewKey { .. });
+    let range = matches!(lv.target, Target::Slot { span, .. } if span.range);
 
     'theend: {
-        if end == start {
+        if end_at == Some(0) {
             if !skip {
                 emsg(gettext(c"E129: Function name required"));
             }
             break 'theend;
         }
-        if end.is_null() || (!lv.ll_tv.is_null() && (lead > 2 || lv.ll_range)) {
+        if end.is_null() || (selects && (lead > 2 || range)) {
             // Report an invalid expression in braces, unless the
             // evaluation was cancelled by an aborting error, an interrupt
             // or an exception.
@@ -496,71 +603,24 @@ pub unsafe fn trans_function_name(
             break 'theend;
         }
 
-        if !lv.ll_tv.is_null() {
-            if !fdp.is_null() {
-                unsafe { (*fdp).fd_dict = lv.ll_dict };
-                unsafe { (*fdp).fd_newkey = lv.ll_newkey };
-                lv.ll_newkey = ptr::null_mut();
-                unsafe { (*fdp).fd_di = lv.ll_di };
-            }
-            if unsafe { (*lv.ll_tv).v_type() } == VAR_FUNC
-                && !unsafe { (*lv.ll_tv).func_name_or_null() }.is_null()
-            {
-                name = unsafe { xstrdup((*lv.ll_tv).func_name_or_null()) };
-                unsafe { *cursor = end as *mut c_char };
-            } else if unsafe { (*lv.ll_tv).v_type() } == VAR_PARTIAL
-                && !unsafe { (*lv.ll_tv).partial_or_null() }.is_null()
-            {
-                if is_luafunc(unsafe { (*lv.ll_tv).partial_or_null() })
-                    && unsafe { *end } == b'.' as c_char
-                {
-                    len = check_luafunc_name(unsafe { cstr::bytes_at(end.add(1)) }, true) as c_int;
-                    if len == 0 {
-                        let arg0 = "v:lua";
-                        semsg!("E15: Invalid expression: \"{arg0}\"");
-                        break 'theend;
-                    }
-                    name = unsafe { xmallocz(len as size_t) } as *mut c_char;
-                    let from = unsafe { end.add(1) } as *const c_void;
-                    let into = name.cast::<u8>();
-                    unsafe { into.copy_from_nonoverlapping(from.cast(), len as size_t) };
-                    unsafe { *cursor = (end as *mut c_char).add(1).offset(len as isize) };
-                } else {
-                    name = unsafe { xstrdup(partial_name((*lv.ll_tv).partial_or_null())) };
-                    unsafe { *cursor = end as *mut c_char };
-                }
-                if !partial.is_null() {
-                    unsafe { *partial = (*lv.ll_tv).partial_or_null() };
-                }
-            } else {
-                if !skip
-                    && flags & TFN_QUIET == 0
-                    && (fdp.is_null()
-                        || lv.ll_dict.is_null()
-                        || unsafe { (*fdp).fd_newkey }.is_null())
-                {
-                    emsg(gettext(E_FUNCREF));
-                } else {
-                    unsafe { *cursor = end as *mut c_char };
-                }
-                name = ptr::null_mut();
-            }
+        if selects {
+            name = unsafe { trans_selected(&mut lv, cursor, end, skip, flags, fdp, partial) };
             break 'theend;
         }
 
-        if lv.ll_name.is_null() {
+        if !lv.has_name() {
             // Error found, but carry on after the function name.
             unsafe { *cursor = end as *mut c_char };
             break 'theend;
         }
 
         // Check whether the name is a funcref; if so, use its value.
-        if !lv.ll_exp_name.is_null() {
-            len = unsafe { cstr::bytes_at(lv.ll_exp_name) }.len() as c_int;
+        let expanded = lv.expanded().map_or(ptr::null(), XString::as_ptr);
+        if !expanded.is_null() {
+            len = unsafe { cstr::bytes_at(expanded) }.len() as c_int;
             let (lenp, quiet) = (&raw mut len, flags & TFN_NO_AUTOLOAD != 0);
-            let exp = lv.ll_exp_name;
-            name = unsafe { deref_func_name(exp, lenp, partial, quiet, ptr::null_mut()) };
-            if name == lv.ll_exp_name {
+            name = unsafe { deref_func_name(expanded, lenp, partial, quiet, ptr::null_mut()) };
+            if ptr::eq(name, expanded) {
                 name = ptr::null_mut();
             }
         } else if flags & TFN_NO_DEREF == 0 {
@@ -587,10 +647,20 @@ pub unsafe fn trans_function_name(
             break 'theend;
         }
 
-        name = unsafe { mangle_function_name(cursor, &mut lv, start, end, lead, skip, flags) };
+        let lv_name = lv.name();
+        let (lv_name, lv_len) = if expanded.is_null() {
+            (start, lv_name.len())
+        } else {
+            (expanded, lv_name.len())
+        };
+        name = unsafe {
+            mangle_function_name(
+                cursor, lv_name, lv_len, expanded, start, end, lead, skip, flags,
+            )
+        };
     }
 
-    unsafe { clear_lval(&raw mut lv) };
+    drop(lv);
     name
 }
 

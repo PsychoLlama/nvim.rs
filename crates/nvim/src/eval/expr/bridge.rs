@@ -81,11 +81,6 @@ impl Cur {
         self.set(unsafe { skipwhite(self.get().wrapping_add(n)) });
     }
 
-    /// The pointer back, for the callees that still take one.
-    pub(crate) fn raw(self) -> *mut *mut c_char {
-        self.0
-    }
-
     /// **The bridge into the evaluator**, for a pointer walker: run `f` over
     /// a [`Cursor`] on the text from here to the terminator, then move this
     /// cursor on by what `f` consumed. It goes when the last pointer walker

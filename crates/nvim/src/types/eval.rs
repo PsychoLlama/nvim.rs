@@ -390,28 +390,6 @@ crate::flag_set! {
     const RO_SBX = 4;
 }
 pub type ExprType = ::core::ffi::c_uint;
-pub struct LVal {
-    pub ll_name: *const ::core::ffi::c_char,
-    pub ll_name_len: size_t,
-    pub ll_exp_name: *mut ::core::ffi::c_char,
-    pub ll_tv: *mut TypVal,
-    /// The lock of the slot [`ll_tv`](Self::ll_tv) points into -- a list
-    /// item's or a dictionary item's -- since the lock belongs to the place
-    /// and not to the value sitting in it.  Null exactly when `ll_tv` is.
-    pub ll_lock: *mut VarLock,
-    /// Where in `ll_list` the lvalue is -- an index, because the list owns
-    /// its items.  Only meaningful when `ll_list` is non-null.
-    pub ll_li: usize,
-    pub ll_list: *mut List,
-    pub ll_range: bool,
-    pub ll_empty2: bool,
-    pub ll_n1: ::core::ffi::c_int,
-    pub ll_n2: ::core::ffi::c_int,
-    pub ll_dict: *mut Dict,
-    pub ll_di: *mut DictItem,
-    pub ll_newkey: *mut ::core::ffi::c_char,
-    pub ll_blob: *mut Blob,
-}
 #[derive(Default)]
 pub struct SaveVEvent {
     pub sve_did_save: bool,

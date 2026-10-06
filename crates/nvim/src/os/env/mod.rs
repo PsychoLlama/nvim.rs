@@ -555,6 +555,18 @@ pub unsafe fn vim_setenv_ext(name: *const c_char, val: *const c_char) {
     }
 }
 
+/// [`vim_setenv_ext`] for a caller that has both name and value as strings.
+pub(crate) fn vim_setenv_named(name: &CStr, value: &CStr) {
+    // SAFETY: two NUL-terminated strings.
+    unsafe { vim_setenv_ext(name.as_ptr(), value.as_ptr()) }
+}
+
+/// [`vim_unsetenv_ext`] for a caller that has the name as a string.
+pub(crate) fn vim_unsetenv_named(name: &CStr) {
+    // SAFETY: a NUL-terminated string.
+    unsafe { vim_unsetenv_ext(name.as_ptr()) }
+}
+
 /// [`os_setenv`] for a caller that has both name and value as strings.
 /// Answers whether the variable was set.
 pub fn env_set(name: &CStr, value: &CStr) -> bool {

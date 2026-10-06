@@ -365,7 +365,7 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
     // Restore the value of b:current_syntax.
     match &old_value {
         None => {
-            let _ = unsafe { do_unlet(c"b:current_syntax".as_ptr(), 16, true) };
+            let _ = do_unlet(b"b:current_syntax", true);
         }
         Some(value) => unsafe {
             set_internal_string_var(c"b:current_syntax".as_ptr(), value.as_ptr().cast_mut());

@@ -712,6 +712,25 @@ pub(crate) unsafe fn set_option_value_handle_tty(
     )))
 }
 
+/// [`set_option_value_handle_tty`] for the option `name` spells.
+pub(crate) fn set_option_value_handle_tty_named(
+    name: &[u8],
+    opt_idx: OptIndex,
+    value: OptVal,
+    opt_flags: OptionSetFlags,
+) -> Result<(), OptError> {
+    if opt_idx != kOptInvalid {
+        return set_option_value(opt_idx, value, opt_flags);
+    }
+    if is_tty_option(name) {
+        return Ok(());
+    }
+    let name = crate::message_fmt::msg_bytes(name);
+    Err(OptError::Owned(XString::from_bytes(
+        tr!("E355: Unknown option: {name}").as_bytes(),
+    )))
+}
+
 /// [`set_option_value`], reporting a rejection as an error message.
 pub(crate) fn set_option_value_give_err(
     opt_idx: OptIndex,

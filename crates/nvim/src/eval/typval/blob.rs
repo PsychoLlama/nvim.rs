@@ -282,6 +282,16 @@ impl TypVal {
         self.overwrite(TypVal::blob(blob));
     }
 
+    /// Another reference to the blob this value holds; see
+    /// [`TypVal::list_handle`].
+    #[inline(always)]
+    pub(crate) fn blob_handle(&self) -> Option<BlobRef> {
+        match self {
+            TypVal::Blob(blob) => (**blob).clone(),
+            _ => None,
+        }
+    }
+
     /// Move the blob out of this slot, leaving `v:_null_blob` behind.
     #[inline(always)]
     pub(crate) fn take_blob(&mut self) -> Option<BlobRef> {
@@ -503,6 +513,19 @@ pub unsafe fn blob_set_range(
     // not -- so the two borrows name different allocations.
     unsafe { (*dest).bytes_mut()[first..first + bytes.len()].copy_from_slice(bytes) };
     Ok(())
+}
+
+/// [`blob_set_range`] into the blob `dest` holds. `src` may hold that same
+/// blob.
+pub(crate) fn set_range(
+    dest: &BlobRef,
+    n1: VarNumber,
+    n2: VarNumber,
+    src: &TypVal,
+) -> Result<(), Failed> {
+    // SAFETY: a blob the handle keeps alive, which no borrow of this frame
+    // reaches; the callee compares `src` against it before borrowing either.
+    unsafe { blob_set_range(dest.as_ptr(), n1, n2, src) }
 }
 
 /// `remove()` over a blob: take out one byte, or the range `[idx, end]`, and

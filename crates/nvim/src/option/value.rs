@@ -135,6 +135,23 @@ impl OptStr {
     }
 }
 
+/// `cur` and `new` joined, when both are strings with storage: the `.=` of
+/// a string option. `None` leaves `new` as it is.
+pub(crate) fn optval_concat(cur: &OptVal, new: &OptVal) -> Option<OptVal> {
+    let (OptVal::String(cur), OptVal::String(new)) = (cur, new) else {
+        return None;
+    };
+    if cur.data().is_null() || new.data().is_null() {
+        return None;
+    }
+    // SAFETY: two live values' strings name live bytes.
+    let (cur, new) = unsafe { (cur.as_bytes(), new.as_bytes()) };
+    let mut joined = Vec::with_capacity(cur.len() + new.len());
+    joined.extend_from_slice(cur);
+    joined.extend_from_slice(new);
+    Some(OptVal::string(String_0::from_bytes(&joined)))
+}
+
 /// Release what a value owns. Only a string owns anything, and the shared
 /// empty string every unset string option points at is not ours to free.
 ///

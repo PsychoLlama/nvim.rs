@@ -321,11 +321,12 @@ pub(crate) unsafe fn get_function_body(
                     if unsafe { checkforcmd(&raw mut arg, c"let".as_ptr(), 2) }
                         || unsafe { checkforcmd(&raw mut p, c"const".as_ptr(), 5) }
                     {
-                        let mut var_count = 0;
-                        let mut semicolon = 0;
-                        arg = unsafe {
-                            skip_var_list(arg, &raw mut var_count, &raw mut semicolon, true)
-                        } as *mut c_char;
+                        // SAFETY: `arg` is inside the NUL-terminated body line.
+                        let targets = unsafe { cstr::bytes_at(arg) };
+                        arg = match skip_var_list(targets, true) {
+                            Some(list) => arg.wrapping_add(list.end),
+                            None => ptr::null_mut(),
+                        };
                         if !arg.is_null() {
                             arg = unsafe { skipwhite(arg) };
                         }

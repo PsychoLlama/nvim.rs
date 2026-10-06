@@ -473,7 +473,10 @@ unsafe fn for_next_item(
     };
 
     // Use the element at the start of the list and advance.
-    let result = !*error && !fi.is_null() && !skip && unsafe { next_for_item(fi, excmd.arg_ptr()) };
+    let result = !*error
+        && !fi.is_null()
+        && !skip
+        && unsafe { next_for_item(fi, excmd.line.rest_of(excmd.line.arg)) };
     if !result {
         unsafe { free_for_info(fi) };
         unsafe { (*cstack).cs_forinfo[idx] = ptr::null_mut() };

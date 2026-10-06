@@ -2,19 +2,19 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_string, arg_string_chk};
+use super::wrappers::arg_string_chk;
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
 use crate::cstr;
-use crate::eval::typval::{NumBuf, callback_free, di_lock, di_tv, list_items, tv_islocked};
-use crate::eval::vars::find_var;
-use crate::eval::{callback_from_typval, clear_lval, get_lval};
+use crate::eval::typval::{NumBuf, callback_free, tv_islocked};
+use crate::eval::vars::with_var;
+use crate::eval::{Target, callback_from_typval, get_lval};
 use crate::ex_cmds::check_secure;
 use crate::memory::xmalloc;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::strings::vim_vsnprintf_typval;
 use crate::types::{
-    Callback, EvalFuncData, NUL, TypVal, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber,
+    Callback, EvalFuncData, TypVal, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -108,50 +108,40 @@ pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
 pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
-    // SAFETY: `get_lval` clears `lv` before writing to it, and every pointer
-    // read below comes back from it; `clear_lval` runs on every path.
-    let mut lv = unsafe { core::mem::zeroed() };
-    let name = arg_string(&mut numbuf, &args[0]) as *mut c_char;
-    let out = &raw mut lv;
+    let text = numbuf.string(&args[0]).to_bytes();
     let flags = (GLV_NO_AUTOLOAD | GLV_READ_ONLY) as c_int;
-    let start = FNE_CHECK_START;
-    let end = unsafe { get_lval(name, None, out, false, false, flags, start) };
-    if !end.is_null() && !lv.ll_name.is_null() {
-        if unsafe { *end } as c_int != NUL {
-            // SAFETY: `end` is the unconsumed remainder of the caller's
-            // expression, NUL-terminated.
-            let rest = unsafe { c_str(end) };
-            if lv.ll_name_len == 0 {
-                semsg!("E475: Invalid argument: {rest}");
-            } else {
-                semsg!("E488: Trailing characters: {rest}");
-            }
-        } else if lv.ll_tv.is_null() {
-            let di = unsafe { find_var(lv.ll_name, lv.ll_name_len, ptr::null_mut(), true) };
-            if !di.is_null() {
-                let locked = unsafe { (*di).di_flags } as c_int & DI_FLAGS_LOCK as c_int != 0
-                    || unsafe { tv_islocked(*di_lock(di), &*di_tv(di)) };
-                result.write_number(locked as VarNumber);
-            }
-        } else if lv.ll_range {
-            semsg!("E786: Range not allowed");
-        } else if !lv.ll_newkey.is_null() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let ll_newkey = unsafe { c_str(lv.ll_newkey) };
-            semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
-        } else if !lv.ll_list.is_null() {
-            // SAFETY: a resolved lvalue's own list and an index into it.
-            let li = &list_items(unsafe { lv.ll_list.as_ref() })[lv.ll_li];
-            let locked = tv_islocked(li.li_lock, &li.li_tv);
-            result.write_number(locked as VarNumber);
+    let (mut lval, end) = get_lval(text, None, false, false, flags, FNE_CHECK_START);
+    let Some(end) = end.filter(|_| lval.has_name()) else {
+        return;
+    };
+    if end < text.len() {
+        // The unconsumed remainder of the expression.
+        let rest = msg_bytes(&text[end..]);
+        if lval.name().is_empty() {
+            semsg!("E475: Invalid argument: {rest}");
         } else {
-            let di = lv.ll_di;
-            // SAFETY: as above, for a dictionary item.
-            let locked = unsafe { tv_islocked(*di_lock(di), &*di_tv(di)) };
-            result.write_number(locked as VarNumber);
+            semsg!("E488: Trailing characters: {rest}");
         }
+        return;
     }
-    unsafe { clear_lval(&raw mut lv) };
+    let locked = match &lval.target {
+        Target::Variable | Target::Blob { .. } => with_var(lval.name(), true, |item| {
+            item.di_flags & DI_FLAGS_LOCK as u8 != 0 || tv_islocked(item.di_lock, &item.di_tv)
+        }),
+        Target::Slot { span, .. } if span.range => {
+            semsg!("E786: Range not allowed");
+            None
+        }
+        Target::NewKey { key, .. } => {
+            let key = msg_bytes(key);
+            semsg!("E716: Key not present in Dictionary: \"{key}\"");
+            None
+        }
+        Target::Slot { .. } => lval.with_slot(|tv, lock| tv_islocked(*lock, tv)),
+    };
+    if let Some(locked) = locked {
+        result.write_number(VarNumber::from(locked));
+    }
 }
 
 /// `id({expr})` — a string unique to the container `expr` refers to.

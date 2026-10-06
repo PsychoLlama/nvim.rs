@@ -446,6 +446,23 @@ unsafe fn finish_write_reg(name: c_int, reg: *mut YankReg, old_y_previous: Optio
     }
 }
 
+/// [`get_reg_contents`] as an owned string, `None` when the register is
+/// empty or cannot be read. `flags` must not ask for a list.
+pub(crate) fn get_reg_contents_owned(regname: c_int, flags: c_int) -> Option<XString> {
+    debug_assert!(flags & kGRegList as c_int == 0, "a list is not a string");
+    let contents = get_reg_contents(regname, flags);
+    // SAFETY: without `kGRegList` the answer is an allocated NUL-terminated
+    // string, or null, and this takes it over once.
+    (!contents.is_null()).then(|| unsafe { XString::from_raw(contents.cast()) })
+}
+
+/// [`write_reg_contents`] of `text`.
+pub(crate) fn write_reg_contents_bytes(name: c_int, text: &[u8], must_append: bool) {
+    let len = ssize_t::try_from(text.len()).expect("a register fits in memory");
+    // SAFETY: `text` names its own bytes, and the length is given.
+    unsafe { write_reg_contents(name, text.as_ptr().cast(), len, c_int::from(must_append)) }
+}
+
 /// Write `str` to register `name`, working out the motion type from the text.
 ///
 /// `len` may be -1 for a NUL-terminated string.

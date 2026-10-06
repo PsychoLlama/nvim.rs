@@ -158,6 +158,17 @@ fn getwinvar(args: &[TypVal], result: &mut TypVal, off: c_int) {
     unsafe { get_var_from(varname, result, deftv, b'w' as c_int, tp, win, nil) };
 }
 
+/// [`tv_to_optval`] for the option `name` spells: the value, and whether
+/// the conversion failed.
+pub(crate) fn tv_to_optval_named(tv: &TypVal, opt_idx: OptIndex, name: &[u8]) -> (OptVal, bool) {
+    let mut error = false;
+    let value = cstr::with_terminated(name, |name| {
+        // SAFETY: a NUL-terminated name and a local flag.
+        unsafe { tv_to_optval(tv, opt_idx, name.as_ptr(), &raw mut error) }
+    });
+    (value, error)
+}
+
 /// `tv` as the value of option `opt_idx`, or [`OptVal::Nil`] with `error` set.
 ///
 /// The option's declared types decide the conversion; a Funcref is accepted

@@ -325,6 +325,19 @@ impl Dict {
         }
     }
 
+    /// Remove the item under `key`, freeing it and its value. False when
+    /// there is none.
+    pub(crate) fn remove_key(&mut self, key: &[u8]) -> bool {
+        let item = self.find_ptr(key);
+        if item.is_null() {
+            return false;
+        }
+        // SAFETY: an item of this dictionary, which the exclusive borrow
+        // keeps in it until the removal.
+        unsafe { tv_dict_item_remove(self, item) };
+        true
+    }
+
     /// Whether the dictionary has `key`.
     #[inline]
     pub fn has_key(&self, key: &[u8]) -> bool {
