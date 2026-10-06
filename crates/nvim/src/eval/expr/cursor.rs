@@ -75,9 +75,7 @@ impl<'a> Cursor<'a> {
 
     /// Step past any spaces and tabs.
     pub(crate) fn skip_white(&mut self) {
-        while matches!(self.byte(), b' ' | b'\t') {
-            self.offset += 1;
-        }
+        self.offset += crate::charset::skip::white(self.rest());
     }
 }
 

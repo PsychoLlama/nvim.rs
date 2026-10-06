@@ -370,11 +370,49 @@ pub(crate) fn string_slice(
     Some(&text[start_byte as usize..end_byte as usize])
 }
 
+/// Whether another subscript follows the operand in `result`. An opening
+/// `[`, `.` or `(` right after white space is not one: `a [b]` is two
+/// operands.
+#[inline(always)]
+fn subscript_follows(cursor: &Cursor<'_>, result: &TypVal, evaluate: bool) -> bool {
+    let opens = match cursor.byte() {
+        b'[' => true,
+        b'.' => result.v_type() == VAR_DICT,
+        b'(' => !evaluate || result.is_func(),
+        b'-' => return cursor.at(1) == b'>',
+        _ => return false,
+    };
+    opens && {
+        let before = cursor
+            .offset()
+            .checked_sub(1)
+            .map_or(0, |at| cursor.text()[at]);
+        !matches!(before, b' ' | b'\t')
+    }
+}
+
 /// Everything that can follow a completed operand, in any order:
 /// `expr[idx]`, `expr[a:b]`, `.name`, a call through a Funcref, and
 /// `expr->method()`. `dict.func(expr)[idx]['func'](expr)->len()` is one run
 /// of this loop.
+#[inline]
 pub(crate) fn handle_subscript(
+    cursor: &mut Cursor<'_>,
+    result: &mut TypVal,
+    evaluate: bool,
+    verbose: bool,
+) -> Result<(), Failed> {
+    // Most operands are followed by nothing of the kind: answer those
+    // without the walk below.
+    if !subscript_follows(cursor, result, evaluate) && !tv_is_luafunc(result) {
+        return Ok(());
+    }
+    subscripts(cursor, result, evaluate, verbose)
+}
+
+/// The walk [`handle_subscript`] makes once something follows.
+#[inline(never)]
+fn subscripts(
     cursor: &mut Cursor<'_>,
     result: &mut TypVal,
     evaluate: bool,
@@ -403,21 +441,7 @@ pub(crate) fn handle_subscript(
         }
     }
 
-    // Whether another subscript follows. An opening `[`, `.` or `(` right
-    // after white space is not one: `a [b]` is two operands.
-    let more = |cursor: &Cursor<'_>, result: &TypVal| {
-        let c = cursor.byte();
-        let opens = c == b'['
-            || (c == b'.' && result.v_type() == VAR_DICT)
-            || (c == b'(' && (!evaluate || result.is_func()));
-        let before = cursor
-            .offset()
-            .checked_sub(1)
-            .map_or(0, |at| cursor.text()[at]);
-        (opens && !matches!(before, b' ' | b'\t')) || (c == b'-' && cursor.at(1) == b'>')
-    };
-
-    while ret.is_ok() && more(cursor, result) {
+    while ret.is_ok() && subscript_follows(cursor, result, evaluate) {
         if cursor.byte() == b'(' {
             ret = call_func_rettv(cursor, result, evaluate, selfdict.as_ref(), None, lua_name);
             // Stop evaluating on an immediate abort, an interrupt, or an

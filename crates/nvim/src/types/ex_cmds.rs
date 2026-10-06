@@ -250,6 +250,27 @@ impl Default for CmdMod {
 /// reads as the empty string. See [`CmdLine::ptr_at`].
 static EMPTY_LINE: [u8; 1] = [0];
 
+/// Where the first NUL in `bytes` is, or their length when there is none.
+///
+/// Sixteen bytes a step, as a fixed-size fold the compiler turns into one
+/// vector compare: this measures a command's whole argument each time an
+/// expression command evaluates it, and a byte-at-a-time search there is a
+/// measurable share of the parser's cost.
+fn nul_at(bytes: &[u8]) -> usize {
+    let mut base = 0;
+    for chunk in bytes.as_chunks::<16>().0 {
+        if chunk.iter().fold(false, |found, &byte| found | (byte == 0)) {
+            break;
+        }
+        base += 16;
+    }
+    let tail = &bytes[base..];
+    base + tail
+        .iter()
+        .position(|&byte| byte == 0)
+        .unwrap_or(tail.len())
+}
+
 #[derive(Clone, Default)]
 pub struct CmdLine {
     /// The line's bytes, empty or ending in a NUL.
@@ -338,11 +359,7 @@ impl CmdLine {
     /// NUL. What a C consumer handed `line + at` reads.
     pub fn rest_of(&self, at: usize) -> &[u8] {
         let tail = &self.text[at.min(self.text.len())..];
-        let end = tail
-            .iter()
-            .position(|byte| *byte == 0)
-            .unwrap_or(tail.len());
-        &tail[..end]
+        &tail[..nul_at(tail)]
     }
 
     /// [`rest_of`](CmdLine::rest_of) with its terminator, as a `&CStr`.
@@ -788,5 +805,35 @@ impl Default for ExArg {
             cookie: ::core::ptr::null_mut(),
             cstack: ::core::ptr::null_mut(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nul_at_finds_the_first_nul_in_every_lane() {
+        for len in 0..40 {
+            for at in 0..=len {
+                let mut bytes = vec![b'x'; len];
+                if at < len {
+                    bytes[at] = 0;
+                    if at + 1 < len {
+                        bytes[at + 1] = 0;
+                    }
+                }
+                assert_eq!(nul_at(&bytes), at, "len {len}, NUL at {at}");
+            }
+        }
+    }
+
+    #[test]
+    fn rest_of_stops_at_the_strings_own_terminator() {
+        let mut line = CmdLine::from_bytes(b"let x = 1 | echo x");
+        line.terminate_at(10);
+        assert_eq!(line.rest_of(0), b"let x = 1 ");
+        assert_eq!(line.rest_of(11), b" echo x");
+        assert_eq!(line.rest_of(line.len()), b"");
     }
 }

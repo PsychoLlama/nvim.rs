@@ -48,7 +48,7 @@
   "cell_raw_ptr": 13,
   "api_err_params": 0,
   "char_as_c_int": 1768,
-  "failed_uses": 1272,
+  "failed_uses": 1273,
   "labeled_blocks": 123,
   "lua_raw_stack": 837,
   "raw_variadic_calls": 123,

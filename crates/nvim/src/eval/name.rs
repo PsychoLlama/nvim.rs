@@ -93,7 +93,19 @@ pub(crate) fn get_name_len(
     let prefix = fname_script_len(cursor.rest());
     cursor.bump(prefix);
     let flags = if prefix > 0 { 0 } else { FNE_CHECK_START };
-    let found = name_end(cursor.rest(), flags);
+    // A name with curly braces in it is an identifier run up to a `{`, so
+    // one that does not stop at one has none: the plain identifier is the
+    // whole name, and the brace-aware scan has nothing to add.
+    let rest = cursor.rest();
+    let id = id_len(rest);
+    if byte_at(rest, id) != b'{' {
+        if id > 0 {
+            cursor.bump(id);
+            cursor.skip_white();
+        }
+        return plain_name(cursor, prefix + id, verbose);
+    }
+    let found = name_end(rest, flags);
 
     if let Some(open) = found.brace_open {
         if evaluate {
@@ -114,6 +126,12 @@ pub(crate) fn get_name_len(
     }
 
     let len = prefix + take_id(cursor);
+    plain_name(cursor, len, verbose)
+}
+
+/// [`get_name_len`]'s answer for a name without curly braces, `len` bytes
+/// long and already stepped over: an empty one is reported when `verbose`.
+fn plain_name(cursor: &Cursor<'_>, len: usize, verbose: bool) -> (c_int, Option<XString>) {
     if len == 0 && verbose && cursor.byte() != END {
         let rest = msg_bytes(cursor.rest());
         semsg!("E15: Invalid expression: \"{rest}\"");
