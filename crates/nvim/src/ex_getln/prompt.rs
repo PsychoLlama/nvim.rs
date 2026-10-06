@@ -85,7 +85,7 @@ pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::f
 /// third means completion for `input()` and the cancel value for
 /// `inputdialog()`.
 pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, secret: bool) {
-    (*result).write_string(::core::ptr::null_mut::<::core::ffi::c_char>());
+    (*result).write_string_raw(::core::ptr::null_mut::<::core::ffi::c_char>());
 
     if cmdpreview.get() {
         return;
@@ -169,7 +169,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
                     return;
                 }
                 if inputdialog {
-                    cancelreturn_strarg2.write_string(strarg2 as *mut ::core::ffi::c_char);
+                    cancelreturn_strarg2.write_string_raw(strarg2 as *mut ::core::ffi::c_char);
                     cancelreturn = &raw mut *cancelreturn_strarg2;
                 } else {
                     xp_name = strarg2;
@@ -215,7 +215,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     let save_ex_normal_busy = ex_normal_busy.get();
     ex_normal_busy.set(0);
     unsafe {
-        (*result).write_string(getcmdline_prompt(
+        (*result).write_string_raw(getcmdline_prompt(
             if secret {
                 NUL
             } else {

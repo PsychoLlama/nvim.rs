@@ -224,7 +224,7 @@ fn add_full(text: &str, fname: Option<&str>, extra: [&str; 4], user_data: Option
     let mut data = user_data.map(|d| {
         let d = CString::new(d).expect("no NUL in test data");
         // SAFETY: a NUL-terminated string; the copy is the value's own.
-        TypVal::String(unsafe { xstrdup(d.as_ptr()) })
+        TypVal::string_raw(unsafe { xstrdup(d.as_ptr()) })
     });
     let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
     let fname = fname.as_deref();

@@ -670,11 +670,11 @@ pub unsafe fn var_item_copy(
             } else {
                 let (cv, s) = (conv as *mut VimConv, src.string_or_null());
                 // SAFETY: `s` is the source string and `cv` the conversion.
-                dst.write_string(unsafe { string_convert(cv, s, null_mut::<size_t>()) });
+                dst.write_string_raw(unsafe { string_convert(cv, s, null_mut::<size_t>()) });
                 // A conversion that failed keeps the original bytes.
                 if dst.string_or_null().is_null() {
                     // SAFETY: `s` is the source's NUL-terminated string.
-                    dst.write_string(unsafe { xstrdup(s) });
+                    dst.write_string_raw(unsafe { xstrdup(s) });
                 }
             }
         }

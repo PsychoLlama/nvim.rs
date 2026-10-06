@@ -248,19 +248,19 @@ fn prompt_buffer(arg: &TypVal) -> Option<Buf> {
 /// `prompt_getprompt({buf})` — the prompt text, or "" for a buffer that is
 /// not a prompt buffer.
 pub fn f_prompt_getprompt(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     // SAFETY: the frame is live and `result` owns the duplicate.
     if let Some(buf) = prompt_buffer(&args[0]) {
-        result.write_string(unsafe { xstrdup(buf_prompt_text(buf)) });
+        result.write_string_raw(unsafe { xstrdup(buf_prompt_text(buf)) });
     }
 }
 
 /// `prompt_getinput({buf})` — what has been typed after the prompt.
 pub fn f_prompt_getinput(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     // SAFETY: the frame is live and `prompt_get_input` hands over an
     // allocation `result` then owns.
     if let Some(buf) = prompt_buffer(&args[0]) {
-        result.write_string(unsafe { prompt_get_input(Some(buf)) });
+        result.write_string_raw(unsafe { prompt_get_input(Some(buf)) });
     }
 }

@@ -80,7 +80,7 @@ pub(crate) fn get_literal_key(cursor: &mut Cursor<'_>, tv: &mut TypVal) -> Resul
     if len == 0 {
         return Err(Failed);
     }
-    tv.write_string(XString::from_bytes(&rest[..len]).into_raw());
+    tv.write_string_raw(XString::from_bytes(&rest[..len]).into_raw());
     cursor.bump(len);
     cursor.skip_white();
     Ok(())

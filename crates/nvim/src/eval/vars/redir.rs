@@ -47,7 +47,7 @@ pub fn assert_error(message: &[u8]) {
     } else {
         XString::from_bytes(message).into_raw()
     };
-    errors.push(TypVal::String(text));
+    errors.push(TypVal::string_raw(text));
 }
 
 /// The name of the variable a running `:redir =>` captures into, `None`
@@ -60,7 +60,7 @@ static REDIR_TEXT: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 
 /// An owned String value holding `text`.
 fn string_value(text: &[u8]) -> TypVal {
-    TypVal::String(XString::from_bytes(text).into_raw())
+    TypVal::string_from(text)
 }
 
 /// Start capturing messages into the variable `name`, appending to it rather

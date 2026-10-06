@@ -157,7 +157,7 @@ fn get_buffer_lines(
     // buffer before `ml_get_buf` sees it.
     let mut ret = unsafe { Tv::new(result) };
     ret.write_empty(if retlist { VAR_LIST } else { VAR_STRING });
-    ret.write_string(ptr::null_mut());
+    ret.write_string_raw(ptr::null_mut());
     if buffer.is_none_or(|b| b.b_ml.ml_mfp.is_null()) || start < 0 || end < start {
         if retlist {
             tv_list_alloc_ret(result, 0);
@@ -173,7 +173,7 @@ fn get_buffer_lines(
                 len(buffer.line_len_raw(start)),
             )
         });
-        ret.write_string(line.unwrap_or(ptr::null_mut()));
+        ret.write_string_raw(line.unwrap_or(ptr::null_mut()));
         return;
     }
     start = start.max(1);

@@ -163,7 +163,7 @@ fn simplify(s: *mut c_char) {
 pub fn f_glob2regpat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let pat = str_arg_chk(args, 0, &mut numbuf);
-    result.write_string(pat.map_or(ptr::null_mut(), |pat| {
+    result.write_string_raw(pat.map_or(ptr::null_mut(), |pat| {
         // SAFETY: `pat` is NUL-terminated, which is what a NULL end
         // pointer promises; a NULL `allow_dirs` asks for none reported.
         unsafe { file_pat_to_reg_pat(pat.as_ptr(), ptr::null(), ptr::null_mut(), false as c_int) }
@@ -190,14 +190,14 @@ pub fn f_pathshorten(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     };
     result.write_empty(VAR_STRING);
     let Some(p) = str_arg_chk(args, 0, &mut numbuf) else {
-        result.write_string(ptr::null_mut());
+        result.write_string_raw(ptr::null_mut());
         return;
     };
     let shortened = Owned::dup(p);
     // SAFETY: a NUL-terminated string this module owns; shortening only ever
     // moves bytes down, so the result stays inside the allocation.
     unsafe { shorten_dir_len(shortened.0, trim_len) };
-    result.write_string(shortened.into_raw());
+    result.write_string_raw(shortened.into_raw());
 }
 
 /// `simplify({path})`: `.`, `..` and duplicate separators collapsed, without
@@ -206,17 +206,17 @@ pub fn f_simplify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let simplified = Owned::dup(str_arg(args, 0, &mut numbuf)).into_raw();
     simplify(simplified);
-    result.write_string(simplified);
+    result.write_string_raw(simplified);
 }
 
 /// `resolve({path})`: the symlink chain followed to its end.
 pub fn f_resolve(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     if let Some(resolved) = resolve(str_arg(args, 0, &mut numbuf)) {
         let raw = resolved.into_raw();
         simplify(raw);
-        result.write_string(raw);
+        result.write_string_raw(raw);
     }
 }
 

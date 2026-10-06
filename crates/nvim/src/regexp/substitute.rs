@@ -616,7 +616,7 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
     let argv = CallFrame::naming([TypVal::list(names_it)]);
 
     let mut rettv = TV_INITIAL_VALUE;
-    rettv.write_string(core::ptr::null_mut());
+    rettv.write_string_raw(core::ptr::null_mut());
 
     let mut funcexe = FUNCEXE_INIT;
     funcexe.fe_argv_func = Some(fill_submatch_list);

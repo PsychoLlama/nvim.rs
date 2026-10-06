@@ -76,7 +76,7 @@ pub fn f_json_decode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 pub fn f_json_encode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the encoder reads the argument and returns an owned string,
     // which the return value takes over.
-    result.write_string(unsafe { encode_tv2json(&args[0], ptr::null_mut::<usize>()) });
+    result.write_string_raw(unsafe { encode_tv2json(&args[0], ptr::null_mut::<usize>()) });
 }
 
 /// `msgpackdump({list} [, {type}])` — a List of msgpack objects as a List

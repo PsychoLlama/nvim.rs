@@ -481,7 +481,7 @@ pub fn eval_foldtext(window: Win) -> Object {
 pub(crate) fn set_argv_var(args: &[&CStr]) {
     let mut list = tv_list_alloc(args.len() as ptrdiff_t);
     for arg in args {
-        list.push(TypVal::String(XString::from_cstr(arg).into_raw()));
+        list.push(TypVal::string_from(arg.to_bytes()));
     }
     for item in list_items_mut(Some(&mut list)) {
         item.li_lock = VarLock::Fixed;

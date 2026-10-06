@@ -178,7 +178,7 @@ pub(crate) fn set_internal_string_var_to(name: &CStr, value: &CStr) {
 /// `name` and `value` are NUL-terminated strings.  `value` stays the
 /// caller's: the store copies it.
 pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
-    let mut tv = ManuallyDrop::new(TypVal::String(value));
+    let mut tv = ManuallyDrop::new(TypVal::string_raw(value));
     unsafe { set_var(name, cstr::bytes_at(name).len(), &mut tv, true) };
 }
 

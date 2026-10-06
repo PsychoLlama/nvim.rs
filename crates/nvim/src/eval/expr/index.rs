@@ -240,7 +240,7 @@ pub(crate) fn eval_index_inner(
             };
             let v = v.map(XString::from_bytes);
             tv_clear(result);
-            result.write_string(v.map_or(::core::ptr::null_mut(), XString::into_raw));
+            result.write_string_raw(v.map_or(::core::ptr::null_mut(), XString::into_raw));
         }
         VAR_BLOB => {
             let _ = blob_slice_or_index(is_range, n1, n2, exclusive, result);

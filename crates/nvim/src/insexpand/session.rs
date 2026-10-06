@@ -294,7 +294,10 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     }
 
     // A static empty string, which the frame names rather than owning.
-    let args = CallFrame::naming([TypVal::Number(1), TypVal::String(c"".as_ptr().cast_mut())]);
+    let args = CallFrame::naming([
+        TypVal::Number(1),
+        TypVal::string_raw(c"".as_ptr().cast_mut()),
+    ]);
 
     let pos = Win::current().w_cursor;
     let locked = Lock::text();

@@ -2,7 +2,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::charset::vim_str2nr;
 use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES, encode_tv2echo, encode_tv2string};
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
@@ -12,13 +11,13 @@ use crate::eval::vars::{
 };
 use crate::eval::{callback_call, callback_from_typval, func_equal, var_item_copy, var2fpos};
 use crate::getchar::state::got_int;
-use crate::global_cell::{ConstTable, GlobalCell};
+use crate::global_cell::GlobalCell;
 use crate::hashtab::{
     Slot, hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset,
     hash_unlock,
 };
 use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
-use crate::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
+use crate::mbyte::{string_convert, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrndup};
 use crate::message::emsg;
 use crate::message::state::did_emsg;
@@ -37,7 +36,7 @@ use crate::types::{
 };
 
 use crate::winlayer::Live;
-use ::libc::{abort, strcasecmp, strcoll, strcpy, strtod};
+use ::libc::{abort, strcasecmp, strcoll, strtod};
 
 // The carve of the transpiled module; see each child's docs.
 mod access;
@@ -70,6 +69,7 @@ mod get;
 pub use self::get::*;
 mod nothing;
 pub(crate) use self::nothing::*;
+mod string;
 pub const DO_NOT_FREE_CNT: ::core::ffi::c_uint = 1073741823;
 pub const DI_FLAGS_ALLOC: ::core::ffi::c_uint = 16;
 pub const DI_FLAGS_FIX: ::core::ffi::c_uint = 4;
@@ -175,39 +175,41 @@ pub const TV_INITIAL_VALUE: TypVal = TypVal::Unknown;
 
 pub(crate) static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub(crate) static tv_empty_string: &::core::ffi::CStr = c"";
 /// How many submatches a `\=` replacement expression is handed: `\0`
 /// through `\9`.
 pub const SL_SIZE: usize = 10;
 pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = 0;
 static tv_equal_recurse_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static num_errors: ConstTable<[*const ::core::ffi::c_char; 11]> = ConstTable::new([
-    c"E685: using an invalid value as a Number".as_ptr(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    c"E703: Using a Funcref as a Number".as_ptr(),
-    c"E745: Using a List as a Number".as_ptr(),
-    c"E728: Using a Dictionary as a Number".as_ptr(),
-    c"E805: Using a Float as a Number".as_ptr(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    c"E703: Using a Funcref as a Number".as_ptr(),
-    c"E974: Using a Blob as a Number".as_ptr(),
-]);
-static str_errors: ConstTable<[*const ::core::ffi::c_char; 11]> = ConstTable::new([
-    e_using_invalid_value_as_string.as_ptr(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    c"E729: Using a Funcref as a String".as_ptr(),
-    c"E730: Using a List as a String".as_ptr(),
-    c"E731: Using a Dictionary as a String".as_ptr(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    ::core::ptr::null::<::core::ffi::c_char>(),
-    c"E729: Using a Funcref as a String".as_ptr(),
-    c"E976: Using a Blob as a String".as_ptr(),
-]);
+/// What a value that has no Number form is called when one is asked for,
+/// by its kind. The empty entries are the kinds that do have one.
+static num_errors: [&::core::ffi::CStr; 11] = [
+    c"E685: using an invalid value as a Number",
+    c"",
+    c"",
+    c"E703: Using a Funcref as a Number",
+    c"E745: Using a List as a Number",
+    c"E728: Using a Dictionary as a Number",
+    c"E805: Using a Float as a Number",
+    c"",
+    c"",
+    c"E703: Using a Funcref as a Number",
+    c"E974: Using a Blob as a Number",
+];
+/// [`num_errors`] for a String.
+static str_errors: [&::core::ffi::CStr; 11] = [
+    e_using_invalid_value_as_string,
+    c"",
+    c"",
+    c"E729: Using a Funcref as a String",
+    c"E730: Using a List as a String",
+    c"E731: Using a Dictionary as a String",
+    c"",
+    c"",
+    c"",
+    c"E729: Using a Funcref as a String",
+    c"E976: Using a Blob as a String",
+];
 pub const FUNCEXE_INIT: FuncExe = FuncExe {
     fe_argv_func: None,
     fe_firstline: 0 as LineNr,

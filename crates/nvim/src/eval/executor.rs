@@ -196,7 +196,7 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
     let s = unsafe { concat_str(numbuf1.string_ptr(&*tv1), s2) };
     // SAFETY: both operands have been copied out of `tv1` by now.
     unsafe { tv_clear(&mut *tv1) };
-    lhs.write_string(s);
+    lhs.write_string_raw(s);
     Ok(())
 }
 

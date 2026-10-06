@@ -177,7 +177,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: &[u8]) -> bool {
         }
         let mut tv = UNSET_TV;
         // SAFETY: `len` bytes from `at` are the character just measured.
-        tv.write_string(unsafe { xmemdupz(at as *const c_void, len as size_t) as *mut c_char });
+        tv.write_string_raw(unsafe { xmemdupz(at as *const c_void, len as size_t) as *mut c_char });
         // SAFETY: `rec` is the caller's record.
         unsafe { (*rec).fi_byte_idx += len };
         return assign(&fi, arg, &mut tv);

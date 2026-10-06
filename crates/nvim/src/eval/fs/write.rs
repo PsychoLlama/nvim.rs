@@ -324,7 +324,7 @@ fn defer_delete(fname: &CStr) {
     // SAFETY: `fname` is NUL-terminated; the answer is a string in nvim's
     // heap, which the deferred call takes over.
     let full = unsafe { full_name_save(fname.as_ptr(), false) };
-    let mut tv = TypVal::String(full);
+    let mut tv = TypVal::string_raw(full);
     let name = c"delete".as_ptr().cast_mut();
     // SAFETY: one argument, at `tv`, whose contents the callee takes over.
     unsafe { add_defer(name, ::core::slice::from_mut(&mut tv)) };

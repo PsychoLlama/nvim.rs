@@ -158,8 +158,6 @@ union_readers! {
     Bool,    BoolVarValue,             as_bool;
     Special, SpecialVarValue,          as_special;
     Float,   Float,                    as_float,     float_or_zero = 0.0;
-    String,  *mut ::core::ffi::c_char, as_string,    string_or_null = ::core::ptr::null_mut();
-    Func,    *mut ::core::ffi::c_char, as_func_name, func_name_or_null = ::core::ptr::null_mut();
 }
 
 impl TypVal {
@@ -283,8 +281,8 @@ impl TypVal {
         match v_type {
             VAR_UNKNOWN => TypVal::Unknown,
             VAR_NUMBER => TypVal::Number(0),
-            VAR_STRING => TypVal::String(::core::ptr::null_mut()),
-            VAR_FUNC => TypVal::Func(::core::ptr::null_mut()),
+            VAR_STRING => TypVal::string(None),
+            VAR_FUNC => TypVal::func(None),
             VAR_LIST => TypVal::list(None),
             VAR_DICT => TypVal::dict(None),
             VAR_FLOAT => TypVal::Float(0.0),
@@ -293,20 +291,6 @@ impl TypVal {
             VAR_PARTIAL => TypVal::partial(None),
             VAR_BLOB => TypVal::blob(None),
             _ => panic!("a VarType outside the eleven the enum names"),
-        }
-    }
-
-    /// The string under either variant that holds one — `String`'s text or
-    /// `Func`'s function name — and NULL under any other.
-    ///
-    /// The arms that treat the two alike (`tv2bool`, `tv_copy`, the encoders)
-    /// are the reason this exists; a site that means only one of them wants
-    /// [`TypVal::string_or_null`] or [`TypVal::func_name_or_null`].
-    #[inline(always)]
-    pub(crate) fn string_or_func_name(&self) -> *mut ::core::ffi::c_char {
-        match self {
-            TypVal::String(text) | TypVal::Func(text) => *text,
-            _ => ::core::ptr::null_mut(),
         }
     }
 
@@ -326,7 +310,7 @@ impl TypVal {
             TypVal::Float(f) => f.to_bits() == 0,
             TypVal::Bool(b) => b == crate::types::kBoolVarFalse,
             TypVal::Special(s) => s == kSpecialVarNull,
-            TypVal::String(p) | TypVal::Func(p) => p.is_null(),
+            TypVal::String(ref text) | TypVal::Func(ref text) => text.is_none(),
             TypVal::List(ref list) => list.is_none(),
             TypVal::Dict(ref dict) => dict.is_none(),
             TypVal::Partial(ref pt) => pt.is_none(),
@@ -364,7 +348,9 @@ impl TypVal {
             |n: u64| ::core::ptr::without_provenance(usize::try_from(n).expect("a 64-bit host"));
         match self {
             TypVal::Unknown => ::core::ptr::null(),
-            TypVal::String(p) | TypVal::Func(p) => p.cast_const().cast(),
+            TypVal::String(text) | TypVal::Func(text) => text
+                .as_ref()
+                .map_or(::core::ptr::null(), |s| s.as_ptr().cast()),
             TypVal::List(list) => list
                 .as_ref()
                 .map_or(::core::ptr::null(), |l| l.as_ptr().cast_const().cast()),
@@ -459,8 +445,6 @@ union_writers! {
     Bool,    boolean,   BoolVarValue,             write_boolean,   "`v:true`/`v:false`";
     Special, special,   SpecialVarValue,          write_special,   "`v:null`";
     Float,   float,     Float,                    write_float,     "a float";
-    String,  string,    *mut ::core::ffi::c_char, write_string,    "an owned string";
-    Func,    name,      *mut ::core::ffi::c_char, write_func_name, "an owned function name";
 }
 
 impl TypVal {
@@ -475,28 +459,6 @@ impl TypVal {
         // callers own the old value's release and some of them fill storage
         // that has never held one.
         unsafe { ::core::ptr::write(self, value) };
-    }
-
-    /// Append `tail` to this String in place, growing its allocation. False,
-    /// leaving the value alone, for anything that is not a String with an
-    /// allocation to grow.
-    pub(crate) fn append_to_string(&mut self, tail: &[u8]) -> bool {
-        let TypVal::String(old) = *self else {
-            return false;
-        };
-        if old.is_null() {
-            return false;
-        }
-        // SAFETY: a String value owns its payload, an `xmalloc`ed
-        // NUL-terminated string, which it gives up here to be grown and
-        // takes back below; `tail` is borrowed from elsewhere, since `self`
-        // is exclusive.
-        let mut bytes = unsafe { crate::memory::XString::from_raw(old) }.into_vec();
-        bytes.pop(); // the terminator, which `owned_cstr` puts back
-        bytes.reserve_exact(tail.len() + 1);
-        bytes.extend_from_slice(tail);
-        self.write_string(crate::memory::handoff::owned_cstr(bytes));
-        true
     }
 
     /// Give up what this slot holds **without releasing it**: the payload
@@ -927,8 +889,6 @@ mod tests {
             VAR_BLOB => TypVal::blob(unsafe { BlobRef::owning(p.cast()) }),
             // SAFETY: as the list arm above.
             VAR_PARTIAL => TypVal::partial(unsafe { PartialRef::owning(p.cast()) }),
-            VAR_STRING => TypVal::String(p.cast()),
-            VAR_FUNC => TypVal::Func(p.cast()),
             other => panic!("no bogus payload for {other}"),
         }
     }
@@ -942,7 +902,7 @@ mod tests {
         assert_eq!(num.as_dict(), None);
         assert_eq!(num.as_blob(), None);
         assert_eq!(num.as_partial(), None);
-        assert_eq!(num.as_string(), None);
+        assert!(!num.is_string());
         assert_eq!(num.as_float(), None);
         assert_eq!(num.as_bool(), None);
         assert_eq!(num.as_special(), None);
@@ -971,20 +931,6 @@ mod tests {
         assert_eq!(tagged(VAR_DICT, l.addr()).as_list(), None);
     }
 
-    #[test]
-    fn the_two_kinds_that_both_hold_a_string_stay_apart() {
-        let text = c"x".as_ptr().cast_mut();
-        let string = ManuallyDrop::new(TypVal::String(text));
-        assert_eq!(string.as_string(), Some(text));
-        assert_eq!(string.as_func_name(), None);
-        assert_eq!(string.string_or_func_name(), text);
-
-        let func = ManuallyDrop::new(TypVal::Func(text));
-        assert_eq!(func.as_string(), None);
-        assert_eq!(func.as_func_name(), Some(text));
-        assert_eq!(func.string_or_func_name(), text);
-    }
-
     /// Sixteen bytes, and the discriminant is the `VarType` code at offset
     /// zero.
     ///
@@ -1000,8 +946,8 @@ mod tests {
         for tv in [
             TypVal::Unknown,
             TypVal::Number(1),
-            TypVal::String(::core::ptr::null_mut()),
-            TypVal::Func(::core::ptr::null_mut()),
+            TypVal::string(None),
+            TypVal::func(None),
             TypVal::list(None),
             TypVal::dict(None),
             TypVal::Float(1.0),
@@ -1032,7 +978,7 @@ mod tests {
     fn an_unknown_typval_reads_as_nothing_at_all() {
         let unknown = TV_INITIAL_VALUE;
         assert_eq!(unknown.as_number(), None);
-        assert_eq!(unknown.as_string(), None);
+        assert!(!unknown.is_string());
         assert!(unknown.list_or_null().is_null());
         assert!(unknown.string_or_func_name().is_null());
     }

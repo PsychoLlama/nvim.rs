@@ -380,15 +380,6 @@ impl TypVal {
     /// `list_*` family reads its argument in: the borrow lasts as long as
     /// the value does, which is what the pointer never said.
     #[inline(always)]
-    /// A String's text, `None` for anything else and for the null string.
-    pub(crate) fn string_cstr(&self) -> Option<&::core::ffi::CStr> {
-        match *self {
-            // SAFETY: a String owns its NUL-terminated text, or is null.
-            TypVal::String(p) if !p.is_null() => Some(unsafe { ::core::ffi::CStr::from_ptr(p) }),
-            _ => None,
-        }
-    }
-
     pub(crate) fn list_ref(&self) -> Option<&List> {
         match self {
             TypVal::List(list) => list.as_deref(),

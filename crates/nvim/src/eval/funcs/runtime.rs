@@ -313,7 +313,7 @@ pub fn f_foreground(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
 
 /// `getfontname()` — always empty; nvim has no font.
 pub fn f_getfontname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
 }
 
 /// `getpid()`
@@ -327,7 +327,7 @@ pub fn f_hostname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `os_get_hostname` writes at most the length it is given,
     // NUL-terminated; `result` then owns the duplicate.
     unsafe { os_get_hostname(hostname.as_mut_ptr(), hostname.len()) };
-    unsafe { (*result).write_string(xstrdup(hostname.as_ptr())) };
+    unsafe { (*result).write_string_raw(xstrdup(hostname.as_ptr())) };
 }
 
 /// `menu_get({path} [, {modes}])`
@@ -360,7 +360,7 @@ pub fn f_mode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if !args.first().is_some_and(non_zero_arg) {
         buf[1] = NUL as c_char;
     }
-    result.write_string(unsafe { xstrdup(buf.as_ptr()) });
+    result.write_string_raw(unsafe { xstrdup(buf.as_ptr()) });
 }
 
 /// `state([{what}])` — the letters for whatever is currently in the way of
@@ -406,7 +406,7 @@ pub fn f_state(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // No flag at all left the garray unallocated, so `state()` answered the
     // *null* string rather than an empty one. Keep that.
-    result.write_string(if flags.is_empty() {
+    result.write_string_raw(if flags.is_empty() {
         ptr::null_mut()
     } else {
         owned_cstr(flags)
@@ -508,7 +508,7 @@ pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
 /// non-zero.
 pub fn f_visualmode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mode = [Buf::current().b_visual_mode_eval as c_char, NUL as c_char];
-    result.write_string(unsafe { xstrdup(mode.as_ptr()) });
+    result.write_string_raw(unsafe { xstrdup(mode.as_ptr()) });
     if args.first().is_some_and(non_zero_arg) {
         Buf::current().b_visual_mode_eval = NUL;
     }
@@ -526,7 +526,7 @@ pub(crate) fn f_wildmenumode(_args: &[TypVal], result: &mut TypVal, _fptr: EvalF
 pub fn f_windowsversion(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `windowsVersion` is a live NUL-terminated buffer and `result`
     // owns the duplicate.
-    unsafe { (*result).write_string(xstrdup(windowsVersion.as_ptr())) };
+    unsafe { (*result).write_string_raw(xstrdup(windowsVersion.as_ptr())) };
 }
 
 /// `wordcount()`

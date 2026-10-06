@@ -107,7 +107,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
             unsafe { (*result.list_or_null()).push_number(-1) };
         }
         kSomeMatchStr => {
-            result.write_string(ptr::null_mut());
+            result.write_string_raw(ptr::null_mut());
         }
         _ => {}
     }
@@ -249,7 +249,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 let span = regmatch.group(0).unwrap_or(0..0);
                 // SAFETY: the span is an offset range into `str`.
                 let text = unsafe { xmemdupz(str.add(span.start).cast(), span.len()) };
-                seeded[0].li_tv.write_string(text as *mut c_char);
+                seeded[0].li_tv.write_string_raw(text as *mut c_char);
                 // `str` may have moved on from `expr`, and the answer is
                 // counted from where the subject began.
                 let skipped = unsafe { str.offset_from(expr) } as usize;
@@ -286,7 +286,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                     // SAFETY: the span is an offset range into `str`.
                     let text =
                         unsafe { xmemdupz(str.add(span.start) as *const c_void, span.len()) };
-                    result.write_string(text as *mut c_char);
+                    result.write_string_raw(text as *mut c_char);
                 }
             }
             _ => {

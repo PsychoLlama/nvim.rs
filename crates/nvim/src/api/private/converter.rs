@@ -419,7 +419,7 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
             };
             // SAFETY: `register_luafunc` answers a NUL-terminated name owned
             // by the registry, and `xstrdup` copies it.
-            TypVal::Func(unsafe { xstrdup(register_luafunc(reference)) })
+            TypVal::func_raw(unsafe { xstrdup(register_luafunc(reference)) })
         }
         // `kind()` answers one of the eleven above.
         _ => unreachable!("an Object carries one of the eleven tags"),

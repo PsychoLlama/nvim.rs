@@ -16,7 +16,7 @@ use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::CStr;
 
-use crate::eval::typval::{DictRef, tv_clear, tv_empty_string};
+use crate::eval::typval::{DictRef, tv_clear};
 use crate::eval::userfunc::{CallWith, deref_func_name_owned, get_func_tv, get_lambda_tv};
 use crate::eval::vars::{check_vars_named, lua_partial};
 use crate::eval::{
@@ -24,6 +24,7 @@ use crate::eval::{
     is_luafunc, luafunc_name_end,
 };
 use crate::ex_eval::aborting;
+use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{Failed, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN};
@@ -59,7 +60,7 @@ pub(crate) fn eval_func(
     // While skipping, a name that was never resolved still has to look
     // like a Funcref so the subscript handling can go on.
     if result.v_type() == VAR_UNKNOWN && !evaluate && cursor.byte() == b'(' {
-        result.write_func_name(tv_empty_string.as_ptr().cast_mut());
+        result.write_func_name(Some(ThinCString::empty()));
     }
     if evaluate && aborting() {
         if ret.is_ok() {

@@ -393,7 +393,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `serverstart([{address}])`
 pub fn f_serverstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     // SAFETY throughout: the frame is live; `address` and `addrs` are allocations this
     // body owns, bar the one entry handed to `result`.
     if check_secure() {
@@ -427,7 +427,7 @@ pub fn f_serverstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // are other people's and are released here.
     let mut n = 0usize;
     let addrs = unsafe { server_address_list(&raw mut n) };
-    result.write_string(unsafe { *addrs.add(n - 1) });
+    result.write_string_raw(unsafe { *addrs.add(n - 1) });
     for i in 0..n - 1 {
         unsafe { xfree(*addrs.add(i) as *mut c_void) };
     }

@@ -83,13 +83,13 @@ pub fn f_getreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let held = unsafe { ListRef::owning(l) }.unwrap_or_else(|| tv_list_alloc(0));
         result.write_list(Some(held));
     } else {
-        result.write_string(get_reg_contents(regname, flags) as *mut c_char);
+        result.write_string_raw(get_reg_contents(regname, flags) as *mut c_char);
     }
 }
 
 /// `getregtype([{regname}])`.
 pub fn f_getregtype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     let Some(regname) = regname(args) else {
         return;
     };
@@ -97,7 +97,7 @@ pub fn f_getregtype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf: TypeBuf = [0; 67];
     let reg_type = unsafe { get_reg_type(regname, &raw mut reglen) };
     unsafe { format_reg_type(reg_type, reglen, buf.as_mut_ptr(), buf.len()) };
-    result.write_string(unsafe { xstrdup(buf.as_ptr()) });
+    result.write_string_raw(unsafe { xstrdup(buf.as_ptr()) });
 }
 
 /// `getreginfo([{regname}])`.
@@ -153,7 +153,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 fn return_register(regname: c_int, result: &mut TypVal) {
     let buf: [c_char; 2] = [regname as c_char, 0];
     // SAFETY: `buf` is NUL-terminated and outlives the copy.
-    result.write_string(unsafe { xstrdup(buf.as_ptr()) });
+    result.write_string_raw(unsafe { xstrdup(buf.as_ptr()) });
 }
 
 /// `reg_executing()` — the register a macro is being played from.

@@ -259,12 +259,12 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
     argv[0].write_number(unsafe { (*chan).id }.cast_signed());
     let cb = if reader.is_null() {
         argv[1].write_number(VarNumber::from(unsafe { (*chan).exit_status }));
-        argv[2].write_string(unsafe { xstrdup(c"exit".as_ptr()) });
+        argv[2].write_string_raw(unsafe { xstrdup(c"exit".as_ptr()) });
         unsafe { &raw mut (*chan).on_exit }
     } else {
         argv[1].write_list(Some(unsafe { reader_lines(reader) }));
         unsafe { (*reader).buffer.clear() };
-        argv[2].write_string(unsafe { xstrdup((*reader).type_0) });
+        argv[2].write_string_raw(unsafe { xstrdup((*reader).type_0) });
         unsafe { &raw mut (*reader).cb }
     };
 

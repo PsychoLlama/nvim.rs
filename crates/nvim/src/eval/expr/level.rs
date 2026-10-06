@@ -523,7 +523,7 @@ pub(crate) fn eval7(
                 // Sign-extended, as the C is: `**arg` is a `char`.
                 let name = c_int::from(cursor.byte().cast_signed());
                 let text = get_reg_contents(name, kGRegExprSrc as c_int);
-                result.write_string(text.cast());
+                result.write_string_raw(text.cast());
             }
             // `@` at the very end of the line names no register.
             if cursor.byte() != NUL as u8 {

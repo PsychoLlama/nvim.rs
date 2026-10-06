@@ -90,7 +90,7 @@ pub fn f_getenv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if p.is_null() {
         result.write_special(kSpecialVarNull);
     } else {
-        result.write_string(p);
+        result.write_string_raw(p);
     }
 }
 
@@ -133,7 +133,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
             unsafe { xfree(expanded as *mut c_void) };
         } else {
-            result.write_string(expanded);
+            result.write_string_raw(expanded);
         }
         return;
     }
@@ -146,7 +146,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if result.v_type() == VAR_LIST {
             result.write_list(None);
         } else {
-            result.write_string(ptr::null_mut());
+            result.write_string_raw(ptr::null_mut());
         }
         return;
     }
@@ -159,7 +159,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let pat = unsafe { CStr::from_ptr(s) };
     if result.v_type() == VAR_STRING {
         let all = expand_one(&mut xpc, Some(pat), None, options, WildMode::All);
-        result.write_string(all.map_or(ptr::null_mut(), XString::into_raw));
+        result.write_string_raw(all.map_or(ptr::null_mut(), XString::into_raw));
     } else {
         expand_one(&mut xpc, Some(pat), None, options, WildMode::AllKeep);
         list_alloc_ret(result, xpc.match_count() as isize);
@@ -207,7 +207,7 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     {
         emsg(msg);
     }
-    result.write_string(XString::from_bytes(eap.line.line()).into_raw());
+    result.write_string_raw(XString::from_bytes(eap.line.line()).into_raw());
 }
 
 /// `setenv({name}, {val})` — `v:null` unsets.
@@ -295,14 +295,14 @@ fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
 /// `stdpath({what})`.
 pub fn f_stdpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     // SAFETY throughout: `p` is coerced from the frame and NUL-terminated once the
     // null check has passed.
     let p = arg_string_chk(&mut numbuf, &args[0]);
     if p.is_null() {
         return;
     }
-    result.write_string(match unsafe { CStr::from_ptr(p) }.to_bytes() {
+    result.write_string_raw(match unsafe { CStr::from_ptr(p) }.to_bytes() {
         b"config" => get_xdg_home(kXDGConfigHome),
         b"data" => get_xdg_home(kXDGDataHome),
         b"cache" => get_xdg_home(kXDGCacheHome),
@@ -349,5 +349,5 @@ pub fn f_swapname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let name = memfile
         .map(|mfp| unsafe { mf_fname(mfp) })
         .filter(|name| !name.is_null());
-    result.write_string(name.map_or(ptr::null_mut(), |name| unsafe { xstrdup(name) }));
+    result.write_string_raw(name.map_or(ptr::null_mut(), |name| unsafe { xstrdup(name) }));
 }

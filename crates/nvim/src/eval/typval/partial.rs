@@ -152,16 +152,18 @@ impl TypVal {
     /// function" reads.
     pub(crate) fn callable_name(&self) -> Option<&::core::ffi::CStr> {
         let name = match self {
-            TypVal::Func(name) => *name,
-            // SAFETY: the partial is null or live, which is what
-            // `partial_name` takes.
-            TypVal::Partial(_) => unsafe { partial_name(self.partial_or_null()) },
+            TypVal::Func(name) => name.as_ref()?.as_cstr(),
+            TypVal::Partial(_) => {
+                // SAFETY: the partial is null or live, which is what
+                // `partial_name` takes.
+                let name = unsafe { partial_name(self.partial_or_null()) };
+                // SAFETY: a partial's name is owned by the partial, or by
+                // the function it holds a reference to. Either lives as
+                // long as this value does.
+                unsafe { crate::cstr::at_opt(name) }?
+            }
             _ => return None,
         };
-        // SAFETY: a Funcref owns its NUL-terminated name, or holds none; a
-        // partial's name is owned by the partial, or by the function it holds
-        // a reference to. Either lives as long as this value does.
-        let name = unsafe { crate::cstr::at_opt(name) }?;
         (!name.is_empty()).then_some(name)
     }
 

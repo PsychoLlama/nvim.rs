@@ -223,7 +223,7 @@ pub fn f_winlayout(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `win_gettype([{nr}])` — the empty string for an ordinary window.
 pub fn f_win_gettype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     // SAFETY: the arguments are live typvals and `curwin` is set.
     let wp = if args.is_empty() {
         Win::current()
@@ -231,7 +231,7 @@ pub fn f_win_gettype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         match arg_win(args, 0) {
             Some(wp) => wp,
             None => {
-                result.write_string(unsafe { xstrdup(c"unknown".as_ptr()) });
+                result.write_string_raw(unsafe { xstrdup(c"unknown".as_ptr()) });
                 return;
             }
         }
@@ -253,7 +253,7 @@ pub fn f_win_gettype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     } else {
         return;
     };
-    result.write_string(unsafe { xstrdup(kind.as_ptr()) });
+    result.write_string_raw(unsafe { xstrdup(kind.as_ptr()) });
 }
 
 /// `getcmdwintype()` — the one-character type of the command-line window, or
@@ -264,5 +264,5 @@ pub fn f_getcmdwintype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     result.write_empty(VAR_STRING);
     let s = unsafe { xmallocz(1) }.cast::<c_char>();
     unsafe { *s = cmdwin_type.get().to_le_bytes()[0].cast_signed() };
-    result.write_string(s);
+    result.write_string_raw(s);
 }

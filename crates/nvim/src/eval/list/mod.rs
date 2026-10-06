@@ -63,7 +63,6 @@ use crate::eval::{eval_expr_typval, get_copy_id};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::hashtab::{hash_lock, hash_unlock};
 use crate::mbyte::{mb_strnicmp, utfc_ptr2len};
-use crate::memory::xmemdupz;
 use crate::message::e_listdictblobarg;
 use crate::message::emsg;
 use crate::message_fmt::{emsg_text, msg_cstr};
@@ -740,7 +739,7 @@ pub(crate) fn cstr_of_chk<'a>(tv: &TypVal, buf: &'a mut NumBuf) -> Option<&'a CS
 /// A `VAR_STRING` owning a fresh copy of `bytes`, NUL-terminated.
 #[inline(always)]
 pub(crate) fn string_tv(bytes: &[u8]) -> TypVal {
-    TypVal::String(unsafe { xmemdupz(bytes.as_ptr().cast(), bytes.len()).cast() })
+    TypVal::string_from(bytes)
 }
 
 /// Whether `lock` forbids a change, reporting `E741`/`E742` naming `what`.
@@ -952,7 +951,7 @@ pub fn f_reverse(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             b.set_ret(result);
         }
         Container::Str(s) => {
-            result.write_string(if s.is_null() {
+            result.write_string_raw(if s.is_null() {
                 core::ptr::null_mut()
             } else {
                 // SAFETY: a live NUL-terminated string; `reverse_text`

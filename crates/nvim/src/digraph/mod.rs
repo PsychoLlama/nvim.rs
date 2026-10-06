@@ -512,7 +512,7 @@ fn set_bool_ret(result: &mut TypVal, value: bool) {
 /// `digraph_get()`.
 pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string(core::ptr::null_mut());
+    result.write_string_raw(core::ptr::null_mut());
     let digraphs = numbuf.string_ptr_chk(&args[0]);
     if digraphs.is_null() {
         return;
@@ -533,7 +533,9 @@ pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // SAFETY: `utf_char2bytes` writes at most six bytes into `buf`, and
     // `xmemdupz` copies exactly the `len` it wrote.
     let len = unsafe { utf_char2bytes(code, buf.as_mut_ptr() as *mut c_char) } as usize;
-    unsafe { (*result).write_string(xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char) };
+    unsafe {
+        (*result).write_string_raw(xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char)
+    };
 }
 
 /// `digraph_getlist()`.

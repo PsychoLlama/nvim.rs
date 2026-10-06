@@ -409,6 +409,7 @@ typedef const char *(*TermKey_Terminfo_Getstr_Hook)(const char *, const char *, 
 typedef unsigned int TermMode;
 typedef unsigned int TermModeState;
 typedef struct terminal Terminal;
+typedef char *ThinCString;
 typedef struct time_watcher TimeWatcher;
 typedef uint64_t Timestamp;
 typedef unsigned int UIExtension;
@@ -1047,8 +1048,8 @@ struct TypVal {
   unsigned int tag;
   union {
     VarNumber number_;
-    char *string_;
-    char *func_;
+    ThinCString string_;
+    ThinCString func_;
     ListRef list_;
     DictRef dict_;
     Float float_;

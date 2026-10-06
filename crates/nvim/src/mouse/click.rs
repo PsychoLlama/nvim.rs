@@ -41,8 +41,8 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
     let argv = CallFrame::naming([
         TypVal::Number(def.tabnr as VarNumber),
         TypVal::Number(click_count(mod_mask.get())),
-        TypVal::String(button_name(which_button).as_ptr().cast_mut()),
-        TypVal::String(modifiers.as_mut_ptr()),
+        TypVal::string_raw(button_name(which_button).as_ptr().cast_mut()),
+        TypVal::string_raw(modifiers.as_mut_ptr()),
     ]);
     let mut rettv = TV_INITIAL_VALUE;
 

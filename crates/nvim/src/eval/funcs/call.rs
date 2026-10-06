@@ -269,7 +269,7 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     msg_col.set(if echo_output { 0 } else { save_msg_col });
 
     let captured = capture_finish(outer_capture);
-    result.write_string(XString::from_bytes(&captured).into_raw());
+    result.write_string_raw(XString::from_bytes(&captured).into_raw());
 }
 
 /// `execute({command} [, {silent}])`
@@ -453,7 +453,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
 
     // Nothing bound and nothing to bind: a plain Funcref will do.
     if dict_idx == 0 && arg_idx == 0 && arg_pt.is_null() && !is_funcref {
-        result.write_func_name(name);
+        result.write_func_name_raw(name);
         unsafe { func_ref(name) };
         return;
     }
@@ -541,7 +541,7 @@ pub fn f_garbagecollect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
 fn libcall_common(args: &[TypVal], result: &mut TypVal, out_type: VarType) {
     result.write_empty(out_type);
     if out_type != VAR_NUMBER {
-        result.write_string(ptr::null_mut());
+        result.write_string_raw(ptr::null_mut());
     }
     // SAFETY throughout: the frame is live; the two names and the string argument are
     // owned by arguments and outlive the call.
@@ -586,7 +586,7 @@ fn libcall_common(args: &[TypVal], result: &mut TypVal, out_type: VarType) {
             semsg!("E364: Library call failed for \"{funcname}()\"");
         }
         Some(LibcallResult::Str(s)) => {
-            result.write_string(s.map_or(ptr::null_mut(), CString::into_raw));
+            result.write_string_raw(s.map_or(ptr::null_mut(), CString::into_raw));
         }
         Some(LibcallResult::Int(n)) => result.write_number(n as VarNumber),
     }

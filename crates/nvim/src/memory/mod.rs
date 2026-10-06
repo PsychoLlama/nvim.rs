@@ -631,10 +631,12 @@ pub unsafe fn time_to_bytes(time_: c_long, buf: *mut u8) {
 pub mod alloc_log;
 pub mod arena;
 pub(crate) mod handoff;
+pub mod thin_cstring;
 pub mod xstring;
 /// The arena allocator, re-exported: every caller in the tree spells it
 /// `crate::memory::arena_*`, and it is the same allocation family.
 pub use arena::*;
+pub use thin_cstring::ThinCString;
 pub use xstring::XString;
 
 pub(crate) static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);

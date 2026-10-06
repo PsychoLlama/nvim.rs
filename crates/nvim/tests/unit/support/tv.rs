@@ -31,7 +31,7 @@ use neovim::eval::typval::{
     BlobRef, DictRef, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear, tv_copy,
     tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
 };
-use neovim::memory::{xcalloc, xmalloc, xmemdupz};
+use neovim::memory::{ThinCString, xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
     Blob, Callback, Dict, DictItem, DictWatcher, List, ListItem, Object, Partial, Refcount, TypVal,
     VarNumber, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
@@ -134,8 +134,8 @@ impl Tv {
             Tv::Bool(b) => TypVal::Bool(if *b { kBoolVarTrue } else { kBoolVarFalse }),
             Tv::Int(n) => TypVal::Number(*n),
             Tv::Float(f) => TypVal::Float(*f),
-            Tv::Str(s) => TypVal::String(unsafe { xmemdupz(s.as_ptr().cast(), s.len()) }.cast()),
-            Tv::NullStr => TypVal::String(ptr::null_mut()),
+            Tv::Str(s) => TypVal::String(ManuallyDrop::new(Some(ThinCString::from_bytes(s)))),
+            Tv::NullStr => TypVal::String(ManuallyDrop::new(None)),
             Tv::NullList => list_tv(None),
             Tv::NullDict => dict_tv(None),
             Tv::NullBlob => blob_tv(None),
@@ -172,9 +172,7 @@ impl Tv {
                 path.pop();
                 dict_tv(Some(dict))
             }
-            Tv::Func(name) => {
-                TypVal::Func(unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast())
-            }
+            Tv::Func(name) => TypVal::Func(ManuallyDrop::new(Some(ThinCString::from_bytes(name)))),
             // SAFETY: the partial just built, at a count of one.
             Tv::Partial(pt) => partial_tv(unsafe { PartialRef::owning(pt.build_at(path)) }),
             Tv::Cycle(up) => {
@@ -283,7 +281,9 @@ impl Payload for TypVal {
 
     fn string(&self) -> *mut c_char {
         match self {
-            TypVal::String(s) | TypVal::Func(s) => *s,
+            TypVal::String(s) | TypVal::Func(s) => s
+                .as_ref()
+                .map_or(ptr::null_mut(), |s| s.as_ptr().cast_mut()),
             other => panic!("not a string: v_type {}", other.v_type()),
         }
     }
@@ -369,10 +369,14 @@ unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
         }),
         TypVal::Number(n) => Tv::Int(*n),
         TypVal::Float(f) => Tv::Float(*f),
-        TypVal::String(s) if s.is_null() => Tv::NullStr,
-        TypVal::String(s) => Tv::Str(unsafe { CStr::from_ptr(*s) }.to_bytes().to_vec()),
-        TypVal::Func(s) if s.is_null() => Tv::NullStr,
-        TypVal::Func(s) => Tv::Func(unsafe { CStr::from_ptr(*s) }.to_bytes().to_vec()),
+        TypVal::String(s) => match &**s {
+            None => Tv::NullStr,
+            Some(s) => Tv::Str(s.as_bytes().to_vec()),
+        },
+        TypVal::Func(s) => match &**s {
+            None => Tv::NullStr,
+            Some(s) => Tv::Func(s.as_bytes().to_vec()),
+        },
         TypVal::Blob(b) if b.is_none() => Tv::NullBlob,
         TypVal::Blob(b) => Tv::Blob(unsafe { blob_bytes(b.as_ref().expect("a blob").as_ptr()) }),
         TypVal::List(l) => {
@@ -730,4 +734,18 @@ pub(crate) unsafe fn read_object(o: *const Object) -> Obj {
         }
         other => panic!("reading Object kind {} is not implemented", other.kind()),
     }
+}
+
+/// A String value over a raw block, which it adopts; null is the null
+/// string. A value over a block it does not own must stay in a
+/// [`ManuallyDrop`] and never be released.
+pub(crate) fn string_tv(raw: *mut c_char) -> TypVal {
+    // SAFETY: the test's own promise, as above.
+    TypVal::String(ManuallyDrop::new(unsafe { ThinCString::from_raw(raw) }))
+}
+
+/// [`string_tv`] for a funcref's name.
+pub(crate) fn func_tv(raw: *mut c_char) -> TypVal {
+    // SAFETY: as [`string_tv`].
+    TypVal::Func(ManuallyDrop::new(unsafe { ThinCString::from_raw(raw) }))
 }

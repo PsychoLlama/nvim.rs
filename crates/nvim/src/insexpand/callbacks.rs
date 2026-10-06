@@ -636,7 +636,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     // The base is the caller's string, so the frame names it.
     let args = CallFrame::naming([
         TypVal::Number(0),
-        TypVal::String(if base.is_null() {
+        TypVal::string_raw(if base.is_null() {
             c"".as_ptr().cast_mut()
         } else {
             base

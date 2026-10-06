@@ -122,7 +122,7 @@ pub unsafe fn decode_string(
         }
         return tv;
     }
-    TypVal::String(if s.is_null() || s_allocated {
+    TypVal::string_raw(if s.is_null() || s_allocated {
         s as *mut c_char
     } else {
         unsafe { xmemdupz(s.cast(), len) as *mut c_char }

@@ -115,7 +115,7 @@ impl List {
     /// `str` is null or an allocation from the `xmalloc` family. **The list
     /// takes it over**; the caller must not free it.
     pub unsafe fn push_allocated_string(&mut self, str: *mut ::core::ffi::c_char) {
-        self.push(TypVal::String(str));
+        self.push(TypVal::string_raw(str));
     }
 
     /// Append the number `n`.

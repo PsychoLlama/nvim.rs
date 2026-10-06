@@ -244,7 +244,7 @@ pub unsafe fn eval_call_provider(
     // duplicated rather than borrowed.
     // SAFETY: the caller's promise -- `method` is NUL-terminated.
     let argvars = [
-        TypVal::String(unsafe { xstrdup(method) }),
+        TypVal::string_raw(unsafe { xstrdup(method) }),
         TypVal::list(arguments),
     ];
     let mut rettv = UNSET_TV;
@@ -456,7 +456,7 @@ pub fn prompt_invoke_callback() {
     } else {
         let mut rettv = UNSET_TV;
         // The array takes the input over and frees it.
-        let argv = [TypVal::String(user_input)];
+        let argv = [TypVal::string_raw(user_input)];
         // SAFETY: the callback is the current buffer's own, and the
         // argument array and result are this frame's.
         let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_callback };

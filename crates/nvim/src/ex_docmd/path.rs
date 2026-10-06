@@ -87,7 +87,7 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> Opti
     let saved_sctx: ScriptCtx = current_sctx.get();
     // The pattern is the caller's, so the frame names it rather than
     // owning it.
-    let args = CallFrame::naming([TypVal::String(pat), TypVal::Bool(cmdcomplete)]);
+    let args = CallFrame::naming([TypVal::string_raw(pat), TypVal::Bool(cmdcomplete)]);
 
     let locked = Lock::text();
     // Errors are reported against the script that *set* the option, not

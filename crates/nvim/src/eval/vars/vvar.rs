@@ -241,7 +241,7 @@ pub fn set_vim_var_char(c: c_int) {
 pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
-    tv.write_string(if val.is_null() {
+    tv.write_string_raw(if val.is_null() {
         ptr::null_mut()
     } else if len == -1 {
         // SAFETY: the caller's obligation -- NUL-terminated.
@@ -323,7 +323,7 @@ pub(crate) unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
         // SAFETY: `v:exception` is declared a String.
         return tv.string_or_null();
     }
-    tv.write_string(oldval);
+    tv.write_string_raw(oldval);
     ptr::null_mut()
 }
 
@@ -337,7 +337,7 @@ pub(crate) unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
         // SAFETY: `v:throwpoint` is declared a String.
         return tv.string_or_null();
     }
-    tv.write_string(oldval);
+    tv.write_string_raw(oldval);
     ptr::null_mut()
 }
 
@@ -447,14 +447,14 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
         }
         debug_assert!(xlen <= newval_len);
 
-        tv.write_string(newval);
+        tv.write_string_raw(newval);
         return oldval;
     }
 
     // SAFETY: the caller's obligation -- `oldval` is this variable's own
     // string, which nothing else holds.
     unsafe { xfree(oldval.cast()) };
-    tv.write_string(oldarg);
+    tv.write_string_raw(oldarg);
     ptr::null_mut()
 }
 
@@ -511,7 +511,7 @@ pub unsafe fn before_set_vvar(
         // SAFETY: the kind says the value holds a string, which
         // this item owns.
         unsafe { xfree(stored.string_or_null().cast()) };
-        stored.write_string(ptr::null_mut());
+        stored.write_string_raw(ptr::null_mut());
 
         if copy || tv.v_type() != VAR_STRING {
             // SAFETY: a live value; the answer lives in `numbuf` or in it.
@@ -521,14 +521,14 @@ pub unsafe fn before_set_vvar(
             // store when it is still empty.
             // SAFETY: the string arm, as above.
             if stored.string_or_null().is_null() {
-                stored.write_string(unsafe { xstrdup(val) });
+                stored.write_string_raw(unsafe { xstrdup(val) });
             }
         } else {
             // Take the string over, rather than copy and free: the value
             // leaves `tv`, so the item now owns the only copy -- and the
             // take's answer must not release it on its way out of scope.
             let taken = ManuallyDrop::new(tv.take_value());
-            stored.write_string(taken.string_or_null());
+            stored.write_string_raw(taken.string_or_null());
         }
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.

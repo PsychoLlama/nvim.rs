@@ -72,12 +72,12 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
                 let itv = &raw mut item.li_tv;
                 let joined = unsafe { concat_str(text, numbuf.string_ptr(&*itv)) };
                 unsafe { tv_clear(&mut *itv) };
-                item.li_tv.write_string(joined);
+                item.li_tv.write_string_raw(joined);
                 did_concat = true;
             }
         } else if lines.v_type() == VAR_STRING {
             let joined = unsafe { concat_str(text, numbuf2.string_ptr(lines)) };
-            joined_string = TypVal::String(joined);
+            joined_string = TypVal::string_raw(joined);
             lines = &joined_string;
         }
     }

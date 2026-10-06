@@ -184,7 +184,7 @@ pub unsafe fn callback_put(cb: *mut Callback, tv: &mut TypVal) {
         Callback::Funcref(name) => {
             // SAFETY: a funcref names its own NUL-terminated bytes.
             unsafe {
-                value.write_func_name(xstrdup(*name));
+                value.write_func_name_raw(xstrdup(*name));
                 func_ref(*name);
             }
         }
@@ -340,7 +340,7 @@ pub unsafe fn dict_watcher_notify(
     // `tv_dict_unref` at the bottom is what gives it back.
     argv.push_naming(TypVal::dict(unsafe { DictRef::owning(dict) }));
     // SAFETY: the key's own NUL-terminated bytes, copied into the frame.
-    argv.push_owned(TypVal::String(unsafe { xstrdup(key.as_ptr()) }));
+    argv.push_owned(TypVal::string_raw(unsafe { xstrdup(key.as_ptr()) }));
     argv.push_owned(TypVal::dict(Some(tv_dict_alloc())));
     let event = argv.args()[2].dict_or_null();
 

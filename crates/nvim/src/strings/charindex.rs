@@ -299,7 +299,7 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     result.write_empty(VAR_STRING);
     let from = unsafe { p.offset(nbyte as isize) } as *const c_void;
     let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
-    result.write_string(part);
+    result.write_string_raw(part);
 }
 
 /// "strpart()" function: a substring measured in bytes, or -- with the
@@ -347,7 +347,7 @@ pub fn f_strpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_empty(VAR_STRING);
     let from = unsafe { p.offset(n as isize) } as *const c_void;
     let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
-    result.write_string(part);
+    result.write_string_raw(part);
 }
 
 /// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.

@@ -157,7 +157,7 @@ pub fn f_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let nul = ptr::null_mut();
     let ap = unsafe { (*dummy_ap.ptr()).clone() };
     let len = unsafe { vim_vsnprintf_typval(nul, 0, fmt, ap, base) };
-    result.write_string(unsafe { xmalloc(len as usize + 1) } as *mut c_char);
+    result.write_string_raw(unsafe { xmalloc(len as usize + 1) } as *mut c_char);
     let out = result.string_or_null();
     let cap = len as usize + 1;
     let ap = unsafe { (*dummy_ap.ptr()).clone() };

@@ -193,7 +193,7 @@ pub(crate) fn filter_map_string(
     expr: &TypVal,
     result: &mut TypVal,
 ) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
 
     // set_vim_var_nr() doesn't set the type.
     set_key_type(VAR_NUMBER);
@@ -236,7 +236,7 @@ pub(crate) fn filter_map_string(
         idx += 1;
         at += len;
     }
-    result.write_string(owned_cstr(out));
+    result.write_string_raw(owned_cstr(out));
 }
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a List.

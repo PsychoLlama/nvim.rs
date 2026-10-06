@@ -22,6 +22,7 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Depth;
+use crate::mbyte::strnicmp_in;
 use crate::message_fmt::{c_str_len, emsg_text};
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
@@ -86,11 +87,13 @@ pub unsafe fn tv_free(tv: Option<&mut TypVal>) {
         VAR_PARTIAL => drop(tv.take_partial()),
         // FALLTHROUGH from VAR_FUNC into VAR_STRING: a funcref owns both a
         // reference to the function and the name string.
-        VAR_FUNC | VAR_STRING => {
-            if tv.v_type() == VAR_FUNC {
-                unsafe { func_unref(tv.func_name_or_null()) };
+        VAR_STRING => drop(tv.take_string()),
+        VAR_FUNC => {
+            if let Some(name) = tv.take_func_name() {
+                // SAFETY: the funcref's own live name; it owned a reference
+                // to the function as well as the text.
+                unsafe { func_unref(name.as_ptr().cast_mut()) };
             }
-            unsafe { xfree(tv.string_or_func_name().cast()) };
         }
         VAR_BLOB => drop(tv.take_blob()),
         VAR_LIST => drop(tv.take_list()),
@@ -112,18 +115,17 @@ impl Clone for TypVal {
     /// else.
     fn clone(&self) -> TypVal {
         match *self {
-            TypVal::String(text) if !text.is_null() => {
-                // SAFETY: the variant says the payload is a live
-                // NUL-terminated string.
-                TypVal::String(unsafe { xstrdup(text) })
-            }
-            TypVal::Func(name) if !name.is_null() => {
-                // SAFETY: as above -- a funcref's payload is its name.
-                let copy = unsafe { xstrdup(name) };
-                // SAFETY: the name just copied; a funcref owns a reference
-                // to the function as well as the text.
-                unsafe { func_ref(copy) };
-                TypVal::Func(copy)
+            TypVal::String(ref text) => TypVal::string((**text).clone()),
+            TypVal::Func(ref name) if name.is_some() => {
+                let copy = (**name).clone();
+                if let Some(copy) = &copy {
+                    // A funcref owns a reference to the function as well as
+                    // the text.
+                    // SAFETY: the name just copied, a live NUL-terminated
+                    // string.
+                    unsafe { func_ref(copy.as_ptr().cast_mut()) };
+                }
+                TypVal::func(copy)
             }
             // As `List`: the handle's own `Clone` is the reference.
             TypVal::Partial(ref pt) => TypVal::partial((**pt).clone()),
@@ -466,11 +468,12 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
         VAR_NUMBER => a.as_number() == b.as_number(),
         VAR_FLOAT => a.as_float() == b.as_float(),
         VAR_STRING => {
-            let mut buf1 = NumBuf::new();
-            let mut buf2 = NumBuf::new();
-            let s1 = buf1.string_ptr(tv1);
-            let s2 = buf2.string_ptr(tv2);
-            (unsafe { mb_strcmp_ic(ic, s1, s2) }) == 0
+            let (s1, s2) = (tv1.string_bytes(), tv2.string_bytes());
+            if ic {
+                strnicmp_in(s1, s2) == 0
+            } else {
+                s1 == s2
+            }
         }
         VAR_BOOL => a.as_bool() == b.as_bool(),
         VAR_SPECIAL => a.as_special() == b.as_special(),

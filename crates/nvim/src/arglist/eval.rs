@@ -103,10 +103,10 @@ pub fn f_argv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // every index is out of range.
     let (entries, count) =
         unsafe { selected_arglist(args.get(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     let idx = number_as_int(tv_get_number_chk(&args[0]).unwrap_or(-1));
     if !entries.is_null() && idx >= 0 && idx < count {
-        unsafe { (*result).write_string(xstrdup(alist_name(entries.offset(idx as isize)))) };
+        unsafe { (*result).write_string_raw(xstrdup(alist_name(entries.offset(idx as isize)))) };
     } else if idx == -1 {
         unsafe { arglist_as_rettv(entries, count, result) };
     }

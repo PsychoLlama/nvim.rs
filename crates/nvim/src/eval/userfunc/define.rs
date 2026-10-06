@@ -628,7 +628,7 @@ impl Definition<'_> {
         tv_clear(&mut item.di_tv);
         // SAFETY: `name` is the NUL-terminated name being defined.
         let owned = unsafe { xmemdupz(self.name as *const c_void, namelen) } as *mut c_char;
-        item.di_tv.write_func_name(owned);
+        item.di_tv.write_func_name_raw(owned);
         Ok(())
     }
 

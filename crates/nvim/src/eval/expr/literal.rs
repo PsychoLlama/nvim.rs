@@ -206,7 +206,7 @@ pub(crate) fn eval_string(
     let mut out = Vec::new();
     string_body(cursor, evaluate.then_some(&mut out), interpolate)?;
     if evaluate {
-        result.write_string(owned_cstr(out));
+        result.write_string_raw(owned_cstr(out));
     }
     Ok(())
 }
@@ -436,7 +436,7 @@ pub(crate) fn eval_lit_string(
     let mut out = Vec::new();
     lit_string_body(cursor, evaluate.then_some(&mut out), interpolate)?;
     if evaluate {
-        result.write_string(owned_cstr(out));
+        result.write_string_raw(owned_cstr(out));
     }
     Ok(())
 }
@@ -560,7 +560,7 @@ pub(crate) fn eval_interp_string(
 
     // A skipped run, or an error before the first piece, answers null; an
     // evaluated run answers its text even when it is empty.
-    result.write_string(if !text.is_empty() || (ret.is_ok() && evaluate) {
+    result.write_string_raw(if !text.is_empty() || (ret.is_ok() && evaluate) {
         owned_cstr(text)
     } else {
         null_mut()
@@ -596,6 +596,6 @@ pub(crate) fn eval_env_var(
         let expanded = expand_env_save_opt_of(spelled.as_cstr(), false);
         (expanded.first() != Some(&b'$')).then_some(expanded)
     });
-    result.write_string(value.map_or(null_mut(), XString::into_raw));
+    result.write_string_raw(value.map_or(null_mut(), XString::into_raw));
     Ok(())
 }

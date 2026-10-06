@@ -287,7 +287,7 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
         if fname.is_null() {
             // There is no point binding a dict to a NULL function, just
             // create a function reference.
-            rv.write_func_name(ptr::null_mut());
+            rv.write_func_name_raw(ptr::null_mut());
         } else {
             // Translate "s:func" to the stored function name.
             // SAFETY: a function name is NUL-terminated.

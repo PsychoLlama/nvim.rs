@@ -543,7 +543,7 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
         match what {
             kDict2ListKeys => {
                 // SAFETY: the item's own NUL-terminated key.
-                tv_item.write_string(unsafe { xstrdup(di.di_key.as_ptr()) });
+                tv_item.write_string_raw(unsafe { xstrdup(di.di_key.as_ptr()) });
             }
             kDict2ListValues => {
                 tv_copy(&di.di_tv, &mut tv_item);

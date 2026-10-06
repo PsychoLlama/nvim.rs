@@ -5,8 +5,7 @@
 //! naming the argument's one-based position.  The `opt_` variants accept
 //! `VAR_UNKNOWN` (the argument was not given) as well.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -17,11 +16,9 @@
 
 use super::*;
 use crate::message_fmt::emsg_text;
-use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::tr_plural;
 use crate::types::Failed;
-use crate::types::NUL;
 
 /// The tail every `tv_check_for_*_arg` shares: answer `Ok`, or raise `errmsg`
 /// naming the argument's one-based position and answer `Err`.
@@ -35,19 +32,18 @@ use crate::types::NUL;
 fn arg_is(
     args: &[TypVal],
     idx: usize,
-    errmsg: *const ::core::ffi::c_char,
+    errmsg: &'static ::core::ffi::CStr,
     ok: impl Fn(&TypVal) -> bool,
 ) -> Result<(), Failed> {
     arg_check(args.get(idx).is_some_and(ok), errmsg, idx)
 }
 
 #[inline]
-fn arg_check(ok: bool, errmsg: *const ::core::ffi::c_char, idx: usize) -> Result<(), Failed> {
+fn arg_check(ok: bool, errmsg: &'static ::core::ffi::CStr, idx: usize) -> Result<(), Failed> {
     if ok {
         return Ok(());
     }
-    // SAFETY: `errmsg` is one of the module's NUL-terminated statics.
-    let errmsg = unsafe { gettext_ptr(errmsg) };
+    let errmsg = gettext(errmsg);
     let position = ::core::ffi::c_int::try_from(idx + 1).expect("an argument position");
     emsg_text(tr_plural!(errmsg, position));
     Err(Failed)
@@ -56,7 +52,7 @@ fn arg_check(ok: bool, errmsg: *const ::core::ffi::c_char, idx: usize) -> Result
 /// Whether `tv` is a Number or a String, raising the type-specific error if
 /// not.
 pub fn tv_check_str_or_nr(tv: &TypVal) -> bool {
-    let message = match (*tv).v_type() {
+    let message = match tv.v_type() {
         VAR_NUMBER | VAR_STRING => return true,
         VAR_FLOAT => c"E805: Expected a Number or a String, Float found",
         VAR_PARTIAL | VAR_FUNC => c"E703: Expected a Number or a String, Funcref found",
@@ -70,7 +66,7 @@ pub fn tv_check_str_or_nr(tv: &TypVal) -> bool {
             semsg!("E685: Internal error: {arg0}");
             return false;
         }
-        _ => unsafe { abort() },
+        _ => unreachable!("a VarType outside the eleven the enum names"),
     };
     emsg(gettext(message));
     false
@@ -78,25 +74,25 @@ pub fn tv_check_str_or_nr(tv: &TypVal) -> bool {
 
 /// Whether `tv` has a Number value, raising the type-specific error if not.
 pub fn tv_check_num(tv: &TypVal) -> bool {
-    match (*tv).v_type() {
+    match tv.v_type() {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
-            unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type() as usize])) };
+            emsg(gettext(num_errors[tv.v_type() as usize]));
             false
         }
-        _ => unsafe { abort() },
+        _ => unreachable!("a VarType outside the eleven the enum names"),
     }
 }
 
 /// Whether `tv` has a String value, raising the type-specific error if not.
 pub fn tv_check_str(tv: &TypVal) -> bool {
-    match (*tv).v_type() {
+    match tv.v_type() {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-            unsafe { emsg(gettext_ptr(str_errors[(*tv).v_type() as usize])) };
+            emsg(gettext(str_errors[tv.v_type() as usize]));
             false
         }
-        _ => unsafe { abort() },
+        _ => unreachable!("a VarType outside the eleven the enum names"),
     }
 }
 
@@ -105,21 +101,16 @@ pub fn tv_check_for_string_arg(args: &[TypVal], idx: usize) -> Result<(), Failed
     arg_is(
         args,
         idx,
-        e_string_required_for_argument_nr.as_ptr(),
-        |arg| arg.v_type() == VAR_STRING,
+        e_string_required_for_argument_nr,
+        TypVal::is_string,
     )
 }
 
 /// `E1175`: argument `idx` must be a String that is not empty.
 pub fn tv_check_for_nonempty_string_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
     tv_check_for_string_arg(args, idx)?;
-    let s = args[idx].string_or_null();
-    let nonempty = !s.is_null() && ::core::ffi::c_int::from(unsafe { *s }) != NUL;
-    arg_check(
-        nonempty,
-        e_non_empty_string_required_for_argument_nr.as_ptr(),
-        idx,
-    )
+    let nonempty = args[idx].string_ref().is_some_and(|text| !text.is_empty());
+    arg_check(nonempty, e_non_empty_string_required_for_argument_nr, idx)
 }
 
 /// [`tv_check_for_string_arg`], accepting a missing argument.
@@ -132,12 +123,9 @@ pub fn tv_check_for_opt_string_arg(args: &[TypVal], idx: usize) -> Result<(), Fa
 
 /// `E1210`: argument `idx` must be a Number.
 pub fn tv_check_for_number_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(
-        args,
-        idx,
-        e_number_required_for_argument_nr.as_ptr(),
-        |arg| arg.v_type() == VAR_NUMBER,
-    )
+    arg_is(args, idx, e_number_required_for_argument_nr, |arg| {
+        arg.v_type() == VAR_NUMBER
+    })
 }
 
 /// [`tv_check_for_number_arg`], accepting a missing argument.
@@ -153,14 +141,14 @@ pub fn tv_check_for_float_or_nr_arg(args: &[TypVal], idx: usize) -> Result<(), F
     arg_is(
         args,
         idx,
-        e_float_or_number_required_for_argument_nr.as_ptr(),
+        e_float_or_number_required_for_argument_nr,
         |arg| arg.v_type() == VAR_FLOAT || arg.v_type() == VAR_NUMBER,
     )
 }
 
 /// `E1212`: argument `idx` must be a Bool, or the Number 0 or 1.
 pub fn tv_check_for_bool_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_bool_required_for_argument_nr.as_ptr(), |arg| {
+    arg_is(args, idx, e_bool_required_for_argument_nr, |arg| {
         let numeric_bool =
             arg.v_type() == VAR_NUMBER && (arg.number_or_zero() == 0 || arg.number_or_zero() == 1);
         arg.v_type() == VAR_BOOL || numeric_bool
@@ -177,21 +165,21 @@ pub fn tv_check_for_opt_bool_arg(args: &[TypVal], idx: usize) -> Result<(), Fail
 
 /// `E1238`: argument `idx` must be a Blob.
 pub fn tv_check_for_blob_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_blob_required_for_argument_nr.as_ptr(), |arg| {
+    arg_is(args, idx, e_blob_required_for_argument_nr, |arg| {
         arg.v_type() == VAR_BLOB
     })
 }
 
 /// `E1211`: argument `idx` must be a List.
 pub fn tv_check_for_list_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_list_required_for_argument_nr.as_ptr(), |arg| {
+    arg_is(args, idx, e_list_required_for_argument_nr, |arg| {
         arg.v_type() == VAR_LIST
     })
 }
 
 /// `E1206`: argument `idx` must be a Dictionary.
 pub fn tv_check_for_dict_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(args, idx, e_dict_required_for_argument_nr.as_ptr(), |arg| {
+    arg_is(args, idx, e_dict_required_for_argument_nr, |arg| {
         arg.v_type() == VAR_DICT
     })
 }
@@ -202,7 +190,7 @@ pub fn tv_check_for_nonnull_dict_arg(args: &[TypVal], idx: usize) -> Result<(), 
     let dict = args[idx].dict_or_null();
     arg_check(
         !dict.is_null(),
-        e_non_null_dict_required_for_argument_nr.as_ptr(),
+        e_non_null_dict_required_for_argument_nr,
         idx,
     )
 }
@@ -220,7 +208,7 @@ pub fn tv_check_for_string_or_number_arg(args: &[TypVal], idx: usize) -> Result<
     arg_is(
         args,
         idx,
-        e_string_or_number_required_for_argument_nr.as_ptr(),
+        e_string_or_number_required_for_argument_nr,
         |arg| arg.v_type() == VAR_STRING || arg.v_type() == VAR_NUMBER,
     )
 }
@@ -240,7 +228,7 @@ pub fn tv_check_for_string_or_list_arg(args: &[TypVal], idx: usize) -> Result<()
     arg_is(
         args,
         idx,
-        e_string_or_list_required_for_argument_nr.as_ptr(),
+        e_string_or_list_required_for_argument_nr,
         |arg| arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST,
     )
 }
@@ -250,7 +238,7 @@ pub fn tv_check_for_string_or_list_or_blob_arg(args: &[TypVal], idx: usize) -> R
     arg_is(
         args,
         idx,
-        e_string_list_or_blob_required_for_argument_nr.as_ptr(),
+        e_string_list_or_blob_required_for_argument_nr,
         |arg| arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB,
     )
 }
@@ -268,17 +256,14 @@ pub fn tv_check_for_string_or_func_arg(args: &[TypVal], idx: usize) -> Result<()
     arg_is(
         args,
         idx,
-        e_string_or_function_required_for_argument_nr.as_ptr(),
+        e_string_or_function_required_for_argument_nr,
         |arg| arg.v_type() == VAR_PARTIAL || arg.v_type() == VAR_FUNC || arg.v_type() == VAR_STRING,
     )
 }
 
 /// `E1226`: argument `idx` must be a List or a Blob.
 pub fn tv_check_for_list_or_blob_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
-    arg_is(
-        args,
-        idx,
-        e_list_or_blob_required_for_argument_nr.as_ptr(),
-        |arg| arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB,
-    )
+    arg_is(args, idx, e_list_or_blob_required_for_argument_nr, |arg| {
+        arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB
+    })
 }

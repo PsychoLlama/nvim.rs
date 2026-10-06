@@ -170,7 +170,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
         _ => c"char",
     };
     // A static string, which the frame names rather than owning.
-    let argv = CallFrame::naming([TypVal::String(kind.as_ptr() as *mut c_char)]);
+    let argv = CallFrame::naming([TypVal::string_raw(kind.as_ptr() as *mut c_char)]);
 
     // Reset virtual_op so that 'virtualedit' can be changed in the
     // function, and finish_op so that mode() returns the right value.

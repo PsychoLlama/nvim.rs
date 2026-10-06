@@ -402,7 +402,7 @@ pub fn f_histget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     };
     // SAFETY: eval-function contract.
-    result.write_string(text);
+    result.write_string_raw(text);
 }
 
 /// "histnr()" function

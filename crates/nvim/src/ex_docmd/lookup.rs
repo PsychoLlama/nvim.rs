@@ -311,7 +311,7 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut name = numbuf.string_ptr(&args[0]) as *mut c_char;
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     while byte(name) == ':' as c_int {
         name = unsafe { name.add(1) };
     }
@@ -326,7 +326,7 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         return;
     }
     unsafe {
-        (*result).write_string(xstrdup(if is_user_cmd(ea.cmdidx) {
+        (*result).write_string_raw(xstrdup(if is_user_cmd(ea.cmdidx) {
             get_user_command_name(ea.useridx, ea.cmdidx)
         } else {
             cmdnames[ea.cmdidx.index()].cmd_name

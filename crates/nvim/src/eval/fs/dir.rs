@@ -268,7 +268,7 @@ fn number_of(tv: &TypVal) -> VarNumber {
 /// local, answering the directory that was current before.
 pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     if args[0].v_type() != VAR_STRING {
         // Returning an empty string means it failed.  No error message, for
         // historic reasons.
@@ -280,7 +280,7 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     {
         let cwd = Owned::zeroed(MAXPATHL as usize);
         if os_cwd(&cwd) {
-            result.write_string(Owned::dup(cwd.cstr()).into_raw());
+            result.write_string_raw(Owned::dup(cwd.cstr()).into_raw());
         }
     }
 
@@ -306,7 +306,7 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // Directory change failed: answer the empty string after all.
         // SAFETY: the answer taken above is nvim's heap, or NULL.
         unsafe { xfree(result.string_or_null().cast::<c_void>()) };
-        result.write_string(ptr::null_mut());
+        result.write_string_raw(ptr::null_mut());
     }
 }
 
@@ -376,7 +376,7 @@ pub fn f_filecopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `getcwd([{win} [, {tab}]])`: the working directory of the scope the
 /// arguments name, always as a string.
 pub fn f_getcwd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     let Some(s) = Scope::read(args, false) else {
         return;
     };
@@ -404,7 +404,7 @@ pub fn f_getcwd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if !from.is_null() {
         set_cwd(&cwd, from);
     }
-    result.write_string(Owned::dup(cwd.cstr()).into_raw());
+    result.write_string_raw(Owned::dup(cwd.cstr()).into_raw());
 }
 
 /// `haslocaldir([{win} [, {tab}]])`: whether the scope the arguments name
@@ -528,7 +528,7 @@ fn defer_delete(created: *mut c_char, recurse: bool) {
     let how = if recurse { c"rf" } else { c"d" };
     // SAFETY: a NUL-terminated literal; the copy is nvim's heap.
     let how = unsafe { xstrdup(how.as_ptr()) };
-    let string = |s| TypVal::String(s);
+    let string = |s| TypVal::string_raw(s);
     let mut tv = [string(created), string(how)];
     let name = c"delete".as_ptr().cast_mut();
     // SAFETY: two arguments, at `tv`, whose contents the callee takes over.
@@ -553,5 +553,5 @@ pub fn f_rename(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `tempname()`: a fresh name in the session's own temporary directory.
 pub fn f_tempname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(vim_tempname());
+    result.write_string_raw(vim_tempname());
 }

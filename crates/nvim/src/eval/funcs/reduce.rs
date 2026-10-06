@@ -31,7 +31,7 @@ use core::mem::ManuallyDrop;
 /// # Safety
 /// `p` has at least `len` readable bytes.
 unsafe fn owned_str(p: *const c_char, len: c_int) -> TypVal {
-    TypVal::String(unsafe { xmemdupz(p as *const c_void, len as usize) } as *mut c_char)
+    TypVal::string_raw(unsafe { xmemdupz(p as *const c_void, len as usize) } as *mut c_char)
 }
 
 /// A Number typval.

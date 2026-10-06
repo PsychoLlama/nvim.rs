@@ -231,7 +231,7 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
         debug_assert!(i < temp.len());
         temp[i] = 0;
 
-        unsafe { (*result).write_string(xmemdupz(temp.as_ptr().cast(), i).cast()) };
+        unsafe { (*result).write_string_raw(xmemdupz(temp.as_ptr().cast(), i).cast()) };
 
         if is_mouse_key(n as c_int) {
             set_mouse_vars();

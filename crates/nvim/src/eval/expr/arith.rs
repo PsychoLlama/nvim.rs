@@ -107,7 +107,7 @@ pub(crate) fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     joined.extend_from_slice(s1);
     joined.extend_from_slice(s2.to_bytes());
     tv_clear(tv1);
-    tv1.write_string(owned_cstr(joined));
+    tv1.write_string_raw(owned_cstr(joined));
     true
 }
 

@@ -360,7 +360,7 @@ pub fn f_exepath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if !is_nonempty_string_arg(args, 0) {
         return;
     }
-    result.write_string(exe_path(str_arg(args, 0, &mut numbuf)));
+    result.write_string_raw(exe_path(str_arg(args, 0, &mut numbuf)));
 }
 
 /// `filereadable({file})`: whether the file exists and can be read.
@@ -393,7 +393,7 @@ pub fn f_getfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         perm = spelled.into_raw();
     }
-    result.write_string(perm);
+    result.write_string_raw(perm);
 }
 
 /// `getfsize({fname})`: the size in bytes, 0 for a directory, -1 when the
@@ -444,7 +444,7 @@ pub fn f_getftype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     });
     let answer = named.map_or(ptr::null_mut(), |t| Owned::dup(t).into_raw());
-    result.write_string(answer);
+    result.write_string_raw(answer);
 }
 
 /// `isdirectory({directory})`: whether the name is a directory.
@@ -456,7 +456,7 @@ pub fn f_isdirectory(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// `browse({save}, {title}, {initdir}, {default})`: a stub -- there is no
 /// file dialog to open.
 pub fn f_browse(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
 }
 
 /// `browsedir({title}, {initdir})`: the same stub.

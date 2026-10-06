@@ -120,7 +120,7 @@ pub fn f_getcmdcomplpat(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     .flatten();
     *result = match pattern {
         Some(pattern) => string_tv(&pattern),
-        None => TypVal::String(::core::ptr::null_mut()),
+        None => TypVal::string_raw(::core::ptr::null_mut()),
     };
 }
 
@@ -132,13 +132,13 @@ pub fn f_getcmdcompltype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     .flatten();
     *result = match name {
         Some(name) => string_tv(&name),
-        None => TypVal::String(::core::ptr::null_mut()),
+        None => TypVal::string_raw(::core::ptr::null_mut()),
     };
 }
 
 /// `getcmdline()` function.
 pub fn f_getcmdline(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(get_cmdline_str());
+    result.write_string_raw(get_cmdline_str());
 }
 
 /// `getcmdpos()` function.
@@ -149,7 +149,7 @@ pub fn f_getcmdpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `getcmdprompt()` function.
 pub fn f_getcmdprompt(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe {
-        (*result).write_string(
+        (*result).write_string_raw(
             get_ccline_ptr()
                 .filter(|p| !p.cmdprompt.is_null())
                 .map_or(::core::ptr::null_mut(), |p| xstrdup(p.cmdprompt)),
@@ -165,7 +165,7 @@ pub fn f_getcmdscreenpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
 /// `getcmdtype()` function.
 pub fn f_getcmdtype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // One character plus the terminator `xmallocz` appends.
-    unsafe { (*result).write_string(xmallocz(1) as *mut ::core::ffi::c_char) };
+    unsafe { (*result).write_string_raw(xmallocz(1) as *mut ::core::ffi::c_char) };
     unsafe { *(*result).string_or_null().offset(0) = get_cmdline_type() as ::core::ffi::c_char };
 }
 

@@ -187,7 +187,7 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     // SAFETY: the caller's promise — `result` is the writable answer slot.
     let mut ret = unsafe { Live::new(result) };
     // Return an empty string on failure.
-    ret.write_string(ptr::null_mut());
+    ret.write_string_raw(ptr::null_mut());
 
     // SAFETY: the Vimscript call convention — `args` is a live argument
     // vector whose first entry is the keys, NUL-terminated.
@@ -257,7 +257,7 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
         // Return a string.
         if let Some((mp, _)) = found {
             let rhs = &mp.m_rhs;
-            ret.write_string(if rhs.luaref() != LUA_NOREF {
+            ret.write_string_raw(if rhs.luaref() != LUA_NOREF {
                 // SAFETY: `mp` is the matching mapping, still linked.
                 unsafe { nlua_funcref_str(rhs.luaref()) }
             } else if rhs.str.is_empty() {

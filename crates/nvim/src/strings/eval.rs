@@ -178,7 +178,7 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// "string()" function.
 pub fn f_string(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).write_string(encode_tv2string(&args[0], ptr::null_mut())) };
+    unsafe { (*result).write_string_raw(encode_tv2string(&args[0], ptr::null_mut())) };
 }
 
 /// "strlen()" function: the length in bytes.
@@ -250,19 +250,19 @@ pub fn f_strwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
 pub fn f_strtrans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string(transstr(numbuf.string_ptr(&args[0]), true)) };
+    unsafe { (*result).write_string_raw(transstr(numbuf.string_ptr(&args[0]), true)) };
 }
 
 /// "tolower()" function.
 pub fn f_tolower(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string(strcase_save(numbuf.string_ptr(&args[0]), false)) };
+    unsafe { (*result).write_string_raw(strcase_save(numbuf.string_ptr(&args[0]), false)) };
 }
 
 /// "toupper()" function.
 pub fn f_toupper(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string(strcase_save(numbuf.string_ptr(&args[0]), true)) };
+    unsafe { (*result).write_string_raw(strcase_save(numbuf.string_ptr(&args[0]), true)) };
 }
 
 /// "tr()" function: character-wise translation.
@@ -280,7 +280,7 @@ pub fn f_tr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let fromstr = buf.string_ptr_chk(&args[1]);
     let tostr = buf2.string_ptr_chk(&args[2]);
 
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     if fromstr.is_null() || tostr.is_null() {
         return; // Type error; the message is already out.
     }
@@ -347,7 +347,7 @@ pub fn f_tr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             out.extend_from_slice(replacement);
             at += ch.len();
         }
-        result.write_string(owned_cstr(out));
+        result.write_string_raw(owned_cstr(out));
         return;
     }
     // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -369,7 +369,7 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut mask = ptr::null::<c_char>();
     let mut dir = 0;
 
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     if head.is_null() || tv_check_for_opt_string_arg(args, 1).is_err() {
         return;
     }
@@ -429,5 +429,5 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     // SAFETY: `start..end` is a span of the string at `head`.
-    unsafe { (*result).write_string(xstrnsave(head.add(start), end - start)) };
+    unsafe { (*result).write_string_raw(xstrnsave(head.add(start), end - start)) };
 }

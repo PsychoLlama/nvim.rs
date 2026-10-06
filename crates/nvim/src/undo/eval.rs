@@ -135,14 +135,14 @@ pub fn f_undofile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: a NUL-terminated name.
     if unsafe { *fname } == 0 {
         // SAFETY: the return value to fill in.
-        result.write_string(ptr::null_mut());
+        result.write_string_raw(ptr::null_mut());
         return;
     }
     // SAFETY: a NUL-terminated name.
     let ffname: *mut c_char = unsafe { full_name_save(fname, true) };
     if !ffname.is_null() {
         // SAFETY: a NUL-terminated absolute path, and the return value.
-        unsafe { (*result).write_string(u_get_undo_file_name(ffname, false)) };
+        unsafe { (*result).write_string_raw(u_get_undo_file_name(ffname, false)) };
     }
     // SAFETY: NULL, or `full_name_save`'s allocation.
     unsafe { xfree(ffname.cast()) };

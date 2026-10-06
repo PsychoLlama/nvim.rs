@@ -18,7 +18,6 @@ use crate::cstr::byte_at;
 use crate::eval::typval::{ListRef, TV_INITIAL_VALUE, tv_list_alloc};
 use crate::eval::{Cursor, eval_to_string, eval1};
 use crate::ex_docmd::exarg_getline;
-use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::is_lower_in_locale;
 use crate::semsg;
@@ -304,5 +303,5 @@ pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Opt
 
 /// A String value owning a copy of `text`.
 fn owned_string(text: &[u8]) -> TypVal {
-    TypVal::String(XString::from_bytes(text).into_raw())
+    TypVal::string_from(text)
 }

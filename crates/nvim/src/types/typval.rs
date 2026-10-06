@@ -14,6 +14,7 @@
 use super::*;
 use crate::eval::gc::RootId;
 pub use crate::eval::typval::{BlobRef, DictRef, DictTab, ItemSlot, ListRef, PartialRef};
+use crate::memory::ThinCString;
 
 pub type BoolVarValue = ::core::ffi::c_uint;
 /// The two `VAR_BOOL` values: `v:false` and `v:true`.
@@ -602,11 +603,13 @@ impl Default for ScriptCtx {
 /// variants here: the string a funcref holds is a *name*, and copying one
 /// takes a reference to the function as well.
 ///
-/// The pointer payloads are still raw, and the value still owns what they
-/// point at: `Drop` is `tv_clear` and `Clone` is `tv_copy`.
+/// The value owns every payload: `Drop` is `tv_clear` and `Clone` is
+/// `tv_copy`. A string is a [`ThinCString`] -- one word, so the value stays
+/// sixteen bytes; `Option`'s `None` is the null string.
 ///
 /// **Every payload is released by [`TypVal`]'s own `Drop`, never by field
-/// glue.** The container handles are held in a [`ManuallyDrop`] to say so:
+/// glue.** The strings and the container handles are held in a
+/// [`ManuallyDrop`] to say so:
 /// `tv_clear` walks a value *iteratively* and takes each handle out of its
 /// slot itself, so a field destructor after it would be dead code -- and the
 /// compiler cannot know that, so it emits the switch anyway and every
@@ -623,10 +626,12 @@ pub enum TypVal {
     Unknown = VAR_UNKNOWN,
     /// An integer.
     Number(VarNumber) = VAR_NUMBER,
-    /// A string.  Owned, and null for `v:_null_string`.
-    String(*mut ::core::ffi::c_char) = VAR_STRING,
+    /// A string, owned; `None` is `v:_null_string`.
+    String(::core::mem::ManuallyDrop<Option<ThinCString>>) = VAR_STRING,
     /// A funcref: an owned function name, plus a reference to the function.
-    Func(*mut ::core::ffi::c_char) = VAR_FUNC,
+    /// `None` is a funcref that names nothing (`v:_null_function`'s shape
+    /// before it is resolved, and what a clear leaves).
+    Func(::core::mem::ManuallyDrop<Option<ThinCString>>) = VAR_FUNC,
     /// A list, owned as one reference; `None` is `v:_null_list`.
     List(::core::mem::ManuallyDrop<Option<ListRef>>) = VAR_LIST,
     /// A dictionary, owned as one reference; `None` is `v:_null_dict`.

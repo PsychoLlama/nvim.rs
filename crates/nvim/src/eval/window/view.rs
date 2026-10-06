@@ -202,7 +202,7 @@ pub fn f_winrestcmd(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             }
         }
     }
-    result.write_string(owned_cstr(cmds));
+    result.write_string_raw(owned_cstr(cmds));
 }
 
 /// `winrestview({dict})` — put back what `winsaveview()` saved.

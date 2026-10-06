@@ -446,7 +446,7 @@ pub fn f_fnamemodify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         str_arg_chk(args, 1, &mut buf),
     );
     let (Some(fname), Some(mods)) = (fname, mods) else {
-        result.write_string(core::ptr::null_mut());
+        result.write_string_raw(core::ptr::null_mut());
         return;
     };
     let name = if mods.is_empty() {
@@ -454,7 +454,7 @@ pub fn f_fnamemodify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     } else {
         modify_fname(mods, &mut 0, false, fname, fname.to_bytes().len()).1
     };
-    result.write_string(owned_cstr(name));
+    result.write_string_raw(owned_cstr(name));
 }
 
 #[cfg(test)]

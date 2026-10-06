@@ -390,7 +390,7 @@ pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     result.write_empty(VAR_STRING);
     if sep.is_null() {
-        result.write_string(::core::ptr::null_mut());
+        result.write_string_raw(::core::ptr::null_mut());
         return;
     }
 
@@ -398,12 +398,12 @@ pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `string_ptr_chk` answered a NUL-terminated separator.
     let sep = unsafe { cstr::at(sep) };
     let _ = list_join(&mut text, args[0].list_ref(), sep);
-    result.write_string(text.into_raw());
+    result.write_string_raw(text.into_raw());
 }
 
 /// `list2str()`: a list of codepoints as a string.
 pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(::core::ptr::null_mut());
+    result.write_string_raw(::core::ptr::null_mut());
     // SAFETY: the builtin's argument array.
     let args = unsafe { Tv::new(core::ptr::from_ref(&args[0]).cast_mut()) };
     if args.v_type() != VAR_LIST {
@@ -424,5 +424,5 @@ pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // A NUL ends the string there, as it did in the C buffer.
         text.push_bytes(&buf.map(|c| c.cast_unsigned())[..buflen]);
     }
-    result.write_string(text.into_raw());
+    result.write_string_raw(text.into_raw());
 }

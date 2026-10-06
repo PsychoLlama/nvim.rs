@@ -50,6 +50,20 @@ fn next_arg<'a>(tvs: &'a [TypVal], idxp: &mut c_int) -> Option<&'a TypVal> {
     Some(tv)
 }
 
+/// `value` as `%g` formats it, written into `buffer`; answers the length,
+/// the terminator excluded. The fixed format is what makes this safe to
+/// call: it takes exactly the one `Float` it is given, and the buffer is
+/// `NUMBUFLEN` bytes, which `%g` never fills.
+pub(crate) fn format_float_g(
+    value: Float,
+    buffer: &mut [u8; crate::eval::typval::NUMBUFLEN as usize],
+) -> usize {
+    let (at, size) = (buffer.as_mut_ptr().cast::<c_char>(), buffer.len());
+    // SAFETY: `at` is writable for `size` bytes, which bounds the write, and
+    // the format names one double, which is what is passed.
+    unsafe { crate::vim_snprintf_safelen!(at, size, c"%g".as_ptr(), value) }
+}
+
 /// The next argument as a number; 0 if it is not one.
 ///
 pub(crate) fn tv_nr(tvs: &[TypVal], idxp: &mut c_int) -> VarNumber {

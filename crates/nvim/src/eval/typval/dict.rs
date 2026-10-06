@@ -491,7 +491,7 @@ impl Dict {
     ) -> Result<(), Failed> {
         let item = Self::fresh_item(key);
         // SAFETY: the item just allocated, which takes `val` over.
-        unsafe { (*item).di_tv.write_string(val) };
+        unsafe { (*item).di_tv.write_string_raw(val) };
         // SAFETY: as above.
         unsafe { self.add_or_free(item) }
     }
@@ -512,7 +512,7 @@ impl Dict {
         // SAFETY: the function's own name, `namelen` bytes of it.
         let owned = unsafe { xmemdupz(name, namelen) } as *mut ::core::ffi::c_char;
         // SAFETY: the item just allocated, which takes the name over.
-        unsafe { (*item).di_tv.write_func_name(owned) };
+        unsafe { (*item).di_tv.write_func_name_raw(owned) };
         // SAFETY: a fresh item in no table.
         if unsafe { self.add_item(item) }.is_err() {
             // SAFETY: the item the add refused.

@@ -294,9 +294,9 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             }
             let owned = unsafe { xstrdup(name) };
             if as_funcref {
-                result.write_func_name(owned);
+                result.write_func_name_raw(owned);
             } else {
-                result.write_string(owned);
+                result.write_string_raw(owned);
             }
         }
         b"dict" => {

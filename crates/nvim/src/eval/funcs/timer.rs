@@ -203,11 +203,11 @@ pub fn f_reltime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `reltimestr({time})` — the elapsed time as seconds with six decimals.
 pub fn f_reltimestr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     // SAFETY: `profile_msg` returns a pointer to its own static buffer,
     // which `xstrdup` copies before anything else can reuse it.
     if let Some(tm) = list2proftime(&args[0]) {
-        result.write_string(unsafe { xstrdup(profile_msg(tm).as_ptr()) });
+        result.write_string_raw(unsafe { xstrdup(profile_msg(tm).as_ptr()) });
     }
 }
 

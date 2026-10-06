@@ -35,11 +35,10 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use super::{DictSlot, Pt, VAR_PARTIAL, func_unref, tv_dict_unref, tv_empty_string};
+use super::{DictSlot, Pt, VAR_PARTIAL, func_unref, tv_dict_unref};
 use crate::eval::typval_encode::{
     ConvFrame, ConvPath, ConvType, Flow, Frame, TypvalSink, encode_typval,
 };
-use crate::memory::xfree;
 use crate::types::{Float, TypVal, int64_t, kBoolVarFalse, kSpecialVarNull, size_t};
 
 /// A sink with no state: everything it does, it does to the value it is
@@ -86,11 +85,11 @@ impl TypvalSink for NothingSink {
     unsafe fn conv_string(
         &mut self,
         tv: Option<&mut TypVal>,
-        buf: *mut c_char,
+        _buf: *mut c_char,
         _len: size_t,
     ) -> Flow {
-        unsafe { xfree(buf.cast::<c_void>()) };
-        slot(tv).write_string(ptr::null_mut());
+        // The slot's own text, released as it leaves; `buf` is its address.
+        drop(slot(tv).take_string());
         Flow::Go
     }
 
@@ -168,10 +167,8 @@ impl TypvalSink for NothingSink {
             }
         } else {
             unsafe { func_unref(fun) };
-            if !ptr::eq(fun, tv_empty_string.as_ptr()) {
-                unsafe { xfree(fun.cast::<c_void>()) };
-            }
-            tv.write_func_name(ptr::null_mut());
+            // The name goes with the reference it stood for.
+            drop(tv.take_func_name());
         }
         Flow::Go
     }

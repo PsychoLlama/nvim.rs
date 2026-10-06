@@ -57,7 +57,7 @@ unsafe fn get_var_from(
     let _no_emsg = Suppress::emsg();
     // SAFETY: the caller's obligation -- a writable value holding nothing.
     let mut ret = unsafe { Tv::new(result) };
-    ret.write_string(ptr::null_mut());
+    ret.write_string_raw(ptr::null_mut());
 
     if let (false, Some(mut tp), Some(mut w)) = (varname.is_null(), tabpage, win)
         && (htname != b'b' as c_int || buffer.is_some())
@@ -284,7 +284,7 @@ pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
             rettv.write_number(number as VarNumber);
         }
         OptVal::String(string) => {
-            rettv.write_string(string.data());
+            rettv.write_string_raw(string.data());
         }
         OptVal::Nil => {}
     }

@@ -185,7 +185,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
     let mut arg_allocated = false;
     // Either the command line's own text or, once `arg_allocated`, a copy
     // this frame frees below; the value releases neither.
-    let mut arg = ManuallyDrop::new(TypVal::String(colored_ccline.text()));
+    let mut arg = ManuallyDrop::new(TypVal::string_raw(colored_ccline.text()));
     let mut tv = TV_INITIAL_VALUE;
 
     // Both are C function-level statics. `prev_prompt_id` starts at
@@ -241,7 +241,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
         }
         if unsafe { *colored_ccline.at(colored_ccline.len()) } as ::core::ffi::c_int != NUL {
             arg_allocated = true;
-            arg.write_string(unsafe {
+            arg.write_string_raw(unsafe {
                 xmemdupz(
                     colored_ccline.text() as *const ::core::ffi::c_void,
                     colored_ccline.len() as size_t,

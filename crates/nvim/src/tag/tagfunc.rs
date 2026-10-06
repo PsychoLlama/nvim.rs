@@ -159,8 +159,8 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // SAFETY: the dictionary this body owns, live for the call.
     let named = unsafe { DictRef::owning(info) };
     let args = CallFrame::naming([
-        TypVal::String(pat),
-        TypVal::String(flag_string.as_mut_ptr()),
+        TypVal::string_raw(pat),
+        TypVal::string_raw(flag_string.as_mut_ptr()),
         TypVal::dict(named),
     ]);
 

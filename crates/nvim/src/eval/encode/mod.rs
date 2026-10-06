@@ -160,7 +160,7 @@ unsafe fn extend_item(l: *mut List, at: size_t, line: &[u8]) {
         unsafe { xrealloc(held.cast::<c_void>(), old_len + line.len() + 1) }.cast::<c_char>();
     list_items_mut(unsafe { l.as_mut() })[at]
         .li_tv
-        .write_string(grown);
+        .write_string_raw(grown);
     let tail =
         unsafe { slice::from_raw_parts_mut(grown.add(old_len).cast::<u8>(), line.len() + 1) };
     tail[..line.len()].copy_from_slice(line);
@@ -285,7 +285,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // must not release it.
                 // SAFETY: a kept slot of the frame's live dictionary.
                 let key_ptr = unsafe { (*hi.hi_key.item()).di_key.as_ptr() };
-                let key_tv = ManuallyDrop::new(TypVal::String(key_ptr.cast_mut()));
+                let key_tv = ManuallyDrop::new(TypVal::string_raw(key_ptr.cast_mut()));
                 let key = unsafe { encode_tv2string(&key_tv, core::ptr::null_mut()) };
                 append_formatted!(tr(c"key %s"), key);
                 // SAFETY: `encode_tv2string` hands back an owned buffer.

@@ -441,7 +441,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
         // of a longer string had the whole of it printed.
         let text = cstr::owned(bytes);
         // The frame names the copy above, which this frame frees.
-        let argv = CallFrame::naming([TypVal::String(text.as_ptr().cast_mut())]);
+        let argv = CallFrame::naming([TypVal::string_raw(text.as_ptr().cast_mut())]);
         let mut rettv = TV_INITIAL_VALUE;
         // SAFETY: one argument, and `rettv` is a live unset value.
         unsafe { callback_call(on_print_cb(), argv.args(), &mut rettv) };

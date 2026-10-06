@@ -228,8 +228,8 @@ unsafe fn report_fails_mismatch(
     // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
     let actual_tv = ManuallyDrop::new(match mismatch.index {
         3 => TypVal::Number(emsg_assert_fails_lnum.get() as VarNumber),
-        4 => TypVal::String(context.as_ptr().cast_mut()),
-        _ => TypVal::String(mismatch.actual),
+        4 => TypVal::string_raw(context.as_ptr().cast_mut()),
+        _ => TypVal::string_raw(mismatch.actual),
     });
     let mut ga = prepare_assert_error();
     let gap = &mut ga;

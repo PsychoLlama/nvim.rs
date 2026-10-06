@@ -839,14 +839,9 @@ fn appending_an_allocated_string_takes_ownership() {
         );
 
         tv_clear(&mut l_tv);
-        // The two NULL strings are released too: `xfree(NULL)` is a call,
-        // and the log records it.
-        log.check(&[
-            alloc::freed(s),
-            alloc::freed(ptr::null::<c_char>()),
-            alloc::freed(ptr::null::<c_char>()),
-            alloc::freed(l),
-        ]);
+        // The two null strings own no block, so releasing them frees
+        // nothing at all.
+        log.check(&[alloc::freed(s), alloc::freed(l)]);
     }
 }
 

@@ -91,7 +91,7 @@ pub fn f_bufloaded(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `bufname([{buf}])` — the buffer's short name, empty when it has none.
 pub fn f_bufname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     let buf = if !args.is_empty() {
         tv_get_buf_from_arg(&args[0])
     } else {
@@ -100,7 +100,7 @@ pub fn f_bufname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if let Some(buf) = buf
         && !buf.name.is_unnamed()
     {
-        result.write_string(unsafe { xstrdup(buf.name.shown_ptr()) });
+        result.write_string_raw(unsafe { xstrdup(buf.name.shown_ptr()) });
     }
 }
 

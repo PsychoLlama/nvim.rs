@@ -98,7 +98,7 @@ fn empty_answer(result: &mut TypVal) {
     if result.v_type() == VAR_LIST {
         result.write_list(None);
     } else {
-        result.write_string(ptr::null_mut());
+        result.write_string_raw(ptr::null_mut());
     }
 }
 
@@ -141,7 +141,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
     let mut count = 1;
     let mut error = false;
 
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     let fname = str_arg(args, 0, &mut numbuf);
 
     let mut pathbuf = NumBuf::new();
@@ -211,7 +211,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
     // The List answer appended a copy of each match and only leaves the
     // loop on a NULL, so there is nothing left to hand back there.
     if result.v_type() == VAR_STRING {
-        result.write_string(fresult);
+        result.write_string_raw(fresult);
     }
 }
 
@@ -260,7 +260,7 @@ pub fn f_glob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let pat = str_arg(args, 0, &mut numbuf);
     if result.v_type() == VAR_STRING {
-        result.write_string(
+        result.write_string_raw(
             xpc.one(pat, options, WildMode::All)
                 .map_or(ptr::null_mut(), XString::into_raw),
         );
@@ -314,7 +314,7 @@ pub fn f_globpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
             joined.push_cstr(name.as_cstr());
         }
-        result.write_string(joined.into_raw());
+        result.write_string_raw(joined.into_raw());
         return;
     }
     let list = RetList::alloc(result, ptrdiff_t::try_from(found.len()).unwrap_or(0));
@@ -345,7 +345,7 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
 
     // The callee only reads it, so the frame names the caller's string
     // rather than copying it.
-    let argv = CallFrame::naming([TypVal::String(name.cast_mut())]);
+    let argv = CallFrame::naming([TypVal::string_raw(name.cast_mut())]);
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut retval = 0;

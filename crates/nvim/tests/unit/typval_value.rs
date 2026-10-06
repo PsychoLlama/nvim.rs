@@ -47,8 +47,8 @@ fn bogus_inner(v_type: VarType, bits: usize) -> TypVal {
     match v_type {
         VAR_NUMBER => TypVal::Number(bits as VarNumber),
         VAR_FLOAT => TypVal::Float(f64::from_bits(bits as u64)),
-        VAR_STRING => TypVal::String(p.cast()),
-        VAR_FUNC => TypVal::Func(p.cast()),
+        VAR_STRING => tv::string_tv(p.cast()),
+        VAR_FUNC => tv::func_tv(p.cast()),
         // SAFETY: a made-up address the case never follows; the value is
         // a `ManuallyDrop`, so the handle is never released.
         VAR_LIST => tv::list_tv(unsafe { ListRef::owning(p.cast()) }),
@@ -1175,7 +1175,7 @@ fn number_rows(number: &CString) -> Vec<Row> {
     };
     vec![
         row(TypVal::Number(42), None),
-        row(TypVal::String(number.as_ptr().cast_mut()), None),
+        row(tv::string_tv(number.as_ptr().cast_mut()), None),
         row(
             TypVal::Float(42.53),
             Some("E805: Using a Float as a Number"),
@@ -1185,7 +1185,7 @@ fn number_rows(number: &CString) -> Vec<Row> {
             Some("E703: Using a Funcref as a Number"),
         ),
         row(
-            TypVal::Func(ptr::null_mut()),
+            tv::func_tv(ptr::null_mut()),
             Some("E703: Using a Funcref as a Number"),
         ),
         row(tv::list_tv(None), Some("E745: Using a List as a Number")),
@@ -1271,7 +1271,7 @@ fn getting_a_line_number_resolves_the_cursor() {
     rows.insert(
         2,
         Row {
-            tv: ManuallyDrop::new(TypVal::String(dot.as_ptr().cast_mut())),
+            tv: ManuallyDrop::new(tv::string_tv(dot.as_ptr().cast_mut())),
             emsg: None,
         },
     );
@@ -1302,7 +1302,7 @@ fn getting_a_float_accepts_only_numbers() {
     let rows: [(ManuallyDrop<TypVal>, Option<&str>, f64); 11] = [
         (ManuallyDrop::new(TypVal::Number(42)), None, 42.0),
         (
-            ManuallyDrop::new(TypVal::String(number.as_ptr().cast_mut())),
+            ManuallyDrop::new(tv::string_tv(number.as_ptr().cast_mut())),
             Some("E892: Using a String as a Float"),
             0.0,
         ),
@@ -1313,7 +1313,7 @@ fn getting_a_float_accepts_only_numbers() {
             0.0,
         ),
         (
-            ManuallyDrop::new(TypVal::Func(ptr::null_mut())),
+            ManuallyDrop::new(tv::func_tv(ptr::null_mut())),
             Some("E891: Using a Funcref as a Float"),
             0.0,
         ),
@@ -1376,7 +1376,7 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
         let rows: [(ManuallyDrop<TypVal>, Option<&str>, Option<&str>); 11] = [
             (ManuallyDrop::new(TypVal::Number(42)), None, Some("42")),
             (
-                ManuallyDrop::new(TypVal::String(number.as_ptr().cast_mut())),
+                ManuallyDrop::new(tv::string_tv(number.as_ptr().cast_mut())),
                 None,
                 Some("100500"),
             ),
@@ -1387,7 +1387,7 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 None,
             ),
             (
-                ManuallyDrop::new(TypVal::Func(ptr::null_mut())),
+                ManuallyDrop::new(tv::func_tv(ptr::null_mut())),
                 Some("E729: Using a Funcref as a String"),
                 None,
             ),
@@ -1457,8 +1457,10 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                     *emsg,
                 );
 
-                // A scalar is formatted into the buffer; a string is not.
-                let scalar = matches!(v_type, VAR_NUMBER | VAR_FLOAT | VAR_SPECIAL | VAR_BOOL);
+                // A number is formatted into the buffer; a string is not,
+                // and neither is a boolean or `v:null`, whose names are
+                // static.
+                let scalar = matches!(v_type, VAR_NUMBER | VAR_FLOAT);
                 if scalar {
                     assert_eq!(got, in_buffer, "{name} of {v_type} should use the buffer");
                 } else if !got.is_null() {
@@ -1501,7 +1503,7 @@ fn the_borrowed_string_forms_answer_bytes_and_a_missing_one_is_none() {
 
     // A String is read in place; a Number is rendered into the buffer.
     let text = cstr("hello");
-    let string = ManuallyDrop::new(TypVal::String(text.as_ptr().cast_mut()));
+    let string = ManuallyDrop::new(tv::string_tv(text.as_ptr().cast_mut()));
     assert_eq!(buf.string(&string).to_bytes(), b"hello");
     assert_eq!(
         buf.string_chk(&string).map(CStr::to_bytes),
@@ -1566,7 +1568,7 @@ fn an_unconvertible_value_reports_its_own_message() {
 
     // A String that is not a number is not a failure: it reads as zero.
     let text = cstr("not a number");
-    let string = ManuallyDrop::new(TypVal::String(text.as_ptr().cast_mut()));
+    let string = ManuallyDrop::new(tv::string_tv(text.as_ptr().cast_mut()));
     assert_eq!(tv_get_number_chk(&string), Ok(0));
     log.clear();
 }

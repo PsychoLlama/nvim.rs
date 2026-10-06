@@ -234,7 +234,8 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
     let mut line = [0 as c_char; IOSIZE as usize];
     unsafe {
         // The prompt is a literal, so the frame must not release it.
-        let input_args = CallFrame::naming([TypVal::String(c"lua_debug> ".as_ptr().cast_mut())]);
+        let input_args =
+            CallFrame::naming([TypVal::string_raw(c"lua_debug> ".as_ptr().cast_mut())]);
         loop {
             lua_settop(lstate, 0);
             let mut input = TV_INITIAL_VALUE;

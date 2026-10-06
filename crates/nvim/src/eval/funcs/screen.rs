@@ -145,10 +145,10 @@ pub fn f_screenrow(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `screenstring({row}, {col})` — the cell's whole text, or "" off the grid.
 pub fn f_screenstring(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(ptr::null_mut());
+    result.write_string_raw(ptr::null_mut());
     let cell = Cell::at(args);
     if cell.on_grid() {
-        result.write_string(unsafe { xstrdup(cell.text().as_ptr()) });
+        result.write_string_raw(unsafe { xstrdup(cell.text().as_ptr()) });
     }
 }
 
@@ -257,7 +257,7 @@ pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         Some(Attr::Bit(bit)) => highlight_has_attr(id, bit, modec),
         None => ptr::null(),
     };
-    result.write_string(if p.is_null() {
+    result.write_string_raw(if p.is_null() {
         ptr::null_mut()
     } else {
         unsafe { xstrdup(p) }

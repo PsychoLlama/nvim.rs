@@ -145,7 +145,7 @@ impl Lines {
     /// Append `s`, a NUL-terminated string in nvim's heap that the list owns
     /// from here on.
     fn push(self, s: *mut c_char) {
-        let tv = TypVal::String(s);
+        let tv = TypVal::string_raw(s);
         // SAFETY: a live list, and `tv` an owned String the list takes over.
         unsafe { (*self.0).push(tv) };
     }

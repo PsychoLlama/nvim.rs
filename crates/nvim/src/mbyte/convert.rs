@@ -198,7 +198,7 @@ unsafe fn iconv_string(
 /// `iconv({string}, {from}, {to})`.
 pub fn f_iconv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string(core::ptr::null_mut());
+    result.write_string_raw(core::ptr::null_mut());
 
     let str = numbuf.string_ptr(&args[0]);
     let mut buf1 = NumBuf::new();
@@ -209,7 +209,7 @@ pub fn f_iconv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut vimconv = CONV_NONE_INIT;
     let _ = unsafe { convert_setup(&raw mut vimconv, from, to) };
     unsafe {
-        (*result).write_string(if vimconv.vc_type == CONV_NONE {
+        (*result).write_string_raw(if vimconv.vc_type == CONV_NONE {
             // Same encoding both ways: hand back a copy unchanged.
             xstrdup(str)
         } else {

@@ -152,7 +152,7 @@ pub(crate) unsafe fn fill_submatch_list(
             Some(bytes) => unsafe { xstrnsave(bytes.as_ptr().cast(), bytes.len()) },
         };
         items.push(ListItem {
-            li_tv: TypVal::String(text),
+            li_tv: TypVal::string_raw(text),
             li_lock: VarLock::Fixed,
         });
     }

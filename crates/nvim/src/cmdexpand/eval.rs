@@ -172,7 +172,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// `getcompletiontype()`: the completion type name a command line would use.
 pub fn f_getcompletiontype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string(core::ptr::null_mut());
+    result.write_string_raw(core::ptr::null_mut());
 
     if tv_check_for_string_arg(args, 0).is_err() {
         return;
@@ -184,7 +184,7 @@ pub fn f_getcompletiontype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     let cmdline_len = as_count(pat.len());
     set_cmd_context(&mut xpc, pat, cmdline_len, false);
     let name = cmdcomplete_type_to_str(xpc.context, xpc.arg.as_ref().map(XString::as_cstr));
-    *result = name.map_or(TypVal::String(core::ptr::null_mut()), |name| {
+    *result = name.map_or(TypVal::string_raw(core::ptr::null_mut()), |name| {
         string_tv(&name)
     });
 
@@ -213,7 +213,7 @@ pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     // not an empty string, so the `None` case is spelled out.
     let orig = cmdline_orig.with(|line| {
         line.as_ref()
-            .map_or(TypVal::String(core::ptr::null_mut()), |line| {
+            .map_or(TypVal::string_raw(core::ptr::null_mut()), |line| {
                 string_tv(line)
             })
     });

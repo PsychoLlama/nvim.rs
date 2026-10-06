@@ -238,7 +238,7 @@ fn convert_top(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted> 
                 let func = nlua_ref_global(lua.lstate, -1);
                 xstrdup(register_luafunc(func))
             };
-            Some(Converted::Value(TypVal::Func(name)))
+            Some(Converted::Value(TypVal::func_raw(name)))
         }
         LUA_TUSERDATA => {
             // TODO(bfredl): check mt.__call and convert to a function?

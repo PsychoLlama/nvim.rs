@@ -180,7 +180,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
     let profiling = do_profiling.get() == PROF_YES;
     // SAFETY: the caller's promise -- `result` outlives the call.
     let mut ret = unsafe { Tv::new(result) };
-    ret.write_string(null_mut());
+    ret.write_string_raw(null_mut());
     if check_secure() {
         return;
     }
@@ -247,7 +247,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
             tv_list_alloc_ret(result, 0 as ptrdiff_t);
         } else {
             // SAFETY: the literal is NUL-terminated.
-            ret.write_string(unsafe { xstrdup(c"".as_ptr()) });
+            ret.write_string_raw(unsafe { xstrdup(c"".as_ptr()) });
         }
         return;
     }
@@ -267,7 +267,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
         // Undo the swap in place; the buffer is handed over as it is.
         // SAFETY: `res` holds `nread` writable bytes.
         unsafe { memchrsub(res as *mut c_void, NUL as c_char, 1 as c_char, nread) };
-        ret.write_string(res);
+        ret.write_string_raw(res);
     }
 }
 

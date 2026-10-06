@@ -30,10 +30,10 @@ use neovim::eval::typval::{
     tv_dict_item_remove, tv_list_alloc,
 };
 use neovim::memory::xstrdup;
-use neovim::types::{Callback, Failed, ListWatch, TypVal, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
+use neovim::types::{Callback, Failed, ListWatch, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
 
 use crate::support::alloc::{self, AllocLog};
-use crate::support::tv::Payload;
+use crate::support::tv::{self, Payload};
 use crate::support::{check_emsg, cstr, editor_lock};
 
 /// `describe('list') describe('append') describe('string()') itp('works')`,
@@ -172,7 +172,7 @@ fn freeing_a_dict_item_frees_its_value_first() {
 
         let di = tv_dict_item_alloc(cstr("").as_ptr());
         log.check(&[]);
-        (*di).di_tv = TypVal::String(value);
+        (*di).di_tv = tv::string_tv(value);
 
         tv_dict_item_free(di);
         log.check(&[alloc::freed(value)]);
@@ -196,7 +196,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
 
         let di = tv_dict_item_alloc(cstr("").as_ptr());
         let value = xstrdup(cstr("test").as_ptr());
-        (*di).di_tv = TypVal::String(value);
+        (*di).di_tv = tv::string_tv(value);
         log.check(&[alloc::string(value, 4)]);
 
         assert_eq!((*d).add_item(di), Ok(()));
