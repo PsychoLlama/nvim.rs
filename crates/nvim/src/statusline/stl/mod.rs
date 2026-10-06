@@ -167,16 +167,15 @@ impl Env {
             // Visual mode is only valid in the current window.
             set_visual_active(false);
         }
-        // SAFETY: `expr` is NUL-terminated, and the result is a string this
-        // frame owns.
-        let str = unsafe { eval_to_string_safe(expr.as_ptr().cast_mut(), self.sandbox, false) };
+        // `expr` is the caller's own copy of the item.
+        let str = eval_to_string_safe(expr.to_bytes(), self.sandbox, false);
         saved_win.restore();
         saved_buf.restore();
         set_visual_active(save_visual);
 
         unlet(c"g:actual_curbuf");
         unlet(c"g:actual_curwin");
-        take_cstring(str)
+        str.map(|text| text.to_vec())
     }
 
     /// The `%f`/`%F`/`%t` file name: the buffer's special name if it has one,
@@ -429,19 +428,6 @@ fn itoa(value: c_int) -> [c_char; 12] {
 fn unlet(name: &CStr) {
     // SAFETY: `name` is a NUL-terminated string with its own length.
     let _ = unsafe { do_unlet(name.as_ptr(), name.to_bytes().len() as size_t, true) };
-}
-
-/// Take ownership of an `xmalloc`ed C string, as a byte vector.
-fn take_cstring(str: *mut c_char) -> Option<Vec<u8>> {
-    if str.is_null() {
-        return None;
-    }
-    // SAFETY: the callers below own the only reference to a NUL-terminated
-    // string the editor allocated, and free it exactly once here.
-    let bytes = unsafe { CStr::from_ptr(str) }.to_bytes().to_vec();
-    // SAFETY: as above.
-    unsafe { xfree(str.cast::<c_void>()) };
-    Some(bytes)
 }
 
 /// `v:lnum`, `v:relnum` and `v:virtnum`, which `'statuscolumn'` items read.
@@ -706,8 +692,10 @@ pub unsafe fn build_stl_str_hl(
         was_set_insecurely(window, opt_idx, opt_scope)
     };
 
+    // A copy: a `%!` expression may set the option the format is, and free
+    // it while it is being read.
     // SAFETY: the caller's NUL-terminated format string.
-    let fmt_bytes = unsafe { CStr::from_ptr(fmt) }.to_bytes();
+    let fmt_bytes = unsafe { CStr::from_ptr(fmt) }.to_bytes().to_vec();
     // A format starting with "%!" is itself an expression, whose result is
     // the format actually used. Evaluating it can fail, in which case the
     // literal text is what gets rendered.
@@ -724,12 +712,11 @@ pub unsafe fn build_stl_str_hl(
                 false,
             )
         };
-        // SAFETY: `fmt` is NUL-terminated and at least two bytes long.
-        let expanded = take_cstring(unsafe { eval_to_string_safe(fmt.add(2), sandbox, false) });
+        let expanded = eval_to_string_safe(&fmt_bytes[2..], sandbox, false);
         unlet(name);
-        expanded.unwrap_or_else(|| fmt_bytes.to_vec())
+        expanded.map_or(fmt_bytes, |text| text.to_vec())
     } else {
-        fmt_bytes.to_vec()
+        fmt_bytes
     };
 
     let fill = Fill::of(fillchar);

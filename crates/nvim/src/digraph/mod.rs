@@ -793,24 +793,16 @@ pub fn keymap_str(window: Win) -> Option<CString> {
     // Evaluate b:keymap_name in wp's buffer.
     let saved = switch_to(window);
     let skipping = Suppress::emsg_skip();
-    let mut expr = *b"b:keymap_name\0";
-    // SAFETY: `expr` is NUL-terminated and outlives the call; the result is
-    // an owned heap string or null.
-    let s = unsafe { eval_to_string(expr.as_mut_ptr() as *mut c_char, false, false) };
+    let s = eval_to_string(b"b:keymap_name", false, false);
     drop(skipping);
     saved.restore();
-    // SAFETY: `s` is null or NUL-terminated, and 'keymap' is an option
-    // string; both are copied here, and `s` is ours to free afterwards.
-    let name = unsafe {
-        let name = if !s.is_null() && *s as c_int != NUL {
-            CStr::from_ptr(s).to_owned()
-        } else if buf.b_kmap_state as c_int & KEYMAP_LOADED != 0 {
+    let name = match s {
+        Some(s) if !s.is_empty() => s.as_cstr().to_owned(),
+        // SAFETY: 'keymap' is an option string, copied here.
+        _ if buf.b_kmap_state as c_int & KEYMAP_LOADED != 0 => unsafe {
             CStr::from_ptr(buf.b_p_keymap.value_ptr()).to_owned()
-        } else {
-            CString::new("lang").expect("no interior NUL")
-        };
-        xfree(s as *mut c_void);
-        name
+        },
+        _ => CString::new("lang").expect("no interior NUL"),
     };
     Some(name)
 }

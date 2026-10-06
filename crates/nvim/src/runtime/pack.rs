@@ -502,8 +502,7 @@ unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> Result<(), Failed> 
 
     // When runtime/filetype.lua has not been loaded yet, these scripts
     // are found when it is.
-    let cmd = unsafe { xstrdup(c"g:did_load_filetypes".as_ptr()) };
-    if opt && unsafe { eval_to_number(cmd, false) } > 0 {
+    if opt && eval_to_number(b"g:did_load_filetypes", false) > 0 {
         let _ = do_cmdline_cmd(c"augroup filetypedetect");
         let pat = glob(FTDETECT_GLOB);
         let mut at = pat.as_ptr().cast_mut();
@@ -512,7 +511,6 @@ unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> Result<(), Failed> 
         let _ = unsafe { gen_expand_wildcards_and_cb(1, patp, ExpandFlags::FILE, true, visitor) };
         let _ = do_cmdline_cmd(c"augroup END");
     }
-    unsafe { xfree(cmd.cast()) };
     unsafe { xfree(ffname.cast()) };
     Ok(())
 }

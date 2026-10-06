@@ -788,39 +788,52 @@ unsafe fn finish_tv2(ga: Vec<u8>, len: *mut size_t) -> *mut c_char {
 }
 
 /// The string representation of `tv`, quoted so `eval()` can read it back.
-///
-/// # Safety
-/// `tv` must be live; `len` must be NULL or writable.
-pub unsafe fn encode_tv2string(tv: &TypVal, len: *mut size_t) -> *mut c_char {
+pub(crate) fn tv2string_bytes(tv: &TypVal) -> Vec<u8> {
     let mut ga = Vec::<u8>::new();
     let evs_ret = encode_vim_to_string(&mut ga, tv, c"encode_tv2string() argument");
     debug_assert!(evs_ret);
     did_echo_string_emsg.set(false);
+    ga
+}
+
+/// [`tv2string_bytes`] as an owned C string.
+///
+/// # Safety
+/// `len` must be NULL or writable.
+pub unsafe fn encode_tv2string(tv: &TypVal, len: *mut size_t) -> *mut c_char {
     // SAFETY: the caller's promise about `len`.
-    unsafe { finish_tv2(ga, len) }
+    unsafe { finish_tv2(tv2string_bytes(tv), len) }
 }
 
 /// The string representation of `tv` as `:echo` displays it — no quotes.
-///
-/// # Safety
-/// As [`encode_tv2string`].
-pub unsafe fn encode_tv2echo(tv: &TypVal, len: *mut size_t) -> *mut c_char {
+pub(crate) fn tv2echo_bytes(tv: &TypVal) -> Vec<u8> {
     let mut ga = Vec::<u8>::new();
-    // SAFETY: the caller's promise about `tv`.
     // A string or function reference echoes as its own bytes, which is
     // the whole difference between `:echo` and `string()` at the top
     // level; below it, the sink says it again.
-    let val = tv;
-    if val.v_type() == VAR_STRING || val.v_type() == VAR_FUNC {
-        let s = val.string_or_func_name();
-        if !s.is_null() {
-            ga.extend_from_slice(unsafe { cstr::bytes_at(s) });
+    if tv.v_type() == VAR_STRING || tv.v_type() == VAR_FUNC {
+        let text = if tv.v_type() == VAR_STRING {
+            tv.string_cstr()
+        } else {
+            tv.callable_name()
+        };
+        if let Some(text) = text {
+            ga.extend_from_slice(text.to_bytes());
         }
     } else {
         let eve_ret = encode_vim_to_echo(&mut ga, tv, c":echo argument");
         debug_assert!(eve_ret);
     }
-    unsafe { finish_tv2(ga, len) }
+    ga
+}
+
+/// [`tv2echo_bytes`] as an owned C string.
+///
+/// # Safety
+/// As [`encode_tv2string`].
+pub unsafe fn encode_tv2echo(tv: &TypVal, len: *mut size_t) -> *mut c_char {
+    // SAFETY: the caller's promise about `len`.
+    unsafe { finish_tv2(tv2echo_bytes(tv), len) }
 }
 
 /// `tv` as JSON, or an empty buffer once the refusal has been reported.

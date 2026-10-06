@@ -566,7 +566,12 @@ unsafe fn eval_replacement(
 
     NESTING.set(nested as c_int + 1);
     let mut text = match expr {
-        None => unsafe { eval_to_string(source.offset(2), true, false) },
+        None => {
+            // A copy: the expression may run another `:s` and replace the
+            // text this one came from.
+            let expr = XString::from_cstr(unsafe { CStr::from_ptr(source.offset(2)) });
+            eval_to_string(&expr, true, false).map_or(core::ptr::null_mut(), XString::into_raw)
+        }
         Some(expr) => unsafe { call_replacement(expr) },
     };
     NESTING.set(nested as c_int);

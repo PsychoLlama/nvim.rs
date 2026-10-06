@@ -228,9 +228,7 @@ pub unsafe fn expand_env_esc(
             if *src == b'`' as c_char && *src.add(1) == b'=' as c_char {
                 let var = src;
                 src = src.add(2);
-                let mut cursor = src.cast_mut();
-                let _ = skip_expr(&raw mut cursor, ptr::null_mut());
-                src = cursor;
+                src = src.add(skip_expr(cstr::bytes_at(src)));
                 if *src == b'`' as c_char {
                     src = src.add(1);
                 }

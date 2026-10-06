@@ -24,7 +24,6 @@ use crate::ex_docmd::ex_pressedreturn;
 use crate::ex_docmd::xfree;
 use crate::ex_getln::state::cmdpreview;
 use crate::highlight_group::{do_highlight, load_colors};
-use crate::memory::xstrdup;
 use crate::message::state::{
     msg_col, msg_didout, need_wait_return, redir_fd, redir_off, redir_reg, redir_vname,
 };
@@ -57,19 +56,15 @@ pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
     }
     // The variable may not exist, which is not an error here: an
     // unnamed scheme reports `default`.
-    let expr = unsafe { xstrdup(c"g:colors_name".as_ptr()) };
     let no_emsg = Suppress::emsg();
-    let name = unsafe { eval_to_string(expr, false, false) };
+    let name = eval_to_string(b"g:colors_name", false, false);
     drop(no_emsg);
-    xfree(expr as *mut c_void);
 
     msg_ext_set_kind(c"list_cmd");
-    if name.is_null() {
-        msg(c"default".as_ptr(), 0);
-    } else {
-        msg(name, 0);
-        xfree(name as *mut c_void);
-    }
+    match name {
+        None => msg(c"default".as_ptr(), 0),
+        Some(name) => msg(name.as_ptr(), 0),
+    };
 }
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.

@@ -20,10 +20,10 @@ use crate::buffer::{buf_is_prompt, current_buf};
 use crate::cstr;
 use crate::drawscreen::redraw_buf_status_later;
 use crate::drawscreen::state::{need_maketitle, redraw_tabline};
-use crate::eval::typval::{callback_free, tv_dict_alloc, tv_free};
+use crate::eval::typval::{callback_free, tv_dict_alloc};
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
-use crate::memory::{XString, xcalloc, xfree, xstrdup};
+use crate::memory::{XString, xfree};
 use crate::option::vars::{
     P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, bkc_flags, p_magic, p_sh, p_siso, p_so, ve_flags,
 };
@@ -178,28 +178,22 @@ pub(crate) unsafe fn option_set_callback_func(
     }
     // A lambda, `function(...)` or `funcref(...)` is an expression; a
     // bare name is the function's name.
-    let tv = if unsafe { *optval } == b'{' as c_char
-        || unsafe { cstr::starts_with(optval, b"function(") }
-        || unsafe { cstr::starts_with(optval, b"funcref(") }
+    // A copy: evaluating it may reach the option.
+    let text = XString::from_cstr(unsafe { CStr::from_ptr(optval) });
+    let tv = if text.starts_with(b"{")
+        || text.starts_with(b"function(")
+        || text.starts_with(b"funcref(")
     {
-        let tv = unsafe { eval_expr(optval, None) };
-        if tv.is_null() {
-            return Err(Failed);
-        }
-        tv
+        eval_expr(&text).ok_or(Failed)?
     } else {
-        let tv = unsafe { xcalloc(1, size_of::<TypVal>()) }.cast::<TypVal>();
-        unsafe { (*tv).write_string(xstrdup(optval)) };
-        tv
+        TypVal::String(text.into_raw())
     };
     let mut cb = Callback::None;
-    if !unsafe { callback_from_typval(&raw mut cb, &*tv) } || !cb.is_set() {
-        unsafe { tv_free(tv.as_mut()) };
+    if !unsafe { callback_from_typval(&raw mut cb, &tv) } || !cb.is_set() {
         return Err(Failed);
     }
     unsafe { callback_free(optcb) };
     unsafe { *optcb = cb };
-    unsafe { tv_free(tv.as_mut()) };
     Ok(())
 }
 

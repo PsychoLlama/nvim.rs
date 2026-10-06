@@ -66,7 +66,6 @@ pub unsafe fn call_user_func(
     let mut f = unsafe { Uf::new(func) };
     // SAFETY: the caller's promise -- `result` is the return value being built.
     let mut rv = unsafe { Tv::new(result) };
-    let mut evalarg = EVALARG_EVALUATE;
     static depth: GlobalCell<c_int> = GlobalCell::new(0);
 
     // Don't execute the function when the call depth is getting too high.
@@ -210,10 +209,11 @@ pub unsafe fn call_user_func(
             isdefault = ai + f.uf_def_args.ga_len >= 0 && i >= argcount;
             if isdefault {
                 def_rettv.write_number(-1);
-                let mut default_expr = defaults[(ai + defaults.len() as c_int) as usize];
-                if unsafe { eval1(&raw mut default_expr, &mut def_rettv, &raw mut evalarg) }
-                    .is_err()
-                {
+                let default_expr = defaults[(ai + defaults.len() as c_int) as usize];
+                // SAFETY: a default is a NUL-terminated line the function
+                // owns, and a running function cannot be redefined (E127).
+                let text = unsafe { cstr::bytes_at(default_expr) };
+                if eval1(&mut Cursor::new(text), &mut def_rettv, true).is_err() {
                     default_arg_err = true;
                     break;
                 }
@@ -367,9 +367,15 @@ pub unsafe fn call_user_func(
     } else if islambda {
         // A lambda's body is one line, "return <expr>"; evaluate the
         // expression straight rather than going through `do_cmdline`.
-        let mut p = unsafe { ga_strings(&f.uf_lines)[0].add(c"return ".count_bytes()) };
+        // SAFETY: the body line is NUL-terminated and the lambda owns it;
+        // a lambda is never redefined, and a running one is not freed.
+        let line = unsafe { cstr::bytes_at(ga_strings(&f.uf_lines)[0]) };
         let _nesting = Depth::of(ex_nesting_level);
-        let _ = unsafe { eval1(&raw mut p, result, &raw mut evalarg) };
+        let _ = eval1(
+            &mut Cursor::new(&line[c"return ".count_bytes()..]),
+            result,
+            true,
+        );
     } else {
         // Call do_cmdline() to execute the lines.
         type Getline = unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
@@ -565,35 +571,21 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
     }
 }
 
-/// Call a Lua function by name with no arguments.
-///
-/// # Safety
-/// `funcname` has `len` readable bytes.
-pub unsafe fn call_simple_luafunc(
-    funcname: *const c_char,
-    len: size_t,
-    result: &mut TypVal,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- `result` is the return value.
-    let rv = &mut *result;
+/// Call the Lua function `name` with no arguments.
+pub fn call_simple_luafunc(name: &[u8], result: &mut TypVal) -> Result<(), Failed> {
     // the default is number zero
-    rv.write_number(0);
-
-    unsafe { nlua_typval_call(funcname, len, &[], rv) };
+    result.write_number(0);
+    // SAFETY: `name` names its own bytes.
+    unsafe { nlua_typval_call(name.as_ptr().cast(), name.len(), &[], result) };
     Ok(())
 }
 
 /// Call a user function by name with no arguments, for the internal callers
 /// that know there is nothing else to pass.  Answers [`Parsed::NotThis`]
 /// when there is no such function.
-///
-/// # Safety
-/// `funcname` has `len` readable bytes.
-pub unsafe fn call_simple_func(
-    funcname: *const c_char,
-    len: size_t,
-    result: &mut TypVal,
-) -> Result<Parsed, Failed> {
+pub fn call_simple_func(funcname: &[u8], result: &mut TypVal) -> Result<Parsed, Failed> {
+    let len = funcname.len();
+    let funcname: *const c_char = funcname.as_ptr().cast();
     // SAFETY: the caller's promise -- `result` is the return value.
     let mut rv = unsafe { Tv::new(result) };
     let mut ret = Err(Failed);

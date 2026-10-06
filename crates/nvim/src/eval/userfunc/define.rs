@@ -265,12 +265,16 @@ impl Definition<'_> {
     /// `None` says the three argument arrays were not handed over and are
     /// still the caller's to release.
     fn install(&mut self) -> Option<()> {
-        let (argp, names) = (self.cursor.raw(), &raw mut self.newargs);
+        let names = &raw mut self.newargs;
         let (varp, defs) = (&raw mut self.varargs, &raw mut self.default_args);
         let skip = self.excmd.skip;
-        // SAFETY: the cursor walks the command's argument and the three
-        // out-parameters are this record's own.
-        let parsed = unsafe { get_function_args(argp, b')' as c_char, names, varp, defs, skip) };
+        let read = |cursor: &mut Cursor<'_>| {
+            // SAFETY: the three out-parameters are this record's own.
+            unsafe { get_function_args(cursor, b')', names, varp, defs, skip) }
+        };
+        // SAFETY: the cursor walks the `:function` command line, which the
+        // defaults -- parsed, not evaluated -- run no code over.
+        let parsed = unsafe { self.cursor.with_cursor(read) };
         if parsed.is_ok() {
             if KeyTyped.get() && ui_has(kUICmdline) {
                 self.show_block = true;

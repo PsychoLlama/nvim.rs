@@ -21,6 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::eval::Parsed;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -86,12 +87,9 @@ pub unsafe fn eval_charconvert(
     unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptCharconvert));
 
-    let mut err = false;
-    if p_ccv(|value| unsafe {
-        eval_to_bool(value.as_ptr().cast_mut(), &raw mut err, None, false, true)
-    }) {
-        err = true;
-    }
+    // A copy: the expression may set the option and free its text.
+    let expr = p_ccv(XString::from_cstr);
+    let err = eval_to_bool(&expr, true) != Ok(false);
 
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
@@ -117,9 +115,8 @@ pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile
     unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptDiffexpr));
 
-    p_dex(|value| unsafe {
-        tv_free(eval_expr_ext(value.as_ptr().cast_mut(), None, true).as_mut())
-    });
+    // A copy: the expression may set the option and free its text.
+    drop(eval_expr_ext(&p_dex(XString::from_cstr), true));
 
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
@@ -142,9 +139,8 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
     unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptPatchexpr));
 
-    p_pex(|value| unsafe {
-        tv_free(eval_expr_ext(value.as_ptr().cast_mut(), None, true).as_mut())
-    });
+    // A copy: the expression may set the option and free its text.
+    drop(eval_expr_ext(&p_pex(XString::from_cstr), true));
 
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
@@ -159,8 +155,9 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
 /// # Safety
 /// `badword` and `expr` are NUL-terminated strings.
 pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut List {
-    let mut evalarg = EVALARG_EVALUATE;
-    let mut p = unsafe { skipwhite(expr) };
+    // SAFETY: the caller's promise -- `expr` is NUL-terminated.
+    let text = unsafe { cstr::bytes_at(expr) };
+    let text = &text[skip::white(text)..];
     let saved_sctx = current_sctx.get();
 
     // `v:val` is the bad word; it has no type of its own, so it has to
@@ -174,8 +171,8 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut L
     let mut rettv = TV_INITIAL_VALUE;
     // A bare `Func(v:val)` call is evaluated without the expression
     // parser; anything else goes through it.
-    let r = match unsafe { may_call_simple_func(p, &mut rettv) } {
-        Ok(Parsed::NotThis) => unsafe { eval1(&raw mut p, &mut rettv, &raw mut evalarg) },
+    let r = match may_call_simple_func(text, &mut rettv) {
+        Ok(Parsed::NotThis) => eval1(&mut Cursor::new(text), &mut rettv, true),
         other => other.map(|_| ()),
     };
     let mut list: *mut List = ptr::null_mut();

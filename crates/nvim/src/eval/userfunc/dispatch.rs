@@ -18,38 +18,26 @@ use super::*;
 use crate::eval::typval::CallFrame;
 use crate::types::Failed;
 
-/// Evaluate a call written as an expression: read `(a, b)` at `*arg`, then
-/// make the call.
+/// Evaluate a call written as an expression: read `(a, b)` at the cursor,
+/// then make the call.
 ///
-/// # Safety
-/// `name` has `len` readable bytes, `*arg` points at the `(`, and `funcexe`
-/// describes the call.
-pub unsafe fn get_func_tv(
-    name: *const c_char,
-    len: c_int,
+/// `name` is what the C handed on: the callee's name, or with `len` given
+/// the text it is the first `len` bytes of -- a `v:lua.` name runs to the
+/// cursor, and a message about it quotes the rest of the line.
+pub(crate) fn get_func_tv(
+    name: &CStr,
+    len: Option<usize>,
     result: &mut TypVal,
-    arg: *mut *mut c_char,
-    evalarg: *mut EvalArg,
-    funcexe: *mut FuncExe,
+    cursor: &mut Cursor<'_>,
+    evaluate: bool,
+    funcexe: &mut FuncExe,
 ) -> Result<(), Failed> {
     let mut argvars = Argv::new();
     let mut argcount = 0;
-    let evaluate = !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE != 0;
 
-    // Get the arguments.
-    let mut argp = unsafe { *arg };
-    // SAFETY: the caller's promise -- `funcexe` describes the call, so its
-    // partial is null or live.
-    let bound = unsafe {
-        if (*funcexe).fe_partial.is_null() {
-            0
-        } else {
-            (*(*funcexe).fe_partial).pt_argc
-        }
-    };
-    let argpp = &raw mut argp;
-    let mut ret =
-        unsafe { get_func_arguments(argpp, evalarg, bound, argvars.room(), &mut argcount) };
+    // SAFETY: `funcexe` describes the call, so its partial is null or live.
+    let bound = unsafe { funcexe.fe_partial.as_ref() }.map_or(0, |partial| partial.pt_argc);
+    let mut ret = get_func_arguments(cursor, evaluate, bound, argvars.room(), &mut argcount);
     // A failed argument leaves whatever it half-built in the slot it was
     // being evaluated into, which upstream leaks and the frame releases.
     argvars.fill(if ret.is_ok() {
@@ -57,26 +45,29 @@ pub unsafe fn get_func_tv(
     } else {
         (argcount + 1).min(MAX_FUNC_ARGS as usize + 1)
     });
-    debug_assert!(ret.is_ok() || ret.is_err());
 
+    let name_ptr = name.as_ptr();
     if ret.is_ok() {
         // Prepare for calling `test_garbagecollect_now()`, which needs to
         // know which variables are used on the call stack.
         let pushed = push_func_args(&argvars.args()[..argcount]);
-        // SAFETY: the caller's promise -- `result` is the return value.
-        let rv = &mut *result;
-        ret = unsafe { call_func(name, len, rv, &argvars.args()[..argcount], funcexe) };
+        let len = len.map_or(-1, |len| c_int::try_from(len).unwrap_or(c_int::MAX));
+        // SAFETY: `name` is terminated, and holds `len` bytes when that is
+        // given; `funcexe` is the caller's.
+        ret = unsafe { call_func(name_ptr, len, result, &argvars.args()[..argcount], funcexe) };
         // The nested calls pushed and popped their own; ours are the last.
         pop_func_args(pushed);
     } else if !aborting() && evaluate {
-        if argcount == MAX_FUNC_ARGS as usize {
-            unsafe { emsg_funcname(c"E740: Too many arguments for function %s".as_ptr(), name) };
+        let message = if argcount == MAX_FUNC_ARGS as usize {
+            c"E740: Too many arguments for function %s"
         } else {
-            unsafe { emsg_funcname(c"E116: Invalid arguments for function %s".as_ptr(), name) };
-        }
+            c"E116: Invalid arguments for function %s"
+        };
+        // SAFETY: a format with one `%s`, and a terminated name.
+        unsafe { emsg_funcname(message.as_ptr(), name_ptr) };
     }
 
-    unsafe { *arg = skipwhite(argp) };
+    cursor.skip_white();
     ret
 }
 

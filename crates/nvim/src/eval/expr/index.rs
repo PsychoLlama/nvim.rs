@@ -6,97 +6,74 @@
 //! its end. `exclusive` is the flag that tells them apart, and it also
 //! switches the String arm onto the character walkers.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::winlayer::Live;
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr::{null, null_mut};
+use core::ffi::{CStr, c_int};
 
-use crate::ascii::ascii_iswhite;
 use crate::eval::typval::{
-    NumBuf, blob_slice_or_index, list_slice_or_index, tv_check_str, tv_clear, tv_copy,
-    tv_dict_unref, tv_get_number,
+    DictRef, NumBuf, blob_slice_or_index, list_slice_or_index, tv_check_str, tv_clear, tv_copy,
+    tv_get_number,
 };
-use crate::eval::userfunc::make_partial;
+use crate::eval::userfunc::set_selfdict;
 use crate::eval::{
-    Cur, EVAL_EVALUATE, Tv, VARNUMBER_MAX, call_func_rettv, check_luafunc_name,
+    Cursor, VARNUMBER_MAX, call_func_rettv, char_len_at, check_luafunc_name,
     e_cannot_index_a_funcref, e_cannot_index_special_variable, e_cannot_slice_dictionary,
     e_missbrac, eval_isdictc, eval_lambda, eval_method, eval1, tv_is_luafunc,
 };
 use crate::ex_eval::aborting;
-use crate::mbyte::{utf_head_off, utfc_ptr2len};
-use crate::memory::xmemdupz;
+use crate::mbyte::head_off;
 use crate::message::e_using_float_as_string;
 use crate::message::emsg;
-use crate::message_fmt::{c_str, c_str_len};
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::types::{
-    Dict, EvalArg, EvalFuncData, Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, ptrdiff_t,
-    size_t, ssize_t,
+    EvalFuncData, Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber,
 };
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
-/// Is this `evalarg` asking for the expression to actually be evaluated?
-///
-/// # Safety
-/// `evalarg` must be null or valid.
-unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
-    !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE as c_int != 0
-}
-
 /// `expr[idx]`, `expr[first : last]` or `dict.key`, with the cursor on the
 /// `[` or the `.`. Leaves the cursor after the `]` or the key.
-///
-/// # Safety
-/// `arg` must point at the cursor into a NUL-terminated expression, `result`
-/// at the value being subscripted, and `evalarg` must be null or valid.
-pub(crate) unsafe fn eval_index(
-    arg: *mut *mut c_char,
+pub(crate) fn eval_index(
+    cursor: &mut Cursor<'_>,
     result: &mut TypVal,
-    evalarg: *mut EvalArg,
+    evaluate: bool,
     verbose: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `result` is the value being subscripted and `evalarg` is
-    // null or valid. All three hold for every call below.
-    let cur = unsafe { Cur::new(arg) };
-    let evaluate = unsafe { evaluating(evalarg) };
     let mut empty1 = false;
     let mut empty2 = false;
     let mut range = false;
-    let mut key: *const c_char = null();
-    let mut keylen: ptrdiff_t = -1;
+    let mut key: Option<&[u8]> = None;
 
     check_can_index(result, evaluate, verbose)?;
 
     let mut var1 = UNSET_TV;
     let mut var2 = UNSET_TV;
-    if cur.byte() == b'.' {
+    if cursor.byte() == b'.' {
         // dict.name
-        key = cur.get().wrapping_add(1);
-        keylen = 0;
-        // SAFETY: the key runs to the first byte that cannot be in one,
-        // which the terminating NUL is not.
-        while eval_isdictc(unsafe { *key.offset(keylen) } as c_int) {
-            keylen += 1;
-        }
+        let rest = &cursor.rest()[1..];
+        let keylen = rest
+            .iter()
+            .take_while(|&&b| eval_isdictc(c_int::from(b)))
+            .count();
         if keylen == 0 {
             return Err(Failed);
         }
-        cur.skip(1 + keylen as usize);
+        key = Some(&rest[..keylen]);
+        cursor.bump(1 + keylen);
+        cursor.skip_white();
     } else {
         // The first index, from inside the brackets.
-        cur.skip(1);
-        if cur.byte() == b':' {
+        cursor.bump(1);
+        cursor.skip_white();
+        if cursor.byte() == b':' {
             empty1 = true;
-        } else if unsafe { eval1(arg, &mut var1, evalarg) }.is_err() {
+        } else if eval1(cursor, &mut var1, evaluate).is_err() {
             return Err(Failed);
         } else if evaluate && !tv_check_str(&var1) {
             tv_clear(&mut var1);
@@ -104,12 +81,13 @@ pub(crate) unsafe fn eval_index(
         }
 
         // The second index, from inside the `[ : ]`.
-        if cur.byte() == b':' {
+        if cursor.byte() == b':' {
             range = true;
-            cur.skip(1);
-            if cur.byte() == b']' {
+            cursor.bump(1);
+            cursor.skip_white();
+            if cursor.byte() == b']' {
                 empty2 = true;
-            } else if unsafe { eval1(arg, &mut var2, evalarg) }.is_err() {
+            } else if eval1(cursor, &mut var2, evaluate).is_err() {
                 if !empty1 {
                     tv_clear(&mut var1);
                 }
@@ -123,7 +101,7 @@ pub(crate) unsafe fn eval_index(
             }
         }
 
-        if cur.byte() != b']' {
+        if cursor.byte() != b']' {
             if verbose {
                 emsg(gettext(e_missbrac));
             }
@@ -134,7 +112,8 @@ pub(crate) unsafe fn eval_index(
             }
             return Err(Failed);
         }
-        cur.skip(1);
+        cursor.bump(1);
+        cursor.skip_white();
     }
 
     if !evaluate {
@@ -143,7 +122,7 @@ pub(crate) unsafe fn eval_index(
     // An empty half of a `[a:b]` is *absent*, not an unset value.
     let one = (!empty1).then_some(&var1);
     let two = (!empty2).then_some(&var2);
-    let res = unsafe { eval_index_inner(result, range, one, two, false, key, keylen, verbose) };
+    let res = eval_index_inner(result, range, one, two, false, key, verbose);
     if !empty1 {
         tv_clear(&mut var1);
     }
@@ -159,10 +138,10 @@ pub(crate) fn check_can_index(
     evaluate: bool,
     verbose: bool,
 ) -> Result<(), Failed> {
-    let message = match (*result).v_type() {
-        VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref.as_ptr(),
-        VAR_FLOAT => e_using_float_as_string.as_ptr(),
-        VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable.as_ptr(),
+    let message: &'static CStr = match result.v_type() {
+        VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref,
+        VAR_FLOAT => e_using_float_as_string,
+        VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable,
         // Not evaluating: the subscript is only being skipped over, and an
         // unset value is what an unevaluated operand looks like.
         VAR_UNKNOWN if !evaluate => return Ok(()),
@@ -174,8 +153,7 @@ pub(crate) fn check_can_index(
         _ => return Ok(()),
     };
     if verbose {
-        // SAFETY: as above.
-        unsafe { emsg(gettext_ptr(message)) };
+        emsg(gettext(message));
     }
     Err(Failed)
 }
@@ -187,44 +165,35 @@ pub(crate) fn f_slice(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     }
     tv_copy(&args[0], result);
     let (first, end) = (Some(&args[1]), args.get(2));
-    let _ = unsafe { eval_index_inner(result, true, first, end, true, null(), 0, false) };
+    let _ = eval_index_inner(result, true, first, end, true, None, false);
 }
 
 /// Apply an index or a range to `result`, in place.
 ///
-/// `var1` is the first index and is null for `[:expr]`; `var2` is the second
-/// and is null for `[expr]` and `[expr:]`. `exclusive` is `slice()`'s: the
-/// second index is excluded and a String is indexed by character. When `key`
-/// is non-null it is the Dict index instead of `var1`.
-///
-/// # Safety
-/// `result` must be valid; `var1`/`var2` null or valid; `key` null or
-/// `keylen` readable bytes (or NUL-terminated when `keylen` is negative).
-#[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn eval_index_inner(
+/// `var1` is the first index and is absent for `[:expr]`; `var2` is the
+/// second and is absent for `[expr]` and `[expr:]`. `exclusive` is
+/// `slice()`'s: the second index is excluded and a String is indexed by
+/// character. `key`, when there is one, is the Dict index instead of `var1`.
+pub(crate) fn eval_index_inner(
     result: &mut TypVal,
     is_range: bool,
     var1: Option<&TypVal>,
     var2: Option<&TypVal>,
     exclusive: bool,
-    key: *const c_char,
-    keylen: ptrdiff_t,
+    key: Option<&[u8]>,
     verbose: bool,
 ) -> Result<(), Failed> {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut n1: VarNumber = 0;
     let mut n2: VarNumber = 0;
-    // SAFETY: the caller's promise -- `result` is the value being indexed,
-    // and `var1`/`var2` are null or valid typvals.
-    let mut rv = unsafe { Tv::new(result) };
     if let Some(var1) = var1
-        && rv.v_type() != VAR_DICT
+        && result.v_type() != VAR_DICT
     {
         n1 = tv_get_number(var1);
     }
     if is_range {
-        if rv.v_type() == VAR_DICT {
+        if result.v_type() == VAR_DICT {
             if verbose {
                 emsg(gettext(e_cannot_slice_dictionary));
             }
@@ -236,18 +205,16 @@ pub(crate) unsafe fn eval_index_inner(
         };
     }
 
-    match rv.v_type() {
+    match result.v_type() {
         VAR_NUMBER | VAR_STRING => {
-            // SAFETY: `numbuf` is this frame's own scratch, and the String
-            // it answers is NUL-terminated with `n1`/`n2` inside it.
-            let s = numbuf.string_ptr(result);
-            let len = unsafe { cstr::bytes_at(s) }.len() as c_int as VarNumber;
+            let s = numbuf.string(result).to_bytes();
+            let len = s.len() as c_int as VarNumber;
             let v = if exclusive {
                 // slice(): character indexes, second one excluded.
                 if is_range {
-                    unsafe { string_slice(s, n1, n2, exclusive) }
+                    string_slice(s, n1, n2, exclusive)
                 } else {
-                    unsafe { char_from_string(s, n1) }
+                    char_from_string(s, n1)
                 }
             } else if is_range {
                 // A substring. Out-of-range indexes give an empty result.
@@ -260,20 +227,20 @@ pub(crate) unsafe fn eval_index_inner(
                     n2 = len;
                 }
                 if n1 >= len || n2 < 0 || n1 > n2 {
-                    null_mut()
+                    None
                 } else {
-                    let at = s.wrapping_offset(n1 as isize).cast();
-                    unsafe { xmemdupz(at, (n2 - n1 + 1) as size_t) as *mut c_char }
+                    // `n2` may be the length itself, whose byte is the end.
+                    Some(&s[n1 as usize..((n2 + 1) as usize).min(s.len())])
                 }
             } else if n1 >= len || n1 < 0 {
                 // A one-byte String; too big or negative gives an empty one.
-                null_mut()
+                None
             } else {
-                let at = s.wrapping_offset(n1 as isize).cast::<c_void>();
-                unsafe { xmemdupz(at, 1) as *mut c_char }
+                Some(&s[n1 as usize..=n1 as usize])
             };
+            let v = v.map(XString::from_bytes);
             tv_clear(result);
-            rv.write_string(v);
+            result.write_string(v.map_or(::core::ptr::null_mut(), XString::into_raw));
         }
         VAR_BLOB => {
             let _ = blob_slice_or_index(is_range, n1, n2, exclusive, result);
@@ -288,49 +255,30 @@ pub(crate) unsafe fn eval_index_inner(
             list_slice_or_index(is_range, n1, n2, exclusive, result, verbose)?;
         }
         VAR_DICT => {
-            let mut key = key;
-            if key.is_null() {
-                // SAFETY: `numbuf2` is this frame's own scratch.
-                key = numbuf2.string_ptr_chk(var1.expect("checked"));
-                if key.is_null() {
+            let key = match key {
+                Some(key) => key,
+                None => match numbuf2.string_chk(var1.expect("checked")) {
+                    Some(key) => key.to_bytes(),
+                    None => return Err(Failed),
+                },
+            };
+            // `v:_null_dict` holds no key at all. The value is copied out
+            // of the item before `result` -- which owns the Dict the item
+            // lives in -- is cleared.
+            let mut tmp = UNSET_TV;
+            match result.dict_ref().and_then(|d| d.find(key)) {
+                Some(item) if !tv_is_luafunc(&item.di_tv) => tv_copy(&item.di_tv, &mut tmp),
+                Some(_) => return Err(Failed),
+                None => {
+                    if verbose {
+                        let key = msg_bytes(key);
+                        semsg!("E716: Key not present in Dictionary: \"{key}\"");
+                    }
                     return Err(Failed);
                 }
             }
-            // A negative `keylen` means the key runs to its terminator, and
-            // `v:_null_dict` holds no key at all. The pointer form is the
-            // answer: the value is copied out of the item after the
-            // dictionary has been named again.
-            //
-            // SAFETY: the caller's promise about `key` and `keylen`, and the
-            // kind says the value holds a live dictionary or none.
-            let item = unsafe {
-                rv.dict_ref().map_or(::core::ptr::null_mut(), |d| {
-                    d.find_ptr(match usize::try_from(keylen) {
-                        Ok(keylen) => cstr::slice_at(key, keylen),
-                        Err(_) => cstr::bytes_at(key),
-                    })
-                })
-            };
-            if item.is_null() && verbose {
-                if keylen > 0 {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let key = unsafe { c_str_len(key, keylen as usize) };
-                    semsg!("E716: Key not present in Dictionary: \"{key}\"");
-                } else {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let key = unsafe { c_str(key) };
-                    semsg!("E716: Key not present in Dictionary: \"{key}\"");
-                }
-            }
-            if item.is_null() || tv_is_luafunc(unsafe { &(*item).di_tv }) {
-                return Err(Failed);
-            }
-            // The copy is taken before `result` — which owns the Dict the
-            // item lives in — is cleared.
-            let mut tmp = UNSET_TV;
-            unsafe { tv_copy(&(*item).di_tv, &mut tmp) };
             tv_clear(result);
-            *rv = tmp;
+            *result = tmp;
         }
         // Not evaluating: skipping over the subscript.
         _ => {}
@@ -338,173 +286,143 @@ pub(crate) unsafe fn eval_index_inner(
     Ok(())
 }
 
-/// `str[index]` by character index, composing characters included. Answers
-/// null when `index` is out of range.
-///
-/// # Safety
-/// `str` must be null or NUL-terminated.
-pub(crate) unsafe fn char_from_string(str: *const c_char, index: VarNumber) -> *mut c_char {
-    if str.is_null() {
-        return null_mut();
-    }
-    let slen = unsafe { cstr::bytes_at(str) }.len();
+/// `text[index]` by character index, composing characters included; `None`
+/// when `index` is out of range.
+pub(crate) fn char_from_string(text: &[u8], index: VarNumber) -> Option<&[u8]> {
     let mut nchar = index;
 
     // As for a List, a negative index counts from the end — but unlike a
     // List, running off the start is an empty string rather than an error.
     if index < 0 {
         let mut clen: c_int = 0;
-        let mut nbyte: size_t = 0;
-        while nbyte < slen {
-            nbyte += unsafe { utfc_ptr2len(str.add(nbyte as usize)) } as size_t;
+        let mut nbyte = 0;
+        while nbyte < text.len() {
+            nbyte += char_len_at(text, nbyte);
             clen += 1;
         }
-        nchar = clen as VarNumber + index;
+        nchar = VarNumber::from(clen) + index;
         if nchar < 0 {
-            return null_mut();
+            return None;
         }
     }
 
-    let mut nbyte: size_t = 0;
-    while nchar > 0 && nbyte < slen {
-        nbyte += unsafe { utfc_ptr2len(str.add(nbyte as usize)) } as size_t;
+    let mut nbyte = 0;
+    while nchar > 0 && nbyte < text.len() {
+        nbyte += char_len_at(text, nbyte);
         nchar -= 1;
     }
-    if nbyte >= slen {
-        return null_mut();
+    if nbyte >= text.len() {
+        return None;
     }
-    // SAFETY: the caller's promise -- `str` is NUL-terminated, and `nbyte`
-    // is the start of a character inside it.
-    let at = str.wrapping_add(nbyte as usize);
-    let len = unsafe { utfc_ptr2len(at) } as size_t;
-    unsafe { xmemdupz(at.cast(), len) as *mut c_char }
+    Some(&text[nbyte..nbyte + char_len_at(text, nbyte)])
 }
 
-/// The byte index of character index `idx` in `str`, composing characters
-/// included. Answers `str_len` for an index past the end and -1 for one
+/// The byte index of character index `idx` in `text`, composing characters
+/// included. Answers `text.len()` for an index past the end and -1 for one
 /// before the start.
-///
-/// # Safety
-/// `str` must hold `str_len` readable bytes.
-pub(crate) unsafe fn char_idx2byte(str: *const c_char, str_len: size_t, idx: VarNumber) -> ssize_t {
+pub(crate) fn char_idx2byte(text: &[u8], idx: VarNumber) -> isize {
     let mut nchar = idx;
-    let mut nbyte: size_t = 0;
+    let mut nbyte = 0;
     if nchar >= 0 {
-        while nchar > 0 && nbyte < str_len {
-            nbyte += unsafe { utfc_ptr2len(str.add(nbyte as usize)) } as size_t;
+        while nchar > 0 && nbyte < text.len() {
+            nbyte += char_len_at(text, nbyte);
             nchar -= 1;
         }
     } else {
-        nbyte = str_len;
+        nbyte = text.len();
         while nchar < 0 && nbyte > 0 {
             nbyte -= 1;
-            nbyte -= unsafe { utf_head_off(str, str.add(nbyte as usize)) } as size_t;
+            nbyte -= head_off(text, nbyte);
             nchar += 1;
         }
         if nchar < 0 {
             return -1;
         }
     }
-    nbyte as ssize_t
+    nbyte as isize
 }
 
-/// `str[first : last]` by character index, composing characters included.
-/// `exclusive` is `slice()`'s. Answers null when the result is empty.
-///
-/// # Safety
-/// `str` must be null or NUL-terminated.
-pub(crate) unsafe fn string_slice(
-    str: *const c_char,
+/// `text[first : last]` by character index, composing characters included.
+/// `exclusive` is `slice()`'s. `None` when the result is empty.
+pub(crate) fn string_slice(
+    text: &[u8],
     first: VarNumber,
     last: VarNumber,
     exclusive: bool,
-) -> *mut c_char {
-    if str.is_null() {
-        return null_mut();
-    }
-    let slen = unsafe { cstr::bytes_at(str) }.len();
+) -> Option<&[u8]> {
+    let slen = text.len() as isize;
     // A very negative first index starts at zero rather than failing.
-    let start_byte = unsafe { char_idx2byte(str, slen, first) }.max(0);
+    let start_byte = char_idx2byte(text, first).max(0);
     let end_byte = if (last == -1 && !exclusive) || last == VARNUMBER_MAX {
-        slen as ssize_t
+        slen
     } else {
-        let mut end = unsafe { char_idx2byte(str, slen, last) };
-        if !exclusive && end >= 0 && end < slen as ssize_t {
+        let mut end = char_idx2byte(text, last);
+        if !exclusive && end >= 0 && end < slen {
             // The end index is inclusive here.
-            end += unsafe { utfc_ptr2len(str.add(end as usize)) } as ssize_t;
+            end += char_len_at(text, end as usize) as isize;
         }
         end
     };
 
-    if start_byte >= slen as ssize_t || end_byte <= start_byte {
-        return null_mut();
+    if start_byte >= slen || end_byte <= start_byte {
+        return None;
     }
-    // SAFETY: as above -- both byte offsets are inside `str`.
-    let at = str.wrapping_add(start_byte as usize).cast();
-    unsafe { xmemdupz(at, (end_byte - start_byte) as size_t) as *mut c_char }
+    Some(&text[start_byte as usize..end_byte as usize])
 }
 
 /// Everything that can follow a completed operand, in any order:
 /// `expr[idx]`, `expr[a:b]`, `.name`, a call through a Funcref, and
 /// `expr->method()`. `dict.func(expr)[idx]['func'](expr)->len()` is one run
 /// of this loop.
-///
-/// # Safety
-/// `arg` must point at the cursor into a NUL-terminated expression whose
-/// preceding byte is readable; `result` must be valid; `evalarg` null or
-/// valid.
-pub(crate) unsafe fn handle_subscript(
-    arg: *mut *const c_char,
+pub(crate) fn handle_subscript(
+    cursor: &mut Cursor<'_>,
     result: &mut TypVal,
-    evalarg: *mut EvalArg,
+    evaluate: bool,
     verbose: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `result` is the operand it follows and `evalarg` is null or
-    // valid. All three hold for every call below.
-    let (cur, rv) = unsafe { (Cur::new(arg.cast()), Tv::new(result)) };
-    let evaluate = unsafe { evaluating(evalarg) };
     let mut ret = Ok(());
-    let mut selfdict: *mut Dict = null_mut();
-    let mut lua_funcname: *const c_char = null();
+    let mut selfdict: Option<DictRef> = None;
+    let mut lua_name: Option<usize> = None;
 
     if tv_is_luafunc(result) {
         if !evaluate {
             tv_clear(result);
         }
-        if cur.byte() != b'.' {
+        if cursor.byte() != b'.' {
             tv_clear(result);
             ret = Err(Failed);
         } else {
-            cur.bump(1);
-            lua_funcname = cur.get();
-            let len = check_luafunc_name(unsafe { cstr::bytes_at(cur.get()) }, true);
+            cursor.bump(1);
+            lua_name = Some(cursor.offset());
+            let len = check_luafunc_name(cursor.rest(), true);
             if len == 0 {
                 tv_clear(result);
                 ret = Err(Failed);
             }
-            cur.bump(len);
+            cursor.bump(len);
         }
     }
 
-    // Whether another subscript follows. The byte *before* the cursor is
-    // only read once one of the three opening characters is there, which
-    // is what proves it is inside the expression rather than before it.
-    let more = || {
-        let c = cur.byte();
+    // Whether another subscript follows. An opening `[`, `.` or `(` right
+    // after white space is not one: `a [b]` is two operands.
+    let more = |cursor: &Cursor<'_>, result: &TypVal| {
+        let c = cursor.byte();
         let opens = c == b'['
-            || (c == b'.' && rv.v_type() == VAR_DICT)
-            || (c == b'(' && (!evaluate || rv.is_func()));
-        // SAFETY: the caller's promise -- the byte before the cursor is
-        // readable, and only an opening character asks for it.
-        (opens && !ascii_iswhite(unsafe { *cur.get().offset(-1) } as c_int))
-            || (c == b'-' && cur.at(1) == b'>')
+            || (c == b'.' && result.v_type() == VAR_DICT)
+            || (c == b'(' && (!evaluate || result.is_func()));
+        let before = cursor
+            .offset()
+            .checked_sub(1)
+            .map_or(0, |at| cursor.text()[at]);
+        (opens && !matches!(before, b' ' | b'\t')) || (c == b'-' && cursor.at(1) == b'>')
     };
 
-    while ret.is_ok() && more() {
-        if cur.byte() == b'(' {
-            let (raw, lua) = (cur.raw(), lua_funcname);
-            ret = unsafe { call_func_rettv(raw, evalarg, result, evaluate, selfdict, None, lua) };
+    while ret.is_ok() && more(cursor, result) {
+        if cursor.byte() == b'(' {
+            let selfdict_ptr = selfdict
+                .as_ref()
+                .map_or(::core::ptr::null_mut(), DictRef::as_ptr);
+            ret = call_func_rettv(cursor, result, evaluate, selfdict_ptr, None, lua_name);
             // Stop evaluating on an immediate abort, an interrupt, or an
             // exception that was thrown and not caught.
             if aborting() {
@@ -513,31 +431,23 @@ pub(crate) unsafe fn handle_subscript(
                 }
                 ret = Err(Failed);
             }
-            unsafe { tv_dict_unref(selfdict) };
-            selfdict = null_mut();
-        } else if cur.byte() == b'-' {
-            ret = if cur.at(2) == b'{' {
+            selfdict = None;
+        } else if cursor.byte() == b'-' {
+            ret = if cursor.at(2) == b'{' {
                 // expr->{lambda}()
-                unsafe { eval_lambda(cur.raw(), result, evalarg, verbose) }
+                eval_lambda(cursor, result, evaluate, verbose)
             } else {
                 // expr->name()
-                unsafe { eval_method(cur.raw(), result, evalarg, verbose) }
+                eval_method(cursor, result, evaluate, verbose)
             };
         } else {
             // `[` or `.`: a Dict being subscripted is the `self` a
             // Funcref found in it would be bound to.
-            unsafe { tv_dict_unref(selfdict) };
-            selfdict = if rv.v_type() == VAR_DICT {
-                // SAFETY: the kind says the value holds a Dict.
-                let d = rv.dict_or_null();
-                if !d.is_null() {
-                    unsafe { (*d).dv_refcount.retain() };
-                }
-                d
-            } else {
-                null_mut()
+            selfdict = match &*result {
+                TypVal::Dict(dict) => (**dict).clone(),
+                _ => None,
             };
-            if unsafe { eval_index(cur.raw(), result, evalarg, verbose) }.is_err() {
+            if eval_index(cursor, result, evaluate, verbose).is_err() {
                 tv_clear(result);
                 ret = Err(Failed);
             }
@@ -545,28 +455,10 @@ pub(crate) unsafe fn handle_subscript(
     }
 
     // Turn "dict.Func" into a partial for "Func" bound to "dict".
-    if !selfdict.is_null() && rv.is_func() {
-        unsafe { set_selfdict(result, selfdict) };
+    if let Some(dict) = selfdict.as_mut()
+        && result.is_func()
+    {
+        set_selfdict(result, dict);
     }
-    unsafe { tv_dict_unref(selfdict) };
     ret
-}
-
-/// Bind `selfdict` to the Funcref in `result`.
-///
-/// # Safety
-/// `result` must be valid and `selfdict` must be a reference this call takes
-/// over.
-pub(crate) unsafe fn set_selfdict(result: &mut TypVal, selfdict: *mut Dict) {
-    // Not for a partial that was bound explicitly (`pt_auto` clear).
-    // SAFETY: the caller's promise -- `result` is valid, and the tag says
-    // whether the value holds a live partial.
-    let rv = unsafe { Tv::new(result) };
-    if rv.v_type() == VAR_PARTIAL {
-        let pt = unsafe { Live::new(rv.partial_or_null()) };
-        if !pt.pt_auto && !pt.pt_dict.is_null() {
-            return;
-        }
-    }
-    unsafe { make_partial(selfdict, result) };
 }

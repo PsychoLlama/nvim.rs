@@ -14,7 +14,6 @@ use crate::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
 use crate::debugger::state::{debug_backtrace_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
 use crate::drawscreen::state::cmdline_row;
-use crate::eval::EVALARG_EVALUATE;
 pub(crate) use crate::eval::Tv;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{
@@ -31,10 +30,10 @@ use crate::eval::vars::{
     list_hashtable_vars, skip_var_list, vars_clear, vars_clear_ext,
 };
 use crate::eval::{
-    LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, clear_evalarg, clear_lval, eval_isnamec,
-    eval_isnamec1, eval0, eval1, fill_evalarg_from_eap, garbage_collect, get_lval,
-    handle_subscript, id_len, is_luafunc, last_set_msg, mark_root, name_end, partial_name,
-    partial_unref, set_ref_in_ht, set_ref_in_list_items, skip_expr,
+    Cur, Cursor, LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, clear_lval, eval_isnamec,
+    eval_isnamec1, eval0_in_cmd, eval1, garbage_collect, get_lval, handle_subscript, id_len,
+    is_luafunc, last_set_msg, mark_root, name_end, partial_name, partial_unref, set_ref_in_ht,
+    set_ref_in_list_items,
 };
 use crate::ex_docmd::state::ex_nesting_level;
 use crate::ex_docmd::{checkforcmd, do_cmdline, ends_excmd, skip_range};
@@ -57,6 +56,7 @@ use crate::keycodes::K_SPECIAL;
 use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
+use crate::memory::XString;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcpy,
 };
@@ -71,6 +71,7 @@ use crate::message::{
     msg_prt_line, msg_putchar, msg_start, msg_str, trunc_string, verbose_enter_scroll,
     verbose_leave_scroll,
 };
+use crate::message_fmt::msg_bytes;
 use crate::option::vars::{p_ic, p_mfd, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
@@ -91,10 +92,10 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, EStack, EvalArg, ExArg, Expand, FcId, FuncCall, FuncDict, FuncExe,
-    GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch, SaveRedo, String_0,
-    TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
+    Callback, Dict, DictItem, EStack, ExArg, Expand, FcId, FuncCall, FuncDict, FuncExe, GArray,
+    HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch, SaveRedo, String_0, TypVal,
+    UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
+    VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
@@ -165,7 +166,6 @@ pub const TFN_QUIET: c_int = 2;
 pub const TFN_INT: c_int = 1;
 
 pub const GLV_READ_ONLY: c_int = 16;
-pub const EVAL_EVALUATE: c_int = 1;
 
 /// Why a call could not be made; `user_func_error` turns one into a message.
 pub const FCERR_NOTMETHOD: c_int = 8;

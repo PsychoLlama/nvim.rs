@@ -376,6 +376,18 @@ impl Dict {
         unsafe { self.add_or_free(item) }
     }
 
+    /// Add `tv` under `key`, taking the value over. A failure releases it
+    /// with the item; the borrow rules out its naming this dictionary, as
+    /// for [`add_tv`](Dict::add_tv).
+    pub fn add_value(&mut self, key: &[u8], tv: TypVal) -> Result<(), Failed> {
+        let item = Self::fresh_item(key);
+        // SAFETY: the item just allocated, which holds `VAR_UNKNOWN` -- so
+        // the value it is overwritten with releases nothing.
+        unsafe { (*item).di_tv.overwrite(tv) };
+        // SAFETY: as above — a fresh item in no table.
+        unsafe { self.add_or_free(item) }
+    }
+
     /// Add `list` under `key`, taking the handle over.  A failure releases
     /// it with the item.
     pub fn add_list(&mut self, key: &[u8], list: Option<ListRef>) -> Result<(), Failed> {

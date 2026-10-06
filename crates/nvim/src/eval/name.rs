@@ -17,7 +17,7 @@ use crate::cstr::byte_at;
 use crate::eval::userfunc::fname_script_len;
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::{
-    AUTOLOAD_CHAR, Cursor, FNE_CHECK_START, FNE_INCL_BR, char_len_at, eval_text_to_string,
+    AUTOLOAD_CHAR, Cursor, FNE_CHECK_START, FNE_INCL_BR, char_len_at, eval_to_string,
     namespace_char,
 };
 use crate::keycodes::{K_SPECIAL, KE_SNR, KS_EXTRA};
@@ -223,7 +223,7 @@ pub(crate) fn name_end(text: &[u8], flags: c_int) -> NameEnd {
 /// braces expand too.
 pub(crate) fn expanded_name(name: &[u8], open: usize, close: Option<usize>) -> Option<XString> {
     let close = close?;
-    let value = eval_text_to_string(&name[open + 1..close], false)?;
+    let value = eval_to_string(&name[open + 1..close], false, false)?;
     let mut expanded = Vec::with_capacity(open + value.len() + name.len() - close);
     expanded.extend_from_slice(&name[..open]);
     expanded.extend_from_slice(&value);

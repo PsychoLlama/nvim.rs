@@ -78,14 +78,14 @@ pub fn f_getreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if return_list {
         flags |= kGRegList as c_int;
         result.write_empty(VAR_LIST);
-        let l = unsafe { get_reg_contents(regname, flags) } as *mut List;
+        let l = get_reg_contents(regname, flags) as *mut List;
         // `get_reg_contents` hands back a list at one reference, which the
         // answer takes over; an unset register gets a fresh empty one.
         // SAFETY: the register's list, whose reference this takes over.
         let held = unsafe { ListRef::owning(l) }.unwrap_or_else(|| tv_list_alloc(0));
         result.write_list(Some(held));
     } else {
-        result.write_string(unsafe { get_reg_contents(regname, flags) } as *mut c_char);
+        result.write_string(get_reg_contents(regname, flags) as *mut c_char);
     }
 }
 
@@ -112,8 +112,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     dict_alloc_ret(result);
     let dict: *mut Dict = result.dict_or_null();
-    let list = unsafe { get_reg_contents(regname, kGRegExprSrc as c_int | kGRegList as c_int) }
-        as *mut List;
+    let list = get_reg_contents(regname, kGRegExprSrc as c_int | kGRegList as c_int) as *mut List;
     // An unset register has no `regcontents`, and no other key either.
     if list.is_null() {
         return;

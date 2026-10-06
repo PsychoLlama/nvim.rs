@@ -56,10 +56,7 @@ mod trycmd;
 use crate::debugger::dbg_check_skipped;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{tv_clear, tv_free};
-use crate::eval::{
-    clear_evalarg, eval_for_line, eval_to_bool, eval0, fill_evalarg_from_eap, free_for_info,
-    next_for_item,
-};
+use crate::eval::{eval_cmd_bool, eval_for_line, eval0_in_cmd, free_for_info, next_for_item};
 use crate::ex_docmd::{ends_excmd, modifier_len};
 use crate::ex_eval::state::{did_endif, did_throw, force_abort, trylevel};
 use crate::getchar::state::got_int;
@@ -70,7 +67,7 @@ use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
-use crate::types::{CondStack, EsList, EvalArg, ExArg, FAIL, Failed, OK, Pend, TypVal};
+use crate::types::{CondStack, EsList, ExArg, FAIL, Failed, OK, Pend, TypVal};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -254,21 +251,10 @@ pub(crate) fn aborted_in_try() -> bool {
 /// `:eval {expr}`
 pub(crate) fn ex_eval(excmd: &mut ExArg) {
     let mut tv = TV_INITIAL_VALUE;
-    let mut evalarg = EvalArg {
-        eval_flags: 0,
-        eval_getline: None,
-        eval_cookie: ptr::null_mut(),
-        eval_tofree: ptr::null_mut(),
-        next_cmd: None,
-    };
-    let skip = excmd.skip;
-    // SAFETY: module contract.
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
-    let arg = excmd.arg_ptr();
-    if unsafe { eval0(arg, &mut tv, Some(excmd), &raw mut evalarg) }.is_ok() {
+    let (at, evaluate) = (excmd.line.arg, !excmd.skip);
+    if eval0_in_cmd(excmd, at, &mut tv, evaluate).is_ok() {
         tv_clear(&mut tv);
     }
-    unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
 }
 
 /// `:if {expr}`
@@ -284,8 +270,8 @@ pub(crate) fn ex_if(excmd: &mut ExArg) {
     unsafe { (*cstack).cs_flags[idx] = CsFlags::NONE };
 
     let skip = unsafe { check_skip(cstack) };
-    let mut error = false;
-    let result = unsafe { eval_to_bool(excmd.arg_ptr(), &raw mut error, Some(excmd), skip, false) };
+    let answer = eval_cmd_bool(excmd, skip);
+    let (result, error) = (answer == Ok(true), answer.is_err());
 
     let flags = if skip || error {
         // Set TRUE, so this conditional never becomes active.
@@ -390,7 +376,8 @@ pub(crate) fn ex_else(excmd: &mut ExArg) {
         let arg = msg_bytes(excmd.line.arg());
         semsg!("E15: Invalid expression: \"{arg}\"");
     } else {
-        result = unsafe { eval_to_bool(excmd.arg_ptr(), &raw mut error, Some(excmd), skip, false) };
+        let answer = eval_cmd_bool(excmd, skip);
+        (result, error) = (answer == Ok(true), answer.is_err());
     }
 
     // The first of several errors in a row is the one to throw. That is
@@ -440,7 +427,9 @@ pub(crate) fn ex_while(excmd: &mut ExArg) {
     let skip = unsafe { check_skip(cstack) };
     let mut error = false;
     let result = if is_while {
-        unsafe { eval_to_bool(excmd.arg_ptr(), &raw mut error, Some(excmd), skip, false) }
+        let answer = eval_cmd_bool(excmd, skip);
+        error = answer.is_err();
+        answer == Ok(true)
     } else {
         unsafe { for_next_item(excmd, cstack, idx, jumped_back, skip, &mut error) }
     };
@@ -472,22 +461,13 @@ unsafe fn for_next_item(
     skip: bool,
     error: &mut bool,
 ) -> bool {
-    let mut evalarg = EvalArg {
-        eval_flags: 0,
-        eval_getline: None,
-        eval_cookie: ptr::null_mut(),
-        eval_tofree: ptr::null_mut(),
-        next_cmd: None,
-    };
-    // SAFETY: module contract.
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
     let fi = if jumped_back {
         // Jumped here from a ":continue" or ":endfor": reuse the list
         // that was evaluated then.
         *error = false;
         unsafe { (*cstack).cs_forinfo[idx] }
     } else {
-        let fi = unsafe { eval_for_line(excmd.arg_ptr(), error, excmd, &raw mut evalarg) };
+        let fi = unsafe { eval_for_line(excmd, error, skip) };
         unsafe { (*cstack).cs_forinfo[idx] = fi };
         fi
     };
@@ -498,7 +478,6 @@ unsafe fn for_next_item(
         unsafe { free_for_info(fi) };
         unsafe { (*cstack).cs_forinfo[idx] = ptr::null_mut() };
     }
-    unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
     result
 }
 

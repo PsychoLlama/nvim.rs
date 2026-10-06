@@ -36,19 +36,8 @@ pub struct Defer {
     pub dr_argcount: c_int,
 }
 
-/// A zeroed `EvalArg`: no flags, no line getter, nothing to free.
-const EVALARG_INIT: EvalArg = EvalArg {
-    eval_flags: 0,
-    eval_getline: None,
-    eval_cookie: ptr::null_mut(),
-    eval_tofree: ptr::null_mut(),
-    next_cmd: None,
-};
-
 /// `:return [expr]`.
 pub fn ex_return(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    let arg = excmd.arg_ptr();
     let mut rettv = TV_INITIAL_VALUE;
     let mut returning = false;
 
@@ -57,14 +46,12 @@ pub fn ex_return(excmd: &mut ExArg) {
         return;
     }
 
-    let mut evalarg = EVALARG_INIT;
-    evalarg.eval_flags = if excmd.skip { 0 } else { EVAL_EVALUATE };
-
     let skipping = (excmd.skip).then(Suppress::emsg_skip);
 
     excmd.line.next = None;
-    if !matches!(excmd.line.byte_at(excmd.line.arg), 0 | b'|' | b'\n')
-        && unsafe { eval0(arg, &mut rettv, Some(excmd), &raw mut evalarg) }.is_ok()
+    let (at, evaluate) = (excmd.line.arg, !excmd.skip);
+    if !matches!(excmd.line.byte_at(at), 0 | b'|' | b'\n')
+        && eval0_in_cmd(excmd, at, &mut rettv, evaluate).is_ok()
     {
         if !excmd.skip {
             returning = unsafe { do_return(excmd, false, true, (&raw mut rettv) as *mut c_void) };
@@ -91,7 +78,6 @@ pub fn ex_return(excmd: &mut ExArg) {
     }
 
     drop(skipping);
-    unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
 }
 
 /// Make the call `:call` asks for, once per line of its range.
@@ -105,12 +91,9 @@ unsafe fn ex_call_inner(
     arg: *mut *mut c_char,
     startarg: *mut c_char,
     funcexe_init: *const FuncExe,
-    evalarg: *mut EvalArg,
 ) -> bool {
-    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    // The subscript after `:call f()` is evaluated for real whatever the
-    // caller's `evalarg` says, so it gets one of its own.
-    let mut subscript_evalarg = EVALARG_EVALUATE;
+    // SAFETY: the caller's promise -- `name` is the terminated name.
+    let callee = unsafe { CStr::from_ptr(name) };
     let mut doesrange = false;
     let mut failed = false;
     let mut lnum = excmd.line1;
@@ -131,13 +114,14 @@ unsafe fn ex_call_inner(
         let mut funcexe = unsafe { *funcexe_init };
         funcexe.fe_doesrange = &raw mut doesrange;
         let mut rettv = TV_INITIAL_VALUE;
-        if unsafe { get_func_tv(name, -1, &mut rettv, arg, evalarg, &raw mut funcexe) }.is_err() {
-            failed = true;
-            break;
-        }
-        // Handle a trailing subscript, e.g. `:call f()[1]()`.
-        let ev = &raw mut subscript_evalarg;
-        if unsafe { handle_subscript(arg as *mut *const c_char, &mut rettv, ev, true) }.is_err() {
+        // The call, then any trailing subscript: `:call f()[1]()`.
+        let call = |cursor: &mut Cursor<'_>| {
+            get_func_tv(callee, None, &mut rettv, cursor, true, &mut funcexe)?;
+            handle_subscript(cursor, &mut rettv, true, true)
+        };
+        // SAFETY: the caller's promise -- `arg` walks the `:call` command
+        // line, which no code the call runs can reach.
+        if unsafe { Cur::new(arg).with_cursor(call) }.is_err() {
             failed = true;
             break;
         }
@@ -158,7 +142,6 @@ unsafe fn ex_defer_inner(
     name: *mut c_char,
     arg: *mut *mut c_char,
     partial: *const Partial,
-    evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     let mut argvars = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
     let mut partial_argc = 0;
@@ -193,7 +176,11 @@ unsafe fn ex_defer_inner(
     // SAFETY: `argvars` has room past the `partial_argc` slots already
     // taken, and `argcount` is this frame's local.
     let free_slot = &mut argvars[partial_argc as usize..];
-    let mut r = unsafe { get_func_arguments(arg, evalarg, 0, free_slot, &mut argcount) };
+    let read =
+        |cursor: &mut Cursor<'_>| get_func_arguments(cursor, true, 0, free_slot, &mut argcount);
+    // SAFETY: the caller's promise -- `arg` walks the `:defer` command line,
+    // which no code the arguments run can reach.
+    let mut r = unsafe { Cur::new(arg).with_cursor(read) };
     let argcount = argcount as c_int + partial_argc;
 
     if r.is_ok() {
@@ -330,20 +317,17 @@ pub fn ex_call(excmd: &mut ExArg) {
     let mut arg = excmd.arg_ptr();
     let mut fudi = FUNCDICT_INIT;
     let mut partial: *mut Partial = ptr::null_mut();
-    let mut evalarg = EVALARG_INIT;
-    let skip = excmd.skip;
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
 
     if excmd.skip {
-        // Trailing arguments are still evaluated, so that errors in them
+        // Trailing arguments are still parsed, so that errors in them
         // are reported -- but nothing is called.
         let mut rettv = TV_INITIAL_VALUE;
         let skipping = Suppress::emsg_skip();
-        if unsafe { eval0(excmd.arg_ptr(), &mut rettv, Some(excmd), &raw mut evalarg) }.is_ok() {
+        let at = excmd.line.arg;
+        if eval0_in_cmd(excmd, at, &mut rettv, false).is_ok() {
             tv_clear(&mut rettv);
         }
         drop(skipping);
-        unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
         return;
     }
 
@@ -391,7 +375,7 @@ pub fn ex_call(excmd: &mut ExArg) {
     } else {
         let failed = if excmd.cmdidx == CmdIdx::defer {
             arg = startarg;
-            unsafe { ex_defer_inner(name, &raw mut arg, partial, &raw mut evalarg).is_err() }
+            unsafe { ex_defer_inner(name, &raw mut arg, partial).is_err() }
         } else {
             let mut funcexe = FUNCEXE_INIT;
             funcexe.fe_partial = partial;
@@ -401,8 +385,7 @@ pub fn ex_call(excmd: &mut ExArg) {
             funcexe.fe_found_var = found_var;
             funcexe.fe_evaluate = true;
             let (argp, exe) = (&raw mut arg, &raw mut funcexe);
-            let ev = &raw mut evalarg;
-            unsafe { ex_call_inner(excmd, name, argp, startarg, exe, ev) }
+            unsafe { ex_call_inner(excmd, name, argp, startarg, exe) }
         };
 
         // When inside a `:try` the trailing text is still checked, so
@@ -422,7 +405,6 @@ pub fn ex_call(excmd: &mut ExArg) {
                 excmd.line.next = excmd.line.check_next(excmd.line.offset_of(arg));
             }
         }
-        unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
     }
 
     unsafe { tv_dict_unref(fudi.fd_dict) };

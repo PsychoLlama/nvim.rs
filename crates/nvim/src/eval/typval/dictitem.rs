@@ -486,8 +486,7 @@ pub fn dict_get_callback(d: Option<&mut Dict>, key: &[u8], result: &mut Callback
     // The borrow of the item is over, so the dictionary can be named again:
     // the partial the value becomes takes a *reference* to it, and that is
     // the only thing `set_selfdict` does to it.
-    // SAFETY: the caller's dictionary and a value this frame owns.
-    unsafe { set_selfdict(&mut tv, &raw mut *d) };
+    set_selfdict(&mut tv, d);
     // SAFETY: a callback slot the caller may not read until this answers.
     let res = unsafe { callback_from_typval(result, &tv) };
     tv_clear(&mut tv);

@@ -13,6 +13,7 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Script;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::normal::visual_active;
 use crate::optionstr::OptString;
@@ -265,13 +266,10 @@ pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut 
     // Errors go against the script that set `'includeexpr'`.
     let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptIncludeexpr as usize]);
 
-    let res = unsafe {
-        eval_to_string_safe(
-            Buf::current().b_p_inex.value_ptr(),
-            was_set_insecurely(Win::current(), kOptIncludeexpr, OptionSetFlags::LOCAL),
-            true,
-        )
-    };
+    // A copy: the expression may set the option and free its text.
+    let expr = Buf::current().b_p_inex.get();
+    let sandbox = was_set_insecurely(Win::current(), kOptIncludeexpr, OptionSetFlags::LOCAL);
+    let res = eval_to_string_safe(&expr, sandbox, true).map_or(ptr::null_mut(), XString::into_raw);
 
     unsafe { set_vim_var_string(Vv::Fname, ptr::null(), 0) };
     drop(script_ctx);

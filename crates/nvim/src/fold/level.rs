@@ -678,9 +678,7 @@ pub(super) fn foldlevel_expr(line: FLine) {
     }
     // 'foldexpr' must not count as typed input.
     let save_keytyped = KeyTyped.get();
-    let mut verdict: c_int = 0;
-    // SAFETY: a live window, and `verdict` is ours.
-    let n = unsafe { eval_foldexpr(line.win(), &raw mut verdict) };
+    let (n, verdict) = eval_foldexpr(line.win());
     KeyTyped.set(save_keytyped);
     // `eval_foldexpr` writes one byte of the expression's answer, so the
     // truncation below is exact.

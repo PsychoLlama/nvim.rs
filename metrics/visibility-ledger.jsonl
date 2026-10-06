@@ -47,7 +47,6 @@
 {"path":"neovim::digraph::default_digraphs","kind":"fn","file":"crates/nvim/src/digraph/mod.rs","tests":["crates/nvim/tests/unit/digraph.rs"]}
 {"path":"neovim::digraph::lookup_default","kind":"fn","file":"crates/nvim/src/digraph/mod.rs","tests":["crates/nvim/tests/unit/digraph.rs"]}
 {"path":"neovim::drawscreen::default_grid_alloc","kind":"fn","file":"crates/nvim/src/drawscreen/resize.rs","tests":["crates/nvim/tests/unit/support.rs"]}
-{"path":"neovim::eval::EVAL_EVALUATE","kind":"const","file":"crates/nvim/src/eval/mod.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::eval::eval0","kind":"fn","file":"crates/nvim/src/eval/expr/level.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::eval::eval_to_number","kind":"fn","file":"crates/nvim/src/eval/entry.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/normal.rs"]}
 {"path":"neovim::eval::eval_to_string","kind":"fn","file":"crates/nvim/src/eval/entry.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/normal.rs","crates/nvim/tests/unit/regexp.rs"]}
@@ -553,7 +552,6 @@
 {"path":"neovim::types::DictKey","kind":"enum","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::types::DictWatcher","kind":"struct","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support.rs","crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::types::Error","kind":"struct","file":"crates/nvim/src/types/api_error.rs","tests":["crates/nvim/tests/unit/options.rs","crates/nvim/tests/unit/unpacker.rs"]}
-{"path":"neovim::types::EvalArg","kind":"struct","file":"crates/nvim/src/types/eval.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::types::Event","kind":"struct","file":"crates/nvim/src/types/event.rs","tests":["crates/nvim/tests/unit/multiqueue.rs"]}
 {"path":"neovim::types::ExArg","kind":"struct","file":"crates/nvim/src/types/ex_cmds.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::types::ExArgt","kind":"struct","file":"crates/nvim/src/types/ex_cmds.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}

@@ -14,6 +14,7 @@ use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg_multiline;
 use crate::types::{MB_MAXBYTES, NUL};
@@ -263,9 +264,11 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
         }
         answer
     } else {
-        // SAFETY: `expr` is the unescaped copy made above, and the answer is
-        // the evaluation's own allocation.
-        unsafe { COwned::new(eval_to_string(expr.as_mut_ptr().cast(), false, false)) }
+        // `expr` is the unescaped copy made above: what user code does to
+        // the mapping cannot reach it.
+        let value = eval_to_string(cstr::in_bytes(&expr).to_bytes(), false, false);
+        // SAFETY: an owned NUL-terminated string, or null.
+        unsafe { COwned::new(value.map_or(ptr::null_mut(), XString::into_raw)) }
     };
 
     drop(locked);

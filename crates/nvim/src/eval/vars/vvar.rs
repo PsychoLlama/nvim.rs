@@ -180,6 +180,14 @@ pub fn get_vim_var_partial(idx: Vv) -> *mut Partial {
     vimvar_val(idx).partial_or_null()
 }
 
+/// A reference of the caller's own to `v:lua`, the partial a `v:lua.name`
+/// callee stands for.
+pub(crate) fn lua_partial() -> Option<PartialRef> {
+    // SAFETY: a `v:` partial is null or live, and the answer takes a
+    // reference of its own.
+    unsafe { PartialRef::retained(get_vim_var_partial(Vv::Lua)) }
+}
+
 /// Declare `v:` variable `idx` to be of type `type_0`, without touching its
 /// value.
 pub fn set_vim_var_type(idx: Vv, type_0: VarType) {

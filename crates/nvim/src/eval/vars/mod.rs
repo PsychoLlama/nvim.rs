@@ -14,10 +14,10 @@ use crate::eval::gc::RootId;
 use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
+use crate::charset::skip;
 use crate::charset::{getdigits_int, skiptowhite, skipwhite};
 use crate::drawscreen::state::sc_col;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
-use crate::eval::EVALARG_EVALUATE;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
@@ -26,8 +26,8 @@ use crate::eval::typval::{
     TV_INITIAL_VALUE, di_lock, di_tv, dict_is_watched, dict_watcher_notify, list_find_nr,
     list_find_str, list_len, list_locked, list_set_lock, queue_init, tv_check_str_or_nr, tv_clear,
     tv_copy, tv_dict_alloc, tv_dict_alloc_lock, tv_dict_hi2di, tv_dict_item_alloc,
-    tv_dict_item_alloc_len, tv_dict_item_remove, tv_dict_unref, tv_free, tv_get_bool_chk,
-    tv_get_number, tv_get_number_chk, tv_ht_iter, tv_item_lock, tv_list_alloc, value_check_lock,
+    tv_dict_item_alloc_len, tv_dict_item_remove, tv_dict_unref, tv_get_bool_chk, tv_get_number,
+    tv_get_number_chk, tv_ht_iter, tv_item_lock, tv_list_alloc, value_check_lock,
 };
 use crate::eval::userfunc::{
     find_hi_in_scoped_ht, find_var_in_scoped_ht, function_exists, get_current_funccal_dict,
@@ -36,10 +36,10 @@ use crate::eval::userfunc::{
 };
 use crate::eval::window::{find_win_by_nr, restore_win, switch_win};
 use crate::eval::{
-    Cursor, LAMBDA_USES_LOCALS, clear_evalarg, clear_lval, env_name_len, eval_expr_ext,
-    eval_isnamec1, eval_option, eval_to_bool, eval_to_string, eval0, eval1, fill_evalarg_from_eap,
-    get_lval, get_name_len, handle_subscript, may_call_simple_func, name_end, num_divide,
-    num_modulus, option_var_end, set_ref_in_ht, set_var_lval, skip_expr,
+    Cursor, LAMBDA_USES_LOCALS, clear_lval, env_name_len, eval_expr_ext, eval_isnamec1,
+    eval_option, eval_to_bool, eval_to_string, eval0_in_cmd, eval1, get_lval, get_name_len,
+    handle_subscript, may_call_simple_func, name_end, num_divide, num_modulus, option_var_end,
+    set_ref_in_ht, set_var_lval,
 };
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
@@ -53,6 +53,7 @@ use crate::hashtab::{
 };
 use crate::lua::executor::nlua_set_sctx;
 use crate::mbyte::utf_char2bytes;
+use crate::memory::XString;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrlcat, xstrlcpy, xstrndup,
 };
@@ -84,14 +85,14 @@ use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
 use crate::strings::concat_str;
 use crate::types::{
-    AcoSave, BoolVarValue, Dict, DictItem, DictKey, EvalArg, EvalFuncData, ExArg, Expand, Failed,
-    GRegFlags, LVal, List, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount, ScopeDictItem,
-    ScopeType, ScriptId, ScriptVar, SpecialVarValue, SwitchWin, TypVal, VAR_BLOB, VAR_BOOL,
-    VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
-    VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber, VarType, VimVarFlags, Vv, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t, uint32_t,
+    AcoSave, BoolVarValue, Dict, DictItem, DictKey, EvalFuncData, ExArg, Expand, Failed, GRegFlags,
+    LVal, List, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount, ScopeDictItem, ScopeType,
+    ScriptId, ScriptVar, SpecialVarValue, SwitchWin, TypVal, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE,
+    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
+    VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT,
+    VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, VarType, VimVarFlags, Vv, int64_t, kBoolVarFalse, kBoolVarTrue, kListLenUnknown,
+    kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t, uint32_t,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};

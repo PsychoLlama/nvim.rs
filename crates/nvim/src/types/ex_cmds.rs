@@ -255,11 +255,10 @@ pub struct CmdLine {
     /// The line's bytes, empty or ending in a NUL.
     text: Vec<u8>,
     /// The buffer a handler swapped out from under the command
-    /// (`eap->cmdline_tofree` upstream): `:let x = 1` continued over more
-    /// lines is evaluated out of a joined copy, which then *becomes* the
-    /// line so that `nextcmd` can point into it. The old bytes stay alive
-    /// until the command ends, because the cursors of the command still
-    /// running address them.
+    /// (`eap->cmdline_tofree` upstream): a `:function` body line or a range
+    /// the command modifiers substitute *becomes* the line. The old bytes
+    /// stay alive until the command ends, because the cursors of the command
+    /// still running address them.
     retired: Option<Vec<u8>>,
     /// Where the command word starts, after the range and the modifiers.
     pub cmd: usize,
@@ -544,11 +543,6 @@ impl CmdLine {
     /// dance, with the lifetime written down.
     pub fn take_over(&mut self, new: Vec<u8>) {
         self.retired = Some(::core::mem::replace(&mut self.text, new));
-    }
-
-    /// Does `at` address the retired buffer rather than the live one?
-    pub fn is_retired(&self, at: usize) -> bool {
-        self.retired.is_some() && at >= self.text.len()
     }
 
     /// A writable pointer at `at`, for a callee that still takes one.

@@ -3,10 +3,9 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{api_set_sctx, cstr_to_string, try_enter, try_leave};
-use crate::eval::EVALARG_EVALUATE;
+use crate::eval::eval0;
 use crate::eval::typval::tv_clear;
 use crate::eval::userfunc::call_func;
-use crate::eval::{clear_evalarg, eval0};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::global_cell::GlobalCell;

@@ -169,20 +169,9 @@ pub fn ex_let(excmd: &mut ExArg) {
     expr = unsafe { skipwhite(expr) };
 
     let skipping = (excmd.skip).then(Suppress::emsg_skip);
-    let mut evalarg = EvalArg {
-        eval_flags: 0,
-        eval_getline: None,
-        eval_cookie: ptr::null_mut(),
-        eval_tofree: ptr::null_mut(),
-        next_cmd: None,
-    };
-    let skip = excmd.skip;
-    // SAFETY: a live local `evalarg`, and `expr` inside the command's own
-    // argument text.
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(&mut *excmd), skip) };
-    let eval_res = unsafe { eval0(expr, &mut rettv, Some(&mut *excmd), &raw mut evalarg) };
+    let (at, evaluate) = (excmd.line.offset_of(expr), !excmd.skip);
+    let eval_res = eval0_in_cmd(excmd, at, &mut rettv, evaluate);
     drop(skipping);
-    unsafe { clear_evalarg(&raw mut evalarg, Some(&mut *excmd)) };
 
     if !excmd.skip && eval_res.is_ok() {
         assign(&mut rettv, op.as_ptr());
@@ -649,7 +638,7 @@ unsafe fn ex_let_register(
     let mut p = numbuf.string_ptr_chk(tv);
     if !p.is_null() && opch == Some(b'.') {
         // SAFETY: a register name and a NUL-terminated value.
-        let s = unsafe { get_reg_contents(regname, kGRegExprSrc as c_int) } as *mut c_char;
+        let s = get_reg_contents(regname, kGRegExprSrc as c_int) as *mut c_char;
         if !s.is_null() {
             ptofree = unsafe { concat_str(s, p) };
             p = ptofree;

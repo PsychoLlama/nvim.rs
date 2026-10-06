@@ -54,9 +54,8 @@ pub fn get_expr_indent() -> c_int {
         // The expression is evaluated from a copy, because 'indentexpr' can
         // be changed while it is running.
         // SAFETY: 'indentexpr' is a NUL-terminated option value.
-        let mut expression = XString::from_cstr(unsafe { cstr::at(buf.b_p_inde.value_ptr()) });
-        // SAFETY: as above; the copy outlives the evaluation.
-        unsafe { eval_to_number(expression.as_mut_ptr(), true) as c_int }
+        let expression = XString::from_cstr(unsafe { cstr::at(buf.b_p_inde.value_ptr()) });
+        eval_to_number(&expression, true) as c_int
     };
     current_sctx.set(save_sctx);
 

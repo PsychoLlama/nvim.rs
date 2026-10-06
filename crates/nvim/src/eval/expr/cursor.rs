@@ -68,6 +68,11 @@ impl<'a> Cursor<'a> {
         self.offset += n;
     }
 
+    /// Move to `offset`, which a caller saved from [`offset`](Self::offset).
+    pub(crate) fn set_offset(&mut self, offset: usize) {
+        self.offset = offset;
+    }
+
     /// Step past any spaces and tabs.
     pub(crate) fn skip_white(&mut self) {
         while matches!(self.byte(), b' ' | b'\t') {

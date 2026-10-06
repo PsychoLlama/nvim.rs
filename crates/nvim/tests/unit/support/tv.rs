@@ -658,21 +658,8 @@ pub(crate) fn partial_tv(handle: Option<PartialRef>) -> TypVal {
 /// # Safety
 /// The editor must be up. The answer owns its contents; clear it.
 pub(crate) unsafe fn eval0(expr: &str) -> Option<TypVal> {
-    use neovim::eval::EVAL_EVALUATE;
-    use neovim::types::EvalArg;
-
     let mut tv = TypVal::Unknown;
-    let mut evalarg = EvalArg {
-        eval_flags: EVAL_EVALUATE as c_int,
-        eval_getline: None,
-        eval_cookie: ptr::null_mut(),
-        eval_tofree: ptr::null_mut(),
-        next_cmd: None,
-    };
-    // `eval0` takes a mutable buffer: it writes the terminator back over
-    // what it consumed.
-    let mut arg: Vec<c_char> = expr.bytes().map(|b| b as c_char).chain([0]).collect();
-    let ok = unsafe { neovim::eval::eval0(arg.as_mut_ptr(), &mut tv, None, &raw mut evalarg) };
+    let (ok, _) = neovim::eval::eval0(expr.as_bytes(), &mut tv, true);
     ok.is_ok().then_some(tv)
 }
 

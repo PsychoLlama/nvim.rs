@@ -85,6 +85,36 @@ pub unsafe fn deref_func_name(
     name as *mut c_char
 }
 
+/// [`deref_func_name`] of the name `name` spells: the function's own name,
+/// copied (a call may delete the variable it was read from), the partial it
+/// came out of or null, and whether a variable was found at all.
+pub(crate) fn deref_func_name_owned(
+    name: &[u8],
+    no_autoload: bool,
+) -> (XString, *mut Partial, bool) {
+    let mut len = c_int::try_from(name.len()).unwrap_or(c_int::MAX);
+    let mut partial = ptr::null_mut();
+    let mut found = false;
+    // SAFETY: `name` names its `len` bytes, and the out-parameters are this
+    // frame's; the answer names `len` bytes, copied before anything can
+    // free them.
+    unsafe {
+        let resolved = deref_func_name(
+            name.as_ptr().cast(),
+            &raw mut len,
+            &raw mut partial,
+            no_autoload,
+            &raw mut found,
+        );
+        let len = usize::try_from(len).unwrap_or(0);
+        (
+            XString::from_bytes(cstr::slice_at(resolved, len)),
+            partial,
+            found,
+        )
+    }
+}
+
 /// Report `errmsg` about `name`, rendering the `<SNR>` mangling back into
 /// something a user can read.
 ///

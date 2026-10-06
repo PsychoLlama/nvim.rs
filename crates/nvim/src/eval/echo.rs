@@ -8,90 +8,70 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Suppress;
 use crate::semsg;
 use crate::types::CmdIdx;
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr::null_mut;
+use core::ffi::{c_char, c_int};
 
-use crate::api::private::helpers::cstr_to_string;
-use crate::charset::skipwhite;
-use crate::eval::encode::{encode_tv2echo, encode_tv2string};
+use crate::eval::encode::{tv2echo_bytes, tv2string_bytes};
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::clear_local;
 use crate::eval::vars::set_var;
-use crate::eval::{clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap};
-use crate::ex_docmd::{DoCmdOpts, check_nextcmd, do_cmdline};
+use crate::eval::{Cursor, echo_hl_id, eval1, eval1_emsg};
+use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::aborting;
 use crate::ex_eval::state::force_abort;
 use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_E, syn_name2id};
-use crate::memory::xfree;
 use crate::message::state::{
     called_emsg, did_emsg, line_msg, msg_didout, msg_ext_skip_verbose, need_clr_eos,
 };
 use crate::message::{
-    emsg_multiline, msg_bytes, msg_clr_eos, msg_end, msg_ext_set_append, msg_ext_set_kind,
-    msg_multiline, msg_outnum, msg_ptr, msg_sb_eol, msg_start, msg_str, msg_str_hl, verbose_enter,
-    verbose_leave,
+    emsg_multiline, msg_bytes as msg_bytes_out, msg_clr_eos, msg_end, msg_ext_set_append,
+    msg_ext_set_kind, msg_multiline, msg_outnum, msg_ptr, msg_sb_eol, msg_start, msg_str,
+    msg_str_hl, verbose_enter, verbose_leave,
 };
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
+use crate::types::String_0;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    EvalArg, ExArg, LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION,
-    VAR_FLAVOUR_SHADA, VAR_STRING, VarFlavour, size_t,
+    ExArg, LineNr, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA,
+    VAR_STRING, VarFlavour,
 };
 use crate::ui::ui_has;
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
-/// A freshly declared `EvalArg`.
-const UNSET_EVALARG: EvalArg = EvalArg {
-    eval_flags: 0,
-    eval_getline: None,
-    eval_cookie: null_mut(),
-    eval_tofree: null_mut(),
-    next_cmd: None,
-};
-
 /// Does this byte end the `:echo` argument list?
-fn ends_args(c: c_char) -> bool {
-    c as c_int == NUL || c == b'|' as c_char || c == b'\n' as c_char
+fn ends_args(c: u8) -> bool {
+    matches!(c, 0 | b'|' | b'\n')
 }
 
 /// `:echo` and `:echon`.
 pub fn ex_echo(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- the `ExArg` outlives the command,
-    // which the `do_cmdline` frame that owns it discharges.
-    let mut arg: *mut c_char = excmd.arg_ptr();
     let mut rettv = UNSET_TV;
     let mut atstart = true;
     let mut need_clear = true;
     let did_emsg_before = did_emsg.get();
     let called_emsg_before = called_emsg.get();
-
-    let mut evalarg = UNSET_EVALARG;
     let skip = excmd.skip;
-    // SAFETY: `evalarg` is this frame's.
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
     let _skipping = skip.then(Suppress::emsg_skip);
 
-    // SAFETY: `arg` walks the command line, which is NUL-terminated.
-    while !ends_args(unsafe { *arg }) && !got_int.get() {
+    let base = excmd.line.arg;
+    let mut cursor = Cursor::new(excmd.line.rest_of(base));
+    while !ends_args(cursor.byte()) && !got_int.get() {
         // The flag is set across the evaluation only: an expression
         // that writes to the screen itself must not have the rest of
         // the line cleared out from under it.
         need_clr_eos.set(true);
-        let start = arg;
-        // SAFETY: `arg`, `rettv` and `evalarg` are all this frame's.
-        if unsafe { eval1(&raw mut arg, &mut rettv, &raw mut evalarg) }.is_err() {
+        let start = cursor.offset();
+        if eval1(&mut cursor, &mut rettv, !skip).is_err() {
             if !aborting()
                 && did_emsg.get() == did_emsg_before
                 && called_emsg.get() == called_emsg_before
             {
-                // SAFETY: the format takes one string, and `start` is a // NUL-terminated tail of the command line.
-                let start = unsafe { c_str(start) };
+                let start = msg_bytes(&cursor.text()[start..]);
                 semsg!("E15: Invalid expression: \"{start}\"");
             }
             need_clr_eos.set(false);
@@ -99,11 +79,10 @@ pub fn ex_echo(excmd: &mut ExArg) {
         }
         need_clr_eos.set(false);
 
-        if !excmd.skip {
+        if !skip {
             if atstart {
                 atstart = false;
                 msg_ext_set_append(excmd.cmdidx == CmdIdx::echon);
-                // SAFETY: the kind is a NUL-terminated literal.
                 msg_ext_set_kind(c"echo");
                 if excmd.cmdidx == CmdIdx::echo {
                     if !msg_didout.get() {
@@ -113,37 +92,27 @@ pub fn ex_echo(excmd: &mut ExArg) {
                 }
             } else if excmd.cmdidx == CmdIdx::echo {
                 // `:echo` separates its arguments; `:echon` does not.
-                // SAFETY: the separator is a NUL-terminated literal.
                 msg_str_hl(c" ", echo_hl_id.get(), false);
             }
-            // SAFETY: `rettv` is this frame's.
-            let tofree = unsafe { encode_tv2echo(&rettv, null_mut::<size_t>()) };
+            let text = String_0::from_bytes(&tv2echo_bytes(&rettv));
             let (hl, clear) = (echo_hl_id.get(), &raw mut need_clear);
-            // SAFETY: `tofree` is the NUL-terminated rendering just made and
-            // `clear` names this frame's flag.
-            unsafe { msg_multiline(cstr_to_string(tofree), hl, true, false, clear) };
-            // SAFETY: nothing else owns the rendering.
-            unsafe { xfree(tofree as *mut c_void) };
+            // SAFETY: `clear` names this frame's flag.
+            unsafe { msg_multiline(text, hl, true, false, clear) };
         }
-        // SAFETY: `rettv` is this frame's.
         clear_local(&mut rettv);
-        // SAFETY: `arg` walks a NUL-terminated command line.
-        arg = unsafe { skipwhite(arg) };
+        cursor.skip_white();
     }
 
-    // SAFETY: `arg` is the tail of the command line.
-    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
-    // SAFETY: `evalarg` is this frame's.
-    unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
+    let end = base + cursor.offset();
+    excmd.line.next = excmd.line.check_next(end);
     msg_ext_set_append(false);
 
     if excmd.skip {
         return;
     }
-    // SAFETY: the command's argument is NUL-terminated.
-    if ui_has(kUIMessages) && ends_args(excmd.line.byte_at(excmd.line.arg).cast_signed()) {
+    if ui_has(kUIMessages) && ends_args(excmd.line.byte_at(excmd.line.arg)) {
         // A bare `:echo` still has to produce an (empty) message.
-        msg_bytes(b"", 0, false);
+        msg_bytes_out(b"", 0, false);
     } else if need_clear {
         msg_clr_eos();
     }
@@ -168,58 +137,45 @@ pub(crate) fn get_echo_hl_id() -> c_int {
 /// one string.
 pub fn ex_execute(excmd: &mut ExArg) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's promise -- the `ExArg` outlives the command.
-    let mut arg: *mut c_char = excmd.arg_ptr();
     let mut rettv = UNSET_TV;
     let mut ret = Ok(());
     let mut text = Vec::<u8>::new();
     // Whether anything was appended at all: with every argument skipped
     // there is no message, which is not the same as an empty one.
     let mut built = false;
+    let skip = excmd.skip;
 
-    let _skipping = (excmd.skip).then(Suppress::emsg_skip);
-    // SAFETY: `arg` walks the command line, which is NUL-terminated.
-    while !ends_args(unsafe { *arg }) {
-        // SAFETY: `arg` and `rettv` are this frame's, `excmd` the caller's.
-        ret = unsafe { eval1_emsg(&raw mut arg, &mut rettv, Some(excmd)) };
+    let _skipping = skip.then(Suppress::emsg_skip);
+    let base = excmd.line.arg;
+    let mut cursor = Cursor::new(excmd.line.rest_of(base));
+    while !ends_args(cursor.byte()) {
+        ret = eval1_emsg(&mut cursor, &mut rettv, !skip);
         if ret.is_err() {
             break;
         }
-        if !excmd.skip {
-            // `:execute` coerces; the two message commands render, and
-            // so own what they produce.
-            let owned = excmd.cmdidx != CmdIdx::execute;
-            // SAFETY: `rettv` is this frame's, holding the value just
-            // evaluated; each of the three renderings is NUL-terminated.
-            let argstr: *const c_char = if !owned {
-                numbuf.string_ptr(&rettv)
-            } else if rettv.v_type() == VAR_STRING {
-                unsafe { encode_tv2echo(&rettv, null_mut::<size_t>()) }
-            } else {
-                unsafe { encode_tv2string(&rettv, null_mut::<size_t>()) }
-            };
+        if !skip {
             if built {
                 text.push(b' ');
             }
-            // SAFETY: `argstr` is NUL-terminated.
-            text.extend_from_slice(unsafe { cstr::bytes_at(argstr) });
-            built = true;
-            if owned {
-                // SAFETY: the two encoders hand back an owned string.
-                unsafe { xfree(argstr as *mut c_void) };
+            // `:execute` coerces; the two message commands render.
+            if excmd.cmdidx == CmdIdx::execute {
+                text.extend_from_slice(numbuf.string(&rettv).to_bytes());
+            } else if rettv.v_type() == VAR_STRING {
+                text.extend_from_slice(&tv2echo_bytes(&rettv));
+            } else {
+                text.extend_from_slice(&tv2string_bytes(&rettv));
             }
+            built = true;
         }
-        // SAFETY: `rettv` is this frame's.
         clear_local(&mut rettv);
-        // SAFETY: `arg` walks a NUL-terminated command line.
-        arg = unsafe { skipwhite(arg) };
+        cursor.skip_white();
     }
+    let end = base + cursor.offset();
 
     if ret.is_ok() && built {
         text.push(0);
         let line = text.as_mut_ptr().cast::<c_char>();
         if excmd.cmdidx == CmdIdx::echomsg {
-            // SAFETY: the kind is a NUL-terminated literal.
             msg_ext_set_kind(c"echomsg");
             // SAFETY: `line` is the NUL-terminated message built above.
             unsafe { msg_ptr(line, echo_hl_id.get()) };
@@ -241,8 +197,7 @@ pub fn ex_execute(excmd: &mut ExArg) {
             let _ = unsafe { do_cmdline(line, getline, cookie, opts) };
         }
     }
-    // SAFETY: `arg` is the tail of the command line.
-    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
+    excmd.line.next = excmd.line.check_next(end);
 }
 
 /// Which persistence a global variable's name asks for: `ALLCAPS` goes to

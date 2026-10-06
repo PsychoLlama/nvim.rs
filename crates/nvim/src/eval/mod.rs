@@ -110,7 +110,6 @@ pub const EXPR_GREATER: ExprType = 3;
 pub const EXPR_NEQUAL: ExprType = 2;
 pub const EXPR_EQUAL: ExprType = 1;
 pub const EXPR_UNKNOWN: ExprType = 0;
-pub const EVAL_EVALUATE: c_uint = 1;
 pub const kGRegExprSrc: GRegFlags = 2;
 pub const FSK_IN_STRING: c_uint = 4;
 pub const FSK_KEYCODE: c_uint = 1;

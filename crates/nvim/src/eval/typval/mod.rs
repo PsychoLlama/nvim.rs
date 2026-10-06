@@ -6,13 +6,13 @@ use crate::charset::vim_str2nr;
 use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES, encode_tv2echo, encode_tv2string};
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
-use crate::eval::userfunc::{call_func, func_ref, func_unref, get_funccal_local_ht};
+use crate::eval::userfunc::{call_func, func_ref, func_unref, get_funccal_local_ht, set_selfdict};
 use crate::eval::vars::{
     get_globvar_dict, valid_varname, var_check_fixed, var_check_ro, var_wrong_func_name,
 };
 use crate::eval::{
-    callback_call, callback_from_typval, func_equal, partial_name, partial_unref, set_selfdict,
-    var_item_copy, var2fpos,
+    callback_call, callback_from_typval, func_equal, partial_name, partial_unref, var_item_copy,
+    var2fpos,
 };
 use crate::getchar::state::got_int;
 use crate::global_cell::{ConstTable, GlobalCell};

@@ -57,17 +57,11 @@ impl Drop for RecursionGuard {
 
 pub fn nvim_eval(expr: String_0) -> Result<Object, Error> {
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
-    let mut evalarg = EVALARG_EVALUATE;
     let _nesting = enter_recursive(&recursive);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
-    let evaluated = api_try(|| {
-        let arg = &raw mut evalarg;
-        // SAFETY: `expr` names its own bytes, and `evalarg` is this frame's.
-        let ok = unsafe { eval0(expr.data(), &mut rettv, None, arg) };
-        // SAFETY: `evalarg` is this frame's.
-        unsafe { clear_evalarg(arg, None) };
-        ok
-    });
+    // The expression ends at its first NUL, as it did for the C.
+    let text = expr.as_cstr().to_bytes();
+    let evaluated = api_try(|| eval0(text, &mut rettv, true).0);
     // A thrown exception outranks the generic message, and `rettv` is cleared
     // whichever way this went -- so the answer is held rather than returned
     // from inside the match.
@@ -156,7 +150,6 @@ pub fn nvim_call_dict_function(
     mut fn_0: String_0,
     args: Array,
 ) -> Result<Object, Error> {
-    let mut evalarg = EVALARG_EVALUATE;
     let mut error = Error::none();
     let mut rettv: TypVal = TV_INITIAL_VALUE;
     // Only the evaluated form owns what it produced.
@@ -167,11 +160,8 @@ pub fn nvim_call_dict_function(
         // SAFETY: `tstate` is this frame's, live until the `try_leave`
         // below.
         unsafe { try_enter(&raw mut tstate) };
-        let arg = &raw mut evalarg;
-        // SAFETY: `expr` names its own bytes, and `evalarg` is this frame's.
-        let eval_ret = unsafe { eval0(expr.data(), &mut rettv, None, arg) };
-        // SAFETY: `evalarg` is this frame's.
-        unsafe { clear_evalarg(arg, None) };
+        // The expression ends at its first NUL, as it did for the C.
+        let eval_ret = eval0(expr.as_cstr().to_bytes(), &mut rettv, true).0;
         // SAFETY: `tstate` is what the `try_enter` above filled in.
         error.absorb(unsafe { try_leave(&raw mut tstate) });
         if error.is_set() {

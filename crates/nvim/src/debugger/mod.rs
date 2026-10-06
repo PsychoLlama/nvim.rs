@@ -51,7 +51,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::memory::XString;
-use crate::memory::{xfree, xstrdup};
+use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;
 use crate::message::state::{
     cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
@@ -299,8 +299,19 @@ pub fn dbg_breakpoint(name: &CStr, lnum: LineNr) {
 /// `bp` must point at a live entry whose `dbg_name` is the expression.
 unsafe fn eval_expr_no_emsg(breakpoint: *mut Breakpoint) -> *mut TypVal {
     let _no_emsg = Suppress::emsg();
+    // A copy: the expression may delete the breakpoint that holds it.
     // SAFETY: caller contract.
-    unsafe { eval_expr((*breakpoint).dbg_name, None) }
+    let expr = XString::from_cstr(unsafe { CStr::from_ptr((*breakpoint).dbg_name) });
+    let Some(value) = eval_expr(&expr) else {
+        return ptr::null_mut();
+    };
+    // The entry keeps the value on the heap, released with `tv_free`.
+    // SAFETY: a fresh block the size of a typval, written before it is read.
+    unsafe {
+        let slot = xmalloc(size_of::<TypVal>()).cast::<TypVal>();
+        slot.write(value);
+        slot
+    }
 }
 
 /// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into a

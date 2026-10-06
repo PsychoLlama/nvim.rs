@@ -258,10 +258,7 @@ pub fn separate_nextcmd(excmd: &mut ExArg) {
             // A backtick-equals expression is stepped over by the
             // evaluator, not by this scan: it may contain any of the
             // ending characters.
-            let mut cursor = excmd.line.ptr_at(at + 2);
-            // SAFETY: `cursor` is this frame's own, over the command's line.
-            let _ = unsafe { skip_expr(&raw mut cursor, ptr::null_mut()) };
-            at = excmd.line.offset_of(cursor);
+            at += 2 + skip_expr(excmd.line.rest_of(at + 2));
             if excmd.line.byte_at(at) == 0 {
                 break;
             }

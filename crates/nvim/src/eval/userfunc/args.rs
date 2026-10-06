@@ -10,70 +10,61 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
-use crate::eval::Cur;
 use crate::eval::typval::DictEntry;
 use crate::types::DictKey;
 use crate::types::{Failed, NUL};
 
-/// Read one argument name at `arg` and append a copy of it to `newargs`.
+/// Read one argument name at the cursor and append a copy of it to
+/// `newargs`, leaving the cursor after it.
 ///
-/// Answers the end of the name, or `arg` itself when what is there cannot be
+/// Answers false, with the cursor where it was, when what is there cannot be
 /// one: empty, starting with a digit, a duplicate of an earlier argument, or
 /// one of the two names the `a:` scope already gives a meaning.
 ///
 /// # Safety
-/// `arg` is a NUL-terminated, *writable* string -- the name is terminated in
-/// place while it is copied.  `newargs`, when non-null, is a `char *` garray.
-unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut GArray, skip: bool) -> *mut c_char {
-    let mut end = arg;
-    // SAFETY: the caller's promise -- `arg` is NUL-terminated and writable,
-    // and the walk stops at the first byte that is not an identifier one.
-    let p = unsafe { Cur::new(&raw mut end) };
-    while ascii_isident(c_int::from(p.byte())) {
-        p.bump(1);
-    }
-    let len = p.get().addr() - arg.addr();
+/// `newargs`, when non-null, is a `char *` garray.
+unsafe fn one_function_arg(cursor: &mut Cursor<'_>, newargs: *mut GArray, skip: bool) -> bool {
+    let rest = cursor.rest();
+    let len = rest
+        .iter()
+        .take_while(|&&b| ascii_isident(c_int::from(b)))
+        .count();
+    let name = &rest[..len];
     // `isdigit()` is one of the ctype predicates the C standard fixes to
     // ASCII in every locale, so this really is the same test.
-    let named = (len == 9 && unsafe { cstr::starts_with(arg, b"firstline") })
-        || (len == 8 && unsafe { cstr::starts_with(arg, b"lastline") });
-    if arg == p.get() || unsafe { *arg as u8 }.is_ascii_digit() || named {
+    if len == 0 || name[0].is_ascii_digit() || name == b"firstline" || name == b"lastline" {
         if !skip {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(arg) };
+            let arg = msg_bytes(rest);
             semsg!("E125: Illegal argument: {arg}");
         }
-        return arg;
+        return false;
     }
     if !newargs.is_null() {
         // SAFETY: the caller's promise -- `newargs` is a `char *` garray,
         // which `ga_grow` has just made room in.
         unsafe { ga_grow(newargs, 1) };
-        // SAFETY: `len` bytes of identifier were just read.
-        let arg_copy = unsafe { xmemdupz(arg as *const c_void, len) } as *mut c_char;
         for &earlier in ga_strings(unsafe { &*newargs }) {
-            if unsafe { cstr::eq(earlier, arg_copy) } {
-                // SAFETY: `xstrdup` answered a NUL-terminated copy.
-                let shown = unsafe { c_str(arg_copy) };
+            // SAFETY: every entry is a NUL-terminated copy.
+            if unsafe { cstr::bytes_at(earlier) } == name {
+                let shown = msg_bytes(name);
                 semsg!("E853: Duplicate argument name: {shown}");
-                unsafe { xfree(arg_copy as *mut c_void) };
-                // Upstream leaves the name NUL-terminated here; the
-                // caller stops on `p == arg` either way.
-                return arg;
+                return false;
             }
         }
-        unsafe { ga_push_string(newargs, arg_copy) };
+        // SAFETY: as above.
+        unsafe { ga_push_string(newargs, XString::from_bytes(name).into_raw()) };
     }
-    p.get()
+    cursor.bump(len);
+    true
 }
 
-/// Parse a definition's argument list, up to and including `endchar`.
+/// Parse a definition's argument list at the cursor, up to and including
+/// `endchar`, and leave the cursor after it; on an error it stays put.
 ///
 /// Fills `newargs` with the names, `default_args` with the *source* of each
 /// `= expr` default (evaluated afresh on every call, not here) and `varargs`
@@ -81,11 +72,10 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut GArray, skip: bool) -
 /// a caller that only wants to skip the list says so.
 ///
 /// # Safety
-/// `*argp` is a NUL-terminated, writable string; the three out-parameters are
-/// null or writable.
+/// The three out-parameters are null or writable.
 pub(crate) unsafe fn get_function_args(
-    argp: *mut *mut c_char,
-    endchar: c_char,
+    cursor: &mut Cursor<'_>,
+    endchar: u8,
     newargs: *mut GArray,
     varargs: *mut c_int,
     default_args: *mut GArray,
@@ -93,11 +83,10 @@ pub(crate) unsafe fn get_function_args(
 ) -> Result<(), Failed> {
     let mut mustend = false;
     let slot = size_of::<*mut c_char>() as c_int;
-    // SAFETY: the caller's promise -- `*argp` is NUL-terminated and
-    // writable, and the three out-parameters are null or writable. The walk
-    // below never steps past the terminator.
-    let mut cursor = unsafe { *argp };
-    let p = unsafe { Cur::new(&raw mut cursor) };
+    let start = cursor.offset();
+    let text = cursor.text();
+    // SAFETY: the caller's promise -- the three out-parameters are null or
+    // writable.
     if !newargs.is_null() {
         unsafe { ga_init(newargs, slot, 3) };
     }
@@ -111,41 +100,39 @@ pub(crate) unsafe fn get_function_args(
     // Isolate the arguments: "arg1, arg2, ...)".
     let mut any_default = false;
     let closed = 'parse: {
-        while p.byte() != endchar as u8 {
-            if p.byte() == b'.' && p.at(1) == b'.' && p.at(2) == b'.' {
+        while cursor.byte() != endchar {
+            if cursor.rest().starts_with(b"...") {
                 if !varargs.is_null() {
                     unsafe { *varargs = 1 };
                 }
-                p.bump(3);
+                cursor.bump(3);
                 mustend = true;
             } else {
-                let arg = p.get();
-                p.set(unsafe { one_function_arg(arg, newargs, skip) });
-                if p.get() == arg {
+                // SAFETY: the caller's promise about `newargs`.
+                if !unsafe { one_function_arg(cursor, newargs, skip) } {
                     break;
                 }
-                if unsafe { *skipwhite(p.get()) } == b'=' as c_char && !default_args.is_null() {
+                let mut after = Cursor::new(text);
+                after.set_offset(cursor.offset());
+                after.skip_white();
+                if after.byte() == b'=' && !default_args.is_null() {
                     let mut rettv = TV_INITIAL_VALUE;
                     any_default = true;
-                    p.skip(0);
-                    p.skip(1);
-                    let expr = p.get();
-                    // SAFETY: `p` is this frame's own cursor, which `eval1`
-                    // advances in place.
-                    let parsed = unsafe { eval1(p.raw(), &mut rettv, ptr::null_mut()) };
-                    if parsed.is_ok() {
-                        unsafe { ga_grow(default_args, 1) };
-                        let mut end = p.get();
-                        // SAFETY: `end` only steps back over what `eval1`
-                        // read, and stops at `expr`.
-                        while end > expr && ascii_iswhite(c_int::from(unsafe { *end.sub(1) })) {
-                            end = end.wrapping_sub(1);
-                        }
+                    cursor.skip_white();
+                    cursor.bump(1);
+                    cursor.skip_white();
+                    let expr = cursor.offset();
+                    if eval1(cursor, &mut rettv, false).is_ok() {
                         // The default is kept as source, and the walk goes
                         // on from its end: the blanks are read again below.
-                        p.set(end);
-                        let len = end.addr() - expr.addr();
-                        let copy = unsafe { xmemdupz(expr as *const c_void, len) } as *mut c_char;
+                        let mut end = cursor.offset();
+                        while end > expr && matches!(text[end - 1], b' ' | b'\t') {
+                            end -= 1;
+                        }
+                        cursor.set_offset(end);
+                        let copy = XString::from_bytes(&text[expr..end]).into_raw();
+                        // SAFETY: the caller's promise about `default_args`.
+                        unsafe { ga_grow(default_args, 1) };
                         unsafe { ga_push_string(default_args, copy) };
                     } else {
                         mustend = true;
@@ -155,40 +142,40 @@ pub(crate) unsafe fn get_function_args(
                     emsg(gettext(fmt));
                     mustend = true;
                 }
-                let comma_after_white = ascii_iswhite(c_int::from(p.byte()))
-                    && unsafe { *skipwhite(p.get()) } == b',' as c_char;
-                if comma_after_white {
+                let white = matches!(cursor.byte(), b' ' | b'\t');
+                let mut after = Cursor::new(text);
+                after.set_offset(cursor.offset());
+                after.skip_white();
+                if white && after.byte() == b',' {
                     if !skip {
-                        // SAFETY: `p` walks the caller's argument list.
-                        let at = unsafe { c_str(p.get()) };
+                        let at = msg_bytes(cursor.rest());
                         semsg!("E1068: No white space allowed before ',': {at}");
                         break 'parse false;
                     }
-                    p.skip(0);
+                    cursor.skip_white();
                 }
-                if p.byte() == b',' {
-                    p.bump(1);
+                if cursor.byte() == b',' {
+                    cursor.bump(1);
                 } else {
                     mustend = true;
                 }
             }
-            p.skip(0);
-            if mustend && p.byte() != endchar as u8 {
+            cursor.skip_white();
+            if mustend && cursor.byte() != endchar {
                 if !skip {
-                    let at = unsafe { *argp };
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let at = unsafe { c_str(at) };
+                    let at = msg_bytes(&text[start..]);
                     semsg!("E475: Invalid argument: {at}");
                 }
                 break;
             }
         }
-        p.byte() == endchar as u8
+        cursor.byte() == endchar
     };
     if closed {
-        unsafe { *argp = p.get().add(1) };
+        cursor.bump(1);
         return Ok(());
     }
+    cursor.set_offset(start);
 
     if !newargs.is_null() {
         unsafe { ga_clear_strings(newargs) };
@@ -199,51 +186,40 @@ pub(crate) unsafe fn get_function_args(
     Err(Failed)
 }
 
-/// Evaluate the arguments of a call, from the `(` at `*arg` to its `)`.
+/// Evaluate the arguments of a call, from the `(` at the cursor to its `)`.
 ///
 /// Stops at `MAX_FUNC_ARGS` less whatever a partial has already bound.
-///
-/// # Safety
-/// `*arg` points at the `(`; `args` has room for `MAX_FUNC_ARGS` values
-/// past `*argcount`.
-pub(crate) unsafe fn get_func_arguments(
-    arg: *mut *mut c_char,
-    evalarg: *mut EvalArg,
+pub(crate) fn get_func_arguments(
+    cursor: &mut Cursor<'_>,
+    evaluate: bool,
     partial_argc: c_int,
     args: &mut [TypVal],
     argcount: &mut usize,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- `*arg` is on the `(` of a
-    // NUL-terminated argument list.
-    let mut cursor = unsafe { *arg };
-    let argp = unsafe { Cur::new(&raw mut cursor) };
     let mut ret = Ok(());
-    let room = (MAX_FUNC_ARGS - partial_argc) as usize;
+    let room = usize::try_from(MAX_FUNC_ARGS as c_int - partial_argc).unwrap_or(0);
     while *argcount < room {
         // skip the '(' or ','
-        argp.skip(1);
-        if matches!(argp.byte(), b')' | b',') || argp.byte() == NUL as u8 {
+        cursor.bump(1);
+        cursor.skip_white();
+        if matches!(cursor.byte(), b')' | b',') || cursor.byte() == NUL as u8 {
             break;
         }
-        // SAFETY: `argp` is this frame's own cursor, which `eval1` advances
-        // in place.
-        let slot = &mut args[*argcount];
-        if unsafe { eval1(argp.raw(), slot, evalarg) }.is_err() {
+        if eval1(cursor, &mut args[*argcount], evaluate).is_err() {
             ret = Err(Failed);
             break;
         }
         *argcount += 1;
-        if argp.byte() != b',' {
+        if cursor.byte() != b',' {
             break;
         }
     }
-    argp.skip(0);
-    if argp.byte() == b')' {
-        argp.bump(1);
+    cursor.skip_white();
+    if cursor.byte() == b')' {
+        cursor.bump(1);
     } else {
         ret = Err(Failed);
     }
-    unsafe { *arg = argp.get() };
     ret
 }
 

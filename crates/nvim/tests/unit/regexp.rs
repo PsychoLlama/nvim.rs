@@ -1618,13 +1618,9 @@ fn substitute_remembers_its_last_replacement_for_tilde_and_evaluates_a_backslash
         let _ = do_cmdline_cmd(&text);
     };
     let read = |expr: &str| {
-        let text = cstr(expr);
-        // SAFETY: NUL-terminated, and outlives the call; the answer is an
-        // allocation this takes over.
-        let got = unsafe { eval_to_string(text.as_ptr().cast_mut(), false, false) };
-        assert!(!got.is_null(), "{expr} evaluated to nothing");
-        // SAFETY: `eval_to_string` answers an `xmalloc`ed C string.
-        unsafe { crate::support::internalize(got) }
+        let got = eval_to_string(expr.as_bytes(), false, false);
+        let got = got.unwrap_or_else(|| panic!("{expr} evaluated to nothing"));
+        String::from_utf8(got.to_vec()).unwrap()
     };
 
     put("silent! keepjumps keepmarks %delete _");
@@ -1689,13 +1685,9 @@ fn a_match_reports_spans_that_are_read_back_against_the_line() {
 fn a_string_substitution_expands_captures_and_submatches() {
     let _sandbox = Sandbox::globals();
     let read = |expr: &str| {
-        let text = cstr(expr);
-        // SAFETY: NUL-terminated, and outlives the call; the answer is an
-        // allocation this takes over.
-        let got = unsafe { eval_to_string(text.as_ptr().cast_mut(), false, false) };
-        assert!(!got.is_null(), "{expr} evaluated to nothing");
-        // SAFETY: `eval_to_string` answers an `xmalloc`ed C string.
-        unsafe { crate::support::internalize(got) }
+        let got = eval_to_string(expr.as_bytes(), false, false);
+        let got = got.unwrap_or_else(|| panic!("{expr} evaluated to nothing"));
+        String::from_utf8(got.to_vec()).unwrap()
     };
 
     // `&` is the whole match and `\1` the first group -- both resolved

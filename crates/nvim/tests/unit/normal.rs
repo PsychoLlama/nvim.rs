@@ -88,22 +88,14 @@ fn mapped_keys(editor: &Editor, seq: &str) {
 
 /// Evaluate an expression for its number.
 fn num(_editor: &Editor, expr: &str) -> i64 {
-    let text = cstr(expr);
-    // SAFETY: `text` is NUL-terminated and outlives the call.
-    unsafe { eval_to_number(text.as_ptr().cast_mut(), false) }
+    eval_to_number(expr.as_bytes(), false)
 }
 
 /// Evaluate an expression for its string.
 fn string(_editor: &Editor, expr: &str) -> String {
-    let text = cstr(expr);
-    // SAFETY: `text` is NUL-terminated and outlives the call; the answer is
-    // an allocation this takes ownership of.
-    let got = unsafe { eval_to_string(text.as_ptr().cast_mut(), false, false) };
-    if got.is_null() {
-        return String::new();
-    }
-    // SAFETY: `eval_to_string` answers an `xmalloc`ed NUL-terminated string.
-    unsafe { crate::support::internalize(got) }
+    eval_to_string(expr.as_bytes(), false, false)
+        .map(|got| String::from_utf8(got.to_vec()).unwrap())
+        .unwrap_or_default()
 }
 
 /// The whole buffer, one line per element, joined with `/`.

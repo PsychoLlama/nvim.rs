@@ -149,13 +149,12 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
 
     // Copy it: the option can be changed while it is running.
     // SAFETY: 'formatexpr' is a NUL-terminated option value.
-    let mut fex = XString::from_cstr(unsafe { cstr::at(Buf::current().b_p_fex.value_ptr()) });
+    let fex = XString::from_cstr(unsafe { cstr::at(Buf::current().b_p_fex.value_ptr()) });
     // Errors go against the script that set `'formatexpr'`.
     let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptFormatexpr as usize]);
     let r = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
-        // SAFETY: the copy above, which outlives the evaluation.
-        unsafe { eval_to_number(fex.as_mut_ptr(), true) as c_int }
+        eval_to_number(&fex, true) as c_int
     };
     unsafe { set_vim_var_string(Vv::Char, ::core::ptr::null::<c_char>(), -1 as ptrdiff_t) };
     drop(script_ctx);

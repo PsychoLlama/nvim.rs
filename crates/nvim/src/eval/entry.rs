@@ -1,12 +1,15 @@
 //! What the rest of the editor calls the evaluator through.
 //!
-//! Every entry point here brackets one evaluation: it sets up an
-//! `EvalArg`, runs `eval0`, converts the result to whatever the caller
-//! wanted, and clears the typval on both the success and the error path.
-//! The bracket is the whole content of the file — twenty-four times, with
-//! the differences in what is counted up around it (`emsg_skip`,
-//! `emsg_off`, `sandbox`, `textlock`, the funccal stack) and what the
-//! answer is converted to.
+//! Every entry point here brackets one evaluation: it takes the
+//! expression's text as bytes (or a command's line and an offset into it),
+//! runs `eval0`, converts the result to whatever the caller wanted, and
+//! clears the typval on both the success and the error path. What differs
+//! is what is counted up around it (`emsg_skip`, `emsg_off`, `sandbox`,
+//! `textlock`, the funccal stack) and what the answer is converted to.
+//!
+//! The text is the caller's, borrowed for the evaluation. A caller whose
+//! text lives where the expression can reach it -- an option value, a
+//! mapping, a register -- hands over a copy.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -17,19 +20,15 @@ use crate::eval::list::cstr_of;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::{Lock, Suppress};
 use crate::memory::XString;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
+use core::ffi::{c_char, c_int};
 use core::ptr::null_mut;
 
-use crate::api::private::helpers::cstr_to_string;
-use crate::ascii::ascii_isdigit;
-use crate::charset::skipwhite;
-use crate::eval::EVALARG_EVALUATE;
-use crate::eval::encode::encode_tv2string;
+use crate::charset::skip;
+use crate::eval::encode::{encode_tv2string, tv2string_bytes};
 use crate::eval::typval::{
     NumBuf, list_join, list_last, list_len, list_set_lock, tv_clear, tv_dict_free_contents,
     tv_get_number_chk, tv_list_alloc,
@@ -38,41 +37,25 @@ use crate::eval::userfunc::{CallStackAside, call_func, func_init};
 use crate::eval::vars::clear_local;
 use crate::eval::vars::{evalvars_init, get_vim_var_dict, get_vim_var_partial, set_vim_var_list};
 use crate::eval::{
-    EVAL_EVALUATE, FUNCEXE_INIT, Tv, check_luafunc_name, clear_evalarg, eval0,
-    eval0_simple_funccal, eval1, may_call_simple_func, partial_name,
+    Cursor, FUNCEXE_INIT, Tv, check_luafunc_name, eval0, eval0_in_cmd, eval0_simple_funccal, eval1,
+    may_call_simple_func, partial_name,
 };
 use crate::ex_eval::aborting;
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::xstrdup;
 use crate::message::state::{called_emsg, did_emsg};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::optionstr::OptString;
-use crate::runtime::sourcing_a_script;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    Dict, EvalArg, ExArg, Failed, FuncExe, HashTab, NUL, Object, OptionSetFlags, Partial,
-    SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t, size_t, ssize_t,
+    Dict, ExArg, Failed, FuncExe, HashTab, NUL, Object, OptionSetFlags, Partial, SaveVEvent,
+    ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t, size_t, ssize_t,
 };
-use crate::winlayer::Live;
-use ::libc::atol;
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
-/// A freshly declared `EvalArg`, before `fill_evalarg_from_eap`.
-const UNSET_EVALARG: EvalArg = EvalArg {
-    eval_flags: 0,
-    eval_getline: None,
-    eval_cookie: null_mut(),
-    eval_tofree: null_mut(),
-    next_cmd: None,
-};
-
-/// One expression's evaluation state, owned by the frame that declared it.
-type Ev = Live<EvalArg>;
-
-/// An empty growable array.
 /// Reserve `v:event` for the duration of one autocommand, saving whatever
 /// a surrounding one had put there.
 ///
@@ -120,100 +103,55 @@ pub fn eval_init() {
     func_init();
 }
 
-/// Set up an `EvalArg` for an expression that is part of an Ex command.
-///
-/// The line-getter is carried over only while sourcing a script, which is
-/// what lets an expression there run onto a following line.
-///
-/// # Safety
-/// `evalarg` must be valid.
-pub unsafe fn fill_evalarg_from_eap(evalarg: *mut EvalArg, excmd: Option<&mut ExArg>, skip: bool) {
-    // SAFETY: the caller's promise -- `evalarg` outlives the call.
-    let mut evalarg = unsafe { Ev::new(evalarg) };
-    *evalarg = UNSET_EVALARG;
-    evalarg.eval_flags = if skip { 0 } else { EVAL_EVALUATE as c_int };
-    let Some(command) = excmd else {
-        return;
-    };
-    if sourcing_a_script(command) != 0 {
-        evalarg.eval_getline = command.ea_getline;
-        evalarg.eval_cookie = command.cookie;
-    }
+/// A number's truth, with an error for a value that has no number.
+fn truth(tv: &mut TypVal) -> Result<bool, Failed> {
+    let answer = tv_get_number_chk(tv).map(|n| n != 0).map_err(|_| Failed);
+    clear_local(tv);
+    answer
 }
 
-/// Evaluate `arg` and answer its truth. `error` says whether the
-/// evaluation itself failed, which is not the same as answering false.
-///
-/// # Safety
-/// `arg` must be a NUL-terminated expression, `error` valid, `excmd` null or
-/// valid.
-pub unsafe fn eval_to_bool(
-    arg: *mut c_char,
-    error: *mut bool,
-    mut excmd: Option<&mut ExArg>,
-    skip: bool,
-    use_simple_function: bool,
-) -> bool {
+/// Evaluate `text` and answer its truth. An `Err` is an evaluation that
+/// failed, which is not the same as answering false.
+pub(crate) fn eval_to_bool(text: &[u8], use_simple_function: bool) -> Result<bool, Failed> {
     let mut tv = UNSET_TV;
-    let mut retval = false;
-    let mut evalarg = UNSET_EVALARG;
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, excmd.as_deref_mut(), skip) };
-    let skipping = skip.then(Suppress::emsg_skip);
-    let r = if use_simple_function {
-        unsafe { eval0_simple_funccal(arg, &mut tv, excmd.as_deref_mut(), &raw mut evalarg) }
+    if use_simple_function {
+        eval0_simple_funccal(text, &mut tv)?;
     } else {
-        unsafe { eval0(arg, &mut tv, excmd.as_deref_mut(), &raw mut evalarg) }
-    };
-    if r.is_err() {
-        unsafe { *error = true };
-    } else {
-        unsafe { *error = false };
-        if !skip {
-            retval = match tv_get_number_chk(&tv) {
-                Ok(n) => n != 0,
-                Err(_) => {
-                    // SAFETY: the caller's flag, as above.
-                    unsafe { *error = true };
-                    false
-                }
-            };
-            clear_local(&mut tv);
-        }
+        eval0(text, &mut tv, true).0?;
     }
-    drop(skipping);
-    unsafe { clear_evalarg(&raw mut evalarg, excmd) };
-    retval
+    truth(&mut tv)
+}
+
+/// The truth of the command's argument -- `:if`, `:elseif`, `:while` -- or,
+/// when `skip`, only its parse (and then false). The command after it is
+/// left in `line.next`.
+pub(crate) fn eval_cmd_bool(excmd: &mut ExArg, skip: bool) -> Result<bool, Failed> {
+    let mut tv = UNSET_TV;
+    let _skipping = skip.then(Suppress::emsg_skip);
+    let at = excmd.line.arg;
+    eval0_in_cmd(excmd, at, &mut tv, !skip)?;
+    if skip { Ok(false) } else { truth(&mut tv) }
 }
 
 /// `eval1` with a fallback message: when the expression failed silently —
 /// nothing aborted and nothing reported — say which expression it was.
-///
-/// # Safety
-/// `arg` must point at the cursor into a NUL-terminated expression;
-/// `result` valid; `excmd` null or valid.
-pub(crate) unsafe fn eval1_emsg(
-    arg: *mut *mut c_char,
+pub(crate) fn eval1_emsg(
+    cursor: &mut Cursor<'_>,
     result: &mut TypVal,
-    mut excmd: Option<&mut ExArg>,
+    evaluate: bool,
 ) -> Result<(), Failed> {
-    let start: *const c_char = unsafe { *arg };
+    let start = cursor.offset();
     let did_emsg_before = did_emsg.get();
     let called_emsg_before = called_emsg.get();
-
-    let mut evalarg = UNSET_EVALARG;
-    let skip = excmd.as_deref().is_some_and(|command| command.skip);
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, excmd.as_deref_mut(), skip) };
-    let ret = unsafe { eval1(arg, result, &raw mut evalarg) };
+    let ret = eval1(cursor, result, evaluate);
     if ret.is_err()
         && !aborting()
         && did_emsg.get() == did_emsg_before
         && called_emsg.get() == called_emsg_before
     {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let start = unsafe { c_str(start) };
+        let start = msg_bytes(&cursor.text()[start..]);
         semsg!("E15: Invalid expression: \"{start}\"");
     }
-    unsafe { clear_evalarg(&raw mut evalarg, excmd) };
     ret
 }
 
@@ -286,17 +224,16 @@ pub(crate) fn eval_expr_func(
 /// Evaluate `expr` as an expression *string*, which must consume all of it.
 pub(crate) fn eval_expr_string(expr: &TypVal, result: &mut TypVal) -> Result<(), Failed> {
     let mut buf = NumBuf::new();
-    let mut s = buf.string_ptr_chk(expr) as *mut c_char;
-    if s.is_null() {
-        return Err(Failed);
-    }
-    s = unsafe { skipwhite(s) };
-    unsafe { eval1_emsg(&raw mut s, result, None) }?;
-    if unsafe { *skipwhite(s) } as c_int != NUL {
+    let text = buf.string_chk(expr).ok_or(Failed)?;
+    let mut cursor = Cursor::new(text.to_bytes());
+    cursor.skip_white();
+    eval1_emsg(&mut cursor, result, true)?;
+    let end = cursor.offset();
+    cursor.skip_white();
+    if cursor.byte() != 0 {
         tv_clear(result);
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let s = unsafe { c_str(s) };
-        semsg!("E15: Invalid expression: \"{s}\"");
+        let rest = msg_bytes(&cursor.text()[end..]);
+        semsg!("E15: Invalid expression: \"{rest}\"");
         return Err(Failed);
     }
     Ok(())
@@ -344,178 +281,99 @@ pub unsafe fn eval_expr_to_bool(expr: &TypVal, error: *mut bool) -> bool {
     res
 }
 
-/// Evaluate `arg` for its String, or only parse it when `skip`.
-///
-/// # Safety
-/// As `eval_to_bool`.
-pub unsafe fn eval_to_string_skip(arg: *mut c_char, excmd: &mut ExArg, skip: bool) -> *mut c_char {
+/// The command's argument evaluated for its String -- `:throw` -- or, when
+/// `skip`, only parsed. The command after it is left in `line.next`.
+pub(crate) fn eval_cmd_string(excmd: &mut ExArg, skip: bool) -> Option<XString> {
     let mut numbuf = NumBuf::new();
     let mut tv = UNSET_TV;
-    let mut evalarg = UNSET_EVALARG;
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
-    let skipping = skip.then(Suppress::emsg_skip);
-    let retval = if unsafe { eval0(arg, &mut tv, Some(excmd), &raw mut evalarg) }.is_err() || skip {
-        null_mut()
-    } else {
-        let s = unsafe { xstrdup(numbuf.string_ptr(&tv)) };
-        clear_local(&mut tv);
-        s
-    };
-    drop(skipping);
-    unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
-    retval
+    let _skipping = skip.then(Suppress::emsg_skip);
+    let at = excmd.line.arg;
+    if eval0_in_cmd(excmd, at, &mut tv, !skip).is_err() || skip {
+        return None;
+    }
+    let value = XString::from_cstr(numbuf.string(&tv));
+    clear_local(&mut tv);
+    Some(value)
 }
 
-/// Step the cursor over an expression without evaluating it.
-///
-/// # Safety
-/// `cursor` must point at the cursor into a NUL-terminated expression;
-/// `evalarg` null or valid.
-pub unsafe fn skip_expr(cursor: *mut *mut c_char, evalarg: *mut EvalArg) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a non-null `evalarg` outlives the
-    // call.
-    let ev = (!evalarg.is_null()).then(|| unsafe { Ev::new(evalarg) });
-    let save_flags = ev.map_or(0, |e| e.eval_flags);
-    if let Some(mut e) = ev {
-        e.eval_flags &= !(EVAL_EVALUATE as c_int);
-    }
-    // SAFETY: the caller's promise -- `cursor` holds a cursor into a
-    // NUL-terminated expression, and blanks stop at the terminator.
-    unsafe { *cursor = skipwhite(*cursor) };
-    let mut rettv = UNSET_TV;
-    // Deliberately not handed `evalarg`: the flags were cleared on it
-    // for the benefit of anything else looking, but this walk wants no
-    // line getter either.
-    // SAFETY: `cursor` is the caller's cursor and `rettv` is this frame's.
-    let res = unsafe { eval1(cursor, &mut rettv, null_mut()) };
-    if let Some(mut e) = ev {
-        e.eval_flags = save_flags;
-    }
-    res
+/// How much of `text` an expression takes up, white space before it
+/// included, parsing it without evaluating anything. A `` `=expr` `` in a
+/// command's argument is stepped over this way.
+pub(crate) fn skip_expr(text: &[u8]) -> usize {
+    let mut cursor = Cursor::new(text);
+    cursor.skip_white();
+    let mut skipped = UNSET_TV;
+    let _ = eval1(&mut cursor, &mut skipped, false);
+    cursor.offset()
 }
 
 /// Render a typval as the String a caller of the evaluator expects: a List
 /// joined with newlines when `join_list`, otherwise the `string()` form for
 /// a container and the plain coercion for everything else.
-///
-/// # Safety
-/// `tv` must be valid.
-pub(crate) unsafe fn typval2string(tv: &mut TypVal, join_list: bool) -> *mut c_char {
+pub(crate) fn typval2string(tv: &TypVal, join_list: bool) -> XString {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's promise -- the typval outlives the call, and
-    // `VAR_LIST` says the value holds a List.
-    let value = unsafe { Tv::new(tv) };
-    if join_list && value.v_type() == VAR_LIST {
+    if join_list && tv.v_type() == VAR_LIST {
         let mut text = XString::new();
-        // SAFETY: the typval's live List, or null.
-        let l = unsafe { value.list_or_null().as_ref() };
+        let l = tv.list_ref();
         let _ = list_join(&mut text, l, c"\n");
         if list_len(l) > 0 {
             text.push_byte(b'\n');
         }
-        return text.into_raw();
+        return text;
     }
-    if value.v_type() == VAR_LIST || value.v_type() == VAR_DICT {
-        // SAFETY: the caller's typval.
-        return unsafe { encode_tv2string(tv, null_mut()) };
+    if tv.v_type() == VAR_LIST || tv.v_type() == VAR_DICT {
+        return XString::from_bytes(&tv2string_bytes(tv));
     }
-    // SAFETY: as above; `numbuf` outlives the string rendered into it.
-    unsafe { xstrdup(numbuf.string_ptr(tv)) }
+    XString::from_cstr(numbuf.string(tv))
 }
 
-/// Evaluate `arg` for its String.
-///
-/// # Safety
-/// As `eval_to_bool`.
-pub unsafe fn eval_to_string_eap(
-    arg: *mut c_char,
-    join_list: bool,
-    excmd: Option<&mut ExArg>,
-    use_simple_function: bool,
-) -> *mut c_char {
+/// Evaluate `text` for its String: a List joined with newlines when
+/// `join_list`. `None` when the evaluation failed.
+pub fn eval_to_string(text: &[u8], join_list: bool, use_simple_function: bool) -> Option<XString> {
     let mut tv = UNSET_TV;
-    let mut evalarg = UNSET_EVALARG;
-    let skip = excmd.as_deref().is_some_and(|command| command.skip);
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, excmd, skip) };
-    // The `excmd` is read for the line getter above but deliberately not
-    // handed on: this evaluation is not the Ex command's own.
     let r = if use_simple_function {
-        unsafe { eval0_simple_funccal(arg, &mut tv, None, &raw mut evalarg) }
+        eval0_simple_funccal(text, &mut tv)
     } else {
-        unsafe { eval0(arg, &mut tv, None, &raw mut evalarg) }
+        eval0(text, &mut tv, true).0
     };
-    let retval = if r.is_err() {
-        null_mut()
-    } else {
-        let s = unsafe { typval2string(&mut tv, join_list) };
-        clear_local(&mut tv);
-        s
-    };
-    unsafe { clear_evalarg(&raw mut evalarg, None) };
-    retval
-}
-
-/// `eval_to_string_eap` with no Ex command around it.
-///
-/// # Safety
-/// `arg` must be a NUL-terminated expression.
-pub unsafe fn eval_to_string(
-    arg: *mut c_char,
-    join_list: bool,
-    use_simple_function: bool,
-) -> *mut c_char {
-    unsafe { eval_to_string_eap(arg, join_list, None, use_simple_function) }
-}
-
-/// [`eval_to_string`] of text the caller lends: the expression is evaluated
-/// from a terminated copy, and the answer is owned. `None` when the
-/// evaluation failed.
-pub(crate) fn eval_text_to_string(expr: &[u8], join_list: bool) -> Option<XString> {
-    let mut copy = XString::from_bytes(expr);
-    // SAFETY: `copy` is a NUL-terminated expression of this frame's own; the
-    // answer is null or an owned string, taken over once.
-    unsafe {
-        let value = eval_to_string(copy.as_mut_ptr(), join_list, false);
-        (!value.is_null()).then(|| XString::from_raw(value))
-    }
+    r.ok()?;
+    let value = typval2string(&tv, join_list);
+    clear_local(&mut tv);
+    Some(value)
 }
 
 /// `eval_to_string` with the text locked and, optionally, the sandbox on,
 /// and with the function-call stack saved across it.
-///
-/// # Safety
-/// `arg` must be a NUL-terminated expression.
-pub unsafe fn eval_to_string_safe(
-    arg: *mut c_char,
+pub(crate) fn eval_to_string_safe(
+    text: &[u8],
     use_sandbox: bool,
     use_simple_function: bool,
-) -> *mut c_char {
+) -> Option<XString> {
     let call_stack_aside = CallStackAside::new();
     let _sandboxed = use_sandbox.then(Lock::sandbox);
     let _locked = Lock::text();
-    let retval = unsafe { eval_to_string(arg, false, use_simple_function) };
+    let value = eval_to_string(text, false, use_simple_function);
     drop(call_stack_aside);
-    retval
+    value
 }
 
-/// Evaluate `expr` for its Number, silently. -1 for a failure, which is
+/// Evaluate `text` for its Number, silently. -1 for a failure, which is
 /// not distinguishable from a result of -1.
-///
-/// # Safety
-/// `expr` must be a NUL-terminated expression.
-pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> VarNumber {
-    let mut evalarg = EVALARG_EVALUATE;
+pub fn eval_to_number(text: &[u8], use_simple_function: bool) -> VarNumber {
     let mut rettv = UNSET_TV;
-    let mut p = unsafe { skipwhite(expr) };
     let _no_emsg = Suppress::emsg();
     // Note the shortcut is handed the *unskipped* expression, unlike `eval1`.
     let simple = if use_simple_function {
-        unsafe { may_call_simple_func(expr, &mut rettv) }
+        may_call_simple_func(text, &mut rettv)
     } else {
         Ok(Parsed::NotThis)
     };
     let r = match simple {
-        Ok(Parsed::NotThis) => unsafe { eval1(&raw mut p, &mut rettv, &raw mut evalarg) },
+        Ok(Parsed::NotThis) => {
+            let mut cursor = Cursor::new(text);
+            cursor.skip_white();
+            eval1(&mut cursor, &mut rettv, true)
+        }
         other => other.map(|_| ()),
     };
 
@@ -528,62 +386,32 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> Va
     }
 }
 
-/// Evaluate the command's argument as an expression: [`eval_expr`] over
-/// `excmd`'s own text. `None` when it failed.
+/// Evaluate the command's argument as an expression, leaving the command
+/// after it in `line.next`. `None` when it failed.
 pub(crate) fn eval_cmd_arg(excmd: &mut ExArg) -> Option<TypVal> {
-    let arg = excmd.arg_ptr();
-    // SAFETY: the command line's own NUL-terminated text, which the
-    // evaluator reads alongside the command it was given.
-    let tv = unsafe { eval_expr(arg, Some(excmd)) };
-    if tv.is_null() {
-        return None;
-    }
-    // SAFETY: the block `eval_expr` just answered, holding a value: the
-    // value moves out and the block goes back without dropping it.
-    let value = unsafe { tv.read() };
-    unsafe { xfree(tv as *mut c_void) };
-    Some(value)
+    let mut tv = UNSET_TV;
+    let at = excmd.line.arg;
+    let evaluate = !excmd.skip;
+    eval0_in_cmd(excmd, at, &mut tv, evaluate).ok()?;
+    Some(tv)
 }
 
-/// Evaluate `arg` into a heap typval the caller owns; null on failure.
-///
-/// # Safety
-/// `arg` must be a NUL-terminated expression; `excmd` null or valid.
-pub unsafe fn eval_expr(arg: *mut c_char, excmd: Option<&mut ExArg>) -> *mut TypVal {
-    unsafe { eval_expr_ext(arg, excmd, false) }
+/// Evaluate `text` into a value the caller owns; `None` on failure.
+pub(crate) fn eval_expr(text: &[u8]) -> Option<TypVal> {
+    eval_expr_ext(text, false)
 }
 
 /// As `eval_expr`, optionally taking the shortcut for an expression that is
 /// nothing but one function call.
-///
-/// # Safety
-/// As `eval_expr`.
-pub unsafe fn eval_expr_ext(
-    arg: *mut c_char,
-    mut excmd: Option<&mut ExArg>,
-    use_simple_function: bool,
-) -> *mut TypVal {
-    let mut tv = unsafe { xmalloc(size_of::<TypVal>()) } as *mut TypVal;
-    let mut evalarg = UNSET_EVALARG;
-    let skip = excmd.as_deref().is_some_and(|command| command.skip);
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, excmd.as_deref_mut(), skip) };
-    // `eval0_simple_funccal` falls through to `eval0` itself, so the two
-    // arms are the whole of the choice: nothing here can be left undone.
-    // The allocation holds no value yet, and the evaluator is handed a
-    // borrow of it: give it one before anything reads the bytes.
-    // SAFETY: the allocation just made.
-    let slot = unsafe { (tv.write(TV_INITIAL_VALUE), &mut *tv) }.1;
+pub(crate) fn eval_expr_ext(text: &[u8], use_simple_function: bool) -> Option<TypVal> {
+    let mut tv = UNSET_TV;
     let r = if use_simple_function {
-        unsafe { eval0_simple_funccal(arg, slot, excmd.as_deref_mut(), &raw mut evalarg) }
+        eval0_simple_funccal(text, &mut tv)
     } else {
-        unsafe { eval0(arg, slot, excmd.as_deref_mut(), &raw mut evalarg) }
+        eval0(text, &mut tv, true).0
     };
-    if r.is_err() {
-        unsafe { xfree(tv as *mut c_void) };
-        tv = null_mut();
-    }
-    unsafe { clear_evalarg(&raw mut evalarg, excmd) };
-    tv
+    r.ok()?;
+    Some(tv)
 }
 
 /// Call a Vimscript function by name with `argv` as its arguments.
@@ -656,93 +484,91 @@ pub(crate) fn call_func_retlist(func: &CStr, argv: &[TypVal]) -> Option<TypVal> 
     Some(rettv)
 }
 
-/// Run 'foldexpr' for the window's current line. `marker` comes back holding
-/// the leading marker character (`>`, `<`, `=`, `a`, `s`) when there was
-/// one.
-///
-/// # Safety
-/// `window` and `marker` must be valid.
-pub unsafe fn eval_foldexpr(window: Win, marker: *mut c_int) -> c_int {
-    let mut evalarg = EVALARG_EVALUATE;
+/// The number `text` starts with, as C's `atol` reads it: white space, a
+/// sign and digits, saturating rather than overflowing.
+fn leading_long(text: &[u8]) -> VarNumber {
+    let skip = text
+        .iter()
+        .take_while(|&&b| matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        .count();
+    let mut rest = &text[skip..];
+    let negative = rest.first() == Some(&b'-');
+    if matches!(rest.first(), Some(b'-' | b'+')) {
+        rest = &rest[1..];
+    }
+    let mut n: i128 = 0;
+    for &b in rest.iter().take_while(|b| b.is_ascii_digit()) {
+        n = (n * 10 + i128::from(b - b'0')).min(i128::from(VarNumber::MAX) + 1);
+    }
+    let n = if negative { -n } else { n };
+    n.clamp(i128::from(VarNumber::MIN), i128::from(VarNumber::MAX)) as VarNumber
+}
+
+/// Run 'foldexpr' for the window's current line: the level, and the leading
+/// marker character (`>`, `<`, `=`, `a`, `s`) when there was one, else NUL.
+pub(crate) fn eval_foldexpr(window: Win) -> (c_int, c_int) {
     let saved_sctx: ScriptCtx = current_sctx.get();
     let use_sandbox = was_set_insecurely(window, kOptFoldexpr, OptionSetFlags::LOCAL);
-    // SAFETY: an option string is NUL-terminated.
-    let arg = unsafe { skipwhite(window.w_onebuf_opt.wo_fde.value_ptr()) };
+    // A copy: the expression may set 'foldexpr' and free the option's text.
+    let expr = window.w_onebuf_opt.wo_fde.get();
+    let text = &expr[skip::white(&expr)..];
     current_sctx.set(window.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
+    let mut marker = NUL;
     let retval: VarNumber = {
         let _no_emsg = Suppress::emsg();
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         let _locked = Lock::text();
-        // SAFETY: the caller's promise about `marker`.
-        unsafe { *marker = NUL };
 
         let mut tv = UNSET_TV;
         let mut retval: VarNumber = 0;
-        if unsafe { eval0_simple_funccal(arg, &mut tv, None, &raw mut evalarg) }.is_ok() {
+        if eval0_simple_funccal(text, &mut tv).is_ok() {
             if tv.v_type() == VAR_NUMBER {
                 retval = tv.number_or_zero();
-            } else if tv.v_type() != VAR_STRING || tv.string_or_null().is_null() {
-                retval = 0;
-            } else {
-                // SAFETY: `VAR_STRING` says `v_string` is the live member,
-                // and a non-null one is NUL-terminated.
-                let mut s = tv.string_or_null();
-                let first = unsafe { *s };
+            } else if let Some(answer) = tv.string_cstr() {
+                let mut digits = answer.to_bytes();
                 // A leading non-digit that is not a minus sign is the
                 // fold marker; the rest is the level.
-                if first as c_int != NUL
-                    && !ascii_isdigit(first as c_int)
-                    && first != b'-' as c_char
+                if let Some(&first) = digits.first()
+                    && !first.is_ascii_digit()
+                    && first != b'-'
                 {
-                    // SAFETY: the caller's promise about `marker`; `first` is
-                    // not the terminator, so the rest is inside the string.
-                    unsafe { *marker = first as u8 as c_int };
-                    s = unsafe { s.add(1) };
+                    marker = c_int::from(first);
+                    digits = &digits[1..];
                 }
-                // SAFETY: `s` is inside the NUL-terminated string.
-                retval = unsafe { atol(s) } as VarNumber;
+                retval = leading_long(digits);
             }
             clear_local(&mut tv);
         }
         retval
     };
-    unsafe { clear_evalarg(&raw mut evalarg, None) };
     current_sctx.set(saved_sctx);
-    retval as c_int
+    (retval as c_int, marker)
 }
 
 /// Run 'foldtext' for the window's current fold. A List comes back as an
 /// Object so the caller can keep its per-chunk highlighting; anything else
 /// is coerced to a String.
 pub fn eval_foldtext(window: Win) -> Object {
-    let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
-    /// The empty String an error answers with.
-    fn empty_string() -> Object {
-        Object::string(String_0::NULL)
-    }
-
     let use_sandbox = was_set_insecurely(window, kOptFoldtext, OptionSetFlags::LOCAL);
-    let arg = window.w_onebuf_opt.wo_fdt.value_ptr();
+    // A copy: the expression may set 'foldtext' and free the option's text.
+    let expr = window.w_onebuf_opt.wo_fdt.get();
     let call_stack_aside = CallStackAside::new();
     let _sandboxed = use_sandbox.then(Lock::sandbox);
     let _locked = Lock::text();
 
     let mut tv = UNSET_TV;
-    let retval = if unsafe { eval0_simple_funccal(arg, &mut tv, None, &raw mut evalarg) }.is_err() {
-        empty_string()
+    let retval = if eval0_simple_funccal(&expr, &mut tv).is_err() {
+        Object::string(String_0::NULL)
     } else {
         let obj = if tv.v_type() == VAR_LIST {
             Object::from(&tv)
         } else {
-            // SAFETY: `numbuf` holds the rendering, NUL-terminated.
-            Object::string(unsafe { cstr_to_string(numbuf.string_ptr(&tv)) })
+            Object::string(String_0::from_bytes(numbuf.string(&tv).to_bytes()))
         };
         clear_local(&mut tv);
         obj
     };
-
-    unsafe { clear_evalarg(&raw mut evalarg, None) };
     drop(call_stack_aside);
     retval
 }

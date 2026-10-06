@@ -11,14 +11,14 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
 use crate::eval::Parsed;
 use crate::eval::typval::PartialRef;
-use crate::message_fmt::c_str;
+use crate::memory::handoff::owned_cstr;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::snprintf;
-use crate::strings::has_bytes;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use crate::strings::find_bytes;
+use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
 
@@ -95,21 +95,17 @@ pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut U
     fp
 }
 
-/// Parse a lambda expression at `*arg` into a partial in `result`.
+/// Parse a lambda expression at the cursor into a partial in `result`.
 ///
 /// Answers [`Parsed::NotThis`] when it is a dictionary or a `{expr}` rather
 /// than a lambda -- which is decided by whether an `->` follows a legal
 /// argument list.
-///
-/// # Safety
-/// `*arg` points at the `{`, and `result` is an uninitialised return value.
-pub unsafe fn get_lambda_tv(
-    arg: *mut *mut c_char,
+pub(crate) fn get_lambda_tv(
+    cursor: &mut Cursor<'_>,
     result: &mut TypVal,
-    evalarg: *mut EvalArg,
+    evaluate: bool,
 ) -> Result<Parsed, Failed> {
     let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
-    let evaluate = !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE != 0;
     let mut newargs = GArray::EMPTY;
     let mut varargs = 0;
     // The enclosing lambda's capture flag, put back when this one is done.
@@ -117,16 +113,18 @@ pub unsafe fn get_lambda_tv(
     // flag alone, so what it reads still counts for the enclosing lambda.
     let enclosing_uses_locals = LAMBDA_USES_LOCALS.get();
     let mut uses_locals = false;
-    let mut tofree: *mut c_char = ptr::null_mut();
+    let text = cursor.text();
 
     // First, check whether this is a lambda expression at all: an "->"
     // must follow a well-formed argument list.
-    let mut s = unsafe { skipwhite((*arg).add(1)) };
-    let (sp, dash) = (&raw mut s, b'-' as c_char);
-    // SAFETY: `s` walks the caller's expression; nothing is written back.
-    let (no_args, no_var, no_defs) = (ptr::null_mut(), ptr::null_mut(), ptr::null_mut());
-    let looks_like = unsafe { get_function_args(sp, dash, no_args, no_var, no_defs, true) };
-    if looks_like.is_err() || unsafe { *s } != b'>' as c_char {
+    let mut look = Cursor::new(text);
+    look.set_offset(cursor.offset() + 1);
+    look.skip_white();
+    let none = ptr::null_mut();
+    // SAFETY: nothing is asked back.
+    let looks_like =
+        unsafe { get_function_args(&mut look, b'-', none, ptr::null_mut(), none, true) };
+    if looks_like.is_err() || look.byte() != b'>' {
         return Ok(Parsed::NotThis);
     }
 
@@ -139,13 +137,12 @@ pub unsafe fn get_lambda_tv(
         } else {
             ptr::null_mut()
         };
-        unsafe { *arg = skipwhite((*arg).add(1)) };
-        let (dash, varp) = (b'-' as c_char, &raw mut varargs);
-        let none = ptr::null_mut();
-        // SAFETY: `arg` is the caller's cursor and `varargs` is this
-        // frame's local.
-        let read = unsafe { get_function_args(arg, dash, pnewargs, varp, none, false) };
-        if read.is_err() || unsafe { **arg } != b'>' as c_char {
+        cursor.bump(1);
+        cursor.skip_white();
+        // SAFETY: `newargs` and `varargs` are this frame's locals.
+        let read =
+            unsafe { get_function_args(cursor, b'-', pnewargs, &raw mut varargs, none, false) };
+        if read.is_err() || cursor.byte() != b'>' {
             break 'errret false;
         }
 
@@ -155,62 +152,49 @@ pub unsafe fn get_lambda_tv(
         }
 
         // Get the start and the end of the expression.
-        unsafe { *arg = skipwhite((*arg).add(1)) };
-        let start = unsafe { *arg };
-        let ret = unsafe { skip_expr(arg, evalarg) };
-        let end = unsafe { *arg };
+        cursor.bump(1);
+        cursor.skip_white();
+        let start = cursor.offset();
+        let mut skipped = TV_INITIAL_VALUE;
+        let ret = eval1(cursor, &mut skipped, false);
+        let end = cursor.offset();
         if ret.is_err() {
             break 'errret false;
         }
         if evaluate {
             uses_locals = LAMBDA_USES_LOCALS.get() == Some(true);
         }
-        if !evalarg.is_null() {
-            // Avoid that the expression gets freed when another line
-            // break follows.
-            tofree = unsafe { (*evalarg).eval_tofree };
-            unsafe { (*evalarg).eval_tofree = ptr::null_mut() };
-        }
 
-        unsafe { *arg = skipwhite(*arg) };
-        if unsafe { **arg } != b'}' as c_char {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(*arg) };
-            semsg!("E451: Expected }}: {arg0}");
+        cursor.skip_white();
+        if cursor.byte() != b'}' {
+            let rest = msg_bytes(cursor.rest());
+            semsg!("E451: Expected }}: {rest}");
             break 'errret false;
         }
-        unsafe { *arg = (*arg).add(1) };
+        cursor.bump(1);
 
         if evaluate {
             let mut flags = FuncFlags::NONE;
             let name = get_lambda_name(&mut lambda_buf);
             let fp = unsafe { alloc_ufunc(name.data(), name.len()) };
             let pt = unsafe { xcalloc(1, size_of::<Partial>()) } as *mut Partial;
-            // SAFETY: both are this call's own allocations, and `result` is
-            // the caller's uninitialised return value.
+            // SAFETY: both are this call's own allocations.
             let (mut f, mut part) = unsafe { (Uf::new(fp), Live::new(pt)) };
-            let mut rv = unsafe { Tv::new(result) };
-
-            let mut newlines = GArray::EMPTY;
-            unsafe { ga_init(&raw mut newlines, size_of::<*mut c_char>() as c_int, 1) };
-            unsafe { ga_grow(&raw mut newlines, 1) };
 
             // The body is the expression with "return " in front of it.
-            const RETURN: &CStr = c"return ";
-            let body_len = RETURN.count_bytes() + unsafe { end.offset_from(start) } as size_t + 1;
-            let p = unsafe { xmalloc(body_len) } as *mut c_char;
-            unsafe { *(newlines.ga_data as *mut *mut c_char) = p };
-            newlines.ga_len = 1;
-            unsafe { strcpy(p, RETURN.as_ptr()) };
-            let expr = unsafe { p.add(RETURN.count_bytes()) };
-            // SAFETY: `expr` has room for the body, which runs from
-            // `start` to `end` inside the caller's expression.
-            let len = unsafe { end.offset_from(start) } as size_t;
-            unsafe { xmemcpyz(expr as *mut c_void, start as *const c_void, len) };
-            if !has_bytes(unsafe { cstr::at(expr) }, b"a:") {
+            let body = &text[start..end];
+            let mut line = Vec::with_capacity(b"return ".len() + body.len());
+            line.extend_from_slice(b"return ");
+            line.extend_from_slice(body);
+            if find_bytes(body, b"a:").is_none() {
                 // No a: variables are used for sure.
                 flags |= FuncFlags::NOARGS;
             }
+            let mut newlines = GArray::EMPTY;
+            unsafe { ga_init(&raw mut newlines, size_of::<*mut c_char>() as c_int, 1) };
+            unsafe { ga_grow(&raw mut newlines, 1) };
+            unsafe { *(newlines.ga_data as *mut *mut c_char) = owned_cstr(line) };
+            newlines.ga_len = 1;
 
             f.uf_refcount = Refcount::ONE;
             let _ = unsafe { func_table().add(uf_name_ptr(fp)) };
@@ -240,7 +224,7 @@ pub unsafe fn get_lambda_tv(
             part.pt_func = fp;
             part.pt_refcount = Refcount::ONE;
             // SAFETY: the count just set is the one the slot takes over.
-            rv.write_partial(unsafe { PartialRef::owning(pt) });
+            result.write_partial(unsafe { PartialRef::owning(pt) });
         }
         true
     };
@@ -251,16 +235,28 @@ pub unsafe fn get_lambda_tv(
     if evaluate {
         LAMBDA_USES_LOCALS.set(enclosing_uses_locals);
     }
-    if !evalarg.is_null() && unsafe { (*evalarg).eval_tofree }.is_null() {
-        unsafe { (*evalarg).eval_tofree = tofree };
-    } else {
-        unsafe { xfree(tofree as *mut c_void) };
-    }
     if parsed {
         Ok(Parsed::Done)
     } else {
         Err(Failed)
     }
+}
+
+/// Bind `selfdict` to the Funcref in `result`: `dict.Func` read out of
+/// `dict`. Not for a partial that was bound explicitly (`pt_auto` clear).
+pub(crate) fn set_selfdict(result: &mut TypVal, selfdict: &mut Dict) {
+    if let Some(pt) = result.as_partial()
+        && !pt.is_null()
+    {
+        // SAFETY: a partial value holds a reference to a live partial.
+        let pt = unsafe { &*pt };
+        if !pt.pt_auto && !pt.pt_dict.is_null() {
+            return;
+        }
+    }
+    // SAFETY: `result` holds the funcref just read out of `selfdict`, which
+    // the borrow keeps live while the partial takes its own reference.
+    unsafe { make_partial(selfdict, result) };
 }
 
 /// Turn `dict.Func` into a partial that binds `selfdict`, when `Func` was

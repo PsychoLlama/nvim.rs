@@ -90,10 +90,8 @@ unsafe fn get_reg_wrap_one_line(s: *mut c_char, flags: c_int) -> *mut c_void {
 ///
 /// `kGRegNoExpr` refuses `"=` outright and `kGRegExprSrc` answers its source
 /// rather than evaluating it, which is what `getreg('=', 1, ...)` wants.
-///
-/// # Safety
-/// May run arbitrary Vimscript through `"=`.
-pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
+/// `"=` may run arbitrary Vimscript.
+pub fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
     let mut regname = regname;
     if regname == '=' as c_int {
         if flags & kGRegNoExpr as c_int != 0 {

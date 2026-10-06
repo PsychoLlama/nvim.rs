@@ -2321,7 +2321,6 @@ static const int ETYPE_SCRIPT = 1;
 static const int ETYPE_SPELL = 9;
 static const int ETYPE_TOP = 0;
 static const int ETYPE_UFUNC = 2;
-static const int EVAL_EVALUATE = 1;
 static const int EVENT_BUF_SIZE = 256;
 static const int EVENT_COUNT = 145;
 static const int EXESTACK_GROWSIZE = 50;

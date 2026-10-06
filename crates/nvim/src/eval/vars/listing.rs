@@ -131,7 +131,6 @@ pub(crate) unsafe fn list_arg_vars(
     mut arg: *const c_char,
     first: *mut c_int,
 ) -> *const c_char {
-    let mut evalarg = EVALARG_EVALUATE;
     let mut error = false;
     while ends_excmd(unsafe { *arg } as c_int) == 0 && !got_int.get() {
         if error || excmd.skip {
@@ -184,8 +183,12 @@ pub(crate) unsafe fn list_arg_vars(
                 error = true;
                 break 'done;
             }
+            // The subscript is read from the same text as the name, so the
+            // byte before it is there to look at.
             let arg_subsc = arg;
-            if unsafe { handle_subscript(&raw mut arg, &mut tv, &raw mut evalarg, true) }.is_err() {
+            let subscripted = handle_subscript(&mut cursor, &mut tv, true, true);
+            arg = name_start.wrapping_add(cursor.offset());
+            if subscripted.is_err() {
                 error = true;
                 break 'done;
             }

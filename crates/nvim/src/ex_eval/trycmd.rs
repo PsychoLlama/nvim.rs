@@ -51,12 +51,13 @@ use super::{
 };
 use crate::cstr;
 use crate::debugger::dbg_check_skipped;
-use crate::eval::eval_to_string_skip;
+use crate::eval::eval_cmd_string;
 use crate::eval::userfunc::do_return;
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::state::{current_exception, did_throw, force_abort, need_rethrow};
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
+use crate::memory::XString;
 use crate::memory::xmalloc;
 use crate::message::e_argreq;
 use crate::message::state::{did_emsg, emsg_silent};
@@ -78,9 +79,8 @@ use core::ptr;
 pub(crate) fn ex_throw(excmd: &mut ExArg) {
     // SAFETY: module contract.
     let value = if !matches!(excmd.line.byte_at(excmd.line.arg), 0 | b'|' | b'\n') {
-        // `eval_to_string_skip` still walks a `char *`; p32-8's.
-        let arg = excmd.arg_ptr();
-        unsafe { eval_to_string_skip(arg, excmd, excmd.skip) }
+        let skip = excmd.skip;
+        eval_cmd_string(excmd, skip).map_or(ptr::null_mut(), XString::into_raw)
     } else {
         emsg(message(e_argreq));
         ptr::null_mut()

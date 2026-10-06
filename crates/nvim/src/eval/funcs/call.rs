@@ -8,9 +8,7 @@ use super::{AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF
 use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
-use crate::charset::skipwhite;
 use crate::cstr;
-use crate::eval::EVALARG_EVALUATE;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
     ListRef, NumBuf, PartialRef, list_items, list_iter, list_len, tv_check_for_dict_arg,
@@ -35,6 +33,7 @@ use crate::message::emsg;
 use crate::message::state::{emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off};
 use crate::message::{capture_finish, capture_start, e_toomanyarg, e_unknown_function_str};
 use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::{expand_env_save, os_env_exists};
@@ -131,29 +130,26 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `eval({string})`
 pub fn f_eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the frame is live and `s` walks a string an argument owns.
-    let mut s = arg_string_chk(&mut numbuf, &args[0]);
-    if !s.is_null() {
-        s = unsafe { skipwhite(s) };
-    }
-    // Kept for the message: `eval1` advances `s` past what it consumed.
-    let expr_start = s;
-    if s.is_null()
-        || unsafe { eval1(&raw mut s as *mut *mut c_char, result, &raw mut evalarg) }.is_err()
-    {
-        if !expr_start.is_null() && !aborting() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let expr_start = unsafe { c_str(expr_start) };
+    let Some(text) = numbuf.string_chk(&args[0]) else {
+        need_clr_eos.set(false);
+        result.write_number(0);
+        return;
+    };
+    let mut cursor = Cursor::new(text.to_bytes());
+    cursor.skip_white();
+    // Kept for the message: `eval1` advances the cursor past what it read.
+    let expr_start = cursor.offset();
+    if eval1(&mut cursor, result, true).is_err() {
+        if !aborting() {
+            let expr_start = msg_bytes(&cursor.text()[expr_start..]);
             semsg!("E15: Invalid expression: \"{expr_start}\"");
         }
         need_clr_eos.set(false);
         result.write_number(0);
-    } else if unsafe { *s } as c_int != NUL {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let s = unsafe { c_str(s) };
-        semsg!("E488: Trailing characters: {s}");
+    } else if cursor.byte() != 0 {
+        let rest = msg_bytes(cursor.rest());
+        semsg!("E488: Trailing characters: {rest}");
     }
 }
 

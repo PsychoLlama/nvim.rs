@@ -10,7 +10,7 @@
 use crate::cstr;
 use crate::eval::typval::ListRef;
 use crate::memory::handoff::owned_cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::semsg;
 use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int};
@@ -23,74 +23,42 @@ use crate::types::NUL;
 /// The comment character a marker line may carry after it.
 const COMMENT_CHAR: c_char = b'"' as c_char;
 
-/// Evaluate the `{expr}` block at `p` and append its value to `gap`.
-/// Answers the character past the closing brace, or NULL.
+/// Evaluate the `{expr}` block `text` starts with and append its value to
+/// `gap`. Answers how many bytes of `text` the block took, closing brace
+/// included, or `None` after an error.
 ///
 /// `evaluate` false parses the block without running it, which is what a
 /// skipped `:let` wants.
-///
-/// # Safety
-/// `p` points at the `{` of a NUL-terminated string, writable in place.
-pub unsafe fn eval_one_expr_in_str(
-    p: *mut c_char,
-    gap: &mut Vec<u8>,
-    evaluate: bool,
-) -> *mut c_char {
-    // SAFETY: the caller's obligation throughout -- `p` points at the `{`
-    // of a NUL-terminated string that is writable in place, and every walk
-    // below stops at that NUL.
-    let block_start = unsafe { skipwhite(p.add(1)) };
-    let mut block_end = block_start;
-    if unsafe { *block_start } == NUL as c_char {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let p = unsafe { c_str(p) };
-        semsg!("E1279: Missing '}}': {p}");
-        return ptr::null_mut();
-    }
-    if unsafe { skip_expr(&raw mut block_end, ptr::null_mut()) }.is_err() {
-        return ptr::null_mut();
-    }
-    block_end = unsafe { skipwhite(block_end) };
-    if unsafe { *block_end } != b'}' as c_char {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let p = unsafe { c_str(p) };
-        semsg!("E1279: Missing '}}': {p}");
-        return ptr::null_mut();
-    }
-    if evaluate {
-        // Terminate the expression in place for `eval_to_string`.
-        unsafe { *block_end = NUL as c_char };
-        let expr_val = unsafe { eval_to_string(block_start, false, false) };
-        unsafe { *block_end = b'}' as c_char };
-        if expr_val.is_null() {
-            return ptr::null_mut();
-        }
-        // SAFETY: `eval_to_string` answers an owned NUL-terminated string.
-        gap.extend_from_slice(unsafe { cstr::bytes_at(expr_val) });
-        unsafe { xfree(expr_val.cast()) };
-    }
-    unsafe { block_end.add(1) }
-}
-
-/// [`eval_one_expr_in_str`] over text the caller lends: `text` starts at the
-/// `{`, and the answer is how many bytes of it the substitution took, or
-/// `None` after an error.
-///
-/// The evaluation runs over a terminated copy, which is what lets the
-/// expression be cut off in place without writing into the caller's text.
 pub(crate) fn eval_one_expr_in_text(
     text: &[u8],
     gap: &mut Vec<u8>,
     evaluate: bool,
 ) -> Option<usize> {
-    let mut copy = Vec::with_capacity(text.len() + 1);
-    copy.extend_from_slice(text);
-    copy.push(NUL as u8);
-    let start = copy.as_mut_ptr().cast::<c_char>();
-    // SAFETY: `copy` is a NUL-terminated buffer of this frame's own, which
-    // the callee may write into.
-    let end = unsafe { eval_one_expr_in_str(start, gap, evaluate) };
-    (!end.is_null()).then(|| end.addr() - start.addr())
+    let missing = || {
+        let text = msg_bytes(text);
+        semsg!("E1279: Missing '}}': {text}");
+    };
+    let mut cursor = Cursor::new(text);
+    cursor.bump(1);
+    cursor.skip_white();
+    let block_start = cursor.offset();
+    if cursor.byte() == NUL as u8 {
+        missing();
+        return None;
+    }
+    let mut skipped = TV_INITIAL_VALUE;
+    eval1(&mut cursor, &mut skipped, false).ok()?;
+    cursor.skip_white();
+    let block_end = cursor.offset();
+    if cursor.byte() != b'}' {
+        missing();
+        return None;
+    }
+    if evaluate {
+        let value = eval_to_string(&text[block_start..block_end], false, false)?;
+        gap.extend_from_slice(&value);
+    }
+    Some(block_end + 1)
 }
 
 /// Evaluate every `{expr}` in `str` and answer the result as an allocated
@@ -136,10 +104,12 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
             continue;
         }
 
-        p = unsafe { eval_one_expr_in_str(p, &mut text, true) };
-        if p.is_null() {
+        // SAFETY: `p` is inside `str`, which is NUL-terminated.
+        let Some(used) = eval_one_expr_in_text(unsafe { cstr::bytes_at(p) }, &mut text, true)
+        else {
             return ptr::null_mut();
-        }
+        };
+        p = p.wrapping_add(used);
     }
     owned_cstr(text)
 }

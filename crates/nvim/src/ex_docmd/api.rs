@@ -21,7 +21,6 @@ use crate::ex_docmd::ex_msg;
 use crate::message::emsg;
 use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
-use core::ptr;
 use std::ffi::CString;
 
 use crate::ascii::ascii_iswhite;
@@ -41,9 +40,7 @@ use crate::ex_docmd::modifier::{
 use crate::ex_docmd::onecmd::{
     append_command, ex_range_without_command, fresh_exarg, shift_cmd_args,
 };
-use crate::ex_docmd::scan::{
-    check_nextcmd, parse_bang, parse_count, parse_register, separate_nextcmd,
-};
+use crate::ex_docmd::scan::{parse_bang, parse_count, parse_register, separate_nextcmd};
 
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
 use crate::ex_docmd::state::{cmdmod, global_busy};
@@ -62,7 +59,7 @@ use crate::winlayer::graph::cmdwin_type;
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
-    CmdAddr, CmdLine, CmdParseInfo, CondStack, ExArg, ExArgt, FAIL, Failed, LineNr, NUL, Pos,
+    CmdAddr, CmdLine, CmdParseInfo, CondStack, ExArg, ExArgt, FAIL, Failed, LineNr, Pos,
 };
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Win};
@@ -177,21 +174,18 @@ pub unsafe fn parse_cmdline(
             // `ExArgt::TRLBAR`, because a `|` inside the expression is not a
             // separator. Skipping expression by expression finds the one
             // that is.
-            let mut arg = excmd.arg_ptr();
-            while byte(arg) != NUL && byte(arg) != '|' as c_int && byte(arg) != '\n' as c_int {
-                let start = arg;
+            let mut at = excmd.line.arg;
+            while !matches!(excmd.line.byte_at(at), 0 | b'|' | b'\n') {
                 let skipping = Suppress::emsg_skip();
-                let _ = unsafe { skip_expr(&raw mut arg, ptr::null_mut()) };
+                let used = skip_expr(excmd.line.rest_of(at));
                 drop(skipping);
                 // Nothing an expression parser recognises: step over one
                 // byte, or this loop never ends.
-                if arg == start {
-                    arg = unsafe { arg.add(1) };
-                }
+                at += used.max(1);
             }
-            if byte(arg) == '|' as c_int || byte(arg) == '\n' as c_int {
-                excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
-                unsafe { *arg = 0 };
+            if matches!(excmd.line.byte_at(at), b'|' | b'\n') {
+                excmd.line.next = excmd.line.check_next(at);
+                excmd.line.terminate_at(at);
             }
         }
 
@@ -461,10 +455,4 @@ fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char {
 fn skipwhite(p: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::charset::skipwhite(p) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { c_int::from(*p) }
 }

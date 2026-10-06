@@ -144,10 +144,7 @@ pub(crate) fn expand_filename(
         if excmd.line.byte_at(at) == b'`' && excmd.line.byte_at(at + 1) == b'=' {
             // `` `=expr` `` is evaluated much later, by the shell
             // expansion; step over it without touching it.
-            let mut cursor = excmd.line.ptr_at(at + 2);
-            // SAFETY: `cursor` is this frame's own, over the command's line.
-            let _ = unsafe { skip_expr(&raw mut cursor, ptr::null_mut()) };
-            at = excmd.line.offset_of(cursor);
+            at += 2 + skip_expr(excmd.line.rest_of(at + 2));
             if excmd.line.byte_at(at) == b'`' {
                 at += 1;
             }

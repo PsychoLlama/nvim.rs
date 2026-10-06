@@ -513,7 +513,9 @@ pub(crate) unsafe fn expand_backtick(
         unsafe { xmemdupz(pat.add(1).cast(), (quoted.len() - 2) as size_t) }.cast();
     let buffer = if unsafe { *cmd } == b'=' as c_char {
         // `={expr}`: expand an expression.
-        unsafe { eval_to_string(cmd.add(1), true, false) }
+        // SAFETY: `cmd` is this frame's own NUL-terminated copy.
+        let expr = unsafe { cstr::bytes_at(cmd.add(1)) };
+        eval_to_string(expr, true, false).map_or(core::ptr::null_mut(), XString::into_raw)
     } else {
         let opts = if flags.has(ExpandFlags::SILENT) {
             ShellOpts::SILENT

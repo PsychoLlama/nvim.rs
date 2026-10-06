@@ -1,93 +1,65 @@
 //! List and dict literals, including the `#{}` form.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::eval::Parsed;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::message_fmt::c_str;
+use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use core::ffi::{c_char, c_int};
-use core::ptr::null_mut;
 
-use crate::ascii::ascii_isdigit;
-use crate::charset::skipwhite;
-use crate::eval::typval::{
-    DictRef, ListRef, NumBuf, dict_find, tv_clear, tv_dict_alloc, tv_dict_item_alloc,
-    tv_dict_item_free, tv_list_alloc,
-};
-use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
-use crate::memory::xmemdupz;
-use crate::types::{EvalArg, Failed, NUL, TypVal, VarLock, kListLenShouldKnow, ptrdiff_t, size_t};
-use crate::winlayer::Live;
+use crate::eval::typval::{NumBuf, dict_find, tv_clear, tv_dict_alloc, tv_list_alloc};
+use crate::eval::{Cursor, eval1};
+use crate::types::{Failed, NUL, TypVal, kListLenShouldKnow, ptrdiff_t};
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
-/// Is this `evalarg` asking for the expression to actually be evaluated?
-///
-/// # Safety
-/// `evalarg` must be null or valid.
-unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
-    !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE as c_int != 0
-}
-
 /// `[a, b, c]`, with the cursor on the `[`.
-///
-/// # Safety
-/// `arg` must point at the cursor into a NUL-terminated expression.
-pub(crate) unsafe fn eval_list(
-    arg: *mut *mut c_char,
+pub(crate) fn eval_list(
+    cursor: &mut Cursor<'_>,
     result: &mut TypVal,
-    evalarg: *mut EvalArg,
+    evaluate: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `result` is the result being built and `evalarg` is null or
-    // valid. All three hold for every call below.
-    let cur = unsafe { Cur::new(arg) };
-    let evaluate = unsafe { evaluating(evalarg) };
     // The one reference to the list being built. A path that gives up
     // drops it, which is what upstream's `list_free` on a list still at
     // refcount zero was.
-    let held = evaluate.then(|| tv_list_alloc(kListLenShouldKnow as ptrdiff_t));
-    let list = held.as_ref().map_or(null_mut(), ListRef::as_ptr);
-    cur.skip(1);
+    let mut held = evaluate.then(|| tv_list_alloc(kListLenShouldKnow as ptrdiff_t));
+    cursor.bump(1);
+    cursor.skip_white();
 
     let ok = 'items: {
-        while cur.byte() != b']' && cur.byte() != NUL as u8 {
+        while cursor.byte() != b']' && cursor.byte() != NUL as u8 {
             let mut tv = UNSET_TV;
-            if unsafe { eval1(arg, &mut tv, evalarg) }.is_err() {
+            if eval1(cursor, &mut tv, evaluate).is_err() {
                 break 'items false;
             }
-            if evaluate {
-                unsafe { (*list).push(tv) };
+            if let Some(list) = held.as_mut() {
+                list.push(tv);
             }
-            let had_comma = cur.byte() == b',';
+            let had_comma = cursor.byte() == b',';
             if had_comma {
-                cur.skip(1);
+                cursor.bump(1);
+                cursor.skip_white();
             }
-            if cur.byte() == b']' {
+            if cursor.byte() == b']' {
                 break;
             }
             // A trailing comma is allowed; a missing one is not.
             if had_comma {
                 continue;
             }
-            let at = cur.get();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let at = unsafe { c_str(at) };
+            let at = msg_bytes(cursor.rest());
             semsg!("E696: Missing comma in List: {at}");
             break 'items false;
         }
-        if cur.byte() != b']' {
-            let at = cur.get();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let at = unsafe { c_str(at) };
+        if cursor.byte() != b']' {
+            let at = msg_bytes(cursor.rest());
             semsg!("E697: Missing end of List ']': {at}");
             break 'items false;
         }
-        cur.skip(1);
+        cursor.bump(1);
+        cursor.skip_white();
         true
     };
 
@@ -100,30 +72,17 @@ pub(crate) unsafe fn eval_list(
     Err(Failed)
 }
 
-/// The bare word a `#{}` literal uses as a key.
-///
-/// # Safety
-/// `arg` must point at the cursor into a NUL-terminated expression.
-pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: &mut TypVal) -> Result<(), Failed> {
-    /// Letters, digits, `_` and `-`: what a literal key may contain.
-    fn is_key_char(c: c_char) -> bool {
-        let b = c as u8;
-        b.is_ascii_alphabetic() || ascii_isdigit(c as c_int) || b == b'_' || b == b'-'
-    }
-
-    // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression and `tv` is the key being built. The walk stops at the
-    // first byte that cannot be in a key, which the NUL is not.
-    let (cur, mut key) = unsafe { (Cur::new(arg), Tv::new(tv)) };
-    if !is_key_char(cur.byte() as c_char) {
+/// The bare word a `#{}` literal uses as a key: letters, digits, `_` and `-`.
+pub(crate) fn get_literal_key(cursor: &mut Cursor<'_>, tv: &mut TypVal) -> Result<(), Failed> {
+    let is_key_char = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'-';
+    let rest = cursor.rest();
+    let len = rest.iter().take_while(|&&b| is_key_char(b)).count();
+    if len == 0 {
         return Err(Failed);
     }
-    let mut len = 0;
-    while is_key_char(cur.at(len) as c_char) {
-        len += 1;
-    }
-    key.write_string(unsafe { xmemdupz(cur.get().cast(), len as size_t) } as *mut c_char);
-    cur.skip(len);
+    tv.write_string(XString::from_bytes(&rest[..len]).into_raw());
+    cursor.bump(len);
+    cursor.skip_white();
     Ok(())
 }
 
@@ -131,124 +90,103 @@ pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: &mut TypVal) -> 
 ///
 /// Answers [`Parsed::NotThis`] when the `{` opened a curly-braces name rather than a
 /// dictionary, which the caller then re-reads as a name.
-///
-/// # Safety
-/// `arg` must point at the cursor, on the `{`.
-pub(crate) unsafe fn eval_dict(
-    arg: *mut *mut c_char,
+pub(crate) fn eval_dict(
+    cursor: &mut Cursor<'_>,
     result: &mut TypVal,
-    evalarg: *mut EvalArg,
+    evaluate: bool,
     literal: bool,
 ) -> Result<Parsed, Failed> {
-    // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `result` is the result being built and `evalarg` is null or
-    // valid. All three hold for every call below.
-    let cur = unsafe { Cur::new(arg) };
-    let evaluate = unsafe { evaluating(evalarg) };
     let mut tv = UNSET_TV;
     let mut buf = NumBuf::new();
 
     // Is this `{expr}` rather than a Dict? It has to be decided without
-    // evaluating, or a function in it would be called twice — which is
-    // also why `eval1` is handed no `evalarg`. `{}` is an empty Dict and
-    // `#{abc}` is never a curly-braces name.
-    let mut curly_expr = unsafe { skipwhite(cur.get().add(1)) };
-    if unsafe { *curly_expr } != b'}' as c_char
-        && !literal
-        && unsafe { eval1(&raw mut curly_expr, &mut tv, null_mut()) }.is_ok()
-        && unsafe { *skipwhite(curly_expr) } == b'}' as c_char
-    {
+    // evaluating, or a function in it would be called twice. `{}` is an
+    // empty Dict and `#{abc}` is never a curly-braces name.
+    let mut curly = Cursor::new(cursor.text());
+    curly.bump(cursor.offset() + 1);
+    curly.skip_white();
+    if curly.byte() != b'}' && !literal && eval1(&mut curly, &mut tv, false).is_ok() && {
+        curly.skip_white();
+        curly.byte() == b'}'
+    } {
         return Ok(Parsed::NotThis);
     }
 
     // The one reference to the dictionary being built. A path that gives
     // up drops it, which is what upstream's `tv_dict_free` on a dictionary
     // still at refcount zero was.
-    let held = evaluate.then(tv_dict_alloc);
-    let dict = held.as_ref().map_or(null_mut(), DictRef::as_ptr);
+    let mut held = evaluate.then(tv_dict_alloc);
     let mut tvkey = UNSET_TV;
     tv = UNSET_TV;
-    cur.skip(1);
+    cursor.bump(1);
+    cursor.skip_white();
 
     let ok = 'items: {
-        while cur.byte() != b'}' && cur.byte() != NUL as u8 {
+        while cursor.byte() != b'}' && cursor.byte() != NUL as u8 {
             let read_key = if literal {
-                unsafe { get_literal_key(arg, &mut tvkey) }
+                get_literal_key(cursor, &mut tvkey)
             } else {
-                unsafe { eval1(arg, &mut tvkey, evalarg) }
+                eval1(cursor, &mut tvkey, evaluate)
             };
             if read_key.is_err() {
                 break 'items false;
             }
-            if cur.byte() != b':' {
-                let at = cur.get();
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let at = unsafe { c_str(at) };
+            if cursor.byte() != b':' {
+                let at = msg_bytes(cursor.rest());
                 semsg!("E720: Missing colon in Dictionary: {at}");
                 tv_clear(&mut tvkey);
                 break 'items false;
             }
 
             // The key borrows `buf`, so it must not outlive this pass.
-            let mut key: *mut c_char = null_mut();
+            let mut key: &[u8] = b"";
             if evaluate {
-                key = buf.string_ptr_chk(&tvkey) as *mut c_char;
-                if key.is_null() {
+                let Some(text) = buf.string_chk(&tvkey) else {
                     tv_clear(&mut tvkey);
                     break 'items false;
-                }
+                };
+                key = text.to_bytes();
             }
-            cur.skip(1);
-            if unsafe { eval1(arg, &mut tv, evalarg) }.is_err() {
+            cursor.bump(1);
+            cursor.skip_white();
+            if eval1(cursor, &mut tv, evaluate).is_err() {
                 tv_clear(&mut tvkey);
                 break 'items false;
             }
-            if evaluate {
-                // SAFETY: the dictionary being built, and a NUL-terminated
-                // key.
-                if unsafe { dict_find(dict.as_ref(), cstr::bytes_at(key)) }.is_some() {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let key = unsafe { c_str(key) };
+            if let Some(dict) = held.as_mut() {
+                if dict_find(Some(dict), key).is_some() {
+                    let key = msg_bytes(key);
                     semsg!("E721: Duplicate key in Dictionary: \"{key}\"");
                     tv_clear(&mut tvkey);
                     tv_clear(&mut tv);
                     break 'items false;
                 }
-                // SAFETY: a fresh item of this call's own.
-                let mut item = unsafe { Live::new(tv_dict_item_alloc(key)) };
-                item.di_tv = tv.take();
-                item.di_lock = VarLock::Unlocked;
-                let item = item.raw();
-                if unsafe { (*dict).add_item(item) }.is_err() {
-                    unsafe { tv_dict_item_free(item) };
-                }
+                let _ = dict.add_value(key, tv.take());
             }
             tv_clear(&mut tvkey);
 
-            let had_comma = cur.byte() == b',';
+            let had_comma = cursor.byte() == b',';
             if had_comma {
-                cur.skip(1);
+                cursor.bump(1);
+                cursor.skip_white();
             }
-            if cur.byte() == b'}' {
+            if cursor.byte() == b'}' {
                 break;
             }
             if had_comma {
                 continue;
             }
-            let at = cur.get();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let at = unsafe { c_str(at) };
+            let at = msg_bytes(cursor.rest());
             semsg!("E722: Missing comma in Dictionary: {at}");
             break 'items false;
         }
-        if cur.byte() != b'}' {
-            let at = cur.get();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let at = unsafe { c_str(at) };
+        if cursor.byte() != b'}' {
+            let at = msg_bytes(cursor.rest());
             semsg!("E723: Missing end of Dictionary '}}': {at}");
             break 'items false;
         }
-        cur.skip(1);
+        cursor.bump(1);
+        cursor.skip_white();
         true
     };
 
@@ -263,19 +201,14 @@ pub(crate) unsafe fn eval_dict(
 }
 
 /// `#{...}`, with the cursor on the `#`.
-///
-/// # Safety
-/// As `eval_dict`.
-pub(crate) unsafe fn eval_lit_dict(
-    arg: *mut *mut c_char,
+pub(crate) fn eval_lit_dict(
+    cursor: &mut Cursor<'_>,
     result: &mut TypVal,
-    evalarg: *mut EvalArg,
+    evaluate: bool,
 ) -> Result<Parsed, Failed> {
-    // SAFETY: the caller's promise -- `arg` is the cursor, on the `#`.
-    let cur = unsafe { Cur::new(arg) };
-    if cur.at(1) != b'{' {
+    if cursor.at(1) != b'{' {
         return Ok(Parsed::NotThis);
     }
-    cur.bump(1);
-    unsafe { eval_dict(arg, result, evalarg, true) }
+    cursor.bump(1);
+    eval_dict(cursor, result, evaluate, true)
 }

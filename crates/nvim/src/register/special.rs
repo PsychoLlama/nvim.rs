@@ -72,18 +72,17 @@ pub unsafe fn get_expr_line() -> *mut c_char {
     static nested: GlobalCell<c_int> = GlobalCell::new(0);
 
     // Evaluating may set `expr_line` again, so work on a copy.
-    let Some(mut expression) = expr_line.with(Clone::clone) else {
+    let Some(expression) = expr_line.with(Clone::clone) else {
         return ::core::ptr::null_mut();
     };
     if nested.get() >= 10 {
         return expression.into_raw();
     }
     let nesting = Depth::of(&nested);
-    // SAFETY: running Vimscript is the caller's promise, and the copy is a
-    // NUL-terminated string this call owns for the duration.
-    let rv = unsafe { eval_to_string(expression.as_mut_ptr(), true, false) };
+    // The copy is this call's own, whatever the expression does to `"=`.
+    let rv = eval_to_string(&expression, true, false);
     drop(nesting);
-    rv
+    rv.map_or(::core::ptr::null_mut(), XString::into_raw)
 }
 
 /// The `"=` expression itself, allocated, without evaluating it.

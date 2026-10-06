@@ -14,22 +14,18 @@
 #![allow(unsafe_code)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
-use crate::ascii::ascii_iswhite;
-use crate::charset::skipwhite;
 use crate::eval::typval::{blob_copy, blob_len, blob_unref, index_of, list_items_mut, list_unref};
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{ex_let_vars, skip_var_list};
-use crate::eval::{EVAL_EVALUATE, Fi, ForInfo, e_string_list_or_blob_required, eval0};
+use crate::eval::{Fi, ForInfo, e_string_list_or_blob_required, eval0_in_cmd};
 use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
-use crate::types::{
-    EvalArg, ExArg, ListWatch, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, size_t,
-};
+use crate::types::{ExArg, ListWatch, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, size_t};
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
@@ -39,51 +35,38 @@ const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 /// `:endfor` frees it either way; `errp` is what says the loop must not
 /// run.
 ///
+/// `skip` parses the header without evaluating it.
+///
 /// # Safety
-/// `arg` must be NUL-terminated; `errp` and `evalarg` valid; `excmd` null or
-/// valid.
-pub unsafe fn eval_for_line(
-    arg: *const c_char,
-    errp: *mut bool,
-    excmd: &mut ExArg,
-    evalarg: *mut EvalArg,
-) -> *mut c_void {
+/// `errp` must be valid.
+pub unsafe fn eval_for_line(excmd: &mut ExArg, errp: *mut bool, skip: bool) -> *mut c_void {
     // SAFETY: `xcalloc` never answers NULL and hands back one zeroed
     // `ForInfo`, which the caller owns until `:endfor` frees it.
     let mut fi = unsafe { Fi::new(xcalloc(1, size_of::<ForInfo>()) as *mut ForInfo) };
-    // SAFETY: the caller's promise about `evalarg` and `errp`.
-    let skip = unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE as c_int == 0;
-    // SAFETY: as above.
+    // SAFETY: the caller's promise about `errp`.
     unsafe { *errp = true };
 
     let varcount = fi.field_ptr(offset_of!(ForInfo, fi_varcount));
     let semicolon = fi.field_ptr(offset_of!(ForInfo, fi_semicolon));
-    // SAFETY: the caller's promise that `arg` is NUL-terminated; the two
+    let arg = excmd.arg_ptr();
+    // SAFETY: the command's own NUL-terminated argument; the two
     // out-parameters are the `ForInfo`'s own fields.
     let expr = unsafe { skip_var_list(arg, varcount, semicolon, false) };
     if expr.is_null() {
         return fi.raw() as *mut c_void;
     }
-    // SAFETY: `expr` points into `arg`, which is NUL-terminated, so the
-    // three bytes tested below stop at the terminator.
-    let expr = unsafe { skipwhite(expr) };
-    if unsafe { *expr.add(0) } != b'i' as c_char
-        || unsafe { *expr.add(1) } != b'n' as c_char
-        || !(unsafe { *expr.add(2) } as c_int == NUL
-            || ascii_iswhite(unsafe { *expr.add(2) } as c_int))
-    {
+    let line = &excmd.line;
+    let at = line.skip_white(line.offset_of(expr));
+    if !line.starts_with(at, b"in") || !matches!(line.byte_at(at + 2), 0 | b' ' | b'\t') {
         // SAFETY: the message is a NUL-terminated literal.
         emsg_static(c"E690: Missing \"in\" after :for");
         return fi.raw() as *mut c_void;
     }
 
     let _skipping = skip.then(Suppress::emsg_skip);
-    // SAFETY: as above -- two bytes into a NUL-terminated string.
-    let expr = unsafe { skipwhite(expr.add(2)) };
+    let at = line.skip_white(at + 2);
     let mut tv = UNSET_TV;
-    // SAFETY: `expr` is NUL-terminated, `tv` is this frame's, and `excmd` and
-    // `evalarg` are the caller's.
-    if unsafe { eval0(expr as *mut c_char, &mut tv, Some(excmd), evalarg) }.is_ok() {
+    if eval0_in_cmd(excmd, at, &mut tv, !skip).is_ok() {
         // SAFETY: the caller's promise about `errp`.
         unsafe { *errp = false };
         if !skip {

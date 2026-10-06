@@ -161,6 +161,33 @@ pub unsafe fn eval_variable(
     Ok(())
 }
 
+/// [`eval_variable`] of the name `name` spells, with no item asked back.
+pub(crate) fn eval_variable_named(
+    name: &[u8],
+    result: Option<&mut TypVal>,
+    verbose: bool,
+    no_autoload: bool,
+) -> Result<(), Failed> {
+    let len = c_int::try_from(name.len()).unwrap_or(c_int::MAX);
+    // SAFETY: `name` names its `len` bytes, and no item is asked for.
+    unsafe {
+        eval_variable(
+            name.as_ptr().cast(),
+            len,
+            result,
+            ptr::null_mut(),
+            verbose,
+            no_autoload,
+        )
+    }
+}
+
+/// [`check_vars`] of the name `name` spells.
+pub(crate) fn check_vars_named(name: &[u8]) {
+    // SAFETY: `name` names its own bytes.
+    unsafe { check_vars(name.as_ptr().cast(), name.len()) }
+}
+
 /// Note in [`LAMBDA_USES_LOCALS`] that `name[0..len]` is a function-local
 /// variable or an argument, which is what makes a lambda capture it.
 ///
@@ -395,16 +422,13 @@ pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_
 ///
 /// # Safety
 /// `var` is a NUL-terminated string.
-pub unsafe fn var_exists(mut var: *const c_char) -> bool {
-    let mut evalarg = EVALARG_EVALUATE;
+pub unsafe fn var_exists(var: *const c_char) -> bool {
     let mut n = false;
     let mut name = var;
     // Get the variable name, expanding a `{curly}` name into `tofree`.
     // SAFETY: the caller's obligation -- `var` is NUL-terminated.
     let mut cursor = Cursor::new(unsafe { cstr::bytes_at(var) });
     let (len, tofree) = get_name_len(&mut cursor, true, false);
-    // The scan stays inside the text.
-    var = var.wrapping_add(cursor.offset());
     if len > 0 {
         let mut tv = TV_INITIAL_VALUE;
         if let Some(expanded) = &tofree {
@@ -414,13 +438,13 @@ pub unsafe fn var_exists(mut var: *const c_char) -> bool {
             .is_ok();
         if n {
             // Handle `d.key`, `l[idx]` and `Func()`.
-            n = unsafe { handle_subscript(&raw mut var, &mut tv, &raw mut evalarg, false) }.is_ok();
+            n = handle_subscript(&mut cursor, &mut tv, true, false).is_ok();
             if n {
                 clear_local(&mut tv);
             }
         }
     }
-    if unsafe { *var } != NUL as c_char {
+    if cursor.byte() != NUL as u8 {
         n = false;
     }
     drop(tofree);

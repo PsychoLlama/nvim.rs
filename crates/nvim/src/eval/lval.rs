@@ -31,14 +31,12 @@ use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::semsg;
-use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ops::ControlFlow;
 use core::ptr::null_mut;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
     NumBuf, blob_check_index, blob_check_range, blob_len, di_lock, index_of,
@@ -53,61 +51,19 @@ use crate::eval::vars::{
 use crate::eval::{Cur, Lv, Tv};
 use crate::eval::{
     FNE_INCL_BR, GLV_FAIL, GLV_NO_AUTOLOAD, GLV_OK, GLV_QUIET, GLV_READ_ONLY, GLV_STOP, GlvStatus,
-    e_cannot_slice_dictionary, e_missbrac, eval_isnamec, eval_isnamec1, eval1, expanded_name,
-    name_end, tv_is_luafunc,
+    e_cannot_slice_dictionary, e_missbrac, eval1, expanded_name, name_end, tv_is_luafunc,
 };
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
-use crate::mbyte::utfc_ptr2len;
 use crate::memory::{XString, xfree, xmemdupz, xstrdup};
 use crate::message::state::emsg_severe;
-use crate::types::EvalArg;
 use crate::types::{
-    Dict, DictItem, Failed, LVal, List, NUL, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST,
+    Dict, DictItem, Failed, LVal, List, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST,
     VAR_UNKNOWN, VarNumber, kListLenUnknown, ptrdiff_t, size_t,
 };
 
 /// A freshly declared typval.
 pub(super) const UNSET_TV: TypVal = TV_INITIAL_VALUE;
-
-/// The namespace letters a `x:` prefix may use. A `:` anywhere else ends
-/// the name.
-const NAMESPACES: &core::ffi::CStr = c"bgstvw";
-
-/// The end of the plain name starting at `arg`, or `arg` itself when it
-/// does not start one. With `use_namespace`, a single leading `x:` from
-/// `NAMESPACES` is part of the name rather than its end.
-///
-/// # Safety
-/// `arg` must be NUL-terminated.
-pub(crate) unsafe fn to_name_end(arg: *const c_char, use_namespace: bool) -> *const c_char {
-    // SAFETY: the caller's promise -- `arg` is NUL-terminated, so its first byte is readable.
-    let first = unsafe { *arg };
-    if !eval_isnamec1(c_int::from(first)) {
-        return arg;
-    }
-    // SAFETY: a name character is not the terminator, so the byte after it is inside the string.
-    let start = unsafe { arg.add(1) };
-    let mut p = start;
-    loop {
-        // SAFETY: `p` walks the string and every step stops at the terminator.
-        let c = unsafe { *p };
-        if c_int::from(c) == NUL || !eval_isnamec(c_int::from(c)) {
-            break;
-        }
-        if c == b':'.cast_signed() {
-            // A `:` continues the name only as the one namespace letter.
-            let namespaced =
-                use_namespace && p == start && has_char(NAMESPACES, c_int::from(first));
-            if !namespaced {
-                break;
-            }
-        }
-        // SAFETY: `c` is not the terminator, so `p` is on a character.
-        p = unsafe { p.offset(utfc_ptr2len(p as *mut c_char) as isize) };
-    }
-    p
-}
 
 /// Resolve one `.key` or `[key]` subscript against the Dictionary in
 /// `lval->ll_tv`. `key` is the text for a `.key`; for a `[key]` it is taken
@@ -392,8 +348,6 @@ struct Subscripts<'a> {
     flags: c_int,
     /// `GLV_QUIET`: resolve, but report nothing.
     quiet: bool,
-    /// This walk's own evaluation state, for the index expressions.
-    evalarg: EvalArg,
 }
 
 /// What one subscript's index text came to.
@@ -534,9 +488,10 @@ impl Subscripts<'_> {
     /// One index expression, evaluated at the cursor into `var` and checked
     /// for being usable as a string.
     fn eval_into(&mut self, var: &mut TypVal) -> Option<()> {
-        // SAFETY: the cursor walks the NUL-terminated name, and `var` and
-        // `evalarg` are this walk's own.
-        let evaluated = unsafe { eval1(self.cursor.raw(), var, &raw mut self.evalarg) };
+        // SAFETY: the cursor walks the text the lvalue was handed -- a
+        // command line or a function's argument, the caller's own -- which
+        // no code the index expression runs can reach.
+        let evaluated = unsafe { self.cursor.with_cursor(|cursor| eval1(cursor, var, true)) };
         (evaluated.is_ok() && tv_check_str(var)).then_some(())
     }
 
@@ -666,7 +621,6 @@ pub(crate) unsafe fn get_lval_subscript(
         unlet,
         flags,
         quiet: flags & GLV_QUIET.cast_signed() != 0,
-        evalarg: EVALARG_EVALUATE,
     };
     // The two index expressions. They outlive the walk, so a refusal
     // part-way through still releases whichever of them was evaluated.
