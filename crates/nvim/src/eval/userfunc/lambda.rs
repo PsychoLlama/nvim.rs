@@ -11,6 +11,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cstr;
 use crate::eval::Parsed;
 use crate::eval::typval::PartialRef;
 use crate::memory::handoff::owned_cstr;
@@ -269,8 +270,6 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
     // SAFETY: the caller's promise -- `result` holds the funcref just read.
     let mut rv = unsafe { Tv::new(result) };
     let mut fp: *mut UserFunc = ptr::null_mut();
-    let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
-    let mut error = 0;
 
     // SAFETY: the tag says which union member holds the callable, and a
     // partial in it is null or live.
@@ -278,7 +277,7 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
     if rv.v_type() == VAR_PARTIAL && !held.is_null() && !unsafe { (*held).pt_func }.is_null() {
         fp = unsafe { (*held).pt_func };
     } else {
-        let mut fname = if rv.v_type() == VAR_FUNC || rv.v_type() == VAR_STRING {
+        let fname = if rv.v_type() == VAR_FUNC || rv.v_type() == VAR_STRING {
             rv.string_or_func_name()
         } else if held.is_null() {
             ptr::null_mut()
@@ -291,12 +290,8 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
             rv.write_func_name(ptr::null_mut());
         } else {
             // Translate "s:func" to the stored function name.
-            let mut tofree: *mut c_char = ptr::null_mut();
-            let buf = fname_buf.as_mut_ptr();
-            let (freep, errp) = (&raw mut tofree, &raw mut error);
-            fname = unsafe { fname_trans_sid(fname, buf, freep, errp) };
-            fp = unsafe { find_func(fname) };
-            unsafe { xfree(tofree as *mut c_void) };
+            // SAFETY: a function name is NUL-terminated.
+            fp = find_func(&fname_trans_sid(unsafe { cstr::bytes_at(fname) }).0);
         }
     }
 

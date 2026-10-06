@@ -2444,7 +2444,6 @@ static const int FIXVAR_CNT = 12;
 static const int FLAG_DID_DEL = 4;
 static const int FLAG_DID_SPLIT = 2;
 static const int FLAG_PREFIX_OK = 1;
-static const int FLEN_FIXED = 40;
 static const int FLUSH_INPUT = 2;
 static const int FLUSH_MINIMAL = 0;
 static const int FLUSH_TYPEAHEAD = 1;

@@ -11,8 +11,7 @@
 
 use crate::cstr;
 use crate::semsg;
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::eval::typval::DictEntry;
@@ -224,55 +223,30 @@ pub(crate) fn get_func_arguments(
 }
 
 /// How many arguments `name` takes: required, optional, and whether it also
-/// takes a `...`.  Answers `Err` when there is no such function.
-///
-/// # Safety
-/// `name` is NUL-terminated and the three out-parameters are writable.
-pub unsafe fn get_func_arity(
-    name: *const c_char,
-    required: *mut c_int,
-    optional: *mut c_int,
-    varargs: *mut bool,
-) -> Result<(), Failed> {
-    let argcount;
-    let min_argcount;
-    // SAFETY: the caller's promise -- `name` is NUL-terminated and the three
-    // out-parameters are writable.
-    let fdef = unsafe { find_internal_func(name) };
-    if !fdef.is_null() {
-        // SAFETY: `find_internal_func` answers a live table entry.
-        let arity = unsafe { (*fdef).arity };
+/// takes a `...`. `None` when there is no such function.
+pub(crate) fn get_func_arity(name: &[u8]) -> Option<(c_int, c_int, bool)> {
+    if let Some(fdef) = find_builtin(name) {
         // An open-ended builtin takes as many as the evaluator will pass.
-        argcount = arity.max().map_or(MAX_FUNC_ARGS, c_int::from);
-        min_argcount = c_int::from(arity.min());
-        unsafe { *varargs = false };
-    } else {
-        let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
-        let mut tofree: *mut c_char = ptr::null_mut();
-        let mut error = FCERR_NONE;
-        let buf = fname_buf.as_mut_ptr();
-        let (freep, errp) = (&raw mut tofree, &raw mut error);
-        // SAFETY: `buf` has `FLEN_FIXED + 1` bytes and the two
-        // out-parameters are this frame's locals.
-        let fname = unsafe { fname_trans_sid(name, buf, freep, errp) };
-        let ufunc = if error == FCERR_NONE {
-            unsafe { find_func(fname) }
-        } else {
-            ptr::null_mut()
-        };
-        unsafe { xfree(tofree as *mut c_void) };
-        if ufunc.is_null() {
-            return Err(Failed);
-        }
-        // SAFETY: `find_func` answers a live function.
-        let f = unsafe { Uf::new(ufunc) };
-        argcount = f.uf_args.ga_len;
-        min_argcount = f.uf_args.ga_len - f.uf_def_args.ga_len;
-        unsafe { *varargs = f.uf_varargs != 0 };
+        let argcount = fdef.arity.max().map_or(MAX_FUNC_ARGS, c_int::from);
+        let min_argcount = c_int::from(fdef.arity.min());
+        return Some((min_argcount, argcount - min_argcount, false));
     }
-    unsafe { *required = min_argcount };
-    unsafe { *optional = argcount - min_argcount };
-    Ok(())
+    let (fname, error) = fname_trans_sid(name);
+    if error != FCERR_NONE {
+        return None;
+    }
+    let ufunc = find_func(&fname);
+    if ufunc.is_null() {
+        return None;
+    }
+    // SAFETY: `find_func` answers a live function.
+    let f = unsafe { Uf::new(ufunc) };
+    let min_argcount = f.uf_args.ga_len - f.uf_def_args.ga_len;
+    Some((
+        min_argcount,
+        f.uf_args.ga_len - min_argcount,
+        f.uf_varargs != 0,
+    ))
 }
 
 /// Add one of `a:`'s fixed numbers, into a slot of the funccall's own

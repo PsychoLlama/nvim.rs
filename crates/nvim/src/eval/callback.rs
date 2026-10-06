@@ -19,7 +19,7 @@ use core::ptr::{null, null_mut};
 
 use crate::ascii::ascii_isdigit;
 use crate::eval::collect::set_ref_in_item;
-use crate::eval::userfunc::{call_func, func_ref, get_scriptlocal_funcname};
+use crate::eval::userfunc::{call_func, func_ref, scriptlocal_funcname};
 use crate::eval::vars::emsg_static;
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::{
@@ -28,7 +28,7 @@ use crate::eval::{
 use crate::lua::executor::{
     nlua_call_ref_quiet, nlua_is_table_from_lua, nlua_register_table_as_callable,
 };
-use crate::memory::xstrdup;
+use crate::memory::{XString, xstrdup};
 use crate::message::e_command_too_recursive;
 use crate::option::vars::p_mfd;
 use crate::types::{
@@ -80,7 +80,8 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: &TypVal) -> boo
             let mut funcref = null_mut();
             if tv.v_type() == VAR_STRING {
                 // SAFETY: `name` is the typval's NUL-terminated string.
-                funcref = unsafe { get_scriptlocal_funcname(name) };
+                let written = unsafe { cstr::bytes_at(name) };
+                funcref = scriptlocal_funcname(written).map_or(null_mut(), XString::into_raw);
             }
             if funcref.is_null() {
                 // SAFETY: as above -- `name` is NUL-terminated.

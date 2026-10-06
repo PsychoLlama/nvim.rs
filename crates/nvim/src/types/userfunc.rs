@@ -14,11 +14,6 @@ use super::*;
 pub type ArgvFunc = Option<unsafe fn(&[TypVal], usize, *mut UserFunc) -> usize>;
 /// A funccall's place in the funccall table.
 pub(crate) type FcId = crate::id_table::TableId<FuncCall>;
-pub struct FuncDict {
-    pub fd_dict: *mut Dict,
-    pub fd_newkey: *mut ::core::ffi::c_char,
-    pub fd_di: *mut DictItem,
-}
 #[derive(Copy, Clone)]
 pub struct FuncExe {
     pub fe_argv_func: ArgvFunc,

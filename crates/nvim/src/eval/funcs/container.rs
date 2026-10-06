@@ -334,10 +334,8 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
 /// # Safety
 /// `pt` is a live Partial and `result` is the cleared return value.
 unsafe fn func_arity(pt: *mut Partial, result: &mut TypVal) {
-    let (mut required, mut optional, mut varargs) = (0, 0, false);
-    let name = unsafe { partial_name(pt) };
-    let (req, opt, var) = (&raw mut required, &raw mut optional, &raw mut varargs);
-    let _ = unsafe { get_func_arity(name, req, opt, var) };
+    let name = unsafe { cstr::bytes_at(partial_name(pt)) };
+    let (mut required, mut optional, varargs) = get_func_arity(name).unwrap_or((0, 0, false));
     result.write_empty(VAR_DICT);
     dict_alloc_ret(result);
     let dict = result.dict_or_null();

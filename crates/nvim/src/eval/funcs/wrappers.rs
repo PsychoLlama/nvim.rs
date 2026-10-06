@@ -141,6 +141,11 @@ pub(crate) fn blob_alloc_ret(result: &mut TypVal) -> &mut Blob {
     tv_blob_alloc_ret(result)
 }
 
+/// The table row for the builtin `name` spells.
+pub(crate) fn find_builtin(name: &[u8]) -> Option<&'static EvalFuncDef> {
+    builtin_index(name).map(|row| &BUILTINS[row])
+}
+
 /// The table row for the builtin `name` spells, or null if there is none.
 ///
 /// # Safety

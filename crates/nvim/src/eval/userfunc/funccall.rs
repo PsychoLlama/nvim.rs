@@ -79,6 +79,13 @@ impl FuncTable {
         unsafe { hash_find(self.0, name) }
     }
 
+    /// The item for `name`, measured, or the empty slot it would go in.
+    pub(crate) fn find_bytes(self, name: &[u8]) -> Slot {
+        // SAFETY: `name` is readable for its length; the table is this
+        // crate's `static`.
+        unsafe { hash_find_len(self.0, name.as_ptr().cast(), name.len()) }
+    }
+
     /// Add `key` — a `UserFunc`'s own `uf_name` — to the table.
     ///
     /// # Safety
@@ -407,11 +414,14 @@ pub(crate) fn get_current_funccal() -> *mut FuncCall {
 /// `name` is null or NUL-terminated.
 pub unsafe fn func_unref(name: *mut c_char) {
     // SAFETY: the caller's promise -- `name` is null or NUL-terminated.
-    if name.is_null() || unsafe { !func_name_refcount(name) } {
+    let Some(name) = (unsafe { cstr::at_opt(name) }).map(CStr::to_bytes) else {
+        return;
+    };
+    if !func_name_refcount(name) {
         return;
     }
-    let fp = unsafe { find_func(name) };
-    if fp.is_null() && unsafe { *name as u8 }.is_ascii_digit() {
+    let fp = find_func(name);
+    if fp.is_null() && name.first().is_some_and(u8::is_ascii_digit) {
         // Only give an error for a numbered function.
         internal_error(c"func_unref()");
         unsafe { abort() };
@@ -443,13 +453,16 @@ pub unsafe fn func_ptr_unref(func: *mut UserFunc) {
 /// `name` is null or NUL-terminated.
 pub unsafe fn func_ref(name: *mut c_char) {
     // SAFETY: the caller's promise -- `name` is null or NUL-terminated.
-    if name.is_null() || unsafe { !func_name_refcount(name) } {
+    let Some(name) = (unsafe { cstr::at_opt(name) }).map(CStr::to_bytes) else {
+        return;
+    };
+    if !func_name_refcount(name) {
         return;
     }
-    let fp = unsafe { find_func(name) };
+    let fp = find_func(name);
     if !fp.is_null() {
         unsafe { (*fp).uf_refcount.retain() };
-    } else if unsafe { *name as u8 }.is_ascii_digit() {
+    } else if name.first().is_some_and(u8::is_ascii_digit) {
         // Only give an error for a numbered function; fail silently when
         // a named or lambda function isn't found.
         internal_error(c"func_ref()");
@@ -853,8 +866,9 @@ pub fn set_ref_in_functions(copy_id: c_int) -> bool {
             todo -= 1;
             // The key *is* the function's trailing name member, so the
             // function is that many bytes before it.
-            let fp = unsafe { hi.hi_key.sub(offset_of!(UserFunc, uf_name)) } as *mut UserFunc;
-            let named = unsafe { func_name_refcount(uf_name_ptr(fp)) };
+            let fp = uf_from_name_ptr(hi.hi_key);
+            // SAFETY: a kept key is a live function's NUL-terminated name.
+            let named = func_name_refcount(unsafe { cstr::bytes_at(hi.hi_key) });
             if !named && unsafe { set_ref_in_func(ptr::null_mut(), fp, copy_id) } {
                 return true;
             }
@@ -897,16 +911,10 @@ pub unsafe fn set_ref_in_func(name: *mut c_char, fp_in: *mut UserFunc, copy_id: 
         return false;
     }
 
-    let mut error = FCERR_NONE;
-    let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
-    let mut tofree: *mut c_char = ptr::null_mut();
-    let buf = fname_buf.as_mut_ptr();
-    let (freep, errp) = (&raw mut tofree, &raw mut error);
     // SAFETY: the caller's promise -- `name` is NUL-terminated when it is
-    // used; `buf` has `FLEN_FIXED + 1` bytes and the out-parameters are this
-    // frame's locals.
+    // used.
     let fp = if fp_in.is_null() {
-        unsafe { find_func(fname_trans_sid(name, buf, freep, errp)) }
+        find_func(&fname_trans_sid(unsafe { cstr::bytes_at(name) }).0)
     } else {
         fp_in
     };
@@ -921,6 +929,5 @@ pub unsafe fn set_ref_in_func(name: *mut c_char, fp_in: *mut UserFunc, copy_id: 
             fc = unsafe { (*(*fc).fc_func).uf_scoped };
         }
     }
-    unsafe { xfree(tofree as *mut c_void) };
     aborted
 }

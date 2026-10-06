@@ -80,6 +80,17 @@ pub(crate) fn check_for_word(line: &CmdLine, at: usize, name: &[u8], min: usize)
     (matched >= min && !follows.is_ascii_alphabetic()).then(|| line.skip_white(at + matched))
 }
 
+/// [`check_for_word`] over any text: where the word `name` -- at least `min`
+/// bytes of it, and not followed by a letter -- that starts `text[at..]`
+/// ends, past the blanks after it. Past the end of `text` reads as a NUL.
+pub(crate) fn check_for_word_in(text: &[u8], at: usize, name: &[u8], min: usize) -> Option<usize> {
+    let rest = text.get(at..).unwrap_or_default();
+    let matched = rest.iter().zip(name).take_while(|(a, b)| a == b).count();
+    let follows = rest.get(matched).copied().unwrap_or(0);
+    (matched >= min && !follows.is_ascii_alphabetic())
+        .then(|| at + matched + crate::charset::skip::white(&rest[matched..]))
+}
+
 /// The two commands whose one-letter spelling the table cannot express,
 /// because a longer command starts with the same letter.
 ///

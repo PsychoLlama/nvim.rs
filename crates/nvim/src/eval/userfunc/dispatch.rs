@@ -11,13 +11,15 @@
 
 use crate::cstr;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{DictRef, PartialRef};
 use crate::types::Failed;
+use std::borrow::Cow;
+use std::ffi::CString;
 
 /// What a call is made with besides its name and its arguments, as borrows
 /// the caller holds for the length of the call: the safe face of
@@ -146,8 +148,7 @@ pub(crate) fn get_func_tv(
         } else {
             c"E116: Invalid arguments for function %s"
         };
-        // SAFETY: a format with one `%s`, and a terminated name.
-        unsafe { emsg_funcname(message.as_ptr(), name.as_ptr()) };
+        emsg_funcname(message, name.to_bytes());
     }
 
     cursor.skip_white();
@@ -284,7 +285,7 @@ fn splice_base(argv: &mut Option<Argv>, args: &[TypVal], base: &TypVal) -> Resul
 /// `funcname` has `len` readable bytes (or is NUL-terminated when `len` is
 /// not positive) and `funcexe` describes the call.
 pub unsafe fn call_func(
-    mut funcname: *const c_char,
+    funcname: *const c_char,
     mut len: c_int,
     result: &mut TypVal,
     args_in: &[TypVal],
@@ -293,10 +294,13 @@ pub unsafe fn call_func(
     let mut ret = Err(Failed);
     let mut error = FCERR_NONE;
     let mut fp: *mut UserFunc = ptr::null_mut();
-    let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
-    let mut tofree: *mut c_char = ptr::null_mut();
-    let mut fname: *mut c_char = ptr::null_mut();
-    let mut name: *mut c_char = ptr::null_mut();
+    // The name, copied: if it comes from a funcref variable it could be
+    // changed or deleted inside the called function. Then the name the
+    // function is stored under, when that is not the name itself.
+    let mut name: Option<CString> = None;
+    let mut translated: Option<CString> = None;
+    // A `v:lua` called directly is reported by that name.
+    let mut report_vlua = false;
     let mut selfdict = unsafe { (*funcexe).fe_selfdict };
     // How much of `args_in` is still the argument list, once an
     // `fe_argv_func` has had its say.
@@ -317,13 +321,18 @@ pub unsafe fn call_func(
         fp = unsafe { (*partial).pt_func };
     }
     if fp.is_null() {
-        // Copy the name: if it comes from a funcref variable it could be
-        // changed or deleted inside the called function.
-        name = unsafe { xmemdupz(funcname as *const c_void, len as size_t) } as *mut c_char;
-        let buf = fname_buf.as_mut_ptr();
-        let (freep, errp) = (&raw mut tofree, &raw mut error);
-        fname = unsafe { fname_trans_sid(name, buf, freep, errp) };
+        // SAFETY: the caller's promise -- `len` readable bytes. Every
+        // reader of the copy stops at its first NUL, as the C's did.
+        let copy = unsafe { cstr::slice_at(funcname, len as size_t) };
+        let copy = &copy[..copy.iter().position(|&b| b == 0).unwrap_or(copy.len())];
+        let copy = name.insert(CString::new(copy).expect("cut at its first NUL"));
+        let (stored, sid_error) = fname_trans_sid(copy.to_bytes());
+        error = sid_error;
+        if let Cow::Owned(stored) = stored {
+            translated = Some(CString::new(stored).expect("a mangled name holds no NUL"));
+        }
     }
+    let fname: &CStr = translated.as_deref().or(name.as_deref()).unwrap_or(c"");
     if !unsafe { (*funcexe).fe_doesrange }.is_null() {
         unsafe { *(*funcexe).fe_doesrange = false };
     }
@@ -352,14 +361,13 @@ pub unsafe fn call_func(
 
         if error == FCERR_NONE && unsafe { (*funcexe).fe_evaluate } {
             // Skip "g:" before a function name.
-            let is_global = fp.is_null()
-                && unsafe { *fname } == b'g' as c_char
-                && unsafe { *fname.add(1) } == b':' as c_char;
-            let rfname = if is_global {
-                unsafe { fname.add(2) }
+            let rfname_c = if fp.is_null() && fname.to_bytes().starts_with(b"g:") {
+                &fname[2..]
             } else {
                 fname
             };
+            let rfname = rfname_c.to_bytes();
+            let rfname_c = rfname_c.as_ptr().cast_mut();
 
             // the default is number zero
             result.write_number(0);
@@ -381,33 +389,31 @@ pub unsafe fn call_func(
                 } else {
                     // v:lua was called directly; show its name in the
                     // message.
-                    unsafe { xfree(name as *mut c_void) };
-                    name = ptr::null_mut();
-                    funcname = c"v:lua".as_ptr();
+                    report_vlua = true;
                 }
-            } else if !fp.is_null() || !unsafe { builtin_function(rfname, -1) } {
+            } else if !fp.is_null() || !builtin_function(rfname) {
                 // A user-defined function.
                 if fp.is_null() {
-                    fp = unsafe { find_func(rfname) };
+                    fp = find_func(rfname);
                 }
 
                 // Trigger FuncUndefined, which may load the function.
                 let event = AutoEvent::FuncUndefined;
                 if fp.is_null()
-                    && unsafe { apply_autocmds(event, rfname, rfname, true, None) }
+                    && unsafe { apply_autocmds(event, rfname_c, rfname_c, true, None) }
                     && !aborting()
                 {
-                    fp = unsafe { find_func(rfname) };
+                    fp = find_func(rfname);
                 }
                 // Try loading a package.  Reached by every spelling that
                 // does *not* go through `deref_func_name` first --
                 // `call()`, `nvim_call_function`, `vim.fn` -- because
                 // that one's `find_var` has already sourced it.
                 if fp.is_null()
-                    && unsafe { script_autoload(rfname, cstr::bytes_at(rfname).len(), true) }
+                    && unsafe { script_autoload(rfname_c, rfname.len(), true) }
                     && !aborting()
                 {
-                    fp = unsafe { find_func(rfname) };
+                    fp = find_func(rfname);
                 }
 
                 if !fp.is_null() && unsafe { (*fp).uf_flags }.has(FuncFlags::DELETED) {
@@ -440,9 +446,9 @@ pub unsafe fn call_func(
                 let base = unsafe { (*funcexe).fe_basetv };
                 let args = spliced_args(&argv, args_in, nargs);
                 error = if base.is_null() {
-                    unsafe { call_internal_func(fname, args, result) }
+                    unsafe { call_internal_func(fname.as_ptr(), args, result) }
                 } else {
-                    unsafe { call_internal_method(fname, args, result, &mut *base) }
+                    unsafe { call_internal_method(fname.as_ptr(), args, result, &mut *base) }
                 };
             }
 
@@ -463,14 +469,14 @@ pub unsafe fn call_func(
     // Report an error unless evaluating the arguments or making the call
     // was cancelled by an aborting error, an interrupt or an exception.
     if !aborting() {
-        let what = if name.is_null() { funcname } else { name };
         // SAFETY: `funcexe` is the caller's own.
         let found = unsafe { (*funcexe).fe_found_var };
-        unsafe { user_func_error(error, what, found) };
+        match &name {
+            _ if report_vlua => user_func_error(error, b"v:lua", found),
+            Some(name) => user_func_error(error, name.to_bytes(), found),
+            // SAFETY: the caller's terminated name.
+            None => user_func_error(error, unsafe { cstr::bytes_at(funcname) }, found),
+        }
     }
-
-    // The copies made from the partial go with the frame.
-    unsafe { xfree(tofree as *mut c_void) };
-    unsafe { xfree(name as *mut c_void) };
     ret
 }

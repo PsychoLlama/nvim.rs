@@ -16,7 +16,7 @@ use crate::eval::typval::{
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
-    get_scriptlocal_funcname, save_function_name, trans_function_name, translated_function_exists,
+    save_function_name, scriptlocal_funcname, trans_function_name, translated_function_exists,
 };
 use crate::eval::vars::var_exists;
 use crate::eval::{Cursor, eval_option, eval1, partial_name, script_host_eval};
@@ -40,8 +40,8 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{
-    EvalFuncData, FuncDict, List, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType,
+    EvalFuncData, List, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_STRING, VarNumber, VarType,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -98,17 +98,15 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // which is what turns `s:`/`<SID>` into the real name.
     let tofree;
     if args[0].v_type() == VAR_STRING {
-        let mut p = func;
-        let name = &raw mut p;
         let flags = TFN_INT as c_int | TFN_QUIET as c_int;
-        let (fd, pt) = (ptr::null_mut::<FuncDict>(), ptr::null_mut());
-        // SAFETY: `p` walks a NUL-terminated string the frame owns.
-        tofree = Owned(unsafe { trans_function_name(name, false, flags, fd, pt) });
-        if tofree.0.is_null() {
-            unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), func) };
+        // SAFETY: a NUL-terminated string the frame owns.
+        let written = unsafe { cstr::bytes_at(func) };
+        let Some(translated) = trans_function_name(written, false, flags, false).name else {
+            emsg_funcname(e_unknown_function_str, written);
             return;
-        }
-        func = tofree.0;
+        };
+        tofree = translated;
+        func = tofree.as_ptr().cast_mut();
     }
 
     // A bad {dict} skips the call but still runs the cleanup below.
@@ -311,7 +309,8 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             if unsafe { strnequal(p, c"*v:lua.".as_ptr(), 7) } {
                 unsafe { nlua_func_exists(p.add(7)) as c_int }
             } else {
-                unsafe { function_exists(p.add(1), false) as c_int }
+                // SAFETY: the caller's NUL-terminated text.
+                c_int::from(function_exists(unsafe { cstr::bytes_at(p.add(1)) }, false))
             }
         }
         b':' => unsafe { cmd_exists(p.add(1)) },
@@ -355,19 +354,18 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
 
     // An autoload name is left alone: it may not be loaded yet, and
     // checking would load it.
-    let mut trans_name = Owned(ptr::null_mut());
+    let mut trans_name = None;
     if (use_string && !has_char(unsafe { cstr::at(s) }, AUTOLOAD_CHAR)) || is_funcref {
-        let mut name = s;
-        let out = &raw mut name;
         let flags = TFN_INT as c_int
             | TFN_QUIET as c_int
             | TFN_NO_AUTOLOAD as c_int
             | TFN_NO_DEREF as c_int;
-        let fd = ptr::null_mut::<FuncDict>();
-        // SAFETY: `name` walks a NUL-terminated string the frame owns.
-        trans_name = Owned(unsafe { save_function_name(out, false, flags, fd) });
+        // SAFETY: a NUL-terminated string the frame owns.
+        let written = unsafe { cstr::bytes_at(s) };
+        let found = save_function_name(written, false, flags, false);
+        trans_name = found.name;
         // Anything left over means the name was not a name.
-        if unsafe { *name } as c_int != NUL {
+        if found.end < written.len() {
             s = ptr::null_mut();
         }
     }
@@ -375,7 +373,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     if s.is_null()
         || unsafe { *s } as c_int == NUL
         || (use_string && ascii_isdigit(unsafe { *s } as c_int))
-        || (is_funcref && trans_name.0.is_null())
+        || (is_funcref && trans_name.is_none())
     {
         let what = if use_string {
             arg_string(&mut numbuf2, &args[0])
@@ -387,11 +385,11 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         semsg!("E475: Invalid argument: {what}");
         return;
     }
-    if !trans_name.0.is_null()
+    if let Some(trans_name) = &trans_name
         && if is_funcref {
-            unsafe { find_func(trans_name.0) }.is_null()
+            find_func(trans_name).is_null()
         } else {
-            !unsafe { translated_function_exists(trans_name.0) }
+            !translated_function_exists(trans_name)
         }
     {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -403,12 +401,13 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     // Expand `s:` and `<SID>` into `<SNR>nr_` so the result can be
     // called from another script. `trans_function_name` would do it
     // too, but some plugins depend on the name staying printable.
-    let name =
-        if unsafe { cstr::starts_with(s, b"s:") } || unsafe { cstr::starts_with(s, b"<SID>") } {
-            unsafe { get_scriptlocal_funcname(s) }
-        } else {
-            unsafe { xstrdup(s) }
-        };
+    // SAFETY: as above.
+    let written = unsafe { cstr::bytes_at(s) };
+    let name = if written.starts_with(b"s:") || written.starts_with(b"<SID>") {
+        scriptlocal_funcname(written).map_or(ptr::null_mut(), XString::into_raw)
+    } else {
+        unsafe { xstrdup(s) }
+    };
 
     // The second argument may be either the argument list or the dict;
     // a third settles it.
@@ -445,7 +444,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
             if list_len(unsafe { list.as_ref() }) == 0 {
                 arg_idx = 0;
             } else if list_len(unsafe { list.as_ref() }) > MAX_FUNC_ARGS as c_int {
-                unsafe { emsg_funcname(e_toomanyarg.as_ptr(), s) };
+                emsg_funcname(e_toomanyarg, written);
                 unsafe { xfree(name as *mut c_void) };
                 return;
             }
@@ -507,7 +506,8 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         unsafe { func_ptr_ref((*pt).pt_func) };
         unsafe { xfree(name as *mut c_void) };
     } else if is_funcref {
-        unsafe { (*pt).pt_func = find_func(trans_name.0) };
+        let trans_name = trans_name.as_deref().unwrap_or_default();
+        unsafe { (*pt).pt_func = find_func(trans_name) };
         unsafe { func_ptr_ref((*pt).pt_func) };
         unsafe { xfree(name as *mut c_void) };
     } else {

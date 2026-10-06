@@ -228,7 +228,7 @@ impl TypvalSink for LuaSink {
             let fp = if fun.is_null() {
                 ::core::ptr::null_mut()
             } else {
-                find_func(fun)
+                find_func(crate::cstr::bytes_at(fun))
             };
             if fp.is_null() || !(*fp).uf_flags.has(FuncFlags::LUAREF) {
                 None

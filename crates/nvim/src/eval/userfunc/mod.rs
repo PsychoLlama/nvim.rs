@@ -10,33 +10,31 @@ use core::{ptr, slice};
 
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
 use crate::autocmd::apply_autocmds;
-use crate::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
+use crate::charset::{skip, vim_strsize};
 use crate::debugger::state::{debug_backtrace_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
 use crate::drawscreen::state::cmdline_row;
 pub(crate) use crate::eval::Tv;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{
-    call_internal_func, call_internal_method, check_internal_func, find_internal_func,
+    call_internal_func, call_internal_method, check_internal_func, find_builtin,
 };
 use crate::eval::gc::want_garbage_collect;
 use crate::eval::typval::{
     TV_INITIAL_VALUE, list_init_static, list_iter, list_iter_mut, list_set_lock, tv_clear, tv_copy,
-    tv_dict_hi2di, tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_remove, tv_dict_iter,
-    tv_dict_unref, tv_get_number_chk, value_check_lock,
+    tv_dict_hi2di, tv_dict_item_alloc_len, tv_dict_iter, tv_get_number_chk,
 };
 use crate::eval::vars::{
-    find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars,
-    skip_var_list, vars_clear, vars_clear_ext,
+    find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars, skip_var_list,
+    vars_clear, vars_clear_ext,
 };
 use crate::eval::{
-    Cur, Cursor, LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, eval_isnamec,
-    eval_isnamec1, eval0_in_cmd, eval1, garbage_collect, get_lval, handle_subscript, id_len,
-    is_luafunc, last_set_msg, mark_root, name_end, partial_name, partial_unref, set_ref_in_ht,
-    set_ref_in_list_items,
+    Cursor, LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, eval_isnamec, eval_isnamec1,
+    eval0_in_cmd, eval1, garbage_collect, get_lval, handle_subscript, id_len, is_luafunc,
+    last_set_msg, mark_root, name_end, partial_unref, set_ref_in_ht, set_ref_in_list_items,
 };
 use crate::ex_docmd::state::ex_nesting_level;
-use crate::ex_docmd::{checkforcmd, do_cmdline, ends_excmd, skip_range};
+use crate::ex_docmd::{do_cmdline, ends_excmd, skip_range};
 use crate::ex_eval::state::{did_throw, trylevel};
 use crate::ex_eval::{
     PendingAction, aborted_in_try, aborting, cleanup_conditionals, exception_state_clear,
@@ -57,9 +55,7 @@ use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
 use crate::memory::XString;
-use crate::memory::{
-    xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcpy,
-};
+use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
 use crate::message::state::{
     did_emsg, emsg_severe, lines_left, msg_row, msg_scroll, need_wait_return,
 };
@@ -89,13 +85,13 @@ use crate::runtime::{
     script_id_valid,
 };
 use crate::search::{restore_search_patterns, save_search_patterns};
-use crate::strings::{concat_str, xstrnsave};
+use crate::strings::xstrnsave;
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, EStack, ExArg, Expand, FcId, FuncCall, FuncDict, FuncExe, GArray,
-    HashTab, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch, SaveRedo, String_0, TypVal,
-    UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
-    VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
+    Callback, Dict, DictItem, EStack, ExArg, Expand, FcId, FuncCall, FuncExe, GArray, HashTab,
+    LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch, SaveRedo, String_0, TypVal, UserFunc,
+    VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
@@ -115,7 +111,7 @@ mod listing;
 mod name;
 mod ret;
 
-pub use self::args::*;
+pub(crate) use self::args::*;
 pub use self::body::*;
 pub use self::call::*;
 pub use self::define::*;
@@ -124,7 +120,7 @@ pub(crate) use self::frames::*;
 pub use self::funccall::*;
 pub use self::lambda::*;
 pub use self::listing::*;
-pub use self::name::*;
+pub(crate) use self::name::*;
 pub use self::ret::*;
 /// The two pointees this family passes around, as `Copy` newtypes.
 ///
@@ -256,13 +252,6 @@ pub const FUNCEXE_INIT: FuncExe = FuncExe {
 /// A zeroed `RegMatch`, for the two places that compile a pattern here.
 pub(crate) const REGMATCH_INIT: RegMatch = RegMatch::new(ptr::null_mut(), false);
 
-/// A zeroed `FuncDict`: no dictionary, no key, no item.
-pub(crate) const FUNCDICT_INIT: FuncDict = FuncDict {
-    fd_dict: ptr::null_mut(),
-    fd_newkey: ptr::null_mut(),
-    fd_di: ptr::null_mut(),
-};
-
 /// The name a `UserFunc` carries in the flexible member at its end -- C's
 /// `UF2HIKEY`, and the key the function hashtable is indexed by.
 ///
@@ -271,6 +260,13 @@ pub(crate) const FUNCDICT_INIT: FuncDict = FuncDict {
 /// caller's business, as it is for every other pointer it holds.
 pub(crate) fn uf_name_ptr(func: *mut UserFunc) -> *mut c_char {
     func.wrapping_byte_add(offset_of!(UserFunc, uf_name)).cast()
+}
+
+/// The function whose inline name `key` is: [`uf_name_ptr`] backwards,
+/// which is how a function-table key names its function. Safe for the same
+/// reason -- it says where the function is and reads nothing.
+pub(crate) fn uf_from_name_ptr(key: *mut c_char) -> *mut UserFunc {
+    key.wrapping_byte_sub(offset_of!(UserFunc, uf_name)).cast()
 }
 
 /// The innermost entry of the `:source`/function call stack: what C's

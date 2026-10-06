@@ -1,745 +1,550 @@
 //! Turning what the user wrote into the name a `UserFunc` is stored under.
 //!
-//! `trans_function_name` is the whole of it: it resolves `s:`/`<SID>` to
+//! [`trans_function_name`] is the whole of it: it resolves `s:`/`<SID>` to
 //! the `<SNR>N_` mangling, evaluates a curly-brace name, follows a
 //! dictionary subscript to a numbered function, and rejects the spellings
-//! that are not names at all.  `fname_trans_sid` and `cat_func_name` are
-//! the two smaller manglings around it, and `builtin_function` is what
-//! decides a name belongs to the builtin table instead.
+//! that are not names at all. It reads a slice of the command line and
+//! answers how much of it the name took. [`fname_trans_sid`] is the smaller
+//! mangling a call applies, and [`builtin_function`] is what decides a name
+//! belongs to the builtin table instead.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
+use crate::charset::skip;
 use crate::eval::lval::{LValue, Slot as LvalSlot, Target};
-use crate::eval::typval::PartialRef;
+use crate::eval::typval::{DictRef, PartialRef};
+use crate::eval::vars::with_var;
 use crate::mbyte::strnicmp_in;
 use crate::memory::XString;
-use crate::message_fmt::{c_str, emsg_text};
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::semsg;
-use crate::snprintf;
 use crate::tr_plural;
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::{offset_of, size_of_val};
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int};
+use std::borrow::Cow;
 
 use super::*;
 use crate::keycodes::KE_SNR;
-use crate::os::cshim::gettext_ptr;
-use crate::types::NUL;
 
-/// The name of the function `name` refers to.
-///
-/// When `name` is a variable holding a funcref or a partial, that is the
-/// function's own name and `*lenp` is updated to match; otherwise `name` is
-/// handed straight back.  `*partialp` is the partial it came out of, when the
-/// caller asked for it.
-///
-/// # Safety
-/// `name` has `*lenp` readable bytes and the out-parameters are null or
-/// writable.
-pub unsafe fn deref_func_name(
-    name: *const c_char,
-    lenp: *mut c_int,
-    partialp: *mut *mut Partial,
-    no_autoload: bool,
-    found_var: *mut bool,
-) -> *mut c_char {
-    if !partialp.is_null() {
-        unsafe { *partialp = ptr::null_mut() };
-    }
+/// The bytes a script-local name is stored behind: `K_SPECIAL KS_EXTRA
+/// KE_SNR`, which a listing shows as `<SNR>`.
+const SNR: [u8; 3] = [0x80, 253, 82];
+const _: () = assert!(SNR[0] as c_int == K_SPECIAL);
+const _: () = assert!(SNR[1] as c_int == KS_EXTRA);
+const _: () = assert!(SNR[2] as c_int == KE_SNR as c_int);
 
-    // Looking the *variable* up is also what autoloads `pkg#name`'s
-    // package: `find_var` -> `check_vars` sources it on the way.
-    let v = unsafe { find_var(name, *lenp as size_t, ptr::null_mut(), no_autoload) };
-    if v.is_null() {
-        return name as *mut c_char;
-    }
-    let tv = unsafe { &raw mut (*v).di_tv };
-    if !found_var.is_null() {
-        unsafe { *found_var = true };
-    }
-
-    if unsafe { (*tv).v_type() } == VAR_FUNC {
-        if unsafe { (*tv).func_name_or_null() }.is_null() {
-            // Just in case.
-            unsafe { *lenp = 0 };
-            return c"".as_ptr() as *mut c_char;
-        }
-        unsafe { *lenp = cstr::bytes_at((*tv).func_name_or_null()).len() as c_int };
-        return unsafe { (*tv).func_name_or_null() };
-    }
-
-    if unsafe { (*tv).v_type() } == VAR_PARTIAL {
-        let pt = unsafe { (*tv).partial_or_null() };
-        if pt.is_null() {
-            // Just in case.
-            unsafe { *lenp = 0 };
-            return c"".as_ptr() as *mut c_char;
-        }
-        if !partialp.is_null() {
-            unsafe { *partialp = pt };
-        }
-        let s = unsafe { partial_name(pt) };
-        unsafe { *lenp = cstr::bytes_at(s).len() as c_int };
-        return s;
-    }
-
-    name as *mut c_char
+/// The byte at `i`, or a NUL past the end -- how the C read its string.
+fn byte(text: &[u8], i: usize) -> u8 {
+    text.get(i).copied().unwrap_or(0)
 }
 
-/// [`deref_func_name`] of the name `name` spells: the function's own name,
-/// copied, a reference to the partial it came out of, and whether a variable
-/// was found at all. Both are the caller's own because a call may delete the
-/// variable they were read from.
+/// What a name, read as a variable, turned out to call.
+pub(crate) struct Dereffed {
+    /// The function a Funcref or a partial in the variable names; `None`
+    /// when there is no such variable, or it holds something else.
+    pub(crate) name: Option<XString>,
+    /// The partial it came out of.
+    pub(crate) partial: Option<PartialRef>,
+    /// Whether a variable of that name exists at all.
+    pub(crate) found_var: bool,
+}
+
+/// The function the variable `name` holds, when it holds one.
+///
+/// Both answers are the caller's own: a call may delete the variable they
+/// were read from. Looking the *variable* up is also what autoloads
+/// `pkg#name`'s package: `find_var` sources it on the way.
+pub(crate) fn deref_func_name(name: &[u8], no_autoload: bool) -> Dereffed {
+    with_var(name, no_autoload, |item| {
+        let tv = &item.di_tv;
+        // The function's own name; a missing one is the empty string.
+        let callee = || XString::from_bytes(tv.callable_name().map_or(&b""[..], CStr::to_bytes));
+        match tv {
+            TypVal::Func(_) => Dereffed {
+                name: Some(callee()),
+                partial: None,
+                found_var: true,
+            },
+            TypVal::Partial(partial) => Dereffed {
+                name: Some(callee()),
+                partial: (**partial).clone(),
+                found_var: true,
+            },
+            _ => Dereffed {
+                name: None,
+                partial: None,
+                found_var: true,
+            },
+        }
+    })
+    .unwrap_or(Dereffed {
+        name: None,
+        partial: None,
+        found_var: false,
+    })
+}
+
+/// [`deref_func_name`], answering `name` itself when it is not a function
+/// variable.
 pub(crate) fn deref_func_name_owned(
     name: &[u8],
     no_autoload: bool,
 ) -> (XString, Option<PartialRef>, bool) {
-    let mut len = c_int::try_from(name.len()).unwrap_or(c_int::MAX);
-    let mut partial = ptr::null_mut();
-    let mut found = false;
-    // SAFETY: `name` names its `len` bytes, and the out-parameters are this
-    // frame's; the answer names `len` bytes, copied before anything can
-    // free them.
-    unsafe {
-        let resolved = deref_func_name(
-            name.as_ptr().cast(),
-            &raw mut len,
-            &raw mut partial,
-            no_autoload,
-            &raw mut found,
-        );
-        let len = usize::try_from(len).unwrap_or(0);
-        (
-            XString::from_bytes(cstr::slice_at(resolved, len)),
-            PartialRef::retained(partial),
-            found,
-        )
-    }
+    let found = deref_func_name(name, no_autoload);
+    let resolved = found.name.unwrap_or_else(|| XString::from_bytes(name));
+    (resolved, found.partial, found.found_var)
 }
 
 /// Report `errmsg` about `name`, rendering the `<SNR>` mangling back into
-/// something a user can read.
-///
-/// # Safety
-/// `errmsg` is an untranslated format with one `%s`, and `name` is
-/// NUL-terminated.
-pub unsafe fn emsg_funcname(errmsg: *const c_char, name: *const c_char) {
-    let mut p = name as *mut c_char;
-    if unsafe { *name } as u8 as c_int == K_SPECIAL
-        && unsafe { *name.add(1) } != 0
-        && unsafe { *name.add(2) } != 0
-    {
-        p = unsafe { concat_str(c"<SNR>".as_ptr(), name.add(3)) };
-    }
-    // SAFETY: `errmsg` is the caller's untranslated format and `p` the name.
-    let (errmsg, shown) = unsafe { (gettext_ptr(errmsg), c_str(p)) };
-    emsg_text(tr_plural!(errmsg, shown));
-    if !core::ptr::eq(p, name) {
-        unsafe { xfree(p as *mut c_void) };
-    }
+/// something a user can read. `errmsg` is untranslated and has one `%s`.
+pub(crate) fn emsg_funcname(errmsg: &'static CStr, name: &[u8]) {
+    let shown: Cow<'_, [u8]> =
+        if c_int::from(byte(name, 0)) == K_SPECIAL && byte(name, 1) != 0 && byte(name, 2) != 0 {
+            let mut shown = b"<SNR>".to_vec();
+            shown.extend_from_slice(&name[3..]);
+            Cow::Owned(shown)
+        } else {
+            Cow::Borrowed(name)
+        };
+    emsg_text(tr_plural!(gettext(errmsg), msg_bytes(&shown)));
 }
-
-/// How long a mangled name may be before `fname_trans_sid` has to allocate.
-pub const FLEN_FIXED: c_int = 40;
 
 /// Whether a script-local prefix was written `s:` rather than `<SNR>` --
 /// which decides whether the *current* script id has to be substituted in.
-///
-/// # Safety
-/// `name` is a prefix `eval_fname_script` already accepted, so it has at
-/// least three readable bytes.
-unsafe fn eval_fname_sid(name: *const c_char) -> bool {
-    unsafe { *name == b's' as c_char || (*name.add(2) as u8).eq_ignore_ascii_case(&b'I') }
+/// `name` starts with a prefix [`fname_script_len`] accepted.
+fn fname_is_sid(name: &[u8]) -> bool {
+    byte(name, 0) == b's' || byte(name, 2).eq_ignore_ascii_case(&b'I')
 }
 
-/// Rewrite `s:`/`<SID>` at the front of `name` into the `<SNR>N_` byte
-/// sequence, using `fname_buf` when the result fits and an allocation
-/// (handed back through `tofree`) when it does not.
-///
-/// # Safety
-/// `name` is NUL-terminated, `fname_buf` has `FLEN_FIXED + 1` bytes, and
-/// `tofree`/`error` are writable.
-pub(crate) unsafe fn fname_trans_sid(
-    name: *const c_char,
-    fname_buf: *mut c_char,
-    tofree: *mut *mut c_char,
-    error: *mut c_int,
-) -> *mut c_char {
-    let script_name = unsafe { name.offset(eval_fname_script(name) as isize) };
-    if script_name == name {
+/// `name` with an `s:`/`<SID>`/`<SNR>` prefix rewritten into the `<SNR>N_`
+/// byte sequence, or `name` itself when it has none; and `FCERR_SCRIPT`
+/// when `s:` was written outside a script, which leaves the number out.
+pub(crate) fn fname_trans_sid(name: &[u8]) -> (Cow<'_, [u8]>, c_int) {
+    let lead = fname_script_len(name);
+    if lead == 0 {
         // "name" doesn't start with "s:" or "<SID>".
-        return name as *mut c_char;
+        return (Cow::Borrowed(name), FCERR_NONE);
     }
-
-    unsafe { *fname_buf = K_SPECIAL as c_char };
-    unsafe { *fname_buf.add(1) = KS_EXTRA as c_char };
-    unsafe { *fname_buf.add(2) = KE_SNR as c_char };
-    let mut fname_buflen: size_t = 3;
-    if !unsafe { eval_fname_sid(name) } {
-        // "<SID>" or "<SNR>"
-        unsafe { *fname_buf.add(fname_buflen) = NUL as c_char };
-    } else if current_sctx.get().sc_sid <= 0 {
-        unsafe { *error = FCERR_SCRIPT };
-    } else {
-        // SAFETY: `fname_buf` has `FLEN_FIXED + 1` bytes, of which
-        // `fname_buflen` are used.
-        let into = unsafe { fname_buf.add(fname_buflen) };
-        let left = (FLEN_FIXED as size_t + 1).wrapping_sub(fname_buflen);
+    let script_name = &name[lead..];
+    let mut error = FCERR_NONE;
+    let mut fname = Vec::with_capacity(SNR.len() + 12 + script_name.len() + 1);
+    fname.extend_from_slice(&SNR);
+    if fname_is_sid(name) {
         let sid = current_sctx.get().sc_sid;
-        fname_buflen += unsafe { snprintf!(into, left, c"%d_".as_ptr(), sid) } as size_t;
+        if sid <= 0 {
+            error = FCERR_SCRIPT;
+        } else {
+            fname.extend_from_slice(format!("{sid}_").as_bytes());
+        }
     }
-    let fnamelen = fname_buflen + unsafe { cstr::bytes_at(script_name) }.len();
-    if fnamelen < FLEN_FIXED as size_t {
-        unsafe { strcpy(fname_buf.add(fname_buflen), script_name) };
-        fname_buf
-    } else {
-        let fname = unsafe { xmalloc(fnamelen + 1) } as *mut c_char;
-        unsafe { *tofree = fname };
-        // SAFETY: `fname` has `fnamelen + 1` bytes and both parts are
-        // NUL-terminated.
-        let (cap, both) = (fnamelen + 1, c"%s%s".as_ptr());
-        unsafe { snprintf!(fname, cap, both, fname_buf, script_name) };
-        fname
-    }
+    // "<SNR>" keeps the digits it was written with.
+    fname.extend_from_slice(script_name);
+    (Cow::Owned(fname), error)
 }
 
 /// The function stored under `name`, or null.
-///
-/// # Safety
-/// `name` is NUL-terminated.
-pub unsafe fn find_func(name: *const c_char) -> *mut UserFunc {
-    let hi = unsafe { func_table().find(name) };
+pub(crate) fn find_func(name: &[u8]) -> *mut UserFunc {
+    let hi = func_table().find_bytes(name);
     if hi.is_kept() {
-        // The key *is* the function's trailing name member, so the
-        // function is that many bytes before it.
-        let fp = unsafe { hi.hi_key.sub(offset_of!(UserFunc, uf_name)) };
-        fp as *mut UserFunc
+        uf_from_name_ptr(hi.hi_key)
     } else {
         ptr::null_mut()
     }
 }
 
-/// Whether `ufunc` is a global function rather than a script-local one --
-/// which is exactly whether its stored name carries the `<SNR>` mangling.
-///
-/// # Safety
-/// `ufunc` is a live function.
-unsafe fn func_is_global(ufunc: *const UserFunc) -> bool {
-    unsafe { *((&raw const (*ufunc).uf_name) as *const c_char) as u8 as c_int != K_SPECIAL }
-}
-
-/// Write `func`'s printable name into `buf`, answering how much was written
-/// (capped at `bufsize - 1`).
-///
-/// # Safety
-/// `func` is a live function and `buf` has `bufsize` writable bytes.
-pub(crate) unsafe fn cat_func_name(
-    buf: *mut c_char,
-    bufsize: size_t,
-    func: *const UserFunc,
-) -> c_int {
-    let uflen = unsafe { (*func).uf_namelen };
-    debug_assert!(uflen > 0);
-    let name = unsafe { &raw const (*func).uf_name } as *const c_char;
-    let len = if !unsafe { func_is_global(func) } && uflen > 3 {
-        unsafe { snprintf!(buf, bufsize, c"<SNR>%s".as_ptr(), name.add(3)) }
-    } else {
-        unsafe { snprintf!(buf, bufsize, c"%s".as_ptr(), name) }
-    };
-    debug_assert!(len > 0);
-    len.min(bufsize as c_int - 1)
-}
-
 /// Whether a function of this name is reference-counted: the numbered
 /// dictionary functions and the lambdas, and nothing else.
-///
-/// # Safety
-/// `name` is NUL-terminated.
-pub(crate) unsafe fn func_name_refcount(name: *const c_char) -> bool {
-    (unsafe { *name } as u8).is_ascii_digit()
-        || (unsafe { *name } == b'<' as c_char && unsafe { *name.add(1) } == b'l' as c_char)
+pub(crate) fn func_name_refcount(name: &[u8]) -> bool {
+    byte(name, 0).is_ascii_digit() || name.starts_with(b"<l")
 }
 
 /// Whether `name` names a builtin function: it starts lowercase, is not a
 /// scoped name, and carries no `#` (which would make it an autoload name).
-///
-/// `len` is the name's length, or -1 for "NUL-terminated".
-///
-/// # Safety
-/// `name` has `len` readable bytes, or is NUL-terminated when `len` is -1.
-pub(crate) unsafe fn builtin_function(name: *const c_char, len: c_int) -> bool {
-    if !(unsafe { *name } as u8).is_ascii_lowercase() || unsafe { *name.add(1) } == b':' as c_char {
-        return false;
-    }
-    // The two spellings upstream uses -- `strchr` when the length is
-    // unknown, `memchr` when it is -- are one search over the same bytes.
-    let n = if len == -1 {
-        unsafe { cstr::bytes_at(name) }.len()
-    } else {
-        len as size_t
-    };
-    !unsafe { slice::from_raw_parts(name as *const u8, n) }.contains(&(AUTOLOAD_CHAR as u8))
+pub(crate) fn builtin_function(name: &[u8]) -> bool {
+    builtin_function_in(name, name.len())
 }
 
-/// The name to show a user: the unmangled `<SNR>123_name` when there is one.
-///
-/// # Safety
-/// `func` is a live function.
-pub unsafe fn printable_func_name(func: *mut UserFunc) -> *mut c_char {
-    // SAFETY: the caller's promise -- `func` is a live function.
-    let f = unsafe { Uf::new(func) };
-    if !f.uf_name_exp.is_null() {
-        f.uf_name_exp
-    } else {
-        uf_name_ptr(func)
+/// [`builtin_function`] of `text[..len]`. The scope test reads the byte
+/// after the first even when the name is one byte long, as the C did,
+/// which is why it gets the text the name is the start of.
+fn builtin_function_in(text: &[u8], len: usize) -> bool {
+    if !byte(text, 0).is_ascii_lowercase() || byte(text, 1) == b':' {
+        return false;
     }
+    let name = text.get(..len).unwrap_or(text);
+    !name.contains(&b'#')
+}
+
+/// The dictionary entry a `dict.func` name selected: what `:function`
+/// writes, `:delfunction` removes and `:call` binds `self` to.
+///
+/// The entry is found again by its key whenever it is used: reading a
+/// function body or evaluating the arguments of a call runs code that may
+/// remove it.
+pub(crate) struct FuncDict {
+    /// The dictionary, held across whatever runs before it is used.
+    pub(crate) dict: DictRef,
+    /// The key the function is, or is to be, under.
+    pub(crate) key: Vec<u8>,
+    /// The key was not in the dictionary when the name was read.
+    pub(crate) new_key: bool,
+}
+
+/// What [`trans_function_name`] read.
+#[derive(Default)]
+pub(crate) struct FunctionName {
+    /// The name the function is stored under; `None` when there is not one
+    /// there, which has been reported unless the name was a `dict.key` that
+    /// does not exist yet.
+    pub(crate) name: Option<XString>,
+    /// How much of the text the name took. It stays at 0 where the C left
+    /// its cursor alone.
+    pub(crate) end: usize,
+    /// The dictionary entry a `dict.func` selected, for a caller that asked.
+    pub(crate) dict: Option<FuncDict>,
+    /// The partial the name selected, or held in the variable it named.
+    pub(crate) partial: Option<PartialRef>,
 }
 
 /// Build the stored name out of a resolved lvalue: strip the scope prefix,
 /// prepend the `<SNR>` mangling when the name is script-local, and reject
 /// the two spellings that cannot be function names.
 ///
-/// `name`/`name_len` are the lvalue's name, which is `expanded` when the
-/// name had curly braces (null otherwise). `lead` comes in as
-/// `eval_fname_script`'s answer (0, 2 or 5) and is reworked here into the
-/// *number of bytes* to prepend: 0 for a global name, 3 for `<SNR>` alone,
-/// or 3 plus the script id for `s:`/`<SID>`.
-///
-/// # Safety
-/// `name` points at `name_len` readable bytes, `expanded` is null or
-/// NUL-terminated, and `start`/`end` bracket the name in the command line.
+/// `name_len` is the lvalue's name length, measured in `expanded` when the
+/// name had curly braces and in `text` from `start` otherwise; `end` is
+/// where the name ends in `text`. `lead` is [`fname_script_len`]'s answer
+/// (0, 2 or 5).
 #[allow(clippy::too_many_arguments)]
-unsafe fn mangle_function_name(
-    cursor: *mut *mut c_char,
-    mut name: *const c_char,
-    mut name_len: size_t,
-    expanded: *const c_char,
-    start: *const c_char,
-    end: *const c_char,
-    mut lead: c_int,
+fn mangle_function_name(
+    text: &[u8],
+    expanded: Option<&[u8]>,
+    mut name_len: usize,
+    start: usize,
+    end: usize,
+    mut lead: usize,
     skip: bool,
     flags: c_int,
-) -> *mut c_char {
-    let mut len;
-    if !expanded.is_null() {
-        len = unsafe { cstr::bytes_at(expanded) }.len() as c_int;
-        if lead <= 2 && name_len >= 2 && unsafe { cstr::starts_with(name, b"s:") } {
+) -> Option<XString> {
+    let source = expanded.unwrap_or(text);
+    let mut at;
+    let len;
+    if let Some(expanded) = expanded {
+        at = 0;
+        let mut whole = expanded.len();
+        if lead <= 2 && name_len >= 2 && expanded.starts_with(b"s:") {
             // When there was "s:" already, or the name expanded to get a
             // leading "s:", remove it.
-            name = unsafe { name.add(2) };
-            name_len = name_len.wrapping_sub(2);
-            len -= 2;
+            at = 2;
+            name_len -= 2;
+            whole -= 2;
             lead = 2;
         }
+        len = whole;
     } else {
-        // Skip over "s:" and "g:".  The length subtraction wraps, and
-        // upstream's does too: `get_lval` in *skip* mode leaves the
-        // length 0, which `:function s:Name()` inside a false `:if`
-        // reaches.  Nothing reads the wrapped length on that path
-        // (`skip` forces `lead` to 0 and gates the E884 check), but a
-        // plain `-=` aborts a debug build there.
-        if lead == 2
-            || (unsafe { *name } == b'g' as c_char && unsafe { *name.add(1) } == b':' as c_char)
-        {
-            name = unsafe { name.add(2) };
-            name_len = name_len.wrapping_sub(2);
+        at = start;
+        // Skip over "s:" and "g:". In skip mode the length can be shorter
+        // than the prefix, which nothing then reads (`skip` forces `lead`
+        // to 0 and gates the E884 check).
+        if lead == 2 || (byte(text, at) == b'g' && byte(text, at + 1) == b':') {
+            at += 2;
+            name_len = name_len.saturating_sub(2);
         }
-        len = unsafe { end.offset_from(name) } as c_int;
+        len = end.saturating_sub(at);
     }
-    let mut sid_buf: [c_char; 20] = [0; 20];
-    let mut sid_buflen: size_t = 0;
 
     // Accept <SID>name() inside a script, translated into <SNR>123_name();
     // accept <SNR>123_name() outside one.
+    let mut sid = Vec::new();
     if skip {
         lead = 0; // do nothing
     } else if lead > 0 {
-        lead = 3;
-        if (!expanded.is_null() && unsafe { eval_fname_sid(expanded) })
-            || unsafe { eval_fname_sid(*cursor) }
-        {
+        lead = SNR.len();
+        if expanded.is_some_and(fname_is_sid) || fname_is_sid(text) {
             // It's "s:" or "<SID>".
-            if current_sctx.get().sc_sid <= 0 {
+            let sc_sid = current_sctx.get().sc_sid;
+            if sc_sid <= 0 {
                 emsg(gettext(e_usingsid));
-                return ptr::null_mut();
+                return None;
             }
-            let (into, cap) = (sid_buf.as_mut_ptr(), size_of_val(&sid_buf));
-            let sid = current_sctx.get().sc_sid;
-            sid_buflen = unsafe { snprintf!(into, cap, c"%d_".as_ptr(), sid) } as size_t;
-            lead += sid_buflen as c_int;
+            sid = format!("{sc_sid}_").into_bytes();
         }
-    } else if flags & TFN_INT == 0 && unsafe { builtin_function(name, name_len as c_int) } {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let start = unsafe { c_str(start) };
+    } else if flags & TFN_INT == 0 && builtin_function_in(&source[at..], name_len) {
+        let start = msg_bytes(&text[start..]);
         semsg!("E128: Function name must start with a capital or \"s:\": {start}");
-        return ptr::null_mut();
+        return None;
     }
 
     if !skip && flags & TFN_QUIET == 0 && flags & TFN_NO_DEREF == 0 {
-        // Upstream also asks `cp < end`.  `cp` points into `lv.ll_name`,
-        // which for a curly-brace name is a fresh allocation while `end`
-        // points into the command line: that compares two unrelated
-        // objects and answers whatever the allocator happened to do.
-        // `xmemrchr` is already bounded by `ll_name_len`, so every colon
-        // it finds is inside the name and the extra test adds nothing but
-        // the coin flip (O-B14-12).
-        let cp = unsafe { xmemrchr(name as *const c_void, b':', name_len) };
-        if !cp.is_null() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let start = unsafe { c_str(start) };
+        // Upstream also asks that the colon be before `end`, comparing a
+        // pointer into a curly-brace name's expansion with one into the
+        // command line: two unrelated objects. Every colon in the name is
+        // inside it, so the extra test adds nothing but the coin flip
+        // (O-B14-12).
+        let name = source.get(at..at + name_len).unwrap_or_default();
+        if name.contains(&b':') {
+            let start = msg_bytes(&text[start..]);
             semsg!("E884: Function name cannot contain a colon: {start}");
-            return ptr::null_mut();
+            return None;
         }
     }
 
-    let from = name;
-    let name = unsafe { xmalloc(len as size_t + lead as size_t + 1) } as *mut c_char;
+    let mut name = Vec::with_capacity(lead + sid.len() + len + 1);
     if !skip && lead > 0 {
-        unsafe { *name = K_SPECIAL as c_char };
-        unsafe { *name.add(1) = KS_EXTRA as c_char };
-        unsafe { *name.add(2) = KE_SNR as c_char };
-        if sid_buflen > 0 {
-            // It's "<SID>", so the script id goes in as well.
-            let (into, from) = (unsafe { name.add(3) }, sid_buf.as_ptr());
-            let into = into.cast::<u8>();
-            unsafe { into.copy_from_nonoverlapping(from.cast(), sid_buflen) };
-        }
+        name.extend_from_slice(&SNR);
+        // It's "<SID>", so the script id goes in as well.
+        name.extend_from_slice(&sid);
     }
-    let into = unsafe { name.offset(lead as isize) } as *mut c_void;
-    let into = into.cast::<u8>();
-    unsafe { into.copy_from(from.cast(), len as size_t) };
-    unsafe { *name.offset((lead + len) as isize) = NUL as c_char };
-    unsafe { *cursor = end as *mut c_char };
-    name
+    name.extend_from_slice(source.get(at..at + len).unwrap_or_default());
+    Some(XString::from_bytes(&name))
 }
 
 /// The function a name that selects a value names -- `dict.func`,
-/// `list[i]`, `v:lua.name` -- with what `fdp` and `partial` record of it.
-///
-/// # Safety
-/// As [`trans_function_name`], with `end` the end of the name `lv` was
-/// resolved from.
-unsafe fn trans_selected(
+/// `list[i]`, `v:lua.name` -- with what it records of the selection in
+/// `answer`. `end` is where the name `lv` was resolved from ends in `text`.
+fn trans_selected(
     lv: &mut LValue<'_>,
-    cursor: *mut *mut c_char,
-    end: *const c_char,
+    text: &[u8],
+    end: usize,
     skip: bool,
     flags: c_int,
-    fdp: *mut FuncDict,
-    partial: *mut *mut Partial,
-) -> *mut c_char {
-    let name: *mut c_char;
-    let len: c_int;
-    // The dictionary a `dict.func` names, the key it adds and the
-    // item it replaces, by address: `FuncDict` holds them so.
-    let dict = match &lv.target {
+    want_dict: bool,
+    answer: &mut FunctionName,
+) {
+    let new_key = matches!(lv.target, Target::NewKey { .. });
+    let selected_dict = match &lv.target {
         Target::Slot {
-            slot: LvalSlot::Key { dict, .. },
+            slot: LvalSlot::Key { dict, key },
             ..
         }
-        | Target::NewKey { dict, .. } => dict.as_ptr(),
-        _ => ptr::null_mut(),
+        | Target::NewKey { dict, key } => Some(FuncDict {
+            dict: dict.clone(),
+            key: key.clone(),
+            new_key,
+        }),
+        _ => None,
     };
-    if !fdp.is_null() {
-        let (newkey, item) = match &lv.target {
-            Target::NewKey { key, .. } => (XString::from_bytes(key).into_raw(), ptr::null_mut()),
-            Target::Slot {
-                slot: LvalSlot::Key { dict, key },
-                ..
-            } => (ptr::null_mut(), dict.find_ptr(key)),
-            _ => (ptr::null_mut(), ptr::null_mut()),
-        };
-        unsafe { (*fdp).fd_dict = dict };
-        unsafe { (*fdp).fd_newkey = newkey };
-        unsafe { (*fdp).fd_di = item };
+    let has_dict = selected_dict.is_some();
+    if want_dict {
+        answer.dict = selected_dict;
     }
+
     /// What the selected value is, as far as a function name goes.
     enum Selected {
-        Func(*mut c_char),
-        Partial(*mut Partial),
+        Func(XString),
+        Partial(PartialRef, XString),
         Other,
     }
     let selected = lv
         .with_slot(|tv, _| {
-            let (func, pt) = (tv.func_name_or_null(), tv.partial_or_null());
-            if tv.v_type() == VAR_FUNC && !func.is_null() {
-                // SAFETY: a funcref's name is NUL-terminated.
-                Selected::Func(unsafe { xstrdup(func) })
-            } else if tv.v_type() == VAR_PARTIAL && !pt.is_null() {
-                Selected::Partial(pt)
-            } else {
-                Selected::Other
+            let tv = &*tv;
+            // The function's own name; a missing one is the empty string.
+            let callee =
+                || XString::from_bytes(tv.callable_name().map_or(&b""[..], CStr::to_bytes));
+            match tv {
+                TypVal::Func(_) if !tv.func_name_or_null().is_null() => Selected::Func(callee()),
+                TypVal::Partial(partial) => match &**partial {
+                    Some(partial) => Selected::Partial(partial.clone(), callee()),
+                    None => Selected::Other,
+                },
+                _ => Selected::Other,
             }
         })
         .unwrap_or(Selected::Other);
     match selected {
         Selected::Func(func) => {
-            name = func;
-            unsafe { *cursor = end as *mut c_char };
+            answer.name = Some(func);
+            answer.end = end;
         }
-        // The partial stays where it is, in the container the
-        // name selected it from; the answer borrows it.
-        Selected::Partial(pt) => {
-            if is_luafunc(pt) && unsafe { *end } == b'.' as c_char {
-                len = check_luafunc_name(unsafe { cstr::bytes_at(end.add(1)) }, true) as c_int;
+        Selected::Partial(partial, name) => {
+            if is_luafunc(partial.as_ptr()) && byte(text, end) == b'.' {
+                let len = check_luafunc_name(&text[end + 1..], true);
                 if len == 0 {
                     let arg0 = "v:lua";
                     semsg!("E15: Invalid expression: \"{arg0}\"");
-                    return ptr::null_mut();
+                    return;
                 }
-                name = unsafe { xmallocz(len as size_t) } as *mut c_char;
-                let from = unsafe { end.add(1) } as *const c_void;
-                let into = name.cast::<u8>();
-                unsafe { into.copy_from_nonoverlapping(from.cast(), len as size_t) };
-                unsafe { *cursor = (end as *mut c_char).add(1).offset(len as isize) };
+                answer.name = Some(XString::from_bytes(&text[end + 1..end + 1 + len]));
+                answer.end = end + 1 + len;
             } else {
-                name = unsafe { xstrdup(partial_name(pt)) };
-                unsafe { *cursor = end as *mut c_char };
+                answer.name = Some(name);
+                answer.end = end;
             }
-            if !partial.is_null() {
-                unsafe { *partial = pt };
-            }
+            answer.partial = Some(partial);
         }
         Selected::Other => {
-            if !skip
-                && flags & TFN_QUIET == 0
-                && (fdp.is_null() || dict.is_null() || unsafe { (*fdp).fd_newkey }.is_null())
-            {
+            if !skip && flags & TFN_QUIET == 0 && !(want_dict && has_dict && new_key) {
                 emsg(gettext(E_FUNCREF));
             } else {
-                unsafe { *cursor = end as *mut c_char };
+                answer.end = end;
             }
-            name = ptr::null_mut();
         }
     }
-    name
 }
 
-/// Read a function name at `*pp` and answer it in allocated memory, or null
-/// when there is not one there.
+/// Read a function name at the start of `text` -- a command line from the
+/// name to its end -- and answer the name it is stored under and how much
+/// of the text it took.
 ///
-/// # Safety
-/// `*pp` is a NUL-terminated command line; `fdp` and `partial` are null or
-/// writable.
-pub unsafe fn trans_function_name(
-    cursor: *mut *mut c_char,
+/// `want_dict` asks for the dictionary entry a `dict.func` selects, which
+/// is also what lets a key the dictionary does not have yet pass quietly.
+pub(crate) fn trans_function_name(
+    text: &[u8],
     skip: bool,
     flags: c_int,
-    fdp: *mut FuncDict,
-    partial: *mut *mut Partial,
-) -> *mut c_char {
-    let mut name: *mut c_char = ptr::null_mut();
-    let mut len;
-
-    if !fdp.is_null() {
-        unsafe { fdp.cast::<u8>().write_bytes(0, size_of::<FuncDict>()) };
-    }
-    let mut start: *const c_char = unsafe { *cursor };
+    want_dict: bool,
+) -> FunctionName {
+    let mut answer = FunctionName::default();
 
     // A hard-coded <SNR> is an already translated function id, from a
     // user command.
-    if unsafe { *(*cursor) } as u8 as c_int == K_SPECIAL
-        && unsafe { *(*cursor).add(1) } as u8 as c_int == KS_EXTRA
-        && unsafe { *(*cursor).add(2) } as c_int == KE_SNR as c_int
-    {
-        unsafe { *cursor = (*cursor).add(3) };
-        // SAFETY: the name is NUL-terminated.
-        let id = id_len(unsafe { cstr::bytes_at(*cursor) });
-        if id > 0 {
-            // SAFETY: the identifier and the blanks after it are inside it.
-            unsafe { *cursor = skipwhite((*cursor).add(id)) };
-        }
-        len = id as c_int + 3;
-        return unsafe { xmemdupz(start as *const c_void, len as size_t) } as *mut c_char;
+    if text.starts_with(&SNR) {
+        let id = id_len(&text[SNR.len()..]);
+        let past = SNR.len() + id;
+        answer.end = if id > 0 {
+            past + skip::white(&text[past..])
+        } else {
+            SNR.len()
+        };
+        answer.name = Some(XString::from_bytes(&text[..past]));
+        return answer;
     }
 
-    // A name starting with "<SID>" or "<SNR>" is local to a script.  But
+    // A name starting with "<SID>" or "<SNR>" is local to a script. But
     // don't skip over "s:", `get_lval` needs it for "s:dict.func".
-    let lead = unsafe { eval_fname_script(start) };
-    if lead > 2 {
-        start = unsafe { start.add(lead as usize) };
-    }
+    let lead = fname_script_len(text);
+    let start = if lead > 2 { lead } else { 0 };
 
     // The TFN_ flags use the same values as the GLV_ ones.
     let glv = flags | GLV_READ_ONLY;
     let fne = if lead > 2 { 0 } else { FNE_CHECK_START };
-    // SAFETY: `start` is inside the caller's NUL-terminated command line.
-    let text = unsafe { cstr::bytes_at(start) };
-    let (mut lv, end_at) = get_lval(text, None, false, skip, glv, fne);
-    // SAFETY: an end `get_lval` answers is inside `text`.
-    let end: *const c_char = end_at.map_or(ptr::null(), |end| unsafe { start.add(end) });
+    let (mut lv, end_at) = get_lval(&text[start..], None, false, skip, glv, fne);
     // Upstream's `ll_tv != NULL`: the name selected a value rather than
     // naming a whole variable.
     let selects = matches!(lv.target, Target::Slot { .. } | Target::NewKey { .. });
     let range = matches!(lv.target, Target::Slot { span, .. } if span.range);
 
-    'theend: {
-        if end_at == Some(0) {
-            if !skip {
-                emsg(gettext(c"E129: Function name required"));
-            }
-            break 'theend;
+    if end_at == Some(0) {
+        if !skip {
+            emsg(gettext(c"E129: Function name required"));
         }
-        if end.is_null() || (selects && (lead > 2 || range)) {
+        return answer;
+    }
+    let end = match end_at {
+        Some(end) if !(selects && (lead > 2 || range)) => start + end,
+        _ => {
             // Report an invalid expression in braces, unless the
             // evaluation was cancelled by an aborting error, an interrupt
             // or an exception.
             if !aborting() {
-                if !end.is_null() {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let start = unsafe { c_str(start) };
+                if end_at.is_some() {
+                    let start = msg_bytes(&text[start..]);
                     semsg!("E475: Invalid argument: {start}");
                 }
             } else {
-                // SAFETY: `start` is NUL-terminated, and the name's end is
-                // inside it.
-                unsafe {
-                    let end = name_end(cstr::bytes_at(start), FNE_INCL_BR).end;
-                    *cursor = start.add(end).cast_mut();
-                }
+                answer.end = start + name_end(&text[start..], FNE_INCL_BR).end;
             }
-            break 'theend;
+            return answer;
         }
+    };
 
-        if selects {
-            name = unsafe { trans_selected(&mut lv, cursor, end, skip, flags, fdp, partial) };
-            break 'theend;
-        }
-
-        if !lv.has_name() {
-            // Error found, but carry on after the function name.
-            unsafe { *cursor = end as *mut c_char };
-            break 'theend;
-        }
-
-        // Check whether the name is a funcref; if so, use its value.
-        let expanded = lv.expanded().map_or(ptr::null(), XString::as_ptr);
-        if !expanded.is_null() {
-            len = unsafe { cstr::bytes_at(expanded) }.len() as c_int;
-            let (lenp, quiet) = (&raw mut len, flags & TFN_NO_AUTOLOAD != 0);
-            name = unsafe { deref_func_name(expanded, lenp, partial, quiet, ptr::null_mut()) };
-            if ptr::eq(name, expanded) {
-                name = ptr::null_mut();
-            }
-        } else if flags & TFN_NO_DEREF == 0 {
-            len = unsafe { end.offset_from(*cursor) } as c_int;
-            let (lenp, quiet) = (&raw mut len, flags & TFN_NO_AUTOLOAD != 0);
-            let at = unsafe { *cursor };
-            name = unsafe { deref_func_name(at, lenp, partial, quiet, ptr::null_mut()) };
-            if name == unsafe { *cursor } {
-                name = ptr::null_mut();
-            }
-        }
-        if !name.is_null() {
-            name = unsafe { xstrdup(name) };
-            unsafe { *cursor = end as *mut c_char };
-            if unsafe { cstr::starts_with(name, b"<SNR>") } {
-                // Change "<SNR>" to the byte sequence.
-                unsafe { *name = K_SPECIAL as c_char };
-                unsafe { *name.add(1) = KS_EXTRA as c_char };
-                unsafe { *name.add(2) = KE_SNR as c_char };
-                let (into, from) = unsafe { (name.add(3), name.add(5)) };
-                let len = unsafe { cstr::bytes_at(from) }.len() + 1;
-                unsafe { into.cast::<u8>().copy_from(from.cast(), len) };
-            }
-            break 'theend;
-        }
-
-        let lv_name = lv.name();
-        let (lv_name, lv_len) = if expanded.is_null() {
-            (start, lv_name.len())
-        } else {
-            (expanded, lv_name.len())
-        };
-        name = unsafe {
-            mangle_function_name(
-                cursor, lv_name, lv_len, expanded, start, end, lead, skip, flags,
-            )
-        };
+    if selects {
+        trans_selected(&mut lv, text, end, skip, flags, want_dict, &mut answer);
+        return answer;
     }
 
-    drop(lv);
-    name
+    if !lv.has_name() {
+        // Error found, but carry on after the function name.
+        answer.end = end;
+        return answer;
+    }
+
+    // Check whether the name is a funcref; if so, use its value. A
+    // curly-brace name is always looked up; a plain one unless the caller
+    // asked for the name as written.
+    let no_autoload = flags & TFN_NO_AUTOLOAD != 0;
+    let expanded = lv.expanded().map(|expanded| &expanded[..]);
+    let dereffed = match expanded {
+        Some(expanded) => Some(deref_func_name(expanded, no_autoload)),
+        None if flags & TFN_NO_DEREF == 0 => Some(deref_func_name(&text[..end], no_autoload)),
+        None => None,
+    };
+    if let Some(dereffed) = dereffed {
+        answer.partial = dereffed.partial;
+        if let Some(name) = dereffed.name {
+            answer.end = end;
+            // Change "<SNR>" to the byte sequence.
+            answer.name = Some(match name.strip_prefix(b"<SNR>") {
+                Some(rest) => {
+                    let mut name = SNR.to_vec();
+                    name.extend_from_slice(rest);
+                    XString::from_bytes(&name)
+                }
+                None => name,
+            });
+            return answer;
+        }
+    }
+
+    let name_len = lv.name().len();
+    answer.name = mangle_function_name(text, expanded, name_len, start, end, lead, skip, flags);
+    if answer.name.is_some() {
+        answer.end = end;
+    }
+    answer
 }
 
-/// Expand `s:`/`<SID>` at the front of `funcname` into `<SNR>N_`, in
-/// allocated memory.  Answers null when there is no such prefix, or when
-/// there is no script to take the id from.
-///
-/// # Safety
-/// `funcname` is null or NUL-terminated.
-pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
-    if funcname.is_null() {
-        return ptr::null_mut();
-    }
-    if !unsafe { cstr::starts_with(funcname, b"s:") }
-        && !unsafe { cstr::starts_with(funcname, b"<SID>") }
-    {
+/// Expand `s:`/`<SID>` at the front of `name` into `<SNR>N_`. `None` when
+/// there is no such prefix, or no script to take the id from (reported).
+pub(crate) fn scriptlocal_funcname(name: &[u8]) -> Option<XString> {
+    let off = if name.starts_with(b"s:") {
+        2
+    } else if name.starts_with(b"<SID>") {
+        5
+    } else {
         // The function name does not have a script-local prefix.
-        return ptr::null_mut();
-    }
+        return None;
+    };
     let sid = current_sctx.get().sc_sid;
     if !script_id_valid(sid) {
         emsg(gettext(e_usingsid));
-        return ptr::null_mut();
+        return None;
     }
+    let mut local = format!("<SNR>{sid}_").into_bytes();
+    local.extend_from_slice(&name[off..]);
+    Some(XString::from_bytes(&local))
+}
 
-    let mut sid_buf: [c_char; 25] = [0; 25];
-    let (into, cap) = (sid_buf.as_mut_ptr(), size_of_val(&sid_buf));
-    // SAFETY: `sid_buf` is this frame's own, of `cap` bytes.
-    let sid_buflen = unsafe { snprintf!(into, cap, c"<SNR>%d_".as_ptr(), sid) } as size_t;
-    let off = if unsafe { *funcname } == b's' as c_char {
-        2
+/// How many bytes `strtoimax` consumes at the start of `text`: blanks, a
+/// sign and the digits after it, or nothing at all when there are none.
+fn strtoimax_len(text: &[u8]) -> usize {
+    let blanks = text
+        .iter()
+        .take_while(|&&b| matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        .count();
+    let sign = usize::from(matches!(byte(text, blanks), b'+' | b'-'));
+    let digits = skip::digits(&text[(blanks + sign).min(text.len())..]);
+    if digits == 0 {
+        0
     } else {
-        5
-    };
-    let newnamesize = sid_buflen + unsafe { cstr::bytes_at(funcname.add(off)) }.len() + 1;
-    let newname = unsafe { xmalloc(newnamesize) } as *mut c_char;
-    // SAFETY: `newname` has `newnamesize` bytes, `sid_buf` is this frame's
-    // own and `funcname + off` is inside the caller's name.
-    let (sid, tail) = (sid_buf.as_ptr(), unsafe { funcname.add(off) });
-    unsafe { snprintf!(newname, newnamesize, c"%s%s".as_ptr(), sid, tail) };
-    newname
+        blanks + sign + digits
+    }
 }
 
 /// [`trans_function_name`], except that a `<lambda>N` is taken as-is.
-/// Answers the name in allocated memory.
-///
-/// # Safety
-/// `*name` is a NUL-terminated command line; `fudi` is null or writable.
-pub unsafe fn save_function_name(
-    name: *mut *mut c_char,
+pub(crate) fn save_function_name(
+    text: &[u8],
     skip: bool,
     flags: c_int,
-    fudi: *mut FuncDict,
-) -> *mut c_char {
-    let mut p = unsafe { *name };
-    let saved;
-    if unsafe { cstr::starts_with(p, b"<lambda>") } {
-        p = unsafe { p.add(8) };
-        unsafe { getdigits(&raw mut p, false, 0) };
-        saved = unsafe { xmemdupz(*name as *const c_void, p.offset_from(*name) as size_t) }
-            as *mut c_char;
-        if !fudi.is_null() {
-            unsafe { fudi.cast::<u8>().write_bytes(0, size_of::<FuncDict>()) };
-        }
-    } else {
-        saved = unsafe { trans_function_name(&raw mut p, skip, flags, fudi, ptr::null_mut()) };
+    want_dict: bool,
+) -> FunctionName {
+    if let Some(number) = text.strip_prefix(b"<lambda>") {
+        let end = b"<lambda>".len() + strtoimax_len(number);
+        return FunctionName {
+            name: Some(XString::from_bytes(&text[..end])),
+            end,
+            ..FunctionName::default()
+        };
     }
-    unsafe { *name = p };
-    saved
-}
-
-/// How long the script-local prefix at `p` is: 5 for `<SID>`/`<SNR>`, 2 for
-/// `s:`, 0 for neither.
-///
-/// # Safety
-/// `p` is NUL-terminated.
-pub unsafe fn eval_fname_script(p: *const c_char) -> c_int {
-    // SAFETY: the caller's promise; the prefix stops at the terminator.
-    fname_script_len(unsafe { cstr::prefix_at(p, 5) }) as c_int
+    trans_function_name(text, skip, flags, want_dict)
 }
 
 /// How long the script-local prefix `text` starts with is: 5 for

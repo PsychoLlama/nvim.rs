@@ -10,16 +10,15 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::cstr::byte_at;
+use crate::ex_docmd::check_for_word_in;
 use crate::memory::XString;
-use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::strings::vim_strchr;
 use crate::swmsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
-use crate::eval::Cur;
 use crate::types::{FAIL, NUL, OK};
 
 /// How many `:function` definitions may nest inside one another.
@@ -47,22 +46,20 @@ pub(crate) unsafe fn get_function_body(
     let mut line_arg = line_arg_in;
     let mut indent = 2;
     let mut nesting = 0;
-    let mut skip_until: *mut c_char = ptr::null_mut();
+    // The line that ends a heredoc or an `:append`, while one is open.
+    let mut skip_until: Option<Vec<u8>> = None;
     let mut ret = FAIL;
     let mut is_heredoc = false;
-    let mut heredoc_trimmed: *mut c_char = ptr::null_mut();
-    let mut heredoc_trimmedlen: size_t = 0;
+    // The indent a `trim` heredoc's lines lose.
+    let mut heredoc_trimmed: Vec<u8> = Vec::new();
     let mut do_concat = true;
 
-    // Whether the command at `p` is one of the interpreter commands that
-    // takes a `<<` heredoc, matched by its shortest abbreviation plus
-    // whatever may follow: `py`/`py3`/`pyx`/`pyt`hon, `pe`rl, `tc`l,
-    // `lua`, `rub`y, `mz`scheme.  Each `p[n]` is read only once the
-    // bytes before it are known not to be the terminator.
-    let heredoc_command = |p: *const c_char| {
-        // SAFETY: `p` is inside a NUL-terminated line, and each `b(n)` is
-        // read only once the bytes before it are known not to be the NUL.
-        let b = |i: usize| unsafe { *p.add(i) } as u8;
+    // Whether the command `cmd` starts with is one of the interpreter
+    // commands that takes a `<<` heredoc, matched by its shortest
+    // abbreviation plus whatever may follow: `py`/`py3`/`pyx`/`pyt`hon,
+    // `pe`rl, `tc`l, `lua`, `rub`y, `mz`scheme.
+    let heredoc_command = |cmd: &[u8]| {
+        let b = |i: usize| cmd.get(i).copied().unwrap_or(0);
         (b(0) == b'p'
             && b(1) == b'y'
             && (!b(2).is_ascii_alphanumeric()
@@ -80,12 +77,8 @@ pub(crate) unsafe fn get_function_body(
 
     // `[trim]` in a heredoc introducer: the body's lines then have the
     // introducer's own indent stripped.
-    let is_word = |p: *const c_char, word: &CStr| {
-        let n = word.count_bytes();
-        unsafe {
-            cstr::prefix_eq(p, word.as_ptr(), n)
-                && (*p.add(n) == NUL as c_char || ascii_iswhite(*p.add(n) as c_int))
-        }
+    let is_word = |text: &[u8], word: &[u8]| {
+        text.starts_with(word) && matches!(text.get(word.len()), None | Some(b' ' | b'\t'))
     };
 
     'theend: {
@@ -97,17 +90,19 @@ pub(crate) unsafe fn get_function_body(
             need_wait_return.set(false);
 
             let theline;
-            let mut p;
-            let mut arg: *mut c_char;
             if !line_arg.is_null() {
                 // Use eap->arg, split up in parts by line breaks.
                 theline = line_arg;
-                p = unsafe { vim_strchr(theline, b'\n' as c_int) };
-                if p.is_null() {
-                    line_arg = unsafe { line_arg.add(cstr::bytes_at(line_arg).len()) };
-                } else {
-                    unsafe { *p = NUL as c_char };
-                    line_arg = unsafe { p.add(1) };
+                // SAFETY: `line_arg` walks the command's own NUL-terminated
+                // line, which this loop splits in place.
+                let rest = unsafe { cstr::bytes_at(line_arg) };
+                match rest.iter().position(|&b| b == b'\n') {
+                    None => line_arg = line_arg.wrapping_add(rest.len()),
+                    Some(at) => {
+                        // SAFETY: as above -- the newline is inside the line.
+                        unsafe { *line_arg.add(at) = NUL as c_char };
+                        line_arg = line_arg.wrapping_add(at + 1);
+                    }
                 }
             } else {
                 unsafe { xfree(*line_to_free as *mut c_void) };
@@ -122,20 +117,20 @@ pub(crate) unsafe fn get_function_body(
             if KeyTyped.get() {
                 lines_left.set(Rows.get() - 1);
             }
-            if theline.is_null() {
-                if !skip_until.is_null() {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let skip_until = unsafe { c_str(skip_until) };
-                    semsg!("E1145: Missing heredoc end marker: {skip_until}");
+            // SAFETY: the line just read is null or NUL-terminated, and
+            // nothing writes it while this walk reads it.
+            let Some(line) = (unsafe { cstr::at_opt(theline) }).map(CStr::to_bytes) else {
+                if let Some(marker) = &skip_until {
+                    let marker = msg_bytes(marker);
+                    semsg!("E1145: Missing heredoc end marker: {marker}");
                 } else {
                     emsg(gettext(c"E126: Missing :endfunction"));
                 }
                 break 'theend;
-            }
+            };
             if show_block {
                 debug_assert!(indent >= 0);
-                // SAFETY: the line just read, NUL-terminated.
-                ui_ext_cmdline_block_append(indent as size_t, unsafe { cstr::bytes_at(theline) });
+                ui_ext_cmdline_block_append(indent as size_t, line);
             }
 
             // Detect line continuation: SOURCING_LNUM increased by more
@@ -147,64 +142,55 @@ pub(crate) unsafe fn get_function_body(
                 sourcing_lnum_off = 0;
             }
 
-            if !skip_until.is_null() {
+            let indented = skip::white(line);
+            if let Some(marker) = &skip_until {
                 // Don't check for ":endfunc" between
                 // * ":append" and "."
                 // * ":python <<EOF" and "EOF"
                 // * ":let {var-name} =<< [trim] {marker}" and "{marker}"
-                if heredoc_trimmed.is_null()
-                    || (is_heredoc && unsafe { skipwhite(theline) } == theline)
-                    || unsafe { cstr::prefix_eq(theline, heredoc_trimmed, heredoc_trimmedlen) }
-                {
-                    p = if heredoc_trimmed.is_null()
-                        || (is_heredoc && unsafe { skipwhite(theline) } == theline)
-                    {
-                        theline
-                    } else {
-                        unsafe { theline.add(heredoc_trimmedlen) }
-                    };
-                    if unsafe { cstr::eq(p, skip_until) } {
-                        unsafe { xfree(skip_until as *mut c_void) };
-                        skip_until = ptr::null_mut();
-                        unsafe { xfree(heredoc_trimmed as *mut c_void) };
-                        heredoc_trimmed = ptr::null_mut();
-                        heredoc_trimmedlen = 0;
+                let unindented = heredoc_trimmed.is_empty() || (is_heredoc && indented == 0);
+                if unindented || line.starts_with(&heredoc_trimmed) {
+                    let at = if unindented { 0 } else { heredoc_trimmed.len() };
+                    if line[at..] == marker[..] {
+                        skip_until = None;
+                        heredoc_trimmed.clear();
                         do_concat = true;
                         is_heredoc = false;
                     }
                 }
             } else {
                 // Skip ':' and blanks.
-                p = theline;
-                // SAFETY: `theline` is NUL-terminated, so the walk stops.
-                let w = unsafe { Cur::new(&raw mut p) };
-                while ascii_iswhite(c_int::from(w.byte())) || w.byte() == b':' {
-                    w.bump(1);
-                }
+                let mut p = line
+                    .iter()
+                    .take_while(|&&b| ascii_iswhite(c_int::from(b)) || b == b':')
+                    .count();
 
                 // Check for "endfunction".  The count is decremented on
                 // every one seen; only the outermost ends the body.
-                if unsafe { checkforcmd(&raw mut p, c"endfunction".as_ptr(), 4) } && {
-                    let outermost = nesting == 0;
-                    nesting -= 1;
-                    outermost
-                } {
-                    // SAFETY: `p` is inside the NUL-terminated line.
-                    let w = unsafe { Cur::new(&raw mut p) };
-                    if w.byte() == b'!' {
-                        w.bump(1);
+                if let Some(after) = check_for_word_in(line, p, b"endfunction", 4)
+                    && {
+                        let outermost = nesting == 0;
+                        nesting -= 1;
+                        outermost
+                    }
+                {
+                    let mut after = after;
+                    if byte_at(line, after) == b'!' {
+                        after += 1;
                     }
                     let mut nextcmd: *mut c_char = ptr::null_mut();
-                    if w.byte() == b'|' {
-                        nextcmd = unsafe { p.add(1) };
-                    } else if !line_arg.is_null()
-                        && unsafe { *skipwhite(line_arg) } != NUL as c_char
-                    {
+                    // SAFETY: `line_arg` walks the NUL-terminated command
+                    // line, where it is not null.
+                    let more_args = !line_arg.is_null()
+                        && skip::white(unsafe { cstr::bytes_at(line_arg) })
+                            < unsafe { cstr::bytes_at(line_arg) }.len();
+                    if byte_at(line, after) == b'|' {
+                        nextcmd = theline.wrapping_add(after + 1);
+                    } else if more_args {
                         nextcmd = line_arg;
-                    } else if w.byte() != NUL as u8 && w.byte() != b'"' && p_verbose() > 0 {
-                        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                        let p = unsafe { c_str(p) };
-                        swmsg!(true, "W22: Text found after :endfunction: {p}");
+                    } else if !matches!(byte_at(line, after), 0 | b'"') && p_verbose() > 0 {
+                        let rest = msg_bytes(&line[after..]);
+                        swmsg!(true, "W22: Text found after :endfunction: {rest}");
                     }
                     if !nextcmd.is_null() {
                         // Another command follows. When it is in the
@@ -231,27 +217,26 @@ pub(crate) unsafe fn get_function_body(
 
                 // Increase the indent inside "if", "while", "for" and
                 // "try", decrease it at "end".
-                if indent > 2 && unsafe { cstr::starts_with(p, b"end") } {
+                let word = &line[p..];
+                if indent > 2 && word.starts_with(b"end") {
                     indent -= 2;
-                } else if unsafe { cstr::starts_with(p, b"if") }
-                    || unsafe { cstr::starts_with(p, b"wh") }
-                    || unsafe { cstr::starts_with(p, b"for") }
-                    || unsafe { cstr::starts_with(p, b"try") }
+                } else if word.starts_with(b"if")
+                    || word.starts_with(b"wh")
+                    || word.starts_with(b"for")
+                    || word.starts_with(b"try")
                 {
                     indent += 2;
                 }
 
                 // Check for defining a function inside this function.
-                if unsafe { checkforcmd(&raw mut p, c"function".as_ptr(), 2) } {
-                    if unsafe { *p } == b'!' as c_char {
-                        p = unsafe { skipwhite(p.add(1)) };
+                if let Some(after) = check_for_word_in(line, p, b"function", 2) {
+                    p = after;
+                    if byte_at(line, p) == b'!' {
+                        p += 1 + skip::white(&line[p + 1..]);
                     }
-                    p = unsafe { p.offset(eval_fname_script(p) as isize) };
-                    let (pp, no_dict) = (&raw mut p, ptr::null_mut());
-                    let no_partial = ptr::null_mut();
-                    let nested = unsafe { trans_function_name(pp, true, 0, no_dict, no_partial) };
-                    unsafe { xfree(nested as *mut c_void) };
-                    if unsafe { *skipwhite(p) } == b'(' as c_char {
+                    p += fname_script_len(&line[p..]);
+                    p += trans_function_name(&line[p..], true, 0, false).end;
+                    if byte_at(line, p + skip::white(&line[p..])) == b'(' {
                         if nesting == MAX_FUNC_NESTING - 1 {
                             emsg(gettext(E_FUNCTION_NESTING_TOO_DEEP));
                         } else {
@@ -263,52 +248,36 @@ pub(crate) unsafe fn get_function_body(
 
                 // Check for ":append", ":change", ":insert", which run
                 // until a line holding only a dot.
-                // SAFETY: `p` is NUL-terminated; a null context is "not completing".
-                p = unsafe { p.add(skip_range(cstr::bytes_at(p), None)) };
-                let tp = p;
-                let ranged = unsafe {
-                    checkforcmd(&raw mut p, c"append".as_ptr(), 1)
-                        || checkforcmd(&raw mut p, c"change".as_ptr(), 1)
-                        || checkforcmd(&raw mut p, c"insert".as_ptr(), 1)
-                };
-                // SAFETY: `p` is inside the NUL-terminated line.
-                let after = unsafe { Cur::new(&raw mut p) };
-                if ranged
-                    && (after.byte() == b'!'
-                        || after.byte() == b'|'
-                        || ascii_iswhite_nl_or_nul(c_int::from(after.byte())))
+                // A null context is "not completing".
+                p += skip_range(&line[p..], None);
+                let ranged = check_for_word_in(line, p, b"append", 1)
+                    .or_else(|| check_for_word_in(line, p, b"change", 1))
+                    .or_else(|| check_for_word_in(line, p, b"insert", 1));
+                if let Some(after) = ranged
+                    && (byte_at(line, after) == b'!'
+                        || byte_at(line, after) == b'|'
+                        || ascii_iswhite_nl_or_nul(c_int::from(byte_at(line, after))))
                 {
-                    skip_until =
-                        unsafe { xmemdupz(c".".as_ptr() as *const c_void, 1) } as *mut c_char;
-                } else {
-                    p = tp;
+                    skip_until = Some(b".".to_vec());
+                    p = after;
                 }
 
                 // Heredoc: check for ":python <<EOF", ":lua <<EOF", etc.
-                arg = unsafe { skipwhite(skiptowhite(p)) };
-                if unsafe { *arg } == b'<' as c_char
-                    && unsafe { *arg.add(1) } == b'<' as c_char
-                    && heredoc_command(p)
-                {
+                let mut arg = p + skip::to_white(&line[p..]);
+                arg += skip::white(&line[arg..]);
+                if line[arg..].starts_with(b"<<") && heredoc_command(&line[p..]) {
                     // ":python <<" continues until a dot, like ":append".
-                    p = unsafe { skipwhite(arg.add(2)) };
-                    if is_word(p, c"trim") {
+                    p = arg + 2 + skip::white(&line[arg + 2..]);
+                    if is_word(&line[p..], b"trim") {
                         // Ignore leading white space.
-                        p = unsafe { skipwhite(p.add(4)) };
-                        heredoc_trimmedlen =
-                            unsafe { skipwhite(theline).offset_from(theline) } as size_t;
-                        heredoc_trimmed =
-                            unsafe { xmemdupz(theline as *const c_void, heredoc_trimmedlen) }
-                                as *mut c_char;
+                        p += 4 + skip::white(&line[p + 4..]);
+                        heredoc_trimmed = line[..indented].to_vec();
                     }
-                    skip_until = if unsafe { *p } == NUL as c_char {
-                        unsafe { xmemdupz(c".".as_ptr() as *const c_void, 1) as *mut c_char }
+                    skip_until = Some(if p == line.len() {
+                        b".".to_vec()
                     } else {
-                        unsafe {
-                            xmemdupz(p as *const c_void, skiptowhite(p).offset_from(p) as size_t)
-                                as *mut c_char
-                        }
-                    };
+                        line[p..p + skip::to_white(&line[p..])].to_vec()
+                    });
                     do_concat = false;
                     is_heredoc = true;
                 }
@@ -317,48 +286,45 @@ pub(crate) unsafe fn get_function_body(
                     // Check for ":cmd v =<< [trim] EOF" and
                     // ":cmd [a, b] =<< [trim] EOF", where "cmd" is "let"
                     // or "const".
-                    arg = p;
-                    if unsafe { checkforcmd(&raw mut arg, c"let".as_ptr(), 2) }
-                        || unsafe { checkforcmd(&raw mut p, c"const".as_ptr(), 5) }
+                    //
+                    // Upstream steps past "let" with the copy it parses the
+                    // targets from, but past "const" with the line's own
+                    // cursor, so for "const" the targets are read from the
+                    // word "const" itself and never reach the "=<<".
+                    let targets = match check_for_word_in(line, p, b"let", 2) {
+                        Some(after) => Some(after),
+                        None => check_for_word_in(line, p, b"const", 5).map(|after| {
+                            let at = p;
+                            p = after;
+                            at
+                        }),
+                    };
+                    let operator = targets
+                        .and_then(|at| skip_var_list(&line[at..], true).map(|list| at + list.end))
+                        .map(|at| at + skip::white(&line[at..]));
+                    if let Some(operator) = operator
+                        && line[operator..].starts_with(b"=<<")
                     {
-                        // SAFETY: `arg` is inside the NUL-terminated body line.
-                        let targets = unsafe { cstr::bytes_at(arg) };
-                        arg = match skip_var_list(targets, true) {
-                            Some(list) => arg.wrapping_add(list.end),
-                            None => ptr::null_mut(),
-                        };
-                        if !arg.is_null() {
-                            arg = unsafe { skipwhite(arg) };
-                        }
-                        if !arg.is_null() && unsafe { cstr::starts_with(arg, b"=<<") } {
-                            p = unsafe { skipwhite(arg.add(3)) };
-                            let mut has_trim = false;
-                            loop {
-                                // Both modifiers may appear, in either
-                                // order and more than once.
-                                if is_word(p, c"trim") {
-                                    p = unsafe { skipwhite(p.add(4)) };
-                                    has_trim = true;
-                                } else if is_word(p, c"eval") {
-                                    p = unsafe { skipwhite(p.add(4)) };
-                                } else {
-                                    break;
-                                }
+                        p = operator + 3 + skip::white(&line[operator + 3..]);
+                        let mut has_trim = false;
+                        loop {
+                            // Both modifiers may appear, in either order
+                            // and more than once.
+                            if is_word(&line[p..], b"trim") {
+                                p += 4 + skip::white(&line[p + 4..]);
+                                has_trim = true;
+                            } else if is_word(&line[p..], b"eval") {
+                                p += 4 + skip::white(&line[p + 4..]);
+                            } else {
+                                break;
                             }
-                            if has_trim {
-                                heredoc_trimmedlen =
-                                    unsafe { skipwhite(theline).offset_from(theline) } as size_t;
-                                heredoc_trimmed = unsafe {
-                                    xmemdupz(theline as *const c_void, heredoc_trimmedlen)
-                                } as *mut c_char;
-                            }
-                            unsafe { xfree(skip_until as *mut c_void) };
-                            let word = unsafe { skiptowhite(p).offset_from(p) } as size_t;
-                            let marker = unsafe { xmemdupz(p as *const c_void, word) };
-                            skip_until = marker as *mut c_char;
-                            do_concat = false;
-                            is_heredoc = true;
                         }
+                        if has_trim {
+                            heredoc_trimmed = line[..indented].to_vec();
+                        }
+                        skip_until = Some(line[p..p + skip::to_white(&line[p..])].to_vec());
+                        do_concat = false;
+                        is_heredoc = true;
                     }
                 }
             }
@@ -369,7 +335,7 @@ pub(crate) unsafe fn get_function_body(
             // Copy the line to newly allocated memory.
             // `get_one_sourceline` allocates 250 bytes per line, so this
             // saves 80% on average at the cost of an alloc/free.
-            unsafe { ga_push_string(newlines, xstrdup(theline)) };
+            unsafe { ga_push_string(newlines, XString::from_bytes(line).into_raw()) };
 
             // Add NULL lines for the continuation lines, so that the line
             // count equals the index in the growarray.
@@ -389,8 +355,6 @@ pub(crate) unsafe fn get_function_body(
         }
     }
 
-    unsafe { xfree(skip_until as *mut c_void) };
-    unsafe { xfree(heredoc_trimmed as *mut c_void) };
     need_wait_return.set(need_wait_return.get() || saved_wait_return);
     ret
 }

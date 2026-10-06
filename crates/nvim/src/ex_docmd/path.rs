@@ -26,7 +26,7 @@ use crate::eval::typval::{
     ListRef, TV_INITIAL_VALUE, callback_free, list_copy, list_find, list_iter, list_len, tv_clear,
 };
 
-use crate::eval::userfunc::get_scriptlocal_funcname;
+use crate::eval::userfunc::scriptlocal_funcname;
 use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
 use crate::ex_docmd::xfree;
 use crate::ex_docmd::{ffu_cb, kCdCauseManual, prev_dir};
@@ -187,7 +187,9 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
         return Err((e_invarg).into());
     }
     let varp = args.os_varp.string_var();
-    let name = unsafe { get_scriptlocal_funcname(varp.value_ptr()) };
+    // SAFETY: a string option's value is null or NUL-terminated.
+    let value = unsafe { cstr::bytes_at_or_empty(varp.value_ptr()) };
+    let name = scriptlocal_funcname(value).map_or(ptr::null_mut(), XString::into_raw);
     if !name.is_null() {
         // Replace and *then* free; see `did_set_optexpr`.
         let old = unsafe { varp.replace(name) };

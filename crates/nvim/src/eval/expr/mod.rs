@@ -5,8 +5,6 @@
 
 mod cursor;
 pub(crate) use self::cursor::*;
-mod bridge;
-pub(crate) use self::bridge::*;
 mod level;
 pub use self::level::*;
 mod arith;

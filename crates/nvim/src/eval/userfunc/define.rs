@@ -23,8 +23,9 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
-use crate::eval::Cur;
-use crate::eval::typval::{DictTab, tv_dict_item_free};
+use crate::eval::typval::value_check_lock_named;
+use crate::eval::vars::with_var;
+use crate::memory::XString;
 use crate::types::{FAIL, Failed, NUL, Refcount};
 
 /// Whether the function table changed under a listing, which means the
@@ -35,6 +36,20 @@ pub(crate) fn function_list_modified(prev_ht_changed: c_int) -> c_int {
         return 1;
     }
     0
+}
+
+/// The name to show a user: the unmangled `<SNR>123_name` when there is one.
+///
+/// # Safety
+/// `func` is a live function.
+pub(crate) unsafe fn printable_func_name(func: *mut UserFunc) -> *mut c_char {
+    // SAFETY: the caller's promise -- `func` is a live function.
+    let f = unsafe { Uf::new(func) };
+    if !f.uf_name_exp.is_null() {
+        f.uf_name_exp
+    } else {
+        uf_name_ptr(func)
+    }
 }
 
 /// Print `function Name(a, b = 1, ...) range dict abort closure`, the head of
@@ -121,19 +136,17 @@ pub(crate) unsafe fn list_func_head(
 /// it, over a dozen locals that outlived the jumps. Those locals are these
 /// fields, and each label is the tail of the method whose refusal names it.
 ///
-/// Whoever builds one promises that `cursor` walks the command's
-/// NUL-terminated argument, so every method below is ordinary checked code
-/// resting on that.
+/// The parse walks the command line by offset, `at`.
 struct Definition<'a> {
     /// The command being run.
     excmd: &'a mut ExArg,
-    /// Where in the command's argument the parse has got to.
-    cursor: Cur,
+    /// Where in the command line the parse has got to.
+    at: usize,
     /// The name being defined, owned until it is handed to the function.
     /// Null for a dictionary function, which is given a number instead.
     name: *mut c_char,
     /// The dictionary entry a `dict.func` name resolved to.
-    fudi: FuncDict,
+    fudi: Option<FuncDict>,
     /// The body's first line, when it is in the command itself
     /// (`exe "func T()\n…\nendfunc"`) rather than read from the source.
     line_arg: *mut c_char,
@@ -181,27 +194,34 @@ impl Definition<'_> {
     fn define(&mut self, paren: bool) {
         if !paren {
             // ":function func": list that one function.
-            // SAFETY: the live command, and the name and cursor into it.
-            let _ = unsafe { list_one_function(self.excmd, self.name, self.cursor.get()) };
+            // SAFETY: a null name is no name; otherwise it is this record's
+            // own NUL-terminated string.
+            let name = unsafe { cstr::at_opt(self.name) }
+                .map(CStr::to_bytes)
+                .unwrap_or_default();
+            let _ = list_one_function(self.excmd, name, self.at);
             return;
         }
 
-        self.cursor.skip(0);
-        if self.cursor.byte() != b'(' {
+        self.at = self.excmd.line.skip_white(self.at);
+        if self.excmd.line.byte_at(self.at) != b'(' {
             if !self.excmd.skip {
                 let arg = msg_bytes(self.excmd.line.arg());
                 semsg!("E124: Missing '(': {arg}");
                 return;
             }
             // Attempt to carry on by skipping some text.
-            // SAFETY: the cursor walks the command's NUL-terminated argument.
-            if has_char(unsafe { cstr::at(self.cursor.get()) }, b'(' as c_int) {
-                // SAFETY: as above.
-                self.cursor
-                    .set(unsafe { vim_strchr(self.cursor.get(), b'(' as c_int) });
+            if let Some(paren) = self
+                .excmd
+                .line
+                .rest_of(self.at)
+                .iter()
+                .position(|&b| b == b'(')
+            {
+                self.at += paren;
             }
         }
-        self.cursor.skip(1);
+        self.at = self.excmd.line.skip_white(self.at + 1);
 
         let slot = size_of::<*mut c_char>() as c_int;
         // SAFETY: both arrays are this record's own.
@@ -231,28 +251,33 @@ impl Definition<'_> {
     fn check_name(&mut self) -> Option<()> {
         // Check the name of the function, unless it is a dictionary
         // function that is being overwritten.
-        let arg = if self.name.is_null() {
-            self.fudi.fd_newkey
-        } else {
-            self.name
-        };
         // A dictionary function defined with bracket notation
         // (`obj['foo-bar']()`) is named by a *dictionary key*, which need
         // not follow the function naming rules, so the identifier check is
-        // skipped for it.
-        // SAFETY, for every region below: `fd_di` is a live item when it is
-        // not null, and `arg` is a NUL-terminated name.
-        let named = !arg.is_null()
-            && (self.fudi.fd_di.is_null() || !unsafe { (*self.fudi.fd_di).di_tv.is_func() })
-            && arg != self.fudi.fd_newkey;
-        // SAFETY: as above -- `arg` is one of the two NUL-terminated names.
-        if named && !reads_as_identifier(unsafe { cstr::at(arg) }) {
-            // SAFETY: as above; the format takes one string.
-            unsafe { emsg_funcname(e_invarg2.as_ptr(), arg) };
+        // skipped for it -- and so is the name of an existing entry that
+        // holds a Funcref.
+        let holds_func = self.fudi.as_ref().is_some_and(|fudi| {
+            !fudi.new_key
+                && fudi
+                    .dict
+                    .find(&fudi.key)
+                    .is_some_and(|item| item.di_tv.is_func())
+        });
+        // SAFETY: a null name is no name; otherwise it is this record's own
+        // NUL-terminated string.
+        let name = unsafe { cstr::at_opt(self.name) }.map(CStr::to_bytes);
+        if let Some(name) = name
+            && !holds_func
+            && !reads_as_identifier(name)
+        {
+            emsg_funcname(e_invarg2, name);
             return None;
         }
         // Disallow using the g: dict.
-        if !self.fudi.fd_dict.is_null() && unsafe { (*self.fudi.fd_dict).dv_scope } == VAR_DEF_SCOPE
+        if self
+            .fudi
+            .as_ref()
+            .is_some_and(|fudi| fudi.dict.dv_scope == VAR_DEF_SCOPE)
         {
             emsg(gettext(c"E862: Cannot use g: here"));
             return None;
@@ -268,13 +293,10 @@ impl Definition<'_> {
         let names = &raw mut self.newargs;
         let (varp, defs) = (&raw mut self.varargs, &raw mut self.default_args);
         let skip = self.excmd.skip;
-        let read = |cursor: &mut Cursor<'_>| {
-            // SAFETY: the three out-parameters are this record's own.
-            unsafe { get_function_args(cursor, b')', names, varp, defs, skip) }
-        };
-        // SAFETY: the cursor walks the `:function` command line, which the
-        // defaults -- parsed, not evaluated -- run no code over.
-        let parsed = unsafe { self.cursor.with_cursor(read) };
+        let mut cursor = Cursor::new(self.excmd.line.rest_of(self.at));
+        // SAFETY: the three out-parameters are this record's own.
+        let parsed = unsafe { get_function_args(&mut cursor, b')', names, varp, defs, skip) };
+        self.at += cursor.offset();
         if parsed.is_ok() {
             if KeyTyped.get() && ui_has(kUICmdline) {
                 self.show_block = true;
@@ -342,10 +364,7 @@ impl Definition<'_> {
     /// the body on the same line, a comment, or nothing.
     fn parse_attributes(&mut self) -> Result<(), Refusal> {
         loop {
-            self.cursor.skip(0);
-            // SAFETY, for every region in this loop: the cursor walks the
-            // command's NUL-terminated argument, and `starts_with` stops at
-            // the terminator.
+            self.at = self.excmd.line.skip_white(self.at);
             let attribute = [
                 (&b"range"[..], FuncFlags::RANGE),
                 (&b"dict"[..], FuncFlags::DICT),
@@ -353,39 +372,34 @@ impl Definition<'_> {
                 (&b"closure"[..], FuncFlags::CLOSURE),
             ]
             .into_iter()
-            .find(|(word, _)| unsafe { cstr::starts_with(self.cursor.get(), word) });
+            .find(|(word, _)| self.excmd.line.starts_with(self.at, word));
             let Some((word, flag)) = attribute else {
                 break;
             };
             self.flags |= flag;
-            self.cursor.bump(word.len());
+            self.at += word.len();
             if flag == FuncFlags::CLOSURE && current_fc().is_null() {
-                let what = if self.name.is_null() {
-                    c"".as_ptr()
-                } else {
-                    self.name.cast_const()
-                };
-                let fmt = c"E932: Closure function should not be at top level: %s";
-                // SAFETY: a format taking one NUL-terminated string, and a
-                // name that is one.
-                unsafe { emsg_funcname(fmt.as_ptr(), what) };
+                // SAFETY: a null name is no name; otherwise it is this
+                // record's own NUL-terminated string.
+                let what = unsafe { cstr::at_opt(self.name) }
+                    .map(CStr::to_bytes)
+                    .unwrap_or_default();
+                emsg_funcname(
+                    c"E932: Closure function should not be at top level: %s",
+                    what,
+                );
                 return Err(Refusal::Unwind);
             }
         }
 
         // A line break means the body follows in the same string, which is
         // what makes `exe "func T()\n...\nendfunc"` work.
-        if self.cursor.byte() == b'\n' {
-            // SAFETY: the byte after a newline is inside the string.
-            self.line_arg = unsafe { self.cursor.get().add(1) };
-        } else if self.cursor.byte() != NUL as u8
-            && self.cursor.byte() != b'"'
-            && !self.excmd.skip
-            && did_emsg.get() == 0
-        {
-            // SAFETY: the cursor walks a NUL-terminated string.
-            let p = unsafe { c_str(self.cursor.get()) };
-            semsg!("E488: Trailing characters: {p}");
+        let next = self.excmd.line.byte_at(self.at);
+        if next == b'\n' {
+            self.line_arg = self.excmd.line.ptr_at(self.at + 1);
+        } else if next != NUL as u8 && next != b'"' && !self.excmd.skip && did_emsg.get() == 0 {
+            let rest = msg_bytes(self.excmd.line.rest_of(self.at));
+            semsg!("E488: Trailing characters: {rest}");
         }
 
         if KeyTyped.get() {
@@ -408,32 +422,31 @@ impl Definition<'_> {
         if self.excmd.skip || self.excmd.forceit {
             return;
         }
-        if !self.fudi.fd_dict.is_null() && self.fudi.fd_newkey.is_null() {
+        // SAFETY: a null name is no name; otherwise it is this record's own
+        // NUL-terminated string.
+        let name = unsafe { cstr::at_opt(self.name) }.map(CStr::to_bytes);
+        if self.fudi.as_ref().is_some_and(|fudi| !fudi.new_key) {
             emsg(gettext(E_FUNCDICT));
-        // SAFETY: a NUL-terminated function name.
-        } else if !self.name.is_null() && !unsafe { find_func(self.name) }.is_null() {
-            // SAFETY: as above -- the format takes one string.
-            unsafe { emsg_funcname(E_FUNCEXTS.as_ptr(), self.name) };
+        } else if let Some(name) = name
+            && !find_func(name).is_null()
+        {
+            emsg_funcname(E_FUNCEXTS, name);
         }
     }
 
     /// Find the function this definition replaces, or make room for a new
     /// one, answering the length of the name it is to carry.
     fn resolve_target(&mut self) -> Result<size_t, Refusal> {
-        if !self.fudi.fd_dict.is_null() {
+        if self.fudi.is_some() {
             return self.number_dict_function();
         }
-        let mut ht: *mut DictTab = ptr::null_mut();
-        // SAFETY, for every region below: `name` is the NUL-terminated name
-        // being defined, and `ht` is this frame's own.
-        let name_len = unsafe { cstr::bytes_at(self.name) }.len();
-        let v = unsafe { find_var(self.name, name_len, &raw mut ht, false) };
-        if !v.is_null() && unsafe { (*v).di_tv.v_type() } == VAR_FUNC {
-            let clash = c"E707: Function name conflicts with variable: %s";
-            unsafe { emsg_funcname(clash.as_ptr(), self.name) };
+        // SAFETY: the NUL-terminated name being defined.
+        let name = unsafe { cstr::bytes_at(self.name) };
+        if with_var(name, false, |item| item.di_tv.v_type() == VAR_FUNC) == Some(true) {
+            emsg_funcname(c"E707: Function name conflicts with variable: %s", name);
             return Err(Refusal::Unwind);
         }
-        self.func = unsafe { find_func(self.name) };
+        self.func = find_func(name);
         if !self.func.is_null() {
             self.replace_existing()?;
         }
@@ -450,13 +463,13 @@ impl Definition<'_> {
         // table answered, and `name` its NUL-terminated name.
         let (sid, seq) = unsafe { ((*func).uf_script_ctx.sc_sid, (*func).uf_script_ctx.sc_seq) };
         let sctx = current_sctx.get();
+        let name = unsafe { cstr::bytes_at(self.name) };
         if !self.excmd.forceit && (sid != sctx.sc_sid || seq == sctx.sc_seq) {
-            unsafe { emsg_funcname(E_FUNCEXTS.as_ptr(), self.name) };
+            emsg_funcname(E_FUNCEXTS, name);
             return Err(Refusal::Keep);
         }
         if unsafe { (*func).uf_calls } > 0 {
-            let busy = c"E127: Cannot redefine function %s: It is in use";
-            unsafe { emsg_funcname(busy.as_ptr(), self.name) };
+            emsg_funcname(c"E127: Cannot redefine function %s: It is in use", name);
             return Err(Refusal::Keep);
         }
         if unsafe { (*func).uf_refcount }.is_shared() {
@@ -492,26 +505,21 @@ impl Definition<'_> {
     /// sequential number, reachable only through a Funcref.
     fn number_dict_function(&mut self) -> Result<size_t, Refusal> {
         self.func = ptr::null_mut();
-        if self.fudi.fd_newkey.is_null() && !self.excmd.forceit {
+        let Some(fudi) = &self.fudi else {
+            return Err(Refusal::Unwind);
+        };
+        if !fudi.new_key && !self.excmd.forceit {
             emsg(gettext(E_FUNCDICT));
             return Err(Refusal::Unwind);
         }
-        // SAFETY: `fd_dict` is the live dictionary and `fd_di` its item when
-        // it is not null; `ea.arg` names the command for the message.
-        let locked = unsafe {
-            if self.fudi.fd_di.is_null() {
-                // Can't add a function to a locked dictionary.
-                value_check_lock(
-                    (*self.fudi.fd_dict).dv_lock,
-                    self.excmd.arg_ptr(),
-                    TV_CSTRING,
-                )
-            } else {
-                // Can't change an existing function if it is locked.
-                value_check_lock((*self.fudi.fd_di).di_lock, self.excmd.arg_ptr(), TV_CSTRING)
-            }
+        // Can't add a function to a locked dictionary, and can't change an
+        // existing function if it is locked. The entry is found again: the
+        // body that was just read may have run code that removed it.
+        let lock = match fudi.dict.find(&fudi.key) {
+            Some(item) if !fudi.new_key => item.di_lock,
+            _ => fudi.dict.dv_lock,
         };
-        if locked {
+        if value_check_lock_named(lock, self.excmd.line.arg()) {
             return Err(Refusal::Unwind);
         }
 
@@ -532,7 +540,7 @@ impl Definition<'_> {
     /// put it in the table.
     fn create(&mut self, mut namelen: size_t) -> Result<(), Refusal> {
         // SAFETY: `name` is the NUL-terminated name being defined.
-        if self.fudi.fd_dict.is_null()
+        if self.fudi.is_none()
             && has_char(unsafe { cstr::at(self.name) }, AUTOLOAD_CHAR)
             && !self.autoload_name_matches_script()
         {
@@ -549,7 +557,7 @@ impl Definition<'_> {
         // SAFETY: as above.
         self.func = unsafe { alloc_ufunc(self.name, namelen) };
 
-        if !self.fudi.fd_dict.is_null() {
+        if self.fudi.is_some() {
             self.add_dict_entry(namelen)?;
             // Behave as though "dict" had been used.
             self.flags |= FuncFlags::DICT;
@@ -603,29 +611,25 @@ impl Definition<'_> {
     /// Put a Funcref to the new function in the dictionary entry the name
     /// resolved to, creating the entry when there was none.
     fn add_dict_entry(&mut self, namelen: size_t) -> Result<(), Refusal> {
-        if self.fudi.fd_di.is_null() {
-            // Add a new dict entry.
-            // SAFETY: `fd_newkey` is the owned key text and `fd_dict` the
-            // live dictionary.
-            self.fudi.fd_di = unsafe { tv_dict_item_alloc(self.fudi.fd_newkey) };
-            // SAFETY: as above -- the item is freed again if it is refused.
-            if unsafe { (*self.fudi.fd_dict).add_item(self.fudi.fd_di) }.is_err() {
-                // SAFETY: as above.
-                unsafe { tv_dict_item_free(self.fudi.fd_di) };
-                // SAFETY: `func` was allocated just now and never installed.
-                unsafe { xfree(self.func as *mut c_void) };
-                self.func = ptr::null_mut();
-                return Err(Refusal::Unwind);
-            }
-        } else {
-            // Overwrite the existing dict entry.
-            // SAFETY: `fd_di` is the live item.
-            unsafe { tv_clear(&mut (*self.fudi.fd_di).di_tv) };
+        let Some(fudi) = &mut self.fudi else {
+            return Ok(());
+        };
+        let (dict, key) = (&mut fudi.dict, &fudi.key[..]);
+        // The entry an existing key named is found again, and one that has
+        // gone since is added back.
+        let existing = !fudi.new_key && dict.find(key).is_some();
+        if !existing && dict.add_value(key, TV_INITIAL_VALUE).is_err() {
+            // SAFETY: `func` was allocated just now and never installed.
+            unsafe { xfree(self.func as *mut c_void) };
+            self.func = ptr::null_mut();
+            return Err(Refusal::Unwind);
         }
+        let item = dict.find_mut(key).expect("the entry just found or added");
+        // Overwrite the existing dict entry.
+        tv_clear(&mut item.di_tv);
         // SAFETY: `name` is the NUL-terminated name being defined.
         let owned = unsafe { xmemdupz(self.name as *const c_void, namelen) } as *mut c_char;
-        // SAFETY: the item is live and takes the copy over.
-        unsafe { (*self.fudi.fd_di).di_tv.write_func_name(owned) };
+        item.di_tv.write_func_name(owned);
         Ok(())
     }
 
@@ -676,8 +680,8 @@ impl Definition<'_> {
 /// Each byte is read the way the C reads it, through a signed `c_char`, so
 /// that a byte over 0x7f asks the character classes about a *negative*
 /// number and is refused rather than wrapping into some other class.
-fn reads_as_identifier(name: &CStr) -> bool {
-    let mut bytes = name.to_bytes();
+fn reads_as_identifier(name: &[u8]) -> bool {
+    let mut bytes = name;
     if bytes.first().map(|&b| c_int::from(b)) == Some(K_SPECIAL) {
         // Skip the mangling: `<SNR>`, a script number, and an underscore.
         // Upstream steps three bytes in when there is no underscore, which
@@ -724,33 +728,30 @@ pub fn ex_function(excmd: &mut ExArg) {
 
     // Get the function name.  There are these situations:
     //   func       a normal function name: "name" == func, no dict
-    //   dict.func  a new dictionary entry: "name" == NULL, fd_dict set,
-    //              fd_di == NULL, fd_newkey == func
-    //   dict.func  an existing entry holding a Funcref: "name" == func,
-    //              fd_dict and fd_di set, fd_newkey == NULL
-    //   dict.func  an existing entry that is not a Funcref:
-    //              "name" == NULL, fd_dict and fd_di set
+    //   dict.func  a new dictionary entry: "name" == NULL, a dict entry
+    //              with `new_key`
+    //   dict.func  an existing entry holding a Funcref: "name" == func and
+    //              a dict entry
+    //   dict.func  an existing entry that is not a Funcref: "name" == NULL
+    //              and a dict entry
     //   s:func     a script-local name; g:func is the same as func
-    let mut fudi = FUNCDICT_INIT;
-    let mut p = excmd.arg_ptr();
-    // SAFETY: the command's argument, and both out-parameters are this
-    // frame's own.
-    let name =
-        unsafe { save_function_name(&raw mut p, excmd.skip, TFN_NO_AUTOLOAD, &raw mut fudi) };
-    // SAFETY: `p` is the cursor into the NUL-terminated argument.
-    let paren = has_char(unsafe { cstr::at(p) }, b'(' as c_int);
-    if name.is_null() && (fudi.fd_dict.is_null() || !paren) && !excmd.skip {
+    let arg = excmd.line.arg;
+    let FunctionName {
+        name, end, dict, ..
+    } = save_function_name(excmd.line.rest_of(arg), excmd.skip, TFN_NO_AUTOLOAD, true);
+    let at = arg + end;
+    let paren = excmd.line.rest_of(at).contains(&b'(');
+    if name.is_none() && (dict.is_none() || !paren) && !excmd.skip {
         // Return on an invalid expression in braces, unless the evaluation
         // was cancelled by an aborting error, an interrupt or an exception.
         if !aborting() {
-            if !fudi.fd_newkey.is_null() {
-                // SAFETY: a message argument the caller holds as a
-                // NUL-terminated string.
-                let fd_newkey = unsafe { c_str(fudi.fd_newkey) };
-                semsg!("E716: Key not present in Dictionary: \"{fd_newkey}\"");
+            if let Some(FuncDict {
+                key, new_key: true, ..
+            }) = &dict
+            {
+                let key = msg_bytes(key);
+                semsg!("E716: Key not present in Dictionary: \"{key}\"");
             }
-            // SAFETY: the key is this command's own.
-            unsafe { xfree(fudi.fd_newkey as *mut c_void) };
             return;
         }
         excmd.skip = true;
@@ -763,11 +764,9 @@ pub fn ex_function(excmd: &mut ExArg) {
 
     let mut definition = Definition {
         excmd,
-        // SAFETY: `p` is this frame's own from here on, walking the
-        // command's NUL-terminated argument.
-        cursor: unsafe { Cur::new(&raw mut p) },
-        name,
-        fudi,
+        at,
+        name: name.map_or(ptr::null_mut(), XString::into_raw),
+        fudi: dict,
         line_arg: ptr::null_mut(),
         line_to_free: ptr::null_mut(),
         newargs: GArray::EMPTY,
@@ -786,8 +785,6 @@ pub fn ex_function(excmd: &mut ExArg) {
     // SAFETY: all three are the definition's own, and null is fine for
     // `xfree`.
     unsafe { xfree(definition.line_to_free as *mut c_void) };
-    // SAFETY: as above.
-    unsafe { xfree(definition.fudi.fd_newkey as *mut c_void) };
     // SAFETY: as above.
     unsafe { xfree(definition.name as *mut c_void) };
     did_emsg.set(did_emsg.get() | saved_did_emsg);

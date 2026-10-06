@@ -93,7 +93,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     {
         // SAFETY: `find_func` answers null or a live `UserFunc`.
         unsafe {
-            let fp = find_func(di.di_tv.func_name_or_null());
+            let fp = find_func(cstr::bytes_at(di.di_tv.func_name_or_null()));
             if !fp.is_null() && (*fp).uf_flags.has(FuncFlags::LUAREF) {
                 rhs_lua = api_new_luaref((*fp).uf_luaref);
                 orig_rhs = c"".as_ptr().cast_mut();

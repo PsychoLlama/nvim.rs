@@ -13,7 +13,7 @@
 use crate::cstr;
 use crate::ex_eval::CsFlags;
 use crate::guard::Suppress;
-use crate::message_fmt::c_str;
+use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -23,7 +23,6 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::{DictRef, PartialRef};
-use crate::os::cshim::gettext_ptr;
 use crate::types::{Failed, IOSIZE, Pend};
 
 /// One call recorded by `:defer`, to be made when the function returns.
@@ -81,36 +80,28 @@ pub fn ex_return(excmd: &mut ExArg) {
     drop(skipping);
 }
 
-/// Make the call `:call` asks for, once per line of its range.
-///
-/// # Safety
-/// `excmd` is a live `:call`, `name` the resolved function name, and
-/// `startarg` the `(` its arguments start at.
-unsafe fn ex_call_inner(
+/// Make the call `:call` asks for, once per line of its range, with its
+/// arguments at `startarg` in the command line. Answers whether it failed
+/// and where in the line the last walk stopped.
+fn ex_call_inner(
     excmd: &mut ExArg,
-    name: *mut c_char,
-    arg: *mut *mut c_char,
-    startarg: *mut c_char,
-    partial: *mut Partial,
-    selfdict: *mut Dict,
+    callee: &CStr,
+    startarg: usize,
+    partial: Option<&PartialRef>,
+    selfdict: Option<&DictRef>,
     found_var: bool,
-) -> bool {
-    // SAFETY: the caller's promise -- `name` is the terminated name, and
-    // `partial` and `selfdict` are null or live; the handles hold their own
-    // references across the calls.
-    let (callee, partial, selfdict) = unsafe {
-        (
-            CStr::from_ptr(name),
-            PartialRef::retained(partial),
-            DictRef::retained(selfdict),
-        )
-    };
+) -> (bool, usize) {
     let mut doesrange = false;
     let mut failed = false;
-    let mut lnum = excmd.line1;
+    let mut stop = startarg;
+    let (line1, line2, ranged) = (excmd.line1, excmd.line2, excmd.addr_count > 0);
+    // The command line is this command's own: no code a call runs can reach
+    // it, so the walk borrows it across the calls.
+    let text = excmd.line.rest_of(startarg);
 
-    while lnum <= excmd.line2 {
-        if excmd.addr_count > 0 {
+    let mut lnum = line1;
+    while lnum <= line2 {
+        if ranged {
             // Default is the line number, not the range.
             if lnum > Buf::current().b_ml.ml_line_count {
                 emsg(gettext(e_invrange));
@@ -120,26 +111,23 @@ unsafe fn ex_call_inner(
             Win::current().w_cursor.col = 0;
             Win::current().w_cursor.coladd = 0;
         }
-        unsafe { *arg = startarg };
 
         let with = CallWith {
-            firstline: excmd.line1,
-            lastline: excmd.line2,
-            partial: partial.as_ref(),
-            selfdict: selfdict.as_ref(),
+            firstline: line1,
+            lastline: line2,
+            partial,
+            selfdict,
             doesrange: Some(&mut doesrange),
             found_var,
             ..CallWith::new(true)
         };
         let mut rettv = TV_INITIAL_VALUE;
         // The call, then any trailing subscript: `:call f()[1]()`.
-        let call = |cursor: &mut Cursor<'_>| {
-            get_func_tv(callee, None, &mut rettv, cursor, with)?;
-            handle_subscript(cursor, &mut rettv, true, true)
-        };
-        // SAFETY: the caller's promise -- `arg` walks the `:call` command
-        // line, which no code the call runs can reach.
-        if unsafe { Cur::new(arg).with_cursor(call) }.is_err() {
+        let mut cursor = Cursor::new(text);
+        let called = get_func_tv(callee, None, &mut rettv, &mut cursor, with)
+            .and_then(|()| handle_subscript(&mut cursor, &mut rettv, true, true));
+        stop = startarg + cursor.offset();
+        if called.is_err() {
             failed = true;
             break;
         }
@@ -149,18 +137,17 @@ unsafe fn ex_call_inner(
         }
         lnum += 1;
     }
-    failed
+    (failed, stop)
 }
 
 /// `:defer Func(args)`: check the call now and record it for the way out.
-///
-/// # Safety
-/// `name` is the resolved function name and `*arg` its `(`.
-unsafe fn ex_defer_inner(
-    name: *mut c_char,
-    arg: *mut *mut c_char,
-    partial: *const Partial,
-) -> Result<(), Failed> {
+/// `text` is the command line from the `(`; answers how much of it the
+/// arguments took.
+fn ex_defer_inner(
+    callee: &XString,
+    partial: Option<&PartialRef>,
+    text: &[u8],
+) -> (Result<(), Failed>, usize) {
     let mut argvars = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
     let mut partial_argc = 0;
     let mut argcount = 0;
@@ -168,65 +155,64 @@ unsafe fn ex_defer_inner(
     if current_fc().is_null() {
         let arg0 = "defer";
         semsg!("E193: {arg0} not inside a function");
-        return Err(Failed);
+        return (Err(Failed), 0);
     }
 
-    if !partial.is_null() {
-        if !unsafe { (*partial).pt_dict }.is_null() {
-            let fmt = E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER.as_ptr();
-            unsafe { emsg(gettext_ptr(fmt)) };
-            return Err(Failed);
+    if let Some(partial) = partial {
+        if !partial.pt_dict.is_null() {
+            emsg(gettext(E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER));
+            return (Err(Failed), 0);
         }
-        if unsafe { (*partial).pt_argc } > 0 {
-            partial_argc = unsafe { (*partial).pt_argc };
-            // SAFETY: the partial has `partial_argc` bound arguments and
-            // `argvars` has room for them.
-            let bound = unsafe { (*partial).pt_argv };
-            for i in 0..partial_argc {
-                let into = &raw mut argvars[i as usize];
-                unsafe { tv_copy(&*bound.offset(i as isize), &mut *into) };
+        if partial.pt_argc > 0 {
+            partial_argc = partial.pt_argc;
+            for (i, slot) in argvars.iter_mut().take(partial_argc as usize).enumerate() {
+                // SAFETY: the partial holds `pt_argc` bound arguments, and
+                // the handle keeps them alive.
+                tv_copy(unsafe { &*partial.pt_argv.add(i) }, slot);
             }
         }
     }
 
     // Upstream passes `false` for the partial argument count here; the
     // room already taken is accounted for by the `argvars` offset below.
-    // SAFETY: `argvars` has room past the `partial_argc` slots already
-    // taken, and `argcount` is this frame's local.
+    let mut cursor = Cursor::new(text);
     let free_slot = &mut argvars[partial_argc as usize..];
-    let read =
-        |cursor: &mut Cursor<'_>| get_func_arguments(cursor, true, 0, free_slot, &mut argcount);
-    // SAFETY: the caller's promise -- `arg` walks the `:defer` command line,
-    // which no code the arguments run can reach.
-    let mut r = unsafe { Cur::new(arg).with_cursor(read) };
+    let mut r = get_func_arguments(&mut cursor, true, 0, free_slot, &mut argcount);
     let argcount = argcount as c_int + partial_argc;
 
     if r.is_ok() {
-        if unsafe { builtin_function(name, -1) } {
-            let fdef = unsafe { find_internal_func(name) };
-            if fdef.is_null() {
-                unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), name) };
-                r = Err(Failed);
-            } else {
-                r = unsafe { check_internal_func(fdef, argcount) };
-            }
+        if builtin_function(callee) {
+            r = match find_builtin(callee) {
+                None => {
+                    emsg_funcname(e_unknown_function_str, callee);
+                    Err(Failed)
+                }
+                // SAFETY: a row of the builtin table.
+                Some(fdef) => unsafe { check_internal_func(fdef, argcount) },
+            };
         } else {
-            let ufunc = unsafe { find_func(name) };
+            let ufunc = find_func(callee);
             if !ufunc.is_null() {
+                // SAFETY: the function just found is live.
                 let error = unsafe { check_user_func_argcount(ufunc, argcount) };
                 if error != FCERR_UNKNOWN {
-                    unsafe { user_func_error(error, name, false) };
+                    user_func_error(error, callee, false);
                     r = Err(Failed);
                 }
             }
         }
     }
 
-    if r.is_err() {
-        return Err(Failed);
+    if r.is_ok() {
+        // SAFETY: a function is running, and the name is NUL-terminated.
+        unsafe {
+            add_defer(
+                callee.as_ptr().cast_mut(),
+                &mut argvars[..argcount as usize],
+            )
+        };
     }
-    unsafe { add_defer(name, &mut argvars[..argcount as usize]) };
-    Ok(())
+    (r, cursor.offset())
 }
 
 /// Whether a `:defer` can be recorded here, i.e. whether a function is
@@ -331,11 +317,6 @@ pub fn invoke_all_defer() {
 
 /// `:call` and `:defer`.
 pub fn ex_call(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    let mut arg = excmd.arg_ptr();
-    let mut fudi = FUNCDICT_INIT;
-    let mut partial: *mut Partial = ptr::null_mut();
-
     if excmd.skip {
         // Trailing arguments are still parsed, so that errors in them
         // are reported -- but nothing is called.
@@ -349,77 +330,73 @@ pub fn ex_call(excmd: &mut ExArg) {
         return;
     }
 
-    let (argp, dictp) = (&raw mut arg, &raw mut fudi);
-    let partialp = &raw mut partial;
-    // SAFETY: `arg` walks the caller's command line and the two
-    // out-parameters are this frame's locals.
-    let tofree = unsafe { trans_function_name(argp, false, TFN_INT, dictp, partialp) };
-    if !fudi.fd_newkey.is_null() {
+    let arg = excmd.line.arg;
+    let FunctionName {
+        name: tofree,
+        end,
+        dict,
+        partial,
+    } = trans_function_name(excmd.line.rest_of(arg), false, TFN_INT, true);
+    if let Some(FuncDict {
+        key, new_key: true, ..
+    }) = &dict
+    {
         // Still need to give an error message for missing key.
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fd_newkey = unsafe { c_str(fudi.fd_newkey) };
-        semsg!("E716: Key not present in Dictionary: \"{fd_newkey}\"");
-        unsafe { xfree(fudi.fd_newkey as *mut c_void) };
+        let key = msg_bytes(key);
+        semsg!("E716: Key not present in Dictionary: \"{key}\"");
     }
-    if tofree.is_null() {
+    let Some(tofree) = tofree else {
         return;
-    }
-
-    // Increase the reference on the dictionary, it could get deleted when
-    // evaluating the arguments.
-    if !fudi.fd_dict.is_null() {
-        unsafe { (*fudi.fd_dict).dv_refcount.retain() };
-    }
+    };
 
     // If it is the name of a variable of type VAR_FUNC or VAR_PARTIAL use
-    // its contents; `trans_function_name` skips over "s:" and "g:".
-    let mut len = unsafe { cstr::bytes_at(tofree) }.len() as c_int;
-    let mut found_var = false;
-    let want_partial = if partial.is_null() {
-        &raw mut partial
-    } else {
-        ptr::null_mut()
+    // its contents; `trans_function_name` skips over "s:" and "g:". The
+    // dictionary is held by `dict`, as it could get deleted when evaluating
+    // the arguments.
+    let dereffed = deref_func_name(&tofree, false);
+    let found_var = dereffed.found_var;
+    let (name, partial) = match dereffed.name {
+        Some(name) => (name, partial.or(dereffed.partial)),
+        None => (tofree, partial),
     };
-    let (lenp, foundp) = (&raw mut len, &raw mut found_var);
-    // SAFETY: `tofree` is the translated name and the out-parameters are
-    // this frame's locals.
-    let name = unsafe { deref_func_name(tofree, lenp, want_partial, false, foundp) };
+    let selfdict = dict.as_ref().map(|dict| &dict.dict);
 
-    let startarg = unsafe { skipwhite(arg) };
-    if unsafe { *startarg } != b'(' as c_char {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    let startarg = excmd.line.skip_white(arg + end);
+    if excmd.line.byte_at(startarg) != b'(' {
         let arg = msg_bytes(excmd.line.arg());
         semsg!("E107: Missing parentheses: {arg}");
+        return;
+    }
+    let (failed, stop) = if excmd.cmdidx == CmdIdx::defer {
+        let (r, used) = ex_defer_inner(&name, partial.as_ref(), excmd.line.rest_of(startarg));
+        (r.is_err(), startarg + used)
     } else {
-        let failed = if excmd.cmdidx == CmdIdx::defer {
-            arg = startarg;
-            unsafe { ex_defer_inner(name, &raw mut arg, partial).is_err() }
-        } else {
-            let (argp, selfdict) = (&raw mut arg, fudi.fd_dict);
-            unsafe { ex_call_inner(excmd, name, argp, startarg, partial, selfdict, found_var) }
-        };
+        let callee = name.as_cstr();
+        ex_call_inner(
+            excmd,
+            callee,
+            startarg,
+            partial.as_ref(),
+            selfdict,
+            found_var,
+        )
+    };
 
-        // When inside a `:try` the trailing text is still checked, so
-        // that an error is reported for it rather than swallowed.
-        if (!aborting() || did_throw.get())
-            && (!failed || unsafe { (*excmd.cstack).cs_trylevel } > 0)
-        {
-            if ends_excmd(unsafe { *arg } as c_int) == 0 {
-                if !failed && !aborting() {
-                    emsg_severe.set(true);
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let arg = unsafe { c_str(arg) };
-                    semsg!("E488: Trailing characters: {arg}");
-                }
-            } else {
-                // `arg` is where the call walk stopped, inside the line.
-                excmd.line.next = excmd.line.check_next(excmd.line.offset_of(arg));
+    // When inside a `:try` the trailing text is still checked, so that an
+    // error is reported for it rather than swallowed.
+    // SAFETY: a command being run has its condition stack.
+    let in_try = unsafe { (*excmd.cstack).cs_trylevel } > 0;
+    if (!aborting() || did_throw.get()) && (!failed || in_try) {
+        if ends_excmd(c_int::from(excmd.line.byte_at(stop))) == 0 {
+            if !failed && !aborting() {
+                emsg_severe.set(true);
+                let rest = msg_bytes(excmd.line.rest_of(stop));
+                semsg!("E488: Trailing characters: {rest}");
             }
+        } else {
+            excmd.line.next = excmd.line.check_next(stop);
         }
     }
-
-    unsafe { tv_dict_unref(fudi.fd_dict) };
-    unsafe { xfree(tofree as *mut c_void) };
 }
 
 /// Return from a function, answering whether the return happened now rather

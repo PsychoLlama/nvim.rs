@@ -349,7 +349,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
         if eval_variable(&loaded(&buf, len), Some(&mut tv), false, true).is_err() {
             unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
             // SAFETY: `bp` holds the NUL-terminated function name.
-            let defined = !unsafe { find_func(bp) }.is_null();
+            let defined = !unsafe { find_func(cstr::bytes_at(bp)) }.is_null();
             if defined && p_lpl() {
                 // SAFETY: the format takes two NUL-terminated strings.
                 let (nm2, nm) = unsafe { (c_str(nm), c_str(nm)) };
@@ -366,7 +366,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
         // SAFETY: as above.
         unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
         // SAFETY: `bp` holds the NUL-terminated function name just built.
-        if unsafe { find_func(bp) }.is_null() {
+        if unsafe { find_func(cstr::bytes_at(bp)) }.is_null() {
             // SAFETY: the format takes three NUL-terminated strings.
             let (nm2, nm, bp) = unsafe { (c_str(nm), c_str(nm), c_str(bp)) };
             semsg!("provider: {nm2}: g:loaded_{nm}_provider=2 but {bp} is not defined");

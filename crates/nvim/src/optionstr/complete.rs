@@ -10,8 +10,9 @@ use crate::cstr;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
-use crate::eval::userfunc::get_scriptlocal_funcname;
+use crate::eval::userfunc::scriptlocal_funcname;
 use crate::insexpand::set_cpt_callbacks;
+use crate::memory::XString;
 use crate::option::copy_option_part;
 use crate::option::vars::{P_CIA, P_COT, P_HLG, P_TC, cia_flags, cot_flags, spo_flags, tc_flags};
 use crate::options::{opt_cot_values, opt_spo_values, opt_tc_values};
@@ -21,6 +22,7 @@ use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, vali
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::types::{NUL, OptError, OptSet, OptionSetFlags};
+use core::ptr;
 
 use super::OptString;
 use super::frame::{invalid, varp, win};
@@ -244,7 +246,9 @@ pub fn did_set_optexpr(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's own variable; `get_scriptlocal_funcname` returns
     // a fresh allocation or null, and the old value is freed here.
     let varp = varp(args);
-    let resolved = unsafe { get_scriptlocal_funcname(varp.value_ptr()) };
+    // SAFETY: a string option's value is null or NUL-terminated.
+    let value = unsafe { cstr::bytes_at_or_empty(varp.value_ptr()) };
+    let resolved = scriptlocal_funcname(value).map_or(ptr::null_mut(), XString::into_raw);
     if !resolved.is_null() {
         // Replace and *then* free: a global value's string is the option
         // record's, so freeing it before the write would release it twice.

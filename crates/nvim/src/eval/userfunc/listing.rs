@@ -12,15 +12,14 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::offset_of;
+use crate::snprintf;
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::{Candidate, ExpandContext, IOSIZE, NUL};
+use crate::types::{Candidate, ExpandContext, IOSIZE};
 use core::ffi::CStr;
 use std::ffi::CString;
 
@@ -36,7 +35,7 @@ pub(crate) fn list_functions(mut pattern: Option<&mut RegMatch>) {
         if hi.is_kept() {
             // The key *is* the function's trailing name member, so the
             // function is that many bytes before it.
-            let fp = unsafe { hi.hi_key.sub(offset_of!(UserFunc, uf_name)) } as *mut UserFunc;
+            let fp = uf_from_name_ptr(hi.hi_key);
             todo -= 1;
             // Without a pattern, skip what the user filtered out and the
             // numbered/lambda functions; with one, skip the numbered
@@ -44,7 +43,7 @@ pub(crate) fn list_functions(mut pattern: Option<&mut RegMatch>) {
             // SAFETY: a function's name is NUL-terminated.
             let name = unsafe { cstr::at(uf_name_ptr(fp)) };
             let show = match pattern.as_deref_mut() {
-                None => !message_filtered(name) && !unsafe { func_name_refcount(uf_name_ptr(fp)) },
+                None => !message_filtered(name) && !func_name_refcount(name.to_bytes()),
                 Some(pattern) => {
                     !cstr::first(name).is_ascii_digit() && vim_regexec(pattern, name, 0)
                 }
@@ -88,24 +87,13 @@ pub(crate) fn list_functions_matching_pat(excmd: &mut ExArg) -> usize {
 /// `:function Name`: print one function with its numbered body lines.
 /// Answers the function, so that the caller can go on to redefine it.
 ///
-/// # Safety
-/// `excmd` is a live `:function` command, `name` the translated name and `p`
-/// the rest of the command line.
-pub(crate) unsafe fn list_one_function(
-    excmd: &mut ExArg,
-    name: *mut c_char,
-    p: *mut c_char,
-) -> *mut UserFunc {
-    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    if ends_excmd(unsafe { *skipwhite(p) } as c_int) == 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let p = unsafe { c_str(p) };
-        semsg!("E488: Trailing characters: {p}");
+/// `name` is the translated name and `at` where it ends in the command line.
+pub(crate) fn list_one_function(excmd: &mut ExArg, name: &[u8], at: usize) -> *mut UserFunc {
+    if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.skip_white(at)))) == 0 {
+        let rest = msg_bytes(excmd.line.rest_of(at));
+        semsg!("E488: Trailing characters: {rest}");
         return ptr::null_mut();
     }
-    // `p` is the cursor `trans_function_name` left in the line; the walk
-    // still answers a pointer, so it comes back to an offset here.
-    let at = excmd.line.offset_of(p);
     excmd.line.next = excmd.line.check_next(at);
     if excmd.line.next.is_some() {
         excmd.line.terminate_at(at);
@@ -114,9 +102,9 @@ pub(crate) unsafe fn list_one_function(
         return ptr::null_mut();
     }
 
-    let fp = unsafe { find_func(name) };
+    let fp = find_func(name);
     if fp.is_null() {
-        unsafe { emsg_funcname(c"E123: Undefined function: %s".as_ptr(), name) };
+        emsg_funcname(c"E123: Undefined function: %s", name);
         return ptr::null_mut();
     }
 
@@ -170,40 +158,55 @@ pub(crate) unsafe fn list_one_function(
 
 /// Whether a function of this *already translated* name exists, builtin or
 /// user-defined.
-///
-/// # Safety
-/// `name` is NUL-terminated.
-pub unsafe fn translated_function_exists(name: *const c_char) -> bool {
-    if unsafe { builtin_function(name, -1) } {
-        return !unsafe { find_internal_func(name) }.is_null();
+pub(crate) fn translated_function_exists(name: &[u8]) -> bool {
+    if builtin_function(name) {
+        return find_builtin(name).is_some();
     }
-    !unsafe { find_func(name) }.is_null()
+    !find_func(name).is_null()
 }
 
 /// `exists('*name')`: whether `name` names a function, without autoloading
 /// one to find out.
-///
-/// # Safety
-/// `name` is NUL-terminated.
-pub unsafe fn function_exists(name: *const c_char, no_deref: bool) -> bool {
-    let mut nm = name;
-    let mut n = false;
+pub(crate) fn function_exists(name: &[u8], no_deref: bool) -> bool {
     let mut flag = TFN_INT | TFN_QUIET | TFN_NO_AUTOLOAD;
     if no_deref {
         flag |= TFN_NO_DEREF;
     }
-    let nmp = (&raw mut nm) as *mut *mut c_char;
-    // SAFETY: `nm` is this frame's own cursor into the caller's name.
-    let p = unsafe { trans_function_name(nmp, false, flag, ptr::null_mut(), ptr::null_mut()) };
-    nm = unsafe { skipwhite(nm) };
+    let found = trans_function_name(name, false, flag, false);
+    let after = found.end + skip::white(&name[found.end..]);
 
     // Only accept "funcname", "funcname ", "funcname (..." and
     // "funcname(...", not "funcname!...".
-    if !p.is_null() && (unsafe { *nm } == NUL as c_char || unsafe { *nm } == b'(' as c_char) {
-        n = unsafe { translated_function_exists(p) };
-    }
-    unsafe { xfree(p as *mut c_void) };
-    n
+    found.name.is_some_and(|translated| {
+        matches!(name.get(after), None | Some(b'(')) && translated_function_exists(&translated)
+    })
+}
+
+/// Whether `ufunc` is a global function rather than a script-local one --
+/// which is exactly whether its stored name carries the `<SNR>` mangling.
+///
+/// # Safety
+/// `ufunc` is a live function.
+unsafe fn func_is_global(ufunc: *const UserFunc) -> bool {
+    unsafe { *((&raw const (*ufunc).uf_name) as *const c_char) as u8 as c_int != K_SPECIAL }
+}
+
+/// Write `func`'s printable name into `buf`, answering how much was written
+/// (capped at `bufsize - 1`).
+///
+/// # Safety
+/// `func` is a live function and `buf` has `bufsize` writable bytes.
+unsafe fn cat_func_name(buf: *mut c_char, bufsize: size_t, func: *const UserFunc) -> c_int {
+    let uflen = unsafe { (*func).uf_namelen };
+    debug_assert!(uflen > 0);
+    let name = unsafe { &raw const (*func).uf_name } as *const c_char;
+    let len = if !unsafe { func_is_global(func) } && uflen > 3 {
+        unsafe { snprintf!(buf, bufsize, c"<SNR>%s".as_ptr(), name.add(3)) }
+    } else {
+        unsafe { snprintf!(buf, bufsize, c"%s".as_ptr(), name) }
+    };
+    debug_assert!(len > 0);
+    len.min(bufsize as c_int - 1)
 }
 
 /// Completion over the user functions: answers the `idx`th name, resuming
@@ -237,9 +240,7 @@ pub fn get_user_func_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     }
     // The key *is* the function's trailing name member, so the function is
     // that many bytes before it.
-    let key = func_table().slot(slot.get()).hi_key;
-    // SAFETY: a kept slot's key is the name member of a live function.
-    let fp = unsafe { key.sub(offset_of!(UserFunc, uf_name)) } as *mut UserFunc;
+    let fp = uf_from_name_ptr(func_table().slot(slot.get()).hi_key);
     // SAFETY: as above.
     let f = unsafe { Uf::new(fp) };
     // SAFETY: a live function's name is NUL-terminated.
@@ -271,55 +272,42 @@ pub fn get_user_func_name(expand: &Expand, idx: usize) -> Option<Candidate> {
 
 /// `:delfunction`.
 pub fn ex_delfunction(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    let mut fudi = FUNCDICT_INIT;
-    let mut p = excmd.arg_ptr();
-    let name =
-        unsafe { trans_function_name(&raw mut p, excmd.skip, 0, &raw mut fudi, ptr::null_mut()) };
-    unsafe { xfree(fudi.fd_newkey as *mut c_void) };
-    if name.is_null() {
-        if !fudi.fd_dict.is_null() && !excmd.skip {
+    let arg = excmd.line.arg;
+    let FunctionName {
+        name, end, dict, ..
+    } = trans_function_name(excmd.line.rest_of(arg), excmd.skip, 0, true);
+    let Some(name) = name else {
+        if dict.is_some() && !excmd.skip {
             emsg(gettext(E_FUNCREF));
         }
         return;
-    }
-    if ends_excmd(unsafe { *skipwhite(p) } as c_int) == 0 {
-        unsafe { xfree(name as *mut c_void) };
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let p = unsafe { c_str(p) };
-        semsg!("E488: Trailing characters: {p}");
+    };
+    let at = arg + end;
+    if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.skip_white(at)))) == 0 {
+        let rest = msg_bytes(excmd.line.rest_of(at));
+        semsg!("E488: Trailing characters: {rest}");
         return;
     }
-    // As `list_one_function`: `p` is where the name walk stopped.
-    let at = excmd.line.offset_of(p);
     excmd.line.next = excmd.line.check_next(at);
     if excmd.line.next.is_some() {
         excmd.line.terminate_at(at);
     }
 
-    if (unsafe { *name } as u8).is_ascii_digit() && fudi.fd_dict.is_null() {
+    if name.first().is_some_and(u8::is_ascii_digit) && dict.is_none() {
         // Numbered function.
         if !excmd.skip {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E475: Invalid argument: {arg}");
         }
-        unsafe { xfree(name as *mut c_void) };
         return;
     }
-    let fp = if !excmd.skip {
-        unsafe { find_func(name) }
-    } else {
-        ptr::null_mut()
-    };
-    unsafe { xfree(name as *mut c_void) };
     if excmd.skip {
         return;
     }
+    let fp = find_func(&name);
 
     if fp.is_null() {
         if !excmd.forceit {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E130: Unknown function: {arg}");
         }
@@ -343,16 +331,21 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
         return;
     }
 
-    if !fudi.fd_dict.is_null() {
+    if let Some(FuncDict { mut dict, key, .. }) = dict {
         // Delete the dict item that refers to the function; that invokes
         // `func_unref` and possibly deletes the function.
-        unsafe { tv_dict_item_remove(fudi.fd_dict, fudi.fd_di) };
+        if !dict.remove_key(&key) {
+            let arg0 = "tv_dict_item_remove()";
+            semsg!("E685: Internal error: {arg0}");
+        }
         return;
     }
     // A normal function has a refcount of 1 for its entry in the
     // hashtable; a numbered function or a lambda has none.  Above that,
     // something else still holds it, so unlink it but keep it.
-    let held = if unsafe { func_name_refcount(uf_name_ptr(fp)) } {
+    // SAFETY: `fp` is the live function just found, whose name is
+    // NUL-terminated.
+    let held = if func_name_refcount(unsafe { cstr::bytes_at(uf_name_ptr(fp)) }) {
         0
     } else {
         1

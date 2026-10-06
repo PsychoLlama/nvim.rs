@@ -533,42 +533,23 @@ pub(crate) unsafe fn call_user_func_check(
 }
 
 /// Report why a call could not be made.
-///
-/// # Safety
-/// `name` is NUL-terminated.
-pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_var: bool) {
-    match error {
-        FCERR_UNKNOWN => {
-            if found_var {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let name = unsafe { c_str(name) };
-                semsg!("E1085: Not a callable type: {name}");
-            } else {
-                unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), name) };
-            }
+pub(crate) fn user_func_error(error: c_int, name: &[u8], found_var: bool) {
+    let template = match error {
+        FCERR_UNKNOWN if found_var => {
+            let name = msg_bytes(name);
+            semsg!("E1085: Not a callable type: {name}");
+            return;
         }
-        FCERR_NOTMETHOD => {
-            unsafe { emsg_funcname(c"E276: Cannot use function as a method: %s".as_ptr(), name) };
-        }
-        FCERR_DELETED => {
-            unsafe { emsg_funcname(c"E933: Function was deleted: %s".as_ptr(), name) };
-        }
-        FCERR_TOOMANY => {
-            unsafe { emsg_funcname(gettext(e_toomanyarg).as_ptr(), name) };
-        }
-        FCERR_TOOFEW => {
-            unsafe { emsg_funcname(gettext(e_toofewarg).as_ptr(), name) };
-        }
-        FCERR_SCRIPT => {
-            let fmt = c"E120: Using <SID> not in a script context: %s";
-            unsafe { emsg_funcname(fmt.as_ptr(), name) };
-        }
-        FCERR_DICT => {
-            let fmt = c"E725: Calling dict function without Dictionary: %s";
-            unsafe { emsg_funcname(fmt.as_ptr(), name) };
-        }
-        _ => {}
-    }
+        FCERR_UNKNOWN => e_unknown_function_str,
+        FCERR_NOTMETHOD => c"E276: Cannot use function as a method: %s",
+        FCERR_DELETED => c"E933: Function was deleted: %s",
+        FCERR_TOOMANY => e_toomanyarg,
+        FCERR_TOOFEW => e_toofewarg,
+        FCERR_SCRIPT => c"E120: Using <SID> not in a script context: %s",
+        FCERR_DICT => c"E725: Calling dict function without Dictionary: %s",
+        _ => return,
+    };
+    emsg_funcname(template, name);
 }
 
 /// Call the Lua function `name` with no arguments.
@@ -593,25 +574,12 @@ pub fn call_simple_func(funcname: &[u8], result: &mut TypVal) -> Result<Parsed, 
     rv.write_number(0);
 
     let name = unsafe { xstrnsave(funcname, len) };
-    let mut error = FCERR_NONE;
-    let mut tofree: *mut c_char = ptr::null_mut();
-    let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
-    let buf = fname_buf.as_mut_ptr();
-    let (freep, errp) = (&raw mut tofree, &raw mut error);
-    // SAFETY: `buf` has `FLEN_FIXED + 1` bytes and the two out-parameters
-    // are this frame's locals.
-    let fname = unsafe { fname_trans_sid(name, buf, freep, errp) };
+    // SAFETY: the copy just made, NUL-terminated.
+    let (fname, mut error) = fname_trans_sid(unsafe { cstr::bytes_at(name) });
 
     // Skip "g:" before a function name.
-    let is_global =
-        unsafe { *fname } == b'g' as c_char && unsafe { *fname.add(1) } == b':' as c_char;
-    let rfname = if is_global {
-        unsafe { fname.add(2) }
-    } else {
-        fname
-    };
-
-    let fp = unsafe { find_func(rfname) };
+    let rfname = fname.strip_prefix(b"g:").unwrap_or(&fname);
+    let fp = find_func(rfname);
     if fp.is_null() {
         ret = Ok(Parsed::NotThis);
     } else if unsafe { (*fp).uf_flags }.has(FuncFlags::DELETED) {
@@ -628,8 +596,8 @@ pub fn call_simple_func(funcname: &[u8], result: &mut TypVal) -> Result<Parsed, 
         }
     }
 
-    unsafe { user_func_error(error, name, false) };
-    unsafe { xfree(tofree as *mut c_void) };
+    // SAFETY: the copy made above, NUL-terminated.
+    user_func_error(error, unsafe { cstr::bytes_at(name) }, false);
     unsafe { xfree(name as *mut c_void) };
     ret
 }

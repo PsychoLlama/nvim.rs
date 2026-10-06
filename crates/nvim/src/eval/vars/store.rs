@@ -385,7 +385,8 @@ pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
     // Don't allow hiding a function. With an existing variable this may
     // be assigning another function to the same one, whose type the
     // caller checks.
-    if new_var && unsafe { function_exists(name, false) } {
+    // SAFETY: the caller's NUL-terminated name.
+    if new_var && function_exists(unsafe { cstr::bytes_at(name) }, false) {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let name = unsafe { c_str(name) };
         semsg!("E705: Variable name conflicts with existing function: {name}");
