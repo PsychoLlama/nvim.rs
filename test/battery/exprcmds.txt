@@ -27,6 +27,18 @@ let @r .= 'app'
 let g:curly{g:n}x = 'cb'
 let g:{'dyn'} = 'dynamic'
 const g:K = 1 | let g:K = 2
+let g:l[2].k = 'w' | let g:l[1][1:] = [8]
+let g:l[1][0] = 'y' | let g:d.b[1] += 5
+let [g:x; g:rest] = g:l | let [g:a, g:b2] = [g:x, len(g:rest)]
+let g:l[g:n - 41][0] .= 'q'
+let g:l[-2:-1] = ['m', 'n'] | let g:l[:0] = [7]
+let g:d['a'] -= 1 | let g:d.a *= 3 | let g:d.a /= 2 | let g:d.a %= 2
+let g:b[0:0] = 0z33 | let g:b[2] = 4
+let g:{'cu' . 'rly42x'} = 'cb2' | let g:curly{g:n}x ..= '!'
+let $NVIMTEST ..= g:l[0]
+let &l:sw += g:n % 5
+let @r = g:d.a . 'x'
+let l:x = 1
 let g:x = 1 " comment
 let g:x = "a\"b" | let g:y = 2
 let g:x = 'a|b' | let g:y = 3
@@ -41,6 +53,12 @@ unlet $NVIMTEST
 lockvar g:l | call add(g:l, 1)
 lockvar 1 g:d | let g:d.a = 2
 lockvar! g:n | unlockvar g:n | let g:n = 1
+unlet g:l[1][0] g:d.b[0]
+unlet g:l[-1:]
+lockvar 2 g:l[1] | let g:x = islocked('g:l[1][0]')
+unlockvar! g:l[1:] | let g:x = islocked('g:l[1]')
+const g:x = [1, [2]] | let g:y = islocked('g:x[1]')
+let g:x = islocked('g:d.b[0]') . islocked('g:n') . islocked('g:nosuch')
 # -- calls and echo
 call g:Id(1)
 call g:obj.method()

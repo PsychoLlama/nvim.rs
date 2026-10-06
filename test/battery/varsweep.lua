@@ -2993,6 +2993,162 @@ section('s19-refs', function()
 end)
 
 -- ---------------------------------------------------------------------
+-- s20 -- the left-hand side as a place
+-- ---------------------------------------------------------------------
+
+section('s20-lvalue', function()
+  -- What `get_lval` resolves and `set_var_lval`/`:unlet`/`:lockvar`
+  -- write through, when the thing being indexed changes while the
+  -- index is evaluated.  The C reads the container out of its slot
+  -- *after* the index expression ran (a replaced list is the one
+  -- written), and finds the item by index or key when it writes, so an
+  -- index expression that removes, inserts or extends is visible in
+  -- the answer.  The cases where the C reads freed memory are not
+  -- here: the functional suite holds those.
+  --
+  -- The messages are the other half: a subscripted target that is
+  -- locked is named with the *rest of the command line* (the C quotes
+  -- the name up to its NUL, and nothing cuts it there), a whole
+  -- variable with its name alone, a curly-brace one with the expansion.
+  local CASES = {
+    { 'rm-index', 'let g:L = [1, 2, 3]', 'let g:L[remove(g:L, 0)] = 9', 'g:L' },
+    { 'add-index', 'let g:L = [[1], [2]]', 'let g:L[0][len(add(g:L, [5])) - 3] = 7', 'g:L' },
+    { 'rm-outer', 'let g:L = [[1], [2]]', 'let g:L[0][remove(g:L, 0)[0] - 1] = 7', 'g:L' },
+    { 'extend-key', "let g:D = {'a': 1, 'b': 2}", "let g:D[extend(g:D, {'c': 3}) is g:D ? 'a' : 'b'] = 1", 'g:D' },
+    { 'replace-inner', "let g:D = {'a': [1]}", "let g:D.a[execute('let g:D.a = [7, 8]') is '' ? 1 : 0] = 5", 'g:D' },
+    { 'replace-root', 'let g:L = [1]', "let g:L[execute('let g:L = [7, 8]') is '' ? 1 : 0] = 5", 'g:L' },
+    { 'retype', 'let g:L = [[0]]', "let g:L[0][execute('let g:L[0] = {}') is '' ? 0 : 0] = 1", 'g:L' },
+    { 'unlet-len', 'let g:L = [1, 2, 3]', 'unlet g:L[len(g:L) - 1]', 'g:L' },
+    { 'unlet-rm', 'let g:L = [1, 2, 3]', 'unlet g:L[remove(g:L, 0)]', 'g:L' },
+    { 'slice-rm1', 'let g:L = [1, 2, 3, 4]', 'let g:L[remove(g:L, 0):2] = [8, 9]', 'g:L' },
+    { 'slice-rm2', 'let g:L = [1, 2, 3, 4]', 'let g:L[1:remove(g:L, 0)] = [8, 9]', 'g:L' },
+    { 'unpack-rm', 'let g:L = [0, 0]', 'let [g:L[0], g:L[remove(g:L, 0)]] = [5, 6]', 'g:L' },
+    { 'unpack-idx', 'let g:L = [[1, 2], [3, 4]]', 'let [g:L[0][1], g:L[1]] = [9, 8]', 'g:L' },
+    { 'lock-rm', 'let g:L = [1, 2, 3]', 'lockvar g:L[remove(g:L, 0)]', "[g:L, islocked('g:L[0]'), islocked('g:L[1]')]" },
+    { 'islocked-rm', 'let g:L = [1, 2, 3]', "echo islocked('g:L[remove(g:L, 0)]')", 'g:L' },
+    { 'for-rm', 'let g:L = [1, 2, 3] | let g:O = []', 'for x in g:L | call add(g:O, x) | call remove(g:L, 0) | endfor', '[g:O, g:L]' },
+    { 'for-add', 'let g:L = [1, 2, 3] | let g:O = []', 'for x in g:L | call add(g:O, x) | call add(g:L, x + 10) | if len(g:L) > 6 | break | endif | endfor', '[g:O, g:L]' },
+    { 'for-unpack', 'let g:L = [[1, 2], [3, 4]] | let g:O = []', 'for [x, y] in g:L | call add(g:O, x . y) | call remove(g:L, -1) | endfor', '[g:O, g:L]' },
+    { 'for-target', 'let g:L = [0, 0] | let g:D = {}', 'for g:D[len(g:D)] in g:L | endfor', 'g:D' },
+    { 'watch', "let g:D = {'a': 1} | let g:O = [] | call dictwatcheradd(g:D, '*', {d, k, z -> add(g:O, [k, z])})", 'let g:D.a = 2 | let g:D.b = 3 | let g:D.b += 1 | unlet g:D.a', 'g:O' },
+    { 'watch-extend', "let g:D = {'a': 1} | call dictwatcheradd(g:D, '*', {d, k, z -> extend(d, {'w': 1})})", 'let g:D.a = 2', 'g:D' },
+    { 'watch-index', "let g:D = {'a': 1, 'b': 2} | let g:O = [] | call dictwatcheradd(g:D, '*', {d, k, z -> add(g:O, [k, z])})", "let g:D[execute('unlet g:D.b')[0:0] . 'a'] = 5", '[g:D, g:O]' },
+    { 'locked-item', 'let g:L = [1, 2, 3] | lockvar g:L', "let g:L[0] = 2 | echo 'after'", 'g:L' },
+    { 'locked-slice', 'let g:L = [1, 2, 3] | lockvar 1 g:L', "let g:L[0:1] = [5, 6] | echo 'after'", 'g:L' },
+    { 'locked-newkey', "let g:D = {'a': 1} | lockvar g:D", "let g:D.b = 2 | echo 'after'", 'g:D' },
+    { 'locked-blob', 'let g:B = 0z0102 | lockvar g:B', "let g:B[0] = 1 | echo 'x'", 'g:B' },
+    { 'locked-unlet', 'let g:L = [[1]] | lockvar 2 g:L', "unlet g:L[0][0] | echo 'x'", 'g:L' },
+    { 'locked-whole', 'let g:N = 1 | lockvar g:N', "let g:N = 2 | echo 'x'", 'g:N' },
+    { 'locked-curly', 'let g:x = [1] | lockvar g:x', "let g:{'x'}[0] = 3 | echo 1", 'g:x' },
+    { 'ro-key', '', "let v:['count'] = 3 | echo 1", 'v:count' },
+    { 'null-blob', 'let g:B = v:_null_blob', 'let g:B[0] = 1', 'g:B' },
+    { 'null-list', 'let g:L = v:_null_list', 'let g:L[0] = 1', '[g:L, g:L is v:_null_list]' },
+    { 'null-dict', "let g:D = {'n': v:_null_dict}", 'let g:D.n.k = 1', 'g:D' },
+    { 'null-dict-root', 'let g:D = v:_null_dict', 'let g:D.k = 1', 'g:D' },
+    { 'dict-op', "let g:D = {'a': 1}", "let g:D.a += 2 | let g:D.a .= 'x' | let g:D['a'] ..= 'y'", 'g:D' },
+    { 'dict-op-new', "let g:D = {'a': 1}", 'let g:D.zz += 2', 'g:D' },
+    { 'blob-set', 'let g:B = 0z0102', 'let g:B[0:1] = 0z0304 | let g:B[2] = 5 | let g:B[-1] = 6', 'g:B' },
+    { 'blob-op', 'let g:B = 0z0102', 'let g:B[0] += 1', 'g:B' },
+    { 'blob-bad', 'let g:B = 0z0102', "let g:B[0] = 256 | let g:B[1] = 'x'", 'g:B' },
+    { 'blob-unlet', 'let g:B = 0z0102', 'unlet g:B[0]', 'g:B' },
+    { 'blob-lock', 'let g:B = 0z0102', 'lockvar g:B[0]', "[g:B, islocked('g:B')]" },
+    { 'slice-op', 'let g:L = [1, 2]', "let g:L[0:1] .= 'x'", 'g:L' },
+    { 'slice-plus', 'let g:L = [1, 2, 3]', 'let g:L[0:1] += [10, 20]', 'g:L' },
+    { 'const-item', 'let g:L = [1, 2]', 'const g:L[0] = 1', 'g:L' },
+    { 'const-slice', 'let g:L = [1, 2]', 'const g:L[0:] = [1]', 'g:L' },
+    { 'const-then', '', 'const g:C = [1] | let g:C[0] = 2', 'g:C' },
+    { 'vvar-item', '', "let v:errmsg[0] = 'x'", 'v:errmsg' },
+    { 'vvar-key', '', "let v:['errmsg'] = 'y'", 'v:errmsg' },
+    { 'vvar-new', '', "let v:['nosuch'] = 'y'", 'v:errmsg' },
+    { 'vvar-oldfiles', '', 'let v:oldfiles[0] = 1', 'v:oldfiles' },
+    { 'g-key', '', "let g:['NK'] = 3 | let g:.NK2 = 4", '[g:NK, g:NK2]' },
+    { 's-key', '', "let s:['nk'] = 3", 's:' },
+    { 'g-funcname', '', "let g:['A'] = function('len') | let g:['lower'] = function('len')", 'g:A' },
+    { 'g-badname', '', "let g:['a b'] = 1", "exists('g:[''a b'']')" },
+    { 'unlet-scope', '', 'unlet g:', '1' },
+    { 'unlet-vvar', '', 'unlet v:errmsg', '1' },
+    { 'unlet-env', '', 'unlet $VARSNOSUCH | let $VARSP = "a" | unlet $VARSP', 'exists("$VARSP")' },
+    { 'lock-env', '', 'lockvar $HOME | echo 1', '1' },
+    { 'lock-nested', "let g:D = {'k': [1]}", 'lockvar 2 g:D.k | call add(g:D.k, 2)', 'g:D' },
+    { 'lock-slice', 'let g:L = [[1], [2], [3]]', "lockvar 2 g:L[0:1] | echo [islocked('g:L[0]'), islocked('g:L[2]')]", 'g:L' },
+    { 'lock-open', 'let g:L = [[1], [2], [3]]', "lockvar 2 g:L[1:] | echo [islocked('g:L[0]'), islocked('g:L[2]')]", 'g:L' },
+    { 'unlock-curly', "let g:x = [1] | lockvar g:x", "unlockvar g:{'x'} | let g:x[0] = 5", 'g:x' },
+    { 'islocked-odd', 'let g:N = 0 | let g:D = {} | let g:L = []', "echo islocked('g:nosuch') islocked('g:N') islocked('g:D.nokey') islocked('g:L[0:1]') islocked('g:N x')", '1' },
+    { 'islocked-empty', '', "echo islocked('')", '1' },
+    { 'idx-num', 'let g:N = 0', 'let g:N[0] = 1', 'g:N' },
+    { 'idx-str', "let g:S = 'abc'", "let g:S[0] = 'z'", 'g:S' },
+    { 'idx-dictnum', "let g:D = {'a': 1}", "let g:D['a'][0] = 1", 'g:D' },
+    { 'dot-num', "let g:D = {'a': 1}", 'let g:D.a.b = 1', 'g:D' },
+    { 'key-list', "let g:D = {'a': 1}", 'let g:D[[]] = 1', 'g:D' },
+    { 'key-slice', "let g:D = {'a': 1}", 'let g:D[1:2] = 1', 'g:D' },
+    { 'slice-last', 'let g:L = [1, 2]', 'let g:L[0:1][0] = 1', 'g:L' },
+    { 'slice-value', 'let g:L = [1, 2]', 'let g:L[0:1] = 1', 'g:L' },
+    { 'slice-long', 'let g:L = [1, 2]', 'let g:L[0:1] = [1, 2, 3]', 'g:L' },
+    { 'slice-open', 'let g:L = [1, 2]', 'let g:L[0:] = [5] | let g:L[1:0] = [5]', 'g:L' },
+    { 'slice-end', 'let g:L = [1, 2]', 'let g:L[2:] = [5] | let g:L[3:] = [5]', 'g:L' },
+    { 'neg-index', 'let g:L = [1, 2]', 'let g:L[-3] = 5', 'g:L' },
+    { 'unlet-big', 'let g:L = [1, 2]', 'unlet g:L[5]', 'g:L' },
+    { 'unlet-slices', 'let g:L = [1, 2, 3, 4, 5]', 'unlet g:L[3:] | unlet g:L[-2:-1] | unlet g:L[1:0]', 'g:L' },
+    { 'unlet-many', "let g:L = [1, 2] | let g:D = {'a': 1, 'b': 2} | let g:N = 1", 'unlet g:L[0] g:D.a g:N g:D["b"]', "[g:L, g:D, exists('g:N')]" },
+    { 'unlet-trail', 'let g:N = 1', 'unlet g:N x', "exists('g:N')" },
+    { 'unlet-miss', "let g:D = {}", 'unlet g:D.a | echo 1', 'g:D' },
+    { 'unlet-nokey', "let g:D = {}", 'unlet! g:D.a g:nosuch | echo 1', 'g:D' },
+    { 'missbrac', 'let g:L = [1]', 'let g:L[0 = 1', 'g:L' },
+    { 'emptykey', 'let g:D = {}', 'let g:D. = 1', 'g:D' },
+    { 'emptyenv', '', 'let $ = 1', '1' },
+    { 'emptyopt', '', 'let & = 1 | let &l: = 1', '1' },
+    { 'noopt', '', 'let &nosuchopt = 1', '1' },
+    { 'reg-plus', '', "let @a = 'x' | let @a += 1", '@a' },
+    { 'env-plus', '', 'let $VARSP = 1 | let $VARSP += 1', '$VARSP' },
+    { 'opt-cat', '', "let &textwidth .= 'x'", '&textwidth' },
+    { 'opt-trail', '', 'let &textwidth = 5 x', '&textwidth' },
+    { 'name-trail', '', 'let g:NK x = 5', "exists('g:NK')" },
+    { 'list-trail', '', 'let [g:A, g:B] x = [1, 2]', "exists('g:A')" },
+    { 'list-inner', '', 'let [g:A x, g:B] = [1, 2]', "exists('g:A')" },
+    { 'heredoc-item', 'let g:L = [1]', "let g:L[0] =<< END\nx\nEND", 'g:L' },
+    { 'heredoc-unpack', '', "let [g:A, g:B] =<< END\nx\ny\nEND", '[g:A, g:B]' },
+    { 'heredoc-eval', 'let g:N = 3', "let g:A =<< trim eval END\n  {g:N}{{x}}{'}'}\n    {g:N + 1}\n  END", 'g:A' },
+    { 'heredoc-stray', '', "let g:A =<< eval END\nx}y\nEND", "exists('g:A')" },
+    { 'heredoc-open', '', "let g:A =<< eval END\nx{1\nEND", "exists('g:A')" },
+    { 'redir-across', '', "redir => g:R\necho 'a'\necho 'b'\nredir END", 'g:R' },
+    { 'redir-append-key', "let g:D = {'k': 'x'}", "redir =>> g:D.k\necho 'a'\nredir END", 'g:D' },
+    { 'redir-moved', "let g:L = ['x']", "redir =>> g:L[0]\necho 'a'\ncall insert(g:L, 'y')\necho 'b'\nredir END", 'g:L' },
+    { 'redir-gone', "let g:L = ['x']", "redir =>> g:L[0]\necho 'a'\nlet g:L = []\necho 'b'\nredir END", 'g:L' },
+    { 'redir-curly', "let g:x = 'R'", "redir => g:{g:x}\necho 'c'\nredir END", 'g:R' },
+    { 'redir-trail', '', 'redir => g:R x', "exists('g:R')" },
+    { 'func-scopes', '', "function! XLv(a) abort\n  let l:x = [1]\n  let l:x[0] = 2\n  let l:['y'] = 3\n  let a:a[0] = 9\n  return [l:x, l:y, a:a]\nendfunction\necho XLv([1])", '1' },
+    { 'func-args', '', "function! XLa(a) abort\n  let a:['b'] = 2\nendfunction\ncall XLa(1)", '1' },
+    { 'func-argset', '', "function! XLb(a) abort\n  let a:a = 2\nendfunction\ncall XLb(1)", '1' },
+    { 'scopes', '', 'let w:LX = [1] | let w:LX[0] = 2 | let t:LY = {} | let t:LY.z = 1 | let b:LQ = 0z00 | let b:LQ[0] = 255', '[w:LX, t:LY, b:LQ]' },
+    { 'opt-scopes', '', 'let &l:shiftwidth = 3 | let &g:shiftwidth = 4 | let &shiftwidth += 1', '[&l:shiftwidth, &g:shiftwidth]' },
+    { 'func-value', 'let g:D = {}', "let g:D.k = function('len') | let g:D.K = 1 | let g:D.f = {x -> x}", 'sort(keys(g:D))' },
+    { 'funcref-var', '', "let g:Fk = function('len') | let g:Fk = 1 | let g:fk = function('len')", "[g:Fk, exists('g:fk')]" },
+    { 'curly-sub', "let g:x = {'a': [1]}", "let g:{'x'}.a[0] = 2 | let g:{'x'}['b'] = 3", 'g:x' },
+    { 'curly-unlet-sub', "let g:x = {'a': 1, 'b': 2}", "unlet g:{'x'}.a | unlet g:{'x'}['b']", 'g:x' },
+  }
+  for _, case in ipairs(CASES) do
+    quiet('silent! redir END')
+    quiet('silent! unlockvar! g:L g:D g:B g:N g:x g:C')
+    quiet('silent! unlet! g:L g:D g:B g:N g:S g:O g:x g:y g:C g:A g:R g:NK g:NK2 g:Fk g:fk')
+    quiet('silent! unlet! w:LX t:LY b:LQ s:nk g:lower $VARSP')
+    quiet("let v:errmsg = '' | set textwidth=0 shiftwidth& | call setreg('a', '')")
+    if case[2] ~= '' then
+      quiet(case[2])
+    end
+    exec_then('lv ' .. case[1], case[3], case[4])
+    veval('lv ' .. case[1] .. ' errmsg', 'v:errmsg')
+  end
+  quiet('silent! redir END')
+  quiet('silent! unlockvar! g:L g:D g:B g:N g:x g:C')
+  quiet('silent! unlet! g:L g:D g:B g:N g:S g:O g:x g:y g:C g:A g:R g:NK g:NK2 g:Fk g:fk')
+  quiet('silent! unlet! w:LX t:LY b:LQ s:nk g:lower $VARSP')
+  quiet("set textwidth=0 shiftwidth& | call setreg('a', '')")
+  for _, name in ipairs({ 'XLv', 'XLa', 'XLb' }) do
+    quiet('silent! delfunction! ' .. name)
+  end
+end)
+
+-- ---------------------------------------------------------------------
 -- Run.
 -- ---------------------------------------------------------------------
 
