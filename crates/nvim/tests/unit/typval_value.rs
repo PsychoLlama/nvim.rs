@@ -11,12 +11,11 @@ use std::mem::ManuallyDrop;
 use std::ptr;
 
 use neovim::eval::typval::{
-    BlobRef, DictRef, ListRef, NumBuf, PartialRef, Unconvertible, list_first, tv_check_lock,
-    tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal,
-    tv_get_bool, tv_get_bool_chk, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk,
-    tv_islocked, tv_item_lock, tv_list_alloc_ret, value_check_lock,
+    DictRef, ListRef, LockName, NumBuf, Unconvertible, list_first, tv_check_lock, tv_check_num,
+    tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal, tv_get_bool,
+    tv_get_bool_chk, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_islocked,
+    tv_item_lock, tv_list_alloc_ret, value_check_lock,
 };
-use neovim::eval::userfunc::TV_CSTRING;
 use neovim::memory::{xfree, xmalloc};
 use neovim::types::{
     TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
@@ -55,10 +54,10 @@ fn bogus_inner(v_type: VarType, bits: usize) -> TypVal {
         // SAFETY: as the list arm -- a made-up address in a
         // `ManuallyDrop`, never released.
         VAR_DICT => tv::dict_tv(unsafe { DictRef::owning(p.cast()) }),
-        // SAFETY: as the list arm.
-        VAR_PARTIAL => tv::partial_tv(unsafe { PartialRef::owning(p.cast()) }),
-        // SAFETY: as the list arm.
-        VAR_BLOB => tv::blob_tv(unsafe { BlobRef::owning(p.cast()) }),
+        // A NULL partial: the cases read only the kind.
+        VAR_PARTIAL => tv::partial_tv(None),
+        // A NULL blob, as the partial arm.
+        VAR_BLOB => tv::blob_tv(None),
         VAR_BOOL => TypVal::Bool(kBoolVarTrue),
         VAR_SPECIAL => TypVal::Special(kSpecialVarNull),
         VAR_UNKNOWN => TypVal::Unknown,
@@ -443,13 +442,8 @@ impl Slot {
     }
 
     /// `tv_item_lock` over this slot.
-    ///
-    /// # Safety
-    /// As `tv_item_lock`.
-    unsafe fn item_lock(&mut self, deep: c_int, lock: bool, check_refcount: bool) {
-        unsafe {
-            tv_item_lock(&raw mut self.lock, &mut self.tv, deep, lock, check_refcount);
-        }
+    fn item_lock(&mut self, deep: c_int, lock: bool, check_refcount: bool) {
+        tv_item_lock(&mut self.lock, &self.tv, deep, lock, check_refcount);
     }
 
     /// `tv_islocked` over this slot.
@@ -494,7 +488,8 @@ fn locking_a_partial_leaves_its_dict_alone() {
         .build();
         let mut p = Slot::new(p_tv);
         p.item_lock(-1, true, false);
-        assert_eq!((*(*p.tv.partial()).pt_dict).dv_lock, VarLock::Unlocked);
+        let bound = (*p.tv.partial()).pt_dict.as_ref().expect("a bound dict");
+        assert_eq!(bound.dv_lock, VarLock::Unlocked);
         tv_clear(&mut p.tv);
     }
 }
@@ -635,59 +630,45 @@ fn a_value_is_locked_by_its_own_lock_or_its_containers() {
 
 /// `describe('check_lock()') itp('works')`, spec line 2893.
 ///
-/// `name_len` is a length *or* the sentinel `TV_CSTRING`, which means "the
-/// whole NUL-terminated name" — the difference between `tes` and `test` in
-/// the last two rows.
+/// The name is a measured slice *or* none at all -- the difference between
+/// `tes` and `test` in the rows is the length the spec passed.
 #[test]
 fn checking_a_lock_names_what_is_locked() {
     let log = AllocLog::start();
-    // SAFETY: every name is this frame's and NUL-terminated.
-    unsafe {
-        let test = cstr("test");
-        let cstring = TV_CSTRING;
-        let check = |lock, name: *const c_char, len, msg| {
-            check_emsg(log.editor(), || value_check_lock(lock, name, len), msg)
-        };
+    let check = |lock, name, msg| check_emsg(log.editor(), || value_check_lock(lock, name), msg);
 
-        assert!(!check(VarLock::Unlocked, test.as_ptr(), 3, None));
-        assert!(check(
-            VarLock::Locked,
-            test.as_ptr(),
-            3,
-            Some("E741: Value is locked: tes")
-        ));
-        assert!(check(
-            VarLock::Fixed,
-            test.as_ptr(),
-            3,
-            Some("E742: Cannot change value of tes")
-        ));
-        assert!(check(
-            VarLock::Locked,
-            ptr::null(),
-            0,
-            Some("E741: Value is locked")
-        ));
-        assert!(check(
-            VarLock::Fixed,
-            ptr::null(),
-            0,
-            Some("E742: Cannot change value")
-        ));
-        assert!(check(
-            VarLock::Locked,
-            ptr::null(),
-            cstring,
-            Some("E741: Value is locked")
-        ));
-        assert!(check(
-            VarLock::Fixed,
-            test.as_ptr(),
-            cstring,
-            Some("E742: Cannot change value of test")
-        ));
-        log.clear();
-    }
+    assert!(!check(VarLock::Unlocked, LockName::Bytes(b"tes"), None));
+    assert!(check(
+        VarLock::Locked,
+        LockName::Bytes(b"tes"),
+        Some("E741: Value is locked: tes")
+    ));
+    assert!(check(
+        VarLock::Fixed,
+        LockName::Bytes(b"tes"),
+        Some("E742: Cannot change value of tes")
+    ));
+    assert!(check(
+        VarLock::Locked,
+        LockName::None,
+        Some("E741: Value is locked")
+    ));
+    assert!(check(
+        VarLock::Fixed,
+        LockName::None,
+        Some("E742: Cannot change value")
+    ));
+    assert!(check(
+        VarLock::Fixed,
+        LockName::Bytes(b"test"),
+        Some("E742: Cannot change value of test")
+    ));
+    assert!(check(
+        VarLock::Fixed,
+        LockName::Translate(c"test"),
+        Some("E742: Cannot change value of test")
+    ));
+    log.clear();
 }
 
 /// `deep` is a *level count*, not a flag: 1 locks the value and the
@@ -823,11 +804,10 @@ fn checking_a_lock_reads_the_value_and_then_its_container() {
     // SAFETY: every value is this case's own; the name outlives the calls.
     unsafe {
         let name = cstr("v");
-        let cstring = TV_CSTRING;
         let check = |slot: &Slot, msg| {
             check_emsg(
                 log.editor(),
-                || tv_check_lock(slot.lock, &slot.tv, name.as_ptr(), cstring),
+                || tv_check_lock(slot.lock, &slot.tv, LockName::Bytes(name.to_bytes())),
                 msg,
             )
         };

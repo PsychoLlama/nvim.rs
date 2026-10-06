@@ -11,8 +11,7 @@
 //! the children below reach a list through `list_items`/`list_iter`/
 //! `list_len`, never through `(*l).lv_items`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -22,7 +21,6 @@
 )]
 
 use super::*;
-use crate::types::{HashTab, SlotEntry};
 use crate::winlayer::Live;
 
 /// The `Copy` handles over the four objects this module manipulates through
@@ -45,8 +43,6 @@ pub(crate) type Li = Live<ListItem>;
 pub(crate) type Dt = Live<Dict>;
 /// A live `DictItem`; see [`Tv`].
 pub(crate) type Di = Live<DictItem>;
-/// A live `Blob`; see [`Tv`].
-pub(crate) type Bl = Live<Blob>;
 /// A live `Partial`; see [`Tv`].
 pub(crate) type Pt = Live<Partial>;
 
@@ -209,6 +205,15 @@ impl TypVal {
         self.overwrite(TypVal::dict(dict));
     }
 
+    /// The handle this value holds, borrowed; see [`TypVal::list_shared`].
+    #[inline(always)]
+    pub(crate) fn dict_shared(&self) -> Option<&DictRef> {
+        match self {
+            TypVal::Dict(dict) => dict.as_ref(),
+            _ => None,
+        }
+    }
+
     /// Another reference to the dictionary this value holds; see
     /// [`TypVal::list_handle`].
     #[inline(always)]
@@ -353,34 +358,6 @@ impl TypVal {
     }
 }
 
-impl Li {
-    /// The item's value, as a handle: it lives exactly as long as the item.
-    #[inline(always)]
-    pub(crate) fn tv(self) -> Tv {
-        // SAFETY: `li_tv` is a field of the live item this handle names, and
-        // `field_ptr` computes its address without borrowing the item.
-        unsafe { Tv::new(self.field_ptr(::core::mem::offset_of!(ListItem, li_tv))) }
-    }
-
-    /// `li_tv`'s kind; see [`TypVal::v_type`].
-    #[inline(always)]
-    pub(crate) fn v_type(self) -> crate::types::VarType {
-        self.li_tv.v_type()
-    }
-
-    /// `li_tv.vval.v_number`; see [`TypVal::as_number`].
-    #[inline(always)]
-    pub(crate) fn number(self) -> VarNumber {
-        self.tv().number_or_zero()
-    }
-
-    /// `li_tv.vval.v_list`; see [`TypVal::list_or_null`].
-    #[inline(always)]
-    pub(crate) fn list(self) -> *mut List {
-        self.tv().list_or_null()
-    }
-}
-
 /// The slot writers, generated over the enum's ten value-carrying variants.
 ///
 /// `tv.write_x(v)` **overwrites a slot without releasing what it held**.
@@ -427,11 +404,8 @@ impl TypVal {
     /// is the caller's and not this call's.
     #[inline(always)]
     pub(crate) fn overwrite(&mut self, value: TypVal) {
-        // SAFETY: `self` is a `&mut`, so the place is writable and aligned;
-        // `write` does not read what was there, which is the point -- these
-        // callers own the old value's release and some of them fill storage
-        // that has never held one.
-        unsafe { ::core::ptr::write(self, value) };
+        // Forgotten, not dropped: these callers own the old value's release.
+        ::core::mem::forget(::core::mem::replace(self, value));
     }
 
     /// Give up what this slot holds **without releasing it**: the payload
@@ -489,50 +463,21 @@ impl TypVal {
     }
 }
 
-/// Where a dictionary pointer *lives*, for the walk that has to clear it.
+/// Where a dictionary handle *lives*, for the walk that has to clear it.
 ///
 /// [`TypvalSink`](crate::eval::typval_encode::TypvalSink)'s dictionary hooks
 /// are handed the place rather than the value, because the `nothing` sink
 /// releases the reference and blanks the slot it came out of. Two different
 /// places are that slot — a `TypVal::Dict`'s payload, and a partial's
-/// `pt_dict`, which is a bare `*mut Dict` and no typval at all — so one
-/// pointer type cannot serve both.
+/// `pt_dict`, which is no typval at all — so one pointer type cannot serve
+/// both. Reading through one is the `nothing` sink's business.
 #[derive(Clone, Copy)]
 pub(crate) enum DictSlot {
     /// A typval holding the dictionary. Cleared, it is a `TypVal::Dict` over
     /// NULL: still a dictionary, holding none.
     Value(*mut TypVal),
     /// A partial's `pt_dict` field.
-    Field(*mut *mut Dict),
-}
-
-impl DictSlot {
-    /// The dictionary in the slot, or NULL.
-    ///
-    /// # Safety
-    /// The slot must be live for the call, and a [`Value`](Self::Value) must
-    /// hold a dictionary.
-    #[inline(always)]
-    pub(crate) unsafe fn get(self) -> *mut Dict {
-        match self {
-            // SAFETY: the caller's promise: a live slot.
-            DictSlot::Value(tv) => unsafe { (*tv).dict_or_null() },
-            DictSlot::Field(dictp) => unsafe { *dictp },
-        }
-    }
-
-    /// Leave the slot holding no dictionary, releasing nothing.
-    ///
-    /// # Safety
-    /// As [`get`](Self::get).
-    #[inline(always)]
-    pub(crate) unsafe fn clear(self) {
-        match self {
-            // SAFETY: the caller's promise: a live slot.
-            DictSlot::Value(tv) => unsafe { (*tv).write_dict(None) },
-            DictSlot::Field(dictp) => unsafe { *dictp = ::core::ptr::null_mut() },
-        }
-    }
+    Field(*mut Option<DictRef>),
 }
 
 /// Lock status of `l`; a NULL list reads as `VarLock::Fixed`.
@@ -587,18 +532,6 @@ pub(crate) fn list_iter_mut(l: Option<&mut List>) -> ::core::slice::IterMut<'_, 
     list_items_mut(l).iter_mut()
 }
 
-/// Store `d` in `tv` as the return value, taking a reference to it.
-///
-/// # Safety
-/// `tv` must point at a writable `TypVal` holding no value yet — the old
-/// contents are overwritten, not cleared — and `d` is null or a live
-/// dictionary the caller holds a reference to.
-#[inline(always)]
-pub unsafe fn tv_dict_set_ret(tv: &mut TypVal, d: *mut Dict) {
-    // SAFETY: the caller's promise: a writable typval and a live dictionary.
-    unsafe { Tv::new(tv) }.write_dict(unsafe { DictRef::retained(d) });
-}
-
 /// Number of items in `d`, as the `long` the family counts in; a NULL
 /// dictionary is empty.
 #[inline]
@@ -628,81 +561,6 @@ pub(crate) fn tv_dict_hi2di(hi: Slot<DictEntry>) -> *mut DictItem {
     hi.hi_key.item()
 }
 
-/// A walk over the occupied slots of a dictionary's hashtab.
-///
-/// See [`tv_dict_iter`].
-pub(crate) struct TableIter<E: SlotEntry> {
-    ht: *const HashTab<E>,
-    idx: usize,
-    todo: size_t,
-}
-
-/// A walk over the occupied slots of a dictionary's hashtab.
-pub(crate) type DictIter = TableIter<DictEntry>;
-
-impl<E: SlotEntry> Iterator for TableIter<E> {
-    type Item = Slot<E>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Slot<E>> {
-        while self.todo != 0 {
-            // The cursor is an index, and the slot is read out of the table
-            // afresh each step: a body may take `&mut` to the table (every
-            // `hash_remove` does), and the small run lives *in* the table,
-            // so a pointer cursor would not survive the first removal.
-            // SAFETY: the walk's table is live for the walk, and `todo`
-            // live entries remain, so `idx` is one of its slots.
-            let hi = unsafe { (*self.ht).slot(self.idx) };
-            self.idx += 1;
-            if hi.is_kept() {
-                self.todo -= 1;
-                return Some(hi);
-            }
-        }
-        None
-    }
-}
-
-/// Walk the occupied slots of `d`'s hashtab: upstream's `TV_DICT_ITER`, which
-/// is `HASHTAB_ITER` plus a `TV_DICT_HI2DI`.
-///
-/// The item is yielded as the [`Slot`], not the `DictItem`, because the
-/// bodies that remove entries need it for `hash_remove`; [`tv_dict_hi2di`] is
-/// the other half.
-///
-/// The live-item count is snapshotted before the first step, exactly as the
-/// macro does.  That is what lets a body remove entries as it goes — but only
-/// with the hashtab locked, since an unlocked `hash_remove` may rehash and
-/// renumber the slots underneath the walk.
-///
-/// # Safety
-/// `d` points at a live dictionary that outlives the walk. A raw pointer and
-/// not a reference: a body writes through the table (upstream's does), so the
-/// walk must not be holding a borrow of it.
-#[inline]
-pub(crate) unsafe fn tv_dict_iter(d: *const Dict) -> DictIter {
-    // SAFETY: the caller's live dictionary.
-    unsafe { tv_ht_iter(&raw const (*d).dv_hashtab) }
-}
-
-/// [`tv_dict_iter`] over a bare hashtab: upstream's `HASHTAB_ITER`.
-///
-/// The variable scopes are reached both ways -- as a `Dict` and as the
-/// `HashTab` inside it -- so both spellings exist. The contract is the
-/// same one.
-///
-/// # Safety
-/// As [`tv_dict_iter`], for the table rather than the dictionary.
-#[inline]
-pub(crate) unsafe fn tv_ht_iter<E: SlotEntry>(ht: *const HashTab<E>) -> TableIter<E> {
-    TableIter {
-        ht,
-        idx: 0,
-        // SAFETY: the caller's live table.
-        todo: unsafe { (*ht).ht_used },
-    }
-}
-
 /// Store `b` in `tv` as the return value: the slot takes the handle over.
 ///
 /// The old contents are overwritten, not cleared, as every
@@ -714,47 +572,19 @@ pub fn tv_blob_set_ret(tv: &mut TypVal, b: Option<BlobRef>) {
 
 #[cfg(test)]
 mod tests {
-    use ::core::mem::ManuallyDrop;
-
     use super::*;
-    use crate::types::VarType;
+    use crate::global_cell::editor_state_lock;
 
-    /// The value of `v_type` whose payload is `bits`, so that reading the
-    /// wrong arm would answer something a real value never holds: the point
-    /// of these cases is that the *kind* gates the read.
-    ///
-    /// [`ManuallyDrop`], because the payload is a made-up address and
-    /// releasing it would follow it.
-    fn tagged(v_type: VarType, bits: usize) -> ManuallyDrop<TypVal> {
-        ManuallyDrop::new(tagged_inner(v_type, bits))
-    }
-
-    fn tagged_inner(v_type: VarType, bits: usize) -> TypVal {
-        let p = ::core::ptr::without_provenance_mut::<()>(bits);
-        match v_type {
-            VAR_NUMBER => TypVal::Number(VarNumber::try_from(bits).expect("a small address")),
-            // SAFETY: a made-up address, wrapped in a `ManuallyDrop` by
-            // `tagged` so that nothing ever releases it.
-            VAR_LIST => TypVal::list(unsafe { ListRef::owning(p.cast()) }),
-            // SAFETY: as the list arm above.
-            VAR_DICT => TypVal::dict(unsafe { DictRef::owning(p.cast()) }),
-            // SAFETY: as the list arm above.
-            VAR_BLOB => TypVal::blob(unsafe { BlobRef::owning(p.cast()) }),
-            // SAFETY: as the list arm above.
-            VAR_PARTIAL => TypVal::partial(unsafe { PartialRef::owning(p.cast()) }),
-            other => panic!("no bogus payload for {other}"),
-        }
-    }
-
+    /// The payload `0xdead_beef` is what a hoisted read would follow as a
+    /// pointer: the point of these cases is that the *kind* gates the read.
     #[test]
     fn a_reader_answers_only_for_its_own_tag() {
-        // 0xdead_beef is what a hoisted read would follow as a pointer.
-        let num = tagged(VAR_NUMBER, 0xdead_beef);
+        let num = TypVal::Number(0xdead_beef);
         assert_eq!(num.as_number(), Some(0xdead_beef));
         assert_eq!(num.as_list(), None);
         assert_eq!(num.as_dict(), None);
         assert_eq!(num.as_blob(), None);
-        assert_eq!(num.as_partial(), None);
+        assert!(num.partial_ref().is_none());
         assert!(!num.is_string());
         assert_eq!(num.as_float(), None);
         assert_eq!(num.as_bool(), None);
@@ -763,7 +593,7 @@ mod tests {
 
     #[test]
     fn the_null_form_is_the_option_form_with_the_familys_empty_value() {
-        let num = tagged(VAR_NUMBER, 0xdead_beef);
+        let num = TypVal::Number(0xdead_beef);
         assert!(num.list_or_null().is_null());
         assert!(num.dict_or_null().is_null());
         assert!(num.blob_or_null().is_null());
@@ -775,54 +605,33 @@ mod tests {
 
     #[test]
     fn a_list_reads_back_as_the_pointer_it_was_given() {
-        // Any address will do: nothing here dereferences it.
-        let l = ::core::ptr::without_provenance_mut::<List>(0x1000);
-        let tv = tagged(VAR_LIST, l.addr());
-        assert_eq!(tv.as_list(), Some(l));
-        assert_eq!(tv.list_or_null(), l);
-        // The same bits under any other tag are not a list.
-        assert_eq!(tagged(VAR_DICT, l.addr()).as_list(), None);
+        let _serial = editor_state_lock();
+        let l = tv_list_alloc(0);
+        let tv = TypVal::list(Some(l.clone()));
+        assert_eq!(tv.as_list(), Some(l.as_ptr()));
+        assert_eq!(tv.list_or_null(), l.as_ptr());
+        // Any other kind is not a list.
+        assert_eq!(TypVal::dict(Some(tv_dict_alloc())).as_list(), None);
     }
 
-    /// Sixteen bytes, and the discriminant is the `VarType` code at offset
-    /// zero.
-    ///
-    /// The size is the reason the lock lives on the slot: a `TypVal` is
-    /// copied into every argument frame and every return slot in the
-    /// interpreter, and twenty-four would be paid for on all of them. The
-    /// offset is what `#[repr(C, u32)]` promises and what the generated
-    /// `ffi.cdef` chunk describes to the unit fixtures.
+    /// Sixteen bytes. The size is the reason the lock lives on the slot: a
+    /// `TypVal` is copied into every argument frame and every return slot
+    /// in the interpreter, and twenty-four would be paid for on all of them.
+    /// Where the tag sits is the core's test.
     #[test]
-    fn a_value_is_sixteen_bytes_tagged_by_its_var_type() {
+    fn a_value_is_sixteen_bytes() {
         assert_eq!(::core::mem::size_of::<TypVal>(), 16);
         assert_eq!(::core::mem::align_of::<TypVal>(), 8);
-        for tv in [
-            TypVal::Unknown,
-            TypVal::Number(1),
-            TypVal::string(None),
-            TypVal::func(None),
-            TypVal::list(None),
-            TypVal::dict(None),
-            TypVal::Float(1.0),
-            TypVal::Bool(kBoolVarTrue),
-            TypVal::Special(kSpecialVarNull),
-            TypVal::partial(None),
-            TypVal::blob(None),
-        ] {
-            // Every one of these is an empty value, so dropping it is free.
-            // SAFETY: `repr(C, u32)` puts the discriminant first, and it is
-            // a `u32`.
-            let tag = unsafe { *(&raw const tv).cast::<VarType>() };
-            assert_eq!(tag, tv.v_type());
-        }
     }
 
     /// `%p` answers the payload under every kind, as upstream's untagged
     /// union read did.
     #[test]
     fn the_printed_address_is_the_payload_whatever_the_kind_is() {
-        let l = ::core::ptr::without_provenance_mut::<List>(0x1000);
-        assert_eq!(tagged(VAR_LIST, 0x1000).payload_address().addr(), l.addr());
+        let _serial = editor_state_lock();
+        let l = tv_list_alloc(0);
+        let tv = TypVal::list(Some(l.clone()));
+        assert_eq!(tv.payload_address().addr(), l.as_ptr().addr());
         assert_eq!(TypVal::Number(42).payload_address().addr(), 42);
         assert_eq!(TypVal::Unknown.payload_address().addr(), 0);
     }

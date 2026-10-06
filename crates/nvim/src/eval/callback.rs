@@ -24,7 +24,7 @@ use core::mem::ManuallyDrop;
 use core::ptr::{null, null_mut};
 
 use crate::ascii::ascii_isdigit;
-use crate::eval::collect::set_ref_in_item;
+use crate::eval::collect::{set_ref_in_item_dict, set_ref_in_item_partial};
 use crate::eval::userfunc::{
     CallWith, call_func_with, func_ref_name, func_unref_name, scriptlocal_funcname,
 };
@@ -37,7 +37,7 @@ use crate::lua::executor::{
 use crate::message::e_command_too_recursive;
 use crate::option::vars::p_mfd;
 use crate::types::{
-    Callback, CallbackReader, DictRef, HtStack, ListStack, OptInt, TypVal, VAR_FUNC, VAR_NUMBER,
+    Callback, CallbackReader, HtStack, ListStack, OptInt, TypVal, VAR_FUNC, VAR_NUMBER,
     VAR_SPECIAL, VAR_STRING, kSpecialVarNull,
 };
 use crate::winlayer::Win;
@@ -223,10 +223,11 @@ pub fn callback_to_string(callback: &Callback) -> ThinCString {
         }
         Callback::Funcref(name) => [b"<vim function: ", name.as_bytes(), b">"].concat(),
         Callback::Partial(partial) => {
-            // SAFETY: the partial's own name, null or NUL-terminated; a
-            // null one printed as `%s` does.
-            let name = unsafe { partial.pt_name.as_ref().map(|at| CStr::from_ptr(at)) };
-            let name = name.map_or(&b"(null)"[..], CStr::to_bytes);
+            // A partial with no name of its own prints as `%s` did NULL.
+            let name = partial
+                .pt_name
+                .as_ref()
+                .map_or(&b"(null)"[..], |n| n.as_bytes());
             [b"<vim partial: ", name, b">"].concat()
         }
         // Anything else is an empty string.
@@ -267,12 +268,7 @@ pub fn callback_call(callback: &Callback, args: &[TypVal], result: &mut TypVal) 
                 None => (full, None),
             }
         }
-        Callback::Partial(held) => {
-            // SAFETY: the callback holds a live partial, whose name it or
-            // its function owns for as long as the reference lives.
-            let name = unsafe { CStr::from_ptr(partial_name(held.as_ptr())) };
-            (name, Some(&**held))
-        }
+        Callback::Partial(held) => (partial_name(held), Some(&**held)),
         Callback::Lua(luaref) => {
             // A Lua reference is called directly, with no arguments —
             // this is the "is it still wanted" question, not a
@@ -308,16 +304,10 @@ pub unsafe fn set_ref_in_callback(
     list_stack: *mut *mut ListStack,
 ) -> bool {
     match callback {
-        Callback::Partial(partial) => {
-            // A borrowed view: the callback keeps the reference, so this
-            // releases nothing.
-            // SAFETY: a made-up owner of the callback's reference, in a
-            // `ManuallyDrop` so that nothing ever releases it.
-            let held = unsafe { PartialRef::owning(partial.as_ptr()) };
-            let tv = ManuallyDrop::new(TypVal::partial(held));
-            // SAFETY: `tv` is this frame's, and the stacks are the caller's.
-            unsafe { set_ref_in_item(&tv, copy_id, ht_stack, list_stack) }
-        }
+        // SAFETY: the stacks are the caller's.
+        Callback::Partial(partial) => unsafe {
+            set_ref_in_item_partial(partial, copy_id, ht_stack, list_stack)
+        },
         // A Lua reference is the Lua garbage collector's, not this one's,
         // and nothing that reaches here should hold one.
         Callback::Lua(_) => unreachable!("set_ref_in_callback on a Lua callback"),
@@ -344,12 +334,7 @@ pub(crate) unsafe fn set_ref_in_callback_reader(
     }
     // SAFETY: as above.
     let self_dict = unsafe { (*reader).self_0 };
-    if !self_dict.is_null() {
-        // As above: the reader keeps the reference.
-        // SAFETY: the reader's own dictionary, which it keeps.
-        let tv = ManuallyDrop::new(TypVal::dict(unsafe { DictRef::owning(self_dict) }));
-        // SAFETY: `tv` is this frame's, and the stacks are the caller's.
-        return unsafe { set_ref_in_item(&tv, copy_id, ht_stack, list_stack) };
-    }
-    false
+    // SAFETY: the reader's own dictionary, null or live; the stacks are the
+    // caller's.
+    unsafe { set_ref_in_item_dict(self_dict, copy_id, ht_stack, list_stack) }
 }

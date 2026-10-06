@@ -1,13 +1,12 @@
 //! `Blob`: a reference-counted byte vector, and the builtins over it.
 //!
-//! [`tv_blob_alloc`] / [`blob_unref`] are the lifetime pair.
-//! [`tv_blob_slice_or_index`] is the subscript, [`tv_blob_set_range`] and
-//! [`tv_blob_set_append`] the two ways an assignment writes into one, and
-//! [`tv_blob_remove`] is `remove()`.  [`f_blob2list`] and [`f_list2blob`]
+//! [`tv_blob_alloc`] answers a [`BlobRef`], whose drop is the release.
+//! [`blob_slice_or_index`] is the subscript, [`set_range`] and
+//! [`Blob::set_or_append`] the two ways an assignment writes into one, and
+//! [`blob_remove`] is `remove()`.  [`f_blob2list`] and [`f_list2blob`]
 //! convert to and from a list of byte numbers.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::message::emsg;
@@ -194,6 +193,15 @@ impl TypVal {
         }
     }
 
+    /// The handle this value holds, borrowed; see [`TypVal::list_shared`].
+    #[inline(always)]
+    pub(crate) fn blob_shared(&self) -> Option<&BlobRef> {
+        match self {
+            TypVal::Blob(blob) => blob.as_ref(),
+            _ => None,
+        }
+    }
+
     /// Move the blob out of this slot, leaving `v:_null_blob` behind.
     #[inline(always)]
     pub(crate) fn take_blob(&mut self) -> Option<BlobRef> {
@@ -335,74 +343,42 @@ pub fn blob_check_range(
 
 /// `dest[n1 : n2] = src`: copy `src`'s blob over that range of `dest`.
 ///
-/// `dest` is a **pointer** rather than a borrow because `src` may name the
-/// very same blob: `:let b[0 : len(b) - 1] = b` reaches here with one blob
-/// as both operands, and a `&mut` to it while the source is being read is
-/// undefined where the pointer was merely delicate. The length check forces
-/// such a range to span the whole blob, so the copy is the identity and
-/// this answers before it takes the borrow at all.
-///
-/// # Safety
-///
-/// `dest` must point at a live blob with no other borrow of it live for the
-/// call; `src` may hold that same blob.
-pub unsafe fn blob_set_range(
-    dest: *mut Blob,
-    n1: VarNumber,
-    n2: VarNumber,
-    src: &TypVal,
-) -> Result<(), Failed> {
-    // The source is kept as a pointer as well as a borrow: `dest` is
-    // compared against the pointer, because a second *borrow* of what it
-    // names is the aliasing this exists to avoid.
-    let at = src.blob_or_null();
-    // SAFETY: the value's own blob.
-    let from = unsafe { at.as_ref() };
-    if n2 - n1 + 1 != VarNumber::from(blob_len(from)) {
-        let msg = gettext(c"E972: Blob value does not have the right number of bytes");
-        emsg(msg);
-        return Err(Failed);
-    }
-    if ::core::ptr::eq(at, dest) {
-        return Ok(());
-    }
-    let bytes = blob_bytes(from);
-    let first = usize::try_from(n1).expect("a byte of the blob");
-    // SAFETY: the caller's live blob, which the test above says `from` is
-    // not -- so the two borrows name different allocations.
-    unsafe { (*dest).bytes_mut()[first..first + bytes.len()].copy_from_slice(bytes) };
-    Ok(())
-}
-
-/// [`blob_set_range`] into the blob `dest` holds. `src` may hold that same
-/// blob.
+/// `src` may hold the very same blob: `:let b[0 : len(b) - 1] = b` reaches
+/// here with one blob as both operands. The length check forces such a range
+/// to span the whole blob, so the copy is the identity and this answers
+/// before it borrows `dest` at all.
 pub(crate) fn set_range(
     dest: &BlobRef,
     n1: VarNumber,
     n2: VarNumber,
     src: &TypVal,
 ) -> Result<(), Failed> {
-    // SAFETY: a blob the handle keeps alive, which no borrow of this frame
-    // reaches; the callee compares `src` against it before borrowing either.
-    unsafe { blob_set_range(dest.as_ptr(), n1, n2, src) }
+    if n2 - n1 + 1 != VarNumber::from(blob_len(src.blob_ref())) {
+        let msg = gettext(c"E972: Blob value does not have the right number of bytes");
+        emsg(msg);
+        return Err(Failed);
+    }
+    if src.blob_shared().is_some_and(|from| from.ptr_eq(dest)) {
+        return Ok(());
+    }
+    let bytes = blob_bytes(src.blob_ref());
+    let first = usize::try_from(n1).expect("a byte of the blob");
+    // Two different blobs, so the borrows name different allocations.
+    dest.edit().bytes_mut()[first..first + bytes.len()].copy_from_slice(bytes);
+    Ok(())
 }
 
 /// `remove()` over a blob: take out one byte, or the range `[idx, end]`, and
-/// store what was removed in `result`.
-///
-/// # Safety
-///
-/// `arg_errmsg` must point at the NUL-terminated message to raise when the
-/// blob is locked.
-pub unsafe fn blob_remove(
+/// store what was removed in `result`. `arg_errmsg` is the message literal
+/// a locked blob reports, translated.
+pub fn blob_remove(
     blob: Option<&mut Blob>,
     args: &[TypVal],
     result: &mut TypVal,
-    arg_errmsg: *const ::core::ffi::c_char,
+    arg_errmsg: &'static ::core::ffi::CStr,
 ) {
     let lock = blob.as_ref().map_or(VarLock::Unlocked, |b| b.bv_lock);
-    // SAFETY: the caller's promise: a NUL-terminated message.
-    if unsafe { value_check_lock(lock, arg_errmsg, TV_TRANSLATE as size_t) } {
+    if value_check_lock(lock, LockName::Translate(arg_errmsg)) {
         return;
     }
 
@@ -455,14 +431,12 @@ pub unsafe fn blob_remove(
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
 pub fn f_blob2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     if tv_check_for_blob_arg(args, 0).is_err() {
         return;
     }
-    let l = result.list_or_null();
     for &byte in blob_bytes(args[0].blob_ref()) {
-        // SAFETY: the list just stored in the return slot.
-        unsafe { (*l).push_number(VarNumber::from(byte)) };
+        list.push_number(VarNumber::from(byte));
     }
 }
 
@@ -474,8 +448,7 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_list_arg(args, 0).is_err() {
         return;
     }
-    // SAFETY: the argument's own list, borrowed for the walk.
-    for li in list_iter(unsafe { args[0].list_or_null().as_ref() }) {
+    for li in list_iter(args[0].list_ref()) {
         let read = tv_get_number_chk(&li.li_tv);
         let n = read.unwrap_or(0);
         if read.is_err() || !(0..=255).contains(&n) {
@@ -591,13 +564,11 @@ mod tests {
     fn assigning_a_blob_over_the_whole_of_itself_changes_nothing() {
         let _held = editor_state_lock();
         let held = blob_of(b"abcd");
-        let at = held.as_ptr();
         let src = TypVal::blob(Some(held.clone()));
         let mut dest = TypVal::Unknown;
-        dest.write_blob(Some(held));
+        dest.write_blob(Some(held.clone()));
 
-        // SAFETY: the blob both values hold, unborrowed for the call.
-        assert_eq!(unsafe { blob_set_range(at, 0, 3, &src) }, Ok(()));
+        assert_eq!(set_range(&held, 0, 3, &src), Ok(()));
         assert_eq!(blob_bytes(dest.blob_ref()), b"abcd");
 
         // A shorter range of the same blob never gets here: the length
@@ -607,6 +578,7 @@ mod tests {
 
         tv_clear(&mut dest);
         drop(src);
+        drop(held);
     }
 
     /// A copy is a blob of its own, holding the same bytes.
@@ -629,30 +601,23 @@ mod tests {
         tv_clear(&mut to);
     }
 
-    /// The reference count of the blob `b` points at.
-    fn refs(b: *mut Blob) -> i32 {
-        // SAFETY: a live blob the case holds.
-        unsafe { (*b).bv_refcount.get() }
-    }
-
     /// `tv_copy` of a blob shares it: one more reference, the same bytes,
     /// and a write through either value is seen through the other.
     #[test]
     fn a_copied_blob_value_shares_the_blob() {
         let _held = editor_state_lock();
         let b = blob_of(b"ab");
-        let at = b.as_ptr();
         let mut one = TypVal::blob(Some(b.clone()));
         let mut two = TypVal::Unknown;
         tv_copy(&one, &mut two);
-        assert_eq!(two.blob_or_null(), at);
-        assert_eq!(refs(at), 3);
+        assert!(two.blob_shared().is_some_and(|two| two.ptr_eq(&b)));
+        assert_eq!(b.bv_refcount.get(), 3);
         two.blob_mut().expect("a blob").push(b'c');
         assert_eq!(blob_bytes(one.blob_ref()), b"abc");
         tv_clear(&mut one);
-        assert_eq!(refs(at), 2);
+        assert_eq!(b.bv_refcount.get(), 2);
         tv_clear(&mut two);
-        assert_eq!(refs(at), 1);
+        assert_eq!(b.bv_refcount.get(), 1);
         assert_eq!(b.bytes(), b"abc");
     }
 
@@ -662,18 +627,14 @@ mod tests {
     fn a_blob_handle_counts_its_references() {
         let _held = editor_state_lock();
         let b = tv_blob_alloc();
-        let at = b.as_ptr();
-        assert_eq!(refs(at), 1);
+        assert_eq!(b.bv_refcount.get(), 1);
         let c = b.clone();
-        assert_eq!(refs(at), 2);
+        assert_eq!(c.bv_refcount.get(), 2);
         drop(b);
-        assert_eq!(refs(at), 1);
-        // SAFETY: a live blob, which the handle takes a second reference to.
-        let d = unsafe { BlobRef::retained(at) }.expect("not null");
-        assert_eq!(refs(at), 2);
+        assert_eq!(c.bv_refcount.get(), 1);
+        let d = c.clone();
+        assert_eq!(d.bv_refcount.get(), 2);
         drop(c);
         drop(d);
-        // SAFETY: null is no blob.
-        assert!(unsafe { BlobRef::retained(::core::ptr::null_mut()) }.is_none());
     }
 }

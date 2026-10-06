@@ -159,26 +159,22 @@ fn ex_defer_inner(
     }
 
     if let Some(partial) = partial {
-        if !partial.pt_dict.is_null() {
+        if partial.pt_dict.is_some() {
             emsg(gettext(E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER));
             return (Err(Failed), 0);
         }
-        if partial.pt_argc > 0 {
-            partial_argc = partial.pt_argc;
-            for (i, slot) in argvars.iter_mut().take(partial_argc as usize).enumerate() {
-                // SAFETY: the partial holds `pt_argc` bound arguments, and
-                // the handle keeps them alive.
-                tv_copy(unsafe { &*partial.pt_argv.add(i) }, slot);
-            }
+        partial_argc = partial.pt_argv.len();
+        for (arg, slot) in partial.pt_argv.iter().zip(&mut argvars) {
+            tv_copy(arg, slot);
         }
     }
 
     // Upstream passes `false` for the partial argument count here; the
     // room already taken is accounted for by the `argvars` offset below.
     let mut cursor = Cursor::new(text);
-    let free_slot = &mut argvars[partial_argc as usize..];
+    let free_slot = &mut argvars[partial_argc..];
     let mut r = get_func_arguments(&mut cursor, true, 0, free_slot, &mut argcount);
-    let argcount = argcount as c_int + partial_argc;
+    let argcount = argcount as c_int + partial_argc as c_int;
 
     if r.is_ok() {
         if builtin_function(callee) {
@@ -448,13 +444,9 @@ pub unsafe fn do_return(
                 // `:debug`, and blanking it first would leave it a
                 // `VAR_UNKNOWN` the echo encoder refuses.  The source gives
                 // it up straight after that report instead.
-                let saved = unsafe { xcalloc(1, size_of::<TypVal>()) };
+                let copy = unsafe { (*result.cast::<TypVal>()).bit_copy() };
+                let saved = Box::into_raw(Box::new(copy)).cast::<c_void>();
                 unsafe { (*cstack).set_pending_return(idx as usize, saved) };
-                unsafe {
-                    saved
-                        .cast::<TypVal>()
-                        .write((*result.cast::<TypVal>()).bit_copy())
-                };
                 // `reanimate` blanks `fc_rettv` just below, which is its
                 // own way of giving the value up.
                 handed_over = !reanimate;
@@ -475,7 +467,8 @@ pub unsafe fn do_return(
             unsafe { tv_clear(&mut *(*current_fc()).fc_rettv) };
             unsafe { *(*current_fc()).fc_rettv = (*(result as *mut TypVal)).take() };
             if !is_cmd {
-                unsafe { xfree(result) };
+                // The pending slot's box, emptied just above.
+                drop(unsafe { Box::from_raw(result.cast::<TypVal>()) });
             }
         }
     }

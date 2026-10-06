@@ -23,7 +23,7 @@ use crate::types::{EvalFuncData, TypVal, VarLock, int64_t, uint8_t};
 
 /// `extend()`/`extendnew()` over two Dicts: merge `argvars[1]`'s keys into
 /// `argvars[0]` (or into a copy of it) under the policy `argvars[2]` names.
-fn extend_dict(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut TypVal) {
+fn extend_dict(args: &[TypVal], arg_errmsg: &'static CStr, is_new: bool, result: &mut TypVal) {
     let Container::Dict(mut d1) = Container::of(&args[0]) else {
         unreachable!("dispatched on VAR_DICT")
     };
@@ -52,8 +52,10 @@ fn extend_dict(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut Ty
         let Some(copy) = d1.copy() else {
             return;
         };
-        d1 = DictArg::of(copy.as_ptr());
         held = Some(copy);
+    }
+    if let Some(copy) = &held {
+        d1 = DictArg::of(Some(copy));
     }
 
     // Check the third argument.
@@ -83,7 +85,7 @@ fn extend_dict(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut Ty
 
 /// `extend()`/`extendnew()` over two Lists: splice `argvars[1]` into
 /// `argvars[0]` (or into a copy of it) before index `argvars[2]`.
-fn extend_list(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut TypVal) {
+fn extend_list(args: &[TypVal], arg_errmsg: &'static CStr, is_new: bool, result: &mut TypVal) {
     let mut error = false;
     let Container::List(mut l1) = Container::of(&args[0]) else {
         unreachable!("dispatched on VAR_LIST")
@@ -102,8 +104,10 @@ fn extend_list(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut Ty
         let Some(copy) = l1.copy() else {
             return;
         };
-        l1 = ListArg::of(copy.as_ptr());
         held = Some(copy);
+    }
+    if let Some(copy) = &held {
+        l1 = ListArg::of(Some(copy));
     }
 
     // The item to splice in before, or None for "at the end".  Every way out
@@ -136,7 +140,7 @@ fn extend_list(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut Ty
 
 /// The shared body of `extend()` and `extendnew()`: two Lists or two Dicts,
 /// nothing else.
-fn extend(args: &[TypVal], result: &mut TypVal, arg_errmsg: &CStr, is_new: bool) {
+fn extend(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static CStr, is_new: bool) {
     match (Container::of(&args[0]), Container::of(&args[1])) {
         (Container::List(_), Container::List(_)) => extend_list(args, arg_errmsg, is_new, result),
         (Container::Dict(_), Container::Dict(_)) => extend_dict(args, arg_errmsg, is_new, result),

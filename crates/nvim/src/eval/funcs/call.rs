@@ -12,7 +12,7 @@ use crate::cstr;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
     ListRef, NumBuf, PartialRef, list_items, list_iter, list_len, tv_check_for_dict_arg,
-    tv_check_for_list_arg, tv_copy,
+    tv_check_for_list_arg,
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
@@ -28,7 +28,7 @@ use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
 };
 use crate::memory::{ThinCString, XString};
-use crate::memory::{xcalloc, xfree, xmalloc, xstrdup};
+use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
 use crate::message::state::{emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off};
 use crate::message::{capture_finish, capture_start, e_toomanyarg, e_unknown_function_str};
@@ -40,7 +40,7 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{
-    EvalFuncData, List, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    EvalFuncData, List, NUL, Partial, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_STRING, VarNumber, VarType,
 };
 use core::ffi::{c_char, c_int, c_void};
@@ -82,7 +82,11 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut()),
         VAR_PARTIAL => {
             partial = args[0].partial_or_null();
-            unsafe { partial_name(partial) }
+            args[0]
+                .partial_ref()
+                .map_or(c"", partial_name)
+                .as_ptr()
+                .cast_mut()
         }
         _ if nlua_is_table_from_lua(&args[0]) => {
             owned = true;
@@ -327,7 +331,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     let mut numbuf2 = NumBuf::new();
     // SAFETY throughout: the frame is live; the partial built below owns every value
     // it copies, and `trans_name`/`name` are released on every path.
-    let mut arg_pt = ptr::null_mut::<Partial>();
+    let mut arg_pt: Option<&Partial> = None;
     let mut use_string = false;
     let mut s = match args[0].v_type() {
         // function(MyFunc, [arg], dict)
@@ -335,9 +339,9 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
             .func_name()
             .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut()),
         // function(dict.MyFunc, [arg])
-        VAR_PARTIAL if !args[0].partial_or_null().is_null() => {
-            arg_pt = args[0].partial_or_null();
-            unsafe { partial_name(arg_pt) }
+        VAR_PARTIAL if args[0].partial_ref().is_some() => {
+            arg_pt = args[0].partial_ref();
+            arg_pt.map_or(c"", partial_name).as_ptr().cast_mut()
         }
         // function('MyFunc', [arg], dict)
         _ => {
@@ -445,7 +449,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     }
 
     // Nothing bound and nothing to bind: a plain Funcref will do.
-    if dict_idx == 0 && arg_idx == 0 && arg_pt.is_null() && !is_funcref {
+    if dict_idx == 0 && arg_idx == 0 && arg_pt.is_none() && !is_funcref {
         // SAFETY: `name` is the `xmalloc`ed copy made above, which the
         // result adopts; it stays live for the reference taken on it.
         result.write_func_name(unsafe { ThinCString::from_raw(name) });
@@ -453,63 +457,45 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         return;
     }
 
-    let pt = unsafe { xcalloc(1, size_of::<Partial>()) } as *mut Partial;
-    if arg_idx > 0 || (!arg_pt.is_null() && unsafe { (*arg_pt).pt_argc } > 0) {
+    let mut pt = Partial::EMPTY;
+    if arg_idx > 0 || arg_pt.is_some_and(|bound| !bound.pt_argv.is_empty()) {
         // The bound arguments of the partial being extended come
         // first, then this call's.
-        let arg_len = if arg_pt.is_null() {
-            0
-        } else {
-            unsafe { (*arg_pt).pt_argc }
-        };
-        let lv_len = list_len(unsafe { list.as_ref() });
-        unsafe { (*pt).pt_argc = arg_len + lv_len };
-        let bytes = size_of::<TypVal>() * unsafe { (*pt).pt_argc } as usize;
-        unsafe { (*pt).pt_argv = xmalloc(bytes) as *mut TypVal };
-        let mut i = 0;
-        while i < arg_len {
-            let from = unsafe { (*arg_pt).pt_argv.add(i as usize) };
-            let to = unsafe { (*pt).pt_argv.add(i as usize) };
-            unsafe { tv_copy(&*from, &mut *to) };
-            i += 1;
-        }
-        for li in list_iter(unsafe { list.as_ref() }) {
-            unsafe { tv_copy(&li.li_tv, &mut *(*pt).pt_argv.add(i as usize)) };
-            i += 1;
-        }
+        let bound = arg_pt.map_or(&[][..], |bound| &bound.pt_argv);
+        let list = unsafe { list.as_ref() };
+        pt.pt_argv
+            .reserve_exact(bound.len() + list.map_or(0, List::len));
+        pt.pt_argv.extend(bound.iter().cloned());
+        pt.pt_argv
+            .extend(list_iter(list).map(|li| li.li_tv.clone()));
     }
 
     if dict_idx > 0 {
         // Bound explicitly, so `pt_auto` stays false.
-        unsafe { (*pt).pt_dict = args[dict_idx].dict_or_null() };
-        unsafe { (*(*pt).pt_dict).dv_refcount.retain() };
-    } else if !arg_pt.is_null() {
+        pt.pt_dict = args[dict_idx].dict_handle();
+    } else if let Some(bound) = arg_pt {
         // A dict bound automatically stays bound automatically. This
         // is what makes `function(dict.func, [], dict)` keep `dict`.
-        unsafe { (*pt).pt_dict = (*arg_pt).pt_dict };
-        unsafe { (*pt).pt_auto = (*arg_pt).pt_auto };
-        if !unsafe { (*pt).pt_dict }.is_null() {
-            unsafe { (*(*pt).pt_dict).dv_refcount.retain() };
-        }
+        pt.pt_dict = bound.pt_dict.clone();
+        pt.pt_auto = bound.pt_auto;
     }
 
-    unsafe { (*pt).pt_refcount = Refcount::ONE };
-    // SAFETY: the count just set is the one this handle owns.
-    let held = unsafe { PartialRef::owning(pt) };
-    if !arg_pt.is_null() && !unsafe { (*arg_pt).pt_func }.is_null() {
-        unsafe { (*pt).pt_func = (*arg_pt).pt_func };
-        unsafe { func_ptr_ref((*pt).pt_func) };
+    if let Some(bound) = arg_pt.filter(|bound| !bound.pt_func.is_null()) {
+        pt.pt_func = bound.pt_func;
+        unsafe { func_ptr_ref(pt.pt_func) };
         unsafe { xfree(name as *mut c_void) };
     } else if is_funcref {
         let trans_name = trans_name.as_deref().unwrap_or_default();
-        unsafe { (*pt).pt_func = find_func(trans_name) };
-        unsafe { func_ptr_ref((*pt).pt_func) };
+        pt.pt_func = find_func(trans_name);
+        unsafe { func_ptr_ref(pt.pt_func) };
         unsafe { xfree(name as *mut c_void) };
     } else {
-        unsafe { (*pt).pt_name = name };
+        // SAFETY: `name` is the `xmalloc`ed copy made above, which the
+        // partial adopts.
+        pt.pt_name = unsafe { ThinCString::from_raw(name) };
         unsafe { func_ref(name) };
     }
-    result.write_partial(held);
+    result.write_partial(Some(PartialRef::new(pt)));
 }
 
 /// `funcref({name} [, {arglist}] [, {dict}])`

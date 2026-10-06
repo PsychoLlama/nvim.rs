@@ -19,7 +19,7 @@ use crate::memory::ThinCString;
 use core::ffi::{c_int, c_void};
 use core::mem::size_of;
 
-use crate::eval::typval::{blob_copy, blob_len, blob_unref, index_of, list_unref, tv_copy};
+use crate::eval::typval::{blob_copy, blob_len, index_of, list_unref, tv_copy};
 use crate::eval::vars::{VarList, ex_let_vars, skip_var_list};
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::{Fi, ForInfo, e_string_list_or_blob_required, eval0_in_cmd};
@@ -87,16 +87,13 @@ pub unsafe fn eval_for_line(excmd: &mut ExArg, errp: *mut bool, skip: bool) -> *
                 }
                 VAR_BLOB => {
                     fi.fi_bi = 0;
-                    if !tv.blob_or_null().is_null() {
+                    if tv.blob_ref().is_some() {
                         // Copied, so the loop is not affected by later
                         // changes to the Blob it was handed.
                         let mut btv = UNSET_TV;
-                        // SAFETY: the value's own blob, borrowed for the copy.
-                        blob_copy(unsafe { tv.blob_or_null().as_ref() }, &mut btv);
-                        // SAFETY: the copy left a Blob in `btv`.
-                        fi.fi_blob = btv.blob_or_null();
+                        blob_copy(tv.blob_ref(), &mut btv);
                         // The reference the copy took is `fi`'s now.
-                        btv.disown();
+                        fi.fi_blob = btv.take_blob();
                     }
                     // SAFETY: `tv` is this frame's.
                     clear_local(&mut tv);
@@ -138,9 +135,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: &[u8]) -> bool {
     let fi = unsafe { Fi::new(fi_void as *mut ForInfo) };
     let rec = fi.raw();
 
-    if !fi.fi_blob.is_null() {
-        // SAFETY: `fi_blob` is the copy `eval_for_line` took.
-        let blob = unsafe { &*fi.fi_blob };
+    if let Some(blob) = &fi.fi_blob {
         if fi.fi_bi >= blob_len(Some(blob)) {
             return false;
         }
@@ -223,7 +218,7 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
         return;
     }
     // SAFETY: the caller's promise -- the loop's own `ForInfo`.
-    let fi = unsafe { Fi::new(fi_void as *mut ForInfo) };
+    let mut fi = unsafe { Fi::new(fi_void as *mut ForInfo) };
     if !fi.fi_list.is_null() {
         let list = fi.fi_list;
         // SAFETY: the watcher was added to this List by `eval_for_line`,
@@ -231,9 +226,9 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
         unsafe { (*list).watch_remove(fi.fi_watch) };
         // SAFETY: as above -- this releases the reference `fi` held.
         unsafe { list_unref(list) };
-    } else if !fi.fi_blob.is_null() {
-        // SAFETY: the Blob is the copy `eval_for_line` took.
-        unsafe { blob_unref(fi.fi_blob) };
+    } else if let Some(blob) = fi.fi_blob.take() {
+        // The copy `eval_for_line` took.
+        drop(blob);
     } else {
         // SAFETY: the String is owned, and null is fine for `xfree`.
         unsafe { xfree(fi.fi_string as *mut c_void) };

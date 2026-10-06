@@ -68,7 +68,7 @@ fn vimvar_val(idx: Vv) -> Tv {
 ///
 /// Safe: `tv_clear`'s only precondition is a live, writable value, and a row
 /// of the `v:` table is one for the whole program.
-fn clear_vimvar(idx: Vv) {
+pub(crate) fn clear_vimvar(idx: Vv) {
     // SAFETY: a row of a live `static` table.
     unsafe { tv_clear(&mut *vimvar_val(idx).raw()) };
 }
@@ -188,9 +188,7 @@ pub fn get_vim_var_partial(idx: Vv) -> *mut Partial {
 /// A reference of the caller's own to `v:lua`, the partial a `v:lua.name`
 /// callee stands for.
 pub(crate) fn lua_partial() -> Option<PartialRef> {
-    // SAFETY: a `v:` partial is null or live, and the answer takes a
-    // reference of its own.
-    unsafe { PartialRef::retained(get_vim_var_partial(Vv::Lua)) }
+    vimvar_val(Vv::Lua).partial_shared().cloned()
 }
 
 /// Declare `v:` variable `idx` to be of type `type_0`, without touching its
@@ -252,6 +250,18 @@ pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
     });
 }
 
+/// Set `v:` variable `idx` to a copy of `bytes`: [`set_vim_var_string`]
+/// over a slice.
+pub(crate) fn set_vim_var_bytes(idx: Vv, bytes: &[u8]) {
+    clear_vimvar(idx);
+    vimvar_val(idx).write_string(Some(ThinCString::from_bytes(bytes)));
+}
+
+/// Lend `v:` variable `idx`'s value to `f`.
+pub(crate) fn with_vim_var<R>(idx: Vv, f: impl FnOnce(&TypVal) -> R) -> R {
+    f(&vimvar_val(idx))
+}
+
 /// Set `v:` variable `idx` to `val`, which takes the handle over.
 pub fn set_vim_var_list(idx: Vv, val: Option<ListRef>) {
     let mut tv = vimvar_val(idx);
@@ -281,14 +291,9 @@ pub fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
 /// table already declares `v:lua` a `VAR_PARTIAL` and nothing ever replaces
 /// it; this runs once, from `evalvars_init`.
 ///
-/// # Safety
-/// As [`get_vim_var_tv`]; `val` is a live partial whose reference the caller
-/// hands over.
-pub(crate) unsafe fn set_vim_var_partial(idx: Vv, val: *mut Partial) {
-    let mut tv = vimvar_val(idx);
-    // SAFETY: the caller's promise -- a live partial whose reference the
-    // slot takes over.
-    tv.write_partial(unsafe { PartialRef::owning(val) });
+/// The slot takes `val` over.
+pub(crate) fn set_vim_var_partial(idx: Vv, val: PartialRef) {
+    vimvar_val(idx).write_partial(Some(val));
 }
 
 /// Set `v:register` to `c`, or to `"` for the unnamed register.

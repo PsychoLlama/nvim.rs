@@ -18,7 +18,7 @@ use crate::eval::typval::{DictEntry, DictRef, DictTab, ListRef, tv_dict_item_fre
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::MessagePackType;
-use crate::types::{DictKey, Refcount};
+use crate::types::{DictKey, PartialRef, Refcount};
 use crate::types::{Failed, NUL};
 
 /// Build the `g:` and `v:` scopes and fill the `v:` table.  Called once, at
@@ -132,13 +132,12 @@ pub fn evalvars_init() {
     set_vim_var_bool(Vv::True, kBoolVarTrue);
     set_vim_var_special(Vv::Null, kSpecialVarNull);
 
-    let vvlua_partial = unsafe { xcalloc(1, ::core::mem::size_of::<Partial>()) } as *mut Partial;
     // The name should never be printed, but do not crash if it is.
-    unsafe { (*vvlua_partial).pt_name = xmallocz(0) as *mut c_char };
-    // SAFETY: the partial just allocated. The region covers the *call*:
-    // `unsafe { … }.retain()` would bump a copy of the count.
-    unsafe { (*vvlua_partial).pt_refcount.retain() };
-    unsafe { set_vim_var_partial(Vv::Lua, vvlua_partial) };
+    let lua = Partial {
+        pt_name: Some(ThinCString::empty()),
+        ..Partial::EMPTY
+    };
+    set_vim_var_partial(Vv::Lua, PartialRef::new(lua));
 
     // The default for v:register is not 0 but '"'.
     set_reg_var(0);
@@ -394,7 +393,7 @@ unsafe fn unlet_terminated(
             let (len, lock) = (TV_CSTRING as size_t, unsafe { (*d).dv_lock });
             if unsafe { var_check_fixed(flags, name, len) }
                 || unsafe { var_check_ro(flags, name, len) }
-                || unsafe { value_check_lock(lock, name, len) }
+                || value_check_lock(lock, LockName::Bytes(unsafe { cstr::bytes_at(name) }))
             {
                 return Err(Failed);
             }
@@ -402,7 +401,8 @@ unsafe fn unlet_terminated(
             // only answer the same way -- nothing above it changes
             // `dv_lock` -- so the repetition is dead; kept because
             // deleting it is a change no gate could confirm.
-            if unsafe { value_check_lock((*d).dv_lock, name, len) } {
+            let name = LockName::Bytes(unsafe { cstr::bytes_at(name) });
+            if value_check_lock(unsafe { (*d).dv_lock }, name) {
                 return Err(Failed);
             }
 

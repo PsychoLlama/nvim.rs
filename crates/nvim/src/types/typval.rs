@@ -526,18 +526,19 @@ impl ListWatch {
 }
 /// A partial: a function plus bound arguments and an optional `self` dict.
 ///
-/// Not `Copy`: `pt_name`, `pt_argv` and the two refcounts are owned, and
-/// `partial_unref` is what releases them.
-#[derive(Clone)]
+/// It owns its name, its arguments and its dictionary reference; the last
+/// [`PartialRef`] going is what releases them (`partial_free`, in upstream's
+/// order). Built in place with [`PartialRef::new`].
 pub struct Partial {
     pub pt_refcount: Refcount,
     pub pt_copy_id: ::core::ffi::c_int,
-    pub pt_name: *mut ::core::ffi::c_char,
+    /// The function's name, holding a reference to it by name. `None` when
+    /// `pt_func` is the function instead.
+    pub pt_name: Option<ThinCString>,
     pub pt_func: *mut UserFunc,
     pub pt_auto: bool,
-    pub pt_argc: ::core::ffi::c_int,
-    pub pt_argv: *mut TypVal,
-    pub pt_dict: *mut Dict,
+    pub pt_argv: Vec<TypVal>,
+    pub pt_dict: Option<DictRef>,
 }
 pub type ScriptId = ::core::ffi::c_int;
 #[derive(Copy, Clone, PartialEq)]

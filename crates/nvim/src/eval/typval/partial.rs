@@ -2,11 +2,13 @@
 //!
 //! The refcount *is* the ownership, as it is for [`ListRef`] and
 //! [`BlobRef`](super::BlobRef): [`PartialRef`] retains on `Clone`, releases
-//! on `Drop`, and the last one frees through [`partial_unref`] -- the
+//! on `Drop`, and the last one frees through [`partial_free`] -- the
 //! teardown of `pt_argv`, `pt_dict` and `pt_func`, which lives here with
 //! the rest of the handle.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Two reads through `pt_func`, the user function's raw pointer: its name and
+// its release. They go with that pointer.
 #![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
@@ -17,9 +19,9 @@
 )]
 
 use super::*;
-use crate::eval::userfunc::{func_ptr_unref, func_unref};
-use crate::winlayer::Live;
-use ::core::ffi::{c_char, c_void};
+use crate::eval::userfunc::{func_ptr_unref, func_unref_name, uf_name_ptr};
+use crate::types::Refcount;
+use ::core::ffi::CStr;
 
 /// The `TypVal` readers and writers for the partial arm.
 ///
@@ -69,21 +71,30 @@ impl TypVal {
         }
     }
 
+    /// The partial this value holds, borrowed -- `None` for every other
+    /// kind and for a NULL partial. See [`TypVal::list_ref`].
+    #[inline(always)]
+    pub(crate) fn partial_ref(&self) -> Option<&Partial> {
+        self.partial_shared().map(|pt| &**pt)
+    }
+
+    /// The handle this value holds, borrowed: what to keep across a call
+    /// that can run user code. See [`TypVal::list_shared`].
+    #[inline(always)]
+    pub(crate) fn partial_shared(&self) -> Option<&PartialRef> {
+        match self {
+            TypVal::Partial(pt) => pt.as_ref(),
+            _ => None,
+        }
+    }
+
     /// The name of the function a Funcref or partial calls; `None` for any
     /// other value, and for a name that is empty, which is how "no
     /// function" reads.
-    pub(crate) fn callable_name(&self) -> Option<&::core::ffi::CStr> {
+    pub(crate) fn callable_name(&self) -> Option<&CStr> {
         let name = match self {
             TypVal::Func(name) => name.as_ref()?.as_cstr(),
-            TypVal::Partial(_) => {
-                // SAFETY: the partial is null or live, which is what
-                // `partial_name` takes.
-                let name = unsafe { partial_name(self.partial_or_null()) };
-                // SAFETY: a partial's name is owned by the partial, or by
-                // the function it holds a reference to. Either lives as
-                // long as this value does.
-                unsafe { crate::cstr::at_opt(name) }?
-            }
+            TypVal::Partial(pt) => pt.as_deref().map_or(c"", partial_name),
             _ => return None,
         };
         (!name.is_empty()).then_some(name)
@@ -92,89 +103,66 @@ impl TypVal {
     /// What a partial binds: its dictionary and its arguments. Neither for a
     /// Funcref, a NULL partial or anything else.
     pub(crate) fn partial_binding(&self) -> (Option<&Dict>, &[TypVal]) {
-        let pt = self.partial_or_null();
-        if pt.is_null() {
-            return (None, &[]);
-        }
-        // SAFETY: a partial value holds a reference to a live partial, which
-        // owns its dictionary reference (or none) and its `pt_argc`
-        // arguments for as long as this value holds it.
-        let pt = unsafe { &*pt };
-        let args = match usize::try_from(pt.pt_argc) {
-            // SAFETY: as above -- `pt_argv` holds `argc` values.
-            Ok(argc @ 1..) => unsafe { ::core::slice::from_raw_parts(pt.pt_argv, argc) },
-            _ => &[],
-        };
-        // SAFETY: as above.
-        (unsafe { pt.pt_dict.as_ref() }, args)
+        self.partial_ref()
+            .map_or((None, &[]), |pt| (pt.pt_dict.as_deref(), &pt.pt_argv))
     }
+}
+
+impl Partial {
+    /// A partial binding nothing and calling nothing yet, for
+    /// [`PartialRef::new`] to build on.
+    pub(crate) const EMPTY: Partial = Partial {
+        pt_refcount: Refcount::ZERO,
+        pt_copy_id: 0,
+        pt_name: None,
+        pt_func: ::core::ptr::null_mut(),
+        pt_auto: false,
+        pt_argv: Vec::new(),
+        pt_dict: None,
+    };
 }
 
 /// The function name a partial stands for: its own, its `UserFunc`'s, or the
 /// empty string.
-///
-/// # Safety
-/// `pt` must be null or valid.
-pub(crate) unsafe fn partial_name(pt: *mut Partial) -> *mut c_char {
-    if !pt.is_null() {
-        // SAFETY: the caller's promise, and `pt` is not null.
-        let pt = unsafe { Live::new(pt) };
-        if !pt.pt_name.is_null() {
-            return pt.pt_name;
-        }
-        let func = pt.pt_func;
-        if !func.is_null() {
-            // SAFETY: `pt_func` is a live `UserFunc` whose name is inline.
-            return unsafe { &raw mut (*func).uf_name }.cast::<c_char>();
-        }
+pub(crate) fn partial_name(pt: &Partial) -> &CStr {
+    if let Some(name) = &pt.pt_name {
+        return name.as_cstr();
     }
-    c"".as_ptr().cast_mut()
+    if pt.pt_func.is_null() {
+        return c"";
+    }
+    // SAFETY: the partial holds a reference to `pt_func`, a live `UserFunc`
+    // whose name is inline, NUL-terminated, and lives as long as it does.
+    // The user function is still a raw pointer (its own slice's).
+    unsafe { CStr::from_ptr(uf_name_ptr(pt.pt_func)) }
 }
 
-/// Release a partial and everything it bound.
-///
-/// # Safety
-/// `pt` must be valid and unreferenced.
-pub(super) unsafe fn partial_free(pt: *mut Partial) {
-    // SAFETY: the caller's promise -- `pt` is a live, unreferenced partial.
-    let live = unsafe { Live::new(pt) };
-    if let Ok(argc @ 1..) = usize::try_from(live.pt_argc) {
-        // SAFETY: `pt_argv` holds `pt_argc` typvals this partial owns.
-        for tv in unsafe { ::core::slice::from_raw_parts_mut(live.pt_argv, argc) } {
-            tv_clear(tv);
-        }
+/// Release what the last reference to a partial bound, in upstream's order:
+/// the arguments, then the dictionary, then the function.
+pub(super) fn partial_free(partial: Partial) {
+    let Partial {
+        pt_name,
+        pt_func,
+        pt_argv,
+        pt_dict,
+        ..
+    } = partial;
+    drop(pt_argv);
+    drop(pt_dict);
+    match pt_name {
+        Some(name) => func_unref_name(name.as_cstr()),
+        // SAFETY: the reference the partial held on its function.
+        None => unsafe { func_ptr_unref(pt_func) },
     }
-    unsafe { xfree(live.pt_argv.cast::<c_void>()) };
-    unsafe { tv_dict_unref(live.pt_dict) };
-    if !live.pt_name.is_null() {
-        unsafe { func_unref(live.pt_name) };
-        unsafe { xfree(live.pt_name.cast::<c_void>()) };
-    } else {
-        unsafe { func_ptr_unref(live.pt_func) };
-    }
-    unsafe { xfree(pt.cast::<c_void>()) };
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cstr;
     use crate::eval::funcs::f_function;
     use crate::eval::list::string_tv;
     use crate::global_cell::editor_state_lock;
     use crate::types::EvalFuncData;
-
-    /// The reference count of the dictionary `d` points at.
-    fn dict_refs(d: *mut Dict) -> i32 {
-        // SAFETY: a live dictionary the case holds.
-        unsafe { (*d).dv_refcount.get() }
-    }
-
-    /// The reference count of the list `l` points at.
-    fn list_refs(l: *mut List) -> i32 {
-        // SAFETY: a live list the case holds.
-        unsafe { (*l).lv_refcount.get() }
-    }
 
     /// `function(name, args, dict)`, as the builtin answers it.  `len` is a
     /// builtin, so the name resolves without defining anything, and is not
@@ -203,49 +191,49 @@ mod tests {
         let _serial = editor_state_lock();
         let d = tv_dict_alloc();
         let inner = tv_list_alloc(1);
-        let (dp, ip) = (d.as_ptr(), inner.as_ptr());
-        let (d_before, i_before) = (dict_refs(dp), list_refs(ip));
+        let (d_before, i_before) = (d.dv_refcount.get(), inner.lv_refcount.get());
         let mut args = tv_list_alloc(2);
         args.push_number(1);
         args.push_list(Some(inner.clone()));
 
         let mut pt = function(Some(args), Some(d.clone()));
-        let p = pt.partial_or_null();
-        assert!(!p.is_null(), "function() answered a partial");
-        // SAFETY: the partial `pt` holds.
-        let part = unsafe { &*p };
-        assert_eq!(part.pt_refcount.get(), 1);
-        assert_eq!(part.pt_argc, 2);
-        assert_eq!(part.pt_dict, dp);
-        assert!(!part.pt_auto, "an explicit dict is not auto-bound");
-        // SAFETY: the partial's own name.
-        assert_eq!(unsafe { cstr::at(part.pt_name) }.to_bytes(), b"len");
-        let (dict, argv) = pt.partial_binding();
-        assert_eq!(dict.map(::core::ptr::from_ref), Some(dp.cast_const()));
-        assert_eq!(argv[0].number_or_zero(), 1);
+        let held = pt
+            .partial_shared()
+            .expect("function() answered a partial")
+            .clone();
+        assert_eq!(held.pt_refcount.get(), 2);
+        assert_eq!(held.pt_argv.len(), 2);
+        assert!(held.pt_dict.as_ref().is_some_and(|pd| pd.ptr_eq(&d)));
+        assert!(!held.pt_auto, "an explicit dict is not auto-bound");
         assert_eq!(
-            argv[1].list_or_null(),
-            ip,
+            held.pt_name.as_ref().map(|n| n.as_bytes()),
+            Some(&b"len"[..])
+        );
+        let (dict, argv) = pt.partial_binding();
+        assert!(dict.is_some_and(|bound| ::core::ptr::eq(bound, &*d)));
+        assert_eq!(argv[0].number_or_zero(), 1);
+        assert!(
+            argv[1].list_shared().is_some_and(|l| l.ptr_eq(&inner)),
             "an argument is shared, not copied"
         );
-        assert_eq!(dict_refs(dp), d_before + 1);
-        assert_eq!(list_refs(ip), i_before + 1);
+        assert_eq!(d.dv_refcount.get(), d_before + 1);
+        assert_eq!(inner.lv_refcount.get(), i_before + 1);
 
         let mut copy = TypVal::Unknown;
         tv_copy(&pt, &mut copy);
-        assert_eq!(copy.partial_or_null(), p, "a copy shares the partial");
-        // SAFETY: as above.
-        assert_eq!(unsafe { (*p).pt_refcount.get() }, 2);
-        assert_eq!(dict_refs(dp), d_before + 1);
+        assert!(
+            copy.partial_shared().is_some_and(|c| c.ptr_eq(&held)),
+            "a copy shares the partial"
+        );
+        assert_eq!(held.pt_refcount.get(), 3);
+        assert_eq!(d.dv_refcount.get(), d_before + 1);
 
         tv_clear(&mut pt);
-        // SAFETY: still held by `copy`.
-        assert_eq!(unsafe { (*p).pt_refcount.get() }, 1);
+        assert_eq!(held.pt_refcount.get(), 2);
         tv_clear(&mut copy);
-        assert_eq!(dict_refs(dp), d_before);
-        assert_eq!(list_refs(ip), i_before);
-        drop(inner);
-        drop(d);
+        drop(held);
+        assert_eq!(d.dv_refcount.get(), d_before);
+        assert_eq!(inner.lv_refcount.get(), i_before);
     }
 
     /// `function(P, [x])` builds a second partial: the bound arguments are
@@ -255,7 +243,6 @@ mod tests {
     fn rebinding_a_partial_appends_its_arguments() {
         let _serial = editor_state_lock();
         let d = tv_dict_alloc();
-        let dp = d.as_ptr();
         let mut first_args = tv_list_alloc(1);
         first_args.push_number(1);
         let mut first = function(Some(first_args), Some(d.clone()));
@@ -270,19 +257,19 @@ mod tests {
             tv_clear(tv);
         }
 
-        assert_ne!(second.partial_or_null(), first.partial_or_null());
+        let (a, b) = (first.partial_shared(), second.partial_shared());
+        assert!(!a.zip(b).is_some_and(|(a, b)| a.ptr_eq(b)));
         let (dict, args) = second.partial_binding();
-        assert_eq!(dict.map(::core::ptr::from_ref), Some(dp.cast_const()));
+        assert!(dict.is_some_and(|bound| ::core::ptr::eq(bound, &*d)));
         let numbers: Vec<_> = args.iter().map(TypVal::number_or_zero).collect();
         assert_eq!(numbers, [1, 2]);
         assert_eq!(first.partial_binding().1.len(), 1);
         // The handle, and one per partial.
-        assert_eq!(dict_refs(dp), 3);
+        assert_eq!(d.dv_refcount.get(), 3);
 
         tv_clear(&mut first);
         tv_clear(&mut second);
-        assert_eq!(dict_refs(dp), 1);
-        drop(d);
+        assert_eq!(d.dv_refcount.get(), 1);
     }
 
     /// A partial whose bound dictionary holds the partial: neither count
@@ -291,33 +278,28 @@ mod tests {
     fn a_partial_bound_to_the_dict_holding_it_is_freed_by_the_collector() {
         let _serial = editor_state_lock();
         let d = tv_dict_alloc();
-        let dp = d.as_ptr();
         let mut pt = function(None, Some(d.clone()));
-        let p = pt.partial_or_null();
+        let held = pt.partial_shared().expect("a partial").clone();
         // The dictionary's item takes a reference of its own.
-        // SAFETY: a live dictionary of this case's own.
-        unsafe { (*dp).add_tv(b"p", &pt) }.expect("a key used once");
+        d.edit().add_tv(b"p", &pt).expect("a key used once");
         tv_clear(&mut pt);
-        // SAFETY: held by the dictionary's item.
-        assert_eq!(unsafe { (*p).pt_refcount.get() }, 1);
+        assert_eq!(held.pt_refcount.get(), 2);
+        drop(held);
         // The handle and the partial.
-        assert_eq!(dict_refs(dp), 2);
+        assert_eq!(d.dv_refcount.get(), 2);
+        let view = ::core::mem::ManuallyDrop::new(d.clone());
         drop(d);
-        assert_eq!(dict_refs(dp), 1, "the cycle keeps it alive");
+        assert_eq!(view.dv_refcount.get(), 2, "the cycle keeps it alive");
 
         tv_in_free_unref_items.set(true);
         // Pass 1: the item goes, the partial goes with it, and the partial
         // gives back the dictionary's last reference -- which must not
         // free the dictionary under the walk.
-        // SAFETY: a dictionary nothing else is walking.
-        tv_dict_free_contents(&::core::mem::ManuallyDrop::new(
-            unsafe { DictRef::owning(dp) }.expect("a live dictionary"),
-        ));
-        assert_eq!(dict_refs(dp), 0);
-        // Pass 2.
-        // SAFETY: as above, now empty.
-        unsafe { tv_dict_free_dict(dp) };
+        tv_dict_free_contents(&view);
+        assert_eq!(view.dv_refcount.get(), 1);
         tv_in_free_unref_items.set(false);
+        // Pass 2: the view's own reference, the last.
+        drop(::core::mem::ManuallyDrop::into_inner(view));
     }
 
     /// A NULL partial has no name and no binding.
@@ -325,15 +307,17 @@ mod tests {
     fn a_null_partial_names_nothing() {
         let _serial = editor_state_lock();
         let pt = TypVal::partial(None);
-        assert!(pt.partial_or_null().is_null());
+        assert!(pt.partial_ref().is_none());
         assert_eq!(pt.callable_name(), None);
         let (dict, args) = pt.partial_binding();
         assert!(dict.is_none());
         assert!(args.is_empty());
-        // SAFETY: NULL is what `partial_name` accepts.
-        assert_eq!(
-            unsafe { cstr::at(partial_name(::core::ptr::null_mut())) }.to_bytes(),
-            b""
-        );
+        assert_eq!(partial_name(&Partial::EMPTY).to_bytes(), b"");
+    }
+
+    /// The partial's own size, which every bound callable pays.
+    #[test]
+    fn a_partial_is_sixty_four_bytes() {
+        assert_eq!(::core::mem::size_of::<Partial>(), 64);
     }
 }

@@ -342,7 +342,7 @@ pub(crate) mod alloc {
     use std::mem::size_of;
 
     use neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
-    use neovim::types::{Dict, List, Partial, TypVal};
+    use neovim::types::{Dict, List};
 
     /// A recording of this thread's editor allocations, plus the editor lock
     /// — recording only means anything with one case running at a time.
@@ -422,25 +422,6 @@ pub(crate) mod alloc {
         AllocEvent::Malloc {
             size: len + 1,
             ret: s as *mut c_void,
-        }
-    }
-
-    /// A `Partial` built by the harness rather than by the code under
-    /// test: the spec's `a.lua_pt(pt)`.
-    pub(crate) fn partial(pt: *const Partial) -> AllocEvent {
-        AllocEvent::Calloc {
-            count: 1,
-            size: size_of::<Partial>(),
-            ret: pt as *mut c_void,
-        }
-    }
-
-    /// A partial's argument vector, likewise the harness's: the spec's
-    /// `a.lua_tvs(argv, argc)`.
-    pub(crate) fn argv(argv: *const TypVal, argc: usize) -> AllocEvent {
-        AllocEvent::Malloc {
-            size: size_of::<TypVal>() * argc,
-            ret: argv as *mut c_void,
         }
     }
 

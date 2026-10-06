@@ -33,13 +33,40 @@
 )]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::mem::forget;
 
-use super::{DictSlot, Pt, VAR_PARTIAL, func_unref, tv_dict_unref};
+use super::{DictRef, DictSlot, VAR_PARTIAL};
 use crate::eval::typval_encode::{
     ConvFrame, ConvPath, ConvType, Flow, Frame, TypvalSink, encode_typval,
 };
+use crate::eval::userfunc::func_unref_name;
 use crate::types::{Float, TypVal, int64_t, kBoolVarFalse, kSpecialVarNull, size_t};
+
+impl DictSlot {
+    /// The handle the slot holds, if any.
+    ///
+    /// # Safety
+    /// The slot is live for the borrow, and nothing else writes it meanwhile.
+    unsafe fn held<'a>(self) -> Option<&'a DictRef> {
+        match self {
+            // SAFETY: the caller's promise: a live slot.
+            DictSlot::Value(tv) => unsafe { &*tv }.dict_shared(),
+            DictSlot::Field(field) => unsafe { &*field }.as_ref(),
+        }
+    }
+
+    /// Move the handle out, leaving the slot holding no dictionary.
+    ///
+    /// # Safety
+    /// As [`held`](Self::held).
+    unsafe fn take(self) -> Option<DictRef> {
+        match self {
+            // SAFETY: the caller's promise: a live slot.
+            DictSlot::Value(tv) => unsafe { &mut *tv }.take_dict(),
+            DictSlot::Field(field) => unsafe { &mut *field }.take(),
+        }
+    }
+}
 
 /// A sink with no state: everything it does, it does to the value it is
 /// handed.
@@ -149,26 +176,26 @@ impl TypvalSink for NothingSink {
     unsafe fn conv_func_start(
         &mut self,
         tv: Option<&mut TypVal>,
-        fun: *mut c_char,
+        _fun: *mut c_char,
         _prefix: &'static CStr,
         _path: &ConvPath,
     ) -> Flow {
         let tv = slot(tv);
         if tv.v_type() == VAR_PARTIAL {
-            let pt = tv.partial_or_null();
-            // SAFETY: the typval's own partial.
-            let part = unsafe { Pt::new(pt) };
-            if !pt.is_null() && part.pt_refcount.is_shared() {
+            if tv
+                .partial_ref()
+                .is_some_and(|pt| pt.pt_refcount.is_shared())
+            {
                 // Somebody else still holds it: give up this slot's
                 // reference and stop, rather than walking into arguments
                 // that are not ours to free.
                 drop(tv.take_partial());
                 return Flow::Stop;
             }
-        } else {
-            unsafe { func_unref(fun) };
-            // The name goes with the reference it stood for.
-            drop(tv.take_func_name());
+        } else if let Some(name) = tv.take_func_name() {
+            // `fun` is this name: the reference it stood for goes, and the
+            // name with it.
+            func_unref_name(name.as_cstr());
         }
         Flow::Go
     }
@@ -181,17 +208,16 @@ impl TypvalSink for NothingSink {
         if tv.v_type() != VAR_PARTIAL {
             return;
         }
-        let pt = tv.partial_or_null();
-        if pt.is_null() {
+        let Some(pt) = tv.partial_shared() else {
             return;
-        }
-        debug_assert!(
-            unsafe { (*pt).pt_dict }.is_null() || unsafe { (*(*pt).pt_dict).dv_copy_id } == copyid
-        );
-        unsafe { (*pt).pt_dict = ptr::null_mut() };
-        // SAFETY: the typval's own partial.
-        let mut part = unsafe { Pt::new(pt) };
-        part.pt_argc = 0;
+        };
+        let part = pt.edit();
+        // The dictionary is gone by now unless it is part of a reference
+        // cycle, whose reference is the collector's to give back; and so
+        // is every argument left standing.
+        debug_assert!(part.pt_dict.as_ref().is_none_or(|d| d.dv_copy_id == copyid));
+        forget(part.pt_dict.take());
+        part.pt_argv.drain(..).for_each(forget);
         debug_assert!(!part.pt_refcount.is_shared());
         // The last reference: the slot gives it up and the partial is freed.
         drop(tv.take_partial());
@@ -219,8 +245,8 @@ impl TypvalSink for NothingSink {
         // map's `_VAL`, which cannot reach a sink that refuses specials.
         debug_assert!(dictp.is_some());
         if let Some(dictp) = dictp {
-            unsafe { tv_dict_unref(dictp.get()) };
-            unsafe { dictp.clear() };
+            // SAFETY: the walk's live slot.
+            drop(unsafe { dictp.take() });
         }
     }
 
@@ -262,11 +288,12 @@ impl TypvalSink for NothingSink {
         dictp: Option<DictSlot>,
         frame: &mut ConvFrame,
     ) -> Flow {
+        // SAFETY (both): the walk's live slot.
         if let Some(dictp) = dictp
-            && unsafe { (*dictp.get()).dv_refcount }.is_shared()
+            && unsafe { dictp.held() }.is_some_and(|d| d.dv_refcount.is_shared())
         {
-            unsafe { (*dictp.get()).dv_refcount.release() };
-            unsafe { dictp.clear() };
+            // Not the last reference, so this frees nothing.
+            drop(unsafe { dictp.take() });
             if let Frame::Dict { todo, .. } = &mut frame.frame {
                 *todo = 0;
             }
@@ -277,8 +304,8 @@ impl TypvalSink for NothingSink {
 
     fn conv_dict_end(&mut self, dictp: Option<DictSlot>) {
         if let Some(dictp) = dictp {
-            unsafe { tv_dict_unref(dictp.get()) };
-            unsafe { dictp.clear() };
+            // SAFETY: the walk's live slot.
+            drop(unsafe { dictp.take() });
         }
     }
 

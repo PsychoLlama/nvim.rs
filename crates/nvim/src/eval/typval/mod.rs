@@ -4,7 +4,7 @@
 
 use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES};
 use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
-use crate::eval::userfunc::{func_ref, func_unref, get_funccal_local_ht, set_selfdict};
+use crate::eval::userfunc::{get_funccal_local_ht, set_selfdict};
 use crate::eval::vars::get_globvar_dict;
 use crate::eval::{callback_call, callback_from_typval, func_equal, var2fpos};
 use crate::getchar::state::got_int;
@@ -27,9 +27,8 @@ use crate::types::{
     LineNr, List, ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB,
     VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL,
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue,
-    kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t, uint8_t,
+    kListLenMayKnow, kSpecialVarNull, ptrdiff_t, uint8_t,
 };
-use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.
 mod access;

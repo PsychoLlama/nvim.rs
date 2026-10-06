@@ -215,7 +215,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
         free_fc = false;
         // Make a copy of the a: variables, since that was not done above.
         // SAFETY: as above -- the `a:` dictionary is this funccall's own.
-        for hi in unsafe { tv_dict_iter(&raw const (*fc).fc_l_avars) } {
+        for hi in unsafe { tv_ht_iter(&raw const (*fc).fc_l_avars.dv_hashtab) } {
             let di = tv_dict_hi2di(hi);
             unsafe { tv_copy(&(*di).di_tv, &mut (*di).di_tv) };
         }

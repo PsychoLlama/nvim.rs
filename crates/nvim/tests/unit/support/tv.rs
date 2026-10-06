@@ -22,16 +22,15 @@
 //! is the same answer for every structure in the specs and a shorter one
 //! to write down.
 
-use std::ffi::{CStr, c_char, c_int, c_void};
+use std::ffi::{c_char, c_void};
 use std::mem::ManuallyDrop;
-use std::ops::Deref;
 use std::ptr;
 
 use neovim::eval::typval::{
     BlobRef, DictRef, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear, tv_copy,
     tv_dict_alloc, tv_list_alloc,
 };
-use neovim::memory::{ThinCString, xcalloc, xmalloc, xmemdupz};
+use neovim::memory::ThinCString;
 use neovim::types::{
     Blob, Callback, Dict, DictItem, List, ListItem, Object, Partial, Refcount, TypVal, VarNumber,
     kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
@@ -174,7 +173,7 @@ impl Tv {
             }
             Tv::Func(name) => TypVal::Func(ManuallyDrop::new(Some(ThinCString::from_bytes(name)))),
             // SAFETY: the partial just built, at a count of one.
-            Tv::Partial(pt) => partial_tv(unsafe { PartialRef::owning(pt.build_at(path)) }),
+            Tv::Partial(pt) => partial_tv(Some(unsafe { pt.build_at(path) })),
             Tv::Cycle(up) => {
                 // The container is already live and gains a reference.
                 match path[*up] {
@@ -196,35 +195,29 @@ impl Tv {
 impl Pt {
     /// # Safety
     /// As [`Tv::build`].
-    unsafe fn build_at(&self, path: &mut Vec<Container>) -> *mut Partial {
-        let pt: *mut Partial = unsafe { xcalloc(1, size_of::<Partial>()) }.cast();
-        let argv: *mut TypVal = if self.args.is_empty() {
-            ptr::null_mut()
-        } else {
-            unsafe { xmalloc(size_of::<TypVal>() * self.args.len()) }.cast()
-        };
-        for (i, arg) in self.args.iter().enumerate() {
-            // Raw storage: the value is written in, not assigned over.
-            unsafe { argv.add(i).write(arg.build_at(path)) };
-        }
-        let dict = match &self.dict {
-            None => ptr::null_mut(),
-            // The partial takes the dictionary over, so the value that
-            // built it must not release it on the way out of the match.
-            Some(dict) => match ManuallyDrop::new(unsafe { dict.build_at(path) }).deref() {
-                TypVal::Dict(d) => d.as_ref().map_or(ptr::null_mut(), DictRef::as_ptr),
+    unsafe fn build_at(&self, path: &mut Vec<Container>) -> PartialRef {
+        let pt_argv = self
+            .args
+            .iter()
+            .map(|arg| unsafe { arg.build_at(path) })
+            .collect();
+        // The partial takes the dictionary over from the value that built it.
+        let pt_dict = self
+            .dict
+            .as_ref()
+            .map(|dict| match &mut unsafe { dict.build_at(path) } {
+                TypVal::Dict(d) => d.take().expect("a partial's dict is a live dict"),
                 other => panic!("a partial's dict is a dict, not {}", other.v_type()),
-            },
-        };
-        unsafe {
-            (*pt).pt_refcount = Refcount::ONE;
-            (*pt).pt_name = xmemdupz(self.value.as_ptr().cast(), self.value.len()).cast();
-            (*pt).pt_auto = self.auto;
-            (*pt).pt_argc = c_int::try_from(self.args.len()).expect("a small argument count");
-            (*pt).pt_argv = argv;
-            (*pt).pt_dict = dict;
-        }
-        pt
+            });
+        PartialRef::new(Partial {
+            pt_refcount: Refcount::ZERO,
+            pt_copy_id: 0,
+            pt_name: Some(ThinCString::from_bytes(&self.value)),
+            pt_func: ptr::null_mut(),
+            pt_auto: self.auto,
+            pt_argv,
+            pt_dict,
+        })
     }
 }
 
@@ -449,17 +442,23 @@ unsafe fn read_partial(pt: *const Partial, path: &mut Vec<Container>) -> Pt {
     if pt.is_null() {
         return Pt::default();
     }
-    let args = (0..unsafe { (*pt).pt_argc })
-        .map(|i| unsafe { read_at((*pt).pt_argv.offset(i as isize), path) })
+    let pt = unsafe { &*pt };
+    let args = pt
+        .pt_argv
+        .iter()
+        .map(|arg| unsafe { read_at(arg, path) })
         .collect();
     Pt {
-        value: unsafe { CStr::from_ptr((*pt).pt_name) }.to_bytes().to_vec(),
-        auto: unsafe { (*pt).pt_auto },
+        value: pt
+            .pt_name
+            .as_ref()
+            .map_or(Vec::new(), |name| name.as_bytes().to_vec()),
+        auto: pt.pt_auto,
         args,
-        dict: match unsafe { (*pt).pt_dict } {
-            d if d.is_null() => None,
-            d => Some(unsafe { read_dict_at(d, path) }),
-        },
+        dict: pt
+            .pt_dict
+            .as_ref()
+            .map(|d| unsafe { read_dict_at(d.as_ptr(), path) }),
     }
 }
 
@@ -614,9 +613,8 @@ pub(crate) unsafe fn build_callback(cb: &Cb) -> Callback {
         Cb::Fref(name) => Callback::Funcref(ManuallyDrop::new(ThinCString::from_bytes(name))),
         Cb::Pt(pt) => {
             let mut path = Vec::new();
-            // SAFETY: the partial just built, at a count of one.
-            let held = unsafe { PartialRef::owning(pt.build_at(&mut path)) };
-            Callback::Partial(ManuallyDrop::new(held.expect("a built partial")))
+            let held = unsafe { pt.build_at(&mut path) };
+            Callback::Partial(ManuallyDrop::new(held))
         }
     }
 }

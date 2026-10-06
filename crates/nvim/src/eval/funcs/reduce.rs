@@ -283,7 +283,7 @@ pub fn f_reduce(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         VAR_FUNC => args[1]
             .func_name()
             .map_or(core::ptr::null(), ThinCString::as_ptr),
-        VAR_PARTIAL => unsafe { partial_name(args[1].partial_or_null()) },
+        VAR_PARTIAL => args[1].partial_ref().map_or(c"", partial_name).as_ptr(),
         _ => numbuf.string(&args[1]).as_ptr(),
     };
     if func_name.is_null() || unsafe { *func_name } as c_int == NUL {

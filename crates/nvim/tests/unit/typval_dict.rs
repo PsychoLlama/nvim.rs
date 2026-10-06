@@ -127,8 +127,9 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         let fref_name = fref_name.as_ptr();
         log.check(&[alloc::string(fref_name, "tr".len())]);
 
-        // A partial owns its argument vector, each argument, its dict and
-        // its name — allocated in that order.
+        // A partial owns each argument, its dict and its name — allocated
+        // in that order. The partial and its argument vector are Rust
+        // allocations, which the log does not see.
         let partial = tv::build_callback(&Cb::Pt(Box::new(Pt {
             value: b"tr".to_vec(),
             auto: false,
@@ -138,14 +139,10 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         let Callback::Partial(pt) = &partial else {
             panic!("built a partial callback");
         };
-        let pt = pt.as_ptr();
-        let pt_argv = (*pt).pt_argv;
-        let pt_dict = (*pt).pt_dict;
-        let pt_name = (*pt).pt_name;
-        let pt_arg = (*pt_argv).string();
+        let pt_dict = pt.pt_dict.as_ref().map_or(ptr::null_mut(), |d| d.as_ptr());
+        let pt_name = pt.pt_name.as_ref().map_or(ptr::null(), |n| n.as_ptr());
+        let pt_arg = pt.pt_argv[0].string();
         log.check(&[
-            alloc::partial(pt),
-            alloc::argv(pt_argv, 1),
             alloc::string(pt_arg, "test".len()),
             alloc::dict(pt_dict),
             alloc::string(pt_name, "tr".len()),
@@ -191,10 +188,8 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         assert!((*d).watcher_remove(b"te", &registered[2].1));
         log.check(&[
             alloc::freed(pt_arg),
-            alloc::freed(pt_argv),
             alloc::freed(pt_dict),
             alloc::freed(pt_name),
-            alloc::freed(pt),
         ]);
         assert!(!(*d).watcher_remove(b"te", &registered[2].1));
         assert_eq!(tv::dict_watchers(d).len(), 1);

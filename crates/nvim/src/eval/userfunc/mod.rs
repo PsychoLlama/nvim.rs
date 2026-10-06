@@ -22,7 +22,7 @@ use crate::eval::funcs::{
 use crate::eval::gc::want_garbage_collect;
 use crate::eval::typval::{
     TV_INITIAL_VALUE, list_init_static, list_iter, list_iter_mut, list_set_lock, tv_clear, tv_copy,
-    tv_dict_hi2di, tv_dict_iter, tv_get_number_chk,
+    tv_dict_hi2di, tv_get_number_chk,
 };
 use crate::eval::vars::{
     find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars, skip_var_list,
@@ -31,7 +31,7 @@ use crate::eval::vars::{
 use crate::eval::{
     Cursor, LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, eval_isnamec, eval_isnamec1,
     eval0_in_cmd, eval1, garbage_collect, get_lval, handle_subscript, id_len, is_luafunc,
-    last_set_msg, mark_root, name_end, partial_unref, set_ref_in_ht, set_ref_in_list_items,
+    last_set_msg, mark_root, name_end, set_ref_in_ht, set_ref_in_list_items,
 };
 use crate::ex_docmd::state::ex_nesting_level;
 use crate::ex_docmd::{do_cmdline, ends_excmd, skip_range};
@@ -47,7 +47,7 @@ use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
 use crate::guard::sandbox;
 use crate::hashtab::{
-    Slot, hash_add, hash_find, hash_find_len, hash_init, hash_remove, hash_set_key,
+    Slot, hash_add, hash_find, hash_find_len, hash_init, hash_remove, hash_set_key, tv_ht_iter,
 };
 use crate::insexpand::ins_compl_active;
 use crate::keycodes::K_SPECIAL;
@@ -90,8 +90,8 @@ use crate::types::ui::kUICmdline;
 use crate::types::{
     Callback, Dict, DictItem, EStack, ExArg, Expand, FcId, FuncCall, FuncExe, GArray, HashTab,
     LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch, SaveRedo, String_0, TypVal, UserFunc,
-    VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
+    VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;

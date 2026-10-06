@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::hashtab::tv_ht_iter;
 use crate::memory::ThinCString;
 use crate::types::DictItem;
 use core::ffi::{c_char, c_int};
@@ -26,7 +27,7 @@ use super::{
 };
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    Di, TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_dict_hi2di, tv_dict_iter, tv_list_alloc,
+    Di, TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_dict_hi2di, tv_list_alloc,
 };
 use crate::memory::{xfree, xmallocz};
 use crate::mpack::conv::{
@@ -238,7 +239,7 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
             // Duplicate key.  Disown the values already handed to the
             // dictionary — the special-map path is about to re-use every
             // one of them — then free the dictionary and give up.
-            for hi in unsafe { tv_dict_iter(dict) } {
+            for hi in unsafe { tv_ht_iter(&raw const (*dict).dv_hashtab) } {
                 let d = tv_dict_hi2di(hi);
                 // SAFETY: an item of the dictionary being unwound.
                 let mut item = unsafe { Di::new(d) };

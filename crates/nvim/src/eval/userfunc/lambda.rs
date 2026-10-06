@@ -11,10 +11,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
 use crate::eval::Parsed;
-use crate::eval::typval::PartialRef;
-use crate::memory::ThinCString;
+use crate::eval::typval::{DictRef, PartialRef};
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
@@ -179,9 +177,8 @@ pub(crate) fn get_lambda_tv(
             let mut flags = FuncFlags::NONE;
             let name = get_lambda_name(&mut lambda_buf);
             let fp = unsafe { alloc_ufunc(name.data(), name.len()) };
-            let pt = unsafe { xcalloc(1, size_of::<Partial>()) } as *mut Partial;
-            // SAFETY: both are this call's own allocations.
-            let (mut f, mut part) = unsafe { (Uf::new(fp), Live::new(pt)) };
+            // SAFETY: this call's own allocation.
+            let mut f = unsafe { Uf::new(fp) };
 
             // The body is the expression with "return " in front of it.
             let body = &text[start..end];
@@ -223,10 +220,11 @@ pub(crate) fn get_lambda_tv(
             f.uf_script_ctx = current_sctx.get();
             f.uf_script_ctx.sc_lnum += sourcing_lnum() - newlines.ga_len as LineNr;
 
-            part.pt_func = fp;
-            part.pt_refcount = Refcount::ONE;
-            // SAFETY: the count just set is the one the slot takes over.
-            result.write_partial(unsafe { PartialRef::owning(pt) });
+            let part = Partial {
+                pt_func: fp,
+                ..Partial::EMPTY
+            };
+            result.write_partial(Some(PartialRef::new(part)));
         }
         true
     };
@@ -247,50 +245,40 @@ pub(crate) fn get_lambda_tv(
 /// Bind `selfdict` to the Funcref in `result`: `dict.Func` read out of
 /// `dict`. Not for a partial that was bound explicitly (`pt_auto` clear).
 pub(crate) fn set_selfdict(result: &mut TypVal, selfdict: &mut Dict) {
-    if let Some(pt) = result.as_partial()
-        && !pt.is_null()
+    if let Some(pt) = result.partial_ref()
+        && !pt.pt_auto
+        && pt.pt_dict.is_some()
     {
-        // SAFETY: a partial value holds a reference to a live partial.
-        let pt = unsafe { &*pt };
-        if !pt.pt_auto && !pt.pt_dict.is_null() {
-            return;
-        }
+        return;
     }
-    // SAFETY: `result` holds the funcref just read out of `selfdict`, which
-    // the borrow keeps live while the partial takes its own reference.
-    unsafe { make_partial(selfdict, result) };
+    // SAFETY: a live dictionary, of which the handle takes a reference of
+    // its own. The callers hold the dictionary as a borrow.
+    let selfdict = unsafe { DictRef::retained(selfdict) };
+    make_partial(selfdict.as_ref().expect("a borrowed dictionary"), result);
 }
 
 /// Turn `dict.Func` into a partial that binds `selfdict`, when `Func` was
 /// declared with the `dict` attribute.
 ///
-/// # Safety
-/// `result` holds the funcref just read and `selfdict` the dictionary it came
-/// out of.
-pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
-    // SAFETY: the caller's promise -- `result` holds the funcref just read.
-    let mut rv = unsafe { Tv::new(result) };
+/// `result` holds the funcref just read and `selfdict` is the dictionary it
+/// came out of.
+pub fn make_partial(selfdict: &DictRef, result: &mut TypVal) {
     let mut fp: *mut UserFunc = ptr::null_mut();
 
-    // SAFETY: the tag says which union member holds the callable, and a
-    // partial in it is null or live.
-    let held = rv.partial_or_null();
-    if rv.v_type() == VAR_PARTIAL && !held.is_null() && !unsafe { (*held).pt_func }.is_null() {
-        fp = unsafe { (*held).pt_func };
+    let held = result.partial_ref();
+    if let Some(held) = held.filter(|held| !held.pt_func.is_null()) {
+        fp = held.pt_func;
     } else {
-        let fname = if rv.v_type() == VAR_FUNC || rv.v_type() == VAR_STRING {
-            rv.text_or_name().map(|name| name.as_bytes())
-        } else if held.is_null() {
-            None
+        let fname = if result.v_type() == VAR_FUNC || result.v_type() == VAR_STRING {
+            result.text_or_name().map(|name| name.as_bytes())
         } else {
-            let name = unsafe { (*held).pt_name };
-            // SAFETY: a partial's name is null or NUL-terminated.
-            (!name.is_null()).then(|| unsafe { cstr::bytes_at(name) })
+            held.and_then(|held| held.pt_name.as_ref())
+                .map(|name| name.as_bytes())
         };
         match fname {
             // There is no point binding a dict to a NULL function, just
             // create a function reference.
-            None => rv.write_func_name(None),
+            None => result.write_func_name(None),
             // Translate "s:func" to the stored function name.
             Some(fname) => fp = find_func(&fname_trans_sid(fname).0),
         }
@@ -299,48 +287,36 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
     if fp.is_null() || !unsafe { (*fp).uf_flags }.has(FuncFlags::DICT) {
         return;
     }
-    let pt = unsafe { xcalloc(1, size_of::<Partial>()) } as *mut Partial;
-    // SAFETY: a fresh partial of this call's own, and `selfdict` is the
-    // dictionary the funcref came out of.
-    let mut part = unsafe { Live::new(pt) };
-    part.pt_refcount = Refcount::ONE;
-    part.pt_dict = selfdict;
-    unsafe { (*selfdict).dv_refcount.retain() };
-    part.pt_auto = true;
-    if rv.v_type() == VAR_FUNC || rv.v_type() == VAR_STRING {
+    let mut part = Partial {
+        pt_dict: Some(selfdict.clone()),
+        pt_auto: true,
+        ..Partial::EMPTY
+    };
+    if result.v_type() == VAR_FUNC || result.v_type() == VAR_STRING {
         // Just a function: take over the function name and use selfdict.
-        let name = if rv.v_type() == VAR_STRING {
-            rv.take_string()
+        part.pt_name = if result.v_type() == VAR_STRING {
+            result.take_string()
         } else {
-            rv.take_func_name()
+            result.take_func_name()
         };
-        part.pt_name = name.map_or(ptr::null_mut(), ThinCString::into_raw);
     } else {
         // Partial: copy the function name, use selfdict and copy the
         // arguments.  Neither can be taken over, because the partial may
         // be referenced elsewhere.
-        // SAFETY: the kind says the value holds a live partial.
-        let ret_pt = unsafe { Live::new(rv.partial_or_null()) };
-        if !ret_pt.pt_name.is_null() {
-            part.pt_name = unsafe { xstrdup(ret_pt.pt_name) };
-            unsafe { func_ref(part.pt_name) };
+        let ret_pt = result
+            .take_partial()
+            .expect("a partial value with a function");
+        if let Some(name) = &ret_pt.pt_name {
+            func_ref_name(name);
+            part.pt_name = Some(name.clone());
         } else {
             part.pt_func = ret_pt.pt_func;
             unsafe { func_ptr_ref(part.pt_func) };
         }
-        if ret_pt.pt_argc > 0 {
-            let arg_size = size_of::<TypVal>().wrapping_mul(ret_pt.pt_argc as size_t);
-            part.pt_argv = unsafe { xmalloc(arg_size) } as *mut TypVal;
-            part.pt_argc = ret_pt.pt_argc;
-            let (from, into) = (ret_pt.pt_argv, part.pt_argv);
-            for i in 0..part.pt_argc {
-                unsafe { tv_copy(&*from.offset(i as isize), &mut *into.offset(i as isize)) };
-            }
-        }
-        unsafe { partial_unref(ret_pt.raw()) };
+        part.pt_argv = ret_pt.pt_argv.clone();
+        drop(ret_pt);
     }
-    // SAFETY: the count set above is the one the slot takes over.
-    rv.write_partial(unsafe { PartialRef::owning(pt) });
+    result.write_partial(Some(PartialRef::new(part)));
 }
 
 /// Wrap a Lua reference in a `UserFunc`, so that Vimscript can call it by

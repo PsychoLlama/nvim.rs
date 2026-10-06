@@ -3,18 +3,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::TV_TRANSLATE;
-use super::wrappers::{arg_copy, arg_number_chk, dict_alloc_ret, list_alloc_ret};
-use crate::cstr;
+use super::wrappers::{arg_copy, arg_number_chk};
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    ListRef, NumBuf, blob_bytes, blob_len, dict_get_number_def, dict_len, list_copy, list_find,
-    list_flatten, list_items, list_len, list_locked, list_uidx, tv_check_for_list_or_blob_arg,
-    tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg,
-    tv_clear, tv_copy, tv_dict_set_ret, tv_equal, tv_get_bool_chk, value_check_lock,
+    ListRef, LockName, NumBuf, blob_bytes, blob_len, dict_get_number_def, dict_len, index_of,
+    list_copy, list_find, list_flatten, list_items, list_len, list_locked, list_uidx,
+    tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg,
+    tv_check_for_string_or_func_arg, tv_clear, tv_copy, tv_dict_alloc, tv_equal, tv_get_bool_chk,
+    tv_list_alloc, value_check_lock,
 };
-use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
+use crate::eval::userfunc::{func_ref_name, get_func_arity, printable_func_name};
 use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type,
 };
@@ -27,13 +26,12 @@ use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    Blob, BoolVarValue, EvalFuncData, List, Partial, Refcount, TypVal, VAR_BLOB, VAR_BOOL,
-    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
-    VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST,
-    VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv, kBoolVarTrue,
-    kSpecialVarNull,
+    Blob, BoolVarValue, EvalFuncData, List, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
+    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB,
+    VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER,
+    VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv, kBoolVarTrue, kSpecialVarNull,
 };
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 /// A cleared typval, the shape both dispatchers start every slot from.
@@ -146,8 +144,7 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
     } else {
         // SAFETY: `list` is the live List argument 0 named.
         let lock = list_locked(unsafe { list.as_ref() });
-        let what = c"flatten() argument".as_ptr();
-        if unsafe { value_check_lock(lock, what, TV_TRANSLATE as usize) } {
+        if value_check_lock(lock, LockName::Translate(c"flatten() argument")) {
             return;
         }
     }
@@ -256,48 +253,44 @@ fn get_from_dict(args: &[TypVal]) -> *mut TypVal {
 /// "dict" selector does — and then only when the Partial had no dict.
 fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the caller has checked the tag. A plain Funcref is answered through
-    // a stack Partial holding just its name, which lives as long as this
-    // call and is never stored.
-    let mut fref = Partial {
-        pt_refcount: Refcount::ZERO,
-        pt_copy_id: 0,
-        pt_name: ptr::null_mut(),
-        pt_func: ptr::null_mut(),
-        pt_auto: false,
-        pt_argc: 0,
-        pt_argv: ptr::null_mut(),
-        pt_dict: ptr::null_mut(),
-    };
-    let pt = if args.first().is_some_and(|arg| arg.v_type() == VAR_PARTIAL) {
-        args[0].partial_or_null()
-    } else {
-        fref.pt_name = args[0]
-            .func_name()
-            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
-        &raw mut fref
-    };
+    // A plain Funcref reads as a partial holding just its name.
+    let (name, own_name, func, dict, bound): (&CStr, bool, _, _, &[TypVal]) =
+        if args.first().is_some_and(|arg| arg.v_type() == VAR_PARTIAL) {
+            // Upstream answers nothing for a NULL partial, and the default
+            // applies.
+            let Some(pt) = args[0].partial_ref() else {
+                return true;
+            };
+            let own = pt.pt_name.is_some();
+            (
+                partial_name(pt),
+                own,
+                pt.pt_func,
+                pt.pt_dict.as_ref(),
+                &pt.pt_argv,
+            )
+        } else {
+            let name = args[0].func_name().map_or(c"", |name| name.as_cstr());
+            let own = args[0].func_name().is_some();
+            (name, own, ptr::null_mut(), None, &[])
+        };
     let what = numbuf.bytes(&args[1]);
     match what {
         b"func" | b"name" => {
-            let mut name: *const c_char = unsafe { partial_name(pt) };
             // "func" hands back a Funcref, "name" a plain String.
             let as_funcref = what == b"func";
-            debug_assert!(!name.is_null());
             if as_funcref {
-                unsafe { func_ref(name as *mut c_char) };
+                func_ref_name(name);
             }
             // A lambda has no name of its own; "name" shows the
             // printable form instead.
-            if what == b"name"
-                && unsafe { (*pt).pt_name }.is_null()
-                && !unsafe { (*pt).pt_func }.is_null()
-            {
-                name = unsafe { printable_func_name((*pt).pt_func) };
-            }
-            // SAFETY: the partial's own NUL-terminated name, live for the
-            // copy.
-            let owned = ThinCString::from_cstr(unsafe { CStr::from_ptr(name) });
+            let owned = if what == b"name" && !own_name && !func.is_null() {
+                // SAFETY: the partial's live function, whose printable name
+                // is NUL-terminated and lives as long as it does.
+                ThinCString::from_cstr(unsafe { CStr::from_ptr(printable_func_name(func)) })
+            } else {
+                ThinCString::from_cstr(name)
+            };
             if as_funcref {
                 result.write_func_name(Some(owned));
             } else {
@@ -305,8 +298,8 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             }
         }
         b"dict" => {
-            if !unsafe { (*pt).pt_dict }.is_null() {
-                unsafe { tv_dict_set_ret(result, (*pt).pt_dict) };
+            if let Some(dict) = dict {
+                result.write_dict(Some(dict.clone()));
             }
             // "dict" is the only selector that falls through to the
             // default-argument handling, and it does so whether or not
@@ -315,13 +308,13 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             return true;
         }
         b"args" => {
-            result.write_empty(VAR_LIST);
-            let list = unsafe { list_alloc_ret(result, (*pt).pt_argc as isize) };
-            for i in 0..unsafe { (*pt).pt_argc } {
-                unsafe { (*list).push_copy(&*(*pt).pt_argv.offset(i as isize)) };
+            let mut list = tv_list_alloc(index_of(bound.len()) as isize);
+            for arg in bound {
+                list.push_copy(arg);
             }
+            result.write_list(Some(list));
         }
-        b"arity" => unsafe { func_arity(pt, result) },
+        b"arity" => func_arity(name, bound.len(), result),
         _ => {
             // Kept on the variadic message call: `what` is arbitrary
             // user bytes and a Rust format string can only carry UTF-8.
@@ -333,29 +326,26 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
 }
 
 /// `get(Funcref, "arity")` — what the function still wants after the
-/// Partial's bound arguments are subtracted.
-///
-/// # Safety
-/// `pt` is a live Partial and `result` is the cleared return value.
-unsafe fn func_arity(pt: *mut Partial, result: &mut TypVal) {
-    let name = unsafe { cstr::bytes_at(partial_name(pt)) };
-    let (mut required, mut optional, varargs) = get_func_arity(name).unwrap_or((0, 0, false));
-    result.write_empty(VAR_DICT);
-    dict_alloc_ret(result);
-    let dict = result.dict_or_null();
+/// Partial's `bound` arguments are subtracted.
+fn func_arity(name: &CStr, bound: usize, result: &mut TypVal) {
+    let bound = index_of(bound);
+    let (mut required, mut optional, varargs) =
+        get_func_arity(name.to_bytes()).unwrap_or((0, 0, false));
     // The bound arguments cover the required ones first.
-    if unsafe { (*pt).pt_argc } >= required + optional {
+    if bound >= required + optional {
         optional = 0;
         required = 0;
-    } else if unsafe { (*pt).pt_argc } > required {
-        optional -= unsafe { (*pt).pt_argc } - required;
+    } else if bound > required {
+        optional -= bound - required;
         required = 0;
     } else {
-        required -= unsafe { (*pt).pt_argc };
+        required -= bound;
     }
-    let _ = unsafe { (*dict).add_number(b"required", required as VarNumber) };
-    let _ = unsafe { (*dict).add_number(b"optional", optional as VarNumber) };
-    let _ = unsafe { (*dict).add_bool(b"varargs", varargs as BoolVarValue) };
+    let mut dict = tv_dict_alloc();
+    let _ = dict.add_number(b"required", VarNumber::from(required));
+    let _ = dict.add_number(b"optional", VarNumber::from(optional));
+    let _ = dict.add_bool(b"varargs", BoolVarValue::from(varargs));
+    result.write_dict(Some(dict));
 }
 
 /// `index({object}, {expr} [, {start} [, {ic}]])`.

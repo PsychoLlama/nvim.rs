@@ -7,8 +7,7 @@
 //! [`tv_item_lock`] is `:lockvar`, which walks into containers to the depth
 //! it is given.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -20,19 +19,13 @@
 )]
 
 use super::*;
-use crate::cstr;
+use crate::eval::userfunc::func_ref_name;
 use crate::guard::Depth;
 use crate::mbyte::strnicmp_in;
-use crate::message_fmt::{c_str_len, emsg_text};
-use crate::os::cshim::gettext_ptr;
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::semsg;
 use crate::tr_plural;
-
-/// `TV_TRANSLATE`: the `name_len` sentinel that asks a lock error to run the
-/// name through `gettext` and measure it itself.
-const TV_TRANSLATE: size_t = size_t::MAX;
-/// `TV_CSTRING`: the `name_len` sentinel that asks it to measure the name.
-const TV_CSTRING: size_t = size_t::MAX - 1;
+use ::core::ffi::CStr;
 
 /// Release whatever `tv` holds, leaving the **empty value of its own kind**.
 ///
@@ -67,43 +60,6 @@ pub fn tv_clear(tv: &mut TypVal) {
     debug_assert!(evn_ret);
 }
 
-/// Release what `tv` holds and free the `TypVal` itself.
-///
-/// Unlike [`tv_clear`] this does not recurse into a container: it drops one
-/// reference and frees the box.
-///
-/// `None` is a no-op, which is what the callers that free the answer of a
-/// failed evaluation need.
-///
-/// # Safety
-///
-/// `tv` must be an initialized typval, unaliased for the call, in an
-/// allocation of its own.
-pub unsafe fn tv_free(tv: Option<&mut TypVal>) {
-    let Some(tv) = tv else { return };
-    match tv.v_type() {
-        // SAFETY, for every arm: the caller's promise -- a live typval, so
-        // the member the kind names is its own.
-        VAR_PARTIAL => drop(tv.take_partial()),
-        // FALLTHROUGH from VAR_FUNC into VAR_STRING: a funcref owns both a
-        // reference to the function and the name string.
-        VAR_STRING => drop(tv.take_string()),
-        VAR_FUNC => {
-            if let Some(name) = tv.take_func_name() {
-                // SAFETY: the funcref's own live name; it owned a reference
-                // to the function as well as the text.
-                unsafe { func_unref(name.as_ptr().cast_mut()) };
-            }
-        }
-        VAR_BLOB => drop(tv.take_blob()),
-        VAR_LIST => drop(tv.take_list()),
-        VAR_DICT => drop(tv.take_dict()),
-        _ => {}
-    }
-    // SAFETY: the caller's promise -- the box is theirs to free.
-    unsafe { xfree(::core::ptr::from_mut(tv).cast()) };
-}
-
 impl Clone for TypVal {
     /// A shallow copy: the string is duplicated, and a container gains a
     /// reference rather than being copied.
@@ -121,9 +77,7 @@ impl Clone for TypVal {
                 if let Some(copy) = &copy {
                     // A funcref owns a reference to the function as well as
                     // the text.
-                    // SAFETY: the name just copied, a live NUL-terminated
-                    // string.
-                    unsafe { func_ref(copy.as_ptr().cast_mut()) };
+                    func_ref_name(copy.as_cstr());
                 }
                 TypVal::func(copy)
             }
@@ -141,11 +95,13 @@ impl Clone for TypVal {
                 semsg!("E685: Internal error: {arg0}");
                 TypVal::Unknown
             }
-            // A scalar, and the two container variants over NULL: nothing
-            // to duplicate and no reference to take.
-            // SAFETY: the arms above cover everything that owns anything,
-            // so what is left holds no reference this could duplicate.
-            ref other => unsafe { other.bit_copy() },
+            // A scalar, and a Funcref over NULL: nothing to duplicate and
+            // no reference to take.
+            TypVal::Func(_) => TypVal::func(None),
+            TypVal::Number(n) => TypVal::Number(n),
+            TypVal::Float(f) => TypVal::Float(f),
+            TypVal::Bool(b) => TypVal::Bool(b),
+            TypVal::Special(s) => TypVal::Special(s),
         }
     }
 }
@@ -179,10 +135,8 @@ impl Drop for TypVal {
 /// not assigned, because half the callers hand this a fresh `xmalloc`'d list
 /// item and the other half have just cleared the slot.
 pub fn tv_copy(from: &TypVal, to: &mut TypVal) {
-    // SAFETY: the caller's promise: a live source and writable storage that
-    // owes nothing, so the old bits are overwritten rather than released.
-    let copy = (*from).clone();
-    unsafe { ::core::ptr::write(to, copy) };
+    // The old value is the caller's: overwritten, not released.
+    to.overwrite(from.clone());
 }
 
 /// `:lockvar` / `:unlockvar` over the slot `slot_lock`/`tv` name, descending
@@ -197,81 +151,120 @@ pub fn tv_copy(from: &TypVal, to: &mut TypVal) {
 /// With `check_refcount`, a container held by more than one reference is left
 /// alone — that is what keeps `:lockvar` on a function argument from locking
 /// the caller's value.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval and `slot_lock` at the lock of
-/// the slot holding it; both unaliased for the call.
-pub unsafe fn tv_item_lock(
-    slot_lock: *mut VarLock,
-    tv: &mut TypVal,
+pub fn tv_item_lock(
+    slot_lock: &mut VarLock,
+    tv: &TypVal,
     deep: ::core::ffi::c_int,
     lock: bool,
     check_refcount: bool,
 ) {
+    let Some(_depth) = item_lock_depth(deep) else {
+        return;
+    };
+    if let Some(held) = lock_slot(slot_lock, tv, lock, check_refcount) {
+        held.lock(deep, lock, check_refcount);
+    }
+}
+
+/// The recursion counter of [`tv_item_lock`], one level deeper; `None` --
+/// having reported `E743` past the limit -- when the descent stops here.
+fn item_lock_depth(deep: ::core::ffi::c_int) -> Option<crate::guard::Bump> {
     // TODO(ZyX-I): Make this not recursive
     static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
     if recurse.get() >= DICT_MAXNEST {
         emsg(gettext(e_variable_nested_too_deep_for_unlock));
-        return;
+        return None;
     }
     if deep == 0 {
-        return;
+        return None;
     }
-    let _recurse = Depth::of(&recurse);
+    Some(Depth::of(&recurse))
+}
 
-    // lock/unlock the slot itself
-    unsafe { *slot_lock = (*slot_lock).changed(lock) };
+/// A container [`tv_item_lock`] descends into, held for the descent.
+enum Held {
+    Blob(BlobRef),
+    List(ListRef),
+    Dict(DictRef),
+}
 
-    // SAFETY: the caller's promise: a live typval.
-    let mut val = unsafe { Tv::new(tv) };
-    match val.v_type() {
-        VAR_BLOB => {
-            let b = val.blob_or_null();
-            // SAFETY: the typval's own blob.
-            let bl = unsafe { Bl::new(b) };
-            if !b.is_null() && !(check_refcount && bl.bv_refcount.is_shared()) {
-                unsafe { (*b).bv_lock = (*b).bv_lock.changed(lock) };
+/// Lock or unlock the slot itself, and answer the container in it that the
+/// descent goes on into -- unless `check_refcount` says it is shared.
+///
+/// The container is answered as a handle of its own, so that the descent
+/// holds no borrow of the slot, which may be an item of a container the
+/// descent reaches again.
+fn lock_slot(
+    slot_lock: &mut VarLock,
+    tv: &TypVal,
+    lock: bool,
+    check_refcount: bool,
+) -> Option<Held> {
+    *slot_lock = slot_lock.changed(lock);
+    let skip = |count: &crate::types::Refcount| check_refcount && count.is_shared();
+    match tv {
+        TypVal::Blob(blob) => blob
+            .as_ref()
+            .filter(|b| !skip(&b.bv_refcount))
+            .map(|b| Held::Blob(b.clone())),
+        TypVal::List(list) => list
+            .as_ref()
+            .filter(|l| !skip(&l.lv_refcount))
+            .map(|l| Held::List(l.clone())),
+        TypVal::Dict(dict) => dict
+            .as_ref()
+            .filter(|d| !skip(&d.dv_refcount))
+            .map(|d| Held::Dict(d.clone())),
+        TypVal::Unknown => ::std::process::abort(),
+        _ => None,
+    }
+}
+
+impl Held {
+    /// Lock or unlock the container, and its items below `deep`.
+    fn lock(self, deep: ::core::ffi::c_int, lock: bool, check_refcount: bool) {
+        let descend = !(0..=1).contains(&deep);
+        match self {
+            Held::Blob(blob) => {
+                let blob = blob.edit();
+                blob.bv_lock = blob.bv_lock.changed(lock);
             }
-        }
-        VAR_LIST => {
-            let l = val.list_or_null();
-            // SAFETY: the typval's own list.
-            let ls = unsafe { Ls::new(l) };
-            if !l.is_null() && !(check_refcount && ls.lv_refcount.is_shared()) {
-                unsafe { (*l).lv_lock = (*l).lv_lock.changed(lock) };
-                if !(0..=1).contains(&deep) {
-                    // Recursive: lock/unlock the items the List contains.
-                    for li in list_iter_mut(val.list_mut()) {
-                        let (lock_of, value) = (&raw mut li.li_lock, &raw mut li.li_tv);
-                        unsafe {
-                            tv_item_lock(lock_of, &mut *value, deep - 1, lock, check_refcount)
-                        };
+            Held::List(list) => {
+                let this = list.edit();
+                this.lv_lock = this.lv_lock.changed(lock);
+                // Recursive: lock/unlock the items the List contains.
+                for at in 0..if descend { list.len() } else { 0 } {
+                    let Some(_depth) = item_lock_depth(deep - 1) else {
+                        continue;
+                    };
+                    let item = &mut list.edit().items_mut()[at];
+                    let held = lock_slot(&mut item.li_lock, &item.li_tv, lock, check_refcount);
+                    if let Some(held) = held {
+                        held.lock(deep - 1, lock, check_refcount);
+                    }
+                }
+            }
+            Held::Dict(dict) => {
+                let this = dict.edit();
+                this.dv_lock = this.dv_lock.changed(lock);
+                if !descend {
+                    return;
+                }
+                // Recursive: lock/unlock the items the Dict contains.
+                let mut cursor = DictCursor::new(&dict);
+                while let Some(slot) = cursor.next(&dict) {
+                    let Some(_depth) = item_lock_depth(deep - 1) else {
+                        continue;
+                    };
+                    let item = dict.edit().item_at_mut(slot).expect("a kept slot");
+                    let held = lock_slot(&mut item.di_lock, &item.di_tv, lock, check_refcount);
+                    if let Some(held) = held {
+                        held.lock(deep - 1, lock, check_refcount);
                     }
                 }
             }
         }
-        VAR_DICT => {
-            let d = val.dict_or_null();
-            // SAFETY: the typval's own dictionary.
-            let dt = unsafe { Dt::new(d) };
-            if !d.is_null() && !(check_refcount && dt.dv_refcount.is_shared()) {
-                unsafe { (*d).dv_lock = (*d).dv_lock.changed(lock) };
-                if !(0..=1).contains(&deep) {
-                    // recursive: lock/unlock the items the Dict contains
-                    for hi in unsafe { tv_dict_iter(d) } {
-                        let di = tv_dict_hi2di(hi);
-                        let (lock_of, value) = (di_lock(di), di_tv(di));
-                        unsafe {
-                            tv_item_lock(lock_of, &mut *value, deep - 1, lock, check_refcount)
-                        };
-                    }
-                }
-            }
-        }
-        VAR_UNKNOWN => unsafe { abort() },
-        _ => {}
     }
 }
 
@@ -281,136 +274,82 @@ pub fn tv_islocked(slot_lock: VarLock, tv: &TypVal) -> bool {
     let val = tv;
     let container_lock = match val.v_type() {
         VAR_LIST => list_locked((*tv).list_ref()),
-        VAR_DICT => {
-            unsafe { (*tv).dict_or_null().as_ref() }.map_or(VarLock::Unlocked, |d| d.dv_lock)
-        }
+        VAR_DICT => tv.dict_ref().map_or(VarLock::Unlocked, |d| d.dv_lock),
         _ => VarLock::Unlocked,
     };
     slot_lock == VarLock::Locked || container_lock == VarLock::Locked
 }
 
+/// What a lock error names: upstream's `name`/`name_len` pair, whose
+/// `TV_TRANSLATE` and `TV_CSTRING` sentinel lengths become variants.
+#[derive(Clone, Copy, Debug)]
+pub enum LockName<'a> {
+    /// No name: "E741: Value is locked".
+    None,
+    /// A message literal, translated before it is shown.
+    Translate(&'static CStr),
+    /// These bytes, as they are.
+    Bytes(&'a [u8]),
+}
+
+impl TypVal {
+    /// The lock of the container this value holds; a scalar or NULL
+    /// container has none.
+    fn container_lock(&self) -> VarLock {
+        match self {
+            TypVal::Blob(blob) => blob.as_ref().map_or(VarLock::Unlocked, |b| b.bv_lock),
+            TypVal::List(list) => list.as_ref().map_or(VarLock::Unlocked, |l| l.lv_lock),
+            TypVal::Dict(dict) => dict.as_ref().map_or(VarLock::Unlocked, |d| d.dv_lock),
+            _ => VarLock::Unlocked,
+        }
+    }
+}
+
 /// Whether the slot `slot_lock`/`tv` names may not be changed, raising the
-/// matching error if so.
-///
-/// `name` is what the error names; `name_len` may be `TV_TRANSLATE` or
-/// `TV_CSTRING` instead of a real length.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval, and `slot_lock` be the lock of
-/// the slot holding it. `name` must be null, or point at
-/// the name the error reports — NUL-terminated for
-/// `TV_CSTRING`/`TV_TRANSLATE`, otherwise `name_len` readable bytes.
-pub unsafe extern "C" fn tv_check_lock(
-    slot_lock: VarLock,
-    tv: &TypVal,
-    name: *const ::core::ffi::c_char,
-    name_len: size_t,
-) -> bool {
-    let val = tv;
-    let lock = match val.v_type() {
-        // SAFETY (all three arms): the caller's live typval, whose kind says
-        // which container it holds.
-        VAR_BLOB => {
-            unsafe { (*tv).blob_or_null().as_ref() }.map_or(VarLock::Unlocked, |b| b.bv_lock)
-        }
-        VAR_LIST => {
-            unsafe { (*tv).list_or_null().as_ref() }.map_or(VarLock::Unlocked, |l| l.lv_lock)
-        }
-        VAR_DICT => {
-            unsafe { (*tv).dict_or_null().as_ref() }.map_or(VarLock::Unlocked, |d| d.dv_lock)
-        }
-        _ => VarLock::Unlocked,
-    };
-    (unsafe { value_check_lock(slot_lock, name, name_len) })
-        || (lock.is_locked() && unsafe { value_check_lock(lock, name, name_len) })
+/// matching error if so: the slot's own lock first, then the container's.
+pub fn tv_check_lock(slot_lock: VarLock, tv: &TypVal, name: LockName<'_>) -> bool {
+    let lock = tv.container_lock();
+    value_check_lock(slot_lock, name) || (lock.is_locked() && value_check_lock(lock, name))
 }
 
 /// Whether `lock` forbids a change, raising the matching error if so.
-///
-/// # Safety
-///
-/// `name` must be null, or point at the name the error reports — NUL-
-/// terminated for `TV_CSTRING`/`TV_TRANSLATE`, otherwise `name_len` readable
-/// bytes.
-pub unsafe fn value_check_lock(
-    lock: VarLock,
-    mut name: *const ::core::ffi::c_char,
-    mut name_len: size_t,
-) -> bool {
+pub fn value_check_lock(lock: VarLock, name: LockName<'_>) -> bool {
     // Upstream asserts the message was set; with `VarLock` an enum the
     // match is exhaustive over three named states and the assertion is
     // the compiler's.
-    let error_message = match (lock, name.is_null()) {
+    let unnamed = matches!(name, LockName::None);
+    let error_message = match (lock, unnamed) {
         (VarLock::Unlocked, _) => return false,
-        (VarLock::Locked, true) => e_value_is_locked.as_ptr(),
-        (VarLock::Locked, false) => e_value_is_locked_str.as_ptr(),
-        (VarLock::Fixed, true) => e_cannot_change_value.as_ptr(),
-        (VarLock::Fixed, false) => e_cannot_change_value_of_str.as_ptr(),
+        (VarLock::Locked, true) => e_value_is_locked,
+        (VarLock::Locked, false) => e_value_is_locked_str,
+        (VarLock::Fixed, true) => e_cannot_change_value,
+        (VarLock::Fixed, false) => e_cannot_change_value_of_str,
     };
-
-    // SAFETY: `error_message` is one of the NUL-terminated statics chosen
-    // just above.
-    let error_message = unsafe { gettext_ptr(error_message) };
-    if name.is_null() {
-        emsg(error_message);
-    } else {
-        if name_len == TV_TRANSLATE {
-            name = unsafe { gettext_ptr(name) }.as_ptr();
-            name_len = unsafe { cstr::bytes_at(name) }.len();
-        } else if name_len == TV_CSTRING {
-            name_len = unsafe { cstr::bytes_at(name) }.len();
+    let error_message = gettext(error_message);
+    let name = match name {
+        LockName::None => {
+            emsg(error_message);
+            return true;
         }
-        // SAFETY: `name` is readable for `name_len` bytes.
-        let shown = unsafe { c_str_len(name, name_len) };
-        emsg_text(tr_plural!(
-            error_message,
-            crate::narrow::len_as_int(name_len),
-            shown
-        ));
-    }
-
+        LockName::Translate(literal) => gettext(literal).to_bytes(),
+        LockName::Bytes(bytes) => bytes,
+    };
+    emsg_text(tr_plural!(
+        error_message,
+        crate::narrow::len_as_int(name.len()),
+        msg_bytes(name)
+    ));
     true
 }
 
 /// [`value_check_lock`] naming the value with `name`, measured.
 pub(crate) fn value_check_lock_named(lock: VarLock, name: &[u8]) -> bool {
-    let error_message = match lock {
-        VarLock::Unlocked => return false,
-        VarLock::Locked => e_value_is_locked_str,
-        VarLock::Fixed => e_cannot_change_value_of_str,
-    };
-    let error_message = gettext(error_message);
-    emsg_text(tr_plural!(
-        error_message,
-        crate::narrow::len_as_int(name.len()),
-        crate::message_fmt::msg_bytes(name)
-    ));
-    true
+    value_check_lock(lock, LockName::Bytes(name))
 }
 
 /// [`tv_check_lock`] naming the value with `name`, measured.
 pub(crate) fn tv_check_lock_named(slot_lock: VarLock, tv: &TypVal, name: &[u8]) -> bool {
-    let lock = match tv.v_type() {
-        VAR_BLOB => tv.blob_ref().map_or(VarLock::Unlocked, |b| b.bv_lock),
-        VAR_LIST => tv.list_ref().map_or(VarLock::Unlocked, |l| l.lv_lock),
-        VAR_DICT => tv.dict_ref().map_or(VarLock::Unlocked, |d| d.dv_lock),
-        _ => VarLock::Unlocked,
-    };
-    value_check_lock_named(slot_lock, name)
-        || (lock.is_locked() && value_check_lock_named(lock, name))
-}
-
-/// [`tv_item_lock`] for a slot whose lock and value are borrowed apart.
-pub(crate) fn item_lock(
-    slot_lock: &mut VarLock,
-    tv: &mut TypVal,
-    deep: ::core::ffi::c_int,
-    lock: bool,
-    check_refcount: bool,
-) {
-    // SAFETY: the two borrows are the slot's own lock and value.
-    unsafe { tv_item_lock(slot_lock, tv, deep, lock, check_refcount) }
+    tv_check_lock(slot_lock, tv, LockName::Bytes(name))
 }
 
 /// Whether `tv1` and `tv2` are equal, `ic` ignoring case in strings.
@@ -456,8 +395,8 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
             dict_equal((*tv1).dict_ref(), (*tv2).dict_ref(), ic)
         }
         VAR_PARTIAL | VAR_FUNC => {
-            if a.as_partial().is_some_and(|p| p.is_null())
-                || b.as_partial().is_some_and(|p| p.is_null())
+            if matches!(a, TypVal::Partial(pt) if pt.is_none())
+                || matches!(b, TypVal::Partial(pt) if pt.is_none())
             {
                 return false;
             }
@@ -480,6 +419,6 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
         // VAR_UNKNOWN can be the result of an invalid expression, let's say
         // it does not equal anything, not even self.
         VAR_UNKNOWN => false,
-        _ => unsafe { abort() },
+        _ => ::std::process::abort(),
     }
 }

@@ -60,6 +60,12 @@ impl List {
         self.insert_item(ListItem::new(copy), at);
     }
 
+    /// Insert `tv` before `at` (or append it), taking over whatever it
+    /// owns.
+    pub(crate) fn insert(&mut self, tv: TypVal, at: InsertAt) {
+        self.insert_item(ListItem::new(tv), at);
+    }
+
     /// Append a copy of `tv`.
     pub fn push_copy(&mut self, tv: &TypVal) {
         self.insert_copy(tv, None);

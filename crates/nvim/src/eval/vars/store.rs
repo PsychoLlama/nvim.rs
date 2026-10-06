@@ -142,7 +142,7 @@ pub unsafe fn set_var_const(
         let item = unsafe { Di::new(di) };
         let (flags, lock) = (item.di_flags as c_int, item.di_lock);
         if unsafe { var_check_ro(flags, name, name_len) }
-            || unsafe { value_check_lock(lock, name, name_len) }
+            || value_check_lock(lock, LockName::Bytes(name_bytes))
             || unsafe { var_check_lock(flags, name, name_len) }
         {
             return;
@@ -239,7 +239,7 @@ pub unsafe fn set_var_const(
         // Like `:lockvar! name`: lock the value and what it contains,
         // but only where the reference count is one, so that only
         // literal values are locked.
-        unsafe { tv_item_lock(di_lock(di), &mut *cur, DICT_MAXNEST, true, true) };
+        unsafe { tv_item_lock(&mut *di_lock(di), &*cur, DICT_MAXNEST, true, true) };
     }
 }
 

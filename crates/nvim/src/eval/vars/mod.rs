@@ -22,10 +22,10 @@ use crate::eval::executor::eexe_mod_op;
 use crate::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    TV_INITIAL_VALUE, di_lock, dict_is_watched, dict_watcher_notify, list_find_nr, list_find_str,
-    list_len, list_set_lock, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc,
+    LockName, TV_INITIAL_VALUE, di_lock, dict_is_watched, dict_watcher_notify, list_find_nr,
+    list_find_str, list_len, list_set_lock, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc,
     tv_dict_alloc_lock, tv_dict_hi2di, tv_dict_unref, tv_get_bool_chk, tv_get_number,
-    tv_get_number_chk, tv_ht_iter, tv_item_lock, tv_list_alloc, value_check_lock,
+    tv_get_number_chk, tv_item_lock, tv_list_alloc, value_check_lock,
 };
 use crate::eval::userfunc::{
     find_hi_in_scoped_ht, find_var_in_scoped_ht, function_exists, get_current_funccal_dict,
@@ -45,12 +45,12 @@ use crate::global_cell::GlobalCell;
 use crate::guard::sandbox;
 use crate::hashtab::{
     Slot, hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset,
-    hash_unlock,
+    hash_unlock, tv_ht_iter,
 };
 use crate::lua::executor::nlua_set_sctx;
 use crate::mbyte::utf_char2bytes;
 use crate::memory::XString;
-use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xstrlcat, xstrlcpy};
+use crate::memory::{xcalloc, xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::state::emsg_severe;
 use crate::message::{
     e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,

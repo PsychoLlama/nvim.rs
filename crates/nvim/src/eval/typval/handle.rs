@@ -306,7 +306,7 @@ impl Dict {
     ///
     /// The walk borrows the dictionary, so nothing can add to or remove from
     /// it while the walk is live. A body that edits the table wants
-    /// [`tv_dict_iter`](super::tv_dict_iter), which is a slot index.
+    /// [`DictCursor`](super::DictCursor), which is a slot index.
     pub fn items(&self) -> impl Iterator<Item = &DictItem> {
         // SAFETY: a kept slot of a live dictionary names a live item, and
         // the borrow of the dictionary keeps it alive for the walk.
@@ -518,42 +518,12 @@ pub unsafe fn tv_dict_unref(d: *mut Dict) {
 #[repr(transparent)]
 pub struct BlobRef(NonNull<Blob>);
 
-/// The same API as [`ListRef`]'s, method for method.
+/// The same API as [`ListRef`]'s, less the raw bridges: a blob is only
+/// ever made by [`tv_blob_alloc`].
 impl BlobRef {
-    /// # Safety
-    /// As [`ListRef::from_owned`].
-    #[inline(always)]
-    pub unsafe fn from_owned(at: NonNull<Blob>) -> BlobRef {
-        BlobRef(at)
-    }
-
-    /// # Safety
-    /// As [`ListRef::owning`].
-    #[inline(always)]
-    pub unsafe fn owning(at: *mut Blob) -> Option<BlobRef> {
-        NonNull::new(at).map(BlobRef)
-    }
-
-    /// # Safety
-    /// As [`ListRef::retained`].
-    #[inline(always)]
-    pub unsafe fn retained(at: *mut Blob) -> Option<BlobRef> {
-        let at = NonNull::new(at)?;
-        // SAFETY: the caller's promise: a live object.
-        unsafe { (*at.as_ptr()).bv_refcount.retain() };
-        Some(BlobRef(at))
-    }
-
     #[inline(always)]
     pub fn as_ptr(&self) -> *mut Blob {
         self.0.as_ptr()
-    }
-
-    #[inline(always)]
-    pub fn into_raw(self) -> *mut Blob {
-        let at = self.0;
-        ::core::mem::forget(self);
-        at.as_ptr()
     }
 
     #[inline(always)]
@@ -579,10 +549,13 @@ impl Clone for BlobRef {
 }
 
 impl Drop for BlobRef {
+    /// Give the reference back; the last one frees the blob.
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY: as `ListRef`'s.
-        unsafe { blob_unref(self.as_ptr()) };
+        if self.edit().bv_refcount.release() <= 0 {
+            // SAFETY: the last reference to the `Box` `tv_blob_alloc` leaked.
+            drop(unsafe { Box::from_raw(self.as_ptr()) });
+        }
     }
 }
 
@@ -618,33 +591,7 @@ pub fn tv_blob_alloc() -> BlobRef {
     });
     // The count starts at the handle's one.
     blob.bv_refcount.retain();
-    // SAFETY: the reference is this handle's own, and `blob_free` is the
-    // `Box` it came from going back.
-    unsafe { BlobRef::from_owned(NonNull::from(Box::leak(blob))) }
-}
-
-/// Free `b` and its bytes.
-///
-/// # Safety
-///
-/// `b` must point at a live blob, unaliased for the call.
-pub unsafe fn blob_free(b: *mut Blob) {
-    // SAFETY: the caller's promise: a live, unaliased blob, which
-    // `tv_blob_alloc` made as a `Box`.
-    drop(unsafe { Box::from_raw(b) });
-}
-
-/// Drop a reference to `b`, freeing it when the last one goes.
-///
-/// # Safety
-///
-/// `b` must point at a live blob, unaliased for the call.
-pub unsafe fn blob_unref(b: *mut Blob) {
-    if let Some(blob) = unsafe { b.as_mut() }
-        && blob.bv_refcount.release() <= 0
-    {
-        unsafe { blob_free(b) };
-    }
+    BlobRef(NonNull::from(Box::leak(blob)))
 }
 
 /// One reference to a [`Partial`], given back when the handle goes: the
@@ -652,42 +599,18 @@ pub unsafe fn blob_unref(b: *mut Blob) {
 #[repr(transparent)]
 pub struct PartialRef(NonNull<Partial>);
 
-/// The same API as [`ListRef`]'s, method for method.
+/// The same API as [`ListRef`]'s, less the raw bridges: a partial is only
+/// ever made by [`PartialRef::new`].
 impl PartialRef {
-    /// # Safety
-    /// As [`ListRef::from_owned`].
-    #[inline(always)]
-    pub unsafe fn from_owned(at: NonNull<Partial>) -> PartialRef {
-        PartialRef(at)
-    }
-
-    /// # Safety
-    /// As [`ListRef::owning`].
-    #[inline(always)]
-    pub unsafe fn owning(at: *mut Partial) -> Option<PartialRef> {
-        NonNull::new(at).map(PartialRef)
-    }
-
-    /// # Safety
-    /// As [`ListRef::retained`].
-    #[inline(always)]
-    pub unsafe fn retained(at: *mut Partial) -> Option<PartialRef> {
-        let at = NonNull::new(at)?;
-        // SAFETY: the caller's promise: a live object.
-        unsafe { (*at.as_ptr()).pt_refcount.retain() };
-        Some(PartialRef(at))
+    /// A partial built in place, owned by the handle (a count of one).
+    pub fn new(mut partial: Partial) -> PartialRef {
+        partial.pt_refcount = Refcount::ONE;
+        PartialRef(NonNull::from(Box::leak(Box::new(partial))))
     }
 
     #[inline(always)]
     pub fn as_ptr(&self) -> *mut Partial {
         self.0.as_ptr()
-    }
-
-    #[inline(always)]
-    pub fn into_raw(self) -> *mut Partial {
-        let at = self.0;
-        ::core::mem::forget(self);
-        at.as_ptr()
     }
 
     #[inline(always)]
@@ -713,10 +636,12 @@ impl Clone for PartialRef {
 }
 
 impl Drop for PartialRef {
-    #[inline(always)]
+    /// Give the reference back; the last one frees the partial.
     fn drop(&mut self) {
-        // SAFETY: as `ListRef`'s.
-        unsafe { partial_unref(self.as_ptr()) };
+        if self.edit().pt_refcount.release() <= 0 {
+            // SAFETY: the last reference to the `Box` `new` leaked.
+            partial_free(*unsafe { Box::from_raw(self.as_ptr()) });
+        }
     }
 }
 
@@ -735,20 +660,6 @@ impl ::core::ops::DerefMut for PartialRef {
     fn deref_mut(&mut self) -> &mut Partial {
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }
-    }
-}
-
-/// Drop one reference to a partial, freeing it at zero.
-///
-/// # Safety
-/// `pt` must be null or valid.
-pub(crate) unsafe fn partial_unref(pt: *mut Partial) {
-    if pt.is_null() {
-        return;
-    }
-    // SAFETY: the caller's promise, and `pt` is not null.
-    if unsafe { (*pt).pt_refcount.release() } <= 0 {
-        unsafe { partial_free(pt) };
     }
 }
 
@@ -1025,5 +936,30 @@ mod tests {
         assert_eq!(b, Some(1));
         // SAFETY: as above; `tv_dict_free` is the pair of passes.
         unsafe { tv_dict_free(dp) };
+    }
+
+    /// The discriminant is the `VarType` code at offset zero: what
+    /// `#[repr(C, u32)]` promises and what the generated `ffi.cdef` chunk
+    /// describes to the unit fixtures.
+    #[test]
+    fn a_value_is_tagged_by_its_var_type_at_offset_zero() {
+        for tv in [
+            TypVal::Unknown,
+            TypVal::Number(1),
+            TypVal::string(None),
+            TypVal::func(None),
+            TypVal::list(None),
+            TypVal::dict(None),
+            TypVal::Float(1.0),
+            TypVal::Bool(kBoolVarTrue),
+            TypVal::Special(kSpecialVarNull),
+            TypVal::partial(None),
+            TypVal::blob(None),
+        ] {
+            // SAFETY: `repr(C, u32)` puts the discriminant first, and it is
+            // a `u32`.
+            let tag = unsafe { *(&raw const tv).cast::<crate::types::VarType>() };
+            assert_eq!(tag, tv.v_type());
+        }
     }
 }

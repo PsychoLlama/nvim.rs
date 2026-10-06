@@ -630,7 +630,7 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
     } else if (*expr).v_type() == VAR_PARTIAL {
         let partial: *mut Partial = (*expr).partial_or_null();
         funcexe.fe_partial = partial;
-        Some(unsafe { partial_name(partial) }.cast_const())
+        Some((*expr).partial_ref().map_or(c"", partial_name).as_ptr())
     } else {
         None
     };

@@ -39,7 +39,6 @@ use crate::debugger::state::{
 };
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
-use crate::eval::typval::tv_free;
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
 use crate::ex_docmd::state::{ex_nesting_level, ex_normal_busy};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
@@ -51,7 +50,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::memory::XString;
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::{xfree, xstrdup};
 use crate::message::msg_starthere;
 use crate::message::state::{
     cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
@@ -102,7 +101,7 @@ pub struct Breakpoint {
     /// `!` was used.
     pub dbg_forceit: c_int,
     /// Last value of a watched expression.
-    pub dbg_val: *mut TypVal,
+    pub dbg_val: Option<Box<TypVal>>,
     /// Stored nesting level, for `DBG_EXPR`.
     pub dbg_level: c_int,
 }
@@ -118,7 +117,7 @@ impl Breakpoint {
             dbg_prog: ptr::null_mut(),
             dbg_lnum: 0,
             dbg_forceit: 0,
-            dbg_val: ptr::null_mut(),
+            dbg_val: None,
             dbg_level: 0,
         }
     }
@@ -297,21 +296,13 @@ pub fn dbg_breakpoint(name: &CStr, lnum: LineNr) {
 ///
 /// # Safety
 /// `bp` must point at a live entry whose `dbg_name` is the expression.
-unsafe fn eval_expr_no_emsg(breakpoint: *mut Breakpoint) -> *mut TypVal {
+unsafe fn eval_expr_no_emsg(breakpoint: *mut Breakpoint) -> Option<Box<TypVal>> {
     let _no_emsg = Suppress::emsg();
     // A copy: the expression may delete the breakpoint that holds it.
     // SAFETY: caller contract.
     let expr = XString::from_cstr(unsafe { CStr::from_ptr((*breakpoint).dbg_name) });
-    let Some(value) = eval_expr(&expr) else {
-        return ptr::null_mut();
-    };
-    // The entry keeps the value on the heap, released with `tv_free`.
-    // SAFETY: a fresh block the size of a typval, written before it is read.
-    unsafe {
-        let slot = xmalloc(size_of::<TypVal>()).cast::<TypVal>();
-        slot.write(value);
-        slot
-    }
+    // The entry keeps the value on the heap.
+    eval_expr(&expr).map(Box::new)
 }
 
 /// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into a
@@ -565,9 +556,8 @@ pub fn ex_breakdel(excmd: &mut ExArg) {
         let bp = list.remove(todel);
         // SAFETY: all three are this entry's own allocations.
         unsafe { xfree(bp.dbg_name.cast()) };
-        if bp.dbg_type == DBG_EXPR && !bp.dbg_val.is_null() {
-            unsafe { tv_free(bp.dbg_val.as_mut()) };
-        }
+        // A watch's last value goes with the entry.
+        drop(bp.dbg_val);
         unsafe { vim_regfree(bp.dbg_prog) };
         // `:profdel` is not something `:breaklist` shows, so it does not
         // invalidate anybody's cached view.
@@ -737,44 +727,44 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
     // assumption the C makes -- that a watch does not itself add a
     // breakpoint, which would grow the array and move every entry.
     let tv = unsafe { eval_expr_no_emsg(breakpoint) };
-    let previous = unsafe { (*breakpoint).dbg_val };
+    let previous = unsafe { (*breakpoint).dbg_val.take() };
 
-    if tv.is_null() {
+    let Some(mut tv) = tv else {
         // The expression stopped evaluating at all, which counts as a
         // change -- but only if there was a value to change from.
-        if previous.is_null() {
+        let Some(mut previous) = previous else {
             return false;
-        }
-        unsafe { set_oldval(Some(&mut *previous)) };
+        };
+        set_oldval(Some(&mut previous));
         set_newval(None);
-        unsafe { tv_free(previous.as_mut()) };
-        unsafe { (*breakpoint).dbg_val = ptr::null_mut() };
         return true;
-    }
+    };
 
-    if previous.is_null() {
+    let Some(mut previous) = previous else {
         // First evaluation: the baseline, with no old value to show.
         set_oldval(None);
-        unsafe { (*breakpoint).dbg_val = tv };
-        unsafe { set_newval(Some(&mut *tv)) };
+        set_newval(Some(&mut tv));
+        unsafe { (*breakpoint).dbg_val = Some(tv) };
         return true;
-    }
+    };
 
     // `EXPR_IS` answers "is the same value"; a false answer is a change.
-    let changed = unsafe { typval_compare(&mut *tv, &mut *previous, EXPR_IS, false) }.is_ok()
-        && unsafe { (*tv).number_or_zero() } == 0;
+    let changed =
+        typval_compare(&mut tv, &mut previous, EXPR_IS, false).is_ok() && tv.number_or_zero() == 0;
     if changed {
         // Render the old value before re-evaluating, because evaluating
         // can reach whatever the old value refers to.
-        unsafe { set_oldval(Some(&mut *previous)) };
+        set_oldval(Some(&mut previous));
         // `typval_compare` overwrote `tv`, so the new value has to be
         // evaluated a second time before it can be shown.
-        let fresh = unsafe { eval_expr_no_emsg(breakpoint) };
-        unsafe { set_newval(Some(&mut *fresh)) };
-        unsafe { tv_free(previous.as_mut()) };
+        let mut fresh = unsafe { eval_expr_no_emsg(breakpoint) };
+        set_newval(fresh.as_deref_mut());
+        drop(previous);
         unsafe { (*breakpoint).dbg_val = fresh };
+    } else {
+        unsafe { (*breakpoint).dbg_val = Some(previous) };
     }
-    unsafe { tv_free(tv.as_mut()) };
+    drop(tv);
     changed
 }
 

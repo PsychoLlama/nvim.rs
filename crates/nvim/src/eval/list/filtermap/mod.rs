@@ -32,8 +32,8 @@
 use core::ffi::CStr;
 
 use super::{
-    Container, TvRef, clear_tv, clear_vim_var, copy_tv, err_not_container, eval_expr, number_of,
-    restore_vim_var, run_cmd, save_vim_var, set_vim_var_tv, string_bytes, vim_var_value,
+    Container, clear_tv, clear_vim_var, copy_tv, err_not_container, eval_expr, number_of,
+    push_vim_var, restore_vim_var, run_cmd, save_vim_var, string_bytes,
 };
 use crate::eval::typval::CallFrame;
 use crate::message::state::did_emsg;
@@ -80,20 +80,19 @@ impl FilterMap {
     }
 }
 
-/// Handle one item: set `v:val` to `tv`, evaluate `expr`, and answer whether
-/// the walk should go on.  The caller sets `v:key`.
+/// Handle one item, whose value the caller has copied into `v:val`:
+/// evaluate `expr`, and answer whether the walk should go on.  The caller
+/// sets `v:key`.
 ///
 /// `newtv` receives the value for `map()`/`mapnew()`; `rem` says whether
 /// `filter()` should drop the item.  The two forms that do not want a value
 /// clear it here.
 pub(crate) fn filter_map_one(
-    tv: TvRef,
     expr: &TypVal,
     filtermap: FilterMap,
     newtv: &mut TypVal,
     rem: &mut bool,
 ) -> bool {
-    set_vim_var_tv(Vv::Val, tv);
     newtv.write_empty(VAR_UNKNOWN);
 
     let mut retval = false;
@@ -105,8 +104,8 @@ pub(crate) fn filter_map_one(
             break 'theend;
         }
         let mut argv = CallFrame::<2>::new();
-        argv.push_borrowed(vim_var_value(Vv::Key));
-        argv.push_borrowed(vim_var_value(Vv::Val));
+        push_vim_var(&mut argv, Vv::Key);
+        push_vim_var(&mut argv, Vv::Val);
         if !eval_expr(expr, &argv, newtv) {
             break 'theend;
         }

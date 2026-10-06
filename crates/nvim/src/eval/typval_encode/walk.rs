@@ -12,6 +12,7 @@ use super::{
     ConvFrame, ConvPath, ConvStack, ConvType, Flow, Frame, PartialStage, Refused, TypvalSink,
 };
 use crate::eval::encode::encode_vim_list_to_buf;
+use crate::eval::typval::DictRef;
 use crate::eval::typval::{
     DictSlot, Dt, Li, Pt, Tv, blob_bytes, di_tv, dict_find, dv_copyid, list_first, list_items,
     list_items_mut, list_iter, list_last, list_len, lv_copyid, tv_dict_hi2di,
@@ -212,22 +213,20 @@ unsafe fn convert_one_value<S: TypvalSink>(
             unsafe { sink.conv_func_end(slot!(), copyid) };
         }
         VAR_PARTIAL => {
-            let pt = val.partial_or_null();
-            let fun = if pt.is_null() {
-                ptr::null_mut()
-            } else {
-                unsafe { partial_name(pt) }
-            };
+            let pt = val.partial_ref();
+            let fun = pt.map_or(ptr::null_mut(), |pt| partial_name(pt).as_ptr().cast_mut());
             // When using uf_name prepend "g:" for a global function.
-            let prefix =
-                if !fun.is_null() && !pt.is_null() && unsafe { (*pt).pt_name }.is_null() && {
-                    let c = unsafe { *fun } as u8;
-                    c.is_ascii_uppercase()
-                } {
-                    c"g:"
-                } else {
-                    c""
-                };
+            let prefix = if pt.is_some_and(|pt| {
+                pt.pt_name.is_none()
+                    && partial_name(pt)
+                        .to_bytes()
+                        .first()
+                        .is_some_and(u8::is_ascii_uppercase)
+            }) {
+                c"g:"
+            } else {
+                c""
+            };
             {
                 let path = ConvPath { stack, objname };
                 item_hook!(unsafe { sink.conv_func_start(slot!(), fun, prefix, &path) });
@@ -527,17 +526,17 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             let last = unsafe {
                 Li::new(list_last(val_list.as_mut()).map_or(ptr::null_mut(), ptr::from_mut))
             };
-            let ext_type = first.number();
-            if first.v_type() != VAR_NUMBER
+            let ext_type = first.li_tv.number_or_zero();
+            if first.li_tv.v_type() != VAR_NUMBER
                 || ext_type > i8::MAX as VarNumber
                 || ext_type < i8::MIN as VarNumber
-                || last.v_type() != VAR_LIST
+                || last.li_tv.v_type() != VAR_LIST
             {
                 return Ok(None);
             }
             let mut len: size_t = 0;
             let mut buf: *mut c_char = ptr::null_mut();
-            let bytes = last.list();
+            let bytes = last.li_tv.list_or_null();
             if !unsafe { encode_vim_list_to_buf(bytes, &raw mut len, &raw mut buf) } {
                 return Ok(None);
             }
@@ -709,18 +708,18 @@ unsafe fn walk<S: TypvalSink>(
             Frame::Partial { stage, pt } => {
                 // SAFETY: the partial the frame was pushed for; only read
                 // once `pt` has been checked non-null, as upstream does.
-                let part = unsafe { Pt::new(pt) };
+                let mut part = unsafe { Pt::new(pt) };
                 match stage {
                     PartialStage::Args => {
-                        let argc = if pt.is_null() { 0 } else { part.pt_argc };
+                        let argc = if pt.is_null() { 0 } else { part.pt_argv.len() };
                         let argc = argc as ptrdiff_t;
                         unsafe { sink.conv_func_before_args(cur_tv.as_mut(), argc) };
                         if let Frame::Partial { stage: slot, .. } = &mut stack.get_mut(idx).frame {
                             *slot = PartialStage::Self_;
                         }
-                        if !pt.is_null() && part.pt_argc > 0 {
-                            let pt_argc = part.pt_argc;
-                            let pt_argv = part.pt_argv;
+                        if !pt.is_null() && !part.pt_argv.is_empty() {
+                            let pt_argc = part.pt_argv.len() as c_int;
+                            let pt_argv = part.pt_argv.as_mut_ptr();
                             walk_hook!(sink.conv_list_start(None, pt_argc));
                             stack.push(ConvFrame {
                                 tv: ptr::null_mut(),
@@ -741,6 +740,8 @@ unsafe fn walk<S: TypvalSink>(
                             ptr::null_mut()
                         } else {
                             part.pt_dict
+                                .as_ref()
+                                .map_or(ptr::null_mut(), DictRef::as_ptr)
                         };
                         if dict.is_null() {
                             unsafe { sink.conv_func_before_self(cur_tv.as_mut(), -1) };

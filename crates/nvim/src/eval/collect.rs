@@ -31,7 +31,7 @@
 use crate::guard::Depth;
 use crate::memory::ThinCString;
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::{ManuallyDrop, offset_of, size_of};
+use core::mem::{offset_of, size_of};
 use core::ptr::{NonNull, null, null_mut};
 
 use crate::autocmd::aucmd_wins;
@@ -73,7 +73,7 @@ use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     AdditionalData, Buffer, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem, Failed,
-    FileMark, FileMarkView, HashItem, HtStack, List, ListStack, NUL, OptInt, Partial, Pos,
+    FileMark, FileMarkView, HashItem, HtStack, List, ListStack, NUL, OptInt, PartialRef, Pos,
     String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
     VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv, Window,
     XFileMark, YankReg, size_t,
@@ -569,32 +569,32 @@ pub(crate) unsafe fn set_ref_in_item_list(
 /// arguments.
 ///
 /// # Safety
-/// `pt` must be null or valid; the stacks null or valid.
+/// The stacks null or valid.
 pub(crate) unsafe fn set_ref_in_item_partial(
-    pt: *mut Partial,
+    pt: &PartialRef,
     copy_id: c_int,
     ht_stack: *mut *mut HtStack,
     list_stack: *mut *mut ListStack,
 ) -> bool {
-    if pt.is_null() || unsafe { (*pt).pt_copy_id } == copy_id {
+    if pt.pt_copy_id == copy_id {
         return false;
     }
-    unsafe { (*pt).pt_copy_id = copy_id };
+    pt.edit().pt_copy_id = copy_id;
 
-    let mut abort = unsafe { set_ref_in_func((*pt).pt_name, (*pt).pt_func, copy_id) };
-    if !unsafe { (*pt).pt_dict }.is_null() {
-        // A borrowed view, not an owner: the partial keeps the reference,
-        // so `dtv` releases nothing.
-        let dtv = ManuallyDrop::new(TypVal::dict(unsafe { DictRef::owning((*pt).pt_dict) }));
-        abort = abort || unsafe { set_ref_in_item(&dtv, copy_id, ht_stack, list_stack) };
+    let name = pt
+        .pt_name
+        .as_ref()
+        .map_or(null_mut(), |name| name.as_ptr().cast_mut());
+    // SAFETY: the partial's own name and function.
+    let mut abort = unsafe { set_ref_in_func(name, pt.pt_func, copy_id) };
+    if let Some(dict) = &pt.pt_dict {
+        // SAFETY: the partial's own dictionary; the stacks are the caller's.
+        abort =
+            abort || unsafe { set_ref_in_item_dict(dict.as_ptr(), copy_id, ht_stack, list_stack) };
     }
-    // SAFETY: `pt` is a live partial, so it holds `pt_argc` bound
-    // arguments and `pt_argv` names them.
-    for i in 0..unsafe { (*pt).pt_argc } {
-        // SAFETY: as above -- `i` is one of them.
-        let arg = unsafe { (*pt).pt_argv.offset(i as isize) };
-        // SAFETY: as above; the stacks are the caller's.
-        abort = abort || unsafe { set_ref_in_item(&*arg, copy_id, ht_stack, list_stack) };
+    for arg in &pt.pt_argv {
+        // SAFETY: the stacks are the caller's.
+        abort = abort || unsafe { set_ref_in_item(arg, copy_id, ht_stack, list_stack) };
     }
     abort
 }
@@ -628,7 +628,9 @@ pub unsafe fn set_ref_in_item(
                 .map_or(null_mut(), |name| name.as_ptr().cast_mut());
             unsafe { set_ref_in_func(name, null_mut::<UserFunc>(), copy_id) }
         }
-        VAR_PARTIAL => unsafe { set_ref_in_item_partial(tv.partial_or_null(), copy_id, ht, ls) },
+        VAR_PARTIAL => tv
+            .partial_shared()
+            .is_some_and(|pt| unsafe { set_ref_in_item_partial(pt, copy_id, ht, ls) }),
         _ => false,
     }
 }

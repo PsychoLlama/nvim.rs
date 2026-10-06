@@ -19,7 +19,7 @@ use crate::charset::getdigits_int_at;
 use crate::cstr::{self, byte_at};
 use crate::eval::lval::{LValue, Slot, Span, Target};
 use crate::eval::typval::{
-    dict_is_watched, dict_watcher_notify, item_lock, list_iter_mut, list_locked, tv_copy,
+    dict_is_watched, dict_watcher_notify, list_locked, tv_copy, tv_item_lock,
     value_check_lock_named,
 };
 use crate::eval::{FNE_CHECK_START, env_name_len, get_lval};
@@ -254,7 +254,7 @@ fn do_lock_var(mut lval: LValue<'_>, lock: bool, deep: c_int) -> Result<(), Fail
                     item.di_flags &= !DI_FLAGS_LOCK;
                 }
                 if deep != 0 {
-                    item_lock(&mut item.di_lock, &mut item.di_tv, deep, lock, false);
+                    tv_item_lock(&mut item.di_lock, &item.di_tv, deep, lock, false);
                 }
             });
         }
@@ -272,16 +272,18 @@ fn do_lock_var(mut lval: LValue<'_>, lock: bool, deep: c_int) -> Result<(), Fail
             } else {
                 usize::try_from(span.n2 - span.n1 + 1).unwrap_or(0)
             };
-            let (mut list, index) = (list.clone(), *index);
-            for item in list_iter_mut(Some(&mut list)).skip(index).take(count) {
-                item_lock(&mut item.li_lock, &mut item.li_tv, deep, lock, false);
+            let (list, index) = (list.clone(), *index);
+            let end = index.saturating_add(count).min(list.len());
+            for at in index..end {
+                let item = &mut list.edit().items_mut()[at];
+                tv_item_lock(&mut item.li_lock, &item.li_tv, deep, lock, false);
             }
         }
         Target::Slot {
             slot: Slot::Key { .. },
             ..
         } if deep != 0 => {
-            lval.with_slot(|tv, slot_lock| item_lock(slot_lock, tv, deep, lock, false));
+            lval.with_slot(|tv, slot_lock| tv_item_lock(slot_lock, tv, deep, lock, false));
         }
         Target::Slot { .. } | Target::NewKey { .. } => {}
     }

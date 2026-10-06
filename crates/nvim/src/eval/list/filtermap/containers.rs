@@ -29,9 +29,9 @@ use core::ffi::CStr;
 
 use super::{FilterMap, filter_map_one};
 use crate::eval::list::{
-    BlobArg, DictArg, ListArg, TvRef, UNKNOWN_TV, char_len, check_fixed, check_lock, check_ro,
-    clear_tv, clear_vim_var, err, list_alloc_ret, number_arm, set_key_nr, set_key_string,
-    set_key_type, string_bytes, string_tv,
+    BlobArg, DictArg, ListArg, UNKNOWN_TV, char_len, check_fixed, check_lock, check_ro, clear_tv,
+    clear_vim_var, err, list_alloc_ret, number_arm, set_key_nr, set_key_string, set_key_type,
+    set_val, string_bytes, string_tv,
 };
 use crate::message::state::did_emsg;
 use crate::message::{e_invalblob, e_string_required};
@@ -46,7 +46,7 @@ use crate::types::{TypVal, VAR_BOOL, VAR_NUMBER, VAR_STRING, VarLock, VarNumber,
 pub(crate) fn filter_map_dict(
     d: DictArg,
     filtermap: FilterMap,
-    arg_errmsg: &CStr,
+    arg_errmsg: &'static CStr,
     expr: &TypVal,
     result: &mut TypVal,
 ) {
@@ -73,7 +73,8 @@ pub(crate) fn filter_map_dict(
         set_key_string(di.key());
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
-        let ok = filter_map_one(di.tv(), expr, filtermap, &mut newtv, &mut rem);
+        di.set_val();
+        let ok = filter_map_one(expr, filtermap, &mut newtv, &mut rem);
         clear_vim_var(Vv::Key);
         if !ok || did_emsg.get() != 0 {
             clear_tv(&mut newtv);
@@ -115,7 +116,7 @@ pub(crate) fn filter_map_dict(
 pub(crate) fn filter_map_blob(
     blob_arg: BlobArg,
     filtermap: FilterMap,
-    arg_errmsg: &CStr,
+    arg_errmsg: &'static CStr,
     expr: &TypVal,
     result: &mut TypVal,
 ) {
@@ -149,9 +150,8 @@ pub(crate) fn filter_map_blob(
         set_key_nr(idx);
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
-        if !filter_map_one(TvRef::of(&mut tv), expr, filtermap, &mut newtv, &mut rem)
-            || did_emsg.get() != 0
-        {
+        set_val(&mut tv);
+        if !filter_map_one(expr, filtermap, &mut newtv, &mut rem) || did_emsg.get() != 0 {
             break;
         }
         if filtermap != FilterMap::Foreach {
@@ -209,9 +209,8 @@ pub(crate) fn filter_map_string(
         set_key_nr(idx);
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
-        if !filter_map_one(TvRef::of(&mut tv), expr, filtermap, &mut newtv, &mut rem)
-            || did_emsg.get() != 0
-        {
+        set_val(&mut tv);
+        if !filter_map_one(expr, filtermap, &mut newtv, &mut rem) || did_emsg.get() != 0 {
             clear_tv(&mut newtv);
             clear_tv(&mut tv);
             break;
@@ -248,7 +247,7 @@ pub(crate) fn filter_map_string(
 pub(crate) fn filter_map_list(
     l: ListArg,
     filtermap: FilterMap,
-    arg_errmsg: &CStr,
+    arg_errmsg: &'static CStr,
     expr: &TypVal,
     result: &mut TypVal,
 ) {
@@ -278,7 +277,8 @@ pub(crate) fn filter_map_list(
         set_key_nr(idx);
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
-        if !filter_map_one(li.tv(), expr, filtermap, &mut newtv, &mut rem) {
+        li.set_val();
+        if !filter_map_one(expr, filtermap, &mut newtv, &mut rem) {
             break;
         }
         if did_emsg.get() != 0 {

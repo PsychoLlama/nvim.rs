@@ -30,7 +30,7 @@ use crate::types::NL;
 pub(crate) use crate::message::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, Blob, ChannelStreamType, Dict, ExprType, Failed, FuncExe, GRegFlags, LineNr, List,
+    Array, BlobRef, ChannelStreamType, Dict, ExprType, Failed, FuncExe, GRegFlags, LineNr, List,
     LuaRetMode, MarkGet, MotionType, Partial, Timer, TypVal, uint64_t,
 };
 use crate::winlayer::Live;
@@ -62,7 +62,7 @@ mod pattern;
 pub use self::pattern::*;
 mod expr;
 pub(crate) use self::expr::*;
-pub(crate) use self::typval::{partial_name, partial_unref};
+pub(crate) use self::typval::partial_name;
 pub(crate) use self::vars::{get_v_event, restore_v_event};
 // `eval0` is reached from `crates/nvim/tests/unit`, which links the library
 // from outside; the rest of `expr` stays in-crate.
@@ -117,7 +117,6 @@ pub const GLV_STOP: GlvStatus = 2;
 pub type GlvStatus = c_uint;
 pub const GLV_OK: GlvStatus = 1;
 pub const GLV_FAIL: GlvStatus = 0;
-#[derive(Clone)]
 pub struct ForInfo {
     pub fi_semicolon: c_int,
     pub fi_varcount: c_int,
@@ -125,7 +124,8 @@ pub struct ForInfo {
     pub fi_watch: u32,
     pub fi_list: *mut List,
     pub fi_bi: c_int,
-    pub fi_blob: *mut Blob,
+    /// The copy of the Blob the loop walks. A zeroed `ForInfo` holds none.
+    pub fi_blob: Option<BlobRef>,
     pub fi_string: *mut c_char,
     pub fi_byte_idx: c_int,
 }

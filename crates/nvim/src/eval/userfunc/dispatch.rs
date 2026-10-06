@@ -16,7 +16,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::CallFrame;
-use crate::eval::typval::{DictRef, PartialRef};
+use crate::eval::typval::{DictRef, PartialRef, index_of};
 use crate::types::Failed;
 use std::borrow::Cow;
 
@@ -124,7 +124,9 @@ pub(crate) fn get_func_tv(
     let mut argcount = 0;
     let evaluate = with.evaluate;
 
-    let bound = with.partial.map_or(0, |partial| partial.pt_argc);
+    let bound = with
+        .partial
+        .map_or(0, |partial| index_of(partial.pt_argv.len()));
     let mut ret = get_func_arguments(cursor, evaluate, bound, argvars.room(), &mut argcount);
     // A failed argument leaves whatever it half-built in the slot it was
     // being evaluated into, which upstream leaks and the frame releases.
@@ -174,7 +176,7 @@ pub unsafe fn func_call(
         let bound = if partial.is_null() {
             0
         } else {
-            unsafe { (*partial).pt_argc }
+            index_of(unsafe { &(*partial).pt_argv }.len())
         };
         // SAFETY: the caller's promise -- `args` holds a List or nothing.
         let items = unsafe { (*args).list_or_null().as_ref() };
@@ -242,19 +244,19 @@ fn spliced_args<'a>(argv: &'a Option<Argv>, args: &'a [TypVal], n: usize) -> &'a
 /// are more arguments than a call can take.
 ///
 /// # Safety
-/// `partial` is a live partial with `pt_argc` bound arguments.
+/// `partial` is a live partial.
 unsafe fn splice_bound(
     argv: &mut Argv,
     partial: *const Partial,
     args: &[TypVal],
 ) -> Result<(), ()> {
-    let bound = unsafe { (*partial).pt_argc } as usize;
-    if bound + args.len() > MAX_FUNC_ARGS as usize {
+    // SAFETY: the caller's promise -- a live partial.
+    let bound = unsafe { &(*partial).pt_argv };
+    if bound.len() + args.len() > MAX_FUNC_ARGS as usize {
         return Err(());
     }
-    for i in 0..bound {
-        // SAFETY: the caller's promise -- `pt_argv` holds `pt_argc` values.
-        argv.push_owned(unsafe { (*(*partial).pt_argv.add(i)).clone() });
+    for value in bound {
+        argv.push_owned(value.clone());
     }
     argv.extend_borrowed(args);
     Ok(())
@@ -374,12 +376,12 @@ pub unsafe fn call_func(
             // dict argument, use the dict argument -- that is backwards
             // compatible.  When the dict was bound explicitly, use the
             // partial's.
-            if !unsafe { (*partial).pt_dict }.is_null()
+            if let Some(dict) = unsafe { &(*partial).pt_dict }
                 && (selfdict.is_null() || !unsafe { (*partial).pt_auto })
             {
-                selfdict = unsafe { (*partial).pt_dict };
+                selfdict = dict.as_ptr();
             }
-            if error == FCERR_NONE && unsafe { (*partial).pt_argc } > 0 {
+            if error == FCERR_NONE && !unsafe { &(*partial).pt_argv }.is_empty() {
                 let mut frame = Argv::new();
                 // SAFETY: `funcexe`'s partial is live.
                 if unsafe { splice_bound(&mut frame, partial, args_in) }.is_err() {

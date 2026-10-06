@@ -55,7 +55,7 @@ mod trycmd;
 
 use crate::debugger::dbg_check_skipped;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{tv_clear, tv_free};
+use crate::eval::typval::tv_clear;
 use crate::eval::{eval_cmd_bool, eval_for_line, eval0_in_cmd, free_for_info, next_for_item};
 use crate::ex_docmd::{ends_excmd, modifier_len};
 use crate::ex_eval::state::{did_endif, did_throw, force_abort, trylevel};
@@ -201,8 +201,10 @@ unsafe fn check_skip(cstack: *mut CondStack) -> bool {
 /// # Safety
 /// `p` is a `TypVal` a pending `:return` owned.
 unsafe fn discard_pending_return(p: *mut c_void) {
-    // SAFETY: caller contract.
-    unsafe { tv_free(p.cast::<TypVal>().as_mut()) }
+    if !p.is_null() {
+        // SAFETY: caller contract -- the `Box` `do_return` made for it.
+        drop(unsafe { Box::from_raw(p.cast::<TypVal>()) });
+    }
 }
 
 /// Whether to abort immediately: an error while aborting, an interrupt, or

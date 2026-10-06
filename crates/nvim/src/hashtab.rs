@@ -619,6 +619,61 @@ pub unsafe fn hash_hash_len(key: *const c_char, len: usize) -> HashValue {
     hash_bytes_len(unsafe { slice::from_raw_parts(key.cast::<u8>(), len) })
 }
 
+/// A walk over the occupied slots of a hashtab; see [`tv_ht_iter`].
+pub(crate) struct TableIter<E: SlotEntry> {
+    ht: *const HashTab<E>,
+    idx: usize,
+    todo: usize,
+}
+
+impl<E: SlotEntry> Iterator for TableIter<E> {
+    type Item = Slot<E>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Slot<E>> {
+        while self.todo != 0 {
+            // The cursor is an index, and the slot is read out of the table
+            // afresh each step: a body may take `&mut` to the table (every
+            // `hash_remove` does), and the small run lives *in* the table,
+            // so a pointer cursor would not survive the first removal.
+            // SAFETY: the walk's table is live for the walk, and `todo`
+            // live entries remain, so `idx` is one of its slots.
+            let hi = unsafe { (*self.ht).slot(self.idx) };
+            self.idx += 1;
+            if hi.is_kept() {
+                self.todo -= 1;
+                return Some(hi);
+            }
+        }
+        None
+    }
+}
+
+/// Walk the occupied slots of a hashtab: upstream's `HASHTAB_ITER` (and,
+/// over a dictionary's table, `TV_DICT_ITER`).
+///
+/// The live-item count is snapshotted before the first step, exactly as the
+/// macro does. That is what lets a body remove entries as it goes -- but
+/// only with the table locked, since an unlocked `hash_remove` may rehash
+/// and renumber the slots underneath the walk.
+///
+/// The walks left on this are the variable scopes', which reach their
+/// tables through the raw pointers of the structures that own them.
+///
+/// # Safety
+/// `ht` points at a live table that outlives the walk. A raw pointer and not
+/// a reference: a body writes through the table, so the walk must not be
+/// holding a borrow of it.
+#[inline]
+pub(crate) unsafe fn tv_ht_iter<E: SlotEntry>(ht: *const HashTab<E>) -> TableIter<E> {
+    TableIter {
+        ht,
+        idx: 0,
+        // SAFETY: the caller's live table.
+        todo: unsafe { (*ht).ht_used },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
