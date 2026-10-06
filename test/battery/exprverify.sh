@@ -53,6 +53,14 @@ if [[ -z $CUT ]] && ! just build >"$LOG" 2>&1; then
 fi
 NVIM=${CUT:-$REPO/target/debug/nvim}
 
+# Before the work directory is made: cutting the baseline runs this script,
+# which deletes and remakes it -- under a process already standing in it,
+# whose `:p` and `:.` would then read a deleted current directory.
+BASELINE=
+if [ -z "$CUT" ]; then
+  BASELINE=${EXPR_BASELINE:-$("$HERE/baseline.sh" expr)}
+fi
+
 # A fixed, short work directory: `:p` and `%:p` answers carry it, and the
 # buffer is named inside it, so it must be the same path on both sides.
 WORK=/tmp/exprsweep-work
@@ -60,11 +68,6 @@ rm -rf "$WORK"
 mkdir -p "$WORK/home"
 cd "$WORK" || exit 1
 : >"$WORK/empty"
-
-BASELINE=
-if [ -z "$CUT" ]; then
-  BASELINE=${EXPR_BASELINE:-$("$HERE/baseline.sh" expr)}
-fi
 
 out=$OUT/$LABEL
 rm -f "$out.txt" "$out.stderr"

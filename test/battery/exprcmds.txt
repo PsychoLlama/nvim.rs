@@ -98,6 +98,60 @@ function! g:T4(a, a)<NL>endfunction | let g:x = 1
 function! g:T5(a = 1 , b = [1] )<NL>return a:b<NL>endfunction<NL>let g:x = g:T5()
 let g:lam = {a, b -> a + b} | let g:x = g:lam(1, 2)
 echo {x -> x}(1) | echo 'after'
+# -- :call through every kind of name
+call g:Id(1) | let g:x = 2
+call g:Id(1) trailing
+call g:Id 1
+call g:Id (1)
+call g:fd['f']('ab')
+call [g:F][0]('x')
+call s:Sf(1)
+call <SID>Sf(2)
+call g:F('x')
+call {'a': g:F}.a('y')
+call g:l->len()
+call g:Id(1)->string()
+call g:Id([1])[0]
+call g:Id(g:P)([2])
+call g:nosuch()
+call g:d.nosuch()
+call g:d.a()
+call function('g:Id')(1)
+call v:lua.tostring(1)
+call g:obj.method() | call g:obj['method']()
+call g:Id(1, 2, 3)
+call g:Id(
+call len([1, 2]
+# -- :return and :defer
+function! g:T6(x)<NL>return a:x + 1 | let g:y = 9<NL>endfunction<NL>let g:x = g:T6(1)
+function! g:T6()<NL>return<NL>endfunction<NL>let g:x = g:T6()
+function! g:T6()<NL>return | let g:y = 1<NL>endfunction<NL>let g:x = g:T6()
+function! g:T6()<NL>return 1 2<NL>endfunction<NL>let g:x = g:T6()
+function! g:T6()<NL>defer add(g:l, 'd1')<NL>defer g:Id(2)<NL>call add(g:l, 'body')<NL>endfunction<NL>call g:T6()
+function! g:T6()<NL>defer add(g:l, 'd')<NL>try<NL>throw 'x'<NL>finally<NL>call add(g:l, 'f')<NL>endtry<NL>endfunction<NL>call g:T6()
+function! g:T6()<NL>defer g:P(1)<NL>defer g:obj.method()<NL>endfunction<NL>call g:T6()
+function! g:T6()<NL>defer g:nosuch(1)<NL>defer len(1, 2)<NL>defer g:Id()<NL>endfunction<NL>call g:T6()
+function! g:T6()<NL>defer add(g:l, 1) | let g:y = 1<NL>defer add(g:l, 2) x<NL>endfunction<NL>call g:T6()
+defer g:Id(1)
+return 1
+# -- :function headers
+function! g:T6(...) abort<NL>return a:0<NL>endfunction<NL>let g:x = g:T6(1, 2)
+function! g:T6(a = (1 + (2)), b = [')'], c = {-> 1}, d = "x(y")<NL>return [a:a, a:b, a:d]<NL>endfunction<NL>let g:x = g:T6()
+function! g:T6() range abort dict closure<NL>endfunction
+function! g:T6() -> number<NL>endfunction
+function! g:T6(..., a)<NL>endfunction
+function! g:T6(a:b)<NL>endfunction
+function! g:T6(firstline)<NL>endfunction
+function! g:T6(a ,b)<NL>endfunction
+function! g:T6(1a)<NL>endfunction
+function! g:T6() range<NL>let g:x = [a:firstline, a:lastline]<NL>endfunction<NL>execute '1call g:T6()'
+function! s:T7()<NL>return 7<NL>endfunction<NL>let g:x = s:T7() + <SID>T7()
+function! <SID>T8(x)<NL>return a:x<NL>endfunction<NL>let g:x = s:T8(8)
+function! g:d.nf() dict<NL>return self.a<NL>endfunction<NL>let g:x = g:d.nf()
+function! g:l[0]()<NL>endfunction
+function! g:t6()<NL>endfunction
+function! g:T:6()<NL>endfunction
+function! {'g:T' . 6}()<NL>return 6<NL>endfunction<NL>let g:x = g:T6()
 # -- heredocs
 let g:h =<< END<NL>line1<NL>  line2<NL>END
 let g:h =<< trim END<NL>    a<NL>      b<NL>    END

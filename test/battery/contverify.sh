@@ -60,6 +60,13 @@ if [[ -z $CUT ]] && ! just build >"$LOG" 2>&1; then
 fi
 NVIM=${CUT:-$REPO/target/debug/nvim}
 
+# Resolved before the work directory is made: cutting the baseline runs
+# this script, which deletes and remakes it under this process.
+BASELINE=
+if [ -z "$CUT" ]; then
+  BASELINE=${CONT_BASELINE:-$("$HERE/baseline.sh" cont)}
+fi
+
 # A fixed, short work directory, as every row has: nothing here should
 # reach a path, and if something ever does it is the same one on both sides.
 WORK=/tmp/contsweep-work
@@ -67,11 +74,6 @@ rm -rf "$WORK"
 mkdir -p "$WORK/home"
 cd "$WORK" || exit 1
 : >"$WORK/empty"
-
-BASELINE=
-if [ -z "$CUT" ]; then
-  BASELINE=${CONT_BASELINE:-$("$HERE/baseline.sh" cont)}
-fi
 
 fail=0
 for corpus in list dict blob; do

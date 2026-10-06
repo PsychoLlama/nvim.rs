@@ -59,6 +59,10 @@ func! g:Id(x) abort
   return a:x
 endfunc
 
+func! s:Sf(...) abort
+  return a:000
+endfunc
+
 func! Fixture() abort
   " A cut `:lockvar g:l` is `:lockvar g:`, which locks the scope and every
   " global in it.
@@ -75,7 +79,7 @@ func! Fixture() abort
       execute 'unlet g:' . name
     endif
   endfor
-  for f in ['g:T1', 'g:T2', 'g:T3']
+  for f in ['g:T1', 'g:T2', 'g:T3', 'g:T4', 'g:T5', 'g:T6', 's:T7', 's:T8', 'g:t6']
     if exists('*' . f)
       execute 'delfunction ' . f
     endif

@@ -79,21 +79,23 @@ if [[ -z $CUT ]] && ! just build >"$LOG" 2>&1; then
 fi
 NVIM=${CUT:-$REPO/target/debug/nvim}
 
+# The baseline is CUT, not committed: `baseline.sh` runs these same corpora
+# against the binary `test/battery/BASE` pins and caches the result under
+# target/battery/base/<sha>/.  Cut mode never diffs, so it never resolves a
+# baseline -- and must not, since that would re-enter baseline.sh.
+# Resolved before the work directory is made: cutting the baseline runs
+# this script, which deletes and remakes it under this process.
+BASELINE=
+if [ -z "$CUT" ]; then
+  BASELINE=${DECODE_BASELINE:-$("$HERE/baseline.sh" decode)}
+fi
+
 # The corpora are cwd-independent (verified), but run them from a fixed
 # short directory anyway: that is the rule every other sweep follows and
 # it costs nothing.
 WORK=/tmp/decodesweep-work
 rm -rf "$WORK"; mkdir -p "$WORK"
 cd "$WORK" || exit 1
-
-# The baseline is CUT, not committed: `baseline.sh` runs these same corpora
-# against the binary `test/battery/BASE` pins and caches the result under
-# target/battery/base/<sha>/.  Cut mode never diffs, so it never resolves a
-# baseline -- and must not, since that would re-enter baseline.sh.
-BASELINE=
-if [ -z "$CUT" ]; then
-  BASELINE=${DECODE_BASELINE:-$("$HERE/baseline.sh" decode)}
-fi
 
 fail=0
 for corpus in json msgpack luajson lumpack rpc; do
