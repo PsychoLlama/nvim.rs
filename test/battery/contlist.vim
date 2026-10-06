@@ -479,5 +479,424 @@ unlet big
 call garbagecollect(1)
 call S('done')
 
+" ------------------------------------------- 12. the :for cursor, widened
+call S('=== 12. for cursors, widened ===')
+func! Walk(l, Body) abort
+  let seen = []
+  let s:wl = a:l
+  try
+    for x in s:wl
+      call add(seen, x)
+      if len(seen) > 30 | break | endif
+      call a:Body(x)
+    endfor
+  catch
+    call add(seen, 'threw ' . substitute(v:exception, '\v^Vim\(\a+\)?:?', '', ''))
+  endtry
+  return string(seen) . ' ' . string(a:l)
+endfunc
+call S('remove current (first)', Walk([0, 1, 2, 3], {x -> x == 0 ? remove(s:wl, 0) : 0}))
+call S('remove current (last)', Walk([0, 1, 2, 3], {x -> x == 3 ? remove(s:wl, 3) : 0}))
+call S('remove next', Walk([0, 1, 2, 3, 4], {x -> x == 1 ? remove(s:wl, 2) : 0}))
+call S('remove previous', Walk([0, 1, 2, 3, 4], {x -> x == 2 ? remove(s:wl, 1) : 0}))
+call S('remove all remaining', Walk([0, 1, 2, 3, 4], {x -> x == 1 ? remove(s:wl, 2, -1) : 0}))
+call S('remove current and rest', Walk([0, 1, 2, 3, 4], {x -> x == 1 ? remove(s:wl, 1, -1) : 0}))
+call S('remove everything', Walk([0, 1, 2, 3], {x -> x == 1 ? remove(s:wl, 0, -1) : 0}))
+call S('filter to empty', Walk([0, 1, 2, 3], {x -> x == 1 ? filter(s:wl, 0) : 0}))
+call S('insert before current', Walk([0, 1, 2, 3], {x -> x == 2 && index(s:wl, 'n') < 0 ? insert(s:wl, 'n', 2) : 0}))
+call S('insert at front each', Walk([0, 1, 2], {x -> type(x) == v:t_number && x < 10 ? insert(s:wl, x + 10) : 0}))
+call S('insert after current', Walk([0, 1, 2], {x -> x == 1 ? insert(s:wl, 'a', 2) : 0}))
+call S('remove then re-add', Walk([0, 1, 2, 3], {x -> x == 1 ? add(s:wl, remove(s:wl, 2)) : 0}))
+call S('reverse at end', Walk([0, 1, 2, 3], {x -> x == 3 ? reverse(s:wl) : 0}))
+call S('sort moves current', Walk([3, 0, 2, 1], {x -> x == 0 ? sort(s:wl) : 0}))
+call S('uniq removes next', Walk([1, 2, 2, 2, 3], {x -> x == 1 ? uniq(s:wl) : 0}))
+call S('slice assign over current', Walk([0, 1, 2, 3], {x -> x == 1 ? execute('let s:wl[1:2] = ["a", "b"]') : 0}))
+call S('extend at current', Walk([0, 1, 2], {x -> x == 1 ? extend(s:wl, ['e', 'f'], 1) : 0}))
+
+" nested :for over the same list, removing in the inner loop
+let l = [1, 2, 3, 4, 5]
+let pairs = []
+for x in l
+  for y in l
+    call add(pairs, x . ':' . y)
+    if x == 1 && y == 2
+      call remove(l, index(l, 2))
+    endif
+  endfor
+endfor
+call S('nested remove inner current', string(pairs), string(l))
+let l = [1, 2, 3, 4, 5]
+let pairs = []
+for x in l
+  for y in l
+    call add(pairs, x . ':' . y)
+    if x == 2 && y == 4
+      call remove(l, index(l, 2))
+    endif
+  endfor
+endfor
+call S('nested remove outer current', string(pairs), string(l))
+let l = [1, 2, 3, 4, 5]
+let pairs = []
+for x in l
+  for y in l
+    call add(pairs, x . ':' . y)
+    if x == 1 && y == 1
+      call remove(l, 1, -1)
+    endif
+  endfor
+endfor
+call S('nested remove all but first', string(pairs), string(l))
+let l = [1, 2, 3]
+let pairs = []
+for x in l
+  for y in l
+    call add(pairs, x . ':' . y)
+    if len(pairs) > 40 | break | endif
+    if x == 2 && y == 2
+      call insert(l, 0, 1)
+    endif
+  endfor
+endfor
+call S('nested insert', string(pairs), string(l))
+
+" :for over a list whose variable goes away or changes
+let l = [1, 2, 3]
+let seen = []
+for x in l
+  call add(seen, x)
+  if x == 1
+    unlet l
+  endif
+endfor
+call S('unlet without gc', string(seen), exists('l'))
+let l = [1, 2, 3]
+let seen = []
+for x in l
+  call add(seen, x)
+  if x == 1
+    let l = [7, 8, 9]
+  endif
+endfor
+call S('rebind while walking', string(seen), string(l))
+func! UnletLocal() abort
+  let l = [1, 2, 3]
+  let seen = []
+  for x in l
+    call add(seen, x)
+    if x == 2
+      unlet l
+      call garbagecollect(1)
+    endif
+  endfor
+  return seen
+endfunc
+call S('unlet local while walking', string(UnletLocal()))
+let g:gl = [1, 2, 3]
+let seen = []
+for x in g:gl
+  call add(seen, x)
+  if x == 1
+    unlet g:gl
+    call garbagecollect(1)
+  endif
+endfor
+call S('unlet global while walking', string(seen))
+
+" filter()/map() whose callback edits the list being walked
+func! FMEdit(kind, Edit, l) abort
+  let s:fl = a:l
+  let v:errmsg = ''
+  try
+    if a:kind ==# 'filter'
+      let r = filter(s:fl, a:Edit)
+    else
+      let r = map(s:fl, a:Edit)
+    endif
+    return 'ok ' . string(r) . ' ' . string(a:l) . ' errmsg=' . v:errmsg
+  catch
+    return 'threw ' . substitute(v:exception, '\v^Vim\(\a+\)?:?', '', '') . ' ' . string(a:l)
+  endtry
+endfunc
+call S('filter removes first', FMEdit('filter', {i, v -> v == 2 ? len(remove(s:fl, 0)) * 0 + 1 : 1}, [1, 2, 3, 4]))
+call S('filter removes current', FMEdit('filter', {i, v -> v == 2 ? remove(s:fl, i) * 0 + 1 : 1}, [1, 2, 3, 4]))
+call S('filter removes next', FMEdit('filter', {i, v -> v == 2 ? remove(s:fl, i + 1) * 0 + 1 : 1}, [1, 2, 3, 4]))
+call S('filter removes rest', FMEdit('filter', {i, v -> v == 1 ? len(remove(s:fl, 1, -1)) * 0 + 1 : 1}, [1, 2, 3, 4]))
+call S('filter drops and removes', FMEdit('filter', {i, v -> v == 2 ? remove(s:fl, -1) * 0 : 1}, [1, 2, 3, 4]))
+call S('filter appends', FMEdit('filter', {i, v -> v == 1 ? len(add(s:fl, 9)) * 0 + 1 : 1}, [1, 2, 3]))
+call S('map removes first', FMEdit('map', {i, v -> v == 2 ? remove(s:fl, 0) * 0 + v * 10 : v * 10}, [1, 2, 3, 4]))
+call S('map removes rest', FMEdit('map', {i, v -> v == 1 ? len(remove(s:fl, 1, -1)) * 0 + 10 : v * 10}, [1, 2, 3, 4]))
+call S('map clears', FMEdit('map', {i, v -> v == 2 ? len(filter(s:fl, 0)) : v}, [1, 2, 3, 4]))
+call S('filter string removes', FMEdit('filter', 'v:val == 2 ? remove(s:fl, 0) * 0 + 1 : 1', [1, 2, 3, 4]))
+call S('map string removes', FMEdit('map', 'v:val == 2 ? remove(s:fl, -1) : v:val', [1, 2, 3, 4]))
+call S('filter locked inside', FMEdit('filter', {i, v -> islocked('s:fl')}, [1, 2]))
+unlet s:fl
+
+" --------------------------------------- 13. sort()/uniq() comparators
+call S('=== 13. sort/uniq comparators ===')
+func! SortTry(what, l, ...) abort
+  let s:sl = a:l
+  let v:errmsg = ''
+  try
+    let r = call(a:what, [s:sl] + a:000)
+    return 'ok ' . string(r) . ' ' . string(a:l) . ' errmsg=' . v:errmsg
+  catch
+    return 'threw ' . substitute(v:exception, '\v^Vim\(\a+\)?:?', '', '') . ' ' . string(a:l)
+  endtry
+endfunc
+let s:adds = 0
+func! CmpAdd(a, b) abort
+  let s:adds += 1
+  if s:adds <= 3 | call add(s:sl, 100 + s:adds) | endif
+  return a:a == a:b ? 0 : a:a > a:b ? 1 : -1
+endfunc
+func! CmpRemove(a, b) abort
+  if len(s:sl) > 0 | call remove(s:sl, 0) | endif
+  return a:a == a:b ? 0 : a:a > a:b ? 1 : -1
+endfunc
+func! CmpSeen(a, b) abort
+  call add(s:cmplens, len(s:sl))
+  return a:a == a:b ? 0 : a:a > a:b ? 1 : -1
+endfunc
+func! CmpThrow(a, b) abort
+  throw 'cmp threw'
+endfunc
+func! CmpString(a, b) abort
+  return 'x'
+endfunc
+func! CmpList(a, b) abort
+  return [1]
+endfunc
+func! CmpFloat(a, b) abort
+  return a:a > a:b ? 0.5 : -0.5
+endfunc
+func! CmpSelf(a, b) dict abort
+  let self.calls += 1
+  if self.mutate && self.calls <= 3 | call add(s:sl, 50 + self.calls) | endif
+  return a:a == a:b ? 0 : a:a > a:b ? self.dir : -self.dir
+endfunc
+let s:adds = 0
+call S('sort funcref adds', SortTry('sort', [3, 1, 2], function('CmpAdd')))
+call S('sort funcref removes', SortTry('sort', [3, 1, 2, 5, 4], function('CmpRemove')))
+let s:cmplens = []
+call S('sort sees the list', SortTry('sort', [3, 1, 2], function('CmpSeen')), string(uniq(sort(s:cmplens))))
+call S('sort lambda adds', SortTry('sort', [3, 1, 2], {a, b -> len(add(s:sl, 0)) * 0 + a - b}))
+call S('sort lambda call remove', SortTry('sort', [3, 1, 2], {a, b -> len(s:sl) ? remove(s:sl, 0) * 0 + a - b : a - b}))
+let cd = {'calls': 0, 'mutate': 0, 'dir': -1}
+call S('sort partial self', SortTry('sort', [3, 1, 2], function('CmpSelf', [], cd)), cd.calls > 0)
+let cd = {'calls': 0, 'mutate': 1, 'dir': 1}
+call S('sort partial self mutates', SortTry('sort', [3, 1, 2], function('CmpSelf', [], cd)), cd.calls > 0)
+let cd = {'calls': 0, 'mutate': 0, 'dir': 1}
+call S('sort dict arg', SortTry('sort', [3, 1, 2], 'CmpSelf', cd), cd.calls > 0)
+call S('sort throws', SortTry('sort', [3, 1, 2], function('CmpThrow')))
+call S('sort returns string', SortTry('sort', [3, 1, 2], function('CmpString')))
+call S('sort returns list', SortTry('sort', [3, 1, 2], function('CmpList')))
+call S('sort returns float', SortTry('sort', [3, 1, 2], function('CmpFloat')))
+call S('sort lambda returns string', SortTry('sort', [3, 1, 2], {a, b -> 'a'}))
+call S('sort missing func', SortTry('sort', [3, 1, 2], 'NoSuchCmp'))
+call S('sort bad number', SortTry('sort', [3, 1, 2], 2))
+let s:adds = 0
+call S('uniq funcref adds', SortTry('uniq', [1, 1, 2, 2], function('CmpAdd')))
+call S('uniq funcref removes', SortTry('uniq', [1, 1, 2, 2, 3], function('CmpRemove')))
+call S('uniq lambda removes', SortTry('uniq', [1, 1, 2, 2, 3], {a, b -> len(s:sl) > 2 ? remove(s:sl, -1) * 0 + a - b : a - b}))
+let cd = {'calls': 0, 'mutate': 1, 'dir': 1}
+call S('uniq partial self mutates', SortTry('uniq', [1, 1, 2, 2], function('CmpSelf', [], cd)), cd.calls > 0)
+call S('uniq throws', SortTry('uniq', [1, 1, 2], function('CmpThrow')))
+call S('uniq returns string', SortTry('uniq', [1, 1, 2], function('CmpString')))
+call S('uniq returns float', SortTry('uniq', [1, 1, 2], function('CmpFloat')))
+" the built-in orderings over mixed types
+let mixed = [10, '9', 2.5, 'b', 'A', 'a', -1, '10', 1.0, 'B', v:true, '', 0, '-3', [1], {'k': 1}, v:null]
+let flat = [10, '9', 2.5, 'b', 'A', 'a', -1, '10', 1.0, 'B', '', 0, '-3']
+for how in ['', 'N', 'n', 'f', 'l', 'i', 1, 0]
+  call S('sort how=' . string(how), SortTry('sort', copy(mixed), how))
+  call S('sort flat how=' . string(how), SortTry('sort', copy(flat), how))
+  call S('uniq how=' . string(how), SortTry('uniq', ['a', 'A', 'A', 1, '1', 1.0, 1, 'b', 'B', 2, 2.0, '2'], how))
+endfor
+call S('sort f on floats', SortTry('sort', [3.5, -1.25, 0.0, 2, 1.0e10, -1.0e-3], 'f'))
+call S('sort N on strings', SortTry('sort', ['10', '9', '0x1F', '-2', 'abc', '3e2'], 'N'))
+call S('sort n on strings', SortTry('sort', ['10', '9', '0x1F', '-2', 'abc', '3e2'], 'n'))
+call S('sort i stability', SortTry('sort', ['b', 'A', 'a', 'B', 'a', 'A'], 'i'))
+call S('sort 1 stability', SortTry('sort', ['b', 'A', 'a', 'B', 'a', 'A'], 1))
+let lk = [3, 1, 2]
+lockvar 1 lk
+call S('sort locked', SortTry('sort', lk))
+call S('uniq locked', SortTry('uniq', lk))
+unlockvar 1 lk
+
+" ------------------------------------------------------------ 14. partials
+call S('=== 14. partials ===')
+func! Str(x) abort
+  try
+    return string(a:x)
+  catch
+    return 'threw ' . substitute(v:exception, '\v^Vim\(\a+\)?:?', '', '')
+  endtry
+endfunc
+func! PF(...) dict abort
+  return [a:000, get(self, 'tag', '-')]
+endfunc
+func! PG(...) abort
+  return a:000
+endfunc
+let pd = {'tag': 'pd', 'F': function('PF')}
+let od = {'tag': 'od'}
+let P = function('PF', [1, 2], pd)
+call S('partial string', string(P))
+call S('partial name', string(get(P, 'name')), 'args', string(get(P, 'args')), 'dict', string(get(P, 'dict')))
+call S('partial func', string(get(P, 'func')))
+call S('partial call', string(P(3)))
+call S('auto-bound d.F', string(pd.F), string(pd.F(9)))
+let AB = pd.F
+call S('auto-bound held', string(AB), string(get(AB, 'dict')), string(AB(8)))
+let FD = function(pd.F)
+call S('function(d.F)', string(FD), string(FD(7)))
+let P2 = function(P)
+call S('function(P)', string(P2), P2 == P, P2 is P)
+let P3 = function(P, [3])
+call S('function(P, [3])', string(P3), string(P3(4)))
+let P4 = function(P, od)
+call S('function(P, {})', string(P4), string(P4(5)))
+let P5 = function(P, [6], od)
+call S('function(P, [6], od)', string(P5), string(P5()))
+let R = funcref('PF', [1], pd)
+call S('funcref', string(R), string(R(2)))
+let R2 = funcref(P)
+call S('funcref(P)', string(R2), string(R2()))
+call S('call(P, [x])', string(call(P, ['x'])))
+call S('call(P, [x], od)', string(call(P, ['x'], od)))
+call S('call(PG partial, [x], od)', string(call(function('PG', [0]), ['x'], od)))
+call S('== between partials', P == function('PF', [1, 2], pd), P == function('PF', [1, 2], od), P == function('PF', [1], pd))
+call S('is between partials', P is P, P is function('PF', [1, 2], pd), P is P2)
+call S('== partial vs funcref', P == function('PF'), function('PF') == function('PF'))
+call S('== with equal dicts', function('PF', [], {'tag': 1}) == function('PF', [], {'tag': 1}))
+let CP = copy(P)
+let DP = deepcopy(P)
+call S('copy partial', string(CP), CP == P, CP is P)
+call S('deepcopy partial', string(DP), DP == P, DP is P, get(DP, 'dict') is pd)
+let held = [P, {'p': P}]
+let hc = copy(held)
+let hd = deepcopy(held)
+call S('copy list of partials', hc[0] is P, hc[1] is held[1])
+call S('deepcopy list of partials', string(hd), hd[0] is P, hd[1].p is P, hd[1] is held[1], get(hd[0], 'dict') is pd)
+let dh = {'a': P, 'b': P}
+let dhc = deepcopy(dh)
+call S('deepcopy dict of partials', dhc.a is dhc.b, dhc.a == P)
+" a partial whose bound dict holds the partial
+let cy = {'tag': 'cy'}
+let cy.P = function('PF', [1], cy)
+call S('partial cycle string', Str(cy))
+call S('partial cycle call', string(cy.P(2)))
+call S('partial cycle get dict', get(cy.P, 'dict') is cy)
+call garbagecollect(1)
+call S('partial cycle after gc', Str(cy.P(3)), Str(cy))
+let Cyp = cy.P
+unlet cy
+call garbagecollect(1)
+call S('partial cycle held by partial', Str(Cyp(4)), Str(get(Cyp, 'dict')))
+let cyd = deepcopy(get(Cyp, 'dict'))
+call S('deepcopy of partial cycle', Str(cyd), get(cyd.P, 'dict') is cyd)
+unlet Cyp cyd
+call garbagecollect(1)
+call S('partial cycle collected')
+" a partial whose argv holds the partial's own dict and list
+let al = [1]
+let ad = {'tag': 'ad', 'l': al}
+let AP = function('PF', [al, ad], ad)
+call add(al, AP)
+call S('argv cycle string', Str(AP))
+call garbagecollect(1)
+call S('argv cycle after gc', Str(AP('z')))
+let APc = deepcopy(AP)
+call S('argv cycle deepcopy', Str(APc), get(APc, 'args')[0] is al)
+unlet al ad AP APc
+call garbagecollect(1)
+call S('argv cycle collected')
+" lambdas and partials of lambdas
+let g:Lm = {x -> [x, self]}
+call T('lambda in dict', 'call(g:Lm, [1], {"s": 1})')
+unlet g:Lm
+let LP = function({... -> a:000}, [1, 2])
+call S('partial of lambda', string(LP(3)), string(get(LP, 'args')))
+unlet P P2 P3 P4 P5 R R2 CP DP held hc hd dh dhc AB FD LP
+
+" ----------------------------------------------- 15. deepcopy with cycles
+call S('=== 15. deepcopy cycles ===')
+let ll = [1]
+call add(ll, ll)
+let llc = deepcopy(ll)
+call S('list in itself', llc[1] is llc, llc[1] isnot ll, ll[1] is ll, string(ll[0]))
+let dd = {'n': 1}
+let dd.me = dd
+let ddc = deepcopy(dd)
+call S('dict in itself', ddc.me is ddc, ddc.me isnot dd, dd.me is dd)
+let xl = [1]
+let xd = {'l': xl}
+call add(xl, xd)
+let xlc = deepcopy(xl)
+call S('list<->dict', xlc[1].l is xlc, xlc[1] isnot xd, xl[1] is xd, xd.l is xl)
+let xdc = deepcopy(xd)
+call S('dict<->list', xdc.l[1] is xdc, xdc.l isnot xl)
+let pdc = {'n': 1}
+let pdc.P = function('PF', [pdc], pdc)
+let pdcc = deepcopy(pdc)
+call S('through partial dict', get(pdcc.P, 'dict') is pdc, get(pdcc.P, 'args')[0] is pdc, Str(pdcc.P()))
+let pdcc.n = 2
+call S('original untouched', pdc.n, string(keys(pdc)))
+let deep = [[[1]]]
+call add(deep[0][0], deep)
+let deepc = deepcopy(deep)
+call S('deep cycle', deepc[0][0][1] is deepc, deep[0][0][1] is deep)
+let two = [1]
+let tw = [two, two, [two]]
+let twc = deepcopy(tw)
+call S('shared keeps sharing', twc[0] is twc[1], twc[2][0] is twc[0])
+let twn = deepcopy(tw, 1)
+call S('noref unshares', twn[0] is twn[1], twn[2][0] is twn[0], string(twn))
+let shd = {'x': two, 'y': two}
+let shdn = deepcopy(shd, 1)
+call S('noref dict unshares', shdn.x is shdn.y, string(shdn))
+let g:cl = ll
+let g:cd = dd
+call T('noref list cycle', 'deepcopy(g:cl, 1)')
+call T('noref dict cycle', 'deepcopy(g:cd, 1)')
+unlet g:cl g:cd
+call S('original intact', len(ll), ll[1] is ll, len(dd), dd.me is dd)
+unlet ll llc dd ddc xl xd xlc xdc pdc pdcc deep deepc two tw twc twn shd shdn
+call garbagecollect(1)
+call S('deepcopy cycles collected')
+
+" ----------------------------------------------- 16. self-extension
+call S('=== 16. self-extension ===')
+let l = [1, 2, 3]
+call extend(l, l, 1)
+call S('extend(l, l, 1)', string(l))
+let l = [1, 2, 3]
+call extend(l, l, -1)
+call S('extend(l, l, -1)', string(l))
+let g:el = [1, 2, 3]
+call T('extend(l, l, 9)', 'extend(g:el, g:el, 9)')
+unlet g:el
+let l = [1, 2, 3]
+let l += l
+call S('l += l', string(l))
+let l = [1, 2, 3]
+let l[0:1] += l[0:1]
+call S('l[0:1] += l[0:1]', string(l))
+let l = [[1], 2]
+call extend(l, l)
+call S('extend self shares items', l[0] is l[2], string(l))
+let l = []
+call extend(l, l)
+call S('extend empty self', string(l))
+let d = {'a': 1, 'b': 2}
+call extend(d, d, 'keep')
+call S('extend dict self keep', string(d))
+let g:ed = d
+call T('extend dict self error', 'extend(g:ed, g:ed, "error")')
+unlet g:ed
+let l = [1, 2]
+let m = extendnew(l, l)
+call S('extendnew self', string(m), string(l))
+
 call writefile(s:out, $DIFFOUT)
 qall!

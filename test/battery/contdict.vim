@@ -407,5 +407,215 @@ lua vim.g.luad = {x = 1, y = 2}
 call S('lua g var', string(sort(keys(g:luad))))
 unlet g:luad
 
+" ------------------------------------------------------- 11. dict watchers
+call S('=== 11. dict watchers ===')
+func! WTry(cmd) abort
+  try
+    execute a:cmd
+    call S('  ok', a:cmd)
+  catch
+    call S('  threw', substitute(v:exception, '\v^Vim\(\a+\)?:?', '', ''))
+  endtry
+endfunc
+let s:log = []
+func! WLog(name, d, k, ch) abort
+  let ch = map(copy(a:ch), 'type(v:val) == v:t_dict ? "<dict " . join(sort(keys(v:val)), ",") . ">" : v:val')
+  call add(s:log, a:name . ' ' . a:k . ' ' . string(ch) . ' ' . string(sort(keys(a:d))))
+endfunc
+func! WStar(d, k, ch) abort
+  call WLog('star', a:d, a:k, a:ch)
+endfunc
+func! WPrefix(d, k, ch) abort
+  call WLog('aprefix', a:d, a:k, a:ch)
+endfunc
+func! WExact(d, k, ch) abort
+  call WLog('exact', a:d, a:k, a:ch)
+endfunc
+func! WAfter(d, k, ch) abort
+  call WLog('after', a:d, a:k, a:ch)
+endfunc
+func! WLate(d, k, ch) abort
+  call WLog('late', a:d, a:k, a:ch)
+endfunc
+func! WBy(d, k, ch) abort
+  call WLog('bystander', a:d, a:k, a:ch)
+endfunc
+func! WRm(d, k, ch) abort
+  call WLog('rm', a:d, a:k, a:ch)
+endfunc
+func! WFlush(label) abort
+  call S(a:label, len(s:log))
+  for e in s:log
+    call S('  ' . e)
+  endfor
+  let s:log = []
+endfunc
+" plain recording, every pattern shape
+let wd = {}
+call dictwatcheradd(wd, '*', 'WStar')
+call dictwatcheradd(wd, 'a*', 'WPrefix')
+call dictwatcheradd(wd, 'abc', 'WExact')
+let wd.abc = 1
+let wd.abd = 2
+let wd.x = 3
+let wd.abc = 10
+let wd.ab = 4
+call remove(wd, 'abc')
+unlet wd.x
+call extend(wd, {'abc': 5, 'y': 6})
+call extend(wd, {'abc': 5}, 'force')
+call filter(wd, 'v:key !=# "y"')
+call map(wd, 'v:val + 1')
+let wd['a'] = [1]
+call add(wd.a, 2)
+call WFlush('patterns')
+call dictwatcherdel(wd, 'abc', 'WExact')
+let wd.abc = 0
+call WFlush('exact removed')
+call WTry('call dictwatcherdel(g:wd, "abc", "WExact")')
+call WTry('call dictwatcherdel(g:wd, "zz", "WStar")')
+call WTry('call dictwatcherdel(g:wd, "*", function("WLog", ["other"]))')
+call dictwatcheradd(wd, 'p', function('WLog', ['partial']))
+let wd.p = 1
+call WTry('call dictwatcherdel(g:wd, "p", function("WLog", ["partial"]))')
+let wd.p = 2
+call WFlush('missing removals')
+call dictwatcherdel(wd, '*', 'WStar')
+call dictwatcherdel(wd, 'a*', 'WPrefix')
+let wd.abc = 99
+call WFlush('all removed')
+
+" a callback that adds a key
+let wa = {}
+func! WAdd(d, k, ch) abort
+  call add(s:log, 'add ' . a:k . ' ' . string(a:ch))
+  if a:k !=# 'added'
+    let a:d.added = get(a:d, 'added', 0) + 1
+  endif
+endfunc
+call dictwatcheradd(wa, '*', 'WAdd')
+let wa.one = 1
+let wa.two = 2
+call WFlush('callback adds')
+call S('  dict', string(wa))
+call dictwatcherdel(wa, '*', 'WAdd')
+
+" a callback that removes the watched key
+let wr = {}
+func! WRemove(d, k, ch) abort
+  call add(s:log, 'rm ' . a:k . ' ' . string(a:ch))
+  if has_key(a:d, a:k) && a:k ==# 'gone'
+    call remove(a:d, a:k)
+  endif
+endfunc
+call dictwatcheradd(wr, 'gone', 'WRemove')
+let wr.gone = 1
+let wr.kept = 2
+call WFlush('callback removes watched key')
+call S('  dict', string(wr))
+let wr.gone = 2
+call WFlush('again')
+call S('  dict', string(wr))
+call dictwatcherdel(wr, 'gone', 'WRemove')
+
+" a callback that removes itself
+let ws = {}
+func! WSelf(d, k, ch) abort
+  call add(s:log, 'self ' . a:k . ' ' . string(a:ch))
+  call dictwatcherdel(a:d, '*', 'WSelf')
+endfunc
+call dictwatcheradd(ws, '*', 'WSelf')
+call dictwatcheradd(ws, '*', 'WAfter')
+let ws.a = 1
+let ws.b = 2
+call WFlush('callback removes itself')
+call WTry('call dictwatcherdel(g:ws, "*", "WSelf")')
+call dictwatcherdel(ws, '*', 'WAfter')
+call WFlush('self gone')
+
+" a callback that adds a second watcher
+let w2 = {}
+let s:added2 = 0
+func! WSecond(d, k, ch) abort
+  call add(s:log, 'second ' . a:k . ' ' . string(a:ch))
+  if !s:added2
+    let s:added2 = 1
+    call dictwatcheradd(a:d, '*', 'WLate')
+  endif
+endfunc
+call dictwatcheradd(w2, '*', 'WSecond')
+let w2.a = 1
+let w2.b = 2
+call WFlush('callback adds a watcher')
+call dictwatcherdel(w2, '*', 'WSecond')
+call dictwatcherdel(w2, '*', 'WLate')
+
+" a callback that changes the dict a second time (recursion)
+let wc = {}
+let s:depth = 0
+func! WRecurse(d, k, ch) abort
+  let s:depth += 1
+  call add(s:log, 'rec depth=' . s:depth . ' ' . a:k . ' ' . string(a:ch))
+  if s:depth < 4
+    let a:d[a:k] = get(a:d, a:k, 0) + 100
+  endif
+  let s:depth -= 1
+endfunc
+call dictwatcheradd(wc, '*', 'WRecurse')
+call dictwatcheradd(wc, '*', 'WBy')
+let wc.n = 1
+call WFlush('recursion')
+call S('  dict', string(wc))
+call dictwatcherdel(wc, '*', 'WRecurse')
+call dictwatcherdel(wc, '*', 'WBy')
+
+" a callback that throws, and a callback held by a lambda
+let wt = {}
+call dictwatcheradd(wt, '*', {d, k, ch -> execute('throw "watch threw"')})
+call WTry('let g:wt.a = 1')
+call S('  dict', string(wt))
+let wl = {}
+call dictwatcheradd(wl, 'k', {d, k, ch -> add(s:log, 'lambda ' . k . ' ' . string(ch))})
+let wl.k = 1
+let wl.j = 2
+unlet wl.k
+call WFlush('lambda watcher')
+
+" remove() and friends while a watcher is active
+let wm = {'a': 1, 'b': [2], 'c': {'d': 3}}
+call dictwatcheradd(wm, '*', 'WRm')
+call S('remove under watch', string(remove(wm, 'b')), string(remove(wm, 'c')))
+call WTry('call remove(g:wm, "nope")')
+call WFlush('removals logged')
+call S('  dict', string(wm))
+" a watched dict that is copied, deep copied, locked, and collected
+let wcp = copy(wm)
+let wdp = deepcopy(wm)
+let wcp.z = 1
+let wdp.z = 1
+call WFlush('copies are unwatched')
+lockvar 1 wm
+call WTry('let g:wm.q = 1')
+unlockvar 1 wm
+call WFlush('locked')
+let wm.self = wm
+call garbagecollect(1)
+let wm.after = 1
+call WFlush('watched cycle after gc')
+unlet wm.self
+call dictwatcherdel(wm, '*', 'WRm')
+" a watched dict dropped with its watcher still registered
+let wgone = {}
+call dictwatcheradd(wgone, '*', function('WLog', ['dropped']))
+let wgone.a = 1
+unlet wgone
+call garbagecollect(1)
+call WFlush('dropped with watcher')
+" argument errors
+call WTry('call dictwatcheradd([], "*", "WLog")')
+call WTry('call dictwatcheradd({}, "", "WLog")')
+call WTry('call dictwatcheradd({}, "*", 0)')
+call WTry('call dictwatcherdel({}, "*", "WLog")')
+
 call writefile(s:out, $DIFFOUT)
 qall!
