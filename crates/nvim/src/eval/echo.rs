@@ -1,33 +1,31 @@
 //! `:echo`, `:echohl`, `:execute` and where a variable was last set.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Suppress;
 use crate::semsg;
 use crate::types::CmdIdx;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::eval::encode::{tv2echo_bytes, tv2string_bytes};
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::CallStackAside;
-use crate::eval::vars::clear_local;
-use crate::eval::vars::set_var;
+use crate::eval::vars::{clear_local, set_var_named};
 use crate::eval::{Cursor, echo_hl_id, eval1, eval1_emsg};
-use crate::ex_docmd::{DoCmdOpts, do_cmdline};
+use crate::ex_docmd::{DoCmdOpts, do_cmdline_as};
 use crate::ex_eval::aborting;
 use crate::ex_eval::state::force_abort;
 use crate::getchar::state::got_int;
-use crate::highlight_group::{HLF_E, syn_name2id};
+use crate::highlight_group::syn_name2id;
 use crate::message::state::{
     called_emsg, did_emsg, line_msg, msg_didout, msg_ext_skip_verbose, need_clr_eos,
 };
 use crate::message::{
-    emsg_multiline, msg_bytes as msg_bytes_out, msg_clr_eos, msg_end, msg_ext_set_append,
-    msg_ext_set_kind, msg_multiline, msg_outnum, msg_ptr, msg_sb_eol, msg_start, msg_str,
-    msg_str_hl, verbose_enter, verbose_leave,
+    emsg_multiline_text, msg, msg_bytes as msg_bytes_out, msg_clr_eos, msg_end, msg_ext_set_append,
+    msg_ext_set_kind, msg_multiline, msg_outnum, msg_sb_eol, msg_start, msg_str, msg_str_hl,
+    verbose_enter, verbose_leave,
 };
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
@@ -95,9 +93,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
                 msg_str_hl(c" ", echo_hl_id.get(), false);
             }
             let text = String_0::from_bytes(&tv2echo_bytes(&rettv));
-            let (hl, clear) = (echo_hl_id.get(), &raw mut need_clear);
-            // SAFETY: `clear` names this frame's flag.
-            unsafe { msg_multiline(text, hl, true, false, clear) };
+            msg_multiline(text, echo_hl_id.get(), true, false, &mut need_clear);
         }
         clear_local(&mut rettv);
         cursor.skip_white();
@@ -174,27 +170,19 @@ pub fn ex_execute(excmd: &mut ExArg) {
 
     if ret.is_ok() && built {
         text.push(0);
-        let line = text.as_mut_ptr().cast::<c_char>();
         if excmd.cmdidx == CmdIdx::echomsg {
             msg_ext_set_kind(c"echomsg");
-            // SAFETY: `line` is the NUL-terminated message built above.
-            unsafe { msg_ptr(line, echo_hl_id.get()) };
+            msg(cstr::in_bytes(&text), echo_hl_id.get());
         } else if excmd.cmdidx == CmdIdx::echoerr {
             // `:echoerr` reports without counting as an error unless
             // something is already unwinding.
             let save_did_emsg = did_emsg.get();
-            // SAFETY: `line` is the NUL-terminated message built above, and
-            // the kind is a literal.
-            unsafe { emsg_multiline(line, Some(c"echoerr"), HLF_E, true) };
+            emsg_multiline_text(cstr::in_bytes(&text), c"echoerr");
             if !force_abort.get() {
                 did_emsg.set(save_did_emsg);
             }
         } else if excmd.cmdidx == CmdIdx::execute {
-            let (getline, cookie) = (excmd.ea_getline, excmd.cookie);
-            let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE;
-            // SAFETY: `line` is the NUL-terminated command built above, and
-            // the getline pair is the caller's own.
-            let _ = unsafe { do_cmdline(line, getline, cookie, opts) };
+            let _ = do_cmdline_as(excmd, &mut text, DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE);
         }
     }
     excmd.line.next = excmd.line.check_next(end);
@@ -202,41 +190,19 @@ pub fn ex_execute(excmd: &mut ExArg) {
 
 /// Which persistence a global variable's name asks for: `ALLCAPS` goes to
 /// the shada file, `MixedCase` to a session file, anything else nowhere.
-///
-/// # Safety
-/// `varname` must be NUL-terminated.
-pub unsafe fn var_flavour(varname: *mut c_char) -> VarFlavour {
-    // SAFETY: the caller's promise -- `varname` is NUL-terminated, so its
-    // first byte is readable.
-    let first = unsafe { *varname };
-    if !(first >= b'A' as c_char && first <= b'Z' as c_char) {
-        return VAR_FLAVOUR_DEFAULT;
-    }
-    let mut p = varname;
-    loop {
-        // SAFETY: the byte before this one was not the terminator, so this
-        // one is still inside the string.
-        p = unsafe { p.add(1) };
-        let c = unsafe { *p };
-        if c == 0 {
-            return VAR_FLAVOUR_SHADA;
-        }
-        if c >= b'a' as c_char && c <= b'z' as c_char {
-            return VAR_FLAVOUR_SESSION;
-        }
+pub fn var_flavour(name: &[u8]) -> VarFlavour {
+    match name.split_first() {
+        Some((b'A'..=b'Z', rest)) if rest.iter().any(u8::is_ascii_lowercase) => VAR_FLAVOUR_SESSION,
+        Some((b'A'..=b'Z', _)) => VAR_FLAVOUR_SHADA,
+        _ => VAR_FLAVOUR_DEFAULT,
     }
 }
 
 /// Set a global variable from outside any function, so that the current
-/// function's scope cannot capture it.
-///
-/// # Safety
-/// `name` must be NUL-terminated; `vartv`'s ownership moves here.
-pub unsafe fn var_set_global(name: *const c_char, mut vartv: TypVal) {
+/// function's scope cannot capture it. The value moves into the variable.
+pub fn var_set_global(name: &CStr, mut vartv: TypVal) {
     let call_stack_aside = CallStackAside::new();
-    // SAFETY: the caller's promise about `name`; `vartv` is this frame's
-    // copy, whose ownership moves into the variable.
-    unsafe { set_var(name, cstr::bytes_at(name).len(), &mut vartv, false) };
+    set_var_named(name, &mut vartv, false);
     drop(call_stack_aside);
 }
 

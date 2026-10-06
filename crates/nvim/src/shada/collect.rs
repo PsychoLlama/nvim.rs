@@ -263,8 +263,7 @@ pub(crate) unsafe fn var_shada_iter(
     // table, so a pointer would not survive a mutation of it.
     let wanted = |idx: usize| {
         let hi = unsafe { (*globvarht).slot(idx) };
-        hi.is_kept()
-            && unsafe { var_flavour((*hi.hi_key.item()).di_key.as_ptr().cast_mut()) } & flavour != 0
+        hi.is_kept() && var_flavour(unsafe { (*hi.hi_key.item()).di_key.bytes() }) & flavour != 0
     };
 
     unsafe { *name = core::ptr::null() };

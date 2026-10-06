@@ -11,6 +11,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::PartialRef;
 use crate::mbyte::strnicmp_in;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::semsg;
@@ -86,12 +87,13 @@ pub unsafe fn deref_func_name(
 }
 
 /// [`deref_func_name`] of the name `name` spells: the function's own name,
-/// copied (a call may delete the variable it was read from), the partial it
-/// came out of or null, and whether a variable was found at all.
+/// copied, a reference to the partial it came out of, and whether a variable
+/// was found at all. Both are the caller's own because a call may delete the
+/// variable they were read from.
 pub(crate) fn deref_func_name_owned(
     name: &[u8],
     no_autoload: bool,
-) -> (XString, *mut Partial, bool) {
+) -> (XString, Option<PartialRef>, bool) {
     let mut len = c_int::try_from(name.len()).unwrap_or(c_int::MAX);
     let mut partial = ptr::null_mut();
     let mut found = false;
@@ -109,7 +111,7 @@ pub(crate) fn deref_func_name_owned(
         let len = usize::try_from(len).unwrap_or(0);
         (
             XString::from_bytes(cstr::slice_at(resolved, len)),
-            partial,
+            PartialRef::retained(partial),
             found,
         )
     }

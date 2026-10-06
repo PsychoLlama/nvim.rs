@@ -537,8 +537,7 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
         let mut need_clear = false;
         msg_ext_set_kind(c"wmsg");
         let text = String_0::from_bytes(&msg);
-        let clear = &raw mut need_clear;
-        unsafe { msg_multiline(text, 0, false, false, clear) };
+        msg_multiline(text, 0, false, false, &mut need_clear);
     }
 
     drop(no_prompt);
@@ -892,8 +891,7 @@ pub unsafe fn recover_names(
                     unsafe { swapfile_info(name, &mut msg_buf) };
                     let mut need_clear = false;
                     let text = String_0::from_bytes(&msg_buf);
-                    let clear = &raw mut need_clear;
-                    unsafe { msg_multiline(text, 0, false, false, clear) };
+                    msg_multiline(text, 0, false, false, &mut need_clear);
                 }
             }
             ui_flush();

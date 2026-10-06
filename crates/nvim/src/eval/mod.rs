@@ -62,6 +62,8 @@ mod pattern;
 pub use self::pattern::*;
 mod expr;
 pub(crate) use self::expr::*;
+pub(crate) use self::typval::{partial_name, partial_unref};
+pub(crate) use self::vars::{get_v_event, restore_v_event};
 // `eval0` is reached from `crates/nvim/tests/unit`, which links the library
 // from outside; the rest of `expr` stays in-crate.
 pub use self::expr::eval0;

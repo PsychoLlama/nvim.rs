@@ -16,7 +16,95 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::CallFrame;
+use crate::eval::typval::{DictRef, PartialRef};
 use crate::types::Failed;
+
+/// What a call is made with besides its name and its arguments, as borrows
+/// the caller holds for the length of the call: the safe face of
+/// [`FuncExe`], whose raw pointers are taken from these and live no longer.
+pub(crate) struct CallWith<'a> {
+    /// The range a function with the `range` attribute is handed.
+    pub(crate) firstline: LineNr,
+    pub(crate) lastline: LineNr,
+    /// False to parse the arguments without making the call.
+    pub(crate) evaluate: bool,
+    /// The partial the callee came out of: bound arguments, a bound `self`.
+    pub(crate) partial: Option<&'a PartialRef>,
+    /// The dictionary a `dict.Func()` call is a method of.
+    pub(crate) selfdict: Option<&'a DictRef>,
+    /// The `expr` of `expr->method()`, passed as the first argument.
+    pub(crate) basetv: Option<&'a mut TypVal>,
+    /// Told whether the function handled the range itself (`:call`).
+    pub(crate) doesrange: Option<&'a mut bool>,
+    /// The name was found as a variable: a missing function is not then
+    /// autoloaded.
+    pub(crate) found_var: bool,
+}
+
+impl<'a> CallWith<'a> {
+    /// A call with nothing bound and no range.
+    pub(crate) fn new(evaluate: bool) -> Self {
+        CallWith {
+            firstline: 0,
+            lastline: 0,
+            evaluate,
+            partial: None,
+            selfdict: None,
+            basetv: None,
+            doesrange: None,
+            found_var: false,
+        }
+    }
+
+    /// A call with nothing bound, over the cursor line.
+    pub(crate) fn at_cursor(evaluate: bool) -> Self {
+        let lnum = Win::current().w_cursor.lnum;
+        CallWith {
+            firstline: lnum,
+            lastline: lnum,
+            ..CallWith::new(evaluate)
+        }
+    }
+
+    /// The `FuncExe` these borrows describe. Its pointers are only good for
+    /// as long as `self` is borrowed.
+    fn funcexe(&mut self) -> FuncExe {
+        FuncExe {
+            fe_firstline: self.firstline,
+            fe_lastline: self.lastline,
+            fe_evaluate: self.evaluate,
+            fe_partial: self.partial.map_or(ptr::null_mut(), PartialRef::as_ptr),
+            fe_selfdict: self.selfdict.map_or(ptr::null_mut(), DictRef::as_ptr),
+            fe_basetv: self
+                .basetv
+                .as_deref_mut()
+                .map_or(ptr::null_mut(), ptr::from_mut),
+            fe_doesrange: self
+                .doesrange
+                .as_deref_mut()
+                .map_or(ptr::null_mut(), ptr::from_mut),
+            fe_found_var: self.found_var,
+            ..FUNCEXE_INIT
+        }
+    }
+}
+
+/// [`call_func`] of the function `name` names -- its first `len` bytes when
+/// that is given -- with `args`.
+pub(crate) fn call_func_with(
+    name: &CStr,
+    len: Option<usize>,
+    result: &mut TypVal,
+    args: &[TypVal],
+    mut with: CallWith<'_>,
+) -> Result<(), Failed> {
+    let len = len.map_or(-1, |len| c_int::try_from(len).unwrap_or(c_int::MAX));
+    let mut funcexe = with.funcexe();
+    // SAFETY: `name` is terminated, and holds `len` bytes when that is
+    // given; every pointer in `funcexe` is taken from a borrow `with` holds
+    // across the call.
+    unsafe { call_func(name.as_ptr(), len, result, args, &raw mut funcexe) }
+}
 
 /// Evaluate a call written as an expression: read `(a, b)` at the cursor,
 /// then make the call.
@@ -29,14 +117,13 @@ pub(crate) fn get_func_tv(
     len: Option<usize>,
     result: &mut TypVal,
     cursor: &mut Cursor<'_>,
-    evaluate: bool,
-    funcexe: &mut FuncExe,
+    with: CallWith<'_>,
 ) -> Result<(), Failed> {
     let mut argvars = Argv::new();
     let mut argcount = 0;
+    let evaluate = with.evaluate;
 
-    // SAFETY: `funcexe` describes the call, so its partial is null or live.
-    let bound = unsafe { funcexe.fe_partial.as_ref() }.map_or(0, |partial| partial.pt_argc);
+    let bound = with.partial.map_or(0, |partial| partial.pt_argc);
     let mut ret = get_func_arguments(cursor, evaluate, bound, argvars.room(), &mut argcount);
     // A failed argument leaves whatever it half-built in the slot it was
     // being evaluated into, which upstream leaks and the frame releases.
@@ -46,15 +133,11 @@ pub(crate) fn get_func_tv(
         (argcount + 1).min(MAX_FUNC_ARGS as usize + 1)
     });
 
-    let name_ptr = name.as_ptr();
     if ret.is_ok() {
         // Prepare for calling `test_garbagecollect_now()`, which needs to
         // know which variables are used on the call stack.
         let pushed = push_func_args(&argvars.args()[..argcount]);
-        let len = len.map_or(-1, |len| c_int::try_from(len).unwrap_or(c_int::MAX));
-        // SAFETY: `name` is terminated, and holds `len` bytes when that is
-        // given; `funcexe` is the caller's.
-        ret = unsafe { call_func(name_ptr, len, result, &argvars.args()[..argcount], funcexe) };
+        ret = call_func_with(name, len, result, &argvars.args()[..argcount], with);
         // The nested calls pushed and popped their own; ours are the last.
         pop_func_args(pushed);
     } else if !aborting() && evaluate {
@@ -64,7 +147,7 @@ pub(crate) fn get_func_tv(
             c"E116: Invalid arguments for function %s"
         };
         // SAFETY: a format with one `%s`, and a terminated name.
-        unsafe { emsg_funcname(message.as_ptr(), name_ptr) };
+        unsafe { emsg_funcname(message.as_ptr(), name.as_ptr()) };
     }
 
     cursor.skip_white();

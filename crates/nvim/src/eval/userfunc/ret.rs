@@ -22,6 +22,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::{DictRef, PartialRef};
 use crate::os::cshim::gettext_ptr;
 use crate::types::{Failed, IOSIZE, Pend};
 
@@ -90,10 +91,20 @@ unsafe fn ex_call_inner(
     name: *mut c_char,
     arg: *mut *mut c_char,
     startarg: *mut c_char,
-    funcexe_init: *const FuncExe,
+    partial: *mut Partial,
+    selfdict: *mut Dict,
+    found_var: bool,
 ) -> bool {
-    // SAFETY: the caller's promise -- `name` is the terminated name.
-    let callee = unsafe { CStr::from_ptr(name) };
+    // SAFETY: the caller's promise -- `name` is the terminated name, and
+    // `partial` and `selfdict` are null or live; the handles hold their own
+    // references across the calls.
+    let (callee, partial, selfdict) = unsafe {
+        (
+            CStr::from_ptr(name),
+            PartialRef::retained(partial),
+            DictRef::retained(selfdict),
+        )
+    };
     let mut doesrange = false;
     let mut failed = false;
     let mut lnum = excmd.line1;
@@ -111,12 +122,19 @@ unsafe fn ex_call_inner(
         }
         unsafe { *arg = startarg };
 
-        let mut funcexe = unsafe { *funcexe_init };
-        funcexe.fe_doesrange = &raw mut doesrange;
+        let with = CallWith {
+            firstline: excmd.line1,
+            lastline: excmd.line2,
+            partial: partial.as_ref(),
+            selfdict: selfdict.as_ref(),
+            doesrange: Some(&mut doesrange),
+            found_var,
+            ..CallWith::new(true)
+        };
         let mut rettv = TV_INITIAL_VALUE;
         // The call, then any trailing subscript: `:call f()[1]()`.
         let call = |cursor: &mut Cursor<'_>| {
-            get_func_tv(callee, None, &mut rettv, cursor, true, &mut funcexe)?;
+            get_func_tv(callee, None, &mut rettv, cursor, with)?;
             handle_subscript(cursor, &mut rettv, true, true)
         };
         // SAFETY: the caller's promise -- `arg` walks the `:call` command
@@ -377,15 +395,8 @@ pub fn ex_call(excmd: &mut ExArg) {
             arg = startarg;
             unsafe { ex_defer_inner(name, &raw mut arg, partial).is_err() }
         } else {
-            let mut funcexe = FUNCEXE_INIT;
-            funcexe.fe_partial = partial;
-            funcexe.fe_selfdict = fudi.fd_dict;
-            funcexe.fe_firstline = excmd.line1;
-            funcexe.fe_lastline = excmd.line2;
-            funcexe.fe_found_var = found_var;
-            funcexe.fe_evaluate = true;
-            let (argp, exe) = (&raw mut arg, &raw mut funcexe);
-            unsafe { ex_call_inner(excmd, name, argp, startarg, exe) }
+            let (argp, selfdict) = (&raw mut arg, fudi.fd_dict);
+            unsafe { ex_call_inner(excmd, name, argp, startarg, partial, selfdict, found_var) }
         };
 
         // When inside a `:try` the trailing text is still checked, so

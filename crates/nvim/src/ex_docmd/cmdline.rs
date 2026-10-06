@@ -819,6 +819,27 @@ impl Run {
     }
 }
 
+/// [`do_cmdline`] of `line`, which must end in a NUL, reading any further
+/// lines from wherever the running command `excmd` reads its own -- which is
+/// how `:execute` runs what it built.
+pub(crate) fn do_cmdline_as(
+    excmd: &crate::types::ExArg,
+    line: &mut [u8],
+    flags: DoCmdOpts,
+) -> Result<(), Failed> {
+    assert_eq!(line.last(), Some(&0), "a command line is NUL-terminated");
+    // SAFETY: `line` is terminated and this call's to lend; a running
+    // command's line getter and its cookie are a live pair.
+    unsafe {
+        do_cmdline(
+            line.as_mut_ptr().cast(),
+            excmd.ea_getline,
+            excmd.cookie,
+            flags,
+        )
+    }
+}
+
 /// Run Ex commands, from `cmdline` and then from `fgetline`.
 ///
 /// May be called recursively. Answers `Err` when the line could not be run.

@@ -781,17 +781,10 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
 /// Record the "before" value the prompt banner prints, freeing whatever an
 /// earlier change left. A null typval renders as the empty value.
 fn set_oldval(tv: Option<&mut TypVal>) {
-    // SAFETY: the caller's typval, and `typval_tostring` always answers an
-    // allocation of its own.
-    debug_oldval.set(Some(unsafe {
-        XString::from_raw(typval_tostring(tv.map(|tv| &*tv), true))
-    }));
+    debug_oldval.set(Some(typval_tostring(tv.map(|tv| &*tv), true)));
 }
 
 /// [`set_oldval`] for the "after" value.
 fn set_newval(tv: Option<&mut TypVal>) {
-    // SAFETY: as `set_oldval`.
-    debug_newval.set(Some(unsafe {
-        XString::from_raw(typval_tostring(tv.map(|tv| &*tv), true))
-    }));
+    debug_newval.set(Some(typval_tostring(tv.map(|tv| &*tv), true)));
 }

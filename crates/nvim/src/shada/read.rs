@@ -417,7 +417,11 @@ impl Reading {
 fn apply_variable(mut entry: ShadaEntry) {
     let var = entry.data.variable_mut();
     // The value moves into the variable; the name stays the entry's.
-    unsafe { var_set_global(var.name, var.value.take()) };
+    // SAFETY: the entry's NUL-terminated name.
+    var_set_global(
+        unsafe { ::core::ffi::CStr::from_ptr(var.name) },
+        var.value.take(),
+    );
     unsafe { shada_free_shada_entry(&raw mut entry) };
 }
 

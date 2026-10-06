@@ -177,7 +177,7 @@ unsafe extern "C" fn out_data_event(argv: *mut *mut c_void) {
             hl,
             false,
             false,
-            &raw mut need_clear,
+            &mut need_clear,
         );
         xfree(text.cast());
         ui_flush();

@@ -46,9 +46,10 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
     ]);
     let mut rettv = TV_INITIAL_VALUE;
 
-    // SAFETY: `func` is the name the statusline parser recorded, the four
-    // arguments are live for the call, and `rettv` is a live typval.
-    let _ = unsafe { call_vim_function(def.func, argv.args(), &mut rettv) };
+    // SAFETY: `func` is the NUL-terminated name the statusline parser
+    // recorded.
+    let func = unsafe { CStr::from_ptr(def.func) };
+    let _ = call_vim_function(func, argv.args(), &mut rettv);
     tv_clear(&mut rettv);
 
     // Make sure next click does not register as drag when callback absorbs

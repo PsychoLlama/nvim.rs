@@ -2,9 +2,9 @@
 //!
 //! The refcount *is* the ownership, as it is for [`ListRef`] and
 //! [`BlobRef`](super::BlobRef): [`PartialRef`] retains on `Clone`, releases
-//! on `Drop`, and the last one frees through
-//! [`partial_unref`](crate::eval::partial_unref) -- which is where the
-//! teardown of `pt_argv`, `pt_dict` and `pt_func` lives, and stays.
+//! on `Drop`, and the last one frees through [`partial_unref`] -- the
+//! teardown of `pt_argv`, `pt_dict` and `pt_func`, which lives here with
+//! the rest of the handle.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -17,7 +17,9 @@
 )]
 
 use super::*;
-use crate::eval::partial_name;
+use crate::eval::userfunc::{func_ptr_unref, func_unref};
+use crate::winlayer::Live;
+use ::core::ffi::{c_char, c_void};
 use ::core::ptr::NonNull;
 
 /// One reference to a [`Partial`], given back when the handle goes.
@@ -62,6 +64,17 @@ impl PartialRef {
     #[inline(always)]
     pub fn as_ptr(&self) -> *mut Partial {
         self.0.as_ptr()
+    }
+}
+
+impl ::core::ops::Deref for PartialRef {
+    type Target = Partial;
+
+    /// The partial, read: its bound arguments, dictionary and function.
+    #[inline(always)]
+    fn deref(&self) -> &Partial {
+        // SAFETY: the handle holds a reference, so the partial is live.
+        unsafe { self.0.as_ref() }
     }
 }
 
@@ -170,5 +183,64 @@ impl TypVal {
         };
         // SAFETY: as above.
         (unsafe { pt.pt_dict.as_ref() }, args)
+    }
+}
+
+/// The function name a partial stands for: its own, its `UserFunc`'s, or the
+/// empty string.
+///
+/// # Safety
+/// `pt` must be null or valid.
+pub(crate) unsafe fn partial_name(pt: *mut Partial) -> *mut c_char {
+    if !pt.is_null() {
+        // SAFETY: the caller's promise, and `pt` is not null.
+        let pt = unsafe { Live::new(pt) };
+        if !pt.pt_name.is_null() {
+            return pt.pt_name;
+        }
+        let func = pt.pt_func;
+        if !func.is_null() {
+            // SAFETY: `pt_func` is a live `UserFunc` whose name is inline.
+            return unsafe { &raw mut (*func).uf_name }.cast::<c_char>();
+        }
+    }
+    c"".as_ptr().cast_mut()
+}
+
+/// Release a partial and everything it bound.
+///
+/// # Safety
+/// `pt` must be valid and unreferenced.
+unsafe fn partial_free(pt: *mut Partial) {
+    // SAFETY: the caller's promise -- `pt` is a live, unreferenced partial.
+    let live = unsafe { Live::new(pt) };
+    if let Ok(argc @ 1..) = usize::try_from(live.pt_argc) {
+        // SAFETY: `pt_argv` holds `pt_argc` typvals this partial owns.
+        for tv in unsafe { ::core::slice::from_raw_parts_mut(live.pt_argv, argc) } {
+            tv_clear(tv);
+        }
+    }
+    unsafe { xfree(live.pt_argv.cast::<c_void>()) };
+    unsafe { tv_dict_unref(live.pt_dict) };
+    if !live.pt_name.is_null() {
+        unsafe { func_unref(live.pt_name) };
+        unsafe { xfree(live.pt_name.cast::<c_void>()) };
+    } else {
+        unsafe { func_ptr_unref(live.pt_func) };
+    }
+    unsafe { xfree(pt.cast::<c_void>()) };
+}
+
+/// Drop one reference to a partial, freeing it at zero.
+///
+/// # Safety
+/// `pt` must be null or valid.
+pub(crate) unsafe fn partial_unref(pt: *mut Partial) {
+    if pt.is_null() {
+        return;
+    }
+    // SAFETY: the caller's promise, and `pt` is not null.
+    if unsafe { (*pt).pt_refcount.release() } <= 0 {
+        unsafe { partial_free(pt) };
     }
 }

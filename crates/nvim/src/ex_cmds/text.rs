@@ -222,15 +222,8 @@ fn describe_char(
 /// started.
 unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool) {
     // SAFETY: caller's contract.
-    unsafe {
-        msg_multiline(
-            cstr_to_string(line.as_mut_ptr()),
-            0,
-            true,
-            false,
-            need_clear,
-        )
-    };
+    let text = unsafe { cstr_to_string(line.as_mut_ptr()) };
+    msg_multiline(text, 0, true, false, need_clear);
 }
 
 /// `:left`, `:center` and `:right` -- re-indent every line of the range.

@@ -10,10 +10,7 @@ use crate::eval::userfunc::{call_func, func_ref, func_unref, get_funccal_local_h
 use crate::eval::vars::{
     get_globvar_dict, valid_varname, var_check_fixed, var_check_ro, var_wrong_func_name,
 };
-use crate::eval::{
-    callback_call, callback_from_typval, func_equal, partial_name, partial_unref, var_item_copy,
-    var2fpos,
-};
+use crate::eval::{callback_call, callback_from_typval, func_equal, var_item_copy, var2fpos};
 use crate::getchar::state::got_int;
 use crate::global_cell::{ConstTable, GlobalCell};
 use crate::hashtab::{

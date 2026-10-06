@@ -321,15 +321,12 @@ pub(crate) unsafe fn msg_ptr(s: *const c_char, hl_id: c_int) -> bool {
 /// bell rings instead of being drawn.
 ///
 /// `need_clear` is cleared once the rest of the line has been cleared.
-///
-/// # Safety
-/// `str` must describe a readable range, and `need_clear` a writable `bool`.
-pub unsafe fn msg_multiline(
+pub fn msg_multiline(
     str: String_0,
     hl_id: c_int,
     check_int: bool,
     hist: bool,
-    need_clear: *mut bool,
+    need_clear: &mut bool,
 ) {
     let bytes = str.as_bytes();
     let mut chunk = 0;
@@ -340,11 +337,9 @@ pub unsafe fn msg_multiline(
         }
         if matches!(bytes[at], b'\n' | b'\t' | b'\r' | 0x07) {
             msg_display_part(&bytes[chunk..at], hl_id, hist);
-            // SAFETY: the caller's contract -- `need_clear` is writable.
-            if c_int::from(bytes[at]) != TAB && unsafe { *need_clear } {
+            if c_int::from(bytes[at]) != TAB && *need_clear {
                 msg_clr_eos();
-                // SAFETY: as above.
-                unsafe { *need_clear = false };
+                *need_clear = false;
             }
             if c_int::from(bytes[at]) == BELL {
                 vim_beep(kOptBoFlagShell as c_uint);
@@ -434,7 +429,7 @@ pub unsafe fn msg_multihl(
         if err {
             unsafe { emsg_multiline(chunk.text.data(), kind, chunk.hl_id, true) };
         } else {
-            unsafe { msg_multiline(chunk.text, chunk.hl_id, true, false, &raw mut need_clear) };
+            msg_multiline(chunk.text, chunk.hl_id, true, false, &mut need_clear);
         }
         debug_assert!(
             !ui_has(kUIMessages)
@@ -516,7 +511,13 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
 
     let mut need_clear = true;
     if multiline {
-        unsafe { msg_multiline(cstr_to_string(s), hl_id, false, false, &raw mut need_clear) };
+        msg_multiline(
+            unsafe { cstr_to_string(s) },
+            hl_id,
+            false,
+            false,
+            &mut need_clear,
+        );
     } else {
         msg_display(unsafe { cstr::at(s) }, hl_id, false);
     }

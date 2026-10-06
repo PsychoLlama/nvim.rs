@@ -252,13 +252,12 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
         // {skip} is evaluated with the cursor on the match.
         let save_pos = Win::current().w_cursor;
         Win::current().w_cursor = pos;
-        let mut err = false;
-        let do_skip = unsafe { eval_expr_to_bool(&args[4], &raw mut err) };
+        let answer = eval_expr_to_bool(&args[4]);
         Win::current().w_cursor = save_pos;
-        if err {
+        let Ok(do_skip) = answer else {
             subpatnum = FAIL;
             break;
-        }
+        };
         if !do_skip {
             break;
         }
@@ -573,15 +572,14 @@ pub unsafe fn do_searchpair(
         if use_skip {
             let save_pos = Win::current().w_cursor;
             Win::current().w_cursor = pos;
-            let mut err = false;
             let expr = skip.expect("`use_skip` means there is one");
-            let skipped = unsafe { eval_expr_to_bool(expr, &raw mut err) };
+            let answer = eval_expr_to_bool(expr);
             Win::current().w_cursor = save_pos;
-            if err {
+            let Ok(skipped) = answer else {
                 Win::current().w_cursor = save_cursor;
                 retval = -1;
                 break;
-            }
+            };
             if skipped {
                 continue;
             }

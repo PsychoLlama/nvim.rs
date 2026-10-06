@@ -554,8 +554,7 @@ fn store_session_globals(out: SessionFile) -> bool {
     for item in globals.items_mut() {
         let key = item.di_key.as_ptr();
         let kind = item.di_tv.v_type();
-        // SAFETY: the key is the item's own, NUL-terminated.
-        let sessionable = unsafe { var_flavour(key.cast_mut()) } == VAR_FLAVOUR_SESSION;
+        let sessionable = var_flavour(item.di_key.bytes()) == VAR_FLAVOUR_SESSION;
         if (kind == VAR_NUMBER || kind == VAR_STRING) && sessionable {
             // SAFETY: the session file, and the item's own key and value.
             if !unsafe { put_session_global(out, key, kind, &mut item.di_tv) } {

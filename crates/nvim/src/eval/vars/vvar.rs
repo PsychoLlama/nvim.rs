@@ -26,7 +26,8 @@ use core::ptr;
 use super::*;
 use crate::eval::typval::DictEntry;
 use crate::eval::typval::NumBuf;
-use crate::types::NUL;
+use crate::eval::typval::tv_dict_free_contents;
+use crate::types::{HashTab, NUL, SaveVEvent};
 
 /// Row `i` of the `v:` table, for the walks that visit every one.
 ///
@@ -710,4 +711,45 @@ pub fn vim_var_bytes(idx: Vv) -> Vec<u8> {
     unsafe { cstr::at(get_vim_var_str(idx)) }
         .to_bytes()
         .to_vec()
+}
+
+/// Reserve `v:event` for the duration of one autocommand, saving whatever
+/// a surrounding one had put there.
+///
+/// # Safety
+/// `sve` must be valid.
+pub(crate) unsafe fn get_v_event(sve: *mut SaveVEvent) -> *mut Dict {
+    let v_event = get_vim_var_dict(Vv::Event);
+    // SAFETY: the caller's promise about `sve`, and `v_event` as above.
+    let (saved, live) = unsafe { (&mut (*sve).sve_hashtab, &mut (*v_event).dv_hashtab) };
+    let did_save = live.ht_used > 0 as size_t;
+    // SAFETY: the caller's promise about `sve`.
+    unsafe { (*sve).sve_did_save = did_save };
+    if did_save {
+        // A plain move: the table owns its slots, so what the surrounding
+        // autocommand put in `v:event` travels to `sve` intact and
+        // `v:event` starts the inner one empty. `restore_v_event` moves it
+        // back.
+        *saved = core::mem::replace(live, HashTab::init());
+    }
+    v_event
+}
+
+/// Put back what `get_v_event` saved.
+///
+/// # Safety
+/// `v_event` and `sve` must be a pair `get_v_event` produced.
+pub(crate) unsafe fn restore_v_event(v_event: *mut Dict, sve: *mut SaveVEvent) {
+    // SAFETY: the caller's promise -- the pair `get_v_event` produced.
+    unsafe { tv_dict_free_contents(v_event) };
+    // `tv_dict_free_contents` already left `v:event` with a fresh empty
+    // table, so the not-saved case has nothing left to do.
+    // SAFETY: as above.
+    if unsafe { (*sve).sve_did_save } {
+        // SAFETY: as above.
+        let (saved, live) = unsafe { (&mut (*sve).sve_hashtab, &mut (*v_event).dv_hashtab) };
+        // The move back. `sve` is left with a table that owns nothing,
+        // which is what its `Default` is.
+        *live = core::mem::take(saved);
+    }
 }

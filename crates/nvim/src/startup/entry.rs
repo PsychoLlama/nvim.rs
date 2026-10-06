@@ -233,7 +233,11 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     event_init();
     unsafe { early_init(&raw mut params) };
-    unsafe { set_argv_var(argv, argc) };
+    // SAFETY: the process's `argc` NUL-terminated arguments.
+    let args: Vec<&::core::ffi::CStr> = (0..argc)
+        .map(|i| unsafe { ::core::ffi::CStr::from_ptr(*argv.offset(i as isize)) })
+        .collect();
+    set_argv_var(&args);
     check_and_set_isatty(&raw mut params);
     unsafe { command_line_scan(&raw mut params) };
     set_argf_var();

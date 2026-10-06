@@ -7,46 +7,29 @@
 //! delete the Funcref it is being reached through while its own arguments
 //! are still being evaluated.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::eval::Parsed;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::winlayer::{Live, Win};
-use core::ffi::{CStr, c_char, c_void};
-use core::ptr::null_mut;
+use core::ffi::CStr;
 
-use crate::eval::typval::{tv_clear, tv_dict_unref, tv_empty_string};
-use crate::eval::userfunc::{
-    deref_func_name_owned, func_ptr_unref, func_unref, get_func_tv, get_lambda_tv,
-};
+use crate::eval::typval::{DictRef, tv_clear, tv_empty_string};
+use crate::eval::userfunc::{CallWith, deref_func_name_owned, get_func_tv, get_lambda_tv};
 use crate::eval::vars::{check_vars_named, lua_partial};
 use crate::eval::{
-    Cursor, FUNCEXE_INIT, e_cannot_use_partial_here, e_empty_function_name, e_nowhitespace, eval7,
-    get_name_len, is_luafunc, luafunc_name_end,
+    Cursor, e_cannot_use_partial_here, e_empty_function_name, e_nowhitespace, eval7, get_name_len,
+    is_luafunc, luafunc_name_end,
 };
 use crate::ex_eval::aborting;
-use crate::memory::xfree;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::{
-    Dict, Failed, FuncExe, Partial, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN,
-};
+use crate::types::{Failed, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN};
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
-
-/// A call's `FuncExe`, with the cursor line as its range.
-fn funcexe_at_cursor(evaluate: bool) -> FuncExe {
-    let mut funcexe: FuncExe = FUNCEXE_INIT;
-    funcexe.fe_firstline = Win::current().w_cursor.lnum;
-    funcexe.fe_lastline = Win::current().w_cursor.lnum;
-    funcexe.fe_evaluate = evaluate;
-    funcexe
-}
 
 /// Call a function by name, having parsed the name but not the arguments,
 /// which the cursor is on.
@@ -64,19 +47,14 @@ pub(crate) fn eval_func(
     // name was read out of.
     let (resolved, partial, found_var) = deref_func_name_owned(name, !evaluate);
 
-    let mut funcexe = funcexe_at_cursor(evaluate);
-    funcexe.fe_partial = partial;
-    funcexe.fe_basetv = basetv.map_or(null_mut(), ::core::ptr::from_mut);
-    funcexe.fe_found_var = found_var;
-    let mut ret = get_func_tv(
-        resolved.as_cstr(),
-        None,
-        result,
-        cursor,
-        evaluate,
-        &mut funcexe,
-    );
-    drop(resolved);
+    let with = CallWith {
+        partial: partial.as_ref(),
+        basetv,
+        found_var,
+        ..CallWith::at_cursor(evaluate)
+    };
+    let mut ret = get_func_tv(resolved.as_cstr(), None, result, cursor, with);
+    drop((resolved, partial));
 
     // While skipping, a name that was never resolved still has to look
     // like a Funcref so the subscript handling can go on.
@@ -102,11 +80,10 @@ pub(crate) fn call_func_rettv(
     cursor: &mut Cursor<'_>,
     result: &mut TypVal,
     evaluate: bool,
-    selfdict: *mut Dict,
+    selfdict: Option<&DictRef>,
     basetv: Option<&mut TypVal>,
     lua_name: Option<usize>,
 ) -> Result<(), Failed> {
-    let mut pt: *mut Partial = null_mut();
     // The callee moves out of `result` so the call can fill it. It is
     // cleared at the end rather than here: the arguments are evaluated
     // in between and may delete the Funcref they name.
@@ -120,8 +97,7 @@ pub(crate) fn call_func_rettv(
     if evaluate {
         functv = result.take();
         if functv.v_type() == VAR_PARTIAL {
-            pt = functv.partial_or_null();
-            if is_luafunc(pt) {
+            if is_luafunc(functv.partial_or_null()) {
                 let start = lua_name.unwrap_or(cursor.offset());
                 lua_text = Some(XString::from_bytes(&cursor.text()[start..]));
                 name_len = Some(cursor.offset() - start);
@@ -151,11 +127,17 @@ pub(crate) fn call_func_rettv(
         funcname = c"";
     }
 
-    let mut funcexe = funcexe_at_cursor(evaluate);
-    funcexe.fe_partial = pt;
-    funcexe.fe_selfdict = selfdict;
-    funcexe.fe_basetv = basetv.map_or(null_mut(), ::core::ptr::from_mut);
-    let ret = get_func_tv(funcname, name_len, result, cursor, evaluate, &mut funcexe);
+    let partial = match &functv {
+        TypVal::Partial(partial) => partial.as_ref(),
+        _ => None,
+    };
+    let with = CallWith {
+        partial,
+        selfdict,
+        basetv,
+        ..CallWith::at_cursor(evaluate)
+    };
+    let ret = get_func_tv(funcname, name_len, result, cursor, with);
 
     if evaluate {
         tv_clear(&mut functv);
@@ -192,7 +174,7 @@ pub(crate) fn eval_lambda(
         tv_clear(result);
         Err(Failed)
     } else {
-        call_func_rettv(cursor, result, evaluate, null_mut(), Some(&mut base), None)
+        call_func_rettv(cursor, result, evaluate, None, Some(&mut base), None)
     };
 
     if evaluate {
@@ -324,7 +306,7 @@ pub(crate) fn eval_method(
                     result.write_partial(lua_partial());
                 }
                 let base = basep.take();
-                ret = call_func_rettv(cursor, result, evaluate, null_mut(), base, lua_name);
+                ret = call_func_rettv(cursor, result, evaluate, None, base, lua_name);
             } else {
                 let base = basep.take();
                 ret = eval_func(cursor, &name, result, evaluate, base);
@@ -338,61 +320,4 @@ pub(crate) fn eval_method(
         tv_clear(&mut base);
     }
     ret
-}
-
-/// The function name a partial stands for: its own, its `UserFunc`'s, or the
-/// empty string.
-///
-/// # Safety
-/// `pt` must be null or valid.
-pub(crate) unsafe fn partial_name(pt: *mut Partial) -> *mut c_char {
-    if !pt.is_null() {
-        // SAFETY: the caller's promise, and `pt` is not null.
-        let pt = unsafe { Live::new(pt) };
-        if !pt.pt_name.is_null() {
-            return pt.pt_name;
-        }
-        let func = pt.pt_func;
-        if !func.is_null() {
-            // SAFETY: `pt_func` is a live `UserFunc` whose name is inline.
-            return unsafe { &raw mut (*func).uf_name } as *mut c_char;
-        }
-    }
-    c"".as_ptr() as *mut c_char
-}
-
-/// Release a partial and everything it bound.
-///
-/// # Safety
-/// `pt` must be valid and unreferenced.
-unsafe fn partial_free(pt: *mut Partial) {
-    // SAFETY: the caller's promise -- `pt` is a live, unreferenced partial.
-    let live = unsafe { Live::new(pt) };
-    for i in 0..live.pt_argc {
-        // SAFETY: `pt_argv` holds `pt_argc` typvals this partial owns.
-        unsafe { tv_clear(&mut *live.pt_argv.offset(i as isize)) };
-    }
-    unsafe { xfree(live.pt_argv as *mut c_void) };
-    unsafe { tv_dict_unref(live.pt_dict) };
-    if !live.pt_name.is_null() {
-        unsafe { func_unref(live.pt_name) };
-        unsafe { xfree(live.pt_name as *mut c_void) };
-    } else {
-        unsafe { func_ptr_unref(live.pt_func) };
-    }
-    unsafe { xfree(pt as *mut c_void) };
-}
-
-/// Drop one reference to a partial, freeing it at zero.
-///
-/// # Safety
-/// `pt` must be null or valid.
-pub(crate) unsafe fn partial_unref(pt: *mut Partial) {
-    if pt.is_null() {
-        return;
-    }
-    // SAFETY: the caller's promise, and `pt` is not null.
-    if unsafe { (*pt).pt_refcount.release() } <= 0 {
-        unsafe { partial_free(pt) };
-    }
 }

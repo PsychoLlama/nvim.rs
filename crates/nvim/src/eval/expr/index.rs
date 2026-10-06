@@ -419,10 +419,7 @@ pub(crate) fn handle_subscript(
 
     while ret.is_ok() && more(cursor, result) {
         if cursor.byte() == b'(' {
-            let selfdict_ptr = selfdict
-                .as_ref()
-                .map_or(::core::ptr::null_mut(), DictRef::as_ptr);
-            ret = call_func_rettv(cursor, result, evaluate, selfdict_ptr, None, lua_name);
+            ret = call_func_rettv(cursor, result, evaluate, selfdict.as_ref(), None, lua_name);
             // Stop evaluating on an immediate abort, an interrupt, or an
             // exception that was thrown and not caught.
             if aborting() {

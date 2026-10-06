@@ -63,7 +63,7 @@ pub(crate) fn set_buffer_lines(
                 break '_cleanup;
             }
         } else {
-            line = unsafe { typval_tostring(Some(lines), false) };
+            line = typval_tostring(Some(lines), false).into_raw();
         }
         loop {
             // Re-read, as upstream does: the type tag is the argument's own
@@ -75,7 +75,7 @@ pub(crate) fn set_buffer_lines(
                     break;
                 };
                 unsafe { xfree(line.cast()) };
-                line = unsafe { typval_tostring(Some(&item.li_tv), false) };
+                line = typval_tostring(Some(&item.li_tv), false).into_raw();
                 at += 1;
             }
             ret.write_number(1);

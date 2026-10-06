@@ -5,7 +5,6 @@
 use crate::api::private::helpers::{api_set_sctx, cstr_to_string, try_enter, try_leave};
 use crate::eval::eval0;
 use crate::eval::typval::tv_clear;
-use crate::eval::userfunc::call_func;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::global_cell::GlobalCell;
@@ -18,14 +17,13 @@ use crate::types::{
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
     FuncExe, Integer, KeyDict_exec_opts, LineNr, Object, ParserHighlight, ParserHighlightChunk,
     ParserLine, ParserPosition, ParserState, Partial, String_0, TryState, TypVal, UVarNumber,
-    VAR_DICT, VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
+    VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_free_ast,
     viml_pexpr_parse,
 };
 use crate::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy, viml_parser_init};
-use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.
 mod eval;

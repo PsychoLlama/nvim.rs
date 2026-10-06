@@ -11,8 +11,7 @@
 //! text lives where the expression can reach it -- an option value, a
 //! mapping, a register -- hands over a copy.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::eval::Parsed;
@@ -23,79 +22,33 @@ use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::Win;
-use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
-use core::ptr::null_mut;
+use core::ffi::{CStr, c_int};
 
 use crate::charset::skip;
-use crate::eval::encode::{encode_tv2string, tv2string_bytes};
+use crate::eval::encode::tv2string_bytes;
 use crate::eval::typval::{
-    NumBuf, list_join, list_last, list_len, list_set_lock, tv_clear, tv_dict_free_contents,
-    tv_get_number_chk, tv_list_alloc,
+    NumBuf, list_items_mut, list_join, list_len, list_set_lock, tv_clear, tv_get_number_chk,
+    tv_list_alloc,
 };
-use crate::eval::userfunc::{CallStackAside, call_func, func_init};
-use crate::eval::vars::clear_local;
-use crate::eval::vars::{evalvars_init, get_vim_var_dict, get_vim_var_partial, set_vim_var_list};
+use crate::eval::userfunc::{CallStackAside, CallWith, call_func_with, func_init};
+use crate::eval::vars::{clear_local, evalvars_init, lua_partial, set_vim_var_list};
 use crate::eval::{
-    Cursor, FUNCEXE_INIT, Tv, check_luafunc_name, eval0, eval0_in_cmd, eval0_simple_funccal, eval1,
-    may_call_simple_func, partial_name,
+    Cursor, check_luafunc_name, eval0, eval0_in_cmd, eval0_simple_funccal, eval1,
+    may_call_simple_func,
 };
 use crate::ex_eval::aborting;
-use crate::memory::xstrdup;
 use crate::message::state::{called_emsg, did_emsg};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::optionstr::OptString;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    Dict, ExArg, Failed, FuncExe, HashTab, NUL, Object, OptionSetFlags, Partial, SaveVEvent,
-    ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t, size_t, ssize_t,
+    ExArg, Failed, NUL, Object, OptionSetFlags, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t,
 };
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
-
-/// Reserve `v:event` for the duration of one autocommand, saving whatever
-/// a surrounding one had put there.
-///
-/// # Safety
-/// `sve` must be valid.
-pub unsafe fn get_v_event(sve: *mut SaveVEvent) -> *mut Dict {
-    let v_event = get_vim_var_dict(Vv::Event);
-    // SAFETY: the caller's promise about `sve`, and `v_event` as above.
-    let (saved, live) = unsafe { (&mut (*sve).sve_hashtab, &mut (*v_event).dv_hashtab) };
-    let did_save = live.ht_used > 0 as size_t;
-    // SAFETY: the caller's promise about `sve`.
-    unsafe { (*sve).sve_did_save = did_save };
-    if did_save {
-        // A plain move: the table owns its slots, so what the surrounding
-        // autocommand put in `v:event` travels to `sve` intact and
-        // `v:event` starts the inner one empty. `restore_v_event` moves it
-        // back.
-        *saved = core::mem::replace(live, HashTab::init());
-    }
-    v_event
-}
-
-/// Put back what `get_v_event` saved.
-///
-/// # Safety
-/// `v_event` and `sve` must be a pair `get_v_event` produced.
-pub unsafe fn restore_v_event(v_event: *mut Dict, sve: *mut SaveVEvent) {
-    // SAFETY: the caller's promise -- the pair `get_v_event` produced.
-    unsafe { tv_dict_free_contents(v_event) };
-    // `tv_dict_free_contents` already left `v:event` with a fresh empty
-    // table, so the not-saved case has nothing left to do.
-    // SAFETY: as above.
-    if unsafe { (*sve).sve_did_save } {
-        // SAFETY: as above.
-        let (saved, live) = unsafe { (&mut (*sve).sve_hashtab, &mut (*v_event).dv_hashtab) };
-        // The move back. `sve` is left with a table that owns nothing,
-        // which is what its `Default` is.
-        *live = core::mem::take(saved);
-    }
-}
 
 /// Bring up the evaluator: the `v:` variables and the function table.
 pub fn eval_init() {
@@ -158,19 +111,11 @@ pub(crate) fn eval1_emsg(
 /// Is this typval usable as an expression argument at all? An unset value
 /// and an empty String are not.
 pub fn eval_expr_valid_arg(tv: &TypVal) -> bool {
-    // SAFETY: the caller's promise -- the typval outlives the call, and it
-    // is only read through here.
-    let tv = unsafe { Tv::new(::core::ptr::from_ref(tv).cast_mut()) };
-    if tv.v_type() == VAR_UNKNOWN {
-        return false;
+    match tv.v_type() {
+        VAR_UNKNOWN => false,
+        VAR_STRING => tv.string_cstr().is_some_and(|text| !text.is_empty()),
+        _ => true,
     }
-    if tv.v_type() != VAR_STRING {
-        return true;
-    }
-    // SAFETY: `VAR_STRING` says the value holds a string, and
-    // a non-null one is NUL-terminated.
-    let s = tv.string_or_null();
-    !s.is_null() && unsafe { *s } as c_int != NUL
 }
 
 /// Call the partial in `expr`.
@@ -179,21 +124,16 @@ pub(crate) fn eval_expr_partial(
     argv: &[TypVal],
     result: &mut TypVal,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a `VAR_PARTIAL`, so the value holds a
-    // live partial or NULL.
-    let partial = (*expr).partial_or_null();
-    if partial.is_null() {
+    let TypVal::Partial(partial) = expr else {
         return Err(Failed);
-    }
-    let s: *const c_char = unsafe { partial_name(partial) };
-    if s.is_null() || unsafe { *s } as c_int == NUL {
-        return Err(Failed);
-    }
-    let mut funcexe: FuncExe = FUNCEXE_INIT;
-    funcexe.fe_evaluate = true;
-    funcexe.fe_partial = partial;
-    unsafe { call_func(s, -1, result, argv, &raw mut funcexe) }?;
-    Ok(())
+    };
+    let partial = partial.as_ref().ok_or(Failed)?;
+    let name = expr.callable_name().ok_or(Failed)?;
+    let with = CallWith {
+        partial: Some(partial),
+        ..CallWith::new(true)
+    };
+    call_func_with(name, None, result, argv, with)
 }
 
 /// Call the function `expr` names.
@@ -203,22 +143,17 @@ pub(crate) fn eval_expr_func(
     result: &mut TypVal,
 ) -> Result<(), Failed> {
     let mut buf = NumBuf::new();
-    // SAFETY: the caller's promise -- `expr` outlives the call, and it is
-    // only read through here; `VAR_FUNC` says `v_string` is its live
-    // member, and `buf` outlives the string rendered into it.
-    let expr_tv = expr;
-    let s: *const c_char = if expr_tv.v_type() == VAR_FUNC {
-        expr_tv.func_name_or_null() as *const c_char
+    let name = if expr.v_type() == VAR_FUNC {
+        expr.callable_name()
     } else {
-        buf.string_ptr_chk(expr)
+        buf.string_chk(expr)
     };
-    if s.is_null() || unsafe { *s } as c_int == NUL {
-        return Err(Failed);
+    match name {
+        Some(name) if !name.is_empty() => {
+            call_func_with(name, None, result, argv, CallWith::new(true))
+        }
+        _ => Err(Failed),
     }
-    let mut funcexe: FuncExe = FUNCEXE_INIT;
-    funcexe.fe_evaluate = true;
-    unsafe { call_func(s, -1, result, argv, &raw mut funcexe) }?;
-    Ok(())
 }
 
 /// Evaluate `expr` as an expression *string*, which must consume all of it.
@@ -260,25 +195,10 @@ pub fn eval_expr_typval(
 }
 
 /// `eval_expr_typval` with no arguments, answering the result's truth.
-///
-/// # Safety
-/// `expr` and `error` must be valid.
-pub unsafe fn eval_expr_to_bool(expr: &TypVal, error: *mut bool) -> bool {
+pub(crate) fn eval_expr_to_bool(expr: &TypVal) -> Result<bool, Failed> {
     let mut rettv = UNSET_TV;
-    if eval_expr_typval(expr, false, &[], &mut rettv).is_err() {
-        unsafe { *error = true };
-        return false;
-    }
-    let res = match tv_get_number_chk(&rettv) {
-        Ok(n) => n != 0,
-        Err(_) => {
-            // SAFETY: the caller's flag, as above.
-            unsafe { *error = true };
-            false
-        }
-    };
-    clear_local(&mut rettv);
-    res
+    eval_expr_typval(expr, false, &[], &mut rettv)?;
+    truth(&mut rettv)
 }
 
 /// The command's argument evaluated for its String -- `:throw` -- or, when
@@ -415,43 +335,29 @@ pub(crate) fn eval_expr_ext(text: &[u8], use_simple_function: bool) -> Option<Ty
 }
 
 /// Call a Vimscript function by name with `argv` as its arguments.
-///
-/// # Safety
-/// `func` must be NUL-terminated and `result` must be valid.
-pub unsafe fn call_vim_function(
-    func: *const c_char,
+pub(crate) fn call_vim_function(
+    func: &CStr,
     argv: &[TypVal],
     result: &mut TypVal,
 ) -> Result<(), Failed> {
-    let mut func = func;
-    let mut len = unsafe { cstr::bytes_at(func) }.len() as c_int;
-    let mut pt: *mut Partial = null_mut();
     let mut ret = Err(Failed);
-
     'fail: {
-        // SAFETY: `len >= 6` promises six readable bytes.
-        if len >= 6 && unsafe { cstr::starts_with(func, b"v:lua.") } {
-            // SAFETY: the six bytes just compared are behind us, so what is
-            // left is still inside the NUL-terminated name.
-            func = unsafe { func.add(6) };
-            // SAFETY: as above.
-            len = check_luafunc_name(unsafe { cstr::bytes_at(func) }, false) as c_int;
+        let (name, len, lua) = if let Some(lua_name) = func.to_bytes().strip_prefix(b"v:lua.") {
+            let len = check_luafunc_name(lua_name, false);
             if len == 0 {
                 break 'fail;
             }
-            pt = get_vim_var_partial(Vv::Lua);
-        }
-        // SAFETY: the caller's promise about `result`.
-        let rv = &mut *result;
-        rv.write_empty(VAR_UNKNOWN);
-        let mut funcexe: FuncExe = FUNCEXE_INIT;
-        funcexe.fe_firstline = Win::current().w_cursor.lnum;
-        funcexe.fe_lastline = Win::current().w_cursor.lnum;
-        funcexe.fe_evaluate = true;
-        funcexe.fe_partial = pt;
-        ret = unsafe { call_func(func, len, rv, argv, &raw mut funcexe) };
+            (cstr::suffix(func, 6), Some(len), lua_partial())
+        } else {
+            (func, None, None)
+        };
+        result.write_empty(VAR_UNKNOWN);
+        let with = CallWith {
+            partial: lua.as_ref(),
+            ..CallWith::at_cursor(true)
+        };
+        ret = call_func_with(name, len, result, argv, with);
     }
-
     if ret.is_err() {
         tv_clear(result);
     }
@@ -464,8 +370,7 @@ pub unsafe fn call_vim_function(
 pub(crate) fn call_func_retstr(func: &CStr, argv: &[TypVal]) -> Option<XString> {
     let mut numbuf = NumBuf::new();
     let mut rettv = UNSET_TV;
-    // SAFETY: a NUL-terminated function name.
-    unsafe { call_vim_function(func.as_ptr(), argv, &mut rettv) }.ok()?;
+    call_vim_function(func, argv, &mut rettv).ok()?;
     let retval = XString::from_cstr(cstr_of(&rettv, &mut numbuf));
     clear_local(&mut rettv);
     Some(retval)
@@ -475,8 +380,7 @@ pub(crate) fn call_func_retstr(func: &CStr, argv: &[TypVal]) -> Option<XString> 
 /// when that is a List; `None` for anything else.
 pub(crate) fn call_func_retlist(func: &CStr, argv: &[TypVal]) -> Option<TypVal> {
     let mut rettv = UNSET_TV;
-    // SAFETY: a NUL-terminated function name.
-    unsafe { call_vim_function(func.as_ptr(), argv, &mut rettv) }.ok()?;
+    call_vim_function(func, argv, &mut rettv).ok()?;
     if rettv.v_type() != VAR_LIST {
         clear_local(&mut rettv);
         return None;
@@ -574,46 +478,26 @@ pub fn eval_foldtext(window: Win) -> Object {
 }
 
 /// Fill `v:argv` from the process arguments. Every item is locked.
-///
-/// # Safety
-/// `argv` must hold `argc` NUL-terminated strings.
-pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
-    let list = tv_list_alloc(argc as ptrdiff_t);
-    let l = list.as_ptr();
-    // SAFETY: `l` is that List.
-    list_set_lock(unsafe { l.as_mut() }, VarLock::Fixed);
-    for i in 0..argc {
-        // SAFETY: the caller's promise -- `argc` NUL-terminated strings,
-        // so slot `i` is one of them; -1 asks the callee to measure it.
-        let arg = unsafe { *argv.offset(i as isize) } as *const c_char;
-        // SAFETY: as above.
-        unsafe { (*l).push_string(arg, -1 as ssize_t) };
-        // SAFETY: the item just appended is the List's last.
-        unsafe { (*list_last(l.as_mut())).li_lock = VarLock::Fixed };
+pub(crate) fn set_argv_var(args: &[&CStr]) {
+    let mut list = tv_list_alloc(args.len() as ptrdiff_t);
+    for arg in args {
+        list.push(TypVal::String(XString::from_cstr(arg).into_raw()));
     }
+    for item in list_items_mut(Some(&mut list)) {
+        item.li_lock = VarLock::Fixed;
+    }
+    list_set_lock(Some(&mut list), VarLock::Fixed);
     set_vim_var_list(Vv::Argv, Some(list));
 }
 
 /// Render a typval for display, as `:echo` would. A null typval is the
 /// "no such variable" text, which is what the debugger prints.
-///
-/// # Safety
-/// `arg` must be null or valid.
-pub unsafe fn typval_tostring(arg: Option<&TypVal>, quotes: bool) -> *mut c_char {
+pub(crate) fn typval_tostring(arg: Option<&TypVal>, quotes: bool) -> XString {
     let Some(value) = arg else {
-        // SAFETY: the text is a NUL-terminated literal.
-        return unsafe { xstrdup(c"(does not exist)".as_ptr()) };
+        return XString::from_cstr(c"(does not exist)");
     };
     if !quotes && value.v_type() == VAR_STRING {
-        let s = value.string_or_null();
-        let s = if s.is_null() {
-            c"".as_ptr()
-        } else {
-            s as *const c_char
-        };
-        // SAFETY: `s` is NUL-terminated either way.
-        return unsafe { xstrdup(s) };
+        return XString::from_cstr(value.string_cstr().unwrap_or(c""));
     }
-    // SAFETY: the caller's typval.
-    unsafe { encode_tv2string(value, null_mut()) }
+    XString::from_bytes(&tv2string_bytes(value))
 }

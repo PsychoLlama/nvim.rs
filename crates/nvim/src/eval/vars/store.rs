@@ -71,6 +71,12 @@ pub unsafe fn set_var(name: *const c_char, name_len: size_t, tv: &mut TypVal, co
     unsafe { set_var_const(name, name_len, tv, copy, false) }
 }
 
+/// [`set_var`] of the variable `name` names.
+pub(crate) fn set_var_named(name: &CStr, tv: &mut TypVal, copy: bool) {
+    // SAFETY: `name` is NUL-terminated at its length.
+    unsafe { set_var(name.as_ptr(), name.count_bytes(), tv, copy) }
+}
+
 /// Store `tv` in the variable `name`, creating it if it does not exist.
 ///
 /// `copy` asks for a copy of the value; without it `tv` is moved out of and
