@@ -25,7 +25,7 @@
 use super::{__S_IFMT, SEEK_END, SEEK_SET, no_fileinfo, str_arg};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{list_len, tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret};
-use crate::memory::{xfree, xmemdupz, xrealloc};
+use crate::memory::{ThinCString, xfree, xrealloc};
 use crate::message::{e_cant_read_file_str, e_isadir2, e_notopen};
 use crate::message_fmt::{c_str, emsg_text};
 use crate::os::cshim::gettext;
@@ -142,10 +142,9 @@ impl Lines {
         list_len(unsafe { self.0.as_ref() }) as int64_t
     }
 
-    /// Append `s`, a NUL-terminated string in nvim's heap that the list owns
-    /// from here on.
-    fn push(self, s: *mut c_char) {
-        let tv = TypVal::string_raw(s);
+    /// Append `s`, which the list owns from here on.
+    fn push(self, s: ThinCString) {
+        let tv = TypVal::string(Some(s));
         // SAFETY: a live list, and `tv` an owned String the list takes over.
         unsafe { (*self.0).push(tv) };
     }
@@ -230,17 +229,18 @@ impl Carry {
     ///
     /// Resizing rather than allocating afresh is what copies the bytes only
     /// once, so that a very long line is allocated only once too.
-    fn take(&mut self, tail: &[c_char]) -> *mut c_char {
+    fn take(&mut self, tail: &[c_char]) -> ThinCString {
         let (len, n) = (self.len as usize, tail.len());
         // SAFETY: the pointer is nvim's own, and the new size covers the
-        // bytes already written, `tail`, and the terminator after them.
+        // bytes already written, `tail`, and the terminator after them; the
+        // terminated block is adopted.
         let s = unsafe {
             let s = xrealloc(self.buf.cast::<c_void>(), (len + n + 1) as size_t).cast::<c_char>();
             s.add(len)
                 .cast::<u8>()
                 .copy_from_nonoverlapping(tail.as_ptr().cast(), n);
             *s.add(len + n) = 0;
-            s
+            ThinCString::from_raw(s).expect("xrealloc never answers null")
         };
         // Field by field: assigning through `self` would drop the buffer
         // that has just been handed out.
@@ -424,12 +424,11 @@ fn read_lines(fd: &File, lines: Lines, binary: bool, maxline: int64_t) {
 }
 
 /// A fresh NUL-terminated copy of `line`.
-fn dupz(line: &[c_char]) -> *mut c_char {
+fn dupz(line: &[c_char]) -> ThinCString {
     debug_assert!(line.len() < c_int::MAX as usize, "len < INT_MAX");
-    let (p, len) = (line.as_ptr().cast::<c_void>(), line.len());
-    // SAFETY: `p` is readable for `len` bytes, which is what a live slice of
-    // that length promises.
-    unsafe { xmemdupz(p, len).cast::<c_char>() }
+    // SAFETY: the same live slice, read as the bytes it holds.
+    let bytes = unsafe { ::core::slice::from_raw_parts(line.as_ptr().cast::<u8>(), line.len()) };
+    ThinCString::from_bytes(bytes)
 }
 
 // ---------------------------------------------------------------------

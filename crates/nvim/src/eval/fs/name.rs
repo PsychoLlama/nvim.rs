@@ -35,7 +35,6 @@ use crate::eval::do_string_sub;
 use crate::eval::typval::NumBuf;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memory::XString;
-use crate::memory::handoff::owned_cstr;
 use crate::os::env::{expand_env_save_opt_of, home_replace_in};
 use crate::os::fs::{dirname_text, os_isdir_of};
 use crate::path::{full_name_of, path_fnamencmp, tail_index, vim_is_abs_name};
@@ -446,7 +445,7 @@ pub fn f_fnamemodify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         str_arg_chk(args, 1, &mut buf),
     );
     let (Some(fname), Some(mods)) = (fname, mods) else {
-        result.write_string_raw(core::ptr::null_mut());
+        result.write_string(None);
         return;
     };
     let name = if mods.is_empty() {
@@ -454,7 +453,7 @@ pub fn f_fnamemodify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     } else {
         modify_fname(mods, &mut 0, false, fname, fname.to_bytes().len()).1
     };
-    result.write_string_raw(owned_cstr(name));
+    result.write_string(Some(name.into()));
 }
 
 #[cfg(test)]

@@ -24,8 +24,7 @@ use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_exec;
 use crate::memline::ml_get;
-use crate::memory::handoff::owned_cstr;
-use crate::memory::xstrdup;
+use crate::memory::ThinCString;
 use crate::menu::{get_menu_cmd_modes, menu_get};
 use crate::message::state::msg_scrolled;
 use crate::normal::op_pending;
@@ -313,7 +312,7 @@ pub fn f_foreground(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
 
 /// `getfontname()` — always empty; nvim has no font.
 pub fn f_getfontname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
 }
 
 /// `getpid()`
@@ -323,11 +322,12 @@ pub fn f_getpid(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `hostname()`
 pub fn f_hostname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mut hostname = [0 as c_char; 256];
+    let mut hostname = [0u8; 256];
     // SAFETY: `os_get_hostname` writes at most the length it is given,
-    // NUL-terminated; `result` then owns the duplicate.
-    unsafe { os_get_hostname(hostname.as_mut_ptr(), hostname.len()) };
-    unsafe { (*result).write_string_raw(xstrdup(hostname.as_ptr())) };
+    // NUL-terminated.
+    unsafe { os_get_hostname(hostname.as_mut_ptr().cast::<c_char>(), hostname.len()) };
+    let name = CStr::from_bytes_until_nul(&hostname).unwrap_or(c"");
+    result.write_string(Some(ThinCString::from_cstr(name)));
 }
 
 /// `menu_get({path} [, {modes}])`
@@ -360,7 +360,7 @@ pub fn f_mode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if !args.first().is_some_and(non_zero_arg) {
         buf[1] = NUL as c_char;
     }
-    result.write_string_raw(unsafe { xstrdup(buf.as_ptr()) });
+    result.write_string(Some(c_chars_until_nul(&buf)));
 }
 
 /// `state([{what}])` — the letters for whatever is currently in the way of
@@ -406,10 +406,10 @@ pub fn f_state(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // No flag at all left the garray unallocated, so `state()` answered the
     // *null* string rather than an empty one. Keep that.
-    result.write_string_raw(if flags.is_empty() {
-        ptr::null_mut()
+    result.write_string(if flags.is_empty() {
+        None
     } else {
-        owned_cstr(flags)
+        Some(flags.into())
     });
 }
 
@@ -507,8 +507,8 @@ pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
 /// `visualmode([{expr}])` — the last Visual mode, cleared when `{expr}` is
 /// non-zero.
 pub fn f_visualmode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mode = [Buf::current().b_visual_mode_eval as c_char, NUL as c_char];
-    result.write_string_raw(unsafe { xstrdup(mode.as_ptr()) });
+    let mode = [Buf::current().b_visual_mode_eval as c_char];
+    result.write_string(Some(c_chars_until_nul(&mode)));
     if args.first().is_some_and(non_zero_arg) {
         Buf::current().b_visual_mode_eval = NUL;
     }
@@ -524,9 +524,18 @@ pub(crate) fn f_wildmenumode(_args: &[TypVal], result: &mut TypVal, _fptr: EvalF
 
 /// `windowsversion()` — always empty here; kept for scripts that ask.
 pub fn f_windowsversion(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `windowsVersion` is a live NUL-terminated buffer and `result`
-    // owns the duplicate.
-    unsafe { (*result).write_string_raw(xstrdup(windowsVersion.as_ptr())) };
+    result.write_string(Some(c_chars_until_nul(&windowsVersion)));
+}
+
+/// A copy of the C characters in `chars` up to the first NUL, or all of
+/// them when there is none.
+fn c_chars_until_nul(chars: &[c_char]) -> ThinCString {
+    let bytes: Vec<u8> = chars
+        .iter()
+        .take_while(|&&c| c != 0)
+        .map(|&c| c as u8)
+        .collect();
+    bytes.into()
 }
 
 /// `wordcount()`

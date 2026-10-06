@@ -13,7 +13,7 @@ use crate::eval::typval::{
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::utfc_ptr2len;
-use crate::memory::xmemdupz;
+use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message::state::called_emsg;
 use crate::message_fmt::c_str;
@@ -23,7 +23,7 @@ use crate::types::{
     EvalFuncData, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING,
     VAR_UNKNOWN, VarLock, VarNumber,
 };
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::mem::ManuallyDrop;
 
 /// A one-character String typval owning a copy of `len` bytes at `p`.
@@ -31,7 +31,8 @@ use core::mem::ManuallyDrop;
 /// # Safety
 /// `p` has at least `len` readable bytes.
 unsafe fn owned_str(p: *const c_char, len: c_int) -> TypVal {
-    TypVal::string_raw(unsafe { xmemdupz(p as *const c_void, len as usize) } as *mut c_char)
+    // SAFETY: the caller's obligation.
+    TypVal::string_from(unsafe { core::slice::from_raw_parts(p.cast::<u8>(), len as usize) })
 }
 
 /// A Number typval.
@@ -291,7 +292,9 @@ pub fn f_reduce(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // `eval_expr_typval`, so that an empty name reports E1132 instead of
     // an "unknown function" for the empty string.
     let func_name = match args[1].v_type() {
-        VAR_FUNC => args[1].func_name_or_null(),
+        VAR_FUNC => args[1]
+            .func_name()
+            .map_or(core::ptr::null(), ThinCString::as_ptr),
         VAR_PARTIAL => unsafe { partial_name(args[1].partial_or_null()) },
         _ => arg_string(&mut numbuf, &args[1]),
     };

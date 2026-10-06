@@ -9,14 +9,13 @@ use crate::eval::typval::{NumBuf, callback_free, tv_islocked};
 use crate::eval::vars::with_var;
 use crate::eval::{Target, callback_from_typval, get_lval};
 use crate::ex_cmds::check_secure;
-use crate::memory::xmalloc;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::strings::vim_vsnprintf_typval;
 use crate::types::{
     Callback, EvalFuncData, TypVal, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber,
 };
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 /// An unset callback, the shape `callback_from_typval` fills in.
@@ -157,9 +156,10 @@ pub fn f_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let nul = ptr::null_mut();
     let ap = unsafe { (*dummy_ap.ptr()).clone() };
     let len = unsafe { vim_vsnprintf_typval(nul, 0, fmt, ap, base) };
-    result.write_string_raw(unsafe { xmalloc(len as usize + 1) } as *mut c_char);
-    let out = result.string_or_null();
-    let cap = len as usize + 1;
+    let mut out = vec![0u8; len as usize + 1];
+    let cap = out.len();
     let ap = unsafe { (*dummy_ap.ptr()).clone() };
-    unsafe { vim_vsnprintf_typval(out, cap, fmt, ap, base) };
+    unsafe { vim_vsnprintf_typval(out.as_mut_ptr().cast(), cap, fmt, ap, base) };
+    out.truncate(len as usize);
+    result.write_string(Some(out.into()));
 }

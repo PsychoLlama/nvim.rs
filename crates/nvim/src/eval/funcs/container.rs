@@ -19,7 +19,7 @@ use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type,
 };
 use crate::eval::{eval_expr_typval, get_copy_id, partial_name, var_item_copy};
-use crate::memory::xstrdup;
+use crate::memory::ThinCString;
 use crate::message::e_listblobreq;
 use crate::message::state::{called_emsg, did_emsg};
 use crate::message::{emsg, internal_error};
@@ -27,7 +27,7 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    Blob, BoolVarValue, EvalFuncData, List, NUL, Partial, Refcount, TypVal, VAR_BLOB, VAR_BOOL,
+    Blob, BoolVarValue, EvalFuncData, List, Partial, Refcount, TypVal, VAR_BLOB, VAR_BOOL,
     VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
     VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST,
     VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv, kBoolVarTrue,
@@ -66,10 +66,7 @@ pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // which union member is live. A String, List, Dict or Blob pointer may
     // still be null, which each reader treats as empty.
     let empty = match tv.v_type() {
-        VAR_STRING | VAR_FUNC => {
-            let s = tv.string_or_func_name();
-            s.is_null() || unsafe { *s } == NUL as c_char
-        }
+        VAR_STRING | VAR_FUNC => tv.text_or_name().is_none_or(ThinCString::is_empty),
         VAR_PARTIAL => false,
         VAR_NUMBER => (tv.number_or_zero()) == 0,
         VAR_FLOAT => (tv.float_or_zero()) == 0.0,
@@ -271,7 +268,9 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
     let pt = if args.first().is_some_and(|arg| arg.v_type() == VAR_PARTIAL) {
         args[0].partial_or_null()
     } else {
-        fref.pt_name = args[0].func_name_or_null();
+        fref.pt_name = args[0]
+            .func_name()
+            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
         &raw mut fref
     };
     let what = arg_string(&mut numbuf, &args[1]);
@@ -292,11 +291,13 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             {
                 name = unsafe { printable_func_name((*pt).pt_func) };
             }
-            let owned = unsafe { xstrdup(name) };
+            // SAFETY: the partial's own NUL-terminated name, live for the
+            // copy.
+            let owned = ThinCString::from_cstr(unsafe { CStr::from_ptr(name) });
             if as_funcref {
-                result.write_func_name_raw(owned);
+                result.write_func_name(Some(owned));
             } else {
-                result.write_string_raw(owned);
+                result.write_string(Some(owned));
             }
         }
         b"dict" => {
@@ -457,12 +458,10 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // An empty expression matches nothing rather than everything.
     let expr = &args[1];
     let vacuous = match expr.v_type() {
-        VAR_STRING => {
-            expr.string_or_null().is_null() || unsafe { *expr.string_or_null() } == NUL as c_char
-        }
+        VAR_STRING => expr.string_ref().is_none_or(ThinCString::is_empty),
         // Upstream names `v_partial` here; under `VAR_FUNC` that is the
         // same word as the name, so this asks whether the Funcref has one.
-        VAR_FUNC => expr.func_name_or_null().is_null(),
+        VAR_FUNC => expr.func_name().is_none(),
         _ => false,
     };
     if vacuous {

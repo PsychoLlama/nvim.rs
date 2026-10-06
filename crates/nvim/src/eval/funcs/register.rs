@@ -16,7 +16,7 @@ use crate::eval::typval::{
 use crate::eval::vars::get_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
 use crate::keycodes::Ctrl_V;
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::{ThinCString, xfree, xmalloc};
 use crate::register::{
     format_reg_type, get_reg_contents, get_reg_type, get_register_name, get_unname_register,
     get_yank_register, op_reg_set_previous, write_reg_contents_ex, write_reg_contents_lst,
@@ -27,7 +27,7 @@ use crate::types::{
     VAR_LIST, Vv, kBoolVarFalse, kBoolVarTrue,
 };
 use crate::vim_snprintf;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// The buffer `format_reg_type` and `getreginfo()` build a register type in.
@@ -83,13 +83,17 @@ pub fn f_getreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let held = unsafe { ListRef::owning(l) }.unwrap_or_else(|| tv_list_alloc(0));
         result.write_list(Some(held));
     } else {
-        result.write_string_raw(get_reg_contents(regname, flags) as *mut c_char);
+        // SAFETY: without `kGRegList` the register answers an `xmalloc`ed
+        // string, which the result adopts, or NULL.
+        result.write_string(unsafe {
+            ThinCString::from_raw(get_reg_contents(regname, flags).cast::<c_char>())
+        });
     }
 }
 
 /// `getregtype([{regname}])`.
 pub fn f_getregtype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     let Some(regname) = regname(args) else {
         return;
     };
@@ -97,7 +101,9 @@ pub fn f_getregtype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf: TypeBuf = [0; 67];
     let reg_type = unsafe { get_reg_type(regname, &raw mut reglen) };
     unsafe { format_reg_type(reg_type, reglen, buf.as_mut_ptr(), buf.len()) };
-    result.write_string_raw(unsafe { xstrdup(buf.as_ptr()) });
+    // SAFETY: `format_reg_type` leaves `buf` NUL-terminated.
+    let spelled = unsafe { CStr::from_ptr(buf.as_ptr()) };
+    result.write_string(Some(ThinCString::from_cstr(spelled)));
 }
 
 /// `getreginfo([{regname}])`.
@@ -151,9 +157,8 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// The single-character String the three recording-state builtins return.
 fn return_register(regname: c_int, result: &mut TypVal) {
-    let buf: [c_char; 2] = [regname as c_char, 0];
-    // SAFETY: `buf` is NUL-terminated and outlives the copy.
-    result.write_string_raw(unsafe { xstrdup(buf.as_ptr()) });
+    // A NUL register name answers the empty string.
+    result.write_string(Some(ThinCString::from_bytes(&[regname as c_char as u8])));
 }
 
 /// `reg_executing()` — the register a macro is being played from.
@@ -312,12 +317,12 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         unsafe { write_list(regname, list, append, yank_type, block_len) };
     } else if !regcontents.is_null() {
         // SAFETY: a non-null pointer to the caller's value.
-        let strval = numbuf5.string_ptr_chk(unsafe { &*regcontents });
-        if strval.is_null() {
+        let Some(strval) = numbuf5.string_chk(unsafe { &*regcontents }) else {
             return;
-        }
+        };
         let reg = regname as c_int;
-        let len = unsafe { cstr::bytes_at(strval) }.len() as isize;
+        let len = strval.to_bytes().len() as isize;
+        let strval = strval.as_ptr();
         unsafe { write_reg_contents_ex(reg, strval, len, append, yank_type, block_len) };
     }
     if pointreg != 0 {
@@ -359,23 +364,22 @@ unsafe fn write_list(
     if !l.is_null() {
         for li in list_iter(unsafe { l.as_ref() }) {
             let mut buf = NumBuf::new();
-            let s = buf.string_ptr_chk(&li.li_tv);
-            if s.is_null() {
+            let Some(s) = buf.string_chk(&li.li_tv) else {
                 complete = false;
                 break;
-            }
-            // A value that is not already a String was rendered into
-            // the scratch buffer, which the next item reuses, so it is
-            // copied out and the copy remembered for the free below.
-            let value = if s == buf.as_mut_ptr().cast_const() {
+            };
+            // A scalar was rendered into the scratch buffer, which does not
+            // outlive this item, so it is copied out and the copy remembered
+            // for the free below.
+            let value = if !li.li_tv.is_string() {
                 // SAFETY: `curalloc` is inside the copies half of the
                 // allocation, which has room for one per item.
-                let copy = unsafe { xstrdup(s) };
+                let copy = ThinCString::from_cstr(s).into_raw();
                 unsafe { *curalloc = copy };
                 curalloc = unsafe { curalloc.add(1) };
                 copy
             } else {
-                s as *mut c_char
+                s.as_ptr().cast_mut()
             };
             // SAFETY: `curval` is inside the values half, which has room
             // for one per item plus the terminator.

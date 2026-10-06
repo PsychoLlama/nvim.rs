@@ -29,13 +29,12 @@
 use super::{FINDFILE_DIR, FINDFILE_FILE, RetList, nr_arg, str_arg, str_arg_chk};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one, globpath};
 use crate::eval::eval_expr_typval;
-use crate::eval::typval::CallFrame;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
 use crate::fileio::readdir_core;
-use crate::memory::{XString, xfree};
+use crate::memory::{ThinCString, XString, xfree};
 use crate::option::vars::p_wic;
 use crate::optionstr::OptString;
 use crate::path::buffer_path;
@@ -98,7 +97,7 @@ fn empty_answer(result: &mut TypVal) {
     if result.v_type() == VAR_LIST {
         result.write_list(None);
     } else {
-        result.write_string_raw(ptr::null_mut());
+        result.write_string(None);
     }
 }
 
@@ -141,7 +140,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
     let mut count = 1;
     let mut error = false;
 
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     let fname = str_arg(args, 0, &mut numbuf);
 
     let mut pathbuf = NumBuf::new();
@@ -211,7 +210,9 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
     // The List answer appended a copy of each match and only leaves the
     // loop on a NULL, so there is nothing left to hand back there.
     if result.v_type() == VAR_STRING {
-        result.write_string_raw(fresult);
+        // SAFETY: the last match, an `xmalloc`ed string nothing else holds,
+        // which the result adopts; or NULL.
+        result.write_string(unsafe { ThinCString::from_raw(fresult) });
     }
 }
 
@@ -260,10 +261,7 @@ pub fn f_glob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let pat = str_arg(args, 0, &mut numbuf);
     if result.v_type() == VAR_STRING {
-        result.write_string_raw(
-            xpc.one(pat, options, WildMode::All)
-                .map_or(ptr::null_mut(), XString::into_raw),
-        );
+        result.write_string(xpc.one(pat, options, WildMode::All).map(ThinCString::from));
         return;
     }
     xpc.one(pat, options, WildMode::AllKeep);
@@ -314,7 +312,7 @@ pub fn f_globpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
             joined.push_cstr(name.as_cstr());
         }
-        result.write_string_raw(joined.into_raw());
+        result.write_string(Some(joined.into()));
         return;
     }
     let list = RetList::alloc(result, ptrdiff_t::try_from(found.len()).unwrap_or(0));
@@ -343,13 +341,15 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
     prepare_vimvar(Vv::Val, &mut save_val);
     set_val(name);
 
-    // The callee only reads it, so the frame names the caller's string
-    // rather than copying it.
-    let argv = CallFrame::naming([TypVal::string_raw(name.cast_mut())]);
+    // The argument owns a copy of the name, released with it.
+    // SAFETY: the caller's contract: a NUL-terminated name.
+    let argv = [TypVal::string_from(
+        unsafe { CStr::from_ptr(name) }.to_bytes(),
+    )];
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut retval = 0;
-    let ran = eval_expr_typval(expr, false, argv.args(), &mut rettv);
+    let ran = eval_expr_typval(expr, false, &argv, &mut rettv);
     if ran.is_ok() {
         retval = tv_get_number_chk(&rettv).unwrap_or(-1);
         tv_clear(&mut rettv);

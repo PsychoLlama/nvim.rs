@@ -12,10 +12,10 @@ use crate::message::state::did_emsg;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{
-    Context, Error, EvalFuncData, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarNumber,
+    Context, Error, EvalFuncData, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN,
+    VarNumber,
 };
-use core::ffi::{CStr, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 /// A cleared API error, the shape every `api_*` out-parameter starts in.
@@ -83,8 +83,8 @@ pub fn f_ctxpush(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
                 // non-String item.
                 // A null `v_string` is the empty string, which matches
                 // no name; `strequal` answered the same for it.
-                if tv.v_type() == VAR_STRING && !tv.string_or_null().is_null() {
-                    types |= match unsafe { CStr::from_ptr(tv.string_or_null()) }.to_bytes() {
+                if let Some(name) = tv.string_ref() {
+                    types |= match name.as_bytes() {
                         b"regs" => kCtxRegs as c_int,
                         b"jumps" => kCtxJumps as c_int,
                         b"bufs" => kCtxBufs as c_int,

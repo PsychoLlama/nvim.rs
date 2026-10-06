@@ -23,11 +23,11 @@ use crate::eval::typval::{
 use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match, matched_char_count};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get_buf;
-use crate::memory::{xfree, xmemdupz};
+use crate::memory::{ThinCString, xfree};
 use crate::message::e_buffer_is_not_loaded;
 use crate::message::emsg;
 use crate::message::state::did_emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::SavedCpo;
 use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
@@ -38,7 +38,7 @@ use crate::types::{
     VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::{ptr, slice};
 
 /// An unset typval, as `VAR_UNKNOWN` spells it.
 const TV_UNKNOWN: TypVal = TV_INITIAL_VALUE;
@@ -107,7 +107,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
             unsafe { (*result.list_or_null()).push_number(-1) };
         }
         kSomeMatchStr => {
-            result.write_string_raw(ptr::null_mut());
+            result.write_string(None);
         }
         _ => {}
     }
@@ -245,11 +245,14 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 let ret_l = result.list_or_null();
                 // SAFETY: the four items seeded above.
                 let seeded = list_items_mut(unsafe { ret_l.as_mut() });
-                unsafe { xfree(seeded[0].li_tv.string_or_null() as *mut c_void) };
+                drop(seeded[0].li_tv.take_string());
                 let span = regmatch.group(0).unwrap_or(0..0);
                 // SAFETY: the span is an offset range into `str`.
-                let text = unsafe { xmemdupz(str.add(span.start).cast(), span.len()) };
-                seeded[0].li_tv.write_string_raw(text as *mut c_char);
+                let text =
+                    unsafe { slice::from_raw_parts(str.add(span.start).cast::<u8>(), span.len()) };
+                seeded[0]
+                    .li_tv
+                    .write_string(Some(ThinCString::from_bytes(text)));
                 // `str` may have moved on from `expr`, and the answer is
                 // counted from where the subject began.
                 let skipped = unsafe { str.offset_from(expr) } as usize;
@@ -284,9 +287,10 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 } else {
                     let span = regmatch.group(0).unwrap_or(0..0);
                     // SAFETY: the span is an offset range into `str`.
-                    let text =
-                        unsafe { xmemdupz(str.add(span.start) as *const c_void, span.len()) };
-                    result.write_string_raw(text as *mut c_char);
+                    let text = unsafe {
+                        slice::from_raw_parts(str.add(span.start).cast::<u8>(), span.len())
+                    };
+                    result.write_string(Some(ThinCString::from_bytes(text)));
                 }
             }
             _ => {
@@ -525,9 +529,8 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     while at < list_items(unsafe { l.as_ref() }).len() {
         let li_tv = &list_items(unsafe { l.as_ref() })[at].li_tv;
         // A non-String item, and the null String, contribute nothing.
-        if li_tv.v_type() == VAR_STRING && !li_tv.string_or_null().is_null() {
-            // SAFETY: a live String typval's text is NUL-terminated.
-            let str = unsafe { cstr::at(li_tv.string_or_null()) };
+        if let Some(text) = li_tv.string_ref() {
+            let str = text.as_cstr();
             let idx = index_of(at);
             unsafe { get_matches_in_str(str, &mut prog.0, retlist, idx, submatches, false) };
         }
@@ -592,7 +595,7 @@ unsafe fn item_string(
     numbuf: &mut NumBuf,
 ) -> *const c_char {
     if (*tv).v_type() == VAR_STRING {
-        return (*tv).string_or_null();
+        return (*tv).string_ref().map_or(ptr::null(), ThinCString::as_ptr);
     }
     if (*tv).v_type() != VAR_DICT {
         return ptr::null();
@@ -613,7 +616,9 @@ unsafe fn item_string(
             let called = unsafe { callback_call(cb, &argv, rv) };
             drop(argv);
             if called && (*result).v_type() == VAR_STRING {
-                (*result).string_or_null()
+                (*result)
+                    .string_ref()
+                    .map_or(ptr::null(), ThinCString::as_ptr)
             } else {
                 ptr::null()
             }
@@ -756,9 +761,8 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
         return;
     }
     let pat = &args[1];
-    if pat.v_type() != VAR_STRING || pat.string_or_null().is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe { c_str(numbuf.string_ptr(pat)) };
+    if pat.string_ref().is_none() {
+        let arg0 = msg_cstr(numbuf.string(pat));
         semsg!("E475: Invalid argument: {arg0}");
         return;
     }
@@ -777,18 +781,12 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
         // says is there.
         let d = unsafe { &mut *args[2].dict_or_null() };
         if let Some(di) = d.find(b"key") {
-            if di.di_tv.v_type() != VAR_STRING
-                || di.di_tv.string_or_null().is_null()
-                // SAFETY: a non-null string of the item's own.
-                || unsafe { *di.di_tv.string_or_null() } == 0
-            {
-                let got = numbuf2.string_ptr(&di.di_tv);
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let got = unsafe { c_str(got) };
+            if di.di_tv.string_ref().is_none_or(ThinCString::is_empty) {
+                let got = msg_cstr(numbuf2.string(&di.di_tv));
                 semsg!("E475: Invalid value for argument {}: {got}", "key");
                 return;
             }
-            key = numbuf3.string_ptr(&di.di_tv);
+            key = numbuf3.string(&di.di_tv).as_ptr();
         } else if !dict_get_callback(Some(d), b"text_cb", &mut cb) {
             semsg!("E475: Invalid value for argument {}", "text_cb");
             return;
@@ -817,7 +815,7 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
         }
     }
     let request = Request {
-        pattern: numbuf4.string_ptr(pat),
+        pattern: numbuf4.string(pat).as_ptr(),
         source: if !key.is_null() {
             Source::Key(key)
         } else if cb.is_set() {

@@ -10,12 +10,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use super::{strcase_save, strict_bool_arg, xstrnsave};
+use super::{strcase_save, strict_bool_arg};
 use crate::charset::{Str2NrBases, skipwhite, transstr, vim_str2nr};
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
@@ -23,24 +22,22 @@ use crate::eval::typval::{
     tv_list_alloc_ret,
 };
 use crate::mbyte::{
-    char_at, char_count, char_len, cluster_len, clusters, mb_cptr2char_adv, mb_ptr2char_adv,
-    mb_string2cells, utf_head_off,
+    char_at, char_count, char_len, cluster_len, clusters, head_off, mb_cptr2char_adv,
+    mb_ptr2char_adv, mb_string2cells,
 };
-use crate::memory::handoff::owned_cstr;
+use crate::memory::ThinCString;
 use crate::message::e_invarg;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::cshim::{gettext, strstr};
 use crate::plines::linetabsize_col;
-use crate::types::{EvalFuncData, TypVal, VAR_STRING, VarNumber, kListLenUnknown, ptrdiff_t};
-use core::ffi::CStr;
+use crate::types::{EvalFuncData, TypVal, VarNumber, kListLenUnknown, ptrdiff_t};
 
 /// "str2list()" function: the string as a list of code points.
 pub fn f_str2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
-    // SAFETY: the argument was converted to a NUL-terminated string.
-    let bytes = unsafe { cstr::bytes_at(numbuf.string_ptr(&args[0])) };
+    let bytes = numbuf.bytes(&args[0]);
     let mut at = 0;
     while at < bytes.len() {
         let rest = &bytes[at..];
@@ -69,7 +66,7 @@ pub fn f_str2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    let mut p = unsafe { skipwhite(numbuf.string_ptr(&args[0])) };
+    let mut p = unsafe { skipwhite(numbuf.string(&args[0]).as_ptr()) };
     let isneg = unsafe { *p } == b'-' as c_char;
     if unsafe { *p } == b'+' as c_char || unsafe { *p } == b'-' as c_char {
         p = unsafe { skipwhite(p.add(1)) };
@@ -102,19 +99,20 @@ pub fn f_stridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
 
     let mut buf = NumBuf::new();
-    let needle = numbuf.string_ptr_chk(&args[1]);
-    let haystack_start = buf.string_ptr_chk(&args[0]);
-    let mut haystack = haystack_start;
-    if needle.is_null() || haystack.is_null() {
+    let needle = numbuf.string_chk(&args[1]);
+    let haystack_text = buf.string_chk(&args[0]);
+    let (Some(needle), Some(haystack_text)) = (needle, haystack_text) else {
         return;
-    }
+    };
+    let (needle, haystack_start) = (needle.as_ptr(), haystack_text.as_ptr());
+    let mut haystack = haystack_start;
 
     if args.len() > 2 {
         let Ok(start_idx) = tv_get_number_chk(&args[2]) else {
             return;
         };
         let start_idx = start_idx as ptrdiff_t;
-        if start_idx >= unsafe { cstr::bytes_at(haystack).len() as ptrdiff_t } {
+        if start_idx >= haystack_text.to_bytes().len() as ptrdiff_t {
             return;
         }
         // A negative start is ignored, not counted from the end.
@@ -137,11 +135,12 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
 
     let mut buf = NumBuf::new();
-    let needle = numbuf.string_ptr_chk(&args[1]);
-    let haystack = buf.string_ptr_chk(&args[0]);
-    if needle.is_null() || haystack.is_null() {
+    let needle = numbuf.string_chk(&args[1]);
+    let haystack_text = buf.string_chk(&args[0]);
+    let (Some(needle), Some(haystack_text)) = (needle, haystack_text) else {
         return;
-    }
+    };
+    let (needle, haystack) = (needle.as_ptr(), haystack_text.as_ptr());
 
     let end_idx = if args.len() > 2 {
         let idx = tv_get_number_chk(&args[2]).unwrap_or(-1) as ptrdiff_t;
@@ -150,7 +149,7 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         idx
     } else {
-        unsafe { cstr::bytes_at(haystack).len() as ptrdiff_t }
+        haystack_text.to_bytes().len() as ptrdiff_t
     };
     let last_allowed = unsafe { haystack.offset(end_idx) };
 
@@ -178,15 +177,17 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// "string()" function.
 pub fn f_string(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).write_string_raw(encode_tv2string(&args[0], ptr::null_mut())) };
+    // SAFETY: the encoder answers an `xmalloc`ed string, which the result
+    // adopts.
+    result.write_string(unsafe {
+        ThinCString::from_raw(encode_tv2string(&args[0], ptr::null_mut()))
+    });
 }
 
 /// "strlen()" function: the length in bytes.
 pub fn f_strlen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe {
-        (*result).write_number(cstr::bytes_at(numbuf.string_ptr(&args[0])).len() as VarNumber)
-    };
+    result.write_number(numbuf.bytes(&args[0]).len() as VarNumber);
 }
 
 /// The character count `strchars()` and `strcharlen()` share.
@@ -200,7 +201,7 @@ fn strchar_common(args: &[TypVal], result: &mut TypVal, skipcc: bool) {
     } else {
         mb_cptr2char_adv
     };
-    let mut s = numbuf.string_ptr(&args[0]);
+    let mut s = numbuf.string(&args[0]).as_ptr();
     let mut len: VarNumber = 0;
     while unsafe { *s } != 0 {
         unsafe { next_char(&raw mut s) };
@@ -232,7 +233,7 @@ pub fn f_strchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// optional starting column.
 pub fn f_strdisplaywidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let s = numbuf.string_ptr(&args[0]);
+    let s = numbuf.string(&args[0]).as_ptr();
     let col = if args.len() > 1 {
         tv_get_number(&args[1]) as c_int
     } else {
@@ -244,25 +245,33 @@ pub fn f_strdisplaywidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 /// "strwidth()" function: screen cells, with a tab counting as one.
 pub fn f_strwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_number(mb_string2cells(numbuf.string_ptr(&args[0])) as VarNumber) };
+    let text = numbuf.string(&args[0]).as_ptr();
+    result.write_number(unsafe { mb_string2cells(text) } as VarNumber);
 }
 
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
 pub fn f_strtrans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string_raw(transstr(numbuf.string_ptr(&args[0]), true)) };
+    let text = numbuf.string(&args[0]).as_ptr();
+    // SAFETY: a NUL-terminated argument; the answer is `xmalloc`ed and the
+    // result adopts it.
+    result.write_string(unsafe { ThinCString::from_raw(transstr(text, true)) });
 }
 
 /// "tolower()" function.
 pub fn f_tolower(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string_raw(strcase_save(numbuf.string_ptr(&args[0]), false)) };
+    let text = numbuf.string(&args[0]).as_ptr();
+    // SAFETY: as `f_strtrans`.
+    result.write_string(unsafe { ThinCString::from_raw(strcase_save(text, false)) });
 }
 
 /// "toupper()" function.
 pub fn f_toupper(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string_raw(strcase_save(numbuf.string_ptr(&args[0]), true)) };
+    let text = numbuf.string(&args[0]).as_ptr();
+    // SAFETY: as `f_strtrans`.
+    result.write_string(unsafe { ThinCString::from_raw(strcase_save(text, true)) });
 }
 
 /// "tr()" function: character-wise translation.
@@ -276,23 +285,15 @@ pub fn f_tr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = NumBuf::new();
     let mut buf2 = NumBuf::new();
-    let in_str = numbuf.string_ptr(&args[0]);
-    let fromstr = buf.string_ptr_chk(&args[1]);
-    let tostr = buf2.string_ptr_chk(&args[2]);
+    let in_bytes = numbuf.bytes(&args[0]);
+    let fromstr = buf.string_chk(&args[1]);
+    let tostr = buf2.bytes_chk(&args[2]);
 
-    result.write_string_raw(ptr::null_mut());
-    if fromstr.is_null() || tostr.is_null() {
+    result.write_string(None);
+    let (Some(fromstr), Some(to_bytes)) = (fromstr, tostr) else {
         return; // Type error; the message is already out.
-    }
-
-    // SAFETY: all three were converted to NUL-terminated strings above.
-    let (in_bytes, from_bytes, to_bytes) = unsafe {
-        (
-            cstr::bytes_at(in_str),
-            cstr::bytes_at(fromstr),
-            cstr::bytes_at(tostr),
-        )
     };
+    let from_bytes = fromstr.to_bytes();
 
     /// The `n`-th character of a set, as its bytes.
     fn nth_char(set: &[u8], n: usize) -> Option<&[u8]> {
@@ -347,11 +348,10 @@ pub fn f_tr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             out.extend_from_slice(replacement);
             at += ch.len();
         }
-        result.write_string_raw(owned_cstr(out));
+        result.write_string(Some(out.into()));
         return;
     }
-    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-    let fromstr = unsafe { c_str(fromstr) };
+    let fromstr = msg_cstr(fromstr);
     semsg!("E475: Invalid argument: {fromstr}");
 }
 
@@ -365,38 +365,30 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf1 = NumBuf::new();
     let mut buf2 = NumBuf::new();
-    let head = buf1.string_ptr_chk(&args[0]);
-    let mut mask = ptr::null::<c_char>();
+    let head = buf1.bytes_chk(&args[0]);
+    let mut mask = None;
     let mut dir = 0;
 
-    result.write_string_raw(ptr::null_mut());
-    if head.is_null() || tv_check_for_opt_string_arg(args, 1).is_err() {
+    result.write_string(None);
+    let Some(bytes) = head else { return };
+    if tv_check_for_opt_string_arg(args, 1).is_err() {
         return;
     }
 
-    if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
-        mask = buf2.string_ptr_chk(&args[1]);
-        if unsafe { *mask } == 0 {
-            mask = ptr::null();
-        }
+    if args.get(1).is_some_and(TypVal::is_string) {
+        mask = buf2.bytes_chk(&args[1]).filter(|mask| !mask.is_empty());
         if args.len() > 2 {
             let Ok(given) = tv_get_number_chk(&args[2]) else {
                 return;
             };
             dir = given as c_int;
             if !(0..=2).contains(&dir) {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let arg0 = unsafe { c_str(numbuf.string_ptr(&args[2])) };
+                let arg0 = msg_cstr(numbuf.string(&args[2]));
                 semsg!("E475: Invalid argument: {arg0}");
                 return;
             }
         }
     }
-
-    // SAFETY: both were converted to NUL-terminated strings above, and the
-    // mask may be absent.
-    let bytes = unsafe { cstr::bytes_at(head) };
-    let mask = unsafe { cstr::at_opt(mask) }.map(CStr::to_bytes);
 
     // Whitespace and NBSP by default, else exactly the mask's set.
     let trimmable = |c: c_int| -> bool {
@@ -417,10 +409,7 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if dir == 0 || dir == 2 {
         while end > start {
             // Step back over one whole character.
-            // SAFETY: `head` is the NUL-terminated string `bytes` borrows,
-            // and `end - 1` is a byte of it.
-            let back = unsafe { utf_head_off(head.cast_mut(), head.add(end - 1)) };
-            let prev = end - 1 - usize::try_from(back).expect("never negative");
+            let prev = end - 1 - head_off(bytes, end - 1);
             if !trimmable(char_at(&bytes[prev..])) {
                 break;
             }
@@ -428,6 +417,5 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    // SAFETY: `start..end` is a span of the string at `head`.
-    unsafe { (*result).write_string_raw(xstrnsave(head.add(start), end - start)) };
+    result.write_string(Some(ThinCString::from_bytes(&bytes[start..end])));
 }

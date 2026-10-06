@@ -39,7 +39,7 @@ use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
     tv_list_alloc_ret,
 };
-use crate::memory::{xfree, xmallocz, xstrdup};
+use crate::memory::{ThinCString, xfree, xmallocz, xstrdup};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fileio::FileOpenFlags;
@@ -54,7 +54,6 @@ use crate::types::{
     ptrdiff_t, size_t, ssize_t, uint64_t, uv_stat_t, uv_timespec_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::ManuallyDrop;
 use core::ptr;
 
 // The carve of the transpiled module; see each child's docs.
@@ -98,10 +97,8 @@ static e_error_while_writing_str: &::core::ffi::CStr = c"E80: Error while writin
 ///
 /// A Number argument has no string of its own, so the caller lends `buf` for
 /// it to be spelled into and the answer borrows one or the other.
-pub(crate) fn str_arg<'a>(args: &[TypVal], i: usize, buf: &'a mut NumBuf) -> &'a CStr {
-    // SAFETY: a live typval and a scratch of the promised length; the answer
-    // is NUL-terminated and never NULL.
-    unsafe { CStr::from_ptr(buf.string_ptr(&args[i])) }
+pub(crate) fn str_arg<'a>(args: &'a [TypVal], i: usize, buf: &'a mut NumBuf) -> &'a CStr {
+    buf.string(&args[i])
 }
 
 /// Argument `i` as a NUL-terminated path, or None -- having reported the
@@ -183,8 +180,8 @@ pub(crate) fn from(s: &CStr, from: usize) -> &CStr {
 ///
 /// What upstream frees by hand before each `return`, and the reason the
 /// bodies below are ordinary control flow rather than a chain of gotos.
-/// [`Owned::into_raw`] is how a string that becomes a builtin's answer, or a
-/// caller's buffer, leaves without being freed.
+/// A string that becomes a builtin's answer is copied into the answer's own
+/// [`ThinCString`].
 ///
 /// The accessors rebuild their view from the raw pointer rather than
 /// borrowing `self`, because the same string is read and then written within
@@ -194,7 +191,7 @@ pub(crate) struct Owned(pub(crate) *mut c_char);
 impl Drop for Owned {
     fn drop(&mut self) {
         // SAFETY: every constructor allocates through nvim's allocator, and
-        // `into_raw` is the only way to leave without freeing.
+        // nothing else frees the block.
         unsafe { xfree(self.0.cast::<c_void>()) };
     }
 }
@@ -239,11 +236,6 @@ impl Owned {
         // SAFETY: `i` is inside the string or is its terminator, both of
         // which are inside the allocation.
         unsafe { *self.0.add(i) = b as c_char };
-    }
-
-    /// Give the string up to the caller, who frees it.
-    pub(crate) fn into_raw(self) -> *mut c_char {
-        ManuallyDrop::new(self).0
     }
 }
 
@@ -303,13 +295,15 @@ fn can_exe(p: &CStr) -> bool {
     unsafe { os_can_exe(p, ptr::null_mut(), true) }
 }
 
-/// Where `p`'s executable was found, or NULL when it is not one.
-fn exe_path(p: &CStr) -> *mut c_char {
+/// Where `p`'s executable was found, or `None` when it is not one.
+fn exe_path(p: &CStr) -> Option<ThinCString> {
     let mut path = ptr::null_mut();
     // SAFETY: `p` is NUL-terminated and `path` is this frame's own; the
-    // answer is a string in nvim's heap, or NULL.
-    unsafe { os_can_exe(p, &raw mut path, true) };
-    path
+    // answer is an `xmalloc`ed string, adopted here, or NULL.
+    unsafe {
+        os_can_exe(p, &raw mut path, true);
+        ThinCString::from_raw(path)
+    }
 }
 
 fn is_dir(p: &CStr) -> bool {
@@ -360,7 +354,7 @@ pub fn f_exepath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if !is_nonempty_string_arg(args, 0) {
         return;
     }
-    result.write_string_raw(exe_path(str_arg(args, 0, &mut numbuf)));
+    result.write_string(exe_path(str_arg(args, 0, &mut numbuf)));
 }
 
 /// `filereadable({file})`: whether the file exists and can be read.
@@ -383,17 +377,17 @@ pub fn f_filewritable(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 pub fn f_getfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let file_perm = getperm(str_arg(args, 0, &mut numbuf));
-    let mut perm = ptr::null_mut();
+    let mut perm = None;
     if file_perm >= 0 {
-        let spelled = Owned::dup(c"---------");
+        let mut spelled = *b"---------";
         for i in 0..9 {
             if file_perm & (1 << (8 - i)) != 0 {
-                spelled.set(i as usize, b"rwx"[i as usize % 3]);
+                spelled[i as usize] = b"rwx"[i as usize % 3];
             }
         }
-        perm = spelled.into_raw();
+        perm = Some(ThinCString::from_bytes(&spelled));
     }
-    result.write_string_raw(perm);
+    result.write_string(perm);
 }
 
 /// `getfsize({fname})`: the size in bytes, 0 for a directory, -1 when the
@@ -443,8 +437,7 @@ pub fn f_getftype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             _ => c"other",
         }
     });
-    let answer = named.map_or(ptr::null_mut(), |t| Owned::dup(t).into_raw());
-    result.write_string_raw(answer);
+    result.write_string(named.map(ThinCString::from_cstr));
 }
 
 /// `isdirectory({directory})`: whether the name is a directory.
@@ -456,7 +449,7 @@ pub fn f_isdirectory(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// `browse({save}, {title}, {initdir}, {default})`: a stub -- there is no
 /// file dialog to open.
 pub fn f_browse(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
 }
 
 /// `browsedir({title}, {initdir})`: the same stub.

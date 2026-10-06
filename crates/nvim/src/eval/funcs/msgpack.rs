@@ -14,7 +14,7 @@ use crate::eval::encode::{
 };
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{NumBuf, blob_bytes, list_items, list_len};
-use crate::memory::{alloc_block, free_block, strequal, xfree};
+use crate::memory::{ThinCString, alloc_block, free_block, strequal, xfree};
 use crate::message_fmt::c_str_len;
 use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
@@ -74,9 +74,11 @@ pub fn f_json_decode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `json_encode({expr})`.
 pub fn f_json_encode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the encoder reads the argument and returns an owned string,
-    // which the return value takes over.
-    result.write_string_raw(unsafe { encode_tv2json(&args[0], ptr::null_mut::<usize>()) });
+    // SAFETY: the encoder reads the argument and returns an `xmalloc`ed
+    // string, which the return value adopts.
+    result.write_string(unsafe {
+        ThinCString::from_raw(encode_tv2json(&args[0], ptr::null_mut::<usize>()))
+    });
 }
 
 /// `msgpackdump({list} [, {type}])` — a List of msgpack objects as a List

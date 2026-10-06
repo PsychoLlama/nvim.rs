@@ -17,7 +17,7 @@ use crate::eval::typval::NumBuf;
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
 use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::normal::find_decl;
 use crate::option::vars::{P_WS, p_ws};
 
@@ -29,8 +29,7 @@ use crate::search::{
 };
 use crate::semsg;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, LineNr, NUL, Pos, SearchItArg, TypVal, VarNumber, int64_t,
-    size_t,
+    Direction, EvalFuncData, FAIL, LineNr, Pos, SearchItArg, TypVal, VarNumber, int64_t, size_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -115,19 +114,16 @@ impl Drop for SavedWrapScan {
 /// Sets the bits it recognises in `flags`, and may write 'wrapscan'.
 fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
     let mut dir = FORWARD as c_int;
-    // SAFETY: the caller's obligation; `nbuf` outlives the string
-    // `tv_get_string_buf_chk` may park in it.
     let Some(varp) = varp else {
         return FORWARD as c_int;
     };
     let mut nbuf = NumBuf::new();
-    let mut p = nbuf.string_ptr_chk(varp);
-    if p.is_null() {
+    let Some(text) = nbuf.bytes_chk(varp) else {
         // Type error; the message is already out.
         return 0;
-    }
-    while unsafe { *p } as c_int != NUL {
-        match unsafe { *p } as u8 {
+    };
+    for (at, &letter) in text.iter().enumerate() {
+        match letter {
             b'b' => dir = BACKWARD as c_int,
             b'w' => P_WS.set(true),
             b'W' => P_WS.set(false),
@@ -137,8 +133,7 @@ fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
                     // The message quotes the rest of the flag string
                     // from the offending letter on, not just the
                     // letter, and those are arbitrary user bytes.
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let p = unsafe { c_str(p) };
+                    let p = msg_bytes(&text[at..]);
                     semsg!("E475: Invalid argument: {p}");
                     dir = 0;
                 }
@@ -147,7 +142,6 @@ fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
         if dir == 0 {
             break;
         }
-        p = unsafe { p.add(1) };
     }
     dir
 }

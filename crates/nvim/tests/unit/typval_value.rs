@@ -1457,10 +1457,8 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                     *emsg,
                 );
 
-                // A number is formatted into the buffer; a string is not,
-                // and neither is a boolean or `v:null`, whose names are
-                // static.
-                let scalar = matches!(v_type, VAR_NUMBER | VAR_FLOAT);
+                // A scalar is formatted into the buffer; a string is not.
+                let scalar = matches!(v_type, VAR_NUMBER | VAR_FLOAT | VAR_SPECIAL | VAR_BOOL);
                 if scalar {
                     assert_eq!(got, in_buffer, "{name} of {v_type} should use the buffer");
                 } else if !got.is_null() {

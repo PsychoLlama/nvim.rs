@@ -27,13 +27,13 @@ use crate::guard::Suppress;
 use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
 };
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::message::state::{emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off};
 use crate::message::{capture_finish, capture_start, e_toomanyarg, e_unknown_function_str};
 use crate::message_fmt::c_str;
-use crate::message_fmt::msg_bytes;
+use crate::message_fmt::{msg_bytes, msg_cstr_opt};
 use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::{expand_env_save, os_env_exists};
@@ -43,9 +43,8 @@ use crate::types::{
     EvalFuncData, List, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_STRING, VarNumber, VarType,
 };
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
-use std::ffi::CString;
 
 /// A C string this module allocated and must release.
 ///
@@ -78,7 +77,9 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Only the Lua-table arm allocates; the others borrow.
     let mut owned = false;
     let mut func = match args[0].v_type() {
-        VAR_FUNC => args[0].func_name_or_null(),
+        VAR_FUNC => args[0]
+            .func_name()
+            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut()),
         VAR_PARTIAL => {
             partial = args[0].partial_or_null();
             unsafe { partial_name(partial) }
@@ -180,13 +181,9 @@ unsafe fn get_list_line(
         return ptr::null_mut();
     };
     let mut buf = NumBuf::new();
-    let s = buf.string_ptr_chk(&item.li_tv);
+    let line = buf.string_chk(&item.li_tv).map(ThinCString::from_cstr);
     unsafe { (*state).at = at + 1 };
-    if s.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { xstrdup(s) }
-    }
+    line.map_or(ptr::null_mut(), ThinCString::into_raw)
 }
 
 /// `execute()` and `win_execute()`: run commands with output captured.
@@ -269,7 +266,7 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     msg_col.set(if echo_output { 0 } else { save_msg_col });
 
     let captured = capture_finish(outer_capture);
-    result.write_string_raw(XString::from_bytes(&captured).into_raw());
+    result.write_string(Some(ThinCString::from_bytes(&captured)));
 }
 
 /// `execute({command} [, {silent}])`
@@ -339,7 +336,9 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     let mut use_string = false;
     let mut s = match args[0].v_type() {
         // function(MyFunc, [arg], dict)
-        VAR_FUNC => args[0].func_name_or_null(),
+        VAR_FUNC => args[0]
+            .func_name()
+            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut()),
         // function(dict.MyFunc, [arg])
         VAR_PARTIAL if !args[0].partial_or_null().is_null() => {
             arg_pt = args[0].partial_or_null();
@@ -453,7 +452,9 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
 
     // Nothing bound and nothing to bind: a plain Funcref will do.
     if dict_idx == 0 && arg_idx == 0 && arg_pt.is_null() && !is_funcref {
-        result.write_func_name_raw(name);
+        // SAFETY: `name` is the `xmalloc`ed copy made above, which the
+        // result adopts; it stays live for the reference taken on it.
+        result.write_func_name(unsafe { ThinCString::from_raw(name) });
         unsafe { func_ref(name) };
         return;
     }
@@ -541,10 +542,8 @@ pub fn f_garbagecollect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
 fn libcall_common(args: &[TypVal], result: &mut TypVal, out_type: VarType) {
     result.write_empty(out_type);
     if out_type != VAR_NUMBER {
-        result.write_string_raw(ptr::null_mut());
+        result.write_string(None);
     }
-    // SAFETY throughout: the frame is live; the two names and the string argument are
-    // owned by arguments and outlive the call.
     if check_secure() {
         return;
     }
@@ -553,40 +552,34 @@ fn libcall_common(args: &[TypVal], result: &mut TypVal, out_type: VarType) {
     {
         return;
     }
-    let libname = args[0].string_or_null();
-    let funcname = args[1].string_or_null();
+    let libname = args[0].string_cstr();
+    let funcname = args[1].string_cstr();
     let arg3 = &args[2];
-    let str_in = if arg3.v_type() == VAR_STRING {
-        arg3.string_or_null()
-    } else {
-        ptr::null_mut()
-    };
     // A VAR_STRING third argument with a NULL v_string falls through to
     // the int-taking prototype, reading the same union as a number.
     // Upstream quirk, preserved.
-    let arg = if str_in.is_null() {
-        LibcallArg::Int(arg3.number_or_zero() as c_int)
-    } else {
-        LibcallArg::Str(unsafe { CStr::from_ptr(str_in) })
+    let arg = match arg3.string_cstr() {
+        Some(text) => LibcallArg::Str(text),
+        None => LibcallArg::Int(arg3.number_or_zero() as c_int),
     };
     let want = if out_type == VAR_STRING {
         LibcallReturn::Str
     } else {
         LibcallReturn::Int
     };
-    let answer = if libname.is_null() || funcname.is_null() {
-        None
-    } else {
-        unsafe { os_libcall(CStr::from_ptr(libname), CStr::from_ptr(funcname), arg, want) }
+    let answer = match (libname, funcname) {
+        // SAFETY: both names are the arguments' own strings, live for the
+        // call.
+        (Some(libname), Some(funcname)) => unsafe { os_libcall(libname, funcname, arg, want) },
+        _ => None,
     };
     match answer {
         None => {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let funcname = unsafe { c_str(funcname) };
+            let funcname = msg_cstr_opt(funcname);
             semsg!("E364: Library call failed for \"{funcname}()\"");
         }
         Some(LibcallResult::Str(s)) => {
-            result.write_string_raw(s.map_or(ptr::null_mut(), CString::into_raw));
+            result.write_string(s.map(ThinCString::from));
         }
         Some(LibcallResult::Int(n)) => result.write_number(n as VarNumber),
     }

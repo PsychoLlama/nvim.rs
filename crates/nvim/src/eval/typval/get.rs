@@ -160,11 +160,11 @@ impl NumBuf {
             VAR_STRING => Some(tv.string_cstr().unwrap_or(c"")),
             VAR_BOOL => {
                 let which = tv.as_bool().unwrap_or(crate::types::kBoolVarFalse);
-                Some(BOOL_VAR_NAMES[which as usize])
+                Some(self.copied(BOOL_VAR_NAMES[which as usize]))
             }
             VAR_SPECIAL => {
                 let which = tv.as_special().unwrap_or(kSpecialVarNull);
-                Some(SPECIAL_VAR_NAMES[which as usize])
+                Some(self.copied(SPECIAL_VAR_NAMES[which as usize]))
             }
             VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
                 emsg(gettext(str_errors[tv.v_type() as usize]));
@@ -225,6 +225,17 @@ impl NumBuf {
     /// TRANSIENT.
     pub fn as_mut_ptr(&mut self) -> *mut ::core::ffi::c_char {
         self.0.as_mut_ptr().cast()
+    }
+
+    /// `name` copied into the buffer. A static name would do for reading,
+    /// but some callers still hand the answer to a C callee that writes into
+    /// it (`findfile()`'s path walk cuts it at each comma), as upstream's
+    /// `strcpy` into this buffer allowed.
+    fn copied(&mut self, name: &CStr) -> &CStr {
+        let bytes = name.to_bytes();
+        let len = bytes.len().min(self.0.len() - 1);
+        self.0[..len].copy_from_slice(&bytes[..len]);
+        self.terminated(len)
     }
 
     /// The first `len` bytes of the buffer, terminated.

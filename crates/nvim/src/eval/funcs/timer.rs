@@ -19,9 +19,9 @@ use crate::event::time::{
 use crate::ex_cmds::check_secure;
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::{ThinCString, xfree, xmalloc};
 use crate::message::state::called_emsg;
-use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, profile_sub};
+use crate::profile::{profile_end, profile_msg_str, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::startup::main_loop;
 use crate::types::{
@@ -203,11 +203,12 @@ pub fn f_reltime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `reltimestr({time})` — the elapsed time as seconds with six decimals.
 pub fn f_reltimestr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
-    // SAFETY: `profile_msg` returns a pointer to its own static buffer,
-    // which `xstrdup` copies before anything else can reuse it.
+    result.write_string(None);
     if let Some(tm) = list2proftime(&args[0]) {
-        result.write_string_raw(unsafe { xstrdup(profile_msg(tm).as_ptr()) });
+        // Cut to the 49 bytes `profile_msg`'s buffer holds.
+        let text = profile_msg_str(tm);
+        let text = &text.as_bytes()[..text.len().min(49)];
+        result.write_string(Some(ThinCString::from_bytes(text)));
     }
 }
 

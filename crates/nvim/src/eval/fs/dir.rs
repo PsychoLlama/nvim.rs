@@ -35,8 +35,8 @@ use crate::eval::window::find_win_by_nr;
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{changedir_func, vim_mkdir_emsg};
-use crate::fileio::{delete_recursive, vim_copyfile, vim_rename, vim_tempname};
-use crate::memory::{xfree, xstrdup, xstrlcpy};
+use crate::fileio::{delete_recursive, temp_name, vim_copyfile, vim_rename};
+use crate::memory::{ThinCString, xstrlcpy};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_invargNval, e_invexpr2, e_mkdir};
 use crate::message_fmt::{c_str, emsg_text};
@@ -52,7 +52,7 @@ use crate::types::{
 use crate::window::find_tabpage;
 use crate::winlayer::{TabPage, Win};
 use ::libc::abort;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 // ---------------------------------------------------------------------
@@ -90,7 +90,7 @@ fn path_arg<'a>(args: &'a [TypVal], i: usize, buf: &'a mut NumBuf) -> &'a CStr {
 /// gave it, which is upstream's own doing and not something a `&CStr` may
 /// share provenance with.
 fn path_arg_raw(args: &[TypVal], i: usize, buf: &mut NumBuf) -> *mut c_char {
-    buf.string_ptr(&args[i]).cast_mut()
+    buf.string(&args[i]).as_ptr().cast_mut()
 }
 
 /// The current directory of the process, into `cwd`; false when the OS will
@@ -137,7 +137,8 @@ fn changedir(dir: *mut c_char, scope: CdScope) -> bool {
 /// The String argument `i` holds, raw, because `chdir()` hands the callee
 /// the argument's own storage.
 fn string_of(tv: &TypVal) -> *mut c_char {
-    tv.string_or_null()
+    tv.string_ref()
+        .map_or(ptr::null_mut(), |text| text.as_ptr().cast_mut())
 }
 
 // ---------------------------------------------------------------------
@@ -268,7 +269,7 @@ fn number_of(tv: &TypVal) -> VarNumber {
 /// local, answering the directory that was current before.
 pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     if args[0].v_type() != VAR_STRING {
         // Returning an empty string means it failed.  No error message, for
         // historic reasons.
@@ -280,7 +281,7 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     {
         let cwd = Owned::zeroed(MAXPATHL as usize);
         if os_cwd(&cwd) {
-            result.write_string_raw(Owned::dup(cwd.cstr()).into_raw());
+            result.write_string(Some(ThinCString::from_cstr(cwd.cstr())));
         }
     }
 
@@ -304,9 +305,7 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     if !changedir(string_of(&args[0]), scope) {
         // Directory change failed: answer the empty string after all.
-        // SAFETY: the answer taken above is nvim's heap, or NULL.
-        unsafe { xfree(result.string_or_null().cast::<c_void>()) };
-        result.write_string_raw(ptr::null_mut());
+        drop(result.take_string());
     }
 }
 
@@ -376,7 +375,7 @@ pub fn f_filecopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `getcwd([{win} [, {tab}]])`: the working directory of the scope the
 /// arguments name, always as a string.
 pub fn f_getcwd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     let Some(s) = Scope::read(args, false) else {
         return;
     };
@@ -404,7 +403,7 @@ pub fn f_getcwd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if !from.is_null() {
         set_cwd(&cwd, from);
     }
-    result.write_string_raw(Owned::dup(cwd.cstr()).into_raw());
+    result.write_string(Some(ThinCString::from_cstr(cwd.cstr())));
 }
 
 /// `haslocaldir([{win} [, {tab}]])`: whether the scope the arguments name
@@ -507,7 +506,9 @@ pub fn f_mkdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // SAFETY: `dir` is NUL-terminated; the answer is nvim's heap.
         created = unsafe { full_name_save(dir, false) };
     }
-    if !created.is_null() {
+    // SAFETY: `created` is an `xmalloc`ed string one of the two callees
+    // above answered, or NULL; it is adopted here.
+    if let Some(created) = unsafe { ThinCString::from_raw(created) } {
         defer_delete(created, defer_recurse);
     }
 }
@@ -524,12 +525,12 @@ fn strip_trailing_seps(dir: *mut c_char) {
 
 /// Register `delete({created}, "d"|"rf")` to run when the calling function
 /// returns -- `mkdir()`'s `D` and `R` flags.
-fn defer_delete(created: *mut c_char, recurse: bool) {
+fn defer_delete(created: ThinCString, recurse: bool) {
     let how = if recurse { c"rf" } else { c"d" };
-    // SAFETY: a NUL-terminated literal; the copy is nvim's heap.
-    let how = unsafe { xstrdup(how.as_ptr()) };
-    let string = |s| TypVal::string_raw(s);
-    let mut tv = [string(created), string(how)];
+    let mut tv = [
+        TypVal::string(Some(created)),
+        TypVal::string(Some(ThinCString::from_cstr(how))),
+    ];
     let name = c"delete".as_ptr().cast_mut();
     // SAFETY: two arguments, at `tv`, whose contents the callee takes over.
     unsafe { add_defer(name, &mut tv) };
@@ -553,5 +554,5 @@ pub fn f_rename(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `tempname()`: a fresh name in the session's own temporary directory.
 pub fn f_tempname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(vim_tempname());
+    result.write_string(temp_name().map(ThinCString::from));
 }

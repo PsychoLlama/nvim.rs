@@ -28,14 +28,14 @@ use super::{Owned, at, err, from, is_sep, str_arg, str_arg_chk};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_reg_pat;
-use crate::memory::{xrealloc, xstrlcat};
+use crate::memory::{ThinCString, xrealloc, xstrlcat};
 use crate::path::{
     add_pathsep, after_pathsep, path_is_absolute, path_next_component, path_tail,
     path_tail_with_sep, shorten_dir_len, simplify_filename,
 };
 use crate::types::{EvalFuncData, MAXPATHL, TypVal, VAR_STRING, VarNumber, size_t};
 use ::libc::readlink;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 // ---------------------------------------------------------------------
@@ -149,10 +149,10 @@ fn after_sep(s: &CStr, at: usize) -> bool {
 }
 
 /// Collapse `.`, `..` and duplicate separators, in place.
-fn simplify(s: *mut c_char) {
+fn simplify(s: &mut ThinCString) {
     // SAFETY: `s` is a NUL-terminated string this module owns; the result is
     // never longer than the input, so it stays inside the allocation.
-    unsafe { simplify_filename(s) };
+    unsafe { simplify_filename(s.as_mut_ptr()) };
 }
 
 // ---------------------------------------------------------------------
@@ -163,10 +163,18 @@ fn simplify(s: *mut c_char) {
 pub fn f_glob2regpat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let pat = str_arg_chk(args, 0, &mut numbuf);
-    result.write_string_raw(pat.map_or(ptr::null_mut(), |pat| {
+    result.write_string(pat.and_then(|pat| {
         // SAFETY: `pat` is NUL-terminated, which is what a NULL end
-        // pointer promises; a NULL `allow_dirs` asks for none reported.
-        unsafe { file_pat_to_reg_pat(pat.as_ptr(), ptr::null(), ptr::null_mut(), false as c_int) }
+        // pointer promises; a NULL `allow_dirs` asks for none reported. The
+        // answer is an `xmalloc`ed string, adopted here, or NULL.
+        unsafe {
+            ThinCString::from_raw(file_pat_to_reg_pat(
+                pat.as_ptr(),
+                ptr::null(),
+                ptr::null_mut(),
+                false as c_int,
+            ))
+        }
     }));
 }
 
@@ -190,33 +198,33 @@ pub fn f_pathshorten(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     };
     result.write_empty(VAR_STRING);
     let Some(p) = str_arg_chk(args, 0, &mut numbuf) else {
-        result.write_string_raw(ptr::null_mut());
+        result.write_string(None);
         return;
     };
-    let shortened = Owned::dup(p);
+    let mut shortened = ThinCString::from_cstr(p);
     // SAFETY: a NUL-terminated string this module owns; shortening only ever
     // moves bytes down, so the result stays inside the allocation.
-    unsafe { shorten_dir_len(shortened.0, trim_len) };
-    result.write_string_raw(shortened.into_raw());
+    unsafe { shorten_dir_len(shortened.as_mut_ptr(), trim_len) };
+    result.write_string(Some(shortened));
 }
 
 /// `simplify({path})`: `.`, `..` and duplicate separators collapsed, without
 /// asking the filesystem anything.
 pub fn f_simplify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let simplified = Owned::dup(str_arg(args, 0, &mut numbuf)).into_raw();
-    simplify(simplified);
-    result.write_string_raw(simplified);
+    let mut simplified = ThinCString::from_cstr(str_arg(args, 0, &mut numbuf));
+    simplify(&mut simplified);
+    result.write_string(Some(simplified));
 }
 
 /// `resolve({path})`: the symlink chain followed to its end.
 pub fn f_resolve(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     if let Some(resolved) = resolve(str_arg(args, 0, &mut numbuf)) {
-        let raw = resolved.into_raw();
-        simplify(raw);
-        result.write_string_raw(raw);
+        let mut resolved = ThinCString::from_cstr(resolved.cstr());
+        simplify(&mut resolved);
+        result.write_string(Some(resolved));
     }
 }
 

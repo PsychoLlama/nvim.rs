@@ -22,7 +22,7 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::nlua_exec;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::memory::{arena_mem_free, xfree, xmemdup, xstrdup};
 use crate::message::e_invarg;
 use crate::message::on_print_cb;
@@ -393,7 +393,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `serverstart([{address}])`
 pub fn f_serverstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     // SAFETY throughout: the frame is live; `address` and `addrs` are allocations this
     // body owns, bar the one entry handed to `result`.
     if check_secure() {
@@ -427,7 +427,8 @@ pub fn f_serverstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // are other people's and are released here.
     let mut n = 0usize;
     let addrs = unsafe { server_address_list(&raw mut n) };
-    result.write_string_raw(unsafe { *addrs.add(n - 1) });
+    // The last entry is an `xmalloc`ed string, which the result adopts.
+    result.write_string(unsafe { ThinCString::from_raw(*addrs.add(n - 1)) });
     for i in 0..n - 1 {
         unsafe { xfree(*addrs.add(i) as *mut c_void) };
     }
@@ -449,8 +450,8 @@ pub fn f_serverstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // already-cleared return value rather than by this assignment.
     result.write_number(0);
     // v:_null_string stops nothing.
-    if !args[0].string_or_null().is_null() {
-        result.write_number(unsafe { server_stop(args[0].string_or_null(), false) } as VarNumber);
+    if let Some(address) = args[0].string_ref() {
+        result.write_number(unsafe { server_stop(address.as_ptr(), false) } as VarNumber);
     }
 }
 

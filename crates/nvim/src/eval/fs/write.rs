@@ -29,6 +29,7 @@ use crate::eval::typval::{NumBuf, blob_bytes, list_items, tv_check_str_or_nr};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
+use crate::memory::ThinCString;
 use crate::message::e_invarg2;
 use crate::message::emsg;
 use crate::message_fmt::{c_str, emsg_text};
@@ -133,10 +134,9 @@ impl Item {
     /// type that has no string form.
     /// The caller lends `buf` for a Number item to be spelled into.
     fn string(self, buf: &mut NumBuf) -> Option<&CStr> {
-        // SAFETY: a live item and a scratch of the promised length; the
-        // answer is NUL-terminated, or NULL.
+        // SAFETY: a live item.
         let tv = &raw const list_items(unsafe { self.list.as_ref() })[self.at].li_tv;
-        unsafe { buf.string_ptr_chk(&*tv).as_ref() }.map(|p| unsafe { CStr::from_ptr(p) })
+        buf.string_chk(unsafe { &*tv })
     }
 
     /// Whether the item is a String or a Number, having reported if not.
@@ -321,10 +321,10 @@ fn in_lua_script() -> bool {
 /// Register `delete({fname})` to run when the calling function returns --
 /// the `D` flag.
 fn defer_delete(fname: &CStr) {
-    // SAFETY: `fname` is NUL-terminated; the answer is a string in nvim's
-    // heap, which the deferred call takes over.
-    let full = unsafe { full_name_save(fname.as_ptr(), false) };
-    let mut tv = TypVal::string_raw(full);
+    // SAFETY: `fname` is NUL-terminated; the answer is an `xmalloc`ed
+    // string, adopted here and taken over by the deferred call.
+    let full = unsafe { ThinCString::from_raw(full_name_save(fname.as_ptr(), false)) };
+    let mut tv = TypVal::string(full);
     let name = c"delete".as_ptr().cast_mut();
     // SAFETY: one argument, at `tv`, whose contents the callee takes over.
     unsafe { add_defer(name, ::core::slice::from_mut(&mut tv)) };
@@ -448,5 +448,5 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// The String argument 0 holds.
 fn string_of(tv: &TypVal) -> *const c_char {
-    tv.string_or_null()
+    tv.string_ref().map_or(ptr::null(), ThinCString::as_ptr)
 }

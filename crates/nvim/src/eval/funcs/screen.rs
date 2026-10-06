@@ -21,7 +21,7 @@ use crate::highlight_group::{
 };
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memline::ml_get_len;
-use crate::memory::xstrdup;
+use crate::memory::ThinCString;
 use crate::message::msg_scroll_flush;
 use crate::syntax::{SynFlags, get_syntax_info, syn_get_stack_item, syn_get_sub_char};
 use crate::types::{ColNr, EvalFuncData, NUL, ScreenChar, TypVal, VarNumber, kListLenMayKnow};
@@ -145,10 +145,13 @@ pub fn f_screenrow(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `screenstring({row}, {col})` — the cell's whole text, or "" off the grid.
 pub fn f_screenstring(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     let cell = Cell::at(args);
     if cell.on_grid() {
-        result.write_string_raw(unsafe { xstrdup(cell.text().as_ptr()) });
+        let text = cell.text();
+        // SAFETY: `text` spells the cell NUL-terminated.
+        let text = unsafe { CStr::from_ptr(text.as_ptr()) };
+        result.write_string(Some(ThinCString::from_cstr(text)));
     }
 }
 
@@ -257,11 +260,10 @@ pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         Some(Attr::Bit(bit)) => highlight_has_attr(id, bit, modec),
         None => ptr::null(),
     };
-    result.write_string_raw(if p.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { xstrdup(p) }
-    });
+    // SAFETY: a non-null answer is a NUL-terminated string the highlight
+    // tables hold, live for the copy.
+    result
+        .write_string((!p.is_null()).then(|| ThinCString::from_cstr(unsafe { CStr::from_ptr(p) })));
 }
 
 /// `synID({lnum}, {col}, {trans})` — the syntax id at a position, 0 off the

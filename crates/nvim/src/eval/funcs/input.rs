@@ -10,7 +10,6 @@ use super::{
 use crate::api::private::helpers::cstr_to_string;
 use crate::api::vim::nvim_feedkeys;
 use crate::buffer::buf_is_prompt;
-use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::edit::buf_prompt_text;
 use crate::eval::prompt_get_input;
@@ -23,7 +22,7 @@ use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::input::prompt_for_input;
-use crate::memory::xstrdup;
+use crate::memory::ThinCString;
 use crate::message::e_invarg;
 use crate::message::state::{lines_left, msg_row, msg_scroll};
 use crate::message::{
@@ -38,7 +37,7 @@ use crate::types::{EvalFuncData, FAIL, NUL, TypVal, TypeaheadSave, VAR_LIST, Var
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// `{type}` spellings `confirm()` recognises, by their first letter.
@@ -183,7 +182,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let list = args[0].list_or_null();
     let len = list_len(unsafe { list.as_ref() }) as usize;
     for (at, li) in list_iter(unsafe { list.as_ref() }).enumerate() {
-        msg_str(unsafe { cstr::at(numbuf.string_ptr(&li.li_tv)) });
+        msg_str(numbuf.string(&li.li_tv));
         // A UI that owns the message area keeps the items in one message,
         // bar the last separator.
         if !ui_has(kUIMessages) || at + 1 < len {
@@ -248,19 +247,20 @@ fn prompt_buffer(arg: &TypVal) -> Option<Buf> {
 /// `prompt_getprompt({buf})` — the prompt text, or "" for a buffer that is
 /// not a prompt buffer.
 pub fn f_prompt_getprompt(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
-    // SAFETY: the frame is live and `result` owns the duplicate.
+    result.write_string(None);
     if let Some(buf) = prompt_buffer(&args[0]) {
-        result.write_string_raw(unsafe { xstrdup(buf_prompt_text(buf)) });
+        // SAFETY: the buffer's own NUL-terminated prompt, or a literal.
+        let text = unsafe { CStr::from_ptr(buf_prompt_text(buf)) };
+        result.write_string(Some(ThinCString::from_cstr(text)));
     }
 }
 
 /// `prompt_getinput({buf})` — what has been typed after the prompt.
 pub fn f_prompt_getinput(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
-    // SAFETY: the frame is live and `prompt_get_input` hands over an
-    // allocation `result` then owns.
+    result.write_string(None);
+    // SAFETY: `prompt_get_input` hands over an `xmalloc`ed string, which the
+    // result adopts.
     if let Some(buf) = prompt_buffer(&args[0]) {
-        result.write_string_raw(unsafe { prompt_get_input(Some(buf)) });
+        result.write_string(unsafe { ThinCString::from_raw(prompt_get_input(Some(buf))) });
     }
 }

@@ -29,7 +29,7 @@ use crate::guard::Suppress;
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::e_invalwindow;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::SavedCpo;
 use crate::option::vars::{P_MAGIC, p_magic};
 use crate::os::cshim::gettext;
@@ -38,7 +38,7 @@ use crate::semsg_multiline;
 use crate::types::Candidate;
 use crate::types::{
     Arena, Array, Blob, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List,
-    MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
+    MsgpackRpcRequestHandler, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
     VarNumber, WrongArity, kBoolVarTrue, ptrdiff_t,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
@@ -100,16 +100,15 @@ pub(crate) fn arg_lnum(tv: &TypVal) -> LineNr {
 
 /// Argument `tv` as a string, the empty string for a value that has none.
 pub(crate) fn arg_string(buf: &mut NumBuf, tv: &TypVal) -> *const c_char {
-    // SAFETY: as [`arg_number`]; a Number is formatted into `buf`, which
-    // outlives the borrow the caller holds it through.
-    buf.string_ptr(tv)
+    // A Number is formatted into `buf`, which outlives the borrow the caller
+    // holds it through.
+    buf.string(tv).as_ptr()
 }
 
 /// As [`arg_string`], but NULL rather than the empty string for a value that
 /// has none.
 pub(crate) fn arg_string_chk(buf: &mut NumBuf, tv: &TypVal) -> *const c_char {
-    // SAFETY: as [`arg_string`].
-    buf.string_ptr_chk(tv)
+    buf.string_chk(tv).map_or(ptr::null(), CStr::as_ptr)
 }
 
 /// Copy argument `tv` into `to`, taking a reference on what it points at.
@@ -333,9 +332,7 @@ pub(crate) fn non_zero_arg(tv: &TypVal) -> bool {
     match tv.v_type() {
         VAR_NUMBER => tv.number_or_zero() != 0,
         VAR_BOOL => tv.as_bool() == Some(kBoolVarTrue),
-        VAR_STRING => {
-            !tv.string_or_null().is_null() && unsafe { *tv.string_or_null() } as c_int != NUL
-        }
+        VAR_STRING => tv.string_ref().is_some_and(|s| !s.is_empty()),
         _ => false,
     }
 }
@@ -419,12 +416,12 @@ pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     if (*tv).v_type() != VAR_STRING {
         return None;
     }
-    let name = (*tv).string_or_null();
     // The empty string is the current buffer, `$` the last one.
-    if name.is_null() || unsafe { *name } as c_int == NUL {
+    let Some(name) = tv.string_ref().filter(|name| !name.is_empty()) else {
         return Buf::current_or_none();
-    }
-    if unsafe { *name } as u8 == b'$' && unsafe { *name.add(1) } as c_int == NUL {
+    };
+    let name_bytes = name.as_bytes();
+    if name_bytes == b"$" {
         return last_buffer();
     }
 
@@ -433,9 +430,11 @@ pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     let save_magic = p_magic();
     let _cpo = SavedCpo::empty();
     P_MAGIC.set(true);
-    let end = unsafe { name.add(cstr::bytes_at(name).len()) };
+    let pattern = name_bytes.as_ptr_range();
     let only = curtab_only != 0;
-    let buf = unsafe { buflist_findpat(name, end, true, false, only) };
+    // SAFETY: the pattern is the argument's own string, live for the call.
+    let buf =
+        unsafe { buflist_findpat(pattern.start.cast(), pattern.end.cast(), true, false, only) };
     let found = find_buf(buf);
     P_MAGIC.set(save_magic);
 
@@ -465,9 +464,7 @@ pub fn get_buf_arg(arg: &TypVal) -> Option<Buf> {
     let buf = tv_get_buf(arg, 0);
     drop(no_emsg);
     if buf.is_none() {
-        let what = numbuf.string_ptr(arg);
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let what = unsafe { c_str(what) };
+        let what = msg_cstr(numbuf.string(arg));
         semsg!("E158: Invalid buffer name: {what}");
     }
     buf
