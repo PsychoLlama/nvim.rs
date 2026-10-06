@@ -19,7 +19,6 @@ use crate::eval::typval::CallFrame;
 use crate::eval::typval::{DictRef, PartialRef};
 use crate::types::Failed;
 use std::borrow::Cow;
-use std::ffi::CString;
 
 /// What a call is made with besides its name and its arguments, as borrows
 /// the caller holds for the length of the call: the safe face of
@@ -278,6 +277,39 @@ fn splice_base(argv: &mut Option<Argv>, args: &[TypVal], base: &TypVal) -> Resul
     Ok(())
 }
 
+/// `bytes` and a NUL after them, in one allocation.
+fn terminated(bytes: &[u8]) -> Vec<u8> {
+    let mut owned = Vec::with_capacity(bytes.len() + 1);
+    owned.extend_from_slice(bytes);
+    owned.push(0);
+    owned
+}
+
+/// The callee's name, copied and terminated: cut at its first NUL, as every
+/// C reader of it was, unless it was `measured` to the NUL already.
+fn name_copy(name: &[u8], measured: bool) -> Vec<u8> {
+    if measured {
+        terminated(name)
+    } else {
+        terminated(&name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())])
+    }
+}
+
+/// The name `name` is stored under, terminated, when that is not `name`
+/// itself; and [`fname_trans_sid`]'s error.
+fn stored_name(name: &[u8]) -> (Option<Vec<u8>>, c_int) {
+    let (stored, error) = fname_trans_sid(name);
+    match stored {
+        Cow::Owned(stored) => (Some(terminated(&stored)), error),
+        Cow::Borrowed(_) => (None, error),
+    }
+}
+
+/// A [`terminated`] copy without its NUL.
+fn unterminated(text: &[u8]) -> &[u8] {
+    &text[..text.len() - 1]
+}
+
 /// Make a call: resolve `funcname` to a partial, a `v:lua` reference, a user
 /// function (autoloading one if need be) or a builtin, and run it.
 ///
@@ -297,8 +329,8 @@ pub unsafe fn call_func(
     // The name, copied: if it comes from a funcref variable it could be
     // changed or deleted inside the called function. Then the name the
     // function is stored under, when that is not the name itself.
-    let mut name: Option<CString> = None;
-    let mut translated: Option<CString> = None;
+    let mut name: Option<Vec<u8>> = None;
+    let mut translated: Option<Vec<u8>> = None;
     // A `v:lua` called directly is reported by that name.
     let mut report_vlua = false;
     let mut selfdict = unsafe { (*funcexe).fe_selfdict };
@@ -314,7 +346,10 @@ pub unsafe fn call_func(
     // this answers FAIL.
     result.write_empty(VAR_UNKNOWN);
 
-    if len <= 0 {
+    // A length the caller did not give is the name's own, which then holds
+    // no NUL.
+    let measured = len <= 0;
+    if measured {
         len = unsafe { cstr::bytes_at(funcname) }.len() as c_int;
     }
     if !partial.is_null() {
@@ -324,15 +359,11 @@ pub unsafe fn call_func(
         // SAFETY: the caller's promise -- `len` readable bytes. Every
         // reader of the copy stops at its first NUL, as the C's did.
         let copy = unsafe { cstr::slice_at(funcname, len as size_t) };
-        let copy = &copy[..copy.iter().position(|&b| b == 0).unwrap_or(copy.len())];
-        let copy = name.insert(CString::new(copy).expect("cut at its first NUL"));
-        let (stored, sid_error) = fname_trans_sid(copy.to_bytes());
-        error = sid_error;
-        if let Cow::Owned(stored) = stored {
-            translated = Some(CString::new(stored).expect("a mangled name holds no NUL"));
-        }
+        let copy = name.insert(name_copy(copy, measured));
+        (translated, error) = stored_name(unterminated(copy));
     }
-    let fname: &CStr = translated.as_deref().or(name.as_deref()).unwrap_or(c"");
+    // The name the function is stored under, with its NUL.
+    let fname: &[u8] = translated.as_deref().or(name.as_deref()).unwrap_or(b"\0");
     if !unsafe { (*funcexe).fe_doesrange }.is_null() {
         unsafe { *(*funcexe).fe_doesrange = false };
     }
@@ -361,13 +392,15 @@ pub unsafe fn call_func(
 
         if error == FCERR_NONE && unsafe { (*funcexe).fe_evaluate } {
             // Skip "g:" before a function name.
-            let rfname_c = if fp.is_null() && fname.to_bytes().starts_with(b"g:") {
-                &fname[2..]
+            let skip = if fp.is_null() && fname.starts_with(b"g:") {
+                2
             } else {
-                fname
+                0
             };
-            let rfname = rfname_c.to_bytes();
-            let rfname_c = rfname_c.as_ptr().cast_mut();
+            let rfname = unterminated(&fname[skip..]);
+            // The same, as the C string the autocommand and the autoloader
+            // read.
+            let rfname_c = fname[skip..].as_ptr().cast::<c_char>().cast_mut();
 
             // the default is number zero
             result.write_number(0);
@@ -446,9 +479,9 @@ pub unsafe fn call_func(
                 let base = unsafe { (*funcexe).fe_basetv };
                 let args = spliced_args(&argv, args_in, nargs);
                 error = if base.is_null() {
-                    unsafe { call_internal_func(fname.as_ptr(), args, result) }
+                    unsafe { call_internal_func(fname.as_ptr().cast(), args, result) }
                 } else {
-                    unsafe { call_internal_method(fname.as_ptr(), args, result, &mut *base) }
+                    unsafe { call_internal_method(fname.as_ptr().cast(), args, result, &mut *base) }
                 };
             }
 
@@ -473,7 +506,7 @@ pub unsafe fn call_func(
         let found = unsafe { (*funcexe).fe_found_var };
         match &name {
             _ if report_vlua => user_func_error(error, b"v:lua", found),
-            Some(name) => user_func_error(error, name.to_bytes(), found),
+            Some(name) => user_func_error(error, unterminated(name), found),
             // SAFETY: the caller's terminated name.
             None => user_func_error(error, unsafe { cstr::bytes_at(funcname) }, found),
         }
