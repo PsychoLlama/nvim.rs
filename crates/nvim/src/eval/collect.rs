@@ -394,7 +394,10 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
         };
         if stale(unsafe { (*ll).copy_id() }, copy_id) && !list_has_watchers(unsafe { ll.as_ref() })
         {
-            list_free_contents(unsafe { &mut *ll });
+            // SAFETY: a registered list; the view takes no reference.
+            list_free_contents(&::core::mem::ManuallyDrop::new(
+                unsafe { ListRef::owning(ll) }.expect("a live list"),
+            ));
             did_free = true;
         }
     }
@@ -682,21 +685,17 @@ pub unsafe fn var_item_copy(
             }
         }
         VAR_LIST => {
-            let l = src.list_or_null();
-            if l.is_null() {
-                dst.write_list(None);
-            // SAFETY: `l` is the source's live List.
-            } else if copy_id != 0 && unsafe { (*l).copy_id() } == copy_id {
-                // Already copied under this id: share that copy, which gains
-                // this reference.
-                // SAFETY: as above -- the copy it was given under this id.
-                let copy = list_latest_copy(unsafe { &*l });
-                dst.write_list(unsafe { ListRef::retained(copy) });
-            } else {
-                // SAFETY: as above; `conv` is null or the caller's.
-                dst.write_list(unsafe { list_copy(conv, ListRef::retained(l), deep, copy_id) });
-            }
-            if dst.list_or_null().is_null() && !l.is_null() {
+            let orig = src.list_shared();
+            let copied = orig.and_then(|orig| {
+                // The copy it was given under this id, which gains this
+                // reference, or a fresh one.
+                // SAFETY: `conv` is null or the caller's.
+                orig.copy_under(copy_id)
+                    .or_else(|| list_copy(unsafe { conv.as_ref() }, orig, deep, copy_id))
+            });
+            let failed = orig.is_some() && copied.is_none();
+            dst.write_list(copied);
+            if failed {
                 ret = Err(Failed);
             }
         }
@@ -758,16 +757,10 @@ pub(crate) fn var_item_copy_with(
     }
 }
 
-/// The copy this list was last given under the current `copy_id`.
-#[inline]
-pub(crate) fn list_latest_copy(l: &List) -> *mut List {
-    l.lv_copylist
-}
-
 /// Is anything watching this list? A watched list is never freed, because
 /// the watcher is a borrow the mark cannot see.
 ///
 #[inline]
 pub(crate) fn list_has_watchers(l: Option<&List>) -> bool {
-    l.is_some_and(|l| !l.lv_watch.is_null())
+    l.is_some_and(List::is_watched)
 }

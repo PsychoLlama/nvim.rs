@@ -290,7 +290,7 @@ fn seed_list(tv: &TypVal) -> Option<[*mut TypVal; 4]> {
     for (i, slot) in out.iter_mut().enumerate() {
         // SAFETY: the length check above proves index `i` exists, so
         // `list_find` returns a live item.
-        let tv = unsafe { &raw mut (*list_find(l.as_mut(), i as c_int)).li_tv };
+        let tv = unsafe { &raw mut list_find(l.as_mut(), i as c_int).expect("checked").li_tv };
         // SAFETY: as above.
         if unsafe { (*tv).v_type() } != VAR_NUMBER {
             return None;

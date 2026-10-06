@@ -153,7 +153,7 @@ impl Lines {
     /// last few.
     fn drop_first(self) {
         // SAFETY: a live list, reached only with at least one item in it.
-        unsafe { (*self.0).remove_at(0) };
+        drop(unsafe { (*self.0).take_range(0, 0) });
     }
 }
 

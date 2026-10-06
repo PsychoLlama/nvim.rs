@@ -132,9 +132,10 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
         return;
     }
     if make_copy {
-        // SAFETY: the argument's live list, which the copy takes a
-        // reference to for the walk; no conversion, a fresh copyID.
-        let copy = unsafe { list_copy(ptr::null(), ListRef::retained(list), false, get_copy_id()) };
+        // No conversion, a fresh copyID.
+        let copy = args[0]
+            .list_shared()
+            .and_then(|list| list_copy(None, list, false, get_copy_id()));
         list = copy.as_ref().map_or(ptr::null_mut(), ListRef::as_ptr);
         // The reference taken above goes back: the answer is the copy.
         drop(result.take_list());
@@ -152,7 +153,10 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
     }
     // SAFETY: `list` is the live List argument 0 named.
     let len = list_len(unsafe { list.as_ref() }) as i64;
-    list_flatten(unsafe { &mut *list }, 0, len, maxdepth as i64);
+    // The answer holds `list`: the argument's own, or its copy.
+    if let Some(list) = result.list_shared() {
+        list_flatten(list, 0, len, maxdepth as i64);
+    }
 }
 
 /// `get({container}, {key} [, {default}])` — for a Blob, List, Dict,
@@ -223,11 +227,10 @@ fn get_from_list(args: &[TypVal]) -> *mut TypVal {
     }
     let mut error = false;
     let idx = arg_number_chk(&args[1], Some(&mut error)) as c_int;
-    let li = list_find(unsafe { l.as_mut() }, idx);
-    if error || li.is_null() {
-        return ptr::null_mut();
+    match list_find(unsafe { l.as_mut() }, idx) {
+        Some(li) if !error => &raw mut li.li_tv,
+        _ => ptr::null_mut(),
     }
-    unsafe { &raw mut (*li).li_tv }
 }
 
 /// `get()` over a Dictionary. The caller has checked the tag.

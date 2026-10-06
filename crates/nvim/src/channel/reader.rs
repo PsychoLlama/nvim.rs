@@ -287,7 +287,7 @@ pub unsafe fn reader_lines(reader: *mut CallbackReader) -> ListRef {
     let into = l.as_ptr();
     // SAFETY: the fresh list, and the caller's garray, which holds `ga_len`
     // readable bytes at `ga_data`.
-    unsafe { (*into).push_string(c"".as_ptr(), 0) };
+    unsafe { (*into).push_bytes(Some(b"")) };
     let buffer = unsafe { &(*reader).buffer };
     if !buffer.is_empty() {
         unsafe { encode_list_write(into.cast(), buffer.as_ptr().cast(), buffer.len()) };

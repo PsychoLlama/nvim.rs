@@ -459,8 +459,8 @@ impl ListItem {
     }
 }
 
-/// A Vimscript List: an array of values, reference counted, and a chain of
-/// cursors (`lv_watch`) held by whatever `:for` loops are walking it.
+/// A Vimscript List: an array of values, reference counted, and the cursors
+/// (`lv_watch`) of whatever `:for` loops are walking it.
 ///
 /// The items are owned outright -- dropping the list drops them -- which is
 /// why an item's identity outside the array is an *index* and not an
@@ -468,7 +468,8 @@ impl ListItem {
 /// and `tv_list_watch_*` is what keeps it pointing at the same item.
 pub struct List {
     pub lv_items: Vec<ListItem>,
-    pub lv_watch: *mut ListWatch,
+    /// The `:for` cursors on this list, each named by its `id`.
+    pub lv_watch: Vec<ListWatch>,
     pub lv_copylist: *mut List,
     /// Where the collector's registry holds this list, or `RootId::NONE`
     /// for one the allocator never handed out.
@@ -491,7 +492,7 @@ impl List {
     pub const fn empty() -> List {
         List {
             lv_items: Vec::new(),
-            lv_watch: ::core::ptr::null_mut(),
+            lv_watch: Vec::new(),
             lv_copylist: ::core::ptr::null_mut(),
             lv_root: RootId::NONE,
             lv_refcount: Refcount::ZERO,
@@ -507,13 +508,13 @@ impl List {
 /// it will hand out next, or [`ListWatch::ENDED`] once it has run off the
 /// end.
 ///
-/// Not `Copy`: a node of the intrusive watcher chain the loop links into its
-/// list, so a duplicate would be a second node claiming the same place in
-/// it.
+/// The list owns its cursors; a loop holds the `id` its cursor was
+/// registered under and asks the list for the index.
 #[derive(Clone)]
 pub struct ListWatch {
-    pub lw_index: ::core::ffi::c_int,
-    pub lw_next: *mut ListWatch,
+    /// Unique among the cursors of one list.
+    pub id: u32,
+    pub index: ::core::ffi::c_int,
 }
 
 impl ListWatch {
@@ -522,14 +523,6 @@ impl ListWatch {
     /// it is walking still ends, because the cursor ran off the end before
     /// the item existed.
     pub const ENDED: ::core::ffi::c_int = -1;
-
-    /// A cursor on `l[0]`, which is where a `:for` loop starts.
-    pub const fn at_start() -> ListWatch {
-        ListWatch {
-            lw_index: 0,
-            lw_next: ::core::ptr::null_mut(),
-        }
-    }
 }
 /// A partial: a function plus bound arguments and an optional `self` dict.
 ///

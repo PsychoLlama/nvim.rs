@@ -83,8 +83,7 @@ use crate::startup::exiting;
 use crate::types::CmdIdx;
 use crate::types::TypVal;
 use crate::types::{
-    CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t, size_t, ssize_t,
-    uint64_t,
+    CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t, size_t, uint64_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
@@ -231,7 +230,7 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
 
     let argv = tv_list_alloc(3 as ptrdiff_t);
     let into = argv.as_ptr();
-    unsafe { (*into).push_string(buffer.as_ptr(), -1 as ssize_t) };
+    unsafe { (*into).push_str(crate::cstr::at_opt(buffer.as_ptr())) };
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
     unsafe {
@@ -254,7 +253,7 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     let into = argv.as_ptr();
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
-    unsafe { (*into).push_string(excmd.arg_ptr(), -1 as ssize_t) };
+    unsafe { (*into).push_str(crate::cstr::at_opt(excmd.arg_ptr())) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),

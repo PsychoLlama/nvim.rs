@@ -93,7 +93,7 @@ pub unsafe fn tv_to_argv(
     // resolved path is what actually goes in slot 0.
     // SAFETY: a non-empty List has a first item, and `numbuf2` outlives
     // the string rendered into it.
-    let arg0 = numbuf2.string_chk(unsafe { &(*list_first(argl.as_mut())).li_tv });
+    let arg0 = numbuf2.string_chk(unsafe { &list_first(argl.as_mut()).expect("non-empty").li_tv });
     let mut exe_resolved: *mut c_char = null_mut();
     // SAFETY: `exe_resolved` is this frame's.
     let runnable =

@@ -28,7 +28,7 @@ use crate::message::state::emsg_severe;
 use crate::message_fmt::msg_bytes;
 use crate::os::env::vim_unsetenv_named;
 use crate::semsg;
-use crate::types::{CmdIdx, ExArg, Failed, List, VAR_DICT, VAR_LIST};
+use crate::types::{CmdIdx, ExArg, Failed, ListRef, VAR_DICT, VAR_LIST};
 use core::ffi::c_int;
 
 use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, GLV_QUIET, clear_local, do_unlet, with_var};
@@ -155,12 +155,12 @@ fn do_unlet_var(mut lval: LValue<'_>, forceit: bool) -> Result<(), Failed> {
             slot: Slot::Item { list, index },
             span,
         } => {
-            let (mut list, index, span) = (list.clone(), *index, *span);
+            let (list, index, span) = (list.clone(), *index, *span);
             if value_check_lock_named(list_locked(Some(&list)), lval.name()) {
                 return Err(Failed);
             }
             if span.range {
-                unlet_range(&mut list, index, span);
+                unlet_range(&list, index, span);
             } else {
                 list.remove_at(index);
             }
@@ -200,7 +200,7 @@ fn do_unlet_var(mut lval: LValue<'_>, forceit: bool) -> Result<(), Failed> {
 
 /// Delete the items of `list` from `first` through the range's last, or to
 /// the end when it has none.  `first` must be an index into `list`.
-fn unlet_range(list: &mut List, first: usize, span: Span) {
+fn unlet_range(list: &ListRef, first: usize, span: Span) {
     // The run ends at `n2` when there is one, and at the last item either
     // way.  An empty list has no run at all; `get_lval` refuses the index
     // that would name one, so this only guards the arithmetic.

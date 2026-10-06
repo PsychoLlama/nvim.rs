@@ -102,16 +102,10 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
     let mut retlist = None;
     if called as c_int == OK {
         if rettv.v_type() as c_uint == VAR_LIST as c_uint {
-            // SAFETY: the return value's own list, which the copy takes a
-            // reference to for the walk; no conversion, a fresh copyID.
-            retlist = unsafe {
-                list_copy(
-                    ptr::null(),
-                    ListRef::retained(rettv.list_or_null()),
-                    false,
-                    get_copy_id(),
-                )
-            };
+            // No conversion, a fresh copyID.
+            retlist = rettv
+                .list_shared()
+                .and_then(|list| list_copy(None, list, false, get_copy_id()));
         } else {
             emsg(gettext(e_invalid_return_type_from_findfunc));
         }
@@ -154,11 +148,12 @@ pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> *mut c_char {
         semsg!("E347: No more file \"{findarg}\" found in path");
     } else {
         let li = list_find(held.as_deref_mut(), count - 1);
-        if !li.is_null() && unsafe { (*li).li_tv.v_type() } as c_uint == VAR_STRING as c_uint {
-            // SAFETY: the item `list_find` found in the list held above.
+        if let Some(li) = li
+            && li.li_tv.v_type() as c_uint == VAR_STRING as c_uint
+        {
             // The null string, which upstream's `xstrdup` crashed on, reads
             // as the empty one.
-            let name = unsafe { (*li).li_tv.string_cstr() }.unwrap_or(c"");
+            let name = li.li_tv.string_cstr().unwrap_or(c"");
             ret_fname = ThinCString::from_cstr(name).into_raw();
         }
     }

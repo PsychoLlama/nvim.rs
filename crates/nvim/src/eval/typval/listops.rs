@@ -8,8 +8,7 @@
 //! from the tail for a negative index and is a bounds check and an array
 //! index — the list owns its items, so there is nothing to walk.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,6 +18,7 @@
 )]
 
 use super::*;
+use crate::eval::collect::var_item_copy_with;
 use crate::memory::ThinCString;
 use crate::semsg;
 use crate::types::Failed;
@@ -88,28 +88,15 @@ impl List {
         self.push(TypVal::dict(dict));
     }
 
-    /// Append a copy of `str`'s first `len` bytes.
-    ///
-    /// A negative `len` means the whole NUL-terminated string; a NULL `str`
-    /// appends a NULL string.
-    ///
-    /// # Safety
-    /// `str` is null, or readable for `len` bytes, or -- when `len` is
-    /// negative -- NUL-terminated. The bytes are copied, so `str` stays the
-    /// caller's.
-    pub unsafe fn push_string(&mut self, str: *const ::core::ffi::c_char, len: ssize_t) {
-        let copied = if str.is_null() {
-            None
-        } else if len >= 0 {
-            // SAFETY: the caller's promise: `len` readable bytes.
-            let bytes =
-                unsafe { ::core::slice::from_raw_parts(str.cast::<u8>(), len.cast_unsigned()) };
-            Some(ThinCString::from_bytes(bytes))
-        } else {
-            // SAFETY: the caller's promise: NUL-terminated.
-            Some(ThinCString::from_cstr(unsafe { CStr::from_ptr(str) }))
-        };
-        self.push(TypVal::string(copied));
+    /// Append a copy of `text`; `None` appends a NULL string.
+    pub fn push_bytes(&mut self, text: Option<&[u8]>) {
+        self.push(TypVal::string(text.map(ThinCString::from_bytes)));
+    }
+
+    /// Append a copy of the NUL-terminated `text`; `None` appends a NULL
+    /// string.
+    pub fn push_str(&mut self, text: Option<&CStr>) {
+        self.push(TypVal::string(text.map(ThinCString::from_cstr)));
     }
 
     /// Append the number `n`.
@@ -122,36 +109,28 @@ impl List {
 ///
 /// `copy_id` is the garbage collector's mark: non-zero records the copy on the
 /// original *before* any item is added, so a list containing itself resolves
-/// to the same copy.  Answers NULL when a deep copy of an item failed.
+/// to the same copy.  Answers `None` when a deep copy of an item failed.
+/// A non-zero `copy_id` must be one the caller reserved from `get_copyID`:
+/// a stale one makes an unrelated walk believe this list is already visited.
 ///
-/// A **counted** handle rather than a borrow: `var_item_copy` re-enters the
-/// evaluator, which can grow -- or release the last reference to -- the very
-/// list being copied. The handle keeps it alive for the walk, and every item
-/// read is a fresh, short-lived borrow through it.
-///
-/// # Safety
-/// `conv` is null or a live converter. A non-zero `copy_id` must be one the
-/// caller reserved from `get_copyID`: it is written onto `orig`, and a stale
-/// one makes an unrelated walk believe this list is already visited.
-pub unsafe fn list_copy(
-    conv: *const VimConv,
-    orig: Option<ListRef>,
+/// A deep copy re-enters through `var_item_copy`, and a list that holds
+/// itself is read again from in there -- through the mark this call has just
+/// written onto it -- so the walk is by index over the handle, each item read
+/// through a fresh borrow.
+pub fn list_copy(
+    conv: Option<&VimConv>,
+    orig: &ListRef,
     deep: bool,
     copy_id: ::core::ffi::c_int,
 ) -> Option<ListRef> {
-    let mut orig = orig?;
-
     let mut copy = tv_list_alloc(ptrdiff_t::try_from(orig.len()).unwrap_or(-1));
     if copy_id != 0 {
         // Do this before adding the items, because one of the items may
         // refer back to this list.
-        orig.lv_copy_id = copy_id;
-        orig.lv_copylist = copy.as_ptr();
+        orig.remember_copy(copy_id, &copy);
     }
-    // By index, re-derived each step: a deep copy runs `var_item_copy`,
-    // which can re-enter and grow the very list being copied.  The count is
-    // taken once, as upstream's walk over the original links effectively
-    // did.
+    // The count is taken once, as upstream's walk over the original links
+    // effectively did.
     let len = orig.len();
     for at in 0..len {
         if got_int.get() {
@@ -160,8 +139,7 @@ pub unsafe fn list_copy(
         let mut value = TV_INITIAL_VALUE;
         let from = &orig.items()[at].li_tv;
         if deep {
-            // SAFETY: the caller's promise about `conv` and `copy_id`.
-            if unsafe { var_item_copy(conv, from, &mut value, deep, copy_id) }.is_err() {
+            if var_item_copy_with(conv, from, &mut value, deep, copy_id).is_err() {
                 // `tv_list_copy_error`: the partial copy goes with the
                 // handle, which is the only reference to it.
                 return None;
@@ -174,104 +152,66 @@ pub unsafe fn list_copy(
     Some(copy)
 }
 
-/// Splicing one list into another: the `extend()` half, and the aliasing
-/// case it has to answer.
-impl List {
-    /// Insert copies of `src`'s items at `bef`, where `src` is a **different**
-    /// list.
-    ///
-    /// The two borrows are what says so.  For `extend(l, l)` -- and for
-    /// `l += l`, and for `flatten()` over a list holding itself -- the
-    /// caller branches to [`List::extend_from_self`] instead: two live
-    /// borrows of one list would be undefined where the pointer this
-    /// replaced was merely delicate.
-    pub(crate) fn extend_from(&mut self, src: &List, bef: InsertAt) {
-        self.lv_items.reserve(src.len());
-        for i in 0..src.len() {
-            // The copy is made *before* anything is inserted, and the
-            // insertion point walks along with the items already put in.
-            self.insert_copy(&src.items()[i].li_tv, bef.map(|at| at + i));
-        }
-    }
-
-    /// Insert copies of this list's *own* items at `bef`: `extend(l, l)`.
-    ///
-    /// The count is read once, so the walk copies what was there and does
-    /// not run away.  The `i`th original item has `i` copies in front of it
-    /// by the time its turn comes, so it now sits at `2 * i` -- unless it
-    /// started before the insertion point, where nothing has moved.  That is
-    /// upstream's `befbef`/`saved_next` bookkeeping, arithmetic instead of
-    /// links.
-    pub(crate) fn extend_from_self(&mut self, bef: InsertAt) {
-        let todo = self.len();
-        self.lv_items.reserve(todo);
-        let bef_at = bef.unwrap_or(usize::MAX);
-        for i in 0..todo {
-            let src = if i >= bef_at { i + i } else { i };
-            // The copy is made before the insert, which is what lets it read
-            // the array it is about to write.
-            let mut copy = TV_INITIAL_VALUE;
-            tv_copy(&self.items()[src].li_tv, &mut copy);
-            self.insert_item(ListItem::new(copy), bef.map(|at| at + i));
-        }
-    }
-}
-
 /// Insert copies of `src`'s items into `dest` at `bef`, where the two may be
-/// the same list.
+/// the same list: `extend(l, l)`, `l += l`, and `flatten()` over a list
+/// holding itself.
 ///
-/// The branch is the whole function: `dest` and `src` are named by raw
-/// pointers precisely because one borrow cannot answer both, and each arm
-/// takes only the borrows it needs.
+/// Each copy is made before the list it goes into is borrowed, and that
+/// borrow lasts one statement: a copy of an item naming either list takes a
+/// reference to it. For the same list, the items are all copied first, the
+/// count taken before -- so the walk copies what was there and does not run
+/// away, which is what upstream's `befbef`/`saved_next` bookkeeping bought.
 ///
 /// A NULL `src` is the empty list -- `extend(l, v:_null_list)` -- and
-/// extends nothing.
-///
-/// # Safety
-/// `dest` must point at a live list and `src` at a live list or null --
-/// possibly the same list as `dest` -- with no other borrow of either live
-/// for the call, and `bef` must be `None` or an index of `dest`.
-pub unsafe fn list_extend(dest: *mut List, src: *const List, bef: InsertAt) {
-    if src.is_null() {
+/// extends nothing. `bef` must be `None` or an index of `dest`.
+pub fn list_extend(dest: &ListRef, src: Option<&ListRef>, bef: InsertAt) {
+    let Some(src) = src else {
         return;
-    }
-    if ::core::ptr::eq(dest.cast_const(), src) {
-        // SAFETY: the caller's promise: a live list.
-        unsafe { &mut *dest }.extend_from_self(bef);
+    };
+    if dest.ptr_eq(src) {
+        let copies: Vec<TypVal> = (0..src.len())
+            .map(|at| src.items()[at].li_tv.clone())
+            .collect();
+        dest.edit().lv_items.reserve(copies.len());
+        for (i, copy) in copies.into_iter().enumerate() {
+            dest.edit()
+                .insert_item(ListItem::new(copy), bef.map(|at| at + i));
+        }
     } else {
-        // SAFETY: as above, and the test above says the two are disjoint.
-        unsafe { (*dest).extend_from(&*src, bef) };
+        let count = src.len();
+        dest.edit().lv_items.reserve(count);
+        for i in 0..count {
+            // The insertion point walks along with the items already put in.
+            let copy = src.items()[i].li_tv.clone();
+            dest.edit()
+                .insert_item(ListItem::new(copy), bef.map(|at| at + i));
+        }
     }
 }
 
 /// `l1 + l2`: store a shallow copy of the two lists joined in `tv`.
 ///
-/// `tv` holds no value yet: it is overwritten, not cleared.
-///
-/// # Safety
-/// `l1` and `l2` are each null or a live list the caller holds a reference
-/// to; they may be the same list (`l + l`), which the copy makes harmless.
-pub unsafe fn list_concat(l1: *mut List, l2: *mut List, tv: &mut TypVal) -> Result<(), Failed> {
+/// `tv` holds no value yet: it is overwritten, not cleared. The two may be
+/// the same list (`l + l`), which the copy makes harmless.
+pub fn list_concat(
+    l1: Option<&ListRef>,
+    l2: Option<&ListRef>,
+    tv: &mut TypVal,
+) -> Result<(), Failed> {
     tv.write_empty(VAR_LIST);
-    // SAFETY: the caller's promise: live lists, or null.
-    let (held1, mut held2) = unsafe { (ListRef::retained(l1), ListRef::retained(l2)) };
-    let l = if held1.is_none() && held2.is_none() {
-        None
-    } else if held1.is_none() {
-        // SAFETY: no conversion, and the fresh-copy marker is 0.
-        unsafe { list_copy(::core::ptr::null(), held2, false, 0) }
-    } else {
-        // SAFETY: as above.
-        let mut l = unsafe { list_copy(::core::ptr::null(), held1, false, 0) };
-        if let Some(ref mut l) = l
-            && let Some(src) = held2.as_deref_mut()
-        {
-            // The copy is a list of this call's own, so it is never `src`.
-            l.extend_from(src, None);
+    let l = match (l1, l2) {
+        (None, None) => None,
+        (None, Some(l2)) => list_copy(None, l2, false, 0),
+        (Some(l1), l2) => {
+            let l = list_copy(None, l1, false, 0);
+            if let Some(l) = &l {
+                // The copy is a list of this call's own, so it is never `l2`.
+                list_extend(l, l2, None);
+            }
+            l
         }
-        l
     };
-    if l.is_none() && !(l1.is_null() && l2.is_null()) {
+    if l.is_none() && !(l1.is_none() && l2.is_none()) {
         return Err(Failed);
     }
     tv.write_list(l);
@@ -284,27 +224,21 @@ pub(crate) fn list_concat_values(
     tv2: &TypVal,
     tv: &mut TypVal,
 ) -> Result<(), Failed> {
-    // SAFETY: a List value holds a reference to a live list, or none.
-    unsafe { list_concat(tv1.list_or_null(), tv2.list_or_null(), tv) }
+    list_concat(tv1.list_shared(), tv2.list_shared(), tv)
 }
 
 /// `remove()` over a list: move one item, or the range `[idx, end]`, into
-/// `result`.
-///
-/// # Safety
-/// `args` must hold at least two values, the first a `VAR_LIST`.
-/// `result` must be writable and hold no value yet, and `arg_errmsg` must be
-/// a NUL-terminated string.
-pub unsafe fn list_remove(
+/// `result`, which holds no value yet. `args` holds at least two values,
+/// the first a `VAR_LIST`; `arg_errmsg` names the argument in a lock error,
+/// translated.
+pub fn list_remove(
     list: Option<&mut List>,
     args: &[TypVal],
     result: &mut TypVal,
-    arg_errmsg: *const ::core::ffi::c_char,
+    arg_errmsg: &'static CStr,
 ) {
-    let translate = size_t::try_from(TV_TRANSLATE).unwrap_or(size_t::MAX);
     let lock = list.as_deref().map_or(VarLock::Fixed, List::lock);
-    // SAFETY: the caller's promise: a NUL-terminated message.
-    if unsafe { value_check_lock(lock, arg_errmsg, translate) } {
+    if value_check_lock_named(lock, gettext(arg_errmsg).to_bytes()) {
         return;
     }
     let Some(list) = list else { return };
@@ -388,7 +322,7 @@ impl List {
         }
         self.lv_items.reverse();
         // A cursor follows the item it stands on, which has been mirrored.
-        if !self.lv_watch.is_null() {
+        if self.is_watched() {
             let mirrored: Vec<::core::ffi::c_int> = (0..len).rev().map(index_of).collect();
             watch_permute(self, &mirrored);
         }
@@ -396,29 +330,22 @@ impl List {
 }
 
 /// The item at index `n` of `l`, counting from the tail when `n` is
-/// negative, or NULL when there is no such item.
-///
-/// The answer **borrows the list's item store** and is invalidated by any
-/// edit to it.
-pub fn list_find(l: Option<&mut List>, n: ::core::ffi::c_int) -> *mut ListItem {
-    let Some(l) = l else {
-        return ::core::ptr::null_mut();
-    };
-    let Some(at) = list_index(Some(l), n) else {
-        return ::core::ptr::null_mut();
-    };
-    &raw mut l.items_mut()[at]
+/// negative, or `None` when there is no such item.
+pub fn list_find(l: Option<&mut List>, n: ::core::ffi::c_int) -> Option<&mut ListItem> {
+    let l = l?;
+    let at = list_index(Some(l), n)?;
+    Some(&mut l.items_mut()[at])
 }
 
-/// First item of `l`, or NULL when it is empty or NULL.
+/// First item of `l`, or `None` when it is empty or NULL.
 #[inline]
-pub fn list_first(l: Option<&mut List>) -> *mut ListItem {
+pub fn list_first(l: Option<&mut List>) -> Option<&mut ListItem> {
     list_find(l, 0)
 }
 
-/// Last item of `l`, or NULL when it is empty or NULL.
+/// Last item of `l`, or `None` when it is empty or NULL.
 #[inline]
-pub fn list_last(l: Option<&mut List>) -> *mut ListItem {
+pub fn list_last(l: Option<&mut List>) -> Option<&mut ListItem> {
     list_find(l, -1)
 }
 

@@ -15,7 +15,7 @@ use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
-use crate::types::{ColNr, Failed, FileMark, LineNr, List, ListItem, NUL, Pos, TypVal, VAR_LIST};
+use crate::types::{ColNr, Failed, FileMark, LineNr, List, NUL, Pos, TypVal, VAR_LIST};
 use crate::winlayer::Win;
 
 /// The character index of byte index `byteidx` in a buffer line.
@@ -133,9 +133,8 @@ pub fn var2fpos(
         };
         // The column may be spelled `"$"`, meaning end of line.
         // SAFETY: `l` is a live List.
-        let li: *mut ListItem = list_find(unsafe { l.as_mut() }, 1);
-        // SAFETY: a non-null item is a live item of `l`.
-        let dollar = !li.is_null() && unsafe { (*li).li_tv.string_bytes() } == b"$";
+        let li = list_find(unsafe { l.as_mut() }, 1);
+        let dollar = li.is_some_and(|li| li.li_tv.string_bytes() == b"$");
         if dollar {
             pos.col = len + 1;
         }

@@ -26,7 +26,6 @@ use crate::register::{
 };
 use crate::types::{
     AdditionalData, NUL, String_0, VAR_LIST, VAR_NUMBER, VAR_STRING, YankReg, ptrdiff_t, size_t,
-    ssize_t,
 };
 use core::ffi::{c_char, c_int, c_void};
 
@@ -167,7 +166,7 @@ pub(crate) unsafe fn get_clipboard(
     let regname = name as c_char;
     // SAFETY: a fresh list; `regname` outlives the append, and the provider
     // call below owns `args` from here on.
-    unsafe { (*args.as_ptr()).push_string(&raw const regname, 1) };
+    unsafe { (*args.as_ptr()).push_bytes(Some(&[regname.cast_unsigned()])) };
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"get".as_ptr().cast_mut());
     let result = unsafe { eval_call_provider(provider, method, Some(args), false) };
 
@@ -185,13 +184,23 @@ pub(crate) unsafe fn get_clipboard(
         let res = result.list_or_null();
         let lines;
         if list_len(result.list_ref()) == 2
-            && unsafe { (*list_first(res.as_mut())).li_tv.v_type() } == VAR_LIST
+            && unsafe { list_first(res.as_mut()).expect("two items").li_tv.v_type() } == VAR_LIST
         {
-            lines = unsafe { (*list_first(res.as_mut())).li_tv.list_or_null() };
-            if unsafe { (*list_last(res.as_mut())).li_tv.v_type() } != VAR_STRING {
+            lines = unsafe {
+                list_first(res.as_mut())
+                    .expect("two items")
+                    .li_tv
+                    .list_or_null()
+            };
+            if unsafe { list_last(res.as_mut()).expect("two items").li_tv.v_type() } != VAR_STRING {
                 break 'err;
             }
-            let Some(regtype) = (unsafe { (*list_last(res.as_mut())).li_tv.string_ref() }) else {
+            let Some(regtype) = (unsafe {
+                list_last(res.as_mut())
+                    .expect("two items")
+                    .li_tv
+                    .string_ref()
+            }) else {
                 break 'err;
             };
             if regtype.as_bytes().len() > 1 {
@@ -300,18 +309,18 @@ pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut YankReg) {
     let lines = tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t);
     for i in 0..reg.y_size {
         let line = unsafe { &*reg.y_array.add(i) };
-        unsafe { (*lines.as_ptr()).push_string(line.data(), line.len() as ssize_t) };
+        unsafe { (*lines.as_ptr()).push_bytes(Some(line.as_bytes())) };
     }
     if trailing {
-        unsafe { (*lines.as_ptr()).push_string(core::ptr::null(), 0) };
+        unsafe { (*lines.as_ptr()).push_bytes(None) };
     }
 
     let args = tv_list_alloc(3);
     let into = args.as_ptr();
     unsafe { (*into).push_list(Some(lines)) };
-    unsafe { (*into).push_string(&raw const regtype, 1) };
+    unsafe { (*into).push_bytes(Some(&[regtype.cast_unsigned()])) };
     let regname = [name as c_char];
-    unsafe { (*into).push_string(regname.as_ptr(), 1) };
+    unsafe { (*into).push_bytes(Some(&[regname[0].cast_unsigned()])) };
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
     unsafe { eval_call_provider(provider, method, Some(args), true) };
 }

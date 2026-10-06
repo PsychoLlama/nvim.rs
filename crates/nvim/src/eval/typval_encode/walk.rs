@@ -520,9 +520,13 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                 return Ok(None);
             }
             // SAFETY: the two items of a two-item list.
-            let first = unsafe { Li::new(list_first(val_list.as_mut())) };
+            let first = unsafe {
+                Li::new(list_first(val_list.as_mut()).map_or(ptr::null_mut(), ptr::from_mut))
+            };
             // SAFETY: as above.
-            let last = unsafe { Li::new(list_last(val_list.as_mut())) };
+            let last = unsafe {
+                Li::new(list_last(val_list.as_mut()).map_or(ptr::null_mut(), ptr::from_mut))
+            };
             let ext_type = first.number();
             if first.v_type() != VAR_NUMBER
                 || ext_type > i8::MAX as VarNumber

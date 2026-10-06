@@ -415,7 +415,7 @@ unsafe fn read_list_at(l: *const List, path: &mut Vec<Container>) -> Tv {
     path.push(Container::List(l.cast_mut()));
     let mut items = Vec::new();
     for at in 0..list_len(unsafe { l.as_ref() }) {
-        let li = list_find(unsafe { l.cast_mut().as_mut() }, at);
+        let li = item_ptr(list_find(unsafe { l.cast_mut().as_mut() }, at));
         items.push(unsafe { read_at(&raw const (*li).li_tv, path) });
     }
     path.pop();
@@ -504,8 +504,37 @@ pub(crate) unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut Dict {
 /// `l` is NULL or points at a live list.
 pub(crate) unsafe fn list_items(l: *const List) -> Vec<*mut ListItem> {
     (0..list_len(unsafe { l.as_ref() }))
-        .map(|at| list_find(unsafe { l.cast_mut().as_mut() }, at))
+        .map(|at| item_ptr(list_find(unsafe { l.cast_mut().as_mut() }, at)))
         .collect()
+}
+
+/// A handle onto `l` holding a reference of its own, given back when the
+/// handle drops -- what a list's releasing edits (`remove_range`,
+/// `remove_at`) and the handle-taking functions are called through.
+///
+/// # Safety
+/// `l` points at a live list.
+pub(crate) unsafe fn handle(l: *mut List) -> ListRef {
+    // SAFETY: the caller's promise: a live list.
+    unsafe { ListRef::retained(l) }.expect("a live list")
+}
+
+/// `l` as the handle the handle-taking functions want, *without* a
+/// reference of its own: reference counts read the same through it, and
+/// dropping it gives nothing back. `None` for NULL.
+///
+/// # Safety
+/// `l` is NULL or points at a live list that outlives the view.
+pub(crate) unsafe fn view(l: *mut List) -> Option<ManuallyDrop<ListRef>> {
+    // SAFETY: the caller's promise; the `ManuallyDrop` keeps the handle
+    // from giving back a reference it never took.
+    unsafe { ListRef::owning(l) }.map(ManuallyDrop::new)
+}
+
+/// The item a lookup (`list_find`, `list_first`, `list_last`) answered, as
+/// the address the spec compared: NULL for `None`.
+pub(crate) fn item_ptr(item: Option<&mut ListItem>) -> *mut ListItem {
+    item.map_or(ptr::null_mut(), ptr::from_mut)
 }
 
 /// The spec's `dict_items`: every live item of `d`, in hashtab order —

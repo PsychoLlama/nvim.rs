@@ -5,13 +5,13 @@
 //! for itself whether the operator and the right operand make sense, and
 //! answers `FAIL` when they do not so the caller reports one error message.
 //!
-//! The entry points take raw pointers rather than references because the two
-//! operands can be the same object: `:let l[0:1] += l[0:1]` reaches here from
-//! `list_assign_range` with `tv1` and `tv2` aliasing, so a `&mut`/`&` pair
-//! would be unsound.
+//! The two operands are a `&mut` and a `&`, so they are never one value: a
+//! caller whose right operand may be the left one -- `:let l[0:1] += l[0:1]`
+//! in `list_assign_range` -- copies it first. The two may still *share* a
+//! List or a Blob, which is what `l += l` is; each arm copies what it reads
+//! out of the right operand before it writes.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,15 +20,13 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::typval::BlobRef;
-use crate::eval::typval::{ListRef, NumBuf, list_extend, tv_clear, tv_get_number};
-use crate::eval::{Tv, num_divide, num_modulus};
+use crate::eval::typval::{NumBuf, list_extend, tv_clear, tv_get_number};
+use crate::eval::{num_divide, num_modulus};
+use crate::message_fmt::msg_bytes;
 use crate::types::{
-    Blob, Failed, Float, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber,
+    Failed, Float, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber,
 };
-use ::libc::abort;
-use core::ffi::{CStr, c_char};
 
 /// Is `op` one of the arithmetic operators, i.e. everything but concatenation?
 ///
@@ -53,66 +51,41 @@ fn float_op(lhs: Float, op: u8, rhs: Float) -> Float {
 }
 
 /// `blob1 += blob2`.
-///
-/// # Safety
-///
-/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
-/// must point at an initialized typval.
-unsafe fn tv_op_blob(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation -- two initialised typvals, which may
-    // alias, which is why they are held as pointers and never as references.
-    let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
+fn tv_op_blob(lhs: &mut TypVal, rhs: &TypVal, op: u8) -> Result<(), Failed> {
     if op != b'+' || rhs.v_type() != VAR_BLOB {
         return Err(Failed);
     }
-    let b2: *mut Blob = rhs.blob_or_null();
-    if b2.is_null() {
+    let Some(tail) = rhs.blob_ref() else {
         return Ok(());
-    }
-    let b1: *mut Blob = lhs.blob_or_null();
-    if b1.is_null() {
+    };
+    if lhs.blob_ref().is_none() {
         // Appending to an unallocated blob shares the right-hand one
         // rather than copying it.
-        // SAFETY: `b2` is the live Blob the right-hand typval holds, and
-        // this takes a reference of its own.
-        lhs.write_blob(unsafe { BlobRef::retained(b2) });
+        lhs.write_blob(rhs.blob_handle());
         return Ok(());
     }
-    // SAFETY: both Blobs are live; `b1 += b1` appends a copy of itself.
-    unsafe {
-        let tail = (*b2).bytes().to_vec();
-        (*b1).extend(&tail);
+    // Copied out first: `b1 += b1` appends a copy of itself.
+    let tail = tail.bytes().to_vec();
+    if let Some(blob) = lhs.blob_mut() {
+        blob.extend(&tail);
     }
     Ok(())
 }
 
 /// `list1 += list2`.
-///
-/// # Safety
-///
-/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
-/// must point at an initialized typval.
-unsafe fn tv_op_list(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation -- two initialised typvals, which may
-    // alias.
-    let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
+fn tv_op_list(lhs: &mut TypVal, rhs: &TypVal, op: u8) -> Result<(), Failed> {
     if op != b'+' || rhs.v_type() != VAR_LIST {
         return Err(Failed);
     }
-    let l2 = rhs.list_or_null();
-    if l2.is_null() {
+    let Some(l2) = rhs.list_shared() else {
         return Ok(());
-    }
-    let l1 = lhs.list_or_null();
-    if l1.is_null() {
+    };
+    match lhs.list_shared() {
+        // `l += l` is the one list twice, which the extend answers.
+        Some(l1) => list_extend(l1, Some(l2), None),
         // Appending to an unallocated list shares the right-hand one
         // rather than copying it.
-        // SAFETY: `l2` is the live List the right-hand typval holds, and
-        // the left-hand one takes a reference of its own.
-        lhs.write_list(unsafe { ListRef::retained(l2) });
-    } else {
-        // SAFETY: both Lists are live.
-        unsafe { list_extend(l1, l2, None) };
+        None => lhs.write_list(Some(l2.clone())),
     }
     Ok(())
 }
@@ -121,92 +94,53 @@ unsafe fn tv_op_list(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
 ///
 /// A float on the right promotes the result to a float, except for `%`, which
 /// has no float form and fails.
-///
-/// # Safety
-///
-/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
-/// must point at an initialized typval.
-unsafe fn tv_op_number(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation -- two initialised typvals, which may
-    // alias. Both operands are read out in full before `tv_clear` touches
-    // `tv1`, which is what makes the aliasing case safe.
-    let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
-    // SAFETY: as above.
-    let n: VarNumber = unsafe { tv_get_number(&*tv1) };
+fn tv_op_number(lhs: &mut TypVal, rhs: &TypVal, op: u8) -> Result<(), Failed> {
+    let n: VarNumber = tv_get_number(lhs);
     if rhs.v_type() == VAR_FLOAT {
         if op == b'%' {
             return Err(Failed);
         }
-        // SAFETY: `VAR_FLOAT` says the value holds a Float.
         let f = float_op(n as Float, op, rhs.float_or_zero());
-        // SAFETY: `tv1` is the caller's initialised typval.
-        unsafe { tv_clear(&mut *tv1) };
+        tv_clear(lhs);
         lhs.write_float(f);
     } else {
         // Only the arm that is taken reads the right operand, because
         // `tv_get_number` reports on a value it cannot convert.
         let n = match op {
-            // SAFETY: `tv2` is initialised.
-            b'+' => n.wrapping_add(unsafe { tv_get_number(&*tv2) }),
-            b'-' => n.wrapping_sub(unsafe { tv_get_number(&*tv2) }),
-            b'*' => n.wrapping_mul(unsafe { tv_get_number(&*tv2) }),
-            b'/' => num_divide(n, unsafe { tv_get_number(&*tv2) }),
-            b'%' => num_modulus(n, unsafe { tv_get_number(&*tv2) }),
+            b'+' => n.wrapping_add(tv_get_number(rhs)),
+            b'-' => n.wrapping_sub(tv_get_number(rhs)),
+            b'*' => n.wrapping_mul(tv_get_number(rhs)),
+            b'/' => num_divide(n, tv_get_number(rhs)),
+            b'%' => num_modulus(n, tv_get_number(rhs)),
             _ => n,
         };
-        // SAFETY: `tv1` is the caller's initialised typval.
-        unsafe { tv_clear(&mut *tv1) };
+        tv_clear(lhs);
         lhs.write_number(n);
     }
     Ok(())
 }
 
 /// `str1 .= str2`.
-///
-/// # Safety
-///
-/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
-/// must point at an initialized typval.
-unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Failed> {
-    // The two operands need a scratch each: `s2` is still live when `tv1`'s
-    // own string form is rendered.
-    let mut numbuf1 = NumBuf::new();
-    // SAFETY: the caller's obligation -- two initialised typvals, which may
-    // alias. Both scratches are live locals that outlive the strings
-    // formatted into them, and `concat_str` has copied both operands before
-    // `tv_clear` runs.
-    let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
+fn tv_op_string(lhs: &mut TypVal, rhs: &TypVal) -> Result<(), Failed> {
     if rhs.v_type() == VAR_FLOAT {
         return Err(Failed);
     }
     let mut numbuf = NumBuf::new();
-    // SAFETY: as above.
-    let s2 = numbuf.bytes(unsafe { &*tv2 });
-    // An owned string is extended in place -- unless the right operand *is*
-    // the left one (`:let l[0:1] .= l`), whose bytes growing it would move.
-    // SAFETY: as above; when the two differ, `s2` is not `tv1`'s.
-    if !core::ptr::eq(tv1.cast_const(), tv2) && unsafe { (*tv1).append_to_string(s2) } {
+    let s2 = numbuf.bytes(rhs);
+    // An owned string is extended in place.
+    if lhs.append_to_string(s2) {
         return Ok(());
     }
-    // SAFETY: as above.
-    let mut joined = numbuf1.bytes(unsafe { &*tv1 }).to_vec();
+    let mut numbuf1 = NumBuf::new();
+    let mut joined = numbuf1.bytes(lhs).to_vec();
     joined.extend_from_slice(s2);
-    // SAFETY: both operands have been copied out of `tv1` by now.
-    unsafe { tv_clear(&mut *tv1) };
+    tv_clear(lhs);
     lhs.write_string(Some(joined.into()));
     Ok(())
 }
 
 /// `f1 += f2`, `f1 -= f2`, `f1 *= f2`, `f1 /= f2`.
-///
-/// # Safety
-///
-/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
-/// must point at an initialized typval.
-unsafe fn tv_op_float(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation -- two initialised typvals, which may
-    // alias. The right operand is read before the left is written.
-    let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
+fn tv_op_float(lhs: &mut TypVal, rhs: &TypVal, op: u8) -> Result<(), Failed> {
     let rhs_type = rhs.v_type();
     if op == b'%'
         || op == b'.'
@@ -218,63 +152,41 @@ unsafe fn tv_op_float(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<()
         rhs.float_or_zero()
     } else {
         // A string operand goes through the usual "leading number" parse.
-        // SAFETY: `tv2` is initialised.
-        unsafe { tv_get_number(&*tv2) as Float }
+        tv_get_number(rhs) as Float
     };
     let result = float_op(lhs.float_or_zero(), op, f);
     lhs.write_float(result);
     Ok(())
 }
 
-/// `tv1 += tv2`, `-=`, `*=`, `/=`, `%=`, `.=`. Returns `Ok` or `Err`; on
-/// `Err` the "wrong variable type" error has already been reported.
-///
-/// # Safety
-///
-/// `tv1` and `tv2` must point at initialised typvals; `op` must point at a
-/// NUL-terminated operator.
-///
-/// **The two typvals may be the same object**, which is why this family
-/// keeps its raw pointers where the rest of the evaluator takes borrows:
-/// `:let l[0:1] += l[0:1]` reaches [`tv_op_list`] with one list item as both
-/// operands (`eval/typval/listrange.rs`), and `&mut`/`&` of one place is
-/// exactly what Rust does not allow.
-pub unsafe fn eexe_mod_op(
-    tv1: *mut TypVal,
-    tv2: *const TypVal,
-    op: *const c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation -- `op` is NUL-terminated.
-    let op = unsafe { CStr::from_ptr(op) };
-    let op_byte = op.to_bytes().first().copied().unwrap_or(0);
-    // SAFETY: the caller's obligation -- two initialised typvals, which may
-    // alias; every helper below restates the same promise.
-    let (lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
-    let rhs_type = rhs.v_type();
+/// `tv1 += tv2`, `-=`, `*=`, `/=`, `%=`, `.=`, with `op` the operator's one
+/// byte (`+`, `-`, `*`, `/`, `%` or `.`). Returns `Ok` or `Err`; on `Err`
+/// the "wrong variable type" error has already been reported.
+pub fn eexe_mod_op(tv1: &mut TypVal, tv2: &TypVal, op: u8) -> Result<(), Failed> {
+    let rhs_type = tv2.v_type();
     // Nothing works with a Funcref or a Dict on the right, and v:true and
     // friends only work with "..=".
     if rhs_type == VAR_FUNC
         || rhs_type == VAR_DICT
-        || ((rhs_type == VAR_BOOL || rhs_type == VAR_SPECIAL) && op_byte == b'.')
+        || ((rhs_type == VAR_BOOL || rhs_type == VAR_SPECIAL) && op == b'.')
     {
         report_wrong_type(op);
         return Err(Failed);
     }
-    let retval = match lhs.v_type() {
-        // SAFETY: as above -- each helper takes the same two pointers.
-        VAR_BLOB => unsafe { tv_op_blob(tv1, tv2, op_byte) },
-        VAR_LIST => unsafe { tv_op_list(tv1, tv2, op_byte) },
+    let retval = match tv1.v_type() {
+        VAR_BLOB => tv_op_blob(tv1, tv2, op),
+        VAR_LIST => tv_op_list(tv1, tv2, op),
         VAR_NUMBER | VAR_STRING => {
             if rhs_type == VAR_LIST {
                 Err(Failed)
-            } else if is_arithmetic(op_byte) {
-                unsafe { tv_op_number(tv1, tv2, op_byte) }
+            } else if is_arithmetic(op) {
+                tv_op_number(tv1, tv2, op)
             } else {
-                unsafe { tv_op_string(tv1, tv2) }
+                tv_op_string(tv1, tv2)
             }
         }
-        VAR_FLOAT => unsafe { tv_op_float(tv1, tv2, op_byte) },
-        VAR_UNKNOWN => unsafe { abort() },
+        VAR_FLOAT => tv_op_float(tv1, tv2, op),
+        VAR_UNKNOWN => std::process::abort(),
         // Dict, Funcref, Partial, Bool and Special have no compound form.
         _ => Err(Failed),
     };
@@ -285,17 +197,11 @@ pub unsafe fn eexe_mod_op(
     retval
 }
 
-/// [`eexe_mod_op`] over two values that are not the same typval: `op` is
-/// the operator's one byte (`+`, `-`, `*`, `/`, `%` or `.`).
-pub(crate) fn mod_op(target: &mut TypVal, value: &TypVal, op: u8) -> Result<(), Failed> {
-    let op = [op.cast_signed(), 0];
-    // SAFETY: two typvals the borrows keep apart, and a terminated operator.
-    unsafe { eexe_mod_op(target, value, op.as_ptr()) }
-}
-
-/// Report `E734` naming the operator that was refused.
-fn report_wrong_type(op: &CStr) {
-    crate::semsg!("E734: Wrong variable type for {}=", op.to_string_lossy());
+/// Report `E734` naming the operator that was refused: its one byte, or
+/// nothing for an empty one.
+fn report_wrong_type(op: u8) {
+    let op: &[u8] = if op == 0 { &[] } else { &[op] };
+    crate::semsg!("E734: Wrong variable type for {}=", msg_bytes(op));
 }
 
 #[cfg(test)]

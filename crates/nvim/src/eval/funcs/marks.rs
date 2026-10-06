@@ -193,7 +193,7 @@ pub fn f_tagfiles(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let out = tv_list_alloc_ret(result, kListLenUnknown as isize);
     let mut files = TagFiles::new();
     while let Some(name) = files.next() {
-        unsafe { (*out).push_string(name.as_ptr(), -1) };
+        unsafe { (*out).push_str(crate::cstr::at_opt(name.as_ptr())) };
     }
 }
 

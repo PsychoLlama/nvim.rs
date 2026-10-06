@@ -149,7 +149,7 @@ pub fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
             let list = tv_list_alloc(y_size as ptrdiff_t);
             for i in 0..y_size {
                 let line = &*y_array.add(i);
-                (*list.as_ptr()).push_string(line.data(), line.len() as c_int as ssize_t);
+                (*list.as_ptr()).push_bytes(Some(line.as_bytes()));
             }
             // The caller takes the reference over.
             list.into_raw() as *mut c_void

@@ -348,12 +348,10 @@ unsafe fn dict_number(dict: *mut Dict, key: &CStr, current: c_int) -> Option<c_i
 /// # Safety
 /// `list` must be a readable list.
 unsafe fn list_number(list: *mut List, index: c_int, current: c_int) -> Option<c_int> {
-    let li = list_find(unsafe { list.as_mut() }, index);
-    if li.is_null() {
+    let Some(li) = list_find(unsafe { list.as_mut() }, index) else {
         return Some(current);
-    }
-    // SAFETY: the item just found belongs to the caller's list.
-    tv_get_number_chk(unsafe { &(*li).li_tv })
+    };
+    tv_get_number_chk(&li.li_tv)
         .ok()
         .map(|value| value as c_int)
 }

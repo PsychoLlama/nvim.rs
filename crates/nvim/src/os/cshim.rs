@@ -570,6 +570,23 @@ pub(crate) fn bump_catalogue_epoch() {
     MIRI_CATALOGUE_EPOCH.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed);
 }
 
+/// The C library's `strcoll()` of two strings: their order in the process
+/// locale's collation, as `sort(l, 'l')` asks for it.
+pub(crate) fn strcoll(a: &::core::ffi::CStr, b: &::core::ffi::CStr) -> ::core::ffi::c_int {
+    #[cfg(not(miri))]
+    {
+        // SAFETY: two NUL-terminated strings, only read for the call.
+        unsafe { ::libc::strcoll(a.as_ptr(), b.as_ptr()) }
+    }
+    // Miri cannot call the C library; the "C" locale collates by byte.
+    #[cfg(miri)]
+    match a.cmp(b) {
+        ::core::cmp::Ordering::Less => -1,
+        ::core::cmp::Ordering::Equal => 0,
+        ::core::cmp::Ordering::Greater => 1,
+    }
+}
+
 /// The C library's `islower()` of `byte`, under the current locale -- which
 /// in a non-C locale covers more than `a`-`z`.
 pub(crate) fn is_lower_in_locale(byte: u8) -> bool {

@@ -55,7 +55,7 @@ use crate::startup::{
 };
 use crate::types::{
     ExArg, Handle, IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
-    kListLenMayKnow, ptrdiff_t, size_t, ssize_t,
+    kListLenMayKnow, ptrdiff_t, size_t,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -94,7 +94,7 @@ pub(crate) fn set_argf_var() {
         let fname = unsafe { alist_name(((*alist).al_ga.as_mut_ptr()).offset(i as isize)) };
         if !fname.is_null() {
             let _ = unsafe { vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false) };
-            unsafe { (*list).push_string(full.as_mut_ptr(), -1 as ssize_t) };
+            unsafe { (*list).push_str(cstr::at_opt(full.as_ptr())) };
         }
     }
     list_set_lock(unsafe { list.as_mut() }, VarLock::Fixed);

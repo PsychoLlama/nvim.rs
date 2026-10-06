@@ -189,9 +189,9 @@ fn get_buffer_lines(
     for lnum in start..=end {
         let (text, len) = (
             buffer.line_raw(lnum).raw(),
-            buffer.line_len_raw(lnum) as ssize_t,
+            usize::try_from(buffer.line_len_raw(lnum)).unwrap_or(0),
         );
-        unsafe { (*list).push_string(text, len) };
+        unsafe { (*list).push_bytes(Some(cstr::slice_at(text, len))) };
     }
 }
 

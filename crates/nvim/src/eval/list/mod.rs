@@ -73,7 +73,7 @@ use crate::os::cshim::gettext;
 use crate::tr_c;
 use crate::types::{
     Blob, Dict, DictItem, EvalFuncData, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST,
-    VAR_STRING, VarLock, VarNumber, VarType, VimConv, Vv, int64_t, ptrdiff_t, size_t, uint8_t,
+    VAR_STRING, VarLock, VarNumber, VarType, Vv, int64_t, ptrdiff_t, size_t, uint8_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -279,32 +279,33 @@ impl ListArg {
     /// Splice copies of `other`'s items in before `before`.
     #[inline(always)]
     pub(crate) fn extend_with(self, other: ListArg, before: Option<Item>) {
-        // SAFETY: both live or NULL, and `before` is an item of this list.
-        unsafe { list_extend(self.0, other.0, before.map(|i| i.at)) };
+        // SAFETY: both live or NULL; the handles take a reference each for
+        // the call.
+        let (dest, src) = unsafe { (ListRef::retained(self.0), ListRef::retained(other.0)) };
+        if let Some(dest) = &dest {
+            // `before` is an item of this list.
+            list_extend(dest, src.as_ref(), before.map(|i| i.at));
+        }
     }
 
     /// Remove `item` and answer the one that followed it.
     #[inline(always)]
     pub(crate) fn remove_item(self, item: Item) -> Option<Item> {
         // SAFETY: live, and `item` is an item of this list.  This is what
-        // shifts any `:for` cursor parked on it.
-        unsafe { (*self.0).remove_at(item.at) };
+        // shifts any `:for` cursor parked on it; the item is released once
+        // the borrow has ended.
+        drop(unsafe { (*self.0).take_range(item.at, item.at) });
         self.at(item.at)
     }
 
     /// A shallow copy, for `extendnew()`.  `None` when the copy failed.
     #[inline(always)]
     pub(crate) fn copy(self) -> Option<ListRef> {
-        // SAFETY: live or NULL; the copy takes a reference of its own for
-        // the walk, no conversion, and a fresh copyID.
-        unsafe {
-            list_copy(
-                null::<VimConv>(),
-                ListRef::retained(self.0),
-                false,
-                get_copy_id(),
-            )
-        }
+        // SAFETY: live or NULL; the handle takes a reference of its own
+        // for the walk.
+        let list = unsafe { ListRef::retained(self.0) }?;
+        // No conversion, and a fresh copyID.
+        list_copy(None, &list, false, get_copy_id())
     }
 }
 
@@ -939,7 +940,9 @@ pub fn f_remove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // SAFETY: the blob the first argument holds, borrowed for the call.
         Container::Blob(b) => unsafe { blob_remove(b.0.as_mut(), args, result, arg_errmsg) },
         // SAFETY: the list the first argument holds, borrowed for the call.
-        Container::List(l) => unsafe { list_remove(l.0.as_mut(), args, result, arg_errmsg) },
+        Container::List(l) => {
+            list_remove(unsafe { l.0.as_mut() }, args, result, c"remove() argument")
+        }
         _ => err_str(e_listdictblobarg, c"remove()"),
     }
 }

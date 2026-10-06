@@ -274,7 +274,7 @@ fn copying_a_container_is_shallow() {
     unsafe {
         let mut from = Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build();
         let outer = from.list();
-        let inner = (*list_first(outer.as_mut())).li_tv.list();
+        let inner = list_first(outer.as_mut()).unwrap().li_tv.list();
         assert_eq!(
             ((*outer).lv_refcount.get(), (*inner).lv_refcount.get()),
             (1, 1)
@@ -285,7 +285,7 @@ fn copying_a_container_is_shallow() {
 
         assert_eq!(to.list(), outer, "the copy names the same list");
         assert_eq!(
-            (*list_first(to.list().as_mut())).li_tv.list(),
+            list_first(to.list().as_mut()).unwrap().li_tv.list(),
             inner,
             "and the same list inside it",
         );
@@ -781,7 +781,7 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
     unsafe {
         let mut tv = Slot::new(Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build());
         let outer = tv.tv.list();
-        let inner = (*list_first(outer.as_mut())).li_tv.list();
+        let inner = list_first(outer.as_mut()).unwrap().li_tv.list();
 
         // A second name for the outer list, as an argument binding is.
         let mut other = TypVal::Unknown;

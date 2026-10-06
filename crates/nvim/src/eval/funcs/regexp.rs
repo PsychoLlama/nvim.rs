@@ -97,7 +97,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
             // Seeded with the "no match" answer, which the tail of this
             // function trims back to three items for a String subject.
             list_alloc_ret(result, 4);
-            unsafe { (*result.list_or_null()).push_string(c"".as_ptr(), 0) };
+            unsafe { (*result.list_or_null()).push_bytes(Some(b"")) };
             unsafe { (*result.list_or_null()).push_number(-1) };
             unsafe { (*result.list_or_null()).push_number(-1) };
             unsafe { (*result.list_or_null()).push_number(-1) };
@@ -266,10 +266,11 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 for i in 0..NSUBEXP as usize {
                     let list = result.list_or_null();
                     match regmatch.group(i) {
-                        None => unsafe { (*list).push_string(ptr::null(), 0) },
+                        None => unsafe { (*list).push_bytes(None) },
                         // SAFETY: the span is an offset range into `str`.
                         Some(span) => unsafe {
-                            (*list).push_string(str.add(span.start), span.len() as isize)
+                            (*list)
+                                .push_bytes(Some(cstr::slice_at(str.add(span.start), span.len())))
                         },
                     }
                 }
@@ -313,7 +314,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
         let ret_l = result.list_or_null();
         // SAFETY: the placeholder is the second of the four items seeded
         // above.
-        unsafe { (*ret_l).remove_at(1) };
+        drop(unsafe { (*ret_l).take_range(1, 1) });
     }
 }
 
@@ -357,10 +358,13 @@ unsafe fn get_matches_in_str(
             let _ = unsafe { (*d).add_list(b"submatches", Some(submatch_list)) };
             for i in 1..NSUBEXP as usize {
                 match rmp.group(i) {
-                    None => unsafe { (*sml).push_string(c"".as_ptr(), 0) },
+                    None => unsafe { (*sml).push_bytes(Some(b"")) },
                     // SAFETY: the span is an offset range into `str`.
                     Some(span) => unsafe {
-                        (*sml).push_string(str.as_ptr().add(span.start), span.len() as isize)
+                        (*sml).push_bytes(Some(cstr::slice_at(
+                            str.as_ptr().add(span.start),
+                            span.len(),
+                        )))
                     },
                 }
             }
@@ -628,8 +632,8 @@ unsafe fn item_string(
 /// `list` must point at a live list, unaliased for the call.
 unsafe fn nested_list(list: *mut List, idx: c_int) -> *mut List {
     let li = list_find(unsafe { list.as_mut() }, idx);
-    debug_assert!(!li.is_null(), "fuzzy: result list is short");
-    let nested = unsafe { (*li).li_tv.list_or_null() };
+    debug_assert!(li.is_some(), "fuzzy: result list is short");
+    let nested = li.map_or(ptr::null_mut(), |li| li.li_tv.list_or_null());
     debug_assert!(!nested.is_null(), "fuzzy: result item is not a list");
     nested
 }

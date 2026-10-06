@@ -203,14 +203,16 @@ pub fn f_repeat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
-    // SAFETY: the caller's obligation.
-    let src = args[0].list_or_null();
+    let src = args[0].list_shared();
     // The length hint is upstream's; a non-positive count contributes
     // nothing rather than a negative capacity.
-    let hint = VarNumber::from(n > 0) * n * VarNumber::from(list_len(unsafe { src.as_ref() }));
-    let out = list_alloc_ret(result, hint as isize);
+    let hint = VarNumber::from(n > 0) * n * VarNumber::from(list_len(args[0].list_ref()));
+    list_alloc_ret(result, hint as isize);
+    let Some(out) = result.list_shared() else {
+        return;
+    };
     for _ in 0..n.max(0) {
-        unsafe { list_extend(out, src, None) };
+        list_extend(out, src, None);
     }
 }
 
@@ -363,7 +365,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     }
     debug_assert!(len <= c_int::MAX as usize);
     let list = list_alloc_ret(result, 2);
-    unsafe { (*list).push_string(word, len as isize) };
+    unsafe { (*list).push_bytes((!word.is_null()).then(|| cstr::slice_at(word, len))) };
     let reason: Option<&CStr> = match attr {
         HLF_SPB => Some(c"bad"),
         HLF_SPR => Some(c"rare"),
@@ -372,8 +374,8 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         _ => None,
     };
     match reason {
-        Some(r) => unsafe { (*list).push_string(r.as_ptr(), r.count_bytes() as isize) },
-        None => unsafe { (*list).push_string(ptr::null(), -1) },
+        Some(r) => unsafe { (*list).push_str(Some(r)) },
+        None => unsafe { (*list).push_bytes(None) },
     }
 }
 
@@ -486,7 +488,7 @@ unsafe fn split_into(list: *mut List, subject: &CStr, prog: *mut RegProg, keepem
                 && start < match_end)
         {
             // SAFETY: `start` bytes of the tail, which is NUL-terminated.
-            unsafe { (*list).push_string(tail.as_ptr(), start as isize) };
+            unsafe { (*list).push_bytes(Some(&tail.to_bytes()[..start])) };
         }
         if !matched {
             break;

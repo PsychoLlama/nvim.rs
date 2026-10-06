@@ -87,7 +87,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
             let itv = &raw mut list_items_mut(unsafe { l.as_mut() })[0].li_tv;
             unsafe { set_buffer_lines(Some(buf), lnum, false, &*itv, result) };
             if result.number_or_zero() == 0 {
-                unsafe { (*l).remove_at(0) };
+                drop(unsafe { (*l).take_range(0, 0) });
                 set_buffer_lines(Some(buf), lnum, true, lines, result);
             }
         } else {

@@ -7,11 +7,12 @@
 //! passes so the result buffer is sized once, and [`f_list2str`] is the
 //! codepoint-list-to-string builtin.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
+use crate::eval::encode::tv2echo_bytes;
+use crate::eval::executor::eexe_mod_op;
+use crate::mbyte::encode_char;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::semsg;
@@ -70,58 +71,25 @@ pub fn list_check_range_index_two(
     Ok(())
 }
 
-/// [`list_assign_range`] over two handles, naming the target `varname` in a
-/// lock error. `dest` and `src` may be the same list.
+/// `dest[idx1:idx2] = src`, or `dest[idx1:idx2] op= src` when `op` is given,
+/// naming the target `varname` in a lock error.
+///
+/// `empty_idx2` means the range had no upper bound (`dest[idx1:]`). `dest`
+/// and `src` may be the same list -- `:let l[0:1] += l[0:1]` -- so each
+/// step copies the source value out before the target is touched, and
+/// borrows either list for one statement at a time.
 pub(crate) fn assign_range(
     dest: &ListRef,
     src: Option<&ListRef>,
-    idx1: ::core::ffi::c_int,
+    idx1_arg: ::core::ffi::c_int,
     idx2: ::core::ffi::c_int,
     empty_idx2: bool,
     op: Option<u8>,
     varname: &[u8],
 ) -> Result<(), Failed> {
-    let op = op.map(|op| [op.cast_signed(), 0]);
-    let src = src.map_or(::core::ptr::null_mut(), ListRef::as_ptr);
-    cstr::with_terminated(varname, |varname| {
-        // SAFETY: two lists the handles keep alive, which the callee allows
-        // to be the same one; a terminated operator and name.
-        unsafe {
-            list_assign_range(
-                dest.as_ptr(),
-                src,
-                idx1,
-                idx2,
-                empty_idx2,
-                op.as_ref().map_or(::core::ptr::null(), |op| op.as_ptr()),
-                varname.as_ptr(),
-            )
-        }
-    })
-}
-
-/// `dest[idx1:idx2] = src`, or `dest[idx1:idx2] op= src` when `op` is given.
-///
-/// `empty_idx2` means the range had no upper bound (`dest[idx1:]`).
-///
-/// # Safety
-///
-/// `dest` and `src` must point at live lists, unaliased for the call. `op`
-/// must be null or a NUL-terminated operator, and `varname` null or a NUL-
-/// terminated name for the lock error; both live for the call.
-pub unsafe fn list_assign_range(
-    dest: *mut List,
-    src: *mut List,
-    idx1_arg: ::core::ffi::c_int,
-    idx2: ::core::ffi::c_int,
-    empty_idx2: bool,
-    op: *const ::core::ffi::c_char,
-    varname: *const ::core::ffi::c_char,
-) -> Result<(), Failed> {
     let mut idx1 = idx1_arg;
-    // SAFETY: the caller's promise: two live lists.
-    let first = list_find_index(unsafe { dest.as_ref() }, &mut idx1);
-    let srclen = list_len(unsafe { src.as_ref() }) as usize;
+    let first = list_find_index(Some(dest), &mut idx1);
+    let srclen = src.map_or(0, |src| src.len());
 
     // Check whether any of the list items is locked before making any
     // changes.  The walk stops at the end of the range or at the end of the
@@ -131,17 +99,14 @@ pub unsafe fn list_assign_range(
     let mut at = first;
     for i in 0..srclen {
         let Some(dest_at) = at else { break };
-        // SAFETY: an index of `dest`, which nothing has edited yet.
-        let lock = unsafe { (*dest).items() }[dest_at].li_lock;
-        // SAFETY: the caller's promise about `varname`.
-        if unsafe { value_check_lock(lock, varname, TV_CSTRING as size_t) } {
+        let lock = dest.items()[dest_at].li_lock;
+        if value_check_lock_named(lock, varname) {
             return Err(Failed);
         }
         if i + 1 == srclen || (!empty_idx2 && idx2 == idx) {
             break;
         }
-        // SAFETY: a live list.
-        at = (dest_at + 1 < unsafe { (*dest).len() }).then_some(dest_at + 1);
+        at = (dest_at + 1 < dest.len()).then_some(dest_at + 1);
         idx += 1;
     }
 
@@ -152,41 +117,39 @@ pub unsafe fn list_assign_range(
     // zero and the E710 under it reports.
     let mut at = first.unwrap_or(0);
     let mut i = 0;
-    // SAFETY: a live list.
-    while i < srclen && at < unsafe { (*dest).len() } {
-        // Both slots are re-derived on every step: `eexe_mod_op` runs the
-        // evaluator and may have moved either array.  When `dest` *is*
-        // `src` -- `:let l[0:1] += l[0:1]`, p30-7's documented aliasing --
-        // both come from the *one* derivation of it, because two would pop
-        // each other.
-        // SAFETY: two live lists.
-        let dbase = unsafe { (*dest).items_mut().as_mut_ptr() };
-        let sbase = if ::core::ptr::eq(dest, src) {
-            dbase
-        } else {
-            unsafe { (*src).items_mut().as_mut_ptr() }
+    let op = op.filter(|&op| op != b'=');
+    while let Some(src) = src.filter(|_| i < srclen && at < dest.len()) {
+        // Both slots are re-read on every step, and the source value is
+        // copied out first: when `dest` *is* `src`, the two slots are one
+        // list's, and either may have moved since the last step.
+        let from = src.items()[i].li_tv.clone();
+        let value = match op {
+            Some(op) => {
+                // The operator works on a copy of the target's value too --
+                // which shares its List or Blob, so `+=` still extends the
+                // one in the slot -- and the result goes back.
+                let mut current = dest.items()[at].li_tv.clone();
+                if eexe_mod_op(&mut current, &from, op).is_ok() {
+                    Some(current)
+                } else {
+                    None
+                }
+            }
+            None => Some(from),
         };
-        // SAFETY: `at` is an index of `dest` and `i` one of `src`.
-        let (to, from) = unsafe {
-            (
-                &raw mut (*dbase.add(at)).li_tv,
-                &raw mut (*sbase.add(i)).li_tv,
-            )
-        };
-        if !op.is_null() && unsafe { *op } as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
-            let _ = unsafe { eexe_mod_op(to, from, op) };
-        } else {
-            unsafe { tv_clear(&mut *to) };
-            unsafe { tv_copy(&*from, &mut *to) };
+        if let Some(value) = value {
+            // The old value is released once the borrow of `dest` has
+            // ended: it may name `dest`.
+            let old = ::core::mem::replace(&mut dest.edit().items_mut()[at].li_tv, value);
+            drop(old);
         }
         i += 1;
         if i == srclen || (!empty_idx2 && idx2 == idx) {
             break;
         }
-        // SAFETY: a live list.
-        if at + 1 == unsafe { (*dest).len() } {
+        if at + 1 == dest.len() {
             // Need to add an empty item.
-            unsafe { (*dest).push_number(0) };
+            dest.edit().push_number(0);
         }
         at += 1;
         idx += 1;
@@ -198,8 +161,7 @@ pub unsafe fn list_assign_range(
         return Err(Failed);
     }
     let short = if empty_idx2 {
-        // SAFETY: a live list.
-        at + 1 < unsafe { (*dest).len() }
+        at + 1 < dest.len()
     } else {
         idx != idx2
     };
@@ -217,8 +179,8 @@ pub unsafe fn list_assign_range(
 ///
 /// The nested list an item names may be **the list being flattened** -- a
 /// list can hold itself -- which is why the splice goes through
-/// [`list_extend`]'s branch rather than a second borrow.
-pub fn list_flatten(list: &mut List, first: usize, maxitems: int64_t, maxdepth: int64_t) {
+/// [`list_extend`] over two handles rather than a second borrow.
+pub fn list_flatten(list: &ListRef, first: usize, maxitems: int64_t, maxdepth: int64_t) {
     if maxdepth == 0 {
         return;
     }
@@ -230,22 +192,20 @@ pub fn list_flatten(list: &mut List, first: usize, maxitems: int64_t, maxdepth: 
         if got_int.get() {
             return;
         }
-        let step = if let Some(inner) = list.items()[at].li_tv.as_list() {
+        let step = if list.items()[at].li_tv.v_type() == VAR_LIST {
             let before = list.len();
             // The item naming the nested list is taken out *without* being
-            // released, and held until the splice is done: `inner` may be
-            // the very list being flattened, or the item may hold its last
-            // reference, and either way freeing it first would pull the
+            // released, and held until the splice is done: the nested list
+            // may be the very list being flattened, or the item may hold its
+            // last reference, and either way freeing it first would pull the
             // items out from under the copy.  That is what upstream's
             // `tv_list_drop_items`-then-`tv_clear` order bought.
-            let held = list.take_range(at, at);
-            // SAFETY: `inner` is the live list the taken item still names,
-            // and may be `list` itself -- which is the branch's business.
-            unsafe { list_extend(list, inner, Some(at)) };
+            let held = list.edit().take_range(at, at);
+            let inner = held[0].li_tv.list_shared();
+            list_extend(list, inner, Some(at));
 
             if maxdepth > 0 {
-                // SAFETY: as above.
-                let inner_len = int64_t::from(list_len(unsafe { inner.as_ref() }));
+                let inner_len = int64_t::from(list_len(inner.map(|inner| &**inner)));
                 list_flatten(list, at, inner_len, maxdepth - 1);
             }
             drop(held);
@@ -341,25 +301,18 @@ pub fn list_join(out: &mut XString, l: Option<&List>, sep: &CStr) -> Result<(), 
     if list_len(l) == 0 {
         return Ok(());
     }
-    let mut joined: Vec<String_0> = Vec::with_capacity(list_len(l).cast_unsigned() as usize);
+    let mut joined: Vec<Vec<u8>> = Vec::with_capacity(list_len(l).cast_unsigned() as usize);
     for item in list_iter(l) {
         if got_int.get() {
             break;
         }
-        let mut len: size_t = 0;
-        // SAFETY: a live item of the caller's list.
-        let data = unsafe { encode_tv2echo(&item.li_tv, &raw mut len) };
-        if data.is_null() {
-            return Err(Failed);
-        }
-        // SAFETY: `encode_tv2echo` answers its own NUL-terminated block.
-        joined.push(unsafe { String_0::from_owned_parts(data, len) });
+        joined.push(tv2echo_bytes(&item.li_tv));
         line_breakcheck();
     }
 
     let sep = sep.to_bytes();
-    let total: usize = joined.iter().map(String_0::len).sum::<usize>()
-        + sep.len() * joined.len().saturating_sub(1);
+    let total: usize =
+        joined.iter().map(Vec::len).sum::<usize>() + sep.len() * joined.len().saturating_sub(1);
     let mut text = Vec::with_capacity(total);
     for (i, s) in joined.iter().enumerate() {
         if got_int.get() {
@@ -368,7 +321,7 @@ pub fn list_join(out: &mut XString, l: Option<&List>, sep: &CStr) -> Result<(), 
         if i > 0 {
             text.extend_from_slice(sep);
         }
-        text.extend_from_slice(s.as_bytes());
+        text.extend_from_slice(s);
         line_breakcheck();
     }
     out.push_bytes(&text);
@@ -402,25 +355,22 @@ pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `list2str()`: a list of codepoints as a string.
 pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(None);
-    // SAFETY: the builtin's argument array.
-    let args = unsafe { Tv::new(core::ptr::from_ref(&args[0]).cast_mut()) };
-    if args.v_type() != VAR_LIST {
+    let arg = &args[0];
+    if arg.v_type() != VAR_LIST {
         emsg(gettext(e_invarg));
         return;
     }
-    let l = args.list_or_null();
-    if l.is_null() {
+    let Some(list) = arg.list_ref() else {
         return;
-    }
+    };
 
     let mut text = XString::new();
-    let mut buf: [::core::ffi::c_char; 22] = [0; 22];
-    // SAFETY: the builtin's own argument, borrowed for the walk.
-    for li in list_iter(args.list_ref()) {
+    let mut buf = [0u8; 22];
+    for li in list.items() {
         let n = tv_get_number(&li.li_tv);
-        let buflen = unsafe { utf_char2bytes(n as ::core::ffi::c_int, buf.as_mut_ptr()) } as usize;
+        let buflen = encode_char(n as ::core::ffi::c_int, &mut buf);
         // A NUL ends the string there, as it did in the C buffer.
-        text.push_bytes(&buf.map(|c| c.cast_unsigned())[..buflen]);
+        text.push_bytes(&buf[..buflen]);
     }
     result.write_string(Some(text.into()));
 }

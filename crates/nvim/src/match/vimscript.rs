@@ -397,11 +397,11 @@ pub(crate) fn f_matcharg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     }
     let m = unsafe { get_match(Win::current(), id) };
     if m.is_null() {
-        unsafe { (*l).push_string(::core::ptr::null(), 0) };
-        unsafe { (*l).push_string(::core::ptr::null(), 0) };
+        l.push_bytes(None);
+        l.push_bytes(None);
     } else {
-        unsafe { (*l).push_string(syn_id2name((*m).mit_hlg_id).as_ptr().cast_mut(), -1) };
-        unsafe { (*l).push_string((*m).mit_pattern, -1) };
+        unsafe { (*l).push_str(Some(syn_id2name((*m).mit_hlg_id))) };
+        unsafe { (*l).push_str(cstr::at_opt((*m).mit_pattern)) };
     }
 }
 

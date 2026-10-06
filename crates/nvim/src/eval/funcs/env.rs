@@ -127,7 +127,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if result.v_type() == VAR_LIST {
             list_alloc_ret(result, isize::from(!expanded.is_null()));
             if !expanded.is_null() {
-                unsafe { (*result.list_or_null()).push_string(expanded, -1) };
+                unsafe { (*result.list_or_null()).push_str(cstr::at_opt(expanded)) };
             }
             unsafe { xfree(expanded as *mut c_void) };
         } else {
@@ -165,7 +165,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         for name in xpc.matches() {
             let list = result.list_or_null();
             // SAFETY: the List just allocated, and a NUL-terminated name.
-            unsafe { (*list).push_string(name.as_ptr(), -1) };
+            unsafe { (*list).push_str(cstr::at_opt(name.as_ptr())) };
         }
         expand_cleanup(&mut xpc);
     }

@@ -592,7 +592,7 @@ pub(crate) fn list_append_dict(list: *mut List, dict: Option<DictRef>) {
 
 pub(crate) fn list_append_str(list: *mut List, value: &CStr) {
     // SAFETY: see the section note; a negative length means "to the NUL".
-    unsafe { (*list).push_string(value.as_ptr(), -1) };
+    unsafe { (*list).push_str(Some(value)) };
 }
 
 /// A right-hand side with its special keys spelled out, as an allocation the

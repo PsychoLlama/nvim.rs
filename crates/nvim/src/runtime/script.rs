@@ -312,7 +312,7 @@ fn get_script_local_funcs(sid: ScriptId) -> ListRef {
             fp.uf_name_exp
         };
         // SAFETY: `name` is NUL-terminated, which the -1 length asks for.
-        unsafe { (*l).push_string(name, -1) };
+        unsafe { (*l).push_str(cstr::at_opt(name)) };
     }
     list
 }

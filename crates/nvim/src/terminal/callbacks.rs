@@ -31,7 +31,6 @@ use crate::options::kOptBoFlagTerm;
 use crate::types::{
     Error, Event, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
     VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, ptrdiff_t,
-    ssize_t,
 };
 use crate::ui::vim_beep;
 use crate::vterm::vterm::{
@@ -243,7 +242,7 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     // SAFETY: the event's own two arguments, as `term_selection_set` left
     // them: a selection mask, and the string it allocated.
     let (mask, data) = unsafe { ((*argv).expose_provenance(), *argv.add(1) as *mut c_char) };
-    let mut regname = if mask as VTermSelectionMask == VTERM_SELECTION_PRIMARY {
+    let regname = if mask as VTermSelectionMask == VTERM_SELECTION_PRIMARY {
         b'*' as c_char
     } else {
         b'+' as c_char
@@ -258,9 +257,9 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     let regtype = b'v' as c_char;
     // SAFETY: as above, over one byte of this frame each, which the list
     // copies.
-    unsafe { (*args).push_string(&raw const regtype, 1 as ssize_t) };
+    unsafe { (*args).push_bytes(Some(&[regtype.cast_unsigned()])) };
     // SAFETY: as above.
-    unsafe { (*args).push_string(&raw mut regname, 1 as ssize_t) };
+    unsafe { (*args).push_bytes(Some(&[regname.cast_unsigned()])) };
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
     // SAFETY: two names of this crate's own, and the arguments built above.
     // The provider is Vimscript, which is why this runs on the main loop.

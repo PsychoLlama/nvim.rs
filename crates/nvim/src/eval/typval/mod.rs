@@ -2,19 +2,17 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES, encode_tv2echo, encode_tv2string};
-use crate::eval::executor::eexe_mod_op;
+use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES};
 use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
-use crate::eval::userfunc::{call_func, func_ref, func_unref, get_funccal_local_ht, set_selfdict};
+use crate::eval::userfunc::{func_ref, func_unref, get_funccal_local_ht, set_selfdict};
 use crate::eval::vars::get_globvar_dict;
-use crate::eval::{callback_call, callback_from_typval, func_equal, var_item_copy, var2fpos};
+use crate::eval::{callback_call, callback_from_typval, func_equal, var2fpos};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{
     Slot, hash_add, hash_find_len, hash_init, hash_remove, hash_reset, hash_unlock,
 };
 use crate::lua::executor::api_free_luaref;
-use crate::mbyte::utf_char2bytes;
 use crate::memory::{xcalloc, xfree};
 use crate::message::emsg;
 use crate::message::state::did_emsg;
@@ -26,13 +24,12 @@ use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::types::{
     Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float, FuncExe,
-    LineNr, List, ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, String_0, TypVal,
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t,
-    kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t,
+    LineNr, List, ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB,
+    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue,
+    kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t, uint8_t,
 };
-
-use ::libc::{abort, strcasecmp, strcoll, strtod};
+use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.
 mod access;
@@ -75,36 +72,6 @@ pub const DI_FLAGS_FIX: ::core::ffi::c_uint = 4;
 pub const DI_FLAGS_RO_SBX: ::core::ffi::c_uint = 2;
 pub const DI_FLAGS_RO: ::core::ffi::c_uint = 1;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
-/// One stringified list item on `join()`'s way to the answer.
-///
-/// Upstream carries the allocation twice -- once as the string and once as
-/// `tofree`, because its `String` did not own anything -- and clears the
-/// array with `FREE_JOIN_TOFREE`. The string owns its bytes here, so there
-/// is one field and the array's own clear releases it.
-pub struct SortInfo {
-    pub item_compare_ic: ::core::ffi::c_int,
-    pub item_compare_lc: bool,
-    pub item_compare_numeric: bool,
-    pub item_compare_numbers: bool,
-    pub item_compare_float: bool,
-    pub item_compare_func: *const ::core::ffi::c_char,
-    pub item_compare_partial: *mut Partial,
-    pub item_compare_selfdict: *mut Dict,
-    pub item_compare_func_err: bool,
-}
-pub struct ListSortItem {
-    pub item: *mut ListItem,
-    pub idx: ::core::ffi::c_int,
-}
-/// A `qsort_r` comparator over two `ListSortItem`s, its context the sort's
-/// `SortInfo`.
-pub type ListSorter = Option<
-    unsafe extern "C" fn(
-        *const ::core::ffi::c_void,
-        *const ::core::ffi::c_void,
-        *mut ::core::ffi::c_void,
-    ) -> ::core::ffi::c_int,
->;
 pub type DictListType = ::core::ffi::c_uint;
 pub const kDict2ListItems: DictListType = 2;
 pub const kDict2ListValues: DictListType = 1;
@@ -150,19 +117,6 @@ static e_string_or_function_required_for_argument_nr: &::core::ffi::CStr =
     c"E1256: String or function required for argument %d";
 static e_non_null_dict_required_for_argument_nr: &::core::ffi::CStr =
     c"E1297: Non-NULL Dictionary required for argument %d";
-/// A zeroed `SortInfo`, which is what a bare `SortInfo info;` declaration
-/// is before `parse_sort_uniq_args` fills it in.
-pub const SORTINFO_INIT: SortInfo = SortInfo {
-    item_compare_ic: 0,
-    item_compare_lc: false,
-    item_compare_numeric: false,
-    item_compare_numbers: false,
-    item_compare_float: false,
-    item_compare_func: ::core::ptr::null(),
-    item_compare_partial: ::core::ptr::null_mut(),
-    item_compare_selfdict: ::core::ptr::null_mut(),
-    item_compare_func_err: false,
-};
 /// `TV_INITIAL_VALUE`: the `VAR_UNKNOWN` a `TypVal` is initialised to and
 /// left as after being moved out of.  c2rust wrote the designated
 /// initialiser out at every use site.
@@ -177,7 +131,6 @@ pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 /// How many submatches a `\=` replacement expression is handed: `\0`
 /// through `\9`.
 pub const SL_SIZE: usize = 10;
-pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = 0;
 static tv_equal_recurse_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// What a value that has no Number form is called when one is asked for,

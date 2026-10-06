@@ -179,7 +179,7 @@ unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
     };
     let word = |s: &CStr| {
         // SAFETY: a live list and a NUL-terminated string.
-        unsafe { (*fr_list).push_string(s.as_ptr(), s.count_bytes().cast_signed()) };
+        unsafe { (*fr_list).push_str(Some(s)) };
     };
     if c_int::from(fr.fr_layout) == FR_LEAF {
         // A leaf frame with no window is a frame being taken apart; it is

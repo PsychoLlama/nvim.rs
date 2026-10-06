@@ -49,8 +49,6 @@ pub(crate) type Di = Live<DictItem>;
 pub(crate) type Bl = Live<Blob>;
 /// A live `Partial`; see [`Tv`].
 pub(crate) type Pt = Live<Partial>;
-/// A live `ListWatch`; see [`Tv`].
-pub(crate) type Lw = Live<ListWatch>;
 
 /// The address of a field of `*p`, **computed rather than read**.
 ///

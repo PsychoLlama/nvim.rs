@@ -378,7 +378,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                     .as_string()
                     .expect("`serverlist()` answers with a list of strings");
                 // SAFETY: the address is the object's own, NUL-terminated.
-                unsafe { (*list).push_string(addr.data(), -1) };
+                unsafe { (*list).push_str(crate::cstr::at_opt(addr.data())) };
             }
         }
     }

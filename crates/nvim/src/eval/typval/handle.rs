@@ -261,9 +261,10 @@ pub unsafe fn list_free_list(l: *mut List) {
         unsafe { api_free_luaref((*l).lua_table_ref) };
         list.lua_table_ref = LUA_NOREF as LuaRef;
     }
-    // The item array itself: `xfree` is the C's and runs no destructor.
+    // The item array and the cursor array: `xfree` is the C's and runs no
+    // destructor, so the fields go first.
     // SAFETY: as above.
-    unsafe { ::core::ptr::drop_in_place(&raw mut (*l).lv_items) };
+    unsafe { ::core::ptr::drop_in_place(l) };
     unsafe { xfree(l.cast()) };
 }
 
@@ -277,8 +278,13 @@ pub unsafe fn list_free(l: *mut List) {
     if tv_in_free_unref_items.get() {
         return;
     }
-    // SAFETY: the caller's promise: a live, unaliased list.
-    list_free_contents(unsafe { &mut *l });
+    {
+        // A view of the list that takes no reference: the caller's was the
+        // last, and it is given back by freeing.
+        // SAFETY: the caller's promise -- a live list.
+        let view = ::core::mem::ManuallyDrop::new(ListRef(unsafe { NonNull::new_unchecked(l) }));
+        list_free_contents(&view);
+    }
     unsafe { list_free_list(l) };
 }
 
@@ -944,6 +950,28 @@ impl<const N: usize> CallFrame<N> {
 /// before copying the items, so that an item naming the original again gets
 /// the copy. The copy is held by the walk that made it for as long as that
 /// `copy_id` is the one asked about, which is what the reads rest on.
+impl ListRef {
+    /// Mark this list as copied to `copy` under `copy_id`.
+    pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &ListRef) {
+        let this = self.edit();
+        this.lv_copy_id = copy_id;
+        this.lv_copylist = copy.as_ptr();
+    }
+}
+
+impl List {
+    /// The copy this list was given under `copy_id` by the walk still
+    /// running, with a reference of its own.
+    pub(crate) fn copy_under(&self, copy_id: ::core::ffi::c_int) -> Option<ListRef> {
+        if copy_id == 0 || self.lv_copy_id != copy_id {
+            return None;
+        }
+        // SAFETY: written by `remember_copy` under this id, by the walk that
+        // still holds the copy.
+        unsafe { ListRef::retained(self.lv_copylist) }
+    }
+}
+
 impl DictRef {
     /// Mark this dictionary as copied to `copy` under `copy_id`.
     pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &DictRef) {

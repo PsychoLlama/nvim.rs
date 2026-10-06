@@ -404,9 +404,9 @@ unsafe fn getlist_append_pair(dp: &Digraph, l: *mut List) {
     let l2 = tv_list_alloc(2);
     let into = l2.as_ptr();
     unsafe { (*l).push_list(Some(l2)) };
-    unsafe { (*into).push_string(chars.as_ptr() as *const c_char, -1) };
+    unsafe { (*into).push_str(cstr::at_opt(chars.as_ptr() as *const c_char)) };
     unsafe { utf_char2bytes(dp.result, buf.as_mut_ptr() as *mut c_char) };
-    unsafe { (*into).push_string(buf.as_ptr() as *const c_char, -1) };
+    unsafe { (*into).push_str(cstr::at_opt(buf.as_ptr() as *const c_char)) };
 }
 
 /// Build the `digraph_getlist()` result: user digraphs, plus the effective

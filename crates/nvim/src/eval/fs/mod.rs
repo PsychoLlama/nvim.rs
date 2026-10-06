@@ -51,7 +51,7 @@ use crate::path::vim_ispathsep;
 use crate::strings::concat_str;
 use crate::types::{
     Direction, EvalFuncData, FAIL, FileInfo, List, TypVal, VAR_STRING, VarNumber, int32_t,
-    ptrdiff_t, size_t, ssize_t, uint64_t, uv_stat_t, uv_timespec_t,
+    ptrdiff_t, size_t, uint64_t, uv_stat_t, uv_timespec_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -152,7 +152,7 @@ impl RetList {
     pub(crate) fn push(self, s: *const c_char) {
         // SAFETY: a live list and a NUL-terminated string, which is what a
         // length of -1 promises.
-        unsafe { (*self.0).push_string(s, -1 as ssize_t) };
+        unsafe { (*self.0).push_str(crate::cstr::at_opt(s)) };
     }
 }
 

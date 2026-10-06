@@ -31,7 +31,7 @@ pub(crate) use crate::message::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
     Array, Blob, ChannelStreamType, Dict, ExprType, Failed, FuncExe, GRegFlags, LineNr, List,
-    ListWatch, LuaRetMode, MarkGet, MotionType, Partial, Timer, TypVal, uint64_t,
+    LuaRetMode, MarkGet, MotionType, Partial, Timer, TypVal, uint64_t,
 };
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
@@ -121,7 +121,8 @@ pub const GLV_FAIL: GlvStatus = 0;
 pub struct ForInfo {
     pub fi_semicolon: c_int,
     pub fi_varcount: c_int,
-    pub fi_lw: ListWatch,
+    /// The id of the cursor this loop registered with `fi_list`.
+    pub fi_watch: u32,
     pub fi_list: *mut List,
     pub fi_bi: c_int,
     pub fi_blob: *mut Blob,

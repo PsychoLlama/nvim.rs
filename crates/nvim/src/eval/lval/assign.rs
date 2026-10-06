@@ -29,7 +29,7 @@ use crate::message_fmt::msg_bytes;
 use crate::semsg;
 
 use super::{LValue, Slot, Span, Target, UNSET_TV};
-use crate::eval::executor::mod_op;
+use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
     BlobRef, DictRef, assign_range, blob_len, dict_is_watched, dict_watcher_notify, set_range,
     tv_check_lock_named, tv_copy, tv_get_number_chk, value_check_lock_named,
@@ -179,7 +179,7 @@ fn write_slot(lval: &mut LValue<'_>, value: &mut TypVal, copy: bool, op: Option<
     if lval.with_slot(|tv, _| tv_copy(tv, &mut current)).is_none() {
         return;
     }
-    if mod_op(&mut current, value, op).is_ok() {
+    if eexe_mod_op(&mut current, value, op).is_ok() {
         lval.with_slot(move |tv, _| *tv = current);
     } else {
         clear_local(&mut current);
@@ -255,7 +255,7 @@ fn set_whole_var(
         return;
     };
     let writable = !var_check_ro_named(flags.into(), name) && !tv_check_lock_named(lock, &tv, name);
-    if writable && mod_op(&mut tv, value, op).is_ok() {
+    if writable && eexe_mod_op(&mut tv, value, op).is_ok() {
         // The folded value goes back by name.
         set_var_const_named(name, &mut tv, false, false);
     }

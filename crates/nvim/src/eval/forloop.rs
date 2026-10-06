@@ -2,7 +2,8 @@
 //!
 //! `ForInfo` holds exactly one of three iterations and which field is
 //! set is what says which: `fi_blob` a Blob by byte, `fi_string` a String
-//! by character, `fi_list` (through `fi_lw`) a List by item. They are
+//! by character, `fi_list` (through the cursor `fi_watch` names) a List by
+//! item. They are
 //! tested in that order, so `free_for_info` and `next_for_item` agree
 //! without anything recording a kind.
 //!
@@ -16,11 +17,9 @@
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::ThinCString;
 use core::ffi::{c_int, c_void};
-use core::mem::{offset_of, size_of};
+use core::mem::size_of;
 
-use crate::eval::typval::{
-    blob_copy, blob_len, blob_unref, index_of, list_items_mut, list_unref, tv_copy,
-};
+use crate::eval::typval::{blob_copy, blob_len, blob_unref, index_of, list_unref, tv_copy};
 use crate::eval::vars::{VarList, ex_let_vars, skip_var_list};
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::{Fi, ForInfo, e_string_list_or_blob_required, eval0_in_cmd};
@@ -80,15 +79,8 @@ pub unsafe fn eval_for_line(excmd: &mut ExArg, errp: *mut bool, skip: bool) -> *
                         // is what keeps the cursor valid across changes
                         // to the List while the loop runs.
                         fi.fi_list = l;
-                        let lw = fi.field_ptr::<ListWatch>(offset_of!(ForInfo, fi_lw));
-                        // The List holds `lw` from here on, so this write
-                        // goes through the pointer rather than borrowing
-                        // the whole record — `winlayer::live`'s note.
-                        // SAFETY: `lw` is the `ForInfo`'s own watcher, which
-                        // the loop's first step reads.
-                        unsafe { (*lw).lw_index = 0 };
                         // SAFETY: `l` is the live List the typval held.
-                        unsafe { (*l).watch_add(lw) };
+                        fi.fi_watch = unsafe { (*l).watch_add() };
                         // The reference is `fi`'s now.
                         tv.disown();
                     }
@@ -139,11 +131,8 @@ pub unsafe fn eval_for_line(excmd: &mut ExArg, errp: *mut bool, skip: bool) -> *
 /// `fi_void` must be a `ForInfo` from `eval_for_line`; `arg` is the loop's
 /// variable list.
 pub unsafe fn next_for_item(fi_void: *mut c_void, arg: &[u8]) -> bool {
-    // `eval_for_line` handed the List the address of `fi_lw`, so the List
-    // is holding a pointer into this record for as long as the loop runs.
-    // Every write below therefore goes through `rec` rather than through
-    // `DerefMut`, which would borrow the whole `ForInfo` and pop it —
-    // see `winlayer::live`'s note.
+    // Every write below goes through `rec` rather than through `DerefMut`,
+    // which would borrow the whole `ForInfo` while `fi` reads it.
     // SAFETY: the caller's promise -- the loop's own `ForInfo`, which
     // `:endfor` keeps alive for as long as the loop runs.
     let fi = unsafe { Fi::new(fi_void as *mut ForInfo) };
@@ -185,25 +174,30 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: &[u8]) -> bool {
     // keeps naming the same item.  `ENDED` is upstream's NULL `lw_item`,
     // and is sticky: a loop whose body appends to the list it is walking
     // still ends.
-    let Ok(at) = usize::try_from(fi.fi_lw.lw_index) else {
+    let list_at = fi.fi_list;
+    // SAFETY: `fi_list` is null or the List the loop took a reference to;
+    // a loop over nothing (a null List, a failed header) has no items.
+    let Some(list) = (unsafe { list_at.as_ref() }) else {
         return false;
     };
-    // SAFETY: `fi_list` is the List the loop took a reference to.
-    let items = list_items_mut(unsafe { fi.fi_list.as_mut() });
-    let Some(item) = items.get_mut(at) else {
+    let Ok(at) = usize::try_from(list.watch_index(fi.fi_watch)) else {
+        return false;
+    };
+    let len = list.len();
+    let Some(item) = list.items().get(at) else {
         return false;
     };
     // The item is copied out: assigning it runs the targets' index
     // expressions, which may edit the List being walked.
     let mut value = UNSET_TV;
     tv_copy(&item.li_tv, &mut value);
-    let next = if at + 1 >= items.len() {
+    let next = if at + 1 >= len {
         ListWatch::ENDED
     } else {
         index_of(at + 1)
     };
-    // SAFETY: `rec` is the caller's record.
-    unsafe { (*rec).fi_lw.lw_index = next };
+    // SAFETY: as above; the borrow taken for the read has ended.
+    unsafe { (*list_at).set_watch_index(fi.fi_watch, next) };
     assign(&fi, arg, &mut value)
 }
 
@@ -231,14 +225,10 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
     // SAFETY: the caller's promise -- the loop's own `ForInfo`.
     let fi = unsafe { Fi::new(fi_void as *mut ForInfo) };
     if !fi.fi_list.is_null() {
-        let lw = fi.field_ptr(offset_of!(ForInfo, fi_lw));
-        // Read out first: `List::watch_remove` writes through `lw`, which
-        // points into this record, so no borrow of the record may still be
-        // alive while it runs.
         let list = fi.fi_list;
         // SAFETY: the watcher was added to this List by `eval_for_line`,
         // and the reference it took is released here.
-        unsafe { (*list).watch_remove(lw) };
+        unsafe { (*list).watch_remove(fi.fi_watch) };
         // SAFETY: as above -- this releases the reference `fi` held.
         unsafe { list_unref(list) };
     } else if !fi.fi_blob.is_null() {

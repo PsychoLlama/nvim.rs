@@ -4,7 +4,7 @@
 //! [`list_unref`] the one every caller actually uses.  The `ListWatch`
 //! half ([`List::watch_add`], [`watch_shift`]) is how a `:for`
 //! loop survives having the item it is standing on removed underneath it,
-//! and [`List::remove_range`] / [`List::move_range_to`] are the two ways
+//! and [`ListRef::remove_range`] / [`List::move_range_to`] are the two ways
 //! items leave a list.
 //!
 //! # The item store
@@ -17,13 +17,15 @@
 //! shifted by [`watch_shift`] at every insert and removal so that it
 //! keeps naming the same *item*.
 //!
-//! A `*mut ListItem` still exists, and is still what most callers hold; it
-//! is a **borrow of the array** and is invalidated by any edit, exactly as a
-//! `&mut` into a `Vec` would be.
+//! # Releasing items
+//!
+//! A value can name the list it is in, and releasing it reads that list
+//! again. So nothing here releases a value while a borrow of the list is
+//! live: the items are taken out first ([`List::take_range`]), the borrow
+//! ends, and *then* they are dropped -- which is why the entry points that
+//! release take a [`ListRef`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Every entry point here dereferences the caller's list.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -47,13 +49,6 @@ pub(crate) fn list_items_mut(l: Option<&mut List>) -> &mut [ListItem] {
 }
 
 /// The editing half of a [`List`]: what it holds, and what moves it.
-///
-/// Every entry point here took the list by pointer and was an `unsafe fn`
-/// for no reason but that. A `List` is a `Vec<ListItem>` with a watcher
-/// chain beside it, and a borrow says everything the pointer said -- except
-/// where two of them would name the same list, which is the one thing the
-/// pointer let happen silently and the borrow will not (see
-/// [`List::extend_from_self`]).
 impl List {
     /// The items this list owns.
     #[inline(always)]
@@ -104,49 +99,44 @@ impl List {
         self.lv_copy_id = copy_id;
     }
 
-    /// Remove `self[at]`, clearing the value it held.
-    ///
-    /// Answers the index of the item that followed it, which is `at` again
-    /// -- or `None` when the removed item was the last one.
-    pub fn remove_at(&mut self, at: usize) -> Option<usize> {
-        self.remove_range(at, at);
-        (at < self.len()).then_some(at)
+    /// Register a cursor standing on the first item, and answer the id it
+    /// is known by from here on.
+    pub fn watch_add(&mut self) -> u32 {
+        let id = self
+            .lv_watch
+            .iter()
+            .map(|watch| watch.id)
+            .max()
+            .map_or(1, |id| id + 1);
+        self.lv_watch.push(ListWatch { id, index: 0 });
+        id
     }
 
-    /// Push `lw` onto the watcher chain.
-    ///
-    /// # Safety
-    ///
-    /// `lw` must point at a watcher that outlives its registration: the
-    /// list stores the address, so a watcher that moves or dies first
-    /// leaves the chain naming freed storage.
-    pub unsafe fn watch_add(&mut self, lw: *mut ListWatch) {
-        // SAFETY: the caller's promise: a watcher that outlives this.
-        unsafe { (*lw).lw_next = self.lv_watch };
-        self.lv_watch = lw;
+    /// Where the cursor `id` stands: an index of the list, or
+    /// [`ListWatch::ENDED`].
+    pub fn watch_index(&self, id: u32) -> ::core::ffi::c_int {
+        self.lv_watch
+            .iter()
+            .find(|watch| watch.id == id)
+            .map_or(ListWatch::ENDED, |watch| watch.index)
     }
 
-    /// Unlink `lwrem` from the watcher chain.
-    ///
-    /// # Safety
-    ///
-    /// `lwrem` must point at an entry of this list's watcher chain.
-    pub unsafe fn watch_remove(&mut self, lwrem: *mut ListWatch) {
-        // `lwp` trails `lw` by one link so the match can be spliced out.
-        let mut lwp = &raw mut self.lv_watch;
-        let mut lw = self.lv_watch;
-        while !lw.is_null() {
-            if lw == lwrem {
-                // SAFETY: `lwp` is the link that names `lw`, and `lw` an
-                // entry of this chain.
-                unsafe { *lwp = (*lw).lw_next };
-                break;
-            }
-            // SAFETY: an entry of this list's watcher chain.
-            let mut watch = unsafe { Lw::new(lw) };
-            lwp = &raw mut watch.lw_next;
-            lw = watch.lw_next;
+    /// Move the cursor `id` to `index`.
+    pub fn set_watch_index(&mut self, id: u32, index: ::core::ffi::c_int) {
+        if let Some(watch) = self.lv_watch.iter_mut().find(|watch| watch.id == id) {
+            watch.index = index;
         }
+    }
+
+    /// Unregister the cursor `id`.
+    pub fn watch_remove(&mut self, id: u32) {
+        self.lv_watch.retain(|watch| watch.id != id);
+    }
+
+    /// Whether any `:for` loop is walking this list.
+    #[inline(always)]
+    pub(crate) fn is_watched(&self) -> bool {
+        !self.lv_watch.is_empty()
     }
 }
 
@@ -172,28 +162,21 @@ impl List {
 ///
 /// `at` must be an index into the list as it now is.
 pub(crate) fn watch_shift(l: &mut List, at: ::core::ffi::c_int, count: ::core::ffi::c_int) {
-    let mut lw = l.lv_watch;
-    if lw.is_null() {
+    if l.lv_watch.is_empty() {
         return;
     }
     let len = index_of(l.len());
-    while !lw.is_null() {
-        // SAFETY: an entry of `l`'s watcher chain.
-        let watch = unsafe { Lw::new(lw) };
-        let was = watch.lw_index;
-        if was >= at {
+    for watch in &mut l.lv_watch {
+        if watch.index >= at {
             // Clamped at `at`: a cursor inside a removed run lands on
             // whatever followed the run.
-            let moved = (was + count).max(at);
-            let landed = if moved >= len {
+            let moved = (watch.index + count).max(at);
+            watch.index = if moved >= len {
                 ListWatch::ENDED
             } else {
                 moved
             };
-            // SAFETY: as above.
-            unsafe { (*lw).lw_index = landed };
         }
-        lw = watch.lw_next;
     }
 }
 
@@ -207,17 +190,13 @@ pub(crate) fn watch_shift(l: &mut List, at: ::core::ffi::c_int, count: ::core::f
 ///
 /// `moved` must be one index per item, as the list stood before.
 pub(crate) fn watch_permute(l: &mut List, moved: &[::core::ffi::c_int]) {
-    let mut lw = l.lv_watch;
-    while !lw.is_null() {
-        // SAFETY: an entry of `l`'s watcher chain.
-        let watch = unsafe { Lw::new(lw) };
-        let to = usize::try_from(watch.lw_index)
+    for watch in &mut l.lv_watch {
+        let to = usize::try_from(watch.index)
             .ok()
             .and_then(|at| moved.get(at));
         if let Some(&to) = to {
-            unsafe { (*lw).lw_index = to };
+            watch.index = to;
         }
-        lw = watch.lw_next;
     }
 }
 
@@ -297,6 +276,16 @@ impl TypVal {
         }
     }
 
+    /// The handle this value holds, borrowed -- what to keep across a call
+    /// that can run user code, `.edit()`ing it one statement at a time.
+    #[inline(always)]
+    pub(crate) fn list_shared(&self) -> Option<&ListRef> {
+        match self {
+            TypVal::List(list) => (**list).as_ref(),
+            _ => None,
+        }
+    }
+
     /// The list this value holds, borrowed for writing.
     ///
     /// The exclusive borrow is the point: a caller holding one cannot also
@@ -353,21 +342,14 @@ impl TypVal {
 
 impl List {
     /// Take the items `self[first..=last]` out without releasing what they
-    /// hold; the caller owns them now.  `first..=last` must be a run of the
-    /// list's items.
+    /// hold; the caller owns them now, and drops them once its borrow of
+    /// the list has ended.  `first..=last` must be a run of the list's
+    /// items.
     pub(crate) fn take_range(&mut self, first: usize, last: usize) -> Vec<ListItem> {
         let taken: Vec<ListItem> = self.lv_items.drain(first..=last).collect();
         // The items are gone, so the cursors move now.
         watch_shift(self, index_of(first), -index_of(taken.len()));
         taken
-    }
-
-    /// Remove the items `self[first..=last]`, releasing what they hold.
-    pub fn remove_range(&mut self, first: usize, last: usize) {
-        // Dropped after the cursors have moved: releasing a value can
-        // re-enter the evaluator, which must not see a list whose watchers
-        // still name items that are gone.
-        drop(self.take_range(first, last));
     }
 
     /// Move the items `self[first..=last]` onto `target`'s tail.
@@ -393,15 +375,36 @@ impl List {
     ///
     /// The counterpart of [`List::disown_items`]: a funccall that has to
     /// outlive the call that made it cannot keep naming the caller's
-    /// arguments, so each item takes a real copy.
+    /// arguments, so each item takes a real copy -- written over the
+    /// borrowed bits, which were never this list's to release.
     pub(crate) fn own_items(&mut self) {
-        for li in &mut self.lv_items {
-            let slot = &raw mut li.li_tv;
-            // SAFETY: source and destination are one slot, which `tv_copy`
-            // reads before overwriting it with a value that owns what it
-            // names.
-            unsafe { tv_copy(&*slot, &mut *slot) };
+        for item in &mut self.lv_items {
+            let copy = item.li_tv.clone();
+            item.li_tv.overwrite(copy);
         }
+    }
+}
+
+/// The removals that release what they take: on the handle, because the
+/// release happens after the borrow of the list has ended.
+impl ListRef {
+    /// Remove the items `self[first..=last]`, releasing what they hold.
+    pub fn remove_range(&self, first: usize, last: usize) {
+        // Dropped after the cursors have moved and the borrow has ended:
+        // releasing a value can re-enter the evaluator, which must not see
+        // a list whose watchers still name items that are gone -- and the
+        // value may name this very list.
+        let taken = self.edit().take_range(first, last);
+        drop(taken);
+    }
+
+    /// Remove `self[at]`, releasing the value it held.
+    ///
+    /// Answers the index of the item that followed it, which is `at` again
+    /// -- or `None` when the removed item was the last one.
+    pub fn remove_at(&self, at: usize) -> Option<usize> {
+        self.remove_range(at, at);
+        (at < self.len()).then_some(at)
     }
 }
 
@@ -414,13 +417,15 @@ pub fn tv_list_alloc_ret(ret_tv: &mut TypVal, len: ptrdiff_t) -> &mut List {
     ret_tv.list_mut().expect("the list just stored")
 }
 
-/// Free every item in `l`, leaving the list itself allocated and empty.
-pub fn list_free_contents(l: &mut List) {
-    // Taken out before anything is cleared: releasing a value can re-enter
-    // the evaluator, and what it must not find is a list half way through
-    // being emptied.
-    let items = ::core::mem::take(&mut l.lv_items);
-    debug_assert!(l.lv_watch.is_null());
+/// Free every item in `list`, leaving the list itself allocated and empty.
+///
+/// The items are taken out before anything is released, and released once
+/// the borrow of the list has ended: releasing a value can re-enter the
+/// evaluator, which must not find a list half way through being emptied --
+/// and a value naming this list reads it again.
+pub fn list_free_contents(list: &ListRef) {
+    let items = ::core::mem::take(&mut list.edit().lv_items);
+    debug_assert!(!list.is_watched());
     // Dropping the array clears each value in turn, front to back.
     drop(items);
 }
@@ -428,13 +433,11 @@ pub fn list_free_contents(l: &mut List) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::eval::collect::var_item_copy_with;
     use crate::global_cell::editor_state_lock;
+    use ::core::mem::ManuallyDrop;
 
-    /// The safe layer these cases are written against.
-    ///
-    /// Every entry point below takes the caller's list by pointer; the
-    /// helpers here promise what those signatures ask for once — the list is
-    /// this module's own, the indexes are inside it — so that a case reads
+    /// The safe layer these cases are written against, so that a case reads
     /// as ordinary code and says only what it is about.
     mod l {
         use super::*;
@@ -445,92 +448,53 @@ mod tests {
         }
 
         /// `[0, 1, ..., len - 1]`, the list every case below edits.
-        ///
-        /// The case owns the one reference the allocator handed out, and
-        /// gives it back through [`done`].
-        pub(super) fn counted(len: usize) -> *mut List {
-            let list = tv_list_alloc(ptrdiff_t::try_from(len).expect("a short list"));
-            let l = list.as_ptr();
+        pub(super) fn counted(len: usize) -> ListRef {
+            let mut list = tv_list_alloc(ptrdiff_t::try_from(len).expect("a short list"));
             for n in 0..len {
-                // SAFETY: the list just allocated.
-                unsafe { (*l).push_number(VarNumber::try_from(n).expect("a small number")) };
+                list.push_number(VarNumber::try_from(n).expect("a small number"));
             }
-            list.into_raw()
+            list
         }
 
         /// The numbers `l` holds, so a case can say which items survived
         /// rather than how many.
-        pub(super) fn numbers(l: *mut List) -> Vec<VarNumber> {
-            // SAFETY: a list `counted` made, holding numbers.
-            unsafe { list_iter(l.as_ref()).map(|li| li.li_tv.number_or_zero()) }.collect()
+        pub(super) fn numbers(l: &List) -> Vec<VarNumber> {
+            l.items()
+                .iter()
+                .map(|li| li.li_tv.number_or_zero())
+                .collect()
         }
 
         /// A watcher standing on `l[at]`, registered with `l`.
-        ///
-        /// Handed out as a raw pointer rather than a `Box`: the list stores
-        /// the address, so moving the `Box` afterwards would invalidate it.
-        /// [`done`] takes it back.
-        pub(super) fn watch(l: *mut List, at: usize) -> *mut ListWatch {
-            // SAFETY: a list `counted` made.
-            assert!(
-                at < list_items(unsafe { l.as_ref() }).len(),
-                "no item at {at}"
-            );
-            let lw = Box::into_raw(Box::new(ListWatch {
-                lw_index: index(at),
-                lw_next: ::core::ptr::null_mut(),
-            }));
-            // SAFETY: as above, and the watcher outlives its registration.
-            unsafe { (*l).watch_add(lw) };
-            lw
+        pub(super) fn watch(l: &mut List, at: usize) -> u32 {
+            assert!(at < l.len(), "no item at {at}");
+            let id = l.watch_add();
+            l.set_watch_index(id, index(at));
+            id
         }
 
         /// Where a watcher is standing, as an index into `l` -- `None` once
         /// it has been pushed off the end.
         ///
-        /// The watcher's own field is a pointer today and an index
-        /// tomorrow; every case below is written in indexes so that it says
-        /// the same thing either way.  That is the whole point of these
-        /// cases: the identity a `:for` loop holds on to is *the item*, and
-        /// what [`tv_list_watch_fix`] and its successors owe is that the
-        /// item does not change under an edit somewhere else in the list.
-        pub(super) fn watching(l: *mut List, lw: *mut ListWatch) -> Option<usize> {
-            let _ = l;
-            // SAFETY: a watcher `watch` registered with `l`.  `ENDED` is
-            // negative, which is the NULL upstream pushed a cursor off the
-            // end to.
-            usize::try_from(unsafe { (*lw).lw_index }).ok()
-        }
-
-        /// Remove `l[at]`.
-        pub(super) fn remove(l: *mut List, at: usize) {
-            // SAFETY: a list `counted` made, and an index of it.
-            unsafe { (*l).remove_at(at) };
-        }
-
-        /// Remove `l[first..=last]`.
-        pub(super) fn remove_run(l: *mut List, first: usize, last: usize) {
-            // SAFETY: as above, and a run of items of `l`.
-            unsafe { (*l).remove_range(first, last) };
-        }
-
-        /// Move `l[first..=last]` onto `tgt`'s tail.
-        pub(super) fn move_run(l: *mut List, first: usize, last: usize, tgt: *mut List) {
-            // SAFETY: as above, plus a second list of this module's own.
-            unsafe { (*l).move_range_to(first, last, &mut *tgt) };
+        /// The identity a `:for` loop holds on to is *the item*, and what
+        /// the watcher bookkeeping owes is that the item does not change
+        /// under an edit somewhere else in the list.
+        pub(super) fn watching(l: &List, id: u32) -> Option<usize> {
+            // `ENDED` is negative, which is the NULL upstream pushed a
+            // cursor off the end to.
+            usize::try_from(l.watch_index(id)).ok()
         }
 
         /// Insert the number `n` in front of `l[at]`.
-        pub(super) fn insert(l: *mut List, n: VarNumber, at: usize) {
-            // SAFETY: as above, and a value the insert copies.
-            unsafe { (*l).insert_copy(&TypVal::Number(n), Some(at)) };
+        pub(super) fn insert(l: &mut List, n: VarNumber, at: usize) {
+            l.insert_copy(&TypVal::Number(n), Some(at));
         }
 
         /// One step of a `:for` loop's cursor: the number it stands on,
         /// with the cursor moved past it -- what `next_for_item` does
         /// before the body runs.  `None` once the walk has ended.
-        pub(super) fn step(l: *mut List, lw: *mut ListWatch) -> Option<VarNumber> {
-            let at = watching(l, lw)?;
+        pub(super) fn step(l: &mut List, id: u32) -> Option<VarNumber> {
+            let at = watching(l, id)?;
             let now = numbers(l);
             let item = *now.get(at)?;
             let next = if at + 1 >= now.len() {
@@ -538,23 +502,17 @@ mod tests {
             } else {
                 index(at + 1)
             };
-            // SAFETY: a watcher `watch` registered with `l`.
-            unsafe { (*lw).lw_index = next };
+            l.set_watch_index(id, next);
             Some(item)
         }
 
-        /// Unregister every watcher and free `l`; the pair every case ends
-        /// with.
-        pub(super) fn done(l: *mut List, lws: &[*mut ListWatch]) {
-            for &lw in lws {
-                // SAFETY: a watcher `watch` registered with `l`, whose `Box`
-                // is taken back here.
-                unsafe { (*l).watch_remove(lw) };
-                // SAFETY: the `Box` `watch` leaked, taken back here.
-                drop(unsafe { Box::from_raw(lw) });
+        /// Unregister every watcher and let `l` go; the pair every case
+        /// ends with.
+        pub(super) fn done(mut l: ListRef, ids: &[u32]) {
+            for &id in ids {
+                l.watch_remove(id);
             }
-            // SAFETY: a list `counted` made, now unwatched.
-            unsafe { list_free(l) };
+            drop(l);
         }
     }
 
@@ -580,47 +538,47 @@ mod tests {
     #[test]
     fn removing_an_item_after_the_watcher_leaves_it_where_it_was() {
         let _serial = editor_state_lock();
-        let list = l::counted(5);
-        let lw = l::watch(list, 1);
-        l::remove(list, 3);
-        assert_eq!(l::numbers(list), [0, 1, 2, 4]);
-        assert_eq!(l::watching(list, lw), Some(1));
+        let mut list = l::counted(5);
+        let lw = l::watch(&mut list, 1);
+        list.remove_at(3);
+        assert_eq!(l::numbers(&list), [0, 1, 2, 4]);
+        assert_eq!(l::watching(&list, lw), Some(1));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn removing_an_item_before_the_watcher_keeps_it_on_the_same_item() {
         let _serial = editor_state_lock();
-        let list = l::counted(5);
-        let lw = l::watch(list, 3);
-        l::remove(list, 1);
-        assert_eq!(l::numbers(list), [0, 2, 3, 4]);
+        let mut list = l::counted(5);
+        let lw = l::watch(&mut list, 3);
+        list.remove_at(1);
+        assert_eq!(l::numbers(&list), [0, 2, 3, 4]);
         // The item it stands on is still the one holding 3 -- which has
         // moved down one place.
-        assert_eq!(l::watching(list, lw), Some(2));
+        assert_eq!(l::watching(&list, lw), Some(2));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn removing_the_watched_item_lands_the_watcher_on_the_next_one() {
         let _serial = editor_state_lock();
-        let list = l::counted(5);
-        let lw = l::watch(list, 2);
-        l::remove(list, 2);
-        assert_eq!(l::numbers(list), [0, 1, 3, 4]);
+        let mut list = l::counted(5);
+        let lw = l::watch(&mut list, 2);
+        list.remove_at(2);
+        assert_eq!(l::numbers(&list), [0, 1, 3, 4]);
         // Index 2 again, but the item that *followed* the removed one.
-        assert_eq!(l::watching(list, lw), Some(2));
+        assert_eq!(l::watching(&list, lw), Some(2));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn removing_the_watched_last_item_pushes_the_watcher_off_the_end() {
         let _serial = editor_state_lock();
-        let list = l::counted(3);
-        let lw = l::watch(list, 2);
-        l::remove(list, 2);
-        assert_eq!(l::numbers(list), [0, 1]);
-        assert_eq!(l::watching(list, lw), None);
+        let mut list = l::counted(3);
+        let lw = l::watch(&mut list, 2);
+        list.remove_at(2);
+        assert_eq!(l::numbers(&list), [0, 1]);
+        assert_eq!(l::watching(&list, lw), None);
         l::done(list, &[lw]);
     }
 
@@ -630,78 +588,81 @@ mod tests {
         // walking: the cursor is already past the end, and nothing puts it
         // back.
         let _serial = editor_state_lock();
-        let list = l::counted(2);
-        let lw = l::watch(list, 1);
-        l::remove(list, 1);
-        assert_eq!(l::watching(list, lw), None);
-        // SAFETY: this module's own list.
-        unsafe { (*list).push_number(9) };
-        assert_eq!(l::watching(list, lw), None);
+        let mut list = l::counted(2);
+        let lw = l::watch(&mut list, 1);
+        list.remove_at(1);
+        assert_eq!(l::watching(&list, lw), None);
+        list.push_number(9);
+        assert_eq!(l::watching(&list, lw), None);
         l::done(list, &[lw]);
     }
 
     #[test]
     fn removing_a_run_around_the_watcher_lands_it_after_the_run() {
         let _serial = editor_state_lock();
-        let list = l::counted(7);
-        let lws = [l::watch(list, 0), l::watch(list, 3), l::watch(list, 6)];
-        l::remove_run(list, 2, 4);
-        assert_eq!(l::numbers(list), [0, 1, 5, 6]);
-        assert_eq!(l::watching(list, lws[0]), Some(0));
+        let mut list = l::counted(7);
+        let lws = [
+            l::watch(&mut list, 0),
+            l::watch(&mut list, 3),
+            l::watch(&mut list, 6),
+        ];
+        list.remove_range(2, 4);
+        assert_eq!(l::numbers(&list), [0, 1, 5, 6]);
+        assert_eq!(l::watching(&list, lws[0]), Some(0));
         // Was on 3, inside the run: now on what followed the run, 5.
-        assert_eq!(l::watching(list, lws[1]), Some(2));
+        assert_eq!(l::watching(&list, lws[1]), Some(2));
         // Was on 6, after the run: still on 6.
-        assert_eq!(l::watching(list, lws[2]), Some(3));
+        assert_eq!(l::watching(&list, lws[2]), Some(3));
         l::done(list, &lws);
     }
 
     #[test]
     fn inserting_before_the_watcher_keeps_it_on_the_same_item() {
         let _serial = editor_state_lock();
-        let list = l::counted(4);
-        let lw = l::watch(list, 2);
-        l::insert(list, 90, 1);
-        assert_eq!(l::numbers(list), [0, 90, 1, 2, 3]);
-        assert_eq!(l::watching(list, lw), Some(3));
+        let mut list = l::counted(4);
+        let lw = l::watch(&mut list, 2);
+        l::insert(&mut list, 90, 1);
+        assert_eq!(l::numbers(&list), [0, 90, 1, 2, 3]);
+        assert_eq!(l::watching(&list, lw), Some(3));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn inserting_after_the_watcher_leaves_it_where_it_was() {
         let _serial = editor_state_lock();
-        let list = l::counted(4);
-        let lw = l::watch(list, 1);
-        l::insert(list, 90, 3);
-        assert_eq!(l::numbers(list), [0, 1, 2, 90, 3]);
-        assert_eq!(l::watching(list, lw), Some(1));
+        let mut list = l::counted(4);
+        let lw = l::watch(&mut list, 1);
+        l::insert(&mut list, 90, 3);
+        assert_eq!(l::numbers(&list), [0, 1, 2, 90, 3]);
+        assert_eq!(l::watching(&list, lw), Some(1));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn inserting_at_the_watched_item_pushes_the_watcher_up() {
         let _serial = editor_state_lock();
-        let list = l::counted(4);
-        let lw = l::watch(list, 1);
-        l::insert(list, 90, 1);
-        assert_eq!(l::numbers(list), [0, 90, 1, 2, 3]);
+        let mut list = l::counted(4);
+        let lw = l::watch(&mut list, 1);
+        l::insert(&mut list, 90, 1);
+        assert_eq!(l::numbers(&list), [0, 90, 1, 2, 3]);
         // Still on the item holding 1, now one place further along.
-        assert_eq!(l::watching(list, lw), Some(2));
+        assert_eq!(l::watching(&list, lw), Some(2));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn moving_the_watched_run_to_another_list_lands_the_watcher_after_it() {
         let _serial = editor_state_lock();
-        let list = l::counted(6);
-        let tgt = l::counted(0);
-        let lws = [l::watch(list, 1), l::watch(list, 4)];
-        l::move_run(list, 1, 2, tgt);
-        assert_eq!(l::numbers(list), [0, 3, 4, 5]);
-        assert_eq!(l::numbers(tgt), [1, 2]);
+        let mut list = l::counted(6);
+        let mut tgt = l::counted(0);
+        let lws = [l::watch(&mut list, 1), l::watch(&mut list, 4)];
+        list.move_range_to(1, 2, &mut tgt);
+        assert_eq!(l::numbers(&list), [0, 3, 4, 5]);
+        assert_eq!(l::numbers(&tgt), [1, 2]);
         // A watcher follows the list it is registered with, not the items
         // that left it.
-        assert_eq!(l::watching(list, lws[0]), Some(1));
-        assert_eq!(l::watching(list, lws[1]), Some(2));
+        assert_eq!(l::watching(&list, lws[0]), Some(1));
+        assert_eq!(l::watching(&list, lws[1]), Some(2));
         l::done(list, &lws);
         l::done(tgt, &[]);
     }
@@ -711,20 +672,20 @@ mod tests {
     #[test]
     fn a_walk_that_removes_the_next_item_skips_it() {
         let _serial = editor_state_lock();
-        let list = l::counted(5);
-        let lw = l::watch(list, 0);
+        let mut list = l::counted(5);
+        let lw = l::watch(&mut list, 0);
         let mut seen = Vec::new();
-        while let Some(n) = l::step(list, lw) {
+        while let Some(n) = l::step(&mut list, lw) {
             seen.push(n);
             if n == 1 {
                 // The cursor stands on 2; take it away.
-                assert_eq!(l::watching(list, lw), Some(2));
-                l::remove(list, 2);
-                assert_eq!(l::watching(list, lw), Some(2));
+                assert_eq!(l::watching(&list, lw), Some(2));
+                list.remove_at(2);
+                assert_eq!(l::watching(&list, lw), Some(2));
             }
         }
         assert_eq!(seen, [0, 1, 3, 4]);
-        assert_eq!(l::numbers(list), [0, 1, 3, 4]);
+        assert_eq!(l::numbers(&list), [0, 1, 3, 4]);
         l::done(list, &[lw]);
     }
 
@@ -734,23 +695,23 @@ mod tests {
     #[test]
     fn a_walk_that_removes_its_current_item_misses_nothing() {
         let _serial = editor_state_lock();
-        let list = l::counted(5);
-        let lw = l::watch(list, 0);
+        let mut list = l::counted(5);
+        let lw = l::watch(&mut list, 0);
         let mut seen = Vec::new();
-        while let Some(n) = l::step(list, lw) {
+        while let Some(n) = l::step(&mut list, lw) {
             seen.push(n);
             if n == 1 || n == 2 {
-                let at = l::numbers(list)
+                let at = l::numbers(&list)
                     .iter()
                     .position(|&v| v == n)
                     .expect("the current item");
-                let before = l::watching(list, lw).expect("not at the end");
-                l::remove(list, at);
-                assert_eq!(l::watching(list, lw), Some(before - 1));
+                let before = l::watching(&list, lw).expect("not at the end");
+                list.remove_at(at);
+                assert_eq!(l::watching(&list, lw), Some(before - 1));
             }
         }
         assert_eq!(seen, [0, 1, 2, 3, 4]);
-        assert_eq!(l::numbers(list), [0, 3, 4]);
+        assert_eq!(l::numbers(&list), [0, 3, 4]);
         l::done(list, &[lw]);
     }
 
@@ -760,28 +721,28 @@ mod tests {
     #[test]
     fn a_walk_that_removes_a_run_around_its_cursor_resumes_after_it() {
         let _serial = editor_state_lock();
-        let list = l::counted(8);
-        let lw = l::watch(list, 0);
+        let mut list = l::counted(8);
+        let lw = l::watch(&mut list, 0);
         let mut seen = Vec::new();
-        while let Some(n) = l::step(list, lw) {
+        while let Some(n) = l::step(&mut list, lw) {
             seen.push(n);
             match n {
                 1 => {
                     // The cursor is on 2; take 1..=3 away.
-                    l::remove_run(list, 1, 3);
-                    assert_eq!(l::numbers(list), [0, 4, 5, 6, 7]);
-                    assert_eq!(l::watching(list, lw), Some(1));
+                    list.remove_range(1, 3);
+                    assert_eq!(l::numbers(&list), [0, 4, 5, 6, 7]);
+                    assert_eq!(l::watching(&list, lw), Some(1));
                 }
                 5 => {
                     // The cursor is on 6; take it and everything after.
-                    l::remove_run(list, 3, 4);
-                    assert_eq!(l::watching(list, lw), None);
+                    list.remove_range(3, 4);
+                    assert_eq!(l::watching(&list, lw), None);
                 }
                 _ => {}
             }
         }
         assert_eq!(seen, [0, 1, 4, 5]);
-        assert_eq!(l::numbers(list), [0, 4, 5]);
+        assert_eq!(l::numbers(&list), [0, 4, 5]);
         l::done(list, &[lw]);
     }
 
@@ -790,18 +751,18 @@ mod tests {
     #[test]
     fn a_walk_that_inserts_before_its_item_does_not_visit_the_insert() {
         let _serial = editor_state_lock();
-        let list = l::counted(4);
-        let lw = l::watch(list, 0);
+        let mut list = l::counted(4);
+        let lw = l::watch(&mut list, 0);
         let mut seen = Vec::new();
-        while let Some(n) = l::step(list, lw) {
+        while let Some(n) = l::step(&mut list, lw) {
             seen.push(n);
             if n == 2 {
-                l::insert(list, 90, 2);
-                assert_eq!(l::watching(list, lw), Some(4));
+                l::insert(&mut list, 90, 2);
+                assert_eq!(l::watching(&list, lw), Some(4));
             }
         }
         assert_eq!(seen, [0, 1, 2, 3]);
-        assert_eq!(l::numbers(list), [0, 1, 90, 2, 3]);
+        assert_eq!(l::numbers(&list), [0, 1, 90, 2, 3]);
         l::done(list, &[lw]);
     }
 
@@ -810,28 +771,26 @@ mod tests {
     #[test]
     fn two_watchers_on_one_list_each_follow_their_item() {
         let _serial = editor_state_lock();
-        let list = l::counted(6);
-        let outer = l::watch(list, 2);
-        let inner = l::watch(list, 4);
-        l::remove(list, 3);
-        assert_eq!(l::watching(list, outer), Some(2));
-        assert_eq!(l::watching(list, inner), Some(3));
+        let mut list = l::counted(6);
+        let outer = l::watch(&mut list, 2);
+        let inner = l::watch(&mut list, 4);
+        assert_ne!(outer, inner);
+        list.remove_at(3);
+        assert_eq!(l::watching(&list, outer), Some(2));
+        assert_eq!(l::watching(&list, inner), Some(3));
         // Removing the outer cursor's item leaves the inner one alone.
-        l::remove(list, 2);
-        assert_eq!(l::numbers(list), [0, 1, 4, 5]);
-        assert_eq!(l::watching(list, outer), Some(2));
-        assert_eq!(l::watching(list, inner), Some(2));
+        list.remove_at(2);
+        assert_eq!(l::numbers(&list), [0, 1, 4, 5]);
+        assert_eq!(l::watching(&list, outer), Some(2));
+        assert_eq!(l::watching(&list, inner), Some(2));
         // Both land on the same item, and both end together.
-        l::remove_run(list, 2, 3);
-        assert_eq!(l::watching(list, outer), None);
-        assert_eq!(l::watching(list, inner), None);
-        // Unregistering one leaves the other on the chain.
-        // SAFETY: a watcher registered with `list`.
-        unsafe { (*list).watch_remove(outer) };
-        // SAFETY: as above, now off the chain.
-        drop(unsafe { Box::from_raw(outer) });
-        // SAFETY: this module's own list.
-        assert_eq!(unsafe { (*list).lv_watch }, inner);
+        list.remove_range(2, 3);
+        assert_eq!(l::watching(&list, outer), None);
+        assert_eq!(l::watching(&list, inner), None);
+        // Unregistering one leaves the other registered.
+        list.watch_remove(outer);
+        let ids: Vec<u32> = list.lv_watch.iter().map(|watch| watch.id).collect();
+        assert_eq!(ids, [inner]);
         l::done(list, &[inner]);
     }
 
@@ -839,23 +798,35 @@ mod tests {
     #[test]
     fn a_permutation_carries_every_watcher_with_its_item() {
         let _serial = editor_state_lock();
-        let list = l::counted(4);
-        let lws = [l::watch(list, 0), l::watch(list, 3)];
+        let mut list = l::counted(4);
+        let lws = [l::watch(&mut list, 0), l::watch(&mut list, 3)];
         // Reverse: index i goes to 3 - i.
-        // SAFETY: this module's own list.
-        unsafe { (*list).lv_items.reverse() };
-        // SAFETY: as above.
-        watch_permute(unsafe { &mut *list }, &[3, 2, 1, 0]);
-        assert_eq!(l::numbers(list), [3, 2, 1, 0]);
-        assert_eq!(l::watching(list, lws[0]), Some(3));
-        assert_eq!(l::watching(list, lws[1]), Some(0));
+        list.lv_items.reverse();
+        watch_permute(&mut list, &[3, 2, 1, 0]);
+        assert_eq!(l::numbers(&list), [3, 2, 1, 0]);
+        assert_eq!(l::watching(&list, lws[0]), Some(3));
+        assert_eq!(l::watching(&list, lws[1]), Some(0));
         l::done(list, &lws);
     }
 
     /// The reference count of `l`.
-    fn refs(l: *mut List) -> i32 {
-        // SAFETY: a live list the case holds.
-        unsafe { (*l).lv_refcount.get() }
+    fn refs(l: &List) -> i32 {
+        l.lv_refcount.get()
+    }
+
+    /// A handle over `list` that owns no reference -- what the collector
+    /// holds while it frees a list nobody references.
+    fn view(list: &ListRef) -> ManuallyDrop<ListRef> {
+        let view = ManuallyDrop::new(list.clone());
+        view.edit().lv_refcount.release();
+        view
+    }
+
+    /// Give `view` a reference of its own again and let it go: the release
+    /// that frees whatever is left of the list.
+    fn free(view: ManuallyDrop<ListRef>) {
+        view.edit().lv_refcount.retain();
+        drop(ManuallyDrop::into_inner(view));
     }
 
     /// Hold `tv_in_free_unref_items` up for a scope, and put it down even
@@ -881,56 +852,45 @@ mod tests {
     fn a_list_released_mid_collection_waits_for_the_collector() {
         let _serial = editor_state_lock();
         let list = l::counted(3);
-        assert_eq!(refs(list), 1);
+        let held = view(&list);
+        assert_eq!(refs(&held), 1);
         {
             let _collecting = Collecting::start();
-            // SAFETY: the one reference `counted` handed over.
-            unsafe { list_unref(list) };
+            drop(list);
             // Still allocated, still holding its items, at zero.
-            assert_eq!(refs(list), 0);
-            assert_eq!(l::numbers(list), [0, 1, 2]);
+            assert_eq!(refs(&held), 0);
+            assert_eq!(l::numbers(&held), [0, 1, 2]);
         }
         // What `free_unref_items` does with it: contents, then the list.
-        // SAFETY: the list, unreferenced but not yet freed.
-        list_free_contents(unsafe { &mut *list });
-        // SAFETY: as above, now empty.
-        unsafe { list_free_list(list) };
+        list_free_contents(&held);
+        free(held);
     }
 
     /// A list that holds itself never reaches zero by itself; the
     /// collector's two passes are what free it.
     ///
-    /// Pass 1 is `list_free_contents(&mut List)`, exactly as
-    /// `free_unref_items` calls it, and dropping the self-reference walks
-    /// the list through a raw pointer while that `&mut` is protected --
-    /// the same aliasing bug as [`removing_an_item_that_names_its_own_list`],
-    /// reached from `garbagecollect()` on any list that holds itself.
+    /// Pass 1 is `list_free_contents`, exactly as `free_unref_items` calls
+    /// it, and dropping the self-reference walks the list again -- which is
+    /// why the items are taken out under a borrow that has ended by then.
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in current code: list_free_contents releases an item naming its own \
-                  list under a protected &mut List (Stacked Borrows: strongly protected Unique)"
-    )]
     fn a_self_cycle_is_freed_by_the_collectors_two_passes() {
         let _serial = editor_state_lock();
-        let list = l::counted(1);
-        // SAFETY: a live list, which the item takes a reference to.
-        unsafe { (*list).push_list(ListRef::retained(list)) };
-        assert_eq!(refs(list), 2);
-        // SAFETY: the reference `counted` handed over.
-        unsafe { list_unref(list) };
-        assert_eq!(refs(list), 1, "the cycle keeps it alive");
+        let mut list = l::counted(1);
+        let itself = list.clone();
+        list.push_list(Some(itself));
+        assert_eq!(refs(&list), 2);
+        let held = view(&list);
+        drop(list);
+        assert_eq!(refs(&held), 1, "the cycle keeps it alive");
 
         let collecting = Collecting::start();
         // Pass 1: the contents.  The self-reference goes to zero, and the
         // flag keeps that from freeing the list under the walk.
-        // SAFETY: a live list nothing else is walking.
-        list_free_contents(unsafe { &mut *list });
-        assert_eq!(refs(list), 0);
-        // Pass 2: the structure.
-        // SAFETY: as above, now empty.
-        unsafe { list_free_list(list) };
+        list_free_contents(&held);
+        assert_eq!(refs(&held), 0);
         drop(collecting);
+        // Pass 2: the structure.
+        free(held);
     }
 
     /// A deep copy of a list that holds itself: the copy's item names the
@@ -938,63 +898,51 @@ mod tests {
     #[test]
     fn a_deep_copy_of_a_self_cycle_points_at_the_copy() {
         let _serial = editor_state_lock();
-        let list = l::counted(1);
-        // SAFETY: a live list, which the item takes a reference to.
-        unsafe { (*list).push_list(ListRef::retained(list)) };
-        // SAFETY: as above, for the value the copy reads.
-        let from = TypVal::list(unsafe { ListRef::retained(list) });
-        let before = refs(list);
+        let mut list = l::counted(1);
+        let itself = list.clone();
+        list.push_list(Some(itself));
+        let from = TypVal::list(Some(list.clone()));
+        let before = refs(&list);
 
         let mut to = TypVal::Unknown;
         let copy_id = crate::eval::get_copy_id();
-        // SAFETY: two live values, no conversion, a fresh copy id.
-        let copied = unsafe { var_item_copy(::core::ptr::null(), &from, &mut to, true, copy_id) };
+        let copied = var_item_copy_with(None, &from, &mut to, true, copy_id);
         assert_eq!(copied, Ok(()));
-        let copy = to.list_or_null();
-        assert_ne!(copy, list);
-        assert_eq!(l::numbers(copy)[0], 0);
-        // SAFETY: the copy `to` holds.
-        let inner = list_items(unsafe { copy.as_ref() })[1].li_tv.list_or_null();
-        assert_eq!(inner, copy, "the cycle followed the original");
-        assert_eq!(refs(list), before);
-        // The value `to` holds, and the copy's item.
-        assert_eq!(refs(copy), 2);
+        let copy = to.list_shared().expect("a list").clone();
+        assert!(!copy.ptr_eq(&list));
+        assert_eq!(l::numbers(&copy)[0], 0);
+        let inner = copy.items()[1].li_tv.list_shared().expect("a list");
+        assert!(inner.ptr_eq(&copy), "the cycle followed the original");
+        assert_eq!(refs(&list), before);
+        // The value `to` holds, the copy's item, and `copy` here.
+        assert_eq!(refs(&copy), 3);
 
-        // Break both cycles, then let the values go.  The items are taken
-        // out and released *after* the list's borrow ends: releasing one
-        // in place is the aliasing bug the next case pins.
-        for l in [copy, list] {
-            // SAFETY: a live list, and an index of it.
-            let taken = unsafe { (*l).take_range(1, 1) };
-            drop(taken);
+        // Break both cycles, then let the values go.
+        for l in [&copy, &list] {
+            l.remove_at(1);
         }
+        drop(copy);
         let mut from = from;
         tv_clear(&mut from);
         tv_clear(&mut to);
         l::done(list, &[]);
     }
 
-    /// `remove(l, i)` where `l[i]` is `l` itself: the item is released
-    /// inside `remove_range(&mut self)`, and releasing a list value walks
-    /// that list (`tv_clear` -> `encode_vim_to_nothing` reads its length)
-    /// through a raw pointer -- while the `&mut List` the removal runs
-    /// under is still protected.  Stacked Borrows rejects that read; the
-    /// same shape is `let l = [1] | call add(l, l) | call remove(l, 1)`.
+    /// `remove(l, i)` where `l[i]` is `l` itself: releasing a list value
+    /// walks that list (`tv_clear` -> `encode_vim_to_nothing` reads its
+    /// length), so the removal takes the item out under a borrow that has
+    /// ended before it is released.  The same shape is
+    /// `let l = [1] | call add(l, l) | call remove(l, 1)`.
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in current code: remove_range releases an item naming its own list \
-                  under a protected &mut List (Stacked Borrows: strongly protected Unique)"
-    )]
     fn removing_an_item_that_names_its_own_list() {
         let _serial = editor_state_lock();
-        let list = l::counted(1);
-        // SAFETY: a live list, which the item takes a reference to.
-        unsafe { (*list).push_list(ListRef::retained(list)) };
-        assert_eq!(refs(list), 2);
-        l::remove(list, 1);
-        assert_eq!(refs(list), 1);
-        assert_eq!(l::numbers(list), [0]);
+        let mut list = l::counted(1);
+        let itself = list.clone();
+        list.push_list(Some(itself));
+        assert_eq!(refs(&list), 2);
+        list.remove_at(1);
+        assert_eq!(refs(&list), 1);
+        assert_eq!(l::numbers(&list), [0]);
         l::done(list, &[]);
     }
 
@@ -1005,31 +953,25 @@ mod tests {
     fn a_deep_copy_keeps_sharing_only_under_a_copy_id() {
         let _serial = editor_state_lock();
         let shared = l::counted(2);
-        let outer = l::counted(0);
+        let mut outer = l::counted(0);
         for _ in 0..2 {
-            // SAFETY: two live lists of this case's own.
-            unsafe { (*outer).push_list(ListRef::retained(shared)) };
+            outer.push_list(Some(shared.clone()));
         }
-        // SAFETY: as above.
-        let from = TypVal::list(unsafe { ListRef::retained(outer) });
-        let item = |l: *mut List, at: usize| {
-            // SAFETY: a live list holding lists.
-            list_items(unsafe { l.as_ref() })[at].li_tv.list_or_null()
-        };
+        let from = TypVal::list(Some(outer.clone()));
+        let item = |l: &List, at: usize| l.items()[at].li_tv.list_or_null();
 
         for (copy_id, shares) in [(crate::eval::get_copy_id(), true), (0, false)] {
             let mut to = TypVal::Unknown;
-            // SAFETY: two live values, no conversion.
-            let copied =
-                unsafe { var_item_copy(::core::ptr::null(), &from, &mut to, true, copy_id) };
+            let copied = var_item_copy_with(None, &from, &mut to, true, copy_id);
             assert_eq!(copied, Ok(()));
-            let copy = to.list_or_null();
-            assert_ne!(item(copy, 0), shared);
+            let copy = to.list_ref().expect("a list");
+            assert_ne!(item(copy, 0), shared.as_ptr());
             assert_eq!(item(copy, 0) == item(copy, 1), shares);
-            assert_eq!(l::numbers(item(copy, 1)), [0, 1]);
+            let second = copy.items()[1].li_tv.list_ref().expect("a list");
+            assert_eq!(l::numbers(second), [0, 1]);
             tv_clear(&mut to);
         }
-        assert_eq!(refs(shared), 3);
+        assert_eq!(refs(&shared), 3);
 
         let mut from = from;
         tv_clear(&mut from);

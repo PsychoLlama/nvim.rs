@@ -165,7 +165,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // `[&l [1], *l, *l]`
         let mut tv = sharing(3, &Tv::List(vec![Tv::Float(1.0)]));
         let outer = tv.list();
-        let inner = (*list_first(outer.as_mut())).li_tv.list();
+        let inner = list_first(outer.as_mut()).unwrap().li_tv.list();
         // Two lists and nothing per item: the items are the lists' own
         // arrays, whose growth this log does not see.
         log.check(&[alloc::list(outer), alloc::list(inner)]);
@@ -176,7 +176,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // `[&l [], *l, *l]`
         let mut tv = sharing(3, &Tv::List(vec![]));
         let outer = tv.list();
-        let inner = (*list_first(outer.as_mut())).li_tv.list();
+        let inner = list_first(outer.as_mut()).unwrap().li_tv.list();
         log.check(&[alloc::list(outer), alloc::list(inner)]);
         assert_eq!((*inner).lv_refcount.get(), 3);
         tv_clear(&mut tv);
@@ -185,7 +185,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // `[&d {}, *d]`
         let mut tv = sharing(2, &Tv::Dict(vec![]));
         let outer = tv.list();
-        let inner = (*list_first(outer.as_mut())).li_tv.dict();
+        let inner = list_first(outer.as_mut()).unwrap().li_tv.dict();
         log.check(&[alloc::list(outer), alloc::dict(inner)]);
         assert_eq!((*inner).dv_refcount.get(), 2);
         tv_clear(&mut tv);
@@ -194,7 +194,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // `[&d {a: 1}, *d]`
         let mut tv = sharing(2, &Tv::dict([("a", Tv::Float(1.0))]));
         let outer = tv.list();
-        let inner = (*list_first(outer.as_mut())).li_tv.dict();
+        let inner = list_first(outer.as_mut()).unwrap().li_tv.dict();
         log.check(&[alloc::list(outer), alloc::dict(inner)]);
         assert_eq!((*inner).dv_refcount.get(), 2);
         tv_clear(&mut tv);

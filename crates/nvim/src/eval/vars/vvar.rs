@@ -645,7 +645,8 @@ pub(crate) unsafe fn set_vvar_item(
     let val = if compound {
         // SAFETY: this item's value, a live local, and the caller's `tv`.
         unsafe { tv_copy(&*cur, &mut tmp) };
-        if unsafe { eexe_mod_op(&raw mut tmp, tv, op) }.is_err() {
+        // SAFETY: as above -- a one-byte operator.
+        if eexe_mod_op(&mut tmp, tv, unsafe { *op }.cast_unsigned()).is_err() {
             clear_local(&mut tmp);
             return;
         }

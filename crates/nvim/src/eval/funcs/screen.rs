@@ -336,7 +336,7 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let list = list_alloc_ret(result, 3);
     let concealed = syntax_flags.has(SynFlags::CONCEAL) as c_int as VarNumber;
     unsafe { (*list).push_number(concealed) };
-    unsafe { (*list).push_string(text.as_ptr(), -1) };
+    unsafe { (*list).push_str(crate::cstr::at_opt(text.as_ptr())) };
     unsafe { (*list).push_number(matchid as VarNumber) };
 }
 

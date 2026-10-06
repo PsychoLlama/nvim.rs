@@ -254,7 +254,7 @@ pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
         let bytes = match_.group_bytes(no, snapshot.line())?;
         let list = tv_list_alloc(1);
         // SAFETY: a borrow of the line the match ran over.
-        unsafe { (*list.as_ptr()).push_string(bytes.as_ptr().cast(), bytes.len() as isize) };
+        unsafe { (*list.as_ptr()).push_bytes(Some(bytes)) };
         return Some(list);
     }
 
@@ -272,14 +272,19 @@ pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
     let into = list.as_ptr();
     let s = unsafe { reg_getline_submatch(rex, slnum).offset(scol as isize) };
     if slnum == elnum {
-        unsafe { (*into).push_string(s, (ecol - scol) as isize) };
+        unsafe {
+            (*into).push_bytes((!s.is_null()).then(|| cstr::slice_at(s, (ecol - scol) as usize)))
+        };
     } else {
         // A negative length means "to the end of the line".
-        unsafe { (*into).push_string(s, -1) };
+        unsafe { (*into).push_str(cstr::at_opt(s)) };
         for lnum in slnum + 1..elnum {
-            unsafe { (*into).push_string(reg_getline_submatch(rex, lnum), -1) };
+            unsafe { (*into).push_str(cstr::at_opt(reg_getline_submatch(rex, lnum))) };
         }
-        unsafe { (*into).push_string(reg_getline_submatch(rex, elnum), ecol as isize) };
+        let last = reg_getline_submatch(rex, elnum);
+        unsafe {
+            (*into).push_bytes((!last.is_null()).then(|| cstr::slice_at(last, ecol as usize)))
+        };
     }
     Some(list)
 }

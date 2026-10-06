@@ -572,7 +572,6 @@
 {"path":"neovim::types::LineNr","kind":"type","file":"crates/nvim/src/types/pos.rs","tests":["crates/nvim/tests/unit/cursor.rs","crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/memline.rs"]}
 {"path":"neovim::types::List","kind":"struct","file":"crates/nvim/src/types/multiqueue_list.rs","tests":["crates/nvim/tests/unit/eval_encode.rs","crates/nvim/tests/unit/support.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval.rs","crates/nvim/tests/unit/typval_list.rs"]}
 {"path":"neovim::types::ListItem","kind":"struct","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
-{"path":"neovim::types::ListWatch","kind":"struct","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/typval.rs","crates/nvim/tests/unit/typval_list.rs"]}
 {"path":"neovim::types::MAXPATHL","kind":"const","file":"crates/nvim/src/types/os.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::types::MTDamagePair","kind":"struct","file":"crates/nvim/src/types/types.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::MTKey","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
