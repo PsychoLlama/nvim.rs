@@ -6,19 +6,16 @@ use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES, encode_tv2echo, enc
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
 use crate::eval::userfunc::{call_func, func_ref, func_unref, get_funccal_local_ht, set_selfdict};
-use crate::eval::vars::{
-    get_globvar_dict, valid_varname, var_check_fixed, var_check_ro, var_wrong_func_name,
-};
+use crate::eval::vars::get_globvar_dict;
 use crate::eval::{callback_call, callback_from_typval, func_equal, var_item_copy, var2fpos};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{
-    Slot, hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset,
-    hash_unlock,
+    Slot, hash_add, hash_find_len, hash_init, hash_remove, hash_reset, hash_unlock,
 };
-use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
-use crate::mbyte::{string_convert, utf_char2bytes};
-use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
+use crate::lua::executor::api_free_luaref;
+use crate::mbyte::utf_char2bytes;
+use crate::memory::{xcalloc, xfree};
 use crate::message::emsg;
 use crate::message::state::did_emsg;
 use crate::message::{
@@ -29,13 +26,12 @@ use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::types::{
     Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float, FuncExe,
-    LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue, String_0, TypVal,
-    UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VimConv,
-    int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t,
+    LineNr, List, ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, String_0, TypVal,
+    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t,
+    kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t,
 };
 
-use crate::winlayer::Live;
 use ::libc::{abort, strcasecmp, strcoll, strtod};
 
 // The carve of the transpiled module; see each child's docs.
@@ -55,6 +51,7 @@ mod sort;
 pub use self::sort::*;
 mod watcher;
 pub use self::watcher::*;
+pub use crate::eval::callback::{callback_copy, callback_free, callback_put, callback_to_string};
 mod dict;
 pub use self::dict::*;
 mod dictitem;

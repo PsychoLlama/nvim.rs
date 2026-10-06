@@ -129,7 +129,7 @@ pub fn did_set_operatorfunc(_args: &mut OptSet) -> Result<(), OptError> {
 pub fn set_ref_in_opfunc(copy_id: c_int) -> bool {
     let (ht, list) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
     // SAFETY: the caller's promise -- the eval heap is consistent.
-    unsafe { set_ref_in_callback(global_opfunc(), copy_id, ht, list) }
+    unsafe { set_ref_in_callback(&*global_opfunc(), copy_id, ht, list) }
 }
 
 /// `g@` -- call 'operatorfunc' with the region in `'[`/`']`.
@@ -179,7 +179,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     finish_op.set(false);
 
     let mut rettv: TypVal = TV_INITIAL_VALUE;
-    if unsafe { callback_call(global_opfunc(), &argv, &mut rettv) } {
+    if unsafe { callback_call(&*global_opfunc(), &argv, &mut rettv) } {
         tv_clear(&mut rettv);
     }
 

@@ -395,7 +395,6 @@ pub struct SaveVEvent {
     pub sve_did_save: bool,
     pub sve_hashtab: DictTab,
 }
-#[derive(Clone)]
 pub struct Timer {
     pub tw: TimeWatcher,
     pub timer_id: ::core::ffi::c_int,

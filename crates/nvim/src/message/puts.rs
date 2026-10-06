@@ -442,7 +442,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
         let argv = [TypVal::string_from(bytes)];
         let mut rettv = TV_INITIAL_VALUE;
         // SAFETY: one argument, and `rettv` is a live unset value.
-        unsafe { callback_call(on_print_cb(), &argv, &mut rettv) };
+        unsafe { callback_call(&*on_print_cb(), &argv, &mut rettv) };
         tv_clear(&mut rettv);
         return;
     }

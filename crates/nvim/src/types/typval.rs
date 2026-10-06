@@ -22,10 +22,13 @@ pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 /// A Vimscript or Lua callable, held by whatever registered it.
 ///
-/// Not `Copy`. Whichever variant is live -- a funcref name, a `Partial`
-/// refcount, a `LuaRef` -- is owned, and `callback_free` releases it.
-/// Duplicating one without `callback_copy` is a second owner of the same
-/// reference, so the copies that remain say `.clone()` and are visible.
+/// Neither `Copy` nor `Clone`. Whichever variant is live -- a funcref name,
+/// a `Partial` reference, a `LuaRef` -- is owned: [`Callback::duplicate`]
+/// takes a second reference, and [`Callback::clear`] gives this one back.
+/// The payloads sit in a [`ManuallyDrop`](::core::mem::ManuallyDrop) so
+/// that no structure's drop glue releases them: the release stays the
+/// explicit `clear` it has always been, which also gives back the funcref's
+/// count on its function.
 ///
 /// `#[repr(C, u32)]` with `None` at zero, because several aggregates that
 /// hold one are born from all-zero bytes and never write the field:
@@ -33,14 +36,13 @@ pub const kBoolVarTrue: BoolVarValue = 1;
 /// `mem::zeroed`, `'complete'`'s per-source array from `xcalloc`. The
 /// discriminant may not move into a niche, or "no callback" stops being
 /// what those zeroes mean.
-#[derive(Clone)]
 #[repr(C, u32)]
 pub enum Callback {
     None = 0,
-    /// A function name, owned: `func_unref` and `xfree` release it.
-    Funcref(*mut ::core::ffi::c_char) = 1,
+    /// A function name, owned, plus a counted use of the function.
+    Funcref(::core::mem::ManuallyDrop<ThinCString>) = 1,
     /// A partial, holding a reference of its own.
-    Partial(*mut Partial) = 2,
+    Partial(::core::mem::ManuallyDrop<PartialRef>) = 2,
     /// A Lua value in that state's registry.
     Lua(LuaRef) = 3,
 }
@@ -51,18 +53,23 @@ impl Callback {
         !matches!(self, Callback::None)
     }
 }
-/// One `dictwatcheradd()` registration, linked into its dict's queue.
+/// One `dictwatcheradd()` registration, held by its dictionary's
+/// `watchers`.
 ///
-/// Not `Copy`: it owns `key_pattern`, its `callback`, and a queue node whose
-/// neighbours point back at this address.
-#[derive(Clone)]
+/// Shared (`Rc`) so that the walk firing it can keep it alive across its
+/// callback while that callback edits the list; `busy` and `needs_free` are
+/// cells for the same reason.
 pub struct DictWatcher {
     pub callback: Callback,
-    pub key_pattern: *mut ::core::ffi::c_char,
-    pub key_pattern_len: size_t,
-    pub node: QUEUE,
-    pub busy: bool,
-    pub needs_free: bool,
+    pub key_pattern: Vec<u8>,
+    pub busy: ::core::cell::Cell<bool>,
+    pub needs_free: ::core::cell::Cell<bool>,
+}
+
+impl Drop for DictWatcher {
+    fn drop(&mut self) {
+        self.callback.clear();
+    }
 }
 pub type ListLenSpecials = ::core::ffi::c_int;
 /// The negative lengths `tv_list_alloc` accepts in place of a real count.
@@ -360,7 +367,7 @@ pub struct Blob {
 /// A `Dict`.
 ///
 /// Neither `Copy` nor `Clone`: it owns its hashtab -- and through it the
-/// items every key points into -- its watcher queue and a Lua table
+/// items every key points into -- its watchers and a Lua table
 /// reference, none of which a second holder may free.
 pub struct Dict {
     pub dv_lock: VarLock,
@@ -373,7 +380,7 @@ pub struct Dict {
     /// `RootId::NONE` for one the allocator never handed out -- every scope
     /// dictionary initialised in place.
     pub dv_root: RootId,
-    pub watchers: QUEUE,
+    pub watchers: Vec<::std::rc::Rc<DictWatcher>>,
     pub lua_table_ref: LuaRef,
 }
 /// Not `Clone`: it holds `l:` and `a:` by value, and a dictionary owns the

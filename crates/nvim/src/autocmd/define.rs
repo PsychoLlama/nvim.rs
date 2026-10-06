@@ -481,7 +481,7 @@ pub unsafe fn autocmd_register(
     ac.id = id;
     if handler_cmd.is_null() {
         ac.handler_cmd = ::core::ptr::null_mut();
-        unsafe { callback_copy(&raw mut (*ac.raw()).handler_fn, handler_fn) };
+        unsafe { callback_copy(&mut (*ac.raw()).handler_fn, &*handler_fn) };
     } else {
         ac.handler_cmd = unsafe { xstrdup(handler_cmd) };
         // The slot `kv_pushp` handed over is whatever `xrealloc` left there.
@@ -583,7 +583,7 @@ pub fn autocmd_delete_id(id: int64_t) -> bool {
 /// `ac` must point at a live `AutoCmd`, unaliased for the call.
 pub unsafe fn aucmd_handler_to_string(ac: *mut AutoCmd) -> *mut ::core::ffi::c_char {
     if unsafe { (*ac).handler_cmd.is_null() } {
-        unsafe { callback_to_string(&(*ac).handler_fn) }
+        callback_to_string(unsafe { &(*ac).handler_fn }).into_raw()
     } else {
         unsafe { xstrdup((*ac).handler_cmd) }
     }

@@ -27,7 +27,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     };
     let str = |key: &CStr, value: *const c_char| {
         // SAFETY: a live dictionary, and two NUL-terminated strings.
-        let _ = unsafe { (*dict).add_str(key.to_bytes(), value) };
+        let _ = unsafe { (*dict).add_str(key.to_bytes(), crate::cstr::at_opt(value)) };
     };
     let list = |key: &CStr, value: Option<ListRef>| {
         // SAFETY: a live dictionary and a live list, which the dictionary

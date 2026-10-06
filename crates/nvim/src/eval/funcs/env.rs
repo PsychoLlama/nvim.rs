@@ -73,7 +73,7 @@ pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if !dict_has_key(result.dict_ref(), bytes) {
             // SAFETY: `value` is the NUL-terminated tail of the entry.
             let d = result.dict_mut().expect("just allocated");
-            let _ = unsafe { d.add_str(bytes, value) };
+            let _ = unsafe { d.add_str(bytes, cstr::at_opt(value)) };
         }
         unsafe { xfree(key as *mut c_void) };
     }

@@ -342,7 +342,7 @@ pub(crate) mod alloc {
     use std::mem::size_of;
 
     use neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
-    use neovim::types::{Dict, DictWatcher, List, Partial, TypVal};
+    use neovim::types::{Dict, List, Partial, TypVal};
 
     /// A recording of this thread's editor allocations, plus the editor lock
     /// — recording only means anything with one case running at a time.
@@ -422,14 +422,6 @@ pub(crate) mod alloc {
         AllocEvent::Malloc {
             size: len + 1,
             ret: s as *mut c_void,
-        }
-    }
-
-    /// `tv_dict_watcher_add`'s allocation: `a.dwatcher(w)`.
-    pub(crate) fn dwatcher(w: *const DictWatcher) -> AllocEvent {
-        AllocEvent::Malloc {
-            size: size_of::<DictWatcher>(),
-            ret: w as *mut c_void,
         }
     }
 

@@ -49,7 +49,7 @@ pub unsafe fn callback_reader_start(reader: *mut CallbackReader, type_0: *const 
 /// `reader` is live and its callback and buffer are this call's to release.
 pub unsafe fn callback_reader_free(reader: *mut CallbackReader) {
     // SAFETY: the caller's reader.
-    unsafe { callback_free(&raw mut (*reader).cb) };
+    unsafe { callback_free(&mut (*reader).cb) };
     // The reader itself may live in `xmalloc` memory whose release never runs
     // a destructor, so the buffer is handed back here rather than at drop.
     drop(unsafe { mem::take(&mut (*reader).buffer) });
@@ -270,7 +270,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
         unsafe { &raw mut (*reader).cb }
     };
 
-    unsafe { callback_call(cb, &argv, &mut rettv) };
+    unsafe { callback_call(&*cb, &argv, &mut rettv) };
     tv_clear(&mut rettv);
 }
 

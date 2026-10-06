@@ -95,7 +95,7 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
     let cb = get_findfunc_callback();
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_empty(VAR_UNKNOWN);
-    let called = unsafe { callback_call(cb, &args, &mut rettv) };
+    let called = unsafe { callback_call(&*cb, &args, &mut rettv) };
     current_sctx.set(saved_sctx);
     drop(locked);
 
@@ -178,7 +178,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
         let r = p_ffu(|ffu| option_set_callback_func(ffu.as_ptr().cast_mut(), global_findfunc()));
         // Setting it globally without `:setglobal` clears the local one.
         if !args.os_flags.has(OptionSetFlags::GLOBAL) {
-            unsafe { callback_free(&raw mut buf.b_ffu_cb) };
+            callback_free(&mut buf.b_ffu_cb);
         }
         r
     };
@@ -200,7 +200,14 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
 /// Mark what the global 'findfunc' callback holds, for the garbage
 /// collector.
 pub fn set_ref_in_findfunc(copy_id: c_int) -> bool {
-    unsafe { set_ref_in_callback(global_findfunc(), copy_id, ptr::null_mut(), ptr::null_mut()) }
+    unsafe {
+        set_ref_in_callback(
+            &*global_findfunc(),
+            copy_id,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    }
 }
 
 /// The directory `:cd -` would go back to, at this scope.

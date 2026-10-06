@@ -22,15 +22,15 @@
 #![cfg(not(miri))]
 
 use std::ffi::{CStr, c_char};
+use std::mem::ManuallyDrop;
 use std::ptr;
 
 use neovim::eval::typval::{
-    dict_is_watched, list_find, list_first, list_last, list_len, list_unref, tv_dict_alloc,
-    tv_dict_free, tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_free,
-    tv_dict_item_remove, tv_list_alloc,
+    DictRef, dict_is_watched, list_find, list_first, list_last, list_len, list_unref,
+    tv_dict_alloc, tv_dict_free, tv_dict_item_free, tv_dict_item_remove, tv_list_alloc,
 };
 use neovim::memory::xstrdup;
-use neovim::types::{Callback, Failed, ListWatch, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
+use neovim::types::{Callback, DictItem, ListWatch, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Payload};
@@ -139,10 +139,10 @@ fn a_dict_item_owns_exactly_the_key_it_was_given() {
         // key outlives the copy.
         unsafe {
             let c_key = cstr(key);
-            let di = match len {
-                None => tv_dict_item_alloc(c_key.as_ptr()),
-                Some(len) => tv_dict_item_alloc_len(c_key.as_ptr(), len),
-            };
+            let di = Box::into_raw(match len {
+                None => DictItem::boxed(c_key.to_bytes()),
+                Some(len) => DictItem::boxed(&c_key.to_bytes()[..len]),
+            });
             let len = len.unwrap_or(key.len());
             assert_eq!((*di).key(), &key.as_bytes()[..len], "{key:?}/{len}");
             assert_eq!((*di).key_cstr().to_bytes(), &key.as_bytes()[..len]);
@@ -170,7 +170,7 @@ fn freeing_a_dict_item_frees_its_value_first() {
         let value = xstrdup(cstr("test").as_ptr());
         log.check(&[alloc::string(value, 4)]);
 
-        let di = tv_dict_item_alloc(cstr("").as_ptr());
+        let di = Box::into_raw(DictItem::boxed(b""));
         log.check(&[]);
         (*di).di_tv = tv::string_tv(value);
 
@@ -194,25 +194,28 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         let d = tv_dict_alloc().into_raw();
         log.check(&[alloc::dict(d)]);
 
-        let di = tv_dict_item_alloc(cstr("").as_ptr());
+        let mut di = DictItem::boxed(b"");
         let value = xstrdup(cstr("test").as_ptr());
-        (*di).di_tv = tv::string_tv(value);
+        di.di_tv = tv::string_tv(value);
         log.check(&[alloc::string(value, 4)]);
 
-        assert_eq!((*d).add_item(di), Ok(()));
+        assert!((*d).add_item(di).is_ok());
         log.check(&[]);
 
         // The same key again. The hashtab reports it and nothing is
-        // allocated for the failure.
+        // allocated for the failure; the refused item comes back.
         let again = check_emsg(
             log.editor(),
-            || (*d).add_item(di),
+            || (*d).add_item(DictItem::boxed(b"")),
             Some(r#"E685: Internal error: hash_add(): duplicate key """#),
         );
-        assert_eq!(again, Err(Failed));
+        assert!(again.is_err());
+        drop(again);
         log.clear();
 
-        tv_dict_item_remove(d, di);
+        // A view of the case's dict, which takes no reference.
+        let held = ManuallyDrop::new(DictRef::owning(d).expect("a live dict"));
+        tv_dict_item_remove(&held, b"");
         log.check(&[alloc::freed(value)]);
 
         // Freeing the now-empty dict releases the dict and nothing else —
@@ -307,7 +310,7 @@ fn a_watcher_is_removed_only_by_its_own_pattern() {
         let d = tv_dict_alloc().into_raw();
         let callback = Callback::None;
         let pattern = cstr("key*");
-        (*d).watcher_add(pattern.to_bytes(), callback.clone());
+        (*d).watcher_add(pattern.to_bytes(), Callback::None);
         assert!(dict_is_watched(d.as_ref()));
 
         // A prefix of the pattern is not the pattern ...

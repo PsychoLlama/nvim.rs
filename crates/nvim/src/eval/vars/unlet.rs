@@ -19,7 +19,7 @@ use crate::charset::getdigits_int_at;
 use crate::cstr::{self, byte_at};
 use crate::eval::lval::{LValue, Slot, Span, Target};
 use crate::eval::typval::{
-    dict_is_watched, item_lock, list_iter_mut, list_locked, notify_watchers, tv_copy,
+    dict_is_watched, dict_watcher_notify, item_lock, list_iter_mut, list_locked, tv_copy,
     value_check_lock_named,
 };
 use crate::eval::{FNE_CHECK_START, env_name_len, get_lval};
@@ -181,7 +181,9 @@ fn do_unlet_var(mut lval: LValue<'_>, forceit: bool) -> Result<(), Failed> {
             }
             dict.remove_key(&key);
             if watched {
-                cstr::with_terminated(&key, |key| notify_watchers(&dict, key, None, Some(&oldtv)));
+                cstr::with_terminated(&key, |key| {
+                    dict_watcher_notify(&dict, key, None, Some(&oldtv))
+                });
             }
             clear_local(&mut oldtv);
             Ok(())

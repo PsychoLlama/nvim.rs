@@ -888,7 +888,7 @@ mod tests {
         };
         assert_eq!(read(&mut slot), Some(7));
 
-        assert!(dict.remove_key(b"a"));
+        assert!(dict.remove_key(b"a").is_some());
         assert_eq!(read(&mut slot), None);
 
         dict.add_number(b"a", 8).expect("the key is free again");

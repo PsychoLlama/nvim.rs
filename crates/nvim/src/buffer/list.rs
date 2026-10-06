@@ -107,8 +107,7 @@ fn xfree_clear<T>(slot: &mut *mut T) {
 }
 
 fn clear_callback(cb: &mut Callback) {
-    // SAFETY: a callback slot inside a live buffer.
-    unsafe { callback_free(cb) };
+    callback_free(cb);
 }
 
 fn clear_cpt(callbacks: &mut *mut Callback, count: c_int) {

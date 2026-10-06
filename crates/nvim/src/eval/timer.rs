@@ -18,9 +18,7 @@ use core::ffi::{c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
-use crate::eval::typval::{
-    callback_free, callback_put, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc_ret,
-};
+use crate::eval::typval::{callback_free, callback_put, tv_dict_alloc, tv_list_alloc_ret};
 use crate::eval::vars::clear_local;
 use crate::eval::{Tm, Tv, callback_call, last_timer_id, timers};
 use crate::event::multiqueue::{main_loop_child_queue, multiqueue_free};
@@ -88,18 +86,13 @@ pub unsafe fn add_timer_info(result: &mut TypVal, timer: *mut Timer) {
         let _ = unsafe { (*dict).add_number(cstr::slice_at(key.as_ptr(), len), value) };
     }
 
-    // SAFETY: `tv_dict_item_alloc` never answers NULL.
-    let di: *mut DictItem = unsafe { tv_dict_item_alloc(c"callback".as_ptr()) };
-    // SAFETY: `di` is the item just allocated, and it is freed again here
-    // when the dictionary refuses it.
-    if unsafe { (*dict).add_item(di) }.is_err() {
-        // SAFETY: nothing took the item over.
-        unsafe { xfree(di as *mut c_void) };
-        return;
-    }
+    let mut item = DictItem::boxed(b"callback");
     let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
-    // SAFETY: `cb` is the timer's own callback and `di` the item just added.
-    unsafe { callback_put(cb, &mut (*di).di_tv) };
+    // SAFETY: `cb` is the timer's own callback.
+    callback_put(unsafe { &*cb }, &mut item.di_tv);
+    // SAFETY: `dict` is the dictionary just appended. A refused item --
+    // which a fresh dictionary never refuses -- goes with its value.
+    let _ = unsafe { (*dict).add_item(item) };
 }
 
 /// Fill `result` with a List describing every live timer.
@@ -151,7 +144,7 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
     // SAFETY: `cb` is the timer's own callback, kept live by the reference
     // above; `argv` and `rettv` are this frame's.
-    unsafe { callback_call(cb, &argv, &mut rettv) };
+    unsafe { callback_call(&*cb, &argv, &mut rettv) };
 
     if called_emsg.get() > called_emsg_before && did_emsg.get() != 0 {
         timer.emsg_count += 1;
@@ -179,15 +172,8 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     unsafe { timer_decref(timer.raw()) };
 }
 
-/// Start a timer, answering its id.
-///
-/// # Safety
-/// `callback` must be valid; its ownership moves into the timer.
-pub unsafe fn timer_start(
-    timeout: int64_t,
-    repeat_count: c_int,
-    callback: *const Callback,
-) -> uint64_t {
+/// Start a timer running `callback`, which it takes over, answering its id.
+pub fn timer_start(timeout: int64_t, repeat_count: c_int, callback: Callback) -> uint64_t {
     // SAFETY: `xmalloc` never answers NULL and the block is one `Timer`;
     // every field is written below before anything reads one.
     let mut timer = unsafe { Tm::new(xmalloc(size_of::<Timer>()) as *mut Timer) };
@@ -199,8 +185,9 @@ pub unsafe fn timer_start(
     timer.timeout = timeout;
     timer.timer_id = last_timer_id.get() as c_int;
     last_timer_id.set(last_timer_id.get().wrapping_add(1));
-    // SAFETY: the caller's promise about `callback`.
-    timer.callback = unsafe { (*callback).clone() };
+    // An assignment over uninitialised bytes is sound here only because a
+    // `Callback` has no drop glue: nothing reads what was there.
+    timer.callback = callback;
 
     let tw: *mut TimeWatcher = timer.field_ptr(offset_of!(Timer, tw));
     // SAFETY: the loop lives from startup to exit, `tw` is the timer's own
@@ -254,7 +241,7 @@ pub(crate) unsafe fn timer_close_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     unsafe { multiqueue_free(timer.tw.events) };
     let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
     // SAFETY: `cb` is the timer's own callback.
-    unsafe { callback_free(cb) };
+    unsafe { callback_free(&mut *cb) };
     let id = timer.timer_id as uint64_t;
     let _ = timers.with_mut(|map| map.remove(&id));
     // SAFETY: this hands back the map's reference.

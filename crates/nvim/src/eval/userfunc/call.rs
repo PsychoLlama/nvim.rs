@@ -238,7 +238,9 @@ pub unsafe fn call_user_func(
             unsafe { (*v).di_key = DictKey::new(key) };
             v
         } else {
-            let v = unsafe { tv_dict_item_alloc_len(name, namelen) };
+            // SAFETY: `namelen` readable bytes; the table frees the item by
+            // its `DI_FLAGS_ALLOC`.
+            let v = Box::into_raw(DictItem::boxed(unsafe { cstr::slice_at(name, namelen) }));
             unsafe { (*v).di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX };
             v
         };

@@ -42,8 +42,7 @@ use crate::eval::typval::DictEntry;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
     DictRef, ListRef, blob_copy, dict_copy, list_copy, list_free_contents, list_free_list,
-    list_iter_mut, tv_copy, tv_dict_free_contents, tv_dict_free_dict, tv_dict_watcher_node_data,
-    tv_in_free_unref_items,
+    list_iter_mut, tv_copy, tv_dict_free_contents, tv_dict_free_dict, tv_in_free_unref_items,
 };
 use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
@@ -73,11 +72,11 @@ use crate::registry::SlotTable;
 use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    AdditionalData, Buffer, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem,
-    DictWatcher, Failed, FileMark, FileMarkView, HashItem, HtStack, List, ListStack, NUL, OptInt,
-    Partial, Pos, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT,
-    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
-    VimConv, Window, XFileMark, YankReg, size_t,
+    AdditionalData, Buffer, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem, Failed,
+    FileMark, FileMarkView, HashItem, HtStack, List, ListStack, NUL, OptInt, Partial, Pos,
+    String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv, Window,
+    XFileMark, YankReg, size_t,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -117,7 +116,7 @@ pub(crate) fn mark_root(tv: &TypVal, copy_id: c_int) -> bool {
 /// `cb` must be a live callback.
 unsafe fn mark_cb(cb: *mut Callback, copy_id: c_int) -> bool {
     // SAFETY: as [`mark_root`].
-    unsafe { set_ref_in_callback(cb, copy_id, null_mut(), null_mut()) }
+    unsafe { set_ref_in_callback(&*cb, copy_id, null_mut(), null_mut()) }
 }
 
 /// Mark one callback reader, with neither stack.
@@ -380,7 +379,10 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
             continue;
         };
         if stale(unsafe { (*dd).dv_copy_id }, copy_id) {
-            unsafe { tv_dict_free_contents(dd) };
+            // SAFETY: a registered dictionary; the view takes no reference.
+            tv_dict_free_contents(&::core::mem::ManuallyDrop::new(
+                unsafe { DictRef::owning(dd) }.expect("a live dictionary"),
+            ));
             did_free = true;
         }
     }
@@ -525,14 +527,9 @@ pub(crate) unsafe fn set_ref_in_item_dict(
     // The watchers' callbacks are marked only on this branch, which is
     // upstream's. A dictionary reached with no `ht_stack` — that is,
     // one recursed into directly — does not have them marked.
-    let mut w: *mut QUEUE = unsafe { (*dd).watchers.next } as *mut QUEUE;
-    // SAFETY: `dd` is a live Dict, and the queue head lives inside it.
-    let head: *mut QUEUE = unsafe { &raw mut (*dd).watchers };
-    while w != head {
-        let next: *mut QUEUE = unsafe { (*w).next } as *mut QUEUE;
-        let watcher: *mut DictWatcher = unsafe { tv_dict_watcher_node_data(w) };
-        unsafe { set_ref_in_callback(&raw mut (*watcher).callback, copy_id, ht_stack, list_stack) };
-        w = next;
+    // SAFETY: `dd` is a live Dict, and marking runs no user code.
+    for watcher in unsafe { &(*dd).watchers } {
+        unsafe { set_ref_in_callback(&watcher.callback, copy_id, ht_stack, list_stack) };
     }
     false
 }
@@ -704,19 +701,20 @@ pub unsafe fn var_item_copy(
             }
         }
         VAR_DICT => {
-            let d = src.dict_or_null();
-            if d.is_null() {
-                dst.write_dict(None);
-            // SAFETY: `d` is the source's live Dict.
-            } else if copy_id != 0 && unsafe { (*d).dv_copy_id } == copy_id {
-                // SAFETY: as above -- the copy it was given under this id,
-                // which gains this reference.
-                dst.write_dict(unsafe { DictRef::retained((*d).dv_copydict) });
-            } else {
-                // SAFETY: as above; `conv` is null or the caller's.
-                dst.write_dict(unsafe { dict_copy(conv, d, deep, copy_id) });
-            }
-            if dst.dict_or_null().is_null() && !d.is_null() {
+            let orig = match src {
+                TypVal::Dict(dict) => (**dict).as_ref(),
+                _ => None,
+            };
+            let copied = orig.and_then(|orig| {
+                // The copy it was given under this id, which gains this
+                // reference, or a fresh one.
+                // SAFETY: `conv` is null or the caller's.
+                orig.copy_under(copy_id)
+                    .or_else(|| dict_copy(unsafe { conv.as_ref() }, orig, deep, copy_id))
+            });
+            let failed = orig.is_some() && copied.is_none();
+            dst.write_dict(copied);
+            if failed {
                 ret = Err(Failed);
             }
         }
@@ -738,6 +736,26 @@ pub unsafe fn var_item_copy(
     }
 
     ret
+}
+
+/// [`var_item_copy`] with the converter as a borrow.
+pub(crate) fn var_item_copy_with(
+    conv: Option<&VimConv>,
+    from: &TypVal,
+    to: &mut TypVal,
+    deep: bool,
+    copy_id: c_int,
+) -> Result<(), Failed> {
+    // SAFETY: a borrowed converter or null, and two borrowed values.
+    unsafe {
+        var_item_copy(
+            conv.map_or(null(), core::ptr::from_ref),
+            from,
+            to,
+            deep,
+            copy_id,
+        )
+    }
 }
 
 /// The copy this list was last given under the current `copy_id`.

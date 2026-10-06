@@ -79,9 +79,7 @@ pub fn evalvars_init() {
         let type_list = tv_list_alloc(0);
         let at = type_list.as_ptr();
         list_set_lock(unsafe { at.as_mut() }, VarLock::Fixed);
-        let di = unsafe { tv_dict_item_alloc(name.as_ptr()) };
-        // SAFETY: the item just allocated.
-        let mut item = unsafe { Di::new(di) };
+        let mut item = DictItem::boxed(name.to_bytes());
         item.di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
         item.di_tv.write_list(Some(type_list));
         // The encoder and decoder compare these by *identity*, so the table
@@ -89,7 +87,7 @@ pub fn evalvars_init() {
         // back, since `v:msgpack_types` lives as long as the process.
         let kept = unsafe { ListRef::retained(at) };
         type_lists[i] = kept.expect("the list just allocated").into_raw();
-        if unsafe { (*msgpack_types_dict).add_item(di) }.is_err() {
+        if unsafe { (*msgpack_types_dict).add_item(item) }.is_err() {
             // The names are distinct by construction.
             unsafe { abort() };
         }
@@ -284,13 +282,11 @@ pub unsafe fn init_var_dict(dict: *mut Dict, dict_var: *mut ScopeDictItem, scope
     var.di_lock = VarLock::Fixed;
     var.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
     var.di_key = DictKey::EMPTY;
-    // The watcher queue's head points at its own node, so `queue_init` goes
-    // last: a borrow of the whole `Dict` afterwards would invalidate the
-    // pointer it has just stored. The hash table has no such constraint any
-    // more -- it owns its slots -- but `hash_init` writes over storage that
-    // must not already hold a table, which is what a fresh `Dict` is.
+    // `hash_init` writes over storage that must not already hold a table,
+    // which is what a fresh `Dict` is; the watcher list is written for the
+    // same reason -- uninitialised storage is not a valid `Vec`.
     unsafe { hash_init(&raw mut (*dict).dv_hashtab) };
-    unsafe { queue_init(&raw mut (*dict).watchers) };
+    unsafe { (&raw mut (*dict).watchers).write(Vec::new()) };
 }
 
 /// Undo [`init_var_dict`]'s reference count, so that `dict` can be freed.
@@ -422,7 +418,9 @@ unsafe fn unlet_terminated(
             if watched {
                 unsafe {
                     dict_watcher_notify(
-                        dict,
+                        &::core::mem::ManuallyDrop::new(
+                            DictRef::owning(dict).expect("a watched dictionary"),
+                        ),
                         ::core::ffi::CStr::from_ptr(varname),
                         None,
                         Some(&oldtv),

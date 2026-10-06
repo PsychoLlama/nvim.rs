@@ -334,7 +334,7 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
     if let Some(FuncDict { mut dict, key, .. }) = dict {
         // Delete the dict item that refers to the function; that invokes
         // `func_unref` and possibly deletes the function.
-        if !dict.remove_key(&key) {
+        if dict.remove_key(&key).is_none() {
             let arg0 = "tv_dict_item_remove()";
             semsg!("E685: Internal error: {arg0}");
         }

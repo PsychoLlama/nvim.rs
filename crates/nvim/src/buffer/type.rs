@@ -20,6 +20,7 @@
 #![allow(unsafe_code)]
 
 use crate::autocmd::fire_autocmds;
+use crate::eval::typval::DictRef;
 use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -251,7 +252,9 @@ pub fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
         // plus a local holding the value it had.
         unsafe {
             dict_watcher_notify(
-                vars,
+                &::core::mem::ManuallyDrop::new(
+                    DictRef::owning(vars).expect("a watched dictionary"),
+                ),
                 ::core::ffi::CStr::from_ptr(key),
                 Some(&*new),
                 Some(&old_val),

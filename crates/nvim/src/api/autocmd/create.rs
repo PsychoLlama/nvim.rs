@@ -22,6 +22,7 @@ use crate::api::private::validate::{
     err_bad_number, err_bad_value, err_conflict, err_expected, err_required,
 };
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::narrow::len_as_int;
 use crate::types::Failed;
 use crate::winlayer::Live;
@@ -73,7 +74,9 @@ pub fn nvim_create_autocmd(
                             let _ = taken.and_then(Object::into_luaref);
                         }
                     } else if let Some(name) = given.as_string() {
-                        handler_fn = Callback::Funcref(string_to_cstr(name));
+                        handler_fn = Callback::Funcref(::core::mem::ManuallyDrop::new(
+                            ThinCString::from_bytes(name.as_bytes()),
+                        ));
                     } else {
                         let want = c"Lua function or Vim function name";
                         let got = api_typename(given.kind());
@@ -190,7 +193,7 @@ pub fn nvim_create_autocmd(
         unsafe { *ptr_ = NULL_0 };
         let _ = unsafe { *ptr_ };
     } else {
-        unsafe { callback_free(&raw mut handler_fn) };
+        callback_free(&mut handler_fn);
     }
     (autocmd_id as Integer).reported(error)
 }

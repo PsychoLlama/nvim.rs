@@ -172,7 +172,7 @@ pub(crate) unsafe fn option_set_callback_func(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's pointers are valid for the call.
     if optval.is_null() || unsafe { *optval } == 0 {
-        unsafe { callback_free(optcb) };
+        unsafe { callback_free(&mut *optcb) };
         return Ok(());
     }
     // A lambda, `function(...)` or `funcref(...)` is an expression; a
@@ -188,10 +188,10 @@ pub(crate) unsafe fn option_set_callback_func(
         TypVal::string(Some(text.into()))
     };
     let mut cb = Callback::None;
-    if !unsafe { callback_from_typval(&raw mut cb, &tv) } || !cb.is_set() {
+    if !callback_from_typval(&mut cb, &tv) || !cb.is_set() {
         return Err(Failed);
     }
-    unsafe { callback_free(optcb) };
+    unsafe { callback_free(&mut *optcb) };
     unsafe { *optcb = cb };
     Ok(())
 }

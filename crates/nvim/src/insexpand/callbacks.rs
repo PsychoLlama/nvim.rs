@@ -84,7 +84,7 @@ impl CompleteFuncCb {
     /// collector leaves it alone. Answers whether to abort.
     pub(crate) fn set_ref(self, copy_id: c_int) -> bool {
         // SAFETY: the caller's promise; the slot is this cell's own.
-        unsafe { set_ref_in_callback(self.slot(), copy_id, ptr::null_mut(), ptr::null_mut()) }
+        unsafe { set_ref_in_callback(&*self.slot(), copy_id, ptr::null_mut(), ptr::null_mut()) }
     }
 }
 
@@ -127,15 +127,14 @@ impl CptCallbacks {
             unsafe {
                 let from = src.add(i);
                 if (*from).is_set() {
-                    callback_copy(&raw mut slot, from);
+                    callback_copy(&mut slot, &*from);
                 }
             }
             slot
         };
         let fresh: Vec<Callback> = (0..count as usize).map(copy).collect();
         for mut old in CPT_CB.replace(fresh) {
-            // SAFETY: a slot of the old cache, which nothing else holds.
-            unsafe { callback_free(&raw mut old) };
+            callback_free(&mut old);
         }
     }
 
@@ -335,9 +334,9 @@ pub(crate) fn get_cpt_sources_count() -> c_int {
 /// `globcb` must point at an initialized callback, unaliased for the call.
 /// `bufcb` must point at an initialized callback, unaliased for the call.
 pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *mut Callback) {
-    unsafe { callback_free(bufcb) };
+    unsafe { callback_free(&mut *bufcb) };
     if unsafe { &*globcb }.is_set() {
-        unsafe { callback_copy(bufcb, globcb) };
+        unsafe { callback_copy(&mut *bufcb, &*globcb) };
     }
 }
 
@@ -420,7 +419,7 @@ pub unsafe fn clear_cpt_callbacks(callbacks: *mut *mut Callback, count: c_int) {
         return;
     }
     for i in 0..count as isize {
-        unsafe { callback_free((*callbacks).offset(i)) };
+        unsafe { callback_free(&mut *(*callbacks).offset(i)) };
     }
     unsafe { xfree((*callbacks).cast::<c_void>()) };
     unsafe { *callbacks = ptr::null_mut() };
@@ -450,7 +449,7 @@ pub(crate) unsafe fn copy_cpt_callbacks(
     unsafe { *dest_cnt = cnt };
     for i in 0..cnt as isize {
         if unsafe { &*src.offset(i) }.is_set() {
-            unsafe { callback_copy((*dest).offset(i), src.offset(i)) };
+            unsafe { callback_copy(&mut *(*dest).offset(i), &*src.offset(i)) };
         }
     }
 }
@@ -534,7 +533,7 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
             p_tsrfu(|value| unsafe { tsrfu_cb().set_from_option(value.as_ptr().cast_mut()) });
         // When using :set, free the local callback.
         if !args.os_flags.has(OptionSetFlags::GLOBAL) {
-            unsafe { callback_free(&raw mut buf.b_tsrfu_cb) };
+            callback_free(&mut buf.b_tsrfu_cb);
         }
         retval
     };
@@ -566,7 +565,7 @@ pub unsafe fn set_ref_in_cpt_callbacks(
         let slot = unsafe { callbacks.offset(i) };
         // SAFETY: as above; the two nulls say there is no containing list or
         // dict to mark.
-        abort = abort || unsafe { set_ref_in_callback(slot, copy_id, no_list, no_dict) };
+        abort = abort || unsafe { set_ref_in_callback(&*slot, copy_id, no_list, no_dict) };
     }
     abort
 }
@@ -644,7 +643,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: ComplStr, mut cb: *
     // switching to another window: it should not be needed and may end up
     // in Insert mode in another buffer.
     let locked = Lock::text();
-    if unsafe { callback_call(cb, &args, &mut rettv) } {
+    if unsafe { callback_call(&*cb, &args, &mut rettv) } {
         // The two container arms take the reference out of `rettv` and
         // give it back by hand below.
         match rettv.v_type() {

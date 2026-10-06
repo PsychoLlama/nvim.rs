@@ -137,14 +137,14 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // contents, which the null check above established.
         _ => unreachable!("register {regname} has contents but no type"),
     }
-    let _ = unsafe { (*dict).add_str(b"regtype", buf.as_ptr()) };
+    let _ = unsafe { (*dict).add_str(b"regtype", cstr::at_opt(buf.as_ptr())) };
 
     // The unnamed register reports what it points at; every other one
     // reports whether it is what the unnamed register points at.
     buf[0] = get_register_name(get_unname_register()) as c_char;
     buf[1] = NUL as c_char;
     if regname == b'"' as c_int {
-        let _ = unsafe { (*dict).add_str(b"points_to", buf.as_ptr()) };
+        let _ = unsafe { (*dict).add_str(b"points_to", cstr::at_opt(buf.as_ptr())) };
     } else {
         let unnamed = regname == buf[0] as c_int;
         let flag = if unnamed { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue;

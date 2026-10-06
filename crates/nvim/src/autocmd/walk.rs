@@ -170,13 +170,12 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
 /// `ac` must point at a live `AutoCmd`. `apc` must point at a live
 /// `AutoPatCmd`.
 unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
-    // SAFETY: `ac` and `apc` are the caller's live row and walk cursor, and
-    // the row owns the handler this clones.
-    let mut callback = unsafe { (*ac).handler_fn.clone() };
-    let Callback::Lua(luaref) = callback else {
+    // SAFETY: `ac` and `apc` are the caller's live row and walk cursor;
+    // the row is the caller's own copy, which nothing else reaches.
+    let callback = unsafe { &(*ac).handler_fn };
+    let &Callback::Lua(luaref) = callback else {
         let mut rettv = TV_INITIAL_VALUE;
-        // SAFETY: two locals of this frame, which outlive the call.
-        unsafe { callback_call(&raw mut callback, &[], &mut rettv) };
+        callback_call(callback, &[], &mut rettv);
         return false;
     };
 
@@ -283,7 +282,10 @@ pub unsafe fn getnextac(
 
     let retval;
     if unsafe { (*ac).handler_cmd }.is_null() {
-        let mut ac_copy = unsafe { (*ac).clone() };
+        // Upstream's `AutoCmd ac_copy = *ac`: a bit copy that *names* what
+        // the row owns, so that the callback can grow the vector under it.
+        // Nothing releases the copy.
+        let mut ac_copy = unsafe { ac.read() };
         // Mark a `++once` handler removed *before* running it, so a
         // `:doautocmd` from inside it cannot run it again (#25526).
         //

@@ -296,7 +296,7 @@ unsafe fn render_stack(stack: &[EStack], which: EStackArg) -> *mut c_char {
 /// `d` must point at a live dictionary, unaliased for the call. `val` must
 /// point at a NUL-terminated string.
 unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
-    let _ = unsafe { (*d).add_str(key.to_bytes(), val) };
+    let _ = unsafe { (*d).add_str(key.to_bytes(), cstr::at_opt(val)) };
 }
 
 /// # Safety
@@ -335,7 +335,13 @@ unsafe fn stacktrace_push_item(
     // append takes a second; both are given back when this frame ends.
     let tv = TypVal::dict(Some(d_held));
     if !func.is_null() {
-        let _ = unsafe { (*d).add_func(b"funcref", func) };
+        // SAFETY: a live function, whose name is inline and terminated.
+        let _ = unsafe {
+            (*d).add_func(
+                b"funcref",
+                CStr::from_ptr((&raw const (*func).uf_name).cast::<c_char>()),
+            )
+        };
     }
     if !event.is_null() {
         unsafe { dict_add_str(d, c"event", event) };

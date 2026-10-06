@@ -414,9 +414,14 @@ pub(crate) fn get_current_funccal() -> *mut FuncCall {
 /// `name` is null or NUL-terminated.
 pub unsafe fn func_unref(name: *mut c_char) {
     // SAFETY: the caller's promise -- `name` is null or NUL-terminated.
-    let Some(name) = (unsafe { cstr::at_opt(name) }).map(CStr::to_bytes) else {
-        return;
-    };
+    if let Some(name) = unsafe { cstr::at_opt(name) } {
+        func_unref_name(name);
+    }
+}
+
+/// [`func_unref`] for a name the caller holds as a `&CStr`.
+pub(crate) fn func_unref_name(name: &CStr) {
+    let name = name.to_bytes();
     if !func_name_refcount(name) {
         return;
     }
@@ -426,6 +431,7 @@ pub unsafe fn func_unref(name: *mut c_char) {
         internal_error(c"func_unref()");
         unsafe { abort() };
     }
+    // SAFETY: null, or a function the table holds.
     unsafe { func_ptr_unref(fp) };
 }
 
@@ -453,14 +459,20 @@ pub unsafe fn func_ptr_unref(func: *mut UserFunc) {
 /// `name` is null or NUL-terminated.
 pub unsafe fn func_ref(name: *mut c_char) {
     // SAFETY: the caller's promise -- `name` is null or NUL-terminated.
-    let Some(name) = (unsafe { cstr::at_opt(name) }).map(CStr::to_bytes) else {
-        return;
-    };
+    if let Some(name) = unsafe { cstr::at_opt(name) } {
+        func_ref_name(name);
+    }
+}
+
+/// [`func_ref`] for a name the caller holds as a `&CStr`.
+pub(crate) fn func_ref_name(name: &CStr) {
+    let name = name.to_bytes();
     if !func_name_refcount(name) {
         return;
     }
     let fp = find_func(name);
     if !fp.is_null() {
+        // SAFETY: a function the table holds.
         unsafe { (*fp).uf_refcount.retain() };
     } else if name.first().is_some_and(u8::is_ascii_digit) {
         // Only give an error for a numbered function; fail silently when

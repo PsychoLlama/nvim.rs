@@ -348,8 +348,8 @@ unsafe fn get_matches_in_str(
         let span = rmp.group(0).unwrap_or(0..0);
         let _ = unsafe { (*d).add_number(b"byteidx", span.start as VarNumber) };
         // SAFETY: the span is an offset range into `str`.
-        let start = unsafe { str.as_ptr().add(span.start) };
-        let _ = unsafe { (*d).add_str_len(b"text", start, span.len() as c_int) };
+        let text = unsafe { cstr::slice_at(str.as_ptr().add(span.start), span.len()) };
+        let _ = unsafe { (*d).add_str_len(b"text", Some(text)) };
         if submatches {
             let submatch_list = tv_list_alloc(NSUBEXP as isize - 1);
             // A borrow of the list the dictionary owns from here on.
@@ -608,7 +608,7 @@ unsafe fn item_string(
             let argv = [TypVal::dict(held)];
             // SAFETY: `result` is the caller's return value.
             let rv = &mut *result;
-            let called = unsafe { callback_call(cb, &argv, rv) };
+            let called = unsafe { callback_call(&*cb, &argv, rv) };
             drop(argv);
             if called && (*result).v_type() == VAR_STRING {
                 (*result)
@@ -823,7 +823,7 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
         limit,
     };
     unsafe { fuzzy_match_in_list(list.list_or_null(), &request, result) };
-    unsafe { callback_free(&raw mut cb) };
+    callback_free(&mut cb);
 }
 
 /// `matchfuzzy()`: the items of a list that fuzzy match a pattern.

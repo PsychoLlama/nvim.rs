@@ -537,7 +537,9 @@ pub unsafe fn before_set_vvar(
             let vv_dict = get_vimvar_dict();
             unsafe {
                 dict_watcher_notify(
-                    vv_dict,
+                    &::core::mem::ManuallyDrop::new(
+                        DictRef::owning(vv_dict).expect("a watched dictionary"),
+                    ),
                     ::core::ffi::CStr::from_ptr(varname),
                     Some(&*cur),
                     Some(&oldtv),
@@ -567,7 +569,9 @@ pub unsafe fn before_set_vvar(
             let vv_dict = get_vimvar_dict();
             unsafe {
                 dict_watcher_notify(
-                    vv_dict,
+                    &::core::mem::ManuallyDrop::new(
+                        DictRef::owning(vv_dict).expect("a watched dictionary"),
+                    ),
                     ::core::ffi::CStr::from_ptr(varname),
                     Some(&*cur),
                     Some(&oldtv),
@@ -695,7 +699,9 @@ pub(crate) unsafe fn set_vvar_item(
         let vv_dict = get_vimvar_dict();
         unsafe {
             dict_watcher_notify(
-                vv_dict,
+                &::core::mem::ManuallyDrop::new(
+                    DictRef::owning(vv_dict).expect("a watched dictionary"),
+                ),
                 ::core::ffi::CStr::from_ptr(varname),
                 Some(&*cur),
                 Some(&oldtv),
@@ -763,7 +769,9 @@ pub(crate) unsafe fn get_v_event(sve: *mut SaveVEvent) -> *mut Dict {
 /// `v_event` and `sve` must be a pair `get_v_event` produced.
 pub(crate) unsafe fn restore_v_event(v_event: *mut Dict, sve: *mut SaveVEvent) {
     // SAFETY: the caller's promise -- the pair `get_v_event` produced.
-    unsafe { tv_dict_free_contents(v_event) };
+    tv_dict_free_contents(&::core::mem::ManuallyDrop::new(
+        unsafe { DictRef::owning(v_event) }.expect("a live dictionary"),
+    ));
     // `tv_dict_free_contents` already left `v:event` with a fresh empty
     // table, so the not-saved case has nothing left to do.
     // SAFETY: as above.

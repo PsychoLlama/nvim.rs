@@ -482,8 +482,15 @@ impl DictArg {
 
     #[inline(always)]
     pub(crate) fn remove_item(self, item: DictItemRef) {
-        // SAFETY: a live dict and one of its own items.
-        unsafe { tv_dict_item_remove(self.0, item.0) };
+        // The key is copied out of the item the removal frees.
+        let key = crate::types::DictKey::new(item.key());
+        // SAFETY: a live dict; the view takes no reference.
+        tv_dict_item_remove(
+            &::core::mem::ManuallyDrop::new(
+                unsafe { DictRef::owning(self.0) }.expect("a live dictionary"),
+            ),
+            key.bytes(),
+        );
     }
 
     /// Merge `other`'s keys in under `action` (`"keep"`/`"force"`/`"error"`).
@@ -492,16 +499,28 @@ impl DictArg {
         // The mode is the action's first byte, which is how upstream tells
         // `"keep"` from `"force"` from `"error"`.
         let mode = action.to_bytes()[0];
-        // SAFETY: both live, and the two may be the same dictionary --
-        // which is the whole reason `dict_extend` takes pointers.
-        unsafe { dict_extend(self.0, other.0, mode) };
+        // SAFETY: both live, and the two may be the same dictionary; the
+        // views take no reference.
+        unsafe {
+            dict_extend(
+                &::core::mem::ManuallyDrop::new(
+                    DictRef::owning(self.0).expect("a live dictionary"),
+                ),
+                &::core::mem::ManuallyDrop::new(
+                    DictRef::owning(other.0).expect("a live dictionary"),
+                ),
+                mode,
+            )
+        };
     }
 
     /// A shallow copy, for `extendnew()`.  `None` when the copy failed.
     #[inline(always)]
     pub(crate) fn copy(self) -> Option<DictRef> {
-        // SAFETY: live; no conversion, and a fresh copyID.
-        unsafe { dict_copy(null::<VimConv>(), self.0, false, get_copy_id()) }
+        // SAFETY: live or NULL; the view takes no reference.
+        let orig = ::core::mem::ManuallyDrop::new(unsafe { DictRef::owning(self.0) });
+        // No conversion, and a fresh copyID.
+        dict_copy(None, orig.as_ref()?, false, get_copy_id())
     }
 
     /// Allocate a fresh dict into `result`, for `mapnew()`.
@@ -916,7 +935,7 @@ pub fn f_remove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     match Container::of(&args[0]) {
         // SAFETY: as above -- these three take the vector itself, and each is
         // reached only for the type it handles.
-        Container::Dict(_) => unsafe { tv_dict_remove(args, result, arg_errmsg) },
+        Container::Dict(_) => tv_dict_remove(args, result, c"remove() argument"),
         // SAFETY: the blob the first argument holds, borrowed for the call.
         Container::Blob(b) => unsafe { blob_remove(b.0.as_mut(), args, result, arg_errmsg) },
         // SAFETY: the list the first argument holds, borrowed for the call.

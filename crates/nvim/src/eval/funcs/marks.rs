@@ -113,7 +113,7 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         let _ = unsafe { (*d).add_number(b"bufnr", entry.fmark.fnum as VarNumber) };
         // A jump into a file that is no longer loaded keeps its name.
         if !entry.fname.is_null() {
-            let _ = unsafe { (*d).add_str(b"filename", entry.fname) };
+            let _ = unsafe { (*d).add_str(b"filename", crate::cstr::at_opt(entry.fname)) };
         }
     }
 }

@@ -12,7 +12,6 @@
 use super::*;
 use crate::winlayer::Win;
 
-#[derive(Clone)]
 pub struct AutoCmd {
     pub pat: *mut AutoPat,
     pub id: int64_t,

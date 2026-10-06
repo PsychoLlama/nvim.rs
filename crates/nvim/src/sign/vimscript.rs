@@ -36,7 +36,7 @@ const HL_KEYS: [&str; 4] = ["linehl", "texthl", "culhl", "numhl"];
 /// `d` must be a live dictionary and `val` a NUL-terminated string.
 unsafe fn put_str(d: *mut Dict, key: &str, val: *const ::core::ffi::c_char) {
     // SAFETY: the caller's dictionary and value.
-    let _ = unsafe { (*d).add_str(key.as_bytes(), val) };
+    let _ = unsafe { (*d).add_str(key.as_bytes(), crate::cstr::at_opt(val)) };
 }
 
 /// `tv_dict_add_nr` with a Rust key; see [`put_str`].

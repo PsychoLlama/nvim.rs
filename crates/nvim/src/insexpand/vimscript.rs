@@ -34,8 +34,7 @@ pub(crate) fn do_autocmd_completedone(c: c_int, mode: c_int, word: Option<&CStr>
     let v_event = unsafe { get_v_event(&raw mut save_v_event) };
     // SAFETY: `v_event` is the dict just built, and every value is a
     // NUL-terminated string.
-    let add_str =
-        |key: &str, val: &CStr| unsafe { (*v_event).add_str(key.as_bytes(), val.as_ptr()) };
+    let add_str = |key: &str, val: &CStr| unsafe { (*v_event).add_str(key.as_bytes(), Some(val)) };
 
     let mode_name = CTRL_X_MODE_NAMES[(mode & !CTRL_X_WANT_IDENT) as usize].unwrap_or(c"");
     let _ = add_str("complete_word", word.unwrap_or(c""));
@@ -370,7 +369,7 @@ pub(crate) fn fill_complete_info_dict(di: &mut Dict, m: MatchId, add_match: bool
         };
         // SAFETY: each value is null or a NUL-terminated string of the match's.
         let add_str = |di: &mut Dict, key: &str, val: *const c_char| unsafe {
-            let _ = di.add_str(key.as_bytes(), val);
+            let _ = di.add_str(key.as_bytes(), cstr::at_opt(val));
         };
         add_str(di, "word", item.text.as_ptr());
         add_str(di, "abbr", extra(CPT_ABBR));
@@ -424,7 +423,9 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
         let (key, klen) = ("mode".as_ptr().cast(), "mode".len());
         // SAFETY: `retdict` is the dict being built and `ins_compl_mode`
         // answers a NUL-terminated static name.
-        ret = unsafe { (*retdict).add_str(cstr::slice_at(key, klen), ins_compl_mode()) };
+        ret = unsafe {
+            (*retdict).add_str(cstr::slice_at(key, klen), cstr::at_opt(ins_compl_mode()))
+        };
     }
 
     if ret.is_ok() && what_flag & CI_WHAT_PUM_VISIBLE != 0 {
@@ -442,7 +443,10 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
         };
         let (key, klen) = ("preinserted_text".as_ptr().cast(), "preinserted_text".len());
         // SAFETY: `text` is readable for `len` bytes.
-        ret = unsafe { (*retdict).add_str_len(cstr::slice_at(key, klen), text, len.max(0)) };
+        ret = unsafe {
+            let text = cstr::slice_at(text, usize::try_from(len.max(0)).unwrap_or(0));
+            (*retdict).add_str_len(cstr::slice_at(key, klen), Some(text))
+        };
     }
 
     if ret.is_err()

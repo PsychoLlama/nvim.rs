@@ -240,7 +240,6 @@ impl ColoredCmdline {
         self.text.extend_from_slice(text);
     }
 }
-#[derive(Clone)]
 pub struct CmdlineInfo {
     pub(crate) cmdbuff: CmdBuff,
     pub cmdpos: ::core::ffi::c_int,

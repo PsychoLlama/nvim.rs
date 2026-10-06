@@ -484,5 +484,5 @@ unsafe fn search_pattern(tagp: &TagParts) -> Name {
 /// `d` must be live and `val` NUL-terminated.
 unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     // SAFETY: the caller's promise.
-    let _ = unsafe { (*d).add_str(key.to_bytes(), val) };
+    let _ = unsafe { (*d).add_str(key.to_bytes(), cstr::at_opt(val)) };
 }

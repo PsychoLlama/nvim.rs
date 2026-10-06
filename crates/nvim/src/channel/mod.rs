@@ -397,7 +397,7 @@ unsafe fn channel_destroy(chan: *mut Channel) {
     }
     unsafe { callback_reader_free(&raw mut (*chan).on_data) };
     unsafe { callback_reader_free(&raw mut (*chan).on_stderr) };
-    unsafe { callback_free(&raw mut (*chan).on_exit) };
+    unsafe { callback_free(&mut (*chan).on_exit) };
     unsafe { multiqueue_free((*chan).events) };
     drop(unsafe { Box::from_raw(chan) });
 }

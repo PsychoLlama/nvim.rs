@@ -496,7 +496,7 @@ pub fn f_getcharsearch(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     let csearch = last_csearch();
     tv_dict_alloc_ret(result);
     let dict = result.dict_or_null();
-    let _ = unsafe { (*dict).add_str(b"char", csearch.as_ptr()) };
+    let _ = unsafe { (*dict).add_str(b"char", crate::cstr::at_opt(csearch.as_ptr())) };
     let forward = last_csearch_forward() as VarNumber;
     let _ = unsafe { (*dict).add_number(b"forward", forward) };
     let until = last_csearch_until() as VarNumber;

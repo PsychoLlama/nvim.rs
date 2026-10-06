@@ -280,9 +280,7 @@ fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
                 }
             }
             handler @ (Callback::Funcref(_) | Callback::Partial(_)) => {
-                // SAFETY: the caller's promise about a partial; the name is
-                // copied out.
-                let name = unsafe { cstr_to_string(callback_to_string(handler)) };
+                let name = String_0::from(callback_to_string(handler).as_cstr());
                 info.insert(c"callback", Object::string(name));
             }
             // A row with neither a command nor a handler cannot exist.

@@ -550,8 +550,8 @@ struct AdditionalData {
 struct Callback {
   unsigned int tag;
   union {
-    char *funcref_;
-    Partial *partial_;
+    ThinCString funcref_;
+    PartialRef partial_;
     LuaRef lua_;
   } payload;
 };

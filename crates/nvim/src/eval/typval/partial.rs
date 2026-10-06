@@ -310,7 +310,9 @@ mod tests {
         // gives back the dictionary's last reference -- which must not
         // free the dictionary under the walk.
         // SAFETY: a dictionary nothing else is walking.
-        unsafe { tv_dict_free_contents(dp) };
+        tv_dict_free_contents(&::core::mem::ManuallyDrop::new(
+            unsafe { DictRef::owning(dp) }.expect("a live dictionary"),
+        ));
         assert_eq!(dict_refs(dp), 0);
         // Pass 2.
         // SAFETY: as above, now empty.

@@ -18,9 +18,10 @@
 use crate::message_fmt::{c_str, emsg_text, msg_bytes};
 use crate::semsg;
 use crate::tr_c;
+use crate::types::DictItem;
 use core::ffi::{CStr, c_char, c_int};
 
-use crate::eval::typval::{dict_find, list_len, tv_clear, tv_dict_item_alloc, tv_list_alloc};
+use crate::eval::typval::{dict_find, list_len, tv_clear, tv_list_alloc};
 use crate::types::{Dict, List, TypVal, VAR_STRING};
 use ::libc::abort;
 
@@ -216,14 +217,12 @@ impl<'a> Decoder<'a> {
                     .val
                     .string_ref()
                     .expect("a plain key is a non-null String");
-                // SAFETY: the key's own NUL-terminated text, which the item
-                // copies.
-                let obj_di = unsafe { tv_dict_item_alloc(key_text.as_ptr()) };
+                let mut obj_di = DictItem::boxed(key_text.as_bytes());
                 tv_clear(&mut key.val);
+                obj_di.di_tv = obj.val;
                 if unsafe { (*last.container.dict()).add_item(obj_di) }.is_err() {
                     unsafe { abort() };
                 }
-                unsafe { (*obj_di).di_tv = obj.val };
             } else {
                 let kv_pair = tv_list_alloc(2);
                 let into = kv_pair.as_ptr();

@@ -224,16 +224,14 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             get_echo_hl_id(),
             xp_type,
             xp_arg,
-            // The prompt installs an alias of this in `ccline` for the
-            // length of the call and restores the previous line after; the
-            // callback stays this frame's to free, below.
-            input_callback.clone(),
+            // The prompt takes the callback over, and releases it when it
+            // returns.
+            input_callback,
             false,
             ::core::ptr::null_mut::<bool>(),
         ))
     });
     ex_normal_busy.set(save_ex_normal_busy);
-    unsafe { callback_free(&raw mut input_callback) };
 
     if result.string_ref().is_none() && !cancelreturn.is_null() {
         unsafe { tv_copy(&*cancelreturn, result) };

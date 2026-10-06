@@ -151,8 +151,7 @@ fn clear_mappings(buffer: Buf, abbrev: bool) {
 }
 
 fn free_callback(cb: &mut Callback) {
-    // SAFETY: a callback inside a live buffer.
-    unsafe { callback_free(cb) };
+    callback_free(cb);
 }
 
 fn clear_mark(mark: &mut FileMark) {
@@ -232,7 +231,7 @@ fn clear_buf_vars(buffer: Buf) {
 fn rescue_changedtick(mut buffer: Buf) {
     let (vars, di) = (buffer.b_vars, &raw mut buffer.changedtick_di);
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
-    let _ = unsafe { (*vars).add_item(tv_dict_item_copy(di)) };
+    let _ = unsafe { (*vars).add_item(tv_dict_item_copy(&*di)) };
 }
 
 fn release_vars(buffer: Buf) {

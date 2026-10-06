@@ -525,9 +525,19 @@ pub fn may_trigger_modechanged() {
     // both mode names outlive the autocommand that reads them.
     let v_event = unsafe { get_v_event(&raw mut save_v_event) };
     let (key, len) = (c"new_mode".as_ptr(), c"new_mode".count_bytes());
-    let _ = unsafe { (*v_event).add_str(cstr::slice_at(key, len), curr_mode.as_mut_ptr()) };
+    let _ = unsafe {
+        (*v_event).add_str(
+            cstr::slice_at(key, len),
+            cstr::at_opt(curr_mode.as_mut_ptr()),
+        )
+    };
     let (key, len) = (c"old_mode".as_ptr(), c"old_mode".count_bytes());
-    let _ = unsafe { (*v_event).add_str(cstr::slice_at(key, len), old_mode.as_mut_ptr()) };
+    let _ = unsafe {
+        (*v_event).add_str(
+            cstr::slice_at(key, len),
+            cstr::at_opt(old_mode.as_mut_ptr()),
+        )
+    };
     unsafe { (*v_event).set_keys_readonly() };
     let (fname, fname_io) = (pattern.as_mut_ptr(), ptr::null_mut::<c_char>());
     let buf = Buf::current_or_none();

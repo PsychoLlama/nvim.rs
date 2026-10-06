@@ -16,6 +16,7 @@
 #![allow(unsafe_code)]
 
 use crate::memory::ThinCString;
+use crate::types::DictItem;
 use core::ffi::{c_char, c_int};
 use core::mem::MaybeUninit;
 use core::ptr;
@@ -25,8 +26,7 @@ use super::{
 };
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    Di, TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_dict_hi2di, tv_dict_item_alloc_len,
-    tv_dict_item_free, tv_dict_iter, tv_list_alloc,
+    Di, TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_dict_hi2di, tv_dict_iter, tv_list_alloc,
 };
 use crate::memory::{xfree, xmallocz};
 use crate::mpack::conv::{
@@ -228,9 +228,13 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
 
     for i in 0..len {
         let key = pairs[i * 2].string_bytes();
-        // SAFETY: the key's own bytes, which the item copies.
-        let di = unsafe { tv_dict_item_alloc_len(key.as_ptr().cast(), key.len()) };
-        if unsafe { (*dict).add_item(di) }.is_err() {
+        let mut item = DictItem::boxed(key);
+        // The value moves out of the pair array, which is freed
+        // uncleared.  On the duplicate-key path below the move is undone:
+        // every item added so far is disowned, leaving the pair array the
+        // owner again for the special-map path to re-use.
+        item.di_tv = unsafe { ptr::read(&raw const pairs[i * 2 + 1]) };
+        if let Err(mut refused) = unsafe { (*dict).add_item(item) } {
             // Duplicate key.  Disown the values already handed to the
             // dictionary — the special-map path is about to re-use every
             // one of them — then free the dictionary and give up.
@@ -241,14 +245,10 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
                 item.di_tv.write_special(kSpecialVarNull);
             }
             tv_clear(result);
-            unsafe { tv_dict_item_free(di) };
+            refused.di_tv.write_special(kSpecialVarNull);
+            drop(refused);
             return false;
         }
-        // The value moves out of the pair array, which is freed
-        // uncleared.  On the duplicate-key path above the move is undone:
-        // every item added so far is disowned, leaving the pair array the
-        // owner again for the special-map path to re-use.
-        unsafe { (*di).di_tv = ptr::read(&raw const pairs[i * 2 + 1]) };
     }
 
     // The keys were copied into the items; the originals are ours to free.

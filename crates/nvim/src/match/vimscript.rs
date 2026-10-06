@@ -31,7 +31,7 @@ const MAX_SAVED_POS: c_int = 8;
 /// `d` must be live and `val` null or NUL-terminated.
 unsafe fn put_str(d: *mut Dict, key: &str, val: *const c_char) {
     // SAFETY: the caller's dictionary and value.
-    let _ = unsafe { (*d).add_str(key.as_bytes(), val) };
+    let _ = unsafe { (*d).add_str(key.as_bytes(), cstr::at_opt(val)) };
 }
 
 /// `tv_dict_add_nr` with a Rust key; see [`put_str`].

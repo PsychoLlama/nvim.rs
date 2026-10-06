@@ -54,7 +54,7 @@ pub(crate) unsafe fn aucmd_del(ac: *mut AutoCmd) {
 
     // A handler is either a command string or a callback, never both.
     if unsafe { (*ac).handler_cmd.is_null() } {
-        unsafe { callback_free(&raw mut (*ac).handler_fn) };
+        unsafe { callback_free(&mut (*ac).handler_fn) };
     } else {
         xfree_clear(unsafe { &raw mut (*ac).handler_cmd });
     }
@@ -104,7 +104,7 @@ pub(crate) fn au_cleanup() {
                 // this one or one the loop has already passed over, and
                 // everything past `nsize` is dropped by the truncation
                 // below.
-                unsafe { *(*acs).items.add(nsize) = (*ac).clone() };
+                unsafe { *(*acs).items.add(nsize) = ac.read() };
             }
             if !unsafe { (*ac).pat.is_null() } {
                 nsize = nsize.wrapping_add(1);

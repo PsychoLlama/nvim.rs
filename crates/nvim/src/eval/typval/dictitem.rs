@@ -12,12 +12,13 @@
 //! `items()` show.
 //!
 //! The table does not free its items. Which of them it owns is
-//! `DI_FLAGS_ALLOC`, and [`tv_dict_item_free`] is what acts on it -- four
-//! kinds of item are embedded in something bigger (a funccall's fixed
-//! variables, a scope's own entry, `b:changedtick`, a `v:` row) and outlive
-//! every table they are in.  The `tv_dict_item_*` family keeps its raw
-//! pointers for the reason `tv_list_free` does: an item off a table is
-//! owned by nobody, so no borrow describes it.
+//! `DI_FLAGS_ALLOC` -- four kinds of item are embedded in something bigger
+//! (a funccall's fixed variables, a scope's own entry, `b:changedtick`, a
+//! `v:` row) and outlive every table they are in. An item off a table is a
+//! `Box<DictItem>` ([`DictItem::boxed`]); [`Dict::add_item`] takes one over,
+//! and a removal hands back what the table held
+//! ([`RemovedItem`](super::RemovedItem)), to be dropped once the borrow of
+//! the dictionary has ended.
 //!
 //! [`Dict::find`] is the hashtable lookup every getter goes through, and the
 //! `dict_get_*` family coerces what it finds to one type, answering a
@@ -28,18 +29,17 @@
 //! half and [`f_items`] / [`f_keys`] / [`f_values`] are the builtins that
 //! turn a container into a list.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::cstr;
+use crate::eval::vars::var_wrong_func_name_named;
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
+use crate::memory::handoff::owned_cstr;
 use crate::message::emsg;
 use crate::semsg;
-use crate::snprintf;
 use crate::types::{DictKey, Failed, HashTab};
 use core::ffi::CStr;
 
@@ -66,83 +66,60 @@ impl From<Failed> for KeyTaken {
     }
 }
 
-/// Allocate a `DictItem` holding a copy of `key`'s first `key_len` bytes.
-///
-/// The item owns its key: a short one -- which is nearly every key -- lives
-/// in the item, a long one in its own allocation.  Upstream over-allocated
-/// the item so the key sat in a flexible tail, because its hash table's slot
-/// pointed at the key and found the item by subtracting an offset; the slot
-/// names the item now.
-///
-/// # Safety
-/// `key` must be readable for `key_len` bytes; it need not be
-/// NUL-terminated, since the key terminates itself.
-///
-/// The item comes back owned by the caller, holding `VAR_UNKNOWN`. It has
-/// to reach either [`Dict::add_item`] (which takes it on `Ok` and leaves
-/// it on `Err`) or [`tv_dict_item_free`]; nothing else frees it.
-pub unsafe fn tv_dict_item_alloc_len(
-    key: *const ::core::ffi::c_char,
-    key_len: size_t,
-) -> *mut DictItem {
-    // SAFETY: the caller's promise -- `key_len` readable bytes.
-    let bytes = unsafe { ::core::slice::from_raw_parts(key.cast::<u8>(), key_len) };
-    Box::into_raw(Box::new(DictItem {
-        di_tv: TypVal::Unknown,
-        di_lock: VarLock::Unlocked,
-        di_flags: DI_FLAGS_ALLOC as uint8_t,
-        di_key: DictKey::new(bytes),
-    }))
+impl DictItem {
+    /// A fresh item holding a copy of `key`, and `VAR_UNKNOWN`.
+    ///
+    /// The item owns its key: a short one -- which is nearly every key --
+    /// lives in the item, a long one in its own allocation.  Upstream
+    /// over-allocated the item so the key sat in a flexible tail, because its
+    /// hash table's slot pointed at the key and found the item by subtracting
+    /// an offset; the slot names the item now.
+    ///
+    /// The item is `DI_FLAGS_ALLOC`: a dictionary that takes it over
+    /// ([`Dict::add_item`]) owns it, and gives it back on removal.
+    pub fn boxed(key: &[u8]) -> Box<DictItem> {
+        Box::new(DictItem {
+            di_tv: TypVal::Unknown,
+            di_lock: VarLock::Unlocked,
+            di_flags: DI_FLAGS_ALLOC as uint8_t,
+            di_key: DictKey::new(key),
+        })
+    }
 }
 
-/// [`tv_dict_item_alloc_len`] for a NUL-terminated key.
-///
-/// # Safety
-/// `key` must be a NUL-terminated string. Otherwise as
-/// [`tv_dict_item_alloc_len`], including the caller's ownership of the
-/// result.
-pub unsafe fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut DictItem {
-    unsafe { tv_dict_item_alloc_len(key, cstr::bytes_at(key).len()) }
+/// A fresh item holding a copy of `item`'s key and value.
+pub fn tv_dict_item_copy(item: &DictItem) -> Box<DictItem> {
+    let mut copy = DictItem::boxed(item.key());
+    tv_copy(&item.di_tv, &mut copy.di_tv);
+    copy
 }
 
-/// A fresh item holding a copy of `di`'s key and value.
+/// Remove the item under `key` from `dict` and release it; E685 when there
+/// is none.
 ///
-/// # Safety
-/// `di` must be a live item. The copy is the caller's, with the same
-/// obligation as [`tv_dict_item_alloc_len`]'s result.
-pub unsafe fn tv_dict_item_copy(di: *mut DictItem) -> *mut DictItem {
-    let new_di = unsafe { tv_dict_item_alloc((*di).di_key.as_ptr()) };
-    unsafe { tv_copy(&(*di).di_tv, &mut (*new_di).di_tv) };
-    new_di
-}
-
-/// Remove `item` from `dict` and free it.
-///
-/// # Safety
-/// `item` must be an item of `dict`, and both must be live. `item` is
-/// freed, so the caller must not hold it afterwards.
-pub unsafe fn tv_dict_item_remove(dict: *mut Dict, item: *mut DictItem) {
-    let hi = unsafe { hash_find(&raw mut (*dict).dv_hashtab, (*item).di_key.as_ptr()) };
-    if hi.is_kept() {
-        unsafe { hash_remove(&raw mut (*dict).dv_hashtab, hi) };
-    } else {
+/// A handle, because releasing a value can reach the dictionary it was in:
+/// the release happens once the removal's borrow has ended.
+pub fn tv_dict_item_remove(dict: &DictRef, key: &[u8]) {
+    let removed = dict.edit().remove_key(key);
+    if removed.is_none() {
         let arg0 = "tv_dict_item_remove()";
         semsg!("E685: Internal error: {arg0}");
     }
-    unsafe { tv_dict_item_free(item) };
+    drop(removed);
 }
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
 pub(crate) fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
     let bytes = blob_bytes(args[0].blob_ref());
     tv_list_alloc_ret(result, ptrdiff_t::try_from(bytes.len()).unwrap_or(-1));
+    let Some(list) = result.list_mut() else {
+        return;
+    };
     for (at, &byte) in bytes.iter().enumerate() {
-        let pair = tv_list_alloc(2);
-        let into = pair.as_ptr();
-        // SAFETY: the list stored in the return slot, and the fresh pair.
-        unsafe { (*result.list_or_null()).push_list(Some(pair)) };
-        unsafe { (*into).push_number(VarNumber::try_from(at).expect("a short blob")) };
-        unsafe { (*into).push_number(VarNumber::from(byte)) };
+        let mut pair = tv_list_alloc(2);
+        pair.push_number(VarNumber::try_from(at).expect("a short blob"));
+        pair.push_number(VarNumber::from(byte));
+        list.push_list(Some(pair));
     }
 }
 
@@ -153,23 +130,31 @@ pub(crate) fn tv_dict2items(args: &[TypVal], result: &mut TypVal) {
 
 /// `items()` over a list: a list of `[index, value]` pairs.
 pub(crate) fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
-    let l = args[0].list_or_null();
-    tv_list_alloc_ret(result, list_len(unsafe { l.as_ref() }) as ptrdiff_t);
-    if l.is_null() {
+    let source = args[0].list_ref();
+    tv_list_alloc_ret(
+        result,
+        ptrdiff_t::try_from(list_len(source)).unwrap_or(ptrdiff_t::MAX),
+    );
+    if source.is_none() {
         return;
     }
-    for (idx, li) in list_iter(unsafe { l.as_ref() }).enumerate() {
-        let l2 = tv_list_alloc(2);
-        let at = l2.as_ptr();
-        unsafe { (*(*result).list_or_null()).push_list(Some(l2)) };
-        unsafe { (*at).push_number(idx as VarNumber) };
-        unsafe { (*at).push_copy(&li.li_tv) };
+    let Some(list) = result.list_mut() else {
+        return;
+    };
+    for (idx, item) in list_iter(source).enumerate() {
+        let mut pair = tv_list_alloc(2);
+        pair.push_number(VarNumber::try_from(idx).expect("a short list"));
+        pair.push_copy(&item.li_tv);
+        list.push_list(Some(pair));
     }
 }
 
 /// `items()` over a string: a list of `[index, character]` pairs.
 pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
     tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
+    let Some(list) = result.list_mut() else {
+        return;
+    };
     // A null string behaves like an empty one.
     let text = args[0].string_bytes();
 
@@ -177,28 +162,32 @@ pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
     let mut offset = 0;
     while offset < text.len() {
         let len = cluster_len(&text[offset..]);
-        let l2 = tv_list_alloc(2);
-        let at = l2.as_ptr();
-        unsafe { (*(*result).list_or_null()).push_list(Some(l2)) };
-        unsafe { (*at).push_number(idx) };
-        unsafe { (*at).push(TypVal::string_from(&text[offset..offset + len])) };
+        let mut pair = tv_list_alloc(2);
+        pair.push_number(idx);
+        pair.push(TypVal::string_from(&text[offset..offset + len]));
+        list.push_list(Some(pair));
         offset += len;
         idx += 1;
     }
 }
 
 impl Dict {
-    /// Remove the item under `key`, freeing it and its value. False when
-    /// there is none.
-    pub(crate) fn remove_key(&mut self, key: &[u8]) -> bool {
-        let item = self.find_ptr(key);
-        if item.is_null() {
-            return false;
-        }
-        // SAFETY: an item of this dictionary, which the exclusive borrow
-        // keeps in it until the removal.
-        unsafe { tv_dict_item_remove(self, item) };
-        true
+    /// The item under `key` as a pointer, or null: the escape hatch for the
+    /// bodies that hold an item *while* they reach the dictionary again.
+    /// Safe to compute; it is the dereference that needs a promise.
+    #[inline]
+    pub(crate) fn find_ptr(&self, key: &[u8]) -> *mut DictItem {
+        self.slot_of(key).map_or(::core::ptr::null_mut(), |slot| {
+            tv_dict_hi2di(self.dv_hashtab.slot(slot))
+        })
+    }
+
+    /// Take the item under `key` out of the table, answering what the table
+    /// held -- `None` when there is no such key. Dropping the answer is the
+    /// release; do it once the borrow of the dictionary has ended.
+    pub(crate) fn remove_key(&mut self, key: &[u8]) -> Option<RemovedItem> {
+        let slot = self.slot_of(key)?;
+        Some(self.remove_at(slot))
     }
 
     /// Whether the dictionary has `key`.
@@ -259,40 +248,20 @@ pub fn dict_get_bool(d: Option<&Dict>, key: &[u8], def: ::core::ffi::c_int) -> V
 
 /// `denv` as a NULL-terminated `environ`-shaped array of `KEY=VALUE` strings.
 ///
-/// Every string, and the array itself, is freshly allocated; **the caller
-/// owns the lot** and has to free it. Every value of `denv` must have a
-/// string form.
+/// Every string, and the array itself, is freshly allocated from the
+/// allocator `xfree` releases; **the caller owns the lot** and has to free
+/// it. Every value of `denv` must have a string form.
 pub fn dict_to_env(denv: &Dict) -> *mut *mut ::core::ffi::c_char {
     let mut numbuf = NumBuf::new();
-    let env_size = denv.len();
-
     // + 1 for NULL
-    let env =
-        unsafe { xmalloc((env_size + 1) * ::core::mem::size_of::<*mut ::core::ffi::c_char>()) }
-            as *mut *mut ::core::ffi::c_char;
-
-    for (i, var) in denv.items().enumerate() {
-        let key = &var.di_key;
-        let str = numbuf.string(&var.di_tv);
-        let len = key.len() + str.count_bytes() + c"=".count_bytes() + 1;
-        // SAFETY: `i` is below `env_size`, and the format spends two
-        // NUL-terminated strings into `len` writable bytes.
-        unsafe {
-            *env.add(i) = xmalloc(len) as *mut ::core::ffi::c_char;
-            snprintf!(
-                *env.add(i),
-                len,
-                c"%s=%s".as_ptr(),
-                key.as_ptr(),
-                str.as_ptr()
-            );
-        }
+    let mut env = Vec::with_capacity(denv.len() + 1);
+    for var in denv.items() {
+        let value = numbuf.string(&var.di_tv);
+        env.push(owned_cstr([var.key(), b"=", value.to_bytes()].concat()));
     }
-
     // must be null terminated
-    // SAFETY: the slot past the last entry, which the allocation has room for.
-    unsafe { *env.add(env_size) = ::core::ptr::null_mut() };
-    env
+    env.push(::core::ptr::null_mut());
+    Box::into_raw(env.into_boxed_slice()).cast::<*mut ::core::ffi::c_char>()
 }
 
 /// `d[key]` as a fresh allocation **the caller owns**, NULL for a missing
@@ -357,8 +326,7 @@ pub fn dict_get_callback(d: Option<&mut Dict>, key: &[u8], result: &mut Callback
     // the partial the value becomes takes a *reference* to it, and that is
     // the only thing `set_selfdict` does to it.
     set_selfdict(&mut tv, d);
-    // SAFETY: a callback slot the caller may not read until this answers.
-    let res = unsafe { callback_from_typval(result, &tv) };
+    let res = callback_from_typval(result, &tv);
     tv_clear(&mut tv);
     res
 }
@@ -375,11 +343,11 @@ pub fn dict_get_callback(d: Option<&mut Dict>, key: &[u8], result: &mut Callback
 /// once. [`DictKey::as_ptr`] is the read that costs nothing, and the guards
 /// above it rule the call out before the key is touched at all.
 pub fn dict_wrong_func_name(d: &Dict, item: &DictItem) -> bool {
-    let at = &raw const *d;
-    (at == get_globvar_dict().cast_const() || dv_hashtab(at.cast_mut()) == get_funccal_local_ht())
+    let at = ::core::ptr::from_ref(d);
+    (at == get_globvar_dict().cast_const()
+        || ::core::ptr::eq(&d.dv_hashtab, get_funccal_local_ht().cast_const()))
         && item.di_tv.is_func()
-        // SAFETY: a key is NUL-terminated, which is what `as_ptr` answers.
-        && unsafe { var_wrong_func_name(item.di_key.as_ptr(), true) }
+        && var_wrong_func_name_named(item.key(), true)
 }
 
 /// The shared body of `keys()`, `values()` and `items()` over a dictionary.
@@ -393,6 +361,9 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
     tv_list_alloc_ret(result, dict_len(d) as ptrdiff_t);
     // NULL dict behaves like an empty dict
     let Some(d) = d else { return };
+    let Some(list) = result.list_mut() else {
+        return;
+    };
 
     for di in d.items() {
         let mut tv_item = TV_INITIAL_VALUE;
@@ -406,19 +377,15 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
             }
             kDict2ListItems => {
                 // items()
-                let sub_l = tv_list_alloc(2);
-                let at = sub_l.as_ptr();
-                tv_item.write_list(Some(sub_l));
-                // SAFETY: the pair just allocated, and the item's own key.
-                unsafe { (*at).push_string(di.di_key.as_ptr(), -1) };
-                // SAFETY: as above.
-                unsafe { (*at).push_copy(&di.di_tv) };
+                let mut pair = tv_list_alloc(2);
+                pair.push(TypVal::string(Some(ThinCString::from_bytes(di.key()))));
+                pair.push_copy(&di.di_tv);
+                tv_item.write_list(Some(pair));
             }
             _ => {}
         }
 
-        // SAFETY: the list this call put in the return slot.
-        unsafe { (*result.list_or_null()).push(tv_item) };
+        list.push(tv_item);
     }
 }
 
@@ -464,5 +431,80 @@ impl NumBuf {
     /// one.
     pub fn dict_string<'a>(&'a mut self, d: Option<&'a Dict>, key: &[u8]) -> Option<&'a CStr> {
         dict_get_string_buf(d, key, self)
+    }
+}
+
+impl Dict {
+    /// The item under `key`, or `None` when there is none.
+    ///
+    /// The key is bytes: the table hashes and compares exactly those, and a
+    /// key that reaches the table has no NUL among them. **The answer borrows
+    /// the dictionary, not the slot**: an item is its own allocation, so a
+    /// rehash leaves it where it was, and only a removal -- which needs the
+    /// exclusive borrow this rules out -- ends it.
+    #[inline]
+    pub fn find(&self, key: &[u8]) -> Option<&DictItem> {
+        self.slot_of(key).and_then(|slot| self.item_at(slot))
+    }
+
+    /// [`Dict::find`] with the item writable.
+    #[inline]
+    pub fn find_mut(&mut self, key: &[u8]) -> Option<&mut DictItem> {
+        self.slot_of(key).and_then(|slot| self.item_at_mut(slot))
+    }
+}
+
+/// What [`Dict::remove_at`] took out of a table: an allocated item, or the
+/// value of one embedded in a structure that keeps the item itself.
+/// Dropping it releases the value.
+pub(crate) enum RemovedItem {
+    /// An item the dictionary owned.
+    Allocated(Box<DictItem>),
+    /// The value of an embedded item, which stays where it is, emptied.
+    Embedded(TypVal),
+}
+
+impl RemovedItem {
+    /// The value the item held.
+    pub(crate) fn value_mut(&mut self) -> &mut TypVal {
+        match self {
+            RemovedItem::Allocated(item) => &mut item.di_tv,
+            RemovedItem::Embedded(value) => value,
+        }
+    }
+}
+
+/// A walk over a dictionary's occupied slots that holds no borrow of it
+/// between steps: upstream's `TV_DICT_ITER`.
+///
+/// The live-item count is taken at the start, as the macro does, which is
+/// what lets a body remove entries as it goes -- with the table locked
+/// ([`Dict::lock_table`]), since an unlocked removal may rehash and renumber
+/// the slots under the walk.
+pub(crate) struct DictCursor {
+    slot: usize,
+    todo: usize,
+}
+
+impl DictCursor {
+    /// A walk from the first slot of `dict`.
+    pub(crate) fn new(dict: &Dict) -> DictCursor {
+        DictCursor {
+            slot: 0,
+            todo: dict.dv_hashtab.ht_used,
+        }
+    }
+
+    /// The next occupied slot of `dict`, or `None` at the end.
+    pub(crate) fn next(&mut self, dict: &Dict) -> Option<usize> {
+        while self.todo != 0 {
+            let slot = self.slot;
+            self.slot += 1;
+            if dict.dv_hashtab.slot(slot).is_kept() {
+                self.todo -= 1;
+                return Some(slot);
+            }
+        }
+        None
     }
 }

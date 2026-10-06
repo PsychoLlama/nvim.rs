@@ -138,11 +138,11 @@ unsafe fn set_prompt_callback(args: &[TypVal], slot: impl Fn(Buf) -> *mut Callba
     let Some(buf) = tv_get_buf(&args[0], 0) else {
         return;
     };
-    if !unsafe { callback_from_typval(&raw mut callback, &args[1]) } {
+    if !callback_from_typval(&mut callback, &args[1]) {
         return;
     }
     let slot = slot(buf);
-    unsafe { callback_free(slot) };
+    unsafe { callback_free(&mut *slot) };
     unsafe { *slot = callback };
 }
 

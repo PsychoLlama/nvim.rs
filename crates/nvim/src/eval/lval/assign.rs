@@ -31,7 +31,7 @@ use crate::semsg;
 use super::{LValue, Slot, Span, Target, UNSET_TV};
 use crate::eval::executor::mod_op;
 use crate::eval::typval::{
-    BlobRef, DictRef, assign_range, blob_len, dict_is_watched, notify_watchers, set_range,
+    BlobRef, DictRef, assign_range, blob_len, dict_is_watched, dict_watcher_notify, set_range,
     tv_check_lock_named, tv_copy, tv_get_number_chk, value_check_lock_named,
 };
 use crate::eval::vars::{
@@ -205,7 +205,9 @@ fn add_key(dict: &DictRef, key: &[u8], value: &mut TypVal, copy: bool, op: Optio
         if let Some(item) = target.find(key) {
             tv_copy(&item.di_tv, &mut newtv);
         }
-        cstr::with_terminated(key, |key| notify_watchers(dict, key, Some(&newtv), None));
+        cstr::with_terminated(key, |key| {
+            dict_watcher_notify(dict, key, Some(&newtv), None)
+        });
         clear_local(&mut newtv);
     }
 }
@@ -218,7 +220,7 @@ fn notify_key(dict: &DictRef, key: &[u8], lval: &mut LValue<'_>, oldtv: &TypVal)
     // An old value of `VAR_UNKNOWN` is how the C told a new key; a key that
     // existed always has one.
     let old = (oldtv.v_type() != VAR_UNKNOWN).then_some(oldtv);
-    cstr::with_terminated(key, |key| notify_watchers(dict, key, Some(&newtv), old));
+    cstr::with_terminated(key, |key| dict_watcher_notify(dict, key, Some(&newtv), old));
     clear_local(&mut newtv);
 }
 

@@ -46,7 +46,7 @@ pub fn f_dictwatcheradd(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
         return;
     };
     let mut callback = NO_CALLBACK;
-    if !unsafe { callback_from_typval(&raw mut callback, &args[2]) } {
+    if !callback_from_typval(&mut callback, &args[2]) {
         semsg!("E475: Invalid argument: funcref");
         return;
     }
@@ -77,7 +77,7 @@ pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
         return;
     };
     let mut callback = NO_CALLBACK;
-    if !unsafe { callback_from_typval(&raw mut callback, &args[2]) } {
+    if !callback_from_typval(&mut callback, &args[2]) {
         return;
     }
     // SAFETY: as `f_dictwatcheradd`; the callback only identifies a
@@ -90,7 +90,7 @@ pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
     if !removed {
         semsg!("Couldn't find a watcher matching key and callback");
     }
-    unsafe { callback_free(&raw mut callback) };
+    callback_free(&mut callback);
 }
 
 /// `islocked({expr})` — 1 when the variable the name resolves to is locked,

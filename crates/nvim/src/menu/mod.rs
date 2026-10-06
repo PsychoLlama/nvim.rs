@@ -547,13 +547,15 @@ pub(crate) fn dict_add_str(dict: *mut Dict, key: &CStr, value: &CStr) {
 /// [`dict_add_str`] for a value that is still a raw pointer.
 pub(crate) fn dict_add_str_raw(dict: *mut Dict, key: &CStr, value: *const c_char) {
     // SAFETY: see the section note; `tv_dict_add_str` copies `value`.
-    let _ = unsafe { (*dict).add_str(key.to_bytes(), value) };
+    let _ = unsafe { (*dict).add_str(key.to_bytes(), cstr::at_opt(value)) };
 }
 
 /// [`dict_add_str`] handing over an allocation the Dict then owns.
 pub(crate) fn dict_add_allocated_str(dict: *mut Dict, key: &CStr, value: *mut c_char) {
     // SAFETY: see the section note; the Dict takes over `value`.
-    let _ = unsafe { (*dict).add_allocated_str(key.to_bytes(), value) };
+    let _ = unsafe {
+        (*dict).add_allocated_str(key.to_bytes(), crate::memory::ThinCString::from_raw(value))
+    };
 }
 
 pub(crate) fn dict_add_nr(dict: *mut Dict, key: &CStr, value: VarNumber) {

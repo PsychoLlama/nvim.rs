@@ -40,7 +40,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::eval::decode::decode_string;
-use crate::eval::typval::{DictSlot, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc};
+use crate::eval::typval::{DictSlot, tv_dict_alloc, tv_list_alloc};
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::{find_func, register_luafunc};
@@ -398,13 +398,10 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
             let mut dict = tv_dict_alloc();
             for KeyValuePair { key, value } in pairs {
                 let item_tv = object_to_vim(value, take_luaref);
-                // SAFETY: a key is a NUL-terminated name, and `di` is the
-                // item just allocated for it.
-                unsafe {
-                    let di: *mut DictItem = tv_dict_item_alloc(key.as_ptr());
-                    (*di).di_tv = item_tv;
-                    let _ = dict.add_item(di);
-                }
+                // The key up to its NUL, as the C's `strlen` read it.
+                let mut item = DictItem::boxed(key.as_c_str().to_bytes());
+                item.di_tv = item_tv;
+                let _ = dict.add_item(item);
             }
             TypVal::dict(Some(dict))
         }

@@ -402,5 +402,10 @@ unsafe fn add_tag_field(
     }
     value.push(0);
     let name_len = unsafe { cstr::bytes_at(field_name) }.len();
-    unsafe { (*dict).add_str(cstr::slice_at(field_name, name_len), value.as_ptr()) }
+    unsafe {
+        (*dict).add_str(
+            cstr::slice_at(field_name, name_len),
+            cstr::at_opt(value.as_ptr()),
+        )
+    }
 }

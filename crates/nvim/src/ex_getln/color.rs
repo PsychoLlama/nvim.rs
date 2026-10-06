@@ -212,7 +212,11 @@ msg_putchar('\n' as ::core::ffi::c_int);
             // Currently this should only happen while processing input()
             // prompts.
             debug_assert!(colored_ccline.input_fn != 0);
-            color_cb = colored_ccline.highlight_callback.clone();
+            // A reference of this frame's own, rather than upstream's bit
+            // copy: the callback is user code, and the command line it
+            // came from is a global it can reach.
+            color_cb = colored_ccline.highlight_callback.duplicate();
+            can_free_cb = true;
         } else if colored_ccline.cmdfirstc == ':' as ::core::ffi::c_int {
             // C's TRY_WRAP.
             let mut tstate: TryState = TRY_STATE_INIT;
@@ -259,8 +263,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
         err_errmsg = c"E5407: Callback has thrown an exception: %s".as_ptr();
         let saved_msg_col = msg_col.get();
         let silenced = Suppress::messages();
-        let cbcall_ret =
-            unsafe { callback_call(&raw mut color_cb, ::core::slice::from_ref(&arg), &mut tv) };
+        let cbcall_ret = callback_call(&color_cb, ::core::slice::from_ref(&arg), &mut tv);
         drop(silenced);
         msg_col.set(saved_msg_col);
         if got_int.get() {
@@ -383,7 +386,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
     // color_cmdline_end:
     debug_assert!(!err.is_set());
     if can_free_cb {
-        unsafe { callback_free(&raw mut color_cb) };
+        callback_free(&mut color_cb);
     }
     // Errors' "output" is cached just as well as regular results.
     //

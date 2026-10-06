@@ -328,7 +328,15 @@ pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut Dict) {
 /// `d` must point at a live dictionary, unaliased for the call. `val` must
 /// point at `len` readable bytes.
 unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char, len: c_int) {
-    let _ = unsafe { (*d).add_str_len(key.to_bytes(), val, len) };
+    // SAFETY: the caller's `len` readable bytes, or its NUL-terminated
+    // string for a negative `len`.
+    let val = (!val.is_null()).then(|| unsafe {
+        match usize::try_from(len) {
+            Ok(len) => cstr::slice_at(val, len),
+            Err(_) => CStr::from_ptr(val).to_bytes(),
+        }
+    });
+    let _ = unsafe { (*d).add_str_len(key.to_bytes(), val) };
 }
 
 /// # Safety

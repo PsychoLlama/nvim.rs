@@ -164,3 +164,19 @@ impl<const N: usize> Drop for CallFrame<N> {
         self.truncate(0);
     }
 }
+
+impl<const N: usize> CallFrame<N> {
+    /// Append a bit copy of each of the caller's values.
+    pub(crate) fn extend_borrowed(&mut self, tvs: &[TypVal]) {
+        for tv in tvs {
+            self.push_borrowed(tv);
+        }
+    }
+
+    /// Put a bit copy of `tv` in front of everything already in the frame,
+    /// which is what makes `base->Method(a)` a call of `Method(base, a)`.
+    pub(crate) fn insert_borrowed_front(&mut self, tv: &TypVal) {
+        self.push_borrowed(tv);
+        self.rotate_last_to_front();
+    }
+}

@@ -186,7 +186,7 @@ pub(crate) unsafe fn cmdline_event_dict(
     cmdtype: *const ::core::ffi::c_char,
 ) -> *mut Dict {
     let dict = unsafe { get_v_event(save_v_event) };
-    let _ = unsafe { (*dict).add_str(b"cmdtype", cmdtype) };
+    let _ = unsafe { (*dict).add_str(b"cmdtype", cstr::at_opt(cmdtype)) };
     let _ = unsafe { (*dict).add_number(b"cmdlevel", Cc::current().level as VarNumber) };
     unsafe { (*dict).set_keys_readonly() };
     dict
@@ -652,8 +652,9 @@ pub fn getcmdline(
 /// `prompt` must point at a NUL-terminated string. `xp_context` must be an
 /// initialized `ExpandContext` whose pointer fields point at live data for
 /// the call. `xp_arg` must point at a NUL-terminated string.
-/// `highlight_callback` must be an initialized callback the caller owns for
-/// the call. `mouse_used` must point at a writable `bool` the caller owns.
+/// `mouse_used` must point at a writable `bool` the caller owns.
+/// `highlight_callback` is taken over: the prompt's command line holds it
+/// for the call, and it is released when the prompt returns.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn getcmdline_prompt(
     firstc: ::core::ffi::c_int,
@@ -695,6 +696,8 @@ pub unsafe fn getcmdline_prompt(
 
     let ret = command_line_enter(firstc, 1, 0, false) as *mut ::core::ffi::c_char;
     cc.redraw_state = kCmdRedrawNone;
+    // Out of the line before the line it suspended comes back.
+    let mut highlight_callback = ::core::mem::replace(&mut cc.highlight_callback, Callback::None);
     if did_save_ccline {
         restore_cmdline();
     }
@@ -703,6 +706,7 @@ pub unsafe fn getcmdline_prompt(
     if cc.in_use() {
         msg_col.set(msg_col_save);
     }
+    highlight_callback.clear();
     ret
 }
 

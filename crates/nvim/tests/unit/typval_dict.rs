@@ -8,19 +8,19 @@
 #![cfg(not(miri))]
 
 use std::ffi::{CStr, c_char};
+use std::mem::ManuallyDrop;
 use std::ptr;
 
 use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
 use neovim::eval::typval::{
     DictRef, ListRef, NumBuf, callback_free, dict_clear, dict_copy, dict_equal, dict_extend,
     dict_find, dict_get_callback, dict_get_number, dict_get_string_alloc, dict_get_string_buf,
-    dict_get_string_buf_chk, list_unref, tv_clear, tv_dict_alloc, tv_dict_free,
-    tv_dict_item_alloc_len, tv_dict_unref,
+    dict_get_string_buf_chk, list_unref, tv_clear, tv_dict_alloc, tv_dict_free, tv_dict_unref,
 };
 use neovim::guard::{Suppress, sandbox};
 use neovim::mbyte::convert_setup;
 use neovim::memory::{ThinCString, xfree, xmalloc, xstrdup};
-use neovim::types::{Callback, Dict, Failed, TypVal, VarLock, VimConv};
+use neovim::types::{Callback, Dict, DictItem, Failed, TypVal, VarLock, VimConv};
 use std::ffi::c_int;
 
 use crate::support::alloc::{self, AllocLog};
@@ -33,14 +33,28 @@ use crate::support::tv::{self, Cb, Payload, Pt, Tv};
 /// upstream's `tv_dict_copy` left it holding.
 ///
 /// # Safety
-/// As [`tv_dict_copy`].
+/// `conv` is null or a live converter, and `orig` null or a live dict.
 unsafe fn dict_copied(
     conv: *const VimConv,
     orig: *mut Dict,
     deep: bool,
     copy_id: c_int,
 ) -> *mut Dict {
-    unsafe { dict_copy(conv, orig, deep, copy_id) }.map_or(ptr::null_mut(), DictRef::into_raw)
+    // A view of the case's dict that takes no reference.
+    let orig = ManuallyDrop::new(unsafe { DictRef::owning(orig) });
+    let Some(orig) = orig.as_ref() else {
+        return ptr::null_mut();
+    };
+    dict_copy(unsafe { conv.as_ref() }, orig, deep, copy_id)
+        .map_or(ptr::null_mut(), DictRef::into_raw)
+}
+
+/// A view of the case's dict as a handle, which takes no reference.
+///
+/// # Safety
+/// `d` is a live dict.
+unsafe fn view(d: *mut Dict) -> ManuallyDrop<DictRef> {
+    ManuallyDrop::new(unsafe { DictRef::owning(d) }.expect("a live dict"))
 }
 use crate::support::{check_emsg, cstr};
 
@@ -71,15 +85,18 @@ fn a_zero_length_watch_pattern_matches_anything() {
         let cb = tv::build_callback(&Cb::None);
         log.clear();
 
-        (*d).watcher_add(b"", cb.clone());
+        // The probe below is a bit copy: it names what the watcher owns.
+        (*d).watcher_add(b"", ptr::read(&cb));
         let ws = tv::dict_watchers(d);
-        log.check(&[alloc::dwatcher(ws[0].at), alloc::string(ws[0].pattern, 0)]);
+        // The watcher and its pattern are the dictionary's own `Rc` and
+        // `Vec`, which the `xmalloc` log does not see.
+        log.check(&[]);
         assert_eq!(ws[0].pat, b"");
         assert_eq!(ws[0].cb, Cb::None);
         assert!(!ws[0].busy);
 
         assert!((*d).watcher_remove(b"", &cb));
-        log.check(&[alloc::freed(ws[0].pattern), alloc::freed(ws[0].at)]);
+        log.check(&[]);
         assert_eq!(tv::dict_watchers(d), []);
 
         tv_dict_free(d);
@@ -104,9 +121,10 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
 
         // A funcref owns its name.
         let fref = tv::build_callback(&Cb::Fref(b"tr".to_vec()));
-        let Callback::Funcref(fref_name) = fref else {
+        let Callback::Funcref(fref_name) = &fref else {
             panic!("built a funcref callback");
         };
+        let fref_name = fref_name.as_ptr();
         log.check(&[alloc::string(fref_name, "tr".len())]);
 
         // A partial owns its argument vector, each argument, its dict and
@@ -117,9 +135,10 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             args: vec![Tv::s("test")],
             dict: Some(Tv::Dict(vec![])),
         })));
-        let Callback::Partial(pt) = partial else {
+        let Callback::Partial(pt) = &partial else {
             panic!("built a partial callback");
         };
+        let pt = pt.as_ptr();
         let pt_argv = (*pt).pt_argv;
         let pt_dict = (*pt).pt_dict;
         let pt_name = (*pt).pt_name;
@@ -133,8 +152,10 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         ]);
 
         let registered = [("te", none), ("foo", fref), ("te", partial)];
-        for (pattern, cb) in registered.clone() {
-            (*d).watcher_add(pattern.as_bytes(), cb);
+        // The watchers take bit copies over; `registered` keeps naming what
+        // they own, as probes for the removals below.
+        for (pattern, cb) in &registered {
+            (*d).watcher_add(pattern.as_bytes(), ptr::read(cb));
         }
         let ws = tv::dict_watchers(d);
         assert_eq!(
@@ -156,25 +177,13 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
                 ),
             ]
         );
-        log.check(&[
-            alloc::dwatcher(ws[0].at),
-            alloc::string(ws[0].pattern, "te".len()),
-            alloc::dwatcher(ws[1].at),
-            alloc::string(ws[1].pattern, "foo".len()),
-            alloc::dwatcher(ws[2].at),
-            alloc::string(ws[2].pattern, "te".len()),
-        ]);
+        // The watchers and their patterns are the dictionary's own `Rc`s
+        // and `Vec`s, which the `xmalloc` log does not see.
+        log.check(&[]);
 
-        // The funcref: its name, its pattern, itself.
+        // The funcref: its name.
         assert!((*d).watcher_remove(b"foo", &registered[1].1));
-        log.check(&[
-            alloc::freed(match registered[1].1 {
-                Callback::Funcref(name) => name,
-                _ => panic!("the watcher holds a funcref"),
-            }),
-            alloc::freed(ws[1].pattern),
-            alloc::freed(ws[1].at),
-        ]);
+        log.check(&[alloc::freed(fref_name)]);
         assert!(!(*d).watcher_remove(b"foo", &registered[1].1));
         assert_eq!(tv::dict_watchers(d).len(), 2);
 
@@ -186,15 +195,13 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             alloc::freed(pt_dict),
             alloc::freed(pt_name),
             alloc::freed(pt),
-            alloc::freed(ws[2].pattern),
-            alloc::freed(ws[2].at),
         ]);
         assert!(!(*d).watcher_remove(b"te", &registered[2].1));
         assert_eq!(tv::dict_watchers(d).len(), 1);
 
         // And the one that owns nothing.
         assert!((*d).watcher_remove(b"te", &registered[0].1));
-        log.check(&[alloc::freed(ws[0].pattern), alloc::freed(ws[0].at)]);
+        log.check(&[]);
         assert!(!(*d).watcher_remove(b"te", &registered[0].1));
         assert_eq!(tv::dict_watchers(d), []);
 
@@ -620,7 +627,7 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
                 msg,
             );
             let cb = tv::read_callback(slot);
-            callback_free(slot);
+            callback_free(&mut *slot);
             xfree(slot.cast());
             (cb, ok)
         };
@@ -718,30 +725,32 @@ fn adding_an_item_transfers_it_and_refuses_a_duplicate() {
     let log = AllocLog::start();
     // SAFETY: the item is handed to the dict, which frees it.
     unsafe {
-        let di = tv_dict_item_alloc_len(cstr("t-est").as_ptr(), 5);
+        let mut di = DictItem::boxed(cstr("t-est").to_bytes());
         log.check(&[]);
-        (*di).di_tv = Tv::Int(42).build();
+        di.di_tv = Tv::Int(42).build();
+        // A second item under the same key, for the duplicate below.
+        let mut again = DictItem::boxed(b"t-est");
+        again.di_tv = Tv::Int(42).build();
 
         let d = tv::new_dict(&[("test", f(10.0))]);
         log.check(&[alloc::dict(d)]);
         assert_eq!(tv::read_dict(d), Tv::dict([("test", f(10.0))]));
         log.clear();
 
-        assert_eq!((*d).add_item(di), Ok(()));
+        assert!((*d).add_item(di).is_ok());
         log.check(&[]);
         assert_eq!(
             tv::read_dict(d),
             Tv::dict([("t-est", Tv::Int(42)), ("test", f(10.0))])
         );
 
-        assert_eq!(
-            check_emsg(
-                log.editor(),
-                || (*d).add_item(di),
-                Some(&duplicate("t-est"))
-            ),
-            Err(Failed)
+        let refused = check_emsg(
+            log.editor(),
+            || (*d).add_item(again),
+            Some(&duplicate("t-est")),
         );
+        assert!(refused.is_err(), "the duplicate came back");
+        drop(refused);
 
         log.clear();
         tv_dict_free(d);
@@ -798,13 +807,13 @@ fn adding_a_typed_value_takes_the_key_by_length() {
             ),
             (
                 "str",
-                Box::new(|d, _| (*d).add_str(b"tes", cstr("TEST").as_ptr())),
+                Box::new(|d, _| (*d).add_str(b"tes", Some(&cstr("TEST")))),
                 Tv::s("TEST"),
                 true,
             ),
             (
                 "allocated_str",
-                Box::new(move |d, n| (*d).add_allocated_str(b"tes", s[n])),
+                Box::new(move |d, n| (*d).add_allocated_str(b"tes", ThinCString::from_raw(s[n]))),
                 Tv::s("TEST"),
                 false,
             ),
@@ -881,16 +890,16 @@ fn clearing_a_dict_frees_its_items() {
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
         // Clearing an empty dict is a no-op.
-        dict_clear(d);
+        dict_clear(&view(d));
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
-        let _ = (*d).add_str(b"TES", cstr("tEsT").as_ptr());
+        let _ = (*d).add_str(b"TES", Some(&cstr("tEsT")));
         let di = tv::di_of(d, "TES");
         let value = (*di).di_tv.string();
         log.check(&[alloc::string(value, "tEsT".len())]);
         assert_eq!(tv::read_dict(d), Tv::dict([("TES", Tv::s("tEsT"))]));
 
-        dict_clear(d);
+        dict_clear(&view(d));
         log.check(&[alloc::freed(value)]);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
@@ -909,7 +918,7 @@ fn extending_a_dict_keeps_forces_or_reports() {
         let extend = |d1: *mut Dict, d2: *mut Dict, action: &str, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
-                || dict_extend(d1, d2, *(cstr(action).as_ptr()) as u8),
+                || dict_extend(&view(d1), &view(d2), *(cstr(action).as_ptr()) as u8),
                 msg,
             );
         };
@@ -968,7 +977,7 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
         let extend = |d1: *mut Dict, d2: *mut Dict, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
-                || dict_extend(d1, d2, *(cstr("force").as_ptr()) as u8),
+                || dict_extend(&view(d1), &view(d2), *(cstr("force").as_ptr()) as u8),
                 msg,
             );
         };
@@ -1291,9 +1300,9 @@ fn a_self_referencing_dict_copies_into_a_self_referencing_copy() {
         assert_eq!((*copy).dv_refcount.get(), 2, "the copy holds itself");
         assert_eq!(tv::read_dict(copy), Tv::dict([("test", Tv::Cycle(0))]));
 
-        dict_clear(d);
+        dict_clear(&view(d));
         assert_eq!((*d).dv_refcount.get(), 1);
-        dict_clear(copy);
+        dict_clear(&view(copy));
         assert_eq!((*copy).dv_refcount.get(), 1);
 
         tv_dict_unref(copy);

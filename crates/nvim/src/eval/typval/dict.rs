@@ -11,42 +11,38 @@
 //! exactly those.  [`dict_extend`] is `extend()` with its three `action`
 //! modes, [`dict_copy`] is `copy()`/`deepcopy()` over a dictionary.
 //!
-//! Four entry points keep a raw pointer, each because the operation reaches
-//! the same dictionary again while it is running: [`dict_extend`] (the two
-//! arguments may be one dictionary), [`dict_copy`] (a cycle is read back
-//! through the mark this call writes), [`dict_clear`] (the values it frees
-//! may name the dictionary they are in) and
-//! [`dict_watcher_notify`](super::dict_watcher_notify) (the callbacks are
-//! user code). The allocation pair -- `tv_dict_item_*` -- keeps one for the
-//! reason `tv_list_free` does.
+//! The operations that reach the same dictionary again while they run take
+//! a [`DictRef`] and borrow the dictionary one statement at a time:
+//! [`dict_extend`] (the two arguments may be one dictionary, and watchers
+//! are user code), [`dict_copy`] (a cycle is read back through the mark this
+//! call writes), and [`dict_clear`] and [`tv_dict_free_contents`] (the values
+//! they release may name the dictionary they were in). A removal answers a
+//! [`RemovedItem`], dropped once the borrow of the table has ended.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::eval::collect::var_item_copy_with;
+use crate::eval::userfunc::func_ref_name;
+use crate::eval::vars::{valid_varname_named, var_check_fixed_named, var_check_ro_named};
+use crate::mbyte::string_convert_bytes;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
 use ::core::ffi::CStr;
 
 use super::*;
-use crate::cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::{CONV_NONE, Failed};
 
 impl Dict {
-    /// Add `item`, which the dictionary takes over.  `Err` when the key is
-    /// already there, or when it would shadow a builtin function in a scope
-    /// dictionary — and then `item` is still the caller's to free.
-    ///
-    /// # Safety
-    /// `item` must point at a live item that is in no hashtab.
-    pub unsafe fn add_item(&mut self, item: *mut DictItem) -> Result<(), Failed> {
-        // SAFETY: the caller's fresh item.
-        if dict_wrong_func_name(self, unsafe { &*item }) {
-            return Err(Failed);
+    /// Add `item`, which the dictionary takes over.  `Err` hands it back
+    /// when the key is already there, or when it would shadow a builtin
+    /// function in a scope dictionary.
+    pub fn add_item(&mut self, item: Box<DictItem>) -> Result<(), Box<DictItem>> {
+        if dict_wrong_func_name(self, &item) {
+            return Err(item);
         }
-        // SAFETY: this dictionary's own table, and an item that is in none.
-        unsafe { hash_add(&raw mut self.dv_hashtab, DictEntry::new(item)) }
+        self.insert(item)
     }
 
     /// The tail every `add_*` below shares: hand `item` over, or free it
@@ -56,32 +52,12 @@ impl Dict {
     /// item here, and releasing a container value *reads* the container --
     /// so a value naming `self` would be read while the exclusive borrow of
     /// `self` claims to be alone with it. Safe code cannot build such a
-    /// value (a second handle to a borrowed dictionary needs
-    /// [`DictRef::retained`], which is `unsafe`), and that is where the
-    /// obligation sits. [`dict_clear`] is the same hazard where the values
-    /// are already in the table, and takes a pointer for it.
-    ///
-    /// # Safety
-    /// As [`Dict::add_item`], except that a taken key frees `item` rather
-    /// than handing it back — so the caller must not touch it on either
-    /// answer.
+    /// value from a borrowed dictionary: a second handle needs the
+    /// [`DictRef`] the borrow came from, and its holder adds through that
+    /// handle one statement at a time ([`dict_extend`]).
     #[inline]
-    unsafe fn add_or_free(&mut self, item: *mut DictItem) -> Result<(), Failed> {
-        // SAFETY: the caller's fresh item.
-        if unsafe { self.add_item(item) }.is_err() {
-            // SAFETY: the item the add refused, which is in no table.
-            unsafe { tv_dict_item_free(item) };
-            return Err(Failed);
-        }
-        Ok(())
-    }
-
-    /// A fresh item under `key`, holding `VAR_UNKNOWN` and owned by the
-    /// caller.
-    #[inline]
-    fn fresh_item(key: &[u8]) -> *mut DictItem {
-        // SAFETY: `key` is a slice, so it is readable for its own length.
-        unsafe { tv_dict_item_alloc_len(key.as_ptr().cast::<::core::ffi::c_char>(), key.len()) }
+    fn add_or_free(&mut self, item: Box<DictItem>) -> Result<(), Failed> {
+        self.add_item(item).map_err(|_refused| Failed)
     }
 
     /// Add a copy of `tv` under `key`.
@@ -90,33 +66,27 @@ impl Dict {
     /// way — and the exclusive borrow is what rules out its being a value of
     /// this same dictionary.
     pub fn add_tv(&mut self, key: &[u8], tv: &TypVal) -> Result<(), Failed> {
-        let item = Self::fresh_item(key);
-        // SAFETY: the item just allocated, which holds `VAR_UNKNOWN`.
-        unsafe { tv_copy(tv, &mut (*item).di_tv) };
-        // SAFETY: as above — a fresh item in no table.
-        unsafe { self.add_or_free(item) }
+        let mut item = DictItem::boxed(key);
+        tv_copy(tv, &mut item.di_tv);
+        self.add_or_free(item)
     }
 
     /// Add `tv` under `key`, taking the value over. A failure releases it
     /// with the item; the borrow rules out its naming this dictionary, as
     /// for [`add_tv`](Dict::add_tv).
     pub fn add_value(&mut self, key: &[u8], tv: TypVal) -> Result<(), Failed> {
-        let item = Self::fresh_item(key);
-        // SAFETY: the item just allocated, which holds `VAR_UNKNOWN` -- so
-        // the value it is overwritten with releases nothing.
-        unsafe { (*item).di_tv.overwrite(tv) };
-        // SAFETY: as above — a fresh item in no table.
-        unsafe { self.add_or_free(item) }
+        let mut item = DictItem::boxed(key);
+        // The item holds `VAR_UNKNOWN`, so the overwrite releases nothing.
+        item.di_tv.overwrite(tv);
+        self.add_or_free(item)
     }
 
     /// Add `list` under `key`, taking the handle over.  A failure releases
     /// it with the item.
     pub fn add_list(&mut self, key: &[u8], list: Option<ListRef>) -> Result<(), Failed> {
-        let item = Self::fresh_item(key);
-        // SAFETY: the item just allocated.
-        unsafe { (*item).di_tv.write_list(list) };
-        // SAFETY: as above.
-        unsafe { self.add_or_free(item) }
+        let mut item = DictItem::boxed(key);
+        item.di_tv.write_list(list);
+        self.add_or_free(item)
     }
 
     /// Add `dict` under `key`, taking the handle over.  A failure releases
@@ -126,161 +96,87 @@ impl Dict {
     /// nothing reads through it here, which is what makes `let d.self = d`
     /// work.
     pub fn add_dict(&mut self, key: &[u8], dict: Option<DictRef>) -> Result<(), Failed> {
-        let item = Self::fresh_item(key);
-        // SAFETY: the item just allocated.
-        unsafe { (*item).di_tv.write_dict(dict) };
-        // SAFETY: as above.
-        unsafe { self.add_or_free(item) }
+        let mut item = DictItem::boxed(key);
+        item.di_tv.write_dict(dict);
+        self.add_or_free(item)
     }
 
     /// Add the number `nr` under `key`.
     pub fn add_number(&mut self, key: &[u8], nr: VarNumber) -> Result<(), Failed> {
-        let item = Self::fresh_item(key);
-        // SAFETY: the item just allocated.
-        unsafe { (*item).di_tv.write_number(nr) };
-        // SAFETY: as above.
-        unsafe { self.add_or_free(item) }
+        let mut item = DictItem::boxed(key);
+        item.di_tv.write_number(nr);
+        self.add_or_free(item)
     }
 
     /// Add the float `nr` under `key`.
     pub fn add_float(&mut self, key: &[u8], nr: Float) -> Result<(), Failed> {
-        let item = Self::fresh_item(key);
-        // SAFETY: the item just allocated.
-        unsafe { (*item).di_tv.write_float(nr) };
-        // SAFETY: as above.
-        unsafe { self.add_or_free(item) }
+        let mut item = DictItem::boxed(key);
+        item.di_tv.write_float(nr);
+        self.add_or_free(item)
     }
 
     /// Add the boolean `val` under `key`.
     pub fn add_bool(&mut self, key: &[u8], val: BoolVarValue) -> Result<(), Failed> {
-        let item = Self::fresh_item(key);
-        // SAFETY: the item just allocated.
-        unsafe { (*item).di_tv.write_boolean(val) };
-        // SAFETY: as above.
-        unsafe { self.add_or_free(item) }
+        let mut item = DictItem::boxed(key);
+        item.di_tv.write_boolean(val);
+        self.add_or_free(item)
     }
 
-    /// Add a copy of the NUL-terminated string `val` under `key`.
-    ///
-    /// # Safety
-    /// `val` is null or a NUL-terminated string. The string is copied.
-    pub unsafe fn add_str(
+    /// Add a copy of the string `val` under `key`; `None` stores NULL.
+    pub fn add_str(&mut self, key: &[u8], val: Option<&CStr>) -> Result<(), Failed> {
+        self.add_value(key, TypVal::string(val.map(ThinCString::from_cstr)))
+    }
+
+    /// Add a copy of the bytes `val` under `key`; `None` stores NULL. A NUL
+    /// among the bytes ends the string for every reader, as `xstrndup`'s
+    /// copy did.
+    pub fn add_str_len(&mut self, key: &[u8], val: Option<&[u8]>) -> Result<(), Failed> {
+        self.add_value(key, TypVal::string(val.map(ThinCString::from_bytes)))
+    }
+
+    /// Add `val` under `key`, taking it over whether the key was free or
+    /// not.
+    pub fn add_allocated_str(
         &mut self,
         key: &[u8],
-        val: *const ::core::ffi::c_char,
+        val: Option<ThinCString>,
     ) -> Result<(), Failed> {
-        // SAFETY: the caller's promise about `val`.
-        unsafe { self.add_str_len(key, val, -1) }
+        self.add_value(key, TypVal::string(val))
     }
 
-    /// Add a copy of `val`'s first `len` bytes under `key`.  A negative
-    /// `len` means the whole NUL-terminated string; a NULL `val` stores
-    /// NULL.
+    /// Add a funcref to the function `name` under `key`.
     ///
-    /// # Safety
-    /// `val` is null, or readable for `len` bytes, or — when `len` is
-    /// negative — NUL-terminated. The bytes are copied.
-    pub unsafe fn add_str_len(
-        &mut self,
-        key: &[u8],
-        val: *const ::core::ffi::c_char,
-        len: ::core::ffi::c_int,
-    ) -> Result<(), Failed> {
-        let s = if val.is_null() {
-            None
-        } else if len < 0 {
-            // SAFETY: the caller's NUL-terminated string.
-            Some(ThinCString::from_cstr(unsafe { CStr::from_ptr(val) }))
-        } else {
-            // SAFETY: the caller's `len` readable bytes; a NUL among them
-            // ends the copy for every reader, as `xstrndup`'s did.
-            let bytes = unsafe { ::core::slice::from_raw_parts(val.cast::<u8>(), len as usize) };
-            Some(ThinCString::from_bytes(bytes))
-        };
-        self.add_value(key, TypVal::string(s))
-    }
-
-    /// Add `val` under `key`, taking ownership of the allocation.
-    ///
-    /// # Safety
-    /// `val` is null or an allocation from the `xmalloc` family, and **this
-    /// takes it over** whether the key was free or not — the caller must not
-    /// free it on either answer.
-    pub unsafe fn add_allocated_str(
-        &mut self,
-        key: &[u8],
-        val: *mut ::core::ffi::c_char,
-    ) -> Result<(), Failed> {
-        // SAFETY: the caller's promise: an `xmalloc`ed block or null, which
-        // the value takes over.
-        self.add_value(key, TypVal::string(unsafe { ThinCString::from_raw(val) }))
-    }
-
-    /// Add a funcref to `func` under `key`.
-    ///
-    /// Only the name is copied; the funcref counts as a use of the function.
-    ///
-    /// # Safety
-    /// `func` must point at a live `UserFunc` whose `uf_name` is
-    /// `uf_namelen` readable bytes.
-    pub unsafe fn add_func(&mut self, key: &[u8], func: *mut UserFunc) -> Result<(), Failed> {
-        let item = Self::fresh_item(key);
-        let name = unsafe { (&raw const (*func).uf_name).cast::<u8>() };
-        // SAFETY: the caller's promise: a live function.
-        let func = unsafe { Live::<UserFunc>::new(func) };
-        let namelen = func.uf_namelen;
-        // SAFETY: the function's own name, `namelen` bytes of it.
-        let owned =
-            ThinCString::from_bytes(unsafe { ::core::slice::from_raw_parts(name, namelen) });
-        // SAFETY: the item just allocated, which takes the name over.
-        unsafe { (*item).di_tv.write_func_name(Some(owned)) };
-        // SAFETY: a fresh item in no table.
-        if unsafe { self.add_item(item) }.is_err() {
-            // SAFETY: the item the add refused.
-            unsafe { tv_dict_item_free(item) };
-            return Err(Failed);
-        }
-        // SAFETY: the name the item now holds.
-        unsafe {
-            func_ref(
-                (*item)
-                    .di_tv
-                    .func_name()
-                    .map_or(::core::ptr::null_mut(), |name| name.as_ptr().cast_mut()),
-            )
-        };
+    /// Only the name is copied; the funcref counts as a use of the function
+    /// once it is stored. A refused item is released as any funcref is,
+    /// which is upstream's.
+    pub fn add_func(&mut self, key: &[u8], name: &CStr) -> Result<(), Failed> {
+        let mut item = DictItem::boxed(key);
+        item.di_tv
+            .write_func_name(Some(ThinCString::from_cstr(name)));
+        self.add_or_free(item)?;
+        func_ref_name(name);
         Ok(())
     }
 }
 
-/// Free every item of `d`, leaving the dictionary allocated and empty.
+/// Free every item of `dict`, leaving the dictionary allocated and empty.
 ///
-/// **Not a method, and not `&mut Dict`.** The values it frees may name this
-/// very dictionary -- `deepcopy()` of a self-referencing one leaves exactly
-/// that, and so does any cycle the collector has not yet reached -- and
-/// releasing such a value *reads* the dictionary again, from a pointer whose
-/// provenance is the allocator's rather than the borrow's. An exclusive
-/// reference is a promise about the whole call, so the read is a use of
-/// memory the promise had claimed alone. `just miri` is the only thing that
-/// sees it; the functional suite, ASan and all three differentials pass
-/// either way.
+/// **A handle, not `&mut Dict`.** The values it frees may name this very
+/// dictionary -- `deepcopy()` of a self-referencing one leaves exactly that,
+/// and so does any cycle the collector has not yet reached -- and releasing
+/// such a value *reads* the dictionary again. Each removal is one statement's
+/// borrow, and the value is released after it.
 ///
-/// # Safety
-/// `d` must point at a live dictionary that nothing else is walking: the
-/// hashtab is locked for this walk, because the walk removes as it goes.
-pub unsafe fn dict_clear(d: *mut Dict) {
-    // SAFETY: the caller's live dictionary; the lock is released below.
-    unsafe { hash_lock(&raw mut (*d).dv_hashtab) };
-    debug_assert!(unsafe { (*d).dv_hashtab.ht_locked } > 0);
-    // SAFETY: a live dictionary, locked for the walk.
-    for hi in unsafe { tv_dict_iter(d) } {
-        // SAFETY: the walk's own item, unlinked immediately below.
-        unsafe { tv_dict_item_free(tv_dict_hi2di(hi)) };
-        // SAFETY: the slot the walk is standing on.
-        unsafe { hash_remove(&raw mut (*d).dv_hashtab, hi) };
+/// Nothing else may be walking the dictionary: the hashtab is locked for this
+/// walk, because the walk removes as it goes.
+pub fn dict_clear(dict: &DictRef) {
+    dict.edit().lock_table();
+    let mut cursor = DictCursor::new(dict);
+    while let Some(slot) = cursor.next(dict) {
+        let removed = dict.edit().remove_at(slot);
+        drop(removed);
     }
-    // SAFETY: the lock taken above.
-    unsafe { hash_unlock(&raw mut (*d).dv_hashtab) };
+    dict.edit().unlock_table();
 }
 
 impl Dict {
@@ -300,14 +196,11 @@ impl Dict {
     pub fn extend_from_self(&mut self, action: u8) {
         let scoped = self.dv_scope != VAR_NO_SCOPE;
         for di in self.items() {
-            let key = &di.di_key;
-            // SAFETY: the item's own NUL-terminated key.
-            if scoped && !unsafe { valid_varname(key.as_ptr()) } {
+            if scoped && !valid_varname_named(di.key()) {
                 break;
             }
             if action == b'e' {
-                // SAFETY: as above.
-                let key = msg_bytes(key.bytes());
+                let key = msg_bytes(di.key());
                 semsg!("E737: Key already exists: {key}");
                 break;
             }
@@ -317,125 +210,120 @@ impl Dict {
 
 /// `extend(d1, d2, action)`: fold `d2`'s items into `d1`.
 ///
-/// Takes pointers, for two reasons the list's twin has only one of:
-/// **`d1` and `d2` may be the same dictionary**, and the body reaches each
-/// of them again while holding an item of the other -- and every watcher
-/// this fires is user code that reaches them a third way. So unlike the
-/// list, only the *self* case is spelled as a borrow
-/// ([`Dict::extend_from_self`], which is a walk and a message and nothing
-/// else); there is no `extend_from(&mut self, &mut Dict)`, because an
-/// exclusive reference promises more than the watchers leave true.
-///
-/// # Safety
-/// `d1` and `d2` must point at live dictionaries. `"move"` empties `d2`, so
-/// it must not be the same dictionary as `d1` and must not be locked against
-/// a walk.
-pub unsafe fn dict_extend(d1: *mut Dict, d2: *mut Dict, action: u8) {
-    // SAFETY: the caller's live dictionary.
-    let watched = dict_is_watched(unsafe { d1.as_ref() });
-    let arg_errmsg = tr(c"extend() argument");
-    // SAFETY: a NUL-terminated message from the translation table.
-    let arg_errmsg_len = unsafe { cstr::bytes_at(arg_errmsg) }.len();
+/// **`d1` and `d2` may be the same dictionary**, and every watcher this
+/// fires is user code that can reach either of them, so both are handles and
+/// the walk over `d2` is a slot cursor: an item is re-read from its slot
+/// after anything that can run user code, and what a notification is handed
+/// is copied out first. `"move"` empties `d2`, so it must not be the same
+/// dictionary as `d1` and must not be locked against a walk.
+pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
+    let watched = dict_is_watched(Some(d1));
+    let arg_errmsg = gettext(c"extend() argument").to_bytes();
 
     if action == b'm' {
         // don't rehash on hash_remove()
-        // SAFETY: the caller's live dictionary; unlocked below.
-        unsafe { hash_lock(&raw mut (*d2).dv_hashtab) };
+        d2.edit().lock_table();
     }
 
-    // SAFETY: the caller's live dictionary, which the body writes through.
-    for hi2 in unsafe { tv_dict_iter(d2) } {
-        let di2 = tv_dict_hi2di(hi2);
-        // SAFETY: the walk's own item.
-        let di2_key = unsafe { &(*di2).di_key };
-        // SAFETY: the caller's live dictionary. The pointer form is what
-        // this branch needs: the item is held across `value_check_lock`,
-        // which re-enters, and it is an item of `d1` itself when the two
-        // dictionaries are one.
-        let di1 = unsafe { (*d1).find_ptr(di2_key.bytes()) };
+    let mut cursor = DictCursor::new(d2);
+    while let Some(slot2) = cursor.next(d2) {
+        let Some(item2) = d2.item_at(slot2) else {
+            continue;
+        };
+        let slot1 = d1.slot_of(item2.key());
         // Check the key to be valid when adding to any scope.
-        // SAFETY: the caller's live dictionary and the item's own key.
-        if unsafe { (*d1).dv_scope } != VAR_NO_SCOPE && !unsafe { valid_varname(di2_key.as_ptr()) }
+        if d1.dv_scope != VAR_NO_SCOPE && !valid_varname_named(item2.key()) {
+            break;
+        }
+        let Some(slot1) = slot1 else {
+            if action == b'm' {
+                // Cheap way to move a dict item from "d2" to "d1". If the
+                // add would fail, "d2" keeps it.
+                if dict_wrong_func_name(d1, item2) {
+                    continue;
+                }
+                let key = ThinCString::from_bytes(item2.key());
+                let moved = match d2.edit().remove_at(slot2) {
+                    RemovedItem::Allocated(item) => item,
+                    // An item embedded in its owner cannot change tables;
+                    // what moves is its value, in an item of its own.
+                    RemovedItem::Embedded(value) => {
+                        let mut item = DictItem::boxed(key.as_bytes());
+                        item.di_tv.overwrite(value);
+                        item
+                    }
+                };
+                // Note upstream does not gate this on `watched`, unlike the
+                // copying branch below.
+                let new = moved.di_tv.clone();
+                let added = d1.edit().insert(moved);
+                debug_assert!(added.is_ok(), "the key was not in d1");
+                drop(added);
+                dict_watcher_notify(d1, key.as_cstr(), Some(&new), None);
+            } else {
+                let new_item = tv_dict_item_copy(item2);
+                let note = watched.then(|| {
+                    (
+                        ThinCString::from_bytes(new_item.key()),
+                        new_item.di_tv.clone(),
+                    )
+                });
+                let added = d1.edit().add_item(new_item);
+                if added.is_err() {
+                    drop(added);
+                } else if let Some((key, new)) = note {
+                    dict_watcher_notify(d1, key.as_cstr(), Some(&new), None);
+                }
+            }
+            continue;
+        };
+        if action == b'e' {
+            let key = msg_bytes(item2.key());
+            semsg!("E737: Key already exists: {key}");
+            break;
+        }
+        if action != b'f' || d1.ptr_eq(d2) {
+            continue;
+        }
+        let Some(item1) = d1.item_at(slot1) else {
+            continue;
+        };
+        if value_check_lock_named(item1.di_lock, arg_errmsg)
+            || var_check_ro_named(::core::ffi::c_int::from(item1.di_flags), arg_errmsg)
         {
             break;
         }
-        if di1.is_null() {
-            if action == b'm' {
-                // Cheap way to move a dict item from "d2" to "d1".
-                // If dict_add() fails then "d2" won't be empty.
-                // SAFETY: an item the table is about to give up.
-                if unsafe { (*d1).add_item(di2) }.is_ok() {
-                    // SAFETY: the slot the walk is standing on.
-                    unsafe { hash_remove(&raw mut (*d2).dv_hashtab, hi2) };
-                    // Note upstream does not gate this on `watched`, unlike
-                    // the copying branch below.
-                    // SAFETY: the item just moved into `d1`.
-                    unsafe {
-                        dict_watcher_notify(d1, di2_key.as_c_str(), Some(&*di_tv(di2)), None);
-                    };
-                }
-            } else {
-                // SAFETY: the walk's own item.
-                let new_di = unsafe { tv_dict_item_copy(di2) };
-                // SAFETY: a fresh item in no table.
-                if unsafe { (*d1).add_item(new_di) }.is_err() {
-                    // SAFETY: the item the add refused.
-                    unsafe { tv_dict_item_free(new_di) };
-                } else if watched {
-                    // SAFETY: the item just added to `d1`.
-                    unsafe {
-                        let key = (*new_di).di_key.as_c_str();
-                        dict_watcher_notify(d1, key, Some(&*di_tv(new_di)), None);
-                    }
-                }
-            }
-        } else if action == b'e' {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let di2_key = msg_bytes(di2_key.bytes());
-            semsg!("E737: Key already exists: {di2_key}");
+        // Disallow replacing a builtin function.
+        if dict_wrong_func_name(d1, item2) {
             break;
-        } else if action == b'f' && di2 != di1 {
-            // SAFETY: the item the lookup found in `d1`.
-            if unsafe { value_check_lock((*di1).di_lock, arg_errmsg, arg_errmsg_len) } || {
-                // SAFETY: as above.
-                let flags = unsafe { (*di1).di_flags } as ::core::ffi::c_int;
-                // SAFETY: a NUL-terminated message.
-                unsafe { var_check_ro(flags, arg_errmsg, arg_errmsg_len) }
-            } {
-                break;
-            }
-            // Disallow replacing a builtin function.
-            // SAFETY: the caller's live dictionary and the source item.
-            if unsafe { dict_wrong_func_name(&*d1, &*di2) } {
-                break;
-            }
-
-            let mut oldtv = TV_INITIAL_VALUE;
-            if watched {
-                // SAFETY: the item being overwritten.
-                unsafe { tv_copy(&(*di1).di_tv, &mut oldtv) };
-            }
-
-            // SAFETY: the two items, each of a live dictionary.
-            unsafe {
-                tv_clear(&mut (*di1).di_tv);
-                tv_copy(&(*di2).di_tv, &mut (*di1).di_tv);
-            }
-
-            if watched {
-                // SAFETY: the item just overwritten in `d1`.
-                unsafe {
-                    let key = (*di1).di_key.as_c_str();
-                    dict_watcher_notify(d1, key, Some(&*di_tv(di1)), Some(&oldtv));
-                }
-                tv_clear(&mut oldtv);
-            }
         }
+
+        let oldtv = if watched {
+            item1.di_tv.clone()
+        } else {
+            TypVal::Unknown
+        };
+        // Upstream's order: the old value goes, then the new one is copied
+        // in. The old one is released once the borrow of `d1` has ended.
+        let cleared = d1.edit().item_at_mut(slot1).map(|item1| item1.di_tv.take());
+        drop(cleared);
+        let Some(item2) = d2.item_at(slot2) else {
+            continue;
+        };
+        let new = item2.di_tv.clone();
+        let note = watched.then(|| (ThinCString::from_bytes(item2.key()), new.clone()));
+        if let Some(item1) = d1.edit().item_at_mut(slot1) {
+            item1.di_tv = new;
+        }
+
+        if let Some((key, new)) = note {
+            dict_watcher_notify(d1, key.as_cstr(), Some(&new), Some(&oldtv));
+        }
+        drop(oldtv);
     }
 
     if action == b'm' {
-        // SAFETY: the lock taken above.
-        unsafe { hash_unlock(&raw mut (*d2).dv_hashtab) };
+        d2.edit().unlock_table();
     }
 }
 
@@ -476,92 +364,51 @@ pub fn dict_equal(d1: Option<&Dict>, d2: Option<&Dict>, ic: bool) -> bool {
 ///
 /// `copy_id` is the garbage collector's mark: non-zero records the copy on
 /// the original so a self-referencing dictionary resolves to the same copy.
+/// A non-zero one must be one the caller reserved from `get_copyID`: a stale
+/// one makes an unrelated walk think this dictionary is already visited.
 ///
-/// **The source stays a pointer**, where every other read of a dictionary in
-/// this file is a borrow. A deep copy re-enters through `var_item_copy`, and
-/// a dictionary that holds itself is read again from in there — through the
-/// `dv_copydict` this call has just written onto it. Neither a shared borrow
-/// (which could not write the mark) nor an exclusive one (which the
-/// re-entrant read would alias) describes that, and a counted handle would
-/// cost a retain and a release on every `copy()` — which is what the list
-/// side paid for the same answer.
-///
-/// # Safety
-/// `orig` is null or a live dictionary and `conv` is null or a live
-/// converter. A non-zero `copy_id` is written onto `orig`, so it must be one
-/// the caller reserved from `get_copyID`; passing a stale one makes an
-/// unrelated walk think this dictionary is already visited.
-pub unsafe fn dict_copy(
-    conv: *const VimConv,
-    orig: *mut Dict,
+/// A deep copy re-enters through `var_item_copy`, and a dictionary that
+/// holds itself is read again from in there -- through the mark this call
+/// has just written onto it -- so the walk is a slot cursor over the handle.
+pub fn dict_copy(
+    conv: Option<&VimConv>,
+    orig: &DictRef,
     deep: bool,
     copy_id: ::core::ffi::c_int,
 ) -> Option<DictRef> {
-    if orig.is_null() {
-        return None;
-    }
-
     let mut copy = tv_dict_alloc();
-    // A borrow of the dictionary the handle owns, for the items to go into.
-    let into = copy.as_ptr();
     if copy_id != 0 {
-        // SAFETY: the caller's promise: a live dictionary.
-        let mut from = unsafe { Dt::new(orig) };
-        from.dv_copy_id = copy_id;
-        from.dv_copydict = into;
+        orig.remember_copy(copy_id, &copy);
     }
-    // SAFETY: the caller's live dictionary; the walk re-enters through
-    // `var_item_copy`, so it is driven off the pointer and not a borrow.
-    for hi in unsafe { tv_dict_iter(orig) } {
-        let di = tv_dict_hi2di(hi);
+    let conv = conv.filter(|conv| conv.vc_type != CONV_NONE);
+    let mut cursor = DictCursor::new(orig);
+    while let Some(slot) = cursor.next(orig) {
         if got_int.get() {
             break;
         }
-        // The key is read as a pointer and a length, not as a `&CStr`:
-        // every item of every `copy()` passes through here, and building a
-        // `&CStr` out of a `DictKey` validates it.
-        // SAFETY: the walk's own item.
-        let di_key = unsafe { &(*di).di_key };
-        // SAFETY: the caller's converter, read only for its kind.
-        let new_di = if conv.is_null() || unsafe { (*conv).vc_type } == CONV_NONE {
-            // The length comes off the key rather than out of a `strlen`:
-            // this is every item of every `copy()` and `deepcopy()`.
-            // SAFETY: the item's own key, readable for its own length.
-            unsafe { tv_dict_item_alloc_len(di_key.as_ptr(), di_key.len()) }
-        } else {
-            let mut len = di_key.len();
-            // SAFETY: the caller's converter and the item's own key.
-            let key = unsafe { string_convert(conv, di_key.as_ptr().cast_mut(), &raw mut len) };
-            if key.is_null() {
+        let Some(item) = orig.item_at(slot) else {
+            continue;
+        };
+        let key = item.key();
+        let mut new_item = match conv {
+            None => DictItem::boxed(key),
+            Some(conv) => match string_convert_bytes(conv, key) {
+                (Some(converted), _) => DictItem::boxed(&converted),
                 // The conversion failed: keep the original key, but at the
-                // length `string_convert` left behind.
-                // SAFETY: the item's own key, which is at least that long.
-                unsafe { tv_dict_item_alloc_len(di_key.as_ptr(), len) }
-            } else {
-                // SAFETY: the converted key, `len` bytes of it.
-                let new_di = unsafe { tv_dict_item_alloc_len(key, len) };
-                // SAFETY: the conversion's own allocation.
-                unsafe { xfree(key.cast()) };
-                new_di
-            }
+                // length the conversion left behind.
+                (None, len) => DictItem::boxed(&key[..len.min(key.len())]),
+            },
         };
         if deep {
-            let from = di_tv(di);
-            let to = di_tv(new_di);
-            // SAFETY: the source item's value and the fresh item's slot.
-            if unsafe { var_item_copy(conv, &*from, &mut *to, deep, copy_id) }.is_err() {
-                // SAFETY: the fresh item, which is in no table.
-                unsafe { xfree(new_di.cast()) };
+            if var_item_copy_with(conv, &item.di_tv, &mut new_item.di_tv, deep, copy_id).is_err() {
+                drop(new_item);
                 break;
             }
         } else {
-            // SAFETY: as above.
-            unsafe { tv_copy(&(*di).di_tv, &mut (*new_di).di_tv) };
+            tv_copy(&item.di_tv, &mut new_item.di_tv);
         }
-        // SAFETY: a fresh item in no table.
-        if unsafe { copy.add_item(new_di) }.is_err() {
-            // SAFETY: the item the add refused.
-            unsafe { tv_dict_item_free(new_di) };
+        if let Err(refused) = copy.add_item(new_item) {
+            drop(refused);
             break;
         }
     }
@@ -586,22 +433,14 @@ pub fn tv_dict_alloc_lock(lock: VarLock) -> DictRef {
 
 /// Allocate an empty dictionary and store it in `ret_tv` as the return value.
 pub fn tv_dict_alloc_ret(ret_tv: &mut TypVal) {
-    // SAFETY: the allocator is the editor's own, on its own thread.
     ret_tv.write_dict(Some(tv_dict_alloc_lock(VarLock::Unlocked)));
 }
 
-/// `remove()` over a dictionary: move `argvars[0][argvars[1]]` into `result`.
+/// `remove()` over a dictionary: move `args[0][args[1]]` into `result`.
 ///
-/// # Safety
-/// `args` must point at at least three values, the first a `VAR_DICT`
-/// and the third the `VAR_UNKNOWN` terminator when there is no third
-/// argument. `result` must be writable and hold no value yet, and
-/// `arg_errmsg` must be a NUL-terminated string.
-pub unsafe fn tv_dict_remove(
-    args: &[TypVal],
-    result: &mut TypVal,
-    arg_errmsg: *const ::core::ffi::c_char,
-) {
+/// `result` must hold no value yet. `arg_errmsg` names the argument in a
+/// lock error, translated.
+pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static CStr) {
     let mut numbuf = NumBuf::new();
     if args.len() > 2 {
         let arg0 = "remove()";
@@ -609,75 +448,76 @@ pub unsafe fn tv_dict_remove(
         return;
     }
 
-    let d = args[0].dict_or_null();
-    if d.is_null() || unsafe { value_check_lock((*d).dv_lock, arg_errmsg, TV_TRANSLATE as size_t) }
-    {
+    let TypVal::Dict(dict) = &args[0] else {
+        return;
+    };
+    let Some(dict) = &**dict else {
+        return;
+    };
+    let name = gettext(arg_errmsg).to_bytes();
+    if value_check_lock_named(dict.dv_lock, name) {
         return;
     }
     let Some(key) = numbuf.string_chk(&args[1]) else {
         return;
     };
-    // SAFETY: the dictionary the argument holds. The pointer form is what
-    // this needs: the value is moved out of the item and the item is then
-    // unlinked, which reaches the dictionary again.
-    let di = unsafe { (*d).find_ptr(key.to_bytes()) };
-    if di.is_null() {
+    let Some(slot) = dict.slot_of(key.to_bytes()) else {
         let key = msg_cstr(key);
         semsg!("E716: Key not present in Dictionary: \"{key}\"");
         return;
-    }
-    // SAFETY: the item the lookup just found in `d`.
-    let mut item = unsafe { Di::new(di) };
-    let flags = item.di_flags as ::core::ffi::c_int;
-    if unsafe { var_check_fixed(flags, arg_errmsg, TV_TRANSLATE as size_t) }
-        || unsafe { var_check_ro(flags, arg_errmsg, TV_TRANSLATE as size_t) }
-    {
+    };
+    let flags = dict
+        .item_at(slot)
+        .map_or(0, |item| ::core::ffi::c_int::from(item.di_flags));
+    if var_check_fixed_named(flags, name) || var_check_ro_named(flags, name) {
         return;
     }
 
     // Move the value out rather than copying it: `result` takes the
     // reference the item held.
-    *result = item.di_tv.take();
-    // SAFETY: the dictionary the argument holds, and its own item.
-    unsafe { tv_dict_item_remove(d, di) };
-    // SAFETY: the dictionary the argument holds.
-    if dict_is_watched(unsafe { d.as_ref() }) {
-        // SAFETY: as above.
-        unsafe { dict_watcher_notify(d, key, None, Some(result)) };
+    let mut removed = dict.edit().remove_at(slot);
+    *result = removed.value_mut().take();
+    drop(removed);
+    if dict_is_watched(Some(dict)) {
+        dict_watcher_notify(dict, key, None, Some(result));
     }
 }
 
-/// Free every item and watcher of `d`, leaving the `Dict` itself allocated
-/// and empty.
+/// Free every item and watcher of `dict`, leaving the `Dict` itself
+/// allocated and empty: the free path.
 ///
-/// # Safety
-/// `d` must point at a live dictionary that nothing else is walking: the
-/// hashtab is locked for the walk, so a re-entrant call through a watcher
-/// callback would see a half-emptied dictionary.
-pub unsafe fn tv_dict_free_contents(d: *mut Dict) {
-    // Lock the hashtab so `hash_remove` below cannot rehash it under the
+/// Nothing else may be walking the dictionary: the hashtab is locked for the
+/// walk, so a re-entrant call would see a half-emptied dictionary.
+pub fn tv_dict_free_contents(dict: &DictRef) {
+    // Lock the hashtab so the removals below cannot rehash it under the
     // walk.
-    unsafe { hash_lock(&raw mut (*d).dv_hashtab) };
-    // SAFETY: the caller's promise: a live dictionary.
-    let mut dict = unsafe { Dt::new(d) };
-    debug_assert!(dict.dv_hashtab.ht_locked > 0);
-    for hi in unsafe { tv_dict_iter(d) } {
-        // Remove the item before freeing it, so that a callback that
+    dict.edit().lock_table();
+    let mut cursor = DictCursor::new(dict);
+    while let Some(slot) = cursor.next(dict) {
+        // Out of the table before it is freed, so that a release that
         // reaches this dictionary does not see a freed value.
-        let di = tv_dict_hi2di(hi);
-        unsafe { hash_remove(&raw mut (*d).dv_hashtab, hi) };
-        unsafe { tv_dict_item_free(di) };
+        let removed = dict.edit().remove_at(slot);
+        drop(removed);
     }
 
-    while !unsafe { queue_empty(&raw mut (*d).watchers) } {
-        let w = dict.watchers.next;
-        unsafe { queue_remove(w) };
-        unsafe { tv_dict_watcher_free(tv_dict_watcher_node_data(w)) };
-    }
+    let watchers = ::core::mem::take(&mut dict.edit().watchers);
+    drop(watchers);
 
+    let dict = dict.edit();
     dict.dv_hashtab.ht_locked -= 1;
-    // SAFETY: the caller's dictionary, now empty of items.
-    hash_reset(unsafe { &mut (*d).dv_hashtab });
+    hash_reset(&mut dict.dv_hashtab);
+}
+
+impl Dict {
+    /// How many entries the dictionary holds.
+    pub fn len(&self) -> usize {
+        self.dv_hashtab.ht_used
+    }
+
+    /// Whether the dictionary holds no entries.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[cfg(test)]
@@ -767,7 +607,8 @@ mod tests {
     fn an_item_outlives_the_rehash_that_moves_its_slot() {
         let _held = editor_state_lock();
         let mut d = dict_of(&["first"]);
-        let before = d.find_ptr(b"first");
+        let at = |d: &Dict| d.find(b"first").map(::core::ptr::from_ref);
+        let before = at(&d);
         let slots_before = d.dv_hashtab.size();
         for n in 0..40 {
             let key = format!("k{n}");
@@ -775,7 +616,7 @@ mod tests {
                 .expect("a key used once");
         }
         assert!(d.dv_hashtab.size() > slots_before, "the table never grew");
-        assert_eq!(before, d.find_ptr(b"first"));
+        assert_eq!(before, at(&d));
         assert_eq!(number_at(&d, b"first"), Some(0));
         assert_eq!(number_at(&d, b"k39"), Some(39));
         assert_eq!(number_at(&d, b"absent"), None);
@@ -810,19 +651,17 @@ mod tests {
         assert_eq!(number_at(&d, b"c"), Some(2));
     }
 
-    /// And the pointer form still branches to it: the two arguments may be
-    /// one dictionary, which is the whole reason it takes pointers.
+    /// And the handle form reaches both cases: the two arguments may be one
+    /// dictionary.
     #[test]
     fn the_branching_extend_reaches_both_cases() {
         let _held = editor_state_lock();
         let into = dict_of(&["a"]);
         let from = dict_of(&["b", "c"]);
-        // SAFETY: two live dictionaries this case owns.
-        unsafe { dict_extend(into.as_ptr(), from.as_ptr(), b'f') };
+        dict_extend(&into, &from, b'f');
         assert_eq!(into.len(), 3);
         assert_eq!(number_at(&into, b"b"), Some(0));
-        // SAFETY: one live dictionary, named twice.
-        unsafe { dict_extend(into.as_ptr(), into.as_ptr(), b'f') };
+        dict_extend(&into, &into, b'f');
         assert_eq!(into.len(), 3);
         assert_eq!(number_at(&into, b"a"), Some(0));
     }
@@ -855,14 +694,12 @@ mod tests {
         let _held = editor_state_lock();
         let mut d = dict_of(&["n"]);
         // The value is a second reference to the dictionary itself.
-        // SAFETY: a live dictionary, which the handle takes a reference to.
-        let held = unsafe { DictRef::retained(d.as_ptr()) };
-        d.add_dict(b"self", held).expect("a key used once");
+        let held = d.clone();
+        d.add_dict(b"self", Some(held)).expect("a key used once");
 
         let copy_id = crate::eval::get_copy_id();
-        // SAFETY: a live dictionary, no conversion, and a fresh copy id.
-        let copy = unsafe { dict_copy(::core::ptr::null(), d.as_ptr(), true, copy_id) }
-            .expect("the copy was not interrupted");
+        // No conversion, and a fresh copy id.
+        let copy = dict_copy(None, &d, true, copy_id).expect("the copy was not interrupted");
         assert_eq!(copy.len(), 2);
         assert_eq!(number_at(&copy, b"n"), Some(0));
         let inner = copy.find(b"self").expect("the copy kept the key");
@@ -873,37 +710,31 @@ mod tests {
         );
 
         // Break the cycles so both dictionaries actually go away. A cycle
-        // is exactly why this is not a method: releasing the value reads
-        // the dictionary it names, which is this one.
-        // SAFETY: two live dictionaries this case owns.
-        unsafe {
-            dict_clear(d.as_ptr());
-            dict_clear(copy.as_ptr());
-        }
+        // is exactly why this takes a handle: releasing the value reads the
+        // dictionary it names, which is this one.
+        dict_clear(&d);
+        dict_clear(&copy);
     }
 
     /// A walk may remove the entry it is standing on, but only with the
-    /// table locked: an unlocked `hash_remove` may rehash and renumber the
-    /// slots the cursor is counting through.
+    /// table locked: an unlocked removal may rehash and renumber the slots
+    /// the cursor is counting through.
     #[test]
     fn a_locked_walk_may_remove_as_it_goes() {
         let _held = editor_state_lock();
         let d = dict_of(&["a", "b", "c", "d"]);
-        // SAFETY: a live dictionary; the lock is released below.
-        unsafe { hash_lock(&raw mut (*d.as_ptr()).dv_hashtab) };
-        // SAFETY: a live dictionary, locked for the walk.
-        for hi in unsafe { tv_dict_iter(d.as_ptr()) } {
-            let di = tv_dict_hi2di(hi);
-            // SAFETY: one of the dictionary's own items.
-            if unsafe { (*di).di_tv.number_or_zero() } % 2 == 0 {
-                // SAFETY: the slot the walk is standing on, and its item.
-                unsafe { hash_remove(&raw mut (*d.as_ptr()).dv_hashtab, hi) };
-                // SAFETY: as above, now out of the table.
-                unsafe { tv_dict_item_free(di) };
+        d.edit().lock_table();
+        let mut cursor = DictCursor::new(&d);
+        while let Some(slot) = cursor.next(&d) {
+            let even = d
+                .item_at(slot)
+                .is_some_and(|di| di.di_tv.number_or_zero() % 2 == 0);
+            if even {
+                let removed = d.edit().remove_at(slot);
+                drop(removed);
             }
         }
-        // SAFETY: the lock taken above.
-        unsafe { hash_unlock(&raw mut (*d.as_ptr()).dv_hashtab) };
+        d.edit().unlock_table();
         assert_eq!(slot_order(&d), ["b", "d"]);
         assert_eq!(number_at(&d, b"a"), None);
         assert_eq!(number_at(&d, b"d"), Some(3));
@@ -915,8 +746,7 @@ mod tests {
     fn clearing_leaves_a_usable_table() {
         let _held = editor_state_lock();
         let mut d = dict_of(&["a", "b", "c"]);
-        // SAFETY: a live dictionary this case owns and nothing walks.
-        unsafe { dict_clear(d.as_ptr()) };
+        dict_clear(&d);
         assert_eq!(d.len(), 0);
         assert!(d.is_empty());
         assert_eq!(number_at(&d, b"a"), None);
@@ -928,10 +758,9 @@ mod tests {
         assert_eq!(slot_order(&d), slot_order(&refilled));
     }
 
-    /// The reference count of the dictionary `d` points at.
-    fn refs(d: *mut Dict) -> i32 {
-        // SAFETY: a live dictionary the case holds.
-        unsafe { (*d).dv_refcount.get() }
+    /// The reference count of `d`.
+    fn refs(d: &Dict) -> i32 {
+        d.dv_refcount.get()
     }
 
     /// Hold `tv_in_free_unref_items` up for a scope, and put it down even
@@ -959,43 +788,35 @@ mod tests {
         let mut l = tv_list_alloc(1);
         l.push_dict(Some(d.clone()));
         d.add_list(b"l", Some(l.clone())).expect("a key used once");
-        let (lp, dp) = (l.as_ptr(), d.as_ptr());
-        let before = (
-            // SAFETY: the list the handle holds.
-            unsafe { (*lp).lv_refcount.get() },
-            refs(dp),
-        );
-        assert_eq!(before, (2, 2));
+        assert_eq!((l.lv_refcount.get(), refs(&d)), (2, 2));
 
         let from = TypVal::list(Some(l.clone()));
         let mut to = TypVal::Unknown;
         let copy_id = crate::eval::get_copy_id();
-        // SAFETY: two live values, no conversion, a fresh copy id.
-        let copied = unsafe { var_item_copy(::core::ptr::null(), &from, &mut to, true, copy_id) };
+        // No conversion, a fresh copy id.
+        let copied = var_item_copy_with(None, &from, &mut to, true, copy_id);
         assert_eq!(copied, Ok(()));
-        let cl = to.list_or_null();
-        // SAFETY: the copy `to` holds.
-        let cd = list_items(unsafe { cl.as_ref() })[0].li_tv.dict_or_null();
-        assert_ne!(cl, lp);
-        assert_ne!(cd, dp);
-        // SAFETY: the copied dictionary, which the copied list holds.
-        let back = unsafe { &*cd }
+        let cl = to.list_handle().expect("the copy is a list");
+        let cd = list_items(Some(&cl))[0]
+            .li_tv
+            .dict_handle()
+            .expect("the copied list holds a dictionary");
+        assert!(!cl.ptr_eq(&l));
+        assert!(!cd.ptr_eq(&d));
+        let back = cd
             .find(b"l")
             .expect("the copy kept the key")
             .di_tv
             .list_or_null();
-        assert_eq!(back, cl, "the cycle followed the original");
-        // SAFETY: as above.
-        assert_eq!(number_at(unsafe { &*cd }, b"n"), Some(0));
-        // SAFETY: the list the handle holds.
-        assert_eq!((unsafe { (*lp).lv_refcount.get() }, refs(dp)), (3, 2));
+        assert_eq!(back, cl.as_ptr(), "the cycle followed the original");
+        assert_eq!(number_at(&cd, b"n"), Some(0));
+        // The extra reference of the value `from` holds is the list's.
+        assert_eq!((l.lv_refcount.get(), refs(&d)), (3, 2));
 
         // Break both cycles at the dictionary, then let everything go.
-        // SAFETY: two live dictionaries nothing walks.
-        unsafe {
-            dict_clear(dp);
-            dict_clear(cd);
-        }
+        dict_clear(&d);
+        dict_clear(&cd);
+        drop((cl, cd));
         let mut from = from;
         tv_clear(&mut from);
         tv_clear(&mut to);
@@ -1003,46 +824,23 @@ mod tests {
         drop(d);
     }
 
-    /// While the collector is freeing, the last reference going does not
-    /// free the dictionary; the collector's two passes do.
+    /// While the collector is freeing, a dictionary's items give back the
+    /// references they hold on it without freeing it: the collector's
+    /// second pass does that.
     #[test]
-    fn a_dict_cycle_is_freed_by_the_collectors_two_passes() {
+    fn a_dict_cycle_is_emptied_without_being_freed_by_the_collectors_first_pass() {
         let _held = editor_state_lock();
         let mut d = dict_of(&["n"]);
-        // SAFETY: a live dictionary, which the value takes a reference to.
-        let held = unsafe { DictRef::retained(d.as_ptr()) };
-        d.add_dict(b"self", held).expect("a key used once");
-        let dp = d.as_ptr();
-        drop(d);
-        assert_eq!(refs(dp), 1, "the cycle keeps it alive");
+        let held = d.clone();
+        d.add_dict(b"self", Some(held)).expect("a key used once");
+        assert_eq!(refs(&d), 2, "the handle and the cycle");
 
         let collecting = Collecting::start();
-        // SAFETY: a dictionary nothing else is walking.
-        unsafe { tv_dict_free_contents(dp) };
-        // Released to zero by its own item, and still allocated.
-        assert_eq!(refs(dp), 0);
-        // SAFETY: as above, now empty.
-        assert_eq!(unsafe { &*dp }.len(), 0);
-        // SAFETY: as above.
-        unsafe { tv_dict_free_dict(dp) };
+        tv_dict_free_contents(&d);
+        // Released by its own item, and still allocated.
+        assert_eq!(refs(&d), 1);
+        assert_eq!(d.len(), 0);
         drop(collecting);
-    }
-
-    /// `tv_dict_unref` to zero under the flag leaves the dictionary for the
-    /// collector, which frees it explicitly afterwards.
-    #[test]
-    fn a_dict_released_mid_collection_waits_for_the_collector() {
-        let _held = editor_state_lock();
-        let d = dict_of(&["a", "b"]);
-        let dp = d.as_ptr();
-        {
-            let _collecting = Collecting::start();
-            drop(d);
-            assert_eq!(refs(dp), 0);
-            // SAFETY: unreferenced but not freed.
-            assert_eq!(number_at(unsafe { &*dp }, b"b"), Some(1));
-        }
-        // SAFETY: as above; `tv_dict_free` is the pair of passes.
-        unsafe { tv_dict_free(dp) };
+        drop(d);
     }
 }

@@ -70,9 +70,9 @@ pub(super) unsafe fn add_mark(
         }))
     };
     unsafe { (*lpos).push_number(VarNumber::from(pos.coladd)) };
-    if unsafe { (*d).add_str(b"mark", mname) }.is_err()
+    if unsafe { (*d).add_str(b"mark", cstr::at_opt(mname)) }.is_err()
         || unsafe { (*d).add_list(b"pos", Some(held)) }.is_err()
-        || (!fname.is_null() && unsafe { (*d).add_str(b"file", fname) }.is_err())
+        || (!fname.is_null() && unsafe { (*d).add_str(b"file", cstr::at_opt(fname)) }.is_err())
     {
         return Err(Failed);
     }

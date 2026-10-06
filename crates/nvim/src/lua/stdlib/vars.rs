@@ -17,6 +17,7 @@
 )]
 
 use crate::cstr;
+use crate::eval::typval::DictRef;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -26,7 +27,7 @@ use crate::api::private::helpers::{
 };
 use crate::eval::typval::{
     TV_INITIAL_VALUE, dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy,
-    tv_dict_item_alloc_len, tv_dict_item_remove,
+    tv_dict_item_remove,
 };
 use crate::eval::vars::{before_set_vvar, get_globvar_dict, get_vimvar_dict};
 use crate::ex_eval::aborting;
@@ -109,9 +110,19 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
                 return 0;
             }
             if watched {
-                dict_watcher_notify(dict, key.as_cstr(), None, Some(&(*di).di_tv));
+                dict_watcher_notify(
+                    &::core::mem::ManuallyDrop::new(
+                        DictRef::owning(dict).expect("a watched dictionary"),
+                    ),
+                    key.as_cstr(),
+                    None,
+                    Some(&(*di).di_tv),
+                );
             }
-            tv_dict_item_remove(dict, di);
+            tv_dict_item_remove(
+                &::core::mem::ManuallyDrop::new(DictRef::owning(dict).expect("a live dictionary")),
+                key.as_bytes(),
+            );
             return 0;
         }
 
@@ -123,8 +134,8 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
 
         let mut oldtv = TV_INITIAL_VALUE;
         if di.is_null() {
-            di = tv_dict_item_alloc_len(key.data(), key.len());
-            let _ = (*dict).add_item(di);
+            let _ = (*dict).add_item(DictItem::boxed(key.as_bytes()));
+            di = (*dict).find_ptr(key.as_bytes());
         } else {
             let mut type_error = false;
             if dict == get_vimvar_dict()
@@ -149,7 +160,14 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         tv_copy(&tv, &mut (*di).di_tv);
 
         if watched {
-            dict_watcher_notify(dict, key.as_cstr(), Some(&tv), Some(&oldtv));
+            dict_watcher_notify(
+                &::core::mem::ManuallyDrop::new(
+                    DictRef::owning(dict).expect("a watched dictionary"),
+                ),
+                key.as_cstr(),
+                Some(&tv),
+                Some(&oldtv),
+            );
             tv_clear(&mut oldtv);
         }
         tv_clear(&mut tv);

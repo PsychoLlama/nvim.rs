@@ -13,8 +13,8 @@ use crate::channel::{
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, dict_extend, dict_find, dict_get_number, list_iter, list_len, tv_dict_alloc,
-    tv_dict_free, tv_dict_item_remove, tv_list_alloc,
+    DictRef, NumBuf, dict_extend, dict_find, dict_get_number, list_iter, list_len, tv_dict_alloc,
+    tv_dict_free, tv_list_alloc,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::eval::{common_job_callbacks, find_job, tv_to_argv};
@@ -308,7 +308,11 @@ unsafe fn create_environment(
         let row = EvalFuncData::None;
         // SAFETY: `out` is this frame's own value.
         f_environ(&[], unsafe { &mut *out }, row);
-        unsafe { dict_extend(env, inherited.dict_or_null(), b'f') };
+        if let TypVal::Dict(inherited) = &inherited
+            && let Some(inherited) = &**inherited
+        {
+            dict_extend(&env_held, inherited, b'f');
+        }
         unsafe { tv_dict_free(inherited.dict_or_null()) };
         // Freed outright rather than released, so the value that named it
         // must give it up without a second release.
@@ -316,43 +320,40 @@ unsafe fn create_environment(
 
         if pty {
             for name in PTY_IGNORED_ENV {
-                if let Some(dv) = env_held.find(name.to_bytes()) {
-                    // SAFETY: the dictionary this call owns, and its own item.
-                    unsafe { tv_dict_item_remove(env, ::core::ptr::from_ref(dv).cast_mut()) };
-                }
+                drop(env_held.remove_key(name.to_bytes()));
             }
             // COLORTERM was just removed; put ours back when we know
             // the child can use it.
             if p_tgc() {
                 let truecolor = c"truecolor".as_ptr();
-                let _ = unsafe { (*env).add_str(b"COLORTERM", truecolor) };
+                let _ = unsafe { (*env).add_str(b"COLORTERM", cstr::at_opt(truecolor)) };
             }
         }
     }
 
     if pty {
-        if let Some(dv) = env_held.find(b"TERM") {
-            // SAFETY: the dictionary this call owns, and its own item.
-            unsafe { tv_dict_item_remove(env, ::core::ptr::from_ref(dv).cast_mut()) };
-        }
-        let _ = unsafe { (*env).add_str(b"TERM", pty_term_name) };
+        drop(env_held.remove_key(b"TERM"));
+        let _ = unsafe { (*env).add_str(b"TERM", cstr::at_opt(pty_term_name)) };
     }
 
     // $NVIM points the child at this instance's server address, when
     // there is one.
     let nvim_addr = get_vim_var_str(Vv::Servername);
     if unsafe { *nvim_addr } as c_int != NUL {
-        if let Some(dv) = env_held.find(b"NVIM") {
-            // SAFETY: the dictionary this call owns, and its own item.
-            unsafe { tv_dict_item_remove(env, ::core::ptr::from_ref(dv).cast_mut()) };
-        }
-        let _ = unsafe { (*env).add_str(b"NVIM", nvim_addr) };
+        drop(env_held.remove_key(b"NVIM"));
+        let _ = unsafe { (*env).add_str(b"NVIM", cstr::at_opt(nvim_addr)) };
     }
 
     // The job's own `env` wins over everything above.
     if !job_env.is_null() {
-        // SAFETY: the dictionary this call owns, and the job's own.
-        unsafe { dict_extend(env, job_env, b'f') };
+        // SAFETY: the job's own dictionary; the view takes no reference.
+        dict_extend(
+            &env_held,
+            &::core::mem::ManuallyDrop::new(
+                unsafe { DictRef::owning(job_env) }.expect("a live dictionary"),
+            ),
+            b'f',
+        );
     }
 
     if pty {
@@ -364,7 +365,12 @@ unsafe fn create_environment(
             let value = unsafe { os_getenv(name.as_ptr()) };
             if !value.is_null() {
                 // SAFETY: `os_getenv` answers an allocation this takes over.
-                let _ = unsafe { env_held.add_allocated_str(name.to_bytes(), value) };
+                let _ = unsafe {
+                    env_held.add_allocated_str(
+                        name.to_bytes(),
+                        crate::memory::ThinCString::from_raw(value),
+                    )
+                };
             }
         }
     }

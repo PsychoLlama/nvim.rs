@@ -111,13 +111,13 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
     if !contents.is_null() {
         // SAFETY: `dict` is that event dictionary, the key is a literal of
         // the length given, and the caller promises a NUL-terminated value.
-        let _ = unsafe { (*dict).add_str(b"regcontents", contents) };
+        let _ = unsafe { (*dict).add_str(b"regcontents", cstr::at_opt(contents)) };
     }
     let mut buf: [c_char; 67] = [0; 67];
     buf[0] = regname as c_char;
     buf[1] = NUL as c_char;
     // SAFETY: as above; `buf` is NUL-terminated by the line before.
-    let _ = unsafe { (*dict).add_str(b"regname", buf.as_mut_ptr()) };
+    let _ = unsafe { (*dict).add_str(b"regname", cstr::at_opt(buf.as_mut_ptr())) };
     // SAFETY: `dict` is the event dictionary.
     unsafe { (*dict).set_keys_readonly() };
     let no_fname: *mut c_char = ::core::ptr::null_mut();

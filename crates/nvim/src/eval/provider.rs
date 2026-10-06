@@ -108,7 +108,7 @@ pub unsafe fn common_job_callbacks(
         // SAFETY: as above.
         unsafe { callback_reader_free(on_stderr) };
         // SAFETY: as above.
-        unsafe { callback_free(on_exit) };
+        unsafe { callback_free(&mut *on_exit) };
         return false;
     }
 
@@ -463,7 +463,7 @@ pub fn prompt_invoke_callback() {
         // argument array and result are this frame's.
         let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_callback };
         // SAFETY: as above.
-        unsafe { callback_call(cb, &argv, &mut rettv) };
+        unsafe { callback_call(&*cb, &argv, &mut rettv) };
         drop(argv);
         clear_local(&mut rettv);
     }
@@ -487,7 +487,7 @@ pub fn invoke_prompt_interrupt() -> bool {
     // this frame's.
     let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_interrupt };
     // SAFETY: as above.
-    let ret = unsafe { callback_call(cb, &[], &mut rettv) };
+    let ret = unsafe { callback_call(&*cb, &[], &mut rettv) };
     // SAFETY: `rettv` is this frame's.
     clear_local(&mut rettv);
     ret as c_int != FAIL

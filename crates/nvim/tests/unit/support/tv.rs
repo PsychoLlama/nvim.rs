@@ -23,18 +23,18 @@
 //! to write down.
 
 use std::ffi::{CStr, c_char, c_int, c_void};
-use std::mem::{ManuallyDrop, offset_of};
+use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::ptr;
 
 use neovim::eval::typval::{
     BlobRef, DictRef, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear, tv_copy,
-    tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
+    tv_dict_alloc, tv_list_alloc,
 };
 use neovim::memory::{ThinCString, xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
-    Blob, Callback, Dict, DictItem, DictWatcher, List, ListItem, Object, Partial, Refcount, TypVal,
-    VarNumber, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
+    Blob, Callback, Dict, DictItem, List, ListItem, Object, Partial, Refcount, TypVal, VarNumber,
+    kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
 };
 
 use super::cstr;
@@ -163,9 +163,9 @@ impl Tv {
                 let d = dict.as_ptr();
                 path.push(Container::Dict(d));
                 for (key, value) in entries {
-                    let di = unsafe { tv_dict_item_alloc(cstr(key.clone()).as_ptr()) };
+                    let mut di = DictItem::boxed(cstr(key.clone()).to_bytes());
                     let mut value_tv = unsafe { value.build_at(path) };
-                    unsafe { tv_copy(&value_tv, &mut (*di).di_tv) };
+                    tv_copy(&value_tv, &mut di.di_tv);
                     tv_clear(&mut value_tv);
                     let _ = unsafe { (*d).add_item(di) };
                 }
@@ -564,10 +564,10 @@ pub(crate) unsafe fn read_callback(cb: *const Callback) -> Cb {
     let mut path = Vec::new();
     match unsafe { &*cb } {
         Callback::None => Cb::None,
-        Callback::Funcref(name) => Cb::Fref(unsafe { CStr::from_ptr(*name) }.to_bytes().to_vec()),
-        Callback::Partial(partial) => {
-            Cb::Pt(Box::new(unsafe { read_partial(*partial, &mut path) }))
-        }
+        Callback::Funcref(name) => Cb::Fref(name.as_bytes().to_vec()),
+        Callback::Partial(partial) => Cb::Pt(Box::new(unsafe {
+            read_partial(partial.as_ptr(), &mut path)
+        })),
         Callback::Lua(_) => panic!("a Lua callback is not implemented"),
     }
 }
@@ -581,12 +581,13 @@ pub(crate) unsafe fn read_callback(cb: *const Callback) -> Cb {
 pub(crate) unsafe fn build_callback(cb: &Cb) -> Callback {
     match cb {
         Cb::None => Callback::None,
-        Cb::Fref(name) => {
-            Callback::Funcref(unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast())
-        }
+        // `xmemdupz`, as the spec's `ffi.gc(...)` string was.
+        Cb::Fref(name) => Callback::Funcref(ManuallyDrop::new(ThinCString::from_bytes(name))),
         Cb::Pt(pt) => {
             let mut path = Vec::new();
-            Callback::Partial(unsafe { pt.build_at(&mut path) })
+            // SAFETY: the partial just built, at a count of one.
+            let held = unsafe { PartialRef::owning(pt.build_at(&mut path)) };
+            Callback::Partial(ManuallyDrop::new(held.expect("a built partial")))
         }
     }
 }
@@ -594,11 +595,7 @@ pub(crate) unsafe fn build_callback(cb: &Cb) -> Callback {
 /// One registered dict watcher, as `dict_watchers` spelled it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Watcher {
-    /// The watcher itself, for the allocation log.
-    pub at: *mut DictWatcher,
-    /// `key_pattern`, for the allocation log.
-    pub pattern: *mut c_char,
-    /// `key_pattern[0..key_pattern_len]`.
+    /// `key_pattern`.
     pub pat: Vec<u8>,
     /// `callback`.
     pub cb: Cb,
@@ -611,23 +608,14 @@ pub(crate) struct Watcher {
 /// # Safety
 /// `d` points at a live dict.
 pub(crate) unsafe fn dict_watchers(d: *const Dict) -> Vec<Watcher> {
-    let head = unsafe { &raw const (*d).watchers };
-    let mut out = Vec::new();
-    let mut q = unsafe { (*head).next };
-    while q.cast_const() != head {
-        let w: *mut DictWatcher = unsafe { q.byte_sub(offset_of!(DictWatcher, node)) }.cast();
-        let pattern = unsafe { (*w).key_pattern };
-        let len = unsafe { (*w).key_pattern_len };
-        out.push(Watcher {
-            at: w,
-            pattern,
-            pat: unsafe { std::slice::from_raw_parts(pattern.cast::<u8>(), len) }.to_vec(),
-            cb: unsafe { read_callback(&raw const (*w).callback) },
-            busy: unsafe { (*w).busy },
-        });
-        q = unsafe { (*q).next };
-    }
-    out
+    unsafe { &(*d).watchers }
+        .iter()
+        .map(|w| Watcher {
+            pat: w.key_pattern.clone(),
+            cb: unsafe { read_callback(&raw const w.callback) },
+            busy: w.busy.get(),
+        })
+        .collect()
 }
 
 /// The spec's `ga_alloc`: a `GArray` on the caller's stack, initialised.

@@ -209,7 +209,7 @@ pub unsafe fn func_call(
 /// `callback` is live.
 pub unsafe fn callback_call_retnr(callback: *mut Callback, args: &[TypVal]) -> VarNumber {
     let mut rettv = TV_INITIAL_VALUE;
-    if !unsafe { callback_call(callback, args, &mut rettv) } {
+    if !unsafe { callback_call(&*callback, args, &mut rettv) } {
         return -2;
     }
     let retval = tv_get_number_chk(&rettv).unwrap_or(-1);

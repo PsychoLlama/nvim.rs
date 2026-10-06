@@ -2,9 +2,7 @@
 //!
 //! Upstream declares these `static inline` in `typval.h`, so they are the part
 //! of this file that is compiled into its callers rather than called; they keep
-//! the `#[inline]` the transpile gave them for the same reason.  The four
-//! `QUEUE_*` helpers are the intrusive-list macros `dv_watchers` is threaded
-//! on.
+//! the `#[inline]` the transpile gave them for the same reason.
 //!
 //! Every accessor takes the raw pointer its callers already hold — 500-odd call
 //! sites across the tree pass `*mut List`/`*mut Dict` around, and the
@@ -51,8 +49,6 @@ pub(crate) type Di = Live<DictItem>;
 pub(crate) type Bl = Live<Blob>;
 /// A live `Partial`; see [`Tv`].
 pub(crate) type Pt = Live<Partial>;
-/// A live `DictWatcher`; see [`Tv`].
-pub(crate) type Dw = Live<DictWatcher>;
 /// A live `ListWatch`; see [`Tv`].
 pub(crate) type Lw = Live<ListWatch>;
 
@@ -88,22 +84,10 @@ pub(crate) fn di_lock(di: *mut DictItem) -> *mut VarLock {
     field_of(di, ::core::mem::offset_of!(DictItem, di_lock))
 }
 
-/// The address of a dictionary's hash table; see [`field_of`].
-#[inline(always)]
-pub(crate) fn dv_hashtab(d: *mut Dict) -> *mut DictTab {
-    field_of(d, ::core::mem::offset_of!(Dict, dv_hashtab))
-}
-
 /// The address of a dictionary's copy mark; see [`field_of`].
 #[inline(always)]
 pub(crate) fn dv_copyid(d: *mut Dict) -> *mut ::core::ffi::c_int {
     field_of(d, ::core::mem::offset_of!(Dict, dv_copy_id))
-}
-
-/// The address of a dictionary's watcher queue; see [`field_of`].
-#[inline(always)]
-pub(crate) fn dv_watchers(d: *mut Dict) -> *mut QUEUE {
-    field_of(d, ::core::mem::offset_of!(Dict, watchers))
 }
 
 /// The address of a list's copy mark; see [`field_of`].
@@ -399,15 +383,6 @@ impl Li {
     }
 }
 
-/// `_()`: the translation of a message, which is always a literal here.
-///
-/// Safe by construction rather than by promise: the argument is a `&CStr`,
-/// so the NUL `gettext` looks for is part of the type.
-#[inline(always)]
-pub(crate) fn tr(msg: &'static ::core::ffi::CStr) -> *const ::core::ffi::c_char {
-    gettext(msg).as_ptr()
-}
-
 /// The slot writers, generated over the enum's ten value-carrying variants.
 ///
 /// `tv.write_x(v)` **overwrites a slot without releasing what it held**.
@@ -562,53 +537,6 @@ impl DictSlot {
     }
 }
 
-/// True when an intrusive queue head has no entries.
-///
-/// # Safety
-/// `q` must point at an initialised queue node — one that has been through
-/// [`queue_init`] or spliced onto a queue that has.
-#[inline(always)]
-pub unsafe fn queue_empty(q: *const QUEUE) -> bool {
-    unsafe { q == (*q).next }
-}
-
-/// Make `q` an empty queue head, pointing at itself both ways.
-///
-/// # Safety
-/// `q` must point at writable `QUEUE`-sized storage. Anything it was
-/// already linked into is left pointing at it, so only initialise a node
-/// that is on no queue.
-#[inline(always)]
-pub unsafe fn queue_init(q: *mut QUEUE) {
-    unsafe { (*q).next = q };
-    unsafe { (*q).prev = q };
-}
-
-/// Splice `q` in as the last entry of the queue headed by `h`.
-///
-/// # Safety
-/// `h` must be an initialised queue head and `q` a node that is on no
-/// queue. Both must outlive the link.
-#[inline(always)]
-pub(crate) unsafe fn queue_insert_tail(h: *mut QUEUE, q: *mut QUEUE) {
-    unsafe { (*q).next = h };
-    unsafe { (*q).prev = (*h).prev };
-    unsafe { (*(*q).prev).next = q };
-    unsafe { (*h).prev = q };
-}
-
-/// Unlink `q` from whatever queue it is on.
-///
-/// # Safety
-/// `q` must be a node currently on a queue, and its neighbours must still
-/// be live. The node's own links are left stale, so it has to be
-/// re-initialised before it is used as a head again.
-#[inline(always)]
-pub(crate) unsafe fn queue_remove(q: *mut QUEUE) {
-    unsafe { (*(*q).prev).next = (*q).next };
-    unsafe { (*(*q).next).prev = (*q).prev };
-}
-
 /// Lock status of `l`; a NULL list reads as `VarLock::Fixed`.
 #[inline]
 pub fn list_locked(l: Option<&List>) -> VarLock {
@@ -686,9 +614,7 @@ pub fn dict_len(d: Option<&Dict>) -> ::core::ffi::c_long {
 /// Whether at least one watcher is registered on `d`.
 #[inline]
 pub fn dict_is_watched(d: Option<&Dict>) -> bool {
-    // SAFETY: an initialised watcher queue -- every dictionary is allocated
-    // through `tv_dict_alloc`, which runs `queue_init` over this field.
-    d.is_some_and(|d| !unsafe { queue_empty(&raw const d.watchers) })
+    d.is_some_and(|d| !d.watchers.is_empty())
 }
 
 /// The `DictItem` a dictionary hashtab slot names: upstream's
@@ -786,25 +712,6 @@ pub(crate) unsafe fn tv_ht_iter<E: SlotEntry>(ht: *const HashTab<E>) -> TableIte
 #[inline(always)]
 pub fn tv_blob_set_ret(tv: &mut TypVal, b: Option<BlobRef>) {
     tv.write_blob(b);
-}
-
-/// The `DictWatcher` a queue node is embedded in (upstream's `QUEUE_DATA`).
-///
-/// Upstream spells this out as a function rather than the macro purely so it
-/// can carry `FUNC_ATTR_NO_SANITIZE_ADDRESS`: ASan does not follow the pointer
-/// arithmetic back out of the struct.
-///
-/// # Safety
-/// `q` must be the `node` field of a live `DictWatcher` — a node from any
-/// other queue yields a wild pointer, since the watcher is found by
-/// subtracting an offset.
-#[inline(always)]
-pub unsafe fn tv_dict_watcher_node_data(q: *mut QUEUE) -> *mut DictWatcher {
-    unsafe {
-        q.cast::<::core::ffi::c_char>()
-            .sub(::core::mem::offset_of!(DictWatcher, node))
-    }
-    .cast::<DictWatcher>()
 }
 
 #[cfg(test)]

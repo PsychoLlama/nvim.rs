@@ -409,7 +409,7 @@ unsafe fn add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
 /// `d` must be live and `val` NUL-terminated.
 unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     // SAFETY: the dict is live, and both strings are NUL-terminated.
-    let _ = unsafe { (*d).add_str(key.to_bytes(), val) };
+    let _ = unsafe { (*d).add_str(key.to_bytes(), cstr::at_opt(val)) };
 }
 
 /// A number field of a dict, zero when it is missing.

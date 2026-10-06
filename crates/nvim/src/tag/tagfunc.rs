@@ -76,7 +76,14 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
 /// Mark the global `'tagfunc'` callback so the collector keeps it.
 pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
     // SAFETY: the caller's promise.
-    unsafe { set_ref_in_callback(global_tagfunc(), copy_id, ptr::null_mut(), ptr::null_mut()) }
+    unsafe {
+        set_ref_in_callback(
+            &*global_tagfunc(),
+            copy_id,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    }
 }
 
 /// Copy the global `'tagfunc'` callback into `buffer`'s local one.
@@ -84,11 +91,10 @@ pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
 /// Safe: the buffer is live by [`Buf`]'s promise, and the global callback
 /// lives in a static.
 pub fn set_buflocal_tfu_callback(mut buffer: Buf) {
-    // SAFETY: a live buffer owns its own callback, and `global_tagfunc`
-    // answers the address of a static.
-    unsafe { callback_free(&raw mut buffer.b_tfu_cb) };
+    callback_free(&mut buffer.b_tfu_cb);
+    // SAFETY: `global_tagfunc` answers the address of a static.
     if unsafe { &*global_tagfunc() }.is_set() {
-        unsafe { callback_copy(&raw mut buffer.b_tfu_cb, global_tagfunc()) };
+        callback_copy(&mut buffer.b_tfu_cb, unsafe { &*global_tagfunc() });
     }
 }
 
@@ -166,13 +172,8 @@ pub(crate) unsafe fn find_tagfunc_tags(
 
     let mut rettv = TV_INITIAL_VALUE;
     let save_pos = Win::current().w_cursor;
-    let mut result = unsafe {
-        callback_call(
-            &raw mut (*Buf::current_raw()).b_tfu_cb,
-            args.args(),
-            &mut rettv,
-        )
-    } as c_int;
+    let mut result =
+        unsafe { callback_call(&(*Buf::current_raw()).b_tfu_cb, args.args(), &mut rettv) } as c_int;
     // The function may have moved the cursor, or left it somewhere
     // that no longer exists.
     Win::current().w_cursor = save_pos;
@@ -337,5 +338,5 @@ fn string_fields(d: &Dict) -> Vec<Field<'_>> {
 /// `d` must be live and `val` NUL-terminated.
 unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     // SAFETY: the caller's promise.
-    let _ = unsafe { (*d).add_str(key.to_bytes(), val) };
+    let _ = unsafe { (*d).add_str(key.to_bytes(), cstr::at_opt(val)) };
 }

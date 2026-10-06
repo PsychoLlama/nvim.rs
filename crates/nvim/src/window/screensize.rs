@@ -20,7 +20,6 @@ use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::mem::size_of;
-use core::ptr;
 
 use super::arith::NextCurwin;
 use super::*;
@@ -377,11 +376,13 @@ fn fire_scrolled(scroll: &mut Subject, scroll_dict: Option<DictRef>) {
     // SAFETY: as [`fire_resized`]; `scroll_dict` is live and is unreferenced
     // once its contents have been copied in.
     let v_event = unsafe { get_v_event(&raw mut save) };
-    // SAFETY: two live dictionaries and a static key.
-    let from = scroll_dict
-        .as_ref()
-        .map_or(ptr::null_mut(), DictRef::as_ptr);
-    unsafe { dict_extend(v_event, from, b'm') };
+    // SAFETY: `v:event`, live; the view takes no reference.
+    let into = &::core::mem::ManuallyDrop::new(
+        unsafe { DictRef::owning(v_event) }.expect("a live dictionary"),
+    );
+    if let Some(from) = scroll_dict.as_ref() {
+        dict_extend(into, from, b'm');
+    }
     // SAFETY: a live dictionary.
     unsafe { (*v_event).set_keys_readonly() };
     drop(scroll_dict);

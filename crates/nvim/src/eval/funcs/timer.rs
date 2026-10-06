@@ -292,12 +292,10 @@ pub fn f_timer_start(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         }
     }
     let mut callback = Callback::None;
-    if !unsafe { callback_from_typval(&raw mut callback, &args[1]) } {
+    if !callback_from_typval(&mut callback, &args[1]) {
         return;
     }
-    result.write_number(
-        unsafe { timer_start(arg_number(&args[0]), repeat, &raw mut callback) } as VarNumber,
-    );
+    result.write_number(timer_start(arg_number(&args[0]), repeat, callback) as VarNumber);
 }
 
 /// `timer_stop({id})`.

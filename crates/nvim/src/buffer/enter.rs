@@ -26,6 +26,8 @@ use core::ptr;
 
 use super::*;
 use crate::arglist::check_arg_idx;
+use crate::eval::typval::DictEntry;
+use crate::hashtab::hash_add;
 
 use crate::channel::channel_job_running;
 use crate::diff::diff_buf_add;
@@ -187,8 +189,11 @@ fn now() -> time_t {
 /// Add `b:changedtick` to the buffer's variable dictionary.
 fn add_changedtick(mut buffer: Buf) {
     let (vars, di) = (buffer.b_vars, &raw mut buffer.changedtick_di);
-    // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
-    let _ = unsafe { (*vars).add_item(di) };
+    // The item is embedded in the buffer, so it goes into the table
+    // directly; `b:` is neither scope the function-name check guards.
+    // SAFETY: a live buffer's dictionary, and its own `changedtick` item,
+    // which outlives the table.
+    let _ = unsafe { hash_add(&raw mut (*vars).dv_hashtab, DictEntry::new(di)) };
 }
 
 // ---------------------------------------------------------------------------

@@ -194,20 +194,12 @@ impl ::core::ops::DerefMut for ListRef {
     }
 }
 
-/// Allocate an empty list, **owned by the handle it answers**.
-///
-/// `len` is a capacity hint: a caller that knows how many items are coming
-/// reserves them here rather than growing the array on the way.  A negative
+/// Allocate an empty list, **owned by the handle it answers** (a count of
+/// one, where upstream answered zero). `len` is a capacity hint; a negative
 /// one (`kListLenUnknown`) reserves nothing.
-///
-/// The list arrives at a reference count of **one**, held by the
-/// [`ListRef`].  Upstream handed one back at zero and relied on the first
-/// storer to raise it; a caller that stored it nowhere had to notice and
-/// free it by hand.  Dropping the handle is that free.
 pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
-    // Still the `xmalloc` family rather than a `Box`, because the allocation
-    // log the unit cases assert against sees only that family -- and because
-    // the tree hands `*mut List` around and frees it in `list_free_list`.
+    // The `xmalloc` family, not a `Box`: the unit cases' allocation log sees
+    // only that family.
     let list = unsafe { xcalloc(1, ::core::mem::size_of::<List>()) }.cast::<List>();
     // Written, not assigned: a zeroed `List` is not a valid one (`Vec` never
     // holds a null pointer), so there is nothing there to drop.
@@ -229,11 +221,8 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
     unsafe { ListRef::from_owned(at) }
 }
 
-/// Initialise a `List` embedded in the caller's own storage: empty, locked
-/// and carrying `DO_NOT_FREE_CNT`, so nothing frees it.
-///
-/// The caller's storage is what owns it -- `FuncCall`'s `a:000` list, a `\=`
-/// expression's submatch list -- and dropping that storage drops the items.
+/// Initialise a `List` embedded in the caller's own storage (`a:000`, a
+/// `\=` submatch list): empty, locked, carrying `DO_NOT_FREE_CNT`.
 ///
 /// # Safety
 ///
@@ -251,11 +240,8 @@ pub unsafe fn list_init_static(l: *mut List) {
     }
 }
 
-/// Take `l` out of the garbage collector's registry and free the `List`.
-///
-/// Upstream freed the header and left whatever was still linked off it --
-/// a leak the collector's two passes made unreachable.  The items are the
-/// header's own array now, so they go with it.
+/// Take `l` out of the garbage collector's registry and free the `List`,
+/// with whatever items are still in its array.
 ///
 /// # Safety
 ///
@@ -310,16 +296,6 @@ pub unsafe fn list_unref(l: *mut List) {
 }
 
 impl Dict {
-    /// How many entries the dictionary holds.
-    pub fn len(&self) -> usize {
-        self.dv_hashtab.ht_used
-    }
-
-    /// Whether the dictionary holds no entries.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     /// Every entry, in slot order -- which is the order Vim shows.
     ///
     /// The walk borrows the dictionary, so nothing can add to or remove from
@@ -364,31 +340,23 @@ impl Dict {
 #[repr(transparent)]
 pub struct DictRef(NonNull<Dict>);
 
+/// The same API as [`ListRef`]'s, method for method.
 impl DictRef {
-    /// See [`ListRef::from_owned`].
-    ///
     /// # Safety
-    ///
     /// As [`ListRef::from_owned`].
     #[inline(always)]
     pub unsafe fn from_owned(at: NonNull<Dict>) -> DictRef {
         DictRef(at)
     }
 
-    /// See [`ListRef::owning`].
-    ///
     /// # Safety
-    ///
     /// As [`ListRef::owning`].
     #[inline(always)]
     pub unsafe fn owning(at: *mut Dict) -> Option<DictRef> {
         NonNull::new(at).map(DictRef)
     }
 
-    /// See [`ListRef::retained`].
-    ///
     /// # Safety
-    ///
     /// As [`ListRef::retained`].
     #[inline(always)]
     pub unsafe fn retained(at: *mut Dict) -> Option<DictRef> {
@@ -398,13 +366,11 @@ impl DictRef {
         Some(DictRef(at))
     }
 
-    /// See [`ListRef::as_ptr`].
     #[inline(always)]
     pub fn as_ptr(&self) -> *mut Dict {
         self.0.as_ptr()
     }
 
-    /// See [`ListRef::into_raw`].
     #[inline(always)]
     pub fn into_raw(self) -> *mut Dict {
         let at = self.0;
@@ -412,13 +378,11 @@ impl DictRef {
         at.as_ptr()
     }
 
-    /// See [`ListRef::ptr_eq`].
     #[inline(always)]
     pub fn ptr_eq(&self, other: &DictRef) -> bool {
         self.0 == other.0
     }
 
-    /// See [`ListRef::edit`].
     #[inline(always)]
     #[allow(clippy::mut_from_ref)]
     pub fn edit(&self) -> &mut Dict {
@@ -462,15 +426,8 @@ impl ::core::ops::DerefMut for DictRef {
     }
 }
 
-/// Allocate an empty dictionary, **owned by the handle it answers**.
-///
-/// The dictionary arrives at a reference count of **one**, held by the
-/// [`DictRef`]; upstream handed one back at zero and relied on the first
-/// storer to raise it.
-///
-/// Safe, as [`tv_list_alloc`](super::tv_list_alloc) is: the collector's
-/// registry is a `GlobalCell`, so the editor's own thread is the only
-/// caller by construction.
+/// Allocate an empty dictionary, **owned by the handle it answers**; see
+/// [`tv_list_alloc`].
 pub fn tv_dict_alloc() -> DictRef {
     let d = unsafe { xcalloc(1, ::core::mem::size_of::<Dict>()) }.cast::<Dict>();
 
@@ -486,7 +443,9 @@ pub fn tv_dict_alloc() -> DictRef {
     dict.dv_refcount = Refcount::ONE;
     dict.dv_copy_id = 0;
     dict.dv_root = root;
-    unsafe { queue_init(&raw mut (*d).watchers) };
+    // Written, not assigned: zeroed storage is not a valid `Vec`.
+    // SAFETY: the allocation just made.
+    unsafe { (&raw mut (*d).watchers).write(Vec::new()) };
     dict.lua_table_ref = LUA_NOREF as LuaRef;
     // SAFETY: the reference just seeded is the one this handle owns.
     unsafe { DictRef::from_owned(at) }
@@ -524,7 +483,13 @@ pub unsafe fn tv_dict_free(d: *mut Dict) {
     if tv_in_free_unref_items.get() {
         return;
     }
-    unsafe { tv_dict_free_contents(d) };
+    {
+        // A view of the dictionary that takes no reference: the caller's
+        // was the last, and it is given back by freeing.
+        // SAFETY: the caller's promise -- a live dictionary.
+        let view = ::core::mem::ManuallyDrop::new(DictRef(unsafe { NonNull::new_unchecked(d) }));
+        tv_dict_free_contents(&view);
+    }
     unsafe { tv_dict_free_dict(d) };
 }
 
@@ -547,31 +512,23 @@ pub unsafe fn tv_dict_unref(d: *mut Dict) {
 #[repr(transparent)]
 pub struct BlobRef(NonNull<Blob>);
 
+/// The same API as [`ListRef`]'s, method for method.
 impl BlobRef {
-    /// See [`ListRef::from_owned`].
-    ///
     /// # Safety
-    ///
     /// As [`ListRef::from_owned`].
     #[inline(always)]
     pub unsafe fn from_owned(at: NonNull<Blob>) -> BlobRef {
         BlobRef(at)
     }
 
-    /// See [`ListRef::owning`].
-    ///
     /// # Safety
-    ///
     /// As [`ListRef::owning`].
     #[inline(always)]
     pub unsafe fn owning(at: *mut Blob) -> Option<BlobRef> {
         NonNull::new(at).map(BlobRef)
     }
 
-    /// See [`ListRef::retained`].
-    ///
     /// # Safety
-    ///
     /// As [`ListRef::retained`].
     #[inline(always)]
     pub unsafe fn retained(at: *mut Blob) -> Option<BlobRef> {
@@ -581,13 +538,11 @@ impl BlobRef {
         Some(BlobRef(at))
     }
 
-    /// See [`ListRef::as_ptr`].
     #[inline(always)]
     pub fn as_ptr(&self) -> *mut Blob {
         self.0.as_ptr()
     }
 
-    /// See [`ListRef::into_raw`].
     #[inline(always)]
     pub fn into_raw(self) -> *mut Blob {
         let at = self.0;
@@ -595,13 +550,11 @@ impl BlobRef {
         at.as_ptr()
     }
 
-    /// See [`ListRef::ptr_eq`].
     #[inline(always)]
     pub fn ptr_eq(&self, other: &BlobRef) -> bool {
         self.0 == other.0
     }
 
-    /// See [`ListRef::edit`].
     #[inline(always)]
     #[allow(clippy::mut_from_ref)]
     pub fn edit(&self) -> &mut Blob {
@@ -693,31 +646,23 @@ pub unsafe fn blob_unref(b: *mut Blob) {
 #[repr(transparent)]
 pub struct PartialRef(NonNull<Partial>);
 
+/// The same API as [`ListRef`]'s, method for method.
 impl PartialRef {
-    /// See [`ListRef::from_owned`].
-    ///
     /// # Safety
-    ///
     /// As [`ListRef::from_owned`].
     #[inline(always)]
     pub unsafe fn from_owned(at: NonNull<Partial>) -> PartialRef {
         PartialRef(at)
     }
 
-    /// See [`ListRef::owning`].
-    ///
     /// # Safety
-    ///
     /// As [`ListRef::owning`].
     #[inline(always)]
     pub unsafe fn owning(at: *mut Partial) -> Option<PartialRef> {
         NonNull::new(at).map(PartialRef)
     }
 
-    /// See [`ListRef::retained`].
-    ///
     /// # Safety
-    ///
     /// As [`ListRef::retained`].
     #[inline(always)]
     pub unsafe fn retained(at: *mut Partial) -> Option<PartialRef> {
@@ -727,13 +672,11 @@ impl PartialRef {
         Some(PartialRef(at))
     }
 
-    /// See [`ListRef::as_ptr`].
     #[inline(always)]
     pub fn as_ptr(&self) -> *mut Partial {
         self.0.as_ptr()
     }
 
-    /// See [`ListRef::into_raw`].
     #[inline(always)]
     pub fn into_raw(self) -> *mut Partial {
         let at = self.0;
@@ -741,13 +684,11 @@ impl PartialRef {
         at.as_ptr()
     }
 
-    /// See [`ListRef::ptr_eq`].
     #[inline(always)]
     pub fn ptr_eq(&self, other: &PartialRef) -> bool {
         self.0 == other.0
     }
 
-    /// See [`ListRef::edit`].
     #[inline(always)]
     #[allow(clippy::mut_from_ref)]
     pub fn edit(&self) -> &mut Partial {
@@ -874,57 +815,28 @@ pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
 }
 
 impl Dict {
-    /// The item under `key`, or `None` when there is none.
-    ///
-    /// The key is bytes, not a NUL-terminated string: the table hashes and
-    /// compares exactly the bytes it is given, and the two spellings the C
-    /// had (`hash_find` and `hash_find_len`) agree on every key a dictionary
-    /// can hold, since a key that reaches the table is NUL-terminated and so
-    /// has no NUL among its bytes.  A caller holding a `&CStr` says
-    /// `key.to_bytes()`; one holding a `c"..."` literal pays nothing for it.
-    ///
-    /// **The answer borrows the dictionary, not the slot.** An item is its
-    /// own allocation, so a rehash moves the slot and leaves the item where
-    /// it was; what invalidates the borrow is the item being *removed*,
-    /// which needs the exclusive borrow this one rules out.
+    /// The item in slot `slot`, or `None` when the slot holds none.
     #[inline]
-    pub fn find(&self, key: &[u8]) -> Option<&DictItem> {
-        let at = self.find_ptr(key);
-        // SAFETY: a non-null answer is one of this dictionary's own items,
-        // which the borrow of the dictionary keeps alive.
-        (!at.is_null()).then(|| unsafe { &*at })
+    pub(crate) fn item_at(&self, slot: usize) -> Option<&DictItem> {
+        let hi = self.dv_hashtab.slot(slot);
+        // SAFETY: a kept slot of this dictionary names a live item, which the
+        // borrow of the dictionary keeps alive.
+        hi.is_kept().then(|| unsafe { &*hi.hi_key.item() })
     }
 
-    /// [`Dict::find`] with the item writable.
+    /// [`Dict::item_at`] with the item writable.
     #[inline]
-    pub fn find_mut(&mut self, key: &[u8]) -> Option<&mut DictItem> {
-        let at = self.find_ptr(key);
-        // SAFETY: a non-null answer is one of this dictionary's own items;
-        // no two slots name the same one, and the exclusive borrow of the
-        // dictionary keeps the set of them fixed.
-        (!at.is_null()).then(|| unsafe { &mut *at })
+    pub(crate) fn item_at_mut(&mut self, slot: usize) -> Option<&mut DictItem> {
+        let hi = self.dv_hashtab.slot(slot);
+        // SAFETY: as `item_at`; no two slots name one item, and the exclusive
+        // borrow keeps the set of them fixed.
+        hi.is_kept().then(|| unsafe { &mut *hi.hi_key.item() })
     }
 
-    /// The lookup both borrow forms are built on: the item under `key`, or
-    /// null.
-    ///
-    /// **The answer is not derived from the borrow.** The table's slot holds
-    /// a `*mut DictItem` that came from the item's own allocation, and this
-    /// copies it out, so writing through it is sound where casting a shared
-    /// borrow's address would not be.
-    ///
-    /// It is the escape hatch for the two bodies that must hold an item
-    /// *while* they reach the dictionary again -- `extend()`'s overwrite
-    /// branch, which re-enters through `value_check_lock`, and `remove()`,
-    /// which takes the value out and then unlinks the item. Everything else
-    /// wants [`Dict::find`].
+    /// The slot holding `key`, if any.
     #[inline]
-    pub(crate) fn find_ptr(&self, key: &[u8]) -> *mut DictItem {
-        // SAFETY: a live table of this dictionary's own, and `key` is a
-        // slice, so it is readable for its length. The two spellings the C
-        // had agree here: a key that reaches the table is NUL-terminated, so
-        // it has no NUL among its bytes, which is the only input the
-        // length-taking hash treats differently.
+    pub(crate) fn slot_of(&self, key: &[u8]) -> Option<usize> {
+        // SAFETY: this dictionary's own table, and a slice key.
         let hi = unsafe {
             hash_find_len(
                 &raw const self.dv_hashtab,
@@ -932,11 +844,57 @@ impl Dict {
                 key.len(),
             )
         };
-        if hi.is_kept() {
-            tv_dict_hi2di(hi)
-        } else {
-            ::core::ptr::null_mut()
+        hi.is_kept().then(|| hi.index())
+    }
+
+    /// Put `item` in the table, which takes it over. When its key is
+    /// already there the item comes back, untouched.
+    pub(crate) fn insert(&mut self, item: Box<DictItem>) -> Result<(), Box<DictItem>> {
+        let at = Box::into_raw(item);
+        // SAFETY: this dictionary's own table, and an item in no table whose
+        // key lives as long as it does.
+        match unsafe { hash_add(&raw mut self.dv_hashtab, DictEntry::new(at)) } {
+            Ok(()) => Ok(()),
+            // SAFETY: the table refused it, so the `Box` is the caller's again.
+            Err(_) => Err(unsafe { Box::from_raw(at) }),
         }
+    }
+
+    /// Take the item in slot `slot` out of the table.
+    ///
+    /// Nothing is released here: the answer owns what the item held, and
+    /// dropping it after the borrow of the dictionary has ended is the
+    /// release -- which matters, because a value can name the dictionary it
+    /// was in, and releasing it reads that dictionary again.
+    pub(crate) fn remove_at(&mut self, slot: usize) -> RemovedItem {
+        let hi = self.dv_hashtab.slot(slot);
+        debug_assert!(hi.is_kept());
+        let item = hi.hi_key.item();
+        // SAFETY: a kept slot of this dictionary's own table.
+        unsafe { hash_remove(&raw mut self.dv_hashtab, hi) };
+        // SAFETY: the item the slot named, out of the table now. An allocated
+        // one is the `Box` `insert` (or `DictItem::boxed`) made; an embedded
+        // one belongs to the structure it lives in, which keeps it.
+        unsafe {
+            if ::core::ffi::c_uint::from((*item).di_flags) & DI_FLAGS_ALLOC != 0 {
+                RemovedItem::Allocated(Box::from_raw(item))
+            } else {
+                RemovedItem::Embedded((*item).di_tv.take())
+            }
+        }
+    }
+
+    /// Stop the table resizing while a walk removes as it goes.
+    #[inline]
+    pub(crate) fn lock_table(&mut self) {
+        self.dv_hashtab.ht_locked += 1;
+    }
+
+    /// Undo one [`Dict::lock_table`], resizing now if the table wanted to.
+    #[inline]
+    pub(crate) fn unlock_table(&mut self) {
+        // SAFETY: this dictionary's own table, locked by the caller.
+        unsafe { hash_unlock(&raw mut self.dv_hashtab) };
     }
 }
 
@@ -978,18 +936,66 @@ impl<const N: usize> CallFrame<N> {
         // clear, so `truncate` disowns it rather than clearing it.
         self.push_naming(unsafe { tv.bit_copy() });
     }
+}
 
-    /// Append a bit copy of each of the caller's values.
-    pub(crate) fn extend_borrowed(&mut self, tvs: &[TypVal]) {
-        for tv in tvs {
-            self.push_borrowed(tv);
-        }
+/// The deep copy's memo: what a cycle back to a container resolves to.
+///
+/// A deep copy marks each original with its `copy_id` and the copy it made
+/// before copying the items, so that an item naming the original again gets
+/// the copy. The copy is held by the walk that made it for as long as that
+/// `copy_id` is the one asked about, which is what the reads rest on.
+impl DictRef {
+    /// Mark this dictionary as copied to `copy` under `copy_id`.
+    pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &DictRef) {
+        let this = self.edit();
+        this.dv_copy_id = copy_id;
+        this.dv_copydict = copy.as_ptr();
     }
+}
 
-    /// Put a bit copy of `tv` in front of everything already in the frame,
-    /// which is what makes `base->Method(a)` a call of `Method(base, a)`.
-    pub(crate) fn insert_borrowed_front(&mut self, tv: &TypVal) {
-        self.push_borrowed(tv);
-        self.rotate_last_to_front();
+impl Dict {
+    /// The copy this dictionary was given under `copy_id` by the walk still
+    /// running, with a reference of its own.
+    pub(crate) fn copy_under(&self, copy_id: ::core::ffi::c_int) -> Option<DictRef> {
+        if copy_id == 0 || self.dv_copy_id != copy_id {
+            return None;
+        }
+        // SAFETY: written by `remember_copy` under this id, by the walk that
+        // still holds the copy.
+        unsafe { DictRef::retained(self.dv_copydict) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::global_cell::editor_state_lock;
+
+    /// `tv_dict_unref` to zero under the flag leaves the dictionary for the
+    /// collector, which frees it explicitly afterwards. Here rather than
+    /// beside the dictionary operations because reaching a dictionary nobody
+    /// holds is a raw read.
+    #[test]
+    fn a_dict_released_mid_collection_waits_for_the_collector() {
+        let _held = editor_state_lock();
+        let mut d = tv_dict_alloc();
+        d.add_number(b"a", 0).expect("a key used once");
+        d.add_number(b"b", 1).expect("a key used once");
+        let dp = d.as_ptr();
+        tv_in_free_unref_items.set(true);
+        drop(d);
+        // SAFETY: unreferenced but not freed.
+        let (refs, b) = unsafe {
+            let dict = &*dp;
+            (
+                dict.dv_refcount.get(),
+                dict.find(b"b").map(|di| di.di_tv.number_or_zero()),
+            )
+        };
+        tv_in_free_unref_items.set(false);
+        assert_eq!(refs, 0);
+        assert_eq!(b, Some(1));
+        // SAFETY: as above; `tv_dict_free` is the pair of passes.
+        unsafe { tv_dict_free(dp) };
     }
 }

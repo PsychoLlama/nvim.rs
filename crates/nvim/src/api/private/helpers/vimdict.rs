@@ -16,10 +16,10 @@
 
 use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
 use crate::api_error;
+use crate::eval::typval::DictRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy, tv_dict_item_alloc_len,
-    tv_dict_item_remove,
+    dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy, tv_dict_item_remove,
 };
 use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
 use crate::types::TypVal;
@@ -131,7 +131,9 @@ pub(crate) unsafe fn dict_set_var(
             // SAFETY: as above; a removal has no new value to show.
             unsafe {
                 dict_watcher_notify(
-                    dict,
+                    &::core::mem::ManuallyDrop::new(
+                        DictRef::owning(dict).expect("a watched dictionary"),
+                    ),
                     ::core::ffi::CStr::from_ptr(key.data()),
                     None,
                     Some(&*old),
@@ -142,8 +144,13 @@ pub(crate) unsafe fn dict_set_var(
             // SAFETY: as above.
             rv = Object::from(unsafe { &*old });
         }
-        // SAFETY: `di` is an item of `dict`.
-        unsafe { tv_dict_item_remove(dict, di) };
+        // SAFETY: `dict` is live; the view takes no reference.
+        tv_dict_item_remove(
+            &::core::mem::ManuallyDrop::new(
+                unsafe { DictRef::owning(dict) }.expect("a live dictionary"),
+            ),
+            key.as_bytes(),
+        );
         return Ok(rv);
     }
 
@@ -153,10 +160,10 @@ pub(crate) unsafe fn dict_set_var(
     let mut oldtv = TV_INITIAL_VALUE;
 
     if di.is_null() {
-        // SAFETY: `key` names its own bytes and `dict` is live.
+        // SAFETY: `dict` is live.
         unsafe {
-            di = tv_dict_item_alloc_len(key.data(), key.len());
-            let _ = (*dict).add_item(di);
+            let _ = (*dict).add_item(DictItem::boxed(key.as_bytes()));
+            di = (*dict).find_ptr(key.as_bytes());
         }
     } else {
         if retval {
@@ -195,7 +202,9 @@ pub(crate) unsafe fn dict_set_var(
         // SAFETY: as above, and `oldtv` is this frame's.
         unsafe {
             dict_watcher_notify(
-                dict,
+                &::core::mem::ManuallyDrop::new(
+                    DictRef::owning(dict).expect("a watched dictionary"),
+                ),
                 ::core::ffi::CStr::from_ptr(key.data()),
                 Some(&tv),
                 Some(&oldtv),

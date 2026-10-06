@@ -29,12 +29,13 @@
 )]
 
 use crate::semsg;
+use crate::types::DictItem;
 use core::ffi::{CStr, c_char};
 
 use super::pop::{At, LuaStack, TURN_SLOTS};
 use super::{VARNUMBER_MAX, VARNUMBER_MIN, nlua_traverse_table};
 use crate::eval::decode::{decode_create_map_special_dict, decode_string};
-use crate::eval::typval::{DictRef, ListRef, tv_dict_alloc, tv_dict_item_alloc_len, tv_list_alloc};
+use crate::eval::typval::{DictRef, ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::eval::userfunc::register_luafunc;
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
@@ -151,17 +152,14 @@ impl OpenValue {
             OpenValue::List { list, .. } => list.lv_items.push(ListItem::new(value)),
             OpenValue::Dict { dict, table } => {
                 let key = lua.string_at(At(table.0 + 1));
-                // SAFETY: `key` is the Lua string's own bytes, which the
-                // item copies; the dictionary is the one this frame holds.
-                unsafe {
-                    let item = tv_dict_item_alloc_len(key.as_ptr().cast::<c_char>(), key.len());
-                    (*item).di_tv = value;
-                    if dict.add_item(item).is_err() {
-                        // A Lua table cannot hand the same key back twice,
-                        // so the only refusal left is the funcref-name
-                        // check, which a key from a table never trips.
-                        abort();
-                    }
+                let mut item = DictItem::boxed(key);
+                item.di_tv = value;
+                if dict.add_item(item).is_err() {
+                    // A Lua table cannot hand the same key back twice,
+                    // so the only refusal left is the funcref-name
+                    // check, which a key from a table never trips.
+                    // SAFETY: `abort` only ever ends the process.
+                    unsafe { abort() };
                 }
             }
             OpenValue::Pairs { pairs, table, .. } => {

@@ -22,7 +22,7 @@ use crate::eval::funcs::{
 use crate::eval::gc::want_garbage_collect;
 use crate::eval::typval::{
     TV_INITIAL_VALUE, list_init_static, list_iter, list_iter_mut, list_set_lock, tv_clear, tv_copy,
-    tv_dict_hi2di, tv_dict_item_alloc_len, tv_dict_iter, tv_get_number_chk,
+    tv_dict_hi2di, tv_dict_iter, tv_get_number_chk,
 };
 use crate::eval::vars::{
     find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars, skip_var_list,

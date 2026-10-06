@@ -15,6 +15,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::DictRef;
 use crate::semsg;
 use crate::strings::has_char;
 use crate::strings::vim_strchr;
@@ -185,7 +186,11 @@ pub unsafe fn set_var_const(
         // what `tv_dict_item_alloc_len` does, and it is where every
         // other item in the tree comes from; `valid_varname` has just
         // walked `varname` to its NUL, so the two agree on the length.
-        di = unsafe { tv_dict_item_alloc_len(varname, varname_len) };
+        // SAFETY: `varname_len` readable bytes; the table frees the item by
+        // its `DI_FLAGS_ALLOC`.
+        di = Box::into_raw(DictItem::boxed(unsafe {
+            cstr::slice_at(varname, varname_len)
+        }));
         if unsafe { hash_add(ht, DictEntry::new(di)) }.is_err() {
             unsafe { tv_dict_item_free(di) };
             return;
@@ -219,7 +224,9 @@ pub unsafe fn set_var_const(
         let key = unsafe { (*di).di_key.as_ptr() };
         unsafe {
             dict_watcher_notify(
-                dict,
+                &::core::mem::ManuallyDrop::new(
+                    DictRef::owning(dict).expect("a watched dictionary"),
+                ),
                 ::core::ffi::CStr::from_ptr(key),
                 Some(&*cur),
                 Some(&oldtv),
@@ -254,6 +261,16 @@ pub(crate) fn var_check_ro_named(flags: c_int, name: &[u8]) -> bool {
     };
     let len = crate::narrow::len_as_int(name.len());
     emsg_text(tr_plural!(gettext(error_message), len, msg_bytes(name)));
+    true
+}
+
+/// [`var_check_fixed`] naming the variable `name`, measured.
+pub(crate) fn var_check_fixed_named(flags: c_int, name: &[u8]) -> bool {
+    if flags & DI_FLAGS_FIX as c_int == 0 {
+        return false;
+    }
+    let name = msg_bytes(name);
+    semsg!("E795: Cannot delete variable {name}");
     true
 }
 

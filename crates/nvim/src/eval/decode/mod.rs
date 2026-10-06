@@ -21,8 +21,7 @@ use crate::memory::ThinCString;
 use core::ffi::c_char;
 
 use crate::eval::typval::{
-    Di, ListRef, TV_INITIAL_VALUE, di_tv, tv_blob_alloc_ret, tv_dict_alloc, tv_dict_item_alloc_len,
-    tv_list_alloc,
+    ListRef, TV_INITIAL_VALUE, tv_blob_alloc_ret, tv_dict_alloc, tv_list_alloc,
 };
 use crate::eval::vars::msgpack_type_list;
 use crate::types::{DictItem, List, MessagePackType, TypVal, VAR_LIST, VarLock, ptrdiff_t, size_t};
@@ -48,23 +47,18 @@ pub(crate) const kMPExt: MessagePackType = 7;
 /// with one reference on it.
 #[inline]
 pub(crate) fn create_special_dict(result: &mut TypVal, type_: MessagePackType, val: TypVal) {
-    let dict_held = tv_dict_alloc();
-    let dict = dict_held.as_ptr();
+    let mut dict_held = tv_dict_alloc();
 
-    let type_di: *mut DictItem =
-        unsafe { tv_dict_item_alloc_len("_TYPE".as_ptr() as *const c_char, "_TYPE".len()) };
-    // SAFETY: the item just added to the special dictionary.
-    let mut type_item = unsafe { Di::new(type_di) };
+    let mut type_item = DictItem::boxed(b"_TYPE");
     type_item.di_tv.write_empty(VAR_LIST);
     type_item.di_lock = VarLock::Unlocked;
     let type_list = unsafe { ListRef::retained(msgpack_type_list(type_)) };
     type_item.di_tv.write_list(type_list);
-    let _ = unsafe { (*dict).add_item(type_di) };
+    let _ = dict_held.add_item(type_item);
 
-    let val_di: *mut DictItem =
-        unsafe { tv_dict_item_alloc_len("_VAL".as_ptr() as *const c_char, "_VAL".len()) };
-    unsafe { di_tv(val_di).write(val) };
-    let _ = unsafe { (*dict).add_item(val_di) };
+    let mut val_item = DictItem::boxed(b"_VAL");
+    val_item.di_tv.overwrite(val);
+    let _ = dict_held.add_item(val_item);
 
     unsafe { ::core::ptr::write(result, TypVal::dict(Some(dict_held))) };
 }

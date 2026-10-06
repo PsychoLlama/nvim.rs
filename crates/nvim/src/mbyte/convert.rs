@@ -345,6 +345,24 @@ pub unsafe fn string_convert(
     unsafe { string_convert_ext(vcp, text, lenp, core::ptr::null_mut()) }
 }
 
+/// [`string_convert`] of `text`, measured: the converted bytes, or `None`
+/// when the conversion failed -- and, either way, the length the conversion
+/// left behind, which a failure need not leave at `text.len()`.
+pub(crate) fn string_convert_bytes(vcp: &VimConv, text: &[u8]) -> (Option<Vec<u8>>, usize) {
+    let mut len = text.len();
+    // SAFETY: `text` is `len` readable bytes, which the conversion only
+    // reads; the answer is a fresh block or null.
+    let converted =
+        unsafe { string_convert(vcp, text.as_ptr().cast::<c_char>().cast_mut(), &raw mut len) };
+    // SAFETY: a block of the `xmalloc` family holding `len` bytes, or null.
+    let bytes = (!converted.is_null()).then(|| unsafe {
+        let bytes = core::slice::from_raw_parts(converted.cast::<u8>(), len).to_vec();
+        xfree(converted.cast());
+        bytes
+    });
+    (bytes, len)
+}
+
 /// Run `vcp`'s plan over `text`, answering a freshly allocated string.
 ///
 /// `lenp` is the input length in and the output length out; null means "NUL

@@ -48,7 +48,6 @@ pub struct Unpacker {
     pub has_grid_line_event: bool,
 }
 
-#[derive(Clone)]
 pub struct CallbackReader {
     pub cb: Callback,
     pub self_0: *mut Dict,
