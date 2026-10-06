@@ -85,7 +85,9 @@ pub(crate) unsafe fn item_compare(
             if b.v_type() != VAR_STRING || info.item_compare_numeric {
                 p1 = c"'".as_ptr().cast_mut();
             } else {
-                p1 = a.string_or_null();
+                p1 = a
+                    .string_ref()
+                    .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut());
             }
         } else {
             p1 = unsafe { encode_tv2string(&*tv1, ::core::ptr::null_mut()) };
@@ -95,7 +97,9 @@ pub(crate) unsafe fn item_compare(
             if a.v_type() != VAR_STRING || info.item_compare_numeric {
                 p2 = c"'".as_ptr().cast_mut();
             } else {
-                p2 = b.string_or_null();
+                p2 = b
+                    .string_ref()
+                    .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut());
             }
         } else {
             p2 = unsafe { encode_tv2string(&*tv2, ::core::ptr::null_mut()) };
@@ -444,7 +448,9 @@ pub(crate) fn parse_sort_uniq_args(
 
     // optional second argument: {func}
     if arg1.v_type() == VAR_FUNC {
-        info.item_compare_func = arg1.func_name_or_null();
+        info.item_compare_func = arg1
+            .func_name()
+            .map_or(::core::ptr::null(), |name| name.as_ptr());
     } else if arg1.v_type() == VAR_PARTIAL {
         info.item_compare_partial = arg1.partial_or_null();
     } else {
@@ -455,8 +461,7 @@ pub(crate) fn parse_sort_uniq_args(
         if nr == 1 {
             info.item_compare_ic = 1;
         } else if arg1.v_type() != VAR_NUMBER {
-            let name = how.string_ptr(&args[1]);
-            info.item_compare_func = name;
+            info.item_compare_func = how.string(&args[1]).as_ptr();
         } else if nr != 0 {
             emsg(gettext(e_invarg));
             return Err(Failed);

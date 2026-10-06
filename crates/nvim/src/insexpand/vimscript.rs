@@ -92,9 +92,7 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int
         let get_nr = |key: &CStr| dict_get_number(d, key.to_bytes());
         let owned = |key: &[u8]| {
             let mut scratch = NumBuf::new();
-            let text = dict_get_string_buf(d, key, &mut scratch);
-            // SAFETY: a non-null answer is a NUL-terminated string.
-            (!text.is_null()).then(|| XString::from_cstr(unsafe { cstr::at(text) }))
+            dict_get_string_buf(d, key, &mut scratch).map(XString::from_cstr)
         };
 
         word = borrowed(c"word", &mut numbuf);

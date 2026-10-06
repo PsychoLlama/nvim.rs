@@ -44,8 +44,11 @@
 
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::memory::ThinCString;
+use crate::strings::reversed_text;
 use core::ffi::{CStr, c_char, c_int};
 use core::marker::PhantomData;
+use core::ptr::null;
 
 use crate::cstr;
 use crate::eval::typval::{
@@ -67,7 +70,6 @@ use crate::message::e_listdictblobarg;
 use crate::message::emsg;
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::os::cshim::gettext;
-use crate::strings::reverse_text;
 use crate::tr_c;
 use crate::types::{
     Blob, Dict, DictItem, EvalFuncData, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST,
@@ -142,7 +144,7 @@ impl Container {
             VAR_LIST => Self::List(ListArg(tv.list_or_null())),
             VAR_DICT => Self::Dict(DictArg(tv.dict_or_null())),
             VAR_BLOB => Self::Blob(BlobArg(tv.blob_or_null())),
-            VAR_STRING => Self::Str(tv.string_or_null()),
+            VAR_STRING => Self::Str(tv.string_ref().map_or(null(), ThinCString::as_ptr)),
             _ => Self::Other,
         }
     }
@@ -297,7 +299,7 @@ impl ListArg {
         // the walk, no conversion, and a fresh copyID.
         unsafe {
             list_copy(
-                core::ptr::null::<VimConv>(),
+                null::<VimConv>(),
                 ListRef::retained(self.0),
                 false,
                 get_copy_id(),
@@ -499,7 +501,7 @@ impl DictArg {
     #[inline(always)]
     pub(crate) fn copy(self) -> Option<DictRef> {
         // SAFETY: live; no conversion, and a fresh copyID.
-        unsafe { dict_copy(core::ptr::null::<VimConv>(), self.0, false, get_copy_id()) }
+        unsafe { dict_copy(null::<VimConv>(), self.0, false, get_copy_id()) }
     }
 
     /// Allocate a fresh dict into `result`, for `mapnew()`.
@@ -707,12 +709,8 @@ fn equal(a: &TypVal, b: &TypVal, ic: bool) -> bool {
 /// The bytes of a String `tv`; empty for `v:_null_string`, and for anything
 /// that is not a String at all.
 #[inline(always)]
-pub(crate) fn string_bytes<'a>(tv: &TypVal) -> &'a [u8] {
-    match Container::of(tv) {
-        // SAFETY: a `VAR_STRING`'s `v_string` is NUL-terminated.
-        Container::Str(s) if !s.is_null() => unsafe { CStr::from_ptr(s) }.to_bytes(),
-        _ => b"",
-    }
+pub(crate) fn string_bytes(tv: &TypVal) -> &[u8] {
+    tv.string_bytes()
 }
 
 /// `tv` as a NUL-terminated string, coercing what can be coerced.
@@ -721,19 +719,16 @@ pub(crate) fn string_bytes<'a>(tv: &TypVal) -> &'a [u8] {
 /// spelled into; the answer borrows `buf` or the value, whichever it came
 /// from, and lives no longer than either.
 #[inline(always)]
-pub(crate) fn cstr_of<'a>(tv: &TypVal, buf: &'a mut NumBuf) -> &'a CStr {
-    // SAFETY: the scratch is the promised length and the answer is
-    // NUL-terminated, never NULL.
-    unsafe { CStr::from_ptr(buf.string_ptr(tv)) }
+pub(crate) fn cstr_of<'a>(tv: &'a TypVal, buf: &'a mut NumBuf) -> &'a CStr {
+    buf.string(tv)
 }
 
 /// `tv` as a NUL-terminated string, or None -- having reported the error --
 /// for a type that has no string form. As [`cstr_of`], the caller lends the
 /// scratch a Number is spelled into.
 #[inline(always)]
-pub(crate) fn cstr_of_chk<'a>(tv: &TypVal, buf: &'a mut NumBuf) -> Option<&'a CStr> {
-    // SAFETY: as `cstr_of`; the answer may also be NULL.
-    unsafe { cstr::at_opt(buf.string_ptr_chk(tv)) }
+pub(crate) fn cstr_of_chk<'a>(tv: &'a TypVal, buf: &'a mut NumBuf) -> Option<&'a CStr> {
+    buf.string_chk(tv)
 }
 
 /// A `VAR_STRING` owning a fresh copy of `bytes`, NUL-terminated.
@@ -950,14 +945,11 @@ pub fn f_reverse(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
             b.set_ret(result);
         }
-        Container::Str(s) => {
-            result.write_string_raw(if s.is_null() {
-                core::ptr::null_mut()
-            } else {
-                // SAFETY: a live NUL-terminated string; `reverse_text`
-                // allocates the answer.
-                unsafe { reverse_text(s as *mut c_char) }
-            });
+        Container::Str(_) => {
+            let reversed = args[0]
+                .string_ref()
+                .map(|text| ThinCString::from_vec(reversed_text(text.as_bytes())));
+            result.write_string(reversed);
         }
         Container::List(l) => {
             if !check_lock(l.locked(), c"reverse() argument") {

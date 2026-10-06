@@ -31,9 +31,9 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::vim_snprintf;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::ManuallyDrop;
 use core::slice;
 
 use crate::eval::typval::{dict_find, list_items, list_items_mut, list_len};
@@ -42,7 +42,7 @@ use crate::eval::vars::eval_msgpack_type_lists;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
 use crate::memory::handoff::owned_cstr;
-use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc};
+use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::message_fmt::{c_str, emsg_text, msg_bytes, msg_cstr};
 use crate::os::cshim::{gettext, gettext_ptr};
@@ -99,31 +99,27 @@ fn tr(msg: &'static CStr) -> *const c_char {
     gettext(msg).as_ptr()
 }
 
-/// The string `l[at]` holds; a NULL one, or no such item, is an empty line.
+/// The string `l[at]` holds; `None` for a NULL one or no such item, which
+/// is an empty line.
 ///
 /// # Safety
-/// `l` must be a live list.
+/// `l` must be a live list that nothing changes while the answer is held.
 #[inline(always)]
-unsafe fn item_string(l: *const List, at: size_t) -> *mut c_char {
+unsafe fn item_string<'a>(l: *const List, at: size_t) -> Option<&'a ThinCString> {
     // SAFETY: the caller's promise: a live list.
-    match list_items(unsafe { l.as_ref() }).get(at) {
-        Some(li) => li.li_tv.string_or_null(),
-        None => core::ptr::null_mut(),
-    }
+    list_items(unsafe { l.as_ref() })
+        .get(at)?
+        .li_tv
+        .string_ref()
 }
 
-/// `strlen` of [`item_string`], with a NULL string reading as zero.
+/// The bytes of [`item_string`], with a NULL string reading as empty.
 ///
 /// # Safety
 /// As [`item_string`].
 #[inline(always)]
-unsafe fn item_strlen(l: *const List, at: size_t) -> size_t {
-    let s = unsafe { item_string(l, at) };
-    if s.is_null() {
-        0
-    } else {
-        unsafe { cstr::bytes_at(s) }.len()
-    }
+unsafe fn item_bytes<'a>(l: *const List, at: size_t) -> &'a [u8] {
+    unsafe { item_string(l, at) }.map_or(&[], |text| text.as_bytes())
 }
 
 /// The items of `list`, front to back.  A NULL list is an empty one.
@@ -154,29 +150,21 @@ fn store_nuls_as_newlines(line: &mut [u8]) {
 /// `l` must be a live list and `at` an index of it whose value is a
 /// `VAR_STRING` this may take ownership of and replace.
 unsafe fn extend_item(l: *mut List, at: size_t, line: &[u8]) {
-    let old_len = unsafe { item_strlen(l, at) };
-    let held = unsafe { item_string(l, at) };
-    let grown =
-        unsafe { xrealloc(held.cast::<c_void>(), old_len + line.len() + 1) }.cast::<c_char>();
-    list_items_mut(unsafe { l.as_mut() })[at]
-        .li_tv
-        .write_string_raw(grown);
-    let tail =
-        unsafe { slice::from_raw_parts_mut(grown.add(old_len).cast::<u8>(), line.len() + 1) };
-    tail[..line.len()].copy_from_slice(line);
-    tail[line.len()] = 0;
-    store_nuls_as_newlines(&mut tail[..line.len()]);
+    let mut tail = line.to_vec();
+    store_nuls_as_newlines(&mut tail);
+    // SAFETY: the caller's promise: a live list, and `at` an index of it.
+    let tv = &mut list_items_mut(unsafe { l.as_mut() })[at].li_tv;
+    match tv.string_mut() {
+        Some(text) => text.push_bytes(&tail),
+        None => tv.write_string(Some(ThinCString::from_vec(tail))),
+    }
 }
 
 /// `line` as a fresh NUL-terminated allocation the list takes over.
-fn own_line(line: &[u8]) -> *mut c_char {
-    // SAFETY: `line` is readable for its own length; `xmemdupz` allocates one
-    // byte more and terminates.
-    let owned = unsafe { xmemdupz(line.as_ptr().cast::<c_void>(), line.len()).cast::<c_char>() };
-    // SAFETY: the allocation is `line.len()` bytes plus the terminator.
-    let copied = unsafe { slice::from_raw_parts_mut(owned.cast::<u8>(), line.len()) };
-    store_nuls_as_newlines(copied);
-    owned
+fn own_line(line: &[u8]) -> ThinCString {
+    let mut copied = line.to_vec();
+    store_nuls_as_newlines(&mut copied);
+    ThinCString::from_vec(copied)
 }
 
 /// Msgpack callback for writing to a `readfile()`-style list.
@@ -217,19 +205,15 @@ pub unsafe fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size
     }
     while at < len {
         let (line, next) = split(bytes, at);
-        let owned = if line.is_empty() {
-            core::ptr::null_mut()
-        } else {
-            own_line(line)
-        };
+        let owned = (!line.is_empty()).then(|| own_line(line));
         // SAFETY: `list` is live and takes over `owned`.
-        unsafe { (*list).push_allocated_string(owned) };
+        unsafe { (*list).push(TypVal::string(owned)) };
         at = next;
     }
     if at == len {
         // The write ended on a newline, so it opened one more empty item.
         // SAFETY: as above.
-        unsafe { (*list).push_allocated_string(core::ptr::null_mut()) };
+        unsafe { (*list).push(TypVal::string(None)) };
     }
 }
 
@@ -281,11 +265,9 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // SAFETY: the frame's dictionary is live and `idx` is a slot
                 // of its hash table, or one past the last.
                 let hi = unsafe { (*dict).dv_hashtab.slot(idx.saturating_sub(1)) };
-                // The key belongs to the item, so the value that names it
-                // must not release it.
+                // A copy of the key, which the value releases.
                 // SAFETY: a kept slot of the frame's live dictionary.
-                let key_ptr = unsafe { (*hi.hi_key.item()).di_key.as_ptr() };
-                let key_tv = ManuallyDrop::new(TypVal::string_raw(key_ptr.cast_mut()));
+                let key_tv = TypVal::string_from(unsafe { (*hi.hi_key.item()).di_key.bytes() });
                 let key = unsafe { encode_tv2string(&key_tv, core::ptr::null_mut()) };
                 append_formatted!(tr(c"key %s"), key);
                 // SAFETY: `encode_tv2string` hands back an owned buffer.
@@ -379,7 +361,7 @@ pub unsafe fn encode_vim_list_to_buf(
         }
         // One separator per item, so the total is one too many.
         // SAFETY: the caller's promise about `list`, and an index of it.
-        len += 1 + unsafe { item_strlen(list, at) };
+        len += 1 + unsafe { item_bytes(list, at) }.len();
     }
     len = len.saturating_sub(1);
     // SAFETY: the caller's promise about the two out parameters.
@@ -442,16 +424,17 @@ pub unsafe fn encode_read_from_list(
     let mut p = 0;
     while p < nbuf {
         debug_assert!(
-            state.li_length == 0 || !unsafe { item_string(state.list, state.at) }.is_null(),
+            state.li_length == 0 || unsafe { item_string(state.list, state.at) }.is_some(),
             "state->li_length == 0 || TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL"
         );
+        // SAFETY: the caller's promise: a live list, unchanged by the read.
+        let text = unsafe { item_bytes(state.list, state.at) };
         // `i` and `state.offset` step together; upstream keeps both because
         // the loop it wrote reads one and advances the other.
         let mut i = state.offset;
         while i < state.li_length && p < nbuf {
-            // SAFETY: the item holds at least `li_length` bytes and `offset`
-            // is below that.
-            let ch = unsafe { *item_string(state.list, state.at).add(state.offset) } as u8;
+            // The item holds `li_length` bytes and `offset` is below that.
+            let ch = text[state.offset];
             state.offset += 1;
             out[p] = if ch == b'\n' { 0 } else { ch };
             p += 1;
@@ -473,7 +456,7 @@ pub unsafe fn encode_read_from_list(
             }
             state.offset = 0;
             // SAFETY: the item was just checked to hold a string.
-            state.li_length = unsafe { item_strlen(state.list, state.at) };
+            state.li_length = unsafe { item_bytes(state.list, state.at) }.len();
         }
     }
     // SAFETY: the caller's promise about `read_bytes`.
@@ -497,7 +480,7 @@ pub unsafe fn encode_init_lrstate(list: *const List) -> ListReaderState {
         at: 0,
         offset: 0,
         // SAFETY: the caller's promise; the first item holds a string or NULL.
-        li_length: unsafe { item_strlen(list, 0) },
+        li_length: unsafe { item_bytes(list, 0) }.len(),
     }
 }
 

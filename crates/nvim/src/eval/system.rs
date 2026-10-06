@@ -11,6 +11,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::semsg;
 use crate::smsg;
 use crate::snprintf;
@@ -29,7 +30,7 @@ use crate::eval::vars::set_vim_var_nr;
 use crate::eval::{NL, PROF_YES, Tv};
 use crate::ex_cmds::check_secure;
 use crate::memline::ml_get_buf;
-use crate::memory::{memchrsub, xcalloc, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::memory::{memchrsub, xcalloc, xfree, xmalloc};
 use crate::message::e_invarg;
 use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
 use crate::message_fmt::{c_str, msg_cstr};
@@ -62,8 +63,8 @@ pub unsafe fn tv_to_argv(
     // SAFETY: the caller's promise -- the typval outlives the call.
     let tv = cmd_tv;
     if tv.v_type() == VAR_STRING {
-        // SAFETY: `numbuf` is the caller's scratch, which outlives `*cmd`.
-        let cmd_str = numbuf.string_ptr(cmd_tv);
+        // The caller's scratch, which outlives `*cmd`.
+        let cmd_str = numbuf.string(cmd_tv).as_ptr();
         if !cmd.is_null() {
             // SAFETY: the caller's promise -- a non-null `cmd` is valid.
             unsafe { *cmd = cmd_str };
@@ -92,19 +93,21 @@ pub unsafe fn tv_to_argv(
     // resolved path is what actually goes in slot 0.
     // SAFETY: a non-empty List has a first item, and `numbuf2` outlives
     // the string rendered into it.
-    let arg0 = numbuf2.string_ptr_chk(unsafe { &(*list_first(argl.as_mut())).li_tv });
+    let arg0 = numbuf2.string_chk(unsafe { &(*list_first(argl.as_mut())).li_tv });
     let mut exe_resolved: *mut c_char = null_mut();
-    // SAFETY: `arg0` is NUL-terminated and `exe_resolved` is this frame's.
+    // SAFETY: `exe_resolved` is this frame's.
     let runnable =
-        !arg0.is_null() && unsafe { os_can_exe(cstr::at(arg0), &raw mut exe_resolved, true) };
+        arg0.is_some_and(|arg0| unsafe { os_can_exe(arg0, &raw mut exe_resolved, true) });
     if !runnable {
-        if !arg0.is_null() && !executable.is_null() {
+        if let Some(arg0) = arg0
+            && !executable.is_null()
+        {
             let mut buf: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
             let size = size_of::<[c_char; IOSIZE as usize]>();
             let fmt = c"'%s' is not executable".as_ptr();
             // SAFETY: `buf` is this frame's and `size` is its length; the
             // format takes the one NUL-terminated string `arg0`.
-            unsafe { snprintf!(buf.as_mut_ptr(), size, fmt, arg0) };
+            unsafe { snprintf!(buf.as_mut_ptr(), size, fmt, arg0.as_ptr()) };
             let (what, text) = (c"cmd".as_ptr(), buf.as_mut_ptr());
             // SAFETY: the format takes two NUL-terminated strings.
             let (what, text) = unsafe { (c_str(what), c_str(text)) };
@@ -129,17 +132,16 @@ pub unsafe fn tv_to_argv(
         for arg in list_iter(tv.list_ref()) {
             // SAFETY: `arg` is one of the List's items, and `numbuf3`
             // outlives the string rendered into it.
-            let a = numbuf3.string_ptr_chk(&arg.li_tv);
-            if a.is_null() {
+            let Some(a) = numbuf3.string_chk(&arg.li_tv) else {
                 // SAFETY: `argv` holds `i` owned strings and a NULL tail.
                 unsafe { shell_free_argv(argv) };
                 // SAFETY: `exe_resolved` is the owned path from above.
                 unsafe { xfree(exe_resolved as *mut c_void) };
                 return null_mut();
-            }
+            };
             // SAFETY: the List has `argc` items, so slot `i` is inside the
-            // vector; `a` is NUL-terminated.
-            unsafe { *argv.offset(i) = xstrdup(a) };
+            // vector.
+            unsafe { *argv.offset(i) = ThinCString::from_cstr(a).into_raw() };
             i += 1;
         }
     }
@@ -180,7 +182,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
     let profiling = do_profiling.get() == PROF_YES;
     // SAFETY: the caller's promise -- `result` outlives the call.
     let mut ret = unsafe { Tv::new(result) };
-    ret.write_string_raw(null_mut());
+    ret.write_string(None);
     if check_secure() {
         return;
     }
@@ -246,8 +248,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
             // SAFETY: `result` is the caller's.
             tv_list_alloc_ret(result, 0 as ptrdiff_t);
         } else {
-            // SAFETY: the literal is NUL-terminated.
-            ret.write_string_raw(unsafe { xstrdup(c"".as_ptr()) });
+            ret.write_string(Some(ThinCString::empty()));
         }
         return;
     }
@@ -267,7 +268,9 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
         // Undo the swap in place; the buffer is handed over as it is.
         // SAFETY: `res` holds `nread` writable bytes.
         unsafe { memchrsub(res as *mut c_void, NUL as c_char, 1 as c_char, nread) };
-        ret.write_string_raw(res);
+        // SAFETY: `os_system` answered an `xmalloc`ed, NUL-terminated block,
+        // which the value takes over.
+        ret.write_string(unsafe { ThinCString::from_raw(res) });
     }
 }
 
@@ -348,17 +351,14 @@ pub unsafe fn save_tv_as_string(
         return null_mut();
     }
     if value.v_type() != VAR_LIST && value.v_type() != VAR_NUMBER {
-        // SAFETY: `numbuf` outlives the string rendered into it.
-        let ret = numbuf.string_ptr_chk(tv);
-        if ret.is_null() {
+        let Some(ret) = numbuf.bytes_chk(tv) else {
             // SAFETY: the caller's promise about `len`.
             unsafe { *len = -1 };
             return null_mut();
-        }
-        // SAFETY: `ret` is NUL-terminated, and `len` is the caller's.
-        unsafe { *len = cstr::bytes_at(ret).len() as ptrdiff_t };
-        // SAFETY: `ret` has the `*len` bytes just measured.
-        return unsafe { xmemdupz(ret as *const c_void, *len as size_t) as *mut c_char };
+        };
+        // SAFETY: the caller's promise about `len`.
+        unsafe { *len = ret.len() as ptrdiff_t };
+        return ThinCString::from_bytes(ret).into_raw();
     }
     if value.v_type() == VAR_NUMBER {
         // SAFETY: a `VAR_NUMBER`, which is what the callee wants.
@@ -431,9 +431,8 @@ unsafe fn list_as_string(
     if !list.is_null() {
         // SAFETY: the caller's promise -- a live List.
         for li in list_iter(unsafe { list.as_ref() }) {
-            // SAFETY: `numbuf` outlives the string rendered into it, and
-            // `len` is the caller's.
-            let tv_len = unsafe { cstr::bytes_at(numbuf.string_ptr(&li.li_tv)) }.len();
+            let tv_len = numbuf.bytes(&li.li_tv).len();
+            // SAFETY: the caller's promise about `len`.
             unsafe { *len += tv_len as ptrdiff_t + sep };
         }
     }
@@ -453,7 +452,7 @@ unsafe fn list_as_string(
         for (at, li) in list_iter(unsafe { list.as_ref() }).enumerate() {
             // SAFETY: `numbuf2` outlives the string rendered into it, and
             // the measurement above left room for that string's bytes.
-            unsafe { end = copy_swapping_nl(numbuf2.string_ptr(&li.li_tv), end) };
+            unsafe { end = copy_swapping_nl(numbuf2.string(&li.li_tv).as_ptr(), end) };
             let last = at + 1 == count;
             if endnl || !last {
                 if crlf {

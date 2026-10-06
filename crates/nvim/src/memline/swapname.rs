@@ -18,11 +18,13 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::{Lock, Suppress};
 use crate::mbyte::cluster_len;
+use crate::memory::ThinCString;
 use crate::memory::xstrlcpy;
 use crate::message_fmt::c_str;
 use crate::option::vars::P_DIR;
 use crate::path::ExpandFlags;
 use crate::semsg;
+use crate::types::TypVal;
 use ::libc::{EINVAL, ENOENT};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
@@ -897,8 +899,12 @@ pub unsafe fn recover_names(
             ui_flush();
         } else if !ret_list.is_null() {
             for &name in found.iter() {
-                let joined = unsafe { concat_fnames(dir_name, name, true) };
-                unsafe { (*ret_list).push_allocated_string(joined) };
+                // SAFETY: the list is the caller's, and `concat_fnames`
+                // answers an `xmalloc`ed block the list takes over.
+                unsafe {
+                    let joined = ThinCString::from_raw(concat_fnames(dir_name, name, true));
+                    (*ret_list).push(TypVal::string(joined));
+                }
             }
         } else {
             file_count += num_files;

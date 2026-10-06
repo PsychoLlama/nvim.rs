@@ -13,6 +13,7 @@
 use crate::cstr;
 use crate::eval::typval::PartialRef;
 use crate::guard::Depth;
+use crate::memory::ThinCString;
 use core::ffi::{CStr, c_char, c_int};
 use core::mem::ManuallyDrop;
 use core::ptr::{null, null_mut};
@@ -28,11 +29,11 @@ use crate::eval::{
 use crate::lua::executor::{
     nlua_call_ref_quiet, nlua_is_table_from_lua, nlua_register_table_as_callable,
 };
-use crate::memory::{XString, xstrdup};
+use crate::memory::xstrdup;
 use crate::message::e_command_too_recursive;
 use crate::option::vars::p_mfd;
 use crate::types::{
-    Callback, CallbackReader, DictRef, FAIL, FuncExe, HtStack, ListStack, NUL, OK, OptInt, Partial,
+    Callback, CallbackReader, DictRef, FAIL, FuncExe, HtStack, ListStack, OK, OptInt, Partial,
     TypVal, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, Vv,
 };
 use crate::winlayer::Win;
@@ -58,38 +59,34 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: &TypVal) -> boo
         let partial = tv.partial_or_null();
         unsafe { (*partial).pt_refcount.retain() };
         Callback::Partial(partial)
-    } else if tv.v_type() == VAR_STRING
-        // SAFETY: `VAR_STRING` says `v_string` is the live member, and a
-        // non-null one is NUL-terminated, so its first byte is readable.
-        && !tv.string_or_null().is_null()
-        && ascii_isdigit(c_int::from(unsafe { *tv.string_or_null() }))
+    } else if tv
+        .string_ref()
+        .is_some_and(|text| ascii_isdigit(c_int::from(text.first())))
     {
         r = FAIL;
         Callback::None
     } else if tv.v_type() == VAR_FUNC || tv.v_type() == VAR_STRING {
-        let name = tv.string_or_func_name();
-        if name.is_null() {
-            r = FAIL;
-            Callback::None
-        // SAFETY: a non-null name is NUL-terminated.
-        } else if c_int::from(unsafe { *name }) == NUL {
-            Callback::None
-        } else {
-            // A plain String may name a script-local function, which
-            // has to be resolved against the current script now.
-            let mut funcref = null_mut();
-            if tv.v_type() == VAR_STRING {
-                // SAFETY: `name` is the typval's NUL-terminated string.
-                let written = unsafe { cstr::bytes_at(name) };
-                funcref = scriptlocal_funcname(written).map_or(null_mut(), XString::into_raw);
+        match tv.text_or_name() {
+            None => {
+                r = FAIL;
+                Callback::None
             }
-            if funcref.is_null() {
-                // SAFETY: as above -- `name` is NUL-terminated.
-                funcref = unsafe { xstrdup(name) };
+            Some(name) if name.is_empty() => Callback::None,
+            Some(name) => {
+                // A plain String may name a script-local function, which
+                // has to be resolved against the current script now.
+                let scriptlocal = if tv.v_type() == VAR_STRING {
+                    scriptlocal_funcname(name.as_bytes())
+                } else {
+                    None
+                };
+                let funcref = scriptlocal
+                    .map_or_else(|| name.clone(), ThinCString::from)
+                    .into_raw();
+                // SAFETY: the name just stored is a live owned string.
+                unsafe { func_ref(funcref) };
+                Callback::Funcref(funcref)
             }
-            // SAFETY: the name just stored is a live owned string.
-            unsafe { func_ref(funcref) };
-            Callback::Funcref(funcref)
         }
     // SAFETY: the caller's promise about `arg`.
     } else if nlua_is_table_from_lua(arg) {

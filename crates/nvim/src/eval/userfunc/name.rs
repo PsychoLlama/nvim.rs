@@ -340,7 +340,7 @@ fn trans_selected(
             let callee =
                 || XString::from_bytes(tv.callable_name().map_or(&b""[..], CStr::to_bytes));
             match tv {
-                TypVal::Func(_) if !tv.func_name_or_null().is_null() => Selected::Func(callee()),
+                TypVal::Func(_) if tv.func_name().is_some() => Selected::Func(callee()),
                 TypVal::Partial(partial) => match &**partial {
                     Some(partial) => Selected::Partial(partial.clone(), callee()),
                     None => Selected::Other,

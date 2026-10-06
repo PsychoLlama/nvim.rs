@@ -9,6 +9,7 @@
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Depth;
+use crate::memory::ThinCString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::snprintf;
@@ -41,8 +42,7 @@ use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
 use crate::types::{
     Callback, CallbackReader, CallerScope, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncExe,
-    NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, ptrdiff_t, size_t, ssize_t,
-    uint64_t,
+    NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, ptrdiff_t, size_t, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live, Win};
@@ -184,9 +184,8 @@ pub unsafe fn script_host_eval(name: *mut c_char, args: &[TypVal], result: &mut 
         return;
     }
     let args = tv_list_alloc(1 as ptrdiff_t);
-    // SAFETY: `VAR_STRING` says the value holds a string, and
-    // -1 asks the callee to measure it.
-    unsafe { (*args.as_ptr()).push_string(arg.string_or_null(), -1 as ssize_t) };
+    // SAFETY: the list just allocated.
+    unsafe { (*args.as_ptr()).push(TypVal::string(arg.string_ref().cloned())) };
     let method = c"eval".as_ptr() as *mut c_char;
     // SAFETY: `name` and `method` are NUL-terminated.
     *ret = unsafe { eval_call_provider(name, method, Some(args), false) };
@@ -244,7 +243,9 @@ pub unsafe fn eval_call_provider(
     // duplicated rather than borrowed.
     // SAFETY: the caller's promise -- `method` is NUL-terminated.
     let argvars = [
-        TypVal::string_raw(unsafe { xstrdup(method) }),
+        TypVal::string(Some(ThinCString::from_cstr(unsafe {
+            CStr::from_ptr(method)
+        }))),
         TypVal::list(arguments),
     ];
     let mut rettv = UNSET_TV;
@@ -456,7 +457,8 @@ pub fn prompt_invoke_callback() {
     } else {
         let mut rettv = UNSET_TV;
         // The array takes the input over and frees it.
-        let argv = [TypVal::string_raw(user_input)];
+        // SAFETY: `user_input` is an `xmalloc`ed block nothing else holds.
+        let argv = [TypVal::string(unsafe { ThinCString::from_raw(user_input) })];
         // SAFETY: the callback is the current buffer's own, and the
         // argument array and result are this frame's.
         let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_callback };

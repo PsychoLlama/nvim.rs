@@ -14,6 +14,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::{list_items, list_len};
+use crate::memory::ThinCString;
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
 
@@ -157,7 +158,7 @@ fn get_buffer_lines(
     // buffer before `ml_get_buf` sees it.
     let mut ret = unsafe { Tv::new(result) };
     ret.write_empty(if retlist { VAR_LIST } else { VAR_STRING });
-    ret.write_string_raw(ptr::null_mut());
+    ret.write_string(None);
     if buffer.is_none_or(|b| b.b_ml.ml_mfp.is_null()) || start < 0 || end < start {
         if retlist {
             tv_list_alloc_ret(result, 0);
@@ -167,13 +168,19 @@ fn get_buffer_lines(
     let buffer = buffer.expect("the early return covers an absent buffer");
     if !retlist {
         let len = |n| size_t::try_from(n).expect("a line length is not negative");
-        let line = (start >= 1 && start <= buffer.line_count()).then(|| unsafe {
-            xstrnsave(
-                buffer.line_raw(start).raw(),
-                len(buffer.line_len_raw(start)),
-            )
-        });
-        ret.write_string_raw(line.unwrap_or(ptr::null_mut()));
+        let line = if start >= 1 && start <= buffer.line_count() {
+            // SAFETY: a line of the buffer and its length; `xstrnsave`
+            // answers a fresh block the value takes over.
+            unsafe {
+                ThinCString::from_raw(xstrnsave(
+                    buffer.line_raw(start).raw(),
+                    len(buffer.line_len_raw(start)),
+                ))
+            }
+        } else {
+            None
+        };
+        ret.write_string(line);
         return;
     }
     start = start.max(1);

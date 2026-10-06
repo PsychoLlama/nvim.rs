@@ -3,9 +3,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::winlayer::{Buf, Live};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::find_buf;
@@ -16,10 +15,7 @@ use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
-use crate::types::{
-    ColNr, Failed, FileMark, LineNr, List, ListItem, NUL, Pos, TypVal, VAR_LIST, VAR_STRING,
-    uint8_t,
-};
+use crate::types::{ColNr, Failed, FileMark, LineNr, List, ListItem, NUL, Pos, TypVal, VAR_LIST};
 use crate::winlayer::Win;
 
 /// The character index of byte index `byteidx` in a buffer line.
@@ -93,12 +89,12 @@ pub fn buf_charidx_to_byteidx(buffer: Option<Buf>, mut lnum: LineNr, mut charidx
 /// Resolve a position expression — a `[lnum, col]` List, `.`, `v`, `'m`,
 /// `w0`, `w$` or `$` — against the window `wp`.
 ///
-/// # Safety
-/// `tv`, `ret_fnum` and `wp` must be valid.
-pub unsafe fn var2fpos(
+/// A file mark (`'A`–`'Z`, `'0`–`'9`) stores the number of its buffer in
+/// `ret_fnum`; every other form leaves it alone.
+pub fn var2fpos(
     tv: &TypVal,
     dollar_lnum: bool,
-    ret_fnum: *mut c_int,
+    ret_fnum: &mut c_int,
     charcol: bool,
     window: Win,
 ) -> Option<Pos> {
@@ -106,11 +102,7 @@ pub unsafe fn var2fpos(
     // The record a `'m` lookup answers into: a motion mark has no store of
     // its own, so it is computed straight into this frame's slot.
     let mut slot = FileMark::UNSET;
-    // SAFETY: the caller's promise -- a live window, and a typval that is
-    // only read through here, which is what makes casting its `const` away
-    // sound. Nothing below holds either across a call that could close the
-    // window: `wp` is the caller's and outlives this frame.
-    let (wp, tv) = (window, tv);
+    let wp = window;
     let mut pos = Pos::default();
     let bp = wp.buffer();
 
@@ -142,12 +134,8 @@ pub unsafe fn var2fpos(
         // The column may be spelled `"$"`, meaning end of line.
         // SAFETY: `l` is a live List.
         let li: *mut ListItem = list_find(unsafe { l.as_mut() }, 1);
-        // SAFETY: a non-null item holds a typval, and `VAR_STRING` says
-        // `v_string` is its live member.
-        let dollar = !li.is_null()
-            && unsafe { (*li).li_tv.v_type() } == VAR_STRING
-            && !unsafe { (*li).li_tv.string_or_null() }.is_null()
-            && unsafe { cstr::eq_bytes((*li).li_tv.string_or_null(), b"$") };
+        // SAFETY: a non-null item is a live item of `l`.
+        let dollar = !li.is_null() && unsafe { (*li).li_tv.string_bytes() } == b"$";
         if dollar {
             pos.col = len + 1;
         }
@@ -164,20 +152,15 @@ pub unsafe fn var2fpos(
         return Some(pos);
     }
 
-    // SAFETY: `tv` is the caller's typval and `numbuf` outlives the name.
-    let name = numbuf.string_ptr_chk(tv);
-    if name.is_null() {
-        return None;
-    }
+    let name = numbuf.bytes_chk(tv)?;
 
     // A zero line number is the "nothing matched yet" marker for the
-    // three forms below.
-    // SAFETY: `name` is NUL-terminated, so its first byte is readable and,
-    // while that is not the terminator, so is the second.
-    let first = unsafe { *name };
-    if first == b'.' as c_char {
+    // three forms below. Past the end of the name reads as its terminator.
+    let first = name.first().copied().unwrap_or(0);
+    let second = name.get(1).copied().unwrap_or(0);
+    if first == b'.' {
         pos = wp.w_cursor;
-    } else if first == b'v' as c_char && unsafe { *name.add(1) } as c_int == NUL {
+    } else if first == b'v' && second == 0 {
         // The other end of the Visual selection — but only in the
         // window that owns it.
         if visual_active() && wp.is_current() {
@@ -185,10 +168,8 @@ pub unsafe fn var2fpos(
         } else {
             pos = wp.w_cursor;
         }
-    } else if first == b'\'' as c_char {
-        // SAFETY: `first` is not the terminator, so the second byte is
-        // still inside the name.
-        let mname = unsafe { *name.add(1) } as uint8_t as c_int;
+    } else if first == b'\'' {
+        let mname = c_int::from(second);
         // SAFETY: the buffer and the window are live, and `slot` is this
         // frame's record.
         let fm: *const FileMark = unsafe { mark_get(bp, wp, &raw mut slot, kMarkAll, mname) };
@@ -200,8 +181,8 @@ pub unsafe fn var2fpos(
         pos = unsafe { (*fm).mark };
         // Only the file marks carry a buffer of their own.
         if (mname >= b'A' as c_int && mname <= b'Z' as c_int) || ascii_isdigit(mname) {
-            // SAFETY: `fm` is live and `ret_fnum` is the caller's.
-            unsafe { *ret_fnum = (*fm).fnum };
+            // SAFETY: `fm` is live.
+            *ret_fnum = unsafe { (*fm).fnum };
         }
     }
 
@@ -213,18 +194,15 @@ pub unsafe fn var2fpos(
     }
 
     pos.coladd = 0;
-    if first == b'w' as c_char && dollar_lnum {
+    if first == b'w' && dollar_lnum {
         check_cursor_moved(wp);
         pos.col = 0;
-        // SAFETY: `first` is not the terminator, so the second byte is
-        // still inside the name.
-        let second = unsafe { *name.add(1) };
-        if second == b'0' as c_char {
+        if second == b'0' {
             update_topline(wp);
             pos.lnum = wp.w_topline.max(1);
             return Some(pos);
         }
-        if second == b'$' as c_char {
+        if second == b'$' {
             validate_botline_win(wp);
             pos.lnum = if wp.w_botline > 0 {
                 wp.w_botline - 1
@@ -233,7 +211,7 @@ pub unsafe fn var2fpos(
             };
             return Some(pos);
         }
-    } else if first == b'$' as c_char {
+    } else if first == b'$' {
         // `$` is the last line where a line number is wanted, and the
         // end of the current line where a column is.
         if dollar_lnum {

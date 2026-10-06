@@ -14,6 +14,7 @@
 use crate::cstr;
 use crate::eval::Parsed;
 use crate::eval::typval::PartialRef;
+use crate::memory::ThinCString;
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
@@ -278,20 +279,20 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
         fp = unsafe { (*held).pt_func };
     } else {
         let fname = if rv.v_type() == VAR_FUNC || rv.v_type() == VAR_STRING {
-            rv.string_or_func_name()
+            rv.text_or_name().map(|name| name.as_bytes())
         } else if held.is_null() {
-            ptr::null_mut()
+            None
         } else {
-            unsafe { (*held).pt_name }
+            let name = unsafe { (*held).pt_name };
+            // SAFETY: a partial's name is null or NUL-terminated.
+            (!name.is_null()).then(|| unsafe { cstr::bytes_at(name) })
         };
-        if fname.is_null() {
+        match fname {
             // There is no point binding a dict to a NULL function, just
             // create a function reference.
-            rv.write_func_name_raw(ptr::null_mut());
-        } else {
+            None => rv.write_func_name(None),
             // Translate "s:func" to the stored function name.
-            // SAFETY: a function name is NUL-terminated.
-            fp = find_func(&fname_trans_sid(unsafe { cstr::bytes_at(fname) }).0);
+            Some(fname) => fp = find_func(&fname_trans_sid(fname).0),
         }
     }
 
@@ -308,7 +309,12 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
     part.pt_auto = true;
     if rv.v_type() == VAR_FUNC || rv.v_type() == VAR_STRING {
         // Just a function: take over the function name and use selfdict.
-        part.pt_name = rv.string_or_func_name();
+        let name = if rv.v_type() == VAR_STRING {
+            rv.take_string()
+        } else {
+            rv.take_func_name()
+        };
+        part.pt_name = name.map_or(ptr::null_mut(), ThinCString::into_raw);
     } else {
         // Partial: copy the function name, use selfdict and copy the
         // arguments.  Neither can be taken over, because the partial may

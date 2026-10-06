@@ -121,15 +121,15 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         noremap = REMAP_SCRIPT;
     }
 
-    // SAFETY: as above; the `desc` allocation is copied out of and released
-    // by the guard.
-    let desc = unsafe { COwned::new(dict_get_string_alloc(d, b"desc")) };
+    let mut desc_buf = NumBuf::new();
+    let desc =
+        dict_get_string_buf(d, b"desc", &mut desc_buf).map(|desc| MapStr::new(desc.to_bytes()));
     let mut args = MapArguments {
         expr: number(c"expr") != 0,
         silent: number(c"silent") != 0,
         nowait: number(c"nowait") != 0,
         replace_keycodes: number(c"replace_keycodes") != 0,
-        desc: desc.to_map_str(),
+        desc,
         ..MapArguments::default()
     };
 

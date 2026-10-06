@@ -17,6 +17,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::memory::ThinCString;
 use core::ffi::c_char;
 
 use crate::eval::typval::{
@@ -24,7 +25,6 @@ use crate::eval::typval::{
     tv_list_alloc,
 };
 use crate::eval::vars::msgpack_type_list;
-use crate::memory::xmemdupz;
 use crate::types::{DictItem, List, MessagePackType, TypVal, VAR_LIST, VarLock, ptrdiff_t, size_t};
 use ::libc::memchr;
 
@@ -122,9 +122,15 @@ pub unsafe fn decode_string(
         }
         return tv;
     }
-    TypVal::string_raw(if s.is_null() || s_allocated {
-        s as *mut c_char
+    TypVal::string(if s.is_null() {
+        None
+    } else if s_allocated {
+        // SAFETY: the caller handed over its `xmalloc` block, NUL-terminated.
+        unsafe { ThinCString::from_raw(s.cast_mut()) }
     } else {
-        unsafe { xmemdupz(s.cast(), len) as *mut c_char }
+        // SAFETY: the caller's promise: `len` readable bytes at `s`.
+        Some(ThinCString::from_bytes(unsafe {
+            core::slice::from_raw_parts(s.cast::<u8>(), len)
+        }))
     })
 }

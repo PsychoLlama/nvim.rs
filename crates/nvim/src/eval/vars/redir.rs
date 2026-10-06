@@ -18,7 +18,7 @@ use crate::cstr::byte_at;
 use crate::eval::typval::tv_list_alloc;
 use crate::eval::{FNE_CHECK_START, eval_isnamec1, get_lval, set_var_lval};
 use crate::global_cell::GlobalCell;
-use crate::memory::XString;
+use crate::memory::ThinCString;
 use crate::message::e_invarg;
 use crate::message::state::{called_emsg, did_emsg};
 use crate::message_fmt::msg_bytes;
@@ -42,12 +42,8 @@ pub fn assert_error(message: &[u8]) {
     };
     // A message that was never appended to used to be a null `ga_data`,
     // which appends `v:null`'s string; an empty one is an empty string.
-    let text = if message.is_empty() {
-        core::ptr::null_mut()
-    } else {
-        XString::from_bytes(message).into_raw()
-    };
-    errors.push(TypVal::string_raw(text));
+    let text = (!message.is_empty()).then(|| ThinCString::from_bytes(message));
+    errors.push(TypVal::string(text));
 }
 
 /// The name of the variable a running `:redir =>` captures into, `None`

@@ -81,8 +81,7 @@ pub fn tv_get_lnum(tv: &TypVal) -> LineNr {
     if lnum <= 0 && did_emsg_before == did_emsg.get() && tv.v_type() != VAR_NUMBER {
         // No valid number, try using same function as line() does.
         let mut fnum = 0;
-        // SAFETY: the value is the caller's and `fnum` this frame's own.
-        let fp = unsafe { var2fpos(tv, true, &raw mut fnum, false, Win::current()) };
+        let fp = var2fpos(tv, true, &mut fnum, false, Win::current());
         if let Some(fp) = fp.as_ref() {
             lnum = fp.lnum;
         }

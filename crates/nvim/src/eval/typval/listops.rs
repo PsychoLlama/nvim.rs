@@ -19,8 +19,10 @@
 )]
 
 use super::*;
+use crate::memory::ThinCString;
 use crate::semsg;
 use crate::types::Failed;
+use core::ffi::CStr;
 
 /// Where an insertion goes: in front of the item at this index, or at the
 /// tail when it is `None`.
@@ -97,25 +99,17 @@ impl List {
     /// caller's.
     pub unsafe fn push_string(&mut self, str: *const ::core::ffi::c_char, len: ssize_t) {
         let copied = if str.is_null() {
-            ::core::ptr::null_mut()
+            None
         } else if len >= 0 {
             // SAFETY: the caller's promise: `len` readable bytes.
-            unsafe { xmemdupz(str.cast(), len.cast_unsigned()).cast::<::core::ffi::c_char>() }
+            let bytes =
+                unsafe { ::core::slice::from_raw_parts(str.cast::<u8>(), len.cast_unsigned()) };
+            Some(ThinCString::from_bytes(bytes))
         } else {
             // SAFETY: the caller's promise: NUL-terminated.
-            unsafe { xstrdup(str) }
+            Some(ThinCString::from_cstr(unsafe { CStr::from_ptr(str) }))
         };
-        // SAFETY: the copy just made is this list's now.
-        unsafe { self.push_allocated_string(copied) };
-    }
-
-    /// Append `str`, taking ownership of the allocation.
-    ///
-    /// # Safety
-    /// `str` is null or an allocation from the `xmalloc` family. **The list
-    /// takes it over**; the caller must not free it.
-    pub unsafe fn push_allocated_string(&mut self, str: *mut ::core::ffi::c_char) {
-        self.push(TypVal::string_raw(str));
+        self.push(TypVal::string(copied));
     }
 
     /// Append the number `n`.
@@ -459,21 +453,21 @@ pub fn list_find_nr(
     }
 }
 
-/// The string at index `n` of `l`, or NULL with `E684` raised.
+/// The string at index `n` of `l`, or `None` with `E684` raised.
 ///
 /// The string borrows the item, so it is only valid until the list changes;
 /// raising `E684` goes through the editor's message state, so the caller
 /// must be on the main thread.
-pub fn list_find_str(
-    l: Option<&List>,
+pub fn list_find_str<'a>(
+    l: Option<&'a List>,
     n: ::core::ffi::c_int,
-    numbuf: &mut NumBuf,
-) -> *const ::core::ffi::c_char {
+    numbuf: &'a mut NumBuf,
+) -> Option<&'a CStr> {
     let Some(at) = list_index(l, n) else {
         semsg!("E684: List index out of range: {}", int64_t::from(n));
-        return ::core::ptr::null();
+        return None;
     };
-    numbuf.string_ptr(&list_items(l)[at].li_tv)
+    Some(numbuf.string(&list_items(l)[at].li_tv))
 }
 
 /// [`list_index`], clamping a negative index that fell off the front to 0.

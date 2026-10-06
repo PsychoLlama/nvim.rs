@@ -23,7 +23,6 @@
 use crate::eval::typval::BlobRef;
 use crate::eval::typval::{ListRef, NumBuf, list_extend, tv_clear, tv_get_number};
 use crate::eval::{Tv, num_divide, num_modulus};
-use crate::strings::concat_str;
 use crate::types::{
     Blob, Failed, Float, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
     VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber,
@@ -182,21 +181,19 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
     }
     let mut numbuf = NumBuf::new();
     // SAFETY: as above.
-    // SAFETY: as above.
-    let s2 = numbuf.string_ptr(unsafe { &*tv2 });
+    let s2 = numbuf.bytes(unsafe { &*tv2 });
     // An owned string is extended in place -- unless the right operand *is*
     // the left one (`:let l[0:1] .= l`), whose bytes growing it would move.
     // SAFETY: as above; when the two differ, `s2` is not `tv1`'s.
-    if !core::ptr::eq(tv1.cast_const(), tv2)
-        && unsafe { (*tv1).append_to_string(crate::cstr::bytes_at(s2)) }
-    {
+    if !core::ptr::eq(tv1.cast_const(), tv2) && unsafe { (*tv1).append_to_string(s2) } {
         return Ok(());
     }
     // SAFETY: as above.
-    let s = unsafe { concat_str(numbuf1.string_ptr(&*tv1), s2) };
+    let mut joined = numbuf1.bytes(unsafe { &*tv1 }).to_vec();
+    joined.extend_from_slice(s2);
     // SAFETY: both operands have been copied out of `tv1` by now.
     unsafe { tv_clear(&mut *tv1) };
-    lhs.write_string_raw(s);
+    lhs.write_string(Some(joined.into()));
     Ok(())
 }
 

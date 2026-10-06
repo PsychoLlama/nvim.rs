@@ -22,6 +22,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::memory::ThinCString;
 use crate::snprintf;
 use ::core::ffi::CStr;
 
@@ -183,10 +184,10 @@ pub unsafe fn callback_put(cb: *mut Callback, tv: &mut TypVal) {
         }
         Callback::Funcref(name) => {
             // SAFETY: a funcref names its own NUL-terminated bytes.
-            unsafe {
-                value.write_func_name_raw(xstrdup(*name));
-                func_ref(*name);
-            }
+            let copy = ThinCString::from_cstr(unsafe { CStr::from_ptr(*name) });
+            value.write_func_name(Some(copy));
+            // SAFETY: as above.
+            unsafe { func_ref(*name) };
         }
         // A Lua callback and no callback at all have no Vimscript form.
         Callback::Lua(_) | Callback::None => {
@@ -339,8 +340,7 @@ pub unsafe fn dict_watcher_notify(
     // it: the reference the callbacks run under is the retain below, and
     // `tv_dict_unref` at the bottom is what gives it back.
     argv.push_naming(TypVal::dict(unsafe { DictRef::owning(dict) }));
-    // SAFETY: the key's own NUL-terminated bytes, copied into the frame.
-    argv.push_owned(TypVal::string_raw(unsafe { xstrdup(key.as_ptr()) }));
+    argv.push_owned(TypVal::string(Some(ThinCString::from_cstr(key))));
     argv.push_owned(TypVal::dict(Some(tv_dict_alloc())));
     let event = argv.args()[2].dict_or_null();
 

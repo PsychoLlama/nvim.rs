@@ -408,8 +408,8 @@ pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     }
     let list = list_alloc_ret(result, found.len() as isize);
     for word in found {
-        // SAFETY: the list takes the string over.
-        unsafe { (*list).push_allocated_string(word.into_raw()) };
+        // SAFETY: the list this call put in the return slot.
+        unsafe { (*list).push(TypVal::string(Some(word.into()))) };
     }
 }
 

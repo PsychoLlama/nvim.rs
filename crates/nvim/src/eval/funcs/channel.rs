@@ -342,7 +342,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut addrs_arr = Array::with_capacity(n);
     let list = list_alloc_ret(result, n as isize);
     for i in 0..n {
-        unsafe { (*list).push_allocated_string(*addrs.add(i)) };
+        unsafe { (*list).push(TypVal::string(ThinCString::from_raw(*addrs.add(i)))) };
         let addr = unsafe { *addrs.add(i) };
         addrs_arr.push(Object::string(unsafe { cstr_to_string(addr) }));
     }

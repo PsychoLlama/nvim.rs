@@ -26,7 +26,6 @@
 )]
 
 use core::ffi::CStr;
-use core::ptr;
 
 use super::{FilterMap, filter_map_one};
 use crate::eval::list::{
@@ -34,7 +33,6 @@ use crate::eval::list::{
     clear_tv, clear_vim_var, err, list_alloc_ret, number_arm, set_key_nr, set_key_string,
     set_key_type, string_bytes, string_tv,
 };
-use crate::memory::handoff::owned_cstr;
 use crate::message::state::did_emsg;
 use crate::message::{e_invalblob, e_string_required};
 use crate::types::{TypVal, VAR_BOOL, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv};
@@ -193,7 +191,7 @@ pub(crate) fn filter_map_string(
     expr: &TypVal,
     result: &mut TypVal,
 ) {
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
 
     // set_vim_var_nr() doesn't set the type.
     set_key_type(VAR_NUMBER);
@@ -236,7 +234,7 @@ pub(crate) fn filter_map_string(
         idx += 1;
         at += len;
     }
-    result.write_string_raw(owned_cstr(out));
+    result.write_string(Some(out.into()));
 }
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a List.

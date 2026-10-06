@@ -29,6 +29,7 @@
 #![allow(unsafe_code)]
 
 use crate::guard::Depth;
+use crate::memory::ThinCString;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{ManuallyDrop, offset_of, size_of};
 use core::ptr::{NonNull, null, null_mut};
@@ -61,7 +62,7 @@ use crate::global_cell::GlobalCell;
 use crate::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
 use crate::mark::mark_global_iter;
 use crate::mbyte::string_convert;
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::{xfree, xmalloc};
 use crate::message::{internal_error, verb_msg};
 use crate::ops::set_ref_in_opfunc;
 use crate::option::vars::p_verbose;
@@ -622,7 +623,9 @@ pub unsafe fn set_ref_in_item(
         // A Funcref names a function, which may be a closure holding a
         // scope of its own.
         VAR_FUNC => {
-            let name = tv.func_name_or_null();
+            let name = tv
+                .func_name()
+                .map_or(null_mut(), |name| name.as_ptr().cast_mut());
             unsafe { set_ref_in_func(name, null_mut::<UserFunc>(), copy_id) }
         }
         VAR_PARTIAL => unsafe { set_ref_in_item_partial(tv.partial_or_null(), copy_id, ht, ls) },
@@ -662,20 +665,23 @@ pub unsafe fn var_item_copy(
     match src.v_type() {
         VAR_STRING => {
             // SAFETY: as above; a null `conv` is not read.
-            let plain = conv.is_null()
-                || unsafe { (*conv).vc_type } == CONV_NONE
-                || src.string_or_null().is_null();
-            if plain {
-                tv_copy(from, to);
-            } else {
-                let (cv, s) = (conv as *mut VimConv, src.string_or_null());
-                // SAFETY: `s` is the source string and `cv` the conversion.
-                dst.write_string_raw(unsafe { string_convert(cv, s, null_mut::<size_t>()) });
-                // A conversion that failed keeps the original bytes.
-                if dst.string_or_null().is_null() {
-                    // SAFETY: `s` is the source's NUL-terminated string.
-                    dst.write_string_raw(unsafe { xstrdup(s) });
+            let converting = !conv.is_null() && unsafe { (*conv).vc_type } != CONV_NONE;
+            match src.string_ref() {
+                Some(text) if converting => {
+                    // SAFETY: `text` is the source string, which the
+                    // conversion only reads, and `conv` the conversion; the
+                    // answer is a fresh block or null.
+                    let converted = unsafe {
+                        ThinCString::from_raw(string_convert(
+                            conv,
+                            text.as_ptr().cast_mut(),
+                            null_mut::<size_t>(),
+                        ))
+                    };
+                    // A conversion that failed keeps the original bytes.
+                    dst.write_string(Some(converted.unwrap_or_else(|| text.clone())));
                 }
+                _ => tv_copy(from, to),
             }
         }
         VAR_LIST => {

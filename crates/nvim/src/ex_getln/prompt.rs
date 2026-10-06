@@ -105,7 +105,8 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     let mut xp_name_buf = NumBuf::new();
     // Its *address* is the "argument absent" answer below, so it has to be
     // a distinct object from the `""` literal `defstr` starts as.
-    let def: [::core::ffi::c_char; 1] = [0];
+    let def_block = [0u8; 1];
+    let def = ::core::ffi::CStr::from_bytes_with_nul(&def_block).expect("a lone terminator");
 
     if args[0].v_type() == VAR_DICT {
         if args.len() > 1 {
@@ -115,16 +116,17 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         let dict = args[0].dict_or_null();
         // C's `S_LEN(key)`: the key pointer and its length, spelled once.
         let dict_str =
-            |key: &::core::ffi::CStr, numbuf: &mut NumBuf, def: *const ::core::ffi::c_char| {
+            |key: &::core::ffi::CStr, numbuf: &mut NumBuf, def: Option<&::core::ffi::CStr>| {
                 // SAFETY: the argument's own dictionary.
                 dict_get_string_buf_chk(unsafe { dict.as_ref() }, key.to_bytes(), numbuf, def)
+                    .map_or(::core::ptr::null(), ::core::ffi::CStr::as_ptr)
             };
 
-        prompt = dict_str(c"prompt", &mut prompt_buf, c"".as_ptr());
+        prompt = dict_str(c"prompt", &mut prompt_buf, Some(c""));
         if prompt.is_null() {
             return;
         }
-        defstr = dict_str(c"default", &mut defstr_buf, c"".as_ptr());
+        defstr = dict_str(c"default", &mut defstr_buf, Some(c""));
         if defstr.is_null() {
             return;
         }
@@ -140,7 +142,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             // its own field, so its address is the item's plus a constant.
             cancelreturn = unsafe { &raw mut (*cancelreturn_di).di_tv };
         }
-        xp_name = dict_str(c"completion", &mut xp_name_buf, def.as_ptr());
+        xp_name = dict_str(c"completion", &mut xp_name_buf, Some(def));
         if xp_name.is_null() {
             // error
             return;

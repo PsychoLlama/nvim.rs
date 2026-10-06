@@ -11,8 +11,11 @@
 use crate::cstr;
 use crate::eval::typval::DictRef;
 use crate::guard::Suppress;
+use crate::memory::ThinCString;
 use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
+use crate::types::String_0;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -57,7 +60,7 @@ unsafe fn get_var_from(
     let _no_emsg = Suppress::emsg();
     // SAFETY: the caller's obligation -- a writable value holding nothing.
     let mut ret = unsafe { Tv::new(result) };
-    ret.write_string_raw(ptr::null_mut());
+    ret.write_string(None);
 
     if let (false, Some(mut tp), Some(mut w)) = (varname.is_null(), tabpage, win)
         && (htname != b'b' as c_int || buffer.is_some())
@@ -150,7 +153,9 @@ fn getwinvar(args: &[TypVal], result: &mut TypVal, off: c_int) {
         TabPage::current_or_none()
     };
     let win = find_win_by_nr(&args[off as usize], tp);
-    let varname = numbuf.string_ptr_chk(&args[off as usize + 1]);
+    let varname = numbuf
+        .string_chk(&args[off as usize + 1])
+        .map_or(ptr::null(), CStr::as_ptr);
     let deftv = args.get(off as usize + 2);
     let nil = None;
     // SAFETY: the caller's obligation -- `off + 3` live values -- and the
@@ -214,21 +219,13 @@ pub(crate) unsafe fn tv_to_optval(
         // number at all, so a zero from a String has to be re-read: it
         // is only honest if the string is all '0's and nothing else.
         if !err && tvh.v_type() == VAR_STRING && n == 0 {
-            // SAFETY: the kind says the value holds a string.
-            let s = tvh.string_or_null();
-            let mut idx = 0;
-            while !s.is_null() && unsafe { *s.add(idx) } == b'0' as c_char {
-                idx += 1;
-            }
-            if idx == 0 || unsafe { *s.add(idx) } != NUL as c_char {
+            let s = tvh.string_bytes();
+            let zeros = s.iter().take_while(|&&byte| byte == b'0').count();
+            if zeros == 0 || zeros != s.len() {
                 err = true;
-                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (option, arg1) = unsafe {
-                    (
-                        c_str(option),
-                        c_str(if s.is_null() { c"".as_ptr() } else { s }),
-                    )
-                };
+                // SAFETY: the caller's NUL-terminated option name.
+                let option = unsafe { c_str(option) };
+                let arg1 = msg_bytes(s);
                 semsg!("E521: Number required: &{option} = '{arg1}'");
             }
         }
@@ -240,9 +237,11 @@ pub(crate) unsafe fn tv_to_optval(
     } else if option_has_str {
         // Never set a string option to `v:true` or `v:null`.
         if tvh.v_type() != VAR_BOOL && tvh.v_type() != VAR_SPECIAL {
-            let strval = nbuf.string_ptr_chk(tv);
-            err = strval.is_null();
-            OptVal::string(unsafe { cstr_to_string(strval) })
+            let strval = nbuf.string_chk(tv);
+            err = strval.is_none();
+            OptVal::string(
+                strval.map_or(String_0::NULL, |text| String_0::from_bytes(text.to_bytes())),
+            )
         } else {
             if !is_tty_opt {
                 err = true;
@@ -284,7 +283,9 @@ pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
             rettv.write_number(number as VarNumber);
         }
         OptVal::String(string) => {
-            rettv.write_string_raw(string.data());
+            // SAFETY: the option's own NUL-terminated block, or null; the
+            // answer takes it over, as the note above says.
+            rettv.write_string(unsafe { ThinCString::from_raw(string.data()) });
         }
         OptVal::Nil => {}
     }
@@ -330,7 +331,9 @@ fn setwinvar(args: &[TypVal], off: c_int) {
         TabPage::current_or_none()
     };
     let win = find_win_by_nr(&args[off as usize], tp);
-    let varname = numbuf.string_ptr_chk(&args[off as usize + 1]);
+    let varname = numbuf
+        .string_chk(&args[off as usize + 1])
+        .map_or(ptr::null(), CStr::as_ptr);
     let varp = &args[off as usize + 2];
     let Some(w) = win.filter(|_| !varname.is_null()) else {
         return;
@@ -377,7 +380,9 @@ unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: &TypVal) {
 /// `gettabvar()`.
 pub fn f_gettabvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let varname = numbuf.string_ptr_chk(&args[1]);
+    let varname = numbuf
+        .string_chk(&args[1])
+        .map_or(ptr::null(), CStr::as_ptr);
     let tp = find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int);
     // Any window of that tab page will do: only its `t:` scope is read.
     let win = any_window_of(tp);
@@ -401,7 +406,9 @@ pub fn f_getwinvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `getbufvar()`.
 pub fn f_getbufvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let varname = numbuf.string_ptr_chk(&args[1]);
+    let varname = numbuf
+        .string_chk(&args[1])
+        .map_or(ptr::null(), CStr::as_ptr);
     let buf = tv_get_buf_from_arg(&args[0]);
     let deftv = args.get(2);
     let (tp, win) = (TabPage::current_or_none(), Win::current_or_none());
@@ -418,7 +425,9 @@ pub fn f_settabvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let tp = find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int);
-    let varname = numbuf.string_ptr_chk(&args[1]);
+    let varname = numbuf
+        .string_chk(&args[1])
+        .map_or(ptr::null(), CStr::as_ptr);
     let varp = &args[2];
     if varname.is_null() || tp.is_none() {
         return;
@@ -457,7 +466,9 @@ pub fn f_setbufvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if check_secure() || !tv_check_str_or_nr(&args[0]) {
         return;
     }
-    let varname = numbuf.string_ptr_chk(&args[1]);
+    let varname = numbuf
+        .string_chk(&args[1])
+        .map_or(ptr::null(), CStr::as_ptr);
     let buf = tv_get_buf(&args[0], 0);
     let varp = &args[2];
     if buf.is_none() || varname.is_null() {

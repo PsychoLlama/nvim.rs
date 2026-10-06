@@ -12,6 +12,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::message_fmt::c_str;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
@@ -626,9 +627,10 @@ impl Definition<'_> {
         let item = dict.find_mut(key).expect("the entry just found or added");
         // Overwrite the existing dict entry.
         tv_clear(&mut item.di_tv);
-        // SAFETY: `name` is the NUL-terminated name being defined.
-        let owned = unsafe { xmemdupz(self.name as *const c_void, namelen) } as *mut c_char;
-        item.di_tv.write_func_name_raw(owned);
+        // SAFETY: `name` is the name being defined, `namelen` bytes of it.
+        let name = unsafe { ::core::slice::from_raw_parts(self.name.cast::<u8>(), namelen) };
+        item.di_tv
+            .write_func_name(Some(ThinCString::from_bytes(name)));
         Ok(())
     }
 

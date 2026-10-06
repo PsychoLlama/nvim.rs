@@ -12,7 +12,6 @@
 )]
 
 use super::*;
-use crate::memory::handoff::owned_cstr;
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
 /// `getwinpos([{timeout}])` — the GUI's window position, which a terminal
@@ -202,7 +201,7 @@ pub fn f_winrestcmd(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             }
         }
     }
-    result.write_string_raw(owned_cstr(cmds));
+    result.write_string(Some(cmds.into()));
 }
 
 /// `winrestview({dict})` — put back what `winsaveview()` saved.

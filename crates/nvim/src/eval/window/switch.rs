@@ -104,7 +104,7 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
 
 /// `win_execute({winid}, {command} [, {silent}])`.
 pub fn f_win_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     // SAFETY: the arguments and `result` are live typvals; the saved state is a
     // live local that `win_execute_after` is given whatever happens between.
     let id = number_as_int(arg_number(args, 0));

@@ -19,7 +19,7 @@ use neovim::eval::typval::{
 };
 use neovim::guard::{Suppress, sandbox};
 use neovim::mbyte::convert_setup;
-use neovim::memory::{xfree, xmalloc, xstrdup};
+use neovim::memory::{ThinCString, xfree, xmalloc, xstrdup};
 use neovim::types::{Callback, Dict, Failed, VarLock, VimConv};
 use std::ffi::c_int;
 
@@ -329,7 +329,10 @@ fn getting_a_string_renders_a_scalar_into_the_lent_buffer() {
         let get = |d: *const Dict, key: &str, msg: Option<&str>, buf: &mut NumBuf| {
             check_emsg(
                 log.editor(),
-                || dict_get_string_buf((d).as_ref(), cstr(key).to_bytes(), buf),
+                || {
+                    dict_get_string_buf((d).as_ref(), cstr(key).to_bytes(), buf)
+                        .map_or(ptr::null(), CStr::as_ptr)
+                },
                 msg,
             )
         };
@@ -401,7 +404,10 @@ fn getting_a_string_with_save_allocates_the_answer() {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
-                || dict_get_string_alloc((d).as_ref(), cstr(key).to_bytes()),
+                || {
+                    dict_get_string_alloc((d).as_ref(), cstr(key).to_bytes())
+                        .map_or(ptr::null_mut(), ThinCString::into_raw)
+                },
                 msg,
             );
             let answer =
@@ -463,7 +469,10 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
-                || dict_get_string_buf((d).as_ref(), cstr(key).to_bytes(), &mut scratch),
+                || {
+                    dict_get_string_buf((d).as_ref(), cstr(key).to_bytes(), &mut scratch)
+                        .map_or(ptr::null(), CStr::as_ptr)
+                },
                 None,
             );
             if is_float {
@@ -529,7 +538,15 @@ fn getting_a_checked_string_falls_back_to_the_default() {
                 log.clear();
                 let ret = check_emsg(
                     log.editor(),
-                    || dict_get_string_buf_chk(d.as_ref(), key, &mut scratch, def),
+                    || {
+                        dict_get_string_buf_chk(
+                            d.as_ref(),
+                            key,
+                            &mut scratch,
+                            Some(CStr::from_ptr(def)),
+                        )
+                        .map_or(ptr::null(), CStr::as_ptr)
+                    },
                     None,
                 );
                 if is_float {

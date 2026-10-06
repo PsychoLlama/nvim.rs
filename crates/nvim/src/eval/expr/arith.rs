@@ -8,7 +8,6 @@
 #![forbid(unsafe_code)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::memory::handoff::owned_cstr;
 use core::ffi::c_int;
 
 use crate::eval::typval::{
@@ -107,7 +106,7 @@ pub(crate) fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     joined.extend_from_slice(s1);
     joined.extend_from_slice(s2.to_bytes());
     tv_clear(tv1);
-    tv1.write_string_raw(owned_cstr(joined));
+    tv1.write_string(Some(joined.into()));
     true
 }
 

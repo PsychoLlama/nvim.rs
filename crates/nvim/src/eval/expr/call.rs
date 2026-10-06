@@ -259,7 +259,7 @@ pub(crate) fn eval_method(
                         semsg!("E488: Trailing characters: {at}");
                     }
                     ret = Err(Failed);
-                } else if callee.as_func_name().is_some_and(|name| !name.is_null()) {
+                } else if callee.func_name().is_some() {
                     name = callee
                         .callable_name()
                         .map_or(&[][..], CStr::to_bytes)

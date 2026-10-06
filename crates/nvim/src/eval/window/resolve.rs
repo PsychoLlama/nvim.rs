@@ -137,12 +137,10 @@ fn get_winnr(tabpage: TabPage, argvar: Option<&TypVal>) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut twin = tabpage.curwin();
     if let Some(argvar) = argvar {
-        // SAFETY: the caller's obligation; `endp` is a live local and
-        // `tv_get_string_chk` hands back a NUL-terminated string or NULL.
-        let arg = numbuf.string_ptr_chk(argvar);
-        let resolved = match arg.is_null() {
-            true => None,
-            false => unsafe { relative_win(tabpage, twin, arg) },
+        let resolved = match numbuf.string_chk(argvar) {
+            None => None,
+            // SAFETY: the argument's NUL-terminated string form.
+            Some(arg) => unsafe { relative_win(tabpage, twin, arg.as_ptr()) },
         };
         match resolved {
             Some(wp) => twin = wp,
@@ -328,10 +326,7 @@ pub fn f_tabpagenr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let nr = if args.is_empty() {
         tab_index(TabPage::current())
     } else {
-        // SAFETY: the arguments are live typvals, and `tv_get_string_chk`
-        // hands back a NUL-terminated string or NULL.
-        let arg = numbuf.string_ptr_chk(&args[0]);
-        let word = (!arg.is_null()).then(|| unsafe { CStr::from_ptr(arg) });
+        let word = numbuf.string_chk(&args[0]);
         match word.map(CStr::to_bytes) {
             None => 0,
             // `tabpage_index(NULL)` counts one past the last tab page.

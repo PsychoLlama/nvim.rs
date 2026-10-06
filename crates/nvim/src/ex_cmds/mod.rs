@@ -380,12 +380,11 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     }
     let mut numbuf = NumBuf::new();
     // SAFETY: as above; `nr` is inside the list.
-    let picked = list_find_str(unsafe { list.as_ref() }, nr - 1, &mut numbuf);
-    if picked.is_null() {
+    let Some(picked) = list_find_str(unsafe { list.as_ref() }, nr - 1, &mut numbuf) else {
         return;
-    }
+    };
     // SAFETY: `picked` is a live string, and the expansion is ours to free.
-    let expanded = Owned(unsafe { expand_env_save(picked.cast_mut()) });
+    let expanded = Owned(unsafe { expand_env_save(picked.as_ptr().cast_mut()) });
     // SAFETY: the expansion is a NUL-terminated block this frame owns.
     excmd.set_arg_text(unsafe { cstr::bytes_at(expanded.0) });
     excmd.cmdidx = CmdIdx::edit;

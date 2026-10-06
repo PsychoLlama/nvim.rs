@@ -23,12 +23,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::memory::ThinCString;
+use crate::message_fmt::msg_cstr;
 use ::core::ffi::CStr;
 use ::core::ptr::NonNull;
 
 use super::*;
 use crate::cstr;
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::{CONV_NONE, Failed, Refcount};
 
@@ -466,16 +468,17 @@ impl Dict {
         len: ::core::ffi::c_int,
     ) -> Result<(), Failed> {
         let s = if val.is_null() {
-            ::core::ptr::null_mut()
+            None
         } else if len < 0 {
             // SAFETY: the caller's NUL-terminated string.
-            unsafe { xstrdup(val) }
+            Some(ThinCString::from_cstr(unsafe { CStr::from_ptr(val) }))
         } else {
-            // SAFETY: the caller's `len` readable bytes.
-            unsafe { xstrndup(val, len as size_t) }
+            // SAFETY: the caller's `len` readable bytes; a NUL among them
+            // ends the copy for every reader, as `xstrndup`'s did.
+            let bytes = unsafe { ::core::slice::from_raw_parts(val.cast::<u8>(), len as usize) };
+            Some(ThinCString::from_bytes(bytes))
         };
-        // SAFETY: a fresh allocation this call owns and hands on.
-        unsafe { self.add_allocated_str(key, s) }
+        self.add_value(key, TypVal::string(s))
     }
 
     /// Add `val` under `key`, taking ownership of the allocation.
@@ -489,11 +492,9 @@ impl Dict {
         key: &[u8],
         val: *mut ::core::ffi::c_char,
     ) -> Result<(), Failed> {
-        let item = Self::fresh_item(key);
-        // SAFETY: the item just allocated, which takes `val` over.
-        unsafe { (*item).di_tv.write_string_raw(val) };
-        // SAFETY: as above.
-        unsafe { self.add_or_free(item) }
+        // SAFETY: the caller's promise: an `xmalloc`ed block or null, which
+        // the value takes over.
+        self.add_value(key, TypVal::string(unsafe { ThinCString::from_raw(val) }))
     }
 
     /// Add a funcref to `func` under `key`.
@@ -505,14 +506,15 @@ impl Dict {
     /// `uf_namelen` readable bytes.
     pub unsafe fn add_func(&mut self, key: &[u8], func: *mut UserFunc) -> Result<(), Failed> {
         let item = Self::fresh_item(key);
-        let name = unsafe { (&raw mut (*func).uf_name).cast() };
+        let name = unsafe { (&raw const (*func).uf_name).cast::<u8>() };
         // SAFETY: the caller's promise: a live function.
         let func = unsafe { Live::<UserFunc>::new(func) };
         let namelen = func.uf_namelen;
         // SAFETY: the function's own name, `namelen` bytes of it.
-        let owned = unsafe { xmemdupz(name, namelen) } as *mut ::core::ffi::c_char;
+        let owned =
+            ThinCString::from_bytes(unsafe { ::core::slice::from_raw_parts(name, namelen) });
         // SAFETY: the item just allocated, which takes the name over.
-        unsafe { (*item).di_tv.write_func_name_raw(owned) };
+        unsafe { (*item).di_tv.write_func_name(Some(owned)) };
         // SAFETY: a fresh item in no table.
         if unsafe { self.add_item(item) }.is_err() {
             // SAFETY: the item the add refused.
@@ -520,7 +522,14 @@ impl Dict {
             return Err(Failed);
         }
         // SAFETY: the name the item now holds.
-        unsafe { func_ref((*item).di_tv.func_name_or_null()) };
+        unsafe {
+            func_ref(
+                (*item)
+                    .di_tv
+                    .func_name()
+                    .map_or(::core::ptr::null_mut(), |name| name.as_ptr().cast_mut()),
+            )
+        };
         Ok(())
     }
 }
@@ -886,18 +895,15 @@ pub unsafe fn tv_dict_remove(
     {
         return;
     }
-    let key = numbuf.string_ptr_chk(&args[1]);
-    if key.is_null() {
+    let Some(key) = numbuf.string_chk(&args[1]) else {
         return;
-    }
-    // SAFETY: the dictionary the argument holds, and a NUL-terminated key
-    // from the scratch buffer. The pointer form is what this needs: the
-    // value is moved out of the item and the item is then unlinked, which
-    // reaches the dictionary again.
-    let di = unsafe { (*d).find_ptr(cstr::bytes_at(key)) };
+    };
+    // SAFETY: the dictionary the argument holds. The pointer form is what
+    // this needs: the value is moved out of the item and the item is then
+    // unlinked, which reaches the dictionary again.
+    let di = unsafe { (*d).find_ptr(key.to_bytes()) };
     if di.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let key = unsafe { c_str(key) };
+        let key = msg_cstr(key);
         semsg!("E716: Key not present in Dictionary: \"{key}\"");
         return;
     }
@@ -917,8 +923,8 @@ pub unsafe fn tv_dict_remove(
     unsafe { tv_dict_item_remove(d, di) };
     // SAFETY: the dictionary the argument holds.
     if dict_is_watched(unsafe { d.as_ref() }) {
-        // SAFETY: as above, and a NUL-terminated key from the scratch.
-        unsafe { dict_watcher_notify(d, CStr::from_ptr(key), None, Some(result)) };
+        // SAFETY: as above.
+        unsafe { dict_watcher_notify(d, key, None, Some(result)) };
     }
 }
 

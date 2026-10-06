@@ -19,6 +19,8 @@
 use crate::channel::main_loop_events;
 use crate::drawscreen::status_redraw_buf;
 use crate::eval::eval_call_provider;
+use crate::memory::ThinCString;
+use crate::types::TypVal;
 
 use crate::api::private::helpers::dict_set_var;
 use crate::eval::typval::tv_list_alloc;
@@ -247,8 +249,8 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
         b'+' as c_char
     };
     let lines = tv_list_alloc(1 as ptrdiff_t);
-    // SAFETY: as above.
-    unsafe { (*lines.as_ptr()).push_allocated_string(data) };
+    // SAFETY: as above; the list takes `data` over.
+    unsafe { (*lines.as_ptr()).push(TypVal::string(ThinCString::from_raw(data))) };
     let held = tv_list_alloc(3 as ptrdiff_t);
     let args = held.as_ptr();
     // SAFETY: as above.

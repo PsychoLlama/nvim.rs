@@ -51,7 +51,7 @@ use crate::hashtab::{
 use crate::lua::executor::nlua_set_sctx;
 use crate::mbyte::utf_char2bytes;
 use crate::memory::XString;
-use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy, xstrndup};
+use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xstrlcat, xstrlcpy};
 use crate::message::state::emsg_severe;
 use crate::message::{
     e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,

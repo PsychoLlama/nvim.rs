@@ -16,11 +16,12 @@ use crate::cstr;
 use crate::eval::typval::DictRef;
 use crate::eval::typval::ListRef;
 use crate::eval::typval::PartialRef;
+use crate::memory::ThinCString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::snprintf;
 use core::ffi::{c_char, c_int};
-use core::mem::{ManuallyDrop, offset_of};
+use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
@@ -174,12 +175,9 @@ pub(crate) fn get_vim_var_str(idx: Vv) -> *mut c_char {
         VAR_STRING,
         "v: variable {idx:?} is not a String"
     );
-    let s = tv.string_or_null();
-    if s.is_null() {
-        c"".as_ptr().cast_mut()
-    } else {
-        s
-    }
+    tv.string_ref()
+        .map_or(c"".as_ptr(), ThinCString::as_ptr)
+        .cast_mut()
 }
 
 /// `v:` variable `idx` as a Partial.
@@ -241,14 +239,16 @@ pub fn set_vim_var_char(c: c_int) {
 pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
-    tv.write_string_raw(if val.is_null() {
-        ptr::null_mut()
+    tv.write_string(if val.is_null() {
+        None
     } else if len == -1 {
         // SAFETY: the caller's obligation -- NUL-terminated.
-        unsafe { xstrdup(val) }
+        Some(ThinCString::from_cstr(unsafe { CStr::from_ptr(val) }))
     } else {
-        // SAFETY: the caller's obligation -- readable for `len`.
-        unsafe { xstrndup(val, len as size_t) }
+        // SAFETY: the caller's obligation -- readable for `len`. A NUL
+        // among them ends the string for every reader, as `xstrndup` did.
+        let bytes = unsafe { ::core::slice::from_raw_parts(val.cast::<u8>(), len as size_t) };
+        Some(ThinCString::from_bytes(bytes))
     });
 }
 
@@ -301,9 +301,10 @@ pub fn set_reg_var(c: c_int) {
     // Only write when it changed, to avoid the reallocation. The test
     // is against `c`, not against the name that would be stored, so
     // `set_reg_var(0)` always rewrites -- upstream's.
-    // SAFETY: `v:register` is declared a String, so the value holds one.
-    let cur = vimvar_val(Vv::Register).string_or_null();
-    if cur.is_null() || unsafe { *cur } != c as c_char {
+    let unchanged = vimvar_val(Vv::Register)
+        .string_ref()
+        .is_some_and(|cur| cur.first() == c as u8);
+    if !unchanged {
         let buf = [regname, NUL as c_char];
         // SAFETY: a two-byte NUL-terminated local.
         unsafe { set_vim_var_string(Vv::Register, buf.as_ptr(), 1) };
@@ -320,10 +321,13 @@ pub fn set_reg_var(c: c_int) {
 pub(crate) unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Exception);
     if oldval.is_null() {
-        // SAFETY: `v:exception` is declared a String.
-        return tv.string_or_null();
+        return tv
+            .string_ref()
+            .map_or(ptr::null_mut(), |s| s.as_ptr().cast_mut());
     }
-    tv.write_string_raw(oldval);
+    // SAFETY: the caller's obligation -- the block the read half answered,
+    // which the variable owns again.
+    tv.write_string(unsafe { ThinCString::from_raw(oldval) });
     ptr::null_mut()
 }
 
@@ -334,10 +338,12 @@ pub(crate) unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
 pub(crate) unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Throwpoint);
     if oldval.is_null() {
-        // SAFETY: `v:throwpoint` is declared a String.
-        return tv.string_or_null();
+        return tv
+            .string_ref()
+            .map_or(ptr::null_mut(), |s| s.as_ptr().cast_mut());
     }
-    tv.write_string_raw(oldval);
+    // SAFETY: as [`v_exception`].
+    tv.write_string(unsafe { ThinCString::from_raw(oldval) });
     ptr::null_mut()
 }
 
@@ -357,8 +363,6 @@ pub(crate) unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
 /// `oldarg` is NULL or an owned string.
 pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Cmdarg);
-    // SAFETY: `v:cmdarg` is declared a String.
-    let oldval = tv.string_or_null();
 
     'error: {
         let Some(command) = excmd else {
@@ -447,14 +451,17 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
         }
         debug_assert!(xlen <= newval_len);
 
-        tv.write_string_raw(newval);
-        return oldval;
+        // The old value goes to the caller, to put back later.
+        let oldval = tv.take_string();
+        // SAFETY: the block allocated above, now NUL-terminated.
+        tv.write_string(unsafe { ThinCString::from_raw(newval) });
+        return oldval.map_or(ptr::null_mut(), ThinCString::into_raw);
     }
 
-    // SAFETY: the caller's obligation -- `oldval` is this variable's own
-    // string, which nothing else holds.
-    unsafe { xfree(oldval.cast()) };
-    tv.write_string_raw(oldarg);
+    drop(tv.take_string());
+    // SAFETY: the caller's obligation -- `oldarg` is an owned string or
+    // null, which the variable takes back.
+    tv.write_string(unsafe { ThinCString::from_raw(oldarg) });
     ptr::null_mut()
 }
 
@@ -508,27 +515,22 @@ pub unsafe fn before_set_vvar(
             // SAFETY: a live value and a live local.
             unsafe { tv_copy(&*cur, &mut oldtv) };
         }
-        // SAFETY: the kind says the value holds a string, which
-        // this item owns.
-        unsafe { xfree(stored.string_or_null().cast()) };
-        stored.write_string_raw(ptr::null_mut());
+        drop(stored.take_string());
 
         if copy || tv.v_type() != VAR_STRING {
             // SAFETY: a live value; the answer lives in `numbuf` or in it.
-            let val = numbuf.string_ptr(unsafe { &*tv.raw() });
+            let val = numbuf.string(unsafe { &*tv.raw() });
             // Careful: assigning to v:errmsg, `tv_get_string()` may
             // itself raise an error, which sets the variable -- so only
             // store when it is still empty.
-            // SAFETY: the string arm, as above.
-            if stored.string_or_null().is_null() {
-                stored.write_string_raw(unsafe { xstrdup(val) });
+            if stored.string_ref().is_none() {
+                stored.write_string(Some(ThinCString::from_cstr(val)));
             }
         } else {
             // Take the string over, rather than copy and free: the value
-            // leaves `tv`, so the item now owns the only copy -- and the
-            // take's answer must not release it on its way out of scope.
-            let taken = ManuallyDrop::new(tv.take_value());
-            stored.write_string_raw(taken.string_or_null());
+            // leaves `tv`, so the item now owns the only copy.
+            let mut taken = tv.take_value();
+            stored.write_string(taken.take_string());
         }
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.

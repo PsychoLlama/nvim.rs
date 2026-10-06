@@ -60,7 +60,7 @@ use crate::eval::typval::{
     tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::ex_getln::text_or_buf_locked;
-use crate::memory::{xfree, xmallocz, xstrdup};
+use crate::memory::{xfree, xstrdup};
 use crate::r#move::{
     changed_window_setting, check_topfill, set_topline, update_curswant, validate_botline_win,
     validate_cursor,

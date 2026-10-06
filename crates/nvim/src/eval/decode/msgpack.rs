@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
+use crate::memory::ThinCString;
 use core::ffi::{c_char, c_int};
 use core::mem::MaybeUninit;
 use core::ptr;
@@ -39,7 +39,7 @@ use crate::mpack::mpack_core::{
 };
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::types::{
-    List, TypVal, VAR_STRING, VAR_UNKNOWN, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow,
+    List, TypVal, VAR_UNKNOWN, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow,
     kSpecialVarNull, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t,
 };
 use crate::winlayer::Live;
@@ -217,11 +217,7 @@ pub unsafe fn typval_parser_error_free(parser: *mut mpack_parser_t) {
 /// `pairs` holds `len * 2` decoded typvals and `result` is writable.
 unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> bool {
     for i in 0..len {
-        let key = &pairs[i * 2];
-        if key.v_type() != VAR_STRING
-            || key.string_or_null().is_null()
-            || unsafe { *key.string_or_null() } == 0
-        {
+        if pairs[i * 2].string_ref().is_none_or(ThinCString::is_empty) {
             return false;
         }
     }
@@ -231,8 +227,9 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
     unsafe { ptr::write(result, TypVal::dict(Some(dict_held))) };
 
     for i in 0..len {
-        let key = pairs[i * 2].string_or_null();
-        let di = unsafe { tv_dict_item_alloc_len(key, cstr::bytes_at(key).len()) };
+        let key = pairs[i * 2].string_bytes();
+        // SAFETY: the key's own bytes, which the item copies.
+        let di = unsafe { tv_dict_item_alloc_len(key.as_ptr().cast(), key.len()) };
         if unsafe { (*dict).add_item(di) }.is_err() {
             // Duplicate key.  Disown the values already handed to the
             // dictionary — the special-map path is about to re-use every
@@ -256,7 +253,7 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
 
     // The keys were copied into the items; the originals are ours to free.
     for i in 0..len {
-        unsafe { xfree(pairs[i * 2].string_or_null().cast()) };
+        drop(pairs[i * 2].take_string());
     }
     true
 }

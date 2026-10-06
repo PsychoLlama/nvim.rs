@@ -46,7 +46,7 @@ pub use prompt::{
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::buffer::{
     buf_ensure_loaded, buf_is_nofilename, buf_is_prompt, buflist_add, buflist_findlnum,
-    buflist_findname_exp, buflist_new, find_buf,
+    buflist_findname_exp, find_buf,
 };
 use crate::change::{appended_lines_mark, changed_lines, deleted_lines_mark, inserted_bytes};
 use crate::cursor::check_cursor_col;
@@ -66,7 +66,7 @@ use core::{mem, ptr};
 
 use crate::buffer::state::swap_exists_action;
 use crate::memline::{ml_append, ml_delete_flags, ml_get, ml_replace, ml_replace_buf};
-use crate::memory::{strnequal, xfree, xstrdup};
+use crate::memory::{strnequal, xfree};
 use crate::message::state::did_emsg;
 use crate::r#move::update_topline;
 use crate::path::path_with_url;

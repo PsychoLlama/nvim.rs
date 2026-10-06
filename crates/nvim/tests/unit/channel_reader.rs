@@ -83,8 +83,8 @@ fn line(text: &str) -> Tv {
     Tv::s(text)
 }
 
-/// The empty line a *newline* opens. `List::push_allocated_string` takes
-/// a null for it, so it reads back as a NULL string and not as `""` — the
+/// The empty line a *newline* opens. The list is handed the null string
+/// for it, so it reads back as a NULL string and not as `""` — the
 /// two are the same line to Vimscript but not to `assert_eq!`.
 fn opened() -> Tv {
     Tv::NullStr

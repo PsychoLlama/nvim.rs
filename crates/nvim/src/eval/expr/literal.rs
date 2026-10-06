@@ -20,8 +20,8 @@ use crate::keycodes::{
     FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, special_key_at, trans_special_into,
 };
 use crate::mbyte::encode_char;
+use crate::memory::ThinCString;
 use crate::memory::XString;
-use crate::memory::handoff::owned_cstr;
 use crate::message::{emsg, iemsg};
 use crate::message_fmt::msg_bytes;
 use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_option};
@@ -31,7 +31,6 @@ use crate::os::env::{expand_env_save_opt_of, vim_getenv_owned};
 use crate::semsg;
 use crate::types::{Failed, Float, MB_MAXCHAR, NUL, OptVal, TypVal};
 use core::ffi::c_int;
-use core::ptr::null_mut;
 
 /// The NUL byte, as the walks below compare it.
 const END: u8 = NUL as u8;
@@ -206,7 +205,7 @@ pub(crate) fn eval_string(
     let mut out = Vec::new();
     string_body(cursor, evaluate.then_some(&mut out), interpolate)?;
     if evaluate {
-        result.write_string_raw(owned_cstr(out));
+        result.write_string(Some(out.into()));
     }
     Ok(())
 }
@@ -436,7 +435,7 @@ pub(crate) fn eval_lit_string(
     let mut out = Vec::new();
     lit_string_body(cursor, evaluate.then_some(&mut out), interpolate)?;
     if evaluate {
-        result.write_string_raw(owned_cstr(out));
+        result.write_string(Some(out.into()));
     }
     Ok(())
 }
@@ -560,10 +559,10 @@ pub(crate) fn eval_interp_string(
 
     // A skipped run, or an error before the first piece, answers null; an
     // evaluated run answers its text even when it is empty.
-    result.write_string_raw(if !text.is_empty() || (ret.is_ok() && evaluate) {
-        owned_cstr(text)
+    result.write_string(if !text.is_empty() || (ret.is_ok() && evaluate) {
+        Some(text.into())
     } else {
-        null_mut()
+        None
     });
     Ok(())
 }
@@ -596,6 +595,6 @@ pub(crate) fn eval_env_var(
         let expanded = expand_env_save_opt_of(spelled.as_cstr(), false);
         (expanded.first() != Some(&b'$')).then_some(expanded)
     });
-    result.write_string_raw(value.map_or(null_mut(), XString::into_raw));
+    result.write_string(value.map(ThinCString::from));
     Ok(())
 }

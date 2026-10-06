@@ -4,7 +4,7 @@
 
 use crate::eval::Parsed;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::memory::XString;
+use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 
@@ -80,7 +80,7 @@ pub(crate) fn get_literal_key(cursor: &mut Cursor<'_>, tv: &mut TypVal) -> Resul
     if len == 0 {
         return Err(Failed);
     }
-    tv.write_string_raw(XString::from_bytes(&rest[..len]).into_raw());
+    tv.write_string(Some(ThinCString::from_bytes(&rest[..len])));
     cursor.bump(len);
     cursor.skip_white();
     Ok(())

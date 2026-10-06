@@ -14,7 +14,8 @@
 #![allow(unsafe_code)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use core::ffi::{c_char, c_int, c_void};
+use crate::memory::ThinCString;
+use core::ffi::{c_int, c_void};
 use core::mem::{offset_of, size_of};
 
 use crate::eval::typval::{
@@ -25,8 +26,8 @@ use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::{Fi, ForInfo, e_string_list_or_blob_required, eval0_in_cmd};
 use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
-use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
-use crate::types::{ExArg, ListWatch, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, size_t};
+use crate::memory::{xcalloc, xfree};
+use crate::types::{ExArg, ListWatch, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
@@ -113,15 +114,10 @@ pub unsafe fn eval_for_line(excmd: &mut ExArg, errp: *mut bool, skip: bool) -> *
                     // The String is taken over rather than copied; a
                     // null one becomes an owned empty string so that
                     // `free_for_info` has something to free either way.
-                    // The string's ownership moves into `fi` with it, and
-                    // nothing clears `tv` on this path, so it is not
-                    // nulled out here.
-                    fi.fi_string = tv.string_or_null();
-                    tv.disown();
-                    if fi.fi_string.is_null() {
-                        // SAFETY: the literal is NUL-terminated.
-                        fi.fi_string = unsafe { xstrdup(c"".as_ptr()) };
-                    }
+                    fi.fi_string = tv
+                        .take_string()
+                        .unwrap_or_else(ThinCString::empty)
+                        .into_raw();
                 }
                 _ => {
                     // SAFETY: the message is a NUL-terminated literal, and
@@ -175,9 +171,10 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: &[u8]) -> bool {
         if len == 0 {
             return false;
         }
-        let mut tv = UNSET_TV;
         // SAFETY: `len` bytes from `at` are the character just measured.
-        tv.write_string_raw(unsafe { xmemdupz(at as *const c_void, len as size_t) as *mut c_char });
+        let text = unsafe { core::slice::from_raw_parts(at.cast::<u8>(), len as usize) };
+        let mut tv = UNSET_TV;
+        tv.write_string(Some(ThinCString::from_bytes(text)));
         // SAFETY: `rec` is the caller's record.
         unsafe { (*rec).fi_byte_idx += len };
         return assign(&fi, arg, &mut tv);

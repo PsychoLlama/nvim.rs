@@ -18,8 +18,10 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::semsg;
+use crate::types::TypVal;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -79,8 +81,8 @@ unsafe fn get_reg_wrap_one_line(s: *mut c_char, flags: c_int) -> *mut c_void {
         return s as *mut c_void;
     }
     let list = tv_list_alloc(1);
-    // SAFETY: as above.
-    unsafe { (*list.as_ptr()).push_allocated_string(s) };
+    // SAFETY: as above; the list takes `s` over.
+    unsafe { (*list.as_ptr()).push(TypVal::string(ThinCString::from_raw(s))) };
     // The caller takes the reference over.
     list.into_raw() as *mut c_void
 }

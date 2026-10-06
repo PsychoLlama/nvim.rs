@@ -16,6 +16,7 @@ use crate::eval::typval::{
 use crate::keycodes::Ctrl_V;
 use crate::mbyte::{cluster_len, mb_prevptr};
 use crate::memline::{ml_get, ml_get_buf_len, ml_get_len};
+use crate::memory::ThinCString;
 use crate::memory::xmalloc;
 use crate::message::e_buffer_is_not_loaded;
 use crate::message::emsg;
@@ -387,7 +388,9 @@ pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         debug_assert!(!text.data().is_null());
         // The list takes the block over, so the string gives it up rather
         // than releasing it here.
-        unsafe { (*result.list_or_null()).push_allocated_string(text.into_raw()) };
+        unsafe {
+            (*result.list_or_null()).push(TypVal::string(ThinCString::from_raw(text.into_raw())))
+        };
     }
 }
 

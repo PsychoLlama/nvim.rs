@@ -15,19 +15,14 @@ use super::lines::set_buffer_lines;
 use super::*;
 use crate::cstr;
 use crate::eval::typval::{NumBuf, list_items, list_items_mut, list_len};
+use crate::memory::ThinCString;
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
 
 /// Whether `s` ends in a newline — which asks the *next* `prompt_appendbuf()`
 /// to start a fresh line rather than extending this one.
-///
-/// # Safety
-/// `s` must be a NUL-terminated string.
-unsafe fn ends_in_newline(s: *const c_char) -> bool {
-    // SAFETY: the caller's obligation; the index is within the string because
-    // `strlen` measured it.
-    let len = unsafe { cstr::bytes_at(s) }.len();
-    len > 0 && unsafe { *s.add(len - 1) } == b'\n'.cast_signed()
+fn ends_in_newline(s: &[u8]) -> bool {
+    s.last() == Some(&b'\n')
 }
 
 /// `prompt_appendbuf({buf}, {string/list})` — 0 when the text went in.
@@ -69,15 +64,17 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         if lines.v_type() == VAR_LIST {
             let l = lines.list_or_null();
             if let Some(item) = (list_items_mut(unsafe { l.as_mut() })).first_mut() {
-                let itv = &raw mut item.li_tv;
-                let joined = unsafe { concat_str(text, numbuf.string_ptr(&*itv)) };
-                unsafe { tv_clear(&mut *itv) };
-                item.li_tv.write_string_raw(joined);
+                let joined = unsafe {
+                    ThinCString::from_raw(concat_str(text, numbuf.string(&item.li_tv).as_ptr()))
+                };
+                tv_clear(&mut item.li_tv);
+                item.li_tv.write_string(joined);
                 did_concat = true;
             }
         } else if lines.v_type() == VAR_STRING {
-            let joined = unsafe { concat_str(text, numbuf2.string_ptr(lines)) };
-            joined_string = TypVal::string_raw(joined);
+            let joined =
+                unsafe { ThinCString::from_raw(concat_str(text, numbuf2.string(lines).as_ptr())) };
+            joined_string = TypVal::string(joined);
             lines = &joined_string;
         }
     }
@@ -102,12 +99,11 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         let mut buf = buf;
         buf.b_prompt_append_new_line = if lines.v_type() == VAR_LIST {
             match list_items(lines.list_ref()).last() {
-                // SAFETY: the item's own string, NUL-terminated.
-                Some(last) => unsafe { ends_in_newline(numbuf3.string_ptr(&last.li_tv)) },
+                Some(last) => ends_in_newline(numbuf3.bytes(&last.li_tv)),
                 None => false,
             }
         } else {
-            lines.v_type() == VAR_STRING && unsafe { ends_in_newline(numbuf4.string_ptr(lines)) }
+            lines.v_type() == VAR_STRING && ends_in_newline(numbuf4.bytes(lines))
         };
     }
 }
@@ -164,13 +160,13 @@ pub fn f_prompt_setprompt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFunc
     let Some(mut buf) = tv_get_buf(&args[0], 0) else {
         return;
     };
-    let new_prompt = numbuf.string_ptr(&args[1]);
-    let new_prompt_len = len_as_int(unsafe { cstr::bytes_at(new_prompt) }.len());
+    let new_prompt = numbuf.string(&args[1]);
+    let new_prompt_len = len_as_int(new_prompt.count_bytes());
     if buf_is_prompt(Some(buf)) && !buf.b_ml.ml_mfp.is_null() {
-        unsafe { rewrite_prompt_line(buf, new_prompt, new_prompt_len) };
+        unsafe { rewrite_prompt_line(buf, new_prompt.as_ptr(), new_prompt_len) };
     }
     unsafe { xfree(buf.b_prompt_text.cast()) };
-    buf.b_prompt_text = unsafe { xstrdup(new_prompt) };
+    buf.b_prompt_text = ThinCString::from_cstr(new_prompt).into_raw();
     buf.b_prompt_start.mark.col = new_prompt_len;
 }
 

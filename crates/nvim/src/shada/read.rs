@@ -16,6 +16,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
@@ -345,7 +346,9 @@ impl Reading {
             };
             // SAFETY: `fname` is null or NUL-terminated.
             self.oldfiles_set.insert(unsafe { shada_key(fname) }.into());
-            unsafe { (*self.oldfiles_list).push_allocated_string(fname) };
+            // SAFETY: the list takes `fname` over, an `xmalloc`ed block or
+            // null.
+            unsafe { (*self.oldfiles_list).push(TypVal::string(ThinCString::from_raw(fname))) };
             if !self.want_marks {
                 entry.data.filemark_mut().fname = core::ptr::null_mut();
             }

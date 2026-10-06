@@ -820,7 +820,7 @@ fn appending_an_allocated_string_takes_ownership() {
 
         let s = xstrdup(cstr("test").as_ptr());
         log.clear();
-        (*l).push_allocated_string(s);
+        (*l).push(tv::string_tv(s));
         log.check(&[]);
         assert_eq!(
             (*list_last(l.as_mut())).li_tv.string(),
@@ -828,9 +828,9 @@ fn appending_an_allocated_string_takes_ownership() {
             "the caller's allocation itself, not a copy"
         );
 
-        (*l).push_allocated_string(ptr::null_mut());
+        (*l).push(tv::string_tv(ptr::null_mut()));
         log.check(&[]);
-        (*l).push_allocated_string(ptr::null_mut());
+        (*l).push(tv::string_tv(ptr::null_mut()));
         log.check(&[]);
 
         assert_eq!(
@@ -1813,7 +1813,7 @@ fn finding_a_string_by_index_renders_scalars() {
             let mut numbuf = NumBuf::new();
             let ret = check_emsg(
                 log.editor(),
-                || list_find_str(l.as_ref(), n, &mut numbuf),
+                || list_find_str(l.as_ref(), n, &mut numbuf).map_or(ptr::null(), CStr::as_ptr),
                 msg,
             );
             (!ret.is_null()).then(|| CStr::from_ptr(ret).to_string_lossy().into_owned())

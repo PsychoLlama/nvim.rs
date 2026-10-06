@@ -284,7 +284,9 @@ fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
         if !dir.is_null() && dir_len > 0 {
             let dir = unsafe { xmemdupz(dir as *const c_void, dir_len) } as *mut c_char;
             let path = unsafe { concat_fnames_realloc(dir, appname.as_ptr(), true) };
-            unsafe { (*list).push_allocated_string(path) };
+            // SAFETY: the list takes over the block `concat_fnames_realloc`
+            // answered.
+            unsafe { (*list).push(TypVal::string(ThinCString::from_raw(path))) };
         }
         if iter.is_null() {
             break;

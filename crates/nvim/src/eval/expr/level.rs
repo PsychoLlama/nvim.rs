@@ -16,6 +16,7 @@ use crate::charset::skip;
 use crate::eval::Cursor;
 use crate::eval::char_len_at;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::c_int;
@@ -40,7 +41,7 @@ use crate::message::emsg;
 use crate::message::state::{called_emsg, did_emsg};
 use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
-use crate::register::get_reg_contents;
+use crate::register::get_reg_contents_owned;
 use crate::strings::find_bytes;
 use crate::types::{
     ExArg, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_STRING,
@@ -522,8 +523,8 @@ pub(crate) fn eval7(
                 result.write_empty(VAR_STRING);
                 // Sign-extended, as the C is: `**arg` is a `char`.
                 let name = c_int::from(cursor.byte().cast_signed());
-                let text = get_reg_contents(name, kGRegExprSrc as c_int);
-                result.write_string_raw(text.cast());
+                let text = get_reg_contents_owned(name, kGRegExprSrc as c_int);
+                result.write_string(text.map(ThinCString::from));
             }
             // `@` at the very end of the line names no register.
             if cursor.byte() != NUL as u8 {

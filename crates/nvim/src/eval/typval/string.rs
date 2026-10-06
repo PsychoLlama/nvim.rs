@@ -156,25 +156,9 @@ impl TypVal {
 
     /// TRANSIENT.
     #[inline(always)]
-    pub(crate) fn as_func_name(&self) -> Option<*mut ::core::ffi::c_char> {
-        match self {
-            TypVal::Func(_) => Some(self.func_name_or_null()),
-            _ => None,
-        }
-    }
-
-    /// TRANSIENT.
-    #[inline(always)]
     pub(crate) fn write_string_raw(&mut self, raw: *mut ::core::ffi::c_char) {
         // SAFETY: TRANSIENT -- the callers hand over an owned block.
         self.write_string(unsafe { ThinCString::from_raw(raw) });
-    }
-
-    /// TRANSIENT.
-    #[inline(always)]
-    pub(crate) fn write_func_name_raw(&mut self, raw: *mut ::core::ffi::c_char) {
-        // SAFETY: TRANSIENT -- the callers hand over an owned block.
-        self.write_func_name(unsafe { ThinCString::from_raw(raw) });
     }
 
     /// TRANSIENT.
@@ -189,19 +173,6 @@ impl TypVal {
     pub(crate) fn func_raw(raw: *mut ::core::ffi::c_char) -> TypVal {
         // SAFETY: TRANSIENT -- the callers hand over an owned block.
         TypVal::func(unsafe { ThinCString::from_raw(raw) })
-    }
-
-    /// The string under either variant that holds one — `String`'s text or
-    /// `Func`'s function name — and NULL under any other.
-    ///
-    /// The arms that treat the two alike (`tv2bool`, `tv_copy`, the encoders)
-    /// are the reason this exists; a site that means only one of them wants
-    /// [`TypVal::string_or_null`] or [`TypVal::func_name_or_null`].
-    #[inline(always)]
-    pub(crate) fn string_or_func_name(&self) -> *mut ::core::ffi::c_char {
-        // TRANSIENT.
-        self.text_or_name()
-            .map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut())
     }
 
     /// Append `tail` to this String in place, growing its allocation. False,

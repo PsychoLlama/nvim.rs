@@ -17,6 +17,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::c_str;
@@ -393,7 +394,10 @@ unsafe fn script_query(
     }
 
     // SAFETY: the string is allocated for us and handed straight to the caller.
-    unsafe { *pat = dict_get_string_alloc((dict).as_ref(), b"name") };
+    unsafe {
+        *pat = dict_get_string_alloc((dict).as_ref(), b"name")
+            .map_or(ptr::null_mut(), ThinCString::into_raw)
+    };
     if !unsafe { *pat }.is_null() {
         regmatch.regprog = vim_regcomp(unsafe { cstr::at(*pat) }, RE_MAGIC + RE_STRING);
     }

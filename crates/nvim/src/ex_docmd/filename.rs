@@ -462,7 +462,7 @@ pub unsafe fn eval_vars(
                         }
                         let oldfiles = get_vim_var_list(Vv::Oldfiles);
                         result = list_find_str(unsafe { oldfiles.as_ref() }, i - 1, &mut numbuf)
-                            .cast_mut();
+                            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
                         if result.is_null() {
                             unsafe { *errormsg = c"".as_ptr() };
                             return ptr::null_mut();

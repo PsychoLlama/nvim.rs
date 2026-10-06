@@ -12,6 +12,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::list_items;
 use crate::highlight_group::HLF_D;
+use crate::memory::ThinCString;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::types::{Failed, IOSIZE, VAR_DICT, VAR_LIST};
@@ -189,21 +190,22 @@ impl TagStack {
             {
                 continue;
             }
-            let tagname = dict_get_string_alloc(unsafe { (item).as_ref() }, b"tagname");
-            if tagname.is_null() {
+            let Some(tagname) = dict_get_string_alloc(unsafe { (item).as_ref() }, b"tagname")
+            else {
                 continue;
-            }
+            };
             // The dict counts columns from one, the mark from zero.
             if mark.col > 0 {
                 mark.col -= 1;
             }
             self.push(Push {
-                tagname,
+                tagname: tagname.into_raw(),
                 cur_fnum: unsafe { number(item, c"bufnr") },
                 cur_match: unsafe { number(item, c"matchnr") } - 1,
                 mark,
                 fnum,
-                user_data: dict_get_string_alloc(unsafe { (item).as_ref() }, b"user_data"),
+                user_data: dict_get_string_alloc(unsafe { (item).as_ref() }, b"user_data")
+                    .map_or(ptr::null_mut(), ThinCString::into_raw),
             });
         }
     }

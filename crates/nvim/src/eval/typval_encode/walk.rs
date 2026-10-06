@@ -5,7 +5,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -50,18 +49,6 @@ macro_rules! walk_hook {
             Flow::Fail => return Err(Refused),
         }
     };
-}
-
-/// Length of a `VAR_STRING`'s string, NULL reading as empty.
-pub(crate) fn tv_strlen(tv: &TypVal) -> size_t {
-    // SAFETY: the caller's promise: a live VAR_STRING typval.
-    let val = tv;
-    debug_assert!(val.v_type() == VAR_STRING);
-    if val.string_or_null().is_null() {
-        0
-    } else {
-        unsafe { cstr::bytes_at((*tv).string_or_null()) }.len()
-    }
 }
 
 /// Mark `val` with `copy_id`, or tell the sink it has been here before.
@@ -192,7 +179,11 @@ unsafe fn convert_one_value<S: TypvalSink>(
     }
     match val.v_type() {
         VAR_STRING => {
-            let (buf, len) = (val.string_or_null(), unsafe { tv_strlen(&*tv) });
+            // The address, not a borrow: the hook takes its own `&mut` of
+            // the slot.
+            let (buf, len) = val.string_ref().map_or((ptr::null_mut(), 0), |s| {
+                (s.as_ptr().cast_mut(), s.as_bytes().len())
+            });
             item_hook!(unsafe { sink.conv_string(slot!(), buf, len) });
         }
         VAR_NUMBER => {
@@ -211,7 +202,9 @@ unsafe fn convert_one_value<S: TypvalSink>(
             unsafe { sink.conv_blob(slot!(), bytes) };
         }
         VAR_FUNC => {
-            let name = val.func_name_or_null();
+            let name = val
+                .func_name()
+                .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
             let path = ConvPath { stack, objname };
             item_hook!(unsafe { sink.conv_func_start(slot!(), name, c"", &path) });
             unsafe { sink.conv_func_before_args(slot!(), 0) };

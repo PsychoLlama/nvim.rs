@@ -8,8 +8,9 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use core::ffi::{c_char, c_int};
-use core::mem::{ManuallyDrop, offset_of};
+use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
@@ -178,7 +179,13 @@ pub(crate) fn set_internal_string_var_to(name: &CStr, value: &CStr) {
 /// `name` and `value` are NUL-terminated strings.  `value` stays the
 /// caller's: the store copies it.
 pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
-    let mut tv = ManuallyDrop::new(TypVal::string_raw(value));
+    let value = (!value.is_null()).then(|| {
+        // SAFETY: the caller's promise: a NUL-terminated `value`.
+        ThinCString::from_cstr(unsafe { CStr::from_ptr(value) })
+    });
+    // The value holds a copy, which the store copies again and this frame
+    // releases.
+    let mut tv = TypVal::string(value);
     unsafe { set_var(name, cstr::bytes_at(name).len(), &mut tv, true) };
 }
 

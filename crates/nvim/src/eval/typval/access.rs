@@ -917,7 +917,7 @@ mod tests {
         assert!(num.partial_or_null().is_null());
         assert!(num.string_or_null().is_null());
         assert!(num.func_name_or_null().is_null());
-        assert!(num.string_or_func_name().is_null());
+        assert!(num.text_or_name().is_none());
     }
 
     #[test]
@@ -980,6 +980,6 @@ mod tests {
         assert_eq!(unknown.as_number(), None);
         assert!(!unknown.is_string());
         assert!(unknown.list_or_null().is_null());
-        assert!(unknown.string_or_func_name().is_null());
+        assert!(unknown.text_or_name().is_none());
     }
 }

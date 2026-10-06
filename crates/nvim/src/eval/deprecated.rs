@@ -21,6 +21,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::memory::ThinCString;
 use core::ffi::{c_char, c_int};
 use core::slice;
 
@@ -30,7 +31,7 @@ use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{CallFrame, DictRef, NumBuf, list_items, list_len, tv_dict_alloc};
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
-use crate::memory::{xmalloc, xstrdup};
+use crate::memory::xmalloc;
 use crate::message::emsg_ptr;
 use crate::message::{e_api_spawn_failed, e_invarg};
 use crate::semsg;
@@ -103,12 +104,10 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    // SAFETY: a `VAR_STRING` holds a NUL-terminated string or NULL.
-    let prog = args[0].string_or_null();
-    if prog.is_null() || unsafe { *prog } == 0 {
+    let Some(prog) = args[0].string_ref().filter(|prog| !prog.is_empty()) else {
         emsg_static(e_api_spawn_failed);
         return;
-    }
+    };
 
     // The program name, its arguments, and the NULL the vector ends with.
     let argvl = argsl as usize + 2;
@@ -117,13 +116,12 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let raw = unsafe { xmalloc(size_of::<*mut c_char>() * argvl) }.cast::<*mut c_char>();
     // SAFETY: as above -- `argvl` slots were allocated.
     let child_argv = unsafe { slice::from_raw_parts_mut(raw, argvl) };
-    // SAFETY: `prog` is a live NUL-terminated string.
-    child_argv[0] = unsafe { xstrdup(prog) };
+    child_argv[0] = prog.clone().into_raw();
     let mut i = 1;
     // SAFETY: the list is unchanged since it was counted, so it still has
     // `argsl` items and they all fit.
     for arg in unsafe { items(args_list) } {
-        child_argv[i] = unsafe { xstrdup(numbuf.string_ptr(&arg.li_tv)) };
+        child_argv[i] = ThinCString::from_cstr(numbuf.string(&arg.li_tv)).into_raw();
         i += 1;
     }
     child_argv[i] = core::ptr::null_mut();

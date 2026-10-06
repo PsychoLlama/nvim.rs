@@ -214,7 +214,9 @@ pub unsafe fn get_spellword(
         emsg_static(msg);
         return -1;
     }
-    unsafe { *ret_word = list_find_str(list.as_ref(), 0, numbuf) };
+    unsafe {
+        *ret_word = list_find_str(list.as_ref(), 0, numbuf).map_or(ptr::null(), CStr::as_ptr)
+    };
     if unsafe { (*ret_word).is_null() } {
         return -1;
     }

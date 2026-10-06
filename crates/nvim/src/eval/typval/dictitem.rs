@@ -36,11 +36,13 @@
 use super::*;
 use crate::cstr;
 use crate::hashtab::removed_sentinel;
+use crate::mbyte::cluster_len;
+use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::semsg;
 use crate::snprintf;
-use crate::types::NUL;
 use crate::types::{DictKey, Failed, HashTab, SlotEntry};
+use core::ffi::CStr;
 
 /// What a dictionary's hash table holds in an occupied slot: the item.
 ///
@@ -236,25 +238,20 @@ pub(crate) fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
 
 /// `items()` over a string: a list of `[index, character]` pairs.
 pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
-    let mut p = args[0].string_or_null().cast_const();
-
     tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
-    if p.is_null() {
-        return; // null string behaves like an empty string
-    }
+    // A null string behaves like an empty one.
+    let text = args[0].string_bytes();
 
     let mut idx: VarNumber = 0;
-    while unsafe { *p } as ::core::ffi::c_int != NUL {
-        let len = unsafe { utfc_ptr2len(p) };
-        if len == 0 {
-            break;
-        }
+    let mut offset = 0;
+    while offset < text.len() {
+        let len = cluster_len(&text[offset..]);
         let l2 = tv_list_alloc(2);
         let at = l2.as_ptr();
         unsafe { (*(*result).list_or_null()).push_list(Some(l2)) };
         unsafe { (*at).push_number(idx) };
-        unsafe { (*at).push_string(p, len as ssize_t) };
-        p = unsafe { p.offset(len as isize) };
+        unsafe { (*at).push(TypVal::string_from(&text[offset..offset + len])) };
+        offset += len;
         idx += 1;
     }
 }
@@ -410,15 +407,19 @@ pub fn dict_to_env(denv: &Dict) -> *mut *mut ::core::ffi::c_char {
 
     for (i, var) in denv.items().enumerate() {
         let key = &var.di_key;
-        let str = numbuf.string_ptr(&var.di_tv);
-        debug_assert!(!str.is_null());
-        // SAFETY: a non-null answer is a NUL-terminated string.
-        let len = key.len() + unsafe { cstr::bytes_at(str) }.len() + c"=".count_bytes() + 1;
+        let str = numbuf.string(&var.di_tv);
+        let len = key.len() + str.count_bytes() + c"=".count_bytes() + 1;
         // SAFETY: `i` is below `env_size`, and the format spends two
         // NUL-terminated strings into `len` writable bytes.
         unsafe {
             *env.add(i) = xmalloc(len) as *mut ::core::ffi::c_char;
-            snprintf!(*env.add(i), len, c"%s=%s".as_ptr(), key.as_ptr(), str);
+            snprintf!(
+                *env.add(i),
+                len,
+                c"%s=%s".as_ptr(),
+                key.as_ptr(),
+                str.as_ptr()
+            );
         }
     }
 
@@ -434,43 +435,33 @@ pub fn dict_to_env(denv: &Dict) -> *mut *mut ::core::ffi::c_char {
 /// The `save` half of the C's `tv_dict_get_string`; the borrowing half is
 /// [`dict_get_string_buf`], which renders into the caller's own [`NumBuf`]
 /// rather than a process-wide one.
-pub fn dict_get_string_alloc(d: Option<&Dict>, key: &[u8]) -> *mut ::core::ffi::c_char {
+pub fn dict_get_string_alloc(d: Option<&Dict>, key: &[u8]) -> Option<ThinCString> {
     let mut numbuf = NumBuf::new();
-    let s = dict_get_string_buf(d, key, &mut numbuf);
-    if s.is_null() {
-        return ::core::ptr::null_mut();
-    }
-    // SAFETY: a non-null answer is a NUL-terminated string.
-    unsafe { xstrdup(s) }
+    dict_get_string_buf(d, key, &mut numbuf).map(ThinCString::from_cstr)
 }
 
 /// `d[key]` as a string, formatting a number into `numbuf`.
 ///
 /// The answer points into `numbuf` or borrows the item, so it lives no
 /// longer than whichever of the two the value came from.
-pub fn dict_get_string_buf(
-    d: Option<&Dict>,
+pub fn dict_get_string_buf<'a>(
+    d: Option<&'a Dict>,
     key: &[u8],
-    numbuf: &mut NumBuf,
-) -> *const ::core::ffi::c_char {
-    match dict_find(d, key) {
-        Some(di) => numbuf.string_ptr(&di.di_tv),
-        None => ::core::ptr::null(),
-    }
+    numbuf: &'a mut NumBuf,
+) -> Option<&'a CStr> {
+    dict_find(d, key).map(|di| numbuf.string(&di.di_tv))
 }
 
-/// [`dict_get_string_buf`] answering `def` for a missing key, and NULL with
-/// an error raised for a value that has no string form.
-///
-/// `def` is returned as-is, so its lifetime is the caller's problem.
-pub fn dict_get_string_buf_chk(
-    d: Option<&Dict>,
+/// [`dict_get_string_buf`] answering `def` for a missing key, and `None`
+/// with an error raised for a value that has no string form.
+pub fn dict_get_string_buf_chk<'a>(
+    d: Option<&'a Dict>,
     key: &[u8],
-    numbuf: &mut NumBuf,
-    def: *const ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
+    numbuf: &'a mut NumBuf,
+    def: Option<&'a CStr>,
+) -> Option<&'a CStr> {
     match dict_find(d, key) {
-        Some(di) => numbuf.string_ptr_chk(&di.di_tv),
+        Some(di) => numbuf.string_chk(&di.di_tv),
         None => def,
     }
 }
@@ -542,8 +533,7 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
 
         match what {
             kDict2ListKeys => {
-                // SAFETY: the item's own NUL-terminated key.
-                tv_item.write_string_raw(unsafe { xstrdup(di.di_key.as_ptr()) });
+                tv_item.write_string(Some(ThinCString::from_bytes(di.di_key.bytes())));
             }
             kDict2ListValues => {
                 tv_copy(&di.di_tv, &mut tv_item);
@@ -598,9 +588,7 @@ pub fn f_has_key(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_dict_arg(args, 0).is_err() {
         return;
     }
-    let key = numbuf.string_ptr(&args[1]);
-    // SAFETY: a non-null answer is a NUL-terminated string.
-    let found = dict_has_key(args[0].dict_ref(), unsafe { cstr::bytes_at(key) });
+    let found = dict_has_key(args[0].dict_ref(), numbuf.bytes(&args[1]));
     result.write_number(VarNumber::from(found));
 }
 
@@ -609,6 +597,6 @@ impl NumBuf {
     /// the C's `tv_dict_get_string`; [`dict_get_string_alloc`] is the other
     /// one.
     pub fn dict_string(&mut self, d: Option<&Dict>, key: &[u8]) -> *const ::core::ffi::c_char {
-        dict_get_string_buf(d, key, self)
+        dict_get_string_buf(d, key, self).map_or(::core::ptr::null(), CStr::as_ptr)
     }
 }

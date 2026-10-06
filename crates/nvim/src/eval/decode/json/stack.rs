@@ -15,7 +15,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text, msg_bytes};
 use crate::semsg;
 use crate::tr_c;
@@ -212,8 +211,14 @@ impl<'a> Decoder<'a> {
             if last.special_val.is_null() {
                 // A key that could not be a `Dict` key has already sent
                 // this container down the special-map path below.
-                debug_assert!(!(key.is_special_string || key.val.string_or_null().is_null()));
-                let obj_di = unsafe { tv_dict_item_alloc(key.val.string_or_null()) };
+                debug_assert!(!key.is_special_string);
+                let key_text = key
+                    .val
+                    .string_ref()
+                    .expect("a plain key is a non-null String");
+                // SAFETY: the key's own NUL-terminated text, which the item
+                // copies.
+                let obj_di = unsafe { tv_dict_item_alloc(key_text.as_ptr()) };
                 tv_clear(&mut key.val);
                 if unsafe { (*last.container.dict()).add_item(obj_di) }.is_err() {
                     unsafe { abort() };
@@ -255,14 +260,10 @@ impl<'a> Decoder<'a> {
         // map, which can hold every one of them.
         if last.special_val.is_null()
             && (obj.is_special_string
-                || obj.val.string_or_null().is_null()
-                || unsafe {
-                    dict_find(
-                        last.container.dict().as_ref(),
-                        cstr::bytes_at(obj.val.string_or_null()),
-                    )
-                }
-                .is_some())
+                || obj.val.string_ref().is_none_or(|key| {
+                    // SAFETY: the open dictionary is live.
+                    dict_find(unsafe { last.container.dict().as_ref() }, key.as_bytes()).is_some()
+                }))
         {
             tv_clear(&mut obj.val);
             // Rewind to the `{` and reopen it as a special map.

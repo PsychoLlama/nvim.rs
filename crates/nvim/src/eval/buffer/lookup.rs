@@ -12,30 +12,33 @@
 )]
 
 use super::*;
+use crate::buffer::buflist_add_name;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
+use crate::memory::ThinCString;
 use crate::types::{VAR_NUMBER, VAR_STRING};
 
 /// The buffer `avar` names, by number or by exact name.
 pub fn find_buffer(avar: &TypVal) -> Option<Buf> {
-    // SAFETY: the caller's obligation; a `VAR_STRING` holds a NUL-terminated
-    // string or NULL.
-    match (*avar).v_type() {
-        VAR_NUMBER => find_buf(number_as_int((*avar).number_or_zero())),
-        VAR_STRING if !(*avar).string_or_null().is_null() => {
-            let name = (*avar).string_or_null();
-            if let Some(found) = unsafe { buflist_findname_exp(name) } {
+    match avar.v_type() {
+        VAR_NUMBER => find_buf(number_as_int(avar.number_or_zero())),
+        VAR_STRING => {
+            let name = avar.string_cstr()?;
+            // SAFETY: the value's own NUL-terminated string, which the
+            // lookup only reads.
+            if let Some(found) = unsafe { buflist_findname_exp(name.as_ptr().cast_mut()) } {
                 return Some(found);
             }
             // A buffer with no file of its own — a URL, or a scratch
             // buffer — is not in the name index, so it is matched
             // literally instead.
+            // SAFETY: a named buffer's shown name is NUL-terminated.
             buffers().find(|b| {
                 !b.name.is_unnamed()
                     && (unsafe { path_with_url(cstr::at(b.name.shown_ptr())) } != 0
                         || buf_is_nofilename(Some(*b)))
-                    && unsafe { cstr::eq(b.name.shown_ptr(), name) }
+                    && b.name.shown() == Some(name)
             })
         }
         _ => None,
@@ -45,15 +48,15 @@ pub fn find_buffer(avar: &TypVal) -> Option<Buf> {
 /// `bufadd({name})` — the number of the buffer, creating it if need be.
 pub fn f_bufadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the arguments are live typvals and `tv_get_string` hands back a
-    // NUL-terminated string.
-    let name = numbuf.string_ptr(&args[0]) as *mut c_char;
+    let name = numbuf.string(&args[0]);
     // An empty name asks for an unnamed buffer.
-    let name = if unsafe { *name } == 0 {
+    let name = if name.is_empty() {
         ptr::null_mut()
     } else {
-        name
+        name.as_ptr().cast_mut()
     };
+    // SAFETY: null or the argument's NUL-terminated string, which
+    // `buflist_add` copies and does not write.
     result.write_number(VarNumber::from(unsafe { buflist_add(name, 0) }));
 }
 
@@ -91,7 +94,7 @@ pub fn f_bufloaded(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `bufname([{buf}])` — the buffer's short name, empty when it has none.
 pub fn f_bufname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string_raw(ptr::null_mut());
+    result.write_string(None);
     let buf = if !args.is_empty() {
         tv_get_buf_from_arg(&args[0])
     } else {
@@ -100,7 +103,7 @@ pub fn f_bufname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if let Some(buf) = buf
         && !buf.name.is_unnamed()
     {
-        result.write_string_raw(unsafe { xstrdup(buf.name.shown_ptr()) });
+        result.write_string(buf.name.shown().map(ThinCString::from_cstr));
     }
 }
 
@@ -123,11 +126,9 @@ pub fn f_bufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if buf.is_none()
         && args.len() > 1
         && tv_get_number_chk(&args[1]).is_ok_and(|create| create != 0)
+        && let Some(name) = numbuf.string_chk(&args[0])
     {
-        let name = numbuf.string_ptr_chk(&args[0]);
-        if !name.is_null() {
-            buf = unsafe { buflist_new(name as *mut c_char, ptr::null_mut(), 1, 0) };
-        }
+        buf = buflist_add_name(Some(name), 1, 0);
     }
     if let Some(buf) = buf {
         result.write_number(VarNumber::from(buf.handle));

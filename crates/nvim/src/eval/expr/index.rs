@@ -9,7 +9,7 @@
 #![forbid(unsafe_code)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::memory::XString;
+use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::{CStr, c_int};
@@ -238,9 +238,9 @@ pub(crate) fn eval_index_inner(
             } else {
                 Some(&s[n1 as usize..=n1 as usize])
             };
-            let v = v.map(XString::from_bytes);
+            let v = v.map(ThinCString::from_bytes);
             tv_clear(result);
-            result.write_string_raw(v.map_or(::core::ptr::null_mut(), XString::into_raw));
+            result.write_string(v);
         }
         VAR_BLOB => {
             let _ = blob_slice_or_index(is_range, n1, n2, exclusive, result);

@@ -65,6 +65,7 @@ use crate::getchar::state::vgetc_busy;
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::memline::MlFlags;
+use crate::memory::ThinCString;
 use crate::memory::{xfree, xstrdup};
 use crate::message::state::{msg_col, msg_didany, msg_didout, msg_row};
 use crate::message::{
@@ -80,6 +81,7 @@ use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::startup::exiting;
 use crate::types::CmdIdx;
+use crate::types::TypVal;
 use crate::types::{
     CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t, size_t, ssize_t,
     uint64_t,
@@ -190,7 +192,7 @@ pub(crate) fn ex_perldo(excmd: &mut ExArg) {
 /// Hand the command's own text to the provider, with the range.
 fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
     // SAFETY: module contract; `script_get` returns an owned string that
-    // `List::push_allocated_string` takes over.
+    // the argument list takes over.
     let mut len: size_t = 0;
     let script = unsafe { script_get(excmd, &raw mut len) };
     if script.is_null() {
@@ -198,7 +200,7 @@ fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
     }
     let argv = tv_list_alloc(3 as ptrdiff_t);
     let into = argv.as_ptr();
-    unsafe { (*into).push_allocated_string(script) };
+    unsafe { (*into).push(TypVal::string(ThinCString::from_raw(script))) };
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
     unsafe {
