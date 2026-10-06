@@ -30,7 +30,7 @@ use crate::types::NL;
 pub(crate) use crate::message::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, BlobRef, ChannelStreamType, Dict, ExprType, Failed, FuncExe, GRegFlags, LineNr, List,
+    Array, BlobRef, ChannelStreamType, Dict, ExprType, Failed, FuncExe, GRegFlags, LineNr, ListRef,
     LuaRetMode, MarkGet, MotionType, Partial, Timer, TypVal, uint64_t,
 };
 use crate::winlayer::Live;
@@ -122,7 +122,9 @@ pub struct ForInfo {
     pub fi_varcount: c_int,
     /// The id of the cursor this loop registered with `fi_list`.
     pub fi_watch: u32,
-    pub fi_list: *mut List,
+    /// The List the loop walks, with the reference it holds. A zeroed
+    /// `ForInfo` holds none.
+    pub fi_list: Option<ListRef>,
     pub fi_bi: c_int,
     /// The copy of the Blob the loop walks. A zeroed `ForInfo` holds none.
     pub fi_blob: Option<BlobRef>,

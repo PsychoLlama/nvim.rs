@@ -21,7 +21,7 @@ use crate::guard::Depth;
 use crate::memory::ThinCString;
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
-use core::ptr::{null, null_mut};
+use core::ptr::null_mut;
 
 use crate::ascii::ascii_isdigit;
 use crate::eval::collect::{set_ref_in_item_dict, set_ref_in_item_partial};
@@ -274,9 +274,8 @@ pub fn callback_call(callback: &Callback, args: &[TypVal], result: &mut TypVal) 
             // this is the "is it still wanted" question, not a
             // general-purpose call.
             let no_args = ARRAY_DICT_INIT;
-            // SAFETY: the reference is the one the callback owns, and the
-            // call is handed no arguments, no arena and no error sink.
-            let rv = unsafe { nlua_call_ref_quiet(*luaref, null(), no_args, kRetNilBool) };
+            // No arguments, no arena and no error sink.
+            let rv = nlua_call_ref_quiet(*luaref, None, no_args, kRetNilBool);
             return rv.as_boolean().unwrap_or(false);
         }
         Callback::None => return false,

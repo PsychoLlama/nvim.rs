@@ -14,7 +14,7 @@ use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     DictRef, NumBuf, dict_extend, dict_find, dict_get_number, list_iter, list_len, tv_dict_alloc,
-    tv_dict_free, tv_list_alloc,
+    tv_list_alloc,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::eval::{common_job_callbacks, find_job, tv_to_argv};
@@ -313,10 +313,8 @@ unsafe fn create_environment(
         {
             dict_extend(&env_held, inherited, b'f');
         }
-        unsafe { tv_dict_free(inherited.dict_or_null()) };
-        // Freed outright rather than released, so the value that named it
-        // must give it up without a second release.
-        inherited.disown();
+        // The one reference, given back with the handle.
+        drop(inherited.take_dict());
 
         if pty {
             for name in PTY_IGNORED_ENV {

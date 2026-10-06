@@ -44,7 +44,7 @@ use std::ptr;
 use neovim::eval::encode::{
     encode_tv2echo, encode_tv2json, encode_tv2string, encode_vim_to_msgpack,
 };
-use neovim::eval::typval::{list_free, tv_clear};
+use neovim::eval::typval::{ListRef, list_free_contents, list_free_list, tv_clear};
 use neovim::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use neovim::types::{PackerBuffer, String_0, TypVal};
 
@@ -440,8 +440,8 @@ fn msgpack_packs_every_kind_of_value_it_accepts() {
 fn a_cycle_met_twice_is_reported_once_per_dump() {
     let editor = editor_lock();
     // SAFETY: the list is this case's own. It holds two references to
-    // itself, so it is taken apart by `list_free` rather than by
-    // releasing the outside one.
+    // itself, so it is taken apart by hand rather than by releasing the
+    // outside one.
     unsafe {
         // The value is taken apart by hand below, so it must not release
         // the list a second time on the way out of scope.
@@ -460,7 +460,11 @@ fn a_cycle_met_twice_is_reported_once_per_dump() {
         let got = check_emsg(&editor, || echo(at), None);
         assert_eq!(got, "[[...@0], [...@0]]");
 
-        list_free(tv.list());
+        // Its contents first, which gives back the two references it holds
+        // to itself, then the list.
+        let l = tv.list();
+        list_free_contents(&ManuallyDrop::new(ListRef::owning(l).expect("a list")));
+        list_free_list(l);
     }
 }
 

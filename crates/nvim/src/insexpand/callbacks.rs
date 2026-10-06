@@ -17,7 +17,7 @@ use crate::guard::Lock;
 use crate::option::next_option_part;
 use crate::optionstr::OptStringRef;
 use crate::semsg;
-use crate::types::{Failed, NUL, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
+use crate::types::{DictRef, Failed, ListRef, NUL, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
 use crate::winlayer::{Buf, Win};
 
 /// One of the three global completion-function callbacks.
@@ -633,8 +633,8 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: ComplStr, mut cb: *
     // The argument owns a copy of the base, released with it.
     let args = [TypVal::Number(0), base.with_bytes(TypVal::string_from)];
 
-    let mut matchlist: *mut List = ptr::null_mut();
-    let mut matchdict: *mut Dict = ptr::null_mut();
+    let mut matchlist: Option<ListRef> = None;
+    let mut matchdict: Option<DictRef> = None;
     let mut rettv = TYPVAL_T_INIT;
     let save_state = State.get();
     let pos = Win::current().w_cursor;
@@ -644,17 +644,11 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: ComplStr, mut cb: *
     // in Insert mode in another buffer.
     let locked = Lock::text();
     if unsafe { callback_call(&*cb, &args, &mut rettv) } {
-        // The two container arms take the reference out of `rettv` and
-        // give it back by hand below.
+        // The two container arms take the reference out of `rettv`; it is
+        // given back when the handle drops below.
         match rettv.v_type() {
-            VAR_LIST => {
-                matchlist = rettv.list_or_null();
-                rettv.disown();
-            }
-            VAR_DICT => {
-                matchdict = rettv.dict_or_null();
-                rettv.disown();
-            }
+            VAR_LIST => matchlist = rettv.take_list(),
+            VAR_DICT => matchdict = rettv.take_dict(),
             // VAR_SPECIAL falls through to the default.
             // TODO(brammool): Give error message?
             _ => tv_clear(&mut rettv),
@@ -667,20 +661,16 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: ComplStr, mut cb: *
     validate_cursor(Win::current());
     if !equalpos(Win::current().w_cursor, pos) {
         emsg(gettext(E_COMPLDEL));
-    } else if !matchlist.is_null() {
-        unsafe { ins_compl_add_list(matchlist) };
-    } else if !matchdict.is_null() {
-        unsafe { ins_compl_add_dict(matchdict) };
+    } else if let Some(list) = &matchlist {
+        unsafe { ins_compl_add_list(list.as_ptr()) };
+    } else if let Some(dict) = &matchdict {
+        unsafe { ins_compl_add_dict(dict.as_ptr()) };
     }
 
     // Restore State, it might have been changed.
     State.set(save_state);
-    if !matchdict.is_null() {
-        unsafe { tv_dict_unref(matchdict) };
-    }
-    if !matchlist.is_null() {
-        unsafe { list_unref(matchlist) };
-    }
+    drop(matchdict);
+    drop(matchlist);
 }
 
 /// The attribute of the named highlight group, or `-1` for no name.

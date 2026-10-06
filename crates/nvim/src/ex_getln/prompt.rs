@@ -74,6 +74,13 @@ pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::f
     owned_cstr(text)
 }
 
+/// The `cancelreturn` entry of an `{opts}` dictionary, if it has one.
+fn opts_cancelreturn(opts: &TypVal) -> Option<&TypVal> {
+    opts.dict_ref()
+        .and_then(|dict| dict.find(b"cancelreturn"))
+        .map(|item| &item.di_tv)
+}
+
 /// Drive one `input()`-family prompt and leave its answer in `result`.
 ///
 /// Shared by `input()`, `inputsecret()` and `inputdialog()`.  `args` is
@@ -89,10 +96,13 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
 
     let prompt: *const ::core::ffi::c_char;
     let mut defstr: *const ::core::ffi::c_char = c"".as_ptr();
-    let mut cancelreturn: *mut TypVal = ::core::ptr::null_mut::<TypVal>();
     // A copy of the positional cancel value; `tv_copy` puts another copy
     // in the answer, and this one is released with the frame.
-    let mut cancelreturn_strarg2: TypVal;
+    let mut cancelreturn: Option<TypVal> = None;
+    // Whether `{opts}` has a `cancelreturn`. The value is looked up again
+    // once the prompt is done: the prompt runs user code, which may change
+    // or remove the entry.
+    let mut cancelreturn_in_opts = false;
     let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut input_callback = Callback::None;
     let mut prompt_buf = NumBuf::new();
@@ -126,18 +136,9 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         if defstr.is_null() {
             return;
         }
-        // The pointer form is what `cancelreturn` is: the value outlives
-        // the borrow, and the dictionary is named again below.
         // `v:_null_dict` is a `VAR_DICT` holding nothing, so the lookup has
         // to tolerate it -- `input(v:_null_dict)` reaches here.
-        // SAFETY: the argument's own dictionary, or none.
-        let cancelreturn_di = unsafe { dict.as_ref() }
-            .map_or(::core::ptr::null_mut(), |d| d.find_ptr(b"cancelreturn"));
-        if !cancelreturn_di.is_null() {
-            // SAFETY: just tested non-null; a dictionary item's value is
-            // its own field, so its address is the item's plus a constant.
-            cancelreturn = unsafe { &raw mut (*cancelreturn_di).di_tv };
-        }
+        cancelreturn_in_opts = opts_cancelreturn(&args[0]).is_some();
         xp_name = dict_str(c"completion", &mut xp_name_buf, Some(def));
         if xp_name.is_null() {
             // error
@@ -166,8 +167,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
                     return;
                 };
                 if inputdialog {
-                    cancelreturn_strarg2 = TypVal::string_from(strarg2.to_bytes());
-                    cancelreturn = &raw mut cancelreturn_strarg2;
+                    cancelreturn = Some(TypVal::string_from(strarg2.to_bytes()));
                 } else {
                     xp_name = strarg2.as_ptr();
                 }
@@ -233,8 +233,12 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     });
     ex_normal_busy.set(save_ex_normal_busy);
 
-    if result.string_ref().is_none() && !cancelreturn.is_null() {
-        unsafe { tv_copy(&*cancelreturn, result) };
+    if result.string_ref().is_none() {
+        if let Some(value) = &cancelreturn {
+            tv_copy(value, result);
+        } else if cancelreturn_in_opts && let Some(value) = opts_cancelreturn(&args[0]) {
+            tv_copy(value, result);
+        }
     }
 
     unsafe { xfree(xp_arg as *mut ::core::ffi::c_void) };

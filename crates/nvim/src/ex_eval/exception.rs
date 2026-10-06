@@ -44,7 +44,6 @@ use super::{cause_abort, message};
 use crate::cstr;
 use crate::debugger::state::debug_break_level;
 use crate::drawscreen::state::cmdline_row;
-use crate::eval::typval::{ListRef, list_unref};
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
@@ -450,7 +449,7 @@ pub(super) unsafe fn throw_exception(thrown: Thrown, cmdname: *mut c_char) -> Re
         throw_name,
         throw_lnum,
         // The exception owns the stack trace it was thrown with.
-        stacktrace: stacktrace_create().map_or(ptr::null_mut(), ListRef::into_raw),
+        stacktrace: stacktrace_create(),
     };
     let (id, _) = EXCEPTIONS.with_mut(|table| table.insert((), exception));
 
@@ -523,9 +522,9 @@ pub(super) fn discard_exception(id: ExcId, was_finished: bool) {
         // SAFETY: the exception's own allocation.
         unsafe { xfree(exception.value.cast()) };
     }
-    // SAFETY: the exception's own allocation and stack trace reference.
+    // SAFETY: the exception's own allocation.
     unsafe { xfree(exception.throw_name.cast()) };
-    unsafe { list_unref(exception.stacktrace) };
+    drop(exception.stacktrace);
     // The messages go with the rest of it.
 }
 
@@ -556,9 +555,8 @@ fn set_exception_vars(excp: Option<ExcId>) {
     // SAFETY: the exception's own NUL-terminated value; the variable takes a
     // copy.
     unsafe { set_vim_var_string(Vv::Exception, excp.value, -1) };
-    // SAFETY: the exception's own stack trace; `v:stacktrace` takes a
-    // reference of its own.
-    unsafe { set_vim_var_list(Vv::Stacktrace, ListRef::retained(excp.stacktrace)) };
+    // `v:stacktrace` takes a reference of its own.
+    set_vim_var_list(Vv::Stacktrace, excp.stacktrace.clone());
     // SAFETY: the exception's own NUL-terminated name.
     if unsafe { *excp.throw_name } == NUL as c_char {
         // `throw_name` is unset for an exception from a typed command.

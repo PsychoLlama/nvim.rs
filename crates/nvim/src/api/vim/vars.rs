@@ -49,36 +49,28 @@ pub fn nvim_del_current_line() -> Result<(), Error> {
 /// The global variable `name`, autoloading the script that defines it if it
 /// is not there yet.
 pub fn nvim_get_var(name: String_0) -> Result<Object, Error> {
-    let mut error = Error::none();
-    // SAFETY: the caller's promise about `name`.
-    let mut di = unsafe { find_globvar(&name) };
-    if di.is_null() {
-        // SAFETY: as above.
+    let mut value = globvar_object(&name);
+    if value.is_none() {
+        // SAFETY: the API string names its own `len` bytes.
         let loaded = unsafe { script_autoload(name.data(), name.len(), false) };
         if !loaded || aborting() {
-            error = key_not_found(&name);
-            return Object::Nil.reported(error);
+            return Object::Nil.reported(key_not_found(&name));
         }
-        // SAFETY: as above.
-        di = unsafe { find_globvar(&name) };
+        value = globvar_object(&name);
     }
-    if di.is_null() {
-        error = key_not_found(&name);
-        return Object::Nil.reported(error);
+    match value {
+        Some(value) => value.reported(Error::none()),
+        None => Object::Nil.reported(key_not_found(&name)),
     }
-    // SAFETY: `di` is the live item the lookup found.
-    Object::from(unsafe { &(*di).di_tv }).reported(error)
 }
 
-/// `g:name`'s dictionary item, or null.
-///
-/// # Safety
-/// `name` must name its own bytes.
-unsafe fn find_globvar(name: &String_0) -> *mut DictItem {
-    // SAFETY: the global dictionary is live from startup to exit. The
-    // pointer form is the answer: the caller writes through the item and
-    // reaches the dictionary again to fire its watchers.
-    unsafe { (*get_globvar_dict()).find_ptr(name.as_bytes()) }
+/// `g:name`'s value, converted -- `None` when there is no such variable.
+fn globvar_object(name: &String_0) -> Option<Object> {
+    // SAFETY: the global dictionary is live from startup to exit; the borrow
+    // ends with the conversion, which runs no user code.
+    unsafe { &*get_globvar_dict() }
+        .find(name.as_bytes())
+        .map(|item| Object::from(&item.di_tv))
 }
 
 /// "Key not found: `name`".

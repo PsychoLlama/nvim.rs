@@ -326,17 +326,19 @@ pub unsafe fn nlua_call_ref(
 }
 
 /// [`nlua_call_ref`] for a caller with nowhere to report to: a failing
-/// callback shows its error rather than answering with one.
-///
-/// # Safety
-/// As [`nlua_call_ref`].
-pub unsafe fn nlua_call_ref_quiet(
+/// callback shows its error rather than answering with one. `name`, when
+/// given, is the first argument, as there.
+pub fn nlua_call_ref_quiet(
     ref_0: LuaRef,
-    name: *const c_char,
+    name: Option<&CStr>,
     args: Array,
     mode: LuaRetMode,
 ) -> Object {
-    // SAFETY: the caller's.
+    let name = name.map_or(ptr::null(), CStr::as_ptr);
+    // SAFETY: `name` is null or a terminated string that outlives the call.
+    // A reference is an index into the registry, read with a raw get: one
+    // that names nothing pushes nil, which the protected call reports, as
+    // `nlua_ref_is_function` relies on.
     unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, false) }.unwrap_or(Object::Nil)
 }
 

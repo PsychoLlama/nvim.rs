@@ -298,7 +298,8 @@ pub unsafe fn unref_var_dict(dict: *mut Dict) {
     // SAFETY: the caller's obligation -- a dictionary `init_var_dict`
     // built. The region covers the call, not just the dereference.
     unsafe { (*dict).dv_refcount.release_many(DO_NOT_FREE_CNT - 1) };
-    unsafe { tv_dict_unref(dict) };
+    // The caller's one reference, given back with the handle.
+    drop(unsafe { DictRef::owning(dict) });
 }
 
 /// Free every variable in `ht`, and its values.

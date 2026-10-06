@@ -1,7 +1,7 @@
 //! Allocating, freeing and editing a `List` and the items it owns.
 //!
-//! [`tv_list_alloc`] and [`list_free`] are the reference-counted pair,
-//! [`list_unref`] the one every caller actually uses.  The `ListWatch`
+//! [`tv_list_alloc`] answers a [`ListRef`], whose `Drop` is the release
+//! that frees the list with its last reference.  The `ListWatch`
 //! half ([`List::watch_add`], [`watch_shift`]) is how a `:for`
 //! loop survives having the item it is standing on removed underneath it,
 //! and [`ListRef::remove_range`] / [`List::move_range_to`] are the two ways

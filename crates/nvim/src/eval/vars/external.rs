@@ -27,7 +27,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::eval::typval::NumBuf;
+use crate::eval::typval::{ListRef, NumBuf};
 use crate::guard::Suppress;
 use crate::narrow::number_as_int;
 use crate::types::{FAIL, OK};
@@ -149,12 +149,12 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
 /// Evaluate the `expr:` part of `'spellsuggest'` over `badword`, which the
 /// expression reads as `v:val`.
 ///
-/// Answers the suggestion list, or NULL when the expression failed or did
+/// Answers the suggestion list, or `None` when the expression failed or did
 /// not answer a List.  Errors are suppressed unless `'verbose'` is on.
 ///
 /// # Safety
 /// `badword` and `expr` are NUL-terminated strings.
-pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut List {
+pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> Option<ListRef> {
     // SAFETY: the caller's promise -- `expr` is NUL-terminated.
     let text = unsafe { cstr::bytes_at(expr) };
     let text = &text[skip::white(text)..];
@@ -175,12 +175,11 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut L
         Ok(Parsed::NotThis) => eval1(&mut Cursor::new(text), &mut rettv, true),
         other => other.map(|_| ()),
     };
-    let mut list: *mut List = ptr::null_mut();
+    let mut list = None;
     if r.is_ok() {
         if rettv.v_type() == VAR_LIST {
-            // The reference goes to the caller with the pointer.
-            list = rettv.list_or_null();
-            rettv.disown();
+            // The reference goes to the caller with the handle.
+            list = rettv.take_list();
         } else {
             clear_local(&mut rettv);
         }

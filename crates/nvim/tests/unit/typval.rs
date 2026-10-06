@@ -25,8 +25,8 @@ use std::ffi::{CStr, c_char};
 use std::mem::ManuallyDrop;
 
 use neovim::eval::typval::{
-    DictRef, dict_is_watched, list_find, list_first, list_last, list_len, list_unref,
-    tv_dict_alloc, tv_dict_free, tv_dict_item_free, tv_dict_item_remove, tv_list_alloc,
+    DictRef, ListRef, dict_is_watched, list_find, list_first, list_last, list_len, tv_dict_alloc,
+    tv_dict_item_free, tv_dict_item_remove, tv_list_alloc,
 };
 use neovim::memory::xstrdup;
 use neovim::types::{Callback, DictItem, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
@@ -81,7 +81,7 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
             .map(|&s| alloc::freed(s))
             .collect();
         expected.push(alloc::freed(l));
-        list_unref(l);
+        drop(ListRef::owning(l));
         log.check(&expected);
     }
 }
@@ -222,7 +222,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         // `check_net`, the twin of the spec's `clear_tmp_allocs`: with every
         // matched allocate/release pair dropped, what remains is the release
         // of something allocated before this stretch of the log.
-        tv_dict_free(d);
+        drop(DictRef::owning(d));
         log.check_net(true, &[alloc::freed(d)]);
     }
 }
@@ -259,7 +259,7 @@ fn removing_a_run_shortens_the_list() {
             4,
             "the gap closed"
         );
-        list_unref(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -291,7 +291,7 @@ fn a_watcher_on_a_removed_item_advances_past_it() {
         assert_eq!(list_find(l.as_mut(), at).unwrap().li_tv.number(), 3);
 
         (*l).watch_remove(lw);
-        list_unref(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -329,6 +329,6 @@ fn a_watcher_is_removed_only_by_its_own_pattern() {
             !dict_is_watched(d.as_ref()),
             "its own pattern did not match"
         );
-        tv_dict_free(d);
+        drop(DictRef::owning(d));
     }
 }

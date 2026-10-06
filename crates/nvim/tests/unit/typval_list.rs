@@ -32,8 +32,8 @@ use std::ptr;
 
 use neovim::eval::typval::{
     DictRef, ListRef, NumBuf, list_concat, list_copy, list_equal, list_extend, list_find,
-    list_find_nr, list_find_str, list_first, list_free, list_free_contents, list_free_list,
-    list_join, list_last, list_len, list_unref, tv_clear, tv_list_alloc,
+    list_find_nr, list_find_str, list_first, list_free_contents, list_free_list, list_join,
+    list_last, list_len, tv_clear, tv_list_alloc,
 };
 use neovim::mbyte::convert_setup;
 use neovim::memory::{XString, xstrdup};
@@ -46,7 +46,7 @@ use crate::support::{check_emsg, cstr};
 /// [`list_copy`] answering the pointer these cases are written against.
 ///
 /// The copy comes back as an owning handle; the case takes the reference
-/// over and gives it back with `list_free`/`list_unref`, which is what
+/// over and gives it back by dropping a [`ListRef`] over it, which is what
 /// upstream's `list_copy` + `tv_list_ref` pair left it holding.
 ///
 /// # Safety
@@ -156,7 +156,7 @@ fn removing_an_item_answers_the_index_that_followed_it() {
         );
         log.check(&[]);
 
-        list_free(l);
+        drop(ListRef::owning(l));
         log.check(&[alloc::freed(l)]);
     }
 }
@@ -186,7 +186,7 @@ fn removing_an_item_frees_its_value() {
             assert_eq!(tv::read_list(l), Tv::List(left.iter().map(Tv::s).collect()));
         }
 
-        list_free(l);
+        drop(ListRef::owning(l));
         log.check(&[alloc::freed(strings.remove(0)), alloc::freed(l)]);
     }
 }
@@ -245,7 +245,7 @@ fn removing_an_item_moves_the_watchers_standing_on_it() {
 
         unwatch(l, &lws);
         // Floats cost nothing, so the list header is all there is to free.
-        list_free(l);
+        drop(ListRef::owning(l));
         log.check(&[alloc::freed(l)]);
     }
 }
@@ -281,7 +281,7 @@ fn removing_a_watch_unlinks_it_without_freeing() {
         assert!(watchers(l).is_empty());
         log.check(&[]);
 
-        list_free(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -299,7 +299,7 @@ fn removing_an_unregistered_watch_is_a_no_op() {
         assert_eq!(watchers(l), [lw], "the registered watcher stays");
         log.check(&[]);
         unwatch(l, &[lw]);
-        list_free(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -345,7 +345,7 @@ fn freeing_a_list_frees_its_contents_then_itself() {
     // SAFETY: the three lists are this case's own and are freed here.
     unsafe {
         for (l, allocated) in three_lists(&log) {
-            list_free(l);
+            drop(ListRef::owning(l));
             log.check(
                 &allocated
                     .iter()
@@ -425,9 +425,9 @@ fn unref_frees_only_at_the_last_reference() {
         log.check(&[alloc::list(l), alloc::list(inner)]);
 
         (*l).lv_refcount = Refcount::new(2);
-        list_unref(l);
+        drop(ListRef::owning(l));
         log.check(&[]);
-        list_unref(l);
+        drop(ListRef::owning(l));
         log.check(&[alloc::freed(inner), alloc::freed(l)]);
     }
 }
@@ -501,7 +501,7 @@ fn moving_a_run_of_items_takes_them_without_freeing_and_moves_the_watchers() {
         // Thirteen items changed hands and not one allocation moved.
         log.check(&[]);
 
-        list_free(tgt);
+        drop(ListRef::owning(tgt));
         log.check(&[alloc::freed(tgt)]);
         tv_clear(&mut l_tv);
     }
@@ -734,7 +734,7 @@ fn appending_a_list_takes_a_reference() {
 
         tv_clear(&mut l_tv);
         assert_eq!((*inner).lv_refcount.get(), 1, "the list gave its back");
-        list_unref(inner);
+        drop(ListRef::owning(inner));
     }
 }
 
@@ -1039,7 +1039,7 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
             alloc::list(shallow),
             alloc::string((*copies[3]).li_tv.string(), "“".len()),
         ]);
-        list_free(shallow);
+        drop(ListRef::owning(shallow));
         log.clear();
 
         assert_eq!((*inner_dict).dv_refcount.get(), 1);
@@ -1072,7 +1072,7 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
             alloc::string((*copies[3]).li_tv.string(), "“".len()),
         ]);
 
-        list_free(deep);
+        drop(ListRef::owning(deep));
         tv_clear(&mut l_tv);
     }
 }
@@ -1142,7 +1142,7 @@ fn a_converting_copy_rewrites_every_string() {
             ],
         );
 
-        list_free(deep);
+        drop(ListRef::owning(deep));
         tv_clear(&mut l_tv);
         let _ = convert_setup(&raw mut vc, ptr::null_mut(), ptr::null_mut());
     }
@@ -1192,8 +1192,8 @@ fn a_copy_id_preserves_sharing() {
         );
 
         assert_eq!((*inner).lv_refcount.get(), 3);
-        list_unref(without);
-        list_unref(with);
+        drop(ListRef::owning(without));
+        drop(ListRef::owning(with));
         tv_clear(&mut l_tv);
         tv_clear(&mut inner_tv);
     }
@@ -1221,7 +1221,7 @@ fn a_self_referencing_list_copies_into_a_self_referencing_copy() {
         tv::handle(copy).remove_at(0);
         assert_eq!((*copy).lv_refcount.get(), 1);
 
-        list_unref(copy);
+        drop(ListRef::owning(copy));
         tv_clear(&mut l_tv);
     }
 }
@@ -1260,7 +1260,7 @@ fn a_list_can_be_extended_with_itself() {
             assert_eq!((*d).dv_refcount.get(), 2, "the dict gained one reference");
             assert_eq!(tv::read_list(l), Tv::List(expected), "bef {bef:?}");
 
-            list_free(l);
+            drop(ListRef::owning(l));
             log.check(&[alloc::freed(d), alloc::freed(l)]);
         }
     }
@@ -1291,8 +1291,8 @@ fn extending_with_an_empty_list_does_nothing() {
             assert_eq!(tv::read_list(l), Tv::List(vec![f(1.0), DICT]));
         }
 
-        list_free(l);
-        list_free(empty);
+        drop(ListRef::owning(l));
+        drop(ListRef::owning(empty));
     }
 }
 
@@ -1318,7 +1318,7 @@ fn extending_with_a_null_list_does_nothing() {
             assert_eq!(tv::read_list(l), Tv::List(vec![f(1.0), f(2.0)]));
         }
 
-        list_free(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -1361,11 +1361,11 @@ fn extending_with_another_list_copies_its_items() {
             assert_eq!((*inner).lv_refcount.get(), 2, "but its list item is");
             assert_eq!(tv::read_list(l), Tv::List(expected), "bef {bef:?}");
 
-            list_free(l);
+            drop(ListRef::owning(l));
             assert_eq!((*inner).lv_refcount.get(), 1);
         }
 
-        list_free(l2);
+        drop(ListRef::owning(l2));
     }
 }
 
@@ -1418,7 +1418,7 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
         for mut rettv in results {
             tv_clear(&mut rettv);
         }
-        list_free(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -1459,8 +1459,8 @@ fn concatenating_two_lists_copies_both() {
         );
 
         tv_clear(&mut rettv);
-        list_free(l1);
-        list_free(l2);
+        drop(ListRef::owning(l1));
+        drop(ListRef::owning(l2));
     }
 }
 
@@ -1491,7 +1491,7 @@ fn concatenating_a_list_with_itself_copies_it_twice() {
         );
 
         tv_clear(&mut rettv);
-        list_free(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -1542,9 +1542,9 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
         for mut rettv in kept {
             tv_clear(&mut rettv);
         }
-        list_free(l);
-        list_free(le);
-        list_free(le2);
+        drop(ListRef::owning(l));
+        drop(ListRef::owning(le));
+        drop(ListRef::owning(le2));
     }
 }
 
@@ -1565,28 +1565,23 @@ fn joining_a_list_renders_every_item() {
         let l = tv::new_list(&[Tv::s("boo"), Tv::s("far")]);
         assert_eq!(join(l, " "), "boo far");
         assert_eq!(join(l, ""), "boofar");
-        list_free(l);
-
+        drop(ListRef::owning(l));
         let l = tv::new_list(&[Tv::s("boo")]);
         assert_eq!(join(l, " "), "boo");
-        list_free(l);
-
+        drop(ListRef::owning(l));
         let l = tv::new_list(&[]);
         assert_eq!(join(l, " "), "");
-        list_free(l);
-
+        drop(ListRef::owning(l));
         let l = tv::new_list(&[Tv::Dict(vec![]), Tv::s("far")]);
         assert_eq!(join(l, " "), "{} far");
-        list_free(l);
-
+        drop(ListRef::owning(l));
         // A recursive list renders as the marker `string()` uses, not by
         // looping.
         let l = tv::new_list(&[Tv::List(vec![Tv::Cycle(1)]), Tv::s("far")]);
         assert_eq!(join(l, " "), "[[...@0]] far");
         let recursive = list_first(l.as_mut()).unwrap().li_tv.list();
         tv::handle(recursive).remove_at(0);
-        list_free(l);
-
+        drop(ListRef::owning(l));
         log.clear();
     }
 }
@@ -1665,8 +1660,8 @@ fn a_null_list_equals_an_empty_one() {
             assert!(list_equal(l2.as_ref(), l.as_ref(), ic));
         }
 
-        list_free(l);
-        list_free(l2);
+        drop(ListRef::owning(l));
+        drop(ListRef::owning(l2));
     }
 }
 
@@ -1705,7 +1700,7 @@ fn comparing_lists_folds_case_only_when_asked() {
             );
         }
         for l in ls {
-            list_free(l);
+            drop(ListRef::owning(l));
         }
     }
 }
@@ -1755,7 +1750,7 @@ fn finding_an_item_by_index_works_from_either_end() {
         assert_eq!(tv::item_ptr(list_last(l.as_mut())), lis[4]);
 
         log.check(&[]);
-        list_free(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -1786,7 +1781,7 @@ fn finding_a_number_by_index_reads_through_strings() {
                 assert_eq!(find_nr(l, n, None), (false, want));
             }
             log.check(&[]);
-            list_free(l);
+            drop(ListRef::owning(l));
         }
 
         // A NULL string is zero, not an error.
@@ -1794,8 +1789,7 @@ fn finding_a_number_by_index_reads_through_strings() {
         log.clear();
         assert_eq!(find_nr(l, 0, None), (false, 0));
         log.check(&[]);
-        list_free(l);
-
+        drop(ListRef::owning(l));
         // A NULL list and an out-of-range index both set the error flag and
         // answer -1 without a message.
         for n in [-5, 4, 2, -3] {
@@ -1807,8 +1801,7 @@ fn finding_a_number_by_index_reads_through_strings() {
             assert_eq!(find_nr(l, n, None), (true, -1));
         }
         log.check(&[]);
-        list_free(l);
-
+        drop(ListRef::owning(l));
         // An item that is not a number reports, and answers 0.
         let l = tv::new_list(&[f(1.0), Tv::List(vec![]), Tv::Dict(vec![])]);
         for (n, msg) in [
@@ -1822,7 +1815,7 @@ fn finding_a_number_by_index_reads_through_strings() {
             assert_eq!(find_nr(l, n, Some(msg)), (true, 0));
             log.clear();
         }
-        list_free(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -1855,8 +1848,7 @@ fn finding_a_string_by_index_renders_scalars() {
             alloc::freed(ptr::null::<u8>()),
             alloc::freed(ptr::null::<u8>()),
         ]);
-        list_free(l);
-
+        drop(ListRef::owning(l));
         // A string item is answered in place.
         let l = tv::new_list(&(1..=5).map(|n| Tv::s(n.to_string())).collect::<Vec<_>>());
         log.clear();
@@ -1864,15 +1856,13 @@ fn finding_a_string_by_index_renders_scalars() {
             assert_eq!(find_str(l, n, None).as_deref(), Some(want));
         }
         log.check(&[]);
-        list_free(l);
-
+        drop(ListRef::owning(l));
         // A NULL string reads as empty.
         let l = tv::new_list(&[Tv::NullStr]);
         log.clear();
         assert_eq!(find_str(l, 0, None).as_deref(), Some(""));
         log.check(&[]);
-        list_free(l);
-
+        drop(ListRef::owning(l));
         // Out of range answers NULL and reports the index.
         let l = tv::new_list(&(1..=5).map(|n| Tv::Int(i64::from(n))).collect::<Vec<_>>());
         assert_eq!(
@@ -1885,8 +1875,7 @@ fn finding_a_string_by_index_renders_scalars() {
             None
         );
         log.clear();
-        list_free(l);
-
+        drop(ListRef::owning(l));
         // A container answers the empty string and reports.
         let l = tv::new_list(&[Tv::List(vec![]), Tv::Dict(vec![])]);
         for (n, msg) in [
@@ -1898,7 +1887,7 @@ fn finding_a_string_by_index_renders_scalars() {
             assert_eq!(find_str(l, n, Some(msg)).as_deref(), Some(""));
             log.clear();
         }
-        list_free(l);
+        drop(ListRef::owning(l));
     }
 }
 
@@ -1946,8 +1935,8 @@ fn an_items_identity_is_its_index_into_one_list() {
         assert!(list_first(None).is_none());
         assert!(list_last(None).is_none());
 
-        list_free(l);
-        list_free(l2);
+        drop(ListRef::owning(l));
+        drop(ListRef::owning(l2));
     }
 }
 

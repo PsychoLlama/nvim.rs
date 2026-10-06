@@ -37,9 +37,8 @@ use crate::edit::{
     ins_redraw, insertchar, start_arrow, stop_arrow,
 };
 use crate::eval::typval::{
-    callback_copy, callback_free, dict_find, dict_get_number, dict_get_tv, list_unref, tv_clear,
-    tv_dict_alloc, tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_unref, tv_get_number_chk,
-    tv_list_alloc,
+    callback_copy, callback_free, dict_find, dict_get_number, dict_get_tv, tv_clear, tv_dict_alloc,
+    tv_dict_alloc_lock, tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc,
 };
 use crate::eval::userfunc::callback_call_retnr;
 use crate::eval::vars::set_vim_var_dict;

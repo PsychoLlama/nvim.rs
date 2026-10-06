@@ -227,7 +227,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut yank_type: MotionType = kMTUnknown;
     let mut block_len: c_int = -1;
-    let mut regcontents: *const TypVal = ptr::null();
+    let regcontents: Option<&TypVal>;
     let mut pointreg: c_char = 0;
 
     if args[1].v_type() == VAR_DICT {
@@ -240,13 +240,13 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             unsafe { write_reg_contents_lst(reg, lines, false, kMTUnknown, -1) };
             return;
         }
-        // SAFETY: the argument's own dictionary. The pointer form is what
-        // `regcontents` is: the value is handed on to the register writer.
-        let di = unsafe { (*d).find_ptr(b"regcontents") };
-        if !di.is_null() {
-            regcontents = unsafe { &raw mut (*di).di_tv };
-        }
-        // SAFETY: as above.
+        // The value is handed on to the register writer, which runs no
+        // user code, so the borrow of the argument's dictionary holds.
+        regcontents = args[1]
+            .dict_ref()
+            .and_then(|dict| dict.find(b"regcontents"))
+            .map(|item| &item.di_tv);
+        // SAFETY: the argument's own dictionary.
         let d_ref = unsafe { d.as_ref() };
         if let Some(stropt) = numbuf2.dict_string(d_ref, b"regtype") {
             let text = stropt.to_bytes();
@@ -271,7 +271,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             pointreg = regname;
         }
     } else {
-        regcontents = &args[1];
+        regcontents = Some(&args[1]);
     }
 
     let mut append = false;
@@ -302,12 +302,13 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    if !regcontents.is_null() && unsafe { (*regcontents).v_type() } == VAR_LIST {
-        let list = unsafe { (*regcontents).list_or_null() };
+    if let Some(contents) = regcontents
+        && contents.v_type() == VAR_LIST
+    {
+        let list = contents.list_or_null();
         unsafe { write_list(regname, list, append, yank_type, block_len) };
-    } else if !regcontents.is_null() {
-        // SAFETY: a non-null pointer to the caller's value.
-        let Some(strval) = numbuf5.string_chk(unsafe { &*regcontents }) else {
+    } else if let Some(contents) = regcontents {
+        let Some(strval) = numbuf5.string_chk(contents) else {
             return;
         };
         let reg = regname as c_int;

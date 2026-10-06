@@ -14,7 +14,7 @@ use super::{
     MAXPATHL, MAXWLEN, NUL, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, Sug, sps_flags, sps_limit,
 };
 use crate::charset::getdigits_int;
-use crate::eval::typval::{NumBuf, list_iter, list_unref};
+use crate::eval::typval::{NumBuf, list_iter};
 use crate::eval::vars::{eval_spell_expr, get_spellword};
 use crate::fileio::vim_fgets;
 use crate::getchar::state::got_int;
@@ -114,12 +114,11 @@ pub(crate) fn spell_check_sps() -> Result<(), Failed> {
 pub(super) unsafe fn spell_suggest_expr(su: Sug, expr: *mut c_char) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller guarantees the pointers; the list the expression
-    // returns is owned here until it is unreferenced.
+    // returns is owned here until the handle drops.
     // The work is split up so that `SugInfo` need not be exported to
     // the evaluator.
-    let list = unsafe { eval_spell_expr(su.su_badword() as *mut c_char, expr) };
-    if !list.is_null() {
-        for li in list_iter(unsafe { list.as_ref() }) {
+    if let Some(list) = unsafe { eval_spell_expr(su.su_badword() as *mut c_char, expr) } {
+        for li in list_iter(Some(&list)) {
             if li.li_tv.v_type() == VAR_LIST {
                 // Each item is a [word, score] pair.
                 let mut word: *const c_char = ptr::null();
@@ -137,7 +136,6 @@ pub(super) unsafe fn spell_suggest_expr(su: Sug, expr: *mut c_char) {
                 }
             }
         }
-        unsafe { list_unref(list) };
     }
 
     unsafe { check_suggestions(su.raw(), su.su_ga()) };

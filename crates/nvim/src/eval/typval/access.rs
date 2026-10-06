@@ -33,7 +33,7 @@ use crate::winlayer::Live;
 ///
 /// A handle is never built from a pointer the code has not already committed
 /// to dereferencing: the null-tolerant entry points (`list_len`,
-/// `list_unref`, …) keep their `as_ref()` guard and take no handle.
+/// `list_find`, …) keep their `as_ref()` guard and take no handle.
 pub(crate) type Tv = Live<TypVal>;
 /// A live `List`; see [`Tv`].
 pub(crate) type Ls = Live<List>;

@@ -19,7 +19,7 @@ use crate::memory::ThinCString;
 use core::ffi::{c_int, c_void};
 use core::mem::size_of;
 
-use crate::eval::typval::{blob_copy, blob_len, index_of, list_unref, tv_copy};
+use crate::eval::typval::{blob_copy, blob_len, index_of, tv_copy};
 use crate::eval::vars::{VarList, ex_let_vars, skip_var_list};
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::{Fi, ForInfo, e_string_list_or_blob_required, eval0_in_cmd};
@@ -70,19 +70,13 @@ pub unsafe fn eval_for_line(excmd: &mut ExArg, errp: *mut bool, skip: bool) -> *
         if !skip {
             match tv.v_type() {
                 VAR_LIST => {
-                    let l = tv.list_or_null();
-                    if l.is_null() {
-                        // SAFETY: `tv` is this frame's.
-                        clear_local(&mut tv);
-                    } else {
-                        // The reference moves into `fi`, and the watcher
-                        // is what keeps the cursor valid across changes
-                        // to the List while the loop runs.
-                        fi.fi_list = l;
-                        // SAFETY: `l` is the live List the typval held.
-                        fi.fi_watch = unsafe { (*l).watch_add() };
-                        // The reference is `fi`'s now.
-                        tv.disown();
+                    // The reference moves into `fi`, and the watcher is
+                    // what keeps the cursor valid across changes to the
+                    // List while the loop runs. A null List leaves `tv`
+                    // holding nothing to release.
+                    if let Some(list) = tv.take_list() {
+                        fi.fi_watch = list.edit().watch_add();
+                        fi.fi_list = Some(list);
                     }
                 }
                 VAR_BLOB => {
@@ -169,10 +163,8 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: &[u8]) -> bool {
     // keeps naming the same item.  `ENDED` is upstream's NULL `lw_item`,
     // and is sticky: a loop whose body appends to the list it is walking
     // still ends.
-    let list_at = fi.fi_list;
-    // SAFETY: `fi_list` is null or the List the loop took a reference to;
-    // a loop over nothing (a null List, a failed header) has no items.
-    let Some(list) = (unsafe { list_at.as_ref() }) else {
+    // A loop over nothing (a null List, a failed header) has no items.
+    let Some(list) = fi.fi_list.as_ref() else {
         return false;
     };
     let Ok(at) = usize::try_from(list.watch_index(fi.fi_watch)) else {
@@ -191,8 +183,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: &[u8]) -> bool {
     } else {
         index_of(at + 1)
     };
-    // SAFETY: as above; the borrow taken for the read has ended.
-    unsafe { (*list_at).set_watch_index(fi.fi_watch, next) };
+    list.edit().set_watch_index(fi.fi_watch, next);
     assign(&fi, arg, &mut value)
 }
 
@@ -219,13 +210,11 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
     }
     // SAFETY: the caller's promise -- the loop's own `ForInfo`.
     let mut fi = unsafe { Fi::new(fi_void as *mut ForInfo) };
-    if !fi.fi_list.is_null() {
-        let list = fi.fi_list;
-        // SAFETY: the watcher was added to this List by `eval_for_line`,
-        // and the reference it took is released here.
-        unsafe { (*list).watch_remove(fi.fi_watch) };
-        // SAFETY: as above -- this releases the reference `fi` held.
-        unsafe { list_unref(list) };
+    if let Some(list) = fi.fi_list.take() {
+        // The watcher `eval_for_line` added; dropping the handle releases
+        // the reference `fi` held.
+        list.edit().watch_remove(fi.fi_watch);
+        drop(list);
     } else if let Some(blob) = fi.fi_blob.take() {
         // The copy `eval_for_line` took.
         drop(blob);

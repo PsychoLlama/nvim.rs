@@ -233,19 +233,14 @@ fn get_from_list(args: &[TypVal]) -> *mut TypVal {
 /// `get()` over a Dictionary. The caller has checked the tag.
 fn get_from_dict(args: &[TypVal]) -> *mut TypVal {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation.
-    let d = args[0].dict_or_null();
-    if d.is_null() {
+    let Some(dict) = args[0].dict_ref() else {
         return ptr::null_mut();
-    }
+    };
     let key = numbuf.bytes(&args[1]);
-    // SAFETY: the argument's own dictionary. The pointer form is the
-    // answer: the caller writes through the value.
-    let di = unsafe { (*d).find_ptr(key) };
-    if di.is_null() {
-        return ptr::null_mut();
-    }
-    unsafe { &raw mut (*di).di_tv }
+    // The caller only copies the value out, before anything else runs.
+    dict.find(key).map_or(ptr::null_mut(), |item| {
+        ptr::from_ref(&item.di_tv).cast_mut()
+    })
 }
 
 /// Answer `get()` for a Funcref or Partial. Returns whether the caller

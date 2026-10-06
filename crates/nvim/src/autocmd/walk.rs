@@ -221,10 +221,8 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     let mut args = ArrayBuf::<1>::new();
     args.push(data.object());
 
-    // SAFETY: the reference is the row's own; `args` stands for the length
-    // of the call.
-    let result =
-        unsafe { nlua_call_ref_quiet(luaref, ::core::ptr::null(), args.array(), kRetNilBool) };
+    // `args` stands for the length of the call.
+    let result = nlua_call_ref_quiet(luaref, None, args.array(), kRetNilBool);
     matches!(result, Object::Boolean(true))
 }
 

@@ -123,11 +123,8 @@ unsafe fn term_write(
         args.push(Object::string(text));
     }
     let _locked = Lock::text();
-    let name = c"input".as_ptr();
-
-    // SAFETY: `cb` is a live Lua reference and `args` this frame's own; the
-    // handler reports nothing, so it is given no error slot.
-    unsafe { nlua_call_ref_quiet(cb, name, args, kRetNilBool) };
+    // The handler reports nothing, so it is given no error slot.
+    nlua_call_ref_quiet(cb, Some(c"input"), args, kRetNilBool);
 }
 
 fn term_resize(mut _width: uint16_t, mut _height: uint16_t, mut _data: *mut ::core::ffi::c_void) {}

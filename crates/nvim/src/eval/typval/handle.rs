@@ -168,10 +168,24 @@ impl Drop for ListRef {
     /// Give the reference back, freeing the object with the last one.
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY: this handle names a live object, and is giving up
-        // the reference that kept it so.
-        unsafe { list_unref(self.as_ptr()) };
+        if self.edit().lv_refcount.release() <= 0 {
+            free_list(self);
+        }
     }
+}
+
+/// Free `list` and everything in it: its last reference has just gone.
+/// A no-op while `free_unref_items()` is walking, which frees the whole
+/// graph itself.
+fn free_list(list: &ListRef) {
+    if tv_in_free_unref_items.get() {
+        return;
+    }
+    // The handle is the view the contents are freed through: it owns the
+    // reference that was the last, and gives it back by freeing.
+    list_free_contents(list);
+    // SAFETY: a live list, which nothing references any more.
+    unsafe { list_free_list(list.as_ptr()) };
 }
 
 impl ::core::ops::Deref for ListRef {
@@ -226,8 +240,8 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
 ///
 /// # Safety
 ///
-/// `l` must point at storage the caller owns and will not free through
-/// [`list_free`]; whatever was there is overwritten without being
+/// `l` must point at storage the caller owns and will not release through
+/// a [`ListRef`]; whatever was there is overwritten without being
 /// dropped, so it must hold no list yet.
 pub unsafe fn list_init_static(l: *mut List) {
     // SAFETY: the caller's promise: storage holding no list yet.
@@ -266,39 +280,6 @@ pub unsafe fn list_free_list(l: *mut List) {
     // SAFETY: as above.
     unsafe { ::core::ptr::drop_in_place(l) };
     unsafe { xfree(l.cast()) };
-}
-
-/// Free `l` and everything in it.  A no-op while `free_unref_items()` is
-/// walking, which frees the whole graph itself.
-///
-/// # Safety
-///
-/// `l` must point at a live list, unaliased for the call.
-pub unsafe fn list_free(l: *mut List) {
-    if tv_in_free_unref_items.get() {
-        return;
-    }
-    {
-        // A view of the list that takes no reference: the caller's was the
-        // last, and it is given back by freeing.
-        // SAFETY: the caller's promise -- a live list.
-        let view = ::core::mem::ManuallyDrop::new(ListRef(unsafe { NonNull::new_unchecked(l) }));
-        list_free_contents(&view);
-    }
-    unsafe { list_free_list(l) };
-}
-
-/// Drop a reference to `l`, freeing it when the last one goes.
-///
-/// # Safety
-///
-/// `l` must point at a live list, unaliased for the call.
-pub unsafe fn list_unref(l: *mut List) {
-    if let Some(list) = unsafe { l.as_mut() }
-        && list.lv_refcount.release() <= 0
-    {
-        unsafe { list_free(l) };
-    }
 }
 
 impl Dict {
@@ -409,9 +390,21 @@ impl Clone for DictRef {
 impl Drop for DictRef {
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY: as `ListRef`'s.
-        unsafe { tv_dict_unref(self.as_ptr()) };
+        if self.edit().dv_refcount.release() <= 0 {
+            free_dict(self);
+        }
     }
+}
+
+/// [`free_list`]'s counterpart: free `dict` and everything in it.
+fn free_dict(dict: &DictRef) {
+    if tv_in_free_unref_items.get() {
+        return;
+    }
+    tv_dict_free_contents(dict);
+    // SAFETY: a live dictionary whose contents are gone, which nothing
+    // references any more.
+    unsafe { tv_dict_free_dict(dict.as_ptr()) };
 }
 
 impl ::core::ops::Deref for DictRef {
@@ -478,39 +471,6 @@ pub unsafe fn tv_dict_free_dict(d: *mut Dict) {
         dict.lua_table_ref = LUA_NOREF as LuaRef;
     }
     unsafe { xfree(d.cast()) };
-}
-
-/// Free `d` and everything in it.  A no-op while `free_unref_items()` is
-/// walking, which frees the whole graph itself.
-///
-/// # Safety
-/// `d` must point at a live dictionary that nothing still references.
-pub unsafe fn tv_dict_free(d: *mut Dict) {
-    if tv_in_free_unref_items.get() {
-        return;
-    }
-    {
-        // A view of the dictionary that takes no reference: the caller's
-        // was the last, and it is given back by freeing.
-        // SAFETY: the caller's promise -- a live dictionary.
-        let view = ::core::mem::ManuallyDrop::new(DictRef(unsafe { NonNull::new_unchecked(d) }));
-        tv_dict_free_contents(&view);
-    }
-    unsafe { tv_dict_free_dict(d) };
-}
-
-/// Drop a reference to `d`, freeing it when the last one goes.
-///
-/// # Safety
-/// `d` is null, or points at a live dictionary of which the caller holds a
-/// reference. That reference is given up here, so the caller must not use
-/// `d` again.
-pub unsafe fn tv_dict_unref(d: *mut Dict) {
-    if let Some(dict) = unsafe { d.as_mut() }
-        && dict.dv_refcount.release() <= 0
-    {
-        unsafe { tv_dict_free(d) };
-    }
 }
 
 /// One reference to a [`Blob`], given back when the handle goes: the blob
@@ -910,7 +870,7 @@ mod tests {
     use super::*;
     use crate::global_cell::editor_state_lock;
 
-    /// `tv_dict_unref` to zero under the flag leaves the dictionary for the
+    /// A dictionary released to zero under the flag is left for the
     /// collector, which frees it explicitly afterwards. Here rather than
     /// beside the dictionary operations because reaching a dictionary nobody
     /// holds is a raw read.
@@ -934,8 +894,9 @@ mod tests {
         tv_in_free_unref_items.set(false);
         assert_eq!(refs, 0);
         assert_eq!(b, Some(1));
-        // SAFETY: as above; `tv_dict_free` is the pair of passes.
-        unsafe { tv_dict_free(dp) };
+        // SAFETY: as above. The handle takes the count below zero, which
+        // frees it now that the flag is down.
+        drop(unsafe { DictRef::owning(dp) });
     }
 
     /// The discriminant is the `VarType` code at offset zero: what

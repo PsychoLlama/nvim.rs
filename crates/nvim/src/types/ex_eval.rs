@@ -137,7 +137,8 @@ pub struct Exception {
     pub(crate) messages: ErrorMsgs,
     pub throw_name: *mut ::core::ffi::c_char,
     pub throw_lnum: LineNr,
-    pub stacktrace: *mut List,
+    /// The stack trace the exception was thrown with, which it owns.
+    pub stacktrace: Option<ListRef>,
 }
 
 /// An exception's place in the exception table.

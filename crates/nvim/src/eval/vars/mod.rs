@@ -24,8 +24,8 @@ use crate::eval::typval::DictTab;
 use crate::eval::typval::{
     LockName, TV_INITIAL_VALUE, di_lock, dict_is_watched, dict_watcher_notify, list_find_nr,
     list_find_str, list_len, list_set_lock, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc,
-    tv_dict_alloc_lock, tv_dict_hi2di, tv_dict_unref, tv_get_bool_chk, tv_get_number,
-    tv_get_number_chk, tv_item_lock, tv_list_alloc, value_check_lock,
+    tv_dict_alloc_lock, tv_dict_hi2di, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
+    tv_item_lock, tv_list_alloc, value_check_lock,
 };
 use crate::eval::userfunc::{
     find_hi_in_scoped_ht, find_var_in_scoped_ht, function_exists, get_current_funccal_dict,

@@ -5,7 +5,7 @@
 //! user-visible, which is what [`Dict::items`] promises and what this
 //! module's tests pin.
 //!
-//! [`tv_dict_alloc`] and [`tv_dict_unref`] are the reference-counted pair;
+//! [`tv_dict_alloc`] answers a [`DictRef`], whose `Drop` is the release;
 //! [`dict_clear`] empties one without freeing it.  The `Dict::add_*` family
 //! is the C header's overload set, each taking the key as bytes and copying
 //! exactly those.  [`dict_extend`] is `extend()` with its three `action`

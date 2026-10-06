@@ -23,7 +23,7 @@ use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use crate::eval::typval::tv_dict_free;
+use crate::eval::typval::DictRef;
 use crate::event::libuv::uv_strerror;
 use crate::event::libuv_proc::libuv_proc_init;
 use crate::event::proc::{exit_on_closed_chan, proc_get_exepath, proc_spawn};
@@ -102,7 +102,7 @@ pub unsafe fn channel_job_start(
         semsg!("E475: Invalid argument: {why}");
         unsafe { shell_free_argv(argv) };
         if !env.is_null() {
-            unsafe { tv_dict_free(env) };
+            drop(unsafe { DictRef::owning(env) });
         }
         unsafe { channel_destroy_early(chan) };
         unsafe { *status_out = 0 };
@@ -156,7 +156,7 @@ pub unsafe fn channel_job_start(
     }
     unsafe { xfree(cmd.cast()) };
     if !unsafe { (*proc).env }.is_null() {
-        unsafe { tv_dict_free((*proc).env) };
+        drop(unsafe { DictRef::owning((*proc).env) });
     }
     if status != 0 {
         unsafe { channel_destroy_early(chan) };

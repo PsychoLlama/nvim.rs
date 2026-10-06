@@ -217,7 +217,7 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
     let mut reader = reader();
     let at = &raw mut reader;
     // SAFETY: as `delivered`. The sentinel is this case's own: it is never
-    // referenced, so nothing but the final `list_free` can free it.
+    // referenced, so nothing but dropping `held` at the end can free it.
     unsafe {
         let before = rooted_lists();
         let held = tv_list_alloc(kListLenUnknown as isize);
