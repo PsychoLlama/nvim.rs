@@ -263,10 +263,9 @@ pub(crate) unsafe fn tv_to_optval(
 /// An option's value as a typval.  `numbool` renders a Boolean option as a
 /// Number, which is what the old spelling of the accessors answered.
 pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
-    // The string arm *names* the `OptVal`'s bytes rather than copying them,
-    // so the answer owns what `value` owned: a caller holding a borrowed
-    // `OptVal` -- one it did not allocate, or one it frees itself -- has to
-    // keep the answer out of `Drop`'s way.
+    // The string arm copies the `OptVal`'s bytes: the value is a borrowed
+    // view (an option's own storage, or a copy its caller frees), and the
+    // answer owns what it holds.
     let mut rettv = TypVal::Special(kSpecialVarNull);
     match value {
         OptVal::Boolean(_) => {
@@ -283,9 +282,10 @@ pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
             rettv.write_number(number as VarNumber);
         }
         OptVal::String(string) => {
-            // SAFETY: the option's own NUL-terminated block, or null; the
-            // answer takes it over, as the note above says.
-            rettv.write_string(unsafe { ThinCString::from_raw(string.data()) });
+            // SAFETY: the option value's NUL-terminated block, or null,
+            // live for the call.
+            let text = unsafe { cstr::at_opt(string.data()) };
+            rettv.write_string(text.map(ThinCString::from_cstr));
         }
         OptVal::Nil => {}
     }

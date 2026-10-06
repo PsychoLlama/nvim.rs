@@ -28,7 +28,6 @@ use crate::types::AutoEvent;
 use crate::types::OptStr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
-use core::mem::ManuallyDrop;
 use core::ptr;
 
 use crate::autocmd::{apply_autocmds, do_filetype_autocmd};
@@ -130,13 +129,12 @@ fn apply_optionset_autocmd(
         return;
     }
 
-    // Each of the four names its `OptVal`'s string rather than owning it --
-    // the caller `optval_free`s all four -- and `set_vim_var_tv` copies, so
-    // these release nothing.
-    let mut oldval_tv = ManuallyDrop::new(optval_as_tv(oldval, false));
-    let mut oldval_g_tv = ManuallyDrop::new(optval_as_tv(oldval_g, false));
-    let mut oldval_l_tv = ManuallyDrop::new(optval_as_tv(oldval_l, false));
-    let mut newval_tv = ManuallyDrop::new(optval_as_tv(newval, false));
+    // Each holds a copy of its `OptVal`'s string -- the caller `optval_free`s
+    // the four values -- and `set_vim_var_tv` copies again.
+    let mut oldval_tv = optval_as_tv(oldval, false);
+    let mut oldval_g_tv = optval_as_tv(oldval_g, false);
+    let mut oldval_l_tv = optval_as_tv(oldval_l, false);
+    let mut newval_tv = optval_as_tv(newval, false);
 
     set_vim_var_tv(Vv::OptionOld, &mut oldval_tv);
     set_vim_var_tv(Vv::OptionNew, &mut newval_tv);

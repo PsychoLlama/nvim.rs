@@ -14,7 +14,6 @@ use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::mem::ManuallyDrop;
 
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::cstr;
@@ -478,9 +477,8 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
         if varp.is_none() {
             continue;
         }
-        // The value names the option's own storage; the dictionary takes a
-        // copy, so this releases nothing.
-        let tv = ManuallyDrop::new(optval_as_tv(optval_from_varp(opt_idx, varp), true));
+        // A copy of the option's value; the dictionary takes its own.
+        let tv = optval_as_tv(optval_from_varp(opt_idx, varp), true);
         let name = get_option(opt_idx).fullname;
         let _ = unsafe { (*d).add_tv(name.to_bytes(), &tv) };
     }
