@@ -350,6 +350,31 @@ local CORPUS = {
     nil,
     setup = { "let g:C_locked_deep = {'a': [1]}", 'lockvar! g:C_locked_deep' },
   },
+  -- String payloads whose *ownership* differs: the null string (a String
+  -- holding no allocation at all), multibyte text around a newline, and
+  -- funcrefs whose names are a global, a script-local `<SNR>` and a
+  -- partial over a user function.
+  { 'str_null', 'v:_null_string' },
+  { 'str_mbnl', [["é\n中"]] },
+  {
+    'fn_user',
+    nil,
+    setup = {
+      "call execute(['function! EvalSweepF(...)', 'return a:000', 'endfunction'])",
+      "let g:C_fn_user = function('EvalSweepF')",
+    },
+  },
+  {
+    'fn_script',
+    nil,
+    exec = table.concat({
+      'function! s:SweepS()',
+      '  return 2',
+      'endfunction',
+      "let g:C_fn_script = function('s:SweepS')",
+    }, '\n'),
+  },
+  { 'fn_user_partial', "function('EvalSweepF', [v:_null_string, ''])" },
 }
 
 local NAMES = {}
@@ -358,7 +383,14 @@ local function build_corpus()
   for _, entry in ipairs(CORPUS) do
     local name = entry[1]
     NAMES[#NAMES + 1] = name
-    local cmds = entry.setup or { 'let g:C_' .. name .. ' = ' .. entry[2] }
+    local cmds = entry.setup or entry.exec and {} or { 'let g:C_' .. name .. ' = ' .. entry[2] }
+    if entry.exec then
+      -- A script of its own, for what needs a script context (`s:`).
+      local ok, res = pcall(vim.api.nvim_exec2, entry.exec, {})
+      if not ok then
+        emit('corpus', name, '! SETUP', esc(errtext(res)))
+      end
+    end
     for _, cmd in ipairs(cmds) do
       local err = command(cmd)
       if err then
@@ -1388,6 +1420,136 @@ section('s4-lastbufnr', function()
   veval('lastbufnr wiped top dollar', "bufnr('$')")
   command('silent! bwipeout! zed')
   veval('lastbufnr wiped all', 'last_buffer_nr()')
+end)
+
+section('s1-strpayload', function()
+  -- The null string against the empty one, through every reader that
+  -- could tell them apart: the coercions, the comparisons, the
+  -- encoders, the registers, the buffer, the API.  Then text with a
+  -- newline (a NUL in a register or a line) and the function names a
+  -- funcref carries.
+  local N = 'v:_null_string'
+  local EXPRS = {
+    N .. " == ''",
+    N .. " is ''",
+    N .. ' == ' .. N,
+    N .. " !=# 'a'",
+    N .. " =~ '^$'",
+    'type(' .. N .. ')',
+    'string(' .. N .. ')',
+    'empty(' .. N .. ')',
+    'len(' .. N .. ')',
+    'strlen(' .. N .. ')',
+    'strchars(' .. N .. ')',
+    '!' .. N,
+    N .. ' + 0',
+    N .. " . 'x'",
+    N .. ' . ' .. N,
+    'json_encode(' .. N .. ')',
+    'json_encode([' .. N .. ', {"k": ' .. N .. '}])',
+    'msgpackdump([' .. N .. '])',
+    'msgpackparse(msgpackdump([' .. N .. ']))',
+    "printf('%s|', " .. N .. ')',
+    "printf('%5s|%-3s|', " .. N .. ', ' .. N .. ')',
+    "execute('echo ' . 'v:_null_string')",
+    "execute('echon v:_null_string . \"|\"')",
+    'toupper(' .. N .. ')',
+    'tr(' .. N .. ", 'a', 'b')",
+    'substitute(' .. N .. ", '^', 'x', '')",
+    'repeat(' .. N .. ', 3)',
+    'split(' .. N .. ')',
+    'join([' .. N .. ", 'a', " .. N .. "], ',')",
+    'sort([' .. N .. ", '', 'a', " .. N .. '])',
+    'uniq([' .. N .. ", ''])",
+    "index(['', 'a'], " .. N .. ')',
+    "count(['', ''], " .. N .. ')',
+    "has_key({'': 1}, " .. N .. ')',
+    '{' .. N .. ': 1}',
+    'escape(' .. N .. ", 'a')",
+    'fnameescape(' .. N .. ')',
+    'shellescape(' .. N .. ')',
+    'trim(' .. N .. ')',
+    'matchstr(' .. N .. ", '.*')",
+    'stridx(' .. N .. ", '')",
+    'str2nr(' .. N .. ')',
+    'str2float(' .. N .. ')',
+    'iconv(' .. N .. ", 'utf-8', 'latin1')",
+    'fnamemodify(' .. N .. ", ':t:r')",
+    'expand(' .. N .. ')',
+    'copy(' .. N .. ')',
+    'deepcopy([' .. N .. '])',
+    'get([' .. N .. '], 0, 1)',
+    'call(' .. N .. ', [])',
+    'function(' .. N .. ')',
+    'funcref(' .. N .. ')',
+    'exists(' .. N .. ')',
+    'getreg(' .. N .. ')',
+    'setreg(' .. N .. ", 'x')",
+    'setreg(' .. "'a', " .. N .. ')',
+    "getreg('a', 1, 1)",
+    "getregtype('a')",
+    "setreg('b', [" .. N .. ", 'x', " .. N .. '])',
+    "getreg('b', 1, 1)",
+    "getreg('b')",
+    "setreg('c', \"a\\nb\\u00e9\")",
+    "getreg('c', 1, 1)",
+    "getreg('c')",
+    "getregtype('c')",
+    "setreg('d', [\"a\\nb\", \"\\u4e2d\\n\"])",
+    "getreg('d', 1, 1)",
+    "getreg('d')",
+    "[setline(1, ['x', \"a\\nb\", " .. N .. ']), getline(1, \'$\')]',
+    "[setline(1, " .. N .. "), getline(1)]",
+    'luaeval("_A == nil and \'nil\' or type(_A)", ' .. N .. ')',
+    'luaeval("#_A", ' .. N .. ')',
+    -- function names
+    "string(function('EvalSweepF'))",
+    "string(funcref('EvalSweepF'))",
+    "string(function('EvalSweepF', [1]))",
+    "string(funcref('EvalSweepF', [1], {}))",
+    "get(function('EvalSweepF'), 'name')",
+    "get(funcref('EvalSweepF'), 'name')",
+    "get(function('EvalSweepF', [1]), 'args')",
+    "function('EvalSweepF') == function('EvalSweepF')",
+    "function('EvalSweepF') is function('EvalSweepF')",
+    "function('EvalSweepF') == function('EvalSweepF', [])",
+    "function('EvalSweepF')(" .. N .. ", 'b')",
+    "call(function('EvalSweepF'), [" .. N .. '])',
+    "call('EvalSweepF', [" .. N .. '])',
+    'g:C_fn_script()',
+    'string(g:C_fn_script)',
+    "get(g:C_fn_script, 'name') =~ '^<SNR>\\d\\+_SweepS$'",
+    "exists('*EvalSweepF')",
+    "exists('*' . get(g:C_fn_script, 'name'))",
+    "function('tr') == function('tr')",
+    "string(function('tr'))",
+    "function('NoSuchSweepFn')",
+    "string(function('NoSuchSweepFn'))",
+    "funcref('NoSuchSweepFn')",
+    "string(map(['a', " .. N .. "], 'v:val . \"!\"'))",
+    "string(map([" .. N .. "], {_, v -> v}))",
+  }
+  for index, expr in ipairs(EXPRS) do
+    veval(string.format('strpayload %03d %s', index, esc(expr)), 'string(' .. expr .. ')')
+  end
+  -- A variable holding the null string, appended to and assigned over.
+  command('let g:__ns = v:_null_string')
+  veval('strpayload let', 'string(g:__ns)')
+  command("let g:__ns .= 'y'")
+  veval('strpayload let append', 'string(g:__ns)')
+  command('let g:__ns = v:_null_string')
+  command("let g:__ns ..= ''")
+  veval('strpayload let append empty', 'string([g:__ns, g:__ns is v:_null_string])')
+  command('silent! unlet! g:__ns')
+  -- The API side: what a null string becomes as an Object and back.
+  attempt('strpayload nvim_eval', vim.api.nvim_eval, N)
+  attempt('strpayload nvim_eval list', vim.api.nvim_eval, '[' .. N .. ", '']")
+  attempt('strpayload nvim_call_function', vim.api.nvim_call_function, 'EvalSweepF', { '', 'x' })
+  attempt('strpayload vim.fn', vim.fn.EvalSweepF, 'a', '')
+  attempt('strpayload nvim_get_var', vim.api.nvim_get_var, 'C_str_null')
+  attempt('strpayload vim.g', function()
+    return vim.g.C_str_mbnl
+  end)
 end)
 
 section('s4-termopen', function()
