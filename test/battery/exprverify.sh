@@ -27,7 +27,7 @@
 # The fixture is rebuilt before every evaluation, so a line's answer does
 # not depend on the lines before it.  No time, pid or address reaches either
 # artifact; three runs of one binary were byte-identical.  It costs ~45 s
-# on a debug build, almost all of it the expression section's six entries
+# on a debug build, almost all of it the expression section's seven entries
 # over ~3,800 prefixes.
 set -uo pipefail
 

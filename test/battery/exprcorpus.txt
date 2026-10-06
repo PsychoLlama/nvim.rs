@@ -113,6 +113,21 @@ type(g:F) == v:t_func
 string(g:P)
 eval('1 + ' . '2')
 execute('echo 1')
+# -- methods through a name that is not yet a call: the callee is read up
+# -- to the `(` and no further
+'abc'->g:fd.f()
+[1]->g:fd['f']()
+'abc'->g:fd.p()
+'x'->g:fd.nosuch()
+'x'->g:fd.f ()
+'x'->g:fd.f(1)
+g:l->g:F()->string()
+'a'->g:{'F'}()
+'ab'->g:fd.f()->g:fd.f()
+# -- a backtick expression in a file name
+expand('`=g:n . "x"`')
+expand('`=g:l[1][0]`  rest')
+expand('$NVIMTEST/`=g:n`')
 # -- interpolation
 $"value: {g:n} and {g:s}"
 $'single {g:n} {{}}'

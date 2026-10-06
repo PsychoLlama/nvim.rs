@@ -8,8 +8,8 @@
 "
 "   expr   every line of exprcorpus.txt, and EVERY PREFIX of it (the
 "          truncation corpus: a parser that reads a slice where the C read
-"          up to a NUL disagrees first on a cut-off line), through six
-"          entries -- eval(), `:let`, `:echo` followed by `| echon`, so the
+"          up to a NUL disagrees first on a cut-off line), through seven
+"          entries -- eval(), nvim_eval(), `:let`, `:echo` followed by `| echon`, so the
 "          report shows whether the rest of the line ran, `:execute`, `:call`
 "          and `:elseif` in SKIP mode (parsed, not evaluated) followed by
 "          `| endif | let`.  Each answer is the value or the exception, then
@@ -92,6 +92,7 @@ func! Fixture() abort
   let g:curly42x = 'curly'
   let g:cury = 'cury'
   let g:obj = {'v': 'ov'}
+  let g:fd = {'f': function('len'), 'p': function('add', [[]])}
   func! g:obj.method() dict abort
     return self.v
   endfunc
@@ -102,7 +103,7 @@ func! Fixture() abort
   let v:errmsg = ''
 endfunc
 
-" The six entries for one expression text.
+" The seven entries for one expression text.
 func! Entries(e) abort
   let r = []
   call Fixture()
@@ -111,6 +112,15 @@ func! Entries(e) abort
     call add(r, 'eval ' . Show(v))
   catch
     call add(r, 'eval ' . Exc())
+  endtry
+  call add(r, '  errmsg ' . string(v:errmsg))
+
+  call Fixture()
+  try
+    let v = nvim_eval(a:e)
+    call add(r, 'api ' . Show(v))
+  catch
+    call add(r, 'api ' . Exc())
   endtry
   call add(r, '  errmsg ' . string(v:errmsg))
 
@@ -248,7 +258,8 @@ func! Reent(name, cmds, probe) abort
   catch
     call S('    probe ' . Exc())
   endtry
-  setlocal foldmethod& foldexpr& indentexpr& statusline&
+  setlocal foldmethod& foldexpr& indentexpr& statusline& includeexpr& formatexpr& foldtext&
+  silent! normal! zE
   set statusline& laststatus&
   silent! mapclear
   silent! mapclear!
@@ -290,6 +301,21 @@ call Reent('statusline %! resets itself',
       \  'set statusline=%!execute(''set\ statusline=abc'')',
       \  'redrawstatus!'],
       \ '&statusline')
+call Reent('includeexpr resets itself',
+      \ ['setlocal includeexpr=execute(''setlocal\ includeexpr='')..''nosuch''',
+      \  'normal! gf'],
+      \ '&l:includeexpr')
+call Reent('formatexpr resets itself',
+      \ ['setlocal formatexpr=execute(''setlocal\ formatexpr='')',
+      \  'normal! gqj'],
+      \ '[getline(1, ''$''), &l:formatexpr]')
+call Reent('foldtext resets itself',
+      \ ['setlocal foldmethod=manual foldtext=execute(''setlocal\ foldtext=x'')..''ft''',
+      \  '1,2fold'],
+      \ '[foldtextresult(1), foldtextresult(1), &l:foldtext]')
+call Reent('backtick file name changes its own command',
+      \ ['badd `=execute(''let g:x = 7'')..''bt''`'],
+      \ '[g:x, bufexists(''bt'')]')
 call Reent('substitute expression runs a substitute',
       \ ['%s/x/\=execute(''s#a#b#'')/'],
       \ 'getline(1, ''$'')')

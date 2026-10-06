@@ -51,6 +51,20 @@ echo 'a' | echon 'b'
 echo g:l[0] g:d.a
 execute 'let g:x = 1' | let g:y = 2
 execute "echo 'x'" | echo 'y'
+# -- skipped expressions, and the command after them
+if 0 | echo g:l[0] g:d.a | let g:x = 1 | endif | let g:y = 2
+if 0 | let g:x = [1, 2][0] | elseif g:n > 1 | let g:y = {'a': 1}.a | endif
+while 0 | call g:Id({x -> x}(1)) | endwhile | let g:y = 1
+if 0 | execute 'a' 'b' | return 3 | endif | let g:y = 1
+for g:v in [] | echo g:v->string() | endfor | let g:y = 1
+if 0 | let g:x = 'a'->g:fd.f() | endif | let g:y = g:fd.f('xy')
+echo 'a' 'b' | let g:x = 1
+echo 1 g:nosuch 2 | let g:x = 1
+echo g:l[0] | echon g:d.a
+execute 'let g:x =' 1 | let g:y = 2
+execute 'let g:x = 1' '| let g:y = 2'
+execute 'let g:x = 1' | | let g:y = 2
+badd `=g:n . 'x'` | let g:y = 1
 # -- control flow
 if g:n > 1 | let g:x = 1 | elseif g:nosuch | let g:x = 2 | else | let g:x = 3 | endif
 while 0 | echo 'never' | endwhile
