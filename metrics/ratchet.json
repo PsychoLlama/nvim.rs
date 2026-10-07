@@ -357,7 +357,7 @@
     "crates/nvim/src/eval/typval/blob.rs": {"pub_items": 9},
     "crates/nvim/src/eval/typval/check.rs": {"pub_items": 24},
     "crates/nvim/src/eval/typval/dict.rs": {"pub_items": 8},
-    "crates/nvim/src/eval/typval/dictitem.rs": {"pub_items": 22},
+    "crates/nvim/src/eval/typval/dictitem.rs": {"pub_items": 21},
     "crates/nvim/src/eval/typval/get.rs": {"pub_items": 10},
     "crates/nvim/src/eval/typval/handle.rs": {"pub_items": 12, "unsafe_stmts": 62},
     "crates/nvim/src/eval/typval/list.rs": {"pub_items": 2},

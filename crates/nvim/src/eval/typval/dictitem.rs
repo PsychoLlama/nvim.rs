@@ -343,7 +343,7 @@ pub fn dict_get_callback(d: Option<&mut Dict>, key: &[u8], result: &mut Callback
 /// once. [`DictKey::as_ptr`] is the read that costs nothing, and the guards
 /// above it rule the call out before the key is touched at all.
 #[inline]
-pub fn dict_wrong_func_name(d: &Dict, item: &DictItem) -> bool {
+pub(crate) fn dict_wrong_func_name(d: &Dict, item: &DictItem) -> bool {
     let at = ::core::ptr::from_ref(d);
     (at == get_globvar_dict().cast_const()
         || ::core::ptr::eq(&d.dv_hashtab, get_funccal_local_ht().cast_const()))
