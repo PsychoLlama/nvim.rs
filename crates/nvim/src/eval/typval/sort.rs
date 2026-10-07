@@ -118,12 +118,12 @@ fn ascii_casecmp(a: &[u8], b: &[u8]) -> c_int {
 /// `encode_tv2string()` puts quotes around a string and allocates memory.
 /// Don't do that for string variables. Use a single quote when comparing
 /// with a non-string to do what the docs promise.
-fn sort_key<'v>(tv: &'v TypVal, other: &TypVal, numeric: bool) -> Cow<'v, CStr> {
+fn sort_key<'v>(tv: &'v TypVal, other: &TypVal, numeric: bool) -> Cow<'v, [u8]> {
     if tv.v_type() == VAR_STRING {
         if other.v_type() != VAR_STRING || numeric {
-            Cow::Borrowed(c"'")
+            Cow::Borrowed(b"'")
         } else {
-            Cow::Borrowed(tv.string_cstr().unwrap_or(c""))
+            Cow::Borrowed(tv.string_bytes())
         }
     } else {
         let mut text = tv2string_bytes(tv);
@@ -131,7 +131,7 @@ fn sort_key<'v>(tv: &'v TypVal, other: &TypVal, numeric: bool) -> Cow<'v, CStr> 
         if let Some(end) = text.iter().position(|&b| b == 0) {
             text.truncate(end);
         }
-        Cow::Owned(CString::new(text).expect("cut at the first NUL"))
+        Cow::Owned(text)
     }
 }
 
@@ -154,13 +154,15 @@ fn compare_builtin(info: &SortInfo<'_>, tv1: &TypVal, tv2: &TypVal) -> c_int {
     let key2 = sort_key(tv2, tv1, info.numeric);
     if info.numeric {
         // `strtod`'s prefix parse; a key with no number in it is 0.
-        let n1 = strtod(key1.to_bytes()).0;
-        let n2 = strtod(key2.to_bytes()).0;
+        let n1 = strtod(&key1).0;
+        let n2 = strtod(&key2).0;
         sign_of(n1, n2)
     } else if info.lc {
-        strcoll(&key1, &key2)
+        // Only the locale's collation needs the terminated form.
+        let terminated = |key: &[u8]| CString::new(key).expect("cut at the first NUL");
+        strcoll(&terminated(&key1), &terminated(&key2))
     } else if info.ic {
-        ascii_casecmp(key1.to_bytes(), key2.to_bytes())
+        ascii_casecmp(&key1, &key2)
     } else {
         sign(key1.cmp(&key2))
     }
@@ -279,11 +281,19 @@ pub(crate) fn do_sort(list: &ListRef, info: &mut SortInfo<'_>) {
     }
 
     // Put the items back in the sorted order; each moves out exactly once.
-    let mut slots: Vec<Option<ListItem>> = taken.into_iter().map(Some).collect();
+    let mut taken = taken;
     let sorted: Vec<ListItem> = order
         .iter()
-        .map(|&from| slots[from].take().expect("each item moves once"))
+        .map(|&from| {
+            let item = &mut taken[from];
+            ListItem {
+                li_tv: item.li_tv.take(),
+                li_lock: item.li_lock,
+            }
+        })
         .collect();
+    // Every value has moved out; what is left releases nothing.
+    drop(taken);
     // A cursor stands on an item, not on a place, so it goes where the item
     // went.  Only paid for when something is actually walking the list.
     if list.is_watched() {
@@ -435,9 +445,9 @@ pub(crate) fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
     } else {
         c"uniq() argument"
     };
-    if !value_check_lock_named(
+    if !value_check_lock(
         list_locked(first.list_ref()),
-        gettext(arg_errmsg).to_bytes(),
+        LockName::Translate(arg_errmsg),
     ) {
         // The answer is the argument's own list, with a reference of its
         // own.

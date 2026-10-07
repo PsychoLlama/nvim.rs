@@ -691,6 +691,16 @@ pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
     }
 }
 
+/// Release every item of a table already taken out of its dictionary, in
+/// slot order: the whole-dictionary free, without a removal per slot.
+pub(crate) fn release_table(table: DictTab) {
+    for hi in table.items() {
+        // SAFETY: a kept slot of a table nothing else can reach any more
+        // names a live item, released exactly once here.
+        unsafe { tv_dict_item_free(hi.hi_key.item()) };
+    }
+}
+
 impl Dict {
     /// The item in slot `slot`, or `None` when the slot holds none.
     #[inline]

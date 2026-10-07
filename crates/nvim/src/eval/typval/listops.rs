@@ -244,7 +244,7 @@ pub fn list_remove(
     arg_errmsg: &'static CStr,
 ) {
     let lock = list.as_deref().map_or(VarLock::Fixed, List::lock);
-    if value_check_lock_named(lock, gettext(arg_errmsg).to_bytes()) {
+    if value_check_lock(lock, LockName::Translate(arg_errmsg)) {
         return;
     }
     let Some(list) = list else { return };

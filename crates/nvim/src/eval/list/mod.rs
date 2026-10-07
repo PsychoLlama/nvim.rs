@@ -700,13 +700,17 @@ pub(crate) fn check_lock(lock: VarLock, what: &'static CStr) -> bool {
 /// Whether `flags` says the variable is read-only, reporting `E46` if so.
 #[inline(always)]
 pub(crate) fn check_ro(flags: c_int, what: &'static CStr) -> bool {
-    var_check_ro_named(flags, gettext(what).to_bytes())
+    // Translated only when there is something to report: the lookup is not
+    // free, and this runs on every write.
+    flags & (crate::eval::typval::DI_FLAGS_RO | crate::eval::typval::DI_FLAGS_RO_SBX) as c_int != 0
+        && var_check_ro_named(flags, gettext(what).to_bytes())
 }
 
 /// Whether `flags` says the variable is fixed, reporting `E795` if so.
 #[inline(always)]
 pub(crate) fn check_fixed(flags: c_int, what: &'static CStr) -> bool {
-    var_check_fixed_named(flags, gettext(what).to_bytes())
+    flags & crate::eval::typval::DI_FLAGS_FIX as c_int != 0
+        && var_check_fixed_named(flags, gettext(what).to_bytes())
 }
 
 /// Report `msg`, one of `main.rs`'s shared error texts, translated.

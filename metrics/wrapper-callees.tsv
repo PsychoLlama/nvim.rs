@@ -987,6 +987,7 @@ count	callee	no_raw	defs	def
 3	tree_add_word	0	1	crates/nvim/src/spellfile/wordtree.rs
 3	try_getdigits	0	1	crates/nvim/src/charset/walk.rs
 3	try_to_free_memory	1	1	crates/nvim/src/memory/mod.rs
+3	tv_dict_item_free	0	1	crates/nvim/src/eval/typval/handle.rs
 3	u_compute_hash	0	1	crates/nvim/src/undo/file.rs
 3	u_freeentry	0	1	crates/nvim/src/undo/tree.rs
 3	u_freeheader	0	1	crates/nvim/src/undo/tree.rs
@@ -1630,7 +1631,6 @@ count	callee	no_raw	defs	def
 2	transmute	0	0	
 2	transstr_len	0	1	crates/nvim/src/charset/display.rs
 2	tv_dict_free_dict	0	1	crates/nvim/src/eval/typval/handle.rs
-2	tv_dict_item_free	0	1	crates/nvim/src/eval/typval/handle.rs
 2	tv_list_alloc	0	0	
 2	tv_to_argv	0	1	crates/nvim/src/eval/system.rs
 2	tv_to_optval	0	1	crates/nvim/src/eval/vars/scoped.rs

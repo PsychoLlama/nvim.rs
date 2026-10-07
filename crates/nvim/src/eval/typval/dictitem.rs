@@ -342,6 +342,7 @@ pub fn dict_get_callback(d: Option<&mut Dict>, key: &[u8], result: &mut Callback
 /// on the hot path, which is the 2.5 % `evalbench` p30-9 §7 already paid
 /// once. [`DictKey::as_ptr`] is the read that costs nothing, and the guards
 /// above it rule the call out before the key is touched at all.
+#[inline]
 pub fn dict_wrong_func_name(d: &Dict, item: &DictItem) -> bool {
     let at = ::core::ptr::from_ref(d);
     (at == get_globvar_dict().cast_const()

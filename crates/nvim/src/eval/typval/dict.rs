@@ -454,8 +454,7 @@ pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static
     let Some(dict) = &**dict else {
         return;
     };
-    let name = gettext(arg_errmsg).to_bytes();
-    if value_check_lock_named(dict.dv_lock, name) {
+    if value_check_lock(dict.dv_lock, LockName::Translate(arg_errmsg)) {
         return;
     }
     let Some(key) = numbuf.string_chk(&args[1]) else {
@@ -469,7 +468,10 @@ pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static
     let flags = dict
         .item_at(slot)
         .map_or(0, |item| ::core::ffi::c_int::from(item.di_flags));
-    if var_check_fixed_named(flags, name) || var_check_ro_named(flags, name) {
+    if flags & (DI_FLAGS_FIX | DI_FLAGS_RO | DI_FLAGS_RO_SBX) as ::core::ffi::c_int != 0 && {
+        let name = gettext(arg_errmsg).to_bytes();
+        var_check_fixed_named(flags, name) || var_check_ro_named(flags, name)
+    } {
         return;
     }
 
@@ -489,23 +491,13 @@ pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static
 /// Nothing else may be walking the dictionary: the hashtab is locked for the
 /// walk, so a re-entrant call would see a half-emptied dictionary.
 pub fn tv_dict_free_contents(dict: &DictRef) {
-    // Lock the hashtab so the removals below cannot rehash it under the
-    // walk.
-    dict.edit().lock_table();
-    let mut cursor = DictCursor::new(dict);
-    while let Some(slot) = cursor.next(dict) {
-        // Out of the table before it is freed, so that a release that
-        // reaches this dictionary does not see a freed value.
-        let removed = dict.edit().remove_at(slot);
-        drop(removed);
-    }
-
+    // The whole table comes out first, so a release that reaches this
+    // dictionary finds it empty rather than half freed; the items then go
+    // in slot order, as the walk upstream did.
+    let table = ::core::mem::replace(&mut dict.edit().dv_hashtab, DictTab::init());
+    release_table(table);
     let watchers = ::core::mem::take(&mut dict.edit().watchers);
     drop(watchers);
-
-    let dict = dict.edit();
-    dict.dv_hashtab.ht_locked -= 1;
-    hash_reset(&mut dict.dv_hashtab);
 }
 
 impl Dict {

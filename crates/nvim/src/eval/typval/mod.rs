@@ -9,9 +9,7 @@ use crate::eval::vars::get_globvar_dict;
 use crate::eval::{callback_call, callback_from_typval, func_equal, var2fpos};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::hashtab::{
-    Slot, hash_add, hash_find_len, hash_init, hash_remove, hash_reset, hash_unlock,
-};
+use crate::hashtab::{Slot, hash_add, hash_find_len, hash_init, hash_remove, hash_unlock};
 use crate::lua::executor::api_free_luaref;
 use crate::memory::{xcalloc, xfree};
 use crate::message::emsg;
