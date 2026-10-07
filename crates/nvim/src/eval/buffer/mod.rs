@@ -13,8 +13,7 @@
 //! This file holds what they share: the "make another buffer current for the
 //! duration of a change" dance, and the window walk several of them need.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -43,14 +42,12 @@ pub use prompt::{
     f_prompt_appendbuf, f_prompt_setcallback, f_prompt_setinterrupt, f_prompt_setprompt,
 };
 
-use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
+use crate::autocmd::AucmdBuf;
 use crate::buffer::{
-    buf_ensure_loaded, buf_is_nofilename, buf_is_prompt, buflist_add, buflist_findlnum,
-    buflist_findname_exp, find_buf,
+    buf_ensure_loaded, buf_is_nofilename, buf_is_prompt, buflist_findlnum, find_buf,
 };
 use crate::change::{appended_lines_mark, changed_lines, deleted_lines_mark, inserted_bytes};
 use crate::cursor::check_cursor_col;
-use crate::edit::buf_prompt_text;
 use crate::eval::funcs::{get_buf_arg, tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::{
     callback_free, dict_find, tv_check_str_or_nr, tv_clear, tv_dict_alloc, tv_get_lnum,
@@ -60,33 +57,23 @@ use crate::eval::{callback_from_typval, typval_tostring};
 use crate::ex_cmds::check_secure;
 use crate::extmark::extmark_splice_cols;
 use crate::narrow::number_as_int;
-use crate::winlayer::WinId;
-use core::ffi::{CStr, c_char, c_int};
-use core::{mem, ptr};
+use core::ffi::{CStr, c_int};
 
 use crate::buffer::state::swap_exists_action;
-use crate::memline::{ml_append, ml_delete_flags, ml_get, ml_replace, ml_replace_buf};
-use crate::memory::{strnequal, xfree};
+use crate::memline::ml_delete_flags;
 use crate::message::state::did_emsg;
 use crate::r#move::update_topline;
 use crate::path::path_with_url;
 use crate::sign::{buf_has_signs, get_buffer_signs};
-use crate::strings::{concat_str, xstrnsave};
 use crate::types::*;
 use crate::undo::u_sync_once;
 use crate::winlayer::graph::cmdwin_buf;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
+use crate::buffer::WinInfos;
 use crate::memline::ML_DEL_MESSAGE;
 use crate::normal::{set_visual_active, visual_active};
 use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
-use crate::winlayer::{Buf, Live, TabPage, Win, buffers, tab_windows, windows_in_tab};
-
-/// A value whose caller has promised it outlives the handle.
-///
-/// The builtins here are handed `TypVal`s and `ListItem`s that belong to
-/// the evaluator's own argument frame, which outlives the call. Wrapping is
-/// the unsafe step, once; every `(*p).field` after it is checked code.
-pub(super) type Tv = Live<TypVal>;
+use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, windows_in_tab};
 
 /// Argument `i` as a Number.
 ///
@@ -115,49 +102,43 @@ pub(super) fn arg_buf_chk(args: &[TypVal], i: usize) -> Option<Buf> {
 /// [`SavedBufferState::restore`] can put it back.
 struct SavedBufferState {
     curwin_save: Win,
-    aco: AcoSave,
-    using_aco: bool,
+    /// The autocommand window the buffer was made current in, when no window
+    /// showed it; dropping it restores what it replaced.
+    aco: Option<AucmdBuf>,
     save_visual_active: bool,
 }
-impl SavedBufferState {
-    /// The all-zero state the two halves below start from — `AcoSave`'s
-    /// own initial value, which `aucmd_prepbuf` overwrites in full.
-    fn new() -> Self {
-        // SAFETY: every field is a raw pointer, an integer, a `bool` or a
-        // `Win` (one pointer), for all of which all-zero is a valid value.
-        // A null `Win` names no window and `prepare` overwrites it before
-        // anything reads it, exactly as the raw pointer it replaced was.
-        unsafe { mem::zeroed() }
-    }
 
+impl SavedBufferState {
     /// Make `buffer` the current buffer, with a window showing it, so that a
     /// change to it has its side effects (mark adjustment and the rest) done
     /// where they belong.
     ///
     /// MUST be undone with [`SavedBufferState::restore`].
-    fn prepare(&mut self, buffer: Buf) {
-        self.save_visual_active = visual_active();
+    fn prepare(buffer: Buf) -> Self {
+        let save_visual_active = visual_active();
         set_visual_active(false);
-        self.curwin_save = Win::current();
+        let curwin_save = Win::current();
         buffer.make_current();
         find_win_for_curbuf();
         let current = Win::current();
-        if current.w_buffer != buffer {
+        let aco = (current.w_buffer != buffer).then(|| {
             // No existing window for this buffer. It is dangerous to have
             // `curwin->w_buffer` differ from `curbuf`, so use the autocmd
             // window.
             current.buffer().make_current();
-            // SAFETY: `self.aco` is this frame's, and the buffer is live.
-            unsafe { aucmd_prepbuf(&raw mut self.aco, buffer) };
-            self.using_aco = true;
+            AucmdBuf::enter(buffer)
+        });
+        SavedBufferState {
+            curwin_save,
+            aco,
+            save_visual_active,
         }
     }
 
     /// Undo what [`SavedBufferState::prepare`] did.
-    fn restore(&mut self) {
-        if self.using_aco {
-            // SAFETY: the caller's obligation — `aco` is what `prepare` left.
-            unsafe { aucmd_restbuf(&raw mut self.aco) };
+    fn restore(self) {
+        if let Some(aco) = self.aco {
+            drop(aco);
         } else {
             // The saved window is live and so is its buffer.
             self.curwin_save.make_current();
@@ -172,21 +153,16 @@ fn find_win_for_curbuf() {
     // The b_wininfo list holds the windows that recently contained the
     // buffer, so walking it is cheaper than walking every window. It can name
     // a window that has moved on, hence the second test.
-    // SAFETY: `curbuf` is live and its window-info vector holds `size` live
-    // entries.
-    let buf = Buf::current();
-    let wininfo = &buf.b_wininfo;
-    for i in 0..wininfo.size {
-        let wip: *mut WinInfo = unsafe { *wininfo.items.add(i) };
-        // SAFETY: the buffer's own array of live entries.
-        let Some(win) = (unsafe { (*wip).wi_win }).and_then(WinId::get) else {
-            continue;
-        };
-        if win.w_buffer.is_current() {
-            win.make_current();
-            break;
-        }
+    let mut buf = Buf::current();
+    let found = WinInfos::of(&mut buf)
+        .entries_mut()
+        .iter()
+        .filter_map(|entry| entry.window())
+        .find(|win| win.w_buffer.is_current());
+    if let Some(win) = found {
+        win.make_current();
     }
 }
+
 pub const SEA_NONE: c_int = 0;
 pub const SEA_READONLY: c_int = 4;

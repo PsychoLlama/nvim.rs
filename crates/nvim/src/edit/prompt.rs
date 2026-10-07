@@ -42,6 +42,13 @@ pub(crate) fn buf_prompt_text(buffer: Buf) -> *mut c_char {
     buffer.b_prompt_text
 }
 
+/// Give `buffer` the prompt `text`, releasing the one it had.
+pub(crate) fn set_buf_prompt_text(mut buffer: Buf, text: crate::memory::ThinCString) {
+    let old = core::mem::replace(&mut buffer.b_prompt_text, text.into_raw());
+    // SAFETY: the buffer's own prompt text, an allocation it alone held.
+    unsafe { xfree(old.cast()) };
+}
+
 /// [`buf_prompt_text`], copied.
 pub(crate) fn buf_prompt_text_owned(buffer: Buf) -> crate::memory::ThinCString {
     // SAFETY: the buffer's own terminated prompt text, or a literal; copied

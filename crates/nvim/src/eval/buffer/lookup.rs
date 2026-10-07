@@ -1,8 +1,7 @@
 //! Resolving a buffer argument — number, name, `#`, `%` — and the questions
 //! about one: `bufnr()`, `bufname()`, `bufwinid()`, ...
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -12,8 +11,7 @@
 )]
 
 use super::*;
-use crate::buffer::buflist_add_name;
-use crate::cstr;
+use crate::buffer::{buflist_add_name, find_buffer_by_name};
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::memory::ThinCString;
@@ -25,20 +23,16 @@ pub fn find_buffer(avar: &TypVal) -> Option<Buf> {
         VAR_NUMBER => find_buf(number_as_int(avar.number_or_zero())),
         VAR_STRING => {
             let name = avar.string_cstr()?;
-            // SAFETY: the value's own NUL-terminated string, which the
-            // lookup only reads.
-            if let Some(found) = unsafe { buflist_findname_exp(name.as_ptr().cast_mut()) } {
+            if let Some(found) = find_buffer_by_name(name) {
                 return Some(found);
             }
             // A buffer with no file of its own — a URL, or a scratch
             // buffer — is not in the name index, so it is matched
             // literally instead.
-            // SAFETY: a named buffer's shown name is NUL-terminated.
             buffers().find(|b| {
-                !b.name.is_unnamed()
-                    && (unsafe { path_with_url(cstr::at(b.name.shown_ptr())) } != 0
-                        || buf_is_nofilename(Some(*b)))
-                    && b.name.shown() == Some(name)
+                b.name.shown().is_some_and(|shown| {
+                    (path_with_url(shown) != 0 || buf_is_nofilename(Some(*b))) && shown == name
+                })
             })
         }
         _ => None,
@@ -50,14 +44,9 @@ pub fn f_bufadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let name = numbuf.string(&args[0]);
     // An empty name asks for an unnamed buffer.
-    let name = if name.is_empty() {
-        ptr::null_mut()
-    } else {
-        name.as_ptr().cast_mut()
-    };
-    // SAFETY: null or the argument's NUL-terminated string, which
-    // `buflist_add` copies and does not write.
-    result.write_number(VarNumber::from(unsafe { buflist_add(name, 0) }));
+    let name = (!name.is_empty()).then_some(name);
+    let buffer = buflist_add_name(name, 0, 0);
+    result.write_number(buffer.map_or(0, |b| VarNumber::from(b.handle)));
 }
 
 /// `bufexists({buf})`.

@@ -1,7 +1,6 @@
 //! The dictionary `getbufinfo()` returns.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,38 +15,20 @@ use crate::types::{VAR_DICT, kListLenMayKnow};
 
 /// One `getbufinfo()` entry: a buffer's options, variables and attributes.
 fn get_buffer_info(buffer: Buf) -> DictRef {
-    // SAFETY: the caller's obligation. The dictionary is handed straight to
-    // the caller's list, so it is not leaked, and it stays alive for every
-    // entry the closure adds.
-    let dict_held = tv_dict_alloc();
-    let dict = dict_held.as_ptr();
+    let dict = tv_dict_alloc();
     let nr = |key: &CStr, value: VarNumber| {
-        // SAFETY: a live dictionary and a NUL-terminated key.
-        let _ = unsafe { (*dict).add_number(key.to_bytes(), value) };
-    };
-    let str = |key: &CStr, value: *const c_char| {
-        // SAFETY: a live dictionary, and two NUL-terminated strings.
-        let _ = unsafe { (*dict).add_str(key.to_bytes(), crate::cstr::at_opt(value)) };
+        let _ = dict.edit().add_number(key.to_bytes(), value);
     };
     let list = |key: &CStr, value: Option<ListRef>| {
-        // SAFETY: a live dictionary and a live list, which the dictionary
-        // takes over.
-        let _ = unsafe { (*dict).add_list(key.to_bytes(), value) };
+        let _ = dict.edit().add_list(key.to_bytes(), value);
     };
 
     nr(c"bufnr", VarNumber::from(buffer.handle));
-    str(
-        c"name",
-        if buffer.name.full().is_none() {
-            c"".as_ptr()
-        } else {
-            buffer.name.full_ptr() as *const c_char
-        },
-    );
+    let name = buffer.name.full().unwrap_or(c"");
+    let _ = dict.edit().add_str(b"name", Some(name));
     // The *current* buffer's line is the cursor's; any other's is the one it
     // will be entered at.
-    let lnum = if buffer.raw() == Buf::current_raw() {
-        // SAFETY: `curwin` is set from startup to exit.
+    let lnum = if buffer.is_current() {
         Win::current().w_cursor.lnum
     } else {
         buflist_findlnum(buffer)
@@ -56,9 +37,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     nr(c"linecount", VarNumber::from(buffer.line_count()));
     nr(c"loaded", VarNumber::from(!buffer.b_ml.ml_mfp.is_null()));
     nr(c"listed", VarNumber::from(buffer.b_p_bl));
-    // SAFETY: a live buffer.
     nr(c"changed", VarNumber::from(buf_is_changed(buffer)));
-    // SAFETY: a live buffer.
     nr(c"changedtick", buf_get_changedtick(buffer));
     nr(
         c"hidden",
@@ -68,21 +47,14 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
         c"command",
         VarNumber::from(cmdwin_buf.get() == Some(buffer.id())),
     );
-    // SAFETY: a live dictionary and the buffer's own variable dictionary.
-    let vars = c"variables";
-    // SAFETY: the buffer's own `b:` scope; the answer takes a reference.
-    let b_vars = unsafe { DictRef::retained(buffer.b_vars) };
-    let _ = unsafe { (*dict).add_dict(vars.to_bytes(), b_vars) };
+    // The buffer's own `b:` scope; the answer takes a reference.
+    let vars = buffer.b_bufvar.di_tv.dict_handle();
+    let _ = dict.edit().add_dict(b"variables", vars);
 
     // The windows displaying this buffer.
     let windows = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-    let into = windows.as_ptr();
-    let append = |handle: Handle| {
-        // SAFETY: a live list.
-        unsafe { (*into).push_number(VarNumber::from(handle)) };
-    };
     for wp in tab_windows().filter(|wp| wp.w_buffer == buffer) {
-        append(wp.handle);
+        windows.edit().push_number(VarNumber::from(wp.handle));
     }
     list(c"windows", Some(windows));
 
@@ -90,17 +62,14 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
         list(c"signs", Some(get_buffer_signs(buffer)));
     }
     nr(c"lastused", buffer.b_last_used);
-    dict_held
+    dict
 }
 
 /// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
 /// filter dictionary selects.
 pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals; the list belongs to
-    // `result` for the whole walk, and `dict_find` hands back a live entry
-    // of the dictionary the argument holds.
     let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
-    let mut argbuf: *mut Buffer = ptr::null_mut();
+    let mut argbuf: Option<Buf> = None;
     let mut filter = Filter::default();
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT) {
         let sel_d = args[0].dict_ref();
@@ -116,17 +85,17 @@ pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             };
         }
     } else if !args.is_empty() {
-        argbuf = arg_buf_chk(args, 0).map_or(ptr::null_mut(), Buf::raw);
-        if argbuf.is_null() {
+        argbuf = arg_buf_chk(args, 0);
+        if argbuf.is_none() {
             return;
         }
     }
     for buf in buffers() {
-        if !argbuf.is_null() && argbuf != buf.raw() || filter.rejects(buf) {
+        if argbuf.is_some_and(|wanted| wanted != buf) || filter.rejects(buf) {
             continue;
         }
-        (*list).push_dict(Some(get_buffer_info(buf)));
-        if !argbuf.is_null() {
+        list.push_dict(Some(get_buffer_info(buf)));
+        if argbuf.is_some() {
             return;
         }
     }

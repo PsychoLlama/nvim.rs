@@ -434,6 +434,17 @@ pub(crate) fn ml_append_bytes(buffer: Buf, lnum: LineNr, line: &[u8]) -> Result<
     unsafe { ml_append_buf(buffer, lnum, copy.as_mut_ptr().cast(), len, false) }
 }
 
+/// [`ml_append`] for a line the caller holds: append `line` after line
+/// `lnum` of the current buffer, opening its memline if need be.
+pub(crate) fn ml_append_text(lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
+    let mut copy = Vec::with_capacity(line.len() + 1);
+    copy.extend_from_slice(line);
+    copy.push(0);
+    let len = ColNr::try_from(copy.len()).expect("a line shorter than INT_MAX");
+    // SAFETY: `len` bytes, the NUL among them, owned by this call.
+    unsafe { ml_append(lnum, copy.as_mut_ptr().cast(), len, false) }
+}
+
 /// [`ml_append`] for an arbitrary buffer, which must already have a memline.
 ///
 /// # Safety
@@ -513,6 +524,24 @@ pub unsafe fn ml_replace(
     copy: bool,
 ) -> Result<(), Failed> {
     unsafe { ml_replace_buf(Buf::current(), lnum, line, copy, false) }
+}
+
+/// [`ml_replace_buf`] for a line the caller holds, which the memline copies.
+pub(crate) fn ml_replace_buf_text(buffer: Buf, lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
+    let mut copy = Vec::with_capacity(line.len() + 1);
+    copy.extend_from_slice(line);
+    copy.push(0);
+    // SAFETY: `line.len()` bytes and a NUL, which the copy duplicates.
+    unsafe {
+        ml_replace_buf_len(
+            buffer,
+            lnum,
+            copy.as_mut_ptr().cast(),
+            line.len(),
+            true,
+            false,
+        )
+    }
 }
 
 /// [`ml_replace`] with the length given, excluding the NUL.

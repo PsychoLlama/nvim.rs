@@ -1,8 +1,7 @@
 //! Reading and writing buffer text: `getbufline()`, `setbufline()`,
 //! `appendbufline()`, `deletebufline()` and their current-buffer forms.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -12,9 +11,9 @@
 )]
 
 use super::*;
-use crate::cstr;
-use crate::eval::typval::{list_items, list_len};
-use crate::memory::ThinCString;
+use crate::eval::typval::list_len;
+use crate::memline::{Lines, ml_append_text, ml_get_len, ml_replace_buf_text};
+use crate::memory::{ThinCString, XString};
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
 
@@ -30,85 +29,82 @@ pub(crate) fn set_buffer_lines(
     lines: &TypVal,
     result: &mut TypVal,
 ) {
-    // SAFETY: the caller's obligation. `cob` is a live local, restored on
-    // every path out; `line` is owned here and freed before each replacement
-    // and once at the end.
     let mut lnum: LineNr = lnum_arg + LineNr::from(append);
     let mut added: c_int = 0;
     let is_curbuf: bool = buffer == Buf::current_or_none();
-    // SAFETY: the caller's obligation -- live typvals, and a live buffer or
-    // NULL, which the test below tells apart.
-    let mut ret = unsafe { Tv::new(result) };
     let unloaded = |b: Buf| !is_curbuf && b.b_ml.ml_mfp.is_null();
-    if buffer.is_none_or(unloaded) || lnum < 1 {
-        ret.write_number(1);
+    let Some(target) = buffer.filter(|&b| !unloaded(b)) else {
+        result.write_number(1);
+        return;
+    };
+    if lnum < 1 {
+        result.write_number(1);
         return;
     }
-    let mut cob = SavedBufferState::new();
-    if let (false, Some(buffer)) = (is_curbuf, buffer) {
-        cob.prepare(buffer);
-    }
+    let cob = (!is_curbuf).then(|| SavedBufferState::prepare(target));
     let append_lnum: LineNr = if append {
         lnum - 1
     } else {
         Buf::current().line_count()
     };
-    let mut l: *mut List = ptr::null_mut();
+    // A List argument is walked through a handle of its own: the body below
+    // runs autocommands, which may edit -- or drop -- the very list.
+    let list = if lines.v_type() == VAR_LIST {
+        lines.list_handle()
+    } else {
+        None
+    };
     let mut at: usize = 0;
-    let mut line: *mut c_char = ptr::null_mut();
-    let src = lines;
+    let mut line: Option<XString> = None;
     '_cleanup: {
-        if src.v_type() == VAR_LIST {
-            l = src.list_or_null();
-            if list_len(unsafe { l.as_ref() }) == 0 {
+        if lines.v_type() == VAR_LIST {
+            if list_len(list.as_deref()) == 0 {
                 break '_cleanup;
             }
         } else {
-            line = typval_tostring(Some(lines), false).into_raw();
+            line = Some(typval_tostring(Some(lines), false));
         }
         loop {
-            // Re-read, as upstream does: the type tag is the argument's own
-            // and the walk below can run user code.
-            if src.v_type() == VAR_LIST {
-                // Re-read the items too: the body below runs autocommands,
-                // which may edit the very list being appended.
-                let Some(item) = (list_items(unsafe { l.as_ref() })).get(at) else {
+            if let Some(list) = &list {
+                // Re-read the items every time, as upstream does.
+                let Some(item) = list.items().get(at) else {
                     break;
                 };
-                unsafe { xfree(line.cast()) };
-                line = typval_tostring(Some(&item.li_tv), false).into_raw();
+                line = Some(typval_tostring(Some(&item.li_tv), false));
                 at += 1;
             }
-            ret.write_number(1);
-            if line.is_null() || lnum > Buf::current().line_count() + 1 {
+            result.write_number(1);
+            let Some(text) = line.as_ref() else { break };
+            if lnum > Buf::current().line_count() + 1 {
                 break;
             }
+            let text = text.as_cstr().to_bytes();
             if u_sync_once.get() == 2 {
                 u_sync_once.set(1);
                 u_sync(true);
             }
             if !append && lnum <= Buf::current().line_count() {
-                let old_len = len_as_int(unsafe { cstr::bytes_at(ml_get(lnum)) }.len());
-                if u_savesub(lnum).is_ok() && unsafe { ml_replace(lnum, line, true) }.is_ok() {
-                    let new_len = len_as_int(unsafe { cstr::bytes_at(line) }.len());
-                    inserted_bytes(lnum, 0, old_len, new_len);
+                let old_len = ml_get_len(lnum);
+                if u_savesub(lnum).is_ok()
+                    && ml_replace_buf_text(Buf::current(), lnum, text).is_ok()
+                {
+                    inserted_bytes(lnum, 0, old_len, len_as_int(text.len()));
                     if is_curbuf && lnum == Win::current().w_cursor.lnum {
                         check_cursor_col(Win::current());
                     }
-                    ret.write_number(0);
+                    result.write_number(0);
                 }
             } else if added > 0 || u_save(lnum - 1, lnum).is_ok() {
                 added += 1;
-                if unsafe { ml_append(lnum - 1, line, 0, false) }.is_ok() {
-                    ret.write_number(0);
+                if ml_append_text(lnum - 1, text).is_ok() {
+                    result.write_number(0);
                 }
             }
-            if l.is_null() {
+            if list.is_none() {
                 break;
             }
             lnum += 1;
         }
-        unsafe { xfree(line.cast()) };
         if added > 0 {
             appended_lines_mark(append_lnum, added);
             // Only the current window of the current buffer follows the
@@ -125,14 +121,13 @@ pub(crate) fn set_buffer_lines(
             update_topline(Win::current());
         }
     }
-    if !is_curbuf {
+    if let Some(cob) = cob {
         cob.restore();
     }
 }
 
 /// `setbufline()` and `appendbufline()`, which differ only in `append`.
 fn buf_set_append_line(args: &[TypVal], result: &mut TypVal, append: bool) {
-    // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let Some(buf) = arg_buf(args, 0, 0) else {
         result.write_number(1);
@@ -154,50 +149,37 @@ fn get_buffer_lines(
     retlist: bool,
     result: &mut TypVal,
 ) {
-    // SAFETY: the caller's obligation; every line index is clamped to the
-    // buffer before `ml_get_buf` sees it.
-    let mut ret = unsafe { Tv::new(result) };
-    ret.write_empty(if retlist { VAR_LIST } else { VAR_STRING });
-    ret.write_string(None);
-    if buffer.is_none_or(|b| b.b_ml.ml_mfp.is_null()) || start < 0 || end < start {
+    result.write_empty(if retlist { VAR_LIST } else { VAR_STRING });
+    result.write_string(None);
+    let Some(buffer) = buffer.filter(|b| !b.b_ml.ml_mfp.is_null()) else {
+        if retlist {
+            tv_list_alloc_ret(result, 0);
+        }
+        return;
+    };
+    if start < 0 || end < start {
         if retlist {
             tv_list_alloc_ret(result, 0);
         }
         return;
     }
-    let buffer = buffer.expect("the early return covers an absent buffer");
+    let mut text = Lines::in_buffer(buffer);
     if !retlist {
-        let len = |n| size_t::try_from(n).expect("a line length is not negative");
-        let line = if start >= 1 && start <= buffer.line_count() {
-            // SAFETY: a line of the buffer and its length; `xstrnsave`
-            // answers a fresh block the value takes over.
-            unsafe {
-                ThinCString::from_raw(xstrnsave(
-                    buffer.line_raw(start).raw(),
-                    len(buffer.line_len_raw(start)),
-                ))
-            }
-        } else {
-            None
-        };
-        ret.write_string(line);
+        let line = (start >= 1 && start <= buffer.line_count())
+            .then(|| ThinCString::from_bytes(text.line(start)));
+        result.write_string(line);
         return;
     }
     start = start.max(1);
     end = end.min(buffer.line_count());
     let list = tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t);
     for lnum in start..=end {
-        let (text, len) = (
-            buffer.line_raw(lnum).raw(),
-            usize::try_from(buffer.line_len_raw(lnum)).unwrap_or(0),
-        );
-        unsafe { (*list).push_bytes(Some(cstr::slice_at(text, len))) };
+        list.push_bytes(Some(text.line(lnum)));
     }
 }
 
 /// `getbufline()` when `retlist`, `getbufoneline()` otherwise.
 fn getbufline(args: &[TypVal], result: &mut TypVal, retlist: bool) {
-    // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let buf = arg_buf_chk(args, 0);
     let lnum = arg_lnum_buf(args, 1, buf);
@@ -214,7 +196,6 @@ fn getbufline(args: &[TypVal], result: &mut TypVal, retlist: bool) {
 
 /// `append({lnum}, {string/list})`.
 pub fn f_append(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
@@ -234,7 +215,6 @@ pub fn f_setbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `setline({lnum}, {string/list})`.
 pub fn f_setline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
@@ -244,7 +224,6 @@ pub fn f_setline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `getline({lnum} [, {end}])` — one String, or a List for a range.
 pub fn f_getline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let lnum = arg_lnum(args, 0);
     // One argument answers a string, a range answers a list.
     let (end, retlist) = if args.len() > 1 {
@@ -268,8 +247,6 @@ pub fn f_getbufoneline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// `deletebufline({buf}, {first} [, {last}])` — 0 when the lines went.
 pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(1);
-    // SAFETY: the arguments and `result` are live typvals; `cob` is a live
-    // local, restored on every path out of the change.
     let did_emsg_before = did_emsg.get();
     let Some(buf) = arg_buf(args, 0, 0) else {
         return;
@@ -288,10 +265,7 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         return;
     }
     let is_curbuf = Some(buf) == Buf::current_or_none();
-    let mut cob = SavedBufferState::new();
-    if !is_curbuf {
-        cob.prepare(buf);
-    }
+    let cob = (!is_curbuf).then(|| SavedBufferState::prepare(buf));
     last = last.min(Buf::current().line_count());
     let count = last - first + 1;
     if u_sync_once.get() == 2 {
@@ -321,7 +295,7 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         deleted_lines_mark(first, count);
         result.write_number(0);
     }
-    if !is_curbuf {
+    if let Some(cob) = cob {
         cob.restore();
     }
 }

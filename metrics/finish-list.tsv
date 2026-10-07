@@ -173,7 +173,7 @@ drawscreen/	drawscreen/mode.rs	1	5	0	5	-	-	-	vim_strsize:3 at:1 vim_snprintf:1
 drawscreen/	drawscreen/state.rs	1	0	0	0	-	-	-	-
 drawscreen/	drawscreen/winlines.rs	1	44	0	11	deref:32 expr:1	-	-	.add:4 win_line:3 decor_conceal_line:1 decor_virt_lines:1 grid_line_getchar:1 prepare_search_hl:1
 drawscreen/	drawscreen/winupdate.rs	1	46	0	14	deref:32	-	-	.add:4 re_multiline:2 .init_search_hl:1 decor_range_add_virt:1 getvcols:1 getvvcol:1 terminal_check_size:1 terminal_suspended:1
-edit/	*	14	209	10	148	deref:53 expr:4 ref:2	other:7 str:1	str:5	.offset:20 append_to_redobuff:9 xfree:5 ins_str:4 stuff_readbuf_len:4 utfc_ptr2len:4 .offset_from:3 append_to_redobuff_literally:3
+edit/	*	14	210	10	149	deref:53 expr:4 ref:2	other:7 str:1	str:5	.offset:20 append_to_redobuff:9 xfree:6 ins_str:4 stuff_readbuf_len:4 utfc_ptr2len:4 .offset_from:3 append_to_redobuff_literally:3
 edit/	edit/bs.rs	1	17	0	15	deref:2	-	-	.offset:2 utfc_next:2 .offset_from:1 charsize_nowrap:1 ins_str:1 mb_get_class:1 ml_get_buf:1 tabstop_count:1
 edit/	edit/chars.rs	1	19	0	13	deref:6	-	str:1	.offset:2 copy_option_part:2 utf_char2bytes:2 append_to_redobuff_literally:1 at:1 get_leader_len:1 ins_bytes_len:1 ins_char_bytes:1
 edit/	edit/ctrl.rs	1	10	0	9	deref:1	-	-	do_put:2 append_to_redobuff:1 free_fmark:1 get_yank_register:1 insert_reg:1 map_to_exists_mode:1 stuff_redo_readbuf:1
@@ -182,18 +182,13 @@ edit/	edit/key.rs	1	7	0	5	deref:2	-	-	.offset:1 append_to_redobuff_literally:1 d
 edit/	edit/lastins.rs	1	21	2	10	deref:10 expr:1	-	str:1	stuff_readbuf_len:3 .offset:2 .offset_from:1 String_0::from_owned_parts:1 add_char2buf:1 xmalloc:1 xmemdupz:1
 edit/	edit/literal.rs	1	17	0	12	deref:5	-	-	append_to_redobuff:4 append_to_redobuff_literally:1 bytes_at:1 init_charsize_arg:1 ins_str:1 utf_ptr2str_char_info:1 utfc_next:1 vim_snprintf:1
 edit/	edit/motion.rs	1	5	0	5	-	-	-	getvcol_nolist:1 stuff_readbuf_len:1 utfc_ptr2len:1
-edit/	edit/prompt.rs	1	6	0	5	deref:1	-	str:2	at:1 bytes_at:1 ml_append:1 ml_replace:1 strnequal:1
+edit/	edit/prompt.rs	1	7	0	6	deref:1	-	str:2	at:1 bytes_at:1 ml_append:1 ml_replace:1 strnequal:1 xfree:1
 edit/	edit/redraw.rs	1	12	1	10	deref:2	-	-	grid_line_getchar:3 apply_autocmds:2 aucmd_prepbuf:1 aucmd_restbuf:1 getvcol_nolist:1 grid_line_puts:1 utf_head_off:1
 edit/	edit/replace.rs	1	11	1	8	deref:3	str:1	-	win_chartabsize:2 .add:1 getvcol:1 ins_bytes_len:1 utf_head_off:1 utf_ptr2len:1 utfc_ptr2len:1
 edit/	edit/state.rs	1	18	2	9	deref:4 ref:2 expr:1	other:2	-	.offset:1 ModeState::insert:1 change_warning:1 get_inserted:1 ins_compl_addleader:1 linetabsize_str:1 tabstop_at:1 utfc_ptr2len:1
 edit/	edit/tab.rs	1	41	0	33	deref:6 expr:2	other:1	-	.offset:11 append_to_redobuff:2 getvcol:2 init_charsize_arg:2 tabstop_padding:2 win_charsize:2 xfree:2 .copy_from:1
 edit/	edit/undo.rs	1	13	4	8	deref:5	other:4	-	append_to_redobuff:2 apply_autocmds:1 get_inserted:1 linetabsize_str:1
-eval/	*	29	722	54	452	deref:176 expr:57 ref:18 compound:4	str:36 other:22 void:18 value:17 pp_str:1	str:16 value:10 other:4 void:2 pp_str:1	.as_ref:28 xfree:27 c_str:17 ThinCString::from_raw:13 CStr::from_ptr:8 from_raw_parts:5 Box::from_raw:4 bytes_at:4
-eval/	eval/buffer/info.rs	1	6	0	1	deref:5	-	-	-
-eval/	eval/buffer/lines.rs	1	12	0	11	deref:1	-	-	.as_ref:2 bytes_at:2 xfree:2 ThinCString::from_raw:1 ml_append:1 ml_replace:1
-eval/	eval/buffer/lookup.rs	1	3	0	3	-	-	-	buflist_add:1 buflist_findname_exp:1 path_with_url:1
-eval/	eval/buffer/mod.rs	1	5	0	3	deref:2	-	-	aucmd_prepbuf:1 aucmd_restbuf:1
-eval/	eval/buffer/prompt.rs	1	19	2	17	deref:2	str:1 value:1	-	.as_mut:2 ThinCString::from_raw:2 ml_replace_buf:2 xfree:2 bytes_at:1 concat_str:1 strnequal:1
+eval/	*	24	677	52	417	deref:166 expr:57 ref:18 compound:4	str:35 other:22 void:18 value:16 pp_str:1	str:16 value:10 other:4 void:2 pp_str:1	.as_ref:26 xfree:23 c_str:17 ThinCString::from_raw:10 CStr::from_ptr:8 from_raw_parts:5 Box::from_raw:4 emsg_ptr:4
 eval/	eval/collect.rs	1	18	1	11	deref:4 ref:2 expr:1	other:1	-	.as_ref:2
 eval/	eval/forloop.rs	1	8	3	4	deref:4	void:2 other:1	void:1	xfree:1
 eval/	eval/fs/dir.rs	1	21	0	16	deref:3 expr:2	str:7	str:5	ThinCString::from_raw:1 abort:1 c_str:1 changedir_func:1 delete_recursive:1 emsg:1 full_name_save:1 os_fileinfo_link:1
@@ -431,10 +426,10 @@ mbyte/	mbyte/mod.rs	1	33	2	16	deref:16 expr:1	str:2 pp_str:1	str:1	.offset:5 xfr
 mbyte/	mbyte/utf8/mod.rs	1	62	16	29	deref:33	str:13 other:5 pp_str:3	-	.offset:2 schar_from_buf:2 .as_mut:1 copy_nonoverlapping:1 from_raw_parts_mut:1
 mbyte/	mbyte/utf8/tables.rs	1	0	0	0	-	-	-	-
 mbyte/	mbyte/walk.rs	1	62	14	42	deref:19 expr:1	str:16 other:2 pp_str:2	str:1	.offset:10 .offset_from:8 at_opt:1 bytes_at:1 mark_mb_adjustpos:1 ml_get_buf:1 prefix_at:1 ptr2cells:1
-memline/	*	8	565	60	412	deref:117 expr:12 compound:4 ref:4	str:35 other:23 pp_str:5 value:4	str:9 other:6	xfree:23 bytes_at:21 mf_put:21 Db::new:18 copy:11 Pb::new:10 Pe::new:10 c_str:10
+memline/	*	8	567	60	414	deref:117 expr:12 compound:4 ref:4	str:35 other:23 pp_str:5 value:4	str:9 other:6	xfree:23 bytes_at:21 mf_put:21 Db::new:18 copy:11 Pb::new:10 Pe::new:10 c_str:10
 memline/	memline/block0.rs	1	82	11	65	deref:11 expr:3 ref:1	str:9 other:3 value:3	-	os_fileinfo:5 zeroed:5 bytes_at:4 os_fileinfo_inode:3 eq:2 same_directory:2 vim_full_name:2 buf_store_file_info:1
 memline/	memline/edit.rs	1	85	8	60	deref:21 expr:2	other:7 str:1	other:1	copy:9 mf_put:8 Db::new:6 Pe::new:6 Pb::new:5 mf_free:2 mf_get:2 copy_nonoverlapping:1
-memline/	memline/lines.rs	1	43	14	26	deref:9 compound:3	other:2 str:1	-	Db::new:3 Buf::new:2 bytes_at:2 mb_utflen:1 xfree:1 xmemdupz:1
+memline/	memline/lines.rs	1	45	14	28	deref:9 compound:3	other:2 str:1	-	Db::new:3 Buf::new:2 bytes_at:2 mb_utflen:1 xfree:1 xmemdupz:1
 memline/	memline/mod.rs	1	50	1	28	deref:20	other:2	-	mf_put:3 mf_close:2 mf_open_file:2 mf_sync:2 Db::new:1 Pb::new:1 Pe::new:1 c_str:1
 memline/	memline/offsets.rs	1	19	3	12	deref:4 expr:3	other:1	-	Db::new:3
 memline/	memline/recover.rs	1	106	4	75	deref:25 ref:3 expr:1	other:3 str:3	str:1	c_str:7 at:5 mf_need_trans:3 mf_put:3 mf_sync:3 os_fileinfo:3 xfree:3 zeroed:3
