@@ -5,110 +5,89 @@
 //! and prefixing the value with `#`, `*`, `[` or `{` by type.  That layout
 //! is a contract: it is what a user sees.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::semsg;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
-use core::mem::offset_of;
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::eval::typval::{DictRef, DictTab};
-use crate::types::{IOSIZE, NUL};
+use crate::eval::typval::DictRef;
+use crate::types::IOSIZE;
 
-/// Every variable of `ht`, one per line, each name prefixed with `prefix`.
+/// The variables in `dict`, one per line, each name prefixed with `prefix`.
 ///
 /// `empty` includes the variables holding the null string, which only the
 /// scopes that can hold one want.  `:filter` is applied to the prefixed
 /// name.
 ///
-/// # Safety
-/// `ht` is a live variable hashtab, `prefix` a NUL-terminated string and
-/// `first` writable.
-pub unsafe fn list_hashtable_vars(
-    ht: *mut DictTab,
-    prefix: *const c_char,
-    empty: bool,
-    first: *mut c_int,
-) {
-    for hi in unsafe { tv_ht_iter(ht) } {
-        // Upstream re-reads `got_int` in the loop condition, so a `:let`
-        // listing stops at the interrupt rather than at the end.
-        if got_int.get() {
-            break;
-        }
-        let di = tv_dict_hi2di(hi);
-        let mut buf = [0 as c_char; IOSIZE as usize];
-        unsafe { xstrlcpy(buf.as_mut_ptr(), prefix, IOSIZE as size_t) };
-        unsafe { xstrlcat(buf.as_mut_ptr(), (*di).di_key.as_ptr(), IOSIZE as size_t) };
-        if message_filtered(unsafe { cstr::at(buf.as_mut_ptr()) }) {
+/// Each variable's name and value are copied out of the dictionary before
+/// anything is printed: a message can `:redir` into a variable, which is a
+/// write to a dictionary -- possibly this one.
+pub(crate) fn list_dict_vars(dict: &DictRef, prefix: &CStr, empty: bool, first: &mut bool) {
+    let mut cursor = DictCursor::new(dict);
+    // Upstream re-reads `got_int` in the loop condition, so a `:let`
+    // listing stops at the interrupt rather than at the end.
+    while !got_int.get()
+        && let Some(slot) = cursor.next(dict)
+    {
+        let Some((key, value)) = dict
+            .item_at(slot)
+            .map(|item| (item.key().to_vec(), item.di_tv.clone()))
+        else {
+            continue;
+        };
+        // What `:filter` matches: the prefixed name, cut where upstream's
+        // `IOSIZE` buffer cut it.
+        let mut name = prefix.to_bytes().to_vec();
+        name.extend_from_slice(&key);
+        name.truncate(IOSIZE as usize - 1);
+        if cstr::with_terminated(&name, message_filtered) {
             continue;
         }
-        if empty
-            || unsafe { (*di).di_tv.v_type() } != VAR_STRING
-            || unsafe { (*di).di_tv.string_ref() }.is_some()
-        {
-            unsafe { list_one_var(di, prefix, first) };
+        if empty || value.v_type() != VAR_STRING || value.string_ref().is_some() {
+            let text = encode_tv2echo(&value);
+            list_one_var_a(prefix, &key, value.v_type(), text.as_bytes(), first);
         }
-    }
-}
-
-/// The variables in `dict`, each shown with `prefix` in front of its name.
-pub(crate) fn list_dict_vars(dict: &DictRef, prefix: &CStr, empty: bool, first: &mut c_int) {
-    // SAFETY: the dictionary's own table, live for as long as the caller
-    // holds it, a NUL-terminated prefix, and the caller's `first`.
-    unsafe {
-        list_hashtable_vars(
-            ptr::from_mut(&mut dict.edit().dv_hashtab),
-            prefix.as_ptr(),
-            empty,
-            first,
-        )
     }
 }
 
 /// The `g:` scope.
-pub(crate) fn list_glob_vars(first: &mut c_int) {
+pub(crate) fn list_glob_vars(first: &mut bool) {
     list_dict_vars(&globvar_dict(), c"", true, first);
 }
 
 /// The current buffer's `b:` scope.
-pub(crate) fn list_buf_vars(first: &mut c_int) {
-    // SAFETY: the current buffer's own `b:` dictionary.
-    let ht = unsafe { &raw mut (*Buf::current().b_vars).dv_hashtab };
-    // SAFETY: a live scope table, and the caller's `first`.
-    unsafe { list_hashtable_vars(ht, c"b:".as_ptr(), true, first) }
+pub(crate) fn list_buf_vars(first: &mut bool) {
+    if let Some(dict) = Buf::current().b_bufvar.di_tv.dict_handle() {
+        list_dict_vars(&dict, c"b:", true, first);
+    }
 }
 
 /// The current window's `w:` scope.
-pub(crate) fn list_win_vars(first: &mut c_int) {
-    // SAFETY: the current window's own `w:` dictionary.
-    let ht = unsafe { &raw mut (*Win::current().w_vars).dv_hashtab };
-    // SAFETY: a live scope table, and the caller's `first`.
-    unsafe { list_hashtable_vars(ht, c"w:".as_ptr(), true, first) }
+pub(crate) fn list_win_vars(first: &mut bool) {
+    if let Some(dict) = Win::current().w_winvar.di_tv.dict_handle() {
+        list_dict_vars(&dict, c"w:", true, first);
+    }
 }
 
 /// The current tab page's `t:` scope.
-pub(crate) fn list_tab_vars(first: &mut c_int) {
-    // SAFETY: `curtab` is set from startup to exit, and the tab page's own
-    // `t:` dictionary is live with it.
-    let ht = unsafe { &raw mut (*TabPage::current().tp_vars).dv_hashtab };
-    // SAFETY: a live scope table, and the caller's `first`.
-    unsafe { list_hashtable_vars(ht, c"t:".as_ptr(), true, first) }
+pub(crate) fn list_tab_vars(first: &mut bool) {
+    if let Some(dict) = TabPage::current().tp_winvar.di_tv.dict_handle() {
+        list_dict_vars(&dict, c"t:", true, first);
+    }
 }
 
 /// The `v:` scope.  `empty` is false: the `v:` variables that hold no string
 /// are not listed.
-pub(crate) fn list_vim_vars(first: &mut c_int) {
+pub(crate) fn list_vim_vars(first: &mut bool) {
     list_dict_vars(&vimvar_dict(), c"v:", false, first);
 }
 
 /// The current script's `s:` scope, if there is one.
-pub(crate) fn list_script_vars(first: &mut c_int) {
+pub(crate) fn list_script_vars(first: &mut bool) {
     let sid = current_sctx.get().sc_sid;
     if let Some(dict) = script_scope_dict(sid) {
         list_dict_vars(&dict, c"s:", false, first);
@@ -118,7 +97,7 @@ pub(crate) fn list_script_vars(first: &mut c_int) {
 /// `:let name …`: print each named variable in `text`, or the whole of a
 /// scope named on its own. `skip` only checks that the names parse. Answers
 /// where in `text` it stopped.
-pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut c_int) -> usize {
+pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut bool) -> usize {
     let mut error = false;
     let mut arg = 0;
     let rest = |at: usize| text.get(at..).unwrap_or_default();
@@ -198,8 +177,7 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut c_int) -> usize
                     }
                 }
             } else {
-                // SAFETY: a live value, and no state to thread.
-                let s = encode_tv2echo(&tv).into_raw();
+                let rendered = encode_tv2echo(&tv);
                 // Without a subscript the expanded name is what was
                 // looked up; with one, the command line's own text is
                 // what should be shown.
@@ -207,23 +185,7 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut c_int) -> usize
                     Some(expanded) if arg == arg_subsc => expanded,
                     _ => &text[name_start..arg],
                 };
-                let text = if s.is_null() { c"".as_ptr() } else { s };
-                let ty = tv.v_type();
-                let name_size = ptrdiff_t::try_from(shown.len()).expect("a name fits");
-                // SAFETY: a NUL-terminated rendering, a name of `name_size`
-                // bytes, and the caller's `first`.
-                unsafe {
-                    list_one_var_a(
-                        c"".as_ptr(),
-                        shown.as_ptr().cast(),
-                        name_size,
-                        ty,
-                        text,
-                        first,
-                    )
-                };
-                // SAFETY: the rendering is this frame's own allocation.
-                unsafe { xfree(s.cast()) };
+                list_one_var_a(c"", shown, tv.v_type(), rendered.as_bytes(), first);
             }
             clear_local(&mut tv);
         }
@@ -233,24 +195,6 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut c_int) -> usize
     arg
 }
 
-/// One variable, rendering its value with `encode_tv2echo`.
-///
-/// # Safety
-/// `v` is a live item, `prefix` a NUL-terminated string, `first` writable.
-unsafe fn list_one_var(v: *mut DictItem, prefix: *const c_char, first: *mut c_int) {
-    // SAFETY: the caller's obligation -- a live item, whose key and value
-    // are its own.
-    let item = unsafe { Di::new(v) };
-    let key = unsafe { (*v).di_key.as_ptr() };
-    let len = unsafe { (*v).di_key.len() } as ptrdiff_t;
-    let tv = item.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
-    let s = unsafe { encode_tv2echo(&*tv).into_raw() };
-    let text = if s.is_null() { c"".as_ptr() } else { s };
-    let ty = item.di_tv.v_type();
-    unsafe { list_one_var_a(prefix, key, len, ty, text, first) };
-    unsafe { xfree(s.cast()) };
-}
-
 /// Print one `name  <sigil><value>` line.
 ///
 /// The name is padded to column 22 and the sigil says what the type is:
@@ -258,61 +202,47 @@ unsafe fn list_one_var(v: *mut DictItem, prefix: *const c_char, first: *mut c_in
 /// else.  For a List or a Dict the sigil replaces the bracket the rendered
 /// value already starts with.
 ///
-/// `first` clears the rest of the screen on the first line and is set false;
-/// a NULL `name` is an `a:` variable, which stores none.
-///
-/// # Safety
-/// `prefix` and `string` are NUL-terminated; `name` is NULL or `name_len`
-/// bytes; `first` is writable.
-unsafe fn list_one_var_a(
-    prefix: *const c_char,
-    name: *const c_char,
-    name_len: ptrdiff_t,
-    type_0: VarType,
-    mut string: *const c_char,
-    first: *mut c_int,
-) {
-    // SAFETY: the caller's obligation throughout -- `first` is writable,
-    // `prefix` and `string` are NUL-terminated, and `name` is `name_len`
-    // bytes or NULL. Every callee below writes to the message area.
-    let is_first = unsafe { *first } != 0;
-    if is_first {
+/// `first` clears the rest of the screen on the first line and is set false.
+fn list_one_var_a(prefix: &CStr, name: &[u8], value_type: VarType, text: &[u8], first: &mut bool) {
+    if *first {
         msg_ext_set_kind(c"list_cmd");
         msg_start();
     } else {
-        msg_putchar(b'\n' as c_int);
+        msg_putchar(c_int::from(b'\n'));
     }
     // Not `msg()`, which would overwrite "v:statusmsg".
-    if unsafe { *prefix } != NUL as c_char {
-        msg_str(unsafe { cstr::at(prefix) });
+    if !prefix.is_empty() {
+        msg_str(prefix);
     }
-    if !name.is_null() {
-        // SAFETY: `name_len` bytes follow `name`.
-        msg_bytes(unsafe { cstr::slice_at(name, name_len as usize) }, 0, false);
-    }
-    msg_putchar(b' ' as c_int);
+    msg_bytes(name, 0, false);
+    msg_putchar(c_int::from(b' '));
     msg_advance(22);
 
     // The sigil, and the bracket it stands in for.
-    let sigil: u8 = match type_0 {
+    let sigil: u8 = match value_type {
         VAR_NUMBER => b'#',
         VAR_FUNC | VAR_PARTIAL => b'*',
         VAR_LIST => b'[',
         VAR_DICT => b'{',
         _ => b' ',
     };
-    msg_putchar(sigil as c_int);
-    if (type_0 == VAR_LIST || type_0 == VAR_DICT) && unsafe { *string } == sigil as c_char {
-        string = unsafe { string.add(1) };
-    }
+    msg_putchar(c_int::from(sigil));
+    let text = match text.split_first() {
+        Some((&lead, rest))
+            if (value_type == VAR_LIST || value_type == VAR_DICT) && lead == sigil =>
+        {
+            rest
+        }
+        _ => text,
+    };
 
-    msg_display(unsafe { cstr::at(string) }, 0, false);
+    msg_display_bytes(text, 0, false);
 
-    if type_0 == VAR_FUNC || type_0 == VAR_PARTIAL {
+    if value_type == VAR_FUNC || value_type == VAR_PARTIAL {
         msg_str(c"()");
     }
-    if is_first {
+    if *first {
         msg_clr_eos();
-        unsafe { *first = 0 };
+        *first = false;
     }
 }

@@ -495,11 +495,15 @@ impl DictCursor {
     }
 
     /// The next occupied slot of `dict`, or `None` at the end.
+    ///
+    /// The walk also ends at the last slot: a body that ran user code may
+    /// have removed entries from an unlocked table, which can shrink it.
     pub(crate) fn next(&mut self, dict: &Dict) -> Option<usize> {
-        while self.todo != 0 {
+        let slots = dict.dv_hashtab.slots();
+        while self.todo != 0 && self.slot < slots.len() {
             let slot = self.slot;
             self.slot += 1;
-            if dict.dv_hashtab.slot(slot).is_kept() {
+            if slots[slot].is_kept() {
                 self.todo -= 1;
                 return Some(slot);
             }

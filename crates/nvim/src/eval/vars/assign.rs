@@ -99,7 +99,7 @@ pub(crate) struct VarList {
 pub fn ex_let(excmd: &mut ExArg) {
     let is_const = excmd.cmdidx == CmdIdx::r#const;
     let arg = excmd.line.arg;
-    let mut first: c_int = 1;
+    let mut first = true;
 
     // The targets' text, measured once: nothing below writes into the line
     // before it is read again (the here-document cuts only after them).

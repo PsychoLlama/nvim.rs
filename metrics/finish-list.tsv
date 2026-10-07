@@ -188,7 +188,7 @@ edit/	edit/replace.rs	1	11	1	8	deref:3	str:1	-	win_chartabsize:2 .add:1 getvcol:
 edit/	edit/state.rs	1	18	2	9	deref:4 ref:2 expr:1	other:2	-	.offset:1 ModeState::insert:1 change_warning:1 get_inserted:1 ins_compl_addleader:1 linetabsize_str:1 tabstop_at:1 utfc_ptr2len:1
 edit/	edit/tab.rs	1	41	0	33	deref:6 expr:2	other:1	-	.offset:11 append_to_redobuff:2 getvcol:2 init_charsize_arg:2 tabstop_padding:2 win_charsize:2 xfree:2 .copy_from:1
 edit/	edit/undo.rs	1	13	4	8	deref:5	other:4	-	append_to_redobuff:2 apply_autocmds:1 get_inserted:1 linetabsize_str:1
-eval/	*	51	1110	95	729	deref:250 expr:80 ref:28 compound:4	str:67 other:36 value:33 void:19 pp_str:2	str:19 value:16 other:7 void:2 pp_str:1	.as_ref:60 xfree:45 c_str:27 ThinCString::from_raw:24 CStr::from_ptr:16 bytes_at:13 .as_mut:8 from_raw_parts:8
+eval/	*	50	1080	92	711	deref:242 expr:76 ref:28 compound:4	str:62 other:32 value:32 void:19 pp_str:2	str:19 value:16 other:7 void:2 pp_str:1	.as_ref:60 xfree:43 c_str:27 ThinCString::from_raw:24 CStr::from_ptr:16 bytes_at:13 .as_mut:8 from_raw_parts:8
 eval/	eval/buffer/info.rs	1	6	0	1	deref:5	-	-	-
 eval/	eval/buffer/lines.rs	1	12	0	11	deref:1	-	-	.as_ref:2 bytes_at:2 xfree:2 ThinCString::from_raw:1 ml_append:1 ml_replace:1
 eval/	eval/buffer/lookup.rs	1	3	0	3	-	-	-	buflist_add:1 buflist_findname_exp:1 path_with_url:1
@@ -233,7 +233,6 @@ eval/	eval/typval/handle.rs	1	61	11	30	expr:12 ref:9 deref:5 compound:1	value:8	
 eval/	eval/userfunc/call.rs	1	2	0	0	expr:2	-	-	-
 eval/	eval/userfunc/ret.rs	1	11	2	5	deref:5 expr:1	void:10	str:3 other:2 void:1	Box::from_raw:1 cleanup_conditionals:1 report_pending:1
 eval/	eval/vars/external.rs	1	10	6	8	deref:2	str:13 pp_str:1 value:1	-	.as_ref:2 at_opt:2 bytes_at:1
-eval/	eval/vars/listing.rs	1	30	3	18	deref:8 expr:4	str:5 other:4 value:1	-	xfree:2 slice_at:1 tv_ht_iter:1 xstrlcat:1 xstrlcpy:1
 eval/	eval/vars/mod.rs	1	0	0	0	-	-	-	-
 eval/	eval/window/info.rs	1	14	1	4	deref:10	value:1	-	-
 eval/	eval/window/mod.rs	1	0	0	0	-	-	-	-
@@ -358,8 +357,8 @@ grid/	grid/border.rs	1	43	2	13	deref:26 expr:1	other:5	-	.offset:1 mb_string2cel
 grid/	grid/line.rs	1	19	3	12	ref:4 deref:2 expr:1	other:1 str:1	-	ui_line:2 .offset:1 .offset_from:1 abort:1 utf_ptr2cells_len:1 utfc_ptr2len:1 utfc_ptr2len_len:1 utfc_ptrlen2schar:1
 grid/	grid/mod.rs	1	23	1	2	deref:17 ref:3 expr:1	other:1	other:1	xfree:1
 grid/	grid/schar.rs	1	44	15	33	deref:7 expr:4	str:4 pp_str:1	other:2 str:1	bytes_at:3 utf_char2bytes:3 utf_ptr2char:3 .copy_from_nonoverlapping:2 strnlen:2 abort:1 from_raw_parts:1 mh_clear:1
-hashtab.rs	*	1	26	17	15	ref:6 deref:3	value:12 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
-hashtab.rs	hashtab.rs	1	26	17	15	ref:6 deref:3	value:12 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
+hashtab.rs	*	1	24	16	15	ref:6 deref:1	value:11 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
+hashtab.rs	hashtab.rs	1	24	16	15	ref:6 deref:1	value:11 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
 help/	*	2	188	15	109	deref:69 expr:7 compound:1	str:15 other:3 pp_str:3 void:3	str:3	.offset:13 bytes_at:11 c_str:6 xfree:5 xstrlcat:4 fclose:3 free_wild:3 nlua_exec:3
 help/	help/mod.rs	1	94	7	43	deref:42 expr:6 compound:1	str:4 pp_str:2 void:2 other:1	str:3	bytes_at:7 .offset:4 xfree:4 nlua_exec:3 c_str:2 emsg_multiline:2 eq:2 free_wild:2
 help/	help/tags.rs	1	94	8	66	deref:27 expr:1	str:11 other:2 pp_str:1 void:1	-	.offset:9 bytes_at:4 c_str:4 xstrlcat:4 add_pathsep:2 fclose:2 fprintf:2 os_fopen:2

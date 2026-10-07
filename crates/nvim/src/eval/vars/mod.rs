@@ -22,8 +22,8 @@ use crate::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::{
     LockName, TV_INITIAL_VALUE, dict_is_watched, dict_watcher_notify, list_find_nr, list_find_str,
     list_len, list_set_lock, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc,
-    tv_dict_alloc_lock, tv_dict_hi2di, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
-    tv_item_lock, tv_list_alloc, value_check_lock,
+    tv_dict_alloc_lock, tv_get_bool_chk, tv_get_number, tv_get_number_chk, tv_item_lock,
+    tv_list_alloc, value_check_lock,
 };
 use crate::eval::userfunc::{
     current_func_has_scope, funccal_scope, function_exists, list_func_vars, walk_scoped_funccals,
@@ -40,17 +40,16 @@ use crate::ex_eval::aborting;
 use crate::getchar::state::got_int;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::guard::sandbox;
-use crate::hashtab::{hash_reset, tv_ht_iter};
+use crate::hashtab::hash_reset;
 use crate::lua::executor::nlua_set_sctx_in;
 use crate::memory::XString;
-use crate::memory::{xfree, xstrlcat, xstrlcpy};
 use crate::message::state::emsg_severe;
 use crate::message::{
     e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,
     e_string_required,
 };
 use crate::message::{
-    emsg, internal_error, message_filtered, msg_advance, msg_bytes, msg_clr_eos, msg_display,
+    emsg, internal_error, message_filtered, msg_advance, msg_bytes, msg_clr_eos, msg_display_bytes,
     msg_ext_set_kind, msg_putchar, msg_start, msg_str,
 };
 use crate::option::vars::{p_ccv, p_dex, p_pex, p_verbose};
@@ -78,7 +77,6 @@ use crate::types::{
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
-use crate::winlayer::Live;
 use crate::winlayer::graph::lastused_tabpage;
 
 // The carve of the transpiled module; see each child's docs.
@@ -98,7 +96,7 @@ pub use self::assign::*;
 pub use self::external::*;
 pub(crate) use self::heredoc::*;
 pub use self::lifecycle::*;
-pub use self::listing::*;
+pub(crate) use self::listing::*;
 pub use self::lookup::*;
 pub use self::redir::*;
 pub use self::scoped::*;
@@ -107,7 +105,7 @@ pub use self::unlet::*;
 pub use self::vvar::*;
 /// One of the `list_*_vars` scope listers: everything a bare `g:`/`b:`/`w:`/
 /// ... can name, whether on a `:let` line or as the whole of one.
-pub(crate) type ScopeLister = fn(&mut c_int);
+pub(crate) type ScopeLister = fn(&mut bool);
 
 /// `__ctype_b_loc()`'s lower-case bit, the one `islower()` reads.
 pub const _ISlower: c_uint = 512;
@@ -125,16 +123,6 @@ pub const DI_FLAGS_RO: uint8_t = 1;
 
 /// `get_lval`'s "do not report" flag.
 pub const GLV_QUIET: c_int = 2;
-
-/// One entry of a scope dictionary, whose caller has promised it outlives the
-/// value.
-///
-/// The scopes hand their entries around as a bare `*mut DictItem` and the
-/// promise is discharged by the dictionary outliving the call -- which every
-/// caller here already relies on, because the entry is what it came to read.
-/// Wrapping is the unsafe step, once; every `(*di).field` after it is
-/// ordinary checked code. See [`Live`] for what the promise is and is not.
-pub(crate) type Di = Live<DictItem>;
 
 pub const kGRegExprSrc: GRegFlags = 2;
 

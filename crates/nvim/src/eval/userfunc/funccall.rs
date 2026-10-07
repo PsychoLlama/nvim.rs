@@ -655,7 +655,7 @@ pub(crate) fn is_funccal_local_dict(dict: &Dict) -> bool {
 }
 
 /// List the `l:` variables, when there is a function running.
-pub fn list_func_vars(first: &mut c_int) {
+pub fn list_func_vars(first: &mut bool) {
     if let Some(frame) = current_fc().filter(|frame| frame.scope_ready.get()) {
         list_dict_vars(&frame.scopes.l_vars, c"l:", false, first);
     }
