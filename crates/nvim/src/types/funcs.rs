@@ -15,7 +15,8 @@ use super::*;
 /// evaluator.
 #[derive(Copy, Clone)]
 pub struct EvalFuncDef {
-    pub name: *mut ::core::ffi::c_char,
+    /// The name it answers to; `None` on the blank row that ends the table.
+    pub name: Option<&'static ::core::ffi::CStr>,
     pub arity: Arity,
     pub base_arg: BaseArg,
     pub fast: bool,

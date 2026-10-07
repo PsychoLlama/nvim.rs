@@ -55,9 +55,9 @@ pub fn nvim_get_context(opts: &mut KeyDict_context) -> Result<ApiDict, Error> {
         }
     }
     let mut ctx: Context = CONTEXT_INIT;
-    unsafe { ctx_save(&raw mut ctx, int_types) };
-    let dict: ApiDict = unsafe { ctx_to_dict(&raw mut ctx) };
-    unsafe { ctx_free(&raw mut ctx) };
+    ctx_save(Some(&mut ctx), int_types);
+    let dict: ApiDict = ctx_to_dict(&ctx);
+    ctx_free(&mut ctx);
     dict.reported(error)
 }
 
@@ -65,12 +65,11 @@ pub fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
     let mut ctx: Context = CONTEXT_INIT;
     let save_did_emsg: ::core::ffi::c_int = did_emsg.get();
     did_emsg.set(0);
-    let read = unsafe { ctx_from_dict(dict, &raw mut ctx) };
+    let read = ctx_from_dict(dict, &mut ctx);
     if read.is_ok() {
-        // SAFETY: `ctx` is this frame's own, filled in above.
-        unsafe { ctx_restore(&raw mut ctx, CTX_ALL) };
+        ctx_restore(Some(&ctx), CTX_ALL);
     }
-    unsafe { ctx_free(&raw mut ctx) };
+    ctx_free(&mut ctx);
     did_emsg.set(save_did_emsg);
     read.map(|_| Object::Nil)
 }

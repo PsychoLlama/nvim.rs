@@ -198,6 +198,13 @@ pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
 
 /// Ask the user for input through a cmdline prompt.
 ///
+/// [`prompt_for_input`] for a number from a list on screen, which a mouse
+/// click may pick instead of a typed number: `mouse_used` says which.
+pub(crate) fn prompt_for_number(mouse_used: &mut bool) -> c_int {
+    // SAFETY: a main-thread prompt with the caller's own flag.
+    unsafe { prompt_for_input(None, 0, false, mouse_used) }
+}
+
 /// `one_key` returns after a single key press; `mouse_used`, when non-null,
 /// lets the user click a number instead of typing it. A null `prompt` gets
 /// the default "type a number" wording, which depends on `mouse_used`.

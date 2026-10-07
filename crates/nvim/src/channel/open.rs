@@ -61,6 +61,49 @@ use super::{
 /// Whether stdio has already been claimed. Only one channel may own it.
 static did_stdio: GlobalCell<bool> = GlobalCell::new(false);
 
+/// `rpcstart()`'s spawn: `argv` (the program first) started as a job that
+/// speaks RPC over its pipes, its channel announced. Answers the channel id,
+/// or why the spawn failed, as `channel_job_start`'s status does.
+pub(crate) fn rpc_job_start(argv: &[&CStr]) -> VarNumber {
+    // The vector `channel_job_start` takes over: a copy of every string, and
+    // the null it ends with.
+    let vector: Vec<*mut c_char> = argv
+        .iter()
+        .map(|arg| crate::memory::ThinCString::from_cstr(arg).into_raw())
+        .chain(core::iter::once(ptr::null_mut()))
+        .collect();
+    // The global allocator is `malloc`, so the boxed slice is a block the
+    // vector's eventual `xfree` releases.
+    let raw = Box::into_raw(vector.into_boxed_slice()).cast::<*mut c_char>();
+    let mut status: VarNumber = 0;
+    // SAFETY: an `xmalloc`ed, null-terminated vector of `xmalloc`ed strings,
+    // which the start takes over, and a status of this call's own.
+    let chan = unsafe {
+        channel_job_start(
+            raw,
+            ptr::null(),
+            CallbackReader::none(),
+            CallbackReader::none(),
+            Callback::None,
+            false,
+            true,
+            false,
+            false,
+            kChannelStdinPipe,
+            ptr::null(),
+            0,
+            0,
+            ptr::null_mut(),
+            &raw mut status,
+        )
+    };
+    if !chan.is_null() {
+        // SAFETY: the channel just created.
+        unsafe { channel_create_event(chan, ptr::null()) };
+    }
+    status
+}
+
 /// Spawns a child process and wires a channel to it.
 ///
 /// Returns null and writes `status_out` on failure: 0 when the arguments were

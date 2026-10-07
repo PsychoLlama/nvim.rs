@@ -110,6 +110,7 @@ pub mod term;
 pub use info::{
     channel_all_info, channel_create_event, channel_info, channel_info_changed, channel_job_running,
 };
+pub(crate) use open::rpc_job_start;
 pub use open::{channel_connect, channel_from_connection, channel_from_stdio, channel_job_start};
 pub use reader::{
     callback_reader_free, callback_reader_start, channel_reader_callbacks, on_channel_data,
@@ -497,10 +498,26 @@ enum CloseError {
 impl CloseError {
     /// The shared message string this reports as.
     fn message(self) -> *const c_char {
+        message(self.text())
+    }
+
+    /// The same message, as the string it is.
+    fn text(self) -> &'static CStr {
         match self {
-            CloseError::NoSuchChannel => message(e_invchan),
-            CloseError::NoSuchStream => message(e_invstream),
-            CloseError::RpcStream => message(e_invstreamrpc),
+            CloseError::NoSuchChannel => e_invchan,
+            CloseError::NoSuchStream => e_invstream,
+            CloseError::RpcStream => e_invstreamrpc,
+        }
+    }
+}
+
+/// [`channel_close`], reporting why a refused close was refused.
+pub(crate) fn channel_close_or_report(id: uint64_t, part: ChannelPart) -> bool {
+    match close_channel_part(id, part) {
+        Ok(()) => true,
+        Err(why) => {
+            crate::message::emsg(why.text());
+            false
         }
     }
 }

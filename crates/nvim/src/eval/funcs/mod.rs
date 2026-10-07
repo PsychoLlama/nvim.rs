@@ -9,7 +9,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::memory::ARENA_EMPTY;
 use crate::types::{
     Array, ChannelPart, ChannelStreamType, Context, GRegFlags, LuaRetMode, MotionType, ProcType,
     String_0, XDGVarType, uint64_t,

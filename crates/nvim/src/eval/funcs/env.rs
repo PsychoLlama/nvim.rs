@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_number_chk, dict_alloc_ret, list_alloc_ret, list_set_ret};
+use super::wrappers::{arg_number_chk, dict_alloc_ret, list_alloc_ret};
 use super::{
     ENV_SEPCHAR, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome,
     kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
@@ -33,8 +33,8 @@ use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::CmdLine;
 use crate::types::{
-    CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, List, NUL, OK, OptInt, TypVal,
-    VAR_DICT, VAR_LIST, VAR_STRING, VarNumber, XDGVarType, kBoolVarFalse, kListLenShouldKnow,
+    CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, NUL, OK, OptInt, TypVal, VAR_DICT,
+    VAR_LIST, VAR_STRING, VarNumber, XDGVarType, kBoolVarFalse, kListLenShouldKnow,
     kListLenUnknown, kSpecialVarNull,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -104,7 +104,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // too, because it is the third.
     if args.len() > 1 && args.len() > 2 && arg_number_chk(&args[2], Some(&mut error)) != 0 && !error
     {
-        list_set_ret(result, ptr::null_mut::<List>());
+        result.write_list(None);
     }
     let s = numbuf.string(&args[0]);
     if matches!(s.to_bytes().first(), Some(b'%' | b'#' | b'<')) {

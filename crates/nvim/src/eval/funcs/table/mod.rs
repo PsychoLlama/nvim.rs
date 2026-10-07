@@ -31,9 +31,7 @@ mod table_3;
 pub(crate) use self::lookup::*;
 
 use core::ffi::CStr;
-use core::ptr;
 
-use crate::api::private::dispatch::method_handlers;
 use crate::arglist::{f_argc, f_argidx, f_arglistid, f_argv};
 use crate::cmdexpand::{f_cmdcomplete_info, f_getcompletion, f_getcompletiontype};
 use crate::cmdhist::{f_histadd, f_histdel, f_histget, f_histnr};
@@ -145,15 +143,13 @@ use crate::testing::{
     f_assert_notmatch, f_assert_report, f_assert_true, f_test_garbagecollect_now,
     f_test_write_list_log,
 };
-use crate::types::{
-    Arity, BaseArg, EvalFuncData, EvalFuncDef, FloatFunc, MsgpackRpcRequestHandler, VimLFunc,
-};
+use crate::types::{Arity, BaseArg, EvalFuncData, EvalFuncDef, FloatFunc, VimLFunc};
 use crate::undo::{f_undofile, f_undotree};
 
 /// A row with every field at rest: nameless, argumentless, not a method, not
 /// fast, and calling nothing. It is also the table's terminator.
 const BLANK: EvalFuncDef = EvalFuncDef {
-    name: ptr::null_mut(),
+    name: None,
     arity: Arity::Exact(0),
     base_arg: BaseArg::Never,
     fast: false,
@@ -169,7 +165,7 @@ const fn builtin(
     func: VimLFunc,
 ) -> EvalFuncDef {
     EvalFuncDef {
-        name: name.as_ptr().cast_mut(),
+        name: Some(name),
         arity,
         base_arg,
         func,
@@ -201,11 +197,7 @@ const fn float(name: &'static CStr, op: FloatFunc) -> EvalFuncDef {
 /// An API method, called through its row of the RPC handler table.
 const fn api(name: &'static CStr, argc: u8, row: usize) -> EvalFuncDef {
     EvalFuncDef {
-        data: EvalFuncData::Api(
-            (&raw const method_handlers)
-                .cast::<MsgpackRpcRequestHandler>()
-                .wrapping_add(row),
-        ),
+        data: EvalFuncData::Api(row),
         ..builtin(name, Arity::Exact(argc), BaseArg::Never, Some(api_wrapper))
     }
 }

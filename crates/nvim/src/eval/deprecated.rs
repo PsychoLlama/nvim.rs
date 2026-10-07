@@ -16,61 +16,34 @@
 //! Each declares its arity in `eval.lua`, and that arity is what says how
 //! many of the two slots below are real.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::memory::ThinCString;
-use core::ffi::{c_char, c_int};
-use core::slice;
+use core::ffi::{CStr, c_int};
 
-use crate::channel::{channel_close, channel_create_event, channel_job_start};
-use crate::eval::find_job;
+use crate::channel::{channel_close_or_report, rpc_job_start};
 use crate::eval::funcs::{f_jobstart, f_jobstop};
-use crate::eval::typval::{CallFrame, DictRef, NumBuf, list_items, list_len, tv_dict_alloc};
+use crate::eval::job_is_running;
+use crate::eval::typval::{CallFrame, list_iter, tv_dict_alloc};
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
-use crate::memory::xmalloc;
-use crate::message::emsg_ptr;
 use crate::message::{e_api_spawn_failed, e_invarg};
 use crate::semsg;
-use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    Callback, CallbackReader, ChannelPart, EvalFuncData, List, ListItem, TypVal, VAR_DICT,
-    VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue, uint64_t,
+    ChannelPart, EvalFuncData, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
+    kBoolVarTrue, uint64_t,
 };
 use crate::winlayer::buffers;
 
 pub const kChannelPartRpc: ChannelPart = 3;
 
-/// `CALLBACK_NONE`: no callback at all.
-const CALLBACK_NONE: Callback = Callback::None;
-
-/// `CALLBACK_READER_INIT`: a stream nobody is listening to.
-const CALLBACK_READER_INIT: CallbackReader = CallbackReader::none();
-
-/// The items of `list`, front to back.  A NULL list is an empty one.
-///
-/// # Safety
-/// `list` must be live, and nothing may change it while the iterator is
-/// alive.
-unsafe fn items<'a>(list: *const List) -> impl Iterator<Item = &'a ListItem> {
-    // SAFETY: the caller's promise -- a live list nothing changes for the
-    // life of the iterator.
-    list_items(unsafe { list.as_ref() }).iter()
-}
-
 /// `rpcstart(prog[, argv])`: start a job and speak RPC over its pipes.
 ///
 /// Deprecated in favour of `jobstart(..., {'rpc': v:true})`.
 pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's promise about `result`.
-    let result = &mut *result;
     result.write_number(0);
 
-    // SAFETY: `check_secure` only reads the option and reports.
     if check_secure() {
         return;
     }
@@ -84,23 +57,16 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut args_list: *mut List = core::ptr::null_mut();
-    let mut argsl = 0;
-    if let Some(given) = given {
-        // The guard above leaves only `VAR_LIST` here.
-        // SAFETY: a `VAR_LIST` holds a live list or NULL.
-        args_list = given.list_or_null();
-        argsl = list_len(unsafe { args_list.as_ref() });
-        // Assert that all list items are strings.
-        for (i, arg) in unsafe { items(args_list) }.enumerate() {
-            // SAFETY: `arg` is one of the list's items.
-            if arg.li_tv.v_type() != VAR_STRING {
-                semsg!(
-                    "E5010: List item {} of the second argument is not a string",
-                    i as c_int
-                );
-                return;
-            }
+    // The guard above leaves only a List, or nothing, here.
+    let list = given.and_then(TypVal::list_ref);
+    // Assert that all list items are strings.
+    for (i, arg) in list_iter(list).enumerate() {
+        if arg.li_tv.v_type() != VAR_STRING {
+            semsg!(
+                "E5010: List item {} of the second argument is not a string",
+                i as c_int
+            );
+            return;
         }
     }
 
@@ -109,59 +75,18 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
 
-    // The program name, its arguments, and the NULL the vector ends with.
-    let argvl = argsl as usize + 2;
-    // SAFETY: `xmalloc` never answers NULL, and `argvl` slots are written
-    // below before anything reads them.
-    let raw = unsafe { xmalloc(size_of::<*mut c_char>() * argvl) }.cast::<*mut c_char>();
-    // SAFETY: as above -- `argvl` slots were allocated.
-    let child_argv = unsafe { slice::from_raw_parts_mut(raw, argvl) };
-    child_argv[0] = prog.clone().into_raw();
-    let mut i = 1;
-    // SAFETY: the list is unchanged since it was counted, so it still has
-    // `argsl` items and they all fit.
-    for arg in unsafe { items(args_list) } {
-        child_argv[i] = ThinCString::from_cstr(numbuf.string(&arg.li_tv)).into_raw();
-        i += 1;
-    }
-    child_argv[i] = core::ptr::null_mut();
-
-    // The channel id, or the reason the spawn failed; written on every path.
-    let mut status: VarNumber = 0;
-    // SAFETY: `channel_job_start` takes over the vector.
-    let chan = unsafe {
-        channel_job_start(
-            child_argv.as_mut_ptr(),
-            core::ptr::null(),
-            CALLBACK_READER_INIT,
-            CALLBACK_READER_INIT,
-            CALLBACK_NONE,
-            false,
-            true,
-            false,
-            false,
-            kChannelStdinPipe,
-            core::ptr::null(),
-            0,
-            0,
-            core::ptr::null_mut(),
-            &raw mut status,
-        )
-    };
-    result.write_number(status);
-    if !chan.is_null() {
-        // SAFETY: `chan` is the channel just created.
-        unsafe { channel_create_event(chan, core::ptr::null()) };
-    }
+    // The program name, then its arguments: Strings, checked above, the null
+    // String reading as the empty one.
+    let mut argv: Vec<&CStr> = vec![prog.as_cstr()];
+    argv.extend(list_iter(list).map(|arg| arg.li_tv.string_cstr().unwrap_or(c"")));
+    // The channel id, or the reason the spawn failed.
+    result.write_number(rpc_job_start(&argv));
 }
 
 /// `rpcstop(id)`: stop a job, or close a channel that is not one.
 pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
-    // SAFETY: the caller's promise about `result`.
-    let ret = &mut *result;
-    ret.write_number(0);
+    result.write_number(0);
 
-    // SAFETY: `check_secure` only reads the option and reports.
     if check_secure() {
         return;
     }
@@ -172,22 +97,13 @@ pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
         return;
     }
 
-    // SAFETY: a `VAR_NUMBER` holds its number inline.
     let id = args[0].number_or_zero() as uint64_t;
     // If called with a job, stop it; otherwise close the channel.
-    // SAFETY: `find_job` only looks the id up.
-    if !unsafe { find_job(id, false) }.is_null() {
-        // SAFETY: the arguments are this call's own.
+    if job_is_running(id) {
         f_jobstop(args, result, fptr);
     } else {
-        let mut error: *const c_char = core::ptr::null();
-        // SAFETY: `error` is written whenever the close fails.
-        let closed = unsafe { channel_close(id, kChannelPartRpc, &raw mut error) };
-        ret.write_number(closed as VarNumber);
-        if !closed {
-            // SAFETY: the failed close named its reason.
-            unsafe { emsg_ptr(error) };
-        }
+        let closed = channel_close_or_report(id, kChannelPartRpc);
+        result.write_number(VarNumber::from(closed));
     }
 }
 
@@ -200,7 +116,6 @@ pub fn f_last_buffer_nr(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     for buf in buffers() {
         n = n.max(buf.handle());
     }
-    // SAFETY: the caller's promise about `result`.
     result.write_number(n as VarNumber);
 }
 
@@ -211,24 +126,15 @@ pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     }
 
     // `jobstart()` reads its options from a dictionary, and this one always
-    // has the `term` flag in it; with no options given, a dictionary is
-    // borrowed for the call and freed again on the way out.  The frame
-    // borrows the caller's values, so nothing in it is released.
-    // The borrowed options dictionary this body owns; the frame *names* it
-    // and releases nothing, so dropping the handle at the end is the free.
-    let held = (args.len() < 2).then(tv_dict_alloc);
+    // has the `term` flag in it; with no options given, a dictionary is made
+    // for the call and freed again on the way out.  The frame borrows its
+    // values, so nothing in it is released.
+    let made = (args.len() < 2).then(|| TypVal::dict(Some(tv_dict_alloc())));
     let mut frame = CallFrame::<2>::new();
     frame.push_borrowed(&args[0]);
-    match args.get(1) {
+    match args.get(1).or(made.as_ref()) {
         Some(opts) => frame.push_borrowed(opts),
-        // SAFETY: the dictionary `held` owns, live for the call.
-        None => {
-            let at = held
-                .as_ref()
-                .expect("no options means a fresh one")
-                .as_ptr();
-            frame.push_naming(TypVal::dict(unsafe { DictRef::owning(at) }));
-        }
+        None => unreachable!("no options means a fresh dictionary"),
     }
 
     if frame.args()[1].v_type() != VAR_DICT {
@@ -237,9 +143,9 @@ pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
         return;
     }
 
-    let dict = frame.args()[1].dict_or_null();
-    // SAFETY: `dict` is the dictionary the frame's second slot names.
-    let _ = unsafe { (*dict).add_bool(b"term", kBoolVarTrue) };
+    if let Some(dict) = frame.args()[1].dict_shared() {
+        let _ = dict.edit().add_bool(b"term", kBoolVarTrue);
+    }
     f_jobstart(frame.args(), result, fptr);
-    drop(held);
+    drop(made);
 }

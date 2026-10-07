@@ -234,7 +234,7 @@ const SUPPORT: &str = r#"
 /// A row with every field at rest: nameless, argumentless, not a method, not
 /// fast, and calling nothing. It is also the table's terminator.
 const BLANK: EvalFuncDef = EvalFuncDef {
-    name: ptr::null_mut(),
+    name: None,
     arity: Arity::Exact(0),
     base_arg: BaseArg::Never,
     fast: false,
@@ -250,7 +250,7 @@ const fn builtin(
     func: VimLFunc,
 ) -> EvalFuncDef {
     EvalFuncDef {
-        name: name.as_ptr().cast_mut(),
+        name: Some(name),
         arity,
         base_arg,
         func,
@@ -282,11 +282,7 @@ const fn float(name: &'static CStr, op: FloatFunc) -> EvalFuncDef {
 /// An API method, called through its row of the RPC handler table.
 const fn api(name: &'static CStr, argc: u8, row: usize) -> EvalFuncDef {
     EvalFuncDef {
-        data: EvalFuncData::Api(
-            (&raw const method_handlers)
-                .cast::<MsgpackRpcRequestHandler>()
-                .wrapping_add(row),
-        ),
+        data: EvalFuncData::Api(row),
         ..builtin(name, Arity::Exact(argc), BaseArg::Never, Some(api_wrapper))
     }
 }
@@ -363,9 +359,7 @@ fn imports(out: &mut String, rows: &[Builtin], symbols: &Symbols) -> Result<(), 
             .or_default()
             .insert(name);
     }
-    out.push_str("use core::ffi::CStr;\n");
-    out.push_str("use core::ptr;\n\n");
-    out.push_str("use crate::api::private::dispatch::method_handlers;\n");
+    out.push_str("use core::ffi::CStr;\n\n");
     out.push_str("use crate::global_cell::ConstTable;\n");
     for (module, names) in &by_module {
         writeln!(
@@ -376,10 +370,7 @@ fn imports(out: &mut String, rows: &[Builtin], symbols: &Symbols) -> Result<(), 
         .unwrap();
     }
     out.push_str(
-        "use crate::types::{\n\
-         \x20   Arity, BaseArg, EvalFuncData, EvalFuncDef, FloatFunc, MsgpackRpcRequestHandler,\n\
-         \x20   VimLFunc,\n\
-         };\n",
+        "use crate::types::{Arity, BaseArg, EvalFuncData, EvalFuncDef, FloatFunc, VimLFunc};\n",
     );
     Ok(())
 }

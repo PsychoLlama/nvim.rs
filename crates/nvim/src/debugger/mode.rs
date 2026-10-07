@@ -256,8 +256,7 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
         let save_ex_normal_busy = ex_normal_busy.get();
         ex_normal_busy.set(0);
         if !debug_greedy.get() {
-            // SAFETY: `typeaheadbuf` outlives the restore below.
-            unsafe { save_typeahead(&raw mut typeaheadbuf) };
+            save_typeahead(&mut typeaheadbuf);
             typeahead_saved = true;
             save_ignore_script = ignore_script.get();
             ignore_script.set(true);
@@ -284,9 +283,9 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
         debug_break_level.set(outer_level);
 
         if typeahead_saved {
-            // SAFETY: paired with the `save_typeahead` above (or an earlier
-            // pass's, per the note on the declaration).
-            unsafe { restore_typeahead(&raw mut typeaheadbuf) };
+            // Paired with the `save_typeahead` above (or an earlier pass's,
+            // per the note on the declaration).
+            restore_typeahead(&mut typeaheadbuf);
             ignore_script.set(save_ignore_script);
         }
         ex_normal_busy.set(save_ex_normal_busy);

@@ -145,6 +145,12 @@ unsafe fn job_callback(vopts: *mut Dict, key: &CStr, into: *mut Callback) -> boo
     }
 }
 
+/// Whether `id` names a job that is still running.
+pub(crate) fn job_is_running(id: uint64_t) -> bool {
+    // SAFETY: the lookup only reads the channel table; nothing is reported.
+    !unsafe { find_job(id, false) }.is_null()
+}
+
 /// The channel a job id names, or null.
 ///
 /// # Safety
@@ -391,15 +397,10 @@ pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
 
 /// Everything the user typed into a prompt buffer since the prompt, as one
 /// newline-joined string.
-///
-/// # Safety
-/// `buf` must be valid.
-pub unsafe fn prompt_get_input(buffer: Option<Buf>) -> *mut c_char {
-    let Some(buf) = buffer else {
-        return null_mut();
-    };
+pub fn prompt_get_input(buffer: Option<Buf>) -> Option<ThinCString> {
+    let buf = buffer?;
     if !buf_is_prompt(Some(buf)) {
-        return null_mut();
+        return None;
     }
     let lnum_start = buf.b_prompt_start.mark.lnum;
     let lnum_last = buf.line_count();
@@ -427,18 +428,17 @@ pub unsafe fn prompt_get_input(buffer: Option<Buf>) -> *mut c_char {
         // SAFETY: as above.
         unsafe { xfree(half_text as *mut c_void) };
     }
-    full_text
+    // SAFETY: the joined text is an allocation of this call's, handed over.
+    unsafe { ThinCString::from_raw(full_text) }
 }
 
 /// The user pressed Enter in a prompt buffer: open the next line and hand
 /// what was typed to the buffer's callback.
 pub fn prompt_invoke_callback() {
     let lnum = Buf::current().line_count();
-    // SAFETY: the current buffer is live.
-    let user_input = unsafe { prompt_get_input(Buf::current_or_none()) };
-    if user_input.is_null() {
+    let Some(user_input) = prompt_get_input(Buf::current_or_none()) else {
         return;
-    }
+    };
 
     // SAFETY: `lnum` is the buffer's last line, and the literal is
     // NUL-terminated.
@@ -449,13 +449,11 @@ pub fn prompt_invoke_callback() {
     Buf::current().b_prompt_start.mark.lnum = lnum + 1;
 
     if !Buf::current().b_prompt_callback.is_set() {
-        // SAFETY: nothing took the input over.
-        unsafe { xfree(user_input as *mut c_void) };
+        drop(user_input);
     } else {
         let mut rettv = UNSET_TV;
         // The array takes the input over and frees it.
-        // SAFETY: `user_input` is an `xmalloc`ed block nothing else holds.
-        let argv = [TypVal::string(unsafe { ThinCString::from_raw(user_input) })];
+        let argv = [TypVal::string(Some(user_input))];
         // SAFETY: the callback is the current buffer's own, and the
         // argument array and result are this frame's.
         let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_callback };

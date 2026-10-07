@@ -14,7 +14,7 @@ use crate::keycodes::Ctrl_C;
 use crate::keycodes::ModMask;
 use crate::mbyte::{char_at, cluster_len};
 use crate::types::NUL;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// How many buttons can carry a hotkey. Buttons past this share the default.
@@ -28,6 +28,28 @@ const HAS_HOTKEY_LEN: usize = 30;
 /// `buttons` is `"Button1\nButton2\n..."`, with `&` marking a hotkey letter.
 /// `ex_cmd` allows `:` to dismiss the dialog and start an Ex command.
 ///
+/// [`do_dialog`] with no title, text field or Ex command: `confirm()`.
+pub(crate) fn confirm_dialog(
+    kind: c_int,
+    message: &CStr,
+    buttons: &CStr,
+    dfltbutton: c_int,
+) -> c_int {
+    let (message, buttons) = (message.as_ptr(), buttons.as_ptr());
+    // SAFETY: two terminated strings, only read.
+    unsafe {
+        do_dialog(
+            kind,
+            ptr::null(),
+            message,
+            buttons,
+            dfltbutton,
+            ptr::null(),
+            0,
+        )
+    }
+}
+
 /// # Safety
 /// `message` and `buttons` must be valid C strings.
 pub unsafe fn do_dialog(

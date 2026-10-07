@@ -42,6 +42,13 @@ pub(crate) fn buf_prompt_text(buffer: Buf) -> *mut c_char {
     buffer.b_prompt_text
 }
 
+/// [`buf_prompt_text`], copied.
+pub(crate) fn buf_prompt_text_owned(buffer: Buf) -> crate::memory::ThinCString {
+    // SAFETY: the buffer's own terminated prompt text, or a literal; copied
+    // before anything can change it.
+    crate::memory::ThinCString::from_cstr(unsafe { cstr::at(buf_prompt_text(buffer)) })
+}
+
 /// The effective prompt for the current buffer.
 pub(crate) fn prompt_text() -> *mut c_char {
     buf_prompt_text(Buf::current())

@@ -83,43 +83,39 @@ pub(crate) fn ctx_size() -> size_t {
     CTX_STACK.with(Vec::len)
 }
 
-/// The context `index` places below the top of the stack, or null when the
-/// index is out of bounds.
-pub(crate) fn ctx_get(index: size_t) -> *mut Context {
-    CTX_STACK.with_mut(|stack| match stack.len().checked_sub(index + 1) {
-        Some(at) => &raw mut stack[at],
-        None => core::ptr::null_mut(),
+/// Run `f` on the context `index` places below the top of the stack; `None`
+/// when the index is out of bounds. `f` runs under the stack's borrow, so it
+/// must run no editor code.
+pub(crate) fn with_ctx<R>(index: size_t, f: impl FnOnce(&mut Context) -> R) -> Option<R> {
+    CTX_STACK.with_mut(|stack| {
+        let at = stack.len().checked_sub(index + 1)?;
+        Some(f(&mut stack[at]))
     })
 }
 
 /// Free everything a context owns.
-///
-/// # Safety
-/// `ctx` is a live context whose blobs are owned.
-pub unsafe fn ctx_free(ctx: *mut Context) {
-    // SAFETY: the caller's context.
+pub fn ctx_free(ctx: &mut Context) {
     // Assigning the empty context releases the five fields it replaces.
-    unsafe { *ctx = CONTEXT_INIT };
+    *ctx = CONTEXT_INIT;
 }
 
 /// Save the editor state selected by `flags` into `ctx`, or push a new
-/// context on the stack when `ctx` is null.
-///
-/// # Safety
-/// Main-thread editor call; `ctx` is null or a live, empty context.
-pub unsafe fn ctx_save(ctx: *mut Context, flags: c_int) {
-    let ctx = if ctx.is_null() {
-        CTX_STACK.with_mut(|stack| {
-            stack.push(CONTEXT_INIT);
-            let at = stack.len() - 1;
-            &raw mut stack[at]
-        })
-    } else {
-        ctx
-    };
-    // SAFETY: either the caller's context or the one just pushed. Each
-    // encoder runs editor code, so the stack is not borrowed across them.
-    let ctx = unsafe { &mut *ctx };
+/// context on the stack when there is none.
+pub fn ctx_save(ctx: Option<&mut Context>, flags: c_int) {
+    match ctx {
+        Some(ctx) => ctx_save_into(ctx, flags),
+        None => {
+            // Filled before it is pushed: each encoder runs editor code, so
+            // the stack is not borrowed across them.
+            let mut pushed = CONTEXT_INIT;
+            ctx_save_into(&mut pushed, flags);
+            CTX_STACK.with_mut(|stack| stack.push(pushed));
+        }
+    }
+}
+
+/// [`ctx_save`] into a context of the caller's own.
+fn ctx_save_into(ctx: &mut Context, flags: c_int) {
     if flags & kCtxRegs as c_int != 0 {
         ctx.regs = shada_encode_regs();
     }
@@ -140,21 +136,20 @@ pub unsafe fn ctx_save(ctx: *mut Context, flags: c_int) {
 }
 
 /// Restore the editor state selected by `flags` from `ctx`, or pop the top
-/// of the stack when `ctx` is null. False only when the stack is empty.
-///
-/// # Safety
-/// Main-thread editor call; `ctx` is null or a live context.
-pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
-    let mut popped = None;
-    let ctx = if ctx.is_null() {
-        let Some(top) = CTX_STACK.with_mut(Vec::pop) else {
-            return false;
-        };
-        // The popped context is owned here; it is freed at the end, as
-        // upstream frees the one it popped off the kvec.
-        &raw mut *popped.insert(top)
-    } else {
-        ctx
+/// of the stack when there is none. False only when the stack is empty.
+pub fn ctx_restore(ctx: Option<&Context>, flags: c_int) -> bool {
+    let popped;
+    let ctx = match ctx {
+        Some(ctx) => ctx,
+        None => {
+            let Some(top) = CTX_STACK.with_mut(Vec::pop) else {
+                return false;
+            };
+            // The popped context is owned here and freed when this returns,
+            // as upstream frees the one it popped off the kvec.
+            popped = top;
+            &popped
+        }
     };
 
     // Reading a context's ShaDa blobs must not be filtered by whatever the
@@ -162,23 +157,22 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
     let op_shada = get_option_value(kOptShada, OptionSetFlags::GLOBAL);
     let _ = set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
 
+    // SAFETY: each blob is the context's own, read as a copy.
     if flags & kCtxRegs as c_int != 0 {
-        unsafe { shada_read_string((*ctx).regs.clone(), SHADA_RESTORE) };
+        unsafe { shada_read_string(ctx.regs.clone(), SHADA_RESTORE) };
     }
     if flags & kCtxJumps as c_int != 0 {
-        unsafe { shada_read_string((*ctx).jumps.clone(), SHADA_RESTORE) };
+        unsafe { shada_read_string(ctx.jumps.clone(), SHADA_RESTORE) };
     }
     if flags & kCtxBufs as c_int != 0 {
-        unsafe { shada_read_string((*ctx).bufs.clone(), SHADA_RESTORE) };
+        unsafe { shada_read_string(ctx.bufs.clone(), SHADA_RESTORE) };
     }
     if flags & kCtxGVars as c_int != 0 {
-        unsafe { shada_read_string((*ctx).gvars.clone(), SHADA_RESTORE) };
+        unsafe { shada_read_string(ctx.gvars.clone(), SHADA_RESTORE) };
     }
     if flags & kCtxFuncs as c_int != 0 {
-        unsafe { ctx_restore_funcs(&*ctx) };
-    }
-    if popped.is_some() {
-        unsafe { ctx_free(ctx) };
+        // SAFETY: the captured definitions are API strings of this context.
+        unsafe { ctx_restore_funcs(ctx) };
     }
 
     let _ = set_option_value(kOptShada, op_shada, OptionSetFlags::GLOBAL);
@@ -262,14 +256,7 @@ fn put_array(rv: &mut ApiDict, key: &CStr, array: Array) {
 
 /// The dict form of a context: each blob as an array of byte-strings, plus
 /// the function bodies. This shape is API surface — see the module docs.
-///
-/// # Safety
-/// Main-thread editor call; `ctx` is a live context.
-pub unsafe fn ctx_to_dict(ctx: *mut Context) -> ApiDict {
-    debug_assert!(!ctx.is_null(), "ctx != NULL");
-    // SAFETY: the caller's context; the dict is sized for the five entries
-    // put into it.
-    let ctx = unsafe { &*ctx };
+pub fn ctx_to_dict(ctx: &Context) -> ApiDict {
     let mut rv = ApiDict::with_capacity(5);
     put_array(&mut rv, c"regs", string_to_array(&ctx.regs, false));
     put_array(&mut rv, c"jumps", string_to_array(&ctx.jumps, false));
@@ -283,16 +270,10 @@ pub unsafe fn ctx_to_dict(ctx: *mut Context) -> ApiDict {
 /// `kCtx*` flags for the sections the dict actually carried; entries that
 /// are not arrays, and names that are not one of the five, are ignored.
 ///
-/// # Safety
-/// Main-thread editor call; `ctx` is a live context.
-///
 /// The sections read before a refusal stay in `ctx`, which the caller frees
 /// either way.
-pub unsafe fn ctx_from_dict(dict: ApiDict, ctx: *mut Context) -> Result<c_int, Error> {
-    debug_assert!(!ctx.is_null(), "ctx != NULL");
+pub fn ctx_from_dict(dict: ApiDict, ctx: &mut Context) -> Result<c_int, Error> {
     let mut types = 0;
-    // SAFETY: the caller's dict and context.
-    let ctx = unsafe { &mut *ctx };
     for KeyValuePair { key, value } in dict {
         let Some(array) = value.into_array() else {
             continue;

@@ -4,19 +4,17 @@
 //!
 //! Nothing here belongs to one family. The families themselves live in the
 //! sibling modules; this is what the parent module hands them.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::table::{BUILTINS, builtin_index};
 use super::{
-    ARENA_EMPTY, FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY, FCERR_UNKNOWN,
-    MAX_FUNC_ARGS, VIML_INTERNAL_CALL,
+    FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS,
 };
-use crate::buffer::{buflist_findpat, find_buf};
-use crate::cstr;
+use crate::api::private::converter::call_handler_for_vimscript;
+use crate::buffer::{buflist_findpat_cstr, find_buf};
 use crate::eval::buffer::find_buffer;
 use crate::eval::typval::{
-    CallFrame, ListRef, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
+    CallFrame, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
     tv_dict_alloc_ret, tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk,
     tv_list_alloc_ret,
 };
@@ -26,10 +24,9 @@ use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
-use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::e_invalwindow;
 use crate::message::emsg;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::option::SavedCpo;
 use crate::option::vars::{P_MAGIC, p_magic};
 use crate::os::cshim::gettext;
@@ -37,14 +34,11 @@ use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::Candidate;
 use crate::types::{
-    Arena, Array, Blob, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List,
-    MsgpackRpcRequestHandler, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VarNumber, WrongArity, kBoolVarTrue, ptrdiff_t,
+    Array, Blob, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List, Object, TypVal,
+    VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, WrongArity, kBoolVarTrue, ptrdiff_t,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
-use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 // -- Reading an argument, writing a return value ----------------------------
@@ -109,14 +103,6 @@ pub(crate) fn list_alloc_ret(result: &mut TypVal, len: ptrdiff_t) -> *mut List {
     tv_list_alloc_ret(result, len)
 }
 
-/// Make `result` the List `l`, which may be null for an empty one.
-///
-/// The answer takes a reference of its own; the caller keeps the one it had.
-pub(crate) fn list_set_ret(result: &mut TypVal, l: *mut List) {
-    // SAFETY: `l` is null or a list the caller holds a reference to.
-    result.write_list(unsafe { ListRef::retained(l) });
-}
-
 /// Make `result` a fresh, empty Dictionary.
 pub(crate) fn dict_alloc_ret(result: &mut TypVal) {
     tv_dict_alloc_ret(result)
@@ -132,26 +118,6 @@ pub(crate) fn find_builtin(name: &[u8]) -> Option<&'static EvalFuncDef> {
     builtin_index(name).map(|row| &BUILTINS[row])
 }
 
-/// The table row for the builtin `name` spells, or null if there is none.
-///
-/// # Safety
-/// `name` is a NUL-terminated string.
-pub unsafe fn find_internal_func(name: *const c_char) -> *const EvalFuncDef {
-    // SAFETY: `name` is NUL-terminated, so its first `len` bytes are
-    // readable. `from_raw_parts` refuses a null pointer even for an empty
-    // slice, and an empty name is not a builtin anyway.
-    let len = unsafe { cstr::bytes_at(name) }.len();
-    let key = if len == 0 {
-        &[][..]
-    } else {
-        unsafe { slice::from_raw_parts(name.cast::<u8>(), len) }
-    };
-    match builtin_index(key) {
-        Some(row) => unsafe { BUILTINS.as_ptr().add(row) },
-        None => ptr::null::<EvalFuncDef>(),
-    }
-}
-
 /// Check a call against a row's arity, reporting E118/E119 if it does not
 /// fit.
 pub(crate) fn check_builtin_argcount(fdef: &EvalFuncDef, argcount: c_int) -> Result<(), Failed> {
@@ -159,9 +125,7 @@ pub(crate) fn check_builtin_argcount(fdef: &EvalFuncDef, argcount: c_int) -> Res
         Ok(()) => return Ok(()),
         Err(wrong) => wrong,
     };
-    // SAFETY: a row's name is a `'static` NUL-terminated string in the
-    // generated table.
-    let name = unsafe { c_str(fdef.name) };
+    let name = msg_cstr_opt(fdef.name);
     match wrong {
         WrongArity::TooMany => {
             semsg!("E118: Too many arguments for function: {name}");
@@ -173,49 +137,11 @@ pub(crate) fn check_builtin_argcount(fdef: &EvalFuncDef, argcount: c_int) -> Res
     Err(Failed)
 }
 
-/// [`check_builtin_argcount`] of a row by pointer.
-///
-/// # Safety
-/// `fdef` is a live table row.
-pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation.
-    check_builtin_argcount(unsafe { &*fdef }, argcount)
-}
-
-/// [`call_internal_func`] of the builtin `name` spells.
+/// Call the builtin `name` spells.
 pub(crate) fn call_internal_func_named(name: &CStr, args: &[TypVal], result: &mut TypVal) -> c_int {
-    // SAFETY: `name` is NUL-terminated and lives for the call.
-    unsafe { call_internal_func(name.as_ptr(), args, result) }
-}
-
-/// [`call_internal_method`] of the builtin `name` spells.
-pub(crate) fn call_internal_method_named(
-    name: &CStr,
-    args: &[TypVal],
-    result: &mut TypVal,
-    base: &mut TypVal,
-) -> c_int {
-    // SAFETY: `name` is NUL-terminated and lives for the call, and `base`
-    // the caller's live value.
-    unsafe { call_internal_method(name.as_ptr(), args, result, base) }
-}
-
-/// Call the builtin `fname` spells.
-///
-/// # Safety
-/// `fname` is a NUL-terminated string.
-pub unsafe fn call_internal_func(
-    fname: *const c_char,
-    args: &[TypVal],
-    result: &mut TypVal,
-) -> c_int {
-    // SAFETY: the caller's obligation.
-    let fdef = unsafe { find_internal_func(fname) };
-    if fdef.is_null() {
+    let Some(fdef) = find_builtin(name.to_bytes()) else {
         return FCERR_UNKNOWN as c_int;
-    }
-    // SAFETY: `find_internal_func` answers a live row of the generated table.
-    let fdef = unsafe { &*fdef };
+    };
     match fdef.arity.accepts(args.len()) {
         Ok(()) => {}
         Err(WrongArity::TooFew) => return FCERR_TOOFEW as c_int,
@@ -226,28 +152,21 @@ pub unsafe fn call_internal_func(
     FCERR_NONE as c_int
 }
 
-/// Call the builtin `fname` spells as a method: `base->fname(args)`.
+/// Call the builtin `name` spells as a method: `base->name(args)`.
 ///
 /// The row says where the base value goes among the arguments, so this
 /// splices it in rather than asking the body to know about methods at all.
 /// The spliced frame borrows: every slot names a value the caller owns for
 /// the length of the call, which is why it is `ManuallyDrop`.
-///
-/// # Safety
-/// As [`call_internal_func`], plus `base` is a live typval.
-pub unsafe fn call_internal_method(
-    fname: *const c_char,
+pub(crate) fn call_internal_method_named(
+    name: &CStr,
     args: &[TypVal],
     result: &mut TypVal,
     base: &mut TypVal,
 ) -> c_int {
-    // SAFETY: the caller's obligation.
-    let fdef = unsafe { find_internal_func(fname) };
-    if fdef.is_null() {
+    let Some(fdef) = find_builtin(name.to_bytes()) else {
         return FCERR_UNKNOWN as c_int;
-    }
-    // SAFETY: `find_internal_func` answers a live row of the generated table.
-    let fdef = unsafe { &*fdef };
+    };
     let Some(base_index) = fdef.base_arg.index() else {
         return FCERR_NOTMETHOD as c_int;
     };
@@ -299,11 +218,7 @@ pub fn get_function_name(expand: &Expand, idx: usize) -> Option<Candidate> {
 
     BUILTIN_IDX.set(BUILTIN_IDX.get() + 1);
     let builtin = &BUILTINS[BUILTIN_IDX.get() as usize];
-    if builtin.name.is_null() {
-        return None;
-    }
-    // SAFETY: a builtin's name is a string literal.
-    let mut name = unsafe { CStr::from_ptr(builtin.name) }.to_bytes().to_vec();
+    let mut name = builtin.name?.to_bytes().to_vec();
     name.push(b'(');
     if builtin.arity.max() == Some(0) {
         name.push(b')');
@@ -355,9 +270,7 @@ pub(crate) fn tv_get_float_chk(tv: &TypVal) -> Result<Float, Unconvertible> {
         VAR_NUMBER => Ok(tv.number_or_zero() as Float),
         _ => {
             let msg = c"E808: Number or Float required";
-            // SAFETY: a message argument this call holds as a NUL-terminated
-            // string for the length of the format.
-            let arg0 = unsafe { c_str(gettext(msg).as_ptr()) };
+            let arg0 = msg_cstr(gettext(msg));
             semsg!("{arg0}");
             Err(Unconvertible)
         }
@@ -385,45 +298,34 @@ pub fn float_op_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData
 /// generated table puts the RPC handler in the row's payload.
 ///
 pub fn api_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
-    // SAFETY throughout: the dispatcher's arguments and return value; `items`
-    // outlives the `Array` that borrows it, and the arena owns what the
-    // conversion allocates until it is freed below.
     if check_secure() {
         return;
     }
     let EvalFuncData::Api(row) = fptr else {
         unreachable!("an API builtin's row carries its handler")
     };
-    let handler: MsgpackRpcRequestHandler = unsafe { *row };
-
-    let mut arena: Arena = ARENA_EMPTY;
     let array: Array = args.iter().map(Object::from).collect();
 
-    let call = handler.fn_0.expect("non-null function pointer");
-    match call(VIML_INTERNAL_CALL, array, &mut arena) {
+    match call_handler_for_vimscript(row, array) {
         Ok(rv) => {
-            // The answer is this frame's, so the conversion takes the Lua
+            // The answer is this frame's, so the conversion took the Lua
             // references below it rather than making new ones.
-            *result = TypVal::from(rv);
+            *result = rv;
         }
         Err(err) => {
-            // SAFETY: a message the error holds as a NUL-terminated string.
-            let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
+            let msg = msg_cstr(err.message_or_empty());
             semsg_multiline!(c"emsg", "E5555: API call: {msg}");
         }
     }
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }
 
 /// The buffer a typval names: a buffer number, or a name matched as a
 /// pattern the way `:buffer` matches one.
 pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
-    // SAFETY: the caller's obligation; the name is the string the typval
-    // owns and outlives the match.
-    if (*tv).v_type() == VAR_NUMBER {
-        return find_buf((*tv).number_or_zero() as c_int);
+    if tv.v_type() == VAR_NUMBER {
+        return find_buf(tv.number_or_zero() as c_int);
     }
-    if (*tv).v_type() != VAR_STRING {
+    if tv.v_type() != VAR_STRING {
         return None;
     }
     // The empty string is the current buffer, `$` the last one.
@@ -440,12 +342,8 @@ pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     let save_magic = p_magic();
     let _cpo = SavedCpo::empty();
     P_MAGIC.set(true);
-    let pattern = name_bytes.as_ptr_range();
     let only = curtab_only != 0;
-    // SAFETY: the pattern is the argument's own string, live for the call.
-    let buf =
-        unsafe { buflist_findpat(pattern.start.cast(), pattern.end.cast(), true, false, only) };
-    let found = find_buf(buf);
+    let found = find_buf(buflist_findpat_cstr(name.as_cstr(), true, false, only));
     P_MAGIC.set(save_magic);
 
     // A name no buffer matches may still be a *file* name we know.
@@ -468,8 +366,7 @@ pub fn tv_get_buf_from_arg(tv: &TypVal) -> Option<Buf> {
 /// [`tv_get_buf`] for a builtin that must report a bad buffer itself.
 pub fn get_buf_arg(arg: &TypVal) -> Option<Buf> {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the caller's obligation. The guard is what makes E158 the
-    // *only* message this can produce.
+    // The guard is what makes E158 the *only* message this can produce.
     let no_emsg = Suppress::emsg();
     let buf = tv_get_buf(arg, 0);
     drop(no_emsg);

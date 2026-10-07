@@ -1,44 +1,40 @@
 //! Asking the user: `input()`, `confirm()`, the prompt-buffer accessors
 //! and `feedkeys()`.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::wrappers::{arg_number, arg_number_chk};
 use super::{
     SIGINT, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING, tv_get_buf_from_arg,
 };
-use crate::api::private::helpers::cstr_to_string;
 use crate::api::vim::nvim_feedkeys;
 use crate::buffer::buf_is_prompt;
 use crate::drawscreen::state::cmdline_row;
-use crate::edit::buf_prompt_text;
+use crate::edit::buf_prompt_text_owned;
 use crate::eval::prompt_get_input;
 use crate::eval::typval::{NumBuf, list_iter, list_len};
-use crate::event::libuv::uv_kill;
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::get_user_input;
 use crate::getchar::state::got_int;
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
-use crate::input::prompt_for_input;
-use crate::memory::ThinCString;
+use crate::input::prompt_for_number;
 use crate::message::e_invarg;
 use crate::message::state::{lines_left, msg_row, msg_scroll};
 use crate::message::{
-    do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start, msg_str, verb_msg,
+    confirm_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start, msg_str, verb_msg,
 };
 use crate::mouse::state::mouse_row;
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
+use crate::os::proc::os_kill;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
-use crate::types::{EvalFuncData, FAIL, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
+use crate::types::{EvalFuncData, FAIL, String_0, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
 /// `{type}` spellings `confirm()` recognises, by their first letter.
 /// Anything else leaves the default in place.
@@ -60,9 +56,6 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut kind = VIM_GENERIC as c_int;
     let mut error = false;
 
-    // SAFETY throughout: the frame is live; the two scratch buffers outlive the
-    // strings `tv_get_string_buf_chk` may park in them and the dialog runs
-    // before they go out of scope.
     let message = numbuf.string_chk(&args[0]);
     if message.is_none() {
         error = true;
@@ -95,13 +88,10 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // No {choices}, or an empty one, means a single "Ok".
     let buttons = buttons
         .filter(|buttons| !buttons.is_empty())
-        .unwrap_or_else(|| gettext(c"&Ok"))
-        .as_ptr();
+        .unwrap_or_else(|| gettext(c"&Ok"));
     if !error && let Some(message) = message {
-        let message = message.as_ptr();
-        let chosen =
-            unsafe { do_dialog(kind, ptr::null(), message, buttons, default, ptr::null(), 0) };
-        result.write_number(chosen as VarNumber);
+        let chosen = confirm_dialog(kind, message, buttons, default);
+        result.write_number(VarNumber::from(chosen));
     }
 }
 
@@ -109,13 +99,12 @@ pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// debugger is attached. Answers FAIL; there is no success value.
 pub fn f_debugbreak(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(FAIL as VarNumber);
-    // SAFETY throughout: the frame is live.
     let pid = arg_number(&args[0]) as c_int;
     if pid == 0 {
         emsg(gettext(e_invarg));
         return;
     }
-    unsafe { uv_kill(pid, SIGINT) };
+    let _ = os_kill(pid, SIGINT);
 }
 
 /// `feedkeys({string} [, {mode}])`
@@ -123,16 +112,15 @@ pub fn f_feedkeys(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let _rettv = result;
     let mut mode_buf = NumBuf::new();
-    // SAFETY throughout: the frame is live and both strings outlive the call.
     if check_secure() {
         return;
     }
-    let keys = numbuf.string(&args[0]).as_ptr();
+    let keys = String_0::from_cstr(numbuf.string(&args[0]));
     // A missing {mode} is spelled as a null string, not as "".
-    let mode = args
-        .get(1)
-        .map_or(ptr::null(), |mode| mode_buf.string(mode).as_ptr());
-    unsafe { nvim_feedkeys(cstr_to_string(keys), cstr_to_string(mode), true) };
+    let mode = args.get(1).map_or(String_0::NULL, |mode| {
+        String_0::from_cstr(mode_buf.string(mode))
+    });
+    nvim_feedkeys(keys, mode, true);
 }
 
 /// Whether the prompt currently being read should echo `*` instead of what
@@ -152,8 +140,8 @@ pub fn f_inputdialog(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `inputsecret({prompt} [, {text}])`
 pub fn f_inputsecret(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
-    // SAFETY throughout: the dispatcher's argument array and return value; the two
-    // globals are restored on the way out, and `f_input` cannot unwind.
+    // The two globals are restored on the way out, and `f_input` cannot
+    // unwind.
     let secret = Suppress::cmdline_echo();
     INPUTSECRET.set(true);
     f_input(args, result, fptr);
@@ -164,8 +152,6 @@ pub fn f_inputsecret(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
 /// `inputlist({textlist})` — print the list and read a number.
 pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the frame is live and the List is held by an argument for the
-    // whole call.
     if args[0].v_type() != VAR_LIST {
         let arg0 = "inputlist()";
         semsg!("E686: Argument of {arg0} must be a List");
@@ -179,9 +165,11 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     msg_scroll.set(1);
     msg_clr_eos();
 
-    let list = args[0].list_or_null();
-    let len = list_len(unsafe { list.as_ref() }) as usize;
-    for (at, li) in list_iter(unsafe { list.as_ref() }).enumerate() {
+    // The List is held by the argument for the whole call, and printing it
+    // runs no user code.
+    let list = args[0].list_ref();
+    let len = list_len(list) as usize;
+    for (at, li) in list_iter(list).enumerate() {
         msg_str(numbuf.string(&li.li_tv));
         // A UI that owns the message area keeps the items in one message,
         // bar the last separator.
@@ -191,11 +179,11 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let mut mouse_used = false;
-    let mut selected = unsafe { prompt_for_input(None, 0, false, &raw mut mouse_used) };
+    let mut selected = prompt_for_number(&mut mouse_used);
     // A click names a line rather than an item, so count back from the
     // bottom of the list.
     if mouse_used {
-        selected = list_len(unsafe { list.as_ref() }) - (cmdline_row.get() - mouse_row.get());
+        selected = list_len(args[0].list_ref()) - (cmdline_row.get() - mouse_row.get());
     }
     result.write_number(selected as VarNumber);
 }
@@ -210,9 +198,7 @@ static SAVED_TYPEAHEAD: GlobalCell<Vec<TypeaheadSave>> = GlobalCell::new(Vec::ne
 /// keys.
 pub fn f_inputsave(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut saved = TypeaheadSave::default();
-    // SAFETY: `saved` is a fresh state of the right type, and the stack owns
-    // it from here on.
-    unsafe { save_typeahead(&raw mut saved) };
+    save_typeahead(&mut saved);
     SAVED_TYPEAHEAD.with_mut(|stack| stack.push(saved));
 }
 
@@ -222,10 +208,8 @@ pub fn f_inputrestore(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     // The pop happens outside the restore: `restore_typeahead` reaches the
     // typeahead cells, not this one, but keeping the borrow a leaf is the rule.
     if let Some(mut saved) = SAVED_TYPEAHEAD.with_mut(Vec::pop) {
-        // SAFETY: filled by the `f_inputsave` that pushed it.
-        unsafe { restore_typeahead(&raw mut saved) };
+        restore_typeahead(&mut saved);
     } else if p_verbose() > 1 {
-        // SAFETY throughout: a static message, and the caller's return value.
         let msg = c"called inputrestore() more often than inputsave()";
         verb_msg(gettext(msg));
         result.write_number(1);
@@ -249,18 +233,14 @@ fn prompt_buffer(arg: &TypVal) -> Option<Buf> {
 pub fn f_prompt_getprompt(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(None);
     if let Some(buf) = prompt_buffer(&args[0]) {
-        // SAFETY: the buffer's own NUL-terminated prompt, or a literal.
-        let text = unsafe { CStr::from_ptr(buf_prompt_text(buf)) };
-        result.write_string(Some(ThinCString::from_cstr(text)));
+        result.write_string(Some(buf_prompt_text_owned(buf)));
     }
 }
 
 /// `prompt_getinput({buf})` — what has been typed after the prompt.
 pub fn f_prompt_getinput(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(None);
-    // SAFETY: `prompt_get_input` hands over an `xmalloc`ed string, which the
-    // result adopts.
     if let Some(buf) = prompt_buffer(&args[0]) {
-        result.write_string(unsafe { ThinCString::from_raw(prompt_get_input(Some(buf))) });
+        result.write_string(prompt_get_input(Some(buf)));
     }
 }

@@ -14,7 +14,7 @@ use core::ffi::{c_int, c_void};
 use core::ptr;
 
 use super::{in_fast_callback, nlua_error, nlua_pcall, nlua_pushref, nlua_ref_global};
-use crate::eval::funcs::find_internal_func;
+use crate::eval::funcs::find_builtin;
 use crate::event::r#loop::process_events_until;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::time::{
@@ -35,8 +35,8 @@ use crate::message::e_fast_api_disabled;
 use crate::os::cshim::gettext;
 use crate::startup::main_loop;
 use crate::types::{
-    EvalFuncDef, Event, LuaRef, MultiQueue, TimeWatcher, int64_t, intptr_t, lua_Integer, lua_State,
-    ptrdiff_t, uint32_t, uint64_t,
+    Event, LuaRef, MultiQueue, TimeWatcher, int64_t, intptr_t, lua_Integer, lua_State, ptrdiff_t,
+    uint32_t, uint64_t,
 };
 use crate::ui::state::ui_event_ns_id;
 use crate::ui::{ui_flush, ui_remove_cb};
@@ -308,10 +308,9 @@ pub unsafe extern "C-unwind" fn nlua_in_fast_event(lstate: *mut lua_State) -> c_
 /// # Safety
 /// `name` must be a NUL-terminated function name.
 pub(crate) unsafe fn viml_func_is_fast(name: *const core::ffi::c_char) -> bool {
-    unsafe {
-        let fdef: *const EvalFuncDef = find_internal_func(name);
-        !fdef.is_null() && (*fdef).fast
-    }
+    // SAFETY: the caller's promise.
+    let name = unsafe { crate::cstr::bytes_at(name) };
+    find_builtin(name).is_some_and(|fdef| fdef.fast)
 }
 
 /// Whether anything that is not `fast` may run right now.

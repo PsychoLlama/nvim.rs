@@ -752,42 +752,35 @@ pub(crate) fn ungot_key_ready() -> bool {
         .is_some_and(|stuffed| stuffed || stuff_empty())
 }
 
-/// Save all three kinds of typeahead, so that a prompt really has to be
-/// answered by the user.
-///
-/// # Safety
-/// `save` must point at writable storage that outlives the matching
-/// [`restore_typeahead`].
-pub unsafe fn save_typeahead(save: *mut TypeaheadSave) {
-    // SAFETY (this body): the caller's promise -- `save` is writable storage
-    // that outlives the matching restore.
-    unsafe { (*save).save_typebuf = typeahead().take() };
-    unsafe { alloc_typebuf((*save).save_typebuf.change_cnt()) };
-    unsafe { (*save).typebuf_valid = true };
-    unsafe { (*save).ungot = ungot.take() };
+/// Save all three kinds of typeahead into `save`, so that a prompt really
+/// has to be answered by the user.
+pub fn save_typeahead(save: &mut TypeaheadSave) {
+    save.save_typebuf = typeahead().take();
+    // A fresh buffer for the typeahead just moved out.
+    alloc_typebuf(save.save_typebuf.change_cnt());
+    save.typebuf_valid = true;
+    save.ungot = ungot.take();
 
-    unsafe { (*save).save_readbuf1 = readbuf1().take() };
-    unsafe { (*save).save_readbuf2 = readbuf2().take() };
+    save.save_readbuf1 = readbuf1().take();
+    save.save_readbuf2 = readbuf2().take();
 }
 
-/// Put back what [`save_typeahead`] saved, freeing what was read in the
-/// meantime. Can only be called once per save.
-///
-/// # Safety
-/// `save` must be the one a matching [`save_typeahead`] filled.
-pub unsafe fn restore_typeahead(save: *mut TypeaheadSave) {
-    // SAFETY (this body): as [`save_typeahead`] -- `save` is the one a matching
-    // save filled.
-    if unsafe { (*save).typebuf_valid } {
+/// Put back what [`save_typeahead`] saved in `save`, freeing what was read
+/// in the meantime. Can only be called once per save.
+pub fn restore_typeahead(save: &mut TypeaheadSave) {
+    if save.typebuf_valid {
+        // SAFETY: the typeahead read since the save, replaced just below.
         unsafe { free_typebuf() };
-        typeahead().set(core::mem::take(unsafe { &mut (*save).save_typebuf }));
+        typeahead().set(core::mem::take(&mut save.save_typebuf));
     }
-    ungot.set(unsafe { (*save).ungot.take() });
+    ungot.set(save.ungot.take());
 
+    // SAFETY: the read buffers filled since the save, replaced just below.
     unsafe { readbuf1().free() };
-    readbuf1().set(core::mem::take(unsafe { &mut (*save).save_readbuf1 }));
+    readbuf1().set(core::mem::take(&mut save.save_readbuf1));
+    // SAFETY: as above.
     unsafe { readbuf2().free() };
-    readbuf2().set(core::mem::take(unsafe { &mut (*save).save_readbuf2 }));
+    readbuf2().set(core::mem::take(&mut save.save_readbuf2));
 }
 
 #[cfg(test)]

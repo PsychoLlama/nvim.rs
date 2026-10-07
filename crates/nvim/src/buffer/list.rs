@@ -17,7 +17,7 @@ use crate::cstr;
 use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::types::BufName;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
 use super::*;
@@ -796,6 +796,27 @@ pub(crate) fn buflist_findname_file_id(
 /// `unlisted` searches the unlisted buffers too, when no listed one matched;
 /// `curtab_only` ignores buffers not open in the current tab page.
 ///
+/// [`buflist_findpat`] of the whole of a pattern the caller holds as a
+/// string.
+pub(crate) fn buflist_findpat_cstr(
+    pattern: &CStr,
+    unlisted: bool,
+    diffmode: bool,
+    curtab_only: bool,
+) -> c_int {
+    let range = pattern.to_bytes().as_ptr_range();
+    // SAFETY: the pattern and its end, inside one terminated string.
+    unsafe {
+        buflist_findpat(
+            range.start.cast(),
+            range.end.cast(),
+            unlisted,
+            diffmode,
+            curtab_only,
+        )
+    }
+}
+
 /// # Safety
 ///
 /// `pattern` must point at a NUL-terminated string. `pattern_end` must point

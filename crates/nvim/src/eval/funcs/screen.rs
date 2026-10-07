@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_lnum, arg_number, arg_number_chk, list_alloc_ret, list_set_ret};
+use super::wrappers::{arg_lnum, arg_number, arg_number_chk, list_alloc_ret};
 use crate::winlayer::{Buf, Win};
 
 use crate::eval::typval::NumBuf;
@@ -300,7 +300,7 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     // call and `text` outlives the list it is copied into.
     // Cleared first: an out-of-range position answers an empty List,
     // not a three-item one.
-    list_set_ret(result, ptr::null_mut());
+    result.write_list(None);
     let lnum = arg_lnum(&args[0]);
     // Wraps because the C's does.
     let col = (arg_number(&args[1]) as ColNr).wrapping_sub(1);
@@ -347,7 +347,7 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // call.
     // An out-of-range position answers an empty List, not a List of no
     // items.
-    list_set_ret(result, ptr::null_mut());
+    result.write_list(None);
     let lnum = arg_lnum(&args[0]);
     // Wraps because the C's does.
     let col = (arg_number(&args[1]) as ColNr).wrapping_sub(1);

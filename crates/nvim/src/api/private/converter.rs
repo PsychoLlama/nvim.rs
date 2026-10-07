@@ -46,7 +46,7 @@ use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::types::{
-    ApiDict, Array, BoolVarValue, DictItem, DictKey, Float, Integer, KeyValuePair, ListItem,
+    ApiDict, Array, BoolVarValue, DictItem, DictKey, Error, Float, Integer, KeyValuePair, ListItem,
     Object, String_0, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull,
@@ -358,4 +358,18 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
         // `kind()` answers one of the eleven above.
         _ => unreachable!("an Object carries one of the eleven tags"),
     }
+}
+
+/// Call the RPC handler in row `row` of the method table with `args` on
+/// behalf of Vimscript, and convert its answer to a value before the arena
+/// the call allocated its scratch in is released.
+pub(crate) fn call_handler_for_vimscript(row: usize, args: Array) -> Result<TypVal, Error> {
+    let handler = crate::api::private::dispatch::method_handlers[row];
+    let call = handler.fn_0.expect("non-null function pointer");
+    let mut arena = crate::memory::ARENA_EMPTY;
+    let answer = call(crate::eval::funcs::VIML_INTERNAL_CALL, args, &mut arena).map(TypVal::from);
+    // SAFETY: the arena is this call's own, and its answer has been converted
+    // out of it above; an error owns its message.
+    unsafe { crate::memory::arena_mem_free(crate::memory::arena_finish(&raw mut arena)) };
+    answer
 }

@@ -30,8 +30,8 @@ pub enum EvalFuncData {
     None,
     /// A libm operation, for `float_op_wrapper`.
     Float(FloatFunc),
-    /// A row of the RPC handler table, for `api_wrapper`.
-    Api(*const MsgpackRpcRequestHandler),
+    /// The index of a row of the RPC handler table, for `api_wrapper`.
+    Api(usize),
 }
 pub type Loop = loop_0;
 #[derive(Copy, Clone)]

@@ -76,6 +76,12 @@ fn parse_pids(text: &str) -> Vec<c_int> {
 
 /// Whether process `pid` is running.
 ///
+/// Send `sig` to process `pid`; whether it was sent.
+pub(crate) fn os_kill(pid: c_int, sig: c_int) -> bool {
+    // SAFETY: `uv_kill` takes no pointers.
+    unsafe { uv_kill(pid, sig) == 0 }
+}
+
 /// A process owned by another user answers EPERM rather than ESRCH; only a
 /// definite ESRCH counts as "gone".
 pub fn os_proc_running(pid: c_int) -> bool {

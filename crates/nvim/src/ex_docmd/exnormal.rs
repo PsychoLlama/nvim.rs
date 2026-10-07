@@ -65,7 +65,7 @@ pub unsafe fn save_current_state(sst: *mut SaveState) -> bool {
     msg_scroll.set(0);
     // Not entering Insert mode from here.
     restart_edit.set(0);
-    unsafe { save_typeahead(&raw mut s.tabuf) };
+    save_typeahead(&mut s.tabuf);
     s.tabuf.typebuf_valid
 }
 
@@ -76,8 +76,8 @@ pub unsafe fn save_current_state(sst: *mut SaveState) -> bool {
 /// `sst` must point at a live `SaveState`, unaliased for the call.
 pub unsafe fn restore_current_state(sst: *mut SaveState) {
     // SAFETY: as `save_current_state`.
-    let s = unsafe { &*sst };
-    unsafe { restore_typeahead(&raw mut (*sst).tabuf) };
+    let s = unsafe { &mut *sst };
+    restore_typeahead(&mut s.tabuf);
     msg_scroll.set(s.save_msg_scroll);
     // A command that asked to enter Insert mode *after* `:normal`
     // finishes keeps that request; anything else is put back.
