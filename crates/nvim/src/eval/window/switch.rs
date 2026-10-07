@@ -224,3 +224,35 @@ pub unsafe fn restore_win_noblock(switchwin: *mut SwitchWin, no_display: bool) {
         win.buffer().make_current();
     }
 }
+
+/// A window made current by [`switch_win`] for as long as this value lives:
+/// [`restore_win`] runs when it is dropped, whether the switch worked or not.
+pub(crate) struct WinSwitch {
+    saved: SwitchWin,
+    no_display: bool,
+}
+
+impl WinSwitch {
+    /// [`switch_win`] to `win` (and `tabpage`, when given), answering the
+    /// guard that switches back and whether the switch worked (`win` was
+    /// still valid). No autocommands run until the guard is dropped.
+    pub(crate) fn enter(win: Win, tabpage: Option<TabPage>, no_display: bool) -> (WinSwitch, bool) {
+        let mut saved = SwitchWin {
+            sw_curwin: None,
+            sw_curtab: None,
+            sw_same_win: false,
+            sw_visual_active: false,
+        };
+        // SAFETY: a local the guard owns, and handles, which `switch_win`
+        // checks before entering.
+        let entered = unsafe { switch_win(&raw mut saved, win, tabpage, no_display) };
+        (WinSwitch { saved, no_display }, entered.is_ok())
+    }
+}
+
+impl Drop for WinSwitch {
+    fn drop(&mut self) {
+        // SAFETY: the record `enter` filled in, restored once.
+        unsafe { restore_win(&raw mut self.saved, self.no_display) };
+    }
+}

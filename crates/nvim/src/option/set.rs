@@ -34,7 +34,7 @@ use crate::autocmd::{apply_autocmds, do_filetype_autocmd};
 use crate::charset::buf_init_chartab;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, redraw_all_later};
 use crate::eval::vars::{
-    optval_as_tv, reset_v_option_vars, set_vim_var_string, set_vim_var_tv, with_vim_var_str,
+    reset_v_option_vars, set_vim_var_string, set_vim_var_tv, with_vim_var_str,
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
@@ -44,6 +44,7 @@ use crate::message::emsg;
 use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
 use crate::message_fmt::msg_cstr;
 use crate::mouse::setmouse;
+use crate::option::optval_as_tv;
 use crate::runtime::state::current_sctx;
 use crate::startup::starting;
 use crate::ui::state::t_colors;

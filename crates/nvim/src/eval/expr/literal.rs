@@ -14,7 +14,7 @@ use crate::ascii::ascii_isxdigit;
 use crate::charset::{Str2NrBases, hex2nr, str2nr_in};
 use crate::cstr::byte_at;
 use crate::eval::typval::{tv_blob_alloc, tv_blob_set_ret};
-use crate::eval::vars::{eval_one_expr_in_text, optval_as_tv};
+use crate::eval::vars::eval_one_expr_in_text;
 use crate::eval::{Cursor, char_len_at, env_name_len, option_var_end};
 use crate::keycodes::{
     FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, special_key_at, trans_special_into,
@@ -24,6 +24,7 @@ use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::{emsg, iemsg};
 use crate::message_fmt::msg_bytes;
+use crate::option::optval_as_tv;
 use crate::option::optval_free;
 use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_option};
 use crate::options::kOptInvalid;

@@ -29,7 +29,7 @@ use std::ffi::CString;
 use super::{
     ScopeLister, clear_local, e_double_semicolon_in_list_of_variables, e_letunexp, emsg_static,
     heredoc_get, kGRegExprSrc, list_arg_vars, list_buf_vars, list_func_vars, list_glob_vars,
-    list_script_vars, list_tab_vars, list_vim_vars, list_win_vars, tv_to_optval_named,
+    list_script_vars, list_tab_vars, list_vim_vars, list_win_vars, tv_to_optval,
 };
 use crate::charset::skip;
 use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE, list_len, tv_copy, tv_list_alloc};
@@ -447,7 +447,7 @@ fn ex_let_option(
         }
 
         let error;
-        (newval, error) = tv_to_optval_named(tv, opt_idx, name);
+        (newval, error) = tv_to_optval(tv, opt_idx, name);
         if error {
             break 'theend;
         }

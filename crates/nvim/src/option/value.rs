@@ -25,8 +25,10 @@ use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::memory::{xmalloc, xstrdup};
 use crate::optionstr::{free_string_option, is_empty_option};
+use crate::types::{BoolVarValue, TypVal, VarNumber, kSpecialVarNull};
 use crate::types::{
     Object, OptIndex, OptStr, OptVal, OptValType, String_0, kObjectTypeBoolean, kObjectTypeInteger,
     kObjectTypeNil, kObjectTypeString, size_t,
@@ -303,6 +305,38 @@ pub(crate) fn optval_to_cstr(value: &OptVal) -> *mut c_char {
             buf
         }
     }
+}
+
+/// An option's value as a typval.  `numbool` renders a Boolean option as a
+/// Number, which is what the old spelling of the accessors answered.
+pub(crate) fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
+    // The string arm copies the `OptVal`'s bytes: the value is a borrowed
+    // view (an option's own storage, or a copy its caller frees), and the
+    // answer owns what it holds.
+    let mut rettv = TypVal::Special(kSpecialVarNull);
+    match value {
+        OptVal::Boolean(_) => {
+            if numbool {
+                let word = value.tristate().expect("the arm is Boolean");
+                rettv.write_number(VarNumber::from(word));
+            } else if let Some(boolean) = value.as_boolean() {
+                // An unset global-local boolean has no Vimscript
+                // spelling and stays the `v:null` this started as.
+                rettv.write_boolean(BoolVarValue::from(boolean));
+            }
+        }
+        OptVal::Number(number) => {
+            rettv.write_number(number as VarNumber);
+        }
+        OptVal::String(string) => {
+            // SAFETY: the option value's NUL-terminated block, or null,
+            // live for the call.
+            let text = unsafe { cstr::at_opt(string.data()) };
+            rettv.write_string(text.map(ThinCString::from_cstr));
+        }
+        OptVal::Nil => {}
+    }
+    rettv
 }
 
 /// The value as the API reports it. A tri-state boolean that is neither true

@@ -19,8 +19,7 @@ use crate::buffer::{buf_is_prompt, current_buf};
 use crate::cstr;
 use crate::drawscreen::redraw_buf_status_later;
 use crate::drawscreen::state::{need_maketitle, redraw_tabline};
-use crate::eval::typval::{callback_free, tv_dict_alloc};
-use crate::eval::vars::optval_as_tv;
+use crate::eval::typval::{DictRef, callback_free, tv_dict_alloc};
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::{XString, xfree};
 use crate::option::vars::{
@@ -34,13 +33,13 @@ use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
 use crate::search::state::magic_overruled;
 use crate::state::mode::State;
 use crate::types::{
-    BsFlag, Callback, CpoFlag, Dict, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
+    BsFlag, Callback, CpoFlag, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
     ShmFlag, TypVal, int64_t, size_t, uint8_t,
 };
 
 use super::{
     EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,
-    option_has_scope, optval_from_varp, set_option_direct,
+    option_has_scope, optval_as_tv, optval_from_varp, set_option_direct,
 };
 use crate::state::MODE_TERMINAL;
 use crate::winlayer::Win;
@@ -457,22 +456,17 @@ pub(crate) fn fish_like_shell() -> bool {
     })
 }
 
-/// Every buffer-local (or window-local) option of the current buffer and
-/// window, as a dictionary — what `b:` and `w:` expose.
-pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
-    let scope = if bufopt != 0 {
-        kOptScopeBuf
-    } else {
-        kOptScopeWin
-    };
-    // SAFETY: the option table is a plain array, and `get_varp` hands back
-    // the variable for the current buffer and window.
-    let d_held = tv_dict_alloc();
-    let d = d_held.as_ptr();
+/// Every buffer-local (`buffer`) or window-local option of the current
+/// buffer and window, as a dictionary — what `b:` and `w:` expose.
+pub(crate) fn get_winbuf_options(buffer: bool) -> DictRef {
+    let scope = if buffer { kOptScopeBuf } else { kOptScopeWin };
+    let dict = tv_dict_alloc();
     for opt_idx in kOptAleph..kOptCount {
         if !option_has_scope(opt_idx, scope) {
             continue;
         }
+        // `get_varp` hands back the variable for the current buffer and
+        // window.
         let varp = get_varp(opt_idx);
         if varp.is_none() {
             continue;
@@ -480,10 +474,9 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
         // A copy of the option's value; the dictionary takes its own.
         let tv = optval_as_tv(optval_from_varp(opt_idx, varp), true);
         let name = get_option(opt_idx).fullname;
-        let _ = unsafe { (*d).add_tv(name.to_bytes(), &tv) };
+        let _ = dict.edit().add_tv(name.to_bytes(), &tv);
     }
-    // The caller takes the reference over.
-    d_held.into_raw()
+    dict
 }
 
 /// 'scrolloff' for a window, local where set. A terminal buffer never

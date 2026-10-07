@@ -12,9 +12,7 @@ use core::mem::ManuallyDrop;
 use crate::eval::gc::{RootId, unroot_dict};
 use crate::eval::typval::{DictCursor, ListRef, RemovedItem};
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_iswhite;
-use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::charset::skip;
 use crate::drawscreen::state::sc_col;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
@@ -31,7 +29,7 @@ use crate::eval::userfunc::{
     current_func_has_scope, funccal_scope, function_exists, list_func_vars, walk_scoped_funccals,
     with_funccal_scope_entry,
 };
-use crate::eval::window::{find_win_by_nr, restore_win, switch_win};
+use crate::eval::window::find_win_by_nr;
 use crate::eval::{
     Cursor, LAMBDA_USES_LOCALS, eval_expr_ext, eval_isnamec1, eval_option, eval_to_bool, eval1,
     get_name_len, handle_subscript, may_call_simple_func, name_end, set_ref_in_dict_items,
@@ -58,7 +56,7 @@ use crate::message::{
 use crate::option::vars::{p_ccv, p_dex, p_pex, p_verbose};
 use crate::option::{
     find_option, get_option, get_winbuf_options, is_tty_option, kOptFlagFunc, option_has_type,
-    option_last_set, optval_free, set_option_value_handle_tty,
+    option_last_set, optval_free,
 };
 use crate::options::{kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest};
 use crate::os::cshim::gettext;
@@ -70,19 +68,18 @@ use crate::runtime::{
 use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
 use crate::types::{
-    AcoSave, BoolVarValue, Dict, DictItem, DictKey, EvalFuncData, ExArg, Expand, GRegFlags, List,
-    OptIndex, OptVal, Partial, ScopeDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue,
-    SwitchWin, TypVal, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
-    VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, VarType, VimVarFlags, Vv, int64_t, kBoolVarFalse,
-    kBoolVarTrue, kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t, uint8_t, uint32_t,
+    BoolVarValue, Dict, DictItem, DictKey, EvalFuncData, ExArg, Expand, GRegFlags, List, OptIndex,
+    OptVal, Partial, ScopeDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue, TypVal,
+    VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
+    VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
+    VarLock, VarNumber, VarType, VimVarFlags, Vv, int64_t, kBoolVarFalse, kBoolVarTrue,
+    kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t, uint8_t, uint32_t,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
 use crate::winlayer::Live;
 use crate::winlayer::graph::lastused_tabpage;
-use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.
 mod assign;
@@ -138,9 +135,6 @@ pub const GLV_QUIET: c_int = 2;
 /// Wrapping is the unsafe step, once; every `(*di).field` after it is
 /// ordinary checked code. See [`Live`] for what the promise is and is not.
 pub(crate) type Di = Live<DictItem>;
-
-/// A value whose caller has promised it outlives the handle.
-pub(crate) type Tv = Live<TypVal>;
 
 pub const kGRegExprSrc: GRegFlags = 2;
 
