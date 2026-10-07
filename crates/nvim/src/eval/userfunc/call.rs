@@ -128,7 +128,8 @@ pub(crate) fn call_user_func(
     let islambda = func.name().as_bytes().starts_with(b"<lambda>");
     let scopes = &frame.scopes;
 
-    // Init the l: variables.
+    // Init the l: variables. From here a lookup sees the function's scopes.
+    frame.scope_ready.set(true);
     if let Some(selfdict) = selfdict {
         // Set l:self to "selfdict"; it takes a reference of its own.
         let value = TypVal::dict(Some(selfdict.clone()));

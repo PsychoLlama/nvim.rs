@@ -443,6 +443,7 @@ pub(crate) fn create_funccal(func: &Rc<UserFunc>) -> Rc<FuncCall> {
             reused.func = func.clone();
             reused.id = id;
             reused.level = level;
+            reused.scope_ready.set(false);
             reused.linenr.set(0);
             reused.returned.set(false);
             reused.breakpoint.set(0);
@@ -459,6 +460,7 @@ pub(crate) fn create_funccal(func: &Rc<UserFunc>) -> Rc<FuncCall> {
             Rc::new(FuncCall {
                 func: func.clone(),
                 scopes,
+                scope_ready: Cell::new(false),
                 linenr: Cell::new(0),
                 returned: Cell::new(false),
                 rettv: RefCell::new(TypVal::Unknown),
@@ -612,6 +614,11 @@ pub fn get_funccal() -> Option<Rc<FuncCall>> {
 /// Run `f` on the funccall whose scopes a variable lookup sees: the call in
 /// progress, or the one `:backtrace` moved to.
 fn with_scope_funccal<R>(f: impl FnOnce(&FuncCall) -> R) -> Option<R> {
+    // Upstream's `have_funccal_scope`: asked of the call in progress, even
+    // when `:backtrace` looks at another.
+    if !with_current_fc(|frame| frame.is_some_and(|frame| frame.scope_ready.get())) {
+        return None;
+    }
     // Every variable lookup lands here; without a backtrace level it is the
     // call in progress, read without a reference.
     if debug_backtrace_level.get() == 0 {
@@ -656,7 +663,7 @@ pub fn get_funccal_args_var() -> *mut DictItem {
 
 /// List the `l:` variables, when there is a function running.
 pub fn list_func_vars(first: &mut c_int) {
-    if let Some(frame) = current_fc() {
+    if let Some(frame) = current_fc().filter(|frame| frame.scope_ready.get()) {
         list_dict_vars(&frame.scopes.l_vars, c"l:", false, first);
     }
 }

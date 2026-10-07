@@ -395,6 +395,10 @@ pub struct FuncCall {
     pub(crate) func: ::std::rc::Rc<UserFunc>,
     /// The scope dictionaries and `a:000`.
     pub(crate) scopes: crate::eval::userfunc::FrameScopes,
+    /// Whether `l:`/`a:` are set up: a variable lookup made before that --
+    /// a breakpoint expression evaluated as the call starts -- sees no
+    /// function scope, as upstream's did while `l:`'s count was still 0.
+    pub(crate) scope_ready: ::core::cell::Cell<bool>,
     /// The body line the next read hands out.
     pub(crate) linenr: ::core::cell::Cell<::core::ffi::c_int>,
     /// `:return` ran (and is not pending behind a `:finally`).
