@@ -29,6 +29,11 @@
 #                    and every msgpack token width.  evalsweep drives
 #                    json and msgpack only over ENCODER-GENERATED values,
 #                    so all of that is invisible to it.
+#   walk             the encoders' shared container walk (cycles, deep
+#                    nests, partials, special dicts, floats, the error
+#                    path text), every byte-prefix of a set of valid JSON
+#                    and msgpack documents, and the collector over cycles
+#                    through partials, watchers, :for cursors and v: vars.
 #   luajson          crates/nvim/src/cjson/ (incl. `fpconv.rs`, a
 #                    hand-rolled grisu whose exact output is a byte
 #                    contract no test asserts).
@@ -98,11 +103,11 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 cd "$WORK" || exit 1
 
 fail=0
-for corpus in json msgpack luajson lumpack rpc; do
+for corpus in json msgpack walk luajson lumpack rpc; do
   out=$OUT/$LABEL.$corpus
   rm -f "$out"
   case $corpus in
-    json|msgpack)
+    json|msgpack|walk)
       timeout -k 5 "$LIMIT" \
         "$NVIM" --headless -u NONE -S "$HERE/decodecorpus-$corpus.vim" \
         -c qa >"$out" 2>&1 ;;

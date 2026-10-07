@@ -58,7 +58,7 @@ Each row is `<name>verify.sh` (build + diff), `<name>sweep.sh` (sandbox,
 environment, the scrubs only the shell can see), `<name>sweep.lua` (the corpus)
 and a `<name>base/` cut into the cache. Six rows deviate: `sess` and `undo`
 use `<row>gold.{sh,lua}`, `ex` uses `ex-run.sh` + `exprobe.lua`/`parseprobe.lua`, and
-`decode` has no sweep at all — `decodeverify.sh` runs the five
+`decode` has no sweep at all — `decodeverify.sh` runs the six
 `decodecorpus-*` files directly; `cont` runs `contlist.vim`/`contdict.vim`/
 `contblob.vim` directly, and `expr` runs the Vimscript driver `exprsweep.vim`
 over `exprcorpus.txt` and `exprcmds.txt`.
