@@ -260,22 +260,14 @@ pub(crate) fn new_tabpage(
 /// afterwards -- a scope rather than a guard, since the transpiled code has no
 /// unwinding path either.
 fn in_window(tabpage: TabPage, body: impl FnOnce()) {
-    let mut switchwin = SwitchWin {
-        sw_curwin: None,
-        sw_curtab: None,
-        sw_same_win: false,
-        sw_visual_active: false,
-    };
-    let slot = &raw mut switchwin;
+    let mut switchwin = SwitchWin::default();
     let win = tabpage
         .current_window()
         .expect("a live tab page has a current window");
-    // SAFETY: a slot of our own, and a live window of the live tab page.
-    let sw_result = unsafe { switch_win_noblock(slot, win, Some(tabpage), true) };
+    let sw_result = switch_win_noblock(&mut switchwin, win, Some(tabpage), true);
     debug_assert!(sw_result.is_ok(), "the window was switched to");
     body();
-    // SAFETY: the slot `switch_win_noblock` just filled in.
-    unsafe { restore_win_noblock(slot, true) };
+    restore_win_noblock(&mut switchwin, true);
 }
 
 /// `Rows - 'cmdheight' - tabline - global statusline`: the rows a tab page's

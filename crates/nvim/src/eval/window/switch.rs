@@ -1,8 +1,7 @@
 //! Making another window current for the duration of a call, which is what
 //! `win_execute()` and the API's window-scoped entry points use.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -12,9 +11,9 @@
 )]
 
 use super::*;
-use crate::cstr;
 use crate::memory::XString;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
+use crate::os::fs::current_dir;
 use crate::pos::equalpos;
 use crate::types::Failed;
 use crate::window::valid_tab;
@@ -24,44 +23,38 @@ use crate::window::valid_win;
 ///
 /// The caller must call [`win_execute_after`] afterwards whatever the answer
 /// is, because the saved state is written before the switch is attempted.
-///
-/// # Safety
-/// `args` must point at a writable `WinExecute`, and `window`/`tabpage` must be a
-/// live window and tab page.
-pub unsafe fn win_execute_before(args: *mut WinExecute, window: Win, tabpage: TabPage) -> bool {
-    // SAFETY: the caller's obligation. `args` is the caller's own storage and
-    // nothing below can reach it, so the exclusive borrow is sound; `autocwd`
-    // is a live local and `os_dirname` fills at most `MAXPATHL` bytes.
-    let (args, win, tab) = unsafe { (&mut *args, window, tabpage) };
+pub fn win_execute_before(args: &mut WinExecute, window: Win, tabpage: TabPage) -> bool {
     args.wp = Some(window.id());
-    args.curpos = win.w_cursor;
-    args.cwd_status = Err(Failed);
+    args.curpos = window.w_cursor;
+    args.cwd = None;
     args.apply_acd = false;
-    args.save_sfname = ptr::null_mut();
-    if !win.is_current()
+    args.save_sfname = None;
+    if !window.is_current()
         && (!Win::current().w_localdir.is_null()
-            || !win.w_localdir.is_null()
-            || !tab.is_current()
-                && (!TabPage::current().tp_localdir.is_null() || !tab.tp_localdir.is_null())
+            || !window.w_localdir.is_null()
+            || !tabpage.is_current()
+                && (!TabPage::current().tp_localdir.is_null() || !tabpage.tp_localdir.is_null())
             || p_acd())
     {
-        args.cwd_status = unsafe { os_dirname(args.cwd.as_mut_ptr(), size_of_val(&args.cwd)) };
+        args.cwd = current_dir();
     }
-    if args.cwd_status.is_ok() && p_acd() {
+    if let Some(cwd) = &args.cwd
+        && p_acd()
+    {
         // 'autochdir' will move the working directory itself when the
         // window is entered; `apply_acd` records that it has already
         // landed where the saved one says, so the restore can skip it.
         let buf = Buf::current();
-        if !buf.name.short().is_none() && buf.name.shown_ptr() == buf.name.short_ptr() {
-            args.save_sfname = unsafe { xstrdup(buf.name.short_ptr()) };
+        let short = buf.name.short();
+        if short.is_some() && buf.name.shown().map(CStr::as_ptr) == short.map(CStr::as_ptr) {
+            args.save_sfname = short.map(XString::from_cstr);
         }
         do_autochdir();
-        let mut autocwd: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-        if unsafe { os_dirname(autocwd.as_mut_ptr(), size_of_val(&autocwd)) }.is_ok() {
-            args.apply_acd = unsafe { cstr::eq(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) };
+        if let Some(autocwd) = current_dir() {
+            args.apply_acd = cwd.as_cstr() == autocwd.as_cstr();
         }
     }
-    if unsafe { switch_win_noblock(&raw mut args.switchwin, window, Some(tabpage), true) }.is_ok() {
+    if switch_win_noblock(&mut args.switchwin, window, Some(tabpage), true).is_ok() {
         check_cursor(Win::current());
         return true;
     }
@@ -70,27 +63,20 @@ pub unsafe fn win_execute_before(args: *mut WinExecute, window: Win, tabpage: Ta
 
 /// Restore the previous window after executing user code.
 ///
-/// # Safety
-/// `args` must be the value [`win_execute_before`] was handed.
-pub unsafe fn win_execute_after(args: *mut WinExecute) {
-    // SAFETY: the caller's obligation. `args` is the caller's own storage and
-    // nothing below can reach it; `win_valid` re-checks the saved window,
-    // because the code that ran may have closed it.
-    let args = unsafe { &mut *args };
-    unsafe { restore_win_noblock(&raw mut args.switchwin, true) };
+/// `args` is the value [`win_execute_before`] was handed.
+pub fn win_execute_after(args: &mut WinExecute) {
+    restore_win_noblock(&mut args.switchwin, true);
     if args.apply_acd {
-        unsafe { xfree(args.save_sfname.cast()) };
+        args.save_sfname = None;
         do_autochdir();
-    } else if args.cwd_status.is_ok() {
-        unsafe { os_chdir(cstr::at(args.cwd.as_mut_ptr())) };
-        if !args.save_sfname.is_null() {
-            let mut buf = Buf::current();
-            // SAFETY: the block `win_execute_before` saved, which nothing
-            // else holds; the buffer releases what it had in its place.
-            buf.name
-                .set_short(Some(unsafe { XString::from_raw(args.save_sfname) }));
+    } else if let Some(cwd) = &args.cwd {
+        os_chdir(cwd.as_cstr());
+        if let Some(short) = args.save_sfname.take() {
+            Buf::current().name.set_short(Some(short));
         }
     }
+    // `valid_win` re-checks the saved window, because the code that ran may
+    // have closed it.
     if let Some(mut win) = args.wp.and_then(valid_win)
         && !equalpos(args.curpos, win.w_cursor)
     {
@@ -105,17 +91,15 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
 /// `win_execute({winid}, {command} [, {silent}])`.
 pub fn f_win_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(None);
-    // SAFETY: the arguments and `result` are live typvals; the saved state is a
-    // live local that `win_execute_after` is given whatever happens between.
     let id = number_as_int(arg_number(args, 0));
     let Some((wp, tp)) = win_and_tab_by_id(id) else {
         return;
     };
-    let mut saved: WinExecute = unsafe { mem::zeroed() };
-    if unsafe { win_execute_before(&raw mut saved, wp, tp) } {
+    let mut saved = WinExecute::default();
+    if win_execute_before(&mut saved, wp, tp) {
         execute_common(args, result, 1);
     }
-    unsafe { win_execute_after(&raw mut saved) };
+    win_execute_after(&mut saved);
 }
 
 /// Make `win` the current window and `tabpage` the current tab page.
@@ -125,36 +109,24 @@ pub fn f_win_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 ///
 /// `no_display` keeps the display untouched: no redraw is triggered and
 /// another tab page is only half entered.
-///
-/// # Safety
-/// `switchwin` must be writable, `win` a live window and `tabpage` a live tab page
-/// or NULL.
-pub unsafe fn switch_win(
-    switchwin: *mut SwitchWin,
+pub fn switch_win(
+    switchwin: &mut SwitchWin,
     win: Win,
     tabpage: Option<TabPage>,
     no_display: bool,
 ) -> Result<(), Failed> {
     block_autocmds();
-    unsafe { switch_win_noblock(switchwin, win, tabpage, no_display) }
+    switch_win_noblock(switchwin, win, tabpage, no_display)
 }
 
 /// [`switch_win`] without blocking autocommands.
-///
-/// # Safety
-/// As [`switch_win`].
-pub unsafe fn switch_win_noblock(
-    switchwin: *mut SwitchWin,
+pub fn switch_win_noblock(
+    switchwin: &mut SwitchWin,
     win: Win,
     tabpage: Option<TabPage>,
     no_display: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation. `switchwin` is the caller's own
-    // storage and nothing below can reach it, so the exclusive borrow is
-    // sound; all-zero is a valid `SwitchWin`.
-    let into = switchwin.cast::<u8>();
-    unsafe { into.write_bytes(0, size_of::<SwitchWin>()) };
-    let switchwin = unsafe { &mut *switchwin };
+    *switchwin = SwitchWin::default();
     switchwin.sw_curwin = Win::current_or_none().map(Win::id);
     if win.is_current() {
         switchwin.sw_same_win = true;
@@ -182,25 +154,16 @@ pub unsafe fn switch_win_noblock(
 
 /// Restore the tab page and window [`switch_win`] saved, if they are still
 /// valid.
-///
-/// # Safety
-/// `switchwin` must be the value [`switch_win`] was handed.
-pub unsafe fn restore_win(switchwin: *mut SwitchWin, no_display: bool) {
-    // SAFETY: the caller's obligation.
-    unsafe { restore_win_noblock(switchwin, no_display) };
+pub fn restore_win(switchwin: &mut SwitchWin, no_display: bool) {
+    restore_win_noblock(switchwin, no_display);
     unblock_autocmds();
 }
 
 /// [`restore_win`] without unblocking autocommands.
 ///
-/// # Safety
-/// As [`restore_win`].
-pub unsafe fn restore_win_noblock(switchwin: *mut SwitchWin, no_display: bool) {
-    // SAFETY: the caller's obligation. `switchwin` is the caller's own
-    // storage and nothing below can reach it; both saved pointers are
-    // re-checked before being entered, because the code that ran may have
-    // closed them.
-    let switchwin = unsafe { &mut *switchwin };
+/// Both saved handles are re-checked before being entered, because the code
+/// that ran may have closed them.
+pub fn restore_win_noblock(switchwin: &mut SwitchWin, no_display: bool) {
     if let Some(back) = switchwin.sw_curtab.and_then(valid_tab) {
         if no_display {
             // `unuse_tabpage` writes the current window back into the tab
@@ -237,22 +200,14 @@ impl WinSwitch {
     /// guard that switches back and whether the switch worked (`win` was
     /// still valid). No autocommands run until the guard is dropped.
     pub(crate) fn enter(win: Win, tabpage: Option<TabPage>, no_display: bool) -> (WinSwitch, bool) {
-        let mut saved = SwitchWin {
-            sw_curwin: None,
-            sw_curtab: None,
-            sw_same_win: false,
-            sw_visual_active: false,
-        };
-        // SAFETY: a local the guard owns, and handles, which `switch_win`
-        // checks before entering.
-        let entered = unsafe { switch_win(&raw mut saved, win, tabpage, no_display) };
+        let mut saved = SwitchWin::default();
+        let entered = switch_win(&mut saved, win, tabpage, no_display);
         (WinSwitch { saved, no_display }, entered.is_ok())
     }
 }
 
 impl Drop for WinSwitch {
     fn drop(&mut self) {
-        // SAFETY: the record `enter` filled in, restored once.
-        unsafe { restore_win(&raw mut self.saved, self.no_display) };
+        restore_win(&mut self.saved, self.no_display);
     }
 }

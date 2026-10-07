@@ -387,18 +387,11 @@ pub fn win_locked(window: Win) -> c_int {
     window.w_locked as c_int
 }
 
-/// # Safety
-///
-/// `tabnr` must point at a writable `int` the caller owns. `winnr` must point
-/// at a writable `int` the caller owns.
-pub unsafe fn win_get_tabwin(id: Handle, tabnr: *mut c_int, winnr: *mut c_int) {
-    let found = tab_and_win_number(id);
-    // SAFETY: the caller's promise -- two writable `int`s.
-    unsafe {
-        let (tnum, wnum) = found.unwrap_or((0, 0));
-        *tabnr = tnum;
-        *winnr = wnum;
-    }
+/// The tab page and window number of the window with handle `id`, both
+/// 1-based; `(0, 0)` when there is no such window or it is one the `winnr`
+/// numbering skips.
+pub fn win_get_tabwin(id: Handle) -> (c_int, c_int) {
+    tab_and_win_number(id).unwrap_or((0, 0))
 }
 
 /// The tab page and window number of the window with handle `id`, both 1-based

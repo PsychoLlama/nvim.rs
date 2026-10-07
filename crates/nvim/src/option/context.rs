@@ -114,11 +114,8 @@ impl OptionContext {
                     sw_visual_active: false,
                 };
                 let tab = win_find_tabpage(win.id());
-                // SAFETY: `switchwin` is this frame's, and `win` live: the
-                // caller took it from the registry within this call.
-                if unsafe { switch_win_noblock(&raw mut switchwin, win, tab, true) }.is_err() {
-                    // SAFETY: as above.
-                    unsafe { restore_win_noblock(&raw mut switchwin, true) };
+                if switch_win_noblock(&mut switchwin, win, tab, true).is_err() {
+                    restore_win_noblock(&mut switchwin, true);
                     return Err(Error::exception(c"Problem while switching windows"));
                 }
                 Ok(Some(OptionContext::Win(switchwin)))
@@ -135,10 +132,9 @@ impl OptionContext {
     /// Undo the switch [`OptionContext::enter`] made.
     fn leave(mut self) {
         match &mut self {
+            OptionContext::Win(switchwin) => restore_win_noblock(switchwin, true),
             // SAFETY: the scratch space `enter` filled, and nothing else has
-            // moved the current window or buffer since.
-            OptionContext::Win(switchwin) => unsafe { restore_win_noblock(switchwin, true) },
-            // SAFETY: as above.
+            // moved the current buffer since.
             OptionContext::Buf(aco) => unsafe { aucmd_restbuf(aco) },
         }
     }

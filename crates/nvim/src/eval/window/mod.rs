@@ -16,8 +16,7 @@
 //! the numbering questions rest on, hung off [`winlayer`](crate::winlayer)'s
 //! handles rather than written out as a pointer test at every site.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -61,7 +60,6 @@ use crate::eval::typval::{
     tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::ex_getln::text_or_buf_locked;
-use crate::memory::{xfree, xstrdup};
 use crate::r#move::{
     changed_window_setting, check_topfill, set_topline, update_curswant, validate_botline_win,
     validate_cursor,
@@ -69,15 +67,13 @@ use crate::r#move::{
 use crate::narrow::number_as_int;
 use crate::normal::end_visual_mode;
 use crate::option::vars::p_acd;
-use crate::os::fs::{os_chdir, os_dirname};
+use crate::os::fs::os_chdir;
 use crate::types::*;
 use crate::winlayer::graph::{cmdwin_type, cmdwin_win, prevwin};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };
-use ::libc::strtol;
-use core::ffi::{CStr, c_char, c_int};
-use core::{mem, ptr};
+use core::ffi::{CStr, c_int};
 pub const FR_LEAF: c_int = 0;
 pub const FR_ROW: c_int = 1;
 /// Window handles start here, so a `winnr()`-shaped argument at or above it is

@@ -187,13 +187,10 @@ impl Opening {
         };
         let mut switchwin = SwitchWin::default();
         let tabpage = self.tabpage.expect("a live window is on a tab page");
-        // SAFETY: `switchwin` is this frame's own, and `parent`/`tabpage`
-        // are the live window and tab page to split in.
-        let result = unsafe { switch_win(&raw mut switchwin, parent, Some(tabpage), true) };
+        let result = switch_win(&mut switchwin, parent, Some(tabpage), true);
         debug_assert!(result.is_ok(), "the window was switched to");
         let made = split_ins(size, flags);
-        // SAFETY: the matching restore of the switch above.
-        unsafe { restore_win(&raw mut switchwin, true) };
+        restore_win(&mut switchwin, true);
         made
     }
 
@@ -201,16 +198,13 @@ impl Opening {
     /// autocommands moved it.
     fn announce(&mut self, window: Win, window_id: WinId) {
         let mut switchwin = SwitchWin::default();
-        // SAFETY: `switchwin` is this frame's own, and `window`/`tabpage`
-        // name the window just made and the tab page it is on.
-        let result = unsafe { switch_win_noblock(&raw mut switchwin, window, self.tabpage, true) };
+        let result = switch_win_noblock(&mut switchwin, window, self.tabpage, true);
         debug_assert!(result.is_ok(), "the window was switched to");
         let switched = fire_autocmds(AutoEvent::WinNew, false, Buf::current_or_none());
         if switched {
             self.tabpage = win_find_tabpage(window_id);
         }
-        // SAFETY: the matching restore of the switch above.
-        unsafe { restore_win_noblock(&raw mut switchwin, true) };
+        restore_win_noblock(&mut switchwin, true);
     }
 
     /// Put the buffer in the new window, if the window is not already

@@ -108,10 +108,10 @@ pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
     w.w_set_curswant = true;
     let mut switchwin = SwitchWin::default();
     // `None`: the window may be on any tab page, and the switch stays here.
-    let _ = unsafe { switch_win(&raw mut switchwin, w, None, true) };
+    let _ = switch_win(&mut switchwin, w, None, true);
     update_topline(Win::current());
     validate_cursor(Win::current());
-    unsafe { restore_win(&raw mut switchwin, true) };
+    restore_win(&mut switchwin, true);
     w.redraw_later(UPD_VALID);
     w.w_redr_status = true;
     ().reported(err)
@@ -212,10 +212,7 @@ pub fn nvim_win_get_number(win: WindowHandle) -> Result<Integer, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(0 as Integer);
     };
-    let mut tabnr: ::core::ffi::c_int = 0;
-    let mut winnr: ::core::ffi::c_int = 0;
-    // SAFETY: both counters are this frame's own out-parameters.
-    unsafe { win_get_tabwin(w.handle, &raw mut tabnr, &raw mut winnr) };
+    let (_, winnr) = win_get_tabwin(w.handle);
     Ok(Integer::from(winnr))
 }
 
@@ -277,16 +274,13 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
     api_try(|| {
         let mut switch_args = WinExecute::default();
         let mut res = Ok(Object::Nil);
-        // SAFETY: `switch_args` is this frame's own and nothing the call runs
-        // can reach it.
-        let switched = unsafe { win_execute_before(&raw mut switch_args, w, tabpage) };
+        let switched = win_execute_before(&mut switch_args, w, tabpage);
         if switched {
             let name = ptr::null::<::core::ffi::c_char>();
             // SAFETY: the call runs Lua, which `api_try` catches.
             res = unsafe { nlua_call_ref(fun, name, Array::EMPTY, kRetLuaref) };
         }
-        // SAFETY: the matching restore of the switch above.
-        unsafe { win_execute_after(&raw mut switch_args) };
+        win_execute_after(&mut switch_args);
         res
     })?
 }

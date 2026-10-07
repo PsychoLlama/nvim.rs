@@ -9,8 +9,7 @@
 //! ordinal). Zero means "the current one" for a window number and "no tab page
 //! given" for a tab page, except in `win_getid()`, which rejects it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,7 +19,6 @@
 )]
 
 use super::*;
-use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 use crate::types::kListLenMayKnow;
@@ -38,7 +36,6 @@ pub(crate) fn arg_number(args: &[TypVal], i: usize) -> VarNumber {
 
 /// Argument `i` as a Number, answering 0 for a value that has none.
 pub(crate) fn arg_number_chk(args: &[TypVal], i: usize) -> VarNumber {
-    // SAFETY: as [`arg_number`].
     tv_get_number_chk(&args[i]).unwrap_or(-1)
 }
 
@@ -68,7 +65,7 @@ pub fn win_and_tab_by_id(id: c_int) -> Option<(Win, TabPage)> {
 /// Number zero is the current window; a value at or above [`LOWEST_WIN_ID`] is
 /// taken as an id instead, but only within `tabpage`.
 pub fn find_win_by_nr(vp: &TypVal, tabpage: Option<TabPage>) -> Option<Win> {
-    // SAFETY: the caller's obligation. A value that is not a number reports
+    // A value that is not a number reports
     // and answers zero, which reads here as "the current window"; the
     // narrowing is upstream's and is what makes 0x1_0000_0000 read as 0.
     let nr = number_as_int(tv_get_number_chk(vp).unwrap_or(-1));
@@ -76,10 +73,8 @@ pub fn find_win_by_nr(vp: &TypVal, tabpage: Option<TabPage>) -> Option<Win> {
         return None;
     }
     if nr == 0 {
-        // SAFETY: `curwin` is set from startup to exit.
         return Some(Win::current());
     }
-    // SAFETY: `curtab` is set from startup to exit.
     let tabpage = tabpage.unwrap_or_else(TabPage::current);
     if nr >= LOWEST_WIN_ID {
         return windows_in_tab(tabpage).find(|wp| wp.handle == nr);
@@ -92,7 +87,6 @@ pub fn find_win_by_nr(vp: &TypVal, tabpage: Option<TabPage>) -> Option<Win> {
 /// The window `vp` names: a window id in any tab page, or a window number in
 /// the current one.
 pub fn find_win_by_nr_or_id(vp: &TypVal) -> Option<Win> {
-    // SAFETY: the caller's obligation.
     let nr = number_as_int(tv_get_number_chk(vp).unwrap_or(-1));
     if nr >= LOWEST_WIN_ID {
         // The second read is upstream's: `tv_get_number` where the test used
@@ -100,7 +94,6 @@ pub fn find_win_by_nr_or_id(vp: &TypVal) -> Option<Win> {
         // report twice.
         return win_by_id(number_as_int(tv_get_number(vp)));
     }
-    // SAFETY: the caller's obligation.
     find_win_by_nr(vp, None)
 }
 
@@ -109,7 +102,6 @@ pub fn find_win_by_nr_or_id(vp: &TypVal) -> Option<Win> {
 /// An absent window argument answers the current window and never looks at the
 /// tab page; an absent tab page argument means the current one.
 pub fn find_tabwin(wvp: Option<&TypVal>, tvp: Option<&TypVal>) -> Option<Win> {
-    // SAFETY: the caller's obligation.
     let Some(wvp) = wvp else {
         return Some(Win::current());
     };
@@ -139,8 +131,7 @@ fn get_winnr(tabpage: TabPage, argvar: Option<&TypVal>) -> c_int {
     if let Some(argvar) = argvar {
         let resolved = match numbuf.string_chk(argvar) {
             None => None,
-            // SAFETY: the argument's NUL-terminated string form.
-            Some(arg) => unsafe { relative_win(tabpage, twin, arg.as_ptr()) },
+            Some(arg) => relative_win(tabpage, twin, arg.to_bytes()),
         };
         match resolved {
             Some(wp) => twin = wp,
@@ -166,30 +157,23 @@ fn get_winnr(tabpage: TabPage, argvar: Option<&TypVal>) -> c_int {
 /// The window the `winnr()` argument `arg` names, relative to `twin` in `tabpage`:
 /// `"$"`, `"#"`, or a count followed by one of `hjkl`. `None` is the caller's
 /// 0, and the invalid-expression error has already been reported.
-///
-/// # Safety
-/// `arg` must be a NUL-terminated string.
-unsafe fn relative_win(tabpage: TabPage, twin: Win, arg: *const c_char) -> Option<Win> {
-    // SAFETY: the caller's obligation; `endp` is a live local that `strtol`
-    // leaves pointing into `arg`.
-    if unsafe { cstr::eq_bytes(arg, b"$") } {
-        return Some(tabpage.lastwin());
+fn relative_win(tabpage: TabPage, twin: Win, arg: &[u8]) -> Option<Win> {
+    match arg {
+        b"$" => return Some(tabpage.lastwin()),
+        b"#" => return tabpage.prevwin(),
+        _ => {}
     }
-    if unsafe { cstr::eq_bytes(arg, b"#") } {
-        return tabpage.prevwin();
-    }
-    let mut endp: *mut c_char = ptr::null_mut();
-    let count = number_as_int(unsafe { strtol(arg, &raw mut endp, 10) }).max(1);
-    let rest = (!endp.is_null() && c_int::from(unsafe { *endp }) != NUL)
-        .then(|| unsafe { CStr::from_ptr(endp) });
+    let (count, end) = leading_long(arg);
+    let count = number_as_int(count).max(1);
+    let rest = &arg[end..];
     // "j"/"k" walk the layout tree vertically, "h"/"l" horizontally; `count`
     // says how many neighbours to step. The comparison is `strequal`'s, which
     // is a whole-string one.
-    let direction = match rest.map(CStr::to_bytes) {
-        Some(b"j") => Some(win_vert_neighbor(tabpage, twin, false, count)),
-        Some(b"k") => Some(win_vert_neighbor(tabpage, twin, true, count)),
-        Some(b"h") => Some(win_horz_neighbor(tabpage, twin, true, count)),
-        Some(b"l") => Some(win_horz_neighbor(tabpage, twin, false, count)),
+    let direction = match rest {
+        b"j" => Some(win_vert_neighbor(tabpage, twin, false, count)),
+        b"k" => Some(win_vert_neighbor(tabpage, twin, true, count)),
+        b"h" => Some(win_horz_neighbor(tabpage, twin, true, count)),
+        b"l" => Some(win_horz_neighbor(tabpage, twin, false, count)),
         _ => None,
     };
     match direction {
@@ -197,17 +181,42 @@ unsafe fn relative_win(tabpage: TabPage, twin: Win, arg: *const c_char) -> Optio
         // there is nothing that way.
         Some(wp) => Some(wp.expect("a live handle")),
         None => {
-            // SAFETY: the caller's obligation -- a NUL-terminated argument.
-            let text = unsafe { CStr::from_ptr(arg) }.to_string_lossy();
+            let text = String::from_utf8_lossy(arg);
             crate::semsg!("E15: Invalid expression: \"{}\"", text);
             None
         }
     }
 }
 
+/// The number `text` starts with and where it ends, as C's `strtol` reads it
+/// in base 10: white space, a sign and digits, saturating at the `long`
+/// range. With no digits the end is 0, the start of the text, as `strtol`'s
+/// is.
+fn leading_long(text: &[u8]) -> (i64, usize) {
+    let skip = text
+        .iter()
+        .take_while(|&&b| matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        .count();
+    let mut at = skip;
+    let negative = text.get(at) == Some(&b'-');
+    if matches!(text.get(at), Some(b'-' | b'+')) {
+        at += 1;
+    }
+    let digits = text[at..].iter().take_while(|b| b.is_ascii_digit()).count();
+    if digits == 0 {
+        return (0, 0);
+    }
+    let mut n: i128 = 0;
+    for &b in &text[at..at + digits] {
+        n = (n * 10 + i128::from(b - b'0')).min(i128::from(i64::MAX) + 1);
+    }
+    let n = if negative { -n } else { n };
+    let n = i64::try_from(n.clamp(i128::from(i64::MIN), i128::from(i64::MAX))).unwrap_or(0);
+    (n, at + digits)
+}
+
 /// `win_getid([{winnr} [, {tabnr}]])` — the id of a window named by number.
 pub fn f_win_getid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals, and `curwin`/`curtab` are set.
     if args.is_empty() {
         result.write_number(VarNumber::from(Win::current().handle));
         return;
@@ -250,11 +259,8 @@ fn nth_numbered_win(tabpage: TabPage, winnr: c_int) -> Option<Win> {
 
 /// `win_id2tabwin({winid})` — `[tabnr, winnr]`, `[0, 0]` for an unknown id.
 pub fn f_win_id2tabwin(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals; the two counters are
-    // live locals the callee writes only when it finds the window.
     let id: Handle = number_as_int(arg_number(args, 0));
-    let (mut winnr, mut tabnr) = (1, 1);
-    unsafe { win_get_tabwin(id, &raw mut tabnr, &raw mut winnr) };
+    let (tabnr, winnr) = win_get_tabwin(id);
     let list = tv_list_alloc_ret(result, 2);
     (*list).push_number(VarNumber::from(tabnr));
     (*list).push_number(VarNumber::from(winnr));
@@ -282,8 +288,6 @@ pub fn f_win_id2win(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `win_findbuf({bufnr})` — the ids of every window showing that buffer.
 pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals, and the list stays
-    // alive for the appends because `result` owns it.
     let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     let bufnr = number_as_int(arg_number(args, 0));
     for wp in tab_windows().filter(|wp| wp.buffer().handle == bufnr) {
@@ -294,7 +298,6 @@ pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// `win_gotoid({winid})` — 1 when the window was reached, 0 otherwise.
 pub fn f_win_gotoid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let id = number_as_int(tv_get_number(&args[0]));
-    // SAFETY: `curwin` is set from startup to exit.
     if Win::current().handle == id {
         result.write_number(1);
         return;
@@ -305,7 +308,6 @@ pub fn f_win_gotoid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some((wp, tp)) = win_and_tab_by_id(id) else {
         return;
     };
-    // SAFETY: a live window in a live tab page.
     if visual_active() && wp.buffer().raw() != Buf::current_raw() {
         end_visual_mode();
     }
@@ -322,7 +324,6 @@ pub fn f_winnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `tabpagenr([{arg}])` — a tab page number.
 pub fn f_tabpagenr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the arguments are live typvals; the tab page globals are set.
     let nr = if args.is_empty() {
         tab_index(TabPage::current())
     } else {
@@ -347,8 +348,6 @@ pub fn f_tabpagenr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `tabpagewinnr({tabnr} [, {arg}])` — a window number in another tab page.
 pub fn f_tabpagewinnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals.
-    // SAFETY: the arguments are live typvals.
     let n = number_as_int(arg_number(args, 0));
     let nr = match find_tabpage(n) {
         Some(tp) => get_winnr(tp, args.get(1)),
@@ -359,7 +358,6 @@ pub fn f_tabpagewinnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 
 /// `winbufnr({nr})` — the buffer number of the window `nr` names, -1 for none.
 pub fn f_winbufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
     result.write_number(match wp {
         Some(wp) => VarNumber::from(wp.buffer().handle),

@@ -13,7 +13,6 @@ use super::*;
 use crate::memory::XString;
 use crate::r#move::WinValid;
 use crate::registry::IdSet;
-use crate::types::Failed;
 use crate::winlayer::{Buf, BufId, FrameId, TabId, WinId};
 
 pub struct SwitchWin {
@@ -30,10 +29,12 @@ pub struct WinExecute {
     /// time `win_execute_after` looks.
     pub(crate) wp: Option<WinId>,
     pub curpos: Pos,
-    pub cwd: [::core::ffi::c_char; 4096],
-    pub cwd_status: Result<(), Failed>,
+    /// The working directory to go back to; only saved when a local
+    /// directory or 'autochdir' could move it.
+    pub cwd: Option<XString>,
     pub apply_acd: bool,
-    pub save_sfname: *mut ::core::ffi::c_char,
+    /// The buffer's short name, saved for 'autochdir' to put back.
+    pub save_sfname: Option<XString>,
     pub switchwin: SwitchWin,
 }
 
@@ -52,8 +53,7 @@ impl Default for SwitchWin {
 
 impl Default for WinExecute {
     /// The zeroed state a caller declares before handing it to
-    /// `win_execute_before`, which fills what it needs and leaves the rest --
-    /// `cwd` in particular is only written when 'autochdir' is on.
+    /// `win_execute_before`, which fills what it needs and leaves the rest.
     fn default() -> Self {
         WinExecute {
             wp: None,
@@ -62,10 +62,9 @@ impl Default for WinExecute {
                 col: 0,
                 coladd: 0,
             },
-            cwd: [0; 4096],
-            cwd_status: Err(Failed),
+            cwd: None,
             apply_acd: false,
-            save_sfname: ::core::ptr::null_mut(),
+            save_sfname: None,
             switchwin: SwitchWin::default(),
         }
     }

@@ -18,7 +18,6 @@
 )]
 
 use core::ffi::{CStr, c_int};
-use core::ptr;
 
 use super::{TRY_STATE_INIT, nlua_push_errstr};
 use crate::api::private::helpers::{try_enter, try_leave};
@@ -32,9 +31,7 @@ use crate::lua::ffi::{
     luaL_checkinteger,
 };
 use crate::narrow::number_as_int;
-use crate::types::{
-    AcoSave, CmdMod, CmdModFlags, Error, Failed, Pos, SwitchWin, WinExecute, lua_State,
-};
+use crate::types::{AcoSave, CmdMod, CmdModFlags, Error, Pos, SwitchWin, WinExecute, lua_State};
 use crate::window::win_find_tabpage;
 use crate::winlayer::{self, Buf, Win};
 
@@ -62,10 +59,9 @@ const WIN_EXECUTE_INIT: WinExecute = WinExecute {
         col: 0,
         coladd: 0,
     },
-    cwd: [0; 4096],
-    cwd_status: Err(Failed),
+    cwd: None,
     apply_acd: false,
-    save_sfname: ptr::null_mut(),
+    save_sfname: None,
     switchwin: SwitchWin {
         sw_curwin: None,
         sw_curtab: None,
@@ -143,7 +139,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
             // untouched: no call, no results, and nothing to restore.
             let entered = if let Some(win) = win {
                 let tabpage = win_find_tabpage(win.id()).expect("a live window is on a tab page");
-                win_execute_before(&raw mut win_execute_args, win, tabpage)
+                win_execute_before(&mut win_execute_args, win, tabpage)
             } else {
                 if let Some(buf) = buf {
                     aucmd_prepbuf(&raw mut aco, buf);
@@ -158,7 +154,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
                 rets = lua_gettop(lstate) - s;
 
                 if win.is_some() {
-                    win_execute_after(&raw mut win_execute_args);
+                    win_execute_after(&mut win_execute_args);
                 } else if buf.is_some() {
                     aucmd_restbuf(&raw mut aco);
                 }

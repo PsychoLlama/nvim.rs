@@ -322,9 +322,7 @@ impl Relayout {
         if need_switch {
             let parent_tp = expect_tab(self.parent_tp);
             let parent = self.parent.expect("`need_switch` says there is a parent");
-            // SAFETY: `switchwin` is this frame's own, and `parent`/
-            // `parent_tp` are the live window and tab page to split in.
-            let result = unsafe { switch_win(&raw mut switchwin, parent, Some(parent_tp), true) };
+            let result = switch_win(&mut switchwin, parent, Some(parent_tp), true);
             debug_assert!(result.is_ok(), "the window was switched to");
         }
         let split_ok = win_split_ins(
@@ -343,8 +341,7 @@ impl Relayout {
             );
         }
         if need_switch {
-            // SAFETY: the matching restore of the switch above.
-            unsafe { restore_win(&raw mut switchwin, true) };
+            restore_win(&mut switchwin, true);
         }
         split_ok
     }

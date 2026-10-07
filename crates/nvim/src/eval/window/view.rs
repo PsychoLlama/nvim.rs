@@ -1,8 +1,7 @@
 //! Window geometry: the saved view, the resize commands, and moving a window
 //! or one of its separators.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -17,8 +16,6 @@ use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 /// `getwinpos([{timeout}])` — the GUI's window position, which a terminal
 /// never has.
 pub fn f_getwinpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value, and the list it is given
-    // stays alive for the two appends.
     let list = tv_list_alloc_ret(result, 2);
     (*list).push_number(-1);
     (*list).push_number(-1);
@@ -26,13 +23,11 @@ pub fn f_getwinpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `getwinposx()` — always -1; there is no GUI window.
 pub fn f_getwinposx(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value.
     result.write_number(-1);
 }
 
 /// `getwinposy()` — always -1; there is no GUI window.
 pub fn f_getwinposy(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value.
     result.write_number(-1);
 }
 
@@ -75,8 +70,6 @@ pub fn f_win_move_statusline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
 /// `win_screenpos({nr})` — the window's top-left cell, one-based; `[0, 0]` for
 /// a window that does not exist.
 pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals; the list stays
-    // alive for the two appends because `result` owns it.
     let list = tv_list_alloc_ret(result, 2);
     let wp = arg_win(args, 0);
     let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow + 1, wp.w_wincol + 1));
@@ -87,8 +80,6 @@ pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// The `{options}` dictionary `win_splitmove()` takes: the split flags and the
 /// size to give the moved window.
 fn splitmove_options(opts: &TypVal) -> (c_int, c_int) {
-    // SAFETY: the caller's obligation; `dict_find` hands back a live entry
-    // of the same dictionary or NULL.
     let d = (*opts).dict_ref();
     let mut flags = 0;
     if dict_get_number(d, b"vertical") != 0 {
@@ -108,9 +99,6 @@ fn splitmove_options(opts: &TypVal) -> (c_int, c_int) {
 /// `win_splitmove({nr}, {target} [, {options}])` — 0 when the window moved.
 pub fn f_win_splitmove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
-    // SAFETY: the arguments are live typvals; the windows the resolver
-    // answers are live, and every callee below re-checks validity because an
-    // autocommand may close one under it.
     let wp = arg_win(args, 0);
     let targetwin = arg_win(args, 1);
     let oldwin = Win::current();
@@ -151,7 +139,6 @@ pub fn f_win_splitmove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 
 /// `wincol()` — the cursor's screen column within the window, one-based.
 pub fn f_wincol(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = Win::current();
     validate_cursor(win);
     result.write_number(VarNumber::from(win.w_wcol + 1));
@@ -159,7 +146,6 @@ pub fn f_wincol(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `winline()` — the cursor's screen row within the window, one-based.
 pub fn f_winline(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = Win::current();
     validate_cursor(win);
     result.write_number(VarNumber::from(win.w_wrow + 1));
@@ -167,14 +153,12 @@ pub fn f_winline(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `winheight({nr})` — text height, -1 for a window that does not exist.
 pub fn f_winheight(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
     result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height)));
 }
 
 /// `winwidth({nr})` — text width, -1 for a window that does not exist.
 pub fn f_winwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
     result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width)));
 }
@@ -185,7 +169,6 @@ pub fn f_winwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// The whole thing is emitted twice: setting one window's height changes its
 /// neighbours', so a single pass cannot land on the sizes it names.
 pub fn f_winrestcmd(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `curtab` is set, and `result` takes the text over at the end.
     let mut cmds = Vec::<u8>::new();
     let tp = TabPage::current();
     // Scoped so the buffer it borrows is free again for the tail below.
@@ -209,16 +192,12 @@ pub fn f_winrestcmd(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// Every key is optional: what the dictionary does not mention keeps its
 /// current value.
 pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals, and `curwin` is set.
     if tv_check_for_nonnull_dict_arg(args, 0).is_err() {
         return;
     }
-    let dict = args[0].dict_or_null();
+    let dict = args[0].dict_ref();
     let mut win = Win::current();
-    let entry = |key: &CStr| {
-        // SAFETY: a live dictionary.
-        dict_find(unsafe { dict.as_ref() }, key.to_bytes()).map(|di| tv_get_number(&di.di_tv))
-    };
+    let entry = |key: &CStr| dict_find(dict, key.to_bytes()).map(|di| tv_get_number(&di.di_tv));
 
     if let Some(v) = entry(c"lnum") {
         win.w_cursor.lnum = number_as_int(v);
@@ -236,7 +215,6 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
     if let Some(v) = entry(c"topline") {
         // Not a plain assignment: 'scrolloff' and folds decide where the
         // window can actually start.
-        // SAFETY: a live window.
         set_topline(win, number_as_int(v));
     }
     if let Some(v) = entry(c"topfill") {
@@ -249,15 +227,12 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
         win.w_skipcol = number_as_int(v);
     }
 
-    // SAFETY: a live window, and `curbuf` is set.
     check_cursor(win);
     win_new_height(win, win.w_height);
     win_new_width(win, win.w_width);
     changed_window_setting(win);
-    // SAFETY: `curbuf` is set from startup to exit.
     let line_count = Buf::current().line_count();
     win.w_topline = restored_topline(win.w_topline, line_count);
-    // SAFETY: a live window.
     check_topfill(win, true);
 }
 
@@ -280,8 +255,6 @@ fn restored_topline(topline: LineNr, line_count: LineNr) -> LineNr {
 
 /// `winsaveview()` — everything `winrestview()` puts back.
 pub fn f_winsaveview(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value and `curwin` is set; the
-    // dictionary stays alive for the appends because `result` owns it.
     tv_dict_alloc_ret(result);
     let dict = result.dict_mut().expect("just allocated");
     let win = Win::current();
