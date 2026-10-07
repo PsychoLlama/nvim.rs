@@ -3,7 +3,7 @@
 //!
 //! Tokens come off the safe tokenizer in [`crate::mpack::mpack_core`]; the
 //! walk keeps an explicit stack of the containers still open, at most
-//! [`MAX_DEPTH`] deep as upstream's parser is. Each node *owns* what it is
+//! [`MAX_NESTING`] deep as upstream's parser is. Each node *owns* what it is
 //! building -- a list, a map's decoded pairs, a string's bytes -- and hands
 //! the finished value to the node below it when it closes, so nothing is ever
 //! half-written into a slot, and a parse abandoned part-way simply drops what
@@ -39,9 +39,9 @@ use crate::types::{
 
 /// How deep a value may nest, counting each string's bytes as one more
 /// level: upstream's `MPACK_MAX_OBJECT_DEPTH`.
-const MAX_DEPTH: usize = 32;
+const MAX_NESTING: usize = 32;
 
-/// The status past `MPACK_ERROR`: the value nests deeper than [`MAX_DEPTH`].
+/// The status past `MPACK_ERROR`: the value nests deeper than [`MAX_NESTING`].
 pub(crate) const MPACK_NOMEM: c_int = MPACK_ERROR.cast_signed() + 1;
 
 /// The most a container's header may reserve before its items arrive.
@@ -215,7 +215,7 @@ impl MsgpackDecoder {
     /// whole object once the token completes it.
     fn token(&mut self, tok: Tok) -> Result<Option<TypVal>, c_int> {
         // Every token takes a level while it is entered, a scalar too.
-        if self.stack.len() == MAX_DEPTH {
+        if self.stack.len() == MAX_NESTING {
             return Err(MPACK_NOMEM);
         }
         let len = tok.len;
@@ -273,7 +273,7 @@ impl MsgpackDecoder {
     /// The next piece of the innermost string's bytes.
     fn chunk(&mut self, data: &[u8]) -> Result<Option<TypVal>, c_int> {
         // The chunk is a node of its own while it is copied in.
-        if self.stack.len() == MAX_DEPTH {
+        if self.stack.len() == MAX_NESTING {
             return Err(MPACK_NOMEM);
         }
         let Some(Node::Bytes { bytes, .. }) = self.stack.last_mut() else {
