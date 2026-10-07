@@ -19,10 +19,9 @@
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Lock;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::message_fmt::{c_str, report_msg};
 use crate::option::vars::P_SEL;
-use crate::snprintf;
 use crate::tr_plural;
 use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
@@ -393,38 +392,14 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
 }
 
 /// Render a register's type as the string `getregtype()` and `:registers`
-/// show: `v`, `V`, or `CTRL-V` followed by the block width.
-///
-/// # Safety
-/// `buf` must hold at least `buf_len` bytes, and `buf_len` be more than 1.
-pub unsafe fn format_reg_type(
-    reg_type: MotionType,
-    reg_width: ColNr,
-    buf: *mut c_char,
-    buf_len: size_t,
-) {
-    debug_assert!(buf_len > 1);
-    // Every type but the blockwise one answers a single character, which
-    // `buf_len > 1` leaves room for along with its NUL.
-    let short = match reg_type {
-        kMTLineWise => 'V' as c_char,
-        kMTCharWise => 'v' as c_char,
-        kMTUnknown => NUL as c_char,
-        kMTBlockWise => {
-            // SAFETY: `buf` holds the `buf_len` bytes `snprintf` is told
-            // about, and the format takes the single `%d` given.
-            unsafe { snprintf!(buf, buf_len, c"\x16%d".as_ptr(), reg_width + 1) };
-            return;
-        }
-        _ => return,
-    };
-    // SAFETY: `buf_len` is more than one, so the first byte is writable.
-    unsafe { *buf = short };
-    // `kMTUnknown` answers the empty string, whose NUL is that first byte
-    // already; upstream leaves the second one alone.
-    if reg_type != kMTUnknown {
-        // SAFETY: `buf_len` is more than one, so the second byte is too.
-        unsafe { *buf.add(1) = NUL as c_char };
+/// show: `v`, `V`, or `CTRL-V` followed by the block width; empty for an
+/// unknown type.
+pub fn format_reg_type(reg_type: MotionType, reg_width: ColNr) -> ThinCString {
+    match reg_type {
+        kMTLineWise => ThinCString::from_bytes(b"V"),
+        kMTCharWise => ThinCString::from_bytes(b"v"),
+        kMTBlockWise => ThinCString::from_vec(format!("\x16{}", reg_width + 1).into_bytes()),
+        _ => ThinCString::empty(),
     }
 }
 
@@ -466,15 +441,13 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
     };
     let _ = dict.edit().add_list(b"regcontents", Some(list));
 
-    let mut buf: [c_char; 67] = [0; 67];
-    // SAFETY: `reg` is live, and `buf` is 67 writable bytes -- more than one.
-    unsafe { format_reg_type((*reg).y_type, (*reg).y_width, buf.as_mut_ptr(), buf.len()) };
-    let _ = dict.edit().add_str(b"regtype", Some(cstr::in_chars(&buf)));
+    // SAFETY: `reg` is live.
+    let regtype = unsafe { format_reg_type((*reg).y_type, (*reg).y_width) };
+    let _ = dict.edit().add_str(b"regtype", Some(&regtype));
 
     // SAFETY: the caller promises `op` is the yank's operator.
     let op = unsafe { *op };
-    buf[0] = op.regname as c_char;
-    buf[1] = NUL as c_char;
+    let mut buf: [c_char; 2] = [op.regname as c_char, NUL as c_char];
     let _ = dict.edit().add_str(b"regname", Some(cstr::in_chars(&buf)));
 
     let flag = |set| if set { kBoolVarTrue } else { kBoolVarFalse };

@@ -21,23 +21,22 @@ use crate::cstr;
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::semsg;
-use crate::types::TypVal;
+use crate::types::{ListRef, TypVal};
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
 use crate::types::NUL;
 
-/// The motion type of register `regname`, and its width if blockwise.
+/// The motion type of register `regname`, and its width if blockwise (0
+/// otherwise).
 ///
-/// `kMTUnknown` for an invalid or empty register.
-///
-/// # Safety
-/// `reg_width` must be null or writable. May run the clipboard provider.
-pub unsafe fn get_reg_type(regname: c_int, reg_width: *mut ColNr) -> MotionType {
+/// `kMTUnknown` for an invalid or empty register. May run the clipboard
+/// provider.
+pub fn get_reg_type(regname: c_int) -> (MotionType, ColNr) {
     // Every computed register reads as charwise.
     match regname {
-        Ctrl_F | Ctrl_P | Ctrl_W | Ctrl_A => return kMTCharWise,
+        Ctrl_F | Ctrl_P | Ctrl_W | Ctrl_A => return (kMTCharWise, 0),
         c if c == '#' as c_int
             || c == '=' as c_int
             || c == ':' as c_int
@@ -46,73 +45,69 @@ pub unsafe fn get_reg_type(regname: c_int, reg_width: *mut ColNr) -> MotionType 
             || c == '%' as c_int
             || c == '_' as c_int =>
         {
-            return kMTCharWise;
+            return (kMTCharWise, 0);
         }
         _ => {}
     }
 
-    // SAFETY: `valid_yank_reg` only looks the name up.
     if regname != NUL && !valid_yank_reg(regname, false) {
-        return kMTUnknown;
+        return (kMTUnknown, 0);
     }
     // SAFETY: a valid register name, so this answers a live register.
     let reg = unsafe { get_yank_register(regname, YREG_PASTE) };
     // SAFETY: `reg` is that live register; these are three of its fields.
     let (y_array, y_type, y_width) = unsafe { ((*reg).y_array, (*reg).y_type, (*reg).y_width) };
     if y_array.is_null() {
-        return kMTUnknown;
+        return (kMTUnknown, 0);
     }
-    if !reg_width.is_null() && y_type == kMTBlockWise {
-        // SAFETY: the caller promises a writable `reg_width`.
-        unsafe { *reg_width = y_width };
-    }
-    y_type
+    (y_type, if y_type == kMTBlockWise { y_width } else { 0 })
 }
 
-/// Hand back `s` as either the string itself or a one-element list, depending
-/// on `kGRegList`.
-///
-/// Takes ownership of `s` either way.
-///
-/// # Safety
-/// `s` must be an allocated, NUL-terminated string.
-unsafe fn get_reg_wrap_one_line(s: *mut c_char, flags: c_int) -> *mut c_void {
-    if flags & kGRegList as c_int == 0 {
-        return s as *mut c_void;
-    }
-    let list = tv_list_alloc(1);
-    // SAFETY: as above; the list takes `s` over.
-    unsafe { (*list.as_ptr()).push(TypVal::string(ThinCString::from_raw(s))) };
-    // The caller takes the reference over.
-    list.into_raw() as *mut c_void
+/// What a register read answers: one string, or -- with `kGRegList` -- its
+/// lines.
+enum RegContents {
+    Text(XString),
+    Lines(ListRef),
 }
 
-/// The contents of register `regname`, as an allocated string or -- with
+/// The contents of register `regname`, as one string or -- with
 /// `kGRegList` -- a `List` of lines.
 ///
 /// `kGRegNoExpr` refuses `"=` outright and `kGRegExprSrc` answers its source
 /// rather than evaluating it, which is what `getreg('=', 1, ...)` wants.
-/// `"=` may run arbitrary Vimscript.
-pub fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
+/// `"=` may run arbitrary Vimscript, and `"*`/`"+` the clipboard provider.
+fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
+    let as_list = flags & kGRegList as c_int != 0;
+    // A computed register's one string, as a one-item list when lines were
+    // asked for -- where even a missing string is an item.
+    let one_line = |text: Option<XString>| {
+        if !as_list {
+            return text.map(RegContents::Text);
+        }
+        let list = tv_list_alloc(1);
+        list.edit()
+            .push(TypVal::string(text.map(ThinCString::from)));
+        Some(RegContents::Lines(list))
+    };
     let mut regname = regname;
     if regname == '=' as c_int {
         if flags & kGRegNoExpr as c_int != 0 {
-            return ::core::ptr::null_mut();
+            return None;
         }
-        // SAFETY: both hand back an allocated NUL-terminated string, which is
-        // what the wrapper takes ownership of.
         if flags & kGRegExprSrc as c_int != 0 {
-            return unsafe { get_reg_wrap_one_line(get_expr_line_src(), flags) };
+            return one_line(get_expr_line_src());
         }
-        // SAFETY: as above; evaluating the expression may run Vimscript,
-        // which this function's own caller already allows for.
-        return unsafe { get_reg_wrap_one_line(get_expr_line(), flags) };
+        // SAFETY: `get_expr_line` answers an allocated NUL-terminated string
+        // or null, taken over once here. Evaluating the expression may run
+        // Vimscript, which this function's own caller already allows for.
+        let value = unsafe { ThinCString::from_raw(get_expr_line()) };
+        return one_line(value.map(ThinCString::into_xstring));
     }
     if regname == '@' as c_int {
         regname = '"' as c_int; // `getreg('@')` means the unnamed register
     }
     if regname != NUL && !valid_yank_reg(regname, false) {
-        return ::core::ptr::null_mut();
+        return None;
     }
 
     let mut retval: *mut c_char = ::core::ptr::null_mut();
@@ -120,18 +115,19 @@ pub fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
     // SAFETY: two writable locals, which is all `get_spec_reg` writes to.
     if unsafe { get_spec_reg(regname, &raw mut retval, &raw mut allocated, false) } {
         if retval.is_null() {
-            return ::core::ptr::null_mut();
+            return None;
         }
         // The caller always owns the answer.
-        // SAFETY: `get_spec_reg` answered a NUL-terminated string; when it is
-        // not already ours, `xstrdup` makes a copy that is.
         let owned = if allocated {
-            retval
+            // SAFETY: `get_spec_reg` allocated this NUL-terminated string
+            // for the caller, which takes it over once here.
+            unsafe { XString::from_raw(retval) }
         } else {
-            unsafe { xstrdup(retval) }
+            // SAFETY: `get_spec_reg` answered a NUL-terminated string it
+            // keeps, which is copied before anything can change it.
+            XString::from_cstr(unsafe { CStr::from_ptr(retval) })
         };
-        // SAFETY: `owned` is that allocated, NUL-terminated string.
-        return unsafe { get_reg_wrap_one_line(owned, flags) };
+        return one_line(Some(owned));
     }
 
     // SAFETY: a valid register name, so this answers a live register.
@@ -139,29 +135,23 @@ pub fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
     // SAFETY: `reg` is that live register; these are three of its fields.
     let (y_array, y_type, y_size) = unsafe { ((*reg).y_array, (*reg).y_type, (*reg).y_size) };
     if y_array.is_null() {
-        return ::core::ptr::null_mut();
+        return None;
     }
+    // SAFETY: a non-null `y_array` holds `y_size` lines and `i` is below
+    // `y_size`, so each of these is one of the register's own lines.
+    let lines = || (0..y_size).map(|i| unsafe { &*y_array.add(i) });
 
-    if flags & kGRegList as c_int != 0 {
-        // SAFETY: a non-null `y_array` holds `y_size` NUL-terminated lines,
-        // so every index below is one of them; the list copies each.
-        return unsafe {
-            let list = tv_list_alloc(y_size as ptrdiff_t);
-            for i in 0..y_size {
-                let line = &*y_array.add(i);
-                (*list.as_ptr()).push_bytes(Some(line.as_bytes()));
-            }
-            // The caller takes the reference over.
-            list.into_raw() as *mut c_void
-        };
+    if as_list {
+        let list = tv_list_alloc(y_size as ptrdiff_t);
+        for line in lines() {
+            list.edit().push_bytes(Some(line.as_bytes()));
+        }
+        return Some(RegContents::Lines(list));
     }
 
     // One string, with a newline between lines and after the last one if
     // the register is linewise.
     let needs_nl = |i: size_t| y_type == kMTLineWise || i < y_size.wrapping_sub(1);
-    // SAFETY: `i` is below `y_size`, so each of these is one of the
-    // register's own lines.
-    let lines = || (0..y_size).map(|i| unsafe { &*y_array.add(i) });
     let mut text = XString::with_capacity(lines().map(|line| line.len() + 1).sum::<size_t>());
     for (i, line) in lines().enumerate() {
         text.push_bytes(line.as_bytes());
@@ -169,7 +159,26 @@ pub fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
             text.push_byte(b'\n');
         }
     }
-    text.into_raw().cast::<c_void>()
+    Some(RegContents::Text(text))
+}
+
+/// [`get_reg_contents`] as one owned string, `None` when the register is
+/// empty or cannot be read. `flags` must not ask for a list.
+pub(crate) fn get_reg_contents_owned(regname: c_int, flags: c_int) -> Option<XString> {
+    debug_assert!(flags & kGRegList as c_int == 0, "a list is not a string");
+    match get_reg_contents(regname, flags)? {
+        RegContents::Text(text) => Some(text),
+        RegContents::Lines(_) => unreachable!("lines were not asked for"),
+    }
+}
+
+/// [`get_reg_contents`] as a List of lines, `None` when the register is
+/// empty or cannot be read.
+pub(crate) fn get_reg_contents_list(regname: c_int, flags: c_int) -> Option<ListRef> {
+    match get_reg_contents(regname, flags | kGRegList as c_int)? {
+        RegContents::Lines(list) => Some(list),
+        RegContents::Text(_) => unreachable!("lines were asked for"),
+    }
 }
 
 /// Prepare register `name` to be written: check the name, remember `""`, and
@@ -448,16 +457,6 @@ unsafe fn finish_write_reg(name: c_int, reg: *mut YankReg, old_y_previous: Optio
     }
 }
 
-/// [`get_reg_contents`] as an owned string, `None` when the register is
-/// empty or cannot be read. `flags` must not ask for a list.
-pub(crate) fn get_reg_contents_owned(regname: c_int, flags: c_int) -> Option<XString> {
-    debug_assert!(flags & kGRegList as c_int == 0, "a list is not a string");
-    let contents = get_reg_contents(regname, flags);
-    // SAFETY: without `kGRegList` the answer is an allocated NUL-terminated
-    // string, or null, and this takes it over once.
-    (!contents.is_null()).then(|| unsafe { XString::from_raw(contents.cast()) })
-}
-
 /// [`write_reg_contents`] of `text`.
 pub(crate) fn write_reg_contents_bytes(name: c_int, text: &[u8], must_append: bool) {
     let len = ssize_t::try_from(text.len()).expect("a register fits in memory");
@@ -481,35 +480,29 @@ pub unsafe fn write_reg_contents(
     unsafe { write_reg_contents_ex(name, str, len, must_append != 0, kMTUnknown, 0) };
 }
 
-/// Write a null-terminated array of lines to register `name`.
+/// Write `lines` to register `name`, one line apiece.
 ///
-/// # Safety
-/// `strings` must be a null-terminated array of NUL-terminated strings.
-pub unsafe fn write_reg_contents_lst(
+/// Writing a `"*`/`"+` register runs the clipboard provider.
+pub fn write_reg_contents_lst(
     name: c_int,
-    strings: *mut *mut c_char,
+    lines: &[&CStr],
     must_append: bool,
     yank_type: MotionType,
     block_len: ColNr,
 ) {
     if name == '/' as c_int || name == '=' as c_int {
         // Neither register can hold more than one line.
-        // SAFETY: `strings` is a null-terminated array, so the first element
-        // is there; the second is only read once the first is not the
-        // terminator, so it is there too.
-        let first = unsafe { *strings };
-        let s = if first.is_null() {
-            c"".as_ptr().cast_mut()
-        } else if !(unsafe { *strings.add(1) }).is_null() {
-            emsg(gettext(
-                e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines,
-            ));
-            return;
-        } else {
-            first
+        let line = match lines {
+            [] => c"",
+            [line] => line,
+            _ => {
+                emsg(gettext(
+                    e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines,
+                ));
+                return;
+            }
         };
-        // SAFETY: `s` is NUL-terminated, which is what `len == -1` means.
-        unsafe { write_reg_contents_ex(name, s, -1, must_append, yank_type, block_len) };
+        write_reg_contents_cstr(name, line, must_append, yank_type, block_len);
         return;
     }
     if name == '_' as c_int {
@@ -522,13 +515,30 @@ pub unsafe fn write_reg_contents_lst(
     if reg.is_null() {
         return;
     }
-    // The length is meaningless for a list write and `str_to_reg` ignores
-    // it; upstream passes `strlen((char *)strings)` all the same.
-    // SAFETY: `strings` is the null-terminated array of NUL-terminated
-    // strings `str_list` asks for, and `reg` is the register just prepared.
-    let len = unsafe { cstr::bytes_at(strings as *mut c_char) }.len();
-    unsafe { str_to_reg(reg, yank_type, strings as *mut c_char, len, block_len, true) };
+    // `str_to_reg` reads a list as a null-terminated array of string
+    // pointers, and ignores the length.
+    let array: Vec<*const c_char> = lines
+        .iter()
+        .map(|line| line.as_ptr())
+        .chain([::core::ptr::null()])
+        .collect();
+    // SAFETY: `array` is that null-terminated array of NUL-terminated
+    // strings, live for the call, and `reg` is the register just prepared.
+    unsafe { str_to_reg(reg, yank_type, array.as_ptr().cast(), 0, block_len, true) };
     unsafe { finish_write_reg(name, reg, old_y_previous) };
+}
+
+/// [`write_reg_contents_ex`] of `text`.
+pub(crate) fn write_reg_contents_cstr(
+    name: c_int,
+    text: &CStr,
+    must_append: bool,
+    yank_type: MotionType,
+    block_len: ColNr,
+) {
+    let len = ssize_t::try_from(text.to_bytes().len()).expect("a register fits in memory");
+    // SAFETY: `text` is NUL-terminated and holds `len` bytes before it.
+    unsafe { write_reg_contents_ex(name, text.as_ptr(), len, must_append, yank_type, block_len) };
 }
 
 /// Write `str` to register `name` as `yank_type`.

@@ -85,15 +85,9 @@ pub unsafe fn get_expr_line() -> *mut c_char {
     rv.map_or(::core::ptr::null_mut(), XString::into_raw)
 }
 
-/// The `"=` expression itself, allocated, without evaluating it.
-///
-/// # Safety
-/// Reads the register store; main thread only.
-pub unsafe fn get_expr_line_src() -> *mut c_char {
-    expr_line.with(|line| {
-        line.clone()
-            .map_or(::core::ptr::null_mut(), XString::into_raw)
-    })
+/// A copy of the `"=` expression itself, without evaluating it.
+pub fn get_expr_line_src() -> Option<XString> {
+    expr_line.with(Clone::clone)
 }
 
 /// The contents of a computed register.

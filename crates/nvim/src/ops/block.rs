@@ -451,6 +451,45 @@ pub unsafe fn charwise_block_prep(
     };
 }
 
+/// [`block_prep`] of `op` on line `lnum` of the current buffer, for a caller
+/// that only reads the answer.
+pub(crate) fn block_def(op: &OpArg, lnum: LineNr) -> BlockDef {
+    let (mut op, mut bd) = (*op, BlockDef::ZERO);
+    // SAFETY: both are this frame's locals, and `ml_get` answers a line for
+    // any `lnum`, which is all `block_prep` reads it through.
+    unsafe { block_prep(&raw mut op, &raw mut bd, lnum, false) };
+    bd
+}
+
+/// [`charwise_block_prep`] of line `lnum` of the current buffer, for a
+/// caller that only reads the answer. A corner on `lnum` past the end of the
+/// line is read as its end.
+pub(crate) fn charwise_block_def(start: Pos, end: Pos, lnum: LineNr, inclusive: bool) -> BlockDef {
+    let len = ml_get_len(lnum);
+    let onto_line = |pos: Pos| Pos {
+        col: if pos.lnum == lnum {
+            pos.col.clamp(0, len)
+        } else {
+            pos.col
+        },
+        ..pos
+    };
+    let mut bd = BlockDef::ZERO;
+    // SAFETY: `bd` is this frame's local, `ml_get` answers a line for any
+    // `lnum`, and a corner on that line is a column of it, terminator
+    // included -- the only columns `charwise_block_prep` reads at.
+    unsafe {
+        charwise_block_prep(
+            onto_line(start),
+            onto_line(end),
+            &raw mut bd,
+            lnum,
+            inclusive,
+        )
+    };
+    bd
+}
+
 /// Compute `op`'s `start_vcol`/`end_vcol` and square its corners up.
 ///
 /// Only does anything for a CTRL-V selection. Afterwards `op.start` and

@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::winlayer::{Buf, Live};
+use crate::winlayer::Buf;
 use core::ffi::c_int;
 
 use crate::ascii::ascii_isdigit;
@@ -232,39 +232,34 @@ pub fn var2fpos(
 }
 
 /// Read a `[lnum, col]` List — optionally with a leading buffer number and
-/// a trailing offset and 'curswant' — into `posp`.
+/// a trailing offset and 'curswant' — into `pos`.
 ///
-/// # Safety
-/// `arg` and `posp` must be valid; `fnump` and `curswantp` null or valid.
-pub unsafe fn list2fpos(
+/// The buffer number is read only when `fnum` is given, and 'curswant' only
+/// when `curswant` is; both are written only as far as the List parsed.
+pub fn list2fpos(
     arg: &TypVal,
-    posp: *mut Pos,
-    fnump: *mut c_int,
-    curswantp: *mut ColNr,
+    pos: &mut Pos,
+    mut fnum: Option<&mut c_int>,
+    curswant: Option<&mut ColNr>,
     charcol: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- both outlive the call.
-    let (arg, mut posp) = unsafe { (arg, Live::<Pos>::new(posp)) };
     if arg.v_type() != VAR_LIST {
         return Err(Failed);
     }
-    let l: *mut List = arg.list_or_null();
-    if l.is_null() {
+    let Some(l) = arg.list_ref() else {
         return Err(Failed);
-    }
+    };
     // Without a buffer number the List is 2..4 items, with one 3..5.
-    let least = if fnump.is_null() { 2 } else { 3 };
-    let most = if fnump.is_null() { 4 } else { 5 };
-    // SAFETY: `l` is a live List.
-    let n_items = list_len(unsafe { l.as_ref() });
+    let (least, most) = if fnum.is_none() { (2, 4) } else { (3, 5) };
+    let n_items = list_len(Some(l));
     if n_items < least || n_items > most {
         return Err(Failed);
     }
 
     let mut i = 0;
-    if !fnump.is_null() {
-        // SAFETY: `l` is a live List; a null `error` means "do not report".
-        let mut n = list_find_nr(unsafe { l.as_ref() }, i, None) as c_int;
+    if let Some(fnum) = fnum.as_deref_mut() {
+        // A null `error` means "do not report".
+        let mut n = list_find_nr(Some(l), i, None) as c_int;
         i += 1;
         if n < 0 {
             return Err(Failed);
@@ -272,52 +267,41 @@ pub unsafe fn list2fpos(
         if n == 0 {
             n = Buf::current().handle as c_int; // buffer 0 is "current"
         }
-        // SAFETY: the caller's promise -- a non-null `fnump` is valid.
-        unsafe { *fnump = n };
+        *fnum = n;
     }
 
-    // SAFETY: `l` is a live List.
-    let n = list_find_nr(unsafe { l.as_ref() }, i, None) as c_int;
+    let n = list_find_nr(Some(l), i, None) as c_int;
     i += 1;
     if n < 0 {
         return Err(Failed);
     }
-    posp.lnum = n as LineNr;
+    pos.lnum = n as LineNr;
 
-    // SAFETY: as above.
-    let mut n = list_find_nr(unsafe { l.as_ref() }, i, None) as c_int;
+    let mut n = list_find_nr(Some(l), i, None) as c_int;
     i += 1;
     if n < 0 {
         return Err(Failed);
     }
     if charcol {
-        // SAFETY: the caller's promise -- a non-null `fnump` is valid, and
-        // it was written above.
-        let handle = if fnump.is_null() {
-            Buf::current().handle as c_int
-        } else {
-            unsafe { *fnump }
-        };
+        let handle = fnum.map_or(Buf::current().handle as c_int, |fnum| *fnum);
         let Some(buf) = find_buf(handle).filter(|b| !b.b_ml.ml_mfp.is_null()) else {
             return Err(Failed);
         };
-        let lnum = if posp.lnum == 0 {
+        let lnum = if pos.lnum == 0 {
             Win::current().w_cursor.lnum
         } else {
-            posp.lnum
+            pos.lnum
         };
         n = buf_charidx_to_byteidx(Some(buf), lnum, n) + 1;
     }
-    posp.col = n as ColNr;
+    pos.col = n as ColNr;
 
     // A missing or negative offset is no offset.
-    // SAFETY: `l` is a live List.
-    let off = list_find_nr(unsafe { l.as_ref() }, i, None) as c_int;
-    posp.coladd = if off < 0 { 0 } else { off as ColNr };
+    let off = list_find_nr(Some(l), i, None) as c_int;
+    pos.coladd = if off < 0 { 0 } else { off as ColNr };
 
-    if !curswantp.is_null() {
-        // SAFETY: `l` is a live List, and a non-null `curswantp` is valid.
-        unsafe { *curswantp = list_find_nr(l.as_ref(), i + 1, None) as ColNr };
+    if let Some(curswant) = curswant {
+        *curswant = list_find_nr(Some(l), i + 1, None) as ColNr;
     }
     Ok(())
 }

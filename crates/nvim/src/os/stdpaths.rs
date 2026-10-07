@@ -21,9 +21,9 @@
 
 use crate::cstr;
 use crate::fileio::vim_gettempdir;
-use crate::memory::{xfree, xmemdupz, xstrdup};
+use crate::memory::{ThinCString, XString, xfree, xmemdupz, xstrdup};
 use crate::os::env::{env_buf, expand_env_save, os_env_exists, os_getenv, os_getenv_into};
-use crate::path::{concat_fnames_realloc, path_fnamecmp, path_is_absolute};
+use crate::path::{concat_fnames_realloc, join_fnames, path_fnamecmp, path_is_absolute};
 use crate::types::{IOSIZE, XDGVarType, size_t};
 use core::ffi::{CStr, c_char};
 use core::ptr;
@@ -186,21 +186,28 @@ pub fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut c_char {
     }
 }
 
-/// `{xdg_directory}/$NVIM_APPNAME`, or NULL when the directory is unset.
-/// The caller owns the result.
-pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
-    let dir = stdpaths_get_xdg_var(idx);
+/// [`stdpaths_get_xdg_var`] as an owned string.
+pub(crate) fn xdg_var(idx: XDGVarType) -> Option<ThinCString> {
+    // SAFETY: `stdpaths_get_xdg_var` answers a fresh NUL-terminated block
+    // or null, taken over once here.
+    unsafe { ThinCString::from_raw(stdpaths_get_xdg_var(idx)) }
+}
+
+/// `{xdg_directory}/$NVIM_APPNAME`, or `None` when the directory is unset.
+pub fn xdg_home(idx: XDGVarType) -> Option<XString> {
+    let dir = xdg_var(idx);
     let appname = get_appname(false);
     // Windows appends "-data" to the data/state homes; the headroom upstream
     // needed for that in `IObuff` is asserted on every platform.
     let iosize = usize::try_from(IOSIZE).expect("the scratch buffer has a positive size");
     debug_assert!(appname.count_bytes() < iosize - c"-data".count_bytes() - 1);
-    if dir.is_null() {
-        return dir;
-    }
-    // SAFETY: `dir` is owned and `concat_fnames_realloc` consumes it;
-    // `appname` outlives the call.
-    unsafe { concat_fnames_realloc(dir, appname.as_ptr(), true) }
+    Some(join_fnames(&dir?, &appname, true))
+}
+
+/// [`xdg_home`], or NULL when the directory is unset. The caller owns the
+/// result.
+pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
+    xdg_home(idx).map_or(ptr::null_mut(), XString::into_raw)
 }
 
 /// `$XDG_CONFIG_HOME/$NVIM_APPNAME/{fname}`. The caller owns the result.
@@ -251,17 +258,6 @@ pub unsafe fn stdpaths_user_state_subpath(
     CString::new(out)
         .expect("a CStr's bytes hold no NUL")
         .into_raw()
-}
-
-/// [`get_xdg_home`] as an owned string: `{xdg_directory}/$NVIM_APPNAME`, or
-/// `None` when the directory is unset.
-pub fn xdg_home(idx: XDGVarType) -> Option<CString> {
-    let dir = get_xdg_home(idx);
-    // SAFETY: null, or one owned NUL-terminated path.
-    let owned = unsafe { cstr::at_opt(dir) }.map(CStr::to_owned);
-    // SAFETY: as above.
-    unsafe { xfree(dir.cast()) };
-    owned
 }
 
 /// [`stdpaths_user_state_subpath`] as an owned string, with neither trailing

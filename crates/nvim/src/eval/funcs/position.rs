@@ -378,9 +378,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
     let (lnum, mut col, coladd) = if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
         let mut pos = NOWHERE;
         let mut curswant: ColNr = -1;
-        let (out, want) = (&raw mut pos, &raw mut curswant);
-        // SAFETY: argument 0 is a live typval and both are locals.
-        let read = unsafe { list2fpos(&args[0], out, ptr::null_mut(), want, charcol) };
+        let read = list2fpos(&args[0], &mut pos, None, Some(&mut curswant), charcol);
         if read.is_err() {
             emsg(gettext(e_invarg));
             return;
@@ -459,9 +457,8 @@ fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
     let mut pos = NOWHERE;
     let mut fnum: c_int = 0;
     let mut curswant: ColNr = -1;
-    let (out, buf, want) = (&raw mut pos, &raw mut fnum, &raw mut curswant);
-    // SAFETY: argument 1 is a live typval and the three are locals.
-    if unsafe { list2fpos(&args[1], out, buf, want, charpos) }.is_err() {
+    let want = Some(&mut curswant);
+    if list2fpos(&args[1], &mut pos, Some(&mut fnum), want, charpos).is_err() {
         return;
     }
     if pos.col != END_OF_LINE {

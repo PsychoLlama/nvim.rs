@@ -296,6 +296,13 @@ impl Win {
         (c[0], c[2])
     }
 
+    /// [`Win::virtual_vcol_span`] of a position held by value.
+    pub(crate) fn virtual_vcol_span_at(self, mut pos: Pos) -> (ColNr, ColNr) {
+        // SAFETY: `pos` is this frame's local, live for the call.
+        let at = unsafe { PosRef::new(&raw mut pos) };
+        self.virtual_vcol_span(at)
+    }
+
     /// [`Win::vcol_triple`] with 'virtualedit' taken into account.
     #[inline(always)]
     pub fn virtual_vcol_triple(self, pos: PosRef) -> (ColNr, ColNr, ColNr) {

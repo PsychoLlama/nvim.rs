@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 use crate::cstr;
 use crate::ex_cmds::newlnum;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::optionstr::{OptString, local_or_global};
 use crate::snprintf;
 use crate::types::CmdIdx;
@@ -350,6 +350,38 @@ pub unsafe fn find_cmdline_var(src: *const c_char, usedlen: *mut size_t) -> ssiz
         }
     }
     -1
+}
+
+/// [`eval_vars`] of the special item `text` opens with (`%`, `#`,
+/// `<cword>`, ...) with nothing before it, which is `expand()`'s question:
+/// the expansion, and the error message -- which may be empty -- when it
+/// failed.
+pub(crate) fn eval_vars_leading(text: &CStr) -> (Option<ThinCString>, Option<CString>) {
+    // A copy, because `eval_vars` is handed a writable cursor.
+    let mut copy = text.to_bytes_with_nul().to_vec();
+    let src = copy.as_mut_ptr().cast::<c_char>();
+    let (mut used, mut errormsg): (size_t, *const c_char) = (0, ptr::null());
+    let none = (ptr::null_mut(), ptr::null_mut());
+    // SAFETY: `src` is this frame's NUL-terminated copy and also the start
+    // of the line, so nothing before it is touched; the two out-parameters
+    // are locals, and the other two are not asked for. The answer is a fresh
+    // block or null, and the message a NUL-terminated static one or null;
+    // both are taken over or copied here.
+    unsafe {
+        let expanded = eval_vars(
+            src,
+            src,
+            &raw mut used,
+            none.0,
+            &raw mut errormsg,
+            none.1,
+            false,
+        );
+        (
+            ThinCString::from_raw(expanded),
+            cstr::at_opt(errormsg).map(CStr::to_owned),
+        )
+    }
 }
 
 /// Expand one special item at `src` into a freshly allocated string.

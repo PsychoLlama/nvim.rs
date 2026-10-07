@@ -69,9 +69,7 @@ use crate::mbyte::{
 };
 use crate::memline::{decl, ml_append, ml_replace};
 use crate::memory::XString;
-use crate::memory::{
-    memchrsub, memcnt, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup,
-};
+use crate::memory::{memchrsub, memcnt, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::message::state::{msg_ext_skip_flush, redir_reg};
 use crate::message::{e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long};
 use crate::message::{

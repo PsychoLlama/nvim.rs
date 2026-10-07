@@ -200,9 +200,7 @@ pub fn ex_display(excmd: &mut ExArg) {
             // Before `get_clipboard` below, because for `"*`/`"+` this
             // queries the provider itself, and upstream's order of the
             // two queries is what the messages depend on.
-            //
-            // SAFETY: main thread; a null `expr` asks for no expression back.
-            let type_0 = match unsafe { get_reg_type(name, ::core::ptr::null_mut()) } {
+            let type_0 = match get_reg_type(name).0 {
                 kMTLineWise => 'l' as c_int,
                 kMTCharWise => 'c' as c_int,
                 _ => 'b' as c_int,

@@ -1,94 +1,66 @@
 //! The environment and the paths around it: `environ()`, `expand()`,
 //! `stdpath()` and the swap-file queries.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::wrappers::{arg_number_chk, dict_alloc_ret, list_alloc_ret};
+use super::wrappers::{arg_number_chk, dict_alloc_ret};
 use super::{
     ENV_SEPCHAR, kXDGCacheHome, kXDGConfigDirs, kXDGConfigHome, kXDGDataDirs, kXDGDataHome,
     kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one};
-use crate::cstr;
-use crate::eval::typval::{NumBuf, dict_get_bool, dict_has_key, tv_list_alloc};
+use crate::eval::typval::{NumBuf, dict_get_bool, dict_has_key, tv_list_alloc_ret};
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::{eval_vars, expand_filename};
+use crate::ex_docmd::{eval_vars_leading, expand_filename};
 use crate::guard::Suppress;
-use crate::memfile::mf_fname;
-use crate::memline::{recover_names, swapfile_dict};
+use crate::memline::{list_swap_files, swapfile_dict};
 use crate::memory::ThinCString;
-use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
-use crate::message::{emsg, emsg_ptr};
+use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::{p_verbose, p_wic};
-use crate::os::cshim::strchr;
-use crate::os::env::{
-    os_copy_fullenv, os_free_fullenv, os_get_fullenv_size, vim_env_iter, vim_getenv,
-    vim_setenv_ext, vim_unsetenv_ext,
-};
+use crate::os::env::{os_copy_fullenv, vim_getenv_owned, vim_setenv_named, vim_unsetenv_named};
 use crate::os::fs::os_setperm;
-use crate::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
-use crate::path::concat_fnames_realloc;
+use crate::os::stdpaths::{get_appname, xdg_home, xdg_var};
+use crate::path::join_fnames;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::CmdLine;
 use crate::types::{
-    CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, NUL, OK, OptInt, TypVal, VAR_DICT,
+    CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, OK, OptInt, TypVal, VAR_DICT,
     VAR_LIST, VAR_STRING, VarNumber, XDGVarType, kBoolVarFalse, kListLenShouldKnow,
     kListLenUnknown, kSpecialVarNull,
 };
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::c_int;
 
 /// `environ()` — the process environment as a Dictionary.
 pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: `env` is an array of `env_size` strings plus a NULL, filled by
-    // `os_copy_fullenv` and released by `os_free_fullenv`. Every string is
-    // NUL-terminated and writable — the split below writes a NUL into one
-    // and puts the original byte back.
     dict_alloc_ret(result);
-    let env_size = os_get_fullenv_size();
-    let env = unsafe { xmalloc(size_of::<*mut c_char>() * (env_size + 1)) } as *mut *mut c_char;
-    unsafe { *env.add(env_size) = ptr::null_mut() };
-    unsafe { os_copy_fullenv(env, env_size) };
+    let env = os_copy_fullenv();
     // Walked backwards, so that when a name appears twice the *first*
     // entry is the one that survives the duplicate check below.
-    for i in (0..env_size).rev() {
-        let entry = unsafe { *env.add(i) };
+    for entry in env.iter().rev() {
         // A leading '=' is part of the name on the platforms that allow
         // it, so the separator search starts past it.
-        let skip = usize::from(unsafe { *entry } == b'=' as c_char);
-        let end = unsafe { strchr(entry.add(skip), b'=' as c_int) };
-        debug_assert!(!end.is_null());
-        let len = unsafe { end.offset_from(entry) };
+        let skip = usize::from(entry.first() == Some(&b'='));
+        let len = entry[skip..]
+            .iter()
+            .position(|&byte| byte == b'=')
+            .map(|at| skip + at)
+            .expect("an environment entry holds a '='");
         debug_assert!(len > 0);
-        let value = unsafe { entry.offset(len).add(1) };
-
-        let saved = unsafe { *entry.offset(len) };
-        unsafe { *entry.offset(len) = NUL as c_char };
-        let key = unsafe { xstrdup(entry) };
-        unsafe { *entry.offset(len) = saved };
-        // SAFETY: `key` is the `len` bytes just copied out of the entry.
-        let bytes = unsafe { cstr::slice_at(key, len as usize) };
-        if !dict_has_key(result.dict_ref(), bytes) {
-            // SAFETY: `value` is the NUL-terminated tail of the entry.
-            let d = result.dict_mut().expect("just allocated");
-            let _ = unsafe { d.add_str(bytes, cstr::at_opt(value)) };
+        let (key, value) = (&entry[..len], &entry[len + 1..]);
+        if !dict_has_key(result.dict_ref(), key) {
+            let dict = result.dict_mut().expect("just allocated");
+            let _ = dict.add_str_len(key, Some(value));
         }
-        unsafe { xfree(key as *mut c_void) };
     }
-    unsafe { os_free_fullenv(env) };
 }
 
 /// `getenv({name})` — the variable's value, or `v:null` when it is unset.
 pub fn f_getenv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let name = numbuf.string(&args[0]).as_ptr();
-    // SAFETY: `name` is NUL-terminated; `vim_getenv` returns an `xmalloc`ed
-    // string, adopted here, or null.
-    match unsafe { ThinCString::from_raw(vim_getenv(name)) } {
+    match vim_getenv_owned(numbuf.string(&args[0])) {
         None => result.write_special(kSpecialVarNull),
-        Some(value) => result.write_string(Some(value)),
+        Some(value) => result.write_string(Some(ThinCString::from(value))),
     }
 }
 
@@ -98,8 +70,6 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut options = WildOpts::SILENT | WildOpts::USE_NL | WildOpts::LIST_NOTFOUND;
     let mut error = false;
     result.write_empty(VAR_STRING);
-    // SAFETY throughout: `s` points into the argument, which outlives every call here;
-    // `xpc` is cleared by `expand_init` before use and cleaned up after.
     // The `{list}` argument is only honoured when `{nosuf}` was given
     // too, because it is the third.
     if args.len() > 1 && args.len() > 2 && arg_number_chk(&args[2], Some(&mut error)) != 0 && !error
@@ -112,28 +82,18 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // whose own errors are suppressed unless 'verbose' is set.
         let quiet = p_verbose() == 0 as OptInt;
         let no_emsg = quiet.then(Suppress::emsg);
-        let mut len: usize = 0;
-        let mut errormsg: *const c_char = ptr::null();
-        let (src, start) = (s.as_ptr().cast_mut(), s.as_ptr());
-        let (used, msg) = (&raw mut len, &raw mut errormsg);
-        let nul = ptr::null_mut();
-        // SAFETY: `s` is the NUL-terminated argument and the two
-        // out-parameters are locals.
-        let expanded = unsafe { eval_vars(src, start, used, nul, msg, nul, false) };
+        let (expanded, errormsg) = eval_vars_leading(s);
         drop(no_emsg);
-        if !quiet && !errormsg.is_null() {
-            unsafe { emsg_ptr(errormsg) };
+        if !quiet && let Some(msg) = &errormsg {
+            emsg(msg);
         }
         if result.v_type() == VAR_LIST {
-            list_alloc_ret(result, isize::from(!expanded.is_null()));
-            if !expanded.is_null() {
-                unsafe { (*result.list_or_null()).push_str(cstr::at_opt(expanded)) };
+            let list = tv_list_alloc_ret(result, isize::from(expanded.is_some()));
+            if let Some(expanded) = expanded {
+                list.push(TypVal::string(Some(expanded)));
             }
-            unsafe { xfree(expanded as *mut c_void) };
         } else {
-            // SAFETY: `eval_vars` answers an `xmalloc`ed string, which the
-            // result adopts, or NULL.
-            result.write_string(unsafe { ThinCString::from_raw(expanded) });
+            result.write_string(expanded);
         }
         return;
     }
@@ -161,11 +121,9 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         result.write_string(all.map(ThinCString::from));
     } else {
         expand_one(&mut xpc, Some(pat), None, options, WildMode::AllKeep);
-        list_alloc_ret(result, xpc.match_count() as isize);
+        let list = tv_list_alloc_ret(result, xpc.match_count() as isize);
         for name in xpc.matches() {
-            let list = result.list_or_null();
-            // SAFETY: the List just allocated, and a NUL-terminated name.
-            unsafe { (*list).push_str(cstr::at_opt(name.as_ptr())) };
+            list.push_str(Some(name.as_cstr()));
         }
         expand_cleanup(&mut xpc);
     }
@@ -176,16 +134,10 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_empty(VAR_STRING);
-    // SAFETY throughout: `cmdstr` is owned here and handed to the return value;
-    // `expand_filename` may replace it with another owned string.
     // {'errmsg': v:true} asks for the expansion's own error instead of
     // silence.
-    let errmsg = args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) && {
-        // SAFETY: the kind says the value holds a Dict pointer.
-        let d = args[1].dict_or_null();
-        let no = kBoolVarFalse as c_int;
-        dict_get_bool(unsafe { (d).as_ref() }, b"errmsg", no) != 0
-    };
+    let errmsg = args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT)
+        && dict_get_bool(args[1].dict_ref(), b"errmsg", kBoolVarFalse as c_int) != 0;
     let quiet = !errmsg;
     let line = numbuf.bytes(&args[0]).to_vec();
     let mut eap = ExArg {
@@ -209,21 +161,18 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `setenv({name}, {val})` — `v:null` unsets.
 pub fn f_setenv(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
-    let _rettv = _result;
-    // SAFETY throughout: the two scratch buffers outlive the strings coerced into them.
     let mut namebuf = NumBuf::new();
     let mut valbuf = NumBuf::new();
     // Coerced before the sandbox check, as upstream has it: the
     // coercion can report an error of its own.
-    let name = namebuf.string(&args[0]).as_ptr();
+    let name = namebuf.string(&args[0]);
     if check_secure() {
         return;
     }
     if args[1].as_special() == Some(kSpecialVarNull) {
-        unsafe { vim_unsetenv_ext(name) };
+        vim_unsetenv_named(name);
     } else {
-        let val = valbuf.string(&args[1]).as_ptr();
-        unsafe { vim_setenv_ext(name, val) };
+        vim_setenv_named(name, valbuf.string(&args[1]));
     }
 }
 
@@ -257,34 +206,17 @@ pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// path, each with the application name appended.
 fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
     let appname = get_appname(false);
-    let held = tv_list_alloc(kListLenShouldKnow as isize);
-    let list = held.as_ptr();
-    result.write_list(Some(held));
-    let dirs = stdpaths_get_xdg_var(xdg);
-    if dirs.is_null() {
+    let list = tv_list_alloc_ret(result, kListLenShouldKnow as isize);
+    let Some(dirs) = xdg_var(xdg) else {
         return;
-    }
-    let mut iter: *const c_void = ptr::null();
-    loop {
-        let mut dir_len: usize = 0;
-        let mut dir: *const c_char = ptr::null();
-        let (out, out_len) = (&raw mut dir, &raw mut dir_len);
-        let sep = ENV_SEPCHAR as c_char;
-        // SAFETY: `dirs` is NUL-terminated, `iter` is null or a position in
-        // it, and the two out-parameters are locals.
-        iter = unsafe { vim_env_iter(sep, dirs, iter, out, out_len) };
-        if !dir.is_null() && dir_len > 0 {
-            let dir = unsafe { xmemdupz(dir as *const c_void, dir_len) } as *mut c_char;
-            let path = unsafe { concat_fnames_realloc(dir, appname.as_ptr(), true) };
-            // SAFETY: the list takes over the block `concat_fnames_realloc`
-            // answered.
-            unsafe { (*list).push(TypVal::string(ThinCString::from_raw(path))) };
-        }
-        if iter.is_null() {
-            break;
+    };
+    // An empty entry names no directory.
+    for dir in dirs.as_bytes().split(|&byte| byte == ENV_SEPCHAR as u8) {
+        if !dir.is_empty() {
+            let path = join_fnames(&ThinCString::from_bytes(dir), &appname, true);
+            list.push(TypVal::string(Some(ThinCString::from(path))));
         }
     }
-    unsafe { xfree(dirs as *mut c_void) };
 }
 
 /// `stdpath({what})`.
@@ -295,55 +227,42 @@ pub fn f_stdpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
     let dir = match p.to_bytes() {
-        b"config" => get_xdg_home(kXDGConfigHome),
-        b"data" => get_xdg_home(kXDGDataHome),
-        b"cache" => get_xdg_home(kXDGCacheHome),
+        b"config" => xdg_home(kXDGConfigHome),
+        b"data" => xdg_home(kXDGDataHome),
+        b"cache" => xdg_home(kXDGCacheHome),
         // "log" is deliberately the state directory: the log file lives
         // there and there is no XDG log home.
-        b"state" | b"log" => get_xdg_home(kXDGStateHome),
-        b"run" => stdpaths_get_xdg_var(kXDGRuntimeDir),
+        b"state" | b"log" => xdg_home(kXDGStateHome),
+        b"run" => xdg_var(kXDGRuntimeDir).map(ThinCString::into_xstring),
         b"config_dirs" => return get_xdg_var_list(kXDGConfigDirs, result),
         b"data_dirs" => return get_xdg_var_list(kXDGDataDirs, result),
         _ => {
-            // The name is arbitrary user bytes, so this keeps the
-            // variadic call.
             let p = msg_cstr(p);
             semsg!("E6100: \"{p}\" is not a valid stdpath");
             return;
         }
     };
-    // SAFETY: the XDG lookups answer an `xmalloc`ed string, which the
-    // result adopts, or NULL.
-    result.write_string(unsafe { ThinCString::from_raw(dir) });
+    result.write_string(dir.map(ThinCString::from));
 }
 
 /// `swapfilelist()` — every swap file in 'directory'.
 pub fn f_swapfilelist(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: `recover_names` appends to the list just allocated.
-    list_alloc_ret(result, kListLenUnknown as isize);
-    let list = result.list_or_null();
-    let (fname, dirp) = (ptr::null_mut(), ptr::null_mut());
-    unsafe { recover_names(fname, false, list, 0, dirp) };
+    list_swap_files(tv_list_alloc_ret(result, kListLenUnknown as isize));
 }
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.
 pub fn f_swapinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the dict is allocated into the return value first, so
-    // `swapfile_dict` has somewhere to write.
+    // The dict is allocated into the return value first, so `swapfile_dict`
+    // has somewhere to write.
     dict_alloc_ret(result);
-    let fname = numbuf.string(&args[0]).as_ptr();
-    unsafe { swapfile_dict(fname, result.dict_or_null()) };
+    let fname = numbuf.string(&args[0]);
+    swapfile_dict(fname, result.dict_mut().expect("just allocated"));
 }
 
 /// `swapname({buf})` — the swap file a buffer is using, if any.
 pub fn f_swapname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_empty(VAR_STRING);
-    let buf = tv_get_buf(&args[0], 0);
-    let memfile = buf.map(|b| b.b_ml.ml_mfp).filter(|mfp| !mfp.is_null());
-    let name = memfile
-        .map(|mfp| unsafe { mf_fname(mfp) })
-        .filter(|name| !name.is_null());
-    // SAFETY: the memfile's own NUL-terminated name, live for the copy.
-    result.write_string(name.map(|name| ThinCString::from_cstr(unsafe { CStr::from_ptr(name) })));
+    let name = tv_get_buf(&args[0], 0).and_then(|buffer| buffer.swap_file_name());
+    result.write_string(name.map(ThinCString::from));
 }

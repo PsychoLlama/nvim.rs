@@ -177,17 +177,7 @@ impl TagStack {
             };
             let mut mark = Pos::default();
             let mut fnum = 0;
-            if unsafe {
-                list2fpos(
-                    &from.di_tv,
-                    &raw mut mark,
-                    &raw mut fnum,
-                    ptr::null_mut(),
-                    false,
-                )
-            }
-            .is_err()
-            {
+            if list2fpos(&from.di_tv, &mut mark, Some(&mut fnum), None, false).is_err() {
                 continue;
             }
             let Some(tagname) = dict_get_string_alloc(unsafe { (item).as_ref() }, b"tagname")

@@ -187,6 +187,12 @@ pub fn op_reg_set_previous(name: c_char) -> bool {
     true
 }
 
+/// Point `""` at register `regname`'s slot -- the first slot, for a name
+/// that has none -- the way a yank into it would.
+pub(crate) fn point_unnamed_at(regname: c_int) {
+    y_previous.set(Some(op_reg_index(regname).max(0)));
+}
+
 /// Widen a blockwise register's `y_width` to its widest line, in *cells*.
 ///
 /// Does nothing to a register that is not blockwise.

@@ -285,14 +285,12 @@ pub(crate) fn swapfile_proc_running(b0: &ZeroBlock, swap_fname: *const c_char) -
 /// Describe a swap file for the `swapinfo()` builtin: the block-zero fields
 /// if they can be read and make sense, an `error` key saying why not if they
 /// cannot.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string. `d` must point at a live
-/// dictionary, unaliased for the call.
-pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut Dict) {
-    let error = |text: &'static CStr| unsafe { dict_add_str(d, c"error", text.as_ptr(), -1) };
-    match unsafe { ZeroBlock::read(fname) } {
+pub fn swapfile_dict(fname: &CStr, d: &mut Dict) {
+    let mut error = |text: &CStr| {
+        let _ = d.add_str(b"error", Some(text));
+    };
+    // SAFETY: a NUL-terminated path.
+    match unsafe { ZeroBlock::read(fname.as_ptr()) } {
         Err(NoBlock::CannotOpen) => error(c"Cannot open file"),
         Err(NoBlock::CannotRead) => error(c"Cannot read file"),
         Ok(b0) if !ml_check_b0_id(&b0) => error(c"Not a swap file"),
@@ -301,49 +299,20 @@ pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut Dict) {
             // The strings are reported at their full field width rather
             // than up to the NUL: this is the raw block, and a caller
             // inspecting a damaged swap file wants what is really there.
-            unsafe { dict_add_str(d, c"version", b0.b0_version.as_ptr(), 10) };
-            unsafe { dict_add_str(d, c"user", b0.b0_uname.as_ptr(), B0_UNAME_SIZE as c_int) };
-            unsafe { dict_add_str(d, c"host", b0.b0_hname.as_ptr(), B0_HNAME_SIZE as c_int) };
-            unsafe {
-                dict_add_str(
-                    d,
-                    c"fname",
-                    b0.b0_fname.as_ptr(),
-                    B0_FNAME_SIZE_ORG as c_int,
-                )
-            };
-            unsafe { dict_add_nr(d, c"pid", swapfile_proc_running(&b0, fname) as VarNumber) };
-            unsafe { dict_add_nr(d, c"mtime", b0_read_number(&b0.b0_mtime) as VarNumber) };
-            unsafe { dict_add_nr(d, c"dirty", b0.dirty() as VarNumber) };
-            unsafe { dict_add_nr(d, c"inode", b0_read_number(&b0.b0_ino) as VarNumber) };
+            fn field(chars: &[c_char]) -> Option<&[u8]> {
+                Some(cstr::as_bytes(chars))
+            }
+            let _ = d.add_str_len(b"version", field(&b0.b0_version));
+            let _ = d.add_str_len(b"user", field(&b0.b0_uname));
+            let _ = d.add_str_len(b"host", field(&b0.b0_hname));
+            let _ = d.add_str_len(b"fname", field(&b0.b0_fname));
+            let pid = swapfile_proc_running(&b0, fname.as_ptr());
+            let _ = d.add_number(b"pid", pid as VarNumber);
+            let _ = d.add_number(b"mtime", b0_read_number(&b0.b0_mtime) as VarNumber);
+            let _ = d.add_number(b"dirty", b0.dirty() as VarNumber);
+            let _ = d.add_number(b"inode", b0_read_number(&b0.b0_ino) as VarNumber);
         }
     }
-}
-
-/// `tv_dict_add_*` take the key and its length separately; upstream spells
-/// that pair `S_LEN(key)`. A negative `len` means "up to the NUL".
-///
-/// # Safety
-///
-/// `d` must point at a live dictionary, unaliased for the call. `val` must
-/// point at `len` readable bytes.
-unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char, len: c_int) {
-    // SAFETY: the caller's `len` readable bytes, or its NUL-terminated
-    // string for a negative `len`.
-    let val = (!val.is_null()).then(|| unsafe {
-        match usize::try_from(len) {
-            Ok(len) => cstr::slice_at(val, len),
-            Err(_) => CStr::from_ptr(val).to_bytes(),
-        }
-    });
-    let _ = unsafe { (*d).add_str_len(key.to_bytes(), val) };
-}
-
-/// # Safety
-///
-/// `d` must point at a live dictionary, unaliased for the call.
-unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
-    let _ = unsafe { (*d).add_number(key.to_bytes(), nr) };
 }
 
 /// Describe a swap file in the ATTENTION message and in `:recover`'s listing.

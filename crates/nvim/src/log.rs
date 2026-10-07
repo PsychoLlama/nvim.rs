@@ -197,10 +197,10 @@ fn expand_log_file_var() -> (Vec<u8>, bool) {
 /// hands `get_xdg_home`'s null straight to `os_isdir`.
 fn ensure_state_home() -> Option<MkdirFailure> {
     let home = xdg_home(kXDGStateHome)?;
-    if dir_exists(&home) {
+    if dir_exists(home.as_cstr()) {
         return None;
     }
-    mkdir_recurse(&home, 0o700 as int32_t).err()
+    mkdir_recurse(home.as_cstr(), 0o700 as int32_t).err()
 }
 
 /// The default log path, `$XDG_STATE_HOME/nvim/nvim.log`.

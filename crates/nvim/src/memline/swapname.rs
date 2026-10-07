@@ -694,6 +694,15 @@ fn expanded(
     unsafe { expand_wildcards(n, pats, count, files, how) }
 }
 
+/// [`recover_names`] of every swap file in 'directory', collected into
+/// `list` -- what `swapfilelist()` answers.
+pub(crate) fn list_swap_files(list: &mut List) {
+    let (fname, fname_out) = (core::ptr::null_mut(), core::ptr::null_mut());
+    // SAFETY: no file name and no n'th name are asked for, and `list` is a
+    // live list, borrowed for the call.
+    unsafe { recover_names(fname, false, list, 0, fname_out) };
+}
+
 /// Find the swap files in the current directory and in every directory of
 /// the `'directory'` option.
 ///

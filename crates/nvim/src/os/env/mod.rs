@@ -272,18 +272,6 @@ pub unsafe fn os_unsetenv(name: *const c_char) -> c_int {
     }
 }
 
-/// How many variables the environment block holds.
-pub fn os_get_fullenv_size() -> size_t {
-    // SAFETY: `environ` is libc's own NULL-terminated block.
-    unsafe {
-        let mut len = 0;
-        while !(*environ.add(len)).is_null() {
-            len += 1;
-        }
-        len
-    }
-}
-
 /// Free what [`os_copy_fullenv`] allocated.
 ///
 /// # Safety
@@ -304,22 +292,19 @@ pub unsafe fn os_free_fullenv(env: *mut *mut c_char) {
     }
 }
 
-/// Copy the environment into `env` as newly allocated `"NAME=VALUE"` strings.
-/// The caller frees them, with [`os_free_fullenv`].
-///
-/// # Safety
-/// `env` must be writable for `env_size` pointers.
-pub unsafe fn os_copy_fullenv(env: *mut *mut c_char, env_size: size_t) {
-    // SAFETY: the caller's contract; `environ` is NULL-terminated, so the
-    // walk stops at whichever end comes first.
+/// A copy of the environment, as `"NAME=VALUE"` strings in its order.
+pub fn os_copy_fullenv() -> Vec<Vec<u8>> {
+    let mut env = Vec::new();
+    // SAFETY: `environ` is libc's own NULL-terminated block of NUL-terminated
+    // strings, copied out before anything can change it.
     unsafe {
-        for i in 0..env_size {
-            if (*environ.add(i)).is_null() {
-                break;
-            }
-            *env.add(i) = xstrdup(*environ.add(i));
+        let mut entry = environ;
+        while !(*entry).is_null() {
+            env.push(CStr::from_ptr(*entry).to_bytes().to_vec());
+            entry = entry.add(1);
         }
     }
+    env
 }
 
 /// The *name* of the environment variable at `index`, newly allocated, or
