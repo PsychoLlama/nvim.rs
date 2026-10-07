@@ -833,3 +833,174 @@ pub unsafe fn encode_tv2json(tv: &TypVal, len: *mut size_t) -> *mut c_char {
     // SAFETY: the caller's promise about `len`.
     unsafe { finish_tv2(ga, len) }
 }
+
+#[cfg(test)]
+mod tests {
+    //! The text sinks over the container walk, end to end: the shapes the
+    //! walk's frames exist for -- nests past the inline budget, containers
+    //! that reach themselves, a partial's arguments and self dictionary --
+    //! with the exact text each prints.
+
+    use super::*;
+    use crate::eval::list::string_tv;
+    use crate::eval::typval::{
+        DictRef, ListRef, PartialRef, tv_blob_alloc, tv_dict_alloc, tv_list_alloc,
+    };
+    use crate::global_cell::editor_state_lock;
+    use crate::memory::ThinCString;
+    use crate::types::{Partial, kBoolVarTrue, kSpecialVarNull};
+
+    /// The editor lock, with messages suppressed: there is no screen to
+    /// draw them on.
+    fn ready() -> (impl Drop, crate::guard::Quiet) {
+        let held = editor_state_lock();
+        (held, crate::guard::Suppress::output())
+    }
+
+    fn text(tv: &TypVal) -> String {
+        String::from_utf8(tv2string_bytes(tv)).expect("ASCII")
+    }
+
+    fn echo(tv: &TypVal) -> String {
+        String::from_utf8(tv2echo_bytes(tv)).expect("ASCII")
+    }
+
+    fn json(tv: &TypVal) -> Option<String> {
+        let mut ga = Vec::new();
+        let ok = encode_vim_to_json(&mut ga, tv, c"test");
+        did_echo_string_emsg.set(false);
+        ok.then(|| String::from_utf8(ga).expect("UTF-8"))
+    }
+
+    fn list(items: Vec<TypVal>) -> ListRef {
+        let mut l = tv_list_alloc(-1);
+        for tv in items {
+            l.push(tv);
+        }
+        l
+    }
+
+    fn partial(name: &str, args: Vec<TypVal>, dict: Option<DictRef>) -> PartialRef {
+        PartialRef::new(Partial {
+            pt_name: Some(ThinCString::from_bytes(name.as_bytes())),
+            pt_argv: args,
+            pt_dict: dict,
+            ..Partial::EMPTY
+        })
+    }
+
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
+    )]
+    fn scalars_and_flat_containers_print_as_their_literals() {
+        let _serial = ready();
+        let mut blob = tv_blob_alloc();
+        blob.extend(&[1, 0xab]);
+        let mut d = tv_dict_alloc();
+        d.add_number(b"n", 1).expect("fresh key");
+        let tv = TypVal::list(Some(list(vec![
+            TypVal::Number(-7),
+            string_tv(b"it's"),
+            TypVal::Float(1.5),
+            TypVal::list(Some(tv_list_alloc(0))),
+            TypVal::dict(Some(tv_dict_alloc())),
+            TypVal::blob(Some(blob)),
+            TypVal::Special(kSpecialVarNull),
+            TypVal::Bool(kBoolVarTrue),
+            TypVal::dict(Some(d)),
+            TypVal::string(None),
+        ])));
+        assert_eq!(
+            text(&tv),
+            "[-7, 'it''s', 1.5, [], {}, 0z01AB, v:null, v:true, {'n': 1}, '']"
+        );
+        assert_eq!(
+            json(&tv).as_deref(),
+            Some("[-7, \"it's\", 1.5, [], {}, [1, 171], null, true, {\"n\": 1}, \"\"]")
+        );
+    }
+
+    /// A list that holds itself, and a dictionary that does, two levels down.
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
+    )]
+    fn a_container_that_reaches_itself_is_marked_not_followed() {
+        let _serial = ready();
+        let mut l = list(vec![TypVal::Number(1)]);
+        let again = l.clone();
+        l.push(TypVal::list(Some(again)));
+        let tv = TypVal::list(Some(l.clone()));
+        // `:echo`'s marker: `string()` and JSON say the same with an error
+        // message, which wants a screen.
+        assert_eq!(echo(&tv), "[1, [...@0]]");
+
+        let mut d = tv_dict_alloc();
+        let inner = list(vec![TypVal::dict(Some(d.clone()))]);
+        d.add_list(b"l", Some(inner)).expect("fresh key");
+        let dtv = TypVal::dict(Some(d.clone()));
+        assert_eq!(echo(&dtv), "{'l': [{...@0}]}");
+
+        // A container met twice, side by side, is not a cycle.
+        let shared = list(vec![TypVal::Number(2)]);
+        let twice = TypVal::list(Some(list(vec![
+            TypVal::list(Some(shared.clone())),
+            TypVal::list(Some(shared)),
+        ])));
+        assert_eq!(text(&twice), "[[2], [2]]");
+
+        // Break the cycles, or nothing frees them.
+        l.remove_range(1, 1);
+        drop(d.edit().remove_key(b"l"));
+    }
+
+    /// Thirty levels: past the walk's eight inline frames and back.
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
+    )]
+    fn a_deep_nest_prints_every_level() {
+        let _serial = ready();
+        let mut tv = TypVal::Number(0);
+        for _ in 0..30 {
+            tv = TypVal::list(Some(list(vec![tv])));
+        }
+        let expected = format!("{}0{}", "[".repeat(30), "]".repeat(30));
+        assert_eq!(text(&tv), expected);
+        assert_eq!(json(&tv).as_deref(), Some(expected.as_str()));
+    }
+
+    /// A partial walks its arguments, then its self dictionary -- which here
+    /// holds the partial: a cycle through a partial frame.
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
+    )]
+    fn a_partial_prints_its_arguments_and_its_dictionary() {
+        let _serial = ready();
+        let mut d = tv_dict_alloc();
+        d.add_number(b"n", 1).expect("fresh key");
+        let args = vec![
+            TypVal::Number(1),
+            TypVal::list(Some(list(vec![string_tv(b"x")]))),
+        ];
+        let pt = partial("tr", args, Some(d.clone()));
+        let tv = TypVal::partial(Some(pt.clone()));
+        assert_eq!(text(&tv), "function('tr', [1, ['x']], {'n': 1})");
+
+        d.add_value(b"p", TypVal::partial(Some(pt)))
+            .expect("fresh key");
+        // The marker counts frames from the bottom: the partial's own frame
+        // is 0, its self dictionary's 1.
+        assert_eq!(
+            echo(&tv),
+            "function('tr', [1, ['x']], {'p': function('tr', [1, ['x']], {...@1}), 'n': 1})"
+        );
+        drop(d.edit().remove_key(b"p"));
+    }
+}

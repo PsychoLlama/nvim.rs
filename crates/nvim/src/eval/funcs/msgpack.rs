@@ -251,3 +251,134 @@ pub fn f_msgpackparse(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         unsafe { msgpackparse_unpack_blob(args[0].blob_ref(), ret_list) };
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Round trips through the four builtins, and the decoder's statuses on
+    //! a truncated stream.
+
+    use super::*;
+    use crate::eval::list::string_tv;
+    use crate::eval::typval::{ListRef, tv_dict_alloc, tv_list_alloc};
+    use crate::global_cell::editor_state_lock;
+
+    fn list(items: Vec<TypVal>) -> ListRef {
+        let mut l = tv_list_alloc(-1);
+        for tv in items {
+            l.push(tv);
+        }
+        l
+    }
+
+    fn call(f: fn(&[TypVal], &mut TypVal, EvalFuncData), args: Vec<TypVal>) -> TypVal {
+        let mut result = TypVal::Number(0);
+        f(&args, &mut result, EvalFuncData::None);
+        result
+    }
+
+    /// A value with a container of every kind msgpack carries.
+    fn sample() -> TypVal {
+        let mut d = tv_dict_alloc();
+        d.add_number(b"n", -300).expect("fresh key");
+        d.add_value(b"s", string_tv(b"a\nb")).expect("fresh key");
+        d.add_list(
+            b"l",
+            Some(list(vec![TypVal::Float(0.5), TypVal::Number(70_000)])),
+        )
+        .expect("fresh key");
+        TypVal::list(Some(list(vec![
+            TypVal::dict(Some(d)),
+            TypVal::list(Some(list(vec![]))),
+            TypVal::Number(5_000_000_000),
+        ])))
+    }
+
+    fn bytes_of(blob: &TypVal) -> Vec<u8> {
+        blob.blob_ref().map_or_else(Vec::new, |b| b.bv_data.clone())
+    }
+
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
+    )]
+    fn msgpack_round_trips_through_a_blob_and_a_list_of_lines() {
+        let _serial = editor_state_lock();
+        let values = TypVal::list(Some(list(vec![sample(), string_tv(b"x")])));
+        let blob = call(f_msgpackdump, vec![values.clone(), string_tv(b"B")]);
+        let bytes = bytes_of(&blob);
+        assert_eq!(bytes[0], 0x93, "a three-item array first");
+
+        let back = call(f_msgpackparse, vec![blob]);
+        let text = crate::eval::encode::tv2string_bytes(&back);
+        assert_eq!(
+            String::from_utf8(text).expect("ASCII"),
+            // The dictionary's own slot order, which is the table's.
+            "[[{'s': 'a\nb', 'l': [0.5, 70000], 'n': -300}, [], 5000000000], 'x']"
+        );
+
+        // The same objects as lines, split at every newline the bytes hold.
+        let lines = call(f_msgpackdump, vec![values]);
+        let back = call(f_msgpackparse, vec![lines]);
+        assert_eq!(
+            crate::eval::encode::tv2string_bytes(&back),
+            crate::eval::encode::tv2string_bytes(&call(
+                f_msgpackparse,
+                vec![call(f_msgpackdump, vec![back.clone(), string_tv(b"B")])]
+            ))
+        );
+    }
+
+    /// Every prefix of a dumped value: incomplete, then whole.
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
+    )]
+    fn a_truncated_object_is_incomplete_until_its_last_byte() {
+        let _serial = editor_state_lock();
+        let mut d = tv_dict_alloc();
+        d.add_value(b"k", string_tv(b"value")).expect("fresh key");
+        d.add_number(b"n", 1 << 40).expect("fresh key");
+        let values = TypVal::list(Some(list(vec![TypVal::dict(Some(d))])));
+        let bytes = bytes_of(&call(f_msgpackdump, vec![values, string_tv(b"B")]));
+        for cut in 0..bytes.len() {
+            let mut data = &bytes[..cut];
+            let mut tv = TypVal::Number(0);
+            let status = unpack_typval(&mut data, &mut tv);
+            if cut == 0 {
+                continue;
+            }
+            assert_eq!(status, MPACK_EOF as c_int, "cut at {cut}");
+            assert_eq!(tv.v_type(), VAR_UNKNOWN, "cut at {cut}");
+        }
+        let mut data = &bytes[..];
+        let mut tv = TypVal::Number(0);
+        assert_eq!(unpack_typval(&mut data, &mut tv), MPACK_OK as c_int);
+        assert!(data.is_empty());
+        assert_eq!(
+            crate::eval::encode::tv2string_bytes(&tv),
+            b"{'k': 'value', 'n': 1099511627776}"
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
+    )]
+    fn json_round_trips_its_containers_and_scalars() {
+        let _serial = editor_state_lock();
+        let doc = string_tv(b"{\"a\": [1, 2.5, \"x\\u00e9\", null, true, {}], \"b\": {\"c\": []}}");
+        let value = call(f_json_decode, vec![doc]);
+        let text = call(f_json_encode, vec![value]);
+        assert_eq!(
+            text.string_bytes(),
+            "{\"a\": [1, 2.5, \"x\u{e9}\", null, true, {}], \"b\": {\"c\": []}}".as_bytes()
+        );
+        // A List of lines is joined with newlines first.
+        let lines = TypVal::list(Some(list(vec![string_tv(b"[1,"), string_tv(b"2]")])));
+        let value = call(f_json_decode, vec![lines]);
+        assert_eq!(crate::eval::encode::tv2string_bytes(&value), b"[1, 2]");
+    }
+}
