@@ -306,9 +306,9 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         prevwin.set(win_find_by_handle(unsafe { (*aco).save_prevwin_handle }).map(Win::id));
         // Free the autocommand window's `w:` variables, keeping the
         // hashtab for the next borrower.
-        let vars = aw.w_vars;
-        unsafe { vars_clear(&raw mut (*vars).dv_hashtab) };
-        unsafe { hash_init(&raw mut (*vars).dv_hashtab) };
+        if let Some(vars) = aw.w_winvar.di_tv.dict_handle() {
+            vars_clear(&vars);
+        }
 
         // A `:lcd` inside the autocommand window has to be undone
         // *before* `tp_localdir` and `globaldir` come back.

@@ -260,9 +260,13 @@ pub unsafe fn find_var_in_ht(
     if varname_len == 0 {
         // Something like "s:", or `ht` would have been NULL.
         return match htname as u8 {
-            b's' => (unsafe { &raw mut (*script_sv(current_sctx.get().sc_sid)).sv_var }).cast(),
-            b'g' => globvar_scope_item().cast(),
-            b'v' => vimvar_scope_item().cast(),
+            b's' => with_script_item(current_sctx.get().sc_sid, |si| {
+                si.sn_vars
+                    .as_mut()
+                    .map_or(ptr::null_mut(), |vars| vars.sv_var.item())
+            }),
+            b'g' => globvar_scope_item(),
+            b'v' => vimvar_scope_item(),
             b'b' => (unsafe { &raw mut (*Buf::current_raw()).b_bufvar }).cast(),
             b'w' => (unsafe { &raw mut (*Win::current_raw()).w_winvar }).cast(),
             b't' => (unsafe { &raw mut (*TabPage::current_raw()).tp_winvar }).cast(),
@@ -329,9 +333,11 @@ pub(crate) unsafe fn find_var_ht_dict(
             return (ptr::null_mut(), varname);
         }
 
-        // "version" is "v:version" in every scope.
-        if unsafe { hash_find_len(get_compat_ht(), name, name_len) }.is_kept() {
-            return (get_compat_ht(), varname);
+        // "version" is "v:version" in every scope. The scope dictionary
+        // stays unset: a compat name has no watchers of its own.
+        // SAFETY: the caller's `name_len` readable bytes.
+        if is_compat_name(unsafe { cstr::slice_at(name, name_len) }) {
+            return (get_vimvar_ht(), varname);
         }
 
         *dict = get_funccal_local_dict();
@@ -374,7 +380,8 @@ pub(crate) unsafe fn find_var_ht_dict(
                         unsafe { new_script_item(ptr::null_mut(), &raw mut sctx.sc_sid) };
                     }
                     current_sctx.set(sctx);
-                    *dict = unsafe { &raw mut (*script_sv(sctx.sc_sid)).sv_dict };
+                    // `s:` is never freed, so its address outlives the handle.
+                    *dict = script_scope_dict(sctx.sc_sid).map_or(ptr::null_mut(), |d| d.as_ptr());
                 }
             }
             _ => {}

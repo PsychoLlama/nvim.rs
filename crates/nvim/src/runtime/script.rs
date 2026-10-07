@@ -17,7 +17,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::eval::typval::DictRef;
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::memory::handoff::owned_cstr;
@@ -447,17 +446,9 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
 
         // A script ID was specified, so report that script in full.
         if let ScriptQuery::Sid(_) = *query {
-            let sv_dict = unsafe { &raw mut (*(*si).sn_vars).sv_dict };
-            // SAFETY: the script's own scope dictionary; the view takes no
-            // reference.
-            let vars = dict_copy(
-                None,
-                &::core::mem::ManuallyDrop::new(
-                    unsafe { DictRef::owning(sv_dict) }.expect("a live dictionary"),
-                ),
-                true,
-                get_copy_id(),
-            );
+            let sv_dict = crate::eval::vars::script_scope_dict(sid as ScriptId)
+                .expect("a sourced script has an s: scope");
+            let vars = dict_copy(None, &sv_dict, true, get_copy_id());
             let (key, klen) = (c"variables".as_ptr(), c"variables".count_bytes());
             let _ = unsafe { (*d).add_dict(cstr::slice_at(key, klen), vars) };
             let funcs = get_script_local_funcs(sid as ScriptId);

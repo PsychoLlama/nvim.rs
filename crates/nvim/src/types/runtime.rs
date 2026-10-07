@@ -77,7 +77,7 @@ pub(crate) struct SnPrl {
 }
 
 pub struct ScriptItem {
-    pub sn_vars: *mut ScriptVar,
+    pub sn_vars: Option<Box<ScriptVar>>,
     pub sn_name: *mut ::core::ffi::c_char,
     pub sn_lua: bool,
     pub sn_prof_on: bool,
@@ -102,7 +102,7 @@ impl ScriptItem {
     /// `xcalloc(1, sizeof(ScriptItem))` handed a new registry slot.
     pub fn new() -> Self {
         Self {
-            sn_vars: ::core::ptr::null_mut(),
+            sn_vars: None,
             sn_name: ::core::ptr::null_mut(),
             sn_lua: false,
             sn_prof_on: false,
@@ -129,9 +129,8 @@ impl Default for ScriptItem {
         Self::new()
     }
 }
-/// Not `Clone`: it holds a script's `s:` scope by value, and a dictionary
-/// owns the items its hash table indexes.
+/// A script's `s:` scope: the entry a bare `s:` resolves to, whose value is
+/// the scope's dictionary.
 pub struct ScriptVar {
     pub sv_var: ScopeDictItem,
-    pub sv_dict: Dict,
 }

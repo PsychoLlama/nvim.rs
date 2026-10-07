@@ -17,7 +17,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::eval::typval::DictTab;
+use crate::eval::typval::{DictRef, DictTab};
 use crate::types::{IOSIZE, NUL};
 
 /// Every variable of `ht`, one per line, each name prefixed with `prefix`.
@@ -58,12 +58,7 @@ pub unsafe fn list_hashtable_vars(
 }
 
 /// The variables in `dict`, each shown with `prefix` in front of its name.
-pub(crate) fn list_dict_vars(
-    dict: &crate::eval::typval::DictRef,
-    prefix: &CStr,
-    empty: bool,
-    first: &mut c_int,
-) {
+pub(crate) fn list_dict_vars(dict: &DictRef, prefix: &CStr, empty: bool, first: &mut c_int) {
     // SAFETY: the dictionary's own table, live for as long as the caller
     // holds it, a NUL-terminated prefix, and the caller's `first`.
     unsafe {
@@ -78,8 +73,7 @@ pub(crate) fn list_dict_vars(
 
 /// The `g:` scope.
 pub(crate) fn list_glob_vars(first: &mut c_int) {
-    // SAFETY: the global scope's own table, and the caller's `first`.
-    unsafe { list_hashtable_vars(get_globvar_ht(), c"".as_ptr(), true, first) }
+    list_dict_vars(&globvar_dict(), c"", true, first);
 }
 
 /// The current buffer's `b:` scope.
@@ -110,18 +104,14 @@ pub(crate) fn list_tab_vars(first: &mut c_int) {
 /// The `v:` scope.  `empty` is false: the `v:` variables that hold no string
 /// are not listed.
 pub(crate) fn list_vim_vars(first: &mut c_int) {
-    // SAFETY: the `v:` scope's own table, and the caller's `first`.
-    unsafe { list_hashtable_vars(get_vimvar_ht(), c"v:".as_ptr(), false, first) }
+    list_dict_vars(&vimvar_dict(), c"v:", false, first);
 }
 
 /// The current script's `s:` scope, if there is one.
 pub(crate) fn list_script_vars(first: &mut c_int) {
     let sid = current_sctx.get().sc_sid;
-    if script_id_valid(sid) {
-        // SAFETY: a valid script id, whose own `s:` dictionary this lists.
-        let ht = unsafe { &raw mut (*script_sv(sid)).sv_dict.dv_hashtab };
-        // SAFETY: a live scope table, and the caller's `first`.
-        unsafe { list_hashtable_vars(ht, c"s:".as_ptr(), false, first) };
+    if let Some(dict) = script_scope_dict(sid) {
+        list_dict_vars(&dict, c"s:", false, first);
     }
 }
 

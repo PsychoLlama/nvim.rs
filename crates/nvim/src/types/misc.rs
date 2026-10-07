@@ -43,7 +43,7 @@ pub struct ParserHighlight {
 /// The [`DictItem`] a scope dictionary is reached through, whose key is the
 /// empty string and whose value is the scope dictionary itself.
 ///
-/// It is `unref_var_dict` that gives up the reference -- a buffer, a window
+/// It is `release_var_scope` that gives up the reference -- a buffer, a window
 /// and a tab page each embed one of these and are ordinary Rust values, so
 /// without [`ManuallyDrop`](core::mem::ManuallyDrop) freeing one would
 /// release the scope twice.  The item is wrapped rather than duplicated: its
@@ -61,6 +61,14 @@ impl ScopeDictItem {
     /// The item itself, which is what a hashtab slot names.
     pub fn item(&mut self) -> *mut DictItem {
         &raw mut *self.0
+    }
+
+    /// The scope dictionary's address, for the raw `b_vars`/`w_vars`/
+    /// `tp_vars` fields that mirror the entry; null before the scope exists.
+    pub fn dict_ptr(&self) -> *mut Dict {
+        self.di_tv
+            .dict_shared()
+            .map_or(::core::ptr::null_mut(), DictRef::as_ptr)
     }
 }
 

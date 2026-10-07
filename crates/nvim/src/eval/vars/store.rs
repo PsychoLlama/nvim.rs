@@ -151,17 +151,16 @@ pub unsafe fn set_var_const(
         // A `v:` variable keeps its declared type, and two of them have
         // a side effect on assignment; `before_set_vvar` is both, and it
         // answers false when it has already done the store itself.
-        let mut type_error = false;
-        let err = &raw mut type_error;
-        // The item's own key is the name without the `v:`, terminated.
-        let key = unsafe { (*di).di_key.as_ptr() };
-        if ht == get_vimvar_ht() && !unsafe { before_set_vvar(key, di, tv, copy, watched, err) } {
-            if type_error {
-                // SAFETY: the item's NUL-terminated key.
-                let varname = unsafe { c_str(key) };
-                semsg!("E963: Setting v:{varname} to value with wrong type");
+        if ht == get_vimvar_ht() {
+            match before_set_vvar(varname_bytes, tv, copy, watched) {
+                VvarStore::Store => {}
+                VvarStore::Done => return,
+                VvarStore::TypeError => {
+                    let varname = msg_bytes(varname_bytes);
+                    semsg!("E963: Setting v:{varname} to value with wrong type");
+                    return;
+                }
             }
-            return;
         }
 
         let cur = item.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));

@@ -5,76 +5,137 @@
 //! which are how it publishes one.  [`before_set_vvar`] is the Vimscript
 //! side of the same thing: the type enforcement `:let v:x = …` goes through.
 //!
-//! Every one of them indexes the `vimvars` table by [`Vv`], so none
-//! of them can fail; the table's entries are `DictItem`-shaped and are the
-//! same items `v:` the dictionary holds.
+//! Every one of them names its row by [`Vv`], so none of them can fail. The
+//! rows are items the `v:` dictionary owns, reached through the dictionary's
+//! handle and found again by name on every access (a slot hint in
+//! [`vimvar_slots`] makes that one probe); `v:val` and `v:key`, while they
+//! are not in the dictionary, sit in [`outside_vimvars`].
+//!
+//! A write takes the old value out in one borrow of the item and releases it
+//! after the borrow has ended: a value can name the `v:` dictionary itself.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::eval::typval::DictRef;
 use crate::eval::typval::ListRef;
 use crate::eval::typval::PartialRef;
 use crate::memory::ThinCString;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use core::ffi::{c_char, c_int};
-use core::mem::offset_of;
-use core::ptr;
+use core::ffi::{CStr, c_char, c_int};
+use core::mem;
 
 use super::*;
-use crate::eval::typval::DictEntry;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_dict_free_contents;
 use crate::types::{HashTab, SaveVEvent};
 
-/// Row `i` of the `v:` table, for the walks that visit every one.
-///
-/// Total, and so a safe `fn`: the table is a `static` of `VIMVAR_COUNT`
-/// rows, which outlives every caller.
-pub(crate) fn vimvar_row(i: usize) -> Vvr {
-    debug_assert!(i < VIMVAR_COUNT, "v: table has no row {i}");
-    // SAFETY: a row of a live `static` table.
-    unsafe { Vvr::new(vimvar_table().add(i)) }
+/// The `v:` dictionary, built on first use.
+pub(crate) fn vimvar_dict() -> DictRef {
+    match scope_vim.with(|entry| entry.di_tv.dict_handle()) {
+        Some(dict) => dict,
+        None => build_vim_scope(),
+    }
 }
 
-/// The item a `v:` table row *is*: what the `v:` dictionary holds, rather
-/// than a copy of it.
-///
-/// A raw pointer taken from the row's address, never through a borrow of
-/// the row: the `v:` hashtab keeps this pointer, and a `&mut VimVar` taken
-/// afterwards would invalidate it.
-pub(crate) fn vimvar_row_item(row: Vvr) -> *mut DictItem {
-    row.field_ptr(offset_of!(VimVar, vv_di))
+/// Build the `v:` scope: the dictionary and its rows, every one empty and of
+/// its declared type. [`evalvars_init`] gives them their first values.
+fn build_vim_scope() -> DictRef {
+    let entry = new_unrooted_var_scope(VAR_SCOPE);
+    let dict = entry
+        .di_tv
+        .dict_handle()
+        .expect("a scope entry names its dictionary");
+    dict.edit().dv_lock = VarLock::Fixed;
+    for (i, row) in VIMVAR_ROWS.iter().enumerate() {
+        let mut item = DictItem::boxed(row.name.to_bytes());
+        item.di_flags |= if row.flags.has(VimVarFlags::RO) {
+            DI_FLAGS_RO | DI_FLAGS_FIX
+        } else if row.flags.has(VimVarFlags::RO_SBX) {
+            DI_FLAGS_RO_SBX | DI_FLAGS_FIX
+        } else {
+            DI_FLAGS_FIX
+        };
+        item.di_tv = TypVal::empty(row.declared);
+        // Into the `v:` scope dictionary -- unless the value is not always
+        // available, which is what a `VAR_UNKNOWN` row means.
+        if row.declared == VAR_UNKNOWN {
+            let at = outside_index(Vv::try_from(i).expect("a row of the table"));
+            outside_vimvars.with_mut(|outside| outside[at] = Some(item));
+        } else if dict.edit().insert(item).is_err() {
+            // The names are distinct by construction.
+            unreachable!("v: has two rows named {:?}", row.name);
+        }
+    }
+    scope_vim.set(entry);
+    dict
 }
 
-/// The `v:` table row `idx` names.
-///
-/// Total for [`vimvar_row`]'s reason, with [`Vv`]'s discriminants being
-/// exactly the rows of the table.
-fn vimvar(idx: Vv) -> Vvr {
-    vimvar_row(idx as usize)
+/// Where in [`outside_vimvars`] `v:val` and `v:key` wait.
+fn outside_index(idx: Vv) -> usize {
+    match idx {
+        Vv::Val => 0,
+        Vv::Key => 1,
+        _ => unreachable!("only v:val and v:key leave the v: dictionary"),
+    }
 }
 
-/// The value of `v:` variable `idx`, without reading the row.
-fn vimvar_val(idx: Vv) -> Tv {
-    // SAFETY: a field of a live row is live, and `field_ptr` reads nothing.
-    unsafe { Tv::new(vimvar(idx).field_ptr(offset_of!(VimVar, vv_di.di_tv))) }
+/// The slot row `idx` is in, in `dict` (the `v:` dictionary), or `None` when
+/// it is not in the dictionary.
+#[inline]
+fn vimvar_slot(dict: &Dict, idx: Vv) -> Option<usize> {
+    let name = VIMVAR_ROWS[idx as usize].name.to_bytes();
+    let hint = usize::from(vimvar_slots.with(|slots| slots[idx as usize]));
+    if dict.item_at(hint).is_some_and(|item| item.key() == name) {
+        return Some(hint);
+    }
+    let slot = dict.slot_of(name)?;
+    let hint = u16::try_from(slot).expect("the v: table has fewer than 65536 slots");
+    vimvar_slots.with_mut(|slots| slots[idx as usize] = hint);
+    Some(slot)
+}
+
+/// Lend row `idx`'s item to `f` to read. `f` must not write a `v:` variable.
+#[inline]
+fn with_vimvar_ref<R>(idx: Vv, f: impl FnOnce(&DictItem) -> R) -> R {
+    let dict = vimvar_dict();
+    match vimvar_slot(&dict, idx) {
+        Some(slot) => f(dict.item_at(slot).expect("a kept slot")),
+        None => outside_vimvars.with(|outside| {
+            f(outside[outside_index(idx)]
+                .as_ref()
+                .expect("a row out of v: waits outside it"))
+        }),
+    }
+}
+
+/// Lend row `idx`'s item to `f` to write. `f` must not reach a `v:`
+/// variable or release a value: what it replaces it answers, for the caller
+/// to release after the borrow.
+#[inline]
+fn with_vimvar_item<R>(idx: Vv, f: impl FnOnce(&mut DictItem) -> R) -> R {
+    let dict = vimvar_dict();
+    match vimvar_slot(&dict, idx) {
+        Some(slot) => f(dict.edit().item_at_mut(slot).expect("a kept slot")),
+        None => outside_vimvars.with_mut(|outside| {
+            f(outside[outside_index(idx)]
+                .as_mut()
+                .expect("a row out of v: waits outside it"))
+        }),
+    }
+}
+
+/// Replace `v:` variable `idx`'s value with `value`, releasing the old one.
+fn replace_vimvar(idx: Vv, value: TypVal) {
+    let old = with_vimvar_item(idx, |item| mem::replace(&mut item.di_tv, value));
+    drop(old);
 }
 
 /// Clear `v:` variable `idx`, freeing whatever it holds.
-///
-/// Safe: `tv_clear`'s only precondition is a live, writable value, and a row
-/// of the `v:` table is one for the whole program.
 pub(crate) fn clear_vimvar(idx: Vv) {
-    // SAFETY: a row of a live `static` table.
-    unsafe { tv_clear(&mut *vimvar_val(idx).raw()) };
-}
-
-/// The item of `v:` variable `idx`, as the hashtab holds it.
-fn vimvar_item(idx: Vv) -> *mut DictItem {
-    vimvar_row_item(vimvar(idx))
+    let old = with_vimvar_item(idx, |item| item.di_tv.take_value());
+    drop(old);
 }
 
 /// Save `v:` variable `idx` into `save_tv` and blank it, adding it to the
@@ -82,82 +143,82 @@ fn vimvar_item(idx: Vv) -> *mut DictItem {
 ///
 /// Pairs with [`restore_vimvar`].
 pub fn prepare_vimvar(idx: Vv, save_tv: &mut TypVal) {
-    // Written through the row's *value* rather than through the row: the
-    // `v:` hashtab keeps a pointer to `di_key`, which is a member of
-    // `VimVar`, and a write through a borrow of the whole row would
-    // invalidate it (see [`Live`]'s module docs). A `Live<TypVal>` borrows
-    // only the value.
-    let mut tv = vimvar_val(idx);
     // A take, not a write: the value moves to `save_tv` and the tag stays
     // behind, which is what the test below reads and what
-    // [`restore_vimvar`] puts back.  Nothing is freed from under the copy.
-    // SAFETY: the caller's obligation -- `save_tv` is writable.
-    *save_tv = tv.take_value();
-    if tv.v_type() == VAR_UNKNOWN {
+    // [`restore_vimvar`] puts back.
+    let (saved, untyped) = with_vimvar_item(idx, |item| {
+        let saved = item.di_tv.take_value();
+        (saved, item.di_tv.v_type() == VAR_UNKNOWN)
+    });
+    *save_tv = saved;
+    if untyped {
         // `v:val` and `v:key` have no type until something sets one, and
         // are absent from the dictionary until then.
-        // SAFETY: the `v:` hashtab, and a key that is the row's own.
-        let _ = unsafe { hash_add(get_vimvar_ht(), DictEntry::new(vimvar_item(idx))) };
+        let at = outside_index(idx);
+        if let Some(item) = outside_vimvars.with_mut(|outside| outside[at].take())
+            && let Err(item) = vimvar_dict().edit().insert(item)
+        {
+            outside_vimvars.with_mut(|outside| outside[at] = Some(item));
+        }
     }
 }
 
 /// Put back what [`prepare_vimvar`] saved.
 pub fn restore_vimvar(idx: Vv, save_tv: &mut TypVal) {
-    // Through the value, for [`prepare_vimvar`]'s reason.
-    let mut tv = vimvar_val(idx);
-    // SAFETY: the caller's obligation -- `save_tv` is the value the paired
-    // `prepare_vimvar` filled.
-    *tv = (*save_tv).take();
-    if tv.v_type() != VAR_UNKNOWN {
+    let saved = save_tv.take();
+    let (old, untyped) = with_vimvar_item(idx, |item| {
+        let old = mem::replace(&mut item.di_tv, saved);
+        (old, item.di_tv.v_type() == VAR_UNKNOWN)
+    });
+    drop(old);
+    if !untyped {
         return;
     }
-    // SAFETY: the `v:` hashtab and the row's own key; `hash_find` answers an
-    // item of the table it was given.
-    let hi = unsafe { hash_find(get_vimvar_ht(), (*vimvar_item(idx)).di_key.as_ptr()) };
-    if hi.is_kept() {
-        unsafe { hash_remove(get_vimvar_ht(), hi) };
-    } else {
-        internal_error(c"restore_vimvar()");
+    let name = VIMVAR_ROWS[idx as usize].name.to_bytes();
+    let dict = vimvar_dict();
+    let removed = dict.edit().remove_key(name);
+    match removed {
+        Some(RemovedItem::Allocated(item)) => {
+            outside_vimvars.with_mut(|outside| outside[outside_index(idx)] = Some(item));
+        }
+        Some(RemovedItem::Embedded(_)) => unreachable!("v: owns its rows"),
+        None => internal_error(c"restore_vimvar()"),
     }
 }
 
 /// Copy `tv` into `v:` variable `idx`.
 pub fn set_vim_var_tv(idx: Vv, tv: &mut TypVal) {
-    let out = vimvar_val(idx).raw();
-    // SAFETY: a live `v:` value, and the caller's obligation for `tv`.
-    unsafe { tv_clear(&mut *out) };
-    unsafe { tv_copy(tv, &mut *out) };
+    let mut copy = TV_INITIAL_VALUE;
+    tv_copy(tv, &mut copy);
+    replace_vimvar(idx, copy);
 }
 
 /// The name of `v:` variable `idx`, without the `v:`.
-///
-/// The table's names are static literals, so the answer outlives everything.
 pub(crate) fn get_vim_var_name(idx: Vv) -> &'static CStr {
-    // SAFETY: every row's name is a NUL-terminated literal of the static
-    // table, never written.
-    unsafe { CStr::from_ptr(vimvar(idx).vv_name) }
+    VIMVAR_ROWS[idx as usize].name
 }
 
-/// Lend `v:` variable `idx`'s value to `f` to write through.
+/// Lend `v:` variable `idx`'s value to `f` to write through. `f` must not
+/// reach a `v:` variable, nor release a value that could.
 pub(crate) fn with_vim_var_mut<R>(idx: Vv, f: impl FnOnce(&mut TypVal) -> R) -> R {
-    f(&mut vimvar_val(idx))
+    with_vimvar_item(idx, |item| f(&mut item.di_tv))
 }
 
 /// `v:` variable `idx` as a Number.  The caller knows its declared type.
 pub(crate) fn get_vim_var_nr(idx: Vv) -> VarNumber {
-    vimvar_val(idx).number_or_zero()
+    with_vimvar_ref(idx, |item| item.di_tv.number_or_zero())
 }
 
 /// Another reference to the List `v:` variable `idx` holds, `None` when it
 /// holds none.
 pub(crate) fn get_vim_var_list_handle(idx: Vv) -> Option<ListRef> {
-    vimvar_val(idx).list_handle()
+    with_vimvar_ref(idx, |item| item.di_tv.list_handle())
 }
 
 /// Another reference to the Dict `v:` variable `idx` holds, `None` when it
 /// holds none.
 pub(crate) fn get_vim_var_dict_handle(idx: Vv) -> Option<DictRef> {
-    vimvar_val(idx).dict_handle()
+    with_vimvar_ref(idx, |item| item.di_tv.dict_handle())
 }
 
 /// Lend `v:` variable `idx`'s string to `f`, with an unset one reading as
@@ -170,66 +231,62 @@ pub(crate) fn get_vim_var_dict_handle(idx: Vv) -> Option<DictRef> {
 /// a caller that holds the string across such a thing takes
 /// [`vim_var_string`] or [`vim_var_bytes`] instead.
 pub(crate) fn with_vim_var_str<R>(idx: Vv, f: impl FnOnce(&CStr) -> R) -> R {
-    let tv = vimvar_val(idx);
-    debug_assert_eq!(
-        tv.v_type(),
-        VAR_STRING,
-        "v: variable {idx:?} is not a String"
-    );
-    f(tv.string_ref().map_or(c"", ThinCString::as_cstr))
+    with_vimvar_ref(idx, |item| {
+        let tv = &item.di_tv;
+        debug_assert_eq!(
+            tv.v_type(),
+            VAR_STRING,
+            "v: variable {idx:?} is not a String"
+        );
+        f(tv.string_ref().map_or(c"", ThinCString::as_cstr))
+    })
 }
 
 /// A copy of `v:` variable `idx`'s string, `None` for the null string.
 pub(crate) fn vim_var_string(idx: Vv) -> Option<ThinCString> {
-    let tv = vimvar_val(idx);
-    debug_assert_eq!(
-        tv.v_type(),
-        VAR_STRING,
-        "v: variable {idx:?} is not a String"
-    );
-    tv.string_ref().cloned()
+    with_vimvar_ref(idx, |item| {
+        let tv = &item.di_tv;
+        debug_assert_eq!(
+            tv.v_type(),
+            VAR_STRING,
+            "v: variable {idx:?} is not a String"
+        );
+        tv.string_ref().cloned()
+    })
 }
 
 /// A reference of the caller's own to `v:lua`, the partial a `v:lua.name`
 /// callee stands for.
 pub(crate) fn lua_partial() -> Option<PartialRef> {
-    vimvar_val(Vv::Lua).partial_shared().cloned()
+    with_vimvar_ref(Vv::Lua, |item| item.di_tv.partial_shared().cloned())
 }
 
 /// Declare `v:` variable `idx` to be of type `type_0`, without touching its
 /// value.
 pub fn set_vim_var_type(idx: Vv, type_0: VarType) {
-    let mut tv = vimvar_val(idx);
-    tv.write_empty(type_0);
+    with_vimvar_item(idx, |item| item.di_tv.write_empty(type_0));
 }
 
 /// Set `v:` variable `idx` to the Number `val`.
 pub fn set_vim_var_nr(idx: Vv, val: VarNumber) {
-    let mut tv = vimvar_val(idx);
-    clear_vimvar(idx);
-    tv.write_number(val);
+    replace_vimvar(idx, TypVal::Number(val));
 }
 
 /// Set `v:` variable `idx` to `v:true` or `v:false`.
 pub fn set_vim_var_bool(idx: Vv, val: BoolVarValue) {
-    let mut tv = vimvar_val(idx);
-    clear_vimvar(idx);
-    tv.write_boolean(val);
+    replace_vimvar(idx, TypVal::Bool(val));
 }
 
 /// Set `v:` variable `idx` to `v:null`.
 pub fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
-    let mut tv = vimvar_val(idx);
-    clear_vimvar(idx);
-    tv.write_special(val);
+    replace_vimvar(idx, TypVal::Special(val));
 }
 
 /// Set `v:char` to the character `c`.
 pub fn set_vim_var_char(c: c_int) {
     let mut buf = [0u8; 7];
-    // SAFETY: `utf_char2bytes` writes at most six bytes into the local.
-    let buflen = unsafe { utf_char2bytes(c, buf.as_mut_ptr().cast()) };
-    set_vim_var_string(Vv::Char, Some(&buf[..buflen as usize]));
+    let buflen = crate::mbyte::encode_char(c, &mut buf);
+    set_vim_var_string(Vv::Char, Some(&buf[..buflen]));
 }
 
 /// Set `v:` variable `idx` to a copy of `val`; `None` is the null string.
@@ -243,37 +300,26 @@ pub fn set_vim_var_string(idx: Vv, val: Option<&[u8]>) {
 /// Set `v:` variable `idx` to `val`, which it takes over; `None` is the null
 /// string.
 pub(crate) fn set_vim_var_owned(idx: Vv, val: Option<ThinCString>) {
-    let mut tv = vimvar_val(idx);
-    clear_vimvar(idx);
-    tv.write_string(val);
+    replace_vimvar(idx, TypVal::string(val));
 }
 
 /// Lend `v:` variable `idx`'s value to `f`.
 pub(crate) fn with_vim_var<R>(idx: Vv, f: impl FnOnce(&TypVal) -> R) -> R {
-    f(&vimvar_val(idx))
+    with_vimvar_ref(idx, |item| f(&item.di_tv))
 }
 
 /// Set `v:` variable `idx` to `val`, which takes the handle over.
 pub fn set_vim_var_list(idx: Vv, val: Option<ListRef>) {
-    let mut tv = vimvar_val(idx);
-    clear_vimvar(idx);
-    tv.write_list(val);
+    replace_vimvar(idx, TypVal::list(val));
 }
 
 /// Set `v:` variable `idx` to `val`, which takes the handle over, and make
 /// its keys read-only.
 pub fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
-    let mut tv = vimvar_val(idx);
-    clear_vimvar(idx);
-    let at = val
-        .as_ref()
-        .map_or(::core::ptr::null_mut(), DictRef::as_ptr);
-    tv.write_dict(val);
-    if at.is_null() {
-        return;
+    if let Some(dict) = &val {
+        dict.edit().set_keys_readonly();
     }
-    // SAFETY: the caller's obligation -- a live dictionary.
-    unsafe { (*at).set_keys_readonly() };
+    replace_vimvar(idx, TypVal::dict(val));
 }
 
 /// Set `v:lua`'s partial.
@@ -284,7 +330,7 @@ pub fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
 ///
 /// The slot takes `val` over.
 pub(crate) fn set_vim_var_partial(idx: Vv, val: PartialRef) {
-    vimvar_val(idx).write_partial(Some(val));
+    replace_vimvar(idx, TypVal::partial(Some(val)));
 }
 
 /// Set `v:register` to `c`, or to `"` for the unnamed register.
@@ -297,9 +343,11 @@ pub fn set_reg_var(c: c_int) {
     // Only write when it changed, to avoid the reallocation. The test
     // is against `c`, not against the name that would be stored, so
     // `set_reg_var(0)` always rewrites -- upstream's.
-    let unchanged = vimvar_val(Vv::Register)
-        .string_ref()
-        .is_some_and(|cur| cur.first() == c as u8);
+    let unchanged = with_vimvar_ref(Vv::Register, |item| {
+        item.di_tv
+            .string_ref()
+            .is_some_and(|cur| cur.first() == c as u8)
+    });
     if !unchanged {
         set_vim_var_string(Vv::Register, Some(&[regname as u8]));
     }
@@ -312,11 +360,13 @@ pub fn set_reg_var(c: c_int) {
 /// that was there is freed, answering `None` -- there is nothing left for the
 /// caller to put back.
 pub fn set_cmdarg(excmd: Option<&ExArg>, oldarg: Option<ThinCString>) -> Option<ThinCString> {
-    let mut tv = vimvar_val(Vv::Cmdarg);
-
     let Some(command) = excmd else {
-        drop(tv.take_string());
-        tv.write_string(oldarg);
+        let old = with_vimvar_item(Vv::Cmdarg, |item| {
+            let old = item.di_tv.take_string();
+            item.di_tv.write_string(oldarg);
+            old
+        });
+        drop(old);
         return None;
     };
     let mut newval: Vec<u8> = Vec::new();
@@ -360,150 +410,131 @@ pub fn set_cmdarg(excmd: Option<&ExArg>, oldarg: Option<ThinCString>) -> Option<
     }
 
     // The old value goes to the caller, to put back later.
-    let oldval = tv.take_string();
-    tv.write_string(Some(ThinCString::from_bytes(&newval)));
-    oldval
+    with_vimvar_item(Vv::Cmdarg, |item| {
+        let oldval = item.di_tv.take_string();
+        item.di_tv
+            .write_string(Some(ThinCString::from_bytes(&newval)));
+        oldval
+    })
 }
 
 /// Set `v:count` and `v:count1`, and `v:prevcount` from the old `v:count`
 /// first when asked.
 pub(crate) fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
     if set_prevcount {
-        let old = vimvar_val(Vv::Count).number_or_zero();
-        let mut prev = vimvar_val(Vv::Prevcount);
-        prev.write_number(old);
+        let old = get_vim_var_nr(Vv::Count);
+        with_vimvar_item(Vv::Prevcount, |item| item.di_tv.write_number(old));
     }
-    let (mut count_tv, mut count1_tv) = (vimvar_val(Vv::Count), vimvar_val(Vv::Count1));
-    count_tv.write_number(count as VarNumber);
-    count1_tv.write_number(count1 as VarNumber);
+    with_vimvar_item(Vv::Count, |item| {
+        item.di_tv.write_number(count as VarNumber)
+    });
+    with_vimvar_item(Vv::Count1, |item| {
+        item.di_tv.write_number(count1 as VarNumber);
+    });
 }
 
-/// The type enforcement a write to a `v:` variable passes.
+/// Notify the `v:` dictionary's watchers that `key` changed from `old` to
+/// what it holds now.
+fn notify_vvar_watchers(key: &[u8], old: &TypVal) {
+    let dict = vimvar_dict();
+    let new = dict.find(key).map(|item| item.di_tv.clone());
+    cstr::with_terminated(key, |key| {
+        dict_watcher_notify(&dict, key, new.as_ref(), Some(old));
+    });
+}
+
+/// Why [`before_set_vvar`] did not leave the store to its caller.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum VvarStore {
+    /// The type checked out: store the value the ordinary way.
+    Store,
+    /// Done: the variable converted the value and stored it itself.
+    Done,
+    /// The value's type is not the declared one (E963, the caller's to
+    /// report).
+    TypeError,
+}
+
+/// The type enforcement a write to the `v:` variable `key` passes.
 ///
 /// A `v:` variable keeps the type the table declares for it, so a String or
 /// a Number one converts what it is given rather than replacing it -- and
 /// two of them, `v:searchforward` and `v:hlsearch`, have a side effect on
 /// the editor when they change.  Both of those cases do the store
-/// themselves, notify the watchers and answer **false**: there is nothing
-/// left for the caller to do.  Any other declared type accepts only a value
-/// of the same type; a mismatch sets `type_error` (E963) and also answers
-/// false.  True means "type checked out, store it the ordinary way".
+/// themselves, notify the watchers and answer [`VvarStore::Done`]. Any other
+/// declared type accepts only a value of the same type.
 ///
-/// # Safety
-/// `varname` is the name without the `v:`, `di` its item in the `v:` table,
-/// `tv` the value being stored and `type_error` writable.
-pub unsafe fn before_set_vvar(
-    varname: *const c_char,
-    di: *mut DictItem,
-    tv: &mut TypVal,
-    copy: bool,
-    watched: bool,
-    type_error: *mut bool,
-) -> bool {
-    let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation -- `di` is an item of the `v:` scope
-    // dictionary and `tv` the value being stored, both live for this call.
-    // The item is reached through its *value*: `cur` points into the item,
-    // so a write through a borrow of the whole item -- which `Live`'s
-    // `DerefMut` hands out -- would invalidate the pointer the watcher
-    // notification below is handed. See [`Live`]'s module docs.
-    let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
-    let (mut stored, mut tv) = unsafe { (Tv::new(cur), Tv::new(tv)) };
-    if stored.v_type() == VAR_STRING {
-        let mut oldtv = TV_INITIAL_VALUE;
-        if watched {
-            // SAFETY: a live value and a live local.
-            unsafe { tv_copy(&*cur, &mut oldtv) };
-        }
-        drop(stored.take_string());
+/// `key` must name a variable of the `v:` dictionary.
+pub(crate) fn before_set_vvar(key: &[u8], tv: &mut TypVal, copy: bool, watched: bool) -> VvarStore {
+    let dict = vimvar_dict();
+    let current = |dict: &DictRef| {
+        dict.find(key)
+            .map_or(VAR_UNKNOWN, |item| item.di_tv.v_type())
+    };
+    let stored_type = current(&dict);
+    if stored_type == VAR_STRING {
+        // The old value, for the watchers, and the string taken out.
+        let (old, taken) = match dict.edit().find_mut(key) {
+            Some(item) => (
+                watched.then(|| item.di_tv.clone()),
+                item.di_tv.take_string(),
+            ),
+            None => (None, None),
+        };
+        drop(taken);
 
         if copy || tv.v_type() != VAR_STRING {
-            // SAFETY: a live value; the answer lives in `numbuf` or in it.
-            let val = numbuf.string(unsafe { &*tv.raw() });
+            let mut numbuf = NumBuf::new();
             // Careful: assigning to v:errmsg, `tv_get_string()` may
             // itself raise an error, which sets the variable -- so only
             // store when it is still empty.
-            if stored.string_ref().is_none() {
-                stored.write_string(Some(ThinCString::from_cstr(val)));
+            let val = numbuf.string(tv);
+            let val = ThinCString::from_cstr(val);
+            if let Some(item) = dict.edit().find_mut(key)
+                && item.di_tv.string_ref().is_none()
+            {
+                item.di_tv.write_string(Some(val));
             }
         } else {
             // Take the string over, rather than copy and free: the value
             // leaves `tv`, so the item now owns the only copy.
             let mut taken = tv.take_value();
-            stored.write_string(taken.take_string());
+            let string = taken.take_string();
+            if let Some(item) = dict.edit().find_mut(key) {
+                item.di_tv.write_string(string);
+            }
         }
-        if watched {
-            // SAFETY: the `v:` dictionary, this item's value and a live local.
-            let vv_dict = get_vimvar_dict();
-            unsafe {
-                dict_watcher_notify(
-                    &::core::mem::ManuallyDrop::new(
-                        DictRef::owning(vv_dict).expect("a watched dictionary"),
-                    ),
-                    ::core::ffi::CStr::from_ptr(varname),
-                    Some(&*cur),
-                    Some(&oldtv),
-                )
-            };
-            clear_local(&mut oldtv);
+        if let Some(old) = old {
+            notify_vvar_watchers(key, &old);
         }
-        return false;
-    } else if stored.v_type() == VAR_NUMBER {
-        let mut oldtv = TV_INITIAL_VALUE;
-        if watched {
-            // SAFETY: a live value and a live local.
-            unsafe { tv_copy(&*cur, &mut oldtv) };
+        return VvarStore::Done;
+    } else if stored_type == VAR_NUMBER {
+        let old = watched
+            .then(|| dict.find(key).map(|item| item.di_tv.clone()))
+            .flatten();
+        let n = tv_get_number(tv);
+        if let Some(item) = dict.edit().find_mut(key) {
+            item.di_tv.write_number(n);
         }
-        // SAFETY: a live value; the Number arm is what the tag declares.
-        let n = unsafe { tv_get_number(&*tv.raw()) };
-        stored.write_number(n);
-        // SAFETY: the caller's obligation -- `varname` is NUL-terminated.
-        if unsafe { cstr::eq_bytes(varname, b"searchforward") } {
+        if key == b"searchforward" {
             set_search_direction(if n != 0 { b'/' as c_int } else { b'?' as c_int });
-        } else if unsafe { cstr::eq_bytes(varname, b"hlsearch") } {
+        } else if key == b"hlsearch" {
             no_hlsearch.set(n == 0);
             redraw_all_later(UPD_SOME_VALID);
         }
-        if watched {
-            // SAFETY: the `v:` dictionary, this item's value and a live local.
-            let vv_dict = get_vimvar_dict();
-            unsafe {
-                dict_watcher_notify(
-                    &::core::mem::ManuallyDrop::new(
-                        DictRef::owning(vv_dict).expect("a watched dictionary"),
-                    ),
-                    ::core::ffi::CStr::from_ptr(varname),
-                    Some(&*cur),
-                    Some(&oldtv),
-                )
-            };
-            clear_local(&mut oldtv);
+        if let Some(old) = old {
+            notify_vvar_watchers(key, &old);
         }
-        return false;
-    } else if stored.v_type() != tv.v_type() {
-        // SAFETY: the caller's obligation -- `type_error` is writable.
-        unsafe { *type_error = true };
-        return false;
+        return VvarStore::Done;
+    } else if stored_type != tv.v_type() {
+        return VvarStore::TypeError;
     }
-    true
+    VvarStore::Store
 }
 
-/// [`set_vvar_item`] for the existing `v:` variable `key`, with `op` the
-/// compound operator's byte. Nothing happens for a key `v:` does not have.
-pub(crate) fn set_vvar_key(key: &[u8], tv: &mut TypVal, copy: bool, op: Option<u8>) {
-    // SAFETY: the `v:` scope dictionary is a static.
-    let item = unsafe { (*get_vimvar_dict()).find_ptr(key) };
-    if item.is_null() {
-        return;
-    }
-    let op = op.map(|op| [op.cast_signed(), 0]);
-    let op = op.as_ref().map_or(ptr::null(), |op| op.as_ptr());
-    // SAFETY: an item of the `v:` dictionary, and a terminated operator.
-    unsafe { set_vvar_item(item, tv, copy, op) };
-}
-
-/// A write to a `v:` variable that reached the scope dictionary directly:
-/// `let v:['name'] = value`.
+/// A write to the existing `v:` variable `key` that reached the scope
+/// dictionary directly: `let v:['name'] = value`, with `op` the compound
+/// operator's byte. Nothing happens for a key `v:` does not have.
 ///
 /// The subscripted spelling makes `get_lval` resolve `v:` to a plain
 /// `Dict` and `set_var_lval` store straight into the `DictItem`, so
@@ -518,100 +549,64 @@ pub(crate) fn set_vvar_key(key: &[u8], tv: &mut TypVal, copy: bool, op: Option<u
 /// applies to a *copy* of the current value before handing the result to
 /// `set_var_const`, so that `let v:searchforward .= 'x'` converts back to a
 /// Number rather than replacing one.
-///
-/// # Safety
-/// `di` is an item of the `v:` scope dictionary, `tv` the value being
-/// assigned, and `op` NULL or the assignment's one-character operator.
-pub(crate) unsafe fn set_vvar_item(
-    di: *mut DictItem,
-    tv: &mut TypVal,
-    copy: bool,
-    op: *const c_char,
-) {
-    // SAFETY: the caller's obligation -- `di` is an item of the `v:` scope
-    // dictionary, live for this call.
-    // As [`before_set_vvar`], the item is written through its value, so that
-    // `cur` survives the store.
-    let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
-    // SAFETY: the caller's obligation, and the `v:` dictionary is a static.
-    let varname = unsafe { (*di).di_key.as_ptr() };
-    let watched = dict_is_watched(unsafe { (get_vimvar_dict()).as_ref() });
+pub(crate) fn set_vvar_key(key: &[u8], tv: &mut TypVal, copy: bool, op: Option<u8>) {
+    let dict = vimvar_dict();
+    if dict.find(key).is_none() {
+        return;
+    }
+    let watched = dict_is_watched(Some(&dict));
 
     // `+=` and friends act on the current value, so evaluate them into a
     // temporary first and enforce the type on the *result*.
+    let compound = op.is_some_and(|op| op != b'=');
     let mut tmp = TV_INITIAL_VALUE;
-    // SAFETY: the caller's obligation -- `op` is NUL-terminated or NULL.
-    let compound = !op.is_null() && unsafe { *op } != b'=' as c_char;
-    let val = if compound {
-        // SAFETY: this item's value, a live local, and the caller's `tv`.
-        unsafe { tv_copy(&*cur, &mut tmp) };
-        // SAFETY: as above -- a one-byte operator.
-        if eexe_mod_op(&mut tmp, tv, unsafe { *op }.cast_unsigned()).is_err() {
-            clear_local(&mut tmp);
-            return;
+    let val: &mut TypVal = match op.filter(|_| compound) {
+        Some(op) => {
+            if let Some(item) = dict.find(key) {
+                tmp = item.di_tv.clone();
+            }
+            if eexe_mod_op(&mut tmp, tv, op).is_err() {
+                clear_local(&mut tmp);
+                return;
+            }
+            &mut tmp
         }
-        &raw mut tmp
-    } else {
-        tv
+        None => tv,
     };
 
-    let mut type_error = false;
     // The temporary is ours to free, so the store must copy out of it
     // rather than take its string.
     let copy_out = copy || compound;
-    let err = &raw mut type_error;
-    // SAFETY: the item and the value are live, and `type_error` is a local.
-    let typed = unsafe { before_set_vvar(varname, di, &mut *val, copy_out, watched, err) };
-    if !typed {
-        if type_error {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let varname = unsafe { c_str(varname) };
+    match before_set_vvar(key, val, copy_out, watched) {
+        VvarStore::Store => {}
+        VvarStore::Done => return,
+        VvarStore::TypeError => {
+            let varname = msg_bytes(key);
             semsg!("E963: Setting v:{varname} to value with wrong type");
+            return;
         }
-        // SAFETY: a live local.
-        clear_local(&mut tmp);
-        return;
     }
 
     // The declared type matched: the ordinary store, as `set_var_const`
     // performs it.
-    let mut oldtv = TV_INITIAL_VALUE;
-    if watched {
-        // SAFETY: this item's value and a live local.
-        unsafe { tv_copy(&*cur, &mut oldtv) };
-    }
-    // SAFETY: this item's value, which the store below replaces.
-    unsafe { tv_clear(&mut *cur) };
-    // SAFETY: `val` is the caller's value or the local temporary.
-    let val_type = unsafe { (*val).v_type() };
-    if !compound && (copy || val_type == VAR_NUMBER || val_type == VAR_FLOAT) {
-        // SAFETY: a live value and this item's own.
-        unsafe { tv_copy(&*val, &mut *cur) };
+    let val_type = val.v_type();
+    let new = if !compound && (copy || val_type == VAR_NUMBER || val_type == VAR_FLOAT) {
+        val.clone()
     } else {
-        // SAFETY: as above; the value is moved out and blanked.
-        let mut cur = unsafe { Tv::new(cur) };
-        *cur = unsafe { (*val).take() };
-    }
-    // As `set_var_const`: the value stored is unlocked, which with the lock
-    // on the slot means this item.
-    unsafe { *di_lock(di) = VarLock::Unlocked };
+        val.take()
+    };
+    let Some(old) = dict.edit().find_mut(key).map(|item| {
+        // As `set_var_const`: the value stored is unlocked, which with the
+        // lock on the slot means this item.
+        item.di_lock = VarLock::Unlocked;
+        mem::replace(&mut item.di_tv, new)
+    }) else {
+        return;
+    };
     if watched {
-        // SAFETY: the `v:` dictionary, this item's value and a live local.
-        let vv_dict = get_vimvar_dict();
-        unsafe {
-            dict_watcher_notify(
-                &::core::mem::ManuallyDrop::new(
-                    DictRef::owning(vv_dict).expect("a watched dictionary"),
-                ),
-                ::core::ffi::CStr::from_ptr(varname),
-                Some(&*cur),
-                Some(&oldtv),
-            )
-        };
-        clear_local(&mut oldtv);
+        notify_vvar_watchers(key, &old);
     }
-    // SAFETY: a live local.
-    clear_local(&mut tmp);
+    drop(old);
 }
 
 /// Blank the six `v:option_*` variables the `OptionSet` autocommand reads.
@@ -651,7 +646,7 @@ pub(crate) fn get_v_event(sve: &mut SaveVEvent) -> DictRef {
         // autocommand put in `v:event` travels to `sve` intact and
         // `v:event` starts the inner one empty. `restore_v_event` moves it
         // back.
-        sve.sve_hashtab = core::mem::replace(live, HashTab::init());
+        sve.sve_hashtab = mem::replace(live, HashTab::init());
     }
     v_event
 }
@@ -666,6 +661,6 @@ pub(crate) fn restore_v_event(v_event: DictRef, sve: &mut SaveVEvent) {
     if sve.sve_did_save {
         // The move back. `sve` is left with a table that owns nothing,
         // which is what its `Default` is.
-        v_event.edit().dv_hashtab = core::mem::take(&mut sve.sve_hashtab);
+        v_event.edit().dv_hashtab = mem::take(&mut sve.sve_hashtab);
     }
 }

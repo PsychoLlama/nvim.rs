@@ -26,7 +26,7 @@ use core::ffi::{CStr, c_int};
 
 use crate::eval::typval::{dict_find, list_len};
 use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
-use crate::eval::vars::eval_msgpack_type_lists;
+use crate::eval::vars::msgpack_type_list_is;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{char_at, char_len, utf_char2len, utf_printable};
 use crate::message::emsg;
@@ -543,12 +543,9 @@ pub fn encode_check_json_key(tv: &TypVal) -> bool {
     };
     let type_tv = &type_di.di_tv;
     if type_tv.v_type() != VAR_LIST
-        || !core::ptr::eq(
-            type_tv
-                .list_ref()
-                .map_or(core::ptr::null(), core::ptr::from_ref),
-            eval_msgpack_type_lists.get()[kMPString as usize],
-        )
+        || !type_tv
+            .list_ref()
+            .is_some_and(|list| msgpack_type_list_is(kMPString, list))
     {
         return false;
     }

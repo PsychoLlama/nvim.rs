@@ -36,7 +36,6 @@ use crate::getchar::state::{KeyTyped, got_int, reg_recording};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
 use crate::guard::secure;
-use crate::hashtab::hash_init;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_set_sctx;

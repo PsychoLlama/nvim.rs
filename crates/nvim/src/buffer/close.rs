@@ -35,7 +35,7 @@ use crate::diff::{diff_buf_delete, diffopt_hiddenoff};
 use crate::drawscreen::state::updating_screen;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{callback_free, tv_dict_item_copy};
-use crate::eval::vars::{unref_var_dict, vars_clear};
+use crate::eval::vars::{release_var_scope, vars_clear};
 use crate::extmark::extmark_free_all;
 use crate::garray::ga_clear;
 use crate::hashtab::{hash_find, hash_remove};
@@ -222,7 +222,9 @@ fn clear_buf_vars(buffer: Buf) {
         let changedtick_hi = hash_find(vars, c"changedtick".as_ptr());
         debug_assert!(changedtick_hi.is_kept(), "changedtick is in the table");
         hash_remove(vars, changedtick_hi);
-        vars_clear(vars);
+    }
+    if let Some(dict) = buffer.b_bufvar.di_tv.dict_handle() {
+        vars_clear(&dict);
     }
 }
 
@@ -234,9 +236,8 @@ fn rescue_changedtick(mut buffer: Buf) {
     let _ = unsafe { (*vars).add_item(tv_dict_item_copy(&*di)) };
 }
 
-fn release_vars(buffer: Buf) {
-    // SAFETY: a live buffer's variable dictionary.
-    unsafe { unref_var_dict(buffer.b_vars) };
+fn release_vars(mut buffer: Buf) {
+    release_var_scope(&mut buffer.b_bufvar);
 }
 
 fn forget_autocmds(buffer: Buf) {

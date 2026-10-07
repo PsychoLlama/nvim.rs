@@ -21,7 +21,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy, tv_dict_item_remove,
 };
-use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
+use crate::eval::vars::{VvarStore, before_set_vvar, get_vimvar_dict};
 use crate::types::TypVal;
 use crate::types::{
     Dict, DictItem, Error, Object, String_0, kErrorTypeException, kErrorTypeValidation, size_t,
@@ -171,15 +171,14 @@ pub(crate) unsafe fn dict_set_var(
             rv = Object::from(unsafe { &(*di).di_tv });
         }
         // `v:` keys are typed, and some of them run a hook on assignment.
-        let mut type_error = false;
-        let accepted = dict != get_vimvar_dict() || {
-            let (new, bad) = (&raw mut tv, &raw mut type_error);
-            // SAFETY: `di` is live, and `tv`/`type_error` are this frame's.
-            unsafe { before_set_vvar(key.data(), di, &mut *new, true, watched, bad) }
+        let verdict = if dict == get_vimvar_dict() {
+            before_set_vvar(key.as_bytes(), &mut tv, true, watched)
+        } else {
+            VvarStore::Store
         };
-        if !accepted {
+        if verdict != VvarStore::Store {
             tv_clear(&mut tv);
-            if type_error {
+            if verdict == VvarStore::TypeError {
                 let key = key.as_cstr().to_string_lossy();
                 return Err(api_error!(
                     kErrorTypeValidation,

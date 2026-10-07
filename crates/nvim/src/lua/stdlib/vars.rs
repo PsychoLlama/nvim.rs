@@ -29,7 +29,7 @@ use crate::eval::typval::{
     TV_INITIAL_VALUE, dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy,
     tv_dict_item_remove,
 };
-use crate::eval::vars::{before_set_vvar, get_globvar_dict, get_vimvar_dict};
+use crate::eval::vars::{VvarStore, before_set_vvar, get_globvar_dict, get_vimvar_dict};
 use crate::ex_eval::aborting;
 use crate::lua::converter::{nlua_pop_typval, nlua_push_typval};
 use crate::lua::ffi::{
@@ -137,12 +137,12 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
             let _ = (*dict).add_item(DictItem::boxed(key.as_bytes()));
             di = (*dict).find_ptr(key.as_bytes());
         } else {
-            let mut type_error = false;
-            if dict == get_vimvar_dict()
-                && !before_set_vvar(key.data(), di, &mut tv, true, watched, &raw mut type_error)
-            {
+            // `v:` keys are typed, and some of them run a hook on assignment.
+            let verdict = (dict == get_vimvar_dict())
+                .then(|| before_set_vvar(key.as_bytes(), &mut tv, true, watched));
+            if let Some(verdict) = verdict.filter(|verdict| *verdict != VvarStore::Store) {
                 tv_clear(&mut tv);
-                if type_error {
+                if verdict == VvarStore::TypeError {
                     return luaL_error(
                         lstate,
                         c"Setting v:%s to value with wrong type".as_ptr(),

@@ -24,11 +24,9 @@ use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{WinInfos, buflist_new};
 use crate::decoration::clear_virttext;
-use crate::eval::typval::tv_dict_alloc;
-use crate::eval::vars::{init_var_dict, unref_var_dict, vars_clear};
+use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
 use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
 use crate::grid::grid_assign_handle;
-use crate::hashtab::hash_init;
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
 use crate::option::vars::p_ch;
@@ -214,12 +212,9 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     register_window(new_wp);
     new_wp.w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(&mut new_wp.w_grid_alloc);
-    // SAFETY: a fresh dictionary, which becomes the window's own.
-    // The window's storage owns it; `init_var_dict` seeds it with
-    // `DO_NOT_FREE_CNT`.
-    new_wp.w_vars = tv_dict_alloc().into_raw();
-    // SAFETY: the dictionary just allocated, and the window's own scope.
-    unsafe { init_var_dict(new_wp.w_vars, &raw mut new_wp.w_winvar, VAR_SCOPE) };
+    // The window's `w:` scope; `w_vars` mirrors the entry's dictionary.
+    new_wp.w_winvar = new_var_scope(VAR_SCOPE);
+    new_wp.w_vars = new_wp.w_winvar.dict_ptr();
     block_autocmds();
     if !hidden {
         // A window in another tab page goes on that tab page's list.
@@ -286,14 +281,10 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     clear_options(&raw mut window.w_allbuf_opt);
     free(window.w_p_lcs_chars.multispace);
     free(window.w_p_lcs_chars.leadmultispace);
-    // SAFETY: the window's own variable dictionary.
-    let vars = unsafe { &raw mut (*window.w_vars).dv_hashtab };
-    // SAFETY: as above.
-    unsafe { vars_clear(vars) };
-    // SAFETY: as above.
-    unsafe { hash_init(vars) };
-    // SAFETY: as above.
-    unsafe { unref_var_dict(window.w_vars) };
+    if let Some(vars) = window.w_winvar.di_tv.dict_handle() {
+        vars_clear(&vars);
+    }
+    release_var_scope(&mut window.w_winvar);
     if prevwin.get() == Some(window.id()) {
         prevwin.set(None);
     }

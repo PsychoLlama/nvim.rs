@@ -28,8 +28,7 @@ use crate::diff::diff_clear;
 use crate::diff::state::diff_need_scrollbind;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::drawscreen::state::redraw_tabline;
-use crate::eval::typval::tv_dict_alloc;
-use crate::eval::vars::{init_var_dict, unref_var_dict, vars_clear};
+use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::{text_locked, text_locked_msg};
@@ -100,13 +99,9 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     let mut tp = register_tabpage(tp.handle(), owned);
 
     // Init t: variables.
-    // SAFETY: a fresh dictionary, which becomes the tab page's own.
-    // The tab page's storage owns it; `init_var_dict` seeds it with
-    // `DO_NOT_FREE_CNT`.
-    tp.tp_vars = tv_dict_alloc().into_raw();
-    let (vars, scope) = (tp.tp_vars, &raw mut tp.tp_winvar);
-    // SAFETY: the dictionary just allocated, and the tab page's own scope.
-    unsafe { init_var_dict(vars, scope, VAR_SCOPE) };
+    // The tab page's `t:` scope; `tp_vars` mirrors the entry's dictionary.
+    tp.tp_winvar = new_var_scope(VAR_SCOPE);
+    tp.tp_vars = tp.tp_winvar.dict_ptr();
     tp.tp_diff_invalid = 1;
     tp.tp_ch_used = p_ch();
     tp
@@ -127,13 +122,11 @@ pub(crate) fn free_tab(tabpage: TabPage) {
     for idx in 0..SNAP_COUNT {
         drop_snapshot(tabpage, idx);
     }
-    let vars = tabpage.tp_vars;
-    // SAFETY: the tab page's own dictionary; `vars_clear` frees every t:
-    // variable and `hash_init` puts an empty table back.
-    unsafe {
-        vars_clear(&raw mut (*vars).dv_hashtab);
-        unref_var_dict(vars);
+    if let Some(vars) = tabpage.tp_winvar.di_tv.dict_handle() {
+        vars_clear(&vars);
     }
+    let mut tabpage = tabpage;
+    release_var_scope(&mut tabpage.tp_winvar);
     if lastused_tabpage.get() == Some(tabpage.id()) {
         lastused_tabpage.set(None);
     }

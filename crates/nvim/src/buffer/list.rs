@@ -25,8 +25,8 @@ use crate::allocator::Owned;
 use crate::autocmd::apply_autocmds;
 use crate::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::diff::diff_mode_buf;
-use crate::eval::typval::{callback_free, tv_dict_alloc};
-use crate::eval::vars::init_var_dict;
+use crate::eval::typval::callback_free;
+use crate::eval::vars::new_var_scope;
 use crate::ex_cmds::getfile;
 use crate::ex_docmd::tabpage_new;
 use crate::ex_eval::aborting;
@@ -359,14 +359,10 @@ fn new_buffer() -> Owned<Buffer> {
     // gives it its number and puts it in the registry.
     let owned = alloc_unregistered_buffer();
     let mut buf = Buf::owned_by(&owned);
-    // Init the b: variables.
-    // SAFETY: a fresh dictionary for the buffer's own `b:` scope.
-    // The buffer's storage owns it: `init_var_dict` seeds it with
-    // `DO_NOT_FREE_CNT` and `unref_var_dict` gives the block back.
-    buf.b_vars = tv_dict_alloc().into_raw();
-    let (vars, scope_var) = (buf.b_vars, &raw mut buf.b_bufvar);
-    // SAFETY: the dictionary just allocated and the buffer's scope variable.
-    unsafe { init_var_dict(vars, scope_var, VAR_SCOPE) };
+    // Init the b: variables. The entry holds the dictionary until
+    // `release_var_scope`; `b_vars` mirrors it for the raw readers.
+    buf.b_bufvar = new_var_scope(VAR_SCOPE);
+    buf.b_vars = buf.b_bufvar.dict_ptr();
     buf_init_changedtick(buf);
     owned
 }

@@ -24,7 +24,7 @@ use super::{
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::partial_name;
 use crate::eval::typval::{blob_bytes, dict_find, list_len};
-use crate::eval::vars::eval_msgpack_type_lists;
+use crate::eval::vars::msgpack_type_of;
 use crate::message::internal_error;
 use crate::types::{
     Dict, List, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
@@ -82,7 +82,7 @@ fn check_self_reference<S: TypvalSink>(
 }
 
 /// The eight `_TYPE` markers a special dictionary can carry, in the order
-/// `eval_msgpack_type_lists` holds them (upstream's `MessagePackType`).
+/// `v:msgpack_types` holds them (upstream's `MessagePackType`).
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum SpecialKind {
     Nil,
@@ -249,14 +249,7 @@ fn convert_special_dict<'a, S: TypvalSink>(
     let Some(val_di) = dict_find(Some(dict), b"_VAL") else {
         return Ok(None);
     };
-    let type_list = type_di
-        .di_tv
-        .list_ref()
-        .map_or(::core::ptr::null(), ::core::ptr::from_ref);
-    let found = eval_msgpack_type_lists
-        .get()
-        .iter()
-        .position(|&l| ::core::ptr::eq(l, type_list));
+    let found = type_di.di_tv.list_ref().and_then(msgpack_type_of);
     // Upstream runs the check a second time here, before it knows whether
     // this is a special dictionary at all.
     sink.check_before();
