@@ -26,7 +26,7 @@ use std::mem::ManuallyDrop;
 
 use neovim::eval::typval::{
     DictRef, ListRef, dict_is_watched, list_find, list_first, list_last, list_len, tv_dict_alloc,
-    tv_dict_item_free, tv_dict_item_remove, tv_list_alloc,
+    tv_dict_item_remove, tv_list_alloc,
 };
 use neovim::memory::xstrdup;
 use neovim::types::{Callback, DictItem, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
@@ -134,27 +134,18 @@ fn a_dict_item_owns_exactly_the_key_it_was_given() {
         (long, None),
         (long, Some(9)),
     ] {
-        // SAFETY: the item is this iteration's own and is freed below; the
-        // key outlives the copy.
-        unsafe {
-            let c_key = cstr(key);
-            let di = Box::into_raw(match len {
-                None => DictItem::boxed(c_key.to_bytes()),
-                Some(len) => DictItem::boxed(&c_key.to_bytes()[..len]),
-            });
-            let len = len.unwrap_or(key.len());
-            assert_eq!((*di).key(), &key.as_bytes()[..len], "{key:?}/{len}");
-            assert_eq!((*di).key_cstr().to_bytes(), &key.as_bytes()[..len]);
-            assert_eq!(
-                (*di).di_tv.v_type(),
-                VAR_UNKNOWN,
-                "a fresh item holds nothing"
-            );
-            tv_dict_item_free(di);
-            // Neither the item nor its key is an `xmalloc`: the log is
-            // silent, and a leak would be Miri's or ASan's to report.
-            log.check(&[]);
-        }
+        let di = match len {
+            None => DictItem::boxed(cstr(key).to_bytes()),
+            Some(len) => DictItem::boxed(&cstr(key).to_bytes()[..len]),
+        };
+        let len = len.unwrap_or(key.len());
+        assert_eq!(di.key(), &key.as_bytes()[..len], "{key:?}/{len}");
+        assert_eq!(di.key_cstr().to_bytes(), &key.as_bytes()[..len]);
+        assert_eq!(di.di_tv.v_type(), VAR_UNKNOWN, "a fresh item holds nothing");
+        drop(di);
+        // Neither the item nor its key is an `xmalloc`: the log is
+        // silent, and a leak would be Miri's or ASan's to report.
+        log.check(&[]);
     }
 }
 
@@ -164,18 +155,17 @@ fn a_dict_item_owns_exactly_the_key_it_was_given() {
 fn freeing_a_dict_item_frees_its_value_first() {
     let log = AllocLog::start();
     // SAFETY: the string is handed to the item, which takes ownership of it;
-    // `tv_dict_item_free` releases both.
-    unsafe {
-        let value = xstrdup(cstr("test").as_ptr());
-        log.check(&[alloc::string(value, 4)]);
+    // dropping the item releases both.
+    let value = unsafe { xstrdup(cstr("test").as_ptr()) };
+    log.check(&[alloc::string(value, 4)]);
 
-        let di = Box::into_raw(DictItem::boxed(b""));
-        log.check(&[]);
-        (*di).di_tv = tv::string_tv(value);
+    let mut di = DictItem::boxed(b"");
+    log.check(&[]);
+    // The item takes over the block.
+    di.di_tv = tv::string_tv(value);
 
-        tv_dict_item_free(di);
-        log.check(&[alloc::freed(value)]);
-    }
+    drop(di);
+    log.check(&[alloc::freed(value)]);
 }
 
 /// `describe('dict') describe('item') describe('add()/remove()')

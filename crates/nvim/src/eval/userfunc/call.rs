@@ -7,11 +7,7 @@
 //! functions) and `user_func_error` turns an `FCERR_*` code into the message
 //! the user sees.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// The `a:` entries and the `a:000` items *name* the caller's arguments for
-// the length of the call -- upstream's design, which `test_refcount()`
-// shows -- and that duplicate is the handle core's bit copy.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -221,11 +217,11 @@ pub(crate) fn call_user_func(
         let value = if isdefault {
             def_rettv.take()
         } else {
-            // SAFETY: the caller keeps the value for the length of the call,
-            // and the `a:` item releases nothing: `cleanup_function_call`
-            // gives it up, or upgrades it to a copy of its own when the
-            // scope outlives the call.
-            unsafe { args[at].bit_copy() }
+            // The caller keeps the value for the length of the call, and
+            // the `a:` item releases nothing: `cleanup_function_call` gives
+            // it up, or upgrades it to a copy of its own when the scope
+            // outlives the call.
+            args[at].named_for_call()
         };
         let mut item = scopes.entry(&name, value, VarLock::Fixed);
         if isdefault {
@@ -245,8 +241,7 @@ pub(crate) fn call_user_func(
         if (0..MAX_FUNC_ARGS).contains(&ai) {
             // Add the extra argument to a:000. As `a:name` above, the item
             // *names* the caller's value; `List::disown_items` gives it up.
-            // SAFETY: as the `a:` item above.
-            let value = unsafe { args[at].bit_copy() };
+            let value = args[at].named_for_call();
             scopes.a_list.edit().lv_items.push(ListItem {
                 li_tv: value,
                 li_lock: VarLock::Fixed,

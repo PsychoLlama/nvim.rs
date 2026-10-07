@@ -47,13 +47,13 @@ count	callee	no_raw	defs	def
 30	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 30	f	0	0	
 30	ptr2cells	0	1	crates/nvim/src/charset/display.rs
-29	Box::from_raw	0	9	
 29	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
 29	ml_replace	0	1	crates/nvim/src/memline/lines.rs
 29	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
 29	os_fileinfo	0	1	crates/nvim/src/os/fs/meta.rs
 29	os_isdir	0	1	crates/nvim/src/os/fs/mod.rs
 29	os_path_exists	0	1	crates/nvim/src/os/fs/dir.rs
+28	Box::from_raw	0	9	
 28	eq	0	1	crates/nvim/src/cstr.rs
 28	xstrlcat	0	1	crates/nvim/src/memory/mod.rs
 27	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
@@ -952,6 +952,7 @@ count	callee	no_raw	defs	def
 3	xstrchrnul	0	1	crates/nvim/src/memory/mod.rs
 2	.append_number	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
 2	.append_string	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
+2	.bit_copy	1	1	crates/nvim/src/eval/typval/handle.rs
 2	.byte	1	1	crates/nvim/src/winlayer.rs
 2	.color_col_attr	1	1	crates/nvim/src/drawline/state.rs
 2	.emit	0	1	crates/nvim/src/popupmenu/draw.rs
@@ -1515,7 +1516,6 @@ count	callee	no_raw	defs	def
 2	transmute	0	0	
 2	transstr_len	0	1	crates/nvim/src/charset/display.rs
 2	trunc_string	0	1	crates/nvim/src/message/mod.rs
-2	tv_clear	0	0	
 2	tv_dict_free_dict	0	1	crates/nvim/src/eval/typval/handle.rs
 2	tv_to_argv	0	1	crates/nvim/src/eval/system.rs
 2	typed_items	1	1	crates/nvim/src/garray.rs
@@ -1598,7 +1598,6 @@ count	callee	no_raw	defs	def
 1	.array_length	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
 1	.as_bytes	1	1	crates/nvim/src/option/value.rs
 1	.as_slice	1	1	crates/nvim/src/runtime/cache.rs
-1	.bit_copy	1	1	crates/nvim/src/eval/typval/handle.rs
 1	.breakindent	0	1	crates/nvim/src/plines/mod.rs
 1	.build_preword	0	1	crates/nvim/src/spellsuggest/walk/node.rs
 1	.can_strip	1	1	crates/nvim/src/path/mod.rs
@@ -2725,7 +2724,7 @@ count	callee	no_raw	defs	def
 1	tui_stop	0	1	crates/nvim/src/tui/tui.rs
 1	tui_terminal_after_startup	0	1	crates/nvim/src/tui/tui.rs
 1	tui_wait_ready	0	1	crates/nvim/src/tui/tui.rs
-1	tv_dict_item_free	0	1	crates/nvim/src/eval/typval/handle.rs
+1	tv_clear	0	0	
 1	tv_list_alloc	0	0	
 1	tzset	0	0	
 1	u_save_line	0	1	crates/nvim/src/undo/tree.rs

@@ -653,32 +653,22 @@ unsafe impl SlotEntry for DictEntry {
     }
 }
 
-/// Clear `item`'s value and free it, if it was allocated (rather than
-/// embedded in a `FuncCall`'s fixed-variable array, a scope dictionary, a
-/// buffer's `b:changedtick` or a `v:` row).
-///
-/// # Safety
-/// `item` must be a live item that is **not** in any hashtab -- remove it
-/// first, or the hashtab is left pointing at freed memory. An item with
-/// `DI_FLAGS_ALLOC` is dangling afterwards; an embedded one is merely
-/// emptied, keeping its key: the storage is not this call's to release.
-pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
-    if ::core::ffi::c_uint::from(unsafe { (*item).di_flags }) & DI_FLAGS_ALLOC != 0 {
-        // The value and the key go with the item.
-        // SAFETY: the caller's live item, which this allocated.
-        drop(unsafe { Box::from_raw(item) });
-    } else {
-        unsafe { tv_clear(&mut (*item).di_tv) };
-    }
-}
-
 /// Release every item of a table already taken out of its dictionary, in
-/// slot order: the whole-dictionary free, without a removal per slot.
+/// slot order: the whole-dictionary free, without a removal per slot. An
+/// embedded item (not `DI_FLAGS_ALLOC`) is only emptied.
 pub(crate) fn release_table(table: DictTab) {
     for hi in table.items() {
+        let item = hi.hi_key.item();
         // SAFETY: a kept slot of a table nothing else can reach any more
-        // names a live item, released exactly once here.
-        unsafe { tv_dict_item_free(hi.hi_key.item()) };
+        // names a live item, released once here; `DictItem::boxed` made it
+        // when it carries `DI_FLAGS_ALLOC`.
+        unsafe {
+            if ::core::ffi::c_uint::from((*item).di_flags) & DI_FLAGS_ALLOC != 0 {
+                drop(Box::from_raw(item));
+            } else {
+                tv_clear(&mut (*item).di_tv);
+            }
+        }
     }
 }
 
@@ -789,6 +779,15 @@ impl TypVal {
         // SAFETY: the caller's promise above -- the duplicate is not released,
         // so the payload keeps its one owner.
         unsafe { ::core::ptr::read(self) }
+    }
+
+    /// The [`bit_copy`](TypVal::bit_copy) an `a:` or `a:000` item holds: it
+    /// *names* the caller's argument for the call. Contract: the caller keeps
+    /// `self` until the frame gives the duplicate up unreleased (or upgrades
+    /// it to a copy when the scope outlives the call).
+    pub(crate) fn named_for_call(&self) -> TypVal {
+        // SAFETY: the contract above -- the payload keeps its one owner.
+        unsafe { self.bit_copy() }
     }
 }
 
