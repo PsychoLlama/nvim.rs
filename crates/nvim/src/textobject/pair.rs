@@ -13,11 +13,10 @@ use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_activ
 use crate::snprintf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
 
 use super::*;
 use crate::ascii::ascii_iswhite;
-use crate::cstr::byte_at;
+use crate::cstr::{self, byte_at};
 use crate::cursor::{
     dec_cursor, gchar_cursor, get_cursor_line_ptr, get_cursor_pos_ptr, inc_cursor,
 };
@@ -299,26 +298,8 @@ fn in_html_tag(end_tag: bool) -> bool {
 /// `do_searchpair` with the arguments this file always passes: no middle
 /// pattern, no skip expression, no match position, no stop line and no
 /// time limit.
-///
-/// # Safety
-/// `spat` and `epat` must be NUL-terminated patterns, and there must be a
-/// current window and buffer with the cursor on a line of it.
-unsafe fn search_tag_pair(spat: *const c_char, epat: *const c_char, dir: c_int) -> c_int {
-    // SAFETY: the patterns come from the caller; the rest are the nulls and
-    // zeroes `do_searchpair` reads as "no skip, no limit".
-    unsafe {
-        do_searchpair(
-            spat,
-            c"".as_ptr(),
-            epat,
-            dir,
-            None,
-            0,
-            ptr::null_mut(),
-            0,
-            0,
-        )
-    }
+fn search_tag_pair(spat: &[u8], epat: &[u8], dir: c_int) -> c_int {
+    do_searchpair(spat, b"", epat, dir, None, 0, None, 0, 0)
 }
 
 /// `it` / `at`: the region between an enclosing HTML start and end tag,
@@ -390,11 +371,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
     'again: loop {
         // Search backwards for the unclosed `<aaa>`.
         for _ in 0..count {
-            // SAFETY: both patterns are NUL-terminated constants, and the
-            // cursor is on a line of the current buffer.
-            if unsafe { search_tag_pair(ANY_START_TAG.as_ptr(), ANY_END_TAG.as_ptr(), BACKWARD) }
-                <= 0
-            {
+            if search_tag_pair(ANY_START_TAG.to_bytes(), ANY_END_TAG.to_bytes(), BACKWARD) <= 0 {
                 Win::current().w_cursor = old_pos;
                 P_WS.set(save_p_ws);
                 return retval;
@@ -434,7 +411,13 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         unsafe { snprintf!(spat, spat_len, NAMED_START_TAG.as_ptr(), len, p) };
         unsafe { snprintf!(epat, epat_len, NAMED_END_TAG.as_ptr(), len, p) };
         // SAFETY: `snprintf` NUL-terminated both patterns above.
-        let r = unsafe { search_tag_pair(spat, epat, FORWARD) };
+        let r = unsafe {
+            search_tag_pair(
+                cstr::at(spat).to_bytes(),
+                cstr::at(epat).to_bytes(),
+                FORWARD,
+            )
+        };
         // SAFETY: both came from `xmalloc` above and are dead from here on.
         unsafe { xfree(spat as *mut c_void) };
         unsafe { xfree(epat as *mut c_void) };

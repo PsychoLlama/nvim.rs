@@ -406,21 +406,18 @@ pub unsafe fn ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut ScreenGrid {
 }
 
 /// The topmost grid at screen coordinates (`row`, `col`).
-///
-/// # Safety
-/// As [`ui_comp_mouse_focus`].
-pub unsafe fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> *mut ScreenGrid {
+pub fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> GridRef {
     if let Some(grid) = topmost_at(row, col, |_| true) {
-        return grid.raw();
+        return grid;
     }
     for wp in windows_in_curtab() {
         let grid = win_layer(wp);
         let hidden = wp.w_config.hide;
         if grid.covers(row, col) && !hidden {
-            return grid.raw();
+            return grid;
         }
     }
-    default_layer().raw()
+    default_layer()
 }
 
 /// Rebuilds `[startcol, endcol)` of `row` from every layer overlapping it,

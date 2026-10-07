@@ -181,9 +181,7 @@ pub(crate) fn sign_list_defined(sign: SignRef) {
     for (label, id) in labels.into_iter().zip(ids) {
         if id > 0 {
             msg_str(label);
-            let p = unsafe { get_highlight_name_ext(id - 1, false) };
-            // SAFETY: a highlight group's own name, NUL-terminated.
-            msg_str(unsafe { cstr::at_opt(p) }.unwrap_or(c"NONE"));
+            msg_str(get_highlight_name_ext(id - 1, false).unwrap_or(c"NONE"));
         }
     }
 }

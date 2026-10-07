@@ -93,13 +93,8 @@ unsafe fn group_arg(tv: &TypVal, numbuf: &mut NumBuf) -> Option<*mut c_char> {
 }
 
 /// The name of highlight group `id`, or `"NONE"` when it has none.
-///
-/// # Safety
-/// None beyond `get_highlight_name_ext`'s.
-unsafe fn hl_name(id: ::core::ffi::c_int) -> *const ::core::ffi::c_char {
-    // SAFETY: the null `Expand` is the "no completion context" argument.
-    let p = unsafe { get_highlight_name_ext(id - 1, false) };
-    if p.is_null() { c"NONE".as_ptr() } else { p }
+fn hl_name(id: ::core::ffi::c_int) -> &'static ::core::ffi::CStr {
+    get_highlight_name_ext(id - 1, false).unwrap_or(c"NONE")
 }
 
 /// Walks a `List`, yielding each item's value in order.
@@ -178,7 +173,7 @@ pub(crate) fn sign_get_info_dict(sign: SignRef) -> DictRef {
     ];
     for (key, id) in HL_KEYS.iter().zip(ids) {
         if id > 0 {
-            unsafe { put_str(d, key, hl_name(id)) };
+            unsafe { put_str(d, key, hl_name(id).as_ptr()) };
         }
     }
     d_held

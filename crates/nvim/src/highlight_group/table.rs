@@ -358,15 +358,6 @@ pub(crate) unsafe fn syn_name2attr(name: *const c_char) -> c_int {
     }
 }
 
-/// Whether a group named `name` exists.
-///
-/// # Safety
-/// See [`syn_name2id`].
-pub(crate) unsafe fn highlight_exists(name: *const c_char) -> c_int {
-    // SAFETY: the caller's NUL-terminated name.
-    c_int::from(syn_name2id(unsafe { CStr::from_ptr(name) }) > 0)
-}
-
 /// The name of the group with id `id`, or `""` for an id that names none.
 pub(crate) fn syn_id2name(id: c_int) -> &'static CStr {
     // The bound has to be tested BEFORE the index is formed: `id` of 0 is the

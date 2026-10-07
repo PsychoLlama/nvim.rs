@@ -67,6 +67,7 @@ pub use jumplist::{
     free_jumplist, get_changelist, get_jumplist, mark_jumplist_forget_file, mark_jumplist_iter,
     setpcmark,
 };
+pub(crate) use lookup::mark_lookup;
 pub use lookup::{
     getnextmark, mark_get, mark_get_global, mark_get_local, mark_get_motion, mark_get_visual,
     mark_move_to,
@@ -309,6 +310,17 @@ pub unsafe fn setmark_pos(
     // SAFETY: `pos` and `buf` are the caller's, both live.
     unsafe { do_markset_autocmd(mark_name(c), pos, buf) };
     Ok(())
+}
+
+/// [`setmark_pos`] of a position held by value, with no view: set mark `c`
+/// to `pos`, in file `fnum` for a file mark.
+///
+/// A position held by value is never the cursor itself, so `''` set this way
+/// just moves the context mark rather than pushing a jumplist entry.
+pub(crate) fn setmark_at(c: c_int, mut pos: Pos, fnum: c_int) -> Result<(), Failed> {
+    // SAFETY: `pos` is this frame's local, live for the call, and a null
+    // view means "no view".
+    unsafe { setmark_pos(c, &raw mut pos, fnum, ptr::null_mut()) }
 }
 
 /// Delete every entry referring to file "fnum" from both the jumplist and the

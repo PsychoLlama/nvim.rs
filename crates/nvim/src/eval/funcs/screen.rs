@@ -1,22 +1,18 @@
 //! What is on the screen: the `screen*()` cell queries, the `syn*()` syntax
 //! queries and the highlight-group lookups.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::wrappers::{arg_lnum, arg_number, arg_number_chk, list_alloc_ret};
+use super::wrappers::{arg_lnum, arg_number, arg_number_chk};
 use crate::winlayer::{Buf, Win};
 
-use crate::eval::typval::NumBuf;
-use crate::grid::{
-    GridRef, MAX_SCHAR_SIZE, grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint,
-};
+use crate::eval::typval::{NumBuf, tv_list_alloc_ret};
+use crate::grid::{GridRef, grid_getchar, schar_bytes, schar_from_char};
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::HlColorText;
 use crate::highlight_group::{
-    get_highlight_name_ext, highlight_color, highlight_exists, highlight_has_attr,
-    syn_get_final_id, syn_name2id,
+    get_highlight_name_ext, highlight_color, highlight_has_attr, syn_get_final_id, syn_name2id,
 };
-use crate::mbyte::{utf_ptr2char, utf_ptr2len};
+use crate::mbyte::{char_at, char_len};
 use crate::memline::ml_get_len;
 use crate::memory::ThinCString;
 use crate::message::msg_scroll_flush;
@@ -24,11 +20,7 @@ use crate::syntax::{SynFlags, get_syntax_info, syn_get_stack_item, syn_get_sub_c
 use crate::types::{ColNr, EvalFuncData, NUL, ScreenChar, TypVal, VarNumber, kListLenMayKnow};
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
-
-/// The size of a `tv_get_string_buf` scratch buffer. `NUMBUFLEN` in the C.
-const NUMBUFLEN: usize = 65;
+use core::ffi::c_int;
 
 /// One screen cell, resolved from the `{row}`, `{col}` pair every
 /// `screen*()` query starts with.
@@ -47,8 +39,6 @@ struct Cell {
 impl Cell {
     /// Resolve arguments 0 and 1.
     fn at(args: &[TypVal]) -> Cell {
-        // SAFETY throughout: the caller's obligation; the compositor always answers
-        // with a live grid.
         // A coercion failure answers 0, which the -1 turns into an
         // out-of-range coordinate. The subtraction wraps because the C's
         // does: a `{row}` of INT_MIN is a silly argument, not a crash.
@@ -57,7 +47,7 @@ impl Cell {
         // Legacy tests read printed messages back with screenchar(), so
         // the pending message scroll has to reach the grid first.
         msg_scroll_flush();
-        let grid = unsafe { GridRef::new(ui_comp_get_grid_at_coord(row, col)) };
+        let grid = ui_comp_get_grid_at_coord(row, col);
         row -= grid.comp_row;
         col -= grid.comp_col;
         Cell { grid, row, col }
@@ -73,14 +63,10 @@ impl Cell {
         grid_getchar(self.grid, self.row, self.col, None)
     }
 
-    /// The cell's character, spelled out as UTF-8 and NUL-terminated.
-    fn text(&self) -> [c_char; NUMBUFLEN] {
-        let mut buf = [0 as c_char; NUMBUFLEN];
-        debug_assert!(NUMBUFLEN > MAX_SCHAR_SIZE as usize);
-        // SAFETY: the caller has checked the bounds; `schar_get` writes at
-        // most `MAX_SCHAR_SIZE` bytes plus a terminator.
-        unsafe { schar_get(buf.as_mut_ptr(), self.schar()) };
-        buf
+    /// The cell's character, spelled out as UTF-8. The caller has checked
+    /// the bounds.
+    fn text(&self) -> Vec<u8> {
+        schar_bytes(self.schar())
     }
 }
 
@@ -101,7 +87,7 @@ pub fn f_screenattr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_screenchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let cell = Cell::at(args);
     result.write_number(if cell.on_grid() {
-        unsafe { schar_get_first_codepoint(cell.schar()) }
+        char_at(&cell.text())
     } else {
         -1
     } as VarNumber);
@@ -111,18 +97,18 @@ pub fn f_screenchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// combining ones `screenchar()` drops.
 pub fn f_screenchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let cell = Cell::at(args);
-    let list = list_alloc_ret(result, kListLenMayKnow as isize);
+    let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);
     if !cell.on_grid() {
         return;
     }
-    let buf = cell.text();
+    let text = cell.text();
     // The C walks with a do-while, so a cell whose text is empty still
     // reports one codepoint.
     let mut i = 0usize;
     loop {
-        unsafe { (*list).push_number(utf_ptr2char(buf.as_ptr().add(i)) as VarNumber) };
-        i += unsafe { utf_ptr2len(buf.as_ptr().add(i)) } as usize;
-        if buf[i] as c_int == NUL {
+        list.push_number(char_at(&text[i..]) as VarNumber);
+        i += char_len(&text[i..]);
+        if i >= text.len() {
             break;
         }
     }
@@ -130,13 +116,11 @@ pub fn f_screenchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `screencol()` — the cursor's screen column, one-based.
 pub fn f_screencol(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value.
     result.write_number((ui_current_col() + 1) as VarNumber);
 }
 
 /// `screenrow()` — the cursor's screen row, one-based.
 pub fn f_screenrow(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value.
     result.write_number((ui_current_row() + 1) as VarNumber);
 }
 
@@ -145,10 +129,7 @@ pub fn f_screenstring(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     result.write_string(None);
     let cell = Cell::at(args);
     if cell.on_grid() {
-        let text = cell.text();
-        // SAFETY: `text` spells the cell NUL-terminated.
-        let text = unsafe { CStr::from_ptr(text.as_ptr()) };
-        result.write_string(Some(ThinCString::from_cstr(text)));
+        result.write_string(Some(ThinCString::from_bytes(&cell.text())));
     }
 }
 
@@ -162,9 +143,8 @@ pub fn f_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `hlexists({name})` — whether the group is defined.
 pub fn f_hlexists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let name = numbuf.string(&args[0]).as_ptr();
-    // SAFETY: `name` is the argument's NUL-terminated string.
-    result.write_number(unsafe { highlight_exists(name) } as VarNumber);
+    let name = numbuf.string(&args[0]);
+    result.write_number(VarNumber::from(syn_name2id(name) > 0));
 }
 
 /// What a `synIDattr()` `{what}` argument selects.
@@ -228,9 +208,6 @@ fn attr_selector(what: &[u8]) -> Option<Attr> {
 pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut color: HlColorText = [0; 20];
-    // SAFETY throughout: the frame is live; `what` is the string an argument owns and
-    // outlives the `highlight_color` call, and `modebuf` outlives the string
-    // `tv_get_string_buf` may park in it.
     let id = arg_number(&args[0]) as c_int;
     let what = numbuf.string(&args[1]);
 
@@ -249,23 +226,18 @@ pub fn f_syn_id_attr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         'c' as c_int
     };
 
-    let p = match attr_selector(what.to_bytes()) {
-        Some(Attr::Color) => unsafe { highlight_color(id, what.as_ptr(), modec, &mut color) },
-        Some(Attr::Name) => unsafe { get_highlight_name_ext(id - 1, false) },
+    let answer = match attr_selector(what.to_bytes()) {
+        Some(Attr::Color) => highlight_color(id, what.to_bytes(), modec, &mut color),
+        Some(Attr::Name) => get_highlight_name_ext(id - 1, false),
         Some(Attr::Bit(bit)) => highlight_has_attr(id, bit, modec),
-        None => ptr::null(),
+        None => None,
     };
-    // SAFETY: a non-null answer is a NUL-terminated string the highlight
-    // tables hold, live for the copy.
-    result
-        .write_string((!p.is_null()).then(|| ThinCString::from_cstr(unsafe { CStr::from_ptr(p) })));
+    result.write_string(answer.map(ThinCString::from_cstr));
 }
 
 /// `synID({lnum}, {col}, {trans})` — the syntax id at a position, 0 off the
 /// buffer or when the `{trans}` argument does not coerce.
 pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the frame is live, and `curbuf`/`curwin` are live for the
-    // whole call.
     let lnum = arg_lnum(&args[0]);
     // Wraps because the C's does; `col` is only used as a range test.
     let col = (arg_number(&args[1]) as ColNr).wrapping_sub(1);
@@ -286,7 +258,6 @@ pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `synIDtrans({id})` — the id the group's `:hi link` chain ends at.
 pub fn f_syn_id_trans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the frame is live.
     let id = arg_number(&args[0]) as c_int;
     result.write_number(if id > 0 { syn_get_final_id(id) } else { 0 } as VarNumber);
 }
@@ -295,9 +266,7 @@ pub fn f_syn_id_trans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut syntax_flags = SynFlags::NONE;
     let mut matchid = 0;
-    let mut text = [0 as c_char; NUMBUFLEN];
-    // SAFETY throughout: the frame is live; `curbuf`/`curwin` are live for the whole
-    // call and `text` outlives the list it is copied into.
+    let mut text = Vec::new();
     // Cleared first: an out-of-range position answers an empty List,
     // not a three-item one.
     result.write_list(None);
@@ -328,23 +297,21 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
                 };
             }
             if cchar != NUL as ScreenChar {
-                unsafe { schar_get(text.as_mut_ptr(), cchar) };
+                text = schar_bytes(cchar);
             }
         }
     }
 
-    let list = list_alloc_ret(result, 3);
+    let list = tv_list_alloc_ret(result, 3);
     let concealed = syntax_flags.has(SynFlags::CONCEAL) as c_int as VarNumber;
-    unsafe { (*list).push_number(concealed) };
-    unsafe { (*list).push_str(crate::cstr::at_opt(text.as_ptr())) };
-    unsafe { (*list).push_number(matchid as VarNumber) };
+    list.push_number(concealed);
+    list.push_bytes(Some(&text));
+    list.push_number(matchid as VarNumber);
 }
 
 /// `synstack({lnum}, {col})` — every syntax id in effect at a position,
 /// outermost first.
 pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the frame is live; `curbuf`/`curwin` are live for the whole
-    // call.
     // An out-of-range position answers an empty List, not a List of no
     // items.
     result.write_list(None);
@@ -354,7 +321,7 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count && col >= 0 && col <= ml_get_len(lnum)
     {
-        let list = list_alloc_ret(result, kListLenMayKnow as isize);
+        let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);
         // Run the syntax engine, keeping the stack this time.
         Win::current().syntax_id(lnum, col, false, None, true);
         for i in 0.. {
@@ -362,7 +329,7 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             if id < 0 {
                 break;
             }
-            unsafe { (*list).push_number(id as VarNumber) };
+            list.push_number(id as VarNumber);
         }
     }
 }

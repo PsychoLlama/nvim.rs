@@ -310,9 +310,7 @@ fn ns_destroy(map: &mut ExtmarkNs) {
 /// `ml_find_line_or_offset(buf, lnum, NULL, true)`: the byte offset of a
 /// line, counted with the file format's line endings ignored.
 fn line_offset(buffer: Buf, lnum: LineNr) -> c_int {
-    // SAFETY: a live buffer; the `offp` out-parameter is NULL, which the
-    // callee tests for.
-    unsafe { ml_find_line_or_offset(buffer, lnum, ptr::null_mut(), true) }
+    ml_find_line_or_offset(buffer, lnum, None, true)
 }
 
 /// `u_force_get_undo_header(buf)`, and then the extmark list on it. NULL when

@@ -222,8 +222,7 @@ impl Env {
 
     /// The byte offset of the cursor line, for `%o`/`%O`.
     pub(super) fn line_offset(&self) -> c_int {
-        // SAFETY: a live buffer and its own cursor line.
-        unsafe { ml_find_line_or_offset(self.buf, self.win.w_cursor.lnum, ptr::null_mut(), false) }
+        ml_find_line_or_offset(self.buf, self.win.w_cursor.lnum, None, false)
     }
 
     /// `%p`: how far through the buffer the cursor is, as a percentage.

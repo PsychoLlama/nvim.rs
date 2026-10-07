@@ -22,7 +22,6 @@
 
 use crate::cstr;
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 use crate::ex_eval::state::{
     current_exception, did_throw, force_abort, msg_lists, need_rethrow, trylevel,
@@ -33,14 +32,14 @@ use crate::ex_eval::{
 use crate::getchar::state::got_int;
 use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
-use crate::mark::setmark_pos;
+use crate::mark::setmark_at;
 use crate::message::state::did_emsg;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    BufferHandle, ColNr, Error, FileMarkView, Integer, LineNr, NUL, Pos, ScriptId, String_0,
-    TabpageHandle, TryState, WindowHandle, int64_t, kErrorTypeException, uint64_t,
+    BufferHandle, ColNr, Error, Integer, LineNr, NUL, Pos, ScriptId, String_0, TabpageHandle,
+    TryState, WindowHandle, int64_t, kErrorTypeException, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -316,7 +315,7 @@ pub(crate) fn set_mark(
     }
     debug_assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
 
-    let mut pos = Pos {
+    let pos = Pos {
         lnum: line as LineNr,
         col: col as ColNr,
         coladd: 0,
@@ -325,9 +324,7 @@ pub(crate) fn set_mark(
     let mark = unsafe { *name.data() } as c_int;
     // SAFETY: `buffer` is live.
     let handle = unsafe { (*buffer).handle };
-    let (at, no_view) = (&raw mut pos, ptr::null_mut::<FileMarkView>());
-    // SAFETY: `pos` is this frame's, and the mark is set in `handle`.
-    if unsafe { setmark_pos(mark, at, handle, no_view) }.is_ok() {
+    if setmark_at(mark, pos, handle).is_ok() {
         return Ok(());
     }
     // `%c` wrote the one byte, whatever it was.

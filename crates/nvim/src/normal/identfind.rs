@@ -38,7 +38,7 @@ use crate::regexp::RE_LAST;
 use crate::search::{BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit};
 use crate::textobject::findpar;
 use crate::types::{ColNr, LineNr, NUL, OpArg, OpType, Pos, ShmFlag, int64_t, size_t, uint8_t};
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// Whether this character continues a `FIND_EVAL` expression rather than
 /// ending it -- `.`, `->` and a balanced `[...]` subscript.
@@ -350,6 +350,22 @@ pub(crate) unsafe fn is_ident(line: *const c_char, offset: c_int) -> bool {
         i += 1;
     }
     !incomment && instring == 0
+}
+
+/// [`find_decl`] of a word held as text: `searchdecl()`'s entry point.
+pub(crate) fn find_decl_of(word: &CStr, locally: bool, thisblock: bool, flags: c_int) -> bool {
+    // A copy, because the search asks for bytes it may write to.
+    let mut owned = word.to_bytes_with_nul().to_vec();
+    // SAFETY: `owned` is the word's bytes and a NUL, this frame's own.
+    unsafe {
+        find_decl(
+            owned.as_mut_ptr().cast(),
+            word.count_bytes(),
+            locally,
+            thisblock,
+            flags,
+        )
+    }
 }
 
 /// Search backwards for where `ptr` is declared: the first occurrence that is

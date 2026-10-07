@@ -737,7 +737,7 @@ fn ui_cursor_is_behind_floatwin() -> bool {
         win.w_wcol
     };
     let ccol = win.w_wincol + win.w_wincol_off + wcol;
-    let top_grid = unsafe { ui_comp_get_grid_at_coord(crow, ccol) };
+    let top_grid = ui_comp_get_grid_at_coord(crow, ccol).raw();
     top_grid != &raw mut win.w_grid_alloc && top_grid != default_grid_ref().raw()
 }
 

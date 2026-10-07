@@ -148,36 +148,41 @@ unsafe fn reshape_match(entry: *mut c_char, head: &mut Vec<c_char>) {
 
 /// `taglist()` — append a dictionary per match of `pat` to `list`.
 ///
-/// `buf_fname` names the buffer whose matches sort first, or is NULL.
-/// Answers `Ok`, or `Err` when a field could not be recorded.
-///
-/// # Safety
-/// `list` must be live and `pat` NUL-terminated.
-pub unsafe fn get_tags(
-    list: *mut List,
-    pat: *mut c_char,
-    buf_fname: *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's promise; `find_tags` fills both locals, and the
-    // matches it answers become ours.
+/// `buf_fname` names the buffer whose matches sort first. Answers `Ok`, or
+/// `Err` when a field could not be recorded. `'tagfunc'` may run, before
+/// anything is appended.
+pub fn get_tags(list: &mut List, pat: &CStr, buf_fname: Option<&CStr>) -> Result<(), Failed> {
     let mut num_matches = 0;
     let mut matches = ptr::null_mut::<*mut c_char>();
-    let num_matches2 = &raw mut num_matches;
-    let matchesp = &raw mut matches;
-    let flags2 = (TAG_REGEXP | TAG_NOIC) as c_int;
+    let flags = (TAG_REGEXP | TAG_NOIC) as c_int;
     let mincount = MAXCOL as c_int;
-    let mut ret = unsafe { find_tags(pat, num_matches2, matchesp, flags2, mincount, buf_fname) };
+    let buf_fname = buf_fname.map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
+    // SAFETY: both strings are NUL-terminated and only read, and the two
+    // out-parameters are this frame's.
+    let mut ret = unsafe {
+        find_tags(
+            pat.as_ptr().cast_mut(),
+            &raw mut num_matches,
+            &raw mut matches,
+            flags,
+            mincount,
+            buf_fname,
+        )
+    };
     if ret.is_err() || num_matches <= 0 {
         return ret;
     }
 
     for i in 0..num_matches as usize {
+        // SAFETY: `find_tags` answered `num_matches` matches, each an
+        // allocation that is ours from here on.
         let entry = unsafe { *matches.add(i) };
         if !unsafe { describe_match(list, entry) } {
             ret = Err(Failed);
         }
         unsafe { xfree(entry.cast()) };
     }
+    // SAFETY: the array `find_tags` allocated, emptied above.
     unsafe { xfree(matches.cast()) };
     ret
 }
@@ -189,8 +194,8 @@ pub unsafe fn get_tags(
 /// lines, is silently passed over.
 ///
 /// # Safety
-/// `list` must be live and `entry` must be a match [`find_tags`] answered.
-unsafe fn describe_match(list: *mut List, entry: *mut c_char) -> bool {
+/// `entry` must be a match [`find_tags`] answered.
+unsafe fn describe_match(list: &mut List, entry: *mut c_char) -> bool {
     // SAFETY: the caller's promise. Everything written into the dict is
     // copied out of the match, which outlives the call.
     let mut tp = TagParts::default();
@@ -206,7 +211,7 @@ unsafe fn describe_match(list: *mut List, entry: *mut c_char) -> bool {
     let dict_held = tv_dict_alloc();
 
     let dict = dict_held.as_ptr();
-    unsafe { (*list).push_dict(Some(dict_held)) };
+    list.push_dict(Some(dict_held));
 
     // Short-circuiting is upstream's: once one field fails, the rest
     // of these are not tried.

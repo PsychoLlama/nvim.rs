@@ -189,6 +189,24 @@ pub unsafe extern "C" fn schar_get(mut buf_out: *mut c_char, sc: ScreenChar) -> 
     len
 }
 
+/// The bytes of `sc`, without a terminator: [`schar_get`] into an owned
+/// buffer, for a caller that wants the text rather than a buffer to fill.
+///
+/// # Panics
+/// When `sc` names a slot of the glyph cache that does not exist, which no
+/// glyph this process produced can.
+pub(crate) fn schar_bytes(sc: ScreenChar) -> Vec<u8> {
+    assert!(
+        !(schar_high(sc) && schar_idx(sc) >= glyph_cache().keys_len()),
+        "a glyph this process produced"
+    );
+    let mut buf = [0u8; MAX_SCHAR_SIZE as usize + 1];
+    // SAFETY: `buf` has room for the longest glyph and its terminator, and
+    // `sc` is inline or names a slot of the cache, checked above.
+    let len = unsafe { schar_get(buf.as_mut_ptr().cast::<c_char>(), sc) };
+    buf[..len].to_vec()
+}
+
 /// Like [`schar_get`], but advances `*buf_out` past the bytes and writes no
 /// terminator -- for building a string out of several glyphs.
 ///

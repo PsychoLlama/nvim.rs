@@ -1,7 +1,6 @@
 //! Turning an expression into a buffer position.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -9,14 +8,20 @@ use core::ffi::c_int;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::find_buf;
 use crate::eval::kMarkAll;
-use crate::eval::typval::{NumBuf, list_find, list_find_nr, list_len};
-use crate::mark::mark_get;
-use crate::mbyte::{mb_charlen, utfc_ptr2len};
-use crate::memline::{ml_get_buf, ml_get_buf_len};
+use crate::eval::typval::{NumBuf, list_find_nr, list_len};
+use crate::mark::mark_lookup;
+use crate::mbyte::{char_count, cluster_len};
+use crate::memline::{Lines, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
-use crate::types::{ColNr, Failed, FileMark, LineNr, List, NUL, Pos, TypVal, VAR_LIST};
+use crate::types::{ColNr, Failed, LineNr, Pos, TypVal, VAR_LIST};
 use crate::winlayer::Win;
+
+/// How many characters line `lnum` of `buffer` holds.
+fn line_char_count(buffer: Buf, lnum: LineNr) -> c_int {
+    let count = char_count(Lines::in_buffer(buffer).line(lnum));
+    c_int::try_from(count).unwrap_or(c_int::MAX)
+}
 
 /// The character index of byte index `byteidx` in a buffer line.
 pub fn buf_byteidx_to_charidx(buffer: Option<Buf>, mut lnum: LineNr, byteidx: c_int) -> c_int {
@@ -29,29 +34,26 @@ pub fn buf_byteidx_to_charidx(buffer: Option<Buf>, mut lnum: LineNr, byteidx: c_
     if lnum > buf.line_count() {
         lnum = buf.line_count();
     }
-    // SAFETY: `lnum` is a line of the buffer, clamped just above.
-    let str = unsafe { ml_get_buf(buf, lnum) };
-    // SAFETY: the line is NUL-terminated, so its first byte is readable.
-    if unsafe { *str } as c_int == NUL {
+    let mut lines = Lines::in_buffer(buf);
+    let line = lines.line(lnum);
+    if line.is_empty() {
         return 0;
     }
 
-    // SAFETY: `byteidx` is a byte index into the line, so the bound is
-    // inside it or one past its end.
-    let bound = unsafe { str.offset(byteidx as isize) };
-    let mut t = str;
+    // The walk stops at the end of the line or past the byte index,
+    // whichever comes first; a memline line holds no NUL of its own, so its
+    // end is where the C met the terminator.
+    // A negative index is before the line, so the walk does not start.
+    let bound = usize::try_from(byteidx).ok();
+    let mut t = 0usize;
     let mut count = 0;
-    // SAFETY: `t` walks the NUL-terminated line and stops at the
-    // terminator, so every read is inside it.
-    while unsafe { *t } as c_int != NUL && t <= bound {
-        // SAFETY: `t` is on a character of the line.
-        t = unsafe { t.offset(utfc_ptr2len(t) as isize) };
+    while t < line.len() && bound.is_some_and(|bound| t <= bound) {
+        t += cluster_len(&line[t..]);
         count += 1;
     }
     // A byte index exactly at the terminator counts the position past
     // the last character, unless it is index zero on an empty line.
-    // SAFETY: `t` is inside the line.
-    if unsafe { *t } as c_int == NUL && byteidx != 0 && t == bound {
+    if t == line.len() && byteidx != 0 && bound == Some(t) {
         count += 1;
     }
     count - 1
@@ -68,22 +70,18 @@ pub fn buf_charidx_to_byteidx(buffer: Option<Buf>, mut lnum: LineNr, mut charidx
     if lnum > buf.line_count() {
         lnum = buf.line_count();
     }
-    // SAFETY: `lnum` is a line of the buffer, clamped just above.
-    let str = unsafe { ml_get_buf(buf, lnum) };
-    let mut t = str;
+    let mut lines = Lines::in_buffer(buf);
+    let line = lines.line(lnum);
+    let mut t = 0usize;
     // The decrement is inside the condition, so a `charidx` of 0 or 1
     // both answer byte 0.
-    // SAFETY: `t` walks the NUL-terminated line and stops at the
-    // terminator.
-    while unsafe { *t } as c_int != NUL && {
+    while t < line.len() && {
         charidx -= 1;
         charidx > 0
     } {
-        // SAFETY: `t` is on a character of the line.
-        t = unsafe { t.offset(utfc_ptr2len(t) as isize) };
+        t += cluster_len(&line[t..]);
     }
-    // SAFETY: both cursors are into the one line.
-    unsafe { t.offset_from(str) as c_int }
+    c_int::try_from(t).unwrap_or(c_int::MAX)
 }
 
 /// Resolve a position expression — a `[lnum, col]` List, `.`, `v`, `'m`,
@@ -99,41 +97,30 @@ pub fn var2fpos(
     window: Win,
 ) -> Option<Pos> {
     let mut numbuf = NumBuf::new();
-    // The record a `'m` lookup answers into: a motion mark has no store of
-    // its own, so it is computed straight into this frame's slot.
-    let mut slot = FileMark::UNSET;
     let wp = window;
     let mut pos = Pos::default();
     let bp = wp.buffer();
 
     // `[lnum, col]`, `[lnum, col, off]`.
     if tv.v_type() == VAR_LIST {
-        let l: *mut List = tv.list_or_null();
-        if l.is_null() {
-            return None;
-        }
+        let l = tv.list_ref()?;
         let mut error = false;
-        // SAFETY: `l` is a live List and `error` is this frame's.
-        pos.lnum = list_find_nr(unsafe { l.as_ref() }, 0, Some(&mut error)) as LineNr;
+        pos.lnum = list_find_nr(Some(l), 0, Some(&mut error)) as LineNr;
         if error || pos.lnum <= 0 || pos.lnum > bp.line_count() {
             return None;
         }
-        // SAFETY: as above.
-        pos.col = list_find_nr(unsafe { l.as_ref() }, 1, Some(&mut error)) as ColNr;
+        pos.col = list_find_nr(Some(l), 1, Some(&mut error)) as ColNr;
         if error {
             return None;
         }
 
-        // SAFETY (both arms): `pos.lnum` is a line of the buffer, checked
-        // above, and a buffer line is NUL-terminated.
         let len = if charcol {
-            unsafe { mb_charlen(ml_get_buf(bp, pos.lnum)) }
+            line_char_count(bp, pos.lnum)
         } else {
             ml_get_buf_len(bp, pos.lnum) as c_int
         };
         // The column may be spelled `"$"`, meaning end of line.
-        // SAFETY: `l` is a live List.
-        let li = list_find(unsafe { l.as_mut() }, 1);
+        let li = l.items().get(1);
         let dollar = li.is_some_and(|li| li.li_tv.string_bytes() == b"$");
         if dollar {
             pos.col = len + 1;
@@ -143,8 +130,7 @@ pub fn var2fpos(
         }
         pos.col -= 1;
 
-        // SAFETY: `l` is a live List and `error` is this frame's.
-        pos.coladd = list_find_nr(unsafe { l.as_ref() }, 2, Some(&mut error)) as ColNr;
+        pos.coladd = list_find_nr(Some(l), 2, Some(&mut error)) as ColNr;
         if error {
             pos.coladd = 0;
         }
@@ -169,19 +155,14 @@ pub fn var2fpos(
         }
     } else if first == b'\'' {
         let mname = c_int::from(second);
-        // SAFETY: the buffer and the window are live, and `slot` is this
-        // frame's record.
-        let fm: *const FileMark = unsafe { mark_get(bp, wp, &raw mut slot, kMarkAll, mname) };
-        // SAFETY: a non-null answer is a live record.
-        if fm.is_null() || unsafe { (*fm).mark.lnum } <= 0 {
+        let fm = mark_lookup(bp, wp, kMarkAll, mname)?;
+        if fm.mark.lnum <= 0 {
             return None;
         }
-        // SAFETY: as above.
-        pos = unsafe { (*fm).mark };
+        pos = fm.mark;
         // Only the file marks carry a buffer of their own.
         if (mname >= b'A' as c_int && mname <= b'Z' as c_int) || ascii_isdigit(mname) {
-            // SAFETY: `fm` is live.
-            *ret_fnum = unsafe { (*fm).fnum };
+            *ret_fnum = fm.fnum;
         }
     }
 
@@ -219,9 +200,8 @@ pub fn var2fpos(
         } else {
             let lnum = wp.w_cursor.lnum;
             pos.lnum = lnum;
-            // SAFETY (both arms): the cursor is on a line of the buffer.
             pos.col = if charcol {
-                unsafe { mb_charlen(ml_get_buf(bp, lnum)) }
+                line_char_count(bp, lnum)
             } else {
                 ml_get_buf_len(bp, lnum)
             };

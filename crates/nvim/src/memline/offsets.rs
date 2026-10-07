@@ -220,7 +220,7 @@ unsafe fn ml_chunk_split(buffer: Buf, curix: usize, curline_arg: LineNr) -> bool
 /// the caller left blank.
 ///
 /// With `lnum > 0` this returns the byte offset of the start of that line
-/// (and `offp` should be NULL). With `lnum == 0` it returns the line holding
+/// (and `offp` should be `None`). With `lnum == 0` it returns the line holding
 /// byte offset `*offp`, and writes the remaining column offset back through
 /// `offp`.
 ///
@@ -228,13 +228,10 @@ unsafe fn ml_chunk_split(buffer: Buf, curix: usize, curline_arg: LineNr) -> bool
 /// is what byte tracking wants.
 ///
 /// Returns -1 when there is nothing to answer from.
-///
-/// # Safety
-/// `buffer` must point at a buffer, and `offp` be NULL or writable.
-pub unsafe fn ml_find_line_or_offset(
+pub fn ml_find_line_or_offset(
     buffer: Buf,
     lnum: LineNr,
-    offp: *mut c_int,
+    mut offp: Option<&mut c_int>,
     no_ff: bool,
 ) -> c_int {
     // SAFETY: the caller's buffer, reached through a handle that
@@ -267,7 +264,7 @@ pub unsafe fn ml_find_line_or_offset(
         return -1;
     }
 
-    let offset = if offp.is_null() { 0 } else { unsafe { *offp } };
+    let offset = offp.as_deref().copied().unwrap_or(0);
     if lnum == 0 && offset <= 0 {
         // Not a "find offset", and offset 0 must be in line 1.
         return 1;
@@ -340,14 +337,15 @@ pub unsafe fn ml_find_line_or_offset(
         let len = text_end - unsafe { db_line_start(dp, idx) } as c_int;
         size += len;
         if offset != 0 && size >= offset {
+            // A non-zero offset was read through `offp`, so it is there.
+            let offp = offp.as_deref_mut().expect("an offset to answer through");
             if size + ffdos == offset {
-                unsafe { *offp = 0 };
+                *offp = 0;
             } else if idx == start_idx {
-                unsafe { *offp = offset - size + len };
+                *offp = offset - size + len;
             } else {
-                unsafe {
-                    *offp = offset - size + len - (text_end - db_line_start(dp, idx - 1) as c_int)
-                };
+                *offp = offset - size + len
+                    - (text_end - unsafe { db_line_start(dp, idx - 1) } as c_int);
             }
             curline += idx - start_idx + extra;
             if curline > b.b_ml.ml_line_count {
@@ -384,7 +382,7 @@ pub fn goto_byte(cnt: c_int) {
     if boff != 0 {
         boff -= 1;
     }
-    let lnum = unsafe { ml_find_line_or_offset(Buf::current(), 0, &raw mut boff, false) };
+    let lnum = ml_find_line_or_offset(Buf::current(), 0, Some(&mut boff), false);
     if lnum < 1 {
         // Past the end.
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;

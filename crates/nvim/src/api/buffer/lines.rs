@@ -356,10 +356,7 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
         return (0 as Integer).reported(error);
     }
     let lnum = index as LineNr + 1 as LineNr;
-    let no_lnum = ::core::ptr::null_mut::<::core::ffi::c_int>();
-    // SAFETY: `b` is the live buffer and `lnum` one past its last line at
-    // most, which is what this asks for.
-    let offset = unsafe { ml_find_line_or_offset(b, lnum, no_lnum, true) };
+    let offset = ml_find_line_or_offset(b, lnum, None, true);
     (offset as Integer).reported(error)
 }
 

@@ -701,6 +701,51 @@ pub(crate) fn searchit_buf(
     status != FAIL
 }
 
+/// [`searchit`] once in the current window, for the search builtins: for
+/// `pat` from `pos`, which answers the match, giving up past line
+/// `stop_lnum` (when it is not zero) or at the deadline `deadline`.
+///
+/// Answers [`searchit`]'s number: [`FAIL`], or the first matching
+/// sub-pattern plus one.
+pub(crate) fn search_in_current(
+    pos: &mut Pos,
+    dir: Direction,
+    pat: &[u8],
+    options: c_int,
+    stop_lnum: LineNr,
+    deadline: &mut ProfTime,
+) -> c_int {
+    // A NUL-terminated copy the search may write to, and that no code run
+    // between two searches can free.
+    let mut owned = Vec::with_capacity(pat.len() + 1);
+    owned.extend_from_slice(pat);
+    owned.push(0);
+    let mut extra = SearchItArg {
+        sa_stop_lnum: stop_lnum,
+        sa_tm: deadline,
+        sa_timed_out: 0,
+        sa_wrapped: 0,
+    };
+    // SAFETY: a position this call holds, a NUL-terminated copy of the
+    // pattern with its length, and an argument block of this frame whose
+    // deadline is the caller's.
+    unsafe {
+        searchit(
+            Some(Win::current()),
+            Buf::current(),
+            pos,
+            ptr::null_mut(),
+            dir,
+            owned.as_mut_ptr().cast(),
+            pat.len(),
+            1,
+            options,
+            RE_SEARCH,
+            &raw mut extra,
+        )
+    }
+}
+
 /// The number of the first sub-pattern that matched, or zero if none of
 /// them did.
 ///

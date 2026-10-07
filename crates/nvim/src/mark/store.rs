@@ -44,7 +44,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use crate::mark::namedfm;
@@ -131,21 +131,10 @@ impl Fmark {
         self.0
     }
 
-    /// The address of the position inside the record, which `:marks` and
-    /// `getmarklist()` pass around on its own.
-    #[inline(always)]
-    pub(super) fn pos_raw(self) -> *mut Pos {
-        // `wrapping_byte_add` would be the safe spelling, but the field
-        // offset is only knowable through a projection, and a projection
-        // through a raw pointer is the unsafe operation.
-        // SAFETY: `new`'s caller promised a live record.
-        unsafe { &raw mut (*self.0).mark }
-    }
-
     /// The whole record, copied out.
     #[inline(always)]
     pub(super) fn read(self) -> FileMark {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: `new`'s caller promised a live record.
         unsafe { (*self.0).clone() }
     }
 
@@ -153,61 +142,61 @@ impl Fmark {
     /// [`Fmark::place`].
     #[inline(always)]
     pub(super) fn write(self, fm: FileMark) {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { *self.0 = fm };
     }
 
     #[inline(always)]
     pub(super) fn pos(self) -> Pos {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { (*self.0).mark }
     }
 
     #[inline(always)]
     pub(super) fn set_pos(self, pos: Pos) {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { (*self.0).mark = pos };
     }
 
     #[inline(always)]
     pub(super) fn lnum(self) -> LineNr {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { (*self.0).mark.lnum }
     }
 
     #[inline(always)]
     pub(super) fn set_lnum(self, lnum: LineNr) {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { (*self.0).mark.lnum = lnum };
     }
 
     #[inline(always)]
     pub(super) fn col(self) -> ColNr {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { (*self.0).mark.col }
     }
 
     #[inline(always)]
     pub(super) fn fnum(self) -> c_int {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { (*self.0).fnum }
     }
 
     #[inline(always)]
     pub(super) fn set_fnum(self, fnum: c_int) {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { (*self.0).fnum = fnum };
     }
 
     #[inline(always)]
     pub(super) fn timestamp(self) -> Timestamp {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { (*self.0).timestamp }
     }
 
     #[inline(always)]
     pub(super) fn set_timestamp(self, timestamp: Timestamp) {
-        // SAFETY: as `pos_raw`.
+        // SAFETY: as `read`.
         unsafe { (*self.0).timestamp = timestamp };
     }
 
@@ -564,21 +553,6 @@ mod tests {
     }
 
     #[test]
-    fn the_position_address_names_the_position_inside_the_record() {
-        let mut record = record();
-        let fm = handle(&mut record);
-        fm.set_pos(at(9, 2));
-        // SAFETY: the handle names a live record, so its position is live.
-        let seen = unsafe { *fm.pos_raw() };
-        assert_eq!((seen.lnum, seen.col), (9, 2));
-        // The claim is that the address is the record's own `mark` field, not
-        // that the field sits at any particular offset: `FileMark` has no
-        // guaranteed layout, so `mark` need not come first.
-        assert_eq!(fm.pos_raw(), &raw mut record.mark);
-        assert!(fm.raw().cast::<u8>() <= fm.pos_raw().cast::<u8>());
-    }
-
-    #[test]
     fn an_xfmark_handle_reaches_both_halves() {
         let mut record = Box::new(UNSET_XFMARK);
         // SAFETY: the box outlives the handle.
@@ -587,5 +561,15 @@ mod tests {
         assert_eq!(record.fmark.mark.lnum, 5);
         assert!(xfm.fname().is_null());
         assert_eq!(xfm.read().fmark.mark.col, 1);
+    }
+}
+
+impl XFileMark {
+    /// The file name a mark read out of the shada file carries until its
+    /// buffer is loaded, if it carries one.
+    pub(crate) fn file_name(&self) -> Option<&CStr> {
+        // SAFETY: `fname` is null or the NUL-terminated allocation the
+        // record owns, which lives as long as the borrow of the record.
+        unsafe { crate::cstr::at_opt(self.fname) }
     }
 }

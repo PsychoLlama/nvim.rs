@@ -12,6 +12,7 @@
 use super::*;
 use crate::cstr;
 use crate::mbyte::MAX_SCHAR_SIZE;
+use crate::mbyte::char_len;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, Failed, NUL};
 use crate::winlayer::Win;
@@ -52,13 +53,24 @@ pub fn last_csearch_until() -> c_int {
     c_int::from(last_t_cmd.get())
 }
 
-/// Remember a character search, for `:let @/`-style state restoration.
+/// Remember a character search, for `setcharsearch()`: `c` is its first
+/// character and `text` the whole cluster.
 ///
-/// # Safety
-/// `s` must point at `len` readable bytes.
-pub unsafe fn set_last_csearch(c: c_int, s: *const c_char, len: c_int) {
+/// The store holds one screen cell's worth of bytes, so a cluster longer
+/// than that keeps only the characters that fit. Upstream copies the whole
+/// cluster and writes past the end of its buffer when a base character
+/// carries enough composing characters.
+pub fn set_last_csearch(c: c_int, text: &[u8]) {
+    let mut len = 0;
+    while len < text.len() {
+        let step = char_len(&text[len..]);
+        if len + step > SCHAR_BYTES - 1 {
+            break;
+        }
+        len += step;
+    }
     lastc.set(c as u8);
-    lastc_bytelen.set(len);
+    lastc_bytelen.set(c_int::try_from(len).expect("a cell's worth of bytes"));
     // Upstream writes over the front of the old value rather than replacing
     // it, and `lastc_bytelen` is what says how much of it counts.
     let mut bytes = if len != 0 {
@@ -66,9 +78,9 @@ pub unsafe fn set_last_csearch(c: c_int, s: *const c_char, len: c_int) {
     } else {
         [0; SCHAR_BYTES]
     };
-    // SAFETY: the caller's promise of `len` readable bytes, and `len` is a
-    // character's length, which fits.
-    unsafe { ptr::copy_nonoverlapping(s, bytes.as_mut_ptr(), len as usize) };
+    for (to, &from) in bytes.iter_mut().zip(&text[..len]) {
+        *to = from as c_char;
+    }
     lastc_bytes.set(bytes);
 }
 

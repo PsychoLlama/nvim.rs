@@ -84,6 +84,7 @@ pub use line::{
     screengrid_line_start,
 };
 pub(crate) use line::{grid_line_puts_bytes, linebuf};
+pub(crate) use schar::schar_bytes;
 pub use schar::{
     MAX_SCHAR_SIZE, line_do_arabic_shape, schar_cache_clear, schar_cache_clear_if_full,
     schar_cells, schar_from_ascii, schar_from_buf, schar_from_char, schar_from_str, schar_get,

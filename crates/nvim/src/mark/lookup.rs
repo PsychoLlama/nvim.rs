@@ -92,6 +92,19 @@ pub unsafe fn mark_get(
     fmp
 }
 
+/// [`mark_get`] answering the record by value: `None` for a name that
+/// resolves to nothing.
+///
+/// The record is the snapshot [`mark_get`] makes, so it is the caller's to
+/// keep; a motion mark is computed into it from [`FileMark::UNSET`].
+pub(crate) fn mark_lookup(buffer: Buf, win: Win, flag: MarkGet, name: c_int) -> Option<FileMark> {
+    let mut slot = FileMark::UNSET;
+    // SAFETY: `slot` is this frame's record and outlives the answer, which
+    // is either null or `slot` itself.
+    let found = unsafe { mark_get(buffer, win, &raw mut slot, flag, name) };
+    (!found.is_null()).then_some(slot)
+}
+
 /// Get a global mark {A-Z0-9}.
 ///
 /// `name` — the name of the mark.

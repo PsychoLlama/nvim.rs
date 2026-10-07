@@ -34,7 +34,6 @@ use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::{Win, tab_windows};
 use core::ffi::{c_int, c_ulong};
-use core::ptr;
 
 /// `:move` -- move lines `line1`..`line2` to sit after line `dest`.
 ///
@@ -54,15 +53,11 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
         return Ok(());
     }
 
-    // SAFETY: `curbuf` is live and the three line numbers are inside it.  A
-    // NULL length is upstream's way of asking only for the byte offset.
-    let (start_byte, end_byte, dest_byte) = unsafe {
-        (
-            ml_find_line_or_offset(Buf::current(), line1, ptr::null_mut(), true) as BCount,
-            ml_find_line_or_offset(Buf::current(), line2 + 1, ptr::null_mut(), true) as BCount,
-            ml_find_line_or_offset(Buf::current(), dest + 1, ptr::null_mut(), true) as BCount,
-        )
-    };
+    let (start_byte, end_byte, dest_byte) = (
+        ml_find_line_or_offset(Buf::current(), line1, None, true) as BCount,
+        ml_find_line_or_offset(Buf::current(), line2 + 1, None, true) as BCount,
+        ml_find_line_or_offset(Buf::current(), dest + 1, None, true) as BCount,
+    );
     let extent_byte = end_byte - start_byte;
     let num_lines = line2 - line1 + 1;
 

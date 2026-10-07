@@ -10,12 +10,11 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::list_items;
 use crate::highlight_group::HLF_D;
 use crate::memory::ThinCString;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
-use crate::types::{Failed, IOSIZE, VAR_DICT, VAR_LIST};
+use crate::types::{Failed, IOSIZE, ListRef, VAR_LIST};
 use crate::vim_snprintf;
 use crate::winlayer::{Buf, Live, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -151,28 +150,21 @@ impl TagStack {
         entry.user_data = item.user_data;
     }
 
-    /// Add every dict in `l` that describes a jump, oldest first.
-    ///
-    /// # Safety
-    /// `l` must be a live list.
-    unsafe fn push_items(&mut self, l: *mut List) {
-        // SAFETY: the list and its items are live for the whole walk, and
-        // the two strings taken out of each dict are freshly allocated
-        // copies the new entry takes over.
-        // An index: `push` below reads user dictionaries and can re-enter.
+    /// Add every dict in `items` that describes a jump, oldest first.
+    fn push_items(&mut self, items: &ListRef) {
+        // An index and a handle on each dict rather than a borrow of the
+        // list: nothing here should hold into a user container across the
+        // writes to the stack.
         let mut at = 0;
-        // SAFETY: the caller's promise -- a live list.
-        while at < list_items(unsafe { l.as_ref() }).len() {
-            let tv = &raw const list_items(unsafe { l.as_ref() })[at].li_tv;
+        while at < items.len() {
+            let item = items.items()[at].li_tv.dict_handle();
             at += 1;
 
             // Skip anything that is not a dict describing a jump.
-            if unsafe { (*tv).v_type() } != VAR_DICT || unsafe { (*tv).dict_or_null().is_null() } {
+            let Some(item) = item else {
                 continue;
-            }
-            let item = unsafe { (*tv).dict_or_null() };
-            let found = unsafe { find(item, c"from") };
-            let Some(from) = found else {
+            };
+            let Some(from) = dict_find(Some(&*item), b"from") else {
                 continue;
             };
             let mut mark = Pos::default();
@@ -180,8 +172,7 @@ impl TagStack {
             if list2fpos(&from.di_tv, &mut mark, Some(&mut fnum), None, false).is_err() {
                 continue;
             }
-            let Some(tagname) = dict_get_string_alloc(unsafe { (item).as_ref() }, b"tagname")
-            else {
+            let Some(tagname) = dict_get_string_alloc(Some(&*item), b"tagname") else {
                 continue;
             };
             // The dict counts columns from one, the mark from zero.
@@ -190,11 +181,11 @@ impl TagStack {
             }
             self.push(Push {
                 tagname: tagname.into_raw(),
-                cur_fnum: unsafe { number(item, c"bufnr") },
-                cur_match: unsafe { number(item, c"matchnr") } - 1,
+                cur_fnum: number(&item, b"bufnr"),
+                cur_match: number(&item, b"matchnr") - 1,
                 mark,
                 fnum,
-                user_data: dict_get_string_alloc(unsafe { (item).as_ref() }, b"user_data")
+                user_data: dict_get_string_alloc(Some(&*item), b"user_data")
                     .map_or(ptr::null_mut(), ThinCString::into_raw),
             });
         }
@@ -267,31 +258,24 @@ pub fn do_tags(_excmd: &mut ExArg) {
 }
 
 /// Describe one stack entry the way `gettagstack()` answers it.
-///
-/// # Safety
-/// Both pointers must be live.
-unsafe fn tag_details(tag: &Taggy, retdict: *mut Dict) {
-    // SAFETY: the dict is live, and the entry's strings are
-    // NUL-terminated.
-    unsafe { add_str(retdict, c"tagname", tag.tagname) };
-    unsafe { add_nr(retdict, c"matchnr", (tag.cur_match + 1) as VarNumber) };
-    unsafe { add_nr(retdict, c"bufnr", tag.cur_fnum as VarNumber) };
+fn tag_details(tag: &Taggy, retdict: &mut Dict) {
+    add_str(retdict, b"tagname", tag.tagname);
+    let _ = retdict.add_number(b"matchnr", (tag.cur_match + 1) as VarNumber);
+    let _ = retdict.add_number(b"bufnr", tag.cur_fnum as VarNumber);
     if !tag.user_data.is_null() {
-        unsafe { add_str(retdict, c"user_data", tag.user_data) };
+        add_str(retdict, b"user_data", tag.user_data);
     }
 
-    let held = tv_list_alloc(4);
-    let pos = held.as_ptr();
-    let (from, from_len) = (c"from".as_ptr(), c"from".count_bytes());
-    let _ = unsafe { (*retdict).add_list(cstr::slice_at(from, from_len), Some(held)) };
+    let pos = tv_list_alloc(4);
+    let _ = retdict.add_list(b"from", Some(pos.clone()));
     let mark = &tag.fmark;
     let str_m = if mark.fnum != -1 {
         mark.fnum as VarNumber
     } else {
         0
     };
-    unsafe { (*pos).push_number(str_m) };
-    unsafe { (*pos).push_number(mark.mark.lnum as VarNumber) };
+    pos.edit().push_number(str_m);
+    pos.edit().push_number(mark.mark.lnum as VarNumber);
     // Columns are counted from one outside, except for the "past the
     // end of the line" sentinel, which is passed through.
     let n2 = if mark.mark.col == MAXCOL as ColNr {
@@ -299,28 +283,22 @@ unsafe fn tag_details(tag: &Taggy, retdict: *mut Dict) {
     } else {
         (mark.mark.col + 1) as VarNumber
     };
-    unsafe { (*pos).push_number(n2) };
-    unsafe { (*pos).push_number(mark.mark.coladd as VarNumber) };
+    pos.edit().push_number(n2);
+    pos.edit().push_number(mark.mark.coladd as VarNumber);
 }
 
 /// `gettagstack()` — describe the tag stack of `window` into `retdict`.
-///
-/// # Safety
-/// `retdict` must be a live dict.
-pub unsafe fn get_tagstack(window: Win, retdict: *mut Dict) {
+pub fn get_tagstack(window: Win, retdict: &mut Dict) {
     let mut stack = TagStack::of(window);
-    unsafe { add_nr(retdict, c"length", stack.len() as VarNumber) };
-    unsafe { add_nr(retdict, c"curidx", (stack.curidx() + 1) as VarNumber) };
+    let _ = retdict.add_number(b"length", stack.len() as VarNumber);
+    let _ = retdict.add_number(b"curidx", (stack.curidx() + 1) as VarNumber);
 
-    let held = tv_list_alloc(2);
-    let items = held.as_ptr();
-    let (key, key_len) = (c"items".as_ptr(), c"items".count_bytes());
-    let _ = unsafe { (*retdict).add_list(cstr::slice_at(key, key_len), Some(held)) };
+    let items = tv_list_alloc(2);
+    let _ = retdict.add_list(b"items", Some(items.clone()));
     for entry in stack.entries() {
-        let d_held = tv_dict_alloc();
-        let d = d_held.as_ptr();
-        unsafe { (*items).push_dict(Some(d_held)) };
-        unsafe { tag_details(entry, d) };
+        let d = tv_dict_alloc();
+        items.edit().push_dict(Some(d.clone()));
+        tag_details(entry, d.edit());
     }
 }
 
@@ -328,12 +306,7 @@ pub unsafe fn get_tagstack(window: Win, retdict: *mut Dict) {
 ///
 /// `action` is `'a'` to append, `'r'` to replace and `'t'` to truncate.
 /// Answers `Err` with the error already reported.
-///
-/// # Safety
-/// `d` must be a live dict.
-pub unsafe fn set_tagstack(window: Win, d: *const Dict, action: c_int) -> Result<(), Failed> {
-    // SAFETY: the dict is live for the whole call, and nothing else holds
-    // the window's tag stack.
+pub fn set_tagstack(window: Win, d: &Dict, action: c_int) -> Result<(), Failed> {
     if tfu_in_use.get() {
         // 'tagfunc' is running: it is the tag stack's own contents
         // that are being computed.
@@ -341,17 +314,17 @@ pub unsafe fn set_tagstack(window: Win, d: *const Dict, action: c_int) -> Result
         return Err(Failed);
     }
 
-    let mut items = ptr::null_mut::<List>();
-    if let Some(di) = unsafe { find(d, c"items") } {
+    let mut items = None;
+    if let Some(di) = dict_find(Some(d), b"items") {
         if di.di_tv.v_type() != VAR_LIST {
             emsg(gettext(e_listreq));
             return Err(Failed);
         }
-        items = di.di_tv.list_or_null();
+        items = di.di_tv.list_handle();
     }
 
     let mut stack = TagStack::of(window);
-    if let Some(di) = unsafe { find(d, c"curidx") } {
+    if let Some(di) = dict_find(Some(d), b"curidx") {
         stack.set_curidx(tv_get_number(&di.di_tv) as c_int - 1);
     }
 
@@ -363,50 +336,25 @@ pub unsafe fn set_tagstack(window: Win, d: *const Dict, action: c_int) -> Result
         }
     }
 
-    if !items.is_null() {
+    if let Some(items) = items {
         if action == 'r' as c_int {
             stack.clear();
         }
-        unsafe { stack.push_items(items) };
+        stack.push_items(&items);
         // Leave the index above the last entry, as a fresh jump would.
         stack.set_curidx(stack.len() as c_int);
     }
     Ok(())
 }
 
-/// [`dict_find`] answering `None` rather than a NULL pointer.
-///
-/// # Safety
-/// `d` must be live.
-unsafe fn find<'a>(d: *const Dict, key: &CStr) -> Option<&'a DictItem> {
-    // SAFETY: the dict is live, and the answer borrows it -- the contract
-    // this signature passes on.
-    dict_find(unsafe { d.as_ref() }, key.to_bytes())
-}
-
-/// [`tv_dict_add_nr`] with the key's length taken from the literal.
-///
-/// # Safety
-/// `d` must be live.
-unsafe fn add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
-    // SAFETY: the dict is live and the key is NUL-terminated.
-    let _ = unsafe { (*d).add_number(key.to_bytes(), nr) };
-}
-
-/// [`tv_dict_add_str`] with the key's length taken from the literal.
-///
-/// # Safety
-/// `d` must be live and `val` NUL-terminated.
-unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
-    // SAFETY: the dict is live, and both strings are NUL-terminated.
-    let _ = unsafe { (*d).add_str(key.to_bytes(), cstr::at_opt(val)) };
+/// [`Dict::add_str`] of an entry's own string, which may be null.
+fn add_str(d: &mut Dict, key: &[u8], val: *const c_char) {
+    // SAFETY: a stack entry's strings are null or NUL-terminated
+    // allocations the entry owns, live for the call.
+    let _ = d.add_str(key, unsafe { cstr::at_opt(val) });
 }
 
 /// A number field of a dict, zero when it is missing.
-///
-/// # Safety
-/// `d` must be live.
-unsafe fn number(d: *const Dict, key: &CStr) -> c_int {
-    // SAFETY: the dict is live and the key is NUL-terminated.
-    dict_get_number(unsafe { (d).as_ref() }, key.to_bytes()) as c_int
+fn number(d: &Dict, key: &[u8]) -> c_int {
+    dict_get_number(Some(d), key) as c_int
 }

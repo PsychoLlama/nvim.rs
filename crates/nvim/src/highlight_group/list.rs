@@ -11,7 +11,7 @@
 use crate::charset::skip;
 use crate::cstr;
 use crate::types::Candidate;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::charset::vim_strsize;
 use crate::eval::last_set_msg;
@@ -355,8 +355,7 @@ pub(crate) fn set_context_in_highlight_cmd(expand: &mut Expand, arg: usize) {
 /// `expand_generic`'s callback: the `idx`th completion candidate.
 pub(crate) fn get_highlight_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     let idx = c_int::try_from(idx).ok()?;
-    // SAFETY: a group's name or a literal; NUL-terminated, null past the end.
-    let name = unsafe { cstr::at_opt(get_highlight_name_ext(idx, true)) }?;
+    let name = get_highlight_name_ext(idx, true)?;
     Some(Candidate::Owned(name.to_owned()))
 }
 
@@ -365,32 +364,29 @@ pub(crate) fn get_highlight_name(_expand: &Expand, idx: usize) -> Option<Candida
 ///
 /// A cleared group answers `""` rather than NULL, which would end the walk:
 /// entries are never removed from the table, only cleared.
-///
-/// # Safety
-/// Main thread only.
-pub(crate) unsafe fn get_highlight_name_ext(idx: c_int, skip_cleared: bool) -> *const c_char {
+pub(crate) fn get_highlight_name_ext(idx: c_int, skip_cleared: bool) -> Option<&'static CStr> {
     if idx < 0 {
-        return core::ptr::null();
+        return None;
     }
     let groups = highlight_num_groups();
     if skip_cleared && idx < groups && group(idx + 1).cleared {
-        return c"".as_ptr();
+        return Some(c"");
     }
 
     let none = include_none.get();
     let default = include_default.get();
     let link = include_link.get();
     if idx == groups && none != 0 {
-        c"none".as_ptr()
+        Some(c"none")
     } else if idx == groups + none && default != 0 {
-        c"default".as_ptr()
+        Some(c"default")
     } else if idx == groups + none + default && link != 0 {
-        c"link".as_ptr()
+        Some(c"link")
     } else if idx == groups + none + default + 1 && link != 0 {
-        c"clear".as_ptr()
+        Some(c"clear")
     } else if idx >= groups {
-        core::ptr::null()
+        None
     } else {
-        group(idx + 1).name.as_ptr()
+        Some(group(idx + 1).name)
     }
 }

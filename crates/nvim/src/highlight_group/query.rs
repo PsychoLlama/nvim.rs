@@ -14,7 +14,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::api::private::helpers::cstr_to_string;
 use crate::highlight::dict::put;
@@ -134,12 +134,16 @@ pub(crate) fn ns_get_hl_defs(
 }
 
 /// `synIDattr({id}, {flag})` for a boolean attribute: `"1"` if the group has
-/// it, NULL if not.
+/// it, `None` if not.
 ///
 /// `modec` is `'g'` for `gui=` and anything else for `cterm=`.
-pub(crate) fn highlight_has_attr(id: c_int, flag: HlAttrFlags, modec: c_int) -> *const c_char {
+pub(crate) fn highlight_has_attr(
+    id: c_int,
+    flag: HlAttrFlags,
+    modec: c_int,
+) -> Option<&'static CStr> {
     if id <= 0 || id > highlight_num_groups() {
-        return core::ptr::null();
+        return None;
     }
     let entry = group(id);
     let attr = if modec == 'g' as c_int {
@@ -154,11 +158,7 @@ pub(crate) fn highlight_has_attr(id: c_int, flag: HlAttrFlags, modec: c_int) -> 
     } else {
         attr.has(flag)
     };
-    if has {
-        c"1".as_ptr()
-    } else {
-        core::ptr::null()
-    }
+    has.then_some(c"1")
 }
 
 /// Where a `#rrggbb` or decimal answer from [`highlight_color`] is
@@ -170,23 +170,17 @@ pub(crate) type HlColorText = [u8; 20];
 /// those with a `#` suffix, or `"font"`.
 ///
 /// `modec` is `'g'` for `gui=`, `'c'` for `cterm=` and `'t'` for `term=`,
-/// which has no colours at all. NULL means "nothing to report".
-///
-/// # Safety
-/// `what` is NUL-terminated and at least four bytes readable — upstream reads
-/// `what[3]` unconditionally, which its own callers guarantee. Main thread
-/// only.
-pub(crate) unsafe fn highlight_color(
+/// which has no colours at all. `None` means "nothing to report"; an answer
+/// is formatted into `into` and borrows it.
+pub(crate) fn highlight_color<'a>(
     id: c_int,
-    what: *const c_char,
+    what: &[u8],
     modec: c_int,
-    into: &mut HlColorText,
-) -> *const c_char {
+    into: &'a mut HlColorText,
+) -> Option<&'a CStr> {
     if id <= 0 || id > highlight_num_groups() {
-        return core::ptr::null();
+        return None;
     }
-    // SAFETY: the caller's NUL-terminated selector.
-    let what = unsafe { CStr::from_ptr(what) }.to_bytes();
     let lower = |i: usize| what.get(i).copied().unwrap_or(0).to_ascii_lowercase();
 
     let (mut fg, mut sp, mut font) = (false, false, false);
@@ -197,7 +191,7 @@ pub(crate) unsafe fn highlight_color(
     } else if lower(0) == b's' && lower(1) == b'p' {
         sp = true;
     } else if !(lower(0) == b'b' && lower(1) == b'g') {
-        return core::ptr::null();
+        return None;
     }
 
     let entry = group(id);
@@ -211,7 +205,7 @@ pub(crate) unsafe fn highlight_color(
                 entry.rgb_bg
             };
             if !(0..=0xffffff).contains(&n) {
-                return core::ptr::null();
+                return None;
             }
             return answer(format_args!("#{n:06x}"), into);
         }
@@ -227,31 +221,31 @@ pub(crate) unsafe fn highlight_color(
         let mut hexbuf: HexBuf = [0; 8];
         return match coloridx_to_name(idx, value, &mut hexbuf) {
             Some(name) => answer(format_args!("{}", name.to_string_lossy()), into),
-            None => core::ptr::null(),
+            None => None,
         };
     }
 
     if font || sp {
-        return core::ptr::null();
+        return None;
     }
     if modec == 'c' as c_int {
         let n = if fg { entry.cterm_fg } else { entry.cterm_bg } - 1;
         if n < 0 {
-            return core::ptr::null();
+            return None;
         }
         return answer(format_args!("{n}"), into);
     }
     // `term` has no colours.
-    core::ptr::null()
+    None
 }
 
-/// Parks `text` in `into` and hands back a pointer to it, truncating at 19
-/// bytes as upstream's `char[20]` did.
-fn answer(text: core::fmt::Arguments, into: &mut HlColorText) -> *const c_char {
+/// Parks `text` in `into` and answers it from there, truncating at 19 bytes
+/// as upstream's `char[20]` did.
+fn answer<'a>(text: core::fmt::Arguments, into: &'a mut HlColorText) -> Option<&'a CStr> {
     let text = text.to_string();
     let bytes = text.as_bytes();
     let len = bytes.len().min(into.len() - 1);
     into[..len].copy_from_slice(&bytes[..len]);
     into[len] = 0;
-    into.as_ptr().cast()
+    CStr::from_bytes_until_nul(&into[..]).ok()
 }
