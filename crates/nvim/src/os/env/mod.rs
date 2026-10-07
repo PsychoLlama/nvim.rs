@@ -343,6 +343,24 @@ pub fn os_getenvname_at_index(index: size_t) -> *mut c_char {
     }
 }
 
+/// Fill `out` from the operating system's entropy source. `false` when
+/// there is none to be had.
+pub(crate) fn os_random(out: &mut [u8]) -> bool {
+    // SAFETY: a synchronous `uv_random` (no loop, no request, no callback)
+    // fills `out`, whose length it is told.
+    let rc = unsafe {
+        crate::event::libuv::uv_random(
+            ptr::null_mut(),
+            ptr::null_mut(),
+            out.as_mut_ptr().cast(),
+            out.len(),
+            0,
+            None,
+        )
+    };
+    rc == 0
+}
+
 /// This process's id.
 pub fn os_get_pid() -> int64_t {
     // SAFETY: `getpid` takes no arguments.

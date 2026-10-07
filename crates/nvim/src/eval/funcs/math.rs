@@ -1,22 +1,19 @@
 //! Numbers: arithmetic, the bitwise operators and the random-number
 //! generator.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::VARNUMBER_MAX;
-use super::wrappers::{arg_number_chk, list_alloc_ret, tv_get_float_chk};
+use super::wrappers::{arg_number_chk, tv_get_float_chk};
 use crate::charset::skip;
-use crate::charset::string2float;
-use crate::eval::typval::{NumBuf, list_find, list_len};
-use crate::event::libuv::uv_random;
+use crate::charset::string2float_in;
+use crate::eval::typval::{ListRef, NumBuf, tv_list_alloc_ret};
 use crate::global_cell::GlobalCell;
 use crate::message_fmt::msg_cstr;
-use crate::os::env::os_get_pid;
+use crate::os::env::{os_get_pid, os_random};
 use crate::os::time::os_hrtime;
 use crate::semsg;
-use crate::types::{EvalFuncData, Float, TypVal, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VarNumber};
-use core::ffi::{c_double, c_int, c_void};
-use core::ptr;
+use crate::types::{EvalFuncData, Float, TypVal, VAR_FLOAT, VarNumber};
+use core::ffi::c_double;
 
 /// `abs({expr})` — magnitude, as a Float for a Float and as a Number
 /// otherwise. A value that is not coercible to a number reports through
@@ -195,13 +192,7 @@ pub fn f_isnan(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// clock mixed with the process id when the OS source is unavailable.
 fn init_srand() -> u32 {
     let mut bytes = [0u8; 4];
-    // SAFETY throughout: a synchronous `uv_random` (null loop and request) fills
-    // `bytes`, whose length it is told; the callback is null because the
-    // call is synchronous.
-    let (out, len) = (bytes.as_mut_ptr().cast::<c_void>(), bytes.len());
-    let (loop_, req) = (ptr::null_mut(), ptr::null_mut());
-    let rc = unsafe { uv_random(loop_, req, out, len, 0, None) };
-    if rc == 0 {
+    if os_random(&mut bytes) {
         return u32::from_ne_bytes(bytes);
     }
     (os_hrtime() as u32) ^ (os_get_pid() as u32)
@@ -251,60 +242,43 @@ pub fn f_rand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         STATE.set(Some(state));
         draw
     } else {
-        let Some(seed) = seed_list(&args[0]) else {
+        let Some((seed, mut state)) = seed_list(&args[0]) else {
             let what = msg_cstr(numbuf.string(&args[0]));
             semsg!("E475: Invalid argument: {what}");
             result.write_number(-1);
             return;
         };
-        // SAFETY throughout: `seed_list` proved all four items are live Numbers.
-        let mut state = [
-            unsafe { (*seed[0]).number_or_zero() } as u32,
-            unsafe { (*seed[1]).number_or_zero() } as u32,
-            unsafe { (*seed[2]).number_or_zero() } as u32,
-            unsafe { (*seed[3]).number_or_zero() } as u32,
-        ];
         let draw = xoshiro128starstar(&mut state);
-        for (item, word) in seed.iter().zip(state) {
-            unsafe { (**item).write_number(word as VarNumber) };
+        // The list is advanced in place: its four items are Numbers, so
+        // overwriting them releases nothing.
+        for (item, word) in seed.edit().items_mut().iter_mut().zip(state) {
+            item.li_tv.write_number(VarNumber::from(word));
         }
         draw
     };
     result.write_number(value as VarNumber);
 }
 
-/// The four state words of a seed list, or `None` if the value is not a
-/// four-element List of Numbers.
-fn seed_list(tv: &TypVal) -> Option<[*mut TypVal; 4]> {
-    if tv.v_type() != VAR_LIST {
+/// A seed list and the four state words it holds, or `None` if the value is
+/// not a four-element List of Numbers.
+fn seed_list(tv: &TypVal) -> Option<(&ListRef, [u32; 4])> {
+    let list = tv.list_shared()?;
+    let items = list.items();
+    if items.len() != 4 {
         return None;
     }
-    // SAFETY: the kind says the value holds a list pointer, which may be
-    // null for an empty list literal; `list_len` answers 0 for null.
-    let l = tv.list_or_null();
-    // SAFETY: `l` is a list pointer or null.
-    if list_len(tv.list_ref()) != 4 {
-        return None;
+    let mut state = [0; 4];
+    for (word, item) in state.iter_mut().zip(items) {
+        // The state is the low 32 bits of each Number.
+        *word = item.li_tv.as_number()? as u32;
     }
-    let mut out = [ptr::null_mut(); 4];
-    for (i, slot) in out.iter_mut().enumerate() {
-        // SAFETY: the length check above proves index `i` exists, so
-        // `list_find` returns a live item.
-        let tv = unsafe { &raw mut list_find(l.as_mut(), i as c_int).expect("checked").li_tv };
-        // SAFETY: as above.
-        if unsafe { (*tv).v_type() } != VAR_NUMBER {
-            return None;
-        }
-        *slot = tv;
-    }
-    Some(out)
+    Some((list, state))
 }
 
 /// `srand([{expr}])` — a four-Number seed list, from the OS or from the
 /// Number handed in.
 pub fn f_srand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: `result` is the dispatcher's cleared return value.
-    list_alloc_ret(result, 4);
+    let seeds = tv_list_alloc_ret(result, 4);
     let mut x = if !args.is_empty() {
         let mut error = false;
         let n = arg_number_chk(&args[0], Some(&mut error));
@@ -317,8 +291,7 @@ pub fn f_srand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         init_srand()
     };
     for _ in 0..4 {
-        // SAFETY: the list was just allocated into `result`.
-        unsafe { (*result.list_or_null()).push_number(splitmix32(&mut x) as VarNumber) };
+        seeds.push_number(VarNumber::from(splitmix32(&mut x)));
     }
 }
 
@@ -360,17 +333,15 @@ pub fn f_range(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         semsg!("E727: Start past end");
         return;
     }
-    // SAFETY throughout: `result` is the dispatcher's cleared return value. The length
-    // is upstream's estimate and only preallocates.
+    // The length is upstream's estimate and only preallocates.
     let hint = (end as isize).wrapping_sub(start as isize) / stride as isize;
-    let list = list_alloc_ret(result, hint);
+    let list = tv_list_alloc_ret(result, hint);
     while if stride > 0 {
         start <= end
     } else {
         start >= end
     } {
-        // SAFETY: `list` was just allocated into `result`.
-        unsafe { (*list).push_number(start) };
+        list.push_number(start);
         let Some(next) = start.checked_add(stride) else {
             // `i += stride` overflows here in the C and the loop's own test
             // then ends it. Stopping is the same observable outcome without
@@ -396,7 +367,6 @@ pub fn f_str2float(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         at += 1;
         at += skip::white(&bytes[at..]);
     }
-    // SAFETY: a tail of the NUL-terminated argument string.
-    let (parsed, _) = unsafe { string2float(text[at..].as_ptr()) };
+    let (parsed, _) = string2float_in(&bytes[at..]);
     result.write_float(if negate { -parsed } else { parsed });
 }
