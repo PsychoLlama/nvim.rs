@@ -199,6 +199,44 @@ pub unsafe extern "C" fn vim_snprintf_safelen(
     (str_l as size_t).min(str_m - 1)
 }
 
+/// Vimscript's `printf()`: the String value `fmt` formatted with the typval
+/// arguments `args`, measured and then written into an exact allocation.
+/// `None` when reading the format or the measuring pass reported an error,
+/// which skips the formatting pass.
+///
+/// The caller's `did_emsg` survives: it is cleared before the format is read
+/// so that only *this* call's errors are seen, and OR-ed back afterwards.
+pub(crate) fn format_typvals(fmt: &TypVal, args: &[TypVal]) -> Option<Vec<u8>> {
+    use crate::message::state::did_emsg;
+    // The `va_list` the formatter is handed. It is never read: a typval
+    // slice is what selects the Vimscript argument source, and every
+    // conversion then reads the slice.
+    fn unread() -> VaList<'static> {
+        // SAFETY: a zeroed `va_list` is inert as long as nothing reads it,
+        // and with a typval slice nothing does.
+        unsafe { core::mem::transmute::<[u8; 24], VaList<'static>>([0u8; 24]) }
+    }
+    let saved_did_emsg = did_emsg.get();
+    did_emsg.set(0);
+    let mut buf = NumBuf::new();
+    let fmt = buf.string(fmt).as_ptr();
+    // SAFETY: a terminated format, a typval argument source, and a
+    // zero-length destination for the measuring pass.
+    let len = unsafe { vim_vsnprintf_typval(ptr::null_mut(), 0, fmt, unread(), Some(args)) };
+    let len = usize::try_from(len).unwrap_or(0);
+    let out = (did_emsg.get() == 0).then(|| {
+        let mut out = vec![0u8; len + 1];
+        // SAFETY: as above, into `len + 1` bytes this call owns.
+        unsafe {
+            vim_vsnprintf_typval(out.as_mut_ptr().cast(), len + 1, fmt, unread(), Some(args))
+        };
+        out.truncate(len);
+        out
+    });
+    did_emsg.set(did_emsg.get() | saved_did_emsg);
+    out
+}
+
 /// # Safety
 ///
 /// `str` must point at a NUL-terminated string, unaliased for the call. `fmt`

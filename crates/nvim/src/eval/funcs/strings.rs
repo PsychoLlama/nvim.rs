@@ -1,107 +1,67 @@
 //! Building and reshaping strings: escaping, formatting, splitting,
 //! substituting, hashing, time formatting and spelling.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::wrappers::{
-    arg_bool_chk, arg_number, arg_number_chk, blob_alloc_ret, list_alloc_ret, non_zero_arg,
-};
+use super::wrappers::{arg_bool_chk, arg_number, arg_number_chk, blob_alloc_ret, non_zero_arg};
 use super::{NSUBEXP, VSE_NONE};
-use crate::cstr;
-use crate::cursor::get_cursor_pos_ptr;
 use crate::eval::do_string_sub;
 use crate::eval::typval::{
     NumBuf, blob_bytes, list_extend, list_len, tv_check_for_nonempty_string_arg,
-    tv_check_for_string_arg, tv_check_num,
+    tv_check_for_string_arg, tv_check_num, tv_list_alloc_ret,
 };
-use crate::ex_getln::vim_strsave_fnameescape;
+use crate::ex_getln::fnameescape;
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
-use crate::keycodes::vim_strsave_escape_ks;
-use crate::mbyte::{
-    convert_setup, enc_locale, string_convert, utf_char2bytes, utf_ptr2char, utfc_ptr2len,
-};
-use crate::memory::{ThinCString, XString, xfree, xmallocz};
+use crate::keycodes::escape_ks;
+use crate::mbyte::{Converter, char_at, cluster_len, enc_locale, encode_char};
+use crate::memline::Lines;
+use crate::memory::{ThinCString, XString};
 use crate::message::e_no_spell;
-use crate::message::state::did_emsg;
-use crate::message::{emsg, str2special_save};
+use crate::message::{emsg, str2special_bytes};
 use crate::option::SavedCpo;
 use crate::option::vars::p_enc;
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, gettext_owned};
-use crate::os::time::{os_localtime_r, os_strptime, tm_zeroed};
-use crate::regexp::{
-    RE_MAGIC, RE_STRING, reg_submatch, reg_submatch_list, vim_regcomp, vim_regexec_nl, vim_regfree,
+use crate::os::time::{
+    os_localtime_r, os_mktime, os_strftime, os_strptime, os_time_raw, tm_zeroed,
 };
+use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING, reg_submatch, reg_submatch_list};
 use crate::search::FORWARD;
 use crate::semsg;
 use crate::sha256::hex_digest;
-use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_move_to};
+use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check_text, spell_move_to};
 use crate::spellsuggest::spell_suggest_list;
-use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
+use crate::strings::{escaped_bytes, format_typvals, shellescape_of};
 use crate::types::{
-    CONV_NONE, EvalFuncData, Hlf, List, NUL, RegMatch, RegProg, TypVal, VAR_BLOB, VAR_LIST,
-    VAR_STRING, VarNumber, VimConv, kListLenMayKnow, time_t, tm,
+    EvalFuncData, Hlf, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow,
+    time_t, tm,
 };
 use crate::winlayer::{Buf, Win};
-use ::libc::{mktime, strftime, time};
-use core::ffi::{CStr, VaList, c_char, c_int, c_void};
-use core::ptr;
-
-/// The placeholder `va_list` the typval formatter is handed. It is never
-/// read: `vim_vsnprintf_typval` takes its arguments from the typval array
-/// whenever that is non-null, which is the only way this family calls it.
-///
-/// # Safety
-/// The result must only reach `vim_vsnprintf_typval` with a non-null
-/// typval argument list.
-unsafe fn dummy_ap() -> VaList<'static> {
-    // SAFETY: a zeroed `va_list` is inert as long as nothing reads it, and
-    // the typval overload never does. This is what the transpiled body did
-    // through a zeroed static.
-    unsafe { core::mem::transmute::<[u8; 24], VaList<'static>>([0u8; 24]) }
-}
-
-/// A conversion descriptor that has not been set up yet.
-const CONV_NONE_INIT: VimConv = VimConv {
-    vc_type: CONV_NONE,
-    vc_factor: 0,
-    vc_fd: ptr::null_mut(),
-    vc_fail: false,
-};
+use core::ffi::{CStr, c_int};
 
 /// `char2nr({string} [, {utf8}])` — the first character's code point. The
 /// second argument only has to type-check; nvim is always UTF-8.
 pub fn f_char2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the arguments are live typvals.
     if args.len() > 1 && !tv_check_num(&args[1]) {
         return;
     }
-    let text = numbuf.string(&args[0]).as_ptr();
-    result.write_number(unsafe { utf_ptr2char(text) } as VarNumber);
+    result.write_number(VarNumber::from(char_at(numbuf.bytes(&args[0]))));
 }
 
 /// `escape({string}, {chars})` — backslash every byte listed in `chars`.
 pub fn f_escape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = NumBuf::new();
-    let str = numbuf.string(&args[0]).as_ptr();
-    let chars = buf.string(&args[1]).as_ptr();
-    // SAFETY: both are NUL-terminated and outlive the call, `chars` because
-    // `buf` does; the escaper answers an `xmalloc`ed string, which the
-    // result adopts.
-    result.write_string(unsafe { ThinCString::from_raw(vim_strsave_escaped(str, chars)) });
+    let text = numbuf.string(&args[0]);
+    let chars = buf.string(&args[1]);
+    result.write_string(Some(escaped_bytes(text, chars).into()));
 }
 
 /// `fnameescape({string})`.
 pub fn f_fnameescape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let name = numbuf.string(&args[0]).as_ptr();
-    // SAFETY: `name` is NUL-terminated and outlives the call; the escaper
-    // answers an `xmalloc`ed string, which the result adopts.
-    result.write_string(unsafe {
-        ThinCString::from_raw(vim_strsave_fnameescape(name, VSE_NONE as c_int))
-    });
+    let name = numbuf.string(&args[0]);
+    result.write_string(Some(fnameescape(name, VSE_NONE as c_int).into()));
 }
 
 /// `gettext({string})` — a no-op while no message catalogs ship, but it
@@ -124,12 +84,9 @@ pub fn f_keytrans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(text) = args[0].string_ref() else {
         return;
     };
-    // SAFETY throughout: `text` is the argument's live NUL-terminated
-    // string; both producers answer an `xmalloc`ed string, the first freed
-    // here and the second adopted by the result.
-    let escaped = unsafe { vim_strsave_escape_ks(text.as_ptr().cast_mut()) };
-    result.write_string(unsafe { ThinCString::from_raw(str2special_save(escaped, true, true)) });
-    unsafe { xfree(escaped.cast::<c_void>()) };
+    let escaped = escape_ks(text.as_cstr());
+    let readable = str2special_bytes(escaped.as_cstr(), true, true);
+    result.write_string(Some(readable.into()));
 }
 
 /// `nr2char({number} [, {utf8}])`.
@@ -143,7 +100,6 @@ pub fn f_nr2char(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     if num < 0 {
-        // SAFETY throughout: a literal message.
         let msg = c"E5070: Character number must not be less than zero";
         emsg(gettext(msg));
         return;
@@ -156,44 +112,18 @@ pub fn f_nr2char(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let mut buf = [0u8; 6];
-    // SAFETY: `buf` has room for the longest UTF-8 sequence
-    // `utf_char2bytes` writes, and the returned length is what it wrote.
-    let len = unsafe { utf_char2bytes(num as c_int, buf.as_mut_ptr().cast::<c_char>()) };
-    result.write_string(Some(ThinCString::from_bytes(&buf[..len as usize])));
+    let len = encode_char(num as c_int, &mut buf);
+    result.write_string(Some(ThinCString::from_bytes(&buf[..len])));
 }
 
-/// `printf({fmt}, ...)` — measure, then format into an exact allocation.
-///
-/// The `did_emsg` dance is load-bearing: the measuring pass is where a bad
-/// format reports, and the formatting pass is skipped when it did. The
-/// caller's own `did_emsg` is restored by OR-ing it back, so an error
-/// raised before this call is not lost and one raised inside it is.
+/// `printf({fmt}, ...)` — measured, then formatted into an exact
+/// allocation; a format that reports an error answers the null String.
 pub fn f_printf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(None);
-
-    let saved_did_emsg = did_emsg.get();
-    did_emsg.set(0);
-    let mut buf = NumBuf::new();
-    // SAFETY throughout: `buf` outlives both passes, and the conversions read
-    // the arguments after the format. The `dummy_ap` va_list is never read
-    // because a typval slice is what selects the Vimscript overload, which is
-    // how every caller of this entry point uses it.
-    let fmt = buf.string(&args[0]).as_ptr();
-    let rest = Some(&args[1..]);
-    let len = unsafe { vim_vsnprintf_typval(ptr::null_mut(), 0, fmt, dummy_ap(), rest) };
-    if did_emsg.get() == 0 {
-        let mut out = vec![0u8; len as usize + 1];
-        let room = out.len();
-        unsafe { vim_vsnprintf_typval(out.as_mut_ptr().cast(), room, fmt, dummy_ap(), rest) };
-        out.truncate(len as usize);
-        result.write_string(Some(out.into()));
-    }
-    did_emsg.set(did_emsg.get() | saved_did_emsg);
+    result.write_string(format_typvals(&args[0], &args[1..]).map(ThinCString::from));
 }
 
 /// `repeat({expr}, {count})` — for a List, a Blob or a String.
 pub fn f_repeat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the arguments are live typvals.
     let n = arg_number(&args[1]);
     match args[0].v_type() {
         VAR_LIST => repeat_list(args, result, n),
@@ -207,7 +137,7 @@ fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     // The length hint is upstream's; a non-positive count contributes
     // nothing rather than a negative capacity.
     let hint = VarNumber::from(n > 0) * n * VarNumber::from(list_len(args[0].list_ref()));
-    list_alloc_ret(result, hint as isize);
+    tv_list_alloc_ret(result, hint as isize);
     let Some(out) = result.list_shared() else {
         return;
     };
@@ -253,14 +183,7 @@ fn repeat_string(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     if len.wrapping_div(n as usize) != slen {
         return;
     }
-    // SAFETY: `xmallocz` answers `len + 1` bytes, terminated, and the
-    // copies fill the first `len` of them from `p`, which is `slen` long;
-    // the result adopts the block.
-    let r = unsafe { xmallocz(len) }.cast::<u8>();
-    for i in 0..n as usize {
-        unsafe { r.add(i * slen).copy_from(p.as_ptr(), slen) };
-    }
-    result.write_string(unsafe { ThinCString::from_raw(r.cast::<c_char>()) });
+    result.write_string(Some(p.repeat(n as usize).into()));
 }
 
 /// `sha256({string})` — also accepts a Blob, whose bytes are hashed as they
@@ -279,23 +202,16 @@ pub fn f_sha256(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `shellescape({string} [, {special}])`.
 pub fn f_shellescape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the arguments are live typvals.
     let do_special = args.get(1).is_some_and(non_zero_arg);
-    let str = numbuf.string(&args[0]).as_ptr();
-    // SAFETY: `str` is NUL-terminated and outlives the call; the escaper
-    // answers an `xmalloc`ed string, which the result adopts.
-    result.write_string(unsafe {
-        ThinCString::from_raw(vim_strsave_shellescape(str, do_special, do_special))
-    });
+    let text = numbuf.string(&args[0]);
+    result.write_string(Some(shellescape_of(text, do_special, do_special).into()));
 }
 
 /// `soundfold({word})`.
 pub fn f_soundfold(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let word = numbuf.string(&args[0]).as_ptr();
-    // SAFETY: the word is NUL-terminated and outlives the call; the folder
-    // answers an `xmalloc`ed string, which the result adopts.
-    result.write_string(unsafe { ThinCString::from_raw(eval_soundfold(word)) });
+    let word = numbuf.string(&args[0]);
+    result.write_string(Some(eval_soundfold(word).into()));
 }
 
 /// Turn 'spell' on for the duration of `body`, loading the spell languages
@@ -304,15 +220,13 @@ pub fn f_soundfold(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// Both spelling builtins open this way, and both must put the window's own
 /// 'spell' back on every path out — including the error one.
 fn with_spell(body: impl FnOnce()) {
-    // SAFETY throughout: `curwin` names a live window from startup to exit, and the
-    // spell state hanging off it is initialised with the window.
     let mut win = Win::current();
     let saved = win.w_onebuf_opt.wo_spell;
     if win.w_onebuf_opt.wo_spell == 0 {
         let _ = parse_spelllang(win);
         win.w_onebuf_opt.wo_spell = 1;
     }
-    if unsafe { (*win.w_s).b_p_spl.first_byte() } == 0 {
+    if win.syntax().b_p_spl.first_byte() == 0 {
         emsg(gettext(e_no_spell));
     } else {
         body();
@@ -323,20 +237,20 @@ fn with_spell(body: impl FnOnce()) {
 /// `spellbadword([{sentence}])` — the first misspelling and why it is one.
 pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut word: *const c_char = c"".as_ptr();
+    // The misspelt word, copied out: the cursor line's text when the search
+    // moved the cursor onto one, the argument's otherwise.
+    let mut word: Vec<u8> = Vec::new();
     let mut attr: Hlf = HLF_COUNT;
-    let mut len: usize = 0;
     let mut reported = false;
-    // SAFETY throughout the closure: `curwin`/`curbuf` are live, and an
-    // argument is a live typval. `spell_check` advances `str` by the
-    // length it reports, which never passes the terminator.
     with_spell(|| {
         reported = true;
         if args.is_empty() {
-            let at = &raw mut attr;
-            len = unsafe { spell_move_to(Win::current(), FORWARD, SMT_ALL, true, at) };
+            let len = spell_move_to(Win::current(), FORWARD, SMT_ALL, true, Some(&mut attr));
             if len != 0 {
-                word = get_cursor_pos_ptr();
+                let cursor = Win::current().w_cursor;
+                let col = usize::try_from(cursor.col).unwrap_or(0);
+                let line = Lines::current().line(cursor.lnum).to_vec();
+                word = line[col..(col + len).min(line.len())].to_vec();
                 Win::current().w_set_curswant = true;
             }
         } else if Buf::current().b_s.b_p_spl.first_byte() != 0 {
@@ -346,16 +260,14 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
                 let end = text.count_bytes();
                 let mut offset = 0;
                 while offset < end {
-                    let p = text[offset..].as_ptr().cast_mut();
-                    let (at, cap) = (&raw mut attr, &raw mut capcol);
-                    len = unsafe { spell_check(Win::current(), p, at, cap, false) };
+                    let rest = &text[offset..];
+                    let len = spell_check_text(Win::current(), rest, &mut attr, &mut capcol, false);
                     if attr != HLF_COUNT {
-                        word = p;
+                        word = rest.to_bytes()[..len.min(rest.count_bytes())].to_vec();
                         break;
                     }
                     offset += len;
                     capcol -= len as c_int;
-                    len = 0;
                 }
             }
         }
@@ -363,9 +275,8 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     if !reported {
         return;
     }
-    debug_assert!(len <= c_int::MAX as usize);
-    let list = list_alloc_ret(result, 2);
-    unsafe { (*list).push_bytes((!word.is_null()).then(|| cstr::slice_at(word, len))) };
+    let list = tv_list_alloc_ret(result, 2);
+    list.push_bytes(Some(&word));
     let reason: Option<&CStr> = match attr {
         HLF_SPB => Some(c"bad"),
         HLF_SPR => Some(c"rare"),
@@ -374,8 +285,8 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         _ => None,
     };
     match reason {
-        Some(r) => unsafe { (*list).push_str(Some(r)) },
-        None => unsafe { (*list).push_bytes(None) },
+        Some(r) => list.push_str(Some(r)),
+        None => list.push_bytes(None),
     }
 }
 
@@ -403,17 +314,14 @@ pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
             }
             (maxcount, need_capital)
         };
-        // SAFETY: `str` is the NUL-terminated argument.
-        let word = str.as_ptr().cast_mut();
-        found = unsafe { spell_suggest_list(word, maxcount, need_capital, false) };
+        found = spell_suggest_list(str, maxcount, need_capital, false);
     });
     if !reported {
         return;
     }
-    let list = list_alloc_ret(result, found.len() as isize);
+    let list = tv_list_alloc_ret(result, found.len() as isize);
     for word in found {
-        // SAFETY: the list this call put in the return slot.
-        unsafe { (*list).push(TypVal::string(Some(word.into()))) };
+        list.push(TypVal::string(Some(word.into())));
     }
 }
 
@@ -424,8 +332,6 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // 'cpoptions' is cleared around the split so that its flags cannot
     // change what the pattern means.
     let _cpo = SavedCpo::empty();
-    // SAFETY throughout: the arguments are live typvals, `patbuf` outlives the calls
-    // that may fill it, and the compiled program is freed before returning.
     let str = numbuf.string(&args[0]);
     let mut typeerr = false;
     let mut keepempty = false;
@@ -441,13 +347,9 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     // An absent or empty pattern splits on runs of whitespace.
     let pat = pat.filter(|pat| !pat.is_empty()).unwrap_or(c"[\\x01- ]\\+");
-    let list = list_alloc_ret(result, kListLenMayKnow as isize);
-    if !typeerr {
-        let prog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-        if !prog.is_null() {
-            unsafe { split_into(list, str, prog, keepempty) };
-            unsafe { vim_regfree(prog) };
-        }
+    let list = tv_list_alloc_ret(result, kListLenMayKnow as isize);
+    if !typeerr && let Some(mut prog) = OwnedProg::compile(pat, RE_MAGIC + RE_STRING) {
+        split_into(list, str, &mut prog, keepempty);
     }
 }
 
@@ -459,103 +361,83 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// (`end < endp[0]`) after at least one piece is already there. That last
 /// clause is what makes `split("aXbXc", "X*", 1)` differ from the plain
 /// form.
-///
-/// # Safety
-/// `list` is a live list and `prog` is a compiled program the caller frees.
-unsafe fn split_into(list: *mut List, subject: &CStr, prog: *mut RegProg, keepempty: bool) {
-    let mut regmatch: RegMatch = RegMatch::new(prog, false);
+fn split_into(list: &mut List, subject: &CStr, prog: &mut OwnedProg, keepempty: bool) {
     // Where the piece being cut starts, and how far into it the next match
     // may begin. The pattern is run against the *tail* rather than the whole
     // subject, because a `^` in it anchors at each piece.
     let mut at = 0;
     let mut col = 0;
     loop {
-        let tail = cstr::suffix(subject, at);
+        let tail = &subject[at..];
         let rest = tail.to_bytes();
         if rest.is_empty() && !keepempty {
             break;
         }
-        let matched = !rest.is_empty() && vim_regexec_nl(&mut regmatch, tail, col);
-        let (start, match_end) = match regmatch.group(0).filter(|_| matched) {
+        let found = if rest.is_empty() {
+            None
+        } else {
+            prog.exec_nl(tail, col, false)
+        };
+        let matched = found.is_some();
+        let (start, match_end) = match found.as_ref().and_then(|m| m.group(0)) {
             Some(span) => (span.start, span.end),
             None => (rest.len(), 0),
         };
         if keepempty
             || start > 0
-            || (list_len(unsafe { list.as_ref() }) > 0
-                && !rest.is_empty()
-                && matched
-                && start < match_end)
+            || (list_len(Some(list)) > 0 && !rest.is_empty() && matched && start < match_end)
         {
-            // SAFETY: `start` bytes of the tail, which is NUL-terminated.
-            unsafe { (*list).push_bytes(Some(&tail.to_bytes()[..start])) };
+            list.push_bytes(Some(&rest[..start]));
         }
         if !matched {
             break;
         }
         // An empty match would not advance, so the next attempt starts
         // one character further in while the piece stays put.
-        col = if match_end > 0 {
-            0
-        } else {
-            // SAFETY: the tail is NUL-terminated.
-            unsafe { utfc_ptr2len(tail.as_ptr()) as usize }
-        };
+        col = if match_end > 0 { 0 } else { cluster_len(rest) };
         at += match_end;
     }
+}
+
+/// `strftime({format} [, {time}])`.
+/// The conversions between 'encoding' and the locale's own encoding, one
+/// way and the other; `None` where no conversion is needed.
+fn locale_converters() -> (Option<Converter>, Option<Converter>) {
+    let locale = enc_locale();
+    let locale = locale.as_ref().map_or(c"", XString::as_cstr);
+    let to_locale = p_enc(|value| Converter::new(value, locale));
+    let from_locale = p_enc(|value| Converter::new(locale, value));
+    (to_locale, from_locale)
 }
 
 /// `strftime({format} [, {time}])`.
 pub fn f_strftime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_empty(VAR_STRING);
-    // SAFETY throughout: the arguments are live typvals; the two conversion
-    // descriptors are opened and closed here, and `enc` is freed on every
-    // path out.
-    let mut p = numbuf.string(&args[0]).as_ptr().cast_mut();
+    let format = numbuf.string(&args[0]);
     let seconds: time_t = if args.len() > 1 {
         arg_number(&args[1]) as time_t
     } else {
-        unsafe { time(ptr::null_mut()) }
+        os_time_raw()
     };
     let mut curtime: tm = tm_zeroed();
     if !os_localtime_r(seconds, &mut curtime) {
         result.write_string(Some(ThinCString::from_cstr(gettext(c"(Invalid)"))));
         return;
     }
-    let mut conv: VimConv = CONV_NONE_INIT;
-    let enc = unsafe { enc_locale() };
-    let _ = p_enc(|value| unsafe { convert_setup(&raw mut conv, value.as_ptr().cast_mut(), enc) });
-    if conv.vc_type != CONV_NONE {
-        p = unsafe { string_convert(&raw mut conv, p, ptr::null_mut()) };
-    }
-    let mut out: [c_char; 256] = [0; 256];
-    if p.is_null() || unsafe { strftime(out.as_mut_ptr(), out.len(), p, &raw mut curtime) } == 0 {
-        out[0] = NUL as c_char;
-    }
-    if conv.vc_type != CONV_NONE {
-        unsafe { xfree(p.cast::<c_void>()) };
-    }
-    // The reverse conversion reuses `conv`, so it must be set up again
-    // in the other direction before the result is converted back.
-    let _ = p_enc(|value| unsafe { convert_setup(&raw mut conv, enc, value.as_ptr().cast_mut()) });
-    result.write_string(if conv.vc_type != CONV_NONE {
-        // The converter answers an `xmalloc`ed string, which the result
-        // adopts.
-        unsafe {
-            ThinCString::from_raw(string_convert(
-                &raw mut conv,
-                out.as_mut_ptr(),
-                ptr::null_mut(),
-            ))
-        }
-    } else {
-        Some(ThinCString::from_cstr(unsafe {
-            CStr::from_ptr(out.as_ptr())
-        }))
+    let (to_locale, from_locale) = locale_converters();
+    // A format that will not convert formats nothing.
+    let out = match &to_locale {
+        Some(conv) => conv
+            .convert(format.to_bytes())
+            .map(|format| os_strftime(XString::from_bytes(&format).as_cstr(), &curtime))
+            .unwrap_or_default(),
+        None => os_strftime(format, &curtime),
+    };
+    result.write_string(match &from_locale {
+        Some(conv) => conv.convert(&out).map(ThinCString::from),
+        None => Some(ThinCString::from(out)),
     });
-    let _ = unsafe { convert_setup(&raw mut conv, ptr::null_mut(), ptr::null_mut()) };
-    unsafe { xfree(enc.cast::<c_void>()) };
 }
 
 /// `strptime({format}, {timestring})`.
@@ -567,33 +449,26 @@ pub fn f_strptime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         tm_isdst: -1,
         ..tm_zeroed()
     };
-    // SAFETY throughout: the arguments are live typvals, the two scratch buffers
-    // outlive the calls that may fill them, and `enc` and the converted
-    // format are freed on every path out.
-    let mut fmt = fmt_buf.string(&args[0]).as_ptr().cast_mut();
-    let str = str_buf.string(&args[1]);
-    let mut conv: VimConv = CONV_NONE_INIT;
-    let enc = unsafe { enc_locale() };
-    let _ = p_enc(|value| unsafe { convert_setup(&raw mut conv, value.as_ptr().cast_mut(), enc) });
-    if conv.vc_type != CONV_NONE {
-        fmt = unsafe { string_convert(&raw mut conv, fmt, ptr::null_mut()) };
-    }
+    let format = fmt_buf.string(&args[0]);
+    let text = str_buf.string(&args[1]);
+    let (to_locale, _) = locale_converters();
+    let converted = to_locale.map(|conv| {
+        conv.convert(format.to_bytes())
+            .map(|f| XString::from_bytes(&f))
+    });
+    let format = match &converted {
+        Some(converted) => converted.as_ref().map(XString::as_cstr),
+        None => Some(format),
+    };
     // `mktime` reporting -1 is indistinguishable from a genuine
     // timestamp of -1, and upstream treats both as failure.
-    let parsed =
-        !fmt.is_null() && !os_strptime(str, unsafe { CStr::from_ptr(fmt) }, &mut tmval).is_null();
-    result.write_number(match parsed {
-        true => unsafe { mktime(&raw mut tmval) as VarNumber },
-        false => -1,
-    });
-    if result.number_or_zero() == -1 {
-        result.write_number(0);
-    }
-    if conv.vc_type != CONV_NONE {
-        unsafe { xfree(fmt.cast::<c_void>()) };
-    }
-    let _ = unsafe { convert_setup(&raw mut conv, ptr::null_mut(), ptr::null_mut()) };
-    unsafe { xfree(enc.cast::<c_void>()) };
+    let parsed = format.is_some_and(|format| !os_strptime(text, format, &mut tmval).is_null());
+    let seconds = if parsed {
+        os_mktime(&mut tmval) as VarNumber
+    } else {
+        -1
+    };
+    result.write_number(if seconds == -1 { 0 } else { seconds });
 }
 
 /// `submatch({nr} [, {list}])`.

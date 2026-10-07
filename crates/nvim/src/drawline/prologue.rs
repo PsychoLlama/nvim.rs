@@ -802,7 +802,7 @@ impl LineSetup {
         let saved_cursor = window.w_cursor;
         window.w_cursor.lnum = lnum;
         window.w_cursor.col = linecol;
-        let len = unsafe { spell_move_to(window, FORWARD, SMT_ALL, true, &raw mut spell_hlf) };
+        let len = spell_move_to(window, FORWARD, SMT_ALL, true, Some(&mut spell_hlf));
 
         // `spell_move_to` may call `ml_get` and invalidate "line".
         self.line = unsafe { ml_get_buf(window.buffer(), lnum) };

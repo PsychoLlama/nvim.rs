@@ -966,7 +966,6 @@ COUNTED_RE = {
 CELL_PTR_ALLOW = {
     "main_loop": "uv_loop_t plus self-referential multiqueues; libuv owns the address",
     "read_stream": "RStream — a uv stream handle registered with the loop",
-    "dummy_ap": "VaList<'static>; retires with the variadics, not with the cells",
     # NB. `msgpack_rpc/server.rs` declares a second, unrelated `WATCHERS`;
     # the list is name-keyed, so a `.ptr()` there would be exempted too. It
     # has none today, and `cell_ptr` still counts it.

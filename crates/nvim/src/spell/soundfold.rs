@@ -24,11 +24,11 @@
 
 use crate::cstr;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_class};
-use crate::memory::xstrdup;
+use crate::memory::XString;
 use crate::types::{LangP, MB_MAXBYTES, NUL, SpellLang};
 
 use super::MAXWLEN;
@@ -38,11 +38,7 @@ use crate::optionstr::OptString;
 /// `soundfold()`: the sound-fold of `word` in the first of the window's
 /// languages that has a sound-folding table, or a copy of `word` itself
 /// when spell checking is off or no language defines one.
-///
-/// # Safety
-///
-/// `word` must point at a NUL-terminated string.
-pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
+pub fn eval_soundfold(word: &CStr) -> XString {
     let win = Win::current_raw();
     if unsafe { (*win).w_onebuf_opt.wo_spell } != 0
         && unsafe { (*(*win).w_s).b_p_spl.first_byte() } != 0
@@ -55,12 +51,14 @@ pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
                 let mut sound = [0 as c_char; MAXWLEN];
                 let slang = unsafe { (*lp).lp_slang };
                 let out = sound.as_mut_ptr();
-                unsafe { spell_soundfold(slang, word as *mut c_char, false, out) };
-                return unsafe { xstrdup(sound.as_ptr()) };
+                // SAFETY: a live language of the window's, a terminated word
+                // the fold only reads, and a buffer of `MAXWLEN` it fills.
+                unsafe { spell_soundfold(slang, word.as_ptr().cast_mut(), false, out) };
+                return XString::from_bytes(cstr::in_chars(&sound).to_bytes());
             }
         }
     }
-    unsafe { xstrdup(word) }
+    XString::from_bytes(word.to_bytes())
 }
 
 /// Sound-fold `inword` into `res` using `slang`'s scheme.

@@ -377,13 +377,8 @@ pub(crate) unsafe fn badword_captype(word: *mut c_char, end: *mut c_char) -> Wor
 /// Find suggestions for `word`, at most `maxcount` of them.
 ///
 /// This is what the `spellsuggest()` Vimscript function is built on.
-///
-/// # Safety
-///
-/// `word` must be NUL-terminated, and the
-/// current window must have its languages loaded.
-pub(crate) unsafe fn spell_suggest_list(
-    word: *mut c_char,
+pub(crate) fn spell_suggest_list(
+    word: &CStr,
     maxcount: c_int,
     need_cap: bool,
     interactive: bool,
@@ -393,6 +388,9 @@ pub(crate) unsafe fn spell_suggest_list(
     let mut sug = SugInfo::new();
     // SAFETY: `sug` is this frame's own, live for the whole call.
     let su = unsafe { Sug::new(&raw mut sug) };
+    // SAFETY: a terminated word the search only reads, and the frame's own
+    // suggestion state.
+    let word = word.as_ptr().cast_mut();
     unsafe { spell_find_suggest(word, 0, su, maxcount, false, need_cap, interactive) };
 
     let mut found = Vec::with_capacity(sug.su_ga.len());

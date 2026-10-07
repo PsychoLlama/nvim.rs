@@ -90,20 +90,16 @@ fn can_syn_spell(window: Win, lnum: LineNr, col: c_int) -> bool {
 /// `dir` is `FORWARD` or `BACKWARD`; `behaviour` selects which kinds of bad
 /// word count (`SMT_ALL`, `SMT_BAD` for `]S`, `SMT_RARE`); `curline` limits
 /// the search to the cursor line, which is what `spellbadword()` and
-/// Insert-mode completion want. `attrp`, when not null and searching
-/// forward, receives the highlight of the word found.
+/// Insert-mode completion want. `found_attr`, when given and searching forward,
+/// receives the highlight of the word found.
 ///
 /// Returns the length of the bad word, or 0 if none was found.
-///
-/// # Safety
-///
-/// `attrp` must point at a live `Hlf`, unaliased for the call.
-pub unsafe fn spell_move_to(
+pub fn spell_move_to(
     mut window: Win,
     dir: c_int,
     behaviour: SpellMoveType,
     curline: bool,
-    attrp: *mut Hlf,
+    mut found_attr: Option<&mut Hlf>,
 ) -> size_t {
     if no_spell_checking(window) {
         return 0;
@@ -242,8 +238,8 @@ pub unsafe fn spell_move_to(
                         if dir == FORWARD {
                             // Nothing further to look for.
                             window.w_cursor = found_pos;
-                            if !attrp.is_null() {
-                                unsafe { *attrp = attr };
+                            if let Some(found_attr) = found_attr.as_deref_mut() {
+                                *found_attr = attr;
                             }
                             ret = len;
                             done = true;

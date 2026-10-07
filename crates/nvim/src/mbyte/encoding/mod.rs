@@ -24,6 +24,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 use crate::optionstr::OptString;
 use crate::os::cshim::strchr;
 use crate::strings::vim_strchr;
@@ -263,10 +264,8 @@ pub unsafe fn enc_canonize(enc: *mut c_char) -> *mut c_char {
 /// are the exception — those name the encoding by the *territory*, so they
 /// become `euc-jp`, `euc-cn`, `euc-kr`.
 ///
-/// # Safety
-///
-/// The editor's globals must be live. The result is `xmalloc`'d.
-pub unsafe fn enc_locale() -> *mut c_char {
+/// `None` when the C library names no locale at all.
+pub fn enc_locale() -> Option<XString> {
     let mut env = env_buf();
     let mut s = unsafe { nl_langinfo(CODESET) };
     if s.is_null() || unsafe { *s } == 0 {
@@ -285,7 +284,7 @@ pub unsafe fn enc_locale() -> *mut c_char {
         }
     }
     if s.is_null() {
-        return core::ptr::null_mut();
+        return None;
     }
 
     let mut buf = [0 as c_char; 50];
@@ -303,7 +302,8 @@ pub unsafe fn enc_locale() -> *mut c_char {
             buf[4] = alnum_lowered(unsafe { *dot.offset(-2) });
             buf[5] = alnum_lowered(unsafe { *dot.offset(-1) });
             buf[6] = 0;
-            return unsafe { enc_canonize(buf.as_mut_ptr()) };
+            // SAFETY: a terminated name; the canonical form is allocated.
+            return Some(unsafe { XString::from_raw(enc_canonize(buf.as_mut_ptr())) });
         }
         copy_from = unsafe { dot.offset(1) };
     }
@@ -323,7 +323,8 @@ pub unsafe fn enc_locale() -> *mut c_char {
         i += 1;
     }
     buf[i] = 0;
-    unsafe { enc_canonize(buf.as_mut_ptr()) }
+    // SAFETY: as above.
+    Some(unsafe { XString::from_raw(enc_canonize(buf.as_mut_ptr())) })
 }
 
 /// Is this locale name one of the `ja_JP.EUC` family, which names its

@@ -15,7 +15,7 @@ use crate::keycodes::{Key, MAX_KEY_NAME_LEN, SpecialKeyName, termcap_key, termca
 use crate::mbyte::{cells_at, char_at, cluster_len};
 use crate::memory::handoff::owned_cstr;
 use crate::types::MB_MAXCHAR;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// The `<xx>` form of an unprintable byte gets its own highlight so it can be
@@ -320,15 +320,27 @@ pub unsafe fn str2special_save(
     replace_spaces: bool,
     replace_lt: bool,
 ) -> *mut c_char {
+    // SAFETY: the caller's promise.
+    let text = unsafe { CStr::from_ptr(str) };
+    owned_cstr(str2special_bytes(text, replace_spaces, replace_lt))
+}
+
+/// [`str2special`] over the whole of `text`: the readable spelling of every
+/// key in it, as bytes.
+pub(crate) fn str2special_bytes(text: &CStr, replace_spaces: bool, replace_lt: bool) -> Vec<u8> {
     let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
     let mut out = Vec::<u8>::new();
-    let mut p = str;
-    while unsafe { *p } != 0 {
-        let text = unsafe { str2special(&raw mut p, replace_spaces, replace_lt, &mut piece) };
-        // SAFETY: `str2special` answers a NUL-terminated rendering.
-        out.extend_from_slice(unsafe { cstr::bytes_at(text) });
+    let mut p = text.as_ptr();
+    // SAFETY: `p` walks the terminated `text`, which `str2special` advances
+    // through one key at a time and never past the NUL; each rendering it
+    // answers is terminated.
+    unsafe {
+        while *p != 0 {
+            let piece = str2special(&raw mut p, replace_spaces, replace_lt, &mut piece);
+            out.extend_from_slice(cstr::bytes_at(piece));
+        }
     }
-    owned_cstr(out)
+    out
 }
 
 /// [`str2special`] over a whole string, into `arena`.

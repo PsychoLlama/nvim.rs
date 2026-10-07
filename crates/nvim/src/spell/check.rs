@@ -31,7 +31,7 @@ use crate::cstr;
 use crate::memory::XString;
 use crate::spell::WordFlags;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::mem;
 
 use crate::charset::{skip, skipbin, skipdigits, skiphex};
@@ -553,7 +553,23 @@ pub fn spell_expand_check_cap(col: ColNr) {
 ///
 /// `pat` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn expand_spelling(_lnum: LineNr, pat: *mut c_char) -> Vec<XString> {
-    unsafe { spell_suggest_list(pat, 100, spell_expand_need_cap.get(), true) }
+    // SAFETY: the caller's promise.
+    let pat = unsafe { CStr::from_ptr(pat) };
+    spell_suggest_list(pat, 100, spell_expand_need_cap.get(), true)
+}
+
+/// [`spell_check`] of the word `text` starts with, for a caller holding the
+/// text as a string: the word's length in bytes, good or bad.
+pub(crate) fn spell_check_text(
+    window: Win,
+    text: &CStr,
+    attr: &mut Hlf,
+    capcol: &mut c_int,
+    docount: bool,
+) -> usize {
+    // SAFETY: a terminated string, which the check only reads, and two
+    // cells of the caller's own.
+    unsafe { spell_check(window, text.as_ptr().cast_mut(), attr, capcol, docount) }
 }
 
 #[cfg(test)]

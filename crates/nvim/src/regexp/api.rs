@@ -417,6 +417,23 @@ impl OwnedProg {
         matched.then_some(matches)
     }
 
+    /// [`vim_regexec_nl`] of this pattern over `line` from byte `col`: as
+    /// [`OwnedProg::exec`], with a newline in `line` matched as one.
+    pub(crate) fn exec_nl(
+        &mut self,
+        line: &CStr,
+        col: usize,
+        ignore_case: bool,
+    ) -> Option<RegMatch> {
+        if self.0.is_null() {
+            return None;
+        }
+        let mut matches = RegMatch::new(self.0, ignore_case);
+        let matched = vim_regexec_nl(&mut matches, line, col);
+        self.0 = matches.regprog;
+        matched.then_some(matches)
+    }
+
     /// [`vim_regexec_multi`] of this pattern over `buffer` from line `lnum`,
     /// column `col`, with `rmp`'s other settings. Answers the number of
     /// lines the match spans plus one, or 0.

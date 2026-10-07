@@ -230,12 +230,30 @@ pub fn os_strptime(str: &CStr, format: &CStr, tm: &mut tm) -> *mut c_char {
     unsafe { strptime(str.as_ptr(), format.as_ptr(), tm) }
 }
 
+/// `time` formatted by `strftime`'s `format`, at most 255 bytes of it.
+/// Empty when the formatted text would not fit, as `strftime` answers it.
+pub(crate) fn os_strftime(format: &CStr, time: &tm) -> Vec<u8> {
+    let mut out = [0 as c_char; 256];
+    // SAFETY: a terminated format, a filled-in time, and `out.len()` bytes
+    // of this call's own to write into.
+    let len = unsafe { strftime(out.as_mut_ptr(), out.len(), format.as_ptr(), time) };
+    out[..len].iter().map(|&c| c.cast_unsigned()).collect()
+}
+
+/// `mktime` of `time`, which it normalises in place: seconds since the
+/// epoch, or -1 when the time cannot be represented.
+pub(crate) fn os_mktime(time: &mut tm) -> time_t {
+    // SAFETY: a live time of the caller's own.
+    unsafe { ::libc::mktime(time) }
+}
+
 /// Seconds since the UNIX epoch.
 pub fn os_time() -> Timestamp {
     os_time_raw().cast_unsigned()
 }
 
-fn os_time_raw() -> time_t {
+/// Seconds since the UNIX epoch, as the C library counts them.
+pub(crate) fn os_time_raw() -> time_t {
     // SAFETY: `time` accepts a null out-parameter.
     unsafe { time(ptr::null_mut()) }
 }

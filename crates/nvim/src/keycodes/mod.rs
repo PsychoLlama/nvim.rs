@@ -849,6 +849,13 @@ pub unsafe fn add_char2buf(c: c_int, s: *mut c_char) -> *mut c_char {
     unsafe { s.add(at) }
 }
 
+/// [`vim_strsave_escape_ks`] of `text`, owned.
+pub(crate) fn escape_ks(text: &CStr) -> crate::memory::XString {
+    // SAFETY: a terminated string the escaper only reads; the answer is an
+    // allocation this call takes over.
+    unsafe { crate::memory::XString::from_raw(vim_strsave_escape_ks(text.as_ptr().cast_mut())) }
+}
+
 /// A copy of `p` with every literal `K_SPECIAL` byte escaped, so the result
 /// can go into the typeahead buffer. The caller owns the allocation.
 ///

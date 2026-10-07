@@ -75,6 +75,7 @@ pub use chartab::{
     nofold_len, onecap_copy, spell_casefold, spell_iswordp, spell_iswordp_nmw,
 };
 pub(crate) use chartab::{spelltab_fold, spelltab_isu, spelltab_isw, spelltab_upper};
+pub(crate) use check::spell_check_text;
 pub use check::{
     check_need_cap, expand_spelling, no_spell_checking, spell_check, spell_check_window,
     spell_expand_check_cap, spell_to_word_end, spell_valid_case, spell_word_start,

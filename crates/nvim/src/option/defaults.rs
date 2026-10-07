@@ -246,13 +246,7 @@ fn set_init_expand_env() {
 /// The encoding a file with no 'fileencodings' match is read as, taken from
 /// the locale.
 fn set_init_fenc_default() {
-    // SAFETY: `enc_locale` answers null or a string the caller owns.
-    let enc = unsafe { enc_locale() };
-    let enc = if enc.is_null() {
-        XString::from("utf-8")
-    } else {
-        unsafe { XString::from_raw(enc) }
-    };
+    let enc = enc_locale().unwrap_or_else(|| XString::from("utf-8"));
     fenc_default.set(Some(enc));
 }
 

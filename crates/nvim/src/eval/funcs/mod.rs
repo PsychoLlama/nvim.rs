@@ -1,9 +1,14 @@
+//! The builtin functions, one module per family, and the vocabulary they
+//! share.
+//!
+//! No `forbid(unsafe_code)` here: a lint attribute on a `mod.rs` reaches the
+//! whole subtree, and `forbid` cannot be lifted by a child, so it waits for
+//! the last family that still needs `unsafe` (the job, channel and timer
+//! builtins). Until then the crate's `deny` is what holds this file.
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::global_cell::GlobalCell;
 use crate::memory::ARENA_EMPTY;
 use crate::types::{
     Array, ChannelPart, ChannelStreamType, Context, GRegFlags, LuaRetMode, MotionType, ProcType,
@@ -151,9 +156,6 @@ pub const CONTEXT_INIT: Context = Context {
 };
 static e_string_list_or_blob_required: &::core::ffi::CStr = c"E1098: String, List or Blob required";
 static e_missing_function_argument: &::core::ffi::CStr = c"E1132: Missing function argument";
-static dummy_ap: GlobalCell<::core::ffi::VaList<'static>> = GlobalCell::new(unsafe {
-    ::core::mem::transmute::<[u8; 24], ::core::ffi::VaList<'static>>([0u8; 24])
-});
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;

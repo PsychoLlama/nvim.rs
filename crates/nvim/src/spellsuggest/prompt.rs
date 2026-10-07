@@ -74,7 +74,6 @@ use crate::winlayer::Win;
 use crate::{smsg, tr};
 use ::libc::{strcat, strcpy};
 use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
 
 /// The escape the redo buffer ends the change-word command with.
 const ESC: c_int = 0x1b;
@@ -192,7 +191,7 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     // SAFETY: `curwin` is set from startup to exit and the caller
     // guarantees its spell state; a null `attrp` asks for no attribute.
     let win = Win::current();
-    let moved = unsafe { spell_move_to(win, FORWARD as c_int, SMT_ALL, true, ptr::null_mut()) };
+    let moved = spell_move_to(win, FORWARD as c_int, SMT_ALL, true, None);
     if moved != 0 && Win::current().w_cursor.col <= prev_cursor.col {
         return Some(0);
     }

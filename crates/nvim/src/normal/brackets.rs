@@ -280,16 +280,7 @@ fn nv_bracket_spell(cmd_arg: &mut CmdArg) {
         _ => SMT_BAD as SpellMoveType,
     };
     for _ in 0..cmd_arg.count1 {
-        if unsafe {
-            spell_move_to(
-                Win::current(),
-                direction(cmd_arg),
-                what,
-                false,
-                ptr::null_mut(),
-            )
-        } == 0
-        {
+        if spell_move_to(Win::current(), direction(cmd_arg), what, false, None) == 0 {
             clear_op_beep(cmd_arg.op());
             break;
         }
