@@ -18,7 +18,8 @@
 "          execute(): lvalues (`:let l[i]`, slices, dict keys, `$ENV`,
 "          `&option`, `@r`, curly-brace names), `:unlet`, `:lockvar`,
 "          `:function` argument lists and defaults, heredocs, `:for`, `:if`,
-"          `:try`.  `<NL>` in a line is a newline.  The answer is the
+"          `:try`, `:function` listings, a function deleted or redefined
+"          while it runs, `:defer` under `:throw`, `:breakadd`, `:profile`.  `<NL>` in a line is a newline.  The answer is the
 "          captured output or the exception, v:errmsg, and the fixture's
 "          state after the command.
 "   reent  text the evaluator is reading, changed by the expression it is
@@ -84,6 +85,12 @@ func! Fixture() abort
       execute 'delfunction ' . f
     endif
   endfor
+  " A cut `:breakadd` or `:profile start` would outlive its case: a breakpoint
+  " on a function a later case calls waits for the user.
+  silent! breakdel *
+  if v:profiling
+    profile stop
+  endif
   let g:l = [1, [2, 3], {'k': 'v'}]
   let g:d = {'a': 1, 'b': [1, 2], 'c d': 3}
   let g:n = 42
@@ -236,6 +243,11 @@ func! Sweep(file, Fn, decode) abort
       catch
         let answers = ['DRIVER ' . Exc()]
       endtry
+      " A `:return` run by execute() returns from the driver's own function,
+      " with whatever value it named.
+      if type(answers) != v:t_list
+        let answers = ['RETURNED ' . Show(answers)]
+      endif
       for r in answers
         call S('    ' . r)
       endfor

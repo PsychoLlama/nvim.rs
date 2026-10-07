@@ -157,3 +157,26 @@ let g:h =<< END<NL>line1<NL>  line2<NL>END
 let g:h =<< trim END<NL>    a<NL>      b<NL>    END
 let g:h =<< eval END<NL>{g:n} {1 + 1}<NL>END
 let g:h =<< trim eval END<NL>  x{g:s}y<NL>  END
+# -- :function listings
+function! g:T6(a, b = [1], ...) range abort dict<NL>  let x = 1<NL>  return x<NL>endfunction<NL>function g:T6
+function! g:T6(a) closure<NL>endfunction
+function! g:T6()<NL>if 1<NL>return 1<NL>endif<NL>endfunction<NL>function! g:T6
+function! g:T6()<NL>endfunction<NL>function /^T[0-9]$
+function! g:T6()<NL>endfunction<NL>function<NL>let g:n = 1
+function! s:T7(x)<NL>return a:x<NL>endfunction<NL>function s:T7<NL>verbose function <SID>T7
+function! g:d.nf() dict<NL>return 1<NL>endfunction<NL>function g:d.nf<NL>let g:x = len(execute('function'))
+let g:lam = {x -> x * 2}<NL>execute 'function ' . get(g:lam, 'name')<NL>let g:x = 1
+function g:nosuch
+function /\(
+# -- delete and redefine while running, held, deleted
+function! g:T6()<NL>delfunction g:T6<NL>return 1<NL>endfunction<NL>let g:x = g:T6()
+function! g:T6()<NL>delfunction! g:T6<NL>endfunction<NL>call g:T6() | let g:x = exists('*g:T6')
+function! g:T6()<NL>function! g:T6()<NL>return 2<NL>endfunction<NL>return 1<NL>endfunction<NL>let g:x = [g:T6(), g:T6()]
+function! g:T6()<NL>return 1<NL>endfunction<NL>let g:K = funcref('g:T6')<NL>function! g:T6()<NL>return 2<NL>endfunction<NL>let g:x = [g:K(), g:T6()]
+function! g:T6()<NL>return 1<NL>endfunction<NL>let g:K = funcref('g:T6')<NL>delfunction g:T6<NL>let g:x = [exists('*g:T6'), g:K()]
+function! g:T6()<NL>return 1<NL>endfunction<NL>let g:K = function('g:T6')<NL>delfunction g:T6<NL>let g:x = g:K()
+function! g:T6()<NL>defer add(g:l, 'd1')<NL>defer add(g:l, 'd2')<NL>throw 'boom'<NL>endfunction<NL>call g:T6()
+function! g:T6()<NL>defer g:T6()<NL>endfunction<NL>call g:T6()
+# -- profiling and breakpoints
+breakadd func 2 g:Brk<NL>breakadd func g:Brk2<NL>breaklist<NL>breakdel *<NL>breaklist
+profile start Xprof<NL>profile func T6<NL>function! g:T6()<NL>call g:Id(1)<NL>endfunction<NL>call g:T6()<NL>profile dump<NL>let g:x = map(readfile('Xprof'), {_, v -> substitute(v, '\d\+\.\d\+', 'T', 'g')})<NL>profile stop
