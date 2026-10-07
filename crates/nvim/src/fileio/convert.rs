@@ -97,7 +97,10 @@ pub(crate) unsafe fn readfile_charconvert(
     } else {
         unsafe { close(*fdp) }; // close the input file, ignore errors
         *fdp = -1;
-        if unsafe { eval_charconvert(fenc, c"utf-8".as_ptr(), fname, tmpname) } == FAIL {
+        // SAFETY: the caller's two NUL-terminated names, and the temp name.
+        let (from, fname, tmpname_c) =
+            unsafe { (cstr::at(fenc), cstr::at(fname), cstr::at(tmpname)) };
+        if eval_charconvert(from, c"utf-8", fname, tmpname_c) == FAIL {
             errmsg = Some(translate(c"Conversion with 'charconvert' failed"));
         }
         if errmsg.is_none() {

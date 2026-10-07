@@ -702,10 +702,10 @@ pub unsafe fn buf_write(
                     if wfname != fname {
                         // The file went to a temp file; 'charconvert'
                         // turns that into the output file.
-                        if end != 0
-                            && unsafe { eval_charconvert(c"utf-8".as_ptr(), fenc, wfname, fname) }
-                                == FAIL
-                        {
+                        // SAFETY: three NUL-terminated names, live for the call.
+                        let (enc_to, from, to) =
+                            unsafe { (cstr::at(fenc), cstr::at(wfname), cstr::at(fname)) };
+                        if end != 0 && eval_charconvert(c"utf-8", enc_to, from, to) == FAIL {
                             writer.conv_error = true;
                             end = 0;
                         }

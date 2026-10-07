@@ -181,7 +181,9 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
     let tmp_new = unsafe { (*dio).dio_new.din_fname };
     let tmp_diff = unsafe { (*dio).dio_diff.dout_fname };
     if P_DEX.first_byte() != 0 {
-        unsafe { eval_diff(tmp_orig, tmp_new, tmp_diff) };
+        // SAFETY: the three temp file names `dio` holds, NUL-terminated.
+        let names = unsafe { (cstr::at(tmp_orig), cstr::at(tmp_new), cstr::at(tmp_diff)) };
+        eval_diff(names.0, names.1, names.2);
         return Ok(());
     }
     if unsafe { (*dio).dio_internal } != 0 {

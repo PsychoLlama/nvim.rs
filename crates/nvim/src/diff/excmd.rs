@@ -102,7 +102,8 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
 
         if P_PEX.first_byte() != 0 {
             // SAFETY: three NUL-terminated file names.
-            unsafe { eval_patch(tmp_orig, name, tmp_new) };
+            let names = unsafe { (cstr::at(tmp_orig), cstr::at(name), cstr::at(tmp_new)) };
+            eval_patch(names.0, names.1, names.2);
         } else {
             // SAFETY: three NUL-terminated names.
             let mut command = unsafe {

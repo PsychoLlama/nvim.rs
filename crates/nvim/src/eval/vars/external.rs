@@ -11,8 +11,7 @@
 //! the file is being read), then blank the variables again and put the
 //! context back.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,10 +20,8 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::eval::Parsed;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
 use super::*;
 use crate::eval::typval::{ListRef, NumBuf};
@@ -33,17 +30,9 @@ use crate::narrow::number_as_int;
 use crate::types::{FAIL, OK};
 
 /// Publish the `v:` strings an expression is meant to read.
-///
-/// One promise for the whole list rather than one per variable: every caller
-/// below has the same handful of NUL-terminated arguments to put in place.
-///
-/// # Safety
-/// Every value is NULL or NUL-terminated.
-unsafe fn set_vim_var_strings(vars: &[(Vv, *const c_char)]) {
+fn set_vim_var_strings(vars: &[(Vv, &CStr)]) {
     for &(idx, val) in vars {
-        // SAFETY: the caller's obligation.
-        let val = unsafe { cstr::at_opt(val) };
-        set_vim_var_string(idx, val.map(CStr::to_bytes));
+        set_vim_var_string(idx, Some(val.to_bytes()));
     }
 }
 
@@ -59,14 +48,11 @@ fn clear_vim_var_strings(vars: &[Vv]) {
 /// Answers `FAIL` both when the expression itself failed and when it
 /// answered a true value, which is how it reports that the conversion did
 /// not work.
-///
-/// # Safety
-/// The four arguments are NUL-terminated strings.
-pub unsafe fn eval_charconvert(
-    enc_from: *const c_char,
-    enc_to: *const c_char,
-    fname_from: *const c_char,
-    fname_to: *const c_char,
+pub fn eval_charconvert(
+    enc_from: &CStr,
+    enc_to: &CStr,
+    fname_from: &CStr,
+    fname_to: &CStr,
 ) -> c_int {
     const VARS: [Vv; 4] = [
         Vv::CharconvertFrom,
@@ -75,14 +61,12 @@ pub unsafe fn eval_charconvert(
         Vv::FnameOut,
     ];
     let saved_sctx = current_sctx.get();
-    let named = [
+    set_vim_var_strings(&[
         (Vv::CharconvertFrom, enc_from),
         (Vv::CharconvertTo, enc_to),
         (Vv::FnameIn, fname_from),
         (Vv::FnameOut, fname_to),
-    ];
-    // SAFETY: the caller's obligation -- four NUL-terminated strings.
-    unsafe { set_vim_var_strings(&named) };
+    ]);
     current_sctx.set(option_last_set(kOptCharconvert));
 
     // A copy: the expression may set the option and free its text.
@@ -98,19 +82,14 @@ pub unsafe fn eval_charconvert(
 /// Evaluate `'diffexpr'` to write the difference between `origfile` and
 /// `newfile` into `outfile`.  Errors are ignored: the caller notices by
 /// finding no usable output.
-///
-/// # Safety
-/// The three arguments are NUL-terminated strings.
-pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile: *const c_char) {
+pub fn eval_diff(origfile: &CStr, newfile: &CStr, outfile: &CStr) {
     const VARS: [Vv; 3] = [Vv::FnameIn, Vv::FnameNew, Vv::FnameOut];
     let saved_sctx = current_sctx.get();
-    let named = [
+    set_vim_var_strings(&[
         (Vv::FnameIn, origfile),
         (Vv::FnameNew, newfile),
         (Vv::FnameOut, outfile),
-    ];
-    // SAFETY: the caller's obligation -- three NUL-terminated strings.
-    unsafe { set_vim_var_strings(&named) };
+    ]);
     current_sctx.set(option_last_set(kOptDiffexpr));
 
     // A copy: the expression may set the option and free its text.
@@ -122,19 +101,14 @@ pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile
 
 /// Evaluate `'patchexpr'` to apply `difffile` to `origfile`, writing the
 /// result to `outfile`.  Errors are ignored, as in [`eval_diff`].
-///
-/// # Safety
-/// The three arguments are NUL-terminated strings.
-pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfile: *const c_char) {
+pub fn eval_patch(origfile: &CStr, difffile: &CStr, outfile: &CStr) {
     const VARS: [Vv; 3] = [Vv::FnameIn, Vv::FnameDiff, Vv::FnameOut];
     let saved_sctx = current_sctx.get();
-    let named = [
+    set_vim_var_strings(&[
         (Vv::FnameIn, origfile),
         (Vv::FnameDiff, difffile),
         (Vv::FnameOut, outfile),
-    ];
-    // SAFETY: the caller's obligation -- three NUL-terminated strings.
-    unsafe { set_vim_var_strings(&named) };
+    ]);
     current_sctx.set(option_last_set(kOptPatchexpr));
 
     // A copy: the expression may set the option and free its text.
@@ -149,24 +123,15 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
 ///
 /// Answers the suggestion list, or `None` when the expression failed or did
 /// not answer a List.  Errors are suppressed unless `'verbose'` is on.
-///
-/// # Safety
-/// `badword` and `expr` are NUL-terminated strings.
-pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> Option<ListRef> {
-    // SAFETY: the caller's promise -- `expr` is NUL-terminated.
-    let text = unsafe { cstr::bytes_at(expr) };
-    let text = &text[skip::white(text)..];
+pub fn eval_spell_expr(badword: &[u8], expr: &[u8]) -> Option<ListRef> {
+    let text = &expr[skip::white(expr)..];
     let saved_sctx = current_sctx.get();
 
     // `v:val` is the bad word; it has no type of its own, so it has to
     // be added to the `v:` dictionary and taken out again.
     let mut save_val = TV_INITIAL_VALUE;
     prepare_vimvar(Vv::Val, &mut save_val);
-    // SAFETY: the caller's promise -- `badword` is NUL-terminated.
-    set_vim_var_string(
-        Vv::Val,
-        unsafe { cstr::at_opt(badword) }.map(CStr::to_bytes),
-    );
+    set_vim_var_string(Vv::Val, Some(badword));
     let no_emsg = (p_verbose() == 0).then(Suppress::emsg);
     current_sctx.set(option_last_set(kOptSpellsuggest));
 
@@ -195,31 +160,18 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> Option
     list
 }
 
-/// One suggestion from [`eval_spell_expr`]'s answer: the word into
-/// `ret_word` and the score as the return value, or -1 on an error.
+/// One suggestion from [`eval_spell_expr`]'s answer: the word and the
+/// score, or `None` on an error.
 ///
 /// An entry has to be a two-element list of a word and a score; the score is
 /// not checked for being unsigned, which upstream notes and does not fix.
-///
-/// # Safety
-/// `list` is one entry of the suggestion list; `ret_word` is writable, and
-/// is left alone when the answer is -1.
-pub unsafe fn get_spellword(
-    list: *mut List,
-    ret_word: *mut *const c_char,
-    numbuf: &mut NumBuf,
-) -> c_int {
-    if list_len(unsafe { list.as_ref() }) != 2 {
+pub fn get_spellword(list: Option<&List>) -> Option<(Vec<u8>, c_int)> {
+    if list_len(list) != 2 {
         let msg = c"E5700: Expression from 'spellsuggest' must yield lists with exactly two values";
-        // SAFETY: a NUL-terminated literal.
         emsg_static(msg);
-        return -1;
+        return None;
     }
-    unsafe {
-        *ret_word = list_find_str(list.as_ref(), 0, numbuf).map_or(ptr::null(), CStr::as_ptr)
-    };
-    if unsafe { (*ret_word).is_null() } {
-        return -1;
-    }
-    number_as_int(list_find_nr(unsafe { list.as_ref() }, -1, None))
+    let mut numbuf = NumBuf::new();
+    let word = list_find_str(list, 0, &mut numbuf)?.to_bytes().to_vec();
+    Some((word, number_as_int(list_find_nr(list, -1, None))))
 }

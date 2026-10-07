@@ -14,7 +14,8 @@ use super::{
     MAXPATHL, MAXWLEN, NUL, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, Sug, sps_flags, sps_limit,
 };
 use crate::charset::getdigits_int;
-use crate::eval::typval::{NumBuf, list_iter};
+use crate::cstr;
+use crate::eval::typval::list_iter;
 use crate::eval::vars::{eval_spell_expr, get_spellword};
 use crate::fileio::vim_fgets;
 use crate::getchar::state::got_int;
@@ -112,19 +113,22 @@ pub(crate) fn spell_check_sps() -> Result<(), Failed> {
 ///
 /// `su` must be valid and `expr` NUL-terminated.
 pub(super) unsafe fn spell_suggest_expr(su: Sug, expr: *mut c_char) {
-    let mut numbuf = NumBuf::new();
-    // SAFETY: the caller guarantees the pointers; the list the expression
-    // returns is owned here until the handle drops.
+    let badword = cstr::in_chars(&su.su_badword).to_bytes();
+    // SAFETY: the caller guarantees `expr` is NUL-terminated.
+    let expr = unsafe { cstr::bytes_at(expr) };
+    // The list the expression returns is owned here until the handle drops.
     // The work is split up so that `SugInfo` need not be exported to
     // the evaluator.
-    if let Some(list) = unsafe { eval_spell_expr(su.su_badword() as *mut c_char, expr) } {
+    if let Some(list) = eval_spell_expr(badword, expr) {
         for li in list_iter(Some(&list)) {
             if li.li_tv.v_type() == VAR_LIST {
                 // Each item is a [word, score] pair.
-                let mut word: *const c_char = ptr::null();
-                let pair = li.li_tv.list_or_null();
-                let score = unsafe { get_spellword(pair, &raw mut word, &mut numbuf) };
+                let Some((mut word, score)) = get_spellword(li.li_tv.list_ref()) else {
+                    continue;
+                };
                 if score >= 0 && score <= su.su_maxscore {
+                    word.push(0);
+                    let word = word.as_ptr().cast::<c_char>();
                     let sug = su.raw();
                     let ga = su.su_ga();
                     let badlen = su.su_badlen;
