@@ -213,7 +213,7 @@ impl Pt {
             pt_refcount: Refcount::ZERO,
             pt_copy_id: 0,
             pt_name: Some(ThinCString::from_bytes(&self.value)),
-            pt_func: ptr::null_mut(),
+            pt_func: None,
             pt_auto: self.auto,
             pt_argv,
             pt_dict,

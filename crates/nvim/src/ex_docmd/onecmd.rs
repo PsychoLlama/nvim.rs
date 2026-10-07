@@ -72,7 +72,7 @@ use crate::winlayer::graph::cmdwin_type;
 
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::profile::{func_line_exec, script_line_exec};
+use crate::profile::{func_line_exec_cookie, script_line_exec};
 use crate::runtime::{do_finish, getsourceline, source_finished};
 use crate::types::{
     CmdAddr, CmdLine, CondStack, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, NUL, size_t,
@@ -735,7 +735,7 @@ pub(crate) unsafe fn profile_cmd(
         return;
     }
     if getline_equal(fgetline, cookie, Some(get_func_line)) {
-        unsafe { func_line_exec(getline_cookie(fgetline, cookie)) };
+        func_line_exec_cookie(unsafe { getline_cookie(fgetline, cookie) });
     } else if getline_equal(fgetline, cookie, Some(getsourceline)) {
         script_line_exec();
     }

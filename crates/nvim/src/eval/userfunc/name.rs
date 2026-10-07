@@ -30,7 +30,7 @@ use crate::keycodes::KE_SNR;
 const SNR: [u8; 3] = [0x80, 253, 82];
 const _: () = assert!(SNR[0] as c_int == K_SPECIAL);
 const _: () = assert!(SNR[1] as c_int == KS_EXTRA);
-const _: () = assert!(SNR[2] as c_int == KE_SNR as c_int);
+const _: () = assert!(SNR[2] == 82 && KE_SNR == 82);
 
 /// The byte at `i`, or a NUL past the end -- how the C read its string.
 fn byte(text: &[u8], i: usize) -> u8 {
@@ -139,16 +139,6 @@ pub(crate) fn fname_trans_sid(name: &[u8]) -> (Cow<'_, [u8]>, c_int) {
     // "<SNR>" keeps the digits it was written with.
     fname.extend_from_slice(script_name);
     (Cow::Owned(fname), error)
-}
-
-/// The function stored under `name`, or null.
-pub(crate) fn find_func(name: &[u8]) -> *mut UserFunc {
-    let hi = func_table().find_bytes(name);
-    if hi.is_kept() {
-        uf_from_name_ptr(hi.hi_key)
-    } else {
-        ptr::null_mut()
-    }
 }
 
 /// Whether a function of this name is reference-counted: the numbered

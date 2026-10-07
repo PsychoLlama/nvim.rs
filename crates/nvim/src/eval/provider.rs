@@ -24,10 +24,10 @@ use crate::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::eval::typval::{
     ListRef, callback_free, dict_get_callback, dict_get_number, tv_list_alloc,
 };
-use crate::eval::userfunc::{CallStackAside, call_func, current_fc_id, find_func};
+use crate::eval::userfunc::{CallStackAside, CallWith, call_func_with, current_fc_id, func_exists};
 use crate::eval::vars::eval_variable;
 use crate::eval::vars::{clear_local, emsg_static};
-use crate::eval::{FUNCEXE_INIT, Tv, callback_call, kChannelStreamProc};
+use crate::eval::{Tv, callback_call, kChannelStreamProc};
 use crate::event::proc::proc_is_stopped;
 use crate::ex_cmds::check_secure;
 use crate::getchar::state::got_int;
@@ -41,8 +41,8 @@ use crate::runtime::script_autoload;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
 use crate::types::{
-    Callback, CallbackReader, CallerScope, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncExe,
-    NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, ptrdiff_t, size_t, uint64_t,
+    Callback, CallbackReader, CallerScope, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, NUL,
+    ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, ptrdiff_t, size_t, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live, Win};
@@ -228,7 +228,7 @@ pub unsafe fn eval_call_provider(
     let fmt = c"provider#%s#Call".as_ptr();
     // SAFETY: `func` is this frame's and `size` is its length; the format
     // takes the one NUL-terminated string `provider`.
-    let name_len = unsafe { snprintf!(func.as_mut_ptr(), size, fmt, provider) };
+    unsafe { snprintf!(func.as_mut_ptr(), size, fmt, provider) };
 
     let scope = CallerScope {
         script_ctx: current_sctx.get(),
@@ -256,14 +256,8 @@ pub unsafe fn eval_call_provider(
     ];
     let mut rettv = UNSET_TV;
 
-    let mut funcexe: FuncExe = FUNCEXE_INIT;
-    funcexe.fe_firstline = Win::current().w_cursor.lnum;
-    funcexe.fe_lastline = Win::current().w_cursor.lnum;
-    funcexe.fe_evaluate = true;
-    let name = func.as_mut_ptr();
-    // SAFETY: `name` is the NUL-terminated name rendered above, and
-    // `rettv` and `funcexe` are this frame's.
-    let _ = unsafe { call_func(name, name_len, &mut rettv, &argvars, &raw mut funcexe) };
+    let name = cstr::in_chars(&func);
+    let _ = call_func_with(name, None, &mut rettv, &argvars, CallWith::at_cursor(true));
     drop(argvars);
     drop(call_stack_aside);
     provider_caller_scope.set(saved_provider_caller_scope);
@@ -356,7 +350,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
         if eval_variable(&loaded(&buf, len), Some(&mut tv), false, true).is_err() {
             unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
             // SAFETY: `bp` holds the NUL-terminated function name.
-            let defined = !unsafe { find_func(cstr::bytes_at(bp)) }.is_null();
+            let defined = func_exists(unsafe { cstr::bytes_at(bp) });
             if defined && p_lpl() {
                 // SAFETY: the format takes two NUL-terminated strings.
                 let (nm2, nm) = unsafe { (c_str(nm), c_str(nm)) };
@@ -373,7 +367,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
         // SAFETY: as above.
         unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
         // SAFETY: `bp` holds the NUL-terminated function name just built.
-        if unsafe { find_func(cstr::bytes_at(bp)) }.is_null() {
+        if !func_exists(unsafe { cstr::bytes_at(bp) }) {
             // SAFETY: the format takes three NUL-terminated strings.
             let (nm2, nm, bp) = unsafe { (c_str(nm), c_str(nm), c_str(bp)) };
             semsg!("provider: {nm2}: g:loaded_{nm}_provider=2 but {bp} is not defined");

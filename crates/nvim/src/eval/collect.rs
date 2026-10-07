@@ -31,7 +31,7 @@
 use crate::guard::Depth;
 use core::ffi::c_int;
 use core::mem::{ManuallyDrop, offset_of};
-use core::ptr::{NonNull, null_mut};
+use core::ptr::NonNull;
 
 use crate::autocmd::aucmd_wins;
 use crate::channel::channels;
@@ -67,7 +67,7 @@ use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     CONV_NONE, Callback, CallbackReader, Channel, Failed, List, OptInt, PartialRef, Timer, TypVal,
-    UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
@@ -490,12 +490,8 @@ pub(crate) fn set_ref_in_item_partial(
     }
     pt.edit().pt_copy_id = copy_id;
 
-    let name = pt
-        .pt_name
-        .as_ref()
-        .map_or(null_mut(), |name| name.as_ptr().cast_mut());
-    // SAFETY: the partial's own name and function.
-    let mut abort = unsafe { set_ref_in_func(name, pt.pt_func, copy_id) };
+    let name = pt.pt_name.as_ref().map(|name| name.as_bytes());
+    let mut abort = set_ref_in_func(name, pt.pt_func.as_ref(), copy_id);
     if let Some(dict) = &pt.pt_dict {
         abort = abort
             || set_ref_in_item_dict(
@@ -541,11 +537,8 @@ pub fn set_ref_in_item(
         // A Funcref names a function, which may be a closure holding a
         // scope of its own.
         VAR_FUNC => {
-            let name = tv
-                .func_name()
-                .map_or(null_mut(), |name| name.as_ptr().cast_mut());
-            // SAFETY: the value's own name, NUL-terminated.
-            unsafe { set_ref_in_func(name, null_mut::<UserFunc>(), copy_id) }
+            let name = tv.func_name().map(|name| name.as_bytes());
+            set_ref_in_func(name, None, copy_id)
         }
         VAR_PARTIAL => tv
             .partial_shared()

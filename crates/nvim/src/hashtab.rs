@@ -220,7 +220,7 @@ impl<E: SlotEntry> HashTab<E> {
 /// `idx * 5 + perturb + 1` computed from the previous (masked-on-first,
 /// unmasked-after) index. Never terminates — every walk ends by finding an
 /// empty slot, which is guaranteed because the table is never full.
-struct Probe {
+pub(crate) struct Probe {
     idx: HashValue,
     perturb: HashValue,
     mask: HashValue,
@@ -228,7 +228,7 @@ struct Probe {
 }
 
 impl Probe {
-    fn new(hash: HashValue, mask: HashValue) -> Self {
+    pub(crate) fn new(hash: HashValue, mask: HashValue) -> Self {
         Probe {
             idx: hash & mask,
             perturb: hash,
@@ -280,7 +280,7 @@ fn fold(first: u8, rest: &[u8]) -> HashValue {
 /// The `hash_hash_len` fold differs deliberately: it consumes exactly `len`
 /// bytes without stopping at NUL, and a leading NUL byte seeds the fold with
 /// 0 instead of ending it.
-fn hash_bytes_len(key: &[u8]) -> HashValue {
+pub(crate) fn hash_bytes_len(key: &[u8]) -> HashValue {
     match key.split_first() {
         Some((&first, rest)) => fold(first, rest),
         None => 0,
@@ -294,7 +294,12 @@ fn hash_bytes_len(key: &[u8]) -> HashValue {
 /// is the same question as `oldsize == HT_INIT_SIZE`, because the only way
 /// off the inline array was to grow past it and the only way back was to
 /// shrink to exactly its size.
-fn resize_decision(filled: usize, used: usize, oldsize: usize, minitems: usize) -> Option<usize> {
+pub(crate) fn resize_decision(
+    filled: usize,
+    used: usize,
+    oldsize: usize,
+    minitems: usize,
+) -> Option<usize> {
     let array_is_small = oldsize == HT_INIT_SIZE;
     let minsize = if minitems == 0 {
         if filled < HT_INIT_SIZE - 1 && array_is_small {

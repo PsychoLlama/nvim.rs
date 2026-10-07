@@ -235,25 +235,6 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
     unsafe { ListRef::from_owned(at) }
 }
 
-/// Initialise a `List` embedded in the caller's own storage (`a:000`, a
-/// `\=` submatch list): empty, locked, carrying `DO_NOT_FREE_CNT`.
-///
-/// # Safety
-///
-/// `l` must point at storage the caller owns and will not release through
-/// a [`ListRef`]; whatever was there is overwritten without being
-/// dropped, so it must hold no list yet.
-pub unsafe fn list_init_static(l: *mut List) {
-    // SAFETY: the caller's promise: storage holding no list yet.
-    unsafe {
-        l.write(List {
-            lv_refcount: Refcount::new(DO_NOT_FREE_CNT.cast_signed()),
-            lv_lock: VarLock::Fixed,
-            ..List::empty()
-        });
-    }
-}
-
 /// Take `l` out of the garbage collector's registry and free the `List`,
 /// with whatever items are still in its array.
 ///

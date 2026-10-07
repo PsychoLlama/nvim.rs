@@ -543,7 +543,7 @@ unsafe fn profile_script_start(si: *mut ScriptItem) {
     if !unsafe { (*si).sn_prof_on }
         && unsafe { has_profiling(true, (*si).sn_name, &raw mut forceit) }
     {
-        unsafe { profile_init(si) };
+        profile_init(unsafe { &mut *si });
         unsafe { (*si).sn_pr_force = forceit };
     }
     if unsafe { (*si).sn_prof_on } {

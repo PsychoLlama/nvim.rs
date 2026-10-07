@@ -21,7 +21,7 @@ use crate::api::private::helpers::{cstr_to_string, string_to_array};
 use crate::api::vimscript::exec_impl;
 use crate::cstr;
 use crate::eval::encode::encode_vim_list_to_buf;
-use crate::eval::userfunc::func_tbl_get;
+use crate::eval::userfunc::all_funcs;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::getchar::VIML_INTERNAL_CALL;
 use crate::global_cell::GlobalCell;
@@ -192,20 +192,6 @@ const fn shada_while_restoring() -> OptVal {
     OptVal::static_string(SHADA_WHILE_RESTORING)
 }
 
-/// Every name in the global function table, in hash-table order.
-///
-/// Collected before any of them is executed: upstream walks the table with
-/// `exec_impl` running inside the walk, which is only safe because listing a
-/// function cannot define or delete one.
-///
-/// # Safety
-/// Main-thread editor call; the function table is live.
-unsafe fn func_names() -> Vec<*const c_char> {
-    // SAFETY: the caller's contract -- the function table is live.
-    let functbl = unsafe { &*func_tbl_get() };
-    functbl.items().map(|hi| hi.hi_key.cast_const()).collect()
-}
-
 /// Capture every function's `:function` listing into `ctx.funcs`.
 ///
 /// Lambdas are skipped (they have no name to redefine), and with
@@ -213,10 +199,11 @@ unsafe fn func_names() -> Vec<*const c_char> {
 /// names start with the `K_SPECIAL` byte.
 fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
     ctx.funcs = ARRAY_INIT;
-    // SAFETY: the caller's contract; every name is NUL-terminated and alive
-    // for the walk, and `cmd` is owned until `exec_impl` has copied it.
-    for name in unsafe { func_names() } {
-        let bytes = unsafe { CStr::from_ptr(name) }.to_bytes();
+    // Collected before any of them is executed: upstream walks the table
+    // with `exec_impl` running inside the walk, which is only safe because
+    // listing a function cannot define or delete one.
+    for func in all_funcs() {
+        let bytes = func.name().as_bytes();
         let islambda = bytes.starts_with(b"<lambda>");
         let isscript = bytes.first() == Some(&(K_SPECIAL as uint8_t));
         if islambda || (scriptonly && !isscript) {

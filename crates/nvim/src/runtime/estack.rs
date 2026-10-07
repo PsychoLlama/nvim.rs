@@ -69,22 +69,21 @@ pub fn estack_push(es_type: EStackType, name: *mut c_char, lnum: LineNr) {
 
 /// Add a user function to the execution stack.
 ///
-/// # Safety
-///
-/// `ufunc` must point at a live `UserFunc`, unaliased for the call.
-pub unsafe fn estack_push_ufunc(ufunc: *mut UserFunc, lnum: LineNr) {
-    // SAFETY: `ufunc` is a live user function. `uf_name_exp` is the
-    // `<SNR>`-expanded name when one was built; otherwise the name is the
-    // struct's trailing inline buffer.
-    let name = unsafe {
-        if (*ufunc).uf_name_exp.is_null() {
-            (&raw mut (*ufunc).uf_name).cast::<c_char>()
-        } else {
-            (*ufunc).uf_name_exp
-        }
-    };
+/// The frame names `func` by address and its printable name by pointer: the
+/// caller keeps the function for as long as the frame is on the stack, which
+/// is the length of the call.
+pub fn estack_push_ufunc(func: &UserFunc, lnum: LineNr) {
+    let name = func.printable_name().as_ptr().cast_mut();
     push_entry(entry_for(ETYPE_UFUNC, name, lnum));
-    with_innermost(|entry| entry.es_info = EstackInfo::UserFunction(ufunc));
+    with_innermost(|entry| entry.es_info = EstackInfo::UserFunction(ptr::from_ref(func)));
+}
+
+/// The innermost frame's name, copied; `None` when it has none.
+pub(crate) fn sourcing_name_bytes() -> Option<Vec<u8>> {
+    let name = innermost_frame().es_name;
+    // SAFETY: a frame's name is null or a NUL-terminated string that lives as
+    // long as the frame.
+    unsafe { cstr::at_opt(name) }.map(|name| name.to_bytes().to_vec())
 }
 
 /// Take an item off of the execution stack. The bottom frame stays.
@@ -214,7 +213,7 @@ unsafe fn defining_script(stack: &[EStack]) -> *mut c_char {
             ETYPE_UFUNC | ETYPE_AUCMD => {
                 // SAFETY: both payloads outlive the frame that names them.
                 let def_ctx = match entry.es_info {
-                    EstackInfo::UserFunction(ufunc) => unsafe { (*ufunc).uf_script_ctx },
+                    EstackInfo::UserFunction(func) => unsafe { (*func).script_ctx.get() },
                     EstackInfo::Autocommand(aucmd) => unsafe { (*aucmd).script_ctx },
                     // An autocommand frame whose walk has finished.
                     EstackInfo::None => continue,
@@ -319,7 +318,7 @@ unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
 /// unaliased for the call.
 unsafe fn stacktrace_push_item(
     l: *mut List,
-    func: *mut UserFunc,
+    func: *const UserFunc,
     event: *const c_char,
     lnum: LineNr,
     filepath: *mut c_char,
@@ -335,13 +334,8 @@ unsafe fn stacktrace_push_item(
     // append takes a second; both are given back when this frame ends.
     let tv = TypVal::dict(Some(d_held));
     if !func.is_null() {
-        // SAFETY: a live function, whose name is inline and terminated.
-        let _ = unsafe {
-            (*d).add_func(
-                b"funcref",
-                CStr::from_ptr((&raw const (*func).uf_name).cast::<c_char>()),
-            )
-        };
+        // SAFETY: a live function.
+        let _ = unsafe { (*d).add_func(b"funcref", (*func).name().as_cstr()) };
     }
     if !event.is_null() {
         unsafe { dict_add_str(d, c"event", event) };
@@ -373,16 +367,16 @@ pub fn stacktrace_create() -> Option<ListRef> {
                 );
             },
             ETYPE_UFUNC => {
-                let Some(fp) = entry.es_info.user_function() else {
+                let Some(func) = entry.es_info.user_function() else {
                     continue;
                 };
                 // SAFETY: the frame's function outlives the frame.
-                let sctx = unsafe { (*fp).uf_script_ctx };
+                let sctx = unsafe { (*func).script_ctx.get() };
                 // SAFETY: `l` and the path below are ours.
                 unsafe {
                     stacktrace_push_item(
                         l,
-                        fp,
+                        func,
                         ptr::null(),
                         entry.es_lnum + sctx.sc_lnum,
                         script_path(sctx).as_ptr().cast_mut(),

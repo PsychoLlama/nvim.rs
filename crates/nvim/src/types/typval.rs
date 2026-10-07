@@ -106,7 +106,7 @@ pub enum VarLock {
     /// `:lockvar` set this, and `:unlockvar` can clear it.
     Locked = 1,
     /// A slot that cannot be unlocked at all: `v:` variables, `a:`
-    /// arguments, and the static lists `list_init_static` hands out.
+    /// arguments, `a:000` and a `\=` expression's submatch list.
     Fixed = 2,
 }
 
@@ -383,40 +383,41 @@ pub struct Dict {
     pub watchers: Vec<::std::rc::Rc<DictWatcher>>,
     pub lua_table_ref: LuaRef,
 }
-/// Not `Clone`: it holds `l:` and `a:` by value, and a dictionary owns the
-/// items its hash table indexes.
-pub struct FuncCall {
-    pub fc_func: *mut UserFunc,
-    pub fc_linenr: ::core::ffi::c_int,
-    pub fc_returned: ::core::ffi::c_int,
-    pub fc_fixvar: [DictItem; 12],
-    pub fc_l_vars: Dict,
-    pub fc_l_vars_var: ScopeDictItem,
-    pub fc_l_avars: Dict,
-    pub fc_l_avars_var: ScopeDictItem,
-    pub fc_l_varlist: List,
-    pub fc_rettv: *mut TypVal,
-    pub fc_breakpoint: LineNr,
-    pub fc_dbg_tick: ::core::ffi::c_int,
-    pub fc_level: ::core::ffi::c_int,
-    pub fc_defer: GArray,
-    pub fc_prof_child: ProfTime,
-    /// Its own place in the funccall table, which also knows its caller.
-    pub(crate) fc_id: Option<FcId>,
-    pub fc_refcount: Refcount,
-    pub fc_copy_id: ::core::ffi::c_int,
-    pub fc_ufuncs: GArray,
-}
-/// A funccall's twelve fixed variables, `b:changedtick` and a `v:` row are
-/// each an ordinary [`DictItem`](crate::types::DictItem) now: the four
-/// look-alike structs existed only to spell the flexible key member out at
-/// their own length, and an item owns its key.  The one still wrapped is the
-/// scope dictionary's own entry, which must not drop the reference it names
-/// ([`ScopeDictItem`](crate::types::ScopeDictItem)).
+/// One call of a user function: its `a:`/`l:` scopes, its caller (kept by the
+/// funccall table, see `eval/userfunc/frames.rs`), its place in the body and
+/// its return value.
 ///
-/// A funccall arrives `xcalloc`'d, so what a fixed variable's storage holds
-/// before it is used has to be a *valid* item: an all-zero `DictItem` is
-/// `VAR_UNKNOWN`, unlocked, unflagged, with the empty inline key.
+/// Shared (`Rc`) by the table and whoever is using it across user code; the
+/// fields that change during the call are cells, each borrowed only for the
+/// access that asks.
+pub struct FuncCall {
+    /// The function being run.
+    pub(crate) func: ::std::rc::Rc<UserFunc>,
+    /// The scope dictionaries and `a:000`.
+    pub(crate) scopes: crate::eval::userfunc::FrameScopes,
+    /// The body line the next read hands out.
+    pub(crate) linenr: ::core::cell::Cell<::core::ffi::c_int>,
+    /// `:return` ran (and is not pending behind a `:finally`).
+    pub(crate) returned: ::core::cell::Cell<bool>,
+    /// What `:return` set.
+    pub(crate) rettv: ::core::cell::RefCell<TypVal>,
+    pub(crate) breakpoint: ::core::cell::Cell<LineNr>,
+    pub(crate) dbg_tick: ::core::cell::Cell<::core::ffi::c_int>,
+    /// The `:if`/`:while` nesting of the line that made the call.
+    pub(crate) level: ::core::ffi::c_int,
+    /// The calls `:defer` recorded, made newest first on the way out.
+    pub(crate) defer: ::core::cell::RefCell<Vec<crate::eval::userfunc::Defer>>,
+    pub(crate) prof_child: ::core::cell::Cell<ProfTime>,
+    /// Its own place in the funccall table, which also knows its caller.
+    pub(crate) id: FcId,
+    /// How many closures captured this call's scope.
+    pub(crate) refcount: ::core::cell::Cell<::core::ffi::c_int>,
+    pub(crate) copy_id: ::core::cell::Cell<::core::ffi::c_int>,
+    /// The functions defined as closures over this call. A slot is emptied
+    /// when its function lets go of the scope.
+    pub(crate) ufuncs: ::core::cell::RefCell<Vec<::std::rc::Weak<UserFunc>>>,
+}
+/// An item's short keys -- every fixed `a:` name -- fit inline.
 #[cfg(not(randomized_layout))]
 const _: () = {
     use crate::types::{DictItem, DictKey};
@@ -527,7 +528,7 @@ pub struct Partial {
     /// The function's name, holding a reference to it by name. `None` when
     /// `pt_func` is the function instead.
     pub pt_name: Option<ThinCString>,
-    pub pt_func: *mut UserFunc,
+    pub pt_func: Option<::std::rc::Rc<UserFunc>>,
     pub pt_auto: bool,
     pub pt_argv: Vec<TypVal>,
     pub pt_dict: Option<DictRef>,
@@ -641,36 +642,109 @@ pub enum TypVal {
     /// A blob, owned as one reference; `None` is `v:_null_blob`.
     Blob(::core::mem::ManuallyDrop<Option<BlobRef>>) = VAR_BLOB,
 }
-#[repr(C)]
+/// A user function: `:function`, a numbered dictionary function, a lambda,
+/// or a Lua reference given a Vimscript name.
+///
+/// Shared (`Rc`) by whatever can reach it: the function table, a partial
+/// that names it by pointer (`funcref()`, a lambda), the call running it, and
+/// the closures a call registered. That sharing is only *memory*; the
+/// editor-visible life of a function is still `refcount`/`calls`, upstream's
+/// counts, which decide when it is cleared and taken out of the table
+/// ([`crate::eval::userfunc::func_clear_free`]). The fields that change after
+/// the definition are cells, borrowed only for the access that asks, never
+/// across a call that can run user code.
 pub struct UserFunc {
-    pub uf_varargs: ::core::ffi::c_int,
-    pub uf_flags: crate::eval::userfunc::FuncFlags,
-    pub uf_calls: ::core::ffi::c_int,
-    pub uf_cleared: bool,
-    pub uf_args: GArray,
-    pub uf_def_args: GArray,
-    pub uf_lines: GArray,
-    pub uf_profiling: ::core::ffi::c_int,
-    pub uf_prof_initialized: ::core::ffi::c_int,
-    pub uf_luaref: LuaRef,
-    pub uf_tm_count: ::core::ffi::c_int,
-    pub uf_tm_total: ProfTime,
-    pub uf_tm_self: ProfTime,
-    pub uf_tm_children: ProfTime,
-    pub uf_tml_count: *mut ::core::ffi::c_int,
-    pub uf_tml_total: *mut ProfTime,
-    pub uf_tml_self: *mut ProfTime,
-    pub uf_tml_start: ProfTime,
-    pub uf_tml_children: ProfTime,
-    pub uf_tml_wait: ProfTime,
-    pub uf_tml_idx: ::core::ffi::c_int,
-    pub uf_tml_execed: ::core::ffi::c_int,
-    pub uf_script_ctx: ScriptCtx,
-    pub uf_refcount: Refcount,
-    pub uf_scoped: *mut FuncCall,
-    pub uf_name_exp: *mut ::core::ffi::c_char,
-    pub uf_namelen: size_t,
-    pub uf_name: [::core::ffi::c_char; 0],
+    /// The name the table holds it under: a global name, `<SNR>`-mangled
+    /// (`K_SPECIAL KS_EXTRA KE_SNR` + `123_name`), a number, `<lambda>N`.
+    pub(crate) name: ThinCString,
+    /// `<SNR>123_name`, the printable form of a mangled name.
+    pub(crate) name_exp: Option<ThinCString>,
+    pub(crate) flags: ::core::cell::Cell<crate::eval::userfunc::FuncFlags>,
+    /// How many calls of it are running.
+    pub(crate) calls: ::core::cell::Cell<::core::ffi::c_int>,
+    pub(crate) cleared: ::core::cell::Cell<bool>,
+    pub(crate) refcount: ::core::cell::Cell<Refcount>,
+    /// The arguments, their defaults and the body, replaced as a whole when
+    /// the function is redefined in place.
+    pub(crate) body: ::core::cell::RefCell<::std::rc::Rc<FuncBody>>,
+    pub(crate) luaref: ::core::cell::Cell<LuaRef>,
+    pub(crate) script_ctx: ::core::cell::Cell<ScriptCtx>,
+    /// The call whose scope a closure captured.
+    pub(crate) scoped: ::core::cell::Cell<Option<FcId>>,
+    pub(crate) prof: ::core::cell::RefCell<FuncProfile>,
 }
+
+/// What `:function` collected between the parentheses and `:endfunction`.
+#[derive(Default)]
+pub(crate) struct FuncBody {
+    /// The argument names.
+    pub args: Vec<Box<[u8]>>,
+    /// The source of each default, right-aligned with `args`.
+    pub def_args: Vec<Box<[u8]>>,
+    /// The body, one entry per source line; `None` for a continuation
+    /// line, so that an index is a line number.
+    pub lines: Vec<Option<Box<[u8]>>>,
+    /// Whether a `...` was declared.
+    pub varargs: bool,
+}
+
+/// A function's `:profile` counters, the per-line ones sized to its body.
+#[derive(Default)]
+pub(crate) struct FuncProfile {
+    pub profiling: bool,
+    pub initialized: bool,
+    pub tm_count: ::core::ffi::c_int,
+    pub tm_total: ProfTime,
+    pub tm_self: ProfTime,
+    pub tm_children: ProfTime,
+    pub tml_count: Vec<::core::ffi::c_int>,
+    pub tml_total: Vec<ProfTime>,
+    pub tml_self: Vec<ProfTime>,
+    pub tml_start: ProfTime,
+    pub tml_children: ProfTime,
+    pub tml_wait: ProfTime,
+    /// The body line being timed, or -1.
+    pub tml_idx: ::core::ffi::c_int,
+    pub tml_execed: bool,
+}
+
+impl UserFunc {
+    /// The name the table holds it under.
+    pub fn name(&self) -> &ThinCString {
+        &self.name
+    }
+
+    /// The name to show a user: `<SNR>123_name` for a script-local one.
+    pub fn printable_name(&self) -> &ThinCString {
+        self.name_exp.as_ref().unwrap_or(&self.name)
+    }
+
+    /// The body as it stands; a redefinition replaces it, and a holder of
+    /// this one keeps reading the text it started on.
+    pub(crate) fn body(&self) -> ::std::rc::Rc<FuncBody> {
+        self.body.borrow().clone()
+    }
+
+    /// Whether any of `flags` is set.
+    pub fn has_flag(&self, flags: crate::eval::userfunc::FuncFlags) -> bool {
+        self.flags.get().has(flags)
+    }
+
+    /// One more counted holder.
+    pub fn retain(&self) {
+        let mut count = self.refcount.get();
+        count.retain();
+        self.refcount.set(count);
+    }
+
+    /// One counted holder fewer; answers how many are left.
+    pub fn release(&self) -> ::core::ffi::c_int {
+        let mut count = self.refcount.get();
+        let left = count.release();
+        self.refcount.set(count);
+        left
+    }
+}
+
 pub type UVarNumber = uint64_t;
 pub type VarNumber = int64_t;

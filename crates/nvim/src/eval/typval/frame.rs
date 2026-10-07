@@ -52,17 +52,6 @@ impl<const N: usize> CallFrame<N> {
         }
     }
 
-    /// A frame of values the caller keeps: every slot names a payload
-    /// something else owns and releases, and the frame releases none of
-    /// them.
-    pub(crate) fn naming(tvs: [TypVal; N]) -> Self {
-        let mut frame = Self::new();
-        for tv in tvs {
-            frame.push_naming(tv);
-        }
-        frame
-    }
-
     /// How many arguments the frame holds.
     #[inline]
     pub(crate) fn len(&self) -> usize {

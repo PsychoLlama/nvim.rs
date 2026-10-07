@@ -1,22 +1,23 @@
-//! The argument list: parsing it, checking it, filling `a:`.
+//! The argument list: parsing it and checking it.
 //!
 //! `get_function_args` reads the `(a, b = expr, ...)` of a definition once,
 //! at definition time, keeping each default as unevaluated source; the
-//! `get_func_arg*` pair reads the arguments of a *call*.  `add_nr_var`
-//! seeds the three numeric `a:` entries (`a:0`, `a:firstline`,
-//! `a:lastline`) directly into the funccall's embedded fixvar array.
+//! `get_func_arg*` pair reads the arguments of a *call*.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::cstr;
 use crate::semsg;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
-use crate::eval::typval::DictEntry;
-use crate::types::DictKey;
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 
 /// Read one argument name at the cursor and append a copy of it to
 /// `newargs`, leaving the cursor after it.
@@ -24,10 +25,11 @@ use crate::types::{Failed, NUL};
 /// Answers false, with the cursor where it was, when what is there cannot be
 /// one: empty, starting with a digit, a duplicate of an earlier argument, or
 /// one of the two names the `a:` scope already gives a meaning.
-///
-/// # Safety
-/// `newargs`, when non-null, is a `char *` garray.
-unsafe fn one_function_arg(cursor: &mut Cursor<'_>, newargs: *mut GArray, skip: bool) -> bool {
+fn one_function_arg(
+    cursor: &mut Cursor<'_>,
+    newargs: Option<&mut Vec<Box<[u8]>>>,
+    skip: bool,
+) -> bool {
     let rest = cursor.rest();
     let len = rest
         .iter()
@@ -43,20 +45,13 @@ unsafe fn one_function_arg(cursor: &mut Cursor<'_>, newargs: *mut GArray, skip: 
         }
         return false;
     }
-    if !newargs.is_null() {
-        // SAFETY: the caller's promise -- `newargs` is a `char *` garray,
-        // which `ga_grow` has just made room in.
-        unsafe { ga_grow(newargs, 1) };
-        for &earlier in ga_strings(unsafe { &*newargs }) {
-            // SAFETY: every entry is a NUL-terminated copy.
-            if unsafe { cstr::bytes_at(earlier) } == name {
-                let shown = msg_bytes(name);
-                semsg!("E853: Duplicate argument name: {shown}");
-                return false;
-            }
+    if let Some(newargs) = newargs {
+        if newargs.iter().any(|earlier| **earlier == *name) {
+            let shown = msg_bytes(name);
+            semsg!("E853: Duplicate argument name: {shown}");
+            return false;
         }
-        // SAFETY: as above.
-        unsafe { ga_push_string(newargs, XString::from_bytes(name).into_raw()) };
+        newargs.push(name.into());
     }
     cursor.bump(len);
     true
@@ -67,33 +62,27 @@ unsafe fn one_function_arg(cursor: &mut Cursor<'_>, newargs: *mut GArray, skip: 
 ///
 /// Fills `newargs` with the names, `default_args` with the *source* of each
 /// `= expr` default (evaluated afresh on every call, not here) and `varargs`
-/// with whether a `...` was seen.  Any of the three may be null, which is how
-/// a caller that only wants to skip the list says so.
-///
-/// # Safety
-/// The three out-parameters are null or writable.
-pub(crate) unsafe fn get_function_args(
+/// with whether a `...` was seen.  Any of the three may be `None`, which is
+/// how a caller that only wants to skip the list says so.
+pub(crate) fn get_function_args(
     cursor: &mut Cursor<'_>,
     endchar: u8,
-    newargs: *mut GArray,
-    varargs: *mut c_int,
-    default_args: *mut GArray,
+    mut newargs: Option<&mut Vec<Box<[u8]>>>,
+    mut varargs: Option<&mut bool>,
+    mut default_args: Option<&mut Vec<Box<[u8]>>>,
     skip: bool,
 ) -> Result<(), Failed> {
     let mut mustend = false;
-    let slot = size_of::<*mut c_char>() as c_int;
     let start = cursor.offset();
     let text = cursor.text();
-    // SAFETY: the caller's promise -- the three out-parameters are null or
-    // writable.
-    if !newargs.is_null() {
-        unsafe { ga_init(newargs, slot, 3) };
+    if let Some(newargs) = newargs.as_deref_mut() {
+        newargs.clear();
     }
-    if !default_args.is_null() {
-        unsafe { ga_init(default_args, slot, 3) };
+    if let Some(default_args) = default_args.as_deref_mut() {
+        default_args.clear();
     }
-    if !varargs.is_null() {
-        unsafe { *varargs = 0 };
+    if let Some(varargs) = varargs.as_deref_mut() {
+        *varargs = false;
     }
 
     // Isolate the arguments: "arg1, arg2, ...)".
@@ -101,20 +90,19 @@ pub(crate) unsafe fn get_function_args(
     let closed = 'parse: {
         while cursor.byte() != endchar {
             if cursor.rest().starts_with(b"...") {
-                if !varargs.is_null() {
-                    unsafe { *varargs = 1 };
+                if let Some(varargs) = varargs.as_deref_mut() {
+                    *varargs = true;
                 }
                 cursor.bump(3);
                 mustend = true;
             } else {
-                // SAFETY: the caller's promise about `newargs`.
-                if !unsafe { one_function_arg(cursor, newargs, skip) } {
+                if !one_function_arg(cursor, newargs.as_deref_mut(), skip) {
                     break;
                 }
                 let mut after = Cursor::new(text);
                 after.set_offset(cursor.offset());
                 after.skip_white();
-                if after.byte() == b'=' && !default_args.is_null() {
+                if after.byte() == b'=' && default_args.is_some() {
                     let mut rettv = TV_INITIAL_VALUE;
                     any_default = true;
                     cursor.skip_white();
@@ -129,10 +117,9 @@ pub(crate) unsafe fn get_function_args(
                             end -= 1;
                         }
                         cursor.set_offset(end);
-                        let copy = XString::from_bytes(&text[expr..end]).into_raw();
-                        // SAFETY: the caller's promise about `default_args`.
-                        unsafe { ga_grow(default_args, 1) };
-                        unsafe { ga_push_string(default_args, copy) };
+                        if let Some(default_args) = default_args.as_deref_mut() {
+                            default_args.push(text[expr..end].into());
+                        }
                     } else {
                         mustend = true;
                     }
@@ -176,11 +163,11 @@ pub(crate) unsafe fn get_function_args(
     }
     cursor.set_offset(start);
 
-    if !newargs.is_null() {
-        unsafe { ga_clear_strings(newargs) };
+    if let Some(newargs) = newargs {
+        newargs.clear();
     }
-    if !default_args.is_null() {
-        unsafe { ga_clear_strings(default_args) };
+    if let Some(default_args) = default_args {
+        default_args.clear();
     }
     Err(Failed)
 }
@@ -196,12 +183,12 @@ pub(crate) fn get_func_arguments(
     argcount: &mut usize,
 ) -> Result<(), Failed> {
     let mut ret = Ok(());
-    let room = usize::try_from(MAX_FUNC_ARGS as c_int - partial_argc).unwrap_or(0);
+    let room = usize::try_from(MAX_FUNC_ARGS - partial_argc).unwrap_or(0);
     while *argcount < room {
         // skip the '(' or ','
         cursor.bump(1);
         cursor.skip_white();
-        if matches!(cursor.byte(), b')' | b',') || cursor.byte() == NUL as u8 {
+        if matches!(cursor.byte(), b')' | b',') || cursor.byte() == 0 {
             break;
         }
         if eval1(cursor, &mut args[*argcount], evaluate).is_err() {
@@ -235,50 +222,22 @@ pub(crate) fn get_func_arity(name: &[u8]) -> Option<(c_int, c_int, bool)> {
     if error != FCERR_NONE {
         return None;
     }
-    let ufunc = find_func(&fname);
-    if ufunc.is_null() {
-        return None;
-    }
-    // SAFETY: `find_func` answers a live function.
-    let f = unsafe { Uf::new(ufunc) };
-    let min_argcount = f.uf_args.ga_len - f.uf_def_args.ga_len;
-    Some((
-        min_argcount,
-        f.uf_args.ga_len - min_argcount,
-        f.uf_varargs != 0,
-    ))
-}
-
-/// Add one of `a:`'s fixed numbers, into a slot of the funccall's own
-/// `fc_fixvar` array rather than an allocation.
-///
-/// # Safety
-/// `v` is a `DictItem` whose key member has room for `name`, and `dp` is
-/// the dictionary it is being linked into.  `v` must outlive `dp`.
-pub(crate) unsafe fn add_nr_var(dp: *mut Dict, v: *mut DictItem, name: *mut c_char, nr: VarNumber) {
-    // SAFETY: the caller's promise -- `v` is a `DictItem` with room for
-    // `name` in its inline key, and `dp` is the dictionary it joins.
-    // SAFETY: the caller's NUL-terminated name.
-    unsafe { (*v).di_key = DictKey::new(cstr::bytes_at(name)) };
-    let mut item = unsafe { Live::new(v) };
-    item.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
-    let _ = unsafe { hash_add(&raw mut (*dp).dv_hashtab, DictEntry::new(v)) };
-    item.di_lock = VarLock::Fixed;
-    item.di_tv.write_number(nr);
+    let body = find_func(&fname)?.body();
+    let declared = c_int::try_from(body.args.len()).unwrap_or(c_int::MAX);
+    let defaults = c_int::try_from(body.def_args.len()).unwrap_or(c_int::MAX);
+    let min_argcount = declared - defaults;
+    Some((min_argcount, declared - min_argcount, body.varargs))
 }
 
 /// Whether `argcount` arguments can be given to `func`: `FCERR_UNKNOWN` when
 /// they can, one of `FCERR_TOOFEW`/`FCERR_TOOMANY` when they cannot.
-///
-/// # Safety
-/// `func` is a live function.
-pub(crate) unsafe fn check_user_func_argcount(func: *mut UserFunc, argcount: c_int) -> c_int {
-    // SAFETY: the caller's promise -- `func` is a live function.
-    let f = unsafe { Uf::new(func) };
-    let regular_args = f.uf_args.ga_len;
-    if argcount < regular_args - f.uf_def_args.ga_len {
+pub(crate) fn check_user_func_argcount(func: &UserFunc, argcount: c_int) -> c_int {
+    let body = func.body();
+    let regular_args = c_int::try_from(body.args.len()).unwrap_or(c_int::MAX);
+    let defaults = c_int::try_from(body.def_args.len()).unwrap_or(c_int::MAX);
+    if argcount < regular_args - defaults {
         FCERR_TOOFEW
-    } else if f.uf_varargs == 0 && argcount > regular_args {
+    } else if !body.varargs && argcount > regular_args {
         FCERR_TOOMANY
     } else {
         FCERR_UNKNOWN

@@ -70,6 +70,19 @@ fn write_startup(bytes: &[u8]) {
     });
 }
 
+/// Record a startup-timing message, if `--startuptime` asked for one.
+///
+/// The C spells this as the `TIME_MSG` macro. Safe: no raw pointer crosses
+/// the boundary, and the `time_fd` test is the whole of it.
+pub(crate) fn time_msg_at(what: &CStr) {
+    if startup_timing() {
+        // SAFETY: `time_fd` is the startup-timing file, opened once by
+        // `init_startuptime` and closed by `time_finish`; `what` outlives the
+        // call and the second argument is the "no elapsed time" null.
+        unsafe { time_msg(what.as_ptr(), ::core::ptr::null::<ProfTime>()) };
+    }
+}
+
 /// Write the startuptime report header and the first message. Must be
 /// called once before [`time_msg`].
 ///

@@ -36,11 +36,6 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
 
-/// Offset of `uf_name` inside `UserFunc`: the function table's hash keys point
-/// at that inline buffer, so backing up by this recovers the function.  This is
-/// the transpiled `HI2UF`, the same constant profile.rs and userfunc.rs use.
-const UF_NAME_OFFSET: usize = 240;
-
 /// Bytes `autoload_name` puts in front of the name it is given.
 const AUTOLOAD_PREFIX: &[u8] = b"autoload/";
 /// ...and what it puts after the last package separator, NUL included.
@@ -68,6 +63,22 @@ pub(crate) fn script_item(sid: ScriptId) -> *mut ScriptItem {
         idx.and_then(|idx| items.get(idx).copied())
             .unwrap_or(ptr::null_mut())
     })
+}
+
+/// Run `f` on the registry entry for script `sid`, which must be a script
+/// the editor has sourced ([`script_id_valid`]).
+///
+/// No user code runs inside `f`: it is for reading and updating the entry's
+/// counters, which is all the profiler does with one.
+///
+/// # Panics
+/// When `sid` names no script.
+pub(crate) fn with_script_item<R>(sid: ScriptId, f: impl FnOnce(&mut ScriptItem) -> R) -> R {
+    let item = script_item(sid);
+    assert!(!item.is_null(), "script id out of range");
+    // SAFETY: a registry entry is boxed and lives as long as the editor, and
+    // `f` runs no user code that could reach it another way meanwhile.
+    f(unsafe { &mut *item })
 }
 
 /// Is `sid` a script the editor has sourced -- upstream's `SCRIPT_ID_VALID`?
@@ -293,26 +304,13 @@ fn getline_is_source(fgetline: LineGetter) -> bool {
 /// The script-local functions defined in the script with id `sid`, as a list of
 /// their names.
 fn get_script_local_funcs(sid: ScriptId) -> ListRef {
-    let functbl = func_tbl_get();
-    // SAFETY: the process-wide function table, which outlives this walk, and
-    // a fresh list with at most one entry per function.
-    let list = unsafe { tv_list_alloc((*functbl).ht_used as ptrdiff_t) };
-    let l = list.as_ptr();
-
-    for hi in unsafe { tv_ht_iter(functbl) } {
-        // SAFETY: an occupied slot's key is a `UserFunc`'s inline name buffer,
-        // so backing up by that field's offset recovers the function.
-        let fp = unsafe { &*hi.hi_key.byte_sub(UF_NAME_OFFSET).cast::<UserFunc>() };
-        if fp.uf_script_ctx.sc_sid != sid {
-            continue;
-        }
-        let name = if fp.uf_name_exp.is_null() {
-            (&raw const fp.uf_name).cast::<c_char>()
-        } else {
-            fp.uf_name_exp
-        };
-        // SAFETY: `name` is NUL-terminated, which the -1 length asks for.
-        unsafe { (*l).push_str(cstr::at_opt(name)) };
+    let funcs: Vec<_> = all_funcs()
+        .into_iter()
+        .filter(|func| func.script_ctx.get().sc_sid == sid)
+        .collect();
+    let list = tv_list_alloc(ptrdiff_t::try_from(funcs.len()).unwrap_or(ptrdiff_t::MAX));
+    for func in &funcs {
+        list.edit().push_str(Some(func.printable_name().as_cstr()));
     }
     list
 }
@@ -909,6 +907,28 @@ pub unsafe fn autoload_name(name: *const c_char, name_len: size_t) -> *mut c_cha
     let scriptname = unsafe { xmalloc(out.len()) }.cast::<u8>();
     unsafe { ptr::copy_nonoverlapping(out.as_ptr(), scriptname, out.len()) };
     scriptname.cast::<c_char>()
+}
+
+/// The autoload script path for `name` ([`autoload_name`]), owned.
+pub(crate) fn autoload_name_of(name: &[u8]) -> XString {
+    // SAFETY: `name` is `name.len()` readable bytes, and the answer is an
+    // `xmalloc`ed, NUL-terminated string this adopts.
+    unsafe { XString::from_raw(autoload_name(name.as_ptr().cast(), name.len())) }
+}
+
+/// [`script_autoload`] of `name`.
+pub(crate) fn script_autoload_named(name: &[u8], reload: bool) -> bool {
+    // SAFETY: `name` is `name.len()` readable bytes, which is all the
+    // function reads of it.
+    unsafe { script_autoload(name.as_ptr().cast(), name.len(), reload) }
+}
+
+/// The line number a running command's source is at: [`get_sourced_lnum`]
+/// of the command's own getter and cookie.
+pub(crate) fn sourced_lnum_of(excmd: &ExArg) -> LineNr {
+    // SAFETY: a running command's line getter and its cookie are a live
+    // pair.
+    unsafe { get_sourced_lnum(excmd.ea_getline, excmd.cookie) }
 }
 
 /// If `name` has a package name, try autoloading the script for it.

@@ -154,18 +154,14 @@ pub unsafe fn find_internal_func(name: *const c_char) -> *const EvalFuncDef {
 
 /// Check a call against a row's arity, reporting E118/E119 if it does not
 /// fit.
-///
-/// # Safety
-/// `fdef` is a live table row.
-pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation; the row's name is a `'static` string
-    // in the generated table.
-    let wrong = match unsafe { (*fdef).arity }.accepts(argcount.cast_unsigned() as usize) {
+pub(crate) fn check_builtin_argcount(fdef: &EvalFuncDef, argcount: c_int) -> Result<(), Failed> {
+    let wrong = match fdef.arity.accepts(usize::try_from(argcount).unwrap_or(0)) {
         Ok(()) => return Ok(()),
         Err(wrong) => wrong,
     };
-    // SAFETY: the builtin's own name, NUL-terminated.
-    let name = unsafe { c_str((*fdef).name) };
+    // SAFETY: a row's name is a `'static` NUL-terminated string in the
+    // generated table.
+    let name = unsafe { c_str(fdef.name) };
     match wrong {
         WrongArity::TooMany => {
             semsg!("E118: Too many arguments for function: {name}");
@@ -175,6 +171,33 @@ pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> 
         }
     }
     Err(Failed)
+}
+
+/// [`check_builtin_argcount`] of a row by pointer.
+///
+/// # Safety
+/// `fdef` is a live table row.
+pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> Result<(), Failed> {
+    // SAFETY: the caller's obligation.
+    check_builtin_argcount(unsafe { &*fdef }, argcount)
+}
+
+/// [`call_internal_func`] of the builtin `name` spells.
+pub(crate) fn call_internal_func_named(name: &CStr, args: &[TypVal], result: &mut TypVal) -> c_int {
+    // SAFETY: `name` is NUL-terminated and lives for the call.
+    unsafe { call_internal_func(name.as_ptr(), args, result) }
+}
+
+/// [`call_internal_method`] of the builtin `name` spells.
+pub(crate) fn call_internal_method_named(
+    name: &CStr,
+    args: &[TypVal],
+    result: &mut TypVal,
+    base: &mut TypVal,
+) -> c_int {
+    // SAFETY: `name` is NUL-terminated and lives for the call, and `base`
+    // the caller's live value.
+    unsafe { call_internal_method(name.as_ptr(), args, result, base) }
 }
 
 /// Call the builtin `fname` spells.

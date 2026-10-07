@@ -23,7 +23,10 @@ use core::ptr;
 
 use crate::debugger::{dbg_breakpoint, do_debug};
 
-use crate::eval::userfunc::{func_breakpoint, func_dbg_tick, func_name, get_func_line};
+use crate::eval::userfunc::{
+    func_breakpoint, func_dbg_tick, func_has_abort, func_has_ended, func_level, func_name,
+    get_func_line,
+};
 
 use crate::ex_docmd::onecmd::do_one_cmd;
 use crate::ex_docmd::source::{
@@ -63,7 +66,9 @@ use crate::profile::do_profiling;
 use crate::message::{msg_start, wait_return};
 
 use crate::os::input::line_breakcheck;
-use crate::profile::{func_line_end, func_line_start, script_line_end, script_line_start};
+use crate::profile::{
+    func_line_end_cookie, func_line_start_cookie, script_line_end, script_line_start,
+};
 use crate::runtime::{
     getsourceline, set_sourcing_lnum, source_breakpoint, source_dbg_tick, source_level,
 };
@@ -183,8 +188,7 @@ fn replay_stored_line(source: &Source, lines: &GArray, current_line: c_int) -> O
     // aborted?
     if source.is_func() {
         if do_profiling.get() == PROF_YES {
-            // SAFETY: the record's promise -- the function's own frame.
-            unsafe { func_line_end(source.real_cookie) };
+            func_line_end_cookie(source.real_cookie);
         }
         if func_has_ended(source.real_cookie) != 0 {
             return None;
@@ -217,8 +221,7 @@ fn replay_stored_line(source: &Source, lines: &GArray, current_line: c_int) -> O
     }
     if do_profiling.get() == PROF_YES {
         if source.is_func() {
-            // SAFETY: as above.
-            unsafe { func_line_start(source.real_cookie) };
+            func_line_start_cookie(source.real_cookie);
         } else if source.is_script() {
             script_line_start();
         }
@@ -840,6 +843,20 @@ pub(crate) fn do_cmdline_as(
     }
 }
 
+/// [`do_cmdline`] with no first line, reading every line from `getter`.
+///
+/// Safe where `do_cmdline` is not: `getter` is a safe function, so no cookie
+/// it is handed can make it misbehave -- a function body's getter resolves its
+/// cookie as an id and checks it.
+pub(crate) fn do_cmdline_getter(
+    getter: fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
+    cookie: *mut c_void,
+    flags: DoCmdOpts,
+) -> Result<(), Failed> {
+    // SAFETY: no first line, and a safe getter whatever the cookie.
+    unsafe { do_cmdline(ptr::null_mut(), Some(getter), cookie, flags) }
+}
+
 /// Run Ex commands, from `cmdline` and then from `fgetline`.
 ///
 /// May be called recursively. Answers `Err` when the line could not be run.
@@ -876,9 +893,9 @@ pub unsafe fn do_cmdline(
     let (mut fname, mut breakpoint, mut dbg_tick) =
         (ptr::null_mut(), ptr::null_mut(), ptr::null_mut());
     if getline_equal(fgetline, cookie, Some(get_func_line)) {
-        fname = unsafe { func_name(real_cookie) };
-        breakpoint = unsafe { func_breakpoint(real_cookie) };
-        dbg_tick = unsafe { func_dbg_tick(real_cookie) };
+        fname = func_name(real_cookie);
+        breakpoint = func_breakpoint(real_cookie);
+        dbg_tick = func_dbg_tick(real_cookie);
     } else if getline_equal(fgetline, cookie, Some(getsourceline)) {
         fname = sourcing_entry().es_name;
         breakpoint = unsafe { source_breakpoint(real_cookie) };
@@ -949,24 +966,6 @@ fn do_errthrow(cstack: &mut CondStack, cmdname: Option<&CStr>) {
     let name = cmdname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
     // SAFETY: `cstack` is this run's own, and the name is a static string.
     unsafe { crate::ex_eval::do_errthrow(&raw mut *cstack, name) }
-}
-
-/// `func_has_abort()` as checked code.
-fn func_has_abort(cookie: *mut c_void) -> c_int {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::eval::userfunc::func_has_abort(cookie) }
-}
-
-/// `func_has_ended()` as checked code.
-fn func_has_ended(cookie: *mut c_void) -> c_int {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::eval::userfunc::func_has_ended(cookie) }
-}
-
-/// `func_level()` as checked code.
-fn func_level(cookie: *mut c_void) -> c_int {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::eval::userfunc::func_level(cookie) }
 }
 
 /// `getline_equal()`, checked.

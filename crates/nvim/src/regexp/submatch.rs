@@ -108,39 +108,27 @@ pub(crate) fn reg_getline_submatch_len(rex: Rex, lnum: LineNr) -> ColNr {
     reg_line_len(rex, lnum, LineOrigin::Submatch)
 }
 
-/// Fill `argv[argskip]` — a ten-item static list — with the submatches, and
+/// Fill `argv[argskip]` — the caller's empty list — with the submatches, and
 /// report how many arguments the call now has.
 ///
-/// This is the `fe_argv_func` a `\=` expression's function is called
-/// through, so it runs before the function body sees its arguments. A
-/// function that does not take a submatches argument gets none: the list
-/// stays as the caller left it, which is what tells [`super::substitute`]
-/// there is nothing to free.
-///
-/// # Safety
-///
-/// `func` must point at a live `UserFunc`, unaliased for the call.
-pub(crate) unsafe fn fill_submatch_list(
-    argv: &[TypVal],
-    argskip: usize,
-    func: *mut UserFunc,
-) -> usize {
-    // `argv[argskip]` holds the caller's own list, which it keeps alive
-    // across the call.
-    let listarg = &argv[argskip];
-    // SAFETY: the caller's promise -- a live function.
-    let declared = unsafe { (*func).uf_args.ga_len };
-    if unsafe { (*func).uf_varargs } == 0 && declared as usize <= argskip {
+/// This is the `argv_func` a `\=` expression's function is called through,
+/// so it runs before the function body sees its arguments. A function that
+/// does not take a submatches argument gets none: the list stays as the
+/// caller left it.
+pub(crate) fn fill_submatch_list(argv: &[TypVal], argskip: usize, func: &UserFunc) -> usize {
+    let body = func.body();
+    if !body.varargs && body.args.len() <= argskip {
         return argskip;
     }
 
-    // The list is the caller's own storage; it starts empty and gets one
-    // item per capture.
-    let list = listarg.list_or_null();
+    // The list is the caller's own; it starts empty and gets one item per
+    // capture.
+    let Some(list) = argv[argskip].list_shared() else {
+        return argskip + 1;
+    };
     // SAFETY: the running string match is the caller's structure.
     let match_ = unsafe { Live::new(Rsm::acquire().match_()) };
-    // SAFETY: the slot holds the caller's list, which nothing else names.
-    let items = unsafe { &mut (*list).lv_items };
+    let items = &mut list.edit().lv_items;
     items.reserve_exact(SL_SIZE);
     // SAFETY: the running string match is the caller's structure.
     let line = unsafe { Rsm::acquire() }.line();

@@ -6,10 +6,7 @@
 //! teardown of `pt_argv`, `pt_dict` and `pt_func`, which lives here with
 //! the rest of the handle.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Two reads through `pt_func`, the user function's raw pointer: its name and
-// its release. They go with that pointer.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,7 +16,7 @@
 )]
 
 use super::*;
-use crate::eval::userfunc::{func_ptr_unref, func_unref_name, uf_name_ptr};
+use crate::eval::userfunc::{func_ptr_unref, func_unref_name};
 use crate::types::Refcount;
 use ::core::ffi::CStr;
 
@@ -115,7 +112,7 @@ impl Partial {
         pt_refcount: Refcount::ZERO,
         pt_copy_id: 0,
         pt_name: None,
-        pt_func: ::core::ptr::null_mut(),
+        pt_func: None,
         pt_auto: false,
         pt_argv: Vec::new(),
         pt_dict: None,
@@ -128,13 +125,9 @@ pub(crate) fn partial_name(pt: &Partial) -> &CStr {
     if let Some(name) = &pt.pt_name {
         return name.as_cstr();
     }
-    if pt.pt_func.is_null() {
-        return c"";
-    }
-    // SAFETY: the partial holds a reference to `pt_func`, a live `UserFunc`
-    // whose name is inline, NUL-terminated, and lives as long as it does.
-    // The user function is still a raw pointer (its own slice's).
-    unsafe { CStr::from_ptr(uf_name_ptr(pt.pt_func)) }
+    pt.pt_func
+        .as_ref()
+        .map_or(c"", |func| func.name().as_cstr())
 }
 
 /// Release what the last reference to a partial bound, in upstream's order:
@@ -151,8 +144,11 @@ pub(super) fn partial_free(partial: Partial) {
     drop(pt_dict);
     match pt_name {
         Some(name) => func_unref_name(name.as_cstr()),
-        // SAFETY: the reference the partial held on its function.
-        None => unsafe { func_ptr_unref(pt_func) },
+        None => {
+            if let Some(func) = pt_func {
+                func_ptr_unref(&func);
+            }
+        }
     }
 }
 

@@ -11,18 +11,9 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub type ArgvFunc = Option<unsafe fn(&[TypVal], usize, *mut UserFunc) -> usize>;
+/// Fills in a call's arguments once its user function is known: the
+/// argument slice, how many leading slots to leave, and the function.
+/// Answers how many arguments the call now has.
+pub type ArgvFunc = fn(&[TypVal], usize, &UserFunc) -> usize;
 /// A funccall's place in the funccall table.
 pub(crate) type FcId = crate::id_table::TableId<FuncCall>;
-#[derive(Copy, Clone)]
-pub struct FuncExe {
-    pub fe_argv_func: ArgvFunc,
-    pub fe_firstline: LineNr,
-    pub fe_lastline: LineNr,
-    pub fe_doesrange: *mut bool,
-    pub fe_evaluate: bool,
-    pub fe_partial: *mut Partial,
-    pub fe_selfdict: *mut Dict,
-    pub fe_basetv: *mut TypVal,
-    pub fe_found_var: bool,
-}

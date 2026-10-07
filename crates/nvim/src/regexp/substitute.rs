@@ -21,7 +21,6 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::eval::typval::CallFrame;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -33,8 +32,9 @@ use super::{
     RegSubMatch, Rex, TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len,
     reg_prev_sub, rsm,
 };
-use crate::eval::typval::{ListRef, NumBuf, TV_INITIAL_VALUE, list_init_static, tv_clear};
-use crate::eval::userfunc::call_func;
+use crate::eval::gc::{RootId, unroot_list};
+use crate::eval::typval::{NumBuf, SL_SIZE, TV_INITIAL_VALUE, tv_clear, tv_list_alloc};
+use crate::eval::userfunc::{CallWith, call_func_with};
 use crate::eval::{eval_to_string, partial_name};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{Ctrl_H, K_SPECIAL};
@@ -48,8 +48,8 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
-    FuncExe, LineNr, List, NUL, Partial, RegMMatch, RegMatch, TypVal, VAR_FUNC, VAR_PARTIAL,
-    VAR_UNKNOWN, uint8_t,
+    LineNr, NUL, RegMMatch, RegMatch, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VarLock,
+    ptrdiff_t, uint8_t,
 };
 use crate::winlayer::Live;
 use ::libc::strcpy;
@@ -87,19 +87,6 @@ fn stash(nested: usize, text: *mut c_char) {
 /// means the two passes disagreed, which is a bug here rather than in the
 /// user's pattern.
 const E_NOT_ENOUGH_SPACE: &CStr = c"vim_regsub_both(): not enough space";
-
-/// A `FuncExe` that asks for nothing.
-const FUNCEXE_INIT: FuncExe = FuncExe {
-    fe_argv_func: None,
-    fe_firstline: 0,
-    fe_lastline: 0,
-    fe_doesrange: core::ptr::null_mut(),
-    fe_evaluate: false,
-    fe_partial: core::ptr::null_mut(),
-    fe_selfdict: core::ptr::null_mut(),
-    fe_basetv: core::ptr::null_mut(),
-    fe_found_var: false,
-};
 
 /// The case hook `\u`, `\U`, `\l` and `\L` install for the rest of a
 /// replacement.
@@ -572,7 +559,7 @@ unsafe fn eval_replacement(
             let expr = XString::from_cstr(unsafe { CStr::from_ptr(source.offset(2)) });
             eval_to_string(&expr, true, false).map_or(core::ptr::null_mut(), XString::into_raw)
         }
-        Some(expr) => unsafe { call_replacement(expr) },
+        Some(expr) => call_replacement(expr),
     };
     NESTING.set(nested as c_int);
 
@@ -597,47 +584,37 @@ unsafe fn eval_replacement(
 /// Call `expr` — a funcref or a partial — with the submatches as its one
 /// argument, and return its result as an allocated string. Null when the
 /// call failed, which has already reported itself.
-///
-/// # Safety
-///
-/// `expr` must point at an initialized typval, unaliased for the call.
-unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
-    // SAFETY: `expr` is the caller's live callable.
-    // `fill_submatch_list` fills this in place if the function takes an
-    // argument at all, so it must outlive the call.
-    // The list is this frame's own storage, and drops its items with it.
-    let mut match_list = List::empty();
-    // SAFETY: this frame's own storage, holding no list yet.
-    unsafe { list_init_static(&raw mut match_list) };
-    // The slot names the list without owning it, which is what `naming`
-    // says.
-    // SAFETY: this frame's own list, which outlives the call.
-    let names_it = unsafe { ListRef::owning(&raw mut match_list) };
-    let argv = CallFrame::naming([TypVal::list(names_it)]);
+fn call_replacement(expr: &TypVal) -> *mut c_char {
+    // `fill_submatch_list` fills the list in if the function takes an
+    // argument at all. Like upstream's static list it is locked and out of
+    // the collector's registry: this frame owns it.
+    let match_list = tv_list_alloc(ptrdiff_t::try_from(SL_SIZE).unwrap_or(0));
+    {
+        let l = match_list.edit();
+        unroot_list(l.lv_root);
+        l.lv_root = RootId::NONE;
+        l.lv_lock = VarLock::Fixed;
+    }
+    let argv = [TypVal::list(Some(match_list.clone()))];
 
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_string(None);
 
-    let mut funcexe = FUNCEXE_INIT;
-    funcexe.fe_argv_func = Some(fill_submatch_list);
-    funcexe.fe_evaluate = true;
-    let name = if (*expr).v_type() == VAR_FUNC {
-        Some(
-            (*expr)
-                .func_name()
-                .map_or(core::ptr::null(), ThinCString::as_ptr),
-        )
-    } else if (*expr).v_type() == VAR_PARTIAL {
-        let partial: *mut Partial = (*expr).partial_or_null();
-        funcexe.fe_partial = partial;
-        Some((*expr).partial_ref().map_or(c"", partial_name).as_ptr())
+    let mut with = CallWith::new(true);
+    with.argv_func = Some(fill_submatch_list);
+    let name = if expr.v_type() == VAR_FUNC {
+        Some(expr.func_name().map_or(c"", ThinCString::as_cstr))
+    } else if expr.v_type() == VAR_PARTIAL {
+        with.partial = expr.partial_shared();
+        Some(expr.partial_ref().map_or(c"", partial_name))
     } else {
         None
     };
     if let Some(name) = name {
-        let funcexe = &raw mut funcexe;
-        let _ = unsafe { call_func(name, -1, &mut rettv, argv.args(), funcexe) };
+        let _ = call_func_with(name, None, &mut rettv, &argv, with);
     }
+    drop(argv);
+    drop(match_list);
 
     // An unknown return type means the call failed and has already said
     // so; there is no second error to report.

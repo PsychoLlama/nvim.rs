@@ -12,8 +12,9 @@ use crate::cstr;
 use crate::semsg;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::mem::offset_of;
+use core::ptr;
 
 use super::*;
 use crate::eval::typval::DictTab;
@@ -53,6 +54,25 @@ pub unsafe fn list_hashtable_vars(
         {
             unsafe { list_one_var(di, prefix, first) };
         }
+    }
+}
+
+/// The variables in `dict`, each shown with `prefix` in front of its name.
+pub(crate) fn list_dict_vars(
+    dict: &crate::eval::typval::DictRef,
+    prefix: &CStr,
+    empty: bool,
+    first: &mut c_int,
+) {
+    // SAFETY: the dictionary's own table, live for as long as the caller
+    // holds it, a NUL-terminated prefix, and the caller's `first`.
+    unsafe {
+        list_hashtable_vars(
+            ptr::from_mut(&mut dict.edit().dv_hashtab),
+            prefix.as_ptr(),
+            empty,
+            first,
+        )
     }
 }
 

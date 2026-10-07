@@ -24,7 +24,7 @@ use std::ffi::CString;
 use super::*;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::NumBuf;
-use crate::types::{Candidate, Failed, NUL};
+use crate::types::{Candidate, Failed, ItemSlot, NUL};
 
 /// `"<prefix>:<name>"`, as a completion candidate.
 pub(crate) fn cat_prefix_varname(prefix: u8, name: &CStr) -> Candidate {
@@ -452,4 +452,76 @@ pub(crate) fn var_exists(var: &[u8]) -> bool {
         n = false;
     }
     n
+}
+
+/// Find a hashitem in a parent scope, i.e. one a lambda captured.
+///
+/// Moved here from `eval/userfunc`: only the variable lookups ask it.
+///
+/// # Safety
+/// `name` is NUL-terminated and `ht` is writable.
+pub(crate) unsafe fn find_hi_in_scoped_ht(
+    name: *const c_char,
+    ht: *mut *mut DictTab,
+) -> Option<ItemSlot> {
+    if !current_func_has_scope() {
+        return None;
+    }
+    // SAFETY: the caller's NUL-terminated string.
+    let namelen = unsafe { cstr::bytes_at(name) }.len();
+    // Upstream answers the *last* hashitem it looked at, not only a found
+    // one, so a miss still hands back the slot it stopped on.
+    let mut last: Option<ItemSlot> = None;
+    // SAFETY: as above; `varname` is a tail of `name`, so the subtraction
+    // leaves the length of what is left of it. That holds for every
+    // dereference in the probe.
+    let probe = || {
+        let (found, varname) = unsafe { find_var_ht(name, namelen) };
+        let varname = name.wrapping_add(varname);
+        if !found.is_null() && unsafe { *varname } != NUL as c_char {
+            let past = unsafe { varname.offset_from(name) } as size_t;
+            let hi = unsafe { hash_find_len(found, varname, namelen.wrapping_sub(past)) };
+            last = Some(hi);
+            if hi.is_kept() {
+                unsafe { *ht = found };
+                return Some(hi);
+            }
+        }
+        None
+    };
+    walk_scoped_funccals(probe);
+    last
+}
+
+/// Find a variable in a parent scope, i.e. one a lambda captured.
+///
+/// Moved here from `eval/userfunc`: only the variable lookups ask it.
+///
+/// # Safety
+/// `name` has `namelen` readable bytes.
+pub(crate) unsafe fn find_var_in_scoped_ht(
+    name: *const c_char,
+    namelen: size_t,
+    no_autoload: c_int,
+) -> *mut DictItem {
+    if !current_func_has_scope() {
+        return ptr::null_mut();
+    }
+    // SAFETY: `name` has `namelen` readable bytes and `varname` is a tail of
+    // it.
+    let probe = || {
+        let (ht, varname) = unsafe { find_var_ht(name, namelen) };
+        let varname = name.wrapping_add(varname);
+        if !ht.is_null() && unsafe { *varname } != NUL as c_char {
+            let past = unsafe { varname.offset_from(name) } as size_t;
+            let left = namelen.wrapping_sub(past);
+            let first = unsafe { *name } as c_int;
+            let v = unsafe { find_var_in_ht(ht, first, varname, left, no_autoload != 0) };
+            if !v.is_null() {
+                return Some(v);
+            }
+        }
+        None
+    };
+    walk_scoped_funccals(probe).unwrap_or(ptr::null_mut())
 }

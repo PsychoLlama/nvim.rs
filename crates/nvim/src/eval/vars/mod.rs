@@ -28,9 +28,9 @@ use crate::eval::typval::{
     tv_item_lock, tv_list_alloc, value_check_lock,
 };
 use crate::eval::userfunc::{
-    find_hi_in_scoped_ht, find_var_in_scoped_ht, function_exists, get_current_funccal_dict,
-    get_funccal_args_dict, get_funccal_args_ht, get_funccal_args_var, get_funccal_local_dict,
-    get_funccal_local_ht, get_funccal_local_var, list_func_vars,
+    current_func_has_scope, function_exists, get_current_funccal_dict, get_funccal_args_dict,
+    get_funccal_args_ht, get_funccal_args_var, get_funccal_local_dict, get_funccal_local_ht,
+    get_funccal_local_var, list_func_vars, walk_scoped_funccals,
 };
 use crate::eval::window::{find_win_by_nr, restore_win, switch_win};
 use crate::eval::{

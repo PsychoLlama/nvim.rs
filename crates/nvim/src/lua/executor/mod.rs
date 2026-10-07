@@ -25,10 +25,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::lua::ffi::LUA_REFNIL;
-use crate::types::{
-    Dict, FuncExe, LuaRef, LuaRetMode, Partial, TypVal, lua_CFunction, lua_State, uint64_t,
-    uv_thread_t,
-};
+use crate::types::{LuaRef, LuaRetMode, lua_CFunction, lua_State, uint64_t, uv_thread_t};
 
 mod call;
 mod callable;
@@ -127,19 +124,6 @@ pub const MAX_FUNC_ARGS: ::core::ffi::c_uint = 20;
 const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
-
-/// A zeroed `FuncExe`, which `nlua_call` fills.
-pub const FUNCEXE_INIT: FuncExe = FuncExe {
-    fe_argv_func: None,
-    fe_firstline: 0,
-    fe_lastline: 0,
-    fe_doesrange: ::core::ptr::null_mut(),
-    fe_evaluate: false,
-    fe_partial: ::core::ptr::null_mut::<Partial>(),
-    fe_selfdict: ::core::ptr::null_mut::<Dict>(),
-    fe_basetv: ::core::ptr::null_mut::<TypVal>(),
-    fe_found_var: false,
-};
 
 // -- The editor-wide state --------------------------------------------------
 

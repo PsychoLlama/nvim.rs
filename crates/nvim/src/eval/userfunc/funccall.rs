@@ -1,536 +1,546 @@
-//! The FuncCall stack, the function table, and the GC roots.
+//! The funccall's life, the function's life, and the GC roots.
 //!
-//! Three families that all read the same two globals.  `create_funccal` /
-//! `cleanup_function_call` / `funccal_unref` own the funccall's lifetime --
-//! including the case where a closure outlives the call that made it and
-//! the funccall has to be kept alive with it.  `func_ref`/`func_unref` and
-//! the `func_clear*` group own the `UserFunc`'s.  The `set_ref_in_*` group
-//! is what the garbage collector calls to mark everything reachable from a
-//! call in progress, and `find_var_in_scoped_ht` is how a closure body
-//! reaches the `l:` of the call it captured.
+//! `create_funccal` / `cleanup_function_call` / `funccal_unref` own the
+//! funccall's lifetime -- including the case where a closure, an escaped
+//! `l:` or a returned `a:000` outlives the call that made it and the funccall
+//! has to be kept for the collector. `func_ptr_ref`/`func_ptr_unref` and the
+//! `func_clear*` group own a function's editor-visible life: the counts that
+//! decide when it is cleared and taken out of the table. The `set_ref_in_*`
+//! group is what the garbage collector calls to mark everything reachable
+//! from a call in progress.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
-use core::cell::UnsafeCell;
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::{ManuallyDrop, offset_of};
+use core::cell::{Cell, RefCell, UnsafeCell};
+use core::ffi::{CStr, c_int};
+use core::mem::ManuallyDrop;
 use core::ptr;
+use std::rc::{Rc, Weak};
 
 use super::*;
-use crate::eval::typval::{DictRef, ListRef};
-use crate::types::{DictTab, Failed, ItemSlot, NUL, Refcount};
+use crate::eval::gc::{RootId, unroot_dict, unroot_list};
+use crate::eval::typval::{CallFrame, DictRef, ListRef, RemovedItem, tv_dict_alloc, tv_list_alloc};
+use crate::eval::vars::list_dict_vars;
+use crate::hashtab::{HT_INIT_SIZE, hash_reset};
+use crate::types::{DictKey, DictTab, HashItem, Refcount, ScopeDictItem, ScopeType};
 
-/// A handle on the global user-function table.
+/// A funccall's three scopes: `l:`, `a:` and `a:000`, with the entries that
+/// name `l:` and `a:` themselves (what `l:` alone evaluates to).
 ///
-/// It *names* the table rather than borrowing it, so it stays valid across
-/// the callbacks — autocommands, `:function` listings, closures — that add to
-/// and remove from the table while a walk over it is in progress. That is
-/// what `ht_changed` is for, and a `&mut` could not survive it.
-#[derive(Clone, Copy)]
-pub(crate) struct FuncTable(*mut HashTab);
-
-/// The one place the function table's address is taken.
-pub(crate) fn func_table() -> FuncTable {
-    FuncTable(func_hashtab.ptr())
-}
-
-impl FuncTable {
-    /// The address, for the callers outside this family that still take one.
-    pub(crate) fn raw(self) -> *mut HashTab {
-        self.0
-    }
-
-    /// Build the table, once, at startup.
-    pub(crate) fn init(self) {
-        // SAFETY: the only constructor names a `static`, and this runs before
-        // anything reads the table.
-        unsafe { hash_init(self.0) };
-    }
-
-    /// How many live entries the table holds.
-    pub(crate) fn used(self) -> size_t {
-        // SAFETY: the only constructor names a `static`.
-        unsafe { (*self.0).ht_used }
-    }
-
-    /// The slot at `idx`, which is how a walk reads one: an index and not a
-    /// cursor, because a callback may take `&mut` to the table.
-    pub(crate) fn slot(self, idx: usize) -> Slot {
-        // SAFETY: as `used`.
-        unsafe { (*self.0).slot(idx) }
-    }
-
-    /// The generation counter: every add and remove bumps it, so a walk can
-    /// tell that a callback rearranged the table under it.
-    pub(crate) fn changed(self) -> c_int {
-        // SAFETY: as `used`.
-        unsafe { (*self.0).ht_changed }
-    }
-
-    /// The item for `name`, or the empty slot it would go in.
-    ///
-    /// # Safety
-    /// `name` must be a NUL-terminated string.
-    pub(crate) unsafe fn find(self, name: *const c_char) -> Slot {
-        // SAFETY: the caller's key; the table is this crate's `static`.
-        unsafe { hash_find(self.0, name) }
-    }
-
-    /// The item for `name`, measured, or the empty slot it would go in.
-    pub(crate) fn find_bytes(self, name: &[u8]) -> Slot {
-        // SAFETY: `name` is readable for its length; the table is this
-        // crate's `static`.
-        unsafe { hash_find_len(self.0, name.as_ptr().cast(), name.len()) }
-    }
-
-    /// Add `key` — a `UserFunc`'s own `uf_name` — to the table.
-    ///
-    /// # Safety
-    /// `key` must be a NUL-terminated string that outlives the entry.
-    pub(crate) unsafe fn add(self, key: *mut c_char) -> Result<(), Failed> {
-        // SAFETY: the caller's key; the table is this crate's `static`.
-        unsafe { hash_add(self.0, key) }
-    }
-
-    /// Point the entry `hi` at a different key: the function it names has
-    /// been redefined, so the entry stays and the key it holds moves to the
-    /// new `UserFunc`'s own inline name.
-    ///
-    /// # Safety
-    /// `hi` must be a slot of this table and `key` the same name, in
-    /// storage that outlives the entry.
-    pub(crate) unsafe fn set_key(self, hi: Slot, key: *mut c_char) {
-        // SAFETY: the caller's slot and key; the table is this crate's
-        // `static`.
-        unsafe { hash_set_key(self.0, hi, key) };
-    }
-
-    /// Drop the entry `hi`, which must be one this table answered.
-    pub(crate) fn remove(self, hi: Slot) {
-        // SAFETY: the caller's item; the table is this crate's `static`.
-        unsafe { hash_remove(self.0, hi) };
-    }
-}
-
-/// Build the function table, once, at startup.
-pub fn func_init() {
-    func_table().init();
-}
-
-/// The function table itself, for the callers outside this family.
-pub(crate) fn func_tbl_get() -> *mut HashTab {
-    func_table().raw()
-}
-
-/// The functions a funccall registered as closures over it.
+/// Upstream embedded all three in the funccall, seeded with
+/// `DO_NOT_FREE_CNT` so that nothing could free them, and compared the count
+/// against that seed to tell whether one had escaped. Here they are ordinary
+/// dictionaries and a list the funccall holds handles to, carrying the same
+/// seed while a call is using them ([`FrameScopes::activate`]) so the same
+/// comparison works. They are not in the collector's registry, as upstream's
+/// embedded ones were not: a running or parked funccall marks them itself.
 ///
-/// # Safety
-/// `fc` is a live funccall.
-unsafe fn fc_ufuncs(fc: *mut FuncCall) -> *mut [*mut UserFunc] {
-    // SAFETY: the caller's promise -- `fc` is a live funccall, so its
-    // `fc_ufuncs` garray holds `ga_len` initialised function pointers.
-    let ga = unsafe { &raw mut (*fc).fc_ufuncs };
-    let (data, len) = unsafe { ((*ga).ga_data as *mut *mut UserFunc, (*ga).ga_len as usize) };
-    ptr::slice_from_raw_parts_mut(data, len)
+/// A funccall whose scopes nothing else holds gives them back emptied, and
+/// the next call starts from them: a call then allocates nothing for its
+/// scopes, where upstream allocated nothing because it embedded them.
+pub(crate) struct FrameScopes {
+    pub(crate) l_vars: DictRef,
+    /// The entry `l:` evaluates to. It holds a counted reference of its own,
+    /// which `Drop` gives back; vars/ reaches it by address.
+    l_vars_var: UnsafeCell<ScopeDictItem>,
+    pub(crate) a_vars: DictRef,
+    a_vars_var: UnsafeCell<ScopeDictItem>,
+    pub(crate) a_list: ListRef,
+    /// Whether the counts carry the `DO_NOT_FREE_CNT` seed.
+    active: Cell<bool>,
+    /// Emptied entries of earlier calls, for this call's.
+    spare: RefCell<Vec<Box<DictItem>>>,
 }
 
-/// Free the funccall itself, having already dealt with what it holds.
-///
-/// # Safety
-/// `fc` has been through [`cleanup_function_call`] and is off every list.
-unsafe fn free_funccal(fc: *mut FuncCall) {
-    // SAFETY: the caller's promise -- `fc` is a live funccall off every list.
-    let mut frame = unsafe { Fc::new(fc) };
-    for i in 0..frame.fc_ufuncs.ga_len as usize {
-        // SAFETY: `i` is inside the garray `fc_ufuncs` just measured.
-        let fp = unsafe { (*fc_ufuncs(fc))[i] };
-        // When garbage collecting, a FuncCall may be freed before the
-        // function that references it, so clear its `uf_scoped`.  The
-        // function may have been redefined and now point at another
-        // FuncCall; don't clear it then.
-        if !fp.is_null() && unsafe { (*fp).uf_scoped } == fc {
-            unsafe { (*fp).uf_scoped = ptr::null_mut() };
+/// The holders a scope dictionary has besides any escape: the funccall's
+/// handle and the scope's own entry.
+const DICT_HOLDERS: c_int = 2;
+/// The holders `a:000` has besides any escape: the funccall's handle. The
+/// `a:000` entry names it uncounted, as upstream's did.
+const LIST_HOLDERS: c_int = 1;
+
+/// A scope dictionary and the entry that names it.
+fn scope_dict(scope: ScopeType) -> (DictRef, UnsafeCell<ScopeDictItem>) {
+    let dict = tv_dict_alloc();
+    {
+        let d = dict.edit();
+        // Out of the collector's registry: the funccall marks it.
+        unroot_dict(d.dv_root);
+        d.dv_root = RootId::NONE;
+        d.dv_scope = scope;
+    }
+    let entry = ScopeDictItem(ManuallyDrop::new(DictItem {
+        di_tv: TypVal::dict(Some(dict.clone())),
+        di_lock: VarLock::Fixed,
+        di_flags: DI_FLAGS_RO | DI_FLAGS_FIX,
+        di_key: DictKey::EMPTY,
+    }));
+    (dict, UnsafeCell::new(entry))
+}
+
+impl FrameScopes {
+    /// Fresh scopes.
+    fn new() -> FrameScopes {
+        let (l_vars, l_vars_var) = scope_dict(VAR_DEF_SCOPE);
+        let (a_vars, a_vars_var) = scope_dict(VAR_SCOPE);
+        let a_list = tv_list_alloc(-1);
+        {
+            let l = a_list.edit();
+            unroot_list(l.lv_root);
+            l.lv_root = RootId::NONE;
+        }
+        FrameScopes {
+            l_vars,
+            l_vars_var,
+            a_vars,
+            a_vars_var,
+            a_list,
+            active: Cell::new(false),
+            spare: RefCell::new(Vec::new()),
         }
     }
-    // SAFETY: as above -- the garray and the function are this call's own.
-    unsafe { ga_clear(&raw mut (*fc).fc_ufuncs) };
 
-    // The reference `create_funccal` took.  This is the *only* place it
-    // is given back, which is why a funccall parked for the garbage
-    // collector keeps its function undeletable until then.
-    // SAFETY: as above -- the function is this call's own.
-    unsafe { func_ptr_unref(frame.fc_func) };
-    // The `a:000` array's own allocation: the table runs no destructor.
-    drop(core::mem::take(&mut frame.fc_l_varlist.lv_items));
-    release_funccal(frame.fc_id.expect("a funccall in the table"));
-}
-
-/// Free `fc` and everything in it.  Only for a funccall that was kept beyond
-/// its call, i.e. after [`cleanup_function_call`] has run on it.
-///
-/// # Safety
-/// `fc` is a parked funccall, already taken off the parked list.
-unsafe fn free_funccal_contents(fc: *mut FuncCall) {
-    // All l: variables, then all a: variables, then the a:000 items.
-    // SAFETY: the caller's promise -- `fc` is a parked funccall, so the two
-    // scope hashtables and the `a:000` list are its own and unreferenced.
-    unsafe { vars_clear(&raw mut (*fc).fc_l_vars.dv_hashtab) };
-    unsafe { vars_clear(&raw mut (*fc).fc_l_avars.dv_hashtab) };
-    for li in list_iter_mut(unsafe { Some(&mut (*fc).fc_l_varlist) }) {
-        tv_clear(&mut li.li_tv);
+    /// Seed the counts for a call: from here until the call is done a count
+    /// other than `DO_NOT_FREE_CNT` means something else holds the scope.
+    fn activate(&self) {
+        for dict in [&self.l_vars, &self.a_vars] {
+            let d = dict.edit();
+            d.dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
+            d.dv_lock = VarLock::Unlocked;
+            d.dv_copy_id = 0;
+        }
+        let l = self.a_list.edit();
+        l.lv_refcount = Refcount::new(DO_NOT_FREE_CNT);
+        l.lv_lock = VarLock::Fixed;
+        l.lv_copy_id = 0;
+        self.active.set(true);
     }
-    unsafe { free_funccal(fc) };
+
+    /// Give the seed back: what is left is the holders and any escape.
+    fn deactivate(&self) {
+        if !self.active.replace(false) {
+            return;
+        }
+        for dict in [&self.l_vars, &self.a_vars] {
+            dict.edit()
+                .dv_refcount
+                .release_many(DO_NOT_FREE_CNT - DICT_HOLDERS);
+        }
+        self.a_list
+            .edit()
+            .lv_refcount
+            .release_many(DO_NOT_FREE_CNT - LIST_HOLDERS);
+    }
+
+    /// Whether anything besides the funccall holds one of the three.
+    fn referenced(&self) -> bool {
+        self.a_list.lv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+            || self.l_vars.dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+            || self.a_vars.dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+    }
+
+    /// Whether these can start another call: nothing else holds them, and
+    /// no Lua table mirrors them.
+    fn reusable(&self) -> bool {
+        self.l_vars.dv_refcount == Refcount::new(DICT_HOLDERS)
+            && self.a_vars.dv_refcount == Refcount::new(DICT_HOLDERS)
+            && self.a_list.lv_refcount == Refcount::new(LIST_HOLDERS)
+            && self.l_vars.lua_table_ref == LUA_NOREF
+            && self.a_vars.lua_table_ref == LUA_NOREF
+            && self.a_list.lua_table_ref == LUA_NOREF
+            && self.l_vars.watchers.is_empty()
+            && self.a_vars.watchers.is_empty()
+    }
+
+    /// An entry for one of the scopes: read-only, holding `value` under
+    /// `key`, built in an emptied one when there is one.
+    pub(crate) fn entry(&self, key: &[u8], value: TypVal, lock: VarLock) -> Box<DictItem> {
+        let alloc = u8::try_from(crate::eval::typval::DI_FLAGS_ALLOC).expect("a flag byte");
+        let flags = alloc | DI_FLAGS_RO | DI_FLAGS_FIX;
+        match self.spare.borrow_mut().pop() {
+            Some(mut item) => {
+                item.di_key = DictKey::new(key);
+                item.di_flags = flags;
+                item.di_lock = lock;
+                item.di_tv = value;
+                item
+            }
+            None => {
+                let mut item = DictItem::boxed(key);
+                item.di_flags = flags;
+                item.di_lock = lock;
+                item.di_tv = value;
+                item
+            }
+        }
+    }
+
+    /// The entry `l:` evaluates to, by address, for vars/.
+    pub(crate) fn l_vars_var(&self) -> *mut DictItem {
+        self.l_vars_var.get().cast()
+    }
+
+    /// The entry `a:` evaluates to, by address, for vars/.
+    pub(crate) fn a_vars_var(&self) -> *mut DictItem {
+        self.a_vars_var.get().cast()
+    }
 }
 
-/// The last part of returning from a function: free the local hashtable,
-/// unless a closure, a returned `a:000` or an escaped `l:` is still using it.
-///
-/// # Safety
-/// `fc` is the funccall that has just finished, and is the current one.
-pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
-    let mut free_fc = true;
-    // SAFETY: the caller's promise -- `fc` is the funccall that has just
-    // finished, and every scope below is its own.
-    let mut frame = unsafe { Fc::new(fc) };
-    let may_free_fc = frame.fc_refcount <= Refcount::ZERO;
-    let id = frame.fc_id.expect("a funccall in the table");
-    set_current_fc(id.caller());
+impl Drop for FrameScopes {
+    fn drop(&mut self) {
+        self.deactivate();
+        // The two scope entries' own references.
+        for entry in [&mut self.l_vars_var, &mut self.a_vars_var] {
+            drop(entry.get_mut().0.di_tv.take());
+        }
+    }
+}
 
+/// Empty `dict`, slot by slot, releasing each value -- or, when the values
+/// are only named (an `a:` item names the caller's argument), giving each up
+/// unreleased. Upstream's `vars_clear_ext`. The emptied items are kept in
+/// `spare` for the next call's entries.
+fn clear_scope(dict: &DictRef, release_values: bool, spare: &RefCell<Vec<Box<DictItem>>>) {
+    if dict.dv_hashtab.ht_used == 0 {
+        return;
+    }
+    dict.edit().lock_table();
+    let mut slot = 0;
+    while dict.dv_hashtab.ht_used > 0 && slot < dict.dv_hashtab.size() {
+        if dict.dv_hashtab.slots()[slot].is_kept() {
+            let removed = dict.edit().remove_at(slot);
+            // Released with the borrow of the dictionary over: a value can
+            // name the dictionary it was in.
+            let mut value = match removed {
+                RemovedItem::Allocated(mut item) => {
+                    let value = item.di_tv.take();
+                    let mut spare = spare.borrow_mut();
+                    if spare.len() < SPARE_ITEMS {
+                        spare.push(item);
+                    }
+                    value
+                }
+                RemovedItem::Embedded(value) => value,
+            };
+            if !release_values {
+                value.disown();
+            }
+            drop(value);
+        }
+        slot += 1;
+    }
+    dict.edit().unlock_table();
+    let table = &mut dict.edit().dv_hashtab;
+    if table.size() == HT_INIT_SIZE {
+        // Upstream's `hash_clear` + `hash_init`, without building a new
+        // table to move over this one: the initial slots, emptied.
+        table.slots_mut().fill(HashItem::EMPTY);
+        table.ht_used = 0;
+        table.ht_filled = 0;
+        table.ht_changed = 0;
+        table.ht_locked = 0;
+    } else {
+        hash_reset(table);
+    }
+}
+
+/// How many emptied entries a set of scopes keeps for its next call.
+const SPARE_ITEMS: usize = 24;
+
+/// Empty `a:000`, giving the named items up unreleased.
+fn disown_list(list: &ListRef) {
+    list.edit().disown_items();
+}
+
+/// Free the funccall itself, having already dealt with what its scopes hold.
+fn free_funccal(frame: &FuncCall) {
+    // When garbage collecting, a funccall may be freed before the function
+    // that references it, so clear the functions' scope. A function that
+    // was redefined since may point at another funccall; leave it then.
+    for func in frame.ufuncs.take() {
+        if let Some(func) = func.upgrade()
+            && func.scoped.get() == Some(frame.id)
+        {
+            func.scoped.set(None);
+        }
+    }
+    // The reference `create_funccal` took. This is the *only* place it is
+    // given back, which is why a funccall parked for the collector keeps its
+    // function undeletable until then.
+    func_ptr_unref(&frame.func);
+    drop(release_funccal(frame.id));
+}
+
+/// Free a parked funccall and everything in it, once it is off the parked
+/// list.
+fn free_funccal_contents(frame: &FuncCall) {
+    // All l: variables, then all a: variables, then the a:000 items.
+    clear_scope(&frame.scopes.l_vars, true, &frame.scopes.spare);
+    clear_scope(&frame.scopes.a_vars, true, &frame.scopes.spare);
+    frame.scopes.a_list.edit().lv_items.clear();
+    free_funccal(frame);
+}
+
+/// The last part of returning from a function: free the local scopes,
+/// unless a closure, a returned `a:000` or an escaped `l:` is still using
+/// them. Answers the scopes for the next call when they can be reused.
+pub(crate) fn cleanup_function_call(frame: Rc<FuncCall>) {
+    let scopes = &frame.scopes;
+    let may_free_fc = frame.refcount.get() <= 0;
+    set_current_fc(frame.id.caller());
+
+    let mut free_fc = true;
     // Free all l: variables if not referred to.
-    if may_free_fc && frame.fc_l_vars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
-        unsafe { vars_clear(&raw mut (*fc).fc_l_vars.dv_hashtab) };
+    if may_free_fc && scopes.l_vars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
+        clear_scope(&scopes.l_vars, true, &scopes.spare);
     } else {
         free_fc = false;
     }
 
     // If the a:000 list and the l: and a: dicts are not referenced and no
-    // closure is using them, the FuncCall and what is in it can go.
-    if may_free_fc && frame.fc_l_avars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
-        unsafe { vars_clear_ext(&raw mut (*fc).fc_l_avars.dv_hashtab, false) };
+    // closure is using them, the funccall and what is in it can go.
+    if may_free_fc && scopes.a_vars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
+        clear_scope(&scopes.a_vars, false, &scopes.spare);
     } else {
         free_fc = false;
         // Make a copy of the a: variables, since that was not done above.
-        // SAFETY: as above -- the `a:` dictionary is this funccall's own.
-        for hi in unsafe { tv_ht_iter(&raw const (*fc).fc_l_avars.dv_hashtab) } {
-            let di = tv_dict_hi2di(hi);
-            // The copy is taken before the slot is borrowed to hold it.
-            let owned = unsafe { (*di).di_tv.clone() };
-            unsafe { (*di).di_tv.overwrite(owned) };
+        let d = scopes.a_vars.edit();
+        for item in d.items_mut() {
+            let owned = item.di_tv.clone();
+            item.di_tv.overwrite(owned);
         }
     }
 
-    if may_free_fc && frame.fc_l_varlist.lv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
-        frame.fc_l_varlist.disown_items();
+    if may_free_fc && scopes.a_list.lv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
+        disown_list(&scopes.a_list);
     } else {
         free_fc = false;
         // Make a copy of the a:000 items, since that was not done above.
-        frame.fc_l_varlist.own_items();
+        scopes.a_list.edit().own_items();
     }
 
     if free_fc {
-        unsafe { free_funccal(fc) };
+        free_funccal(&frame);
+        frame.scopes.deactivate();
+        if Rc::strong_count(&frame) == 1
+            && Rc::weak_count(&frame) == 0
+            && frame.scopes.reusable()
+            && frame.defer.borrow().is_empty()
+            && frame.ufuncs.borrow().is_empty()
+        {
+            give_spare_funccal(frame);
+        }
         return;
     }
 
-    // "fc" is still in use.  This happens when returning "a:000",
-    // assigning "l:" to a global variable, or defining a closure.  Link
-    // it into the list for garbage collection later.
+    // The funccall is still in use. This happens when returning "a:000",
+    // assigning "l:" to a global variable, or defining a closure. Keep it
+    // for the collector to free later.
     static made_copy: GlobalCell<c_int> = GlobalCell::new(0);
-    park_funccal(id);
+    park_funccal(frame.id);
 
     if want_garbage_collect.get() {
         // The collector is ready anyway; clear the count.
         made_copy.set(0);
     } else {
         made_copy.set(made_copy.get() + 1);
-        if made_copy.get() >= (4096 * 1024 / size_of::<FuncCall>()) as c_int {
-            // Four megabytes' worth of copies, which happens when a
-            // function that references itself is called repeatedly.  Ask
-            // for a collection soon rather than grow without bound.
+        if made_copy.get()
+            >= c_int::try_from(4096 * 1024 / size_of::<FuncCall>()).unwrap_or(c_int::MAX)
+        {
+            // Four megabytes' worth of copies, which happens when a function
+            // that references itself is called repeatedly. Ask for a
+            // collection soon rather than grow without bound.
             made_copy.set(0);
             want_garbage_collect.set(true);
         }
     }
 }
 
-/// Drop a reference to `fc` and free it when the last one goes.  `func` is
-/// detached from it either way.
-///
-/// # Safety
-/// `fc` is null or a live funccall; `func` is a live function.
-pub(crate) unsafe fn funccal_unref(fc: *mut FuncCall, func: *mut UserFunc, force: bool) {
-    if fc.is_null() {
+/// Drop a reference to the funccall `scope` names and free it when the last
+/// one goes. `func` lets go of it either way.
+pub(crate) fn funccal_unref(scope: Option<FcId>, func: &UserFunc, force: bool) {
+    let Some(frame) = scope.and_then(FcId::try_funccall) else {
         return;
-    }
-
-    // SAFETY: the caller's promise, and `fc` is not null.
-    let left = unsafe { (*fc).fc_refcount.release() };
+    };
+    let left = frame.refcount.get() - 1;
+    frame.refcount.set(left);
     let unused = if force {
         left <= 0
     } else {
-        unsafe { !fc_referenced(fc) }
+        !fc_referenced(&frame)
     };
-    if unused && unsafe { unlink_parked_funccals(Sweep::First, |parked| parked == fc) } {
+    if unused && unlink_parked_funccals(Sweep::First, |parked| parked.id == frame.id) {
         return;
     }
-    // SAFETY: as above -- the closure array is this funccall's own.
-    for slot in unsafe { (*fc_ufuncs(fc)).iter_mut() } {
-        if *slot == func {
-            *slot = ptr::null_mut();
+    for slot in frame.ufuncs.borrow_mut().iter_mut() {
+        if ptr::eq(slot.as_ptr(), func) {
+            *slot = Weak::new();
         }
     }
 }
 
-/// Take the function out of the function hashtable.  Answers whether it was
-/// there: a function deleted while it still had references is already gone.
-///
-/// # Safety
-/// `func` is a live function.
-pub(crate) unsafe fn func_remove(func: *mut UserFunc) -> bool {
-    // SAFETY: the caller's promise -- `func` is a live function, so its
-    // inline name is the key it was added under.
-    let hi = unsafe { func_table().find(uf_name_ptr(func)) };
-    if !hi.is_kept() {
-        return false;
-    }
-    func_table().remove(hi);
-    true
-}
-
-/// Free everything hanging off `func` -- its argument names, its defaults, its
+/// Free everything hanging off `func` -- its arguments, its defaults, its
 /// body, its Lua reference and its profiling counters.
-///
-/// # Safety
-/// `func` is a live function.
-pub(crate) unsafe fn func_clear_items(func: *mut UserFunc) {
-    // SAFETY: the caller's promise -- `func` is a live function, so the three
-    // garrays, the Lua reference and the three counters are all its own.
-    let mut f = unsafe { Uf::new(func) };
-    unsafe { ga_clear_strings(&raw mut (*func).uf_args) };
-    unsafe { ga_clear_strings(&raw mut (*func).uf_def_args) };
-    unsafe { ga_clear_strings(&raw mut (*func).uf_lines) };
-
-    if f.uf_flags.has(FuncFlags::LUAREF) {
-        unsafe { api_free_luaref(f.uf_luaref) };
-        f.uf_luaref = LUA_NOREF as LuaRef;
+pub(crate) fn func_clear_items(func: &UserFunc) {
+    *func.body.borrow_mut() = Rc::new(FuncBody::default());
+    if func.has_flag(FuncFlags::LUAREF) {
+        release_luaref(func.luaref.replace(LUA_NOREF));
     }
-    // Addresses, not reads: `field_ptr` is the object's address plus a
-    // constant, so naming the three counters needs no dereference.
-    let counters: [*mut *mut c_void; 3] = [
-        f.field_ptr(offset_of!(UserFunc, uf_tml_count)),
-        f.field_ptr(offset_of!(UserFunc, uf_tml_total)),
-        f.field_ptr(offset_of!(UserFunc, uf_tml_self)),
-    ];
-    for counter in counters {
-        unsafe { xfree(*counter) };
-        unsafe { *counter = ptr::null_mut() };
-    }
+    let mut prof = func.prof.borrow_mut();
+    prof.tml_count = Vec::new();
+    prof.tml_total = Vec::new();
+    prof.tml_self = Vec::new();
 }
 
 /// Free everything `func` holds, once.
-///
-/// # Safety
-/// `func` is a live function.
-unsafe fn func_clear(func: *mut UserFunc, force: bool) {
-    // SAFETY: the caller's promise -- `func` is a live function.
-    let mut f = unsafe { Uf::new(func) };
-    if f.uf_cleared {
+fn func_clear(func: &UserFunc, force: bool) {
+    if func.cleared.replace(true) {
         return;
     }
-    f.uf_cleared = true;
-    unsafe { func_clear_items(func) };
+    func_clear_items(func);
     // Drop the reference on the scope this function closed over.
-    unsafe { funccal_unref(f.uf_scoped, func, force) };
+    funccal_unref(func.scoped.get(), func, force);
 }
 
-/// Free `func` itself, having already cleared what it holds.
-///
-/// # Safety
-/// `func` has been through [`func_clear`].
-unsafe fn func_free(func: *mut UserFunc) {
-    // SAFETY: the caller's promise -- `func` has been through `func_clear`.
-    let mut f = unsafe { Uf::new(func) };
-    // Only remove it when not done already, otherwise we would remove a
-    // newer version of the function.
-    if !f.uf_flags.has(FuncFlags::DELETED | FuncFlags::REMOVED) {
-        unsafe { func_remove(func) };
+/// Clear `func` and take it out of the table. What is left of it goes with
+/// its last holder.
+pub(crate) fn func_clear_free(func: &UserFunc, force: bool) {
+    func_clear(func, force);
+    // Only remove it when not done already, otherwise a newer version of the
+    // function would go.
+    if !func.has_flag(FuncFlags::DELETED | FuncFlags::REMOVED) {
+        remove_func(func.name().as_bytes());
     }
-    unsafe { xfree(f.uf_name_exp as *mut c_void) };
-    f.uf_name_exp = ptr::null_mut();
-    unsafe { xfree(func as *mut c_void) };
 }
 
-/// Free a function and everything it holds.
-///
-/// # Safety
-/// `func` is a live function that nothing is running.
-pub(crate) unsafe fn func_clear_free(func: *mut UserFunc, force: bool) {
-    // SAFETY: the caller's promise, handed straight on to both.
-    unsafe { func_clear(func, force) };
-    unsafe { func_free(func) };
-}
-
-/// Start a call of `func`: allocate its funccall, make it the current one, and
-/// take a reference to the function for as long as it lives.
-///
-/// # Safety
-/// `func` is a live function and `result` outlives the call.
-pub unsafe fn create_funccal(func: *mut UserFunc, result: &mut TypVal) -> *mut FuncCall {
-    // What upstream's `xcalloc` hands back, allocated in place: the value is
-    // too big to build on the stack and move. All-zero is a valid value for
-    // every field but `a:000`'s item array, a `Vec`, which is given a real
-    // empty one before the value is read; `call_user_func` initialises the
-    // list properly.
-    let mut fresh = Box::<UnsafeCell<ManuallyDrop<FuncCall>>>::new_zeroed();
-    let at = fresh.as_mut_ptr().cast::<FuncCall>();
-    // SAFETY: a field of the zeroed value, written without reading it; then
-    // every field holds a valid value.
-    let fresh = unsafe {
-        (&raw mut (*at).fc_l_varlist).write(crate::types::List::empty());
-        fresh.assume_init()
-    };
-    let rettv: *mut TypVal = result;
-    let (id, fc) = adopt_funccal(fresh, current_fc_id(), |frame| {
-        frame.fc_func = func;
-        frame.fc_rettv = rettv;
+/// Start a call of `func`: file its funccall, make it the current one, and
+/// take a counted reference to the function for as long as the funccall
+/// lives.
+pub(crate) fn create_funccal(func: &Rc<UserFunc>) -> Rc<FuncCall> {
+    let spare = take_spare_funccal();
+    let level = ex_nesting_level.get();
+    let frame = adopt_funccal(current_fc_id(), |id| match spare {
+        Some(mut frame) => {
+            // Built in place: the funccall's fields are reset, its emptied
+            // scopes kept.
+            let reused = Rc::get_mut(&mut frame).expect("a spare funccall is unshared");
+            reused.func = func.clone();
+            reused.id = id;
+            reused.level = level;
+            reused.linenr.set(0);
+            reused.returned.set(false);
+            reused.breakpoint.set(0);
+            reused.dbg_tick.set(0);
+            reused.prof_child.set(0);
+            reused.refcount.set(0);
+            reused.copy_id.set(0);
+            reused.scopes.activate();
+            frame
+        }
+        None => {
+            let scopes = FrameScopes::new();
+            scopes.activate();
+            Rc::new(FuncCall {
+                func: func.clone(),
+                scopes,
+                linenr: Cell::new(0),
+                returned: Cell::new(false),
+                rettv: RefCell::new(TypVal::Unknown),
+                breakpoint: Cell::new(0),
+                dbg_tick: Cell::new(0),
+                level,
+                defer: RefCell::new(Vec::new()),
+                prof_child: Cell::new(0),
+                id,
+                refcount: Cell::new(0),
+                copy_id: Cell::new(0),
+                ufuncs: RefCell::new(Vec::new()),
+            })
+        }
     });
-    set_current_fc(Some(id));
-    // SAFETY: the caller's promise -- `func` is live.
-    unsafe { func_ptr_ref(func) };
-    fc
-}
-
-/// The call in progress, or null.
-pub(crate) fn get_current_funccal() -> *mut FuncCall {
-    current_fc()
+    set_current_fc(Some(frame.id));
+    func_ptr_ref(func);
+    frame
 }
 
 /// Drop a reference held by *name*, which only the numbered functions and
 /// the lambdas have.
-///
-/// # Safety
-/// `name` is null or NUL-terminated.
-pub unsafe fn func_unref(name: *mut c_char) {
-    // SAFETY: the caller's promise -- `name` is null or NUL-terminated.
-    if let Some(name) = unsafe { cstr::at_opt(name) } {
-        func_unref_name(name);
-    }
-}
-
-/// [`func_unref`] for a name the caller holds as a `&CStr`.
 pub(crate) fn func_unref_name(name: &CStr) {
     let name = name.to_bytes();
     if !func_name_refcount(name) {
         return;
     }
-    let fp = find_func(name);
-    if fp.is_null() && name.first().is_some_and(u8::is_ascii_digit) {
+    match find_func(name) {
+        Some(func) => func_ptr_unref(&func),
         // Only give an error for a numbered function.
-        internal_error(c"func_unref()");
-        unsafe { abort() };
+        None if name.first().is_some_and(u8::is_ascii_digit) => {
+            internal_error(c"func_unref()");
+            std::process::abort();
+        }
+        None => {}
     }
-    // SAFETY: null, or a function the table holds.
-    unsafe { func_ptr_unref(fp) };
 }
 
-/// Drop a reference and free the function when the last one goes.
-///
-/// # Safety
-/// `func` is null or a live function.
-pub unsafe fn func_ptr_unref(func: *mut UserFunc) {
-    if func.is_null() {
-        return;
-    }
-    // SAFETY: the caller's promise, and `func` is not null.
-    let mut f = unsafe { Uf::new(func) };
-    f.uf_refcount.release();
-    // Only delete it when it is not running; otherwise that is done when
-    // `uf_calls` reaches zero.
-    if f.uf_refcount <= Refcount::ZERO && f.uf_calls == 0 {
-        unsafe { func_clear_free(func, false) };
+/// Drop a counted reference and clear the function when the last one goes.
+pub(crate) fn func_ptr_unref(func: &UserFunc) {
+    // Only clear it when it is not running; otherwise that is done when
+    // `calls` reaches zero.
+    if func.release() <= 0 && func.calls.get() == 0 {
+        func_clear_free(func, false);
     }
 }
 
 /// Count a reference held by *name*.
-///
-/// # Safety
-/// `name` is null or NUL-terminated.
-pub unsafe fn func_ref(name: *mut c_char) {
-    // SAFETY: the caller's promise -- `name` is null or NUL-terminated.
-    if let Some(name) = unsafe { cstr::at_opt(name) } {
-        func_ref_name(name);
-    }
-}
-
-/// [`func_ref`] for a name the caller holds as a `&CStr`.
 pub(crate) fn func_ref_name(name: &CStr) {
     let name = name.to_bytes();
     if !func_name_refcount(name) {
         return;
     }
-    let fp = find_func(name);
-    if !fp.is_null() {
-        // SAFETY: a function the table holds.
-        unsafe { (*fp).uf_refcount.retain() };
-    } else if name.first().is_some_and(u8::is_ascii_digit) {
-        // Only give an error for a numbered function; fail silently when
-        // a named or lambda function isn't found.
-        internal_error(c"func_ref()");
+    match find_func(name) {
+        Some(func) => func.retain(),
+        // Only give an error for a numbered function; fail silently when a
+        // named or lambda function isn't found.
+        None if name.first().is_some_and(u8::is_ascii_digit) => {
+            internal_error(c"func_ref()");
+        }
+        None => {}
     }
 }
 
 /// Count a reference held by pointer.
-///
-/// # Safety
-/// `func` is null or a live function.
-pub unsafe fn func_ptr_ref(func: *mut UserFunc) {
-    if !func.is_null() {
-        // SAFETY: the caller's promise, and `func` is not null.
-        unsafe { (*func).uf_refcount.retain() };
-    }
+pub(crate) fn func_ptr_ref(func: &UserFunc) {
+    func.retain();
 }
 
-/// Whether anything outside `fc` still holds it.
-///
-/// `l:`, `a:` and `a:000` all live inside the FuncCall, so a reference to
-/// any of them is a reference to the whole thing.
-///
-/// # Safety
-/// `fc` is a live funccall.
-unsafe fn fc_referenced(fc: *const FuncCall) -> bool {
-    // SAFETY: the caller's promise -- `fc` is a live funccall.
-    let frame = unsafe { Fc::new(fc.cast_mut()) };
-    frame.fc_l_varlist.lv_refcount != Refcount::new(DO_NOT_FREE_CNT)
-        || frame.fc_l_vars.dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
-        || frame.fc_l_avars.dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
-        || frame.fc_refcount > Refcount::ZERO
+/// Whether anything outside `frame` still holds it.
+fn fc_referenced(frame: &FuncCall) -> bool {
+    frame.scopes.referenced() || frame.refcount.get() > 0
 }
 
-/// Whether nothing in `fc` carries `copy_id`, i.e. nothing in use reaches it.
-///
-/// # Safety
-/// `fc` is a live funccall.
-unsafe fn can_free_funccal(fc: *mut FuncCall, copy_id: c_int) -> bool {
-    // SAFETY: the caller's promise -- `fc` is a live funccall.
-    let frame = unsafe { Fc::new(fc) };
-    frame.fc_l_varlist.lv_copy_id != copy_id
-        && frame.fc_l_vars.dv_copy_id != copy_id
-        && frame.fc_l_avars.dv_copy_id != copy_id
-        && frame.fc_copy_id != copy_id
+/// Whether nothing in `frame` carries `copy_id`, i.e. nothing in use reaches
+/// it.
+fn can_free_funccal(frame: &FuncCall, copy_id: c_int) -> bool {
+    frame.scopes.a_list.lv_copy_id != copy_id
+        && frame.scopes.l_vars.dv_copy_id != copy_id
+        && frame.scopes.a_vars.dv_copy_id != copy_id
+        && frame.copy_id.get() != copy_id
 }
 
-/// Free every parked funccall the garbage collector did not reach.  This is
+/// Free every parked funccall the garbage collector did not reach. This is
 /// what finally gives back the reference `create_funccal` took.
 pub fn free_unref_funccal(copy_id: c_int, testing: c_int) -> bool {
-    // SAFETY: the collector's own mark, and the parked list is this module's.
-    let did_free =
-        unsafe { unlink_parked_funccals(Sweep::All, |fc| can_free_funccal(fc, copy_id)) };
+    let did_free = unlink_parked_funccals(Sweep::All, |frame| can_free_funccal(frame, copy_id));
     if did_free {
-        // Freeing a funccal may have made more items collectable.
+        // Freeing a funccall may have made more items collectable.
         garbage_collect(testing != 0);
     }
     did_free
@@ -538,11 +548,10 @@ pub fn free_unref_funccal(copy_id: c_int, testing: c_int) -> bool {
 
 /// How far a walk of the parked list goes.
 enum Sweep {
-    /// Stop as soon as one node has been freed. `funccal_unref` is looking
-    /// for one specific funccall, and the C returns from the loop the moment
-    /// it finds it.
+    /// Stop as soon as one has been freed: `funccal_unref` is looking for
+    /// one specific funccall.
     First,
-    /// Walk the whole list: the collector frees every node it can.
+    /// Walk the whole list: the collector frees every one it can.
     All,
 }
 
@@ -556,25 +565,17 @@ enum Sweep {
 /// last funccall it *kept* and asks for the one after it; should that one
 /// have gone meanwhile, it starts again from the newest, which only asks
 /// `doomed` again about funccalls it already kept.
-///
-/// # Safety
-/// `doomed` may dereference what it is handed: every parked funccall is
-/// live, which is the list's own invariant.
-unsafe fn unlink_parked_funccals(
-    stop: Sweep,
-    mut doomed: impl FnMut(*mut FuncCall) -> bool,
-) -> bool {
+fn unlink_parked_funccals(stop: Sweep, mut doomed: impl FnMut(&FuncCall) -> bool) -> bool {
     let mut freed = false;
     let mut kept = None;
     while let Some(id) = parked_after(kept) {
-        let fc = id.funccall();
-        if !doomed(fc) {
+        let frame = id.funccall();
+        if !doomed(&frame) {
             kept = Some(id);
             continue;
         }
         unpark_funccal(id);
-        // SAFETY: unparked above, so nothing reaches it any more.
-        unsafe { free_funccal_contents(fc) };
+        free_funccal_contents(&frame);
         freed = true;
         if matches!(stop, Sweep::First) {
             break;
@@ -584,15 +585,8 @@ unsafe fn unlink_parked_funccals(
 }
 
 /// The funccall the debugger is looking at, which `:backtrace` moves.
-pub fn get_funccal() -> *mut FuncCall {
-    // Every variable lookup lands here; without a backtrace level it is the
-    // call in progress, which is one load.
-    if debug_backtrace_level.get() == 0 {
-        return current_fc();
-    }
-    let Some(mut funccal) = current_fc_id() else {
-        return ptr::null_mut();
-    };
+pub fn get_funccal() -> Option<Rc<FuncCall>> {
+    let mut funccal = current_fc_id()?;
     // The bound is re-read every step on purpose: the overflow arm below
     // lowers it, and that is what ends the walk.
     let mut i = 0;
@@ -605,113 +599,77 @@ pub fn get_funccal() -> *mut FuncCall {
         }
         i += 1;
     }
-    funccal.funccall()
+    Some(funccal.funccall())
 }
 
-/// Whether there is a `l:` scope to read at all.
-fn have_funccal_scope() -> bool {
-    let fc = current_fc();
-    // SAFETY: null or the live call in progress.
-    !fc.is_null() && unsafe { (*fc).fc_l_vars.dv_refcount } != Refcount::ZERO
+/// Run `f` on the funccall whose scopes a variable lookup sees: the call in
+/// progress, or the one `:backtrace` moved to.
+fn with_scope_funccal<R>(f: impl FnOnce(&FuncCall) -> R) -> Option<R> {
+    // Every variable lookup lands here; without a backtrace level it is the
+    // call in progress, read without a reference.
+    if debug_backtrace_level.get() == 0 {
+        with_current_fc(|frame| frame.map(f))
+    } else {
+        current_fc_id()?;
+        get_funccal().map(|frame| f(&frame))
+    }
 }
 
 /// The `l:` scope dictionary, or null when there is no call.
 pub fn get_funccal_local_dict() -> *mut Dict {
-    if !have_funccal_scope() {
-        return ptr::null_mut();
-    }
-    unsafe { &raw mut (*get_funccal()).fc_l_vars }
+    with_scope_funccal(|frame| frame.scopes.l_vars.as_ptr()).unwrap_or(ptr::null_mut())
 }
 
 /// The `l:` scope hashtab, or null when there is no call.
 pub fn get_funccal_local_ht() -> *mut DictTab {
-    let d = get_funccal_local_dict();
-    if d.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { &raw mut (*d).dv_hashtab }
-    }
+    with_scope_funccal(|frame| ptr::from_mut(&mut frame.scopes.l_vars.edit().dv_hashtab))
+        .unwrap_or(ptr::null_mut())
 }
 
 /// The `l:` scope variable, or null when there is no call.
 pub fn get_funccal_local_var() -> *mut DictItem {
-    if !have_funccal_scope() {
-        return ptr::null_mut();
-    }
-    unsafe { &raw mut (*get_funccal()).fc_l_vars_var }.cast()
+    with_scope_funccal(|frame| frame.scopes.l_vars_var()).unwrap_or(ptr::null_mut())
 }
 
 /// The `a:` scope dictionary, or null when there is no call.
 pub fn get_funccal_args_dict() -> *mut Dict {
-    if !have_funccal_scope() {
-        return ptr::null_mut();
-    }
-    unsafe { &raw mut (*get_funccal()).fc_l_avars }
+    with_scope_funccal(|frame| frame.scopes.a_vars.as_ptr()).unwrap_or(ptr::null_mut())
 }
 
 /// The `a:` scope hashtab, or null when there is no call.
 pub fn get_funccal_args_ht() -> *mut DictTab {
-    let d = get_funccal_args_dict();
-    if d.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { &raw mut (*d).dv_hashtab }
-    }
+    with_scope_funccal(|frame| ptr::from_mut(&mut frame.scopes.a_vars.edit().dv_hashtab))
+        .unwrap_or(ptr::null_mut())
 }
 
 /// The `a:` scope variable, or null when there is no call.
 pub fn get_funccal_args_var() -> *mut DictItem {
-    if !have_funccal_scope() {
-        return ptr::null_mut();
-    }
-    unsafe { &raw mut (*get_funccal()).fc_l_avars_var }.cast()
+    with_scope_funccal(|frame| frame.scopes.a_vars_var()).unwrap_or(ptr::null_mut())
 }
 
 /// List the `l:` variables, when there is a function running.
 pub fn list_func_vars(first: &mut c_int) {
-    let fc = current_fc();
-    if fc.is_null() {
-        return;
-    }
-    // SAFETY: the current funccall is the live call in progress, and `first` is
-    // the caller's own.
-    let frame = unsafe { Fc::new(fc) };
-    if frame.fc_l_vars.dv_refcount > Refcount::ZERO {
-        let ht = unsafe { &raw mut (*fc).fc_l_vars.dv_hashtab };
-        unsafe { list_hashtable_vars(ht, c"l:".as_ptr(), false, first) };
+    if let Some(frame) = current_fc() {
+        list_dict_vars(&frame.scopes.l_vars, c"l:", false, first);
     }
 }
 
 /// The dictionary `ht` belongs to, when `ht` is the current `l:`.
-///
-/// # Safety
-/// `ht` is a live hashtab.
-pub(crate) unsafe fn get_current_funccal_dict(ht: *mut DictTab) -> *mut Dict {
-    let fc = current_fc();
-    if fc.is_null() {
-        return ptr::null_mut();
-    }
-    // SAFETY: the current funccall is the live call in progress; both are the
-    // addresses of its fields, taken without reading the object.
-    if ht == unsafe { &raw mut (*fc).fc_l_vars.dv_hashtab } {
-        return unsafe { &raw mut (*fc).fc_l_vars };
-    }
-    ptr::null_mut()
+pub(crate) fn get_current_funccal_dict(ht: *mut DictTab) -> *mut Dict {
+    with_current_fc(|frame| {
+        frame
+            .filter(|frame| ptr::eq(ht, &raw const frame.scopes.l_vars.dv_hashtab))
+            .map_or(ptr::null_mut(), |frame| frame.scopes.l_vars.as_ptr())
+    })
 }
 
 /// Walk the chain of captured scopes a closure body can see, running `probe`
 /// on each in turn with it made the current call, and stop at the first
 /// that answers.
-fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Option<T> {
-    // The id of the scope a live call's function closed over: a live
-    // funccall, kept alive by the closure's reference, or none.
-    //
-    // SAFETY: the caller's promise -- a call is in progress, so the current
-    // funccall and its `fc_func` are both live, and so is the scope.
-    let scope_of_current = || unsafe {
-        let scoped = (*(*current_fc()).fc_func).uf_scoped;
-        (!scoped.is_null()).then(|| (*scoped).fc_id).flatten()
-    };
+pub(crate) fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Option<T> {
+    // The scope the function of the call in progress closed over.
+    let scope_of_current =
+        || with_current_fc(|frame| frame.and_then(|frame| frame.func.scoped.get()));
     let old_current = current_fc_id();
     let mut found = None;
     set_current_fc(scope_of_current());
@@ -730,85 +688,21 @@ fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Option<T> {
     found
 }
 
-/// Find a hashitem in a parent scope, i.e. one a lambda captured.
-///
-/// # Safety
-/// `name` is NUL-terminated and `ht` is writable.
-pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, ht: *mut *mut DictTab) -> Option<ItemSlot> {
-    // SAFETY: the current funccall is null or the live call in progress, whose
-    // `fc_func` is live too; `name` is the caller's NUL-terminated string.
-    if current_fc().is_null() || unsafe { (*(*current_fc()).fc_func).uf_scoped }.is_null() {
-        return None;
-    }
-    let namelen = unsafe { cstr::bytes_at(name) }.len();
-    // Upstream answers the *last* hashitem it looked at, not only a found
-    // one, so a miss still hands back the slot it stopped on.
-    let mut last: Option<ItemSlot> = None;
-    // SAFETY: as above; `varname` is a tail of `name`, so the subtraction
-    // leaves the length of what is left of it. That holds for every
-    // dereference in the probe.
-    let probe = || {
-        let (found, varname) = unsafe { find_var_ht(name, namelen) };
-        let varname = name.wrapping_add(varname);
-        if !found.is_null() && unsafe { *varname } != NUL as c_char {
-            let past = unsafe { varname.offset_from(name) } as size_t;
-            let hi = unsafe { hash_find_len(found, varname, namelen.wrapping_sub(past)) };
-            last = Some(hi);
-            if hi.is_kept() {
-                unsafe { *ht = found };
-                return Some(hi);
-            }
-        }
-        None
-    };
-    walk_scoped_funccals(probe);
-    last
-}
-
-/// Find a variable in a parent scope, i.e. one a lambda captured.
-///
-/// # Safety
-/// `name` has `namelen` readable bytes.
-pub unsafe fn find_var_in_scoped_ht(
-    name: *const c_char,
-    namelen: size_t,
-    no_autoload: c_int,
-) -> *mut DictItem {
-    // SAFETY: the current funccall is null or the live call in progress, whose
-    // `fc_func` is live too; `name` has `namelen` readable bytes and
-    // `varname` is a tail of it.
-    if current_fc().is_null() || unsafe { (*(*current_fc()).fc_func).uf_scoped }.is_null() {
-        return ptr::null_mut();
-    }
-    let probe = || {
-        let (ht, varname) = unsafe { find_var_ht(name, namelen) };
-        let varname = name.wrapping_add(varname);
-        if !ht.is_null() && unsafe { *varname } != NUL as c_char {
-            let past = unsafe { varname.offset_from(name) } as size_t;
-            let left = namelen.wrapping_sub(past);
-            let first = unsafe { *name } as c_int;
-            let v = unsafe { find_var_in_ht(ht, first, varname, left, no_autoload != 0) };
-            if !v.is_null() {
-                return Some(v);
-            }
-        }
-        None
-    };
-    walk_scoped_funccals(probe).unwrap_or(ptr::null_mut())
+/// Whether the call in progress runs a function that closed over a scope.
+pub(crate) fn current_func_has_scope() -> bool {
+    with_current_fc(|frame| frame.is_some_and(|frame| frame.func.scoped.get().is_some()))
 }
 
 /// Mark the parked funccalls with `copyID + 1`, so that the collector can
 /// tell "reachable from a live value" from "merely parked".
 pub fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
     let mark = copy_id + 1;
-    for fc in parked_funccals().into_iter().map(FcId::funccall) {
-        // SAFETY: every node of the parked list is live, which is the list's
-        // own invariant, and the three scopes are that node's own.
-        unsafe { (*fc).fc_copy_id = mark };
-        let (vars, avars, items) = unsafe { scopes_of(fc) };
-        let reached = set_ref_in_dict_items(&vars, mark, None)
-            || set_ref_in_dict_items(&avars, mark, None)
-            || set_ref_in_list_items(&items, mark, None);
+    for frame in parked_funccals().into_iter().map(FcId::funccall) {
+        frame.copy_id.set(mark);
+        let scopes = &frame.scopes;
+        let reached = set_ref_in_dict_items(&scopes.l_vars, mark, None)
+            || set_ref_in_dict_items(&scopes.a_vars, mark, None)
+            || set_ref_in_list_items(&scopes.a_list, mark, None);
         if reached {
             return true;
         }
@@ -816,79 +710,38 @@ pub fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
     false
 }
 
-/// The three scopes a funccall owns: `l:`, `a:` and `a:000`, as views that
-/// take no reference -- the funccall embeds them, and they live as long as
-/// it does.
-///
-/// # Safety
-/// `fc` is a live funccall, which outlives the views.
-unsafe fn scopes_of(
-    fc: *mut FuncCall,
-) -> (
-    ManuallyDrop<DictRef>,
-    ManuallyDrop<DictRef>,
-    ManuallyDrop<ListRef>,
-) {
-    // SAFETY: the caller's promise; the three are the funccall's own.
-    unsafe {
-        (
-            ManuallyDrop::new(DictRef::owning(&raw mut (*fc).fc_l_vars).expect("embedded")),
-            ManuallyDrop::new(DictRef::owning(&raw mut (*fc).fc_l_avars).expect("embedded")),
-            ManuallyDrop::new(ListRef::owning(&raw mut (*fc).fc_l_varlist).expect("embedded")),
-        )
-    }
-}
-
-/// Mark everything `fc` holds, once per collection.
-///
-/// # Safety
-/// `fc` is a live funccall.
-unsafe fn set_ref_in_funccal(fc: *mut FuncCall, copy_id: c_int) -> bool {
-    // SAFETY: the caller's promise -- `fc` is a live funccall, so the three
-    // scopes and the function are its own.
-    let mut frame = unsafe { Fc::new(fc) };
-    if frame.fc_copy_id == copy_id {
+/// Mark everything `frame` holds, once per collection.
+fn set_ref_in_funccal(frame: &FuncCall, copy_id: c_int) -> bool {
+    if frame.copy_id.get() == copy_id {
         return false;
     }
-    frame.fc_copy_id = copy_id;
-    let (vars, avars, items) = unsafe { scopes_of(fc) };
-    let func = frame.fc_func;
-    set_ref_in_dict_items(&vars, copy_id, None)
-        || set_ref_in_dict_items(&avars, copy_id, None)
-        || set_ref_in_list_items(&items, copy_id, None)
-        || unsafe { set_ref_in_func(ptr::null_mut(), func, copy_id) }
+    frame.copy_id.set(copy_id);
+    let scopes = &frame.scopes;
+    set_ref_in_dict_items(&scopes.l_vars, copy_id, None)
+        || set_ref_in_dict_items(&scopes.a_vars, copy_id, None)
+        || set_ref_in_list_items(&scopes.a_list, copy_id, None)
+        || set_ref_in_func(None, Some(&frame.func), copy_id)
 }
 
 /// Mark every local and argument on the call stack, including the stacks
 /// set aside.
 pub fn set_ref_in_call_stack(copy_id: c_int) -> bool {
     let stacks = ::core::iter::once(current_fc_id()).chain(set_aside_call_stacks());
-    // SAFETY: every funccall on a call stack is running, so live.
     stacks
         .flat_map(call_chain)
-        .any(|id| unsafe { set_ref_in_funccal(id.funccall(), copy_id) })
+        .any(|id| set_ref_in_funccal(&id.funccall(), copy_id))
 }
 
 /// Mark everything reachable from a function that is still available by name.
 pub fn set_ref_in_functions(copy_id: c_int) -> bool {
-    let mut todo = func_table().used() as c_int;
-    let mut idx = 0;
-    // SAFETY: the walk covers the `ht_used` kept items of the function
-    // table's own bucket array, and every key in it is a live function's
-    // inline name.
-    while todo > 0 && !got_int.get() {
-        let hi = func_table().slot(idx);
-        idx += 1;
-        if hi.is_kept() {
-            todo -= 1;
-            // The key *is* the function's trailing name member, so the
-            // function is that many bytes before it.
-            let fp = uf_from_name_ptr(hi.hi_key);
-            // SAFETY: a kept key is a live function's NUL-terminated name.
-            let named = func_name_refcount(unsafe { cstr::bytes_at(hi.hi_key) });
-            if !named && unsafe { set_ref_in_func(ptr::null_mut(), fp, copy_id) } {
-                return true;
-            }
+    for func in all_funcs() {
+        if got_int.get() {
+            break;
+        }
+        if !func_name_refcount(func.name().as_bytes())
+            && set_ref_in_func(None, Some(&func), copy_id)
+        {
+            return true;
         }
     }
     false
@@ -899,52 +752,52 @@ pub(crate) fn push_func_args(args: &[TypVal]) -> usize {
     if get_vim_var_nr(Vv::Testing) == 0 {
         return 0;
     }
-    // SAFETY: a `ManuallyDrop` copy, truncated away unreleased by
-    // `pop_func_args` before the caller's frame ends.
-    let copy = |tv: &TypVal| ManuallyDrop::new(unsafe { tv.bit_copy() });
-    funcargs.with_mut(|kept| kept.extend(args.iter().map(copy)));
-    args.len()
+    let mut frame = CallFrame::new();
+    frame.extend_borrowed(args);
+    funcargs.with_mut(|kept| kept.push(frame));
+    1
 }
 
-/// Forget the last `count` arguments [`push_func_args`] kept.
-pub(crate) fn pop_func_args(count: usize) {
-    funcargs.with_mut(|kept| kept.truncate(kept.len().saturating_sub(count)));
+/// Forget what the last [`push_func_args`] kept, if it kept anything.
+pub(crate) fn pop_func_args(pushed: usize) {
+    if pushed > 0 {
+        let frame = funcargs.with_mut(Vec::pop);
+        drop(frame);
+    }
 }
 
 /// Mark everything reachable from an argument of a call in progress.
 pub fn set_ref_in_func_args(copy_id: c_int) -> bool {
     // Marking only reads and calls no function: the borrow may span it.
-    funcargs.with(|args| args.iter().any(|tv| mark_root(tv, copy_id)))
+    funcargs.with(|frames| {
+        frames
+            .iter()
+            .any(|frame| frame.args().iter().any(|tv| mark_root(tv, copy_id)))
+    })
 }
 
 /// Mark every list and dictionary reachable through the function `name`, or
-/// through `fp_in` when the caller already has it.  Answers whether marking
+/// through `func` when the caller already has it. Answers whether marking
 /// failed somehow.
-///
-/// # Safety
-/// `name` is null or NUL-terminated; `fp_in` is null or a live function.
-pub unsafe fn set_ref_in_func(name: *mut c_char, fp_in: *mut UserFunc, copy_id: c_int) -> bool {
-    if name.is_null() && fp_in.is_null() {
-        return false;
-    }
-
-    // SAFETY: the caller's promise -- `name` is NUL-terminated when it is
-    // used.
-    let fp = if fp_in.is_null() {
-        find_func(&fname_trans_sid(unsafe { cstr::bytes_at(name) }).0)
-    } else {
-        fp_in
+pub fn set_ref_in_func(name: Option<&[u8]>, func: Option<&Rc<UserFunc>>, copy_id: c_int) -> bool {
+    let found;
+    let func = match (func, name) {
+        (Some(func), _) => func,
+        (None, Some(name)) => {
+            found = find_func(&fname_trans_sid(name).0);
+            match &found {
+                Some(func) => func,
+                None => return false,
+            }
+        }
+        (None, None) => return false,
     };
 
     let mut aborted = false;
-    if !fp.is_null() {
-        // SAFETY: `fp` is a live function, and every scope on the chain is a
-        // live funccall whose own function is live too.
-        let mut fc = unsafe { (*fp).uf_scoped };
-        while !fc.is_null() {
-            aborted = aborted || unsafe { set_ref_in_funccal(fc, copy_id) };
-            fc = unsafe { (*(*fc).fc_func).uf_scoped };
-        }
+    let mut scope = func.scoped.get();
+    while let Some(frame) = scope.and_then(FcId::try_funccall) {
+        aborted = aborted || set_ref_in_funccal(&frame, copy_id);
+        scope = frame.func.scoped.get();
     }
     aborted
 }

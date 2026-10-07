@@ -56,33 +56,20 @@ pub fn cancel_redo() {
 /// Used before running autocommands and user functions, which must not append
 /// to the caller's redo buffer. The copy is what makes `:normal .` inside a
 /// function repeat the command the function's caller last ran.
-///
-/// # Safety
-/// `save_redo` must point at writable storage that outlives the matching
-/// [`restore_redobuff`].
-pub unsafe fn save_redobuff(save_redo: *mut SaveRedo) {
-    // SAFETY (this body): the caller's promise -- `save_redo` is writable
-    // storage that outlives the matching restore.
-    unsafe { (*save_redo).sr_redobuff = redobuff().take() };
-    unsafe { (*save_redo).sr_old_redobuff = old_redobuff().take() };
-
-    // SAFETY: as above — the caller's own `SaveRedo`.
-    redobuff().add_bytes(&unsafe { (*save_redo).sr_redobuff.bytes() });
+pub fn save_redobuff(save_redo: &mut SaveRedo) {
+    save_redo.sr_redobuff = redobuff().take();
+    save_redo.sr_old_redobuff = old_redobuff().take();
+    redobuff().add_bytes(&save_redo.sr_redobuff.bytes());
 }
 
 /// Put back what [`save_redobuff`] moved aside.
-///
-/// # Safety
-/// `save_redo` must be the one a matching [`save_redobuff`] filled.
-pub unsafe fn restore_redobuff(save_redo: *mut SaveRedo) {
-    // SAFETY (this body): as [`save_redobuff`] -- `save_redo` is the one a
-    // matching save filled.
+pub fn restore_redobuff(save_redo: &mut SaveRedo) {
+    // SAFETY: as [`reset_redobuff`].
     unsafe { redobuff().free() };
-    redobuff().set(core::mem::take(unsafe { &mut (*save_redo).sr_redobuff }));
+    redobuff().set(core::mem::take(&mut save_redo.sr_redobuff));
+    // SAFETY: as above.
     unsafe { old_redobuff().free() };
-    old_redobuff().set(core::mem::take(unsafe {
-        &mut (*save_redo).sr_old_redobuff
-    }));
+    old_redobuff().set(core::mem::take(&mut save_redo.sr_old_redobuff));
 }
 
 /// Append `s` to the redo buffer. `K_SPECIAL` must already be escaped.

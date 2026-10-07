@@ -52,6 +52,12 @@ const MOD_FLAGS: [(CmdModFlags, &CStr); 9] = [
     (CmdModFlags::NOSWAPFILE, c"noswapfile"),
 ];
 
+/// [`nlua_set_sctx`] of a script context the caller owns.
+pub(crate) fn set_sctx_from_lua(current: &mut ScriptCtx) {
+    // SAFETY: `current` is a writable script context, borrowed for the call.
+    unsafe { nlua_set_sctx(current) }
+}
+
 /// Point `current` at the Lua source position the running function was
 /// defined at, so `:verbose` and an error message name the `.lua` file.
 ///

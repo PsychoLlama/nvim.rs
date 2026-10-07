@@ -6,49 +6,49 @@
 //! here-document inside the body, and refuses to nest more than
 //! MAX_FUNC_NESTING definitions deep.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::cstr;
 use crate::cstr::byte_at;
-use crate::ex_docmd::check_for_word_in;
+use crate::ex_docmd::{check_for_word_in, read_next_line};
 use crate::memory::XString;
+use crate::runtime::sourced_lnum_of;
 use crate::semsg;
 use crate::swmsg;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::Failed;
 
 /// How many `:function` definitions may nest inside one another.
 pub const MAX_FUNC_NESTING: c_int = 50;
 
 /// Read the body of a `:function`, up to its `:endfunction`.
 ///
-/// Lines come either from `line_arg_in` (an `:execute`d definition, split on
-/// newlines) or from the command line / the script being sourced.  Each one
-/// is appended to `newlines`, with a NULL line per continuation line so that
-/// the index in the array stays the line number.
-///
-/// # Safety
-/// `excmd` is a live `:function` command, `newlines` an initialised `char *`
-/// garray. `line_to_free` keeps whatever the last read handed back.
-pub(crate) unsafe fn get_function_body(
+/// Lines come either from the command's own line, from `line_arg` on (an
+/// `:execute`d definition, split on newlines), or from the command line /
+/// the script being sourced.  Each one is appended to `newlines`, with a
+/// `None` per continuation line so that the index stays the line number.
+/// `line_to_free` keeps whatever the last read handed back.
+pub(crate) fn get_function_body(
     excmd: &mut ExArg,
-    newlines: *mut GArray,
-    line_arg_in: *mut c_char,
+    newlines: &mut Vec<Option<Box<[u8]>>>,
+    mut line_arg: Option<usize>,
     line_to_free: &mut Option<XString>,
     show_block: bool,
-) -> c_int {
-    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
+) -> Result<(), Failed> {
     let mut saved_wait_return = need_wait_return.get();
-    let mut line_arg = line_arg_in;
     let mut indent = 2;
     let mut nesting = 0;
     // The line that ends a heredoc or an `:append`, while one is open.
     let mut skip_until: Option<Vec<u8>> = None;
-    let mut ret = FAIL;
+    let mut ret = Err(Failed);
     let mut is_heredoc = false;
     // The indent a `trim` heredoc's lines lose.
     let mut heredoc_trimmed: Vec<u8> = Vec::new();
@@ -89,54 +89,54 @@ pub(crate) unsafe fn get_function_body(
             }
             need_wait_return.set(false);
 
-            let theline;
-            if !line_arg.is_null() {
+            // The line, and where it starts in the command's own line when
+            // it is a part of that.
+            let (line, line_at): (Vec<u8>, Option<usize>) = if let Some(at) = line_arg {
                 // Use eap->arg, split up in parts by line breaks.
-                theline = line_arg;
-                // SAFETY: `line_arg` walks the command's own NUL-terminated
-                // line, which this loop splits in place.
-                let rest = unsafe { cstr::bytes_at(line_arg) };
-                match rest.iter().position(|&b| b == b'\n') {
-                    None => line_arg = line_arg.wrapping_add(rest.len()),
-                    Some(at) => {
-                        // SAFETY: as above -- the newline is inside the line.
-                        unsafe { *line_arg.add(at) = NUL as c_char };
-                        line_arg = line_arg.wrapping_add(at + 1);
+                let rest = excmd.line.rest_of(at);
+                let line = match rest.iter().position(|&b| b == b'\n') {
+                    None => {
+                        line_arg = Some(at + rest.len());
+                        rest.to_vec()
                     }
-                }
+                    Some(len) => {
+                        let line = rest[..len].to_vec();
+                        // The command's line is split in place, as upstream
+                        // does.
+                        excmd.line.terminate_at(at + len);
+                        line_arg = Some(at + len + 1);
+                        line
+                    }
+                };
+                (line, Some(at))
             } else {
                 *line_to_free = None;
-                theline = match excmd.ea_getline {
-                    None => getcmdline(b':' as c_int, 0, indent, do_concat),
-                    Some(getline) => unsafe {
-                        getline(b':' as c_int, excmd.cookie, indent, do_concat)
-                    },
+                *line_to_free = read_next_line(excmd, c_int::from(b':'), indent, do_concat);
+                if KeyTyped.get() {
+                    lines_left.set(Rows.get() - 1);
+                }
+                let Some(read) = line_to_free.as_ref() else {
+                    if let Some(marker) = &skip_until {
+                        let marker = msg_bytes(marker);
+                        semsg!("E1145: Missing heredoc end marker: {marker}");
+                    } else {
+                        emsg(gettext(c"E126: Missing :endfunction"));
+                    }
+                    break 'theend;
                 };
-                // SAFETY: a getter answers null or an allocation of its own.
-                *line_to_free = (!theline.is_null()).then(|| unsafe { XString::from_raw(theline) });
-            }
-            if KeyTyped.get() {
+                (read.as_cstr().to_bytes().to_vec(), None)
+            };
+            if line_at.is_some() && KeyTyped.get() {
                 lines_left.set(Rows.get() - 1);
             }
-            // SAFETY: the line just read is null or NUL-terminated, and
-            // nothing writes it while this walk reads it.
-            let Some(line) = (unsafe { cstr::at_opt(theline) }).map(CStr::to_bytes) else {
-                if let Some(marker) = &skip_until {
-                    let marker = msg_bytes(marker);
-                    semsg!("E1145: Missing heredoc end marker: {marker}");
-                } else {
-                    emsg(gettext(c"E126: Missing :endfunction"));
-                }
-                break 'theend;
-            };
+            let line = &line[..];
             if show_block {
-                debug_assert!(indent >= 0);
-                ui_ext_cmdline_block_append(indent as size_t, line);
+                ui_ext_cmdline_block_append(usize::try_from(indent).unwrap_or(0), line);
             }
 
             // Detect line continuation: SOURCING_LNUM increased by more
             // than one.
-            let mut sourcing_lnum_off = unsafe { get_sourced_lnum(excmd.ea_getline, excmd.cookie) };
+            let mut sourcing_lnum_off = sourced_lnum_of(excmd);
             if sourcing_lnum() < sourcing_lnum_off {
                 sourcing_lnum_off -= sourcing_lnum();
             } else {
@@ -183,35 +183,40 @@ pub(crate) unsafe fn get_function_body(
                     if byte_at(line, after) == b'!' {
                         after += 1;
                     }
-                    let mut nextcmd: *mut c_char = ptr::null_mut();
-                    // SAFETY: `line_arg` walks the NUL-terminated command
-                    // line, where it is not null.
-                    let more_args = !line_arg.is_null()
-                        && skip::white(unsafe { cstr::bytes_at(line_arg) })
-                            < unsafe { cstr::bytes_at(line_arg) }.len();
+                    // Where the next command starts: in the command's own
+                    // line, or in the line the last read handed back.
+                    enum Next {
+                        InCommand(usize),
+                        InRead(usize),
+                    }
+                    let mut nextcmd = None;
+                    let more_args = line_arg.is_some_and(|at| {
+                        let rest = excmd.line.rest_of(at);
+                        skip::white(rest) < rest.len()
+                    });
                     if byte_at(line, after) == b'|' {
-                        nextcmd = theline.wrapping_add(after + 1);
+                        nextcmd = Some(match line_at {
+                            Some(at) => Next::InCommand(at + after + 1),
+                            None => Next::InRead(after + 1),
+                        });
                     } else if more_args {
-                        nextcmd = line_arg;
+                        nextcmd = line_arg.map(Next::InCommand);
                     } else if !matches!(byte_at(line, after), 0 | b'"') && p_verbose() > 0 {
                         let rest = msg_bytes(&line[after..]);
                         swmsg!(true, "W22: Text found after :endfunction: {rest}");
                     }
-                    if !nextcmd.is_null() {
-                        // Another command follows. When it is in the
-                        // command's own line the offset is all that is
-                        // needed; when it is in the last line the getter
-                        // handed back, the command takes that line over.
-                        if excmd.line.contains(nextcmd) {
-                            excmd.line.next = Some(excmd.line.offset_of(nextcmd));
-                        } else {
-                            // `nextcmd` is inside the line the last read
-                            // handed back, which the command takes over.
-                            let at = nextcmd.addr() - theline.addr();
+                    match nextcmd {
+                        // Another command follows in the command's own line:
+                        // the offset is all that is needed.
+                        Some(Next::InCommand(at)) => excmd.line.next = Some(at),
+                        // It is in the line the last read handed back, which
+                        // the command takes over.
+                        Some(Next::InRead(at)) => {
                             let taken = line_to_free.take().expect("the line just read");
                             excmd.line.take_over(taken.into_vec());
                             excmd.line.next = Some(at);
                         }
+                        None => {}
                     }
                     break;
                 }
@@ -330,29 +335,23 @@ pub(crate) unsafe fn get_function_body(
                 }
             }
 
-            // Add the line to the function.
-            unsafe { ga_grow(newlines, 1 + sourcing_lnum_off as c_int) };
-
-            // Copy the line to newly allocated memory.
-            // `get_one_sourceline` allocates 250 bytes per line, so this
-            // saves 80% on average at the cost of an alloc/free.
-            unsafe { ga_push_string(newlines, XString::from_bytes(line).into_raw()) };
-
-            // Add NULL lines for the continuation lines, so that the line
-            // count equals the index in the growarray.
+            // Add the line to the function, and a `None` per continuation
+            // line, so that the line count equals the index.
+            newlines.reserve(1 + usize::try_from(sourcing_lnum_off).unwrap_or(0));
+            newlines.push(Some(line.into()));
             for _ in 0..sourcing_lnum_off {
-                unsafe { ga_push_string(newlines, ptr::null_mut()) };
+                newlines.push(None);
             }
 
             // Check for the end of eap->arg.
-            if !line_arg.is_null() && unsafe { *line_arg } == NUL as c_char {
-                line_arg = ptr::null_mut();
+            if line_arg.is_some_and(|at| excmd.line.byte_at(at) == 0) {
+                line_arg = None;
             }
         }
 
         // Return OK when no error was detected.
         if did_emsg.get() == 0 {
-            ret = OK;
+            ret = Ok(());
         }
     }
 

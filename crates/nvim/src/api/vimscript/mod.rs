@@ -13,11 +13,11 @@ use crate::message::state::{did_emsg, msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
 use crate::runtime::do_source_str;
 use crate::types::{
-    ApiDict, Array, Boolean, Dict, Error, ExprAST, ExprASTNode, ExprASTNodeType,
-    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    FuncExe, Integer, KeyDict_exec_opts, LineNr, Object, ParserHighlight, ParserHighlightChunk,
-    ParserLine, ParserPosition, ParserState, Partial, String_0, TryState, TypVal, UVarNumber,
-    VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
+    ApiDict, Array, Boolean, Error, ExprAST, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
+    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Integer,
+    KeyDict_exec_opts, Object, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
+    ParserState, String_0, TryState, TypVal, UVarNumber, VAR_FUNC, VAR_PARTIAL,
+    kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_free_ast,
@@ -105,17 +105,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: ApiDict = ApiDict::EMPTY;
 pub const ARRAY_DICT_INIT: ApiDict = KV_INITIAL_VALUE;
-pub const FUNCEXE_INIT: FuncExe = FuncExe {
-    fe_argv_func: None,
-    fe_firstline: 0 as LineNr,
-    fe_lastline: 0 as LineNr,
-    fe_doesrange: ::core::ptr::null_mut::<bool>(),
-    fe_evaluate: false,
-    fe_partial: ::core::ptr::null_mut::<Partial>(),
-    fe_selfdict: ::core::ptr::null_mut::<Dict>(),
-    fe_basetv: ::core::ptr::null_mut::<TypVal>(),
-    fe_found_var: false,
-};
 /// `TRY_STATE_INIT`: the saved-state block `try_enter` fills in.  Stays a
 /// per-module const -- sharing one across `api/` would put it in the crate's
 /// exported surface for no gain.

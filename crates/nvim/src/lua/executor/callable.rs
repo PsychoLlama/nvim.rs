@@ -73,7 +73,8 @@ pub fn nlua_is_table_from_lua(arg: &TypVal) -> bool {
 }
 
 /// If `arg` is a Lua table with a `__call` metamethod, register that
-/// metamethod as a Vimscript function and answer its name; otherwise null.
+/// metamethod as a Vimscript function and answer its name, allocated for
+/// the caller to free; otherwise null.
 ///
 /// Every exit leaves the Lua stack exactly as it found it.
 ///
@@ -110,7 +111,7 @@ pub unsafe fn nlua_register_table_as_callable(arg: &TypVal) -> *mut c_char {
         let name = register_luafunc(func);
         lua_pop(lstate, 1);
         debug_assert!(top == lua_gettop(lstate));
-        name
+        name.into_raw()
     }
 }
 
@@ -165,15 +166,11 @@ pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
     }
 }
 
-/// [`nlua_register_table_as_callable`], answering a copy of the name.
+/// [`nlua_register_table_as_callable`], answering the name owned.
 pub(crate) fn register_table_as_callable(arg: &TypVal) -> Option<crate::memory::ThinCString> {
     // SAFETY: a live value, and the main state, which lives as long as the
-    // editor; the name is copied before anything can release it.
-    unsafe {
-        let name = nlua_register_table_as_callable(arg);
-        (!name.is_null())
-            .then(|| crate::memory::ThinCString::from_cstr(core::ffi::CStr::from_ptr(name)))
-    }
+    // editor; the name is an allocation of its own, adopted here.
+    unsafe { crate::memory::ThinCString::from_raw(nlua_register_table_as_callable(arg)) }
 }
 
 /// [`nlua_funcref_str`], as an owned string.

@@ -21,11 +21,11 @@ use crate::message::{
 use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::types::{
-    Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float, FuncExe,
-    LineNr, List, ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB,
-    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue,
-    kListLenMayKnow, kSpecialVarNull, ptrdiff_t, uint8_t,
+    Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float, LineNr, List,
+    ListItem, ListWatch, LuaRef, Partial, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow,
+    kSpecialVarNull, ptrdiff_t, uint8_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -158,14 +158,3 @@ static str_errors: [&::core::ffi::CStr; 11] = [
     c"E729: Using a Funcref as a String",
     c"E976: Using a Blob as a String",
 ];
-pub const FUNCEXE_INIT: FuncExe = FuncExe {
-    fe_argv_func: None,
-    fe_firstline: 0 as LineNr,
-    fe_lastline: 0 as LineNr,
-    fe_doesrange: ::core::ptr::null_mut::<bool>(),
-    fe_evaluate: false,
-    fe_partial: ::core::ptr::null_mut::<Partial>(),
-    fe_selfdict: ::core::ptr::null_mut::<Dict>(),
-    fe_basetv: ::core::ptr::null_mut::<TypVal>(),
-    fe_found_var: false,
-};

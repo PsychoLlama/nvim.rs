@@ -199,9 +199,137 @@ impl<T, M> IdTable<T, M> {
         }
     }
 
+    /// What was set beside `id`'s value. Nothing outside the tests reads it
+    /// since the funccalls moved to an [`RcTable`].
+    #[cfg(test)]
+    pub(crate) fn meta(&self, id: TableId<T>) -> &M {
+        &self.live(id).meta
+    }
+}
+
+/// Values of type `T`, each shared (`Rc`) with whoever is using it, with an
+/// `M` beside it, named by [`TableId`].
+///
+/// [`IdTable`]'s sibling for a value whose holders keep it alive by sharing
+/// rather than by a raw pointer into a fixed box: the table owns one
+/// reference, an id resolves to another, and emptying the slot drops the
+/// table's -- the value goes when its last holder does.
+pub(crate) struct RcTable<T, M = ()> {
+    slots: Vec<RcSlot<T, M>>,
+    vacant: Vec<u32>,
+}
+
+struct RcSlot<T, M> {
+    generation: NonZeroU32,
+    value: Option<::std::rc::Rc<T>>,
+    meta: M,
+}
+
+impl<T, M: Default> RcTable<T, M> {
+    /// An empty table.
+    pub(crate) const fn new() -> Self {
+        RcTable {
+            slots: Vec::new(),
+            vacant: Vec::new(),
+        }
+    }
+
+    /// Share `value`, whose id `make` is told before it builds it, and set
+    /// `meta` beside it.
+    pub(crate) fn insert_with(
+        &mut self,
+        meta: M,
+        make: impl FnOnce(TableId<T>) -> ::std::rc::Rc<T>,
+    ) -> TableId<T> {
+        let index = self.vacant.pop().unwrap_or_else(|| {
+            let index = u32::try_from(self.slots.len()).expect("fewer than 2^32 slots");
+            self.slots.push(RcSlot {
+                generation: NonZeroU32::MIN,
+                value: None,
+                meta: M::default(),
+            });
+            index
+        });
+        let slot = &mut self.slots[index as usize];
+        let id = TableId {
+            index,
+            generation: slot.generation,
+            kind: PhantomData,
+        };
+        slot.value = Some(make(id));
+        slot.meta = meta;
+        id
+    }
+
+    /// Empty `id`'s slot, answering the table's reference.
+    ///
+    /// # Panics
+    /// When `id`'s value is gone already.
+    pub(crate) fn remove(&mut self, id: TableId<T>) -> ::std::rc::Rc<T> {
+        let slot = &mut self.slots[id.index as usize];
+        assert!(
+            slot.generation == id.generation && slot.value.is_some(),
+            "an id outlived its value"
+        );
+        slot.generation = slot.generation.checked_add(1).unwrap_or(NonZeroU32::MIN);
+        slot.meta = M::default();
+        self.vacant.push(id.index);
+        slot.value.take().expect("a live slot holds a value")
+    }
+}
+
+impl<T, M> RcTable<T, M> {
+    fn live(&self, id: TableId<T>) -> &RcSlot<T, M> {
+        let slot = &self.slots[id.index as usize];
+        assert!(
+            slot.generation == id.generation && slot.value.is_some(),
+            "an id outlived its value"
+        );
+        slot
+    }
+
+    /// `id`'s value.
+    ///
+    /// # Panics
+    /// When `id`'s value is gone.
+    pub(crate) fn get(&self, id: TableId<T>) -> &::std::rc::Rc<T> {
+        self.live(id)
+            .value
+            .as_ref()
+            .expect("`live` checked the slot is full")
+    }
+
+    /// `id`'s value, or `None` when it is gone.
+    pub(crate) fn try_get(&self, id: TableId<T>) -> Option<&::std::rc::Rc<T>> {
+        let slot = self.slots.get(id.index as usize)?;
+        (slot.generation == id.generation)
+            .then_some(slot.value.as_ref())
+            .flatten()
+    }
+
     /// What was set beside `id`'s value.
     pub(crate) fn meta(&self, id: TableId<T>) -> &M {
         &self.live(id).meta
+    }
+}
+
+impl<T> TableId<T> {
+    /// The id as one integer, for a caller that must carry it through an
+    /// address-sized cookie.
+    pub(crate) fn to_bits(self) -> usize {
+        (usize::try_from(self.generation.get()).expect("32 bits fit") << 32)
+            | usize::try_from(self.index).expect("32 bits fit")
+    }
+
+    /// The id [`TableId::to_bits`] answered `bits` for, if it is one.
+    pub(crate) fn from_bits(bits: usize) -> Option<TableId<T>> {
+        let index = u32::try_from(bits & 0xffff_ffff).ok()?;
+        let generation = NonZeroU32::new(u32::try_from(bits >> 32).ok()?)?;
+        Some(TableId {
+            index,
+            generation,
+            kind: PhantomData,
+        })
     }
 }
 

@@ -13,7 +13,7 @@ use crate::eval::typval::{
     tv_check_for_string_or_func_arg, tv_clear, tv_copy, tv_dict_alloc, tv_equal, tv_get_bool_chk,
     tv_list_alloc, value_check_lock,
 };
-use crate::eval::userfunc::{func_ref_name, get_func_arity, printable_func_name};
+use crate::eval::userfunc::{func_ref_name, get_func_arity};
 use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type,
 };
@@ -260,14 +260,14 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             (
                 partial_name(pt),
                 own,
-                pt.pt_func,
+                pt.pt_func.as_ref(),
                 pt.pt_dict.as_ref(),
                 &pt.pt_argv,
             )
         } else {
             let name = args[0].func_name().map_or(c"", |name| name.as_cstr());
             let own = args[0].func_name().is_some();
-            (name, own, ptr::null_mut(), None, &[])
+            (name, own, None, None, &[])
         };
     let what = numbuf.bytes(&args[1]);
     match what {
@@ -279,10 +279,8 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             }
             // A lambda has no name of its own; "name" shows the
             // printable form instead.
-            let owned = if what == b"name" && !own_name && !func.is_null() {
-                // SAFETY: the partial's live function, whose printable name
-                // is NUL-terminated and lives as long as it does.
-                ThinCString::from_cstr(unsafe { CStr::from_ptr(printable_func_name(func)) })
+            let owned = if let Some(func) = func.filter(|_| what == b"name" && !own_name) {
+                func.printable_name().clone()
             } else {
                 ThinCString::from_cstr(name)
             };

@@ -6,24 +6,36 @@
 //! parses the argument list first, and `func_call` the one that takes the
 //! arguments already built as a list.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::cstr;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
+use std::rc::Rc;
 
 use super::*;
+use crate::autocmd::fire_autocmds_for;
+use crate::eval::funcs::{call_internal_func_named, call_internal_method_named};
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{DictRef, PartialRef, index_of};
-use crate::types::Failed;
+use crate::lua::executor::typval_call_lua;
+use crate::runtime::script_autoload_named;
+use crate::types::{ArgvFunc, Failed};
 use std::borrow::Cow;
 
 /// What a call is made with besides its name and its arguments, as borrows
-/// the caller holds for the length of the call: the safe face of
-/// [`FuncExe`], whose raw pointers are taken from these and live no longer.
+/// the caller holds for the length of the call.
 pub(crate) struct CallWith<'a> {
+    /// Fills in the arguments once the function is known: a `\=`
+    /// expression's submatch list goes only to a function that takes it.
+    pub(crate) argv_func: Option<ArgvFunc>,
     /// The range a function with the `range` attribute is handed.
     pub(crate) firstline: LineNr,
     pub(crate) lastline: LineNr,
@@ -46,6 +58,7 @@ impl<'a> CallWith<'a> {
     /// A call with nothing bound and no range.
     pub(crate) fn new(evaluate: bool) -> Self {
         CallWith {
+            argv_func: None,
             firstline: 0,
             lastline: 0,
             evaluate,
@@ -66,45 +79,6 @@ impl<'a> CallWith<'a> {
             ..CallWith::new(evaluate)
         }
     }
-
-    /// The `FuncExe` these borrows describe. Its pointers are only good for
-    /// as long as `self` is borrowed.
-    fn funcexe(&mut self) -> FuncExe {
-        FuncExe {
-            fe_firstline: self.firstline,
-            fe_lastline: self.lastline,
-            fe_evaluate: self.evaluate,
-            fe_partial: self.partial.map_or(ptr::null_mut(), PartialRef::as_ptr),
-            fe_selfdict: self.selfdict.map_or(ptr::null_mut(), DictRef::as_ptr),
-            fe_basetv: self
-                .basetv
-                .as_deref_mut()
-                .map_or(ptr::null_mut(), ptr::from_mut),
-            fe_doesrange: self
-                .doesrange
-                .as_deref_mut()
-                .map_or(ptr::null_mut(), ptr::from_mut),
-            fe_found_var: self.found_var,
-            ..FUNCEXE_INIT
-        }
-    }
-}
-
-/// [`call_func`] of the function `name` names -- its first `len` bytes when
-/// that is given -- with `args`.
-pub(crate) fn call_func_with(
-    name: &CStr,
-    len: Option<usize>,
-    result: &mut TypVal,
-    args: &[TypVal],
-    mut with: CallWith<'_>,
-) -> Result<(), Failed> {
-    let len = len.map_or(-1, |len| c_int::try_from(len).unwrap_or(c_int::MAX));
-    let mut funcexe = with.funcexe();
-    // SAFETY: `name` is terminated, and holds `len` bytes when that is
-    // given; every pointer in `funcexe` is taken from a borrow `with` holds
-    // across the call.
-    unsafe { call_func(name.as_ptr(), len, result, args, &raw mut funcexe) }
 }
 
 /// Evaluate a call written as an expression: read `(a, b)` at the cursor,
@@ -157,61 +131,39 @@ pub(crate) fn get_func_tv(
 }
 
 /// Call `name` with the arguments already built as a list, which is what
-/// `call()` and the callbacks do.
-///
-/// # Safety
-/// `name` is NUL-terminated and `args` holds a list (or nothing).
-pub unsafe fn func_call(
-    name: *mut c_char,
+/// `call()` does.
+pub(crate) fn func_call(
+    name: &CStr,
     args: &TypVal,
-    partial: *mut Partial,
-    selfdict: *mut Dict,
+    partial: Option<&PartialRef>,
+    selfdict: Option<&DictRef>,
     result: &mut TypVal,
 ) -> Result<(), Failed> {
     let mut argv = Argv::new();
-    let mut argc = 0;
-    let mut r = Ok(());
-
-    'skip_call: {
-        let bound = if partial.is_null() {
-            0
-        } else {
-            index_of(unsafe { &(*partial).pt_argv }.len())
-        };
-        // SAFETY: the caller's promise -- `args` holds a List or nothing.
-        let items = unsafe { (*args).list_or_null().as_ref() };
-        for item in list_iter(items) {
-            if argc == (MAX_FUNC_ARGS - bound) as usize {
-                emsg(gettext(c"E699: Too many arguments"));
-                break 'skip_call;
-            }
-            // Copy each argument, so that `v_lock` can be set to
-            // VarLock::Fixed in the copy without changing the original list.
-            tv_copy(&item.li_tv, argv.claim());
-            argc += 1;
+    let bound = partial.map_or(0, |partial| index_of(partial.pt_argv.len()));
+    for (argc, item) in list_iter(args.list_ref()).enumerate() {
+        if argc == usize::try_from(MAX_FUNC_ARGS - bound).unwrap_or(0) {
+            emsg(gettext(c"E699: Too many arguments"));
+            return Ok(());
         }
-
-        let mut funcexe = FUNCEXE_INIT;
-        funcexe.fe_firstline = Win::current().w_cursor.lnum;
-        funcexe.fe_lastline = Win::current().w_cursor.lnum;
-        funcexe.fe_evaluate = true;
-        funcexe.fe_partial = partial;
-        funcexe.fe_selfdict = selfdict;
-        // SAFETY: the caller's promise -- `result` is the return value.
-        let rv = &mut *result;
-        r = unsafe { call_func(name, -1, rv, argv.args(), &raw mut funcexe) };
+        // Copy each argument, so that `v_lock` can be set to VarLock::Fixed
+        // in the copy without changing the original list.
+        tv_copy(&item.li_tv, argv.claim());
     }
-    r
+
+    let with = CallWith {
+        partial,
+        selfdict,
+        ..CallWith::at_cursor(true)
+    };
+    call_func_with(name, None, result, argv.args(), with)
 }
 
 /// Call a callback and take its answer as a number; -2 when the call itself
 /// failed.
-///
-/// # Safety
-/// `callback` is live.
-pub unsafe fn callback_call_retnr(callback: *mut Callback, args: &[TypVal]) -> VarNumber {
+pub fn callback_call_retnr(callback: &Callback, args: &[TypVal]) -> VarNumber {
     let mut rettv = TV_INITIAL_VALUE;
-    if !unsafe { callback_call(&*callback, args, &mut rettv) } {
+    if !callback_call(callback, args, &mut rettv) {
         return -2;
     }
     let retval = tv_get_number_chk(&rettv).unwrap_or(-1);
@@ -242,16 +194,8 @@ fn spliced_args<'a>(argv: &'a Option<Argv>, args: &'a [TypVal], n: usize) -> &'a
 /// The bound values are *copied*: the call may free the partial, and the
 /// frame outlives it either way.  Answers `Err` when the two lists together
 /// are more arguments than a call can take.
-///
-/// # Safety
-/// `partial` is a live partial.
-unsafe fn splice_bound(
-    argv: &mut Argv,
-    partial: *const Partial,
-    args: &[TypVal],
-) -> Result<(), ()> {
-    // SAFETY: the caller's promise -- a live partial.
-    let bound = unsafe { &(*partial).pt_argv };
+fn splice_bound(argv: &mut Argv, partial: &Partial, args: &[TypVal]) -> Result<(), ()> {
+    let bound = &partial.pt_argv;
     if bound.len() + args.len() > MAX_FUNC_ARGS as usize {
         return Err(());
     }
@@ -315,19 +259,19 @@ fn unterminated(text: &[u8]) -> &[u8] {
 /// Make a call: resolve `funcname` to a partial, a `v:lua` reference, a user
 /// function (autoloading one if need be) or a builtin, and run it.
 ///
-/// # Safety
-/// `funcname` has `len` readable bytes (or is NUL-terminated when `len` is
-/// not positive) and `funcexe` describes the call.
-pub unsafe fn call_func(
-    funcname: *const c_char,
-    mut len: c_int,
+/// `funcname` is what the C handed on: the callee's name, or with `len`
+/// given the text it is the first `len` bytes of -- a `v:lua.` name runs to
+/// the cursor, and a message about it quotes the rest of the line.
+pub(crate) fn call_func_with(
+    funcname: &CStr,
+    len: Option<usize>,
     result: &mut TypVal,
     args_in: &[TypVal],
-    funcexe: *mut FuncExe,
+    mut with: CallWith<'_>,
 ) -> Result<(), Failed> {
     let mut ret = Err(Failed);
     let mut error = FCERR_NONE;
-    let mut fp: *mut UserFunc = ptr::null_mut();
+    let mut func: Option<Rc<UserFunc>> = None;
     // The name, copied: if it comes from a funcref variable it could be
     // changed or deleted inside the called function. Then the name the
     // function is stored under, when that is not the name itself.
@@ -335,56 +279,52 @@ pub unsafe fn call_func(
     let mut translated: Option<Vec<u8>> = None;
     // A `v:lua` called directly is reported by that name.
     let mut report_vlua = false;
-    let mut selfdict = unsafe { (*funcexe).fe_selfdict };
+    let mut selfdict = with.selfdict;
     // How much of `args_in` is still the argument list, once an
-    // `fe_argv_func` has had its say.
+    // `argv_func` has had its say.
     let mut nargs = args_in.len();
-    // Built only when a partial or `fe_basetv` puts arguments in front;
-    // until then the caller's own slice *is* the argument list.
+    // Built only when a partial or the base puts arguments in front; until
+    // then the caller's own slice *is* the argument list.
     let mut argv: Option<Argv> = None;
-    let partial = unsafe { (*funcexe).fe_partial };
+    let partial = with.partial;
 
-    // Initialise rettv so that the caller may `tv_clear` it even when
-    // this answers FAIL.
+    // Initialise rettv so that the caller may `tv_clear` it even when this
+    // answers FAIL.
     result.write_empty(VAR_UNKNOWN);
 
     // A length the caller did not give is the name's own, which then holds
     // no NUL.
-    let measured = len <= 0;
-    if measured {
-        len = unsafe { cstr::bytes_at(funcname) }.len() as c_int;
+    let text = funcname.to_bytes();
+    let measured = len.is_none();
+    let len = len.unwrap_or(text.len());
+    if let Some(partial) = partial {
+        func = partial.pt_func.clone();
     }
-    if !partial.is_null() {
-        fp = unsafe { (*partial).pt_func };
-    }
-    if fp.is_null() {
-        // SAFETY: the caller's promise -- `len` readable bytes. Every
-        // reader of the copy stops at its first NUL, as the C's did.
-        let copy = unsafe { cstr::slice_at(funcname, len as size_t) };
-        let copy = name.insert(name_copy(copy, measured));
+    if func.is_none() {
+        // Every reader of the copy stops at its first NUL, as the C's did.
+        let copy = name.insert(name_copy(&text[..len.min(text.len())], measured));
         (translated, error) = stored_name(unterminated(copy));
     }
     // The name the function is stored under, with its NUL.
     let fname: &[u8] = translated.as_deref().or(name.as_deref()).unwrap_or(b"\0");
-    if !unsafe { (*funcexe).fe_doesrange }.is_null() {
-        unsafe { *(*funcexe).fe_doesrange = false };
+    if let Some(doesrange) = with.doesrange.as_deref_mut() {
+        *doesrange = false;
     }
 
     'theend: {
-        if !partial.is_null() {
+        if let Some(partial) = partial {
             // When the function has a partial with a dict and there is a
             // dict argument, use the dict argument -- that is backwards
             // compatible.  When the dict was bound explicitly, use the
             // partial's.
-            if let Some(dict) = unsafe { &(*partial).pt_dict }
-                && (selfdict.is_null() || !unsafe { (*partial).pt_auto })
+            if let Some(dict) = &partial.pt_dict
+                && (selfdict.is_none() || !partial.pt_auto)
             {
-                selfdict = dict.as_ptr();
+                selfdict = Some(dict);
             }
-            if error == FCERR_NONE && !unsafe { &(*partial).pt_argv }.is_empty() {
+            if error == FCERR_NONE && !partial.pt_argv.is_empty() {
                 let mut frame = Argv::new();
-                // SAFETY: `funcexe`'s partial is live.
-                if unsafe { splice_bound(&mut frame, partial, args_in) }.is_err() {
+                if splice_bound(&mut frame, partial, args_in).is_err() {
                     error = FCERR_TOOMANY;
                     break 'theend;
                 }
@@ -392,108 +332,99 @@ pub unsafe fn call_func(
             }
         }
 
-        if error == FCERR_NONE && unsafe { (*funcexe).fe_evaluate } {
+        if error == FCERR_NONE && with.evaluate {
             // Skip "g:" before a function name.
-            let skip = if fp.is_null() && fname.starts_with(b"g:") {
+            let skip = if func.is_none() && fname.starts_with(b"g:") {
                 2
             } else {
                 0
             };
             let rfname = unterminated(&fname[skip..]);
-            // The same, as the C string the autocommand and the autoloader
-            // read.
-            let rfname_c = fname[skip..].as_ptr().cast::<c_char>().cast_mut();
+            let rfname_c =
+                CStr::from_bytes_until_nul(&fname[skip..]).expect("the stored name is terminated");
 
             // the default is number zero
             result.write_number(0);
             error = FCERR_UNKNOWN;
 
-            if is_luafunc(partial) {
+            if is_luafunc(partial.map_or(ptr::null_mut(), PartialRef::as_ptr)) {
                 if len > 0 {
                     error = FCERR_NONE;
-                    // SAFETY: `funcexe`'s base is null or a live typval.
-                    if let Some(base) = unsafe { (*funcexe).fe_basetv.as_ref() }
+                    if let Some(base) = with.basetv.as_deref()
                         && splice_base(&mut argv, &args_in[..nargs], base).is_err()
                     {
                         error = FCERR_TOOMANY;
                         break 'theend;
                     }
-                    let len = len as size_t;
                     let args = spliced_args(&argv, args_in, nargs);
-                    unsafe { nlua_typval_call(funcname, len, args, result) };
+                    typval_call_lua(&text[..len.min(text.len())], args, result);
                 } else {
                     // v:lua was called directly; show its name in the
                     // message.
                     report_vlua = true;
                 }
-            } else if !fp.is_null() || !builtin_function(rfname) {
+            } else if func.is_some() || !builtin_function(rfname) {
                 // A user-defined function.
-                if fp.is_null() {
-                    fp = find_func(rfname);
+                if func.is_none() {
+                    func = find_func(rfname);
                 }
 
                 // Trigger FuncUndefined, which may load the function.
                 let event = AutoEvent::FuncUndefined;
-                if fp.is_null()
-                    && unsafe { apply_autocmds(event, rfname_c, rfname_c, true, None) }
+                if func.is_none()
+                    && fire_autocmds_for(event, Some(rfname_c), Some(rfname_c), true, None)
                     && !aborting()
                 {
-                    fp = find_func(rfname);
+                    func = find_func(rfname);
                 }
                 // Try loading a package.  Reached by every spelling that
                 // does *not* go through `deref_func_name` first --
-                // `call()`, `nvim_call_function`, `vim.fn` -- because
-                // that one's `find_var` has already sourced it.
-                if fp.is_null()
-                    && unsafe { script_autoload(rfname_c, rfname.len(), true) }
-                    && !aborting()
-                {
-                    fp = find_func(rfname);
+                // `call()`, `nvim_call_function`, `vim.fn` -- because that
+                // one's `find_var` has already sourced it.
+                if func.is_none() && script_autoload_named(rfname, true) && !aborting() {
+                    func = find_func(rfname);
                 }
 
-                if !fp.is_null() && unsafe { (*fp).uf_flags }.has(FuncFlags::DELETED) {
-                    error = FCERR_DELETED;
-                } else if !fp.is_null() {
-                    if let Some(argv_func) = unsafe { (*funcexe).fe_argv_func } {
-                        // Postponed filling in the arguments; do it now.
-                        let filled = argv.as_ref().map_or(0, Argv::len);
-                        let skip = filled.saturating_sub(args_in.len());
-                        // SAFETY: `fp` is the live function being called.
-                        let args = spliced_args(&argv, args_in, nargs);
-                        let n = unsafe { argv_func(args, skip, fp) };
-                        match &mut argv {
-                            Some(argv) => argv.truncate(n),
-                            None => nargs = n,
+                if let Some(func) = &func {
+                    if func.has_flag(FuncFlags::DELETED) {
+                        error = FCERR_DELETED;
+                    } else {
+                        if let Some(argv_func) = with.argv_func {
+                            // Postponed filling in the arguments; do it now.
+                            let filled = argv.as_ref().map_or(0, Argv::len);
+                            let skip = filled.saturating_sub(args_in.len());
+                            let args = spliced_args(&argv, args_in, nargs);
+                            let n = argv_func(args, skip, func);
+                            match &mut argv {
+                                Some(argv) => argv.truncate(n),
+                                None => nargs = n,
+                            }
                         }
+                        if let Some(base) = with.basetv.as_deref()
+                            && splice_base(&mut argv, &args_in[..nargs], base).is_err()
+                        {
+                            error = FCERR_TOOMANY;
+                            break 'theend;
+                        }
+                        let args = spliced_args(&argv, args_in, nargs);
+                        error = call_user_func_check(func, args, result, &mut with, selfdict);
                     }
-                    // SAFETY: as the `v:lua` branch above.
-                    if let Some(base) = unsafe { (*funcexe).fe_basetv.as_ref() }
-                        && splice_base(&mut argv, &args_in[..nargs], base).is_err()
-                    {
-                        error = FCERR_TOOMANY;
-                        break 'theend;
-                    }
-                    let args = spliced_args(&argv, args_in, nargs);
-                    error = unsafe { call_user_func_check(fp, args, result, funcexe, selfdict) };
                 }
             } else {
-                // SAFETY: as the two calls above.
-                let base = unsafe { (*funcexe).fe_basetv };
                 let args = spliced_args(&argv, args_in, nargs);
-                error = if base.is_null() {
-                    unsafe { call_internal_func(fname.as_ptr().cast(), args, result) }
-                } else {
-                    unsafe { call_internal_method(fname.as_ptr().cast(), args, result, &mut *base) }
+                let builtin = CStr::from_bytes_until_nul(fname).expect("a terminated name");
+                error = match with.basetv.as_deref_mut() {
+                    None => call_internal_func_named(builtin, args, result),
+                    Some(base) => call_internal_method_named(builtin, args, result, base),
                 };
             }
 
-            // The call (or the FuncUndefined autocommand sequence) may
-            // have been aborted by an error, an interrupt, or an
-            // uncaught exception, which `aborting()` reports.  For an
-            // error inside an internal function, or for E132 in
-            // `call_user_func`, the throw point where `force_abort` is
-            // normally updated has not been reached yet, so update it
-            // here to make `aborting()` reliable.
+            // The call (or the FuncUndefined autocommand sequence) may have
+            // been aborted by an error, an interrupt, or an uncaught
+            // exception, which `aborting()` reports.  For an error inside an
+            // internal function, or for E132 in `call_user_func`, the throw
+            // point where `force_abort` is normally updated has not been
+            // reached yet, so update it here to make `aborting()` reliable.
             update_force_abort();
         }
         if error == FCERR_NONE {
@@ -504,13 +435,11 @@ pub unsafe fn call_func(
     // Report an error unless evaluating the arguments or making the call
     // was cancelled by an aborting error, an interrupt or an exception.
     if !aborting() {
-        // SAFETY: `funcexe` is the caller's own.
-        let found = unsafe { (*funcexe).fe_found_var };
+        let found = with.found_var;
         match &name {
             _ if report_vlua => user_func_error(error, b"v:lua", found),
             Some(name) => user_func_error(error, unterminated(name), found),
-            // SAFETY: the caller's terminated name.
-            None => user_func_error(error, unsafe { cstr::bytes_at(funcname) }, found),
+            None => user_func_error(error, text, found),
         }
     }
     ret

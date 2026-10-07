@@ -1,61 +1,49 @@
+// No `forbid(unsafe_code)` here: it would reach `call` and `ret`, which
+// still need it.
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::types::AutoEvent;
-use core::ffi::{CStr, c_char, c_int};
-use core::mem::{ManuallyDrop, offset_of};
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int};
 
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
-use crate::autocmd::apply_autocmds;
-use crate::charset::{skip, vim_strsize};
+use crate::charset::skip;
 use crate::debugger::state::{debug_backtrace_level, debug_tick};
-use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
+use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, has_profiling_named};
 use crate::drawscreen::state::cmdline_row;
-pub(crate) use crate::eval::Tv;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
-use crate::eval::funcs::{
-    call_internal_func, call_internal_method, check_internal_func, find_builtin,
-};
+use crate::eval::funcs::{check_builtin_argcount, find_builtin};
 use crate::eval::gc::want_garbage_collect;
-use crate::eval::typval::{
-    TV_INITIAL_VALUE, list_init_static, list_iter, list_iter_mut, list_set_lock, tv_clear, tv_copy,
-    tv_dict_hi2di, tv_get_number_chk,
-};
-use crate::eval::vars::{
-    find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict, list_hashtable_vars, skip_var_list,
-    vars_clear, vars_clear_ext,
-};
+use crate::eval::typval::{TV_INITIAL_VALUE, list_iter, tv_clear, tv_copy, tv_get_number_chk};
+use crate::eval::vars::{get_vim_var_nr, skip_var_list};
 use crate::eval::{
     Cursor, LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, eval_isnamec, eval_isnamec1,
     eval0_in_cmd, eval1, garbage_collect, get_lval, handle_subscript, id_len, is_luafunc,
     last_set_msg, mark_root, name_end, set_ref_in_dict_items, set_ref_in_list_items,
 };
 use crate::ex_docmd::state::ex_nesting_level;
-use crate::ex_docmd::{do_cmdline, ends_excmd, skip_range};
+use crate::ex_docmd::{ends_excmd, skip_range};
 use crate::ex_eval::state::{did_throw, trylevel};
 use crate::ex_eval::{
     PendingAction, aborted_in_try, aborting, cleanup_conditionals, exception_state_clear,
     exception_state_restore, exception_state_save, report_pending, update_force_abort,
 };
-use crate::ex_getln::{getcmdline, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
-use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_grow, ga_init};
+use crate::ex_getln::{ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
 use crate::guard::sandbox;
-use crate::hashtab::{
-    Slot, hash_add, hash_find, hash_find_len, hash_init, hash_remove, hash_set_key, tv_ht_iter,
-};
 use crate::insexpand::ins_compl_active;
 use crate::keycodes::K_SPECIAL;
-use crate::lua::executor::{
-    api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
-};
-use crate::memory::XString;
-use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
+use crate::lua::executor::{release_luaref, typval_exec_lua_callable};
 use crate::message::state::{
     did_emsg, emsg_severe, lines_left, msg_row, msg_scroll, need_wait_return,
 };
@@ -64,8 +52,7 @@ use crate::message::{
 };
 use crate::message::{
     emsg, internal_error, message_filtered, msg_clr_eos, msg_ext_set_kind, msg_outnum,
-    msg_prt_line, msg_putchar, msg_start, msg_str, trunc_string, verbose_enter_scroll,
-    verbose_leave_scroll,
+    msg_prt_line, msg_putchar, msg_start, msg_str, verbose_enter_scroll, verbose_leave_scroll,
 };
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::{p_ic, p_mfd, p_verbose};
@@ -78,25 +65,18 @@ use crate::profile::{
     profile_self, profile_start, profile_sub_wait, profile_zero, script_prof_restore,
     script_prof_save,
 };
-use crate::regexp::{RE_MAGIC, skip_regexp_at, vim_regcomp, vim_regexec, vim_regfree};
+use crate::regexp::{RE_MAGIC, skip_regexp_at};
 use crate::runtime::state::current_sctx;
-use crate::runtime::{
-    autoload_name, estack_pop, estack_push_ufunc, get_sourced_lnum, script_autoload,
-    script_id_valid,
-};
+use crate::runtime::{estack_pop, estack_push_ufunc, script_id_valid};
 use crate::search::{restore_search_patterns, save_search_patterns};
-use crate::strings::xstrnsave;
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, EStack, ExArg, Expand, FcId, FuncCall, FuncExe, GArray, HashTab,
-    LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch, SaveRedo, String_0, TypVal, UserFunc,
-    VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
+    Callback, Dict, DictItem, EStack, ExArg, Expand, FcId, FuncBody, FuncCall, LineNr, ListItem,
+    LuaRef, OptInt, Partial, SaveRedo, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER,
+    VAR_SCOPE, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
-pub(crate) use crate::winlayer::Live;
-use ::libc::{abort, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
 mod args;
@@ -110,6 +90,7 @@ mod lambda;
 mod listing;
 mod name;
 mod ret;
+mod table;
 #[cfg(test)]
 mod tests;
 
@@ -124,23 +105,7 @@ pub use self::lambda::*;
 pub use self::listing::*;
 pub(crate) use self::name::*;
 pub use self::ret::*;
-/// The two pointees this family passes around, as `Copy` newtypes.
-///
-/// Each is a [`Live<T>`](crate::winlayer::Live): a record that whoever built
-/// it promised the pointee outlives the value. Construction is the one
-/// unsafe step; every `(*p).field` after it is ordinary checked code.
-///
-/// Emphatically **not** `&mut *p`. A user function re-enters the evaluator,
-/// autocommands and Lua while the same `FuncCall` is still reachable
-/// through `current_funccal` and the same `UserFunc` through the function
-/// table, and a `&mut` is `noalias` to LLVM.
-///
-/// A user function and its body.
-pub(crate) type Uf = Live<UserFunc>;
-
-/// One call of one: its `a:`/`l:` scopes, its caller and its return value.
-pub(crate) type Fc = Live<FuncCall>;
-
+pub(crate) use self::table::*;
 /// The refcount an item that must never be freed carries.
 pub const DO_NOT_FREE_CNT: c_int = 1073741823;
 
@@ -199,17 +164,15 @@ pub const E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR: &CStr =
 pub const E_MISSING_HEREDOC_END_MARKER_STR: &CStr = c"E1145: Missing heredoc end marker: %s";
 pub const E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER: &CStr =
     c"E1300: Cannot use a partial with dictionary for :defer";
-static func_hashtab: GlobalCell<HashTab> = GlobalCell::new(HashTab::new());
-
 /// The arguments of the calls currently in progress, innermost last.
 ///
 /// Only kept while `v:testing` is set: `test_garbagecollect_now()` marks
 /// through it so that a value living only in a caller's argument array is not
-/// collected. Each entry is a bit copy of a caller's argument, never released
-/// (hence [`ManuallyDrop`]): the caller holds its arguments by shared borrow
-/// for the whole call, so the copy says what the original says, and marking
-/// only reads it.
-static funcargs: GlobalCell<Vec<ManuallyDrop<TypVal>>> = GlobalCell::new(Vec::new());
+/// collected. Each frame *names* a caller's arguments, releasing none: the
+/// caller holds them by shared borrow for the whole call, and marking only
+/// reads them.
+static funcargs: GlobalCell<Vec<crate::eval::typval::CallFrame<{ MAX_FUNC_ARGS as usize + 1 }>>> =
+    GlobalCell::new(Vec::new());
 
 crate::flag_set! {
     /// `UserFunc::uf_flags`: how a user function was defined and what has
@@ -239,38 +202,6 @@ crate::flag_set! {
     const LUAREF = 0x800;
 }
 
-pub const FUNCEXE_INIT: FuncExe = FuncExe {
-    fe_argv_func: None,
-    fe_firstline: 0,
-    fe_lastline: 0,
-    fe_doesrange: ptr::null_mut(),
-    fe_evaluate: false,
-    fe_partial: ptr::null_mut(),
-    fe_selfdict: ptr::null_mut(),
-    fe_basetv: ptr::null_mut(),
-    fe_found_var: false,
-};
-
-/// A zeroed `RegMatch`, for the two places that compile a pattern here.
-pub(crate) const REGMATCH_INIT: RegMatch = RegMatch::new(ptr::null_mut(), false);
-
-/// The name a `UserFunc` carries in the flexible member at its end -- C's
-/// `UF2HIKEY`, and the key the function hashtable is indexed by.
-///
-/// Safe: a field's address is the object's plus a constant, so saying where
-/// the name is reads nothing. Whether there is a name *there* is the
-/// caller's business, as it is for every other pointer it holds.
-pub(crate) fn uf_name_ptr(func: *mut UserFunc) -> *mut c_char {
-    func.wrapping_byte_add(offset_of!(UserFunc, uf_name)).cast()
-}
-
-/// The function whose inline name `key` is: [`uf_name_ptr`] backwards,
-/// which is how a function-table key names its function. Safe for the same
-/// reason -- it says where the function is and reads nothing.
-pub(crate) fn uf_from_name_ptr(key: *mut c_char) -> *mut UserFunc {
-    key.wrapping_byte_sub(offset_of!(UserFunc, uf_name)).cast()
-}
-
 /// The innermost entry of the `:source`/function call stack: what C's
 /// `SOURCING_LNUM` and `SOURCING_NAME` macros read.
 pub(crate) fn sourcing_entry() -> EStack {
@@ -280,33 +211,4 @@ pub(crate) fn sourcing_entry() -> EStack {
 /// The line number the innermost exec-stack entry is on.
 pub(crate) fn sourcing_lnum() -> LineNr {
     sourcing_entry().es_lnum
-}
-
-/// Append `s`, already owned, to a `char *` garray that has room for it.
-///
-/// # Safety
-/// `gap` is a `char *` garray with at least one free slot (the caller has
-/// just called `ga_grow`), and `s` is an allocation `ga_clear_strings` may
-/// free.
-pub(crate) unsafe fn ga_push_string(gap: *mut GArray, s: *mut c_char) {
-    // SAFETY: the contract's garray, borrowed for the push.
-    let gap = unsafe { &mut *gap };
-    let slots: *mut *mut c_char = gap.ga_data.cast();
-    // SAFETY: the contract says the slot at `ga_len` is free.
-    unsafe { *slots.offset(gap.ga_len as isize) = s };
-    gap.ga_len += 1;
-}
-
-/// The `char *` items a string `GArray` holds, as a slice.
-///
-/// Every `uf_args`/`uf_def_args`/`uf_lines` walk in this family is a read of
-/// exactly this array, and c2rust spelled each one as a cast plus an index.
-/// Safe, because the array belongs to the `GArray` the borrow names.
-pub(crate) fn ga_strings(gap: &GArray) -> &[*mut c_char] {
-    if gap.ga_data.is_null() {
-        return &[];
-    }
-    let len = usize::try_from(gap.ga_len).expect("a garray length is never negative");
-    // SAFETY: a `char *` garray's data is `ga_len` initialised pointers.
-    unsafe { slice::from_raw_parts(gap.ga_data as *const *mut c_char, len) }
 }

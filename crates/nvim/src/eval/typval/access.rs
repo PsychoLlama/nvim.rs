@@ -54,12 +54,6 @@ pub(crate) fn field_of<T, F>(p: *mut T, offset: usize) -> *mut F {
     p.wrapping_byte_add(offset).cast()
 }
 
-/// The address of a dictionary item's value; see [`field_of`].
-#[inline(always)]
-pub(crate) fn di_tv(di: *mut DictItem) -> *mut TypVal {
-    field_of(di, ::core::mem::offset_of!(DictItem, di_tv))
-}
-
 /// The address of a dictionary item's lock; see [`field_of`].
 ///
 /// The lock belongs to the *slot*, not to the value in it: `:lockvar d.k`
@@ -474,12 +468,6 @@ pub fn list_uidx(l: Option<&List>, n: ::core::ffi::c_int) -> ::core::ffi::c_int 
 #[inline]
 pub(crate) fn list_iter(l: Option<&List>) -> ::core::slice::Iter<'_, ListItem> {
     list_items(l).iter()
-}
-
-/// [`list_iter`] with the items writable.
-#[inline]
-pub(crate) fn list_iter_mut(l: Option<&mut List>) -> ::core::slice::IterMut<'_, ListItem> {
-    list_items_mut(l).iter_mut()
 }
 
 /// Number of items in `d`, as the `long` the family counts in; a NULL

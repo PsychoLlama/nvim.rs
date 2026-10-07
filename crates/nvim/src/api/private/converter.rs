@@ -159,18 +159,10 @@ impl TypvalSink for ObjectSink {
         _prefix: &'static CStr,
         _path: &ConvPath<'_, '_>,
     ) -> Flow {
-        // SAFETY: `find_func` answers null or a live function.
-        let luaref = unsafe {
-            let fp = match fun {
-                None => ::core::ptr::null_mut(),
-                Some(fun) => find_func(fun.to_bytes()),
-            };
-            if fp.is_null() || !(*fp).uf_flags.has(FuncFlags::LUAREF) {
-                None
-            } else {
-                Some(api_new_luaref((*fp).uf_luaref))
-            }
-        };
+        let luaref = fun
+            .and_then(|fun| find_func(fun.to_bytes()))
+            .filter(|func| func.has_flag(FuncFlags::LUAREF))
+            .map(|func| api_new_luaref(func.luaref.get()));
         self.emit(match luaref {
             Some(luaref) => Object::LuaRef(luaref),
             None => Object::Nil,
@@ -361,10 +353,7 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
                 let borrowed = value.as_luaref().expect("the tag says LuaRef");
                 api_new_luaref(borrowed)
             };
-            // SAFETY: `register_luafunc` answers a NUL-terminated name owned
-            // by the registry, copied here for the value to own.
-            let name = unsafe { CStr::from_ptr(register_luafunc(reference)) };
-            TypVal::func(Some(crate::memory::ThinCString::from_cstr(name)))
+            TypVal::func(Some(register_luafunc(reference)))
         }
         // `kind()` answers one of the eleven above.
         _ => unreachable!("an Object carries one of the eleven tags"),

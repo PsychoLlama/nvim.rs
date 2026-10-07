@@ -325,9 +325,8 @@ fn defer_delete(fname: &CStr) {
     // string, adopted here and taken over by the deferred call.
     let full = unsafe { ThinCString::from_raw(full_name_save(fname.as_ptr(), false)) };
     let mut tv = TypVal::string(full);
-    let name = c"delete".as_ptr().cast_mut();
-    // SAFETY: one argument, at `tv`, whose contents the callee takes over.
-    unsafe { add_defer(name, ::core::slice::from_mut(&mut tv)) };
+    // The callee takes the argument's contents over.
+    add_defer(c"delete", ::core::slice::from_mut(&mut tv));
 }
 
 /// Whether the first argument is something this builtin can write, having

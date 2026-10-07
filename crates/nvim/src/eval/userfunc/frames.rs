@@ -7,16 +7,15 @@
 //! `funccal_stack` (a list of `funccal_entry_T`s in the frames of whoever set
 //! the call stack aside to run an autocommand or a callback).
 //!
-//! Here every funccall, running or parked, is **owned by one
-//! [`IdTable`]**, and the three globals are [`FcId`]s into it. The table
-//! records beside each funccall the call it was made from, which is
+//! Here every funccall, running or parked, is **shared** (`Rc`) and filed
+//! in one [`RcTable`], and the three globals are [`FcId`]s into it. The
+//! table records beside each funccall the call it was made from, which is
 //! upstream's `fc_caller` chain; the parked funccalls are a `Vec` of ids,
 //! newest last, and the set-aside call stacks a `Vec` of the ids that were
-//! current, innermost last.
-//!
-//! A funccall's contents are given back by hand ([`super::free_funccal`]),
-//! as upstream's `xfree` gave back only the block, which is what the
-//! table's `ManuallyDrop` hand-back is for.
+//! current, innermost last. Whoever is using a funccall across a call that
+//! can run user code -- the call running it, a closure body looking up a
+//! captured variable -- holds an `Rc` of its own, so a funccall the table
+//! lets go of lives until they are done.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -27,55 +26,73 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ptr;
+use std::rc::Rc;
 
 use crate::global_cell::GlobalCell;
-use crate::id_table::{Boxed, IdTable};
+use crate::id_table::RcTable;
 use crate::types::{FcId, FuncCall};
 
 /// The funccalls, each beside its caller, and the three ids upstream kept as
 /// raw globals.
 struct FuncCalls {
-    table: IdTable<FuncCall, Option<FcId>>,
+    table: RcTable<FuncCall, Option<FcId>>,
     /// The call in progress: upstream's `current_funccal`.
     current: Option<FcId>,
-    /// `current`'s funccall, by its fixed address (null when there is
-    /// none): every variable lookup asks for it, and a table lookup per ask
-    /// showed in `evalbench`. Kept in step with `current` by the only two
-    /// writers, [`set_current_fc`] and [`CallStackAside`]; the current call
-    /// is never freed while it is current.
-    current_frame: *mut FuncCall,
+    /// `current`'s funccall: every variable lookup asks for it, and a table
+    /// lookup per ask showed in `evalbench`. Kept in step with `current` by
+    /// the only two writers, [`set_current_fc`] and [`CallStackAside`].
+    current_frame: Option<Rc<FuncCall>>,
     /// Funccalls kept beyond their call, newest last: upstream's
     /// `previous_funccal` list.
     parked: Vec<FcId>,
     /// The call in progress at each [`CallStackAside`], innermost last:
     /// upstream's `funccal_stack`.
     aside: Vec<Option<FcId>>,
+    /// Funccalls that are done, their scopes emptied, for the next calls to
+    /// be built in: a call then allocates nothing.
+    spare: Vec<Rc<FuncCall>>,
 }
 
 impl FuncCalls {
-    /// Make `id` the call in progress.
-    fn make_current(&mut self, id: Option<FcId>) {
+    /// Make `id` the call in progress, answering the reference to the one
+    /// before -- for the caller to drop once the table is no longer
+    /// borrowed, since a funccall's last reference frees its scopes, and
+    /// that can reach back in here.
+    #[must_use = "the old reference is dropped outside the borrow"]
+    fn make_current(&mut self, id: Option<FcId>) -> Option<Rc<FuncCall>> {
         self.current = id;
-        self.current_frame = id.map_or(ptr::null_mut(), |id| self.table.address(id));
+        core::mem::replace(
+            &mut self.current_frame,
+            id.map(|id| self.table.get(id).clone()),
+        )
     }
 }
 
 static FUNC_CALLS: GlobalCell<FuncCalls> = GlobalCell::new(FuncCalls {
-    table: IdTable::new(),
+    table: RcTable::new(),
     current: None,
-    current_frame: ptr::null_mut(),
+    current_frame: None,
     parked: Vec::new(),
     aside: Vec::new(),
+    spare: Vec::new(),
 });
+
+/// How many done funccalls are kept for reuse: enough for the recursion
+/// a script commonly reaches, little enough not to matter after a deep one.
+const SPARE_SCOPES: usize = 32;
 
 impl FcId {
     /// The funccall `self` names.
     ///
     /// # Panics
-    /// When that funccall has been freed.
-    pub(crate) fn funccall(self) -> *mut FuncCall {
-        FUNC_CALLS.with(|calls| calls.table.address(self))
+    /// When that funccall has left the table.
+    pub(crate) fn funccall(self) -> Rc<FuncCall> {
+        FUNC_CALLS.with(|calls| calls.table.get(self).clone())
+    }
+
+    /// The funccall `self` names, or `None` once it has left the table.
+    pub(crate) fn try_funccall(self) -> Option<Rc<FuncCall>> {
+        FUNC_CALLS.with(|calls| calls.table.try_get(self).cloned())
     }
 
     /// The call `self` was made from: upstream's `fc_caller`.
@@ -89,31 +106,56 @@ pub(crate) fn call_chain(top: Option<FcId>) -> Vec<FcId> {
     FUNC_CALLS.with(|calls| ::core::iter::successors(top, |&id| *calls.table.meta(id)).collect())
 }
 
-/// Take ownership of `frame`, a call made from `caller`, which `init`
-/// finishes in place once its `fc_id` is set, and answer its id and its
-/// fixed address.
+/// File the funccall `make` builds -- told its id first -- as a call made
+/// from `caller`.
 pub(crate) fn adopt_funccal(
-    frame: Boxed<FuncCall>,
     caller: Option<FcId>,
-    init: impl FnOnce(&mut FuncCall),
-) -> (FcId, *mut FuncCall) {
+    make: impl FnOnce(FcId) -> Rc<FuncCall>,
+) -> Rc<FuncCall> {
+    let mut made = None;
     FUNC_CALLS.with_mut(|calls| {
-        calls.table.insert_boxed(caller, frame, |id, frame| {
-            frame.fc_id = Some(id);
-            init(frame);
-        })
-    })
+        calls.table.insert_with(caller, |id| {
+            let frame = make(id);
+            made = Some(frame.clone());
+            frame
+        });
+    });
+    made.expect("the table built the funccall")
 }
 
-/// Give back `id`'s storage. What the funccall held must have been given
-/// back already; nothing of it is dropped here.
-pub(crate) fn release_funccal(id: FcId) {
-    FUNC_CALLS.with_mut(|calls| calls.table.free(id));
+/// Take `id` out of the table, answering the table's reference.
+pub(crate) fn release_funccal(id: FcId) -> Rc<FuncCall> {
+    FUNC_CALLS.with_mut(|calls| calls.table.remove(id))
 }
 
-/// The call in progress, or null.
-pub(crate) fn current_fc() -> *mut FuncCall {
-    FUNC_CALLS.with(|calls| calls.current_frame)
+/// A done funccall to build the next call in, if one is spare.
+pub(crate) fn take_spare_funccal() -> Option<Rc<FuncCall>> {
+    FUNC_CALLS.with_mut(|calls| calls.spare.pop())
+}
+
+/// Keep `frame`, done and emptied, for a later call; dropped when enough
+/// are kept.
+pub(crate) fn give_spare_funccal(frame: Rc<FuncCall>) {
+    let extra = FUNC_CALLS.with_mut(|calls| {
+        if calls.spare.len() < SPARE_SCOPES {
+            calls.spare.push(frame);
+            None
+        } else {
+            Some(frame)
+        }
+    });
+    drop(extra);
+}
+
+/// The call in progress.
+pub(crate) fn current_fc() -> Option<Rc<FuncCall>> {
+    FUNC_CALLS.with(|calls| calls.current_frame.clone())
+}
+
+/// Run `f` on the call in progress, without taking a reference: for the
+/// variable lookups, which ask on every name and run no user code.
+pub(crate) fn with_current_fc<R>(f: impl FnOnce(Option<&FuncCall>) -> R) -> R {
+    FUNC_CALLS.with(|calls| f(calls.current_frame.as_deref()))
 }
 
 /// The id of the call in progress.
@@ -123,7 +165,8 @@ pub(crate) fn current_fc_id() -> Option<FcId> {
 
 /// Make `id` the call in progress.
 pub(crate) fn set_current_fc(id: Option<FcId>) {
-    FUNC_CALLS.with_mut(|calls| calls.make_current(id));
+    let old = FUNC_CALLS.with_mut(|calls| calls.make_current(id));
+    drop(old);
 }
 
 /// Keep `id` beyond its call, for the garbage collector to free later.
@@ -175,23 +218,25 @@ pub(crate) struct CallStackAside(());
 impl CallStackAside {
     /// Put the call stack aside.
     pub(crate) fn new() -> CallStackAside {
-        FUNC_CALLS.with_mut(|calls| {
+        let old = FUNC_CALLS.with_mut(|calls| {
             let current = calls.current;
-            calls.make_current(None);
             calls.aside.push(current);
+            calls.make_current(None)
         });
+        drop(old);
         CallStackAside(())
     }
 }
 
 impl Drop for CallStackAside {
     fn drop(&mut self) {
-        FUNC_CALLS.with_mut(|calls| {
+        let old = FUNC_CALLS.with_mut(|calls| {
             let saved = calls
                 .aside
                 .pop()
                 .expect("a set-aside call stack to restore");
-            calls.make_current(saved);
+            calls.make_current(saved)
         });
+        drop(old);
     }
 }

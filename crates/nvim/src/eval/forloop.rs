@@ -24,7 +24,7 @@ use crate::eval::vars::{VarList, ex_let_vars, skip_var_list};
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::{Fi, ForInfo, e_string_list_or_blob_required, eval0_in_cmd};
 use crate::guard::Suppress;
-use crate::mbyte::utfc_ptr2len;
+use crate::mbyte::cluster_len;
 use crate::memory::{xcalloc, xfree};
 use crate::types::{ExArg, ListWatch, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber};
 
@@ -97,10 +97,7 @@ pub unsafe fn eval_for_line(excmd: &mut ExArg, errp: *mut bool, skip: bool) -> *
                     // The String is taken over rather than copied; a
                     // null one becomes an owned empty string so that
                     // `free_for_info` has something to free either way.
-                    fi.fi_string = tv
-                        .take_string()
-                        .unwrap_or_else(ThinCString::empty)
-                        .into_raw();
+                    fi.fi_string = Some(tv.take_string().unwrap_or_else(ThinCString::empty));
                 }
                 _ => {
                     // SAFETY: the message is a NUL-terminated literal, and
@@ -140,21 +137,19 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: &[u8]) -> bool {
         return assign(&fi, arg, &mut tv);
     }
 
-    if !fi.fi_string.is_null() {
-        // SAFETY: `fi_string` is owned and NUL-terminated, and `fi_byte_idx`
-        // is a character boundary inside it.
-        let at = unsafe { fi.fi_string.offset(fi.fi_byte_idx as isize) };
-        // SAFETY: as above.
-        let len = unsafe { utfc_ptr2len(at) };
+    if let Some(string) = &fi.fi_string {
+        let rest = string
+            .as_bytes()
+            .get(usize::try_from(fi.fi_byte_idx).unwrap_or(0)..)
+            .unwrap_or_default();
+        let len = cluster_len(rest);
         if len == 0 {
             return false;
         }
-        // SAFETY: `len` bytes from `at` are the character just measured.
-        let text = unsafe { core::slice::from_raw_parts(at.cast::<u8>(), len as usize) };
         let mut tv = UNSET_TV;
-        tv.write_string(Some(ThinCString::from_bytes(text)));
+        tv.write_string(Some(ThinCString::from_bytes(&rest[..len])));
         // SAFETY: `rec` is the caller's record.
-        unsafe { (*rec).fi_byte_idx += len };
+        unsafe { (*rec).fi_byte_idx += c_int::try_from(len).unwrap_or(c_int::MAX) };
         return assign(&fi, arg, &mut tv);
     }
 
@@ -219,8 +214,7 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
         // The copy `eval_for_line` took.
         drop(blob);
     } else {
-        // SAFETY: the String is owned, and null is fine for `xfree`.
-        unsafe { xfree(fi.fi_string as *mut c_void) };
+        drop(fi.fi_string.take());
     }
     // SAFETY: nothing reaches the `ForInfo` after `:endfor`.
     unsafe { xfree(fi.raw() as *mut c_void) };

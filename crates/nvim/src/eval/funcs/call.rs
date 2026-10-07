@@ -15,8 +15,9 @@ use crate::eval::typval::{
     tv_check_for_list_arg,
 };
 use crate::eval::userfunc::{
-    emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
-    save_function_name, scriptlocal_funcname, trans_function_name, translated_function_exists,
+    emsg_funcname, find_func, func_call, func_exists, func_ptr_ref, func_ref_name, func_unref_name,
+    function_exists, save_function_name, scriptlocal_funcname, trans_function_name,
+    translated_function_exists,
 };
 use crate::eval::vars::var_exists;
 use crate::eval::{Cursor, eval_option, eval1, partial_name, script_host_eval};
@@ -25,7 +26,7 @@ use crate::ex_docmd::{DoCmdOpts, cmd_exists, do_cmdline, do_cmdline_cmd};
 use crate::ex_eval::aborting;
 use crate::guard::Suppress;
 use crate::lua::executor::{
-    nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
+    nlua_func_exists, nlua_is_table_from_lua, nlua_typval_eval, register_table_as_callable,
 };
 use crate::memory::{ThinCString, XString};
 use crate::memory::{xfree, xstrdup};
@@ -73,15 +74,16 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut partial = ptr::null_mut::<Partial>();
+    let mut partial = None;
     // Only the Lua-table arm allocates; the others borrow.
     let mut owned = false;
+    let lua_name;
     let mut func = match args[0].v_type() {
         VAR_FUNC => args[0]
             .func_name()
             .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut()),
         VAR_PARTIAL => {
-            partial = args[0].partial_or_null();
+            partial = args[0].partial_shared();
             args[0]
                 .partial_ref()
                 .map_or(c"", partial_name)
@@ -90,7 +92,10 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         _ if nlua_is_table_from_lua(&args[0]) => {
             owned = true;
-            unsafe { nlua_register_table_as_callable(&args[0]) }
+            lua_name = register_table_as_callable(&args[0]);
+            lua_name
+                .as_ref()
+                .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
         }
         _ => numbuf.string(&args[0]).as_ptr().cast_mut(),
     };
@@ -116,18 +121,21 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // A bad {dict} skips the call but still runs the cleanup below.
     let selfdict = if args.len() <= 2 {
-        Some(ptr::null_mut())
+        Some(None)
     } else if tv_check_for_dict_arg(args, 2).is_err() {
         None
     } else {
-        Some(args[2].dict_or_null())
+        Some(args[2].dict_shared())
     };
+    // SAFETY: `func` is a NUL-terminated name the frame owns or borrows from
+    // an argument, live for the call.
+    let name = unsafe { cstr::at(func) };
     if let Some(selfdict) = selfdict {
-        let _ = unsafe { func_call(func, &args[1], partial, selfdict, result) };
+        let _ = func_call(name, &args[1], partial, selfdict, result);
     }
 
     if owned {
-        unsafe { func_unref(func) };
+        func_unref_name(name);
     }
 }
 
@@ -384,7 +392,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     }
     if let Some(trans_name) = &trans_name
         && if is_funcref {
-            find_func(trans_name).is_null()
+            !func_exists(trans_name)
         } else {
             !translated_function_exists(trans_name)
         }
@@ -452,8 +460,11 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     if dict_idx == 0 && arg_idx == 0 && arg_pt.is_none() && !is_funcref {
         // SAFETY: `name` is the `xmalloc`ed copy made above, which the
         // result adopts; it stays live for the reference taken on it.
-        result.write_func_name(unsafe { ThinCString::from_raw(name) });
-        unsafe { func_ref(name) };
+        let name = unsafe { ThinCString::from_raw(name) };
+        if let Some(name) = &name {
+            func_ref_name(name.as_cstr());
+        }
+        result.write_func_name(name);
         return;
     }
 
@@ -480,20 +491,24 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         pt.pt_auto = bound.pt_auto;
     }
 
-    if let Some(bound) = arg_pt.filter(|bound| !bound.pt_func.is_null()) {
-        pt.pt_func = bound.pt_func;
-        unsafe { func_ptr_ref(pt.pt_func) };
+    if let Some(func) = arg_pt.and_then(|bound| bound.pt_func.as_ref()) {
+        func_ptr_ref(func);
+        pt.pt_func = Some(func.clone());
         unsafe { xfree(name as *mut c_void) };
     } else if is_funcref {
         let trans_name = trans_name.as_deref().unwrap_or_default();
         pt.pt_func = find_func(trans_name);
-        unsafe { func_ptr_ref(pt.pt_func) };
+        if let Some(func) = &pt.pt_func {
+            func_ptr_ref(func);
+        }
         unsafe { xfree(name as *mut c_void) };
     } else {
         // SAFETY: `name` is the `xmalloc`ed copy made above, which the
         // partial adopts.
         pt.pt_name = unsafe { ThinCString::from_raw(name) };
-        unsafe { func_ref(name) };
+        if let Some(name) = &pt.pt_name {
+            func_ref_name(name.as_cstr());
+        }
     }
     result.write_partial(Some(PartialRef::new(pt)));
 }

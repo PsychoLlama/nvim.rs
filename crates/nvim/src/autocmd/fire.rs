@@ -446,7 +446,7 @@ pub unsafe fn apply_autocmds_group(
         if !autocmd_busy.get() {
             save_search_patterns();
             if !ins_compl_active() {
-                unsafe { save_redobuff(&raw mut save_redo) };
+                save_redobuff(&mut save_redo);
                 did_save_redobuff = true;
             }
             Buf::current().b_did_filetype = Buf::current().b_keep_filetype;
@@ -588,7 +588,7 @@ pub unsafe fn apply_autocmds_group(
         if !autocmd_busy.get() {
             restore_search_patterns();
             if did_save_redobuff {
-                unsafe { restore_redobuff(&raw mut save_redo) };
+                restore_redobuff(&mut save_redo);
             }
             Buf::current().b_did_filetype = false;
             free_deferred();

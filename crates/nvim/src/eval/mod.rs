@@ -30,11 +30,11 @@ use crate::types::NL;
 pub(crate) use crate::message::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, BlobRef, ChannelStreamType, Dict, ExprType, Failed, FuncExe, GRegFlags, LineNr, ListRef,
-    LuaRetMode, MarkGet, MotionType, Partial, Timer, TypVal, uint64_t,
+    Array, BlobRef, ChannelStreamType, ExprType, Failed, GRegFlags, ListRef, LuaRetMode, MarkGet,
+    MotionType, Timer, TypVal, uint64_t,
 };
 use crate::winlayer::Live;
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
+use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong};
 
 mod entry;
 pub use self::entry::*;
@@ -128,7 +128,7 @@ pub struct ForInfo {
     pub fi_bi: c_int,
     /// The copy of the Blob the loop walks. A zeroed `ForInfo` holds none.
     pub fi_blob: Option<BlobRef>,
-    pub fi_string: *mut c_char,
+    pub fi_string: Option<crate::memory::ThinCString>,
     pub fi_byte_idx: c_int,
 }
 pub const kMTCharWise: MotionType = 0;
@@ -207,17 +207,6 @@ static last_timer_id: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
 static timers: GlobalCell<SlotTable<uint64_t, *mut Timer>> = GlobalCell::new(SlotTable::new());
 static callback_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub const TV_CSTRING: c_ulong = SIZE_MAX.wrapping_sub(1 as c_ulong);
-pub const FUNCEXE_INIT: FuncExe = FuncExe {
-    fe_argv_func: None,
-    fe_firstline: 0 as LineNr,
-    fe_lastline: 0 as LineNr,
-    fe_doesrange: ::core::ptr::null_mut::<bool>(),
-    fe_evaluate: false,
-    fe_partial: ::core::ptr::null_mut::<Partial>(),
-    fe_selfdict: ::core::ptr::null_mut::<Dict>(),
-    fe_basetv: ::core::ptr::null_mut::<TypVal>(),
-    fe_found_var: false,
-};
 pub const PROF_YES: c_int = 1 as c_int;
 pub const KS_EXTRA: c_int = 253 as c_int;
 pub const INT_MAX: c_int = __INT_MAX__;

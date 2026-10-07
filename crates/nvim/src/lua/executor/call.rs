@@ -1,7 +1,7 @@
 //! `vim.call()` and the rpc entry points.
 //!
 //! [`nlua_call`] invokes a *Vimscript* function from Lua: it converts up to
-//! `MAX_FUNC_ARGS` Lua values to `TypVal`s, calls through `call_func`, and
+//! `MAX_FUNC_ARGS` Lua values to `TypVal`s, calls through `call_func_with`, and
 //! converts the result back.  `nlua_rpc` is `vim.rpcrequest()` and
 //! `vim.rpcnotify()`, which differ only in whether they wait.
 
@@ -18,17 +18,14 @@
 
 use crate::cstr;
 use crate::narrow::len_as_int;
-use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use super::{
-    FUNCEXE_INIT, LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast,
-};
+use super::{LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast};
 use crate::api::private::helpers::{api_set_sctx, try_enter, try_leave};
 use crate::api_error;
 use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE, tv_clear};
-use crate::eval::userfunc::call_func;
+use crate::eval::userfunc::{CallWith, call_func_with};
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::ex_getln::TRY_STATE_INIT;
 use crate::lua::converter::{nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval};
@@ -106,21 +103,17 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             did_emsg.set(0);
 
             let mut rettv = TV_INITIAL_VALUE;
-            let mut funcexe = FUNCEXE_INIT;
-            funcexe.fe_firstline = Win::current().w_cursor.lnum;
-            funcexe.fe_lastline = Win::current().w_cursor.lnum;
-            funcexe.fe_evaluate = true;
 
             let sctx = api_set_sctx(LUA_INTERNAL_CALL);
             let mut tstate = TRY_STATE_INIT;
             try_enter(&raw mut tstate);
             let args = vim_args.args();
-            let _ = call_func(
-                name,
-                len_as_int(name_len),
+            let _ = call_func_with(
+                cstr::at(name),
+                Some(name_len),
                 &mut rettv,
                 args,
-                &raw mut funcexe,
+                CallWith::at_cursor(true),
             );
             err.absorb(try_leave(&raw mut tstate));
             drop(sctx);

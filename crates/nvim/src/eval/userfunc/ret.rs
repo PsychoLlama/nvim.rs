@@ -10,7 +10,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::ex_eval::CsFlags;
 use crate::guard::Suppress;
 use crate::memory::XString;
@@ -20,6 +19,7 @@ use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
+use std::rc::Rc;
 
 use super::*;
 use crate::eval::typval::{DictRef, PartialRef};
@@ -27,13 +27,12 @@ use crate::types::{Failed, IOSIZE, Pend};
 
 /// One call recorded by `:defer`, to be made when the function returns.
 pub struct Defer {
-    pub dr_name: *mut c_char,
-    /// The arguments, **owned**: `:defer` is the one frame in the tree that
-    /// takes its values rather than borrowing them, and `handle_defer_one`
-    /// clears each one after the call.  The record lives in a `GArray`, so
-    /// nothing drops it.
-    pub dr_argvars: [TypVal; MAX_FUNC_ARGS as usize + 1],
-    pub dr_argcount: c_int,
+    /// The callee's name; emptied once the call is under way, so that a
+    /// deferred call that throws cannot make this one run twice.
+    pub(crate) name: Option<XString>,
+    /// The arguments, owned: `:defer` takes its values rather than
+    /// borrowing them, and they go with the record.
+    pub(crate) args: Vec<TypVal>,
 }
 
 /// `:return [expr]`.
@@ -41,7 +40,7 @@ pub fn ex_return(excmd: &mut ExArg) {
     let mut rettv = TV_INITIAL_VALUE;
     let mut returning = false;
 
-    if current_fc().is_null() {
+    if current_fc_id().is_none() {
         emsg(gettext(c"E133: :return not inside a function"));
         return;
     }
@@ -54,7 +53,7 @@ pub fn ex_return(excmd: &mut ExArg) {
         && eval0_in_cmd(excmd, at, &mut rettv, evaluate).is_ok()
     {
         if !excmd.skip {
-            returning = unsafe { do_return(excmd, false, true, (&raw mut rettv) as *mut c_void) };
+            returning = unsafe { do_return(excmd, false, true, (&raw mut rettv).cast::<c_void>()) };
         } else {
             tv_clear(&mut rettv);
         }
@@ -152,7 +151,7 @@ fn ex_defer_inner(
     let mut partial_argc = 0;
     let mut argcount = 0;
 
-    if current_fc().is_null() {
+    if current_fc_id().is_none() {
         let arg0 = "defer";
         semsg!("E193: {arg0} not inside a function");
         return (Err(Failed), 0);
@@ -174,7 +173,8 @@ fn ex_defer_inner(
     let mut cursor = Cursor::new(text);
     let free_slot = &mut argvars[partial_argc..];
     let mut r = get_func_arguments(&mut cursor, true, 0, free_slot, &mut argcount);
-    let argcount = argcount as c_int + partial_argc as c_int;
+    let total = argcount + partial_argc;
+    let argcount = c_int::try_from(total).unwrap_or(c_int::MAX);
 
     if r.is_ok() {
         if builtin_function(callee) {
@@ -183,14 +183,11 @@ fn ex_defer_inner(
                     emsg_funcname(e_unknown_function_str, callee);
                     Err(Failed)
                 }
-                // SAFETY: a row of the builtin table.
-                Some(fdef) => unsafe { check_internal_func(fdef, argcount) },
+                Some(fdef) => check_builtin_argcount(fdef, argcount),
             };
         } else {
-            let ufunc = find_func(callee);
-            if !ufunc.is_null() {
-                // SAFETY: the function just found is live.
-                let error = unsafe { check_user_func_argcount(ufunc, argcount) };
+            if let Some(func) = find_func(callee) {
+                let error = check_user_func_argcount(&func, argcount);
                 if error != FCERR_UNKNOWN {
                     user_func_error(error, callee, false);
                     r = Err(Failed);
@@ -200,13 +197,7 @@ fn ex_defer_inner(
     }
 
     if r.is_ok() {
-        // SAFETY: a function is running, and the name is NUL-terminated.
-        unsafe {
-            add_defer(
-                callee.as_ptr().cast_mut(),
-                &mut argvars[..argcount as usize],
-            )
-        };
+        add_defer(callee.as_cstr(), &mut argvars[..total]);
     }
     (r, cursor.offset())
 }
@@ -214,7 +205,7 @@ fn ex_defer_inner(
 /// Whether a `:defer` can be recorded here, i.e. whether a function is
 /// running.  Reports the error itself when it cannot.
 pub fn can_add_defer() -> bool {
-    if get_current_funccal().is_null() {
+    if current_fc_id().is_none() {
         let arg0 = "defer";
         semsg!("E193: {arg0} not inside a function");
         return false;
@@ -224,90 +215,52 @@ pub fn can_add_defer() -> bool {
 
 /// Record a deferred call of `name` on the funccall that is running.  It
 /// takes over the values in `args`.
-///
-/// # Safety
-/// A function is running, `name` is NUL-terminated and `args` holds
-/// `argcount_arg` values.
-pub unsafe fn add_defer(name: *mut c_char, args: &mut [TypVal]) {
-    let saved_name = unsafe { xstrdup(name) };
-    let mut argcount = args.len() as c_int;
-
-    let fc = current_fc();
-    if unsafe { (*fc).fc_defer.ga_itemsize } == 0 {
-        unsafe { ga_init(&raw mut (*fc).fc_defer, size_of::<Defer>() as c_int, 10) };
-    }
-    let dr =
-        unsafe { ga_append_via_ptr(&raw mut (*fc).fc_defer, size_of::<Defer>()) } as *mut Defer;
-    unsafe { (*dr).dr_name = saved_name };
-    unsafe { (*dr).dr_argcount = argcount };
-    while argcount > 0 {
-        argcount -= 1;
-        // `ga_append_via_ptr` hands back raw storage, so the value is
-        // *written* rather than assigned: there is nothing there to release.
-        let slot = unsafe {
-            (&raw mut (*dr).dr_argvars)
-                .cast::<TypVal>()
-                .add(argcount as usize)
-        };
-        unsafe { slot.write(args[argcount as usize].take()) };
-    }
+pub(crate) fn add_defer(name: &CStr, args: &mut [TypVal]) {
+    let Some(frame) = current_fc() else {
+        return;
+    };
+    let args = args.iter_mut().map(TypVal::take).collect();
+    frame.defer.borrow_mut().push(Defer {
+        name: Some(XString::from_cstr(name)),
+        args,
+    });
 }
 
-/// Make the calls `:defer` recorded on `funccal`, newest first.
-///
-/// # Safety
-/// `funccal` is a live funccall.
-pub(crate) unsafe fn handle_defer_one(funccal: *mut FuncCall) {
-    // SAFETY: the caller's promise -- `funccal` is a live funccall.
-    let frame = unsafe { Fc::new(funccal) };
-    let mut idx = frame.fc_defer.ga_len - 1;
-    while idx >= 0 {
-        let dr = unsafe { (frame.fc_defer.ga_data as *mut Defer).offset(idx as isize) };
-        if !unsafe { (*dr).dr_name }.is_null() {
-            let mut funcexe = FUNCEXE_INIT;
-            funcexe.fe_evaluate = true;
-            let mut rettv = TV_INITIAL_VALUE;
+/// Make the calls `:defer` recorded on `frame`, newest first.
+pub(crate) fn handle_defer_one(frame: &FuncCall) {
+    // The records present now, newest first; one recorded meanwhile -- by a
+    // deferred `execute('defer ...')` -- is dropped uncalled, as upstream's
+    // walk never reached it.
+    let count = frame.defer.borrow().len();
+    for idx in (0..count).rev() {
+        let taken = {
+            let mut records = frame.defer.borrow_mut();
+            records
+                .get_mut(idx)
+                .and_then(|record| Some((record.name.take()?, core::mem::take(&mut record.args))))
+        };
+        let Some((name, args)) = taken else {
+            continue;
+        };
+        let mut rettv = TV_INITIAL_VALUE;
 
-            // Clear the name first, so that a deferred call that itself
-            // throws cannot make this one run twice.
-            let name = unsafe { (*dr).dr_name };
-            unsafe { (*dr).dr_name = ptr::null_mut() };
-
-            // The deferred call runs with a clean exception state, so
-            // that it happens even while an exception is in flight.
-            let estate = exception_state_save();
-            exception_state_clear();
-
-            // SAFETY: `dr` is the deferred call's own record, so its
-            // argument array holds `dr_argcount` values.
-            let argc = unsafe { (*dr).dr_argcount } as usize;
-            let argp = unsafe { (&raw mut (*dr).dr_argvars).cast::<TypVal>() };
-            let args = unsafe { ::core::slice::from_raw_parts(argp, argc) };
-            let exe = &raw mut funcexe;
-            let _ = unsafe { call_func(name, -1, &mut rettv, args, exe) };
-
-            exception_state_restore(&estate);
-            tv_clear(&mut rettv);
-            unsafe { xfree(name as *mut c_void) };
-            let mut i = unsafe { (*dr).dr_argcount } - 1;
-            while i >= 0 {
-                unsafe {
-                    tv_clear(&mut *((&raw mut (*dr).dr_argvars) as *mut TypVal).offset(i as isize))
-                };
-                i -= 1;
-            }
-        }
-        idx -= 1;
+        // The deferred call runs with a clean exception state, so that it
+        // happens even while an exception is in flight.
+        let estate = exception_state_save();
+        exception_state_clear();
+        let _ = call_func_with(name.as_cstr(), None, &mut rettv, &args, CallWith::new(true));
+        exception_state_restore(&estate);
+        tv_clear(&mut rettv);
+        drop(args);
     }
-    unsafe { ga_clear(&raw mut (*funccal).fc_defer) };
+    drop(frame.defer.take());
 }
 
 /// Make every deferred call on every funccall, which is what an exit does.
 pub fn invoke_all_defer() {
     let stacks = ::core::iter::once(current_fc_id()).chain(set_aside_call_stacks());
     for id in stacks.flat_map(call_chain) {
-        // SAFETY: every funccall on a call stack is running, so live.
-        unsafe { handle_defer_one(id.funccall()) };
+        handle_defer_one(&id.funccall());
     }
 }
 
@@ -407,67 +360,58 @@ pub unsafe fn do_return(
     is_cmd: bool,
     result: *mut c_void,
 ) -> bool {
-    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    let mut result = result;
     let cstack = excmd.cstack;
+    let frame = current_fc().expect(":return inside a function");
 
     if reanimate {
         // Undo the return.
-        unsafe { (*current_fc()).fc_returned = 0 };
+        frame.returned.set(false);
     }
 
     // Cleanup (and inactivate) conditionals, but stop when a `:finally`
     // is reached: the return still has to be pending until that has run.
-    let idx = unsafe { cleanup_conditionals(excmd.cstack, CsFlags::NONE, true) };
-    // Set when the pending slot took the value out of `result` by bit copy:
-    // the source gives it up once `report_pending` has rendered it.
-    let mut handed_over = false;
+    // SAFETY: the caller's promise -- a command with its condition stack.
+    let idx = unsafe { cleanup_conditionals(cstack, CsFlags::NONE, true) };
     if idx >= 0 {
+        let at = usize::try_from(idx).expect("a level of the stack");
         // A `:finally` is going to run first; remember the return value.
-        unsafe { (*cstack).cs_pending[idx as usize] = CSTP_RETURN as c_char };
+        let flag = c_char::try_from(CSTP_RETURN).expect("a pending flag fits a char");
+        // SAFETY: as above.
+        unsafe { (*cstack).cs_pending[at] = flag };
 
-        if !is_cmd && !reanimate {
-            // A pending return again gets pending: `result` points to an
-            // allocated variable with the value of the original return.
-            unsafe { (*cstack).set_pending_return(idx as usize, result) };
+        let pending: *mut c_void = if !is_cmd && !reanimate {
+            // A pending return again gets pending: `result` is the boxed
+            // value of the original return.
+            result
         } else {
-            if reanimate {
-                debug_assert!(!unsafe { (*current_fc()).fc_rettv }.is_null());
-                result = unsafe { (*current_fc()).fc_rettv } as *mut c_void;
-            }
-            if result.is_null() {
-                unsafe { (*cstack).set_pending_return(idx as usize, ptr::null_mut()) };
+            let value = if reanimate {
+                // The value is the funccall's; it is not available to the
+                // function any more until the `:finally` is done.
+                Some(frame.rettv.replace(TypVal::Number(0)))
+            } else if result.is_null() {
+                None
             } else {
-                // Store the value of the pending return.  A bit copy, not
-                // a take: the pending slot owns the value from here, but
-                // `report_pending` below still renders `result` for
-                // `:debug`, and blanking it first would leave it a
-                // `VAR_UNKNOWN` the echo encoder refuses.  The source gives
-                // it up straight after that report instead.
-                let copy = unsafe { (*result.cast::<TypVal>()).bit_copy() };
-                let saved = Box::into_raw(Box::new(copy)).cast::<c_void>();
-                unsafe { (*cstack).set_pending_return(idx as usize, saved) };
-                // `reanimate` blanks `fc_rettv` just below, which is its
-                // own way of giving the value up.
-                handed_over = !reanimate;
-            }
-            if reanimate {
-                // The return value is not available yet.
-                unsafe { (*(*current_fc()).fc_rettv).write_number(0) };
-            }
-        }
-        unsafe { report_pending(PendingAction::Made, CSTP_RETURN, Pend::Return(result)) };
-        if handed_over {
-            // Rendered; the pending slot is the only owner now.
-            unsafe { (*result.cast::<TypVal>()).disown() };
-        }
+                // SAFETY: the caller's promise -- `result` is a `TypVal`.
+                Some(unsafe { (*result.cast::<TypVal>()).take() })
+            };
+            value.map_or(ptr::null_mut(), |value| {
+                Box::into_raw(Box::new(value)).cast::<c_void>()
+            })
+        };
+        // SAFETY: as above; the pending slot owns the box from here.
+        unsafe { (*cstack).set_pending_return(at, pending) };
+        // SAFETY: the pending value just stored, or null.
+        unsafe { report_pending(PendingAction::Made, CSTP_RETURN, Pend::Return(pending)) };
     } else {
-        unsafe { (*current_fc()).fc_returned = 1 };
+        frame.returned.set(true);
         if !reanimate && !result.is_null() {
-            unsafe { tv_clear(&mut *(*current_fc()).fc_rettv) };
-            unsafe { *(*current_fc()).fc_rettv = (*(result as *mut TypVal)).take() };
+            // SAFETY: the caller's promise -- `result` is a `TypVal`, the
+            // command's own or (when not `is_cmd`) a pending slot's box.
+            let value = unsafe { (*result.cast::<TypVal>()).take() };
+            drop(frame.rettv.replace(value));
             if !is_cmd {
                 // The pending slot's box, emptied just above.
+                // SAFETY: as above -- a box `Box::into_raw` made.
                 drop(unsafe { Box::from_raw(result.cast::<TypVal>()) });
             }
         }
@@ -481,162 +425,149 @@ pub unsafe fn do_return(
 /// # Safety
 /// `result` is null or a `TypVal`.
 pub unsafe fn get_return_cmd(result: *mut c_void) -> *mut c_char {
-    // The rendered command. Upstream shares `IObuff`, which the debugger
-    // this feeds writes again.
-    let mut line = [0 as c_char; IOSIZE as usize];
-    let mut s: *mut c_char = ptr::null_mut();
-    let mut tofree: *mut c_char = ptr::null_mut();
-    let mut slen: size_t = 0;
+    // SAFETY: the caller's promise.
+    let value = unsafe { result.cast::<TypVal>().as_ref() };
+    let rendered = value.map(encode_tv2echo);
+    let mut line = b":return ".to_vec();
+    if let Some(rendered) = &rendered {
+        line.extend_from_slice(rendered.as_bytes());
+    }
+    // Upstream renders into `IObuff` and marks a cut with "...".
+    let limit = IOSIZE as usize - 1;
+    if line.len() >= limit {
+        line.truncate(limit - 4);
+        line.extend_from_slice(b"...");
+    }
+    XString::from_bytes(&line).into_raw()
+}
 
-    if !result.is_null() {
-        s = unsafe { encode_tv2echo(&*result.cast::<TypVal>()).into_raw() };
-        tofree = s;
-    }
-    if s.is_null() {
-        s = c"".as_ptr() as *mut c_char;
-    } else {
-        slen = unsafe { cstr::bytes_at(s) }.len();
-    }
+/// The cookie `do_cmdline` hands [`get_func_line`] for a call: its funccall's
+/// id, carried in the bits of the pointer-sized cookie.
+pub(crate) fn func_line_cookie(frame: &FuncCall) -> *mut c_void {
+    ptr::without_provenance_mut(frame.id.to_bits())
+}
 
-    const PREFIX: &CStr = c":return ";
-    let buf = line.as_mut_ptr();
-    unsafe { xstrlcpy(buf, PREFIX.as_ptr(), IOSIZE as size_t) };
-    // SAFETY: `buf` is `IOSIZE` bytes and the prefix is already in it.
-    let after = unsafe { buf.add(PREFIX.count_bytes()) };
-    let left = (IOSIZE as size_t) - PREFIX.count_bytes();
-    unsafe { xstrlcpy(after, s, left) };
-    let mut iobufflen = PREFIX.count_bytes() + slen;
-    if iobufflen >= IOSIZE as size_t {
-        unsafe { strcpy(buf.offset(IOSIZE as isize - 4), c"...".as_ptr()) };
-        iobufflen = IOSIZE as size_t - 1;
-    }
-    unsafe { xfree(tofree as *mut c_void) };
-    unsafe { xstrnsave(buf, iobufflen) }
+/// The funccall a [`func_line_cookie`] names.
+///
+/// # Panics
+/// When the cookie names no funccall that is still in the table.
+pub(crate) fn cookie_funccall(cookie: *mut c_void) -> Rc<FuncCall> {
+    FcId::from_bits(cookie.addr())
+        .and_then(FcId::try_funccall)
+        .expect("a function-body cookie names a live funccall")
 }
 
 /// The `do_cmdline` line getter a function body is executed through.  It
 /// also drives the debugger's breakpoints and the line profiler.
 ///
-/// Keeps the raw signature: `getline_equal` compares this function's *address*
-/// against the cookie's getter to decide whether a function is running.
-///
-/// # Safety
-/// `cookie` is the `FuncCall` of the call in progress.
-pub unsafe fn get_func_line(
+/// `getline_equal` compares this function's *address* against the cookie's
+/// getter to decide whether a function is running; it coerces to the
+/// `LineGetter` type, whose cookie is [`func_line_cookie`]'s.
+pub fn get_func_line(
     _c: c_int,
     cookie: *mut c_void,
     _indent: c_int,
     _do_concat: bool,
 ) -> *mut c_char {
-    let fcp = cookie as *mut FuncCall;
-    // SAFETY: the caller's promise -- `cookie` is the funccall of the call
-    // in progress, so it and its function are live, and its body garray does
-    // not move while the function is running.
-    let mut frame = unsafe { Fc::new(fcp) };
-    let fp = frame.fc_func;
-    let f = unsafe { Uf::new(fp) };
-    let lines = || ga_strings(unsafe { &(*fp).uf_lines });
-    let name = uf_name_ptr(fp);
+    let frame = cookie_funccall(cookie);
+    let func = &frame.func;
+    let name = func.name().as_cstr();
 
     // Check for a breakpoint set after the sourcing started.
-    if frame.fc_dbg_tick != debug_tick.get() {
-        frame.fc_breakpoint = unsafe { dbg_find_breakpoint(false, name, sourcing_lnum()) };
-        frame.fc_dbg_tick = debug_tick.get();
+    if frame.dbg_tick.get() != debug_tick.get() {
+        frame
+            .breakpoint
+            .set(dbg_find_breakpoint_named(false, name, sourcing_lnum()));
+        frame.dbg_tick.set(debug_tick.get());
     }
     if do_profiling.get() == PROF_YES {
-        unsafe { func_line_end(cookie) };
+        func_line_end(&frame);
     }
-    let retval = if (f.uf_flags.has(FuncFlags::ABORT) && did_emsg.get() != 0 && !aborted_in_try())
-        || frame.fc_returned != 0
+    let retval = if (func.has_flag(FuncFlags::ABORT) && did_emsg.get() != 0 && !aborted_in_try())
+        || frame.returned.get()
     {
         ptr::null_mut()
     } else {
+        let body = func.body();
+        let mut linenr = usize::try_from(frame.linenr.get()).unwrap_or(0);
         // Skip NULL lines, they are continuation lines.
-        while frame.fc_linenr < f.uf_lines.ga_len && lines()[frame.fc_linenr as usize].is_null() {
-            frame.fc_linenr += 1;
+        while body.lines.get(linenr).is_some_and(Option::is_none) {
+            linenr += 1;
         }
-        if frame.fc_linenr >= f.uf_lines.ga_len {
-            ptr::null_mut()
-        } else {
-            let line = lines()[frame.fc_linenr as usize];
-            frame.fc_linenr += 1;
-            let dup = unsafe { xstrdup(line) };
-            crate::runtime::set_sourcing_lnum(frame.fc_linenr as LineNr);
-            if do_profiling.get() == PROF_YES {
-                unsafe { func_line_start(cookie) };
+        match body.lines.get(linenr) {
+            Some(Some(line)) => {
+                linenr += 1;
+                frame
+                    .linenr
+                    .set(c_int::try_from(linenr).unwrap_or(c_int::MAX));
+                let dup = XString::from_bytes(line).into_raw();
+                crate::runtime::set_sourcing_lnum(LineNr::from(frame.linenr.get()));
+                if do_profiling.get() == PROF_YES {
+                    func_line_start(&frame);
+                }
+                dup
             }
-            dup
+            _ => {
+                frame
+                    .linenr
+                    .set(c_int::try_from(linenr).unwrap_or(c_int::MAX));
+                ptr::null_mut()
+            }
         }
     };
 
     // Did we encounter a breakpoint?
-    if frame.fc_breakpoint != 0 && frame.fc_breakpoint <= sourcing_lnum() {
+    let breakpoint = frame.breakpoint.get();
+    if breakpoint != 0 && breakpoint <= sourcing_lnum() {
         let at = sourcing_lnum();
-        // SAFETY: the running function's name, live with it.
-        dbg_breakpoint(unsafe { CStr::from_ptr(name) }, at);
+        dbg_breakpoint(name, at);
         // Find the next breakpoint.
-        frame.fc_breakpoint = unsafe { dbg_find_breakpoint(false, name, at) };
-        frame.fc_dbg_tick = debug_tick.get();
+        frame
+            .breakpoint
+            .set(dbg_find_breakpoint_named(false, name, at));
+        frame.dbg_tick.set(debug_tick.get());
     }
 
     retval
 }
 
 /// Whether the function running under `cookie` has ended.
-///
-/// # Safety
-/// `cookie` is a `FuncCall`.
-pub unsafe fn func_has_ended(cookie: *mut c_void) -> c_int {
-    let fcp = cookie as *mut FuncCall;
-    ((unsafe { (*(*fcp).fc_func).uf_flags }.has(FuncFlags::ABORT)
-        && did_emsg.get() != 0
-        && !aborted_in_try())
-        || unsafe { (*fcp).fc_returned } != 0) as c_int
+pub fn func_has_ended(cookie: *mut c_void) -> c_int {
+    let frame = cookie_funccall(cookie);
+    c_int::from(
+        (frame.func.has_flag(FuncFlags::ABORT) && did_emsg.get() != 0 && !aborted_in_try())
+            || frame.returned.get(),
+    )
 }
 
 /// Whether the function running under `cookie` was declared `abort`.
-///
-/// # Safety
-/// `cookie` is a `FuncCall`.
-pub unsafe fn func_has_abort(cookie: *mut c_void) -> c_int {
-    // SAFETY: the caller's promise.
-    let flags = unsafe { (*(*(cookie as *mut FuncCall)).fc_func).uf_flags };
-    flags.masked(FuncFlags::ABORT).bits()
+pub fn func_has_abort(cookie: *mut c_void) -> c_int {
+    c_int::from(cookie_funccall(cookie).func.has_flag(FuncFlags::ABORT))
 }
 
-/// The name of the function running under `cookie`.
-///
-/// # Safety
-/// `cookie` is a `FuncCall`.
-pub unsafe fn func_name(cookie: *mut c_void) -> *mut c_char {
-    unsafe { uf_name_ptr((*(cookie as *mut FuncCall)).fc_func) }
+/// The name of the function running under `cookie`, which lives as long as
+/// the call does.
+pub fn func_name(cookie: *mut c_void) -> *mut c_char {
+    cookie_funccall(cookie).func.name().as_ptr().cast_mut()
 }
 
-/// The breakpoint line of the function running under `cookie`.
-///
-/// # Safety
-/// `cookie` is a `FuncCall`.
-pub unsafe fn func_breakpoint(cookie: *mut c_void) -> *mut LineNr {
-    unsafe { &raw mut (*(cookie as *mut FuncCall)).fc_breakpoint }
+/// The breakpoint line of the function running under `cookie`, by address:
+/// the debugger moves it.
+pub fn func_breakpoint(cookie: *mut c_void) -> *mut LineNr {
+    cookie_funccall(cookie).breakpoint.as_ptr()
 }
 
-/// The debug tick of the function running under `cookie`.
-///
-/// # Safety
-/// `cookie` is a `FuncCall`.
-pub unsafe fn func_dbg_tick(cookie: *mut c_void) -> *mut c_int {
-    unsafe { &raw mut (*(cookie as *mut FuncCall)).fc_dbg_tick }
+/// The debug tick of the function running under `cookie`, by address.
+pub fn func_dbg_tick(cookie: *mut c_void) -> *mut c_int {
+    cookie_funccall(cookie).dbg_tick.as_ptr()
 }
 
 /// The `:if`/`:while` nesting level of the function running under `cookie`.
-///
-/// # Safety
-/// `cookie` is a `FuncCall`.
-pub unsafe fn func_level(cookie: *mut c_void) -> c_int {
-    unsafe { (*(cookie as *mut FuncCall)).fc_level }
+pub fn func_level(cookie: *mut c_void) -> c_int {
+    cookie_funccall(cookie).level
 }
 
 /// Whether the function running has already returned.
 pub(crate) fn current_func_returned() -> c_int {
-    unsafe { (*current_fc()).fc_returned }
+    with_current_fc(|frame| c_int::from(frame.is_some_and(|frame| frame.returned.get())))
 }

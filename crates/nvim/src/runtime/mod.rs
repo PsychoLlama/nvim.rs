@@ -38,7 +38,7 @@ use crate::eval::typval::{
     dict_copy, dict_find, dict_get_string_alloc, tv_check_for_opt_dict_arg, tv_dict_alloc,
     tv_dict_alloc_lock, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
-use crate::eval::userfunc::{CallStackAside, func_tbl_get};
+use crate::eval::userfunc::{CallStackAside, all_funcs};
 use crate::eval::vars::new_script_vars;
 use crate::eval::{eval_to_number, get_copy_id};
 use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
@@ -49,7 +49,6 @@ use crate::garray::{ga_grow, ga_init, ga_remove_duplicate_strings};
 use crate::getchar::openscript;
 use crate::getchar::state::got_int;
 use crate::global_cell::{GlobalCell, SharedCell};
-use crate::hashtab::tv_ht_iter;
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};

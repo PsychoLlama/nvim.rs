@@ -182,17 +182,10 @@ impl TypvalSink for LuaSink {
         _prefix: &'static CStr,
         _path: &ConvPath<'_, '_>,
     ) -> Flow {
-        let luaref = unsafe {
-            let fp = match fun {
-                None => ::core::ptr::null_mut(),
-                Some(fun) => find_func(fun.to_bytes()),
-            };
-            if fp.is_null() || !(*fp).uf_flags.has(FuncFlags::LUAREF) {
-                None
-            } else {
-                Some((*fp).uf_luaref)
-            }
-        };
+        let luaref = fun
+            .and_then(|fun| find_func(fun.to_bytes()))
+            .filter(|func| func.has_flag(FuncFlags::LUAREF))
+            .map(|func| func.luaref.get());
         match luaref {
             Some(ref_) => self.pushref(ref_),
             None => self.push_nil(),

@@ -12,14 +12,17 @@
 //! | this one | the arithmetic, `:profile`, and the accounting hooks the interpreter calls per line and per call |
 //! | [`report`] | what `:profile dump` writes |
 //! | [`startuptime`] | the `--startuptime` log |
-//!
-//! Every `unsafe fn` here has the same contract unless it says otherwise: a
-//! main-thread editor call, with the script table, the function table and
-//! the exestack live. The pointer-taking ones additionally want a live item
-//! of the table they name.
 
+// No `forbid(unsafe_code)` here: it would reach `startuptime`, whose log
+// still writes through the C stdio it shares with the rest of startup.
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -29,23 +32,21 @@ pub mod startuptime;
 // The report and the startuptime log were split out of this file; callers
 // name them where they have always been named.
 pub use report::profile_dump;
-pub(crate) use startuptime::time_pop;
 pub use startuptime::{time_finish, time_init, time_msg, time_push, time_start};
+pub(crate) use startuptime::{time_msg_at, time_pop};
 
 use crate::charset::skip;
-use crate::charset::{skiptowhite, skipwhite};
 use crate::debugger::ex_breakadd;
-use crate::eval::userfunc::{func_tbl_get, get_current_funccal};
+use crate::eval::userfunc::{all_funcs, cookie_funccall, current_fc};
 use crate::eval::vars::set_vim_var_nr;
 use crate::global_cell::GlobalCell;
-use crate::memory::xcalloc;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::os::env::expand_env_save_opt;
+use crate::os::env::expand_env_save_opt_of;
 use crate::os::fs::CFile;
 use crate::os::time::os_hrtime;
 use crate::runtime::state::current_sctx;
-use crate::runtime::{script_count, script_id_valid, script_item};
+use crate::runtime::{script_count, script_id_valid, with_script_item};
 use crate::types::Candidate;
 use crate::types::{
     ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, ScriptItem, SnPrl, UserFunc,
@@ -53,19 +54,7 @@ use crate::types::{
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
-
-/// Record a startup-timing message, if `--startuptime` asked for one.
-///
-/// The C spells this as the `TIME_MSG` macro. Safe: no raw pointer crosses
-/// the boundary, and the `time_fd` test is the whole of it.
-pub(crate) fn time_msg_at(what: &CStr) {
-    if startup_timing() {
-        // SAFETY: `time_fd` is the startup-timing file, opened once by
-        // `init_startuptime` and closed by `time_finish`; `what` outlives the
-        // call and the second argument is the "no elapsed time" null.
-        unsafe { time_msg(what.as_ptr(), ::core::ptr::null::<ProfTime>()) };
-    }
-}
+use std::rc::Rc;
 pub(crate) static do_profiling: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 /// The `--startuptime` log, open from `time_init` to `time_finish`.
 pub(crate) static time_fd: GlobalCell<Option<CFile>> = GlobalCell::new(None);
@@ -79,13 +68,6 @@ pub(crate) fn startup_timing() -> bool {
 pub const PROF_NONE: c_int = 0;
 pub const PROF_YES: c_int = 1;
 pub const PROF_PAUSED: c_int = 2;
-
-/// First byte of a `<SNR>`-mangled function name.
-const NL: c_char = b'\n' as c_char;
-/// Offset of `uf_name` inside `UserFunc`: hash keys point at the name, this
-/// recovers the function (the transpiled `HI2UF`, same constant as
-/// eval/userfunc/ uses).
-const UF_NAME_OFFSET: isize = 240;
 
 /// Accumulated time the user kept the editor waiting (input, `:profile
 /// pause`); subtracted from measurements via [`profile_sub_wait`].
@@ -125,9 +107,10 @@ pub fn profile_setlimit(msec: int64_t) -> ProfTime {
     // `INT64_MAX` nanoseconds -- ~292 years -- because that is how far apart
     // [`profile_cmp`] can still tell two times, and the wrapping add past it
     // is the arithmetic this module is built on.
-    let nsec = (msec as ProfTime)
+    let nsec = msec
+        .cast_unsigned()
         .saturating_mul(1_000_000)
-        .min(int64_t::MAX as ProfTime);
+        .min(int64_t::MAX.cast_unsigned());
     profile_start().wrapping_add(nsec)
 }
 
@@ -145,7 +128,9 @@ pub fn profile_divide(tm: ProfTime, count: c_int) -> ProfTime {
     if count <= 0 {
         return profile_zero();
     }
-    (tm as f64 / count as f64).round() as ProfTime
+    // The quotient is never negative; one past `i64::MAX` nanoseconds (292
+    // years) saturates there rather than at `u64::MAX`.
+    crate::narrow::float_as_i64((tm as f64 / f64::from(count)).round()).cast_unsigned()
 }
 
 pub fn profile_add(tm1: ProfTime, tm2: ProfTime) -> ProfTime {
@@ -176,10 +161,10 @@ pub(crate) fn profile_sub_wait(tm: ProfTime, tma: ProfTime) -> ProfTime {
 /// Signed value of a duration produced by [`profile_sub`]. Values above
 /// `i64::MAX` (>=150 years) are taken to be wrapped negative differences.
 pub fn profile_signed(tm: ProfTime) -> int64_t {
-    if tm <= int64_t::MAX as ProfTime {
-        tm as int64_t
+    if tm <= int64_t::MAX.cast_unsigned() {
+        tm.cast_signed()
     } else {
-        -((ProfTime::MAX - tm) as int64_t)
+        -(ProfTime::MAX - tm).cast_signed()
     }
 }
 
@@ -210,7 +195,7 @@ pub(crate) fn profile_msg(tm: ProfTime) -> [c_char; 50] {
     let mut buf = [0 as c_char; 50];
     let n = s.len().min(buf.len() - 1);
     for (dst, src) in buf.iter_mut().zip(s.as_bytes()[..n].iter()) {
-        *dst = *src as c_char;
+        *dst = c_char::from_ne_bytes([*src]);
     }
     buf[n] = 0;
     buf
@@ -224,26 +209,15 @@ pub fn ex_profile(excmd: &mut ExArg) {
     /// Time at which `:profile pause` stopped the clock.
     static PAUSE_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
 
-    // SAFETY: `args.arg` is the command's NUL-terminated argument, so both
-    // walkers stay inside it and the two views borrow from it for the length
-    // of this call.
-    let (subcmd, full, e) = unsafe {
-        let arg = excmd.arg_ptr();
-        let end = skiptowhite(arg);
-        let len = end.offset_from(arg) as usize;
-        (
-            core::slice::from_raw_parts(arg as *const u8, len),
-            CStr::from_ptr(arg).to_bytes(),
-            skipwhite(end),
-        )
-    };
+    let arg = excmd.line.arg;
+    let end = excmd.line.skip_to_white(arg);
+    let subcmd = excmd.line.slice_at(arg, end - arg);
+    let full = excmd.line.arg();
+    let e = excmd.line.skip_white(end);
 
-    if subcmd == b"start" && unsafe { *e } != 0 {
-        // SAFETY: `e` points into the argument; expand_env_save_opt returns
-        // an xmalloc'd C string, and the global allocator is malloc-backed,
-        // so CString may own (and later free) it.
-        let fname = unsafe { CString::from_raw(expand_env_save_opt(e, true)) };
-        PROFILE_FNAME.set(Some(fname));
+    if subcmd == b"start" && excmd.line.byte_at(e) != 0 {
+        let fname = expand_env_save_opt_of(excmd.line.cstr_from(e), true);
+        PROFILE_FNAME.set(Some(fname.as_cstr().to_owned()));
         do_profiling.set(PROF_YES);
         PROF_WAIT_TIME.set(profile_zero());
         set_vim_var_nr(Vv::Profiling, 1 as VarNumber);
@@ -277,47 +251,41 @@ pub fn ex_profile(excmd: &mut ExArg) {
 /// Forget all profiling information (`:profile stop`).
 fn profile_reset() {
     for id in 1..=script_count() {
-        // SAFETY: `1..=ga_len` are the live script ids.
-        let si = unsafe { &mut *script_item(id) };
-        if si.sn_prof_on {
-            si.sn_prof_on = false;
-            si.sn_pr_force = false;
-            si.sn_pr_child = profile_zero();
-            si.sn_pr_nest = 0;
-            si.sn_pr_count = 0;
-            si.sn_pr_total = profile_zero();
-            si.sn_pr_self = profile_zero();
-            si.sn_pr_start = profile_zero();
-            si.sn_pr_children = profile_zero();
-            si.sn_prl_ga = Vec::new();
-            si.sn_prl_start = profile_zero();
-            si.sn_prl_children = profile_zero();
-            si.sn_prl_wait = profile_zero();
-            si.sn_prl_idx = -1;
-            si.sn_prl_execed = 0;
-        }
+        with_script_item(id, |si| {
+            if si.sn_prof_on {
+                si.sn_prof_on = false;
+                si.sn_pr_force = false;
+                si.sn_pr_child = profile_zero();
+                si.sn_pr_nest = 0;
+                si.sn_pr_count = 0;
+                si.sn_pr_total = profile_zero();
+                si.sn_pr_self = profile_zero();
+                si.sn_pr_start = profile_zero();
+                si.sn_pr_children = profile_zero();
+                si.sn_prl_ga = Vec::new();
+                si.sn_prl_start = profile_zero();
+                si.sn_prl_children = profile_zero();
+                si.sn_prl_wait = profile_zero();
+                si.sn_prl_idx = -1;
+                si.sn_prl_execed = 0;
+            }
+        });
     }
-    // SAFETY: the function table is live and its entries outlive this walk.
-    for uf in unsafe { profiled_functions() } {
-        // SAFETY: an entry of the function table.
-        let uf = unsafe { &mut *uf };
-        uf.uf_profiling = 0;
-        uf.uf_tm_count = 0;
-        uf.uf_tm_total = profile_zero();
-        uf.uf_tm_self = profile_zero();
-        uf.uf_tm_children = profile_zero();
-        for i in 0..uf.uf_lines.ga_len as isize {
-            // SAFETY: `func_do_profile` sized all three per-line arrays to
-            // `uf_lines`, which is what this walks.
-            unsafe { *uf.uf_tml_count.offset(i) = 0 };
-            unsafe { *uf.uf_tml_total.offset(i) = 0 };
-            unsafe { *uf.uf_tml_self.offset(i) = 0 };
-        }
-        uf.uf_tml_start = profile_zero();
-        uf.uf_tml_children = profile_zero();
-        uf.uf_tml_wait = profile_zero();
-        uf.uf_tml_idx = -1;
-        uf.uf_tml_execed = 0;
+    for func in profiled_functions() {
+        let mut prof = func.prof.borrow_mut();
+        prof.profiling = false;
+        prof.tm_count = 0;
+        prof.tm_total = profile_zero();
+        prof.tm_self = profile_zero();
+        prof.tm_children = profile_zero();
+        prof.tml_count.fill(0);
+        prof.tml_total.fill(profile_zero());
+        prof.tml_self.fill(profile_zero());
+        prof.tml_start = profile_zero();
+        prof.tml_children = profile_zero();
+        prof.tml_wait = profile_zero();
+        prof.tml_idx = -1;
+        prof.tml_execed = false;
     }
     PROFILE_FNAME.set(None);
 }
@@ -391,49 +359,40 @@ pub fn prof_input_end() {
 /// (the script was targeted by `:profile file` with `!`-forcing).
 pub fn prof_def_func() -> bool {
     let sid = current_sctx.get().sc_sid;
-    // SAFETY: a positive `sc_sid` is a live script id.
-    sid > 0 && unsafe { (*script_item(sid)).sn_pr_force }
+    sid > 0 && with_script_item(sid, |si| si.sn_pr_force)
 }
 
-/// Start profiling function `func`, allocating its per-line counters on
-/// first use.
-///
-/// # Safety
-/// `func` is a live function-table entry.
-pub unsafe fn func_do_profile(func: *mut UserFunc) {
-    // SAFETY: the caller's function.
-    let func = unsafe { &mut *func };
-    // Avoid allocating zero bytes.
-    let len = (func.uf_lines.ga_len as usize).max(1);
-    if func.uf_prof_initialized == 0 {
-        func.uf_tm_count = 0;
-        func.uf_tm_self = profile_zero();
-        func.uf_tm_total = profile_zero();
-        // SAFETY: `xcalloc` returns an owned zeroed array of `len` elements,
-        // which is what the three per-line counters are read as everywhere.
-        if func.uf_tml_count.is_null() {
-            func.uf_tml_count = unsafe { xcalloc(len, size_of::<c_int>()) } as *mut c_int;
+/// Start profiling function `func`, sizing its per-line counters to its
+/// body on first use.
+pub fn func_do_profile(func: &UserFunc) {
+    // Avoid zero-length counters.
+    let len = func.body().lines.len().max(1);
+    let mut prof = func.prof.borrow_mut();
+    if !prof.initialized {
+        prof.tm_count = 0;
+        prof.tm_self = profile_zero();
+        prof.tm_total = profile_zero();
+        if prof.tml_count.is_empty() {
+            prof.tml_count = vec![0; len];
         }
-        if func.uf_tml_total.is_null() {
-            func.uf_tml_total = unsafe { xcalloc(len, size_of::<ProfTime>()) } as *mut ProfTime;
+        if prof.tml_total.is_empty() {
+            prof.tml_total = vec![profile_zero(); len];
         }
-        if func.uf_tml_self.is_null() {
-            func.uf_tml_self = unsafe { xcalloc(len, size_of::<ProfTime>()) } as *mut ProfTime;
+        if prof.tml_self.is_empty() {
+            prof.tml_self = vec![profile_zero(); len];
         }
-        func.uf_tml_idx = -1;
-        func.uf_prof_initialized = 1;
+        prof.tml_idx = -1;
+        prof.initialized = true;
     }
-    func.uf_profiling = 1;
+    prof.profiling = true;
 }
 
 /// Prepare for entering a child (another script/function/shell command)
 /// whose time should not count towards the current one. Returns the wait
 /// time to pass to [`prof_child_exit`].
 pub fn prof_child_enter() -> ProfTime {
-    // SAFETY: `get_current_funccal` answers with the live call frame or null,
-    // and a frame's `fc_func` is the function being executed.
-    if let Some(fc) = unsafe { profiled_funccal() } {
-        unsafe { (*fc).fc_prof_child = profile_start() };
+    if let Some(frame) = profiled_funccal() {
+        frame.prof_child.set(profile_start());
     }
     script_prof_save()
 }
@@ -441,108 +400,104 @@ pub fn prof_child_enter() -> ProfTime {
 /// Account the time spent in a child; pairs with [`prof_child_enter`],
 /// `wait` being its return value.
 pub fn prof_child_exit(wait: ProfTime) {
-    // SAFETY: as [`prof_child_enter`].
-    if let Some(fc) = unsafe { profiled_funccal() } {
-        let fc = unsafe { &mut *fc };
+    if let Some(frame) = profiled_funccal() {
         // Don't count waiting time.
-        let child = profile_sub_wait(wait, profile_end(fc.fc_prof_child));
-        fc.fc_prof_child = child;
-        let func = unsafe { &mut *fc.fc_func };
-        func.uf_tm_children = profile_add(func.uf_tm_children, child);
-        func.uf_tml_children = profile_add(func.uf_tml_children, child);
+        let child = profile_sub_wait(wait, profile_end(frame.prof_child.get()));
+        frame.prof_child.set(child);
+        let mut prof = frame.func.prof.borrow_mut();
+        prof.tm_children = profile_add(prof.tm_children, child);
+        prof.tml_children = profile_add(prof.tml_children, child);
     }
     script_prof_restore(wait);
 }
 
 /// The current call frame, when its function is being profiled.
-///
-/// # Safety
-/// Main-thread editor call; the call stack is live.
-unsafe fn profiled_funccal() -> Option<*mut FuncCall> {
-    let fc = get_current_funccal();
-    (!fc.is_null() && unsafe { (*(*fc).fc_func).uf_profiling } != 0).then_some(fc)
+fn profiled_funccal() -> Option<Rc<FuncCall>> {
+    current_fc().filter(|frame| frame.func.prof.borrow().profiling)
 }
 
-/// Called when starting to read a function line; the exestack lnum must be
-/// correct. The line may turn out not to execute — the time is stored now,
-/// counted only if [`func_line_exec`] follows.
-///
-/// # Safety
-/// `cookie` is the live `FuncCall` of the function being executed.
-pub unsafe fn func_line_start(cookie: *mut c_void) {
-    // SAFETY: the caller's call frame and its function.
-    let fp = unsafe { &mut *(*(cookie as *mut FuncCall)).fc_func };
+/// Called when starting to read a line of the function `frame` is running;
+/// the exestack lnum must be correct. The line may turn out not to execute
+/// — the time is stored now, counted only if [`func_line_exec`] follows.
+pub(crate) fn func_line_start(frame: &FuncCall) {
+    let func = &frame.func;
     let lnum = sourcing_lnum();
-    if fp.uf_profiling != 0 && lnum >= 1 && lnum <= fp.uf_lines.ga_len as LineNr {
-        fp.uf_tml_idx = lnum as c_int - 1;
-        // Skip continuation lines, which the line array stores as nulls.
-        while fp.uf_tml_idx > 0 && unsafe { func_line(fp, fp.uf_tml_idx as isize) }.is_null() {
-            fp.uf_tml_idx -= 1;
+    let body = func.body();
+    let mut prof = func.prof.borrow_mut();
+    if prof.profiling
+        && lnum >= 1
+        && usize::try_from(lnum).is_ok_and(|lnum| lnum <= body.lines.len())
+    {
+        let mut idx = usize::try_from(lnum - 1).unwrap_or(0);
+        // Skip continuation lines, which the body stores as `None`.
+        while idx > 0 && body.lines[idx].is_none() {
+            idx -= 1;
         }
-        fp.uf_tml_execed = 0;
-        fp.uf_tml_start = profile_start();
-        fp.uf_tml_children = profile_zero();
-        fp.uf_tml_wait = PROF_WAIT_TIME.get();
+        prof.tml_idx = c_int::try_from(idx).unwrap_or(c_int::MAX);
+        prof.tml_execed = false;
+        prof.tml_start = profile_start();
+        prof.tml_children = profile_zero();
+        prof.tml_wait = PROF_WAIT_TIME.get();
     }
 }
 
-/// The `idx`'th source line of `func`, or null for a continuation line.
-///
-/// # Safety
-/// `idx` is below `func.uf_lines.ga_len`.
-unsafe fn func_line(func: &UserFunc, idx: isize) -> *mut c_char {
-    // SAFETY: the caller's bound; the array holds `ga_len` line pointers.
-    unsafe { *(func.uf_lines.ga_data as *mut *mut c_char).offset(idx) }
-}
-
-/// Called when actually executing a function line.
-///
-/// # Safety
-/// `cookie` is the live `FuncCall` of the function being executed.
-pub unsafe fn func_line_exec(cookie: *mut c_void) {
-    // SAFETY: the caller's call frame and its function.
-    let fp = unsafe { &mut *(*(cookie as *mut FuncCall)).fc_func };
-    if fp.uf_profiling != 0 && fp.uf_tml_idx >= 0 {
-        fp.uf_tml_execed = 1;
+/// Called when actually executing a line of the function `frame` is
+/// running.
+pub(crate) fn func_line_exec(frame: &FuncCall) {
+    let mut prof = frame.func.prof.borrow_mut();
+    if prof.profiling && prof.tml_idx >= 0 {
+        prof.tml_execed = true;
     }
 }
 
-/// Called when done with a function line.
-///
-/// # Safety
-/// `cookie` is the live `FuncCall` of the function being executed.
-pub unsafe fn func_line_end(cookie: *mut c_void) {
-    // SAFETY: the caller's call frame and its function.
-    let fp = unsafe { &mut *(*(cookie as *mut FuncCall)).fc_func };
-    if fp.uf_profiling != 0 && fp.uf_tml_idx >= 0 {
-        if fp.uf_tml_execed != 0 {
-            let i = fp.uf_tml_idx as isize;
-            // SAFETY: `uf_tml_idx` was checked against `uf_lines.ga_len` in
-            // `func_line_start`, which is what the three arrays are sized to.
-            unsafe { *fp.uf_tml_count.offset(i) += 1 };
-            let spent = profile_sub_wait(fp.uf_tml_wait, profile_end(fp.uf_tml_start));
-            fp.uf_tml_start = spent;
-            let children = fp.uf_tml_children;
-            // SAFETY: as above.
-            unsafe { *fp.uf_tml_total.offset(i) = profile_add(*fp.uf_tml_total.offset(i), spent) };
-            unsafe {
-                *fp.uf_tml_self.offset(i) = profile_self(*fp.uf_tml_self.offset(i), spent, children)
-            };
+/// Called when done with a line of the function `frame` is running.
+pub(crate) fn func_line_end(frame: &FuncCall) {
+    let mut prof = frame.func.prof.borrow_mut();
+    if prof.profiling && prof.tml_idx >= 0 {
+        if prof.tml_execed {
+            let i = usize::try_from(prof.tml_idx).unwrap_or(0);
+            let spent = profile_sub_wait(prof.tml_wait, profile_end(prof.tml_start));
+            prof.tml_start = spent;
+            let children = prof.tml_children;
+            // `tml_idx` was checked against the body in `func_line_start`,
+            // which is what the counters are sized to.
+            if let Some(count) = prof.tml_count.get_mut(i) {
+                *count += 1;
+            }
+            if let Some(total) = prof.tml_total.get_mut(i) {
+                *total = profile_add(*total, spent);
+            }
+            if let Some(own) = prof.tml_self.get_mut(i) {
+                *own = profile_self(*own, spent, children);
+            }
         }
-        fp.uf_tml_idx = -1;
+        prof.tml_idx = -1;
     }
+}
+
+/// [`func_line_start`] for the function body `cookie` is the
+/// `do_cmdline` cookie of.
+pub fn func_line_start_cookie(cookie: *mut c_void) {
+    func_line_start(&cookie_funccall(cookie));
+}
+
+/// [`func_line_exec`] for the function body `cookie` is the `do_cmdline`
+/// cookie of.
+pub fn func_line_exec_cookie(cookie: *mut c_void) {
+    func_line_exec(&cookie_funccall(cookie));
+}
+
+/// [`func_line_end`] for the function body `cookie` is the `do_cmdline`
+/// cookie of.
+pub fn func_line_end_cookie(cookie: *mut c_void) {
+    func_line_end(&cookie_funccall(cookie));
 }
 
 // ---------------------------------------------------------------------------
 // Script profiling.
 
 /// Start profiling script `si` (`:profile file` match on source).
-///
-/// # Safety
-/// `si` is a live script item.
-pub unsafe fn profile_init(si: *mut ScriptItem) {
-    // SAFETY: the caller's script item.
-    let si = unsafe { &mut *si };
+pub fn profile_init(si: &mut ScriptItem) {
     si.sn_pr_count = 0;
     si.sn_pr_total = profile_zero();
     si.sn_pr_self = profile_zero();
@@ -555,8 +510,7 @@ pub unsafe fn profile_init(si: *mut ScriptItem) {
 /// Save the wait time when starting to invoke another script or function;
 /// returns the snapshot for [`script_prof_restore`].
 pub fn script_prof_save() -> ProfTime {
-    if let Some(si) = current_script() {
-        let si = unsafe { &mut *si };
+    with_current_script(|si| {
         if si.sn_prof_on {
             let nest = si.sn_pr_nest;
             si.sn_pr_nest += 1;
@@ -564,44 +518,40 @@ pub fn script_prof_save() -> ProfTime {
                 si.sn_pr_child = profile_start();
             }
         }
-    }
+    });
     PROF_WAIT_TIME.get()
 }
 
 /// Count time spent in children after invoking another script or function;
 /// `wait` is what [`script_prof_save`] returned.
 pub fn script_prof_restore(wait: ProfTime) {
-    let Some(si) = current_script() else {
-        return;
-    };
-    let si = unsafe { &mut *si };
-    if !si.sn_prof_on {
-        return;
-    }
-    si.sn_pr_nest -= 1;
-    if si.sn_pr_nest == 0 {
-        // Don't count wait time.
-        let child = profile_sub_wait(wait, profile_end(si.sn_pr_child));
-        si.sn_pr_child = child;
-        si.sn_pr_children = profile_add(si.sn_pr_children, child);
-        si.sn_prl_children = profile_add(si.sn_prl_children, child);
-    }
+    with_current_script(|si| {
+        if !si.sn_prof_on {
+            return;
+        }
+        si.sn_pr_nest -= 1;
+        if si.sn_pr_nest == 0 {
+            // Don't count wait time.
+            let child = profile_sub_wait(wait, profile_end(si.sn_pr_child));
+            si.sn_pr_child = child;
+            si.sn_pr_children = profile_add(si.sn_pr_children, child);
+            si.sn_prl_children = profile_add(si.sn_prl_children, child);
+        }
+    });
 }
 
 /// Called when starting to read a script line; the exestack lnum must be
 /// correct. See [`func_line_start`] for the execed dance.
 pub fn script_line_start() {
-    // SAFETY: `current_script` only answers with a live script item, and the
-    // exestack is live while a script line is being read.
-    let (si, lnum) = unsafe {
-        let Some(si) = current_script() else { return };
-        (&mut *si, sourcing_lnum())
-    };
-    if si.sn_prof_on && lnum >= 1 {
+    let lnum = sourcing_lnum();
+    with_current_script(|si| {
+        if !(si.sn_prof_on && lnum >= 1) {
+            return;
+        }
         // Grow the array before starting the timer, so that the time spent
         // here isn't counted. Lines that were never reached keep the zero
         // counters this leaves behind.
-        let lines = lnum as usize;
+        let lines = usize::try_from(lnum).unwrap_or(0);
         if si.sn_prl_ga.len() < lines {
             si.sn_prl_ga.resize(lines, SnPrl::default());
         }
@@ -610,29 +560,29 @@ pub fn script_line_start() {
         si.sn_prl_start = profile_start();
         si.sn_prl_children = profile_zero();
         si.sn_prl_wait = PROF_WAIT_TIME.get();
-    }
+    });
 }
 
 /// Called when actually executing a script line.
 pub fn script_line_exec() {
-    let Some(si) = current_script() else {
-        return;
-    };
-    let si = unsafe { &mut *si };
-    if si.sn_prof_on && si.sn_prl_idx >= 0 {
-        si.sn_prl_execed = 1;
-    }
+    with_current_script(|si| {
+        if si.sn_prof_on && si.sn_prl_idx >= 0 {
+            si.sn_prl_execed = 1;
+        }
+    });
 }
 
 /// Called when done with a script line.
 pub fn script_line_end() {
-    let Some(si) = current_script() else {
-        return;
-    };
-    let si = unsafe { &mut *si };
-    if si.sn_prof_on && si.sn_prl_idx >= 0 && (si.sn_prl_idx as usize) < si.sn_prl_ga.len() {
+    with_current_script(script_line_done);
+}
+
+/// [`script_line_end`] of the current script's item.
+fn script_line_done(si: &mut ScriptItem) {
+    let idx = usize::try_from(si.sn_prl_idx).ok();
+    if si.sn_prof_on && idx.is_some_and(|idx| idx < si.sn_prl_ga.len()) {
         if si.sn_prl_execed != 0 {
-            let idx = si.sn_prl_idx as usize;
+            let idx = idx.unwrap_or(0);
             let spent = profile_sub_wait(si.sn_prl_wait, profile_end(si.sn_prl_start));
             si.sn_prl_start = spent;
             let children = si.sn_prl_children;
@@ -648,10 +598,13 @@ pub fn script_line_end() {
 // ---------------------------------------------------------------------------
 // Shared accessors for the editor's script/function tables.
 
-/// The current script's item, if `current_sctx` points at a valid one.
-fn current_script() -> Option<*mut ScriptItem> {
+/// Run `f` on the current script's item, if `current_sctx` points at a
+/// valid one.
+fn with_current_script(f: impl FnOnce(&mut ScriptItem)) {
     let sid = current_sctx.get().sc_sid;
-    script_id_valid(sid).then(|| script_item(sid))
+    if script_id_valid(sid) {
+        with_script_item(sid, f);
+    }
 }
 
 /// Line number being sourced/executed: the top of the exestack.
@@ -659,21 +612,11 @@ fn sourcing_lnum() -> LineNr {
     crate::runtime::innermost_frame().es_lnum
 }
 
-/// All functions in the global function table with profiling data, in hash
-/// table order.
-///
-/// # Safety
-/// Main-thread editor call; the function table is live.
-unsafe fn profiled_functions() -> Vec<*mut UserFunc> {
-    let mut found = Vec::new();
-    // SAFETY: the caller's contract. A hash item's key points at the
-    // `uf_name` field of its `UserFunc`, which is what the offset undoes.
-    let functbl = unsafe { &*func_tbl_get() };
-    for hi in functbl.items() {
-        let fp = unsafe { hi.hi_key.offset(-UF_NAME_OFFSET) } as *mut UserFunc;
-        if unsafe { (*fp).uf_prof_initialized } != 0 {
-            found.push(fp);
-        }
-    }
-    found
+/// All functions in the global function table with profiling data, in the
+/// table's slot order.
+fn profiled_functions() -> Vec<Rc<UserFunc>> {
+    all_funcs()
+        .into_iter()
+        .filter(|func| func.prof.borrow().initialized)
+        .collect()
 }

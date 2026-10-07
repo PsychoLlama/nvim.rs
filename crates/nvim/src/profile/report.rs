@@ -9,8 +9,7 @@
 //! that a time equal to the other one prints as blanks is what makes the
 //! report readable.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,18 +18,16 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{NL, PROFILE_FNAME, func_line, profile_cmp, profile_msg_str, profiled_functions};
-use crate::fileio::vim_fgets;
+use super::{PROFILE_FNAME, profile_cmp, profile_msg_str, profiled_functions};
 use crate::keycodes::K_SPECIAL;
-use crate::os::fs::os_fopen;
-use crate::runtime::{get_scriptname, script_count, script_item};
-use crate::types::{IOSIZE, ProfTime, ScriptItem, UserFunc};
-use ::libc::fclose;
-use core::ffi::{CStr, c_char, c_int};
+use crate::runtime::{get_scriptname, script_count, with_script_item};
+use crate::types::{IOSIZE, ProfTime, ScriptCtx, SnPrl, UserFunc};
+use core::ffi::c_int;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{self, BufWriter, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::os::unix::ffi::OsStrExt;
+use std::rc::Rc;
 
 // ---------------------------------------------------------------------------
 // The report.
@@ -54,13 +51,8 @@ pub fn profile_dump() {
 }
 
 /// `"name()"` with a newline, decoding the `<SNR>` mangling.
-///
-/// # Safety
-/// `func` is a live function-table entry.
-unsafe fn write_func_name(fd: &mut dyn Write, func: *mut UserFunc) -> io::Result<()> {
-    // SAFETY: `uf_name` is the flexible NUL-terminated name at the end of the
-    // entry, alive for as long as `func` is.
-    let name = unsafe { CStr::from_ptr((&raw const (*func).uf_name).cast::<c_char>()).to_bytes() };
+fn write_func_name(fd: &mut dyn Write, func: &UserFunc) -> io::Result<()> {
+    let name = func.name().as_bytes();
     if name.first().is_some_and(|&b| c_int::from(b) == K_SPECIAL) {
         write!(fd, "<SNR>")?;
         fd.write_all(name.get(3..).unwrap_or_default())?;
@@ -98,75 +90,67 @@ fn prof_func_line(
 }
 
 /// The top-20 list sorted on total or self time.
-///
-/// # Safety
-/// `sorttab` holds live function-table entries.
-unsafe fn prof_sort_list(
+fn prof_sort_list(
     fd: &mut dyn Write,
-    sorttab: &[*mut UserFunc],
+    sorttab: &[Rc<UserFunc>],
     title: &str,
     prefer_self: bool,
 ) -> io::Result<()> {
     writeln!(fd, "FUNCTIONS SORTED ON {title} TIME")?;
     writeln!(fd, "count  total (s)   self (s)  function")?;
-    for &fp in sorttab.iter().take(20) {
-        // SAFETY: the caller's entries.
-        let f = unsafe { &*fp };
-        prof_func_line(fd, f.uf_tm_count, f.uf_tm_total, f.uf_tm_self, prefer_self)?;
+    for func in sorttab.iter().take(20) {
+        let (count, total, own) = {
+            let prof = func.prof.borrow();
+            (prof.tm_count, prof.tm_total, prof.tm_self)
+        };
+        prof_func_line(fd, count, total, own, prefer_self)?;
         write!(fd, " ")?;
-        // SAFETY: as above.
-        unsafe { write_func_name(fd, fp) }?;
+        write_func_name(fd, func)?;
     }
     writeln!(fd)
 }
 
 /// Where a function was defined, as the report's `Defined:` line.
 fn write_func_origin(fd: &mut dyn Write, func: &UserFunc) -> io::Result<()> {
-    let p = get_scriptname(func.uf_script_ctx, true);
+    let sctx = func.script_ctx.get();
+    let p = get_scriptname(sctx, true);
     write!(fd, "    Defined: ")?;
     fd.write_all(p.to_bytes())?;
-    writeln!(fd, ":{}", func.uf_script_ctx.sc_lnum)?;
+    writeln!(fd, ":{}", sctx.sc_lnum)?;
     Ok(())
 }
 
 /// Per-function sections plus the sorted lists.
 fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
-    // SAFETY: the caller's contract.
-    let mut sorttab = unsafe { profiled_functions() };
-    for &fp in &sorttab {
-        // SAFETY: an entry of the function table.
-        let f = unsafe { &*fp };
+    let mut sorttab = profiled_functions();
+    for func in &sorttab {
         write!(fd, "FUNCTION  ")?;
-        // SAFETY: as above.
-        unsafe { write_func_name(fd, fp) }?;
-        if f.uf_script_ctx.sc_sid != 0 {
-            write_func_origin(fd, f)?;
+        write_func_name(fd, func)?;
+        if func.script_ctx.get().sc_sid != 0 {
+            write_func_origin(fd, func)?;
         }
-        if f.uf_tm_count == 1 {
+        let prof = func.prof.borrow();
+        if prof.tm_count == 1 {
             writeln!(fd, "Called 1 time")?;
         } else {
-            writeln!(fd, "Called {} times", f.uf_tm_count)?;
+            writeln!(fd, "Called {} times", prof.tm_count)?;
         }
-        writeln!(fd, "Total time: {}", profile_msg_str(f.uf_tm_total))?;
-        writeln!(fd, " Self time: {}", profile_msg_str(f.uf_tm_self))?;
+        writeln!(fd, "Total time: {}", profile_msg_str(prof.tm_total))?;
+        writeln!(fd, " Self time: {}", profile_msg_str(prof.tm_self))?;
         write!(fd, "\ncount  total (s)   self (s)\n")?;
-        for i in 0..f.uf_lines.ga_len as isize {
-            // SAFETY: `i` is below `uf_lines.ga_len`.
-            let line = unsafe { func_line(f, i) };
-            if line.is_null() {
+        let body = func.body();
+        for (i, line) in body.lines.iter().enumerate() {
+            let Some(line) = line else {
                 continue;
-            }
-            // SAFETY: the three per-line counters are sized to `uf_lines`.
-            let (count, total, self_) = unsafe {
-                (
-                    *f.uf_tml_count.offset(i),
-                    *f.uf_tml_total.offset(i),
-                    *f.uf_tml_self.offset(i),
-                )
             };
-            prof_func_line(fd, count, total, self_, true)?;
-            // SAFETY: a NUL-terminated source line owned by the function.
-            fd.write_all(unsafe { CStr::from_ptr(line) }.to_bytes())?;
+            // The three per-line counters are sized to the body.
+            let count = prof.tml_count.get(i).copied().unwrap_or(0);
+            let total = prof.tml_total.get(i).copied().unwrap_or(0);
+            let own = prof.tml_self.get(i).copied().unwrap_or(0);
+            prof_func_line(fd, count, total, own, true)?;
+            // Upstream prints the line as a C string.
+            let end = line.iter().position(|&b| b == 0).unwrap_or(line.len());
+            fd.write_all(&line[..end])?;
             writeln!(fd)?;
         }
         writeln!(fd)?;
@@ -183,47 +167,97 @@ fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
         // `func_hashtab` walk upstream feeds `qsort`. `syntax/syntime.rs`
         // is the sibling that answered the same question the other way and
         // kept `qsort`, for the same comparator.
-        // SAFETY: the entries this walk collected.
-        sorttab.sort_by(|&a, &b| {
-            profile_cmp(unsafe { (*a).uf_tm_total }, unsafe { (*b).uf_tm_total }).cmp(&0)
+        sorttab.sort_by(|a, b| {
+            profile_cmp(a.prof.borrow().tm_total, b.prof.borrow().tm_total).cmp(&0)
         });
-        unsafe { prof_sort_list(fd, &sorttab, "TOTAL", false) }?;
-        sorttab.sort_by(|&a, &b| {
-            profile_cmp(unsafe { (*a).uf_tm_self }, unsafe { (*b).uf_tm_self }).cmp(&0)
-        });
-        unsafe { prof_sort_list(fd, &sorttab, "SELF", true) }?;
+        prof_sort_list(fd, &sorttab, "TOTAL", false)?;
+        sorttab
+            .sort_by(|a, b| profile_cmp(a.prof.borrow().tm_self, b.prof.borrow().tm_self).cmp(&0));
+        prof_sort_list(fd, &sorttab, "SELF", true)?;
     }
     Ok(())
 }
 
+/// C's `fgets` over `reader`: at most `size - 1` bytes, up to and including
+/// the first newline. `None` at the end of the file with nothing read, or
+/// on a read error.
+fn fgets(reader: &mut impl BufRead, size: usize) -> Option<Vec<u8>> {
+    let limit = size - 1;
+    let mut out = Vec::new();
+    while out.len() < limit {
+        let buf = match reader.fill_buf() {
+            Ok(buf) => buf,
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+            Err(_) => return None,
+        };
+        if buf.is_empty() {
+            break;
+        }
+        let room = (limit - out.len()).min(buf.len());
+        let take = buf[..room]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(room, |at| at + 1);
+        out.extend_from_slice(&buf[..take]);
+        reader.consume(take);
+        if out.last() == Some(&b'\n') {
+            break;
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// Whether the byte `fgets` left at the last-but-one place of its buffer
+/// says the line did not fit.
+fn filled(c: u8) -> bool {
+    c != 0 && c != b'\n'
+}
+
+/// Upstream's `vim_fgets` with an `IOSIZE` buffer: one line of at most
+/// `IOSIZE - 1` bytes. A longer line is cut there and the rest of it read
+/// and thrown away, 199 bytes at a time; when that throwing away reaches
+/// the end of the file, the answer is `None` as at the end of the file,
+/// and the cut line is lost with it.
+fn vim_fgets_line(reader: &mut impl BufRead) -> Option<Vec<u8>> {
+    const DISCARD: usize = 200;
+    let size = IOSIZE as usize;
+    let line = fgets(reader, size)?;
+    if line.len() == size - 1 && filled(line[size - 2]) {
+        // Now throw away the rest of the line.
+        loop {
+            let chunk = fgets(reader, DISCARD)?;
+            if !(chunk.len() == DISCARD - 1 && filled(chunk[DISCARD - 2])) {
+                break;
+            }
+        }
+    }
+    Some(line)
+}
+
 /// One script's source, annotated line by line with its counters. The read
 /// runs to the end of file so that trailing continuation lines are listed.
-fn script_dump_source(fd: &mut dyn Write, si: &ScriptItem) -> io::Result<()> {
-    // SAFETY: `sn_name` is the NUL-terminated source path.
-    let sfd = unsafe { os_fopen(si.sn_name, c"r".as_ptr()) };
-    if sfd.is_null() {
+fn script_dump_source(fd: &mut dyn Write, path: &[u8], counters: &[SnPrl]) -> io::Result<()> {
+    let Ok(file) = File::open(OsStr::from_bytes(path)) else {
         return writeln!(fd, "Cannot open file!");
-    }
-    let mut buf = [0 as c_char; IOSIZE as usize];
+    };
+    let mut reader = BufReader::new(file);
+    let size = IOSIZE as usize;
     let mut i: usize = 0;
-    // SAFETY: `buf` is `IOSIZE` chars, which is the bound handed over, and
-    // `sfd` is the handle just opened; it is closed below.
-    while !unsafe { vim_fgets(buf.as_mut_ptr(), IOSIZE, sfd) } {
+    while let Some(mut line) = vim_fgets_line(&mut reader) {
         // When a line has been truncated, append NL, taking care of
         // multibyte characters.
-        if buf[IOSIZE as usize - 2] != 0 && buf[IOSIZE as usize - 2] != NL {
-            let mut n = IOSIZE as usize - 2;
+        if line.len() == size - 1 && filled(line[size - 2]) {
+            let mut n = size - 2;
             // Move back to the first byte of the char.
-            while n > 0 && (buf[n].cast_unsigned() & 0xc0) == 0x80 {
+            while n > 0 && (line[n] & 0xc0) == 0x80 {
                 n -= 1;
             }
-            buf[n] = NL;
-            buf[n + 1] = 0;
+            line.truncate(n);
+            line.push(b'\n');
         }
-        // SAFETY: `buf` was NUL-terminated by `vim_fgets`.
-        let counters = si.sn_prl_ga.get(i).copied();
-        let line = unsafe { CStr::from_ptr(buf.as_ptr()) };
-        match counters.filter(|pp| pp.snp_count > 0) {
+        // The buffer is read as a C string.
+        let end = line.iter().position(|&b| b == 0).unwrap_or(line.len());
+        match counters.get(i).copied().filter(|pp| pp.snp_count > 0) {
             Some(pp) => {
                 write!(fd, "{:5} ", pp.snp_count)?;
                 if pp.sn_prl_total == pp.sn_prl_self {
@@ -235,36 +269,52 @@ fn script_dump_source(fd: &mut dyn Write, si: &ScriptItem) -> io::Result<()> {
             }
             None => write!(fd, "                            ")?,
         }
-        fd.write_all(line.to_bytes())?;
+        fd.write_all(&line[..end])?;
         i += 1;
     }
-    // SAFETY: the handle opened above, used nowhere else.
-    unsafe { fclose(sfd) };
     Ok(())
+}
+
+/// What the report reads of one script's item.
+struct ScriptProfile {
+    count: c_int,
+    total: ProfTime,
+    own: ProfTime,
+    lines: Vec<SnPrl>,
 }
 
 /// Per-script sections: each profiled script's source lines annotated with
 /// their counters.
 fn script_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
     for id in 1..=script_count() {
-        // SAFETY: `1..=ga_len` are the live script ids.
-        let si = unsafe { &*script_item(id) };
-        if !si.sn_prof_on {
+        let profile = with_script_item(id, |si| {
+            si.sn_prof_on.then(|| ScriptProfile {
+                count: si.sn_pr_count,
+                total: si.sn_pr_total,
+                own: si.sn_pr_self,
+                lines: si.sn_prl_ga.clone(),
+            })
+        });
+        let Some(profile) = profile else {
             continue;
-        }
+        };
+        let sctx = ScriptCtx {
+            sc_sid: id,
+            ..ScriptCtx::default()
+        };
+        let name = get_scriptname(sctx, false);
         write!(fd, "SCRIPT  ")?;
-        // SAFETY: `sn_name` is the NUL-terminated source path.
-        fd.write_all(unsafe { CStr::from_ptr(si.sn_name) }.to_bytes())?;
+        fd.write_all(name.to_bytes())?;
         writeln!(fd)?;
-        if si.sn_pr_count == 1 {
+        if profile.count == 1 {
             writeln!(fd, "Sourced 1 time")?;
         } else {
-            writeln!(fd, "Sourced {} times", si.sn_pr_count)?;
+            writeln!(fd, "Sourced {} times", profile.count)?;
         }
-        writeln!(fd, "Total time: {}", profile_msg_str(si.sn_pr_total))?;
-        writeln!(fd, " Self time: {}", profile_msg_str(si.sn_pr_self))?;
+        writeln!(fd, "Total time: {}", profile_msg_str(profile.total))?;
+        writeln!(fd, " Self time: {}", profile_msg_str(profile.own))?;
         write!(fd, "\ncount  total (s)   self (s)\n")?;
-        script_dump_source(fd, si)?;
+        script_dump_source(fd, name.to_bytes(), &profile.lines)?;
         writeln!(fd)?;
     }
     Ok(())

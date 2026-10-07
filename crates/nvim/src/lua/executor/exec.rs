@@ -96,6 +96,13 @@ pub unsafe fn nlua_typval_eval(str: String_0, arg: &TypVal, ret_tv: &mut TypVal)
     }
 }
 
+/// `v:lua.name(...)`, `name` being the text after `v:lua.`.
+pub(crate) fn typval_call_lua(name: &[u8], args: &[TypVal], result: &mut TypVal) {
+    // SAFETY: `name` is `name.len()` readable bytes, and `result` the
+    // caller's own.
+    unsafe { nlua_typval_call(name.as_ptr().cast(), name.len(), args, result) }
+}
+
 /// `v:lua.name(...)`.
 ///
 /// # Safety

@@ -629,6 +629,19 @@ pub unsafe fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LineNr)
     unsafe { debuggy_find(file, fname, after, BreakList::Debug, ptr::null_mut()) }
 }
 
+/// [`dbg_find_breakpoint`] of `name`.
+pub(crate) fn dbg_find_breakpoint_named(file: bool, name: &CStr, after: LineNr) -> LineNr {
+    // SAFETY: `name` is NUL-terminated and lives for the call; the lookup
+    // only reads it.
+    unsafe { dbg_find_breakpoint(file, name.as_ptr().cast_mut(), after) }
+}
+
+/// [`has_profiling`] of `name`, not asking whether it was defined with `!`.
+pub(crate) fn has_profiling_named(file: bool, name: &CStr) -> bool {
+    // SAFETY: as `dbg_find_breakpoint_named`, and no `found` to write.
+    unsafe { has_profiling(file, name.as_ptr().cast_mut(), ptr::null_mut()) }
+}
+
 /// Whether profiling is on for a function or sourced file, and through `found`
 /// whether it was defined with `!`.
 ///

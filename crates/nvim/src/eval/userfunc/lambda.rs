@@ -6,98 +6,75 @@
 //! other way a callable carries state: a bound dictionary, bound arguments,
 //! or both.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
 use crate::eval::Parsed;
 use crate::eval::typval::{DictRef, PartialRef};
-use crate::memory::handoff::owned_cstr;
+use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::strings::find_bytes;
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::offset_of;
-use core::ptr;
+use core::cell::{Cell, RefCell};
+use core::ffi::c_int;
+use std::rc::Rc;
 
 use super::*;
-use crate::types::{Failed, Refcount};
+use crate::types::{Failed, FuncBody, FuncProfile, Refcount, ScriptCtx};
 
-/// Give `func` the funccall that is running as its scope, so that the locals it
-/// closed over stay alive for as long as it does.
-///
-/// # Safety
-/// `func` is a live function and a funccall is running.
-pub(crate) unsafe fn register_closure(func: *mut UserFunc) {
-    // SAFETY: the caller's promise -- `func` is a live function.
-    let mut f = unsafe { Uf::new(func) };
-    if f.uf_scoped == current_fc() {
+/// Give `func` the funccall that is running as its scope, so that the locals
+/// it closed over stay alive for as long as it does. Nothing happens when no
+/// funccall is running.
+pub(crate) fn register_closure(func: &Rc<UserFunc>) {
+    if func.scoped.get() == current_fc_id() {
         return; // no change
     }
-    unsafe { funccal_unref(f.uf_scoped, func, false) };
-    let fc = current_fc();
-    f.uf_scoped = fc;
-    unsafe { (*fc).fc_refcount.retain() };
-    unsafe { ga_grow(&raw mut (*fc).fc_ufuncs, 1) };
-    let ufuncs = unsafe { &raw mut (*fc).fc_ufuncs };
-    unsafe { *((*ufuncs).ga_data as *mut *mut UserFunc).offset((*ufuncs).ga_len as isize) = func };
-    unsafe { (*ufuncs).ga_len += 1 };
+    funccal_unref(func.scoped.get(), func, false);
+    let frame = current_fc();
+    func.scoped.set(frame.as_ref().map(|frame| frame.id));
+    if let Some(frame) = frame {
+        frame.refcount.set(frame.refcount.get() + 1);
+        frame.ufuncs.borrow_mut().push(Rc::downgrade(func));
+    }
 }
 
-/// `"<lambda>"` plus `NUMBUFLEN`, the widest a `VarNumber` prints.
-const LAMBDA_NAME_LEN: usize = 8 + 65;
-
-/// The name of the next lambda, rendered through `into` — the caller's
-/// scratch buffer, so that two names can be alive at once. Upstream answers
-/// one static buffer.
-fn get_lambda_name(into: &mut [c_char; LAMBDA_NAME_LEN]) -> String_0 {
+/// The name of the next lambda.
+fn get_lambda_name() -> Vec<u8> {
     static lambda_no: GlobalCell<c_int> = GlobalCell::new(0);
     lambda_no.set(lambda_no.get() + 1);
-    let text = format!("<lambda>{}", lambda_no.get());
-    let len = text.len().min(LAMBDA_NAME_LEN - 1);
-    for (slot, &byte) in into.iter_mut().zip(&text.as_bytes()[..len]) {
-        *slot = byte as c_char;
-    }
-    into[len] = 0;
-    let buf = into.as_mut_ptr();
-    // SAFETY: the caller's array, `len` bytes of it just written, which the
-    // answer copies.
-    unsafe { String_0::from_raw_bytes(buf, len) }
+    format!("<lambda>{}", lambda_no.get()).into_bytes()
 }
 
-/// Allocate a `UserFunc` for a function called `name`, whose name lives in the
-/// flexible member at the end of the allocation.
-///
-/// # Safety
-/// `name` has `namelen` readable bytes.
-pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut UserFunc {
-    let fp = unsafe { xcalloc(1, offset_of!(UserFunc, uf_name) + namelen + 1) } as *mut UserFunc;
-    // SAFETY: the allocation ends in `namelen + 1` bytes for the name.
-    let into = uf_name_ptr(fp) as *mut c_void;
-    unsafe { xmemcpyz(into, name as *const c_void, namelen) };
-    unsafe { (*fp).uf_namelen = namelen };
-
-    if unsafe { *name } as u8 as c_int == K_SPECIAL {
-        // A script-local name is stored mangled; keep the printable
-        // "<SNR>123_name" beside it.
-        let len = namelen + 3;
-        // SAFETY: `fp` is the allocation just made, whose inline name has
-        // `namelen + 1` bytes; the printable form gets three more.
-        let into = unsafe { xmalloc(len) } as *mut c_char;
-        unsafe { (*fp).uf_name_exp = into };
-        let tail = unsafe { cstr::bytes_at(uf_name_ptr(fp).add(3)) };
+/// A new function called `name`, with nothing in it yet: no body, no
+/// flags, no counted holder. A script-local (mangled) name gets the
+/// printable `<SNR>123_name` beside it.
+pub(crate) fn alloc_ufunc(name: &[u8]) -> UserFunc {
+    let name_exp = (name.first().map(|&b| c_int::from(b)) == Some(K_SPECIAL)).then(|| {
         let mut text = b"<SNR>".to_vec();
-        text.extend_from_slice(tail);
-        text.truncate(len - 1);
-        text.push(0);
-        // SAFETY: `into` has `len` bytes and `text` is at most that long.
-        unsafe {
-            ::core::ptr::copy_nonoverlapping(text.as_ptr().cast::<c_char>(), into, text.len())
-        };
+        text.extend_from_slice(name.get(3..).unwrap_or_default());
+        ThinCString::from_vec(text)
+    });
+    UserFunc {
+        name: ThinCString::from_bytes(name),
+        name_exp,
+        flags: Cell::new(FuncFlags::NONE),
+        calls: Cell::new(0),
+        cleared: Cell::new(false),
+        refcount: Cell::new(Refcount::ZERO),
+        body: RefCell::new(Rc::new(FuncBody::default())),
+        luaref: Cell::new(LUA_NOREF),
+        script_ctx: Cell::new(ScriptCtx::default()),
+        scoped: Cell::new(None),
+        prof: RefCell::new(FuncProfile::default()),
     }
-    fp
 }
 
 /// Parse a lambda expression at the cursor into a partial in `result`.
@@ -110,9 +87,8 @@ pub(crate) fn get_lambda_tv(
     result: &mut TypVal,
     evaluate: bool,
 ) -> Result<Parsed, Failed> {
-    let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
-    let mut newargs = GArray::EMPTY;
-    let mut varargs = 0;
+    let mut newargs: Vec<Box<[u8]>> = Vec::new();
+    let mut varargs = false;
     // The enclosing lambda's capture flag, put back when this one is done.
     // Only an evaluating lambda starts its own: a skipped one leaves the
     // flag alone, so what it reads still counts for the enclosing lambda.
@@ -125,28 +101,20 @@ pub(crate) fn get_lambda_tv(
     let mut look = Cursor::new(text);
     look.set_offset(cursor.offset() + 1);
     look.skip_white();
-    let none = ptr::null_mut();
-    // SAFETY: nothing is asked back.
-    let looks_like =
-        unsafe { get_function_args(&mut look, b'-', none, ptr::null_mut(), none, true) };
+    let looks_like = get_function_args(&mut look, b'-', None, None, None, true);
     if looks_like.is_err() || look.byte() != b'>' {
         return Ok(Parsed::NotThis);
     }
 
-    // Neither `fp` nor `pt` escapes the arm that builds them, which is
-    // why upstream's `assert(fp == NULL)` at its error label holds.
+    // Neither the function nor the partial escapes the arm that builds
+    // them, which is why upstream's `assert(fp == NULL)` at its error label
+    // holds.
     let parsed = 'errret: {
         // Parse the arguments again, this time keeping them.
-        let pnewargs = if evaluate {
-            &raw mut newargs
-        } else {
-            ptr::null_mut()
-        };
+        let names = evaluate.then_some(&mut newargs);
         cursor.bump(1);
         cursor.skip_white();
-        // SAFETY: `newargs` and `varargs` are this frame's locals.
-        let read =
-            unsafe { get_function_args(cursor, b'-', pnewargs, &raw mut varargs, none, false) };
+        let read = get_function_args(cursor, b'-', names, Some(&mut varargs), None, false);
         if read.is_err() || cursor.byte() != b'>' {
             break 'errret false;
         }
@@ -180,10 +148,8 @@ pub(crate) fn get_lambda_tv(
 
         if evaluate {
             let mut flags = FuncFlags::NONE;
-            let name = get_lambda_name(&mut lambda_buf);
-            let fp = unsafe { alloc_ufunc(name.data(), name.len()) };
-            // SAFETY: this call's own allocation.
-            let mut f = unsafe { Uf::new(fp) };
+            let name = get_lambda_name();
+            let func = Rc::new(alloc_ufunc(&name));
 
             // The body is the expression with "return " in front of it.
             let body = &text[start..end];
@@ -194,39 +160,39 @@ pub(crate) fn get_lambda_tv(
                 // No a: variables are used for sure.
                 flags |= FuncFlags::NOARGS;
             }
-            let mut newlines = GArray::EMPTY;
-            unsafe { ga_init(&raw mut newlines, size_of::<*mut c_char>() as c_int, 1) };
-            unsafe { ga_grow(&raw mut newlines, 1) };
-            unsafe { *(newlines.ga_data as *mut *mut c_char) = owned_cstr(line) };
-            newlines.ga_len = 1;
 
-            f.uf_refcount = Refcount::ONE;
-            let _ = unsafe { func_table().add(uf_name_ptr(fp)) };
-            f.uf_args = newargs;
-            let slot = size_of::<*mut c_char>() as c_int;
-            unsafe { ga_init(&raw mut (*fp).uf_def_args, slot, 1) };
-            f.uf_lines = newlines;
-            if !current_fc().is_null() && uses_locals {
+            func.refcount.set(Refcount::ONE);
+            // A lambda's name is new, so the table cannot refuse it; were it
+            // to, the partial still holds the function.
+            let _ = add_func(func.clone());
+            // Every lambda takes any number of arguments.
+            *func.body.borrow_mut() = Rc::new(FuncBody {
+                args: core::mem::take(&mut newargs),
+                def_args: Vec::new(),
+                lines: vec![Some(line.into_boxed_slice())],
+                varargs: true,
+            });
+            if current_fc_id().is_some() && uses_locals {
                 flags |= FuncFlags::CLOSURE;
-                unsafe { register_closure(fp) };
+                register_closure(&func);
             } else {
-                f.uf_scoped = ptr::null_mut();
+                func.scoped.set(None);
             }
 
             if prof_def_func() {
-                unsafe { func_do_profile(fp) };
+                func_do_profile(&func);
             }
             if sandbox.get() != 0 {
                 flags |= FuncFlags::SANDBOX;
             }
-            f.uf_varargs = 1;
-            f.uf_flags = flags;
-            f.uf_calls = 0;
-            f.uf_script_ctx = current_sctx.get();
-            f.uf_script_ctx.sc_lnum += sourcing_lnum() - newlines.ga_len as LineNr;
+            func.flags.set(flags);
+            func.calls.set(0);
+            let mut sctx = current_sctx.get();
+            sctx.sc_lnum += sourcing_lnum() - 1;
+            func.script_ctx.set(sctx);
 
             let part = Partial {
-                pt_func: fp,
+                pt_func: Some(func),
                 ..Partial::EMPTY
             };
             result.write_partial(Some(PartialRef::new(part)));
@@ -234,9 +200,7 @@ pub(crate) fn get_lambda_tv(
         true
     };
 
-    if !parsed {
-        unsafe { ga_clear_strings(&raw mut newargs) };
-    }
+    drop(newargs);
     if evaluate {
         LAMBDA_USES_LOCALS.set(enclosing_uses_locals);
     }
@@ -265,11 +229,9 @@ pub(crate) fn set_selfdict(result: &mut TypVal, selfdict: &DictRef) {
 /// `result` holds the funcref just read and `selfdict` is the dictionary it
 /// came out of.
 pub fn make_partial(selfdict: &DictRef, result: &mut TypVal) {
-    let mut fp: *mut UserFunc = ptr::null_mut();
-
     let held = result.partial_ref();
-    if let Some(held) = held.filter(|held| !held.pt_func.is_null()) {
-        fp = held.pt_func;
+    let func = if let Some(func) = held.and_then(|held| held.pt_func.clone()) {
+        Some(func)
     } else {
         let fname = if result.v_type() == VAR_FUNC || result.v_type() == VAR_STRING {
             result.text_or_name().map(|name| name.as_bytes())
@@ -280,13 +242,16 @@ pub fn make_partial(selfdict: &DictRef, result: &mut TypVal) {
         match fname {
             // There is no point binding a dict to a NULL function, just
             // create a function reference.
-            None => result.write_func_name(None),
+            None => {
+                result.write_func_name(None);
+                None
+            }
             // Translate "s:func" to the stored function name.
-            Some(fname) => fp = find_func(&fname_trans_sid(fname).0),
+            Some(fname) => find_func(&fname_trans_sid(fname).0),
         }
-    }
+    };
 
-    if fp.is_null() || !unsafe { (*fp).uf_flags }.has(FuncFlags::DICT) {
+    if !func.is_some_and(|func| func.has_flag(FuncFlags::DICT)) {
         return;
     }
     let mut part = Partial {
@@ -311,9 +276,9 @@ pub fn make_partial(selfdict: &DictRef, result: &mut TypVal) {
         if let Some(name) = &ret_pt.pt_name {
             func_ref_name(name);
             part.pt_name = Some(name.clone());
-        } else {
-            part.pt_func = ret_pt.pt_func;
-            unsafe { func_ptr_ref(part.pt_func) };
+        } else if let Some(func) = &ret_pt.pt_func {
+            func_ptr_ref(func);
+            part.pt_func = Some(func.clone());
         }
         part.pt_argv = ret_pt.pt_argv.clone();
         drop(ret_pt);
@@ -324,21 +289,20 @@ pub fn make_partial(selfdict: &DictRef, result: &mut TypVal) {
 /// Wrap a Lua reference in a `UserFunc`, so that Vimscript can call it by
 /// name.  Answers that name.
 ///
-/// # Safety
-/// `ref_0` is a live Lua reference the new function takes over.
-pub unsafe fn register_luafunc(ref_0: LuaRef) -> *mut c_char {
-    let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
-    let name = get_lambda_name(&mut lambda_buf);
-    let fp = unsafe { alloc_ufunc(name.data(), name.len()) };
-    // SAFETY: `fp` is the allocation just made.
-    let mut f = unsafe { Uf::new(fp) };
-    f.uf_refcount = Refcount::ONE;
-    f.uf_varargs = 1;
-    f.uf_flags = FuncFlags::LUAREF;
-    f.uf_calls = 0;
-    f.uf_script_ctx = current_sctx.get();
-    f.uf_luaref = ref_0;
+/// The new function takes `luaref` over.
+pub fn register_luafunc(luaref: LuaRef) -> ThinCString {
+    let func = Rc::new(alloc_ufunc(&get_lambda_name()));
+    func.refcount.set(Refcount::ONE);
+    *func.body.borrow_mut() = Rc::new(FuncBody {
+        varargs: true,
+        ..FuncBody::default()
+    });
+    func.flags.set(FuncFlags::LUAREF);
+    func.calls.set(0);
+    func.script_ctx.set(current_sctx.get());
+    func.luaref.set(luaref);
 
-    let _ = unsafe { func_table().add(uf_name_ptr(fp)) };
-    uf_name_ptr(fp)
+    let name = func.name().clone();
+    let _ = add_func(func);
+    name
 }

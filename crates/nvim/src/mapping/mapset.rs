@@ -93,13 +93,9 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
             .di_tv
             .func_name()
             .map_or(&b""[..], |name| name.as_bytes());
-        // SAFETY: `find_func` answers null or a live `UserFunc`.
-        unsafe {
-            let fp = find_func(name);
-            if !fp.is_null() && (*fp).uf_flags.has(FuncFlags::LUAREF) {
-                rhs_lua = api_new_luaref((*fp).uf_luaref);
-                orig_rhs = Some(c"");
-            }
+        if let Some(func) = find_func(name).filter(|func| func.has_flag(FuncFlags::LUAREF)) {
+            rhs_lua = api_new_luaref(func.luaref.get());
+            orig_rhs = Some(c"");
         }
     }
     let (Some(lhs), Some(lhsraw), Some(orig_rhs)) = (lhs, lhsraw, orig_rhs) else {

@@ -383,7 +383,7 @@ unsafe fn unlet_terminated(
 
     if !ht.is_null() && unsafe { *varname } != NUL as c_char {
         // The dictionary whose lock decides whether the item may go.
-        let mut d = unsafe { get_current_funccal_dict(ht) };
+        let mut d = get_current_funccal_dict(ht);
         if d.is_null() {
             if ht == get_globvar_ht() {
                 d = get_globvar_dict();

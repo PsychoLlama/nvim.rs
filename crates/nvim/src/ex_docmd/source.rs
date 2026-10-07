@@ -469,3 +469,22 @@ fn xstrdup(str: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::memory::xstrdup(str) }
 }
+
+/// The next line of the body a running command reads, from wherever the
+/// command reads its own lines: the command line itself when it has no
+/// getter. `None` at the end of input.
+pub(crate) fn read_next_line(
+    excmd: &crate::types::ExArg,
+    c: c_int,
+    indent: c_int,
+    do_concat: bool,
+) -> Option<crate::memory::XString> {
+    let line = match excmd.ea_getline {
+        None => getcmdline(c, 0, indent, do_concat),
+        // SAFETY: a running command's line getter and its cookie are a live
+        // pair.
+        Some(getline) => unsafe { getline(c, excmd.cookie, indent, do_concat) },
+    };
+    // SAFETY: a getter answers null or an allocation of its own.
+    (!line.is_null()).then(|| unsafe { crate::memory::XString::from_raw(line) })
+}

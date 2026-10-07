@@ -531,9 +531,8 @@ fn defer_delete(created: ThinCString, recurse: bool) {
         TypVal::string(Some(created)),
         TypVal::string(Some(ThinCString::from_cstr(how))),
     ];
-    let name = c"delete".as_ptr().cast_mut();
-    // SAFETY: two arguments, at `tv`, whose contents the callee takes over.
-    unsafe { add_defer(name, &mut tv) };
+    // The callee takes the two arguments' contents over.
+    add_defer(c"delete", &mut tv);
 }
 
 /// `rename({from}, {to})`: move a file, 0 on success.

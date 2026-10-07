@@ -297,7 +297,8 @@ pub(crate) unsafe fn get_userdefined_compl_info(
 
     let pos = Win::current().w_cursor;
     let locked = Lock::text();
-    let col = unsafe { callback_call_retnr(cb, &args) } as ColNr;
+    // SAFETY: `cb` is the buffer's live callback.
+    let col = unsafe { callback_call_retnr(&*cb, &args) } as ColNr;
     drop(locked);
 
     State.set(save_state);
