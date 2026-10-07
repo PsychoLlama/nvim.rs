@@ -60,6 +60,19 @@
 --       (test_garbagecollect_now()) leaves behind: reference cycles,
 --       shared subtrees, partials, closures, blobs, a funcref whose
 --       function was deleted, and the `change` dict a watcher keeps.
+--   s20 the left-hand side as a place (get_lval / set_var_lval).
+--
+-- s21 onward widen the scopes and the state the editor writes:
+--
+--   s21 every scope by full name, by byte-prefix and bare (`g:` etc.),
+--       s: in a sourced script, l:/a: in a function, `version`.
+--   s22 v:exception/v:throwpoint through nested try, v:count/
+--       v:register from a mapping, v:event in autocommands, the
+--       v:_null_* constants and the typed v: variables.
+--   s23 :redir => started, ended and re-targeted across function calls.
+--   s24 b:/w:/t: dicts held past :bwipe/:close/:tabclose; accessors.
+--   s25 dictwatcheradd() on g:, v: and b: with re-entrant callbacks.
+--   s26 $ENV.  s27 registers through :let/setreg.  s28 getcompletion().
 --
 -- Everything printed has to be reproducible across two builds run
 -- minutes apart and from two working directories, so the report carries
@@ -3146,6 +3159,804 @@ section('s20-lvalue', function()
   for _, name in ipairs({ 'XLv', 'XLa', 'XLb' }) do
     quiet('silent! delfunction! ' .. name)
   end
+end)
+
+-- ---------------------------------------------------------------------
+-- s21 onward -- shared helpers
+-- ---------------------------------------------------------------------
+
+--- A Lua string as a single-quoted Vimscript literal.
+local function vq(s)
+  return "'" .. (tostring(s):gsub("'", "''")) .. "'"
+end
+
+--- An expression answering the lines of `execute(cmd)` that match
+--- `pat`, joined with `|`.  A scope listing names every variable the run
+--- has created so far; filtering it to the section's own prefix keeps
+--- the artifact independent of every section above.
+local function grepout(cmd, pat)
+  return string.format(
+    "join(filter(split(execute(%s), \"\\n\"), {_, v -> v =~# %s}), '|')",
+    vq(cmd),
+    vq(pat)
+  )
+end
+
+--- `src` run inside a Vimscript try, answering the exception text, so a
+--- multi-command case keeps going after its first error.
+local function tryexec(label, src)
+  exec(label, 'try\n' .. src .. '\ncatch\necho v:exception\nendtry')
+end
+
+-- ---------------------------------------------------------------------
+-- s21 -- every scope by name, by prefix, and bare
+-- ---------------------------------------------------------------------
+
+section('s21-scopenames', function()
+  -- find_var / find_var_ht look a name up by its *whole* key, so a
+  -- byte-prefix of an existing name is a different, missing variable --
+  -- in the listing, in exists(), in :unlet and in :lockvar.  Then the
+  -- bare scope name, which several of those commands accept and treat
+  -- as the scope dictionary itself.
+  for _, sc in ipairs({ 'g', 'b', 'w', 't' }) do
+    local p = sc .. ':Yqab'
+    local tag = 'sn ' .. sc
+    local state = string.format(
+      "string([exists('%sc'), exists('%sd'), islocked('%sc')])",
+      p, p, p
+    )
+    quiet(string.format('silent! unlockvar %sc', p))
+    quiet(string.format('silent! unlet! %sc %sd', p, p))
+    quiet(string.format("let %sc = 1 | let %sd = 'two'", p, p))
+    exec(tag .. ' list-full', 'let ' .. p .. 'c')
+    exec(tag .. ' list-prefix', 'let ' .. p)
+    exec(tag .. ' list-two', 'let ' .. p .. 'c ' .. p .. 'd')
+    exec(tag .. ' list-one-missing', 'let ' .. p .. 'c ' .. p .. ' ' .. p .. 'd')
+    veval(tag .. ' scope-list', grepout('let ' .. sc .. ':', 'Yqab'))
+    veval(tag .. ' plain-list', grepout('let', 'Yqab'))
+    veval(
+      tag .. ' exists',
+      string.format("string([exists('%s'), exists('%sc'), exists('%sc '), exists('%scd')])", p, p, p, p)
+    )
+    exec_then(tag .. ' unlet-prefix', 'unlet ' .. p, state)
+    exec_then(tag .. ' unlet!-prefix', 'unlet! ' .. p, state)
+    exec(tag .. ' echo-prefix', 'echo ' .. p)
+    exec_then(tag .. ' lock', 'lockvar ' .. p .. 'c', state)
+    exec_then(tag .. ' let-locked', 'let ' .. p .. 'c = 5', p .. 'c')
+    exec_then(tag .. ' lock-prefix', 'lockvar ' .. p, state)
+    exec_then(tag .. ' unlock', 'unlockvar ' .. p .. 'c', state)
+    exec_then(tag .. ' unlock-prefix', 'unlockvar ' .. p, state)
+    veval(tag .. ' bare', string.format("string(filter(copy(%s:), {k, v -> k =~# '^Yqab'}))", sc))
+    exec(tag .. ' echo-bare', string.format("echo filter(copy(%s:), {k, v -> k =~# '^Yqab'})", sc))
+    exec_then(tag .. ' unlet-scope', 'unlet ' .. sc .. ':', state)
+    exec_then(tag .. ' unlet!-scope', 'unlet! ' .. sc .. ':', state)
+    exec_then(tag .. ' assign-scope', 'let ' .. sc .. ': = 1', state)
+    exec_then(tag .. ' concat-scope', 'let ' .. sc .. ': .= 1', state)
+    veval(tag .. ' islocked-scope', string.format("string(islocked('%s:'))", sc))
+    exec_then(tag .. ' unlet-both', string.format('unlet %sc %sd', p, p), state)
+  end
+
+  -- `:lockvar 0 g:` and its undo.  MUST be undone: a locked g: is a
+  -- process where no section below can create a global.
+  quiet('silent! unlet! g:YqLk g:YqNew')
+  quiet('let g:YqLk = [1]')
+  local lockstate = "string([islocked('g:'), islocked('g:YqLk'), exists('g:YqNew')])"
+  exec_then('sn g lock0', 'lockvar 0 g:', lockstate)
+  exec_then('sn g lock0 add', 'let g:YqNew = 1', lockstate)
+  exec_then('sn g lock0 change', 'let g:YqLk = [2]', 'string(g:YqLk)')
+  exec_then('sn g lock0 unlet', 'unlet g:YqLk', lockstate)
+  exec_then('sn g unlock0', 'unlockvar 0 g:', lockstate)
+  quiet('silent! unlockvar 0 g:')
+  exec_then('sn g unlock', 'unlockvar g:', lockstate)
+  exec_then('sn g lock1', 'lockvar 1 g:', lockstate)
+  exec_then('sn g lock1 add', 'let g:YqNew = 1', lockstate)
+  exec_then('sn g unlock1', 'unlockvar 1 g:', lockstate)
+  quiet('silent! unlockvar 1 g:')
+  exec_then('sn b lock0', 'lockvar 0 b:', "string(islocked('b:'))")
+  exec_then('sn b lock0 add', 'let b:YqNew = 1', "string(exists('b:YqNew'))")
+  exec_then('sn b unlock0', 'unlockvar 0 b:', "string(islocked('b:'))")
+  quiet('silent! unlockvar 0 b:')
+  quiet('silent! unlet! g:YqLk g:YqNew b:YqNew')
+
+  -- v: listed and filtered to a fixed set of names (the rest name the
+  -- binary, the time or the session).
+  veval('sn v list', grepout('let v:', '^v:\\(count1\\=\\|t_blob\\|false\\|errmsg\\|hlsearch\\)\\s'))
+  exec('sn v list-one', 'let v:count v:false')
+  exec('sn v list-prefix', 'let v:cou')
+  veval('sn v exists-prefix', "string([exists('v:cou'), exists('v:count'), exists('v:')])")
+  exec('sn v unlet-scope', 'unlet v:')
+  exec('sn v assign-scope', 'let v: = 1')
+  veval('sn v islocked-scope', "string(islocked('v:'))")
+
+  -- `version` is a VV_COMPAT name: v:version without the prefix.
+  exec('sn version list', 'let version')
+  exec('sn version echo', 'echo version == v:version')
+  exec_then('sn version unlet', 'unlet version', "string([exists('version'), exists('v:version')])")
+  exec_then('sn version let', 'let version = 1', 'string(version == v:version)')
+  exec('sn version lock', 'lockvar version')
+  veval('sn version islocked', "string(islocked('version'))")
+  veval('sn count exists', "string([exists('count'), exists('v:count'), exists('count1')])")
+
+  -- s: inside a sourced script.
+  local fd = assert(io.open(work .. '/yqs.vim', 'w'))
+  fd:write(table.concat({
+    'let s:Yqabc = 1',
+    "let s:Yqabd = 'two'",
+    'let g:YqS = []',
+    "call add(g:YqS, execute('let s:Yqabc'))",
+    "call add(g:YqS, filter(split(execute('let s:'), \"\\n\"), {_, v -> v =~# 'Yq'}))",
+    "call add(g:YqS, [exists('s:Yqab'), exists('s:Yqabc'), exists('Yqabc')])",
+    'try | unlet s:Yqab | catch | call add(g:YqS, v:exception) | endtry',
+    'try | let s:Yqab | catch | call add(g:YqS, v:exception) | endtry',
+    'lockvar s:Yqabc',
+    "call add(g:YqS, islocked('s:Yqabc'))",
+    'try | let s:Yqabc = 2 | catch | call add(g:YqS, v:exception) | endtry',
+    'unlockvar s:Yqabc',
+    "call add(g:YqS, string(filter(copy(s:), {k, v -> k =~# '^Yq'})))",
+    'try | unlet s: | catch | call add(g:YqS, v:exception) | endtry',
+    'try | let s: = 1 | catch | call add(g:YqS, v:exception) | endtry',
+    "call add(g:YqS, islocked('s:'))",
+    'unlet s:Yqabc s:Yqabd',
+    "call add(g:YqS, filter(keys(s:), {_, v -> v =~# '^Yq'}))",
+    '',
+  }, '\n'))
+  fd:close()
+  quiet('silent! unlet! g:YqS')
+  exec_then('sn s source', 'source ' .. work .. '/yqs.vim', 'string(g:YqS)')
+  quiet('silent! unlet! g:YqS')
+
+  -- l: and a: inside a function.
+  quiet(table.concat({
+    'function! YqScope(Yqabc, ...)',
+    '  let l:Yqabx = 1',
+    '  let r = []',
+    "  call add(r, filter(split(execute('let l:'), \"\\n\"), {_, v -> v =~# 'Yq'}))",
+    "  try | call add(r, execute('let a:')) | catch | call add(r, v:exception) | endtry",
+    "  try | call add(r, execute('let a:Yqabc l:Yqabx')) | catch | call add(r, v:exception) | endtry",
+    "  try | call add(r, execute('let l:Yqabx a:Yqabc')) | catch | call add(r, v:exception) | endtry",
+    "  call add(r, [exists('a:Yqab'), exists('a:Yqabc'), exists('l:Yqab'), exists('l:Yqabx'), exists('Yqabx')])",
+    "  try | unlet l:Yqab | catch | call add(r, v:exception) | endtry",
+    "  try | let l:Yqab | catch | call add(r, v:exception) | endtry",
+    "  try | let a:Yqab | catch | call add(r, v:exception) | endtry",
+    "  try | unlet a:Yqabc | catch | call add(r, v:exception) | endtry",
+    "  try | unlet l: | catch | call add(r, v:exception) | endtry",
+    "  try | unlet a: | catch | call add(r, v:exception) | endtry",
+    "  try | let l: = 1 | catch | call add(r, v:exception) | endtry",
+    "  call add(r, [islocked('l:'), islocked('a:'), islocked('a:Yqabc'), islocked('l:Yqabx')])",
+    '  return r',
+    'endfunction',
+  }, '\n'))
+  veval('sn l scope', "string(YqScope('A', 'B'))")
+  quiet('silent! delfunction! YqScope')
+end)
+
+-- ---------------------------------------------------------------------
+-- s22 -- v: variables the editor writes
+-- ---------------------------------------------------------------------
+
+section('s22-vstate', function()
+  -- v:exception / v:throwpoint through every arm of the exception stack:
+  -- before, inside a catch, inside a nested catch, after the nested
+  -- endtry, in a finally reached normally and reached by an uncaught
+  -- throw, and after the outer endtry.
+  quiet(table.concat({
+    'function! YqBoom() abort',
+    "  throw 'boom'",
+    'endfunction',
+    'function! YqThrow() abort',
+    '  let r = [[v:exception, v:throwpoint]]',
+    '  try',
+    "    throw 'outer'",
+    '  catch',
+    '    call add(r, [v:exception, v:throwpoint])',
+    '    try',
+    "      throw 'inner'",
+    '    catch',
+    '      call add(r, [v:exception, v:throwpoint])',
+    '    endtry',
+    '    call add(r, [v:exception, v:throwpoint])',
+    '  finally',
+    "    call add(r, ['fin', v:exception, v:throwpoint])",
+    '  endtry',
+    '  call add(r, [v:exception, v:throwpoint])',
+    '  try',
+    '    try',
+    "      throw 'x'",
+    '    finally',
+    "      call add(r, ['fin2', v:exception, v:throwpoint])",
+    '    endtry',
+    '  catch',
+    "    call add(r, ['c2', v:exception, v:throwpoint])",
+    '  endtry',
+    '  try',
+    '    call YqBoom()',
+    '  catch',
+    "    call add(r, ['c3', v:exception, v:throwpoint])",
+    '  endtry',
+    '  try',
+    "    echoerr 'loud'",
+    '  catch',
+    "    call add(r, ['c4', v:exception, v:throwpoint])",
+    '  endtry',
+    '  try',
+    '    let x = 1 + []',
+    '  catch',
+    "    call add(r, ['c5', v:exception, v:throwpoint])",
+    '  endtry',
+    '  try',
+    "    throw 'rethrow'",
+    '  catch',
+    '    try',
+    '      throw v:exception . "2"',
+    '    catch',
+    "      call add(r, ['c6', v:exception, v:throwpoint])",
+    '    endtry',
+    '  endtry',
+    "  call add(r, ['end', v:exception, v:throwpoint])",
+    '  return r',
+    'endfunction',
+  }, '\n'))
+  veval('vs throw', 'string(YqThrow())')
+  veval('vs throw after', 'string([v:exception, v:throwpoint])')
+  exec('vs exception set', "let v:exception = 'x'")
+  exec('vs throwpoint set', "let v:throwpoint = 'x'")
+  exec('vs exception unlet', 'unlet v:exception')
+  quiet('silent! delfunction! YqThrow')
+  quiet('silent! delfunction! YqBoom')
+
+  -- v:count, v:count1, v:prevcount and v:register as a mapping sees
+  -- them.
+  quiet(table.concat({
+    'let g:YqC = []',
+    'function! YqCnt() abort',
+    '  call add(g:YqC, [v:count, v:count1, v:prevcount, v:register])',
+    "  return ''",
+    'endfunction',
+    'nnoremap <expr> <F7> YqCnt()',
+  }, '\n'))
+  quiet('execute "normal \\<F7>"')
+  quiet('execute "normal 3\\"a\\<F7>"')
+  quiet('execute "normal 2\\<F7>"')
+  quiet('execute "normal \\"_12\\<F7>"')
+  quiet('execute "normal \\"A\\<F7>"')
+  veval('vs count map', 'string(g:YqC)')
+  veval('vs count after', 'string([v:count, v:count1, v:register])')
+  quiet('silent! nunmap <F7>')
+  quiet('silent! unlet! g:YqC')
+  quiet('silent! delfunction! YqCnt')
+
+  -- v:statusmsg / v:warningmsg: written by the message layer, writable
+  -- by :let, string-typed.
+  -- (A headless process never reaches give_warning for a search wrap or
+  -- W10, so only the :let side is asked.)
+  quiet("let v:warningmsg = '' | let v:statusmsg = ''")
+  exec_then('vs warningmsg set', "let v:warningmsg = 'w'", 'string(v:warningmsg)')
+  exec_then('vs warningmsg num', 'let v:warningmsg = 5', 'string(v:warningmsg)')
+  exec_then('vs statusmsg set', "let v:statusmsg = 's'", 'string(v:statusmsg)')
+  exec_then('vs statusmsg list', 'let v:statusmsg = [1]', 'string(v:statusmsg)')
+  quiet("let v:warningmsg = '' | let v:statusmsg = ''")
+
+  -- v:event: inside TextYankPost, CmdlineEnter/Leave and a User event,
+  -- and outside any.
+  quiet(table.concat({
+    'let g:YqEv = []',
+    'augroup YqEv',
+    '  autocmd!',
+    "  autocmd TextYankPost * call add(g:YqEv, ['yank', deepcopy(v:event), islocked('v:event'), execute('try | let v:event.x = 1 | catch | echo v:exception | endtry')])",
+    "  autocmd CmdlineEnter * call add(g:YqEv, ['enter', deepcopy(v:event)])",
+    "  autocmd CmdlineLeave * call add(g:YqEv, ['leave', deepcopy(v:event)])",
+    "  autocmd User YqU call add(g:YqEv, ['user', deepcopy(v:event)])",
+    'augroup END',
+  }, '\n'))
+  quiet('enew!')
+  quiet("call setline(1, ['alpha beta', 'gamma'])")
+  quiet('normal! gg0yy')
+  quiet('normal! w"byiw')
+  quiet('normal! gg0vly')
+  quiet('normal! gg0\x16jly')
+  quiet('normal! gg0"_yy')
+  quiet('normal! gg0dw')
+  quiet('doautocmd User YqU')
+  quiet([[call feedkeys(":let g:YqFk = 1\<CR>", 'xt')]])
+  quiet([[call feedkeys(":let g:YqFk = 2\<Esc>", 'xt')]])
+  veval('vs event log', 'string(g:YqEv)')
+  veval('vs event outside', 'string([v:event, islocked("v:event")])')
+  exec('vs event set', 'let v:event = {}')
+  exec('vs event key', 'let v:event.x = 1')
+  veval('vs event fk', "string(get(g:, 'YqFk', 'GONE'))")
+  quiet('augroup YqEv | autocmd! | augroup END | augroup! YqEv')
+  quiet('silent! unlet! g:YqEv g:YqFk')
+  quiet('enew!')
+
+  -- The v:_null_* constants.
+  for _, kind in ipairs({ 'string', 'list', 'dict', 'blob' }) do
+    local name = 'v:_null_' .. kind
+    local tag = 'vs null ' .. kind
+    veval(tag .. ' read', string.format('string([type(%s), string(%s), len(%s), empty(%s), %s is %s])', name, name, name, name, name, name))
+    exec(tag .. ' set', 'let ' .. name .. ' = 1')
+    exec(tag .. ' unlet', 'unlet ' .. name)
+    exec(tag .. ' lock', 'lockvar ' .. name)
+    veval(tag .. ' islocked', string.format("string(islocked('%s'))", name))
+    veval(tag .. ' copy', string.format('string([copy(%s) is %s, deepcopy(%s) == %s])', name, name, name, name))
+  end
+  tryexec('vs null add', 'call add(v:_null_list, 1)')
+  tryexec('vs null extend', "call extend(v:_null_dict, {'a': 1})")
+  tryexec('vs null blobadd', 'call add(v:_null_blob, 1)')
+  veval('vs null concat', "string([v:_null_list + [1], v:_null_string . 'x', v:_null_blob + 0z01])")
+
+  -- Typed v: variables, wrong types, and the scope-dictionary write.
+  local TYPED = {
+    { 'errmsg-list', 'let v:errmsg = [1]', 'string(v:errmsg)' },
+    { 'errmsg-key', "let v:['errmsg'] = 'x'", 'string([type(v:errmsg), v:errmsg])' },
+    { 'oldfiles-dict', 'let v:oldfiles = {}', 'string(type(v:oldfiles))' },
+    { 'oldfiles-type', 'let v:oldfiles = []', 'string([type(v:oldfiles), v:oldfiles])' },
+    { 'completed-list', 'let v:completed_item = []', 'string(v:completed_item)' },
+    { 'completed-read', 'let v:completed_item = {}', 'string([type(v:completed_item), v:completed_item])' },
+    { 'errors-str', "let v:errors = 'x'", 'string(v:errors)' },
+    { 'searchforward-0', 'let v:searchforward = 0', 'string([v:searchforward, type(v:searchforward)])' },
+    { 'searchforward-str', "let v:searchforward = '1'", 'string([v:searchforward, type(v:searchforward)])' },
+    { 'hlsearch-cat', "let v:hlsearch .= ''", 'string([v:hlsearch, type(v:hlsearch)])' },
+    { 'hlsearch-0', 'let v:hlsearch = 0', 'string([v:hlsearch, type(v:hlsearch)])' },
+    { 'char-read', 'echo string(v:char)', 'string(type(v:char))' },
+    { 'char-set', "let v:char = 'z'", 'string(v:char)' },
+    { 'cmdarg-read', 'echo string(v:cmdarg)', 'string(type(v:cmdarg))' },
+    { 'cmdarg-set', "let v:cmdarg = 'x'", 'string(v:cmdarg)' },
+    { 'register-set', "let v:register = 'a'", 'string(v:register)' },
+    { 'count-set', 'let v:count = 1', 'string(v:count)' },
+    { 'statusmsg-cat', "let v:statusmsg ..= 'q'", 'string(v:statusmsg)' },
+    { 'errmsg-add', 'let v:errmsg += 1', 'string(v:errmsg)' },
+  }
+  local RESET = table.concat({
+    "silent! let v:errmsg = ''",
+    "silent! let v:statusmsg = ''",
+    'silent! let v:searchforward = 1',
+    'silent! let v:hlsearch = 1',
+    'silent! let v:oldfiles = []',
+    'silent! let v:errors = []',
+    "silent! let v:char = ''",
+    'silent! let v:completed_item = {}',
+  }, '\n')
+  for _, case in ipairs(TYPED) do
+    quiet(RESET)
+    exec_then('vs typed ' .. case[1], case[2], case[3])
+    veval('vs typed ' .. case[1] .. ' errmsg', 'v:errmsg')
+  end
+  quiet(RESET)
+  quiet('nohlsearch')
+end)
+
+-- ---------------------------------------------------------------------
+-- s23 -- :redir => across function calls
+-- ---------------------------------------------------------------------
+
+section('s23-redirnest', function()
+  -- Only one variable redirection exists at a time: a second `:redir =>`
+  -- ends the first, and `:redir END` re-resolves the *name* in whatever
+  -- scope is current when it runs -- so the function that started the
+  -- redirection and the one that ends it need not be the same.
+  quiet(table.concat({
+    'function! YqInner() abort',
+    '  redir => g:YqIn',
+    "  echo 'inner'",
+    '  redir END',
+    'endfunction',
+    'function! YqOuter() abort',
+    '  redir => l:out',
+    "  echo 'outer1'",
+    '  call YqInner()',
+    "  echo 'outer2'",
+    '  redir END',
+    "  return exists('l:out') ? l:out : 'NOL'",
+    'endfunction',
+    'function! YqOpen(name) abort',
+    '  execute "redir => " . a:name',
+    "  echo 'opened'",
+    'endfunction',
+    'function! YqOpenLocal() abort',
+    '  redir => l:v',
+    "  echo 'local'",
+    "  return 'ret'",
+    'endfunction',
+    'function! YqEndLocal() abort',
+    '  let l:v = "pre"',
+    "  echo 'more'",
+    '  redir END',
+    '  return l:v',
+    'endfunction',
+    'function! YqSay(s) abort',
+    '  echo a:s',
+    'endfunction',
+    'function! YqKill() abort',
+    '  unlet g:YqR',
+    'endfunction',
+    'function! YqRetype() abort',
+    '  let g:YqR = [1]',
+    'endfunction',
+  }, '\n'))
+  local NAMES = 'g:YqIn g:YqR g:YqA g:YqB g:YqE g:YqF g:YqG'
+  local READ = "join(map(split('" .. NAMES .. "'), "
+    .. "'v:val . \"=\" . (exists(v:val) ? string(eval(v:val)) : \"GONE\")'), ' ')"
+  local CASES = {
+    { 'outer-inner', 'echo string(YqOuter())' },
+    { 'append-calls', "let g:YqA = 'pre'\nredir =>> g:YqA\ncall YqSay('x')\ncall YqSay('y')\nredir END" },
+    { 'append-twice', "let g:YqA = 'pre'\nredir =>> g:YqA\necho 'a'\nredir END\nredir =>> g:YqA\necho 'b'\nredir END" },
+    { 'restart-same', "redir => g:YqA\necho 'a'\nredir => g:YqA\necho 'b'\nredir END" },
+    { 'restart-other', "redir => g:YqA\necho 'a'\nredir =>> g:YqB\necho 'b'\nredir END" },
+    { 'open-in-fn', "call YqOpen('g:YqR')\necho 'caller'\nredir END" },
+    { 'open-in-fn-append', "let g:YqR = 'pre'\ncall YqOpen('g:YqR')\ncall YqOpen('g:YqB')\nredir END" },
+    { 'local-escape', "echo YqOpenLocal()\necho 'top'\nredir END" },
+    { 'local-other-fn', "echo YqOpenLocal()\necho string(YqEndLocal())" },
+    { 'local-end-only', "echo YqOpenLocal()\nlet l:v = 1" },
+    { 'kill-in-fn', "redir => g:YqR\necho 'a'\ncall YqKill()\necho 'b'\nredir END" },
+    { 'retype-in-fn', "redir => g:YqR\necho 'a'\ncall YqRetype()\necho 'b'\nredir END" },
+    { 'retype-append', "let g:YqR = 'pre'\nredir =>> g:YqR\necho 'a'\ncall YqRetype()\necho 'b'\nredir END" },
+    { 'execute-inside', "redir => g:YqE\necho 'a'\nlet g:YqF = execute('echo \"b\"')\necho 'c'\nredir END" },
+    { 'redir-in-execute', "let g:YqF = execute(\"redir => g:YqG\\necho 'z'\\nredir END\")" },
+    { 'execute-in-redir-fn', "redir => g:YqE\nlet g:YqF = execute('call YqOpen(\"g:YqG\")')\necho 'after'\nredir END" },
+    { 'end-twice', "redir => g:YqA\necho 'a'\nredir END\nredir END" },
+    { 'end-none', 'redir END' },
+  }
+  for _, case in ipairs(CASES) do
+    quiet('silent! redir END')
+    quiet('silent! unlet! ' .. NAMES)
+    quiet("let v:errmsg = ''")
+    exec('rn ' .. case[1], case[2])
+    quiet('silent! redir END')
+    veval('rn ' .. case[1] .. ' value', READ)
+    veval('rn ' .. case[1] .. ' errmsg', 'v:errmsg')
+  end
+  quiet('silent! redir END')
+  quiet('silent! unlet! ' .. NAMES)
+  quiet("let v:errmsg = ''")
+  for _, name in ipairs({ 'YqInner', 'YqOuter', 'YqOpen', 'YqOpenLocal', 'YqEndLocal', 'YqSay', 'YqKill', 'YqRetype' }) do
+    quiet('silent! delfunction! ' .. name)
+  end
+end)
+
+-- ---------------------------------------------------------------------
+-- s24 -- scope dictionaries that outlive their owner
+-- ---------------------------------------------------------------------
+
+section('s24-scopehold', function()
+  -- A b:/w:/t: dictionary is reference-counted like any other: holding
+  -- it in a global keeps it alive after its buffer is wiped, its window
+  -- closed or its tab closed.  What is left in it -- and in particular
+  -- what happens to b:changedtick, an item that lives inside the
+  -- buffer -- is the question.  Handles are kept in globals and never
+  -- recorded.
+  quiet('silent! unlet! g:YqKb g:YqKw g:YqKt g:YqBn g:YqWn g:YqTn g:YqKb2')
+  quiet('tabnew')
+  -- Named, so `:enew` below cannot reuse it in place.
+  quiet('file yqheld')
+  quiet('split')
+  quiet(table.concat({
+    'let b:Yqb = 1',
+    "let b:Yql = [1, 2]",
+    'let w:Yqw = 2',
+    'let t:Yqt = 3',
+    'let g:YqKb = b:',
+    'let g:YqKw = w:',
+    'let g:YqKt = t:',
+    'let g:YqBn = bufnr()',
+    'let g:YqWn = win_getid()',
+    'let g:YqTn = tabpagenr()',
+  }, '\n'))
+  local function keysof(name)
+    return string.format("string(sort(filter(keys(%s), {_, k -> k =~# '^Yq\\|changedtick'})))", name)
+  end
+  veval('sh before', 'string([' .. keysof('g:YqKb') .. ', ' .. keysof('g:YqKw') .. ', ' .. keysof('g:YqKt') .. '])')
+  veval('sh is', 'string([g:YqKb is b:, g:YqKw is w:, g:YqKt is t:])')
+
+  exec('sh close', 'close')
+  veval('sh close keys', keysof('g:YqKw'))
+  veval('sh close value', "string(filter(copy(g:YqKw), {k, v -> k =~# '^Yq'}))")
+  veval('sh close getwinvar', "string([getwinvar(g:YqWn, 'Yqw', 'DEF'), getwinvar(g:YqWn, '', 'DEF'), getwinvar(g:YqWn, '&number', 'DEF')])")
+  veval('sh close is', 'string(g:YqKw is w:)')
+  exec_then('sh close write', 'let g:YqKw.Yqx = 9', "string(filter(copy(g:YqKw), {k, v -> k =~# '^Yq'}))")
+  exec_then('sh close unlet', 'unlet g:YqKw.Yqw', "string(filter(copy(g:YqKw), {k, v -> k =~# '^Yq'}))")
+
+  quiet('enew')
+  exec('sh bwipe', 'execute "bwipe! " . g:YqBn')
+  veval('sh bwipe keys', keysof('g:YqKb'))
+  veval('sh bwipe value', "string(filter(copy(g:YqKb), {k, v -> k =~# '^Yq'}))")
+  veval('sh bwipe changedtick', "string([type(get(g:YqKb, 'changedtick')), get(g:YqKb, 'changedtick') > 0])")
+  exec_then('sh bwipe ct-write', 'let g:YqKb.changedtick = 99', "string(get(g:YqKb, 'changedtick', 'GONE'))")
+  exec_then('sh bwipe ct-unlet', 'unlet g:YqKb.changedtick', "string(has_key(g:YqKb, 'changedtick'))")
+  exec_then('sh bwipe write', 'let g:YqKb.Yqx = 9', "string(filter(copy(g:YqKb), {k, v -> k =~# '^Yq'}))")
+  veval('sh bwipe getbufvar', "string([getbufvar(g:YqBn, 'Yqb', 'DEF'), getbufvar(g:YqBn, '', 'DEF'), getbufvar(g:YqBn, ''), getbufvar(g:YqBn, '&ts', 'DEF')])")
+  exec('sh bwipe setbufvar', "call setbufvar(g:YqBn, 'Yqb', 5)")
+  exec('sh bwipe setbufvar-opt', "call setbufvar(g:YqBn, '&ts', 5)")
+
+  quiet('let g:YqTn = tabpagenr()')
+  exec('sh tabclose', 'tabclose')
+  veval('sh tabclose keys', keysof('g:YqKt'))
+  veval('sh tabclose value', "string(filter(copy(g:YqKt), {k, v -> k =~# '^Yq'}))")
+  veval('sh tabclose gettabvar', "string([gettabvar(g:YqTn, 'Yqt', 'DEF'), gettabvar(g:YqTn, '', 'DEF'), gettabvar(g:YqTn, '')])")
+  veval('sh tabclose settabvar', "execute('try | call settabvar(g:YqTn, \"Yqt\", 1) | catch | echo v:exception | endtry')")
+  veval('sh tabclose is', 'string(g:YqKt is t:)')
+
+  -- The accessors on a live buffer/window/tab, with options and the
+  -- missing-window arms of gettabwinvar.
+  quiet('enew')
+  quiet('let g:YqBn = bufnr()')
+  local ACC = {
+    { 'setbufvar-opt', "call setbufvar(g:YqBn, '&ts', 3)", "getbufvar(g:YqBn, '&ts')" },
+    { 'setbufvar-opt-str', "call setbufvar(g:YqBn, '&ts', '5')", "getbufvar(g:YqBn, '&ts')" },
+    { 'setbufvar-opt-bad', "call setbufvar(g:YqBn, '&ts', 'x')", "getbufvar(g:YqBn, '&ts')" },
+    { 'setbufvar-opt-zero', "call setbufvar(g:YqBn, '&ts', 0)", "getbufvar(g:YqBn, '&ts')" },
+    { 'setbufvar-opt-nosuch', "call setbufvar(g:YqBn, '&nosuchopt', 1)", "getbufvar(g:YqBn, '&nosuchopt', 'DEF')" },
+    { 'setbufvar-opt-global', "call setbufvar(g:YqBn, '&ts', 4)", "string([&ts, &g:ts, getbufvar(g:YqBn, '&ts')])" },
+    { 'setbufvar-ct', "call setbufvar(g:YqBn, 'changedtick', 1)", "getbufvar(g:YqBn, 'changedtick') > 1" },
+    { 'setbufvar-locked', "let b:Yqlk = 1 | lockvar b:Yqlk | call setbufvar(g:YqBn, 'Yqlk', 2)", "getbufvar(g:YqBn, 'Yqlk')" },
+    { 'getbufvar-amp', "echo 1", "type(getbufvar(g:YqBn, '&'))" },
+    { 'getbufvar-ts', "echo 1", "getbufvar(g:YqBn, '&ts')" },
+    { 'getbufvar-l-ts', "echo 1", "getbufvar(g:YqBn, '&l:ts')" },
+    { 'getbufvar-g-ts', "echo 1", "getbufvar(g:YqBn, '&g:ts')" },
+    { 'settabvar-new', "call settabvar(1, 'Yqtn', [1])", "gettabvar(1, 'Yqtn')" },
+    { 'settabvar-bad', "call settabvar(99, 'Yqtn', 1)", "gettabvar(99, 'Yqtn', 'DEF')" },
+    { 'settabvar-amp', "call settabvar(1, '&ts', 1)", "gettabvar(1, '&ts', 'DEF')" },
+    { 'gettabwinvar-nowin', 'echo 1', "gettabwinvar(1, 99, 'Yqw', 'DEF')" },
+    { 'gettabwinvar-nowin-nodef', 'echo 1', "string(gettabwinvar(1, 99, 'Yqw'))" },
+    { 'gettabwinvar-notab', 'echo 1', "gettabwinvar(99, 1, 'Yqw', 'DEF')" },
+    { 'gettabwinvar-zero', "call setwinvar(0, 'Yqw0', 7)", "gettabwinvar(0, 0, 'Yqw0', 'DEF')" },
+    { 'gettabwinvar-all', "call setwinvar(0, 'Yqw0', 7)", "string(filter(gettabwinvar(1, 0, ''), {k, v -> k =~# '^Yq'}))" },
+    { 'gettabwinvar-opt', 'echo 1', "gettabwinvar(1, 1, '&number', 'DEF')" },
+    { 'gettabwinvar-optbad', 'echo 1', "gettabwinvar(1, 1, '&nosuchopt', 'DEF')" },
+    { 'settabwinvar-nowin', "call settabwinvar(1, 99, 'Yqw', 1)", "gettabwinvar(1, 99, 'Yqw', 'DEF')" },
+    { 'settabwinvar-opt', "call settabwinvar(1, 1, '&number', 1)", "string([gettabwinvar(1, 1, '&number'), &number])" },
+    { 'getwinvar-winid', "call setwinvar(0, 'Yqwi', 4)", "getwinvar(win_getid(), 'Yqwi', 'DEF')" },
+  }
+  for _, case in ipairs(ACC) do
+    quiet("let v:errmsg = ''")
+    exec_then('sh acc ' .. case[1], case[2], 'string(' .. case[3] .. ')')
+  end
+  quiet('silent! unlockvar b:Yqlk')
+  quiet('silent! unlet! b:Yqlk w:Yqw0 w:Yqwi t:Yqtn t:Yqt')
+  quiet('setlocal number& | set number& ts&')
+  quiet('silent! unlet! g:YqKb g:YqKw g:YqKt g:YqBn g:YqWn g:YqTn g:YqKb2')
+  quiet("let v:errmsg = ''")
+end)
+
+-- ---------------------------------------------------------------------
+-- s25 -- watchers on the scope dictionaries
+-- ---------------------------------------------------------------------
+
+section('s25-scopewatch', function()
+  -- dictwatcheradd() on g:, v: and b: rather than on an ordinary dict:
+  -- a scope write reaches the watcher through set_var / unlet, and a
+  -- watcher that itself writes the scope is re-entrant.  Every watcher
+  -- is removed at the end.
+  quiet('silent! unlet! g:YqLog g:YqVictim g:YqWoVictim')
+  quiet(table.concat({
+    'let g:YqLog = []',
+    'function! YqWself(d, k, z) abort',
+    "  call add(g:YqLog, ['self', a:k, a:z])",
+    "  execute 'unlet! g:' . a:k",
+    'endfunction',
+    'function! YqWother(d, k, z) abort',
+    "  call add(g:YqLog, ['other', a:k, a:z])",
+    '  unlet! g:YqVictim g:YqWoVictim',
+    'endfunction',
+    'function! YqWre(d, k, z) abort',
+    "  call add(g:YqLog, ['re', a:k, a:z])",
+    "  if get(a:z, 'new', '') isnot# 'R'",
+    "    let g:[a:k] = 'R'",
+    '  endif',
+    'endfunction',
+    'function! YqWv(d, k, z) abort',
+    "  call add(g:YqLog, ['v', a:k, a:z])",
+    'endfunction',
+    'function! YqWb(d, k, z) abort',
+    "  call add(g:YqLog, ['b', a:k, a:z])",
+    'endfunction',
+    'function! YqWct(d, k, z) abort',
+    "  call add(g:YqLog, ['ct', a:k, sort(keys(a:z)), a:z.new - a:z.old])",
+    'endfunction',
+  }, '\n'))
+  exec('sw add', table.concat({
+    "call dictwatcheradd(g:, 'YqWs*', 'YqWself')",
+    "call dictwatcheradd(g:, 'YqWo*', 'YqWother')",
+    "call dictwatcheradd(g:, 'YqWr*', 'YqWre')",
+  }, '\n'))
+  local CASES = {
+    { 'self-new', 'let g:YqWsA = 1', "exists('g:YqWsA')" },
+    { 'self-exists', "let g:YqWsB = 1 | echo exists('g:YqWsB')", "exists('g:YqWsB')" },
+    { 'self-index', 'let g:YqWsC = [1] | let g:YqWsC[0] = 2', "exists('g:YqWsC')" },
+    { 'self-op', 'let g:YqWsD = 1 | let g:YqWsD += 1', "exists('g:YqWsD')" },
+    { 'self-unpack', 'let [g:YqWsE, g:YqWsF] = [1, 2]', "[exists('g:YqWsE'), exists('g:YqWsF')]" },
+    { 'self-scopekey', "let g:['YqWsG'] = 1", "exists('g:YqWsG')" },
+    { 'self-extend', "call extend(g:, {'YqWsH': 1})", "exists('g:YqWsH')" },
+    { 'other-plain', 'let g:YqVictim = 1 | let g:YqWoA = 1', "[exists('g:YqVictim'), exists('g:YqWoA')]" },
+    { 'other-matching', 'let g:YqWoVictim = 1 | let g:YqWoB = 1', "[exists('g:YqWoVictim'), exists('g:YqWoB')]" },
+    { 're-new', 'let g:YqWrA = 1', 'g:YqWrA' },
+    { 're-update', 'let g:YqWrA = 2', 'g:YqWrA' },
+    { 're-unlet', 'unlet g:YqWrA', "exists('g:YqWrA') ? g:YqWrA : 'GONE'" },
+    { 're-concat', "let g:YqWrB = 'a' | let g:YqWrB .= 'b'", 'g:YqWrB' },
+  }
+  for _, case in ipairs(CASES) do
+    quiet('let g:YqLog = []')
+    exec_then('sw ' .. case[1], case[2], 'string(' .. case[3] .. ')')
+    veval('sw ' .. case[1] .. ' log', 'string(g:YqLog)')
+  end
+  exec('sw del', table.concat({
+    "call dictwatcherdel(g:, 'YqWs*', 'YqWself')",
+    "call dictwatcherdel(g:, 'YqWo*', 'YqWother')",
+    "call dictwatcherdel(g:, 'YqWr*', 'YqWre')",
+  }, '\n'))
+  exec('sw del twice', "call dictwatcherdel(g:, 'YqWs*', 'YqWself')")
+  quiet('let g:YqLog = []')
+  exec_then('sw after del', 'let g:YqWsZ = 1', "string([exists('g:YqWsZ'), g:YqLog])")
+
+  -- v:
+  quiet('let g:YqLog = []')
+  exec('sw v add', "call dictwatcheradd(v:, 'errmsg', 'YqWv')")
+  exec('sw v let', "let v:errmsg = 'x'")
+  exec('sw v key', "let v:['errmsg'] = 'y'")
+  exec('sw v emsg', 'silent! call YqNoSuchFunction()')
+  exec('sw v other', "let v:statusmsg = 'z'")
+  veval('sw v log', 'string(g:YqLog)')
+  exec('sw v del', "call dictwatcherdel(v:, 'errmsg', 'YqWv')")
+  quiet("let v:errmsg = '' | let v:statusmsg = ''")
+
+  -- b:, including the changedtick item that buf_set_changedtick writes
+  -- behind :let's back.
+  quiet('enew!')
+  quiet('let g:YqLog = []')
+  exec('sw b add', "call dictwatcheradd(b:, 'Yq*', 'YqWb')")
+  exec('sw b let', 'let b:YqB = 1 | let b:YqB = 2 | unlet b:YqB')
+  exec('sw b setbufvar', "call setbufvar('', 'YqC', 3)")
+  veval('sw b log', 'string(g:YqLog)')
+  exec('sw b del', "call dictwatcherdel(b:, 'Yq*', 'YqWb')")
+  quiet('let g:YqLog = []')
+  exec('sw ct add', "call dictwatcheradd(b:, 'changedtick', 'YqWct')")
+  exec('sw ct edit', "call setline(1, 'x')\ncall append(0, 'y')")
+  veval('sw ct log', 'string(g:YqLog)')
+  exec('sw ct del', "call dictwatcherdel(b:, 'changedtick', 'YqWct')")
+  quiet('silent! unlet! b:YqC')
+  quiet('enew!')
+
+  quiet('silent! unlet! g:YqLog g:YqVictim g:YqWoVictim g:YqWsZ g:YqWoA g:YqWoB g:YqWrA g:YqWrB')
+  for _, name in ipairs({ 'YqWself', 'YqWother', 'YqWre', 'YqWv', 'YqWb', 'YqWct' }) do
+    quiet('silent! delfunction! ' .. name)
+  end
+end)
+
+-- ---------------------------------------------------------------------
+-- s26 -- $ENV
+-- ---------------------------------------------------------------------
+
+section('s26-env', function()
+  local READ = "string([$YQFOO, exists('$YQFOO'), has_key(environ(), 'YQFOO'), getenv('YQFOO')])"
+  local CASES = {
+    { 'unset', 'echo 1' },
+    { 'set', "let $YQFOO = 'x'" },
+    { 'echo', "let $YQFOO = 'x' | echo $YQFOO" },
+    { 'empty', "let $YQFOO = ''" },
+    { 'unlet', "let $YQFOO = 'x' | unlet $YQFOO" },
+    { 'unlet-missing', 'unlet $YQFOO' },
+    { 'unlet!-missing', 'unlet! $YQFOO' },
+    { 'concat-unset', "let $YQFOO .= 'y'" },
+    { 'concat-set', "let $YQFOO = 'x' | let $YQFOO .= 'y' | let $YQFOO ..= 'z'" },
+    { 'number', 'let $YQFOO = 12' },
+    { 'add', 'let $YQFOO = 1 | let $YQFOO += 1' },
+    { 'setenv', "call setenv('YQFOO', 'se')" },
+    { 'setenv-null', "let $YQFOO = 'x' | call setenv('YQFOO', v:null)" },
+    { 'setenv-num', "call setenv('YQFOO', 3)" },
+    { 'lockvar', "let $YQFOO = 'x' | lockvar $YQFOO" },
+    { 'list', "let $YQFOO = 'x' | let $YQFOO" },
+    { 'expand', "let $YQFOO = 'x' | echo expand('$YQFOO/a') expand('$YQNOPE/a')" },
+    { 'curly', "let g:YqEn = 'YQFOO' | execute 'let $' . g:YqEn . ' = \"c\"'" },
+  }
+  for _, case in ipairs(CASES) do
+    quiet('silent! unlet! $YQFOO g:YqEn')
+    exec_then('env ' .. case[1], case[2], READ)
+  end
+  quiet('silent! unlet! $YQFOO g:YqEn')
+  veval('env nope', "string([$YQNOPE, getenv('YQNOPE'), getenv('YQNOPE') is v:null, exists('$YQNOPE')])")
+  veval('env lower', "string([execute('let $yqlow = 1'), $yqlow, $YQLOW, exists('$YQLOW')])")
+  quiet('silent! unlet! $yqlow')
+  veval('env environ', "string(filter(environ(), {k, v -> k =~# '^YQ\\|^yq'}))")
+end)
+
+-- ---------------------------------------------------------------------
+-- s27 -- registers through :let
+-- ---------------------------------------------------------------------
+
+section('s27-registers', function()
+  local function reg(r)
+    return string.format("[getreg('%s', 1, 1), getregtype('%s')]", r, r)
+  end
+  local CASES = {
+    { 'a-set', "let @a = 'x'", reg('a') },
+    { 'A-append', "let @a = 'x' | let @A = 'y'", reg('a') },
+    { 'A-concat', "let @a = 'x' | let @A .= 'y'", reg('a') },
+    { 'a-concat', "let @a = 'x' | let @a .= 'y'", reg('a') },
+    { 'a-nl', "let @a = \"l1\\nl2\\n\"", reg('a') },
+    { 'a-list', "let @a = ['l1', 'l2']", reg('a') },
+    { 'slash', "let @/ = 'pat'", "[@/, getreg('/'), v:searchforward]" },
+    { 'slash-list', "let @/ = ['a', 'b']", "@/" },
+    { 'eq', "let @= = '1+1'", "[@=, getreg('='), getreg('=', 1)]" },
+    { 'underscore', "let @_ = 'x'", "[@_, getreg('_'), getregtype('_')]" },
+    { 'dot', "let @. = 'x'", '@.' },
+    { 'percent', "let @% = 'x'", '@%' },
+    { 'one', "let @1 = 'one'", reg('1') },
+    { 'minus', "let @- = 'small'", reg('-') },
+    { 'quote', "let @\" = 'unnamed'", '[' .. "getreg('\"')" .. ', ' .. "getreg('0')" .. ']' },
+    { 'bad', "let @! = 'x'", '1' },
+    { 'Z', "let @Z = 'z'", reg('z') },
+    { 'setreg-line', "call setreg('b', ['l1', 'l2'], 'l')", reg('b') },
+    { 'setreg-block', "call setreg('b', ['ab', 'c'], 'b5')", reg('b') },
+    { 'setreg-append', "call setreg('b', 'x') | call setreg('b', 'y', 'a')", reg('b') },
+    { 'setreg-dict', "call setreg('c', {'regcontents': ['q'], 'regtype': 'v', 'isunnamed': v:false})", 'getreginfo("c")' },
+    { 'setreg-slash', "call setreg('/', 'sp')", '@/' },
+    { 'setreg-eq', "call setreg('=', '3*3')", "[getreg('=', 1), getreg('=')]" },
+    { 'setreg-bad', "echo setreg('!', 'x')", '1' },
+    { 'colon', "let @: = 'x'", '@:' },
+    { 'colon-typed', [[call feedkeys(":let g:YqCol = 1\<CR>", 'xt')]], "[@:, getreg(':'), get(g:, 'YqCol', 'GONE')]" },
+  }
+  for _, case in ipairs(CASES) do
+    quiet("call setreg('a', '') | call setreg('b', '') | call setreg('c', '') | call setreg('z', '')")
+    quiet("let @/ = '' | let v:errmsg = ''")
+    quiet('silent! unlet! g:YqCol')
+    exec_then('reg ' .. case[1], case[2], 'string(' .. case[3] .. ')')
+  end
+  quiet("call setreg('a', '') | call setreg('b', '') | call setreg('c', '') | call setreg('z', '')")
+  quiet("call setreg('1', '') | call setreg('-', '') | call setreg('\"', '')")
+  quiet("let @/ = '' | let v:errmsg = ''")
+  quiet('silent! unlet! g:YqCol')
+end)
+
+-- ---------------------------------------------------------------------
+-- s28 -- completion over variable names
+-- ---------------------------------------------------------------------
+
+section('s28-complete', function()
+  quiet(table.concat({
+    'let g:YqcAlpha = 1',
+    'let g:YqcBeta = 2',
+    'let b:YqcBuf = 3',
+    'let w:YqcWin = 4',
+    'let t:YqcTab = 5',
+    'let $YQCENV = 6',
+    'function! YqcFunc() abort',
+    '  return 1',
+    'endfunction',
+  }, '\n'))
+  local function comp(label, pat, kind, filter)
+    local expr = string.format('getcompletion(%s, %s)', vq(pat), vq(kind))
+    if filter then
+      expr = string.format('filter(%s, {_, v -> v =~# %s})', expr, vq(filter))
+    end
+    veval('cp ' .. label, 'string(' .. expr .. ')')
+  end
+  comp('g-all', 'g:', 'var', 'Yqc')
+  comp('g-prefix', 'g:Yqc', 'var')
+  comp('g-prefix-b', 'g:YqcB', 'var')
+  comp('g-none', 'g:YqcZ', 'var')
+  comp('bare', 'Yqc', 'var')
+  comp('b', 'b:', 'var', 'Yqc')
+  comp('b-prefix', 'b:Yq', 'var')
+  comp('w', 'w:Yq', 'var')
+  comp('t', 't:Yq', 'var')
+  comp('v-cou', 'v:cou', 'var')
+  comp('v-t', 'v:t_', 'var')
+  comp('v-null', 'v:_null', 'var')
+  comp('v-all-c', 'v:', 'var', '^v:c')
+  comp('expr-g', 'g:Yqc', 'expression')
+  comp('expr-bare', 'Yqc', 'expression')
+  comp('expr-v', 'v:cou', 'expression')
+  comp('function', 'Yqc', 'function')
+  comp('env', 'YQC', 'environment')
+  comp('cmdline-let', 'let g:Yqc', 'cmdline')
+  comp('cmdline-unlet', 'unlet b:Yq', 'cmdline')
+  comp('cmdline-echo', 'echo v:cou', 'cmdline')
+  comp('cmdline-env', 'let $YQC', 'cmdline')
+  comp('cmdline-lock', 'lockvar g:Yqc', 'cmdline')
+  comp('cmdline-call', 'call Yqc', 'cmdline')
+  quiet('silent! unlet! g:YqcAlpha g:YqcBeta b:YqcBuf w:YqcWin t:YqcTab $YQCENV')
+  quiet('silent! delfunction! YqcFunc')
+  -- Without the variables: nothing left to offer.
+  comp('g-gone', 'g:Yqc', 'var')
 end)
 
 -- ---------------------------------------------------------------------

@@ -523,6 +523,22 @@ describe('lua stdlib', function()
       ]],
       }
     end)
+
+    it('deleting a missing variable is silent, refused v: writes raise', function()
+      for _, scope in ipairs({ 'g', 'b', 'w', 't' }) do
+        exec_lua(function(s)
+          vim[s].nosuchvar = nil
+        end, scope)
+        eq(0, fn.exists(scope .. ':nosuchvar'))
+      end
+      matches('Key is read%-only: count$', pcall_err(exec_lua, [[vim.v.count = nil]]))
+      matches('Key is read%-only: throwpoint$', pcall_err(api.nvim_set_vvar, 'throwpoint', 'x'))
+      matches(
+        'Setting v:completed_item to value with wrong type$',
+        pcall_err(exec_lua, [[vim.v.completed_item = 1]])
+      )
+      eq(0, eval('len(v:completed_item)'))
+    end)
   end)
 
   describe('options', function()
