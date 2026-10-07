@@ -313,6 +313,31 @@ pub(crate) fn os_isdir_of(name: &CStr) -> bool {
     unsafe { os_isdir(name.as_ptr()) }
 }
 
+/// libuv's text for the error code `error` -- upstream's `os_strerror`.
+pub(crate) fn os_strerror(error: c_int) -> &'static CStr {
+    // SAFETY: `uv_strerror` answers a static NUL-terminated string for any
+    // code, a code it does not know included.
+    unsafe { cstr::at(uv_strerror(error)) }
+}
+
+/// [`os_can_exe`] asking only whether `name` is executable.
+pub(crate) fn can_execute(name: &CStr, use_path: bool) -> bool {
+    // SAFETY: a null out-parameter asks for no path.
+    unsafe { os_can_exe(name, ptr::null_mut(), use_path) }
+}
+
+/// [`os_can_exe`] answering where the executable `name` was found, or
+/// `None` when it is not one.
+pub(crate) fn executable_path(name: &CStr, use_path: bool) -> Option<crate::memory::XString> {
+    let mut path = ptr::null_mut();
+    // SAFETY: `path` is this frame's own; the callee leaves it null or an
+    // allocated NUL-terminated string, adopted here.
+    unsafe {
+        os_can_exe(name, &raw mut path, use_path);
+        (!path.is_null()).then(|| crate::memory::XString::from_raw(path))
+    }
+}
+
 /// Whether `name` is a directory and *not* a symlink to one.
 pub fn os_isrealdir(name: &CStr) -> bool {
     // `lstat`, not `stat`: a symlink to a directory is not one, though

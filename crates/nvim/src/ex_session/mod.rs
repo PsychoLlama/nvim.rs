@@ -490,7 +490,7 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
             // The 'viewdir' may still need creating.
             let vdir = P_VDIR.get();
             if !os_isdir(vdir.as_ptr().cast_mut()) {
-                let _ = vim_mkdir_emsg(vdir.as_ptr().cast_mut(), 0o755);
+                let _ = vim_mkdir_emsg(vdir.as_cstr(), 0o755);
             }
             view_file
         } else if *arg != NUL as c_char {

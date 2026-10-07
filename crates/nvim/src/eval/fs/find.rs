@@ -10,8 +10,8 @@
 //! evaluates (so the filter re-enters the evaluator on every name).
 //!
 //! Each of the four answers either one string or a List of them, decided by a
-//! flag argument before anything is expanded -- which is why the List has to
-//! be reachable from `rettv` (as [`RetList`]) rather than held as a local.
+//! flag argument before anything is expanded -- which is why the List is
+//! reached through `rettv` rather than held as a local.
 //!
 //! # What holds the results
 //!
@@ -23,29 +23,25 @@
 //!
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::{FINDFILE_DIR, FINDFILE_FILE, RetList, nr_arg, str_arg, str_arg_chk};
+use super::{FINDFILE_DIR, nr_arg, str_arg, str_arg_chk};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one, globpath};
-use crate::cstr;
 use crate::eval::eval_expr_typval;
 use crate::eval::typval::NumBuf;
-use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk};
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_alloc_ret};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
-use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
+use crate::file_search::{FileNameOpts, PathWalk};
 use crate::fileio::readdir_core;
-use crate::memory::{ThinCString, XString, xfree};
-use crate::option::vars::p_wic;
-use crate::optionstr::OptString;
-use crate::path::buffer_path;
+use crate::memory::{ThinCString, XString};
+use crate::option::vars::{P_PATH, p_wic};
+use crate::optionstr::{OptString, local_or_global};
 use crate::types::{
     EvalFuncData, Expand, ExpandContext, TypVal, VAR_LIST, VAR_STRING, VarNumber, Vv,
-    kListLenUnknown, ptrdiff_t, size_t,
+    kListLenUnknown, ptrdiff_t,
 };
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 // ---------------------------------------------------------------------
 // The two things that hold the names found
@@ -89,8 +85,6 @@ impl Expander {
 // Small wrappers over what the four builtins reach for
 // ---------------------------------------------------------------------
 
-/// Answer a List rather than a String.  Which list is decided later, once
-/// the number of matches is known.
 /// Answer nothing, under whichever tag [`ret_list`] left behind: `{list}`
 /// asks for a List and the rest of these answer a String, and the empty
 /// form of both is a NULL payload.
@@ -102,29 +96,18 @@ fn empty_answer(result: &mut TypVal) {
     }
 }
 
+/// Answer a List rather than a String.  Which list is decided later, once
+/// the number of matches is known.
 fn ret_list(result: &mut TypVal) {
     result.write_list(None);
 }
 
-fn free(p: *mut c_char) {
-    // SAFETY: `p` is an owned string, or NULL.
-    unsafe { xfree(p.cast::<c_void>()) };
-}
-
 /// The suffixes `findfile()` tries, and none for `finddir()`.
-fn suffixes(find_what: c_int) -> *mut c_char {
+fn suffixes(find_what: c_int) -> XString {
     if find_what == FINDFILE_DIR as c_int {
-        return c"".as_ptr().cast_mut();
+        return XString::new();
     }
-    Buf::current().b_p_sua.value_ptr()
-}
-
-/// Set `v:val`, or clear it when `name` is NULL.
-fn set_val(name: *const c_char) {
-    // SAFETY: a NUL-terminated string, which every directory entry's name
-    // is, or null.
-    let name = unsafe { cstr::at_opt(name) };
-    set_vim_var_string(Vv::Val, name.map(CStr::to_bytes));
+    Buf::current().b_p_sua.get()
 }
 
 // ---------------------------------------------------------------------
@@ -136,8 +119,8 @@ fn set_val(name: *const c_char) {
 /// all of them as a List.
 fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
     let mut numbuf = NumBuf::new();
-    let mut fresult: *mut c_char = ptr::null_mut();
-    let mut path = buffer_path();
+    // `None` is the buffer's own 'path'.
+    let mut path = None;
     let mut count = 1;
     let mut error = false;
 
@@ -150,7 +133,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
             None => error = true,
             Some(p) => {
                 if !p.to_bytes().is_empty() {
-                    path = p.as_ptr().cast_mut();
+                    path = Some(XString::from_cstr(p));
                 }
                 if args.len() > 2 {
                     count = nr_arg(args, 2, &mut error) as c_int;
@@ -159,61 +142,51 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
         }
     }
     if count < 0 {
-        RetList::alloc(result, kListLenUnknown as c_int as ptrdiff_t);
+        tv_list_alloc_ret(result, kListLenUnknown as c_int as ptrdiff_t);
     }
     if fname.to_bytes().is_empty() || error {
         return;
     }
 
-    let (mut to_find, mut ctx): (*mut c_char, *mut c_char) = (ptr::null_mut(), ptr::null_mut());
-    let (name, len) = (fname.as_ptr().cast_mut(), fname.to_bytes().len() as size_t);
-    let (sua, mut first) = (suffixes(find_what), true);
+    let path = path.unwrap_or_else(|| local_or_global(&Buf::current().b_p_path, P_PATH).get());
+    let sua = suffixes(find_what);
+    let mut walk = PathWalk::new();
+    let mut found;
     loop {
-        // The previous answer, which was either copied into the List or is
-        // about to be replaced.
-        free(fresult);
-        // SAFETY: `curbuf` names the live current buffer.
-        let rel = Buf::current().name.full_ptr();
-        // Only the first round is given the name; the ones after it continue
-        // the walk the context remembers.
-        let (p, n) = if first {
-            (name, len)
-        } else {
-            (ptr::null_mut(), 0)
-        };
-        let (f2f, c) = (&raw mut to_find, &raw mut ctx);
+        let buffer = Buf::current();
         // `findfile()` is quiet and takes the name as written: no message,
         // no `'includeexpr'`, no relative-path preference.
         let quiet = FileNameOpts::NONE;
-        // SAFETY: `p` is NUL-terminated with `n` bytes, or NULL; `path` and
-        // `sua` are option strings; `rel` is the current buffer's own name;
-        // and the two out-parameters carry the walk's state from one round
-        // to the next.
-        fresult = unsafe {
-            find_file_in_path_option(p, n, quiet, first, path, find_what, rel, sua, f2f, c)
-        };
-        first = false;
-        if !fresult.is_null() && result.v_type() == VAR_LIST {
-            RetList::of(result).push(fresult);
+        // Only the first round reads the name; the ones after it continue
+        // the walk.
+        let rel = buffer.name.full();
+        found = walk.next(
+            fname.to_bytes(),
+            quiet,
+            path.as_cstr(),
+            find_what,
+            rel,
+            sua.as_cstr(),
+        );
+        if let Some(name) = &found
+            && let Some(list) = result.list_mut()
+        {
+            list.push_str(Some(name.as_cstr()));
         }
         let more = result.v_type() == VAR_LIST || {
             count -= 1;
             count > 0
         };
-        if !more || fresult.is_null() {
+        if !more || found.is_none() {
             break;
         }
     }
-    free(to_find);
-    // SAFETY: the context this call's own loop built, or NULL.
-    unsafe { vim_findfile_cleanup(ctx.cast::<c_void>()) };
+    drop(walk);
 
     // The List answer appended a copy of each match and only leaves the
-    // loop on a NULL, so there is nothing left to hand back there.
+    // loop on a `None`, so there is nothing left to hand back there.
     if result.v_type() == VAR_STRING {
-        // SAFETY: the last match, an `xmalloc`ed string nothing else holds,
-        // which the result adopts; or NULL.
-        result.write_string(unsafe { ThinCString::from_raw(fresult) });
+        result.write_string(found.map(ThinCString::from));
     }
 }
 
@@ -224,7 +197,7 @@ pub fn f_finddir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `findfile({name} [, {path} [, {count}]])`.
 pub fn f_findfile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    findfilendir(args, result, FINDFILE_FILE as c_int);
+    findfilendir(args, result, super::FINDFILE_FILE as c_int);
 }
 
 /// `glob({pattern} [, {nosuf} [, {list} [, {alllinks}]]])`.
@@ -266,9 +239,9 @@ pub fn f_glob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     xpc.one(pat, options, WildMode::AllKeep);
-    let list = RetList::alloc(result, xpc.count() as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, xpc.count() as ptrdiff_t);
     for name in xpc.files() {
-        list.push(name.as_ptr());
+        list.push_str(Some(name.as_cstr()));
     }
     xpc.cleanup();
 }
@@ -316,37 +289,23 @@ pub fn f_globpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         result.write_string(Some(joined.into()));
         return;
     }
-    let list = RetList::alloc(result, ptrdiff_t::try_from(found.len()).unwrap_or(0));
+    let list = tv_list_alloc_ret(result, ptrdiff_t::try_from(found.len()).unwrap_or(0));
     for name in &found {
-        list.push(name.as_ptr());
+        list.push_str(Some(name.as_cstr()));
     }
 }
 
 /// The per-entry filter `readdir()` hands `readdir_core`: evaluate the
 /// caller's expression with the name as `v:val` and as its one argument.
 ///
-/// Answers 1 to keep the entry, 0 to skip it, -1 to stop the walk -- and 1
-/// when there is no expression at all.
-///
-/// # Safety
-/// `context` is null, or the `TypVal` `f_readdir` handed `readdir_core`; and
-/// `name` is a NUL-terminated entry name.
-unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNumber {
-    if context.is_null() {
-        return 1;
-    }
-    // SAFETY: the caller's contract.
-    let expr = unsafe { &mut *context.cast::<TypVal>() };
-
+/// Answers 1 to keep the entry, 0 to skip it, -1 to stop the walk.
+fn readdir_checkitem(expr: &TypVal, name: &CStr) -> VarNumber {
     let mut save_val = TV_INITIAL_VALUE;
     prepare_vimvar(Vv::Val, &mut save_val);
-    set_val(name);
+    set_vim_var_string(Vv::Val, Some(name.to_bytes()));
 
     // The argument owns a copy of the name, released with it.
-    // SAFETY: the caller's contract: a NUL-terminated name.
-    let argv = [TypVal::string_from(
-        unsafe { CStr::from_ptr(name) }.to_bytes(),
-    )];
+    let argv = [TypVal::string_from(name.to_bytes())];
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut retval = 0;
@@ -356,7 +315,7 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
         tv_clear(&mut rettv);
     }
 
-    set_val(ptr::null());
+    set_vim_var_string(Vv::Val, None);
     restore_vimvar(Vv::Val, &mut save_val);
     retval
 }
@@ -365,19 +324,24 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
 /// with `{expr}` deciding which of them to keep.
 pub fn f_readdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let list = RetList::alloc(result, kListLenUnknown as c_int as ptrdiff_t);
-    let path = str_arg(args, 0, &mut numbuf).as_ptr();
-    // No filter expression is a null context, which the callback reads as
-    // "keep everything".
-    let expr = args
+    tv_list_alloc_ret(result, kListLenUnknown as c_int as ptrdiff_t);
+    let path = str_arg(args, 0, &mut numbuf);
+    // No filter expression keeps everything. The filter runs user code, so
+    // nothing of the answer is held across the walk.
+    let mut filter = args
         .get(1)
-        .map_or(ptr::null_mut(), |tv| ptr::from_ref(tv).cast_mut().cast());
-
-    // SAFETY: `path` is NUL-terminated, and `expr` is null or the argument
-    // the filter reads back through.
-    if let Ok(found) = unsafe { readdir_core(path, expr, Some(readdir_checkitem)) } {
+        .map(|expr| move |name: &CStr| readdir_checkitem(expr, name));
+    let found = readdir_core(
+        path,
+        filter
+            .as_mut()
+            .map(|filter| filter as &mut dyn FnMut(&CStr) -> VarNumber),
+    );
+    if let Ok(found) = found
+        && let Some(list) = result.list_mut()
+    {
         for name in &found {
-            list.push(name.as_ptr());
+            list.push_str(Some(name));
         }
     }
 }

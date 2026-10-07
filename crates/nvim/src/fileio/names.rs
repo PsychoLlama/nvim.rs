@@ -17,6 +17,7 @@ use crate::memory::XString;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
 
+use crate::os::fs::link_info;
 use crate::path::tail_index;
 
 use super::*;
@@ -222,6 +223,12 @@ unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
     -1
 }
 
+/// [`vim_rename`] of two names the caller holds: whether it worked.
+pub(crate) fn rename_file(from: &CStr, to: &CStr) -> bool {
+    // SAFETY: both are NUL-terminated.
+    unsafe { vim_rename(from.as_ptr(), to.as_ptr()) == 0 }
+}
+
 /// Rename `from` to `to`, copying the file across if a rename cannot do it.
 ///
 /// `os_rename` only works when both names are on the same file system.
@@ -277,7 +284,8 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     }
 
     // The rename failed, try copying the file.
-    if unsafe { vim_copyfile(from, to) } != OK {
+    let (from_name, to_name) = unsafe { (cstr::at(from), cstr::at(to)) };
+    if vim_copyfile(from_name, to_name) != OK {
         return -1;
     }
     if unsafe { os_fileinfo(from, &raw mut from_info) } {
@@ -291,23 +299,18 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
 /// A symbolic link is copied as a link, not as its target.
 ///
 /// @return  FAIL for failure, OK for success
-///
-/// # Safety
-///
-/// `from` must point at a NUL-terminated string. `to` must point at a NUL-
-/// terminated string.
-pub unsafe fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
-    let mut from_info = FileInfo::default();
-    if unsafe { os_fileinfo_link(from, &raw mut from_info) }
-        && from_info.stat.st_mode & __S_IFMT as u64 == S_IFLNK
-    {
+pub fn vim_copyfile(from: &CStr, to: &CStr) -> c_int {
+    if link_info(from).is_some_and(|info| info.stat.st_mode & __S_IFMT as u64 == S_IFLNK) {
         let mut linkbuf = [0 as c_char; MAXPATHL as usize + 1];
-        let len = unsafe { readlink(from, linkbuf.as_mut_ptr(), MAXPATHL as size_t) };
+        // SAFETY: a NUL-terminated name, and `MAXPATHL` writable bytes with
+        // room for the terminator after them.
+        let len = unsafe { readlink(from.as_ptr(), linkbuf.as_mut_ptr(), MAXPATHL as size_t) };
         if len <= 0 {
             return FAIL;
         }
         linkbuf[len as usize] = 0;
-        return if unsafe { symlink(linkbuf.as_ptr(), to) } == 0 {
+        // SAFETY: two NUL-terminated names.
+        return if unsafe { symlink(linkbuf.as_ptr(), to.as_ptr()) } == 0 {
             OK
         } else {
             FAIL
@@ -315,12 +318,12 @@ pub unsafe fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
     }
 
     // For systems that support ACL: get the ACL from the original file.
-    let acl = os_get_acl(from);
-    if unsafe { os_copy(cstr::at(from), cstr::at(to), UV_FS_COPYFILE_EXCL) } != 0 {
+    let acl = os_get_acl(from.as_ptr());
+    if os_copy(from, to, UV_FS_COPYFILE_EXCL) != 0 {
         os_free_acl(acl);
         return FAIL;
     }
-    os_set_acl(to, acl);
+    os_set_acl(to.as_ptr(), acl);
     os_free_acl(acl);
     OK
 }
@@ -419,6 +422,17 @@ pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *m
         }
     }
     false
+}
+
+/// [`file_pat_to_reg_pat`] of a whole pattern the caller holds: the regexp,
+/// or `None` when the braces in the pattern do not balance.
+pub(crate) fn file_pat_to_regpat(pat: &CStr) -> Option<XString> {
+    // SAFETY: a NUL-terminated pattern, which is what a null end promises;
+    // the answer is null or an allocated string, adopted here.
+    unsafe {
+        let reg = file_pat_to_reg_pat(pat.as_ptr(), ptr::null(), ptr::null_mut(), 0);
+        (!reg.is_null()).then(|| XString::from_raw(reg))
+    }
 }
 
 /// Convert `pat`, which has shell-style wildcards in it, into a regular

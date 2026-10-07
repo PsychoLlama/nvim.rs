@@ -410,6 +410,80 @@ unsafe fn find_along_option(
     }
 }
 
+/// One name's walk along a search option, resumed once per match: what
+/// `findfile()` and `finddir()` drive. Dropping it ends the walk.
+///
+/// Every string [`find_file_in_path_option`] is handed is a copy the walk
+/// makes for the call, so that nothing it writes in place -- the NUL it puts
+/// after the name -- can land in the caller's storage.
+pub(crate) struct PathWalk {
+    file_to_find: *mut c_char,
+    search_ctx: *mut c_char,
+    started: bool,
+}
+
+impl PathWalk {
+    pub(crate) const fn new() -> Self {
+        Self {
+            file_to_find: ptr::null_mut(),
+            search_ctx: ptr::null_mut(),
+            started: false,
+        }
+    }
+
+    /// The next match of `name` along `path_option`, or `None` when there
+    /// are no more. Only the first call reads `name`.
+    pub(crate) fn next(
+        &mut self,
+        name: &[u8],
+        options: FileNameOpts,
+        path_option: &CStr,
+        find_what: c_int,
+        rel_fname: Option<&CStr>,
+        suffixes: &CStr,
+    ) -> Option<XString> {
+        let first = !self.started;
+        self.started = true;
+        let mut name = first.then(|| [name, &[0][..]].concat());
+        let len = name.as_ref().map_or(0, |name| name.len() - 1);
+        let mut path = path_option.to_bytes_with_nul().to_vec();
+        let mut rel = rel_fname.map(|rel| rel.to_bytes_with_nul().to_vec());
+        let mut suffixes = suffixes.to_bytes_with_nul().to_vec();
+        let raw =
+            |text: Option<&mut Vec<u8>>| text.map_or(ptr::null_mut(), |t| t.as_mut_ptr().cast());
+        // SAFETY: every string is a NUL-terminated copy this frame owns and
+        // the callee may write; the name has `len` bytes before its NUL; and
+        // the two slots are the walk's own, null or what the previous call
+        // left in them. The answer is null or an allocated string, adopted.
+        unsafe {
+            let found = find_file_in_path_option(
+                raw(name.as_mut()),
+                len,
+                options,
+                first,
+                raw(Some(&mut path)),
+                find_what,
+                raw(rel.as_mut()),
+                raw(Some(&mut suffixes)),
+                &raw mut self.file_to_find,
+                &raw mut self.search_ctx,
+            );
+            (!found.is_null()).then(|| XString::from_raw(found))
+        }
+    }
+}
+
+impl Drop for PathWalk {
+    fn drop(&mut self) {
+        // SAFETY: the name copy and the context the callee left in the two
+        // slots, each null or the walk's own, released once.
+        unsafe {
+            xfree(self.file_to_find.cast());
+            vim_findfile_cleanup(self.search_ctx.cast());
+        }
+    }
+}
+
 /// Say that `file_to_find` is not there, in the wording the caller earned:
 /// a first call has not found it at all, a repeat call has run out.
 ///

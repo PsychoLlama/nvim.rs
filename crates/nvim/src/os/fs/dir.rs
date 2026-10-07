@@ -275,25 +275,31 @@ pub struct MkdirFailure {
 
 /// [`os_mkdir_recurse`] for a caller that has the name as a string and wants
 /// the failure as a value rather than through an out-parameter.
-pub fn mkdir_recurse(dir: &CStr, mode: int32_t) -> Result<(), MkdirFailure> {
+///
+/// Success answers the full name of the *first* directory it had to make,
+/// or `None` when they all existed already.
+pub fn mkdir_recurse(dir: &CStr, mode: int32_t) -> Result<Option<CString>, MkdirFailure> {
     let mut failed_dir: *mut c_char = ptr::null_mut();
-    // SAFETY: a NUL-terminated directory name, and `failed_dir` is this
-    // frame's -- it receives at most one owned string, read back and freed
-    // here.
+    let mut created: *mut c_char = ptr::null_mut();
+    // SAFETY: a NUL-terminated directory name, and both out-parameters are
+    // this frame's -- each receives at most one owned string, read back and
+    // freed here.
     let code =
-        unsafe { os_mkdir_recurse(dir.as_ptr(), mode, &raw mut failed_dir, ptr::null_mut()) };
-    // SAFETY: null, or one owned NUL-terminated path.
-    let owned = unsafe { cstr::at_opt(failed_dir) }.map(CStr::to_owned);
-    // SAFETY: null, or the string just copied.
-    unsafe { xfree(failed_dir.cast()) };
+        unsafe { os_mkdir_recurse(dir.as_ptr(), mode, &raw mut failed_dir, &raw mut created) };
+    let adopt = |p: *mut c_char| {
+        // SAFETY: null, or one owned NUL-terminated path, copied and then
+        // freed once.
+        let owned = unsafe { cstr::at_opt(p) }.map(CStr::to_owned);
+        unsafe { xfree(p.cast()) };
+        owned
+    };
+    let (failed_dir, created) = (adopt(failed_dir), adopt(created));
     if code == 0 {
-        return Ok(());
+        return Ok(created);
     }
-    // SAFETY: `uv_strerror` answers a static string for any code.
-    let why = unsafe { cstr::at(uv_strerror(code)) };
     Err(MkdirFailure {
         code,
-        dir: owned,
-        why,
+        dir: failed_dir,
+        why: super::os_strerror(code),
     })
 }

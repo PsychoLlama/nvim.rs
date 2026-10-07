@@ -324,6 +324,36 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     true
 }
 
+/// [`changedir_func`] for a name the caller holds.
+///
+/// The caller hands over a copy nothing else can reach, because the
+/// DirChangedPre autocommand runs while the name is still being read.
+pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> bool {
+    // SAFETY: a NUL-terminated name the callee only reads.
+    unsafe { changedir_func(new_dir.as_ptr().cast_mut(), scope) }
+}
+
+/// Whose own directory [`own_dir`] reads.
+pub(crate) enum DirOwner {
+    Window(Win),
+    TabPage(TabPage),
+    /// What the global directory was before a local one was set.
+    Global,
+}
+
+/// A copy of the directory `owner` has of its own, or `None` when it has
+/// none.
+pub(crate) fn own_dir(owner: DirOwner) -> Option<XString> {
+    let dir = match owner {
+        DirOwner::Window(window) => window.w_localdir,
+        DirOwner::TabPage(tabpage) => tabpage.tp_localdir,
+        DirOwner::Global => globaldir.get(),
+    };
+    // SAFETY: each is null or an allocated NUL-terminated string its owner
+    // keeps, and it is copied before anything can replace it.
+    unsafe { cstr::at_opt(dir) }.map(XString::from_cstr)
+}
+
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
 pub fn ex_cd(excmd: &mut ExArg) {
     let new_dir = excmd.arg_ptr();

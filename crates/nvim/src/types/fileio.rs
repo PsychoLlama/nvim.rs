@@ -11,8 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub type CheckItem =
-    Option<unsafe fn(*mut ::core::ffi::c_void, *const ::core::ffi::c_char) -> VarNumber>;
 /// A buffered file handle.
 ///
 /// Not `Copy`: it owns both the descriptor and the buffer, and

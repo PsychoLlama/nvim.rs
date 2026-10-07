@@ -9,150 +9,71 @@
 //! `f_glob2regpat` translates a wildcard pattern into the regex the search
 //! engine wants.
 //!
-//! # How the pointers are held
+//! # How the strings are held
 //!
-//! `resolve()` juggles three heap strings across a loop with an early exit --
+//! `resolve()` juggles three strings across a loop with an early exit --
 //! the name resolved so far, the part of the argument still to be appended,
-//! and the `readlink` scratch -- which upstream frees by hand before each
-//! `return`.  [`Owned`] owns one of them and frees it on the way out, so the
-//! whole body is ordinary control flow; every offset below is a byte index
-//! into one of those strings rather than a pointer into it, and the C's reads
-//! one past a component are the terminator, which [`at`] answers as 0.
+//! and the link just read -- which upstream frees by hand before each
+//! `return`. Here each is a `Vec<u8>` without its terminator, every offset
+//! is a byte index into one of them, and the C's reads one past a component
+//! are the terminator, which [`at`] answers as 0.
 //!
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::{Owned, at, err, from, is_sep, str_arg, str_arg_chk};
+use super::{after_sep, at, err, is_sep, next_component, str_arg, str_arg_chk, tail_with_sep};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_get_number;
-use crate::fileio::file_pat_to_reg_pat;
-use crate::memory::{ThinCString, xrealloc, xstrlcat};
-use crate::path::{
-    add_pathsep, after_pathsep, path_is_absolute, path_next_component, path_tail,
-    path_tail_with_sep, shorten_dir_len, simplify_filename,
-};
-use crate::types::{EvalFuncData, MAXPATHL, TypVal, VAR_STRING, VarNumber, size_t};
-use ::libc::readlink;
+use crate::fileio::file_pat_to_regpat;
+use crate::memory::ThinCString;
+use crate::path::{path_is_absolute, shorten_dir_name, simplify_name, tail_index};
+use crate::types::{EvalFuncData, MAXPATHL, TypVal, VAR_STRING, VarNumber};
 use core::ffi::{CStr, c_int};
-use core::ptr;
+use std::ffi::OsStr;
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
 // ---------------------------------------------------------------------
-// A heap string, and the byte arithmetic over one
+// The byte arithmetic over a path
 // ---------------------------------------------------------------------
 
-/// The three shapes of allocation `resolve()` does to the name it is
-/// building, on top of the family's [`Owned`].
-impl Owned {
-    /// Drop the first `n` bytes, sliding the rest -- and the terminator --
-    /// down to the front.  Upstream's `STRMOVE`.
-    fn drop_front(&self, n: usize) {
-        let rest = self.len() - n + 1;
-        // SAFETY: source and destination are both inside the allocation and
-        // the two overlap, which is what `memmove` is for.
-        let into = self.0.cast::<u8>();
-        unsafe { into.copy_from(self.0.add(n).cast(), rest as size_t) };
-    }
-
-    /// Replace the last component with `name`, growing the allocation.
-    ///
-    /// The head that is kept plus `name` and its terminator is what the new
-    /// size covers; upstream asks for the whole of both, which is never less.
-    fn replace_tail(&mut self, name: &CStr) {
-        let (len, name_len) = (self.len(), name.to_bytes().len());
-        // SAFETY: the pointer came from the same allocator, and the new size
-        // covers the head that is kept plus `name` and its terminator.
-        self.0 = unsafe { xrealloc(self.0.cast(), (len + name_len + 1) as size_t).cast() };
-        // SAFETY: `path_tail` answers a pointer inside the block just grown,
-        // at most `len` bytes in, so `name` and its terminator fit after it.
-        unsafe {
-            path_tail(self.0)
-                .cast::<u8>()
-                .copy_from_nonoverlapping(name.as_ptr().cast(), name_len + 1)
-        };
-    }
-
-    /// `self` with the first `n` bytes of `tail` appended.
-    fn with_suffix(&self, tail: &CStr, n: usize) -> Owned {
-        let len = self.len();
-        let out = Owned::zeroed(len + n);
-        // SAFETY: `out` holds `len + n` bytes and a terminator; the copy is
-        // `self` and its NUL, and `xstrlcat` then writes at most `n` bytes
-        // and a NUL of its own after them.
-        let into = out.0.cast::<u8>();
-        unsafe { into.copy_from_nonoverlapping(self.0.cast(), len + 1) };
-        unsafe { xstrlcat(out.0.add(len), tail.as_ptr(), (n + 1) as size_t) };
-        out
-    }
+/// The value of the symlink `p` names, as `readlink` fills a [`MAXPATHL`]
+/// buffer with it; `None` when `p` is not a link or the value is empty.
+fn read_link(p: &[u8]) -> Option<Vec<u8>> {
+    let mut link = std::fs::read_link(OsStr::from_bytes(p))
+        .ok()?
+        .into_os_string()
+        .into_vec();
+    link.truncate(MAXPATHL as usize);
+    (!link.is_empty()).then_some(link)
 }
 
-/// The [`MAXPATHL`] scratch `readlink` writes a link's value into.
-struct LinkBuf(Owned);
-
-impl LinkBuf {
-    fn new() -> Self {
-        Self(Owned::zeroed(MAXPATHL as usize))
+/// Append a path separator to the link value `p`, unless it ends in one
+/// already or a `MAXPATHL` buffer has no room for it -- upstream's
+/// `add_pathsep` over the `readlink` buffer.
+fn add_pathsep(p: &mut Vec<u8>) {
+    let len = p.len();
+    if len == 0 || after_sep(p, len) || len + 2 > MAXPATHL as usize {
+        return;
     }
-
-    /// Read the link `p` names into the scratch; false when `p` is not one.
-    fn read(&self, p: &CStr) -> bool {
-        // SAFETY: `p` is NUL-terminated and the scratch holds `MAXPATHL`
-        // writable bytes plus the terminator slot the NUL below goes into.
-        let len = unsafe { readlink(p.as_ptr(), self.0.0, MAXPATHL as size_t) };
-        if len <= 0 {
-            return false;
-        }
-        self.0.set(len as usize, 0);
-        true
-    }
-
-    /// Append a path separator, so that a resolved directory keeps the one
-    /// the argument had.
-    fn add_pathsep(&self) {
-        // SAFETY: the scratch holds `MAXPATHL` bytes and `readlink` filled at
-        // most `MAXPATHL` of them, so there is room for one more.
-        unsafe { add_pathsep(self.0.0) };
-    }
-
-    fn cstr<'a>(&self) -> &'a CStr {
-        self.0.cstr()
-    }
+    p.push(b'/');
 }
 
-/// Where the component after the one at `at` starts: past its separator, or
-/// at the terminator when there is no separator left.
-fn next_component(s: &CStr, at: usize) -> usize {
-    // SAFETY: `at` indexes `s`, so the argument is inside the same
-    // NUL-terminated string and so is the answer.
-    unsafe { path_next_component(s.as_ptr().add(at)).offset_from(s.as_ptr()) as usize }
+/// Whether `p` starts at the root: [`path_is_absolute`], which reads only
+/// the first byte, of bytes without their terminator.
+fn is_absolute(p: &[u8]) -> bool {
+    let probe = [p.first().copied().unwrap_or(0), 0];
+    path_is_absolute(CStr::from_bytes_until_nul(&probe).unwrap_or(c""))
 }
 
-/// Where the last component of `s` starts.
-fn tail(s: &CStr) -> usize {
-    // SAFETY: `s` is NUL-terminated, and the answer is inside it.
-    unsafe { path_tail(s.as_ptr()).offset_from(s.as_ptr()) as usize }
-}
-
-/// Where the separators before the last component start.
-fn tail_with_sep(s: &CStr) -> usize {
-    // SAFETY: as [`tail`]; the cast is `path_tail_with_sep`'s `char *`
-    // parameter, which it only reads.
-    unsafe { path_tail_with_sep(s.as_ptr().cast_mut()).offset_from(s.as_ptr()) as usize }
-}
-
-/// Whether byte `at` of `s` follows a path separator -- and one that is not
-/// the whole of a root, so that `"/"` and `"//"` answer false.
-fn after_sep(s: &CStr, at: usize) -> bool {
-    // SAFETY: `at` indexes `s` or is its terminator, both inside it.
-    unsafe { after_pathsep(s.as_ptr(), s.as_ptr().add(at)) != 0 }
-}
-
-/// Collapse `.`, `..` and duplicate separators, in place.
-fn simplify(s: &mut ThinCString) {
-    // SAFETY: `s` is a NUL-terminated string this module owns; the result is
-    // never longer than the input, so it stays inside the allocation.
-    unsafe { simplify_filename(s.as_mut_ptr()) };
+/// `name` with `.`, `..` and duplicate separators collapsed.
+fn simplify(name: &[u8]) -> ThinCString {
+    let mut text = Vec::with_capacity(name.len() + 1);
+    text.extend_from_slice(name);
+    text.push(0);
+    let len = simplify_name(&mut text);
+    text.truncate(len);
+    ThinCString::from_vec(text)
 }
 
 // ---------------------------------------------------------------------
@@ -163,19 +84,7 @@ fn simplify(s: &mut ThinCString) {
 pub fn f_glob2regpat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let pat = str_arg_chk(args, 0, &mut numbuf);
-    result.write_string(pat.and_then(|pat| {
-        // SAFETY: `pat` is NUL-terminated, which is what a NULL end
-        // pointer promises; a NULL `allow_dirs` asks for none reported. The
-        // answer is an `xmalloc`ed string, adopted here, or NULL.
-        unsafe {
-            ThinCString::from_raw(file_pat_to_reg_pat(
-                pat.as_ptr(),
-                ptr::null(),
-                ptr::null_mut(),
-                false as c_int,
-            ))
-        }
-    }));
+    result.write_string(pat.and_then(file_pat_to_regpat).map(ThinCString::from));
 }
 
 /// `isabsolutepath({path})`: whether the path starts at the root.
@@ -201,20 +110,21 @@ pub fn f_pathshorten(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         result.write_string(None);
         return;
     };
-    let mut shortened = ThinCString::from_cstr(p);
-    // SAFETY: a NUL-terminated string this module owns; shortening only ever
-    // moves bytes down, so the result stays inside the allocation.
-    unsafe { shorten_dir_len(shortened.as_mut_ptr(), trim_len) };
-    result.write_string(Some(shortened));
+    let mut shortened = p.to_bytes_with_nul().to_vec();
+    shorten_dir_name(&mut shortened, trim_len);
+    let end = shortened
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(shortened.len());
+    shortened.truncate(end);
+    result.write_string(Some(ThinCString::from_vec(shortened)));
 }
 
 /// `simplify({path})`: `.`, `..` and duplicate separators collapsed, without
 /// asking the filesystem anything.
 pub fn f_simplify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut simplified = ThinCString::from_cstr(str_arg(args, 0, &mut numbuf));
-    simplify(&mut simplified);
-    result.write_string(Some(simplified));
+    result.write_string(Some(simplify(str_arg(args, 0, &mut numbuf).to_bytes())));
 }
 
 /// `resolve({path})`: the symlink chain followed to its end.
@@ -222,44 +132,40 @@ pub fn f_resolve(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_string(None);
     if let Some(resolved) = resolve(str_arg(args, 0, &mut numbuf)) {
-        let mut resolved = ThinCString::from_cstr(resolved.cstr());
-        simplify(&mut resolved);
-        result.write_string(Some(resolved));
+        result.write_string(Some(simplify(&resolved)));
     }
 }
 
 /// Follow the symlink chain from `fname`, or None having reported E655 when
 /// it does not end within a hundred links.
-fn resolve(fname: &CStr) -> Option<Owned> {
+fn resolve(fname: &CStr) -> Option<Vec<u8>> {
     let mut is_relative_to_current = false;
     let mut has_trailing_pathsep = false;
     let mut limit = 100;
 
-    let mut p = Owned::dup(fname);
-    let b = p.bytes();
-    if at(b, 0) == b'.' && (is_sep(b, 1) || (at(b, 1) == b'.' && is_sep(b, 2))) {
+    let mut p = fname.to_bytes().to_vec();
+    if at(&p, 0) == b'.' && (is_sep(&p, 1) || (at(&p, 1) == b'.' && is_sep(&p, 2))) {
         is_relative_to_current = true;
     }
 
     let len = p.len();
-    if len > 1 && after_sep(p.cstr(), len) {
+    if len > 1 && after_sep(&p, len) {
         has_trailing_pathsep = true;
         // The trailing separator breaks `readlink`.
-        p.set(len - 1, 0);
+        p.truncate(len - 1);
     }
 
     // Separate the first component, keeping the remainder -- which starts at
     // the separator before it -- for the walk below to put back.
     let mut remain = None;
-    let split = next_component(p.cstr(), 0);
-    if at(p.bytes(), split) != 0 {
-        remain = Some(Owned::dup(from(p.cstr(), split - 1)));
-        p.set(split - 1, 0);
+    let split = next_component(&p, 0);
+    if at(&p, split) != 0 {
+        remain = Some(p[split - 1..].to_vec());
+        p.truncate(split - 1);
     }
 
-    let buf = LinkBuf::new();
     loop {
-        while buf.read(p.cstr()) {
+        while let Some(mut link) = read_link(&p) {
             if limit == 0 {
                 err(c"E655: Too many symbolic links (cycle?)");
                 return None;
@@ -268,72 +174,71 @@ fn resolve(fname: &CStr) -> Option<Owned> {
 
             // The answer keeps the trailing separator the argument had.
             if remain.is_none() && has_trailing_pathsep {
-                buf.add_pathsep();
+                add_pathsep(&mut link);
             }
 
             // Separate the first component of the link's value and hang what
             // is left of it in front of what was already left over.
-            let link = buf.cstr();
-            let head = usize::from(is_sep(link.to_bytes(), 0));
-            let split = next_component(link, head);
-            if at(link.to_bytes(), split) != 0 {
-                let rest = from(link, split - 1);
+            let head = usize::from(is_sep(&link, 0));
+            let split = next_component(&link, head);
+            if at(&link, split) != 0 {
+                let rest = &link[split - 1..];
                 remain = Some(match remain.take() {
-                    Some(old) => Owned::cat(rest, old.cstr()),
-                    None => Owned::dup(rest),
+                    Some(old) => [rest, &old].concat(),
+                    None => rest.to_vec(),
                 });
-                buf.0.set(split - 1, 0);
+                link.truncate(split - 1);
             }
 
-            let mut t = tail(p.cstr());
-            if t > 0 && at(p.bytes(), t) == 0 {
+            let mut t = tail_index(&p);
+            if t > 0 && at(&p, t) == 0 {
                 // Ignore a trailing path separator.
-                p.set(t - 1, 0);
-                t = tail(p.cstr());
+                p.truncate(t - 1);
+                t = tail_index(&p);
             }
-            if t > 0 && !path_is_absolute(buf.cstr()) {
+            if t > 0 && !is_absolute(&link) {
                 // The link is relative to the directory of the name it was
                 // reached through: resolve it in that same directory.
-                p.replace_tail(buf.cstr());
+                p.truncate(t);
+                p.extend_from_slice(&link);
             } else {
-                p = Owned::dup(buf.cstr());
+                p = link;
             }
         }
 
         // Append the first component of what is left over.
         let Some(rest) = remain.take() else { break };
-        let split = next_component(rest.cstr(), 1);
-        let more = at(rest.bytes(), split) != 0;
-        p = p.with_suffix(rest.cstr(), split - usize::from(more));
+        let split = next_component(&rest, 1);
+        let more = at(&rest, split) != 0;
+        p.extend_from_slice(&rest[..split - usize::from(more)]);
         if more {
-            rest.drop_front(split - 1);
-            remain = Some(rest);
+            remain = Some(rest[split - 1..].to_vec());
         }
     }
 
     // A relative answer is explicitly relative to the current directory if
     // and only if the argument was.
-    if !is_sep(p.bytes(), 0) {
-        let b = p.bytes();
+    if !is_sep(&p, 0) {
+        let b = &p;
         let dot_component = at(b, 0) == b'.'
             && (at(b, 1) == 0
                 || is_sep(b, 1)
                 || (at(b, 1) == b'.' && (at(b, 2) == 0 || is_sep(b, 2))));
         if is_relative_to_current && at(b, 0) != 0 && !dot_component {
-            p = Owned::cat(c"./", p.cstr());
+            p = [&b"./"[..], &p].concat();
         } else if !is_relative_to_current {
             // Strip a leading "./" -- one of them, though upstream's loop
             // counts however many there are.
             if at(b, 0) == b'.' && is_sep(b, 1) {
-                p.drop_front(2);
+                p.drain(..2);
             }
         }
     }
 
     // And carries no trailing separator unless the argument did -- but "/"
-    // and "//" are kept whole, which is what `after_sep` answers false for.
-    if !has_trailing_pathsep && after_sep(p.cstr(), p.len()) {
-        p.set(tail_with_sep(p.cstr()), 0);
+    // and "//" are kept whole, which `tail_with_sep` never cuts into.
+    if !has_trailing_pathsep && after_sep(&p, p.len()) {
+        p.truncate(tail_with_sep(&p));
     }
     Some(p)
 }

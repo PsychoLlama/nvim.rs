@@ -25,8 +25,6 @@ use core::ptr;
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::charset::getdigits;
 
-use crate::event::libuv::uv_strerror;
-
 use crate::ex_docmd::lookup::check_for_word;
 
 use crate::arglist::state::arg_had_last;
@@ -38,12 +36,12 @@ use crate::ex_docmd::{
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::message::vim_dialog_yesno;
 use crate::message::{e_invarg2, e_invargval, e_invrange};
-use crate::message_fmt::{c_str, emsg_text};
+use crate::message_fmt::{c_str, emsg_text, msg_cstr};
 use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
 
-use crate::os::fs::{CFile, os_isdir, os_mkdir, os_path_exists};
+use crate::os::fs::{CFile, os_isdir, os_mkdir, os_path_exists, os_strerror};
 
 use crate::types::regexp::RegMatch;
 use crate::types::{
@@ -466,15 +464,10 @@ pub(crate) fn check_more(message: bool, forceit: bool) -> c_int {
 }
 
 /// `mkdir`, reporting the reason it failed.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> Result<(), Failed> {
-    let ret = unsafe { os_mkdir(cstr::at(name), prot as int32_t) };
+pub fn vim_mkdir_emsg(name: &CStr, prot: c_int) -> Result<(), Failed> {
+    let ret = os_mkdir(name, prot as int32_t);
     if ret != 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (name, arg1) = unsafe { (c_str(name), c_str(uv_strerror(ret))) };
+        let (name, arg1) = (msg_cstr(name), msg_cstr(os_strerror(ret)));
         semsg!("E739: Cannot create directory {name}: {arg1}");
         return Err(Failed);
     }

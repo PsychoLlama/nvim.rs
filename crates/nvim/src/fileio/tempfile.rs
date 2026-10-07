@@ -19,6 +19,7 @@ use crate::memory::XString;
 use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
 use crate::smsg;
+use crate::types::VarNumber;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::OsStr;
 use std::ffi::{CStr, CString};
@@ -218,38 +219,28 @@ fn vim_mktempdir() {
 /// negative number to stop the walk.
 ///
 /// @return  `Ok` for success, `Err` for failure.
-///
-/// # Safety
-///
-/// `path` must point at a NUL-terminated string. `context` must be the payload this
-/// callback was registered with, live for the call. `checkitem` must be an
-/// initialized `CheckItem` whose pointer fields point at live data for the
-/// call.
-pub unsafe fn readdir_core(
-    path: *const c_char,
-    context: *mut c_void,
-    checkitem: CheckItem,
+pub fn readdir_core(
+    path: &CStr,
+    mut checkitem: Option<&mut dyn FnMut(&CStr) -> VarNumber>,
 ) -> Result<Vec<CString>, Failed> {
     let mut names = Vec::new();
 
     let mut dir = Directory::default();
-    if !unsafe { os_scandir(&mut dir, cstr::at(path)) } {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let path = unsafe { c_str(path) };
+    if !os_scandir(&mut dir, path) {
+        let path = msg_cstr(path);
         smsg!(0, "E484: Can't open file {path}");
         return Err(Failed);
     }
 
-    loop {
-        let p = unsafe { os_scandir_next(&mut dir) };
-        if p.is_null() {
-            break;
-        }
-
-        let name = unsafe { CStr::from_ptr(p) }.to_bytes();
-        let mut ignore = name == b"." || name == b"..";
-        if !ignore && let Some(check) = checkitem {
-            let r = unsafe { check(context, p) };
+    // SAFETY: a `Directory` `os_scandir` succeeded on; the name is null or
+    // NUL-terminated, and copied before the next step of the walk.
+    let next =
+        |dir: &mut Directory| unsafe { cstr::at_opt(os_scandir_next(dir)) }.map(CString::from);
+    while let Some(name) = next(&mut dir) {
+        let bytes = name.as_bytes();
+        let mut ignore = bytes == b"." || bytes == b"..";
+        if !ignore && let Some(check) = checkitem.as_mut() {
+            let r = check(&name);
             if r < 0 {
                 break;
             }
@@ -257,7 +248,7 @@ pub unsafe fn readdir_core(
         }
 
         if !ignore {
-            names.push(CString::from(unsafe { CStr::from_ptr(p) }));
+            names.push(name);
         }
     }
 
@@ -271,12 +262,8 @@ pub unsafe fn readdir_core(
 /// Delete `name` and everything in it, recursively.
 ///
 /// @return  0 for success, -1 if some file was not deleted.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn delete_recursive(name: *const c_char) -> c_int {
-    unsafe { delete_tree(CStr::from_ptr(name).to_bytes()) }
+pub fn delete_recursive(name: &CStr) -> c_int {
+    delete_tree(name.to_bytes())
 }
 
 /// [`delete_recursive`] on a path that has not been through C yet.
@@ -292,7 +279,7 @@ fn delete_tree(name: &[u8]) -> c_int {
         return if os_remove(&path) == 0 { 0 } else { -1 };
     }
 
-    let Ok(names) = (unsafe { readdir_core(path.as_ptr(), ptr::null_mut(), None) }) else {
+    let Ok(names) = readdir_core(&path, None) else {
         return -1;
     };
 

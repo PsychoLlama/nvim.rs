@@ -276,9 +276,23 @@ pub unsafe fn os_fileinfo(path: *const c_char, file_info: *mut FileInfo) -> bool
 /// Whether `path` names anything, a symbolic link included:
 /// [`os_fileinfo_link`] answering only that.
 pub(crate) fn link_exists(path: &CStr) -> bool {
+    link_info(path).is_some()
+}
+
+/// [`os_fileinfo`] of a name the caller holds, or `None` when it cannot be
+/// taken.
+pub(crate) fn file_info(path: &CStr) -> Option<FileInfo> {
     let mut info = FileInfo::default();
     // SAFETY: a NUL-terminated path and a local to fill in.
-    unsafe { os_fileinfo_link(path.as_ptr(), &mut info) }
+    unsafe { os_fileinfo(path.as_ptr(), &mut info) }.then_some(info)
+}
+
+/// [`os_fileinfo_link`] of a name the caller holds: the link's own
+/// metadata, or `None` when it cannot be taken.
+pub(crate) fn link_info(path: &CStr) -> Option<FileInfo> {
+    let mut info = FileInfo::default();
+    // SAFETY: a NUL-terminated path and a local to fill in.
+    unsafe { os_fileinfo_link(path.as_ptr(), &mut info) }.then_some(info)
 }
 
 /// [`os_fileinfo`] without following a symlink — the link's own metadata.

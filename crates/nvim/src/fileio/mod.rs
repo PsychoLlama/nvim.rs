@@ -65,9 +65,9 @@ use crate::os::cshim::{getc, gettext, gettext_ptr, ngettext, putc};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_env_exists};
 use crate::os::fs::{
     os_closedir, os_copy, os_dirname, os_fchown, os_file_is_writable, os_file_owned, os_fileinfo,
-    os_fileinfo_id_equal, os_fileinfo_link, os_fileinfo_size, os_free_acl, os_get_acl, os_getperm,
-    os_isdir, os_isrealdir, os_mkdir, os_mkdtemp, os_open, os_path_exists, os_remove, os_rename,
-    os_rmdir, os_scandir, os_scandir_next, os_set_acl, os_set_cloexec, os_setperm,
+    os_fileinfo_id_equal, os_fileinfo_size, os_free_acl, os_get_acl, os_getperm, os_isdir,
+    os_isrealdir, os_mkdir, os_mkdtemp, os_open, os_path_exists, os_remove, os_rename, os_rmdir,
+    os_scandir, os_scandir_next, os_set_acl, os_set_cloexec, os_setperm,
 };
 use crate::os::input::os_breakcheck;
 use crate::os::users::os_get_username;
@@ -88,10 +88,9 @@ use crate::types::CAR;
 use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, BlnFlags, CheckItem, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo,
-    FileOffset, IOSIZE, LineNr, OK, OptInt, OptStr, OptVal, OptionSetFlags, RegMatch, RegProg,
-    ScriptId, ShmFlag, iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t,
-    uv_gid_t, uv_uid_t,
+    AcoSave, BlnFlags, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo, FileOffset, IOSIZE,
+    LineNr, OK, OptInt, OptStr, OptVal, OptionSetFlags, RegMatch, RegProg, ScriptId, ShmFlag,
+    iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

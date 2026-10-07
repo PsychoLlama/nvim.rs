@@ -19,235 +19,137 @@
 //!
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::{__S_IFMT, SEEK_END, SEEK_SET, no_fileinfo, str_arg};
+use super::{__S_IFMT, str_arg};
 use crate::eval::typval::NumBuf;
-use crate::eval::typval::{list_len, tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret};
-use crate::memory::{ThinCString, xfree, xrealloc};
+use crate::eval::typval::{tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret};
+use crate::memory::ThinCString;
 use crate::message::{e_cant_read_file_str, e_isadir2, e_notopen};
-use crate::message_fmt::{c_str, emsg_text};
+use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::os::cshim::gettext;
-use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};
+use crate::os::fs::os_isdir_of;
 use crate::pos::MAXLNUM;
 use crate::tr_c;
 use crate::types::{
-    Blob, EvalFuncData, FILE, FileInfo, FileOffset, List, READBIN, TypVal, int64_t,
-    kListLenUnknown, off_t, ptrdiff_t, size_t, uint64_t,
+    EvalFuncData, FileOffset, List, TypVal, int64_t, kListLenUnknown, ptrdiff_t, uint64_t,
 };
-use ::libc::{fclose, fileno, fread, fseeko};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::ffi::OsStr;
+use std::io::{ErrorKind, Read, Seek, SeekFrom};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::MetadataExt;
 
 // ---------------------------------------------------------------------
 // The handles
 // ---------------------------------------------------------------------
 
-/// An open stream, closed when it goes out of scope.
-struct File(*mut FILE);
+/// An open file, read the way upstream's binary-mode `FILE *` reads it.
+struct File(std::fs::File);
 
-impl Drop for File {
-    fn drop(&mut self) {
-        // SAFETY: opened by [`File::open`], which is the only constructor,
-        // and closed exactly once.
-        unsafe { fclose(self.0) };
-    }
+/// Where a [`File::seek`] counts from: upstream's `fseeko` `whence`.
+#[derive(Clone, Copy)]
+enum Whence {
+    Start,
+    End,
 }
 
 impl File {
     /// Open `fname` for reading, or None when it cannot be opened.
-    ///
-    /// Always in binary mode: the library functions have a mind of their own
-    /// about CR-LF conversion.
     fn open(fname: &CStr) -> Option<Self> {
-        // SAFETY: both arguments are NUL-terminated.
-        let fd = unsafe { os_fopen(fname.as_ptr(), READBIN.as_ptr()) };
-        // `then`, not `then_some`: the latter would build -- and drop, and
-        // so `fclose` -- a `File` around the null.
-        (!fd.is_null()).then(|| Self(fd))
+        std::fs::File::open(OsStr::from_bytes(fname.to_bytes()))
+            .ok()
+            .map(Self)
     }
 
-    /// The `stat` of the open file, or None when it cannot be taken.
-    fn info(&self) -> Option<FileInfo> {
-        let mut info = no_fileinfo();
-        // SAFETY: a live stream, and a `FileInfo` for the callee to fill.
-        let taken = unsafe { os_fileinfo_fd(fileno(self.0), &raw mut info) };
-        taken.then_some(info)
+    /// The `stat` of the open file: its size and its mode, or None when it
+    /// cannot be taken.
+    fn info(&self) -> Option<(FileOffset, uint64_t)> {
+        let info = self.0.metadata().ok()?;
+        Some((info.size() as FileOffset, uint64_t::from(info.mode())))
     }
 
     /// Seek to `offset` relative to `whence`; false when the seek failed.
-    fn seek(&self, offset: FileOffset, whence: c_int) -> bool {
-        // SAFETY: a live stream.
-        unsafe { fseeko(self.0, offset as off_t, whence) == 0 }
+    fn seek(&mut self, offset: FileOffset, whence: Whence) -> bool {
+        let to = match whence {
+            Whence::Start => SeekFrom::Start(offset as u64),
+            Whence::End => SeekFrom::End(offset),
+        };
+        self.0.seek(to).is_ok()
     }
 
-    /// Fill `buf` from the stream, answering how many bytes arrived.
-    fn read(&self, buf: &mut [c_char]) -> usize {
-        let (p, len) = (buf.as_mut_ptr().cast::<c_void>(), buf.len() as size_t);
-        // SAFETY: `p` is writable for `len` bytes, which is what an element
-        // size of one and a count of `len` ask for.
-        unsafe { fread(p, 1 as size_t, len, self.0) as usize }
-    }
-
-    /// Read `len` bytes into `p`; false on a short read.
-    ///
-    /// # Safety
-    /// `p` is writable for `len` bytes.
-    unsafe fn read_into(&self, p: *mut c_void, len: usize) -> bool {
-        // SAFETY: the caller's contract.
-        unsafe { fread(p, 1 as size_t, len as size_t, self.0) as usize >= len }
-    }
-}
-
-/// The Blob `readblob()` is filling: a **borrow** of the one the result
-/// slot owns.
-#[derive(Clone, Copy)]
-struct BlobOut(*mut Blob);
-
-impl BlobOut {
-    /// Make `result` a fresh, empty Blob.
-    fn alloc(result: &mut TypVal) -> Self {
-        Self(&raw mut *tv_blob_alloc_ret(result))
-    }
-
-    /// Grow to `len` bytes and fill them from `fd`; false on a short read.
-    ///
-    /// Upstream stored the length in `ga_len`, an `int`, and read it back,
-    /// so a size past `INT_MAX` asked `fread` for a nonsense count against a
-    /// buffer `ga_grow` never allocated. The blob is a `Vec` now and is
-    /// asked for exactly `len`.
-    fn fill(self, fd: &File, len: usize) -> bool {
-        // SAFETY: a live blob, the result slot's own.
-        let room = unsafe { (*self.0).claim(len) };
-        // SAFETY: `room` is `len` writable bytes.
-        unsafe { fd.read_into(room.as_mut_ptr().cast(), len) }
+    /// Fill `buf` from the file, answering how many bytes arrived: fewer
+    /// only at the end of the file or on an error, as `fread` answers.
+    fn read(&mut self, buf: &mut [u8]) -> usize {
+        let mut filled = 0;
+        while filled < buf.len() {
+            match self.0.read(&mut buf[filled..]) {
+                Ok(0) => break,
+                Ok(n) => filled += n,
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+        filled
     }
 }
 
-/// The List `readfile()` is filling.
-#[derive(Clone, Copy)]
-struct Lines(*mut List);
+/// How many lines the list holds so far.
+fn count(lines: &List) -> int64_t {
+    lines.len() as int64_t
+}
 
-impl Lines {
-    /// Make `result` a fresh List whose length is not known in advance.
-    fn alloc(result: &mut TypVal) -> Self {
-        let unknown = kListLenUnknown as c_int as ptrdiff_t;
-        // SAFETY: `result` is the builtin's own cleared result slot.
-        Self(tv_list_alloc_ret(result, unknown))
-    }
-
-    fn len(self) -> int64_t {
-        // SAFETY: a live list.
-        list_len(unsafe { self.0.as_ref() }) as int64_t
-    }
-
-    /// Append `s`, which the list owns from here on.
-    fn push(self, s: ThinCString) {
-        let tv = TypVal::string(Some(s));
-        // SAFETY: a live list, and `tv` an owned String the list takes over.
-        unsafe { (*self.0).push(tv) };
-    }
-
-    /// Drop the oldest line, which is how a negative `{max}` keeps only the
-    /// last few.
-    fn drop_first(self) {
-        // SAFETY: a live list, reached only with at least one item in it.
-        drop(unsafe { (*self.0).take_range(0, 0) });
-    }
+/// Append `s` to the list, which owns it from here on.
+fn push_line(lines: &mut List, s: ThinCString) {
+    lines.push(TypVal::string(Some(s)));
 }
 
 /// The bytes of a line that a read ended in the middle of.
 ///
-/// Upstream's `prev`/`prevlen`/`prevsize` triple: a heap buffer, grown by
-/// halves, read back when a CR run or a BOM straddles two reads, and finally
-/// handed to the list as the head of the finished line.
-struct Carry {
-    buf: *mut c_char,
-    len: isize,
-    size: isize,
-}
-
-impl Drop for Carry {
-    fn drop(&mut self) {
-        // SAFETY: null, or nvim's own; [`Carry::take`] is the only other way
-        // for the buffer to leave.
-        unsafe { xfree(self.buf.cast::<c_void>()) };
-    }
-}
+/// Upstream's `prev`/`prevlen`/`prevsize` triple, read back when a CR run
+/// or a BOM straddles two reads, and finally handed to the list as the head
+/// of the finished line.
+struct Carry(Vec<u8>);
 
 impl Carry {
     const fn new() -> Self {
-        Self {
-            buf: ptr::null_mut(),
-            len: 0,
-            size: 0,
-        }
+        Self(Vec::new())
+    }
+
+    fn len(&self) -> isize {
+        self.0.len() as isize
     }
 
     /// Byte `i` of the carried bytes.
     fn byte(&self, i: isize) -> u8 {
-        debug_assert!(i >= 0 && i < self.len);
-        // SAFETY: `i` indexes the bytes already written into the buffer.
-        unsafe { *self.buf.offset(i) as u8 }
+        self.0[i as usize]
+    }
+
+    /// Drop the last `n` bytes, which a BOM straddling two reads leaves
+    /// behind.
+    fn shorten(&mut self, n: isize) {
+        self.0.truncate(self.0.len() - n as usize);
     }
 
     /// Drop the trailing CRs, which is what a CRLF split across two reads
     /// leaves behind.
     fn trim_cr(&mut self) {
-        while self.len > 0 && self.byte(self.len - 1) == b'\r' {
-            self.len -= 1;
+        while self.0.last() == Some(&b'\r') {
+            self.0.pop();
         }
     }
 
     /// Append `bytes`.
-    fn push(&mut self, bytes: &[c_char]) {
-        let n = bytes.len() as isize;
-        if n + self.len >= self.size {
-            // A common use case is an ordinary text file, where the carry is
-            // a fragment of a line: the first allocation is made small, to
-            // avoid repeatedly allocating large and reallocating small.
-            self.size = if self.size == 0 {
-                n
-            } else {
-                (self.size * 3 / 2).max(n * 2 + self.len)
-            };
-            let size = self.size as size_t;
-            // SAFETY: the pointer is null or nvim's own, and the new size
-            // covers the bytes already written as well as `bytes`.
-            self.buf = unsafe { xrealloc(self.buf.cast::<c_void>(), size).cast::<c_char>() };
-        }
-        let (dst, src) = (self.buf.wrapping_offset(self.len), bytes.as_ptr());
-        // SAFETY: `len + n` bytes fit, by the growth above, and `bytes` is a
-        // live slice of that length.
-        unsafe { dst.cast::<u8>().copy_from(src.cast(), n as size_t) };
-        self.len += n;
+    fn push(&mut self, bytes: &[u8]) {
+        self.0.extend_from_slice(bytes);
     }
 
-    /// Give the carry up as the head of a finished line, with `tail` and a
-    /// terminator after it.
-    ///
-    /// Resizing rather than allocating afresh is what copies the bytes only
-    /// once, so that a very long line is allocated only once too.
-    fn take(&mut self, tail: &[c_char]) -> ThinCString {
-        let (len, n) = (self.len as usize, tail.len());
-        // SAFETY: the pointer is nvim's own, and the new size covers the
-        // bytes already written, `tail`, and the terminator after them; the
-        // terminated block is adopted.
-        let s = unsafe {
-            let s = xrealloc(self.buf.cast::<c_void>(), (len + n + 1) as size_t).cast::<c_char>();
-            s.add(len)
-                .cast::<u8>()
-                .copy_from_nonoverlapping(tail.as_ptr().cast(), n);
-            *s.add(len + n) = 0;
-            ThinCString::from_raw(s).expect("xrealloc never answers null")
-        };
-        // Field by field: assigning through `self` would drop the buffer
-        // that has just been handed out.
-        self.buf = ptr::null_mut();
-        self.len = 0;
-        self.size = 0;
-        s
+    /// Give the carry up as the head of a finished line, with `tail` after
+    /// it.
+    fn take(&mut self, tail: &[u8]) -> ThinCString {
+        let mut line = core::mem::take(&mut self.0);
+        line.extend_from_slice(tail);
+        ThinCString::from_vec(line)
     }
 }
 
@@ -261,23 +163,15 @@ impl Carry {
 ///
 /// False -- upstream's `FAIL` -- when the file could not be measured or the
 /// read came up short; the Blob is then given back and `result` left empty.
-fn read_blob(
-    fd: &File,
-    result: &mut TypVal,
-    blob: BlobOut,
-    offset: FileOffset,
-    size_arg: FileOffset,
-) -> bool {
-    let Some(info) = fd.info() else {
+fn read_blob(fd: &mut File, result: &mut TypVal, offset: FileOffset, size_arg: FileOffset) -> bool {
+    let Some((file_size, mode)) = fd.info() else {
         // Can't read the file, error.
         return false;
     };
-    // SAFETY: a `FileInfo` this frame owns.
-    let file_size = unsafe { os_fileinfo_size(&raw const info) } as FileOffset;
     // `S_ISCHR`: a character device, whose size a `stat` does not answer,
     // which is why the two clamps below skip it.
     const S_IFCHR: uint64_t = 0o20000;
-    let chardev = info.stat.st_mode & __S_IFMT as uint64_t == S_IFCHR;
+    let chardev = mode & __S_IFMT as uint64_t == S_IFCHR;
 
     let mut offset = offset;
     let mut size = size_arg;
@@ -288,7 +182,7 @@ fn read_blob(
         if size == -1 || (size > file_size - offset && !chardev) {
             size = file_size - offset;
         }
-        SEEK_SET
+        Whence::Start
     } else {
         // Limit the offset to not go before the start of the file.
         if -offset > file_size && !chardev {
@@ -298,7 +192,7 @@ fn read_blob(
         if size == -1 || size > -offset {
             size = -offset;
         }
-        SEEK_END
+        Whence::End
     };
     if size <= 0 {
         return true;
@@ -306,7 +200,15 @@ fn read_blob(
     if offset != 0 && !fd.seek(offset, whence) {
         return true;
     }
-    if blob.fill(fd, size as usize) {
+    // Upstream stored the length in `ga_len`, an `int`, and read it back,
+    // so a size past `INT_MAX` asked `fread` for a nonsense count against a
+    // buffer `ga_grow` never allocated. The blob is a `Vec` now and is asked
+    // for exactly `size`.
+    let len = size as usize;
+    let filled = result
+        .blob_mut()
+        .is_some_and(|blob| fd.read(blob.claim(len)) >= len);
+    if filled {
         return true;
     }
     // An empty blob is returned on error: the slot gives up the one it
@@ -317,24 +219,24 @@ fn read_blob(
 
 /// `readfile()`'s body: the file split into lines, at most `maxline` of them
 /// -- kept from the end of the file when that is negative.
-fn read_lines(fd: &File, lines: Lines, binary: bool, maxline: int64_t) {
+fn read_lines(fd: &mut File, lines: &mut List, binary: bool, maxline: int64_t) {
     // `IOSIZE` rounded down to a multiple of 256, to avoid the odd + 1.
-    let mut buf = [0 as c_char; (1025 / 256) * 256];
+    let mut buf = [0_u8; (1025 / 256) * 256];
     let mut carry = Carry::new();
 
-    while maxline < 0 || lines.len() < maxline {
+    while maxline < 0 || count(lines) < maxline {
         let mut readlen = fd.read(&mut buf) as isize;
         let (mut p, mut start) = (0_isize, 0_isize);
 
         // This loop processes what was read, but is also entered at end of
         // file so that either an incomplete line gets written, or a "binary"
         // file gets an empty line at the end if it ends in a newline.
-        while p < readlen || (readlen <= 0 && (carry.len > 0 || binary)) {
-            if readlen <= 0 || buf[p as usize] == b'\n' as c_char {
+        while p < readlen || (readlen <= 0 && (carry.len() > 0 || binary)) {
+            if readlen <= 0 || buf[p as usize] == b'\n' {
                 // Finished a line.  Remove the CRs before the NL.
                 let mut len = (p - start) as usize;
                 if readlen > 0 && !binary {
-                    while len > 0 && buf[start as usize + len - 1] == b'\r' as c_char {
+                    while len > 0 && buf[start as usize + len - 1] == b'\r' {
                         len -= 1;
                     }
                     // The removal may cross back into the carry.
@@ -343,45 +245,48 @@ fn read_lines(fd: &File, lines: Lines, binary: bool, maxline: int64_t) {
                     }
                 }
                 let line = &buf[start as usize..start as usize + len];
-                lines.push(if carry.len == 0 {
-                    dupz(line)
-                } else {
-                    carry.take(line)
-                });
+                push_line(
+                    lines,
+                    if carry.len() == 0 {
+                        dupz(line)
+                    } else {
+                        carry.take(line)
+                    },
+                );
 
                 start = p + 1; // Step over the newline.
                 if maxline < 0 {
-                    if lines.len() > -maxline {
-                        debug_assert!(lines.len() == 1 + -maxline, "list_len(l) == 1 + -maxline");
-                        lines.drop_first();
+                    if count(lines) > -maxline {
+                        debug_assert!(count(lines) == 1 + -maxline, "list_len(l) == 1 + -maxline");
+                        drop(lines.take_range(0, 0));
                     }
-                } else if lines.len() >= maxline {
-                    debug_assert!(lines.len() == maxline, "list_len(l) == maxline");
+                } else if count(lines) >= maxline {
+                    debug_assert!(count(lines) == maxline, "list_len(l) == maxline");
                     break;
                 }
                 if readlen <= 0 {
                     break;
                 }
             } else if buf[p as usize] == 0 {
-                buf[p as usize] = b'\n' as c_char;
-            } else if buf[p as usize] as u8 == 0xbf && !binary {
+                buf[p as usize] = b'\n';
+            } else if buf[p as usize] == 0xbf && !binary {
                 // Check for a UTF-8 "bom"; U+FEFF is encoded as EF BB BF.
                 // This is done on finding the BF, by looking at the two
                 // bytes before it -- which, when `p` is at the front of the
                 // buffer or just after it, may be in the carry.
                 let back1 = if p >= 1 {
-                    buf[(p - 1) as usize] as u8
-                } else if carry.len >= 1 {
-                    carry.byte(carry.len - 1)
+                    buf[(p - 1) as usize]
+                } else if carry.len() >= 1 {
+                    carry.byte(carry.len() - 1)
                 } else {
                     0
                 };
                 let back2 = if p >= 2 {
-                    buf[(p - 2) as usize] as u8
-                } else if p == 1 && carry.len >= 1 {
-                    carry.byte(carry.len - 1)
-                } else if carry.len >= 2 {
-                    carry.byte(carry.len - 2)
+                    buf[(p - 2) as usize]
+                } else if p == 1 && carry.len() >= 1 {
+                    carry.byte(carry.len() - 1)
+                } else if carry.len() >= 2 {
+                    carry.byte(carry.len() - 2)
                 } else {
                     0
                 };
@@ -405,7 +310,7 @@ fn read_lines(fd: &File, lines: Lines, binary: bool, maxline: int64_t) {
                             buf.copy_within((p + 1) as usize..readlen as usize, dest as usize);
                         }
                         readlen -= 3 - adjust_carry;
-                        carry.len -= adjust_carry;
+                        carry.shorten(adjust_carry);
                         p = dest - 1;
                     }
                 }
@@ -413,7 +318,7 @@ fn read_lines(fd: &File, lines: Lines, binary: bool, maxline: int64_t) {
             p += 1;
         }
 
-        if (maxline >= 0 && lines.len() >= maxline) || readlen <= 0 {
+        if (maxline >= 0 && count(lines) >= maxline) || readlen <= 0 {
             break;
         }
         if start < p {
@@ -424,11 +329,9 @@ fn read_lines(fd: &File, lines: Lines, binary: bool, maxline: int64_t) {
 }
 
 /// A fresh NUL-terminated copy of `line`.
-fn dupz(line: &[c_char]) -> ThinCString {
+fn dupz(line: &[u8]) -> ThinCString {
     debug_assert!(line.len() < c_int::MAX as usize, "len < INT_MAX");
-    // SAFETY: the same live slice, read as the bytes it holds.
-    let bytes = unsafe { ::core::slice::from_raw_parts(line.as_ptr().cast::<u8>(), line.len()) };
-    ThinCString::from_bytes(bytes)
+    ThinCString::from_bytes(line)
 }
 
 // ---------------------------------------------------------------------
@@ -436,10 +339,8 @@ fn dupz(line: &[c_char]) -> ThinCString {
 // ---------------------------------------------------------------------
 
 /// Report the one-`%s` message `fmt`, translated, about the path `p`.
-fn err_path(fmt: &'static CStr, p: *const c_char) {
-    // SAFETY: `p` is a NUL-terminated path.
-    let p = unsafe { c_str(p) };
-    emsg_text(tr_c!(fmt, p));
+fn err_path(fmt: &'static CStr, p: &CStr) {
+    emsg_text(tr_c!(fmt, msg_cstr(p)));
 }
 
 /// Argument `i` as a Number, which is how `readblob()` reads its offset and
@@ -479,35 +380,29 @@ fn read_file_or_blob(args: &[TypVal], result: &mut TypVal, always_blob: bool) {
         }
     }
 
-    let filling = if blob {
-        Ok(BlobOut::alloc(result))
+    if blob {
+        tv_blob_alloc_ret(result);
     } else {
-        Err(Lines::alloc(result))
-    };
+        tv_list_alloc_ret(result, kListLenUnknown as c_int as ptrdiff_t);
+    }
 
     let fname = str_arg(args, 0, &mut numbuf3);
-    // SAFETY: `fname` is NUL-terminated.
-    if unsafe { os_isdir(fname.as_ptr()) } {
-        err_path(e_isadir2, fname.as_ptr());
+    if os_isdir_of(fname) {
+        err_path(e_isadir2, fname);
         return;
     }
     let empty = fname.to_bytes().is_empty();
-    let Some(fd) = (if empty { None } else { File::open(fname) }) else {
-        let what = gettext(c"<empty>");
-        err_path(
-            e_notopen,
-            if empty { what.as_ptr() } else { fname.as_ptr() },
-        );
+    let Some(mut fd) = (if empty { None } else { File::open(fname) }) else {
+        err_path(e_notopen, if empty { gettext(c"<empty>") } else { fname });
         return;
     };
 
-    match filling {
-        Ok(blob) => {
-            if !read_blob(&fd, result, blob, offset, size) {
-                err_path(e_cant_read_file_str, fname.as_ptr());
-            }
+    if blob {
+        if !read_blob(&mut fd, result, offset, size) {
+            err_path(e_cant_read_file_str, fname);
         }
-        Err(lines) => read_lines(&fd, lines, binary, maxline),
+    } else if let Some(lines) = result.list_mut() {
+        read_lines(&mut fd, lines, binary, maxline);
     }
 }
 

@@ -21,39 +21,34 @@
 //!
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::{__S_IFMT, FAIL, Owned, no_fileinfo, str_arg, str_arg_chk};
-use crate::cstr;
+use super::{str_arg, str_arg_chk, tail_with_sep};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{tv_check_for_string_arg, tv_get_number_chk};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::eval::window::find_win_by_nr;
-use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::{changedir_func, vim_mkdir_emsg};
-use crate::fileio::{delete_recursive, temp_name, vim_copyfile, vim_rename};
-use crate::memory::{ThinCString, xstrlcpy};
+use crate::ex_docmd::{DirOwner, change_dir, own_dir, vim_mkdir_emsg};
+use crate::fileio::{delete_recursive, rename_file, temp_name, vim_copyfile};
+use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message::{e_invarg, e_invargNval, e_invexpr2, e_mkdir};
-use crate::message_fmt::{c_str, emsg_text};
-use crate::os::cshim::gettext_ptr;
-use crate::os::fs::{os_dirname, os_fileinfo_link, os_mkdir_recurse, os_remove, os_rmdir};
-use crate::os::state::globaldir;
-use crate::path::{full_name_save, path_tail, path_tail_with_sep};
+use crate::message_fmt::{emsg_text, msg_cstr, msg_cstr_opt};
+use crate::os::cshim::gettext;
+use crate::os::fs::{current_dir, link_info, mkdir_recurse, os_remove, os_rmdir};
+use crate::path::{full_name_of, tail_index};
 use crate::tr_c;
 use crate::types::{
-    CdScope, EvalFuncData, MAXPATHL, OK, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, kCdScopeGlobal,
-    kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, uint64_t,
+    CdScope, EvalFuncData, FAIL, MAXPATHL, OK, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
+    kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, uint64_t,
 };
 use crate::window::find_tabpage;
 use crate::winlayer::{TabPage, Win};
-use ::libc::abort;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 // ---------------------------------------------------------------------
 // The safe layer this family adds
@@ -61,7 +56,6 @@ use core::ptr;
 
 /// Whether the sandbox forbids touching the tree, having reported it.
 fn secure() -> bool {
-    // SAFETY: reads the sandbox depth and may report; no arguments.
     check_secure()
 }
 
@@ -72,7 +66,6 @@ fn can_defer() -> bool {
 
 /// Whether argument `i` is a String, having reported if not.
 fn is_string_arg(args: &[TypVal], i: usize) -> bool {
-    // SAFETY: the argument vector's own base, and `i` an index into it.
     tv_check_for_string_arg(args, i).is_ok()
 }
 
@@ -85,36 +78,14 @@ fn path_arg<'a>(args: &'a [TypVal], i: usize, buf: &'a mut NumBuf) -> &'a CStr {
     str_arg_chk(args, i, buf).unwrap_or(c"")
 }
 
-/// As [`path_arg`], but kept raw, because `mkdir()` writes the trailing
-/// separators off the path *in place* -- in whatever storage the argument
-/// gave it, which is upstream's own doing and not something a `&CStr` may
-/// share provenance with.
-fn path_arg_raw(args: &[TypVal], i: usize, buf: &mut NumBuf) -> *mut c_char {
-    buf.string(&args[i]).as_ptr().cast_mut()
+/// Whether the window has a directory of its own.
+fn win_has_localdir(win: Win) -> bool {
+    !win.w_localdir.is_null()
 }
 
-/// The current directory of the process, into `cwd`; false when the OS will
-/// not say.
-fn os_cwd(cwd: &Owned) -> bool {
-    // SAFETY: `cwd` holds `MAXPATHL` bytes and a terminator slot after them.
-    unsafe { os_dirname(cwd.0, MAXPATHL as size_t).is_ok() }
-}
-
-/// Copy the NUL-terminated `from` into `cwd`, truncating at [`MAXPATHL`].
-fn set_cwd(cwd: &Owned, from: *const c_char) {
-    // SAFETY: `cwd` holds `MAXPATHL` writable bytes and `from` is
-    // NUL-terminated.
-    unsafe { xstrlcpy(cwd.0, from, MAXPATHL as size_t) };
-}
-
-/// The window's own directory, or NULL when it has none.
-fn win_localdir(win: Win) -> *mut c_char {
-    win.w_localdir
-}
-
-/// The tabpage's own directory, or NULL when it has none.
-fn tab_localdir(tabpage: TabPage) -> *mut c_char {
-    tabpage.tp_localdir
+/// Whether the tabpage has a directory of its own.
+fn tab_has_localdir(tabpage: TabPage) -> bool {
+    !tabpage.tp_localdir.is_null()
 }
 
 /// Tabpage number `n`, or NULL when there is none.
@@ -127,48 +98,23 @@ fn find_win(args: &[TypVal], tabpage: Option<TabPage>) -> Option<Win> {
     find_win_by_nr(&args[0], tabpage)
 }
 
-/// Change to `dir` in `scope`; false -- having reported -- when it fails.
-fn changedir(dir: *mut c_char, scope: CdScope) -> bool {
-    // SAFETY: `dir` is the argument's own NUL-terminated string, or NULL,
-    // which the callee tests for.
-    unsafe { changedir_func(dir, scope) }
-}
-
-/// The String argument `i` holds, raw, because `chdir()` hands the callee
-/// the argument's own storage.
-fn string_of(tv: &TypVal) -> *mut c_char {
-    tv.string_ref()
-        .map_or(ptr::null_mut(), |text| text.as_ptr().cast_mut())
-}
-
 // ---------------------------------------------------------------------
 // The messages
 // ---------------------------------------------------------------------
 
 /// Report the plain message `msg`, translated.
-fn err0(msg: *const c_char) {
-    // SAFETY: `msg` is NUL-terminated, which is all `gettext` and `emsg` ask.
-    unsafe { emsg(gettext_ptr(msg)) };
+fn err0(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 /// Report the one-`%s` message `fmt`, translated, about `a`.
-fn err1(fmt: &'static CStr, a: *const c_char) {
-    // SAFETY: `a` is a NUL-terminated string.
-    let a = unsafe { c_str(a) };
-    emsg_text(tr_c!(fmt, a));
+fn err1(fmt: &'static CStr, a: &CStr) {
+    emsg_text(tr_c!(fmt, msg_cstr(a)));
 }
 
 /// Report the two-`%s` message `fmt`, translated, about `a` and `b`.
-fn err2(fmt: &'static CStr, a: *const c_char, b: *const c_char) {
-    // SAFETY: both are NUL-terminated strings.
-    let (a, b) = unsafe { (c_str(a), c_str(b)) };
-    emsg_text(tr_c!(fmt, a, b));
-}
-
-/// libuv's name for the error code `error`.
-fn strerror(error: c_int) -> *const c_char {
-    // SAFETY: `uv_strerror` answers a NUL-terminated string for any code.
-    unsafe { uv_strerror(error) }
+fn err2(fmt: &'static CStr, a: Option<&CStr>, b: &CStr) {
+    emsg_text(tr_c!(fmt, msg_cstr_opt(a), msg_cstr(b)));
 }
 
 // ---------------------------------------------------------------------
@@ -207,13 +153,13 @@ impl Scope {
                 break;
             }
             if !args.get(i).is_some_and(|arg| arg.v_type() == VAR_NUMBER) {
-                err0(e_invarg.as_ptr());
+                err0(e_invarg);
                 return None;
             }
             s.number[i] = number_of(&args[i]) as c_int;
             // It is an error for a scope number to be less than -1.
             if s.number[i] < -1 {
-                err0(e_invarg.as_ptr());
+                err0(e_invarg);
                 return None;
             }
             // Use the narrowest scope the caller asked for.
@@ -233,7 +179,7 @@ impl Scope {
         if s.number[tab_i] > 0 {
             s.tp = find_tab(s.number[tab_i]);
             if s.tp.is_none() {
-                err0(c"E5000: Cannot find tab number.".as_ptr());
+                err0(c"E5000: Cannot find tab number.");
                 return None;
             }
         }
@@ -241,13 +187,13 @@ impl Scope {
         // And the window in `tp` by number.
         if s.number[win_i] >= 0 {
             if s.number[tab_i] < 0 {
-                err0(c"E5001: Higher scope cannot be -1 if lower scope is >= 0.".as_ptr());
+                err0(c"E5001: Higher scope cannot be -1 if lower scope is >= 0.");
                 return None;
             }
             if s.number[win_i] > 0 {
                 s.win = find_win(args, s.tp);
                 if s.win.is_none() {
-                    err0(c"E5002: Cannot find window number.".as_ptr());
+                    err0(c"E5002: Cannot find window number.");
                     return None;
                 }
             }
@@ -278,11 +224,8 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // The answer is the directory that is current now.  It is taken before
     // the scope is parsed, so a bad scope reports *and* answers it.
-    {
-        let cwd = Owned::zeroed(MAXPATHL as usize);
-        if os_cwd(&cwd) {
-            result.write_string(Some(ThinCString::from_cstr(cwd.cstr())));
-        }
+    if let Some(cwd) = current_dir() {
+        result.write_string(Some(ThinCString::from(cwd)));
     }
 
     let mut scope = kCdScopeGlobal;
@@ -293,17 +236,19 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             b"tabpage" => kCdScopeTabpage,
             b"window" => kCdScopeWindow,
             _ => {
-                err2(e_invargNval, c"scope".as_ptr(), s.as_ptr());
+                err2(e_invargNval, Some(c"scope"), s);
                 return;
             }
         };
-    } else if !win_localdir(Win::current()).is_null() {
+    } else if win_has_localdir(Win::current()) {
         scope = kCdScopeWindow;
-    } else if !tab_localdir(TabPage::current()).is_null() {
+    } else if tab_has_localdir(TabPage::current()) {
         scope = kCdScopeTabpage;
     }
 
-    if !changedir(string_of(&args[0]), scope) {
+    // A copy: the DirChangedPre autocommand runs while the name is read.
+    let dir = args[0].string_ref().map(|dir| CString::from(dir.as_cstr()));
+    if !dir.is_some_and(|dir| change_dir(&dir, scope)) {
         // Directory change failed: answer the empty string after all.
         drop(result.take_string());
     }
@@ -319,7 +264,7 @@ pub fn f_delete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let name = str_arg(args, 0, &mut numbuf);
     if name.to_bytes().is_empty() {
-        err0(e_invarg.as_ptr());
+        err0(e_invarg);
         return;
     }
 
@@ -329,15 +274,13 @@ pub fn f_delete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         c""
     };
-    let name = name.as_ptr();
     let done = |ret: c_int| -> VarNumber { if ret == 0 { 0 } else { -1 } };
     result.write_number(match flags.to_bytes() {
-        // SAFETY: `name` is NUL-terminated; each callee only reads it.
-        b"" => done(unsafe { os_remove(cstr::at(name)) }),
-        b"d" => done(unsafe { os_rmdir(cstr::at(name)) }),
-        b"rf" => VarNumber::from(unsafe { delete_recursive(name) }),
+        b"" => done(os_remove(name)),
+        b"d" => done(os_rmdir(name)),
+        b"rf" => VarNumber::from(delete_recursive(name)),
         _ => {
-            err1(e_invexpr2, flags.as_ptr());
+            err1(e_invexpr2, flags);
             return;
         }
     });
@@ -348,27 +291,22 @@ pub fn f_delete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_filecopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let mut numbuf3 = NumBuf::new();
     result.write_number(0);
     if secure() || !is_string_arg(args, 0) || !is_string_arg(args, 1) {
         return;
     }
 
-    let mut info = no_fileinfo();
     let from = str_arg(args, 0, &mut numbuf);
-    // SAFETY: `from` is NUL-terminated, and `info` is this frame's own.
-    let known = unsafe { os_fileinfo_link(from.as_ptr(), &raw mut info) };
     // `S_ISREG` and `S_ISLNK`: only a plain file or a symlink is copied.
     const S_IFREG: uint64_t = 0o100000;
     const S_IFLNK: uint64_t = 0o120000;
-    let kind = info.stat.st_mode & __S_IFMT as uint64_t;
-    if known && (kind == S_IFREG || kind == S_IFLNK) {
-        let (from, to) = (
-            str_arg(args, 0, &mut numbuf2).as_ptr(),
-            str_arg(args, 1, &mut numbuf3).as_ptr(),
-        );
-        // SAFETY: both are NUL-terminated.
-        result.write_number((unsafe { vim_copyfile(from, to) } == OK) as VarNumber);
+    let copyable = link_info(from).is_some_and(|info| {
+        let kind = info.stat.st_mode & super::__S_IFMT as uint64_t;
+        kind == S_IFREG || kind == S_IFLNK
+    });
+    if copyable {
+        let to = str_arg(args, 1, &mut numbuf2);
+        result.write_number((vim_copyfile(from, to) == OK) as VarNumber);
     }
 }
 
@@ -380,30 +318,28 @@ pub fn f_getcwd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
 
-    let cwd = Owned::zeroed(MAXPATHL as usize);
     // The narrowest local directory that is actually set, entered at the
     // rung the scope names and falling one rung at a time: the window's,
     // then its tabpage's, then the global one, and finally the OS's own.
-    let mut from: *const c_char = ptr::null();
+    let mut dir = None;
     if s.scope == kCdScopeWindow {
-        from = win_localdir(s.win.expect("a window scope names a window"));
+        let win = s.win.expect("a window scope names a window");
+        dir = own_dir(DirOwner::Window(win));
     }
-    if from.is_null() && (kCdScopeWindow..=kCdScopeTabpage).contains(&s.scope) {
-        from = tab_localdir(s.tp.expect("a tab page scope names a tab page"));
+    if dir.is_none() && (kCdScopeWindow..=kCdScopeTabpage).contains(&s.scope) {
+        let tp = s.tp.expect("a tab page scope names a tab page");
+        dir = own_dir(DirOwner::TabPage(tp));
     }
-    if from.is_null() && (kCdScopeWindow..=kCdScopeGlobal).contains(&s.scope) {
+    if dir.is_none() && (kCdScopeWindow..=kCdScopeGlobal).contains(&s.scope) {
         // `globaldir` is not always set.
-        from = globaldir.get();
+        dir = own_dir(DirOwner::Global);
     }
-    if from.is_null() && !os_cwd(&cwd) {
-        // Answer the empty string on failure.
-        from = c"".as_ptr();
-    }
-
-    if !from.is_null() {
-        set_cwd(&cwd, from);
-    }
-    result.write_string(Some(ThinCString::from_cstr(cwd.cstr())));
+    // The empty string when the OS will not say either.
+    let dir = dir.or_else(current_dir);
+    let mut cwd = dir.map_or_else(Vec::new, |dir| dir.as_cstr().to_bytes().to_vec());
+    // Upstream copies it into a `MAXPATHL` buffer, terminator included.
+    cwd.truncate(MAXPATHL as usize - 1);
+    result.write_string(Some(ThinCString::from_vec(cwd)));
 }
 
 /// `haslocaldir([{win} [, {tab}]])`: whether the scope the arguments name
@@ -417,17 +353,14 @@ pub fn f_haslocaldir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     result.write_number(match s.scope {
         kCdScopeWindow => {
             let win = s.win.expect("a window scope names a window");
-            !win_localdir(win).is_null() as VarNumber
+            win_has_localdir(win) as VarNumber
         }
         kCdScopeTabpage => {
             let tp = s.tp.expect("a tab page scope names a tab page");
-            !tab_localdir(tp).is_null() as VarNumber
+            tab_has_localdir(tp) as VarNumber
         }
-        kCdScopeInvalid => {
-            // We should never get here: the read above defaulted it.
-            // SAFETY: `abort` does not return.
-            unsafe { abort() };
-        }
+        // We should never get here: the read above defaulted it.
+        kCdScopeInvalid => std::process::abort(),
         // The global scope never has a local directory.
         _ => 0 as VarNumber,
     });
@@ -449,21 +382,20 @@ pub fn f_mkdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let mut buf = NumBuf::new();
-    let dir = path_arg_raw(args, 0, &mut buf);
-    // SAFETY: `dir` is NUL-terminated.
-    if unsafe { *dir } == 0 {
+    // A copy: upstream cuts the trailing separators off in whatever storage
+    // the argument gave it.
+    let dir = strip_trailing_seps(str_arg(args, 0, &mut buf).to_bytes());
+    if dir.as_bytes().is_empty() {
         return;
     }
-    strip_trailing_seps(dir);
 
     let mut defer = false;
     let mut defer_recurse = false;
-    let mut created = ptr::null_mut();
+    let mut created = None;
     if args.len() > 1 {
         if args.len() > 2 {
             // With no error flag the failure answer is -1 rather than 0, and
             // -1 is exactly what the test below looks for.
-            // SAFETY: a live typval; a null flag asks for that answer.
             prot = tv_get_number_chk(&args[2]).unwrap_or(-1) as c_int;
             if prot == -1 {
                 return;
@@ -477,50 +409,46 @@ pub fn f_mkdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             return;
         }
         if arg2.contains(&b'p') {
-            let mut failed_dir = ptr::null_mut();
-            let want = if defer || defer_recurse {
-                &raw mut created
-            } else {
-                ptr::null_mut()
-            };
-            // SAFETY: `dir` is NUL-terminated and the two out-parameters are
-            // this frame's own; both answer a string in nvim's heap.
-            let ret = unsafe { os_mkdir_recurse(dir, prot, &raw mut failed_dir, want) };
-            if ret != 0 {
-                err2(e_mkdir, failed_dir, strerror(ret));
-                drop(Owned(failed_dir));
-                result.write_number(FAIL as VarNumber);
-                return;
+            match mkdir_recurse(&dir, prot) {
+                Ok(first) => {
+                    // Only the deferred delete wants the first directory made.
+                    if defer || defer_recurse {
+                        created = first.map(ThinCString::from);
+                    }
+                }
+                Err(failure) => {
+                    err2(e_mkdir, failure.dir.as_deref(), failure.why);
+                    result.write_number(FAIL as VarNumber);
+                    return;
+                }
             }
             status = OK as VarNumber;
         }
     }
     if status == FAIL as VarNumber {
-        // SAFETY: `dir` is NUL-terminated; the callee reports its own error.
-        status = VarNumber::from(unsafe { vim_mkdir_emsg(dir, prot) }.is_ok());
+        // The callee reports its own error.
+        status = VarNumber::from(vim_mkdir_emsg(&dir, prot).is_ok());
     }
     result.write_number(status);
 
     // The "D" and "R" flags: deferred deletion of the created directory.
-    if status == OK as VarNumber && created.is_null() && (defer || defer_recurse) {
-        // SAFETY: `dir` is NUL-terminated; the answer is nvim's heap.
-        created = unsafe { full_name_save(dir, false) };
+    if status == OK as VarNumber && created.is_none() && (defer || defer_recurse) {
+        created = Some(ThinCString::from(full_name_of(&dir, false)));
     }
-    // SAFETY: `created` is an `xmalloc`ed string one of the two callees
-    // above answered, or NULL; it is adopted here.
-    if let Some(created) = unsafe { ThinCString::from_raw(created) } {
+    if let Some(created) = created {
         defer_delete(created, defer_recurse);
     }
 }
 
-/// Cut the trailing separators off `dir` when its last component is empty --
-/// in place, in whatever storage the argument gave.
-fn strip_trailing_seps(dir: *mut c_char) {
-    // SAFETY: `dir` is NUL-terminated, and both callees answer a pointer
-    // inside it, so the terminator lands inside the same string.
-    if unsafe { *path_tail(dir) } == 0 {
-        unsafe { *path_tail_with_sep(dir) = 0 };
-    }
+/// `dir` with the trailing separators cut off when its last component is
+/// empty.
+fn strip_trailing_seps(dir: &[u8]) -> CString {
+    let end = if tail_index(dir) == dir.len() {
+        tail_with_sep(dir)
+    } else {
+        dir.len()
+    };
+    CString::new(&dir[..end]).expect("a C string's bytes hold no NUL")
 }
 
 /// Register `delete({created}, "d"|"rf")` to run when the calling function
@@ -543,12 +471,9 @@ pub fn f_rename(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let mut buf = NumBuf::new();
-    let (from, to) = (
-        str_arg(args, 0, &mut numbuf).as_ptr(),
-        path_arg(args, 1, &mut buf).as_ptr(),
-    );
-    // SAFETY: both are NUL-terminated.
-    result.write_number(unsafe { vim_rename(from, to) } as VarNumber);
+    let from = str_arg(args, 0, &mut numbuf);
+    let to = path_arg(args, 1, &mut buf);
+    result.write_number(if rename_file(from, to) { 0 } else { -1 });
 }
 
 /// `tempname()`: a fresh name in the session's own temporary directory.

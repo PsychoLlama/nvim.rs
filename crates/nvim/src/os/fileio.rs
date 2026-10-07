@@ -38,7 +38,7 @@ use crate::os::fs::{
 };
 use crate::os::uv_error::{UV_EINVAL, UV_EIO, UV_ENOTSUP, UV_EROFS};
 use crate::types::{FileDescriptor, iovec, ptrdiff_t, size_t};
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::{ptr, slice};
 
 /// Size of the arena block a `FileDescriptor` buffers through.
@@ -519,6 +519,61 @@ pub unsafe fn file_skip(file: *mut FileDescriptor, size: size_t) -> ptrdiff_t {
 
     file.bytes_read += as_u64(size - skip_remaining);
     as_signed(size - skip_remaining)
+}
+
+/// A [`FileDescriptor`] [`file_open`] opened for writing, held as a value.
+///
+/// The only way to make one is [`WriteFile::open`], so its block and its
+/// positions are always the ones `file_open` set up -- which is what makes
+/// the three operations on it safe. Closing is not a `Drop`: `file_close`
+/// answers an error code the caller reports, so [`WriteFile::close`] spends
+/// the value instead.
+pub(crate) struct WriteFile(FileDescriptor);
+
+impl WriteFile {
+    /// Open `fname` with the [`FileOpenFlags`] `flags` (which must ask for
+    /// writing) and `mode`, or the libuv error code saying why not.
+    pub(crate) fn open(fname: &CStr, flags: FileOpenFlags, mode: c_int) -> Result<Self, c_int> {
+        debug_assert!(has(flags.cast_signed(), WRITING));
+        let mut file = FileDescriptor {
+            fd: -1,
+            buffer: ptr::null_mut(),
+            read_pos: ptr::null_mut(),
+            write_pos: ptr::null_mut(),
+            wr: false,
+            eof: false,
+            non_blocking: false,
+            bytes_read: 0,
+        };
+        // SAFETY: a NUL-terminated name, and a descriptor this frame owns
+        // for the callee to fill in.
+        let error = unsafe { file_open(&raw mut file, fname.as_ptr(), flags.cast_signed(), mode) };
+        if error == 0 {
+            Ok(Self(file))
+        } else {
+            Err(error)
+        }
+    }
+
+    /// Write `data`, answering how many bytes were accepted or a negative
+    /// libuv error code.
+    pub(crate) fn write(&mut self, data: &[u8]) -> ptrdiff_t {
+        // SAFETY: a descriptor `file_open` set up for writing, and a live
+        // slice that is not inside its block.
+        unsafe { file_write(&raw mut self.0, data.as_ptr().cast(), data.len()) }
+    }
+
+    /// Write out whatever is pending; zero or a libuv error code.
+    pub(crate) fn flush(&mut self) -> c_int {
+        // SAFETY: a descriptor `file_open` set up.
+        unsafe { file_flush(&raw mut self.0) }
+    }
+
+    /// Flush, `fsync` when asked, and close; zero or a libuv error code.
+    pub(crate) fn close(mut self, do_fsync: bool) -> c_int {
+        // SAFETY: a descriptor `file_open` set up, spent here exactly once.
+        unsafe { file_close(&raw mut self.0, do_fsync) }
+    }
 }
 
 #[cfg(test)]

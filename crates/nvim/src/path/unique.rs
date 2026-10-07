@@ -30,12 +30,24 @@ use crate::types::{MAXPATHL, PATHSEPSTR};
 /// `str` must be a writable NUL-terminated string. `trim_len` must be at
 /// least 1.
 pub unsafe fn shorten_dir_len(str: *mut c_char, trim_len: c_int) {
-    let tail = unsafe { path_tail(str) };
-    let tail_at = unsafe { tail.offset_from(str) }.cast_unsigned();
     // SAFETY: the caller's promise. The terminator is part of the buffer and
     // is copied like any other byte, so it is inside the slice.
     let len = unsafe { cstr::bytes_at(str) }.len();
-    let bytes = unsafe { core::slice::from_raw_parts_mut(str.cast::<u8>(), len + 1) };
+    shorten_dir_name(
+        unsafe { core::slice::from_raw_parts_mut(str.cast::<u8>(), len + 1) },
+        trim_len,
+    );
+}
+
+/// [`shorten_dir_len`] of a name the caller holds: `bytes` is the string
+/// with its NUL, and the shortened name ends at the first NUL after.
+/// `trim_len` must be at least 1.
+pub(crate) fn shorten_dir_name(bytes: &mut [u8], trim_len: c_int) {
+    let len = bytes
+        .iter()
+        .position(|&b| b == 0)
+        .expect("a NUL-terminated name");
+    let tail_at = tail_index(&bytes[..len]);
 
     // Where the next kept byte goes. Never past `read`, so the copy is
     // always backwards over ground already read.

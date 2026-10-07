@@ -21,40 +21,31 @@
 //! # The safe layer
 //!
 //! A builtin is handed its arguments as a slice; what the fs family adds on
-//! top is the
-//! handful of coercions its builtins do to the arguments -- a path as a
-//! [`CStr`], an optional flag as a Number -- and the two shapes of answer
-//! they give back, an owned string or a List of them
-//! ([`RetList`]).  Each carries exactly one `unsafe` line, so the builtins
-//! above them are ordinary safe Rust.
+//! top is the handful of coercions its builtins do to the arguments -- a
+//! path as a [`CStr`], an optional flag as a Number -- and the byte
+//! arithmetic over a path the children share.
 //!
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
-    tv_list_alloc_ret,
 };
-use crate::memory::{ThinCString, xfree, xmallocz, xstrdup};
+use crate::mbyte::head_off;
+use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fileio::FileOpenFlags;
 use crate::os::fs::{
-    os_can_exe, os_file_is_readable, os_file_is_writable, os_fileinfo, os_fileinfo_link,
-    os_fileinfo_size, os_getperm, os_isdir,
+    can_execute, executable_path, file_info, link_info, os_file_is_readable, os_file_is_writable,
+    os_isdir_of,
 };
-use crate::path::vim_ispathsep;
-use crate::strings::concat_str;
-use crate::types::{
-    Direction, EvalFuncData, FAIL, FileInfo, List, TypVal, VAR_STRING, VarNumber, int32_t,
-    ptrdiff_t, size_t, uint64_t, uv_stat_t, uv_timespec_t,
-};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use crate::path::{tail_index, vim_ispathsep};
+use crate::types::{Direction, EvalFuncData, FileInfo, TypVal, VAR_STRING, VarNumber, uint64_t};
+use core::ffi::{CStr, c_int};
 
 // The carve of the transpiled module; see each child's docs.
 mod dir;
@@ -126,36 +117,6 @@ pub(crate) fn err(msg: &'static CStr) {
     emsg(gettext(msg));
 }
 
-/// The List a builtin is answering.
-///
-/// `glob()`, `globpath()`, `findfile()` and `finddir()` decide between a
-/// String and a List answer from their flags and then fill whichever they
-/// chose, so the list has to be reachable from `rettv` as well as from the
-/// call that made it.
-#[derive(Clone, Copy)]
-pub(crate) struct RetList(*mut List);
-
-impl RetList {
-    /// Make `result` a fresh List with room for `len` items, or
-    /// `kListLenUnknown` when the count is not known yet.
-    pub(crate) fn alloc(result: &mut TypVal, len: ptrdiff_t) -> Self {
-        // SAFETY: `result` is the builtin's own cleared result slot.
-        Self(tv_list_alloc_ret(result, len))
-    }
-
-    /// The List `result` already holds.
-    pub(crate) fn of(result: &TypVal) -> Self {
-        Self(result.list_or_null())
-    }
-
-    /// Append a copy of the NUL-terminated `s`.
-    pub(crate) fn push(self, s: *const c_char) {
-        // SAFETY: a live list and a NUL-terminated string, which is what a
-        // length of -1 promises.
-        unsafe { (*self.0).push_str(crate::cstr::at_opt(s)) };
-    }
-}
-
 /// Byte `i` of `b`, reading its terminator -- and anything past it -- as the
 /// NUL the C reads there.
 ///
@@ -171,101 +132,37 @@ pub(crate) fn is_sep(b: &[u8], i: usize) -> bool {
     vim_ispathsep(at(b, i) as c_int)
 }
 
+/// Whether byte `i` of `b` follows a path separator -- one that is not the
+/// trailing byte of a multibyte character. Upstream's `after_pathsep`.
+pub(crate) fn after_sep(b: &[u8], i: usize) -> bool {
+    i > 0 && is_sep(b, i - 1) && head_off(b, i - 1) == 0
+}
+
+/// Where the separators before the last component of `b` start, never
+/// before the head of the path: upstream's `path_tail_with_sep`, as an
+/// index.
+pub(crate) fn tail_with_sep(b: &[u8]) -> usize {
+    let past_head = b.iter().position(|&c| c != b'/').unwrap_or(b.len());
+    let mut tail = tail_index(b);
+    while tail > past_head && after_sep(b, tail) {
+        tail -= 1;
+    }
+    tail
+}
+
+/// Where the component after the one at `at` starts in `b`: past its
+/// separator, or at the end when there is none. Upstream's
+/// `path_next_component`, as an index.
+pub(crate) fn next_component(b: &[u8], at: usize) -> usize {
+    b[at..]
+        .iter()
+        .position(|&c| c == b'/')
+        .map_or(b.len(), |sep| at + sep + 1)
+}
+
 /// `s` from byte `from` on, which is still NUL-terminated.
 pub(crate) fn from(s: &CStr, from: usize) -> &CStr {
     CStr::from_bytes_with_nul(&s.to_bytes_with_nul()[from..]).expect("one NUL, at the end")
-}
-
-/// A NUL-terminated string in nvim's heap, freed when it goes out of scope.
-///
-/// What upstream frees by hand before each `return`, and the reason the
-/// bodies below are ordinary control flow rather than a chain of gotos.
-/// A string that becomes a builtin's answer is copied into the answer's own
-/// [`ThinCString`].
-///
-/// The accessors rebuild their view from the raw pointer rather than
-/// borrowing `self`, because the same string is read and then written within
-/// one step of `resolve()`'s loop; nothing here holds a view across a write.
-pub(crate) struct Owned(pub(crate) *mut c_char);
-
-impl Drop for Owned {
-    fn drop(&mut self) {
-        // SAFETY: every constructor allocates through nvim's allocator, and
-        // nothing else frees the block.
-        unsafe { xfree(self.0.cast::<c_void>()) };
-    }
-}
-
-impl Owned {
-    /// A fresh copy of `s`.
-    pub(crate) fn dup(s: &CStr) -> Self {
-        // SAFETY: `s` is NUL-terminated, which is all `xstrdup` reads.
-        Self(unsafe { xstrdup(s.as_ptr()) })
-    }
-
-    /// `len` zeroed bytes plus a terminator slot after them.
-    pub(crate) fn zeroed(len: usize) -> Self {
-        // SAFETY: `xmallocz` allocates `len + 1` and zeroes the last byte.
-        Self(unsafe { xmallocz(len as size_t).cast::<c_char>() })
-    }
-
-    /// `a` followed by `b`.
-    pub(crate) fn cat(a: &CStr, b: &CStr) -> Self {
-        // SAFETY: both are NUL-terminated, which is all `concat_str` reads.
-        Self(unsafe { concat_str(a.as_ptr(), b.as_ptr()) })
-    }
-
-    /// The string, for reading.
-    pub(crate) fn cstr<'a>(&self) -> &'a CStr {
-        // SAFETY: the allocation holds a NUL-terminated string throughout --
-        // every write either lands inside it or writes a terminator.
-        unsafe { CStr::from_ptr(self.0) }
-    }
-
-    pub(crate) fn bytes<'a>(&self) -> &'a [u8] {
-        self.cstr().to_bytes()
-    }
-
-    pub(crate) fn len(&self) -> usize {
-        self.bytes().len()
-    }
-
-    /// Write `b` at `i`, which may be the terminator's own index.
-    pub(crate) fn set(&self, i: usize, b: u8) {
-        debug_assert!(i <= self.len());
-        // SAFETY: `i` is inside the string or is its terminator, both of
-        // which are inside the allocation.
-        unsafe { *self.0.add(i) = b as c_char };
-    }
-}
-
-/// A `uv_stat_t` with every field zero: what the `os_fileinfo` family fills
-/// in, and what the three predicates below declare before asking.
-fn no_fileinfo() -> FileInfo {
-    const NO_TIME: uv_timespec_t = uv_timespec_t {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    FileInfo {
-        stat: uv_stat_t {
-            st_dev: 0,
-            st_mode: 0,
-            st_nlink: 0,
-            st_uid: 0,
-            st_gid: 0,
-            st_rdev: 0,
-            st_ino: 0,
-            st_size: 0,
-            st_blksize: 0,
-            st_blocks: 0,
-            st_flags: 0,
-            st_gen: 0,
-            st_atim: NO_TIME,
-            st_mtim: NO_TIME,
-            st_ctim: NO_TIME,
-            st_birthtim: NO_TIME,
-        },
-    }
 }
 
 // ---------------------------------------------------------------------
@@ -278,65 +175,48 @@ fn no_fileinfo() -> FileInfo {
 
 /// Whether argument `i` is a String, having reported if not.
 fn is_string_arg(args: &[TypVal], i: usize) -> bool {
-    // SAFETY: the argument vector's own base, and `i` an index into it.
     tv_check_for_string_arg(args, i).is_ok()
 }
 
 /// Whether argument `i` is a non-empty String, having reported if not.
 fn is_nonempty_string_arg(args: &[TypVal], i: usize) -> bool {
-    // SAFETY: as [`is_string_arg`].
     tv_check_for_nonempty_string_arg(args, i).is_ok()
 }
 
 /// Whether `p` names something executable, looking in `$PATH` as well as
 /// directly, so that a directory name answers too.
 fn can_exe(p: &CStr) -> bool {
-    // SAFETY: `p` is NUL-terminated; a null out-parameter asks for no path.
-    unsafe { os_can_exe(p, ptr::null_mut(), true) }
+    can_execute(p, true)
 }
 
 /// Where `p`'s executable was found, or `None` when it is not one.
 fn exe_path(p: &CStr) -> Option<ThinCString> {
-    let mut path = ptr::null_mut();
-    // SAFETY: `p` is NUL-terminated and `path` is this frame's own; the
-    // answer is an `xmalloc`ed string, adopted here, or NULL.
-    unsafe {
-        os_can_exe(p, &raw mut path, true);
-        ThinCString::from_raw(path)
-    }
+    executable_path(p, true).map(ThinCString::from)
 }
 
 fn is_dir(p: &CStr) -> bool {
-    // SAFETY: `p` is NUL-terminated.
-    unsafe { os_isdir(p.as_ptr()) }
+    os_isdir_of(p)
 }
 
-/// The permission bits of `p`, or a negative number when it has none.
-fn getperm(p: &CStr) -> int32_t {
-    // SAFETY: `p` is NUL-terminated.
-    unsafe { os_getperm(p.as_ptr()) }
+/// The permission bits of `p` -- the whole `st_mode`, as upstream's
+/// `os_getperm` answers it -- or `None` when it has none.
+fn getperm(p: &CStr) -> Option<uint64_t> {
+    file_info(p).map(|info| info.stat.st_mode)
 }
 
 /// The `stat` of what `p` names, following symlinks.
 fn stat(p: &CStr) -> Option<FileInfo> {
-    let mut info = no_fileinfo();
-    // SAFETY: `p` is NUL-terminated and `info` is this frame's own.
-    let taken = unsafe { os_fileinfo(p.as_ptr(), &raw mut info) };
-    taken.then_some(info)
+    file_info(p)
 }
 
 /// As [`stat`], but of the symlink itself rather than what it points at.
 fn lstat(p: &CStr) -> Option<FileInfo> {
-    let mut info = no_fileinfo();
-    // SAFETY: as [`stat`].
-    let taken = unsafe { os_fileinfo_link(p.as_ptr(), &raw mut info) };
-    taken.then_some(info)
+    link_info(p)
 }
 
-/// The size the `stat` reports, which is not always `st_size`.
+/// The size the `stat` reports.
 fn size(info: &FileInfo) -> uint64_t {
-    // SAFETY: a `FileInfo` the caller owns.
-    unsafe { os_fileinfo_size(info) }
+    info.stat.st_size
 }
 
 /// `executable({expr})`: whether the name can be run.
@@ -376,17 +256,15 @@ pub fn f_filewritable(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 /// when the file has none to report.
 pub fn f_getfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let file_perm = getperm(str_arg(args, 0, &mut numbuf));
-    let mut perm = None;
-    if file_perm >= 0 {
+    let perm = getperm(str_arg(args, 0, &mut numbuf)).map(|file_perm| {
         let mut spelled = *b"---------";
-        for i in 0..9 {
+        for (i, c) in spelled.iter_mut().enumerate() {
             if file_perm & (1 << (8 - i)) != 0 {
-                spelled[i as usize] = b"rwx"[i as usize % 3];
+                *c = b"rwx"[i % 3];
             }
         }
-        perm = Some(ThinCString::from_bytes(&spelled));
-    }
+        ThinCString::from_bytes(&spelled)
+    });
     result.write_string(perm);
 }
 
@@ -454,7 +332,6 @@ pub fn f_browse(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `browsedir({title}, {initdir})`: the same stub.
 pub fn f_browsedir(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
-    // SAFETY: forwarded unchanged to a function with the same contract.
     f_browse(args, result, fptr);
 }
 

@@ -327,8 +327,20 @@ impl Simplify<'_> {
 /// `filename` must be a writable NUL-terminated string.
 pub unsafe fn simplify_filename(filename: *mut c_char) -> size_t {
     let len = unsafe { CStr::from_ptr(filename) }.to_bytes().len();
+    simplify_name(unsafe { core::slice::from_raw_parts_mut(filename.cast::<u8>(), len + 1) })
+        as size_t
+}
+
+/// [`simplify_filename`] of a name the caller holds: `name` is the string
+/// with its NUL, and the answer is where the NUL is now. Nothing after that
+/// NUL is meaningful any more.
+pub(crate) fn simplify_name(name: &mut [u8]) -> usize {
+    let len = name
+        .iter()
+        .position(|&b| b == 0)
+        .expect("a NUL-terminated name");
     let mut s = Simplify {
-        name: unsafe { core::slice::from_raw_parts_mut(filename.cast::<u8>(), len + 1) },
+        name: &mut name[..=len],
         end: len,
         start: 0,
         relative: true,
@@ -394,7 +406,7 @@ pub unsafe fn simplify_filename(filename: *mut c_char) -> size_t {
             break;
         }
     }
-    s.end as size_t
+    s.end
 }
 
 /// Put the full path of `fname` in `buf`, which holds `len` bytes.
