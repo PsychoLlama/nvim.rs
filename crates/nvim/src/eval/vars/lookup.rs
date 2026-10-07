@@ -230,7 +230,7 @@ pub(crate) fn with_scope_entry<R>(
         }
         ScopeKind::Vim => {
             drop(vimvar_dict());
-            Some(scope_vim.with_mut(|entry| f(entry)))
+            Some(scope_vim.with_mut(|vim| f(&mut vim.entry)))
         }
         ScopeKind::Compat => None,
         ScopeKind::Buffer => Some(f(&mut Buf::current().b_bufvar)),
@@ -269,9 +269,21 @@ pub(crate) fn scope_dict(kind: ScopeKind) -> Option<DictRef> {
 /// A miss in `g:` may source an autoload script (user code) and look
 /// again; past that, the scopes a lambda closed over are searched. A slot
 /// answered here is good until user code runs.
+#[inline]
 pub(crate) fn locate(name: &[u8], no_autoload: bool) -> Option<Located> {
     let home = find_var_home(name)?;
-    locate_in(&home, name, no_autoload)
+    // The home's handle moves into the answer: one reference per lookup.
+    let varname = &name[home.name_at..];
+    if varname.is_empty() {
+        return Some(Located::Entry(home.kind));
+    }
+    if let Some(slot) = home.dict.slot_of(varname) {
+        return Some(Located::Item {
+            dict: home.dict,
+            slot,
+        });
+    }
+    locate_missed(&home, name, no_autoload)
 }
 
 /// [`locate`] in a home [`find_var_home`] already answered for `name`.
@@ -287,6 +299,12 @@ pub(crate) fn locate_in(home: &VarHome, name: &[u8], no_autoload: bool) -> Optio
             slot,
         });
     }
+    locate_missed(home, name, no_autoload)
+}
+
+/// [`locate`] past a miss in the home scope itself.
+pub(crate) fn locate_missed(home: &VarHome, name: &[u8], no_autoload: bool) -> Option<Located> {
+    let varname = &name[home.name_at..];
     // A global may be an autoload variable; sourcing its script may define
     // it.  Don't source one that ran already, or every check of "is this
     // name a Funcref variable" would re-run it.
@@ -346,6 +364,7 @@ fn locate_scoped(name: &[u8], no_autoload: bool) -> Option<Located> {
 /// names its scope directly -- and `s:` is where an anonymous Lua or
 /// `:execute` chunk is given a script id, so that it can have script
 /// variables at all (#15994).
+#[inline]
 pub(crate) fn find_var_home(name: &[u8]) -> Option<VarHome> {
     let (&lead, _) = name.split_first()?;
     let home = |kind, dict: Option<DictRef>, name_at| {
@@ -394,6 +413,7 @@ pub(crate) fn find_var_home(name: &[u8]) -> Option<VarHome> {
 
 /// The current script's `s:` dictionary for a lookup, giving an anonymous
 /// Lua or `:execute` chunk a script item first.
+#[inline(never)]
 fn script_scope_for_lookup() -> Option<DictRef> {
     // Both calls below fill `sctx` in, and neither reads the cell, so the
     // round trip through a local is what the C's write-through-the-pointer

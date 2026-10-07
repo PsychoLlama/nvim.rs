@@ -747,7 +747,7 @@ pub fn set_ref_in_functions(copy_id: c_int) -> bool {
 
 /// Under `v:testing`, keep a call's `args` markable; [`pop_func_args`] undoes.
 pub(crate) fn push_func_args(args: &[TypVal]) -> usize {
-    if get_vim_var_nr(Vv::Testing) == 0 {
+    if !testing_enabled() {
         return 0;
     }
     let mut frame = CallFrame::new();

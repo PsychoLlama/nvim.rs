@@ -71,14 +71,26 @@ pub(crate) fn set_var_const(name: &[u8], tv: &mut TypVal, copy: bool, is_const: 
     // A compat name has no dictionary of its own to watch.
     let watched = home.kind != ScopeKind::Compat && dict_is_watched(Some(&home.dict));
 
-    let mut found = located_item(locate_in(&home, name, true));
+    // In the home scope itself (the common case, which takes no reference)
+    // or in a scope a lambda closed over.
+    let find = || match home.dict.slot_of(varname) {
+        Some(slot) => (Some(slot), None),
+        None => (None, located_item(locate_missed(&home, name, true))),
+    };
+    let (mut slot, mut other) = find();
     if tv.is_func() {
         // Checking the name can source an autoload script: look again after.
-        if var_wrong_func_name_named(name, found.is_none()) {
+        let new_var = slot.is_none() && other.is_none();
+        if var_wrong_func_name_named(name, new_var) {
             return;
         }
-        found = located_item(locate_in(&home, name, true));
+        (slot, other) = find();
     }
+    let found = match (slot, &other) {
+        (Some(slot), _) => Some((&home.dict, slot)),
+        (None, Some((dict, slot))) => Some((dict, *slot)),
+        (None, None) => None,
+    };
 
     // The old value and a copy of the new one, for the watchers: the old
     // one unset for a new variable.
@@ -124,14 +136,16 @@ pub(crate) fn set_var_const(name: &[u8], tv: &mut TypVal, copy: bool, is_const: 
         // the slot unlocked -- upstream leaves the stored value
         // `VAR_UNLOCKED`, and the lock is the item's.
         let new = store_value(tv, copy);
-        let Some(replaced) = dict.edit().item_at_mut(slot).map(|item| {
-            item.di_lock = VarLock::Unlocked;
-            let old = ::core::mem::replace(&mut item.di_tv, new);
-            (old, watched.then(|| item.di_tv.clone()))
-        }) else {
+        let Some(item) = dict.edit().item_at_mut(slot) else {
             return;
         };
-        (old, new_copy) = replaced;
+        item.di_lock = VarLock::Unlocked;
+        old = ::core::mem::replace(&mut item.di_tv, new);
+        new_copy = if watched {
+            Some(item.di_tv.clone())
+        } else {
+            None
+        };
     } else {
         // A new variable. `v:` and `a:` do not take one.
         if matches!(home.kind, ScopeKind::Vim | ScopeKind::Args) {

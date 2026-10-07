@@ -30,7 +30,7 @@ use crate::eval::typval::{
     NumBuf, tv_check_for_float_or_nr_arg, tv_check_for_opt_string_arg, tv_equal, tv_get_float,
     tv_get_number_chk,
 };
-use crate::eval::vars::{get_vim_var_nr, vim_var_string, with_vim_var};
+use crate::eval::vars::{testing_enabled, vim_var_string, with_vim_var};
 use crate::eval::{garbage_collect, pattern_match};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::suppress_errthrow;
@@ -489,16 +489,18 @@ pub(crate) fn f_assert_exception(args: &[TypVal], result: &mut TypVal, _fptr: Ev
         result.write_number(1);
     } else if error.is_some_and(|error| !has_bytes(thrown, error.to_bytes())) {
         let mut ga = prepare_assert_error();
-        with_vim_var(Vv::Exception, |exception| unsafe {
+        // A copy: the report is not a leaf the variable may be lent to.
+        let exception = with_vim_var(Vv::Exception, TypVal::clone);
+        unsafe {
             fill_assert_error(
                 &mut ga,
                 args.get(1),
                 ptr::null(),
                 Some(&args[0]),
-                exception,
+                &exception,
                 AssertType::Other,
             )
-        });
+        };
         report_assert_error(&ga);
         result.write_number(1);
     }
@@ -561,7 +563,7 @@ pub(crate) fn f_test_garbagecollect_now(
     _result: &mut TypVal,
     _fptr: EvalFuncData,
 ) {
-    if get_vim_var_nr(Vv::Testing) == 0 {
+    if !testing_enabled() {
         emsg(gettext(E_TEST_GARBAGECOLLECT_NOW));
     } else {
         garbage_collect(true);

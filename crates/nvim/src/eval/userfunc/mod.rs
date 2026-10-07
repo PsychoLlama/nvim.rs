@@ -23,7 +23,7 @@ use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{check_builtin_argcount, find_builtin};
 use crate::eval::gc::want_garbage_collect;
 use crate::eval::typval::{TV_INITIAL_VALUE, list_iter, tv_clear, tv_copy, tv_get_number_chk};
-use crate::eval::vars::{get_vim_var_nr, skip_var_list};
+use crate::eval::vars::{skip_var_list, testing_enabled};
 use crate::eval::{
     Cursor, LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, eval_isnamec, eval_isnamec1,
     eval0_in_cmd, eval1, garbage_collect, get_lval, handle_subscript, id_len, is_luafunc,
@@ -73,7 +73,7 @@ use crate::types::ui::kUICmdline;
 use crate::types::{
     Callback, Dict, DictItem, EStack, ExArg, Expand, FcId, FuncBody, FuncCall, LineNr, ListItem,
     LuaRef, OptInt, Partial, SaveRedo, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER,
-    VAR_SCOPE, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, size_t,
+    VAR_SCOPE, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;

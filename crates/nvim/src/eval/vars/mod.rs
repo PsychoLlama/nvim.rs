@@ -199,16 +199,36 @@ state_record! {
     /// The entry a bare `g:` resolves to. Its value is the `g:`
     /// dictionary, a heap dictionary that nothing frees.
     pub(crate) scope_globals: ScopeDictItem = EMPTY_SCOPE_VAR;
-    /// The entry a bare `v:` resolves to, likewise.
-    pub(crate) scope_vim: ScopeDictItem = EMPTY_SCOPE_VAR;
+    /// The entry a bare `v:` resolves to, likewise, and where each row is.
+    pub(crate) scope_vim: VimScope = VimScope {
+        entry: EMPTY_SCOPE_VAR,
+        slots: [(0, 0); VIMVAR_COUNT],
+    };
     /// The `v:msgpack_types` lists, which the msgpack encoder and decoder
     /// compare by identity.
     pub(crate) msgpack_type_lists: [Option<ListRef>; 8] = [const { None }; 8];
+    /// The address of `v:lua`'s partial, which is set once and never
+    /// replaced (`v:lua` is read-only): what [`is_lua_partial`] compares
+    /// against, on every call through a partial.
+    pub(crate) lua_partial_addr: usize = 0;
+    /// Whether `v:testing` is non-zero, kept beside the variable by every
+    /// write to it ([`before_set_vvar`], [`set_vim_var_nr`]): every function
+    /// call asks.
+    pub(crate) vim_testing: bool = false;
     /// `v:val` and `v:key` while they are not in the `v:` dictionary.
     pub(crate) outside_vimvars: [Option<Box<DictItem>>; 2] = [None, None];
-    /// Where each `v:` row last was in the `v:` dictionary's table: a hint,
-    /// checked against the row's name before it is used.
-    pub(crate) vimvar_slots: [u16; VIMVAR_COUNT] = [0; VIMVAR_COUNT];
+}
+
+/// The `v:` scope: the entry a bare `v:` resolves to, whose value is the
+/// `v:` dictionary, and a hint per row of where it is in that dictionary.
+pub(crate) struct VimScope {
+    pub(crate) entry: ScopeDictItem,
+    /// Where each row last was in the dictionary's table, and the address
+    /// of the row's item there: used only while the slot still holds that
+    /// very item. A row's item is never freed, so the address names it for
+    /// the life of the editor. Kept beside the entry so that one access to
+    /// the record finds both.
+    pub(crate) slots: [(usize, usize); VIMVAR_COUNT],
 }
 
 /// One row of the `v:` table: the name, the type the variable is declared

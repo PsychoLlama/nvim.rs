@@ -15,7 +15,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::vim_is_ident_char;
 use crate::cstr::byte_at;
 use crate::eval::userfunc::fname_script_len;
-use crate::eval::vars::with_vim_var;
+use crate::eval::vars::is_lua_partial;
 use crate::eval::{
     AUTOLOAD_CHAR, Cursor, FNE_CHECK_START, FNE_INCL_BR, char_len_at, eval_to_string,
     namespace_char,
@@ -26,7 +26,7 @@ use crate::message_fmt::msg_bytes;
 use crate::option::option_end;
 use crate::semsg;
 use crate::strings::has_char;
-use crate::types::{NUL, OptIndex, OptionSetFlags, Partial, TypVal, VAR_PARTIAL, Vv};
+use crate::types::{NUL, OptIndex, OptionSetFlags, Partial, TypVal, VAR_PARTIAL};
 use core::ffi::c_int;
 
 /// The NUL byte, as the scans below compare it.
@@ -286,7 +286,7 @@ pub fn eval_isdictc(c: c_int) -> bool {
 /// Is this partial the one `v:lua` stands for? A comparison of addresses;
 /// nothing is read through `partial`.
 pub fn is_luafunc(partial: *mut Partial) -> bool {
-    with_vim_var(Vv::Lua, |lua| lua.partial_or_null() == partial)
+    is_lua_partial(partial.addr())
 }
 
 /// Is this typval `v:lua`?

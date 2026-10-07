@@ -8,7 +8,7 @@
 //! Every one of them names its row by [`Vv`], so none of them can fail. The
 //! rows are items the `v:` dictionary owns, reached through the dictionary's
 //! handle and found again by name on every access (a slot hint in
-//! [`vimvar_slots`] makes that one probe); `v:val` and `v:key`, while they
+//! in [`scope_vim`] makes that one probe); `v:val` and `v:key`, while they
 //! are not in the dictionary, sit in [`outside_vimvars`].
 //!
 //! A write takes the old value out in one borrow of the item and releases it
@@ -33,7 +33,7 @@ use crate::types::{HashTab, SaveVEvent};
 
 /// The `v:` dictionary, built on first use.
 pub(crate) fn vimvar_dict() -> DictRef {
-    match scope_vim.with(|entry| entry.di_tv.dict_handle()) {
+    match scope_vim.with(|vim| vim.entry.di_tv.dict_handle()) {
         Some(dict) => dict,
         None => build_vim_scope(),
     }
@@ -68,7 +68,7 @@ fn build_vim_scope() -> DictRef {
             unreachable!("v: has two rows named {:?}", row.name);
         }
     }
-    scope_vim.set(entry);
+    scope_vim.with_mut(|vim| vim.entry = entry);
     dict
 }
 
@@ -82,39 +82,60 @@ fn outside_index(idx: Vv) -> usize {
 }
 
 /// The slot row `idx` is in, in `dict` (the `v:` dictionary), or `None` when
-/// it is not in the dictionary.
-#[inline]
+/// it is not in the dictionary; learnt as the hint for the next access.
 fn vimvar_slot(dict: &Dict, idx: Vv) -> Option<usize> {
-    let name = VIMVAR_ROWS[idx as usize].name.to_bytes();
-    let hint = usize::from(vimvar_slots.with(|slots| slots[idx as usize]));
-    if dict.item_at(hint).is_some_and(|item| item.key() == name) {
-        return Some(hint);
-    }
-    let slot = dict.slot_of(name)?;
-    let hint = u16::try_from(slot).expect("the v: table has fewer than 65536 slots");
-    vimvar_slots.with_mut(|slots| slots[idx as usize] = hint);
+    let slot = dict.slot_of(VIMVAR_ROWS[idx as usize].name.to_bytes())?;
+    let addr = dict
+        .item_at(slot)
+        .map_or(0, |item| ::core::ptr::from_ref(item).addr());
+    scope_vim.with_mut(|vim| vim.slots[idx as usize] = (slot, addr));
     Some(slot)
 }
 
-/// Lend row `idx`'s item to `f` to read. `f` must not write a `v:` variable.
-#[inline]
-fn with_vimvar_ref<R>(idx: Vv, f: impl FnOnce(&DictItem) -> R) -> R {
-    let dict = vimvar_dict();
-    match vimvar_slot(&dict, idx) {
-        Some(slot) => f(dict.item_at(slot).expect("a kept slot")),
-        None => outside_vimvars.with(|outside| {
-            f(outside[outside_index(idx)]
-                .as_ref()
-                .expect("a row out of v: waits outside it"))
-        }),
-    }
+/// Run `f` over row `idx`'s item where the hint says it is, in one access to
+/// the record; `None` (with `f` left in place) when the hint is stale or the
+/// scope not built yet.
+///
+/// `f` runs inside that access, so it must be a leaf: it must not reach a
+/// `v:` variable (nor anything else of the record) or release a value.
+#[inline(always)]
+fn vimvar_at_hint<R, F: FnOnce(&mut DictItem) -> R>(idx: Vv, f: &mut Option<F>) -> Option<R> {
+    scope_vim.with(|vim| {
+        let (hint, addr) = vim.slots[idx as usize];
+        let dict = vim.entry.di_tv.dict_shared()?;
+        let item = dict.edit().item_at_mut(hint)?;
+        if ::core::ptr::from_ref(item).addr() != addr {
+            return None;
+        }
+        f.take().map(|f| f(item))
+    })
 }
 
-/// Lend row `idx`'s item to `f` to write. `f` must not reach a `v:`
-/// variable or release a value: what it replaces it answers, for the caller
-/// to release after the borrow.
+/// Lend row `idx`'s item to `f` to read. `f` must be a leaf, as
+/// [`vimvar_at_hint`]'s.
+#[inline]
+fn with_vimvar_ref<R>(idx: Vv, f: impl FnOnce(&DictItem) -> R) -> R {
+    with_vimvar_item(idx, |item| f(item))
+}
+
+/// Lend row `idx`'s item to `f` to write. `f` must be a leaf, as
+/// [`vimvar_at_hint`]'s: what it replaces it answers, for the caller to
+/// release after the borrow.
 #[inline]
 fn with_vimvar_item<R>(idx: Vv, f: impl FnOnce(&mut DictItem) -> R) -> R {
+    let mut f = Some(f);
+    if let Some(answer) = vimvar_at_hint(idx, &mut f) {
+        return answer;
+    }
+    let f = f.expect("the hint did not run it");
+    with_vimvar_found(idx, f)
+}
+
+/// [`with_vimvar_item`] past a stale hint: the dictionary held by a handle
+/// of this frame's and the row found by name, so `f` runs with no access to
+/// the record open.
+#[cold]
+fn with_vimvar_found<R>(idx: Vv, f: impl FnOnce(&mut DictItem) -> R) -> R {
     let dict = vimvar_dict();
     match vimvar_slot(&dict, idx) {
         Some(slot) => f(dict.edit().item_at_mut(slot).expect("a kept slot")),
@@ -198,8 +219,8 @@ pub(crate) fn get_vim_var_name(idx: Vv) -> &'static CStr {
     VIMVAR_ROWS[idx as usize].name
 }
 
-/// Lend `v:` variable `idx`'s value to `f` to write through. `f` must not
-/// reach a `v:` variable, nor release a value that could.
+/// Lend `v:` variable `idx`'s value to `f` to write through. `f` must be a
+/// leaf: it must not reach a `v:` variable, nor release a value.
 pub(crate) fn with_vim_var_mut<R>(idx: Vv, f: impl FnOnce(&mut TypVal) -> R) -> R {
     with_vimvar_item(idx, |item| f(&mut item.di_tv))
 }
@@ -225,21 +246,12 @@ pub(crate) fn get_vim_var_dict_handle(idx: Vv) -> Option<DictRef> {
 /// empty.
 ///
 /// Every variable asked for here is declared `VAR_STRING` and `E963` refuses
-/// an assignment of another type, so there is nothing to convert. The
-/// borrow is the variable's own, so `f` must not run anything that can
-/// assign a `v:` variable -- no autocommands, no `eval`, no `do_cmdline`;
-/// a caller that holds the string across such a thing takes
-/// [`vim_var_string`] or [`vim_var_bytes`] instead.
+/// an assignment of another type, so there is nothing to convert. `f` sees
+/// a copy, so it may do anything; a caller that holds the string across
+/// user code takes [`vim_var_string`] or [`vim_var_bytes`] all the same.
 pub(crate) fn with_vim_var_str<R>(idx: Vv, f: impl FnOnce(&CStr) -> R) -> R {
-    with_vimvar_ref(idx, |item| {
-        let tv = &item.di_tv;
-        debug_assert_eq!(
-            tv.v_type(),
-            VAR_STRING,
-            "v: variable {idx:?} is not a String"
-        );
-        f(tv.string_ref().map_or(c"", ThinCString::as_cstr))
-    })
+    let value = vim_var_string(idx);
+    f(value.as_ref().map_or(c"", ThinCString::as_cstr))
 }
 
 /// A copy of `v:` variable `idx`'s string, `None` for the null string.
@@ -261,6 +273,23 @@ pub(crate) fn lua_partial() -> Option<PartialRef> {
     with_vimvar_ref(Vv::Lua, |item| item.di_tv.partial_shared().cloned())
 }
 
+/// Whether `v:testing` is set: [`get_vim_var_nr`]`(Vv::Testing) != 0`
+/// without the dictionary.
+#[inline]
+pub(crate) fn testing_enabled() -> bool {
+    let enabled = vim_testing.get();
+    debug_assert_eq!(enabled, get_vim_var_nr(Vv::Testing) != 0);
+    enabled
+}
+
+/// Whether the partial at address `partial` is `v:lua`'s. A comparison of
+/// addresses; nothing is read.
+#[inline]
+pub(crate) fn is_lua_partial(partial: usize) -> bool {
+    let lua = lua_partial_addr.get();
+    lua != 0 && partial == lua
+}
+
 /// Declare `v:` variable `idx` to be of type `type_0`, without touching its
 /// value.
 pub fn set_vim_var_type(idx: Vv, type_0: VarType) {
@@ -269,7 +298,18 @@ pub fn set_vim_var_type(idx: Vv, type_0: VarType) {
 
 /// Set `v:` variable `idx` to the Number `val`.
 pub fn set_vim_var_nr(idx: Vv, val: VarNumber) {
-    replace_vimvar(idx, TypVal::Number(val));
+    if idx == Vv::Testing {
+        vim_testing.set(val != 0);
+    }
+    // A Number over a Number has nothing to release: written in place.
+    let old = with_vimvar_item(idx, |item| match &mut item.di_tv {
+        TypVal::Number(n) => {
+            *n = val;
+            None
+        }
+        tv => Some(mem::replace(tv, TypVal::Number(val))),
+    });
+    drop(old);
 }
 
 /// Set `v:` variable `idx` to `v:true` or `v:false`.
@@ -303,7 +343,8 @@ pub(crate) fn set_vim_var_owned(idx: Vv, val: Option<ThinCString>) {
     replace_vimvar(idx, TypVal::string(val));
 }
 
-/// Lend `v:` variable `idx`'s value to `f`.
+/// Lend `v:` variable `idx`'s value to `f`, which must be a leaf: it must
+/// not reach a `v:` variable. A caller with more to do copies the value out.
 pub(crate) fn with_vim_var<R>(idx: Vv, f: impl FnOnce(&TypVal) -> R) -> R {
     with_vimvar_ref(idx, |item| f(&item.di_tv))
 }
@@ -330,6 +371,9 @@ pub fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
 ///
 /// The slot takes `val` over.
 pub(crate) fn set_vim_var_partial(idx: Vv, val: PartialRef) {
+    if idx == Vv::Lua {
+        lua_partial_addr.set(val.as_ptr().addr());
+    }
     replace_vimvar(idx, TypVal::partial(Some(val)));
 }
 
@@ -521,6 +565,8 @@ pub(crate) fn before_set_vvar(key: &[u8], tv: &mut TypVal, copy: bool, watched: 
         } else if key == b"hlsearch" {
             no_hlsearch.set(n == 0);
             redraw_all_later(UPD_SOME_VALID);
+        } else if key == b"testing" {
+            vim_testing.set(n != 0);
         }
         if let Some(old) = old {
             notify_vvar_watchers(key, &old);
