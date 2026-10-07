@@ -57,7 +57,10 @@ pub(crate) struct FrameScopes {
     pub(crate) a_list: ListRef,
     /// Whether the counts carry the `DO_NOT_FREE_CNT` seed.
     active: Cell<bool>,
-    /// Emptied entries of earlier calls, for this call's.
+    /// Emptied entries of earlier calls, for this call's. Boxed on
+    /// purpose: a dictionary takes its items as boxes, and keeping the
+    /// allocations is the point.
+    #[allow(clippy::vec_box)]
     spare: RefCell<Vec<Box<DictItem>>>,
 }
 
@@ -209,6 +212,7 @@ impl Drop for FrameScopes {
 /// are only named (an `a:` item names the caller's argument), giving each up
 /// unreleased. Upstream's `vars_clear_ext`. The emptied items are kept in
 /// `spare` for the next call's entries.
+#[allow(clippy::vec_box)] // the boxes a dictionary hands back, kept
 fn clear_scope(dict: &DictRef, release_values: bool, spare: &RefCell<Vec<Box<DictItem>>>) {
     if dict.dv_hashtab.ht_used == 0 {
         return;
@@ -220,7 +224,7 @@ fn clear_scope(dict: &DictRef, release_values: bool, spare: &RefCell<Vec<Box<Dic
             let removed = dict.edit().remove_at(slot);
             // Released with the borrow of the dictionary over: a value can
             // name the dictionary it was in.
-            let mut value = match removed {
+            let value = match removed {
                 RemovedItem::Allocated(mut item) => {
                     let value = item.di_tv.take();
                     let mut spare = spare.borrow_mut();
@@ -231,14 +235,17 @@ fn clear_scope(dict: &DictRef, release_values: bool, spare: &RefCell<Vec<Box<Dic
                 }
                 RemovedItem::Embedded(value) => value,
             };
-            if !release_values {
-                value.disown();
+            if release_values {
+                drop(value);
+            } else {
+                // Named, not owned: given up unreleased.
+                core::mem::forget(value);
             }
-            drop(value);
         }
         slot += 1;
     }
-    dict.edit().unlock_table();
+    // Not unlocked first: the table is replaced or emptied whole, which
+    // undoes the lock, and unlocking would only resize what is about to go.
     let table = &mut dict.edit().dv_hashtab;
     if table.size() == HT_INIT_SIZE {
         // Upstream's `hash_clear` + `hash_init`, without building a new

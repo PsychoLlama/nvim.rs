@@ -452,9 +452,18 @@ pub(crate) fn func_line_cookie(frame: &FuncCall) -> *mut c_void {
 /// # Panics
 /// When the cookie names no funccall that is still in the table.
 pub(crate) fn cookie_funccall(cookie: *mut c_void) -> Rc<FuncCall> {
-    FcId::from_bits(cookie.addr())
-        .and_then(FcId::try_funccall)
-        .expect("a function-body cookie names a live funccall")
+    cookie_id(cookie.addr()).funccall()
+}
+
+/// The id a [`func_line_cookie`] carries.
+fn cookie_id(bits: usize) -> FcId {
+    FcId::from_bits(bits).expect("a function-body cookie names a funccall")
+}
+
+/// Run `f` on the funccall a [`func_line_cookie`] names, without taking a
+/// reference: the cookie readers run no user code.
+fn with_cookie_funccall<R>(bits: usize, f: impl FnOnce(&FuncCall) -> R) -> R {
+    cookie_id(bits).with(f)
 }
 
 /// The `do_cmdline` line getter a function body is executed through.  It
@@ -533,38 +542,41 @@ pub fn get_func_line(
 
 /// Whether the function running under `cookie` has ended.
 pub fn func_has_ended(cookie: *mut c_void) -> c_int {
-    let frame = cookie_funccall(cookie);
-    c_int::from(
-        (frame.func.has_flag(FuncFlags::ABORT) && did_emsg.get() != 0 && !aborted_in_try())
-            || frame.returned.get(),
-    )
+    with_cookie_funccall(cookie.addr(), |frame| {
+        c_int::from(
+            (frame.func.has_flag(FuncFlags::ABORT) && did_emsg.get() != 0 && !aborted_in_try())
+                || frame.returned.get(),
+        )
+    })
 }
 
 /// Whether the function running under `cookie` was declared `abort`.
 pub fn func_has_abort(cookie: *mut c_void) -> c_int {
-    c_int::from(cookie_funccall(cookie).func.has_flag(FuncFlags::ABORT))
+    with_cookie_funccall(cookie.addr(), |frame| {
+        c_int::from(frame.func.has_flag(FuncFlags::ABORT))
+    })
 }
 
 /// The name of the function running under `cookie`, which lives as long as
 /// the call does.
 pub fn func_name(cookie: *mut c_void) -> *mut c_char {
-    cookie_funccall(cookie).func.name().as_ptr().cast_mut()
+    with_cookie_funccall(cookie.addr(), |frame| frame.func.name().as_ptr().cast_mut())
 }
 
 /// The breakpoint line of the function running under `cookie`, by address:
 /// the debugger moves it.
 pub fn func_breakpoint(cookie: *mut c_void) -> *mut LineNr {
-    cookie_funccall(cookie).breakpoint.as_ptr()
+    with_cookie_funccall(cookie.addr(), |frame| frame.breakpoint.as_ptr())
 }
 
 /// The debug tick of the function running under `cookie`, by address.
 pub fn func_dbg_tick(cookie: *mut c_void) -> *mut c_int {
-    cookie_funccall(cookie).dbg_tick.as_ptr()
+    with_cookie_funccall(cookie.addr(), |frame| frame.dbg_tick.as_ptr())
 }
 
 /// The `:if`/`:while` nesting level of the function running under `cookie`.
 pub fn func_level(cookie: *mut c_void) -> c_int {
-    cookie_funccall(cookie).level
+    with_cookie_funccall(cookie.addr(), |frame| frame.level)
 }
 
 /// Whether the function running has already returned.

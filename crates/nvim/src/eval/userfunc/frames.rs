@@ -95,6 +95,15 @@ impl FcId {
         FUNC_CALLS.with(|calls| calls.table.try_get(self).cloned())
     }
 
+    /// Run `f` on the funccall `self` names, without taking a reference: for
+    /// a read that runs no user code.
+    ///
+    /// # Panics
+    /// When that funccall has left the table.
+    pub(crate) fn with<R>(self, f: impl FnOnce(&FuncCall) -> R) -> R {
+        FUNC_CALLS.with(|calls| f(calls.table.get(self)))
+    }
+
     /// The call `self` was made from: upstream's `fc_caller`.
     pub(crate) fn caller(self) -> Option<FcId> {
         FUNC_CALLS.with(|calls| *calls.table.meta(self))
