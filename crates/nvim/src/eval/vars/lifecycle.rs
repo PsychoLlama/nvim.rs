@@ -4,22 +4,19 @@
 //! the rest tear one down again -- a script's `s:` scope, a window's `w:`,
 //! the whole of `g:` at exit -- and hand the garbage collector its roots.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::memory::ThinCString;
-use core::ffi::{c_char, c_int};
-use core::mem::offset_of;
-use core::ptr;
+use core::ffi::c_int;
 
 use super::*;
-use crate::eval::typval::{DictEntry, DictRef, DictTab, ListRef, tv_dict_item_free};
-use crate::message_fmt::c_str;
+use crate::eval::typval::{DictRef, ListRef};
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
+use crate::types::Failed;
 use crate::types::MessagePackType;
 use crate::types::{DictKey, PartialRef, Refcount};
-use crate::types::{Failed, NUL};
 
 /// Build the `g:` and `v:` scopes and give the `v:` variables their first
 /// values.  Called once, at startup.
@@ -136,26 +133,11 @@ pub fn garbage_collect_scriptvars(copy_id: c_int) -> bool {
     abort
 }
 
-/// [`set_internal_string_var`] for a name and value the caller holds.
-pub(crate) fn set_internal_string_var_to(name: &CStr, value: &CStr) {
-    // SAFETY: two NUL-terminated strings; the store copies the value.
-    unsafe { set_internal_string_var(name.as_ptr(), value.as_ptr().cast_mut()) };
-}
-
-/// Set the variable `name` to the string `value`, taking ownership of it.
-///
-/// # Safety
-/// `name` and `value` are NUL-terminated strings.  `value` stays the
-/// caller's: the store copies it.
-pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
-    let value = (!value.is_null()).then(|| {
-        // SAFETY: the caller's promise: a NUL-terminated `value`.
-        ThinCString::from_cstr(unsafe { CStr::from_ptr(value) })
-    });
-    // The value holds a copy, which the store copies again and this frame
-    // releases.
-    let mut tv = TypVal::string(value);
-    unsafe { set_var(name, cstr::bytes_at(name).len(), &mut tv, true) };
+/// Set the variable `name` to a copy of the string `value`; `None` is the
+/// null string.
+pub(crate) fn set_internal_string_var(name: &[u8], value: Option<&[u8]>) {
+    let mut tv = TypVal::string(value.map(ThinCString::from_bytes));
+    set_var(name, &mut tv, false);
 }
 
 /// Delete every `g:menutrans_*` variable, which `:menutranslate clear` does.
@@ -193,40 +175,14 @@ pub(crate) fn globvar_dict() -> DictRef {
     }
 }
 
-/// The `g:` scope, as a dictionary.
-pub(crate) fn get_globvar_dict() -> *mut Dict {
-    // `g:` is never freed, so its address outlives the handle.
-    globvar_dict().as_ptr()
-}
-
-/// The `g:` scope, as a hashtab.
-pub(crate) fn get_globvar_ht() -> *mut DictTab {
-    // SAFETY: a field of the dictionary above, never dereferenced here.
-    unsafe { &raw mut (*get_globvar_dict()).dv_hashtab }
-}
-
-/// The `v:` scope, as a dictionary.
-pub(crate) fn get_vimvar_dict() -> *mut Dict {
-    // `v:` is never freed, so its address outlives the handle.
-    vimvar_dict().as_ptr()
-}
-
-/// The `v:` scope, as a hashtab.
-pub(crate) fn get_vimvar_ht() -> *mut DictTab {
-    // SAFETY: a field of the dictionary above, never dereferenced here.
-    unsafe { &raw mut (*get_vimvar_dict()).dv_hashtab }
-}
-
-/// The `DictItem` a bare `g:` resolves to.
-pub(crate) fn globvar_scope_item() -> *mut DictItem {
-    drop(globvar_dict());
-    scope_globals.with_mut(ScopeDictItem::item)
-}
-
-/// The `DictItem` a bare `v:` resolves to.
-pub(crate) fn vimvar_scope_item() -> *mut DictItem {
-    drop(vimvar_dict());
-    scope_vim.with_mut(ScopeDictItem::item)
+/// Whether `dict` is the `g:` dictionary.
+pub(crate) fn is_globvar_dict(dict: &Dict) -> bool {
+    scope_globals.with(|entry| {
+        entry
+            .di_tv
+            .dict_shared()
+            .is_some_and(|globals| ::core::ptr::eq(globals.as_ptr().cast_const(), dict))
+    })
 }
 
 /// Whether `list` is the `v:msgpack_types` list for `type_`.
@@ -338,111 +294,54 @@ pub fn vars_clear(dict: &DictRef) {
 /// Delete the variable `name`, reporting E108 if it does not exist and
 /// `forceit` is not set.
 pub(crate) fn do_unlet(name: &[u8], forceit: bool) -> Result<(), Failed> {
-    // SAFETY: `name` is NUL-terminated at its own length.
-    cstr::with_terminated(name, |name| unsafe {
-        unlet_terminated(name.as_ptr(), name.count_bytes(), forceit)
-    })
-}
+    if let Some(home) = find_var_home(name).filter(|home| home.name_at < name.len())
+        && let Some(Located::Item { dict, slot }) = locate_in(&home, name, true)
+    {
+        let varname = &name[home.name_at..];
+        // The dictionary whose lock decides whether the item may go is the
+        // scope's -- `v:` for a compat name -- even when the item was found
+        // in a scope a lambda closed over; and only a scope of its own is
+        // watched.
+        let lock_dict = &home.dict;
+        let watched = home.kind != ScopeKind::Compat && dict_is_watched(Some(lock_dict));
 
-/// [`do_unlet`] of a terminated name.
-///
-/// # Safety
-/// `name` points at `name_len` readable bytes and is NUL-terminated there.
-unsafe fn unlet_terminated(
-    name: *const c_char,
-    name_len: size_t,
-    forceit: bool,
-) -> Result<(), Failed> {
-    let mut dict: *mut Dict = ptr::null_mut();
-    let (mut ht, varname) = unsafe { find_var_ht_dict(name, name_len, &raw mut dict) };
-    let varname = name.wrapping_add(varname);
-
-    if !ht.is_null() && unsafe { *varname } != NUL as c_char {
-        // The dictionary whose lock decides whether the item may go.
-        let mut d = get_current_funccal_dict(ht);
-        if d.is_null() {
-            if ht == get_globvar_ht() {
-                d = get_globvar_dict();
-            } else {
-                // The scope's own dictionary item holds it.
-                let di = unsafe { find_var_in_ht(ht, *name as c_int, c"".as_ptr(), 0, false) };
-                d = unsafe { (*di).di_tv.dict_or_null() };
-            }
-            if d.is_null() {
-                internal_error(c"do_unlet()");
-                return Err(Failed);
-            }
+        let flags = dict
+            .item_at(slot)
+            .map_or(0, |item| c_int::from(item.di_flags));
+        if var_check_fixed_named(flags, name)
+            || var_check_ro_named(flags, name)
+            || value_check_lock(lock_dict.dv_lock, LockName::Bytes(name))
+        {
+            return Err(Failed);
+        }
+        // Upstream asks the same question a second time here. It can only
+        // answer the same way -- nothing above it changes `dv_lock` -- so
+        // the repetition is dead; kept because deleting it is a change no
+        // gate could confirm.
+        if value_check_lock(lock_dict.dv_lock, LockName::Bytes(name)) {
+            return Err(Failed);
         }
 
-        let found = unsafe { hash_find(ht, varname) };
-        let hi = if found.is_kept() {
-            Some(found)
-        } else {
-            unsafe { find_hi_in_scoped_ht(name, &raw mut ht) }
-        };
-        if let Some(hi) = hi.filter(|hi| hi.is_kept()) {
-            // SAFETY: a kept item of a live variable hashtab.
-            let di = unsafe { Di::new(tv_dict_hi2di(hi)) };
-            let flags = di.di_flags as c_int;
-            let (len, lock) = (TV_CSTRING as size_t, unsafe { (*d).dv_lock });
-            if unsafe { var_check_fixed(flags, name, len) }
-                || unsafe { var_check_ro(flags, name, len) }
-                || value_check_lock(lock, LockName::Bytes(unsafe { cstr::bytes_at(name) }))
-            {
-                return Err(Failed);
-            }
-            // Upstream asks the same question a second time here. It can
-            // only answer the same way -- nothing above it changes
-            // `dv_lock` -- so the repetition is dead; kept because
-            // deleting it is a change no gate could confirm.
-            let name = LockName::Bytes(unsafe { cstr::bytes_at(name) });
-            if value_check_lock(unsafe { (*d).dv_lock }, name) {
-                return Err(Failed);
-            }
+        let old = watched
+            .then(|| dict.item_at(slot).map(|item| item.di_tv.clone()))
+            .flatten();
+        // Released with the borrow of the dictionary over: a value can name
+        // the dictionary it was in.
+        let removed = dict.edit().remove_at(slot);
+        drop(removed);
 
-            let mut oldtv = TV_INITIAL_VALUE;
-            let watched = dict_is_watched(unsafe { (dict).as_ref() });
-            if watched {
-                let tv = di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
-                unsafe { tv_copy(&*tv, &mut oldtv) };
-            }
-
-            unsafe { delete_var(ht, hi) };
-
-            if watched {
-                unsafe {
-                    dict_watcher_notify(
-                        &::core::mem::ManuallyDrop::new(
-                            DictRef::owning(dict).expect("a watched dictionary"),
-                        ),
-                        ::core::ffi::CStr::from_ptr(varname),
-                        None,
-                        Some(&oldtv),
-                    )
-                };
-                clear_local(&mut oldtv);
-            }
-            return Ok(());
+        if let Some(old) = old {
+            cstr::with_terminated(varname, |key| {
+                dict_watcher_notify(lock_dict, key, None, Some(&old));
+            });
         }
+        return Ok(());
     }
 
     if forceit {
         return Ok(());
     }
-    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-    let name = unsafe { c_str(name) };
+    let name = msg_bytes(name);
     semsg!("E108: No such variable: \"{name}\"");
     Err(Failed)
-}
-
-/// Remove the variable `hi` names from `ht` and free it.
-///
-/// # Safety
-/// `hi` is a live item of `ht`.
-pub(crate) unsafe fn delete_var(ht: *mut DictTab, hi: Slot<DictEntry>) {
-    // SAFETY: the caller's obligation -- a live item of `ht`, which this
-    // takes out of the table and then frees.
-    let di = tv_dict_hi2di(hi);
-    unsafe { hash_remove(ht, hi) };
-    unsafe { tv_dict_item_free(di) };
 }

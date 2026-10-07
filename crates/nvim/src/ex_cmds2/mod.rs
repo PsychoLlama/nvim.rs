@@ -55,7 +55,7 @@ use crate::channel::channel_job_running;
 use crate::drawscreen::state::cmdline_row;
 use crate::eval::eval_call_provider;
 use crate::eval::typval::tv_list_alloc;
-use crate::eval::vars::{do_unlet, get_var_value, set_internal_string_var, set_vim_var_string};
+use crate::eval::vars::{do_unlet, set_internal_string_var, set_vim_var_string, var_string_value};
 use crate::ex_cmds::{check_overwrite, set_swapcommand};
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{DoCmdOpts, cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
@@ -66,7 +66,6 @@ use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::memline::MlFlags;
 use crate::memory::ThinCString;
-use crate::memory::{xfree, xstrdup};
 use crate::message::state::{msg_col, msg_didany, msg_didout, msg_row};
 use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
@@ -92,7 +91,6 @@ use crate::winlayer::{Buf, Win, buffers, first_buffer, tabs, windows, windows_in
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-use crate::eval::typval::NumBuf;
 use flag::{
     CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DIALOG_MSG_SIZE, DOBUF_GOTO,
     DOBUF_UNLOAD, VIM_QUESTION,
@@ -657,7 +655,6 @@ pub(crate) fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Failed> {
 /// unlet first and read back afterwards. Without `!` the setting is local to
 /// the buffer, which means saving and restoring the global the plugin wrote.
 pub(crate) fn ex_compiler(excmd: &mut ExArg) {
-    let mut numbuf = NumBuf::new();
     const CURRENT_COMPILER: &CStr = c"g:current_compiler";
     const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
 
@@ -673,16 +670,13 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     // plugin sets; "g:" is explicit so that this works inside a
     // function. Save the old value, then set "b:current_compiler" from
     // whatever the plugin leaves behind and put the old value back.
-    let mut old_cur_comp = ptr::null_mut();
+    let mut old_cur_comp = None;
     if excmd.forceit {
         // ":compiler! {name}" sets global options.
         let cmd = c"command -nargs=* -keepscript CompilerSet set <args>";
         let _ = do_cmdline_cmd(cmd);
     } else {
-        old_cur_comp = unsafe { get_var_value(CURRENT_COMPILER.as_ptr(), &mut numbuf) };
-        if !old_cur_comp.is_null() {
-            old_cur_comp = unsafe { xstrdup(old_cur_comp) };
-        }
+        old_cur_comp = var_string_value(CURRENT_COMPILER.to_bytes());
         let cmd = c"command -nargs=* -keepscript CompilerSet setlocal <args>";
         let _ = do_cmdline_cmd(cmd);
     }
@@ -702,18 +696,17 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     let _ = do_cmdline_cmd(c":delcommand CompilerSet");
 
     // Set "b:current_compiler" from "current_compiler".
-    let p = unsafe { get_var_value(CURRENT_COMPILER.as_ptr(), &mut numbuf) };
-    if !p.is_null() {
-        unsafe { set_internal_string_var(B_CURRENT_COMPILER.as_ptr(), p) };
+    if let Some(value) = var_string_value(CURRENT_COMPILER.to_bytes()) {
+        set_internal_string_var(B_CURRENT_COMPILER.to_bytes(), Some(&value));
     }
 
     // Restore "current_compiler" for ":compiler {name}".
     if !excmd.forceit {
-        if old_cur_comp.is_null() {
-            let _ = do_unlet(CURRENT_COMPILER.to_bytes(), true);
-        } else {
-            unsafe { set_internal_string_var(CURRENT_COMPILER.as_ptr(), old_cur_comp) };
-            unsafe { xfree(old_cur_comp.cast()) };
+        match old_cur_comp {
+            None => {
+                let _ = do_unlet(CURRENT_COMPILER.to_bytes(), true);
+            }
+            Some(old) => set_internal_string_var(CURRENT_COMPILER.to_bytes(), Some(&old)),
         }
     }
 }

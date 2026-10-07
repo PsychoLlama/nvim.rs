@@ -15,24 +15,21 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::option::vars::P_BG;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 
 use crate::autocmd::apply_autocmds;
-use crate::eval::vars::get_var_value;
+use crate::eval::vars::var_string_value;
 use crate::global_cell::GlobalCell;
 use crate::highlight::state::{
     cterm_normal_bg_color, cterm_normal_fg_color, normal_bg, normal_fg, normal_sp,
 };
-use crate::memory::{xfree, xstrdup};
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::types::{Failed, RgbValue};
 
 use super::do_highlight;
-use crate::eval::typval::NumBuf;
 
 /// The groups whose definition does not depend on `'background'`.
 static HIGHLIGHT_INIT_BOTH: [&CStr; 174] = [
@@ -519,21 +516,15 @@ pub(crate) fn syn_init_cmdline_highlight(reset: bool, init: bool) {
 /// `both` includes the groups `'background'` does not affect;
 /// `reset` clears each group first.
 pub(crate) fn init_highlight(both: bool, reset: bool) {
-    let mut numbuf = NumBuf::new();
     /// Whether the `both == true` call from `main()` has happened. Before it
     /// has, nothing else is set up and its own run would overrule this one
     /// anyway, so a `both == false` call is dropped.
     static HAD_BOTH: GlobalCell<bool> = GlobalCell::new(false);
 
-    // SAFETY: the editor's own state; every callee is a main-thread call.
-    let name = unsafe { get_var_value(c"g:colors_name".as_ptr(), &mut numbuf) };
-    if !name.is_null() {
-        // `load_colors` can free the variable, and with it `name`.
-        let copy = unsafe { xstrdup(name) };
-        // SAFETY: `copy` is the owned NUL-terminated name.
-        let okay = load_colors(unsafe { cstr::at(copy) }).is_ok();
-        unsafe { xfree(copy.cast()) };
-        if okay {
+    // A copy: `load_colors` can free the variable.
+    if let Some(name) = var_string_value(b"g:colors_name") {
+        let name = std::ffi::CString::new(name).expect("a value read up to its NUL");
+        if load_colors(&name).is_ok() {
             return;
         }
     }

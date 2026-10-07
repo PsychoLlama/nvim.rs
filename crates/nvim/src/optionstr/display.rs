@@ -21,7 +21,7 @@ use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
 use crate::drawscreen::{
     UPD_INVERTED, UPD_NOT_VALID, comp_col, redraw_all_later, redraw_curbuf_later, redraw_win_line,
 };
-use crate::eval::vars::{do_unlet, get_var_value};
+use crate::eval::vars::{do_unlet, var_string_value};
 use crate::ex_getln::check_opt_wim;
 use crate::ex_getln::state::cmdpreview;
 use crate::highlight_group::init_highlight;
@@ -53,7 +53,6 @@ use super::{
     kZIndexFloatDefault, opt_strings_mask, terminal_notify_theme,
 };
 use crate::decoration::SCL_NUM;
-use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 use crate::winlayer::{Win, buffers};
 
@@ -80,7 +79,6 @@ pub fn did_set_emoji(_args: &mut OptSet) -> Result<(), OptError> {
 /// unset), the value the user asked for is restored, and the highlighting
 /// is built once more from the built-in defaults.
 pub fn did_set_background(args: &mut OptSet) -> Result<(), OptError> {
-    let mut numbuf = NumBuf::new();
     did_set_str_generic(args)?;
     // SAFETY: both are C strings; only the first byte distinguishes "dark"
     // from "light".
@@ -92,9 +90,7 @@ pub fn did_set_background(args: &mut OptSet) -> Result<(), OptError> {
     init_highlight(false, false);
 
     // The global may have been changed by `init_highlight`.
-    if dark != (P_BG.first_byte() == b'd')
-        && !unsafe { get_var_value(c"g:colors_name".as_ptr(), &mut numbuf) }.is_null()
-    {
+    if dark != (P_BG.first_byte() == b'd') && var_string_value(b"g:colors_name").is_some() {
         let name = c"g:colors_name";
         // SAFETY: the name is a C string of the length given.
         let _ = do_unlet(name.to_bytes(), true);

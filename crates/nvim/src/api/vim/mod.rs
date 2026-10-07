@@ -29,7 +29,7 @@ use crate::drawscreen::{
     UPD_CLEAR, UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_buf_later,
     redraw_buf_range_later, redraw_later, setcursor_mayforce, update_screen, win_update_cursorline,
 };
-use crate::eval::vars::{get_globvar_dict, get_vimvar_dict, set_vim_var_nr};
+use crate::eval::vars::{globvar_dict, set_vim_var_nr, vimvar_dict};
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{changedir_func, exec_normal};
 use crate::ex_eval::aborting;

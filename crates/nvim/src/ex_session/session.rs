@@ -35,7 +35,7 @@ use crate::arglist::global_arglist;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
-use crate::eval::vars::get_globvar_dict;
+use crate::eval::vars::globvar_dict;
 use crate::fprintf;
 use crate::memory::xfree;
 use crate::option::vars::{p_shm, p_stal, p_wh, p_wiw};
@@ -548,10 +548,8 @@ fn ses_do_frame(fr: FrameRef) -> bool {
 /// String and Float ones whose name says they belong in a session (an
 /// uppercase first letter and a lowercase one after it).
 fn store_session_globals(out: SessionFile) -> bool {
-    // SAFETY: caller contract -- the global variable dictionary is live, so
-    // the walk of it is ordinary code.
-    let globals = unsafe { &mut *get_globvar_dict() };
-    for item in globals.items_mut() {
+    let globals = globvar_dict();
+    for item in globals.edit().items_mut() {
         let key = item.di_key.as_ptr();
         let kind = item.di_tv.v_type();
         let sessionable = var_flavour(item.di_key.bytes()) == VAR_FLAVOUR_SESSION;

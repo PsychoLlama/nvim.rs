@@ -344,10 +344,8 @@ pub fn dict_get_callback(d: Option<&DictRef>, key: &[u8], result: &mut Callback)
 /// above it rule the call out before the key is touched at all.
 #[inline]
 pub(crate) fn dict_wrong_func_name(d: &Dict, item: &DictItem) -> bool {
-    let at = ::core::ptr::from_ref(d);
-    (at == get_globvar_dict().cast_const()
-        || ::core::ptr::eq(&d.dv_hashtab, get_funccal_local_ht().cast_const()))
-        && item.di_tv.is_func()
+    item.di_tv.is_func()
+        && (is_globvar_dict(d) || is_funccal_local_dict(d))
         && var_wrong_func_name_named(item.key(), true)
 }
 

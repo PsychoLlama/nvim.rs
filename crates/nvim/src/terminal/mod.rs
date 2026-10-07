@@ -51,7 +51,7 @@ use crate::channel::main_loop_events;
 use crate::cstr;
 use crate::cursor_shape::{SHAPE_IDX_TERM, shape_entry};
 use crate::drawscreen::redraw_buf_line_later;
-use crate::eval::vars::get_globvar_dict;
+use crate::eval::vars::globvar_dict;
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_free, multiqueue_new, multiqueue_put_event};
 use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
@@ -964,8 +964,10 @@ unsafe fn get_config_string(buffer: Buf, key: *const c_char) -> *mut c_char {
     // SAFETY: `buffer` is a live buffer and `key` is NUL-terminated.
     let mut obj = unsafe { dict_lookup(buffer.b_vars, key) };
     if obj.is_nil() {
-        // SAFETY: as above, against the global variables.
-        obj = unsafe { dict_lookup(get_globvar_dict(), key) };
+        let globals = globvar_dict();
+        // SAFETY: as above, against the global variables, which the handle
+        // keeps live through the call.
+        obj = unsafe { dict_lookup(globals.as_ptr(), key) };
     }
     obj.into_string()
         .map_or(::core::ptr::null_mut(), String_0::into_raw)

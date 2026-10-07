@@ -17,7 +17,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
-use crate::eval::typval::NumBuf;
 use crate::memory::XString;
 use crate::optionstr::OptString;
 use crate::types::CmdLine;
@@ -331,7 +330,6 @@ pub(crate) fn ex_syntax(excmd: &mut ExArg) {
 ///
 /// Upstream marks this `@deprecated`.
 pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
-    let mut numbuf = NumBuf::new();
     if Win::current().w_s == Win::current().buffer().syntax_block() {
         Win::current().w_s = Box::into_raw(empty_synblock());
         unsafe { hash_init::<*mut c_char>(syn_field!(cur_syn_block(), b_keywtab)) };
@@ -345,10 +343,7 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
 
     // Save the value of b:current_syntax; the autocommand below can change
     // it, so the bytes have to be copied out rather than borrowed.
-    let old_value = unsafe { get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf) };
-    // SAFETY: a variable's value, a NUL-terminated string, live until the
-    // autocommand runs.
-    let old_value = unsafe { cstr::at_opt(old_value) }.map(CStr::to_owned);
+    let old_value = var_string_value(b"b:current_syntax");
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
     let buffer = Buf::current();
@@ -357,9 +352,8 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
     unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, Some(buffer)) };
 
     // Move the value of b:current_syntax to w:current_syntax.
-    let new_value = unsafe { get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf) };
-    if !new_value.is_null() {
-        unsafe { set_internal_string_var(c"w:current_syntax".as_ptr(), new_value) };
+    if let Some(new_value) = var_string_value(b"b:current_syntax") {
+        set_internal_string_var(b"w:current_syntax", Some(&new_value));
     }
 
     // Restore the value of b:current_syntax.
@@ -367,8 +361,6 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
         None => {
             let _ = do_unlet(b"b:current_syntax", true);
         }
-        Some(value) => unsafe {
-            set_internal_string_var(c"b:current_syntax".as_ptr(), value.as_ptr().cast_mut());
-        },
+        Some(value) => set_internal_string_var(b"b:current_syntax", Some(value)),
     }
 }

@@ -26,7 +26,7 @@ use crate::eval::expr::arith::{
 };
 use crate::eval::typval::{tv_check_num, tv_check_str, tv_clear, tv_get_number_chk, tv2bool};
 use crate::eval::userfunc::{call_simple_func, call_simple_luafunc, get_lambda_tv};
-use crate::eval::vars::{check_vars_named, eval_variable, lua_partial};
+use crate::eval::vars::{check_vars, eval_variable, lua_partial};
 use crate::eval::{
     EXPR_UNKNOWN, Parsed, comparison_at, eval_dict, eval_env_var, eval_func, eval_interp_string,
     eval_isnamec, eval_isnamec1, eval_list, eval_lit_dict, eval_lit_string, eval_number,
@@ -564,7 +564,7 @@ pub(crate) fn eval7(
             } else if evaluate {
                 ret = Parsed::done(eval_variable(name, Some(&mut *result), true, false));
             } else {
-                check_vars_named(name);
+                check_vars(name);
                 // While skipping, `v:lua.x` still has to come out as
                 // something callable. The name is `v:lua`: the `.x` is the
                 // text after it, which is what is looked at.

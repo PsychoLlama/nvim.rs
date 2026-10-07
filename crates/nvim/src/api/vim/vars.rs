@@ -66,9 +66,8 @@ pub fn nvim_get_var(name: String_0) -> Result<Object, Error> {
 
 /// `g:name`'s value, converted -- `None` when there is no such variable.
 fn globvar_object(name: &String_0) -> Option<Object> {
-    // SAFETY: the global dictionary is live from startup to exit; the borrow
-    // ends with the conversion, which runs no user code.
-    unsafe { &*get_globvar_dict() }
+    // The borrow ends with the conversion, which runs no user code.
+    globvar_dict()
         .find(name.as_bytes())
         .map(|item| Object::from(&item.di_tv))
 }
@@ -81,29 +80,29 @@ fn key_not_found(name: &String_0) -> Error {
 
 /// Set the global variable `name` to `value`.
 pub fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
-    let dict = get_globvar_dict();
-    // SAFETY: the global dictionary is live from startup to exit; the value
-    // is copied into it.
-    unsafe { dict_set_var(dict, &name, value, false, false) }.map(|_| ())
+    let dict = globvar_dict();
+    // SAFETY: the handle keeps the dictionary live through the call; the
+    // value is copied into it.
+    unsafe { dict_set_var(dict.as_ptr(), &name, value, false, false) }.map(|_| ())
 }
 
 /// Remove the global variable `name`.
 pub fn nvim_del_var(name: String_0) -> Result<(), Error> {
-    let dict = get_globvar_dict();
+    let dict = globvar_dict();
     // SAFETY: as [`nvim_set_var`]; `del` says to remove rather than assign.
-    unsafe { dict_set_var(dict, &name, Object::Nil, true, false) }.map(|_| ())
+    unsafe { dict_set_var(dict.as_ptr(), &name, Object::Nil, true, false) }.map(|_| ())
 }
 
 /// The `v:` variable `name`.
 pub fn nvim_get_vvar(name: String_0) -> Result<Object, Error> {
-    // SAFETY: the caller's promise; `v:` is live from startup to exit and
-    // `error` is this frame's own slot.
-    unsafe { dict_get_value(get_vimvar_dict(), &name) }
+    let dict = vimvar_dict();
+    // SAFETY: the handle keeps `v:` live through the call.
+    unsafe { dict_get_value(dict.as_ptr(), &name) }
 }
 
 /// Set the `v:` variable `name` to `value`.
 pub fn nvim_set_vvar(name: String_0, value: Object) -> Result<(), Error> {
-    let dict = get_vimvar_dict();
+    let dict = vimvar_dict();
     // SAFETY: as [`nvim_set_var`], over `v:` rather than the globals.
-    unsafe { dict_set_var(dict, &name, value, false, false) }.map(|_| ())
+    unsafe { dict_set_var(dict.as_ptr(), &name, value, false, false) }.map(|_| ())
 }

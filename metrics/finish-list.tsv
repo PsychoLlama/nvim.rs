@@ -1,5 +1,5 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	62	738	74	467	deref:92 compound:40 expr:29 ref:6	other:56 str:17 value:4 pp:1	str:5 other:3 value:1	at:25 xfree:12 CStr::from_ptr:10 c_str:6 from_raw_parts:6 ManuallyDrop::take:5 api_free_luaref:5 nlua_exec:5
+api/	*	62	737	74	467	deref:92 compound:40 expr:29 ref:5	other:56 str:17 value:4 pp:1	str:5 other:3 value:1	at:25 xfree:12 CStr::from_ptr:10 c_str:6 from_raw_parts:6 ManuallyDrop::take:5 api_free_luaref:5 nlua_exec:5
 api/	api/autocmd/create.rs	1	15	1	13	deref:2	-	-	at:2 autocmd_register:1 do_autocmd_event:1 xfree:1
 api/	api/autocmd/exec.rs	1	6	0	6	-	-	-	apply_autocmds_group:1 augroup_exists:1 augroup_find:1
 api/	api/autocmd/group.rs	1	10	0	10	-	-	-	augroup_del:2 augroup_add:1 augroup_exists:1 augroup_find:1
@@ -53,7 +53,7 @@ api/	api/vim/redraw.rs	1	3	0	1	compound:1	-	-	-
 api/	api/vim/runtime.rs	1	11	1	7	expr:2 compound:1	-	-	changedir_func:1 do_in_runtimepath:1 do_source:1 mb_string2cells:1 nlua_exec:1
 api/	api/vim/statusline.rs	1	20	0	13	deref:2 expr:2 compound:1	str:1	-	.offset_from:1 CStr::from_ptr:1 Fmt::borrowed:1 check_stl_option:1 decor_redraw_signs:1 labs:1 pum_set_info:1 snprintf:1
 api/	api/vim/term.rs	1	26	2	15	deref:7 compound:1	-	-	at:3 channel_decref:2 channel_send:2 api_free_luaref:1 channel_alloc:1 channel_incref:1 read_buffer_into:1 terminal_check_size:1
-api/	api/vim/vars.rs	1	6	0	5	ref:1	-	-	script_autoload:1
+api/	api/vim/vars.rs	1	5	0	5	-	-	-	script_autoload:1
 api/	api/vimscript/exec.rs	1	4	0	4	-	-	-	at:1 do_source_str:1
 api/	api/vimscript/expression.rs	1	37	2	10	deref:9 compound:3 expr:3 ref:3	other:1 pp:1 value:1	-	xfree:2 .add:1 viml_parser_init:1 viml_pexpr_free_ast:1 viml_pexpr_parse:1
 api/	api/win_config/apply.rs	1	9	0	9	-	-	-	clear_float_config:1 merge_win_config:1 restore_win:1 switch_win:1 ui_comp_remove_grid:1
@@ -188,7 +188,7 @@ edit/	edit/replace.rs	1	11	1	8	deref:3	str:1	-	win_chartabsize:2 .add:1 getvcol:
 edit/	edit/state.rs	1	18	2	9	deref:4 ref:2 expr:1	other:2	-	.offset:1 ModeState::insert:1 change_warning:1 get_inserted:1 ins_compl_addleader:1 linetabsize_str:1 tabstop_at:1 utfc_ptr2len:1
 edit/	edit/tab.rs	1	41	0	33	deref:6 expr:2	other:1	-	.offset:11 append_to_redobuff:2 getvcol:2 init_charsize_arg:2 tabstop_padding:2 win_charsize:2 xfree:2 .copy_from:1
 edit/	edit/undo.rs	1	13	4	8	deref:5	other:4	-	append_to_redobuff:2 apply_autocmds:1 get_inserted:1 linetabsize_str:1
-eval/	*	55	1283	117	853	deref:275 expr:99 ref:28 compound:5	str:89 other:39 value:33 void:19 pp:3 pp_str:2	value:23 str:20 other:11 void:2 pp_str:1	.as_ref:60 xfree:46 c_str:33 bytes_at:26 ThinCString::from_raw:24 CStr::from_ptr:19 .as_mut:9 from_raw_parts:8
+eval/	*	52	1144	99	757	deref:255 expr:81 ref:28 compound:4	str:71 other:37 value:33 void:19 pp_str:2	str:19 value:16 other:7 void:2 pp_str:1	.as_ref:60 xfree:45 c_str:29 ThinCString::from_raw:24 CStr::from_ptr:18 bytes_at:16 .as_mut:8 from_raw_parts:8
 eval/	eval/buffer/info.rs	1	6	0	1	deref:5	-	-	-
 eval/	eval/buffer/lines.rs	1	12	0	11	deref:1	-	-	.as_ref:2 bytes_at:2 xfree:2 ThinCString::from_raw:1 ml_append:1 ml_replace:1
 eval/	eval/buffer/lookup.rs	1	3	0	3	-	-	-	buflist_add:1 buflist_findname_exp:1 path_with_url:1
@@ -233,12 +233,9 @@ eval/	eval/typval/handle.rs	1	61	11	30	expr:12 ref:9 deref:5 compound:1	value:8	
 eval/	eval/userfunc/call.rs	1	2	0	0	expr:2	-	-	-
 eval/	eval/userfunc/ret.rs	1	11	2	5	deref:5 expr:1	void:10	str:3 other:2 void:1	Box::from_raw:1 cleanup_conditionals:1 report_pending:1
 eval/	eval/vars/external.rs	1	10	6	8	deref:2	str:13 pp_str:1 value:1	-	.as_ref:2 at_opt:2 bytes_at:1
-eval/	eval/vars/lifecycle.rs	1	26	3	19	deref:4 expr:3	str:3 other:1	value:4 other:2	bytes_at:2 CStr::from_ptr:1 c_str:1 hash_find:1 hash_remove:1
 eval/	eval/vars/listing.rs	1	30	3	18	deref:8 expr:4	str:5 other:4 value:1	-	xfree:2 slice_at:1 tv_ht_iter:1 xstrlcat:1 xstrlcpy:1
-eval/	eval/vars/lookup.rs	1	49	8	29	deref:9 expr:9 compound:1	str:8 pp:3 other:1	value:3 other:2 str:1	.offset_from:3 hash_find_len:3 memchr:2 .as_mut:1 bytes_at:1 new_script_item:1 nlua_set_sctx:1 script_autoload:1
 eval/	eval/vars/mod.rs	1	0	0	0	-	-	-	-
-eval/	eval/vars/scoped.rs	1	48	4	38	deref:5 expr:2	str:4 other:1	-	bytes_at:3 .copy_from_nonoverlapping:2 CStr::from_ptr:2 c_str:2 abort:1 at_opt:1 aucmd_prepbuf:1 aucmd_restbuf:1
-eval/	eval/vars/store.rs	1	52	7	40	deref:7 expr:5	str:7	-	bytes_at:7 c_str:3 c_str_len:2 slice_at:2 .offset_from:1 hash_add:1 vim_strchr:1
+eval/	eval/vars/scoped.rs	1	36	4	30	deref:5 expr:1	str:4 other:1	-	bytes_at:3 CStr::from_ptr:2 c_str:2 abort:1 at_opt:1 aucmd_prepbuf:1 aucmd_restbuf:1 cstr_to_string:1
 eval/	eval/window/info.rs	1	14	1	4	deref:10	value:1	-	-
 eval/	eval/window/mod.rs	1	0	0	0	-	-	-	-
 eval/	eval/window/resolve.rs	1	8	1	7	deref:1	str:1	-	CStr::from_ptr:2 eq_bytes:2 strtol:1 win_get_tabwin:1
@@ -261,9 +258,9 @@ ex_cmds/	ex_cmds/subst/replace.rs	1	4	0	4	-	str:1	str:1	vim_regsub_multi:2 ml_ap
 ex_cmds/	ex_cmds/subst/report.rs	1	16	0	9	compound:1 deref:1	-	-	OptStr::borrowing:1 at:1 ml_append_buf:1 ml_replace_buf:1 msg_ptr:1 snprintf:1 strcpy:1 vim_snprintf_add:1
 ex_cmds/	ex_cmds/text.rs	1	21	1	15	compound:1	-	-	vim_snprintf:3 utf_ptr2char:2 utf_ptr2len:2 CStr::from_ptr:1 atoi:1 cstr_to_string:1 transchar_nonprint:1 utf_char2bytes:1
 ex_cmds/	ex_cmds/write.rs	1	39	6	32	expr:4 deref:1	str:9	str:1	c_str:4 os_path_exists:3 otherfile:2 at_opt:1 augroup_exists:1 buf_write:1 buflist_new:1 copy_option_part:1
-ex_cmds2/	*	2	45	0	28	deref:11 expr:3 compound:1	-	-	eval_call_provider:3 buf_check_timestamp:2 check_overwrite:2 dialog_msg:2 do_cmdline:2 get_var_value:2 set_internal_string_var:2 apply_autocmds:1
+ex_cmds2/	*	2	39	0	22	deref:11 expr:3 compound:1	-	-	eval_call_provider:3 buf_check_timestamp:2 check_overwrite:2 dialog_msg:2 do_cmdline:2 apply_autocmds:1 buf_set_name:1 buf_write:1
 ex_cmds2/	ex_cmds2/listdo.rs	1	7	0	3	compound:1 deref:1	-	-	apply_autocmds:1 do_cmdline:1 goto_buffer:1
-ex_cmds2/	ex_cmds2/mod.rs	1	38	0	25	deref:10 expr:3	-	-	eval_call_provider:3 buf_check_timestamp:2 check_overwrite:2 dialog_msg:2 get_var_value:2 set_internal_string_var:2 buf_set_name:1 buf_write:1
+ex_cmds2/	ex_cmds2/mod.rs	1	32	0	19	deref:10 expr:3	-	-	eval_call_provider:3 buf_check_timestamp:2 check_overwrite:2 dialog_msg:2 buf_set_name:1 buf_write:1 do_cmdline:1 script_get:1
 ex_docmd/	*	22	439	35	307	deref:93 expr:15 ref:3	str:89 other:24 void:14 pp_str:4 value:1	str:26 other:3 value:2 void:2	.add:23 bytes_at:12 snprintf:10 at:9 c_str:8 CStr::from_ptr:6 msg_ptr:5 vim_snprintf:5
 ex_docmd/	ex_docmd/address.rs	1	12	0	8	deref:4	other:1	other:1	mark_check:3 do_search:1 mark_get:1 mark_move_to:1 searchit:1
 ex_docmd/	ex_docmd/api.rs	1	13	3	9	deref:4	str:4 other:3	str:2	.write_bytes:1 skiptowhite_esc:1
@@ -291,11 +288,11 @@ ex_eval/	*	3	246	16	75	deref:155 expr:6	other:13 str:4 void:1	-	xfree:6 at:2 byt
 ex_eval/	ex_eval/exception.rs	1	29	6	23	deref:2 expr:2	str:4 other:3	-	xfree:5 bytes_at:2 vim_snprintf_safelen:2 XString::from_raw:1 at_opt:1 bytes_at_or_empty:1 concat_str:1 get_return_cmd:1
 ex_eval/	ex_eval/mod.rs	1	109	7	25	deref:84	other:7 void:1	-	free_for_info:2 Box::from_raw:1 eval_for_line:1 next_for_item:1 xfree:1
 ex_eval/	ex_eval/trycmd.rs	1	108	3	27	deref:69 expr:4	other:3	-	at:2 do_return:1 vim_regfree:1 xmalloc:1
-ex_getln/	*	14	344	20	165	deref:144 expr:24 ref:2 compound:1	other:11	other:3 str:1	utfc_ptr2len:9 xfree:8 bytes_at:7 try_enter:7 try_leave:7 .offset:6 cstr_to_string:5 Cls::new:4
+ex_getln/	*	14	343	20	164	deref:144 expr:24 ref:2 compound:1	other:11	other:3 str:1	utfc_ptr2len:9 xfree:8 bytes_at:7 try_enter:7 try_leave:7 .offset:6 cstr_to_string:5 Cls::new:4
 ex_getln/	ex_getln/buffer.rs	1	25	5	16	expr:6 deref:3	other:2	-	Cc::new:2 .as_mut:1 XString::from_raw:1 bytes_at:1 check_abbr:1 get_spec_reg:1 home_replace_save:1 mb_cptr2char_adv:1
 ex_getln/	ex_getln/cmdpreview.rs	1	17	0	17	-	other:1	-	aucmd_prepbuf:3 aucmd_restbuf:3 Cp::new:2 try_enter:2 try_leave:2 abort:1 bytes_at:1 execute_cmd:1
 ex_getln/	ex_getln/cmdwin.rs	1	8	0	6	expr:2	-	-	add_map:2 buf_open_scratch:1 ml_append:1 ml_replace:1 string_to_key:1
-ex_getln/	ex_getln/color.rs	1	35	1	13	deref:18 expr:4	other:1	-	try_enter:2 try_leave:2 bytes_at:1 dict_get_callback:1 gettext_ptr:1 viml_parser_init:1 viml_pexpr_free_ast:1 viml_pexpr_parse:1
+ex_getln/	ex_getln/color.rs	1	34	1	12	deref:18 expr:4	other:1	-	try_enter:2 try_leave:2 bytes_at:1 gettext_ptr:1 viml_parser_init:1 viml_pexpr_free_ast:1 viml_pexpr_parse:1 xfree:1
 ex_getln/	ex_getln/draw.rs	1	25	2	18	deref:4 expr:3	-	-	utfc_ptr2len:6 slice_at:2 bytes_at:1 cstr_to_string:1 ptr2cells:1 utf_head_off:1 utf_ptr2cells:1
 ex_getln/	ex_getln/enter.rs	1	22	2	16	expr:4 deref:2	other:2	other:3 str:1	xfree:3 Cls::new:2 try_enter:2 try_leave:2 xstrdup:2 Is::new:1 ModeState::command_line:1 OptStr::borrowing:1
 ex_getln/	ex_getln/eval.rs	1	6	1	4	deref:1 expr:1	-	-	ThinCString::from_raw:1 ins_typebuf:1 xstrnsave:1
@@ -306,9 +303,9 @@ ex_getln/	ex_getln/incsearch.rs	1	32	3	14	deref:11 ref:2 compound:1	-	-	vim_strc
 ex_getln/	ex_getln/prompt.rs	1	19	1	13	deref:4	other:1	-	.as_ref:2 .offset:2 ThinCString::from_raw:1 bytes_at:1 dict_get_callback:1 parse_compl_arg:1 slice_at:1 strrchr:1
 ex_getln/	ex_getln/uiext.rs	1	12	0	10	deref:1 expr:1	-	-	cstr_to_string:4 .add:1 .copy_from_nonoverlapping:1 .offset:1 String_0::from_owned_parts:1 from_raw_parts:1 xmallocz:1
 ex_getln/	ex_getln/wildchar.rs	1	31	1	3	deref:27 expr:1	other:1	-	.offset:2 Cls::new:1
-ex_session/	*	3	107	13	70	deref:14 expr:6 compound:2 ref:1	str:9 other:4	str:3 other:1	xfree:13 fprintf:3 home_replace_save:3 os_chdir:3 xmalloc:3 .offset:2 bytes_at:2 vim_full_name:2
+ex_session/	*	3	106	13	70	deref:14 expr:6 compound:2	str:9 other:4	str:3 other:1	xfree:13 fprintf:3 home_replace_save:3 os_chdir:3 xmalloc:3 .offset:2 bytes_at:2 vim_full_name:2
 ex_session/	ex_session/mod.rs	1	68	10	43	expr:6 deref:5 compound:2	str:6 other:4	str:3 other:1	xfree:9 os_chdir:3 xmalloc:3 bytes_at:2 home_replace_save:2 vim_full_name:2 .offset:1 alist_name:1
-ex_session/	ex_session/session.rs	1	25	3	16	deref:6 ref:1	str:3	-	xfree:3 .offset:1 fprintf:1 home_replace_save:1 vim_strsave_escaped:1
+ex_session/	ex_session/session.rs	1	24	3	16	deref:6	str:3	-	xfree:3 .offset:1 fprintf:1 home_replace_save:1 vim_strsave_escaped:1
 ex_session/	ex_session/view.rs	1	14	0	11	deref:3	-	-	fprintf:1 makefoldset:1 makemap:1 makeset:1 put_folds:1 xfree:1
 extmark/	*	3	12	2	4	deref:3 ref:3 expr:2	other:6	other:1	decor_free:1 marktree_clear:1 ml_find_line_or_offset:1 xrealloc:1
 extmark/	extmark/mod.rs	1	10	0	4	ref:3 expr:2 deref:1	other:3	other:1	decor_free:1 marktree_clear:1 ml_find_line_or_offset:1 xrealloc:1
@@ -371,10 +368,10 @@ highlight/	*	3	33	5	13	deref:8 compound:2	str:2 other:1	other:3 str:1	cstr_to_st
 highlight/	highlight/dict.rs	1	2	2	2	-	-	-	strcasecmp:1
 highlight/	highlight/mod.rs	1	9	3	8	deref:1	str:2 other:1	other:1 str:1	cstr_to_string:2 CStr::from_ptr:1 remote_ui_hl_attr_define:1 remote_ui_hl_group_set:1
 highlight/	highlight/namespace.rs	1	22	0	3	deref:7 compound:2	-	other:2	bytes_at:1 nlua_call_ref:1
-highlight_group/	*	7	40	7	40	-	str:6	str:6	c_str:8 CStr::from_ptr:6 nlua_set_sctx:6 apply_autocmds:2 at:2 cstr_to_string:2 hlattrs2dict:2 .add:1
+highlight_group/	*	7	36	7	36	-	str:6	str:6	c_str:8 CStr::from_ptr:6 nlua_set_sctx:6 apply_autocmds:2 cstr_to_string:2 hlattrs2dict:2 .add:1 at:1
 highlight_group/	highlight_group/apply.rs	1	3	0	3	-	-	-	nlua_set_sctx:3
 highlight_group/	highlight_group/command.rs	1	17	3	17	-	str:3	str:1	c_str:8 nlua_set_sctx:3 .add:1 CStr::from_ptr:1 transmute:1
-highlight_group/	highlight_group/defaults.rs	1	8	0	8	-	-	-	apply_autocmds:2 CStr::from_ptr:1 at:1 get_var_value:1 source_runtime_vim_lua:1 xfree:1 xstrdup:1
+highlight_group/	highlight_group/defaults.rs	1	4	0	4	-	-	-	apply_autocmds:2 CStr::from_ptr:1 source_runtime_vim_lua:1
 highlight_group/	highlight_group/list.rs	1	3	1	3	-	-	str:1	at:1 at_opt:1 vim_strsize:1
 highlight_group/	highlight_group/mod.rs	1	2	0	2	-	-	-	CStr::from_ptr:1 cstr_to_string:1
 highlight_group/	highlight_group/query.rs	1	5	1	5	-	str:1	str:3	hlattrs2dict:2 CStr::from_ptr:1 bytes_at:1 cstr_to_string:1
@@ -404,8 +401,8 @@ insexpand/	insexpand/sources.rs	1	44	2	29	deref:5 compound:1 expr:1	str:3 pp_str
 insexpand/	insexpand/tests.rs	1	4	0	0	compound:1	-	str:1	-
 insexpand/	insexpand/text.rs	1	30	4	19	deref:10 expr:1	str:5	str:3	.offset:9 mb_get_class:3 bytes_at:1 ignorecase:1 path_tail:1 prefix_eq:1 slice_at:1 utfc_ptr2len:1
 insexpand/	insexpand/vimscript.rs	1	23	5	14	deref:5 expr:2 compound:1	value:5	-	.as_ref:4 .offset:1 extmark_apply_undo:1 extmark_splice_delete:1 xfree:1
-keycodes/	*	1	56	10	34	deref:14 expr:2 compound:1	str:8 other:6 pp_str:3	str:4 pp_str:1	utf_char2bytes:3 bytes_at:2 copy_nonoverlapping:2 get_var_value:2 xmalloc:2 .add:1 .offset_from:1 CStr::from_ptr:1
-keycodes/	keycodes/mod.rs	1	56	10	34	deref:14 expr:2 compound:1	str:8 other:6 pp_str:3	str:4 pp_str:1	utf_char2bytes:3 bytes_at:2 copy_nonoverlapping:2 get_var_value:2 xmalloc:2 .add:1 .offset_from:1 CStr::from_ptr:1
+keycodes/	*	1	51	10	29	deref:14 expr:2 compound:1	str:8 other:6 pp_str:3	str:4 pp_str:1	utf_char2bytes:3 copy_nonoverlapping:2 xmalloc:2 .add:1 .offset_from:1 CStr::from_ptr:1 bytes_at:1 prefix_eq:1
+keycodes/	keycodes/mod.rs	1	51	10	29	deref:14 expr:2 compound:1	str:8 other:6 pp_str:3	str:4 pp_str:1	utf_char2bytes:3 copy_nonoverlapping:2 xmalloc:2 .add:1 .offset_from:1 CStr::from_ptr:1 bytes_at:1 prefix_eq:1
 kvec.rs	*	1	28	3	3	compound:4	other:2	other:1 void:1	from_raw_parts:1 from_raw_parts_mut:1 xfree:1
 kvec.rs	kvec.rs	1	28	3	3	compound:4	other:2	other:1 void:1	from_raw_parts:1 from_raw_parts_mut:1 xfree:1
 map/	*	2	40	17	24	ref:5 compound:4 deref:1 expr:1	other:21 pp:3	other:6	xrealloc:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 strequal:1
@@ -559,12 +556,12 @@ option/	option/slot.rs	1	3	1	2	expr:1	str:1	str:2	XString::from_raw:1 bytes_at:1
 option/	option/stropt.rs	1	118	15	81	deref:35 expr:2	str:29 other:2 pp_str:2	str:4	.add:11 bytes_at:10 at:4 strcpy:4 .offset:3 .offset_from:3 vim_strchr:3 prefix_eq:2
 option/	option/validate.rs	1	4	0	4	-	-	-	vim_snprintf:2 snprintf:1 xfree:1
 option/	option/value.rs	1	18	5	16	expr:2	str:2	str:1	bytes_at:3 snprintf:2 xmalloc:2 xstrdup:2 String_0::from_owned_parts:1 free_string_option:1 from_raw_parts:1
-optionstr/	*	7	246	15	122	deref:55 expr:7 compound:1 ref:1	str:15 handle:1 pp:1	other:1 str:1	.add:14 CStr::from_ptr:10 at:6 from:5 xfree:5 vim_snprintf:4 .replace:3 eq:2
+optionstr/	*	7	245	15	121	deref:55 expr:7 compound:1 ref:1	str:15 handle:1 pp:1	other:1 str:1	.add:14 CStr::from_ptr:10 at:6 from:5 xfree:5 vim_snprintf:4 .replace:3 eq:2
 optionstr/	optionstr/buffer.rs	1	70	1	34	deref:32 expr:4	pp:1	-	.add:8 CStr::from_ptr:2 at:2 xfree:2 .replace:1 check_ei:1 check_isopt:1 enc_canonize:1
 optionstr/	optionstr/chars.rs	1	28	4	20	deref:3 expr:1 ref:1	str:3	other:1	xfree:2 at:1 from_raw_parts_mut:1 hexhex2nr:1 ptr2cells:1 schar_from_str:1 utfc_ptr2len:1 utfc_ptr2schar:1
 optionstr/	optionstr/check.rs	1	65	4	7	compound:1	str:4 handle:1	str:1	CStr::from_ptr:2 vim_snprintf:2 parse_cino:1 xfree:1
 optionstr/	optionstr/complete.rs	1	37	0	21	deref:16	-	-	.add:4 CStr::from_ptr:2 at:2 vim_unsetenv_ext:2 .replace:1 bytes_at_or_empty:1 compile_cap_prog:1 copy_option_part:1
-optionstr/	optionstr/display.rs	1	26	1	21	deref:4 expr:1	str:1	-	eq:2 from:2 .add:1 briopt_check:1 check_colorcolumn:1 fill_culopt_flags:1 get_var_value:1 getdigits_int:1
+optionstr/	optionstr/display.rs	1	25	1	20	deref:4 expr:1	str:1	-	eq:2 from:2 .add:1 briopt_check:1 check_colorcolumn:1 fill_culopt_flags:1 getdigits_int:1 parse_winborder:1
 optionstr/	optionstr/flags.rs	1	7	5	7	-	str:6	-	CStr::from_ptr:2 at:1
 optionstr/	optionstr/statusline.rs	1	13	0	12	expr:1	str:1	-	CStr::from_ptr:2 .add:1 .replace:1 from:1 getdigits_int:1 vim_snprintf:1
 path/	*	6	422	57	299	deref:105 expr:10 compound:4	str:64 other:13 pp_str:8 void:2	str:16	CStr::from_ptr:40 .add:21 xfree:18 xstrlcpy:12 at:9 copy:7 os_dirname:6 copy_nonoverlapping:5
@@ -631,7 +628,7 @@ register/	register/put/mod.rs	1	25	1	20	compound:1 deref:1	other:1	-	from:3 .off
 register/	register/special.rs	1	10	3	6	deref:3 expr:1	other:1 pp_str:1	str:2	XString::from_raw:1 file_name_at_cursor:1 find_ident_under_cursor:1 get_last_insert_save:1 xfree:1
 register/	register/store.rs	1	48	10	18	deref:29 ref:1	other:8 str:2 void:2 pp:1	other:5 void:2	.offset_from:3 .add:2 xfree:2 adjust_clipboard_name:1 get_clipboard:1 mb_string2cells_len:1 xmalloc:1
 register/	register/yank.rs	1	73	7	28	deref:27 compound:3 ref:2 expr:1	other:10 str:1	-	.offset:4 .copy_from:1 .write_bytes:1 abort:1 apply_autocmds:1 block_prep:1 bytes_at:1 c_str:1
-runtime/	*	8	556	92	358	deref:126 expr:21 compound:12 ref:2	str:72 other:19 void:18 pp_str:17 value:8	str:19 other:8 void:1	xfree:26 bytes_at:17 xstrdup:13 .offset_from:10 CStr::from_ptr:9 from_raw_parts:9 snprintf:9 c_str:8
+runtime/	*	8	557	92	359	deref:126 expr:21 compound:12 ref:2	str:72 other:19 void:18 pp_str:17 value:8	str:19 other:8 void:1	xfree:26 bytes_at:17 xstrdup:13 .offset_from:10 CStr::from_ptr:9 from_raw_parts:9 snprintf:9 c_str:8
 runtime/	runtime/cache.rs	1	55	9	46	deref:6 compound:1	str:5 void:1	other:1	.offset_from:3 CStr::from_ptr:3 bytes_at:3 c_str:3 copy_option_part:3 xstrdup:2 xstrlcpy:2 String_0::from_raw_bytes:1
 runtime/	runtime/estack.rs	1	21	5	13	deref:8	str:6 value:4	str:5	xstrdup:3 at_opt:1 bytes_at:1
 runtime/	runtime/expand.rs	1	69	9	45	deref:18 compound:3	str:11 other:7 pp_str:6	str:1	bytes_at:4 ga_append_owned:4 snprintf:3 .add:2 .copy_from:2 .offset_from:2 .sub:2 from_raw_parts:2
@@ -639,7 +636,7 @@ runtime/	runtime/pack.rs	1	81	12	57	deref:14 expr:8 compound:1	str:10 void:5 pp_
 runtime/	runtime/rtp.rs	1	22	2	22	-	str:1	str:2	xfree:6 xstrdup:2 CStr::from_ptr:1 append_path:1 bytes_at:1 copy_nonoverlapping:1 os_isdir:1 vim_get_prefix_from_exepath:1
 runtime/	runtime/script.rs	1	115	18	55	deref:43 expr:4 compound:3 ref:1	other:6 str:5 value:4 void:3 pp_str:1	str:5 other:2	xfree:7 CStr::from_ptr:4 at:4 bytes_at:2 from_raw_parts:2 getline_equal:2 snprintf:2 .as_ref:1
 runtime/	runtime/search.rs	1	76	16	46	deref:11 expr:6 compound:2	str:16 pp_str:6 void:6 other:1	str:1	copy_option_part:2 cstr_to_string:2 snprintf:2 .add:1 .offset_from:1 at:1 c_str:1 callback:1
-runtime/	runtime/source.rs	1	117	21	74	deref:26 expr:3 compound:2 ref:1	str:18 other:5 void:3	other:5 str:4	apply_autocmds:4 c_str:4 xfree:4 xstrdup:4 from_raw_parts:3 .add:2 .offset_from:2 convert_setup:2
+runtime/	runtime/source.rs	1	118	21	75	deref:26 expr:3 compound:2 ref:1	str:18 other:5 void:3	other:5 str:4	apply_autocmds:4 c_str:4 xfree:4 xstrdup:4 from_raw_parts:3 .add:2 .offset_from:2 convert_setup:2
 search/	*	9	370	42	224	deref:123 expr:11 compound:3	str:33 other:18 value:2 pp_str:1	str:8 other:2	.offset:24 at:12 bytes_at:9 utf_ptr2char:9 xfree:9 .offset_from:8 .add:7 xstrnsave:6
 search/	search/charsearch.rs	1	9	1	6	compound:1 deref:1	str:1	-	utf_head_off:2 copy_nonoverlapping:1 prefix_eq:1 utf_char2bytes:1 utfc_ptr2len:1
 search/	search/command.rs	1	68	7	48	deref:18 expr:2	str:6 other:2	str:3	.offset:11 copy:4 .offset_from:3 utf_ptr2char:3 write_bytes:3 bytes_at:2 xfree:2 apply_autocmds:1
@@ -650,8 +647,8 @@ search/	search/matchpair.rs	1	10	0	8	deref:2	-	-	utf_ptr2char:5 .offset:3
 search/	search/pattern.rs	1	51	14	37	deref:12	str:8 other:5 pp_str:1	str:2	xfree:5 xstrnsave:5 CStr::from_ptr:3 bytes_at:2 from_raw_parts:2 emsg:1 skip_regexp_ex:1 utf_ptr2char:1
 search/	search/select.rs	1	6	0	2	-	-	-	-
 search/	search/stat.rs	1	23	4	20	deref:3	other:2 value:2 str:1	-	.as_ref:3 .as_mut:1 at:1 c_str:1 copy:1 prefix_eq:1 xfree:1 xstrnsave:1
-shada/	*	9	555	70	337	deref:166 expr:43 ref:4 compound:1	other:65 str:17 void:3 pp_str:1	str:5 other:3	xfree:29 zeroed:12 uv_strerror:10 bytes_at_or_empty:5 packer_take_string:5 xmalloc:5 c_str:4 file_open:4
-shada/	shada/collect.rs	1	40	6	26	deref:11 expr:3	other:4 pp_str:1 void:1	str:1	packer_take_string:5 zeroed:3 xfree:2 .copy_from_nonoverlapping:1 cstr_to_string:1 mark_jumplist_iter:1 op_global_reg_iter:1 tv_copy:1
+shada/	*	9	550	70	336	deref:162 expr:43 ref:4 compound:1	other:65 str:17 void:3 pp_str:1	str:5 other:3	xfree:29 zeroed:12 uv_strerror:10 bytes_at_or_empty:5 packer_take_string:5 xmalloc:5 c_str:4 file_open:4
+shada/	shada/collect.rs	1	35	6	25	deref:7 expr:3	other:4 pp_str:1 void:1	str:1	packer_take_string:5 zeroed:3 xfree:2 .copy_from_nonoverlapping:1 cstr_to_string:1 mark_jumplist_iter:1 op_global_reg_iter:1 xmalloc:1
 shada/	shada/file.rs	1	75	10	55	deref:12 expr:4 compound:1	other:7 str:6	str:1	uv_strerror:7 file_open:4 xfree:4 CStr::from_ptr:3 zeroed:3 bytes_at:1 c_str:1 concat_fnames_realloc:1
 shada/	shada/merge.rs	1	164	19	63	deref:82 expr:17 ref:1	other:24 void:2	-	.write:1 Box::from_raw:1 eq:1 hist_shada_replace:1 mark_get:1 path_fnamecmp:1 xcalloc:1 xfree:1
 shada/	shada/mod.rs	1	4	2	3	expr:1	-	other:2	.write:1 xmalloc:1
@@ -715,11 +712,11 @@ startup/	startup/remote.rs	1	22	2	18	deref:4	pp_str:2 str:2 other:1	-	fprintf:8 
 startup/	startup/usage.rs	1	10	2	9	expr:1	str:6	-	fprintf:5 printf:2 nlua_init:1
 state.rs	*	1	17	4	17	-	other:4	-	multiqueue_empty:3 apply_autocmds:2 c_str:1 command_line_check:1 command_line_execute:1 handler:1 input_get:1 insert_check:1
 state.rs	state.rs	1	17	4	17	-	other:4	-	multiqueue_empty:3 apply_autocmds:2 c_str:1 command_line_check:1 command_line_execute:1 handler:1 input_get:1 insert_check:1
-statusline/	*	5	99	11	75	deref:12 expr:5 compound:3	str:6 other:5	str:3 other:2	CStr::from_ptr:7 xfree:6 from_raw_parts_mut:3 vim_snprintf:3 atoi:2 cstr_to_string:2 get_rel_pos:2 grid_line_puts:2
+statusline/	*	5	97	11	73	deref:12 expr:5 compound:3	str:6 other:5	str:3 other:2	CStr::from_ptr:7 xfree:6 from_raw_parts_mut:3 vim_snprintf:3 atoi:2 cstr_to_string:2 get_rel_pos:2 grid_line_puts:2
 statusline/	statusline/custom.rs	1	25	1	25	-	str:1	str:1	vim_snprintf:2 .add:1 .offset:1 .offset_from:1 CStr::from_ptr:1 atoi:1 bytes_at:1 col_print:1
 statusline/	statusline/mod.rs	1	26	8	19	deref:5 expr:2	other:5 str:3	other:2 str:1	xfree:5 from_raw_parts_mut:2 grid_line_puts:2 vim_strnsize:1 xcalloc:1 xstrdup:1
 statusline/	statusline/status.rs	1	3	0	0	compound:1	-	-	-
-statusline/	statusline/stl/mod.rs	1	36	1	26	deref:7 expr:3	str:2	str:1	CStr::from_ptr:5 vim_snprintf_safelen:2 append_arg_number:1 atoi:1 describe_sign_text:1 fill_foldcolumn:1 from_raw_parts_mut:1 get_rel_pos:1
+statusline/	statusline/stl/mod.rs	1	34	1	24	deref:7 expr:3	str:2	str:1	CStr::from_ptr:5 vim_snprintf_safelen:2 append_arg_number:1 atoi:1 describe_sign_text:1 fill_foldcolumn:1 from_raw_parts_mut:1 get_rel_pos:1
 statusline/	statusline/tabline.rs	1	9	1	5	compound:2	-	-	CStr::from_ptr:1 cstr_to_string:1 vim_snprintf:1
 strings/	*	9	391	53	213	deref:137 expr:39 ref:2	str:63 pp_str:6 other:3 void:2	str:15 void:2	.add:61 bytes_at:12 from_raw_parts_mut:10 CStr::from_ptr:8 c_str:6 copy_nonoverlapping:5 from_raw_parts:4 xfree:4
 strings/	strings/case.rs	1	23	7	16	expr:4 deref:3	str:10	str:3	from_raw_parts_mut:4 CStr::from_ptr:2 from_raw_parts:2 .add:1 XString::from_raw:1 bytes_at:1 utf_char2bytes:1 utf_ptr2char_info:1
@@ -731,10 +728,10 @@ strings/	strings/printf/emit.rs	1	75	13	45	deref:18 expr:12	str:12 pp_str:1	str:
 strings/	strings/printf/float.rs	1	30	4	16	deref:9 expr:5	str:1	-	.sub:2 bytes_at:2 .add:1 .copy_from:1 xstrlcpy:1
 strings/	strings/printf/mod.rs	1	12	5	10	deref:1 expr:1	str:10	str:1 void:1	vsnprintf:2 String_0::from_owned_parts:1 bytes_at:1 xfree:1 xmalloc:1
 strings/	strings/printf/spec.rs	1	117	8	47	deref:67 expr:3	str:9 pp_str:4 other:3	str:1	.add:18 c_str:6 .offset_from:1 c_str_len:1 xcalloc:1 xfree:1 xrealloc:1 xstrchrnul:1
-syntax/	*	13	190	18	115	deref:48 expr:16 ref:2 compound:1	other:10 str:5 value:4 void:2	other:5 str:3	at:12 .offset:7 .add:5 vim_regfree:4 bytes_at:3 vim_iswordp_buf:3 xfree:3 .assume_init:2
+syntax/	*	13	185	18	110	deref:48 expr:16 ref:2 compound:1	other:10 str:5 value:4 void:2	other:5 str:3	at:12 .offset:7 .add:5 vim_regfree:4 bytes_at:3 vim_iswordp_buf:3 xfree:3 .assume_init:2
 syntax/	syntax/attr.rs	1	15	0	11	deref:4	-	-	.offset:3 vim_iswordp_buf:2
 syntax/	syntax/clear.rs	1	19	2	10	compound:1	other:2	-	vim_regfree:2 Box::from_raw:1
-syntax/	syntax/command.rs	1	13	0	12	expr:1	-	-	get_var_value:2 hash_init:2 set_internal_string_var:2 .assume_init:1 apply_autocmds:1 at:1 at_opt:1 vim_snprintf:1
+syntax/	syntax/command.rs	1	8	0	7	expr:1	-	-	hash_init:2 .assume_init:1 apply_autocmds:1 at:1 vim_snprintf:1
 syntax/	syntax/define.rs	1	4	0	2	expr:2	-	-	at:1 skip_regexp:1
 syntax/	syntax/endpos.rs	1	26	2	16	deref:7 expr:3	str:2 value:1	other:1 str:1	.offset:4 ml_get_buf:2 hash_find:1 str_foldcase:1 utfc_ptr2len:1 vim_iswordp_buf:1 vim_regexec_syntax:1 xmemcpyz:1
 syntax/	syntax/keyword.rs	1	55	7	30	deref:20 expr:4 ref:1	str:3 other:2 value:2	str:2 other:1	.add:3 xfree:3 bytes_at:2 hash_set_key:2 .offset_from:1 c_str:1 hash_add_item:1 hash_hash:1

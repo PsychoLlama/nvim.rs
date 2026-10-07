@@ -207,6 +207,15 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut
     si
 }
 
+/// [`new_script_item`] for a chunk with no file of its own -- an anonymous
+/// Lua or `:execute` one -- answering the id it was given.
+pub(crate) fn new_unnamed_script_item() -> ScriptId {
+    let mut sid = 0;
+    // SAFETY: no name to take over, and a local for the id.
+    unsafe { new_script_item(ptr::null_mut(), &raw mut sid) };
+    sid
+}
+
 /// Collect `excmd`'s range of the current buffer into `source`, and answer the name
 /// to show for those lines: the buffer's own file name, or a synthetic
 /// `:source buffer=N` when it has none.

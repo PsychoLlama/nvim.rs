@@ -4,8 +4,8 @@
 
 use crate::eval::encode::{BOOL_VAR_NAMES, SPECIAL_VAR_NAMES};
 use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
-use crate::eval::userfunc::{get_funccal_local_ht, set_selfdict};
-use crate::eval::vars::get_globvar_dict;
+use crate::eval::userfunc::{is_funccal_local_dict, set_selfdict};
+use crate::eval::vars::is_globvar_dict;
 use crate::eval::{callback_call, callback_from_typval, func_equal, var2fpos};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;

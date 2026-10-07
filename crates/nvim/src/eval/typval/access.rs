@@ -38,32 +38,6 @@ pub(crate) type Ls = Live<List>;
 /// A live `Dict`; see [`Ls`].
 pub(crate) type Dt = Live<Dict>;
 
-/// The address of a field of `*p`, **computed rather than read**.
-///
-/// `&raw mut (*p).field` still requires an `unsafe` block today even though
-/// nothing is dereferenced; `wrapping_byte_add` is the same arithmetic
-/// spelled with a safe method, and it is defined for *every* pointer, null
-/// and dangling included. The obligation the field's address carries belongs
-/// to whoever dereferences it, and it is paid there.
-///
-/// This is [`Live::field_ptr`] without the handle, for the many places that
-/// hold a bare pointer and only want to name one of its fields. The named
-/// wrappers below spell the offsets, so no call site writes `offset_of!`.
-#[inline(always)]
-pub(crate) fn field_of<T, F>(p: *mut T, offset: usize) -> *mut F {
-    p.wrapping_byte_add(offset).cast()
-}
-
-/// The address of a dictionary item's lock; see [`field_of`].
-///
-/// The lock belongs to the *slot*, not to the value in it: `:lockvar d.k`
-/// locks the place `d.k` names, and the value that replaces it is locked
-/// too.  Every `DictItem`-prefixed struct carries the field at this offset.
-#[inline(always)]
-pub(crate) fn di_lock(di: *mut DictItem) -> *mut VarLock {
-    field_of(di, ::core::mem::offset_of!(DictItem, di_lock))
-}
-
 /// The tag-checked readers, generated ten times over the one shape they all
 /// have.
 ///

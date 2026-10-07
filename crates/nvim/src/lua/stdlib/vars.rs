@@ -29,7 +29,7 @@ use crate::eval::typval::{
     TV_INITIAL_VALUE, dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy,
     tv_dict_item_remove,
 };
-use crate::eval::vars::{VvarStore, before_set_vvar, get_globvar_dict, get_vimvar_dict};
+use crate::eval::vars::{VvarStore, before_set_vvar, globvar_dict, vimvar_dict};
 use crate::ex_eval::aborting;
 use crate::lua::converter::{nlua_pop_typval, nlua_push_typval};
 use crate::lua::ffi::{
@@ -57,8 +57,9 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut Dict {
         // A handle that names nothing answers a null dictionary, which is
         // what the caller reports on; why it did not resolve is not read.
         match scope.to_bytes() {
-            b"g" => get_globvar_dict(),
-            b"v" => get_vimvar_dict(),
+            // `g:` and `v:` are never freed, so their addresses outlive the handles.
+            b"g" => globvar_dict().as_ptr(),
+            b"v" => vimvar_dict().as_ptr(),
             b"b" => find_buffer_by_handle(handle as BufferHandle)
                 .unwrap_or_default()
                 .map_or(ptr::null_mut(), |buf| buf.b_vars),
@@ -138,7 +139,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
             di = (*dict).find_ptr(key.as_bytes());
         } else {
             // `v:` keys are typed, and some of them run a hook on assignment.
-            let verdict = (dict == get_vimvar_dict())
+            let verdict = (dict == vimvar_dict().as_ptr())
                 .then(|| before_set_vvar(key.as_bytes(), &mut tv, true, watched));
             if let Some(verdict) = verdict.filter(|verdict| *verdict != VvarStore::Store) {
                 tv_clear(&mut tv);
@@ -188,7 +189,7 @@ pub unsafe extern "C-unwind" fn nlua_getvar(lstate: *mut lua_State) -> c_int {
         let mut len: size_t = 0;
         let name: *const c_char = luaL_checklstring(lstate, 3, &raw mut len);
         let mut di = dict_find(dict.as_ref(), cstr::slice_at(name, len));
-        if di.is_none() && dict == get_globvar_dict() {
+        if di.is_none() && dict == globvar_dict().as_ptr() {
             if !script_autoload(name, len, false) || aborting() {
                 return 0; // nil
             }

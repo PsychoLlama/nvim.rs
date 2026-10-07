@@ -20,7 +20,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::cell::{Cell, RefCell, UnsafeCell};
+use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
 use core::ptr;
@@ -31,7 +31,7 @@ use crate::eval::gc::{RootId, unroot_dict, unroot_list};
 use crate::eval::typval::{CallFrame, DictRef, ListRef, RemovedItem, tv_dict_alloc, tv_list_alloc};
 use crate::eval::vars::list_dict_vars;
 use crate::hashtab::{HT_INIT_SIZE, hash_reset};
-use crate::types::{DictKey, DictTab, HashItem, Refcount, ScopeDictItem, ScopeType};
+use crate::types::{DictKey, HashItem, Refcount, ScopeDictItem, ScopeType};
 
 /// A funccall's three scopes: `l:`, `a:` and `a:000`, with the entries that
 /// name `l:` and `a:` themselves (what `l:` alone evaluates to).
@@ -50,10 +50,11 @@ use crate::types::{DictKey, DictTab, HashItem, Refcount, ScopeDictItem, ScopeTyp
 pub(crate) struct FrameScopes {
     pub(crate) l_vars: DictRef,
     /// The entry `l:` evaluates to. It holds a counted reference of its own,
-    /// which `Drop` gives back; vars/ reaches it by address.
-    l_vars_var: UnsafeCell<ScopeDictItem>,
+    /// which `Drop` gives back; vars/ reaches it through
+    /// [`with_funccal_scope_entry`].
+    l_vars_var: RefCell<ScopeDictItem>,
     pub(crate) a_vars: DictRef,
-    a_vars_var: UnsafeCell<ScopeDictItem>,
+    a_vars_var: RefCell<ScopeDictItem>,
     pub(crate) a_list: ListRef,
     /// Whether the counts carry the `DO_NOT_FREE_CNT` seed.
     active: Cell<bool>,
@@ -72,7 +73,7 @@ const DICT_HOLDERS: c_int = 2;
 const LIST_HOLDERS: c_int = 1;
 
 /// A scope dictionary and the entry that names it.
-fn scope_dict(scope: ScopeType) -> (DictRef, UnsafeCell<ScopeDictItem>) {
+fn scope_dict(scope: ScopeType) -> (DictRef, RefCell<ScopeDictItem>) {
     let dict = tv_dict_alloc();
     {
         let d = dict.edit();
@@ -87,7 +88,7 @@ fn scope_dict(scope: ScopeType) -> (DictRef, UnsafeCell<ScopeDictItem>) {
         di_flags: DI_FLAGS_RO | DI_FLAGS_FIX,
         di_key: DictKey::EMPTY,
     }));
-    (dict, UnsafeCell::new(entry))
+    (dict, RefCell::new(entry))
 }
 
 impl FrameScopes {
@@ -185,16 +186,6 @@ impl FrameScopes {
                 item
             }
         }
-    }
-
-    /// The entry `l:` evaluates to, by address, for vars/.
-    pub(crate) fn l_vars_var(&self) -> *mut DictItem {
-        self.l_vars_var.get().cast()
-    }
-
-    /// The entry `a:` evaluates to, by address, for vars/.
-    pub(crate) fn a_vars_var(&self) -> *mut DictItem {
-        self.a_vars_var.get().cast()
     }
 }
 
@@ -629,36 +620,38 @@ fn with_scope_funccal<R>(f: impl FnOnce(&FuncCall) -> R) -> Option<R> {
     }
 }
 
-/// The `l:` scope dictionary, or null when there is no call.
-pub fn get_funccal_local_dict() -> *mut Dict {
-    with_scope_funccal(|frame| frame.scopes.l_vars.as_ptr()).unwrap_or(ptr::null_mut())
+/// The `l:` (`local`) or `a:` scope dictionary of the call a variable
+/// lookup sees, or `None` when there is none.
+pub(crate) fn funccal_scope(local: bool) -> Option<DictRef> {
+    with_scope_funccal(|frame| {
+        if local {
+            frame.scopes.l_vars.clone()
+        } else {
+            frame.scopes.a_vars.clone()
+        }
+    })
 }
 
-/// The `l:` scope hashtab, or null when there is no call.
-pub fn get_funccal_local_ht() -> *mut DictTab {
-    with_scope_funccal(|frame| ptr::from_mut(&mut frame.scopes.l_vars.edit().dv_hashtab))
-        .unwrap_or(ptr::null_mut())
+/// Run `f` over the entry a bare `l:` (`local`) or `a:` evaluates to, or
+/// answer `None` when there is no call. `f` must not run user code.
+pub(crate) fn with_funccal_scope_entry<R>(
+    local: bool,
+    f: impl FnOnce(&mut DictItem) -> R,
+) -> Option<R> {
+    with_scope_funccal(|frame| {
+        let entry = if local {
+            &frame.scopes.l_vars_var
+        } else {
+            &frame.scopes.a_vars_var
+        };
+        f(&mut entry.borrow_mut())
+    })
 }
 
-/// The `l:` scope variable, or null when there is no call.
-pub fn get_funccal_local_var() -> *mut DictItem {
-    with_scope_funccal(|frame| frame.scopes.l_vars_var()).unwrap_or(ptr::null_mut())
-}
-
-/// The `a:` scope dictionary, or null when there is no call.
-pub fn get_funccal_args_dict() -> *mut Dict {
-    with_scope_funccal(|frame| frame.scopes.a_vars.as_ptr()).unwrap_or(ptr::null_mut())
-}
-
-/// The `a:` scope hashtab, or null when there is no call.
-pub fn get_funccal_args_ht() -> *mut DictTab {
-    with_scope_funccal(|frame| ptr::from_mut(&mut frame.scopes.a_vars.edit().dv_hashtab))
-        .unwrap_or(ptr::null_mut())
-}
-
-/// The `a:` scope variable, or null when there is no call.
-pub fn get_funccal_args_var() -> *mut DictItem {
-    with_scope_funccal(|frame| frame.scopes.a_vars_var()).unwrap_or(ptr::null_mut())
+/// Whether `dict` is the `l:` scope of the call a variable lookup sees.
+pub(crate) fn is_funccal_local_dict(dict: &Dict) -> bool {
+    with_scope_funccal(|frame| ptr::eq(frame.scopes.l_vars.as_ptr().cast_const(), dict))
+        .unwrap_or(false)
 }
 
 /// List the `l:` variables, when there is a function running.
@@ -666,15 +659,6 @@ pub fn list_func_vars(first: &mut c_int) {
     if let Some(frame) = current_fc().filter(|frame| frame.scope_ready.get()) {
         list_dict_vars(&frame.scopes.l_vars, c"l:", false, first);
     }
-}
-
-/// The dictionary `ht` belongs to, when `ht` is the current `l:`.
-pub(crate) fn get_current_funccal_dict(ht: *mut DictTab) -> *mut Dict {
-    with_current_fc(|frame| {
-        frame
-            .filter(|frame| ptr::eq(ht, &raw const frame.scopes.l_vars.dv_hashtab))
-            .map_or(ptr::null_mut(), |frame| frame.scopes.l_vars.as_ptr())
-    })
 }
 
 /// Walk the chain of captured scopes a closure body can see, running `probe`

@@ -13,7 +13,7 @@ use crate::eval::gc::{RootId, unroot_dict};
 use crate::eval::typval::{DictCursor, ListRef, RemovedItem};
 
 use crate::api::private::helpers::cstr_to_string;
-use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::charset::skip;
 use crate::drawscreen::state::sc_col;
@@ -22,15 +22,14 @@ use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::{
-    LockName, TV_INITIAL_VALUE, di_lock, dict_is_watched, dict_watcher_notify, list_find_nr,
-    list_find_str, list_len, list_set_lock, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc,
+    LockName, TV_INITIAL_VALUE, dict_is_watched, dict_watcher_notify, list_find_nr, list_find_str,
+    list_len, list_set_lock, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc,
     tv_dict_alloc_lock, tv_dict_hi2di, tv_get_bool_chk, tv_get_number, tv_get_number_chk,
     tv_item_lock, tv_list_alloc, value_check_lock,
 };
 use crate::eval::userfunc::{
-    current_func_has_scope, function_exists, get_current_funccal_dict, get_funccal_args_dict,
-    get_funccal_args_ht, get_funccal_args_var, get_funccal_local_dict, get_funccal_local_ht,
-    get_funccal_local_var, list_func_vars, walk_scoped_funccals,
+    current_func_has_scope, funccal_scope, function_exists, list_func_vars, walk_scoped_funccals,
+    with_funccal_scope_entry,
 };
 use crate::eval::window::{find_win_by_nr, restore_win, switch_win};
 use crate::eval::{
@@ -43,12 +42,10 @@ use crate::ex_eval::aborting;
 use crate::getchar::state::got_int;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::guard::sandbox;
-use crate::hashtab::{
-    Slot, hash_add, hash_find, hash_find_len, hash_remove, hash_reset, tv_ht_iter,
-};
-use crate::lua::executor::nlua_set_sctx;
+use crate::hashtab::{hash_reset, tv_ht_iter};
+use crate::lua::executor::nlua_set_sctx_in;
 use crate::memory::XString;
-use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
+use crate::memory::{xfree, xstrlcat, xstrlcpy};
 use crate::message::state::emsg_severe;
 use crate::message::{
     e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,
@@ -68,7 +65,7 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::runtime::state::current_sctx;
 use crate::runtime::{
-    new_script_item, script_autoload, script_count, script_id_valid, with_script_item,
+    new_unnamed_script_item, script_autoload_named, script_count, script_id_valid, with_script_item,
 };
 use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
@@ -85,7 +82,7 @@ use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
 use crate::winlayer::Live;
 use crate::winlayer::graph::lastused_tabpage;
-use ::libc::{abort, memchr};
+use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.
 mod assign;
@@ -108,7 +105,7 @@ pub use self::listing::*;
 pub use self::lookup::*;
 pub use self::redir::*;
 pub use self::scoped::*;
-pub use self::store::*;
+pub(crate) use self::store::*;
 pub use self::unlet::*;
 pub use self::vvar::*;
 /// One of the `list_*_vars` scope listers: everything a bare `g:`/`b:`/`w:`/

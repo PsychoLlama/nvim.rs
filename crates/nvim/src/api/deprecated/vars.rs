@@ -86,13 +86,14 @@ pub fn tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<Object,
 }
 
 pub fn vim_set_var(name: String_0, value: Object) -> Result<Object, Error> {
-    let vars = get_globvar_dict();
-    // SAFETY: as `buffer_set_var`, for the global dictionary.
-    unsafe { dict_set_var(vars, &name, value, false, true) }
+    let vars = globvar_dict();
+    // SAFETY: as `buffer_set_var`, for the global dictionary, which the
+    // handle keeps live through the call.
+    unsafe { dict_set_var(vars.as_ptr(), &name, value, false, true) }
 }
 
 pub fn vim_del_var(name: String_0) -> Result<Object, Error> {
-    let vars = get_globvar_dict();
+    let vars = globvar_dict();
     // SAFETY: as `vim_set_var`.
-    unsafe { dict_set_var(vars, &name, Object::Nil, true, true) }
+    unsafe { dict_set_var(vars.as_ptr(), &name, Object::Nil, true, true) }
 }

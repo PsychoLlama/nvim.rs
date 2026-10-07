@@ -256,14 +256,15 @@ pub(crate) unsafe fn var_shada_iter(
     result: &mut TypVal,
     flavour: VarFlavour,
 ) -> Option<usize> {
-    let globvarht = get_globvar_ht();
-    let count = unsafe { (*globvarht).size() };
+    let globals = globvar_dict();
+    let count = globals.dv_hashtab.size();
     // The walk's position is a slot *index*: it is handed back to the caller
     // and comes round again, and the table's small run lives inside the
     // table, so a pointer would not survive a mutation of it.
     let wanted = |idx: usize| {
-        let hi = unsafe { (*globvarht).slot(idx) };
-        hi.is_kept() && var_flavour(unsafe { (*hi.hi_key.item()).di_key.bytes() }) & flavour != 0
+        globals
+            .item_at(idx)
+            .is_some_and(|item| var_flavour(item.di_key.bytes()) & flavour != 0)
     };
 
     unsafe { *name = core::ptr::null() };
@@ -272,9 +273,10 @@ pub(crate) unsafe fn var_shada_iter(
         None => (0..count).find(|&idx| wanted(idx))?,
     };
 
-    let di = unsafe { (*globvarht).slot(idx) }.hi_key.item();
-    unsafe { *name = (*di).di_key.as_ptr() };
-    unsafe { tv_copy(&(*di).di_tv, result) };
+    let item = globals.item_at(idx).expect("the walk answers kept slots");
+    // The key lives with the item, which the caller's promise keeps.
+    unsafe { *name = item.di_key.as_ptr() };
+    tv_copy(&item.di_tv, result);
 
     // Answer where the *next* one is, so the caller knows to stop.
     loop {

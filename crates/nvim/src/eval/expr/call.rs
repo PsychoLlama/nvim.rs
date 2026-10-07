@@ -18,7 +18,7 @@ use core::ffi::CStr;
 
 use crate::eval::typval::{DictRef, tv_clear};
 use crate::eval::userfunc::{CallWith, deref_func_name_owned, get_func_tv, get_lambda_tv};
-use crate::eval::vars::{check_vars_named, lua_partial};
+use crate::eval::vars::{check_vars, lua_partial};
 use crate::eval::{
     Cursor, e_cannot_use_partial_here, e_empty_function_name, e_nowhitespace, eval7, get_name_len,
     is_luafunc, luafunc_name_end,
@@ -42,7 +42,7 @@ pub(crate) fn eval_func(
     basetv: Option<&mut TypVal>,
 ) -> Result<(), Failed> {
     if !evaluate {
-        check_vars_named(name);
+        check_vars(name);
     }
     // A copy: the call may re-enter the evaluator and free the variable the
     // name was read out of.

@@ -117,18 +117,15 @@ unsafe fn get_var_from(
                 unsafe { tv_copy(&*value, result) };
                 done = true;
             } else {
-                // SAFETY: each scope's own variable dictionary is live.
-                let ht = unsafe {
-                    match htname as u8 {
-                        b'b' => &raw mut (*buffer.expect("a `b:` scope").b_vars).dv_hashtab,
-                        b'w' => &raw mut (*w.w_vars).dv_hashtab,
-                        _ => &raw mut (*tp.tp_vars).dv_hashtab,
-                    }
+                let dict = match htname as u8 {
+                    b'b' => buffer.expect("a `b:` scope").b_bufvar.di_tv.dict_handle(),
+                    b'w' => w.w_winvar.di_tv.dict_handle(),
+                    _ => tp.tp_winvar.di_tv.dict_handle(),
                 };
-                let varname_len = unsafe { cstr::bytes_at(varname) }.len();
-                let v = unsafe { find_var_in_ht(ht, htname, varname, varname_len, false) };
-                if !v.is_null() {
-                    unsafe { tv_copy(&(*v).di_tv, result) };
+                // SAFETY: `varname` is NUL-terminated.
+                let varname = unsafe { cstr::bytes_at(varname) };
+                if let Some(item) = dict.as_ref().and_then(|dict| dict.find(varname)) {
+                    tv_copy(&item.di_tv, result);
                     done = true;
                 }
             }
@@ -358,8 +355,8 @@ fn setwinvar(args: &[TypVal], off: c_int) {
 /// Set `<scope><varname>` from `varp`, in whatever buffer, window or tab
 /// page is current.
 ///
-/// `set_var` takes a name with its scope prefix, so the two are joined into
-/// a scratch buffer first; `scope` is `"b:"`, `"w:"` or `"t:"`.
+/// `set_var` takes a name with its scope prefix, so the two are joined
+/// first; `scope` is `"b:"`, `"w:"` or `"t:"`.
 ///
 /// # Safety
 /// `varname` is a NUL-terminated name and `varp` a live value.
@@ -367,14 +364,10 @@ unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: &TypVal) {
     // The store either copies or takes; this one only ever borrows, so it
     // hands over a copy of its own and lets the store take that.
     let mut value = varp.clone();
-    let varname_len = unsafe { cstr::bytes_at(varname) }.len();
-    let name = unsafe { xmalloc(varname_len + 3) } as *mut c_char;
-    let into = name.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(scope.as_ptr().cast(), 2) };
-    let into = unsafe { name.add(2) }.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(varname.cast(), varname_len + 1) };
-    unsafe { set_var(name, varname_len + 2, &mut value, false) };
-    unsafe { xfree(name.cast()) };
+    let mut name = scope.to_bytes().to_vec();
+    // SAFETY: the caller's NUL-terminated name.
+    name.extend_from_slice(unsafe { cstr::bytes_at(varname) });
+    set_var(&name, &mut value, false);
 }
 
 /// `gettabvar()`.

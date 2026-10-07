@@ -32,8 +32,7 @@ use core::{ptr, slice};
 
 use crate::ascii::{ascii_isdigit, ascii_isident};
 use crate::charset::{str2nr_in, transchar, vim_isprintc};
-use crate::eval::typval::NumBuf;
-use crate::eval::vars::get_var_value;
+use crate::eval::vars::var_string_value;
 use crate::mbyte::{
     char_at, cluster_len, utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len_len,
 };
@@ -674,7 +673,6 @@ pub unsafe fn replace_termcodes(
     did_simplify: *mut bool,
     cpo: &CStr,
 ) -> *mut c_char {
-    let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise -- `from` is readable for `from_len`
     // bytes, and every read below stays at or before `end`.
     let mut src = unsafe { Cursor::new(from) };
@@ -755,35 +753,24 @@ pub unsafe fn replace_termcodes(
         if do_special {
             // <Leader> and <LocalLeader> take the value of "mapleader" and
             // "maplocalleader"; a backslash stands in when either is unset.
-            // SAFETY: both names are static, and `numbuf` is a live local.
             let (len, value) = if end.gap(src) >= 7 && starts_with_ignoring_case(src, c"<Leader>") {
-                (8, unsafe {
-                    get_var_value(c"g:mapleader".as_ptr(), &mut numbuf)
-                })
+                (8, var_string_value(b"g:mapleader"))
             } else if end.gap(src) >= 12 && starts_with_ignoring_case(src, c"<LocalLeader>") {
-                (13, unsafe {
-                    get_var_value(c"g:maplocalleader".as_ptr(), &mut numbuf)
-                })
+                (13, var_string_value(b"g:maplocalleader"))
             } else {
-                (0, ptr::null_mut())
+                (0, None)
             };
             if len != 0 {
                 // Up to 8 * 6 characters of "mapleader" are allowed.
-                // SAFETY: `get_var_value` answers null or a NUL-terminated
-                // string that outlives this loop.
-                let too_long = !value.is_null() && unsafe { cstr::bytes_at(value) }.len() > 8 * 6;
-                // SAFETY: the option's value, or the static backslash.
-                let mut leader = unsafe { Cursor::new(value.cast_const()) };
-                if value.is_null() || leader.byte() == 0 || too_long {
-                    // SAFETY: a static NUL-terminated string.
-                    leader = unsafe { Cursor::new(c"\\".as_ptr()) };
-                }
-                while leader.byte() != 0 {
+                let leader: &[u8] = match &value {
+                    Some(value) if !value.is_empty() && value.len() <= 8 * 6 => value,
+                    _ => b"\\",
+                };
+                for &byte in leader {
                     // SAFETY: the 64-byte guard above; the leader is capped
-                    // at 48 bytes by `too_long`.
-                    unsafe { *result.add(dlen) = leader.byte() };
+                    // at 48 bytes.
+                    unsafe { *result.add(dlen) = byte as c_char };
                     dlen += 1;
-                    leader = leader.skip(1);
                 }
                 src = src.skip(len);
                 continue;

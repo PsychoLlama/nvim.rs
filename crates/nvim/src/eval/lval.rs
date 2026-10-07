@@ -41,10 +41,10 @@ use crate::eval::typval::{
     list_check_range_index_one, list_check_range_index_two, list_items_mut, tv_blob_alloc_ret,
     tv_check_str, tv_dict_alloc, tv_get_number, tv_list_alloc_ret,
 };
-use crate::eval::userfunc::get_funccal_args_dict;
+use crate::eval::userfunc::funccal_scope;
 use crate::eval::vars::{
-    clear_local, emsg_static, get_vimvar_dict, valid_varname_named, var_check_lock_named,
-    var_check_ro_named, var_wrong_func_name_named, with_var,
+    clear_local, emsg_static, valid_varname_named, var_check_lock_named, var_check_ro_named,
+    var_wrong_func_name_named, vimvar_dict, with_var,
 };
 use crate::eval::{
     Cursor, FNE_INCL_BR, GLV_NO_AUTOLOAD, GLV_QUIET, GLV_READ_ONLY, e_cannot_slice_dictionary,
@@ -570,7 +570,8 @@ impl Walk<'_, '_> {
 
         let Some((flags, _)) = existing else {
             // A "v:" or "a:" variable cannot be added.
-            if dict.as_ptr() == get_vimvar_dict() || dict.as_ptr() == get_funccal_args_dict() {
+            if dict.ptr_eq(&vimvar_dict()) || funccal_scope(false).is_some_and(|a| a.ptr_eq(&dict))
+            {
                 let name = msg_bytes(self.text);
                 semsg!("E461: Illegal variable name: {name}");
                 return None;

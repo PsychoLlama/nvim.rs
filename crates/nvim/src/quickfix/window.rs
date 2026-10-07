@@ -19,7 +19,7 @@
 use super::*;
 use crate::buffer::find_buf;
 use crate::cursor::check_cursor;
-use crate::eval::vars::set_internal_string_var_to;
+use crate::eval::vars::set_internal_string_var;
 use crate::ex_cmds::{EcmdFlags, edit_buffer_number};
 use crate::option::vars::P_QFTF;
 use crate::option::{boolean_optval, callback_from_option};
@@ -213,7 +213,7 @@ fn set_list_title(qi: Qi) {
     // A copy: setting a variable can run a watcher.
     let title = qi.current_list().title.clone();
     if let Some(title) = title {
-        set_internal_string_var_to(c"w:quickfix_title", title.as_cstr());
+        set_internal_string_var(b"w:quickfix_title", Some(title.as_cstr().to_bytes()));
     }
 }
 

@@ -35,8 +35,8 @@ use crate::eval::typval::{
     tv_check_lock_named, tv_copy, tv_get_number_chk, value_check_lock_named,
 };
 use crate::eval::vars::{
-    clear_local, emsg_static, get_vimvar_dict, set_var_const_named, set_vvar_key,
-    var_check_ro_named, with_var,
+    clear_local, emsg_static, set_var_const, set_vvar_key, var_check_ro_named, vimvar_dict,
+    with_var,
 };
 use crate::message::{e_cannot_mod, e_listreq};
 use crate::types::{TypVal, VAR_BLOB, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber};
@@ -136,7 +136,7 @@ pub(crate) fn set_var_lval(
             // straight into the item, which permanently re-types the
             // variable and, for `v:oldfiles`, crashes the next reader
             // (docket O-B14-10).
-            if dict.as_ptr() == get_vimvar_dict() {
+            if dict.ptr_eq(&vimvar_dict()) {
                 set_vvar_key(key, value, copy, op);
                 return;
             }
@@ -235,7 +235,7 @@ fn set_whole_var(
 ) {
     let name = lval.name();
     let Some(op) = op.filter(|&op| op != b'=') else {
-        set_var_const_named(name, value, copy, is_const);
+        set_var_const(name, value, copy, is_const);
         return;
     };
     // `+=`, `-=`, `*=`, `/=`, `%=` and `..=`.
@@ -257,7 +257,7 @@ fn set_whole_var(
     let writable = !var_check_ro_named(flags.into(), name) && !tv_check_lock_named(lock, &tv, name);
     if writable && eexe_mod_op(&mut tv, value, op).is_ok() {
         // The folded value goes back by name.
-        set_var_const_named(name, &mut tv, false, false);
+        set_var_const(name, &mut tv, false, false);
     }
     clear_local(&mut tv);
 }

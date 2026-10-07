@@ -7,7 +7,7 @@ use crate::api::extmark::{nvim_buf_clear_namespace, nvim_create_namespace, parse
 use crate::api::private::dispatch::msgpack_rpc_get_handler_for;
 use crate::api::private::helpers::{api_set_sctx, api_typename, cstr_to_string, dict_set_var};
 use crate::decoration::{clear_virttext, decor_find_virttext, kHlModeUnknown, kVPosEndOfLine};
-use crate::eval::vars::get_globvar_dict;
+use crate::eval::vars::globvar_dict;
 use crate::extmark::extmark_set;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;

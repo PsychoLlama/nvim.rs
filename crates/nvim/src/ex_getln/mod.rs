@@ -42,7 +42,7 @@ use crate::eval::typval::{
     tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_clear, tv_copy, tv_get_number,
     tv_get_number_chk,
 };
-use crate::eval::vars::{get_globvar_dict, heredoc_get, set_vim_var_char};
+use crate::eval::vars::{globvar_dict, heredoc_get, set_vim_var_char};
 use crate::eval::{callback_call, eval_has_provider, get_echo_hl_id, get_v_event, restore_v_event};
 use crate::ex_cmds::rename_buffer;
 use crate::ex_docmd::state::{

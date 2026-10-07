@@ -6,25 +6,21 @@
 //! [`eval_variable`] is the whole path an expression takes.
 //! [`get_user_var_name`] walks the same scopes for completion.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
-use core::mem::offset_of;
-use core::ptr;
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use super::*;
-use crate::eval::typval::DictTab;
+use crate::eval::typval::DictRef;
 use crate::eval::typval::NumBuf;
-use crate::types::{Candidate, Failed, ItemSlot, NUL};
+use crate::types::{Candidate, Failed, NUL};
 
 /// `"<prefix>:<name>"`, as a completion candidate.
 pub(crate) fn cat_prefix_varname(prefix: u8, name: &CStr) -> Candidate {
@@ -64,53 +60,49 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
         vidx.set(0);
     }
 
-    // One step through `ht`: the first call starts at the array, every
-    // later one advances past the slot the previous call answered and
-    // then skips the empty and removed ones.
-    let step = |done: &GlobalCell<size_t>, ht: *const DictTab| -> Option<&CStr> {
+    // One step through `dict`: the first call starts at the array, every
+    // later one advances past the slot the previous call answered and then
+    // skips the empty and removed ones. The key is copied out.
+    let step = |done: &GlobalCell<size_t>, dict: Option<DictRef>| -> Option<CString> {
+        let dict = dict?;
         let n = done.get();
-        // SAFETY: a live scope's table.
-        if n >= unsafe { (*ht).ht_used } {
+        if n >= dict.dv_hashtab.ht_used {
             return None;
         }
         done.set(n + 1);
-        slot.set(if n == 0 { 0 } else { slot.get() + 1 });
-        // SAFETY: the caller's table, which holds `ht_used > n` live items,
-        // so a kept slot is still ahead of the cursor; a kept slot's item is
-        // a live variable, whose key is NUL-terminated.
-        unsafe {
-            while !(*ht).slot(slot.get()).is_kept() {
-                slot.set(slot.get() + 1);
+        let mut at = if n == 0 { 0 } else { slot.get() + 1 };
+        // The table holds `ht_used > n` live items, so a kept slot is still
+        // ahead of the cursor.
+        let key = loop {
+            if let Some(item) = dict.item_at(at) {
+                break item.key().to_vec();
             }
-            Some(CStr::from_ptr(
-                (*(*ht).slot(slot.get()).hi_key.item()).di_key.as_ptr(),
-            ))
-        }
+            at += 1;
+        };
+        slot.set(at);
+        Some(CString::new(key).expect("a variable name holds no NUL"))
     };
 
-    if let Some(key) = step(&gdone, get_globvar_ht()) {
+    if let Some(key) = step(&gdone, Some(globvar_dict())) {
         if expand.pattern_starts_with(b"g:") {
-            return Some(cat_prefix_varname(b'g', key));
+            return Some(cat_prefix_varname(b'g', &key));
         }
-        return Some(Candidate::Owned(key.to_owned()));
+        return Some(Candidate::Owned(key));
     }
     // The window this completes for is the one the command line was
     // opened over, which is `prevwin` while the command-line window is
     // current.
     let win = prevwin_curwin();
-    // SAFETY: a live window's buffer and variable dictionaries are live.
-    let bvars = unsafe { &raw const (*win.buffer().b_vars).dv_hashtab };
+    let bvars = win.buffer().b_bufvar.di_tv.dict_handle();
     if let Some(key) = step(&bdone, bvars) {
-        return Some(cat_prefix_varname(b'b', key));
+        return Some(cat_prefix_varname(b'b', &key));
     }
-    // SAFETY: as above.
-    if let Some(key) = step(&wdone, unsafe { &raw const (*win.w_vars).dv_hashtab }) {
-        return Some(cat_prefix_varname(b'w', key));
+    if let Some(key) = step(&wdone, win.w_winvar.di_tv.dict_handle()) {
+        return Some(cat_prefix_varname(b'w', &key));
     }
-    // SAFETY: as above, for the current tab page.
-    let tvars = unsafe { &raw const (*TabPage::current().tp_vars).dv_hashtab };
+    let tvars = TabPage::current().tp_winvar.di_tv.dict_handle();
     if let Some(key) = step(&tdone, tvars) {
-        return Some(cat_prefix_varname(b't', key));
+        return Some(cat_prefix_varname(b't', &key));
     }
     let v = vidx.get();
     let vv = Vv::try_from(v).ok()?;
@@ -130,302 +122,307 @@ pub(crate) fn eval_variable(
     verbose: bool,
     no_autoload: bool,
 ) -> Result<(), Failed> {
-    // The lookup every variable an expression names goes through, so it
-    // calls `find_var` directly rather than through `with_var`'s closure,
-    // which the compiler lays out less well here.
-    // SAFETY: `name` names its own bytes, and no table is asked back.
-    let v = unsafe {
-        find_var(
-            name.as_ptr().cast(),
-            name.len(),
-            ptr::null_mut(),
-            no_autoload,
-        )
-    };
-    if v.is_null() {
+    let Some(found) = locate(name, no_autoload) else {
         if result.is_some() && verbose {
             let name = msg_bytes(name);
             semsg!("E121: Undefined variable: {name}");
         }
         return Err(Failed);
-    }
+    };
     if let Some(result) = result {
-        // SAFETY: a live item of a live scope, read before anything runs.
-        tv_copy(unsafe { &(*v).di_tv }, result);
+        // One borrow of the item, copying the value out: nothing runs
+        // between finding the variable and reading it.
+        match found {
+            Located::Item { dict, slot } => {
+                if let Some(item) = dict.item_at(slot) {
+                    tv_copy(&item.di_tv, result);
+                }
+            }
+            Located::Entry(kind) => {
+                with_scope_entry(kind, |item| tv_copy(&item.di_tv, result));
+            }
+        }
     }
     Ok(())
 }
 
-/// [`check_vars`] of the name `name` spells.
-pub(crate) fn check_vars_named(name: &[u8]) {
-    // SAFETY: `name` names its own bytes.
-    unsafe { check_vars(name.as_ptr().cast(), name.len()) }
-}
-
-/// Note in [`LAMBDA_USES_LOCALS`] that `name[0..len]` is a function-local
-/// variable or an argument, which is what makes a lambda capture it.
-///
-/// # Safety
-/// `name` points at `len` readable bytes.
-pub unsafe fn check_vars(name: *const c_char, len: size_t) {
+/// Note in [`LAMBDA_USES_LOCALS`] that `name` is a function-local variable
+/// or an argument, which is what makes a lambda capture it.
+pub(crate) fn check_vars(name: &[u8]) {
     if LAMBDA_USES_LOCALS.get().is_none() {
         return;
     }
-    let (ht, _) = unsafe { find_var_ht(name, len) };
-    if (ht == get_funccal_local_ht() || ht == get_funccal_args_ht())
-        && !unsafe { find_var(name, len, ptr::null_mut(), true) }.is_null()
-    {
+    let local = find_var_home(name)
+        .is_some_and(|home| matches!(home.kind, ScopeKind::Local | ScopeKind::Args));
+    if local && locate(name, true).is_some() {
         LAMBDA_USES_LOCALS.set(Some(true));
     }
 }
 
-/// The item holding the variable `name[0..name_len]`, or NULL.
-///
-/// A non-NULL `htp` means the caller is about to *write*, and takes the
-/// scope's hashtab; it also suppresses autoloading, since a write does not
-/// want the script sourced.
-///
-/// # Safety
-/// `name` points at `name_len` readable bytes; `htp` is writable or NULL.
-pub unsafe fn find_var(
-    name: *const c_char,
-    name_len: size_t,
-    htp: *mut *mut DictTab,
-    no_autoload: bool,
-) -> *mut DictItem {
-    let (ht, varname) = unsafe { find_var_ht(name, name_len) };
-    let varname = name.wrapping_add(varname);
-    if !htp.is_null() {
-        unsafe { *htp = ht };
-    }
-    if ht.is_null() {
-        return ptr::null_mut();
-    }
-    let no_autoload = no_autoload || !htp.is_null();
-    // SAFETY: `varname` points inside `name`, so the subtraction cannot go
-    // negative; the scope's first character is what names it.
-    let htname = c_int::from(unsafe { *name });
-    let vlen = name_len - unsafe { varname.offset_from(name) } as size_t;
-    let ret = unsafe { find_var_in_ht(ht, htname, varname, vlen, no_autoload) };
-    if !ret.is_null() {
-        return ret;
-    }
-    // Search the parent scope, which a lambda can reference.
-    unsafe { find_var_in_scoped_ht(name, name_len, no_autoload as c_int) }
+/// Which scope a variable name lives in.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum ScopeKind {
+    /// `g:`, and an unprefixed name outside a function.
+    Global,
+    /// `v:`.
+    Vim,
+    /// An unprefixed name that means a `v:` variable (`version`): the `v:`
+    /// dictionary, but with no watchers of its own and none of `v:`'s
+    /// assignment rules.
+    Compat,
+    /// `b:`.
+    Buffer,
+    /// `w:`.
+    Window,
+    /// `t:`.
+    Tab,
+    /// `s:`.
+    Script,
+    /// `l:`, and an unprefixed name inside a function.
+    Local,
+    /// `a:`.
+    Args,
 }
 
-/// Run `f` over the item holding the variable `name`, answering `None` when
-/// there is none.
+/// Where a variable name lives: the scope, its dictionary, and where in the
+/// name the variable's own name starts -- past the `x:` prefix, or 0.
+pub(crate) struct VarHome {
+    pub(crate) kind: ScopeKind,
+    pub(crate) dict: DictRef,
+    pub(crate) name_at: usize,
+}
+
+/// What [`locate`] found for a name.
+pub(crate) enum Located {
+    /// A variable: the dictionary holding it and its slot there, good
+    /// until user code runs.
+    Item { dict: DictRef, slot: usize },
+    /// A bare scope name (`g:`, `l:`, ...): the scope's own entry.
+    Entry(ScopeKind),
+}
+
+/// Run `f` over the variable `name`, answering `None` when there is none.
 ///
-/// The borrow is [`Dict::find_mut`]'s: the item lives in its scope's table
-/// for as long as nothing removes it, and nothing does while `f` only reads
-/// and writes the item itself. `f` must not run user code -- what a
-/// handle's `DerefMut` asks of its borrow, and the reason this takes a
-/// closure rather than answering the item.
+/// The borrow is the item's: `f` must not run user code, nor reach the
+/// dictionary the item is in -- the reason this takes a closure rather than
+/// answering the item.
 pub(crate) fn with_var<R>(
     name: &[u8],
     no_autoload: bool,
     f: impl FnOnce(&mut DictItem) -> R,
 ) -> Option<R> {
-    // SAFETY: `name` names its own bytes, and no table is asked back.
-    let item = unsafe {
-        find_var(
-            name.as_ptr().cast(),
-            name.len(),
-            ptr::null_mut(),
-            no_autoload,
-        )
-    };
-    // SAFETY: a live item of a live scope, or null; the borrow ends with `f`.
-    unsafe { item.as_mut() }.map(f)
+    match locate(name, no_autoload)? {
+        Located::Item { dict, slot } => dict.edit().item_at_mut(slot).map(f),
+        Located::Entry(kind) => with_scope_entry(kind, f),
+    }
 }
 
-/// The item holding `varname[0..varname_len]` in `ht`, or NULL.
-///
-/// An empty name is the scope itself (`let g:` and friends), and answers the
-/// scope's own dictionary item; `htname` -- the name's first character -- is
-/// what says which scope that is.  Otherwise the name is looked up, and for
-/// `g:` a miss may source an autoload script and look again.
-///
-/// # Safety
-/// `ht` is a live hashtab and `varname` points at `varname_len` readable
-/// bytes.
-pub unsafe fn find_var_in_ht(
-    ht: *mut DictTab,
-    htname: c_int,
-    varname: *const c_char,
-    varname_len: size_t,
-    no_autoload: bool,
-) -> *mut DictItem {
-    if varname_len == 0 {
-        // Something like "s:", or `ht` would have been NULL.
-        return match htname as u8 {
-            b's' => with_script_item(current_sctx.get().sc_sid, |si| {
-                si.sn_vars
-                    .as_mut()
-                    .map_or(ptr::null_mut(), |vars| vars.sv_var.item())
-            }),
-            b'g' => globvar_scope_item(),
-            b'v' => vimvar_scope_item(),
-            b'b' => (unsafe { &raw mut (*Buf::current_raw()).b_bufvar }).cast(),
-            b'w' => (unsafe { &raw mut (*Win::current_raw()).w_winvar }).cast(),
-            b't' => (unsafe { &raw mut (*TabPage::current_raw()).tp_winvar }).cast(),
-            b'l' => get_funccal_local_var(),
-            b'a' => get_funccal_args_var(),
-            _ => ptr::null_mut(),
-        };
-    }
-
-    let mut hi = unsafe { hash_find_len(ht, varname, varname_len) };
-    if !hi.is_kept() {
-        // A global may be an autoload variable; sourcing its script may
-        // define it.  Don't source one that ran already, or every check
-        // of "is this name a Funcref variable" would re-run it.
-        if ht == get_globvar_ht() && !no_autoload {
-            // script_autoload() may invalidate `hi`, so it has to be
-            // asked for again rather than reused.
-            if !unsafe { script_autoload(varname, varname_len, false) } || aborting() {
-                return ptr::null_mut();
+/// Run `f` over the entry a bare scope name evaluates to, answering `None`
+/// when the scope does not exist (no function running, no script).
+pub(crate) fn with_scope_entry<R>(
+    kind: ScopeKind,
+    f: impl FnOnce(&mut DictItem) -> R,
+) -> Option<R> {
+    match kind {
+        ScopeKind::Global => {
+            drop(globvar_dict());
+            Some(scope_globals.with_mut(|entry| f(entry)))
+        }
+        ScopeKind::Vim => {
+            drop(vimvar_dict());
+            Some(scope_vim.with_mut(|entry| f(entry)))
+        }
+        ScopeKind::Compat => None,
+        ScopeKind::Buffer => Some(f(&mut Buf::current().b_bufvar)),
+        ScopeKind::Window => Some(f(&mut Win::current().w_winvar)),
+        ScopeKind::Tab => Some(f(&mut TabPage::current().tp_winvar)),
+        ScopeKind::Script => {
+            let sid = current_sctx.get().sc_sid;
+            if !script_id_valid(sid) {
+                return None;
             }
-            hi = unsafe { hash_find_len(ht, varname, varname_len) };
+            with_script_item(sid, |si| {
+                si.sn_vars.as_mut().map(|vars| f(&mut vars.sv_var))
+            })
         }
-        if !hi.is_kept() {
-            return ptr::null_mut();
-        }
+        ScopeKind::Local => with_funccal_scope_entry(true, f),
+        ScopeKind::Args => with_funccal_scope_entry(false, f),
     }
-    tv_dict_hi2di(hi)
 }
 
-/// The scope dictionary and hashtab `name[0..name_len]` belongs to, or NULL
-/// when the name names no scope.
-///
-/// A name with no prefix is `v:version` if the compatibility table has it,
-/// otherwise the function-local scope if there is one and `g:` if not.  A
-/// prefixed one names its scope directly -- and `s:` is where an anonymous
-/// Lua or `:execute` chunk is given a script id, so that it can have script
-/// variables at all (#15994).
-///
-/// Answers the hashtab and where in `name` the variable's own name starts:
-/// past the `x:` prefix, or 0 without one.
-///
-/// # Safety
-/// `name` points at `name_len` readable bytes; `d` is writable.
-pub(crate) unsafe fn find_var_ht_dict(
-    name: *const c_char,
-    name_len: size_t,
-    d: *mut *mut Dict,
-) -> (*mut DictTab, usize) {
-    // SAFETY: the caller's obligation -- `name_len` readable bytes, and a
-    // writable out-parameter that is the caller's own local.
-    let mut dict = unsafe { Live::new(d) };
-    *dict = ptr::null_mut();
-    if name_len == 0 {
-        return (ptr::null_mut(), 0);
+/// The dictionary of the scope `kind` names, as of now.
+pub(crate) fn scope_dict(kind: ScopeKind) -> Option<DictRef> {
+    match kind {
+        ScopeKind::Global => Some(globvar_dict()),
+        ScopeKind::Vim | ScopeKind::Compat => Some(vimvar_dict()),
+        ScopeKind::Buffer => Buf::current().b_bufvar.di_tv.dict_handle(),
+        ScopeKind::Window => Win::current().w_winvar.di_tv.dict_handle(),
+        ScopeKind::Tab => TabPage::current().tp_winvar.di_tv.dict_handle(),
+        ScopeKind::Script => script_scope_dict(current_sctx.get().sc_sid),
+        ScopeKind::Local => funccal_scope(true),
+        ScopeKind::Args => funccal_scope(false),
     }
-    // Where the variable's own name starts.
-    let mut varname = 0;
+}
 
-    let lead = unsafe { *name };
-    if name_len == 1 || unsafe { *name.add(1) } != b':' as c_char {
+/// The variable `name`: where it is, or `None`.
+///
+/// A miss in `g:` may source an autoload script (user code) and look
+/// again; past that, the scopes a lambda closed over are searched. A slot
+/// answered here is good until user code runs.
+pub(crate) fn locate(name: &[u8], no_autoload: bool) -> Option<Located> {
+    let home = find_var_home(name)?;
+    locate_in(&home, name, no_autoload)
+}
+
+/// [`locate`] in a home [`find_var_home`] already answered for `name`.
+pub(crate) fn locate_in(home: &VarHome, name: &[u8], no_autoload: bool) -> Option<Located> {
+    let varname = &name[home.name_at..];
+    if varname.is_empty() {
+        // Something like "s:": the scope itself.
+        return Some(Located::Entry(home.kind));
+    }
+    if let Some(slot) = home.dict.slot_of(varname) {
+        return Some(Located::Item {
+            dict: home.dict.clone(),
+            slot,
+        });
+    }
+    // A global may be an autoload variable; sourcing its script may define
+    // it.  Don't source one that ran already, or every check of "is this
+    // name a Funcref variable" would re-run it.
+    if home.kind == ScopeKind::Global
+        && !no_autoload
+        && script_autoload_named(varname, false)
+        && !aborting()
+        && let Some(slot) = home.dict.slot_of(varname)
+    {
+        return Some(Located::Item {
+            dict: home.dict.clone(),
+            slot,
+        });
+    }
+    // Search the parent scope, which a lambda can reference.
+    locate_scoped(name, no_autoload)
+}
+
+/// The variable `name` in a scope a lambda closed over.
+fn locate_scoped(name: &[u8], no_autoload: bool) -> Option<Located> {
+    if !current_func_has_scope() {
+        return None;
+    }
+    // Each probe answers owned handles: nothing is borrowed across the
+    // walk's steps.
+    walk_scoped_funccals(|| {
+        let home = find_var_home(name)?;
+        let varname = &name[home.name_at..];
+        if varname.is_empty() {
+            return None;
+        }
+        if let Some(slot) = home.dict.slot_of(varname) {
+            return Some(Located::Item {
+                dict: home.dict,
+                slot,
+            });
+        }
+        if home.kind == ScopeKind::Global
+            && !no_autoload
+            && script_autoload_named(varname, false)
+            && !aborting()
+        {
+            let slot = home.dict.slot_of(varname)?;
+            return Some(Located::Item {
+                dict: home.dict,
+                slot,
+            });
+        }
+        None
+    })
+}
+
+/// The scope `name` belongs to, or `None` when the name names no scope.
+///
+/// A name with no prefix is `v:version` if it is a compat name, otherwise
+/// the function-local scope if there is one and `g:` if not.  A prefixed one
+/// names its scope directly -- and `s:` is where an anonymous Lua or
+/// `:execute` chunk is given a script id, so that it can have script
+/// variables at all (#15994).
+pub(crate) fn find_var_home(name: &[u8]) -> Option<VarHome> {
+    let (&lead, _) = name.split_first()?;
+    let home = |kind, dict: Option<DictRef>, name_at| {
+        dict.map(|dict| VarHome {
+            kind,
+            dict,
+            name_at,
+        })
+    };
+    if name.get(1) != Some(&b':') {
         // An implicit scope. The name must not start with a colon or a
         // '#'.
-        if lead == b':' as c_char || lead == AUTOLOAD_CHAR {
-            return (ptr::null_mut(), varname);
+        if lead == b':' || lead == AUTOLOAD_CHAR as u8 {
+            return None;
         }
-
-        // "version" is "v:version" in every scope. The scope dictionary
-        // stays unset: a compat name has no watchers of its own.
-        // SAFETY: the caller's `name_len` readable bytes.
-        if is_compat_name(unsafe { cstr::slice_at(name, name_len) }) {
-            return (get_vimvar_ht(), varname);
+        // "version" is "v:version" in every scope.
+        if is_compat_name(name) {
+            return home(ScopeKind::Compat, Some(vimvar_dict()), 0);
         }
-
-        *dict = get_funccal_local_dict();
-        if dict.is_null() {
-            *dict = get_globvar_dict();
-        }
-    } else {
-        varname = 2;
-        if lead == b'g' as c_char {
-            *dict = get_globvar_dict();
-        } else if name_len > 2
-            && (!unsafe { memchr(name.add(2).cast(), b':' as c_int, name_len - 2) }.is_null()
-                || !unsafe { memchr(name.add(2).cast(), AUTOLOAD_CHAR as c_int, name_len - 2) }
-                    .is_null())
-        {
-            // Without `g:` there must be no ':' or '#' in the rest.
-            return (ptr::null_mut(), varname);
-        }
-
-        match lead as u8 {
-            b'b' => *dict = Buf::current().b_vars,
-            b'w' => *dict = Win::current().w_vars,
-            b't' => *dict = TabPage::current().tp_vars,
-            b'v' => *dict = get_vimvar_dict(),
-            b'a' => *dict = get_funccal_args_dict(),
-            b'l' => *dict = get_funccal_local_dict(),
-            b's' => {
-                // Both calls below fill `sctx` in, and neither reads the
-                // cell, so the round trip through a local is what the C's
-                // write-through-the-pointer amounts to.
-                let mut sctx = current_sctx.get();
-                if (sctx.sc_sid > 0 || sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA)
-                    && sctx.sc_sid <= script_count()
-                {
-                    // Resolve the Lua filename and line number, so that
-                    // a later "Last set from" can name them.
-                    unsafe { nlua_set_sctx(&raw mut sctx) };
-                    if sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA {
-                        // An anonymous chunk has no script item yet.
-                        unsafe { new_script_item(ptr::null_mut(), &raw mut sctx.sc_sid) };
-                    }
-                    current_sctx.set(sctx);
-                    // `s:` is never freed, so its address outlives the handle.
-                    *dict = script_scope_dict(sctx.sc_sid).map_or(ptr::null_mut(), |d| d.as_ptr());
-                }
-            }
-            _ => {}
-        }
+        return match funccal_scope(true) {
+            Some(local) => home(ScopeKind::Local, Some(local), 0),
+            None => home(ScopeKind::Global, Some(globvar_dict()), 0),
+        };
     }
-
-    // SAFETY: the dictionary just chosen is live or NULL, and its hashtab
-    // is a field of it. Its address, not a borrow of the dictionary: a
-    // borrow would retag the whole of it, and an earlier answer's hashtab
-    // pointer is still in use.
-    let ht = if (*dict).is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { &raw mut (**dict).dv_hashtab }
-    };
-    (ht, varname)
+    if lead == b'g' {
+        return home(ScopeKind::Global, Some(globvar_dict()), 2);
+    }
+    // Without `g:` there must be no ':' or '#' in the rest.
+    if name[2..]
+        .iter()
+        .any(|&c| c == b':' || c == AUTOLOAD_CHAR as u8)
+    {
+        return None;
+    }
+    match lead {
+        b'b' => home(ScopeKind::Buffer, scope_dict(ScopeKind::Buffer), 2),
+        b'w' => home(ScopeKind::Window, scope_dict(ScopeKind::Window), 2),
+        b't' => home(ScopeKind::Tab, scope_dict(ScopeKind::Tab), 2),
+        b'v' => home(ScopeKind::Vim, Some(vimvar_dict()), 2),
+        b'a' => home(ScopeKind::Args, funccal_scope(false), 2),
+        b'l' => home(ScopeKind::Local, funccal_scope(true), 2),
+        b's' => home(ScopeKind::Script, script_scope_for_lookup(), 2),
+        _ => None,
+    }
 }
 
-/// [`find_var_ht_dict`] without the dictionary.
-///
-/// # Safety
-/// As [`find_var_ht_dict`].
-pub unsafe fn find_var_ht(name: *const c_char, name_len: size_t) -> (*mut DictTab, usize) {
-    let mut d: *mut Dict = ptr::null_mut();
-    unsafe { find_var_ht_dict(name, name_len, &raw mut d) }
+/// The current script's `s:` dictionary for a lookup, giving an anonymous
+/// Lua or `:execute` chunk a script item first.
+fn script_scope_for_lookup() -> Option<DictRef> {
+    // Both calls below fill `sctx` in, and neither reads the cell, so the
+    // round trip through a local is what the C's write-through-the-pointer
+    // amounts to.
+    let mut sctx = current_sctx.get();
+    if !((sctx.sc_sid > 0 || sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA)
+        && sctx.sc_sid <= script_count())
+    {
+        return None;
+    }
+    // Resolve the Lua filename and line number, so that a later "Last set
+    // from" can name them.
+    nlua_set_sctx_in(&mut sctx);
+    if sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA {
+        // An anonymous chunk has no script item yet.
+        sctx.sc_sid = new_unnamed_script_item();
+    }
+    current_sctx.set(sctx);
+    script_scope_dict(sctx.sc_sid)
 }
 
-/// The string value of the variable `name`, or NULL when it does not exist.
-///
-/// A variable holding a Number has no string of its own, so the caller lends
-/// `numbuf` for it to be rendered into; the answer borrows either that or the
-/// variable, and lives no longer than the shorter of the two.
-///
-/// # Safety
-/// `name` is a NUL-terminated string.
-pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_char {
-    // SAFETY: the caller's obligation -- a NUL-terminated name; the answer
-    // borrows the item that was found or the caller's scratch.
-    let v = unsafe { find_var(name, cstr::bytes_at(name).len(), ptr::null_mut(), false) };
-    if v.is_null() {
-        return ptr::null_mut();
-    }
-    let tv = unsafe { Di::new(v) }.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
-    unsafe { numbuf.string(&*tv).as_ptr().cast_mut() }
+/// The string value of the variable `name`, or `None` when it does not
+/// exist. A Number renders as its digits.
+pub(crate) fn var_string_value(name: &[u8]) -> Option<Vec<u8>> {
+    // Copied out, then rendered: rendering a value that is not a string can
+    // report an error, which writes `v:errmsg`.
+    let value = with_var(name, false, |item| item.di_tv.clone())?;
+    let mut numbuf = NumBuf::new();
+    Some(numbuf.string(&value).to_bytes().to_vec())
 }
 
 /// `exists()` over a variable name: whether `var` names something, including
@@ -456,76 +453,4 @@ pub(crate) fn var_exists(var: &[u8]) -> bool {
         n = false;
     }
     n
-}
-
-/// Find a hashitem in a parent scope, i.e. one a lambda captured.
-///
-/// Moved here from `eval/userfunc`: only the variable lookups ask it.
-///
-/// # Safety
-/// `name` is NUL-terminated and `ht` is writable.
-pub(crate) unsafe fn find_hi_in_scoped_ht(
-    name: *const c_char,
-    ht: *mut *mut DictTab,
-) -> Option<ItemSlot> {
-    if !current_func_has_scope() {
-        return None;
-    }
-    // SAFETY: the caller's NUL-terminated string.
-    let namelen = unsafe { cstr::bytes_at(name) }.len();
-    // Upstream answers the *last* hashitem it looked at, not only a found
-    // one, so a miss still hands back the slot it stopped on.
-    let mut last: Option<ItemSlot> = None;
-    // SAFETY: as above; `varname` is a tail of `name`, so the subtraction
-    // leaves the length of what is left of it. That holds for every
-    // dereference in the probe.
-    let probe = || {
-        let (found, varname) = unsafe { find_var_ht(name, namelen) };
-        let varname = name.wrapping_add(varname);
-        if !found.is_null() && unsafe { *varname } != NUL as c_char {
-            let past = unsafe { varname.offset_from(name) } as size_t;
-            let hi = unsafe { hash_find_len(found, varname, namelen.wrapping_sub(past)) };
-            last = Some(hi);
-            if hi.is_kept() {
-                unsafe { *ht = found };
-                return Some(hi);
-            }
-        }
-        None
-    };
-    walk_scoped_funccals(probe);
-    last
-}
-
-/// Find a variable in a parent scope, i.e. one a lambda captured.
-///
-/// Moved here from `eval/userfunc`: only the variable lookups ask it.
-///
-/// # Safety
-/// `name` has `namelen` readable bytes.
-pub(crate) unsafe fn find_var_in_scoped_ht(
-    name: *const c_char,
-    namelen: size_t,
-    no_autoload: c_int,
-) -> *mut DictItem {
-    if !current_func_has_scope() {
-        return ptr::null_mut();
-    }
-    // SAFETY: `name` has `namelen` readable bytes and `varname` is a tail of
-    // it.
-    let probe = || {
-        let (ht, varname) = unsafe { find_var_ht(name, namelen) };
-        let varname = name.wrapping_add(varname);
-        if !ht.is_null() && unsafe { *varname } != NUL as c_char {
-            let past = unsafe { varname.offset_from(name) } as size_t;
-            let left = namelen.wrapping_sub(past);
-            let first = unsafe { *name } as c_int;
-            let v = unsafe { find_var_in_ht(ht, first, varname, left, no_autoload != 0) };
-            if !v.is_null() {
-                return Some(v);
-            }
-        }
-        None
-    };
-    walk_scoped_funccals(probe).unwrap_or(ptr::null_mut())
 }

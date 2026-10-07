@@ -12,7 +12,7 @@ use core::ffi::{CStr, c_int};
 use crate::eval::encode::{tv2echo_bytes, tv2string_bytes};
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::CallStackAside;
-use crate::eval::vars::{clear_local, set_var_named};
+use crate::eval::vars::{clear_local, set_var};
 use crate::eval::{Cursor, echo_hl_id, eval1, eval1_emsg};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline_as};
 use crate::ex_eval::aborting;
@@ -202,7 +202,7 @@ pub fn var_flavour(name: &[u8]) -> VarFlavour {
 /// function's scope cannot capture it. The value moves into the variable.
 pub fn var_set_global(name: &CStr, mut vartv: TypVal) {
     let call_stack_aside = CallStackAside::new();
-    set_var_named(name, &mut vartv, false);
+    set_var(name.to_bytes(), &mut vartv, false);
     drop(call_stack_aside);
 }
 

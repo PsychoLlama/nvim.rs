@@ -58,6 +58,12 @@ pub(crate) fn set_sctx_from_lua(current: &mut ScriptCtx) {
     unsafe { nlua_set_sctx(current) }
 }
 
+/// [`nlua_set_sctx`] of a context the caller holds.
+pub(crate) fn nlua_set_sctx_in(current: &mut ScriptCtx) {
+    // SAFETY: a writable context, borrowed for the call.
+    unsafe { nlua_set_sctx(current) };
+}
+
 /// Point `current` at the Lua source position the running function was
 /// defined at, so `:verbose` and an error message name the `.lua` file.
 ///

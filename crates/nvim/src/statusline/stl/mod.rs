@@ -408,20 +408,7 @@ impl Env {
 /// Set `name` to the number `value` as a string, the way `%{}` publishes the
 /// real current buffer and window.
 fn set_str_var(name: &CStr, value: c_int) {
-    let mut text = itoa(value);
-    // SAFETY: both arguments are NUL-terminated strings this frame owns, and
-    // `set_internal_string_var` copies the value.
-    unsafe { set_internal_string_var(name.as_ptr(), text.as_mut_ptr()) };
-}
-
-/// `value` in decimal, NUL-terminated.
-fn itoa(value: c_int) -> [c_char; 12] {
-    let mut out = [0 as c_char; 12];
-    let text = value.to_string();
-    for (slot, byte) in out.iter_mut().zip(text.bytes()) {
-        *slot = byte as c_char;
-    }
-    out
+    set_internal_string_var(name.to_bytes(), Some(value.to_string().as_bytes()));
 }
 
 /// `:unlet!` a variable this expansion published.
@@ -702,16 +689,7 @@ pub unsafe fn build_stl_str_hl(
     let usefmt = if fmt_bytes.starts_with(b"%!") {
         let mut winid = TypVal::Number(win.handle as VarNumber);
         let name = c"g:statusline_winid";
-        // SAFETY: a NUL-terminated name with its own length, and a typval
-        // this frame owns, which `set_var` copies.
-        unsafe {
-            set_var(
-                name.as_ptr(),
-                name.to_bytes().len() as size_t,
-                &mut winid,
-                false,
-            )
-        };
+        set_var(name.to_bytes(), &mut winid, false);
         let expanded = eval_to_string_safe(&fmt_bytes[2..], sandbox, false);
         unlet(name);
         expanded.map_or(fmt_bytes, |text| text.to_vec())
