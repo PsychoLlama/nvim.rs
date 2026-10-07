@@ -947,6 +947,24 @@ section('s4-readdir', function()
   ans('s4/findfile/emptyname', "findfile('', " .. vq(root) .. ')')
   ans('s4/finddir/emptyname', "finddir('', " .. vq(root) .. ')')
   ans('s4/findfile/count0', "findfile('one.txt', " .. vq(root .. '/**') .. ', 0)')
+
+  -- A filter that changes directory under the walk, and one that edits
+  -- the list the caller is about to receive: readdir() reads the
+  -- directory it was given, not the one the callback left behind.
+  vim.cmd('cd ' .. vim.fn.fnameescape(root))
+  ans('s4/readdir/f-chdir', "readdir('.', {n -> execute('cd a') is# '' && 1})")
+  ans('s4/readdir/f-chdir-cwd', "fnamemodify(getcwd(), ':t')")
+  vim.cmd('cd ' .. vim.fn.fnameescape(root))
+  ans('s4/readdir/f-chdir-up', "readdir('a', {n -> execute('cd ..') is# '' && n !~ '^b'})")
+  vim.cmd('cd ' .. vim.fn.fnameescape(root))
+  ans('s4/readdir/f-unlet', "[execute('let g:fs_rd = []'), readdir('.', {n -> add(g:fs_rd, n) is# g:fs_rd})][1]")
+  ans('s4/readdir/f-unlet-seen', 'len(g:fs_rd)')
+  ans('s4/glob/f-chdir', "map(glob('*', 0, 1), {_, n -> execute('cd ' .. " .. vq(root) .. ") is# '' ? n : n})")
+  vim.cmd('cd ' .. vim.fn.fnameescape(root))
+  ans('s4/globpath/list', "globpath('.,a', '*', 0, 1)")
+  ans('s4/globpath/nosuf', "globpath('.', '*.txt', 1, 1, 1)")
+  ans('s4/glob/alllinks', "glob('*', 0, 1, 1)")
+  vim.cmd('unlet! g:fs_rd')
 end)
 
 -- =====================================================================
