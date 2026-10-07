@@ -124,11 +124,8 @@ struct Selection {
     mode: VisualMode,
 }
 
-/// `g CTRL-G`, and `wordcount()` when `dict` is not null.
-///
-/// # Safety
-/// `dict`, when not null, must point to a live dictionary.
-pub unsafe fn cursor_pos_info(dict: *mut Dict) {
+/// `g CTRL-G`, and `wordcount()` when given the `dict` to fill.
+pub fn cursor_pos_info(dict: Option<&mut Dict>) {
     // The report is assembled across two functions and shown at the end, so
     // it is owned here rather than left in the shared `IObuff`.
     let mut report = String::new();
@@ -137,7 +134,7 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
     let mut bom_count: VarNumber = 0;
 
     if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        if dict.is_null() {
+        if dict.is_none() {
             msg(gettext(no_lines_msg), 0);
             return;
         }
@@ -149,16 +146,16 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
             return;
         }
 
-        if dict.is_null() {
+        if dict.is_none() {
             report = report_counts(&counts, selection.as_ref());
         }
 
         bom_count = VarNumber::from(bomb_size());
-        if dict.is_null() && bom_count > 0 {
+        if dict.is_none() && bom_count > 0 {
             report.push_str(&tr!("(+{bom_count} for BOM)"));
         }
 
-        if dict.is_null() {
+        if dict.is_none() {
             // 'shortmess' must not truncate this one.
             let saved_shm = P_SHM.clear();
             if p_ch() < 1 {
@@ -172,8 +169,8 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
         }
     }
 
-    if !dict.is_null() {
-        unsafe { store_counts(dict, &counts, bom_count, visual.is_some()) };
+    if let Some(dict) = dict {
+        store_counts(dict, &counts, bom_count, visual.is_some());
     }
 }
 
@@ -416,18 +413,9 @@ fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
 ///
 /// The `visual_*` and `cursor_*` keys are the same three numbers under
 /// different names, which is how a caller tells which question was answered.
-///
-/// # Safety
-/// `dict` must point to a live dictionary.
-unsafe fn store_counts(
-    dict: *mut Dict,
-    counts: &PosCounts,
-    bom_count: VarNumber,
-    visual_active: bool,
-) {
-    // SAFETY: the caller's promise -- a live dictionary.
-    let add = |key: &::core::ffi::CStr, value: VarNumber| {
-        let _ = unsafe { (*dict).add_number(key.to_bytes(), value) };
+fn store_counts(dict: &mut Dict, counts: &PosCounts, bom_count: VarNumber, visual_active: bool) {
+    let mut add = |key: &::core::ffi::CStr, value: VarNumber| {
+        let _ = dict.add_number(key.to_bytes(), value);
     };
     add(c"words", counts.words);
     add(c"chars", counts.chars);

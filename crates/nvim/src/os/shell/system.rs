@@ -74,6 +74,29 @@ pub unsafe fn os_system(
     unsafe { do_os_system(argv, input, len, output, nread, true, false) }
 }
 
+/// [`os_system`] for a vector held as an [`Argv`]: run it with `input` on
+/// standard input, answering the exit code and everything the child wrote,
+/// or `None` when it wrote nothing.
+pub(crate) fn os_system_capture(argv: Argv, input: &[u8]) -> (c_int, Option<Vec<u8>>) {
+    let (mut output, mut nread) = (ptr::null_mut::<c_char>(), 0);
+    // SAFETY: the vector is handed over (the child releases it), `input` is
+    // readable for its length, and both out-parameters are locals. A
+    // non-null answer is an `xmalloc` block of `nread` bytes and a NUL, and
+    // a `Vec` may adopt it (the global allocator is `malloc`).
+    unsafe {
+        let status = os_system(
+            argv.into_raw(),
+            input.as_ptr().cast(),
+            input.len(),
+            &raw mut output,
+            &raw mut nread,
+        );
+        let captured =
+            (!output.is_null()).then(|| Vec::from_raw_parts(output.cast::<u8>(), nread, nread + 1));
+        (status, captured)
+    }
+}
+
 /// The one implementation behind [`os_system`] and [`os_call_shell`].
 ///
 /// `silent` suppresses the "shell failed to start" report and

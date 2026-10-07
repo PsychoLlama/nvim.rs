@@ -36,6 +36,19 @@ pub type wint_t = ::core::ffi::c_uint;
 #[cfg(not(miri))]
 pub use ::libc::{memmove, snprintf, strchr, strncasecmp, strncmp, strstr};
 
+/// `strncasecmp` over two C strings: at most `len` bytes, folded with the
+/// process locale's table. A `len` past the shorter string's end compares its
+/// NUL too, so `len = b.count_bytes() + 1` asks whether the two are equal.
+pub(crate) fn cstr_ncasecmp(
+    a: &::core::ffi::CStr,
+    b: &::core::ffi::CStr,
+    len: usize,
+) -> ::core::ffi::c_int {
+    // SAFETY: both strings are NUL-terminated, and `strncasecmp` stops at the
+    // first NUL of either.
+    unsafe { strncasecmp(a.as_ptr(), b.as_ptr(), len) }
+}
+
 /// The character-class bits glibc's table holds for byte `c` in the process
 /// locale -- what `isalnum(c)` and friends test, `_ISalnum` and the rest.
 pub(crate) fn ctype_bits(c: u8) -> ::core::ffi::c_ushort {

@@ -7,272 +7,177 @@
 //! undoes it on the way back. That is why the two halves look asymmetric:
 //! one builds a buffer, the other rewrites one in place.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-
-use crate::cstr;
-use crate::memory::ThinCString;
-use crate::semsg;
-use crate::smsg;
-use crate::snprintf;
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
-use core::ptr::{null, null_mut};
+#![forbid(unsafe_code)]
 
 use crate::buffer::find_buf;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    ListRef, NumBuf, list_first, list_iter, list_len, tv_get_number, tv_list_alloc,
-    tv_list_alloc_ret,
+    ListRef, NumBuf, list_iter, list_len, tv_get_number, tv_list_alloc, tv_list_alloc_ret,
 };
-use crate::eval::vars::emsg_static;
-use crate::eval::vars::set_vim_var_nr;
-use crate::eval::{NL, PROF_YES, Tv};
+use crate::eval::vars::{emsg_static, set_vim_var_nr};
+use crate::eval::{NL, PROF_YES};
 use crate::ex_cmds::check_secure;
-use crate::memline::ml_get_buf;
-use crate::memory::{memchrsub, xcalloc, xfree, xmalloc};
+use crate::memline::Lines;
+use crate::memory::ThinCString;
 use crate::message::e_invarg;
 use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_verbose;
-use crate::os::fs::os_can_exe;
-use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
+use crate::os::fs::executable_path;
+use crate::os::shell::Argv;
+use crate::os::shell::system::os_system_capture;
 use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
+use crate::semsg;
+use crate::smsg;
 use crate::types::{
-    EvalFuncData, IOSIZE, List, NUL, OptInt, ProfTime, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarNumber, Vv, kListLenMayKnow, ptrdiff_t, size_t,
+    EvalFuncData, Failed, IOSIZE, List, OptInt, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarNumber, Vv, kListLenMayKnow,
 };
+use core::ffi::c_int;
 
-/// Build a `NULL`-terminated argument vector out of a String (through the
-/// shell) or a List (directly). `cmd`, when given, comes back naming the
-/// executable; `executable` is cleared when the first item is not one.
-///
-/// # Safety
-/// `cmd_tv` must be valid; `cmd` and `executable` null or valid. `numbuf` is
-/// the scratch a Number command is spelled into and must outlive `*cmd`,
-/// which may point into it.
-pub unsafe fn tv_to_argv(
-    cmd_tv: &TypVal,
-    cmd: *mut *const c_char,
-    executable: *mut bool,
-    numbuf: &mut NumBuf,
-) -> *mut *mut c_char {
-    let mut numbuf2 = NumBuf::new();
-    let mut numbuf3 = NumBuf::new();
-    // SAFETY: the caller's promise -- the typval outlives the call.
-    let tv = cmd_tv;
-    if tv.v_type() == VAR_STRING {
-        // The caller's scratch, which outlives `*cmd`.
-        let cmd_str = numbuf.string(cmd_tv).as_ptr();
-        if !cmd.is_null() {
-            // SAFETY: the caller's promise -- a non-null `cmd` is valid.
-            unsafe { *cmd = cmd_str };
-        }
-        // SAFETY: `cmd_str` is NUL-terminated.
-        return unsafe { shell_build_argv(cmd_str, null::<c_char>()) };
+/// Why [`tv_to_argv`] built no vector. Either way it has been reported.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ArgvRefusal {
+    /// Not a String or a List, an empty List, or an item that is not text.
+    Invalid,
+    /// The List's first item names nothing runnable.
+    NotExecutable,
+}
+
+/// Build the argument vector for a String (run through `'shell'`) or a List
+/// (run directly, its first item resolved to the program's path).
+pub fn tv_to_argv(cmd_tv: &TypVal) -> Result<Argv, ArgvRefusal> {
+    if cmd_tv.v_type() == VAR_STRING {
+        let mut numbuf = NumBuf::new();
+        return Ok(Argv::shell(numbuf.string(cmd_tv)));
     }
-    if tv.v_type() != VAR_LIST {
-        let what = c"expected String or List".as_ptr();
-        // SAFETY: the format takes one NUL-terminated string.
-        let what = unsafe { c_str(what) };
+    if cmd_tv.v_type() != VAR_LIST {
+        let what = "expected String or List";
         semsg!("E475: Invalid argument: {what}");
-        return null_mut();
+        return Err(ArgvRefusal::Invalid);
     }
 
-    let argl: *mut List = tv.list_or_null();
-    // SAFETY: `argl` is a live List or null.
-    let argc = list_len(tv.list_ref());
+    let items = cmd_tv.list_ref();
+    let argc = list_len(items);
     if argc == 0 {
-        // SAFETY: `e_invarg` is a shared NUL-terminated message.
         emsg_static(e_invarg);
-        return null_mut();
+        return Err(ArgvRefusal::Invalid);
     }
 
     // The first item has to resolve to something runnable, and the
     // resolved path is what actually goes in slot 0.
-    // SAFETY: a non-empty List has a first item, and `numbuf2` outlives
-    // the string rendered into it.
-    let arg0 = numbuf2.string_chk(unsafe { &list_first(argl.as_mut()).expect("non-empty").li_tv });
-    let mut exe_resolved: *mut c_char = null_mut();
-    // SAFETY: `exe_resolved` is this frame's.
-    let runnable =
-        arg0.is_some_and(|arg0| unsafe { os_can_exe(arg0, &raw mut exe_resolved, true) });
-    if !runnable {
-        if let Some(arg0) = arg0
-            && !executable.is_null()
-        {
-            let mut buf: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
-            let size = size_of::<[c_char; IOSIZE as usize]>();
-            let fmt = c"'%s' is not executable".as_ptr();
-            // SAFETY: `buf` is this frame's and `size` is its length; the
-            // format takes the one NUL-terminated string `arg0`.
-            unsafe { snprintf!(buf.as_mut_ptr(), size, fmt, arg0.as_ptr()) };
-            let (what, text) = (c"cmd".as_ptr(), buf.as_mut_ptr());
-            // SAFETY: the format takes two NUL-terminated strings.
-            let (what, text) = unsafe { (c_str(what), c_str(text)) };
-            semsg!("E475: Invalid value for argument {what}: {text}");
-            // SAFETY: the caller's promise -- a non-null `executable`.
-            unsafe { *executable = false };
-        }
-        return null_mut();
-    }
-    if !cmd.is_null() {
-        // SAFETY: the caller's promise -- a non-null `cmd` is valid.
-        unsafe { *cmd = exe_resolved };
-    }
+    let mut numbuf = NumBuf::new();
+    let first = &list_iter(items).next().expect("non-empty").li_tv;
+    let Some(arg0) = numbuf.string_chk(first) else {
+        return Err(ArgvRefusal::Invalid);
+    };
+    let Some(program) = executable_path(arg0, true) else {
+        // Upstream formatted this into `IObuff`, which cut it there.
+        let mut text = Vec::with_capacity(arg0.count_bytes() + 20);
+        text.push(b'\'');
+        text.extend_from_slice(arg0.to_bytes());
+        text.extend_from_slice(b"' is not executable");
+        text.truncate(IOSIZE as usize - 1);
+        let (what, text) = (msg_cstr(c"cmd"), msg_bytes(&text));
+        semsg!("E475: Invalid value for argument {what}: {text}");
+        return Err(ArgvRefusal::NotExecutable);
+    };
 
-    let slots = argc as size_t + 1;
-    // SAFETY: `xcalloc` never answers NULL, and the last of the `argc + 1`
-    // zeroed slots stays the vector's NULL terminator.
-    let argv = unsafe { xcalloc(slots, size_of::<*mut c_char>()) } as *mut *mut c_char;
-    let mut i = 0;
-    if !argl.is_null() {
-        // SAFETY: `argl` is a live List.
-        for arg in list_iter(tv.list_ref()) {
-            // SAFETY: `arg` is one of the List's items, and `numbuf3`
-            // outlives the string rendered into it.
-            let Some(a) = numbuf3.string_chk(&arg.li_tv) else {
-                // SAFETY: `argv` holds `i` owned strings and a NULL tail.
-                unsafe { shell_free_argv(argv) };
-                // SAFETY: `exe_resolved` is the owned path from above.
-                unsafe { xfree(exe_resolved as *mut c_void) };
-                return null_mut();
-            };
-            // SAFETY: the List has `argc` items, so slot `i` is inside the
-            // vector.
-            unsafe { *argv.offset(i) = ThinCString::from_cstr(a).into_raw() };
-            i += 1;
-        }
+    let mut program = Some(ThinCString::from(program));
+    let mut words = Vec::with_capacity(argc as usize);
+    for arg in list_iter(items) {
+        let Some(word) = numbuf.string_chk(&arg.li_tv) else {
+            return Err(ArgvRefusal::Invalid);
+        };
+        // Slot 0 takes the resolved path rather than the item's spelling.
+        words.push(
+            program
+                .take()
+                .unwrap_or_else(|| ThinCString::from_cstr(word)),
+        );
     }
-    // Slot 0 holds the item's own spelling; swap in the resolved path.
-    // SAFETY: slot 0 was written above, and nothing else owns it.
-    unsafe { xfree(*argv as *mut c_void) };
-    // SAFETY: as above.
-    unsafe { *argv = exe_resolved };
-    argv
+    Ok(Argv::from_words(words))
 }
 
 /// Split captured output into a List of lines, undoing the NUL/newline
 /// swap on the way.
-///
-/// # Safety
-/// `str` must hold `len` readable bytes.
-pub(crate) unsafe fn string_to_list(
-    str: *const c_char,
-    mut len: size_t,
-    keepempty: bool,
-) -> ListRef {
+fn string_to_list(output: &[u8], keepempty: bool) -> ListRef {
     // A trailing newline does not start an empty last line unless the
     // caller asked to keep one.
-    // SAFETY: the caller's promise -- `len` bytes are readable, so the
-    // last one is.
-    if !keepempty && unsafe { *str.add(len - 1) } as c_int == NL {
-        len -= 1;
-    }
-    let mut list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-    // SAFETY: as above; `str` has `len` readable bytes.
-    encode_list_write(&mut list, unsafe {
-        ::core::slice::from_raw_parts(str.cast(), len)
-    });
+    let output = match output.split_last() {
+        Some((&last, rest)) if !keepempty && c_int::from(last) == NL => rest,
+        _ => output,
+    };
+    let mut list = tv_list_alloc(kListLenMayKnow as isize);
+    encode_list_write(&mut list, output);
     list
 }
 
 /// The shared body of `system()` and `systemlist()`.
 pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, retlist: bool) {
-    let mut cmdbuf = NumBuf::new();
     let profiling = do_profiling.get() == PROF_YES;
-    // SAFETY: the caller's promise -- `result` outlives the call.
-    let mut ret = unsafe { Tv::new(result) };
-    ret.write_string(None);
+    result.write_string(None);
     if check_secure() {
         return;
     }
 
-    let mut input_len: ptrdiff_t = 0;
-    // SAFETY: an argument is a live typval; with no input argument there is
-    // nothing to feed the command.
-    let input = match args.get(1) {
-        Some(tv) => unsafe { save_tv_as_string(tv, &raw mut input_len, false, false) },
-        None => null_mut(),
+    // With no input argument there is nothing to feed the command.
+    let input = match args.get(1).map(|tv| save_tv_as_string(tv, false, false)) {
+        Some(Err(Failed)) => return,
+        Some(Ok(input)) => input,
+        None => None,
     };
-    if input_len < 0 {
-        debug_assert!(input.is_null());
-        return;
-    }
 
-    let mut executable = true;
-    // SAFETY: `args` is the builtin's own vector, and `cmdbuf` outlives
-    // the argv a Number command is spelled into.
-    let argv = unsafe { tv_to_argv(&args[0], null_mut(), &raw mut executable, &mut cmdbuf) };
-    if argv.is_null() {
-        // A command that does not exist reports -1 rather than a shell
-        // exit status.
-        if !executable {
-            set_vim_var_nr(Vv::ShellError, -1);
+    let argv = match tv_to_argv(&args[0]) {
+        Ok(argv) => argv,
+        Err(refusal) => {
+            // A command that does not exist reports -1 rather than a shell
+            // exit status.
+            if refusal == ArgvRefusal::NotExecutable {
+                set_vim_var_nr(Vv::ShellError, -1);
+            }
+            return;
         }
-        // SAFETY: the input buffer is owned here.
-        unsafe { xfree(input as *mut c_void) };
-        return;
-    }
+    };
 
     if p_verbose() > 3 as OptInt {
-        // SAFETY: `argv` is the NULL-terminated vector built above.
-        let cmdstr = unsafe { shell_argv_to_str(argv) };
+        let cmdstr = argv.to_display();
         verbose_enter_scroll();
-        // SAFETY: `cmdstr` owns its NUL-terminated bytes for this block.
         let shown = msg_cstr(cmdstr.as_cstr());
         smsg!(0, "Executing command: \"{shown}\"");
-        // SAFETY: the literal is NUL-terminated.
         msg_str(c"\n\n");
         verbose_leave_scroll();
     }
 
-    let mut wait_time: ProfTime = 0;
-    if profiling {
-        wait_time = prof_child_enter();
-    }
-    let mut nread: size_t = 0;
-    let mut res: *mut c_char = null_mut();
-    let ilen = input_len as size_t;
-    // SAFETY: `argv` is the vector built above, `input` its `ilen` bytes of
-    // standard input, and the two out-parameters are this frame's.
-    let status = unsafe { os_system(argv, input, ilen, &raw mut res, &raw mut nread) };
+    let wait_time = if profiling { prof_child_enter() } else { 0 };
+    let (status, output) = os_system_capture(argv, input.as_deref().unwrap_or_default());
     if profiling {
         prof_child_exit(wait_time);
     }
-    // SAFETY: the child has read it, and the buffer is owned here.
-    unsafe { xfree(input as *mut c_void) };
+    drop(input);
     set_vim_var_nr(Vv::ShellError, status as VarNumber);
 
-    if res.is_null() {
+    let Some(mut output) = output else {
         if retlist {
-            // SAFETY: `result` is the caller's.
-            tv_list_alloc_ret(result, 0 as ptrdiff_t);
+            tv_list_alloc_ret(result, 0);
         } else {
-            ret.write_string(Some(ThinCString::empty()));
+            result.write_string(Some(ThinCString::empty()));
         }
         return;
-    }
+    };
 
     if retlist {
         // The `keepempty` argument is the third, so it is only read
         // when the second was given too.
-        let mut keepempty = 0;
-        if args.len() > 2 {
-            keepempty = tv_get_number(&args[2]) as c_int;
-        }
-        // SAFETY: `res` holds `nread` readable bytes.
-        ret.write_list(Some(unsafe { string_to_list(res, nread, keepempty != 0) }));
-        // SAFETY: the encoder copied what it needed.
-        unsafe { xfree(res as *mut c_void) };
+        let keepempty = args.len() > 2 && tv_get_number(&args[2]) as c_int != 0;
+        result.write_list(Some(string_to_list(&output, keepempty)));
     } else {
         // Undo the swap in place; the buffer is handed over as it is.
-        // SAFETY: `res` holds `nread` writable bytes.
-        unsafe { memchrsub(res as *mut c_void, NUL as c_char, 1 as c_char, nread) };
-        // SAFETY: `os_system` answered an `xmalloc`ed, NUL-terminated block,
-        // which the value takes over.
-        ret.write_string(unsafe { ThinCString::from_raw(res) });
+        for byte in output.iter_mut().filter(|byte| **byte == 0) {
+            *byte = 1;
+        }
+        result.write_string(Some(ThinCString::from_vec(output)));
     }
 }
 
@@ -286,191 +191,82 @@ pub fn f_systemlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     get_system_output_as_rettv(args, result, true)
 }
 
-/// Write `c` at `dest` and answer the byte after it.
-///
-/// # Safety
-/// `dest` must have room for one more byte.
-#[inline(always)]
-unsafe fn put(dest: *mut c_char, c: c_char) -> *mut c_char {
-    // SAFETY: the caller's promise -- one writable byte at `dest`.
-    unsafe {
-        *dest = c;
-        dest.add(1)
-    }
-}
-
-/// Copy the NUL-terminated string at `src` to `dest`, writing a NUL for
-/// every newline it holds, and answer the end of what was written.
+/// Append `text` to `out`, writing a NUL for every newline it holds.
 ///
 /// The swap is the module's convention: a child's standard input is a byte
 /// stream with no way to carry a NUL, so the two trade places on the way
 /// out and the reading half puts them back.
-///
-/// # Safety
-/// `src` must be NUL-terminated, and `dest` must have room for its bytes.
-unsafe fn copy_swapping_nl(src: *const c_char, dest: *mut c_char) -> *mut c_char {
-    let (mut src, mut dest) = (src, dest);
-    loop {
-        // SAFETY: the caller's promise -- the walk stops at the terminator,
-        // so it never leaves the string.
-        let c = unsafe { *src };
-        if c as c_int == NUL {
-            return dest;
-        }
-        let out = if c == b'\n' as c_char {
-            NUL as c_char
-        } else {
-            c
-        };
-        // SAFETY: the caller's promise -- one byte written per byte read.
-        dest = unsafe { put(dest, out) };
-        // SAFETY: `c` was not the terminator, so the next byte is inside.
-        src = unsafe { src.add(1) };
-    }
+fn push_swapping_nl(out: &mut Vec<u8>, text: &[u8]) {
+    out.extend(text.iter().map(|&c| if c == b'\n' { 0 } else { c }));
 }
 
 /// Render a typval as the byte stream a child process's stdin wants: a
 /// String as it is, a Number as that buffer's whole text, a List one item
-/// per line. `len` comes back -1 for a coercion that failed.
+/// per line. `Err` for a coercion that failed (reported), `Ok(None)` for
+/// nothing to send -- which an empty String is not.
 ///
 /// Newlines in the text become NULs and the line separators are newlines,
 /// which is the convention the reading half undoes.
-///
-/// # Safety
-/// `tv` and `len` must be valid.
-pub unsafe fn save_tv_as_string(
-    tv: &TypVal,
-    len: *mut ptrdiff_t,
-    endnl: bool,
-    crlf: bool,
-) -> *mut c_char {
+pub fn save_tv_as_string(tv: &TypVal, endnl: bool, crlf: bool) -> Result<Option<Vec<u8>>, Failed> {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's promise -- both outlive the call.
-    let value = unsafe { Tv::new(::core::ptr::from_ref(tv).cast_mut()) };
-    // SAFETY: as above.
-    unsafe { *len = 0 };
-    if value.v_type() == VAR_UNKNOWN {
-        return null_mut();
+    match tv.v_type() {
+        VAR_UNKNOWN => Ok(None),
+        VAR_NUMBER => buffer_as_string(tv),
+        VAR_LIST => Ok(list_as_string(tv.list_ref(), endnl, crlf)),
+        _ => numbuf
+            .bytes_chk(tv)
+            .map(|text| Some(text.to_vec()))
+            .ok_or(Failed),
     }
-    if value.v_type() != VAR_LIST && value.v_type() != VAR_NUMBER {
-        let Some(ret) = numbuf.bytes_chk(tv) else {
-            // SAFETY: the caller's promise about `len`.
-            unsafe { *len = -1 };
-            return null_mut();
-        };
-        // SAFETY: the caller's promise about `len`.
-        unsafe { *len = ret.len() as ptrdiff_t };
-        return ThinCString::from_bytes(ret).into_raw();
-    }
-    if value.v_type() == VAR_NUMBER {
-        // SAFETY: a `VAR_NUMBER`, which is what the callee wants.
-        return unsafe { buffer_as_string(tv, len) };
-    }
-    // SAFETY: `VAR_LIST` says the value holds a List.
-    unsafe { list_as_string(value.list_or_null(), len, endnl, crlf) }
 }
 
 /// A Number names a buffer; its whole text is the input.
-///
-/// # Safety
-/// `tv` must be a `VAR_NUMBER`; `len` valid.
-unsafe fn buffer_as_string(tv: &TypVal, len: *mut ptrdiff_t) -> *mut c_char {
-    // A `VAR_NUMBER`, so the value holds a buffer number.
+fn buffer_as_string(tv: &TypVal) -> Result<Option<Vec<u8>>, Failed> {
     let nr = tv.number_or_zero();
-    let Some(buf) = find_buf(nr as c_int) else {
+    let Some(buffer) = find_buf(nr as c_int) else {
         semsg!("E86: Buffer {} does not exist", nr);
-        // SAFETY: the caller's promise about `len`.
-        unsafe { *len = -1 };
-        return null_mut();
+        return Err(Failed);
     };
 
-    // Measure first: every line's bytes plus its terminator. The walk
-    // is `strlen` on purpose — upstream counts bytes up to the NUL,
-    // not whatever the memline records as the line's length.
-    for lnum in 1..=buf.line_count() {
-        // SAFETY: `lnum` is a line of the buffer, and a line is
-        // NUL-terminated; `len` is the caller's.
-        unsafe { *len += cstr::bytes_at(ml_get_buf(buf, lnum)).len() as ptrdiff_t + 1 };
+    // Each line up to its first NUL, on purpose: upstream counted bytes
+    // with `strlen`, not whatever the memline records as the length.
+    let mut lines = Lines::in_buffer(buffer);
+    let mut out = Vec::new();
+    for lnum in 1..=buffer.line_count() {
+        let line = lines.line(lnum);
+        let line = line.split(|&b| b == 0).next().unwrap_or_default();
+        push_swapping_nl(&mut out, line);
+        out.push(b'\n');
     }
-    // SAFETY: the caller's promise about `len`.
-    if unsafe { *len } == 0 {
-        return null_mut();
-    }
-
-    // SAFETY: `xmalloc` never answers NULL, and the block holds every
-    // line's bytes, its separator and the final terminator.
-    let ret = unsafe { xmalloc(*len as size_t + 1) as *mut c_char };
-    let mut end = ret;
-    for lnum in 1..=buf.line_count() {
-        // SAFETY: `lnum` is a line of the buffer, and the measurement above
-        // left room for its bytes and one separator.
-        end = unsafe { copy_swapping_nl(ml_get_buf(buf, lnum), end) };
-        // SAFETY: as above -- the separator's byte was measured in.
-        end = unsafe { put(end, b'\n' as c_char) };
-    }
-    // SAFETY: the terminator is the one byte the allocation added.
-    unsafe { *end = NUL as c_char };
-    // SAFETY: both cursors are into the one allocation.
-    unsafe { *len = end.offset_from(ret) as ptrdiff_t };
-    ret
+    Ok((!out.is_empty()).then_some(out))
 }
 
 /// A List is one line per item.
-///
-/// # Safety
-/// `list` must be null or valid; `len` valid.
-unsafe fn list_as_string(
-    list: *mut List,
-    len: *mut ptrdiff_t,
-    endnl: bool,
-    crlf: bool,
-) -> *mut c_char {
+fn list_as_string(list: Option<&List>, endnl: bool, crlf: bool) -> Option<Vec<u8>> {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let sep = if crlf { 2 } else { 1 };
 
-    // Measure first, charging every item a separator.
-    if !list.is_null() {
-        // SAFETY: the caller's promise -- a live List.
-        for li in list_iter(unsafe { list.as_ref() }) {
-            let tv_len = numbuf.bytes(&li.li_tv).len();
-            // SAFETY: the caller's promise about `len`.
-            unsafe { *len += tv_len as ptrdiff_t + sep };
-        }
-    }
-    // SAFETY: the caller's promise about `len`.
-    if unsafe { *len } == 0 {
-        return null_mut();
+    // Measure first, charging every item a separator. Each item is
+    // converted twice, as upstream did, so a bad one complains twice.
+    let measured: usize = list_iter(list)
+        .map(|li| numbuf.bytes(&li.li_tv).len() + sep)
+        .sum();
+    if measured == 0 {
+        return None;
     }
 
-    // The last item's separator is only written when `endnl`, so the
-    // measured length already covers the terminator when it is not.
-    // SAFETY: `xmalloc` never answers NULL, and `len` is the caller's.
-    let ret = unsafe { xmalloc((*len + if endnl { sep } else { 0 }) as size_t) as *mut c_char };
-    let mut end = ret;
-    if !list.is_null() {
-        // SAFETY: the caller's promise -- a live List.
-        let count = list_len(unsafe { list.as_ref() }) as usize;
-        for (at, li) in list_iter(unsafe { list.as_ref() }).enumerate() {
-            // SAFETY: `numbuf2` outlives the string rendered into it, and
-            // the measurement above left room for that string's bytes.
-            unsafe { end = copy_swapping_nl(numbuf2.string(&li.li_tv).as_ptr(), end) };
-            let last = at + 1 == count;
-            if endnl || !last {
-                if crlf {
-                    // SAFETY: the measurement charged every item `sep`
-                    // bytes, which is two when `crlf`.
-                    end = unsafe { put(end, b'\r' as c_char) };
-                }
-                // SAFETY: as above.
-                end = unsafe { put(end, b'\n' as c_char) };
+    let mut out = Vec::with_capacity(measured + 1);
+    let count = list_iter(list).len();
+    for (at, li) in list_iter(list).enumerate() {
+        push_swapping_nl(&mut out, numbuf2.string(&li.li_tv).to_bytes());
+        let last = at + 1 == count;
+        if endnl || !last {
+            if crlf {
+                out.push(b'\r');
             }
+            out.push(b'\n');
         }
     }
-    // SAFETY: the terminator's room is the separator the last item was
-    // charged, or the extra `sep` bytes the allocation added.
-    unsafe { *end = NUL as c_char };
-    // SAFETY: both cursors are into the one allocation.
-    unsafe { *len = end.offset_from(ret) as ptrdiff_t };
-    ret
+    Some(out)
 }

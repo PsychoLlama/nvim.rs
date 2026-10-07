@@ -3,7 +3,7 @@
 //!
 //! [`skip_component`] steps over one `\`-escaped path component;
 //! [`name_equal`] compares a component against a node, ignoring the `&`
-//! mnemonic marker and everything past a TAB. [`get_menu_cmd_modes`] maps
+//! mnemonic marker and everything past a TAB. [`cmd_modes`] maps
 //! the command name (`nmenu`, `vnoremenu`, `amenu!`, ...) onto the mode
 //! bitmask, the `:noremap` flag and the `:unmenu` flag; [`menu_mode_str`]
 //! and [`popup_mode_name`] go the other way, and [`menu_text`] splits a name
@@ -12,8 +12,7 @@
 //!
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -22,7 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::*;
@@ -122,32 +121,6 @@ pub(crate) fn cmd_modes(cmd: &[u8], forceit: bool) -> (c_int, c_int, bool) {
         REMAP_YES
     };
     (modes, noremap, at(cmd, tail) == b'u')
-}
-
-/// [`cmd_modes`] for the two callers outside this module, which hold the
-/// command name as a C string and want the flags through out-parameters.
-///
-/// # Safety
-/// `cmd` must name a NUL-terminated string; `noremap` and `unmenu` must be
-/// null or writable.
-pub(crate) unsafe fn get_menu_cmd_modes(
-    cmd: *const c_char,
-    forceit: bool,
-    noremap: *mut c_int,
-    unmenu: *mut bool,
-) -> c_int {
-    // SAFETY: the caller's obligation.
-    let (modes, no, un) = cmd_modes(unsafe { CStr::from_ptr(cmd) }.to_bytes(), forceit);
-    // SAFETY: the caller's obligation; both writes finish here.
-    unsafe {
-        if !noremap.is_null() {
-            *noremap = no;
-        }
-        if !unmenu.is_null() {
-            *unmenu = un;
-        }
-    }
-    modes
 }
 
 /// The command letters `modes` would be spelled with -- the opposite of

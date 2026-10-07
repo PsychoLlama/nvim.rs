@@ -373,6 +373,16 @@ pub unsafe fn os_get_hostname(hostname: *mut c_char, size: size_t) {
     }
 }
 
+/// [`os_get_hostname`] into `hostname`, NUL-terminated and truncated to fit.
+///
+/// # Panics
+/// When `hostname` is empty: there is no room for the terminator.
+pub(crate) fn os_hostname_into(hostname: &mut [u8]) {
+    assert!(!hostname.is_empty(), "no room for the terminator");
+    // SAFETY: a slice is writable for its whole length.
+    unsafe { os_get_hostname(hostname.as_mut_ptr().cast::<c_char>(), hostname.len()) };
+}
+
 /// The "real", resolved user home directory, as [`init_homedir`] worked it
 /// out.
 pub(crate) static homedir: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());

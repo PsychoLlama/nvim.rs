@@ -16,7 +16,6 @@ use crate::eval::buffer::find_buffer;
 use crate::eval::typval::{
     CallFrame, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
     tv_dict_alloc_ret, tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk,
-    tv_list_alloc_ret,
 };
 use crate::eval::userfunc::get_user_func_name;
 use crate::eval::vars::{cat_prefix_varname, get_user_var_name};
@@ -34,8 +33,8 @@ use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::Candidate;
 use crate::types::{
-    Array, Blob, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List, Object, TypVal,
-    VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, WrongArity, kBoolVarTrue, ptrdiff_t,
+    Array, Blob, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, Object, TypVal,
+    VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, WrongArity, kBoolVarTrue,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{CStr, c_int};
@@ -95,12 +94,6 @@ pub(crate) fn arg_lnum(tv: &TypVal) -> LineNr {
 /// Copy argument `tv` into `to`, taking a reference on what it points at.
 pub(crate) fn arg_copy(tv: &TypVal, to: &mut TypVal) {
     tv_copy(tv, to)
-}
-
-/// Make `result` a fresh List of `len` items, or of unknown length for one of
-/// the `kListLen*` hints. The list the builtin then fills in.
-pub(crate) fn list_alloc_ret(result: &mut TypVal, len: ptrdiff_t) -> *mut List {
-    tv_list_alloc_ret(result, len)
 }
 
 /// Make `result` a fresh, empty Dictionary.

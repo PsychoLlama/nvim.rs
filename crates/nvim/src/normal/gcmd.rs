@@ -13,7 +13,6 @@
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_H, Key};
 use crate::winlayer::{Buf, Win};
-use core::ptr;
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::cursor::{
@@ -370,7 +369,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
             }
         }
         // `g CTRL-G`: count the words, lines and bytes.
-        Ok(CTRL_G) => unsafe { cursor_pos_info(ptr::null_mut()) },
+        Ok(CTRL_G) => cursor_pos_info(None),
         Ok(b'i') => nv_gi_cmd(cmd_arg),
         // `gI`: insert in column 1 regardless of indent.
         Ok(b'I') => {

@@ -157,12 +157,12 @@ pub fn nlua_call_user_expand_func(
     }
 }
 
-/// Run the Lua chunk `code` with `args`, answering its value as an
-/// [`Object`].
-pub(crate) fn nlua_exec_object(code: &CStr, args: Array) -> Result<Object, Error> {
+/// Run the Lua chunk `code` with `args`, answering its value converted as
+/// `mode` says.
+pub(crate) fn nlua_exec_cstr(code: &CStr, args: Array, mode: LuaRetMode) -> Result<Object, Error> {
     // SAFETY: an owned argument array, no chunk name and no arena: the
     // answer is allocated, not borrowed.
-    unsafe { nlua_exec(&String_0::from_cstr(code), ptr::null(), args, kRetObject) }
+    unsafe { nlua_exec(&String_0::from_cstr(code), ptr::null(), args, mode) }
 }
 
 /// Load and run one chunk with `args` as its arguments.

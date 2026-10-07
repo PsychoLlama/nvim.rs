@@ -13,7 +13,7 @@ mod vim_patches;
 use crate::cstr;
 use crate::types::String_0;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 
@@ -77,14 +77,9 @@ const fn terminated(text: &'static str) -> &'static CStr {
 }
 
 /// `has("nvim-MAJOR[.MINOR[.PATCH]]")`: whether this build is that Nvim
-/// release or newer.
-///
-/// # Safety
-/// `version_str` is a NUL-terminated string.
-pub(crate) unsafe fn has_nvim_version(version_str: *const c_char) -> bool {
-    // SAFETY: the caller's obligation.
-    let asked = unsafe { CStr::from_ptr(version_str) };
-    at_most_this_nvim(asked.to_bytes())
+/// release or newer. `asked` is the text after the `nvim-`.
+pub(crate) fn has_nvim_version(asked: &[u8]) -> bool {
+    at_most_this_nvim(asked)
 }
 
 /// Whether `MAJOR[.MINOR[.PATCH]]` names this Nvim release or an older one.

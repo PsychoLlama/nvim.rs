@@ -155,6 +155,63 @@ pub unsafe fn shell_build_argv(cmd: *const c_char, extra_args: *const c_char) ->
     }
 }
 
+/// An owned argument vector: NULL-terminated, never empty, every word an
+/// `xmalloc` block of its own -- the shape [`shell_build_argv`] answers and
+/// a child process adopts. Dropping it releases the lot with
+/// [`shell_free_argv`]; [`into_raw`](Argv::into_raw) hands it on instead.
+pub struct Argv(ptr::NonNull<*mut c_char>);
+
+impl Argv {
+    /// `'shell'` running `cmd` through `'shellcmdflag'`.
+    pub fn shell(cmd: &CStr) -> Self {
+        // SAFETY: `cmd` is NUL-terminated, and there are no extra arguments.
+        let raw = unsafe { shell_build_argv(cmd.as_ptr(), ptr::null()) };
+        Argv(ptr::NonNull::new(raw).expect("shell_build_argv never answers null"))
+    }
+
+    /// `words`, in order, run as they are.
+    ///
+    /// # Panics
+    /// When `words` is empty: a vector names at least its program.
+    pub fn from_words(words: Vec<crate::memory::ThinCString>) -> Self {
+        assert!(!words.is_empty(), "an argument vector names its program");
+        let slots: Vec<*mut c_char> = words
+            .into_iter()
+            .map(crate::memory::ThinCString::into_raw)
+            .chain([ptr::null_mut()])
+            .collect();
+        // A vector's block is an `xmalloc` block, because the global
+        // allocator is `malloc`, so `shell_free_argv` may `xfree` it.
+        let raw = core::mem::ManuallyDrop::new(slots).as_mut_ptr();
+        Argv(ptr::NonNull::new(raw).expect("a non-empty vector is allocated"))
+    }
+
+    /// The program, `argv[0]`.
+    pub fn program(&self) -> &CStr {
+        // SAFETY: the vector is never empty, so slot 0 is a NUL-terminated
+        // word this value owns.
+        unsafe { CStr::from_ptr(*self.0.as_ptr()) }
+    }
+
+    /// The words quoted and joined, for `'verbose'` -- [`shell_argv_to_str`].
+    pub fn to_display(&self) -> XString {
+        // SAFETY: a NULL-terminated vector of NUL-terminated words.
+        unsafe { shell_argv_to_str(self.0.as_ptr()) }
+    }
+
+    /// Give the vector to a consumer that frees it with [`shell_free_argv`].
+    pub fn into_raw(self) -> *mut *mut c_char {
+        core::mem::ManuallyDrop::new(self).0.as_ptr()
+    }
+}
+
+impl Drop for Argv {
+    fn drop(&mut self) {
+        // SAFETY: the vector is this value's own, in `shell_free_argv`'s shape.
+        unsafe { shell_free_argv(self.0.as_ptr()) };
+    }
+}
+
 /// Release what [`shell_build_argv`] allocated.
 ///
 /// # Safety

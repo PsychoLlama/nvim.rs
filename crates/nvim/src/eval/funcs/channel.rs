@@ -3,7 +3,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::list_alloc_ret;
 use super::{
     kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
     kRetObject,
@@ -15,7 +14,9 @@ use crate::channel::{
 };
 use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
 use crate::eval::save_tv_as_string;
-use crate::eval::typval::{NumBuf, blob_bytes, dict_get_bool, dict_get_callback, dict_get_number};
+use crate::eval::typval::{
+    NumBuf, blob_bytes, dict_get_bool, dict_get_callback, dict_get_number, tv_list_alloc_ret,
+};
 use crate::eval::userfunc::{CallStackAside, set_current_fc};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
@@ -130,7 +131,13 @@ pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         // `false` for both: a List joins with NL, not CR-NL, and the
         // trailing NL is the caller's business.
-        unsafe { save_tv_as_string(&args[1], &raw mut input_len, false, false) }
+        match save_tv_as_string(&args[1], false, false) {
+            Ok(Some(text)) => {
+                input_len = isize::try_from(text.len()).expect("a short input");
+                ThinCString::from_vec(text).into_raw()
+            }
+            Ok(None) | Err(_) => ptr::null_mut(),
+        }
     };
     if input.is_null() {
         return;
@@ -336,7 +343,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The same addresses twice: once handed to the List, once copied
     // into the Array the Lua helper is passed.
     let mut addrs_arr = Array::with_capacity(n);
-    let list = list_alloc_ret(result, n as isize);
+    let list: *mut crate::types::List = tv_list_alloc_ret(result, n as isize);
     for i in 0..n {
         unsafe { (*list).push(TypVal::string(ThinCString::from_raw(*addrs.add(i)))) };
         let addr = unsafe { *addrs.add(i) };

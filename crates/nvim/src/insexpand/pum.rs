@@ -169,8 +169,7 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     let v_event = get_v_event(&mut save_v_event);
     let buffer = Buf::current();
     let _ = v_event.edit().add_dict(b"completed_item", Some(item_held));
-    // SAFETY: `v_event` is a live dictionary.
-    unsafe { pum_set_event_info(v_event.as_ptr()) };
+    pum_set_event_info(v_event.edit());
     v_event.edit().set_keys_readonly();
 
     complete_changed_busy.set(true);

@@ -2,11 +2,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::wrappers::{arg_number, list_alloc_ret};
+use super::wrappers::arg_number;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     dict_find, list_find_nr, list_len, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
-    tv_check_for_opt_number_arg, tv_get_number, tv_get_number_chk,
+    tv_check_for_opt_number_arg, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
 };
 use crate::eval::{
     add_timer_info, add_timer_info_all, callback_from_typval, eval_expr_typval, find_timer_by_nr,
@@ -196,7 +196,7 @@ pub fn f_reltime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         profile_sub(end, start)
     };
     let (high, low) = proftime_halves(res);
-    list_alloc_ret(result, 2);
+    tv_list_alloc_ret(result, 2);
     unsafe { (*result.list_or_null()).push_number(high as VarNumber) };
     unsafe { (*result.list_or_null()).push_number(low as VarNumber) };
 }
@@ -224,7 +224,7 @@ pub fn f_reltimefloat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 pub fn f_timer_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the timer list is main-thread state; the return value is the
     // caller's cleared typval.
-    list_alloc_ret(result, kListLenUnknown as c_int as isize);
+    tv_list_alloc_ret(result, kListLenUnknown as c_int as isize);
     if tv_check_for_opt_number_arg(args, 0).is_err() {
         return;
     }

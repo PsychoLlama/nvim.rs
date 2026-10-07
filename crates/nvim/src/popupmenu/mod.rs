@@ -559,15 +559,12 @@ pub fn pum_get_height() -> c_int {
 /// Add the menu's geometry to `dict`, for `v:event` of `CompleteChanged`.
 ///
 /// An external UI's own geometry wins when it has one.
-///
-/// # Safety
-/// `dict` must be a live dictionary.
-pub unsafe fn pum_set_event_info(dict: *mut Dict) {
-    // SAFETY: `dict` is live and the keys are static strings.
+pub fn pum_set_event_info(dict: &mut Dict) {
     if !pum_visible() {
         return;
     }
     let (mut w, mut h, mut r, mut c) = (0.0, 0.0, 0.0, 0.0);
+    // SAFETY: four locals, writable.
     if !unsafe { ui_pum_get_pos(&raw mut w, &raw mut h, &raw mut r, &raw mut c) } {
         w = f64::from(pum_width.get());
         h = f64::from(pum_height.get());
@@ -575,19 +572,15 @@ pub unsafe fn pum_set_event_info(dict: *mut Dict) {
         c = f64::from(pum_col.get());
     }
     for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
-        let _ = unsafe { (*dict).add_float(key.to_bytes(), value as Float) };
+        let _ = dict.add_float(key.to_bytes(), value as Float);
     }
-    let _ = unsafe { (*dict).add_number(b"size", pum_size.get() as VarNumber) };
-    let _ = unsafe {
-        (*dict).add_bool(
-            b"scrollbar",
-            if pum_scrollbar.get() != 0 {
-                kBoolVarTrue
-            } else {
-                kBoolVarFalse
-            },
-        )
+    let _ = dict.add_number(b"size", pum_size.get() as VarNumber);
+    let scrollbar = if pum_scrollbar.get() != 0 {
+        kBoolVarTrue
+    } else {
+        kBoolVarFalse
     };
+    let _ = dict.add_bool(b"scrollbar", scrollbar);
 }
 
 /// Tell a multigrid UI where the menu's grid sits.

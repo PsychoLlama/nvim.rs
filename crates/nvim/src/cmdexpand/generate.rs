@@ -20,7 +20,7 @@ use crate::eval::vars::get_user_var_name;
 use crate::ex_docmd::{expand_findfunc_matches, get_command_name};
 use crate::ex_getln::get_cmdline_last_prompt_id;
 use crate::highlight_group::get_highlight_name;
-use crate::lua::executor::nlua_exec_object;
+use crate::lua::executor::{kRetObject, nlua_exec_cstr};
 use crate::menu::{get_menu_name, get_menu_names};
 use crate::os::env::get_env_name;
 use crate::os::lang::{get_lang_arg, get_locales};
@@ -194,7 +194,7 @@ fn nth_lua_string(names: &GlobalCell<Object>, idx: usize) -> Option<Candidate> {
 /// Replace the cached answer with a fresh one, dropping the old.
 fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, args: Array) {
     // A failed lookup caches nil, as it did when the error was dropped.
-    let res = nlua_exec_object(script, args).unwrap_or(Object::Nil);
+    let res = nlua_exec_cstr(script, args, kRetObject).unwrap_or(Object::Nil);
     // The swap happens inside the borrow and the old answer is released
     // outside it: it must not be reachable through the cell while it is
     // being freed.

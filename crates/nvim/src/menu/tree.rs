@@ -278,13 +278,7 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> Option<DictRef> {
 
 /// Export the menus matching `path_name` into `list` -- the `menu_get()`
 /// builtin. An empty path exports every top-level menu.
-///
-/// # Safety
-/// `path_name` must name a NUL-terminated string and `list` a live List.
-pub(crate) unsafe fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut List) -> bool {
-    // SAFETY: the caller's obligation.
-    let path = unsafe { CStr::from_ptr(path_name) };
-
+pub(crate) fn menu_get(path: &CStr, modes: c_int, list: &mut List) -> bool {
     let mut menu = root_first();
     if !path.is_empty() {
         menu = find_menu(menu, path, modes);
@@ -295,7 +289,7 @@ pub(crate) unsafe fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut L
     for node in menu.into_iter().flat_map(Menu::siblings) {
         let entry = menu_get_recursive(node, modes);
         if entry.as_ref().is_some_and(|d| !d.is_empty()) {
-            list_append_dict(list, entry);
+            list.push_dict(entry);
         }
         if !path.is_empty() {
             // A non-empty query only wants the node `find_menu` reached.

@@ -17,7 +17,7 @@ use crate::eval::typval::{
     tv_list_alloc,
 };
 use crate::eval::vars::vim_var_bytes;
-use crate::eval::{common_job_callbacks, find_job, tv_to_argv};
+use crate::eval::{ArgvRefusal, common_job_callbacks, find_job, tv_to_argv};
 use crate::event::r#loop::loop_on_put;
 use crate::event::multiqueue::{
     multiqueue_free, multiqueue_new, multiqueue_process_events, multiqueue_replace_parent,
@@ -35,7 +35,6 @@ use crate::os::cshim::gettext;
 use crate::os::env::{home_replace, os_getenv};
 use crate::os::fs::os_isdir;
 use crate::os::pty_proc_unix::pty_proc_resize;
-use crate::os::shell::shell_free_argv;
 use crate::os::time::os_hrtime;
 use crate::path::vim_full_name;
 use crate::semsg;
@@ -46,8 +45,8 @@ use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Callback, CallbackReader, Channel, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer, List,
-    MAXPATHL, NUL, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VarNumber,
-    Vv, uint16_t, uint64_t,
+    MAXPATHL, NUL, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VarNumber, Vv, uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
@@ -384,33 +383,36 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     result.write_number(0);
-    // SAFETY throughout: the frame is live; `argv` is released on every path that does
-    // not hand it to `channel_job_start`, which adopts it.
+    // SAFETY throughout: the frame is live.
     if check_secure() {
         return;
     }
 
-    let mut cmd = ptr::null::<c_char>();
-    let mut executable = true;
-    let argv = unsafe { tv_to_argv(&args[0], &raw mut cmd, &raw mut executable, &mut cmdbuf) };
-    if argv.is_null() {
+    let argv = match tv_to_argv(&args[0]) {
+        Ok(argv) => argv,
         // A malformed command answers 0; a command that is simply not
         // executable answers -1.
-        result.write_number(if executable { 0 } else { -1 });
-        return;
-    }
-    // From here on every early exit must release `argv`.
-    macro_rules! bail {
-        () => {{
-            unsafe { shell_free_argv(argv) };
+        Err(refusal) => {
+            result.write_number(if refusal == ArgvRefusal::NotExecutable {
+                -1
+            } else {
+                0
+            });
             return;
-        }};
-    }
-
+        }
+    };
+    // What a terminal buffer is named after: the command line as given, or
+    // the resolved program of a List.
+    let cmd = if args[0].v_type() == VAR_STRING {
+        cmdbuf.string(&args[0]).as_ptr()
+    } else {
+        argv.program().as_ptr()
+    };
+    // Every early exit below releases `argv` by dropping it.
     if !args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) && args.len() > 1 {
         let arg0 = "expected dictionary";
         semsg!("E475: Invalid argument: {arg0}");
-        bail!();
+        return;
     }
 
     let mut job_opts: Option<&Dict> = None;
@@ -459,14 +461,14 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let what = unsafe { c_str(what) };
             semsg!("E475: Invalid argument: {what}");
-            bail!();
+            return;
         }
         if pty && rpc {
             let what = c"job cannot have both 'pty' and 'rpc' options set".as_ptr();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let what = unsafe { c_str(what) };
             semsg!("E475: Invalid argument: {what}");
-            bail!();
+            return;
         }
 
         if let Some(new_cwd) = numbuf2.dict_string(job_opts, b"cwd")
@@ -478,7 +480,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let what = unsafe { c_str(what) };
                 semsg!("E475: Invalid argument: {what}");
-                bail!();
+                return;
             }
         }
 
@@ -486,14 +488,14 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             if di.di_tv.v_type() != VAR_DICT {
                 let arg0 = "env";
                 semsg!("E475: Invalid argument: {arg0}");
-                bail!();
+                return;
             }
             job_env = di.di_tv.dict_or_null();
         }
 
         let options = args[1].dict_shared();
         if !common_job_callbacks(options, &mut on_stdout, &mut on_stderr, &mut on_exit) {
-            bail!();
+            return;
         }
         // The call above took a reference to the options dictionary, which
         // is a write through it: the borrow taken before that is spent, so
@@ -510,18 +512,18 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if term {
         if text_locked() {
             text_locked_msg();
-            bail!();
+            return;
         }
         if Buf::current().b_changed != 0 {
             let msg = c"jobstart(...,{term=true}) requires unmodified buffer";
             emsg(gettext(msg));
-            bail!();
+            return;
         }
         if !Buf::current().terminal.is_null() {
             if unsafe { terminal_running(Buf::current().terminal) } {
                 let handle = Buf::current().handle;
                 semsg!("Terminal already connected to buffer {}", handle);
-                bail!();
+                return;
             }
             buf_close_terminal(Buf::current());
         }
@@ -560,7 +562,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // there is no shorter way to write the call.
     let chan = unsafe {
         channel_job_start(
-            argv,
+            argv.into_raw(),
             ptr::null(),
             on_stdout,
             on_stderr,
