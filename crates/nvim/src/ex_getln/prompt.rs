@@ -149,7 +149,13 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             xp_name = ::core::ptr::null::<::core::ffi::c_char>();
         }
         // SAFETY: the argument's own dictionary, and this frame's callback.
-        if !unsafe { dict_get_callback(dict.as_mut(), b"highlight", &mut input_callback) } {
+        if !unsafe {
+            dict_get_callback(
+                crate::types::DictRef::retained(dict).as_ref(),
+                b"highlight",
+                &mut input_callback,
+            )
+        } {
             return;
         }
     } else {

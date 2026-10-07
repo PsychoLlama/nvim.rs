@@ -120,9 +120,11 @@ unsafe extern "C" {
 // string functions the `just miri` test lane reaches get Rust definitions
 // with C-locale semantics here. Same import path, link-time symbol otherwise.
 /// The exact format strings `vim_vsnprintf` constructs for the conversions it
-/// delegates to libc — nothing more. `%g` never reaches here (vim rewrites it
-/// to `%e`/`%f` first), and neither do inf/nan (vim formats those itself).
-/// Anything unrecognized is a loud panic rather than a silent wrong answer.
+/// delegates to libc, plus literal text around plain `%s`/`%d`/`%i`/`%u`/
+/// `%c`/`%%` conversions -- what the editor's own message templates use.
+/// `%g` never reaches here (vim rewrites it to `%e`/`%f` first), and neither
+/// do inf/nan (vim formats those itself). Anything unrecognized is a loud
+/// panic rather than a silent wrong answer.
 ///
 /// # Safety
 ///
@@ -148,61 +150,126 @@ pub unsafe extern "C" fn snprintf(
 
     let mut ap: ::core::ffi::VaList;
     ap = __args.clone();
-    let fmt = unsafe { ::core::ffi::CStr::from_ptr(__format) }
+    let whole = unsafe { ::core::ffi::CStr::from_ptr(__format) }
         .to_str()
         .expect("snprintf shim: non-UTF-8 format");
-    let out = match fmt {
-        "%p" => {
-            let p = unsafe { ap.next_arg::<*mut ::core::ffi::c_void>() };
-            if p.is_null() {
-                "(nil)".to_string()
-            } else {
-                format!("{:#x}", p.addr())
+    // One conversion at a time, the literal text between them copied: the
+    // editor's own messages (`"Error in %s:"`) reach here too, not only the
+    // single conversions `vim_vsnprintf` hands down.
+    let mut out = String::new();
+    let mut rest = whole;
+    while let Some(at) = rest.find('%') {
+        out.push_str(&rest[..at]);
+        let spec_len = 1 + rest[at + 1..]
+            .find(|c: char| !"+- #0123456789.lhz".contains(c))
+            .map_or(rest.len() - at - 1, |n| n + 1);
+        let fmt = &rest[at..at + spec_len];
+        rest = &rest[at + spec_len..];
+        let one = match fmt {
+            "%%" => "%".to_string(),
+            "%s" => {
+                let p = unsafe { ap.next_arg::<*const ::core::ffi::c_char>() };
+                unsafe { ::core::ffi::CStr::from_ptr(p) }
+                    .to_string_lossy()
+                    .into_owned()
             }
-        }
-        "%ld" => unsafe { ap.next_arg::<::core::ffi::c_long>() }.to_string(),
-        "%lu" => unsafe { ap.next_arg::<::core::ffi::c_ulong>() }.to_string(),
-        "%lo" => format!("{:o}", unsafe { ap.next_arg::<::core::ffi::c_ulong>() }),
-        "%lx" => format!("{:x}", unsafe { ap.next_arg::<::core::ffi::c_ulong>() }),
-        "%lX" => format!("{:X}", unsafe { ap.next_arg::<::core::ffi::c_ulong>() }),
-        ".%d" => format!(".{}", unsafe { ap.next_arg::<::core::ffi::c_int>() }),
-        _ => {
-            // The float formats: %[+ ]?(\.\d+)?[fFeE], default precision 6.
-            let rest = fmt
-                .strip_prefix('%')
-                .unwrap_or_else(|| panic!("snprintf shim: unsupported format {fmt:?}"));
-            let (sign_flag, rest) = match rest.as_bytes().first() {
-                Some(b'+') => (Some('+'), &rest[1..]),
-                Some(b' ') => (Some(' '), &rest[1..]),
-                _ => (None, rest),
-            };
-            let (prec, spec) = match rest.strip_prefix('.') {
-                Some(r) => {
-                    let (digits, spec) = r.split_at(r.len() - 1);
-                    (
-                        digits
-                            .parse()
-                            .unwrap_or_else(|_| panic!("snprintf shim: bad format {fmt:?}")),
-                        spec,
-                    )
-                }
-                None => (6, rest),
-            };
-            let v = unsafe { ap.next_arg::<::core::ffi::c_double>() };
-            let mut s = match spec {
-                "f" | "F" => format!("{v:.prec$}"),
-                "e" => exp_notation(v, prec, false),
-                "E" => exp_notation(v, prec, true),
-                _ => panic!("snprintf shim: unsupported format {fmt:?}"),
-            };
-            if let Some(sign) = sign_flag {
-                if !s.starts_with('-') {
-                    s.insert(0, sign);
+            // An integer conversion with an optional `-`/`0` flag, a width
+            // and an `l` length: `"line %4ld:"`, `"%3d"`.
+            _ if fmt.ends_with(['d', 'i', 'u', 'c'])
+                && !fmt.contains(['.', '+', ' ', '#', 'h', 'z']) =>
+            {
+                let body = &fmt[1..fmt.len() - 1];
+                let (left, body) = match body.strip_prefix('-') {
+                    Some(body) => (true, body),
+                    None => (false, body),
+                };
+                let (long, body) = match body.strip_suffix('l') {
+                    Some(body) => (true, body),
+                    None => (false, body),
+                };
+                let zero = body.starts_with('0');
+                let width: usize = if body.is_empty() {
+                    0
+                } else {
+                    body.parse()
+                        .unwrap_or_else(|_| panic!("snprintf shim: bad format {fmt:?}"))
+                };
+                let text = match (fmt.as_bytes()[fmt.len() - 1], long) {
+                    (b'c', _) => {
+                        char::from(unsafe { ap.next_arg::<::core::ffi::c_int>() } as u8).to_string()
+                    }
+                    (b'u', true) => unsafe { ap.next_arg::<::core::ffi::c_ulong>() }.to_string(),
+                    (b'u', false) => unsafe { ap.next_arg::<::core::ffi::c_uint>() }.to_string(),
+                    (_, true) => unsafe { ap.next_arg::<::core::ffi::c_long>() }.to_string(),
+                    (_, false) => unsafe { ap.next_arg::<::core::ffi::c_int>() }.to_string(),
+                };
+                if left {
+                    format!("{text:<width$}")
+                } else if zero {
+                    match text.strip_prefix('-') {
+                        Some(digits) => format!("-{digits:0>w$}", w = width.saturating_sub(1)),
+                        None => format!("{text:0>width$}"),
+                    }
+                } else {
+                    format!("{text:>width$}")
                 }
             }
-            s
-        }
-    };
+            _ => match fmt {
+                "%p" => {
+                    let p = unsafe { ap.next_arg::<*mut ::core::ffi::c_void>() };
+                    if p.is_null() {
+                        "(nil)".to_string()
+                    } else {
+                        format!("{:#x}", p.addr())
+                    }
+                }
+                "%ld" => unsafe { ap.next_arg::<::core::ffi::c_long>() }.to_string(),
+                "%lu" => unsafe { ap.next_arg::<::core::ffi::c_ulong>() }.to_string(),
+                "%lo" => format!("{:o}", unsafe { ap.next_arg::<::core::ffi::c_ulong>() }),
+                "%lx" => format!("{:x}", unsafe { ap.next_arg::<::core::ffi::c_ulong>() }),
+                "%lX" => format!("{:X}", unsafe { ap.next_arg::<::core::ffi::c_ulong>() }),
+                ".%d" => format!(".{}", unsafe { ap.next_arg::<::core::ffi::c_int>() }),
+                _ => {
+                    // The float formats: %[+ ]?(\.\d+)?[fFeE], default precision 6.
+                    let rest = fmt
+                        .strip_prefix('%')
+                        .unwrap_or_else(|| panic!("snprintf shim: unsupported format {fmt:?}"));
+                    let (sign_flag, rest) = match rest.as_bytes().first() {
+                        Some(b'+') => (Some('+'), &rest[1..]),
+                        Some(b' ') => (Some(' '), &rest[1..]),
+                        _ => (None, rest),
+                    };
+                    let (prec, spec) = match rest.strip_prefix('.') {
+                        Some(r) => {
+                            let (digits, spec) = r.split_at(r.len() - 1);
+                            (
+                                digits.parse().unwrap_or_else(|_| {
+                                    panic!("snprintf shim: bad format {fmt:?}")
+                                }),
+                                spec,
+                            )
+                        }
+                        None => (6, rest),
+                    };
+                    let v = unsafe { ap.next_arg::<::core::ffi::c_double>() };
+                    let mut s = match spec {
+                        "f" | "F" => format!("{v:.prec$}"),
+                        "e" => exp_notation(v, prec, false),
+                        "E" => exp_notation(v, prec, true),
+                        _ => panic!("snprintf shim: unsupported format {fmt:?}"),
+                    };
+                    if let Some(sign) = sign_flag {
+                        if !s.starts_with('-') {
+                            s.insert(0, sign);
+                        }
+                    }
+                    s
+                }
+            },
+        };
+        out.push_str(&one);
+    }
+    out.push_str(rest);
     let bytes = out.as_bytes();
     if __maxlen > 0 {
         let n = bytes.len().min(__maxlen - 1);

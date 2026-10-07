@@ -136,7 +136,13 @@ pub unsafe fn common_job_callbacks(
 unsafe fn job_callback(vopts: *mut Dict, key: &CStr, into: *mut Callback) -> bool {
     // SAFETY: the caller's promise -- a live Dict or null, and a callback
     // slot the caller owns.
-    unsafe { dict_get_callback(vopts.as_mut(), key.to_bytes(), &mut *into) }
+    unsafe {
+        dict_get_callback(
+            crate::types::DictRef::retained(vopts).as_ref(),
+            key.to_bytes(),
+            &mut *into,
+        )
+    }
 }
 
 /// The channel a job id names, or null.

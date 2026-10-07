@@ -786,7 +786,7 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
                 return;
             }
             key = numbuf3.string(&di.di_tv).as_ptr();
-        } else if !dict_get_callback(Some(d), b"text_cb", &mut cb) {
+        } else if !dict_get_callback(args[2].dict_shared(), b"text_cb", &mut cb) {
             semsg!("E475: Invalid value for argument {}", "text_cb");
             return;
         }

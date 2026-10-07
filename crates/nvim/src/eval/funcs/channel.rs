@@ -485,7 +485,7 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         let opts = args[2].dict_or_null();
         rpc = dict_get_number(unsafe { opts.as_ref() }, b"rpc") != 0;
         // SAFETY: the argument's own dictionary, and this frame's reader.
-        if !unsafe { dict_get_callback(opts.as_mut(), b"on_data", &mut on_data.cb) } {
+        if !dict_get_callback(args[2].dict_shared(), b"on_data", &mut on_data.cb) {
             return;
         }
         on_data.buffered = dict_get_number(unsafe { opts.as_ref() }, b"data_buffered") != 0;
@@ -519,12 +519,14 @@ pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut on_stdin = NO_READER;
     let rpc = dict_get_number(unsafe { opts.as_ref() }, b"rpc") != 0;
     // SAFETY: the argument's own dictionary, and this frame's reader.
-    if !unsafe { dict_get_callback(opts.as_mut(), b"on_stdin", &mut on_stdin.cb) } {
+    if !dict_get_callback(args[0].dict_shared(), b"on_stdin", &mut on_stdin.cb) {
         return;
     }
     // `on_print` is a global: there is only one stdio channel.
     // SAFETY: as above, with the one global callback slot.
-    if !unsafe { dict_get_callback(opts.as_mut(), b"on_print", &mut *on_print_cb()) } {
+    if !dict_get_callback(args[0].dict_shared(), b"on_print", unsafe {
+        &mut *on_print_cb()
+    }) {
         return;
     }
     on_stdin.buffered = dict_get_number(unsafe { opts.as_ref() }, b"stdin_buffered") != 0;

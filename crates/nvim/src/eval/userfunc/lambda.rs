@@ -11,12 +11,12 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cstr;
 use crate::eval::Parsed;
 use crate::eval::typval::{DictRef, PartialRef};
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::snprintf;
 use crate::strings::find_bytes;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -55,16 +55,14 @@ const LAMBDA_NAME_LEN: usize = 8 + 65;
 fn get_lambda_name(into: &mut [c_char; LAMBDA_NAME_LEN]) -> String_0 {
     static lambda_no: GlobalCell<c_int> = GlobalCell::new(0);
     lambda_no.set(lambda_no.get() + 1);
+    let text = format!("<lambda>{}", lambda_no.get());
+    let len = text.len().min(LAMBDA_NAME_LEN - 1);
+    for (slot, &byte) in into.iter_mut().zip(&text.as_bytes()[..len]) {
+        *slot = byte as c_char;
+    }
+    into[len] = 0;
     let buf = into.as_mut_ptr();
-    let nr = lambda_no.get();
-    // SAFETY: `buf` is the caller's array of `LAMBDA_NAME_LEN` bytes.
-    let n = unsafe { snprintf!(buf, LAMBDA_NAME_LEN, c"<lambda>%d".as_ptr(), nr) };
-    let len = if n < 1 {
-        0
-    } else {
-        n.min(LAMBDA_NAME_LEN as c_int - 1) as size_t
-    };
-    // SAFETY: `snprintf` wrote `len` bytes of the caller's array, which the
+    // SAFETY: the caller's array, `len` bytes of it just written, which the
     // answer copies.
     unsafe { String_0::from_raw_bytes(buf, len) }
 }
@@ -89,8 +87,15 @@ pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut U
         // `namelen + 1` bytes; the printable form gets three more.
         let into = unsafe { xmalloc(len) } as *mut c_char;
         unsafe { (*fp).uf_name_exp = into };
-        let tail = unsafe { uf_name_ptr(fp).add(3) };
-        unsafe { snprintf!(into, len, c"<SNR>%s".as_ptr(), tail) };
+        let tail = unsafe { cstr::bytes_at(uf_name_ptr(fp).add(3)) };
+        let mut text = b"<SNR>".to_vec();
+        text.extend_from_slice(tail);
+        text.truncate(len - 1);
+        text.push(0);
+        // SAFETY: `into` has `len` bytes and `text` is at most that long.
+        unsafe {
+            ::core::ptr::copy_nonoverlapping(text.as_ptr().cast::<c_char>(), into, text.len())
+        };
     }
     fp
 }
@@ -244,17 +249,14 @@ pub(crate) fn get_lambda_tv(
 
 /// Bind `selfdict` to the Funcref in `result`: `dict.Func` read out of
 /// `dict`. Not for a partial that was bound explicitly (`pt_auto` clear).
-pub(crate) fn set_selfdict(result: &mut TypVal, selfdict: &mut Dict) {
+pub(crate) fn set_selfdict(result: &mut TypVal, selfdict: &DictRef) {
     if let Some(pt) = result.partial_ref()
         && !pt.pt_auto
         && pt.pt_dict.is_some()
     {
         return;
     }
-    // SAFETY: a live dictionary, of which the handle takes a reference of
-    // its own. The callers hold the dictionary as a borrow.
-    let selfdict = unsafe { DictRef::retained(selfdict) };
-    make_partial(selfdict.as_ref().expect("a borrowed dictionary"), result);
+    make_partial(selfdict, result);
 }
 
 /// Turn `dict.Func` into a partial that binds `selfdict`, when `Func` was

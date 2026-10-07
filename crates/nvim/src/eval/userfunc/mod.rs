@@ -110,6 +110,8 @@ mod lambda;
 mod listing;
 mod name;
 mod ret;
+#[cfg(test)]
+mod tests;
 
 pub(crate) use self::args::*;
 pub use self::body::*;

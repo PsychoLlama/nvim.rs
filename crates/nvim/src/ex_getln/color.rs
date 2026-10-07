@@ -226,7 +226,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
             // and `color_cb` is this frame's own.
             dgc_ret = unsafe {
                 dict_get_callback(
-                    get_globvar_dict().as_mut(),
+                    crate::types::DictRef::retained(get_globvar_dict()).as_ref(),
                     b"Nvim_color_cmdline",
                     &mut color_cb,
                 )

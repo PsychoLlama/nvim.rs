@@ -618,7 +618,7 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
             log.clear();
             let ok = check_emsg(
                 log.editor(),
-                || dict_get_callback(d.as_mut(), key, &mut *slot),
+                || dict_get_callback(DictRef::retained(d).as_ref(), key, &mut *slot),
                 msg,
             );
             let cb = tv::read_callback(slot);

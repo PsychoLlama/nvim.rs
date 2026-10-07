@@ -266,7 +266,9 @@ pub unsafe fn call_user_func(
         if addlocal {
             // A lambda sees its arguments as l: variables too, so the
             // value has to be reference-counted twice.
-            unsafe { tv_copy(&(*v).di_tv, &mut (*v).di_tv) };
+            // The copy is taken before the slot is borrowed to hold it.
+            let owned = unsafe { (*v).di_tv.clone() };
+            unsafe { (*v).di_tv.overwrite(owned) };
             let _ = unsafe { hash_add(&raw mut (*fc).fc_l_vars.dv_hashtab, DictEntry::new(v)) };
         } else {
             let _ = unsafe { hash_add(&raw mut (*fc).fc_l_avars.dv_hashtab, DictEntry::new(v)) };

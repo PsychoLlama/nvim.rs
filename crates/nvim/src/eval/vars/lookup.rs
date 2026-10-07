@@ -385,8 +385,14 @@ pub(crate) unsafe fn find_var_ht_dict(
     }
 
     // SAFETY: the dictionary just chosen is live or NULL, and its hashtab
-    // is a field of it.
-    let ht = unsafe { (*dict).as_mut() }.map_or(ptr::null_mut(), |d| &raw mut d.dv_hashtab);
+    // is a field of it. Its address, not a borrow of the dictionary: a
+    // borrow would retag the whole of it, and an earlier answer's hashtab
+    // pointer is still in use.
+    let ht = if (*dict).is_null() {
+        ptr::null_mut()
+    } else {
+        unsafe { &raw mut (**dict).dv_hashtab }
+    };
     (ht, varname)
 }
 

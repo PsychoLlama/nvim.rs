@@ -307,7 +307,7 @@ pub fn dict_get_string_buf_chk<'a>(
 /// `kCallbackNone`; a value that is neither a function nor a string answers
 /// false with `E6000` raised.  `result` must hold no callback yet -- it is overwritten, not
 /// freed -- and on `true` the caller owns whatever it now holds.
-pub fn dict_get_callback(d: Option<&mut Dict>, key: &[u8], result: &mut Callback) -> bool {
+pub fn dict_get_callback(d: Option<&DictRef>, key: &[u8], result: &mut Callback) -> bool {
     *result = Callback::None;
     // A NULL dictionary has no such key, which is the missing-key answer.
     let Some(d) = d else { return true };

@@ -217,7 +217,9 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
         // SAFETY: as above -- the `a:` dictionary is this funccall's own.
         for hi in unsafe { tv_ht_iter(&raw const (*fc).fc_l_avars.dv_hashtab) } {
             let di = tv_dict_hi2di(hi);
-            unsafe { tv_copy(&(*di).di_tv, &mut (*di).di_tv) };
+            // The copy is taken before the slot is borrowed to hold it.
+            let owned = unsafe { (*di).di_tv.clone() };
+            unsafe { (*di).di_tv.overwrite(owned) };
         }
     }
 

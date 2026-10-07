@@ -476,7 +476,7 @@ fn subscripts(
     }
 
     // Turn "dict.Func" into a partial for "Func" bound to "dict".
-    if let Some(dict) = selfdict.as_mut()
+    if let Some(dict) = &selfdict
         && result.is_func()
     {
         set_selfdict(result, dict);
