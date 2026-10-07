@@ -156,6 +156,15 @@ pub(crate) fn sourcing_name() -> *mut c_char {
     innermost().map_or(ptr::null_mut(), |entry| entry.es_name)
 }
 
+/// The name of the innermost frame, copied -- `None` when nothing is
+/// executing.
+pub(crate) fn sourcing_name_copy() -> Option<Vec<u8>> {
+    let name = sourcing_name();
+    // SAFETY: a frame's name is null or a NUL-terminated string the frame
+    // owns, and nothing runs between the read and the copy.
+    (!name.is_null()).then(|| unsafe { cstr::bytes_at(name) }.to_vec())
+}
+
 /// Move the innermost frame to `lnum`.
 pub(crate) fn set_sourcing_lnum(lnum: LineNr) {
     exestack.with_mut(|stack| {

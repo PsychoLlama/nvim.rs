@@ -276,11 +276,11 @@ pub fn f_has(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let answer = if unsafe { same_name(name, c"clipboard_working") }
                 || unsafe { same_name(name, c"unnamedplus") }
             {
-                unsafe { eval_has_provider(c"clipboard".as_ptr(), true) }
+                eval_has_provider(c"clipboard", true)
             } else if unsafe { same_name(name, c"pythonx") } {
-                unsafe { eval_has_provider(c"python3".as_ptr(), true) }
+                eval_has_provider(c"python3", true)
             } else {
-                unsafe { eval_has_provider(name, true) }
+                eval_has_provider(unsafe { CStr::from_ptr(name) }, true)
             };
             set_vim_var_nr(Vv::ShellError, saved);
             answer

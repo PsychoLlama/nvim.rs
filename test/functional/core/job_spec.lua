@@ -345,6 +345,17 @@ describe('jobs', function()
     eq('E474:', string.match(eval('v:errmsg'), 'E%d*:'))
   end)
 
+  it('treats v:_null_dict options as no options', function()
+    local cmd = is_os('win') and "['cmd.exe', '/c', 'exit 0']" or "['true']"
+    local id = eval('jobstart(' .. cmd .. ', v:_null_dict)')
+    ok(id > 0)
+    eq({ 0 }, eval('jobwait([' .. id .. '], 10000)'))
+    local tid = eval('termopen(' .. cmd .. ', v:_null_dict)')
+    ok(tid > 0)
+    eq({ 0 }, eval('jobwait([' .. tid .. '], 10000)'))
+    assert_alive()
+  end)
+
   it('returns -1 when target is not executable #5465', function()
     local function new_job()
       return eval([[jobstart('')]])

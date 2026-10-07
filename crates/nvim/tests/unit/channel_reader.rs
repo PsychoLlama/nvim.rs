@@ -73,7 +73,7 @@ fn delivered(chunks: &[&[u8]]) -> Vec<Tv> {
             drop(list);
             (*at).buffer.clear();
         }
-        callback_reader_free(at);
+        callback_reader_free(&mut *at);
     }
     out
 }
@@ -191,7 +191,7 @@ fn the_accumulator_is_a_byte_buffer_however_the_chunks_fall() {
         let got = tv::read_list(list.as_ptr());
         drop(list);
         (*at).buffer.clear();
-        callback_reader_free(at);
+        callback_reader_free(&mut *at);
         got
     };
     assert_eq!(got, Tv::List(vec![line("one"), line("two")]));
@@ -244,7 +244,7 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
                 "the delivered list outlived its callback",
             );
         }
-        callback_reader_free(at);
+        callback_reader_free(&mut *at);
 
         drop(held);
         assert!(
@@ -282,7 +282,7 @@ fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
         let stored = list.clone();
         drop(list);
         (*at).buffer.clear();
-        callback_reader_free(at);
+        callback_reader_free(&mut *at);
 
         assert!(
             rooted_lists().contains(&at_list),

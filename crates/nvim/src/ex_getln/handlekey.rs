@@ -346,7 +346,7 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
 
         Ok(Key::Middlemouse) => {
             cmdline_paste(
-                if unsafe { eval_has_provider(c"clipboard".as_ptr(), false) } {
+                if eval_has_provider(c"clipboard", false) {
                     '*' as ::core::ffi::c_int
                 } else {
                     0

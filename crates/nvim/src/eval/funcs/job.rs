@@ -82,7 +82,7 @@ pub fn f_jobpid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(id) = job_id(&args[0]) else {
         return;
     };
-    let data = unsafe { find_job(id, true) };
+    let data = find_job(id, true);
     if data.is_null() {
         return;
     }
@@ -106,7 +106,7 @@ pub fn f_jobresize(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         emsg(gettext(e_invarg));
         return;
     }
-    let data = unsafe { find_job(args[0].number_or_zero() as uint64_t, true) };
+    let data = find_job(args[0].number_or_zero() as uint64_t, true);
     if data.is_null() {
         return;
     }
@@ -135,7 +135,7 @@ pub fn f_jobstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
     // `false`: a job that has already gone is not an error here.
-    let data = unsafe { find_job(id, false) };
+    let data = find_job(id, false);
     if data.is_null() {
         return;
     }
@@ -491,11 +491,8 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             job_env = di.di_tv.dict_or_null();
         }
 
-        let out = &raw mut on_stdout;
-        let err = &raw mut on_stderr;
-        let exit = &raw mut on_exit;
-        // SAFETY: `job_opts` is null or a live Dict; the three are locals.
-        if !unsafe { common_job_callbacks(args[1].dict_or_null(), out, err, exit) } {
+        let options = args[1].dict_shared();
+        if !common_job_callbacks(options, &mut on_stdout, &mut on_stderr, &mut on_exit) {
             bail!();
         }
         // The call above took a reference to the options dictionary, which

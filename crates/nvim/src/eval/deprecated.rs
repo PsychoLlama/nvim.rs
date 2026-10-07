@@ -22,9 +22,9 @@
 
 use core::ffi::{CStr, c_int};
 
+use crate::channel::channel_job_running;
 use crate::channel::{channel_close_or_report, rpc_job_start};
 use crate::eval::funcs::{f_jobstart, f_jobstop};
-use crate::eval::job_is_running;
 use crate::eval::typval::{CallFrame, list_iter, tv_dict_alloc};
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
@@ -99,7 +99,7 @@ pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
 
     let id = args[0].number_or_zero() as uint64_t;
     // If called with a job, stop it; otherwise close the channel.
-    if job_is_running(id) {
+    if channel_job_running(id) {
         f_jobstop(args, result, fptr);
     } else {
         let closed = channel_close_or_report(id, kChannelPartRpc);

@@ -107,6 +107,7 @@ pub mod open;
 pub mod reader;
 pub mod term;
 
+pub(crate) use info::channel_stream_type;
 pub use info::{
     channel_all_info, channel_create_event, channel_info, channel_info_changed, channel_job_running,
 };
@@ -396,8 +397,8 @@ unsafe fn channel_destroy(chan: *mut Channel) {
     if unsafe { (*chan).streamtype } == kChannelStreamProc {
         unsafe { proc_free(channel_proc(chan)) };
     }
-    unsafe { callback_reader_free(&raw mut (*chan).on_data) };
-    unsafe { callback_reader_free(&raw mut (*chan).on_stderr) };
+    unsafe { callback_reader_free(&mut (*chan).on_data) };
+    unsafe { callback_reader_free(&mut (*chan).on_stderr) };
     unsafe { callback_free(&mut (*chan).on_exit) };
     unsafe { multiqueue_free((*chan).events) };
     drop(unsafe { Box::from_raw(chan) });

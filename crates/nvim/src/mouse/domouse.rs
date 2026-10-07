@@ -903,7 +903,7 @@ fn advance(pos: PosRef) {
 /// become the `*` one.
 fn has_clipboard_provider() -> bool {
     // SAFETY: a NUL-terminated literal; `throw_if_fast` is false.
-    unsafe { eval_has_provider(c"clipboard".as_ptr(), false) }
+    eval_has_provider(c"clipboard", false)
 }
 
 /// Run `f` over the Visual anchor through a copy: the word walk it is used for

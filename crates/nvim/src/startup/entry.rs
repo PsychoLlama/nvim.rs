@@ -514,7 +514,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if cb_flags.get() & (kOptCbFlagUnnamed as c_int | kOptCbFlagUnnamedplus as c_int) as c_uint != 0
     {
         // Warm the clipboard provider so the first yank is not slow.
-        unsafe { eval_has_provider(c"clipboard".as_ptr(), false) };
+        eval_has_provider(c"clipboard", false);
     }
 
     if !params.luaf.is_null() {

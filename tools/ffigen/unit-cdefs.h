@@ -3184,7 +3184,6 @@ static const int MtFlags_ORPHANED = 8;
 static const int MtFlags_PAIRED = 4;
 static const int MtFlags_REAL = 1;
 static const int MtFlags_RIGHT_GRAVITY = 16384;
-static const int NAMEBUF = 256;
 static const int NAME_LIMIT = 100;
 static const int NAME_MAX = 255;
 static const int NBOOL = 44;

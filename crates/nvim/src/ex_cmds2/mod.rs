@@ -200,14 +200,7 @@ fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
     unsafe { (*into).push(TypVal::string(ThinCString::from_raw(script))) };
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
-    unsafe {
-        eval_call_provider(
-            name.as_ptr().cast_mut(),
-            c"execute".as_ptr().cast_mut(),
-            Some(argv),
-            true,
-        )
-    };
+    eval_call_provider(name, c"execute", Some(argv), true);
 }
 
 /// Hand the argument, as a full path, to the provider.
@@ -231,14 +224,7 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
     unsafe { (*into).push_str(crate::cstr::at_opt(buffer.as_ptr())) };
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
-    unsafe {
-        eval_call_provider(
-            name.as_ptr().cast_mut(),
-            c"execute_file".as_ptr().cast_mut(),
-            Some(argv),
-            true,
-        )
-    };
+    eval_call_provider(name, c"execute_file", Some(argv), true);
 }
 
 /// Hand the range and the command's text to the provider, range first.
@@ -252,14 +238,7 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
     unsafe { (*into).push_str(crate::cstr::at_opt(excmd.arg_ptr())) };
-    unsafe {
-        eval_call_provider(
-            name.as_ptr().cast_mut(),
-            c"do_range".as_ptr().cast_mut(),
-            Some(argv),
-            true,
-        )
-    };
+    eval_call_provider(name, c"do_range", Some(argv), true);
 }
 
 // -- Writing out, and asking about it --------------------------------------

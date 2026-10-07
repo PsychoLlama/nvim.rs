@@ -1,51 +1,48 @@
 //! Calling out of the evaluator: provider script hosts, the job callbacks
 //! they are driven by, and prompt-buffer callbacks.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Depth;
 use crate::memory::ThinCString;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::semsg;
-use crate::snprintf;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::{offset_of, size_of};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr::null_mut;
+use std::ffi::CString;
 
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
-use crate::channel::{callback_reader_free, channel_proc, find_channel};
+use crate::channel::{
+    callback_reader_free, channel_job_running, channel_stream_type, find_channel,
+};
 use crate::eval::typval::{
-    ListRef, callback_free, dict_get_callback, dict_get_number, tv_list_alloc,
+    DictRef, ListRef, callback_free, dict_get_callback, dict_get_number, tv_list_alloc,
 };
 use crate::eval::userfunc::{CallStackAside, CallWith, call_func_with, current_fc_id, func_exists};
 use crate::eval::vars::eval_variable;
 use crate::eval::vars::{clear_local, emsg_static};
-use crate::eval::{Tv, callback_call, kChannelStreamProc};
-use crate::event::proc::proc_is_stopped;
+use crate::eval::{callback_call, kChannelStreamProc};
 use crate::ex_cmds::check_secure;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::nlua_is_deferred_safe;
-use crate::memline::{ml_append, ml_get_buf};
-use crate::memory::{strchrsub, strequal, xfree, xstrdup};
+use crate::memline::{Lines, ml_append_bytes};
 use crate::message::{e_invarg, e_invchan, e_invchanjob};
 use crate::option::vars::p_lpl;
-use crate::runtime::script_autoload;
+use crate::runtime::script_autoload_named;
+use crate::runtime::sourcing_name_copy;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
-use crate::strings::concat_str;
 use crate::types::{
-    Callback, CallbackReader, CallerScope, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, NUL,
-    ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, ptrdiff_t, size_t, uint64_t,
+    Callback, CallbackReader, CallerScope, Channel, EStack, EstackInfo, FAIL, ScriptCtx, TypVal,
+    VAR_NUMBER, VAR_STRING, VarNumber, ptrdiff_t, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
-use crate::winlayer::{Buf, Live, Win};
+use crate::winlayer::{Buf, Win};
 
 pub(crate) static provider_caller_scope: GlobalCell<CallerScope> = GlobalCell::new(CallerScope {
     script_ctx: ScriptCtx::NONE,
@@ -66,12 +63,6 @@ pub(crate) static provider_call_nesting: GlobalCell<c_int> = GlobalCell::new(0 a
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
-/// The scratch a provider function name is rendered into.
-const NAMEBUF: usize = 256;
-
-/// A job's output reader, whose caller has promised it outlives the value.
-type Reader = Live<CallbackReader>;
-
 /// The top of the execution stack, which is where a provider records who
 /// called it.
 ///
@@ -81,100 +72,57 @@ fn top_estack() -> EStack {
 }
 
 /// Read the three job callbacks and the two "buffered" flags out of the
-/// options Dict, taking a reference to it. Answers false — having released
-/// whatever it did read — when any of them is unusable.
+/// options dictionary, taking a reference to it for the readers. Answers
+/// false -- having released whatever it did read -- when any of them is
+/// unusable.
 ///
-/// # Safety
-/// All four pointers must be valid.
-pub unsafe fn common_job_callbacks(
-    vopts: *mut Dict,
-    on_stdout: *mut CallbackReader,
-    on_stderr: *mut CallbackReader,
-    on_exit: *mut Callback,
+/// `v:_null_dict` is an empty options dictionary: it names no callback, is
+/// not buffered into, and has no reference to take.
+pub fn common_job_callbacks(
+    options: Option<&DictRef>,
+    on_stdout: &mut CallbackReader,
+    on_stderr: &mut CallbackReader,
+    on_exit: &mut Callback,
 ) -> bool {
-    // SAFETY: the caller's promise -- both readers outlive the call.
-    let (mut out, mut err) = unsafe { (Reader::new(on_stdout), Reader::new(on_stderr)) };
-    let out_cb: *mut Callback = out.field_ptr(offset_of!(CallbackReader, cb));
-    let err_cb: *mut Callback = err.field_ptr(offset_of!(CallbackReader, cb));
-    // SAFETY: the caller's promise -- a live Dict and three callback slots,
-    // two of which are the readers' own.
-    let ok = unsafe { job_callback(vopts, c"on_stdout", out_cb) }
-        && unsafe { job_callback(vopts, c"on_stderr", err_cb) }
-        && unsafe { job_callback(vopts, c"on_exit", on_exit) };
+    let ok = dict_get_callback(options, b"on_stdout", &mut on_stdout.cb)
+        && dict_get_callback(options, b"on_stderr", &mut on_stderr.cb)
+        && dict_get_callback(options, b"on_exit", on_exit);
     if !ok {
-        // SAFETY: as above; whatever was read into the three slots before
-        // one of them failed is released here.
-        unsafe { callback_reader_free(on_stdout) };
-        // SAFETY: as above.
-        unsafe { callback_reader_free(on_stderr) };
-        // SAFETY: as above.
-        unsafe { callback_free(&mut *on_exit) };
+        // Whatever was read into the three slots before one of them failed
+        // is released here.
+        callback_reader_free(on_stdout);
+        callback_reader_free(on_stderr);
+        callback_free(on_exit);
         return false;
     }
 
-    // SAFETY: the caller's promise -- `vopts` is a live Dict.
-    out.buffered = dict_get_number(unsafe { (vopts).as_ref() }, b"stdout_buffered") != 0;
-    // SAFETY: as above.
-    err.buffered = dict_get_number(unsafe { (vopts).as_ref() }, b"stderr_buffered") != 0;
+    let dict = options.map(|options| &**options);
+    on_stdout.buffered = dict_get_number(dict, b"stdout_buffered") != 0;
+    on_stderr.buffered = dict_get_number(dict, b"stderr_buffered") != 0;
     // Buffered output with no callback is collected into the options
-    // Dict itself, which is why it becomes the reader's `self`.
-    if out.buffered && !out.cb.is_set() {
-        out.self_0 = vopts;
+    // dictionary itself, which is why it becomes the reader's `self`.
+    let own = options.map_or(null_mut(), DictRef::as_ptr);
+    if on_stdout.buffered && !on_stdout.cb.is_set() {
+        on_stdout.self_0 = own;
     }
-    if err.buffered && !err.cb.is_set() {
-        err.self_0 = vopts;
+    if on_stderr.buffered && !on_stderr.cb.is_set() {
+        on_stderr.self_0 = own;
     }
-    // SAFETY: as above; this is the reference the readers now share.
-    unsafe { (*vopts).dv_refcount.retain() };
+    // The reference the readers now share, given up to them: nothing here
+    // releases it.
+    core::mem::forget(options.cloned());
     true
 }
 
-/// One `on_*` callback out of the options Dict, by name.
-///
-/// # Safety
-/// `vopts` must be a live Dict and `into` a valid callback slot.
-unsafe fn job_callback(vopts: *mut Dict, key: &CStr, into: *mut Callback) -> bool {
-    // SAFETY: the caller's promise -- a live Dict or null, and a callback
-    // slot the caller owns.
-    unsafe {
-        dict_get_callback(
-            crate::types::DictRef::retained(vopts).as_ref(),
-            key.to_bytes(),
-            &mut *into,
-        )
-    }
-}
-
-/// Whether `id` names a job that is still running.
-pub(crate) fn job_is_running(id: uint64_t) -> bool {
-    // SAFETY: the lookup only reads the channel table; nothing is reported.
-    !unsafe { find_job(id, false) }.is_null()
-}
-
 /// The channel a job id names, or null.
-///
-/// # Safety
-/// Called with the channel table initialised.
-pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
-    let data = find_channel(id);
-    // SAFETY: a non-null channel is live, and a proc channel has a proc.
-    let running = !data.is_null()
-        && unsafe { (*data).streamtype } == kChannelStreamProc
-        && !unsafe { proc_is_stopped(&*channel_proc(data)) };
-    if running {
-        return data;
+pub fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
+    if channel_job_running(id) {
+        return find_channel(id);
     }
     if show_error {
         // A channel that exists but is not a job gets its own message.
-        // SAFETY: a non-null channel is live.
-        let wrong_kind = !data.is_null() && unsafe { (*data).streamtype } != kChannelStreamProc;
-        if wrong_kind {
-            // SAFETY: a shared NUL-terminated message.
-            emsg_static(e_invchanjob);
-        } else {
-            // SAFETY: as above.
-            emsg_static(e_invchan);
-        }
+        let wrong_kind = channel_stream_type(id).is_some_and(|kind| kind != kChannelStreamProc);
+        emsg_static(if wrong_kind { e_invchanjob } else { e_invchan });
     }
     null_mut()
 }
@@ -184,20 +132,14 @@ pub fn script_host_eval(name: &CStr, args: &[TypVal], result: &mut TypVal) {
     if check_secure() {
         return;
     }
-    // SAFETY: the caller's promise -- both typvals outlive the call.
-    let first = core::ptr::from_ref(&args[0]).cast_mut();
-    let (arg, mut ret) = unsafe { (Tv::new(first), Tv::new(result)) };
+    let arg = &args[0];
     if arg.v_type() != VAR_STRING {
-        // SAFETY: `e_invarg` is a shared NUL-terminated message.
         emsg_static(e_invarg);
         return;
     }
-    let args = tv_list_alloc(1 as ptrdiff_t);
-    // SAFETY: the list just allocated.
-    unsafe { (*args.as_ptr()).push(TypVal::string(arg.string_ref().cloned())) };
-    let method = c"eval".as_ptr() as *mut c_char;
-    // SAFETY: `name` and `method` are NUL-terminated, and only read.
-    *ret = unsafe { eval_call_provider(name.as_ptr().cast_mut(), method, Some(args), false) };
+    let list = tv_list_alloc(1 as ptrdiff_t);
+    list.edit().push(TypVal::string(arg.string_ref().cloned()));
+    *result = eval_call_provider(name, c"eval", Some(list), false);
 }
 
 /// Call `provider#<name>#Call(method, arguments)`.
@@ -209,29 +151,21 @@ pub fn script_host_eval(name: &CStr, args: &[TypVal], result: &mut TypVal) {
 ///
 /// The argument list is handed over: the array holds it for the length of
 /// the call and releases it afterwards.
-///
-/// # Safety
-/// `provider` and `method` must be NUL-terminated.
-pub unsafe fn eval_call_provider(
-    provider: *mut c_char,
-    method: *mut c_char,
+pub fn eval_call_provider(
+    provider: &CStr,
+    method: &CStr,
     arguments: Option<ListRef>,
     discard: bool,
 ) -> TypVal {
-    // SAFETY: the caller's promise -- `provider` is NUL-terminated.
-    if !unsafe { eval_has_provider(provider, false) } {
-        // SAFETY: the format takes one NUL-terminated string.
-        let provider = unsafe { c_str(provider) };
+    if !eval_has_provider(provider, false) {
+        let provider = msg_cstr(provider);
         semsg!("E319: No \"{provider}\" provider found. Run \":checkhealth vim.provider\"");
         return TypVal::Number(0);
     }
 
-    let mut func: [c_char; NAMEBUF] = [0; NAMEBUF];
-    let size = size_of::<[c_char; NAMEBUF]>();
-    let fmt = c"provider#%s#Call".as_ptr();
-    // SAFETY: `func` is this frame's and `size` is its length; the format
-    // takes the one NUL-terminated string `provider`.
-    unsafe { snprintf!(func.as_mut_ptr(), size, fmt, provider) };
+    // Upstream renders the name into 256 bytes; no known provider comes
+    // near that.
+    let func = provider_name(provider.to_bytes(), b"Call");
 
     let scope = CallerScope {
         script_ctx: current_sctx.get(),
@@ -250,17 +184,13 @@ pub unsafe fn eval_call_provider(
     // The argument array holds the two values, so the caller's reference is
     // given back when the array drops -- which is why the method name is
     // duplicated rather than borrowed.
-    // SAFETY: the caller's promise -- `method` is NUL-terminated.
     let argvars = [
-        TypVal::string(Some(ThinCString::from_cstr(unsafe {
-            CStr::from_ptr(method)
-        }))),
+        TypVal::string(Some(ThinCString::from_cstr(method))),
         TypVal::list(arguments),
     ];
     let mut rettv = UNSET_TV;
 
-    let name = cstr::in_chars(&func);
-    let _ = call_func_with(name, None, &mut rettv, &argvars, CallWith::at_cursor(true));
+    let _ = call_func_with(&func, None, &mut rettv, &argvars, CallWith::at_cursor(true));
     drop(argvars);
     drop(call_stack_aside);
     provider_caller_scope.set(saved_provider_caller_scope);
@@ -268,168 +198,102 @@ pub unsafe fn eval_call_provider(
     debug_assert!(provider_call_nesting.get() >= 0);
 
     if discard {
-        // SAFETY: `rettv` is this frame's.
         clear_local(&mut rettv);
     }
     rettv
 }
 
-/// `g:loaded_<name>_provider`, into `buf`.
-///
-/// # Safety
-/// Both buffers must be valid, and `buf` must hold `NAMEBUF` bytes.
-unsafe fn loaded_var(buf: *mut c_char, name: *mut c_char) -> c_int {
-    let fmt = c"g:loaded_%s_provider".as_ptr();
-    // SAFETY: the caller's promise about both buffers.
-    unsafe { snprintf!(buf, size_of::<[c_char; NAMEBUF]>(), fmt, name) }
-}
-
-/// `provider#<name>#<what>`, into `buf`.
-///
-/// # Safety
-/// As [`loaded_var`].
-unsafe fn provider_fn(buf: *mut c_char, name: *mut c_char, what: &CStr) -> c_int {
-    // SAFETY: the caller's promise about both buffers; `what` is a
-    // NUL-terminated literal.
-    unsafe { snprintf!(buf, size_of::<[c_char; NAMEBUF]>(), what.as_ptr(), name) }
+/// `provider#<name>#<what>`.
+fn provider_name(name: &[u8], what: &[u8]) -> CString {
+    let text = [b"provider#".as_slice(), name, b"#", what].concat();
+    CString::new(text).unwrap_or_default()
 }
 
 /// Is this provider both known and usable? Loads its autoload script if it
 /// has not been loaded yet.
-///
-/// # Safety
-/// `feat` must be NUL-terminated.
-pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> bool {
-    const KNOWN: [&CStr; 7] = [
-        c"clipboard",
-        c"python3",
-        c"python3_compiled",
-        c"python3_dynamic",
-        c"perl",
-        c"ruby",
-        c"node",
+pub fn eval_has_provider(feat: &CStr, throw_if_fast: bool) -> bool {
+    const KNOWN: [&[u8]; 7] = [
+        b"clipboard",
+        b"python3",
+        b"python3_compiled",
+        b"python3_dynamic",
+        b"perl",
+        b"ruby",
+        b"node",
     ];
-    // SAFETY: the caller's promise -- `feat` is NUL-terminated, as is every
-    // name it is compared with.
-    if !KNOWN.iter().any(|k| unsafe { strequal(feat, k.as_ptr()) }) {
+    let feat = feat.to_bytes();
+    if !KNOWN.contains(&feat) {
         return false;
     }
-    // SAFETY: the check only reads the Lua scheduler's state.
     if throw_if_fast && !nlua_is_deferred_safe() {
-        let what = c"Vimscript function".as_ptr();
-        // SAFETY: the format takes one NUL-terminated string.
-        let what = unsafe { c_str(what) };
+        let what = "Vimscript function";
         semsg!("E5560: {what} must not be called in a fast event context");
         return false;
     }
 
     // The variable and function names use the part before the first
     // `_`: "python3_dynamic" asks about "python3".
-    let mut name: [c_char; 32] = [0; 32];
-    let size = size_of::<[c_char; 32]>();
-    // SAFETY: `name` is this frame's and `size` its length; the format
-    // takes the one NUL-terminated string `feat`.
-    unsafe { snprintf!(name.as_mut_ptr(), size, c"%s".as_ptr(), feat) };
-    // SAFETY: `name` now holds a NUL-terminated copy of `feat`.
-    unsafe { strchrsub(name.as_mut_ptr(), b'_' as c_char, NUL as c_char) };
-
-    let mut buf: [c_char; NAMEBUF] = [0; NAMEBUF];
+    let name = feat.split(|&b| b == b'_').next().unwrap_or(feat);
+    let loaded = [b"g:loaded_".as_slice(), name, b"_provider"].concat();
+    let call = provider_name(name, b"Call");
     let mut tv = UNSET_TV;
-    let (nm, bp) = (name.as_mut_ptr(), buf.as_mut_ptr());
 
-    // SAFETY (every call below): `bp` names this frame's `NAMEBUF` bytes,
-    // `nm` the NUL-terminated provider name, and `tv` is this frame's.
-    let mut len = unsafe { loaded_var(bp, nm) };
-    let loaded = |buf: &[c_char], len: c_int| {
-        cstr::as_bytes(&buf[..usize::try_from(len).unwrap_or(0)]).to_vec()
-    };
-    if eval_variable(&loaded(&buf, len), Some(&mut tv), false, true).is_err() {
+    if eval_variable(&loaded, Some(&mut tv), false, true).is_err() {
         // Not loaded yet: sourcing any function in the provider's
         // autoload namespace is what pulls the script in.
-        len = unsafe { provider_fn(bp, nm, c"provider#%s#bogus") };
-        unsafe { script_autoload(bp, len as size_t, false) };
-
-        len = unsafe { loaded_var(bp, nm) };
-        if eval_variable(&loaded(&buf, len), Some(&mut tv), false, true).is_err() {
-            unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
-            // SAFETY: `bp` holds the NUL-terminated function name.
-            let defined = func_exists(unsafe { cstr::bytes_at(bp) });
-            if defined && p_lpl() {
-                // SAFETY: the format takes two NUL-terminated strings.
-                let (nm2, nm) = unsafe { (c_str(nm), c_str(nm)) };
-                semsg!("provider: {nm2}: missing required variable g:loaded_{nm}_provider");
+        script_autoload_named(provider_name(name, b"bogus").as_bytes(), false);
+        if eval_variable(&loaded, Some(&mut tv), false, true).is_err() {
+            if func_exists(call.as_bytes()) && p_lpl() {
+                let nm = msg_bytes(name);
+                semsg!("provider: {nm}: missing required variable g:loaded_{nm}_provider");
             }
             return false;
         }
     }
 
     // 2 is the "working" value; 1 means the provider declined.
-    // SAFETY: `VAR_NUMBER` says the value holds a Number.
     let mut ok = tv.v_type() == VAR_NUMBER && tv.number_or_zero() == 2 as VarNumber;
-    if ok {
-        // SAFETY: as above.
-        unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
-        // SAFETY: `bp` holds the NUL-terminated function name just built.
-        if !func_exists(unsafe { cstr::bytes_at(bp) }) {
-            // SAFETY: the format takes three NUL-terminated strings.
-            let (nm2, nm, bp) = unsafe { (c_str(nm), c_str(nm), c_str(bp)) };
-            semsg!("provider: {nm2}: g:loaded_{nm}_provider=2 but {bp} is not defined");
-            ok = false;
-        }
+    if ok && !func_exists(call.as_bytes()) {
+        let (nm, call) = (msg_bytes(name), msg_cstr(&call));
+        semsg!("provider: {nm}: g:loaded_{nm}_provider=2 but {call} is not defined");
+        ok = false;
     }
     ok
 }
 
-/// `"<script>:<line>"` for the innermost execution-stack entry.
-///
-/// # Safety
-/// `buf` must hold `bufsize` writable bytes.
-pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
-    let top = top_estack();
-    if top.es_name.is_null() {
-        // SAFETY: the caller's promise about `buf` and `bufsize`.
-        unsafe { snprintf!(buf, bufsize, c"?".as_ptr()) };
-    } else {
-        // SAFETY: as above; the entry's name is NUL-terminated.
-        unsafe { snprintf!(buf, bufsize, c"%s:%d".as_ptr(), top.es_name, top.es_lnum) };
-    }
+/// `"<script>:<line>"` for the innermost execution-stack entry, or `"?"`
+/// when nothing is executing.
+pub fn eval_source_name_line() -> CString {
+    let Some(name) = sourcing_name_copy() else {
+        return c"?".to_owned();
+    };
+    let mut text = name;
+    text.extend_from_slice(format!(":{}", top_estack().es_lnum).as_bytes());
+    CString::new(text).unwrap_or_default()
 }
 
 /// Everything the user typed into a prompt buffer since the prompt, as one
 /// newline-joined string.
 pub fn prompt_get_input(buffer: Option<Buf>) -> Option<ThinCString> {
-    let buf = buffer?;
-    if !buf_is_prompt(Some(buf)) {
+    let buffer = buffer?;
+    if !buf_is_prompt(Some(buffer)) {
         return None;
     }
-    let lnum_start = buf.b_prompt_start.mark.lnum;
-    let lnum_last = buf.line_count();
+    let lnum_start = buffer.b_prompt_start.mark.lnum;
+    let lnum_last = buffer.line_count();
+    let col = buffer.b_prompt_start.mark.col;
 
-    // SAFETY: the prompt's line is a line of the buffer.
-    let mut text = unsafe { ml_get_buf(buf, lnum_start) };
-    // The prompt itself is skipped, unless the line is shorter than
-    // the recorded column.
-    let col = buf.b_prompt_start.mark.col;
-    // SAFETY: a buffer line is NUL-terminated.
-    if unsafe { cstr::bytes_at(text) }.len() as c_int >= col {
-        // SAFETY: `col` is inside the line, measured just above.
-        text = unsafe { text.offset(col as isize) };
+    let mut lines = Lines::in_buffer(buffer);
+    let first = lines.line(lnum_start);
+    // The prompt itself is skipped, unless the line is shorter than the
+    // recorded column.
+    let skip = usize::try_from(col).ok().filter(|&col| col <= first.len());
+    let mut text = first[skip.unwrap_or(0)..].to_vec();
+    for lnum in (lnum_start + 1)..=lnum_last {
+        text.push(b'\n');
+        text.extend_from_slice(lines.line(lnum));
     }
-    // SAFETY: `text` is NUL-terminated.
-    let mut full_text = unsafe { xstrdup(text) };
-    for i in (lnum_start + 1)..=lnum_last {
-        // SAFETY: `full_text` is owned and NUL-terminated, `i` is a line of
-        // the buffer, and each join frees what it consumed.
-        let half_text = unsafe { concat_str(full_text, c"\n".as_ptr()) };
-        // SAFETY: the join copied what it needed.
-        unsafe { xfree(full_text as *mut c_void) };
-        // SAFETY: as above.
-        full_text = unsafe { concat_str(half_text, ml_get_buf(buf, i)) };
-        // SAFETY: as above.
-        unsafe { xfree(half_text as *mut c_void) };
-    }
-    // SAFETY: the joined text is an allocation of this call's, handed over.
-    unsafe { ThinCString::from_raw(full_text) }
+    Some(ThinCString::from_vec(text))
 }
 
 /// The user pressed Enter in a prompt buffer: open the next line and hand
@@ -440,9 +304,7 @@ pub fn prompt_invoke_callback() {
         return;
     };
 
-    // SAFETY: `lnum` is the buffer's last line, and the literal is
-    // NUL-terminated.
-    let _ = unsafe { ml_append(lnum, c"".as_ptr() as *mut c_char, 0 as ColNr, false) };
+    let _ = ml_append_bytes(Buf::current(), lnum, b"");
     appended_lines_mark(lnum, 1);
     Win::current().w_cursor.lnum = lnum + 1;
     Win::current().w_cursor.col = 0;
@@ -454,11 +316,9 @@ pub fn prompt_invoke_callback() {
         let mut rettv = UNSET_TV;
         // The array takes the input over and frees it.
         let argv = [TypVal::string(Some(user_input))];
-        // SAFETY: the callback is the current buffer's own, and the
-        // argument array and result are this frame's.
-        let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_callback };
-        // SAFETY: as above.
-        unsafe { callback_call(&*cb, &argv, &mut rettv) };
+        // A copy: the callback may replace itself, or wipe the buffer.
+        let callback = Buf::current().b_prompt_callback.duplicate();
+        callback_call(&callback, &argv, &mut rettv);
         drop(argv);
         clear_local(&mut rettv);
     }
@@ -478,12 +338,9 @@ pub fn invoke_prompt_interrupt() -> bool {
     // The interrupt is consumed here; the callback decides what to do
     // about it.
     got_int.set(false);
-    // SAFETY: the callback is the current buffer's own, and the result is
-    // this frame's.
-    let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_interrupt };
-    // SAFETY: as above.
-    let ret = unsafe { callback_call(&*cb, &[], &mut rettv) };
-    // SAFETY: `rettv` is this frame's.
+    // A copy: the callback may replace itself, or wipe the buffer.
+    let callback = Buf::current().b_prompt_interrupt.duplicate();
+    let ret = callback_call(&callback, &[], &mut rettv);
     clear_local(&mut rettv);
     ret as c_int != FAIL
 }

@@ -75,7 +75,7 @@ pub(crate) unsafe fn adjust_clipboard_name(
 
     // SAFETY: main-thread editor call; the feature name is a literal. This
     // runs user code, so no borrow of CLIPBOARD may be held across it.
-    if !unsafe { eval_has_provider(c"clipboard".as_ptr(), false) } {
+    if !eval_has_provider(c"clipboard", false) {
         // Be silent inside a `:while`, a `:redir` and the like — but always
         // complain the first time. `redirecting` walks the message state,
         // so it is asked outside the cell borrow.
@@ -167,8 +167,7 @@ pub(crate) unsafe fn get_clipboard(
     // SAFETY: a fresh list; `regname` outlives the append, and the provider
     // call below owns `args` from here on.
     unsafe { (*args.as_ptr()).push_bytes(Some(&[regname.cast_unsigned()])) };
-    let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"get".as_ptr().cast_mut());
-    let result = unsafe { eval_call_provider(provider, method, Some(args), false) };
+    let result = eval_call_provider(c"clipboard", c"get", Some(args), false);
 
     // Show a message on error unless the provider already indicated failure.
     let mut errmsg = true;
@@ -321,8 +320,7 @@ pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut YankReg) {
     unsafe { (*into).push_bytes(Some(&[regtype.cast_unsigned()])) };
     let regname = [name as c_char];
     unsafe { (*into).push_bytes(Some(&[regname[0].cast_unsigned()])) };
-    let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
-    unsafe { eval_call_provider(provider, method, Some(args), true) };
+    eval_call_provider(c"clipboard", c"set", Some(args), true);
 }
 
 /// Start a batch: defer provider updates until the matching

@@ -45,14 +45,12 @@ pub unsafe fn callback_reader_start(reader: *mut CallbackReader, type_0: *const 
     reader.type_0 = type_0;
 }
 
-/// # Safety
-/// `reader` is live and its callback and buffer are this call's to release.
-pub unsafe fn callback_reader_free(reader: *mut CallbackReader) {
-    // SAFETY: the caller's reader.
-    unsafe { callback_free(&mut (*reader).cb) };
+/// Release `reader`'s callback and buffer.
+pub fn callback_reader_free(reader: &mut CallbackReader) {
+    callback_free(&mut reader.cb);
     // The reader itself may live in `xmalloc` memory whose release never runs
     // a destructor, so the buffer is handed back here rather than at drop.
-    drop(unsafe { mem::take(&mut (*reader).buffer) });
+    drop(mem::take(&mut reader.buffer));
 }
 
 /// Whether a reader has anywhere to deliver to.

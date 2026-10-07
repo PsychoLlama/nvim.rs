@@ -260,10 +260,8 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     unsafe { (*args).push_bytes(Some(&[regtype.cast_unsigned()])) };
     // SAFETY: as above.
     unsafe { (*args).push_bytes(Some(&[regname.cast_unsigned()])) };
-    let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
-    // SAFETY: two names of this crate's own, and the arguments built above.
     // The provider is Vimscript, which is why this runs on the main loop.
-    unsafe { eval_call_provider(provider, method, Some(held), true) };
+    eval_call_provider(c"clipboard", c"set", Some(held), true);
 }
 
 /// Accumulate an OSC 52 clipboard write, queueing it once complete.

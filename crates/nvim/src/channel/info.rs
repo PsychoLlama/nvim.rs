@@ -29,7 +29,7 @@ use crate::autocmd::has_event;
 use crate::channel::channels;
 use crate::eval::encode::encode_tv2json;
 use crate::eval::typval::DictRef;
-use crate::eval::{eval_fmt_source_name_line, get_v_event, restore_v_event};
+use crate::eval::{eval_source_name_line, get_v_event, restore_v_event};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::proc_is_stopped;
@@ -40,7 +40,8 @@ use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    ApiDict, Array, Channel, IOSIZE, Integer, Object, SaveVEvent, TypVal, VAR_DICT, uint64_t,
+    ApiDict, Array, Channel, ChannelStreamType, Integer, Object, SaveVEvent, TypVal, VAR_DICT,
+    uint64_t,
 };
 
 use super::known::*;
@@ -105,11 +106,7 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
 
 /// `"script:line"` for whatever is executing, as an owned copy.
 fn source_name_line() -> CString {
-    let mut buf = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `eval_fmt_source_name_line` only `snprintf`s into the buffer
-    // it is handed, so the result is NUL-terminated within `IOSIZE`.
-    unsafe { eval_fmt_source_name_line(buf.as_mut_ptr(), IOSIZE as usize) };
-    unsafe { CStr::from_ptr(buf.as_ptr()) }.to_owned()
+    eval_source_name_line()
 }
 
 /// Queues the `ChanOpen`/`ChanInfo` autocommand, if anything is listening.
@@ -171,6 +168,14 @@ pub fn channel_job_running(id: uint64_t) -> bool {
     !chan.is_null()
         && unsafe { (*chan).streamtype } == kChannelStreamProc
         && !proc_is_stopped(unsafe { &*channel_proc(chan) })
+}
+
+/// The kind of stream the channel `id` names, or `None` when there is no such
+/// channel.
+pub(crate) fn channel_stream_type(id: uint64_t) -> Option<ChannelStreamType> {
+    let chan = find_channel(id);
+    // SAFETY: a registered channel is live until the next event-loop turn.
+    (!chan.is_null()).then(|| unsafe { (*chan).streamtype })
 }
 
 /// What `nvim_get_chan_info()` reports. An unknown id answers with an empty
