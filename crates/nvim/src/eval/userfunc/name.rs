@@ -345,7 +345,7 @@ fn trans_selected(
             answer.end = end;
         }
         Selected::Partial(partial, name) => {
-            if is_luafunc(partial.as_ptr()) && byte(text, end) == b'.' {
+            if is_luafunc(Some(&partial)) && byte(text, end) == b'.' {
                 let len = check_luafunc_name(&text[end + 1..], true);
                 if len == 0 {
                     let arg0 = "v:lua";

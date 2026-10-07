@@ -264,13 +264,8 @@ fn start_index(word: &[u8]) -> usize {
 
 /// `exists(":cmd")`: 0 for no, 1 for an abbreviation, 2 for a full name,
 /// 3 for a name that is ambiguous between user commands.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
-    // SAFETY: the caller's promise -- a NUL-terminated name.
-    let bytes = unsafe { cstr::bytes_at(name) };
+pub fn cmd_exists(name: &CStr) -> c_int {
+    let bytes = name.to_bytes();
     // A modifier is a command as far as `exists()` is concerned.
     for md in &CMDMODS {
         let j = shared_prefix(bytes, md.name);

@@ -19,7 +19,7 @@
 )]
 
 use crate::cstr;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{get_global_lstate, kRetNilBool, lua_Debug, lua_getinfo, nlua_error, nlua_exec};
@@ -217,10 +217,10 @@ pub unsafe fn nlua_funcref_str(ref_0: LuaRef) -> *mut c_char {
 }
 
 /// `exists('v:lua.f')`: whether the Lua expression names a function.
-///
-/// # Safety
-/// `lua_funcname` must be a NUL-terminated Lua expression.
-pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
+pub fn nlua_func_exists(lua_funcname: &CStr) -> bool {
+    let lua_funcname = lua_funcname.as_ptr();
+    // SAFETY: a terminated expression, formatted into an allocation sized
+    // for it and released below.
     unsafe {
         // `return %s` plus the terminator: the name is evaluated as an
         // expression rather than looked up, so `v:lua.pkg.fn` works.

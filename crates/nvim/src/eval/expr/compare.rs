@@ -216,18 +216,19 @@ pub(crate) fn typval_compare(
             tv_clear(typ1);
             return Err(Failed);
         }
-        let equal = if t1 == VAR_PARTIAL && (*typ1).partial_or_null().is_null()
-            || t2 == VAR_PARTIAL && (*typ2).partial_or_null().is_null()
+        let equal = if t1 == VAR_PARTIAL && (*typ1).partial_shared().is_none()
+            || t2 == VAR_PARTIAL && (*typ2).partial_shared().is_none()
         {
-            // A null partial is only ever equal to another null one, and
-            // both union members are pointers.
-            (*typ1).partial_or_null() == (*typ2).partial_or_null()
+            // A null partial is only ever equal to another null one: an
+            // identity test of the two payloads, as upstream's read of the
+            // union was.
+            (*typ1).payload_address() == (*typ2).payload_address()
         } else if !type_is || (t1 == VAR_FUNC && t2 == VAR_FUNC) {
             // `is` on two plain Funcrefs falls back to comparing names:
             // there is no object for them to be identical to.
             tv_equal(typ1, typ2, ic)
         } else if t1 == VAR_PARTIAL && t2 == VAR_PARTIAL {
-            (*typ1).partial_or_null() == (*typ2).partial_or_null()
+            (*typ1).payload_address() == (*typ2).payload_address()
         } else {
             false
         };

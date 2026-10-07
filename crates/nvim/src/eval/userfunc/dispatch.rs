@@ -17,7 +17,6 @@
 
 use crate::winlayer::Win;
 use core::ffi::c_int;
-use core::ptr;
 use std::rc::Rc;
 
 use super::*;
@@ -347,7 +346,7 @@ pub(crate) fn call_func_with(
             result.write_number(0);
             error = FCERR_UNKNOWN;
 
-            if is_luafunc(partial.map_or(ptr::null_mut(), PartialRef::as_ptr)) {
+            if is_luafunc(partial) {
                 if len > 0 {
                     error = FCERR_NONE;
                     if let Some(base) = with.basetv.as_deref()

@@ -366,17 +366,12 @@ pub fn set_context_in_autocmd(expand: &mut Expand, arg: usize, doautocmd: bool) 
 
 /// `exists('#…')`, in all four shapes: `#Group`, `#Event`, `#Event#pat`
 /// and `#Group#Event#pat`.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string.
-pub unsafe fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
+pub fn au_exists(arg: &::core::ffi::CStr) -> bool {
     // A copy, so the `#` separators can be overwritten with NULs.
     //
-    // SAFETY: `arg` is the caller's NUL-terminated string, so `arg_save` is
-    // a NUL-terminated copy of it this function owns and frees at the end.
-    // Every pointer below is a position inside that copy.
-    let mut owned = XString::from_cstr(unsafe { cstr::at(arg) });
+    // `arg_save` is a NUL-terminated copy of `arg` this function owns and
+    // frees at the end. Every pointer below is a position inside that copy.
+    let mut owned = XString::from_cstr(arg);
     let arg_save = owned.as_mut_ptr();
     let retval = 'theend: {
         let mut p = unsafe { strchr(arg_save, '#' as ::core::ffi::c_int) };

@@ -74,10 +74,7 @@ unsafe fn free_chunk_buffer(scratch: *const c_char, buf: *mut c_char) {
 const EVALNAME: &CStr = c"luaeval()";
 
 /// `luaeval(str, arg)`.
-///
-/// # Safety
-/// `str` must be a live api string and `ret_tv` writable.
-pub unsafe fn nlua_typval_eval(str: String_0, arg: &TypVal, ret_tv: &mut TypVal) {
+pub fn nlua_typval_eval(str: &[u8], arg: &TypVal, ret_tv: &mut TypVal) {
     let mut chunk = [0 as c_char; IOSIZE as usize];
     let scratch = chunk.as_mut_ptr();
     unsafe {
@@ -88,7 +85,7 @@ pub unsafe fn nlua_typval_eval(str: String_0, arg: &TypVal, ret_tv: &mut TypVal)
             .copy_from_nonoverlapping(EVALHEADER.as_ptr().cast(), head);
         lcmd.add(head)
             .cast::<u8>()
-            .copy_from_nonoverlapping(str.data().cast(), str.len());
+            .copy_from_nonoverlapping(str.as_ptr(), str.len());
         *lcmd.add(lcmd_len - 1) = b')' as c_char;
         let arg = ::core::slice::from_ref(arg);
         nlua_typval_exec(lcmd, lcmd_len, EVALNAME.as_ptr(), arg, true, Some(ret_tv));

@@ -1,18 +1,14 @@
 //! Calling things: `call()`, `function()`, `eval()`, `execute()` and the
 //! bridges to the script hosts.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::wrappers::arg_number;
 use super::{AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
-use crate::cstr;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
-    ListRef, NumBuf, PartialRef, list_items, list_iter, list_len, tv_check_for_dict_arg,
-    tv_check_for_list_arg,
+    ListRef, NumBuf, PartialRef, list_iter, list_len, tv_check_for_dict_arg, tv_check_for_list_arg,
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_exists, func_ptr_ref, func_ref_name, func_unref_name,
@@ -22,101 +18,76 @@ use crate::eval::userfunc::{
 use crate::eval::vars::var_exists;
 use crate::eval::{Cursor, eval_option, eval1, partial_name, script_host_eval};
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::{DoCmdOpts, cmd_exists, do_cmdline, do_cmdline_cmd};
+use crate::ex_docmd::{DoCmdOpts, cmd_exists, do_cmdline_cmd, do_cmdline_getter};
 use crate::ex_eval::aborting;
+use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_typval_eval, register_table_as_callable,
 };
-use crate::memory::{ThinCString, XString};
-use crate::memory::{xfree, xstrdup};
+use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message::state::{emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off};
 use crate::message::{capture_finish, capture_start, e_toomanyarg, e_unknown_function_str};
-use crate::message_fmt::c_str;
 use crate::message_fmt::{msg_bytes, msg_cstr, msg_cstr_opt};
 use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
-use crate::os::env::{expand_env_save, os_env_exists};
+use crate::os::env::env_exists;
+use crate::os::env::expand::expand_env_save_opt_of;
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{
     EvalFuncData, List, NUL, Partial, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_STRING, VarNumber, VarType,
 };
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-
-/// A C string this module allocated and must release.
-///
-/// The C bodies below end in a `theend:` label whose only job is one
-/// `xfree`; this is that label.
-struct Owned(*mut c_char);
-
-impl Drop for Owned {
-    fn drop(&mut self) {
-        // SAFETY: the pointer came from the allocator `xfree` releases, or
-        // is null, which `xfree` accepts.
-        unsafe { xfree(self.0 as *mut c_void) };
-    }
-}
 
 /// `call({func}, {arglist} [, {dict}])`
 pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the frame is live; every pointer below either belongs to an
-    // argument or is one this body allocated and releases.
     if tv_check_for_list_arg(args, 1).is_err() {
         return;
     }
     // A null List is v:_null_list, which calls nothing.
-    if args[1].list_or_null().is_null() {
+    if args[1].list_shared().is_none() {
         return;
     }
 
     let mut partial = None;
-    // Only the Lua-table arm allocates; the others borrow.
+    // Only the Lua-table arm registers a name; the others borrow.
     let mut owned = false;
     let lua_name;
-    let mut func = match args[0].v_type() {
-        VAR_FUNC => args[0]
-            .func_name()
-            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut()),
+    let func = match args[0].v_type() {
+        VAR_FUNC => args[0].func_name().map(ThinCString::as_cstr),
         VAR_PARTIAL => {
             partial = args[0].partial_shared();
-            args[0]
-                .partial_ref()
-                .map_or(c"", partial_name)
-                .as_ptr()
-                .cast_mut()
+            Some(args[0].partial_ref().map_or(c"", partial_name))
         }
         _ if nlua_is_table_from_lua(&args[0]) => {
             owned = true;
             lua_name = register_table_as_callable(&args[0]);
-            lua_name
-                .as_ref()
-                .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
+            lua_name.as_ref().map(ThinCString::as_cstr)
         }
-        _ => numbuf.string(&args[0]).as_ptr().cast_mut(),
+        _ => Some(numbuf.string(&args[0])),
     };
-    if func.is_null() || unsafe { *func } as c_int == NUL {
+    let Some(mut func) = func.filter(|func| !func.is_empty()) else {
         // Upstream returns here without releasing an owned name.
         return;
-    }
+    };
 
     // A String name is resolved through the function-name translator,
     // which is what turns `s:`/`<SID>` into the real name.
     let tofree;
     if args[0].v_type() == VAR_STRING {
         let flags = TFN_INT as c_int | TFN_QUIET as c_int;
-        // SAFETY: a NUL-terminated string the frame owns.
-        let written = unsafe { cstr::bytes_at(func) };
+        let written = func.to_bytes();
         let Some(translated) = trans_function_name(written, false, flags, false).name else {
             emsg_funcname(e_unknown_function_str, written);
             return;
         };
         tofree = translated;
-        func = tofree.as_ptr().cast_mut();
+        func = tofree.as_cstr();
     }
 
     // A bad {dict} skips the call but still runs the cleanup below.
@@ -127,15 +98,12 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         Some(args[2].dict_shared())
     };
-    // SAFETY: `func` is a NUL-terminated name the frame owns or borrows from
-    // an argument, live for the call.
-    let name = unsafe { cstr::at(func) };
     if let Some(selfdict) = selfdict {
-        let _ = func_call(name, &args[1], partial, selfdict, result);
+        let _ = func_call(func, &args[1], partial, selfdict, result);
     }
 
     if owned {
-        func_unref_name(name);
+        func_unref_name(func);
     }
 }
 
@@ -164,37 +132,38 @@ pub fn f_eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 }
 
-/// Where the `:execute` List form is up to, as `do_cmdline`'s cookie.
+/// Where an `execute([...])` List walk is up to.
 struct ListLines {
-    /// The list being walked, whose reference this holds.
-    list: *mut List,
+    /// The list being walked, held across the run: a command may drop the
+    /// variable holding it.
+    list: ListRef,
     /// Where the walk is: an index, because a command in the list can edit
     /// the very list it is being read from.
     at: usize,
 }
 
+/// The `execute([...])` walks in progress, innermost last. A walk's line
+/// getter is handed its depth here as its cookie: `execute()` nests when a
+/// command in the list calls it again.
+static LIST_WALKS: GlobalCell<Vec<ListLines>> = GlobalCell::new(Vec::new());
+
 /// `do_cmdline`'s line getter for `execute([...])`: one allocated line per
-/// List item, and null when the List runs out.
-///
-/// # Safety
-/// `cookie` points at a live [`ListLines`].
-unsafe fn get_list_line(
-    _c: c_int,
-    cookie: *mut c_void,
-    _indent: c_int,
-    _do_concat: bool,
-) -> *mut c_char {
-    let state = cookie.cast::<ListLines>();
-    // SAFETY: the caller's obligation. `buf` outlives the string
-    // `tv_get_string_buf_chk` may park in it, because the duplicate is made
-    // before returning.
-    let at = unsafe { (*state).at };
-    let Some(item) = (list_items(unsafe { (*state).list.as_ref() })).get(at) else {
+/// List item, and null when the List runs out or an item is no String.
+fn get_list_line(_c: c_int, cookie: *mut c_void, _indent: c_int, _do_concat: bool) -> *mut c_char {
+    let depth = cookie.addr();
+    // The item is copied out of the walk's cell: reading it as a String may
+    // report an error, which must not happen under the cell's borrow.
+    let item = LIST_WALKS.with_mut(|walks| {
+        let walk = &mut walks[depth];
+        let item = walk.list.items().get(walk.at)?.li_tv.clone();
+        walk.at += 1;
+        Some(item)
+    });
+    let Some(item) = item else {
         return ptr::null_mut();
     };
     let mut buf = NumBuf::new();
-    let line = buf.string_chk(&item.li_tv).map(ThinCString::from_cstr);
-    unsafe { (*state).at = at + 1 };
+    let line = buf.string_chk(&item).map(ThinCString::from_cstr);
     line.map_or(ptr::null_mut(), ThinCString::into_raw)
 }
 
@@ -251,21 +220,17 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
         .is_some_and(|arg| arg.v_type() == VAR_LIST)
     {
         let _ = do_cmdline_cmd(numbuf.string(&args[cmd_idx]));
-    } else if !args[cmd_idx].list_or_null().is_null() {
-        let list = args[cmd_idx].list_or_null();
-        // The List is held across the run: a command may drop the
-        // variable holding it.
-        // SAFETY: the argument's live list.
-        let held = unsafe { ListRef::retained(list) };
-        let mut cookie = ListLines { list, at: 0 };
-        type GetLine = unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
-        let getline = Some(get_list_line as GetLine);
-        let cookie = (&raw mut cookie).cast::<c_void>();
+    } else if let Some(list) = args[cmd_idx].list_handle() {
+        let depth = LIST_WALKS.with_mut(|walks| {
+            walks.push(ListLines { list, at: 0 });
+            walks.len() - 1
+        });
         let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT | DoCmdOpts::KEYTYPED;
-        // SAFETY: `cookie` is the walk state this frame owns and outlives
-        // the call, which is what `get_list_line` asks for.
-        let _ = unsafe { do_cmdline(ptr::null_mut(), getline, cookie, opts) };
-        drop(held);
+        let _ = do_cmdline_getter(get_list_line, ptr::without_provenance_mut(depth), opts);
+        let walk = LIST_WALKS.with_mut(|walks| walks.pop());
+        debug_assert!(walks_matched(walk.as_ref(), depth), "execute(): walks nest");
+        // The list's reference goes once the cell is no longer borrowed.
+        drop(walk);
     }
 
     emsg_silent.set(save_emsg_silent);
@@ -277,6 +242,12 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     result.write_string(Some(ThinCString::from_bytes(&captured)));
 }
 
+/// Whether the walk popped is the one pushed at `depth`: the stack's own
+/// length says so, since nothing else pushes onto it.
+fn walks_matched(walk: Option<&ListLines>, depth: usize) -> bool {
+    walk.is_some() && LIST_WALKS.with(Vec::len) == depth
+}
+
 /// `execute({command} [, {silent}])`
 pub fn f_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     execute_common(args, result, 0);
@@ -285,8 +256,6 @@ pub fn f_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `exists({expr})` — the sigil in front of the name picks the namespace.
 pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the callees read the argument's NUL-terminated
-    // string, or a tail of it.
     let p = numbuf.string(&args[0]);
     let bytes = p.to_bytes();
     // Not a bool: the `:` arm answers 2 for an exact command name, and
@@ -295,12 +264,14 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         b'$' => {
             // The environment, or a name that expands to something
             // other than itself.
-            (if unsafe { os_env_exists(p[1..].as_ptr(), false) } {
-                true
-            } else {
-                let expanded = Owned(unsafe { expand_env_save(p.as_ptr().cast_mut()) });
-                !expanded.0.is_null() && unsafe { *expanded.0 } as u8 != b'$'
-            }) as c_int
+            c_int::from(
+                env_exists(&p[1..], false)
+                    || expand_env_save_opt_of(p, false)
+                        .as_cstr()
+                        .to_bytes()
+                        .first()
+                        != Some(&b'$'),
+            )
         }
         b'&' | b'+' => {
             // An option, and nothing may follow it.
@@ -313,21 +284,19 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         b'*' => {
             if bytes.starts_with(b"*v:lua.") {
-                unsafe { nlua_func_exists(p[7..].as_ptr()) as c_int }
+                c_int::from(nlua_func_exists(&p[7..]))
             } else {
                 c_int::from(function_exists(&bytes[1..], false))
             }
         }
-        b':' => unsafe { cmd_exists(p[1..].as_ptr()) },
+        b':' => cmd_exists(&p[1..]),
         // `##event` asks whether the event name is known at all;
         // `#event` asks whether an autocommand is defined for it.
-        b'#' if bytes.get(1) == Some(&b'#') => {
-            (unsafe { autocmd_supported(p[2..].as_ptr()) }) as c_int
-        }
-        b'#' => unsafe { au_exists(p[1..].as_ptr()) as c_int },
+        b'#' if bytes.get(1) == Some(&b'#') => c_int::from(autocmd_supported(&p[2..])),
+        b'#' => c_int::from(au_exists(&p[1..])),
         _ => c_int::from(var_exists(bytes)),
     };
-    result.write_number(found as VarNumber);
+    result.write_number(VarNumber::from(found));
 }
 
 /// `function()` and `funcref()`.
@@ -337,59 +306,62 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    // SAFETY throughout: the frame is live; the partial built below owns every value
-    // it copies, and `trans_name`/`name` are released on every path.
     let mut arg_pt: Option<&Partial> = None;
     let mut use_string = false;
-    let mut s = match args[0].v_type() {
+    // The name as given; `None` once it has proved not to be one.
+    let mut given: Option<&CStr> = match args[0].v_type() {
         // function(MyFunc, [arg], dict)
-        VAR_FUNC => args[0]
-            .func_name()
-            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut()),
+        VAR_FUNC => args[0].func_name().map(ThinCString::as_cstr),
         // function(dict.MyFunc, [arg])
         VAR_PARTIAL if args[0].partial_ref().is_some() => {
             arg_pt = args[0].partial_ref();
-            arg_pt.map_or(c"", partial_name).as_ptr().cast_mut()
+            Some(arg_pt.map_or(c"", partial_name))
         }
         // function('MyFunc', [arg], dict)
         _ => {
             use_string = true;
-            numbuf.string(&args[0]).as_ptr().cast_mut()
+            Some(numbuf.string(&args[0]))
         }
     };
 
     // An autoload name is left alone: it may not be loaded yet, and
     // checking would load it.
     let mut trans_name = None;
-    if (use_string && !has_char(unsafe { cstr::at(s) }, AUTOLOAD_CHAR)) || is_funcref {
+    if let Some(written) = given
+        && ((use_string && !has_char(written, AUTOLOAD_CHAR)) || is_funcref)
+    {
         let flags = TFN_INT as c_int
             | TFN_QUIET as c_int
             | TFN_NO_AUTOLOAD as c_int
             | TFN_NO_DEREF as c_int;
-        // SAFETY: a NUL-terminated string the frame owns.
-        let written = unsafe { cstr::bytes_at(s) };
+        let written = written.to_bytes();
         let found = save_function_name(written, false, flags, false);
         trans_name = found.name;
         // Anything left over means the name was not a name.
         if found.end < written.len() {
-            s = ptr::null_mut();
+            given = None;
         }
     }
 
-    if s.is_null()
-        || unsafe { *s } as c_int == NUL
-        || (use_string && ascii_isdigit(unsafe { *s } as c_int))
-        || (is_funcref && trans_name.is_none())
-    {
-        let what = if use_string {
-            msg_cstr(numbuf2.string(&args[0]))
-        } else {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            unsafe { c_str(s) }
-        };
-        semsg!("E475: Invalid argument: {what}");
-        return;
-    }
+    let first = given.and_then(|name| name.to_bytes().first().copied());
+    let s = match given {
+        Some(s)
+            if first.is_some()
+                && !(use_string && first.is_some_and(|c| ascii_isdigit(c_int::from(c))))
+                && !(is_funcref && trans_name.is_none()) =>
+        {
+            s
+        }
+        _ => {
+            let what = if use_string {
+                msg_cstr(numbuf2.string(&args[0]))
+            } else {
+                msg_cstr_opt(given)
+            };
+            semsg!("E475: Invalid argument: {what}");
+            return;
+        }
+    };
     if let Some(trans_name) = &trans_name
         && if is_funcref {
             !func_exists(trans_name)
@@ -397,8 +369,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
             !translated_function_exists(trans_name)
         }
     {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let s = unsafe { c_str(s) };
+        let s = msg_cstr(s);
         semsg!("E700: Unknown function: {s}");
         return;
     }
@@ -406,19 +377,18 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     // Expand `s:` and `<SID>` into `<SNR>nr_` so the result can be
     // called from another script. `trans_function_name` would do it
     // too, but some plugins depend on the name staying printable.
-    // SAFETY: as above.
-    let written = unsafe { cstr::bytes_at(s) };
+    let written = s.to_bytes();
     let name = if written.starts_with(b"s:") || written.starts_with(b"<SID>") {
-        scriptlocal_funcname(written).map_or(ptr::null_mut(), XString::into_raw)
+        scriptlocal_funcname(written).map(ThinCString::from)
     } else {
-        unsafe { xstrdup(s) }
+        Some(ThinCString::from_cstr(s))
     };
 
     // The second argument may be either the argument list or the dict;
     // a third settles it.
     let mut dict_idx = 0;
     let mut arg_idx = 0;
-    let mut list = ptr::null_mut::<List>();
+    let mut list: Option<&List> = None;
     if args.len() > 1 {
         if args.len() > 2 {
             arg_idx = 1;
@@ -430,27 +400,24 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         }
         if dict_idx > 0 {
             if tv_check_for_dict_arg(args, dict_idx).is_err() {
-                unsafe { xfree(name as *mut c_void) };
                 return;
             }
             // v:_null_dict binds nothing.
-            if args[dict_idx].dict_or_null().is_null() {
+            if args[dict_idx].dict_shared().is_none() {
                 dict_idx = 0;
             }
         }
         if arg_idx > 0 {
-            if args[arg_idx as usize].v_type() != VAR_LIST {
+            if args[arg_idx].v_type() != VAR_LIST {
                 let msg = c"E923: Second argument of function() must be a list or a dict";
                 emsg(gettext(msg));
-                unsafe { xfree(name as *mut c_void) };
                 return;
             }
-            list = args[arg_idx as usize].list_or_null();
-            if list_len(unsafe { list.as_ref() }) == 0 {
+            list = args[arg_idx].list_ref();
+            if list_len(list) == 0 {
                 arg_idx = 0;
-            } else if list_len(unsafe { list.as_ref() }) > MAX_FUNC_ARGS as c_int {
+            } else if list_len(list) > MAX_FUNC_ARGS as c_int {
                 emsg_funcname(e_toomanyarg, written);
-                unsafe { xfree(name as *mut c_void) };
                 return;
             }
         }
@@ -458,9 +425,6 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
 
     // Nothing bound and nothing to bind: a plain Funcref will do.
     if dict_idx == 0 && arg_idx == 0 && arg_pt.is_none() && !is_funcref {
-        // SAFETY: `name` is the `xmalloc`ed copy made above, which the
-        // result adopts; it stays live for the reference taken on it.
-        let name = unsafe { ThinCString::from_raw(name) };
         if let Some(name) = &name {
             func_ref_name(name.as_cstr());
         }
@@ -473,7 +437,6 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         // The bound arguments of the partial being extended come
         // first, then this call's.
         let bound = arg_pt.map_or(&[][..], |bound| &bound.pt_argv);
-        let list = unsafe { list.as_ref() };
         pt.pt_argv
             .reserve_exact(bound.len() + list.map_or(0, List::len));
         pt.pt_argv.extend(bound.iter().cloned());
@@ -494,18 +457,14 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     if let Some(func) = arg_pt.and_then(|bound| bound.pt_func.as_ref()) {
         func_ptr_ref(func);
         pt.pt_func = Some(func.clone());
-        unsafe { xfree(name as *mut c_void) };
     } else if is_funcref {
         let trans_name = trans_name.as_deref().unwrap_or_default();
         pt.pt_func = find_func(trans_name);
         if let Some(func) = &pt.pt_func {
             func_ptr_ref(func);
         }
-        unsafe { xfree(name as *mut c_void) };
     } else {
-        // SAFETY: `name` is the `xmalloc`ed copy made above, which the
-        // partial adopts.
-        pt.pt_name = unsafe { ThinCString::from_raw(name) };
+        pt.pt_name = name;
         if let Some(name) = &pt.pt_name {
             func_ref_name(name.as_cstr());
         }
@@ -563,9 +522,7 @@ fn libcall_common(args: &[TypVal], result: &mut TypVal, out_type: VarType) {
         LibcallReturn::Int
     };
     let answer = match (libname, funcname) {
-        // SAFETY: both names are the arguments' own strings, live for the
-        // call.
-        (Some(libname), Some(funcname)) => unsafe { os_libcall(libname, funcname, arg, want) },
+        (Some(libname), Some(funcname)) => os_libcall(libname, funcname, arg, want),
         _ => None,
     };
     match answer {
@@ -593,31 +550,27 @@ pub fn f_libcallnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `luaeval({expr} [, {expr}])`
 pub fn f_luaeval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the frame is live and the chunk outlives the call.
-    let Some(chunk) = numbuf.string_chk(&args[0]) else {
+    let Some(chunk) = numbuf.bytes_chk(&args[0]) else {
         return;
     };
     // Lua sees `_A`; with no second argument that is upstream's empty slot,
     // which `nlua_push_typval` reads as nil.
     let absent = TypVal::Unknown;
     let arg = args.get(1).unwrap_or(&absent);
-    unsafe { nlua_typval_eval(cstr_to_string(chunk.as_ptr()), arg, result) };
+    nlua_typval_eval(chunk, arg, result);
 }
 
 /// `py3eval({expr})`
 pub fn f_py3eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the dispatcher's argument array and return value.
-    unsafe { script_host_eval(c"python3".as_ptr() as *mut c_char, args, result) };
+    script_host_eval(c"python3", args, result);
 }
 
 /// `perleval({expr})`
 pub fn f_perleval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the dispatcher's argument array and return value.
-    unsafe { script_host_eval(c"perl".as_ptr() as *mut c_char, args, result) };
+    script_host_eval(c"perl", args, result);
 }
 
 /// `rubyeval({expr})`
 pub fn f_rubyeval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the dispatcher's argument array and return value.
-    unsafe { script_host_eval(c"ruby".as_ptr() as *mut c_char, args, result) };
+    script_host_eval(c"ruby", args, result);
 }

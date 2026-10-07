@@ -116,11 +116,11 @@ fn returned_string(res: *const c_char) -> Option<CString> {
 /// `None` means the library or the symbol could not be loaded; the reason
 /// has already been reported to the user.
 ///
-/// # Safety
-///
-/// Calls arbitrary foreign code under an assumed prototype. The caller has
-/// no way to verify either; see the module docs.
-pub unsafe fn os_libcall(
+/// Not `unsafe`, though it calls arbitrary foreign code under an assumed
+/// prototype: no caller can check either, so there is no contract to hand
+/// on. The call is made on the word of the user who named the library and
+/// the function, which is what `libcall()` has always been (module docs).
+pub fn os_libcall(
     libname: &CStr,
     funcname: &CStr,
     arg: LibcallArg<'_>,
@@ -141,8 +141,8 @@ pub unsafe fn os_libcall(
         }
     };
     // SAFETY: `addr` is a non-null symbol address; the prototype is the
-    // caller's assumption, per this function's contract. `lib` outlives the
-    // call, so the code stays mapped.
+    // user's assumption, per this function's docs. `lib` outlives the call,
+    // so the code stays mapped.
     unsafe {
         Some(match (want, arg) {
             (LibcallReturn::Str, LibcallArg::Str(s)) => LibcallResult::Str(returned_string(

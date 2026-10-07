@@ -98,7 +98,7 @@ pub(crate) fn call_func_rettv(
     if evaluate {
         functv = result.take();
         if functv.v_type() == VAR_PARTIAL {
-            if is_luafunc(functv.partial_or_null()) {
+            if is_luafunc(functv.partial_shared()) {
                 let start = lua_name.unwrap_or(cursor.offset());
                 lua_text = Some(XString::from_bytes(&cursor.text()[start..]));
                 name_len = Some(cursor.offset() - start);
@@ -264,7 +264,7 @@ pub(crate) fn eval_method(
                         .callable_name()
                         .map_or(&[][..], CStr::to_bytes)
                         .to_vec();
-                } else if callee.v_type() == VAR_PARTIAL && !callee.partial_or_null().is_null() {
+                } else if callee.partial_shared().is_some() {
                     let (dict, args) = callee.partial_binding();
                     if !args.is_empty() || dict.is_some() {
                         if verbose {

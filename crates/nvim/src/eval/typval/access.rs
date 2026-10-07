@@ -508,7 +508,7 @@ mod tests {
         let num = TypVal::Number(0xdead_beef);
         assert!(num.list_or_null().is_null());
         assert!(num.dict_or_null().is_null());
-        assert!(num.partial_or_null().is_null());
+        assert!(num.partial_shared().is_none());
         assert!(num.string_ref().is_none());
         assert!(num.func_name().is_none());
         assert!(num.text_or_name().is_none());

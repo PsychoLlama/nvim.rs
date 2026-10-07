@@ -14,6 +14,7 @@
 use crate::ascii::ascii_isdigit;
 use crate::charset::vim_is_ident_char;
 use crate::cstr::byte_at;
+use crate::eval::typval::PartialRef;
 use crate::eval::userfunc::fname_script_len;
 use crate::eval::vars::is_lua_partial;
 use crate::eval::{
@@ -26,7 +27,7 @@ use crate::message_fmt::msg_bytes;
 use crate::option::option_end;
 use crate::semsg;
 use crate::strings::has_char;
-use crate::types::{NUL, OptIndex, OptionSetFlags, Partial, TypVal, VAR_PARTIAL};
+use crate::types::{NUL, OptIndex, OptionSetFlags, TypVal};
 use core::ffi::c_int;
 
 /// The NUL byte, as the scans below compare it.
@@ -283,15 +284,15 @@ pub fn eval_isdictc(c: c_int) -> bool {
     is_alpha(c) || ascii_isdigit(c) || c == b'_' as c_int
 }
 
-/// Is this partial the one `v:lua` stands for? A comparison of addresses;
-/// nothing is read through `partial`.
-pub fn is_luafunc(partial: *mut Partial) -> bool {
-    is_lua_partial(partial.addr())
+/// Is this partial the one `v:lua` stands for? An identity test: the
+/// handle's address against the one `v:lua` holds.
+pub(crate) fn is_luafunc(partial: Option<&PartialRef>) -> bool {
+    partial.is_some_and(|partial| is_lua_partial(partial.as_ptr().addr()))
 }
 
 /// Is this typval `v:lua`?
 pub(crate) fn tv_is_luafunc(tv: &TypVal) -> bool {
-    tv.v_type() == VAR_PARTIAL && is_luafunc(tv.partial_or_null())
+    is_luafunc(tv.partial_shared())
 }
 
 /// The end of the `v:lua.` function name `text` starts with, which may hold

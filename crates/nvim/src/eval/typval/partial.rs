@@ -26,26 +26,6 @@ use ::core::ffi::CStr;
 /// a [`PartialRef`]: it can be borrowed but never handed out, since a copy
 /// of it would be a reference nobody took.
 impl TypVal {
-    /// The partial, or `None` unless this is a `Partial` -- including the
-    /// NULL case, which answers `Some(NULL)`.
-    #[inline(always)]
-    pub(crate) fn as_partial(&self) -> Option<*mut Partial> {
-        match self {
-            TypVal::Partial(pt) => Some(
-                pt.as_ref()
-                    .map_or(::core::ptr::null_mut(), PartialRef::as_ptr),
-            ),
-            _ => None,
-        }
-    }
-
-    /// The partial this value holds, or NULL unless it is a partial holding
-    /// one.  A **borrow**; see [`TypVal::list_or_null`].
-    #[inline(always)]
-    pub(crate) fn partial_or_null(&self) -> *mut Partial {
-        self.as_partial().unwrap_or(::core::ptr::null_mut())
-    }
-
     /// A partial value over `pt`, which the value takes over.
     #[inline(always)]
     pub(crate) const fn partial(pt: Option<PartialRef>) -> TypVal {

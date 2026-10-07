@@ -174,10 +174,7 @@ pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
 }
 
 /// `py3eval()` and its relatives: hand one expression to a script host.
-///
-/// # Safety
-/// `name` must be NUL-terminated; `args` and `result` valid.
-pub unsafe fn script_host_eval(name: *mut c_char, args: &[TypVal], result: &mut TypVal) {
+pub fn script_host_eval(name: &CStr, args: &[TypVal], result: &mut TypVal) {
     if check_secure() {
         return;
     }
@@ -193,8 +190,8 @@ pub unsafe fn script_host_eval(name: *mut c_char, args: &[TypVal], result: &mut 
     // SAFETY: the list just allocated.
     unsafe { (*args.as_ptr()).push(TypVal::string(arg.string_ref().cloned())) };
     let method = c"eval".as_ptr() as *mut c_char;
-    // SAFETY: `name` and `method` are NUL-terminated.
-    *ret = unsafe { eval_call_provider(name, method, Some(args), false) };
+    // SAFETY: `name` and `method` are NUL-terminated, and only read.
+    *ret = unsafe { eval_call_provider(name.as_ptr().cast_mut(), method, Some(args), false) };
 }
 
 /// Call `provider#<name>#Call(method, arguments)`.

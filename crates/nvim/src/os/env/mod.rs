@@ -201,6 +201,12 @@ pub unsafe fn os_getenv_into(
     unsafe { os_getenv_buf(name, buf.as_mut_ptr(), MAXPATHL as usize) }
 }
 
+/// [`os_env_exists`] of a name the caller holds as a string.
+pub(crate) fn env_exists(name: &CStr, nonempty: bool) -> bool {
+    // SAFETY: a terminated name.
+    unsafe { os_env_exists(name.as_ptr(), nonempty) }
+}
+
 /// Whether environment variable `name` is defined, empty or not.
 ///
 /// `nonempty` treats an empty value as "does not exist".

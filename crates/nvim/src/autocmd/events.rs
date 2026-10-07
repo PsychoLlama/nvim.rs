@@ -278,16 +278,12 @@ pub fn get_event_name_no_group(idx: usize, win: bool) -> Option<&'static CStr> {
         .map(|row| row.name)
 }
 
-/// Whether `event` -- a NUL-terminated name -- is an event nvim has.
-///
-/// # Safety
-///
-/// `event` must point at a NUL-terminated string.
-pub unsafe fn autocmd_supported(event: *const ::core::ffi::c_char) -> bool {
+/// Whether `event` is an event nvim has.
+pub fn autocmd_supported(event: &::core::ffi::CStr) -> bool {
     let mut end = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    // SAFETY: `event` is a NUL-terminated name by the contract, and `end` is
-    // a local for the position `event_name2nr` reports back.
-    unsafe { event_name2nr(event, &raw mut end) }.is_some()
+    // SAFETY: `event` is a NUL-terminated name, and `end` is a local for the
+    // position `event_name2nr` reports back.
+    unsafe { event_name2nr(event.as_ptr(), &raw mut end) }.is_some()
 }
 
 /// ASCII-case-folded comparison, the order [`EVENT_NAMES`] is in.
