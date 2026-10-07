@@ -259,11 +259,12 @@ pub fn do_tags(_excmd: &mut ExArg) {
 
 /// Describe one stack entry the way `gettagstack()` answers it.
 fn tag_details(tag: &Taggy, retdict: &mut Dict) {
-    add_str(retdict, b"tagname", tag.tagname);
+    let (tagname, user_data) = entry_strings(tag);
+    let _ = retdict.add_str(b"tagname", tagname);
     let _ = retdict.add_number(b"matchnr", (tag.cur_match + 1) as VarNumber);
     let _ = retdict.add_number(b"bufnr", tag.cur_fnum as VarNumber);
-    if !tag.user_data.is_null() {
-        add_str(retdict, b"user_data", tag.user_data);
+    if user_data.is_some() {
+        let _ = retdict.add_str(b"user_data", user_data);
     }
 
     let pos = tv_list_alloc(4);
@@ -347,11 +348,11 @@ pub fn set_tagstack(window: Win, d: &Dict, action: c_int) -> Result<(), Failed> 
     Ok(())
 }
 
-/// [`Dict::add_str`] of an entry's own string, which may be null.
-fn add_str(d: &mut Dict, key: &[u8], val: *const c_char) {
-    // SAFETY: a stack entry's strings are null or NUL-terminated
-    // allocations the entry owns, live for the call.
-    let _ = d.add_str(key, unsafe { cstr::at_opt(val) });
+/// A stack entry's `tagname` and `user_data`, either of which may be null.
+fn entry_strings(tag: &Taggy) -> (Option<&CStr>, Option<&CStr>) {
+    // SAFETY: an entry's strings are null or NUL-terminated allocations the
+    // entry owns, which live as long as the borrow of it.
+    unsafe { (cstr::at_opt(tag.tagname), cstr::at_opt(tag.user_data)) }
 }
 
 /// A number field of a dict, zero when it is missing.

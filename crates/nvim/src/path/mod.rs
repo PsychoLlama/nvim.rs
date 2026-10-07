@@ -332,7 +332,9 @@ pub unsafe fn simplify_filename(filename: *mut c_char) -> size_t {
 }
 
 /// [`simplify_filename`] of a name the caller holds: `name` is the string
-/// with its NUL, and the answer is where the NUL is now. Nothing after that
+/// with its NUL, and the answer is upstream's length -- where the NUL is
+/// now, except for a name that simplifies to `"."`, which answers the length
+/// it had before. Read the result up to its first NUL; nothing after that
 /// NUL is meaningful any more.
 pub(crate) fn simplify_name(name: &mut [u8]) -> usize {
     let len = name

@@ -248,7 +248,7 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // A copy: the DirChangedPre autocommand runs while the name is read.
     let dir = args[0].string_ref().map(|dir| CString::from(dir.as_cstr()));
-    if !dir.is_some_and(|dir| change_dir(&dir, scope)) {
+    if !dir.is_some_and(|dir| change_dir(dir, scope)) {
         // Directory change failed: answer the empty string after all.
         drop(result.take_string());
     }

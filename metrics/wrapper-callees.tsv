@@ -30,9 +30,9 @@ count	callee	no_raw	defs	def
 44	fprintf	0	0	
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 43	vim_regfree	0	1	crates/nvim/src/regexp/api.rs
-42	at_opt	0	2	
 42	copy_nonoverlapping	0	0	
 42	utf_char2bytes	0	1	crates/nvim/src/mbyte/utf8/mod.rs
+41	at_opt	0	2	
 38	shada_free_shada_entry	0	1	crates/nvim/src/shada/read.rs
 36	copy_option_part	0	1	crates/nvim/src/option/query.rs
 36	vim_strchr	0	1	crates/nvim/src/strings/mod.rs

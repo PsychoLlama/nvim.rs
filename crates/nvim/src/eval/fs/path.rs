@@ -72,7 +72,9 @@ fn simplify(name: &[u8]) -> ThinCString {
     text.extend_from_slice(name);
     text.push(0);
     let len = simplify_name(&mut text);
-    text.truncate(len);
+    // Up to the NUL, which a name that became "." has before `len`.
+    let end = text[..len].iter().position(|&b| b == 0).unwrap_or(len);
+    text.truncate(end);
     ThinCString::from_vec(text)
 }
 

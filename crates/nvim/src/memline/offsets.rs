@@ -117,8 +117,6 @@ impl Buf {
 /// # Safety
 /// `buffer` must point at a buffer whose chunk index has a chunk `curix`.
 unsafe fn ml_chunk_addline(buffer: Buf, line: LineNr, curline: LineNr, curix: usize) -> bool {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
     let mut b = buffer;
     b.b_ml.ml_chunks.add_lines(curix, 1);
 
@@ -169,8 +167,6 @@ unsafe fn ml_chunk_addline(buffer: Buf, line: LineNr, curline: LineNr, curix: us
 /// # Safety
 /// `buffer` must point at a buffer whose chunk index has a chunk `curix`.
 unsafe fn ml_chunk_split(buffer: Buf, curix: usize, curline_arg: LineNr) -> bool {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
     let mut b = buffer;
     b.b_ml.ml_chunks.split_at(curix);
 
@@ -234,8 +230,6 @@ pub fn ml_find_line_or_offset(
     mut offp: Option<&mut c_int>,
     no_ff: bool,
 ) -> c_int {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
     let mut b = buffer;
     let ffdos = (!no_ff && get_fileformat(b) == EOL_DOS) as c_int;
     let mut extra = 0;
@@ -272,8 +266,7 @@ pub fn ml_find_line_or_offset(
 
     // Skip whole chunks, up to but not including the one the answer is
     // in. The last chunk is special: it never qualifies.
-    // SAFETY: the caller's buffer. The borrow is read-only and lasts only
-    // for the search below.
+    // A read-only borrow of the live buffer's chunks, for the search below.
     let chunks = &buffer.b_ml.ml_chunks;
     let mut curline: LineNr = 1;
     let mut curix = 0usize;

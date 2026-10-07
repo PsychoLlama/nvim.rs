@@ -327,10 +327,14 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
 /// [`changedir_func`] for a name the caller holds.
 ///
 /// The caller hands over a copy nothing else can reach, because the
-/// DirChangedPre autocommand runs while the name is still being read.
-pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> bool {
-    // SAFETY: a NUL-terminated name the callee only reads.
-    unsafe { changedir_func(new_dir.as_ptr().cast_mut(), scope) }
+/// DirChangedPre autocommand runs while the name is still being read, and
+/// the directory search cuts the name at a NUL in place (putting the byte
+/// back) on the way.
+pub(crate) fn change_dir(new_dir: std::ffi::CString, scope: CdScope) -> bool {
+    let mut name = new_dir.into_bytes_with_nul();
+    // SAFETY: this frame's own writable NUL-terminated copy, which nothing
+    // else can reach and which outlives the call.
+    unsafe { changedir_func(name.as_mut_ptr().cast(), scope) }
 }
 
 /// Whose own directory [`own_dir`] reads.
