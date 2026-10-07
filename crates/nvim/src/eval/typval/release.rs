@@ -33,7 +33,6 @@
 )]
 
 use super::{DictRef, ListRef, PartialRef};
-use crate::eval::typval_encode::InlineStack;
 use crate::eval::userfunc::func_unref_name;
 use crate::types::{
     TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
@@ -48,14 +47,10 @@ enum Owned {
     Partial { partial: PartialRef, arg: usize },
 }
 
-/// Containers being released without allocating, for the nests most frees
-/// meet; the free runs on every value the interpreter drops.
-type Pending = InlineStack<Owned, 8>;
-
 /// Release what `tv` holds, leaving the empty value of its own kind; a
-/// container that was this value's alone is pushed onto `pending` to have
-/// its items released in turn.
-fn release_slot(tv: &mut TypVal, pending: &mut Pending) {
+/// container that was this value's alone is answered, to have its items
+/// released in turn.
+fn release_slot(tv: &mut TypVal) -> Option<Owned> {
     match tv.v_type() {
         VAR_NUMBER => tv.write_number(0),
         VAR_FLOAT => tv.write_float(0.0),
@@ -73,35 +68,22 @@ fn release_slot(tv: &mut TypVal, pending: &mut Pending) {
         // A blob holds nothing that holds anything.
         VAR_BLOB => drop(tv.take_blob()),
         VAR_LIST => {
-            if let Some(list) = tv.take_list() {
-                if list.lv_refcount.is_shared() {
-                    drop(list);
-                } else {
-                    pending.push(Owned::List { list, at: 0 });
-                }
-            }
+            let list = tv.take_list()?;
+            // Another holder keeps the items; dropping is giving up ours.
+            return (!list.lv_refcount.is_shared()).then(|| Owned::List { list, at: 0 });
         }
         VAR_DICT => {
-            if let Some(dict) = tv.take_dict() {
-                if dict.dv_refcount.is_shared() {
-                    drop(dict);
-                } else {
-                    pending.push(Owned::Dict { dict, slot: 0 });
-                }
-            }
+            let dict = tv.take_dict()?;
+            return (!dict.dv_refcount.is_shared()).then(|| Owned::Dict { dict, slot: 0 });
         }
         VAR_PARTIAL => {
-            if let Some(partial) = tv.take_partial() {
-                if partial.pt_refcount.is_shared() {
-                    drop(partial);
-                } else {
-                    pending.push(Owned::Partial { partial, arg: 0 });
-                }
-            }
+            let partial = tv.take_partial()?;
+            return (!partial.pt_refcount.is_shared()).then(|| Owned::Partial { partial, arg: 0 });
         }
         // `VAR_UNKNOWN` holds nothing.
         _ => {}
     }
+    None
 }
 
 /// The next value `owned` still holds, taken out of its slot, or `None` once
@@ -142,15 +124,38 @@ fn next_value(owned: &mut Owned) -> Option<TypVal> {
 
 /// Release whatever `tv` holds and everything only it holds, leaving `tv`
 /// the empty value of its own kind.
+///
+/// This runs on every value the interpreter drops, and most of them are a
+/// string or a container someone else also holds: those never reach the
+/// walk below, which is the part that keeps a stack.
+#[inline]
 pub(super) fn release_deep(tv: &mut TypVal) {
-    let mut pending = Pending::new();
-    release_slot(tv, &mut pending);
-    while let Some(owned) = pending.last_mut() {
-        match next_value(owned) {
-            Some(mut value) => release_slot(&mut value, &mut pending),
+    if let Some(owned) = release_slot(tv) {
+        release_owned(owned);
+    }
+}
+
+/// Release every item of `first`, and of each container only it holds,
+/// deepest first; then the containers themselves.
+///
+/// The container being drained is a local, so a flat list allocates
+/// nothing; only a nest pushes its parents.
+fn release_owned(first: Owned) {
+    let mut parents: Vec<Owned> = Vec::new();
+    let mut current = first;
+    loop {
+        match next_value(&mut current) {
+            Some(mut value) => {
+                if let Some(child) = release_slot(&mut value) {
+                    parents.push(::core::mem::replace(&mut current, child));
+                }
+            }
             // Emptied: the handle's own drop frees the container, which
             // holds nothing any more.
-            None => drop(pending.pop()),
+            None => match parents.pop() {
+                Some(parent) => drop(::core::mem::replace(&mut current, parent)),
+                None => return drop(current),
+            },
         }
     }
 }

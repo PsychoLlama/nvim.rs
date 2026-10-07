@@ -188,8 +188,7 @@ impl ConvStack<'_> {
 }
 
 /// A stack of `N` items held inline, spilling to the heap beyond that:
-/// klib's `kvec_withinit_t`, which upstream uses for the walk's frames and
-/// the deep free uses for the containers it is part-way through releasing.
+/// klib's `kvec_withinit_t`, which upstream uses for the walk's frames.
 ///
 /// Indexable from the bottom, because that is the order the error path names
 /// the frames in and the position a `@N` self-reference marker counts to.
@@ -231,11 +230,6 @@ impl<T, const N: usize> InlineStack<T, N> {
             Some(slot) => slot.as_mut().expect("an item below the top"),
             None => &mut self.spilled[i - N],
         }
-    }
-
-    pub(crate) fn last_mut(&mut self) -> Option<&mut T> {
-        let last = self.len.checked_sub(1)?;
-        Some(self.get_mut(last))
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -390,7 +384,7 @@ mod tests {
         assert!(stack.iter().copied().eq(0..10));
 
         // A write lands on both sides of the boundary.
-        *stack.last_mut().expect("not empty") = 99;
+        *stack.get_mut(9) = 99;
         *stack.get_mut(3) = 98;
         assert_eq!((*stack.get_mut(9), *stack.get_mut(3)), (99, 98));
 
@@ -410,7 +404,7 @@ mod tests {
     fn the_inline_stack_works_at_both_extremes() {
         let mut inline_only: InlineStack<String, 8> = InlineStack::new();
         inline_only.push("seven".to_owned());
-        assert_eq!(inline_only.last_mut().map(|s| s.as_str()), Some("seven"));
+        assert_eq!(inline_only.get_mut(0).as_str(), "seven");
         assert_eq!(inline_only.pop().as_deref(), Some("seven"));
         assert!(inline_only.is_empty());
 
@@ -425,6 +419,6 @@ mod tests {
             assert_eq!(*always_spills.get_mut(usize::from(i)), i);
         }
         assert_eq!(always_spills.pop(), Some(2));
-        assert_eq!(always_spills.last_mut().copied(), Some(1));
+        assert_eq!(*always_spills.get_mut(1), 1);
     }
 }
