@@ -311,10 +311,9 @@ pub unsafe fn call_user_func(
                         msg_outnum(tv.number_or_zero() as c_int);
                     } else {
                         // Do not want errors such as E724 here.
-                        let tvp = ptr::from_ref(tv).cast_mut();
                         let tofree = {
                             let _no_emsg = Suppress::emsg();
-                            unsafe { encode_tv2string(&*tvp, ptr::null_mut()) }
+                            encode_tv2string(tv).into_raw()
                         };
                         if !tofree.is_null() {
                             let mut buf: [c_char; MSG_BUF_LEN as usize] = [0; MSG_BUF_LEN as usize];
@@ -436,7 +435,7 @@ pub unsafe fn call_user_func(
                 // Do not want errors such as E724 here.
                 let tofree = {
                     let _no_emsg = Suppress::emsg();
-                    unsafe { encode_tv2string(&*ret.raw(), ptr::null_mut()) }
+                    unsafe { encode_tv2string(&*ret.raw()).into_raw() }
                 };
                 let mut s = tofree;
                 if !s.is_null() {

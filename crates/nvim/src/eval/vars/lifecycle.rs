@@ -145,23 +145,34 @@ pub fn evalvars_init() {
 
 /// Mark everything `g:` reaches as live, for the garbage collector.
 pub fn garbage_collect_globvars(copy_id: c_int) -> c_int {
-    unsafe { set_ref_in_ht(get_globvar_ht(), copy_id, ptr::null_mut()) as c_int }
+    c_int::from(mark_scope_items(get_globvar_dict(), copy_id))
 }
 
 /// [`garbage_collect_globvars`] for `v:`.
 pub fn garbage_collect_vimvars(copy_id: c_int) -> bool {
-    unsafe { set_ref_in_ht(get_vimvar_ht(), copy_id, ptr::null_mut()) }
+    mark_scope_items(get_vimvar_dict(), copy_id)
 }
 
 /// [`garbage_collect_globvars`] for every script's `s:`.
 pub fn garbage_collect_scriptvars(copy_id: c_int) -> bool {
     let mut abort = false;
     for i in 1..=script_count() {
-        // SAFETY: a live script id, whose own scope dictionary this marks.
-        let ht = unsafe { &raw mut (*script_sv(i)).sv_dict.dv_hashtab };
-        abort = abort || unsafe { set_ref_in_ht(ht, copy_id, ptr::null_mut()) };
+        // SAFETY: a live script id; the scope dictionary's address only.
+        let dict = unsafe { &raw mut (*script_sv(i)).sv_dict };
+        abort = abort || mark_scope_items(dict, copy_id);
     }
     abort
+}
+
+/// Mark what a scope dictionary's items reach, for the collector.
+fn mark_scope_items(dict: *mut Dict, copy_id: c_int) -> bool {
+    // A view of the scope, which takes no reference: the scope is not a
+    // heap dictionary, and lives as long as what embeds it.
+    // SAFETY: one of the editor's live scope dictionaries.
+    let dict = ::core::mem::ManuallyDrop::new(
+        unsafe { DictRef::owning(dict) }.expect("a scope dictionary"),
+    );
+    set_ref_in_dict_items(&dict, copy_id, None)
 }
 
 /// [`set_internal_string_var`] for a name and value the caller holds.
@@ -247,6 +258,14 @@ pub(crate) fn vimvar_scope_item() -> *mut ScopeDictItem {
 /// msgpack encoder and decoder.
 pub(crate) fn msgpack_type_list(type_: MessagePackType) -> *mut List {
     eval_msgpack_type_lists.get()[type_ as usize].cast_mut()
+}
+
+/// [`msgpack_type_list`] as a reference of the caller's own, for a special
+/// dictionary's `_TYPE`.
+pub(crate) fn msgpack_type_list_ref(type_: MessagePackType) -> Option<ListRef> {
+    // SAFETY: the `v:msgpack_types` lists live as long as the `v:` table,
+    // which outlives every value.
+    unsafe { ListRef::retained(msgpack_type_list(type_)) }
 }
 
 /// Give script `id` its own `s:` scope.

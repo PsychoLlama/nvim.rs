@@ -13,18 +13,16 @@
 //! thrown away.  That is why every arm that stores a value has to check the
 //! flag and resume *without* advancing.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
 use super::decode_create_map_special_dict;
-use crate::eval::typval::{TV_INITIAL_VALUE, list_len, tv_clear, tv_dict_alloc, tv_list_alloc};
+use crate::eval::typval::{ListRef, tv_clear, tv_dict_alloc, tv_list_alloc};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    Failed, List, TypVal, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kBoolVarFalse, kBoolVarTrue,
-    kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t,
+    Failed, TypVal, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t,
 };
 
 mod scan;
@@ -73,21 +71,11 @@ const fn bool_tv(value: bool) -> TypVal {
 
 /// Decode `buf_len` bytes of JSON, assumed UTF-8, into `result`.
 ///
-/// Answers `Err` with the error already reported.
-///
-/// # Safety
-/// `buf` is a live, non-NULL buffer of `buf_len` bytes and `result` is
-/// writable.
-pub unsafe fn json_decode_string(
-    buf: *const c_char,
-    buf_len: size_t,
-    result: &mut TypVal,
-) -> Result<(), Failed> {
-    // SAFETY: `buf`/`buf_len` are the caller's obligation, which upstream
-    // spells FUNC_ATTR_NONNULL_ALL.  Every value on the decoder's stack is
-    // owned by it until it is stored, and the failure path clears whatever is
-    // left.
-    let bytes = unsafe { ::core::slice::from_raw_parts(buf.cast::<u8>(), buf_len) };
+/// Answers `Err` with the error already reported. Every value on the
+/// decoder's stack is owned by it until it is stored, and the failure path
+/// clears whatever is left.
+pub fn json_decode_string(bytes: &[u8], result: &mut TypVal) -> Result<(), Failed> {
+    let buf_len = bytes.len();
 
     let mut p = 0;
     while p < buf_len && matches!(bytes[p], b' ' | TAB | NL | CAR) {
@@ -98,20 +86,15 @@ pub unsafe fn json_decode_string(
         return Err(Failed);
     }
 
-    (*result).write_empty(VAR_UNKNOWN);
+    result.overwrite(TypVal::Unknown);
     let mut dec = Decoder::new(bytes);
     let mut ret = Ok(());
     // Whether a container holds nothing yet, which is what makes a comma
     // a leading one.
-    let is_empty = |c: &Container| {
-        if !c.special_val.is_null() {
-            list_len(unsafe { c.special_val.as_ref() }) == 0
-        } else {
-            match c.container {
-                OpenContainer::Dict(d) => unsafe { (*d).dv_hashtab.ht_used == 0 },
-                OpenContainer::List(l) => list_len(unsafe { l.as_ref() }) == 0,
-            }
-        }
+    let is_empty = |c: &Container| match (&c.special_val, &c.container) {
+        (Some(pairs), _) => pairs.items().is_empty(),
+        (None, OpenContainer::Dict(d)) => d.dv_hashtab.ht_used == 0,
+        (None, OpenContainer::List(l)) => l.items().is_empty(),
     };
     'done: {
         'fail: {
@@ -121,7 +104,7 @@ pub unsafe fn json_decode_string(
                 debug_assert!(bytes[p] == b'{' || !dec.next_map_special);
                 match bytes[p] {
                     b'}' | b']' => {
-                        let Some(&last) = dec.containers.last() else {
+                        let Some(last) = dec.containers.last() else {
                             dec.emsg_rest(E474_NO_CONTAINER, p);
                             break 'fail;
                         };
@@ -150,7 +133,7 @@ pub unsafe fn json_decode_string(
                             break 'scan;
                         }
                         let closed = dec.stack.pop().expect("the container itself");
-                        if !unsafe { dec.finish_value(closed, &mut p) } {
+                        if !dec.finish_value(closed, &mut p) {
                             break 'fail;
                         }
                         // A container is never a dictionary key, so it
@@ -158,7 +141,7 @@ pub unsafe fn json_decode_string(
                         debug_assert!(!dec.next_map_special);
                     }
                     b',' => {
-                        let Some(&last) = dec.containers.last() else {
+                        let Some(last) = dec.containers.last() else {
                             dec.emsg_rest(E474_COMMA_OUTSIDE, p);
                             break 'fail;
                         };
@@ -173,7 +156,7 @@ pub unsafe fn json_decode_string(
                         {
                             dec.emsg_rest(E474_COMMA_FOR_COLON, p);
                             break 'fail;
-                        } else if is_empty(&last) {
+                        } else if is_empty(last) {
                             dec.emsg_rest(E474_LEADING_COMMA, p);
                             break 'fail;
                         }
@@ -182,7 +165,7 @@ pub unsafe fn json_decode_string(
                         continue;
                     }
                     b':' => {
-                        let Some(&last) = dec.containers.last() else {
+                        let Some(last) = dec.containers.last() else {
                             dec.emsg_rest(E474_COLON_OUTSIDE, p);
                             break 'fail;
                         };
@@ -214,7 +197,7 @@ pub unsafe fn json_decode_string(
                         }
                         p += 3;
                         let value = dec.value(NULL_TV, false);
-                        if !unsafe { dec.finish_value(value, &mut p) } {
+                        if !dec.finish_value(value, &mut p) {
                             break 'fail;
                         }
                         if dec.next_map_special {
@@ -228,7 +211,7 @@ pub unsafe fn json_decode_string(
                         }
                         p += 3;
                         let value = dec.value(bool_tv(true), false);
-                        if !unsafe { dec.finish_value(value, &mut p) } {
+                        if !dec.finish_value(value, &mut p) {
                             break 'fail;
                         }
                         if dec.next_map_special {
@@ -242,7 +225,7 @@ pub unsafe fn json_decode_string(
                         }
                         p += 4;
                         let value = dec.value(bool_tv(false), false);
-                        if !unsafe { dec.finish_value(value, &mut p) } {
+                        if !dec.finish_value(value, &mut p) {
                             break 'fail;
                         }
                         if dec.next_map_special {
@@ -251,7 +234,7 @@ pub unsafe fn json_decode_string(
                     }
                     b'"' => {
                         // The error was reported by the scanner.
-                        if !unsafe { parse_json_string(&mut dec, &mut p) } {
+                        if !parse_json_string(&mut dec, &mut p) {
                             break 'fail;
                         }
                         if dec.next_map_special {
@@ -259,7 +242,7 @@ pub unsafe fn json_decode_string(
                         }
                     }
                     b'-' | b'0'..=b'9' => {
-                        if !unsafe { parse_json_number(&mut dec, &mut p) } {
+                        if !parse_json_number(&mut dec, &mut p) {
                             break 'fail;
                         }
                         if dec.next_map_special {
@@ -267,20 +250,19 @@ pub unsafe fn json_decode_string(
                         }
                     }
                     b'[' => {
-                        let tv = TypVal::list(Some(tv_list_alloc(kListLenMayKnow as ptrdiff_t)));
-                        dec.open(tv, ::core::ptr::null_mut(), p);
+                        let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+                        dec.open(OpenContainer::List(list), None, p);
                     }
                     b'{' => {
-                        let mut tv = TV_INITIAL_VALUE;
-                        let mut special_val: *mut List = ::core::ptr::null_mut();
                         if dec.next_map_special {
                             dec.next_map_special = false;
                             let len = kListLenMayKnow as ptrdiff_t;
-                            special_val = unsafe { decode_create_map_special_dict(&mut tv, len) };
+                            let (special, pairs) = decode_create_map_special_dict(len);
+                            let dict = special.dict_shared().expect("a special map").clone();
+                            dec.open_value(OpenContainer::Dict(dict), Some(pairs), special, p);
                         } else {
-                            tv = TypVal::dict(Some(tv_dict_alloc()));
+                            dec.open(OpenContainer::Dict(tv_dict_alloc()), None, p);
                         }
-                        dec.open(tv, special_val, p);
                     }
                     _ => {
                         dec.emsg_rest(E474_UNIDENTIFIED_BYTE, p);
@@ -305,7 +287,7 @@ pub unsafe fn json_decode_string(
             }
             if dec.stack.len() == 1 && dec.containers.is_empty() {
                 let decoded = dec.stack.pop().expect("the decoded value").val;
-                unsafe { ::core::ptr::write(result, decoded) };
+                result.overwrite(decoded);
                 break 'done;
             }
             dec.emsg_rest(E474_UNEXPECTED_END, 0);
@@ -321,21 +303,30 @@ pub unsafe fn json_decode_string(
 impl Decoder<'_> {
     /// Push a container that has just opened, both onto the container stack
     /// and — as a value in its own right — onto the value stack.
-    fn open(&mut self, container: TypVal, special_val: *mut List, at: usize) {
-        // The container stack keeps a handle; the value stack keeps the
-        // value, and is what owns the reference the handle names.
-        let handle = match container.v_type() {
-            VAR_LIST => OpenContainer::List(container.list_or_null()),
-            _ => OpenContainer::Dict(container.dict_or_null()),
+    fn open(&mut self, container: OpenContainer, special_val: Option<ListRef>, at: usize) {
+        let value = match &container {
+            OpenContainer::List(list) => TypVal::list(Some(list.clone())),
+            OpenContainer::Dict(dict) => TypVal::dict(Some(dict.clone())),
         };
-        debug_assert!(container.v_type() == VAR_LIST || container.v_type() == VAR_DICT);
+        self.open_value(container, special_val, value, at);
+    }
+
+    /// [`Self::open`] for a container whose value is already built: the
+    /// container stack keeps a handle, and the value stack keeps the value.
+    fn open_value(
+        &mut self,
+        container: OpenContainer,
+        special_val: Option<ListRef>,
+        value: TypVal,
+        at: usize,
+    ) {
         self.containers.push(Container {
             stack_index: self.stack.len(),
             special_val,
             at,
-            container: handle,
+            container,
         });
-        let value = self.value(container, false);
+        let value = self.value(value, false);
         self.stack.push(value);
     }
 }

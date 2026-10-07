@@ -195,14 +195,8 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
 /// Mark what the global 'findfunc' callback holds, for the garbage
 /// collector.
 pub fn set_ref_in_findfunc(copy_id: c_int) -> bool {
-    unsafe {
-        set_ref_in_callback(
-            &*global_findfunc(),
-            copy_id,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    }
+    // SAFETY: the global callback slot is live.
+    set_ref_in_callback(unsafe { &*global_findfunc() }, copy_id, None, None)
 }
 
 /// The directory `:cd -` would go back to, at this scope.

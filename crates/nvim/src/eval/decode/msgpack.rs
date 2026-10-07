@@ -1,59 +1,112 @@
-//! msgpack bytes into a `TypVal`: the two `mpack_parse` callbacks.
+//! msgpack bytes into a `TypVal`: upstream's `mpack_parse()` walk with its
+//! two typval callbacks, as one owned state machine.
 //!
-//! `mpack_parse()` walks the byte stream with an explicit node stack and
-//! calls [`typval_parse_enter`] as each node opens and [`typval_parse_exit`]
-//! as it closes.  Most values are finished on the way in; the three that are
-//! not are `str`/`bin` and `ext` (their bytes arrive afterwards, as `chunk`
-//! nodes) and `map` (whether it can be a `Dict` is only knowable once every
-//! key has been decoded).  Those three park a buffer in `node.data[1]`, which
-//! is the one thing [`typval_parser_error_free`] has to clean up when a parse
-//! fails part-way.
+//! Tokens come off the safe tokenizer in [`crate::mpack::mpack_core`]; the
+//! walk keeps an explicit stack of the containers still open, at most
+//! [`MAX_DEPTH`] deep as upstream's parser is. Each node *owns* what it is
+//! building -- a list, a map's decoded pairs, a string's bytes -- and hands
+//! the finished value to the node below it when it closes, so nothing is ever
+//! half-written into a slot, and a parse abandoned part-way simply drops what
+//! it had.
 //!
-//! `node.data[0]` is where the value goes — a slot in the parent's list, in
-//! the parent map's scratch array, or the caller's `rettv` at the root.
+//! What a node becomes is upstream's: most values are finished as their token
+//! arrives; `str`/`bin`/`ext` wait for their bytes, which arrive as chunks;
+//! and a `map` waits for every pair, because whether it can be a `Dict` is
+//! only knowable once every key has been decoded.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::hashtab::tv_ht_iter;
-use crate::memory::ThinCString;
-use crate::types::DictItem;
-use core::ffi::{c_char, c_int};
-use core::mem::MaybeUninit;
-use core::ptr;
+use core::ffi::c_int;
 
 use super::{
-    create_special_dict, decode_create_map_special_dict, decode_string, kMPExt, kMPInteger,
+    create_special_dict, decode_create_map_special_dict, decode_owned_string, kMPExt, kMPInteger,
 };
 use crate::eval::encode::encode_list_write;
-use crate::eval::typval::{
-    Di, TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_dict_hi2di, tv_list_alloc,
-};
-use crate::memory::{xfree, xmallocz};
-use crate::mpack::conv::{
-    mpack_unpack_boolean, mpack_unpack_float_fast, mpack_unpack_sint, mpack_unpack_uint,
-};
-use crate::mpack::mpack_core::{
-    MPACK_TOKEN_ARRAY, MPACK_TOKEN_BIN, MPACK_TOKEN_BOOLEAN, MPACK_TOKEN_CHUNK, MPACK_TOKEN_EXT,
-    MPACK_TOKEN_FLOAT, MPACK_TOKEN_MAP, MPACK_TOKEN_NIL, MPACK_TOKEN_SINT, MPACK_TOKEN_STR,
-    MPACK_TOKEN_UINT,
-};
-use crate::mpack::object::{mpack_parse, mpack_parser_init};
+use crate::eval::typval::{ListRef, tv_dict_alloc, tv_list_alloc};
+use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Step, empty_tokbuf, read_step};
+use crate::mpack::token::{Kind, Tok, unpack_boolean, unpack_float, unpack_sint, unpack_uint};
 use crate::types::{
-    List, TypVal, VAR_UNKNOWN, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow,
-    kSpecialVarNull, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t,
+    DictItem, TypVal, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
+    mpack_tokbuf_t,
 };
-use crate::winlayer::Live;
-use ::libc::abort;
 
-/// A live `mpack_node_t`: the parser stack entry a callback is standing on.
-type Nd = Live<mpack_node_t>;
+/// How deep a value may nest, counting each string's bytes as one more
+/// level: upstream's `MPACK_MAX_OBJECT_DEPTH`.
+const MAX_DEPTH: usize = 32;
 
-const MPACK_OK: c_int = 0;
+/// The status past `MPACK_ERROR`: the value nests deeper than [`MAX_DEPTH`].
+pub(crate) const MPACK_NOMEM: c_int = MPACK_ERROR.cast_signed() + 1;
 
-/// The largest `VarNumber`, past which a msgpack unsigned integer needs a
-/// special dictionary to survive the trip into Vimscript.
-const VARNUMBER_MAX: u64 = i64::MAX as u64;
+/// The most a container's header may reserve before its items arrive.
+///
+/// A header is only a claim, and a truncated or hostile one can claim four
+/// billion items; the list grows past this as items really arrive.
+const MAX_RESERVE: usize = 1 << 12;
+
+/// One value still being built.
+enum Node {
+    Array {
+        list: ListRef,
+        len: u32,
+    },
+    /// The decoded `[key, value, key, value, ...]`, and whether the next
+    /// value is a pair's key's value.
+    Map {
+        pairs: Vec<TypVal>,
+        len: u32,
+        key_visited: bool,
+    },
+    /// A `str`, `bin` or `ext`, its bytes arriving in chunks.
+    Bytes {
+        kind: Kind,
+        ext_type: u32,
+        bytes: Vec<u8>,
+        len: u32,
+    },
+}
+
+impl Node {
+    /// Whether every child this node announced has arrived.
+    fn is_complete(&self) -> bool {
+        match self {
+            Node::Array { list, len } => list.items().len() >= *len as usize,
+            Node::Map { pairs, len, .. } => pairs.len() >= 2 * (*len as usize),
+            Node::Bytes { bytes, len, .. } => bytes.len() >= *len as usize,
+        }
+    }
+
+    /// The finished value.
+    fn finish(self) -> TypVal {
+        match self {
+            Node::Array { list, .. } => TypVal::list(Some(list)),
+            Node::Map { pairs, .. } => map_value(pairs),
+            Node::Bytes {
+                kind: Kind::Ext,
+                ext_type,
+                bytes,
+                ..
+            } => {
+                // `{_TYPE: ext, _VAL: [type, [bytes…]]}`.  The payload goes
+                // into a list of strings rather than a blob, as upstream's
+                // TODO notes.
+                let mut list = tv_list_alloc(2);
+                list.push_number(VarNumber::from(ext_type));
+                let mut payload = tv_list_alloc(kListLenMayKnow as isize);
+                encode_list_write(&mut payload, &bytes);
+                list.push_list(Some(payload));
+                create_special_dict(kMPExt, TypVal::list(Some(list)))
+            }
+            Node::Bytes { bytes, .. } => decode_owned_string(bytes),
+        }
+    }
+}
 
 /// A msgpack unsigned integer as a `TypVal`.
 ///
@@ -61,305 +114,220 @@ const VARNUMBER_MAX: u64 = i64::MAX as u64;
 /// split across a four-element `{_TYPE: integer, _VAL: [sign, hi, mid, lo]}`
 /// list — one sign, then 2 + 31 + 31 bits — which is the same shape the
 /// msgpack encoder reads back.
-fn positive_integer_to_special_typval(result: &mut TypVal, val: u64) {
-    if val <= VARNUMBER_MAX {
-        unsafe { ptr::write(result, TypVal::Number(val as VarNumber)) };
-        return;
+fn positive_integer_to_special_typval(val: u64) -> TypVal {
+    if let Ok(number) = VarNumber::try_from(val) {
+        return TypVal::Number(number);
     }
-    let list = tv_list_alloc(4);
-    let into = list.as_ptr();
-    create_special_dict(result, kMPInteger, TypVal::list(Some(list)));
-    unsafe { (*into).push_number(1) };
-    unsafe { (*into).push_number(((val >> 62) & 0x3) as VarNumber) };
-    unsafe { (*into).push_number(((val >> 31) & 0x7fff_ffff) as VarNumber) };
-    unsafe { (*into).push_number((val & 0x7fff_ffff) as VarNumber) };
+    let mut list = tv_list_alloc(4);
+    for piece in [
+        1,
+        (val >> 62) & 0x3,
+        (val >> 31) & 0x7fff_ffff,
+        val & 0x7fff_ffff,
+    ] {
+        list.push_number(VarNumber::try_from(piece).expect("at most 31 bits"));
+    }
+    create_special_dict(kMPInteger, TypVal::list(Some(list)))
 }
 
-/// A node has opened: work out where its value belongs, and decode it if the
-/// token already carries the whole value.
-///
-/// # Safety
-///
-/// `parser` must be the `mpack_parser_t` driving this parse and `node` the
-/// node it is standing on, both live for the call: libmpack's callback
-/// contract.
-unsafe extern "C-unwind" fn typval_parse_enter(
-    parser: *mut mpack_parser_t,
-    node: *mut mpack_node_t,
-) {
-    // SAFETY: the node the parser is standing on.
-    let n = unsafe { Nd::new(node) };
-    // `MPACK_PARENT_NODE`: the node one level up, or none at the root.
-    // `mpack_parser_init` writes `(size_t)-1` into `items[0].pos`, so the
-    // sentinel below the first real node is what says "no parent".
-    let below = unsafe { node.sub(1) };
-    let parent = if unsafe { (*below).pos } == !0 {
-        ptr::null_mut()
-    } else {
-        below
-    };
-
-    let result: *mut TypVal = if parent.is_null() {
-        unsafe { (*parser).data.p }.cast()
-    } else {
-        // SAFETY: the node one level up the parser stack.
-        let up = unsafe { Nd::new(parent) };
-        match up.tok.type_0 {
-            // An array element is appended empty and filled in place.
-            MPACK_TOKEN_ARRAY => {
-                let list: *mut List = unsafe { (*parent).data[1].p }.cast();
-                unsafe { (*list).push(TV_INITIAL_VALUE) }
-            }
-            // A map's pairs go to the scratch array the exit hook reads;
-            // `key_visited` picks the key or the value of the pair.
-            MPACK_TOKEN_MAP => {
-                let pairs: *mut TypVal = unsafe { (*parent).data[1].p }.cast();
-                let visited = up.key_visited as usize;
-                unsafe { pairs.add((*parent).pos * 2).add(visited) }
-            }
-            // The only child of a byte-carrying token is its data, which
-            // is copied straight into the parent's buffer below.
-            MPACK_TOKEN_STR | MPACK_TOKEN_BIN | MPACK_TOKEN_EXT => {
-                debug_assert!(n.tok.type_0 == MPACK_TOKEN_CHUNK);
-                ptr::null_mut()
-            }
-            _ => unsafe { abort() },
-        }
-    };
-
-    unsafe { (*node).data[0].p = result.cast() };
-    // Anything parked here is freed on error; see typval_parser_error_free.
-    unsafe { (*node).data[1].p = ptr::null_mut() };
-
-    let len = n.tok.length as size_t;
-    match n.tok.type_0 {
-        MPACK_TOKEN_NIL => {
-            unsafe { ptr::write(result, TypVal::Special(kSpecialVarNull)) };
-        }
-        MPACK_TOKEN_BOOLEAN => {
-            let set = unsafe { mpack_unpack_boolean((*node).tok) };
-            let v = if set { kBoolVarTrue } else { kBoolVarFalse };
-            unsafe { ptr::write(result, TypVal::Bool(v)) };
-        }
-        MPACK_TOKEN_SINT => {
-            let v = unsafe { mpack_unpack_sint((*node).tok) };
-            unsafe { ptr::write(result, TypVal::Number(v)) };
-        }
-        MPACK_TOKEN_UINT => {
-            let v = unsafe { mpack_unpack_uint((*node).tok) };
-            unsafe { positive_integer_to_special_typval(&mut *result, v) };
-        }
-        MPACK_TOKEN_FLOAT => {
-            let v = unsafe { mpack_unpack_float_fast((*node).tok) };
-            unsafe { ptr::write(result, TypVal::Float(v)) };
-        }
-        // Converted in typval_parse_exit, once the chunks have landed.
-        MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
-            unsafe { (*node).data[1].p = xmallocz(len) };
-        }
-        MPACK_TOKEN_CHUNK => {
-            let data: *mut c_char = unsafe { (*parent).data[1].p }.cast();
-            let dst = unsafe { data.add((*parent).pos) };
-            let src = unsafe { (*node).tok.data.chunk_ptr };
-            unsafe { dst.cast::<u8>().copy_from_nonoverlapping(src.cast(), len) };
-        }
-        MPACK_TOKEN_ARRAY => {
-            let list = tv_list_alloc(len as ptrdiff_t);
-            let into = list.as_ptr();
-            unsafe { ptr::write(result, TypVal::list(Some(list))) };
-            unsafe { (*node).data[1].p = into.cast() };
-        }
-        // Whether this can be a Dict is not knowable yet, so the pairs
-        // are decoded into a flat `[key, value] * length` scratch array.
-        MPACK_TOKEN_MAP => {
-            // `length * 2` is `mpack_uint32_t` arithmetic upstream, so a
-            // header claiming 2^31 pairs or more wraps and under-allocates
-            // — docket O-B14-9, kept rather than fixed.  Widening the
-            // multiply is not free: the honest size is 64 GB, which is a
-            // fatal `E41` here where upstream answers `E475: Incomplete
-            // msgpack string`.
-            let pairs = n.tok.length.wrapping_mul(2) as size_t;
-            unsafe { (*node).data[1].p = xmallocz(pairs * ::core::mem::size_of::<TypVal>()) };
-        }
-        _ => {}
-    }
-}
-
-/// Free what a node parked in `data[1]` but never got to consume.
-///
-/// Called when a parse fails part-way through, for every node still on the
-/// parser's stack.  The typvals themselves are left to the garbage collector.
-///
-/// # Safety
-/// `parser` is a live parser whose `size` bounds its `items`.
-pub unsafe fn typval_parser_error_free(parser: *mut mpack_parser_t) {
-    // SAFETY: the caller's promise: a live parser.
-    let mut ps = unsafe { Live::<mpack_parser_t>::new(parser) };
-    for i in 0..ps.size as usize {
-        let node = &raw mut ps.items[i];
-        match unsafe { (*node).tok.type_0 } {
-            MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT | MPACK_TOKEN_MAP => {
-                unsafe { xfree((*node).data[1].p) };
-                unsafe { (*node).data[1].p = ptr::null_mut() };
-            }
-            _ => {}
-        }
-    }
-}
-
-/// Build a `Dict` out of `len` decoded key/value pairs.
-///
-/// Answers `false` when the map cannot be one — a key that is not a non-empty
-/// string, or a duplicate — leaving every pair in `pairs` untouched and ready
-/// for the special-map path.  The partially built dictionary is torn down
-/// first, with its values disowned so that they survive it.
-///
-/// # Safety
-/// `pairs` holds `len * 2` decoded typvals and `result` is writable.
-unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> bool {
-    for i in 0..len {
-        if pairs[i * 2].string_ref().is_none_or(ThinCString::is_empty) {
-            return false;
-        }
-    }
-
-    let dict_held = tv_dict_alloc();
-    let dict = dict_held.as_ptr();
-    unsafe { ptr::write(result, TypVal::dict(Some(dict_held))) };
-
-    for i in 0..len {
-        let key = pairs[i * 2].string_bytes();
-        let mut item = DictItem::boxed(key);
-        // The value moves out of the pair array, which is freed
-        // uncleared.  On the duplicate-key path below the move is undone:
-        // every item added so far is disowned, leaving the pair array the
-        // owner again for the special-map path to re-use.
-        item.di_tv = unsafe { ptr::read(&raw const pairs[i * 2 + 1]) };
-        if let Err(mut refused) = unsafe { (*dict).add_item(item) } {
-            // Duplicate key.  Disown the values already handed to the
-            // dictionary — the special-map path is about to re-use every
-            // one of them — then free the dictionary and give up.
-            for hi in unsafe { tv_ht_iter(&raw const (*dict).dv_hashtab) } {
-                let d = tv_dict_hi2di(hi);
-                // SAFETY: an item of the dictionary being unwound.
-                let mut item = unsafe { Di::new(d) };
-                item.di_tv.write_special(kSpecialVarNull);
-            }
-            tv_clear(result);
-            refused.di_tv.write_special(kSpecialVarNull);
-            drop(refused);
-            return false;
-        }
-    }
-
-    // The keys were copied into the items; the originals are ours to free.
-    for i in 0..len {
-        drop(pairs[i * 2].take_string());
-    }
-    true
-}
-
-/// A node has closed: finish the values whose bytes only arrive now.
-///
-/// # Safety
-///
-/// `_parser` must be the `mpack_parser_t` driving this parse and `node` the
-/// node it is standing on, both live for the call: libmpack's callback
-/// contract.
-unsafe extern "C-unwind" fn typval_parse_exit(
-    _parser: *mut mpack_parser_t,
-    node: *mut mpack_node_t,
-) {
-    let result: *mut TypVal = unsafe { (*node).data[0].p }.cast();
-    // SAFETY: the node the parser is standing on.
-    let n = unsafe { Nd::new(node) };
-    let len = n.tok.length as size_t;
-    match n.tok.type_0 {
-        // The chunk buffer is handed straight to the string or blob.
-        MPACK_TOKEN_BIN | MPACK_TOKEN_STR => {
-            let bytes = unsafe { (*node).data[1].p }.cast();
-            let text = unsafe { decode_string(bytes, len, false, true) };
-            unsafe { ptr::write(result, text) };
-            unsafe { (*node).data[1].p = ptr::null_mut() };
-        }
-        // `{_TYPE: ext, _VAL: [type, [bytes…]]}`.  The payload goes into a
-        // list of strings rather than a blob, as upstream's TODO notes.
-        MPACK_TOKEN_EXT => {
-            let list = tv_list_alloc(2);
-            let into = list.as_ptr();
-            unsafe { (*into).push_number((*node).tok.data.ext_type as VarNumber) };
-            let ext_val_list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-            let ext_into = ext_val_list.as_ptr();
-            unsafe { (*into).push_list(Some(ext_val_list)) };
-            unsafe { create_special_dict(&mut *result, kMPExt, TypVal::list(Some(list))) };
-            let bytes = unsafe { (*node).data[1].p }.cast();
-            unsafe { encode_list_write(ext_into.cast(), bytes, len) };
-            unsafe { xfree((*node).data[1].p) };
-            unsafe { (*node).data[1].p = ptr::null_mut() };
-        }
-        MPACK_TOKEN_MAP => {
-            let pairs: *mut TypVal = unsafe { (*node).data[1].p }.cast();
-            // SAFETY: the node's own `len * 2` decoded values.
-            let pairs = unsafe { ::core::slice::from_raw_parts_mut(pairs, len * 2) };
-            if !unsafe { map_to_dict(&mut *result, pairs, len) } {
-                let n = len as ptrdiff_t;
-                let list = unsafe { decode_create_map_special_dict(&mut *result, n) };
-                for i in 0..len {
-                    let kv_pair = tv_list_alloc(2);
-                    let into = kv_pair.as_ptr();
-                    unsafe { (*list).push_list(Some(kv_pair)) };
-                    let (k, v) = (&raw const pairs[i * 2], &raw const pairs[i * 2 + 1]);
-                    unsafe { (*into).push(ptr::read(k)) };
-                    unsafe { (*into).push(ptr::read(v)) };
+/// A decoded map: a `Dict` when every key is a non-empty string used once,
+/// and the special map otherwise.
+fn map_value(mut pairs: Vec<TypVal>) -> TypVal {
+    if pairs
+        .iter()
+        .step_by(2)
+        .all(|key| key.string_ref().is_some_and(|key| !key.is_empty()))
+    {
+        let mut dict = tv_dict_alloc();
+        let mut added = 0;
+        while added < pairs.len() {
+            let mut item = DictItem::boxed(pairs[added].string_bytes());
+            item.di_tv = pairs[added + 1].take();
+            if let Err(mut refused) = dict.add_item(item) {
+                // A duplicate key.  Hand every value already added back to
+                // the pair it came from, for the special map below.
+                pairs[added + 1] = refused.di_tv.take();
+                for at in (0..added).step_by(2) {
+                    let back = dict.edit().remove_key(pairs[at].string_bytes());
+                    pairs[at + 1] = back.expect("a key just added").value_mut().take();
                 }
+                break;
             }
-            unsafe { xfree((*node).data[1].p) };
-            unsafe { (*node).data[1].p = ptr::null_mut() };
+            added += 2;
         }
-        // Everything else was finished in typval_parse_enter.
-        _ => {}
+        if added == pairs.len() {
+            return TypVal::dict(Some(dict));
+        }
     }
+    let count = pairs.len() / 2;
+    let (special, mut list) = decode_create_map_special_dict(count.cast_signed());
+    let mut pairs = pairs.into_iter();
+    while let (Some(key), Some(value)) = (pairs.next(), pairs.next()) {
+        let mut kv_pair = tv_list_alloc(2);
+        kv_pair.push(key);
+        kv_pair.push(value);
+        list.push_list(Some(kv_pair));
+    }
+    special
 }
 
-/// One step of `mpack_parse()` with the typval callbacks bound in.
-///
-/// `data` is advanced past whatever was consumed; the answer is `MPACK_OK`
-/// when a whole object came out, `MPACK_EOF` when the bytes ran out
-/// mid-object, or an error status.
-///
-/// # Safety
-/// `parser` was initialised with its `data.p` pointing at the destination
-/// typval.
-pub unsafe fn mpack_parse_typval(parser: *mut mpack_parser_t, data: &mut &[u8]) -> c_int {
-    let (enter, exit) = (Some(typval_parse_enter as _), Some(typval_parse_exit as _));
-    let mut at = data.as_ptr().cast::<c_char>();
-    let mut size: size_t = data.len();
-    // SAFETY: `at` and `size` describe the caller's slice, and the parser
-    // only reads within them, moving both on together.
-    let status = unsafe { mpack_parse(parser, &raw mut at, &raw mut size, enter, exit) };
-    *data = &data[data.len() - size..];
-    status
+/// A streaming msgpack-to-typval decoder: one object at a time, fed as many
+/// slices as it takes.
+pub(crate) struct MsgpackDecoder {
+    tokbuf: mpack_tokbuf_t,
+    stack: Vec<Node>,
+}
+
+impl MsgpackDecoder {
+    pub(crate) fn new() -> Self {
+        MsgpackDecoder {
+            tokbuf: empty_tokbuf(),
+            stack: Vec::new(),
+        }
+    }
+
+    /// Hand a finished value to the node below it, or answer it as the
+    /// whole object when there is none; then close every node that value
+    /// completed.
+    fn deliver(&mut self, mut value: TypVal) -> Option<TypVal> {
+        loop {
+            match self.stack.last_mut() {
+                None => return Some(value),
+                Some(Node::Array { list, .. }) => {
+                    list.push(value);
+                }
+                Some(Node::Map {
+                    pairs, key_visited, ..
+                }) => {
+                    pairs.push(value);
+                    *key_visited = !*key_visited;
+                }
+                Some(Node::Bytes { .. }) => unreachable!("a string's children are its bytes"),
+            }
+            if !self.stack.last().is_some_and(Node::is_complete) {
+                return None;
+            }
+            value = self.stack.pop().expect("the node just completed").finish();
+        }
+    }
+
+    /// One token: open a node for it, or finish a value with it. Answers the
+    /// whole object once the token completes it.
+    fn token(&mut self, tok: Tok) -> Result<Option<TypVal>, c_int> {
+        // Every token takes a level while it is entered, a scalar too.
+        if self.stack.len() == MAX_DEPTH {
+            return Err(MPACK_NOMEM);
+        }
+        let len = tok.len;
+        let value = match tok.kind {
+            Some(Kind::Nil) => TypVal::Special(kSpecialVarNull),
+            Some(Kind::Boolean) => TypVal::Bool(if unpack_boolean(&tok) {
+                kBoolVarTrue
+            } else {
+                kBoolVarFalse
+            }),
+            Some(Kind::Sint) => TypVal::Number(unpack_sint(&tok)),
+            Some(Kind::Uint) => positive_integer_to_special_typval(unpack_uint(&tok)),
+            Some(Kind::Float) => TypVal::Float(unpack_float(&tok)),
+            Some(Kind::Array) => {
+                let reserve = (len as usize).min(MAX_RESERVE);
+                let node = Node::Array {
+                    list: tv_list_alloc(reserve.cast_signed()),
+                    len,
+                };
+                return Ok(self.open(node));
+            }
+            Some(Kind::Map) => {
+                let node = Node::Map {
+                    pairs: Vec::with_capacity(2 * (len as usize).min(MAX_RESERVE)),
+                    len,
+                    key_visited: false,
+                };
+                return Ok(self.open(node));
+            }
+            Some(kind @ (Kind::Bin | Kind::Str | Kind::Ext)) => {
+                // One more byte than the payload, for the string's NUL.
+                let reserve = (len as usize).min(MAX_RESERVE << 4) + 1;
+                let node = Node::Bytes {
+                    kind,
+                    ext_type: tok.lo,
+                    bytes: Vec::with_capacity(reserve),
+                    len,
+                };
+                return Ok(self.open(node));
+            }
+            Some(Kind::Chunk) | None => unreachable!("the tokenizer answers chunks apart"),
+        };
+        Ok(self.deliver(value))
+    }
+
+    /// Push `node`, or finish it at once when it announced no children.
+    fn open(&mut self, node: Node) -> Option<TypVal> {
+        if node.is_complete() {
+            return self.deliver(node.finish());
+        }
+        self.stack.push(node);
+        None
+    }
+
+    /// The next piece of the innermost string's bytes.
+    fn chunk(&mut self, data: &[u8]) -> Result<Option<TypVal>, c_int> {
+        // The chunk is a node of its own while it is copied in.
+        if self.stack.len() == MAX_DEPTH {
+            return Err(MPACK_NOMEM);
+        }
+        let Some(Node::Bytes { bytes, .. }) = self.stack.last_mut() else {
+            unreachable!("a chunk follows a string header");
+        };
+        bytes.extend_from_slice(data);
+        if !self.stack.last().is_some_and(Node::is_complete) {
+            return Ok(None);
+        }
+        let value = self.stack.pop().expect("the node just completed").finish();
+        Ok(self.deliver(value))
+    }
+
+    /// Decode as much of `data` as it takes to finish one object, advancing
+    /// `data` past what was used.
+    ///
+    /// `Ok(Some(value))` is a whole object; `Ok(None)` (upstream's
+    /// `MPACK_EOF`) says `data` ran out first, everything in it consumed, and
+    /// the next call resumes where this one stopped. `Err` is `MPACK_ERROR`
+    /// for bytes that are not msgpack and [`MPACK_NOMEM`] for a value nested
+    /// too deep; the decoder is not to be fed again after either.
+    pub(crate) fn feed(&mut self, data: &mut &[u8]) -> Result<Option<TypVal>, c_int> {
+        while !data.is_empty() {
+            let (step, used) = read_step(&mut self.tokbuf, data);
+            let (taken, rest) = data.split_at(used);
+            let done = match step {
+                Step::Eof => None,
+                Step::Error => return Err(MPACK_ERROR.cast_signed()),
+                Step::Token(tok) => self.token(tok)?,
+                Step::Chunk(_) => self.chunk(taken)?,
+            };
+            *data = rest;
+            if done.is_some() {
+                return Ok(done);
+            }
+        }
+        Ok(None)
+    }
 }
 
 /// Decode one complete msgpack object from `data` into `ret`.
 ///
-/// `data` is advanced past the object.  On any status but `MPACK_OK` the
-/// half-built value is released and `ret` is left cleared.
-pub fn unpack_typval(data: &mut &[u8], ret: &mut TypVal) -> c_int {
-    (*ret).write_empty(VAR_UNKNOWN);
-    // `mpack_parser_init` writes every field this parser will be read
-    // through, `items` included, so the C leaves the declaration
-    // uninitialised too — and it is 2.5 KB, once per decoded object.
-    // Nothing here ever forms a reference to it, so it stays a raw
-    // pointer rather than being `assume_init`ed.
-    let mut storage = MaybeUninit::<mpack_parser_t>::uninit();
-    let parser = storage.as_mut_ptr();
-    unsafe { mpack_parser_init(parser, 0) };
-    unsafe { (*parser).data.p = ::core::ptr::from_mut(ret).cast() };
-    let status = unsafe { mpack_parse_typval(parser, data) };
-    if status != MPACK_OK {
-        unsafe { typval_parser_error_free(parser) };
-        tv_clear(ret);
+/// `data` is advanced past the object.  Answers `MPACK_OK`, `MPACK_EOF` when
+/// the bytes ran out mid-object, or an error status; on anything but
+/// `MPACK_OK` the half-built value is dropped and `ret` is left
+/// `VAR_UNKNOWN`.
+pub(crate) fn unpack_typval(data: &mut &[u8], ret: &mut TypVal) -> c_int {
+    ret.overwrite(TypVal::Unknown);
+    match MsgpackDecoder::new().feed(data) {
+        Ok(Some(value)) => {
+            ret.overwrite(value);
+            MPACK_OK.cast_signed()
+        }
+        Ok(None) => MPACK_EOF.cast_signed(),
+        Err(status) => status,
     }
-    status
 }

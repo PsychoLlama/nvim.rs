@@ -19,7 +19,7 @@ use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
-use crate::types::{FAIL, Object, VAR_BLOB, VAR_TYPE_BLOB};
+use crate::types::{Object, VAR_BLOB, VAR_TYPE_BLOB};
 
 /// Room the packer keeps free, so that a handful of small tokens can be
 /// written without checking after each one.
@@ -277,7 +277,7 @@ fn pack_variable(
 
     // SAFETY: the bytes just built end in the NUL pushed above.
     let vardesc = unsafe { CStr::from_bytes_with_nul_unchecked(&vardesc) };
-    if unsafe { encode_vim_to_msgpack(sbuf, &global_var.value, vardesc) } == FAIL {
+    if !encode_vim_to_msgpack(sbuf, &global_var.value, vardesc) {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let name = unsafe { c_str(global_var.name) };
         semsg!("E574: Failed to write variable {name}");

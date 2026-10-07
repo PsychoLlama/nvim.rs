@@ -146,15 +146,18 @@ unsafe fn delete_byte(at: *mut c_char, len: size_t) -> size_t {
 /// and no greater than `TMP - 1`: the walk starts at `tmp[len - 1]` and reads
 /// the terminator.
 unsafe fn trim_float(c: &Conversion, tmp: &mut [c_char; TMP], mut len: size_t) -> size_t {
+    // Every pointer below is derived from this one: a second `as_mut_ptr`
+    // would retag `tmp` and invalidate the walk's cursor (Stacked Borrows).
+    let base = tmp.as_mut_ptr();
     let mut tp;
     if matches!(c.fmt_spec, b'f' | b'F') {
-        tp = unsafe { tmp.as_mut_ptr().add(len).sub(1) };
+        tp = unsafe { base.add(len).sub(1) };
     } else {
         // `as_mut_ptr`, not `as_ptr`: `delete_byte` writes through what
         // this hands back, and a pointer derived from a *shared* borrow
         // of `tmp` only grants read permission (Stacked Borrows).
         let e = if c.fmt_spec == b'e' { b'e' } else { b'E' } as c_int;
-        tp = unsafe { vim_strchr(tmp.as_mut_ptr().cast_const(), e) };
+        tp = unsafe { vim_strchr(base.cast_const(), e) };
         if tp.is_null() {
             return len;
         }
@@ -177,7 +180,7 @@ unsafe fn trim_float(c: &Conversion, tmp: &mut [c_char; TMP], mut len: size_t) -
     if !c.precision_specified {
         // Never past `tmp[2]`, so `0.0` keeps a digit either side of
         // the point.
-        while tp > unsafe { tmp.as_mut_ptr().add(2) }
+        while tp > unsafe { base.add(2) }
             && unsafe { *tp as u8 } == b'0'
             && unsafe { *tp.sub(1) as u8 } != b'.'
         {
@@ -198,7 +201,8 @@ unsafe fn trim_exponent_width(c: &Conversion, tmp: &mut [c_char; TMP], len: size
     // Only the conversion's own case is looked for, so `%f` -- which
     // has no exponent -- never matches.
     let e = if c.fmt_spec == b'e' { b'e' } else { b'E' } as c_int;
-    let tp = unsafe { vim_strchr(tmp.as_ptr(), e) };
+    // Mutable provenance: `delete_byte` writes through what this answers.
+    let tp = unsafe { vim_strchr(tmp.as_mut_ptr().cast_const(), e) };
     if !tp.is_null()
         && matches!(unsafe { *tp.add(1) as u8 }, b'+' | b'-')
         && unsafe { *tp.add(2) as u8 } == b'0'

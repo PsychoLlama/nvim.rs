@@ -177,11 +177,7 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// "string()" function.
 pub fn f_string(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the encoder answers an `xmalloc`ed string, which the result
-    // adopts.
-    result.write_string(unsafe {
-        ThinCString::from_raw(encode_tv2string(&args[0], ptr::null_mut()))
-    });
+    result.write_string(Some(encode_tv2string(&args[0])));
 }
 
 /// "strlen()" function: the length in bytes.

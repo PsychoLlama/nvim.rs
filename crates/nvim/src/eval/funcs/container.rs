@@ -40,7 +40,7 @@ const NIL: TypVal = TV_INITIAL_VALUE;
 /// `copy({expr})` — one level deep.
 pub fn f_copy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `&args[0]` and `result` are live typvals.
-    let _ = unsafe { var_item_copy(ptr::null(), &args[0], result, false, 0) };
+    let _ = var_item_copy(None, &args[0], result, false, 0);
 }
 
 /// `deepcopy({expr} [, {noref}])`.
@@ -54,7 +54,7 @@ pub fn f_deepcopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let noref = args.len() > 1 && tv_get_bool_chk(&args[1]).unwrap_or(-1) != 0;
     let copy_id = if noref { 0 } else { get_copy_id() };
-    let _ = unsafe { var_item_copy(ptr::null(), &args[0], result, true, copy_id) };
+    let _ = var_item_copy(None, &args[0], result, true, copy_id);
 }
 
 /// `empty({expr})` — what "empty" means for each type.

@@ -30,7 +30,7 @@
 
 use crate::semsg;
 use crate::types::DictItem;
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
 use super::pop::{At, LuaStack, TURN_SLOTS};
 use super::{VARNUMBER_MAX, VARNUMBER_MIN, nlua_traverse_table};
@@ -167,10 +167,7 @@ impl OpenValue {
                 // The `_VAL` of a map special is a list of two-element
                 // `[key, value]` lists, and the key is forced to a blob so
                 // that the NUL that put it here survives.
-                // SAFETY: as above; `decode_string` copies.
-                let key = unsafe {
-                    decode_string(bytes.as_ptr().cast::<c_char>(), bytes.len(), true, false)
-                };
+                let key = decode_string(bytes, true);
                 let mut pair = tv_list_alloc(2);
                 pair.lv_items.push(ListItem::new(key));
                 pair.lv_items.push(ListItem::new(value));
@@ -211,11 +208,8 @@ fn convert_top(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted> 
         }))),
         LUA_TSTRING => {
             let bytes = lua.string_at(lua.top());
-            // SAFETY: the Lua string's own bytes, which `decode_string`
-            // copies.
-            Some(Converted::Value(unsafe {
-                decode_string(bytes.as_ptr().cast::<c_char>(), bytes.len(), false, false)
-            }))
+            // `decode_string` copies the Lua string's bytes.
+            Some(Converted::Value(decode_string(bytes, false)))
         }
         LUA_TNUMBER => {
             let n = lua.top_as_number();
@@ -310,17 +304,8 @@ fn convert_table(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted
                 // A key with a NUL in it has no Vimscript dictionary image,
                 // so the whole table becomes the `{_TYPE = map, _VAL = [[k,
                 // v], …]}` special form and the walk descends into `_VAL`.
-                let mut special = TypVal::Number(0);
-                // SAFETY: a fresh slot, and the list the special dictionary
-                // is built around -- which the dictionary holds a reference
-                // to for as long as this frame holds the dictionary.
-                let mut pairs = unsafe {
-                    let val = decode_create_map_special_dict(
-                        &mut special,
-                        table_props.string_keys_num.cast_signed(),
-                    );
-                    ListRef::retained(val).expect("`_VAL` is a list")
-                };
+                let (special, mut pairs) =
+                    decode_create_map_special_dict(table_props.string_keys_num.cast_signed());
                 pairs.lua_table_ref = table_ref;
                 stack.push(OpenValue::Pairs {
                     special,

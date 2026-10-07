@@ -18,7 +18,7 @@
 )]
 
 use super::*;
-use crate::eval::collect::var_item_copy_with;
+use crate::eval::collect::var_item_copy;
 use crate::memory::ThinCString;
 use crate::semsg;
 use crate::types::Failed;
@@ -145,7 +145,7 @@ pub fn list_copy(
         let mut value = TV_INITIAL_VALUE;
         let from = &orig.items()[at].li_tv;
         if deep {
-            if var_item_copy_with(conv, from, &mut value, deep, copy_id).is_err() {
+            if var_item_copy(conv, from, &mut value, deep, copy_id).is_err() {
                 // `tv_list_copy_error`: the partial copy goes with the
                 // handle, which is the only reference to it.
                 return None;

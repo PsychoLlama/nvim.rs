@@ -19,8 +19,7 @@
 //! false): those are a msgpack/JSON round-trip device, and `string()` prints
 //! them as the plain two-key dictionaries they are.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -29,22 +28,12 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
-use crate::eval::encode::report_self_reference;
-use crate::eval::typval::DictSlot;
-use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
+use crate::eval::encode::{push_decimal, push_float_g, push_hex_byte, report_self_reference};
+use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::message::internal_error;
-use crate::types::{Float, TypVal, int64_t, ptrdiff_t, size_t};
-use crate::vim_snprintf_safelen;
-
-/// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
-/// through.
-const NUMBUFLEN: usize = 65;
-
-/// Upstream's `char ebuf[NUMBUFLEN + 7]`, sized for the longest marker.
-const MARKERBUFLEN: usize = NUMBUFLEN + 7;
+use crate::types::{Float, TypVal};
 
 const NULL_FUNC_NAME: &CStr = c"string(): NULL function name";
 
@@ -58,34 +47,13 @@ struct TextSink<'a, const ECHO: bool> {
 }
 
 impl<const ECHO: bool> TextSink<'_, ECHO> {
-    /// Append one number, formatted the way C's `printf` would.
-    ///
-    /// `N` is the size of the stack buffer upstream declares at the site:
-    /// `NUMBUFLEN` for a number, [`MARKERBUFLEN`] for a self-reference marker.
-    fn concat_num<const N: usize, T: crate::variadic::CArg>(&mut self, fmt: &CStr, num: T) {
-        let mut numbuf = [0 as c_char; N];
-        let formatted = unsafe {
-            let len = vim_snprintf_safelen!(numbuf.as_mut_ptr(), N, fmt.as_ptr(), num);
-            ::core::slice::from_raw_parts(numbuf.as_ptr().cast::<u8>(), len)
-        };
-        self.gap.extend_from_slice(formatted);
-    }
-
     /// A Vimscript string literal: single-quoted, with every `'` doubled.
     ///
-    /// A NULL buffer is `''`; the bytes are copied as they are, NULs and
-    /// invalid UTF-8 included, because a Vimscript string is bytes.
-    ///
-    /// # Safety
-    /// `buf` must be NULL or point at `len` readable bytes.
-    unsafe fn quoted(&mut self, buf: *const c_char, len: size_t) {
-        if buf.is_null() {
-            self.gap.extend_from_slice(b"''");
-            return;
-        }
-        let bytes = unsafe { ::core::slice::from_raw_parts(buf.cast::<u8>(), len) };
+    /// The bytes are copied as they are, NULs and invalid UTF-8 included,
+    /// because a Vimscript string is bytes.
+    fn quoted(&mut self, bytes: &[u8]) {
         let quotes = bytes.iter().filter(|&&c| c == b'\'').count();
-        self.gap.reserve(2 + len + quotes);
+        self.gap.reserve(2 + bytes.len() + quotes);
         self.gap.push(b'\'');
         for &c in bytes {
             if c == b'\'' {
@@ -102,16 +70,14 @@ impl<const ECHO: bool> TextSink<'_, ECHO> {
     /// Upstream compares the frame's *tag* before its pointer, and its two
     /// pointer comparisons cover only `kMPConvDict` and `kMPConvList`.  A
     /// `Pairs` frame is therefore found by neither, and the answer for one is
-    /// the depth of the whole stack; [`ConvFrame::container`] keeps that
-    /// asymmetry deliberately.
+    /// the depth of the whole stack; [`Frame::walks`] keeps that asymmetry
+    /// deliberately.
     ///
-    /// [`ConvFrame::container`]: crate::eval::typval_encode::ConvFrame::container
-    fn backref(path: &ConvPath, val: *mut c_void, conv_type: ConvType) -> size_t {
+    /// [`Frame::walks`]: crate::eval::typval_encode::Frame::walks
+    fn backref(path: &ConvPath<'_, '_>, container: Container<'_>, conv_type: ConvType) -> usize {
         let mut backref = 0;
         for frame in path.stack.iter() {
-            if conv_type != ConvType::Pairs
-                && frame.container() == Some((conv_type, val.cast_const()))
-            {
+            if conv_type != ConvType::Pairs && frame.walks(conv_type, container) {
                 break;
             }
             backref += 1;
@@ -128,11 +94,11 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         c"_typval_encode_string_convert_one_value()"
     };
 
-    fn conv_nil(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_nil(&mut self) {
         self.gap.extend_from_slice(b"v:null");
     }
 
-    fn conv_bool(&mut self, _tv: Option<&mut TypVal>, num: bool) {
+    fn conv_bool(&mut self, num: bool) {
         self.gap.extend_from_slice(if num {
             b"v:true".as_slice()
         } else {
@@ -140,14 +106,13 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         });
     }
 
-    fn conv_number(&mut self, _tv: Option<&mut TypVal>, num: int64_t) {
-        self.concat_num::<NUMBUFLEN, _>(c"%ld", num);
+    fn conv_number(&mut self, num: i64) {
+        push_decimal(self.gap, num);
     }
 
     /// NaN and infinity have no Vimscript literal, so they come out as the
     /// `str2float()` call that rebuilds them.
-    ///
-    fn conv_float(&mut self, _tv: Option<&mut TypVal>, flt: Float) -> Flow {
+    fn conv_float(&mut self, flt: Float) -> Flow {
         match flt.classify() {
             ::core::num::FpCategory::Nan => self.gap.extend_from_slice(b"str2float('nan')"),
             ::core::num::FpCategory::Infinite => {
@@ -156,88 +121,52 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
                 }
                 self.gap.extend_from_slice(b"str2float('inf')");
             }
-            _ => self.concat_num::<NUMBUFLEN, _>(c"%g", flt),
+            _ => push_float_g(self.gap, flt),
         }
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_string`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_string(
-        &mut self,
-        _tv: Option<&mut TypVal>,
-        buf: *mut c_char,
-        len: size_t,
-    ) -> Flow {
-        unsafe { self.quoted(buf, len) };
+    fn conv_string(&mut self, bytes: &[u8]) -> Flow {
+        self.quoted(bytes);
         Flow::Go
     }
 
     /// Unreachable: this sink refuses special dictionaries, which are the only
-    /// source of an `ext` value.  Upstream's macro is empty, and falling
-    /// through leaves the buffer for the walk to free.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_ext_string`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_ext_string(
-        &mut self,
-        _tv: Option<&mut TypVal>,
-        _buf: *mut c_char,
-        _len: size_t,
-        _ext_type: i8,
-    ) -> Flow {
+    /// source of an `ext` value.  Upstream's macro is empty.
+    fn conv_ext_string(&mut self, _bytes: &[u8], _ext_type: i8) -> Flow {
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: *const [u8]) {
-        // SAFETY: the walk's promise: the blob's own array, and this sink
-        // releases nothing.
-        let bytes = unsafe { &*bytes };
-        let len = c_int::try_from(bytes.len()).expect("a short blob");
-        if len == 0 {
+    fn conv_blob(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
             self.gap.extend_from_slice(b"0z");
             return;
         }
-        // Room for "0z", two hex digits a byte, and a "." after every eight
-        // digits: "0z00112233.44556677.8899".
-        let room =
-            usize::try_from(2 + 2 * len + (len - 1) / 4).expect("a blob length is never negative");
-        self.gap.reserve(room);
+        // Room for "0z", two hex digits a byte, and a "." after every four
+        // bytes: "0z00112233.44556677.8899".
+        self.gap
+            .reserve(2 + 2 * bytes.len() + (bytes.len() - 1) / 4);
         self.gap.extend_from_slice(b"0z");
         for (at, &byte) in bytes.iter().enumerate() {
             if at > 0 && (at & 3) == 0 {
                 self.gap.push(b'.');
             }
-            self.concat_num::<NUMBUFLEN, _>(c"%02X", c_int::from(byte));
+            push_hex_byte(self.gap, byte);
         }
     }
 
     /// `function('name'` — the closing paren is [`Self::conv_func_end`]'s.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_func_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_func_start(
+    fn conv_func_start(
         &mut self,
-        _tv: Option<&mut TypVal>,
-        fun: *mut c_char,
+        fun: Option<&CStr>,
         prefix: &'static CStr,
-        _path: &ConvPath,
+        _path: &ConvPath<'_, '_>,
     ) -> Flow {
-        if fun.is_null() {
+        let Some(fun) = fun else {
             internal_error(NULL_FUNC_NAME);
             self.gap.extend_from_slice(b"function(NULL");
             return Flow::Go;
-        }
+        };
         self.gap.extend_from_slice(b"function(");
         // The prefix is written *before* the quoted name and then swapped with
         // its opening quote in place: `g:'Name'` becomes `'g:Name'`.  Doing it
@@ -246,63 +175,63 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         let name_off = self.gap.len();
         let prefix = prefix.to_bytes();
         self.gap.extend_from_slice(prefix);
-        unsafe { self.quoted(fun, cstr::bytes_at(fun).len()) };
+        self.quoted(fun.to_bytes());
         self.gap[name_off] = b'\'';
         self.gap[name_off + 1..=name_off + prefix.len()].copy_from_slice(prefix);
         Flow::Go
     }
 
-    fn conv_func_before_args(&mut self, _tv: Option<&mut TypVal>, len: ptrdiff_t) {
+    fn conv_func_before_args(&mut self, len: usize) {
         if len != 0 {
             self.gap.extend_from_slice(b", ");
         }
     }
 
-    fn conv_func_before_self(&mut self, _tv: Option<&mut TypVal>, len: ptrdiff_t) {
-        if len != -1 {
+    fn conv_func_before_self(&mut self, len: Option<usize>) {
+        if len.is_some() {
             self.gap.extend_from_slice(b", ");
         }
     }
 
-    fn conv_func_end(&mut self, _tv: Option<&mut TypVal>, _copyid: c_int) {
+    fn conv_func_end(&mut self) {
         self.gap.push(b')');
     }
 
-    fn conv_empty_list(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_empty_list(&mut self) {
         self.gap.extend_from_slice(b"[]");
     }
 
-    fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self) {
         self.gap.extend_from_slice(b"{}");
     }
 
-    fn conv_list_start(&mut self, _tv: Option<&mut TypVal>, _len: c_int) -> Flow {
+    fn conv_list_start(&mut self, _len: c_int) -> Flow {
         self.gap.push(b'[');
         Flow::Go
     }
 
-    fn conv_list_between_items(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_list_between_items(&mut self) {
         self.gap.extend_from_slice(b", ");
     }
 
-    fn conv_list_end(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_list_end(&mut self) {
         self.gap.push(b']');
     }
 
-    fn conv_dict_start(&mut self, _tv: Option<&mut TypVal>, _len: size_t) -> Flow {
+    fn conv_dict_start(&mut self, _len: usize) -> Flow {
         self.gap.push(b'{');
         Flow::Go
     }
 
-    fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_after_key(&mut self) {
         self.gap.extend_from_slice(b": ");
     }
 
-    fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_between_items(&mut self) {
         self.gap.extend_from_slice(b", ");
     }
 
-    fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_end(&mut self) {
         self.gap.push(b'}');
     }
 
@@ -311,29 +240,26 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
     /// Both keep going — a self-reference is a marker in the output, not a
     /// failed dump — but only `string()` reports it, and only once per dump so
     /// a cycle seen many times does not flood the user.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_recurse`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_recurse(
+    fn conv_recurse(
         &mut self,
-        val: *mut c_void,
+        container: Container<'_>,
         conv_type: ConvType,
-        path: &ConvPath,
+        path: &ConvPath<'_, '_>,
     ) -> Flow {
         if !ECHO {
             report_self_reference();
         }
-        let backref = Self::backref(path, val, conv_type);
-        let fmt = if !ECHO {
-            c"{E724@%zu}"
+        let backref = Self::backref(path, container, conv_type);
+        let (open, close) = if !ECHO {
+            (&b"{E724@"[..], b'}')
         } else if conv_type == ConvType::Dict {
-            c"{...@%zu}"
+            (&b"{...@"[..], b'}')
         } else {
-            c"[...@%zu]"
+            (&b"[...@"[..], b']')
         };
-        self.concat_num::<MARKERBUFLEN, _>(fmt, backref);
+        self.gap.extend_from_slice(open);
+        push_decimal(self.gap, u64::try_from(backref).unwrap_or(u64::MAX));
+        self.gap.push(close);
         Flow::Go
     }
 }
@@ -341,11 +267,11 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
 /// Append `tv` to `gap` as the text `string()` answers.
 pub(crate) fn encode_vim_to_string(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
     let mut sink = TextSink::<false> { gap };
-    encode_typval_read(&mut sink, tv, objname)
+    encode_typval(&mut sink, tv, objname)
 }
 
 /// Append `tv` to `gap` as the text `:echo` prints.
 pub(crate) fn encode_vim_to_echo(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
     let mut sink = TextSink::<true> { gap };
-    encode_typval_read(&mut sink, tv, objname)
+    encode_typval(&mut sink, tv, objname)
 }

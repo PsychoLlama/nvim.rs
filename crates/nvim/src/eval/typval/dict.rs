@@ -21,7 +21,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::eval::collect::var_item_copy_with;
+use crate::eval::collect::var_item_copy;
 use crate::eval::userfunc::func_ref_name;
 use crate::eval::vars::{valid_varname_named, var_check_fixed_named, var_check_ro_named};
 use crate::mbyte::string_convert_bytes;
@@ -400,7 +400,7 @@ pub fn dict_copy(
             },
         };
         if deep {
-            if var_item_copy_with(conv, &item.di_tv, &mut new_item.di_tv, deep, copy_id).is_err() {
+            if var_item_copy(conv, &item.di_tv, &mut new_item.di_tv, deep, copy_id).is_err() {
                 drop(new_item);
                 break;
             }
@@ -786,7 +786,7 @@ mod tests {
         let mut to = TypVal::Unknown;
         let copy_id = crate::eval::get_copy_id();
         // No conversion, a fresh copy id.
-        let copied = var_item_copy_with(None, &from, &mut to, true, copy_id);
+        let copied = var_item_copy(None, &from, &mut to, true, copy_id);
         assert_eq!(copied, Ok(()));
         let cl = to.list_handle().expect("the copy is a list");
         let cd = list_items(Some(&cl))[0]

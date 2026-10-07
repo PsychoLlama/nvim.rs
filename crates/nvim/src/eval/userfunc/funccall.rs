@@ -21,6 +21,7 @@ use core::mem::{ManuallyDrop, offset_of};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::{DictRef, ListRef};
 use crate::types::{DictTab, Failed, ItemSlot, NUL, Refcount};
 
 /// A handle on the global user-function table.
@@ -177,10 +178,9 @@ unsafe fn free_funccal_contents(fc: *mut FuncCall) {
     // All l: variables, then all a: variables, then the a:000 items.
     // SAFETY: the caller's promise -- `fc` is a parked funccall, so the two
     // scope hashtables and the `a:000` list are its own and unreferenced.
-    let (vars, avars, items) = unsafe { scopes_of(fc) };
-    unsafe { vars_clear(vars) };
-    unsafe { vars_clear(avars) };
-    for li in list_iter_mut(unsafe { items.as_mut() }) {
+    unsafe { vars_clear(&raw mut (*fc).fc_l_vars.dv_hashtab) };
+    unsafe { vars_clear(&raw mut (*fc).fc_l_avars.dv_hashtab) };
+    for li in list_iter_mut(unsafe { Some(&mut (*fc).fc_l_varlist) }) {
         tv_clear(&mut li.li_tv);
     }
     unsafe { free_funccal(fc) };
@@ -804,11 +804,9 @@ pub fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
         // own invariant, and the three scopes are that node's own.
         unsafe { (*fc).fc_copy_id = mark };
         let (vars, avars, items) = unsafe { scopes_of(fc) };
-        let reached = unsafe {
-            set_ref_in_ht(vars, mark, ptr::null_mut())
-                || set_ref_in_ht(avars, mark, ptr::null_mut())
-                || set_ref_in_list_items(items, mark, ptr::null_mut())
-        };
+        let reached = set_ref_in_dict_items(&vars, mark, None)
+            || set_ref_in_dict_items(&avars, mark, None)
+            || set_ref_in_list_items(&items, mark, None);
         if reached {
             return true;
         }
@@ -816,18 +814,25 @@ pub fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
     false
 }
 
-/// The three scopes a funccall owns, by address: `l:`, `a:` and `a:000`.
+/// The three scopes a funccall owns: `l:`, `a:` and `a:000`, as views that
+/// take no reference -- the funccall embeds them, and they live as long as
+/// it does.
 ///
 /// # Safety
-/// `fc` is a live funccall.
-unsafe fn scopes_of(fc: *mut FuncCall) -> (*mut DictTab, *mut DictTab, *mut crate::types::List) {
-    // SAFETY: the caller's promise; a field's address is the object's plus a
-    // constant, so none of the three reads it.
+/// `fc` is a live funccall, which outlives the views.
+unsafe fn scopes_of(
+    fc: *mut FuncCall,
+) -> (
+    ManuallyDrop<DictRef>,
+    ManuallyDrop<DictRef>,
+    ManuallyDrop<ListRef>,
+) {
+    // SAFETY: the caller's promise; the three are the funccall's own.
     unsafe {
         (
-            &raw mut (*fc).fc_l_vars.dv_hashtab,
-            &raw mut (*fc).fc_l_avars.dv_hashtab,
-            &raw mut (*fc).fc_l_varlist,
+            ManuallyDrop::new(DictRef::owning(&raw mut (*fc).fc_l_vars).expect("embedded")),
+            ManuallyDrop::new(DictRef::owning(&raw mut (*fc).fc_l_avars).expect("embedded")),
+            ManuallyDrop::new(ListRef::owning(&raw mut (*fc).fc_l_varlist).expect("embedded")),
         )
     }
 }
@@ -846,12 +851,10 @@ unsafe fn set_ref_in_funccal(fc: *mut FuncCall, copy_id: c_int) -> bool {
     frame.fc_copy_id = copy_id;
     let (vars, avars, items) = unsafe { scopes_of(fc) };
     let func = frame.fc_func;
-    unsafe {
-        set_ref_in_ht(vars, copy_id, ptr::null_mut())
-            || set_ref_in_ht(avars, copy_id, ptr::null_mut())
-            || set_ref_in_list_items(items, copy_id, ptr::null_mut())
-            || set_ref_in_func(ptr::null_mut(), func, copy_id)
-    }
+    set_ref_in_dict_items(&vars, copy_id, None)
+        || set_ref_in_dict_items(&avars, copy_id, None)
+        || set_ref_in_list_items(&items, copy_id, None)
+        || unsafe { set_ref_in_func(ptr::null_mut(), func, copy_id) }
 }
 
 /// Mark every local and argument on the call stack, including the stacks

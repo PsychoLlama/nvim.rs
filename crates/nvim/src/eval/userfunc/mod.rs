@@ -31,7 +31,7 @@ use crate::eval::vars::{
 use crate::eval::{
     Cursor, LAMBDA_USES_LOCALS, callback_call, check_luafunc_name, eval_isnamec, eval_isnamec1,
     eval0_in_cmd, eval1, garbage_collect, get_lval, handle_subscript, id_len, is_luafunc,
-    last_set_msg, mark_root, name_end, set_ref_in_ht, set_ref_in_list_items,
+    last_set_msg, mark_root, name_end, set_ref_in_dict_items, set_ref_in_list_items,
 };
 use crate::ex_docmd::state::ex_nesting_level;
 use crate::ex_docmd::{do_cmdline, ends_excmd, skip_range};

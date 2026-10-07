@@ -14,7 +14,6 @@ use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
-use core::ptr;
 
 use super::*;
 use crate::eval::typval::DictTab;
@@ -190,7 +189,7 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut c_int) -> usize
                 }
             } else {
                 // SAFETY: a live value, and no state to thread.
-                let s = unsafe { encode_tv2echo(&tv, ptr::null_mut()) };
+                let s = encode_tv2echo(&tv).into_raw();
                 // Without a subscript the expanded name is what was
                 // looked up; with one, the command line's own text is
                 // what should be shown.
@@ -235,7 +234,7 @@ unsafe fn list_one_var(v: *mut DictItem, prefix: *const c_char, first: *mut c_in
     let key = unsafe { (*v).di_key.as_ptr() };
     let len = unsafe { (*v).di_key.len() } as ptrdiff_t;
     let tv = item.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
-    let s = unsafe { encode_tv2echo(&*tv, ptr::null_mut()) };
+    let s = unsafe { encode_tv2echo(&*tv).into_raw() };
     let text = if s.is_null() { c"".as_ptr() } else { s };
     let ty = item.di_tv.v_type();
     unsafe { list_one_var_a(prefix, key, len, ty, text, first) };

@@ -119,7 +119,7 @@ pub const fn from_tok(t: &Tok) -> mpack_token_t {
 // ---------------------------------------------------------------------------
 
 /// What one [`read_step`] produced.
-enum Step {
+pub(crate) enum Step {
     /// A complete token.
     Token(Tok),
     /// The next `len` bytes of the input are a `str`/`bin`/`ext` body.
@@ -160,7 +160,7 @@ fn fill_pending(tb: &mut mpack_tokbuf_t, input: &[u8]) -> (usize, bool) {
 /// Answers the step and how many bytes of `input` it consumed. The C bumps
 /// the caller's pointer in three different places for this; here every path
 /// reports a count and the shim does it once.
-fn read_step(tb: &mut mpack_tokbuf_t, input: &[u8]) -> (Step, usize) {
+pub(crate) fn read_step(tb: &mut mpack_tokbuf_t, input: &[u8]) -> (Step, usize) {
     if input.is_empty() {
         return (Step::Eof, 0);
     }
@@ -254,24 +254,28 @@ fn drain_pending(tb: &mut mpack_tokbuf_t, out: &mut [u8]) -> (c_uint, usize) {
 // The C entry points
 // ---------------------------------------------------------------------------
 
-/// Reset a tokbuf to "no partial token, no body outstanding".
-///
-/// # Safety
-/// `tokbuf` must point at a writable `mpack_tokbuf_t`.
-pub unsafe fn mpack_tokbuf_init(tokbuf: *mut mpack_tokbuf_t) {
+/// A tokbuf with no partial token and no body outstanding.
+pub(crate) const fn empty_tokbuf() -> mpack_tokbuf_t {
     // The C leaves `pending`/`pending_tok` alone, on the grounds that
     // `ppos`/`plen` say nothing in them is meaningful yet. That makes the
     // struct un-copyable without reading uninitialised bytes — which
     // `mpack_parser_copy` and `mpack_rpc_session_copy` both do — so it is
     // written out here instead. Twenty-five bytes, once per session.
-    let empty = mpack_tokbuf_t {
+    mpack_tokbuf_t {
         pending: [0; MAX_TOKEN_LEN],
         pending_tok: empty_token(),
         ppos: 0,
         plen: 0,
         passthrough: 0,
-    };
-    unsafe { tokbuf.write(empty) };
+    }
+}
+
+/// Reset a tokbuf to "no partial token, no body outstanding".
+///
+/// # Safety
+/// `tokbuf` must point at a writable `mpack_tokbuf_t`.
+pub unsafe fn mpack_tokbuf_init(tokbuf: *mut mpack_tokbuf_t) {
+    unsafe { tokbuf.write(empty_tokbuf()) };
 }
 
 /// Read one token out of `*buf`, advancing it past what was consumed.

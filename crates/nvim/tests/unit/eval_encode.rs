@@ -29,7 +29,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
     // SAFETY: each list is this case's own and is freed.
     unsafe {
         let write = |l: *mut List, s: &[u8]| {
-            encode_list_write(l.cast(), s.as_ptr().cast(), s.len());
+            encode_list_write(&mut *l, s);
         };
         let ns = Tv::NullStr;
         let s = Tv::s;

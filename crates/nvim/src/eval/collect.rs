@@ -29,20 +29,17 @@
 #![allow(unsafe_code)]
 
 use crate::guard::Depth;
-use crate::memory::ThinCString;
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::{offset_of, size_of};
-use core::ptr::{NonNull, null, null_mut};
+use core::ffi::c_int;
+use core::mem::{ManuallyDrop, offset_of};
+use core::ptr::{NonNull, null_mut};
 
 use crate::autocmd::aucmd_wins;
 use crate::channel::channels;
 use crate::eval::gc::{dict_at, dict_slots, list_at, list_slots};
 use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage_collect};
-use crate::eval::typval::DictEntry;
-use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    DictRef, ListRef, blob_copy, dict_copy, list_copy, list_free_contents, list_free_list,
-    list_iter_mut, tv_copy, tv_dict_free_contents, tv_dict_free_dict, tv_in_free_unref_items,
+    DictRef, ListRef, blob_copy, dict_copy, list_copy, list_free_contents, list_free_list, tv_copy,
+    tv_dict_free_contents, tv_dict_free_dict, tv_in_free_unref_items,
 };
 use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
@@ -53,30 +50,25 @@ use crate::eval::vars::{
     garbage_collect_globvars, garbage_collect_scriptvars, garbage_collect_vimvars,
 };
 use crate::eval::{
-    COPYID_INC, COPYID_MASK, DICT_MAXNEST, Tv, e_variable_nested_too_deep_for_making_copy,
-    kMTCharWise, set_ref_in_callback, set_ref_in_callback_reader, timers,
+    COPYID_INC, COPYID_MASK, DICT_MAXNEST, e_variable_nested_too_deep_for_making_copy,
+    set_ref_in_callback, timers,
 };
 use crate::ex_docmd::set_ref_in_findfunc;
 use crate::global_cell::GlobalCell;
-use crate::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
-use crate::mark::mark_global_iter;
-use crate::mbyte::string_convert;
-use crate::memory::{xfree, xmalloc};
+use crate::insexpand::{mark_cpt_callbacks, set_ref_in_insexpand_funcs};
+use crate::mbyte::string_convert_cstr;
 use crate::message::{internal_error, verb_msg};
 use crate::ops::set_ref_in_opfunc;
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::quickfix::set_ref_in_quickfix;
-use crate::register::op_global_reg_iter;
 use crate::registry::SlotTable;
 use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    AdditionalData, Buffer, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem, Failed,
-    FileMark, FileMarkView, HashItem, HtStack, List, ListStack, NUL, OptInt, PartialRef, Pos,
-    String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv, Window,
-    XFileMark, YankReg, size_t,
+    CONV_NONE, Callback, CallbackReader, Channel, Failed, List, OptInt, PartialRef, Timer, TypVal,
+    UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -96,36 +88,36 @@ pub(crate) fn get_copy_id() -> c_int {
     CURRENT_COPY_ID.get()
 }
 
-/// The `DictItem` a hashtab slot names; the C spells it `TV_DICT_HI2DI`.
-/// Meaningless for a slot that holds no live entry.
-fn hi2di(hi: &HashItem<DictEntry>) -> *mut DictItem {
-    hi.hi_key.item()
-}
-
 /// Mark one root's variable, with neither stack: the collector recurses
 /// into whatever it holds rather than deferring it to a caller's loop.
 pub(crate) fn mark_root(tv: &TypVal, copy_id: c_int) -> bool {
-    // SAFETY: the two nulls are what say "recurse"; a live value's
-    // containers are live.
-    unsafe { set_ref_in_item(tv, copy_id, null_mut(), null_mut()) }
+    set_ref_in_item(tv, copy_id, None, None)
 }
 
 /// Mark one callback, with neither stack.
-///
-/// # Safety
-/// `cb` must be a live callback.
-unsafe fn mark_cb(cb: *mut Callback, copy_id: c_int) -> bool {
-    // SAFETY: as [`mark_root`].
-    unsafe { set_ref_in_callback(&*cb, copy_id, null_mut(), null_mut()) }
+fn mark_cb(cb: &Callback, copy_id: c_int) -> bool {
+    set_ref_in_callback(cb, copy_id, None, None)
 }
 
-/// Mark one callback reader, with neither stack.
+/// Mark what a callback *reader* keeps alive, with neither stack: its
+/// callback, and the `self` dictionary it would be called with.
 ///
 /// # Safety
-/// `reader` must be a live reader.
+/// `reader` must be a live reader, whose `self` dictionary is null or live.
 unsafe fn mark_reader(reader: *mut CallbackReader, copy_id: c_int) -> bool {
-    // SAFETY: as [`mark_root`].
-    unsafe { set_ref_in_callback_reader(reader, copy_id, null_mut(), null_mut()) }
+    // SAFETY: the caller's promise -- the reader outlives the call, and its
+    // `cb` is the callback it owns.
+    if mark_cb(unsafe { &(*reader).cb }, copy_id) {
+        return true;
+    }
+    // A view of the reader's dictionary, which takes no reference: the
+    // reader keeps the one it has.
+    // SAFETY: as above.
+    let Some(self_dict) = (unsafe { DictRef::owning((*reader).self_0) }).map(ManuallyDrop::new)
+    else {
+        return false;
+    };
+    set_ref_in_item_dict(&self_dict, copy_id, None, None)
 }
 
 /// Mark, then free. Answers whether anything was freed.
@@ -150,37 +142,22 @@ pub fn garbage_collect(testing: bool) -> bool {
     abort = abort || garbage_collect_scriptvars(copy_id);
 
     for buf in buffers() {
-        // The addresses come off `Buf::raw`, never through `DerefMut`, so
-        // no `&mut Buffer` is formed while they are live. `Live::field_ptr`
-        // is what says where a field is without reading the object, so
-        // naming these seven is ordinary code.
-        // SAFETY: `buffers()` walks the editor's own list of live buffers.
-        let buf = unsafe { Live::<Buffer>::new(buf.raw()) };
         // buffer-local variables
-        let bufvar =
-            buf.field_ptr::<TypVal>(offset_of!(Buffer, b_bufvar) + offset_of!(DictItem, di_tv));
-        // SAFETY: `bufvar` is the buffer's own variable dictionary.
-        abort = abort || unsafe { mark_root(&*bufvar, copy_id) };
+        abort = abort || mark_root(&buf.b_bufvar.di_tv, copy_id);
         // buffer callback functions
-        for offset in [
-            offset_of!(Buffer, b_prompt_callback),
-            offset_of!(Buffer, b_prompt_interrupt),
-            offset_of!(Buffer, b_cfu_cb),
-            offset_of!(Buffer, b_ofu_cb),
-            offset_of!(Buffer, b_tsrfu_cb),
-            offset_of!(Buffer, b_tfu_cb),
-            offset_of!(Buffer, b_ffu_cb),
+        for cb in [
+            &buf.b_prompt_callback,
+            &buf.b_prompt_interrupt,
+            &buf.b_cfu_cb,
+            &buf.b_ofu_cb,
+            &buf.b_tsrfu_cb,
+            &buf.b_tfu_cb,
+            &buf.b_ffu_cb,
         ] {
-            let cb: *mut Callback = buf.field_ptr(offset);
-            // SAFETY: `cb` is one of the buffer's own callbacks.
-            abort = abort || unsafe { mark_cb(cb, copy_id) };
+            abort = abort || mark_cb(cb, copy_id);
         }
         // The buffer's own 'complete' callback list.
-        let (cpt_cb, cpt_count) = (buf.b_p_cpt_cb, buf.b_p_cpt_count);
-        if !abort && !cpt_cb.is_null() {
-            // SAFETY: as above -- `cpt_count` entries of the buffer's list.
-            abort = abort || unsafe { set_ref_in_cpt_callbacks(cpt_cb, cpt_count, copy_id) };
-        }
+        abort = abort || mark_cpt_callbacks(buf, copy_id);
     }
 
     // 'completefunc', 'omnifunc', 'thesaurusfunc', 'operatorfunc',
@@ -192,38 +169,20 @@ pub fn garbage_collect(testing: bool) -> bool {
 
     // window-local variables, in every tab page
     for wp in tab_windows() {
-        // SAFETY: the walk answers the editor's own live windows.
-        let wp = unsafe { Live::<Window>::new(wp.raw()) };
-        let winvar =
-            wp.field_ptr::<TypVal>(offset_of!(Window, w_winvar) + offset_of!(DictItem, di_tv));
-        // SAFETY: `winvar` is the window's own variable dictionary.
-        abort = abort || unsafe { mark_root(&*winvar, copy_id) };
+        abort = abort || mark_root(&wp.w_winvar.di_tv, copy_id);
     }
 
     // window-local variables in the autocommand windows
     let wins = aucmd_wins();
     for i in 0..wins.len() {
-        // SAFETY: `i` is inside the table, whose windows are live.
-        if let Some(win) = unsafe { (*wins.slot(i)).auc_win } {
-            // SAFETY: as above.
-            let win = unsafe { Live::<Window>::new(win.raw()) };
-            let winvar =
-                win.field_ptr::<TypVal>(offset_of!(Window, w_winvar) + offset_of!(DictItem, di_tv));
-            // SAFETY: `winvar` is that window's own variable dictionary.
-            abort = abort || unsafe { mark_root(&*winvar, copy_id) };
+        if let Some(win) = wins.window(i) {
+            abort = abort || mark_root(&win.w_winvar.di_tv, copy_id);
         }
     }
 
-    walk_shada_iterators();
-
     // tabpage-local variables
     for tp in tabs() {
-        // SAFETY: the walk answers the editor's own live tab pages.
-        let tp = unsafe { Live::<Tabpage>::new(tp.raw()) };
-        let tpvar =
-            tp.field_ptr::<TypVal>(offset_of!(Tabpage, tp_winvar) + offset_of!(DictItem, di_tv));
-        // SAFETY: `tpvar` is the tab page's own variable dictionary.
-        abort = abort || unsafe { mark_root(&*tpvar, copy_id) };
+        abort = abort || mark_root(&tp.tp_winvar.di_tv, copy_id);
     }
 
     abort = abort || garbage_collect_globvars(copy_id) != 0;
@@ -239,21 +198,22 @@ pub fn garbage_collect(testing: bool) -> bool {
         let ch = unsafe { Live::<Channel>::new(data) };
         let on_data = ch.field_ptr(offset_of!(Channel, on_data));
         let on_stderr = ch.field_ptr(offset_of!(Channel, on_stderr));
-        let on_exit = ch.field_ptr(offset_of!(Channel, on_exit));
+        let on_exit: *mut Callback = ch.field_ptr(offset_of!(Channel, on_exit));
         // SAFETY: all three are the channel's own callbacks.
         unsafe { mark_reader(on_data, copy_id) };
         // SAFETY: as above.
         unsafe { mark_reader(on_stderr, copy_id) };
         // SAFETY: as above.
-        unsafe { mark_cb(on_exit, copy_id) };
+        mark_cb(unsafe { &*on_exit }, copy_id);
     }
 
     // Timers, likewise.
     for timer in timers.with(SlotTable::snapshot_values) {
         // SAFETY: the snapshot holds the registered live timers.
-        let cb = unsafe { Live::<Timer>::new(timer) }.field_ptr(offset_of!(Timer, callback));
+        let cb: *mut Callback =
+            unsafe { Live::<Timer>::new(timer) }.field_ptr(offset_of!(Timer, callback));
         // SAFETY: `cb` is the timer's own callback.
-        unsafe { mark_cb(cb, copy_id) };
+        mark_cb(unsafe { &*cb }, copy_id);
     }
 
     // function call arguments, if v:testing is set
@@ -296,60 +256,6 @@ fn trim_exestack() {
         }
         stack.shrink_to(keep);
     });
-}
-
-/// Walk the register and global-mark iterators.
-///
-/// Upstream does this and throws every answer away: the ShaDa "additional
-/// data" these carry used to hold typvals and no longer does. The walks
-/// are kept because they are what would have to change if it ever holds
-/// them again.
-fn walk_shada_iterators() {
-    let mut reg_iter: *const c_void = null();
-    loop {
-        let mut reg = YankReg {
-            y_array: null_mut::<String_0>(),
-            y_size: 0,
-            y_type: kMTCharWise,
-            y_width: 0,
-            timestamp: 0,
-            additional_data: null_mut::<AdditionalData>(),
-        };
-        let mut name: c_char = NUL as c_char;
-        let mut is_unnamed = false;
-        let (n, r, u) = (&raw mut name, &raw mut reg, &raw mut is_unnamed);
-        // SAFETY: the caller's promise; the three are this frame's.
-        reg_iter = unsafe { op_global_reg_iter(reg_iter, n, r, u) };
-        if reg_iter.is_null() {
-            break;
-        }
-    }
-
-    let mut mark_iter: *const c_void = null();
-    loop {
-        let mut fm = XFileMark {
-            fmark: FileMark {
-                mark: Pos {
-                    lnum: 0,
-                    col: 0,
-                    coladd: 0,
-                },
-                fnum: 0,
-                timestamp: 0,
-                view: FileMarkView {
-                    topline_offset: 0,
-                    skipcol: 0,
-                },
-                additional_data: null_mut::<AdditionalData>(),
-            },
-            fname: null_mut::<c_char>(),
-        };
-        let mut name: c_char = NUL as c_char;
-        mark_iter = unsafe { mark_global_iter(mark_iter, &raw mut name, &raw mut fm) };
-        if mark_iter.is_null() {
-            break;
-        }
-    }
 }
 
 /// Free every list and dict whose mark is not `copy_id`.
@@ -427,154 +333,157 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
     did_free as c_int
 }
 
-/// Mark every item of a hashtab, draining the nested hashtabs it finds
-/// into its own stack rather than recursing into them.
+/// Dictionaries a marking walk has met and not yet looked inside: upstream's
+/// `ht_stack`, a linked list of `xmalloc`ed nodes there.
+pub(crate) type DictStack = Vec<DictRef>;
+/// Lists likewise: upstream's `list_stack`.
+pub(crate) type ListStack = Vec<ListRef>;
+
+/// Mark every item of `dict`, draining the nested dictionaries it finds into
+/// its own stack rather than recursing into them; nested lists go onto
+/// `list_stack` when there is one.
 ///
-/// # Safety
-/// `ht` must be valid; `list_stack` null or valid.
-pub unsafe fn set_ref_in_ht(
-    ht: *mut DictTab,
+/// The dictionary itself is not marked: its holder does that.
+pub fn set_ref_in_dict_items(
+    dict: &DictRef,
     copy_id: c_int,
-    list_stack: *mut *mut ListStack,
+    mut list_stack: Option<&mut ListStack>,
 ) -> bool {
-    let mut abort = false;
-    let mut ht_stack: *mut HtStack = null_mut();
-    let mut cur_ht = ht;
-    loop {
-        if !abort {
-            // A nested hashtab is pushed onto `ht_stack`, a nested list
-            // onto the caller's `list_stack`.
-            // SAFETY: the caller's table, or one this walk pushed.
-            for hi in unsafe { &*cur_ht }.items() {
-                // SAFETY: `hi` is a live entry, so the item its inline key
-                // belongs to is live too; `ht_stack` is this frame's and
-                // `list_stack` the caller's.
-                let tv = unsafe { &raw mut (*hi2di(hi)).di_tv };
-                let stack = &raw mut ht_stack;
-                // SAFETY: as above.
-                abort = abort || unsafe { set_ref_in_item(&*tv, copy_id, stack, list_stack) };
-            }
-        }
-        // The stack is drained even while aborting, so nothing leaks.
-        if ht_stack.is_null() {
-            break;
-        }
-        cur_ht = unsafe { (*ht_stack).ht };
-        let done = ht_stack;
-        ht_stack = unsafe { (*ht_stack).prev };
-        unsafe { xfree(done as *mut c_void) };
+    let mut ht_stack = DictStack::new();
+    let mut abort = mark_dict_items(dict, copy_id, &mut ht_stack, list_stack.as_deref_mut());
+    while !abort && let Some(next) = ht_stack.pop() {
+        abort = mark_dict_items(&next, copy_id, &mut ht_stack, list_stack.as_deref_mut());
     }
     abort
 }
 
-/// Mark every item of a list, draining the nested lists it finds into its
-/// own stack rather than recursing into them.
+/// One dictionary's items, for [`set_ref_in_dict_items`].
 ///
-/// # Safety
-/// `l` must be null or valid; `ht_stack` null or valid.
-pub unsafe fn set_ref_in_list_items(
-    l: *mut List,
+/// By slot, with the dictionary borrowed only to read each slot: marking
+/// writes the `copyID` of every container it reaches, and one of them may be
+/// this dictionary -- `g:` holding `g:`.
+fn mark_dict_items(
+    dict: &DictRef,
     copy_id: c_int,
-    ht_stack: *mut *mut HtStack,
+    ht_stack: &mut DictStack,
+    mut list_stack: Option<&mut ListStack>,
 ) -> bool {
-    let mut abort = false;
-    let mut list_stack: *mut ListStack = null_mut();
-    let mut cur_l = l;
-    loop {
-        for li in list_iter_mut(unsafe { cur_l.as_mut() }) {
-            if abort {
-                break;
-            }
-            abort = unsafe { set_ref_in_item(&li.li_tv, copy_id, ht_stack, &raw mut list_stack) };
+    let mut slot = 0;
+    while slot < dict.dv_hashtab.slots().len() {
+        let item = dict.item_at(slot);
+        slot += 1;
+        if let Some(item) = item
+            && set_ref_in_item(
+                &item.di_tv,
+                copy_id,
+                Some(ht_stack),
+                list_stack.as_deref_mut(),
+            )
+        {
+            return true;
         }
-        if list_stack.is_null() {
-            break;
-        }
-        cur_l = unsafe { (*list_stack).list };
-        let done = list_stack;
-        list_stack = unsafe { (*list_stack).prev };
-        unsafe { xfree(done as *mut c_void) };
+    }
+    false
+}
+
+/// Mark every item of `list`, draining the nested lists it finds into its
+/// own stack rather than recursing into them; nested dictionaries go onto
+/// `ht_stack` when there is one.
+pub fn set_ref_in_list_items(
+    list: &ListRef,
+    copy_id: c_int,
+    mut ht_stack: Option<&mut DictStack>,
+) -> bool {
+    let mut list_stack = ListStack::new();
+    let mut abort = mark_list_items(list, copy_id, ht_stack.as_deref_mut(), &mut list_stack);
+    while !abort && let Some(next) = list_stack.pop() {
+        abort = mark_list_items(&next, copy_id, ht_stack.as_deref_mut(), &mut list_stack);
     }
     abort
+}
+
+/// One list's items, for [`set_ref_in_list_items`]; by index, for the
+/// reason [`mark_dict_items`] gives.
+fn mark_list_items(
+    list: &ListRef,
+    copy_id: c_int,
+    mut ht_stack: Option<&mut DictStack>,
+    list_stack: &mut ListStack,
+) -> bool {
+    let mut at = 0;
+    while let Some(item) = list.items().get(at) {
+        at += 1;
+        if set_ref_in_item(
+            &item.li_tv,
+            copy_id,
+            ht_stack.as_deref_mut(),
+            Some(list_stack),
+        ) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Mark a dictionary. With no `ht_stack` it recurses; with one it defers,
-/// pushing its hashtab for the caller's loop to drain.
-///
-/// # Safety
-/// `dd` must be null or valid; the stacks null or valid.
-pub(crate) unsafe fn set_ref_in_item_dict(
-    dd: *mut Dict,
+/// pushing the dictionary for the caller's loop to drain.
+pub(crate) fn set_ref_in_item_dict(
+    dd: &DictRef,
     copy_id: c_int,
-    ht_stack: *mut *mut HtStack,
-    list_stack: *mut *mut ListStack,
+    ht_stack: Option<&mut DictStack>,
+    mut list_stack: Option<&mut ListStack>,
 ) -> bool {
-    if dd.is_null() || unsafe { (*dd).dv_copy_id } == copy_id {
+    if dd.dv_copy_id == copy_id {
         return false;
     }
     // Not seen yet.
-    unsafe { (*dd).dv_copy_id = copy_id };
-    if ht_stack.is_null() {
-        return unsafe { set_ref_in_ht(&raw mut (*dd).dv_hashtab, copy_id, list_stack) };
-    }
-
-    let newitem = unsafe { xmalloc(size_of::<HtStack>()) } as *mut HtStack;
-    // SAFETY: `newitem` is the block just allocated, and `dd` is a live
-    // Dict whose hashtab lives inside it.
-    unsafe { (*newitem).ht = &raw mut (*dd).dv_hashtab };
-    // SAFETY: the caller's promise about `ht_stack`, which this pushes on.
-    unsafe { (*newitem).prev = *ht_stack };
-    // SAFETY: as above.
-    unsafe { *ht_stack = newitem };
+    dd.edit().dv_copy_id = copy_id;
+    let Some(ht_stack) = ht_stack else {
+        return set_ref_in_dict_items(dd, copy_id, list_stack);
+    };
+    ht_stack.push(dd.clone());
 
     // The watchers' callbacks are marked only on this branch, which is
     // upstream's. A dictionary reached with no `ht_stack` — that is,
-    // one recursed into directly — does not have them marked.
-    // SAFETY: `dd` is a live Dict, and marking runs no user code.
-    for watcher in unsafe { &(*dd).watchers } {
-        unsafe { set_ref_in_callback(&watcher.callback, copy_id, ht_stack, list_stack) };
+    // one recursed into directly — does not have them marked. A copy of the
+    // list, so that no borrow of the dictionary spans the marking.
+    let watchers = dd.watchers.clone();
+    for watcher in &watchers {
+        set_ref_in_callback(
+            &watcher.callback,
+            copy_id,
+            Some(ht_stack),
+            list_stack.as_deref_mut(),
+        );
     }
     false
 }
 
 /// Mark a list. With no `list_stack` it recurses; with one it defers.
-///
-/// # Safety
-/// `ll` must be null or valid; the stacks null or valid.
-pub(crate) unsafe fn set_ref_in_item_list(
-    ll: *mut List,
+pub(crate) fn set_ref_in_item_list(
+    ll: &ListRef,
     copy_id: c_int,
-    ht_stack: *mut *mut HtStack,
-    list_stack: *mut *mut ListStack,
+    ht_stack: Option<&mut DictStack>,
+    list_stack: Option<&mut ListStack>,
 ) -> bool {
-    if ll.is_null() || unsafe { (*ll).lv_copy_id } == copy_id {
+    if ll.lv_copy_id == copy_id {
         return false;
     }
-    unsafe { (*ll).lv_copy_id = copy_id };
-    if list_stack.is_null() {
-        return unsafe { set_ref_in_list_items(ll, copy_id, ht_stack) };
-    }
-    // SAFETY: `xmalloc` never answers NULL, and the caller's promise about
-    // `list_stack`, which this pushes the new entry onto.
-    let newitem = unsafe { xmalloc(size_of::<ListStack>()) } as *mut ListStack;
-    unsafe { (*newitem).list = ll };
-    // SAFETY: as above.
-    unsafe { (*newitem).prev = *list_stack };
-    // SAFETY: as above.
-    unsafe { *list_stack = newitem };
+    ll.edit().lv_copy_id = copy_id;
+    let Some(list_stack) = list_stack else {
+        return set_ref_in_list_items(ll, copy_id, ht_stack);
+    };
+    list_stack.push(ll.clone());
     false
 }
 
 /// Mark a partial: its function, its bound dictionary and its bound
 /// arguments.
-///
-/// # Safety
-/// The stacks null or valid.
-pub(crate) unsafe fn set_ref_in_item_partial(
+pub(crate) fn set_ref_in_item_partial(
     pt: &PartialRef,
     copy_id: c_int,
-    ht_stack: *mut *mut HtStack,
-    list_stack: *mut *mut ListStack,
+    mut ht_stack: Option<&mut DictStack>,
+    mut list_stack: Option<&mut ListStack>,
 ) -> bool {
     if pt.pt_copy_id == copy_id {
         return false;
@@ -588,13 +497,23 @@ pub(crate) unsafe fn set_ref_in_item_partial(
     // SAFETY: the partial's own name and function.
     let mut abort = unsafe { set_ref_in_func(name, pt.pt_func, copy_id) };
     if let Some(dict) = &pt.pt_dict {
-        // SAFETY: the partial's own dictionary; the stacks are the caller's.
-        abort =
-            abort || unsafe { set_ref_in_item_dict(dict.as_ptr(), copy_id, ht_stack, list_stack) };
+        abort = abort
+            || set_ref_in_item_dict(
+                dict,
+                copy_id,
+                ht_stack.as_deref_mut(),
+                list_stack.as_deref_mut(),
+            );
     }
-    for arg in &pt.pt_argv {
-        // SAFETY: the stacks are the caller's.
-        abort = abort || unsafe { set_ref_in_item(arg, copy_id, ht_stack, list_stack) };
+    let mut at = 0;
+    while !abort && let Some(arg) = pt.pt_argv.get(at) {
+        at += 1;
+        abort = set_ref_in_item(
+            arg,
+            copy_id,
+            ht_stack.as_deref_mut(),
+            list_stack.as_deref_mut(),
+        );
     }
     abort
 }
@@ -605,32 +524,32 @@ pub(crate) unsafe fn set_ref_in_item_partial(
 /// Marking writes the containers' `copyID`s, never the typval, so a shared
 /// borrow is all it needs -- which is what lets a caller mark through a
 /// value it can only see.
-///
-/// # Safety
-/// The stacks null or valid.
-pub unsafe fn set_ref_in_item(
+pub fn set_ref_in_item(
     tv: &TypVal,
     copy_id: c_int,
-    ht_stack: *mut *mut HtStack,
-    list_stack: *mut *mut ListStack,
+    ht_stack: Option<&mut DictStack>,
+    list_stack: Option<&mut ListStack>,
 ) -> bool {
     let (ht, ls) = (ht_stack, list_stack);
-    // SAFETY: a container a live value holds is live; the stacks are the
-    // caller's.
     match tv.v_type() {
-        VAR_DICT => unsafe { set_ref_in_item_dict(tv.dict_or_null(), copy_id, ht, ls) },
-        VAR_LIST => unsafe { set_ref_in_item_list(tv.list_or_null(), copy_id, ht, ls) },
+        VAR_DICT => tv
+            .dict_shared()
+            .is_some_and(|dict| set_ref_in_item_dict(dict, copy_id, ht, ls)),
+        VAR_LIST => tv
+            .list_shared()
+            .is_some_and(|list| set_ref_in_item_list(list, copy_id, ht, ls)),
         // A Funcref names a function, which may be a closure holding a
         // scope of its own.
         VAR_FUNC => {
             let name = tv
                 .func_name()
                 .map_or(null_mut(), |name| name.as_ptr().cast_mut());
+            // SAFETY: the value's own name, NUL-terminated.
             unsafe { set_ref_in_func(name, null_mut::<UserFunc>(), copy_id) }
         }
         VAR_PARTIAL => tv
             .partial_shared()
-            .is_some_and(|pt| unsafe { set_ref_in_item_partial(pt, copy_id, ht, ls) }),
+            .is_some_and(|pt| set_ref_in_item_partial(pt, copy_id, ht, ls)),
         _ => false,
     }
 }
@@ -639,12 +558,10 @@ pub unsafe fn set_ref_in_item(
 ///
 /// `copy_id` is what makes a *deep* copy of a self-referential structure
 /// terminate: a container already copied under this id answers with the
-/// copy it made rather than making another.
-///
-/// # Safety
-/// `from` and `to` must be valid; `conv` null or valid.
-pub unsafe fn var_item_copy(
-    conv: *const VimConv,
+/// copy it made rather than making another. `to` is overwritten without
+/// being released.
+pub(crate) fn var_item_copy(
+    conv: Option<&VimConv>,
     from: &TypVal,
     to: &mut TypVal,
     deep: bool,
@@ -659,29 +576,16 @@ pub unsafe fn var_item_copy(
     // The un-bump is the guard's, so that an early exit cannot skip it.
     let _depth = Depth::of(&RECURSE);
 
-    // SAFETY: the caller's promise -- both typvals outlive the call. Every
-    // union member read below is the one `src.v_type()` names, and the
-    // matching member of `dst` is written before it is read.
-    let (src, mut dst) = unsafe { (from, Tv::new(to)) };
+    let src = from;
     let mut ret = Ok(());
     match src.v_type() {
         VAR_STRING => {
-            // SAFETY: as above; a null `conv` is not read.
-            let converting = !conv.is_null() && unsafe { (*conv).vc_type } != CONV_NONE;
-            match src.string_ref() {
-                Some(text) if converting => {
-                    // SAFETY: `text` is the source string, which the
-                    // conversion only reads, and `conv` the conversion; the
-                    // answer is a fresh block or null.
-                    let converted = unsafe {
-                        ThinCString::from_raw(string_convert(
-                            conv,
-                            text.as_ptr().cast_mut(),
-                            null_mut::<size_t>(),
-                        ))
-                    };
+            let converting = conv.filter(|conv| conv.vc_type != CONV_NONE);
+            match (src.string_ref(), converting) {
+                (Some(text), Some(conv)) => {
                     // A conversion that failed keeps the original bytes.
-                    dst.write_string(Some(converted.unwrap_or_else(|| text.clone())));
+                    let converted = string_convert_cstr(conv, text.as_cstr());
+                    to.write_string(Some(converted.unwrap_or_else(|| text.clone())));
                 }
                 _ => tv_copy(from, to),
             }
@@ -691,40 +595,31 @@ pub unsafe fn var_item_copy(
             let copied = orig.and_then(|orig| {
                 // The copy it was given under this id, which gains this
                 // reference, or a fresh one.
-                // SAFETY: `conv` is null or the caller's.
                 orig.copy_under(copy_id)
-                    .or_else(|| list_copy(unsafe { conv.as_ref() }, orig, deep, copy_id))
+                    .or_else(|| list_copy(conv, orig, deep, copy_id))
             });
             let failed = orig.is_some() && copied.is_none();
-            dst.write_list(copied);
+            to.write_list(copied);
             if failed {
                 ret = Err(Failed);
             }
         }
         VAR_DICT => {
-            let orig = match src {
-                TypVal::Dict(dict) => (**dict).as_ref(),
-                _ => None,
-            };
+            let orig = src.dict_shared();
             let copied = orig.and_then(|orig| {
                 // The copy it was given under this id, which gains this
                 // reference, or a fresh one.
-                // SAFETY: `conv` is null or the caller's.
                 orig.copy_under(copy_id)
-                    .or_else(|| dict_copy(unsafe { conv.as_ref() }, orig, deep, copy_id))
+                    .or_else(|| dict_copy(conv, orig, deep, copy_id))
             });
             let failed = orig.is_some() && copied.is_none();
-            dst.write_dict(copied);
+            to.write_dict(copied);
             if failed {
                 ret = Err(Failed);
             }
         }
-        VAR_BLOB => {
-            // SAFETY: the source's own blob, and `to` the caller's slot.
-            blob_copy(unsafe { src.blob_or_null().as_ref() }, to);
-        }
+        VAR_BLOB => blob_copy(src.blob_ref(), to),
         VAR_UNKNOWN => {
-            // SAFETY: the text is a NUL-terminated literal.
             internal_error(c"var_item_copy(UNKNOWN)");
             ret = Err(Failed);
         }
@@ -737,26 +632,6 @@ pub unsafe fn var_item_copy(
     }
 
     ret
-}
-
-/// [`var_item_copy`] with the converter as a borrow.
-pub(crate) fn var_item_copy_with(
-    conv: Option<&VimConv>,
-    from: &TypVal,
-    to: &mut TypVal,
-    deep: bool,
-    copy_id: c_int,
-) -> Result<(), Failed> {
-    // SAFETY: a borrowed converter or null, and two borrowed values.
-    unsafe {
-        var_item_copy(
-            conv.map_or(null(), core::ptr::from_ref),
-            from,
-            to,
-            deep,
-            copy_id,
-        )
-    }
 }
 
 /// Is anything watching this list? A watched list is never freed, because

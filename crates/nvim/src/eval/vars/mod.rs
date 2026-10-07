@@ -35,7 +35,7 @@ use crate::eval::userfunc::{
 use crate::eval::window::{find_win_by_nr, restore_win, switch_win};
 use crate::eval::{
     Cursor, LAMBDA_USES_LOCALS, eval_expr_ext, eval_isnamec1, eval_option, eval_to_bool, eval1,
-    get_name_len, handle_subscript, may_call_simple_func, name_end, set_ref_in_ht,
+    get_name_len, handle_subscript, may_call_simple_func, name_end, set_ref_in_dict_items,
 };
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::ends_excmd;

@@ -39,14 +39,13 @@
 
 use std::ffi::CStr;
 use std::mem::ManuallyDrop;
-use std::ptr;
 
 use neovim::eval::encode::{
     encode_tv2echo, encode_tv2json, encode_tv2string, encode_vim_to_msgpack,
 };
 use neovim::eval::typval::{ListRef, list_free_contents, list_free_list, tv_clear};
-use neovim::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
-use neovim::types::{PackerBuffer, String_0, TypVal};
+use neovim::msgpack_rpc::packer::pack_to_bytes;
+use neovim::types::TypVal;
 
 use crate::support::tv::{Payload, Pt, Tv};
 use crate::support::{Editor, check_emsg, editor_lock, internalize};
@@ -307,15 +306,12 @@ fn corpus() -> Vec<Row> {
 
 // ------------------------------------------------------------ the sinks
 
-/// `encode_tv2echo`, with the length it reports checked against the bytes.
+/// `encode_tv2echo`.
 ///
 /// # Safety
 /// `tv` is live.
 unsafe fn echo(tv: *mut TypVal) -> String {
-    let mut len = 0;
-    let text = unsafe { internalize(encode_tv2echo(&*tv, &raw mut len)) };
-    assert_eq!(len, text.len(), "the length reported is the length written");
-    text
+    unsafe { internalize(encode_tv2echo(&*tv).into_raw()) }
 }
 
 /// `encode_tv2string`.
@@ -323,10 +319,7 @@ unsafe fn echo(tv: *mut TypVal) -> String {
 /// # Safety
 /// As [`echo`].
 unsafe fn string(tv: *mut TypVal) -> String {
-    let mut len = 0;
-    let text = unsafe { internalize(encode_tv2string(&*tv, &raw mut len)) };
-    assert_eq!(len, text.len());
-    text
+    unsafe { internalize(encode_tv2string(&*tv).into_raw()) }
 }
 
 /// `encode_tv2json`. A refusal answers an empty string, not a null one.
@@ -334,10 +327,7 @@ unsafe fn string(tv: *mut TypVal) -> String {
 /// # Safety
 /// As [`echo`].
 unsafe fn json(tv: *mut TypVal) -> String {
-    let mut len = 0;
-    let text = unsafe { internalize(encode_tv2json(&*tv, &raw mut len)) };
-    assert_eq!(len, text.len());
-    text
+    unsafe { internalize(encode_tv2json(&*tv).into_raw()) }
 }
 
 /// `encode_vim_to_msgpack` through the packer `msgpackdump()` uses, or
@@ -346,12 +336,11 @@ unsafe fn json(tv: *mut TypVal) -> String {
 /// # Safety
 /// As [`echo`].
 unsafe fn msgpack(tv: *mut TypVal) -> Option<Vec<u8>> {
-    let mut buffer: PackerBuffer = packer_string_buffer();
-    let ok = unsafe { encode_vim_to_msgpack(&raw mut buffer, &*tv, MSGPACK_OBJNAME) };
-    // SAFETY: the buffer is this call's own `packer_string_buffer`.
-    let packed: String_0 = unsafe { packer_take_string(&buffer) };
-    let bytes = packed.as_bytes().to_vec();
-    (ok != 0).then_some(bytes)
+    let mut ok = false;
+    let bytes = pack_to_bytes(|buffer| {
+        ok = encode_vim_to_msgpack(buffer, unsafe { &*tv }, MSGPACK_OBJNAME);
+    });
+    ok.then_some(bytes)
 }
 
 // ------------------------------------------------------------- the cases
@@ -477,18 +466,9 @@ fn the_length_is_optional() {
     unsafe {
         let mut tv = Tv::List(vec![Tv::Int(1), Tv::s("x")]).build();
         let at = &raw mut tv;
-        assert_eq!(
-            internalize(encode_tv2echo(&*at, ptr::null_mut())),
-            "[1, 'x']"
-        );
-        assert_eq!(
-            internalize(encode_tv2string(&*at, ptr::null_mut())),
-            "[1, 'x']"
-        );
-        assert_eq!(
-            internalize(encode_tv2json(&*at, ptr::null_mut())),
-            "[1, \"x\"]"
-        );
+        assert_eq!(internalize(encode_tv2echo(&*at).into_raw()), "[1, 'x']");
+        assert_eq!(internalize(encode_tv2string(&*at).into_raw()), "[1, 'x']");
+        assert_eq!(internalize(encode_tv2json(&*at).into_raw()), "[1, \"x\"]");
         tv_clear(&mut *at);
     }
 }

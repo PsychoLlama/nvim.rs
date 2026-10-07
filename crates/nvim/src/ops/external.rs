@@ -127,9 +127,8 @@ pub fn did_set_operatorfunc(_args: &mut OptSet) -> Result<(), OptError> {
 
 /// Mark the 'operatorfunc' callback with `copy_id` so the collector keeps it.
 pub fn set_ref_in_opfunc(copy_id: c_int) -> bool {
-    let (ht, list) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
     // SAFETY: the caller's promise -- the eval heap is consistent.
-    unsafe { set_ref_in_callback(&*global_opfunc(), copy_id, ht, list) }
+    set_ref_in_callback(unsafe { &*global_opfunc() }, copy_id, None, None)
 }
 
 /// `g@` -- call 'operatorfunc' with the region in `'[`/`']`.

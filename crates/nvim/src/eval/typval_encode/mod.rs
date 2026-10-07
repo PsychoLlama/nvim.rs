@@ -13,25 +13,40 @@
 //! so every hook stays the direct call the macro expansion was.
 //!
 //! The walk is deliberately **not recursive**.  Containers are pushed onto an
-//! explicit stack ([`ConvStack`]) and marked with the current `copy_id` while
-//! they are on it, so a container that references itself is recognised instead
-//! of overflowing the machine stack.  That is the whole reason upstream wrote
-//! it this way, and it is why a hook can only ask the walk to stop ([`Flow`])
-//! — it never gets to decline the descent.
+//! explicit stack ([`ConvStack`]), and a container already on it is a
+//! self-reference, recognised instead of overflowing the machine stack.  That
+//! is the whole reason upstream wrote it this way, and it is why a hook can
+//! only ask the walk to stop ([`Flow`]) — it never gets to decline the descent.
+//!
+//! Upstream finds "already on the stack" by stamping each container with the
+//! walk's `copyID` as it is pushed and restoring the old one as it is popped.
+//! A frame here holds a *borrow* of its container, so the stack itself answers
+//! the question: the stamp only ever meant "some frame below holds this", and
+//! asking the frames is that, with nothing written to the values walked.  A
+//! container is on the stack through a `List`/`Pairs` frame (a list) or a
+//! `Dict` frame (a dictionary); a partial is never stamped, so never asked.
+//!
+//! The walk only reads.  The seventh sink upstream has — `nothing`, the deep
+//! free `tv_clear` runs — writes to every slot it passes; it is a walk of its
+//! own beside `tv_clear` now ([`super::typval::value`]), because a free can
+//! take each value out of its slot and needs none of this.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::MaybeUninit;
+use core::ffi::{CStr, c_int};
 
-use crate::eval::typval::DictSlot;
-
-use crate::types::{Dict, Float, List, Partial, TypVal, int64_t, ptrdiff_t, size_t};
+use crate::types::{Dict, Float, List, Partial, TypVal};
 
 // The walk itself; this half is the contract it runs against.
 mod walk;
-pub(crate) use self::walk::{encode_typval, encode_typval_read};
+pub(crate) use self::walk::encode_typval;
 
 /// The encode was abandoned.
 ///
@@ -59,9 +74,9 @@ pub(crate) enum Flow {
     Fail,
 }
 
-/// The three container kinds `check_self_reference` can be asked about:
-/// upstream's `MPConvStackValType` less the two partial stages, which are
-/// never `copy_id`-marked.
+/// The three container kinds a self-reference can be met as: upstream's
+/// `MPConvStackValType` less the two partial stages, which are never
+/// `copyID`-marked.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum ConvType {
     Dict,
@@ -69,6 +84,13 @@ pub(crate) enum ConvType {
     /// A special dictionary's `_VAL`, a list of `[key, value]` pairs walked as
     /// though it were a dictionary.
     Pairs,
+}
+
+/// A container the walk has met: what a self-reference names.
+#[derive(Copy, Clone)]
+pub(crate) enum Container<'a> {
+    List(&'a List),
+    Dict(&'a Dict),
 }
 
 /// Which of a partial's three parts the walk is up to.
@@ -80,142 +102,140 @@ pub(crate) enum PartialStage {
 }
 
 /// One suspended container: upstream's `MPConvStackVal`, whose `type` tag and
-/// `data` union become one enum.
+/// `data` union become one enum, each arm holding a borrow of the container
+/// and the position the walk has reached in it.
 #[derive(Copy, Clone)]
-pub(crate) enum Frame {
+pub(crate) enum Frame<'a> {
     Dict {
-        dict: *mut Dict,
-        /// Where the dictionary pointer *lives*, so a sink can clear it:
-        /// the typval that holds it, or a partial's `pt_dict` field.
-        dictp: DictSlot,
-        /// The slot the walk stands on -- an *index*, because the small run
-        /// lives inside the `HashTab` and a body may take `&mut` to it.
-        idx: usize,
-        todo: size_t,
+        dict: &'a Dict,
+        /// The next hash-table slot to look at -- an index, so the frame
+        /// is `Copy` and the key handed out last is the slot before it.
+        slot: usize,
+        /// How many items are still to come.
+        todo: usize,
     },
     List {
-        list: *mut List,
-        /// The item the walk stands on -- an *index*, because the list owns
-        /// its items and a body may edit it.  `at == list_len(list)` is
-        /// a drained frame.
+        list: &'a List,
+        /// The next item. `at == list.len()` is a drained frame.
         at: usize,
     },
     Pairs {
-        list: *mut List,
+        list: &'a List,
         /// As [`Frame::List`].
         at: usize,
     },
     Partial {
         stage: PartialStage,
-        pt: *mut Partial,
+        /// `None` for `v:_null_partial`, which still prints as a funcref.
+        partial: Option<&'a Partial>,
     },
     PartialArgs {
-        arg: *mut TypVal,
-        argv: *mut TypVal,
-        todo: size_t,
+        argv: &'a [TypVal],
+        /// The next argument.
+        at: usize,
     },
 }
 
-/// A stack entry: the value being walked plus the `copy_id` to restore when it
-/// is popped.
-#[derive(Copy, Clone)]
-pub(crate) struct ConvFrame {
-    /// The `TypVal` this container came out of.  NULL for the two frames a
-    /// partial pushes, which stand for its argument list and self dictionary.
-    pub tv: *mut TypVal,
-    pub saved_copyid: c_int,
-    pub frame: Frame,
-}
-
-impl ConvFrame {
-    /// The container this frame walks and which kind it is, for a sink
-    /// resolving a self-reference back to a stack position.
+impl Frame<'_> {
+    /// Whether this frame walks `container` under the kind `conv_type`, for a
+    /// sink resolving a self-reference back to a stack position.
     ///
-    /// Note that a `Pairs` frame answers `Pairs`, never `List`: upstream's
-    /// backref searches compare the *tag* first, and a special map's `_VAL`
-    /// list is therefore never found by a `kMPConvList` lookup.  Keep that
-    /// asymmetry — the index it produces is in the `@N` markers `string()`
-    /// and `echo` print.
-    pub(crate) fn container(&self) -> Option<(ConvType, *const c_void)> {
-        match self.frame {
-            Frame::Dict { dict, .. } => Some((ConvType::Dict, dict.cast())),
-            Frame::List { list, .. } => Some((ConvType::List, list.cast())),
-            Frame::Pairs { list, .. } => Some((ConvType::Pairs, list.cast())),
-            Frame::Partial { .. } | Frame::PartialArgs { .. } => None,
+    /// Note that a `Pairs` frame answers only to `Pairs`, never to `List`:
+    /// upstream's backref searches compare the *tag* first, and a special
+    /// map's `_VAL` list is therefore never found by a `kMPConvList` lookup.
+    /// Keep that asymmetry — the index it produces is in the `@N` markers
+    /// `string()` and `echo` print.
+    pub(crate) fn walks(&self, conv_type: ConvType, container: Container<'_>) -> bool {
+        match (*self, conv_type, container) {
+            (Frame::Dict { dict, .. }, ConvType::Dict, Container::Dict(other)) => {
+                ::core::ptr::eq(dict, other)
+            }
+            (Frame::List { list, .. }, ConvType::List, Container::List(other))
+            | (Frame::Pairs { list, .. }, ConvType::Pairs, Container::List(other)) => {
+                ::core::ptr::eq(list, other)
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether this frame holds `container` at all, whatever kind it walks
+    /// it as: upstream's `copyID` stamp, which a list carries the same way
+    /// whether a `List` or a `Pairs` frame put it there.
+    fn holds(&self, container: Container<'_>) -> bool {
+        match (*self, container) {
+            (Frame::Dict { dict, .. }, Container::Dict(other)) => ::core::ptr::eq(dict, other),
+            (Frame::List { list, .. } | Frame::Pairs { list, .. }, Container::List(other)) => {
+                ::core::ptr::eq(list, other)
+            }
+            _ => false,
         }
     }
 }
 
-/// Frames held without allocating.  Upstream's `MPConvStack` is a
-/// `kvec_withinit_t` of the same size, and the reason for it is `tv_clear`:
-/// the `nothing` sink runs this walk on *every* container the interpreter
-/// frees, so a malloc per walk would be a malloc per free.
+/// Frames held without allocating, as upstream's `MPConvStack` is a
+/// `kvec_withinit_t` of the same size: most walks never go deeper.
 const INLINE_FRAMES: usize = 8;
 
 /// The walk's explicit stack of suspended containers.
-pub(crate) type ConvStack = InlineStack<ConvFrame, INLINE_FRAMES>;
+pub(crate) type ConvStack<'a> = InlineStack<Frame<'a>, INLINE_FRAMES>;
+
+impl ConvStack<'_> {
+    /// Whether some frame already holds `container`: the walk has been here
+    /// on the way down, so meeting it again is a self-reference.
+    pub(crate) fn holds(&self, container: Container<'_>) -> bool {
+        self.iter().any(|frame| frame.holds(container))
+    }
+}
 
 /// A stack of `N` items held inline, spilling to the heap beyond that:
-/// klib's `kvec_withinit_t`, which upstream uses both for the walk's own
-/// frames and for the half-built values two of the sinks assemble.
+/// klib's `kvec_withinit_t`, which upstream uses for the walk's frames and
+/// the deep free uses for the containers it is part-way through releasing.
 ///
 /// Indexable from the bottom, because that is the order the error path names
 /// the frames in and the position a `@N` self-reference marker counts to.
-pub(crate) struct InlineStack<T: Copy, const N: usize> {
-    /// **Deliberately uninitialised**, exactly as upstream's `kvi_init` leaves
-    /// `init_array`.  `tv_clear` runs this walk on every value the interpreter
-    /// drops -- scalars included, which never push a frame at all -- so
-    /// zeroing eight 56-byte frames on entry is ~5% of the interpreter and 26%
-    /// of `evalbench`'s `tvclear` phase.  Measured, not guessed.
-    ///
-    /// `len` is the invariant: slots below it are initialised, slots at and
-    /// above it are not.
-    inline: [MaybeUninit<T>; N],
+pub(crate) struct InlineStack<T, const N: usize> {
+    inline: [Option<T>; N],
     spilled: Vec<T>,
     len: usize,
 }
 
-impl<T: Copy, const N: usize> InlineStack<T, N> {
+impl<T, const N: usize> InlineStack<T, N> {
     pub(crate) fn new() -> Self {
         InlineStack {
-            inline: [MaybeUninit::uninit(); N],
+            inline: [const { None }; N],
             spilled: Vec::new(),
             len: 0,
         }
     }
 
     pub(crate) fn push(&mut self, item: T) {
-        if self.len < N {
-            self.inline[self.len].write(item);
-        } else {
-            self.spilled.push(item);
+        match self.inline.get_mut(self.len) {
+            Some(slot) => *slot = Some(item),
+            None => self.spilled.push(item),
         }
         self.len += 1;
     }
 
-    /// Drop the top item.  The caller has already read whatever it needs out
-    /// of it -- upstream's `kv_pop` only decrements the count and its callers
-    /// keep reading the popped slot.
-    pub(crate) fn pop(&mut self) {
-        self.len -= 1;
-        if self.len >= N {
-            self.spilled.pop();
+    /// Take the top item off.
+    pub(crate) fn pop(&mut self) -> Option<T> {
+        self.len = self.len.checked_sub(1)?;
+        match self.inline.get_mut(self.len) {
+            Some(slot) => slot.take(),
+            None => self.spilled.pop(),
         }
     }
 
     pub(crate) fn get_mut(&mut self, i: usize) -> &mut T {
         debug_assert!(i < self.len);
-        if i < N {
-            // SAFETY: `i < len`, so this slot has been written.
-            unsafe { self.inline[i].assume_init_mut() }
-        } else {
-            &mut self.spilled[i - N]
+        match self.inline.get_mut(i) {
+            Some(slot) => slot.as_mut().expect("an item below the top"),
+            None => &mut self.spilled[i - N],
         }
     }
 
-    pub(crate) fn last_mut(&mut self) -> &mut T {
-        let last = self.len - 1;
-        self.get_mut(last)
+    pub(crate) fn last_mut(&mut self) -> Option<&mut T> {
+        let last = self.len.checked_sub(1)?;
+        Some(self.get_mut(last))
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -230,30 +250,26 @@ impl<T: Copy, const N: usize> InlineStack<T, N> {
     pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
         self.inline[..self.len.min(N)]
             .iter()
-            // SAFETY: every slot below `len` has been written.
-            .map(|slot| unsafe { slot.assume_init_ref() })
+            .flatten()
             .chain(self.spilled.iter())
     }
 }
 
 /// What the two failing hooks need to name the value they failed on: the path
 /// down to it and the name of the object being dumped.
-pub(crate) struct ConvPath<'a> {
-    pub stack: &'a ConvStack,
-    pub objname: &'a CStr,
+pub(crate) struct ConvPath<'s, 'a> {
+    pub stack: &'s ConvStack<'a>,
+    pub objname: &'s CStr,
 }
 
 /// The `TYPVAL_ENCODE_CONV_*` macros one includer of `typval_encode.c.h`
 /// defines, as one trait.
 ///
-/// Most methods are `unsafe` because they are handed a raw pointer the walk
-/// borrowed from its caller.  The ones with a `Flow` return are the ones some
-/// sink uses to stop; the rest are `()` because no sink needs to, and the
-/// defaults are for the ones most sinks leave empty.
-///
-/// `tv` is the value the walk is standing on, and `None` where there is
-/// none: the two frames a partial pushes stand for its argument list and its
-/// self dictionary, neither of which is a typval.
+/// The ones with a `Flow` return are the ones some sink uses to stop; the
+/// rest are `()` because no sink needs to, and the defaults are for the ones
+/// most sinks leave empty.  Nothing here is handed the value the walk stands
+/// on: upstream passes it for the `nothing` sink's sake, and no reading sink
+/// looks at it.
 pub(crate) trait TypvalSink {
     /// `TYPVAL_ENCODE_ALLOW_SPECIALS`: whether a two-key `{_TYPE, _VAL}`
     /// dictionary is read as the value it stands for rather than as a plain
@@ -264,61 +280,25 @@ pub(crate) trait TypvalSink {
     /// spells with the instantiation's own function name.
     const CONVERT_FN_NAME: &'static CStr;
 
-    /// Whether the sink *writes* to the values it is walking.
-    ///
-    /// Only the `nothing` sink does -- it is `tv_clear`'s deep free, and
-    /// empties every slot it passes. Every other sink reads, which is what
-    /// lets [`encode_typval_read`](crate::eval::typval_encode::encode_typval_read)
-    /// take a shared borrow; that entry point refuses a sink that says
-    /// `true` here, at compile time.
-    const WRITES_BACK: bool = false;
-
     /// `TYPVAL_ENCODE_CHECK_BEFORE`, run before every value.
     fn check_before(&mut self) {}
 
-    fn conv_nil(&mut self, tv: Option<&mut TypVal>);
-    fn conv_bool(&mut self, tv: Option<&mut TypVal>, num: bool);
-    fn conv_number(&mut self, tv: Option<&mut TypVal>, num: int64_t);
+    fn conv_nil(&mut self);
+    fn conv_bool(&mut self, num: bool);
+    fn conv_number(&mut self, num: i64);
     /// Only reachable through a special dictionary, so sinks that refuse
     /// those leave it empty.
-    ///
-    fn conv_unsigned_number(&mut self, tv: Option<&mut TypVal>, num: u64) {
-        let _ = (tv, num);
+    fn conv_unsigned_number(&mut self, num: u64) {
+        let _ = num;
     }
-    fn conv_float(&mut self, tv: Option<&mut TypVal>, flt: Float) -> Flow;
+    fn conv_float(&mut self, flt: Float) -> Flow;
 
-    /// A `VAR_STRING`, or the `_VAL` of a special string.  `buf` may be NULL.
-    ///
-    /// # Safety
-    /// The walk's contract on the value it is standing on, above. `buf` is null, or readable for `len` bytes and
-    /// owned by the value — it must not be freed or kept past the call.
-    unsafe fn conv_string(
-        &mut self,
-        tv: Option<&mut TypVal>,
-        buf: *mut c_char,
-        len: size_t,
-    ) -> Flow;
+    /// A `VAR_STRING`: its bytes, with a NULL string reading as none.
+    fn conv_string(&mut self, bytes: &[u8]) -> Flow;
     /// A string that is known to be text rather than bytes: a dictionary key,
-    /// or a special string's contents.  Only msgpack and `nothing` tell the
-    /// two apart.
-    ///
-    /// For a dictionary key the buffer is the dictionary's.  For a special
-    /// string it is the walk's, freed the way [`Self::conv_ext_string`]
-    /// describes — so a sink that fails here leaks it, exactly as upstream's
-    /// JSON encoder does.
-    ///
-    /// # Safety
-    /// The walk's contract on the value it is standing on, above. `buf` is null, or readable for `len` bytes. For
-    /// a dictionary key it belongs to the dictionary; for a special string it
-    /// belongs to the walk and is freed on [`Flow::Go`], so an implementation
-    /// must not keep it either way.
-    unsafe fn conv_str_string(
-        &mut self,
-        tv: Option<&mut TypVal>,
-        buf: *mut c_char,
-        len: size_t,
-    ) -> Flow {
-        unsafe { self.conv_string(tv, buf, len) }
+    /// or a special string's contents.  Only msgpack tells the two apart.
+    fn conv_str_string(&mut self, bytes: &[u8]) -> Flow {
+        self.conv_string(bytes)
     }
     /// A dictionary key, which is always a plain byte string.
     ///
@@ -327,146 +307,58 @@ pub(crate) trait TypvalSink {
     /// object on the stack -- can take the bytes without building one. The
     /// default is what every other sink wants: a key is a string like any
     /// other, and [`Self::conv_dict_after_key`] moves it into place.
-    ///
-    /// The bytes belong to the dictionary and are borrowed for the call.
     fn conv_dict_key(&mut self, key: &[u8]) -> Flow {
-        // SAFETY: the slice is live for the call, which is all
-        // `conv_str_string` asks of the buffer.
-        unsafe { self.conv_str_string(None, key.as_ptr().cast::<c_char>().cast_mut(), key.len()) }
+        self.conv_str_string(key)
     }
+    /// A special `ext` value: its type code and payload.
+    fn conv_ext_string(&mut self, bytes: &[u8], ext_type: i8) -> Flow;
 
-    /// A special `ext` value.
-    ///
-    /// `buf` is the walk's, and the walk frees it — *unless* the hook returns
-    /// something other than [`Flow::Go`], in which case it never gets there
-    /// and the hook owns it.  Upstream has exactly this split (the `xfree`
-    /// sits after the macro, which the bailing sinks `return` past), and one
-    /// of the two paths it produces is a leak: see [`Self::conv_str_string`].
-    ///
-    /// # Safety
-    /// The walk's contract on the value it is standing on, above. `buf` is readable for `len` bytes and belongs to
-    /// the walk **only while [`Flow::Go`] is returned** — on any other answer
-    /// the implementation has taken it over and owes it an `xfree`.
-    unsafe fn conv_ext_string(
+    fn conv_blob(&mut self, bytes: &[u8]);
+
+    /// A funcref or partial, before its arguments.  `fun` is `None` for a
+    /// NULL name; `prefix` is `"g:"` where the name needs qualifying.
+    fn conv_func_start(
         &mut self,
-        tv: Option<&mut TypVal>,
-        buf: *mut c_char,
-        len: size_t,
-        ext_type: i8,
-    ) -> Flow;
-
-    /// # Safety
-    /// The walk's contract on the value it is standing on, above. `blob` points at a live blob holding `len` bytes,
-    /// borrowed for the call.
-    /// The bytes arrive as a **raw slice**, not a `&[u8]`, because a sink
-    /// is free to release the value it is standing on -- `NothingSink` does,
-    /// and a reference handed to a call that frees what it names is
-    /// undefined however short its life. A reading sink dereferences it
-    /// first and does not touch `tv`.
-    ///
-    /// # Safety
-    ///
-    /// `bytes` names the blob's own array and is live until this sink
-    /// releases the value, which no sink that reads the bytes does.
-    unsafe fn conv_blob(&mut self, tv: Option<&mut TypVal>, bytes: *const [u8]);
-
-    /// A funcref or partial, before its arguments.  `fun` may be NULL;
-    /// `prefix` is `"g:"` where the name needs qualifying.
-    ///
-    /// # Safety
-    /// The walk's contract on the value it is standing on, above. `fun` is null or a NUL-terminated name borrowed
-    /// for the call, and `path` borrows the walk's own stack — reading it after
-    /// the call would read a stack that has moved on.
-    unsafe fn conv_func_start(
-        &mut self,
-        tv: Option<&mut TypVal>,
-        fun: *mut c_char,
+        fun: Option<&CStr>,
         prefix: &'static CStr,
-        path: &ConvPath,
+        path: &ConvPath<'_, '_>,
     ) -> Flow;
-    fn conv_func_before_args(&mut self, tv: Option<&mut TypVal>, len: ptrdiff_t) {
-        let _ = (tv, len);
+    fn conv_func_before_args(&mut self, len: usize) {
+        let _ = len;
     }
-    /// `len` is −1 when the partial has no self dictionary.
-    ///
-    fn conv_func_before_self(&mut self, tv: Option<&mut TypVal>, len: ptrdiff_t) {
-        let _ = (tv, len);
+    /// `len` is `None` when the partial has no self dictionary.
+    fn conv_func_before_self(&mut self, len: Option<usize>) {
+        let _ = len;
     }
-    fn conv_func_end(&mut self, tv: Option<&mut TypVal>, copyid: c_int) {
-        let _ = (tv, copyid);
-    }
+    fn conv_func_end(&mut self) {}
 
-    fn conv_empty_list(&mut self, tv: Option<&mut TypVal>);
-    /// `dictp` is where the dictionary pointer lives, so a sink can clear it;
-    /// `None` is upstream's `TYPVAL_ENCODE_NODICT_VAR`, meaning the map being
-    /// emitted has no `Dict` behind it.
-    ///
-    /// The dictionary hooks take *no* `tv`: where the walk is standing on a
-    /// value at all, that value is the slot, and it arrives as
-    /// `DictSlot::Value`.  Handing a hook both would be handing it two
-    /// writable paths to one typval.
-    fn conv_empty_dict(&mut self, dictp: Option<DictSlot>);
+    fn conv_empty_list(&mut self);
+    fn conv_empty_dict(&mut self);
 
-    fn conv_list_start(&mut self, tv: Option<&mut TypVal>, len: c_int) -> Flow;
-    /// Called with the frame just pushed for this list, which a sink may edit
-    /// to make the walk skip its items.
-    fn conv_real_list_after_start(
-        &mut self,
-        tv: Option<&mut TypVal>,
-        frame: &mut ConvFrame,
-    ) -> Flow {
-        let _ = (tv, frame);
-        Flow::Go
-    }
-    fn conv_list_between_items(&mut self, tv: Option<&mut TypVal>) {
-        let _ = tv;
-    }
-    fn conv_list_end(&mut self, tv: Option<&mut TypVal>) {
-        let _ = tv;
-    }
+    fn conv_list_start(&mut self, len: c_int) -> Flow;
+    fn conv_list_between_items(&mut self) {}
+    fn conv_list_end(&mut self) {}
 
-    fn conv_dict_start(&mut self, tv: Option<&mut TypVal>, len: size_t) -> Flow;
-    /// The dictionary counterpart of [`Self::conv_real_list_after_start`].
-    fn conv_real_dict_after_start(
-        &mut self,
-        dictp: Option<DictSlot>,
-        frame: &mut ConvFrame,
-    ) -> Flow {
-        let _ = (dictp, frame);
-        Flow::Go
-    }
+    fn conv_dict_start(&mut self, len: usize) -> Flow;
     /// `TYPVAL_ENCODE_SPECIAL_DICT_KEY_CHECK`: veto a key a special map is
     /// about to emit.
-    ///
     fn special_dict_key_check(&mut self, key: &TypVal) -> Flow {
         let _ = key;
         Flow::Go
     }
-    fn conv_dict_after_key(&mut self, dictp: Option<DictSlot>) {
-        let _ = dictp;
-    }
-    fn conv_dict_between_items(&mut self, dictp: Option<DictSlot>) {
-        let _ = dictp;
-    }
-    fn conv_dict_end(&mut self, dictp: Option<DictSlot>) {
-        let _ = dictp;
-    }
+    fn conv_dict_after_key(&mut self) {}
+    fn conv_dict_between_items(&mut self) {}
+    fn conv_dict_end(&mut self) {}
 
-    /// The container `val` is already on the stack.  Returning [`Flow::Go`]
-    /// means "handled, stop converting this value" — a sink that writes a
-    /// marker and one that says nothing both answer that; only the sinks that
-    /// refuse self-reference outright answer [`Flow::Fail`].
-    ///
-    /// # Safety
-    /// `val` is the container the walk found itself back at — a `*mut List`,
-    /// `*mut Dict` or `*mut Partial` according to `conv_type` — live and
-    /// already on the walk's stack. `path` borrows that stack and must not
-    /// outlive the call.
-    unsafe fn conv_recurse(
+    /// `container`, met as `conv_type`, is already on the stack.  Returning
+    /// [`Flow::Go`] means "handled, stop converting this value" — a sink that
+    /// writes a marker and one that says nothing both answer that; only the
+    /// sinks that refuse self-reference outright answer [`Flow::Fail`].
+    fn conv_recurse(
         &mut self,
-        val: *mut c_void,
+        container: Container<'_>,
         conv_type: ConvType,
-        path: &ConvPath,
+        path: &ConvPath<'_, '_>,
     ) -> Flow;
 }
 #[cfg(test)]
@@ -475,58 +367,51 @@ mod tests {
 
     /// The spill boundary, asserted from both sides.
     ///
-    /// How many frames [`InlineStack`] holds inline is a *capacity*, and a
+    /// How many items [`InlineStack`] holds inline is a *capacity*, and a
     /// capacity is not part of any answer: setting `INLINE_FRAMES` to 1 leaves
     /// every sweep byte-identical (measured, `1787432513-typvalmutate.py
-    /// --blind stack-inline-frames`), the same shape p20-22 measured for
-    /// `garray.rs`. What a differential *can* see is the boundary going wrong,
-    /// because `eval/typval_encode`'s walk indexes frames from the bottom and
-    /// the corpus nests thirty deep — but only as a panic. This says it
-    /// precisely, and being pure it also runs under Miri, which is the only
-    /// thing that checks the `MaybeUninit` discipline `inline` is built on.
+    /// --blind stack-inline-frames`). What a differential *can* see is the
+    /// boundary going wrong, because the walk indexes frames from the bottom
+    /// and the corpus nests thirty deep — but only as a panic. This says it
+    /// precisely.
     #[test]
     fn the_inline_stack_spills_and_comes_back_in_order() {
         let mut stack: InlineStack<usize, 4> = InlineStack::new();
         assert!(stack.is_empty());
-
-        for i in 0..4 {
-            stack.push(i);
-        }
-        assert_eq!(stack.len(), 4);
-        assert_eq!(*stack.last_mut(), 3);
-
-        // Past the budget the Vec takes over, and the two halves stay one
-        // sequence indexed from the bottom.
-        for i in 4..10 {
+        for i in 0..10 {
             stack.push(i);
         }
         assert_eq!(stack.len(), 10);
+        // Past the budget the Vec takes over, and the two halves stay one
+        // sequence indexed from the bottom.
         for i in 0..10 {
-            assert_eq!(*stack.get_mut(i), i, "frame {i}");
+            assert_eq!(*stack.get_mut(i), i, "item {i}");
         }
-        assert_eq!(*stack.last_mut(), 9);
+        assert!(stack.iter().copied().eq(0..10));
 
-        // A write through `last_mut` lands on both sides of the boundary.
-        *stack.last_mut() = 99;
-        assert_eq!(*stack.last_mut(), 99);
+        // A write lands on both sides of the boundary.
+        *stack.last_mut().expect("not empty") = 99;
         *stack.get_mut(3) = 98;
-        assert_eq!(*stack.get_mut(3), 98);
+        assert_eq!((*stack.get_mut(9), *stack.get_mut(3)), (99, 98));
 
         // And popping walks back across it in the same order.
-        for i in (0..10).rev() {
+        assert_eq!(stack.pop(), Some(99));
+        for i in (0..9).rev() {
             assert_eq!(stack.len(), i + 1);
-            stack.pop();
+            assert_eq!(stack.pop(), Some(if i == 3 { 98 } else { i }));
         }
         assert!(stack.is_empty());
+        assert_eq!(stack.pop(), None);
+        assert_eq!(stack.iter().count(), 0);
     }
 
     /// A stack that never leaves the inline array, and one that never uses it.
     #[test]
     fn the_inline_stack_works_at_both_extremes() {
-        let mut inline_only: InlineStack<u8, 8> = InlineStack::new();
-        inline_only.push(7);
-        assert_eq!(*inline_only.last_mut(), 7);
-        inline_only.pop();
+        let mut inline_only: InlineStack<String, 8> = InlineStack::new();
+        inline_only.push("seven".to_owned());
+        assert_eq!(inline_only.last_mut().map(|s| s.as_str()), Some("seven"));
+        assert_eq!(inline_only.pop().as_deref(), Some("seven"));
         assert!(inline_only.is_empty());
 
         // `N == 0` is the degenerate arm the generic has to survive: every
@@ -539,7 +424,7 @@ mod tests {
         for i in 0..3u8 {
             assert_eq!(*always_spills.get_mut(usize::from(i)), i);
         }
-        always_spills.pop();
-        assert_eq!(*always_spills.last_mut(), 1);
+        assert_eq!(always_spills.pop(), Some(2));
+        assert_eq!(always_spills.last_mut().copied(), Some(1));
     }
 }

@@ -12,7 +12,7 @@
 #![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_char, c_int};
-use core::{ptr, slice};
+use core::slice;
 
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::typval::{tv_dict_alloc, tv_equal};
@@ -174,7 +174,7 @@ fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
         return;
     }
     // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
-    let tofree = unsafe { encode_tv2echo(msg, ptr::null_mut()) };
+    let tofree = encode_tv2echo(msg).into_raw();
     unsafe { ga_concat_cstr(gap, tofree) };
     unsafe { xfree(tofree.cast()) };
     ga_concat_lit(gap, c": ");
@@ -281,7 +281,7 @@ pub(super) unsafe fn fill_assert_error(
 
     if exp_str.is_null() {
         let expected = exp_tv.expect("no `exp_str` means a value");
-        let tofree = unsafe { encode_tv2string(expected, ptr::null_mut()) };
+        let tofree = encode_tv2string(expected).into_raw();
         unsafe { ga_concat_shorten_esc(gap, tofree) };
         unsafe { xfree(tofree.cast()) };
     } else {
@@ -304,7 +304,7 @@ pub(super) unsafe fn fill_assert_error(
                 _ => c" but got ",
             },
         );
-        let tofree = unsafe { encode_tv2string(got_tv, ptr::null_mut()) };
+        let tofree = encode_tv2string(got_tv).into_raw();
         unsafe { ga_concat_shorten_esc(gap, tofree) };
         unsafe { xfree(tofree.cast()) };
 

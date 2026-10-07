@@ -557,11 +557,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:573 (the default ordering's string() forms): \
-                  encode_typval_read retags a &TypVal as &mut"
-    )]
     fn sorting_numbers_by_the_default_and_the_numeric_orders() {
         let _serial = editor_state_lock();
         let l = list_of(&[N(10), N(9), N(-2), N(100)]);
@@ -579,11 +574,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:573 (the default ordering's string() forms): \
-                  encode_typval_read retags a &TypVal as &mut"
-    )]
     fn sorting_floats_and_ignoring_case() {
         let _serial = editor_state_lock();
         let l = list_of(&[F(2.5), N(1), F(-0.5), F(1e10)]);
@@ -642,18 +632,9 @@ mod tests {
     /// The default ordering compares `string()` forms, so a number and the
     /// string of its digits differ: one is quoted.
     ///
-    /// That comparison is `encode_tv2string(&TypVal)`, whose walk
-    /// (`encode_typval_read`) casts the shared borrow to `*mut` and hands
-    /// each hook `tv.as_mut()` -- a `&mut` retag of a `SharedReadOnly`
-    /// pointer, which Stacked Borrows rejects before anything is written.
-    /// Every `string()` of a non-string value through that entry point
-    /// does the same.
+    /// Under Miri this is also the case that caught the encode walk retagging
+    /// the `&TypVal` it was handed as `&mut`.
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:573: encode_typval_read retags a &TypVal \
-                  as &mut (Stacked Borrows: Unique retag of a SharedReadOnly tag)"
-    )]
     fn uniq_by_string_form_tells_a_number_from_its_digits() {
         let _serial = editor_state_lock();
         let l = list_of(&[N(1), N(1), S("1"), S("1"), S("01")]);

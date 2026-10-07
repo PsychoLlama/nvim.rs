@@ -1,13 +1,8 @@
 //! The `Callback` value: building one from a typval, its lifetime (copy,
 //! release, comparison, rendering) and calling it.
 //!
-//! What still needs `unsafe` here is the edge of two other models: Lua's
-//! (releasing and rendering a `LuaRef`, calling one, registering a table as
-//! a function) and the collector's raw marking stacks; plus reading a
-//! partial's name, which is a pointer the partial owns.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,24 +16,22 @@ use crate::guard::Depth;
 use crate::memory::ThinCString;
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
-use core::ptr::null_mut;
 
 use crate::ascii::ascii_isdigit;
-use crate::eval::collect::{set_ref_in_item_dict, set_ref_in_item_partial};
+use crate::eval::collect::{DictStack, ListStack, set_ref_in_item_partial};
 use crate::eval::userfunc::{
     CallWith, call_func_with, func_ref_name, func_unref_name, scriptlocal_funcname,
 };
 use crate::eval::vars::{emsg_static, lua_partial};
 use crate::eval::{ARRAY_DICT_INIT, callback_depth, check_luafunc_name, kRetNilBool};
 use crate::lua::executor::{
-    api_free_luaref, api_new_luaref, nlua_call_ref_quiet, nlua_funcref_str, nlua_is_table_from_lua,
-    nlua_register_table_as_callable,
+    api_new_luaref, funcref_description, nlua_call_ref_quiet, nlua_is_table_from_lua,
+    register_table_as_callable, release_luaref,
 };
 use crate::message::e_command_too_recursive;
 use crate::option::vars::p_mfd;
 use crate::types::{
-    Callback, CallbackReader, HtStack, ListStack, OptInt, TypVal, VAR_FUNC, VAR_NUMBER,
-    VAR_SPECIAL, VAR_STRING, kSpecialVarNull,
+    Callback, OptInt, TypVal, VAR_FUNC, VAR_NUMBER, VAR_SPECIAL, VAR_STRING, kSpecialVarNull,
 };
 use crate::winlayer::Win;
 
@@ -83,16 +76,12 @@ pub fn callback_from_typval(callback: &mut Callback, arg: &TypVal) -> bool {
             }
         }
     } else if nlua_is_table_from_lua(arg) {
-        // SAFETY: a live value; the table has a `__call`.
-        let name = unsafe { nlua_register_table_as_callable(arg) };
-        if name.is_null() {
-            failed = true;
-            Callback::None
-        } else {
-            // SAFETY: `name` is the registered function's NUL-terminated
-            // name, copied here.
-            let name = ThinCString::from_cstr(unsafe { CStr::from_ptr(name) });
-            Callback::Funcref(ManuallyDrop::new(name))
+        match register_table_as_callable(arg) {
+            None => {
+                failed = true;
+                Callback::None
+            }
+            Some(name) => Callback::Funcref(ManuallyDrop::new(name)),
         }
     } else if tv.v_type() == VAR_SPECIAL || (tv.v_type() == VAR_NUMBER && tv.number_or_zero() == 0)
     {
@@ -126,8 +115,8 @@ impl Callback {
     /// Mark what this callback keeps alive for the collector, answering
     /// whether the walk should be given up.
     pub fn mark(&self, copy_id: c_int) -> bool {
-        // SAFETY: no stacks, as for a root.
-        unsafe { set_ref_in_callback(self, copy_id, null_mut(), null_mut()) }
+        // No stacks, as for a root.
+        set_ref_in_callback(self, copy_id, None, None)
     }
 
     /// Release what this holds and leave it [`Callback::None`].
@@ -142,8 +131,7 @@ impl Callback {
             // NLUA_CLEAR_REF
             Callback::Lua(reference) => {
                 if reference != LUA_NOREF {
-                    // SAFETY: a registry index this callback owned.
-                    unsafe { api_free_luaref(reference) };
+                    release_luaref(reference);
                 }
             }
             Callback::None => {}
@@ -216,10 +204,7 @@ pub fn callback_to_string(callback: &Callback) -> ThinCString {
     const MSGLEN: usize = 100;
     let mut text: Vec<u8> = match callback {
         Callback::Lua(reference) => {
-            // SAFETY: a registry index; the rendering is a block of its own,
-            // which the answer takes over.
-            let rendered = unsafe { ThinCString::from_raw(nlua_funcref_str(*reference)) };
-            return rendered.unwrap_or_else(ThinCString::empty);
+            return funcref_description(*reference).unwrap_or_else(ThinCString::empty);
         }
         Callback::Funcref(name) => [b"<vim function: ", name.as_bytes(), b">"].concat(),
         Callback::Partial(partial) => {
@@ -292,48 +277,22 @@ pub fn callback_call(callback: &Callback, args: &[TypVal], result: &mut TypVal) 
     ret.is_ok()
 }
 
-/// Mark what a callback keeps alive for the collector.
-///
-/// # Safety
-/// The two stacks as `set_ref_in_item`'s.
-pub unsafe fn set_ref_in_callback(
+/// Mark what a callback keeps alive for the collector; the stacks as
+/// [`set_ref_in_item`](crate::eval::collect::set_ref_in_item)'s.
+pub fn set_ref_in_callback(
     callback: &Callback,
     copy_id: c_int,
-    ht_stack: *mut *mut HtStack,
-    list_stack: *mut *mut ListStack,
+    ht_stack: Option<&mut DictStack>,
+    list_stack: Option<&mut ListStack>,
 ) -> bool {
     match callback {
-        // SAFETY: the stacks are the caller's.
-        Callback::Partial(partial) => unsafe {
+        Callback::Partial(partial) => {
             set_ref_in_item_partial(partial, copy_id, ht_stack, list_stack)
-        },
+        }
         // A Lua reference is the Lua garbage collector's, not this one's,
         // and nothing that reaches here should hold one.
         Callback::Lua(_) => unreachable!("set_ref_in_callback on a Lua callback"),
         // A funcref and no callback at all hold nothing collectable.
         Callback::Funcref(_) | Callback::None => false,
     }
-}
-
-/// Mark what a callback *reader* keeps alive: its callback, and the `self`
-/// dictionary it would be called with.
-///
-/// # Safety
-/// `reader` must be valid; the stacks as `set_ref_in_callback`'s.
-pub(crate) unsafe fn set_ref_in_callback_reader(
-    reader: *mut CallbackReader,
-    copy_id: c_int,
-    ht_stack: *mut *mut HtStack,
-    list_stack: *mut *mut ListStack,
-) -> bool {
-    // SAFETY: the caller's promise -- the reader outlives the call, and its
-    // `cb` is the callback it owns.
-    if unsafe { set_ref_in_callback(&(*reader).cb, copy_id, ht_stack, list_stack) } {
-        return true;
-    }
-    // SAFETY: as above.
-    let self_dict = unsafe { (*reader).self_0 };
-    // SAFETY: the reader's own dictionary, null or live; the stacks are the
-    // caller's.
-    unsafe { set_ref_in_item_dict(self_dict, copy_id, ht_stack, list_stack) }
 }

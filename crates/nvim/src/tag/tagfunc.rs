@@ -21,7 +21,6 @@ use crate::types::{
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 /// The global `'tagfunc'` callback. A buffer-local one lives in
 /// `b_tfu_cb`.
@@ -75,15 +74,8 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
 
 /// Mark the global `'tagfunc'` callback so the collector keeps it.
 pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
-    // SAFETY: the caller's promise.
-    unsafe {
-        set_ref_in_callback(
-            &*global_tagfunc(),
-            copy_id,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    }
+    // SAFETY: the global callback slot is live.
+    set_ref_in_callback(unsafe { &*global_tagfunc() }, copy_id, None, None)
 }
 
 /// Copy the global `'tagfunc'` callback into `buffer`'s local one.

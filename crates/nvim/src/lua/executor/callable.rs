@@ -165,6 +165,24 @@ pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
     }
 }
 
+/// [`nlua_register_table_as_callable`], answering a copy of the name.
+pub(crate) fn register_table_as_callable(arg: &TypVal) -> Option<crate::memory::ThinCString> {
+    // SAFETY: a live value, and the main state, which lives as long as the
+    // editor; the name is copied before anything can release it.
+    unsafe {
+        let name = nlua_register_table_as_callable(arg);
+        (!name.is_null())
+            .then(|| crate::memory::ThinCString::from_cstr(core::ffi::CStr::from_ptr(name)))
+    }
+}
+
+/// [`nlua_funcref_str`], as an owned string.
+pub(crate) fn funcref_description(reference: LuaRef) -> Option<crate::memory::ThinCString> {
+    // SAFETY: the main state lives as long as the editor; the rendering is a
+    // block of its own, which the answer takes over.
+    unsafe { crate::memory::ThinCString::from_raw(nlua_funcref_str(reference)) }
+}
+
 /// How a `LuaRef` renders in a listing: `<Lua N: file:line>` when the
 /// reference is a function defined in a file, `<Lua N>` otherwise.
 ///

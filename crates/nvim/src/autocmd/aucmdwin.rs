@@ -72,6 +72,14 @@ impl AucmdWins {
         unsafe { (*self.0).items.add(idx) }
     }
 
+    /// The window slot `idx` holds, if any; `idx` must be below
+    /// [`len`](Self::len).
+    pub(crate) fn window(self, idx: usize) -> Option<Win> {
+        debug_assert!(idx < self.len());
+        // SAFETY: as `slot`: the slot is initialised.
+        unsafe { (*self.slot(idx)).auc_win }
+    }
+
     /// Push an unused slot, growing the array if it is full.
     fn push_empty(self) {
         let vec = self.0;

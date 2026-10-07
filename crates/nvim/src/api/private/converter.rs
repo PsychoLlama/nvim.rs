@@ -37,11 +37,11 @@
 // a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
 use crate::eval::decode::decode_string;
-use crate::eval::typval::{DictSlot, tv_dict_alloc, tv_list_alloc};
-use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
+use crate::eval::typval::{tv_dict_alloc, tv_list_alloc};
+use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
@@ -50,7 +50,6 @@ use crate::types::{
     Object, String_0, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull,
-    size_t,
 };
 
 /// The `From<&TypVal> for Object` sink: upstream's `EncodedData`.
@@ -70,16 +69,6 @@ impl ObjectSink {
             stack: Vec::new(),
             root: Object::Nil,
         }
-    }
-
-    /// A string object over `len` bytes at `data`, copied.
-    ///
-    /// # Safety
-    /// `data` must point at `len` readable bytes.
-    unsafe fn cbuf_to_obj(data: *const c_char, len: size_t) -> Object {
-        // SAFETY: the caller's promise.
-        let bytes = unsafe { core::slice::from_raw_parts(data.cast::<u8>(), len) };
-        Object::string(String_0::from_bytes(bytes))
     }
 
     /// Put a finished value where it belongs: the next slot of the innermost
@@ -124,96 +113,57 @@ impl TypvalSink for ObjectSink {
     const ALLOW_SPECIALS: bool = false;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_object_convert_one_value()";
 
-    fn conv_nil(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_nil(&mut self) {
         self.emit(Object::Nil);
     }
 
-    fn conv_bool(&mut self, _tv: Option<&mut TypVal>, num: bool) {
+    fn conv_bool(&mut self, num: bool) {
         self.emit(Object::Boolean(num));
     }
 
-    fn conv_number(&mut self, _tv: Option<&mut TypVal>, num: i64) {
+    fn conv_number(&mut self, num: i64) {
         self.emit(Object::Integer(num as Integer));
     }
 
-    fn conv_unsigned_number(&mut self, _tv: Option<&mut TypVal>, num: u64) {
+    fn conv_unsigned_number(&mut self, num: u64) {
         self.emit(Object::Integer(num.cast_signed()));
     }
 
-    fn conv_float(&mut self, _tv: Option<&mut TypVal>, flt: Float) -> Flow {
+    fn conv_float(&mut self, flt: Float) -> Flow {
         self.emit(Object::Float(flt));
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_string`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_string(
-        &mut self,
-        _tv: Option<&mut TypVal>,
-        buf: *mut c_char,
-        len: size_t,
-    ) -> Flow {
-        debug_assert!(len == 0 || !buf.is_null());
-        // SAFETY: the walk hands over `len` readable bytes.
-        let obj = unsafe { Self::cbuf_to_obj(if len != 0 { buf } else { c"".as_ptr() }, len) };
-        self.emit(obj);
+    fn conv_string(&mut self, bytes: &[u8]) -> Flow {
+        self.emit(Object::string(String_0::from_bytes(bytes)));
         Flow::Go
     }
 
-    /// An `ext` value has no API image, so it comes out as nil — and falling
-    /// through leaves its buffer for the walk to free.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_ext_string`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_ext_string(
-        &mut self,
-        _tv: Option<&mut TypVal>,
-        _buf: *mut c_char,
-        _len: size_t,
-        _ext_type: i8,
-    ) -> Flow {
+    /// An `ext` value has no API image, so it comes out as nil.
+    fn conv_ext_string(&mut self, _bytes: &[u8], _ext_type: i8) -> Flow {
         self.emit(Object::Nil);
         Flow::Go
     }
 
     /// A blob is bytes, and so is a `String` object.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: *const [u8]) {
-        // SAFETY: the walk's promise: the blob's own array, and this sink
-        // releases nothing.
-        let bytes = unsafe { &*bytes };
+    fn conv_blob(&mut self, bytes: &[u8]) {
         self.emit(Object::string(String_0::from_bytes(bytes)));
     }
 
     /// A funcref that is really a Lua function goes back as a `LuaRef`;
     /// anything else is nil.  Either way the walk stops here, so a partial's
     /// arguments and self dictionary are never visited.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_func_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_func_start(
+    fn conv_func_start(
         &mut self,
-        _tv: Option<&mut TypVal>,
-        fun: *mut c_char,
+        fun: Option<&CStr>,
         _prefix: &'static CStr,
-        _path: &ConvPath,
+        _path: &ConvPath<'_, '_>,
     ) -> Flow {
-        // SAFETY: `fun` is NULL or a NUL-terminated function name.
+        // SAFETY: `find_func` answers null or a live function.
         let luaref = unsafe {
-            let fp = if fun.is_null() {
-                ::core::ptr::null_mut()
-            } else {
-                find_func(crate::cstr::bytes_at(fun))
+            let fp = match fun {
+                None => ::core::ptr::null_mut(),
+                Some(fun) => find_func(fun.to_bytes()),
             };
             if fp.is_null() || !(*fp).uf_flags.has(FuncFlags::LUAREF) {
                 None
@@ -228,25 +178,25 @@ impl TypvalSink for ObjectSink {
         Flow::Stop
     }
 
-    fn conv_empty_list(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_empty_list(&mut self) {
         self.emit(Object::array(Array::EMPTY));
     }
 
-    fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self) {
         self.emit(Object::dict(ApiDict::EMPTY));
     }
 
     /// Reserve the whole array now; the items push into the reservation.
-    fn conv_list_start(&mut self, _tv: Option<&mut TypVal>, len: c_int) -> Flow {
+    fn conv_list_start(&mut self, len: c_int) -> Flow {
         let len = usize::try_from(len).expect("a list length is never negative");
         self.stack.push(Object::array(Array::with_capacity(len)));
         Flow::Go
     }
 
     /// Nothing: an item goes into the array as it converts.
-    fn conv_list_between_items(&mut self, _tv: Option<&mut TypVal>) {}
+    fn conv_list_between_items(&mut self) {}
 
-    fn conv_list_end(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_list_end(&mut self) {
         debug_assert!(matches!(
             self.stack.last(),
             Some(Object::Array(a)) if a.len() == a.capacity()
@@ -254,7 +204,7 @@ impl TypvalSink for ObjectSink {
         self.close();
     }
 
-    fn conv_dict_start(&mut self, _tv: Option<&mut TypVal>, len: size_t) -> Flow {
+    fn conv_dict_start(&mut self, len: usize) -> Flow {
         self.stack.push(Object::dict(ApiDict::with_capacity(len)));
         Flow::Go
     }
@@ -276,11 +226,11 @@ impl TypvalSink for ObjectSink {
     /// Nothing: [`Self::conv_dict_key`] already claimed the entry, and this
     /// sink refuses specials, so the `[key, value]` pair walk -- the only
     /// other caller -- never runs.
-    fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {}
+    fn conv_dict_after_key(&mut self) {}
 
-    fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {}
+    fn conv_dict_between_items(&mut self) {}
 
-    fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_end(&mut self) {
         debug_assert!(matches!(
             self.stack.last(),
             Some(Object::Dict(d)) if d.len() == d.capacity()
@@ -290,16 +240,11 @@ impl TypvalSink for ObjectSink {
 
     /// An `Object` tree is acyclic, so a container that references itself
     /// cannot be represented: the second sighting becomes nil.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_recurse`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_recurse(
+    fn conv_recurse(
         &mut self,
-        _val: *mut c_void,
+        _container: Container<'_>,
         _conv_type: ConvType,
-        _path: &ConvPath,
+        _path: &ConvPath<'_, '_>,
     ) -> Flow {
         self.emit(Object::Nil);
         Flow::Go
@@ -332,7 +277,7 @@ fn vim_to_object(value: &TypVal) -> Object {
     // SAFETY: the caller's typval, walked by a sink that cannot fail on any
     // value a live one can hold.
     let name = c"vim_to_object argument";
-    let converted = encode_typval_read(&mut sink, value, name);
+    let converted = encode_typval(&mut sink, value, name);
     debug_assert!(converted);
     debug_assert!(sink.stack.is_empty());
     // A `VAR_UNKNOWN` emits nothing, which upstream calls impossible and
@@ -381,8 +326,11 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
         kObjectTypeFloat => TypVal::Float(value.as_float().expect("the tag says Float")),
         kObjectTypeString => {
             let str = value.into_string().expect("the tag says String");
-            // SAFETY: the string names `len` readable bytes.
-            unsafe { decode_string(str.data(), str.len(), false, false) }
+            if str.is_null() {
+                TypVal::string(None)
+            } else {
+                decode_string(str.as_bytes(), false)
+            }
         }
         kObjectTypeArray => {
             let array = value.into_array().expect("the tag says Array");

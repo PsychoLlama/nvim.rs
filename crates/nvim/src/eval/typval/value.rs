@@ -1,8 +1,8 @@
 //! Whole-`TypVal` operations: clear, copy, compare, lock.
 //!
-//! [`tv_clear`] releases whatever a value holds and leaves `VAR_UNKNOWN`
-//! behind; it hands a self-referencing container to the deep-free walk in
-//! [`super::nothing`] rather than recursing.  [`tv_copy`] is the shallow
+//! [`tv_clear`] releases whatever a value holds and leaves the empty value
+//! of its kind behind; the deep free in [`super::release`] does the work
+//! without recursing.  [`tv_copy`] is the shallow
 //! copy, [`tv_equal`] the recursion-limited structural comparison, and
 //! [`tv_item_lock`] is `:lockvar`, which walks into containers to the depth
 //! it is given.
@@ -29,9 +29,11 @@ use ::core::ffi::CStr;
 
 /// Release whatever `tv` holds, leaving the **empty value of its own kind**.
 ///
-/// The work is done by the `nothing` sink, the seventh instantiation of
-/// `typval_encode.c.h`: it walks the value iteratively, so a container that
-/// refers to itself is deep-freed without recursing.
+/// The work is done by [`release_deep`](super::release::release_deep), which
+/// is upstream's `nothing` sink, the seventh instantiation of
+/// `typval_encode.c.h`: it frees iteratively, so a nest of any depth is
+/// released without recursing, and a container with another holder -- every
+/// one on a cycle has one -- only gives up a reference.
 ///
 /// The kind survives, as upstream's does: a cleared String is a
 /// `VAR_STRING` over NULL, a cleared List a `VAR_LIST` over NULL. Several
@@ -48,16 +50,7 @@ pub fn tv_clear(tv: &mut TypVal) {
     if tv.is_empty() {
         return;
     }
-
-    // WARNING: do not translate the string here, gettext is slow and this
-    // function is used *very* often. At the current state
-    // `encode_vim_to_nothing` does not error out and does not use the
-    // argument anywhere.
-    //
-    // If that changes and the argument starts being used, translate it
-    // where it is used.
-    let evn_ret = encode_vim_to_nothing(tv, c"tv_clear() argument");
-    debug_assert!(evn_ret);
+    release::release_deep(tv);
 }
 
 impl Clone for TypVal {

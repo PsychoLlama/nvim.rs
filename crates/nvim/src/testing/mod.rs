@@ -167,7 +167,7 @@ unsafe fn assert_bool(args: &[TypVal], is_true: bool) -> c_int {
 unsafe fn assert_append_cmd_or_arg(gap: &mut Vec<u8>, args: &[TypVal], cmd: *const c_char) {
     // SAFETY: the caller's garray and arguments.
     if args.len() > 1 && args.len() > 2 {
-        let tofree = unsafe { encode_tv2echo(&args[2], ptr::null_mut()) };
+        let tofree = encode_tv2echo(&args[2]).into_raw();
         unsafe { ga_concat_cstr(gap, tofree) };
         unsafe { xfree(tofree.cast()) };
     } else {
@@ -352,7 +352,7 @@ unsafe fn assert_equalfile(args: &[TypVal]) -> c_int {
     let mut ga = prepare_assert_error();
     let gap = &mut ga;
     if args.len() > 2 {
-        let tofree = unsafe { encode_tv2echo(&args[2], ptr::null_mut()) };
+        let tofree = encode_tv2echo(&args[2]).into_raw();
         unsafe { ga_concat_cstr(gap, tofree) };
         unsafe { xfree(tofree.cast()) };
         ga_concat_lit(gap, c": ");

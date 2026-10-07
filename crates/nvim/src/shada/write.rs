@@ -700,22 +700,15 @@ impl Writing {
 fn writable_value(vartv: &TypVal) -> bool {
     match vartv.v_type() {
         VAR_FUNC | VAR_PARTIAL => false,
-        VAR_DICT => {
-            let di = vartv.dict_or_null();
+        // A NULL container holds nothing to loop on.
+        VAR_DICT => vartv.dict_shared().is_none_or(|dict| {
             let copy_id = get_copy_id();
-            unsafe {
-                set_ref_in_ht(&raw mut (*di).dv_hashtab, copy_id, core::ptr::null_mut())
-                    || copy_id != (*di).dv_copy_id
-            }
-        }
-        VAR_LIST => {
-            let l = vartv.list_or_null();
+            set_ref_in_dict_items(dict, copy_id, None) || copy_id != dict.dv_copy_id
+        }),
+        VAR_LIST => vartv.list_shared().is_none_or(|list| {
             let copy_id = get_copy_id();
-            unsafe {
-                set_ref_in_list_items(l, copy_id, core::ptr::null_mut())
-                    || copy_id != (*l).lv_copy_id
-            }
-        }
+            set_ref_in_list_items(list, copy_id, None) || copy_id != list.lv_copy_id
+        }),
         _ => true,
     }
 }

@@ -491,6 +491,19 @@ describe('msgpackparse() function', function()
     )
   end)
 
+  it('reports a truncated string inside an array as incomplete only', function()
+    -- Upstream appends the element empty and clears the half-built list,
+    -- which reports E685 (an internal error) before the E475.
+    eq(
+      'Vim(call):E475: Invalid argument: Incomplete msgpack string',
+      pcall_err(command, 'call msgpackparse(0z93C401)')
+    )
+    eq(
+      'Vim(call):E475: Invalid argument: Incomplete msgpack string',
+      pcall_err(command, 'call msgpackparse(["\\x92\\xa2a"])')
+    )
+  end)
+
   it('fails to parse a string', function()
     eq(
       'Vim(call):E899: Argument of msgpackparse() must be a List or Blob',
@@ -675,6 +688,12 @@ describe('msgpackdump() function', function()
     command('let inter = []')
     command('let todump = [inter, inter]')
     dump_eq({ '\146\144\144' }, '[todump]')
+  end)
+
+  it('dumps a special array over a NULL list as an empty array', function()
+    -- Upstream reads the copyID of the NULL list and crashes.
+    command('let todump = {"_TYPE": v:msgpack_types.array, "_VAL": v:_null_list}')
+    dump_eq({ '\144' }, '[todump]')
   end)
 
   it('fails to dump a recursive list in a special dict', function()

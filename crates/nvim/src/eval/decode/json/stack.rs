@@ -12,91 +12,63 @@
 //! position and the three flag bytes as seven separate arguments to every
 //! scanning function.  They are one struct here.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::message_fmt::{c_str, emsg_text, msg_bytes};
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::semsg;
 use crate::tr_c;
 use crate::types::DictItem;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
-use crate::eval::typval::{dict_find, list_len, tv_clear, tv_list_alloc};
-use crate::types::{Dict, List, TypVal, VAR_STRING};
-use ::libc::abort;
+use crate::eval::typval::{DictRef, ListRef, dict_find, tv_clear, tv_list_alloc};
+use crate::types::{TypVal, VAR_STRING};
 
-/// Which kind of container is open, and the container itself.
-///
-/// A **borrowed** handle, not a value: the container's own typval sits on
-/// [`Decoder::stack`] at [`Container::stack_index`] and is what holds the
-/// reference.  Nothing reached through here releases anything.
-#[derive(Copy, Clone)]
+/// A container that is open: a handle on the value [`Decoder::stack`] holds.
+#[derive(Clone)]
 pub(crate) enum OpenContainer {
-    /// A `[`, and the list it allocated.
-    List(*mut List),
-    /// A `{`, and the dictionary it allocated -- for a special map, the
-    /// special dictionary, whose `_VAL` list is [`Container::special_val`].
-    Dict(*mut Dict),
+    List(ListRef),
+    Dict(DictRef),
 }
 
 impl OpenContainer {
-    /// Whether the open container is a dictionary.
-    pub(crate) fn is_dict(self) -> bool {
+    pub(crate) fn is_dict(&self) -> bool {
         matches!(self, OpenContainer::Dict(_))
     }
 
-    /// The dictionary, on a path that has already established it is one.
-    pub(crate) fn dict(self) -> *mut Dict {
+    /// Whether `value` is this container.
+    fn is(&self, value: &TypVal) -> bool {
         match self {
-            OpenContainer::Dict(d) => d,
-            OpenContainer::List(_) => unreachable!("the open container is a dictionary here"),
+            OpenContainer::List(l) => value.list_shared().is_some_and(|v| v.ptr_eq(l)),
+            OpenContainer::Dict(d) => value.dict_shared().is_some_and(|v| v.ptr_eq(d)),
         }
     }
 }
 
-/// One container the decoder is currently inside.
-#[derive(Copy, Clone)]
+/// What [`Decoder::containers`] records about one open container.
+#[derive(Clone)]
 pub(crate) struct Container {
-    /// Where the container's own value sits in [`Decoder::stack`].
+    /// Where the container itself sits in [`Decoder::stack`].
     pub(crate) stack_index: usize,
-    /// The `_VAL` list of a special map, or NULL when the container is an
-    /// ordinary list or dictionary.
-    pub(crate) special_val: *mut List,
-    /// Offset of the byte that opened it: what the restart rewinds to, and
-    /// what an error inside it is reported against.
+    /// For a special map, the `_VAL` list its pairs go into.
+    pub(crate) special_val: Option<ListRef>,
+    /// The offset of the opening bracket, where a restart rewinds to.
     pub(crate) at: usize,
-    /// A handle on the container itself; see [`OpenContainer`].
     pub(crate) container: OpenContainer,
 }
 
-/// One decoded value not yet stored in any container.
-///
-/// The stack **owns** what it holds: a value leaves it by being stored in
-/// its container, by being cleared, or -- for the document's one value --
-/// by being written to the decoder's result.
 pub(crate) struct Value {
-    /// The value is a special dictionary wrapping a string, so it can be a
-    /// dictionary *value* but never a key.
     pub(crate) is_special_string: bool,
-    /// Whether a comma, or a colon, was the token before this value.  Each is
-    /// recorded per value because the restart has to put them back.
     pub(crate) didcomma: bool,
     pub(crate) didcolon: bool,
     pub(crate) val: TypVal,
 }
 
-/// Everything the JSON scanner carries from byte to byte.
 pub(crate) struct Decoder<'a> {
-    /// The whole document.  Every position in the decoder is an offset into
-    /// it, so an error can quote the rest of the input.
     pub(crate) buf: &'a [u8],
     pub(crate) stack: Vec<Value>,
     pub(crate) containers: Vec<Container>,
     pub(crate) didcomma: bool,
     pub(crate) didcolon: bool,
-    /// Set when the dictionary being parsed turned out to need a special map.
-    /// The scanner then resumes at the rewound position *without* advancing,
-    /// so that the `{` is read a second time.
     pub(crate) next_map_special: bool,
 }
 
@@ -112,21 +84,24 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    /// `semsg(_(fmt), LENP(p, e))`: report `fmt` with the document from `at`
-    /// onwards as its `%.*s` argument.
-    ///
-    /// The bytes go out as they came in — an invalid UTF-8 sequence is quoted
-    /// verbatim, which is what several of these messages are about.
     pub(crate) fn emsg_rest(&self, fmt: &'static CStr, at: usize) {
         let rest = &self.buf[at..];
-        // The bytes go out as they came in; `%.*s` reads at most the length
-        // given, which is `rest`'s own.
-        let (len, at) = (rest.len() as c_int, msg_bytes(rest));
-        emsg_text(tr_c!(fmt, len, at));
+        let len = c_int::try_from(rest.len()).unwrap_or(c_int::MAX);
+        emsg_text(tr_c!(fmt, len, msg_bytes(rest)));
     }
 
-    /// Upstream's `OBJ()`: a scanned value, tagged with the punctuation that
-    /// preceded it.
+    /// The document from `at` on, as a `%s` reads it: up to the first NUL.
+    ///
+    /// A document joined from a List of lines is not NUL-terminated, and
+    /// upstream reads past its end here; the end of the document stops
+    /// this.
+    fn rest_as_cstr(&self, at: usize) -> &[u8] {
+        let rest = &self.buf[at..];
+        rest.iter()
+            .position(|&b| b == 0)
+            .map_or(rest, |nul| &rest[..nul])
+    }
+
     pub(crate) fn value(&self, val: TypVal, is_special_string: bool) -> Value {
         Value {
             is_special_string,
@@ -136,31 +111,14 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    /// The innermost open container.
-    ///
-    /// Every caller has just checked that there is one, or has just closed a
-    /// container the grammar guarantees is nested inside another — a
-    /// top-level container never reaches [`Self::finish_value`], because the
-    /// scanner ends the document instead.  Upstream reads `kv_last` of an
-    /// empty vector here rather than saying so.
     fn innermost(&self) -> Container {
-        *self
-            .containers
+        self.containers
             .last()
             .expect("finish_value is only reached inside a container")
+            .clone()
     }
 
-    /// Store a finished value: upstream's `json_decoder_pop`.
-    ///
-    /// `at` is the parse position, used for error text and rewound when the
-    /// container has to be restarted as a special map — in which case
-    /// [`Self::next_map_special`] is set and the caller must resume the scan
-    /// without advancing.  Answers `false` after reporting an error, having
-    /// cleared `obj`.
-    ///
-    /// # Safety
-    /// `obj` owns its value and `at` indexes [`Self::buf`].
-    pub(crate) unsafe fn finish_value(&mut self, mut obj: Value, at: &mut usize) -> bool {
+    pub(crate) fn finish_value(&mut self, mut obj: Value, at: &mut usize) -> bool {
         if self.containers.is_empty() {
             self.stack.push(obj);
             return true;
@@ -168,106 +126,84 @@ impl<'a> Decoder<'a> {
 
         let mut last = self.innermost();
         let mut val_location = *at;
-        // The value being stored *is* the container on top: it has just
-        // closed, so it belongs to the one below, and the error position
-        // to report against is where it opened.
-        // Upstream reads `vval.v_list` for both cases, the two members
-        // having the same size and offset; the handle's kind picks the
-        // reader here, so a Dict container cannot compare two NULLs and
-        // match.
-        let is_the_container = match last.container {
-            OpenContainer::List(l) => obj.val.as_list() == Some(l),
-            OpenContainer::Dict(d) => obj.val.as_dict() == Some(d),
-        };
-        if is_the_container {
+        if last.container.is(&obj.val) {
             self.containers.pop();
             val_location = last.at;
             last = self.innermost();
         }
 
-        if let OpenContainer::List(list) = last.container {
-            if list_len(unsafe { list.as_ref() }) != 0 && !obj.didcomma {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
+        if let OpenContainer::List(list) = &last.container {
+            if !list.items().is_empty() && !obj.didcomma {
+                let arg0 = msg_bytes(self.rest_as_cstr(val_location));
                 semsg!("E474: Expected comma before list item: {arg0}");
                 tv_clear(&mut obj.val);
                 return false;
             }
-            debug_assert!(last.special_val.is_null());
-            unsafe { (*list).push(obj.val) };
+            debug_assert!(last.special_val.is_none());
+            list.edit().push(obj.val);
             return true;
         }
 
-        // A dictionary, with its key already on the stack: this is the
-        // value that goes with it.
         if last.stack_index == self.stack.len().wrapping_sub(2) {
             if !obj.didcolon {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
+                let arg0 = msg_bytes(self.rest_as_cstr(val_location));
                 semsg!("E474: Expected colon before dictionary value: {arg0}");
                 tv_clear(&mut obj.val);
                 return false;
             }
-            let mut key = self.stack.pop().expect("a dictionary key below the value");
-            if last.special_val.is_null() {
-                // A key that could not be a `Dict` key has already sent
-                // this container down the special-map path below.
-                debug_assert!(!key.is_special_string);
-                let key_text = key
-                    .val
-                    .string_ref()
-                    .expect("a plain key is a non-null String");
-                let mut obj_di = DictItem::boxed(key_text.as_bytes());
-                tv_clear(&mut key.val);
-                obj_di.di_tv = obj.val;
-                if unsafe { (*last.container.dict()).add_item(obj_di) }.is_err() {
-                    unsafe { abort() };
+            let key = self.stack.pop().expect("a dictionary key below the value");
+            match (&last.special_val, &last.container) {
+                (None, OpenContainer::Dict(dict)) => {
+                    debug_assert!(!key.is_special_string);
+                    let key_text = key
+                        .val
+                        .string_ref()
+                        .expect("a plain key is a non-null String");
+                    let mut obj_di = DictItem::boxed(key_text.as_bytes());
+                    drop(key);
+                    obj_di.di_tv = obj.val;
+                    // A key already there sent the map down the special path
+                    // before its value was scanned.
+                    dict.edit()
+                        .add_item(obj_di)
+                        .unwrap_or_else(|_| unreachable!("a fresh key"));
                 }
-            } else {
-                let kv_pair = tv_list_alloc(2);
-                let into = kv_pair.as_ptr();
-                unsafe { (*last.special_val).push_list(Some(kv_pair)) };
-                unsafe { (*into).push(key.val) };
-                unsafe { (*into).push(obj.val) };
+                (Some(special_val), _) => {
+                    let mut kv_pair = tv_list_alloc(2);
+                    kv_pair.push(key.val);
+                    kv_pair.push(obj.val);
+                    special_val.edit().push_list(Some(kv_pair));
+                }
+                (None, OpenContainer::List(_)) => unreachable!("a list was handled above"),
             }
             return true;
         }
 
-        // A dictionary with nothing pending: this value is a key.
         if !obj.is_special_string && obj.val.v_type() != VAR_STRING {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(self.buf[*at..].as_ptr() as *const c_char) };
+            let arg0 = msg_bytes(self.rest_as_cstr(*at));
             semsg!("E474: Expected string key: {arg0}");
             tv_clear(&mut obj.val);
             return false;
         }
-        if !obj.didcomma
-            && last.special_val.is_null()
-            && unsafe { (*last.container.dict()).dv_hashtab.ht_used } != 0
-        {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
+        let plain = match (&last.special_val, &last.container) {
+            (None, OpenContainer::Dict(dict)) => Some(dict),
+            _ => None,
+        };
+        if !obj.didcomma && plain.is_some_and(|dict| dict.dv_hashtab.ht_used != 0) {
+            let arg0 = msg_bytes(self.rest_as_cstr(val_location));
             semsg!("E474: Expected comma before dictionary key: {arg0}");
             tv_clear(&mut obj.val);
             return false;
         }
 
-        // Three kinds of key a `Dict` cannot hold: one that is itself a
-        // special dictionary, one carrying an embedded NUL (decoded as a
-        // blob, so `v_string` is NULL), and a duplicate.  Any of them
-        // sends the whole container back to be re-parsed as a special
-        // map, which can hold every one of them.
-        if last.special_val.is_null()
+        if let Some(dict) = plain
             && (obj.is_special_string
-                || obj.val.string_ref().is_none_or(|key| {
-                    // SAFETY: the open dictionary is live.
-                    dict_find(unsafe { last.container.dict().as_ref() }, key.as_bytes()).is_some()
-                }))
+                || obj
+                    .val
+                    .string_ref()
+                    .is_none_or(|key| dict_find(Some(dict), key.as_bytes()).is_some()))
         {
             tv_clear(&mut obj.val);
-            // Rewind to the `{` and reopen it as a special map.
-            // Everything decoded inside it is dropped — the container's
-            // own value included, which frees the half-filled dictionary.
             self.containers.pop();
             let reopened = &self.stack[last.stack_index];
             (self.didcomma, self.didcolon) = (reopened.didcomma, reopened.didcolon);

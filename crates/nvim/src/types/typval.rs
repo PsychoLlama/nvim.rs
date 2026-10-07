@@ -426,14 +426,6 @@ const _: () = {
     );
     assert!(::core::mem::size_of::<DictItem>() <= 48);
 };
-pub struct HtStack {
-    pub ht: *mut DictTab,
-    pub prev: *mut HtStack,
-}
-pub struct ListStack {
-    pub list: *mut List,
-    pub prev: *mut ListStack,
-}
 /// One item of a [`List`].
 ///
 /// `li_lock` is the *slot's* lock -- `:lockvar l[0]` locks the place, not the

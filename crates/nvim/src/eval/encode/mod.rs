@@ -12,47 +12,31 @@
 //! - [`encode_check_json_key`], the special-dictionary key test;
 //! - the three `encode_tv2*` entry points; and
 //! - the `readfile()`-style list codec ([`encode_list_write`],
-//!   [`encode_read_from_list`], [`encode_vim_list_to_buf`]) that msgpack
-//!   channels, `msgpackdump()` and `system()` read and write through.  Its
-//!   one convention: a list item is a line, and a NUL inside a line is stored
-//!   as a newline, because a Vimscript string cannot hold a newline.
-//!
-//! # Safety
-//!
-//! Every `unsafe fn` here forwards its caller's obligations; the `# Safety`
-//! sections say which.  The recurring ones are that a `*mut TypVal` /
-//! `*mut List` / `*const ListItem` is live for the call and that nothing
-//! removes an item from a list while one of these walks it — the encoders run
-//! with no user code interleaved, which is what makes that hold.
+//!   [`ListReader`], [`encode_vim_list_to_buf`]) that msgpack channels,
+//!   `msgpackdump()` and `system()` read and write through.  Its one
+//!   convention: a list item is a line, and a NUL inside a line is stored as a
+//!   newline, because a Vimscript string cannot hold a newline.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
 use crate::memory::ThinCString;
-use crate::vim_snprintf;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::slice;
+use core::ffi::{CStr, c_int};
 
-use crate::eval::typval::{dict_find, list_items, list_items_mut, list_len};
+use crate::eval::typval::{dict_find, list_len};
 use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
-use crate::memory::handoff::owned_cstr;
-use crate::memory::{xfree, xmalloc};
+use crate::mbyte::{char_at, char_len, utf_char2len, utf_printable};
 use crate::message::emsg;
-use crate::message_fmt::{c_str, emsg_text, msg_bytes, msg_cstr};
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr, to_message};
+use crate::os::cshim::gettext;
 use crate::tr_c;
 use crate::tr_plural;
 use crate::types::{
-    Failed, IOSIZE, List, ListItem, ListReaderState, MessagePackType, TypVal, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_STRING, size_t,
+    Failed, IOSIZE, List, MessagePackType, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
 };
-use ::libc::abort;
 
 // The sinks carved out of this module's `typval_encode.c.h` instantiations.
 mod json;
@@ -63,7 +47,6 @@ mod text;
 use self::text::{encode_vim_to_echo, encode_vim_to_string};
 
 pub const kMPString: MessagePackType = 4;
-pub const NOTDONE: c_int = 2;
 
 /// The UTF-16 surrogate range, which a JSON `\u` escape has to spell a
 /// character above the BMP with — and which a *string* may not contain.
@@ -93,44 +76,48 @@ pub(crate) fn report_self_reference() {
     }
 }
 
-/// `_()`: the translation of a message, which is always a literal here.
-#[inline(always)]
-fn tr(msg: &'static CStr) -> *const c_char {
-    gettext(msg).as_ptr()
+/// Append `n` in decimal: `%ld`, `%lu`, `%d` and `%zu` alike, without
+/// going through a formatter for the commonest thing an encoder writes.
+pub(crate) fn push_decimal(out: &mut Vec<u8>, n: impl Into<i128>) {
+    let n: i128 = n.into();
+    if n < 0 {
+        out.push(b'-');
+    }
+    let mut digits = [0u8; 40];
+    let mut at = digits.len();
+    let mut rest = n.unsigned_abs();
+    loop {
+        at -= 1;
+        digits[at] = b'0' + u8::try_from(rest % 10).expect("a decimal digit");
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    out.extend_from_slice(&digits[at..]);
 }
 
-/// The string `l[at]` holds; `None` for a NULL one or no such item, which
-/// is an empty line.
-///
-/// # Safety
-/// `l` must be a live list that nothing changes while the answer is held.
-#[inline(always)]
-unsafe fn item_string<'a>(l: *const List, at: size_t) -> Option<&'a ThinCString> {
-    // SAFETY: the caller's promise: a live list.
-    list_items(unsafe { l.as_ref() })
-        .get(at)?
-        .li_tv
-        .string_ref()
+/// Append `flt` as C's `%g` spells it.
+pub(crate) fn push_float_g(out: &mut Vec<u8>, flt: crate::types::Float) {
+    let mut numbuf = [0u8; crate::eval::typval::NUMBUFLEN as usize];
+    let len = crate::strings::format_float_g(flt, &mut numbuf);
+    out.extend_from_slice(&numbuf[..len]);
 }
 
-/// The bytes of [`item_string`], with a NULL string reading as empty.
-///
-/// # Safety
-/// As [`item_string`].
-#[inline(always)]
-unsafe fn item_bytes<'a>(l: *const List, at: size_t) -> &'a [u8] {
-    unsafe { item_string(l, at) }.map_or(&[], |text| text.as_bytes())
+/// Append `byte` as two uppercase hexadecimal digits: `%02X`.
+pub(crate) fn push_hex_byte(out: &mut Vec<u8>, byte: u8) {
+    out.push(XDIGITS[usize::from(byte >> 4)]);
+    out.push(XDIGITS[usize::from(byte & 0xf)]);
 }
 
-/// The items of `list`, front to back.  A NULL list is an empty one.
-///
-/// # Safety
-/// `list` must be live, and nothing may add to or remove from it while the
-/// iterator is alive.
-unsafe fn items<'a>(list: *const List) -> impl Iterator<Item = &'a ListItem> {
-    // SAFETY: the caller's promise -- a live list nothing adds to or removes
-    // from for the life of the iterator.
-    list_items(unsafe { list.as_ref() }).iter()
+/// The bytes of the string `l[at]` holds; empty for a NULL string or no such
+/// item, which is an empty line.
+#[inline(always)]
+fn item_bytes(l: &List, at: usize) -> &[u8] {
+    l.items()
+        .get(at)
+        .and_then(|li| li.li_tv.string_ref())
+        .map_or(&[], ThinCString::as_bytes)
 }
 
 /// Store a line the way a `readfile()`-style list does: NUL bytes become
@@ -144,22 +131,6 @@ fn store_nuls_as_newlines(line: &mut [u8]) {
     }
 }
 
-/// Append `line` to the string `l[at]` already holds, which grows in place.
-///
-/// # Safety
-/// `l` must be a live list and `at` an index of it whose value is a
-/// `VAR_STRING` this may take ownership of and replace.
-unsafe fn extend_item(l: *mut List, at: size_t, line: &[u8]) {
-    let mut tail = line.to_vec();
-    store_nuls_as_newlines(&mut tail);
-    // SAFETY: the caller's promise: a live list, and `at` an index of it.
-    let tv = &mut list_items_mut(unsafe { l.as_mut() })[at].li_tv;
-    match tv.string_mut() {
-        Some(text) => text.push_bytes(&tail),
-        None => tv.write_string(Some(ThinCString::from_vec(tail))),
-    }
-}
-
 /// `line` as a fresh NUL-terminated allocation the list takes over.
 fn own_line(line: &[u8]) -> ThinCString {
     let mut copied = line.to_vec();
@@ -167,21 +138,15 @@ fn own_line(line: &[u8]) -> ThinCString {
     ThinCString::from_vec(copied)
 }
 
-/// Msgpack callback for writing to a `readfile()`-style list.
+/// Write `bytes` to a `readfile()`-style list.
 ///
-/// Each newline in `buf` starts a new item; whatever came before the first
+/// Each newline in `bytes` starts a new item; whatever came before the first
 /// one continues the item already there.
-///
-/// # Safety
-/// `data` must be a live `List *` and `buf` must be readable for `len`
-/// bytes.
-pub unsafe fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size_t) {
-    if len == 0 {
+pub fn encode_list_write(list: &mut List, bytes: &[u8]) {
+    if bytes.is_empty() {
         return;
     }
-    let list = data.cast::<List>();
-    // SAFETY: the caller's promise about `buf` and `len`.
-    let bytes = unsafe { slice::from_raw_parts(buf.cast::<u8>(), len) };
+    let len = bytes.len();
 
     /// The index just past the next newline, and the line before it.
     fn split(bytes: &[u8], from: usize) -> (&[u8], usize) {
@@ -190,30 +155,30 @@ pub unsafe fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size
         (&rest[..end], from + end + 1)
     }
 
-    // SAFETY: `list` is the caller's, and nothing runs between these calls
-    // that could touch it.
-    let count = list_items(unsafe { list.as_ref() }).len();
     let mut at = 0;
-    if let Some(last) = count.checked_sub(1) {
+    if let Some(last) = list.lv_items.last_mut() {
         // Continue the last item, unless the write starts with a newline.
         let (line, next) = split(bytes, 0);
         if !line.is_empty() {
-            // SAFETY: `last` is this list's own final item.
-            unsafe { extend_item(list, last, line) };
+            let mut tail = line.to_vec();
+            store_nuls_as_newlines(&mut tail);
+            let tv = &mut last.li_tv;
+            match tv.string_mut() {
+                Some(text) => text.push_bytes(&tail),
+                None => tv.write_string(Some(ThinCString::from_vec(tail))),
+            }
         }
         at = next;
     }
     while at < len {
         let (line, next) = split(bytes, at);
         let owned = (!line.is_empty()).then(|| own_line(line));
-        // SAFETY: `list` is live and takes over `owned`.
-        unsafe { (*list).push(TypVal::string(owned)) };
+        list.push(TypVal::string(owned));
         at = next;
     }
     if at == len {
         // The write ended on a newline, so it opened one more empty item.
-        // SAFETY: as above.
-        unsafe { (*list).push(TypVal::string(None)) };
+        list.push(TypVal::string(None));
     }
 }
 
@@ -222,67 +187,37 @@ pub unsafe fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size
 /// `msg` must carry exactly two `%s`: the object being dumped, then the path
 /// — "key foo, index 2, key bar" — which this builds out of the walk's stack.
 /// Always answers [`Flow::Fail`], because that is all its callers do with it.
-///
-/// # Safety
-/// `msg` must be a NUL-terminated format string of that shape, and `path`
-/// must describe a walk that is still in progress.
-pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
-    let idx_msg = tr(c"index %i");
-    let partial_arg_msg = tr(c"partial");
-    let partial_arg_i_msg = tr(c"argument %i");
-    let partial_self_msg = tr(c"partial self dictionary");
-
+pub(crate) fn conv_error(msg: &'static CStr, path: &ConvPath<'_, '_>) -> Flow {
     let mut msg_ga = Vec::<u8>::new();
-    // Upstream formats each part in the shared `IObuff`; the parts are
-    // concatenated as they go, so one buffer of this frame's own serves.
-    let mut part = [0 as c_char; IOSIZE as usize];
-    let iobuff = part.as_mut_ptr();
-
-    /// Everything the arms below share: format into `iobuff` and append it.
-    ///
-    /// # Safety
-    /// `fmt` must match the arguments, and `msg_ga` must be a byte garray.
-    macro_rules! append_formatted {
-        ($fmt:expr $(, $arg:expr)*) => {
-            // SAFETY: `iobuff` is the shared `IOSIZE`-byte scratch and the
-            // format strings here are this function's own literals.
-            unsafe {
-                vim_snprintf!(iobuff, IOSIZE as size_t, $fmt $(, $arg)*);
-                msg_ga.extend_from_slice(cstr::bytes_at(iobuff));
-            }
-        };
-    }
+    // Upstream formats each part in the shared `IObuff`, which cuts it at
+    // `IOSIZE - 1` bytes; `to_message` cuts where that did.
+    let mut append = |part: String| {
+        msg_ga.extend_from_slice(to_message(part, IOSIZE as usize).as_bytes());
+    };
 
     for (i, frame) in path.stack.iter().enumerate() {
         if i != 0 {
-            msg_ga.extend_from_slice(b", ");
+            append(", ".to_owned());
         }
-        match frame.frame {
-            Frame::Dict { dict, idx, .. } => {
-                // The key most recently handed out, which is the slot before
-                // the one the walk is now standing on -- or the first slot,
-                // for a frame that has not handed one out yet.
-                // SAFETY: the frame's dictionary is live and `idx` is a slot
-                // of its hash table, or one past the last.
-                let hi = unsafe { (*dict).dv_hashtab.slot(idx.saturating_sub(1)) };
-                // A copy of the key, which the value releases.
-                // SAFETY: a kept slot of the frame's live dictionary.
-                let key_tv = TypVal::string_from(unsafe { (*hi.hi_key.item()).di_key.bytes() });
-                let key = unsafe { encode_tv2string(&key_tv, core::ptr::null_mut()) };
-                append_formatted!(tr(c"key %s"), key);
-                // SAFETY: `encode_tv2string` hands back an owned buffer.
-                unsafe { xfree(key.cast::<c_void>()) };
+        match *frame {
+            Frame::Dict { dict, slot, .. } => {
+                // The key most recently handed out: the slot before the one
+                // the walk will look at next.
+                let key = dict
+                    .item_at(slot.saturating_sub(1))
+                    .map_or(&[][..], |di| di.key());
+                let key = tv2string_bytes(&TypVal::string_from(key));
+                append(crate::tr!("key {}", msg_bytes(&key)));
             }
             Frame::List { list, at } | Frame::Pairs { list, at } => {
-                // SAFETY: the frame's list is live for the walk.
-                let items = list_items(unsafe { list.as_ref() });
+                let items = list.items();
                 // The item most recently handed out: one back from the
                 // cursor, or the last one once the walk has run off the end.
                 let cur = at
                     .checked_sub(1)
                     .map(|back| back.min(items.len().saturating_sub(1)));
                 let idx = c_int::try_from(cur.unwrap_or(0)).unwrap_or(c_int::MAX);
-                let pairs = matches!(frame.frame, Frame::Pairs { .. });
+                let pairs = matches!(frame, Frame::Pairs { .. });
                 let pair_key = cur.filter(|_| pairs).and_then(|at| {
                     let value = &items[at].li_tv;
                     if value.v_type() != VAR_LIST && list_len(value.list_ref()) <= 0 {
@@ -290,105 +225,71 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                     }
                     // A special map's item is a [key, value] pair, so the
                     // path can name the key rather than the index.
-                    // SAFETY: the pair's own first item.
-                    let key_tv = &list_items(value.list_ref()).first()?.li_tv;
-                    Some(unsafe { encode_tv2echo(key_tv, core::ptr::null_mut()) })
+                    let key_tv = &value.list_ref()?.items().first()?.li_tv;
+                    Some(tv2echo_bytes(key_tv))
                 });
-                match pair_key {
-                    None => append_formatted!(idx_msg, idx),
+                append(match pair_key {
+                    None => crate::tr!("index {}", idx),
                     Some(key) => {
-                        append_formatted!(tr(c"key %s at index %i from special map"), key, idx);
-                        // SAFETY: `encode_tv2echo` hands back an owned buffer.
-                        unsafe { xfree(key.cast::<c_void>()) };
+                        crate::tr!("key {} at index {} from special map", msg_bytes(&key), idx)
                     }
-                }
+                });
             }
             Frame::Partial { stage, .. } => {
-                let text = match stage {
+                append(match stage {
                     // The walk pushes a partial already past its arguments.
-                    // SAFETY: unreachable; `abort` returns `!`.
-                    PartialStage::Args => unsafe { abort() },
-                    PartialStage::Self_ => partial_arg_msg,
-                    PartialStage::End => partial_self_msg,
-                };
-                // SAFETY: both texts are NUL-terminated translations.
-                msg_ga.extend_from_slice(unsafe { cstr::bytes_at(text) });
+                    PartialStage::Args => unreachable!("a partial frame past its arguments"),
+                    PartialStage::Self_ => crate::tr!("partial"),
+                    PartialStage::End => crate::tr!("partial self dictionary"),
+                });
             }
-            Frame::PartialArgs { arg, argv, .. } => {
-                // SAFETY: `arg` and `argv` point into one argument vector.
-                let idx = unsafe { arg.offset_from(argv) } as c_int - 1;
-                append_formatted!(partial_arg_i_msg, idx);
+            Frame::PartialArgs { at, .. } => {
+                let idx = c_int::try_from(at).unwrap_or(c_int::MAX) - 1;
+                append(crate::tr!("argument {}", idx));
             }
         }
     }
 
-    msg_ga.push(0);
-    // SAFETY: `msg` is the caller's two-`%s` format, `objname` its own name,
-    // and `msg_ga` the stack this frame just rendered, NUL-terminated above.
-    let (template, objname, where_0) = unsafe {
-        (
-            gettext_ptr(msg),
-            msg_cstr(path.objname),
-            if path.stack.is_empty() {
-                c_str(tr(c"itself"))
-            } else {
-                c_str(msg_ga.as_ptr().cast::<c_char>())
-            },
-        )
+    let where_0 = if path.stack.is_empty() {
+        crate::tr!("itself")
+    } else {
+        format!("{}", msg_bytes(&msg_ga))
     };
-    emsg_text(tr_plural!(template, objname, where_0));
+    emsg_text(tr_plural!(gettext(msg), msg_cstr(path.objname), where_0));
     Flow::Fail
 }
 
-/// Convert a `readfile()`-style list to a buffer with length.
+/// Convert a `readfile()`-style list to one buffer: the items joined with
+/// newlines, each stored newline turned back into the NUL it stood for.
+/// Not NUL-terminated: a special string's bytes may hold NULs.
 ///
-/// The buffer is **not** NUL-terminated: it is exactly `*ret_len` bytes, and
-/// the caller frees it.  Answers false — writing neither output — when any
-/// item is not a string.
-///
-/// # Safety
-/// `list` must be live, and `ret_len`/`ret_buf` must be writable.
-pub unsafe fn encode_vim_list_to_buf(
-    list: *const List,
-    ret_len: *mut size_t,
-    ret_buf: *mut *mut c_char,
-) -> bool {
-    let mut len: size_t = 0;
-    // SAFETY: the caller's promise about `list`.
-    for (at, li) in unsafe { items(list) }.enumerate() {
+/// `None` when any item is not a string. A NULL list is an empty one.
+pub fn encode_vim_list_to_buf(list: Option<&List>) -> Option<Vec<u8>> {
+    let items = list.map_or(&[][..], List::items);
+    let mut len = 0;
+    for li in items {
         if li.li_tv.v_type() != VAR_STRING {
-            return false;
+            return None;
         }
         // One separator per item, so the total is one too many.
-        // SAFETY: the caller's promise about `list`, and an index of it.
-        len += 1 + unsafe { item_bytes(list, at) }.len();
+        len += 1 + li.li_tv.string_bytes().len();
     }
-    len = len.saturating_sub(1);
-    // SAFETY: the caller's promise about the two out parameters.
-    unsafe { *ret_len = len };
-    if len == 0 {
-        // SAFETY: as above.
-        unsafe { *ret_buf = core::ptr::null_mut() };
-        return true;
+    let mut buf = Vec::with_capacity(len.saturating_sub(1));
+    for (at, li) in items.iter().enumerate() {
+        if at > 0 {
+            buf.push(b'\n');
+        }
+        buf.extend(
+            li.li_tv
+                .string_bytes()
+                .iter()
+                .map(|&ch| if ch == b'\n' { 0 } else { ch }),
+        );
     }
-    // SAFETY: `list` is live and non-empty, so it has a first item.
-    let mut lrstate = unsafe { encode_init_lrstate(list) };
-    let buf = unsafe { xmalloc(len).cast::<c_char>() };
-    let mut read_bytes: size_t = 0;
-    // SAFETY: `buf` is `len` writable bytes and `lrstate` walks `list`.
-    let ret = unsafe { encode_read_from_list(&raw mut lrstate, buf, len, &raw mut read_bytes) };
-    if ret.is_err() {
-        // Every item was checked above, so the reader cannot refuse one.
-        // SAFETY: unreachable.
-        unsafe { abort() };
-    }
-    debug_assert!(len == read_bytes, "len == read_bytes");
-    // SAFETY: the caller's promise about `ret_buf`.
-    unsafe { *ret_buf = buf };
-    true
+    Some(buf)
 }
 
-/// Which of the two sides of [`encode_read_from_list`] ran out first.
+/// Which of the two sides of [`ListReader::read`] ran out first.
 ///
 /// The C answered `OK` for the list and `NOTDONE` for the buffer, and a
 /// caller that read `OK` as "it worked" would loop for ever on a list too
@@ -396,91 +297,72 @@ pub unsafe fn encode_vim_list_to_buf(
 /// half of the `Result`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ListRead {
-    /// The list ran out: `buf` holds the last of it.
+    /// The list ran out: the buffer holds the last of it.
     Drained,
     /// The buffer ran out and the list has more. The C's `NOTDONE`.
     More,
 }
 
-/// Read bytes out of a `readfile()`-style list into `buf`.
-///
-/// `state` is advanced to where reading stopped.  Answers which of the two
-/// ran out, or [`Failed`] on an item that is not a string — the stored
-/// newlines turning back into NULs on the way, which is what
-/// [`encode_list_write`] wrote them for.
-///
-/// # Safety
-/// `state` must describe a position in a live list, `buf` must be writable
-/// for `nbuf` bytes and `read_bytes` must be writable.
-pub unsafe fn encode_read_from_list(
-    state: *mut ListReaderState,
-    buf: *mut c_char,
-    nbuf: size_t,
-    read_bytes: *mut size_t,
-) -> Result<ListRead, Failed> {
-    // SAFETY: the caller's promises about `buf`/`nbuf` and `state`.
-    let out = unsafe { slice::from_raw_parts_mut(buf.cast::<u8>(), nbuf) };
-    let state = unsafe { &mut *state };
-    let mut p = 0;
-    while p < nbuf {
-        debug_assert!(
-            state.li_length == 0 || unsafe { item_string(state.list, state.at) }.is_some(),
-            "state->li_length == 0 || TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL"
-        );
-        // SAFETY: the caller's promise: a live list, unchanged by the read.
-        let text = unsafe { item_bytes(state.list, state.at) };
-        // `i` and `state.offset` step together; upstream keeps both because
-        // the loop it wrote reads one and advances the other.
-        let mut i = state.offset;
-        while i < state.li_length && p < nbuf {
-            // The item holds `li_length` bytes and `offset` is below that.
-            let ch = text[state.offset];
-            state.offset += 1;
-            out[p] = if ch == b'\n' { 0 } else { ch };
-            p += 1;
-            i += 1;
-        }
-        if p < nbuf {
-            state.at += 1;
-            // SAFETY: the caller's promise: a live list.
-            let Some(item) = (list_items(unsafe { state.list.as_ref() })).get(state.at) else {
-                // SAFETY: the caller's promise about `read_bytes`.
-                unsafe { *read_bytes = p };
-                return Ok(ListRead::Drained);
-            };
-            out[p] = b'\n';
-            p += 1;
-            if item.li_tv.v_type() != VAR_STRING {
-                unsafe { *read_bytes = p };
-                return Err(Failed);
-            }
-            state.offset = 0;
-            // SAFETY: the item was just checked to hold a string.
-            state.li_length = unsafe { item_bytes(state.list, state.at) }.len();
-        }
-    }
-    // SAFETY: the caller's promise about `read_bytes`.
-    unsafe { *read_bytes = nbuf };
-    // SAFETY: the caller's promise: a live list.
-    let more = state.at + 1 < list_items(unsafe { state.list.as_ref() }).len();
-    if state.offset < state.li_length || more {
-        Ok(ListRead::More)
-    } else {
-        Ok(ListRead::Drained)
-    }
+/// A position in a `readfile()`-style list being read back as bytes:
+/// upstream's `ListReaderState`.
+pub struct ListReader<'a> {
+    list: &'a List,
+    /// The item being read.
+    at: usize,
+    /// How far into it.
+    offset: usize,
+    /// Its length.
+    li_length: usize,
 }
 
-/// Start reading a `readfile()`-style list from its first item.
-///
-/// # Safety
-/// `list` must be live and must have at least one item.
-pub unsafe fn encode_init_lrstate(list: *const List) -> ListReaderState {
-    ListReaderState {
-        list,
-        at: 0,
-        offset: 0,
-        // SAFETY: the caller's promise; the first item holds a string or NULL.
-        li_length: unsafe { item_bytes(list, 0) }.len(),
+impl<'a> ListReader<'a> {
+    /// Start reading `list` from its first item, which must hold a string
+    /// or nothing.
+    pub fn new(list: &'a List) -> Self {
+        ListReader {
+            list,
+            at: 0,
+            offset: 0,
+            li_length: item_bytes(list, 0).len(),
+        }
+    }
+
+    /// Read bytes into `out`, the stored newlines turning back into NULs on
+    /// the way -- which is what [`encode_list_write`] wrote them for.
+    ///
+    /// Answers which of the two ran out and how many bytes were written, or
+    /// [`Failed`] (with the count so far) on an item that is not a string.
+    pub fn read(&mut self, out: &mut [u8]) -> (Result<ListRead, Failed>, usize) {
+        let nbuf = out.len();
+        let mut p = 0;
+        while p < nbuf {
+            let text = item_bytes(self.list, self.at);
+            while self.offset < self.li_length && p < nbuf {
+                let ch = text[self.offset];
+                self.offset += 1;
+                out[p] = if ch == b'\n' { 0 } else { ch };
+                p += 1;
+            }
+            if p < nbuf {
+                self.at += 1;
+                let Some(item) = self.list.items().get(self.at) else {
+                    return (Ok(ListRead::Drained), p);
+                };
+                out[p] = b'\n';
+                p += 1;
+                if item.li_tv.v_type() != VAR_STRING {
+                    return (Err(Failed), p);
+                }
+                self.offset = 0;
+                self.li_length = item_bytes(self.list, self.at).len();
+            }
+        }
+        let more = self.at + 1 < self.list.items().len();
+        if self.offset < self.li_length || more {
+            (Ok(ListRead::More), nbuf)
+        } else {
+            (Ok(ListRead::Drained), nbuf)
+        }
     }
 }
 
@@ -509,8 +391,7 @@ static JSON_ESCAPES: [[u8; 2]; 0x5d] = {
 /// The two-character escape JSON spells `ch` with, if it has one.
 #[inline(always)]
 fn json_escape_of(ch: c_int) -> Option<&'static [u8; 2]> {
-    // A negative `ch` wraps to a huge index and misses, as it should.
-    let escape = JSON_ESCAPES.get(ch as usize)?;
+    let escape = JSON_ESCAPES.get(usize::try_from(ch).ok()?)?;
     (escape[0] != 0).then_some(escape)
 }
 
@@ -526,7 +407,7 @@ fn json_encode_raw(ch: c_int) -> bool {
 /// `\uNNNN` for a code unit.
 #[inline(always)]
 fn json_unicode_escape(unit: c_int) -> [u8; 6] {
-    let digit = |shift: u32| XDIGITS[((unit >> (4 * shift)) & 0xf) as usize];
+    let digit = |shift: u32| XDIGITS[usize::try_from((unit >> (4 * shift)) & 0xf).unwrap_or(0)];
     [b'\\', b'u', digit(3), digit(2), digit(1), digit(0)]
 }
 
@@ -549,65 +430,8 @@ fn json_surrogate_pair(ch: c_int) -> (c_int, c_int) {
 
 /// `semsg(_(msg), (int)tail.len(), tail)` — the two `%.*s` refusals below.
 fn err_tail(msg: &'static CStr, tail: &[u8]) {
-    // SAFETY: `%.*s` reads exactly the length it is given, and `tail` is
-    // readable for its own.
-    emsg_text(tr_c!(msg, tail.len() as c_int, msg_bytes(tail)));
-}
-
-/// The bytes being escaped into a JSON string.
-///
-/// Deliberately **not** a slice.  Upstream measures each character with
-/// `utf_ptr2char`/`utf_ptr2len`, which read as many bytes as the lead byte
-/// promises and so read *past* `len` when the last character is a truncated
-/// multi-byte sequence.  For a `VAR_STRING` that byte is the terminating NUL
-/// and nothing comes of it, but a special `{'_TYPE': string}` value arrives
-/// in a buffer [`encode_vim_list_to_buf`] sized exactly, and there the
-/// over-read is real.  It is upstream's behaviour, it is reproduced rather
-/// than fixed, and it is why the three accessors are `unsafe`.
-struct Utf8 {
-    at: *const u8,
-    len: usize,
-}
-
-impl Utf8 {
-    /// The code point at `i`, or the byte's own value where no complete
-    /// sequence starts there.
-    ///
-    /// # Safety
-    /// `i` must be below `len`, and the bytes the lead byte at `i` promises
-    /// must be readable — see the type's own note.
-    #[inline(always)]
-    unsafe fn char_at(&self, i: usize) -> c_int {
-        unsafe { utf_ptr2char(self.at.add(i).cast::<c_char>()) }
-    }
-
-    /// How many bytes the character at `i` occupies.
-    ///
-    /// # Safety
-    /// As [`Self::char_at`].
-    #[inline(always)]
-    unsafe fn len_at(&self, i: usize) -> usize {
-        unsafe { utf_ptr2len(self.at.add(i).cast::<c_char>()) as usize }
-    }
-
-    /// `n` bytes from `i`.
-    ///
-    /// # Safety
-    /// As [`Self::char_at`]: `n` is a measured character length, which may
-    /// reach past `len`.
-    #[inline(always)]
-    unsafe fn run(&self, i: usize, n: usize) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.at.add(i), n) }
-    }
-
-    /// Everything from `i` to the end, for an error message.
-    ///
-    /// # Safety
-    /// `i` must be below `len`.
-    #[inline(always)]
-    unsafe fn tail(&self, i: usize) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.at.add(i), self.len - i) }
-    }
+    let len = c_int::try_from(tail.len()).unwrap_or(c_int::MAX);
+    emsg_text(tr_c!(msg, len, msg_bytes(tail)));
 }
 
 /// How long the escaped form of `text` will be, or `None` once the refusal
@@ -615,31 +439,24 @@ impl Utf8 {
 ///
 /// This is upstream's first pass: the one that decides whether the string can
 /// be JSON at all.
-///
-/// # Safety
-/// As [`Utf8`].
 #[inline(always)]
-unsafe fn json_escaped_len(text: &Utf8) -> Option<usize> {
+fn json_escaped_len(text: &[u8]) -> Option<usize> {
     let mut str_len = 0;
     let mut i = 0;
-    while i < text.len {
-        let ch = unsafe { text.char_at(i) };
-        let shift = if ch == 0 {
-            1
-        } else {
-            unsafe { text.len_at(i) }
-        };
+    while i < text.len() {
+        let ch = char_at(&text[i..]);
+        let shift = if ch == 0 { 1 } else { char_len(&text[i..]) };
         debug_assert!(shift > 0, "shift > 0");
         i += shift;
         if json_escape_of(ch).is_some() {
             str_len += 2;
         } else if ch > 0x7f && shift == 1 {
-            err_tail(E474_BAD_UTF8, unsafe { text.tail(i - shift) });
+            err_tail(E474_BAD_UTF8, &text[i - shift..]);
             return None;
         } else if (SURROGATE_HI_START..=SURROGATE_HI_END).contains(&ch)
             || (SURROGATE_LO_START..=SURROGATE_LO_END).contains(&ch)
         {
-            err_tail(E474_SURROGATE, unsafe { text.tail(i - shift) });
+            err_tail(E474_SURROGATE, &text[i - shift..]);
             return None;
         } else if json_encode_raw(ch) {
             str_len += shift;
@@ -654,50 +471,39 @@ unsafe fn json_escaped_len(text: &Utf8) -> Option<usize> {
 /// Convert a string to a JSON string literal, quotes included.
 ///
 /// Two passes, exactly as upstream: the first sizes the result and is where
-/// the refusals happen, the second writes it.  A NULL buffer is `""`.
+/// the refusals happen, the second writes it.  A NULL string is `""`.
 ///
-/// # Safety
-/// `gap` must be a live byte garray, and `buf` must be NULL or readable for
-/// `len` bytes — with the over-read [`Utf8`] describes.
+/// Upstream measures each character with the pointer forms, which read as
+/// many bytes as the lead byte promises -- past the end of a special
+/// `{'_TYPE': string}` value, whose buffer is sized exactly. The slice ends
+/// where the value does, which is the answer a NUL-terminated `VAR_STRING`
+/// always got.
 #[inline(always)]
-pub(crate) unsafe fn convert_to_json_string(
-    gap: &mut Vec<u8>,
-    buf: *const c_char,
-    len: size_t,
-) -> Result<(), Failed> {
-    if buf.is_null() {
-        gap.extend_from_slice(b"\"\"");
-        return Ok(());
-    }
-    let text = Utf8 {
-        at: buf.cast::<u8>(),
-        len,
-    };
-    // SAFETY: forwarded to the caller's promise about `buf`.
-    let Some(str_len) = (unsafe { json_escaped_len(&text) }) else {
+pub(crate) fn convert_to_json_string(gap: &mut Vec<u8>, text: &[u8]) -> Result<(), Failed> {
+    let Some(str_len) = json_escaped_len(text) else {
         return Err(Failed);
     };
     gap.push(b'"');
     gap.reserve(str_len);
     let mut i = 0;
-    while i < text.len {
-        let ch = unsafe { text.char_at(i) };
+    while i < text.len() {
+        let ch = char_at(&text[i..]);
         // The write pass measures the *character*, not the bytes; the two
         // agree except at a NUL, which is one byte and not one character.
         let shift = if ch == 0 {
             1
         } else {
-            utf_char2len(ch) as usize
+            usize::try_from(utf_char2len(ch)).unwrap_or(1)
         };
         debug_assert!(shift > 0, "shift > 0");
         debug_assert!(
-            ch == 0 || shift == unsafe { text.len_at(i) },
+            ch == 0 || shift == char_len(&text[i..]),
             "ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i))"
         );
         if let Some(escape) = json_escape_of(ch) {
             gap.extend_from_slice(escape);
         } else if json_encode_raw(ch) {
-            gap.extend_from_slice(unsafe { text.run(i, shift) });
+            gap.extend_from_slice(&text[i..i + shift]);
         } else if ch < SURROGATE_FIRST_CHAR {
             gap.extend_from_slice(&json_unicode_escape(ch));
         } else {
@@ -723,21 +529,24 @@ pub fn encode_check_json_key(tv: &TypVal) -> bool {
     if tv.v_type() != VAR_DICT {
         return false;
     }
-    // SAFETY: a `VAR_DICT` holds a live dictionary.
-    let spdict = tv.dict_or_null();
-    if unsafe { (*spdict).dv_hashtab.ht_used } != 2 {
+    let Some(spdict) = tv.dict_ref() else {
+        return false;
+    };
+    if spdict.dv_hashtab.ht_used != 2 {
         return false;
     }
-    // SAFETY: `spdict` is live; the two items borrow it.
-    let spdict = unsafe { spdict.as_ref() };
-    let (Some(type_di), Some(val_di)) = (dict_find(spdict, b"_TYPE"), dict_find(spdict, b"_VAL"))
-    else {
+    let (Some(type_di), Some(val_di)) = (
+        dict_find(Some(spdict), b"_TYPE"),
+        dict_find(Some(spdict), b"_VAL"),
+    ) else {
         return false;
     };
     let type_tv = &type_di.di_tv;
     if type_tv.v_type() != VAR_LIST
         || !core::ptr::eq(
-            type_tv.list_or_null(),
+            type_tv
+                .list_ref()
+                .map_or(core::ptr::null(), core::ptr::from_ref),
             eval_msgpack_type_lists.get()[kMPString as usize],
         )
     {
@@ -747,27 +556,11 @@ pub fn encode_check_json_key(tv: &TypVal) -> bool {
     if val_tv.v_type() != VAR_LIST {
         return false;
     }
-    // SAFETY: a `VAR_LIST` holds a live list or NULL, and nothing runs
-    // between the items.
-    for li in unsafe { items(val_tv.list_or_null()) } {
-        if li.li_tv.v_type() != VAR_STRING {
-            return false;
-        }
-    }
-    true
-}
-
-/// Finish one of the three `encode_tv2*` entry points: report the length if
-/// asked, terminate, and hand the buffer over for the caller to free.
-///
-/// # Safety
-/// `len` must be NULL or writable.
-unsafe fn finish_tv2(ga: Vec<u8>, len: *mut size_t) -> *mut c_char {
-    if !len.is_null() {
-        // SAFETY: the caller's promise about `len`.
-        unsafe { *len = ga.len() as size_t };
-    }
-    owned_cstr(ga)
+    val_tv
+        .list_ref()
+        .map_or(&[][..], List::items)
+        .iter()
+        .all(|li| li.li_tv.v_type() == VAR_STRING)
 }
 
 /// The string representation of `tv`, quoted so `eval()` can read it back.
@@ -780,12 +573,8 @@ pub(crate) fn tv2string_bytes(tv: &TypVal) -> Vec<u8> {
 }
 
 /// `tv2string_bytes` as an owned C string.
-///
-/// # Safety
-/// `len` must be NULL or writable.
-pub unsafe fn encode_tv2string(tv: &TypVal, len: *mut size_t) -> *mut c_char {
-    // SAFETY: the caller's promise about `len`.
-    unsafe { finish_tv2(tv2string_bytes(tv), len) }
+pub fn encode_tv2string(tv: &TypVal) -> ThinCString {
+    ThinCString::from_vec(tv2string_bytes(tv))
 }
 
 /// The string representation of `tv` as `:echo` displays it — no quotes.
@@ -811,27 +600,19 @@ pub(crate) fn tv2echo_bytes(tv: &TypVal) -> Vec<u8> {
 }
 
 /// `tv2echo_bytes` as an owned C string.
-///
-/// # Safety
-/// As [`encode_tv2string`].
-pub unsafe fn encode_tv2echo(tv: &TypVal, len: *mut size_t) -> *mut c_char {
-    // SAFETY: the caller's promise about `len`.
-    unsafe { finish_tv2(tv2echo_bytes(tv), len) }
+pub fn encode_tv2echo(tv: &TypVal) -> ThinCString {
+    ThinCString::from_vec(tv2echo_bytes(tv))
 }
 
-/// `tv` as JSON, or an empty buffer once the refusal has been reported.
-///
-/// # Safety
-/// As [`encode_tv2string`].
-pub unsafe fn encode_tv2json(tv: &TypVal, len: *mut size_t) -> *mut c_char {
+/// `tv` as JSON, or an empty string once the refusal has been reported.
+pub fn encode_tv2json(tv: &TypVal) -> ThinCString {
     let mut ga = Vec::<u8>::new();
     let evj_ret = encode_vim_to_json(&mut ga, tv, c"encode_tv2json() argument");
     if !evj_ret {
         ga.clear();
     }
     did_echo_string_emsg.set(false);
-    // SAFETY: the caller's promise about `len`.
-    unsafe { finish_tv2(ga, len) }
+    ThinCString::from_vec(ga)
 }
 
 #[cfg(test)]
@@ -890,10 +671,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
-    )]
     fn scalars_and_flat_containers_print_as_their_literals() {
         let _serial = ready();
         let mut blob = tv_blob_alloc();
@@ -924,10 +701,6 @@ mod tests {
 
     /// A list that holds itself, and a dictionary that does, two levels down.
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
-    )]
     fn a_container_that_reaches_itself_is_marked_not_followed() {
         let _serial = ready();
         let mut l = list(vec![TypVal::Number(1)]);
@@ -959,10 +732,6 @@ mod tests {
 
     /// Thirty levels: past the walk's eight inline frames and back.
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
-    )]
     fn a_deep_nest_prints_every_level() {
         let _serial = ready();
         let mut tv = TypVal::Number(0);
@@ -977,10 +746,6 @@ mod tests {
     /// A partial walks its arguments, then its self dictionary -- which here
     /// holds the partial: a cycle through a partial frame.
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
-    )]
     fn a_partial_prints_its_arguments_and_its_dictionary() {
         let _serial = ready();
         let mut d = tv_dict_alloc();

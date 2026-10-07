@@ -34,17 +34,9 @@ use crate::winlayer::Live;
 /// A handle is never built from a pointer the code has not already committed
 /// to dereferencing: the null-tolerant entry points (`list_len`,
 /// `list_find`, …) keep their `as_ref()` guard and take no handle.
-pub(crate) type Tv = Live<TypVal>;
-/// A live `List`; see [`Tv`].
 pub(crate) type Ls = Live<List>;
-/// A live `ListItem`; see [`Tv`].
-pub(crate) type Li = Live<ListItem>;
-/// A live `Dict`; see [`Tv`].
+/// A live `Dict`; see [`Ls`].
 pub(crate) type Dt = Live<Dict>;
-/// A live `DictItem`; see [`Tv`].
-pub(crate) type Di = Live<DictItem>;
-/// A live `Partial`; see [`Tv`].
-pub(crate) type Pt = Live<Partial>;
 
 /// The address of a field of `*p`, **computed rather than read**.
 ///
@@ -76,18 +68,6 @@ pub(crate) fn di_tv(di: *mut DictItem) -> *mut TypVal {
 #[inline(always)]
 pub(crate) fn di_lock(di: *mut DictItem) -> *mut VarLock {
     field_of(di, ::core::mem::offset_of!(DictItem, di_lock))
-}
-
-/// The address of a dictionary's copy mark; see [`field_of`].
-#[inline(always)]
-pub(crate) fn dv_copyid(d: *mut Dict) -> *mut ::core::ffi::c_int {
-    field_of(d, ::core::mem::offset_of!(Dict, dv_copy_id))
-}
-
-/// The address of a list's copy mark; see [`field_of`].
-#[inline(always)]
-pub(crate) fn lv_copyid(l: *mut List) -> *mut ::core::ffi::c_int {
-    field_of(l, ::core::mem::offset_of!(List, lv_copy_id))
 }
 
 /// The tag-checked readers, generated ten times over the one shape they all
@@ -139,19 +119,6 @@ union_readers! {
 }
 
 impl TypVal {
-    /// The dictionary, or `None` unless this is a `Dict` -- including the
-    /// `v:_null_dict` case, which answers `Some(NULL)`.
-    #[inline(always)]
-    pub(crate) fn as_dict(&self) -> Option<*mut Dict> {
-        match self {
-            TypVal::Dict(dict) => Some(
-                dict.as_ref()
-                    .map_or(::core::ptr::null_mut(), DictRef::as_ptr),
-            ),
-            _ => None,
-        }
-    }
-
     /// The dictionary this value holds, or NULL unless it is a dictionary
     /// holding one.  A **borrow**; see [`TypVal::list_or_null`].
     #[inline(always)]
@@ -463,23 +430,6 @@ impl TypVal {
     }
 }
 
-/// Where a dictionary handle *lives*, for the walk that has to clear it.
-///
-/// [`TypvalSink`](crate::eval::typval_encode::TypvalSink)'s dictionary hooks
-/// are handed the place rather than the value, because the `nothing` sink
-/// releases the reference and blanks the slot it came out of. Two different
-/// places are that slot — a `TypVal::Dict`'s payload, and a partial's
-/// `pt_dict`, which is no typval at all — so one pointer type cannot serve
-/// both. Reading through one is the `nothing` sink's business.
-#[derive(Clone, Copy)]
-pub(crate) enum DictSlot {
-    /// A typval holding the dictionary. Cleared, it is a `TypVal::Dict` over
-    /// NULL: still a dictionary, holding none.
-    Value(*mut TypVal),
-    /// A partial's `pt_dict` field.
-    Field(*mut Option<DictRef>),
-}
-
 /// Lock status of `l`; a NULL list reads as `VarLock::Fixed`.
 #[inline]
 pub fn list_locked(l: Option<&List>) -> VarLock {
@@ -581,9 +531,9 @@ mod tests {
     fn a_reader_answers_only_for_its_own_tag() {
         let num = TypVal::Number(0xdead_beef);
         assert_eq!(num.as_number(), Some(0xdead_beef));
-        assert_eq!(num.as_list(), None);
-        assert_eq!(num.as_dict(), None);
-        assert_eq!(num.as_blob(), None);
+        assert!(num.list_ref().is_none());
+        assert!(num.dict_ref().is_none());
+        assert!(num.blob_ref().is_none());
         assert!(num.partial_ref().is_none());
         assert!(!num.is_string());
         assert_eq!(num.as_float(), None);
@@ -596,7 +546,6 @@ mod tests {
         let num = TypVal::Number(0xdead_beef);
         assert!(num.list_or_null().is_null());
         assert!(num.dict_or_null().is_null());
-        assert!(num.blob_or_null().is_null());
         assert!(num.partial_or_null().is_null());
         assert!(num.string_ref().is_none());
         assert!(num.func_name().is_none());
@@ -608,10 +557,10 @@ mod tests {
         let _serial = editor_state_lock();
         let l = tv_list_alloc(0);
         let tv = TypVal::list(Some(l.clone()));
-        assert_eq!(tv.as_list(), Some(l.as_ptr()));
+        assert!(tv.list_shared().is_some_and(|held| held.ptr_eq(&l)));
         assert_eq!(tv.list_or_null(), l.as_ptr());
         // Any other kind is not a list.
-        assert_eq!(TypVal::dict(Some(tv_dict_alloc())).as_list(), None);
+        assert!(TypVal::dict(Some(tv_dict_alloc())).list_ref().is_none());
     }
 
     /// Sixteen bytes. The size is the reason the lock lives on the slot: a

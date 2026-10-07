@@ -193,7 +193,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                     matched = false;
                     break;
                 };
-                tofree = Echoed(unsafe { encode_tv2echo(&item.li_tv, ptr::null_mut()) });
+                tofree = Echoed(encode_tv2echo(&item.li_tv).into_raw());
                 str = tofree.0;
                 expr = str;
                 if str.is_null() {

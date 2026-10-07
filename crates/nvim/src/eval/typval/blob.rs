@@ -122,33 +122,11 @@ pub(crate) fn blob_bytes(b: Option<&Blob>) -> &[u8] {
 /// a [`BlobRef`]: it can be borrowed but never handed out, since a copy of
 /// it would be a reference nobody took.
 impl TypVal {
-    /// The blob, or `None` unless this is a `Blob` -- including the
-    /// `v:_null_blob` case, which answers `Some(NULL)`.
-    #[inline(always)]
-    pub(crate) fn as_blob(&self) -> Option<*mut Blob> {
-        match self {
-            TypVal::Blob(blob) => Some(
-                blob.as_ref()
-                    .map_or(::core::ptr::null_mut(), BlobRef::as_ptr),
-            ),
-            _ => None,
-        }
-    }
-
-    /// The blob this value holds, or NULL unless it is a blob holding one.
-    ///
-    /// A **borrow**; see [`TypVal::list_or_null`].
-    #[inline(always)]
-    pub(crate) fn blob_or_null(&self) -> *mut Blob {
-        self.as_blob().unwrap_or(::core::ptr::null_mut())
-    }
-
     /// The blob this value holds, borrowed -- `None` for every other kind
     /// and for `v:_null_blob`.
     ///
-    /// The safe spelling of [`TypVal::blob_or_null`], and the one the
-    /// `blob_*` family reads its argument in: the borrow lasts as long as
-    /// the value does, which is what the pointer never said.
+    /// The one the `blob_*` family reads its argument in: the borrow lasts
+    /// as long as the value does.
     #[inline(always)]
     pub(crate) fn blob_ref(&self) -> Option<&Blob> {
         match self {

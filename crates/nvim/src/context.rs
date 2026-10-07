@@ -21,7 +21,6 @@ use crate::api::private::helpers::{cstr_to_string, string_to_array};
 use crate::api::vimscript::exec_impl;
 use crate::cstr;
 use crate::eval::encode::encode_vim_list_to_buf;
-use crate::eval::typval::tv_clear;
 use crate::eval::userfunc::func_tbl_get;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::getchar::VIML_INTERNAL_CALL;
@@ -254,19 +253,16 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
 
 /// Convert a `readfile()`-style array back to the msgpack blob it encodes.
 fn array_to_string(array: Array) -> Result<String_0, Error> {
-    let mut sbuf = String_0::NULL;
-    // `list_tv` owns the conversion result until `tv_clear`.
-    let mut list_tv = TypVal::from(Object::array(array));
+    let list_tv = TypVal::from(Object::array(array));
     debug_assert!(
         list_tv.v_type() as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
         "list_tv.v_type() == VAR_LIST"
     );
-    let (data, size) = sbuf.parts_mut();
-    let converted = unsafe { encode_vim_list_to_buf(list_tv.list_or_null(), size, data) };
-    tv_clear(&mut list_tv);
-    match converted {
-        true => Ok(sbuf),
-        false => Err(Error::exception(
+    match encode_vim_list_to_buf(list_tv.list_ref()) {
+        // An empty list is the NULL string, as upstream's buffer was.
+        Some(bytes) if bytes.is_empty() => Ok(String_0::NULL),
+        Some(bytes) => Ok(String_0::from_bytes(&bytes)),
+        None => Err(Error::exception(
             c"E474: Failed to convert list to msgpack string buffer",
         )),
     }

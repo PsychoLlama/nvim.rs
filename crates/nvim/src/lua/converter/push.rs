@@ -20,11 +20,10 @@
 #![allow(unsafe_code)]
 
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 
 use super::nlua_create_typed_table;
-use crate::eval::typval::DictSlot;
-use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
+use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::find_func;
 use crate::lua::executor::nlua_pushref;
@@ -33,9 +32,7 @@ use crate::lua::ffi::{
     lua_pushnumber, lua_pushvalue, lua_rawset, lua_setmetatable, lua_tonumber,
 };
 use crate::lua::state::nlua_global_refs;
-use crate::types::{
-    Float, LuaRef, TypVal, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
-};
+use crate::types::{Float, LuaRef, TypVal, kObjectTypeDict, lua_Number, lua_State};
 
 /// How many Lua slots opening a container needs: its table, the key or index
 /// it is about to set, and the value that will land on top of them.
@@ -87,12 +84,9 @@ impl LuaSink {
         }
     }
 
-    /// Push `len` bytes as a Lua string.
-    ///
-    /// # Safety
-    /// `buf` must point at `len` readable bytes, or `len` be zero.
-    unsafe fn pushlstring(&mut self, buf: *const c_char, len: size_t) {
-        unsafe { lua_pushlstring(self.lstate, buf, len) };
+    /// Push `bytes` as a Lua string, which copies them.
+    fn pushlstring(&mut self, bytes: &[u8]) {
+        unsafe { lua_pushlstring(self.lstate, bytes.as_ptr().cast::<c_char>(), bytes.len()) };
     }
 
     /// Make room for one more open container, or refuse with `E5102`.
@@ -116,17 +110,21 @@ impl LuaSink {
     /// `data.l.list` for everything that is not `kMPConvDict`, and a special
     /// map's `_VAL` list lives in that member.
     ///
-    /// `None` — no frame matched — cannot happen for a container the walk has
-    /// marked with the current `copy_id`, and upstream pushes nothing at all in
-    /// that case, leaving the value it promised missing.
-    fn backref(path: &ConvPath, val: *mut c_void, conv_type: ConvType) -> Option<c_int> {
+    /// `None` — no frame matched — is a list met as a `List` that a `Pairs`
+    /// frame holds, and upstream pushes nothing at all in that case, leaving
+    /// the value it promised missing.
+    fn backref(
+        path: &ConvPath<'_, '_>,
+        container: Container<'_>,
+        conv_type: ConvType,
+    ) -> Option<c_int> {
         let depth = path.stack.len();
         // Upstream scans from the top down; a container can be on the stack
         // only once, so scanning up finds the same frame.
         let found = path
             .stack
             .iter()
-            .position(|frame| frame.container() == Some((conv_type, val.cast_const())))?;
+            .position(|frame| frame.walks(conv_type, container))?;
         Some(-(((depth - found) * 2) as c_int))
     }
 }
@@ -135,100 +133,59 @@ impl TypvalSink for LuaSink {
     const ALLOW_SPECIALS: bool = true;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_lua_convert_one_value()";
 
-    fn conv_nil(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_nil(&mut self) {
         self.push_nil();
     }
 
-    fn conv_bool(&mut self, _tv: Option<&mut TypVal>, num: bool) {
+    fn conv_bool(&mut self, num: bool) {
         self.pushboolean(num);
     }
 
-    fn conv_number(&mut self, _tv: Option<&mut TypVal>, num: int64_t) {
+    fn conv_number(&mut self, num: i64) {
         self.pushnumber(num as lua_Number);
     }
 
-    fn conv_unsigned_number(&mut self, _tv: Option<&mut TypVal>, num: u64) {
+    fn conv_unsigned_number(&mut self, num: u64) {
         self.pushnumber(num as lua_Number);
     }
 
-    fn conv_float(&mut self, _tv: Option<&mut TypVal>, flt: Float) -> Flow {
+    fn conv_float(&mut self, flt: Float) -> Flow {
         self.pushnumber(flt);
         Flow::Go
     }
 
     /// A Lua string is bytes, so this is the whole of it — NULs included.  It
     /// copies, which is why the walk's buffer-owning hooks need no override.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_string`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_string(
-        &mut self,
-        _tv: Option<&mut TypVal>,
-        buf: *mut c_char,
-        len: size_t,
-    ) -> Flow {
-        unsafe { self.pushlstring(buf, len) };
+    fn conv_string(&mut self, bytes: &[u8]) -> Flow {
+        self.pushlstring(bytes);
         Flow::Go
     }
 
     /// msgpack `ext` has no Lua image, so it comes out as nil.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_ext_string`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_ext_string(
-        &mut self,
-        _tv: Option<&mut TypVal>,
-        _buf: *mut c_char,
-        _len: size_t,
-        _ext_type: i8,
-    ) -> Flow {
+    fn conv_ext_string(&mut self, _bytes: &[u8], _ext_type: i8) -> Flow {
         self.push_nil();
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: *const [u8]) {
-        // SAFETY: the walk's promise: the blob's own array, and this sink
-        // releases nothing.
-        let bytes = unsafe { &*bytes };
-        let data = if bytes.is_empty() {
-            c"".as_ptr()
-        } else {
-            bytes.as_ptr().cast::<c_char>()
-        };
-        // SAFETY: `data` is readable for `bytes.len()` bytes, which is what
-        // the Lua stack copies.
-        unsafe { self.pushlstring(data, bytes.len() as size_t) };
+    /// A blob is bytes, and so is a Lua string.
+    fn conv_blob(&mut self, bytes: &[u8]) {
+        self.pushlstring(bytes);
     }
 
     /// A Lua function that reached Vimscript as a funcref goes back as the
     /// same function; anything else is nil.  Either way the walk stops here,
     /// so a partial's arguments and self dictionary are never visited — which
     /// is why no `Partial` frame ever reaches [`LuaSink::backref`].
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_func_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_func_start(
+    fn conv_func_start(
         &mut self,
-        _tv: Option<&mut TypVal>,
-        fun: *mut c_char,
+        fun: Option<&CStr>,
         _prefix: &'static CStr,
-        _path: &ConvPath,
+        _path: &ConvPath<'_, '_>,
     ) -> Flow {
         let luaref = unsafe {
-            let fp = if fun.is_null() {
-                ::core::ptr::null_mut()
-            } else {
-                find_func(crate::cstr::bytes_at(fun))
+            let fp = match fun {
+                None => ::core::ptr::null_mut(),
+                Some(fun) => find_func(fun.to_bytes()),
             };
             if fp.is_null() || !(*fp).uf_flags.has(FuncFlags::LUAREF) {
                 None
@@ -243,14 +200,14 @@ impl TypvalSink for LuaSink {
         Flow::Stop
     }
 
-    fn conv_empty_list(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_empty_list(&mut self) {
         self.createtable(0, 0);
     }
 
     /// An empty table is ambiguous in Lua, so an empty dictionary carries a
     /// marker: the `vim.empty_dict()` metatable, or the `_TYPE` key when the
     /// caller asked for the special form.
-    fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self) {
         if self.special {
             unsafe { nlua_create_typed_table(self.lstate, 0, 0, kObjectTypeDict) };
         } else {
@@ -262,7 +219,7 @@ impl TypvalSink for LuaSink {
 
     /// The table, then the index its first item will be stored under.
     ///
-    fn conv_list_start(&mut self, _tv: Option<&mut TypVal>, len: c_int) -> Flow {
+    fn conv_list_start(&mut self, len: c_int) -> Flow {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
         }
@@ -273,17 +230,17 @@ impl TypvalSink for LuaSink {
 
     /// Store the item just converted and push the next index.
     ///
-    fn conv_list_between_items(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_list_between_items(&mut self) {
         let idx = unsafe { lua_tonumber(self.lstate, -2) };
         self.rawset();
         self.pushnumber(idx + 1.0);
     }
 
-    fn conv_list_end(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_list_end(&mut self) {
         self.rawset();
     }
 
-    fn conv_dict_start(&mut self, _tv: Option<&mut TypVal>, len: size_t) -> Flow {
+    fn conv_dict_start(&mut self, len: usize) -> Flow {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
         }
@@ -293,29 +250,24 @@ impl TypvalSink for LuaSink {
 
     /// The key is already on the stack and the value has just landed on top of
     /// it, so one `rawset` closes the pair.
-    fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_between_items(&mut self) {
         self.rawset();
     }
 
-    fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_end(&mut self) {
         self.rawset();
     }
 
     /// Lua tables are references, so a container that references itself is not
     /// a problem here: push the half-built table again and the cycle rebuilds
     /// itself.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_recurse`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_recurse(
+    fn conv_recurse(
         &mut self,
-        val: *mut c_void,
+        container: Container<'_>,
         conv_type: ConvType,
-        path: &ConvPath,
+        path: &ConvPath<'_, '_>,
     ) -> Flow {
-        if let Some(idx) = Self::backref(path, val, conv_type) {
+        if let Some(idx) = Self::backref(path, container, conv_type) {
             unsafe { lua_pushvalue(self.lstate, idx) };
         }
         Flow::Go
@@ -342,7 +294,7 @@ pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: &TypVal, flags: c_int
             lstate,
             special: flags & super::kNluaPushSpecial != 0,
         };
-        if !encode_typval_read(&mut sink, tv, c"nlua_push_typval argument") {
+        if !encode_typval(&mut sink, tv, c"nlua_push_typval argument") {
             return false;
         }
         debug_assert!(lua_gettop(lstate) == initial_size + 1);

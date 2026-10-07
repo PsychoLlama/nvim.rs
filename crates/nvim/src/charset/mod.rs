@@ -754,6 +754,16 @@ pub(crate) unsafe fn string2float(text: *const c_char) -> (crate::types::Float, 
     (value, end.addr() - text.addr())
 }
 
+/// [`string2float`] over a slice: the float at the start of `text`, which
+/// ends where the slice does.
+pub(crate) fn string2float_in(text: &[u8]) -> (crate::types::Float, usize) {
+    let mut terminated = Vec::with_capacity(text.len() + 1);
+    terminated.extend_from_slice(text);
+    terminated.push(0);
+    // SAFETY: a NUL-terminated copy.
+    unsafe { string2float(terminated.as_ptr().cast::<c_char>()) }
+}
+
 /// The value of the hexadecimal digit `c`. Anything else is nonsense.
 pub fn hex2nr(c: c_int) -> c_int {
     if (b'a' as c_int..=b'f' as c_int).contains(&c) {

@@ -7,8 +7,7 @@
 //! Vimscript cannot survives a round trip — and the one that refuses both
 //! function references and self-referencing containers outright.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -17,17 +16,15 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
 use crate::eval::encode::conv_error;
-use crate::eval::typval::DictSlot;
-use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
+use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_ext, mpack_float8, mpack_integer,
     mpack_map, mpack_nil, mpack_str, mpack_uint64,
 };
-use crate::os::cshim::gettext;
-use crate::types::{Float, Integer, PackerBuffer, TypVal, int64_t, size_t};
+use crate::types::{Float, PackerBuffer, TypVal};
 
 /// The two errors this sink can raise, both through
 /// [`conv_error`][crate::eval::encode::conv_error], which appends
@@ -40,23 +37,6 @@ struct MsgpackSink<'a> {
     packer: &'a mut PackerBuffer,
 }
 
-impl MsgpackSink<'_> {
-    /// The bytes to pack: a pointer and a length, with the walk's null
-    /// pointer for an empty value read as no bytes rather than as a slice
-    /// over nothing.
-    ///
-    /// # Safety
-    /// `data` must be null -- and then `size` zero -- or point at `size`
-    /// readable bytes.
-    unsafe fn buf<'a>(data: *mut c_char, size: size_t) -> &'a [u8] {
-        if data.is_null() {
-            return &[];
-        }
-        // SAFETY: the caller's promise.
-        unsafe { core::slice::from_raw_parts(data.cast::<u8>(), size) }
-    }
-}
-
 impl TypvalSink for MsgpackSink<'_> {
     const ALLOW_SPECIALS: bool = true;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_msgpack_convert_one_value()";
@@ -67,149 +47,93 @@ impl TypvalSink for MsgpackSink<'_> {
         mpack_check_buffer(self.packer);
     }
 
-    fn conv_nil(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_nil(&mut self) {
         mpack_nil(self.packer.cursor_mut());
     }
 
-    fn conv_bool(&mut self, _tv: Option<&mut TypVal>, num: bool) {
+    fn conv_bool(&mut self, num: bool) {
         mpack_bool(self.packer.cursor_mut(), num);
     }
 
-    fn conv_number(&mut self, _tv: Option<&mut TypVal>, num: int64_t) {
-        mpack_integer(self.packer.cursor_mut(), num as Integer);
+    fn conv_number(&mut self, num: i64) {
+        mpack_integer(self.packer.cursor_mut(), num);
     }
 
-    fn conv_unsigned_number(&mut self, _tv: Option<&mut TypVal>, num: u64) {
+    fn conv_unsigned_number(&mut self, num: u64) {
         mpack_uint64(self.packer.cursor_mut(), num);
     }
 
-    fn conv_float(&mut self, _tv: Option<&mut TypVal>, flt: Float) -> Flow {
+    fn conv_float(&mut self, flt: Float) -> Flow {
         mpack_float8(self.packer.cursor_mut(), flt);
         Flow::Go
     }
 
     /// A Vimscript string is bytes, not text: it can hold NULs and invalid
     /// UTF-8, so it goes out as `bin`.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_string`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_string(
-        &mut self,
-        _tv: Option<&mut TypVal>,
-        buf: *mut c_char,
-        len: size_t,
-    ) -> Flow {
-        mpack_bin(unsafe { Self::buf(buf, len) }, self.packer);
+    fn conv_string(&mut self, bytes: &[u8]) -> Flow {
+        mpack_bin(bytes, self.packer);
         Flow::Go
     }
 
     /// A dictionary key, or a `{_TYPE: string}` payload: text, so `str`.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_str_string`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_str_string(
-        &mut self,
-        _tv: Option<&mut TypVal>,
-        buf: *mut c_char,
-        len: size_t,
-    ) -> Flow {
-        mpack_str(unsafe { Self::buf(buf, len) }, self.packer);
+    fn conv_str_string(&mut self, bytes: &[u8]) -> Flow {
+        mpack_str(bytes, self.packer);
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_ext_string`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_ext_string(
-        &mut self,
-        _tv: Option<&mut TypVal>,
-        buf: *mut c_char,
-        len: size_t,
-        ext_type: i8,
-    ) -> Flow {
-        unsafe { mpack_ext(buf, len, ext_type, self.packer) };
+    fn conv_ext_string(&mut self, bytes: &[u8], ext_type: i8) -> Flow {
+        mpack_ext(bytes, ext_type, self.packer);
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: *const [u8]) {
-        // SAFETY: the walk's promise: the blob's own array, and this sink
-        // releases nothing.
-        let bytes = unsafe { &*bytes };
+    fn conv_blob(&mut self, bytes: &[u8]) {
         mpack_bin(bytes, self.packer);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_func_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_func_start(
+    fn conv_func_start(
         &mut self,
-        _tv: Option<&mut TypVal>,
-        _fun: *mut c_char,
+        _fun: Option<&CStr>,
         _prefix: &'static CStr,
-        path: &ConvPath,
+        path: &ConvPath<'_, '_>,
     ) -> Flow {
-        unsafe { conv_error(gettext(E5004_FUNCREF).as_ptr(), path) }
+        conv_error(E5004_FUNCREF, path)
     }
 
-    fn conv_empty_list(&mut self, _tv: Option<&mut TypVal>) {
+    fn conv_empty_list(&mut self) {
         mpack_array(self.packer.cursor_mut(), 0);
     }
 
-    fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self) {
         mpack_map(self.packer.cursor_mut(), 0);
     }
 
-    fn conv_list_start(&mut self, _tv: Option<&mut TypVal>, len: c_int) -> Flow {
+    fn conv_list_start(&mut self, len: c_int) -> Flow {
         let len = u32::try_from(len).expect("a list length is never negative");
         mpack_array(self.packer.cursor_mut(), len);
         Flow::Go
     }
 
-    fn conv_dict_start(&mut self, _tv: Option<&mut TypVal>, len: size_t) -> Flow {
+    fn conv_dict_start(&mut self, len: usize) -> Flow {
         let len = u32::try_from(len).expect("a dict never holds four billion keys");
         mpack_map(self.packer.cursor_mut(), len);
         Flow::Go
     }
 
     /// msgpack has no way to spell a cycle, so this is where a dump gives up.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_recurse`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_recurse(
+    fn conv_recurse(
         &mut self,
-        _val: *mut c_void,
+        _container: Container<'_>,
         _conv_type: ConvType,
-        path: &ConvPath,
+        path: &ConvPath<'_, '_>,
     ) -> Flow {
-        unsafe { conv_error(gettext(E5005_SELF_REFERENCE).as_ptr(), path) }
+        conv_error(E5005_SELF_REFERENCE, path)
     }
 }
 
-/// Pack `tv` into `packer`.
+/// Pack `tv` into `packer`, answering whether the whole value went.
 ///
-/// `objname` names the value in any error message. Answers `OK`/`FAIL`.
-///
-/// # Safety
-/// `packer` and `tv` must be live, and `objname` NUL-terminated.
-pub unsafe fn encode_vim_to_msgpack(
-    packer: *mut PackerBuffer,
-    tv: &TypVal,
-    objname: &CStr,
-) -> c_int {
-    let mut sink = MsgpackSink {
-        packer: unsafe { &mut *packer },
-    };
-    c_int::from(encode_typval_read(&mut sink, tv, objname))
+/// `objname` names the value in any error message.
+pub fn encode_vim_to_msgpack(packer: &mut PackerBuffer, tv: &TypVal, objname: &CStr) -> bool {
+    let mut sink = MsgpackSink { packer };
+    encode_typval(&mut sink, tv, objname)
 }

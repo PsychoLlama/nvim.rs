@@ -230,20 +230,6 @@ where
 /// them because the payload is a [`ListRef`]: it can be borrowed but never
 /// handed out, since a copy of it would be a reference nobody took.
 impl TypVal {
-    /// The list, or `None` unless this is a `List` -- including the
-    /// `v:_null_list` case, which answers `Some(NULL)` as the generated
-    /// readers' `as_*` forms do for their own empty payloads.
-    #[inline(always)]
-    pub(crate) fn as_list(&self) -> Option<*mut List> {
-        match self {
-            TypVal::List(list) => Some(
-                list.as_ref()
-                    .map_or(::core::ptr::null_mut(), ListRef::as_ptr),
-            ),
-            _ => None,
-        }
-    }
-
     /// The list this value holds, or NULL unless it is a list holding one.
     ///
     /// A **borrow**: the answer is live as long as this value holds the
@@ -433,7 +419,7 @@ pub fn list_free_contents(list: &ListRef) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::eval::collect::var_item_copy_with;
+    use crate::eval::collect::var_item_copy;
     use crate::global_cell::editor_state_lock;
     use ::core::mem::ManuallyDrop;
 
@@ -906,7 +892,7 @@ mod tests {
 
         let mut to = TypVal::Unknown;
         let copy_id = crate::eval::get_copy_id();
-        let copied = var_item_copy_with(None, &from, &mut to, true, copy_id);
+        let copied = var_item_copy(None, &from, &mut to, true, copy_id);
         assert_eq!(copied, Ok(()));
         let copy = to.list_shared().expect("a list").clone();
         assert!(!copy.ptr_eq(&list));
@@ -962,7 +948,7 @@ mod tests {
 
         for (copy_id, shares) in [(crate::eval::get_copy_id(), true), (0, false)] {
             let mut to = TypVal::Unknown;
-            let copied = var_item_copy_with(None, &from, &mut to, true, copy_id);
+            let copied = var_item_copy(None, &from, &mut to, true, copy_id);
             assert_eq!(copied, Ok(()));
             let copy = to.list_ref().expect("a list");
             assert_ne!(item(copy, 0), shared.as_ptr());

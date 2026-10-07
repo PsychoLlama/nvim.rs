@@ -283,14 +283,10 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
 /// # Safety
 /// `reader` is live.
 pub unsafe fn reader_lines(reader: *mut CallbackReader) -> ListRef {
-    let l = tv_list_alloc(kListLenMayKnow as isize);
-    let into = l.as_ptr();
-    // SAFETY: the fresh list, and the caller's garray, which holds `ga_len`
-    // readable bytes at `ga_data`.
-    unsafe { (*into).push_bytes(Some(b"")) };
+    let mut l = tv_list_alloc(kListLenMayKnow as isize);
+    l.push_bytes(Some(b""));
+    // SAFETY: the caller's live reader.
     let buffer = unsafe { &(*reader).buffer };
-    if !buffer.is_empty() {
-        unsafe { encode_list_write(into.cast(), buffer.as_ptr().cast(), buffer.len()) };
-    }
+    encode_list_write(&mut l, buffer);
     l
 }

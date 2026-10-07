@@ -331,20 +331,12 @@ pub unsafe fn mpack_raw(data: *const c_char, len: size_t, packer: &mut PackerBuf
     mpack_check_buffer(packer);
 }
 
-/// An extension object: the header, the type byte, then `len` raw bytes.
-///
-/// # Safety
-/// `buf` must point at `len` readable bytes.
-pub unsafe fn mpack_ext(
-    buf: *mut c_char,
-    len: size_t,
-    ext_type: int8_t,
-    packer: &mut PackerBuffer,
-) {
-    let header = format::ext_header(len, ext_type).expect("extension too long for msgpack");
+/// An extension object: the header, the type byte, then the raw bytes.
+pub fn mpack_ext(bytes: &[u8], ext_type: int8_t, packer: &mut PackerBuffer) {
+    let header = format::ext_header(bytes.len(), ext_type).expect("extension too long for msgpack");
     emit(packer.cursor_mut(), header.bytes());
-    // SAFETY: the caller's bytes.
-    unsafe { mpack_raw(buf, len, packer) };
+    // SAFETY: the slice's own bytes.
+    unsafe { mpack_raw(bytes.as_ptr().cast(), bytes.len(), packer) };
 }
 
 /// A buffer, window or tabpage handle. `ext_type` is the msgpack extension
@@ -560,4 +552,16 @@ pub unsafe fn packer_take_string(buffer: &PackerBuffer) -> String_0 {
         *buffer.start().add(used) = 0;
         String_0::from_owned_parts(buffer.start(), used)
     }
+}
+
+/// Pack with `pack` into a fresh [`packer_string_buffer`] and answer the
+/// bytes, which adopt the buffer's own allocation rather than copying it.
+pub fn pack_to_bytes(pack: impl FnOnce(&mut PackerBuffer)) -> Vec<u8> {
+    let mut packer = packer_string_buffer();
+    pack(&mut packer);
+    let (used, capacity) = (packer.used(), packer.capacity());
+    // SAFETY: the buffer this made, an `xmalloc` block of `capacity` bytes
+    // holding `used` packed ones that nothing else names once `packer` goes;
+    // the global allocator is libc's, so a `Vec` may adopt it.
+    unsafe { Vec::from_raw_parts(packer.start().cast::<u8>(), used, capacity) }
 }

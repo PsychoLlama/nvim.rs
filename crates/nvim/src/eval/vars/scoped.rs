@@ -204,7 +204,7 @@ pub(crate) unsafe fn tv_to_optval(
     {
         // An option that takes a function reference or a lambda stores
         // the name of one.
-        let strval = unsafe { encode_tv2string(tv, ptr::null_mut()) };
+        let strval = encode_tv2string(tv).into_raw();
         err = strval.is_null();
         OptVal::string(unsafe { cstr_to_string(strval) })
     } else if option_has_bool || option_has_num {

@@ -84,7 +84,7 @@ impl CompleteFuncCb {
     /// collector leaves it alone. Answers whether to abort.
     pub(crate) fn set_ref(self, copy_id: c_int) -> bool {
         // SAFETY: the caller's promise; the slot is this cell's own.
-        unsafe { set_ref_in_callback(&*self.slot(), copy_id, ptr::null_mut(), ptr::null_mut()) }
+        set_ref_in_callback(unsafe { &*self.slot() }, copy_id, None, None)
     }
 }
 
@@ -158,11 +158,8 @@ impl CptCallbacks {
     /// abort.
     pub(crate) fn set_ref(self, copy_id: c_int) -> bool {
         CPT_CB.with_mut(|slots| {
-            // SAFETY: the cache's own slots; the two nulls say there is no
-            // containing list or dict to mark.
-            let mark = |slot: &mut Callback| unsafe {
-                set_ref_in_callback(slot, copy_id, ptr::null_mut(), ptr::null_mut())
-            };
+            // No containing list or dict to mark.
+            let mark = |slot: &mut Callback| set_ref_in_callback(slot, copy_id, None, None);
             slots.iter_mut().any(mark)
         })
     }
@@ -544,28 +541,18 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
     }
 }
 
-/// Mark `copy_id` references in an array of `F{func}` callbacks so they are not
-/// garbage collected.
-///
-/// # Safety
-///
-/// `callbacks` must point at an initialized callback, unaliased for the call.
-pub unsafe fn set_ref_in_cpt_callbacks(
-    callbacks: *mut Callback,
-    count: c_int,
-    copy_id: c_int,
-) -> bool {
+/// Mark `copy_id` references in `buffer`'s `F{func}` `'complete'` callbacks
+/// so they are not garbage collected.
+pub fn mark_cpt_callbacks(buffer: Buf, copy_id: c_int) -> bool {
+    let (callbacks, count) = (buffer.b_p_cpt_cb, buffer.b_p_cpt_count);
     if callbacks.is_null() {
         return false;
     }
     let mut abort = false;
-    let (no_list, no_dict) = (ptr::null_mut(), ptr::null_mut());
     for i in 0..count as isize {
-        // SAFETY: `callbacks` holds `count` live callbacks.
-        let slot = unsafe { callbacks.offset(i) };
-        // SAFETY: as above; the two nulls say there is no containing list or
-        // dict to mark.
-        abort = abort || unsafe { set_ref_in_callback(&*slot, copy_id, no_list, no_dict) };
+        // SAFETY: the buffer's own array of `count` live callbacks.
+        let slot = unsafe { &*callbacks.offset(i) };
+        abort = abort || set_ref_in_callback(slot, copy_id, None, None);
     }
     abort
 }

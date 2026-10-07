@@ -345,6 +345,21 @@ pub unsafe fn string_convert(
     unsafe { string_convert_ext(vcp, text, lenp, core::ptr::null_mut()) }
 }
 
+/// [`string_convert`] of a NUL-terminated `text`, answering the converted
+/// string -- the conversion's own block, adopted -- or `None` when the
+/// conversion failed.
+pub(crate) fn string_convert_cstr(vcp: &VimConv, text: &CStr) -> Option<ThinCString> {
+    // SAFETY: `text` is NUL-terminated and only read; the answer is a fresh
+    // `xmalloc` block, NUL-terminated, or null.
+    unsafe {
+        ThinCString::from_raw(string_convert(
+            vcp,
+            text.as_ptr().cast_mut(),
+            core::ptr::null_mut(),
+        ))
+    }
+}
+
 /// [`string_convert`] of `text`, measured: the converted bytes, or `None`
 /// when the conversion failed -- and, either way, the length the conversion
 /// left behind, which a failure need not leave at `text.len()`.

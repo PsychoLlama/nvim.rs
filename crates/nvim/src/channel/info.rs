@@ -89,7 +89,7 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
     // SAFETY: the caller's live channel.
     debug_assert!(unsafe { (*chan).id } <= i64::MAX as uint64_t);
     let tv = unsafe { info_tv((*chan).id) };
-    let str = unsafe { encode_tv2json(&tv, ptr::null_mut()) };
+    let str = encode_tv2json(&tv).into_raw();
     // SAFETY: the caller's live channel, and two NUL-terminated strings --
     // the caller's `source` and the JSON just rendered.
     let (id, source, info) = unsafe { ((*chan).id, c_str(source), c_str(str)) };

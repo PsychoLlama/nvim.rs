@@ -94,7 +94,7 @@ pub(crate) fn tv_str(
             .map_or(ptr::null(), ::core::ffi::CStr::as_ptr)
     } else {
         // SAFETY: a live value; the rendering is a fresh allocation.
-        *tofree = unsafe { encode_tv2echo(tv, ptr::null_mut()) };
+        *tofree = encode_tv2echo(tv).into_raw();
         *tofree
     }
 }

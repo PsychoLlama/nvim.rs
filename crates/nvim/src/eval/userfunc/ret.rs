@@ -489,7 +489,7 @@ pub unsafe fn get_return_cmd(result: *mut c_void) -> *mut c_char {
     let mut slen: size_t = 0;
 
     if !result.is_null() {
-        s = unsafe { encode_tv2echo(&*result.cast::<TypVal>(), ptr::null_mut()) };
+        s = unsafe { encode_tv2echo(&*result.cast::<TypVal>()).into_raw() };
         tofree = s;
     }
     if s.is_null() {

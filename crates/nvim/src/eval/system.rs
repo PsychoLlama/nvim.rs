@@ -170,9 +170,11 @@ pub(crate) unsafe fn string_to_list(
     if !keepempty && unsafe { *str.add(len - 1) } as c_int == NL {
         len -= 1;
     }
-    let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let mut list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     // SAFETY: as above; `str` has `len` readable bytes.
-    unsafe { encode_list_write(list.as_ptr() as *mut c_void, str, len) };
+    encode_list_write(&mut list, unsafe {
+        ::core::slice::from_raw_parts(str.cast(), len)
+    });
     list
 }
 

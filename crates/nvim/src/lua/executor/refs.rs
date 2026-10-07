@@ -169,6 +169,13 @@ pub unsafe fn api_free_luaref(ref_0: LuaRef) {
     unsafe { nlua_unref_global(get_global_lstate(), ref_0) };
 }
 
+/// Give up a reference the caller owns, against the main state.
+pub(crate) fn release_luaref(reference: LuaRef) {
+    // SAFETY: the main state lives as long as the editor, and a holder that
+    // gives a reference up owned it.
+    unsafe { api_free_luaref(reference) };
+}
+
 /// Push what `ref_0` refers to.
 ///
 /// # Safety

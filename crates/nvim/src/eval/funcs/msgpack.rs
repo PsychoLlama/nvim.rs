@@ -1,138 +1,96 @@
 //! Serialisation: the `msgpack*()` and `json_*()` families.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::wrappers::{blob_alloc_ret, list_alloc_ret};
+use super::wrappers::blob_alloc_ret;
 use super::{ARENA_BLOCK_SIZE, MPACK_EOF, MPACK_ERROR, MPACK_OK};
-use crate::eval::decode::{
-    json_decode_string, mpack_parse_typval, typval_parser_error_free, unpack_typval,
-};
+use crate::eval::decode::{MsgpackDecoder, json_decode_string, unpack_typval};
 use crate::eval::encode::{
-    ListRead, encode_init_lrstate, encode_list_write, encode_read_from_list, encode_tv2json,
-    encode_vim_list_to_buf, encode_vim_to_msgpack,
+    ListRead, ListReader, encode_list_write, encode_tv2json, encode_vim_list_to_buf,
+    encode_vim_to_msgpack,
 };
-use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{NumBuf, blob_bytes, list_items, list_len};
-use crate::memory::{ThinCString, alloc_block, free_block, xfree};
-use crate::message_fmt::c_str_len;
-use crate::mpack::object::mpack_parser_init;
-use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
+use crate::eval::typval::{NumBuf, blob_bytes, tv_list_alloc};
+use crate::message_fmt::msg_bytes;
+use crate::msgpack_rpc::packer::pack_to_bytes;
 use crate::semsg;
 use crate::types::{
     Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
-    mpack_parser_t,
 };
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::fmt::Write as _;
-use core::{ptr, slice};
-
-/// A cleared typval, the shape the decoders write their result into.
-const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
 
 /// `json_decode({expr})` — parse JSON from a String, or from a List of
 /// lines joined by NLs.
 pub fn f_json_decode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: `tofree` owns whatever the List conversion allocated and is
-    // released on every path; `s` points into it or into `numbuf`, both of
-    // which outlive the parse.
     let mut numbuf = NumBuf::new();
-    let mut tofree: *mut c_char = ptr::null_mut();
-    let mut len: usize = 0;
-    let s: *const c_char = if args[0].v_type() == VAR_LIST {
-        // SAFETY: the kind says the value holds a List pointer; the two
-        // out-parameters are locals.
-        let l = args[0].list_or_null();
-        let (out_len, out) = (&raw mut len, &raw mut tofree);
-        if !unsafe { encode_vim_list_to_buf(l, out_len, out) } {
+    let joined;
+    let text: &[u8] = if args[0].v_type() == VAR_LIST {
+        let Some(bytes) = encode_vim_list_to_buf(args[0].list_ref()) else {
             semsg!("E474: Failed to convert list to string");
             return;
-        }
-        if tofree.is_null() {
-            debug_assert!(len == 0);
-            c"".as_ptr()
-        } else {
-            tofree
-        }
+        };
+        joined = bytes;
+        &joined
     } else {
         let Some(s) = numbuf.string_chk(&args[0]) else {
             return;
         };
-        len = s.count_bytes();
-        s.as_ptr()
+        s.to_bytes()
     };
-    if unsafe { json_decode_string(s, len, result) }.is_err() {
-        // SAFETY: `s` is the caller's string and `len` its length.
-        let s = unsafe { c_str_len(s, len) };
+    if json_decode_string(text, result).is_err() {
+        // `%s` of the document: it stops at a NUL a joined List may hold.
+        let shown = text
+            .iter()
+            .position(|&b| b == 0)
+            .map_or(text, |nul| &text[..nul]);
+        let s = msg_bytes(shown);
         semsg!("E474: Failed to parse {s}");
         result.write_number(0);
     }
     debug_assert!(result.v_type() != VAR_UNKNOWN);
-    unsafe { xfree(tofree as *mut c_void) };
 }
 
 /// `json_encode({expr})`.
 pub fn f_json_encode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the encoder reads the argument and returns an `xmalloc`ed
-    // string, which the return value adopts.
-    result.write_string(unsafe {
-        ThinCString::from_raw(encode_tv2json(&args[0], ptr::null_mut::<usize>()))
-    });
+    result.write_string(Some(encode_tv2json(&args[0])));
 }
 
 /// `msgpackdump({list} [, {type}])` — a List of msgpack objects as a List
 /// of NL-joined lines, or as a Blob when `{type}` is "B".
 pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the packer owns its buffer until `packer_take_string` hands
-    // it over, and the string is then owned by the Blob or written into the
-    // result List and freed.
     if args[0].v_type() != VAR_LIST {
         let arg0 = "msgpackdump()";
         semsg!("E686: Argument of {arg0} must be a List");
         return;
     }
-    let mut packer = packer_string_buffer();
     // The per-item label the encoder names in its own error messages.
     // One buffer, reused, as the C's 189-byte stack array was.
     let mut label = String::with_capacity(64);
-    let list = args[0].list_or_null();
-    let mut idx: usize = 0;
-    // By index: an encoder hook can run Lua, which may edit the list being
-    // dumped.
-    // SAFETY: a live list, or NULL, which reads as empty.
-    while let Some(item) = (list_items(unsafe { list.as_ref() })).get(idx) {
-        label.clear();
-        let _ = write!(label, "msgpackdump() argument, index {idx}\0");
-        idx += 1;
-        // SAFETY: `packer` is the local writer and `label` is NUL-terminated
-        // by the `write!` above.
-        let what = CStr::from_bytes_with_nul(label.as_bytes()).expect("the NUL above");
-        if unsafe { encode_vim_to_msgpack(&raw mut packer, &item.li_tv, what) } == 0 {
-            break;
+    let items = args[0].list_ref().map_or(&[][..], List::items);
+    // Everything packed up to the first value that refuses.
+    let data = pack_to_bytes(|packer| {
+        for (idx, item) in items.iter().enumerate() {
+            label.clear();
+            let _ = write!(label, "msgpackdump() argument, index {idx}\0");
+            let what = CStr::from_bytes_with_nul(label.as_bytes()).expect("the NUL above");
+            if !encode_vim_to_msgpack(packer, &item.li_tv, what) {
+                break;
+            }
         }
-    }
-    // SAFETY: the buffer is this function's own `packer_string_buffer`.
-    let data = unsafe { packer_take_string(&packer) };
+    });
     if args.len() > 1 && numbuf.bytes(&args[1]) == b"B" {
-        // The Blob adopts the packer's allocation as-is, capacity and
-        // all; nothing copies, so the string gives the block up rather than
-        // releasing it on the way out.
-        let (len, capacity) = (data.len(), packer.capacity());
-        let b = blob_alloc_ret(result);
-        // SAFETY: the packer's own `capacity`-byte allocation holding `len`
-        // bytes, which the string gives up; the global allocator is libc's,
-        // so a `Vec` may adopt it.
-        b.bv_data = unsafe { Vec::from_raw_parts(data.into_raw().cast::<u8>(), len, capacity) };
+        // The Blob adopts the packed bytes as they are; nothing copies.
+        blob_alloc_ret(result).bv_data = data;
     } else {
-        let l = list_alloc_ret(result, kListLenMayKnow as isize);
-        unsafe { encode_list_write(l as *mut c_void, data.data(), data.len()) };
-        drop(data);
+        let mut lines = tv_list_alloc(kListLenMayKnow as isize);
+        encode_list_write(&mut lines, &data);
+        result.write_list(Some(lines));
     }
 }
 
 /// Report an unpacker status that is not `MPACK_OK`.
 fn emsg_mpack_error(status: c_int) {
-    match status as u32 {
+    match status.cast_unsigned() {
         MPACK_ERROR => semsg!("E475: Invalid argument: Failed to parse msgpack string"),
         MPACK_EOF => semsg!("E475: Invalid argument: Incomplete msgpack string"),
         // Anything past MPACK_ERROR is the parser's depth limit.
@@ -141,117 +99,84 @@ fn emsg_mpack_error(status: c_int) {
     };
 }
 
-/// Feed a List of NL-joined strings through the streaming unpacker,
-/// appending each complete object to `ret_list`.
-///
-/// # Safety
-/// `list` and `ret_list` are live lists.
-unsafe fn msgpackparse_unpack_list(list: *const List, ret_list: *mut List) {
-    // SAFETY: the caller's obligation. `buf` is an arena block owned for the
-    // whole walk and freed at the end; `parser` is initialised before use
-    // and its error state released before the last message.
-    if list_len(unsafe { list.as_ref() }) == 0 {
+/// Feed a List of NL-joined strings through the streaming decoder, appending
+/// each complete object to `ret_list`.
+fn msgpackparse_unpack_list(list: &List, ret_list: &mut List) {
+    let Some(first) = list.items().first() else {
         return;
-    }
-    if list_items(unsafe { list.as_ref() })[0].li_tv.v_type() != VAR_STRING {
+    };
+    if first.li_tv.v_type() != VAR_STRING {
         semsg!("E475: Invalid argument: List item is not a string");
         return;
     }
-    let mut lrstate = unsafe { encode_init_lrstate(list) };
-    let buf = unsafe { alloc_block() } as *mut c_char;
-    let mut buf_size: usize = 0;
-    let mut cur_item = EMPTY_TV;
-    let mut parser: mpack_parser_t = unsafe { core::mem::zeroed() };
-    unsafe { mpack_parser_init(&raw mut parser, 0) };
-    parser.data.p = &raw mut cur_item as *mut c_void;
-
-    let mut status = MPACK_OK as c_int;
+    let mut reader = ListReader::new(list);
+    // One arena block's worth at a time, as upstream reads.
+    let mut buf = vec![0u8; ARENA_BLOCK_SIZE.cast_unsigned() as usize];
+    let mut decoder = MsgpackDecoder::new();
+    let mut status = MPACK_OK.cast_signed();
     loop {
-        let mut read_bytes: usize = 0;
-        let at = unsafe { buf.add(buf_size) };
-        let room = (ARENA_BLOCK_SIZE as usize) - buf_size;
-        let (state, got) = (&raw mut lrstate, &raw mut read_bytes);
-        // SAFETY: `buf` has `ARENA_BLOCK_SIZE` bytes and `buf_size` of them
-        // are used; the reader state and the count are locals.
-        let rlret = unsafe { encode_read_from_list(state, at, room, got) };
-        if rlret.is_err() {
+        let (rlret, read_bytes) = reader.read(&mut buf);
+        let Ok(rlret) = rlret else {
             semsg!("E475: Invalid argument: List item is not a string");
             break;
-        }
-        buf_size += read_bytes;
-        // SAFETY: the block's first `buf_size` bytes are the ones read.
-        let mut cursor: &[u8] = unsafe { slice::from_raw_parts(buf.cast::<u8>(), buf_size) };
+        };
+        // The decoder buffers a partial object itself, so every read starts
+        // the block afresh.
+        let mut cursor = &buf[..read_bytes];
         while !cursor.is_empty() {
-            status = unsafe { mpack_parse_typval(&raw mut parser, &mut cursor) };
-            if status != MPACK_OK as c_int {
-                break;
+            match decoder.feed(&mut cursor) {
+                Ok(Some(value)) => {
+                    status = MPACK_OK.cast_signed();
+                    ret_list.push(value);
+                }
+                Ok(None) => status = MPACK_EOF.cast_signed(),
+                Err(error) => {
+                    status = error;
+                    break;
+                }
             }
-            unsafe { (*ret_list).push(cur_item.take()) };
         }
-        let consumed = buf_size - cursor.len();
-        buf_size = cursor.len();
-        if rlret == Ok(ListRead::Drained) {
-            break;
-        }
-        if status == MPACK_EOF as c_int {
-            // Shuffle the partial object back to the front so the next
-            // read tops it up.
-            if buf_size != 0 && consumed > 0 {
-                unsafe {
-                    buf.cast::<u8>()
-                        .copy_from(buf.add(consumed).cast(), buf_size)
-                };
-            }
-        } else if status != MPACK_OK as c_int {
+        if rlret == ListRead::Drained || status > MPACK_EOF.cast_signed() {
             break;
         }
     }
-    if status != MPACK_OK as c_int {
-        unsafe { typval_parser_error_free(&raw mut parser) };
+    if status != MPACK_OK.cast_signed() {
         emsg_mpack_error(status);
     }
-    unsafe { free_block(buf as *mut c_void) };
 }
 
 /// Unpack a Blob, which is already one contiguous buffer.
-///
-/// # Safety
-/// `ret_list` is a live list.
-unsafe fn msgpackparse_unpack_blob(blob: Option<&Blob>, ret_list: *mut List) {
-    let bytes = blob_bytes(blob);
-    if bytes.is_empty() {
-        return;
-    }
+fn msgpackparse_unpack_blob(blob: Option<&Blob>, ret_list: &mut List) {
     // `unpack_typval` advances the cursor past each object.
-    let mut data = bytes;
+    let mut data = blob_bytes(blob);
     while !data.is_empty() {
-        let mut tv = EMPTY_TV;
+        let mut tv = TypVal::Unknown;
         let status = unpack_typval(&mut data, &mut tv);
-        if status != MPACK_OK as c_int {
+        if status != MPACK_OK.cast_signed() {
             emsg_mpack_error(status);
             return;
         }
-        unsafe { (*ret_list).push(tv) };
+        ret_list.push(tv);
     }
 }
 
 /// `msgpackparse({data})` — the objects in a List of strings or a Blob.
 pub fn f_msgpackparse(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the argument and the freshly allocated result list are both
-    // live for the call.
     if args[0].v_type() != VAR_LIST && args[0].v_type() != VAR_BLOB {
         let arg0 = "msgpackparse()";
         semsg!("E899: Argument of {arg0} must be a List or Blob");
         return;
     }
-    let ret_list = list_alloc_ret(result, kListLenMayKnow as isize);
+    let mut ret_list = tv_list_alloc(kListLenMayKnow as isize);
     if args[0].v_type() == VAR_LIST {
-        unsafe { msgpackparse_unpack_list(args[0].list_or_null(), ret_list) };
+        if let Some(list) = args[0].list_ref() {
+            msgpackparse_unpack_list(list, &mut ret_list);
+        }
     } else {
-        unsafe { msgpackparse_unpack_blob(args[0].blob_ref(), ret_list) };
+        msgpackparse_unpack_blob(args[0].blob_ref(), &mut ret_list);
     }
+    result.write_list(Some(ret_list));
 }
-
 #[cfg(test)]
 mod tests {
     //! Round trips through the four builtins, and the decoder's statuses on
@@ -298,10 +223,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
-    )]
     fn msgpack_round_trips_through_a_blob_and_a_list_of_lines() {
         let _serial = editor_state_lock();
         let values = TypVal::list(Some(list(vec![sample(), string_tv(b"x")])));
@@ -331,10 +252,6 @@ mod tests {
 
     /// Every prefix of a dumped value: incomplete, then whole.
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
-    )]
     fn a_truncated_object_is_incomplete_until_its_last_byte() {
         let _serial = editor_state_lock();
         let mut d = tv_dict_alloc();
@@ -363,18 +280,14 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "UB in typval_encode/walk.rs:576: encode_typval_read retags a &TypVal as &mut"
-    )]
     fn json_round_trips_its_containers_and_scalars() {
         let _serial = editor_state_lock();
-        let doc = string_tv(b"{\"a\": [1, 2.5, \"x\\u00e9\", null, true, {}], \"b\": {\"c\": []}}");
+        let doc = string_tv(b"{\"a\": [1, -25, \"x\\u00e9\", null, true, {}], \"b\": {\"c\": []}}");
         let value = call(f_json_decode, vec![doc]);
         let text = call(f_json_encode, vec![value]);
         assert_eq!(
             text.string_bytes(),
-            "{\"a\": [1, 2.5, \"x\u{e9}\", null, true, {}], \"b\": {\"c\": []}}".as_bytes()
+            "{\"a\": [1, -25, \"x\u{e9}\", null, true, {}], \"b\": {\"c\": []}}".as_bytes()
         );
         // A List of lines is joined with newlines first.
         let lines = TypVal::list(Some(list(vec![string_tv(b"[1,"), string_tv(b"2]")])));

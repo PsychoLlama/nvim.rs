@@ -30,9 +30,7 @@ fn decoding_reads_no_further_than_the_length_it_was_given() {
     let _log = AllocLog::start();
     // Raised for the case and put back on drop: the Lua harness forked a
     // child per case, so it never had to lower it.
-    // SAFETY: every buffer outlives the call that reads it, and `rettv` is
-    // this case's own.
-    Suppress::emsg_silent_during(&mut || unsafe {
+    Suppress::emsg_silent_during(&mut || {
         let mut rettv = unset();
         for (text, len) in [
             ("null", 1),
@@ -51,7 +49,7 @@ fn decoding_reads_no_further_than_the_length_it_was_given() {
         ] {
             let buf = cstr(text);
             assert_eq!(
-                json_decode_string(buf.as_ptr(), len, &mut rettv),
+                json_decode_string(&buf.as_bytes()[..len], &mut rettv),
                 Err(Failed),
                 "{text:?} at {len}"
             );
@@ -79,7 +77,7 @@ fn decoding_a_lone_byte_reads_only_that_byte() {
         for &byte in b"ntf\"" {
             let one = xmemdup((&raw const byte).cast(), 1);
             assert_eq!(
-                json_decode_string(one.cast(), 1, &mut rettv),
+                json_decode_string(core::slice::from_raw_parts(one.cast(), 1), &mut rettv),
                 Err(Failed),
                 "{:?}",
                 byte as char
@@ -105,14 +103,13 @@ fn decoding_a_lone_byte_reads_only_that_byte() {
 #[test]
 fn a_decoder_error_quotes_no_more_than_it_read() {
     let log = AllocLog::start();
-    // SAFETY: every buffer outlives its call; `rettv` is this case's own.
-    unsafe {
+    {
         let mut rettv = unset();
         let mut check = |text: &[u8], len: usize, msg: &[u8]| {
             let buf = text.to_vec();
             let ret = check_emsg_bytes(
                 log.editor(),
-                || json_decode_string(buf.as_ptr().cast(), len, &mut rettv),
+                || json_decode_string(&buf[..len], &mut rettv),
                 Some(msg),
             );
             assert_eq!(ret, Err(Failed), "{:?}", String::from_utf8_lossy(text));

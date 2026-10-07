@@ -5,24 +5,19 @@
 //! scanner that calls them they may come back having *rewound* the cursor,
 //! with [`Decoder::next_map_special`] set.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::charset::Str2NrBases;
-use crate::message_fmt::{c_str_len, emsg_text};
+use crate::charset::{Str2NrBases, str2nr_in, string2float_in};
+use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::tr_c;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::stack::Decoder;
 use super::{BS, CAR, FF, NL, TAB};
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
-use crate::charset::string2float;
-use crate::charset::vim_str2nr;
-use crate::eval::decode::decode_string;
-use crate::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
-use crate::memory::xmalloc;
-use crate::types::{NUL, TypVal, UVarNumber, VAR_STRING, VarNumber};
-use ::libc::abort;
+use crate::eval::decode::decode_owned_string;
+use crate::mbyte::{char_at, char_len, encode_char, utf_char2len};
+use crate::types::{TypVal, UVarNumber, VAR_STRING};
 
 const E474_UNFINISHED_ESCAPE: &CStr = c"E474: Unfinished escape sequence: %.*s";
 const E474_UNFINISHED_UNICODE: &CStr = c"E474: Unfinished unicode escape sequence: %.*s";
@@ -58,9 +53,8 @@ const SURROGATE_FIRST_CHAR: c_int = 0x10000;
 /// measured in one pass and decoded in a second, so the output buffer is
 /// allocated exactly once and handed to the typval, which then owns it.
 ///
-/// # Safety
 /// `at` indexes `dec.buf` and points at a `"`.
-pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
+pub(crate) fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> bool {
     let buf = dec.buf;
     let e = buf.len();
     let s = *at + 1;
@@ -112,12 +106,11 @@ pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> boo
             dec.emsg_rest(E474_CONTROL_CHARS, p);
             return fail(at, p);
         }
-        let ch = unsafe { utf_ptr2char(buf.as_ptr().add(p) as *const c_char) };
+        let ch = char_at(&buf[p..]);
         // Every code point above U+007F is two or more bytes, so it can
-        // never equal the byte it starts with — except that
-        // `utf_ptr2char({0xFF, 0})` answers 0xFF even though 0xFF starts
-        // no sequence at all.  U+00C3 is the one real exception, spelled
-        // 0xC3 0x83.
+        // never equal the byte it starts with — except that `char_at` answers
+        // a byte that starts no complete sequence as itself.  U+00C3 is the
+        // one real exception, spelled 0xC3 0x83.
         if ch >= 0x80 && c_int::from(byte) == ch && !(ch == 0xc3 && p + 1 < e && buf[p + 1] == 0x83)
         {
             dec.emsg_rest(E474_ONLY_UTF8, p);
@@ -127,38 +120,35 @@ pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> boo
             dec.emsg_rest(E474_ABOVE_10FFFF, p);
             return fail(at, p);
         }
-        let ch_len = utf_char2len(ch) as usize;
-        debug_assert!(
-            ch_len
-                == if ch != 0 {
-                    unsafe { utf_ptr2len(buf.as_ptr().add(p) as *const c_char) }
-                } else {
-                    1
-                } as usize
-        );
+        let ch_len = usize::try_from(utf_char2len(ch)).unwrap_or(1);
+        debug_assert!(ch_len == if ch != 0 { char_len(&buf[p..]) } else { 1 });
         len += ch_len;
         p += ch_len;
     }
-    // `p > e` is reachable only if `utf_ptr2char` read a lead byte whose
-    // continuation bytes ran past the document; upstream reads the byte
-    // there anyway.
+    // Upstream reaches `p > e` when `utf_ptr2char` read a lead byte whose
+    // continuation bytes ran past the document; the slice form answers such
+    // a byte as itself, which pass one refuses above.
     if p >= e || buf[p] != b'"' {
         dec.emsg_rest(E474_STRING_END, 0);
         return fail(at, p);
     }
 
-    // Pass two: write the decoded bytes.  `out` is handed to the typval
-    // below, which frees it with the value.
-    let out = unsafe { xmalloc(len + 1) } as *mut u8;
-    let mut w: usize = 0;
+    // Pass two: write the decoded bytes, which the typval takes over -- with
+    // room for the string's NUL.
+    let mut out: Vec<u8> = Vec::with_capacity(len + 1);
     // A `\uD800`-range escape is held back until the next escape says
     // whether it is the first half of a surrogate pair.
     let mut fst_in_pair: c_int = 0;
+    let put_char = |out: &mut Vec<u8>, ch: c_int| {
+        let mut encoded = [0u8; 6];
+        let n = encode_char(ch, &mut encoded);
+        out.extend_from_slice(&encoded[..n]);
+    };
     // `PUT_FST_IN_PAIR`: emit a held-back high surrogate as the lone code
     // point it turned out to be.
-    let flush = |w: &mut usize, fst: &mut c_int| {
+    let flush = |out: &mut Vec<u8>, fst: &mut c_int| {
         if *fst != 0 {
-            *w += unsafe { utf_char2bytes(*fst, out.add(*w) as *mut c_char) } as usize;
+            put_char(out, *fst);
             *fst = 0;
         }
     };
@@ -166,45 +156,33 @@ pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> boo
     let mut t = s;
     while t < p {
         if buf[t] != b'\\' || buf[t + 1] != b'u' {
-            flush(&mut w, &mut fst_in_pair);
+            flush(&mut out, &mut fst_in_pair);
         }
         if buf[t] != b'\\' {
-            unsafe { *out.add(w) = buf[t] };
-            w += 1;
+            out.push(buf[t]);
             t += 1;
             continue;
         }
         t += 1;
         if buf[t] == b'u' {
-            let hex = [
-                buf[t + 1] as c_char,
-                buf[t + 2] as c_char,
-                buf[t + 3] as c_char,
-                buf[t + 4] as c_char,
-            ];
-            t += 4;
-            let mut ch: UVarNumber = 0;
-            let (prep, len) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
-            let (nptr, overflow) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
             let what = Str2NrBases::HEX | Str2NrBases::FORCE;
-            let start = hex.as_ptr();
-            #[rustfmt::skip]
-            unsafe { vim_str2nr(start, prep, len, what, nptr, &raw mut ch, 4, true, overflow) };
+            let ch: UVarNumber = str2nr_in(&buf[t + 1..t + 5], what, true).magnitude;
+            t += 4;
+            let code = c_int::try_from(ch).expect("four hex digits");
             if (SURROGATE_HI_START..=SURROGATE_HI_END).contains(&ch) {
-                flush(&mut w, &mut fst_in_pair);
-                fst_in_pair = ch as c_int;
+                flush(&mut out, &mut fst_in_pair);
+                fst_in_pair = code;
             } else if (SURROGATE_LO_START..=SURROGATE_LO_END).contains(&ch) && fst_in_pair != 0 {
-                let full_char = (ch - SURROGATE_LO_START) as c_int
-                    + ((fst_in_pair - SURROGATE_HI_START as c_int) << 10)
-                    + SURROGATE_FIRST_CHAR;
-                w += unsafe { utf_char2bytes(full_char, out.add(w) as *mut c_char) } as usize;
+                let low = c_int::try_from(ch - SURROGATE_LO_START).expect("ten bits");
+                let high = fst_in_pair - c_int::try_from(SURROGATE_HI_START).expect("a code unit");
+                put_char(&mut out, low + (high << 10) + SURROGATE_FIRST_CHAR);
                 fst_in_pair = 0;
             } else {
-                flush(&mut w, &mut fst_in_pair);
-                w += unsafe { utf_char2bytes(ch as c_int, out.add(w) as *mut c_char) } as usize;
+                flush(&mut out, &mut fst_in_pair);
+                put_char(&mut out, code);
             }
         } else {
-            let byte = match buf[t] {
+            out.push(match buf[t] {
                 b'\\' => b'\\',
                 b'/' => b'/',
                 b'"' => b'"',
@@ -213,23 +191,19 @@ pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> boo
                 b'n' => NL,
                 b'r' => CAR,
                 b'f' => FF,
-                // Pass one accepted no other escape.
-                _ => unsafe { abort() },
-            };
-            unsafe { *out.add(w) = byte };
-            w += 1;
+                _ => unreachable!("pass one accepted no other escape"),
+            });
         }
         t += 1;
     }
-    flush(&mut w, &mut fst_in_pair);
-    unsafe { *out.add(w) = NUL as u8 };
+    flush(&mut out, &mut fst_in_pair);
 
-    let obj = unsafe { decode_string(out as *const c_char, w, false, true) };
+    let obj = decode_owned_string(out);
     // A string carrying an embedded NUL came back as a blob wrapped in a
     // special dictionary, which can be a dictionary value but not a key.
     let is_special_string = obj.v_type() != VAR_STRING;
     let value = dec.value(obj, is_special_string);
-    let ok = unsafe { dec.finish_value(value, &mut p) };
+    let ok = dec.finish_value(value, &mut p);
     *at = p;
     ok
 }
@@ -239,9 +213,8 @@ pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> boo
 /// `at` points at the leading digit or minus sign and comes back on the last
 /// character of the number, so that the scanner's own `+= 1` lands past it.
 ///
-/// # Safety
 /// `at` indexes `dec.buf` and points at `-` or a digit.
-pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> bool {
+pub(crate) fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> bool {
     let buf = dec.buf;
     let e = buf.len();
     let s = *at;
@@ -308,35 +281,27 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
         return fail(at, p);
     }
 
-    let text = unsafe { buf.as_ptr().add(s) } as *const c_char;
-    let want = p - s;
+    let text = &buf[s..p];
+    let want = text.len();
+    let shown_len = c_int::try_from(want).unwrap_or(c_int::MAX);
     let mut tv = TypVal::Number(0);
     if fracs.is_some() || exps.is_some() {
-        let (parsed, got) = unsafe { string2float(text) };
+        let (parsed, got) = string2float_in(text);
         tv.write_float(parsed);
         if want != got {
-            // SAFETY: `text` is readable for `want` bytes.
-            let shown = unsafe { c_str_len(text, want) };
-            emsg_text(tr_c!(E685_FLOAT, want as c_int, shown, got, want));
+            emsg_text(tr_c!(E685_FLOAT, shown_len, msg_bytes(text), got, want));
         }
     } else {
-        let mut nr: VarNumber = 0;
-        let mut got: c_int = 0;
-        let prep = ::core::ptr::null_mut();
-        let (unptr, overflow) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
-        let (maxlen, dec) = (want as c_int, Str2NrBases::NONE);
-        #[rustfmt::skip]
-        unsafe { vim_str2nr(text, prep, &raw mut got, dec, &raw mut nr, unptr, maxlen, true, overflow) };
-        if want as c_int != got {
-            // SAFETY: `text` is readable for `want` bytes.
-            let shown = unsafe { c_str_len(text, want) };
-            emsg_text(tr_c!(E685_INTEGER, want as c_int, shown, got, want));
+        let parsed = str2nr_in(text, Str2NrBases::NONE, true);
+        if want != parsed.len {
+            let got = c_int::try_from(parsed.len).unwrap_or(c_int::MAX);
+            emsg_text(tr_c!(E685_INTEGER, shown_len, msg_bytes(text), got, want));
         }
-        tv.write_number(nr);
+        tv.write_number(parsed.value);
     }
 
     let value = dec.value(tv, false);
-    if !unsafe { dec.finish_value(value, &mut p) } {
+    if !dec.finish_value(value, &mut p) {
         *at = p;
         return false;
     }

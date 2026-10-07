@@ -1,30 +1,35 @@
 //! The walk `typval_encode.c.h` emits around its hooks: the two functions
 //! upstream calls `_typval_encode_<sink>_convert_one_value` and
 //! `encode_vim_to_<sink>`, written once against [`TypvalSink`].
+//!
+//! Every frame holds a borrow of the container it is suspended in, all of
+//! them reached from the one value the walk was handed, so the walk is a
+//! shared borrow of that value from start to finish: nothing a sink does can
+//! reach the value through the walk, and the walk writes nothing to it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use super::{
-    ConvFrame, ConvPath, ConvStack, ConvType, Flow, Frame, PartialStage, Refused, TypvalSink,
+    Container, ConvPath, ConvStack, ConvType, Flow, Frame, PartialStage, Refused, TypvalSink,
 };
 use crate::eval::encode::encode_vim_list_to_buf;
-use crate::eval::typval::DictRef;
-use crate::eval::typval::{
-    DictSlot, Dt, Li, Pt, Tv, blob_bytes, di_tv, dict_find, dv_copyid, list_first, list_items,
-    list_items_mut, list_iter, list_last, list_len, lv_copyid, tv_dict_hi2di,
-};
+use crate::eval::partial_name;
+use crate::eval::typval::{blob_bytes, dict_find, list_len};
 use crate::eval::vars::eval_msgpack_type_lists;
-use crate::eval::{get_copy_id, partial_name};
-use crate::memory::xfree;
 use crate::message::internal_error;
 use crate::types::{
-    Dict, List, Partial, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, int64_t,
-    kBoolVarFalse, kBoolVarTrue, kSpecialVarNull, ptrdiff_t, size_t,
+    Dict, List, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse, kBoolVarTrue,
+    kSpecialVarNull,
 };
 
 /// Apply a hook's verdict inside `convert_one_value`, where "stop" is
@@ -52,75 +57,28 @@ macro_rules! walk_hook {
     };
 }
 
-/// Mark `val` with `copy_id`, or tell the sink it has been here before.
+/// Tell the sink it has met `container` before, if some frame already holds
+/// it: upstream's `_TYPVAL_ENCODE_CHECK_SELF_REFERENCE`.
 ///
-/// Answers [`Flow::Go`] for a container the walk has not seen (upstream's
-/// `NOTDONE`), and otherwise whatever the sink makes of the self-reference.
-///
-/// # Safety
-///
-/// `val` must be the container the walk is standing on and `val_copyid` the
-/// address of that container's `copyID` field, both live and unaliased for
-/// the call.
-unsafe fn check_self_reference<S: TypvalSink>(
+/// Answers [`Flow::Go`] for a container the walk is not inside (upstream's
+/// `NOTDONE`), and otherwise whatever the sink makes of the self-reference —
+/// with its "handled" read as "this value is done", which is what the macro's
+/// fall-through to `return OK` meant.
+fn check_self_reference<S: TypvalSink>(
     sink: &mut S,
-    val: *mut c_void,
-    val_copyid: *mut c_int,
+    stack: &ConvStack<'_>,
+    container: Container<'_>,
     conv_type: ConvType,
-    copyid: c_int,
-    path: &ConvPath,
+    objname: &CStr,
 ) -> Flow {
-    if unsafe { *val_copyid } == copyid {
-        // The macro either bails or falls through to `return OK`, which
-        // out here is "this value is done".
-        return match unsafe { sink.conv_recurse(val, conv_type, path) } {
-            Flow::Go => Flow::Stop,
-            other => other,
-        };
+    if !stack.holds(container) {
+        return Flow::Go;
     }
-    unsafe { *val_copyid = copyid };
-    Flow::Go
-}
-
-/// [`check_self_reference`] for a list, whose copyID is a field of its own.
-///
-/// The pair `(val, val_copyid)` is always an object and *that object's* copyID
-/// slot, so spelling the projection once here keeps every call site to one
-/// line instead of the eight rustfmt gives a six-argument call.
-///
-/// # Safety
-/// `list` must point at a live list and `copyid` be one the caller reserved
-/// from `get_copyID`; the sink's own obligations pass straight through.
-#[inline]
-unsafe fn check_list_seen<S: TypvalSink>(
-    sink: &mut S,
-    list: *mut List,
-    conv_type: ConvType,
-    copyid: c_int,
-    path: &ConvPath,
-) -> Flow {
-    // SAFETY: the caller's live list; `lv_copy_id` is a field of it.
-    let seen = lv_copyid(list);
-    // SAFETY: as above.
-    unsafe { check_self_reference(sink, list.cast(), seen, conv_type, copyid, path) }
-}
-
-/// [`check_list_seen`] for a dictionary.
-///
-/// # Safety
-/// As [`check_list_seen`], with `dict` a live dictionary.
-#[inline]
-unsafe fn check_dict_seen<S: TypvalSink>(
-    sink: &mut S,
-    dict: *mut Dict,
-    copyid: c_int,
-    path: &ConvPath,
-) -> Flow {
-    // SAFETY: the caller's live dictionary; `dv_copy_id` is a field of it.
-    let seen = dv_copyid(dict);
-    let ty = ConvType::Dict;
-    // SAFETY: as above.
-    unsafe { check_self_reference(sink, dict.cast(), seen, ty, copyid, path) }
+    let path = ConvPath { stack, objname };
+    match sink.conv_recurse(container, conv_type, &path) {
+        Flow::Go => Flow::Stop,
+        other => other,
+    }
 }
 
 /// The eight `_TYPE` markers a special dictionary can carry, in the order
@@ -148,75 +106,43 @@ const SPECIAL_KINDS: [SpecialKind; 8] = [
     SpecialKind::Ext,
 ];
 
+/// A list's length as the `int` [`TypvalSink::conv_list_start`] is told.
+fn list_count(list: &List) -> c_int {
+    list_len(Some(list))
+}
+
 /// Convert one value, pushing any container it opens onto `stack`.
 ///
 /// Only scalars are finished here; a list or dictionary is announced to the
 /// sink and left for the walk to feed back one item at a time.
-///
-/// # Safety
-///
-/// `tv` must point at the value the walk is standing on, live and unaliased
-/// for the call, and `objname` at the NUL-terminated name the walk's error
-/// messages use.  A raw pointer, not a borrow: the value comes back out of
-/// [`ConvStack`], whose frames hold the containers they are suspended in by
-/// address, and each hook takes its own `&mut` of the slot in turn.
-unsafe fn convert_one_value<S: TypvalSink>(
+fn convert_one_value<'a, S: TypvalSink>(
     sink: &mut S,
-    stack: &mut ConvStack,
-    tv: *mut TypVal,
-    copyid: c_int,
+    stack: &mut ConvStack<'a>,
+    tv: &'a TypVal,
     objname: &CStr,
 ) -> Result<(), Refused> {
     sink.check_before();
-    // SAFETY: the caller's promise: a live typval.
-    let val = unsafe { Tv::new(tv) };
-    // The hook's borrow of the slot the walk is standing on.  Taken *after*
-    // whatever else the arm reads out of it, so that no read goes through the
-    // raw pointer while the borrow is live.
-    macro_rules! slot {
-        () => {
-            tv.as_mut()
-        };
-    }
-    match val.v_type() {
+    match tv.v_type() {
         VAR_STRING => {
-            // The address, not a borrow: the hook takes its own `&mut` of
-            // the slot.
-            let (buf, len) = val.string_ref().map_or((ptr::null_mut(), 0), |s| {
-                (s.as_ptr().cast_mut(), s.as_bytes().len())
-            });
-            item_hook!(unsafe { sink.conv_string(slot!(), buf, len) });
+            let bytes = tv.string_ref().map_or(&[][..], |s| s.as_bytes());
+            item_hook!(sink.conv_string(bytes));
         }
-        VAR_NUMBER => {
-            let n = val.number_or_zero();
-            unsafe { sink.conv_number(slot!(), n) };
-        }
-        VAR_FLOAT => {
-            let f = val.float_or_zero();
-            item_hook!(unsafe { sink.conv_float(slot!(), f) });
-        }
-        VAR_BLOB => {
-            // A raw slice, not a borrow: the sink may release the value.
-            // SAFETY: the value's own blob.
-            let bytes = ::core::ptr::from_ref(blob_bytes(unsafe { val.blob_or_null().as_ref() }));
-            // SAFETY: the walk's contract on the value it is standing on.
-            unsafe { sink.conv_blob(slot!(), bytes) };
-        }
+        VAR_NUMBER => sink.conv_number(tv.number_or_zero()),
+        VAR_FLOAT => item_hook!(sink.conv_float(tv.float_or_zero())),
+        VAR_BLOB => sink.conv_blob(blob_bytes(tv.blob_ref())),
         VAR_FUNC => {
-            let name = val
-                .func_name()
-                .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
+            let name = tv.func_name().map(|name| name.as_cstr());
             let path = ConvPath { stack, objname };
-            item_hook!(unsafe { sink.conv_func_start(slot!(), name, c"", &path) });
-            unsafe { sink.conv_func_before_args(slot!(), 0) };
-            unsafe { sink.conv_func_before_self(slot!(), -1) };
-            unsafe { sink.conv_func_end(slot!(), copyid) };
+            item_hook!(sink.conv_func_start(name, c"", &path));
+            sink.conv_func_before_args(0);
+            sink.conv_func_before_self(None);
+            sink.conv_func_end();
         }
         VAR_PARTIAL => {
-            let pt = val.partial_ref();
-            let fun = pt.map_or(ptr::null_mut(), |pt| partial_name(pt).as_ptr().cast_mut());
+            let partial = tv.partial_ref();
+            let fun = partial.map(partial_name);
             // When using uf_name prepend "g:" for a global function.
-            let prefix = if pt.is_some_and(|pt| {
+            let prefix = if partial.is_some_and(|pt| {
                 pt.pt_name.is_none()
                     && partial_name(pt)
                         .to_bytes()
@@ -229,89 +155,67 @@ unsafe fn convert_one_value<S: TypvalSink>(
             };
             {
                 let path = ConvPath { stack, objname };
-                item_hook!(unsafe { sink.conv_func_start(slot!(), fun, prefix, &path) });
+                item_hook!(sink.conv_func_start(fun, prefix, &path));
             }
-            stack.push(ConvFrame {
-                tv,
-                saved_copyid: copyid - 1,
-                frame: Frame::Partial {
-                    stage: PartialStage::Args,
-                    pt: val.partial_or_null(),
-                },
+            stack.push(Frame::Partial {
+                stage: PartialStage::Args,
+                partial,
             });
         }
-        VAR_LIST => {
-            let list = val.list_or_null();
-            if list.is_null() || list_len(unsafe { list.as_ref() }) == 0 {
-                unsafe { sink.conv_empty_list(slot!()) };
-            } else {
-                let saved_copyid = unsafe { (*list).copy_id() };
-                {
-                    let path = ConvPath { stack, objname };
-                    let ty = ConvType::List;
-                    item_hook!(unsafe { check_list_seen(sink, list, ty, copyid, &path) });
-                }
-                let len = list_len(unsafe { list.as_ref() });
-                item_hook!(unsafe { sink.conv_list_start(slot!(), len) });
-                debug_assert!(saved_copyid != copyid);
-                stack.push(ConvFrame {
-                    tv,
-                    saved_copyid,
-                    frame: Frame::List { list, at: 0 },
-                });
-                item_hook!(unsafe { sink.conv_real_list_after_start(slot!(), stack.last_mut()) });
+        VAR_LIST => match tv.list_ref().filter(|list| !list.items().is_empty()) {
+            None => sink.conv_empty_list(),
+            Some(list) => {
+                let seen = Container::List(list);
+                item_hook!(check_self_reference(
+                    sink,
+                    stack,
+                    seen,
+                    ConvType::List,
+                    objname
+                ));
+                item_hook!(sink.conv_list_start(list_count(list)));
+                stack.push(Frame::List { list, at: 0 });
             }
-        }
+        },
         VAR_BOOL => {
             // Upstream switches over the two named values and ignores
             // anything else.
-            let b = val.as_bool().unwrap_or(kBoolVarFalse);
+            let b = tv.as_bool().unwrap_or(kBoolVarFalse);
             if b == kBoolVarTrue || b == kBoolVarFalse {
-                unsafe { sink.conv_bool(slot!(), b == kBoolVarTrue) };
+                sink.conv_bool(b == kBoolVarTrue);
             }
         }
         VAR_SPECIAL => {
-            if val.as_special() == Some(kSpecialVarNull) {
-                unsafe { sink.conv_nil(slot!()) };
+            if tv.as_special() == Some(kSpecialVarNull) {
+                sink.conv_nil();
             }
         }
-        VAR_DICT => {
-            let dict = val.dict_or_null();
-            // SAFETY: the typval's own dictionary, live while the typval is.
-            let d = unsafe { Dt::new(dict) };
-            if dict.is_null() || d.dv_hashtab.ht_used == 0 {
-                sink.conv_empty_dict(Some(DictSlot::Value(tv)));
-            } else {
+        VAR_DICT => match tv.dict_ref().filter(|dict| dict.dv_hashtab.ht_used != 0) {
+            None => sink.conv_empty_dict(),
+            Some(dict) => {
                 if S::ALLOW_SPECIALS
-                    && let Some(flow) =
-                        unsafe { convert_special_dict(sink, stack, tv, copyid, objname) }?
+                    && let Some(flow) = convert_special_dict(sink, stack, dict, objname)?
                 {
                     item_hook!(flow);
                     return Ok(());
                 }
-                let saved_copyid = d.dv_copy_id;
-                {
-                    let path = ConvPath { stack, objname };
-                    item_hook!(unsafe { check_dict_seen(sink, dict, copyid, &path) });
-                }
-                let dictp = DictSlot::Value(tv);
-                let used = d.dv_hashtab.ht_used;
-                item_hook!(unsafe { sink.conv_dict_start(slot!(), used) });
-                debug_assert!(saved_copyid != copyid);
-                stack.push(ConvFrame {
-                    tv,
-                    saved_copyid,
-                    frame: Frame::Dict {
-                        dict,
-                        dictp,
-                        idx: 0,
-                        todo: d.dv_hashtab.ht_used,
-                    },
+                let seen = Container::Dict(dict);
+                item_hook!(check_self_reference(
+                    sink,
+                    stack,
+                    seen,
+                    ConvType::Dict,
+                    objname
+                ));
+                let used = dict.dv_hashtab.ht_used;
+                item_hook!(sink.conv_dict_start(used));
+                stack.push(Frame::Dict {
+                    dict,
+                    slot: 0,
+                    todo: used,
                 });
-                let dp = Some(dictp);
-                item_hook!(sink.conv_real_dict_after_start(dp, stack.last_mut()));
             }
-        }
+        },
         VAR_UNKNOWN => {
             internal_error(S::CONVERT_FN_NAME);
             return Err(Refused);
@@ -327,490 +231,339 @@ unsafe fn convert_one_value<S: TypvalSink>(
 /// looked special but is not, so the caller emits it as an ordinary one.
 /// `Some(flow)` means it was handled — including the two arms that push a
 /// container for the walk to drain.
-///
-/// # Safety
-///
-/// `tv` must point at the special dictionary the walk is standing on, live
-/// and unaliased for the call, and `objname` at the NUL-terminated name the
-/// walk's error messages use.
-unsafe fn convert_special_dict<S: TypvalSink>(
+fn convert_special_dict<'a, S: TypvalSink>(
     sink: &mut S,
-    stack: &mut ConvStack,
-    tv: *mut TypVal,
-    copyid: c_int,
+    stack: &mut ConvStack<'a>,
+    dict: &'a Dict,
     objname: &CStr,
 ) -> Result<Option<Flow>, Refused> {
-    // SAFETY: the caller's promise: `tv` is a live dictionary value.
-    let dict = unsafe { (*tv).dict_ref() };
-    if dict.map_or(0, Dict::len) != 2 {
+    if dict.len() != 2 {
         return Ok(None);
     }
-    let Some(type_di) = dict_find(dict, b"_TYPE") else {
+    let Some(type_di) = dict_find(Some(dict), b"_TYPE") else {
         return Ok(None);
     };
     if type_di.di_tv.v_type() != VAR_LIST {
         return Ok(None);
     }
-    // The `_VAL` item is re-derived below rather than held: the walk writes
-    // through it, and `find_ptr` answers the table's own pointer where a
-    // borrow would have to be cast.
-    let val_di = dict.map_or(::core::ptr::null_mut(), |d| d.find_ptr(b"_VAL"));
-    if val_di.is_null() {
+    let Some(val_di) = dict_find(Some(dict), b"_VAL") else {
         return Ok(None);
-    }
-    let type_list = type_di.di_tv.list_or_null();
+    };
+    let type_list = type_di
+        .di_tv
+        .list_ref()
+        .map_or(::core::ptr::null(), ::core::ptr::from_ref);
     let found = eval_msgpack_type_lists
         .get()
         .iter()
-        .position(|&l| l == type_list.cast_const());
+        .position(|&l| ::core::ptr::eq(l, type_list));
     // Upstream runs the check a second time here, before it knows whether
     // this is a special dictionary at all.
     sink.check_before();
     let Some(found) = found else {
         return Ok(None);
     };
-    let val_tv = di_tv(val_di);
-    // SAFETY: the `_VAL` item's value, live while the dictionary is.
-    let val = unsafe { Tv::new(val_tv) };
-    // As `convert_one_value`: the borrow is taken last.
-    macro_rules! slot {
-        () => {
-            tv.as_mut()
-        };
-    }
+    let val = &val_di.di_tv;
 
     match SPECIAL_KINDS[found] {
-        SpecialKind::Nil => unsafe { sink.conv_nil(slot!()) },
+        SpecialKind::Nil => sink.conv_nil(),
         SpecialKind::Bool => {
             if val.v_type() != VAR_NUMBER {
                 return Ok(None);
             }
-            let b = val.number_or_zero() != 0;
-            unsafe { sink.conv_bool(slot!(), b) };
+            sink.conv_bool(val.number_or_zero() != 0);
         }
         SpecialKind::Integer => {
             // A list of four integers: a sign (nominally ±1), then the
             // number in three unsigned pieces, most significant first.
             // How many bits each piece really carries is not checked.
-            if val.v_type() != VAR_LIST {
+            let Some(parts) = val
+                .list_ref()
+                .filter(|_| val.v_type() == VAR_LIST)
+                .map(List::items)
+                .filter(|parts| parts.len() == 4)
+            else {
                 return Ok(None);
-            }
-            let val_list = val.list_or_null();
-            if list_len(unsafe { val_list.as_ref() }) != 4 {
-                return Ok(None);
-            }
-            // SAFETY: the four items of a list this long.
-            let parts = list_items(unsafe { val_list.as_ref() });
-            let [sign, highest_bits, high_bits, low_bits] =
-                [0, 1, 2, 3].map(|i| parts[i].li_tv.number_or_zero());
+            };
             if parts.iter().any(|li| li.li_tv.v_type() != VAR_NUMBER) {
                 return Ok(None);
             }
-            if sign == 0 || highest_bits < 0 || high_bits < 0 || low_bits < 0 {
+            let [sign, highest_bits, high_bits, low_bits] =
+                [0, 1, 2, 3].map(|i| parts[i].li_tv.number_or_zero());
+            let (Ok(highest), Ok(high), Ok(low)) = (
+                u64::try_from(highest_bits),
+                u64::try_from(high_bits),
+                u64::try_from(low_bits),
+            ) else {
+                return Ok(None);
+            };
+            if sign == 0 {
                 return Ok(None);
             }
-            let number =
-                ((highest_bits as u64) << 62) | ((high_bits as u64) << 31) | (low_bits as u64);
+            // The pieces are not masked, so a wide one spills into its
+            // neighbour's bits, as upstream's do.
+            let number = (highest << 62) | (high << 31) | low;
             if sign > 0 {
-                unsafe { sink.conv_unsigned_number(slot!(), number) };
+                sink.conv_unsigned_number(number);
             } else {
-                let n = number.wrapping_neg() as int64_t;
-                unsafe { sink.conv_number(slot!(), n) };
+                sink.conv_number(number.wrapping_neg().cast_signed());
             }
         }
         SpecialKind::Float => {
             if val.v_type() != VAR_FLOAT {
                 return Ok(None);
             }
-            let f = val.float_or_zero();
-            return Ok(Some(unsafe { sink.conv_float(slot!(), f) }));
+            return Ok(Some(sink.conv_float(val.float_or_zero())));
         }
         SpecialKind::String => {
             if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
-            let mut len: size_t = 0;
-            let mut buf: *mut c_char = ptr::null_mut();
-            let val_list = val.list_or_null();
-            if !unsafe { encode_vim_list_to_buf(val_list, &raw mut len, &raw mut buf) } {
+            let Some(bytes) = encode_vim_list_to_buf(val.list_ref()) else {
                 return Ok(None);
-            }
-            let flow = unsafe { sink.conv_str_string(slot!(), buf, len) };
-            if flow == Flow::Go {
-                unsafe { xfree(buf.cast()) };
-            }
-            return Ok(Some(flow));
+            };
+            return Ok(Some(sink.conv_str_string(&bytes)));
         }
         SpecialKind::Array => {
             if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
-            let val_list = val.list_or_null();
-            let saved_copyid = unsafe { (*val_list).copy_id() };
-            {
-                let path = ConvPath { stack, objname };
-                let ty = ConvType::List;
-                match unsafe { check_list_seen(sink, val_list, ty, copyid, &path) } {
-                    Flow::Go => {}
-                    other => return Ok(Some(other)),
-                }
-            }
-            let len = list_len(unsafe { val_list.as_ref() });
-            match unsafe { sink.conv_list_start(slot!(), len) } {
+            let Some(val_list) = val.list_ref() else {
+                // `v:_null_list`: an empty array. Upstream reads the copyID
+                // of the NULL list here and crashes; an empty list is what
+                // every other reader makes of it.
+                return Ok(Some(match sink.conv_list_start(0) {
+                    Flow::Go => {
+                        sink.conv_list_end();
+                        Flow::Go
+                    }
+                    other => other,
+                }));
+            };
+            let seen = Container::List(val_list);
+            match check_self_reference(sink, stack, seen, ConvType::List, objname) {
                 Flow::Go => {}
                 other => return Ok(Some(other)),
             }
-            debug_assert!(saved_copyid != copyid && saved_copyid != copyid - 1);
-            stack.push(ConvFrame {
-                tv,
-                saved_copyid,
-                frame: Frame::List {
-                    list: val_list,
-                    at: 0,
-                },
+            match sink.conv_list_start(list_count(val_list)) {
+                Flow::Go => {}
+                other => return Ok(Some(other)),
+            }
+            stack.push(Frame::List {
+                list: val_list,
+                at: 0,
             });
         }
         SpecialKind::Map => {
             if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
-            let val_list = val.list_or_null();
-            if val_list.is_null() || list_len(unsafe { val_list.as_ref() }) == 0 {
-                sink.conv_empty_dict(None);
+            let Some(val_list) = val.list_ref().filter(|l| !l.items().is_empty()) else {
+                sink.conv_empty_dict();
                 return Ok(Some(Flow::Go));
-            }
+            };
             // Every item has to be a two-element list, or this is not a
             // map after all.
-            for li in list_iter(unsafe { val_list.as_ref() }) {
+            for li in val_list.items() {
                 if li.li_tv.v_type() != VAR_LIST || list_len(li.li_tv.list_ref()) != 2 {
                     return Ok(None);
                 }
             }
-            let saved_copyid = unsafe { (*val_list).copy_id() };
-            {
-                let path = ConvPath { stack, objname };
-                let ty = ConvType::Pairs;
-                match unsafe { check_list_seen(sink, val_list, ty, copyid, &path) } {
-                    Flow::Go => {}
-                    other => return Ok(Some(other)),
-                }
-            }
-            let len = list_len(unsafe { val_list.as_ref() }) as size_t;
-            match unsafe { sink.conv_dict_start(slot!(), len) } {
+            let seen = Container::List(val_list);
+            match check_self_reference(sink, stack, seen, ConvType::Pairs, objname) {
                 Flow::Go => {}
                 other => return Ok(Some(other)),
             }
-            debug_assert!(saved_copyid != copyid && saved_copyid != copyid - 1);
-            stack.push(ConvFrame {
-                tv,
-                saved_copyid,
-                frame: Frame::Pairs {
-                    list: val_list,
-                    at: 0,
-                },
+            match sink.conv_dict_start(val_list.items().len()) {
+                Flow::Go => {}
+                other => return Ok(Some(other)),
+            }
+            stack.push(Frame::Pairs {
+                list: val_list,
+                at: 0,
             });
         }
         SpecialKind::Ext => {
-            if val.v_type() != VAR_LIST {
+            let Some([first, last]) = val
+                .list_ref()
+                .filter(|_| val.v_type() == VAR_LIST)
+                .and_then(|l| <&[_; 2]>::try_from(l.items()).ok())
+            else {
                 return Ok(None);
-            }
-            let val_list = val.list_or_null();
-            if list_len(unsafe { val_list.as_ref() }) != 2 {
-                return Ok(None);
-            }
-            // SAFETY: the two items of a two-item list.
-            let first = unsafe {
-                Li::new(list_first(val_list.as_mut()).map_or(ptr::null_mut(), ptr::from_mut))
-            };
-            // SAFETY: as above.
-            let last = unsafe {
-                Li::new(list_last(val_list.as_mut()).map_or(ptr::null_mut(), ptr::from_mut))
             };
             let ext_type = first.li_tv.number_or_zero();
-            if first.li_tv.v_type() != VAR_NUMBER
-                || ext_type > i8::MAX as VarNumber
-                || ext_type < i8::MIN as VarNumber
-                || last.li_tv.v_type() != VAR_LIST
-            {
+            let Ok(ext_type) = i8::try_from(ext_type) else {
+                return Ok(None);
+            };
+            if first.li_tv.v_type() != VAR_NUMBER || last.li_tv.v_type() != VAR_LIST {
                 return Ok(None);
             }
-            let mut len: size_t = 0;
-            let mut buf: *mut c_char = ptr::null_mut();
-            let bytes = last.li_tv.list_or_null();
-            if !unsafe { encode_vim_list_to_buf(bytes, &raw mut len, &raw mut buf) } {
+            let Some(bytes) = encode_vim_list_to_buf(last.li_tv.list_ref()) else {
                 return Ok(None);
-            }
-            let flow = unsafe { sink.conv_ext_string(slot!(), buf, len, ext_type as i8) };
-            if flow == Flow::Go {
-                unsafe { xfree(buf.cast()) };
-            }
-            return Ok(Some(flow));
+            };
+            return Ok(Some(sink.conv_ext_string(&bytes, ext_type)));
         }
     }
     Ok(Some(Flow::Go))
 }
 
-/// Walk `top_tv` and hand every value to `sink`.
+/// Walk `top` and hand every value to `sink`.
 ///
 /// Returns whether the encode ran to completion; a sink that refuses a value
 /// has already reported why.
-pub(crate) fn encode_typval<S: TypvalSink>(
-    sink: &mut S,
-    top_tv: &mut TypVal,
-    objname: &CStr,
-) -> bool {
-    unsafe { walk(sink, ptr::from_mut(top_tv), objname).is_ok() }
+pub(crate) fn encode_typval<S: TypvalSink>(sink: &mut S, top: &TypVal, objname: &CStr) -> bool {
+    let mut stack = ConvStack::new();
+    walk(sink, &mut stack, top, objname).is_ok()
 }
 
-/// [`encode_typval`] for a sink that only reads.
-///
-/// The walk hands each hook a `&mut` of the slot it is standing on, so a
-/// sink that wrote through one would be writing through a shared borrow --
-/// which is why `S::WRITES_BACK` is asserted here rather than trusted.
-pub(crate) fn encode_typval_read<S: TypvalSink>(
+fn walk<'a, S: TypvalSink>(
     sink: &mut S,
-    top_tv: &TypVal,
-    objname: &CStr,
-) -> bool {
-    const { assert!(!S::WRITES_BACK, "this sink writes to what it walks") };
-    let top = ptr::from_ref(top_tv).cast_mut();
-    unsafe { walk(sink, top, objname).is_ok() }
-}
-
-/// # Safety
-///
-/// `objname` must point at the NUL-terminated name the error messages use.
-unsafe fn walk<S: TypvalSink>(
-    sink: &mut S,
-    top_tv: *mut TypVal,
+    stack: &mut ConvStack<'a>,
+    top: &'a TypVal,
     objname: &CStr,
 ) -> Result<(), Refused> {
-    let copyid = get_copy_id();
-    let mut stack = ConvStack::new();
-    unsafe { convert_one_value(sink, &mut stack, top_tv, copyid, objname) }?;
+    convert_one_value(sink, stack, top, objname)?;
 
-    while !stack.is_empty() {
+    while let Some(idx) = stack.len().checked_sub(1) {
         // Upstream keeps a `MPConvStackVal *` into the stack across the
         // hooks and the nested key conversion below, which a `kvi_push`
         // may have reallocated out from under it (O-B14-5).  Here every
         // read and every advance goes through `stack` by index instead,
         // so the borrow checker is what guarantees no reference outlives
-        // a push -- and each one touches only the fields it needs,
-        // because a whole `ConvFrame` is 56 bytes and this loop runs once
-        // per item of every container the interpreter builds, walks or
-        // frees.  Holding one raw pointer for the pass instead was
-        // measured and dropped: it saves two predicted branches an item
-        // and nothing a CGU-1 A/B can see.
-        let idx = stack.len() - 1;
-        let cur_tv = stack.get_mut(idx).tv;
+        // a push.
+        let frame = *stack.get_mut(idx);
         // The value this pass hands to `convert_one_value`.
-        let tv: *mut TypVal;
-        match stack.get_mut(idx).frame {
-            Frame::Dict {
-                dict,
-                dictp,
-                idx: mut slot,
-                mut todo,
-            } => {
-                // SAFETY: the dictionary this frame was pushed for, which the
-                // frame holds a reference to for as long as it is on the
-                // stack.
-                let mut d = unsafe { Dt::new(dict) };
+        let tv: &'a TypVal = match frame {
+            Frame::Dict { dict, slot, todo } => {
                 if todo == 0 {
-                    let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
-                    d.dv_copy_id = saved_copyid;
-                    sink.conv_dict_end(Some(dictp));
+                    sink.conv_dict_end();
                     continue;
                 }
-                if todo != d.dv_hashtab.ht_used {
-                    sink.conv_dict_between_items(Some(dictp));
+                if todo != dict.dv_hashtab.ht_used {
+                    sink.conv_dict_between_items();
                 }
-                while !d.dv_hashtab.slot(slot).is_kept() {
+                let mut slot = slot;
+                let item = loop {
+                    if let Some(item) = dict.item_at(slot) {
+                        break item;
+                    }
                     slot += 1;
-                }
-                let di = tv_dict_hi2di(d.dv_hashtab.slot(slot));
-                todo -= 1;
-                slot += 1;
-                if let Frame::Dict {
-                    idx: slot_field,
-                    todo: todo_slot,
-                    ..
-                } = &mut stack.get_mut(idx).frame
-                {
-                    *slot_field = slot;
-                    *todo_slot = todo;
-                }
+                };
+                *stack.get_mut(idx) = Frame::Dict {
+                    dict,
+                    slot: slot + 1,
+                    todo: todo - 1,
+                };
                 // The key is read as bytes the item already knows the length
-                // of. Spelling it `&CStr` here validates the key, and asking
-                // `strlen` for the length scans it again -- on every entry of
-                // every encode, which is every `string()`, every `json_*`,
-                // every value that crosses into Lua and every `tv_clear`.
-                // SAFETY: the walk's own item, which owns its key.
-                let key = unsafe { (*di).key() };
-                walk_hook!(sink.conv_dict_key(key));
-                sink.conv_dict_after_key(Some(dictp));
-                tv = di_tv(di);
+                // of: every entry of every encode passes here.
+                walk_hook!(sink.conv_dict_key(item.key()));
+                sink.conv_dict_after_key();
+                &item.di_tv
             }
             Frame::List { list, at } => {
-                // SAFETY: the frame's own list, which stays live for the
-                // walk.
-                let items = list_items_mut(unsafe { list.as_mut() });
-                let Some(item) = items.get_mut(at) else {
-                    let saved_copyid = stack.get_mut(idx).saved_copyid;
+                let Some(item) = list.items().get(at) else {
                     stack.pop();
-                    unsafe { (*list).set_copy_id(saved_copyid) };
-                    unsafe { sink.conv_list_end(cur_tv.as_mut()) };
+                    sink.conv_list_end();
                     continue;
                 };
                 if at > 0 {
-                    unsafe { sink.conv_list_between_items(cur_tv.as_mut()) };
+                    sink.conv_list_between_items();
                 }
-                tv = &raw mut item.li_tv;
-                if let Frame::List { at: slot, .. } = &mut stack.get_mut(idx).frame {
-                    *slot = at + 1;
-                }
+                *stack.get_mut(idx) = Frame::List { list, at: at + 1 };
+                &item.li_tv
             }
             Frame::Pairs { list, at } => {
-                // SAFETY: as above.
-                let items = list_items(unsafe { list.as_ref() });
-                let Some(item) = items.get(at) else {
-                    let saved_copyid = stack.get_mut(idx).saved_copyid;
+                let Some(item) = list.items().get(at) else {
                     stack.pop();
-                    unsafe { (*list).set_copy_id(saved_copyid) };
-                    sink.conv_dict_end(None);
+                    sink.conv_dict_end();
                     continue;
                 };
                 if at > 0 {
-                    sink.conv_dict_between_items(None);
+                    sink.conv_dict_between_items();
                 }
-                let kv_pair = item.li_tv.list_or_null();
-                // SAFETY: a `[key, value]` pair, checked when the frame was
-                // pushed.
-                let pair = list_items_mut(unsafe { kv_pair.as_mut() });
-                let key = &raw mut pair[0].li_tv;
-                // SAFETY: an item of the pair, live while the list is.
-                walk_hook!(unsafe { sink.special_dict_key_check(&*key) });
+                // A `[key, value]` pair, checked when the frame was pushed.
+                let pair = item.li_tv.list_ref().map_or(&[][..], List::items);
+                let (Some(key), Some(value)) = (pair.first(), pair.get(1)) else {
+                    unreachable!("a special map's items are checked to be pairs");
+                };
+                walk_hook!(sink.special_dict_key_check(&key.li_tv));
                 // The key goes through the whole walk, and may itself be a
                 // container: this frame is not necessarily the top one by
                 // the time it returns, which is why the advance below is
                 // by index.  It also stays *un*advanced across the key, so
                 // that an error raised there names this pair's index.
-                unsafe { convert_one_value(sink, &mut stack, key, copyid, objname) }?;
-                sink.conv_dict_after_key(None);
-                // Re-derived: the key's own walk may have edited the pair.
-                // SAFETY: as above.
-                tv = &raw mut list_items_mut(unsafe { kv_pair.as_mut() })[1].li_tv;
-                if let Frame::Pairs { at: slot, .. } = &mut stack.get_mut(idx).frame {
-                    *slot = at + 1;
-                }
+                convert_one_value(sink, stack, &key.li_tv, objname)?;
+                sink.conv_dict_after_key();
+                *stack.get_mut(idx) = Frame::Pairs { list, at: at + 1 };
+                &value.li_tv
             }
-            Frame::Partial { stage, pt } => {
-                // SAFETY: the partial the frame was pushed for; only read
-                // once `pt` has been checked non-null, as upstream does.
-                let mut part = unsafe { Pt::new(pt) };
+            Frame::Partial { stage, partial } => {
                 match stage {
                     PartialStage::Args => {
-                        let argc = if pt.is_null() { 0 } else { part.pt_argv.len() };
-                        let argc = argc as ptrdiff_t;
-                        unsafe { sink.conv_func_before_args(cur_tv.as_mut(), argc) };
-                        if let Frame::Partial { stage: slot, .. } = &mut stack.get_mut(idx).frame {
-                            *slot = PartialStage::Self_;
-                        }
-                        if !pt.is_null() && !part.pt_argv.is_empty() {
-                            let pt_argc = part.pt_argv.len() as c_int;
-                            let pt_argv = part.pt_argv.as_mut_ptr();
-                            walk_hook!(sink.conv_list_start(None, pt_argc));
-                            stack.push(ConvFrame {
-                                tv: ptr::null_mut(),
-                                saved_copyid: copyid - 1,
-                                frame: Frame::PartialArgs {
-                                    arg: pt_argv,
-                                    argv: pt_argv,
-                                    todo: pt_argc as size_t,
-                                },
-                            });
+                        let argv = partial.map_or(&[][..], |pt| &pt.pt_argv[..]);
+                        sink.conv_func_before_args(argv.len());
+                        *stack.get_mut(idx) = Frame::Partial {
+                            stage: PartialStage::Self_,
+                            partial,
+                        };
+                        if !argv.is_empty() {
+                            let argc = c_int::try_from(argv.len()).unwrap_or(c_int::MAX);
+                            walk_hook!(sink.conv_list_start(argc));
+                            stack.push(Frame::PartialArgs { argv, at: 0 });
                         }
                     }
                     PartialStage::Self_ => {
-                        if let Frame::Partial { stage: slot, .. } = &mut stack.get_mut(idx).frame {
-                            *slot = PartialStage::End;
-                        }
-                        let dict = if pt.is_null() {
-                            ptr::null_mut()
-                        } else {
-                            part.pt_dict
-                                .as_ref()
-                                .map_or(ptr::null_mut(), DictRef::as_ptr)
+                        *stack.get_mut(idx) = Frame::Partial {
+                            stage: PartialStage::End,
+                            partial,
                         };
-                        if dict.is_null() {
-                            unsafe { sink.conv_func_before_self(cur_tv.as_mut(), -1) };
-                        } else {
-                            // SAFETY: the dictionary the frame was pushed for.
-                            let frame_dict = unsafe { Dt::new(dict) };
-                            let used = frame_dict.dv_hashtab.ht_used;
-                            let count = used as ptrdiff_t;
-                            unsafe { sink.conv_func_before_self(cur_tv.as_mut(), count) };
-                            let dictp = DictSlot::Field(
-                                part.field_ptr(::core::mem::offset_of!(Partial, pt_dict)),
-                            );
-                            if used == 0 {
-                                sink.conv_empty_dict(Some(dictp));
-                                continue;
-                            }
-                            let saved_copyid = frame_dict.dv_copy_id;
-                            {
-                                let path = ConvPath {
-                                    stack: &stack,
-                                    objname,
-                                };
-                                walk_hook!(unsafe { check_dict_seen(sink, dict, copyid, &path) });
-                            }
-                            walk_hook!(sink.conv_dict_start(None, used));
-                            debug_assert!(saved_copyid != copyid && saved_copyid != copyid - 1);
-                            stack.push(ConvFrame {
-                                tv: ptr::null_mut(),
-                                saved_copyid,
-                                frame: Frame::Dict {
-                                    dict,
-                                    dictp,
-                                    idx: 0,
-                                    todo: used,
-                                },
-                            });
-                            let dp = Some(dictp);
-                            walk_hook!(sink.conv_real_dict_after_start(dp, stack.last_mut()));
+                        let Some(dict) = partial.and_then(|pt| pt.pt_dict.as_deref()) else {
+                            sink.conv_func_before_self(None);
+                            continue;
+                        };
+                        let used = dict.dv_hashtab.ht_used;
+                        sink.conv_func_before_self(Some(used));
+                        if used == 0 {
+                            sink.conv_empty_dict();
+                            continue;
                         }
+                        let seen = Container::Dict(dict);
+                        walk_hook!(check_self_reference(
+                            sink,
+                            stack,
+                            seen,
+                            ConvType::Dict,
+                            objname
+                        ));
+                        walk_hook!(sink.conv_dict_start(used));
+                        stack.push(Frame::Dict {
+                            dict,
+                            slot: 0,
+                            todo: used,
+                        });
                     }
                     PartialStage::End => {
-                        unsafe { sink.conv_func_end(cur_tv.as_mut(), copyid) };
+                        sink.conv_func_end();
                         stack.pop();
                     }
                 }
                 continue;
             }
-            Frame::PartialArgs { arg, argv, todo } => {
-                if todo == 0 {
+            Frame::PartialArgs { argv, at } => {
+                let Some(arg) = argv.get(at) else {
                     stack.pop();
-                    sink.conv_list_end(None);
+                    sink.conv_list_end();
                     continue;
+                };
+                if at > 0 {
+                    sink.conv_list_between_items();
                 }
-                if argv != arg {
-                    sink.conv_list_between_items(None);
-                }
-                tv = arg;
-                if let Frame::PartialArgs {
-                    arg: arg_slot,
-                    todo: todo_slot,
-                    ..
-                } = &mut stack.get_mut(idx).frame
-                {
-                    *arg_slot = unsafe { arg.add(1) };
-                    *todo_slot = todo - 1;
-                }
+                *stack.get_mut(idx) = Frame::PartialArgs { argv, at: at + 1 };
+                arg
             }
-        }
-        unsafe { convert_one_value(sink, &mut stack, tv, copyid, objname) }?;
+        };
+        convert_one_value(sink, stack, tv, objname)?;
     }
     Ok(())
 }
