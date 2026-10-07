@@ -4,6 +4,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 use crate::buffer::buf_get_changedtick;
+use crate::eval::vars::{set_vim_var_owned, vim_var_string};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::ErrorMsgs;
@@ -60,7 +61,7 @@ use crate::message_fmt::c_str;
 use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
-use crate::types::{Failed, GArray, IOSIZE, LineGetter, LineNr, OptInt, Vv, ptrdiff_t, size_t};
+use crate::types::{Failed, GArray, IOSIZE, LineGetter, LineNr, OptInt, Vv, size_t};
 
 use crate::winlayer::{Buf, Live, Win};
 
@@ -89,9 +90,11 @@ pub(crate) unsafe fn save_dbg_stuff(dsp: *mut SavedDebugState) {
     d.force_abort = force_abort.get() as c_int;
     force_abort.set(false);
     d.caught_stack = caught_stack.take();
-    // Both of these answer the old value and clear it.
-    d.vv_exception = v_exception(ptr::null_mut());
-    d.vv_throwpoint = v_throwpoint(ptr::null_mut());
+    // Copies, which leave the variables as they are: a `:catch` or a
+    // discarded exception in the debugger may replace them, and a pointer to
+    // the variable's own string would not survive that.
+    d.vv_exception = vim_var_string(Vv::Exception);
+    d.vv_throwpoint = vim_var_string(Vv::Throwpoint);
     d.did_emsg = did_emsg.get();
     did_emsg.set(0);
     d.got_int = got_int.get() as c_int;
@@ -117,8 +120,14 @@ pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut SavedDebugState) {
     trylevel.set(d.trylevel);
     force_abort.set(d.force_abort != 0);
     caught_stack.set(core::mem::take(&mut d.caught_stack));
-    v_exception(d.vv_exception);
-    v_throwpoint(d.vv_throwpoint);
+    // A null saved value puts nothing back, as upstream's `v_exception(NULL)`
+    // is the read half.
+    if let Some(exception) = d.vv_exception.take() {
+        set_vim_var_owned(Vv::Exception, Some(exception));
+    }
+    if let Some(throwpoint) = d.vv_throwpoint.take() {
+        set_vim_var_owned(Vv::Throwpoint, Some(throwpoint));
+    }
     did_emsg.set(d.did_emsg);
     got_int.set(d.got_int != 0);
     did_throw.set(d.did_throw);
@@ -449,19 +458,7 @@ pub(crate) fn ex_errmsg(msg: &'static CStr, arg: &CStr) -> CString {
 /// Cancel an exit that a QuitPre or ExitPre autocommand called off.
 pub fn not_exiting(save_exiting: bool) {
     exiting.set(save_exiting);
-    unsafe { set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t) };
-}
-
-/// `v_exception()` as checked code.
-fn v_exception(oldval: *mut c_char) -> *mut c_char {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::eval::vars::v_exception(oldval) }
-}
-
-/// `v_throwpoint()` as checked code.
-fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::eval::vars::v_throwpoint(oldval) }
+    set_vim_var_string(Vv::Exitreason, None);
 }
 
 /// `xstrdup()` as checked code.

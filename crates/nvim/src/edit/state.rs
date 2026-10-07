@@ -25,7 +25,7 @@
 
 use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::guard::{Keys, Suppress};
@@ -208,17 +208,15 @@ fn insert_enter(s: &mut InsertState) {
 fn trigger_insert_enter(cmdchar: c_int) {
     let save_cursor = Win::current().w_cursor;
 
-    let mode: *const c_char = if cmdchar == 'R' as c_int {
-        c"r".as_ptr()
+    let mode: &[u8] = if cmdchar == 'R' as c_int {
+        b"r"
     } else if cmdchar == 'V' as c_int {
-        c"v".as_ptr()
+        b"v"
     } else {
-        c"i".as_ptr()
+        b"i"
     };
-    // SAFETY: the caller promises a live `curwin`/`curbuf`, which is all
-    // these editor-wide routines ask for.
-    unsafe { set_vim_var_string(Vv::Insertmode, mode, 1) };
-    unsafe { set_vim_var_string(Vv::Char, ::core::ptr::null(), -1) };
+    set_vim_var_string(Vv::Insertmode, Some(mode));
+    set_vim_var_string(Vv::Char, None);
     ins_apply_autocmds(AutoEvent::InsertEnter);
 
     // Highlighting may have changed, e.g. for ModeMsg.
@@ -230,7 +228,7 @@ fn trigger_insert_enter(cmdchar: c_int) {
     // called in case the text was modified; Insert mode has not started
     // yet, so `State` is faked for it.
     if !equalpos(Win::current().w_cursor, save_cursor)
-        && unsafe { *get_vim_var_str(Vv::Char) } as c_int == NUL
+        && with_vim_var_str(Vv::Char, |s| s.is_empty())
         && save_cursor.lnum <= Buf::current().b_ml.ml_line_count
     {
         let save_state = State.get();

@@ -26,6 +26,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -301,16 +302,19 @@ pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
     buf[buflen] = NUL as c_char;
 
     let locked = Lock::text();
-    unsafe { set_vim_var_string(Vv::Char, buf.as_mut_ptr(), buflen as ptrdiff_t) };
+    // Up to the NUL `buf` holds, which is where every reader stops.
+    let typed = cstr::in_chars(&buf).to_bytes();
+    set_vim_var_string(Vv::Char, Some(typed));
 
     let mut res = ::core::ptr::null_mut();
-    if ins_apply_autocmds(AutoEvent::InsertCharPre) != 0
-        && !unsafe { cstr::eq(buf.as_mut_ptr(), get_vim_var_str(Vv::Char)) }
-    {
-        res = unsafe { xstrdup(get_vim_var_str(Vv::Char)) };
+    if ins_apply_autocmds(AutoEvent::InsertCharPre) != 0 {
+        let now = vim_var_bytes(Vv::Char);
+        if now != typed {
+            res = ThinCString::from_vec(now).into_raw();
+        }
     }
 
-    unsafe { set_vim_var_string(Vv::Char, ::core::ptr::null(), -1) };
+    set_vim_var_string(Vv::Char, None);
     drop(locked);
     State.set(save_state);
     res

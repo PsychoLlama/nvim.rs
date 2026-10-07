@@ -15,7 +15,7 @@ use crate::cstr;
 use crate::cstr::byte_at;
 use crate::decoration::{clear_virttext, next_virt_text_chunk};
 use crate::eval::typval::tv_get_lnum;
-use crate::eval::vars::{get_vim_var_nr, get_vim_var_str};
+use crate::eval::vars::{get_vim_var_nr, vim_var_string};
 use crate::global_cell::GlobalCell;
 use crate::memline::Lines;
 use crate::memory::{ThinCString, XString};
@@ -70,12 +70,12 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- a live typval.
     let mut rv = unsafe { Tv::new(result) };
     rv.write_string(None);
-    // SAFETY: reading three `v:` variables the fold drawing has just set.
+    // The three `v:` variables the fold drawing has just set.
     let (start, end, dash) = (Vv::Foldstart, Vv::Foldend, Vv::Folddashes);
     let (foldstart, foldend, dashes) = (
         get_vim_var_nr(start),
         get_vim_var_nr(end),
-        get_vim_var_str(dash),
+        vim_var_string(dash).unwrap_or_else(ThinCString::empty),
     );
     let (foldstart, foldend) = (foldstart as LineNr, foldend as LineNr);
     if !(foldstart > 0 && foldend <= Buf::current().b_ml.ml_line_count) {
@@ -118,8 +118,7 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let one = c"+-%s%3d line: ";
     let many = c"+-%s%3d lines: ";
     let txt = ngettext(one, many, count as c_ulong);
-    // SAFETY: `dashes` is a `v:` variable's NUL-terminated string.
-    let dashes_len = unsafe { cstr::bytes_at(dashes) }.len();
+    let dashes_len = dashes.as_bytes().len();
     // The prefix, then the title, then the cleanup, all in one buffer with
     // room for the widest count.
     let mut text = vec![0u8; txt.count_bytes() + dashes_len + 20 + title.len() + 1];
@@ -130,7 +129,7 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             text.as_mut_ptr().cast::<c_char>(),
             text.len(),
             txt.as_ptr(),
-            dashes,
+            dashes.as_ptr(),
             count
         )
     };

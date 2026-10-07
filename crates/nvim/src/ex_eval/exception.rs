@@ -67,7 +67,7 @@ use crate::strings::concat_str;
 use crate::tr_plural;
 use crate::types::{
     CondStack, ErrorMsg, ErrorMsgs, ExcId, ExceptType, Exception, ExceptionState, Failed, IOSIZE,
-    NUL, Pend, Vv, int64_t, ptrdiff_t,
+    NUL, Pend, Vv, int64_t,
 };
 use crate::vim_snprintf;
 use crate::vim_snprintf_safelen;
@@ -545,22 +545,24 @@ fn set_exception_vars(excp: Option<ExcId>) {
     // Where `v:throwpoint` is rendered; upstream shares `IObuff`.
     let mut throwpoint = [0 as c_char; IOSIZE as usize];
     let Some(id) = excp else {
-        // SAFETY: a null value clears the variable.
-        unsafe { set_vim_var_string(Vv::Exception, ptr::null(), -1) };
-        unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };
+        set_vim_var_string(Vv::Exception, None);
+        set_vim_var_string(Vv::Throwpoint, None);
         set_vim_var_list(Vv::Stacktrace, None);
         return;
     };
     let excp = id.exception();
-    // SAFETY: the exception's own NUL-terminated value; the variable takes a
-    // copy.
-    unsafe { set_vim_var_string(Vv::Exception, excp.value, -1) };
+    // SAFETY: the exception's own NUL-terminated value, or null; the variable
+    // takes a copy.
+    set_vim_var_string(
+        Vv::Exception,
+        unsafe { cstr::at_opt(excp.value) }.map(CStr::to_bytes),
+    );
     // `v:stacktrace` takes a reference of its own.
     set_vim_var_list(Vv::Stacktrace, excp.stacktrace.clone());
     // SAFETY: the exception's own NUL-terminated name.
     if unsafe { *excp.throw_name } == NUL as c_char {
         // `throw_name` is unset for an exception from a typed command.
-        unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };
+        set_vim_var_string(Vv::Throwpoint, None);
         return;
     }
     let point = throwpoint.as_mut_ptr();
@@ -577,7 +579,10 @@ fn set_exception_vars(excp: Option<ExcId>) {
             )
         }
     };
-    unsafe { set_vim_var_string(Vv::Throwpoint, point, len as ptrdiff_t) };
+    set_vim_var_string(
+        Vv::Throwpoint,
+        Some(&cstr::as_bytes(&throwpoint)[..len as usize]),
+    );
 }
 
 /// Push an exception onto the caught stack.

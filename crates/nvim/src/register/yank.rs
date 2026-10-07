@@ -449,9 +449,7 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
         sve_did_save: false,
         sve_hashtab: HashTab::new(),
     };
-    // SAFETY: `save_v_event` is a writable local that outlives the matching
-    // `restore_v_event` below.
-    let dict = unsafe { get_v_event(&raw mut save_v_event) };
+    let dict = get_v_event(&mut save_v_event);
 
     // `regcontents`: the register's lines, as a locked list.
     //
@@ -466,35 +464,28 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
         list_set_lock(list.as_ptr().as_mut(), VarLock::Fixed);
         list
     };
-    // SAFETY: `dict` is `v:event`'s, the key is a literal of the length given.
-    let _ = unsafe { (*dict).add_list(b"regcontents", Some(list)) };
+    let _ = dict.edit().add_list(b"regcontents", Some(list));
 
     let mut buf: [c_char; 67] = [0; 67];
     // SAFETY: `reg` is live, and `buf` is 67 writable bytes -- more than one.
     unsafe { format_reg_type((*reg).y_type, (*reg).y_width, buf.as_mut_ptr(), buf.len()) };
-    // SAFETY: `buf` is NUL-terminated, and the key is a literal of length 7.
-    let _ = unsafe { (*dict).add_str(b"regtype", cstr::at_opt(buf.as_mut_ptr())) };
+    let _ = dict.edit().add_str(b"regtype", Some(cstr::in_chars(&buf)));
 
     // SAFETY: the caller promises `op` is the yank's operator.
     let op = unsafe { *op };
     buf[0] = op.regname as c_char;
     buf[1] = NUL as c_char;
-    // SAFETY: as above.
-    let _ = unsafe { (*dict).add_str(b"regname", cstr::at_opt(buf.as_mut_ptr())) };
+    let _ = dict.edit().add_str(b"regname", Some(cstr::in_chars(&buf)));
 
     let flag = |set| if set { kBoolVarTrue } else { kBoolVarFalse };
-    // SAFETY: `dict` is `v:event`'s, the key a literal of the length given.
-    let _ = unsafe { (*dict).add_bool(b"inclusive", flag(op.inclusive)) };
+    let _ = dict.edit().add_bool(b"inclusive", flag(op.inclusive));
 
     buf[0] = get_op_char(op.op_type) as c_char;
     buf[1] = NUL as c_char;
-    // SAFETY: `buf` is NUL-terminated, and the key is a literal of length 8.
-    let _ = unsafe { (*dict).add_str(b"operator", cstr::at_opt(buf.as_mut_ptr())) };
+    let _ = dict.edit().add_str(b"operator", Some(cstr::in_chars(&buf)));
 
-    // SAFETY: as for `inclusive`.
-    let _ = unsafe { (*dict).add_bool(b"visual", flag(op.is_visual)) };
-    // SAFETY: `dict` is the one just filled in.
-    unsafe { (*dict).set_keys_readonly() };
+    let _ = dict.edit().add_bool(b"visual", flag(op.is_visual));
+    dict.edit().set_keys_readonly();
 
     // The buffer must not change under the yank that is still in flight.
     let locked = Lock::text();
@@ -503,8 +494,7 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
     unsafe { apply_autocmds(AutoEvent::TextYankPost, none, none, false, __hoisted_0) };
     drop(locked);
 
-    // SAFETY: `save_v_event` is the one `get_v_event` was given.
-    unsafe { restore_v_event(dict, &raw mut save_v_event) };
+    restore_v_event(dict, &mut save_v_event);
     recursive.set(false);
 }
 

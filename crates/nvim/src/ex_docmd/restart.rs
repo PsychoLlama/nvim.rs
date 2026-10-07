@@ -4,6 +4,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::types::{Channel, Proc};
@@ -18,7 +19,7 @@ use crate::api::vimscript::nvim_command;
 use crate::channel::{channel_close, channel_job_start, find_channel};
 
 use crate::eval::typval::{NumBuf, list_items, list_len};
-use crate::eval::vars::{get_vim_var_list, get_vim_var_str};
+use crate::eval::vars::{get_vim_var_list_handle, set_vim_var_string, vim_var_bytes};
 
 use crate::event::proc::{proc_stop, proc_wait};
 use crate::ex_docmd::xfree;
@@ -35,7 +36,7 @@ use crate::strings::{concat_str, has_bytes};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair,
-    Object, String_0, VarNumber, Vv, key_value_pair, ptrdiff_t, size_t, uint16_t, uint64_t,
+    Object, String_0, VarNumber, Vv, key_value_pair, size_t, uint16_t, uint64_t,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 
@@ -80,9 +81,10 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
     let mut numbuf2 = NumBuf::new();
     let mut err = Error::none();
     let no_ui = ui_active() == 0;
-    let exepath = get_vim_var_str(Vv::Progpath);
-    let argv_list = get_vim_var_list(Vv::Argv);
-    let argc = list_len(unsafe { argv_list.as_ref() });
+    // A copy: the variable is held across the job start below.
+    let exepath = ThinCString::from_vec(vim_var_bytes(Vv::Progpath));
+    let argv_list = get_vim_var_list_handle(Vv::Argv);
+    let argc = list_len(argv_list.as_deref());
 
     // Three more than `v:argv`: `--embed`, `--headless`, and the null
     // terminator.
@@ -90,8 +92,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
     let mut i: size_t = 0;
     let mut listen_arg: *const c_char = ptr::null();
 
-    // SAFETY: `v:argv` is a live list of strings.
-    let items = list_items(unsafe { argv_list.as_ref() });
+    let items = list_items(argv_list.as_deref());
     let mut at = 0;
     while at < items.len() {
         let arg = numbuf.string(&items[at].li_tv);
@@ -150,7 +151,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
     let channel = unsafe {
         channel_job_start(
             argv,
-            exepath,
+            exepath.as_ptr(),
             blank_reader(),
             on_err,
             blank_callback(),
@@ -243,7 +244,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
             ui_call_restart(servername);
             ui_flush();
 
-            set_vim_var_string(Vv::Exitreason, c"restart".as_ptr(), 7 as ptrdiff_t);
+            set_vim_var_string(Vv::Exitreason, Some(b"restart"));
 
             let mut quit_cmd = if excmd.do_ecmd_cmd.is_none() {
                 c"qall".as_ptr().cast_mut()
@@ -270,7 +271,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
 
         // Reached both on success — where `exiting` is set and this is
         // the last thing that runs — and on every failure.
-        set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t);
+        set_vim_var_string(Vv::Exitreason, None);
         if err.is_set() {
             emsg(err.message_or_empty());
             err.clear();
@@ -411,12 +412,6 @@ fn rpc_send_call(
 ) -> Result<Object, Error> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::msgpack_rpc::channel::rpc_send_call(id, method_name, args, result_mem) }
-}
-
-/// `set_vim_var_string()` as checked code.
-fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::eval::vars::set_vim_var_string(idx, val, len) }
 }
 
 /// `xstrdup()` as checked code.

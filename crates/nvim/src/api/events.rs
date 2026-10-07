@@ -57,11 +57,9 @@ pub fn nvim_ui_term_event(
         err = err_expected(c"termresponse", want, Some(got));
         return Err(err);
     };
-    let (text, len) = (termresponse.data(), termresponse.len().cast_signed());
-    // SAFETY: `termresponse` is that string, live for `len` bytes.
-    unsafe {
-        set_vim_var_string(Vv::Termresponse, text, len);
-        do_termresponse_autocmd(termresponse.clone());
-    }
+    let text = (!termresponse.is_null()).then(|| termresponse.as_bytes());
+    set_vim_var_string(Vv::Termresponse, text);
+    // SAFETY: `termresponse` is a live string.
+    unsafe { do_termresponse_autocmd(termresponse.clone()) };
     ().reported(err)
 }

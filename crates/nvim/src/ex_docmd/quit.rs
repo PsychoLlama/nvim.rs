@@ -19,14 +19,14 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 use crate::autocmd::{is_aucmd_win, may_trigger_vim_suspend_resume};
 
 use crate::buffer::{BufRef, do_bufdel, no_write_message};
 
-use crate::eval::vars::get_vim_var_str;
+use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
 
 use crate::ex_cmds::do_write;
 use crate::ex_cmds2::{autowrite_all, check_changed, dialog_changed};
@@ -47,7 +47,7 @@ use crate::winlayer::graph::{cmdwin_result, cmdwin_type, firstwin, lastwin, topf
 
 use crate::message::msg_ptr;
 
-use crate::types::{CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, NUL, OK, Vv, ptrdiff_t};
+use crate::types::{CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, OK, Vv};
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 
@@ -94,8 +94,8 @@ pub(crate) fn ex_bunload(excmd: &mut ExArg) {
 pub(crate) fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -> bool {
     // `v:exitreason` is set for the autocommands to read, and cleared
     // again if the quit does not happen.
-    if byte(get_vim_var_str(Vv::Exitreason)) == NUL {
-        set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4 as ptrdiff_t);
+    if with_vim_var_str(Vv::Exitreason, CStr::is_empty) {
+        set_vim_var_string(Vv::Exitreason, Some(b"quit"));
     }
     fire_autocmds(AutoEvent::QuitPre, false, window.buffer_or_none());
     // The buffer is read *through* `window`, and only after `win_valid`
@@ -130,7 +130,7 @@ fn quit_was_cancelled(window: WinId, buf: impl FnOnce() -> Buf) -> bool {
             return false;
         }
     }
-    set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t);
+    set_vim_var_string(Vv::Exitreason, None);
     true
 }
 
@@ -633,12 +633,6 @@ fn only_one_window() -> bool {
     crate::window::only_one_window()
 }
 
-/// `set_vim_var_string()` as checked code.
-fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::eval::vars::set_vim_var_string(idx, val, len) }
-}
-
 /// `text_locked()` as checked code.
 fn text_locked() -> bool {
     crate::ex_getln::text_locked()
@@ -652,10 +646,4 @@ fn text_locked_msg() {
 /// `win_close()` as checked code.
 fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
     crate::window::win_close(win, free_buf, force)
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
 }

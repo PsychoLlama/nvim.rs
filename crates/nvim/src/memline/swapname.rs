@@ -384,8 +384,12 @@ unsafe fn attention_message(
 ///
 /// `fname` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn do_swapexists(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
-    unsafe { set_vim_var_string(Vv::Swapname, fname, -1) };
-    unsafe { set_vim_var_string(Vv::Swapchoice, core::ptr::null(), -1) };
+    // SAFETY: the caller's obligation -- a NUL-terminated name.
+    set_vim_var_string(
+        Vv::Swapname,
+        unsafe { cstr::at_opt(fname) }.map(CStr::to_bytes),
+    );
+    set_vim_var_string(Vv::Swapchoice, None);
 
     // `<afile>` is the file being edited. Changing directory is not
     // allowed from here.
@@ -395,9 +399,9 @@ unsafe fn do_swapexists(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
     unsafe { apply_autocmds(AutoEvent::SwapExists, name, no_io, false, None) };
     drop(locked);
 
-    unsafe { set_vim_var_string(Vv::Swapname, core::ptr::null(), -1) };
+    set_vim_var_string(Vv::Swapname, None);
 
-    match unsafe { *get_vim_var_str(Vv::Swapchoice) } as u8 {
+    match with_vim_var_str(Vv::Swapchoice, cstr::first) {
         b'o' => SEA_CHOICE_READONLY,
         b'e' => SEA_CHOICE_EDIT,
         b'r' => SEA_CHOICE_RECOVER,

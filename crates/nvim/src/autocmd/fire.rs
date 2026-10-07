@@ -501,10 +501,9 @@ pub unsafe fn apply_autocmds_group(
             let save_cmdbang = get_vim_var_nr(Vv::Cmdbang);
             let bang = excmd.as_deref().map(|command| command.forceit);
             let save_cmdarg = match excmd {
-                None => ::core::ptr::null_mut(),
+                None => None,
                 Some(command) => {
-                    // SAFETY: a fresh value, so nothing is being freed.
-                    let saved = unsafe { set_cmdarg(Some(command), ::core::ptr::null_mut()) };
+                    let saved = set_cmdarg(Some(command), None);
                     set_vim_var_nr(Vv::Cmdbang, VarNumber::from(bang.unwrap_or(false)));
                     saved
                 }
@@ -542,8 +541,7 @@ pub unsafe fn apply_autocmds_group(
             }
 
             if bang.is_some() {
-                // SAFETY: the string the call above put aside.
-                unsafe { set_cmdarg(None, save_cmdarg) };
+                set_cmdarg(None, save_cmdarg);
                 set_vim_var_nr(Vv::Cmdbang, save_cmdbang);
             }
             // The walk is over. A nested one has popped its own number
@@ -634,9 +632,8 @@ pub extern "C" fn block_autocmds() {
 pub extern "C" fn unblock_autocmds() {
     autocmd_blocked.set(autocmd_blocked.get() - 1);
     if !is_autocmd_blocked() && termresponse_changed.get() && has_event(AutoEvent::TermResponse) {
-        // SAFETY: `v:termresponse` is a NUL-terminated string, and the
-        // autocommand takes the copy over.
-        let sequence = unsafe { cstr_to_string(get_vim_var_str(Vv::Termresponse)) };
+        // The autocommand takes the copy over.
+        let sequence = String_0::from_bytes(&vim_var_bytes(Vv::Termresponse));
         unsafe { do_termresponse_autocmd(sequence) };
     }
 }

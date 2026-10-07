@@ -14,6 +14,7 @@
 use super::*;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::cstr;
+use crate::eval::typval::DictRef;
 use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
 use crate::keycodes::Key;
@@ -28,6 +29,7 @@ use crate::types::{
 use crate::winlayer::Live;
 use crate::winlayer::windows as windows_in_curtab;
 use crate::winlayer::{Buf, Win};
+use core::ffi::CStr;
 
 // ---------------------------------------------------------------------------
 // The command-line state, as a live handle.
@@ -177,18 +179,13 @@ pub(crate) fn ui_ext_cmdline_hide(abort: bool) {
 /// `CmdlineEnter`/`CmdlineLeave` autocommands.  Answers the dictionary,
 /// which the caller hands back to `restore_v_event`.
 ///
-/// # Safety
-///
-/// `save_v_event` must point at a live `SaveVEvent`, unaliased for the call.
-/// `cmdtype` must point at a NUL-terminated string.
-pub(crate) unsafe fn cmdline_event_dict(
-    save_v_event: *mut SaveVEvent,
-    cmdtype: *const ::core::ffi::c_char,
-) -> *mut Dict {
-    let dict = unsafe { get_v_event(save_v_event) };
-    let _ = unsafe { (*dict).add_str(b"cmdtype", cstr::at_opt(cmdtype)) };
-    let _ = unsafe { (*dict).add_number(b"cmdlevel", Cc::current().level as VarNumber) };
-    unsafe { (*dict).set_keys_readonly() };
+pub(crate) fn cmdline_event_dict(save_v_event: &mut SaveVEvent, cmdtype: &CStr) -> DictRef {
+    let dict = get_v_event(save_v_event);
+    let _ = dict.edit().add_str(b"cmdtype", Some(cmdtype));
+    let _ = dict
+        .edit()
+        .add_number(b"cmdlevel", Cc::current().level as VarNumber);
+    dict.edit().set_keys_readonly();
     dict
 }
 
@@ -320,7 +317,7 @@ pub(crate) fn command_line_enter(
 
         if has_event(AutoEvent::CmdlineEnter) {
             let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
-            let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
+            let dict = cmdline_event_dict(&mut save_v_event, cstr::in_chars(&firstcbuf));
 
             // C's TRY_WRAP. restore_v_event() runs *inside* the try here
             // and outside it at CmdlineLeave below; that asymmetry is
@@ -328,7 +325,7 @@ pub(crate) fn command_line_enter(
             let mut tstate: TryState = TRY_STATE_INIT;
             unsafe { try_enter(&raw mut tstate) };
             cmdline_autocmd(AutoEvent::CmdlineEnter, firstcbuf.as_mut_ptr());
-            unsafe { restore_v_event(dict, &raw mut save_v_event) };
+            restore_v_event(dict, &mut save_v_event);
             err.absorb(unsafe { try_leave(&raw mut tstate) });
 
             if err.is_set() {
@@ -395,18 +392,16 @@ pub(crate) fn command_line_enter(
 
         if has_event(AutoEvent::CmdlineLeave) {
             let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
-            let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
+            let dict = cmdline_event_dict(&mut save_v_event, cstr::in_chars(&firstcbuf));
             // Not readonly, unlike the keys above:
-            let _ = unsafe {
-                (*dict).add_bool(
-                    b"abort",
-                    if s.gotesc {
-                        kBoolVarTrue
-                    } else {
-                        kBoolVarFalse
-                    },
-                )
-            };
+            let _ = dict.edit().add_bool(
+                b"abort",
+                if s.gotesc {
+                    kBoolVarTrue
+                } else {
+                    kBoolVarFalse
+                },
+            );
             set_vim_var_char(s.c); // set v:char
 
             // C's TRY_WRAP; the error is printed further below, to avoid
@@ -416,10 +411,10 @@ pub(crate) fn command_line_enter(
             cmdline_autocmd(AutoEvent::CmdlineLeave, firstcbuf.as_mut_ptr());
             err.absorb(unsafe { try_leave(&raw mut tstate) });
 
-            if dict_get_number(unsafe { (dict).as_ref() }, b"abort") != 0 {
+            if dict_get_number(Some(&dict), b"abort") != 0 {
                 s.gotesc = true;
             }
-            unsafe { restore_v_event(dict, &raw mut save_v_event) };
+            restore_v_event(dict, &mut save_v_event);
         }
 
         cmdmsg_rl.set(false);

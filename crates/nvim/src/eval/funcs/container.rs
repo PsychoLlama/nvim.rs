@@ -15,7 +15,8 @@ use crate::eval::typval::{
 };
 use crate::eval::userfunc::{func_ref_name, get_func_arity};
 use crate::eval::vars::{
-    get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type,
+    clear_vimvar, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type, with_vim_var,
+    with_vim_var_mut,
 };
 use crate::eval::{eval_expr_typval, get_copy_id, partial_name, var_item_copy};
 use crate::memory::ThinCString;
@@ -484,8 +485,8 @@ fn indexof_matches(expr: &TypVal) -> bool {
     // outlive the evaluation, and `newtv` is cleared before returning.
     // A frame naming the two `v:` slots for the length of the call.
     let mut argv = CallFrame::<2>::new();
-    argv.push_borrowed(unsafe { &*get_vim_var_tv(Vv::Key) });
-    argv.push_borrowed(unsafe { &*get_vim_var_tv(Vv::Val) });
+    with_vim_var(Vv::Key, |key| argv.push_borrowed(key));
+    with_vim_var(Vv::Val, |val| argv.push_borrowed(val));
     let mut newtv = NIL;
     if eval_expr_typval(expr, false, argv.args(), &mut newtv).is_err() {
         return false;
@@ -548,9 +549,9 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: &TypVal) -> VarN
     while at < list_items(unsafe { l.as_ref() }).len() {
         set_vim_var_nr(Vv::Key, idx);
         let item = &list_items(unsafe { l.as_ref() })[at];
-        unsafe { tv_copy(&item.li_tv, &mut *get_vim_var_tv(Vv::Val)) };
+        with_vim_var_mut(Vv::Val, |val| tv_copy(&item.li_tv, val));
         let found = indexof_matches(expr);
-        unsafe { tv_clear(&mut *get_vim_var_tv(Vv::Val)) };
+        clear_vimvar(Vv::Val);
         if found {
             return idx;
         }

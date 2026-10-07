@@ -18,6 +18,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::strings::has_bytes;
 use crate::vim_snprintf;
 use crate::vim_snprintf_safelen;
@@ -29,7 +30,7 @@ use crate::eval::typval::{
     NumBuf, tv_check_for_float_or_nr_arg, tv_check_for_opt_string_arg, tv_equal, tv_get_float,
     tv_get_number_chk,
 };
-use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, get_vim_var_tv};
+use crate::eval::vars::{get_vim_var_nr, vim_var_string, with_vim_var};
 use crate::eval::{garbage_collect, pattern_match};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::suppress_errthrow;
@@ -479,7 +480,8 @@ pub(crate) fn f_assert_equalfile(args: &[TypVal], result: &mut TypVal, _fptr: Ev
 pub(crate) fn f_assert_exception(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let error = numbuf.string_chk(&args[0]);
-    let thrown = unsafe { cstr::at(get_vim_var_str(Vv::Exception)) };
+    let thrown = vim_var_string(Vv::Exception).unwrap_or_else(ThinCString::empty);
+    let thrown: &CStr = &thrown;
     if thrown.is_empty() {
         let mut ga = prepare_assert_error();
         ga_concat_lit(&mut ga, c"v:exception is not set");
@@ -487,16 +489,16 @@ pub(crate) fn f_assert_exception(args: &[TypVal], result: &mut TypVal, _fptr: Ev
         result.write_number(1);
     } else if error.is_some_and(|error| !has_bytes(thrown, error.to_bytes())) {
         let mut ga = prepare_assert_error();
-        unsafe {
+        with_vim_var(Vv::Exception, |exception| unsafe {
             fill_assert_error(
                 &mut ga,
                 args.get(1),
                 ptr::null(),
                 Some(&args[0]),
-                &*get_vim_var_tv(Vv::Exception),
+                exception,
                 AssertType::Other,
             )
-        };
+        });
         report_assert_error(&ga);
         result.write_number(1);
     }

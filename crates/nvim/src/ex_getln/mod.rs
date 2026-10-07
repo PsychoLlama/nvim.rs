@@ -147,7 +147,7 @@ use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     AcoSave, Array, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline, CondStack,
-    Dict, Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand,
+    Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand,
     ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy,
     ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer,
     LineNr, Magic, MotionType, Object, OpArg, OptInt, OptMagic, OptSet, OptVal, ParserHighlight,

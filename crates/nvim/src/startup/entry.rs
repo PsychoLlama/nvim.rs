@@ -13,6 +13,7 @@
 
 use crate::event::multiqueue::ChildQueue;
 use crate::fprintf;
+use crate::memory::ThinCString;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint};
@@ -33,8 +34,8 @@ use crate::drawscreen::{
 };
 use crate::eval::typval::tv_list_alloc;
 use crate::eval::vars::{
-    get_vim_var_list, get_vim_var_str, set_reg_var, set_vim_var_list, set_vim_var_nr,
-    set_vim_var_string,
+    get_vim_var_list_handle, set_reg_var, set_vim_var_list, set_vim_var_nr, set_vim_var_string,
+    vim_var_string,
 };
 use crate::eval::{eval_has_provider, eval_init, set_argv_var, timer_teardown};
 use crate::event::r#loop::{loop_close, loop_init, loop_poll_events};
@@ -278,8 +279,9 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     let remote_ui = ui_client_channel_id.get() != 0;
     if use_builtin_ui && !remote_ui {
         ui_client_forward_stdin.set(!stdin_isatty.get());
-        let progpath = get_vim_var_str(Vv::Progpath);
-        let chan = unsafe { ui_client_start_server(progpath, params.argc as usize, params.argv) };
+        let progpath = vim_var_string(Vv::Progpath).unwrap_or_else(ThinCString::empty);
+        let chan =
+            unsafe { ui_client_start_server(progpath.as_ptr(), params.argc as usize, params.argv) };
         if chan == 0 {
             unsafe { fprintf!(stderr, c"Failed to start Nvim server!\n".as_ptr()) };
             os_exit(1);
@@ -423,7 +425,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         let _ = shada_read_everything(None, false, true);
         time_msg_at(c"reading ShaDa");
     }
-    if get_vim_var_list(Vv::Oldfiles).is_null() {
+    if get_vim_var_list_handle(Vv::Oldfiles).is_none() {
         set_vim_var_list(Vv::Oldfiles, Some(tv_list_alloc(0)));
     }
 
@@ -448,7 +450,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     // The swap command has served its purpose; the ATTENTION prompts
     // from here on are the user's own doing.
-    unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1) };
+    set_vim_var_string(Vv::Swapcommand, None);
 
     if exmode_active.get() {
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;

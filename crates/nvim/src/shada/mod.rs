@@ -11,7 +11,7 @@ use crate::eval::decode::{decode_string, unpack_typval};
 use crate::eval::encode::encode_vim_to_msgpack;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{list_len, tv_clear, tv_copy, tv_list_alloc};
-use crate::eval::vars::{get_globvar_ht, get_vim_var_list, set_vim_var_list};
+use crate::eval::vars::{get_globvar_ht, get_vim_var_list_handle, set_vim_var_list};
 use crate::eval::{
     get_copy_id, set_ref_in_dict_items, set_ref_in_list_items, var_flavour, var_set_global,
 };

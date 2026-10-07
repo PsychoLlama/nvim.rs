@@ -354,45 +354,33 @@ pub fn may_trigger_win_scrolled_resized() {
 /// Fire `WinResized` with `v:event.windows` set to the resized windows.
 fn fire_resized(resize: &mut Subject, windows_list: Option<ListRef>) {
     let mut save = SaveVEvent::default();
-    // SAFETY: `get_v_event` hands back the dictionary it saved into `save`.
-    let v_event = unsafe { get_v_event(&raw mut save) };
-    // SAFETY: a live dictionary and a live list it takes over.
-    if unsafe { (*v_event).add_list(b"windows", windows_list) }.is_ok() {
+    let v_event = get_v_event(&mut save);
+    if v_event.edit().add_list(b"windows", windows_list).is_ok() {
         let (name, buf) = (resize.name(), resize.buffer());
-        // SAFETY: a live dictionary, a NUL-terminated name and a live buffer.
-        unsafe { (*v_event).set_keys_readonly() };
+        v_event.edit().set_keys_readonly();
 
         let __hoisted_0 = Some(buf);
 
         unsafe { apply_autocmds(AutoEvent::WinResized, name, name, false, __hoisted_0) };
     }
-    // SAFETY: the dictionary `get_v_event` saved into `save`.
-    unsafe { restore_v_event(v_event, &raw mut save) };
+    restore_v_event(v_event, &mut save);
 }
 
 /// Fire `WinScrolled` with `v:event` holding the per-window deltas.
 fn fire_scrolled(scroll: &mut Subject, scroll_dict: Option<DictRef>) {
     let mut save = SaveVEvent::default();
-    // SAFETY: as [`fire_resized`]; `scroll_dict` is live and is unreferenced
-    // once its contents have been copied in.
-    let v_event = unsafe { get_v_event(&raw mut save) };
-    // SAFETY: `v:event`, live; the view takes no reference.
-    let into = &::core::mem::ManuallyDrop::new(
-        unsafe { DictRef::owning(v_event) }.expect("a live dictionary"),
-    );
+    let v_event = get_v_event(&mut save);
     if let Some(from) = scroll_dict.as_ref() {
-        dict_extend(into, from, b'm');
+        dict_extend(&v_event, from, b'm');
     }
-    // SAFETY: a live dictionary.
-    unsafe { (*v_event).set_keys_readonly() };
+    v_event.edit().set_keys_readonly();
     drop(scroll_dict);
     let (name, buf) = (scroll.name(), scroll.buffer());
 
     let __hoisted_0 = Some(buf);
 
     unsafe { apply_autocmds(AutoEvent::WinScrolled, name, name, false, __hoisted_0) };
-    // SAFETY: the dictionary `get_v_event` saved into `save`.
-    unsafe { restore_v_event(v_event, &raw mut save) };
+    restore_v_event(v_event, &mut save);
 }
 
 // ---------------------------------------------------------------------------

@@ -73,22 +73,17 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
     };
 
     let mut saved = SaveVEvent::default();
-    let dict = unsafe { get_v_event(&raw mut saved) };
+    let dict = get_v_event(&mut saved);
     let key: &CStr = if pre { c"directory" } else { c"cwd" };
-    let _ = unsafe { (*dict).add_str(key.to_bytes(), crate::cstr::at_opt(new_dir)) };
-    let _ = unsafe {
-        (*dict).add_str(
-            b"scope",
-            crate::cstr::at_opt(scope_name.as_ptr().cast_mut()),
-        )
-    };
-    let _ = unsafe {
-        (*dict).add_bool(
-            b"changed_window",
-            BoolVarValue::from(cause == kCdCauseWindow),
-        )
-    };
-    unsafe { (*dict).set_keys_readonly() };
+    let _ = dict
+        .edit()
+        .add_str(key.to_bytes(), unsafe { crate::cstr::at_opt(new_dir) });
+    let _ = dict.edit().add_str(b"scope", Some(scope_name));
+    let _ = dict.edit().add_bool(
+        b"changed_window",
+        BoolVarValue::from(cause == kCdCauseWindow),
+    );
+    dict.edit().set_keys_readonly();
 
     unsafe {
         apply_autocmds(
@@ -100,7 +95,7 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
         )
     };
 
-    unsafe { restore_v_event(dict, &raw mut saved) };
+    restore_v_event(dict, &mut saved);
     RECURSIVE.set(false);
 }
 

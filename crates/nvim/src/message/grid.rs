@@ -298,7 +298,7 @@ pub fn msg_ui_flush() {
 
 /// One more line of messages has scrolled off; remember where it started.
 pub(crate) fn inc_msg_scrolled() {
-    if unsafe { *get_vim_var_str(Vv::Scrollstart) } == 0 {
+    if with_vim_var_str(Vv::Scrollstart, CStr::is_empty) {
         // v:scrollstart is empty: set it to the script/function name and
         // line number the scrolling started at.
         // SAFETY: the innermost frame's name is null or NUL-terminated.
@@ -319,7 +319,7 @@ pub(crate) fn inc_msg_scrolled() {
             // `vim_snprintf_safelen` wrote, and nothing else names it.
             p = unsafe { String_0::from_owned_parts(tofree, len) };
         }
-        unsafe { set_vim_var_string(Vv::Scrollstart, p.data(), p.len() as ptrdiff_t) };
+        set_vim_var_string(Vv::Scrollstart, Some(p.as_bytes()));
     }
     msg_scrolled.set(msg_scrolled.get() + 1);
     set_must_redraw(UPD_VALID);

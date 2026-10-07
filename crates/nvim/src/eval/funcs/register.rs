@@ -13,7 +13,7 @@ use crate::cstr;
 use crate::eval::typval::{
     ListRef, NumBuf, dict_get_number, dict_len, list_iter, list_len, tv_list_alloc,
 };
-use crate::eval::vars::get_vim_var_str;
+use crate::eval::vars::with_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
 use crate::keycodes::Ctrl_V;
 use crate::memory::{ThinCString, xfree, xmalloc};
@@ -42,8 +42,7 @@ fn regname(args: &[TypVal]) -> Option<c_int> {
     let first = if let Some(arg) = args.first() {
         numbuf.bytes_chk(arg)?.first().copied().unwrap_or(0)
     } else {
-        // SAFETY: the v:register string, NUL-terminated.
-        (unsafe { *get_vim_var_str(Vv::Register) }) as u8
+        with_vim_var_str(Vv::Register, cstr::first)
     };
     Some(match first {
         0 => b'"' as c_int,

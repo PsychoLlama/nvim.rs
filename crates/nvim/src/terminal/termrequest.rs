@@ -114,10 +114,7 @@ unsafe extern "C" fn emit_termrequest(argv: *mut *mut c_void) {
 /// The body of [`emit_termrequest`] once the terminal is known to be alive.
 fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
     let sequence = String_0::from_bytes(&request.sequence);
-    let (data, size) = (sequence.data(), sequence.len().cast_signed());
-    // SAFETY: `v:termrequest` takes a string of `size` readable bytes,
-    // which it copies.
-    unsafe { set_vim_var_string(Vv::Termrequest, data, size) };
+    set_vim_var_string(Vv::Termrequest, Some(sequence.as_bytes()));
 
     // Rows evicted since the sequence arrived have shifted every buffer
     // line up by one.

@@ -20,8 +20,10 @@
 use crate::ascii::ascii_iswhite;
 use crate::buffer::maketitle;
 use crate::charset::{skiptowhite, skipwhite};
-use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::cstr;
+use crate::eval::vars::{set_vim_var_string, vim_var_string};
 use crate::global_cell::GlobalCell;
+use crate::memory::ThinCString;
 use crate::memory::{xfree, xstrlcpy};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::{PROJECT_NAME, set_helplang_default};
@@ -105,10 +107,10 @@ pub fn set_lang_var() {
         (Vv::Collate, get_locale_val(LC_COLLATE)),
     ] {
         // SAFETY: each value is libc's NUL-terminated locale name (or NULL,
-        // which `set_vim_var_string` documents as clearing the variable),
-        // and is consumed before the next `setlocale` invalidates it. -1 asks
-        // for the whole string.
-        unsafe { set_vim_var_string(var, loc, -1) };
+        // which clears the variable), and is consumed before the next
+        // `setlocale` invalidates it.
+        let loc = unsafe { cstr::at_opt(loc) };
+        set_vim_var_string(var, loc.map(CStr::to_bytes));
     }
 }
 
@@ -126,6 +128,7 @@ pub fn init_locale() {
     // Both `path_tail*` answer a pointer inside the buffer they are given, so
     // `used` is in bounds and the second `xstrlcpy` gets exactly the room
     // left. Everything is derived from the one `base` pointer.
+    let progpath = vim_var_string(Vv::Progpath).unwrap_or_else(ThinCString::empty);
     unsafe {
         setlocale(LC_ALL, c"".as_ptr());
         setlocale(LC_NUMERIC, c"C".as_ptr());
@@ -133,7 +136,7 @@ pub fn init_locale() {
         // `$prefix/bin/nvim` -> `$prefix/share/locale`: drop the executable,
         // then overwrite the directory it sat in.
         let base = localepath.as_mut_ptr();
-        xstrlcpy(base, get_vim_var_str(Vv::Progpath), MAXPATHL as usize);
+        xstrlcpy(base, progpath.as_ptr(), MAXPATHL as usize);
         *path_tail_with_sep(base) = 0;
         let tail = path_tail(base);
         let used = tail.offset_from(base) as usize;

@@ -26,12 +26,12 @@ use crate::eval::typval::{
     NumBuf, list_items, list_len, tv_check_for_opt_number_arg, tv_check_for_opt_string_arg,
     tv_check_for_opt_string_or_list_arg, tv_check_for_string_or_number_arg,
 };
-use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::eval::vars::{set_vim_var_string, vim_var_bytes};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{suppress_errthrow, trylevel};
 use crate::getchar::state::got_int;
 use crate::guard::{MsgBump, Suppress};
-use crate::memory::{ThinCString, XString, xfree, xstrdup};
+use crate::memory::{ThinCString, XString, xfree};
 use crate::message::state::{
     called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
     emsg_assert_fails_msg, emsg_on_display, in_assert_fails, lines_left, msg_col, need_wait_return,
@@ -151,7 +151,7 @@ unsafe fn check_reported_error(
                 return FailsCheck::Matched;
             }
             // Take a copy: an error inside pattern_match() may free it.
-            actual = unsafe { xstrdup(get_vim_var_str(Vv::Errmsg)) };
+            actual = ThinCString::from_vec(vim_var_bytes(Vv::Errmsg)).into_raw();
             *tofree = actual;
             tv = &raw const items[1].li_tv;
             // SAFETY: as above.
@@ -270,7 +270,7 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prom
     lines_left.set(Rows.get());
     emsg_assert_fails_msg.set(None);
     unsafe { xfree(tofree.cast()) };
-    unsafe { set_vim_var_string(Vv::Errmsg, ptr::null(), 0) };
+    set_vim_var_string(Vv::Errmsg, None);
 }
 
 /// `assert_fails(cmd [, error [, msg [, lnum [, context]]]])`.

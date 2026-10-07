@@ -17,7 +17,6 @@
 )]
 
 use crate::winlayer::Win;
-use core::ptr;
 
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::edit::{BeginlineOpts, beginline, cursor_down, prompt_curpos_editable};
@@ -39,7 +38,7 @@ use crate::state::mode::{VIsual_select_reg, arrow_used, restart_edit};
 use crate::types::{CmdArg, NUL, OpType, Vv};
 use crate::undo::{u_redo, u_undo, u_undoline};
 use crate::winlayer::graph::cmdwin_type;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// Re-run this command as the two-character `g<nchar>` operator instead.
 fn as_g_operator(cmd_arg: &mut CmdArg, nchar: u8) {
@@ -189,19 +188,14 @@ pub(crate) fn nv_operator(cmd_arg: &mut CmdArg) {
 /// Publish the pending operator as `v:operator`.
 pub(crate) fn set_op_var(optype: OpType) {
     if optype == OpType::Nop {
-        // SAFETY: a null string with length 0 clears the variable.
-        unsafe { set_vim_var_string(Vv::Operator, ptr::null(), 0) };
+        set_vim_var_string(Vv::Operator, None);
         return;
     }
     // Always two bytes and a terminator: a one-character operator has NUL as
     // its second, and the length handed over is 2 either way.
-    let mut opchars: [c_char; 3] = [0; 3];
-    // SAFETY: both answers are single bytes of an operator's spelling.
     let opchar0 = u8::try_from(get_op_char(optype)).expect("an operator's char is one byte");
-    opchars[0] = opchar0.cast_signed();
     let opchar1 = u8::try_from(get_extra_op_char(optype)).expect("an operator's char is one byte");
-    opchars[1] = opchar1.cast_signed();
-    unsafe { set_vim_var_string(Vv::Operator, opchars.as_mut_ptr(), 2) };
+    set_vim_var_string(Vv::Operator, Some(&[opchar0, opchar1]));
 }
 
 /// The linewise form of an operator: `count1` lines from this one.

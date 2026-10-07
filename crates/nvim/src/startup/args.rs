@@ -689,11 +689,9 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut MainParams) {
     // The first `+cmd`/`-c` becomes `v:swapcommand`, so the ATTENTION
     // prompt can say what the process was asked to do.
     if unsafe { (*parmp).n_commands } > 0 {
-        let len = unsafe { cstr::bytes_at((*parmp).commands[0]) }.len() + 2;
-        let swcmd = unsafe { xmalloc(len + 1) } as *mut c_char;
-        unsafe { snprintf!(swcmd, len + 1, c":%s\r".as_ptr(), (*parmp).commands[0]) };
-        unsafe { set_vim_var_string(Vv::Swapcommand, swcmd, len as ptrdiff_t) };
-        unsafe { xfree(swcmd as *mut c_void) };
+        let command = unsafe { cstr::bytes_at((*parmp).commands[0]) };
+        let swcmd = [&b":"[..], command, b"\r"].concat();
+        set_vim_var_string(Vv::Swapcommand, Some(&swcmd));
     }
 
     time_msg_at(c"parsing arguments");
@@ -777,8 +775,9 @@ pub(crate) unsafe fn init_path(exename: *const c_char) {
     if unsafe { os_exepath(exepath.as_mut_ptr(), &raw mut exepathlen) } != 0 {
         unsafe { path_guess_exepath(exename, exepath.as_mut_ptr(), size_of_val(&exepath)) };
     }
-    unsafe { set_vim_var_string(Vv::Progpath, exepath.as_mut_ptr(), -1 as ptrdiff_t) };
-    unsafe { set_vim_var_string(Vv::Progname, path_tail(exename), -1 as ptrdiff_t) };
+    set_vim_var_string(Vv::Progpath, Some(cstr::in_chars(&exepath).to_bytes()));
+    let progname = unsafe { cstr::at_opt(path_tail(exename)) };
+    set_vim_var_string(Vv::Progname, progname.map(CStr::to_bytes));
 }
 
 /// `-d` with no `-o`/`-O` splits the way 'diffopt' asks.

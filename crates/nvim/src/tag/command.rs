@@ -836,9 +836,9 @@ impl DoTag {
         let str_m = IOSIZE as size_t;
         let fmt = c":ta %s\r".as_ptr();
         let len = unsafe { vim_snprintf_safelen!(swapcmd.as_mut_ptr(), str_m, fmt, name) };
-        unsafe { set_vim_var_string(Vv::Swapcommand, swapcmd.as_ptr(), len as ptrdiff_t) };
+        set_vim_var_string(Vv::Swapcommand, Some(&cstr::as_bytes(&swapcmd)[..len]));
         let result = unsafe { jumpto_tag(entry, self.forceit, true) };
-        unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1) };
+        set_vim_var_string(Vv::Swapcommand, None);
 
         if result != Ok(Jumped::NoSuchFile) {
             // We may have jumped to another window; check the index is

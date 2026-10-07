@@ -23,7 +23,7 @@ use crate::diff::diff_invalidate;
 use crate::drawscreen::state::{redraw_cmdline, redraw_tabline};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later, status_redraw_all};
 use crate::edit::beginline;
-use crate::eval::vars::{eval_charconvert, get_vim_var_str, set_vim_var_string};
+use crate::eval::vars::{eval_charconvert, set_vim_var_string, vim_var_bytes};
 use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::ex_eval::aborting;

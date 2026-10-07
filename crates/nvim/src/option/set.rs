@@ -34,7 +34,7 @@ use crate::autocmd::{apply_autocmds, do_filetype_autocmd};
 use crate::charset::buf_init_chartab;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, redraw_all_later};
 use crate::eval::vars::{
-    get_vim_var_str, optval_as_tv, reset_v_option_vars, set_vim_var_string, set_vim_var_tv,
+    optval_as_tv, reset_v_option_vars, set_vim_var_string, set_vim_var_tv, with_vim_var_str,
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
@@ -56,8 +56,8 @@ use crate::options::{
 use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, gettext_owned};
 use crate::types::{
-    NUL, OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0,
-    VimOption, Vv, ptrdiff_t, size_t, uint32_t,
+    OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0, VimOption,
+    Vv, size_t, uint32_t,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
@@ -124,8 +124,7 @@ fn apply_optionset_autocmd(
     oldval_l: OptVal,
     newval: OptVal,
 ) {
-    // SAFETY: all of these only read globals or the values handed in.
-    if starting.get() != 0 || unsafe { *get_vim_var_str(Vv::OptionType) } != NUL as c_char {
+    if starting.get() != 0 || !with_vim_var_str(Vv::OptionType, CStr::is_empty) {
         return;
     }
 
@@ -144,26 +143,12 @@ fn apply_optionset_autocmd(
     } else {
         c"global"
     };
-    unsafe {
-        set_vim_var_string(
-            Vv::OptionType,
-            type_str.as_ptr(),
-            type_str.count_bytes() as ptrdiff_t,
-        )
-    };
+    set_vim_var_string(Vv::OptionType, Some(type_str.to_bytes()));
 
     // The command spellings are not exclusive: `:setlocal` on a
     // global-local option arrives with both scope bits clear only for a
     // bare `:set`, and a modeline overrides whatever came before it.
-    let command = |name: &CStr| {
-        unsafe {
-            set_vim_var_string(
-                Vv::OptionCommand,
-                name.as_ptr(),
-                name.count_bytes() as ptrdiff_t,
-            )
-        };
-    };
+    let command = |name: &CStr| set_vim_var_string(Vv::OptionCommand, Some(name.to_bytes()));
     if opt_flags.has(OptionSetFlags::LOCAL) {
         command(c"setlocal");
         set_vim_var_tv(Vv::OptionOldlocal, &mut oldval_tv);

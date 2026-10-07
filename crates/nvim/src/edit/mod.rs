@@ -66,7 +66,7 @@ use crate::drawscreen::{
     show_cursor_info_later, showmode, skip_showmode, status_redraw_curbuf, unshowmode,
     update_screen,
 };
-use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::eval::vars::{set_vim_var_string, vim_var_bytes, with_vim_var_str};
 use crate::eval::{invoke_prompt_interrupt, prompt_invoke_callback};
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, expr_map_locked};
@@ -123,7 +123,7 @@ use crate::mbyte::{
     utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
 };
 use crate::memline::{gchar_pos, ml_append, ml_get, ml_get_buf, ml_get_len, ml_replace};
-use crate::memory::{strnequal, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::memory::{strnequal, xfree, xmalloc, xmemdupz};
 use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
 use crate::message::{e_noinstext, e_sandbox, e_textlock};
 use crate::message::{emsg, msg_check_for_delay};

@@ -42,17 +42,15 @@ use crate::types::{FAIL, OK};
 unsafe fn set_vim_var_strings(vars: &[(Vv, *const c_char)]) {
     for &(idx, val) in vars {
         // SAFETY: the caller's obligation.
-        unsafe { set_vim_var_string(idx, val, -1) };
+        let val = unsafe { cstr::at_opt(val) };
+        set_vim_var_string(idx, val.map(CStr::to_bytes));
     }
 }
 
 /// Blank the `v:` strings [`set_vim_var_strings`] put in place.
-///
-/// Safe: the null string reads no bytes.
 fn clear_vim_var_strings(vars: &[Vv]) {
     for &idx in vars {
-        // SAFETY: the null string, which needs nothing readable.
-        unsafe { set_vim_var_string(idx, ptr::null(), -1) };
+        set_vim_var_string(idx, None);
     }
 }
 
@@ -164,7 +162,11 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> Option
     // be added to the `v:` dictionary and taken out again.
     let mut save_val = TV_INITIAL_VALUE;
     prepare_vimvar(Vv::Val, &mut save_val);
-    unsafe { set_vim_var_string(Vv::Val, badword, -1) };
+    // SAFETY: the caller's promise -- `badword` is NUL-terminated.
+    set_vim_var_string(
+        Vv::Val,
+        unsafe { cstr::at_opt(badword) }.map(CStr::to_bytes),
+    );
     let no_emsg = (p_verbose() == 0).then(Suppress::emsg);
     current_sctx.set(option_last_set(kOptSpellsuggest));
 
@@ -186,7 +188,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> Option
     }
 
     drop(no_emsg);
-    unsafe { tv_clear(&mut *get_vim_var_tv(Vv::Val)) };
+    clear_vimvar(Vv::Val);
     restore_vimvar(Vv::Val, &mut save_val);
     current_sctx.set(saved_sctx);
 

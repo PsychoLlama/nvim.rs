@@ -33,7 +33,6 @@ use crate::arglist::check_arg_idx;
 use crate::cstr;
 use crate::ex_cmds::say;
 use crate::types::AutoEvent;
-use crate::vim_snprintf_safelen;
 use crate::winlayer::WinId;
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -51,7 +50,7 @@ use crate::digraph::keymap_init;
 use crate::drawscreen::state::skip_redraw;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline};
-use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
 use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::{aborting, should_abort_err};
@@ -59,7 +58,7 @@ use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::mark::set_last_cursor;
-use crate::memory::{xfree, xmalloc};
+use crate::memory::xfree;
 use crate::message::msg_check_for_delay;
 use crate::message::state::{msg_listdo_overwrite, msg_scroll, msg_scrolled_ign};
 use crate::r#move::{changed_line_abv_curs, update_topline};
@@ -75,9 +74,7 @@ use crate::startup::exiting;
 use crate::state::mode::exmode_active;
 use crate::tag::state::keep_help_flag;
 use crate::terminal::terminal_check_size;
-use crate::types::{
-    ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, Vv, ptrdiff_t, time_t,
-};
+use crate::types::{ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, Vv, time_t};
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
 use crate::winlayer::Buf;
@@ -95,39 +92,22 @@ use core::ptr;
 /// # Safety
 /// `command` must be live, or NULL.
 pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: LineNr) -> bool {
-    // SAFETY: caller's contract; `v:swapcommand` is a live string variable.
-    if unsafe {
-        command.is_null() && newlnum <= 0 || *get_vim_var_str(Vv::Swapcommand) as c_int != NUL
-    } {
+    if command.is_null() && newlnum <= 0 || !with_vim_var_str(Vv::Swapcommand, CStr::is_empty) {
         return false;
     }
-    // SAFETY: as above; `val.data` is `valsize` bytes and each format takes
-    // exactly the one argument that follows it.
-    let valsize = if command.is_null() {
-        30
+    let val = if command.is_null() {
+        format!("{newlnum}G").into_bytes()
     } else {
-        unsafe { strlen_of(command) + 3 }
+        // SAFETY: caller's contract -- a live, NUL-terminated command.
+        [
+            &b":"[..],
+            unsafe { CStr::from_ptr(command) }.to_bytes(),
+            b"\r",
+        ]
+        .concat()
     };
-    // SAFETY: `valsize` writable bytes, which the verbs below fill and the
-    // `xfree` releases.
-    let val = unsafe { xmalloc(valsize) }.cast::<c_char>();
-    let len = if command.is_null() {
-        unsafe { vim_snprintf_safelen!(val, valsize, c"%ldG".as_ptr(), newlnum as i64) }
-    } else {
-        unsafe { vim_snprintf_safelen!(val, valsize, c":%s\r".as_ptr(), command) }
-    };
-    unsafe { set_vim_var_string(Vv::Swapcommand, val, len as ptrdiff_t) };
-    unsafe { xfree(val.cast()) };
+    set_vim_var_string(Vv::Swapcommand, Some(&val));
     true
-}
-
-/// `strlen`, spelled so that the one call site reads.
-///
-/// # Safety
-/// `s` must be a live NUL-terminated string.
-unsafe fn strlen_of(s: *const c_char) -> usize {
-    // SAFETY: caller's contract.
-    unsafe { CStr::from_ptr(s) }.to_bytes().len()
 }
 
 crate::flag_set! {
@@ -501,8 +481,7 @@ pub(crate) unsafe fn do_ecmd(
 
     drop(redraw_off.take());
     if did_set_swapcommand {
-        // SAFETY: main thread; a NULL clears the variable.
-        unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1) };
+        set_vim_var_string(Vv::Swapcommand, None);
     }
     // SAFETY: our own allocation, or NULL.
     unsafe { xfree(free_fname.cast()) };

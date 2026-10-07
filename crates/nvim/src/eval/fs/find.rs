@@ -28,6 +28,7 @@
 
 use super::{FINDFILE_DIR, FINDFILE_FILE, RetList, nr_arg, str_arg, str_arg_chk};
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one, globpath};
+use crate::cstr;
 use crate::eval::eval_expr_typval;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk};
@@ -120,10 +121,10 @@ fn suffixes(find_what: c_int) -> *mut c_char {
 
 /// Set `v:val`, or clear it when `name` is NULL.
 fn set_val(name: *const c_char) {
-    let len: ptrdiff_t = if name.is_null() { 0 } else { -1 };
-    // SAFETY: `Vv::Val` names a `v:` variable, and a length of -1 promises a
-    // NUL-terminated string, which every directory entry's name is.
-    unsafe { set_vim_var_string(Vv::Val, name, len) };
+    // SAFETY: a NUL-terminated string, which every directory entry's name
+    // is, or null.
+    let name = unsafe { cstr::at_opt(name) };
+    set_vim_var_string(Vv::Val, name.map(CStr::to_bytes));
 }
 
 // ---------------------------------------------------------------------

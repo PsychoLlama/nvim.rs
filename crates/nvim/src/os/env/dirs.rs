@@ -13,7 +13,8 @@
 use super::*;
 use crate::cstr;
 use crate::eval::fs::modify_fname;
-use crate::eval::vars::get_vim_var_str;
+use crate::eval::vars::{vim_var_string, with_vim_var_str};
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::memory::xmemrchr;
 use crate::option::vars::{P_HF, p_hf};
@@ -148,10 +149,11 @@ pub unsafe fn vim_env_iter_rev(
 /// # Safety
 /// `exe_name` must be writable for `MAXPATHL` bytes.
 pub unsafe fn vim_get_prefix_from_exepath(exe_name: *mut c_char) {
+    let progpath = vim_var_string(Vv::Progpath).unwrap_or_else(ThinCString::empty);
     // SAFETY: the caller's contract; `path_tail*` answer pointers inside the
     // buffer they are given.
     unsafe {
-        xstrlcpy(exe_name, get_vim_var_str(Vv::Progpath), MAXPATHL as usize);
+        xstrlcpy(exe_name, progpath.as_ptr(), MAXPATHL as usize);
         // Remove the trailing "nvim", then the trailing "bin/".
         *path_tail_with_sep(exe_name) = 0;
         *path_tail(exe_name) = 0;
@@ -172,7 +174,7 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
     // way of saying.
     unsafe {
         // `init_path()` runs before anything reaches here.
-        debug_assert!(*get_vim_var_str(Vv::Progpath) != 0);
+        debug_assert!(!with_vim_var_str(Vv::Progpath, CStr::is_empty));
 
         let kos_env_path = os_getenv(name);
         if !kos_env_path.is_null() {

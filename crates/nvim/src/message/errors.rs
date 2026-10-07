@@ -193,7 +193,8 @@ pub unsafe fn emsg_multiline(
         }
 
         // set "v:errmsg", also when using ":silent! cmd"
-        unsafe { set_vim_var_string(Vv::Errmsg, s, -1) };
+        // SAFETY: the caller's obligation -- a valid C string.
+        set_vim_var_string(Vv::Errmsg, unsafe { cstr::at_opt(s) }.map(CStr::to_bytes));
 
         // When using ":silent! cmd" don't display the error message, but
         // do write it to the redirection and the log.
@@ -397,8 +398,7 @@ pub fn give_warning(message: &CStr, hl: bool, hist: bool) {
     msg_hist_off.set(!hist);
 
     let no_prompt = Suppress::wait_return();
-    // SAFETY: a `CStr` is a valid C string.
-    unsafe { set_vim_var_string(Vv::Warningmsg, message.as_ptr(), -1) };
+    set_vim_var_string(Vv::Warningmsg, Some(message.to_bytes()));
     keep_msg.set(None);
     keep_msg_hl_id.set(if hl { HLF_W } else { 0 });
 

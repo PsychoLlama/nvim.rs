@@ -508,8 +508,8 @@ pub fn may_trigger_modechanged() {
     if !has_event(AutoEvent::ModeChanged) || got_int.get() {
         return;
     }
-    let mut old_mode = last_mode.get();
-    let mut curr_mode = get_mode();
+    let old_mode = last_mode.get();
+    let curr_mode = get_mode();
     if letters(&old_mode) == letters(&curr_mode) {
         return;
     }
@@ -520,30 +520,17 @@ pub fn may_trigger_modechanged() {
         sve_did_save: false,
         sve_hashtab: HashTab::new(),
     };
-    // SAFETY: the editor is initialized; `v_event` is borrowed from
-    // `save_v_event`, which outlives the `restore_v_event` that ends it, and
-    // both mode names outlive the autocommand that reads them.
-    let v_event = unsafe { get_v_event(&raw mut save_v_event) };
-    let (key, len) = (c"new_mode".as_ptr(), c"new_mode".count_bytes());
-    let _ = unsafe {
-        (*v_event).add_str(
-            cstr::slice_at(key, len),
-            cstr::at_opt(curr_mode.as_mut_ptr()),
-        )
-    };
-    let (key, len) = (c"old_mode".as_ptr(), c"old_mode".count_bytes());
-    let _ = unsafe {
-        (*v_event).add_str(
-            cstr::slice_at(key, len),
-            cstr::at_opt(old_mode.as_mut_ptr()),
-        )
-    };
-    unsafe { (*v_event).set_keys_readonly() };
+    let v_event = get_v_event(&mut save_v_event);
+    let new_mode = cstr::as_bytes(letters(&curr_mode));
+    let _ = v_event.edit().add_str_len(b"new_mode", Some(new_mode));
+    let old_mode = cstr::as_bytes(letters(&old_mode));
+    let _ = v_event.edit().add_str_len(b"old_mode", Some(old_mode));
+    v_event.edit().set_keys_readonly();
     let (fname, fname_io) = (pattern.as_mut_ptr(), ptr::null_mut::<c_char>());
     let buf = Buf::current_or_none();
     unsafe { apply_autocmds(AutoEvent::ModeChanged, fname, fname_io, false, buf) };
     last_mode.set(curr_mode);
-    unsafe { restore_v_event(v_event, &raw mut save_v_event) };
+    restore_v_event(v_event, &mut save_v_event);
 }
 
 /// Whether `SafeState` has been announced and not yet withdrawn.

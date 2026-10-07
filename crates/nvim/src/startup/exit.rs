@@ -15,6 +15,7 @@ use crate::autocmd::fire_autocmds;
 use crate::cstr;
 use crate::fprintf;
 use crate::types::AutoEvent;
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 
 use crate::api::private::helpers::cstr_to_string;
@@ -23,7 +24,7 @@ use crate::buffer::{BufRef, buf_get_changedtick, buf_set_changedtick};
 use crate::eval::garbage_collect;
 use crate::eval::gc::garbage_collect_at_exit;
 use crate::eval::userfunc::invoke_all_defer;
-use crate::eval::vars::{get_vim_var_str, set_vim_var_nr, set_vim_var_string, set_vim_var_type};
+use crate::eval::vars::{set_vim_var_nr, set_vim_var_string, set_vim_var_type, with_vim_var_str};
 use crate::event::stream::stream_set_blocking;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg};
@@ -125,8 +126,8 @@ pub fn getout(mut exitval: c_int) -> ! {
     set_vim_var_nr(Vv::Exiting, exitval as VarNumber);
 
     // `:restart` and friends set a reason of their own first.
-    if unsafe { *get_vim_var_str(Vv::Exitreason) } as c_int == NUL {
-        unsafe { set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4) };
+    if with_vim_var_str(Vv::Exitreason, CStr::is_empty) {
+        set_vim_var_string(Vv::Exitreason, Some(b"quit"));
     }
 
     // Every `:defer`red function still on the stack.

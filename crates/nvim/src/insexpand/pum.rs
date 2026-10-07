@@ -166,17 +166,12 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
         ins_compl_dict_alloc(curr_match().expect("a selected item is the current match"))
     };
     let mut save_v_event = SAVE_V_EVENT_INIT;
-    // SAFETY: `save_v_event` is this frame's, and lives until the restore
-    // below hands the saved dict back.
-    let v_event = unsafe { get_v_event(&raw mut save_v_event) };
+    let v_event = get_v_event(&mut save_v_event);
     let buffer = Buf::current();
-    // SAFETY: `v_event` is the dict just built, and the key is a static
-    // string of the length given.
-    unsafe {
-        let _ = (*v_event).add_dict(b"completed_item", Some(item_held));
-        pum_set_event_info(v_event);
-        (*v_event).set_keys_readonly();
-    }
+    let _ = v_event.edit().add_dict(b"completed_item", Some(item_held));
+    // SAFETY: `v_event` is a live dictionary.
+    unsafe { pum_set_event_info(v_event.as_ptr()) };
+    v_event.edit().set_keys_readonly();
 
     complete_changed_busy.set(true);
     let locked = Lock::text();
@@ -185,8 +180,7 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     drop(locked);
     complete_changed_busy.set(false);
 
-    // SAFETY: the pair of `get_v_event`, with the same saved slot.
-    unsafe { restore_v_event(v_event, &raw mut save_v_event) };
+    restore_v_event(v_event, &mut save_v_event);
 }
 
 /// C's `"match %d of %d"` / `"match %d"`, the line `showmode` shows under

@@ -789,7 +789,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
             let verbose = DoCmdOpts::VERBOSE;
             let _ = unsafe { do_cmdline(cmd, None, ptr::null_mut(), verbose) };
             if did_set_swapcommand {
-                unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1 as ptrdiff_t) };
+                set_vim_var_string(Vv::Swapcommand, None);
             }
         }
         return;

@@ -115,10 +115,7 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     let v = vidx.get();
     let vv = Vv::try_from(v).ok()?;
     vidx.set(v + 1);
-    // SAFETY: a `v:` variable's name is NUL-terminated.
-    Some(cat_prefix_varname(b'v', unsafe {
-        CStr::from_ptr(get_vim_var_name(vv))
-    }))
+    Some(cat_prefix_varname(b'v', get_vim_var_name(vv)))
 }
 
 /// Read the variable `name` into `result`, reporting E121 if it does not

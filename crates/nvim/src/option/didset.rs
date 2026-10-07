@@ -65,8 +65,7 @@ use crate::spell::parse_spelllang;
 use crate::startup::{full_screen, readonlymode, starting};
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    Buffer, ColNr, LineNr, OptError, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv,
-    ptrdiff_t, uint8_t,
+    Buffer, ColNr, LineNr, OptError, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv, uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
@@ -182,7 +181,7 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
         let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
         msg_source(HLF_W);
         msg(gettext(warning), HLF_W);
-        unsafe { set_vim_var_string(Vv::Warningmsg, gettext(warning).as_ptr(), -1 as ptrdiff_t) };
+        set_vim_var_string(Vv::Warningmsg, Some(gettext(warning).to_bytes()));
     }
     P_DECO.set(true);
     set_option_value(kOptKeymap, keymap, local)

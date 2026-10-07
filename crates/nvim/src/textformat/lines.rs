@@ -11,7 +11,7 @@
 use crate::cstr;
 use crate::memory::XString;
 use crate::winlayer::{Buf, Win, windows};
-use core::ffi::{c_char, c_int, c_long};
+use core::ffi::{c_int, c_long};
 
 use super::*;
 use crate::ascii::ascii_isspace;
@@ -45,7 +45,7 @@ use crate::state::mode::{State, saved_cursor};
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
     CmdModFlags, ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, LineNr,
-    NUL, OpArg, OptionSetFlags, VarNumber, Vv, ptrdiff_t, size_t,
+    NUL, OpArg, OptionSetFlags, VarNumber, Vv, size_t,
 };
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
@@ -156,7 +156,7 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         eval_to_number(&fex, true) as c_int
     };
-    unsafe { set_vim_var_string(Vv::Char, ::core::ptr::null::<c_char>(), -1 as ptrdiff_t) };
+    set_vim_var_string(Vv::Char, None);
     drop(script_ctx);
     r
 }

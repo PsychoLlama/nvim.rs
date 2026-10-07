@@ -105,21 +105,18 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
         sve_did_save: false,
         sve_hashtab: HashTab::new(),
     };
-    // SAFETY: `save_v_event` is a writable local, which is saved into here
-    // and read back by `restore_v_event` at the end.
-    let dict = unsafe { get_v_event(&raw mut save_v_event) };
+    let dict = get_v_event(&mut save_v_event);
     if !contents.is_null() {
-        // SAFETY: `dict` is that event dictionary, the key is a literal of
-        // the length given, and the caller promises a NUL-terminated value.
-        let _ = unsafe { (*dict).add_str(b"regcontents", cstr::at_opt(contents)) };
+        // SAFETY: the caller promises a NUL-terminated value.
+        let _ = dict
+            .edit()
+            .add_str(b"regcontents", unsafe { cstr::at_opt(contents) });
     }
     let mut buf: [c_char; 67] = [0; 67];
     buf[0] = regname as c_char;
     buf[1] = NUL as c_char;
-    // SAFETY: as above; `buf` is NUL-terminated by the line before.
-    let _ = unsafe { (*dict).add_str(b"regname", cstr::at_opt(buf.as_mut_ptr())) };
-    // SAFETY: `dict` is the event dictionary.
-    unsafe { (*dict).set_keys_readonly() };
+    let _ = dict.edit().add_str(b"regname", Some(cstr::in_chars(&buf)));
+    dict.edit().set_keys_readonly();
     let no_fname: *mut c_char = ::core::ptr::null_mut();
     // SAFETY: the event carries no file name; running the autocommands is
     // what this function is for, and the caller allows it.
@@ -132,8 +129,7 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
             Buf::current_or_none(),
         )
     };
-    // SAFETY: `dict` and `save_v_event` are the pair `get_v_event` made.
-    unsafe { restore_v_event(dict, &raw mut save_v_event) };
+    restore_v_event(dict, &mut save_v_event);
 }
 
 /// `q`: start recording into register `c`, or stop and store what was

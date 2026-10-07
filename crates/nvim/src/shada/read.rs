@@ -100,7 +100,8 @@ struct Reading {
 /// `sd_reader` must point at an open file descriptor, unaliased for the call.
 pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
     let force = flags & kShaDaForceit as c_int != 0;
-    let mut oldfiles_list = get_vim_var_list(Vv::Oldfiles);
+    let mut oldfiles_list =
+        get_vim_var_list_handle(Vv::Oldfiles).map_or(core::ptr::null_mut(), |l| l.as_ptr());
     // `v:oldfiles` is only filled in while it is still empty, so that a
     // second file does not append to the first one's answer.
     let get_old_files = flags & (kShaDaGetOldfiles | kShaDaForceit) as c_int != 0

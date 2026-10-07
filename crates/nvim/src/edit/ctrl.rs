@@ -387,15 +387,14 @@ pub(crate) fn ins_ctrl_() {
 /// `replace_state` is the Replace mode to go *to* -- `MODE_REPLACE` or
 /// `MODE_VREPLACE`, depending on how the insert was started.
 pub(crate) fn ins_insert(replace_state: c_int) {
-    let mode = if State.get() & REPLACE_FLAG != 0 {
-        c"i".as_ptr()
+    let mode: &[u8] = if State.get() & REPLACE_FLAG != 0 {
+        b"i"
     } else if replace_state == MODE_VREPLACE {
-        c"v".as_ptr()
+        b"v"
     } else {
-        c"r".as_ptr()
+        b"r"
     };
-    // SAFETY: a static mode name, and `curwin`/`curbuf` are live.
-    unsafe { set_vim_var_string(Vv::Insertmode, mode, 1) };
+    set_vim_var_string(Vv::Insertmode, Some(mode));
     ins_apply_autocmds(AutoEvent::InsertChange);
 
     if State.get() & REPLACE_FLAG != 0 {

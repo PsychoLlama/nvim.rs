@@ -29,12 +29,8 @@ use crate::winlayer::Win;
 /// `word` is the match accepted, if any.
 pub(crate) fn do_autocmd_completedone(c: c_int, mode: c_int, word: Option<&CStr>) {
     let mut save_v_event = SAVE_V_EVENT_INIT;
-    // SAFETY: `save_v_event` is this frame's, and lives until the restore
-    // below hands the saved dict back.
-    let v_event = unsafe { get_v_event(&raw mut save_v_event) };
-    // SAFETY: `v_event` is the dict just built, and every value is a
-    // NUL-terminated string.
-    let add_str = |key: &str, val: &CStr| unsafe { (*v_event).add_str(key.as_bytes(), Some(val)) };
+    let v_event = get_v_event(&mut save_v_event);
+    let add_str = |key: &str, val: &CStr| v_event.edit().add_str(key.as_bytes(), Some(val));
 
     let mode_name = CTRL_X_MODE_NAMES[(mode & !CTRL_X_WANT_IDENT) as usize].unwrap_or(c"");
     let _ = add_str("complete_word", word.unwrap_or(c""));
@@ -47,12 +43,10 @@ pub(crate) fn do_autocmd_completedone(c: c_int, mode: c_int, word: Option<&CStr>
         c"discard"
     };
     let _ = add_str("reason", reason);
-    // SAFETY: as above.
-    unsafe { (*v_event).set_keys_readonly() };
+    v_event.edit().set_keys_readonly();
 
     ins_apply_autocmds(AutoEvent::CompleteDone);
-    // SAFETY: the pair of `get_v_event`, with the same saved slot.
-    unsafe { restore_v_event(v_event, &raw mut save_v_event) };
+    restore_v_event(v_event, &mut save_v_event);
 }
 
 /// One match as a locked `v:completed_item` dict.

@@ -48,7 +48,7 @@ use crate::eval::typval::{
     value_check_lock,
 };
 use crate::eval::vars::{
-    clear_vimvar, prepare_vimvar, restore_vimvar, set_vim_var_bytes, set_vim_var_nr,
+    clear_vimvar, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
     set_vim_var_tv, set_vim_var_type, var_check_fixed_named, var_check_ro_named, with_vim_var,
 };
 use crate::eval::{eval_expr_typval, get_copy_id};
@@ -787,7 +787,7 @@ pub(crate) fn set_key_string(key: &[u8]) {
     // A slice rather than a `strlen`: this runs once per item of every
     // `filter()` and `map()` over a dictionary, and a `DictKey` already
     // knows how long it is.
-    set_vim_var_bytes(Vv::Key, key);
+    set_vim_var_string(Vv::Key, Some(key));
 }
 
 /// Declare `v:key`'s type for a walk that will set Numbers into it.

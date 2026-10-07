@@ -16,7 +16,7 @@ use crate::eval::typval::{
     DictRef, NumBuf, dict_extend, dict_find, dict_get_number, list_iter, list_len, tv_dict_alloc,
     tv_list_alloc,
 };
-use crate::eval::vars::get_vim_var_str;
+use crate::eval::vars::vim_var_bytes;
 use crate::eval::{common_job_callbacks, find_job, tv_to_argv};
 use crate::event::r#loop::loop_on_put;
 use crate::event::multiqueue::{
@@ -336,10 +336,10 @@ unsafe fn create_environment(
 
     // $NVIM points the child at this instance's server address, when
     // there is one.
-    let nvim_addr = get_vim_var_str(Vv::Servername);
-    if unsafe { *nvim_addr } as c_int != NUL {
+    let nvim_addr = vim_var_bytes(Vv::Servername);
+    if !nvim_addr.is_empty() {
         drop(env_held.remove_key(b"NVIM"));
-        let _ = unsafe { (*env).add_str(b"NVIM", cstr::at_opt(nvim_addr)) };
+        let _ = unsafe { (*env).add_str_len(b"NVIM", Some(&nvim_addr)) };
     }
 
     // The job's own `env` wins over everything above.

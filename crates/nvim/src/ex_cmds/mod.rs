@@ -34,7 +34,7 @@ use crate::autocmd::fire_autocmds;
 use crate::charset::{skip, vim_is_ident_char};
 use crate::cstr;
 use crate::eval::typval::{NumBuf, list_find_str, list_iter, list_len};
-use crate::eval::vars::get_vim_var_list;
+use crate::eval::vars::get_vim_var_list_handle;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::getchar::state::got_int;
@@ -355,16 +355,17 @@ pub(crate) fn skip_vimgrep_pat_at(text: &CStr) -> Option<usize> {
 /// `:oldfiles` -- list `v:oldfiles`, numbered; under `:browse`, then ask for
 /// a number and edit that file.
 pub fn ex_oldfiles(excmd: &mut ExArg) {
-    let list = get_vim_var_list(Vv::Oldfiles);
-    if list.is_null() {
+    // A reference of this frame's own: the prompt below runs user code,
+    // which may assign `v:oldfiles`.
+    let Some(list) = get_vim_var_list_handle(Vv::Oldfiles) else {
         msg(gettext(c"No old files"), 0);
         return;
-    }
+    };
 
     say::start();
     msg_scroll.set(1);
     // SAFETY: a live list, whose items are its own.
-    unsafe { list_oldfiles(list) };
+    unsafe { list_oldfiles(list.as_ptr()) };
     got_int.set(false);
     if !cmdmod_has(CmdModFlags::BROWSE) {
         return;
@@ -374,13 +375,12 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     // SAFETY: main thread; no prompt text and no "did the user cancel" flag.
     let nr = unsafe { prompt_for_input(None, 0, false, ptr::null_mut::<bool>()) };
     say::starthere();
-    // SAFETY: `list` is still the editor's list.
-    if nr <= 0 || nr > list_len(unsafe { list.as_ref() }) {
+    if nr <= 0 || nr > list_len(Some(&list)) {
         return;
     }
     let mut numbuf = NumBuf::new();
-    // SAFETY: as above; `nr` is inside the list.
-    let Some(picked) = list_find_str(unsafe { list.as_ref() }, nr - 1, &mut numbuf) else {
+    // `nr` is inside the list.
+    let Some(picked) = list_find_str(Some(&list), nr - 1, &mut numbuf) else {
         return;
     };
     // SAFETY: `picked` is a live string, and the expansion is ours to free.

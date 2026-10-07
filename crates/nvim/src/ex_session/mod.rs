@@ -518,7 +518,11 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
             // A successful session write sets v:this_session.
             let full = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
             if unsafe { vim_full_name(fname, full, MAXPATHL as size_t, false) }.is_ok() {
-                unsafe { set_vim_var_string(Vv::ThisSession, full, -1) };
+                // SAFETY: `vim_full_name` terminated what it wrote.
+                set_vim_var_string(
+                    Vv::ThisSession,
+                    unsafe { cstr::at_opt(full) }.map(CStr::to_bytes),
+                );
             }
             unsafe { xfree(full.cast::<c_void>()) };
         }

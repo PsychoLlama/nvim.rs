@@ -19,7 +19,6 @@ use crate::eval::typval::PartialRef;
 use crate::memory::ThinCString;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::snprintf;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
@@ -28,7 +27,7 @@ use super::*;
 use crate::eval::typval::DictEntry;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_dict_free_contents;
-use crate::types::{HashTab, NUL, SaveVEvent};
+use crate::types::{HashTab, SaveVEvent};
 
 /// Row `i` of the `v:` table, for the walks that visit every one.
 ///
@@ -131,23 +130,22 @@ pub fn set_vim_var_tv(idx: Vv, tv: &mut TypVal) {
 }
 
 /// The name of `v:` variable `idx`, without the `v:`.
-pub(crate) fn get_vim_var_name(idx: Vv) -> *mut c_char {
-    vimvar(idx).vv_name
+///
+/// The table's names are static literals, so the answer outlives everything.
+pub(crate) fn get_vim_var_name(idx: Vv) -> &'static CStr {
+    // SAFETY: every row's name is a NUL-terminated literal of the static
+    // table, never written.
+    unsafe { CStr::from_ptr(vimvar(idx).vv_name) }
 }
 
-/// The value of `v:` variable `idx`, which the caller may write through.
-pub(crate) fn get_vim_var_tv(idx: Vv) -> *mut TypVal {
-    vimvar_val(idx).raw()
+/// Lend `v:` variable `idx`'s value to `f` to write through.
+pub(crate) fn with_vim_var_mut<R>(idx: Vv, f: impl FnOnce(&mut TypVal) -> R) -> R {
+    f(&mut vimvar_val(idx))
 }
 
 /// `v:` variable `idx` as a Number.  The caller knows its declared type.
 pub(crate) fn get_vim_var_nr(idx: Vv) -> VarNumber {
     vimvar_val(idx).number_or_zero()
-}
-
-/// `v:` variable `idx` as a List.
-pub fn get_vim_var_list(idx: Vv) -> *mut List {
-    vimvar_val(idx).list_or_null()
 }
 
 /// Another reference to the List `v:` variable `idx` holds, `None` when it
@@ -156,33 +154,40 @@ pub(crate) fn get_vim_var_list_handle(idx: Vv) -> Option<ListRef> {
     vimvar_val(idx).list_handle()
 }
 
-/// `v:` variable `idx` as a Dict.
-pub fn get_vim_var_dict(idx: Vv) -> *mut Dict {
-    vimvar_val(idx).dict_or_null()
+/// Another reference to the Dict `v:` variable `idx` holds, `None` when it
+/// holds none.
+pub(crate) fn get_vim_var_dict_handle(idx: Vv) -> Option<DictRef> {
+    vimvar_val(idx).dict_handle()
 }
 
-/// `v:` variable `idx` as a string — the variable's own, with an unset one
-/// reading as empty.
+/// Lend `v:` variable `idx`'s string to `f`, with an unset one reading as
+/// empty.
 ///
 /// Every variable asked for here is declared `VAR_STRING` and `E963` refuses
-/// an assignment of another type, so there is nothing to convert and nothing
-/// to convert it into: the answer lives as long as the variable does, which
-/// is what the callers holding it across a call need.
-pub(crate) fn get_vim_var_str(idx: Vv) -> *mut c_char {
+/// an assignment of another type, so there is nothing to convert. The
+/// borrow is the variable's own, so `f` must not run anything that can
+/// assign a `v:` variable -- no autocommands, no `eval`, no `do_cmdline`;
+/// a caller that holds the string across such a thing takes
+/// [`vim_var_string`] or [`vim_var_bytes`] instead.
+pub(crate) fn with_vim_var_str<R>(idx: Vv, f: impl FnOnce(&CStr) -> R) -> R {
     let tv = vimvar_val(idx);
     debug_assert_eq!(
         tv.v_type(),
         VAR_STRING,
         "v: variable {idx:?} is not a String"
     );
-    tv.string_ref()
-        .map_or(c"".as_ptr(), ThinCString::as_ptr)
-        .cast_mut()
+    f(tv.string_ref().map_or(c"", ThinCString::as_cstr))
 }
 
-/// `v:` variable `idx` as a Partial.
-pub fn get_vim_var_partial(idx: Vv) -> *mut Partial {
-    vimvar_val(idx).partial_or_null()
+/// A copy of `v:` variable `idx`'s string, `None` for the null string.
+pub(crate) fn vim_var_string(idx: Vv) -> Option<ThinCString> {
+    let tv = vimvar_val(idx);
+    debug_assert_eq!(
+        tv.v_type(),
+        VAR_STRING,
+        "v: variable {idx:?} is not a String"
+    );
+    tv.string_ref().cloned()
 }
 
 /// A reference of the caller's own to `v:lua`, the partial a `v:lua.name`
@@ -221,40 +226,26 @@ pub fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
 
 /// Set `v:char` to the character `c`.
 pub fn set_vim_var_char(c: c_int) {
-    let mut buf = [0 as c_char; 7];
+    let mut buf = [0u8; 7];
     // SAFETY: `utf_char2bytes` writes at most six bytes into the local.
-    let buflen = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
-    buf[buflen as usize] = NUL as c_char;
-    // SAFETY: a live local of `buflen` readable bytes.
-    unsafe { set_vim_var_string(Vv::Char, buf.as_ptr(), buflen as ptrdiff_t) };
+    let buflen = unsafe { utf_char2bytes(c, buf.as_mut_ptr().cast()) };
+    set_vim_var_string(Vv::Char, Some(&buf[..buflen as usize]));
 }
 
-/// Set `v:` variable `idx` to a copy of `val`, which is `len` bytes long or
-/// NUL-terminated when `len` is -1.  A NULL `val` is the null string.
+/// Set `v:` variable `idx` to a copy of `val`; `None` is the null string.
 ///
-/// # Safety
-/// As [`get_vim_var_tv`]; `val` is NULL or readable for `len`.
-pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
+/// A NUL among the bytes ends the string for every reader, as `xstrndup`
+/// did.
+pub fn set_vim_var_string(idx: Vv, val: Option<&[u8]>) {
+    set_vim_var_owned(idx, val.map(ThinCString::from_bytes));
+}
+
+/// Set `v:` variable `idx` to `val`, which it takes over; `None` is the null
+/// string.
+pub(crate) fn set_vim_var_owned(idx: Vv, val: Option<ThinCString>) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
-    tv.write_string(if val.is_null() {
-        None
-    } else if len == -1 {
-        // SAFETY: the caller's obligation -- NUL-terminated.
-        Some(ThinCString::from_cstr(unsafe { CStr::from_ptr(val) }))
-    } else {
-        // SAFETY: the caller's obligation -- readable for `len`. A NUL
-        // among them ends the string for every reader, as `xstrndup` did.
-        let bytes = unsafe { ::core::slice::from_raw_parts(val.cast::<u8>(), len as size_t) };
-        Some(ThinCString::from_bytes(bytes))
-    });
-}
-
-/// Set `v:` variable `idx` to a copy of `bytes`: [`set_vim_var_string`]
-/// over a slice.
-pub(crate) fn set_vim_var_bytes(idx: Vv, bytes: &[u8]) {
-    clear_vimvar(idx);
-    vimvar_val(idx).write_string(Some(ThinCString::from_bytes(bytes)));
+    tv.write_string(val);
 }
 
 /// Lend `v:` variable `idx`'s value to `f`.
@@ -310,164 +301,68 @@ pub fn set_reg_var(c: c_int) {
         .string_ref()
         .is_some_and(|cur| cur.first() == c as u8);
     if !unchanged {
-        let buf = [regname, NUL as c_char];
-        // SAFETY: a two-byte NUL-terminated local.
-        unsafe { set_vim_var_string(Vv::Register, buf.as_ptr(), 1) };
+        set_vim_var_string(Vv::Register, Some(&[regname as u8]));
     }
-}
-
-/// Get or restore `v:exception`: a NULL `oldval` reads it, anything else
-/// puts that value back and answers NULL.
-///
-/// Always called in pairs, and neither half allocates or frees.
-///
-/// # Safety
-/// `oldval` is NULL or a string this took out earlier.
-pub(crate) unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
-    let mut tv = vimvar_val(Vv::Exception);
-    if oldval.is_null() {
-        return tv
-            .string_ref()
-            .map_or(ptr::null_mut(), |s| s.as_ptr().cast_mut());
-    }
-    // SAFETY: the caller's obligation -- the block the read half answered,
-    // which the variable owns again.
-    tv.write_string(unsafe { ThinCString::from_raw(oldval) });
-    ptr::null_mut()
-}
-
-/// [`v_exception`] for `v:throwpoint`.
-///
-/// # Safety
-/// As [`v_exception`].
-pub(crate) unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
-    let mut tv = vimvar_val(Vv::Throwpoint);
-    if oldval.is_null() {
-        return tv
-            .string_ref()
-            .map_or(ptr::null_mut(), |s| s.as_ptr().cast_mut());
-    }
-    // SAFETY: as [`v_exception`].
-    tv.write_string(unsafe { ThinCString::from_raw(oldval) });
-    ptr::null_mut()
 }
 
 /// Set `v:cmdarg` to the `++opt` arguments of `excmd`, answering the old value
 /// for the caller to restore.
 ///
-/// A NULL `excmd` is the restore half: `oldarg` goes back and the value that
-/// was there is freed.  The same happens if any of the pieces fails to
-/// format, which is why the answer is NULL on that path -- there is nothing
-/// left for the caller to put back.
-///
-/// The size is worked out in full first, so the writes below cannot
-/// truncate; `xlen` accumulates what each one *would* have written, which is
-/// what makes the closing bound check meaningful.
-///
-/// # Safety
-/// `oldarg` is NULL or an owned string.
-pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut c_char {
+/// A `None` `excmd` is the restore half: `oldarg` goes back and the value
+/// that was there is freed, answering `None` -- there is nothing left for the
+/// caller to put back.
+pub fn set_cmdarg(excmd: Option<&ExArg>, oldarg: Option<ThinCString>) -> Option<ThinCString> {
     let mut tv = vimvar_val(Vv::Cmdarg);
 
-    'error: {
-        let Some(command) = excmd else {
-            break 'error;
+    let Some(command) = excmd else {
+        drop(tv.take_string());
+        tv.write_string(oldarg);
+        return None;
+    };
+    let mut newval: Vec<u8> = Vec::new();
+    if command.force_bin == FORCE_BIN {
+        newval.extend_from_slice(b" ++bin");
+    } else if command.force_bin == FORCE_NOBIN {
+        newval.extend_from_slice(b" ++nobin");
+    }
+    if command.read_edit {
+        newval.extend_from_slice(b" ++edit");
+    }
+    if command.force_ff != 0 {
+        let ff: &[u8] = match command.force_ff as u8 {
+            b'u' => b"unix",
+            b'd' => b"dos",
+            _ => b"mac",
         };
-        let mut len: size_t = 0;
-        if command.force_bin == FORCE_BIN {
-            len += 6; // " ++bin"
-        } else if command.force_bin == FORCE_NOBIN {
-            len += 8; // " ++nobin"
-        }
-        if command.read_edit {
-            len += 7; // " ++edit"
-        }
-        if command.force_ff != 0 {
-            len += 10; // " ++ff=unix"
-        }
-        if command.force_enc != 0 {
-            // The encoding name lives inside the command line the `++enc=`
-            // was parsed out of, at the offset `force_enc` records.
-            // SAFETY: the command's own line with its own recorded offset.
-            let enc = unsafe { command.cmd_ptr().offset(command.force_enc as isize) };
-            len += unsafe { cstr::bytes_at(enc) }.len() + 7;
-        }
-        if command.bad_char != 0 {
-            len += 7 + 4; // " ++bad=" + "keep" or "drop"
-        }
-        if command.mkdir_p {
-            len += 4; // " ++p"
-        }
-
-        let newval_len = len + 1;
-        // SAFETY: `xmalloc` answers `newval_len` writable bytes.
-        let newval = unsafe { xmalloc(newval_len) } as *mut c_char;
-        let mut xlen: size_t = 0;
-
-        // Append one piece. A macro rather than a closure because
-        // `snprintf` is variadic; it bails to `'error` exactly where
-        // upstream's `goto error` does, and `mechdiff` cannot see
-        // through it, so this file's `snprintf` count reads as 1.
-        macro_rules! put {
-            ($($arg:tt)*) => {{
-                // SAFETY: `newval_len - xlen` bytes are left at `newval + xlen`,
-                // and every format below names exactly the arguments it takes.
-                let rc = unsafe { snprintf!(newval.add(xlen), newval_len - xlen, $($arg)*) };
-                if rc < 0 {
-                    break 'error;
-                }
-                xlen += rc as size_t;
-            }};
-        }
-
-        if command.force_bin == FORCE_BIN {
-            put!(c" ++bin".as_ptr());
-        } else if command.force_bin == FORCE_NOBIN {
-            put!(c" ++nobin".as_ptr());
-        } else {
-            // SAFETY: at least one byte was allocated.
-            unsafe { *newval = NUL as c_char };
-        }
-        if command.read_edit {
-            put!(c" ++edit".as_ptr());
-        }
-        if command.force_ff != 0 {
-            let ff = match command.force_ff as u8 {
-                b'u' => c"unix",
-                b'd' => c"dos",
-                _ => c"mac",
-            };
-            put!(c" ++ff=%s".as_ptr(), ff.as_ptr());
-        }
-        if command.force_enc != 0 {
-            // SAFETY: as the length pass above.
-            let enc = unsafe { command.cmd_ptr().offset(command.force_enc as isize) };
-            put!(c" ++enc=%s".as_ptr(), enc);
-        }
-        if command.bad_char == BAD_KEEP {
-            put!(c" ++bad=keep".as_ptr());
-        } else if command.bad_char == BAD_DROP {
-            put!(c" ++bad=drop".as_ptr());
-        } else if command.bad_char != 0 {
-            put!(c" ++bad=%c".as_ptr(), command.bad_char);
-        }
-        if command.mkdir_p {
-            put!(c" ++p".as_ptr());
-        }
-        debug_assert!(xlen <= newval_len);
-
-        // The old value goes to the caller, to put back later.
-        let oldval = tv.take_string();
-        // SAFETY: the block allocated above, now NUL-terminated.
-        tv.write_string(unsafe { ThinCString::from_raw(newval) });
-        return oldval.map_or(ptr::null_mut(), ThinCString::into_raw);
+        newval.extend_from_slice(b" ++ff=");
+        newval.extend_from_slice(ff);
+    }
+    if command.force_enc != 0 {
+        // The encoding name lives inside the command line the `++enc=` was
+        // parsed out of, at the offset `force_enc` records from the command.
+        newval.extend_from_slice(b" ++enc=");
+        newval.extend_from_slice(
+            command
+                .line
+                .rest_of(command.line.cmd + command.force_enc as usize),
+        );
+    }
+    if command.bad_char == BAD_KEEP {
+        newval.extend_from_slice(b" ++bad=keep");
+    } else if command.bad_char == BAD_DROP {
+        newval.extend_from_slice(b" ++bad=drop");
+    } else if command.bad_char != 0 {
+        newval.extend_from_slice(b" ++bad=");
+        newval.push(command.bad_char as u8);
+    }
+    if command.mkdir_p {
+        newval.extend_from_slice(b" ++p");
     }
 
-    drop(tv.take_string());
-    // SAFETY: the caller's obligation -- `oldarg` is an owned string or
-    // null, which the variable takes back.
-    tv.write_string(unsafe { ThinCString::from_raw(oldarg) });
-    ptr::null_mut()
+    // The old value goes to the caller, to put back later.
+    let oldval = tv.take_string();
+    tv.write_string(Some(ThinCString::from_bytes(&newval)));
+    oldval
 }
 
 /// Set `v:count` and `v:count1`, and `v:prevcount` from the old `v:count`
@@ -729,63 +624,48 @@ pub fn reset_v_option_vars() {
         Vv::OptionCommand,
         Vv::OptionType,
     ] {
-        // SAFETY: a `v:` variable and the null string.
-        unsafe { set_vim_var_string(idx, ptr::null(), -1) };
+        set_vim_var_string(idx, None);
     }
 }
 
-/// [`get_vim_var_str`] as owned bytes.
+/// [`with_vim_var_str`] as owned bytes, an unset string reading as empty.
 ///
-/// The pointer form's precondition is "`idx` names a `v:` variable", which
-/// [`Vv`] is: the enumeration *is* the proof, so a caller has nothing left to
-/// promise. The bytes are copied because the variable can be assigned to,
-/// and none of the callers here hold the value that long.
+/// The bytes are copied because the variable can be assigned to while the
+/// caller holds them.
 pub fn vim_var_bytes(idx: Vv) -> Vec<u8> {
-    // SAFETY: `idx` is a `Vv`, which is the precondition.
-    unsafe { cstr::at(get_vim_var_str(idx)) }
-        .to_bytes()
-        .to_vec()
+    with_vim_var_str(idx, |s| s.to_bytes().to_vec())
 }
 
 /// Reserve `v:event` for the duration of one autocommand, saving whatever
-/// a surrounding one had put there.
+/// a surrounding one had put there into `sve`.
 ///
-/// # Safety
-/// `sve` must be valid.
-pub(crate) unsafe fn get_v_event(sve: *mut SaveVEvent) -> *mut Dict {
-    let v_event = get_vim_var_dict(Vv::Event);
-    // SAFETY: the caller's promise about `sve`, and `v_event` as above.
-    let (saved, live) = unsafe { (&mut (*sve).sve_hashtab, &mut (*v_event).dv_hashtab) };
-    let did_save = live.ht_used > 0 as size_t;
-    // SAFETY: the caller's promise about `sve`.
-    unsafe { (*sve).sve_did_save = did_save };
+/// Answers a reference of the caller's own to `v:event`, which goes back to
+/// [`restore_v_event`] with the same `sve`.
+pub(crate) fn get_v_event(sve: &mut SaveVEvent) -> DictRef {
+    let v_event = get_vim_var_dict_handle(Vv::Event).expect("v:event is always a Dict");
+    let live = &mut v_event.edit().dv_hashtab;
+    let did_save = live.ht_used > 0;
+    sve.sve_did_save = did_save;
     if did_save {
         // A plain move: the table owns its slots, so what the surrounding
         // autocommand put in `v:event` travels to `sve` intact and
         // `v:event` starts the inner one empty. `restore_v_event` moves it
         // back.
-        *saved = core::mem::replace(live, HashTab::init());
+        sve.sve_hashtab = core::mem::replace(live, HashTab::init());
     }
     v_event
 }
 
 /// Put back what `get_v_event` saved.
 ///
-/// # Safety
-/// `v_event` and `sve` must be a pair `get_v_event` produced.
-pub(crate) unsafe fn restore_v_event(v_event: *mut Dict, sve: *mut SaveVEvent) {
-    // SAFETY: the caller's promise -- the pair `get_v_event` produced.
-    tv_dict_free_contents(&::core::mem::ManuallyDrop::new(
-        unsafe { DictRef::owning(v_event) }.expect("a live dictionary"),
-    ));
+/// `v_event` and `sve` are the pair [`get_v_event`] produced.
+pub(crate) fn restore_v_event(v_event: DictRef, sve: &mut SaveVEvent) {
+    tv_dict_free_contents(&v_event);
     // `tv_dict_free_contents` already left `v:event` with a fresh empty
     // table, so the not-saved case has nothing left to do.
-    // SAFETY: as above.
-    if unsafe { (*sve).sve_did_save } {
-        // SAFETY: as above.
-        let (saved, live) = unsafe { (&mut (*sve).sve_hashtab, &mut (*v_event).dv_hashtab) };
+    if sve.sve_did_save {
         // The move back. `sve` is left with a table that owns nothing,
         // which is what its `Default` is.
-        *live = core::mem::take(saved);
+        v_event.edit().dv_hashtab = core::mem::take(&mut sve.sve_hashtab);
     }
 }

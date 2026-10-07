@@ -72,7 +72,7 @@ use crate::drawscreen::{
 };
 use crate::eval::callback_call;
 use crate::eval::typval::tv_clear;
-use crate::eval::vars::{get_vim_var_str, set_vim_var_string, var_redir_str};
+use crate::eval::vars::{set_vim_var_string, var_redir_str, with_vim_var_str};
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_process_events;
 use crate::ex_docmd::do_sleep;
@@ -163,7 +163,7 @@ use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     Arena, Array, ColNr, EStack, EStackArg, Event, ExArg, FlushBuffers, GridView, HlMessage,
     HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr,
-    ScreenChar, ShmFlag, String_0, TypVal, Vv, int64_t, ptrdiff_t, size_t, ssize_t, uint64_t,
+    ScreenChar, ShmFlag, String_0, TypVal, Vv, int64_t, size_t, ssize_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::{
@@ -477,7 +477,11 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
     }
 
     if hl_id == 0 {
-        unsafe { set_vim_var_string(Vv::Statusmsg, s, -1) };
+        // SAFETY: the caller's obligation -- a valid C string.
+        set_vim_var_string(
+            Vv::Statusmsg,
+            unsafe { cstr::at_opt(s) }.map(CStr::to_bytes),
+        );
     }
 
     // Displaying a message can cause a problem (e.g. when redrawing the

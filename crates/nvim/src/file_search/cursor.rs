@@ -262,7 +262,8 @@ pub(crate) unsafe fn file_name_in_line(
 ///
 /// `name` must point at `len` readable bytes.
 pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut c_char {
-    unsafe { set_vim_var_string(Vv::Fname, name, len as ptrdiff_t) };
+    // SAFETY: the caller's obligation -- `len` readable bytes.
+    set_vim_var_string(Vv::Fname, Some(unsafe { cstr::slice_at(name, len) }));
     // Errors go against the script that set `'includeexpr'`.
     let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptIncludeexpr as usize]);
 
@@ -271,7 +272,7 @@ pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut 
     let sandbox = was_set_insecurely(Win::current(), kOptIncludeexpr, OptionSetFlags::LOCAL);
     let res = eval_to_string_safe(&expr, sandbox, true).map_or(ptr::null_mut(), XString::into_raw);
 
-    unsafe { set_vim_var_string(Vv::Fname, ptr::null(), 0) };
+    set_vim_var_string(Vv::Fname, None);
     drop(script_ctx);
     res
 }

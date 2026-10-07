@@ -507,12 +507,9 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     }
     // A plain save area `get_v_event` fills in, restored below.
     let mut save_v_event = SaveVEvent::default();
-    // SAFETY: paired with the `restore_v_event` below.
-    let dict = unsafe { get_v_event(&raw mut save_v_event) };
-    // SAFETY: `dict` is `v:event`, which takes a number under a fixed key.
-    let _ = unsafe { (*dict).add_number(b"status", status as VarNumber) };
-    // SAFETY: as above.
-    unsafe { (*dict).set_keys_readonly() };
+    let dict = get_v_event(&mut save_v_event);
+    let _ = dict.edit().add_number(b"status", status as VarNumber);
+    dict.edit().set_keys_readonly();
     let mut payload = DictBuf::<1>::new();
     payload.insert(c"pos", Object::integer(pos as i64));
     let mut event = payload.object();
@@ -524,8 +521,7 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     // borrowed across it.
     let event = AutoEvent::TermClose;
     unsafe { apply_autocmds_group(event, none, none, exited, group, buf, None, data) };
-    // SAFETY: paired with the `get_v_event` above.
-    unsafe { restore_v_event(dict, &raw mut save_v_event) };
+    restore_v_event(dict, &mut save_v_event);
 }
 
 /// Redraw the last line of a terminal's buffer, where the "running" /

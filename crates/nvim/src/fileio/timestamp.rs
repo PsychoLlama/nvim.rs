@@ -236,10 +236,8 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
 unsafe fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs {
     let name = reason.name();
     BUSY.set(true);
-    let len = name.count_bytes() as ptrdiff_t;
-    // SAFETY: a static reason string of `len` bytes.
-    unsafe { set_vim_var_string(Vv::FcsReason, name.as_ptr(), len) };
-    unsafe { set_vim_var_string(Vv::FcsChoice, c"".as_ptr(), 0) };
+    set_vim_var_string(Vv::FcsReason, Some(name.to_bytes()));
+    set_vim_var_string(Vv::FcsChoice, Some(b""));
     let locked = Lock::all_buffers();
     let fname = buffer.name.shown_ptr();
     // SAFETY: a live buffer and its own file name.
@@ -263,7 +261,7 @@ unsafe fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs
         // SAFETY: a static message string.
         unsafe { emsg(gettext_ptr(msg)) };
     }
-    match unsafe { CStr::from_ptr(get_vim_var_str(Vv::FcsChoice)) }.to_bytes() {
+    match vim_var_bytes(Vv::FcsChoice).as_slice() {
         b"reload" if reason != Reason::Deleted => Fcs::Reload(Reload::Text),
         b"edit" => Fcs::Reload(Reload::Detect),
         b"ask" => Fcs::Ask,
@@ -289,7 +287,7 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
     unsafe { xfree(path.cast()) };
     // Set v:warningmsg here, before the unimportant and output-specific
     // `mesg2` has been appended.
-    unsafe { set_vim_var_string(Vv::Warningmsg, tbuf.as_ptr(), at as ptrdiff_t) };
+    set_vim_var_string(Vv::Warningmsg, Some(&cstr::as_bytes(&tbuf)[..at]));
     let mut append = |sep: &CStr| {
         if !mesg2.is_empty() {
             let into = tbuf.as_mut_ptr();

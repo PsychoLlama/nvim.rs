@@ -49,6 +49,7 @@ use crate::lua::secure::ex_trust;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::mark::{ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks};
 use crate::r#match::ex_match;
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::menu::{ex_emenu, ex_menu, ex_menutranslate};
 use crate::message::ex_messages;
@@ -228,8 +229,9 @@ pub struct SavedDebugState {
     pub trylevel: c_int,
     pub force_abort: c_int,
     pub(crate) caught_stack: Vec<ExcId>,
-    pub vv_exception: *mut c_char,
-    pub vv_throwpoint: *mut c_char,
+    /// Copies of `v:exception` and `v:throwpoint`, which stay set.
+    pub vv_exception: Option<ThinCString>,
+    pub vv_throwpoint: Option<ThinCString>,
     pub did_emsg: c_int,
     pub got_int: c_int,
     pub did_throw: bool,
@@ -245,8 +247,8 @@ impl SavedDebugState {
             trylevel: 0,
             force_abort: 0,
             caught_stack: Vec::new(),
-            vv_exception: ::core::ptr::null_mut(),
-            vv_throwpoint: ::core::ptr::null_mut(),
+            vv_exception: None,
+            vv_throwpoint: None,
             did_emsg: 0,
             got_int: 0,
             did_throw: false,

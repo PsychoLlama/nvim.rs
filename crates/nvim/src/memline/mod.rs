@@ -24,7 +24,7 @@ use crate::change::{changed_internal, unchanged};
 use crate::cursor::{check_cursor, coladvance};
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
-use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
 use crate::event::libuv::{uv_strerror, uv_uptime};
 use crate::ex_docmd::cmdmod_has;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};

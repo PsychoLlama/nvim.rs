@@ -26,7 +26,7 @@ use crate::eval::typval::{
     TV_INITIAL_VALUE, callback_copy, callback_free, callback_to_string, tv_clear,
 };
 use crate::eval::userfunc::CallStackAside;
-use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, set_cmdarg, set_vim_var_nr, vars_clear};
+use crate::eval::vars::{get_vim_var_nr, set_cmdarg, set_vim_var_nr, vars_clear, vim_var_bytes};
 use crate::eval::{callback_call, get_v_event, last_set_msg, restore_v_event};
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_docmd::{do_cmdline, ends_excmd, expand_sfile, get_pressedreturn, set_pressedreturn};

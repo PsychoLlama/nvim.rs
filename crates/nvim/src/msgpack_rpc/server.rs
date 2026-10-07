@@ -16,7 +16,7 @@ use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::channel::channel_from_connection;
-use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
+use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
 use crate::event::libuv::{uv_freeaddrinfo, uv_strerror};
 use crate::event::socket::address::is_bare_server_name;
 use crate::event::socket::{socket_watcher_close, socket_watcher_init, socket_watcher_start};
@@ -165,7 +165,8 @@ fn set_vservername() {
         None => core::ptr::null_mut(),
     });
     // SAFETY: the address is either null or the watcher's own string.
-    unsafe { set_vim_var_string(Vv::Servername, default_server, -1) };
+    let default_server = unsafe { crate::cstr::at_opt(default_server) };
+    set_vim_var_string(Vv::Servername, default_server.map(CStr::to_bytes));
 }
 
 pub fn server_teardown() {
@@ -346,8 +347,7 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
     }
 
     WATCHERS.with_mut(|watchers| watchers.push(watcher));
-    // SAFETY: `v:servername` is a live vim variable holding a string.
-    if unsafe { *get_vim_var_str(Vv::Servername) == 0 } {
+    if with_vim_var_str(Vv::Servername, CStr::is_empty) {
         set_vservername();
     }
     0
@@ -395,12 +395,10 @@ pub unsafe fn server_stop(endpoint: *const c_char, keep_vservername: bool) -> bo
         return false;
     };
 
-    // SAFETY: the list owned the watcher and `free_server` releases it;
-    // `v:servername` is a live string.
-    let renamed = unsafe {
-        socket_watcher_close(watcher, Some(free_server));
-        !keep_vservername && strequal(addr.as_ptr().cast_mut(), get_vim_var_str(Vv::Servername))
-    };
+    // SAFETY: the list owned the watcher and `free_server` releases it.
+    unsafe { socket_watcher_close(watcher, Some(free_server)) };
+    let renamed = !keep_vservername
+        && with_vim_var_str(Vv::Servername, |name| name == crate::cstr::in_chars(&addr));
     if renamed {
         set_vservername();
     }

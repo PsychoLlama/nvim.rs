@@ -75,11 +75,10 @@ pub unsafe fn get_foldtext(
         let level = foldinfo.fi_level.min(dashes.len() as c_int - 1);
         dashes[..level as usize].fill('-' as c_char);
         dashes[level as usize] = NUL as c_char;
-        // SAFETY: `dashes` is this frame's, and `level` bytes of it are set.
-        let ds = dashes.as_mut_ptr();
         set_vim_var_nr(Vv::Foldstart, lnum as VarNumber);
         set_vim_var_nr(Vv::Foldend, lnume as VarNumber);
-        unsafe { set_vim_var_string(Vv::Folddashes, ds, level as ptrdiff_t) };
+        let ds = &cstr::as_bytes(&dashes)[..level as usize];
+        set_vim_var_string(Vv::Folddashes, Some(ds));
         set_vim_var_nr(Vv::Foldlevel, level as VarNumber);
         if !GOT_FDT_ERROR.get() {
             let saved = switch_to(window);
@@ -114,7 +113,7 @@ pub unsafe fn get_foldtext(
         }
         LAST_LNUM.set(lnum);
         LAST_WIN.set(Some(window.id()));
-        unsafe { set_vim_var_string(Vv::Folddashes, ptr::null(), -1 as ptrdiff_t) };
+        set_vim_var_string(Vv::Folddashes, None);
         if did_emsg.get() == 0 && save_did_emsg != 0 {
             did_emsg.set(save_did_emsg);
         }

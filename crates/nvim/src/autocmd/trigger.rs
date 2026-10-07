@@ -267,9 +267,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     let buf = find_buffer_by_handle(unsafe { (*e).buf }).unwrap_or_default();
     if let Some(buf) = buf {
         let mut save_v_event = SaveVEvent::default();
-        // SAFETY: `save_v_event` is this frame's own storage, and the
-        // dictionary is `v:event`, live until `restore_v_event` below.
-        let v_event = unsafe { get_v_event(&raw mut save_v_event) };
+        let v_event = get_v_event(&mut save_v_event);
         // SAFETY: non-null, so it is the object the caller published.
         if !data.is_null()
             && let Some(items) = unsafe { &*data }.as_dict()
@@ -278,17 +276,14 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
                 let mut tv = TypVal::from(&item.value);
                 // A value `v:event` cannot hold is dropped, not fatal.
                 if !err.is_set() {
-                    // SAFETY: `v_event` is that dictionary and `item.key` is
-                    // the dict entry's own name of the length given.
-                    let _ = unsafe { (*v_event).add_tv(item.key.bytes(), &tv) };
+                    let _ = v_event.edit().add_tv(item.key.bytes(), &tv);
                     tv_clear(&mut tv);
                 } else {
                     err.clear();
                 }
             }
         }
-        // SAFETY: `v_event` is that dictionary.
-        unsafe { (*v_event).set_keys_readonly() };
+        v_event.edit().set_keys_readonly();
 
         let mut aco = AcoSave::default();
         // SAFETY: `aco` is this frame's own, `buf` was just proved live, and
@@ -298,8 +293,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
             apply_autocmds_group(event, fname, fname_io, false, group, Some(buf), None, data)
         };
         unsafe { aucmd_restbuf(&raw mut aco) };
-        // SAFETY: the pair `get_v_event` above opened.
-        unsafe { restore_v_event(v_event, &raw mut save_v_event) };
+        restore_v_event(v_event, &mut save_v_event);
     }
 
     // SAFETY: everything `aucmd_defer` copied, owned by this event alone.
@@ -378,15 +372,10 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     uienter_busy.set(true);
 
     let mut save_v_event = SaveVEvent::default();
-    // SAFETY: `save_v_event` is this frame's own storage, and the dictionary
-    // `get_v_event` hands back is `v:event`, live until `restore_v_event`.
-    let dict = unsafe { get_v_event(&raw mut save_v_event) };
+    let dict = get_v_event(&mut save_v_event);
     debug_assert!(chanid < VarNumber::MAX as uint64_t);
-    // SAFETY: `dict` is that dictionary and the key is a NUL-terminated
-    // literal of the length given.
-    let _ = unsafe { (*dict).add_number(b"chan", chanid.cast_signed()) };
-    // SAFETY: as above.
-    unsafe { (*dict).set_keys_readonly() };
+    let _ = dict.edit().add_number(b"chan", chanid.cast_signed());
+    dict.edit().set_keys_readonly();
 
     fire_autocmds(
         if attached {
@@ -397,8 +386,7 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
         false,
         Buf::current_or_none(),
     );
-    // SAFETY: the pair `get_v_event` above opened.
-    unsafe { restore_v_event(dict, &raw mut save_v_event) };
+    restore_v_event(dict, &mut save_v_event);
 
     uienter_busy.set(false);
 }

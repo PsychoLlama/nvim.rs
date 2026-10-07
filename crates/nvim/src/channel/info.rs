@@ -148,15 +148,15 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
         .expect("`channel_info_changed` queued a real event");
 
     let mut save_v_event = SaveVEvent::default();
-    let dict = unsafe { get_v_event(&raw mut save_v_event) };
+    let dict = get_v_event(&mut save_v_event);
     let retval = unsafe { info_tv((*chan).id) };
     // SAFETY: the answer's own dictionary; `v:event` takes a reference.
     let info = unsafe { DictRef::retained(retval.dict_or_null()) };
-    let _ = unsafe { (*dict).add_dict(b"info", info) };
-    unsafe { (*dict).set_keys_readonly() };
+    let _ = dict.edit().add_dict(b"info", info);
+    dict.edit().set_keys_readonly();
     let __hoisted_0 = Buf::current_or_none();
     fire_autocmds(event, true, __hoisted_0);
-    unsafe { restore_v_event(dict, &raw mut save_v_event) };
+    restore_v_event(dict, &mut save_v_event);
     unsafe { channel_decref(chan) };
 }
 
