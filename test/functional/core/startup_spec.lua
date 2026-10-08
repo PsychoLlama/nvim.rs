@@ -76,6 +76,44 @@ describe('startup', function()
     assert_log("require%('vim%._core.editor'%)", testfile, 100)
   end)
 
+  it('--startuptime report layout', function()
+    local testfile = 'Xtest_startuptime_layout'
+    finally(function()
+      os.remove(testfile)
+    end)
+    clear({ args = { '--startuptime', testfile } })
+    local log
+    retry(nil, nil, function()
+      log = read_file(testfile)
+      matches('%-%-%- NVIM STARTED %-%-%-\n\n$', log)
+    end)
+    local head = table.concat({
+      '--- Startup times for process: Embedded ---',
+      '',
+      'times in msec',
+      ' clock   self+sourced   self:  sourced script',
+      ' clock   elapsed:              other lines',
+      '',
+      '',
+    }, '\n')
+    eq(head, log:sub(1, #head))
+    local lines = vim.split(log:sub(#head + 1), '\n')
+    local ms = '%d%d%d+%.%d%d%d'
+    matches('^' .. ms .. '  ' .. ms .. ': %-%-%- NVIM STARTING %-%-%-$', lines[1])
+    local sourced = 0
+    for i = 1, #lines - 3 do
+      local line = lines[i]
+      if line:find('^' .. ms .. '  ' .. ms .. '  ' .. ms .. ': ') then
+        sourced = sourced + 1
+      else
+        matches('^' .. ms .. '  ' .. ms .. ': ', line)
+      end
+    end
+    ok(sourced > 0)
+    matches('^' .. ms .. '  ' .. ms .. ': %-%-%- NVIM STARTED %-%-%-$', lines[#lines - 2])
+    eq({ '', '' }, { lines[#lines - 1], lines[#lines] })
+  end)
+
   it('--startuptime does not crash on error #31125', function()
     local p = n.spawn_wait('--startuptime', '.', '-c', '42cquit')
     eq("E484: Can't open file .", p.stderr)
