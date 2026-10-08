@@ -1,7 +1,7 @@
 //! The expression grammar, one module per kind of operand or
 //! operator.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 mod cursor;
 pub(crate) use self::cursor::*;
