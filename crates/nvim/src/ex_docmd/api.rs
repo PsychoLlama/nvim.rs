@@ -58,9 +58,7 @@ use crate::winlayer::graph::cmdwin_type;
 
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
-use crate::types::{
-    CmdAddr, CmdLine, CmdParseInfo, CondStack, ExArg, ExArgt, FAIL, Failed, LineNr, Pos,
-};
+use crate::types::{CmdAddr, CmdLine, CmdParseInfo, ExArg, ExArgt, FAIL, Failed, LineNr, Pos};
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Win};
 
@@ -416,8 +414,8 @@ pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview
 
         // A conditional stack of its own: `:try` and friends reached
         // this way are not nested inside the caller's.
-        let mut cstack = CondStack::new();
-        excmd.cstack = &raw mut cstack;
+        let cond_stack = crate::ex_eval::OwnedCondStack::open();
+        excmd.cond_stack = Some(cond_stack.id());
 
         let _ = unsafe { execute_cmd0(&raw mut retv, excmd, &mut errormsg, preview) };
     }

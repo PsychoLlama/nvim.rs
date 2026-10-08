@@ -167,11 +167,9 @@ fn with_clean_error_state(f: impl FnOnce()) {
         pending: 0,
         exception: None,
     };
-    // SAFETY: a local the matching `leave_cleanup` below hands back.
-    unsafe { enter_cleanup(&raw mut cs) };
+    enter_cleanup(&mut cs);
     f();
-    // SAFETY: the state `enter_cleanup` saved.
-    unsafe { leave_cleanup(&raw mut cs) };
+    leave_cleanup(&mut cs);
 }
 
 // ---------------------------------------------------------------------------

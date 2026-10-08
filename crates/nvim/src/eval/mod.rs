@@ -32,8 +32,8 @@ use crate::types::NL;
 pub(crate) use crate::message::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, BlobRef, ChannelStreamType, ExprType, Failed, GRegFlags, ListRef, LuaRetMode, MarkGet,
-    MotionType, Timer, TypVal, uint64_t,
+    Array, ChannelStreamType, ExprType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Timer,
+    TypVal, uint64_t,
 };
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong};
@@ -43,7 +43,7 @@ pub use self::entry::*;
 mod lval;
 pub(crate) use self::lval::*;
 mod forloop;
-pub use self::forloop::*;
+pub(crate) use self::forloop::*;
 mod collect;
 pub use self::collect::*;
 mod callback;
@@ -89,9 +89,6 @@ pub(crate) type Tv = Live<TypVal>;
 /// nothing here holds one across a call that has not taken a reference.
 pub(crate) type Tm = Live<Timer>;
 
-/// One `:for` loop's iteration state, owned by the `:endfor` that frees it.
-pub(crate) type Fi = Live<ForInfo>;
-
 pub const _ISalnum: c_uint = 8;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
@@ -119,20 +116,6 @@ pub const GLV_STOP: GlvStatus = 2;
 pub type GlvStatus = c_uint;
 pub const GLV_OK: GlvStatus = 1;
 pub const GLV_FAIL: GlvStatus = 0;
-pub struct ForInfo {
-    pub fi_semicolon: c_int,
-    pub fi_varcount: c_int,
-    /// The id of the cursor this loop registered with `fi_list`.
-    pub fi_watch: u32,
-    /// The List the loop walks, with the reference it holds. A zeroed
-    /// `ForInfo` holds none.
-    pub fi_list: Option<ListRef>,
-    pub fi_bi: c_int,
-    /// The copy of the Blob the loop walks. A zeroed `ForInfo` holds none.
-    pub fi_blob: Option<BlobRef>,
-    pub fi_string: Option<crate::memory::ThinCString>,
-    pub fi_byte_idx: c_int,
-}
 pub const kMTCharWise: MotionType = 0;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const INT64_MIN: c_long = -9223372036854775807 as c_long - 1 as c_long;

@@ -630,6 +630,27 @@ pub fn getcmdline(
     command_line_enter(firstc, count, indent, true) as *mut ::core::ffi::c_char
 }
 
+/// [`getcmdline_prompt`] with no prompt text, completion, colouring or mouse
+/// report: the line typed, owned, or `None` when it was abandoned.
+pub(crate) fn getcmdline_bare(firstc: ::core::ffi::c_int) -> Option<XString> {
+    // SAFETY: no prompt, no completion argument and no mouse flag to read or
+    // write; the answer is a fresh `xmalloc` block or null, which the string
+    // adopts.
+    unsafe {
+        let line = getcmdline_prompt(
+            firstc,
+            ::core::ptr::null(),
+            0,
+            ExpandContext::Nothing,
+            ::core::ptr::null(),
+            Callback::None,
+            false,
+            ::core::ptr::null_mut(),
+        );
+        (!line.is_null()).then(|| XString::from_raw(line))
+    }
+}
+
 /// Get a command line with a prompt.
 ///
 /// Prepared to be called recursively from [`getcmdline`] — `f_input()` does

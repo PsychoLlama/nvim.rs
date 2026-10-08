@@ -60,11 +60,12 @@ unsafe fn cmd_source(fname: *mut c_char, excmd: Option<&mut ExArg>) {
             true
         } else if forceit {
             // `:source!` feeds the file to the editor as typed keys.
-            // SAFETY: the command's own conditional stack, live for the call.
             let busy = global_busy.get() != 0
                 || listcmd_busy.get()
                 || !command.line.next.is_none()
-                || unsafe { (*command.cstack).cs_idx } >= 0;
+                || command
+                    .cond_stack
+                    .is_some_and(|cond| cond.with(|cs| cs.idx >= 0));
             // SAFETY: the caller's NUL-terminated name.
             unsafe { openscript(fname, busy) };
             true
@@ -547,11 +548,11 @@ unsafe fn register_script(
 /// # Safety
 /// `si` is the script's live registry item.
 unsafe fn profile_script_start(si: *mut ScriptItem) {
-    let mut forceit = false;
-    // SAFETY: the caller's contract.
-    if !unsafe { (*si).sn_prof_on }
-        && unsafe { has_profiling(true, (*si).sn_name, &raw mut forceit) }
-    {
+    // SAFETY: the caller's contract; a script's name is NUL-terminated.
+    let forced = (!unsafe { (*si).sn_prof_on })
+        .then(|| profiling_forced(true, unsafe { CStr::from_ptr((*si).sn_name) }))
+        .flatten();
+    if let Some(forceit) = forced {
         profile_init(unsafe { &mut *si });
         unsafe { (*si).sn_pr_force = forceit };
     }
@@ -750,7 +751,7 @@ unsafe fn source_bracket(
     }
 
     // SAFETY: as above.
-    cookie.breakpoint = unsafe { dbg_find_breakpoint(true, *fname_exp, 0) };
+    cookie.breakpoint = dbg_find_breakpoint_named(true, unsafe { CStr::from_ptr(*fname_exp) }, 0);
     cookie.fname = *fname_exp;
     cookie.dbg_tick = debug_tick.get();
     cookie.level = ex_nesting_level.get();

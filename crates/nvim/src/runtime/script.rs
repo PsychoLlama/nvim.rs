@@ -30,7 +30,7 @@ use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::ex_eval::CsFlags;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL, Pend};
+use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -566,7 +566,10 @@ pub unsafe fn getsourceline(
 ///
 /// `source` must be a file-backed source cookie.
 unsafe fn refresh_breakpoint(source: *mut SourceCookie) {
-    unsafe { (*source).breakpoint = dbg_find_breakpoint(true, (*source).fname, sourcing_lnum()) };
+    unsafe {
+        (*source).breakpoint =
+            dbg_find_breakpoint_named(true, CStr::from_ptr((*source).fname), sourcing_lnum());
+    };
     unsafe { (*source).dbg_tick = debug_tick.get() };
 }
 
@@ -827,10 +830,10 @@ pub fn do_finish(excmd: &mut ExArg, reanimate: bool) {
     // conditional not in its finally clause -- which then is to be executed
     // next -- is found.  In that case make the `":finish"` pending for
     // execution at the `":endtry"`.  Otherwise, finish normally.
-    let idx = unsafe { cleanup_conditionals(excmd.cstack, CsFlags::NONE, true) };
-    if idx >= 0 {
-        unsafe { (*excmd.cstack).cs_pending[idx as usize] = CSTP_FINISH as c_char };
-        unsafe { report_pending(PendingAction::Made, CSTP_FINISH, Pend::None) };
+    let cond = cond_stack_of(excmd);
+    if let Some(at) = cleanup_conditionals(cond, CsFlags::NONE, true) {
+        cond.with(|cs| cs.pending[at] = CSTP_FINISH);
+        report_pending(PendingAction::Made, CSTP_FINISH, PendingValue::None);
     } else {
         unsafe { (*source_cookie(excmd)).finished = true };
     }

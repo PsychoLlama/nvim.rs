@@ -38,8 +38,8 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    BufferHandle, ColNr, Error, Integer, LineNr, NUL, Pos, ScriptId, String_0, TabpageHandle,
-    TryState, WindowHandle, int64_t, kErrorTypeException, uint64_t,
+    BufferHandle, ColNr, Error, Integer, LineNr, Pos, ScriptId, String_0, TabpageHandle, TryState,
+    WindowHandle, int64_t, kErrorTypeException, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -77,7 +77,7 @@ const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
 use crate::api::private::validate::{Bad, err_bad_number, err_invalid};
 use crate::api_error;
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 // -- Handles ---------------------------------------------------------------
 
 // The handle off the wire is an integer, so nothing about the lookup is
@@ -185,21 +185,15 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
         caught = Some(Error::from_message(kErrorTypeException, msg.as_cstr()));
     } else if did_throw.get() || need_rethrow.get() {
         // Either flag says there is an exception being unwound.
-        let ex = current_exception
+        let (name, lnum, value) = current_exception
             .get()
             .expect("an exception being thrown")
-            .exception();
-        let (name, lnum, value) = (ex.throw_name, ex.throw_lnum, ex.value);
-        // SAFETY: `throw_name` is NUL-terminated, empty for a throw with no
-        // script to name.
-        let named = unsafe { *name } != NUL as c_char;
-        if !named {
-            // SAFETY: the message is a NUL-terminated string.
-            let text = unsafe { cstr::at(value) };
-            caught = Some(Error::from_message(kErrorTypeException, text));
+            .with(|ex| (ex.throw_name.clone(), ex.throw_lnum, ex.value.clone()));
+        // `throw_name` is empty for a throw with no script to name.
+        if name.is_empty() {
+            caught = Some(Error::from_message(kErrorTypeException, value.as_cstr()));
         } else {
-            // SAFETY: both are the exception's own NUL-terminated strings.
-            let (name, value) = unsafe { (c_str(name), c_str(value)) };
+            let (name, value) = (msg_cstr(name.as_cstr()), msg_cstr(value.as_cstr()));
             caught = Some(if lnum != 0 {
                 api_error!(kErrorTypeException, "{name}, line {lnum}: {value}")
             } else {

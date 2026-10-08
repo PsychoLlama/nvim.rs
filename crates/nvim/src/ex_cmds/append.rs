@@ -242,12 +242,10 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
     // Set State to avoid the cursor shape being set to MODE_INSERT state
     // when getline() returns.
     let save_state = State.replace(MODE_CMDLINE);
-    // SAFETY: caller's contract -- the condition stack is the command's.
-    let first = if unsafe { (*args.cstack).cs_looplevel } > 0 {
-        -1
-    } else {
-        NUL
-    };
+    let in_loop = args
+        .cond_stack
+        .is_some_and(|cond| cond.with(|cs| cs.loop_level > 0));
+    let first = if in_loop { -1 } else { NUL };
     // SAFETY: the cookie is the one the getter was handed with.
     let line = unsafe { getline(first, args.cookie, indent, true) };
     State.set(save_state);

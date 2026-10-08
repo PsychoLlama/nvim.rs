@@ -236,10 +236,8 @@ fn a_register_and_a_count_follow_the_argument() {
 type ArgOpts = (char, String, c_int, bool, bool, c_int, String);
 
 fn argopts(_editor: &Editor, line: &str) -> Result<ArgOpts, ()> {
-    let mut args = ExArg {
-        line: CmdLine::from_bytes(line.as_bytes()),
-        ..Default::default()
-    };
+    let mut args = ExArg::default();
+    args.line = CmdLine::from_bytes(line.as_bytes());
     while args.line.arg().starts_with(b"++") {
         if getargopt(&mut args).is_err() {
             return Err(());
@@ -668,12 +666,10 @@ fn separate_nextcmd_cuts_the_argument_at_the_bar_that_ends_it() {
     // one, which `del_trailing_spaces` takes off on the way out.
     #[track_caller]
     fn split(argt: ExArgt, cmdidx: CmdIdx, line: &str) -> (String, Option<String>) {
-        let mut excmd = ExArg {
-            cmdidx,
-            argt,
-            line: CmdLine::from_bytes(line.as_bytes()),
-            ..ExArg::default()
-        };
+        let mut excmd = ExArg::default();
+        excmd.cmdidx = cmdidx;
+        excmd.argt = argt;
+        excmd.line = CmdLine::from_bytes(line.as_bytes());
         separate_nextcmd(&mut excmd);
         let arg = text(excmd.line.arg());
         let next = excmd.line.next_cmd().map(text);

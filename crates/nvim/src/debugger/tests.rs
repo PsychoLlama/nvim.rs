@@ -79,7 +79,6 @@ fn breakpoints_are_added_listed_and_deleted() {
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "`:breakdel {nr}` reads the number with libc's `atoi`")]
 fn a_breakpoint_is_deleted_by_its_number() {
     let fx = Fixture::new();
     fx.run("breakdel *");

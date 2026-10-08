@@ -21,7 +21,7 @@ use crate::os::cshim::gettext;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use crate::debugger::{dbg_breakpoint, do_debug};
+use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, do_debug};
 
 use crate::eval::userfunc::{
     func_breakpoint, func_dbg_tick, func_has_abort, func_has_ended, func_level, func_name,
@@ -36,13 +36,12 @@ use crate::ex_docmd::source::{
 use crate::ex_docmd::xfree;
 use crate::ex_docmd::{DoCmdOpts, sourcing_entry, sourcing_lnum};
 
-use crate::ex_docmd::{
-    CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, LoopCookie, PROF_YES, SavedDebugState, WhileCmd,
-};
+use crate::ex_docmd::{LoopCookie, PROF_YES, SavedDebugState, WhileCmd};
+use crate::ex_eval::flag::{CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW};
 use crate::ex_eval::{CsFlags, CsLoopFlags};
 use crate::ex_eval::{
-    PendingAction, aborting, cleanup_conditionals, do_intthrow, has_loop_cmd, pop_msg_list,
-    push_msg_list, report_pending,
+    OwnedCondStack, PendingAction, PendingValue, aborting, cleanup_conditionals, do_errthrow,
+    do_intthrow, has_loop_cmd, pop_msg_list, push_msg_list, report_pending, rewind_conditionals,
 };
 
 use crate::ex_getln::{getexline, ui_ext_cmdline_block_leave};
@@ -75,15 +74,8 @@ use crate::runtime::{
 
 use crate::memory::XString;
 use crate::types::ui::kUICmdline;
-use crate::types::{
-    CmdLine, CondStack, EsList, Failed, GArray, LineGetter, LineNr, OptInt, Pend, size_t,
-};
+use crate::types::{CmdLine, CondId, Failed, GArray, LineGetter, LineNr, OptInt, size_t};
 use crate::ui::ui_has;
-
-/// A zeroed `CondStack` with the C's `{ .cs_idx = -1 }` index.
-fn empty_cstack() -> CondStack {
-    CondStack::new()
-}
 
 /// Free every line a `:while`/`:for` body stored, and the array holding
 /// them.
@@ -175,7 +167,8 @@ impl Source {
         }
         // SAFETY: as [`Source::stale_breakpoint`].
         unsafe {
-            *self.breakpoint = dbg_find_breakpoint(self.is_script(), self.fname, after);
+            *self.breakpoint =
+                dbg_find_breakpoint_named(self.is_script(), CStr::from_ptr(self.fname), after);
             *self.dbg_tick = debug_tick.get();
         }
     }
@@ -288,59 +281,69 @@ fn ask_for_line(
 /// skipped have had the loop level decremented already.
 fn advance_loop(
     source: &Source,
-    cstack: &mut CondStack,
+    cond: CondId,
     lines: &GArray,
     current_line: &mut c_int,
     current_line_before: c_int,
 ) {
     *current_line += 1;
-    if !cstack
-        .cs_lflags
-        .has(CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP)
-    {
-        if cstack.cs_lflags.has(CsLoopFlags::HAD_LOOP) {
-            // A `:while` or `:for` remembers where its body starts.
-            cstack.cs_lflags.clear(CsLoopFlags::HAD_LOOP);
-            cstack.cs_line[cstack.cs_idx as usize] = current_line_before;
+    // What the loop bookkeeping decided: `None` to carry on, or whether to
+    // jump back to the innermost loop's first line (`Some(Some(line))`) or
+    // rewind the loop that just ended (`Some(None)`).
+    let decided = cond.with(|cs| {
+        if !cs
+            .loop_flags
+            .has(CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP)
+        {
+            if cs.loop_flags.has(CsLoopFlags::HAD_LOOP) {
+                // A `:while` or `:for` remembers where its body starts.
+                cs.loop_flags.clear(CsLoopFlags::HAD_LOOP);
+                let top = cs.top().expect("a loop level is open");
+                cs.line[top] = current_line_before;
+            }
+            return None;
         }
-        return;
-    }
-    cstack
-        .cs_lflags
-        .clear(CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP);
+        cs.loop_flags
+            .clear(CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP);
 
-    // Only a `:while` or `:for` entry has a usable `cs_line`; taking one
-    // from any other kind would make `current_line` point outside the
-    // stored lines.
-    let idx = cstack.cs_idx;
-    if did_emsg.get() == 0
-        && !got_int.get()
-        && !did_throw.get()
-        && idx >= 0
-        && cstack.cs_flags[idx as usize].has(CsFlags::LOOP)
-        && cstack.cs_line[idx as usize] >= 0
-        && cstack.cs_flags[idx as usize].has(CsFlags::ACTIVE)
-    {
-        *current_line = cstack.cs_line[idx as usize];
-        cstack.cs_lflags |= CsLoopFlags::HAD_LOOP;
-        line_breakcheck();
-
-        // The next breakpoint at or after the `:while`.
-        if !source.breakpoint.is_null() && lines.ga_len > *current_line {
-            // SAFETY: `current_line` is an index into the stored body,
-            // just bounds-checked against `ga_len`.
-            let body = lines.ga_data as *mut WhileCmd;
-            let at = unsafe { (*body.offset(*current_line as isize)).lnum } - 1;
-            source.read_breakpoint(at);
+        // Only a `:while` or `:for` level has a usable `line`; taking one
+        // from any other kind would make `current_line` point outside the
+        // stored lines.
+        let top = cs.top()?;
+        let flags = cs.flags[top];
+        if did_emsg.get() == 0
+            && !got_int.get()
+            && !did_throw.get()
+            && flags.has(CsFlags::LOOP)
+            && cs.line[top] >= 0
+            && flags.has(CsFlags::ACTIVE)
+        {
+            cs.loop_flags |= CsLoopFlags::HAD_LOOP;
+            Some(Some(cs.line[top]))
+        } else {
+            Some(None)
         }
-    } else if idx >= 0 {
-        // Only reachable from `:endwhile` or `:endfor`.
-        rewind_conditionals(
-            &raw mut *cstack,
-            idx - 1,
-            CsFlags::LOOP,
-            &raw mut cstack.cs_looplevel,
-        );
+    });
+    match decided {
+        None => {}
+        Some(Some(start)) => {
+            *current_line = start;
+            line_breakcheck();
+
+            // The next breakpoint at or after the `:while`.
+            if !source.breakpoint.is_null() && lines.ga_len > *current_line {
+                // SAFETY: `current_line` is an index into the stored body,
+                // just bounds-checked against `ga_len`.
+                let body = lines.ga_data as *mut WhileCmd;
+                let at = unsafe { (*body.offset(*current_line as isize)).lnum } - 1;
+                source.read_breakpoint(at);
+            }
+        }
+        Some(None) => {
+            // Only reachable from `:endwhile` or `:endfor`.
+            let below = cond.with(|cs| cs.top().and_then(|top| top.checked_sub(1)));
+            rewind_conditionals(cond, below, CsFlags::LOOP);
+        }
     }
 }
 
@@ -350,14 +353,14 @@ fn advance_loop(
 /// then puts `trylevel` back after a `:finish`, a `:return` or that missing
 /// `:endtry` -- a try block in its finally clause drops anything pending,
 /// one in a catch clause finishes what it caught. Frees the `cs_forinfo`s.
-fn unwind_conditionals(source: &Source, cstack: &mut CondStack, initial_trylevel: c_int) {
+fn unwind_conditionals(source: &Source, cond: CondId, initial_trylevel: c_int) {
     if !got_int.get()
         && !did_throw.get()
         && !aborting()
         && (source.is_script() && !source_finished(source.fgetline, source.cookie)
             || source.is_func() && func_has_ended(source.real_cookie) == 0)
     {
-        let flags_here = cstack.cs_flags[cstack.cs_idx as usize];
+        let flags_here = cond.with(|cs| cs.top_flags());
         let missing = if flags_here.has(CsFlags::TRY) {
             e_endtry
         } else if flags_here.has(CsFlags::WHILE) {
@@ -371,19 +374,10 @@ fn unwind_conditionals(source: &Source, cstack: &mut CondStack, initial_trylevel
     }
 
     loop {
-        // SAFETY: `cstack` is this run's own, borrowed for the call.
-        let mut idx = unsafe { cleanup_conditionals(&raw mut *cstack, CsFlags::NONE, true) };
-        if idx >= 0 {
-            // Drop a try block that is not in its finally clause.
-            idx -= 1;
-        }
-        rewind_conditionals(
-            &raw mut *cstack,
-            idx,
-            CsFlags::LOOP,
-            &raw mut cstack.cs_looplevel,
-        );
-        if cstack.cs_idx < 0 {
+        // A try block that is not in its finally clause goes too.
+        let keep = cleanup_conditionals(cond, CsFlags::NONE, true).and_then(|at| at.checked_sub(1));
+        rewind_conditionals(cond, keep, CsFlags::LOOP);
+        if cond.with(|cs| cs.idx < 0) {
             break;
         }
     }
@@ -391,7 +385,7 @@ fn unwind_conditionals(source: &Source, cstack: &mut CondStack, initial_trylevel
 }
 
 /// Hand what this run left back to the caller's conditional stack, and drop
-/// out of the debugger's nesting level. This `cstack` is about to go away:
+/// out of the debugger's nesting level. This run's stack is about to go away:
 /// an uncaught exception has to be rethrown against the caller's, and a
 /// finished function or script may leave the caller's stack with finally
 /// clauses to run -- `do_one_cmd` does both once it sees these flags.
@@ -420,8 +414,7 @@ fn leave_nesting(source: &Source) {
         } else {
             c"End of function"
         };
-        // SAFETY: a static NUL-terminated message.
-        unsafe { do_debug(gettext(what).as_ptr().cast_mut()) };
+        do_debug(gettext(what));
     }
 }
 
@@ -449,7 +442,7 @@ struct Run {
     /// The `:if`/`:while`/`:try` stack this run opens and closes, the body it
     /// is storing or replaying, which line is next, and the getter a command
     /// reads further ones through.
-    cstack: CondStack,
+    cond_stack: OwnedCondStack,
     lines: GArray,
     current_line: c_int,
     loop_cookie: LoopCookie,
@@ -479,7 +472,7 @@ impl Run {
         let mut lines: GArray = unsafe { core::mem::zeroed() };
         unsafe { ga_init(&raw mut lines, size_of::<WhileCmd>() as c_int, 10) };
         Run {
-            cstack: empty_cstack(),
+            cond_stack: OwnedCondStack::open(),
             lines,
             current_line: 0,
             // SAFETY: `LoopCookie` is a `repr(C)` aggregate of scalars and
@@ -506,7 +499,8 @@ impl Run {
         // `|`-separated command was stored separately, so an `:endwhile`
         // can jump back to exactly one of them. A *copy*, because the store
         // keeps its line and the command modifies what it is handed.
-        if self.cstack.cs_looplevel > 0 && self.current_line < self.lines.ga_len {
+        let (loop_level, idx) = self.cond().with(|cs| (cs.loop_level, cs.idx));
+        if loop_level > 0 && self.current_line < self.lines.ga_len {
             self.pending = None;
             let Some(Line(line)) = replay_stored_line(source, &self.lines, self.current_line)
             else {
@@ -518,11 +512,7 @@ impl Run {
         }
 
         if self.pending.is_none() {
-            let indent = if self.cstack.cs_idx < 0 {
-                0
-            } else {
-                (self.cstack.cs_idx + 1) * 2
-            };
+            let indent = if idx < 0 { 0 } else { (idx + 1) * 2 };
             let Some(Line(line)) =
                 ask_for_line(source, indent, self.count, flags, &mut self.did_block)
             else {
@@ -548,7 +538,8 @@ impl Run {
             .pending
             .as_mut()
             .expect("`take_line` leaves a line to run");
-        self.looping = self.cstack.cs_looplevel > 0 || has_loop_cmd(pending.tail(0));
+        self.looping =
+            self.cond_stack.id().with(|cs| cs.loop_level > 0) || has_loop_cmd(pending.tail(0));
         let line = pending.ptr_at(0);
         self.line_before = 0;
         if !self.looping {
@@ -579,10 +570,9 @@ impl Run {
         };
         let recursing = Depth::of(&RECURSIVE);
         let line = self.pending.take().expect("`take_line` leaves a line");
-        // SAFETY: `cstack` is this run's own, and the line source is the one
+        // SAFETY: the line source is the one
         // `command_source` chose.
-        let line =
-            unsafe { do_one_cmd(line, flags, &raw mut self.cstack, cmd_getline, cmd_cookie) };
+        let line = unsafe { do_one_cmd(line, flags, self.cond(), cmd_getline, cmd_cookie) };
         drop(recursing);
 
         if self.looping {
@@ -610,12 +600,18 @@ impl Run {
         }
     }
 
+    /// The condition stack this run opened.
+    fn cond(&self) -> CondId {
+        self.cond_stack.id()
+    }
+
     /// What the conditional stack decides once the command has run.
     fn settle_conditionals(&mut self, source: &Source) {
-        if self.cstack.cs_looplevel > 0 {
+        let cond = self.cond();
+        if cond.with(|cs| cs.loop_level > 0) {
             advance_loop(
                 source,
-                &mut self.cstack,
+                cond,
                 &self.lines,
                 &mut self.current_line,
                 self.line_before,
@@ -623,7 +619,7 @@ impl Run {
         }
 
         // Outside every loop, the stored lines are of no further use.
-        if self.cstack.cs_looplevel == 0 {
+        if cond.with(|cs| cs.loop_level == 0) {
             if self.lines.ga_len > 0 {
                 // SAFETY: `lines` is this run's own store, `ga_len` long.
                 let body = self.lines.ga_data as *mut WhileCmd;
@@ -635,32 +631,35 @@ impl Run {
         }
 
         // A `:finally` makes 'did_emsg', 'got_int' and 'did_throw' pending
-        // until the `:endtry`: reset them and mark the entry active, so the
+        // until the `:endtry`: reset them and mark the level active, so the
         // clause runs at all -- which includes the case where the
         // `:finally` itself noticed a missing `:endif`/`:endwhile`/`:endfor`.
-        if self.cstack.cs_lflags.has(CsLoopFlags::HAD_FINA) {
-            self.cstack.cs_lflags.clear(CsLoopFlags::HAD_FINA);
+        let finally = cond.with(|cs| {
+            let finally = cs.loop_flags.has(CsLoopFlags::HAD_FINA);
+            cs.loop_flags.clear(CsLoopFlags::HAD_FINA);
+            finally.then(|| cs.pending[cs.top().expect("the :try is open")])
+        });
+        if let Some(pending) = finally {
             let carried = match current_exception.get() {
-                Some(id) if did_throw.get() => Pend::Exception(id),
-                _ => Pend::None,
+                Some(id) if did_throw.get() => PendingValue::Exception(id),
+                _ => PendingValue::None,
             };
-            // SAFETY: `carried` is the exception being thrown, if any.
-            unsafe {
-                report_pending(
-                    PendingAction::Made,
-                    self.cstack.cs_pending[self.cstack.cs_idx as usize] as c_int
-                        & (CSTP_ERROR as c_int | CSTP_INTERRUPT as c_int | CSTP_THROW as c_int),
-                    carried,
-                )
-            };
+            report_pending(
+                PendingAction::Made,
+                pending & (CSTP_ERROR | CSTP_INTERRUPT | CSTP_THROW),
+                carried,
+            );
             did_emsg.set(0);
             got_int.set(false);
             did_throw.set(false);
-            self.cstack.cs_flags[self.cstack.cs_idx as usize] |= CsFlags::ACTIVE | CsFlags::FINALLY;
+            cond.with(|cs| {
+                let top = cs.top().expect("the :try is open");
+                cs.flags[top] |= CsFlags::ACTIVE | CsFlags::FINALLY;
+            });
         }
 
         // The global `trylevel` is what a *nested* `do_cmdline` reads.
-        trylevel.set(self.initial_trylevel + self.cstack.cs_trylevel);
+        trylevel.set(self.initial_trylevel + cond.with(|cs| cs.try_level));
 
         // The outermost try conditional -- across function calls and
         // sourced files -- aborting cancels everything. Leaving it normally
@@ -670,26 +669,25 @@ impl Run {
             force_abort.set(false);
         }
 
-        // SAFETY: `cstack` is this run's own.
-        unsafe { do_intthrow(&raw mut self.cstack) };
+        do_intthrow(cond);
     }
 
     /// Keep going while nothing is aborting (or a try conditional is still
     /// open with finally clauses to run or an interrupt to catch), no error
     /// was reported against a *typed* line, and something is left to run.
     fn keep_going(&self, source: &Source, flags: DoCmdOpts) -> Pass {
+        let (try_level, idx) = self.cond().with(|cs| (cs.try_level, cs.idx));
         let aborting_now =
             (got_int.get() || did_emsg.get() != 0 && force_abort.get() || did_throw.get())
-                && self.cstack.cs_trylevel == 0;
+                && try_level == 0;
         // Inside try/catch an error keeps going, so that it can be dealt
         // with -- unless it is a syntax error, which may make the `:endtry`
         // itself be missed.
         let typed_error = did_emsg.get() != 0
-            && (self.cstack.cs_trylevel == 0 || did_emsg_syntax.get())
+            && (try_level == 0 || did_emsg_syntax.get())
             && self.used_getline
             && source.is_typed();
-        let more_to_run =
-            self.pending.is_some() || self.cstack.cs_idx >= 0 || flags.has(DoCmdOpts::REPEAT);
+        let more_to_run = self.pending.is_some() || idx >= 0 || flags.has(DoCmdOpts::REPEAT);
         if aborting_now || typed_error || !more_to_run {
             Pass::Done
         } else {
@@ -703,7 +701,7 @@ impl Run {
         // `:endwhile` and `:endfor` has been passed.
         if self.pending.is_none()
             && !force_abort.get()
-            && self.cstack.cs_idx < 0
+            && self.cond().with(|cs| cs.idx < 0)
             && !source.func_aborted()
         {
             did_emsg.set(0);
@@ -748,19 +746,11 @@ impl Run {
         self.keep_going(source, flags)
     }
 
-    /// Free the `:silent!` list, and ask for a return when too much output
-    /// piled up to fit on the command line (with `:global`, once after the
-    /// whole command). Runs *after* the message list is put back, so that what
-    /// `wait_return` says reaches the caller's list and not this run's.
+    /// Ask for a return when too much output piled up to fit on the command
+    /// line (with `:global`, once after the whole command). Runs *after* the
+    /// message list is put back, so that what `wait_return` says reaches the
+    /// caller's list and not this run's.
     fn report(&mut self) {
-        // SAFETY: the list this run's `:silent!`s built, owned here.
-        let mut elem: *mut EsList = self.cstack.cs_emsg_silent_list;
-        while !elem.is_null() {
-            let next = unsafe { (*elem).next };
-            xfree(elem as *mut c_void);
-            elem = next;
-        }
-
         if self.quiet_output.take().is_some() {
             msg_scroll.set(0);
 
@@ -788,13 +778,14 @@ impl Run {
         // SAFETY: `lines` is this run's own store.
         unsafe { clear_loop_lines(&raw mut self.lines) };
 
-        if self.cstack.cs_idx >= 0 {
-            unwind_conditionals(source, &mut self.cstack, self.initial_trylevel);
+        let cond = self.cond();
+        if cond.with(|cs| cs.idx >= 0) {
+            unwind_conditionals(source, cond, self.initial_trylevel);
         }
 
         // A missing `:endtry`/`:endwhile`/`:endfor`/`:endif` reported above
         // becomes an exception now, after the stack has been rewound.
-        do_errthrow(&mut self.cstack, source.is_func().then_some(c"endfunction"));
+        do_errthrow(Some(cond), source.is_func().then_some(c"endfunction"));
 
         if trylevel.get() == 0 {
             if did_throw.get() {
@@ -843,6 +834,21 @@ pub(crate) fn do_cmdline_as(
     }
 }
 
+/// [`do_cmdline`] of `line`, reading any further lines the way the `:`
+/// prompt does: what is typed at the debugger's `>` prompt runs this way.
+pub(crate) fn do_cmdline_typed(line: &CStr, flags: DoCmdOpts) -> Result<(), Failed> {
+    // SAFETY: `do_cmdline` copies the line before running it, and the typed
+    // line's getter takes no cookie.
+    unsafe {
+        do_cmdline(
+            line.as_ptr().cast_mut(),
+            Some(getexline as _),
+            ptr::null_mut(),
+            flags,
+        )
+    }
+}
+
 /// [`do_cmdline`] with no first line, reading every line from `getter`.
 ///
 /// Safe where `do_cmdline` is not: `getter` is a safe function, so no cookie
@@ -879,9 +885,11 @@ pub unsafe fn do_cmdline(
 
     if do_cmdline_start().is_err() {
         emsg(gettext(e_command_too_recursive));
-        // No command name: this is not an error of any one command.
-        let mut none = empty_cstack();
-        do_errthrow(&mut none, None);
+        // No command name: this is not an error of any one command, and
+        // the throw goes through an empty stack of its own.
+        let none = OwnedCondStack::open();
+        do_errthrow(Some(none.id()), None);
+        drop(none);
         pop_msg_list();
         return Err(Failed);
     }
@@ -955,34 +963,10 @@ pub unsafe fn do_cmdline(
     run.retval
 }
 
-/// `dbg_find_breakpoint()`, checked.
-fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LineNr) -> LineNr {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::debugger::dbg_find_breakpoint(file, fname, after) }
-}
-
-/// `do_errthrow()`, checked.
-fn do_errthrow(cstack: &mut CondStack, cmdname: Option<&CStr>) {
-    let name = cmdname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    // SAFETY: `cstack` is this run's own, and the name is a static string.
-    unsafe { crate::ex_eval::do_errthrow(&raw mut *cstack, name) }
-}
-
 /// `getline_equal()`, checked.
 fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_docmd::source::getline_equal(fgetline, cookie, func) }
-}
-
-/// `rewind_conditionals()` as checked code.
-fn rewind_conditionals(
-    cstack: *mut CondStack,
-    idx: c_int,
-    cond_type: CsFlags,
-    cond_level: *mut c_int,
-) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_eval::rewind_conditionals(cstack, idx, cond_type, cond_level) }
 }
 
 /// `source_finished()`, checked.

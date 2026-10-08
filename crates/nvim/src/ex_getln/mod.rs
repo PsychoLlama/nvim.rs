@@ -146,11 +146,11 @@ use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     AcoSave, Array, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod, CmdParseInfo,
-    CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline, CondStack,
-    Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand,
-    ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy,
-    ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer,
-    LineNr, Magic, MotionType, Object, OpArg, OptInt, OptMagic, OptSet, OptVal, ParserHighlight,
+    CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline, Direction,
+    DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext,
+    ExprAST, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType,
+    ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, Magic,
+    MotionType, Object, OpArg, OptInt, OptMagic, OptSet, OptVal, ParserHighlight,
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Pos, ProfTime, RemapValues,
     SaveVEvent, SearchItArg, String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType,
     VarNumber, size_t, time_t, uint8_t, uint32_t,
@@ -517,7 +517,7 @@ pub(crate) const EXARG_T_INIT: ExArg = ExArg {
     errmsg: None,
     ea_getline: None,
     cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    cstack: ::core::ptr::null_mut::<CondStack>(),
+    cond_stack: None,
 };
 
 /// An all-zero [`CmdParseInfo`]; `parse_cmdline` fills it.

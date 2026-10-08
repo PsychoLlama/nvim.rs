@@ -10,8 +10,7 @@
 //! run as an ordinary Ex command and the prompt comes back, which is why the
 //! parser here answers `None` rather than an error.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -24,14 +23,11 @@
 
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
-use crate::guard::{Allow, Bump, MsgBump, Saved, Suppress};
-use crate::message::msg_ptr;
+use crate::guard::{Allow, Bump, MsgBump, Saved};
+use crate::message::msg;
 use crate::message::state::MsgField;
-use crate::message_fmt::{c_str, msg_cstr, report_msg};
-use crate::os::cshim::strstr;
-use crate::smsg;
+use crate::message_fmt::{msg_cstr, report_msg};
 use crate::tr_c;
-use crate::types::{ExpandContext, NUL};
 
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and
 /// puts back on the way out. The prompt has to be *visible*, so silence and
@@ -100,23 +96,16 @@ impl SavedState {
 }
 
 /// Debug mode: repeatedly read an Ex command, until told to continue normal
-/// execution.
-///
-/// # Safety
-/// `cmd` must be the NUL-terminated command line about to be executed.
-pub unsafe fn do_debug(cmd: *mut c_char) {
+/// execution. `cmd` is the command line about to be executed.
+pub fn do_debug(cmd: &CStr) {
     let saved = SavedState::enter();
-    // SAFETY: caller contract.
-    unsafe { show_debug_banner(cmd) };
-    unsafe { debug_prompt(cmd) };
+    show_debug_banner(cmd);
+    debug_prompt(cmd);
     saved.leave();
 }
 
 /// What is printed on the way in: why we stopped, where, and on which line.
-///
-/// # Safety
-/// As [`do_debug`].
-unsafe fn show_debug_banner(cmd: *mut c_char) {
+fn show_debug_banner(cmd: &CStr) {
     if !debug_did_msg.get() {
         smsg!(0, "Entering Debug mode.  Type \"cont\" to continue.");
     }
@@ -130,36 +119,25 @@ unsafe fn show_debug_banner(cmd: *mut c_char) {
         let Some(text) = cell.take() else {
             continue;
         };
-        // SAFETY: an `XString` is NUL-terminated by construction, and it
-        // outlives the message the formatter builds from it.
         let shown = msg_cstr(text.as_cstr());
         let _: bool = report_msg(0, || tr_c!(label, shown));
     }
 
-    let sname = estack_sfile(ESTACK_NONE);
-    if !sname.is_null() {
-        unsafe { msg_ptr(sname, 0) };
+    if let Some(sname) = estack_sfile_owned(ESTACK_NONE) {
+        msg(sname.as_cstr(), 0);
     }
-    unsafe { xfree(sname.cast()) };
-    unsafe { show_debug_line(cmd) };
+    show_debug_line(cmd);
 }
 
 /// The `line N: <cmd>` / `cmd: <cmd>` line, which both the banner and
-/// `>backtrace` end with.
-///
-/// # Safety
-/// As [`do_debug`].
-unsafe fn show_debug_line(cmd: *mut c_char) {
+/// `>backtrace` end with. The command line is arbitrary bytes, kept as they
+/// are.
+fn show_debug_line(cmd: &CStr) {
     let lnum = sourcing_lnum();
-    // SAFETY: caller contract; the command line is arbitrary bytes, so it
-    // goes through vim's printf verbatim rather than through `format_args!`.
+    let cmd = msg_cstr(cmd);
     if lnum != 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let cmd = unsafe { c_str(cmd) };
-        smsg!(0, "line {}: {cmd}", int64_t::from(lnum));
+        smsg!(0, "line {}: {cmd}", i64::from(lnum));
     } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let cmd = unsafe { c_str(cmd) };
         smsg!(0, "cmd: {cmd}");
     }
 }
@@ -230,10 +208,7 @@ fn parse_debug_cmd(line: &[u8]) -> Option<(DebugCmd, usize)> {
 ///
 /// Anything that is not a debug command is run as an Ex command and the
 /// prompt comes back.
-///
-/// # Safety
-/// As [`do_debug`].
-unsafe fn debug_prompt(cmd: *mut c_char) {
+fn debug_prompt(cmd: &CStr) {
     /// The command last given, reused for a blank line. Static, so `>step`
     /// followed by three empty lines steps four times.
     static last_cmd: GlobalCell<Option<DebugCmd>> = GlobalCell::new(None);
@@ -244,7 +219,6 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
     let mut typeaheadbuf = TypeaheadSave::default();
     let mut typeahead_saved = false;
     let mut save_ignore_script = false;
-    let mut cmdline: *mut c_char = ptr::null_mut();
 
     loop {
         msg_scroll.set(1);
@@ -265,21 +239,7 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
         // Do not debug whatever reading the line itself runs -- an expression
         // mapping, for instance.
         let outer_level = debug_break_level.replace(-1);
-        // SAFETY: the previous line is ours to free, and
-        // `getcmdline_prompt` hands back an owned line or null.
-        unsafe { xfree(cmdline.cast()) };
-        cmdline = unsafe {
-            getcmdline_prompt(
-                '>' as c_int,
-                ptr::null(),
-                0,
-                ExpandContext::Nothing,
-                ptr::null(),
-                Callback::None,
-                false,
-                ptr::null_mut(),
-            )
-        };
+        let cmdline = getcmdline_bare(c_int::from(b'>'));
         debug_break_level.set(outer_level);
 
         if typeahead_saved {
@@ -293,30 +253,24 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
         cmdline_row.set(msg_row.get());
         msg_starthere();
 
-        if !cmdline.is_null() {
-            // SAFETY: `cmdline` is the NUL-terminated line just read, and
-            // `arg` stays inside it.
-            let (line, arg) = unsafe {
-                let head = skipwhite(cmdline);
-                (CStr::from_ptr(head).to_bytes(), head)
-            };
+        if let Some(cmdline) = cmdline {
+            let start = skip_white(&cmdline, 0);
+            let line = &cmdline[start..];
             // A blank line repeats: only a line with something on it decides
             // what `last_cmd` is.
-            let mut arg = arg;
+            let mut arg = line;
             if !line.is_empty() {
                 match parse_debug_cmd(line) {
                     Some((parsed, end)) => {
                         last_cmd.set(Some(parsed));
-                        // SAFETY: `end` is within `line`.
-                        arg = unsafe { arg.add(end) };
+                        arg = &line[end..];
                     }
                     None => last_cmd.set(None),
                 }
             }
 
             if let Some(parsed) = last_cmd.get() {
-                // SAFETY: `cmd` is the caller's, `arg` inside `cmdline`.
-                if unsafe { run_debug_cmd(parsed, cmd, arg, &last_cmd) } {
+                if run_debug_cmd(parsed, cmd, arg, &last_cmd) {
                     continue;
                 }
                 // On the way out, the backtrace is back at the bottom.
@@ -326,34 +280,20 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
 
             // Not a debug command, so run it -- but do not debug it.
             let outer_level = debug_break_level.replace(-1);
-            // SAFETY: `cmdline` is a NUL-terminated Ex command line.
-            let _ = unsafe {
-                do_cmdline(
-                    cmdline,
-                    Some(getexline as _),
-                    NULL,
-                    DoCmdOpts::VERBOSE | DoCmdOpts::EXCRESET,
-                )
-            };
+            let _ = do_cmdline_typed(cmdline.as_cstr(), DoCmdOpts::VERBOSE | DoCmdOpts::EXCRESET);
             debug_break_level.set(outer_level);
         }
         lines_left.set(Rows.get() - 1);
     }
-
-    // SAFETY: the last line read is ours.
-    unsafe { xfree(cmdline.cast()) };
 }
 
 /// Act on one `>` command. True means "ask again" -- the stack-walking
-/// commands do not resume execution.
-///
-/// # Safety
-/// `cmd` is the debugged command line and `arg` points into the line just
-/// read, both NUL-terminated.
-unsafe fn run_debug_cmd(
+/// commands do not resume execution. `arg` is what followed the command's
+/// name in the line just read.
+fn run_debug_cmd(
     parsed: DebugCmd,
-    cmd: *mut c_char,
-    arg: *mut c_char,
+    cmd: &CStr,
+    arg: &[u8],
     last_cmd: &GlobalCell<Option<DebugCmd>>,
 ) -> bool {
     match parsed {
@@ -372,16 +312,14 @@ unsafe fn run_debug_cmd(
             last_cmd.set(Some(DebugCmd::Step));
         }
         DebugCmd::Backtrace => {
-            // SAFETY: caller contract.
-            unsafe { do_showbacktrace(cmd) };
+            do_showbacktrace(cmd);
             return true;
         }
         DebugCmd::Frame => {
-            // SAFETY: caller contract.
-            if c_int::from(unsafe { *arg }) == NUL {
-                unsafe { do_showbacktrace(cmd) };
+            if arg.is_empty() {
+                do_showbacktrace(cmd);
             } else {
-                unsafe { do_setdebugtracelevel(skipwhite(arg)) };
+                do_setdebugtracelevel(&arg[skip_white(arg, 0)..]);
             }
             return true;
         }
@@ -401,15 +339,10 @@ unsafe fn run_debug_cmd(
 
 /// How deep the execution stack is, read off `estack_sfile`'s `..`-joined
 /// rendering of it.
-///
-/// # Safety
-/// `sname` must be null or NUL-terminated.
-unsafe fn get_maxbacktrace_level(sname: *mut c_char) -> c_int {
-    if sname.is_null() {
+fn get_maxbacktrace_level(sname: Option<&[u8]>) -> c_int {
+    let Some(joined) = sname else {
         return 0;
-    }
-    // SAFETY: caller contract.
-    let joined = unsafe { CStr::from_ptr(sname) }.to_bytes();
+    };
     // Non-overlapping, the way `strstr` plus `p += 2` counts them: in a name
     // holding `...` that is one separator followed by a dot, not two
     // separators. A `windows(2)` count would answer differently.
@@ -426,12 +359,8 @@ unsafe fn get_maxbacktrace_level(sname: *mut c_char) -> c_int {
 }
 
 /// `>frame N`, `>frame +N` and `>frame -N`.
-///
-/// # Safety
-/// `arg` must be NUL-terminated.
-unsafe fn do_setdebugtracelevel(arg: *mut c_char) {
-    // SAFETY: caller contract.
-    let (level, relative) = unsafe { (atoi(arg), c_int::from(*arg) == '+' as c_int) };
+fn do_setdebugtracelevel(arg: &[u8]) {
+    let (level, relative) = (atoi(arg), arg.first() == Some(&b'+'));
     if relative || level < 0 {
         debug_backtrace_level.set(debug_backtrace_level.get() + level);
     } else {
@@ -447,13 +376,8 @@ fn do_checkbacktracelevel() {
         smsg!(0, "frame is zero");
         return;
     }
-    // SAFETY: `estack_sfile` hands back an owned name or null.
-    let max = unsafe {
-        let sname = estack_sfile(ESTACK_NONE);
-        let max = get_maxbacktrace_level(sname);
-        xfree(sname.cast());
-        max
-    };
+    let sname = estack_sfile_owned(ESTACK_NONE);
+    let max = get_maxbacktrace_level(sname.as_deref());
     if debug_backtrace_level.get() > max {
         debug_backtrace_level.set(max);
         smsg!(0, "frame at highest level: {max}");
@@ -462,39 +386,31 @@ fn do_checkbacktracelevel() {
 
 /// `>backtrace`: the execution stack, innermost last, with `->` on the frame
 /// `>up`/`>down` have selected.
-///
-/// # Safety
-/// As [`do_debug`].
-unsafe fn do_showbacktrace(cmd: *mut c_char) {
-    let sname = estack_sfile(ESTACK_NONE);
-    let max = unsafe { get_maxbacktrace_level(sname) };
-    if !sname.is_null() {
-        // The frames are one string joined by "..", split in place: each
-        // separator is blanked to print the frame, then put back.
+fn do_showbacktrace(cmd: &CStr) {
+    let sname = estack_sfile_owned(ESTACK_NONE);
+    let max = get_maxbacktrace_level(sname.as_deref());
+    if let Some(sname) = sname {
+        // The frames are one string joined by "..": each is printed up to
+        // the next separator.
         let mut i = 0;
-        let mut cur = sname;
+        let mut rest = &sname[..];
         while !got_int.get() {
-            let next = unsafe { strstr(cur, c"..".as_ptr()) };
-            if !next.is_null() {
-                unsafe { *next = c_char::try_from(NUL).expect("NUL is zero") };
-            }
-            // SAFETY: `cur` walks the NUL-terminated stack name.
-            let (at, frame) = (max - i, unsafe { c_str(cur) });
+            let next = rest.windows(2).position(|pair| pair == b"..");
+            let frame = msg_bytes(&rest[..next.unwrap_or(rest.len())]);
+            let at = max - i;
             if i == max - debug_backtrace_level.get() {
                 smsg!(0, "->{at} {frame}");
             } else {
                 smsg!(0, "  {at} {frame}");
             }
             i += 1;
-            if next.is_null() {
+            let Some(next) = next else {
                 break;
-            }
-            unsafe { *next = '.' as c_char };
-            cur = unsafe { next.offset(2) };
+            };
+            rest = &rest[next + 2..];
         }
-        unsafe { xfree(sname.cast()) };
     }
-    unsafe { show_debug_line(cmd) };
+    show_debug_line(cmd);
 }
 
 /// `:debug {cmd}`: run one command with the debugger stopping at everything.
@@ -506,7 +422,6 @@ pub fn ex_debug(excmd: &mut ExArg) {
 
 /// `:debuggreedy`, whose `0` argument turns it back off.
 pub(crate) fn ex_debuggreedy(excmd: &mut ExArg) {
-    // SAFETY: caller contract.
     let (addr_count, line2) = (excmd.addr_count, excmd.line2);
-    debug_greedy.set(addr_count == 0 || line2 != 0 as LineNr);
+    debug_greedy.set(addr_count == 0 || line2 != 0);
 }

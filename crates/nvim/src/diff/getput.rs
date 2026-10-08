@@ -72,7 +72,7 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
         errmsg: None,
         ea_getline: None,
         cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-        cstack: ::core::ptr::null_mut(),
+        cond_stack: None,
     };
     if count != 0 as size_t {
         ea.set_arg_text(format!("{count}").as_bytes());

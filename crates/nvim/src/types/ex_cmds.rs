@@ -679,7 +679,9 @@ pub struct ExArg {
     pub errmsg: Option<::std::ffi::CString>,
     pub ea_getline: LineGetter,
     pub cookie: *mut ::core::ffi::c_void,
-    pub cstack: *mut CondStack,
+    /// The condition stack of the command line this command runs in; `None`
+    /// for a command run on its own.
+    pub(crate) cond_stack: Option<CondId>,
 }
 
 impl ExArg {
@@ -803,7 +805,7 @@ impl Default for ExArg {
             errmsg: None,
             ea_getline: None,
             cookie: ::core::ptr::null_mut(),
-            cstack: ::core::ptr::null_mut(),
+            cond_stack: None,
         }
     }
 }

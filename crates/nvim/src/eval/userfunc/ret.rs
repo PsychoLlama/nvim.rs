@@ -7,8 +7,7 @@
 //! through.  `:defer` records a call to make on the way out and
 //! `invoke_all_defer` makes them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::ex_eval::CsFlags;
 use crate::guard::Suppress;
@@ -23,7 +22,8 @@ use std::rc::Rc;
 
 use super::*;
 use crate::eval::typval::{DictRef, PartialRef};
-use crate::types::{Failed, IOSIZE, Pend};
+use crate::ex_eval::{PendingValue, cond_stack_of};
+use crate::types::{Failed, IOSIZE};
 
 /// One call recorded by `:defer`, to be made when the function returns.
 pub struct Defer {
@@ -53,7 +53,7 @@ pub fn ex_return(excmd: &mut ExArg) {
         && eval0_in_cmd(excmd, at, &mut rettv, evaluate).is_ok()
     {
         if !excmd.skip {
-            returning = unsafe { do_return(excmd, false, true, (&raw mut rettv).cast::<c_void>()) };
+            returning = do_return(excmd, false, Some(rettv.take()));
         } else {
             tv_clear(&mut rettv);
         }
@@ -64,7 +64,7 @@ pub fn ex_return(excmd: &mut ExArg) {
         // Return unless the expression evaluation was cancelled by an
         // aborting error, an interrupt or an exception.
         if !aborting() {
-            returning = unsafe { do_return(excmd, false, true, ptr::null_mut()) };
+            returning = do_return(excmd, false, None);
         }
     }
 
@@ -333,8 +333,7 @@ pub fn ex_call(excmd: &mut ExArg) {
 
     // When inside a `:try` the trailing text is still checked, so that an
     // error is reported for it rather than swallowed.
-    // SAFETY: a command being run has its condition stack.
-    let in_try = unsafe { (*excmd.cstack).cs_trylevel } > 0;
+    let in_try = cond_stack_of(excmd).with(|cs| cs.try_level > 0);
     if (!aborting() || did_throw.get()) && (!failed || in_try) {
         if ends_excmd(c_int::from(excmd.line.byte_at(stop))) == 0 {
             if !failed && !aborting() {
@@ -351,16 +350,12 @@ pub fn ex_call(excmd: &mut ExArg) {
 /// Return from a function, answering whether the return happened now rather
 /// than being made pending by a `:finally`.
 ///
-/// # Safety
-/// `excmd` is a live command with a condition stack, and `result` is null or a
-/// `TypVal`.
-pub unsafe fn do_return(
-    excmd: &mut ExArg,
-    reanimate: bool,
-    is_cmd: bool,
-    result: *mut c_void,
-) -> bool {
-    let cstack = excmd.cstack;
+/// `value` is what is returned: the `:return` command's value, or the one a
+/// pending `:return` carried to its `:endtry`. `reanimate` is a `:return`
+/// a nested command line made pending in this one, whose value is the
+/// funccall's already.
+pub fn do_return(excmd: &mut ExArg, reanimate: bool, value: Option<TypVal>) -> bool {
+    let cond = cond_stack_of(excmd);
     let frame = current_fc().expect(":return inside a function");
 
     if reanimate {
@@ -370,64 +365,40 @@ pub unsafe fn do_return(
 
     // Cleanup (and inactivate) conditionals, but stop when a `:finally`
     // is reached: the return still has to be pending until that has run.
-    // SAFETY: the caller's promise -- a command with its condition stack.
-    let idx = unsafe { cleanup_conditionals(cstack, CsFlags::NONE, true) };
-    if idx >= 0 {
-        let at = usize::try_from(idx).expect("a level of the stack");
+    let pending_at = cleanup_conditionals(cond, CsFlags::NONE, true);
+    if let Some(at) = pending_at {
         // A `:finally` is going to run first; remember the return value.
-        let flag = c_char::try_from(CSTP_RETURN).expect("a pending flag fits a char");
-        // SAFETY: as above.
-        unsafe { (*cstack).cs_pending[at] = flag };
-
-        let pending: *mut c_void = if !is_cmd && !reanimate {
-            // A pending return again gets pending: `result` is the boxed
-            // value of the original return.
-            result
+        let value = if reanimate {
+            // The value is the funccall's; it is not available to the
+            // function any more until the `:finally` is done.
+            Some(frame.rettv.replace(TypVal::Number(0)))
         } else {
-            let value = if reanimate {
-                // The value is the funccall's; it is not available to the
-                // function any more until the `:finally` is done.
-                Some(frame.rettv.replace(TypVal::Number(0)))
-            } else if result.is_null() {
-                None
-            } else {
-                // SAFETY: the caller's promise -- `result` is a `TypVal`.
-                Some(unsafe { (*result.cast::<TypVal>()).take() })
-            };
-            value.map_or(ptr::null_mut(), |value| {
-                Box::into_raw(Box::new(value)).cast::<c_void>()
-            })
+            value
         };
-        // SAFETY: as above; the pending slot owns the box from here.
-        unsafe { (*cstack).set_pending_return(at, pending) };
-        // SAFETY: the pending value just stored, or null.
-        unsafe { report_pending(PendingAction::Made, CSTP_RETURN, Pend::Return(pending)) };
+        // Reported before it is parked: the stack is not borrowed across a
+        // message, and nothing reads this level meanwhile.
+        report_pending(
+            PendingAction::Made,
+            CSTP_RETURN,
+            PendingValue::Return(value.as_ref()),
+        );
+        cond.with(|cs| {
+            cs.pending[at] = CSTP_RETURN;
+            cs.set_pending_return(at, value);
+        });
     } else {
         frame.returned.set(true);
-        if !reanimate && !result.is_null() {
-            // SAFETY: the caller's promise -- `result` is a `TypVal`, the
-            // command's own or (when not `is_cmd`) a pending slot's box.
-            let value = unsafe { (*result.cast::<TypVal>()).take() };
+        if !reanimate && let Some(value) = value {
             drop(frame.rettv.replace(value));
-            if !is_cmd {
-                // The pending slot's box, emptied just above.
-                // SAFETY: as above -- a box `Box::into_raw` made.
-                drop(unsafe { Box::from_raw(result.cast::<TypVal>()) });
-            }
         }
     }
 
-    idx < 0
+    pending_at.is_none()
 }
 
-/// Render `:return <expr>` for the debugger, in allocated memory.
-///
-/// # Safety
-/// `result` is null or a `TypVal`.
-pub unsafe fn get_return_cmd(result: *mut c_void) -> *mut c_char {
-    // SAFETY: the caller's promise.
-    let value = unsafe { result.cast::<TypVal>().as_ref() };
-    let rendered = value.map(encode_tv2echo);
+/// Render `:return <expr>` for the debugger.
+pub fn get_return_cmd(result: Option<&TypVal>) -> Vec<u8> {
+    let rendered = result.map(encode_tv2echo);
     let mut line = b":return ".to_vec();
     if let Some(rendered) = &rendered {
         line.extend_from_slice(rendered.as_bytes());
@@ -438,7 +409,7 @@ pub unsafe fn get_return_cmd(result: *mut c_void) -> *mut c_char {
         line.truncate(limit - 4);
         line.extend_from_slice(b"...");
     }
-    XString::from_bytes(&line).into_raw()
+    line
 }
 
 /// The cookie `do_cmdline` hands [`get_func_line`] for a call: its funccall's

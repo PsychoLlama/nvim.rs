@@ -174,6 +174,14 @@ pub(crate) fn set_sourcing_lnum(lnum: LineNr) {
     });
 }
 
+/// [`estack_sfile`], owned; `None` where it answers null.
+pub(crate) fn estack_sfile_owned(which: EStackArg) -> Option<crate::memory::XString> {
+    let name = estack_sfile(which);
+    // SAFETY: `estack_sfile` answers a fresh `xmalloc` block or null, which
+    // the string adopts.
+    (!name.is_null()).then(|| unsafe { crate::memory::XString::from_raw(name) })
+}
+
 /// The current value for `<sfile>`, `<stack>` or `<script>`, in allocated
 /// memory.
 ///

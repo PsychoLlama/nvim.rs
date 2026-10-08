@@ -171,7 +171,9 @@ pub unsafe fn emsg_multiline(
         // Cause a throw of an error exception if appropriate. Don't display
         // the error message in this case.
         let mut ignore = false;
-        if unsafe { cause_errthrow(s, multiline, is_multihl.get() > 1, severe, &raw mut ignore) } {
+        // SAFETY: the caller's NUL-terminated message.
+        let mesg = unsafe { CStr::from_ptr(s) };
+        if cause_errthrow(mesg, multiline, is_multihl.get() > 1, severe, &mut ignore) {
             if !ignore {
                 did_emsg.set(did_emsg.get() + 1);
             }

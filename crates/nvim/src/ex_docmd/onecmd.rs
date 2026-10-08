@@ -47,7 +47,7 @@ use crate::ex_docmd::{
 };
 use crate::ex_eval::CsFlags;
 
-use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
+use crate::ex_eval::{aborting, cond_stack_of, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
 
 use crate::ex_docmd::state::{did_emsg_syntax, ex_nesting_level, global_busy};
@@ -72,12 +72,8 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec_cookie, script_line_exec};
 use crate::runtime::{do_finish, getsourceline, source_finished};
-use crate::types::{CmdAddr, CmdLine, CondStack, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, size_t};
-use crate::winlayer::{Buf, Live, Win};
-
-/// The conditional stack the command is running under, whose caller has
-/// promised it outlives the value.
-type Cs = Live<CondStack>;
+use crate::types::{CmdAddr, CmdLine, CondId, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, size_t};
+use crate::winlayer::{Buf, Win};
 
 /// A zeroed `ExArg` with the empty range the parsers start from.
 ///
@@ -191,21 +187,19 @@ fn locate_command(
     mods.apply();
     let after_modifier = excmd.line.cmd;
 
-    let cstack = excmd.cstack;
-    // SAFETY: `cstack` is the caller's conditional stack, live for the
-    // whole of this command.
+    let cond = cond_stack_of(excmd);
     excmd.skip = did_emsg.get() != 0
         || got_int.get()
         || did_throw.get()
-        || unsafe {
-            (*cstack).cs_idx >= 0
-                && !(*cstack).cs_flags[(*cstack).cs_idx as usize].has(CsFlags::ACTIVE)
-        };
+        || cond.with(|cs| {
+            cs.top()
+                .is_some_and(|top| !cs.flags[top].has(CsFlags::ACTIVE))
+        });
 
     let mut p = find_excmd_after_range(excmd);
     let (fgetline, cookie) = (excmd.ea_getline, excmd.cookie);
-    // SAFETY: the command's own line source and conditional stack.
-    unsafe { profile_cmd(excmd, cstack, fgetline, cookie) };
+    // SAFETY: the command's own line source.
+    unsafe { profile_cmd(excmd, cond, fgetline, cookie) };
 
     if !exiting.get() {
         // May go to debug mode. If the `>quit` debug command is used there,
@@ -214,8 +208,7 @@ fn locate_command(
     }
     if !excmd.skip && got_int.get() {
         excmd.skip = true;
-        // SAFETY: the caller's conditional stack.
-        unsafe { do_intthrow(cstack) };
+        do_intthrow(cond);
     }
 
     set_cmd_addr_type(
@@ -525,10 +518,9 @@ fn separate_at_newline(excmd: &mut ExArg) {
 /// stack: a throw, a `:return` or a `:finish`.
 ///
 fn rethrow_from_nested(excmd: &mut ExArg) {
-    let (cstack, fgetline, cookie) = (excmd.cstack, excmd.ea_getline, excmd.cookie);
+    let (cond, fgetline, cookie) = (cond_stack_of(excmd), excmd.ea_getline, excmd.cookie);
     if need_rethrow.get() {
-        // SAFETY: the caller's conditional stack.
-        unsafe { do_throw(cstack) };
+        do_throw(cond);
     } else if check_cstack.get() {
         // SAFETY: the caller's line source.
         if unsafe { source_finished(fgetline, cookie) } {
@@ -536,8 +528,7 @@ fn rethrow_from_nested(excmd: &mut ExArg) {
         } else if getline_equal(fgetline, cookie, Some(get_func_line))
             && current_func_returned() != 0
         {
-            // SAFETY: a null `rettv` is "no value".
-            unsafe { do_return(excmd, true, false, ptr::null_mut()) };
+            do_return(excmd, true, None);
         }
     }
     check_cstack.set(false);
@@ -557,13 +548,12 @@ fn rethrow_from_nested(excmd: &mut ExArg) {
 ///
 /// # Safety
 ///
-/// `cstack` must point at a live `CondStack`, unaliased for the
-/// call. `cookie` must be the payload `fgetline` was registered with, live
-/// for the call.
+/// `cookie` must be the payload `fgetline` was registered with, live for the
+/// call.
 pub(crate) unsafe fn do_one_cmd(
     line: CmdLine,
     flags: DoCmdOpts,
-    cstack: *mut CondStack,
+    cond: CondId,
     fgetline: LineGetter,
     cookie: *mut c_void,
 ) -> CmdLine {
@@ -589,7 +579,7 @@ pub(crate) unsafe fn do_one_cmd(
     excmd.line = line;
     excmd.ea_getline = fgetline;
     excmd.cookie = cookie;
-    excmd.cstack = cstack;
+    excmd.cond_stack = Some(cond);
 
     // Each stage refuses by answering `Err`, having left whatever it has to
     // say in `errormsg`; the reporting below is shared by all of them.
@@ -641,17 +631,9 @@ pub(crate) unsafe fn do_one_cmd(
         };
         emsg(&msg);
     }
-    // SAFETY: the caller's conditional stack, and a name from the table.
-    unsafe {
-        do_errthrow(
-            cstack,
-            if excmd.cmdidx != CmdIdx::SIZE && !is_user_cmd(excmd.cmdidx) {
-                cmdnames[excmd.cmdidx.index()].cmd_name
-            } else {
-                ptr::null_mut()
-            },
-        )
-    };
+    let name = (excmd.cmdidx != CmdIdx::SIZE && !is_user_cmd(excmd.cmdidx))
+        .then(|| crate::ex_docmd::builtin_command_cstr(excmd.cmdidx));
+    do_errthrow(Some(cond), name);
 
     drop(mods);
     reg_executing.set(save_reg_executing);
@@ -689,36 +671,37 @@ fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
 ///
 /// # Safety
 ///
-/// `excmd` must point at the command's `ExArg`. `cstack` must point at a live
-/// `CondStack`, unaliased for the call. `cookie` must be the payload
-/// `fgetline` was registered with, live for the call.
+/// `cookie` must be the payload `fgetline` was registered with, live for
+/// the call.
 pub(crate) unsafe fn profile_cmd(
     excmd: &ExArg,
-    cstack: *mut CondStack,
+    cond: CondId,
     fgetline: LineGetter,
     cookie: *mut c_void,
 ) {
-    // SAFETY: the caller's conditional stack, live for the command.
-    let cs = unsafe { Cs::new(cstack) };
-    if do_profiling.get() != PROF_YES
-        || !(!excmd.skip
-            || cs.cs_idx == 0
-            || (cs.cs_idx > 0 && cs.cs_flags[cs.cs_idx as usize - 1].has(CsFlags::ACTIVE)))
-    {
+    if do_profiling.get() != PROF_YES {
+        return;
+    }
+    let (idx, top, below) = cond.with(|cs| {
+        let top = cs.top().map(|at| cs.flags[at]);
+        let below = cs
+            .top()
+            .and_then(|at| at.checked_sub(1))
+            .map(|at| cs.flags[at]);
+        (cs.idx, top, below)
+    });
+    if !(!excmd.skip || idx == 0 || below.is_some_and(|flags| flags.has(CsFlags::ACTIVE))) {
         return;
     }
     let mut skip = did_emsg.get() != 0 || got_int.get() || did_throw.get();
-    let idx = cs.cs_idx;
     match excmd.cmdidx {
         CmdIdx::catch => {
             skip = !skip
-                && !(idx >= 0
-                    && cs.cs_flags[idx as usize].has(CsFlags::THROWN)
-                    && !cs.cs_flags[idx as usize].has(CsFlags::CAUGHT));
+                && !top
+                    .is_some_and(|flags| flags.has(CsFlags::THROWN) && !flags.has(CsFlags::CAUGHT));
         }
         CmdIdx::r#else | CmdIdx::elseif => {
-            skip = skip
-                || !(idx >= 0 && !cs.cs_flags[idx as usize].has(CsFlags::ACTIVE | CsFlags::TRUE));
+            skip = skip || !top.is_some_and(|flags| !flags.has(CsFlags::ACTIVE | CsFlags::TRUE));
         }
         CmdIdx::finally => skip = false,
         // The four block-enders are the only commands left that keep the

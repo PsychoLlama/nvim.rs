@@ -159,6 +159,15 @@ impl<T, M: Default> IdTable<T, M> {
         ManuallyDrop::into_inner(UnsafeCell::into_inner(*self.empty(id)))
     }
 
+    /// Empty `id`'s slot and hand back the value still in its box, for an
+    /// owner that keeps the block to build the next value in.
+    ///
+    /// # Panics
+    /// When `id`'s value is gone already.
+    pub(crate) fn evict(&mut self, id: TableId<T>) -> Boxed<T> {
+        self.empty(id)
+    }
+
     fn empty(&mut self, id: TableId<T>) -> Boxed<T> {
         let slot = self.live_mut(id);
         slot.generation = slot.generation.checked_add(1).unwrap_or(NonZeroU32::MIN);
@@ -186,6 +195,17 @@ impl<T, M> IdTable<T, M> {
             "an id outlived its value"
         );
         slot
+    }
+
+    /// `id`'s value, borrowed for as long as the table is.
+    ///
+    /// # Panics
+    /// When `id`'s value is gone.
+    pub(crate) fn get_mut(&mut self, id: TableId<T>) -> &mut T {
+        match &mut self.live_mut(id).value {
+            Some(value) => value.get_mut(),
+            None => unreachable!("`live_mut` checked the slot is full"),
+        }
     }
 
     /// `id`'s value, by its fixed address.

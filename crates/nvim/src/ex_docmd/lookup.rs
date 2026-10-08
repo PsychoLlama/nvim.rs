@@ -408,6 +408,12 @@ pub(crate) fn get_command_name(expand: &Expand, idx: usize) -> Option<Candidate>
     }
 }
 
+/// The name of built-in command `idx`, borrowed from the table.
+pub(crate) fn builtin_command_cstr(idx: CmdIdx) -> &'static CStr {
+    // SAFETY: the table's names are NUL-terminated string literals.
+    unsafe { CStr::from_ptr(cmdnames[idx.index()].cmd_name) }
+}
+
 /// The name of built-in command `idx`.
 pub(crate) fn builtin_command_name(idx: CmdIdx) -> *mut c_char {
     cmdnames[idx.index()].cmd_name

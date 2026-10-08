@@ -19,23 +19,30 @@
 //! compares the pointer back against `&prof_ga` to decide what the parser may
 //! accept; naming the choice says the same thing without the identity test.
 //!
+//! A list is borrowed an entry at a time and never across user code: a watch
+//! expression runs arbitrary Vimscript, which may add or delete breakpoints
+//! itself. A watch is found again by its number after it ran.
+//!
 //! The first lives in [`mode`], which the breakpoints reach only through
 //! [`do_debug`] -- and which reaches back only for the two values a changed
 //! watch expression leaves for the banner to print.
 //!
 //! Original: `src/nvim/debugger.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 #[cfg(test)]
 mod tests;
-use crate::ascii::ascii_isdigit;
-use crate::charset::{getdigits_int32, skipwhite};
-use crate::cstr;
 use crate::debugger::state::{
     debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick,
 };
@@ -43,44 +50,37 @@ use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
 use crate::ex_docmd::state::{ex_nesting_level, ex_normal_busy};
-use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
-use crate::ex_getln::{getcmdline_prompt, getexline};
-use crate::fileio::file_pat_to_reg_pat;
+use crate::ex_docmd::{do_cmdline_cmd, do_cmdline_typed};
+use crate::ex_getln::getcmdline_bare;
+use crate::fileio::file_pat_to_regpat;
 use crate::getchar::state::{got_int, ignore_script};
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::memory::XString;
-use crate::memory::{xfree, xstrdup};
 use crate::message::msg_starthere;
 use crate::message::state::{
     cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
 };
-use crate::message_fmt::{c_str, msg_bytes};
-use crate::os::env::{expand_env_save, home_replace};
-use crate::path::fix_fname;
-use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regfree};
-use crate::runtime::{estack_sfile, sourcing_lnum};
+use crate::message_fmt::msg_bytes;
+use crate::os::env::{expand_env_save_opt_of, home_replace_in};
+use crate::path::fixed_fname;
+use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
+use crate::runtime::{estack_sfile_owned, sourcing_lnum};
 use crate::semsg;
 use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::state::mode::State;
-use crate::strings::has_bytes;
 use crate::types::CmdIdx;
-use crate::types::{
-    Callback, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal, TypeaheadSave,
-    int32_t, int64_t, size_t, uint8_t,
-};
+use crate::types::{EStackArg, ExArg, Failed, LineNr, MAXPATHL, TypVal, TypeaheadSave};
 use crate::ui::state::Rows;
 use crate::winlayer::{Buf, Win};
-use ::libc::atoi;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 pub const ESTACK_NONE: EStackArg = 0;
 pub const EXPR_IS: crate::types::ExprType = 9;
-pub const NULL: *mut c_void = ptr::null_mut::<c_void>();
 pub const KS_EXTRA: c_int = 253;
 
 // Debug mode itself: entered from `dbg_check_breakpoint` below.
@@ -89,40 +89,22 @@ mod mode;
 pub use self::mode::*;
 
 /// One breakpoint or profiling point.
-pub struct Breakpoint {
+pub(crate) struct Breakpoint {
     /// Breakpoint number, as `:breaklist` prints it.
-    pub dbg_nr: c_int,
+    nr: c_int,
     /// [`DBG_FUNC`], [`DBG_FILE`] or [`DBG_EXPR`].
-    pub dbg_type: c_int,
+    kind: c_int,
     /// Function name, file name, or the watched expression.
-    pub dbg_name: *mut c_char,
-    /// `dbg_name` compiled, for the two name kinds.
-    pub dbg_prog: *mut RegProg,
+    name: XString,
+    /// `name` compiled, for the two name kinds; out of the entry while it is
+    /// being matched.
+    prog: Option<OwnedProg>,
     /// Line within the function or file.
-    pub dbg_lnum: LineNr,
+    lnum: LineNr,
     /// `!` was used.
-    pub dbg_forceit: c_int,
+    forceit: bool,
     /// Last value of a watched expression.
-    pub dbg_val: Option<Box<TypVal>>,
-    /// Stored nesting level, for `DBG_EXPR`.
-    pub dbg_level: c_int,
-}
-
-impl Breakpoint {
-    /// An entry the parser is about to fill in. It owns nothing yet, so
-    /// dropping it on a parse error frees nothing.
-    fn new() -> Self {
-        Self {
-            dbg_nr: 0,
-            dbg_type: 0,
-            dbg_name: ptr::null_mut(),
-            dbg_prog: ptr::null_mut(),
-            dbg_lnum: 0,
-            dbg_forceit: 0,
-            dbg_val: None,
-            dbg_level: 0,
-        }
-    }
+    value: Option<TypVal>,
 }
 
 pub const DBG_FUNC: c_int = 1;
@@ -131,8 +113,6 @@ pub const DBG_EXPR: c_int = 3;
 
 /// Batch-mode debugging: do not save and restore the typeahead.
 static debug_greedy: GlobalCell<bool> = GlobalCell::new(false);
-/// The before/after values of a watched expression that just changed; shown
-/// once, on the way into the prompt, then freed.
 /// The two values a watch expression moved between, waiting to be printed
 /// in the debug banner. Each is owned, and the banner takes it.
 static debug_oldval: GlobalCell<Option<XString>> = GlobalCell::new(None);
@@ -177,23 +157,21 @@ impl BreakList {
     }
 
     /// How many entries the list holds.
-    fn len(self) -> c_int {
-        self.cell().with(|entries| entries.len() as c_int)
+    fn len(self) -> usize {
+        self.cell().with(Vec::len)
     }
 
     fn is_empty(self) -> bool {
         self.cell().with(Vec::is_empty)
     }
 
-    /// The `idx`th entry.
+    /// Run `f` on the `idx`th entry. `f` must not run user code.
     ///
-    /// Recomputed on every call rather than cached, because a `DBG_EXPR`
-    /// entry's expression runs arbitrary Vimscript and anything it does --
-    /// including another `:breakadd` -- can grow the list and move every
-    /// entry with it.
-    fn entry(self, idx: c_int) -> *mut Breakpoint {
-        self.cell()
-            .with_mut(|entries| entries.as_mut_ptr().wrapping_offset(idx as isize))
+    /// Asked anew each time rather than held: a `DBG_EXPR` entry's
+    /// expression runs arbitrary Vimscript, which can grow or shrink the
+    /// list.
+    fn with<R>(self, idx: usize, f: impl FnOnce(&mut Breakpoint) -> R) -> R {
+        self.cell().with_mut(|entries| f(&mut entries[idx]))
     }
 
     /// Keep a parsed entry, which takes over whatever it owns.
@@ -201,10 +179,9 @@ impl BreakList {
         self.cell().with_mut(|entries| entries.push(entry));
     }
 
-    /// Take the `idx`th entry out of the list, leaving the caller to release
-    /// what it owns.
-    fn remove(self, idx: c_int) -> Breakpoint {
-        self.cell().with_mut(|entries| entries.remove(idx as usize))
+    /// Take the `idx`th entry out of the list.
+    fn remove(self, idx: usize) -> Breakpoint {
+        self.cell().with_mut(|entries| entries.remove(idx))
     }
 }
 
@@ -227,7 +204,6 @@ static debug_skipped_name: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// Called from `do_one_cmd` before every command.
 pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
     debug_skipped.set(false);
-    // SAFETY: caller contract.
     let skip = excmd.skip;
     let Some(name) = debug_breakpoint_name.take() else {
         if ex_nesting_level.get() > debug_break_level.get() {
@@ -238,8 +214,7 @@ pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
             debug_skipped_name.set(None);
             return;
         }
-        // SAFETY: caller contract.
-        unsafe { do_debug(excmd.cmd_ptr()) };
+        do_debug(excmd.line.cstr_from(excmd.line.cmd));
         return;
     };
 
@@ -251,7 +226,12 @@ pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
 
     // A script-local function's name is stored with `K_SNR` in front of it;
     // announce it the way the user spells it.
-    let snr = [K_SPECIAL as u8, KS_EXTRA as u8, KE_SNR as u8];
+    let byte = |code: i64| u8::try_from(code).expect("a key code byte");
+    let snr = [
+        byte(i64::from(K_SPECIAL)),
+        byte(i64::from(KS_EXTRA)),
+        byte(i64::from(KE_SNR)),
+    ];
     let (prefix, rest) = match name.strip_prefix(&snr[..]) {
         Some(rest) => ("<SNR>", rest),
         None => ("", &name[..]),
@@ -260,9 +240,9 @@ pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
     smsg!(
         0,
         "Breakpoint in \"{prefix}{rest}\" line {}",
-        debug_breakpoint_lnum.get() as int64_t
+        i64::from(debug_breakpoint_lnum.get())
     );
-    unsafe { do_debug(excmd.cmd_ptr()) };
+    do_debug(excmd.line.cstr_from(excmd.line.cmd));
 }
 
 /// Enter debug mode after all, for a command that [`dbg_check_breakpoint`]
@@ -276,7 +256,7 @@ pub fn dbg_check_skipped(excmd: &mut ExArg) -> bool {
     let prev_got_int = got_int.get();
     got_int.set(false);
     debug_breakpoint_name.set(debug_skipped_name.take());
-    // SAFETY: caller contract; `args.skip` is true on entry, and is put back.
+    // `skip` is true on entry, and is put back.
     excmd.skip = false;
     dbg_check_breakpoint(excmd);
     excmd.skip = true;
@@ -295,159 +275,161 @@ pub fn dbg_breakpoint(name: &CStr, lnum: LineNr) {
 
 /// Evaluate a watch expression with error messages off: a bad expression must
 /// not make the editor unusable.
-///
-/// # Safety
-/// `bp` must point at a live entry whose `dbg_name` is the expression.
-unsafe fn eval_expr_no_emsg(breakpoint: *mut Breakpoint) -> Option<Box<TypVal>> {
+fn eval_expr_no_emsg(expr: &[u8]) -> Option<TypVal> {
     let _no_emsg = Suppress::emsg();
-    // A copy: the expression may delete the breakpoint that holds it.
-    // SAFETY: caller contract.
-    let expr = XString::from_cstr(unsafe { CStr::from_ptr((*breakpoint).dbg_name) });
-    // The entry keeps the value on the heap.
-    eval_expr(&expr).map(Box::new)
+    eval_expr(expr)
+}
+
+/// `text` from `at` on, past spaces and tabs.
+fn skip_white(text: &[u8], at: usize) -> usize {
+    let mut at = at.min(text.len());
+    while matches!(text.get(at), Some(b' ' | b'\t')) {
+        at += 1;
+    }
+    at
+}
+
+/// The run of digits at the start of `text` as `getdigits_int32` reads it
+/// strictly: saturated at the integer's range.
+fn digits_saturated(text: &[u8]) -> (LineNr, usize) {
+    let len = text.iter().take_while(|b| b.is_ascii_digit()).count();
+    let value = text[..len].iter().fold(0_i64, |n, &d| {
+        n.saturating_mul(10).saturating_add(i64::from(d - b'0'))
+    });
+    (LineNr::try_from(value).unwrap_or(LineNr::MAX), len)
+}
+
+/// `atoi(text)`: leading white space, a sign and the digits after it, read
+/// as glibc's `(int)strtol(..)` reads them -- saturated at the `long`'s range,
+/// then cut to the `int`'s 32 bits.
+pub(crate) fn atoi(text: &[u8]) -> c_int {
+    let mut at = 0;
+    while text
+        .get(at)
+        .is_some_and(|&b| b == b' ' || (b'\t'..=b'\r').contains(&b))
+    {
+        at += 1;
+    }
+    let negative = text.get(at) == Some(&b'-');
+    if matches!(text.get(at), Some(b'-' | b'+')) {
+        at += 1;
+    }
+    let digits = text[at.min(text.len())..]
+        .iter()
+        .take_while(|b| b.is_ascii_digit());
+    let value = digits.fold(0_i64, |n, &d| {
+        let d = i64::from(d - b'0');
+        if negative {
+            n.saturating_mul(10).saturating_sub(d)
+        } else {
+            n.saturating_mul(10).saturating_add(d)
+        }
+    });
+    let low = u32::try_from(value.rem_euclid(1 << 32)).expect("below 2^32");
+    c_int::from_ne_bytes(low.to_ne_bytes())
 }
 
 /// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into a
 /// fresh entry, which the caller keeps or discards.
-///
-/// `dbg_name` comes out allocated. `Err` means nothing was allocated that
-/// the caller has to clean up.
 ///
 /// The entry is built *outside* the list on purpose: a `DBG_EXPR` argument
 /// is evaluated here, and the Vimscript that runs can reach `:breakadd`
 /// itself. Upstream's scratch slot lived one past `ga_len`, so the inner
 /// command would build over the outer's half-finished entry and then commit
 /// it as its own.
-///
-/// # Safety
-/// `arg` must be NUL-terminated.
-unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, Failed> {
-    let mut entry = Breakpoint::new();
-    let bp = &raw mut entry;
+fn dbg_parsearg(arg: &[u8], list: BreakList) -> Result<Breakpoint, Failed> {
     let debugger = list == BreakList::Debug;
+    let invalid = || {
+        let arg = msg_bytes(arg);
+        semsg!("E475: Invalid argument: {arg}");
+        Err(Failed)
+    };
 
-    // SAFETY: caller contract; every read below stays inside `arg`, and `bp`
-    // is this frame's entry, which nothing else can reach.
-    let (kind, here) = unsafe {
-        if cstr::starts_with(arg, b"func") {
-            (DBG_FUNC, false)
-        } else if cstr::starts_with(arg, b"file") {
-            (DBG_FILE, false)
-        } else if debugger && cstr::starts_with(arg, b"here") {
-            if Buf::current().name.full().is_none() {
-                semsg!("E32: No file name");
-                return Err(Failed);
-            }
-            (DBG_FILE, true)
-        } else if debugger && cstr::starts_with(arg, b"expr") {
-            (DBG_EXPR, false)
-        } else {
-            semsg!("E475: Invalid argument: {}", c_str(arg));
+    let (kind, here) = if arg.starts_with(b"func") {
+        (DBG_FUNC, false)
+    } else if arg.starts_with(b"file") {
+        (DBG_FILE, false)
+    } else if debugger && arg.starts_with(b"here") {
+        if Buf::current().name.full().is_none() {
+            semsg!("E32: No file name");
             return Err(Failed);
         }
+        (DBG_FILE, true)
+    } else if debugger && arg.starts_with(b"expr") {
+        (DBG_EXPR, false)
+    } else {
+        return invalid();
     };
-    // SAFETY: `bp` is the reserved scratch entry.
-    unsafe { (*bp).dbg_type = kind };
 
-    // SAFETY: the keyword was four bytes, so this stays inside `arg`.
-    let mut p = unsafe { skipwhite(arg.offset(4)) };
+    let mut at = skip_white(arg, 4);
 
     // An optional line number, which only the debugger's own list accepts.
-    // SAFETY: `p` is inside `arg`, and `getdigits_int32` only advances it.
-    let lnum = unsafe {
-        if here {
-            Win::current().w_cursor.lnum
-        } else if debugger && ascii_isdigit(*p as c_int) {
-            let lnum = getdigits_int32(&raw mut p, true, 0 as int32_t) as LineNr;
-            p = skipwhite(p);
-            lnum
-        } else {
-            0 as LineNr
-        }
+    let lnum = if here {
+        Win::current().w_cursor.lnum
+    } else if debugger && arg.get(at).is_some_and(u8::is_ascii_digit) {
+        let (lnum, len) = digits_saturated(&arg[at..]);
+        at = skip_white(arg, at + len);
+        lnum
+    } else {
+        0
     };
-    // SAFETY: as above.
-    unsafe { (*bp).dbg_lnum = lnum };
 
     // `here` takes no name and everything else requires one; and a function
     // name is given without its parentheses.
-    // SAFETY: `p` is inside `arg`.
-    let malformed = unsafe {
-        let empty = *p as c_int == NUL;
-        (!here && empty) || (here && !empty) || (kind == DBG_FUNC && has_bytes(cstr::at(p), b"()"))
-    };
-    if malformed {
-        // SAFETY: caller contract.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E475: Invalid argument: {arg}");
-        return Err(Failed);
+    let rest = &arg[at..];
+    if (!here && rest.is_empty())
+        || (here && !rest.is_empty())
+        || (kind == DBG_FUNC && rest.windows(2).any(|pair| pair == b"()"))
+    {
+        return invalid();
     }
 
-    // SAFETY: `p` is inside `arg`; every branch leaves `dbg_name` owning an
-    // allocation or null.
-    let name = unsafe {
-        if kind == DBG_FUNC {
-            // `g:` is how the user may spell a global function; the table
-            // does not carry it.
-            let bare = if cstr::starts_with(p, b"g:") {
-                p.offset(2)
-            } else {
-                p
-            };
-            xstrdup(bare)
-        } else if here {
-            xstrdup(Buf::current().name.full_ptr())
-        } else if kind == DBG_EXPR {
-            let expr = xstrdup(p);
-            // `eval_expr_no_emsg` reads the entry's `dbg_name`, so the
-            // expression has to be stored before it can be evaluated -- and
-            // its first value is the baseline the next check compares to.
-            (*bp).dbg_name = expr;
-            (*bp).dbg_val = eval_expr_no_emsg(bp);
-            expr
+    let mut value = None;
+    let name = if kind == DBG_FUNC {
+        // `g:` is how the user may spell a global function; the table does
+        // not carry it.
+        XString::from_bytes(rest.strip_prefix(b"g:").unwrap_or(rest))
+    } else if here {
+        XString::from_cstr(Buf::current().name.full().expect("checked above"))
+    } else if kind == DBG_EXPR {
+        // Its first value is the baseline the next check compares to.
+        value = eval_expr_no_emsg(rest);
+        XString::from_bytes(rest)
+    } else {
+        // Expand the file name the way `do_source` does -- twice, so that
+        // `$DIR/file` expands when `$DIR` is itself `~/dir`.
+        let pattern = CString::new(rest).expect("a command line holds no NUL");
+        let once = expand_env_save_opt_of(&pattern, false);
+        let twice = expand_env_save_opt_of(once.as_cstr(), false);
+        if twice.first() == Some(&b'*') {
+            twice
         } else {
-            // Expand the file name the way `do_source` does -- twice, so that
-            // `$DIR/file` expands when `$DIR` is itself `~/dir`.
-            let once = expand_env_save(p);
-            if once.is_null() {
-                return Err(Failed);
-            }
-            let twice = expand_env_save(once);
-            xfree(once.cast());
-            if twice.is_null() {
-                return Err(Failed);
-            }
-            if *twice as c_int != '*' as c_int {
-                let fixed = fix_fname(twice);
-                xfree(twice.cast());
-                fixed
-            } else {
-                twice
-            }
+            fixed_fname(twice.as_cstr()).ok_or(Failed)?
         }
     };
-    // SAFETY: `bp` is this frame's entry; `name` is owned or null.
-    unsafe { (*bp).dbg_name = name };
-    if name.is_null() {
-        Err(Failed)
-    } else {
-        Ok(entry)
-    }
+    Ok(Breakpoint {
+        nr: 0,
+        kind,
+        name,
+        prog: None,
+        lnum,
+        forceit: false,
+        value,
+    })
 }
 
 /// `:breakadd`, and `:profile func`/`:profile file`.
 pub fn ex_breakadd(excmd: &mut ExArg) {
-    // SAFETY: caller contract.
-    let (list, arg, forceit) = (BreakList::of(&*excmd), excmd.arg_ptr(), excmd.forceit);
-    // SAFETY: `arg` is the NUL-terminated argument.
-    let Ok(mut bp) = (unsafe { dbg_parsearg(arg, list) }) else {
+    let (list, forceit) = (BreakList::of(excmd), excmd.forceit);
+    let Ok(mut breakpoint) = dbg_parsearg(excmd.line.arg(), list) else {
         return;
     };
-    bp.dbg_forceit = c_int::from(forceit);
+    breakpoint.forceit = forceit;
 
-    if bp.dbg_type == DBG_EXPR {
+    if breakpoint.kind == DBG_EXPR {
         last_breakp.set(last_breakp.get() + 1);
-        bp.dbg_nr = last_breakp.get();
-        list.push(bp);
+        breakpoint.nr = last_breakp.get();
+        list.push(breakpoint);
         debug_tick.set(debug_tick.get() + 1);
         if list == BreakList::Debug {
             has_expr_breakpoint.set(true);
@@ -457,110 +439,80 @@ pub fn ex_breakadd(excmd: &mut ExArg) {
 
     // A name is matched as a file glob, so it is compiled the way `:next
     // *.c` would be, not as a regexp the user wrote.
-    // SAFETY: `dbg_name` is the owned NUL-terminated name the parser left.
-    let compiled = unsafe {
-        let pat = file_pat_to_reg_pat(bp.dbg_name, ptr::null(), ptr::null_mut(), 0);
-        if !pat.is_null() {
-            bp.dbg_prog = vim_regcomp(cstr::at(pat), RE_MAGIC + RE_STRING);
-            xfree(pat.cast());
-        }
-        !pat.is_null() && !bp.dbg_prog.is_null()
-    };
-    if !compiled {
-        // SAFETY: the name is this function's to free; the entry is dropped.
-        unsafe { xfree(bp.dbg_name.cast()) };
+    let Some(prog) = file_pat_to_regpat(breakpoint.name.as_cstr())
+        .and_then(|pattern| OwnedProg::compile(pattern.as_cstr(), RE_MAGIC + RE_STRING))
+    else {
         return;
-    }
+    };
+    breakpoint.prog = Some(prog);
 
-    if bp.dbg_lnum == 0 as LineNr {
+    if breakpoint.lnum == 0 {
         // The default line number is the first.
-        bp.dbg_lnum = 1 as LineNr;
+        breakpoint.lnum = 1;
     }
     // A profiling point is not numbered and does not bump `debug_tick`:
     // nothing lists or deletes it by number.
     if list == BreakList::Debug {
         last_breakp.set(last_breakp.get() + 1);
-        bp.dbg_nr = last_breakp.get();
+        breakpoint.nr = last_breakp.get();
         debug_tick.set(debug_tick.get() + 1);
     }
-    list.push(bp);
+    list.push(breakpoint);
 }
 
 /// Recompute [`has_expr_breakpoint`] after the list changed.
 fn update_has_expr_breakpoint() {
-    let list = BreakList::Debug;
-    let any = (0..list.len()).any(|i| {
-        // SAFETY: `i` is below `ga_len`.
-        unsafe { (*list.entry(i)).dbg_type == DBG_EXPR }
-    });
+    let any = dbg_breakp.with(|entries| entries.iter().any(|entry| entry.kind == DBG_EXPR));
     has_expr_breakpoint.set(any);
 }
 
 /// `:breakdel` and `:profdel`.
 pub fn ex_breakdel(excmd: &mut ExArg) {
-    // SAFETY: caller contract.
-    let (list, arg, cmdidx) = (BreakList::of(&*excmd), excmd.arg_ptr(), excmd.cmdidx);
-    // SAFETY: `arg` is NUL-terminated.
-    let first = unsafe { *arg as c_int };
+    let (list, cmdidx) = (BreakList::of(excmd), excmd.cmdidx);
+    let arg = excmd.line.arg();
 
     let mut del_all = false;
-    let todel = if ascii_isdigit(first) {
+    let todel = if arg.first().is_some_and(u8::is_ascii_digit) {
         // `:breakdel {nr}`
-        // SAFETY: `arg` is NUL-terminated.
-        let nr = unsafe { atoi(arg) };
-        // SAFETY: `i` is below `ga_len`.
-        (0..list.len()).find(|&i| unsafe { (*list.entry(i)).dbg_nr == nr })
-    } else if first == '*' as c_int {
+        let nr = atoi(arg);
+        list.cell()
+            .with(|entries| entries.iter().position(|entry| entry.nr == nr))
+    } else if arg.first() == Some(&b'*') {
         del_all = true;
         Some(0)
     } else {
         // `:breakdel {func|file|expr} [lnum] {name}` -- parse it and look
         // for the closest match.
-        // SAFETY: `arg` is NUL-terminated.
-        let Ok(bp) = (unsafe { dbg_parsearg(arg, list) }) else {
+        let Ok(wanted) = dbg_parsearg(arg, list) else {
             return;
         };
-        let mut best_lnum = 0 as LineNr;
-        let mut found = None;
-        for i in 0..list.len() {
-            // SAFETY: `i` is below the list's length, and `bp` is this
-            // frame's; both names are owned and NUL-terminated.
-            let matches = unsafe {
-                let bpi = list.entry(i);
-                bp.dbg_type == (*bpi).dbg_type
-                    && cstr::eq(bp.dbg_name, (*bpi).dbg_name)
-                    && (bp.dbg_lnum == (*bpi).dbg_lnum
-                        || (bp.dbg_lnum == 0 as LineNr
-                            && (best_lnum == 0 as LineNr || (*bpi).dbg_lnum < best_lnum)))
-            };
-            if matches {
-                found = Some(i);
-                // SAFETY: as above.
-                best_lnum = unsafe { (*list.entry(i)).dbg_lnum };
+        list.cell().with(|entries| {
+            let mut best_lnum = 0;
+            let mut found = None;
+            for (i, entry) in entries.iter().enumerate() {
+                let matches = wanted.kind == entry.kind
+                    && wanted.name[..] == entry.name[..]
+                    && (wanted.lnum == entry.lnum
+                        || (wanted.lnum == 0 && (best_lnum == 0 || entry.lnum < best_lnum)));
+                if matches {
+                    found = Some(i);
+                    best_lnum = entry.lnum;
+                }
             }
-        }
-        // SAFETY: the parsed entry is discarded either way.
-        unsafe { xfree(bp.dbg_name.cast()) };
-        found
+            found
+        })
     };
 
     let Some(todel) = todel else {
-        // SAFETY: `arg` is NUL-terminated.
-        let arg = unsafe { c_str(arg) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E161: Breakpoint not found: {arg}");
         return;
     };
 
     while !list.is_empty() {
-        // `todel` is below the list's length, and the entry taken out of it
-        // owns its name, its compiled pattern and (for a watch) its last
-        // value.
-        let bp = list.remove(todel);
-        // SAFETY: all three are this entry's own allocations.
-        unsafe { xfree(bp.dbg_name.cast()) };
-        // A watch's last value goes with the entry.
-        drop(bp.dbg_val);
-        unsafe { vim_regfree(bp.dbg_prog) };
+        // The entry taken out owns its name, its compiled pattern and (for a
+        // watch) its last value.
+        drop(list.remove(todel));
         // `:profdel` is not something `:breaklist` shows, so it does not
         // invalidate anybody's cached view.
         if cmdidx == CmdIdx::breakdel {
@@ -590,167 +542,134 @@ pub fn ex_breaklist(_excmd: &mut ExArg) {
         smsg!(0, "No breakpoints defined");
         return;
     }
-    // Where `home_replace` shortens each file name; upstream shares
-    // `NameBuff`, which the message it feeds writes again.
-    let mut shortened = [0 as c_char; MAXPATHL as usize];
-    let namebuff = shortened.as_mut_ptr();
-
     for i in 0..list.len() {
-        let bp = list.entry(i);
-        let kind = unsafe { (*bp).dbg_type };
-        if kind == DBG_FILE {
-            unsafe { home_replace(None, (*bp).dbg_name, namebuff, MAXPATHL as size_t, true) };
-        }
+        let (nr, kind, name, lnum) = list.with(i, |entry| {
+            (entry.nr, entry.kind, entry.name.clone(), entry.lnum)
+        });
         if kind == DBG_EXPR {
-            // SAFETY: `bp` is a live breakpoint of the editor's own.
-            let (nr, name) = unsafe { ((*bp).dbg_nr, c_str((*bp).dbg_name)) };
+            let name = msg_bytes(&name);
             smsg!(0, "{nr:3}  expr {name}");
-        } else {
-            let (label, shown) = if kind == DBG_FUNC {
-                (c"func".as_ptr(), unsafe { (*bp).dbg_name })
-            } else {
-                (c"file".as_ptr(), namebuff)
-            };
-            // SAFETY: `bp` is a live breakpoint of the editor's own, and both
-            // strings are NUL-terminated.
-            let (nr, lnum) = unsafe { ((*bp).dbg_nr, (*bp).dbg_lnum as int64_t) };
-            let (label, shown) = unsafe { (c_str(label), c_str(shown)) };
-            smsg!(0, "{nr:3}  {label} {shown}  line {lnum}");
+            continue;
         }
+        let (label, shown) = if kind == DBG_FUNC {
+            ("func", name)
+        } else {
+            // Where upstream shortens it in `NameBuff`.
+            (
+                "file",
+                home_replace_in(None, name.as_cstr(), MAXPATHL as usize, true),
+            )
+        };
+        let shown = msg_bytes(&shown);
+        smsg!(0, "{nr:3}  {label} {shown}  line {}", i64::from(lnum));
     }
 }
 
 // -- Lookups ---------------------------------------------------------------
 
-/// The line to break on in `fname`, or 0 when nothing matches.
-///
-/// # Safety
-/// `fname` must be NUL-terminated.
-pub unsafe fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LineNr) -> LineNr {
-    // SAFETY: caller contract.
-    unsafe { debuggy_find(file, fname, after, BreakList::Debug, ptr::null_mut()) }
-}
-
-/// [`dbg_find_breakpoint`] of `name`.
+/// The line to break on in function or file `name`, or 0 when nothing
+/// matches. `file` says which kind `name` is.
 pub(crate) fn dbg_find_breakpoint_named(file: bool, name: &CStr, after: LineNr) -> LineNr {
-    // SAFETY: `name` is NUL-terminated and lives for the call; the lookup
-    // only reads it.
-    unsafe { dbg_find_breakpoint(file, name.as_ptr().cast_mut(), after) }
+    debuggy_find(file, name, after, BreakList::Debug).0
 }
 
-/// [`has_profiling`] of `name`, not asking whether it was defined with `!`.
+/// Whether profiling is on for a function or sourced file.
 pub(crate) fn has_profiling_named(file: bool, name: &CStr) -> bool {
-    // SAFETY: as `dbg_find_breakpoint_named`, and no `found` to write.
-    unsafe { has_profiling(file, name.as_ptr().cast_mut(), ptr::null_mut()) }
+    profiling_forced(file, name).is_some()
 }
 
-/// Whether profiling is on for a function or sourced file, and through `found`
-/// whether it was defined with `!`.
-///
-/// # Safety
-/// `fname` must be NUL-terminated; `found` null or writable.
-pub unsafe fn has_profiling(file: bool, fname: *mut c_char, found: *mut bool) -> bool {
-    // SAFETY: caller contract.
-    unsafe { debuggy_find(file, fname, 0 as LineNr, BreakList::Profiling, found) != 0 as LineNr }
+/// Whether profiling is on for a function or sourced file, and if so
+/// whether its point was defined with `!`.
+pub(crate) fn profiling_forced(file: bool, name: &CStr) -> Option<bool> {
+    let (lnum, forced) = debuggy_find(file, name, 0, BreakList::Profiling);
+    (lnum != 0).then_some(forced)
 }
 
-/// The shared body of [`dbg_find_breakpoint`] and [`has_profiling`]: the
-/// lowest line above `after` that a name entry matches, or -- for a watch
-/// expression whose value just changed -- `after` itself.
-///
-/// # Safety
-/// As [`dbg_find_breakpoint`].
-unsafe fn debuggy_find(
-    file: bool,
-    fname: *mut c_char,
-    after: LineNr,
-    list: BreakList,
-    found: *mut bool,
-) -> LineNr {
+/// The shared body of the lookups: the lowest line above `after` that a name
+/// entry matches, or -- for a watch expression whose value just changed --
+/// `after` itself; and whether the entry that matched was defined with `!`.
+fn debuggy_find(file: bool, fname: &CStr, after: LineNr, list: BreakList) -> (LineNr, bool) {
     if list.is_empty() {
-        return 0 as LineNr;
+        return (0, false);
     }
 
     // A script-local function arrives with `K_SNR` in front of its name; the
     // patterns are written against the `<SNR>` spelling.
-    // SAFETY: caller contract -- `fname` is NUL-terminated, and `K_SPECIAL`
-    // arrives as a three-byte `K_SNR` prefix, so the tail starts at 3.
-    let respelled = unsafe {
-        (!file && *fname as uint8_t as c_int == K_SPECIAL).then(|| {
-            let mut respelled = XString::from_bytes(b"<SNR>");
-            respelled.push_bytes(cstr::bytes_at(fname.offset(3)));
-            respelled
-        })
+    let respelled;
+    let name = match fname.to_bytes() {
+        [first, _, _, tail @ ..] if !file && i32::from(*first) == K_SPECIAL => {
+            let mut spelled = b"<SNR>".to_vec();
+            spelled.extend_from_slice(tail);
+            respelled = CString::new(spelled).expect("a name holds no NUL");
+            respelled.as_c_str()
+        }
+        _ => fname,
     };
-    let name = respelled.as_ref().map_or(fname, |n| n.as_ptr().cast_mut());
 
-    let mut lnum = 0 as LineNr;
-    for i in 0..list.len() {
-        let bp = list.entry(i);
-        // SAFETY: as above.
-        let kind = unsafe { (*bp).dbg_type };
+    let mut lnum = 0;
+    let mut forced = false;
+    let mut i = 0;
+    while i < list.len() {
+        let (kind, line, forceit) = list.with(i, |entry| (entry.kind, entry.lnum, entry.forceit));
         // Skip entries of the wrong kind, and ones for a line beyond a
         // breakpoint already found. Every profiling entry is a candidate:
         // profiling is per file, not per line.
-        // SAFETY: as above.
-        let candidate = unsafe {
-            (kind == DBG_FILE) == file
-                && kind != DBG_EXPR
-                && (list == BreakList::Profiling
-                    || ((*bp).dbg_lnum > after && (lnum == 0 as LineNr || (*bp).dbg_lnum < lnum)))
-        };
+        let candidate = (kind == DBG_FILE) == file
+            && kind != DBG_EXPR
+            && (list == BreakList::Profiling || (line > after && (lnum == 0 || line < lnum)));
 
         if candidate {
             // A previous interruption must not cancel the match; only a
             // CTRL-C typed while matching should.
             let prev_got_int = got_int.get();
             got_int.set(false);
-            // SAFETY: `dbg_prog` is this entry's compiled pattern and `name`
-            // is NUL-terminated.
-            let prog = unsafe { &mut (*bp).dbg_prog };
-            if vim_regexec_prog(prog, false, unsafe { cstr::at(name) }, 0) {
-                lnum = unsafe { (*bp).dbg_lnum };
-                if !found.is_null() {
-                    unsafe { *found = (*bp).dbg_forceit != 0 };
-                }
+            // Out of the entry while it runs: the list is not borrowed
+            // across the match.
+            let mut prog = list.with(i, |entry| entry.prog.take());
+            let matched = prog
+                .as_mut()
+                .is_some_and(|prog| prog.exec(name, 0, false).is_some());
+            list.with(i, |entry| entry.prog = prog);
+            if matched {
+                lnum = line;
+                forced = forceit;
             }
             got_int.set(got_int.get() | prev_got_int);
-        } else if kind == DBG_EXPR {
-            // SAFETY: `bp` is a live watch entry.
-            if unsafe { watch_changed(bp) } {
-                lnum = if after > 0 as LineNr {
-                    after
-                } else {
-                    1 as LineNr
-                };
-                break;
-            }
+        } else if kind == DBG_EXPR && watch_changed(list, i) {
+            lnum = if after > 0 { after } else { 1 };
+            break;
         }
+        i += 1;
     }
 
-    lnum
+    (lnum, forced)
 }
 
-/// Re-evaluate a watch expression and answer whether its value moved,
-/// recording the before and after for the prompt banner when it did.
+/// Re-evaluate the watch expression at `idx` and answer whether its value
+/// moved, recording the before and after for the prompt banner when it did.
 ///
-/// # Safety
-/// `bp` must point at a live `DBG_EXPR` entry.
-unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
-    // SAFETY: caller contract throughout. Evaluating the expression runs
-    // arbitrary Vimscript, so `bp` outliving the call rests on the same
-    // assumption the C makes -- that a watch does not itself add a
-    // breakpoint, which would grow the array and move every entry.
-    let tv = unsafe { eval_expr_no_emsg(breakpoint) };
-    let previous = unsafe { (*breakpoint).dbg_val.take() };
+/// The expression runs arbitrary Vimscript, which may add or delete
+/// breakpoints, so the entry is found again by its number afterwards; one
+/// that deleted itself has not changed.
+fn watch_changed(list: BreakList, idx: usize) -> bool {
+    let (nr, expr) = list.with(idx, |entry| (entry.nr, entry.name.clone()));
+    let find = move || {
+        list.cell()
+            .with(|entries| entries.iter().position(|entry| entry.nr == nr))
+    };
+    let tv = eval_expr_no_emsg(&expr);
+    let Some(at) = find() else {
+        return false;
+    };
+    let previous = list.with(at, |entry| entry.value.take());
 
     let Some(mut tv) = tv else {
         // The expression stopped evaluating at all, which counts as a
         // change -- but only if there was a value to change from.
-        let Some(mut previous) = previous else {
+        let Some(previous) = previous else {
             return false;
         };
-        set_oldval(Some(&mut previous));
+        set_oldval(Some(&previous));
         set_newval(None);
         return true;
     };
@@ -758,8 +677,8 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
     let Some(mut previous) = previous else {
         // First evaluation: the baseline, with no old value to show.
         set_oldval(None);
-        set_newval(Some(&mut tv));
-        unsafe { (*breakpoint).dbg_val = Some(tv) };
+        set_newval(Some(&tv));
+        list.with(at, |entry| entry.value = Some(tv));
         return true;
     };
 
@@ -769,27 +688,29 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
     if changed {
         // Render the old value before re-evaluating, because evaluating
         // can reach whatever the old value refers to.
-        set_oldval(Some(&mut previous));
+        set_oldval(Some(&previous));
         // `typval_compare` overwrote `tv`, so the new value has to be
         // evaluated a second time before it can be shown.
-        let mut fresh = unsafe { eval_expr_no_emsg(breakpoint) };
-        set_newval(fresh.as_deref_mut());
+        let fresh = eval_expr_no_emsg(&expr);
+        set_newval(fresh.as_ref());
         drop(previous);
-        unsafe { (*breakpoint).dbg_val = fresh };
+        if let Some(at) = find() {
+            list.with(at, |entry| entry.value = fresh);
+        }
     } else {
-        unsafe { (*breakpoint).dbg_val = Some(previous) };
+        list.with(at, |entry| entry.value = Some(previous));
     }
     drop(tv);
     changed
 }
 
 /// Record the "before" value the prompt banner prints, freeing whatever an
-/// earlier change left. A null typval renders as the empty value.
-fn set_oldval(tv: Option<&mut TypVal>) {
-    debug_oldval.set(Some(typval_tostring(tv.map(|tv| &*tv), true)));
+/// earlier change left. A missing value renders as such.
+fn set_oldval(tv: Option<&TypVal>) {
+    debug_oldval.set(Some(typval_tostring(tv, true)));
 }
 
 /// [`set_oldval`] for the "after" value.
-fn set_newval(tv: Option<&mut TypVal>) {
-    debug_newval.set(Some(typval_tostring(tv.map(|tv| &*tv), true)));
+fn set_newval(tv: Option<&TypVal>) {
+    debug_newval.set(Some(typval_tostring(tv, true)));
 }

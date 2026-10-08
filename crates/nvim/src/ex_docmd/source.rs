@@ -7,14 +7,13 @@ use crate::buffer::buf_get_changedtick;
 use crate::eval::vars::{set_vim_var_owned, vim_var_string};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::ErrorMsgs;
 use crate::vim_snprintf;
 
 use crate::getchar::typeahead;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::smsg;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -272,37 +271,36 @@ pub(crate) fn do_cmdline_end() {
 /// message is given elsewhere.
 pub fn handle_did_throw() {
     let id = current_exception.get().expect("an exception being thrown");
-    let mut exception = id.exception();
-    let mut reported: *mut c_char = ptr::null_mut();
-    let mut messages = ErrorMsgs::default();
-
-    match exception.type_0 as c_uint {
-        0 => {
-            // ET_USER
-            let mut buf = [0 as c_char; IOSIZE as usize];
-            unsafe {
-                vim_snprintf!(
-                    buf.as_mut_ptr(),
-                    IOSIZE as size_t,
-                    gettext(c"E605: Exception not caught: %s").as_ptr(),
-                    exception.value,
-                )
-            };
-            reported = xstrdup(buf.as_ptr());
-        }
-        1 => {
-            // ET_ERROR: take the messages, so that discarding the
-            // exception does not free them.
-            messages = core::mem::take(&mut exception.messages);
-        }
-        // ET_INTERRUPT, and anything else.
-        _ => {}
-    }
+    // The messages are taken so that discarding the exception does not drop
+    // them, and the name goes to the frame pushed below.
+    let (kind, value, messages, throw_name, throw_lnum) = id.with(|exception| {
+        (
+            exception.type_0,
+            exception.value.clone(),
+            core::mem::take(&mut exception.messages),
+            core::mem::take(&mut exception.throw_name),
+            exception.throw_lnum,
+        )
+    });
+    // A user exception (ET_USER) is reported as not caught; an error one
+    // (ET_ERROR) replays its messages; an interrupt says nothing.
+    let reported = (kind == 0).then(|| {
+        // Upstream renders it into `IObuff`.
+        let template = gettext(c"E605: Exception not caught: %s").to_bytes();
+        let at = template
+            .windows(2)
+            .position(|pair| pair == b"%s")
+            .unwrap_or(template.len());
+        let mut text = template[..at].to_vec();
+        text.extend_from_slice(&value);
+        text.extend_from_slice(template.get(at + 2..).unwrap_or_default());
+        text.truncate(IOSIZE as usize - 1);
+        CString::new(text).expect("no NUL in a message or a value")
+    });
 
     // Report against where the exception was thrown, not where it was
     // caught.
-    estack_push(ETYPE_EXCEPT, exception.throw_name, exception.throw_lnum);
-    exception.throw_name = ptr::null_mut();
+    estack_push(ETYPE_EXCEPT, throw_name.into_raw(), throw_lnum);
     discard_current_exception();
 
     // `:silent!` makes even an uncaught exception non-fatal.
@@ -316,10 +314,8 @@ pub fn handle_did_throw() {
             // SAFETY: the message's own NUL-terminated text.
             unsafe { emsg_multiline(m.msg.as_ptr(), Some(c"emsg"), HLF_E, m.multiline) };
         }
-    } else if !reported.is_null() {
-        // SAFETY: the message `do_cmdline` left behind, NUL-terminated.
-        emsg(unsafe { cstr::at(reported) });
-        xfree(reported as *mut c_void);
+    } else if let Some(reported) = reported {
+        emsg(&reported);
     }
 
     xfree(sourcing_entry().es_name as *mut c_void);

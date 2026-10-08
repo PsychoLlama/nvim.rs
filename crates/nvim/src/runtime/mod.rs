@@ -33,7 +33,7 @@ use crate::autocmd::{apply_autocmds, has_autocmd};
 use crate::charset::{skip_to_newline, skiptowhite, skiptowhite_esc, skipwhite, skipwhite_len};
 use crate::cmdexpand::globpath;
 use crate::debugger::state::{debug_break_level, debug_tick};
-use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
+use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
 use crate::eval::typval::{
     dict_copy, dict_find, dict_get_string_alloc, tv_check_for_opt_dict_arg, tv_dict_alloc,
     tv_dict_alloc_lock, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
@@ -44,7 +44,9 @@ use crate::eval::{eval_to_number, get_copy_id};
 use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
 use crate::ex_docmd::state::{cmdmod, ex_nesting_level, global_busy, listcmd_busy};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, getline_equal};
-use crate::ex_eval::{PendingAction, aborting, cleanup_conditionals, report_pending};
+use crate::ex_eval::{
+    PendingAction, PendingValue, aborting, cleanup_conditionals, cond_stack_of, report_pending,
+};
 use crate::garray::{ga_grow, ga_init, ga_remove_duplicate_strings};
 use crate::getchar::openscript;
 use crate::getchar::state::got_int;

@@ -81,15 +81,13 @@ const NO_CLEANUP: Cleanup = Cleanup {
 /// Reset the error/interrupt/exception state, so that `aborting()` answers
 /// false while a window or buffer is closed. Paired with [`leave_cleanup_now`].
 fn enter_cleanup_now(cs: &mut Cleanup) {
-    // SAFETY: a local to save the pending state into.
-    unsafe { enter_cleanup(cs) };
+    enter_cleanup(cs);
 }
 
 /// Restore what [`enter_cleanup_now`] saved, unless a new aborting error,
 /// interrupt or uncaught exception has discarded it.
 fn leave_cleanup_now(cs: &mut Cleanup) {
-    // SAFETY: the state `enter_cleanup` has just saved.
-    unsafe { leave_cleanup(cs) };
+    leave_cleanup(cs);
 }
 fn close_win(win: Win, free_buf: bool, force: bool) -> c_int {
     win_close(win, free_buf, force)

@@ -407,11 +407,14 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             if old_curwin.is_some() {
                 let need_hide = curbuf_is_changed() && Buf::current().b_nwindows <= 1;
                 if !need_hide || buf_hide(Buf::current()) {
-                    let mut cs: Cleanup = unsafe { core::mem::zeroed() };
-                    unsafe { enter_cleanup(&raw mut cs) };
+                    let mut cs = Cleanup {
+                        pending: 0,
+                        exception: None,
+                    };
+                    enter_cleanup(&mut cs);
                     let free = !need_hide && !buf_hide(Buf::current());
                     win_close(Win::current(), free, false);
-                    unsafe { leave_cleanup(&raw mut cs) };
+                    leave_cleanup(&mut cs);
                 }
             }
         } else if readonlymode.get() && Buf::current().b_nwindows == 1 {
