@@ -203,8 +203,13 @@ unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, T
     let mut omitted = 0;
     // SAFETY: the caller's two live dictionaries.
     let (exp_ref, got_ref) = unsafe { (&*exp_d, &*got_d) };
-    for item in exp_ref.items() {
-        let key = item.key();
+    // The keys are taken first: copying a value that is one of these
+    // dictionaries counts a reference on it, which must not happen under
+    // a walk of its slots.
+    let exp_keys: Vec<Vec<u8>> = exp_ref.items().map(|item| item.key().to_vec()).collect();
+    for key in &exp_keys {
+        let key = key.as_slice();
+        let item = exp_ref.find(key).expect("a key just listed");
         let item2 = got_ref.find(key);
         if item2.is_some_and(|other| tv_equal(&item.di_tv, &other.di_tv, false)) {
             omitted += 1;
@@ -221,9 +226,11 @@ unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, T
     }
 
     // Entries only the actual value has.
-    for item in got_ref.items() {
-        let key = item.key();
+    let got_keys: Vec<Vec<u8>> = got_ref.items().map(|item| item.key().to_vec()).collect();
+    for key in &got_keys {
+        let key = key.as_slice();
         if !exp_ref.has_key(key) {
+            let item = got_ref.find(key).expect("a key just listed");
             // SAFETY: the dictionary this call owns.
             let _ = unsafe { (*got).add_tv(key, &item.di_tv) };
         }

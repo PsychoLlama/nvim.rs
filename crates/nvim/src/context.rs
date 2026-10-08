@@ -88,7 +88,7 @@ pub(crate) fn ctx_size() -> size_t {
 /// must run no editor code.
 pub(crate) fn with_ctx<R>(index: size_t, f: impl FnOnce(&mut Context) -> R) -> Option<R> {
     CTX_STACK.with_mut(|stack| {
-        let at = stack.len().checked_sub(index + 1)?;
+        let at = stack.len().checked_sub(index.checked_add(1)?)?;
         Some(f(&mut stack[at]))
     })
 }
@@ -303,4 +303,26 @@ pub fn ctx_from_dict(dict: ApiDict, ctx: &mut Context) -> Result<c_int, Error> {
         }
     }
     Ok(types)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::eval::test_fixture::Fixture;
+
+    /// A negative index is out of bounds like any other, rather than one
+    /// that wraps past the top of the stack.
+    #[test]
+    fn a_negative_index_is_out_of_bounds() {
+        let fx = Fixture::new();
+        fx.run("call ctxpush([])");
+        assert_eq!(fx.error_of("ctxget(-1)"), "E475");
+        assert_eq!(fx.error_of("ctxset({}, -1)"), "E475");
+        assert_eq!(
+            fx.eval("ctxget(0)"),
+            "{'jumps': [], 'funcs': [], 'bufs': [], 'gvars': [], 'regs': []}"
+        );
+        // Not `ctxpop()`: a restore sets 'shada', which redraws a screen
+        // the fixture does not have.
+        drop(super::CTX_STACK.with_mut(Vec::pop));
+    }
 }

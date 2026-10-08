@@ -73,6 +73,8 @@ const E_TEST_GARBAGECOLLECT_NOW: &CStr =
 
 mod fails;
 mod report;
+#[cfg(test)]
+mod tests;
 
 pub(crate) use fails::f_assert_fails;
 use report::{

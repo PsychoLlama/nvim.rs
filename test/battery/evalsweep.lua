@@ -2813,6 +2813,311 @@ endfunction
   end
 end)
 
+section('s1-testing', function()
+  -- The assert_*() builtins (testing/): what each answers and the exact
+  -- v:errors line a failure appends -- every corpus value rendered on
+  -- both sides of "Expected ... but got ...", escapes, run shortening,
+  -- pruned dictionaries, the sourcing position, assert_fails()'s error,
+  -- line and context checks -- plus test_garbagecollect_now() and
+  -- test_write_list_log().
+  local function ask(label, call)
+    veval('testing ' .. label, 'string([' .. call .. ', v:errors])')
+    command('let v:errors = []')
+  end
+  command('let v:errors = []')
+  per_value('testing equal', "string([assert_equal(%s, 0), v:errors]) . execute('let v:errors = []')")
+  per_value('testing notequal', "string([assert_notequal(%s, %s), v:errors]) . execute('let v:errors = []')")
+  per_value('testing true', "string([assert_true(%s), v:errors]) . execute('let v:errors = []')")
+  per_value('testing false', "string([assert_false(%s, 'msg'), v:errors]) . execute('let v:errors = []')")
+  per_value('testing match', "string([assert_match('^x', %s), v:errors]) . execute('let v:errors = []')")
+  per_value('testing report', "string([assert_report(%s), v:errors]) . execute('let v:errors = []')")
+  local CASES = {
+    'assert_equal(1, 1)',
+    "assert_equal('a', 'b', '')",
+    "assert_equal('a', 'b', [1, 'x'])",
+    "assert_equal(1, 2, 'm')",
+    "assert_equal(repeat('x', 20), '')",
+    "assert_equal(repeat('x', 21), '')",
+    "assert_equal('a' . repeat('é', 40) . 'b', repeat(\"\\x01\", 22))",
+    "assert_equal(\"\\b\\e\\f\\n\\t\\r\\\\\\x7f\\x80\\xff\", 0)",
+    "assert_equal({'a': 1, 'b': 2, 'c': 3}, {'a': 1, 'b': 5, 'd': 4})",
+    "assert_equal({'a': 1, 'b': 2}, {'a': 1, 'b': 2, 'c': 3})",
+    "assert_equal({'a': 1}, 1)",
+    "assert_notequal({'a': 1}, {'a': 1}, 'n')",
+    "assert_match('^b', 'abc', 'why')",
+    "assert_match([], 'a')",
+    "assert_notmatch('b', 'abc')",
+    "assert_notmatch('x', 'abc')",
+    "assert_match('2', 123)",
+    'assert_true(-3)',
+    "assert_true('1')",
+    'assert_false(v:null)',
+    'assert_inrange(1, 3, 4)',
+    'assert_inrange(1, 3, 3)',
+    "assert_inrange(5, 7, -1, 'low')",
+    'assert_inrange(1.0, 2.5, 3)',
+    'assert_inrange(1, 2, 2.5)',
+    'assert_inrange(1, 2, 0z00)',
+    "assert_inrange('a', 3, 1)",
+    'assert_inrange(1, 3, 1, 2)',
+    "assert_inrange(0.0, 1.0, str2float('nan'))",
+    "assert_exception('x')",
+    'assert_report(v:null)',
+    "assert_fails('let x = 1')",
+    "assert_fails('let x = 1', 'E1', 'label')",
+    "assert_fails('call TaNoSuch()')",
+    "assert_fails('call TaNoSuch()', 'E117')",
+    "assert_fails('call TaNoSuch()', 'E999')",
+    "assert_fails('call TaNoSuch()', ['E117:'])",
+    "assert_fails('call TaNoSuch()', ['E9'], 'm')",
+    "assert_fails('call TaNoSuch()', ['E117', 'Unknown'])",
+    "assert_fails('call TaNoSuch()', ['E117', 'nope'])",
+    "assert_fails('call TaNoSuch()', ['a', 'b', 'c'])",
+    "assert_fails('call TaNoSuch()', [])",
+    "assert_fails('call TaNoSuch()', {})",
+    "assert_fails('call TaNoSuch()', [[]])",
+    "assert_fails('call TaFail()', 'E117', '', 2)",
+    "assert_fails('call TaFail()', 'E117', '', 5)",
+    "assert_fails('call TaFail()', 'E117', 'lbl', 5)",
+    "assert_fails('call TaFail()', 'E117', '', -1, 'TaFail')",
+    "assert_fails('call TaFail()', 'E117', '', 2, 'Other')",
+    "assert_fails('call TaFail()', 'E117', '', 'x')",
+    "assert_fails('call TaFail()', 'E117', '', 2, 3)",
+    "assert_fails('throw \"oops\"', 'oops')",
+    "assert_fails('echoerr \"boom\"', 'boom')",
+    'assert_fails([])',
+    "assert_beeps('normal! 0h')",
+    "assert_beeps('normal! 0')",
+    "assert_nobeep('normal! 0h')",
+    "assert_nobeep('normal! 0')",
+    "assert_equalfile('Xta1', 'Xta1')",
+    "assert_equalfile('Xta1', 'Xta2')",
+    "assert_equalfile('Xta1', 'Xta3', 'm')",
+    "assert_equalfile('Xta3', 'Xta1')",
+    "assert_equalfile('Xta4', 'Xta5')",
+    "assert_equalfile('Xmissing', 'Xta1')",
+    "assert_equalfile('Xta1', 'Xmissing')",
+    "assert_equalfile([], 'Xta1')",
+    'test_write_list_log("Xlog")',
+    'test_write_list_log([])',
+  }
+  command('silent! enew!')
+  command("call writefile(['abc', 'def'], 'Xta1')")
+  command("call writefile(['abc', 'dxf'], 'Xta2')")
+  command("call writefile(['abc'], 'Xta3')")
+  command("call writefile([repeat('x', 250) . 'a'], 'Xta4')")
+  command("call writefile([repeat('x', 250) . 'b'], 'Xta5')")
+  local ok, res = pcall(vim.api.nvim_exec2, [[
+    function! TaFail()
+      let x = 1
+      call TaNoSuch()
+    endfunction
+    function! TaInner()
+      let x = 1
+      return assert_equal(1, 2)
+    endfunction
+    function! TaOuter()
+      return TaInner()
+    endfunction
+    function! TaCatch(pat, ...)
+      try
+        throw 'oops E99: a thing'
+      catch
+        return call('assert_exception', [a:pat] + a:000)
+      endtry
+    endfunction
+  ]], {})
+  if not ok then
+    emit('testing exec !', esc(errtext(res)))
+  end
+  for index, call in ipairs(CASES) do
+    command("let v:errmsg = ''")
+    ask(string.format('%03d %s', index, esc(call)), call)
+    veval(string.format('%03d errmsg', index), 'v:errmsg')
+  end
+  ask('inner', 'TaInner()')
+  ask('outer', 'TaOuter()')
+  ask('catch hit', "TaCatch('E99')")
+  ask('catch miss', "TaCatch('E12')")
+  ask('catch miss msg', "TaCatch('E12', 'msg')")
+  -- The failure assert_fails() expected does not linger.
+  command("let v:errmsg = 'before'")
+  ask('fails clears errmsg', "assert_fails('call TaNoSuch()')")
+  veval('testing fails errmsg after', 'v:errmsg')
+  -- Garbage collection, refused without v:testing.
+  command("let g:ta_keep = [[1], {'a': [2]}]")
+  command('let g:ta_cycle = [] | call add(g:ta_cycle, g:ta_cycle) | unlet g:ta_cycle')
+  -- As a command of its own: inside an expression it would free the
+  -- list being built around it, which is what its documentation warns of.
+  command('let v:testing = 1')
+  command("let v:errmsg = ''")
+  emit('testing gc testing', command('call test_garbagecollect_now()') or 'ok')
+  veval('testing gc errmsg', 'v:errmsg')
+  veval('testing gc kept', 'string(g:ta_keep)')
+  command('let v:testing = 0')
+  emit('testing gc refused', command('call test_garbagecollect_now()') or 'ok')
+  command('silent! unlet g:ta_keep')
+  for _, name in ipairs({ 'TaFail', 'TaInner', 'TaOuter', 'TaCatch' }) do
+    command('silent! delfunction ' .. name)
+  end
+  for _, name in ipairs({ 'Xta1', 'Xta2', 'Xta3', 'Xta4', 'Xta5', 'Xlog' }) do
+    command("call delete('" .. name .. "')")
+  end
+end)
+
+section('s1-context', function()
+  -- ctxpush()/ctxpop()/ctxget()/ctxset()/ctxsize() with every type list,
+  -- asked as round trips: what a context holds carries timestamps, what
+  -- it restores does not.
+  local function ask(label, expr)
+    veval('context ' .. label, 'string(' .. expr .. ')')
+  end
+  local ok, res = pcall(vim.api.nvim_exec2, [[
+    function! CtxProbe()
+      return 'probe'
+    endfunction
+    function! s:CtxScript()
+      return 'script'
+    endfunction
+    let g:CtxScriptRef = function('s:CtxScript')
+  ]], {})
+  if not ok then
+    emit('context exec !', esc(errtext(res)))
+  end
+  local TYPES = {
+    "['regs']",
+    "['jumps']",
+    "['bufs']",
+    "['gvars']",
+    "['sfuncs']",
+    "['funcs']",
+    "['regs', 'gvars', 'funcs']",
+    '[]',
+    '',
+  }
+  for _, types in ipairs(TYPES) do
+    local label = types == '' and '(all)' or types
+    command("call setreg('a', 'before')")
+    command("let g:ctx_var = 'before'")
+    ask(label .. ' push', 'ctxpush(' .. types .. ')')
+    ask(label .. ' size', 'ctxsize()')
+    ask(label .. ' keys', 'sort(keys(ctxget()))')
+    ask(label .. ' lens', "map(ctxget(), 'len(v:val)')")
+    ask(label .. ' funcs', "map(copy(get(ctxget(), 'funcs', [])), 'v:val =~# \"CtxProbe\" ? v:val : len(v:val)')")
+    command("call setreg('a', 'after')")
+    command("let g:ctx_var = 'after'")
+    command('silent! delfunction CtxProbe')
+    ask(label .. ' pop', 'ctxpop()')
+    ask(label .. ' reg', "getreg('a')")
+    ask(label .. ' var', 'g:ctx_var')
+    ask(label .. ' func', "exists('*CtxProbe') ? CtxProbe() : 'gone'")
+    ask(label .. ' size after', 'ctxsize()')
+    pcall(vim.api.nvim_exec2, "function! CtxProbe()\n  return 'probe'\nendfunction", {})
+  end
+  -- ctxset() over the top entry, and ctxget()/ctxset() by index.
+  command("let g:ctx_var = 'one'")
+  ask('stack push 1', "ctxpush(['gvars'])")
+  command("let g:ctx_var = 'two'")
+  ask('stack push 2', "ctxpush(['gvars', 'funcs'])")
+  ask('stack get 1 keys', 'sort(keys(ctxget(1)))')
+  ask('stack set', 'ctxset(ctxget(1), 0)')
+  ask('stack set idx', 'ctxset(ctxget(0), 1)')
+  ask('stack set funcs only', "ctxset({'funcs': [\"function! CtxSet()\\n  return 7\\nendfunction\"]})")
+  ask('stack get funcs', "ctxget().funcs")
+  command("let g:ctx_var = 'three'")
+  ask('stack pop', 'ctxpop()')
+  ask('stack var', 'g:ctx_var')
+  ask('stack popped func', "exists('*CtxSet')")
+  ask('stack pop 2', 'ctxpop()')
+  ask('stack var 2', 'g:ctx_var')
+  ask('stack size', 'ctxsize()')
+  ask('stack empty pop', 'ctxpop()')
+  -- What it refuses, over a stack of one.
+  ask('refuse setup', 'ctxpush([])')
+  for _, expr in ipairs({
+    'ctxget(0)',
+    "ctxget('x')",
+    'ctxset({})',
+    'ctxset(1)',
+    "ctxset({'gvars': 1})",
+    "ctxset({'regs': [1]})",
+    "ctxset({}, 3)",
+    "ctxpush(['nope'])",
+    "ctxpush([1])",
+    'ctxpush(1)',
+    'ctxsize()',
+  }) do
+    command("let v:errmsg = ''")
+    ask('refuse ' .. esc(expr), expr)
+    veval('refuse ' .. esc(expr) .. ' errmsg', 'v:errmsg')
+  end
+  -- The API pair, round trip.
+  command("let g:ctx_var = 'api'")
+  local ctx = attempt('context api get keys', function()
+    local c = vim.api.nvim_get_context({ types = { 'gvars', 'funcs' } })
+    local keys = vim.tbl_keys(c)
+    table.sort(keys)
+    return keys
+  end)
+  local saved = vim.api.nvim_get_context({ types = { 'gvars' } })
+  command("let g:ctx_var = 'changed'")
+  attempt('context api load', vim.api.nvim_load_context, saved)
+  ask('api var', 'g:ctx_var')
+  attempt('context api bad type', vim.api.nvim_get_context, { types = { 'nope' } })
+  attempt('context api load bad', vim.api.nvim_load_context, { regs = { 1 } })
+  command('silent! unlet g:ctx_var g:CtxScriptRef')
+  command('silent! delfunction CtxProbe')
+  command('silent! delfunction CtxSet')
+  _ = ctx
+end)
+
+section('s1-parseexpr', function()
+  -- nvim_parse_expression(): the AST dict, the error, the highlight list
+  -- and the length consumed, for a corpus over every node type, every
+  -- error the parser reports, and every flag combination.
+  local EXPRS = {
+    '', ' ', '1', '1 + 2 * 3', '(1 + 2) * 3', '1 ? 2 : 3', '1 ? 2 ? 3 : 4 : 5',
+    '1 ?', '1 ? 2', '@a', '@', '+@a', '-1', '!a', 'a || b && c', 'a == b', 'a ==? b',
+    'a ==# b', 'a !~ b', 'a is b', 'a isnot# b', 'a < b < c', 'a . b', 'a .. b',
+    'a.b', 'a.b.c', 'd.1', 'd. a', 'a[1]', 'a[1:2]', 'a[:2]', 'a[1:]', 'a[:]',
+    'a(1, 2)', 'a(', 'a(1', '[1, 2]', '[1,', '[', ']', '[1 2]', '{}', "{'a': 1}",
+    "{'a': 1,", "{'a'", '{a -> a}', '{a, b -> a + b}', '{-> 1}', '{a', 'a{b}c',
+    'a{b', '{a}{b}', 'g:a', 'l:a', 'a:a', 'v:true', 's:x', 'b:x', 'w:x', 't:x',
+    'x#y#z', '&opt', '&g:opt', '&l:opt', '&', '&g:', '$HOME', '$', '0x1F', '0o17',
+    '017', '0b101', '1.5', '1.5e10', '1e', '0z0102', "'a''b'", "'unclosed",
+    '"a\\nb\\x41\\u00e9\\<Esc>"', '"unclosed', '"\\', 'a % b', 'a / b', 'a * b',
+    'a - b', 'a +', '* 5', '1 2', '1,2', 'a:', 'a :', ':', ',', '->', 'a->b()',
+    'a->', '"\\<C-a>"', 'é', 'aé', '#', '`', '1 | 2', 'a =~ b', '((((1))))',
+    'a ? b : c ? d : e', 'x = 1', 'x += 1', 'x[1] = 2', '[a, b] = c', 'x.y -= 1',
+    'x .= 1', '1 = 2', '{a}', '"\\x"', '"\\u"', '"\\U0001F600"', "'é''é'",
+  }
+  local FLAGS = { '', 'm', 'E', 'l', 'mE', 'ml', 'El', 'mEl' }
+  for index, expr in ipairs(EXPRS) do
+    for _, flags in ipairs(FLAGS) do
+      attempt(
+        string.format('parseexpr %03d %s [%s]', index, esc(expr), flags),
+        vim.api.nvim_parse_expression,
+        expr,
+        flags,
+        true
+      )
+    end
+    attempt(
+      string.format('parseexpr %03d %s nohl', index, esc(expr)),
+      vim.api.nvim_parse_expression,
+      expr,
+      '',
+      false
+    )
+  end
+  attempt('parseexpr badflag', vim.api.nvim_parse_expression, '1', 'x', true)
+  attempt('parseexpr nul', vim.api.nvim_parse_expression, 'a\0b', '', true)
+  attempt('parseexpr deep', function()
+    local ast = vim.api.nvim_parse_expression(string.rep('(', 300) .. '1' .. string.rep(')', 300), '', false)
+    return ast.len
+  end)
+end)
+
 section('s4-termopen', function()
   -- The second argument must be a dictionary or absent.
   veval('termopen baddict', "termopen('x', 'notadict')")
