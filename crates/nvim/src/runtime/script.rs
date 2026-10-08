@@ -492,6 +492,7 @@ unsafe fn dict_add_bool(d: *mut Dict, key: &CStr, val: BoolVarValue) {
 ///
 /// `cookie` must be the payload this callback was registered with, live for
 /// the call.
+#[inline(never)]
 pub unsafe fn getsourceline(
     _c: c_int,
     cookie: *mut c_void,

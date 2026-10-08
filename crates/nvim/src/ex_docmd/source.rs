@@ -336,6 +336,7 @@ pub fn handle_did_throw() {
 /// `cookie` must point at the `LoopCookie` the `:while`/`:for` frame set up,
 /// live for as long as the loop it drives -- this is stored as a `LineGetter`
 /// and gets back whatever was registered beside it.
+#[inline(never)]
 pub(crate) unsafe fn get_loop_line(
     c: c_int,
     cookie: *mut c_void,

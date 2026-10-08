@@ -237,6 +237,7 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
 ///
 /// `cookie` must be the payload this callback was registered with, live for
 /// the call.
+#[inline(never)]
 pub unsafe fn getnextac(
     _c: ::core::ffi::c_int,
     cookie: *mut ::core::ffi::c_void,

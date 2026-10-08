@@ -443,6 +443,7 @@ fn with_cookie_funccall<R>(bits: usize, f: impl FnOnce(&FuncCall) -> R) -> R {
 /// `getline_equal` compares this function's *address* against the cookie's
 /// getter to decide whether a function is running; it coerces to the
 /// `LineGetter` type, whose cookie is [`func_line_cookie`]'s.
+#[inline(never)]
 pub fn get_func_line(
     _c: c_int,
     cookie: *mut c_void,
