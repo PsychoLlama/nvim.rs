@@ -6,8 +6,7 @@
 //! fail, and everything that failure left behind — the error flags, the
 //! pending `hit-enter`, `v:errmsg` — is [`finish_assert_fails`]'s to undo.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,14 +15,12 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::strings::has_bytes;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use crate::eval::pattern_match;
 use crate::eval::typval::{
-    NumBuf, list_items, list_len, tv_check_for_opt_number_arg, tv_check_for_opt_string_arg,
+    NumBuf, tv_check_for_opt_number_arg, tv_check_for_opt_string_arg,
     tv_check_for_opt_string_or_list_arg, tv_check_for_string_or_number_arg,
 };
 use crate::eval::vars::{set_vim_var_string, vim_var_bytes};
@@ -31,7 +28,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{suppress_errthrow, trylevel};
 use crate::getchar::state::got_int;
 use crate::guard::{MsgBump, Suppress};
-use crate::memory::{ThinCString, XString, xfree};
+use crate::memory::{ThinCString, XString};
 use crate::message::state::{
     called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
     emsg_assert_fails_msg, emsg_on_display, in_assert_fails, lines_left, msg_col, need_wait_return,
@@ -39,11 +36,13 @@ use crate::message::state::{
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::gettext;
 use crate::types::{
-    EvalFuncData, List, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv,
+    EvalFuncData, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv,
 };
 use crate::ui::state::Rows;
 
-use super::report::{fill_assert_error, ga_concat_lit, prepare_assert_error, report_assert_error};
+use super::report::{
+    Expected, fill_assert_error, prepare_assert_error, push_lit, report_assert_error,
+};
 use super::{
     AssertType, E_ASSERT_FAILS_FIFTH_ARGUMENT, E_ASSERT_FAILS_FOURTH_ARGUMENT,
     E_ASSERT_FAILS_SECOND_ARG, assert_append_cmd_or_arg,
@@ -73,24 +72,20 @@ struct FailsMismatch {
     /// Which `argvars` slot the unmet expectation came from: 1, 3 or 4.
     index: usize,
     /// The error text that actually arrived, for `index == 1`.
-    actual: *mut c_char,
+    actual: Option<ThinCString>,
 }
 
 /// Whether `assert_fails()`'s arguments have the shapes it documents.
 ///
 /// The later ones are only checked when the earlier optional ones are present,
 /// exactly as upstream: `assert_fails(cmd, err, msg, lnum, context)`.
-///
-/// # Safety
-/// `args` has five slots.
-unsafe fn assert_fails_args_ok(args: &[TypVal]) -> bool {
-    // SAFETY: the caller's arguments.
+fn assert_fails_args_ok(args: &[TypVal]) -> bool {
     if tv_check_for_string_or_number_arg(args, 0).is_err()
         || tv_check_for_opt_string_or_list_arg(args, 1).is_err()
     {
         return false;
     }
-    if args.len() <= 1 || args.len() <= 2 {
+    if args.len() <= 2 {
         return true;
     }
     if tv_check_for_opt_number_arg(args, 3).is_err() {
@@ -104,17 +99,15 @@ unsafe fn assert_fails_args_ok(args: &[TypVal]) -> bool {
 /// A string must be a substring of it; a one- or two-element list holds
 /// patterns, the second of which is matched against `v:errmsg` rather than the
 /// raw message.
-///
-/// # Safety
-/// `args` has five slots; `tofree` receives an allocation the caller frees.
-unsafe fn check_reported_error(
-    args: &[TypVal],
-    reported: &CStr,
-    tofree: &mut *mut c_char,
-) -> FailsCheck {
+fn check_reported_error(args: &[TypVal], reported: &CStr) -> FailsCheck {
     let mut buf = NumBuf::new();
-    // Only read: the mismatch report borrows it.
-    let mut actual = reported.as_ptr().cast_mut();
+    let mismatch = |expected: Option<&CStr>, actual: &CStr| {
+        FailsCheck::Mismatch(FailsMismatch {
+            expected_str: expected.map(ThinCString::from_cstr),
+            index: 1,
+            actual: Some(ThinCString::from_cstr(actual)),
+        })
+    };
 
     match args.get(1).map_or(VAR_UNKNOWN, TypVal::v_type) {
         VAR_STRING => {
@@ -122,50 +115,37 @@ unsafe fn check_reported_error(
             if expected.is_some_and(|expected| has_bytes(reported, expected.to_bytes())) {
                 return FailsCheck::Matched;
             }
-            FailsCheck::Mismatch(FailsMismatch {
-                expected_str: None,
-                index: 1,
-                actual,
-            })
+            mismatch(None, reported)
         }
         VAR_LIST => {
-            let list: *const List = args[1].list_or_null();
-            if list.is_null() || !(1..=2).contains(&list_len(unsafe { list.as_ref() })) {
-                return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG);
-            }
-            // SAFETY: a live list of one or two items.
-            let items = list_items(unsafe { list.as_ref() });
-            let mut tv: *const TypVal = &raw const items[0].li_tv;
-            // SAFETY: an item of the list borrowed above.
-            let Some(expected) = buf.string_chk(unsafe { &*tv }) else {
+            // The patterns are copied out first: matching one can raise an
+            // error, and that runs no user code, but the list is the
+            // caller's and nothing here needs it borrowed.
+            let patterns: Vec<TypVal> = match args[1].list_ref() {
+                Some(list) if (1..=2).contains(&list.len()) => {
+                    list.items().iter().map(|item| item.li_tv.clone()).collect()
+                }
+                _ => return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG),
+            };
+            let Some(expected) = buf.string_chk(&patterns[0]) else {
                 return FailsCheck::Abandon;
             };
-            if !unsafe { pattern_match(expected, cstr::at(actual), false) } {
-                return FailsCheck::Mismatch(FailsMismatch {
-                    expected_str: Some(ThinCString::from_cstr(expected)),
-                    index: 1,
-                    actual,
-                });
+            if !pattern_match(expected, reported, false) {
+                return mismatch(Some(expected), reported);
             }
-            if list_len(unsafe { list.as_ref() }) != 2 {
+            let Some(second) = patterns.get(1) else {
                 return FailsCheck::Matched;
-            }
+            };
             // Take a copy: an error inside pattern_match() may free it.
-            actual = ThinCString::from_vec(vim_var_bytes(Vv::Errmsg)).into_raw();
-            *tofree = actual;
-            tv = &raw const items[1].li_tv;
-            // SAFETY: as above.
-            let Some(expected) = buf.string_chk(unsafe { &*tv }) else {
+            let errmsg = ThinCString::from_vec(vim_var_bytes(Vv::Errmsg));
+            let mut buf = NumBuf::new();
+            let Some(expected) = buf.string_chk(second) else {
                 return FailsCheck::Abandon;
             };
-            if unsafe { pattern_match(expected, cstr::at(actual), false) } {
+            if pattern_match(expected, &errmsg, false) {
                 return FailsCheck::Matched;
             }
-            FailsCheck::Mismatch(FailsMismatch {
-                expected_str: Some(ThinCString::from_cstr(expected)),
-                index: 1,
-                actual,
-            })
+            mismatch(Some(expected), &errmsg)
         }
         _ => FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG),
     }
@@ -176,23 +156,19 @@ unsafe fn check_reported_error(
 ///
 /// A negative line number means "do not check", which is how a test asks only
 /// about the context.
-///
-/// # Safety
-/// `args` has five slots.
-unsafe fn check_error_position(args: &[TypVal], context: &CStr) -> FailsCheck {
-    // SAFETY: the caller's arguments.
-    if args.len() <= 2 || args.len() <= 3 {
+fn check_error_position(args: &[TypVal], context: &CStr) -> FailsCheck {
+    if args.len() <= 3 {
         return FailsCheck::Matched;
     }
     if !args.get(3).is_some_and(|arg| arg.v_type() == VAR_NUMBER) {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FOURTH_ARGUMENT);
     }
     let want_lnum = args[3].number_or_zero();
-    if want_lnum >= 0 && want_lnum != emsg_assert_fails_lnum.get() as VarNumber {
+    if want_lnum >= 0 && want_lnum != VarNumber::from(emsg_assert_fails_lnum.get()) {
         return FailsCheck::Mismatch(FailsMismatch {
             expected_str: None,
             index: 3,
-            actual: ptr::null_mut(),
+            actual: None,
         });
     }
     if args.len() <= 4 {
@@ -208,44 +184,32 @@ unsafe fn check_error_position(args: &[TypVal], context: &CStr) -> FailsCheck {
     FailsCheck::Mismatch(FailsMismatch {
         expected_str: None,
         index: 4,
-        actual: ptr::null_mut(),
+        actual: None,
     })
 }
 
 /// Append a failed `assert_fails()`'s report to `v:errors`.
-///
-/// # Safety
-/// `args` has five slots and `cmd` is the command that was run.
-unsafe fn report_fails_mismatch(
-    args: &[TypVal],
-    cmd: *const c_char,
-    context: &CStr,
-    mismatch: &FailsMismatch,
-) {
-    // SAFETY: the caller's arguments; `actual_tv` holds a copy of its own.
+fn report_fails_mismatch(args: &[TypVal], cmd: &[u8], context: &CStr, mismatch: &FailsMismatch) {
     let actual_tv = match mismatch.index {
-        3 => TypVal::Number(emsg_assert_fails_lnum.get() as VarNumber),
+        3 => TypVal::Number(VarNumber::from(emsg_assert_fails_lnum.get())),
         4 => TypVal::string_from(context.to_bytes()),
-        _ => TypVal::string(unsafe { cstr::at_opt(mismatch.actual) }.map(ThinCString::from_cstr)),
+        _ => TypVal::string(mismatch.actual.clone()),
     };
-    let mut ga = prepare_assert_error();
-    let gap = &mut ga;
-    unsafe {
-        fill_assert_error(
-            gap,
-            args.get(2),
-            mismatch
-                .expected_str
-                .as_ref()
-                .map_or(ptr::null(), ThinCString::as_ptr),
-            Some(&args[mismatch.index]),
-            &actual_tv,
-            AssertType::Fails,
-        )
+    let expected = match &mismatch.expected_str {
+        Some(text) => Expected::Text(text.as_bytes()),
+        None => Expected::Value(&args[mismatch.index]),
     };
-    ga_concat_lit(gap, c": ");
-    unsafe { assert_append_cmd_or_arg(gap, args, cmd) };
-    report_assert_error(gap);
+    let mut message = prepare_assert_error();
+    fill_assert_error(
+        &mut message,
+        args.get(2),
+        expected,
+        &actual_tv,
+        AssertType::Fails,
+    );
+    push_lit(&mut message, c": ");
+    assert_append_cmd_or_arg(&mut message, args, cmd);
+    report_assert_error(&message);
 }
 
 /// Put the message and screen state back the way `assert_fails()` found it.
@@ -253,10 +217,7 @@ unsafe fn report_fails_mismatch(
 /// The command it ran was expected to fail, so everything that failure left
 /// behind — the error flags, the pending `hit-enter`, `v:errmsg` — is this
 /// function's to undo.
-///
-/// # Safety
-/// Called once, at the end of `assert_fails()`.
-unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prompt: MsgBump) {
+fn finish_assert_fails(save_trylevel: c_int, no_prompt: MsgBump) {
     trylevel.set(save_trylevel);
     suppress_errthrow.set(false);
     in_assert_fails.set(false);
@@ -269,23 +230,18 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prom
     msg_reset_scroll();
     lines_left.set(Rows.get());
     emsg_assert_fails_msg.set(None);
-    unsafe { xfree(tofree.cast()) };
     set_vim_var_string(Vv::Errmsg, None);
 }
 
 /// `assert_fails(cmd [, error [, msg [, lnum [, context]]]])`.
 pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the evaluator's argument vector and return slot. `do_cmdline_cmd`
-    // runs user code that is expected to fail; every flag disturbed for it is
-    // restored by `finish_assert_fails`.
-    if !unsafe { assert_fails_args_ok(args) } {
+    if !assert_fails_args_ok(args) {
         return;
     }
 
     let save_trylevel = trylevel.get();
     let called_emsg_before = called_emsg.get();
-    let mut tofree: *mut c_char = ptr::null_mut();
     let mut wrong_arg_msg: Option<&'static CStr> = None;
 
     // trylevel must be zero for a ":throw" command to be considered failed.
@@ -298,7 +254,8 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     let no_prompt = Suppress::wait_return();
 
     // An argument with no string form has reported itself and runs as the
-    // empty command.
+    // empty command. The text is the argument's own, which the call holds
+    // for its whole length, so the command it runs cannot free it.
     let cmd = numbuf.string_chk(&args[0]).unwrap_or(c"");
     let _ = do_cmdline_cmd(cmd);
 
@@ -307,10 +264,10 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     suppress_errthrow.set(false);
 
     if called_emsg.get() == called_emsg_before {
-        let mut ga = prepare_assert_error();
-        ga_concat_lit(&mut ga, c"command did not fail: ");
-        unsafe { assert_append_cmd_or_arg(&mut ga, args, cmd.as_ptr()) };
-        report_assert_error(&ga);
+        let mut message = prepare_assert_error();
+        push_lit(&mut message, c"command did not fail: ");
+        assert_append_cmd_or_arg(&mut message, args, cmd.to_bytes());
+        report_assert_error(&message);
         result.write_number(1);
     } else if args.len() > 1 {
         // Copies: matching a pattern can raise an error of its own, and
@@ -319,21 +276,21 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
         let reported = reported.as_ref().map_or(c"[unknown]", XString::as_cstr);
         let context = emsg_assert_fails_context.with(Clone::clone);
         let context = context.as_ref().map_or(c"", XString::as_cstr);
-        let mut check = unsafe { check_reported_error(args, reported, &mut tofree) };
+        let mut check = check_reported_error(args, reported);
         if matches!(check, FailsCheck::Matched) {
-            check = unsafe { check_error_position(args, context) };
+            check = check_error_position(args, context);
         }
         match check {
             FailsCheck::Matched | FailsCheck::Abandon => {}
             FailsCheck::BadArg(msg) => wrong_arg_msg = Some(msg),
             FailsCheck::Mismatch(mismatch) => {
-                unsafe { report_fails_mismatch(args, cmd.as_ptr(), context, &mismatch) };
+                report_fails_mismatch(args, cmd.to_bytes(), context, &mismatch);
                 result.write_number(1);
             }
         }
     }
 
-    unsafe { finish_assert_fails(save_trylevel, tofree, no_prompt) };
+    finish_assert_fails(save_trylevel, no_prompt);
     if let Some(msg) = wrong_arg_msg {
         emsg(gettext(msg));
     }

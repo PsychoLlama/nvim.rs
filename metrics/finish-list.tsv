@@ -700,10 +700,6 @@ tag/	tag/scan.rs	1	46	4	31	deref:15	str:8 pp_str:2 other:1	str:2	CStr::from_ptr:
 tag/	tag/stack.rs	1	7	0	6	expr:1	-	-	xfree:3 fm_getname:1 vim_snprintf:1
 tag/	tag/tagfile.rs	1	25	2	23	expr:1 ref:1	str:2 pp_str:1 void:1	str:1	CStr::from_ptr:4 Name::from_ptr:4 xfree:2 xstrdup:2 .offset_from:1 copy_option_part:1 do_in_runtimepath:1 path_has_wildcard:1
 tag/	tag/tagfunc.rs	1	14	3	8	ref:4 deref:1 expr:1	str:3 value:2	value:1	option_set_callback_func:2 DictRef::owning:1 bytes_at:1 callback_call:1
-testing/	*	3	86	19	64	deref:14 ref:3 compound:1	str:11	-	xfree:7 .as_ref:3 fclose:3 vim_snprintf_safelen:3 .offset:2 fgetc:2 os_fopen:2 pattern_match:2
-testing/	testing/fails.rs	1	17	5	15	ref:2	str:3	-	.as_ref:3 pattern_match:2 at_opt:1 xfree:1
-testing/	testing/mod.rs	1	41	8	29	deref:10	str:3	-	fclose:3 vim_snprintf_safelen:3 fgetc:2 os_fopen:2 vim_snprintf:2 xfree:2 xstrlcpy:2 eq:1
-testing/	testing/report.rs	1	28	6	20	deref:4 compound:1 ref:1	str:5	-	xfree:4 .offset:2 .offset_from:1 CStr::from_ptr:1 from_raw_parts:1 mb_cptr2char_adv:1 utf_ptr2char:1
 textformat/	*	5	42	3	23	deref:11	other:2	-	get_leader_len:4 .add:2 Op::new:2 xstrnsave:2 at:1 bytes_at:1 ins_bytes:1 ins_str:1
 textformat/	textformat/auto.rs	1	8	0	4	deref:4	-	-	get_leader_len:1 ml_replace:1 xstrnsave:1
 textformat/	textformat/lines.rs	1	5	2	5	-	other:2	-	Op::new:2 at:1 starts_with:1

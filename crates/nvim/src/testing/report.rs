@@ -8,47 +8,30 @@
 //!
 //! Every string in here is matched on by tests. None of it may drift.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use core::ffi::{CStr, c_char, c_int};
-use core::slice;
+use core::ffi::CStr;
 
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::typval::{tv_dict_alloc, tv_equal};
 use crate::eval::vars::assert_error;
-use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
-use crate::memory::{ThinCString, xfree};
-use crate::runtime::estack_sfile;
-use crate::types::{LineNr, TypVal, VAR_DICT};
+use crate::mbyte::{char_at, char_len};
+use crate::memory::ThinCString;
+use crate::runtime::estack_sfile_owned;
+use crate::types::{LineNr, TypVal};
 
 use super::{AssertType, ESTACK_NONE};
 
-/// `GA_CONCAT_LITERAL`: append a C literal, whose length is known here.
-pub(super) fn ga_concat_lit(gap: &mut Vec<u8>, text: &'static CStr) {
-    gap.extend_from_slice(text.to_bytes());
-}
-
-/// Append a NUL-terminated string's bytes, terminator excluded. A null
-/// string appends nothing, as `ga_concat` did.
-///
-/// # Safety
-/// `s` is null or NUL-terminated.
-pub(super) unsafe fn ga_concat_cstr(gap: &mut Vec<u8>, s: *const c_char) {
-    if s.is_null() {
-        return;
-    }
-    // SAFETY: the caller's promise.
-    gap.extend_from_slice(unsafe { CStr::from_ptr(s) }.to_bytes());
-}
-
-/// Append `len` bytes of `p`, NULs and all.
-///
-/// # Safety
-/// `p` is readable for `len` bytes.
-pub(super) unsafe fn ga_concat_bytes(gap: &mut Vec<u8>, p: *const c_char, len: usize) {
-    // SAFETY: the caller's promise.
-    gap.extend_from_slice(unsafe { slice::from_raw_parts(p.cast::<u8>(), len) });
+/// Append a literal message part.
+pub(super) fn push_lit(message: &mut Vec<u8>, text: &'static CStr) {
+    message.extend_from_slice(text.to_bytes());
 }
 
 /// Line number being sourced or executed: the top of the exestack.
@@ -56,54 +39,45 @@ pub(super) fn sourcing_lnum() -> LineNr {
     crate::runtime::innermost_frame().es_lnum
 }
 
-/// A fresh error buffer, opened with the sourcing position: `script line N: `.
+/// A fresh message, opened with the sourcing position: `script line N: `.
 pub(super) fn prepare_assert_error() -> Vec<u8> {
-    let mut ga = Vec::<u8>::new();
-    let gap = &mut ga;
-    let sname = estack_sfile(ESTACK_NONE);
+    let mut message = Vec::new();
+    let source = estack_sfile_owned(ESTACK_NONE);
     let lnum = sourcing_lnum();
-    if !sname.is_null() {
-        // SAFETY: `estack_sfile` answers a NUL-terminated name.
-        unsafe { ga_concat_cstr(gap, sname) };
+    if let Some(source) = &source {
+        message.extend_from_slice(source.as_cstr().to_bytes());
         if lnum > 0 {
-            gap.push(b' ');
+            message.push(b' ');
         }
     }
     if lnum > 0 {
-        gap.extend_from_slice(format!("line {lnum}").as_bytes());
+        message.extend_from_slice(format!("line {lnum}").as_bytes());
     }
-    if !sname.is_null() || lnum > 0 {
-        ga_concat_lit(gap, c": ");
+    if source.is_some() || lnum > 0 {
+        push_lit(&mut message, c": ");
     }
-    // SAFETY: the allocation this function owns.
-    unsafe { xfree(sname.cast()) };
-    ga
+    message
 }
 
-/// Publish `gap` as one `v:errors` entry.
-pub(super) fn report_assert_error(gap: &[u8]) {
-    assert_error(gap);
+/// Publish `message` as one `v:errors` entry.
+pub(super) fn report_assert_error(message: &[u8]) {
+    assert_error(message);
 }
 
 // ---------------------------------------------------------------------------
 // Escaping
 // ---------------------------------------------------------------------------
 
-/// Append `p[..clen]` to `gap`, escaping the unprintable single bytes.
+/// Append one character, escaping it when it is an unprintable single byte.
 ///
 /// NL becomes `\n`, CR `\r`, and anything else below space (or DEL) becomes
 /// `\xNN`. A multibyte character goes through unchanged.
-///
-/// # Safety
-/// `gap` is open and `p` has at least `clen` readable bytes.
-unsafe fn ga_concat_esc(gap: &mut Vec<u8>, p: *const c_char, clen: c_int) {
-    // SAFETY: the caller's buffer.
-    if clen > 1 {
-        unsafe { ga_concat_bytes(gap, p, clen as usize) };
+fn push_escaped(message: &mut Vec<u8>, character: &[u8]) {
+    let &[byte] = character else {
+        message.extend_from_slice(character);
         return;
-    }
-    let byte = unsafe { *p };
-    let escaped = match byte as u8 {
+    };
+    let escaped = match byte {
         b'\x08' => Some(c"\\b"),
         b'\x1b' => Some(c"\\e"),
         b'\x0c' => Some(c"\\f"),
@@ -114,45 +88,43 @@ unsafe fn ga_concat_esc(gap: &mut Vec<u8>, p: *const c_char, clen: c_int) {
         _ => None,
     };
     if let Some(text) = escaped {
-        ga_concat_lit(gap, text);
-    } else if (byte as u8) < b' ' || byte as u8 == 0x7f {
-        gap.extend_from_slice(format!("\\x{:02x}", byte as u8).as_bytes());
+        push_lit(message, text);
+    } else if byte < b' ' || byte == 0x7f {
+        message.extend_from_slice(format!("\\x{byte:02x}").as_bytes());
     } else {
-        gap.push(byte as u8);
+        message.push(byte);
     }
 }
 
-/// Append `str` to `gap` escaped, collapsing a run of more than 20 identical
+/// Append `text` escaped, collapsing a run of more than 20 identical
 /// characters into `\[c occurs N times]` so a long message stays readable.
 ///
-/// # Safety
-/// `gap` is open; `str` is null or a C string.
-unsafe fn ga_concat_shorten_esc(gap: &mut Vec<u8>, str: *const c_char) {
-    // SAFETY: the caller's garray and string; the walk stops at the NUL.
-    if str.is_null() {
-        ga_concat_lit(gap, c"NULL");
-        return;
-    }
-    let mut p = str;
-    while unsafe { *p } != 0 {
-        let mut s = p;
-        let c = unsafe { mb_cptr2char_adv(&raw mut s) };
-        let clen = unsafe { s.offset_from(p) } as c_int;
+/// The text ends at its first NUL, as the C string it was did.
+fn push_shortened(message: &mut Vec<u8>, text: &[u8]) {
+    let text = text.split(|&byte| byte == 0).next().unwrap_or_default();
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        let character = char_at(rest);
+        let clen = char_len(rest);
+        // How many times the character repeats, counted in steps of its
+        // own length.
         let mut same_len = 1;
-        while unsafe { *s } != 0 && c == unsafe { utf_ptr2char(s) } {
+        let mut next = clen;
+        while next < rest.len() && char_at(&rest[next..]) == character {
             same_len += 1;
-            s = unsafe { s.offset(clen as isize) };
+            next += clen;
         }
         if same_len > 20 {
-            ga_concat_lit(gap, c"\\[");
-            unsafe { ga_concat_esc(gap, p, clen) };
-            ga_concat_lit(gap, c" occurs ");
-            gap.extend_from_slice(format!("{same_len}").as_bytes());
-            ga_concat_lit(gap, c" times]");
-            p = s;
+            push_lit(message, c"\\[");
+            push_escaped(message, &rest[..clen]);
+            push_lit(message, c" occurs ");
+            message.extend_from_slice(format!("{same_len}").as_bytes());
+            push_lit(message, c" times]");
+            at += next;
         } else {
-            unsafe { ga_concat_esc(gap, p, clen) };
-            p = unsafe { p.offset(clen as isize) };
+            push_escaped(message, &rest[..clen]);
+            at += clen;
         }
     }
 }
@@ -161,11 +133,11 @@ unsafe fn ga_concat_shorten_esc(gap: &mut Vec<u8>, str: *const c_char) {
 // The failure message
 // ---------------------------------------------------------------------------
 
-/// Prefix `gap` with the caller's own message, when they gave one.
+/// Prefix `message` with the caller's own, when they gave one.
 ///
 /// An empty string counts as no message, which is what lets every
 /// `assert_*()`'s optional `msg` argument be passed through unconditionally.
-fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
+fn append_opt_msg(message: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
     let Some(msg) = opt_msg_tv else {
         return;
     };
@@ -173,112 +145,98 @@ fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
     if blank {
         return;
     }
-    // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
-    let tofree = encode_tv2echo(msg).into_raw();
-    unsafe { ga_concat_cstr(gap, tofree) };
-    unsafe { xfree(tofree.cast()) };
-    ga_concat_lit(gap, c": ");
-}
-
-/// Whether `tv` holds a non-null dictionary.
-fn is_dict(tv: &TypVal) -> bool {
-    tv.v_type() == VAR_DICT && !tv.dict_or_null().is_null()
+    message.extend_from_slice(encode_tv2echo(msg).as_bytes());
+    push_lit(message, c": ");
 }
 
 /// Copies of both dictionaries holding only the entries that differ, and how
-/// many equal ones were dropped.
+/// many equal ones were dropped. `None` unless both hold a dictionary.
 ///
 /// Comparing two large dictionaries is unreadable unless the equal items go
 /// away. The two answers own their dictionaries.
 ///
-/// # Safety
-/// Both typvals hold non-null dictionaries.
-unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, TypVal, c_int) {
-    // SAFETY: the caller's dictionaries. The two walks only ever add to the
-    // *new* dictionaries, so neither hashtab is rehashed under its own walk.
-    let (exp_d, got_d) = (exp_tv.dict_or_null(), got_tv.dict_or_null());
-    let (exp_held, got_held) = (tv_dict_alloc(), tv_dict_alloc());
-    let (exp, got) = (exp_held.as_ptr(), got_held.as_ptr());
+/// The keys are listed first and every entry is found again by key: copying
+/// a value that is one of these dictionaries counts a reference on it, which
+/// must not happen while its slots are being walked.
+fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> Option<(TypVal, TypVal, usize)> {
+    let (exp_dict, got_dict) = (exp_tv.dict_ref()?, got_tv.dict_ref()?);
+    let exp_keys: Vec<Vec<u8>> = exp_dict.items().map(|item| item.key().to_vec()).collect();
+    let got_keys: Vec<Vec<u8>> = got_dict.items().map(|item| item.key().to_vec()).collect();
+    let mut exp_pruned = TypVal::dict(Some(tv_dict_alloc()));
+    let mut got_pruned = TypVal::dict(Some(tv_dict_alloc()));
+    fn find<'a>(tv: &'a TypVal, key: &[u8]) -> Option<&'a TypVal> {
+        tv.dict_ref()
+            .and_then(|dict| dict.find(key))
+            .map(|item| &item.di_tv)
+    }
+    let add = |pruned: &mut TypVal, key: &[u8], value: &TypVal| {
+        if let Some(dict) = pruned.dict_mut() {
+            let _ = dict.add_tv(key, value);
+        }
+    };
 
     let mut omitted = 0;
-    // SAFETY: the caller's two live dictionaries.
-    let (exp_ref, got_ref) = unsafe { (&*exp_d, &*got_d) };
-    // The keys are taken first: copying a value that is one of these
-    // dictionaries counts a reference on it, which must not happen under
-    // a walk of its slots.
-    let exp_keys: Vec<Vec<u8>> = exp_ref.items().map(|item| item.key().to_vec()).collect();
     for key in &exp_keys {
-        let key = key.as_slice();
-        let item = exp_ref.find(key).expect("a key just listed");
-        let item2 = got_ref.find(key);
-        if item2.is_some_and(|other| tv_equal(&item.di_tv, &other.di_tv, false)) {
+        let Some(expected) = find(exp_tv, key) else {
+            continue;
+        };
+        let got = find(got_tv, key);
+        if got.is_some_and(|got| tv_equal(expected, got, false)) {
             omitted += 1;
             continue;
         }
         // Absent from the actual value, or present with a different one.
-        // SAFETY: the two dictionaries this call owns.
-        unsafe {
-            let _ = (*exp).add_tv(key, &item.di_tv);
-            if let Some(other) = item2 {
-                let _ = (*got).add_tv(key, &other.di_tv);
-            }
+        add(&mut exp_pruned, key, expected);
+        if let Some(got) = find(got_tv, key) {
+            add(&mut got_pruned, key, got);
         }
     }
-
     // Entries only the actual value has.
-    let got_keys: Vec<Vec<u8>> = got_ref.items().map(|item| item.key().to_vec()).collect();
     for key in &got_keys {
-        let key = key.as_slice();
-        if !exp_ref.has_key(key) {
-            let item = got_ref.find(key).expect("a key just listed");
-            // SAFETY: the dictionary this call owns.
-            let _ = unsafe { (*got).add_tv(key, &item.di_tv) };
+        if find(exp_tv, key).is_none()
+            && let Some(got) = find(got_tv, key)
+        {
+            add(&mut got_pruned, key, got);
         }
     }
-    (
-        TypVal::dict(Some(exp_held)),
-        TypVal::dict(Some(got_held)),
-        omitted,
-    )
+    Some((exp_pruned, got_pruned, omitted))
 }
 
-/// Fill `gap` with what was expected and what arrived.
+/// What a failed check expected: text already formatted (`True`, a range,
+/// the pattern `assert_fails()` was given), or a value to encode.
+#[derive(Clone, Copy)]
+pub(super) enum Expected<'a> {
+    Text(&'a [u8]),
+    Value(&'a TypVal),
+}
+
+/// Fill `message` with what was expected and what arrived.
 ///
-/// The expectation is either `exp_str` (already formatted, e.g. `"True"` or a
-/// range) or `exp_tv` (encoded here). `ASSERT_NOTEQUAL` prints no "but got"
-/// half — for it the actual value *is* the expected one.
-///
-/// # Safety
-/// `gap` is open; the typvals are live, and `exp_tv`/`got_tv` may be null only
-/// when `exp_str` is not.
-pub(super) unsafe fn fill_assert_error(
-    gap: &mut Vec<u8>,
+/// `ASSERT_NOTEQUAL` prints no "but got" half — for it the actual value
+/// *is* the expected one.
+pub(super) fn fill_assert_error(
+    message: &mut Vec<u8>,
     opt_msg_tv: Option<&TypVal>,
-    exp_str: *const c_char,
-    exp_tv: Option<&TypVal>,
+    expected: Expected<'_>,
     got_tv: &TypVal,
     atype: AssertType,
 ) {
-    let mut omitted = 0;
     // Two dictionaries read better with their equal entries taken out; the
     // pruned copies belong to this frame and go with it.
-    let pruned = (exp_str.is_null()
-        && atype != AssertType::NotEqual
-        && exp_tv.is_some_and(is_dict)
-        && is_dict(got_tv))
-    // SAFETY: both hold non-null dictionaries.
-    .then(|| unsafe { prune_equal_dict_items(exp_tv.expect("a dict is a value"), got_tv) });
-    let (exp_tv, got_tv) = match &pruned {
-        Some((exp, got, n)) => {
-            omitted = *n;
-            (Some(exp), got)
+    let pruned = match expected {
+        Expected::Value(exp_tv) if atype != AssertType::NotEqual => {
+            prune_equal_dict_items(exp_tv, got_tv)
         }
-        None => (exp_tv, got_tv),
+        _ => None,
+    };
+    let (expected, got_tv, omitted) = match &pruned {
+        Some((exp, got, omitted)) => (Expected::Value(exp), got, *omitted),
+        None => (expected, got_tv, 0),
     };
 
-    append_opt_msg(gap, opt_msg_tv);
-    ga_concat_lit(
-        gap,
+    append_opt_msg(message, opt_msg_tv);
+    push_lit(
+        message,
         match atype {
             AssertType::Match | AssertType::NotMatch => c"Pattern ",
             AssertType::NotEqual => c"Expected not equal to ",
@@ -286,39 +244,35 @@ pub(super) unsafe fn fill_assert_error(
         },
     );
 
-    if exp_str.is_null() {
-        let expected = exp_tv.expect("no `exp_str` means a value");
-        let tofree = encode_tv2string(expected).into_raw();
-        unsafe { ga_concat_shorten_esc(gap, tofree) };
-        unsafe { xfree(tofree.cast()) };
-    } else {
-        let quoted = atype == AssertType::Fails;
-        if quoted {
-            ga_concat_lit(gap, c"'");
-        }
-        unsafe { ga_concat_shorten_esc(gap, exp_str) };
-        if quoted {
-            ga_concat_lit(gap, c"'");
+    match expected {
+        Expected::Value(exp_tv) => push_shortened(message, encode_tv2string(exp_tv).as_bytes()),
+        Expected::Text(text) => {
+            let quoted = atype == AssertType::Fails;
+            if quoted {
+                push_lit(message, c"'");
+            }
+            push_shortened(message, text);
+            if quoted {
+                push_lit(message, c"'");
+            }
         }
     }
 
     if atype != AssertType::NotEqual {
-        ga_concat_lit(
-            gap,
+        push_lit(
+            message,
             match atype {
                 AssertType::Match => c" does not match ",
                 AssertType::NotMatch => c" does match ",
                 _ => c" but got ",
             },
         );
-        let tofree = encode_tv2string(got_tv).into_raw();
-        unsafe { ga_concat_shorten_esc(gap, tofree) };
-        unsafe { xfree(tofree.cast()) };
+        push_shortened(message, encode_tv2string(got_tv).as_bytes());
 
         if omitted != 0 {
             let plural = if omitted == 1 { "" } else { "s" };
             let text = format!(" - {omitted} equal item{plural} omitted");
-            gap.extend_from_slice(text.as_bytes());
+            message.extend_from_slice(text.as_bytes());
         }
     }
 }
