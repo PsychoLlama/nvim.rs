@@ -31,6 +31,8 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+#[cfg(test)]
+mod tests;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int32, skipwhite};
 use crate::cstr;

@@ -16,13 +16,12 @@
 use crate::ex_docmd::ex_msg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
 use crate::autocmd::{apply_autocmds, getnextac, has_event};
 
-use crate::cstr;
 use crate::debugger::dbg_check_breakpoint;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::userfunc::{current_func_returned, do_return, get_func_line};
@@ -58,8 +57,7 @@ use crate::getchar::state::{got_int, pending_end_reg_executing, reg_executing};
 use crate::guard::Depth;
 use crate::guard::sandbox;
 use crate::input::ask_yesno;
-use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
-use crate::memory::{xstrlcat, xstrlcpy};
+use crate::mbyte::{cluster_len, head_off};
 use crate::message::state::{did_emsg, msg_silent};
 use crate::message::{
     e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang, e_norange, e_sandbox,
@@ -74,15 +72,12 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec_cookie, script_line_exec};
 use crate::runtime::{do_finish, getsourceline, source_finished};
-use crate::types::{
-    CmdAddr, CmdLine, CondStack, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, NUL, size_t,
-};
+use crate::types::{CmdAddr, CmdLine, CondStack, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, size_t};
 use crate::winlayer::{Buf, Live, Win};
 
 /// The conditional stack the command is running under, whose caller has
 /// promised it outlives the value.
 type Cs = Live<CondStack>;
-use ::libc::strcpy;
 
 /// A zeroed `ExArg` with the empty range the parsers start from.
 ///
@@ -810,39 +805,40 @@ pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
 /// would otherwise be invisible in the report, and it is a common paste
 /// accident.
 pub(crate) fn append_command(msg: &CStr, cmd: &[u8]) -> CString {
-    // The walk below still steps a `char *`, one character at a time; the
-    // slice bounds it, and a NUL inside it ends it as the pointer form's
-    // terminator did.
-    let cmd = cmd.as_ptr().cast::<c_char>();
-    let mut buf = [0 as c_char; IOSIZE as usize];
-    let iobuff = buf.as_mut_ptr();
-    unsafe { xstrlcpy(iobuff, msg.as_ptr(), IOSIZE as size_t) };
-    let len = len_of(iobuff);
-    if len > (IOSIZE - 100) as size_t {
-        let mut d = unsafe { iobuff.add(IOSIZE as usize - 100) };
-        d = unsafe { d.sub(utf_head_off(iobuff, d) as usize) };
-        unsafe { strcpy(d, c"...".as_ptr() as *mut c_char) };
+    // Upstream builds this in `IObuff`: `IOSIZE` bytes, the NUL included.
+    let room = IOSIZE as usize;
+    let mut out = msg.to_bytes().to_vec();
+    out.truncate(room - 1);
+    if out.len() > room - 100 {
+        // Kept with its terminator: `head_off` decodes up to it.
+        out.push(0);
+        let cut = room - 100 - head_off(&out, room - 100);
+        out.truncate(cut);
+        out.extend_from_slice(b"...");
     }
-    unsafe { xstrlcat(iobuff, c": ".as_ptr(), IOSIZE as size_t) };
-
-    let mut s = cmd;
-    let mut d = unsafe { iobuff.add(len_of(iobuff)) };
-    while byte(s) != NUL && unsafe { d.offset_from(iobuff) } + 5 < IOSIZE as isize {
-        if ubyte_at(s, 0) == 0xc2 && ubyte_at(s, 1) == 0xa0 {
-            s = unsafe { s.add(2) };
-            unsafe { strcpy(d, c"<a0>".as_ptr() as *mut c_char) };
-            d = unsafe { d.add(4) };
-        } else {
-            if unsafe { d.offset_from(iobuff) } + unsafe { utfc_ptr2len(s) } as isize + 1
-                >= IOSIZE as isize
-            {
-                break;
-            }
-            unsafe { mb_copy_char(&raw mut s, &raw mut d) };
+    for &b in b": " {
+        if out.len() < room - 1 {
+            out.push(b);
         }
     }
-    unsafe { *d = NUL as c_char };
-    cstr::in_chars(&buf).to_owned()
+
+    // A NUL inside the command ends it, as the terminator did upstream.
+    let cmd = &cmd[..cmd.iter().position(|&b| b == 0).unwrap_or(cmd.len())];
+    let mut at = 0;
+    while at < cmd.len() && out.len() + 5 < room {
+        if cmd[at] == 0xc2 && cmd.get(at + 1) == Some(&0xa0) {
+            at += 2;
+            out.extend_from_slice(b"<a0>");
+        } else {
+            let len = cluster_len(&cmd[at..]);
+            if out.len() + len + 1 >= room {
+                break;
+            }
+            out.extend_from_slice(&cmd[at..at + len]);
+            at += len;
+        }
+    }
+    CString::new(out).expect("no NUL is copied in")
 }
 
 /// What [`ex_ni`] and [`ex_script_ni`] report.
@@ -885,23 +881,4 @@ fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) ->
 fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     crate::ex_docmd::address::invalid_range(excmd)
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
-}
-
-/// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
-fn ubyte_at(p: *const c_char, i: isize) -> u8 {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as u8 }
-}
-
-/// The length of the string at `s` -- `strlen`, as the slice's own `len()`
-/// -- as checked code.
-fn len_of(s: *const c_char) -> usize {
-    // SAFETY: a NUL-terminated string.
-    unsafe { cstr::bytes_at(s) }.len()
 }

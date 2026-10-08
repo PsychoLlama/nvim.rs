@@ -2522,6 +2522,297 @@ section('s1-editor', function()
   command('set cmdheight&')
 end)
 
+section('s1-condstack', function()
+  -- The condition stack, the exceptions and the debugger (ex_eval/,
+  -- debugger/): try/catch/finally with a throw, an error and an interrupt
+  -- in each clause, :return/:break/:continue/:finish through a :finally,
+  -- the values of v:exception/v:throwpoint, what 'verbose' reports, the
+  -- errors each command gives out of place, breakpoints of each kind, and
+  -- :debug driven by typeahead through >step/>next/>bt/>up/>down/>frame/
+  -- >finish/>cont.  Each block runs through execute() so its output is
+  -- reported too.
+  -- `keys` is typeahead for a debug prompt, fed last: an API command
+  -- run after it would take it.
+  local function block(label, lines, keys)
+    local quoted = {}
+    for _, line in ipairs(lines) do
+      quoted[#quoted + 1] = "'" .. line:gsub("'", "''") .. "'"
+    end
+    command('let g:cs_log = []')
+    command("let v:errmsg = ''")
+    if keys then
+      vim.fn.feedkeys(keys, 't')
+    end
+    veval('condstack ' .. label .. ' out', 'string(execute([' .. table.concat(quoted, ', ') .. ']))')
+    veval('condstack ' .. label .. ' log', 'string(g:cs_log)')
+    veval('condstack ' .. label .. ' err', 'v:errmsg')
+    if keys then
+      -- What the prompt did not read goes, so the next case starts clean.
+      command('while getchar(0) | endwhile')
+    end
+  end
+  local function exec(text)
+    local ok, res = pcall(vim.api.nvim_exec2, text, {})
+    if not ok then
+      emit('condstack exec !', esc(errtext(res)))
+    end
+  end
+  exec([[
+function! CsThrow(what)
+  call add(g:cs_log, 'throw ' . a:what)
+  throw a:what
+endfunction
+function! CsNested(where)
+  try
+    try
+      if a:where != 'none' | call CsThrow('t') | endif
+      call add(g:cs_log, 'try done')
+    catch /t/
+      call add(g:cs_log, 'catch ' . v:exception)
+      if a:where == 'catch' | call CsThrow('c') | endif
+    finally
+      call add(g:cs_log, 'finally [' . v:exception . ']')
+      if a:where == 'finally' | call CsThrow('f') | endif
+      if a:where == 'error' | call CsNoSuch() | endif
+      if a:where == 'interrupt' | call interrupt() | endif
+    endtry
+  catch
+    call add(g:cs_log, 'outer ' . v:exception . ' @ ' . v:throwpoint)
+  endtry
+  return 'done ' . a:where
+endfunction
+function! CsReturn(n)
+  for i in range(a:n)
+    while 1
+      try
+        if i == 1 && a:n == 2 | return [i, 'r'] | endif
+        if i == 2 | break | endif
+        if i == 3 | continue | endif
+        break
+      finally
+        call add(g:cs_log, 'fin ' . i)
+        if i == 3 | break | endif
+      endtry
+    endwhile
+  endfor
+  return 'fell through'
+endfunction
+function! CsOverride()
+  try
+    return 'a'
+  finally
+    try
+      return 'b'
+    finally
+      call add(g:cs_log, 'inner')
+    endtry
+  endtry
+endfunction
+function! CsDbgInner(x)
+  let y = a:x + 1
+  return y * 2
+endfunction
+function! CsDbgOuter()
+  let a = 1
+  let b = CsDbgInner(a)
+  let c = b + 1
+  return c
+endfunction
+]])
+  for _, where in ipairs({ 'none', 'try', 'catch', 'finally', 'error', 'interrupt' }) do
+    block('nested ' .. where, { "call add(g:cs_log, CsNested('" .. where .. "'))" })
+  end
+  for n = 1, 5 do
+    block('return ' .. n, { 'call add(g:cs_log, CsReturn(' .. n .. '))' })
+  end
+  block('override', { 'call add(g:cs_log, CsOverride())' })
+  block('rethrow', {
+    'try',
+    '  try',
+    "    throw 'x'",
+    '  catch',
+    '    throw v:exception . v:exception',
+    '  endtry',
+    'catch',
+    '  call add(g:cs_log, v:exception)',
+    'endtry',
+  })
+  block('nonstring', {
+    "for v in ['42', '-1.5', '[1]', '{}', 'v:false', 'v:null', 'function(\"tr\")', '0z01']",
+    '  try',
+    "    execute 'throw ' . v",
+    '  catch',
+    "    call add(g:cs_log, v . ' -> ' . v:exception)",
+    '  endtry',
+    'endfor',
+  })
+  block('vim prefix', {
+    "for v in ['Vim', 'Vim:x', 'Vim(x)', 'Vimx', ' Vim:x']",
+    '  try',
+    '    throw v',
+    '  catch',
+    '    call add(g:cs_log, v:exception)',
+    '  endtry',
+    'endfor',
+  })
+  block('verbose', {
+    'set verbose=14',
+    'try',
+    '  try',
+    "    throw 'v1'",
+    '  finally',
+    "    call add(g:cs_log, 'f')",
+    '  endtry',
+    'catch',
+    'endtry',
+    'for i in [1, 2]',
+    '  try',
+    '    if i == 1 | continue | endif',
+    '    break',
+    '  finally',
+    '  endtry',
+    'endfor',
+    'call CsReturn(2)',
+    'set verbose=0',
+  })
+  block('loops', {
+    'let l = [1, 2, 3]',
+    'for x in l',
+    '  if x == 1 | call add(l, 4) | endif',
+    '  if x == 2 | call remove(l, 0) | endif',
+    '  call add(g:cs_log, x)',
+    'endfor',
+    'for [a, b; c] in [[1, 2], [3, 4, 5]]',
+    '  call add(g:cs_log, [a, b, c])',
+    'endfor',
+    "for ch in 'añ€'",
+    '  call add(g:cs_log, ch)',
+    'endfor',
+    'for n in 0z0a0b',
+    '  call add(g:cs_log, n)',
+    'endfor',
+    'let i = 0',
+    'while i < 5',
+    '  let i += 1',
+    '  if i % 2 | continue | endif',
+    '  call add(g:cs_log, i)',
+    'endwhile',
+  })
+  for _, cmds in ipairs({
+    { 'endwhile' },
+    { 'endfor' },
+    { 'endif' },
+    { 'else' },
+    { 'elseif 1' },
+    { 'if 1', 'else', 'else', 'endif' },
+    { 'if 1', 'else', 'elseif 1', 'endif' },
+    { 'continue' },
+    { 'break' },
+    { 'catch' },
+    { 'finally' },
+    { 'endtry' },
+    { 'try', 'finally', 'catch', 'endtry' },
+    { 'try', 'finally', 'finally', 'endtry' },
+    { 'try', 'while 0', 'endtry' },
+    { 'try', 'if 1', 'finally', 'endtry' },
+    { 'for x in []', 'endwhile' },
+    { 'let i = 0', 'while i < 1', 'let i += 1', 'endfor' },
+    { 'throw' },
+    { "throw 'uncaught'" },
+    { 'endfunction' },
+    { 'return' },
+    { 'for x 1', 'endfor' },
+    { 'for x in 1', 'endfor' },
+  }) do
+    block('error ' .. table.concat(cmds, ' | '), cmds)
+  end
+  exec([[
+function! CsOpen1()
+  if 1
+endfunction
+function! CsOpen2()
+  while 0
+endfunction
+function! CsOpen3()
+  try
+endfunction
+function! CsOpen4()
+  for x in []
+endfunction
+]])
+  for n = 1, 4 do
+    block('open ' .. n, {
+      'try',
+      '  call CsOpen' .. n .. '()',
+      'catch',
+      '  call add(g:cs_log, [v:exception, v:throwpoint])',
+      'endtry',
+    })
+  end
+  -- Breakpoints of each kind, listed, hit and deleted.
+  command('breakdel *')
+  block('breaks', {
+    'breakadd func CsDbgInner',
+    'breakadd func 3 CsDbgOuter',
+    'breakadd file /cs/none.vim',
+    'breakadd file 4 *.cs',
+    'let g:cs_w = 1',
+    'breakadd expr g:cs_w',
+    'breaklist',
+    'breakdel func CsDbgInner',
+    'breakdel expr g:cs_w',
+    'breaklist',
+    'breakdel *',
+    'breaklist',
+    'silent! breakadd',
+    'silent! breakadd func F()',
+    'silent! breakdel 99999',
+    'call add(g:cs_log, v:errmsg)',
+  })
+  -- :debug, stepped through by typeahead.  Each line ends with a CR; a
+  -- `cont` at the end gets out whatever happened before.
+  -- `:debuggreedy` makes the prompt read the typeahead rather than set it
+  -- aside for the user.
+  command('debuggreedy')
+  local debugs = {
+    { 'step', 'step\rstep\rstep\rbt\rup\rbt\rdown\rframe 1\rframe\rframe -1\rcont\r' },
+    { 'next', 'next\rnext\recho "typed"\rnext\rcont\r' },
+    { 'finish', 'step\rstep\rstep\rfinish\rbt\rcont\r' },
+    { 'quit', 'step\rquit\r' },
+    { 'interrupt', 'interrupt\rcont\r' },
+    { 'blank', 'step\r\r\r\rcont\r' },
+    { 'where', 'step\rstep\rwhere\rup\rup\rup\rdown\rdown\rdown\rcont\r' },
+  }
+  for _, case in ipairs(debugs) do
+    block('debug ' .. case[1], {
+      'try',
+      '  debug call add(g:cs_log, CsDbgOuter())',
+      'catch',
+      '  call add(g:cs_log, v:exception)',
+      'endtry',
+    }, case[2])
+  end
+  -- A breakpoint hit while running, and a watch expression that moves.
+  block('breakpoint hit', {
+    'breakadd func 2 CsDbgOuter',
+    'call add(g:cs_log, CsDbgOuter())',
+    'breakdel *',
+  }, 'bt\rcont\r')
+  block('watch hit', {
+    'let g:cs_w = 1',
+    'breakadd expr g:cs_w',
+    'let g:cs_w = 2',
+    'call add(g:cs_log, g:cs_w)',
+    'breakdel *',
+  }, 'cont\r')
+  command('0debuggreedy')
+  command('breakdel *')
+  command('silent! unlet g:cs_w g:cs_log')
+  for _, name in ipairs({ 'CsThrow', 'CsNested', 'CsReturn', 'CsOverride', 'CsDbgInner', 'CsDbgOuter', 'CsOpen1', 'CsOpen2', 'CsOpen3', 'CsOpen4' }) do
+    command('silent! delfunction ' .. name)
+  end
+end)
+
 section('s4-termopen', function()
   -- The second argument must be a dictionary or absent.
   veval('termopen baddict', "termopen('x', 'notadict')")

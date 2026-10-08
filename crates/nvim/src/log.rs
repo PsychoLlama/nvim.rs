@@ -365,8 +365,10 @@ pub fn logmsg_line(
     text: impl FnOnce() -> String,
 ) -> bool {
     if !DID_LOG_INIT.get() {
-        // set_init_1 may try logging before we are ready (#10183).
-        g_stats.with_mut(|s| s.log_skip += 1);
+        // set_init_1 may try logging before we are ready (#10183). A
+        // process that never brings the log up (a lib test) counts past
+        // the 16 bits upstream gives the counter, which wraps there.
+        g_stats.with_mut(|s| s.log_skip = s.log_skip.wrapping_add(1));
         return false;
     }
     if log_level < g_min_log_level.get() {
@@ -378,7 +380,7 @@ pub fn logmsg_line(
             let who = msg_cstr(func_name.or(context).unwrap_or(c""));
             msg_schedule_semsg!("E5430: {who}:{}: recursive log!", line_num);
         }
-        g_stats.with_mut(|s| s.log_skip += 1);
+        g_stats.with_mut(|s| s.log_skip = s.log_skip.wrapping_add(1));
         return false;
     };
 

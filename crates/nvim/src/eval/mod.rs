@@ -18,6 +18,8 @@ pub mod fs;
 pub mod funcs;
 pub mod gc;
 pub mod list;
+#[cfg(test)]
+pub(crate) mod test_fixture;
 pub mod typval;
 pub(crate) mod typval_encode;
 pub mod userfunc;

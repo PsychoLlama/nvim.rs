@@ -51,6 +51,8 @@
 
 mod exception;
 pub(crate) mod state;
+#[cfg(test)]
+mod tests;
 mod trycmd;
 
 use crate::debugger::dbg_check_skipped;
