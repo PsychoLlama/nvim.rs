@@ -307,6 +307,11 @@ pub fn vim_regexec_nl(matches: &mut RegMatch, line: &CStr, col: usize) -> bool {
 /// `rmp` must point at a live `RegMMatch`, unaliased for the call. `tm` must
 /// point at a live `ProfTime`, unaliased for the call. `timed_out` must point
 /// at a writable `int` the caller owns.
+// Kept out of line: inlined into `searchit` and `next_search_hl` (as the
+// optimizer chose on its own once unrelated code moved), the body below
+// leaves its closure as a call of its own and costs those loops ~0.8 % of
+// the memline benchmark's instructions and ~1.3 % of its time.
+#[inline(never)]
 pub unsafe fn vim_regexec_multi(
     rmp: *mut RegMMatch,
     win: Option<Win>,
