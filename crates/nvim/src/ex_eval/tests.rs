@@ -620,10 +620,6 @@ fn each_command_out_of_place_gives_its_error() {
 }
 
 #[test]
-#[cfg_attr(
-    miri,
-    ignore = "a function body is told by its line getter's address, which Miri does not keep unique"
-)]
 fn a_function_that_ends_inside_a_conditional_reports_it() {
     let fx = Fixture::new();
     for (lines, err) in [
