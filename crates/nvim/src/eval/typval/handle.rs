@@ -153,13 +153,24 @@ impl ListRef {
         // live; exclusivity is the caller's promise above.
         unsafe { &mut *self.0.as_ptr() }
     }
+
+    /// The reference count, through its own bytes only: a clone or
+    /// release must not claim the whole object, which a walk over it
+    /// (a dictionary's inline slots) may be borrowing at the time.
+    #[inline(always)]
+    #[allow(clippy::mut_from_ref)]
+    fn count(&self) -> &mut Refcount {
+        // SAFETY: the handle holds a reference, so the object is live;
+        // the borrow covers the count alone and ends with the statement.
+        unsafe { &mut (*self.0.as_ptr()).lv_refcount }
+    }
 }
 
 impl Clone for ListRef {
     /// One more owner of the same object.
     #[inline(always)]
     fn clone(&self) -> ListRef {
-        self.edit().lv_refcount.retain();
+        self.count().retain();
         ListRef(self.0)
     }
 }
@@ -168,7 +179,7 @@ impl Drop for ListRef {
     /// Give the reference back, freeing the object with the last one.
     #[inline(always)]
     fn drop(&mut self) {
-        if self.edit().lv_refcount.release() <= 0 {
+        if self.count().release() <= 0 {
             free_list(self);
         }
     }
@@ -358,12 +369,21 @@ impl DictRef {
         // live; exclusivity is the caller's promise above.
         unsafe { &mut *self.0.as_ptr() }
     }
+
+    /// As [`ListRef::count`].
+    #[inline(always)]
+    #[allow(clippy::mut_from_ref)]
+    fn count(&self) -> &mut Refcount {
+        // SAFETY: the handle holds a reference, so the object is live;
+        // the borrow covers the count alone and ends with the statement.
+        unsafe { &mut (*self.0.as_ptr()).dv_refcount }
+    }
 }
 
 impl Clone for DictRef {
     #[inline(always)]
     fn clone(&self) -> DictRef {
-        self.edit().dv_refcount.retain();
+        self.count().retain();
         DictRef(self.0)
     }
 }
@@ -371,7 +391,7 @@ impl Clone for DictRef {
 impl Drop for DictRef {
     #[inline(always)]
     fn drop(&mut self) {
-        if self.edit().dv_refcount.release() <= 0 {
+        if self.count().release() <= 0 {
             free_dict(self);
         }
     }
@@ -479,12 +499,21 @@ impl BlobRef {
         // live; exclusivity is the caller's promise above.
         unsafe { &mut *self.0.as_ptr() }
     }
+
+    /// As [`ListRef::count`].
+    #[inline(always)]
+    #[allow(clippy::mut_from_ref)]
+    fn count(&self) -> &mut Refcount {
+        // SAFETY: the handle holds a reference, so the object is live;
+        // the borrow covers the count alone and ends with the statement.
+        unsafe { &mut (*self.0.as_ptr()).bv_refcount }
+    }
 }
 
 impl Clone for BlobRef {
     #[inline(always)]
     fn clone(&self) -> BlobRef {
-        self.edit().bv_refcount.retain();
+        self.count().retain();
         BlobRef(self.0)
     }
 }
@@ -493,7 +522,7 @@ impl Drop for BlobRef {
     /// Give the reference back; the last one frees the blob.
     #[inline(always)]
     fn drop(&mut self) {
-        if self.edit().bv_refcount.release() <= 0 {
+        if self.count().release() <= 0 {
             // SAFETY: the last reference to the `Box` `tv_blob_alloc` leaked.
             drop(unsafe { Box::from_raw(self.as_ptr()) });
         }
@@ -566,12 +595,21 @@ impl PartialRef {
         // live; exclusivity is the caller's promise above.
         unsafe { &mut *self.0.as_ptr() }
     }
+
+    /// As [`ListRef::count`].
+    #[inline(always)]
+    #[allow(clippy::mut_from_ref)]
+    fn count(&self) -> &mut Refcount {
+        // SAFETY: the handle holds a reference, so the object is live;
+        // the borrow covers the count alone and ends with the statement.
+        unsafe { &mut (*self.0.as_ptr()).pt_refcount }
+    }
 }
 
 impl Clone for PartialRef {
     #[inline(always)]
     fn clone(&self) -> PartialRef {
-        self.edit().pt_refcount.retain();
+        self.count().retain();
         PartialRef(self.0)
     }
 }
@@ -579,7 +617,7 @@ impl Clone for PartialRef {
 impl Drop for PartialRef {
     /// Give the reference back; the last one frees the partial.
     fn drop(&mut self) {
-        if self.edit().pt_refcount.release() <= 0 {
+        if self.count().release() <= 0 {
             // SAFETY: the last reference to the `Box` `new` leaked.
             partial_free(*unsafe { Box::from_raw(self.as_ptr()) });
         }

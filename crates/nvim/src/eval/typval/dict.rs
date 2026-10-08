@@ -708,6 +708,28 @@ mod tests {
         dict_clear(&copy);
     }
 
+    /// Copying a value out of a dictionary while walking it, where the
+    /// value *is* that dictionary: the copy takes a reference, and taking
+    /// one must touch the count alone, not claim the whole dictionary --
+    /// the walk is reading its slots, which a small table keeps inline.
+    #[test]
+    fn a_walk_may_copy_out_the_dict_it_walks() {
+        let _held = editor_state_lock();
+        let mut d = dict_of(&["n"]);
+        let held = d.clone();
+        d.add_dict(b"self", Some(held)).expect("a key used once");
+
+        let copies: Vec<TypVal> = d.items().map(|di| di.di_tv.clone()).collect();
+        assert_eq!(copies.len(), 2);
+        assert_eq!(refs(&d), 3, "the handle, the entry and the copy");
+        drop(copies);
+        // A release mid-walk is the same touch the other way.
+        d.items().for_each(|di| drop(di.di_tv.clone()));
+        assert_eq!(refs(&d), 2);
+
+        dict_clear(&d);
+    }
+
     /// A walk may remove the entry it is standing on, but only with the
     /// table locked: an unlocked removal may rehash and renumber the slots
     /// the cursor is counting through.
