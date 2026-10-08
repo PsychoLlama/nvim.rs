@@ -74,7 +74,9 @@ use crate::runtime::{
 
 use crate::memory::XString;
 use crate::types::ui::kUICmdline;
-use crate::types::{CmdLine, CondId, Failed, GArray, LineGetter, LineNr, OptInt, size_t};
+use crate::types::{
+    CmdLine, CondId, CondSummary, Failed, GArray, LineGetter, LineNr, OptInt, size_t,
+};
 use crate::ui::ui_has;
 
 /// Free every line a `:while`/`:for` body stored, and the array holding
@@ -276,7 +278,8 @@ fn ask_for_line(
 }
 
 /// One pass of the loop bookkeeping, after a command has run inside a
-/// `:while` or `:for`. `:endwhile`, `:endfor` and `:continue` all land here:
+/// `:while` or `:for` (outside one it does nothing). `:endwhile`, `:endfor`
+/// and `:continue` all land here:
 /// commands that ran jump back to the `:while` or `:for`; ones that were
 /// skipped have had the loop level decremented already.
 fn advance_loop(
@@ -286,11 +289,14 @@ fn advance_loop(
     current_line: &mut c_int,
     current_line_before: c_int,
 ) {
-    *current_line += 1;
-    // What the loop bookkeeping decided: `None` to carry on, or whether to
-    // jump back to the innermost loop's first line (`Some(Some(line))`) or
-    // rewind the loop that just ended (`Some(None)`).
+    // What the loop bookkeeping decided: nothing at all outside a loop,
+    // `None` to carry on, or whether to jump back to the innermost loop's
+    // first line (`Some(Some(line))`) or rewind the loop that just ended
+    // (`Some(None)`).
     let decided = cond.with(|cs| {
+        if cs.loop_level <= 0 {
+            return Err(());
+        }
         if !cs
             .loop_flags
             .has(CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP)
@@ -301,7 +307,7 @@ fn advance_loop(
                 let top = cs.top().expect("a loop level is open");
                 cs.line[top] = current_line_before;
             }
-            return None;
+            return Ok(None);
         }
         cs.loop_flags
             .clear(CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP);
@@ -309,7 +315,9 @@ fn advance_loop(
         // Only a `:while` or `:for` level has a usable `line`; taking one
         // from any other kind would make `current_line` point outside the
         // stored lines.
-        let top = cs.top()?;
+        let Some(top) = cs.top() else {
+            return Ok(None);
+        };
         let flags = cs.flags[top];
         if did_emsg.get() == 0
             && !got_int.get()
@@ -319,11 +327,15 @@ fn advance_loop(
             && flags.has(CsFlags::ACTIVE)
         {
             cs.loop_flags |= CsLoopFlags::HAD_LOOP;
-            Some(Some(cs.line[top]))
+            Ok(Some(Some(cs.line[top])))
         } else {
-            Some(None)
+            Ok(Some(None))
         }
     });
+    let Ok(decided) = decided else {
+        return;
+    };
+    *current_line += 1;
     match decided {
         None => {}
         Some(Some(start)) => {
@@ -443,6 +455,10 @@ struct Run {
     /// is storing or replaying, which line is next, and the getter a command
     /// reads further ones through.
     cond_stack: OwnedCondStack,
+    /// What the stack looked like after the last command settled -- all
+    /// that changes it is a command -- so the loop's own questions about it
+    /// are reads of a local.
+    seen: CondSummary,
     lines: GArray,
     current_line: c_int,
     loop_cookie: LoopCookie,
@@ -473,6 +489,7 @@ impl Run {
         unsafe { ga_init(&raw mut lines, size_of::<WhileCmd>() as c_int, 10) };
         Run {
             cond_stack: OwnedCondStack::open(),
+            seen: CondSummary::EMPTY,
             lines,
             current_line: 0,
             // SAFETY: `LoopCookie` is a `repr(C)` aggregate of scalars and
@@ -499,7 +516,9 @@ impl Run {
         // `|`-separated command was stored separately, so an `:endwhile`
         // can jump back to exactly one of them. A *copy*, because the store
         // keeps its line and the command modifies what it is handed.
-        let (loop_level, idx) = self.cond().with(|cs| (cs.loop_level, cs.idx));
+        let CondSummary {
+            loop_level, idx, ..
+        } = self.seen;
         if loop_level > 0 && self.current_line < self.lines.ga_len {
             self.pending = None;
             let Some(Line(line)) = replay_stored_line(source, &self.lines, self.current_line)
@@ -538,8 +557,7 @@ impl Run {
             .pending
             .as_mut()
             .expect("`take_line` leaves a line to run");
-        self.looping =
-            self.cond_stack.id().with(|cs| cs.loop_level > 0) || has_loop_cmd(pending.tail(0));
+        self.looping = self.seen.loop_level > 0 || has_loop_cmd(pending.tail(0));
         let line = pending.ptr_at(0);
         self.line_before = 0;
         if !self.looping {
@@ -570,9 +588,9 @@ impl Run {
         };
         let recursing = Depth::of(&RECURSIVE);
         let line = self.pending.take().expect("`take_line` leaves a line");
-        // SAFETY: the line source is the one
-        // `command_source` chose.
-        let line = unsafe { do_one_cmd(line, flags, self.cond(), cmd_getline, cmd_cookie) };
+        let (cond, inactive) = (self.cond_stack.id(), self.seen.in_inactive);
+        // SAFETY: the line source is the one `command_source` chose.
+        let line = unsafe { do_one_cmd(line, flags, cond, inactive, cmd_getline, cmd_cookie) };
         drop(recursing);
 
         if self.looping {
@@ -600,26 +618,24 @@ impl Run {
         }
     }
 
-    /// The condition stack this run opened.
-    fn cond(&self) -> CondId {
-        self.cond_stack.id()
-    }
-
     /// What the conditional stack decides once the command has run.
     fn settle_conditionals(&mut self, source: &Source) {
-        let cond = self.cond();
-        if cond.with(|cs| cs.loop_level > 0) {
-            advance_loop(
-                source,
-                cond,
-                &self.lines,
-                &mut self.current_line,
-                self.line_before,
-            );
-        }
+        let (cond, before) = (self.cond_stack.id(), self.line_before);
+        advance_loop(source, cond, &self.lines, &mut self.current_line, before);
+
+        // What the stack says now, in one look: what a `:finally` that just
+        // ran made pending, and what the loop asks until the next command.
+        let (finally, seen) = cond.with(|cs| {
+            let finally = cs.loop_flags.has(CsLoopFlags::HAD_FINA);
+            cs.loop_flags.clear(CsLoopFlags::HAD_FINA);
+            let pending = finally.then(|| cs.pending[cs.top().expect("the :try is open")]);
+            (pending, cs.summary())
+        });
+        let try_level = seen.try_level;
+        self.seen = seen;
 
         // Outside every loop, the stored lines are of no further use.
-        if cond.with(|cs| cs.loop_level == 0) {
+        if self.seen.loop_level == 0 {
             if self.lines.ga_len > 0 {
                 // SAFETY: `lines` is this run's own store, `ga_len` long.
                 let body = self.lines.ga_data as *mut WhileCmd;
@@ -634,11 +650,6 @@ impl Run {
         // until the `:endtry`: reset them and mark the level active, so the
         // clause runs at all -- which includes the case where the
         // `:finally` itself noticed a missing `:endif`/`:endwhile`/`:endfor`.
-        let finally = cond.with(|cs| {
-            let finally = cs.loop_flags.has(CsLoopFlags::HAD_FINA);
-            cs.loop_flags.clear(CsLoopFlags::HAD_FINA);
-            finally.then(|| cs.pending[cs.top().expect("the :try is open")])
-        });
         if let Some(pending) = finally {
             let carried = match current_exception.get() {
                 Some(id) if did_throw.get() => PendingValue::Exception(id),
@@ -652,14 +663,15 @@ impl Run {
             did_emsg.set(0);
             got_int.set(false);
             did_throw.set(false);
-            cond.with(|cs| {
+            self.seen.in_inactive = cond.with(|cs| {
                 let top = cs.top().expect("the :try is open");
                 cs.flags[top] |= CsFlags::ACTIVE | CsFlags::FINALLY;
+                cs.innermost_inactive()
             });
         }
 
         // The global `trylevel` is what a *nested* `do_cmdline` reads.
-        trylevel.set(self.initial_trylevel + cond.with(|cs| cs.try_level));
+        trylevel.set(self.initial_trylevel + try_level);
 
         // The outermost try conditional -- across function calls and
         // sourced files -- aborting cancels everything. Leaving it normally
@@ -669,14 +681,17 @@ impl Run {
             force_abort.set(false);
         }
 
-        do_intthrow(cond);
+        // A throw deactivates conditionals.
+        if do_intthrow(cond) {
+            self.seen.in_inactive = cond.with(|cs| cs.innermost_inactive());
+        }
     }
 
     /// Keep going while nothing is aborting (or a try conditional is still
     /// open with finally clauses to run or an interrupt to catch), no error
     /// was reported against a *typed* line, and something is left to run.
     fn keep_going(&self, source: &Source, flags: DoCmdOpts) -> Pass {
-        let (try_level, idx) = self.cond().with(|cs| (cs.try_level, cs.idx));
+        let CondSummary { try_level, idx, .. } = self.seen;
         let aborting_now =
             (got_int.get() || did_emsg.get() != 0 && force_abort.get() || did_throw.get())
                 && try_level == 0;
@@ -701,7 +716,7 @@ impl Run {
         // `:endwhile` and `:endfor` has been passed.
         if self.pending.is_none()
             && !force_abort.get()
-            && self.cond().with(|cs| cs.idx < 0)
+            && self.seen.idx < 0
             && !source.func_aborted()
         {
             did_emsg.set(0);
@@ -778,14 +793,14 @@ impl Run {
         // SAFETY: `lines` is this run's own store.
         unsafe { clear_loop_lines(&raw mut self.lines) };
 
-        let cond = self.cond();
+        let cond = self.cond_stack.id();
         if cond.with(|cs| cs.idx >= 0) {
             unwind_conditionals(source, cond, self.initial_trylevel);
         }
 
         // A missing `:endtry`/`:endwhile`/`:endfor`/`:endif` reported above
         // becomes an exception now, after the stack has been rewound.
-        do_errthrow(Some(cond), source.is_func().then_some(c"endfunction"));
+        do_errthrow(Some(cond), || source.is_func().then_some(c"endfunction"));
 
         if trylevel.get() == 0 {
             if did_throw.get() {
@@ -888,7 +903,7 @@ pub unsafe fn do_cmdline(
         // No command name: this is not an error of any one command, and
         // the throw goes through an empty stack of its own.
         let none = OwnedCondStack::open();
-        do_errthrow(Some(none.id()), None);
+        do_errthrow(Some(none.id()), || None);
         drop(none);
         pop_msg_list();
         return Err(Failed);

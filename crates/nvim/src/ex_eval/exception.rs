@@ -229,9 +229,10 @@ pub(crate) fn pop_msg_list() {
 
 /// Throw what [`cause_errthrow`] collected as an error exception, through
 /// `cond`. With no stack the throw waits until `do_cmdline` returns -- see
-/// `do_one_cmd`. `cmdname` is the failing command's, for the `Vim(cmd):`
-/// prefix.
-pub(crate) fn do_errthrow(cond: Option<CondId>, cmdname: Option<&CStr>) {
+/// `do_one_cmd`. `cmdname` answers the failing command's name, for the
+/// `Vim(cmd):` prefix; it is asked only when there is something to throw,
+/// which after nearly every command there is not.
+pub(crate) fn do_errthrow(cond: Option<CondId>, cmdname: impl FnOnce() -> Option<&'static CStr>) {
     // Abort every command in nested calls and sourced files immediately.
     if cause_abort.get() {
         cause_abort.set(false);
@@ -251,7 +252,7 @@ pub(crate) fn do_errthrow(cond: Option<CondId>, cmdname: Option<&CStr>) {
     let Some(messages) = messages else {
         return;
     };
-    if throw_exception(Thrown::Error(messages), cmdname).is_err() {
+    if throw_exception(Thrown::Error(messages), cmdname()).is_err() {
         // The messages went with the failed throw.
     } else if let Some(cond) = cond {
         super::trycmd::do_throw(cond);
@@ -263,13 +264,20 @@ pub(crate) fn do_errthrow(cond: Option<CondId>, cmdname: Option<&CStr>) {
 /// Replace the current exception by an interrupt exception, if an interrupt
 /// happened and anyone could catch it. Answers whether the current exception
 /// was discarded.
+#[inline]
 pub(crate) fn do_intthrow(cond: CondId) -> bool {
     // No interrupt, or no try conditional active and nothing being thrown:
-    // do nothing, for the sake of non-EH scripts.
+    // do nothing, for the sake of non-EH scripts. Asked after every
+    // command, so the answer is inline and the throw is not.
     if !got_int.get() || (trylevel.get() == 0 && !did_throw.get()) {
         return false;
     }
+    throw_interrupt(cond)
+}
 
+/// [`do_intthrow`] once an interrupt is to be thrown.
+#[cold]
+fn throw_interrupt(cond: CondId) -> bool {
     if did_throw.get() {
         // An interrupt exception already being thrown stands.
         if current_type() == Some(ET_INTERRUPT) {

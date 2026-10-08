@@ -174,6 +174,7 @@ struct Refused;
 /// The position is left in `excmd.arg`, which nothing has read yet.
 fn locate_command(
     excmd: &mut ExArg,
+    in_inactive: bool,
     mods: &CmdModScope,
     flags: DoCmdOpts,
     errormsg: &mut Option<CString>,
@@ -188,13 +189,7 @@ fn locate_command(
     let after_modifier = excmd.line.cmd;
 
     let cond = cond_stack_of(excmd);
-    excmd.skip = did_emsg.get() != 0
-        || got_int.get()
-        || did_throw.get()
-        || cond.with(|cs| {
-            cs.top()
-                .is_some_and(|top| !cs.flags[top].has(CsFlags::ACTIVE))
-        });
+    excmd.skip = did_emsg.get() != 0 || got_int.get() || did_throw.get() || in_inactive;
 
     let mut p = find_excmd_after_range(excmd);
     let (fgetline, cookie) = (excmd.ea_getline, excmd.cookie);
@@ -548,12 +543,14 @@ fn rethrow_from_nested(excmd: &mut ExArg) {
 ///
 /// # Safety
 ///
-/// `cookie` must be the payload `fgetline` was registered with, live for the
-/// call.
+/// `in_inactive` says the innermost conditional of `cond` is not active, as
+/// the caller last saw it. `cookie` must be the payload `fgetline` was
+/// registered with, live for the call.
 pub(crate) unsafe fn do_one_cmd(
     line: CmdLine,
     flags: DoCmdOpts,
     cond: CondId,
+    in_inactive: bool,
     fgetline: LineGetter,
     cookie: *mut c_void,
 ) -> CmdLine {
@@ -584,7 +581,7 @@ pub(crate) unsafe fn do_one_cmd(
     // Each stage refuses by answering `Err`, having left whatever it has to
     // say in `errormsg`; the reporting below is shared by all of them.
     let ran = (|| {
-        locate_command(&mut excmd, &mods, flags, &mut errormsg)?;
+        locate_command(&mut excmd, in_inactive, &mods, flags, &mut errormsg)?;
 
         // Not implemented in this build: the argument checks are relaxed,
         // because there is nothing to check them against.
@@ -631,9 +628,11 @@ pub(crate) unsafe fn do_one_cmd(
         };
         emsg(&msg);
     }
-    let name = (excmd.cmdidx != CmdIdx::SIZE && !is_user_cmd(excmd.cmdidx))
-        .then(|| crate::ex_docmd::builtin_command_cstr(excmd.cmdidx));
-    do_errthrow(Some(cond), name);
+    let cmdidx = excmd.cmdidx;
+    do_errthrow(Some(cond), || {
+        (cmdidx != CmdIdx::SIZE && !is_user_cmd(cmdidx))
+            .then(|| crate::ex_docmd::builtin_command_cstr(cmdidx))
+    });
 
     drop(mods);
     reg_executing.set(save_reg_executing);

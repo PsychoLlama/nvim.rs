@@ -118,6 +118,22 @@ impl CondStack {
         usize::try_from(self.idx).ok()
     }
 
+    /// Whether the innermost level is open and not active.
+    pub(crate) fn innermost_inactive(&self) -> bool {
+        self.top()
+            .is_some_and(|at| !self.flags[at].has(crate::ex_eval::CsFlags::ACTIVE))
+    }
+
+    /// What the command loop reads between commands.
+    pub(crate) fn summary(&self) -> CondSummary {
+        CondSummary {
+            idx: self.idx,
+            loop_level: self.loop_level,
+            try_level: self.try_level,
+            in_inactive: self.innermost_inactive(),
+        }
+    }
+
     /// The innermost level's flags; `NONE` when none is open.
     pub(crate) fn top_flags(&self) -> crate::ex_eval::CsFlags {
         self.top()
@@ -148,6 +164,27 @@ impl CondStack {
     pub(crate) fn set_pending_exception(&mut self, at: usize, exception: Option<ExcId>) {
         self.pend[at] = exception.map_or(Pend::None, Pend::Exception);
     }
+}
+
+/// The parts of a condition stack the command loop reads between commands:
+/// all that changes them is a command, so the loop asks once after each.
+pub(crate) struct CondSummary {
+    pub(crate) idx: ::core::ffi::c_int,
+    pub(crate) loop_level: ::core::ffi::c_int,
+    pub(crate) try_level: ::core::ffi::c_int,
+    /// The innermost conditional is not active: its commands are parsed,
+    /// not run.
+    pub(crate) in_inactive: bool,
+}
+
+impl CondSummary {
+    /// An empty stack's.
+    pub(crate) const EMPTY: CondSummary = CondSummary {
+        idx: -1,
+        loop_level: 0,
+        try_level: 0,
+        in_inactive: false,
+    };
 }
 
 /// A condition stack's place in the condition-stack table.

@@ -421,7 +421,7 @@ pub(crate) fn ex_while(excmd: &mut ExArg) {
     // ":endwhile"/":endfor". When it is not set, this level needs
     // initialising. The depth is checked first, as upstream does, so the
     // 50th level is refused when it comes round again too.
-    let Some((at, jumped_back)) = cond.with(|cs| {
+    let Some((at, jumped_back, outer_inactive)) = cond.with(|cs| {
         if cs.is_full() {
             return None;
         }
@@ -433,13 +433,15 @@ pub(crate) fn ex_while(excmd: &mut ExArg) {
         }
         let at = cs.top().expect("a loop level is open");
         cs.flags[at] = kind;
-        Some((at, jumped_back))
+        // `check_skip`'s question about the stack, asked in the same look.
+        let outer_inactive = at > 0 && !cs.flags[at - 1].has(CsFlags::ACTIVE);
+        Some((at, jumped_back, outer_inactive))
     }) else {
         excmd.errmsg = Some(c"E585: :while/:for nesting too deep".to_owned());
         return;
     };
 
-    let skip = check_skip(cond);
+    let skip = did_emsg.get() != 0 || got_int.get() || did_throw.get() || outer_inactive;
     let (result, error) = if is_while {
         let answer = eval_cmd_bool(excmd, skip);
         (answer == Ok(true), answer.is_err())
@@ -557,12 +559,14 @@ pub(crate) fn ex_endwhile(excmd: &mut ExArg) {
         CsFlags::FOR
     };
 
-    if cond.with(|cs| cs.loop_level <= 0 || cs.idx < 0) {
+    let Some(flags) = cond.with(|cs| {
+        (cs.loop_level > 0)
+            .then(|| cs.top().map(|at| cs.flags[at]))
+            .flatten()
+    }) else {
         excmd.errmsg = err;
         return;
-    }
-
-    let flags = cond.with(|cs| cs.top_flags());
+    };
     if !flags.has(kind) {
         // In a ":while"/":for" but with the wrong endloop command: do
         // not rewind to the next enclosing one.
