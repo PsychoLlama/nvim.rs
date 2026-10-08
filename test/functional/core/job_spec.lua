@@ -346,13 +346,17 @@ describe('jobs', function()
   end)
 
   it('treats v:_null_dict options as no options', function()
-    local cmd = is_os('win') and "['cmd.exe', '/c', 'exit 0']" or "['true']"
+    -- A job that waits on its stdin, so it is still there to be asked
+    -- about: one that exits at once can be gone before `jobwait()` (-3).
+    local cmd = is_os('win') and "['cmd.exe']" or "['cat', '-']"
     local id = eval('jobstart(' .. cmd .. ', v:_null_dict)')
     ok(id > 0)
-    eq({ 0 }, eval('jobwait([' .. id .. '], 10000)'))
+    eq({ -1 }, eval('jobwait([' .. id .. '], 0)'))
+    eq(1, eval('jobstop(' .. id .. ')'))
     local tid = eval('termopen(' .. cmd .. ', v:_null_dict)')
     ok(tid > 0)
-    eq({ 0 }, eval('jobwait([' .. tid .. '], 10000)'))
+    eq({ -1 }, eval('jobwait([' .. tid .. '], 0)'))
+    eq(1, eval('jobstop(' .. tid .. ')'))
     assert_alive()
   end)
 
