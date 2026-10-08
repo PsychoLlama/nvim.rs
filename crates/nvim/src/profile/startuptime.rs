@@ -7,8 +7,7 @@
 //! at [`time_finish`] — which is what keeps two concurrent processes'
 //! reports from interleaving line by line.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,15 +17,14 @@
 )]
 
 use super::{profile_start, profile_sub};
-use crate::event::libuv::uv_err_name;
-use crate::fprintf;
 use crate::global_cell::GlobalCell;
-use crate::message::e_notopen;
-use crate::os::cshim::{gettext, stderr};
-use crate::os::fs::CFile;
+use crate::message_fmt::{msg_cstr, to_bytes};
+use crate::os::fs::{CFile, os_err_name};
 use crate::profile::{startup_timing, time_fd};
+use crate::tr;
 use crate::types::ProfTime;
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
+use std::io::Write;
 
 // ---------------------------------------------------------------------------
 // --startuptime.
@@ -70,25 +68,15 @@ fn write_startup(bytes: &[u8]) {
     });
 }
 
-/// Record a startup-timing message, if `--startuptime` asked for one.
-///
-/// The C spells this as the `TIME_MSG` macro. Safe: no raw pointer crosses
-/// the boundary, and the `time_fd` test is the whole of it.
+/// Record a startup-timing message, if `--startuptime` asked for one: the
+/// `TIME_MSG` macro of the C.
 pub(crate) fn time_msg_at(what: &CStr) {
-    if startup_timing() {
-        // SAFETY: `time_fd` is the startup-timing file, opened once by
-        // `init_startuptime` and closed by `time_finish`; `what` outlives the
-        // call and the second argument is the "no elapsed time" null.
-        unsafe { time_msg(what.as_ptr(), ::core::ptr::null::<ProfTime>()) };
-    }
+    time_msg(what.to_bytes(), None);
 }
 
 /// Write the startuptime report header and the first message. Must be
 /// called once before [`time_msg`].
-///
-/// # Safety
-/// `message` is NUL-terminated.
-pub unsafe fn time_start(message: *const c_char) {
+pub fn time_start(message: &CStr) {
     if !startup_timing() {
         return;
     }
@@ -98,64 +86,64 @@ pub unsafe fn time_start(message: *const c_char) {
     write_startup(
         b"\ntimes in msec\n clock   self+sourced   self:  sourced script\n clock   elapsed:              other lines\n\n",
     );
-    // SAFETY: the caller's message.
-    unsafe { time_msg(message, core::ptr::null()) };
+    time_msg_at(message);
 }
 
-/// One startuptime line: clock, optional self+sourced (when `start` is
-/// non-null, only for sourcing), elapsed, and the message.
-///
-/// # Safety
-/// `mesg` is NUL-terminated; `start` is null or points at a readable
-/// `ProfTime`.
-pub unsafe fn time_msg(mesg: *const c_char, start: *const ProfTime) {
+/// One startuptime line: clock, the self+sourced column when `start` is
+/// given (only for sourcing), elapsed, and the message.
+pub fn time_msg(message: &[u8], start: Option<ProfTime>) {
+    // The C formatted each label into an `IOSIZE` buffer, so a longer one (a
+    // deep script path) is cut at this many bytes.
+    const MESSAGE_MAX: usize = 1024;
     if !startup_timing() {
         return;
     }
     let now = profile_start();
     let mut line = time_diff_str(G_START_TIME.get(), now);
-    if !start.is_null() {
+    if let Some(start) = start {
         line.push_str("  ");
-        // SAFETY: non-null, so the caller's contract makes it readable.
-        line.push_str(&time_diff_str(unsafe { *start }, now));
+        line.push_str(&time_diff_str(start, now));
     }
     line.push_str("  ");
     line.push_str(&time_diff_str(G_PREV_TIME.get(), now));
     G_PREV_TIME.set(now);
     line.push_str(": ");
     let mut bytes = line.into_bytes();
-    // SAFETY: the caller's NUL-terminated message.
-    bytes.extend_from_slice(unsafe { CStr::from_ptr(mesg) }.to_bytes());
+    bytes.extend_from_slice(&message[..message.len().min(MESSAGE_MAX)]);
     bytes.push(b'\n');
     write_startup(&bytes);
+}
+
+/// Report a failure to open the log on stderr, as the C's `fprintf` did: no
+/// trailing newline.
+fn report_to_stderr(text: &[u8]) {
+    // Nothing to do when stderr itself is gone.
+    let _ = std::io::stderr().write_all(text);
 }
 
 /// Open the `--startuptime` stream. The file is (potentially) written by
 /// multiple nvim processes concurrently, so the report accumulates in a
 /// full ("controlled") setvbuf buffer and is flushed to disk exactly once,
 /// by [`time_finish`].
-///
-/// # Safety
-/// `fname` and `proc_name` are NUL-terminated.
-pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
+pub fn time_init(file_name: &CStr, process_name: &CStr) {
     const BUFSIZE: usize = 8192; // Big enough for the entire report.
-    // SAFETY: the caller's path.
-    let Some(mut log) = CFile::open(unsafe { CStr::from_ptr(fname) }, c"a") else {
-        // SAFETY: the message is a NUL-terminated global with one %s.
-        unsafe { fprintf!(stderr, gettext(e_notopen).as_ptr(), fname) };
+    let Some(mut log) = CFile::open(file_name, c"a") else {
+        report_to_stderr(&to_bytes(&tr!(
+            "E484: Can't open file {}",
+            msg_cstr(file_name)
+        )));
         return;
     };
-    if let Err(r) = log.buffer_fully(BUFSIZE + 1) {
+    if let Err(code) = log.buffer_fully(BUFSIZE + 1) {
         drop(log);
-        let fmt = c"time_init: setvbuf failed: %d %s".as_ptr();
-        let why = unsafe { uv_err_name(r) };
-        unsafe { fprintf!(stderr, fmt, r, why) };
+        let mut text = format!("time_init: setvbuf failed: {code} ").into_bytes();
+        text.extend_from_slice(os_err_name(code).to_bytes());
+        report_to_stderr(&text);
         return;
     }
     time_fd.set(Some(log));
     let mut header = b"--- Startup times for process: ".to_vec();
-    // SAFETY: the caller's NUL-terminated process name.
-    header.extend_from_slice(unsafe { CStr::from_ptr(proc_name) }.to_bytes());
+    header.extend_from_slice(process_name.to_bytes());
     header.extend_from_slice(b" ---\n");
     write_startup(&header);
 }
@@ -165,8 +153,7 @@ pub fn time_finish() {
     if !startup_timing() {
         return;
     }
-    // SAFETY: a literal, and no start time.
-    unsafe { time_msg(c"--- NVIM STARTED ---\n".as_ptr(), core::ptr::null()) };
+    time_msg_at(c"--- NVIM STARTED ---\n");
     if let Some(log) = time_fd.take() {
         log.close();
     }

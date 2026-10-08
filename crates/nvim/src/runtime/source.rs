@@ -16,12 +16,12 @@
 
 use super::*;
 use crate::cstr;
+use crate::message_fmt::to_bytes;
 use crate::message_fmt::{c_str, report_msg};
 use crate::semsg;
 use crate::smsg;
 use crate::snprintf;
 use crate::tr_c;
-use crate::vim_snprintf;
 use crate::winlayer::Buf;
 
 use crate::ex_docmd::DoCmdOpts;
@@ -759,7 +759,7 @@ unsafe fn source_bracket(
 
     // Start measuring load time, if --startuptime opened the log.
     let time_log = startup_timing();
-    let (rel_time, mut start_time) = if !time_log { (0, 0) } else { time_push() };
+    let (rel_time, start_time) = if !time_log { (0, 0) } else { time_push() };
     let profiling = do_profiling.get() == PROF_YES;
     let wait_start = if profiling { prof_child_enter() } else { 0 };
 
@@ -826,11 +826,10 @@ unsafe fn source_bracket(
         verbose_leave();
     }
     if time_log {
-        let mut label = [0 as c_char; IOSIZE as usize];
-        let buf = label.as_mut_ptr();
-        // SAFETY: `label` outlives all three calls.
-        unsafe { vim_snprintf!(buf, IOSIZE as size_t, c"sourcing %s".as_ptr(), req.fname) };
-        unsafe { time_msg(buf, &raw mut start_time) };
+        // SAFETY: `req.fname` is null or NUL-terminated, as for the
+        // verbose message above.
+        let label = format!("sourcing {}", unsafe { c_str(req.fname) });
+        time_msg(&to_bytes(&label), Some(start_time));
         time_pop(rel_time);
     }
     let trigger_source_post = !got_int.get();

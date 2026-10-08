@@ -61,7 +61,7 @@ use crate::option::vars::{fdo_flags, p_smd};
 use crate::options::kOptFdoFlagAll;
 use crate::pos::equalpos;
 use crate::profile::startup_timing;
-use crate::profile::{time_finish, time_msg};
+use crate::profile::{time_finish, time_msg_at};
 use crate::state::mode::{
     State, exmode_active, finish_op, km_startsel, km_stopsel, opcount, restart_edit,
 };
@@ -602,7 +602,7 @@ pub(crate) unsafe fn normal_check(s: *mut NormalState) -> c_int {
         do_redraw.set(false);
         // The first screen update is the end of startup profiling.
         if startup_timing() {
-            unsafe { time_msg(c"first screen update".as_ptr(), ptr::null()) };
+            time_msg_at(c"first screen update");
             time_finish();
         }
         may_make_initial_scroll_size_snapshot();

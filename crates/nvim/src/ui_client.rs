@@ -38,8 +38,7 @@ use crate::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::env::{os_env_exists, os_get_pid};
-use crate::profile::startup_timing;
-use crate::profile::{time_finish, time_msg};
+use crate::profile::{time_finish, time_msg_at};
 use crate::startup::{
     main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, ui_client_attached,
     ui_client_channel_id, ui_client_error_exit, ui_client_exit_status, ui_client_forward_stdin,
@@ -62,9 +61,9 @@ use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     ApiDict, Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs,
-    Integer, KeyDict_highlight, Object, ObjectType, ProfTime, String_0, TUIData, UIClientHandler,
-    Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeString, uint16_t,
+    Integer, KeyDict_highlight, Object, ObjectType, String_0, TUIData, UIClientHandler, Unpacker,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    uint16_t,
 };
 use crate::ui::state::t_colors;
 use ::libc::{close, dup};
@@ -292,9 +291,7 @@ fn api_version() -> ApiDict {
 
 /// Notes in `--startuptime` that `step` has been sent.
 fn log_startup_step(step: &'static CStr) {
-    if startup_timing() {
-        unsafe { time_msg(step.as_ptr(), core::ptr::null::<ProfTime>()) };
-    }
+    time_msg_at(step);
 }
 
 /// Detaches from the server without stopping this process.

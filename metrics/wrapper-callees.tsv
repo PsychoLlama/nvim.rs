@@ -3,9 +3,9 @@ count	callee	no_raw	defs	def
 511	.add	0	2	crates/nvim/src/getchar/buffers.rs
 374	.offset	0	0	
 309	bytes_at	0	1	crates/nvim/src/cstr.rs
-250	CStr::from_ptr	0	2	
-235	at	0	3	
-185	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
+248	CStr::from_ptr	0	2	
+236	at	0	3	
+186	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 167	.offset_from	0	0	
 132	from_raw_parts	0	0	
@@ -18,7 +18,7 @@ count	callee	no_raw	defs	def
 70	snprintf	0	1	crates/nvim/src/os/cshim.rs
 68	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 64	from_raw_parts_mut	0	0	
-64	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
+63	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
 63	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
 62	nlua_pop_integer	0	1	crates/nvim/src/lua/converter/pop.rs
 60	zeroed	0	0	
@@ -27,9 +27,9 @@ count	callee	no_raw	defs	def
 50	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 48	prefix_eq	0	1	crates/nvim/src/cstr.rs
 47	copy	0	1	crates/nvim/src/strings/printf/emit.rs
-44	fprintf	0	0	
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 42	copy_nonoverlapping	0	0	
+42	fprintf	0	0	
 42	utf_char2bytes	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 41	vim_regfree	0	1	crates/nvim/src/regexp/api.rs
 39	at_opt	0	2	
@@ -248,7 +248,6 @@ count	callee	no_raw	defs	def
 8	strcat	0	0	
 8	terminal_check_size	0	1	crates/nvim/src/terminal/mod.rs
 8	time	0	0	
-8	time_msg	0	1	crates/nvim/src/profile/startuptime.rs
 8	utf_ptr2len_len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 8	uv_close	0	0	
 8	win_chartabsize	0	1	crates/nvim/src/plines/mod.rs
@@ -2520,8 +2519,6 @@ count	callee	no_raw	defs	def
 1	test_for_current	0	1	crates/nvim/src/tag/jump.rs
 1	theme	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	tilde_replace	0	1	crates/nvim/src/ex_getln/buffer.rs
-1	time_init	0	1	crates/nvim/src/profile/startuptime.rs
-1	time_start	0	1	crates/nvim/src/profile/startuptime.rs
 1	time_to_bytes	0	1	crates/nvim/src/memory/mod.rs
 1	tokenize_line	0	1	crates/nvim/src/diff/refine.rs
 1	toupper	0	0	
@@ -2603,7 +2600,6 @@ count	callee	no_raw	defs	def
 1	uv_chdir	0	0	
 1	uv_cwd	0	0	
 1	uv_dlclose	0	0	
-1	uv_err_name	0	0	
 1	uv_exepath	0	0	
 1	uv_fs_chmod	0	0	
 1	uv_fs_chown	0	0	

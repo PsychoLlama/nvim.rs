@@ -738,13 +738,13 @@ pub(crate) unsafe fn init_startuptime(paramp: *mut MainParams) {
         let word = unsafe { *(*paramp).argv.offset(i as isize) };
         if unsafe { strcasecmp(word, c"--startuptime".as_ptr()) } == 0 {
             let label = if names_embed {
-                c"Embedded".as_ptr()
+                c"Embedded"
             } else {
-                c"Primary (or UI client)".as_ptr()
+                c"Primary (or UI client)"
             };
-            let file = unsafe { *(*paramp).argv.offset((i + 1) as isize) };
-            unsafe { time_init(file, label) };
-            unsafe { time_start(c"--- NVIM STARTING ---".as_ptr()) };
+            let file = unsafe { CStr::from_ptr(*(*paramp).argv.offset((i + 1) as isize)) };
+            time_init(file, label);
+            time_start(c"--- NVIM STARTING ---");
             break;
         }
     }

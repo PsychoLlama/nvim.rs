@@ -42,8 +42,8 @@ use core::ptr::NonNull;
 use core::{ptr, slice};
 
 use crate::event::libuv::{
-    uv_chdir, uv_cwd, uv_exepath, uv_fs_access, uv_fs_close, uv_fs_copyfile, uv_fs_fsync,
-    uv_fs_lstat, uv_fs_open, uv_fs_realpath, uv_fs_req_cleanup, uv_strerror,
+    uv_chdir, uv_cwd, uv_err_name, uv_exepath, uv_fs_access, uv_fs_close, uv_fs_copyfile,
+    uv_fs_fsync, uv_fs_lstat, uv_fs_open, uv_fs_realpath, uv_fs_req_cleanup, uv_strerror,
     uv_translate_sys_error,
 };
 use crate::log::g_stats;
@@ -318,6 +318,15 @@ pub(crate) fn os_strerror(error: c_int) -> &'static CStr {
     // SAFETY: `uv_strerror` answers a static NUL-terminated string for any
     // code, a code it does not know included.
     unsafe { cstr::at(uv_strerror(error)) }
+}
+
+/// libuv's name for the error code `error` (`"ENOENT"`), as `uv_err_name`
+/// spells it.
+pub(crate) fn os_err_name(error: c_int) -> &'static CStr {
+    // SAFETY: `uv_err_name` answers a static NUL-terminated string for any
+    // code; one it does not know it names from a leaked allocation that is
+    // never freed.
+    unsafe { cstr::at(uv_err_name(error)) }
 }
 
 /// [`os_can_exe`] asking only whether `name` is executable.

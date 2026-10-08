@@ -171,6 +171,14 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
     }
 }
 
+/// The startuptime label for loading `module`: `require('module')`.
+fn require_label(module: &CStr) -> Vec<u8> {
+    let mut label = b"require('".to_vec();
+    label.extend_from_slice(module.to_bytes());
+    label.extend_from_slice(b"')");
+    label
+}
+
 /// Neovim's `require()`: the stock one, wrapped so that `--startuptime`
 /// records how long each module took.
 ///
@@ -180,7 +188,6 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
 /// # Safety
 /// `lstate` must be a live Lua state holding this function's arguments.
 pub(crate) unsafe extern "C-unwind" fn nlua_require(lstate: *mut lua_State) -> c_int {
-    let mut what = [0 as c_char; IOSIZE as usize];
     unsafe {
         let name = luaL_checkstring(lstate, 1);
         lua_settop(lstate, 1);
@@ -210,16 +217,10 @@ pub(crate) unsafe extern "C-unwind" fn nlua_require(lstate: *mut lua_State) -> c
             return 1;
         }
 
-        let (rel_time, mut start_time): (ProfTime, ProfTime) = time_push();
+        let (rel_time, start_time): (ProfTime, ProfTime) = time_push();
         let status = lua_pcall(lstate, 1, 1, 0);
         if status == 0 {
-            vim_snprintf(
-                what.as_mut_ptr(),
-                IOSIZE as size_t,
-                c"require('%s')".as_ptr(),
-                name,
-            );
-            time_msg(what.as_ptr(), &raw mut start_time);
+            time_msg(&require_label(CStr::from_ptr(name)), Some(start_time));
         }
         time_pop(rel_time);
         if status == 0 { 1 } else { lua_error(lstate) }

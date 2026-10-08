@@ -753,26 +753,17 @@ pub fn load_plugins() {
             RuntimeOpts::ALL | RuntimeOpts::NOAFTER,
         )
     };
-    time_msg_now(c"loading rtp plugins");
+    time_msg_at(c"loading rtp plugins");
 
     // Only source "start" packages when a `:packloadall` has not already.
     if !did_source_packages.get() {
         load_start_packages();
     }
-    time_msg_now(c"loading packages");
+    time_msg_at(c"loading packages");
 
     let _ =
         unsafe { source_runtime_vim_lua(plugin_pattern, RuntimeOpts::ALL | RuntimeOpts::AFTER) };
-    time_msg_now(c"loading after plugins");
-}
-
-/// `TIME_MSG()`: note a startup milestone, when `--startuptime` asked for one.
-fn time_msg_now(msg: &CStr) {
-    if !startup_timing() {
-        return;
-    }
-    // SAFETY: a literal, and the null proftime means "now".
-    unsafe { time_msg(msg.as_ptr(), ptr::null()) };
+    time_msg_at(c"loading after plugins");
 }
 
 /// `:packadd[!] {name}`.
