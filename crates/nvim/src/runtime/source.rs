@@ -301,9 +301,10 @@ pub fn cmd_source_buffer(excmd: &ExArg, ex_lua: bool) {
 /// The name is decorated with where the call came from, so an `nvim_exec2()`
 /// nested inside a script says so.
 ///
-/// # Safety
-/// `str` is NUL-terminated and `traceback_name` names the caller.
-pub unsafe fn do_source_str(str: *const c_char, mut traceback_name: *mut c_char) -> c_int {
+/// `text` is copied into the script's lines before any of them runs, and
+/// the name is only ever read, for messages.
+pub fn do_source_str(text: &CStr, traceback_name: &CStr) -> c_int {
+    let mut traceback_name = traceback_name.as_ptr().cast_mut();
     let mut sname_buf = [0 as c_char; 256];
     let (name, lnum) = (sourcing_name(), sourcing_lnum());
     if !name.is_null() {
@@ -322,7 +323,7 @@ pub unsafe fn do_source_str(str: *const c_char, mut traceback_name: *mut c_char)
         };
         traceback_name = sname_buf.as_mut_ptr();
     }
-    let req = SourceRequest::new(traceback_name, str, None, false);
+    let req = SourceRequest::new(traceback_name, text.as_ptr(), None, false);
     do_source_ext(&req)
 }
 

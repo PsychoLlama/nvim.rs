@@ -615,16 +615,13 @@ pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
 
 /// Apply a ShaDa file held in memory rather than on disk. The context stack
 /// keeps its registers, jumps, buffer list and variables in this format.
-///
-/// # Safety
-///
-/// `string` must be a well-formed API string: `size` readable bytes with a
-/// NUL at `data[size]`.
-pub unsafe fn shada_read_string(string: String_0, flags: c_int) {
+pub fn shada_read_string(string: String_0, flags: c_int) {
     if string.is_empty() {
         return;
     }
     let mut sd_reader: FileDescriptor = unsafe { core::mem::zeroed() };
+    // SAFETY: an API string owns `len()` readable bytes at `data()` (the
+    // type's invariant), and it outlives the reader, which is closed below.
     unsafe { file_open_buffer(&raw mut sd_reader, string.data(), string.len()) };
     unsafe { shada_read(&raw mut sd_reader, flags) };
     unsafe { close_file(&raw mut sd_reader) };

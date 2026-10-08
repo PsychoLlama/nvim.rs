@@ -12,14 +12,12 @@
 //! [`array_to_string`] converts one back. Any change to that shape is a
 //! change to what a saved context means, so it is fixed.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::{cstr_to_string, string_to_array};
+use crate::api::private::helpers::string_to_array;
 use crate::api::vimscript::exec_impl;
-use crate::cstr;
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::userfunc::all_funcs;
 use crate::ex_docmd::do_cmdline_cmd;
@@ -37,7 +35,7 @@ use crate::types::{
     ApiDict, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
     OptionSetFlags, String_0, VAR_LIST, size_t, uint8_t,
 };
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// The `ContextTypeFlags` a `Context` can carry, one bit per section.
 pub const kCtxFuncs: ::core::ffi::c_uint = 32;
@@ -157,22 +155,21 @@ pub fn ctx_restore(ctx: Option<&Context>, flags: c_int) -> bool {
     let op_shada = get_option_value(kOptShada, OptionSetFlags::GLOBAL);
     let _ = set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
 
-    // SAFETY: each blob is the context's own, read as a copy.
+    // Each blob is read as a copy.
     if flags & kCtxRegs as c_int != 0 {
-        unsafe { shada_read_string(ctx.regs.clone(), SHADA_RESTORE) };
+        shada_read_string(ctx.regs.clone(), SHADA_RESTORE);
     }
     if flags & kCtxJumps as c_int != 0 {
-        unsafe { shada_read_string(ctx.jumps.clone(), SHADA_RESTORE) };
+        shada_read_string(ctx.jumps.clone(), SHADA_RESTORE);
     }
     if flags & kCtxBufs as c_int != 0 {
-        unsafe { shada_read_string(ctx.bufs.clone(), SHADA_RESTORE) };
+        shada_read_string(ctx.bufs.clone(), SHADA_RESTORE);
     }
     if flags & kCtxGVars as c_int != 0 {
-        unsafe { shada_read_string(ctx.gvars.clone(), SHADA_RESTORE) };
+        shada_read_string(ctx.gvars.clone(), SHADA_RESTORE);
     }
     if flags & kCtxFuncs as c_int != 0 {
-        // SAFETY: the captured definitions are API strings of this context.
-        unsafe { ctx_restore_funcs(ctx) };
+        ctx_restore_funcs(ctx);
     }
 
     let _ = set_option_value(kOptShada, op_shada, OptionSetFlags::GLOBAL);
@@ -203,12 +200,11 @@ fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         if islambda || (scriptonly && !isscript) {
             continue;
         }
-        let mut cmd = Vec::with_capacity(b"func! ".len() + bytes.len() + 1);
+        let mut cmd = Vec::with_capacity(b"func! ".len() + bytes.len());
         cmd.extend_from_slice(b"func! ");
         cmd.extend_from_slice(bytes);
-        cmd.push(0);
         let mut opts = KeyDict_exec_opts { output: Some(true) };
-        let src = unsafe { cstr_to_string(cmd.as_ptr() as *const c_char) };
+        let src = String_0::from_bytes(&cmd);
         if let Ok(func_body) = exec_impl(VIML_INTERNAL_CALL, src, &mut opts) {
             ctx.funcs.push(Object::string(func_body));
         }
@@ -216,19 +212,16 @@ fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
 }
 
 /// Re-execute the captured `:function` definitions.
-///
-/// # Safety
-/// Main-thread editor call; `ctx.funcs` holds NUL-terminated strings.
-unsafe fn ctx_restore_funcs(ctx: &Context) {
+fn ctx_restore_funcs(ctx: &Context) {
     for func in &ctx.funcs {
         // `funcs` is whatever array `ctx_from_dict` was handed, so an entry
         // need not be a string. The C read the string arm under any tag;
-        // anything else is skipped here.
+        // anything else is skipped here. A definition runs as far as its
+        // first NUL, as the C string it was.
         let Some(cmd) = func.as_string() else {
             continue;
         };
-        // SAFETY: the caller's contract -- the entry is NUL-terminated.
-        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.data()) });
+        let _ = do_cmdline_cmd(cmd.as_cstr());
     }
 }
 

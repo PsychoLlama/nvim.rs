@@ -1,5 +1,5 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	62	685	71	424	deref:89 compound:38 expr:27 ref:5	other:56 str:17 pp:1 value:1	str:5 other:3 value:1	at:24 xfree:12 CStr::from_ptr:10 c_str:6 from_raw_parts:6 ManuallyDrop::take:5 api_free_luaref:5 nlua_exec:5
+api/	*	61	681	71	420	deref:89 compound:38 expr:27 ref:5	other:56 str:17 pp:1 value:1	str:5 other:3 value:1	at:23 xfree:12 CStr::from_ptr:10 c_str:6 from_raw_parts:6 ManuallyDrop::take:5 api_free_luaref:5 nlua_exec:5
 api/	api/autocmd/create.rs	1	15	1	13	deref:2	-	-	at:2 autocmd_register:1 do_autocmd_event:1 xfree:1
 api/	api/autocmd/exec.rs	1	6	0	6	-	-	-	apply_autocmds_group:1 augroup_exists:1 augroup_find:1
 api/	api/autocmd/group.rs	1	10	0	10	-	-	-	augroup_del:2 augroup_add:1 augroup_exists:1 augroup_find:1
@@ -54,7 +54,6 @@ api/	api/vim/runtime.rs	1	11	1	7	expr:2 compound:1	-	-	changedir_func:1 do_in_ru
 api/	api/vim/statusline.rs	1	20	0	13	deref:2 expr:2 compound:1	str:1	-	.offset_from:1 CStr::from_ptr:1 Fmt::borrowed:1 check_stl_option:1 decor_redraw_signs:1 labs:1 pum_set_info:1 snprintf:1
 api/	api/vim/term.rs	1	26	2	15	deref:7 compound:1	-	-	at:3 channel_decref:2 channel_send:2 api_free_luaref:1 channel_alloc:1 channel_incref:1 read_buffer_into:1 terminal_check_size:1
 api/	api/vim/vars.rs	1	1	0	1	-	-	-	script_autoload:1
-api/	api/vimscript/exec.rs	1	4	0	4	-	-	-	at:1 do_source_str:1
 api/	api/vimscript/expression.rs	1	37	2	10	deref:9 compound:3 expr:3 ref:3	other:1 pp:1 value:1	-	xfree:2 .add:1 viml_parser_init:1 viml_pexpr_free_ast:1 viml_pexpr_parse:1
 api/	api/win_config/apply.rs	1	7	0	7	-	-	-	clear_float_config:1 merge_win_config:1 ui_comp_remove_grid:1
 api/	api/win_config/border.rs	1	13	4	9	compound:1 deref:1 expr:1	other:2 str:2	-	CStr::from_ptr:1 at:1 copy_option_part:1 mb_string2cells_len:1
@@ -121,8 +120,6 @@ clipboard.rs	*	1	44	3	10	deref:28 expr:4 ref:2	other:2	other:1	xfree:3 .as_ref:1
 clipboard.rs	clipboard.rs	1	44	3	10	deref:28 expr:4 ref:2	other:2	other:1	xfree:3 .as_ref:1 free_register:1 update_yankreg_width:1
 cmdhist/	*	1	26	3	9	compound:4 deref:1 expr:1	str:2	other:1	at:3 slice_at:1 vim_regfree:1 xfree:1
 cmdhist/	cmdhist/mod.rs	1	26	3	9	compound:4 deref:1 expr:1	str:2	other:1	at:3 slice_at:1 vim_regfree:1 xfree:1
-context.rs	*	1	7	1	7	-	-	-	shada_read_string:4 at:1 cstr_to_string:1
-context.rs	context.rs	1	7	1	7	-	-	-	shada_read_string:4 at:1 cstr_to_string:1
 cstr.rs	*	1	20	12	12	deref:6 expr:2	str:16	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cstr.rs	cstr.rs	1	20	12	12	deref:6 expr:2	str:16	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cursor/	*	1	24	1	11	compound:2 expr:2 deref:1	-	str:2	.byte:1 .ended:1 .next_char:1 PosRef::new:1 dec:1 inc:1 init_charsize_arg:1 utf_ptr2char:1
@@ -574,7 +571,7 @@ register/	register/put/mod.rs	1	25	1	20	compound:1 deref:1	other:1	-	from:3 .off
 register/	register/special.rs	1	10	2	6	deref:3 expr:1	other:1 pp_str:1	str:1	XString::from_raw:1 file_name_at_cursor:1 find_ident_under_cursor:1 get_last_insert_save:1 xfree:1
 register/	register/store.rs	1	48	10	18	deref:29 ref:1	other:8 str:2 void:2 pp:1	other:5 void:2	.offset_from:3 .add:2 xfree:2 adjust_clipboard_name:1 get_clipboard:1 mb_string2cells_len:1 xmalloc:1
 register/	register/yank.rs	1	70	6	27	deref:25 compound:3 ref:2 expr:1	other:10	-	.offset:4 .copy_from:1 .write_bytes:1 abort:1 apply_autocmds:1 block_prep:1 bytes_at:1 c_str:1
-runtime/	*	8	552	91	357	deref:123 expr:21 compound:12 ref:2	str:72 other:19 void:18 pp_str:17 value:7	str:19 other:8 void:1	xfree:26 bytes_at:18 xstrdup:13 CStr::from_ptr:11 .offset_from:10 from_raw_parts:9 snprintf:9 c_str:8
+runtime/	*	8	552	90	357	deref:123 expr:21 compound:12 ref:2	str:70 other:19 void:18 pp_str:17 value:7	str:19 other:8 void:1	xfree:26 bytes_at:18 xstrdup:13 CStr::from_ptr:11 .offset_from:10 from_raw_parts:9 snprintf:9 c_str:8
 runtime/	runtime/cache.rs	1	55	9	46	deref:6 compound:1	str:5 void:1	other:1	.offset_from:3 CStr::from_ptr:3 bytes_at:3 c_str:3 copy_option_part:3 xstrdup:2 xstrlcpy:2 String_0::from_raw_bytes:1
 runtime/	runtime/estack.rs	1	23	5	15	deref:8	str:6 value:4	str:5	xstrdup:3 bytes_at:2 XString::from_raw:1 at_opt:1
 runtime/	runtime/expand.rs	1	69	9	45	deref:18 compound:3	str:11 other:7 pp_str:6	str:1	bytes_at:4 ga_append_owned:4 snprintf:3 .add:2 .copy_from:2 .offset_from:2 .sub:2 from_raw_parts:2
@@ -582,7 +579,7 @@ runtime/	runtime/pack.rs	1	81	12	57	deref:14 expr:8 compound:1	str:10 void:5 pp_
 runtime/	runtime/rtp.rs	1	22	2	22	-	str:1	str:2	xfree:6 xstrdup:2 CStr::from_ptr:1 append_path:1 bytes_at:1 copy_nonoverlapping:1 os_isdir:1 vim_get_prefix_from_exepath:1
 runtime/	runtime/script.rs	1	109	17	51	deref:41 expr:4 compound:3 ref:1	other:6 str:5 value:3 void:3 pp_str:1	str:5 other:2	xfree:7 CStr::from_ptr:4 at:4 bytes_at:2 from_raw_parts:2 getline_equal:2 snprintf:2 .set_len:1
 runtime/	runtime/search.rs	1	76	16	46	deref:11 expr:6 compound:2	str:16 pp_str:6 void:6 other:1	str:1	copy_option_part:2 cstr_to_string:2 snprintf:2 .add:1 .offset_from:1 at:1 c_str:1 callback:1
-runtime/	runtime/source.rs	1	117	21	75	deref:25 expr:3 compound:2 ref:1	str:18 other:5 void:3	other:5 str:4	apply_autocmds:4 c_str:4 xfree:4 xstrdup:4 CStr::from_ptr:3 from_raw_parts:3 .add:2 .offset_from:2
+runtime/	runtime/source.rs	1	117	20	75	deref:25 expr:3 compound:2 ref:1	str:16 other:5 void:3	other:5 str:4	apply_autocmds:4 c_str:4 xfree:4 xstrdup:4 CStr::from_ptr:3 from_raw_parts:3 .add:2 .offset_from:2
 search/	*	9	370	41	224	deref:123 expr:11 compound:3	str:32 other:18 value:2 pp_str:1	str:8 other:2	.offset:24 at:12 bytes_at:9 utf_ptr2char:9 xfree:9 .offset_from:8 .add:7 xstrnsave:6
 search/	search/charsearch.rs	1	8	0	5	compound:1 deref:1	-	-	utf_head_off:2 prefix_eq:1 utf_char2bytes:1 utfc_ptr2len:1
 search/	search/command.rs	1	68	7	48	deref:18 expr:2	str:6 other:2	str:3	.offset:11 copy:4 .offset_from:3 utf_ptr2char:3 write_bytes:3 bytes_at:2 xfree:2 apply_autocmds:1
@@ -593,14 +590,14 @@ search/	search/matchpair.rs	1	10	0	8	deref:2	-	-	utf_ptr2char:5 .offset:3
 search/	search/pattern.rs	1	51	14	37	deref:12	str:8 other:5 pp_str:1	str:2	xfree:5 xstrnsave:5 CStr::from_ptr:3 bytes_at:2 from_raw_parts:2 emsg:1 skip_regexp_ex:1 utf_ptr2char:1
 search/	search/select.rs	1	6	0	2	-	-	-	-
 search/	search/stat.rs	1	23	4	20	deref:3	other:2 value:2 str:1	-	.as_ref:3 .as_mut:1 at:1 c_str:1 copy:1 prefix_eq:1 xfree:1 xstrnsave:1
-shada/	*	9	550	70	336	deref:162 expr:43 ref:4 compound:1	other:65 str:17 void:3 pp_str:1	str:5 other:3	xfree:29 zeroed:12 uv_strerror:10 bytes_at_or_empty:5 packer_take_string:5 xmalloc:5 c_str:4 file_open:4
+shada/	*	9	550	69	336	deref:162 expr:43 ref:4 compound:1	other:65 str:17 void:3 pp_str:1	str:5 other:3	xfree:29 zeroed:12 uv_strerror:10 bytes_at_or_empty:5 packer_take_string:5 xmalloc:5 c_str:4 file_open:4
 shada/	shada/collect.rs	1	35	6	25	deref:7 expr:3	other:4 pp_str:1 void:1	str:1	packer_take_string:5 zeroed:3 xfree:2 .copy_from_nonoverlapping:1 cstr_to_string:1 mark_jumplist_iter:1 op_global_reg_iter:1 xmalloc:1
 shada/	shada/file.rs	1	75	10	55	deref:12 expr:4 compound:1	other:7 str:6	str:1	uv_strerror:7 file_open:4 xfree:4 CStr::from_ptr:3 zeroed:3 bytes_at:1 c_str:1 concat_fnames_realloc:1
 shada/	shada/merge.rs	1	164	19	63	deref:82 expr:17 ref:1	other:24 void:2	-	.write:1 Box::from_raw:1 eq:1 hist_shada_replace:1 mark_get:1 path_fnamecmp:1 xcalloc:1 xfree:1
 shada/	shada/mod.rs	1	4	2	3	expr:1	-	other:2	.write:1 xmalloc:1
 shada/	shada/pack.rs	1	47	7	33	deref:12 expr:1 ref:1	other:7	-	bytes_at_or_empty:5 mpack_raw:3 CStr::from_bytes_with_nul_unchecked:1 c_str:1 file_flush:1 from_raw_parts:1 xfree:1
 shada/	shada/parse.rs	1	39	8	19	deref:17 expr:3	other:8 str:5	-	xfree:3 xmalloc:2 xmemdupz:2 .add:1 .copy_from_nonoverlapping:1 c_str:1 push_additional_data:1 xcalloc:1
-shada/	shada/read.rs	1	77	4	66	deref:8 expr:3	other:2 str:1	-	xfree:14 zeroed:3 free_fmark:2 .add:1 .as_ref:1 buflist_new:1 eq:1 file_open_buffer:1
+shada/	shada/read.rs	1	77	3	66	deref:8 expr:3	other:2 str:1	-	xfree:14 zeroed:3 free_fmark:2 .add:1 .as_ref:1 buflist_new:1 eq:1 file_open_buffer:1
 shada/	shada/unpack.rs	1	42	8	32	deref:9 expr:1	other:8 str:4	str:2	uv_strerror:3 file_read:2 .write:1 c_str:1 file_skip:1 file_try_read_buffered:1 from_raw_parts:1 unpack_array:1
 shada/	shada/write.rs	1	67	6	40	deref:15 expr:10 ref:2	other:5 str:1	other:1 str:1	xfree:3 zeroed:3 Box::from_raw:1 cstr_to_string:1 mark_buffer_iter:1 mark_global_iter:1 qsort:1 sub_get_replacement:1
 sign/	*	6	259	44	151	deref:35 compound:10 expr:4 ref:2	str:40 value:14 other:7	other:2 str:2 value:2	.as_ref:11 .add:10 c_str:10 skiptowhite:7 CStr::from_ptr:5 skipwhite:4 atoi:3 bytes_at:3

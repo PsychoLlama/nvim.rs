@@ -2,7 +2,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::{api_set_sctx, cstr_to_string, try_enter, try_leave};
+use crate::api::private::helpers::{api_set_sctx, cstr_to_string};
 use crate::eval::eval0;
 use crate::eval::typval::tv_clear;
 use crate::ex_docmd::do_cmdline_cmd;
@@ -16,8 +16,8 @@ use crate::types::{
     ApiDict, Array, Boolean, Error, ExprAST, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Integer,
     KeyDict_exec_opts, Object, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
-    ParserState, String_0, TryState, TypVal, UVarNumber, VAR_FUNC, VAR_PARTIAL,
-    kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
+    ParserState, String_0, TypVal, UVarNumber, VAR_FUNC, VAR_PARTIAL, kErrorTypeException,
+    kErrorTypeValidation, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_free_ast,
@@ -105,7 +105,3 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const KV_INITIAL_VALUE: ApiDict = ApiDict::EMPTY;
 pub const ARRAY_DICT_INIT: ApiDict = KV_INITIAL_VALUE;
-/// `TRY_STATE_INIT`: the saved-state block `try_enter` fills in.  Stays a
-/// per-module const -- sharing one across `api/` would put it in the crate's
-/// exported surface for no gain.
-const TRY_STATE_INIT: TryState = TryState::INIT;
