@@ -6,70 +6,42 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// c2rust's names for anonymous members of the Vimscript parser's structs.
-#![allow(non_camel_case_types)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// One highlighted stretch of a line: `[start, end_col)` on `start.line`, in
+/// the group the parser named.
+#[derive(Copy, Clone, Debug)]
 pub struct ParserHighlightChunk {
     pub start: ParserPosition,
     pub end_col: size_t,
-    pub group: *const ::core::ffi::c_char,
+    pub group: &'static ::core::ffi::CStr,
 }
-#[derive(Clone)]
-pub struct ParserInputReader {
-    pub get_line: ParserLineGetter,
-    pub cookie: *mut ::core::ffi::c_void,
-    pub lines: ParserInputReader_lines,
-    pub conv: VimConv,
-}
-#[derive(Copy, Clone)]
-pub struct ParserInputReader_lines {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ParserLine,
-    pub init_array: [ParserLine; 4],
-}
-#[derive(Copy, Clone)]
-pub struct ParserLine {
-    pub data: *const ::core::ffi::c_char,
-    pub size: size_t,
-    pub allocated: bool,
-}
-pub type ParserLineGetter = Option<unsafe fn(*mut ::core::ffi::c_void, *mut ParserLine) -> ()>;
+
 /// A line and column inside a parsed string.
 ///
 /// `Copy`: a position is a value.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ParserPosition {
     pub line: size_t,
     pub col: size_t,
 }
-#[derive(Clone)]
-pub struct ParserState {
-    pub reader: ParserInputReader,
+
+/// What a VimL parser reads and where it has got to: the input lines, the
+/// cursor, and the highlight log when the caller asked for one.
+///
+/// The lines are the caller's and are borrowed for the whole parse, which is
+/// what lets the tree and the error point into them; a parse ends at the
+/// first line past the last one, as upstream's reader ended at a null line.
+pub struct ParserState<'a> {
+    /// Every line of the input, in order.
+    pub(crate) input: &'a [&'a [u8]],
+    /// How many lines the reader has handed out, counting the absent one
+    /// past the end once the parse has asked for it.
+    pub(crate) lines_read: usize,
     pub pos: ParserPosition,
-    pub stack: ParserState_stack,
-    pub colors: *mut ParserHighlight,
-    pub can_continuate: bool,
-}
-#[derive(Copy, Clone)]
-pub struct ParserStateItem {
-    pub type_0: ParserStateItem_type_0,
-    /// Which kind of expression an expression frame is parsing. Upstream
-    /// wraps this in a one-armed union of a one-field struct; nothing in
-    /// the tree reads either, because the stack is only pushed and popped.
-    pub expr_type: ParserStateItem_data_expr_type_0,
-}
-pub type ParserStateItem_data_expr_type_0 = ::core::ffi::c_uint;
-pub type ParserStateItem_type_0 = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
-pub struct ParserState_stack {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ParserStateItem,
-    pub init_array: [ParserStateItem; 16],
+    /// The highlight log; `None` when the caller wanted none.
+    pub(crate) colors: Option<Vec<ParserHighlightChunk>>,
 }

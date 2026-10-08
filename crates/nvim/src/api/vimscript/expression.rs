@@ -10,26 +10,16 @@
 //! is what [`node_dict_size`] is for and what the assertions at the two exits
 //! check.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api_error;
-use crate::kvec::InitVec;
 use crate::message_fmt::msg_bytes;
+use crate::types::NodeId;
 use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::ptr;
-
-/// One frame of the AST walk: where the node pointer lives (so the walk can
-/// free it and NULL it out) and where its rendered form goes.
-#[derive(Copy, Clone)]
-struct ConvFrame {
-    node_p: *mut *mut ExprASTNode,
-    ret_node_p: *mut Object,
-}
 
 pub fn nvim_parse_expression(
     expr: String_0,
@@ -37,141 +27,73 @@ pub fn nvim_parse_expression(
     hl: Boolean,
 ) -> Result<ApiDict, Error> {
     let error = Error::none();
-    let pflags = parse_flags(flags)?;
+    let pflags = parse_flags(&flags)?;
 
-    let mut parser_lines: [ParserLine; 2] = [
-        ParserLine {
-            data: expr.data(),
-            size: expr.len(),
-            allocated: false,
-        },
-        ParserLine {
-            data: ptr::null::<c_char>(),
-            size: 0,
-            allocated: false,
-        },
-    ];
-    let mut plines_p: *mut ParserLine = parser_lines.as_mut_ptr();
-    let mut colors: ParserHighlight = ParserHighlight {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut::<ParserHighlightChunk>(),
-        init_array: [ParserHighlightChunk {
-            start: ParserPosition { line: 0, col: 0 },
-            end_col: 0,
-            group: ptr::null::<c_char>(),
-        }; 16],
-    };
-    colors.capacity = colors.init_array.len();
-    colors.items = colors.init_array.as_mut_ptr();
-    let colors_p: *mut ParserHighlight = if hl {
-        &raw mut colors
-    } else {
-        ptr::null_mut::<ParserHighlight>()
-    };
-    // SAFETY: `ParserState` is a plain-data struct, so all-zero is a valid
-    // value for it; `viml_parser_init` fills it in before it is read.
-    let mut pstate: ParserState = unsafe { ::core::mem::zeroed() };
-    let state = &raw mut pstate;
-    let lines = (&raw mut plines_p).cast();
-    // SAFETY: `state`, `lines` and `colors_p` all name this frame's locals,
-    // which outlive the parse below.
-    unsafe { viml_parser_init(state, Some(parser_simple_get_line), lines, colors_p) };
-    // SAFETY: as above -- the parser reads the lines it was just given.
-    let mut east: ExprAST = unsafe { viml_pexpr_parse(state, pflags) };
+    // One line; a null string is no line at all, as a null `data` ended
+    // upstream's reader before it began.
+    let line = [expr.as_bytes()];
+    let input: &[&[u8]] = if expr.is_null() { &[] } else { &line };
+    let mut pstate = ParserState::new(input, hl);
+    let east = viml_pexpr_parse(&mut pstate, pflags);
 
     // "len" and "ast", plus "error" and "highlight" when they apply.
-    let ret_size = 2 + size_t::from(!east.err.msg.is_null()) + size_t::from(hl);
+    let ret_size = 2 + size_t::from(east.err.is_some()) + size_t::from(hl);
     let mut ret: ApiDict = ApiDict::with_capacity(ret_size);
     // A multi-line expression stops at the end of the first line.
     let consumed = if pstate.pos.line == 1 {
-        parser_lines[0].size
+        expr.len()
     } else {
         pstate.pos.col
     };
-    // Every container here is sized for exactly the pairs that follow, so
-    // the one promise `dict_put`/`array_add` ask for is this function's own
-    // invariant -- stated here once rather than at every call site.
     ret.insert(c"len", Object::integer(consumed as Integer));
 
-    if !east.err.msg.is_null() {
+    if let Some(err) = &east.err {
         let mut err_dict: ApiDict = ApiDict::with_capacity(2);
-        // SAFETY: the parser's message is NUL-terminated and `arg` names
-        // `arg_len` bytes of the expression.
-        unsafe {
-            let arg = String_0::from_raw_bytes(east.err.arg, east.err.arg_len as size_t);
-            let msg = cstr_to_string(east.err.msg);
-            err_dict.insert(c"message", Object::string(msg));
-            err_dict.insert(c"arg", Object::string(arg));
-            ret.insert(c"error", Object::dict(err_dict));
-        }
+        let arg = err.arg.map_or(String_0::NULL, String_0::from_bytes);
+        err_dict.insert(c"message", Object::string(String_0::from_cstr(err.msg)));
+        err_dict.insert(c"arg", Object::string(arg));
+        ret.insert(c"error", Object::dict(err_dict));
     }
 
     if hl {
-        let mut hl_arr: Array = Array::with_capacity(colors.size);
-        for i in 0..colors.size {
-            // SAFETY: `i` is below `size`, so the chunk is inside `items`.
-            let chunk: ParserHighlightChunk = unsafe { *colors.items.add(i) };
+        let colors = pstate.take_highlight();
+        let mut hl_arr: Array = Array::with_capacity(colors.len());
+        for chunk in &colors {
             let mut chunk_arr: Array = Array::with_capacity(4);
-            // SAFETY: as above -- both arrays are sized for these pushes,
-            // and `group` is a static highlight-group name.
-            unsafe {
-                chunk_arr.push(Object::integer(chunk.start.line as Integer));
-                chunk_arr.push(Object::integer(chunk.start.col as Integer));
-                chunk_arr.push(Object::integer(chunk.end_col as Integer));
-                chunk_arr.push(Object::string(cstr_to_string(chunk.group)));
-                hl_arr.push(Object::array(chunk_arr));
-            }
+            chunk_arr.push(Object::integer(chunk.start.line as Integer));
+            chunk_arr.push(Object::integer(chunk.start.col as Integer));
+            chunk_arr.push(Object::integer(chunk.end_col as Integer));
+            chunk_arr.push(Object::string(String_0::from_cstr(chunk.group)));
+            hl_arr.push(Object::array(chunk_arr));
         }
         ret.insert(c"highlight", Object::array(hl_arr));
     }
-    // The vector `colors` describes is either its inline array or one heap
-    // block; only the second has anything to free.
-    let heap = InitVec::new(
-        &mut colors.size,
-        &mut colors.capacity,
-        &mut colors.items,
-        &mut colors.init_array,
-    )
-    .take_heap();
-    // SAFETY: `heap` is null or that block.
-    unsafe { xfree(heap) };
 
-    let mut ast = Object::Nil;
-    // SAFETY: `east.root` and `ast` are this frame's.
-    unsafe { convert_ast(&raw mut east.root, &raw mut ast) };
-    ret.insert(c"ast", ast);
+    ret.insert(c"ast", convert_ast(&east));
     debug_assert!(ret.len() == ret.capacity(), "ret.len() == ret.capacity()");
-
-    // SAFETY: the walk freed every node it rendered and NULLed its slot, so
-    // this frees only what is left; `pstate` is this frame's.
-    unsafe { viml_pexpr_free_ast(east) };
-    viml_parser_destroy(&mut pstate);
     ret.reported(error)
 }
 
 /// The `flags` argument as `ExprParserFlags`, or which character was not one.
-fn parse_flags(flags: String_0) -> Result<c_int, Error> {
+fn parse_flags(flags: &String_0) -> Result<c_int, Error> {
     let mut pflags: c_int = 0;
-    for i in 0..flags.len() {
-        // SAFETY: `i` is below `len`, so the byte is inside the string.
-        let ch: c_char = unsafe { *flags.data().add(i) };
-        match ch as u8 {
+    for &ch in flags.as_bytes() {
+        match ch {
             b'm' => pflags |= kExprFlagsMulti as c_int,
             b'E' => pflags |= kExprFlagsDisallowEOC as c_int,
             b'l' => pflags |= kExprFlagsParseLet as c_int,
             // A NUL has no `%c` spelling worth printing.
             0 => {
-                let code = ch as c_uint;
+                let code = c_uint::from(ch);
                 return Err(api_error!(
                     kErrorTypeValidation,
                     "Invalid flag: '\\0' ({code})"
                 ));
             }
             _ => {
-                let code = ch as c_uint;
-                let raw = ch as u8;
-                let shown = msg_bytes(core::slice::from_ref(&raw));
+                // The C prints the flag as a `char`'s `%u`.
+                let code = ch as c_char as c_uint;
+                let shown = msg_bytes(core::slice::from_ref(&ch));
                 return Err(api_error!(
                     kErrorTypeValidation,
                     "Invalid flag: '{shown}' ({code})"
@@ -182,95 +104,52 @@ fn parse_flags(flags: String_0) -> Result<c_int, Error> {
     Ok(pflags)
 }
 
-/// Render the tree at `*root_p` into `*out`, freeing each node as it is
-/// finished.
+/// The tree rendered as nested dictionaries, `nil` for an empty parse.
 ///
-/// Iterative because an expression nests as deep as the input says. A frame is
-/// revisited once per child: the first visit allocates the node's dictionary
-/// and descends into `children`, later visits walk the sibling chain through
-/// `next`, and the visit that finds neither fills the dictionary in and pops.
-///
-/// # Safety
-/// `root_p` and `out` must name the caller's slots, and the tree below
-/// `*root_p` must be the parser's own.
-unsafe fn convert_ast(root_p: *mut *mut ExprASTNode, out: *mut Object) {
-    let mut stack: Vec<ConvFrame> = Vec::with_capacity(16);
-    stack.push(ConvFrame {
-        node_p: root_p,
-        ret_node_p: out,
-    });
-    while let Some(&frame) = stack.last() {
-        // SAFETY: every frame names a slot of the caller's or of a node the
-        // walk has not freed yet.
-        let node: *mut ExprASTNode = unsafe { *frame.node_p };
-        if node.is_null() {
-            // Only the root can be NULL, and only when the parse produced
-            // nothing at all.
-            debug_assert!(stack.len() == 1, "kv_size(ast_conv_stack) == 1");
-            stack.pop();
-            continue;
-        }
-        // SAFETY: as above.
-        if unsafe { (*frame.ret_node_p).is_nil() } {
-            // SAFETY: `node` is a live node of the parser's tree.
-            let ret_node = ApiDict::with_capacity(unsafe { node_dict_size(&*node) });
-            // SAFETY: as above.
-            unsafe { *frame.ret_node_p = Object::dict(ret_node) };
-        }
-        // SAFETY: as above -- and the slot now holds a dictionary, which is
-        // what this addresses in place.
-        let ret_node: *mut ApiDict = unsafe { &mut *frame.ret_node_p }
-            .as_dict_mut()
-            .expect("the slot was given a dictionary just above");
-        // SAFETY: `node` is live.
-        let children = unsafe { (*node).children };
-        if !children.is_null() {
-            // A node has at most two children, laid out as a `next` chain.
-            // SAFETY: `children` is the first of them.
-            let num_children = 1 + size_t::from(!unsafe { (*children).next }.is_null());
-            let mut children_array: Array = Array::with_capacity(num_children);
-            for _ in 0..num_children {
-                children_array.push(Object::Nil);
+/// Iterative, because an expression nests as deep as the input says: each
+/// node is entered once, its children rendered first, and its dictionary
+/// built when it is left from the rendered children on top of `done`.
+fn convert_ast(east: &ExprAST<'_>) -> Object {
+    enum Step {
+        Enter(NodeId),
+        Leave(NodeId),
+    }
+    let Some(root) = east.root else {
+        return Object::Nil;
+    };
+    let mut steps = vec![Step::Enter(root)];
+    let mut done: Vec<Object> = Vec::new();
+    while let Some(step) = steps.pop() {
+        match step {
+            Step::Enter(id) => {
+                steps.push(Step::Leave(id));
+                // Pushed last to first, so the first child is rendered first.
+                let children: Vec<NodeId> = east.children(id).collect();
+                steps.extend(children.into_iter().rev().map(Step::Enter));
             }
-            // SAFETY: `ret_node` names the dictionary the slot holds.
-            let node_dict: &mut ApiDict = unsafe { &mut *ret_node };
-            node_dict.insert(c"children", Object::array(children_array));
-            let last = node_dict.len() - 1;
-            let slot = node_dict[last]
-                .value
-                .as_array_mut()
-                .expect("the pair just inserted holds an array")
-                .as_mut_ptr();
-            stack.push(ConvFrame {
-                // SAFETY: `node` is live for as long as the frame is.
-                node_p: unsafe { &raw mut (*node).children },
-                ret_node_p: slot,
-            });
-        } else if !unsafe { (*node).next }.is_null() {
-            stack.push(ConvFrame {
-                // SAFETY: as above.
-                node_p: unsafe { &raw mut (*node).next },
-                // SAFETY: the parent sized its array for both siblings.
-                ret_node_p: unsafe { frame.ret_node_p.add(1) },
-            });
-        } else {
-            stack.pop();
-            // SAFETY: `node` is live and `ret_node` is its dictionary,
-            // sized by `node_dict_size` for exactly what this adds.
-            unsafe { finish_node(node, &mut *ret_node) };
-            // SAFETY: `ret_node` still addresses the dictionary just filled in.
-            debug_assert!(
-                unsafe { (*ret_node).len() == (*ret_node).capacity() },
-                "the node dictionary was sized for exactly the keys it holds"
-            );
-            // SAFETY: the node has been rendered, so nothing names it any
-            // more, and the slot it hung off is the caller's.
-            unsafe {
-                xfree((*frame.node_p).cast());
-                *frame.node_p = ptr::null_mut::<ExprASTNode>();
+            Step::Leave(id) => {
+                let node = east.node(id);
+                let mut ret_node = ApiDict::with_capacity(node_dict_size(node));
+                let num_children = east.children(id).count();
+                if num_children != 0 {
+                    let children = done.split_off(done.len() - num_children);
+                    let mut children_array: Array = Array::with_capacity(num_children);
+                    for child in children {
+                        children_array.push(child);
+                    }
+                    ret_node.insert(c"children", Object::array(children_array));
+                }
+                finish_node(node, &mut ret_node);
+                debug_assert!(
+                    ret_node.len() == ret_node.capacity(),
+                    "the node dictionary was sized for exactly the keys it holds"
+                );
+                done.push(Object::dict(ret_node));
             }
         }
     }
+    debug_assert!(done.len() == 1, "the walk renders the root last");
+    done.pop().unwrap_or(Object::Nil)
 }
 
 /// How many pairs [`finish_node`] will put in a node's dictionary. The three
@@ -279,7 +158,7 @@ fn node_dict_size(node: &ExprASTNode) -> size_t {
     let type_0 = node.type_0;
     let has_scope = type_0 == kExprNodeOption || type_0 == kExprNodePlainIdentifier;
     let has_ident = has_scope || type_0 == kExprNodePlainKey || type_0 == kExprNodeEnvironment;
-    3 + size_t::from(!node.children.is_null())
+    3 + size_t::from(node.children.is_some())
         + size_t::from(has_scope)
         + size_t::from(has_ident)
         + size_t::from(type_0 == kExprNodeRegister)
@@ -294,32 +173,16 @@ fn node_dict_size(node: &ExprASTNode) -> size_t {
 }
 
 /// The pairs a node contributes once its children have been rendered: the
-/// three every node has, then whatever its own variant carries.
-///
-/// # Safety
-/// `node` must be a live node of the parser's tree, and `ret_node` its
-/// dictionary, sized by [`node_dict_size`].
-unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
-    // SAFETY: the caller's promise -- `node` is live, and nothing below
-    // writes through it.
-    let node = unsafe { &*node };
+/// three every node has, then whatever its own variant carries. `ret_node`
+/// was sized by [`node_dict_size`].
+fn finish_node(node: &ExprASTNode<'_>, ret_node: &mut ApiDict) {
     let type_0 = node.type_0;
-
-    // `ret_node` was sized by `node_dict_size` for exactly the pairs added
-    // here, which is the one promise `dict_put` asks for -- stated once
-    // rather than at each of the fifteen call sites below.
     let put = |dict: &mut ApiDict, key: &'static CStr, value: Object| {
         dict.insert(key, value);
     };
     // The three name tables hold static C strings.
     let table_name = |name: &CStr| Object::string(String_0::from_cstr(name));
-    // The string body is the node's; the answer gets a copy, since the node
-    // itself is about to go.
-    let string_body = |value: *mut c_char, size: size_t| {
-        // SAFETY: the node owns `size` readable bytes at `value`, or names
-        // none at all -- an unterminated string literal has no body.
-        Object::string(unsafe { String_0::from_raw_bytes(value, size) })
-    };
+    let bytes = |value: &[u8]| Object::string(String_0::from_bytes(value));
 
     let type_name = NODE_TYPE_NAMES[type_0 as usize];
     put(ret_node, c"type", table_name(type_name));
@@ -330,16 +193,13 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
     put(ret_node, c"start", Object::array(start_array));
     put(ret_node, c"len", Object::integer(node.len as Integer));
 
-    // The payload, once, so each arm below reads as the field list its
-    // node type carries rather than as a chain through the pointer.
-    let data = node.data;
+    let data = &node.data;
     match type_0 {
         kExprNodeDoubleQuotedString | kExprNodeSingleQuotedString => {
-            let str = string_body(data.string().value, data.string().size);
+            // An unterminated or empty literal may have no body at all.
+            let value = data.string().value.as_deref();
+            let str = value.map_or(Object::string(String_0::NULL), bytes);
             put(ret_node, c"svalue", str);
-            // SAFETY: the body was just copied into the answer, and the
-            // node's own copy is freed exactly once, here.
-            unsafe { xfree(data.string().value.cast()) };
         }
         kExprNodeOption => {
             put(
@@ -347,8 +207,7 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
                 c"scope",
                 Object::integer(data.option().scope as Integer),
             );
-            let ident = string_body(data.option().ident.cast_mut(), data.option().ident_len);
-            put(ret_node, c"ident", ident);
+            put(ret_node, c"ident", bytes(data.option().ident));
         }
         kExprNodePlainIdentifier => {
             put(
@@ -356,19 +215,13 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
                 c"scope",
                 Object::integer(data.variable().scope as Integer),
             );
-            let ident = string_body(data.variable().ident.cast_mut(), data.variable().ident_len);
-            put(ret_node, c"ident", ident);
+            put(ret_node, c"ident", bytes(data.variable().ident));
         }
         kExprNodePlainKey => {
-            let ident = string_body(data.variable().ident.cast_mut(), data.variable().ident_len);
-            put(ret_node, c"ident", ident);
+            put(ret_node, c"ident", bytes(data.variable().ident));
         }
         kExprNodeEnvironment => {
-            let ident = string_body(
-                data.environment().ident.cast_mut(),
-                data.environment().ident_len,
-            );
-            put(ret_node, c"ident", ident);
+            put(ret_node, c"ident", bytes(data.environment().ident));
         }
         kExprNodeRegister => {
             put(

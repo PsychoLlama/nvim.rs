@@ -6,20 +6,14 @@
 //! through [`ExprParser`], which owns everything the loop threads between
 //! them, and [`Flow`], which is how a handler tells the loop what to do next.
 //!
-//! The AST itself deliberately stays *outside* `ExprParser`: the bottom of
-//! the AST stack points at `ExprAST::root`, and a struct holding a pointer
-//! into itself cannot be passed around as `&mut` without invalidating it.
-
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
+use super::ast::{east_set_error, translate};
 use super::{brackets, figure, operators, values, *};
-use crate::types::ParserHighlight;
-use crate::viml::parser::parser::reader_line;
 
 /// Additional flags to pass to the lexer, indexed by the wanted node.
 static want_node_to_lexer_flags: [c_int; 2] = [
@@ -41,13 +35,25 @@ pub(super) fn pt_is_assignment(pt: ExprASTParseType) -> bool {
 /// follow.
 macro_rules! hl {
     ($p:expr, $group:ident) => {
-        (if $p.is_invalid {
-            concat!("NvimInvalid", stringify!($group), "\0")
+        if $p.is_invalid {
+            const {
+                match ::core::ffi::CStr::from_bytes_with_nul(
+                    concat!("NvimInvalid", stringify!($group), "\0").as_bytes(),
+                ) {
+                    Ok(group) => group,
+                    Err(_) => panic!("a group name holds no NUL"),
+                }
+            }
         } else {
-            concat!("Nvim", stringify!($group), "\0")
-        })
-        .as_ptr()
-        .cast::<::core::ffi::c_char>()
+            const {
+                match ::core::ffi::CStr::from_bytes_with_nul(
+                    concat!("Nvim", stringify!($group), "\0").as_bytes(),
+                ) {
+                    Ok(group) => group,
+                    Err(_) => panic!("a group name holds no NUL"),
+                }
+            }
+        }
     };
 }
 pub(super) use hl;
@@ -90,7 +96,7 @@ impl LexExprToken {
             LexExprTokenData::Error(err) => err,
             _ => LexExprTokenError {
                 type_0: kExprLexInvalid,
-                msg: ::core::ptr::null(),
+                msg: c"",
                 opt_scope: kExprOptScopeUnspecified,
             },
         }
@@ -118,7 +124,7 @@ impl LexExprToken {
             _ => kExprOptScopeUnspecified,
         };
         LexExprTokenOption {
-            name: ::core::ptr::null(),
+            name_offset: 0,
             len: 0,
             scope,
         }
@@ -190,24 +196,21 @@ pub(super) enum Flow {
 ///
 /// The first block lives for the whole parse; the second is refreshed for
 /// each token before the handlers see it.
-pub(super) struct ExprParser {
-    /// Reader and highlight state, owned by the caller. Stays a raw pointer:
-    /// it embeds kvecs whose `items` point back inside it, which a `&mut`
-    /// retag would invalidate.
-    pub(super) pstate: *mut ParserState,
-    /// The AST being built, owned by `viml_pexpr_parse`'s frame. `ast_stack`
-    /// holds a pointer to its `root` field, so it cannot live in here.
-    pub(super) ast: *mut ExprAST,
+pub(super) struct ExprParser<'a, 's> {
+    /// Reader and highlight state, owned by the caller.
+    pub(super) pstate: &'s mut ParserState<'a>,
+    /// The AST being built, handed back when the parse ends.
+    pub(super) ast: ExprAST<'a>,
     pub(super) flags: c_int,
 
     /// The current branch of the AST:
     ///
-    /// - item 0 holds the root of the tree, i.e. `&ast.root`;
-    /// - item i points to the previous item's last child.
+    /// - item 0 is the root slot;
+    /// - item i is the previous item's last child.
     ///
-    /// While the parser wants a value the last item points at NULL; otherwise
-    /// it holds the last *finished* value, e.g. `1` or `+(1, 1)`.
-    pub(super) ast_stack: Vec<*mut *mut ExprASTNode>,
+    /// While the parser wants a value the last item is empty; otherwise it
+    /// holds the last *finished* value, e.g. `1` or `+(1, 1)`.
+    pub(super) ast_stack: Vec<Slot>,
     /// What is being parsed: a plain expression, an assignment lvalue, or a
     /// lambda's argument list.
     pub(super) pt_stack: Vec<ExprASTParseType>,
@@ -215,8 +218,8 @@ pub(super) struct ExprParser {
     pub(super) prev_token: LexExprToken,
     pub(super) highlighted_prev_spacing: bool,
     /// The figure brace node currently being read as a lambda's argument
-    /// list; NULL at any other time.
-    pub(super) lambda_node: *mut ExprASTNode,
+    /// list; `None` at any other time.
+    pub(super) lambda_node: Option<NodeId>,
     /// Stack depth at which the assignment lvalue started, so that closing
     /// its last bracket can pop the assignment parse type again.
     pub(super) asgn_level: size_t,
@@ -235,58 +238,46 @@ pub(super) struct ExprParser {
     /// Whether the enclosing node is an as-yet-undecided `d.key`.
     pub(super) is_concat_or_subscript: bool,
     /// The line the token was read from.
-    pub(super) pline: ParserLine,
+    pub(super) pline: &'a [u8],
     /// The slot the token's value node goes into: the top of the AST stack.
-    pub(super) top_node_p: *mut *mut ExprASTNode,
+    pub(super) top_node_p: Slot,
     /// Whether this token is a dictionary key rather than a value.
     pub(super) node_is_key: bool,
     /// The parse type in force for this token.
     pub(super) cur_pt: ExprASTParseType,
 }
 
-impl ExprParser {
-    /// # Safety
-    /// `pstate` must point at a parser initialised by `viml_parser_init` and
-    /// `ast` at the AST being built, both of which must outlive the parse.
-    /// Every method below relies on that and is safe because of it.
-    unsafe fn new(pstate: *mut ParserState, ast: *mut ExprAST, flags: c_int) -> Self {
+impl<'a, 's> ExprParser<'a, 's> {
+    fn new(pstate: &'s mut ParserState<'a>, flags: c_int) -> Self {
         let mut pt_stack = Vec::new();
         pt_stack.push(kEPTExpr);
         if flags & kExprFlagsParseLet as c_int != 0 {
             pt_stack.push(kEPTAssignment);
         }
+        let blank = LexExprToken {
+            start: ParserPosition { line: 0, col: 0 },
+            len: 0,
+            type_0: kExprLexMissing,
+            data: LexExprTokenData::Blank,
+        };
         ExprParser {
             pstate,
-            ast,
+            ast: ExprAST::new(),
             flags,
-            ast_stack: Vec::new(),
+            ast_stack: vec![Slot::Root],
             pt_stack,
             want_node: kENodeValue,
-            prev_token: LexExprToken {
-                start: ParserPosition { line: 0, col: 0 },
-                len: 0,
-                type_0: kExprLexMissing,
-                data: LexExprTokenData::Blank,
-            },
+            prev_token: blank,
             highlighted_prev_spacing: false,
-            lambda_node: ::core::ptr::null_mut::<ExprASTNode>(),
+            lambda_node: None,
             asgn_level: 0,
-            cur_token: LexExprToken {
-                start: ParserPosition { line: 0, col: 0 },
-                len: 0,
-                type_0: kExprLexMissing,
-                data: LexExprTokenData::Blank,
-            },
+            cur_token: blank,
             tok_type: kExprLexMissing,
             is_invalid: false,
             lexer_flags: 0,
             is_concat_or_subscript: false,
-            pline: ParserLine {
-                data: ::core::ptr::null::<c_char>(),
-                size: 0,
-                allocated: false,
-            },
-            top_node_p: ::core::ptr::null_mut::<*mut ExprASTNode>(),
+            pline: &[],
+            top_node_p: Slot::Root,
             node_is_key: false,
             cur_pt: kEPTExpr,
         }
@@ -305,93 +296,63 @@ impl ExprParser {
 
     /// Peek at the next token with the flags this parse state calls for.
     fn next_token(&mut self) -> LexExprToken {
-        // SAFETY: the parser holds `pstate` for the whole parse.
-        unsafe {
-            viml_pexpr_next_token(
-                self.pstate,
-                want_node_to_lexer_flags[self.want_node as usize] | self.lexer_flags,
-            )
-        }
-    }
-
-    /// The line a position falls on.
-    fn line_at(&self, at: ParserPosition) -> ParserLine {
-        // SAFETY: as above; the reborrow reaches only the reader.
-        reader_line(unsafe { &(*self.pstate).reader }, at.line)
-    }
-
-    /// The caller's highlight log, or null when they wanted none.
-    fn colors(&self) -> *mut ParserHighlight {
-        // SAFETY: as above.
-        unsafe { (*self.pstate).colors }
+        viml_pexpr_next_token(
+            self.pstate,
+            want_node_to_lexer_flags[self.want_node as usize] | self.lexer_flags,
+        )
     }
 
     /// How many highlight chunks have been recorded so far; `None` when the
     /// caller asked for no highlighting.
     pub(super) fn highlight_count(&self) -> Option<size_t> {
-        let colors = self.colors();
-        // SAFETY: non-null, and the caller owns it for the whole parse.
-        (!colors.is_null()).then(|| unsafe { (*colors).size })
+        self.pstate.highlight_count()
     }
 
     /// Rewrite the highlight group of a chunk already recorded, as the guess
     /// at what a figure brace is narrows. A no-op without highlighting.
-    ///
-    /// This goes through `highlight_vec`, never the collection's own `items`:
-    /// that pointer is stale while the log is still inline.
-    pub(super) fn recolour(&self, index: size_t, group: *const c_char) {
-        let colors = self.colors();
-        if colors.is_null() {
-            return;
-        }
-        // SAFETY: non-null, and the caller owns it for the whole parse.
-        highlight_vec(unsafe { &mut *colors }).as_mut_slice()[index].group = group;
+    pub(super) fn recolour(&mut self, index: size_t, group: &'static CStr) {
+        self.pstate.recolour(index, group);
     }
 
-    /// A pointer into the line the current token came from. The reader keeps
-    /// every line it has read for the whole parse, so a node may hold on to
-    /// this. `wrapping_add` because the C did: `col` is a position within the
-    /// line, so the arithmetic is exact.
-    pub(super) fn line_ptr(&self, col: size_t) -> *const c_char {
-        self.pline.data.wrapping_add(col)
+    /// `len` bytes of the line the current token came from, from `col`. The
+    /// lines are the caller's for the whole parse, so a node may hold on to
+    /// this.
+    pub(super) fn line_slice(&self, col: size_t, len: size_t) -> &'a [u8] {
+        &self.pline[col..col + len]
     }
 
     /// The byte at `col` of the line the current token came from.
     pub(super) fn line_byte(&self, col: size_t) -> u8 {
-        // SAFETY: `pline` spans the whole line, and callers index within the
-        // current token, which the lexer cut out of that line.
-        unsafe { *self.line_ptr(col) as u8 }
+        self.pline[col]
     }
 
     /// Decode the current token's string literal into `node`, which becomes
     /// its owner.
-    pub(super) fn decode_quoted_string(&self, node: *mut ExprASTNode) {
-        // SAFETY: the parser holds `pstate` for the whole parse, and `node` is
-        // the string node just allocated for this token.
-        unsafe { parse_quoted_string(self.pstate, node, self.cur_token, self.is_invalid) };
+    pub(super) fn decode_quoted_string(&mut self, node: NodeId) {
+        let literal = parse_quoted_string(self.pstate, self.cur_token, self.is_invalid);
+        self.ast.set_data(node, ExprNodeData::Str(literal));
     }
 
     /// `HL_CUR_TOKEN`: highlight the whole current token.
-    pub(super) fn hl_token(&self, group: *const c_char) {
+    pub(super) fn hl_token(&mut self, group: &'static CStr) {
         self.hl_at(self.cur_token.start, self.cur_token.len, group);
     }
 
     /// Highlight a slice of the current token.
-    pub(super) fn hl_at(&self, pos: ParserPosition, len: size_t, group: *const c_char) {
-        // SAFETY: the parser holds `pstate` for the whole parse, and every
-        // group named here is a `'static` string.
-        unsafe { viml_parser_highlight(self.pstate, pos, len, group) };
+    pub(super) fn hl_at(&mut self, pos: ParserPosition, len: size_t, group: &'static CStr) {
+        self.pstate.highlight(pos, len, group);
     }
 
     /// `NEW_NODE_WITH_CUR_POS`: allocate a node spanning the current token,
     /// and the spacing before it if there was any.
-    pub(super) fn new_node(&self, type_0: ExprASTNodeType) -> *mut ExprASTNode {
-        let node = viml_pexpr_new_node(type_0);
+    pub(super) fn new_node(&mut self, type_0: ExprASTNodeType) -> NodeId {
+        let node = self.ast.new_node(type_0);
         if self.prev_token.type_0 == kExprLexSpacing {
             let len = self.cur_token.len.wrapping_add(self.prev_token.len);
-            set_node_span(node, self.prev_token.start, len);
+            self.ast.set_span(node, self.prev_token.start, len);
         } else {
-            set_node_span(node, self.cur_token.start, self.cur_token.len);
+            self.ast
+                .set_span(node, self.cur_token.start, self.cur_token.len);
         }
         node
     }
@@ -404,19 +365,19 @@ impl ExprParser {
 
     /// `ERROR_FROM_TOKEN` / `ERROR_FROM_NODE_AND_MSG`: as [`Self::error`], for
     /// an already-translated message reported at an explicit position.
-    pub(super) fn error_at(&mut self, msg: *const c_char, at: ParserPosition) {
+    pub(super) fn error_at(&mut self, msg: &'static CStr, at: ParserPosition) {
         self.is_invalid = true;
-        east_set_error(self.pstate, self.ast, msg, at);
+        east_set_error(self.pstate, &mut self.ast, msg, at);
     }
 
     /// `ADD_OP_NODE`: hand an operator node to the shunting yard.
-    pub(super) fn add_op_node(&mut self, node: *mut ExprASTNode) {
+    pub(super) fn add_op_node(&mut self, node: NodeId) {
         self.is_invalid |= !viml_pexpr_handle_bop(
             self.pstate,
+            &mut self.ast,
             &mut self.ast_stack,
             node,
             &mut self.want_node,
-            self.ast,
         );
     }
 
@@ -426,8 +387,8 @@ impl ExprParser {
         if self.want_node == kENodeValue {
             self.error(msg);
             let node = self.new_node(kExprNodeMissing);
-            set_node_len(node, 0);
-            set_slot_node(self.top_node_p, node);
+            self.ast.set_len(node, 0);
+            self.ast.set_slot(self.top_node_p, Some(node));
             self.want_node = kENodeOperator;
         }
     }
@@ -442,10 +403,13 @@ impl ExprParser {
         if self.flags & kExprFlagsMulti as c_int != 0 && self.may_have_next_expr() {
             return Flow::Stop;
         }
-        debug_assert!(!slot_node(self.top_node_p).is_null(), "*top_node_p != NULL");
+        debug_assert!(
+            self.ast.slot(self.top_node_p).is_some(),
+            "*top_node_p != NULL"
+        );
         self.error(c"E15: Missing operator: %.*s");
         let node = self.new_node(kExprNodeOpMissing);
-        set_node_len(node, 0);
+        self.ast.set_len(node, 0);
         self.add_op_node(node);
         Flow::Reprocess
     }
@@ -455,16 +419,16 @@ impl ExprParser {
     ///
     pub(super) fn select_figure_brace_type(
         &mut self,
-        node: *mut ExprASTNode,
+        node: NodeId,
         new_type: ExprASTNodeType,
-        group: *const c_char,
+        group: &'static CStr,
     ) {
         assert!(
-            node_type(node) == kExprNodeUnknownFigure || node_type(node) == new_type,
+            self.ast.kind(node) == kExprNodeUnknownFigure || self.ast.kind(node) == new_type,
             "the node is still an unknown figure brace, or already the new type"
         );
-        set_node_type(node, new_type);
-        self.recolour(node_fig(node).opening_hl_idx, group);
+        self.ast.set_kind(node, new_type);
+        self.recolour(self.ast.fig(node).opening_hl_idx, group);
     }
 
     /// `ADD_IDENT`'s prologue: open a complex identifier — `a{b}c` and
@@ -474,7 +438,7 @@ impl ExprParser {
     /// `None` means this cannot be a part of a complex identifier after all,
     /// and the caller must report a missing operator: either there is spacing
     /// before it, or what precedes it is not an identifier.
-    pub(super) fn open_complex_identifier(&mut self) -> Option<*mut *mut ExprASTNode> {
+    pub(super) fn open_complex_identifier(&mut self) -> Option<Slot> {
         debug_assert!(
             self.want_node == kENodeOperator,
             "want_node == kENodeOperator"
@@ -482,7 +446,7 @@ impl ExprParser {
         if self.prev_token.type_0 == kExprLexSpacing {
             return None;
         }
-        match node_type(slot_node(self.top_node_p)) {
+        match self.ast.kind(self.ast.filled(self.top_node_p)) {
             // TODO(ZyX-I): Extend syntax to allow ${expr}. This is needed to
             // handle environment variables like those bash uses for
             // `export -f`: their names consist not only of alphanumeric
@@ -493,12 +457,13 @@ impl ExprParser {
             _ => return None,
         }
         let node = self.new_node(kExprNodeComplexIdentifier);
-        set_node_len(node, 0);
-        set_node_children(node, slot_node(self.top_node_p));
-        set_slot_node(self.top_node_p, node);
-        self.ast_stack.push(next_slot(node_children(node)));
-        let slot = stack_top(&self.ast_stack, 0);
-        debug_assert!(slot_node(slot).is_null(), "*new_top_node_p == NULL");
+        self.ast.set_len(node, 0);
+        let operand = self.ast.slot(self.top_node_p);
+        self.ast.set_children(node, operand);
+        self.ast.set_slot(self.top_node_p, Some(node));
+        let slot = Slot::Next(operand.expect("an identifier precedes it"));
+        self.ast_stack.push(slot);
+        debug_assert!(self.ast.slot(slot).is_none(), "*new_top_node_p == NULL");
         Some(slot)
     }
 
@@ -507,7 +472,9 @@ impl ExprParser {
         loop {
             self.is_concat_or_subscript = self.want_node == kENodeValue
                 && self.ast_stack.len() > 1
-                && node_type(slot_node(stack_top(&self.ast_stack, 1)))
+                && self
+                    .ast
+                    .kind(self.ast.filled(stack_top(&self.ast_stack, 1)))
                     == kExprNodeConcatOrSubscript;
             self.lexer_flags = kELFlagPeek as c_int
                 | (if self.flags & kExprFlagsDisallowEOC as c_int != 0 {
@@ -518,7 +485,8 @@ impl ExprParser {
                 | (if self.want_node == kENodeValue
                     && (self.ast_stack.len() == 1
                         || !matches!(
-                            node_type(slot_node(stack_top(&self.ast_stack, 1))),
+                            self.ast
+                                .kind(self.ast.filled(stack_top(&self.ast_stack, 1))),
                             kExprNodeConcat | kExprNodeConcatOrSubscript
                         ))
                 {
@@ -543,11 +511,7 @@ impl ExprParser {
             }
             self.prev_token = self.cur_token;
             self.highlighted_prev_spacing = false;
-            // SAFETY: the parser holds `pstate` for the whole parse; the two
-            // reborrows are of disjoint fields and reach neither the AST stack
-            // nor the highlight log.
-            let (pos, reader) = unsafe { (&mut (*self.pstate).pos, &mut (*self.pstate).reader) };
-            viml_parser_advance(pos, reader, self.cur_token.len);
+            self.pstate.advance(self.cur_token.len);
         }
         self.finish();
     }
@@ -576,7 +540,10 @@ impl ExprParser {
             self.is_invalid = false;
             self.highlighted_prev_spacing = true;
         }
-        self.pline = self.line_at(self.cur_token.start);
+        self.pline = self
+            .pstate
+            .line(self.cur_token.start.line)
+            .expect("a token comes from a line of the input");
         self.top_node_p = stack_top(&self.ast_stack, 0);
         debug_assert!(!self.ast_stack.is_empty(), "kv_size(ast_stack) >= 1");
         self.check_stack_invariants();
@@ -607,7 +574,8 @@ impl ExprParser {
             // parser has no idea whether the preceding expression is actually a
             // dictionary it can't outright reject anything, so it turns
             // kExprNodeConcatOrSubscript into kExprNodeConcat instead.
-            set_node_type(slot_node(stack_top(&self.ast_stack, 1)), kExprNodeConcat);
+            let enclosing = self.ast.filled(stack_top(&self.ast_stack, 1));
+            self.ast.set_kind(enclosing, kExprNodeConcat);
         }
         if let Some(flow) = self.reconcile_parse_type() {
             return flow;
@@ -615,7 +583,7 @@ impl ExprParser {
         debug_assert!(!self.pt_stack.is_empty(), "kv_size(pt_stack)");
         self.cur_pt = self.pt_top();
         debug_assert!(
-            self.lambda_node.is_null() || self.cur_pt == kEPTLambdaArguments,
+            self.lambda_node.is_none() || self.cur_pt == kEPTLambdaArguments,
             "lambda_node == NULL || cur_pt == kEPTLambdaArguments"
         );
         self.dispatch()
@@ -633,32 +601,35 @@ impl ExprParser {
             return;
         }
         let want_value = self.want_node == kENodeValue;
+        let ast = &self.ast;
         debug_assert!(
-            want_value == slot_node(self.top_node_p).is_null(),
+            want_value == ast.slot(self.top_node_p).is_none(),
             "want_value == (*top_node_p == NULL)"
         );
         debug_assert!(
-            self.ast_stack[0] == ast_root_slot(self.ast),
+            self.ast_stack[0] == Slot::Root,
             "kv_A(ast_stack, 0) == &ast.root"
         );
         let last = self.ast_stack.len().saturating_sub(1);
         for (i, (&slot, &next)) in self.ast_stack.iter().zip(&self.ast_stack[1..]).enumerate() {
             let item_null = want_value && i + 1 == last;
-            let node = slot_node(slot);
+            let node = ast.filled(slot);
+            let first = ast.first_child(node);
+            let second = first.and_then(|first| ast.next(first));
             debug_assert!(
-                children_slot(node) == next
+                next == Slot::Children(node)
                     && (if item_null {
-                        node_children(node).is_null()
+                        first.is_none()
                     } else {
-                        node_next(node_children(node)).is_null()
+                        first.is_some() && second.is_none()
                     })
-                    || next_slot(node_children(node)) == next
+                    || first.is_some_and(|first| next == Slot::Next(first))
                         && (if item_null {
-                            node_next(node_children(node)).is_null()
+                            second.is_none()
                         } else {
-                            node_next(node_next(node_children(node))).is_null()
+                            second.is_some_and(|second| ast.next(second).is_none())
                         }),
-                "(&(*kv_A(ast_stack, i))->children == kv_A(ast_stack, i + 1) && (item_null ? (*kv_A(ast_stack, i))->children == NULL : (*kv_A(ast_stack, i))->children->next == NULL)) || ((&(*kv_A(ast_stack, i))->children->next == kv_A(ast_stack, i + 1)) && (item_null ? (*kv_A(ast_stack, i))->children->next == NULL : (*kv_A(ast_stack, i))->children->next->next == NULL))"
+                "item {i} + 1 is the last child slot of item {i}"
             );
         }
     }
@@ -679,11 +650,12 @@ impl ExprParser {
                             && !self.cur_token.variable().autoload)
                         && self.tok_type != kExprLexArrow
                 {
-                    let mut fig = node_fig(self.lambda_node);
+                    let lambda_node = self.lambda_node.expect("a lambda's arguments are open");
+                    let mut fig = self.ast.fig(lambda_node);
                     fig.type_guesses.allow_lambda = false;
-                    set_node_data(self.lambda_node, ExprNodeData::Figure(fig));
-                    let first = node_children(self.lambda_node);
-                    if !first.is_null() && node_type(first) == kExprNodeComma {
+                    self.ast.set_data(lambda_node, ExprNodeData::Figure(fig));
+                    let first = self.ast.first_child(lambda_node);
+                    if first.is_some_and(|first| self.ast.kind(first) == kExprNodeComma) {
                         // A comma child means the parser has already seen at
                         // least "{arg1,", so the node cannot possibly be
                         // anything but a lambda.
@@ -697,7 +669,7 @@ impl ExprParser {
                         // Else it may appear that the possibly-lambda node is
                         // actually a dictionary or a curly-braces-name
                         // identifier.
-                        self.lambda_node = ::core::ptr::null_mut::<ExprASTNode>();
+                        self.lambda_node = None;
                         self.pt_stack.truncate(self.pt_stack.len() - 1);
                     }
                 }
@@ -742,8 +714,9 @@ impl ExprParser {
     /// Hand the token to the handler for its class.
     fn dispatch(&mut self) -> Flow {
         match self.tok_type {
-            // SAFETY: `abort` only ever ends the process.
-            kExprLexMissing | kExprLexSpacing | kExprLexEOC => unsafe { abort() },
+            kExprLexMissing | kExprLexSpacing | kExprLexEOC => {
+                unreachable!("the token loop handles these itself")
+            }
             kExprLexInvalid => {
                 self.error_at(self.cur_token.error().msg, self.cur_token.start);
                 // Dispatch it again as whatever it was trying to be.
@@ -783,8 +756,7 @@ impl ExprParser {
         // kEPTLambdaArguments is blacklisted because its presence means a
         // better error message comes out of the other branch.
         if self.want_node == kENodeValue && self.pt_top() != kEPTLambdaArguments {
-            // SAFETY: the parser holds `pstate` for the whole parse.
-            let pos = unsafe { (*self.pstate).pos };
+            let pos = self.pstate.pos;
             self.error_at(translate(c"E15: Expected value, got EOC: %.*s"), pos);
             return;
         }
@@ -797,12 +769,12 @@ impl ExprParser {
         // The topmost item is a *finished* value — it may hold an already
         // finished nested expression — so it must not be analyzed.
         self.ast_stack.truncate(self.ast_stack.len() - 1);
-        while !ast_has_error(self.ast) && !self.ast_stack.is_empty() {
-            let node = slot_node(self.ast_stack.pop().expect("the stack is not empty"));
+        while !self.ast.has_error() && !self.ast_stack.is_empty() {
+            let slot = self.ast_stack.pop().expect("the stack is not empty");
             // This should only happen when want_node == kENodeValue.
-            debug_assert!(!node.is_null(), "cur_node != NULL");
+            let node = self.ast.filled(slot);
             // TODO(ZyX-I): Rehighlight as invalid?
-            let msg: &'static CStr = match node_type(node) {
+            let msg: &'static CStr = match self.ast.kind(node) {
                 // The error should've been already reported.
                 kExprNodeOpMissing | kExprNodeMissing => continue,
                 kExprNodeCall => c"E116: Missing closing parenthesis for function call: %.*s",
@@ -836,10 +808,9 @@ impl ExprParser {
                 | kExprNodeEnvironment
                 | kExprNodeRegister
                 | kExprNodePlainIdentifier
-                // SAFETY: `abort` only ever ends the process.
-                | kExprNodePlainKey => unsafe { abort() },
+                | kExprNodePlainKey => unreachable!("a plain value is only ever on top"),
                 // Actually Vim throws E109 in more cases.
-                kExprNodeTernaryValue if !node_got_colon(node) => {
+                kExprNodeTernaryValue if !self.ast.got_colon(node) => {
                     c"E109: Missing ':' after '?': %.*s"
                 }
                 // Everything else is either only valid inside something that
@@ -847,29 +818,19 @@ impl ExprParser {
                 // see in the stack.
                 _ => continue,
             };
-            self.error_at(translate(msg), node_start(node));
+            let start = self.ast.start(node);
+            self.error_at(translate(msg), start);
         }
     }
 }
 
-/// Parse one Vimscript expression.
+/// Parse one Vimscript expression out of `pstate`'s input.
 ///
-/// # Safety
-///
-/// `pstate` must point at a live `ParserState`, unaliased for the call.
-pub unsafe fn viml_pexpr_parse(pstate: *mut ParserState, flags: c_int) -> ExprAST {
-    let mut ast = ExprAST {
-        err: ExprASTError {
-            msg: ::core::ptr::null::<c_char>(),
-            arg: ::core::ptr::null::<c_char>(),
-            arg_len: 0,
-        },
-        root: ::core::ptr::null_mut::<ExprASTNode>(),
-    };
-    // SAFETY: the caller's obligation, and `ast` lives to the end of this
-    // frame — past the parse, which is all `ExprParser` needs.
-    let mut parser = unsafe { ExprParser::new(pstate, &raw mut ast, flags) };
-    parser.ast_stack.push(&raw mut ast.root);
+/// The tree borrows the input lines; `pstate.pos` is left where the parse
+/// stopped.
+pub fn viml_pexpr_parse<'a>(pstate: &mut ParserState<'a>, flags: c_int) -> ExprAST<'a> {
+    let mut parser = ExprParser::new(pstate, flags);
     parser.run();
-    ast
+    parser.ast.check_children();
+    parser.ast
 }

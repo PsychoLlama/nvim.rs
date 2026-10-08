@@ -11,23 +11,32 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-/// A parsed `:echo`-style expression: the error slot and the tree.
+/// A parsed `:echo`-style expression: the error, if the parse found one, and
+/// the tree.
 ///
-/// Not `Copy`: `root` heads a tree `viml_pexpr_free_ast` owns and frees.
-#[derive(Clone)]
-pub struct ExprAST {
-    pub err: ExprASTError,
-    pub root: *mut ExprASTNode,
+/// The nodes live in one arena and name each other by [`NodeId`]: the parser
+/// splices operators in above values it has already built, which an owned
+/// tree of boxes could only do by walking down from the root each time. The
+/// tree borrows the parsed lines, which its identifiers and its error point
+/// into.
+pub struct ExprAST<'a> {
+    pub err: Option<ExprASTError<'a>>,
+    pub nodes: Vec<ExprASTNode<'a>>,
+    pub root: Option<NodeId>,
 }
+
+/// A node of an [`ExprAST`], by its place in the arena.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct NodeId(pub(crate) usize);
+
 /// Where a parse stopped, and why.
-///
-/// `Copy`: `msg` is a static string and `arg` points into the caller's own
-/// expression. It owns nothing.
 #[derive(Copy, Clone)]
-pub struct ExprASTError {
-    pub msg: *const ::core::ffi::c_char,
-    pub arg: *const ::core::ffi::c_char,
-    pub arg_len: ::core::ffi::c_int,
+pub struct ExprASTError<'a> {
+    /// The translated message, with a `%.*s` where `arg` goes.
+    pub msg: &'static ::core::ffi::CStr,
+    /// The rest of the line from where the error was found; `None` when the
+    /// error is past the last line.
+    pub arg: Option<&'a [u8]>,
 }
 pub type ExprASTNodeType = ::core::ffi::c_uint;
 pub type ExprAssignmentType = ::core::ffi::c_uint;
@@ -36,13 +45,15 @@ pub type ExprComparisonType = ::core::ffi::c_uint;
 pub type ExprOptScope = ::core::ffi::c_uint;
 pub type ExprParserFlags = ::core::ffi::c_uint;
 pub type ExprVarScope = ::core::ffi::c_uint;
-pub struct ExprASTNode {
+pub struct ExprASTNode<'a> {
     pub type_0: ExprASTNodeType,
-    pub children: *mut ExprASTNode,
-    pub next: *mut ExprASTNode,
+    /// The first child; the second, if any, is its `next`.
+    pub children: Option<NodeId>,
+    /// The next sibling.
+    pub next: Option<NodeId>,
     pub start: ParserPosition,
     pub len: size_t,
-    pub data: ExprNodeData,
+    pub data: ExprNodeData<'a>,
 }
 /// The payload of an [`ExprASTNode`], as its [`ExprASTNodeType`] selects.
 ///
@@ -53,8 +64,8 @@ pub struct ExprASTNode {
 /// silently. The node types that carry nothing get [`ExprNodeData::None`],
 /// which is also what a freshly allocated node starts as -- upstream left
 /// those bytes uninitialised.
-#[derive(Copy, Clone)]
-pub enum ExprNodeData {
+#[derive(Clone)]
+pub enum ExprNodeData<'a> {
     /// Every node type that carries no payload.
     None,
     /// `kExprNodeRegister`.
@@ -63,7 +74,7 @@ pub enum ExprNodeData {
     /// and `kExprNodeCurlyBracesIdentifier`.
     Figure(ExprNodeFigure),
     /// `kExprNodePlainIdentifier` and `kExprNodePlainKey`.
-    Variable(ExprNodeVariable),
+    Variable(ExprNodeVariable<'a>),
     /// `kExprNodeTernaryValue`.
     Ternary(ExprNodeTernary),
     /// `kExprNodeComparison`.
@@ -75,14 +86,14 @@ pub enum ExprNodeData {
     /// `kExprNodeSingleQuotedString` and `kExprNodeDoubleQuotedString`.
     Str(ExprNodeStr),
     /// `kExprNodeOption`.
-    Opt(ExprNodeOption),
+    Opt(ExprNodeOption<'a>),
     /// `kExprNodeEnvironment`.
-    Environment(ExprNodeEnvironment),
+    Environment(ExprNodeEnvironment<'a>),
     /// `kExprNodeAssignment`.
     Assignment(ExprNodeAssignment),
 }
 
-impl ExprNodeData {
+impl<'a> ExprNodeData<'a> {
     /// The payload of a figure-brace node.
     #[track_caller]
     pub fn figure(&self) -> &ExprNodeFigure {
@@ -112,7 +123,7 @@ impl ExprNodeData {
 
     /// The payload of an option node.
     #[track_caller]
-    pub fn option(&self) -> &ExprNodeOption {
+    pub fn option(&self) -> &ExprNodeOption<'a> {
         match self {
             Self::Opt(v) => v,
             _ => panic!("node payload is not an option"),
@@ -121,7 +132,7 @@ impl ExprNodeData {
 
     /// The payload of an identifier or key node.
     #[track_caller]
-    pub fn variable(&self) -> &ExprNodeVariable {
+    pub fn variable(&self) -> &ExprNodeVariable<'a> {
         match self {
             Self::Variable(v) => v,
             _ => panic!("node payload is not an identifier"),
@@ -130,7 +141,7 @@ impl ExprNodeData {
 
     /// The payload of an environment-variable node.
     #[track_caller]
-    pub fn environment(&self) -> &ExprNodeEnvironment {
+    pub fn environment(&self) -> &ExprNodeEnvironment<'a> {
         match self {
             Self::Environment(v) => v,
             _ => panic!("node payload is not an environment variable"),
@@ -193,9 +204,8 @@ pub struct ExprNodeComparison {
     pub inv: bool,
 }
 #[derive(Copy, Clone)]
-pub struct ExprNodeEnvironment {
-    pub ident: *const ::core::ffi::c_char,
-    pub ident_len: size_t,
+pub struct ExprNodeEnvironment<'a> {
+    pub ident: &'a [u8],
 }
 #[derive(Copy, Clone)]
 pub struct ExprNodeFigure {
@@ -217,27 +227,27 @@ pub struct ExprNodeInteger {
     pub value: UVarNumber,
 }
 #[derive(Copy, Clone)]
-pub struct ExprNodeOption {
-    pub ident: *const ::core::ffi::c_char,
-    pub ident_len: size_t,
+pub struct ExprNodeOption<'a> {
+    pub ident: &'a [u8],
     pub scope: ExprOptScope,
 }
 #[derive(Copy, Clone)]
 pub struct ExprNodeRegister {
     pub name: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
+/// A string literal's decoded value. `None` where upstream allocated no
+/// buffer at all -- an empty single-quoted literal, or a double-quoted one
+/// whose reserve came to nothing -- which is not the same as an empty one.
+#[derive(Clone)]
 pub struct ExprNodeStr {
-    pub value: *mut ::core::ffi::c_char,
-    pub size: size_t,
+    pub value: Option<Vec<u8>>,
 }
 #[derive(Copy, Clone)]
 pub struct ExprNodeTernary {
     pub got_colon: bool,
 }
 #[derive(Copy, Clone)]
-pub struct ExprNodeVariable {
+pub struct ExprNodeVariable<'a> {
     pub scope: ExprVarScope,
-    pub ident: *const ::core::ffi::c_char,
-    pub ident_len: size_t,
+    pub ident: &'a [u8],
 }

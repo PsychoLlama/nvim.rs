@@ -148,12 +148,11 @@ use crate::types::{
     AcoSave, Array, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod, CmdParseInfo,
     CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline, Direction,
     DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext,
-    ExprAST, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType,
-    ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, Magic,
-    MotionType, Object, OpArg, OptInt, OptMagic, OptSet, OptVal, ParserHighlight,
-    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Pos, ProfTime, RemapValues,
-    SaveVEvent, SearchItArg, String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType,
-    VarNumber, size_t, time_t, uint8_t, uint32_t,
+    ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
+    ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, Magic, MotionType, Object,
+    OpArg, OptInt, OptMagic, OptSet, OptVal, ParserState, Pos, ProfTime, RemapValues, SaveVEvent,
+    SearchItArg, String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber,
+    size_t, time_t, uint8_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -164,8 +163,7 @@ use crate::ui::{
 use crate::undo::store::header_chain;
 use crate::undo::{u_blockfree, u_clearall, u_sync, u_undo_and_forget};
 use crate::usercmd::{cmdcomplete_type_to_str, parse_compl_arg};
-use crate::viml::parser::expressions::{viml_pexpr_free_ast, viml_pexpr_parse};
-use crate::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy, viml_parser_init};
+use crate::viml::parser::expressions::viml_pexpr_parse;
 use crate::window::state::skip_win_fix_cursor;
 use crate::window::{
     WSP_BOT, close_windows, global_stl_height, last_window, lastwin_nofloating, win_close,

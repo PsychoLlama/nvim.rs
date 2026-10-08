@@ -6,13 +6,13 @@
 //! is split across four submodules:
 //!
 //! - `lexer` scans one token at a time out of the parser's input.
-//! - `ast` owns the node tables, node allocation and teardown, and the
+//! - `ast` owns the node tables, the node arena and its slots, and the
 //!   shunting-yard step that attaches a binary operator to the tree.
 //! - `strings` decodes single- and double-quoted string literals.
 //! - `parse` is the state machine that drives the other three, handing each
 //!   token to a handler in `operators`, `values`, `brackets` or `figure`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -25,37 +25,23 @@ mod parse;
 mod strings;
 mod values;
 
-pub use ast::{
-    ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_free_ast,
-};
+pub use ast::{ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES};
 pub use lexer::viml_pexpr_next_token;
 pub use parse::viml_pexpr_parse;
 
-use ast::{
-    ast_has_error, ast_root_slot, children_slot, east_set_error, next_slot, node_children,
-    node_fig, node_got_colon, node_lvl, node_next, node_start, node_type, set_node_children,
-    set_node_data, set_node_len, set_node_span, set_node_type, set_slot_node, slot_node, translate,
-    viml_pexpr_handle_bop, viml_pexpr_new_node,
-};
+use ast::{Slot, viml_pexpr_handle_bop};
 use strings::{parse_quoted_string, shifted_pos};
 
-use crate::charset::{hex2nr, vim_str2nr};
-use crate::keycodes::trans_special;
-use crate::mbyte::{utf_char2len, utfc_ptr2len_len};
-use crate::memory::{xcalloc, xfree, xmalloc, xmallocz};
-use crate::os::cshim::gettext;
+use crate::charset::hex2nr;
+use crate::mbyte::utf_char2len;
 use crate::types::{
     ExprAST, ExprASTError, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprFigureGuesses, ExprNodeAssignment,
     ExprNodeComparison, ExprNodeData, ExprNodeEnvironment, ExprNodeFigure, ExprNodeFloat,
     ExprNodeInteger, ExprNodeOption, ExprNodeRegister, ExprNodeStr, ExprNodeTernary,
-    ExprNodeVariable, ExprOptScope, ExprParserFlags, ExprVarScope, Float, ParserLine,
-    ParserPosition, ParserState, UVarNumber, size_t, uint8_t,
+    ExprNodeVariable, ExprOptScope, ExprParserFlags, ExprVarScope, Float, NodeId, ParserPosition,
+    ParserState, UVarNumber, size_t, uint8_t,
 };
-use crate::viml::parser::parser::{
-    highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
-};
-use ::libc::abort;
 pub const FSK_SIMPLIFY: ::core::ffi::c_uint = 8;
 pub const FSK_IN_STRING: ::core::ffi::c_uint = 4;
 pub const FSK_KEYCODE: ::core::ffi::c_uint = 1;
@@ -170,7 +156,8 @@ pub enum LexExprTokenNumberValue {
 #[derive(Copy, Clone)]
 pub struct LexExprTokenError {
     pub type_0: LexExprTokenType,
-    pub msg: *const ::core::ffi::c_char,
+    /// The translated message, with a `%.*s` where the rest of the line goes.
+    pub msg: &'static ::core::ffi::CStr,
     /// The scope an invalid *option* token had already read out of `&g:`
     /// before its name turned out to be missing.
     ///
@@ -187,7 +174,9 @@ pub struct LexExprTokenVar {
 }
 #[derive(Copy, Clone)]
 pub struct LexExprTokenOption {
-    pub name: *const ::core::ffi::c_char,
+    /// Where the name starts, counted from the start of the token: past the
+    /// `&`, and past its `g:`/`l:` when there is one.
+    pub name_offset: size_t,
     pub len: size_t,
     pub scope: ExprOptScope,
 }
@@ -304,11 +293,9 @@ pub struct StringShift {
     pub act_len: size_t,
     pub escape_not_known: bool,
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-
 /// The slot `back` places down from the top of the AST stack; `back` of zero
 /// is the top. Panics on an empty stack, where the C read one slot before the
 /// buffer.
-fn stack_top(stack: &[*mut *mut ExprASTNode], back: usize) -> *mut *mut ExprASTNode {
+fn stack_top(stack: &[Slot], back: usize) -> Slot {
     stack[stack.len() - 1 - back]
 }

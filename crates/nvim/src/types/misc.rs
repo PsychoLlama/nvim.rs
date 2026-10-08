@@ -34,12 +34,6 @@ pub struct Map_uint64_t_MTDamagePair {
     pub values: *mut MTDamagePair,
 }
 pub type OptIndex = ::core::ffi::c_int;
-pub struct ParserHighlight {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ParserHighlightChunk,
-    pub init_array: [ParserHighlightChunk; 16],
-}
 /// The [`DictItem`] a scope dictionary is reached through, whose key is the
 /// empty string and whose value is the scope dictionary itself.
 ///

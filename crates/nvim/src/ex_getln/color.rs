@@ -32,57 +32,21 @@ pub(crate) unsafe fn color_expr_cmdline(
     colored_ccline: Cc,
     ret_ccline_colors: *mut ColoredCmdline,
 ) {
-    let mut parser_lines: [ParserLine; 2] = [
-        ParserLine {
-            data: colored_ccline.text(),
-            size: unsafe { cstr::bytes_at(colored_ccline.text()) }.len(),
-            allocated: false,
-        },
-        ParserLine {
-            data: ::core::ptr::null::<::core::ffi::c_char>(),
-            size: 0,
-            allocated: false,
-        },
-    ];
-    let mut plines_p: *mut ParserLine = parser_lines.as_mut_ptr();
-
-    // C's `kvi_init`: a kvec whose first 16 entries live in the struct.
-    let mut colors = ParserHighlight {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<ParserHighlightChunk>(),
-        init_array: [ParserHighlightChunk {
-            start: ParserPosition { line: 0, col: 0 },
-            end_col: 0,
-            group: ::core::ptr::null::<::core::ffi::c_char>(),
-        }; 16],
-    };
-    colors.capacity = colors.init_array.len();
-    colors.items = colors.init_array.as_mut_ptr();
-
-    let mut pstate: ParserState = unsafe { ::core::mem::zeroed() };
-    unsafe {
-        viml_parser_init(
-            &raw mut pstate,
-            Some(parser_simple_get_line),
-            &raw mut plines_p as *mut ::core::ffi::c_void,
-            &raw mut colors,
-        )
-    };
-    let east: ExprAST =
-        unsafe { viml_pexpr_parse(&raw mut pstate, kExprFlagsDisallowEOC as ::core::ffi::c_int) };
-    unsafe { viml_pexpr_free_ast(east) };
-    viml_parser_destroy(&mut pstate);
+    // SAFETY: the caller's promise -- the command line's text is live and
+    // NUL-terminated for the call.
+    let text = unsafe { cstr::bytes_at(colored_ccline.text()) };
+    let line = [text];
+    let mut pstate = ParserState::new(&line, true);
+    let _ = viml_pexpr_parse(&mut pstate, kExprFlagsDisallowEOC as ::core::ffi::c_int);
+    let colors = pstate.take_highlight();
 
     // C's `kv_resize`: reserve exactly what the parser produced. The
     // gap-filling chunks below may still push past it.
     // SAFETY: the command line's own chunk list, taken above.
-    unsafe { (*ret_ccline_colors).reserve_chunks(colors.size) };
+    unsafe { (*ret_ccline_colors).reserve_chunks(colors.len()) };
 
     let mut prev_end: size_t = 0;
-    let mut i: size_t = 0;
-    while i < colors.size {
-        let chunk: ParserHighlightChunk = unsafe { *colors.items.add(i) };
+    for chunk in &colors {
         debug_assert!(chunk.start.col < INT_MAX as size_t);
         debug_assert!(chunk.end_col < INT_MAX as size_t);
         if chunk.start.col != prev_end {
@@ -97,13 +61,11 @@ pub(crate) unsafe fn color_expr_cmdline(
         let coloured = CmdlineColorChunk {
             start: chunk.start.col as ::core::ffi::c_int,
             end: chunk.end_col as ::core::ffi::c_int,
-            // SAFETY: the chunk's NUL-terminated group name.
-            hl_id: syn_name2id(unsafe { cstr::at(chunk.group) }),
+            hl_id: syn_name2id(chunk.group),
         };
         // SAFETY: the command line's own chunk list, taken above.
         unsafe { (*ret_ccline_colors).push(coloured) };
         prev_end = chunk.end_col;
-        i += 1;
     }
     if prev_end < colored_ccline.len() as size_t {
         let coloured = CmdlineColorChunk {
@@ -113,11 +75,6 @@ pub(crate) unsafe fn color_expr_cmdline(
         };
         // SAFETY: the command line's own chunk list, taken above.
         unsafe { (*ret_ccline_colors).push(coloured) };
-    }
-
-    // C's `kvi_destroy`: only free once the kvec has spilled to the heap.
-    if colors.items != colors.init_array.as_mut_ptr() {
-        unsafe { xfree(colors.items as *mut ::core::ffi::c_void) };
     }
 }
 

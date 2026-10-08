@@ -2,28 +2,24 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::{api_set_sctx, cstr_to_string};
+use crate::api::private::helpers::api_set_sctx;
 use crate::eval::eval0;
 use crate::eval::typval::tv_clear;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::global_cell::GlobalCell;
-use crate::memory::xfree;
 use crate::message::state::{did_emsg, msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
 use crate::runtime::do_source_str;
 use crate::types::{
     ApiDict, Array, Boolean, Error, ExprAST, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Integer,
-    KeyDict_exec_opts, Object, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
-    ParserState, String_0, TypVal, UVarNumber, VAR_FUNC, VAR_PARTIAL, kErrorTypeException,
-    kErrorTypeValidation, size_t, uint64_t,
+    KeyDict_exec_opts, Object, ParserState, String_0, TypVal, UVarNumber, VAR_FUNC, VAR_PARTIAL,
+    kErrorTypeException, kErrorTypeValidation, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
-    ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_free_ast,
-    viml_pexpr_parse,
+    ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, NODE_TYPE_NAMES, viml_pexpr_parse,
 };
-use crate::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy, viml_parser_init};
 
 // The carve of the transpiled module; see each child's docs.
 mod eval;
@@ -88,16 +84,6 @@ pub const kExprNodeTernaryValue: ExprASTNodeType = 3;
 pub const kExprNodeTernary: ExprASTNodeType = 2;
 pub const kExprNodeOpMissing: ExprASTNodeType = 1;
 pub const kExprNodeMissing: ExprASTNodeType = 0;
-pub struct ExprASTConvStackItem {
-    pub node_p: *mut *mut ExprASTNode,
-    pub ret_node_p: *mut Object,
-}
-pub struct ExprASTConvStack {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ExprASTConvStackItem,
-    pub init_array: [ExprASTConvStackItem; 16],
-}
 pub const kExprFlagsParseLet: ExprParserFlags = 4;
 pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
 pub const kExprFlagsMulti: ExprParserFlags = 1;

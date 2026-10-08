@@ -5,16 +5,11 @@
 //! everything below that point is ordinary indexing rather than the C's
 //! `const char *` walk, so the bounds are the compiler's problem.
 //!
-//! One pointer escapes a token: `data.opt.name`, which the option handler in
-//! `values.rs` reads back. It points into the reader's line buffer, which
-//! outlives every token taken from it and is never written to.
+#![forbid(unsafe_code)]
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-
-use crate::charset::Str2NrBases;
-use core::ffi::{CStr, c_char, c_int};
-use core::{ptr, slice};
+use crate::charset::{Str2NrBases, str2nr_in};
+use crate::mbyte::cluster_len;
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::ascii::{ascii_isident, ascii_iswhite};
@@ -38,44 +33,22 @@ const VAR_SCOPES: [ExprVarScope; 8] = [
 /// The scope letters an option may carry before its colon, as in `&g:sw`.
 const OPT_SCOPES: [ExprOptScope; 2] = [kExprOptScopeGlobal, kExprOptScopeLocal];
 
-/// Translate a message for a token's `err.msg`.
-///
-/// A `CStr` is NUL-terminated by construction and `gettext` only reads through
-/// it, so this is the whole of the obligation.
-fn translate(msg: &'static CStr) -> *const c_char {
-    gettext(msg).as_ptr()
-}
+use super::ast::translate;
 
 /// How many bytes the first character of `line` occupies, composing marks
-/// included, without reading past the line's end.
+/// included, without reading past the line's end. `line` does not start
+/// with a NUL (the scanner's own arm takes that), which is the one byte the
+/// pointer form measured differently.
 fn first_char_len(line: &[u8]) -> size_t {
-    // SAFETY: the slice's own length bounds the scan.
-    let len = unsafe { utfc_ptr2len_len(line.as_ptr().cast::<c_char>(), line.len() as c_int) };
-    len as size_t
+    cluster_len(line)
 }
 
-/// `vim_str2nr` over a slice: the unsigned value, the prefix letter it
-/// recognised and how many bytes it consumed.
+/// The number at the start of `bytes`: its unsigned value, the prefix letter
+/// that named its base and how many bytes it took.
 fn str2nr(bytes: &[u8], what: Str2NrBases) -> (UVarNumber, c_int, size_t) {
     debug_assert!(!bytes.is_empty(), "vim_str2nr reads the first byte eagerly");
-    let mut value: UVarNumber = 0;
-    let mut prefix: c_int = 0;
-    let mut len: c_int = 0;
-    // SAFETY: `maxlen` is the slice's own length, so the scan stays inside it.
-    unsafe {
-        vim_str2nr(
-            bytes.as_ptr().cast::<c_char>(),
-            &raw mut prefix,
-            &raw mut len,
-            what,
-            ptr::null_mut(),
-            &raw mut value,
-            bytes.len() as c_int,
-            false,
-            ptr::null_mut(),
-        );
-    }
-    (value, prefix, len as size_t)
+    let parsed = str2nr_in(bytes, what, false);
+    (parsed.magnitude, parsed.prefix, parsed.len)
 }
 
 /// A token that has consumed nothing, positioned at `start`.
@@ -358,7 +331,7 @@ fn scan_option(ret: &mut LexExprToken, line: &[u8]) {
         name_len
     };
     ret.data = LexExprTokenData::Option(LexExprTokenOption {
-        name: name.as_ptr().cast::<c_char>(),
+        name_offset: name_at,
         len: name_len,
         scope,
     });
@@ -616,27 +589,16 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
 
 /// The next token of the Vimscript expression `pstate` is reading, advancing
 /// the cursor past it unless `kELFlagPeek` is set.
-///
-/// # Safety
-///
-/// `pstate` must point at a live `ParserState`, unaliased for the call.
-pub unsafe fn viml_pexpr_next_token(pstate: *mut ParserState, flags: c_int) -> LexExprToken {
-    // SAFETY: the caller hands over the parser state it is driving, and the
-    // reader keeps every line it has produced alive for the parse.
-    let start = unsafe { (*pstate).pos };
-    let Some(pline) = (unsafe { viml_parser_get_remaining_line(pstate) }) else {
+pub fn viml_pexpr_next_token(pstate: &mut ParserState<'_>, flags: c_int) -> LexExprToken {
+    let start = pstate.pos;
+    let Some(line) = pstate.remaining_line() else {
         let mut ret = blank_token(start);
         ret.type_0 = kExprLexEOC;
         return ret;
     };
-    // SAFETY: a `ParserLine` describes `size` readable bytes at `data`, and
-    // `viml_parser_get_remaining_line` answers `None` for a null `data`.
-    let line = unsafe { slice::from_raw_parts(pline.data.cast::<u8>(), pline.size) };
     let ret = scan(line, start, flags);
     if flags & kELFlagPeek as c_int == 0 {
-        // SAFETY: as above. The two reborrows are of disjoint fields, and
-        // neither reaches the stack `parse.rs` pushes onto through `pstate`.
-        unsafe { viml_parser_advance(&mut (*pstate).pos, &mut (*pstate).reader, ret.len) };
+        pstate.advance(ret.len);
     }
     ret
 }

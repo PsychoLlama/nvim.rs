@@ -33,13 +33,13 @@ pub(super) fn register(p: &mut ExprParser) -> Flow {
         return p.op_missing();
     }
     let node = p.new_node(kExprNodeRegister);
-    set_node_data(
+    p.ast.set_data(
         node,
         ExprNodeData::Register(ExprNodeRegister {
             name: p.cur_token.register_name(),
         }),
     );
-    set_slot_node(p.top_node_p, node);
+    p.ast.set_slot(p.top_node_p, Some(node));
     p.want_node = kENodeOperator;
     p.hl_token(hl!(p, Register));
     Flow::NextToken
@@ -60,8 +60,7 @@ pub(super) fn option(p: &mut ExprParser) -> Flow {
             "cur_token.len == 1 || (cur_token.len == 3 && pline.data[cur_token.start.col + 2] == ':')"
         );
         ExprNodeOption {
-            ident: p.line_ptr(at.wrapping_add(p.cur_token.len)),
-            ident_len: 0,
+            ident: p.line_slice(at.wrapping_add(p.cur_token.len), 0),
             scope: if p.cur_token.len == 3 {
                 ExprOptScope::from(p.line_byte(at.wrapping_add(1)))
             } else {
@@ -69,14 +68,14 @@ pub(super) fn option(p: &mut ExprParser) -> Flow {
             },
         }
     } else {
+        let opt = p.cur_token.option();
         ExprNodeOption {
-            ident: p.cur_token.option().name,
-            ident_len: p.cur_token.option().len,
-            scope: p.cur_token.option().scope,
+            ident: p.line_slice(p.cur_token.start.col + opt.name_offset, opt.len),
+            scope: opt.scope,
         }
     };
-    set_node_data(node, ExprNodeData::Opt(opt));
-    set_slot_node(p.top_node_p, node);
+    p.ast.set_data(node, ExprNodeData::Opt(opt));
+    p.ast.set_slot(p.top_node_p, Some(node));
     p.want_node = kENodeOperator;
     p.hl_at(p.cur_token.start, 1, hl!(p, OptionSigil));
     // Note: the scope read here is the *token's*, which for an invalid token
@@ -109,14 +108,13 @@ pub(super) fn environment(p: &mut ExprParser) -> Flow {
     }
     let node = p.new_node(kExprNodeEnvironment);
     let env = ExprNodeEnvironment {
-        ident: p.line_ptr(p.cur_token.start.col.wrapping_add(1)),
-        ident_len: p.cur_token.len.wrapping_sub(1),
+        ident: p.line_slice(p.cur_token.start.col + 1, p.cur_token.len - 1),
     };
-    set_node_data(node, ExprNodeData::Environment(env));
-    if env.ident_len == 0 {
+    p.ast.set_data(node, ExprNodeData::Environment(env));
+    if env.ident.is_empty() {
         p.error(c"E15: Environment variable name missing");
     }
-    set_slot_node(p.top_node_p, node);
+    p.ast.set_slot(p.top_node_p, Some(node));
     p.want_node = kENodeOperator;
     p.hl_at(p.cur_token.start, 1, hl!(p, EnvironmentSigil));
     p.hl_at(
@@ -134,12 +132,11 @@ pub(super) fn number(p: &mut ExprParser) -> Flow {
     }
     let node = if p.node_is_key {
         let node = p.new_node(kExprNodePlainKey);
-        set_node_data(
+        p.ast.set_data(
             node,
             ExprNodeData::Variable(ExprNodeVariable {
                 scope: kExprVarScopeMissing,
-                ident: p.line_ptr(p.cur_token.start.col),
-                ident_len: p.cur_token.len,
+                ident: p.line_slice(p.cur_token.start.col, p.cur_token.len),
             }),
         );
         p.hl_token(hl!(p, IdentifierKey));
@@ -149,13 +146,15 @@ pub(super) fn number(p: &mut ExprParser) -> Flow {
         match number.val {
             LexExprTokenNumberValue::Floating(value) => {
                 let node = p.new_node(kExprNodeFloat);
-                set_node_data(node, ExprNodeData::Float(ExprNodeFloat { value }));
+                p.ast
+                    .set_data(node, ExprNodeData::Float(ExprNodeFloat { value }));
                 p.hl_token(hl!(p, Float));
                 node
             }
             LexExprTokenNumberValue::Integer(value) => {
                 let node = p.new_node(kExprNodeInteger);
-                set_node_data(node, ExprNodeData::Integer(ExprNodeInteger { value }));
+                p.ast
+                    .set_data(node, ExprNodeData::Integer(ExprNodeInteger { value }));
                 let prefix_length = base_to_prefix_length[number.base as usize] as size_t;
                 p.hl_at(p.cur_token.start, prefix_length, hl!(p, NumberPrefix));
                 p.hl_at(
@@ -168,7 +167,7 @@ pub(super) fn number(p: &mut ExprParser) -> Flow {
         }
     };
     p.want_node = kENodeOperator;
-    set_slot_node(p.top_node_p, node);
+    p.ast.set_slot(p.top_node_p, Some(node));
     Flow::NextToken
 }
 
@@ -187,15 +186,17 @@ pub(super) fn plain_identifier(p: &mut ExprParser) -> Flow {
             kExprNodePlainIdentifier
         });
         let scope_shift: size_t = if scope == kExprVarScopeMissing { 0 } else { 2 };
-        set_node_data(
+        p.ast.set_data(
             node,
             ExprNodeData::Variable(ExprNodeVariable {
                 scope,
-                ident: p.line_ptr(p.cur_token.start.col.wrapping_add(scope_shift)),
-                ident_len: p.cur_token.len.wrapping_sub(scope_shift),
+                ident: p.line_slice(
+                    p.cur_token.start.col + scope_shift,
+                    p.cur_token.len - scope_shift,
+                ),
             }),
         );
-        set_slot_node(p.top_node_p, node);
+        p.ast.set_slot(p.top_node_p, Some(node));
         if scope_shift != 0 {
             debug_assert!(!p.node_is_key, "!node_is_key");
             p.hl_at(p.cur_token.start, 1, hl!(p, IdentifierScope));
@@ -225,16 +226,15 @@ pub(super) fn plain_identifier(p: &mut ExprParser) -> Flow {
         return p.op_missing();
     };
     let node = p.new_node(kExprNodePlainIdentifier);
-    set_node_data(
+    p.ast.set_data(
         node,
         ExprNodeData::Variable(ExprNodeVariable {
             scope,
-            ident: p.line_ptr(p.cur_token.start.col),
-            ident_len: p.cur_token.len,
+            ident: p.line_slice(p.cur_token.start.col, p.cur_token.len),
         }),
     );
     p.want_node = kENodeOperator;
-    set_slot_node(slot, node);
+    p.ast.set_slot(slot, Some(node));
     p.hl_token(hl!(p, IdentifierName));
     Flow::NextToken
 }
@@ -259,7 +259,7 @@ pub(super) fn quoted_string(p: &mut ExprParser) -> Flow {
     } else {
         kExprNodeSingleQuotedString
     });
-    set_slot_node(p.top_node_p, node);
+    p.ast.set_slot(p.top_node_p, Some(node));
     p.decode_quoted_string(node);
     p.want_node = kENodeOperator;
     Flow::NextToken

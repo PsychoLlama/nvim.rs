@@ -687,6 +687,9 @@ pub unsafe fn vim_str2nr(
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct ParsedNumber {
     pub(crate) len: usize,
+    /// The prefix letter that named the base (`x`, `b`, `o`, ...), `0` for a
+    /// leading-zero octal, or zero for none.
+    pub(crate) prefix: c_int,
     pub(crate) value: VarNumber,
     pub(crate) magnitude: UVarNumber,
     pub(crate) overflow: bool,
@@ -707,7 +710,7 @@ pub(crate) fn str2nr_in(text: &[u8], what: Str2NrBases, strict: bool) -> ParsedN
     let (start, lenp, prep) = (
         text.as_ptr().cast::<c_char>(),
         &raw mut len,
-        core::ptr::null_mut(),
+        &raw mut parsed.prefix,
     );
     let (nptr, unptr, overflow) = (
         &raw mut parsed.value,

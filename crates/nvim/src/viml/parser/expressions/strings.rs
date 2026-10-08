@@ -1,21 +1,19 @@
 //! Decoding a single- or double-quoted string literal into the AST node that
 //! holds it, and logging the highlighting of every escape it contains.
 //!
-//! The decoders work on the literal's body as a byte slice and build a `Vec`,
-//! which is copied into the node's `xmalloc`ed buffer at the end; the C wrote
-//! straight into that buffer through a `char *` cursor, after a first pass
-//! that measured how big it had to be. That measuring pass survives for the
-//! double-quoted form alone, and only because the C makes a *decision* on it:
-//! an estimate of zero means the node gets no buffer at all, whatever the
-//! decoder would go on to produce.
+//! The decoders work on the literal's body as a byte slice and build the
+//! node's `Vec`; the C wrote straight into an `xmalloc`ed buffer through a
+//! `char *` cursor, after a first pass that measured how big it had to be.
+//! That measuring pass survives for the double-quoted form alone, and only
+//! because the C makes a *decision* on it: an estimate of zero means the node
+//! gets no buffer at all, whatever the decoder would go on to produce.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{CStr, c_char, c_int};
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int};
 
 use super::*;
+use crate::keycodes::trans_special_into;
 use crate::mbyte::{cluster_len, encode_char};
 use crate::types::MB_MAXCHAR;
 
@@ -99,30 +97,6 @@ fn append_char(out: &mut Vec<uint8_t>, code: c_int) {
     let mut buf = [0u8; MB_MAXCHAR];
     let len = encode_char(code, &mut buf);
     out.extend_from_slice(&buf[..len]);
-}
-
-/// `trans_special` over a slice: how many bytes of `rest` the key name
-/// occupied, the key's encoding, and how many bytes of it are meaningful.
-/// Zero written means `rest` does not start with a name this understands.
-fn special_key(rest: &[uint8_t], flags: c_int) -> (size_t, [uint8_t; 19], size_t) {
-    // Room for one key's encoding, which is what `trans_special` asks of its
-    // destination: three bytes of modifiers plus the character itself.
-    let mut key = [0u8; 19];
-    let start = rest.as_ptr();
-    let mut cursor = start.cast::<c_char>();
-    // SAFETY: `src_len` bounds the read to `rest`, and `key` is the room the
-    // destination is documented to need.
-    let written = unsafe {
-        trans_special(
-            &raw mut cursor,
-            rest.len(),
-            key.as_mut_ptr().cast::<c_char>(),
-            flags,
-            false,
-            ptr::null_mut(),
-        )
-    };
-    (cursor as size_t - start as size_t, key, written as size_t)
 }
 
 /// The bytes a single-quoted literal stands for: its body with every doubled
@@ -338,13 +312,12 @@ fn decode_double(
                 if body.get(i + 1) != Some(&b'*') {
                     flags |= FSK_SIMPLIFY as c_int;
                 }
-                let (consumed, key, written) = special_key(&body[i..], flags);
-                i += consumed;
-                if written != 0 {
-                    out.extend_from_slice(&key[..written]);
-                } else {
-                    unknown = true;
-                    i += copy_one_char(&mut out, &tail[i..]);
+                match trans_special_into(&body[i..], flags, false, &mut out) {
+                    Some(consumed) => i += consumed,
+                    None => {
+                        unknown = true;
+                        i += copy_one_char(&mut out, &tail[i..]);
+                    }
                 }
             }
             _ => {
@@ -364,33 +337,22 @@ fn decode_double(
     (out, shifts)
 }
 
-/// Decode the literal `token` covers into `node`, and record how every byte
-/// of it is highlighted.
+/// Decode the literal `token` covers, and record how every byte of it is
+/// highlighted.
 ///
-/// # Safety
-///
-/// `pstate` must be the parser that produced `token`, and `node` a node of a
-/// string type whose value slot is still unset.
-pub(super) unsafe fn parse_quoted_string(
-    pstate: *mut ParserState,
-    node: *mut ExprASTNode,
+/// `token` must be a string token `pstate` produced.
+pub(super) fn parse_quoted_string(
+    pstate: &mut ParserState<'_>,
     token: LexExprToken,
     is_invalid: bool,
-) {
+) -> ExprNodeStr {
     let closed = size_t::from(token.string_is_closed());
-    // SAFETY: `token` came from this parser, so `start.line` indexes a line
-    // the reader is still holding and `start.col + len` is inside it.
-    let (line, colors) = unsafe {
-        let pline = *(*pstate).reader.lines.items.add(token.start.line);
-        (
-            slice::from_raw_parts(pline.data.cast::<uint8_t>(), pline.size),
-            !(*pstate).colors.is_null(),
-        )
-    };
-    // SAFETY: `pstate` is the caller's, and every group name is a static
-    // NUL-terminated string.
-    let highlight = |start: ParserPosition, len: size_t, group: &'static CStr| unsafe {
-        viml_parser_highlight(pstate, start, len, group.as_ptr());
+    let line = pstate
+        .line(token.start.line)
+        .expect("a token comes from a line of the input");
+    let colors = pstate.highlight_count().is_some();
+    let mut highlight = |start: ParserPosition, len: size_t, group: &'static CStr| {
+        pstate.highlight(start, len, group);
     };
 
     let is_double = token.type_0 == kExprLexDoubleQuotedString;
@@ -404,50 +366,23 @@ pub(super) unsafe fn parse_quoted_string(
     // `capacity` is what the C allocates and zero means it allocates nothing:
     // for a single-quoted literal that is exactly the decoded length, for a
     // double-quoted one the reserve measured up front, which the decision to
-    // skip the decode entirely also rests on. Taking the larger of the two
-    // costs nothing and puts a floor under the reserve, whose over-estimates
-    // are argued rather than proved.
+    // skip the decode entirely also rests on.
     let (value, shifts, capacity) = if is_double {
         let reserved = reserve_for_double(&tail[..body_len]);
         if reserved == 0 {
             (Vec::new(), Vec::new(), 0)
         } else {
             let (value, shifts) = decode_double(tail, body_len, token.start.col, colors);
-            let capacity = reserved.max(value.len());
-            (value, shifts, capacity)
+            (value, shifts, reserved)
         }
     } else {
         let (value, shifts) = decode_single(&tail[..body_len], token.start.col, colors);
         let capacity = value.len();
         (value, shifts, capacity)
     };
-
-    // The buffer comes from `xmalloc` because `viml_pexpr_free_ast` releases
-    // it with `xfree`; the single-quoted form uses `xmallocz` so that its
-    // value stays NUL-terminated, as the C did.
-    let buffer = if capacity == 0 {
-        ptr::null_mut::<c_char>()
-    } else {
-        // SAFETY: `capacity` is at least `value.len()`, so the copy fits.
-        unsafe {
-            let buffer = if is_double {
-                xmalloc(capacity)
-            } else {
-                xmallocz(capacity)
-            };
-            buffer
-                .cast::<uint8_t>()
-                .copy_from_nonoverlapping(value.as_ptr(), value.len());
-            buffer.cast::<c_char>()
-        }
-    };
     let literal = ExprNodeStr {
-        value: buffer,
-        size: if buffer.is_null() { 0 } else { value.len() },
+        value: (capacity != 0).then_some(value),
     };
-    // SAFETY: `node` is the caller's, and its value slot is unset, so nothing
-    // is leaked by writing it.
-    unsafe { (*node).data = ExprNodeData::Str(literal) }
 
     if colors {
         let body = body_group(is_double, is_invalid);
@@ -489,4 +424,5 @@ pub(super) unsafe fn parse_quoted_string(
             quote_group(is_double, is_invalid),
         );
     }
+    literal
 }

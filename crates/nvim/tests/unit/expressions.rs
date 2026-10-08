@@ -1,33 +1,16 @@
 //! The Vimscript expression parser, driven end to end the way
 //! `nvim_parse_expression` drives it.
 //!
-//! These exist as much for Miri as for the assertions. The parser builds
-//! three `Vec`s while `ParserState`'s own collections point at arrays inside
-//! the state, and it writes the tree through raw `ExprASTNode **` slots held
-//! on the AST stack; a borrow-stack mistake anywhere in that traffic shows up
-//! here and nowhere in the LuaJIT specs. Each case therefore also frees its
-//! tree and tears the state down.
+//! These exist as much for Miri as for the assertions: the parser builds its
+//! tree in an arena while it splices operators in above values it has
+//! already built, and an indexing mistake anywhere in that traffic shows up
+//! here and nowhere in the RPC specs.
 
-use std::ffi::{CStr, c_int, c_void};
+use std::ffi::c_int;
 use std::fmt::Write as _;
-use std::ptr;
 
-use neovim::memory::xfree;
-use neovim::types::{
-    ExprAST, ExprASTNode, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
-    ParserState,
-};
-use neovim::viml::parser::expressions::{NODE_TYPE_NAMES, viml_pexpr_free_ast, viml_pexpr_parse};
-use neovim::viml::parser::parser::{
-    PARSER_STATE_INIT, highlight_vec, parser_simple_get_line, reader_line, viml_parser_destroy,
-    viml_parser_init,
-};
-
-const EMPTY_LINE: ParserLine = ParserLine {
-    data: ptr::null(),
-    size: 0,
-    allocated: false,
-};
+use neovim::types::{ExprAST, NodeId, ParserState};
+use neovim::viml::parser::expressions::{NODE_TYPE_NAMES, viml_pexpr_parse};
 
 /// `kExprFlagsMulti`, the flag `nvim_parse_expression` passes when it is
 /// allowed to stop at the first thing that cannot continue the expression.
@@ -37,8 +20,8 @@ const MULTI: c_int = 1;
 /// its own grammar and its own parse-type stack.
 const PARSE_LET: c_int = 4;
 
-fn node_name(node: *const ExprASTNode) -> &'static str {
-    NODE_TYPE_NAMES[unsafe { (*node).type_0 } as usize]
+fn node_name(ast: &ExprAST<'_>, node: NodeId) -> &'static str {
+    NODE_TYPE_NAMES[ast.node(node).type_0 as usize]
         .to_str()
         .expect("node type names are ASCII")
 }
@@ -49,33 +32,26 @@ fn node_name(node: *const ExprASTNode) -> &'static str {
 /// - a figure brace's *remaining guesses* about what it will turn out to be
 ///   (`\` lambda, `d` dictionary, `i` curly-braces name), which the parser
 ///   narrows as it reads and which decide how the node is finally classified;
-/// - a string literal's decoded value, where an **empty** literal leaves a
-///   null pointer rather than an empty buffer — the API renders both as `""`.
-fn node_detail(node: *const ExprASTNode) -> String {
-    let name = node_name(node);
-    unsafe {
-        match name {
-            "UnknownFigure" | "DictLiteral" | "CurlyBracesIdentifier" | "Lambda" => {
-                let guesses = (*node).data.figure().type_guesses;
-                format!(
-                    "{name}({}{}{})",
-                    if guesses.allow_lambda { "\\" } else { "-" },
-                    if guesses.allow_dict { "d" } else { "-" },
-                    if guesses.allow_ident { "i" } else { "-" },
-                )
-            }
-            "SingleQuotedString" | "DoubleQuotedString" => {
-                let literal = *(*node).data.string();
-                if literal.value.is_null() {
-                    format!("{name}(val=NULL)")
-                } else {
-                    let bytes =
-                        std::slice::from_raw_parts(literal.value.cast::<u8>(), literal.size);
-                    format!("{name}(val={:?})", String::from_utf8_lossy(bytes))
-                }
-            }
-            _ => name.to_owned(),
+/// - a string literal's decoded value, where an **empty** literal has no
+///   value at all rather than an empty one — the API renders both as `""`.
+fn node_detail(ast: &ExprAST<'_>, node: NodeId) -> String {
+    let name = node_name(ast, node);
+    let data = &ast.node(node).data;
+    match name {
+        "UnknownFigure" | "DictLiteral" | "CurlyBracesIdentifier" | "Lambda" => {
+            let guesses = data.figure().type_guesses;
+            format!(
+                "{name}({}{}{})",
+                if guesses.allow_lambda { "\\" } else { "-" },
+                if guesses.allow_dict { "d" } else { "-" },
+                if guesses.allow_ident { "i" } else { "-" },
+            )
         }
+        "SingleQuotedString" | "DoubleQuotedString" => match &data.string().value {
+            None => format!("{name}(val=NULL)"),
+            Some(bytes) => format!("{name}(val={:?})", String::from_utf8_lossy(bytes)),
+        },
+        _ => name.to_owned(),
     }
 }
 
@@ -83,25 +59,22 @@ fn node_detail(node: *const ExprASTNode) -> String {
 /// information `nvim_parse_expression` reports, in the same order, so it
 /// pins the shape without depending on the RPC encoding. `detailed` adds
 /// what the API leaves out — see [`node_detail`].
-fn dump_with(node: *const ExprASTNode, out: &mut String, detailed: bool) {
+fn dump_with(ast: &ExprAST<'_>, node: NodeId, out: &mut String, detailed: bool) {
     if detailed {
-        out.push_str(&node_detail(node));
+        out.push_str(&node_detail(ast, node));
     } else {
-        out.push_str(node_name(node));
+        out.push_str(node_name(ast, node));
     }
-    let mut child = unsafe { (*node).children };
-    if child.is_null() {
+    let children: Vec<NodeId> = ast.children(node).collect();
+    if children.is_empty() {
         return;
     }
     out.push('(');
-    let mut first = true;
-    while !child.is_null() {
-        if !first {
+    for (index, child) in children.into_iter().enumerate() {
+        if index != 0 {
             out.push_str(", ");
         }
-        first = false;
-        dump_with(child, out, detailed);
-        child = unsafe { (*child).next };
+        dump_with(ast, child, out, detailed);
     }
     out.push(')');
 }
@@ -118,110 +91,67 @@ struct Parsed {
 }
 
 /// Parse `expr` and answer its tree dump, its error message and the
-/// highlight groups it logged, then release everything it allocated.
+/// highlight groups it logged.
 fn parse_with_flags(expr: &str, flags: c_int) -> Parsed {
     parse_cut(expr, expr.len(), flags)
 }
 
-/// [`parse_with_flags`] over a line the reader claims is `size` bytes long,
-/// whatever is behind it. The bytes past `size` are readable, which is the
-/// point: the parser must not read them.
+/// [`parse_with_flags`] over the first `size` bytes of `expr`: the parser
+/// must not read past the line it was handed.
 fn parse_cut(expr: &str, size: usize, flags: c_int) -> Parsed {
-    let source = format!("{expr}\0");
-    let mut input = [
-        ParserLine {
-            data: source.as_ptr().cast(),
-            size,
-            allocated: false,
-        },
-        EMPTY_LINE,
-    ];
-    let mut cursor = input.as_mut_ptr();
+    let line = [&expr.as_bytes()[..size]];
+    let mut pstate = ParserState::new(&line, true);
+    let ast = viml_pexpr_parse(&mut pstate, flags);
 
-    let mut colors = ParserHighlight {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut(),
-        init_array: [ParserHighlightChunk {
-            start: ParserPosition { line: 0, col: 0 },
-            end_col: 0,
-            group: ptr::null(),
-        }; 16],
-    };
-    colors.capacity = colors.init_array.len();
-    colors.items = colors.init_array.as_mut_ptr();
-
-    let mut pstate: ParserState = PARSER_STATE_INIT;
-    let state = &raw mut pstate;
-    unsafe {
-        viml_parser_init(
-            state,
-            Some(parser_simple_get_line),
-            &raw mut cursor as *mut c_void,
-            &raw mut colors,
-        );
-        let ast: ExprAST = viml_pexpr_parse(state, flags);
-
-        let mut tree = String::new();
-        let mut detail = String::new();
-        if ast.root.is_null() {
+    let mut tree = String::new();
+    let mut detail = String::new();
+    match ast.root {
+        None => {
             tree.push_str("<empty>");
             detail.push_str("<empty>");
-        } else {
-            dump_with(ast.root, &mut tree, false);
-            dump_with(ast.root, &mut detail, true);
         }
-        let error = if ast.err.msg.is_null() {
-            None
-        } else {
-            let mut msg = CStr::from_ptr(ast.err.msg)
-                .to_str()
-                .expect("error messages are ASCII")
-                .to_owned();
-            if ast.err.arg_len != 0 {
-                let arg =
-                    std::slice::from_raw_parts(ast.err.arg.cast::<u8>(), ast.err.arg_len as usize);
+        Some(root) => {
+            dump_with(&ast, root, &mut tree, false);
+            dump_with(&ast, root, &mut detail, true);
+        }
+    }
+    let error = ast.err.map(|err| {
+        let msg = err.msg.to_str().expect("error messages are ASCII");
+        match err.arg.filter(|arg| !arg.is_empty()) {
+            Some(arg) => {
                 let mut rendered = String::new();
                 write!(rendered, "{}", String::from_utf8_lossy(arg)).unwrap();
-                msg = msg.replace("%.*s", &rendered);
+                msg.replace("%.*s", &rendered)
             }
-            Some(msg)
-        };
-
-        // Read the log back through `highlight_vec`, not through the
-        // pointer `colors.items` holds: the parser's own borrow of the
-        // collection invalidated that one, and only the view re-derives it.
-        let mut groups = Vec::new();
-        for chunk in highlight_vec(&mut colors).as_slice() {
-            groups.push(
-                CStr::from_ptr(chunk.group)
-                    .to_str()
-                    .expect("group names are ASCII")
-                    .to_owned(),
-            );
+            None => msg.to_owned(),
         }
+    });
 
-        // How far the parser got. The cursor wraps onto the next line the
-        // moment it reaches the end of this one, so a parse that consumed
-        // everything reports the line's own size rather than a column.
-        let len = if (*state).pos.line == 0 {
-            (*state).pos.col
-        } else {
-            reader_line(&(*state).reader, 0).size
-        };
-
-        viml_pexpr_free_ast(ast);
-        viml_parser_destroy(&mut *state);
-        // The chunk log belongs to the caller, not to the parser state: a
-        // long expression pushes it off its inline array and onto the heap.
-        xfree(highlight_vec(&mut colors).take_heap());
-        Parsed {
-            tree,
-            detail,
-            error,
-            groups,
-            len,
-        }
+    // How far the parser got. The cursor wraps onto the next line the
+    // moment it reaches the end of this one, so a parse that consumed
+    // everything reports the line's own size rather than a column.
+    let len = if pstate.pos.line == 0 {
+        pstate.pos.col
+    } else {
+        size
+    };
+    let groups = pstate
+        .take_highlight()
+        .iter()
+        .map(|chunk| {
+            chunk
+                .group
+                .to_str()
+                .expect("group names are ASCII")
+                .to_owned()
+        })
+        .collect();
+    Parsed {
+        tree,
+        detail,
+        error,
+        groups,
+        len,
     }
 }
 
@@ -767,12 +697,12 @@ fn a_parse_reports_how_much_it_consumed() {
 /// is off here rather than the constants renamed.
 #[allow(non_upper_case_globals)]
 mod lexer {
-    use std::ffi::{CStr, c_int, c_void};
-    use std::{fmt, ptr, slice};
+    use std::ffi::{CStr, c_int};
+    use std::fmt;
 
     use neovim::types::{
-        ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ParserLine,
-        ParserPosition, ParserState,
+        ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ParserPosition,
+        ParserState,
     };
     use neovim::viml::parser::expressions::{
         ASSIGNMENT_NAMES, CASE_STRATEGY_NAMES, COMPARISON_NAMES, LexExprToken, LexExprTokenData,
@@ -786,12 +716,6 @@ mod lexer {
         kExprLexRegister, kExprLexSingleQuotedString, kExprLexSpacing, kExprOptScopeGlobal,
         kExprOptScopeLocal, kExprOptScopeUnspecified, viml_pexpr_next_token,
     };
-    use neovim::viml::parser::parser::{
-        PARSER_STATE_INIT, parser_simple_get_line, reader_line, viml_parser_destroy,
-        viml_parser_init,
-    };
-
-    use super::EMPTY_LINE;
 
     // -- the input ---------------------------------------------------------
 
@@ -1034,30 +958,18 @@ mod lexer {
     /// `pstate_str`: the bytes the token's span covers, read back out of the
     /// line the parser kept rather than out of the token — which is what
     /// makes a `len` that overruns the line visible.
-    ///
-    /// # Safety
-    /// `state` must point at a parser that has read at least one line.
-    unsafe fn span(
-        state: *mut ParserState,
+    fn span(
+        pstate: &ParserState<'_>,
         start: ParserPosition,
         len: usize,
     ) -> (Option<Bytes>, Option<String>) {
-        // SAFETY: the caller's obligation. The reborrow is of the reader
-        // alone, which is what `reader_line` reads.
-        let reader = unsafe { &(*state).reader };
-        if start.line >= reader.lines.size {
+        if start.line >= pstate.lines_read() {
             return (
                 None,
                 Some("start.line >= pstate.reader.lines.size".to_owned()),
             );
         }
-        let pline = reader_line(reader, start.line);
-        let line: &[u8] = if pline.data.is_null() {
-            &[]
-        } else {
-            // SAFETY: a `ParserLine` describes `size` readable bytes.
-            unsafe { slice::from_raw_parts(pline.data.cast::<u8>(), pline.size) }
-        };
+        let line = pstate.line(start.line).unwrap_or_default();
         if start.col >= line.len() {
             return (None, Some("start.col >= #pstr".to_owned()));
         }
@@ -1071,9 +983,8 @@ mod lexer {
     /// carry an arm its type does not name -- `!` alone is a `Not` holding
     /// an assignment -- and the spec reports nothing for those.
     ///
-    /// # Safety
-    /// `tkn` must be a token the lexer answered, still describing a live line.
-    unsafe fn payload(kind: &str, tkn: &LexExprToken) -> Tkd {
+    /// `pstate` is the parser `tkn` came out of.
+    fn payload(kind: &str, tkn: &LexExprToken, pstate: &ParserState<'_>) -> Tkd {
         match (kind, tkn.data) {
             ("Comparison", LexExprTokenData::Comparison(cmp)) => Tkd::Cmp {
                 kind: cmp_name(cmp.type_0),
@@ -1104,11 +1015,10 @@ mod lexer {
                     kExprOptScopeLocal => "Local",
                     other => panic!("unknown option scope {other}"),
                 },
-                // SAFETY: the caller's obligation: the name points into a
-                // line the parser is still holding.
-                name: Bytes(
-                    unsafe { slice::from_raw_parts(opt.name.cast::<u8>(), opt.len) }.to_vec(),
-                ),
+                name: Bytes({
+                    let line = pstate.line(tkn.start.line).unwrap_or_default();
+                    line[tkn.start.col + opt.name_offset..][..opt.len].to_vec()
+                }),
             },
             ("PlainIdentifier", LexExprTokenData::Var(var)) => Tkd::Var {
                 scope: intchar(var.scope as c_int),
@@ -1126,9 +1036,7 @@ mod lexer {
             },
             ("Assignment", LexExprTokenData::Assignment(ass)) => Tkd::Asgn(asgn_name(ass.type_0)),
             ("Invalid", LexExprTokenData::Error(err)) => Tkd::Err(
-                // SAFETY: every error message is a static NUL-terminated
-                // string.
-                unsafe { CStr::from_ptr(err.msg) }
+                err.msg
                     .to_str()
                     .expect("error messages are ASCII")
                     .to_owned(),
@@ -1141,52 +1049,31 @@ mod lexer {
     /// token as the spec compared it, where the cursor was left, and the size
     /// of the first line — which is what decides whether the cursor wrapped.
     fn lex(lines: &[Src], col: usize, flags: c_int) -> (Tok, ParserPosition, usize) {
-        let mut plines: Vec<ParserLine> = lines
+        // The reader stops at the first absent line, as it stopped at a null
+        // `data`.
+        let input: Vec<&[u8]> = lines
             .iter()
-            .map(|line| ParserLine {
-                data: if line.present {
-                    line.bytes.as_ptr().cast()
-                } else {
-                    ptr::null()
-                },
-                size: line.size,
-                allocated: false,
-            })
+            .take_while(|line| line.present)
+            .map(|line| &line.bytes[..line.size])
             .collect();
-        plines.push(EMPTY_LINE);
-        let mut cursor = plines.as_mut_ptr();
-        let mut pstate = PARSER_STATE_INIT;
-        let state = &raw mut pstate;
-        // SAFETY: the state stays put for the whole call, the getter walks a
-        // null-terminated array, and every line outlives the token read out
-        // of it.
-        unsafe {
-            viml_parser_init(
-                state,
-                Some(parser_simple_get_line),
-                &raw mut cursor as *mut c_void,
-                ptr::null_mut(),
-            );
-            (*state).pos.col = col;
-            let tkn = viml_pexpr_next_token(state, flags);
-            let kind = kind_name(tkn.type_0);
-            let (text, mut error) = span(state, tkn.start, tkn.len);
-            if error.is_none() && text.as_ref().is_some_and(|got| got.0.len() != tkn.len) {
-                error = Some("#str /= len".to_owned());
-            }
-            let tok = Tok {
-                kind,
-                start: (tkn.start.line, tkn.start.col),
-                len: tkn.len,
-                text,
-                error,
-                data: payload(kind, &tkn),
-            };
-            let pos = (*state).pos;
-            let first = reader_line(&(*state).reader, 0).size;
-            viml_parser_destroy(&mut *state);
-            (tok, pos, first)
+        let mut pstate = ParserState::new(&input, false);
+        pstate.pos.col = col;
+        let tkn = viml_pexpr_next_token(&mut pstate, flags);
+        let kind = kind_name(tkn.type_0);
+        let (text, mut error) = span(&pstate, tkn.start, tkn.len);
+        if error.is_none() && text.as_ref().is_some_and(|got| got.0.len() != tkn.len) {
+            error = Some("#str /= len".to_owned());
         }
+        let tok = Tok {
+            kind,
+            start: (tkn.start.line, tkn.start.col),
+            len: tkn.len,
+            text,
+            error,
+            data: payload(kind, &tkn, &pstate),
+        };
+        let first = pstate.line(0).map_or(0, <[u8]>::len);
+        (tok, pstate.pos, first)
     }
 
     // -- the spec's three case shapes --------------------------------------

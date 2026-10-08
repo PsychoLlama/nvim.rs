@@ -1,22 +1,14 @@
-//! The node tables, node allocation and teardown, and the shunting-yard step
+//! The node arena, the slots the AST stack names, and the shunting-yard step
 //! that attaches a binary operator to the tree.
 //!
-//! # Node pointers
+//! # Slots
 //!
-//! A node is `xcalloc`ed by [`viml_pexpr_new_node`] and lives until
-//! [`viml_pexpr_free_ast`] walks the finished tree, so a non-null node
-//! pointer the parser holds is live and dereferenceable for the whole parse.
-//! That is the whole of the obligation behind the accessors below, and it is
-//! why they are safe functions.
-//!
-//! They stay *raw* projections. The AST stack remembers where the next value
-//! goes by holding an interior pointer into a node — `&raw mut
-//! (*node).children` — and a `&mut ExprASTNode` taken anywhere would retag
-//! over those and leave the stack holding dead tags. `parser.rs`'s module doc
-//! makes the same point about `ParserState`.
+//! Upstream's AST stack holds `ExprASTNode **`s: the root pointer, or some
+//! node's `children` or `next` field, each the place the next value goes.
+//! Here the nodes live in [`ExprAST::nodes`] and name each other by
+//! [`NodeId`], and a stack item is a [`Slot`] naming the same three places.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -27,127 +19,177 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use std::collections::HashSet;
+use core::ffi::CStr;
 
 use super::*;
-use crate::types::{ExprNodeData, ExprNodeFigure};
-use crate::viml::parser::parser::reader_line;
+use crate::os::cshim::gettext;
+use crate::types::ExprNodeFigure;
 
-/// A node's type tag.
-///
-/// Every accessor here is `inline(always)`: they exist to bound the unsafe
-/// surface, not to add a layer, and an unoptimised build otherwise pays a
-/// real call for each field read — which shows up as ~15% on a parse deep
-/// enough for the stack-invariant check below to matter.
-#[inline(always)]
-pub(super) fn node_type(node: *mut ExprASTNode) -> ExprASTNodeType {
-    // SAFETY: a parser-held node pointer is live; see the module doc. Every
-    // accessor below carries the same obligation and does not repeat it.
-    unsafe { (*node).type_0 }
+/// A place a node can hang from: the root of the tree, a node's first
+/// child, or a node's next sibling.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(super) enum Slot {
+    Root,
+    Children(NodeId),
+    Next(NodeId),
 }
 
-#[inline(always)]
-pub(super) fn set_node_type(node: *mut ExprASTNode, type_0: ExprASTNodeType) {
-    unsafe { (*node).type_0 = type_0 }
-}
-
-/// Where in the input the node starts.
-#[inline(always)]
-pub(super) fn node_start(node: *mut ExprASTNode) -> ParserPosition {
-    unsafe { (*node).start }
-}
-
-#[inline(always)]
-pub(super) fn set_node_span(node: *mut ExprASTNode, start: ParserPosition, len: size_t) {
-    unsafe {
-        (*node).start = start;
-        (*node).len = len;
+impl<'a> ExprAST<'a> {
+    /// An empty tree with no error.
+    pub(super) fn new() -> Self {
+        ExprAST {
+            err: None,
+            nodes: Vec::new(),
+            root: None,
+        }
     }
-}
 
-#[inline(always)]
-pub(super) fn set_node_len(node: *mut ExprASTNode, len: size_t) {
-    unsafe { (*node).len = len }
-}
+    /// The node `id` names.
+    pub fn node(&self, id: NodeId) -> &ExprASTNode<'a> {
+        &self.nodes[id.0]
+    }
 
-/// The node's first child, or null when it has none.
-#[inline(always)]
-pub(super) fn node_children(node: *mut ExprASTNode) -> *mut ExprASTNode {
-    unsafe { (*node).children }
-}
+    fn node_mut(&mut self, id: NodeId) -> &mut ExprASTNode<'a> {
+        &mut self.nodes[id.0]
+    }
 
-#[inline(always)]
-pub(super) fn set_node_children(node: *mut ExprASTNode, children: *mut ExprASTNode) {
-    unsafe { (*node).children = children }
-}
+    /// A node's children, first to last.
+    pub fn children(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+        core::iter::successors(self.node(id).children, |&child| self.node(child).next)
+    }
 
-/// The node's sibling, or null when it is the last one.
-#[inline(always)]
-pub(super) fn node_next(node: *mut ExprASTNode) -> *mut ExprASTNode {
-    unsafe { (*node).next }
-}
+    /// A fresh node of the given type, with no children and no sibling. Its
+    /// span and its payload are the caller's to fill in.
+    ///
+    /// Upstream `xmalloc`s the node and leaves `start`, `len` and the payload
+    /// as whatever the allocator handed back; they start zeroed here.
+    pub(super) fn new_node(&mut self, type_0: ExprASTNodeType) -> NodeId {
+        let id = NodeId(self.nodes.len());
+        self.nodes.push(ExprASTNode {
+            type_0,
+            children: None,
+            next: None,
+            start: ParserPosition { line: 0, col: 0 },
+            len: 0,
+            data: ExprNodeData::None,
+        });
+        id
+    }
 
-/// The slot the node's first child goes into — an AST stack item.
-#[inline(always)]
-pub(super) fn children_slot(node: *mut ExprASTNode) -> *mut *mut ExprASTNode {
-    unsafe { &raw mut (*node).children }
-}
+    /// A node's type tag.
+    pub(super) fn kind(&self, id: NodeId) -> ExprASTNodeType {
+        self.node(id).type_0
+    }
 
-/// The slot the node's sibling goes into — an AST stack item.
-#[inline(always)]
-pub(super) fn next_slot(node: *mut ExprASTNode) -> *mut *mut ExprASTNode {
-    unsafe { &raw mut (*node).next }
-}
+    pub(super) fn set_kind(&mut self, id: NodeId, type_0: ExprASTNodeType) {
+        self.node_mut(id).type_0 = type_0;
+    }
 
-/// Whatever an AST stack item currently points at; null while the parser is
-/// still waiting for the value that goes there.
-#[inline(always)]
-pub(super) fn slot_node(slot: *mut *mut ExprASTNode) -> *mut ExprASTNode {
-    unsafe { *slot }
-}
+    /// Where in the input the node starts.
+    pub(super) fn start(&self, id: NodeId) -> ParserPosition {
+        self.node(id).start
+    }
 
-#[inline(always)]
-pub(super) fn set_slot_node(slot: *mut *mut ExprASTNode, node: *mut ExprASTNode) {
-    unsafe { *slot = node }
-}
+    pub(super) fn set_span(&mut self, id: NodeId, start: ParserPosition, len: size_t) {
+        let node = self.node_mut(id);
+        node.start = start;
+        node.len = len;
+    }
 
-/// Write the whole of a node's payload.
-#[inline(always)]
-pub(super) fn set_node_data(node: *mut ExprASTNode, data: ExprNodeData) {
-    unsafe { (*node).data = data }
-}
+    pub(super) fn set_len(&mut self, id: NodeId, len: size_t) {
+        self.node_mut(id).len = len;
+    }
 
-/// A figure brace node's guesses at what it will turn out to be.
-#[inline(always)]
-pub(super) fn node_fig(node: *mut ExprASTNode) -> ExprNodeFigure {
-    *unsafe { (*node).data }.figure()
-}
+    /// The node's first child.
+    pub(super) fn first_child(&self, id: NodeId) -> Option<NodeId> {
+        self.node(id).children
+    }
 
-/// Whether a TernaryValue node has seen its `:` yet.
-#[inline(always)]
-pub(super) fn node_got_colon(node: *mut ExprASTNode) -> bool {
-    unsafe { (*node).data }.ternary().got_colon
-}
+    pub(super) fn set_children(&mut self, id: NodeId, children: Option<NodeId>) {
+        self.node_mut(id).children = children;
+    }
 
-/// The decoded bytes a string node owns.
-#[inline(always)]
-pub(super) fn node_str_value(node: *mut ExprASTNode) -> *mut c_char {
-    unsafe { (*node).data }.string().value
-}
+    /// The node's next sibling.
+    pub(super) fn next(&self, id: NodeId) -> Option<NodeId> {
+        self.node(id).next
+    }
 
-/// The slot the root of the tree goes into — the bottom AST stack item.
-#[inline(always)]
-pub(super) fn ast_root_slot(ast: *mut ExprAST) -> *mut *mut ExprASTNode {
-    unsafe { &raw mut (*ast).root }
-}
+    /// Whatever hangs from `slot`; `None` while the parser is still waiting
+    /// for the value that goes there.
+    pub(super) fn slot(&self, slot: Slot) -> Option<NodeId> {
+        match slot {
+            Slot::Root => self.root,
+            Slot::Children(id) => self.node(id).children,
+            Slot::Next(id) => self.node(id).next,
+        }
+    }
 
-/// Whether the parse has already reported an error. The first one wins, so
-/// this is also what [`east_set_error`] tests.
-#[inline(always)]
-pub(super) fn ast_has_error(ast: *const ExprAST) -> bool {
-    unsafe { !(*ast).err.msg.is_null() }
+    /// The node hanging from a slot the parser knows to be filled.
+    #[track_caller]
+    pub(super) fn filled(&self, slot: Slot) -> NodeId {
+        self.slot(slot).expect("the slot holds a node")
+    }
+
+    pub(super) fn set_slot(&mut self, slot: Slot, node: Option<NodeId>) {
+        match slot {
+            Slot::Root => self.root = node,
+            Slot::Children(id) => self.node_mut(id).children = node,
+            Slot::Next(id) => self.node_mut(id).next = node,
+        }
+    }
+
+    /// Write the whole of a node's payload.
+    pub(super) fn set_data(&mut self, id: NodeId, data: ExprNodeData<'a>) {
+        self.node_mut(id).data = data;
+    }
+
+    /// A figure brace node's guesses at what it will turn out to be.
+    pub(super) fn fig(&self, id: NodeId) -> ExprNodeFigure {
+        *self.node(id).data.figure()
+    }
+
+    /// Whether a TernaryValue node has seen its `:` yet.
+    pub(super) fn got_colon(&self, id: NodeId) -> bool {
+        self.node(id).data.ternary().got_colon
+    }
+
+    /// The precedence level a node binds at.
+    pub(super) fn lvl(&self, id: NodeId) -> ExprOpLvl {
+        node_type_to_node_props[self.kind(id) as usize].lvl
+    }
+
+    /// Which way a node of equal precedence associates.
+    fn ass(&self, id: NodeId) -> ExprOpAssociativity {
+        node_type_to_node_props[self.kind(id) as usize].ass
+    }
+
+    /// Whether the parse has already reported an error. The first one wins.
+    pub(super) fn has_error(&self) -> bool {
+        self.err.is_some()
+    }
+
+    /// The child-count invariants upstream checked as it freed the tree:
+    /// no node has more children than its type allows. Only the last is a
+    /// hard `assert!`, as it was in the transpiled body.
+    pub(super) fn check_children(&self) {
+        for (index, node) in self.nodes.iter().enumerate() {
+            let Some(first) = node.children else {
+                continue;
+            };
+            let maxchildren = node_maxchildren[node.type_0 as usize];
+            debug_assert!(maxchildren > 0, "maxchildren > 0");
+            debug_assert!(maxchildren <= 2, "maxchildren <= 2");
+            let second = self.node(first).next;
+            assert!(
+                if maxchildren == 1 {
+                    second.is_none()
+                } else {
+                    second.is_none_or(|second| self.node(second).next.is_none())
+                },
+                "node {index} has no more children than its type allows"
+            );
+        }
+    }
 }
 
 /// The comparison operators' names, by `ExprComparisonType`.
@@ -312,121 +354,6 @@ pub(super) static node_maxchildren: [uint8_t; 39] = [
     0 as uint8_t,
     2 as uint8_t,
 ];
-/// The teardown walk's stack, plus the set of nodes it holds.
-///
-/// Upstream checks for a recursive AST by rescanning the whole stack once per
-/// node — `assert(*kv_A(ast_stack, i) != *cur_node)` under `#ifndef NDEBUG` —
-/// which is quadratic in the depth of the tree: an 8,000-deep parse spent
-/// ~860 ms in that loop alone in a debug build, and every test suite here
-/// runs a debug build. A slot's node only ever changes while the slot is on
-/// top of the stack, so keeping a set as items are pushed and popped asks
-/// exactly the same question in constant time.
-///
-/// The set is maintained by the `debug_assert!` itself, so it stays empty in
-/// a release build, where the check is compiled out along with it.
-#[derive(Default)]
-struct TeardownStack {
-    slots: Vec<*mut *mut ExprASTNode>,
-    on_stack: HashSet<*mut ExprASTNode>,
-}
-
-impl TeardownStack {
-    /// Descend into `slot`, which currently holds `node`.
-    fn push(&mut self, slot: *mut *mut ExprASTNode, node: *mut ExprASTNode) {
-        debug_assert!(
-            self.on_stack.insert(node),
-            "the AST is recursive: a node is reachable from itself"
-        );
-        self.slots.push(slot);
-    }
-
-    /// Leave the slot on top, which still holds `node`.
-    fn pop(&mut self, node: *mut ExprASTNode) {
-        debug_assert!(
-            self.on_stack.remove(&node),
-            "the stack lost track of a node"
-        );
-        self.slots.pop();
-    }
-}
-
-/// The child-count invariants the C checked under `#ifndef NDEBUG`. Only the
-/// last is a hard `assert!` here, as it was in the transpiled body.
-fn assert_children_fit(node: *mut ExprASTNode) {
-    let maxchildren = node_maxchildren[node_type(node) as usize];
-    debug_assert!(maxchildren > 0, "maxchildren > 0");
-    debug_assert!(maxchildren <= 2, "maxchildren <= 2");
-    let second = node_next(node_children(node));
-    assert!(
-        if maxchildren == 1 {
-            second.is_null()
-        } else {
-            second.is_null() || node_next(second).is_null()
-        },
-        "a node has no more children than its type allows"
-    );
-}
-
-/// Free a finished AST and everything hanging off it.
-///
-/// # Safety
-/// `ast` must be an AST [`viml_pexpr_parse`] built and nobody else has freed.
-pub unsafe fn viml_pexpr_free_ast(mut ast: ExprAST) {
-    let mut stack = TeardownStack::default();
-    stack.push(&raw mut ast.root, ast.root);
-    while let Some(&cur_slot) = stack.slots.last() {
-        let cur_node = slot_node(cur_slot);
-        if cur_node.is_null() {
-            // Only the root slot can be empty: every other one was pushed
-            // holding a node.
-            debug_assert!(stack.slots.len() == 1, "kv_size(ast_stack) == 1");
-            stack.pop(cur_node);
-        } else if !node_children(cur_node).is_null() {
-            assert_children_fit(cur_node);
-            stack.push(children_slot(cur_node), node_children(cur_node));
-        } else if !node_next(cur_node).is_null() {
-            stack.push(next_slot(cur_node), node_next(cur_node));
-        } else {
-            // A leaf: nothing below it is left, so free it and empty its slot,
-            // which is what turns its parent into a leaf in turn.
-            stack.pop(cur_node);
-            if matches!(
-                node_type(cur_node),
-                kExprNodeDoubleQuotedString | kExprNodeSingleQuotedString
-            ) {
-                // SAFETY: a string node owns the buffer `parse_quoted_string`
-                // decoded into, and nothing else points at it.
-                unsafe { xfree(node_str_value(cur_node).cast::<c_void>()) };
-            }
-            // SAFETY: the node came from `viml_pexpr_new_node`'s `xcalloc`,
-            // and the walk has already freed everything it pointed at.
-            unsafe { xfree(cur_node.cast::<c_void>()) };
-            set_slot_node(cur_slot, ptr::null_mut());
-        }
-    }
-}
-
-/// A fresh node of the given type, with no children and no sibling. Its span
-/// and its payload are the caller's to fill in.
-#[inline]
-pub(super) fn viml_pexpr_new_node(type_0: ExprASTNodeType) -> *mut ExprASTNode {
-    // SAFETY: `xcalloc` answers a live zeroed allocation the size of a node,
-    // or dies trying.
-    //
-    // Upstream uses `xmalloc` and writes three of the six fields, leaving
-    // `start`, `len` and the payload as whatever the allocator handed back --
-    // fine for a union whose live member the type tag names, not fine for a
-    // tagged payload, which has to start somewhere valid. Zeroing costs one
-    // `memset` of a node and settles all three; the discriminant is then
-    // written explicitly, because zero bytes are not a promise about an
-    // enum's representation.
-    unsafe {
-        let node = xcalloc(1, size_of::<ExprASTNode>()).cast::<ExprASTNode>();
-        (*node).type_0 = type_0;
-        (*node).data = ExprNodeData::None;
-        node
-    }
-}
 pub(super) static node_type_to_node_props: [ExprNodeProps; 39] = [
     ExprNodeProps {
         lvl: kEOpLvlInvalid,
@@ -585,56 +512,42 @@ pub(super) static node_type_to_node_props: [ExprNodeProps; 39] = [
         ass: kEOpAssLeft,
     },
 ];
-/// The precedence level a node binds at.
-#[inline(always)]
-pub(super) fn node_lvl(node: *mut ExprASTNode) -> ExprOpLvl {
-    node_type_to_node_props[node_type(node) as usize].lvl
-}
-
-/// Which way a node of equal precedence associates.
-#[inline(always)]
-fn node_ass(node: *mut ExprASTNode) -> ExprOpAssociativity {
-    node_type_to_node_props[node_type(node) as usize].ass
-}
 
 /// The shunting yard: splice a binary operator into the tree at the right
 /// precedence, and answer whether the result is valid.
-pub(super) fn viml_pexpr_handle_bop(
-    pstate: *const ParserState,
-    ast_stack: &mut Vec<*mut *mut ExprASTNode>,
-    bop_node: *mut ExprASTNode,
+pub(super) fn viml_pexpr_handle_bop<'a>(
+    pstate: &ParserState<'a>,
+    ast: &mut ExprAST<'a>,
+    ast_stack: &mut Vec<Slot>,
+    bop_node: NodeId,
     want_node: &mut ExprASTWantedNode,
-    ast: *mut ExprAST,
 ) -> bool {
     let mut ret = true;
-    let mut top_node_p: *mut *mut ExprASTNode = ptr::null_mut::<*mut ExprASTNode>();
-    let mut top_node: *mut ExprASTNode = ptr::null_mut::<ExprASTNode>();
+    let mut top_node_p: Option<Slot> = None;
     let mut top_node_lvl: ExprOpLvl = kEOpLvlInvalid;
     let mut top_node_ass: ExprOpAssociativity = 0 as ExprOpAssociativity;
     debug_assert!(!ast_stack.is_empty(), "kv_size(*ast_stack)");
     // A call and a subscript are written as brackets rather than as operators,
     // so their own level says nothing about how tightly they bind.
-    let bop_node_lvl = if matches!(node_type(bop_node), kExprNodeCall | kExprNodeSubscript) {
+    let bop_node_lvl = if matches!(ast.kind(bop_node), kExprNodeCall | kExprNodeSubscript) {
         kEOpLvlSubscript
     } else {
-        node_lvl(bop_node)
+        ast.lvl(bop_node)
     };
     // Unwind the branch as far as this operator outranks it.
     loop {
         let new_top_node_p = stack_top(ast_stack, 0);
-        let new_top_node = slot_node(new_top_node_p);
-        debug_assert!(!new_top_node.is_null(), "new_top_node != NULL");
-        let new_top_node_lvl = node_lvl(new_top_node);
-        let new_top_node_ass = node_ass(new_top_node);
-        if !top_node_p.is_null()
+        let new_top_node = ast.filled(new_top_node_p);
+        let new_top_node_lvl = ast.lvl(new_top_node);
+        let new_top_node_ass = ast.ass(new_top_node);
+        if top_node_p.is_some()
             && (bop_node_lvl > new_top_node_lvl
                 || bop_node_lvl == new_top_node_lvl && new_top_node_ass == kEOpAssNo)
         {
             break;
         }
         ast_stack.truncate(ast_stack.len() - 1);
-        top_node_p = new_top_node_p;
-        top_node = new_top_node;
+        top_node_p = Some(new_top_node_p);
         top_node_lvl = new_top_node_lvl;
         top_node_ass = new_top_node_ass;
         if bop_node_lvl == top_node_lvl && top_node_ass == kEOpAssRight {
@@ -644,17 +557,19 @@ pub(super) fn viml_pexpr_handle_bop(
             break;
         }
     }
+    let top_node_p = top_node_p.expect("the loop ran at least once");
+    let top_node = ast.filled(top_node_p);
     if top_node_ass == kEOpAssLeft || top_node_lvl != bop_node_lvl {
         // The operator takes the whole of what was unwound as its left
         // operand, and stands where that used to.
-        set_slot_node(top_node_p, bop_node);
-        set_node_children(bop_node, top_node);
+        ast.set_slot(top_node_p, Some(bop_node));
+        ast.set_children(bop_node, Some(top_node));
         debug_assert!(
-            node_next(node_children(bop_node)).is_null(),
+            ast.next(top_node).is_none(),
             "bop_node->children->next == NULL"
         );
         ast_stack.push(top_node_p);
-        ast_stack.push(next_slot(node_children(bop_node)));
+        ast_stack.push(Slot::Next(top_node));
     } else {
         assert!(
             top_node_lvl == bop_node_lvl && top_node_ass == kEOpAssRight,
@@ -662,23 +577,25 @@ pub(super) fn viml_pexpr_handle_bop(
         );
         // Right-associative and equal: the operator steals the right operand
         // of the one above it and becomes that operand instead.
-        let top_children = node_children(top_node);
+        let top_children = ast
+            .first_child(top_node)
+            .expect("a right-associative operator has its left operand");
+        let stolen = ast.next(top_children);
         debug_assert!(
-            !top_children.is_null() && !node_next(top_children).is_null(),
+            stolen.is_some(),
             "top_node->children != NULL && top_node->children->next != NULL"
         );
-        set_node_children(bop_node, node_next(top_children));
-        set_slot_node(next_slot(top_children), bop_node);
-        debug_assert!(
-            node_next(node_children(bop_node)).is_null(),
-            "bop_node->children->next == NULL"
-        );
+        ast.set_children(bop_node, stolen);
+        ast.set_slot(Slot::Next(top_children), Some(bop_node));
+        let left = ast.filled(Slot::Children(bop_node));
+        debug_assert!(ast.next(left).is_none(), "bop_node->children->next == NULL");
         ast_stack.push(top_node_p);
-        ast_stack.push(next_slot(top_children));
-        ast_stack.push(next_slot(node_children(bop_node)));
-        if node_type(bop_node) == kExprNodeComparison {
+        ast_stack.push(Slot::Next(top_children));
+        ast_stack.push(Slot::Next(left));
+        if ast.kind(bop_node) == kExprNodeComparison {
             let msg = gettext(c"E15: Operator is not associative: %.*s");
-            east_set_error(pstate, ast, msg.as_ptr(), node_start(bop_node));
+            let start = ast.start(bop_node);
+            east_set_error(pstate, ast, msg, start);
             ret = false;
         }
     }
@@ -687,38 +604,27 @@ pub(super) fn viml_pexpr_handle_bop(
 }
 
 /// Translate a message for the parse error or for a token's `err.msg`.
-///
-/// A `CStr` is NUL-terminated by construction and `gettext` only reads through
-/// it, so this is the whole of the obligation.
-pub(super) fn translate(msg: &'static CStr) -> *const c_char {
-    gettext(msg).as_ptr()
+pub(super) fn translate(msg: &'static CStr) -> &'static CStr {
+    gettext(msg)
 }
 
 /// Record `msg` as the parse error, unless an earlier one already stands.
-/// `msg` must already be translated and must outlive the AST.
-#[inline(always)]
-pub(super) fn east_set_error(
-    pstate: *const ParserState,
-    ast: *mut ExprAST,
-    msg: *const c_char,
+/// `msg` must already be translated.
+pub(super) fn east_set_error<'a>(
+    pstate: &ParserState<'a>,
+    ast: &mut ExprAST<'a>,
+    msg: &'static CStr,
     start: ParserPosition,
 ) {
-    if ast_has_error(ast) {
+    if ast.has_error() {
         return;
     }
-    // SAFETY: the parser holds both for the whole parse. `err` is a different
-    // field from `root`, which the AST stack points into, so the reborrow does
-    // not reach it.
-    let (err, reader) = unsafe { (&mut (*ast).err, &(*pstate).reader) };
-    let pline = reader_line(reader, start.line);
-    err.msg = msg;
-    err.arg_len = c_int::try_from(pline.size.wrapping_sub(start.col))
-        .expect("`start.col` is a position within the line");
-    // `wrapping_add` because the C did: `start.col` is a position within the
-    // line, so this is exact.
-    err.arg = if pline.data.is_null() {
-        ptr::null::<c_char>()
-    } else {
-        pline.data.wrapping_add(start.col)
-    };
+    let arg = pstate.line(start.line).map(|line| {
+        assert!(
+            start.col <= line.len(),
+            "`start.col` is a position within the line"
+        );
+        &line[start.col..]
+    });
+    ast.err = Some(ExprASTError { msg, arg });
 }
