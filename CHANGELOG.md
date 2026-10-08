@@ -9,14 +9,18 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- Rewrote the Vimscript interpreter's storage: expressions are read as
-  byte slices instead of through a moving `char *`, strings, Lists, Dicts,
-  Blobs and partials are owned values whose handles count their references,
-  and user functions, the `:if`/`:while`/`:try` stack, exceptions,
-  breakpoints and the expression parser behind `nvim_parse_expression` own
-  what they hold. A builtin, watcher, `:let` index or `:for` body that
-  frees or grows the container it is reading now gets an error or the
-  value as it was, instead of reading or writing freed memory.
+- Rewrote how Vimscript keeps its values, user functions and control flow.
+  It reaches every builtin function, `:let`, `:for`, `:if`/`:while`/`:try`,
+  exceptions, breakpoints, dictionary watchers and `nvim_parse_expression`.
+  A script that changes a List or Dict while a builtin, watcher or loop is
+  still reading it now gets an error or the old value instead of crashing.
+
+### Fixed
+
+- `jobstart()` and `termopen()` crashed when given `v:_null_dict` as their
+  options. A null dictionary now counts as no options.
+- `:let l[0:1] .= l` and `:let l[0] .= l[0]` on a long string read freed
+  memory and could produce a truncated result.
 
 ## [2026.10.04-0a84d0b534]
 
