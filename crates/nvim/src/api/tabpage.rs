@@ -12,7 +12,7 @@
 
 use crate::api::private::helpers::{
     api_try, dict_get_value, dict_set_var, find_buffer_by_handle, find_tab_by_handle,
-    find_window_by_handle,
+    find_window_by_handle, scope_vars,
 };
 use crate::api::vim::nvim_get_current_win;
 use crate::window::tab_index;
@@ -52,9 +52,7 @@ pub fn nvim_tabpage_get_var(tabpage: TabpageHandle, name: String_0) -> Result<Ob
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
-    // SAFETY: `tab` is a live tabpage, so `tp_vars` is its own dictionary;
-    // `name` is the caller's.
-    unsafe { dict_get_value(tab.tp_vars, &name) }
+    dict_get_value(&scope_vars(&tab.tp_winvar), &name)
 }
 
 /// Set the tab-scoped variable `name`.
@@ -66,8 +64,8 @@ pub fn nvim_tabpage_set_var(
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(());
     };
-    let vars = tab.tp_vars;
-    unsafe { dict_set_var(vars, &name, value, false, false) }.map(|_| ())
+    let vars = scope_vars(&tab.tp_winvar);
+    dict_set_var(&vars, &name, value, false, false).map(|_| ())
 }
 
 /// Remove the tab-scoped variable `name`.
@@ -75,8 +73,8 @@ pub fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<()
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(());
     };
-    let vars = tab.tp_vars;
-    unsafe { dict_set_var(vars, &name, Object::Nil, true, false) }.map(|_| ())
+    let vars = scope_vars(&tab.tp_winvar);
+    dict_set_var(&vars, &name, Object::Nil, true, false).map(|_| ())
 }
 
 /// The window `tabpage` is showing.

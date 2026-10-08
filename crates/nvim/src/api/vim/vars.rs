@@ -81,28 +81,23 @@ fn key_not_found(name: &String_0) -> Error {
 /// Set the global variable `name` to `value`.
 pub fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
     let dict = globvar_dict();
-    // SAFETY: the handle keeps the dictionary live through the call; the
-    // value is copied into it.
-    unsafe { dict_set_var(dict.as_ptr(), &name, value, false, false) }.map(|_| ())
+    dict_set_var(&dict, &name, value, false, false).map(|_| ())
 }
 
 /// Remove the global variable `name`.
 pub fn nvim_del_var(name: String_0) -> Result<(), Error> {
     let dict = globvar_dict();
-    // SAFETY: as [`nvim_set_var`]; `del` says to remove rather than assign.
-    unsafe { dict_set_var(dict.as_ptr(), &name, Object::Nil, true, false) }.map(|_| ())
+    dict_set_var(&dict, &name, Object::Nil, true, false).map(|_| ())
 }
 
 /// The `v:` variable `name`.
 pub fn nvim_get_vvar(name: String_0) -> Result<Object, Error> {
     let dict = vimvar_dict();
-    // SAFETY: the handle keeps `v:` live through the call.
-    unsafe { dict_get_value(dict.as_ptr(), &name) }
+    dict_get_value(&dict, &name)
 }
 
 /// Set the `v:` variable `name` to `value`.
 pub fn nvim_set_vvar(name: String_0, value: Object) -> Result<(), Error> {
     let dict = vimvar_dict();
-    // SAFETY: as [`nvim_set_var`], over `v:` rather than the globals.
-    unsafe { dict_set_var(dict.as_ptr(), &name, value, false, false) }.map(|_| ())
+    dict_set_var(&dict, &name, value, false, false).map(|_| ())
 }

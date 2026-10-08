@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::api::private::helpers::{
-    find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
+    find_buffer_by_handle, find_tab_by_handle, find_window_by_handle, scope_vars,
 };
 
 pub fn buffer_set_var(
@@ -27,18 +27,16 @@ pub fn buffer_set_var(
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
     };
-    let vars = buf.b_vars;
-    // SAFETY: `vars` is that buffer's own dictionary.
-    unsafe { dict_set_var(vars, &name, value, false, true) }
+    let vars = scope_vars(&buf.b_bufvar);
+    dict_set_var(&vars, &name, value, false, true)
 }
 
 pub fn buffer_del_var(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
     };
-    let vars = buf.b_vars;
-    // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, &name, Object::Nil, true, true) }
+    let vars = scope_vars(&buf.b_bufvar);
+    dict_set_var(&vars, &name, Object::Nil, true, true)
 }
 
 pub fn window_set_var(
@@ -49,18 +47,16 @@ pub fn window_set_var(
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
     };
-    let vars = win.w_vars;
-    // SAFETY: as `buffer_set_var`, for that window's dictionary.
-    unsafe { dict_set_var(vars, &name, value, false, true) }
+    let vars = scope_vars(&win.w_winvar);
+    dict_set_var(&vars, &name, value, false, true)
 }
 
 pub fn window_del_var(window: WindowHandle, name: String_0) -> Result<Object, Error> {
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
     };
-    let vars = win.w_vars;
-    // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, &name, Object::Nil, true, true) }
+    let vars = scope_vars(&win.w_winvar);
+    dict_set_var(&vars, &name, Object::Nil, true, true)
 }
 
 pub fn tabpage_set_var(
@@ -71,29 +67,24 @@ pub fn tabpage_set_var(
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
-    let vars = tab.tp_vars;
-    // SAFETY: as `buffer_set_var`, for that tab page's dictionary.
-    unsafe { dict_set_var(vars, &name, value, false, true) }
+    let vars = scope_vars(&tab.tp_winvar);
+    dict_set_var(&vars, &name, value, false, true)
 }
 
 pub fn tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<Object, Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
-    let vars = tab.tp_vars;
-    // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, &name, Object::Nil, true, true) }
+    let vars = scope_vars(&tab.tp_winvar);
+    dict_set_var(&vars, &name, Object::Nil, true, true)
 }
 
 pub fn vim_set_var(name: String_0, value: Object) -> Result<Object, Error> {
     let vars = globvar_dict();
-    // SAFETY: as `buffer_set_var`, for the global dictionary, which the
-    // handle keeps live through the call.
-    unsafe { dict_set_var(vars.as_ptr(), &name, value, false, true) }
+    dict_set_var(&vars, &name, value, false, true)
 }
 
 pub fn vim_del_var(name: String_0) -> Result<Object, Error> {
     let vars = globvar_dict();
-    // SAFETY: as `vim_set_var`.
-    unsafe { dict_set_var(vars.as_ptr(), &name, Object::Nil, true, true) }
+    dict_set_var(&vars, &name, Object::Nil, true, true)
 }

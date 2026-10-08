@@ -344,10 +344,8 @@ pub fn f_getscriptinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let query = unsafe { script_query(args, &mut pat, &mut regmatch) };
 
     if !matches!(query, ScriptQuery::Rejected) {
-        // SAFETY: `result` holds the list allocated above.
-        let l = result.list_or_null();
-        // SAFETY: nothing in the loop sources a script.
-        unsafe { report_scripts(l, &query, &mut regmatch) };
+        let list = result.list_handle().expect("the list allocated above");
+        report_scripts(&list, &query, &mut regmatch);
     }
 
     // SAFETY: both were allocated by the call that produced `query`; either
@@ -375,10 +373,9 @@ unsafe fn script_query(
         return ScriptQuery::All;
     };
     // The tag was tested above, so this is the argument's own dictionary.
-    let dict = arg.dict_or_null();
+    let dict = arg.dict_shared().map(|dict| &**dict);
 
-    // SAFETY: the argument's own dictionary.
-    if let Some(sid_di) = dict_find(unsafe { dict.as_ref() }, b"sid") {
+    if let Some(sid_di) = dict_find(dict, b"sid") {
         let Ok(sid) = tv_get_number_chk(&sid_di.di_tv) else {
             return ScriptQuery::Rejected;
         };
@@ -392,8 +389,7 @@ unsafe fn script_query(
 
     // SAFETY: the string is allocated for us and handed straight to the caller.
     unsafe {
-        *pat = dict_get_string_alloc((dict).as_ref(), b"name")
-            .map_or(ptr::null_mut(), ThinCString::into_raw)
+        *pat = dict_get_string_alloc(dict, b"name").map_or(ptr::null_mut(), ThinCString::into_raw)
     };
     if !unsafe { *pat }.is_null() {
         regmatch.regprog = vim_regcomp(unsafe { cstr::at(*pat) }, RE_MAGIC + RE_STRING);
@@ -405,12 +401,8 @@ unsafe fn script_query(
     }
 }
 
-/// Append one dict per script `query` selects to `l`.
-///
-/// # Safety
-///
-/// `l` must be a live list, and `query` must still own its compiled pattern.
-unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMatch) {
+/// Append one dict per script `query` selects to `list`.
+fn report_scripts(list: &ListRef, query: &ScriptQuery, regmatch: &mut RegMatch) {
     let total = VarNumber::from(script_count());
     // A `sid` query asks about exactly one script, and answers nothing at all
     // when that script does not exist.
@@ -437,7 +429,7 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
         // SAFETY: a fresh dict, handed to the list before anything else sees it.
         let d_held = tv_dict_alloc();
         let d = d_held.as_ptr();
-        unsafe { (*l).push_dict(Some(d_held)) };
+        list.edit().push_dict(Some(d_held));
         unsafe { dict_add_str(d, c"name", name) };
         unsafe { dict_add_nr(d, c"sid", sid) };
         unsafe { dict_add_nr(d, c"version", 1) };

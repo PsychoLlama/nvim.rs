@@ -41,7 +41,7 @@ pub(crate) mod refresh;
 pub(crate) mod scrollback;
 pub(crate) mod termrequest;
 
-use crate::api::private::helpers::{cstr_to_string, dict_get_value};
+use crate::api::private::helpers::{dict_get_value, scope_vars};
 use crate::autocmd::{
     apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, block_autocmds,
     is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
@@ -51,6 +51,7 @@ use crate::channel::main_loop_events;
 use crate::cstr;
 use crate::cursor_shape::{SHAPE_IDX_TERM, shape_entry};
 use crate::drawscreen::redraw_buf_line_later;
+use crate::eval::typval::DictRef;
 use crate::eval::vars::globvar_dict;
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_free, multiqueue_new, multiqueue_put_event};
@@ -67,7 +68,7 @@ use crate::types::String_0;
 use crate::types::builders::DictBuf;
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    AcoSave, BufferHandle, ColNr, Dict, Event, ExtmarkOp, Handle, HlAttrs, LineNr, MarkAdjustMode,
+    AcoSave, BufferHandle, ColNr, Event, ExtmarkOp, Handle, HlAttrs, LineNr, MarkAdjustMode,
     Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue, SaveVEvent, Terminal,
     TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState,
     VTermValue, VarNumber, int16_t, size_t, uint8_t,
@@ -944,13 +945,9 @@ fn is_focused(term: Term) -> bool {
 /// error is cleared and dropped. **The answer BORROWS `dict`**:
 /// The answer is a copy of the variable's value.
 ///
-/// # Safety
-/// `dict` must be a live dictionary and `key` NUL-terminated.
-unsafe fn dict_lookup(dict: *mut Dict, key: *const c_char) -> Object {
-    // SAFETY: forwarded to this function's own caller. A key that is not
-    // there answers nil rather than a refusal.
-    let key = unsafe { cstr_to_string(key) };
-    unsafe { dict_get_value(dict, &key) }.unwrap_or(Object::Nil)
+/// A key that is not there answers nil rather than a refusal.
+fn dict_lookup(dict: &DictRef, key: &CStr) -> Object {
+    dict_get_value(dict, &String_0::from_cstr(key)).unwrap_or(Object::Nil)
 }
 
 /// `b:<key>`, falling back to `g:<key>`, if it is a string.
@@ -961,13 +958,11 @@ unsafe fn dict_lookup(dict: *mut Dict, key: *const c_char) -> Object {
 ///
 /// `key` must point at a NUL-terminated string.
 unsafe fn get_config_string(buffer: Buf, key: *const c_char) -> *mut c_char {
-    // SAFETY: `buffer` is a live buffer and `key` is NUL-terminated.
-    let mut obj = unsafe { dict_lookup(buffer.b_vars, key) };
+    // SAFETY: the caller's NUL-terminated key.
+    let key = unsafe { CStr::from_ptr(key) };
+    let mut obj = dict_lookup(&scope_vars(&buffer.b_bufvar), key);
     if obj.is_nil() {
-        let globals = globvar_dict();
-        // SAFETY: as above, against the global variables, which the handle
-        // keeps live through the call.
-        obj = unsafe { dict_lookup(globals.as_ptr(), key) };
+        obj = dict_lookup(&globvar_dict(), key);
     }
     obj.into_string()
         .map_or(::core::ptr::null_mut(), String_0::into_raw)

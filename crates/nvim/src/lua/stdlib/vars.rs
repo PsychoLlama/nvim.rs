@@ -94,7 +94,12 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
 
         let del = lua_gettop(lstate) < 4 || lua_type(lstate, 4) == LUA_TNIL;
 
-        let mut di: *mut DictItem = match dict_check_writable(dict, &key, del) {
+        // Through a view of the scope's dictionary, which takes no reference.
+        let mut di: *mut DictItem = match dict_check_writable(
+            &::core::mem::ManuallyDrop::new(DictRef::owning(dict).expect("a live dictionary")),
+            &key,
+            del,
+        ) {
             Ok(di) => di,
             Err(e) => {
                 nlua_push_errstr(lstate, c"%s".as_ptr(), e.message_or_empty().as_ptr());

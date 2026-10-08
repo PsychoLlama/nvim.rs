@@ -3,7 +3,7 @@
 #![allow(unsafe_code)]
 
 use super::{f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty};
-use crate::api::private::helpers::dict_set_var;
+use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_close_terminal, setfname};
 use crate::channel::{
@@ -671,8 +671,7 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
 /// Set one buffer-local variable to an Integer, discarding any refusal.
 fn set_buf_var(buffer: Buf, name: &CStr, value: Integer) {
     let value = Object::Integer(value);
-    // SAFETY: the caller's obligation; the name is `'static`.
-    let vars = buffer.b_vars;
+    let vars = scope_vars(&buffer.b_bufvar);
     let name = String_0::from_cstr(name);
-    drop(unsafe { dict_set_var(vars, &name, value, false, false) });
+    drop(dict_set_var(&vars, &name, value, false, false));
 }

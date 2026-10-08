@@ -12,7 +12,7 @@
 
 use crate::api::private::helpers::{
     Reported, api_try, dict_get_value, dict_set_var, find_buffer_by_handle, find_window_by_handle,
-    normalize_index,
+    normalize_index, scope_vars,
 };
 use crate::autocmd::is_aucmd_win;
 use crate::cursor::check_cursor_col;
@@ -157,9 +157,7 @@ pub fn nvim_win_get_var(win: WindowHandle, name: String_0) -> Result<Object, Err
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Object::Nil);
     };
-    // SAFETY: `w` is live, so `w_vars` is its own dictionary; `name` is the
-    // caller's.
-    unsafe { dict_get_value(w.w_vars, &name) }
+    dict_get_value(&scope_vars(&w.w_winvar), &name)
 }
 
 /// Set the window-scoped variable `name`.
@@ -167,8 +165,7 @@ pub fn nvim_win_set_var(win: WindowHandle, name: String_0, value: Object) -> Res
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    // SAFETY: as `nvim_win_get_var`; the store takes `value` over.
-    unsafe { dict_set_var(w.w_vars, &name, value, false, false) }.map(|_| ())
+    dict_set_var(&scope_vars(&w.w_winvar), &name, value, false, false).map(|_| ())
 }
 
 /// Remove the window-scoped variable `name`.
@@ -176,8 +173,7 @@ pub fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), Error> 
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    // SAFETY: as `nvim_win_set_var`, with the deleting flag set.
-    unsafe { dict_set_var(w.w_vars, &name, Object::Nil, true, false) }.map(|_| ())
+    dict_set_var(&scope_vars(&w.w_winvar), &name, Object::Nil, true, false).map(|_| ())
 }
 
 /// `win`'s top-left corner, as a `[row, column]` pair of screen cells.

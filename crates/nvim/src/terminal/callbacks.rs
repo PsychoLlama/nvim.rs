@@ -22,7 +22,7 @@ use crate::eval::eval_call_provider;
 use crate::memory::ThinCString;
 use crate::types::TypVal;
 
-use crate::api::private::helpers::dict_set_var;
+use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::eval::typval::tv_list_alloc;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::memory::xmemdupz;
@@ -129,12 +129,14 @@ pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
     };
     let mut err = Error::none();
     let title = Object::string(String_0::from_bytes(title));
-    let (vars, key) = (buf.b_vars, String_0::from_cstr(c"term_title"));
+    let (vars, key) = (
+        scope_vars(&buf.b_bufvar),
+        String_0::from_cstr(c"term_title"),
+    );
     // Setting a variable can run `BufModified`-ish machinery; the lock
     // keeps that from touching the buffer's lines mid-update.
     buf.b_locked += 1;
-    // SAFETY: the buffer's own variable dictionary.
-    drop(unsafe { dict_set_var(vars, &key, title, false, false) });
+    drop(dict_set_var(&vars, &key, title, false, false));
     buf.b_locked -= 1;
     err.clear();
     status_redraw_buf(buf);

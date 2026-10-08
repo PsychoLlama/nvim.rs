@@ -16,7 +16,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::Reported;
+use crate::api::private::helpers::{Reported, scope_vars};
 use crate::guard::Suppress;
 use crate::types::Failed;
 
@@ -26,7 +26,7 @@ pub fn nvim_buf_get_var(buf: BufferHandle, name: String_0) -> Result<Object, Err
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Object::Nil);
     };
-    unsafe { dict_get_value(b.b_vars, &name) }
+    dict_get_value(&scope_vars(&b.b_bufvar), &name)
 }
 
 pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
@@ -68,18 +68,16 @@ pub fn nvim_buf_set_var(buf: BufferHandle, name: String_0, value: Object) -> Res
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
-    let vars = b.b_vars;
-    // SAFETY: `vars` is that buffer's variable dict, `error` our own slot.
-    unsafe { dict_set_var(vars, &name, value, false, false) }.map(|_| ())
+    let vars = scope_vars(&b.b_bufvar);
+    dict_set_var(&vars, &name, value, false, false).map(|_| ())
 }
 
 pub fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
-    let vars = b.b_vars;
-    // SAFETY: `vars` is that buffer's variable dict, `error` our own slot.
-    unsafe { dict_set_var(vars, &name, Object::Nil, true, false) }.map(|_| ())
+    let vars = scope_vars(&b.b_bufvar);
+    dict_set_var(&vars, &name, Object::Nil, true, false).map(|_| ())
 }
 
 pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
