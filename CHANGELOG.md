@@ -7,6 +7,17 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the Vimscript interpreter's storage: expressions are read as
+  byte slices instead of through a moving `char *`, strings, Lists, Dicts,
+  Blobs and partials are owned values whose handles count their references,
+  and user functions, the `:if`/`:while`/`:try` stack, exceptions,
+  breakpoints and the expression parser behind `nvim_parse_expression` own
+  what they hold. A builtin, watcher, `:let` index or `:for` body that
+  frees or grows the container it is reading now gets an error or the
+  value as it was, instead of reading or writing freed memory.
+
 ## [2026.10.04-0a84d0b534]
 
 ### Changed
