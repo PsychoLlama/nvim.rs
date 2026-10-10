@@ -12,7 +12,8 @@ half was written off as "drifts by design" for four phases (p17-close
 item 5, p19-close): a stored baseline could never match a later build.
 
 This script removes the drift at the source.  It rewrites each file so
-the version reads `<prefix> <VERSION>` -- the text before the first
+the version reads `<prefix> <VERSION>` (and the pid is a fixed-width
+integer, for the same reason: see `CANON_PID`) -- the text before the first
 space is kept, because "which generator wrote this" is real signal, and
 only the varying tail is replaced -- and re-encodes the header entry's
 length prefix to match.  Every other byte is spliced through untouched,
@@ -193,8 +194,20 @@ def canonical(version: str) -> str:
     return head + " " + CANON if sep else CANON
 
 
+# The pid, re-encoded at one width.  shada.c packs it minimally, so the
+# same writer's header is a byte or two shorter whenever the pid counter
+# has wrapped below 65536 -- which moves the header length, the file size
+# and every later offset exactly as the version did.  `shadatok.py` masks
+# the value; this fixes the width (a uint32 is what every pid above 65535
+# already used), so a baseline cut in one pid range matches a run in
+# another.
+CANON_PID = b"\xce\x00\x00\x00\x00"
+
+
 def mask_header_payload(payload: bytes):
-    """Replace the `version` value of a Header map.  (new, old_version)."""
+    """Replace the `version` and `pid` values of a Header map.
+
+    Answers (new payload or None when nothing changed, old version)."""
     pos = 0
     c = payload[pos] if payload else None
     if c is None:
@@ -207,16 +220,24 @@ def mask_header_payload(payload: bytes):
         n, pos = int.from_bytes(payload[1:5], "big"), 5
     else:
         return None, None  # not a map: not a header this script understands
+    pieces = [payload[:pos]]
+    old_version = None
     for _ in range(n):
+        key_start = pos
         key, pos = read(payload, pos)
         start = pos
         value, pos = read(payload, pos)
+        pieces.append(payload[key_start:start])
         if key == "version" and isinstance(value, str):
-            new = canonical(value)
-            if new == value:
-                return None, value
-            return payload[:start] + pack_bin(new) + payload[pos:], value
-    return None, None
+            old_version = value
+            pieces.append(pack_bin(canonical(value)))
+        elif key == "pid" and isinstance(value, int):
+            pieces.append(CANON_PID)
+        else:
+            pieces.append(payload[start:pos])
+    pieces.append(payload[pos:])
+    new = b"".join(pieces)
+    return (None if new == payload else new), old_version
 
 
 def mask_file(path: Path) -> dict:
