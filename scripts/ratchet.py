@@ -800,6 +800,19 @@ plus these whole-tree metrics, which are not per-file:
                         of families that have no oracle at all. It shrinks
                         every slice, by construction: a slice that touches a
                         family writes its test before the rewrite.
+                      cchar_scratch  fixed-size C string buffers: a
+                        `[c_char; N]` array type anywhere code can name one
+                        (a local, a parameter, a return, a field, an alias)
+                        or a `[0 as c_char; N]` initialiser, `vec![..]`
+                        included. One array is one site -- a typed `let`
+                        and its initialiser count once -- and comments do
+                        not count. c2rust's rendering of C's `char buf[N]`:
+                        the buffer is filled through a pointer, truncated at
+                        `N` and read back up to its NUL, which is exactly
+                        the text an owned `Vec<u8>`/`String` replaces. A
+                        field an FFI struct needs for its layout stays; the
+                        rest retire as their functions stop handing text
+                        around by pointer.
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
@@ -1445,6 +1458,18 @@ INSTRUMENTS = {
     "raw_variadic_calls": re.compile(
         r"(?<![\w.])(?<!fn )(?<!direct::)(?:" + "|".join(VARIADIC_CALLEES) + r")\s*\("
     ),
+    # The fixed-size C string buffer: a `[c_char; N]` type (a local, a
+    # parameter, a return, a field) or a `[0 as c_char; N]` initialiser
+    # (`vec![..]` included -- the same buffer on the heap). One array is one
+    # site: the first alternative eats a typed `let` together with its
+    # initialiser, so `let b: [c_char; N] = [0 as c_char; N]` is one and not
+    # two, and a bare `[0; N]` is only ever counted through the type in front
+    # of it. Masked text, so a comment quoting the shape is not a site.
+    "cchar_scratch": re.compile(
+        r"\[\s*c_char\s*;[^\]]*\]\s*=\s*(?:vec!\s*)?\[\s*0(?:\s+as\s+c_char)?\s*;"
+        r"|\[\s*c_char\s*;"
+        r"|\[\s*0\s+as\s+c_char\s*;"
+    ),
 }
 # Phase 33's typed `Stack` over the `lua_State`, which does not exist yet.
 # When it lands, its module goes in here and `lua_raw_stack` becomes "raw
@@ -1625,6 +1650,7 @@ INSTRUMENT_KEYS = (
     "dup_consts",
     "types_files",
     "untested_dirs",
+    "cchar_scratch",
 )
 
 FORBID = "#![forbid(unsafe_code)]"
@@ -3464,6 +3490,7 @@ WHOLE_TREE_LABEL = {
     "dup_consts": "redundant copies of a constant declared in another file",
     "types_files": "files under types/",
     "untested_dirs": "top-level modules with no test of any kind",
+    "cchar_scratch": "fixed-size `[c_char; N]` buffers",
 }
 # The C-vocabulary subset of the above, for the run's summary line.
 VOCABULARY_KEYS = (
@@ -4541,6 +4568,24 @@ SELF_TEST_INSTRUMENTS = [
             "crates/nvim/src/d.rs": "fn f() {\n" + "    g();\n" * 10 + "}\n",
         },
         {"long_fns": 2},
+    ),
+    # One array is one site: a typed `let` with its initialiser, a bare
+    # initialiser, a `vec!`, a parameter and a field each count once; a bare
+    # `[0; N]` (no type in front), a byte array and a comment do not.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f(p: &mut [c_char; 4]) {\n"
+            "    let a: [c_char; N] = [0; N];\n"
+            "    let b: [c_char; 8] = [0 as c_char; 8];\n"
+            "    let c = [0 as c_char; MAXPATHL as usize];\n"
+            "    let d = vec![0 as c_char; 9];\n"
+            "    let e = [0; 3];\n"
+            "    let g = [0u8; 3];\n"
+            "    // let h: [c_char; 2] = [0 as c_char; 2];\n"
+            "}\n"
+            "struct S { x: [c_char; 5] }\n",
+        },
+        {"cchar_scratch": 6},
     ),
     # A `# Safety` section on a safe fn is stale; on an `unsafe fn`, however
     # its qualifiers are spelled, it is the contract.
