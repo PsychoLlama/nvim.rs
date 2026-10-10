@@ -14,13 +14,14 @@
 use std::ffi::{c_char, c_int};
 
 use neovim::ex_docmd::do_cmdline_cmd;
+use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
 use neovim::mbyte::{
     mb_charlen, mb_charlen_len, mb_cptr2char_adv, mb_get_class, mb_off_next, mb_prevptr,
     mb_ptr2char_adv, mb_stricmp, mb_string2cells, mb_string2cells_len, mb_strnicmp,
     mb_utf_index_to_bytes, mb_utflen, utf_ambiguous_width, utf_char2bytes, utf_cp_bounds,
     utf_cp_bounds_len, utf_head_off, utf_ptr2cells, utf_ptr2cells_len, utf_ptr2char,
-    utf_ptr2char_info, utf_ptr2len, utf_ptr2len_len, utf_strnicmp, utf_valid_string, utfc_ptr2len,
-    utfc_ptr2len_len,
+    utf_ptr2char_info, utf_ptr2len, utf_ptr2len_len, utf_ptr2str_char_info, utf_strnicmp,
+    utf_valid_string, utfc_next, utfc_ptr2len, utfc_ptr2len_len, utfc_ptr2schar, utfc_ptrlen2schar,
 };
 use neovim::memory::XString;
 use neovim::option::vars::{P_AMBW, P_ARSHAPE, P_EMOJI};
@@ -127,6 +128,50 @@ fn the_cluster_readers() {
         unsafe { d.add(i64::from(mb_charlen(p))) };
     });
     assert_eq!(got, 0xc865c1fa01f61725, "cluster readers");
+}
+
+/// The drawing path's walk: `utf_ptr2str_char_info` then `utfc_next` to the
+/// NUL, and the two cluster-to-`ScreenChar` packers at every offset.
+#[test]
+fn the_drawing_walk() {
+    let got = digest(|d, text, buf| {
+        let p = buf.as_ptr();
+        // SAFETY: as above; each step lands inside `buf`.
+        unsafe {
+            for i in 0..text.len() {
+                let mut cur = utf_ptr2str_char_info(p.add(i).cast_mut());
+                while *cur.ptr != 0 {
+                    d.add(cur.ptr.offset_from(p) as i64);
+                    d.add(i64::from(cur.chr.value));
+                    d.add(i64::from(cur.chr.len));
+                    cur = utfc_next(cur);
+                }
+                d.add(cur.ptr.offset_from(p) as i64);
+            }
+            let mut out = [0 as c_char; MAX_SCHAR_SIZE as usize];
+            for i in 0..=text.len() {
+                let mut firstc: c_int = 0;
+                let sc = utfc_ptr2schar(p.add(i), &raw mut firstc);
+                let n = schar_get(out.as_mut_ptr(), sc);
+                d.add(i64::from(firstc));
+                d.add(n as i64);
+                for &b in &out[..n] {
+                    d.add(i64::from(b as u8));
+                }
+                // As `grid_line_puts` calls it: with the cluster's length.
+                for left in bounds(text, i) {
+                    let len = utfc_ptr2len_len(p.add(i), left as c_int);
+                    let sc = utfc_ptrlen2schar(p.add(i), len, &raw mut firstc);
+                    let n = schar_get(out.as_mut_ptr(), sc);
+                    d.add(i64::from(firstc));
+                    for &b in &out[..n] {
+                        d.add(i64::from(b as u8));
+                    }
+                }
+            }
+        }
+    });
+    assert_eq!(got, 0x8245ccc2ae2e9065, "drawing walk");
 }
 
 #[test]
