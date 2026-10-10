@@ -1,6 +1,6 @@
 # The differential battery
 
-Thirty-four baselined oracles plus a paired startup probe. Each row drives the
+Thirty-five baselined oracles plus a paired startup probe. Each row drives the
 binary this tree builds through a fixed corpus, scrubs everything that names
 _where_ or _when_ the run happened, and diffs the result against the same
 corpus run through the binary of a **pinned reference commit**. A row says
@@ -11,7 +11,7 @@ Nothing generated is committed. The baselines used to be 276 files and 53 MiB
 of `*base/` in git; they are now **cut on demand** and cached under `target/`.
 
 ```
-just battery              # all 35, ~8 min warm, logs under target/battery-logs
+just battery              # all 36, ~8 min warm, logs under target/battery-logs
 just battery my-label     # same, naming the log set
 test/battery/keyverify.sh # one row, on its own — same cache, same pin
 ```
@@ -61,7 +61,9 @@ use `<row>gold.{sh,lua}`, `ex` uses `ex-run.sh` + `exprobe.lua`/`parseprobe.lua`
 `decode` has no sweep at all — `decodeverify.sh` runs the six
 `decodecorpus-*` files directly; `cont` runs `contlist.vim`/`contdict.vim`/
 `contblob.vim` directly, and `expr` runs the Vimscript driver `exprsweep.vim`
-over `exprcorpus.txt` and `exprcmds.txt`.
+over `exprcorpus.txt` and `exprcmds.txt`, and `msg` drives
+its children through `scr`'s harness (the functional suite's `testnvim` +
+`ui/screen`).
 
 | row      | what it watches                                                                               |
 | -------- | --------------------------------------------------------------------------------------------- |
@@ -99,6 +101,7 @@ over `exprcorpus.txt` and `exprcmds.txt`.
 | `ins`    | `insexpand/` — the CTRL-X alphabet, one line per KEYSTROKE                                    |
 | `cont`   | lists, dicts (slot order) and blobs — sharing, copies, locks, ranges, the collector           |
 | `expr`   | the expression parser: every prefix of every line, six entries, lvalues, re-entrant text      |
+| `msg`    | `message/` — echo/emsg/`shortmess`, truncation, prompts, history, capture, `confirm()`        |
 | probe    | `startprobe.py`: ~200 nvim _processes_ — argv, `$XDG_*`, `-l`/`-S`/`--api-info`, the log file |
 
 Every `*verify.sh` and `*sweep.sh` carries a long header explaining what its row

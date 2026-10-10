@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run all thirty-four baselined differentials + the paired startup probe.
+# Run all thirty-five baselined differentials + the paired startup probe.
 #
 # THIS IS THE CANONICAL COPY.  Every close before phase 20 kept the
 # battery in its own session scratchpad and copied it forward, which is
@@ -269,6 +269,7 @@ run inssweep   "$T/insverify.sh"
 # where an expression changes the text being evaluated; ~45 s.
 run contsweep  "$T/contverify.sh"
 run exprsweep  "$T/exprverify.sh"
+run msgsweep   "$T/msgverify.sh"
 
 echo "=== startup probe (paired)"
 # The probe's baseline, like every row's, is CUT from the binary
