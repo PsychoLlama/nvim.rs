@@ -178,12 +178,48 @@ impl<T> GlobalCell<T> {
 
     /// Overwrite one field of the contents. See
     /// [`get_field`](Self::get_field).
+    ///
+    /// The projection is shared here too, and the write goes through the
+    /// cell's own pointer at the field's address. A write may happen inside
+    /// [`with_field`](Self::with_field) on another field — an option set
+    /// while `'cpoptions'` is lent, say — and a `&mut` to the whole record
+    /// would retire the reference that closure holds (Stacked Borrows: a
+    /// Unique retag of every byte of the record, Miri's report). Written
+    /// through the cell's pointer, only the field's own bytes are touched.
+    ///
+    /// It is [`replace_field`](Self::replace_field) with the old value
+    /// dropped, so a field that owns an allocation is freed after the cell
+    /// already holds the new value: a `Drop` that reads the field back sees
+    /// the new one, never a freed one.
     #[inline(always)]
-    pub fn set_field<F>(&self, project: impl FnOnce(&mut T) -> &mut F, value: F) {
-        check_main_thread();
-        check_no_borrow(self.0.get() as usize);
-        // SAFETY: main-thread invariant + no outstanding borrow.
-        *project(unsafe { &mut *self.0.get() }) = value;
+    pub fn set_field<F>(&self, project: impl FnOnce(&T) -> &F, value: F) {
+        drop(self.replace_field(project, value));
+    }
+
+    /// The address of the field `project` reaches, with the cell's own
+    /// provenance, so a write through it touches that field and nothing
+    /// else.
+    ///
+    /// `project` is any safe `&T -> &F`, so what it answers is checked to lie
+    /// inside the record: a reference into the record's bytes is an aligned,
+    /// valid `F` there, which is all a write needs. The check folds away
+    /// once the projection inlines (`field!` and apigen write `|o| &o.f`, a
+    /// constant offset).
+    #[inline(always)]
+    fn field_ptr<F>(&self, project: impl FnOnce(&T) -> &F) -> *mut F {
+        let record = self.0.get();
+        // SAFETY: main-thread invariant + no outstanding exclusive borrow
+        // (the callers check both); the shared reborrow lives only for the
+        // projection.
+        let field: *const F = project(unsafe { &*record });
+        let offset = (field as usize)
+            .checked_sub(record as usize)
+            .filter(|at| {
+                at.checked_add(size_of::<F>())
+                    .is_some_and(|end| end <= size_of::<T>())
+            })
+            .expect("a field projection must answer a field of the record");
+        record.wrapping_byte_add(offset).cast::<F>()
     }
 
     /// Project one field of the contents, forming no reference to the rest.
@@ -212,12 +248,17 @@ impl<T> GlobalCell<T> {
     /// Overwrite one field and answer what it held. The move out and the
     /// move in are one operation, so a field that owns an allocation can
     /// change hands without either side being able to free it twice.
+    ///
+    /// The write projects as [`set_field`](Self::set_field) describes.
     #[inline(always)]
-    pub fn replace_field<F>(&self, project: impl FnOnce(&mut T) -> &mut F, value: F) -> F {
+    pub fn replace_field<F>(&self, project: impl FnOnce(&T) -> &F, value: F) -> F {
         check_main_thread();
         check_no_borrow(self.0.get() as usize);
-        // SAFETY: main-thread invariant + no outstanding borrow.
-        core::mem::replace(project(unsafe { &mut *self.0.get() }), value)
+        let field = self.field_ptr(project);
+        // SAFETY: main-thread invariant + no outstanding borrow; `field` is
+        // an aligned, initialised `F` inside the cell carrying the cell's
+        // provenance (`field_ptr`), and nothing holds a reference to it.
+        core::mem::replace(unsafe { &mut *field }, value)
     }
 
     /// Run `f` with a shared reference to the contents.
@@ -265,9 +306,11 @@ pub struct Field<S, T> {
     /// The field itself, typed, so a selector cannot name a field of
     /// another type.
     project: fn(&mut S) -> &mut T,
-    /// The same field, shared: what a read projects through, so that a read
-    /// nested in another read of the record does not take the whole record
-    /// mutably (see [`GlobalCell::get_field`]).
+    /// The same field, shared: what a cell access projects through, read or
+    /// write, so that one nested in a borrow of another field does not take
+    /// the whole record mutably (see [`GlobalCell::get_field`] and
+    /// [`GlobalCell::set_field`]). `project` is for a record the caller
+    /// already holds `&mut` ([`Field::of`]).
     view: fn(&S) -> &T,
 }
 
@@ -496,7 +539,7 @@ impl<T> GlobalCell<T> {
     /// [`set_field`](Self::set_field) through a [`Field`] selector.
     #[inline(always)]
     pub fn set_at<F>(&self, field: Field<T, F>, value: F) {
-        self.set_field(field.project, value);
+        self.set_field(field.view, value);
     }
 
     /// [`with_field`](Self::with_field) through a [`Field`] selector.
@@ -508,7 +551,7 @@ impl<T> GlobalCell<T> {
     /// [`replace_field`](Self::replace_field) through a [`Field`] selector.
     #[inline(always)]
     pub fn replace_at<F>(&self, field: Field<T, F>, value: F) -> F {
-        self.replace_field(field.project, value)
+        self.replace_field(field.view, value)
     }
 }
 
@@ -919,6 +962,39 @@ mod tests {
         };
         *COUNT.of(&mut record) += 1;
         assert_eq!(record.count, 8);
+    }
+
+    #[test]
+    fn a_field_write_nested_in_a_field_borrow_leaves_the_borrow_live() {
+        struct Record {
+            count: i32,
+            name: Option<Vec<u8>>,
+        }
+        const COUNT: Field<Record, i32> = field!(Record, count);
+        const NAME: Field<Record, Option<Vec<u8>>> = field!(Record, name);
+        let cell = GlobalCell::new(Record {
+            count: 1,
+            name: Some(b"abc".to_vec()),
+        });
+
+        // An option write inside an option borrow: 'cpoptions' lent to a
+        // reader that, say, reports an error and so sets another option.
+        // The write must not retire the reference the outer closure holds.
+        let seen = cell.with_at(NAME, |name| {
+            cell.set_at(COUNT, 2);
+            let was = cell.replace_at(COUNT, 3);
+            (was, name.as_deref().map(<[u8]>::len))
+        });
+        assert_eq!(seen, (2, Some(3)));
+        assert_eq!(cell.get_at(COUNT), 3);
+        let count = cell.with_field(
+            |record| &record.name,
+            |name| {
+                cell.set_field(|record| &record.count, 4);
+                name.as_deref().map(<[u8]>::len)
+            },
+        );
+        assert_eq!((count, cell.get_at(COUNT)), (Some(3), 4));
     }
 
     #[test]
