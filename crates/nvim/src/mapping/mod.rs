@@ -96,6 +96,8 @@ pub(crate) use self::args::*;
 mod domap;
 pub use self::domap::*;
 mod show;
+#[cfg(test)]
+mod tests;
 pub use self::show::*;
 mod session;
 pub use self::session::*;

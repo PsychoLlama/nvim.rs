@@ -49,7 +49,7 @@
 {"path":"neovim::drawscreen::default_grid_alloc","kind":"fn","file":"crates/nvim/src/drawscreen/resize.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::eval::eval0","kind":"fn","file":"crates/nvim/src/eval/expr/level.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::eval::eval_to_number","kind":"fn","file":"crates/nvim/src/eval/entry.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/normal.rs"]}
-{"path":"neovim::eval::eval_to_string","kind":"fn","file":"crates/nvim/src/eval/entry.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/normal.rs","crates/nvim/tests/unit/regexp.rs"]}
+{"path":"neovim::eval::eval_to_string","kind":"fn","file":"crates/nvim/src/eval/entry.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/normal.rs","crates/nvim/tests/unit/regexp.rs","crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::eval::decode::json_decode_string","kind":"fn","file":"crates/nvim/src/eval/decode/json/mod.rs","tests":["crates/nvim/tests/unit/eval_decode.rs"]}
 {"path":"neovim::eval::encode::encode_list_write","kind":"fn","file":"crates/nvim/src/eval/encode/mod.rs","tests":["crates/nvim/tests/unit/eval_encode.rs"]}
 {"path":"neovim::eval::encode::encode_tv2echo","kind":"fn","file":"crates/nvim/src/eval/encode/mod.rs","tests":["crates/nvim/tests/unit/encode_sinks.rs"]}
@@ -125,7 +125,7 @@
 {"path":"neovim::event::multiqueue::multiqueue_size","kind":"fn","file":"crates/nvim/src/event/multiqueue.rs","tests":["crates/nvim/tests/unit/multiqueue.rs"]}
 {"path":"neovim::ex_docmd::FORCE_BIN","kind":"const","file":"crates/nvim/src/ex_docmd/mod.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::ex_docmd::FORCE_NOBIN","kind":"const","file":"crates/nvim/src/ex_docmd/mod.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
-{"path":"neovim::ex_docmd::do_cmdline_cmd","kind":"fn","file":"crates/nvim/src/ex_docmd/cmdline.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/normal.rs","crates/nvim/tests/unit/options.rs","crates/nvim/tests/unit/regexp.rs"]}
+{"path":"neovim::ex_docmd::do_cmdline_cmd","kind":"fn","file":"crates/nvim/src/ex_docmd/cmdline.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/normal.rs","crates/nvim/tests/unit/options.rs","crates/nvim/tests/unit/regexp.rs","crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::ex_docmd::getargopt","kind":"fn","file":"crates/nvim/src/ex_docmd/argopt.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::ex_docmd::parse_cmdline","kind":"fn","file":"crates/nvim/src/ex_docmd/api.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::ex_docmd::separate_nextcmd","kind":"fn","file":"crates/nvim/src/ex_docmd/scan.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}

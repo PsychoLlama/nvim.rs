@@ -64,6 +64,8 @@ mod define;
 mod exec;
 mod info;
 mod name;
+#[cfg(test)]
+mod tests;
 mod tree;
 
 pub(crate) use self::complete::*;

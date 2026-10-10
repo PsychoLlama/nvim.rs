@@ -29,6 +29,8 @@ pub(crate) struct Fixture {
     window: Win,
     buffer: Buf,
     saved: Vec<(&'static crate::option::vars::StrOpt, Option<XString>)>,
+    /// What [`check`](Self::check) and its siblings found, reported on drop.
+    mismatches: std::cell::RefCell<Vec<String>>,
     _quiet: (crate::guard::MsgBump, crate::guard::MsgBump),
     _held: Held,
 }
@@ -37,10 +39,14 @@ impl Fixture {
     pub(crate) fn new() -> Fixture {
         let held = editor_state_lock();
         got_int.set(false);
-        let window = bare_window();
+        let mut window = bare_window();
         window.make_current();
         let buffer = bare_buffer();
         buffer.make_current();
+        // The current window shows the current buffer, as it always does in
+        // the editor: a walk that reaches the buffer through the window
+        // (`<buffer>`-local tables, `:command -buffer`) finds this one.
+        window.w_buffer = buffer;
         P_MFD.set(100);
         // A message starts on a command line of its own rather than
         // scrolling a grid nobody sized.
@@ -52,6 +58,10 @@ impl Fixture {
             .into_iter()
             .map(|(option, value)| (option, option.swap(Some(XString::from(value)))))
             .collect();
+        // Character classes and cell widths: without them every byte is zero
+        // cells wide, and a listing padded by width depends on whether some
+        // other test happened to fill the table first.
+        crate::charset::init_chartab_for_tests();
         static INIT: std::sync::Once = std::sync::Once::new();
         INIT.call_once(|| {
             // A pattern compiled with 'cpoptions' cleared (`:catch`'s, a
@@ -65,6 +75,7 @@ impl Fixture {
             window,
             buffer,
             saved,
+            mismatches: std::cell::RefCell::default(),
             // Errors still set `v:errmsg`; neither they nor messages are
             // drawn, since there is no screen.
             _quiet: (
@@ -117,6 +128,69 @@ impl Fixture {
         }
     }
 
+    /// What `cmd` prints, as `execute()` captures it.
+    pub(crate) fn output(&self, cmd: &str) -> String {
+        let quoted = cmd.replace('\'', "''");
+        let text = format!("execute('{quoted}')");
+        crate::eval::eval_to_string(text.as_bytes(), false, false)
+            .map(|s| String::from_utf8_lossy(s.as_cstr().to_bytes()).into_owned())
+            .unwrap_or_else(|| "<fail>".into())
+    }
+
+    /// The error `cmd` raises, as `v:errmsg` keeps it, or `none`.
+    pub(crate) fn error_from(&self, cmd: &str) -> String {
+        self.run("let v:errmsg = ''");
+        self.run(&format!("silent! {cmd}"));
+        let err = self.eval("v:errmsg");
+        if err == "''" {
+            "none".into()
+        } else {
+            err.trim_matches('\'').into()
+        }
+    }
+
+    /// Book a mismatch: the fixture fails once, when it goes, with every
+    /// row that moved written as the row that would make it pass -- a table
+    /// of answers reads better than forty assertions, and one run shows all
+    /// of them.
+    #[track_caller]
+    fn book(&self, kind: &str, what: &str, got: &str, want: &str) {
+        if got != want {
+            let at = std::panic::Location::caller();
+            self.mismatches.borrow_mut().push(format!(
+                "{}:{}: {kind}({what:?}, {got:?})",
+                at.file(),
+                at.line()
+            ));
+        }
+    }
+
+    /// `expr`'s value (as `string()` renders it) should be `want`.
+    #[track_caller]
+    pub(crate) fn check(&self, expr: &str, want: &str) {
+        self.book("check", expr, &self.eval(expr), want);
+    }
+
+    /// What `cmd` prints should be `want`.
+    #[track_caller]
+    pub(crate) fn check_output(&self, cmd: &str, want: &str) {
+        self.book("check_output", cmd, &self.output(cmd), want);
+    }
+
+    /// The error `cmd` raises should be `want` (`none` for none).
+    #[track_caller]
+    pub(crate) fn check_error(&self, cmd: &str, want: &str) {
+        self.book("check_error", cmd, &self.error_from(cmd), want);
+    }
+
+    /// [`check`](Self::check) over a table of `(expr, want)` rows.
+    #[track_caller]
+    pub(crate) fn expect_all(&self, cases: &[(&str, &str)]) {
+        for (expr, want) in cases {
+            self.check(expr, want);
+        }
+    }
+
     pub(crate) fn delete(&self, names: &[&str]) {
         for name in names {
             self.run(&format!("silent! delfunction {name}"));
@@ -129,10 +203,15 @@ impl Drop for Fixture {
         for (option, value) in self.saved.drain(..) {
             option.restore(value);
         }
+        self.window.w_buffer = Buf::NULL;
         leave_curbuf();
         free_bare_buffer(self.buffer);
         leave_curwin();
         free_bare_window(self.window);
+        let found = self.mismatches.take();
+        if !found.is_empty() && !std::thread::panicking() {
+            panic!("{} mismatches:\n{}", found.len(), found.join("\n"));
+        }
     }
 }
 

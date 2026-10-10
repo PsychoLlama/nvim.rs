@@ -46,6 +46,8 @@ mod attr;
 mod complete;
 mod expand;
 mod list;
+#[cfg(test)]
+mod tests;
 
 pub(crate) use attr::{parse_addr_type_arg, parse_compl_arg};
 pub(crate) use complete::{

@@ -488,3 +488,133 @@ pub(crate) fn check_emsg_bytes<R>(
     }
     ret
 }
+
+/// Ex-level answers for a case that drives the editor through commands: run
+/// a line, read an expression back as `string()` renders it, capture what a
+/// command prints, and take the error a command raises.
+///
+/// The `check*` methods book a mismatch instead of failing on it; the probe
+/// fails once, when it goes, listing each row that moved as the row that
+/// would make it pass. A table of answers reads better than forty
+/// assertions, and one run shows every row that moved.
+#[cfg(not(miri))]
+pub(crate) struct Probe<'a> {
+    _editor: &'a Editor,
+    mismatches: std::cell::RefCell<Vec<String>>,
+}
+
+#[cfg(not(miri))]
+impl<'a> Probe<'a> {
+    pub(crate) fn new(editor: &'a Editor) -> Probe<'a> {
+        Probe {
+            _editor: editor,
+            mismatches: std::cell::RefCell::default(),
+        }
+    }
+
+    /// Run one command line.
+    pub(crate) fn run(&self, line: &str) {
+        let text = cstr(line);
+        let _ = neovim::ex_docmd::do_cmdline_cmd(&text);
+    }
+
+    /// Back to the editor every other case expects: one tab page, one
+    /// window, buffer 1 current, empty, unnamed, unmarked and unmodified, and
+    /// no other buffer.
+    /// Buffer numbers are never reused, so a case that wiped buffer 1 would
+    /// move every later case's `%n`.
+    pub(crate) fn home(&self) {
+        for cmd in [
+            "silent! tabonly!",
+            "silent! only!",
+            "silent! buffer! 1",
+            // Not `2,$` alone: with buffer 1 the last, that is a backwards
+            // range, which `silent!` swaps into `1,2` -- and wipes buffer 1.
+            "if bufnr('$') > 1 | silent! 2,$bwipeout! | endif",
+            "silent! %delete _",
+            "silent! 0file",
+            "silent! delmarks!",
+            "silent! delmarks <>[]\"^.",
+            "set nomodified",
+        ] {
+            self.run(cmd);
+        }
+    }
+
+    /// `expr`'s value as `string()` renders it, or `<fail>`.
+    pub(crate) fn eval(&self, expr: &str) -> String {
+        let text = format!("string({expr})");
+        neovim::eval::eval_to_string(text.as_bytes(), false, false)
+            .map(|got| String::from_utf8_lossy(&got).into_owned())
+            .unwrap_or_else(|| "<fail>".into())
+    }
+
+    /// What `cmd` prints, as `execute()` captures it.
+    pub(crate) fn output(&self, cmd: &str) -> String {
+        let quoted = cmd.replace('\'', "''");
+        let text = format!("execute('{quoted}')");
+        neovim::eval::eval_to_string(text.as_bytes(), false, false)
+            .map(|got| String::from_utf8_lossy(&got).into_owned())
+            .unwrap_or_else(|| "<fail>".into())
+    }
+
+    /// The error `cmd` raises, as `v:errmsg` keeps it, or `none`.
+    pub(crate) fn error_from(&self, cmd: &str) -> String {
+        self.run("let v:errmsg = ''");
+        self.run(&format!("silent! {cmd}"));
+        let err = self.eval("v:errmsg");
+        if err == "''" {
+            "none".into()
+        } else {
+            err.trim_matches('\'').into()
+        }
+    }
+
+    #[track_caller]
+    fn book(&self, kind: &str, what: &str, got: &str, want: &str) {
+        if got != want {
+            let at = std::panic::Location::caller();
+            self.mismatches.borrow_mut().push(format!(
+                "{}:{}: {kind}({what:?}, {got:?})",
+                at.file(),
+                at.line()
+            ));
+        }
+    }
+
+    /// `expr`'s value should be `want`.
+    #[track_caller]
+    pub(crate) fn check(&self, expr: &str, want: &str) {
+        self.book("check", expr, &self.eval(expr), want);
+    }
+
+    /// What `cmd` prints should be `want`.
+    #[track_caller]
+    pub(crate) fn check_output(&self, cmd: &str, want: &str) {
+        self.book("check_output", cmd, &self.output(cmd), want);
+    }
+
+    /// The error `cmd` raises should be `want` (`none` for none).
+    #[track_caller]
+    pub(crate) fn check_error(&self, cmd: &str, want: &str) {
+        self.book("check_error", cmd, &self.error_from(cmd), want);
+    }
+
+    /// [`check`](Self::check) over a table of `(expr, want)` rows.
+    #[track_caller]
+    pub(crate) fn expect_all(&self, cases: &[(&str, &str)]) {
+        for (expr, want) in cases {
+            self.check(expr, want);
+        }
+    }
+}
+
+#[cfg(not(miri))]
+impl Drop for Probe<'_> {
+    fn drop(&mut self) {
+        let found = self.mismatches.take();
+        if !found.is_empty() && !std::thread::panicking() {
+            panic!("{} mismatches:\n{}", found.len(), found.join("\n"));
+        }
+    }
+}
