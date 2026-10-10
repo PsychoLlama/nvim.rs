@@ -207,7 +207,8 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     // typeahead, not the one the expression is written in.  `vim_unescape_ks`
     // rewrites in place and only shortens, so the copy is room enough.
     let mut expr = mp.m_rhs.str.as_bytes_with_nul().to_vec();
-    let len = unescape_ks_in(&mut expr);
+    let text = expr.len() - 1;
+    let len = unescape_ks_in(&mut expr[..text]);
     expr[len] = NUL as u8;
     let replace_keycodes = mp.m_replace_keycodes;
 

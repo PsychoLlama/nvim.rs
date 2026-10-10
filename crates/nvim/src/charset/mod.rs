@@ -591,7 +591,9 @@ pub(crate) fn backslash_halved(text: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(text.len() + 1);
     let mut at = 0;
     while at < text.len() {
-        if escapes_next(&text[at..]) {
+        // A backslash escapes the byte after it, when there is one: no NUL
+        // is left in `text` for it to stand before.
+        if text[at] == b'\\' && at + 1 < text.len() {
             at += 1;
         }
         out.push(text[at]);

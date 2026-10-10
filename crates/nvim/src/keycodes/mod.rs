@@ -699,15 +699,19 @@ pub fn escape_ks_bytes(text: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Undo [`escape_ks_bytes`] in place, up to the first NUL, answering the new
-/// length; the bytes past it are left as they were. Never longer than what
-/// it was given.
+/// Undo [`escape_ks_bytes`] in place, answering the new length; the bytes
+/// past it are left as they were. Never longer than what it was given. All
+/// of `text` is the text: a caller holding a C string's buffer hands over the
+/// bytes before its NUL.
 pub fn unescape_ks_in(text: &mut [u8]) -> usize {
-    let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
+    let end = text.len();
     let (mut src, mut dst) = (0, 0);
     while src < end {
-        let at = |i: usize| c_int::from(cstr::byte_at(&text[..end], i));
-        if at(src) == K_SPECIAL && at(src + 1) == KS_SPECIAL && at(src + 2) == KE_FILLER {
+        if c_int::from(text[src]) == K_SPECIAL
+            && src + 2 < end
+            && c_int::from(text[src + 1]) == KS_SPECIAL
+            && c_int::from(text[src + 2]) == KE_FILLER
+        {
             text[dst] = K_SPECIAL as u8;
             src += 3;
         } else {

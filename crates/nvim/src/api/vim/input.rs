@@ -210,7 +210,14 @@ pub fn nvim_replace_termcodes(
     let replaced = p_cpo(|cpo| replace_termcodes(text, 0 as ScriptId, flags, None, cpo, None));
     let replaced = replaced.unwrap_or_default();
     // What a C reader of the answer saw: up to its first NUL.
-    String_0::from_bytes(replaced.split(|&b| b == 0).next().unwrap_or_default())
+    let mut replaced = replaced;
+    replaced.truncate(
+        replaced
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(replaced.len()),
+    );
+    String_0::from_xstring(crate::memory::XString::from_vec(replaced))
 }
 
 pub fn nvim_get_keymap(mode: String_0) -> Array {
