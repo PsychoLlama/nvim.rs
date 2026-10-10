@@ -7,8 +7,7 @@
 //! ordered list that shadows it (`:digraph`, `digraph_set()`). Lookups scan
 //! the user list first, in insertion order, then the default table.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 mod tables;
 
@@ -20,7 +19,7 @@ use crate::eval::typval::{
     NumBuf, list_items, list_iter, list_len, tv_check_for_opt_bool_arg, tv_get_bool, tv_list_alloc,
     tv_list_alloc_ret,
 };
-use crate::ex_docmd::{do_cmdline_cmd, getline_equal};
+use crate::ex_docmd::{do_cmdline_cmd, exarg_getline, reads_sourced_lines};
 use crate::ex_getln::putcmdline;
 use crate::ex_getln::state::cmdline_star;
 use crate::getchar::plain_vgetc;
@@ -29,18 +28,18 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::Key;
-use crate::mapping::do_map;
-use crate::mbyte::{char_at, char_len, utf_char2bytes, utf_iscomposing_first};
-use crate::memory::{ThinCString, xfree};
+use crate::mapping::do_map_line;
+use crate::mbyte::{char_at, char_len, encode_char, utf_iscomposing_first};
+use crate::memory::ThinCString;
 use crate::message::state::msg_col;
 use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
 use crate::normal::add_to_showcmd;
 use crate::option::SavedCpo;
 use crate::option::vars::{p_dg, p_enc};
-use crate::optionstr::OptString;
+use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
-use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
+use crate::runtime::{RuntimeOpts, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
     BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptError, OptInt, TypVal, VAR_LIST,
@@ -50,7 +49,7 @@ use crate::ui::state::Columns;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::graph::switch_to;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
 const ESC: c_int = 27;
@@ -220,9 +219,8 @@ fn register_digraph(char1: c_int, char2: c_int, n: c_int) {
 fn check_digraph_chars_valid(char1: c_int, char2: c_int) -> bool {
     if char2 == 0 {
         let mut msg = [0u8; 7];
-        // SAFETY: utf_char2bytes writes at most 6 bytes.
-        let len = unsafe { utf_char2bytes(char1, msg.as_mut_ptr() as *mut c_char) };
-        let msg = String::from_utf8_lossy(&msg[..len as usize]);
+        let len = encode_char(char1, &mut msg);
+        let msg = String::from_utf8_lossy(&msg[..len]);
         crate::semsg!("E1214: Digraph must be just two characters: {msg}");
         return false;
     }
@@ -290,12 +288,8 @@ pub fn putdigraph(mut s: &[u8]) {
 fn outtrans(bytes: &[u8], hl_id: c_int) {
     let mut buf = [0u8; 32];
     buf[..bytes.len()].copy_from_slice(bytes);
-    // SAFETY: buf is NUL-terminated (bytes is always shorter than buf).
-    msg_display(
-        unsafe { cstr::at(buf.as_ptr() as *const c_char) },
-        hl_id,
-        false,
-    );
+    // `bytes` is always shorter than `buf`, so it is terminated.
+    msg_display(cstr::in_bytes(&buf), hl_id, false);
 }
 
 fn digraph_header(name: &'static [u8]) {
@@ -345,8 +339,8 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
         buf[0] = b' ';
         len = 1;
     }
-    // SAFETY: utf_char2bytes writes at most 6 bytes at offset <= 1.
-    len += unsafe { utf_char2bytes(dp.result, buf[len..].as_mut_ptr() as *mut c_char) } as usize;
+    // `buf` has room for the longest sequence after the space.
+    len += encode_char(dp.result, &mut buf[len..]);
     outtrans(&buf[..len], HLF_8);
     let mut num = Vec::with_capacity(8);
     if char2cells(dp.result) == 1 {
@@ -394,19 +388,14 @@ pub fn listdigraphs(use_headers: bool) {
 }
 
 /// Append `[chars, result]` to the `digraph_getlist()` result.
-///
-/// # Safety
-///
-/// `l` must be a valid list.
-unsafe fn getlist_append_pair(dp: &Digraph, l: *mut List) {
+fn getlist_append_pair(dp: &Digraph, list: &mut List) {
     let chars = [dp.char1, dp.char2, 0];
     let mut buf = [0u8; 7];
-    let l2 = tv_list_alloc(2);
-    let into = l2.as_ptr();
-    unsafe { (*l).push_list(Some(l2)) };
-    unsafe { (*into).push_str(cstr::at_opt(chars.as_ptr() as *const c_char)) };
-    unsafe { utf_char2bytes(dp.result, buf.as_mut_ptr() as *mut c_char) };
-    unsafe { (*into).push_str(cstr::at_opt(buf.as_ptr() as *const c_char)) };
+    encode_char(dp.result, &mut buf);
+    let pair = tv_list_alloc(2);
+    pair.edit().push_str(Some(cstr::in_bytes(&chars)));
+    pair.edit().push_str(Some(cstr::in_bytes(&buf)));
+    list.push_list(Some(pair));
 }
 
 /// Build the `digraph_getlist()` result: user digraphs, plus the effective
@@ -424,8 +413,7 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
             }
             let result = get_exact_digraph(dp.char1 as c_int, dp.char2 as c_int, false);
             if result != 0 && result != dp.char2 as c_int {
-                // SAFETY: `list` is the list just allocated into `result`.
-                unsafe { getlist_append_pair(&Digraph { result, ..*dp }, list) };
+                getlist_append_pair(&Digraph { result, ..*dp }, list);
             }
         }
     }
@@ -434,8 +422,7 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
         if got_int.get() {
             break;
         }
-        // SAFETY: as above.
-        unsafe { getlist_append_pair(dp, list) };
+        getlist_append_pair(dp, list);
     }
 }
 
@@ -522,8 +509,7 @@ pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // The chars go through `char` in C, hence the sign extension.
     let code = digraph_get(bytes[0] as i8 as c_int, bytes[1] as i8 as c_int, false);
     let mut buf = [0u8; 7];
-    // SAFETY: `utf_char2bytes` writes at most six bytes into `buf`.
-    let len = unsafe { utf_char2bytes(code, buf.as_mut_ptr() as *mut c_char) } as usize;
+    let len = encode_char(code, &mut buf);
     result.write_string(Some(ThinCString::from_bytes(&buf[..len])));
 }
 
@@ -552,22 +538,16 @@ pub fn f_digraph_setlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 /// `[chars, digraph]` lists. Stops at the first bad entry, keeping the
 /// digraphs registered before it.
 fn digraph_setlist_common(arg: &TypVal) -> bool {
-    // SAFETY: caller contract; the list is only read once its type is known.
-    let pl = {
-        if (*arg).v_type() != VAR_LIST {
-            crate::semsg!("{E_DIGRAPH_SETLIST}");
-            return false;
-        }
-        (*arg).list_or_null()
-    };
-    if pl.is_null() {
-        return true;
+    if arg.v_type() != VAR_LIST {
+        crate::semsg!("{E_DIGRAPH_SETLIST}");
+        return false;
     }
-    // SAFETY: `pl` is a valid list; the walk only follows its links, and
+    let Some(pl) = arg.list_ref() else {
+        return true;
+    };
     // `digraph_set_common` does not touch the list it is reading from.
-    for pli in list_iter(unsafe { pl.as_ref() }) {
-        let l = pli.li_tv.list_or_null();
-        if l.is_null() || list_len(pli.li_tv.list_ref()) != 2 {
+    for pli in list_iter(Some(pl)) {
+        if pli.li_tv.list_ref().is_none() || list_len(pli.li_tv.list_ref()) != 2 {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;
         }
@@ -595,14 +575,8 @@ const MAPTYPE_UNMAP: c_int = 1;
 /// language mappings when it is empty). Answers an error message.
 pub fn keymap_init() -> Result<(), OptError> {
     let mut buf = Buf::current();
-    // SAFETY: curbuf is valid, and the 'keymap' value it holds is a
-    // NUL-terminated option string.
-    let keymap = unsafe {
-        buf.b_kmap_state &= !(KEYMAP_INIT as int16_t);
-        CStr::from_ptr(buf.b_p_keymap.value_ptr())
-            .to_bytes()
-            .to_vec()
-    };
+    buf.b_kmap_state &= !(KEYMAP_INIT as int16_t);
+    let keymap = buf.b_p_keymap.bytes().to_vec();
     if keymap.is_empty() {
         // Stop any active keymap and clear the b:keymap_name variable.
         keymap_unload();
@@ -612,12 +586,7 @@ pub fn keymap_init() -> Result<(), OptError> {
     }
     // Source the keymap file, first for this encoding and then without it.
     // The name is snapshotted above because the script can set 'keymap'.
-    // SAFETY: 'encoding' is a NUL-terminated option string.
-    let enc = p_enc(|value| unsafe {
-        CStr::from_ptr(value.as_ptr().cast_mut())
-            .to_bytes()
-            .to_vec()
-    });
+    let enc = p_enc(|value| value.to_bytes().to_vec());
     if source_keymap_file(&keymap, Some(&enc)) || source_keymap_file(&keymap, None) {
         return Ok(());
     }
@@ -640,16 +609,7 @@ fn source_keymap_file(keymap: &[u8], enc: Option<&[u8]>) -> bool {
 
 /// `:loadkeymap` — read language mappings from the file being sourced.
 pub fn ex_loadkeymap(excmd: &mut ExArg) {
-    // SAFETY: caller contract; the getter and its cookie are the sourcing
-    // machinery's, and `getline_equal` only compares them.
-    let sourced = unsafe {
-        getline_equal(
-            excmd.ea_getline,
-            excmd.cookie,
-            Some(getsourceline as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
-        )
-    };
-    if !sourced {
+    if !reads_sourced_lines(excmd) {
         crate::semsg!("E105: Using :loadkeymap not in a sourced file");
         return;
     }
@@ -674,17 +634,8 @@ pub fn ex_loadkeymap(excmd: &mut ExArg) {
 /// skipped; an over-long or half-empty entry is dropped, and an empty `to`
 /// reports E791.
 fn read_keymap_entries(excmd: &mut ExArg, mut buffer: Buf) {
-    loop {
-        // SAFETY: caller contract; the getter answers an owned heap line or
-        // null at end of file.
-        let line =
-            unsafe { excmd.ea_getline.expect("non-null line getter")(0, excmd.cookie, 0, true) };
-        if line.is_null() {
-            break;
-        }
-        // SAFETY: the line is NUL-terminated and owned until freed below.
-        let bytes = unsafe { CStr::from_ptr(line).to_bytes() };
-        let s = skip_white(bytes);
+    while let Some(line) = exarg_getline(excmd, 0, 0, true) {
+        let s = skip_white(&line);
         if !s.is_empty() && s[0] != b'"' {
             let (from, rest) = split_at_white(s);
             let (to, _) = split_at_white(skip_white(rest));
@@ -699,8 +650,6 @@ fn read_keymap_entries(excmd: &mut ExArg, mut buffer: Buf) {
                 });
             }
         }
-        // SAFETY: the line is ours to free, and nothing borrows it now.
-        unsafe { xfree(line as *mut c_void) };
     }
 }
 
@@ -714,15 +663,7 @@ fn apply_keymap_entries(buffer: Buf) {
         .map(|entry| keymap_map_cmd(&entry.from, Some(&entry.to)))
         .collect();
     for mut cmd in cmds {
-        // SAFETY: `do_map` only reads the NUL-terminated command it is given.
-        unsafe {
-            do_map(
-                MAPTYPE_MAP,
-                cmd.as_mut_ptr() as *mut c_char,
-                MODE_LANGMAP,
-                false,
-            )
-        };
+        do_map_line(MAPTYPE_MAP, &mut cmd, MODE_LANGMAP, false);
     }
 }
 
@@ -756,15 +697,7 @@ fn keymap_unload() {
         .map(|entry| keymap_map_cmd(&entry.from, None))
         .collect();
     for mut cmd in cmds {
-        // SAFETY: `do_map` only reads the NUL-terminated command it is given.
-        unsafe {
-            do_map(
-                MAPTYPE_UNMAP,
-                cmd.as_mut_ptr() as *mut c_char,
-                MODE_LANGMAP,
-                false,
-            )
-        };
+        do_map_line(MAPTYPE_UNMAP, &mut cmd, MODE_LANGMAP, false);
     }
     // The entries own their two strings.
     buf.b_kmap_ga = Vec::new();
@@ -789,10 +722,7 @@ pub fn keymap_str(window: Win) -> Option<CString> {
     saved.restore();
     let name = match s {
         Some(s) if !s.is_empty() => s.as_cstr().to_owned(),
-        // SAFETY: 'keymap' is an option string, copied here.
-        _ if buf.b_kmap_state as c_int & KEYMAP_LOADED != 0 => unsafe {
-            CStr::from_ptr(buf.b_p_keymap.value_ptr()).to_owned()
-        },
+        _ if buf.b_kmap_state as c_int & KEYMAP_LOADED != 0 => buf.b_p_keymap.cstr().to_owned(),
         _ => CString::new("lang").expect("no interior NUL"),
     };
     Some(name)

@@ -407,6 +407,16 @@ pub unsafe fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: Lin
     line_getter_eq(gp, func)
 }
 
+/// Whether `excmd` reads its lines from a script being `:source`d -- the
+/// file itself, or a loop inside it.
+pub(crate) fn reads_sourced_lines(excmd: &crate::types::ExArg) -> bool {
+    let sourced = Some(
+        crate::runtime::getsourceline as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
+    );
+    // SAFETY: a running command's getter and its cookie are a live pair.
+    unsafe { getline_equal(excmd.ea_getline, excmd.cookie, sourced) }
+}
+
 /// The cookie at the bottom of that chain — the function or script the
 /// lines really come from.
 ///

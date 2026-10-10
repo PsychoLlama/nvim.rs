@@ -514,6 +514,17 @@ pub unsafe fn do_map(maptype: c_int, arg: *mut c_char, mode: c_int, is_abbrev: b
     result
 }
 
+/// [`do_map`] over a command line this frame owns, NUL-terminated.
+///
+/// # Panics
+///
+/// If `arg` holds no NUL.
+pub(crate) fn do_map_line(maptype: c_int, arg: &mut [u8], mode: c_int, is_abbrev: bool) -> c_int {
+    assert!(arg.contains(&0), "the map arguments are NUL-terminated");
+    // SAFETY: a live, writable buffer, terminated inside it.
+    unsafe { do_map(maptype, arg.as_mut_ptr().cast(), mode, is_abbrev) }
+}
+
 /// Clear all mappings (`:mapclear`) or abbreviations (`:abclear`).
 ///
 /// The mode is read off the command name *before* the argument pointer is
