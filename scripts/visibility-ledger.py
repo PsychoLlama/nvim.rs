@@ -103,11 +103,13 @@ def strip_comments(text):
 
 def module_file(parts):
     """The file holding module `parts` (a list of segments), or None."""
-    rel = Path(*[p.removeprefix("r#") for p in parts]) if parts else Path()
+    if not parts:
+        return SRC / "lib.rs"
+    rel = Path(*[p.removeprefix("r#") for p in parts])
     for candidate in (SRC / rel.with_suffix(".rs"), SRC / rel / "mod.rs"):
         if candidate.is_file():
             return candidate
-    return SRC / "lib.rs" if not parts else None
+    return None
 
 
 def parse_use_tree(text, start):
@@ -276,6 +278,24 @@ def children(holder: Path):
     ]
 
 
+MACRO_EXPORT = re.compile(
+    r"#\[macro_export\]\s*(?:#\[[^\]]*\]\s*)*macro_rules!\s*(\w+)"
+)
+_EXPORTED_MACROS = None
+
+
+def exported_macro(item):
+    """(file, "macro") for a `#[macro_export]` macro named `item`, or None."""
+    global _EXPORTED_MACROS
+    if _EXPORTED_MACROS is None:
+        _EXPORTED_MACROS = {}
+        for path in sorted(SRC.rglob("*.rs")):
+            for name in MACRO_EXPORT.findall(strip_comments(path.read_text())):
+                _EXPORTED_MACROS.setdefault(name, path)
+    found = _EXPORTED_MACROS.get(item)
+    return None if found is None else (found, "macro")
+
+
 def resolve(path):
     """(module segments, item, declaring file, kind) for one crate path."""
     if path and module_file(path) is not None:
@@ -288,6 +308,10 @@ def resolve(path):
         if item == "*":
             return "::".join(path[:cut]), item, module_file(path[:cut]), "glob"
         found = declaring(path[:cut], item)
+        if found is None and cut == 0:
+            # `#[macro_export]` puts a macro at the crate root from whichever
+            # file defines it.
+            found = exported_macro(item)
         if found is None:
             # A glob re-export the chase could not localise -- an inline
             # module, a macro-declared item, a name that came from another
@@ -325,7 +349,7 @@ def build():
     for (module, item), info in sorted(
         reached.items(), key=lambda kv: (kv[0][0], kv[0][1] or "")
     ):
-        full = f"{CRATE}::{module}" + (f"::{item}" if item else "")
+        full = "::".join(part for part in (CRATE, module, item) if part)
         record = {
             "path": full,
             "kind": info["kind"],
