@@ -808,6 +808,12 @@ pub(crate) unsafe fn mb_unescape(
     cursor: *mut *const c_char,
     into: &mut [c_char; MB_MAXCHAR],
 ) -> *const c_char {
+    // ASCII (a NUL included) is never the start of a multibyte character,
+    // and is almost every byte this is asked about: the typeahead's mapping
+    // match calls it per candidate.
+    if unsafe { **cursor }.cast_unsigned() < 0x80 {
+        return core::ptr::null();
+    }
     // Four characters, each at most three bytes escaped, and the NUL: the
     // most `unescape_at` looks at.
     let text = unsafe { cstr::prefix_at(*cursor, 13) };

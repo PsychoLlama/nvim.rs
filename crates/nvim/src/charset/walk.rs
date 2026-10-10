@@ -184,6 +184,24 @@ pub(crate) unsafe fn skip_to_newline(p: *const c_char) -> *mut c_char {
         .raw()
 }
 
+/// The bytes a decimal number at `p` can occupy -- leading white space, a
+/// sign, digits -- which is everything [`skip::decimal`] reads, without
+/// measuring the rest of the string.
+///
+/// # Safety
+/// `p` must point into a NUL-terminated string.
+unsafe fn number_span<'a>(p: *const c_char) -> &'a [u8] {
+    let cursor = unsafe { Bytes::new(p) };
+    let mut end = cursor.skip_while(|b| matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'));
+    if matches!(end.byte(), b'-' | b'+') {
+        end.advance(1);
+    }
+    let end = end.skip_while(is_digit);
+    let len = end.raw().addr() - p.addr();
+    // SAFETY: every byte up to `end` was read as part of the string.
+    unsafe { slice::from_raw_parts(p.cast::<u8>(), len) }
+}
+
 /// Read a decimal number at `*cursor`, advancing it past the digits; see
 /// [`skip::decimal`]. Answers false when the value did not fit, in which
 /// case `*nr` holds the saturated value.
@@ -191,7 +209,7 @@ pub(crate) unsafe fn skip_to_newline(p: *const c_char) -> *mut c_char {
 /// # Safety
 /// `*cursor` must be a NUL-terminated string, and `nr` writable.
 pub(crate) unsafe fn try_getdigits(cursor: *mut *mut c_char, nr: *mut intmax_t) -> bool {
-    let (number, used, overflow) = skip::decimal(unsafe { cstr::bytes_at(*cursor) });
+    let (number, used, overflow) = skip::decimal(unsafe { number_span(*cursor) });
     unsafe { *cursor = (*cursor).add(used) };
     unsafe { *nr = number };
     !overflow
@@ -203,7 +221,7 @@ pub(crate) unsafe fn try_getdigits(cursor: *mut *mut c_char, nr: *mut intmax_t) 
 /// # Safety
 /// `*cursor` must be a NUL-terminated string.
 pub unsafe fn getdigits(cursor: *mut *mut c_char, strict: bool, def: intmax_t) -> intmax_t {
-    let (number, used) = getdigits_at(unsafe { cstr::bytes_at(*cursor) }, 0, strict, def);
+    let (number, used) = getdigits_at(unsafe { number_span(*cursor) }, 0, strict, def);
     unsafe { *cursor = (*cursor).add(used) };
     number
 }
@@ -213,7 +231,7 @@ pub unsafe fn getdigits(cursor: *mut *mut c_char, strict: bool, def: intmax_t) -
 /// # Safety
 /// `*cursor` must be a NUL-terminated string.
 pub unsafe fn getdigits_int(cursor: *mut *mut c_char, strict: bool, def: c_int) -> c_int {
-    let (number, used) = getdigits_int_at(unsafe { cstr::bytes_at(*cursor) }, 0, strict, def);
+    let (number, used) = getdigits_int_at(unsafe { number_span(*cursor) }, 0, strict, def);
     unsafe { *cursor = (*cursor).add(used) };
     number
 }
@@ -286,6 +304,11 @@ pub unsafe fn vim_iswordp(p: *const c_char) -> bool {
 /// # Safety
 /// `p` must point into a NUL-terminated string.
 pub unsafe fn vim_iswordp_buf(p: *const c_char, buffer: Buf) -> bool {
+    // A byte that leads no sequence is judged as itself, without measuring.
+    let lead = unsafe { Bytes::new(p) }.byte();
+    if crate::mbyte::utf8len_tab[usize::from(lead)] == 1 {
+        return super::vim_iswordc_buf(c_int::from(lead), buffer);
+    }
     is_word_at(
         unsafe { cstr::prefix_at(p, crate::types::MB_MAXCHAR) },
         buffer,

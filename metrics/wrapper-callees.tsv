@@ -2,13 +2,13 @@ count	callee	no_raw	defs	def
 549	xfree	0	1	crates/nvim/src/memory/mod.rs
 504	.add	0	2	crates/nvim/src/getchar/buffers.rs
 346	.offset	0	0	
-318	bytes_at	0	1	crates/nvim/src/cstr.rs
+315	bytes_at	0	1	crates/nvim/src/cstr.rs
 248	CStr::from_ptr	0	2	
 238	at	0	3	
 186	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 157	.offset_from	0	0	
-127	from_raw_parts	0	0	
+128	from_raw_parts	0	0	
 114	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 99	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 97	xmalloc	0	1	crates/nvim/src/memory/mod.rs
@@ -188,6 +188,7 @@ count	callee	no_raw	defs	def
 10	xmallocz	0	1	crates/nvim/src/memory/mod.rs
 9	.get	0	3	
 9	.replace	0	2	
+9	Bytes::new	0	1	crates/nvim/src/charset/walk.rs
 9	Node::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 9	Scan::new	0	3	
 9	add_suggestion	0	1	crates/nvim/src/spellsuggest/collect.rs
@@ -251,7 +252,6 @@ count	callee	no_raw	defs	def
 8	win_chartabsize	0	1	crates/nvim/src/plines/mod.rs
 7	.in_id_list	0	1	crates/nvim/src/syntax/options.rs
 7	.list	1	2	crates/nvim/src/usercmd/mod.rs
-7	Bytes::new	0	1	crates/nvim/src/charset/walk.rs
 7	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
 7	FoldList::new	0	1	crates/nvim/src/fold/list.rs
 7	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
@@ -752,6 +752,7 @@ count	callee	no_raw	defs	def
 3	nlua_pop_dict	0	1	crates/nvim/src/lua/converter/pop.rs
 3	nlua_ref_global	0	1	crates/nvim/src/lua/executor/refs.rs
 3	node_of_digest_key	0	1	crates/nvim/src/spellfile/wordtree.rs
+3	number_span	0	1	crates/nvim/src/charset/walk.rs
 3	nv_mark_move_to	0	1	crates/nvim/src/normal/search.rs
 3	nv_screengo	0	1	crates/nvim/src/normal/motion.rs
 3	onecap_copy	0	1	crates/nvim/src/spell/chartab.rs
