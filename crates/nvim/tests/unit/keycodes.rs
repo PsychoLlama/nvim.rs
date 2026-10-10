@@ -14,15 +14,12 @@
 //!   name -> code direction, the code -> preferred-name direction (which is
 //!   what the `is_alt` column selects), and the table's alternative names.
 
-use std::ffi::{CStr, c_char, c_int};
-use std::ptr;
+use std::ffi::{CStr, c_int};
 
 use neovim::keycodes::{
-    FSK_IN_STRING, ModMask, REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SPECIAL, find_special_key,
-    get_special_key_name, replace_termcodes, special_key_code,
+    FSK_IN_STRING, ModMask, REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SPECIAL,
+    get_special_key_name, replace_termcodes, special_key_at, special_key_code,
 };
-
-use crate::support::{cstr, take_bytes};
 
 /// `'cpoptions'` as `keysweep` set it — the default, which contains `B`, so
 /// `replace_termcodes` does *not* treat a backslash as CTRL-V.
@@ -356,20 +353,10 @@ fn termcodes(src: &str, from_part: bool, do_lt: bool, special: bool) -> Vec<u8> 
     if !special {
         flags |= REPTERM_NO_SPECIAL as c_int;
     }
-    let s = cstr(src);
-    let mut buf: *mut c_char = ptr::null_mut();
-    unsafe {
-        replace_termcodes(
-            s.as_ptr(),
-            src.len(),
-            &mut buf,
-            0,
-            flags,
-            ptr::null_mut(),
-            CPO,
-        );
-        take_bytes(buf)
-    }
+    let out = replace_termcodes(src.as_bytes(), 0, flags, None, CPO, None)
+        .expect("an unbounded translation always answers");
+    // What a C reader of the answer saw: up to its first NUL.
+    out.split(|&b| b == 0).next().unwrap_or_default().to_vec()
 }
 
 /// The code `name` resolves to, and the name that code prints as.
@@ -388,12 +375,8 @@ fn key_name(code: c_int, modifiers: ModMask) -> String {
 /// Wrapper over `find_special_key`: returns the key code and the modifier
 /// mask it reported.
 fn special_key(src: &str, flags: c_int) -> (c_int, ModMask) {
-    let s = cstr(src);
-    let mut srcp: *const c_char = s.as_ptr();
-    let mut modifiers = ModMask::NONE;
-    let key =
-        unsafe { find_special_key(&mut srcp, src.len(), &mut modifiers, flags, ptr::null_mut()) };
-    (key, modifiers)
+    special_key_at(src.as_bytes(), flags, None)
+        .map_or((0, ModMask::NONE), |(key, mods, _)| (key, mods))
 }
 
 #[test]

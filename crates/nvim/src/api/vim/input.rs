@@ -62,7 +62,7 @@ pub fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
         return;
     }
     let keys_esc: *mut ::core::ffi::c_char = if escape_ks {
-        unsafe { vim_strsave_escape_ks(keys.data()) }
+        crate::keycodes::escape_ks(unsafe { cstr::at(keys.data()) }).into_raw()
     } else {
         keys.data()
     };
@@ -205,13 +205,12 @@ pub fn nvim_replace_termcodes(
     if !special {
         flags |= REPTERM_NO_SPECIAL as ::core::ffi::c_int;
     }
-    let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let (text, len, out) = (str.data(), str.len(), &raw mut ptr);
-    let no_flag = ::core::ptr::null_mut::<bool>();
-    // SAFETY: `str` is the caller's and `ptr` this frame's own out-parameter.
-    p_cpo(|cpo| unsafe { replace_termcodes(text, len, out, 0 as ScriptId, flags, no_flag, cpo) });
-    // SAFETY: `replace_termcodes` left an owned C string in `ptr`.
-    unsafe { cstr_to_string(ptr) }
+    // SAFETY: `str` is the caller's, `len` bytes long.
+    let text = unsafe { cstr::slice_at(str.data(), str.len()) };
+    let replaced = p_cpo(|cpo| replace_termcodes(text, 0 as ScriptId, flags, None, cpo, None));
+    let replaced = replaced.unwrap_or_default();
+    // What a C reader of the answer saw: up to its first NUL.
+    String_0::from_bytes(replaced.split(|&b| b == 0).next().unwrap_or_default())
 }
 
 pub fn nvim_get_keymap(mode: String_0) -> Array {

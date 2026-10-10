@@ -114,7 +114,7 @@ use crate::insexpand::{
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_J,
     Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U,
-    Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, add_char2buf, get_special_key_name,
+    Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, get_special_key_name, push_char_escaped,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};

@@ -41,7 +41,13 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
         unsafe { *s = Ctrl_V as c_char };
         s = unsafe { s.offset(1) };
     }
-    s = unsafe { add_char2buf(c, s) };
+    let mut escaped = Vec::new();
+    push_char_escaped(c, &mut escaped);
+    unsafe {
+        s.cast::<u8>()
+            .copy_from_nonoverlapping(escaped.as_ptr(), escaped.len())
+    };
+    s = s.wrapping_add(escaped.len());
     unsafe { *s = ESC as c_char };
     s = unsafe { s.offset(1) };
     unsafe { *s = NUL as c_char };

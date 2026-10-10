@@ -52,7 +52,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::secure;
 use crate::highlight_group::HLF_8;
 use crate::keycodes::{
-    K_SPECIAL, get_special_key_name, replace_termcodes, vim_strsave_escape_ks, vim_unescape_ks,
+    K_SPECIAL, escape_ks_bytes, get_special_key_name, push_char_escaped, replace_termcodes,
+    unescape_ks, unescape_ks_in,
 };
 use crate::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,
@@ -63,9 +64,7 @@ use crate::option::vars::{p_cpo, p_verbose};
 use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, no_abbr};
 
-use crate::mbyte::{
-    cluster_len, mb_prevptr, mb_unescape, utf_char2bytes, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
-};
+use crate::mbyte::{cluster_len, mb_prevptr, mb_unescape, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree};
 use crate::message::{
     emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_display, msg_display_keys,

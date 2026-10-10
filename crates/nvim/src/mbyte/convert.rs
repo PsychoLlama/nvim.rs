@@ -357,6 +357,24 @@ fn to_latin9_byte(c: c_int) -> c_int {
     c
 }
 
+/// A conversion from one encoding to another, torn down when dropped.
+pub(crate) struct Converter(VimConv);
+
+impl Converter {
+    /// The conversion from `from` to `to`, or `None` when none is needed or
+    /// possible.
+    pub(crate) fn new(from: &CStr, to: &CStr) -> Option<Converter> {
+        let mut conv = Converter(CONV_NONE_INIT);
+        let _ = conv.0.setup(Some(from), Some(to));
+        (conv.0.vc_type != CONV_NONE).then_some(conv)
+    }
+
+    /// `text` converted, or `None` when it would not convert.
+    pub(crate) fn convert(&self, text: &[u8]) -> Option<Vec<u8>> {
+        self.0.convert(text)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -388,23 +406,5 @@ mod tests {
     fn latin9_encodes_the_euro() {
         assert_eq!(latin9_to_utf8(&[0xa4]), "€".as_bytes());
         assert_eq!(latin9_to_utf8(b"a"), b"a");
-    }
-}
-
-/// A conversion from one encoding to another, torn down when dropped.
-pub(crate) struct Converter(VimConv);
-
-impl Converter {
-    /// The conversion from `from` to `to`, or `None` when none is needed or
-    /// possible.
-    pub(crate) fn new(from: &CStr, to: &CStr) -> Option<Converter> {
-        let mut conv = Converter(CONV_NONE_INIT);
-        let _ = conv.0.setup(Some(from), Some(to));
-        (conv.0.vc_type != CONV_NONE).then_some(conv)
-    }
-
-    /// `text` converted, or `None` when it would not convert.
-    pub(crate) fn convert(&self, text: &[u8]) -> Option<Vec<u8>> {
-        self.0.convert(text)
     }
 }

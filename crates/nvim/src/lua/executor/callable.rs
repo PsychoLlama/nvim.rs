@@ -21,13 +21,14 @@
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use core::slice;
 
 use super::{get_global_lstate, kRetNilBool, lua_Debug, lua_getinfo, nlua_error, nlua_exec};
 use crate::api::private::helpers::cstr_to_string;
 use crate::eval::userfunc::register_luafunc;
 use crate::getchar::state::{got_int, mod_mask};
 use crate::global_cell::GlobalCell;
-use crate::keycodes::{special_to_buf, vim_unescape_ks};
+use crate::keycodes::{push_special_key, unescape_ks_in};
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
     LUA_NOREF, LUA_TBOOLEAN, LUA_TFUNCTION, lua_checkstack, lua_getfield, lua_getglobal,
@@ -38,7 +39,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;
 use crate::strings::{printf_string, vim_snprintf};
-use crate::types::{Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST, size_t};
+use crate::types::{Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST};
 
 /// An all-zero [`lua_Debug`], which `lua_getinfo` fills.
 const LUA_DEBUG_INIT: lua_Debug = lua_Debug {
@@ -133,9 +134,12 @@ pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
         }
         RECURSIVE.set(true);
 
-        let mut buf = [0 as c_char; 67];
-        let buf_len = special_to_buf(c, mod_mask.get(), false, buf.as_mut_ptr()) as size_t;
-        vim_unescape_ks(typed_buf);
+        let mut buf = Vec::with_capacity(67);
+        push_special_key(c, mod_mask.get(), false, &mut buf);
+        let buf_len = buf.len();
+        let typed =
+            slice::from_raw_parts_mut(typed_buf.cast::<u8>(), cstr::bytes_at(typed_buf).len());
+        *typed_buf.add(unescape_ks_in(typed)) = 0;
 
         let lstate = get_global_lstate();
         let top = lua_gettop(lstate);
@@ -143,7 +147,7 @@ pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
         lua_getglobal(lstate, c"vim".as_ptr());
         lua_getfield(lstate, -1, c"_on_key".as_ptr());
         luaL_checktype(lstate, -1, LUA_TFUNCTION);
-        lua_pushlstring(lstate, buf.as_ptr(), buf_len);
+        lua_pushlstring(lstate, buf.as_ptr().cast(), buf_len);
         lua_pushstring(lstate, typed_buf);
 
         let save_got_int = got_int.get();

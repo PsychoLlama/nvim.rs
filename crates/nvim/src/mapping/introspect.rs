@@ -16,7 +16,6 @@ use crate::option::vars::P_CPO;
 use crate::types::{VAR_DICT, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 /// `hasmapto()`: whether any mapping in the named modes has `{name}` in its
 /// RHS.
@@ -210,15 +209,9 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     // `get_map_mode` only steps the pointer along; it writes nothing.
     let mut which: *mut c_char = which.as_ptr().cast_mut();
 
-    let mut keys_buf: *mut c_char = ptr::null_mut();
-    let mut alt_keys_buf: *mut c_char = ptr::null_mut();
     let mut did_simplify = false;
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
     let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
-    let plain = ptr::null_mut();
-    let simplify = &raw mut did_simplify;
-    let out = &raw mut keys_buf;
-    let alt_out = &raw mut alt_keys_buf;
     // SAFETY: `which` is a NUL-terminated mode string.
     let mode = unsafe { get_map_mode(&raw mut which, false) };
 
@@ -227,15 +220,17 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     // A copy, because the second `replace_termcodes` below is past the end
     // of a projection's borrow.
     let cpo = P_CPO.get();
-    let (keys_simplified, _owned, mut found) = unsafe {
-        let len = cstr::bytes_at(keys).len();
-        let simplified = replace_termcodes(keys, len, out, 0, flags, simplify, cpo.as_cstr());
-        let owned = COwned::new(keys_buf);
-        let found = check_map(simplified, mode, exact, false, abbr);
-        (simplified, owned, found)
+    let terminated = |mut keys: Vec<u8>| {
+        keys.push(0);
+        keys
     };
+    let keys = unsafe { cstr::bytes_at(keys) };
+    let simplify = Some(&mut did_simplify);
+    let replaced = replace_termcodes(keys, 0, flags, simplify, cpo.as_cstr(), None);
+    let keys_simplified = terminated(replaced.unwrap_or_default());
+    let mut found = unsafe { check_map(keys_simplified.as_ptr().cast(), mode, exact, false, abbr) };
     // SAFETY: as above.
-    let _alt_owned = unsafe {
+    unsafe {
         if did_simplify {
             // When the lhs is being simplified the not-simplified keys are
             // preferred for printing, like in do_map(). Upstream leaves the
@@ -243,12 +238,11 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
             // clears both `rhs` and `rhs_lua`, and every reader of `mp` is
             // behind a test on one of those -- so dropping the whole match
             // is the same answer.
-            let len = cstr::bytes_at(keys).len();
-            replace_termcodes(keys, len, alt_out, 0, nosimp, plain, cpo.as_cstr());
-            found = check_map(alt_keys_buf, mode, exact, false, abbr);
+            let alt = replace_termcodes(keys, 0, nosimp, None, cpo.as_cstr(), None);
+            let alt = terminated(alt.unwrap_or_default());
+            found = check_map(alt.as_ptr().cast(), mode, exact, false, abbr);
         }
-        COwned::new(alt_keys_buf)
-    };
+    }
 
     // SAFETY: a match names a still-linked mapping.
     let found = found.map(|found| (unsafe { Mb::new(found.mp) }, found.local));
@@ -270,12 +264,8 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
         }
     } else if let Some((mp, local)) = found {
         // Return a dictionary.
-        // SAFETY: `keys_simplified` is `replace_termcodes`'s NUL-terminated
-        // answer and `mp` a live mapping.
-        let dict = unsafe {
-            let alt = did_simplify.then(|| MapStr::new(cstr::bytes_at(keys_simplified)));
-            mapblock_fill_dict(mp, alt.as_ref(), c_int::from(local), abbr, true)
-        };
+        let alt = did_simplify.then(|| MapStr::new(cstr::in_bytes(&keys_simplified).to_bytes()));
+        let dict = mapblock_fill_dict(mp, alt.as_ref(), c_int::from(local), abbr, true);
         *result = TypVal::from(Object::dict(dict));
     } else {
         // Return an empty dictionary.
@@ -300,23 +290,25 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             if mp.m_simplified {
                 return None;
             }
-            let mut keys_buf: *mut c_char = ptr::null_mut();
             let mut did_simplify = false;
-            let out = &raw mut keys_buf;
-            let simplify = &raw mut did_simplify;
 
             let mut arena = ARENA_EMPTY;
             // SAFETY: `m_keys` is the mapping's own NUL-terminated LHS, and
             // `arena`, `keys_buf` and `did_simplify` are this frame's locals;
             // the allocation `keys_buf` takes over is the guard's.
-            let (alt, _owned) = unsafe {
-                let lhs = str2special_arena(mp.m_keys.as_ptr(), true, false, &raw mut arena);
-                let len = cstr::bytes_at(lhs).len();
-                replace_termcodes(lhs, len, out, 0, flags, simplify, cpo.as_cstr());
-                let alt = (did_simplify && !keys_buf.is_null())
-                    .then(|| MapStr::new(cstr::bytes_at(keys_buf)));
-                (alt, COwned::new(keys_buf))
+            let lhs = unsafe {
+                cstr::bytes_at(str2special_arena(
+                    mp.m_keys.as_ptr(),
+                    true,
+                    false,
+                    &raw mut arena,
+                ))
             };
+            let simplify = Some(&mut did_simplify);
+            let keys = replace_termcodes(lhs, 0, flags, simplify, cpo.as_cstr(), None);
+            let alt = keys
+                .filter(|_| did_simplify)
+                .map(|keys| MapStr::new(keys.split(|&b| b == 0).next().unwrap_or_default()));
 
             // SAFETY: `mp` is a live entry of the table being walked and
             // `result`'s list was allocated above.

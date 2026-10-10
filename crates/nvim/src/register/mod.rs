@@ -59,8 +59,7 @@ use crate::highlight_group::HLF_8;
 use crate::indent::{get_indent, preprocs_left, set_indent, tabstop_padding};
 use crate::insexpand::{ins_compl_delete, ins_compl_preinsert_effect};
 use crate::keycodes::{
-    Ctrl_A, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_R, Ctrl_U, Ctrl_V, Ctrl_W, vim_strsave_escape_ks,
-    vim_unescape_ks,
+    Ctrl_A, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_R, Ctrl_U, Ctrl_V, Ctrl_W, escape_ks, unescape_ks_in,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{

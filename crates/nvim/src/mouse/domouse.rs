@@ -39,10 +39,8 @@ use crate::getchar::{
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
-use crate::keycodes::ModMask;
-use crate::keycodes::{
-    Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, Key, get_mouse_button,
-};
+use crate::keycodes::{Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, Key};
+use crate::keycodes::{ModMask, mouse_button};
 use crate::memline::{gchar_pos, inc};
 use crate::message::state::msg_silent;
 use crate::mouse::state::{
@@ -348,10 +346,7 @@ pub(crate) fn do_mouse(
 /// done when the current character was stuffed.
 fn coalesce_drags(c: c_int) -> (c_int, bool, bool) {
     loop {
-        let (mut is_click, mut is_drag) = (false, false);
-        // SAFETY: `get_mouse_button` writes through the two locals.
-        let which_button =
-            unsafe { get_mouse_button(key_extra(c), &raw mut is_click, &raw mut is_drag) };
+        let (which_button, is_click, is_drag) = mouse_button(key_extra(c));
         // SAFETY: `vpeekc` only looks at the typeahead.
         if !is_drag || KeyStuffed.get() != 0 || vpeekc() == NUL {
             return (which_button, is_click, is_drag);

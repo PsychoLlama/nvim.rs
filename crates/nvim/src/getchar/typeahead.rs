@@ -571,15 +571,13 @@ pub unsafe fn ins_typebuf(
 /// Answers how many bytes went in.
 pub fn ins_char_typebuf(c: c_int, modifiers: ModMask, on_key_ignore: bool) -> c_int {
     // Room for the modifier prefix plus a K_SPECIAL-escaped character.
-    let mut buf = [0 as c_char; MB_MAXBYTES * 3 + 4];
-    // SAFETY (this body): `buf` is this frame's own array, sized for the
-    // longest key escape, which `special_to_buf` fills.
-    let len = unsafe { special_to_buf(c, modifiers, true, buf.as_mut_ptr()) } as usize;
-    debug_assert!(len < buf.len());
-    buf[len] = 0;
+    let mut buf = Vec::with_capacity(MB_MAXBYTES * 3 + 4);
+    push_special_key(c, modifiers, true, &mut buf);
+    let len = buf.len();
+    buf.push(0);
     let _ = unsafe {
         ins_typebuf(
-            buf.as_mut_ptr(),
+            buf.as_mut_ptr().cast(),
             KeyNoremap.get(),
             0,
             !KeyTyped.get(),

@@ -36,16 +36,7 @@ fn abbr_matches(mp: Mb, word: &[u8]) -> bool {
     if !keys.contains(&(K_SPECIAL as u8)) {
         return keys == word;
     }
-    // `vim_unescape_ks` rewrites in place and only ever shortens, so a
-    // NUL-terminated copy is enough room.
-    let mut scratch = mp.m_keys.as_bytes_with_nul().to_vec();
-    // SAFETY: `scratch` is NUL-terminated and outlives the call, which only
-    // rewrites what is already there.
-    let unescaped = unsafe {
-        vim_unescape_ks(scratch.as_mut_ptr().cast());
-        cstr::bytes_at(scratch.as_ptr().cast())
-    };
-    unescaped == word
+    unescape_ks(keys) == word
 }
 
 /// Check for an abbreviation before `ptr[col]` and, if there is one, feed its
@@ -154,21 +145,12 @@ pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int)
             if c >= ABBR_OFF {
                 c -= ABBR_OFF; // remove the ABBR_OFF added by the caller
             }
-            // SAFETY: `j` is at most 1 here and `tb` has room for the longest
-            // multi-byte character plus its NUL; `utf_char2bytes` writes no
-            // more than that, and `vim_strsave_escape_ks`'s answer is at most
-            // twice as long, which still fits.
-            unsafe {
-                let at = tb.as_mut_ptr().add(j).cast::<c_char>();
-                let newlen = utf_char2bytes(c, at) as usize;
-                tb[j + newlen] = NUL as u8;
-                // Need to escape K_SPECIAL.
-                let escaped = COwned::new(vim_strsave_escape_ks(at));
-                if let Some(bytes) = escaped.as_bytes() {
-                    tb[j..j + bytes.len()].copy_from_slice(bytes);
-                    j += bytes.len();
-                }
-            }
+            // The character, with K_SPECIAL escaped. `j` is at most 1 here
+            // and `tb` has room for the longest escaped character.
+            let mut escaped = Vec::new();
+            push_char_escaped(c, &mut escaped);
+            tb[j..j + escaped.len()].copy_from_slice(&escaped);
+            j += escaped.len();
         }
         tb[j] = NUL as u8;
         // Insert the last typed char.
@@ -225,8 +207,8 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     // typeahead, not the one the expression is written in.  `vim_unescape_ks`
     // rewrites in place and only shortens, so the copy is room enough.
     let mut expr = mp.m_rhs.str.as_bytes_with_nul().to_vec();
-    // SAFETY: `expr` is this frame's own NUL-terminated buffer.
-    unsafe { vim_unescape_ks(expr.as_mut_ptr().cast()) };
+    let len = unescape_ks_in(&mut expr);
+    expr[len] = NUL as u8;
     let replace_keycodes = mp.m_replace_keycodes;
 
     // Forbid changing text or using ":normal", which rules out most of the bad
@@ -279,30 +261,12 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     let bytes = answer.as_bytes()?;
     if !replace_keycodes {
         // Escape K_SPECIAL so the result can be used as typeahead.
-        // SAFETY: `answer` is the evaluation's NUL-terminated result, and the
-        // escaped copy is the guard's.
-        let escaped =
-            unsafe { COwned::new(vim_strsave_escape_ks(bytes.as_ptr().cast_mut().cast())) };
-        return escaped.to_map_str();
+        return Some(MapStr::new(&escape_ks_bytes(bytes)));
     }
-    let mut res: *mut c_char = ptr::null_mut();
-    let out = &raw mut res;
     let dolt = REPTERM_DO_LT as c_int;
-    let simplify = ptr::null_mut();
-    // SAFETY: as above; `res` is a live slot for the allocation
-    // `replace_termcodes` makes, which the guard releases.
-    let replaced = p_cpo(|cpo| unsafe {
-        let at = replace_termcodes(
-            bytes.as_ptr().cast(),
-            bytes.len(),
-            out,
-            0,
-            dolt,
-            simplify,
-            cpo,
-        );
-        let _owned = COwned::new(res);
-        MapStr::new(cstr::bytes_at(at))
-    });
-    Some(replaced)
+    let replaced = p_cpo(|cpo| replace_termcodes(bytes, 0, dolt, None, cpo, None));
+    let replaced = replaced.unwrap_or_default();
+    Some(MapStr::new(
+        replaced.split(|&b| b == 0).next().unwrap_or_default(),
+    ))
 }

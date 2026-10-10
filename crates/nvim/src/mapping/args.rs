@@ -17,7 +17,6 @@ use crate::option::cpo_has;
 use crate::types::CpoFlag;
 use crate::vim_snprintf;
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 /// The modes `:map!` covers.
 const MASK_BANG: c_int = MODE_INSERT | MODE_CMDLINE;
@@ -103,36 +102,25 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
     // also removes CTRL-Vs and sometimes backslashes. If something like <C-H>
     // simplifies to 0x08 we take a second, unsimplified copy and mark the
     // pair.
-    let mut lhs_buf = [0 as c_char; 128];
+    // The fixed buffer upstream reads a mapping's lhs into.
+    const LHS_ROOM: usize = 128;
     let mut did_simplify = false;
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
-    let mut bufarg = lhs_buf.as_mut_ptr();
-    let buf = &raw mut bufarg;
-    let simplify = &raw mut did_simplify;
-    let plain = ptr::null_mut();
     let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
-    // SAFETY: the caller's promise — `orig_lhs` is `orig_lhs_len` live bytes
-    // and `cpo` a NUL-terminated `'cpoptions'`.  `lhs_buf` outlives both
-    // calls, which is where `replace_termcodes` may leave its answer, and its
-    // answer is NUL-terminated.
-    let replaced = unsafe {
-        let at = replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, flags, simplify, cpo);
-        if at.is_null() {
-            return false;
-        }
-        cstr::bytes_at(at)
+    // SAFETY: the caller's promise — `orig_lhs` is `orig_lhs_len` live bytes.
+    let lhs = unsafe { cstr::slice_at(orig_lhs, orig_lhs_len) };
+    let simplify = Some(&mut did_simplify);
+    let Some(replaced) = replace_termcodes(lhs, 0, flags, simplify, cpo, Some(LHS_ROOM)) else {
+        return false;
     };
+    let replaced = c_prefix(&replaced);
     args.lhs_len = replaced.len();
     args.lhs = MapStr::new(&replaced[..replaced.len().min(MAXMAPLEN as size_t)]);
     if did_simplify {
-        // SAFETY: as the first call.
-        let alt = unsafe {
-            let at = replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, nosimp, plain, cpo);
-            if at.is_null() {
-                return false;
-            }
-            cstr::bytes_at(at)
+        let Some(alt) = replace_termcodes(lhs, 0, nosimp, None, cpo, Some(LHS_ROOM)) else {
+            return false;
         };
+        let alt = c_prefix(&alt);
         args.alt_lhs_len = alt.len();
         args.alt_lhs = MapStr::new(&alt[..alt.len().min(MAXMAPLEN as size_t)]);
     } else {
@@ -203,18 +191,11 @@ pub(crate) unsafe fn set_maparg_rhs(
         // "<Nop>" means nothing.
         MapStr::empty()
     } else {
-        let mut rhs_buf: *mut c_char = ptr::null_mut();
-        let buf = &raw mut rhs_buf;
         let dolt = REPTERM_DO_LT as c_int;
-        let plain = ptr::null_mut();
-        // SAFETY: as above, plus `cpo` NUL-terminated; `rhs_buf` is only a
-        // scratch slot `replace_termcodes` may take over, which the guard
-        // releases once the answer has been copied out of it.
-        unsafe {
-            let at = replace_termcodes(orig_rhs, orig_rhs_len, buf, sid, dolt, plain, cpo);
-            let _owned = COwned::new(rhs_buf);
-            MapStr::new(cstr::bytes_at(at))
-        }
+        // SAFETY: as above.
+        let rhs = unsafe { cstr::slice_at(orig_rhs, orig_rhs_len) };
+        let replaced = replace_termcodes(rhs, sid, dolt, None, cpo, None).unwrap_or_default();
+        MapStr::new(c_prefix(&replaced))
     };
     // "<Nop>" is a noop, and so is a single ^V: `replace_termcodes` may
     // produce an empty string even when `orig_rhs` is not -- see
@@ -424,4 +405,9 @@ pub(crate) fn get_map_mode_string(mode_string: &[u8], abbr: bool) -> c_int {
     }
 
     mode
+}
+
+/// The bytes a C reader of `bytes` sees: up to the first NUL.
+fn c_prefix(bytes: &[u8]) -> &[u8] {
+    bytes.split(|&b| b == 0).next().unwrap_or_default()
 }

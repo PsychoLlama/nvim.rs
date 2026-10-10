@@ -49,7 +49,7 @@ use crate::highlight_group::{
     syn_check_group, syn_id2name,
 };
 use crate::insexpand::get_cot_flags;
-use crate::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
+use crate::keycodes::{name_to_mod_mask, replace_termcodes};
 use crate::log::LOGLVL_DBG;
 use crate::log::g_stats;
 use crate::lua::executor::{

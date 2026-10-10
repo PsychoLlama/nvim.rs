@@ -24,6 +24,7 @@
 use crate::autocmd::fire_autocmds;
 use crate::autocmd::state::did_cursorhold;
 use crate::autocmd::trigger_cursorhold;
+use crate::cstr;
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{loop_poll_events, process_events_until};
 use crate::event::multiqueue::queue_in;
@@ -32,12 +33,12 @@ use crate::event::rstream::{rstream_init_fd, rstream_may_close, rstream_start, r
 use crate::getchar::state::{ctrl_c_interrupts, got_int, mapped_ctrl_c, typebuf_was_filled};
 use crate::getchar::{before_blocking, typebuf_changed};
 use crate::global_cell::GlobalCell;
-use crate::keycodes::ModMask;
 use crate::keycodes::{
     Ctrl_C, FSK_KEYCODE, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE,
     KE_MOUSEDOWN, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE,
-    KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL, trans_special,
+    KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL,
 };
+use crate::keycodes::{ModMask, trans_special_into};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message_fmt::c_str;
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
@@ -426,14 +427,9 @@ pub unsafe fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
 
         while input_space() >= MAX_TRANS_SPECIAL && ptr < end {
             let mut buf = [0u8; MAX_TRANS_SPECIAL];
-            let new_size = trans_special(
-                &raw mut ptr,
-                end.offset_from(ptr) as size_t,
-                buf.as_mut_ptr().cast::<c_char>(),
-                FSK_KEYCODE,
-                true,
-                ptr::null_mut(),
-            );
+            let text = cstr::slice_at(ptr, end.offset_from(ptr) as size_t);
+            let (used, new_size) = trans_key(text, &mut buf);
+            ptr = ptr.add(used);
 
             if new_size > 0 {
                 let new_size = handle_mouse_event(&mut ptr, end, &mut buf, new_size);
@@ -871,6 +867,20 @@ fn read_error_exit() -> ! {
 unsafe fn pending_events(events: *mut MultiQueue) -> bool {
     // SAFETY: the caller's contract.
     !events.is_null() && unsafe { !multiqueue_empty(events) }
+}
+
+/// The `<>` key name `text` starts with, encoded into `buf`: how many bytes
+/// of `text` it took, and how many of `buf` its encoding fills -- both zero
+/// when `text` does not start with one.
+fn trans_key(text: &[u8], buf: &mut [u8; MAX_TRANS_SPECIAL]) -> (usize, c_uint) {
+    let mut encoded = Vec::with_capacity(MAX_TRANS_SPECIAL);
+    match trans_special_into(text, FSK_KEYCODE, true, &mut encoded) {
+        Some(used) => {
+            buf[..encoded.len()].copy_from_slice(&encoded);
+            (used, c_uint::try_from(encoded.len()).unwrap_or(0))
+        }
+        None => (0, 0),
+    }
 }
 
 #[cfg(test)]

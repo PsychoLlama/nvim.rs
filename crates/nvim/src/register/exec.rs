@@ -175,7 +175,10 @@ pub fn do_record(c: c_int) -> Result<(), Failed> {
     if !p.is_null() {
         // SAFETY: `get_recorded` answered an allocated NUL-terminated
         // string, unescaped in place -- which only ever shortens it.
-        unsafe { vim_unescape_ks(p) };
+        unsafe {
+            let text = slice::from_raw_parts_mut(p.cast::<u8>(), cstr::bytes_at(p).len());
+            *p.add(unescape_ks_in(text)) = 0;
+        }
     }
     // SAFETY: `p` is null or that NUL-terminated string; the autocommands
     // this fires are the ones the caller allows.
@@ -225,7 +228,7 @@ unsafe fn put_in_typebuf(
     if retval.is_ok() {
         // SAFETY: `s` is NUL-terminated, so the escaped copy is too.
         let p = if esc {
-            unsafe { vim_strsave_escape_ks(s) }
+            escape_ks(unsafe { cstr::at(s) }).into_raw()
         } else {
             s
         };
@@ -481,7 +484,7 @@ pub fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> 
         }
         // SAFETY: `str` is NUL-terminated either way -- a register line, or
         // the joined copy, which is ours to free.
-        let escaped = unsafe { vim_strsave_escape_ks(str) };
+        let escaped = escape_ks(unsafe { cstr::at(str) }).into_raw();
         if free_str {
             unsafe { xfree(str as *mut c_void) };
         }

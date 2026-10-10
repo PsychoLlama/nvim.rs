@@ -471,21 +471,12 @@ pub(crate) unsafe fn map_to_exists(
     modechars: *const c_char,
     abbr: bool,
 ) -> bool {
-    let mut buf: *mut c_char = ptr::null_mut();
-    let out = &raw mut buf;
     let dolt = REPTERM_DO_LT.cast_signed();
-    let simplify = ptr::null_mut();
     // SAFETY: the caller's promise — `str` is live and NUL-terminated.
-    let rhs = p_cpo(|cpo| unsafe {
-        let len = cstr::bytes_at(str).len();
-        replace_termcodes(str, len, out, 0, dolt, simplify, cpo)
-    });
-    // The allocation `replace_termcodes` may leave in `buf` is the guard's.
-    // Taken here and not inside the closure: reading `buf` there captured it
-    // by reference, a protected borrow that `replace_termcodes`' write
-    // through `out` then violated (Miri).
-    // SAFETY: `buf` is null or `replace_termcodes`' allocation.
-    let _owned = unsafe { COwned::new(buf) };
+    let text = unsafe { cstr::bytes_at(str) };
+    let mut rhs =
+        p_cpo(|cpo| replace_termcodes(text, 0, dolt, None, cpo, None)).unwrap_or_default();
+    rhs.push(0);
 
     let mut mode = 0;
     for (ch, flags) in MODE_CHARS {
@@ -495,9 +486,8 @@ pub(crate) unsafe fn map_to_exists(
         }
     }
 
-    // SAFETY: `rhs` is `replace_termcodes`'s NUL-terminated answer, and `buf`
-    // its allocation, which the guard releases.
-    unsafe { map_to_exists_mode(rhs, mode, abbr) }
+    // SAFETY: `rhs` is this frame's NUL-terminated translation.
+    unsafe { map_to_exists_mode(rhs.as_ptr().cast(), mode, abbr) }
 }
 
 /// C's `strstr`, over slices: whether `haystack` contains `needle`.

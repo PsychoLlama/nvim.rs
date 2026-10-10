@@ -67,7 +67,8 @@ use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::replace_termcodes;
 use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
-use crate::memory::{XString, xfree, xstrdup};
+use crate::memory::ThinCString;
+use crate::memory::{XString, xfree};
 use crate::message::emsg;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::option::vars::p_cpo;
@@ -361,17 +362,10 @@ pub(crate) unsafe fn uc_add_command(
     luaref: LuaRef,
     force: bool,
 ) -> Result<(), Failed> {
-    let mut rep_buf: *mut c_char = ptr::null_mut();
-    let out = &raw mut rep_buf;
-    let (no_flags, no_did_simplify) = (0, ptr::null_mut());
-    // SAFETY: caller contract; `rep_buf` is this frame's own.
-    p_cpo(|cpo| unsafe {
-        let len = cstr::bytes_at(rep).len();
-        replace_termcodes(rep, len, out, 0, no_flags, no_did_simplify, cpo)
-    });
-    if rep_buf.is_null() {
-        rep_buf = unsafe { xstrdup(rep) };
-    }
+    // SAFETY: caller contract.
+    let rep_text = unsafe { cstr::bytes_at(rep) };
+    let replaced = p_cpo(|cpo| replace_termcodes(rep_text, 0, 0, None, cpo, None));
+    let rep_buf = ThinCString::from_vec(replaced.unwrap_or_default()).into_raw();
 
     let table = if flags & UC_BUFFER != 0 {
         Table::Buffer(Buf::current())

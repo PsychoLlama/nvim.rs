@@ -5,17 +5,16 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, c_char, c_int};
-use std::ptr;
+use std::ffi::{CStr, c_int};
 
 use neovim::keycodes::{
     FSK_IN_STRING, FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, ModMask, REPTERM_DO_LT,
-    REPTERM_FROM_PART, REPTERM_NO_SIMPLIFY, REPTERM_NO_SPECIAL, add_char2buf, find_special_key,
-    replace_termcodes, special_to_buf, trans_special, vim_strsave_escape_ks, vim_unescape_ks,
+    REPTERM_FROM_PART, REPTERM_NO_SIMPLIFY, REPTERM_NO_SPECIAL, escape_ks_bytes, push_char_escaped,
+    push_special_key, replace_termcodes, special_key_at, trans_special_into, unescape_ks_in,
 };
 
 use crate::support::corpus::{Digest, corpus};
-use crate::support::{editor_lock, take_bytes};
+use crate::support::editor_lock;
 
 /// Key names in every shape the parser distinguishes, then the corpus, then
 /// each name glued to a corpus string.
@@ -95,20 +94,11 @@ fn texts() -> Vec<Vec<u8>> {
     out
 }
 
-/// `s` as a NUL-terminated C string.
-fn cbuf(s: &[u8]) -> Vec<c_char> {
-    s.iter()
-        .map(|&b| b as c_char)
-        .chain(std::iter::once(0))
-        .collect()
-}
-
 #[test]
 fn reading_one_key_name() {
     let _editor = editor_lock();
     let mut d = Digest::new();
     for text in texts() {
-        let buf = cbuf(&text);
         for at in 0..text.len() {
             for flags in [
                 0,
@@ -118,54 +108,28 @@ fn reading_one_key_name() {
                 FSK_KEYCODE | FSK_IN_STRING | FSK_SIMPLIFY,
             ] {
                 for len in [text.len() - at, (text.len() - at).min(3)] {
-                    let mut src = buf[at..].as_ptr();
-                    let mut modifiers = ModMask::NONE;
+                    let name = &text[at..at + len];
                     let mut simplified = false;
-                    // SAFETY: `len` bytes are readable at `src`; the
-                    // out-arguments are locals.
-                    let key = unsafe {
-                        find_special_key(
-                            &raw mut src,
-                            len,
-                            &raw mut modifiers,
-                            flags,
-                            &raw mut simplified,
-                        )
-                    };
+                    let found = special_key_at(name, flags, Some(&mut simplified));
+                    let (key, modifiers, used) = found.unwrap_or((0, ModMask::NONE, 0));
                     d.add(i64::from(key));
                     d.add(i64::from(modifiers.bits()));
                     d.add(i64::from(simplified));
-                    // SAFETY: `src` was advanced inside `buf`.
-                    d.add(unsafe { src.offset_from(buf.as_ptr()) } as i64);
+                    d.add((at + used) as i64);
 
-                    let mut src = buf[at..].as_ptr();
-                    let mut out = [0 as c_char; 32];
                     for escape_ks in [false, true] {
-                        // SAFETY: as above; `out` has the 19 bytes a key's
-                        // encoding can take.
-                        let n = unsafe {
-                            trans_special(
-                                &raw mut src,
-                                len,
-                                out.as_mut_ptr(),
-                                flags,
-                                escape_ks,
-                                ptr::null_mut(),
-                            )
-                        };
-                        d.add(i64::from(n));
-                        d.bytes(
-                            &out[..n as usize]
-                                .iter()
-                                .map(|&b| b as u8)
-                                .collect::<Vec<_>>(),
-                        );
+                        let mut out = Vec::new();
+                        let _ = trans_special_into(name, flags, escape_ks, &mut out);
+                        d.add(out.len() as i64);
+                        d.bytes(&out);
                     }
                 }
             }
         }
     }
-    assert_eq!(d.value(), 0xecb440fb908c3995, "one key name");
+    // Recorded from `find_special_key`/`trans_special`, each call from the
+    // start of the name.
+    assert_eq!(d.value(), 0x241f680d35c8f649, "one key name");
 }
 
 #[test]
@@ -173,7 +137,6 @@ fn replacing_key_names() {
     let _editor = editor_lock();
     let mut d = Digest::new();
     for text in texts() {
-        let buf = cbuf(&text);
         // Every combination of the four `REPTERM_*` bits.
         let bits = [
             REPTERM_FROM_PART,
@@ -188,42 +151,17 @@ fn replacing_key_names() {
                 .sum();
             for cpo in [c"aABceFs_" as &CStr, c"aAceFs_"] {
                 for sid in [0, 3, -1] {
-                    let mut out: *mut c_char = ptr::null_mut();
                     let mut simplified = false;
-                    // SAFETY: `buf` holds `text.len()` bytes; `out` starts
-                    // null, so the answer is allocated.
-                    unsafe {
-                        replace_termcodes(
-                            buf.as_ptr(),
-                            text.len(),
-                            &raw mut out,
-                            sid,
-                            flags,
-                            &raw mut simplified,
-                            cpo,
-                        );
-                        d.bytes(&take_bytes(out));
-                    }
+                    let out =
+                        replace_termcodes(&text, sid, flags, Some(&mut simplified), cpo, None)
+                            .expect("an unbounded translation always answers");
+                    d.bytes(c_prefix(&out));
                     d.add(i64::from(simplified));
                     // The fixed 128-byte buffer a mapping's lhs is read into.
-                    let mut fixed = [0x55 as c_char; 128];
-                    let mut out = fixed.as_mut_ptr();
-                    // SAFETY: as above, into a buffer of the documented size.
-                    let res = unsafe {
-                        replace_termcodes(
-                            buf.as_ptr(),
-                            text.len(),
-                            &raw mut out,
-                            sid,
-                            flags,
-                            ptr::null_mut(),
-                            cpo,
-                        )
-                    };
-                    d.add(i64::from(res.is_null()));
-                    if !res.is_null() {
-                        let n = fixed.iter().position(|&b| b == 0).unwrap_or(128);
-                        d.bytes(&fixed[..n].iter().map(|&b| b as u8).collect::<Vec<_>>());
+                    let fixed = replace_termcodes(&text, sid, flags, None, cpo, Some(128));
+                    d.add(i64::from(fixed.is_none()));
+                    if let Some(fixed) = fixed {
+                        d.bytes(c_prefix(&fixed));
                     }
                 }
             }
@@ -237,38 +175,30 @@ fn escaping_k_special() {
     let _editor = editor_lock();
     let mut d = Digest::new();
     for text in texts() {
-        let mut buf = cbuf(&text);
-        // SAFETY: `buf` is NUL-terminated and writable.
-        unsafe {
-            let escaped = take_bytes(vim_strsave_escape_ks(buf.as_mut_ptr()));
-            d.bytes(&escaped);
-            vim_unescape_ks(buf.as_mut_ptr());
-        }
-        let n = buf.iter().position(|&b| b == 0).unwrap_or(0);
-        d.bytes(&buf[..n].iter().map(|&b| b as u8).collect::<Vec<_>>());
+        d.bytes(&escape_ks_bytes(&text));
+        let mut copy = text.clone();
+        let len = unescape_ks_in(&mut copy);
+        d.bytes(&copy[..len]);
     }
     for c in (0..0x900).chain([0x10000, 0x10ffff, 0x7fff_ffff, -1, -0x6b80]) {
-        let mut out = [0 as c_char; 32];
-        // SAFETY: `out` has room for an escaped character, or for three
-        // modifier bytes and a key.
-        unsafe {
-            let end = add_char2buf(c, out.as_mut_ptr());
-            d.add(end.offset_from(out.as_ptr()) as i64);
-            for modifiers in [ModMask::NONE, ModMask::CTRL | ModMask::SHIFT] {
-                for escape_ks in [false, true] {
-                    if c >= 0 || !escape_ks {
-                        let n = special_to_buf(c, modifiers, escape_ks, out.as_mut_ptr());
-                        d.add(i64::from(n));
-                        d.bytes(
-                            &out[..n as usize]
-                                .iter()
-                                .map(|&b| b as u8)
-                                .collect::<Vec<_>>(),
-                        );
-                    }
+        let mut out = Vec::new();
+        push_char_escaped(c, &mut out);
+        d.add(out.len() as i64);
+        for modifiers in [ModMask::NONE, ModMask::CTRL | ModMask::SHIFT] {
+            for escape_ks in [false, true] {
+                if c >= 0 || !escape_ks {
+                    let mut out = Vec::new();
+                    push_special_key(c, modifiers, escape_ks, &mut out);
+                    d.add(out.len() as i64);
+                    d.bytes(&out);
                 }
             }
         }
     }
     assert_eq!(d.value(), 0x3975bf91f957d849, "K_SPECIAL escapes");
+}
+
+/// What a C reader of `bytes` sees: up to the first NUL.
+fn c_prefix(bytes: &[u8]) -> &[u8] {
+    bytes.split(|&b| b == 0).next().unwrap_or_default()
 }

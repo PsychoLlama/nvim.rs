@@ -13,9 +13,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
 use crate::tr;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use super::*;
@@ -256,13 +257,14 @@ fn all_menus_if_star(menu_path: CText) -> CText {
 fn add_menus(menu_path: CText, map_to: CText, arg: &MenuArg, pri_tab: &[c_int; MENUDEPTH + 1]) {
     // Replace special key codes, unless this is a tooltip (plain text) or
     // "<Nop>" (which means nothing at all).
-    let mut map_buf: *mut c_char = ptr::null_mut();
+    let translated;
     let rhs = if map_to.bytes().eq_ignore_ascii_case(b"<nop>") {
         c""
     } else if arg.modes & MENU_TIP_MODE != 0 {
         map_to.as_cstr()
     } else {
-        translate_termcodes(map_to.as_cstr(), &mut map_buf)
+        translated = translate_termcodes(map_to.as_cstr());
+        translated.as_cstr()
     };
 
     add_menu_path(menu_path.as_cstr(), arg, pri_tab, Some(rhs));
@@ -275,26 +277,13 @@ fn add_menus(menu_path: CText, map_to: CText, arg: &MenuArg, pri_tab: &[c_int; M
             }
         }
     }
-    free_str(map_buf);
 }
 
 /// `replace_termcodes()`: `<C-x>` and its kind become the keys they name.
-/// The answer borrows the buffer left in `owner`, which the caller frees.
-fn translate_termcodes<'a>(rhs: &'a CStr, owner: &mut *mut c_char) -> &'a CStr {
-    // SAFETY: `rhs` is NUL-terminated and `owner` names a live slot;
-    // `replace_termcodes` allocates into it and answers a pointer into it.
-    p_cpo(|cpo| unsafe {
-        let translated = replace_termcodes(
-            rhs.as_ptr(),
-            rhs.count_bytes(),
-            owner,
-            0,
-            REPTERM_DO_LT,
-            ptr::null_mut(),
-            cpo,
-        );
-        CStr::from_ptr(translated)
-    })
+fn translate_termcodes(rhs: &CStr) -> ThinCString {
+    let translated =
+        p_cpo(|cpo| replace_termcodes(rhs.to_bytes(), 0, REPTERM_DO_LT, None, cpo, None));
+    ThinCString::from_vec(translated.unwrap_or_default())
 }
 
 /// `getdigits_int(&p, false, 0)`: the number `p` starts with, advancing `p`

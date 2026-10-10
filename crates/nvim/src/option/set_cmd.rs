@@ -19,8 +19,8 @@
 
 use crate::charset::Str2NrBases;
 use crate::cstr;
-use crate::keycodes::ModMask;
-use crate::keycodes::{Key, find_special_key};
+use crate::keycodes::Key;
+use crate::keycodes::special_key_at;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::OptStr;
@@ -672,13 +672,13 @@ unsafe fn find_key_len(arg: *const c_char, len: size_t, has_lt: bool) -> c_int {
         return 0;
     }
     // Back up over the `<` that `has_lt` says was there.
-    let mut p = unsafe { arg.sub(1) };
-    let mut modifiers = ModMask::NONE;
+    let text = unsafe { cstr::slice_at(arg.sub(1), len + 1) };
     let how = FSK_KEYCODE as c_int | FSK_KEEP_X_KEY as c_int | FSK_SIMPLIFY as c_int;
-    let (pp, mods, none) = (&raw mut p, &raw mut modifiers, ptr::null_mut::<bool>());
-    let key = unsafe { find_special_key(pp, len.wrapping_add(1), mods, how, none) };
-    // A key with a modifier left over does not fit in one option value.
-    if modifiers.is_empty() { key } else { 0 }
+    match special_key_at(text, how, None) {
+        // A key with a modifier left over does not fit in one option value.
+        Some((key, modifiers, _)) if modifiers.is_empty() => key,
+        _ => 0,
+    }
 }
 
 /// The key a 'wildchar'-like option's value names: `<xx>`, `^x`, or the
