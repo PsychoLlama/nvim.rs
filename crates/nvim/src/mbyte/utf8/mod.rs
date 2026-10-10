@@ -901,6 +901,67 @@ mod tests {
         }
     }
 
+    /// Every pointer reader, at every offset of strings that end in the
+    /// middle of a sequence, a cluster or an emoji, each in an allocation
+    /// that ends exactly at its NUL: under Miri, a reader that looked one
+    /// byte past the terminator would be an out-of-bounds read. This is the
+    /// claim `text.rs`'s safety argument makes, checked.
+    #[test]
+    fn no_pointer_reader_reads_past_the_nul() {
+        let texts: [&[u8]; 14] = [
+            b"",
+            b"a",
+            b"\xc3",
+            b"\xe2\x82",
+            b"\xf0\x9f\x98",
+            b"\xfc\x84\x80\x80\x80",
+            b"a\xcc",
+            b"\xd8\x80\xe2",
+            b"\xd8\x80\xe2\x82",
+            b"\xe2\x9d\xa4\xef\xb8",
+            b"\xf0\x9f\xa7\x91\xe2\x80\x8d\xf0\x9f",
+            b"\xd9\x84\xd8",
+            b"\x80\x80\x80",
+            b"x\xcc\x80\xcc\x81\xcc",
+        ];
+        // The width readers ask 'ambiwidth', which nothing here set.
+        let _held = crate::global_cell::editor_state_lock();
+        let saved = crate::option::vars::P_AMBW.swap(Some("single".into()));
+        for text in texts {
+            // An allocation of exactly the string and its NUL.
+            let buf: Box<[c_char]> = text
+                .iter()
+                .map(|&b| b as c_char)
+                .chain(core::iter::once(0))
+                .collect();
+            let p = buf.as_ptr();
+            for at in 0..=text.len() {
+                // SAFETY: `p + at` is inside the NUL-terminated `buf`.
+                unsafe {
+                    let q = p.add(at);
+                    let _ = utf_ptr2char(q);
+                    let _ = utf_ptr2len(q);
+                    let _ = utfc_ptr2len(q);
+                    let _ = utf_ptr2char_info(q);
+                    let _ = utf_head_off(p, q);
+                    let _ = mb_off_next(p, q);
+                    let _ = mb_prevptr(p.cast_mut(), q.cast_mut());
+                    let _ = utf_ambiguous_width(q);
+                    let _ = utf_ptr2cells(q);
+                    let _ = mb_string2cells(q);
+                    let _ = utf_composinglike(p, q, core::ptr::null_mut());
+                    if *q != 0 {
+                        let mut cur = utf_ptr2str_char_info(q.cast_mut());
+                        while *cur.ptr != 0 {
+                            cur = utfc_next(cur);
+                        }
+                    }
+                }
+            }
+        }
+        crate::option::vars::P_AMBW.swap(saved);
+    }
+
     /// A NUL, a continuation byte and `0xFE` are all "one byte, its own
     /// value" to the forgiving decoder, and all negative to the strict one.
     #[test]
