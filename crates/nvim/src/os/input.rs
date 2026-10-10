@@ -38,7 +38,7 @@ use crate::keycodes::{
     KE_MOUSEDOWN, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE,
     KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL,
 };
-use crate::keycodes::{ModMask, trans_special_into};
+use crate::keycodes::{ModMask, special_key_at, special_key_bytes};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message_fmt::c_str;
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
@@ -873,10 +873,11 @@ unsafe fn pending_events(events: *mut MultiQueue) -> bool {
 /// of `text` it took, and how many of `buf` its encoding fills -- both zero
 /// when `text` does not start with one.
 fn trans_key(text: &[u8], buf: &mut [u8; MAX_TRANS_SPECIAL]) -> (usize, c_uint) {
-    let mut encoded = Vec::with_capacity(MAX_TRANS_SPECIAL);
-    match trans_special_into(text, FSK_KEYCODE, true, &mut encoded) {
-        Some(used) => {
-            buf[..encoded.len()].copy_from_slice(&encoded);
+    match special_key_at(text, FSK_KEYCODE, None) {
+        Some((key, modifiers, used)) => {
+            let encoded = special_key_bytes(key, modifiers, true);
+            let encoded = encoded.as_bytes();
+            buf[..encoded.len()].copy_from_slice(encoded);
             (used, c_uint::try_from(encoded.len()).unwrap_or(0))
         }
         None => (0, 0),

@@ -728,3 +728,27 @@ pub(super) fn partial_string_cells_in<T: Text>(t: T, size: usize) -> usize {
     }
     cells
 }
+
+/// The display width of the characters that start in the first `len` bytes
+/// of the text -- one that starts inside the bound is counted whole --
+/// stopping where the text ends: `vim_strnsize`'s answer. A byte below 0x80
+/// is as wide as `'isprint'`'s table says.
+pub(super) fn display_width_in<T: Text>(t: T, mut len: i32) -> i32 {
+    let mut at = 0;
+    let mut size = 0;
+    while !t.ends_at(at) && {
+        len -= 1;
+        len >= 0
+    } {
+        let l = cluster_len_in(t, at);
+        let first = t.byte(at);
+        size += if first >= 0x80 {
+            cells_in(t, at)
+        } else {
+            crate::charset::byte2cells(i32::from(first))
+        };
+        at += l;
+        len -= i32::try_from(l).expect("a cluster is short") - 1;
+    }
+    size
+}

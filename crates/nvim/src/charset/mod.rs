@@ -52,6 +52,7 @@ pub use display::{byte2cells, char2cells};
 // The module itself is private: its names are re-exported here.
 mod walk;
 
+pub use crate::mbyte::{vim_strnsize, vim_strsize};
 pub use walk::{
     backslash_halve, backslash_halve_save, getdigits, getdigits_int, getdigits_int32,
     rem_backslash, skipbin, skipdigits, skiphex, skiptowhite, skiptowhite_esc, skipwhite,
@@ -63,7 +64,6 @@ pub(crate) use walk::{
 };
 pub use walk::{
     ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters, transstr, transstr_buf,
-    vim_strnsize, vim_strsize,
 };
 
 /// Bits of a `g_chartab` entry.
@@ -587,7 +587,8 @@ pub(crate) fn is_blank_line(text: &[u8]) -> bool {
 /// the first NUL.
 pub(crate) fn backslash_halved(text: &[u8]) -> Vec<u8> {
     let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
-    let mut out = Vec::with_capacity(text.len());
+    // Room for a terminator too, for a caller that hands the result to C.
+    let mut out = Vec::with_capacity(text.len() + 1);
     let mut at = 0;
     while at < text.len() {
         if escapes_next(&text[at..]) {

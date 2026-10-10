@@ -5,14 +5,14 @@
 //! negative `c_int` and through a byte stream as `K_SPECIAL` plus two bytes;
 //! modifiers ride along as a `K_SPECIAL KS_MODIFIER <bits>` prefix. This
 //! module is the two translations between that and the text a user writes:
-//! [`find_special_key`] and [`replace_termcodes`] read `<C-S-Up>`,
+//! [`special_key_at`] and [`replace_termcodes`] read `<C-S-Up>`,
 //! [`get_special_key_name`] writes it.
 //!
 //! The codes are in [`codes`] and the tables that name them in [`tables`];
 //! everything here is about the notation, over `&[u8]`.
 //!
 //! Two escaping helpers live here for want of a better home:
-//! [`vim_strsave_escape_ks`] and [`vim_unescape_ks`], which hide and reveal a
+//! [`escape_ks_bytes`] and [`unescape_ks_in`], which hide and reveal a
 //! literal 0x80 byte in text that is about to be, or has just been, treated
 //! as a key sequence.
 
@@ -207,25 +207,61 @@ pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
     name
 }
 
-/// Append the byte sequence for `key` with `modifiers` held down to `out`:
-/// how a key is encoded in a string.
+/// The bytes one key is encoded as, held inline: room for a modifier prefix
+/// and a character whose every byte is an escaped `K_SPECIAL`.
+pub struct KeyBytes {
+    bytes: [u8; 3 * MB_MAXBYTES + 4],
+    len: usize,
+}
+
+impl KeyBytes {
+    #[inline]
+    const fn new() -> Self {
+        KeyBytes {
+            bytes: [0; 3 * MB_MAXBYTES + 4],
+            len: 0,
+        }
+    }
+
+    #[inline]
+    fn extend(&mut self, bytes: &[u8]) {
+        self.bytes[self.len..self.len + bytes.len()].copy_from_slice(bytes);
+        self.len += bytes.len();
+    }
+
+    /// The encoding.
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+}
+
+/// The byte sequence for `key` with `modifiers` held down: how a key is
+/// encoded in a string.
 ///
 /// With `escape_ks` set, a literal 0x80 byte inside the character is escaped
 /// the way the typeahead buffer needs.
-pub fn push_special_key(key: c_int, modifiers: ModMask, escape_ks: bool, out: &mut Vec<u8>) {
+pub fn special_key_bytes(key: c_int, modifiers: ModMask, escape_ks: bool) -> KeyBytes {
+    let mut out = KeyBytes::new();
     if !modifiers.is_empty() {
-        out.extend_from_slice(&[K_SPECIAL as u8, KS_MODIFIER as u8, modifiers.bits() as u8]);
+        out.extend(&[K_SPECIAL as u8, KS_MODIFIER as u8, modifiers.bits() as u8]);
     }
     if key < 0 {
         let code = termcap_name(key);
-        out.extend_from_slice(&[K_SPECIAL as u8, code[0], code[1]]);
+        out.extend(&[K_SPECIAL as u8, code[0], code[1]]);
     } else if escape_ks {
-        push_char_escaped(key, out);
+        escape_char_into(key, &mut out);
     } else {
         let mut encoded = [0u8; MB_MAXBYTES + 1];
         let len = encode_char(key, &mut encoded);
-        out.extend_from_slice(&encoded[..len]);
+        out.extend(&encoded[..len]);
     }
+    out
+}
+
+/// [`special_key_bytes`], appended to `out`.
+pub fn push_special_key(key: c_int, modifiers: ModMask, escape_ks: bool, out: &mut Vec<u8>) {
+    out.extend_from_slice(special_key_bytes(key, modifiers, escape_ks).as_bytes());
 }
 
 /// The length of the character (with its composing marks) at `text[i]`,
@@ -507,8 +543,11 @@ pub fn replace_termcodes(
         if room.is_some_and(|room| out.len() + 64 > room) {
             return None;
         }
-        // Check for special <> keycodes, like "<C-S-LeftMouse>".
+        // Check for special <> keycodes, like "<C-S-LeftMouse>". Every name
+        // below opens with a `<`, so nothing else needs the comparisons.
+        let opens_name = at(src) == b'<';
         if do_special
+            && opens_name
             && (flags & REPTERM_DO_LT != 0
                 || (gap(src) >= 3 && from.get(src..src + 4) != Some(b"<lt>")))
         {
@@ -546,7 +585,7 @@ pub fn replace_termcodes(
             }
         }
 
-        if do_special {
+        if do_special && opens_name {
             // <Leader> and <LocalLeader> take the value of "mapleader" and
             // "maplocalleader"; a backslash stands in when either is unset.
             let (len, value) = if gap(src) >= 7 && opens(src, b"<Leader>") {
@@ -598,23 +637,31 @@ pub fn replace_termcodes(
     Some(out)
 }
 
-/// Append `c` to `out`, escaping a literal `K_SPECIAL` byte the way the
+/// `c`'s UTF-8 bytes, with a literal `K_SPECIAL` byte escaped the way the
 /// typeahead buffer needs.
-pub fn push_char_escaped(c: c_int, out: &mut Vec<u8>) {
+fn escape_char_into(c: c_int, out: &mut KeyBytes) {
     let mut encoded = [0u8; MB_MAXBYTES + 1];
     let len = encode_char(c, &mut encoded);
     for &byte in &encoded[..len] {
         if c_int::from(byte) == K_SPECIAL {
-            out.extend_from_slice(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
+            out.extend(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
         } else {
-            out.push(byte);
+            out.extend(&[byte]);
         }
     }
 }
 
+/// Append `c` to `out`, escaping a literal `K_SPECIAL` byte the way the
+/// typeahead buffer needs.
+pub fn push_char_escaped(c: c_int, out: &mut Vec<u8>) {
+    let mut escaped = KeyBytes::new();
+    escape_char_into(c, &mut escaped);
+    out.extend_from_slice(escaped.as_bytes());
+}
+
 /// [`escape_ks_bytes`] of `text`, owned.
 pub(crate) fn escape_ks(text: &CStr) -> XString {
-    XString::from_bytes(&escape_ks_bytes(text.to_bytes()))
+    XString::from_vec(escape_ks_bytes(text.to_bytes()))
 }
 
 /// `text` with every literal `K_SPECIAL` byte escaped, up to its first NUL
@@ -630,6 +677,12 @@ pub fn escape_ks_bytes(text: &[u8]) -> Vec<u8> {
     let mut src = 0;
     while src < text.len() {
         let rest = &text[src..];
+        // ASCII is itself, and is all most text is.
+        if rest[0] < 0x80 {
+            out.push(rest[0]);
+            src += 1;
+            continue;
+        }
         if c_int::from(rest[0]) == K_SPECIAL && rest.len() > 2 {
             // Copy a special key unchanged.
             out.extend_from_slice(&rest[..3]);

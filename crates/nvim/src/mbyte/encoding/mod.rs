@@ -40,7 +40,7 @@ pub use self::tables::*;
 /// `<ctype.h>`'s alphanumeric class bit, as the rest of the tree spells it.
 pub const _ISalnum: c_uint = 8;
 
-/// What [`enc_canon_props`] reports about an encoding name.
+/// What [`canon_props`] reports about an encoding name.
 ///
 /// `c_int`, which is the type of [`Encoding::prop`] and of every value
 /// compared against it; c2rust typed the anonymous enum from what the C

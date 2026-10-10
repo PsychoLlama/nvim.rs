@@ -28,7 +28,7 @@ use crate::api::private::helpers::cstr_to_string;
 use crate::eval::userfunc::register_luafunc;
 use crate::getchar::state::{got_int, mod_mask};
 use crate::global_cell::GlobalCell;
-use crate::keycodes::{push_special_key, unescape_ks_in};
+use crate::keycodes::{special_key_bytes, unescape_ks_in};
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
     LUA_NOREF, LUA_TBOOLEAN, LUA_TFUNCTION, lua_checkstack, lua_getfield, lua_getglobal,
@@ -134,9 +134,8 @@ pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
         }
         RECURSIVE.set(true);
 
-        let mut buf = Vec::with_capacity(67);
-        push_special_key(c, mod_mask.get(), false, &mut buf);
-        let buf_len = buf.len();
+        let key = special_key_bytes(c, mod_mask.get(), false);
+        let (buf, buf_len) = (key.as_bytes(), key.as_bytes().len());
         let typed =
             slice::from_raw_parts_mut(typed_buf.cast::<u8>(), cstr::bytes_at(typed_buf).len());
         *typed_buf.add(unescape_ks_in(typed)) = 0;

@@ -36,7 +36,7 @@ use crate::getchar::state::{
 use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
-use crate::keycodes::{K_SPECIAL, push_special_key};
+use crate::keycodes::{K_SPECIAL, special_key_bytes};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::mapping::{
     Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,

@@ -365,10 +365,28 @@ pub(crate) fn c_cluster_len(bytes: &[u8]) -> usize {
     cluster_len_in(CBytes(bytes), 0)
 }
 
-/// [`cells_at`] of the bytes of a C string; see [`c_cluster_len`].
+/// The display width of the characters that start in the first `len` bytes
+/// of `bytes`, the bytes of a C string, as the pointer form reads them.
 #[inline]
-pub(crate) fn c_cells_at(bytes: &[u8]) -> c_int {
-    cells_in(CBytes(bytes), 0)
+pub(crate) fn c_display_width(bytes: &[u8], len: c_int) -> c_int {
+    text::display_width_in(CBytes(bytes), len)
+}
+
+/// The display width of the whole string `s`.
+///
+/// # Safety
+/// `s` must be a NUL-terminated string.
+pub unsafe fn vim_strsize(s: *const c_char) -> c_int {
+    unsafe { vim_strnsize(s, MAXCOL) }
+}
+
+/// The display width of the characters starting in the first `len` bytes of
+/// `s`; a character that starts inside the bound is counted whole.
+///
+/// # Safety
+/// `s` must be a NUL-terminated string.
+pub unsafe fn vim_strnsize(s: *const c_char, len: c_int) -> c_int {
+    text::display_width_in(unsafe { NulTerminated::new(s) }, len)
 }
 
 /// The grapheme clusters of `bytes`, as `(byte offset, codepoint)`.
@@ -720,7 +738,7 @@ pub fn ambiguous_width_at(bytes: &[u8]) -> bool {
 }
 
 /// The character class of the character `p` points at, deciding Latin-1
-/// with `chartab`; [`class_with`] over a string.
+/// with `chartab`; [`class_of`] over a string.
 ///
 /// # Safety
 ///

@@ -111,8 +111,8 @@ channel/	channel/mod.rs	1	88	19	43	deref:34 expr:11	other:16 pp_str:2 str:2 pp:1
 channel/	channel/open.rs	1	98	8	55	deref:36 expr:7	other:6 pp_str:3 str:3 void:2 value:1	other:1	rpc_start:5 rstream_start:4 rstream_init:3 DictRef::owning:2 dup2:2 fcntl:2 wstream_init:2 proc_spawn:1
 channel/	channel/reader.rs	1	54	12	24	deref:23 expr:5 ref:2	other:17 str:4 void:2 pp:1	-	bytes_at:2 callback_call:1 dict_find:1 from_raw_parts:1 multiqueue_put_event:1 terminal_receive:1
 channel/	channel/term.rs	1	26	7	13	deref:9 expr:4	void:5 other:1 pp:1 str:1	-	multiqueue_put_event:2 proc_stop:1 pty_proc_resize:1 pty_proc_resume:1 rstream_start_inner:1 rstream_stop_inner:1 terminal_destroy:1 wstream_write:1
-charset/	*	1	49	28	31	deref:9 expr:2 compound:1	str:26 other:6 pp_str:5	str:12	bytes_at:11 from_raw_parts_mut:3 prefix_at:3 slice_at:3 utf_ptr2cells:1
-charset/	charset/walk.rs	1	49	28	31	deref:9 expr:2 compound:1	str:26 other:6 pp_str:5	str:12	bytes_at:11 from_raw_parts_mut:3 prefix_at:3 slice_at:3 utf_ptr2cells:1
+charset/	*	1	47	26	29	deref:9 expr:2 compound:1	str:24 other:6 pp_str:5	str:12	bytes_at:9 from_raw_parts_mut:3 prefix_at:3 slice_at:3 utf_ptr2cells:1
+charset/	charset/walk.rs	1	47	26	29	deref:9 expr:2 compound:1	str:24 other:6 pp_str:5	str:12	bytes_at:9 from_raw_parts_mut:3 prefix_at:3 slice_at:3 utf_ptr2cells:1
 clipboard.rs	*	1	44	3	10	deref:28 expr:4 ref:2	other:2	other:1	xfree:3 .as_ref:1 free_register:1 update_yankreg_width:1
 clipboard.rs	clipboard.rs	1	44	3	10	deref:28 expr:4 ref:2	other:2	other:1	xfree:3 .as_ref:1 free_register:1 update_yankreg_width:1
 cmdhist/	*	1	26	3	9	compound:4 deref:1 expr:1	str:2	other:1	at:3 slice_at:1 vim_regfree:1 xfree:1
@@ -381,8 +381,8 @@ match/	*	3	215	19	103	deref:90 expr:10	other:21 value:5 str:4 pp_str:3	other:2 s
 match/	match/mod.rs	1	77	3	39	deref:30 expr:4	str:3 value:2 other:1	other:1	xfree:13 .as_ref:3 c_str:3 vim_regfree:3 .offset:2 at:2 .set_nextcmd_ptr:1 bytes_at:1
 match/	match/searchhl.rs	1	93	11	38	deref:43 expr:6	other:20 pp_str:2	other:1	.offset:3 utfc_ptr2len:2 re_multiline:1 vim_regexec_multi:1 vim_regfree:1
 match/	match/vimscript.rs	1	45	5	26	deref:17	value:3 pp_str:1 str:1	str:1	.as_ref:6 tv_list_alloc:1 utf_char2bytes:1
-mbyte/	*	3	77	36	46	deref:10 expr:3 compound:1 ref:1	str:42 other:7 pp_str:1	str:3	prefix_at:4 .offset_from:3 .as_mut:2 schar_from_buf:2 slice_at:2 at_opt:1 bytes_at:1 copy_nonoverlapping:1
-mbyte/	mbyte/utf8/mod.rs	1	76	35	46	deref:9 expr:3 compound:1 ref:1	str:41 other:7 pp_str:1	str:3	prefix_at:4 .offset_from:3 .as_mut:2 schar_from_buf:2 slice_at:2 at_opt:1 bytes_at:1 copy_nonoverlapping:1
+mbyte/	*	3	79	38	48	deref:10 expr:3 compound:1 ref:1	str:44 other:7 pp_str:1	str:3	prefix_at:4 .offset_from:3 .as_mut:2 schar_from_buf:2 slice_at:2 at_opt:1 bytes_at:1 copy_nonoverlapping:1
+mbyte/	mbyte/utf8/mod.rs	1	78	37	48	deref:9 expr:3 compound:1 ref:1	str:43 other:7 pp_str:1	str:3	prefix_at:4 .offset_from:3 .as_mut:2 schar_from_buf:2 slice_at:2 at_opt:1 bytes_at:1 copy_nonoverlapping:1
 mbyte/	mbyte/utf8/tables.rs	1	0	0	0	-	-	-	-
 mbyte/	mbyte/utf8/text.rs	1	1	1	0	deref:1	str:1	-	-
 memline/	*	8	550	56	406	deref:111 expr:11 compound:4 ref:4	str:33 other:22 pp_str:5 value:1	str:9 other:6	xfree:23 bytes_at:21 mf_put:21 Db::new:18 copy:11 Pb::new:10 Pe::new:10 c_str:10

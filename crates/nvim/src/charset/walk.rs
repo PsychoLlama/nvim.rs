@@ -25,15 +25,13 @@
 
 use core::ffi::{c_char, c_int, c_long};
 
-use super::display::{
-    foldcase, mirror_ascii, strnsize, strsize, trans_characters_in, transstr_into, transstr_owned,
-};
+use super::display::{foldcase, mirror_ascii, trans_characters_in, transstr_into, transstr_owned};
 use super::{
     Str2NrBases, backslash_halved, byte2cells, escapes_next, is_bdigit, is_digit, is_white,
     is_word_at, is_xdigit, skip, str2nr_scan,
 };
 use crate::cstr;
-use crate::memory::{ThinCString, XString};
+use crate::memory::ThinCString;
 use crate::types::{UVarNumber, VarNumber, int32_t, intmax_t, intptr_t, size_t, ssize_t, uint8_t};
 use crate::winlayer::{Buf, Win};
 use core::slice;
@@ -370,7 +368,7 @@ pub unsafe fn backslash_halve(p: *mut c_char) {
 /// # Safety
 /// `p` must be a NUL-terminated string.
 pub unsafe fn backslash_halve_save(p: *const c_char) -> *mut c_char {
-    XString::from_bytes(&backslash_halved(unsafe { cstr::bytes_at(p) })).into_raw()
+    ThinCString::from_vec(backslash_halved(unsafe { cstr::bytes_at(p) })).into_raw()
 }
 
 /// Replace every unprintable byte in `buf` with its display form, in place;
@@ -464,21 +462,4 @@ pub unsafe fn ptr2cells(p: *const c_char) -> c_int {
         return unsafe { crate::mbyte::utf_ptr2cells(p) };
     }
     byte2cells(c_int::from(byte))
-}
-
-/// The display width of the whole string `s`; [`strsize`].
-///
-/// # Safety
-/// `s` must be a NUL-terminated string.
-pub unsafe fn vim_strsize(s: *const c_char) -> c_int {
-    strsize(unsafe { cstr::bytes_at(s) })
-}
-
-/// The display width of the characters starting in the first `len` bytes of
-/// `s`; [`strnsize`].
-///
-/// # Safety
-/// `s` must be a NUL-terminated string.
-pub unsafe fn vim_strnsize(s: *const c_char, len: c_int) -> c_int {
-    strnsize(unsafe { cstr::bytes_at(s) }, len)
 }

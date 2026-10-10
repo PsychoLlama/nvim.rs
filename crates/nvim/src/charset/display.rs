@@ -15,8 +15,8 @@ use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 
 use crate::mbyte::{
-    c_cells_at, c_cluster_len, char_at, char_len, cluster_len, encode_char, mb_tolower,
-    utf_char2cells, utf_char2len,
+    c_cluster_len, char_at, char_len, cluster_len, encode_char, mb_tolower, utf_char2cells,
+    utf_char2len,
 };
 use crate::memory::XString;
 use crate::option::get_fileformat;
@@ -466,17 +466,6 @@ pub(crate) fn ptr2cells_at(bytes: &[u8]) -> c_int {
     table_cells(first)
 }
 
-/// The display width of the character starting the bytes of a C string,
-/// as the pointer form `ptr2cells` reads it.
-#[inline(always)]
-pub(crate) fn c_ptr2cells(bytes: &[u8]) -> c_int {
-    let first = cstr::byte_at(bytes, 0);
-    if first >= 0x80 {
-        return c_cells_at(bytes);
-    }
-    table_cells(first)
-}
-
 /// The display width of the whole of `s`, the bytes of a C string.
 pub(crate) fn strsize(s: &[u8]) -> c_int {
     strnsize(s, MAXCOL)
@@ -491,17 +480,5 @@ pub(crate) fn vim_strsize_cstr(s: &CStr) -> c_int {
 /// `s`, the bytes of a C string: a character that starts inside the bound is
 /// counted whole.
 pub(crate) fn strnsize(s: &[u8], len: c_int) -> c_int {
-    let mut cursor = Chars::new(s);
-    let mut len = len;
-    let mut size = 0;
-    while cursor.byte() != 0 && {
-        len -= 1;
-        len >= 0
-    } {
-        let l = cursor.char_len();
-        size += c_ptr2cells(cursor.rest());
-        cursor.advance(l);
-        len -= l as c_int - 1;
-    }
-    size
+    crate::mbyte::c_display_width(s, len)
 }

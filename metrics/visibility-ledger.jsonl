@@ -42,8 +42,8 @@
 {"path":"neovim::charset::vim_iswordc","kind":"fn","file":"crates/nvim/src/charset/mod.rs","tests":["crates/nvim/tests/unit/mbyte.rs"]}
 {"path":"neovim::charset::vim_iswordp","kind":"fn","file":"crates/nvim/src/charset/walk.rs","tests":["crates/nvim/tests/unit/charset_oracle.rs","crates/nvim/tests/unit/mbyte.rs"]}
 {"path":"neovim::charset::vim_str2nr","kind":"fn","file":"crates/nvim/src/charset/walk.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/charset_oracle.rs"]}
-{"path":"neovim::charset::vim_strnsize","kind":"fn","file":"crates/nvim/src/charset/walk.rs","tests":["crates/nvim/tests/unit/charset_oracle.rs"]}
-{"path":"neovim::charset::vim_strsize","kind":"fn","file":"crates/nvim/src/charset/walk.rs","tests":["crates/nvim/tests/unit/charset_oracle.rs"]}
+{"path":"neovim::charset::vim_strnsize","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","tests":["crates/nvim/tests/unit/charset_oracle.rs"]}
+{"path":"neovim::charset::vim_strsize","kind":"fn","file":"crates/nvim/src/mbyte/utf8/mod.rs","tests":["crates/nvim/tests/unit/charset_oracle.rs"]}
 {"path":"neovim::charset::skip","kind":"mod","file":"crates/nvim/src/charset/skip.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/charset_oracle.rs"]}
 {"path":"neovim::cjson::fpconv::append_g_fmt","kind":"fn","file":"crates/nvim/src/cjson/fpconv.rs","tests":["crates/nvim/tests/unit/fpconv.rs"]}
 {"path":"neovim::cjson::fpconv::strtod","kind":"fn","file":"crates/nvim/src/cjson/fpconv.rs","tests":["crates/nvim/tests/unit/fpconv.rs"]}

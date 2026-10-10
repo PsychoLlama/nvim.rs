@@ -684,8 +684,8 @@ pub const MOUSE_X2: c_int = 0x400;
 /// Not a button: a release or a move with no button down.
 pub const MOUSE_RELEASE: c_int = 0x03;
 
-/// Flags for [`find_special_key`](super::find_special_key) and
-/// [`trans_special`](super::trans_special).
+/// Flags for [`special_key_at`](super::special_key_at) and
+/// [`trans_special_into`](super::trans_special_into).
 ///
 /// * `FSK_KEYCODE` — answer with a key code rather than a single byte, so
 ///   `<BS>` stays `K_BS` instead of collapsing to 0x08.

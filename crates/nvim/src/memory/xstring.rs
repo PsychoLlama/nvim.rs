@@ -96,6 +96,18 @@ impl XString {
         Self(buffer)
     }
 
+    /// `bytes` as a string, keeping its allocation: the terminator is
+    /// appended (which may grow the vector). As [`from_bytes`](Self::from_bytes),
+    /// for text the caller built and no longer needs.
+    pub fn from_vec(mut bytes: Vec<u8>) -> Self {
+        debug_assert!(
+            !bytes.contains(&0),
+            "XString::from_vec: interior NUL -- measured text wants a Vec<u8>"
+        );
+        bytes.push(0);
+        Self(bytes)
+    }
+
     /// A string a C callee writes.
     ///
     /// `payload` is the room the callee is told it has; the block is that
