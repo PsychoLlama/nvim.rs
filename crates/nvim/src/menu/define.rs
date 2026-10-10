@@ -54,18 +54,15 @@ struct MenuArg {
 /// `:menu` and its forty-odd relatives -- every mode prefix, `:noremenu`,
 /// `:unmenu` and `:menu enable`/`disable`.
 pub(crate) fn ex_menu(excmd: &mut ExArg) {
-    // SAFETY: the caller's obligation. `cmd` and `arg` name the command line,
-    // which `ex_docmd` lets a command edit.
-    let (cmd_start, arg_start) = (excmd.cmd_ptr(), excmd.arg_ptr());
-    let (cmd, arg, forceit, ranged) = unsafe {
-        (
-            CStr::from_ptr(cmd_start),
-            CText::new(arg_start),
-            excmd.forceit,
-            (excmd.addr_count != 0 && excmd.line2 != 0).then_some(excmd.line2 as c_int),
-        )
-    };
-    let (modes, noremap, unmenu) = cmd_modes(cmd.to_bytes(), forceit);
+    // The command name is read before the argument pointer is taken: each
+    // pointer accessor reborrows the whole line mutably, so a command-name
+    // pointer taken first would be retired by the argument's (Miri).
+    let forceit = excmd.forceit;
+    let (modes, noremap, unmenu) = cmd_modes(excmd.line.cmd(), forceit);
+    let ranged = (excmd.addr_count != 0 && excmd.line2 != 0).then_some(excmd.line2 as c_int);
+    // SAFETY: the caller's obligation. `arg` names the command line, which
+    // `ex_docmd` lets a command edit.
+    let arg = unsafe { CText::new(excmd.arg_ptr()) };
     do_menu(arg, modes, noremap, unmenu, ranged);
 }
 

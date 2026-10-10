@@ -516,22 +516,25 @@ pub unsafe fn do_map(maptype: c_int, arg: *mut c_char, mode: c_int, is_abbrev: b
 
 /// Clear all mappings (`:mapclear`) or abbreviations (`:abclear`).
 ///
-/// # Safety
-/// `cmdp` and `arg` must be live, NUL-terminated strings.
-unsafe fn do_mapclear(mut cmdp: *mut c_char, arg: *mut c_char, forceit: bool, abbr: bool) {
-    // SAFETY: the caller's promise — `arg` is live and NUL-terminated.
+/// The mode is read off the command name *before* the argument pointer is
+/// taken: each pointer accessor reborrows the whole line mutably, so a
+/// command-name pointer held across the argument's would be retired by it
+/// (Miri).
+fn do_mapclear(excmd: &mut ExArg, forceit: bool, abbr: bool) {
+    let mut cmdp = excmd.cmd_ptr();
+    // SAFETY: `cmd` is the command name the dispatcher matched, so it is live
+    // and NUL-terminated.
+    let mode = unsafe { get_map_mode(&raw mut cmdp, forceit) };
+    let arg = excmd.arg_ptr();
+    // SAFETY: `arg` is the command's own NUL-terminated argument.
     let local = unsafe { cstr::eq_bytes(arg, b"<buffer>") };
     // SAFETY: as above.
     if !local && unsafe { c_int::from(*arg) } != NUL {
         emsg(gettext(e_invarg));
         return;
     }
-    // SAFETY: the caller's promise — `cmdp` is a live command name — and
-    // `curbuf` is live, so its tables are ours to clear.
-    unsafe {
-        let mode = get_map_mode(&raw mut cmdp, forceit);
-        map_clear_mode(Buf::current(), mode, local, abbr);
-    }
+    // SAFETY: `curbuf` is live, so its tables are ours to clear.
+    unsafe { map_clear_mode(Buf::current(), mode, local, abbr) };
 }
 
 /// Add a mapping, copying both strings so that read-only ones can be used.
@@ -627,13 +630,11 @@ pub fn ex_unmap(excmd: &mut ExArg) {
 
 /// `:mapclear` and friends.
 pub fn ex_mapclear(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise — `excmd` is a live `ExArg`, so `cmd` and
-    // `arg` are its own NUL-terminated strings.
-    unsafe { do_mapclear(excmd.cmd_ptr(), excmd.arg_ptr(), excmd.forceit, false) }
+    let forceit = excmd.forceit;
+    do_mapclear(excmd, forceit, false);
 }
 
 /// `:abclear` and friends.
 pub fn ex_abclear(excmd: &mut ExArg) {
-    // SAFETY: as [`ex_mapclear`].
-    unsafe { do_mapclear(excmd.cmd_ptr(), excmd.arg_ptr(), true, true) }
+    do_mapclear(excmd, true, true);
 }

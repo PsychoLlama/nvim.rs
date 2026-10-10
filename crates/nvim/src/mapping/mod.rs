@@ -85,7 +85,7 @@ use crate::types::{
     uint64_t,
 };
 use crate::winlayer::Live;
-use ::libc::{abort, fputc, fputs, strcasecmp};
+use ::libc::{abort, fputc, fputs};
 use std::rc::Rc;
 
 // The carve of the transpiled module; see each child's docs.

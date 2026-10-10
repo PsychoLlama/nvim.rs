@@ -21,7 +21,7 @@
 use super::complete::{COMMAND_COMPLETE, command_complete_name};
 use super::{FAIL, OK, UC_BUFFER};
 use crate::ascii::ascii_iswhite;
-use crate::charset::getdigits_int;
+use crate::charset::getdigits_int_at;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, gettext_ptr};
@@ -397,11 +397,12 @@ fn scan_count(
 /// landed exactly on the end of the value; the strictness is the point,
 /// since `-count=3x` must not quietly mean three.
 fn digits(value: &[u8]) -> Option<c_int> {
-    let mut p = value.as_ptr().cast::<c_char>().cast_mut();
-    // SAFETY: `p` walks `value`, which is live; `getdigits_int` stops at
-    // the first byte that is not a digit, and the value is followed by the
-    // rest of the command line rather than by the end of an allocation.
-    let n = unsafe { getdigits_int(&raw mut p, true, 0) };
-    // SAFETY: as above.
-    (unsafe { p.offset_from(value.as_ptr().cast::<c_char>()) } as usize == value.len()).then_some(n)
+    // A terminated copy: the walk reads to a NUL, and `value` is a slice of
+    // the attribute, not a string of its own -- walking it in place read
+    // past its end into the rest of the command line (Miri).
+    let mut text = Vec::with_capacity(value.len() + 1);
+    text.extend_from_slice(value);
+    text.push(0);
+    let (n, past) = getdigits_int_at(&mut text, 0, true, 0);
+    (past == value.len()).then_some(n)
 }

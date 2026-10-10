@@ -161,12 +161,19 @@ impl<T> GlobalCell<T> {
     /// — a field read that tracked a borrow would make every option read in
     /// the editor a borrow-table entry, and would turn an option read inside
     /// a `did_set_*` callback into a panic.
+    ///
+    /// The projection is a *shared* one. A read may happen inside
+    /// [`with_field`](Self::with_field) on another field of the same record
+    /// (an option read under a `'cpoptions'` borrow, say), and a `&mut` to
+    /// the whole record there would retire the outer reference while it is
+    /// still in use -- undefined behaviour under Stacked Borrows, which Miri
+    /// reports. A shared reborrow is a read, and reads coexist.
     #[inline(always)]
-    pub fn get_field<F: Copy>(&self, project: impl FnOnce(&mut T) -> &mut F) -> F {
+    pub fn get_field<F: Copy>(&self, project: impl FnOnce(&T) -> &F) -> F {
         check_main_thread();
         check_no_exclusive_borrow(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding exclusive borrow.
-        *project(unsafe { &mut *self.0.get() })
+        *project(unsafe { &*self.0.get() })
     }
 
     /// Overwrite one field of the contents. See
@@ -191,16 +198,15 @@ impl<T> GlobalCell<T> {
     /// reason — an option read must not enter the borrow table — so `f` must
     /// not write the same field. Nothing in `f` may reach back into the cell
     /// and replace what it is looking at.
+    ///
+    /// The projection is shared, as [`get_field`](Self::get_field)'s is and
+    /// for the same reason: `f` may read other fields of the record.
     #[inline(always)]
-    pub fn with_field<F, R>(
-        &self,
-        project: impl FnOnce(&mut T) -> &mut F,
-        f: impl FnOnce(&F) -> R,
-    ) -> R {
+    pub fn with_field<F, R>(&self, project: impl FnOnce(&T) -> &F, f: impl FnOnce(&F) -> R) -> R {
         check_main_thread();
         check_no_exclusive_borrow(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding exclusive borrow.
-        f(project(unsafe { &mut *self.0.get() }))
+        f(project(unsafe { &*self.0.get() }))
     }
 
     /// Overwrite one field and answer what it held. The move out and the
@@ -259,6 +265,10 @@ pub struct Field<S, T> {
     /// The field itself, typed, so a selector cannot name a field of
     /// another type.
     project: fn(&mut S) -> &mut T,
+    /// The same field, shared: what a read projects through, so that a read
+    /// nested in another read of the record does not take the whole record
+    /// mutably (see [`GlobalCell::get_field`]).
+    view: fn(&S) -> &T,
 }
 
 // Hand-written rather than derived: `derive` would demand `S: Copy` and
@@ -286,8 +296,8 @@ impl<S, T> Field<S, T> {
     /// The selector for the field `project` reaches, which sits `at` bytes
     /// into `S`. `field!` writes both halves
     /// from one field name, which is the only way they stay a pair.
-    pub const fn new(at: usize, project: fn(&mut S) -> &mut T) -> Self {
-        Self { at, project }
+    pub const fn new(at: usize, project: fn(&mut S) -> &mut T, view: fn(&S) -> &T) -> Self {
+        Self { at, project, view }
     }
 
     /// The field's offset in `S`, which is what identifies it.
@@ -311,6 +321,7 @@ macro_rules! field {
         $crate::global_cell::Field::<$record, _>::new(
             ::core::mem::offset_of!($record, $($field).+),
             |record: &mut $record| &mut record.$($field).+,
+            |record: &$record| &record.$($field).+,
         )
     };
 }
@@ -479,7 +490,7 @@ impl<T> GlobalCell<T> {
     /// [`get_field`](Self::get_field) through a [`Field`] selector.
     #[inline(always)]
     pub fn get_at<F: Copy>(&self, field: Field<T, F>) -> F {
-        self.get_field(field.project)
+        self.get_field(field.view)
     }
 
     /// [`set_field`](Self::set_field) through a [`Field`] selector.
@@ -491,7 +502,7 @@ impl<T> GlobalCell<T> {
     /// [`with_field`](Self::with_field) through a [`Field`] selector.
     #[inline(always)]
     pub fn with_at<F, R>(&self, field: Field<T, F>, f: impl FnOnce(&F) -> R) -> R {
-        self.with_field(field.project, f)
+        self.with_field(field.view, f)
     }
 
     /// [`replace_field`](Self::replace_field) through a [`Field`] selector.
@@ -883,7 +894,14 @@ mod tests {
             name: None,
         });
 
-        assert!(COUNT != Field::new(NAME.field_offset(), |r: &mut Record| &mut r.count));
+        assert!(
+            COUNT
+                != Field::new(
+                    NAME.field_offset(),
+                    |r: &mut Record| &mut r.count,
+                    |r| &r.count
+                )
+        );
         assert_eq!(cell.get_at(COUNT), 1);
         cell.set_at(COUNT, 2);
         assert_eq!(cell.get_at(COUNT), 2);

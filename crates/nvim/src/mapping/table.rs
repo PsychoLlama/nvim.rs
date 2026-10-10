@@ -475,13 +475,17 @@ pub(crate) unsafe fn map_to_exists(
     let out = &raw mut buf;
     let dolt = REPTERM_DO_LT.cast_signed();
     let simplify = ptr::null_mut();
-    // SAFETY: the caller's promise — `str` is live and NUL-terminated.  The
-    // allocation `replace_termcodes` may leave in `buf` is the guard's.
-    let (rhs, _owned) = p_cpo(|cpo| unsafe {
+    // SAFETY: the caller's promise — `str` is live and NUL-terminated.
+    let rhs = p_cpo(|cpo| unsafe {
         let len = cstr::bytes_at(str).len();
-        let rhs = replace_termcodes(str, len, out, 0, dolt, simplify, cpo);
-        (rhs, COwned::new(buf))
+        replace_termcodes(str, len, out, 0, dolt, simplify, cpo)
     });
+    // The allocation `replace_termcodes` may leave in `buf` is the guard's.
+    // Taken here and not inside the closure: reading `buf` there captured it
+    // by reference, a protected borrow that `replace_termcodes`' write
+    // through `out` then violated (Miri).
+    // SAFETY: `buf` is null or `replace_termcodes`' allocation.
+    let _owned = unsafe { COwned::new(buf) };
 
     let mut mode = 0;
     for (ch, flags) in MODE_CHARS {

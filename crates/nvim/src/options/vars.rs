@@ -316,7 +316,7 @@ macro_rules! reader {
         #[allow(dead_code, reason = "a table declares a reader per row")]
         #[inline(always)]
         pub(crate) fn $field<R>(f: impl FnOnce(&CStr) -> R) -> R {
-            OPTIONS.with_field(|o| &mut o.$field, |value| {
+            OPTIONS.with_field(|o| &o.$field, |value| {
                 f(match value {
                     Some(s) => s.as_cstr(),
                     None => {
@@ -343,7 +343,7 @@ macro_rules! reader {
         #[allow(dead_code, reason = "a table declares a reader per row")]
         #[inline(always)]
         pub(crate) fn $field() -> $ty {
-            OPTIONS.get_field(|o| &mut o.$field)
+            OPTIONS.get_field(|o| &o.$field)
         }
     };
 }

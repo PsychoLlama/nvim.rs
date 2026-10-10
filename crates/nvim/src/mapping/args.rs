@@ -192,8 +192,14 @@ pub(crate) unsafe fn set_maparg_rhs(
     // SAFETY: the caller's promise — `orig_rhs` is `orig_rhs_len` live bytes.
     let orig_str =
         unsafe { MapStr::new(core::slice::from_raw_parts(orig_rhs.cast(), orig_rhs_len)) };
-    // SAFETY: `orig_rhs` is NUL-terminated.
-    let str = if unsafe { strcasecmp(orig_rhs, c"<nop>".as_ptr()) } == 0 {
+    // `strcasecmp` against an ASCII needle, up to the first NUL as it read:
+    // ASCII case-folding, which Miri can run and libc's cannot be.
+    let up_to_nul = orig_str
+        .as_bytes()
+        .split(|&b| b == 0)
+        .next()
+        .unwrap_or_default();
+    let str = if up_to_nul.eq_ignore_ascii_case(b"<nop>") {
         // "<Nop>" means nothing.
         MapStr::empty()
     } else {
