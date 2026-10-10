@@ -44,7 +44,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::offset_of;
 use core::{ptr, slice};
 
-use crate::charset::{char2cells, hexhex2nr, ptr2cells};
+use crate::charset::{char2cells, hexhex_at, ptr2cells};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::grid::{schar_from_char, schar_from_str};
 use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
@@ -321,7 +321,7 @@ fn take_encoded_char(value: &CStr, at: &mut usize) -> ScreenChar {
         let mut num: int64_t = 0;
         for _ in 0..pairs {
             *at += 2;
-            let digits = unsafe { hexhex2nr(value.as_ptr().add(*at)) };
+            let digits = hexhex_at(bytes.get(*at..).unwrap_or_default());
             if digits < 0 {
                 return 0;
             }

@@ -26,12 +26,11 @@
 use core::ffi::{c_char, c_int, c_long};
 
 use super::display::{
-    foldcase, mirror_ascii, strnsize, strsize, trans_characters_in, transchar_hex_into,
-    transchar_hex_len, transstr_into, transstr_owned,
+    foldcase, mirror_ascii, strnsize, strsize, trans_characters_in, transstr_into, transstr_owned,
 };
 use super::{
-    Str2NrBases, backslash_halved, byte2cells, escapes_next, hexhex_at, is_bdigit, is_digit,
-    is_white, is_word_at, is_xdigit, skip, str2nr_scan,
+    Str2NrBases, backslash_halved, byte2cells, escapes_next, is_bdigit, is_digit, is_white,
+    is_word_at, is_xdigit, skip, str2nr_scan,
 };
 use crate::cstr;
 use crate::memory::{ThinCString, XString};
@@ -148,16 +147,6 @@ pub unsafe fn skipbin(q: *const c_char) -> *const c_char {
 /// `q` must be a NUL-terminated string.
 pub unsafe fn skiphex(q: *mut c_char) -> *mut c_char {
     unsafe { Bytes::new(q) }.skip_while(is_xdigit).raw()
-}
-
-/// The first decimal digit in `q`, or its NUL; [`skip::to_digit`].
-///
-/// # Safety
-/// `q` must be a NUL-terminated string.
-pub unsafe fn skiptodigit(q: *mut c_char) -> *mut c_char {
-    unsafe { Bytes::new(q) }
-        .skip_while(|byte| !is_digit(byte))
-        .raw()
 }
 
 /// The first white space byte in `p`, or its NUL; [`skip::to_white`].
@@ -285,15 +274,6 @@ pub(crate) unsafe fn getdigits_long(cursor: *mut *mut c_char, strict: bool, def:
     unsafe { getdigits(cursor, strict, intmax_t::from(def)) }
 }
 
-/// Whether `lbuf` holds nothing but white space.
-///
-/// # Safety
-/// `lbuf` must be a NUL-terminated string.
-pub(crate) unsafe fn vim_isblankline(lbuf: *mut c_char) -> bool {
-    let text = unsafe { cstr::bytes_at(lbuf) };
-    matches!(cstr::byte_at(text, skip::white(text)), 0 | b'\r' | b'\n')
-}
-
 /// Whether the character at `p` belongs to a word in the current buffer.
 ///
 /// # Safety
@@ -362,14 +342,6 @@ pub unsafe fn vim_str2nr(
             *unptr = parsed.magnitude;
         }
     }
-}
-
-/// The byte the two hexadecimal digits at `p` spell, or -1; [`hexhex_at`].
-///
-/// # Safety
-/// `p` must hold two readable bytes, or a NUL before them.
-pub unsafe fn hexhex2nr(p: *const c_char) -> c_int {
-    hexhex_at(unsafe { cstr::prefix_at(p, 2) })
 }
 
 /// Whether the backslash at `str` escapes the byte after it; [`escapes_next`].
@@ -465,16 +437,6 @@ pub unsafe fn str_foldcase(
     unsafe { buf.cast::<u8>().copy_from(folded.as_ptr(), folded.len()) };
     unsafe { *buf.add(folded.len()) = 0 };
     buf
-}
-
-/// Write `c`'s `<xx>` form into `buf`; [`transchar_hex_into`].
-///
-/// # Safety
-/// `buf` must have room for the form and its NUL: nine bytes for anything a
-/// buffer can hold.
-pub unsafe fn transchar_hex(buf: *mut c_char, c: c_int) -> size_t {
-    let room = transchar_hex_len(c) + 1;
-    transchar_hex_into(unsafe { slice::from_raw_parts_mut(buf, room) }, c)
 }
 
 /// Reverse the bytes of `str` in place, up to `end` or the NUL;

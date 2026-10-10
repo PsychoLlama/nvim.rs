@@ -128,7 +128,7 @@ pub fn bin(s: &[u8]) -> usize {
 
 /// How many bytes of `s` come before the first decimal digit.
 ///
-/// The slice form of [`skiptodigit`](super::skiptodigit).
+/// The slice form of upstream's `skiptodigit`.
 pub fn to_digit(s: &[u8]) -> usize {
     count(s, |byte| !is_digit(byte))
 }

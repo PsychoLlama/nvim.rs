@@ -73,8 +73,7 @@ impl FindTags {
     /// Whether the line just read holds nothing but white space.
     #[inline(always)]
     fn blank_line(&self) -> bool {
-        // SAFETY: `vim_fgets` NUL-terminated the buffer.
-        unsafe { vim_isblankline(self.lbuf.as_ptr().cast_mut()) }
+        is_blank_line(cstr::in_chars(&self.lbuf).to_bytes())
     }
 
     /// Where the file is being read from now.

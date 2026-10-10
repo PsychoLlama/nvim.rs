@@ -64,8 +64,7 @@ use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
-    head_off, mb_get_class_tab, utf_char2bytes, utf_char2len, utf_fold, utf_ptr2char, utf_strnicmp,
-    utfc_ptr2len,
+    head_off, mb_get_class_tab, utf_char2bytes, utf_char2len, utf_fold, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memline::{Lines, ml_append, ml_delete};
 use crate::memory::{XString, memchrsub, xfree, xmalloc};

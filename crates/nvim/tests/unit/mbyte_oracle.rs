@@ -20,8 +20,8 @@ use neovim::mbyte::{
     mb_string2cells, mb_string2cells_len, mb_strnicmp, mb_utf_index_to_bytes, mb_utflen,
     utf_ambiguous_width, utf_char2bytes, utf_cp_bounds, utf_cp_bounds_len, utf_head_off,
     utf_ptr2cells, utf_ptr2cells_len, utf_ptr2char, utf_ptr2char_info, utf_ptr2len,
-    utf_ptr2len_len, utf_ptr2str_char_info, utf_strnicmp, utf_valid_string, utfc_next,
-    utfc_ptr2len, utfc_ptr2schar, utfc_ptrlen2schar,
+    utf_ptr2len_len, utf_ptr2str_char_info, utf_strnicmp, utfc_next, utfc_ptr2len, utfc_ptr2schar,
+    utfc_ptrlen2schar, valid_utf8,
 };
 use neovim::memory::XString;
 use neovim::option::vars::{P_AMBW, P_ARSHAPE, P_EMOJI};
@@ -230,12 +230,9 @@ fn the_bounds_and_class_readers() {
                 }
             }
         }
-        // SAFETY: as above.
-        unsafe {
-            d.add(i64::from(utf_valid_string(p, std::ptr::null())));
-            for k in 0..=text.len() {
-                d.add(i64::from(utf_valid_string(p, p.add(k))));
-            }
+        d.add(i64::from(valid_utf8(text)));
+        for k in 0..=text.len() {
+            d.add(i64::from(valid_utf8(&text[..k])));
         }
     });
     assert_eq!(got, 0xf1feeec46fdfa4ad, "bounds and class readers");

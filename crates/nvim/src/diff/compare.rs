@@ -92,11 +92,9 @@ pub(crate) fn lines_equal(b1: &[u8], b2: &[u8]) -> bool {
         return b1 == b2;
     }
     if flags & DIFF_ICASE != 0 && flags & ALL_WHITE_DIFF == 0 {
-        let (p1, p2) = (b1.as_ptr().cast::<c_char>(), b2.as_ptr().cast::<c_char>());
-        // SAFETY: each side is bounded by its own length, which is what
-        // `mb_stricmp` reaches by walking to the NUL. A buffer line holds a
-        // NUL byte as an `NL`, so the two spans are the same.
-        return unsafe { utf_strnicmp(p1, p2, b1.len(), b2.len()) } == 0;
+        // A buffer line holds a NUL byte as an `NL`, so each side's own
+        // length is what `mb_stricmp` reached by walking to the NUL.
+        return crate::mbyte::strnicmp_in(b1, b2) == 0;
     }
 
     let (mut p1, mut p2) = (b1, b2);

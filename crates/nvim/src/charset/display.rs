@@ -416,14 +416,9 @@ pub(crate) fn transchar_nonprint_form(buffer: Option<Buf>, c: c_int) -> CharDisp
     owned(&render_nonprint(buffer, c))
 }
 
-/// How long `c`'s `<xx>` form is, excluding the NUL.
-pub(crate) fn transchar_hex_len(c: c_int) -> usize {
-    render::hex_form(c).len
-}
-
 /// Write `c`'s `<xx>` form into `out`, NUL-terminated. Answers the length,
 /// excluding the NUL; nine bytes hold the widest form.
-pub(crate) fn transchar_hex_into(out: &mut [c_char], c: c_int) -> usize {
+pub fn transchar_hex_into(out: &mut [c_char], c: c_int) -> usize {
     let rendered = render::hex_form(c);
     for (slot, &byte) in out.iter_mut().zip(&rendered.bytes[..=rendered.len]) {
         *slot = byte as c_char;

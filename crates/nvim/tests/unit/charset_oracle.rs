@@ -9,8 +9,8 @@ use std::ffi::{c_char, c_int};
 
 use neovim::charset::{
     Str2NrBases, backslash_halve, backslash_halve_save, getdigits, getdigits_int, getdigits_int32,
-    hexhex2nr, ptr2cells, rem_backslash, skipbin, skipdigits, skiphex, skiptodigit, skiptowhite,
-    skiptowhite_esc, skipwhite, str_foldcase, trans_characters, transchar_hex, transstr,
+    hexhex_at, ptr2cells, rem_backslash, skip, skipbin, skipdigits, skiphex, skiptowhite,
+    skiptowhite_esc, skipwhite, str_foldcase, trans_characters, transchar_hex_into, transstr,
     transstr_buf, vim_iswordp, vim_str2nr, vim_strnsize, vim_strsize,
 };
 use neovim::ex_docmd::do_cmdline_cmd;
@@ -129,7 +129,7 @@ fn the_skippers() {
                     skipdigits(at),
                     skipbin(at).cast_mut(),
                     skiphex(at),
-                    skiptodigit(at),
+                    p.add(i + skip::to_digit(&text[i..])).cast_mut(),
                     skiptowhite(at),
                     skiptowhite_esc(at),
                 ] {
@@ -137,7 +137,7 @@ fn the_skippers() {
                 }
                 d.add(i64::from(rem_backslash(at)));
                 if i + 2 <= text.len() {
-                    d.add(i64::from(hexhex2nr(at)));
+                    d.add(i64::from(hexhex_at(&text[i..])));
                 }
                 d.add(i64::from(vim_iswordp(at)));
                 d.add(i64::from(ptr2cells(at)));
@@ -264,8 +264,7 @@ fn the_hex_form() {
     let mut d = Digest::new();
     for c in (0..0x400).chain([0xffff, 0x10000, 0x10ffff, 0x7fff_ffff]) {
         let mut buf = [0 as c_char; 16];
-        // SAFETY: sixteen bytes hold the widest form.
-        let n = unsafe { transchar_hex(buf.as_mut_ptr(), c) };
+        let n = transchar_hex_into(&mut buf, c);
         d.add(n as i64);
         d.bytes(&until_nul(&buf));
     }

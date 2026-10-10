@@ -177,7 +177,7 @@ impl Cells {
         {
             // An illegal UTF-8 byte shows as `<xx>`; an unprintable
             // character as `?` or its fullwidth form.
-            unsafe { transchar_hex(wlv.escape_buf.as_mut_ptr(), self.char_code) };
+            transchar_hex_into(&mut wlv.escape_buf, self.char_code);
             if window.w_onebuf_opt.wo_rl != 0 {
                 unsafe { rl_mirror_ascii(wlv.escape_buf.as_mut_ptr(), ::core::ptr::null_mut()) };
             }

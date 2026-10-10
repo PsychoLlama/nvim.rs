@@ -165,10 +165,11 @@ pub unsafe fn need_conversion(fenc: *const c_char) -> bool {
 /// `name` must point at a NUL-terminated string.
 pub unsafe fn get_fio_flags(name: *const c_char) -> c_int {
     // SAFETY: the caller's string, or `'encoding'`'s own.
-    let prop = if unsafe { *name } == 0 {
-        p_enc(|enc| unsafe { enc_canon_props(enc.as_ptr()) })
+    let name = unsafe { cstr::bytes_at(name) };
+    let prop = if name.is_empty() {
+        p_enc(|enc| canon_props(enc.to_bytes()))
     } else {
-        unsafe { enc_canon_props(name) }
+        canon_props(name)
     };
     let little = if prop & ENC_ENDIAN_L as c_int != 0 {
         FIO_ENDIAN_L

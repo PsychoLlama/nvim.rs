@@ -4,7 +4,7 @@
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::buffer::{buf_is_quickfix, buf_meta_total};
 use crate::charset::{
-    byte2cells, rl_mirror_ascii, skiptowhite, skipwhite, transchar_buf, transchar_hex,
+    byte2cells, rl_mirror_ascii, skiptowhite, skipwhite, transchar_buf, transchar_hex_into,
     transstr_buf, vim_isbreak, vim_isprintc,
 };
 use crate::cursor::get_cursor_rel_lnum;

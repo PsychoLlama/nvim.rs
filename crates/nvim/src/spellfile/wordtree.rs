@@ -69,7 +69,7 @@ use core::{mem, ptr};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
-use crate::mbyte::{utf_valid_string, utfc_ptr2len};
+use crate::mbyte::{utfc_ptr2len, valid_utf8};
 use crate::message::state::{msg_col, msg_didout};
 use crate::message::{msg_clr_eos, msg_start, msg_str};
 use crate::option::vars::p_verbose;
@@ -276,7 +276,7 @@ pub(super) fn wordtree_alloc(spin: &mut SpellInfo) -> *mut WordNode {
 /// `word` and `end` must delimit one readable range.
 pub(super) unsafe fn valid_spell_word(word: *const c_char, end: *const c_char) -> bool {
     // SAFETY: the caller promises the range; the walk stops at `end`.
-    if !unsafe { utf_valid_string(word, end) } {
+    if !valid_utf8(unsafe { cstr::slice_at(word, end.offset_from(word).unsigned_abs()) }) {
         return false;
     }
     let mut p = word;

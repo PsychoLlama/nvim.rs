@@ -779,22 +779,6 @@ pub unsafe fn mb_strcmp_ic(ic: bool, s1: *const c_char, s2: *const c_char) -> c_
     strcmp_ic_in(ic, s1, s2)
 }
 
-/// Is every byte of `s` part of a well-formed UTF-8 sequence? `end` bounds
-/// the check, and a null `end` means "up to the NUL"; [`valid_utf8`] over
-/// those bytes.
-///
-/// # Safety
-///
-/// `s` must be NUL-terminated when `end` is null, and reach `end` otherwise.
-pub unsafe fn utf_valid_string(s: *const c_char, end: *const c_char) -> bool {
-    let bytes = if end.is_null() {
-        unsafe { cstr::bytes_at(s) }
-    } else {
-        unsafe { cstr::slice_at(s, end.offset_from(s).unsigned_abs()) }
-    };
-    valid_utf8(bytes)
-}
-
 /// Decode one character out of a key-encoded string, advancing `*cursor` past
 /// it; [`unescape_at`] over the string. Answers null when there is no
 /// multibyte character there, or `into`, holding it NUL-terminated.
@@ -818,25 +802,6 @@ pub(crate) unsafe fn mb_unescape(
     }
     unsafe { *cursor = (*cursor).add(used) };
     into.as_ptr()
-}
-
-/// The properties of encoding `name`; [`canon_props`] over the string.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn enc_canon_props(name: *const c_char) -> EncProps {
-    canon_props(unsafe { cstr::bytes_at(name) })
-}
-
-/// `p` past an encoding name's `8bit-`/`2byte-` prefix; [`skip_len`] over
-/// the string.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-pub unsafe fn enc_skip(p: *mut c_char) -> *mut c_char {
-    p.wrapping_add(skip_len(unsafe { cstr::bytes_at(p) }))
 }
 
 /// The canonical spelling of encoding name `enc`, `xmalloc`'d;

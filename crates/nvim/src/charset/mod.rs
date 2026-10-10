@@ -41,6 +41,7 @@ pub mod transchar;
 
 // The display half was split out for size; its callers are spread over three
 // dozen modules and name it as `charset::*`.
+pub use display::transchar_hex_into;
 pub(crate) use display::{
     CharDisplay, ptr2cells_at, transchar, transchar_buf, transchar_byte, transchar_byte_buf,
     transchar_nonprint_form, vim_strsize_cstr,
@@ -52,17 +53,17 @@ pub use display::{byte2cells, char2cells};
 mod walk;
 
 pub use walk::{
-    backslash_halve, backslash_halve_save, getdigits, getdigits_int, getdigits_int32, hexhex2nr,
-    rem_backslash, skipbin, skipdigits, skiphex, skiptodigit, skiptowhite, skiptowhite_esc,
-    skipwhite, vim_iswordp, vim_iswordp_buf, vim_str2nr,
+    backslash_halve, backslash_halve_save, getdigits, getdigits_int, getdigits_int32,
+    rem_backslash, skipbin, skipdigits, skiphex, skiptowhite, skiptowhite_esc, skipwhite,
+    vim_iswordp, vim_iswordp_buf, vim_str2nr,
 };
 pub(crate) use walk::{
     getdigits_at, getdigits_int_at, getdigits_long, getwhitecols_curline, skip_to_newline,
-    skipwhite_len, try_getdigits, vim_isblankline,
+    skipwhite_len, try_getdigits,
 };
 pub use walk::{
-    ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters, transchar_hex, transstr,
-    transstr_buf, vim_strnsize, vim_strsize,
+    ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters, transstr, transstr_buf,
+    vim_strnsize, vim_strsize,
 };
 
 /// Bits of a `g_chartab` entry.
@@ -563,7 +564,7 @@ pub fn hex2nr(c: c_int) -> c_int {
 
 /// The byte the two hexadecimal digits `text` starts with spell, or -1. The
 /// end of the slice reads as a NUL, which is not a digit.
-pub(crate) fn hexhex_at(text: &[u8]) -> c_int {
+pub fn hexhex_at(text: &[u8]) -> c_int {
     let (high, low) = (cstr::byte_at(text, 0), cstr::byte_at(text, 1));
     if !is_xdigit(high) || !is_xdigit(low) {
         return -1;
@@ -575,6 +576,11 @@ pub(crate) fn hexhex_at(text: &[u8]) -> c_int {
 /// whether [`backslash_halved`] would remove it.
 pub(crate) fn escapes_next(text: &[u8]) -> bool {
     text.first() == Some(&b'\\') && text.get(1).is_some_and(|&next| next != 0)
+}
+
+/// Whether `text` holds nothing but white space, up to a line end or a NUL.
+pub(crate) fn is_blank_line(text: &[u8]) -> bool {
+    matches!(cstr::byte_at(text, skip::white(text)), 0 | b'\r' | b'\n')
 }
 
 /// `text` with each backslash that escapes the byte after it removed, up to

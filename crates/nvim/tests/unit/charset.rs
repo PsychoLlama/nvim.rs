@@ -5,8 +5,8 @@ use std::ffi::{c_char, c_int};
 use std::ptr;
 
 use neovim::charset::{
-    Str2NrBases, skip, skipbin, skipdigits, skiphex, skiptodigit, skiptowhite, skiptowhite_esc,
-    skipwhite, vim_str2nr,
+    Str2NrBases, skip, skipbin, skipdigits, skiphex, skiptowhite, skiptowhite_esc, skipwhite,
+    vim_str2nr,
 };
 use neovim::types::typval::{UVarNumber, VarNumber};
 
@@ -647,7 +647,7 @@ fn the_slice_skippers_stop_where_the_pointer_skippers_stop() {
             .collect();
         let base = owned.as_ptr();
         // SAFETY: `owned` is NUL-terminated, which is all these forms ask
-        // for; `skiphex`/`skiptodigit` want a `*mut`, and nothing writes.
+        // for; `skiphex` wants a `*mut`, and nothing writes.
         let want = unsafe {
             [
                 skipwhite(base).cast_const(),
@@ -656,7 +656,6 @@ fn the_slice_skippers_stop_where_the_pointer_skippers_stop() {
                 skipdigits(base).cast_const(),
                 skiphex(base.cast_mut()).cast_const(),
                 skipbin(base),
-                skiptodigit(base.cast_mut()).cast_const(),
             ]
         };
         let got = [
@@ -666,7 +665,6 @@ fn the_slice_skippers_stop_where_the_pointer_skippers_stop() {
             skip::digits(case),
             skip::hex(case),
             skip::bin(case),
-            skip::to_digit(case),
         ];
         for (n, (&stopped, offset)) in want.iter().zip(got).enumerate() {
             // SAFETY: both pointers are into `owned`.
