@@ -11,6 +11,8 @@ use std::sync::{Mutex, MutexGuard};
 use neovim::memory::xfree;
 
 #[cfg(not(miri))]
+pub(crate) mod corpus;
+#[cfg(not(miri))]
 pub(crate) mod tv;
 
 /// A NUL-terminated copy of `s`, kept alive by the caller's binding.
