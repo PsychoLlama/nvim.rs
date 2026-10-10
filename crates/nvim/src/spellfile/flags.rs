@@ -40,7 +40,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::hashtab::{hash_add, hash_clear, hash_find};
-use crate::mbyte::mb_ptr2char_adv;
+use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz};
 use crate::types::{NUL, size_t, uint8_t};
 use ::libc::{strcat, strcpy};
@@ -73,7 +73,8 @@ pub(super) unsafe fn get_affitem(flagtype: c_int, cursor: *mut *mut c_char) -> c
         return res as c_uint;
     }
 
-    let mut res = unsafe { mb_ptr2char_adv(cursor.cast::<*const c_char>()) };
+    let mut res = unsafe { utf_ptr2char(*cursor) };
+    unsafe { *cursor = (*cursor).wrapping_add(utfc_ptr2len(*cursor) as usize) };
     // Two-character flags: always for LONG, and for CAPLONG only when
     // the first character is upper case ASCII.
     if flagtype == AFT_LONG
@@ -82,7 +83,8 @@ pub(super) unsafe fn get_affitem(flagtype: c_int, cursor: *mut *mut c_char) -> c
         if unsafe { **cursor } as c_int == NUL {
             return 0;
         }
-        res = unsafe { mb_ptr2char_adv(cursor.cast::<*const c_char>()) } + (res << 16);
+        res = unsafe { utf_ptr2char(*cursor) } + (res << 16);
+        unsafe { *cursor = (*cursor).wrapping_add(utfc_ptr2len(*cursor) as usize) };
     }
     res as c_uint
 }
@@ -133,14 +135,13 @@ pub(super) unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag
         AFT_LONG | AFT_CAPLONG => {
             let mut p = afflist;
             while unsafe { *p } as c_int != NUL {
-                let mut n =
-                    unsafe { mb_ptr2char_adv((&raw mut p).cast::<*const c_char>()) } as c_uint;
+                let mut n = unsafe { utf_ptr2char(p) } as c_uint;
+                p = p.wrapping_add(unsafe { utfc_ptr2len(p) } as usize);
                 if (flagtype == AFT_LONG || (n >= b'A' as c_uint && n <= b'Z' as c_uint))
                     && unsafe { *p } as c_int != NUL
                 {
-                    n = (unsafe { mb_ptr2char_adv((&raw mut p).cast::<*const c_char>()) }
-                        as c_uint)
-                        .wrapping_add(n << 16);
+                    n = (unsafe { utf_ptr2char(p) } as c_uint).wrapping_add(n << 16);
+                    p = p.wrapping_add(unsafe { utfc_ptr2len(p) } as usize);
                 }
                 if n == flag {
                     return true;

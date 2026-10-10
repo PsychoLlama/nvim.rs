@@ -9,7 +9,7 @@ use crate::charset::{getdigits_int, skipwhite};
 use crate::cstr;
 use crate::getchar::state::got_int;
 use crate::hashtab::{hash_clear_all, hash_init};
-use crate::mbyte::convert_setup;
+
 use crate::memory::XString;
 use crate::message::{e_exists, e_invarg};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
@@ -338,7 +338,7 @@ impl SpellInfo {
             si_conv: VimConv {
                 vc_type: 0,
                 vc_factor: 0,
-                vc_fd: ::core::ptr::null_mut(),
+                vc_fd: None,
                 vc_fail: false,
             },
             si_memtot: 0,
@@ -735,8 +735,7 @@ unsafe fn read_inputs(
         } else {
             spell_read_wordfile(spin, stem).is_err()
         };
-        let none = ::core::ptr::null_mut();
-        let _ = unsafe { convert_setup(&raw mut spin.si_conv, none, none) };
+        spin.si_conv = crate::types::CONV_NONE_INIT;
         if failed {
             return true;
         }

@@ -56,7 +56,7 @@ use crate::eval::{
 use crate::ex_docmd::set_ref_in_findfunc;
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{mark_cpt_callbacks, set_ref_in_insexpand_funcs};
-use crate::mbyte::string_convert_cstr;
+
 use crate::message::{internal_error, verb_msg};
 use crate::ops::set_ref_in_opfunc;
 use crate::option::vars::p_verbose;
@@ -577,7 +577,7 @@ pub(crate) fn var_item_copy(
             match (src.string_ref(), converting) {
                 (Some(text), Some(conv)) => {
                     // A conversion that failed keeps the original bytes.
-                    let converted = string_convert_cstr(conv, text.as_cstr());
+                    let converted = conv.convert_cstr(text.as_cstr());
                     to.write_string(Some(converted.unwrap_or_else(|| text.clone())));
                 }
                 _ => tv_copy(from, to),

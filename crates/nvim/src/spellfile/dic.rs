@@ -34,6 +34,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::semsg;
 use crate::smsg;
 use crate::spell::WordFlags;
@@ -45,7 +46,7 @@ use crate::charset::skipwhite;
 use crate::fileio::vim_fgets;
 use crate::getchar::state::got_int;
 use crate::hashtab::{hash_add_item, hash_find, hash_hash, hash_lookup};
-use crate::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
+use crate::mbyte::{mb_charlen, utf_head_off, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::state::{msg_col, msg_didout};
 use crate::message::{msg_clr_eos, msg_display_elided, msg_start};
@@ -128,8 +129,10 @@ pub(super) fn spell_read_dic(
 
         let mut pc: *mut c_char = core::ptr::null_mut();
         let w = if spin.si_conv.vc_type != CONV_NONE {
-            let conv = &raw mut spin.si_conv;
-            pc = unsafe { string_convert(conv, line.as_mut_ptr(), core::ptr::null_mut()) };
+            pc = spin
+                .si_conv
+                .convert_cstr(cstr::in_chars(&line))
+                .map_or(core::ptr::null_mut(), ThinCString::into_raw);
             if pc.is_null() {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (fname, line) = unsafe { (msg_cstr(fname), c_str(line.as_mut_ptr())) };

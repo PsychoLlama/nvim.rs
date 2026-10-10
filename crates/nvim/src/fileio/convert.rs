@@ -24,8 +24,7 @@ use crate::cstr;
 use crate::option::vars::P_CCV;
 use crate::strings::has_char;
 use crate::strings::vim_strchr;
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use std::ffi::CStr;
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::bufwrite::translate;
 use crate::mbyte::ICONV_EINVAL;
@@ -343,7 +342,9 @@ impl Conv {
     ///
     /// `fenc` must point at a NUL-terminated string, unaliased for the call.
     pub(crate) unsafe fn open_iconv(&mut self, fenc: *mut c_char) -> bool {
-        self.iconv = unsafe { my_iconv_open(c"utf-8".as_ptr().cast_mut(), fenc) };
+        let fenc = unsafe { CStr::from_ptr(fenc) };
+        self.iconv = crate::mbyte::open_iconv(c"utf-8", fenc)
+            .map_or_else(no_iconv, crate::os::iconv::Iconv::into_raw);
         self.has_iconv()
     }
 

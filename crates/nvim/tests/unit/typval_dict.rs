@@ -18,8 +18,8 @@ use neovim::eval::typval::{
     dict_get_string_buf_chk, tv_clear, tv_dict_alloc,
 };
 use neovim::guard::{Suppress, sandbox};
-use neovim::mbyte::convert_setup;
 use neovim::memory::{ThinCString, xfree, xmalloc, xstrdup};
+use neovim::types::CONV_NONE_INIT;
 use neovim::types::{Callback, Dict, DictItem, Failed, TypVal, VarLock, VimConv};
 use std::ffi::c_int;
 
@@ -1186,15 +1186,8 @@ fn a_converting_dict_copy_rewrites_the_keys_as_well() {
     let _log = AllocLog::start();
     // SAFETY: the converter and both dicts are this case's own.
     unsafe {
-        let mut vc: VimConv = std::mem::zeroed();
-        assert_eq!(
-            convert_setup(
-                &raw mut vc,
-                cstr("utf-8").as_ptr().cast_mut(),
-                cstr("latin1").as_ptr().cast_mut(),
-            ),
-            Ok(())
-        );
+        let mut vc: VimConv = CONV_NONE_INIT;
+        assert_eq!(vc.setup(Some(c"utf-8"), Some(c"latin1")), Ok(()));
 
         let d = tv::new_dict(&copy_corpus());
         let inner_dict = (*tv::di_of(d, "a")).di_tv.dict();
@@ -1224,7 +1217,7 @@ fn a_converting_dict_copy_rewrites_the_keys_as_well() {
 
         drop(DictRef::owning(deep));
         drop(DictRef::owning(d));
-        let _ = convert_setup(&raw mut vc, ptr::null_mut(), ptr::null_mut());
+        drop(vc);
     }
 }
 

@@ -408,8 +408,8 @@ pub fn did_set_iskeyword(args: &mut OptSet) -> Result<(), OptError> {
     if varp != option_var(kOptIskeyword).string_var() {
         return did_set_isopt(args);
     }
-    // SAFETY: the frame's C string value.
-    if unsafe { check_isopt(varp.value_ptr()) }.is_err() {
+    // SAFETY: the frame's C string value, read before anything can set it.
+    if check_isopt(unsafe { cstr::bytes_at(varp.value_ptr()) }).is_err() {
         return invalid();
     }
     Ok(())

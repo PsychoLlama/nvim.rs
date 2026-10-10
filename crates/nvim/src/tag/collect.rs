@@ -11,7 +11,6 @@
 
 use super::*;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 /// A help match's language and the NUL after it: `{name}@{lang}NUL`.
 const ML_EXTRA: usize = 3;
@@ -22,15 +21,18 @@ impl FindTags {
     /// Converting the pattern the other way does not work, because the
     /// characters would not be recognised.
     pub(crate) fn convert_line(&mut self) {
-        // SAFETY: the buffer is NUL-terminated, and what `string_convert`
-        // answers is an allocated NUL-terminated string that is freed
-        // here.
-        let line = self.lbuf.as_mut_ptr();
-        let conv = unsafe { string_convert(&raw const self.vimconv, line, ptr::null_mut()) };
-        if conv.is_null() {
+        let line = crate::cstr::in_chars(&self.lbuf).to_bytes();
+        let Some(mut converted) = self.vimconv.convert(line) else {
             return;
-        }
-        let converted = unsafe { CStr::from_ptr(conv) }.to_bytes_with_nul();
+        };
+        // What a C reader of the converted string sees, terminated.
+        converted.truncate(
+            converted
+                .iter()
+                .position(|&b| b == 0)
+                .unwrap_or(converted.len()),
+        );
+        converted.push(0);
         if converted.len() > self.lbuf.len() {
             // Upstream sizes the buffer to exactly the converted line,
             // which leaves its last-but-one byte non-NUL — so the
@@ -42,7 +44,6 @@ impl FindTags {
                 self.lbuf[at] = byte as c_char;
             }
         }
-        unsafe { xfree(conv.cast()) };
     }
 
     /// File the match the line holds under the priority it deserves.

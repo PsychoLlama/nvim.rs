@@ -47,8 +47,8 @@ use crate::log::LOGLVL_DBG;
 use crate::map::mh_clear;
 use crate::map_glyph_cache::mh_put_glyph;
 use crate::mbyte::{
-    mb_string2cells, utf_char2bytes, utf_char2len, utf_cp_bounds, utf_ptr2cells, utf_ptr2cells_len,
-    utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len, utfc_ptrlen2schar,
+    cluster_len, mb_string2cells, utf_char2bytes, utf_char2len, utf_cp_bounds, utf_ptr2cells,
+    utf_ptr2cells_len, utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptrlen2schar,
 };
 use crate::memory::{xcalloc, xfree};
 use crate::option::vars::{p_arshape, p_tbidi, rdb_flags};

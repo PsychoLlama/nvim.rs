@@ -57,6 +57,31 @@ pub(crate) fn ctype_bits(c: u8) -> ::core::ffi::c_ushort {
     unsafe { *(*__ctype_b_loc()).add(usize::from(c)) }
 }
 
+/// `towupper(c)`: the process locale's uppercase of wide character `c`.
+pub(crate) fn wide_toupper(c: wint_t) -> wint_t {
+    // SAFETY: a pure function of one wide character.
+    unsafe { towupper(c) }
+}
+
+/// `towlower(c)`: the process locale's lowercase of wide character `c`.
+pub(crate) fn wide_tolower(c: wint_t) -> wint_t {
+    // SAFETY: a pure function of one wide character.
+    unsafe { towlower(c) }
+}
+
+/// `toupper(c)`: the process locale's uppercase of byte value `c`, which
+/// may differ from ASCII's (the Turkish dotless i).
+pub(crate) fn byte_toupper(c: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    // SAFETY: a pure function of one byte value.
+    unsafe { ::libc::toupper(c) }
+}
+
+/// `tolower(c)`, the mirror of [`byte_toupper`].
+pub(crate) fn byte_tolower(c: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    // SAFETY: a pure function of one byte value.
+    unsafe { ::libc::tolower(c) }
+}
+
 unsafe extern "C" {
     /// glibc's character-class table, which `isalpha` and friends index.
     pub fn __ctype_b_loc() -> *mut *const ::core::ffi::c_ushort;

@@ -16,14 +16,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::strict_bool_arg;
 use crate::eval::typval::{
     NumBuf, tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_number_arg,
     tv_check_for_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
 };
-use crate::mbyte::{char_at, char_len, cluster_len, mb_cptr2char_adv, mb_ptr2char_adv};
+use crate::mbyte::{char_at, char_len, cluster_len};
 use crate::memory::ThinCString;
 use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t, size_t};
 
@@ -210,17 +210,18 @@ pub fn f_strutf16len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     }
     let countcc = args.len() > 1 && tv_get_bool(&args[1]) != 0;
 
-    let next_char: unsafe fn(*mut *const c_char) -> c_int = if countcc {
-        mb_cptr2char_adv
-    } else {
-        mb_ptr2char_adv
-    };
-
-    let mut s = numbuf.string(&args[0]).as_ptr();
+    let text = numbuf.string(&args[0]).to_bytes();
     let mut len: VarNumber = 0;
-    while unsafe { *s } != 0 {
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
         // Anything over U+FFFF is a surrogate pair: two units.
-        len += 1 + VarNumber::from(unsafe { next_char(&raw mut s) } > 0xffff);
+        len += 1 + VarNumber::from(char_at(rest) > 0xffff);
+        at += if countcc {
+            char_len(rest)
+        } else {
+            cluster_len(rest)
+        };
     }
     result.write_number(len);
 }

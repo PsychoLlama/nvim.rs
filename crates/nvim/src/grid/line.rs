@@ -266,7 +266,7 @@ pub unsafe fn grid_line_puts(
         // How many bytes is this character, composing marks included?
         let mbyte_blen = if textlen >= 0 {
             let maxlen = unsafe { text.offset(textlen as isize).offset_from(ptr) } as c_int;
-            let blen = unsafe { utfc_ptr2len_len(ptr, maxlen) };
+            let blen = cluster_len(unsafe { crate::cstr::slice_at(ptr, maxlen as usize) }) as c_int;
             if blen > maxlen { 1 } else { blen }
         } else {
             unsafe { utfc_ptr2len(ptr) }

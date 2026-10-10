@@ -533,10 +533,10 @@ pub unsafe fn getsourceline(
     // Convert the encoding of the script line.
     // SAFETY: as above; `string_convert` returns fresh memory or null.
     if !line.is_null() && unsafe { (*sp).conv.vc_type } != CONV_NONE {
-        let converted = unsafe { string_convert(&raw mut (*sp).conv, line, ptr::null_mut()) };
-        if !converted.is_null() {
+        let converted = unsafe { (*sp).conv.convert_cstr(CStr::from_ptr(line)) };
+        if let Some(converted) = converted {
             unsafe { xfree(line.cast::<c_void>()) };
-            line = converted;
+            line = converted.into_raw();
         }
     }
 
@@ -791,9 +791,7 @@ pub fn ex_scriptencoding(excmd: &mut ExArg) {
     };
     // Set up for conversion from the specified encoding to 'encoding'.
     let sp = unsafe { getline_cookie(excmd.ea_getline, excmd.cookie) }.cast::<SourceCookie>();
-    let _ = p_enc(|value| unsafe {
-        convert_setup(&raw mut (*sp).conv, name, value.as_ptr().cast_mut())
-    });
+    let _ = p_enc(|value| unsafe { (*sp).conv.setup(Some(CStr::from_ptr(name)), Some(value)) });
     if name != excmd.arg_ptr() {
         unsafe { xfree(name.cast::<c_void>()) };
     }

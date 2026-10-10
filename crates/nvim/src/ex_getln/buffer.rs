@@ -481,7 +481,8 @@ pub unsafe fn cmdline_paste_str(mut s: *const ::core::ffi::c_char, literally: bo
             s = s.wrapping_add(1);
         }
         // SAFETY: a NUL-terminated string; `s` is left on the next character.
-        let c = unsafe { mb_cptr2char_adv(&raw mut s) };
+        let c = unsafe { utf_ptr2char(s) };
+        s = s.wrapping_add(unsafe { utf_ptr2len(s) } as usize);
         if cv == Ctrl_V
             || c == ESC
             || c == Ctrl_C

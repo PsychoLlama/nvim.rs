@@ -30,14 +30,12 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{
-    mb_islower, mb_isupper, mb_ptr2char_adv, utf_class_tab, utf_printable, utf_ptr2char,
-    utf8len_tab,
+    char_at, mb_islower, mb_isupper, utf_class_tab, utf_printable, utf_ptr2char, utf8len_tab,
 };
 use crate::memory::xmalloc;
-use crate::option::skip_to_option_part;
 use crate::option::vars::{breakat_flags, dy_flags, p_isf, p_isi, p_isp};
 use crate::options::kOptDyFlagUhex;
-use crate::optionstr::OptString;
+use crate::optionstr::OptStringRef;
 use crate::path::path_has_wildcard;
 use crate::types::{Failed, NUL, UVarNumber, VarNumber, uint8_t, uint64_t};
 use ::libc::abort;
@@ -269,9 +267,7 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     // 'iskeyword'. Which table an option fills is the option's identity,
     // which upstream recovered by comparing the value's *address* against
     // `p_isi` and friends; it is named here instead.
-    // SAFETY (both): a `CStr` and a buffer's own option value are
-    // NUL-terminated, and `buffer` is the caller's live one.
-    let fill = |var: &CStr, table| unsafe { parse_isopt(var.as_ptr(), table, Some(buffer), false) };
+    let fill = |var: &CStr, table| parse_isopt(var.to_bytes(), table, Some(buffer), false);
     if global
         && (p_isi(|var| fill(var, IsoptTable::Ident)).is_err()
             || p_isp(|var| fill(var, IsoptTable::Print)).is_err()
@@ -279,16 +275,8 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     {
         return false;
     }
-    if unsafe {
-        parse_isopt(
-            buffer.b_p_isk.value_ptr(),
-            IsoptTable::Keyword,
-            Some(buffer),
-            false,
-        )
-    }
-    .is_err()
-    {
+    let keywords = buffer.b_p_isk.bytes().to_vec();
+    if parse_isopt(&keywords, IsoptTable::Keyword, Some(buffer), false).is_err() {
         return false;
     }
     chartab_initialized.set(true);
@@ -296,13 +284,9 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
 }
 
 /// Whether `var` is a well-formed 'isident'-style option value.
-///
-/// # Safety
-/// `var` must be a NUL-terminated string.
-pub unsafe fn check_isopt(var: *mut c_char) -> Result<(), Failed> {
-    // SAFETY: forwarded; a check pass never touches the (null) buffer, and
-    // the table it would fill is never reached.
-    unsafe { parse_isopt(var, IsoptTable::Keyword, None, true) }
+pub fn check_isopt(var: &[u8]) -> Result<(), Failed> {
+    // A check pass never touches a table, so it needs no buffer.
+    parse_isopt(var, IsoptTable::Keyword, None, true)
 }
 
 /// Set or clear `c`'s bit in `buffer`'s keyword set.
@@ -334,59 +318,53 @@ struct IsoptEntry {
 }
 
 /// The character an entry begins with: either a decimal number naming a
-/// code point, or one (possibly multibyte) character. The cursor is left
-/// after it.
-///
-/// # Safety
-/// The cursor must be inside a NUL-terminated string.
-unsafe fn isopt_char(cursor: &mut Bytes) -> c_int {
-    let mut p = cursor.raw();
-    let c = if is_digit(cursor.byte()) {
-        // SAFETY: `p` walks a NUL-terminated string and stops on a digit
-        // boundary.
-        unsafe { getdigits_int(&raw mut p, true, 0) }
+/// code point, or one (possibly multibyte) character. `at` is left after
+/// it.
+fn isopt_char(var: &[u8], at: &mut usize) -> c_int {
+    let rest = &var[*at..];
+    if is_digit(cstr::byte_at(rest, 0)) {
+        let (c, used) = skip::decimal_int(rest);
+        *at += used;
+        c
     } else {
-        // SAFETY: as above, for one whole character.
-        unsafe { mb_ptr2char_adv((&raw mut p).cast::<*const c_char>()) }
-    };
-    // SAFETY: both advanced `p` no further than the terminator.
-    *cursor = unsafe { Bytes::new(p) };
-    c
+        *at += crate::mbyte::cluster_len(rest);
+        char_at(rest)
+    }
 }
 
-/// Read the entry at the cursor, leaving it on the next one. `None` means
-/// the option value is malformed.
-///
-/// # Safety
-/// The cursor must be inside a NUL-terminated string.
-unsafe fn next_isopt_entry(cursor: &mut Bytes) -> Option<IsoptEntry> {
+/// Read the entry at `at`, leaving `at` on the next one. `None` means the
+/// option value is malformed.
+fn next_isopt_entry(var: &[u8], at: &mut usize) -> Option<IsoptEntry> {
+    let byte = |i: usize| cstr::byte_at(var, i);
     // A leading `^` removes the range instead of adding it.
-    let (byte, next) = cursor.pair();
-    let tilde = byte == b'^' && next != 0;
+    let tilde = byte(*at) == b'^' && byte(*at + 1) != 0;
     if tilde {
-        cursor.advance(1);
+        *at += 1;
     }
 
-    let first = unsafe { isopt_char(cursor) };
+    let first = isopt_char(var, at);
     let mut last: c_int = -1;
-    let (byte, next) = cursor.pair();
-    if byte == b'-' && next != 0 {
-        cursor.advance(1);
-        // SAFETY: as above.
-        last = unsafe { isopt_char(cursor) };
+    if byte(*at) == b'-' && byte(*at + 1) != 0 {
+        *at += 1;
+        last = isopt_char(var, at);
     }
 
     if first <= 0 || first >= 256 || (last < first && last != -1) || last >= 256 {
         return None;
     }
-    let separator = cursor.byte();
+    let separator = byte(*at);
     if separator != 0 && separator != b',' {
         return None;
     }
-    // SAFETY: as above.
-    *cursor = unsafe { Bytes::new(skip_to_option_part(cursor.raw())) };
+    // Past the comma and any spaces after it: `skip_to_option_part`.
+    if separator == b',' {
+        *at += 1;
+    }
+    while byte(*at) == b' ' {
+        *at += 1;
+    }
     // A trailing comma with nothing after it is malformed.
-    if separator == b',' && cursor.byte() == 0 {
+    if separator == b',' && byte(*at) == 0 {
         return None;
     }
 
@@ -428,27 +406,18 @@ fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) {
 }
 
 /// Walk one 'isident'/'isprint'/'isfname'/'iskeyword' value, applying each
-/// comma-separated range to the table the option owns.
-///
-/// Which table that is comes from the *identity* of the pointer — `var` is
-/// compared against `p_isi`/`p_isp`/`p_isf` — so this cannot be called with
-/// a copy of an option's value.
-///
-/// With `only_check` no table is touched and only the syntax is validated.
-///
-/// # Safety
-/// `var` must be a NUL-terminated string, and `buffer` a valid buffer unless
-/// `only_check`.
-unsafe fn parse_isopt(
-    var: *const c_char,
+/// comma-separated range to `table`, which is the option's. With
+/// `only_check` no table is touched and only the syntax is validated. A NUL
+/// in `var` ends it.
+fn parse_isopt(
+    var: &[u8],
     table: IsoptTable,
     buffer: Option<Buf>,
     only_check: bool,
 ) -> Result<(), Failed> {
-    let mut cursor = unsafe { Bytes::new(var) };
-    while cursor.byte() != 0 {
-        // SAFETY: the cursor is still inside `var`.
-        let Some(entry) = (unsafe { next_isopt_entry(&mut cursor) }) else {
+    let mut at = 0;
+    while cstr::byte_at(var, at) != 0 {
+        let Some(entry) = next_isopt_entry(var, &mut at) else {
             return Err(Failed);
         };
         if let (false, Some(buffer)) = (only_check, buffer) {
@@ -483,21 +452,16 @@ pub fn is_word_char(c: c_int) -> bool {
 
 /// Whether `c` belongs to a word according to the 256-bit set `chartab`.
 /// Characters past U+00FF are decided by their Unicode class instead.
-///
-/// # Safety
-/// `chartab` must point at four `uint64_t`s.
-pub unsafe fn vim_iswordc_tab(c: c_int, chartab: *const uint64_t) -> bool {
+pub fn vim_iswordc_tab(c: c_int, chartab: &[uint64_t; 4]) -> bool {
     if c >= 0x100 {
-        return unsafe { utf_class_tab(c, chartab) } >= 2;
+        return utf_class_tab(c, chartab) >= 2;
     }
-    // SAFETY: `c` is under 256, so the word index is one of the four.
-    c > 0 && unsafe { *chartab.add((c as c_uint >> 6) as usize) } & (1u64 << (c & 0x3f)) != 0
+    c > 0 && chartab[(c as c_uint >> 6) as usize] & (1u64 << (c & 0x3f)) != 0
 }
 
 /// Whether `c` belongs to a word in `buffer`.
 pub fn vim_iswordc_buf(c: c_int, buffer: Buf) -> bool {
-    // SAFETY: a valid buffer carries the four-word keyword set inline.
-    unsafe { vim_iswordc_tab(c, (&raw const buffer.b_chartab).cast()) }
+    vim_iswordc_tab(c, &buffer.b_chartab)
 }
 
 /// Whether the character at `p` belongs to a word in the current buffer.

@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::message_fmt::to_bytes;
 use crate::message_fmt::{c_str, report_msg};
 use crate::semsg;
@@ -28,7 +29,7 @@ use crate::ex_docmd::DoCmdOpts;
 use crate::guard::Script;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
-use crate::types::{FAIL, IOSIZE, NUL, OK, READBIN};
+use crate::types::{CONV_NONE_INIT, FAIL, IOSIZE, NUL, OK, READBIN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -630,18 +631,11 @@ unsafe fn strip_bom(conv: *mut VimConv, firstline: *mut c_char) -> *mut c_char {
     if unsafe { slice::from_raw_parts(firstline.cast::<u8>(), 3) } != b"\xef\xbb\xbf" {
         return firstline;
     }
-    let _ = p_enc(|value| unsafe {
-        convert_setup(
-            conv,
-            c"utf-8".as_ptr().cast_mut(),
-            value.as_ptr().cast_mut(),
-        )
-    });
-    let rest = unsafe { firstline.add(3) };
-    let mut recoded = unsafe { string_convert(conv, rest, ptr::null_mut()) };
-    if recoded.is_null() {
-        recoded = unsafe { xstrdup(rest) };
-    }
+    let _ = p_enc(|value| unsafe { (*conv).setup(Some(c"utf-8"), Some(value)) });
+    let rest = unsafe { CStr::from_ptr(firstline.add(3)) };
+    let recoded = unsafe { (*conv).convert_cstr(rest) }
+        .unwrap_or_else(|| ThinCString::from_cstr(rest))
+        .into_raw();
     unsafe { xfree(firstline.cast()) };
     recoded
 }
@@ -692,7 +686,7 @@ unsafe fn finish_source(cookie: &mut SourceCookie, firstline: *mut c_char) {
     cookie.buflines = Vec::new();
     unsafe { xfree(cookie.nextline.cast()) };
     unsafe { xfree(firstline.cast()) };
-    let _ = unsafe { convert_setup(&raw mut cookie.conv, ptr::null_mut(), ptr::null_mut()) };
+    cookie.conv = CONV_NONE_INIT;
 }
 
 /// Everything from opening the script to closing it, in the order it has to

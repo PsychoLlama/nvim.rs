@@ -14,7 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use super::*;
 use crate::mbyte::ICONV_EINVAL;
@@ -206,7 +206,9 @@ impl<'a> ByteWriter<'a> {
     ///
     /// `fenc` must point at a NUL-terminated string, unaliased for the call.
     pub(crate) unsafe fn open_iconv(&mut self, fenc: *mut c_char) -> bool {
-        self.iconv = unsafe { my_iconv_open(fenc, c"utf-8".as_ptr().cast_mut()) };
+        let fenc = unsafe { CStr::from_ptr(fenc) };
+        self.iconv = crate::mbyte::open_iconv(fenc, c"utf-8")
+            .map_or_else(no_iconv, crate::os::iconv::Iconv::into_raw);
         if self.iconv == no_iconv() {
             return false;
         }

@@ -665,7 +665,8 @@ pub unsafe fn stuff_readbuf_one_line(mut s: *const c_char) {
             unsafe { stuff_readbuf_len(s, 3) };
             s = unsafe { s.add(3) };
         } else {
-            let c = unsafe { mb_cptr2char_adv(&raw mut s) };
+            let c = unsafe { utf_ptr2char(s) };
+            s = s.wrapping_add(unsafe { utf_ptr2len(s) } as usize);
             stuff_readbuf_char(if c == CAR || c == NL || c == ESC {
                 ' ' as c_int
             } else {
@@ -711,7 +712,8 @@ pub unsafe fn stuffescaped(mut arg: *const c_char, literally: bool) {
 
         // Then the character that stopped it, one at a time.
         if c_int::from(unsafe { *arg }) != NUL {
-            let c = unsafe { mb_cptr2char_adv(&raw mut arg) };
+            let c = unsafe { utf_ptr2char(arg) };
+            arg = arg.wrapping_add(unsafe { utf_ptr2len(arg) } as usize);
             if literally && ((c < ' ' as c_int && c != TAB) || c == DEL) {
                 stuff_readbuf_char(Ctrl_V);
             }

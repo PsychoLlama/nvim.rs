@@ -16,12 +16,12 @@ use std::ffi::{c_char, c_int};
 use neovim::ex_docmd::do_cmdline_cmd;
 use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
 use neovim::mbyte::{
-    mb_charlen, mb_charlen_len, mb_cptr2char_adv, mb_get_class, mb_off_next, mb_prevptr,
-    mb_ptr2char_adv, mb_stricmp, mb_string2cells, mb_string2cells_len, mb_strnicmp,
-    mb_utf_index_to_bytes, mb_utflen, utf_ambiguous_width, utf_char2bytes, utf_cp_bounds,
-    utf_cp_bounds_len, utf_head_off, utf_ptr2cells, utf_ptr2cells_len, utf_ptr2char,
-    utf_ptr2char_info, utf_ptr2len, utf_ptr2len_len, utf_ptr2str_char_info, utf_strnicmp,
-    utf_valid_string, utfc_next, utfc_ptr2len, utfc_ptr2len_len, utfc_ptr2schar, utfc_ptrlen2schar,
+    cluster_len, mb_charlen, mb_charlen_len, mb_get_class, mb_off_next, mb_prevptr, mb_strcmp_ic,
+    mb_string2cells, mb_string2cells_len, mb_strnicmp, mb_utf_index_to_bytes, mb_utflen,
+    utf_ambiguous_width, utf_char2bytes, utf_cp_bounds, utf_cp_bounds_len, utf_head_off,
+    utf_ptr2cells, utf_ptr2cells_len, utf_ptr2char, utf_ptr2char_info, utf_ptr2len,
+    utf_ptr2len_len, utf_ptr2str_char_info, utf_strnicmp, utf_valid_string, utfc_next,
+    utfc_ptr2len, utfc_ptr2schar, utfc_ptrlen2schar,
 };
 use neovim::memory::XString;
 use neovim::option::vars::{P_AMBW, P_ARSHAPE, P_EMOJI};
@@ -119,7 +119,7 @@ fn the_cluster_readers() {
                 let prev = mb_prevptr(p.cast_mut(), p.add(i).cast_mut());
                 d.add(prev.offset_from(p) as i64);
                 for n in bounds(text, i) {
-                    d.add(i64::from(utfc_ptr2len_len(p.add(i), n as c_int)));
+                    d.add(cluster_len(&text[i..i + n]) as i64);
                     d.add(i64::from(mb_charlen_len(p.add(i), n as c_int)));
                 }
             }
@@ -160,7 +160,7 @@ fn the_drawing_walk() {
                 }
                 // As `grid_line_puts` calls it: with the cluster's length.
                 for left in bounds(text, i) {
-                    let len = utfc_ptr2len_len(p.add(i), left as c_int);
+                    let len = cluster_len(&text[i..i + left]) as c_int;
                     let sc = utfc_ptrlen2schar(p.add(i), len, &raw mut firstc);
                     let n = schar_get(out.as_mut_ptr(), sc);
                     d.add(i64::from(firstc));
@@ -244,12 +244,20 @@ fn the_bounds_and_class_readers() {
 #[test]
 fn the_advancing_readers() {
     let got = digest(|d, _text, buf| {
-        for advance in [mb_ptr2char_adv, mb_cptr2char_adv] {
+        // What `mb_ptr2char_adv` and `mb_cptr2char_adv` did, as their
+        // callers now spell it: decode, then step a cluster or a character.
+        // SAFETY (both): the pointer the walk below hands them.
+        let steps: [fn(*const c_char) -> c_int; 2] = [
+            |p| unsafe { utfc_ptr2len(p) },
+            |p| unsafe { utf_ptr2len(p) },
+        ];
+        for step in steps {
             let mut cursor = buf.as_ptr();
             // SAFETY: each step stays inside the NUL-terminated `buf`.
             unsafe {
                 while *cursor != 0 {
-                    d.add(i64::from(advance(&raw mut cursor)));
+                    d.add(i64::from(utf_ptr2char(cursor)));
+                    cursor = cursor.add(step(cursor) as usize);
                     d.add(cursor.offset_from(buf.as_ptr()) as i64);
                 }
             }
@@ -296,7 +304,9 @@ fn case_insensitive_comparison() {
                 }));
             }
             // SAFETY: both are NUL-terminated.
-            d.add(i64::from(unsafe { mb_stricmp(bx.as_ptr(), by.as_ptr()) }));
+            d.add(i64::from(unsafe {
+                mb_strcmp_ic(true, bx.as_ptr(), by.as_ptr())
+            }));
         }
     }
     assert_eq!(d.value(), 0x3d00abbaa93d7f04, "case-insensitive comparison");

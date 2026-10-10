@@ -40,7 +40,7 @@ use crate::ascii::ascii_iswhite;
 use crate::charset::skiptowhite;
 use crate::cstr;
 use crate::hashtab::hash_find;
-use crate::mbyte::{mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char};
+use crate::mbyte::{mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char, utf_ptr2len};
 use crate::memory::xmemcpyz;
 use crate::memory::xstrlcpy;
 use crate::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
@@ -101,7 +101,8 @@ unsafe fn word_chars(word: *const c_char, out: &mut [c_int; MAXWLEN]) -> usize {
     // `MAXWLEN - 1` characters, so the scan stops at its terminator and
     // `len` stays inside `out`.
     while unsafe { *p } != 0 {
-        out[len] = unsafe { mb_cptr2char_adv(&raw mut p) };
+        out[len] = unsafe { utf_ptr2char(p) };
+        p = p.wrapping_add(unsafe { utf_ptr2len(p) } as usize);
         len += 1;
     }
     out[len] = 0;

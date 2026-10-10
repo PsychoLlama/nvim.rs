@@ -31,7 +31,7 @@ use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
-use crate::mbyte::{convert_setup, mb_strnicmp, string_convert, utfc_ptr2len};
+use crate::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::memory::{XString, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::state::{msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent};
 use crate::message::{e_invarg, e_listreq};

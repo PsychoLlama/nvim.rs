@@ -21,7 +21,7 @@
 
 use super::*;
 use crate::highlight_group::{HLF_SE, HLF_SO};
-use crate::mbyte::{utf8len_tab_zero, utfc_ptr2len_len};
+use crate::mbyte::{cluster_len, utf8len_tab_zero};
 use crate::memory::{xfree, xmemdupz};
 use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_putchar};
 use crate::os::time::os_hrtime;
@@ -193,17 +193,10 @@ unsafe extern "C" fn out_data_event(argv: *mut *mut c_void) {
 pub(crate) fn out_data_append_to_screen(output: &[u8], count: &mut usize, fd: c_int, eof: bool) {
     let mut at = 0;
     while at < *count {
-        // SAFETY: `output[at..*count]` is in bounds, and `utfc_ptr2len_len`
-        // is bounded by the length it is handed.
-        let step = unsafe {
-            if output[at] == 0 {
-                1
-            } else {
-                utfc_ptr2len_len(
-                    output[at..].as_ptr().cast::<c_char>(),
-                    (*count - at) as c_int,
-                ) as usize
-            }
+        let step = if output[at] == 0 {
+            1
+        } else {
+            cluster_len(&output[at..*count])
         };
         if !eof && step == 1 && utf8len_tab_zero[output[at] as usize] as usize > *count - at {
             // An incomplete sequence at the end: leave it for the next chunk.

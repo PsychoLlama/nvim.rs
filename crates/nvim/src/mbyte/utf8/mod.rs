@@ -1,4 +1,5 @@
-//! The UTF-8 codec: bytes to a codepoint and back.
+//! The UTF-8 codec: bytes to a codepoint and back -- and the home of every
+//! pointer spelling of the multibyte readers that still has callers.
 //!
 //! This port decodes the *original* UTF-8, up to six bytes, not the four-byte
 //! form Unicode settled on in 2003. That is upstream's choice and it shows up
@@ -8,21 +9,35 @@
 //!
 //! Two decoders, deliberately different.
 //!
-//! - [`utf_ptr2char`] is forgiving: given a byte that is not the start of a
-//!   valid sequence, or a sequence with a bad continuation byte, it answers
-//!   the *first byte's own value*. Nothing is ever an error, so a caller
-//!   walking a buffer of arbitrary bytes always gets something.
-//! - [`utf_ptr2char_info_impl`] is strict: it answers a **negative** number
-//!   for a sequence it will not accept, which is how the header's inlined
-//!   `utf_ptr2char_info` decides to report a length of one. It never handles
-//!   ASCII — its caller must have ruled that out — and its arithmetic is
-//!   branch-light on purpose, because it is the decode on the drawing path.
-//!
-//! `utf_ptr2char_info_impl` and `utf8len_tab` are the two symbols
-//! `unit-fixtures.so` compiles against, so neither may change signature.
+//! - [`utf_ptr2char`] ([`char_at`]) is forgiving: given a byte that is not
+//!   the start of a valid sequence, or a sequence with a bad continuation
+//!   byte, it answers the *first byte's own value*. Nothing is ever an error,
+//!   so a caller walking a buffer of arbitrary bytes always gets something.
+//! - [`utf_ptr2char_info_impl`] ([`strict_char_at`]) is strict: it answers a
+//!   **negative** number for a sequence it will not accept, which is how the
+//!   header's inlined `utf_ptr2char_info` decides to report a length of one.
+//!   It never handles ASCII — its caller must have ruled that out — and its
+//!   arithmetic is branch-light on purpose, because it is the decode on the
+//!   drawing path.
 //!
 //! The `utfc_*` spellings count the composing characters that follow a base
 //! character as part of it; the plain ones stop at the base.
+//!
+//! # The pointer forms
+//!
+//! Every reader is written once, in [`text`], over a [`text::Text`] that is
+//! either a slice or a NUL-terminated pointer. The slice forms are the API;
+//! the pointer forms below are one-line shims over the same readers, kept
+//! for the callers outside this family whose own cursor is still a pointer
+//! (the regexp engine, spell, the drawing path) and deleted as those convert.
+//! Because both spellings are the same code monomorphised twice, a shim
+//! compiles to what the pointer body it replaced compiled to.
+//!
+//! Four of them are exported by name and may not change signature:
+//! `utf_ptr2char`, `utf_ptr2len` and `utf_ptr2char_info_impl` are
+//! `metrics/abi-ledger.jsonl` rows, and `utf8len_tab` (in `tables`) is
+//! compiled *against* by `unit-fixtures.so`. That, and the shims, is why
+//! this file allows `unsafe` and its siblings do not.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // The exports here are metrics/abi-ledger.jsonl rows (`utf_ptr2char`, `utf_ptr2char_info_impl`, `utf_ptr2len`), and
@@ -30,16 +45,22 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 
 // The carve of the transpiled module; see each child's docs.
 mod slice;
 mod tables;
+mod text;
 
 pub use self::slice::{
     char_at, char_info_at, char_len, encode_char, promised_char_len, strict_char_at,
 };
 pub use self::tables::*;
+use self::text::{
+    NulTerminated, Prefix, Text, ambiguous_width_in, cells_in, char_at_in, char_info_in,
+    char_len_in, cluster_len_in, head_off_in, next_cluster_in, string_cells_in,
+};
 
 /// The characters of `s`, as `MB_PTR_ADV` steps over them: one item per base
 /// character, with any composing characters folded into the step.
@@ -127,91 +148,25 @@ pub unsafe extern "C" fn utf_ptr2char_info_impl(p: *const uint8_t, len: uintptr_
 }
 
 /// The codepoint at `p`, or the first byte's own value if there is no
-/// complete sequence there.
+/// complete sequence there; [`char_at`] over a string.
 ///
 /// # Safety
 ///
-/// `p` must point at a NUL-terminated string. Only as many bytes as the lead
-/// byte promises are read, and a NUL is never a continuation byte, so a
-/// truncated sequence stops at it.
+/// `p` must point at a NUL-terminated string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn utf_ptr2char(p_in: *const c_char) -> c_int {
-    let p = p_in as *const u8;
-    let first = unsafe { *p } as u32;
-    if first < 0x80 {
-        return first as c_int;
-    }
-    let len = utf8len_tab[first as usize] as usize;
-    if len < 2 {
-        // A continuation byte or 0xFE/0xFF: not a lead byte at all.
-        return first as c_int;
-    }
-    let mut code_point = first & LEAD_PAYLOAD[len];
-    for i in 1..len {
-        let cur = unsafe { *p.add(i) };
-        if !utf_is_trail_byte(cur) {
-            return first as c_int;
-        }
-        code_point = (code_point << 6) | (cur as u32 & 0x3f);
-    }
-    code_point as c_int
+pub unsafe extern "C" fn utf_ptr2char(p: *const c_char) -> c_int {
+    char_at_in(unsafe { NulTerminated::new(p) }, 0)
 }
 
-/// Read one character out of `*s`, advancing it and shrinking `*n`.
-///
-/// Answers 0 when nothing is left, and −1 for a byte sequence that is not a
-/// character — including a valid-looking one whose value equals its own first
-/// byte, which is how an overlong encoding is caught. `0xC3 0x83` (Ã) is
-/// exempted because it decodes to 0xC3, the value of its own lead byte, and
-/// is a real character.
+/// How many bytes the character at `p` occupies, or 0 at a NUL;
+/// [`char_len`] over a string.
 ///
 /// # Safety
 ///
-/// `*s` must point at `*n` readable bytes.
-pub(crate) unsafe fn utf_safe_read_char_adv(s: *mut *const c_char, n: *mut size_t) -> c_int {
-    if unsafe { *n } == 0 {
-        return 0;
-    }
-    let first = unsafe { **s } as u8;
-    let k = utf8len_tab_zero[first as usize];
-    if k == 1 {
-        unsafe { *n -= 1 };
-        unsafe { *s = (*s).offset(1) };
-        return first as c_int;
-    }
-    if k as size_t <= unsafe { *n } {
-        let c = unsafe { utf_ptr2char(*s) };
-        if c != first as c_int || (c == 0xc3 && unsafe { *(*s).offset(1) } as u8 == 0x83) {
-            unsafe { *s = (*s).offset(k as isize) };
-            unsafe { *n -= k as size_t };
-            return c;
-        }
-    }
-    -1
-}
-
-/// The codepoint at `*pp`, advancing `*pp` past it **and its composing
-/// characters**.
-///
-/// # Safety
-///
-/// `*pp` must point at a NUL-terminated string.
-pub unsafe fn mb_ptr2char_adv(cursor: *mut *const c_char) -> c_int {
-    let c = unsafe { utf_ptr2char(*cursor) };
-    unsafe { *cursor = (*cursor).offset(utfc_ptr2len(*cursor) as isize) };
-    c
-}
-
-/// The codepoint at `*pp`, advancing `*pp` past the base character only —
-/// so the next call answers the composing character.
-///
-/// # Safety
-///
-/// `*pp` must point at a NUL-terminated string.
-pub unsafe fn mb_cptr2char_adv(cursor: *mut *const c_char) -> c_int {
-    let c = unsafe { utf_ptr2char(*cursor) };
-    unsafe { *cursor = (*cursor).offset(utf_ptr2len(*cursor) as isize) };
-    c
+/// `p` must point at a NUL-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn utf_ptr2len(p: *const c_char) -> c_int {
+    char_len_in(unsafe { NulTerminated::new(p) }, 0) as c_int
 }
 
 /// Can `c` combine onto a character before it, whatever that character is?
@@ -228,23 +183,22 @@ pub fn utf_iscomposing_first(c: c_int) -> bool {
 ///
 /// # Safety
 ///
-/// `p1` and `p2` must point at characters in a NUL-terminated string.
+/// `p1` and `p2` must point at characters in a NUL-terminated string, and
+/// `state` must be null or point at a live [`GraphemeState`].
 pub unsafe fn utf_composinglike(
     p1: *const c_char,
     p2: *const c_char,
     state: *mut GraphemeState,
 ) -> bool {
+    let (cur, next) = unsafe { (NulTerminated::new(p1), NulTerminated::new(p2)) };
     // ASCII never combines, and this is the hot answer.
-    if (unsafe { *p2 } as u8) < 128 {
-        return false;
-    }
-    unsafe { utf_iscomposing(utf_ptr2char(p1), utf_ptr2char(p2), state) }
+    next.byte(0) >= 0x80
+        && iscomposing(char_at_in(cur, 0), char_at_in(next, 0), unsafe {
+            state.as_mut()
+        })
 }
 
 /// Is `c2` part of the same grapheme cluster as `c1`?
-///
-/// Arabic gets an extra rule of its own: two letters that a shaper would join
-/// are treated as one character here even though Unicode breaks between them.
 ///
 /// # Safety
 ///
@@ -258,6 +212,9 @@ pub unsafe fn utf_iscomposing(c1: c_int, c2: c_int, state: *mut GraphemeState) -
 /// [`utf_iscomposing`] with the walk state borrowed rather than pointed at,
 /// which is all the pointer ever meant. `None` is a walk with no state to
 /// carry -- the caller is asking about two characters in isolation.
+///
+/// Arabic gets an extra rule of its own: two letters that a shaper would join
+/// are treated as one character here even though Unicode breaks between them.
 pub fn iscomposing(c1: c_int, c2: c_int, state: Option<&mut GraphemeState>) -> bool {
     !utf8proc_grapheme_break_stateful(c1 as utf8proc_int32_t, c2 as utf8proc_int32_t, state)
         || crate::arabic::arabic_combine(c1, c2)
@@ -292,12 +249,13 @@ pub fn utf_iscomposing_legacy(c: c_int) -> bool {
 /// way.
 #[inline(always)]
 pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScreenChar {
-    let c = unsafe { utf_ptr2char(p) };
+    let text = unsafe { NulTerminated::new(p) };
+    let c = char_at_in(text, 0);
     unsafe { *firstc = c };
     let first_compose = utf_iscomposing_first(c);
-    let maxlen = MAX_SCHAR_SIZE - 1 - first_compose as c_int;
-    let len = unsafe { utfc_ptr2len_len(p, maxlen) } as size_t;
-    if len == 1 && unsafe { *p } as u8 >= 0x80 {
+    let maxlen = (MAX_SCHAR_SIZE - 1) as usize - usize::from(first_compose);
+    let len = cluster_len_in(Prefix::new(text, 0, maxlen), 0);
+    if len == 1 && text.byte(0) >= 0x80 {
         return 0;
     }
     unsafe { schar_from_buf_first(p, len, first_compose) }
@@ -325,7 +283,9 @@ pub unsafe fn utfc_ptrlen2schar(
     let first_compose = utf_iscomposing_first(c);
     let maxlen = MAX_SCHAR_SIZE - 1 - first_compose as c_int;
     if len > maxlen {
-        len = unsafe { utfc_ptr2len_len(p, maxlen) };
+        // Only the first `maxlen` of the caller's `len` bytes are read.
+        let text = unsafe { NulTerminated::new(p) };
+        len = cluster_len_in(Prefix::new(text, 0, maxlen as usize), 0) as c_int;
     }
     unsafe { schar_from_buf_first(p, len as size_t, first_compose) }
 }
@@ -351,145 +311,39 @@ unsafe fn schar_from_buf_first(buf: *const c_char, len: size_t, first_compose: b
     unsafe { schar_from_buf(cbuf.as_ptr(), len + 1) }
 }
 
-/// How many bytes the character at `p` occupies, or 0 at a NUL.
-///
-/// Answers 1 for anything that is not a complete sequence, so a walk always
-/// makes progress.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn utf_ptr2len(p_in: *const c_char) -> c_int {
-    let p = p_in as *const u8;
-    if unsafe { *p } == 0 {
-        return 0;
-    }
-    let len = utf8len_tab[unsafe { *p } as usize] as c_int;
-    for i in 1..len {
-        if !utf_is_trail_byte(unsafe { *p.offset(i as isize) }) {
-            return 1;
-        }
-    }
-    len
-}
-
 /// How many bytes the sequence introduced by byte `b` occupies.
 pub fn utf_byte2len(b: c_int) -> c_int {
     utf8len_tab[b as usize] as c_int
 }
 
-/// [`utf_ptr2len`] over at most `size` bytes.
-///
-/// A sequence cut short by `size` still reports its **full** length, so the
-/// caller can tell "incomplete" from "invalid" by comparing against `size`.
+/// [`utf_ptr2len`] over at most `size` bytes, reporting a sequence `size`
+/// cuts short at its **full** length; [`promised_char_len`] over the
+/// caller's bytes.
 ///
 /// # Safety
 ///
-/// `p` must point at at least one readable byte, and at `min(size, len)`.
+/// `p` must point at `max(size, 1)` readable bytes.
 pub unsafe fn utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
-    let len = utf8len_tab[unsafe { *p } as u8 as usize] as c_int;
-    if len == 1 {
-        return 1;
-    }
-    for i in 1..len.min(size) {
-        if !utf_is_trail_byte(unsafe { *p.offset(i as isize) } as u8) {
-            return 1;
-        }
-    }
-    len
+    let held = usize::try_from(size).unwrap_or(0).max(1);
+    promised_char_len(unsafe { cstr::slice_at(p, held) }) as c_int
 }
 
 /// How many bytes the whole grapheme cluster at `p` occupies — the base
-/// character plus every composing character following it.
+/// character plus every composing character following it — or 0 at a NUL;
+/// [`cluster_len`] over a string.
 ///
 /// # Safety
 ///
 /// `p` must point at a NUL-terminated string.
 pub unsafe fn utfc_ptr2len(p: *const c_char) -> c_int {
-    let first = unsafe { *p } as u8;
-    if first == 0 {
-        return 0;
-    }
-    // Two ASCII bytes: nothing can be combining, answer without decoding.
-    if first < 0x80 && (unsafe { *p.offset(1) } as u8) < 0x80 {
-        return 1;
-    }
-    let mut len = unsafe { utf_ptr2len(p) };
-    if len == 1 && first >= 0x80 {
-        return 1;
-    }
-    let mut prevlen = 0;
-    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    loop {
-        let next = unsafe { p.offset(len as isize) };
-        if (unsafe { *next } as u8) < 0x80
-            || !unsafe { utf_composinglike(p.offset(prevlen as isize), next, &raw mut state) }
-        {
-            return len;
-        }
-        prevlen = len;
-        len += unsafe { utf_ptr2len(next) };
-    }
-}
-
-/// [`utfc_ptr2len`] over at most `size` bytes.
-///
-/// A composing character that is only partly within `size` is left out: the
-/// rest of it may still arrive.
-///
-/// # Safety
-///
-/// `p` must point at `size` readable bytes.
-pub unsafe fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
-    if size < 1 || unsafe { *p } == 0 {
-        return 0;
-    }
-    let first = unsafe { *p } as u8;
-    if first < 0x80 && (size == 1 || (unsafe { *p.offset(1) } as u8) < 0x80) {
-        return 1;
-    }
-    let mut len = unsafe { utf_ptr2len_len(p, size) };
-    if (len == 1 && first >= 0x80) || len > size {
-        return 1;
-    }
-    let mut prevlen = 0;
-    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    while len < size {
-        let next = unsafe { p.offset(len as isize) };
-        if (unsafe { *next } as u8) < 0x80 {
-            break;
-        }
-        let next_len = unsafe { utf_ptr2len_len(next, size - len) };
-        if next_len > size - len {
-            break; // truncated by `size`, not part of this cluster
-        }
-        if !unsafe { utf_composinglike(p.offset(prevlen as isize), next, &raw mut state) } {
-            break;
-        }
-        prevlen = len;
-        len += next_len;
-    }
-    len
-}
-
-/// Is the character at the start of `next` part of the same grapheme cluster
-/// as the one at the start of `cur`?
-///
-/// The slice form of [`utf_composinglike`], and its body.
-#[inline]
-fn composes_onto(cur: &[u8], next: &[u8], state: &mut GraphemeState) -> bool {
-    // ASCII never combines, and this is the hot answer.
-    next.first().is_some_and(|&byte| byte >= 128)
-        && iscomposing(char_at(cur), char_at(next), Some(state))
+    cluster_len_in(unsafe { NulTerminated::new(p) }, 0) as c_int
 }
 
 /// How many bytes the grapheme cluster at the start of `bytes` occupies --
 /// the base character plus every composing character following it -- or 0 if
 /// `bytes` is empty.
 ///
-/// The slice form of [`utfc_ptr2len`], the body of [`utfc_ptr2len_len`], and
-/// the cluster twin of [`char_len`]. The bound the slice carries does the
+/// The cluster twin of [`char_len`]. The bound the slice carries does the
 /// work the pointer form's NUL did, so the answer is never larger than
 /// `bytes.len()`; a composing character only partly inside the slice is left
 /// out, because the rest of it may still arrive.
@@ -498,40 +352,7 @@ fn composes_onto(cur: &[u8], next: &[u8], state: &mut GraphemeState) -> bool {
 /// ordinary byte, one character long, not the end of the string.
 #[inline]
 pub fn cluster_len(bytes: &[u8]) -> usize {
-    let Some(&first) = bytes.first() else {
-        return 0;
-    };
-    if first == 0 {
-        return 1; // an embedded NUL is an ordinary byte here
-    }
-    // Two ASCII bytes: nothing can be combining, answer without decoding.
-    if first < 0x80 && (bytes.len() == 1 || bytes[1] < 0x80) {
-        return 1;
-    }
-    let mut len = promised_char_len(bytes);
-    if (len == 1 && first >= 0x80) || len > bytes.len() {
-        return 1;
-    }
-    let mut prev = 0;
-    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    while len < bytes.len() {
-        let next = &bytes[len..];
-        // ASCII never combines, and this is the hot answer -- asked before
-        // anything is decoded, as the pointer form asked it.
-        if next[0] < 0x80 {
-            break;
-        }
-        let next_len = promised_char_len(next);
-        if next_len > next.len() {
-            break; // cut short by the end of the slice: not part of this
-        }
-        if !composes_onto(&bytes[prev..], next, &mut state) {
-            break;
-        }
-        prev = len;
-        len += next_len;
-    }
-    len
+    cluster_len_in(bytes, 0)
 }
 
 /// The grapheme clusters of `bytes`, as `(byte offset, codepoint)`.
@@ -583,43 +404,433 @@ pub fn utf_char2len(c: c_int) -> c_int {
     }
 }
 
-/// Encode `c` into `buf`, answering how many bytes it took.
+/// Encode `c` into `buf`, answering how many bytes it took; [`encode_char`]
+/// into the caller's buffer.
 ///
 /// # Safety
 ///
 /// `buf` must have room for [`utf_char2len`] bytes — up to `MB_MAXCHAR`.
 pub unsafe fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int {
     let len = utf_char2len(c) as usize;
-    // SAFETY: the caller's promise, spelled as the slice it describes.
-    let out = unsafe { core::slice::from_raw_parts_mut(buf.cast::<u8>(), len) };
-    encode_char(c, out) as c_int
+    encode_char(c, unsafe {
+        core::slice::from_raw_parts_mut(buf.cast::<u8>(), len)
+    }) as c_int
 }
 
-/// The codepoint at `p` and the number of bytes it occupies. An invalid
-/// sequence reports a negative value with a length of one.
-///
-/// The Rust twin of the header's inlined `utf_ptr2char_info`; the C fixture in
-/// `test/unit/fixtures/shim.h` carries its own copy of the same body.
+/// The codepoint at `p` and the number of bytes it occupies; an invalid
+/// sequence reports a negative value with a length of one. [`char_info_at`]
+/// over a string, and the Rust twin of the header's inlined
+/// `utf_ptr2char_info`; the C fixture in `test/unit/fixtures/shim.h` carries
+/// its own copy of the same body.
 ///
 /// # Safety
 ///
 /// `p` must point into a NUL-terminated string.
 #[inline(always)]
-pub unsafe fn utf_ptr2char_info(p_in: *const c_char) -> CharInfo {
-    let p = p_in as *const uint8_t;
-    let first = unsafe { *p };
-    if first < 0x80 {
-        return CharInfo {
-            value: first as int32_t,
-            len: 1,
-        };
+pub unsafe fn utf_ptr2char_info(p: *const c_char) -> CharInfo {
+    char_info_in(unsafe { NulTerminated::new(p) }, 0)
+}
+
+/// How far back from `p` the grapheme cluster covering it starts; [`head_off`]
+/// over a string.
+///
+/// # Safety
+///
+/// `base` must point at the start of a NUL-terminated string and `p` into it.
+pub unsafe fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int {
+    let at = unsafe { p.offset_from(base) }.unsigned_abs();
+    head_off_in(unsafe { NulTerminated::new(base) }, at) as c_int
+}
+
+/// How far back from byte `at` the grapheme cluster covering it starts.
+///
+/// Composing characters count as part of the character they follow, so this
+/// is not just "step back over continuation bytes". `at` may be `text.len()`:
+/// a walk that steps one past the last character is asking about the
+/// terminator, which is ASCII and starts no cluster.
+///
+/// The walk stays inside `text` in both directions: a sequence the slice
+/// cuts short is an illegal one, and its bytes are their own characters.
+pub fn head_off(text: &[u8], at: usize) -> usize {
+    head_off_in(text, at)
+}
+
+/// How many bytes forward from `p` the next character starts, when `p` is in
+/// the middle of one. Zero when `p` is already at a character start.
+///
+/// # Safety
+///
+/// `base` must point at the start of a NUL-terminated string and `p` into it.
+pub unsafe fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int {
+    let (text, at) = unsafe { (NulTerminated::new(base), p.offset_from(base).unsigned_abs()) };
+    let back = head_off_in(text, at);
+    if back == 0 {
+        return 0;
     }
-    let len = utf8len_tab[first as usize] as c_int;
-    let code_point = unsafe { utf_ptr2char_info_impl(p, len as uintptr_t) };
-    CharInfo {
-        value: code_point,
-        len: if code_point < 0 { 1 } else { len },
+    (cluster_len_in(text, at - back) - back) as c_int
+}
+
+/// The start of the character before `p`, or `p` itself at the start of the
+/// line.
+///
+/// # Safety
+///
+/// `line` must point at the start of a NUL-terminated string and `p` into it.
+pub unsafe fn mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char {
+    if p <= line {
+        return p;
     }
+    let before = unsafe { p.offset_from(line) }.unsigned_abs() - 1;
+    let back = head_off_in(unsafe { NulTerminated::new(line) }, before);
+    p.wrapping_sub(back + 1)
+}
+
+/// `text` paired with its codepoint: the start of a character and the
+/// character itself. Composing characters are not consulted.
+///
+/// # Safety
+///
+/// `text` must point into a NUL-terminated string.
+#[inline(always)]
+pub unsafe fn utf_ptr2str_char_info(text: *mut c_char) -> StrCharInfo {
+    StrCharInfo {
+        ptr: text,
+        chr: unsafe { utf_ptr2char_info(text) },
+    }
+}
+
+/// The character after `cur`, treating a following composing character as
+/// part of the *current* one.
+///
+/// # Safety
+///
+/// `cur.ptr` must point into a NUL-terminated string, at a character start.
+#[inline(always)]
+pub unsafe fn utfc_next(cur: StrCharInfo) -> StrCharInfo {
+    let (off, chr) = next_cluster_in(unsafe { NulTerminated::new(cur.ptr) }, 0, cur.chr);
+    StrCharInfo {
+        ptr: cur.ptr.wrapping_add(off),
+        chr,
+    }
+}
+
+/// How many characters a NUL-terminated string holds; [`char_count`] over a
+/// string. A null pointer is zero.
+///
+/// # Safety
+///
+/// `str` must be null or point at a NUL-terminated string.
+pub unsafe fn mb_charlen(str: *const c_char) -> c_int {
+    let bytes = unsafe { cstr::at_opt(str) }.map_or(&[][..], CStr::to_bytes);
+    c_int::try_from(char_count(bytes)).expect("a count of bytes bounds a count of characters")
+}
+
+/// [`mb_charlen`] over at most `len` bytes, stopping at a NUL.
+///
+/// # Safety
+///
+/// `str` must point at `len` readable bytes, or at a NUL before them.
+pub unsafe fn mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
+    let bytes = unsafe { cstr::prefix_at(str, usize::try_from(len).unwrap_or(0)) };
+    c_int::try_from(char_count(bytes)).expect("a count of bytes fits a count of characters")
+}
+
+/// Both ends of the codepoint covering `p`, as offsets from it; [`cp_bounds`]
+/// over the `p_len` bytes from `p` and everything before it.
+///
+/// # Safety
+///
+/// `base <= p_in`, `p_len > 0`, and `p_in` must have `p_len` readable bytes.
+pub unsafe fn utf_cp_bounds_len(
+    base: *const c_char,
+    p_in: *const c_char,
+    p_len: c_int,
+) -> CharBoundsOff {
+    debug_assert!(base <= p_in && p_len > 0, "base <= p_in && p_len > 0");
+    // Only a sequence's worth forward is ever read, so a `p_len` larger than
+    // that -- `INT_MAX`, from [`utf_cp_bounds`] -- may be clamped to it
+    // without changing an answer: the "complete within what is left" test
+    // can only fail beyond it.
+    let at = unsafe { p_in.offset_from(base) }.unsigned_abs();
+    let forward = usize::try_from(p_len).unwrap_or(0).min(MB_MAXCHAR);
+    cp_bounds(unsafe { cstr::slice_at(base, at + forward) }, at)
+}
+
+/// [`utf_cp_bounds_len`] over a NUL-terminated string, where the length does
+/// not bound anything.
+///
+/// # Safety
+///
+/// `base` must point at the start of a NUL-terminated string and `p_in` into
+/// it, with a sequence's worth of bytes (or the NUL) after `p_in`.
+pub unsafe fn utf_cp_bounds(base: *const c_char, p_in: *const c_char) -> CharBoundsOff {
+    unsafe { utf_cp_bounds_len(base, p_in, INT_MAX) }
+}
+
+/// Count the characters in `s[..len]`, adding the totals to `codepoints` and
+/// `codeunits`; [`utf_lengths`] over a string.
+///
+/// # Safety
+///
+/// `s` must point at a NUL-terminated string at least `len` bytes long; both
+/// counters must be writable.
+pub unsafe fn mb_utflen(
+    s: *const c_char,
+    len: size_t,
+    codepoints: *mut size_t,
+    codeunits: *mut size_t,
+) {
+    let (points, units) = text::utf_lengths_in(unsafe { NulTerminated::new(s) }, len);
+    unsafe { *codepoints += points };
+    unsafe { *codeunits += units };
+}
+
+/// The byte offset just past the character at index `index`, counted in
+/// codepoints or in UTF-16 code units, or −1 if the string is shorter;
+/// [`utf_index_to_byte`] over a string.
+///
+/// # Safety
+///
+/// `s` must point at a NUL-terminated string at least `len` bytes long.
+pub unsafe fn mb_utf_index_to_bytes(
+    s: *const c_char,
+    len: size_t,
+    index: size_t,
+    use_utf16_units: bool,
+) -> ssize_t {
+    let text = unsafe { NulTerminated::new(s) };
+    text::utf_index_to_byte_in(text, len, index, use_utf16_units).map_or(-1, |at| at.cast_signed())
+}
+
+/// Count the characters in `text[..len]`: how many codepoints, and how many
+/// UTF-16 code units. The two differ by the surrogate pairs: a character
+/// above the BMP is one codepoint but two UTF-16 code units, which is what the
+/// LSP-facing callers need.
+///
+/// **Not a slice walk over `text[..len]`, deliberately.** A sequence `len`
+/// cuts short still reports its full length, and is decoded out of the
+/// bytes of `text` past `len` -- which is how a four-byte character
+/// straddling the cut is still counted as a surrogate pair. Upstream's body
+/// does the same.
+pub fn utf_lengths(text: &[u8], len: usize) -> (usize, usize) {
+    text::utf_lengths_in(text, len)
+}
+
+/// The byte offset just past the character at index `index` of `text[..len]`,
+/// counted in codepoints or in UTF-16 code units, or `None` if there are
+/// fewer. Counted the way [`utf_lengths`] counts.
+pub fn utf_index_to_byte(
+    text: &[u8],
+    len: usize,
+    index: usize,
+    use_utf16_units: bool,
+) -> Option<usize> {
+    text::utf_index_to_byte_in(text, len, index, use_utf16_units)
+}
+
+/// How many cells the character at `p` occupies; [`cells_at`] over a string.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
+pub unsafe fn utf_ptr2cells(p: *const c_char) -> c_int {
+    cells_in(unsafe { NulTerminated::new(p) }, 0)
+}
+
+/// How many cells the character at the start of `bytes` occupies.
+///
+/// The answer for an *empty* slice is 1 -- what the pointer form answers at a
+/// NUL, because nothing to print still occupies the cell the cursor sits in.
+/// The slice is the string, so a sequence it cuts short is an illegal one,
+/// drawn as `<xx>`.
+#[inline]
+pub fn cells_at(bytes: &[u8]) -> c_int {
+    cells_in(bytes, 0)
+}
+
+/// [`utf_ptr2cells`] over a buffer that is `size` bytes long rather than
+/// NUL-terminated; see [`text::partial_cells_in`] for upstream's shape.
+///
+/// # Safety
+///
+/// `p` must point at `size` readable bytes, and a sequence `size` cuts short
+/// must be completed (or ended by a NUL) by the bytes after them.
+pub unsafe fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int {
+    let size = usize::try_from(size).unwrap_or(0);
+    text::partial_cells_in(unsafe { NulTerminated::new(p) }, 0, size)
+}
+
+/// The total width of a NUL-terminated string; [`string_cells`] over it.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string.
+pub unsafe fn mb_string2cells(str: *const c_char) -> size_t {
+    string_cells_in(unsafe { NulTerminated::new(str) }, 0)
+}
+
+/// The total width of `bytes`. A NUL inside the slice is an ordinary byte,
+/// one cell wide, rather than the end of the string.
+pub fn string_cells(bytes: &[u8]) -> usize {
+    string_cells_in(bytes, 0)
+}
+
+/// The total width of at most `size` bytes, stopping early at a NUL, each
+/// character measured as [`utf_ptr2cells_len`] measures it.
+///
+/// # Safety
+///
+/// As [`utf_ptr2cells_len`].
+pub unsafe fn mb_string2cells_len(str: *const c_char, size: size_t) -> size_t {
+    text::partial_string_cells_in(unsafe { NulTerminated::new(str) }, size)
+}
+
+/// Might the character at `p` be drawn at a width the grid did not predict?
+/// [`ambiguous_width_at`] over a string.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
+pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
+    ambiguous_width_in(unsafe { NulTerminated::new(p) }, 0)
+}
+
+/// Might the character at the start of `bytes` be drawn at a width the grid
+/// did not predict? An ambiguous-width character answers whatever
+/// `'ambiwidth'` currently says, an emoji whatever `'emoji'` says, and a VS-16
+/// after any character turns it into an emoji.
+pub fn ambiguous_width_at(bytes: &[u8]) -> bool {
+    ambiguous_width_in(bytes, 0)
+}
+
+/// The character class of the character `p` points at, deciding Latin-1
+/// with `chartab`; [`class_with`] over a string.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string, and `chartab` at a buffer's
+/// `b_chartab`, the four-word `'iskeyword'` bitmap.
+pub unsafe fn mb_get_class_tab(p: *const c_char, chartab: *const uint64_t) -> c_int {
+    let chartab = unsafe { &*chartab.cast::<[uint64_t; 4]>() };
+    let text = unsafe { NulTerminated::new(p) };
+    class_of(text.byte(0), || char_at_in(text, 0), chartab)
+}
+
+/// [`mb_get_class_tab`] against the current buffer's `'iskeyword'`.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
+pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
+    let text = unsafe { NulTerminated::new(p) };
+    class_of(
+        text.byte(0),
+        || char_at_in(text, 0),
+        &Buf::current().b_chartab,
+    )
+}
+
+/// Compare two strings case-insensitively, at most `n1`/`n2` bytes each and
+/// never past a NUL; [`strnicmp_in`] over them.
+///
+/// # Safety
+///
+/// `s1` and `s2` must point at `n1` and `n2` readable bytes, or at a NUL
+/// before them.
+pub unsafe fn utf_strnicmp(s1: *const c_char, s2: *const c_char, n1: size_t, n2: size_t) -> c_int {
+    strnicmp_in(unsafe { cstr::prefix_at(s1, n1) }, unsafe {
+        cstr::prefix_at(s2, n2)
+    })
+}
+
+/// [`utf_strnicmp`] with one length for both sides.
+///
+/// # Safety
+///
+/// Both strings must have `nn` readable bytes, or a NUL before them.
+pub unsafe fn mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: size_t) -> c_int {
+    unsafe { utf_strnicmp(s1, s2, nn, nn) }
+}
+
+/// `strcmp` or [`utf_strnicmp`] of two NUL-terminated strings, whichever `ic`
+/// asks for.
+///
+/// # Safety
+///
+/// Both strings must be NUL-terminated.
+pub unsafe fn mb_strcmp_ic(ic: bool, s1: *const c_char, s2: *const c_char) -> c_int {
+    let (s1, s2) = unsafe { (cstr::bytes_at(s1), cstr::bytes_at(s2)) };
+    strcmp_ic_in(ic, s1, s2)
+}
+
+/// Is every byte of `s` part of a well-formed UTF-8 sequence? `end` bounds
+/// the check, and a null `end` means "up to the NUL"; [`valid_utf8`] over
+/// those bytes.
+///
+/// # Safety
+///
+/// `s` must be NUL-terminated when `end` is null, and reach `end` otherwise.
+pub unsafe fn utf_valid_string(s: *const c_char, end: *const c_char) -> bool {
+    let bytes = if end.is_null() {
+        unsafe { cstr::bytes_at(s) }
+    } else {
+        unsafe { cstr::slice_at(s, end.offset_from(s).unsigned_abs()) }
+    };
+    valid_utf8(bytes)
+}
+
+/// Decode one character out of a key-encoded string, advancing `*cursor` past
+/// it; [`unescape_at`] over the string. Answers null when there is no
+/// multibyte character there, or `into`, holding it NUL-terminated.
+///
+/// # Safety
+///
+/// `*cursor` must point at a NUL-terminated string.
+pub(crate) unsafe fn mb_unescape(
+    cursor: *mut *const c_char,
+    into: &mut [c_char; MB_MAXCHAR],
+) -> *const c_char {
+    // Four characters, each at most three bytes escaped, and the NUL: the
+    // most `unescape_at` looks at.
+    let text = unsafe { cstr::prefix_at(*cursor, 13) };
+    let Some((bytes, used)) = unescape_at(text) else {
+        return core::ptr::null();
+    };
+    *into = [0; MB_MAXCHAR];
+    for (slot, &byte) in into.iter_mut().zip(&bytes) {
+        *slot = byte as c_char;
+    }
+    unsafe { *cursor = (*cursor).add(used) };
+    into.as_ptr()
+}
+
+/// The properties of encoding `name`; [`canon_props`] over the string.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
+pub unsafe fn enc_canon_props(name: *const c_char) -> EncProps {
+    canon_props(unsafe { cstr::bytes_at(name) })
+}
+
+/// `p` past an encoding name's `8bit-`/`2byte-` prefix; [`skip_len`] over
+/// the string.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
+pub unsafe fn enc_skip(p: *mut c_char) -> *mut c_char {
+    p.wrapping_add(skip_len(unsafe { cstr::bytes_at(p) }))
+}
+
+/// The canonical spelling of encoding name `enc`, `xmalloc`'d;
+/// [`canonize`] over the string.
+///
+/// # Safety
+///
+/// `enc` must point at a NUL-terminated string.
+pub unsafe fn enc_canonize(enc: *mut c_char) -> *mut c_char {
+    canonize(unsafe { cstr::bytes_at(enc) }).into_raw()
 }
 
 #[cfg(test)]

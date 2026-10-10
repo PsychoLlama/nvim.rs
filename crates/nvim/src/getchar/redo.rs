@@ -138,7 +138,8 @@ pub unsafe fn append_to_redobuff_literally(str: *const c_char, len: c_int) {
 
         // Then the special or multibyte character that stopped the run.
         // Composing characters are handled separately, one at a time.
-        let c = unsafe { mb_cptr2char_adv(&raw mut s) };
+        let c = unsafe { utf_ptr2char(s) };
+        s = s.wrapping_add(unsafe { utf_ptr2len(s) }.unsigned_abs() as usize);
         let last = c_int::from(unsafe { *s }) == NUL;
         if c < ' ' as c_int || c == DEL || (last && (c == '0' as c_int || c == '^' as c_int)) {
             redobuff().add_char(Ctrl_V);
@@ -172,7 +173,9 @@ pub unsafe fn append_to_redobuff_keys(mut s: *const c_char) {
             unsafe { redobuff().add(s, 3) };
             s = unsafe { s.add(3) };
         } else {
-            redobuff().add_char(unsafe { mb_cptr2char_adv(&raw mut s) });
+            let c = unsafe { utf_ptr2char(s) };
+            s = s.wrapping_add(unsafe { utf_ptr2len(s) }.unsigned_abs() as usize);
+            redobuff().add_char(c);
         }
     }
 }

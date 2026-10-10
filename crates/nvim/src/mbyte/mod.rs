@@ -22,10 +22,9 @@
 //! `8g8` ([`utf_find_illegal`]), a validity check and the `K_SPECIAL`
 //! unescaper.
 //!
-//! **Eleven symbols here are exported by name and may not change
-//! signature.** Nine are FFI'd from the LuaJIT unit specs; `utf8len_tab` and
-//! `utf_ptr2char_info_impl` are compiled *against* by `unit-fixtures.so`, so
-//! changing either is a C compile failure inside `just unittest`.
+//! Three symbols in [`utf8`] are exported by name and may not change
+//! signature (`utf_ptr2char`, `utf_ptr2len`, `utf_ptr2char_info_impl`), and
+//! `utf8len_tab` is compiled *against* by `unit-fixtures.so`.
 //!
 //! # The slice API
 //!
@@ -59,32 +58,22 @@
 //! these moving instead of standing still on an embedded NUL, and it is the
 //! reason a caller passes the bytes it *means*, terminator excluded.
 //!
-//! Two pointer forms are not on the table because they are not twins of
-//! anything here. [`utf_ptr2cells_len`] reports a sequence its `size` cuts
-//! short by decoding it out of the bytes that follow, so it is a different
-//! function from [`cells_at`] rather than a pointer spelling of it, and
-//! [`utf_head_off`] still walks backwards through a pointer.
+//! # The pointer forms that stay
 //!
-//! # The pointer forms that stay, and what they cost
-//!
-//! **The floor is 33 calls, every one of them inside `mbyte/`**: `utf8/mod.rs`
-//! 17, `cells.rs` 6, `walk.rs` 4, this file 3, `convert.rs` 2, `class.rs` 1.
-//! They are the decode itself -- the bodies each slice form above is written
-//! on top of -- and four are exported by name, so the number does not go to
-//! zero.
-//!
-//! What the ratchet's `mbyte_raw` counts beyond those 33 is a *caller* whose
-//! own cursor is still a pointer, and two things hold them there. `regexp/`'s
-//! 63 are the compiler's cursor and the matcher's `rex.input`; they move when `Rex`
-//! carries a length, so that `reg_nextline`/`reg_getline` can answer a slice.
-//! The rest -- `spell/`, `insexpand/`, `spellsuggest/`, `search/` -- wait on
-//! [`utf_ptr2char`] and [`utfc_ptr2len`] growing slice siblings, and that is a
-//! measured job rather than a sweep: the two hottest readers in the tree
-//! (`drawline`, `regexp`) go through both, and `utfc_ptr2schar` below is what
-//! happens when one of them stops being inlined.
+//! Every reader is written once, in `utf8/text.rs`, over either kind of text,
+//! and every pointer spelling that still has callers outside this family is
+//! a one-line shim over it in [`utf8`] -- `utfc_ptr2len`, `utf_head_off`,
+//! `utf_ptr2cells`, `utf_char2bytes`, `mb_prevptr`, `utfc_next` and the rest
+//! -- so the two spellings are the same code and cannot drift. They stay
+//! while their callers' cursors are pointers (the regexp engine, spell, the
+//! drawing path) and go as those convert; nothing else in this family
+//! touches a raw pointer. `utfc_ptr2schar` is what happens when one of them
+//! stops being inlined on the drawing path.
 
+// No `unsafe` here, and none allowed: the crate denies it. Not `forbid`,
+// because a `forbid` reaches the whole subtree and `utf8/` keeps the
+// family's exported symbols and pointer shims, which need the allow.
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 
 use core::fmt::Write as _;
 
@@ -92,45 +81,36 @@ use crate::cstr;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 use crate::ascii::ascii_iswhite;
-use crate::charset::{char2cells, ptr2cells, vim_isprintc, vim_iswordc_tab};
-use crate::cursor::get_cursor_pos_ptr;
+use crate::charset::{ptr2cells_at, vim_isprintc, vim_iswordc_tab};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
-use crate::eval::typval::{list_len, tv_check_for_string_arg, tv_list_alloc, tv_list_alloc_ret};
+use crate::eval::typval::{tv_check_for_string_arg, tv_list_alloc, tv_list_alloc_ret};
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_from_buf;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
-use crate::mark::mark_mb_adjustpos;
-use crate::memline::ml_get_buf;
-use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::e_listreq;
 use crate::message::{emsg, msg};
 use crate::r#move::changed_window_setting_all;
 use crate::option::vars::{cmp_flags, fenc_default, p_emoji, p_enc};
 use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
-use crate::optionstr::OptString;
+use crate::optionstr::OptStringRef;
 use crate::optionstr::check_chars_options;
-use crate::os::cshim::{__ctype_b_loc, gettext, strncasecmp};
-use crate::os::env::{env_buf, os_getenv_into};
+use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, Expand, GraphemeState, IOSIZE,
-    List, MB_MAXCHAR, NUL, ScreenChar, StrCharInfo, TypVal, VAR_LIST, VAR_NUMBER, VarNumber,
-    VimConv, iconv_t, int8_t, int32_t, ptrdiff_t, size_t, ssize_t, uint8_t, uint64_t, uintptr_t,
-    utf8proc_int32_t,
+    List, MB_MAXCHAR, ScreenChar, StrCharInfo, TypVal, VarNumber, VimConv, int8_t, int32_t,
+    ptrdiff_t, size_t, ssize_t, uint8_t, uint64_t, uintptr_t, utf8proc_int32_t,
 };
 use crate::utf8proc::{
-    UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,
-    UTF8PROC_BOUNDCLASS_OTHER, UTF8PROC_BOUNDCLASS_PREPEND, UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR,
     UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN, utf8proc_decompose_char,
     utf8proc_get_property, utf8proc_grapheme_break, utf8proc_grapheme_break_stateful,
     utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
 };
-use ::libc::{__errno_location, iconv, iconv_close, iconv_open, setlocale, tolower, toupper};
 
 // The carve of the transpiled module; see each child's docs.
 mod case;
@@ -163,14 +143,21 @@ pub const INT_MAX: c_int = c_int::MAX;
 pub const MAX_SCHAR_SIZE: c_int = 32;
 /// The second byte of an escaped literal `K_SPECIAL`; see [`mb_unescape`].
 pub const KS_SPECIAL: c_int = 254;
+/// The cursor line from the cursor on, as `get_cursor_pos_ptr` reads it.
+fn with_cursor_text<R>(f: impl FnOnce(&[u8]) -> R) -> R {
+    let cursor = Win::current().w_cursor;
+    let mut lines = Buf::current().lines();
+    let line = lines.line(cursor.lnum);
+    let col = usize::try_from(cursor.col).unwrap_or(0);
+    f(line.get(col..).unwrap_or_default())
+}
+
 /// `g8`: show the bytes of the character under the cursor, in hex.
 ///
 /// A composing sequence is shown as its characters separated by `+`.
 pub fn show_utf8() {
     // The whole grapheme cluster, composing characters included.
-    // SAFETY: the cursor line is a NUL-terminated string.
-    let line = unsafe { cstr::bytes_at(get_cursor_pos_ptr()) };
-    let cluster = &line[..cluster_len(line)];
+    let cluster = with_cursor_text(|text| text[..cluster_len(text)].to_vec());
     if cluster.is_empty() {
         msg(c"NUL", 0);
         return;
@@ -198,11 +185,27 @@ pub fn show_utf8() {
     msg(&cstr::owned(hex.as_bytes()), 0);
 }
 
+/// The offset of the first byte of `text` that is not valid UTF-8, up to its
+/// first NUL: too few continuation bytes -- which `char_len` reports as a
+/// length of 1 -- or too many, an overlong sequence, which is caught by
+/// re-encoding the decoded character and finding a shorter length.
+fn first_illegal(text: &[u8]) -> Option<usize> {
+    let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        let len = char_len(rest);
+        if rest[0] >= 0x80
+            && (len == 1 || usize::try_from(utf_char2len(char_at(rest))).ok() != Some(len))
+        {
+            return Some(at);
+        }
+        at += len;
+    }
+    None
+}
+
 /// `8g8`: move the cursor to the next byte that is not valid UTF-8.
-///
-/// "Not valid" is either too few continuation bytes -- which `utf_ptr2len`
-/// reports as a length of 1 -- or too many, an overlong sequence, which is
-/// caught by re-encoding the decoded character and finding a shorter length.
 ///
 /// When the file is being *stored* in an 8-bit encoding, the search runs over
 /// the converted line rather than the buffer's, and the column has to be
@@ -210,57 +213,42 @@ pub fn show_utf8() {
 pub fn utf_find_illegal() {
     let start = Win::current().w_cursor;
     let mut vimconv = CONV_NONE_INIT;
-    let mut tofree: *mut c_char = core::ptr::null_mut();
 
-    if unsafe { enc_canon_props(Buf::current().b_p_fenc.value_ptr()) } & ENC_8BIT != 0 {
+    let fenc = Buf::current().b_p_fenc.cstr().to_owned();
+    if canon_props(fenc.to_bytes()) & ENC_8BIT != 0 {
         // 'encoding' is utf-8 but the file is 8-bit, so what is illegal is
         // decided after converting back to the file's encoding.
-        let _ = p_enc(|value| unsafe {
-            convert_setup(
-                &raw mut vimconv,
-                value.as_ptr().cast_mut(),
-                Buf::current().b_p_fenc.value_ptr(),
-            )
-        });
+        let _ = p_enc(|value| vimconv.setup(Some(value), Some(fenc.as_c_str())));
     }
 
     Win::current().w_cursor.coladd = 0;
-    let found = 'search: loop {
-        let mut p = get_cursor_pos_ptr();
-        if vimconv.vc_type != CONV_NONE {
-            unsafe { xfree(tofree as *mut c_void) };
-            tofree = unsafe { string_convert(&raw mut vimconv, p, core::ptr::null_mut()) };
-            if tofree.is_null() {
+    let found = loop {
+        let at = if vimconv.vc_type == CONV_NONE {
+            with_cursor_text(first_illegal).map(|at| ColNr::try_from(at).unwrap_or(MAXCOL))
+        } else {
+            let Some(converted) = with_cursor_text(|text| vimconv.convert(text)) else {
                 break false;
-            }
-            p = tofree;
-        }
-
-        while unsafe { *p } != NUL as c_char {
-            let len = unsafe { utf_ptr2len(p) };
-            if unsafe { *p } as u8 >= 0x80
-                && (len == 1 || utf_char2len(unsafe { utf_ptr2char(p) }) != len)
-            {
-                if vimconv.vc_type == CONV_NONE {
-                    unsafe {
-                        Win::current().w_cursor.col += p.offset_from(get_cursor_pos_ptr()) as ColNr
-                    };
-                } else {
-                    // `p` is an offset into the *converted* line; step the
-                    // real line forward by that many bytes' worth of
-                    // characters to find the matching column.
-                    let mut left = unsafe { p.offset_from(tofree) } as c_int;
-                    let mut q = get_cursor_pos_ptr();
-                    while unsafe { *q } != NUL as c_char && left > 0 {
-                        left -= 1;
-                        let l = unsafe { utf_ptr2len(q) };
-                        Win::current().w_cursor.col += l;
-                        q = unsafe { q.offset(l as isize) };
+            };
+            // `at` is an offset into the *converted* line; step the real
+            // line forward by that many bytes' worth of characters to find
+            // the matching column.
+            first_illegal(&converted).map(|at| {
+                with_cursor_text(|text| {
+                    let mut col = 0;
+                    for _ in 0..at {
+                        let len = char_len(&text[col..]);
+                        if len == 0 {
+                            break;
+                        }
+                        col += len;
                     }
-                }
-                break 'search true;
-            }
-            p = unsafe { p.offset(len as isize) };
+                    ColNr::try_from(col).unwrap_or(MAXCOL)
+                })
+            })
+        };
+        if let Some(at) = at {
+            Win::current().w_cursor.col += at;
+            break true;
         }
 
         if Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count {
@@ -274,105 +262,67 @@ pub fn utf_find_illegal() {
         Win::current().w_cursor = start;
         beep_flush();
     }
-    unsafe { xfree(tofree as *mut c_void) };
-    let _ = unsafe {
-        convert_setup(
-            &raw mut vimconv,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-        )
-    };
 }
 
-/// Is every byte of `s` part of a well-formed UTF-8 sequence?
-///
-/// `end` bounds the check; a null `end` means "up to the NUL". A sequence
-/// that runs past `end` is a failure, not a truncation: this is the strict
+/// Is every byte of `bytes` part of a well-formed UTF-8 sequence? A sequence
+/// that runs past the end is a failure, not a truncation: this is the strict
 /// answer, for callers deciding whether to accept a whole string at all.
-///
-/// # Safety
-///
-/// `s` must be NUL-terminated when `end` is null, and reach `end` otherwise.
-pub unsafe fn utf_valid_string(s: *const c_char, end: *const c_char) -> bool {
-    let mut p = s as *const u8;
-    let end = end as *const u8;
-    while if end.is_null() {
-        unsafe { *p != 0 }
-    } else {
-        p < end
-    } {
-        let mut l = utf8len_tab_zero[unsafe { *p } as usize] as c_int;
-        if l == 0 {
+pub fn valid_utf8(bytes: &[u8]) -> bool {
+    let mut at = 0;
+    while at < bytes.len() {
+        let len = usize::from(utf8len_tab_zero[usize::from(bytes[at])]);
+        if len == 0 {
             return false; // not a lead byte
         }
-        if !end.is_null() && unsafe { p.offset(l as isize) } > end {
+        let Some(sequence) = bytes.get(at..at + len) else {
             return false; // the sequence runs past the end
+        };
+        if !sequence[1..].iter().all(|&b| utf_is_trail_byte(b)) {
+            return false;
         }
-        p = unsafe { p.offset(1) };
-        l -= 1;
-        while l > 0 {
-            if !utf_is_trail_byte(unsafe { *p }) {
-                return false;
-            }
-            p = unsafe { p.offset(1) };
-            l -= 1;
-        }
+        at += len;
     }
     true
 }
 
-/// Decode one character out of a key-encoded string, advancing `*pp` past it.
+/// Decode one character out of the start of a key-encoded string.
 ///
 /// Typeahead and mappings escape a literal `K_SPECIAL` byte as the three-byte
 /// `K_SPECIAL KS_SPECIAL KE_FILLER`, so a multibyte character containing that
 /// byte cannot be read directly. This unescapes as it goes and answers as
-/// soon as it has a *multibyte* character.
+/// soon as it has a *multibyte* character: its bytes (NUL-padded) and how
+/// many bytes of `text` they took.
 ///
-/// Answers null when the next character is ASCII, when a real special key is
+/// `None` when the next character is ASCII, when a real special key is
 /// reached (one cannot be part of a multibyte character), or when four bytes
 /// have gone by without a character — four being the longest sequence anyone
-/// types.
-///
-/// The result is written into `into` and answered as a pointer to it, or
-/// null. Upstream answers a shared static buffer, valid only until the next
-/// call.
-///
-/// # Safety
-///
-/// `*pp` must be a NUL-terminated string.
-pub(crate) unsafe fn mb_unescape(
-    cursor: *mut *const c_char,
-    into: &mut [c_char; MB_MAXCHAR],
-) -> *const c_char {
-    let out = into.as_mut_ptr();
-    let str = unsafe { *cursor } as *const u8;
-    let mut buf_idx = 0;
-    let mut str_idx = 0;
-    while unsafe { *str.add(str_idx) } != 0 && buf_idx < 4 {
-        if unsafe { *str.add(str_idx) } as c_int == K_SPECIAL {
-            if unsafe { *str.add(str_idx + 1) } as c_int != KS_SPECIAL
-                || unsafe { *str.add(str_idx + 2) } as c_int != KE_FILLER
-            {
+/// types. The end of `text` reads as a NUL.
+pub(crate) fn unescape_at(text: &[u8]) -> Option<([u8; MB_MAXCHAR], usize)> {
+    let at = |i: usize| cstr::byte_at(text, i);
+    let mut out = [0u8; MB_MAXCHAR];
+    let mut len = 0;
+    let mut used = 0;
+    while at(used) != 0 && len < 4 {
+        if c_int::from(at(used)) == K_SPECIAL {
+            if c_int::from(at(used + 1)) != KS_SPECIAL || c_int::from(at(used + 2)) != KE_FILLER {
                 break; // a real special key, which is never multibyte
             }
-            unsafe { *out.add(buf_idx) = K_SPECIAL as c_char };
-            str_idx += 2;
+            out[len] = K_SPECIAL as u8;
+            used += 2;
         } else {
-            unsafe { *out.add(buf_idx) = *str.add(str_idx) as c_char };
+            out[len] = at(used);
         }
-        buf_idx += 1;
-        unsafe { *out.add(buf_idx) = NUL as c_char };
+        len += 1;
 
         // An illegal sequence answers 1 here, so this only fires on a
         // character that is really multibyte.
-        if char_len(cstr::as_bytes(&into[..buf_idx])) > 1 {
-            unsafe { *cursor = (str as *const c_char).add(str_idx + 1) };
-            return out;
+        if char_len(&out[..len]) > 1 {
+            return Some((out, used + 1));
         }
-        if (unsafe { *out } as u8) < 128 {
+        if out[0] < 128 {
             break; // ASCII: nothing more can make it multibyte
         }
-        str_idx += 1;
+        used += 1;
     }
-    core::ptr::null()
+    None
 }

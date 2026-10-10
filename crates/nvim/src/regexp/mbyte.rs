@@ -9,7 +9,7 @@ use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use super::Rex;
-use crate::mbyte::{mb_ptr2char_adv, utf_fold, utf_ptr2char, utf_strnicmp, utfc_ptr2len};
+use crate::mbyte::{utf_fold, utf_ptr2char, utf_strnicmp, utfc_ptr2len};
 use crate::strings::vim_strchr;
 
 /// The base characters of U+FB20..U+FB4F, the Hebrew presentation forms, so
@@ -123,8 +123,10 @@ pub(crate) unsafe fn cstrncmp(rex: Rex, s1: *mut c_char, s2: *mut c_char, n: &mu
         let mut c1 = 0;
         let mut c2 = 0;
         while unsafe { str1.offset_from(s1) } < *n as isize {
-            c1 = unsafe { mb_ptr2char_adv(&raw mut str1) };
-            c2 = unsafe { mb_ptr2char_adv(&raw mut str2) };
+            c1 = unsafe { utf_ptr2char(str1) };
+            str1 = str1.wrapping_add(unsafe { utfc_ptr2len(str1) } as usize);
+            c2 = unsafe { utf_ptr2char(str2) };
+            str2 = str2.wrapping_add(unsafe { utfc_ptr2len(str2) } as usize);
             if c1 == c2 || (rex.reg_ic() && utf_fold(c1) == utf_fold(c2)) {
                 continue;
             }

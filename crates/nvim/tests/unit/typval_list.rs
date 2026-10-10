@@ -35,8 +35,8 @@ use neovim::eval::typval::{
     list_find_nr, list_find_str, list_first, list_free_contents, list_free_list, list_join,
     list_last, list_len, tv_clear, tv_list_alloc,
 };
-use neovim::mbyte::convert_setup;
 use neovim::memory::{XString, xstrdup};
+use neovim::types::CONV_NONE_INIT;
 use neovim::types::{List, Refcount, TypVal, VAR_LIST, VarLock, VimConv};
 
 use crate::support::alloc::{self, AllocLog};
@@ -1087,15 +1087,8 @@ fn a_converting_copy_rewrites_every_string() {
     let log = AllocLog::start();
     // SAFETY: the converter and every list are this case's own.
     unsafe {
-        let mut vc: VimConv = std::mem::zeroed();
-        assert_eq!(
-            convert_setup(
-                &raw mut vc,
-                cstr("utf-8").as_ptr().cast_mut(),
-                cstr("latin1").as_ptr().cast_mut(),
-            ),
-            Ok(())
-        );
+        let mut vc: VimConv = CONV_NONE_INIT;
+        assert_eq!(vc.setup(Some(c"utf-8"), Some(c"latin1")), Ok(()));
 
         let mut l_tv = copy_corpus().build();
         let l = l_tv.list();
@@ -1144,7 +1137,7 @@ fn a_converting_copy_rewrites_every_string() {
 
         drop(ListRef::owning(deep));
         tv_clear(&mut l_tv);
-        let _ = convert_setup(&raw mut vc, ptr::null_mut(), ptr::null_mut());
+        drop(vc);
     }
 }
 

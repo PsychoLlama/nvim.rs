@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::ThinCString;
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::semsg;
 use crate::smsg;
@@ -18,7 +19,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use crate::fileio::vim_fgets;
 use crate::getchar::state::got_int;
-use crate::mbyte::{convert_setup, enc_canonize, string_convert};
+use crate::mbyte::enc_canonize;
 use crate::memory::xfree;
 use crate::option::vars::p_enc;
 use crate::os::fs::os_fopen;
@@ -70,8 +71,10 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
         unsafe { xfree(pc.cast()) };
         pc = core::ptr::null_mut();
         let mut line = if spin.si_conv.vc_type != CONV_NONE {
-            let conv = &raw mut spin.si_conv;
-            pc = unsafe { string_convert(conv, rline.as_mut_ptr(), core::ptr::null_mut()) };
+            pc = spin
+                .si_conv
+                .convert_cstr(cstr::in_chars(&rline))
+                .map_or(core::ptr::null_mut(), ThinCString::into_raw);
             if pc.is_null() {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (fname, rline) = unsafe { (msg_cstr(fname), c_str(rline.as_mut_ptr())) };
@@ -187,8 +190,9 @@ fn read_wordfile_header(
             line = unsafe { line.add(9) };
             let enc = unsafe { enc_canonize(line) };
             if spin.si_ascii == 0
-                && p_enc(|value| unsafe {
-                    convert_setup(&raw mut spin.si_conv, enc, value.as_ptr().cast_mut())
+                && p_enc(|value| {
+                    spin.si_conv
+                        .setup(Some(unsafe { CStr::from_ptr(enc) }), Some(value))
                 })
                 .is_err()
             {

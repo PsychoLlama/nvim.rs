@@ -15,21 +15,16 @@
 //! `setcellwidths()` overrides the answer for chosen ranges, for terminals
 //! and fonts that disagree with Unicode.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::eval::typval::{index_of, list_iter};
 use crate::option::vars::P_AMBW;
 use crate::os::cshim::gettext_owned;
 use crate::semsg;
-use crate::types::NUL;
+use crate::types::VAR_NUMBER;
 use core::cmp::Ordering;
-use core::ffi::{c_char, c_int, c_uint};
-
-/// Variation Selector 16: "draw the character before me as an emoji".
-const VS16: c_int = 0xfe0f;
+use core::ffi::{c_int, c_uint};
 
 /// Below this codepoint, `'emoji'` leaves widths alone: the older symbol
 /// blocks have traditionally been drawn one cell wide and widening them
@@ -73,7 +68,7 @@ fn cw_value(c: c_int) -> c_int {
 /// How many cells the codepoint `c` occupies on its own.
 ///
 /// "On its own" is the limit of this answer: a character whose width depends
-/// on what follows it — an emoji base plus VS-16 — needs [`utf_ptr2cells`].
+/// on what follows it — an emoji base plus VS-16 — needs [`cells_at`].
 pub fn utf_char2cells(c: c_int) -> c_int {
     if c < 0x80 {
         return 1;
@@ -103,206 +98,16 @@ pub fn utf_char2cells(c: c_int) -> c_int {
     1
 }
 
-/// Whether the character at `p` asks for emoji presentation by being followed
-/// by VS-16 — the one width question that needs to look past the character.
+/// Whether `c`, one cell wide on its own, is an emoji-like character that a
+/// VS-16 after it widens to two cells under 'emoji' -- the half of that
+/// question that does not need the next character.
 ///
-/// # Safety
-///
-/// `next` must point at the byte after the character, inside the same string.
-unsafe fn widened_by_vs16(cells: c_int, c: c_int, next: *const c_char) -> bool {
-    cells == 1
-        && p_emoji()
-        && prop_is_emojilike(utf8proc_get_property(c))
-        // SAFETY: the caller's obligation.
-        && unsafe { utf_ptr2char(next) } == VS16
-}
-
-/// How many cells the character at `p` occupies.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-pub unsafe fn utf_ptr2cells(p_in: *const c_char) -> c_int {
-    let p = p_in as *const u8;
-    if unsafe { *p } < 0x80 {
-        return 1;
-    }
-    let len = utf8len_tab[unsafe { *p } as usize] as c_int;
-    let c = unsafe { utf_ptr2char_info_impl(p, len as uintptr_t) };
-    // An illegal byte is displayed as <xx>.
-    if c <= 0 {
-        return 4;
-    }
-    // An ASCII answer from a multibyte lead byte means an overlong
-    // sequence, which is displayed the way that ASCII character is.
-    if c < 0x80 {
-        return char2cells(c);
-    }
-    let cells = utf_char2cells(c);
-    if unsafe { widened_by_vs16(cells, c, p_in.offset(len as isize)) } {
-        return 2;
-    }
-    cells
-}
-
-/// How many cells the character at the start of `bytes` occupies.
-///
-/// The slice form of [`utf_ptr2cells`], and the answer for an *empty* slice
-/// is 1 -- what the pointer form answers at a NUL, because nothing to print
-/// still occupies the cell the cursor sits in.
-///
-/// Not the slice form of [`utf_ptr2cells_len`], which is a different
-/// function: that one reports a sequence its `size` cuts short by decoding it
-/// out of whatever bytes follow. Here the slice is the string, so a cut
-/// sequence is an illegal one, drawn as `<xx>`.
-#[inline]
-pub fn cells_at(bytes: &[u8]) -> c_int {
-    let Some(&first) = bytes.first() else {
-        return 1;
-    };
-    if first < 0x80 {
-        return 1;
-    }
-    let c = strict_char_at(bytes);
-    // An illegal byte, an incomplete sequence, or an overlong encoding of
-    // NUL: all displayed as <xx>.
-    if c <= 0 {
-        return 4;
-    }
-    // An ASCII answer from a multibyte lead byte means an overlong
-    // sequence, which is displayed the way that ASCII character is.
-    if c < 0x80 {
-        return char2cells(c);
-    }
-    let cells = utf_char2cells(c);
-    let rest = &bytes[usize::from(utf8len_tab[usize::from(first)])..];
-    if cells == 1 && emoji_widened_at(c, rest) {
-        return 2;
-    }
-    cells
-}
-
-/// Whether `c`, followed by `rest`, is an emoji-like character that VS-16
-/// widens to two cells under 'emoji'.
-///
-/// Out of [`cells_at`]'s body on purpose: that one is `pub` and
-/// `#[inline]`, and an option read inlined into it would export the option
-/// record, whose every read in the editor then goes through the GOT.
-fn emoji_widened_at(c: c_int, rest: &[u8]) -> bool {
-    p_emoji() && prop_is_emojilike(utf8proc_get_property(c)) && char_at(rest) == VS16
-}
-
-/// The total width of `bytes`.
-///
-/// The slice form of [`mb_string2cells`]. A NUL inside the slice is an
-/// ordinary byte, one cell wide, rather than the end of the string.
-pub fn string_cells(bytes: &[u8]) -> usize {
-    let mut cells = 0;
-    let mut at = 0;
-    while at < bytes.len() {
-        let rest = &bytes[at..];
-        // A width is never negative, and a cluster is never empty here.
-        cells += cells_at(rest).cast_unsigned() as usize;
-        at += cluster_len(rest);
-    }
-    cells
-}
-
-/// [`utf_ptr2cells`] over a string that is `size` bytes long rather than
-/// NUL-terminated.
-///
-/// A sequence cut short by the end of the buffer is *not* an illegal byte: it
-/// answers 1, because the rest of it may still arrive.
-///
-/// # Safety
-///
-/// `p` must point at `size` readable bytes.
-pub unsafe fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int {
-    if size <= 0 || (unsafe { *p } as u8) < 0x80 {
-        return 1;
-    }
-    let len = unsafe { utf_ptr2len_len(p, size) };
-    if len < utf8len_tab[unsafe { *p } as u8 as usize] as c_int {
-        return 1; // truncated
-    }
-    let c = unsafe { utf_ptr2char(p) };
-    // An illegal byte is displayed as <xx>.
-    if unsafe { utf_ptr2len(p) } == 1 || c == NUL {
-        return 4;
-    }
-    if c < 0x80 {
-        return char2cells(c);
-    }
-    let cells = utf_char2cells(c);
-    // The VS-16 has to be *complete* within `size`; a truncated one does
-    // not widen anything.
-    let next = unsafe { p.offset(len as isize) };
-    if size > len
-        && unsafe { utf_ptr2len_len(next, size - len) }
-            == utf8len_tab[unsafe { *next } as u8 as usize] as c_int
-        && unsafe { widened_by_vs16(cells, c, next) }
-    {
-        return 2;
-    }
-    cells
-}
-
-/// The total width of a NUL-terminated string.
-///
-/// # Safety
-///
-/// `str` must point at a NUL-terminated string.
-pub unsafe fn mb_string2cells(str: *const c_char) -> size_t {
-    let mut cells: size_t = 0;
-    let mut p = str;
-    while unsafe { *p } != NUL as c_char {
-        cells += unsafe { utf_ptr2cells(p) } as size_t;
-        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-    }
-    cells
-}
-
-/// The total width of at most `size` bytes, stopping early at a NUL.
-///
-/// # Safety
-///
-/// `str` must point at `size` readable bytes.
-pub unsafe fn mb_string2cells_len(str: *const c_char, size: size_t) -> size_t {
-    let mut cells: size_t = 0;
-    let mut p = str;
-    while unsafe { *p } != NUL as c_char && p < unsafe { str.add(size) } {
-        let left = size as c_int - unsafe { p.offset_from(str) } as c_int;
-        cells += unsafe { utf_ptr2cells_len(p, left) } as size_t;
-        p = unsafe { p.offset(utfc_ptr2len_len(p, left) as isize) };
-    }
-    cells
-}
-
-/// Might the character at `p` be drawn at a width the grid did not predict?
-///
-/// The screen asks this to decide whether a cell needs re-measuring: an
-/// ambiguous-width character answers whatever `'ambiwidth'` currently says,
-/// an emoji whatever `'emoji'` says, and a VS-16 after any character turns it
-/// into an emoji.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
-    // Nothing to print, or a lone ASCII character: neither can move.
-    if unsafe { *p } == NUL as c_char || unsafe { *p.offset(1) } == NUL as c_char {
-        return false;
-    }
-    let info = unsafe { utf_ptr2char_info(p) };
-    if info.value >= 0x80 {
-        let prop = utf8proc_get_property(info.value);
-        if prop.ambiguous_width || prop_is_emojilike(prop) {
-            return true;
-        }
-    }
-    // Safe against a NUL: `memcmp` stops at the first difference, and the
-    // NUL differs from VS-16's first byte.
-    unsafe { cstr::starts_with(p.offset(info.len as isize), b"\xef\xb8\x8f") }
+/// Out of the readers' bodies on purpose: they are `#[inline]`, and an
+/// option read inlined into them would export the option record, whose every
+/// read in the editor then goes through the GOT.
+#[inline(never)]
+pub(crate) fn emoji_widens(c: c_int) -> bool {
+    p_emoji() && prop_is_emojilike(utf8proc_get_property(c))
 }
 
 /// `setcellwidths({list})` — override the width of chosen codepoint ranges.
@@ -313,12 +118,11 @@ pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
 /// still agree with the new widths, and the old table comes back if they do
 /// not.
 pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
-    if args[0].v_type() as c_uint != VAR_LIST as c_uint || args[0].list_or_null().is_null() {
+    let Some(list) = args[0].list_ref() else {
         emsg(gettext(e_listreq));
         return;
-    }
-    let __v = unsafe { parse_cell_widths(args[0].list_or_null()) };
-    let Some(table) = __v else {
+    };
+    let Some(table) = parse_cell_widths(list) else {
         return;
     };
 
@@ -340,20 +144,15 @@ pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
 ///
 /// An empty list is a valid empty table — that is how the overrides are
 /// cleared.
-///
-/// # Safety
-///
-/// `l` must be a live list.
-unsafe fn parse_cell_widths(l: *const List) -> Option<Vec<CellWidthRange>> {
-    let mut rows: Vec<CellWidthRange> =
-        Vec::with_capacity(list_len(unsafe { l.as_ref() }) as usize);
-    for (item, li) in list_iter(unsafe { l.as_ref() }).enumerate() {
+fn parse_cell_widths(list: &List) -> Option<Vec<CellWidthRange>> {
+    let mut rows: Vec<CellWidthRange> = Vec::with_capacity(list.len());
+    for (item, li) in list_iter(Some(list)).enumerate() {
         let item = index_of(item);
-        if li.li_tv.v_type() as c_uint != VAR_LIST as c_uint || li.li_tv.list_or_null().is_null() {
+        let Some(row) = li.li_tv.list_ref() else {
             semsg!("E1109: List item {} is not a List", item);
             return None;
-        }
-        rows.push(unsafe { parse_cell_width_row(li.li_tv.list_or_null(), item) }?);
+        };
+        rows.push(parse_cell_width_row(row, item)?);
     }
 
     // Upstream sorts with qsort, which is unstable; two rows sharing a
@@ -376,14 +175,10 @@ unsafe fn parse_cell_widths(l: *const List) -> Option<Vec<CellWidthRange>> {
 ///
 /// `item` is the entry's index in the outer list, which is what the messages
 /// name.
-///
-/// # Safety
-///
-/// `li_l` must be a live list.
-unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWidthRange> {
+fn parse_cell_width_row(row: &List, item: c_int) -> Option<CellWidthRange> {
     let mut numbers = [0 as VarNumber; 3];
     let mut seen = 0;
-    for lili in list_iter(unsafe { li_l.as_ref() }) {
+    for lili in list_iter(Some(row)) {
         let tv = &lili.li_tv;
         if tv.v_type() as c_uint != VAR_NUMBER as c_uint {
             break;
@@ -426,13 +221,13 @@ unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWid
 /// `[first, last, width]`.
 pub fn f_getcellwidths(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let rows = CELL_WIDTHS.with(|t| t.clone());
-    tv_list_alloc_ret(result, rows.len() as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, rows.len() as ptrdiff_t);
     for row in &rows {
         let entry = tv_list_alloc(3);
-        let into = entry.as_ptr();
-        unsafe { (*into).push_number(row.first) };
-        unsafe { (*into).push_number(row.last) };
-        unsafe { (*into).push_number(row.width as VarNumber) };
-        unsafe { (*(*result).list_or_null()).push_list(Some(entry)) };
+        let into = entry.edit();
+        into.push_number(row.first);
+        into.push_number(row.last);
+        into.push_number(row.width as VarNumber);
+        list.push_list(Some(entry));
     }
 }

@@ -183,7 +183,8 @@ impl Cells {
             }
             wlv.extra_text = wlv.escape_buf.as_mut_ptr();
             let mut p: *const ::core::ffi::c_char = wlv.extra_text;
-            self.char_code = unsafe { mb_ptr2char_adv(&raw mut p) };
+            self.char_code = unsafe { utf_ptr2char(p) };
+            p = p.wrapping_add(unsafe { utfc_ptr2len(p) } as usize);
             wlv.extra_text = p as *mut ::core::ffi::c_char;
             self.cell_char = schar_from_char(self.char_code);
             wlv.extra_todo = unsafe { cstr::bytes_at(wlv.extra_text) }.len() as ::core::ffi::c_int;

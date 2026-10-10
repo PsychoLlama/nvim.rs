@@ -38,6 +38,7 @@ use crate::event::libuv::{
 };
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
+use crate::memory::XString;
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcat, xstrlcpy};
 use crate::message::internal_error;
 use crate::message_fmt::c_str;
@@ -140,6 +141,16 @@ pub unsafe fn os_getenv(name: *const c_char) -> *mut c_char {
         }
         e
     }
+}
+
+/// [`os_getenv`] of a name the caller holds as a string: the value, or `None`
+/// when the variable is unset or empty.
+pub(crate) fn getenv_owned(name: &CStr) -> Option<XString> {
+    // SAFETY: a NUL-terminated name; the answer is a fresh `xmalloc` block
+    // or NULL.
+    let value = unsafe { os_getenv(name.as_ptr()) };
+    // SAFETY: a fresh block, owned by nobody else.
+    (!value.is_null()).then(|| unsafe { XString::from_raw(value) })
 }
 
 /// `getenv()` into `buf` rather than allocating; truncated if it does not fit.

@@ -64,6 +64,26 @@ fn get_locale_val(what: c_int) -> *mut c_char {
     unsafe { setlocale(what, ptr::null()) }
 }
 
+/// The locale's character encoding, as `nl_langinfo(CODESET)` names it, or
+/// `None` when the C library names none.
+pub(crate) fn locale_codeset() -> Option<Vec<u8>> {
+    // SAFETY: `nl_langinfo` answers a NUL-terminated string in static
+    // storage (or NULL), read here before anything can replace it.
+    let name = unsafe { ::libc::nl_langinfo(::libc::CODESET) };
+    // SAFETY: as above.
+    let name = unsafe { cstr::at_opt(name) }?;
+    (!name.is_empty()).then(|| name.to_bytes().to_vec())
+}
+
+/// The locale in effect for character classification (`LC_CTYPE`), or
+/// `None` when libc reports none.
+pub(crate) fn ctype_locale() -> Option<Vec<u8>> {
+    // SAFETY: `setlocale` answers a NUL-terminated string in its own static
+    // storage (or NULL), read here before the next `setlocale` call.
+    let name = unsafe { cstr::at_opt(get_locale_val(LC_CTYPE)) }?;
+    (!name.is_empty()).then(|| name.to_bytes().to_vec())
+}
+
 /// Whether `lang` starts with a language name — two letters. Rejects NULL,
 /// `""`, `"C"` and `"C.UTF-8"`, which are not languages anybody has help
 /// files for.

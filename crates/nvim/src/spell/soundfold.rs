@@ -27,7 +27,7 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_class};
+use crate::mbyte::{utf_char2bytes, utf_class, utf_ptr2char, utf_ptr2len};
 use crate::memory::XString;
 use crate::types::{LangP, MB_MAXBYTES, NUL, SpellLang};
 
@@ -110,7 +110,8 @@ unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res
     let mut prevc = 0;
     let mut s = inword;
     while unsafe { *s } != 0 {
-        let mut c = unsafe { mb_cptr2char_adv(&raw mut s) };
+        let mut c = unsafe { utf_ptr2char(s) };
+        s = s.wrapping_add(unsafe { utf_ptr2len(s) } as usize);
         if utf_class(c) == 0 {
             c = ' ' as c_int;
         } else if c < 256 {
@@ -188,7 +189,8 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
     let mut s = inword;
     while unsafe { *s } != 0 {
         let t = s;
-        let mut c = unsafe { mb_cptr2char_adv(&raw mut s) };
+        let mut c = unsafe { utf_ptr2char(s) };
+        s = s.wrapping_add(unsafe { utf_ptr2len(s) } as usize);
         if unsafe { (*slang).sl_rem_accents } {
             if utf_class(c) == 0 {
                 if did_white {

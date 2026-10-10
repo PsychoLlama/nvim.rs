@@ -30,7 +30,7 @@ use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::Key;
 use crate::mapping::do_map;
-use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
+use crate::mbyte::{char_at, char_len, utf_char2bytes, utf_iscomposing_first};
 use crate::memory::{ThinCString, xfree};
 use crate::message::state::msg_col;
 use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
@@ -439,18 +439,14 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
     }
 }
 
-/// Decode the leading character of `s`, and answer it with what follows —
-/// `mb_cptr2char_adv` over a slice. A NUL first byte decodes to 0 and
-/// consumes nothing, exactly as the C did.
+/// Decode the leading character of `s`, and answer it with what follows,
+/// stepping over the base character only. A NUL first byte decodes to 0 and
+/// consumes nothing, as the C did.
 fn next_char(s: &[u8]) -> (c_int, &[u8]) {
-    let start = s.as_ptr() as *const c_char;
-    let mut p = start;
-    // SAFETY: `s` is a prefix of a NUL-terminated string, so the decoder
-    // stops at the terminator at the latest and advances `p` by the length
-    // of exactly the character it decoded.
-    let c = unsafe { mb_cptr2char_adv(&raw mut p) };
-    let used = (p as usize - start as usize).min(s.len());
-    (c, &s[used..])
+    if s.first().is_none_or(|&b| b == 0) {
+        return (0, s);
+    }
+    (char_at(s), &s[char_len(s)..])
 }
 
 /// The string value of `arg`, `None` when the typval is not one (which is

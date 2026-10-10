@@ -13,6 +13,7 @@ pub mod dl;
 pub mod env;
 pub mod fileio;
 pub mod fs;
+pub mod iconv;
 pub mod input;
 pub mod lang;
 pub mod proc;

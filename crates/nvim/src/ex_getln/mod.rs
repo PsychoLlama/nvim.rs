@@ -67,9 +67,9 @@ use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
 use crate::mbyte::{
-    mb_cptr2char_adv, mb_get_class, mb_off_next, mb_prevptr, mb_tolower, utf_char2bytes,
-    utf_char2len, utf_head_off, utf_iscomposing_first, utf_ptr2cells, utf_ptr2char,
-    utf8len_tab_zero, utfc_ptr2len,
+    mb_get_class, mb_off_next, mb_prevptr, mb_tolower, utf_char2bytes, utf_char2len, utf_head_off,
+    utf_iscomposing_first, utf_ptr2cells, utf_ptr2char, utf_ptr2len, utf8len_tab_zero,
+    utfc_ptr2len,
 };
 use crate::memline::{decl, incl, ml_append, ml_replace};
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};

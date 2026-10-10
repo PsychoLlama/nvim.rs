@@ -29,8 +29,8 @@ use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use crate::mbyte::{
-    mb_cptr2char_adv, mb_get_class, mb_islower, mb_isupper, mb_ptr2char_adv, mb_toupper,
-    utf_char2bytes, utf_class, utf_fold, utf_ptr2char, utfc_ptr2len,
+    mb_get_class, mb_islower, mb_isupper, mb_toupper, utf_char2bytes, utf_class, utf_fold,
+    utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::memory::xstrlcpy;
 use crate::types::{Failed, MB_MAXBYTES, NUL, SpellTab, uint8_t};
@@ -244,7 +244,8 @@ pub unsafe fn spell_casefold(
             unsafe { *buf.offset(outi as isize) = NUL as c_char };
             return Err(Failed);
         }
-        let mut c = unsafe { mb_cptr2char_adv(&raw mut p) };
+        let mut c = unsafe { utf_ptr2char(p) };
+        p = p.wrapping_add(unsafe { utf_ptr2len(p) } as usize);
         if c == 0x3a3 || c == 0x3c2 {
             // Greek sigma folds to the final form at the end of a word
             // and to the medial form anywhere else.
@@ -292,7 +293,8 @@ pub unsafe fn captype(word: *const c_char, end: *const c_char) -> WordFlags {
         p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
     }
 
-    let c = unsafe { mb_ptr2char_adv(&raw mut p) };
+    let c = unsafe { utf_ptr2char(p) };
+    p = p.wrapping_add(unsafe { utfc_ptr2len(p) } as usize);
     let mut allcap = is_upper(c);
     let firstcap = allcap;
     let mut past_second = false;
@@ -352,7 +354,8 @@ pub(super) fn spell_toupper(c: c_int) -> c_int {
 /// terminated string, unaliased for the call.
 pub unsafe fn onecap_copy(word: *const c_char, wcopy: *mut c_char, upper: bool) {
     let mut p = word;
-    let mut c = unsafe { mb_cptr2char_adv(&raw mut p) };
+    let mut c = unsafe { utf_ptr2char(p) };
+    p = p.wrapping_add(unsafe { utf_ptr2len(p) } as usize);
     c = if upper {
         if c >= 128 {
             mb_toupper(c)
@@ -379,7 +382,8 @@ pub unsafe fn allcap_copy(word: *const c_char, wcopy: *mut c_char) {
     let mut d = wcopy;
     let mut s = word;
     while unsafe { *s } != 0 {
-        let mut c = unsafe { mb_cptr2char_adv(&raw mut s) };
+        let mut c = unsafe { utf_ptr2char(s) };
+        s = s.wrapping_add(unsafe { utf_ptr2len(s) } as usize);
         if c == 0xdf {
             // German sharp s upper-cases to two characters; the second
             // goes through the usual path below.

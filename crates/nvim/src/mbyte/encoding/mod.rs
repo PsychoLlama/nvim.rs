@@ -2,36 +2,35 @@
 //!
 //! Users write an encoding name in whatever spelling they know —
 //! `ISO_8859-15`, `latin-9`, `microsoft-cp1252`, `ja_JP.EUC` — and every one
-//! of them has to reduce to a single name nvim can look up. [`enc_canonize`]
+//! of them has to reduce to a single name nvim can look up. [`canonize`]
 //! is that reduction, in three stages: normalise the spelling (lowercase,
 //! `_` becomes `-`), rewrite the four families whose punctuation varies, and
 //! then resolve the result through the alias table.
 //!
-//! [`enc_canon_props`] answers what a canonical name *is* — 8-bit, DBCS or
+//! [`canon_props`] answers what a canonical name *is* — 8-bit, DBCS or
 //! Unicode, and for Unicode which byte order and unit width — which is what
 //! decides whether a conversion needs iconv at all.
 //!
 //! [`enc_locale`] is where the default comes from: the C library's idea of
 //! what the user's locale encodes in, put through the same canonicalisation.
-//! `bomb_size`/`remove_bom` are the byte-order-mark half of the question.
+//! [`bomb_size`] is the byte-order-mark half of the question.
+//!
+//! The pointer spellings (`enc_canonize`, `enc_canon_props`, `enc_skip`)
+//! live in [`utf8`](super::utf8) as shims over these.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// `nl_item`, from POSIX's `<langinfo.h>`.
-#![allow(non_camel_case_types)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::cstr;
 use crate::memory::XString;
-use crate::optionstr::OptString;
-use crate::os::cshim::strchr;
-use crate::strings::vim_strchr;
+use crate::optionstr::OptStringRef;
+use crate::os::cshim::ctype_bits;
+use crate::os::env::getenv_owned;
+use crate::os::lang::{ctype_locale, locale_codeset};
 use crate::types::Candidate;
 use crate::winlayer::Buf;
-use ::libc::nl_langinfo;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint};
 
 // The carve of the transpiled module; see each child's docs.
 mod tables;
@@ -71,11 +70,6 @@ pub const ENC_LATIN9: EncProps = 1024;
 /// Mac OS Roman.
 pub const ENC_MACROMAN: EncProps = 2048;
 
-pub type nl_item = c_int;
-
-/// `nl_langinfo`'s "what does this locale encode in" item.
-pub const CODESET: nl_item = 14;
-
 /// The index of `name` in [`ENCODINGS`], if it is a canonical name.
 fn find_canonical(name: &[u8]) -> Option<usize> {
     ENCODINGS.iter().position(|e| e.name.to_bytes() == name)
@@ -93,13 +87,7 @@ fn find_alias(name: &[u8]) -> Option<usize> {
 ///
 /// The `2byte-`/`8bit-`/`iso-8859-` prefixes answer even when the full name
 /// is unknown: they say what the encoding *is* without saying which one.
-///
-/// # Safety
-///
-/// `name` must be a NUL-terminated string.
-pub unsafe fn enc_canon_props(name: *const c_char) -> EncProps {
-    // SAFETY: the caller's obligation.
-    let name = unsafe { CStr::from_ptr(name) }.to_bytes();
+pub fn canon_props(name: &[u8]) -> EncProps {
     if let Some(i) = find_canonical(name) {
         return ENCODINGS[i].prop;
     }
@@ -115,11 +103,11 @@ pub unsafe fn enc_canon_props(name: *const c_char) -> EncProps {
 /// How many bytes the current buffer's byte-order mark occupies, or 0 when it
 /// is not writing one.
 pub fn bomb_size() -> c_int {
-    let buf = Buf::current_raw();
-    if unsafe { (*buf).b_p_bomb } == 0 || unsafe { (*buf).b_p_bin } != 0 {
+    let buf = Buf::current();
+    if buf.b_p_bomb == 0 || buf.b_p_bin != 0 {
         return 0;
     }
-    let fenc = unsafe { CStr::from_ptr((*buf).b_p_fenc.value_ptr()) }.to_bytes();
+    let fenc = buf.b_p_fenc.bytes();
     if fenc.is_empty() || fenc == b"utf-8" {
         3
     } else if fenc.starts_with(b"ucs-2") || fenc.starts_with(b"utf-16") {
@@ -131,34 +119,11 @@ pub fn bomb_size() -> c_int {
     }
 }
 
-/// Delete every UTF-8 byte-order mark from `s`, in place.
-///
-/// # Safety
-///
-/// `s` must be a writable NUL-terminated string.
-pub unsafe fn remove_bom(s: *mut c_char) {
-    let mut p = s;
-    loop {
-        p = unsafe { strchr(p, 0xef) };
-        if p.is_null() {
-            return;
-        }
-        if unsafe { *p.offset(1) } as u8 == 0xbb && unsafe { *p.offset(2) } as u8 == 0xbf {
-            // Move the rest of the string down over the mark, NUL included.
-            let rest = unsafe { p.offset(3) };
-            let rest_len = unsafe { cstr::bytes_at(rest) }.len();
-            unsafe { p.cast::<u8>().copy_from(rest.cast(), rest_len + 1) };
-        } else {
-            p = unsafe { p.offset(1) };
-        }
-    }
-}
-
 /// How many bytes of `name` are a `2byte-`/`8bit-` prefix.
 ///
 /// The prefix says what an encoding *is* rather than naming it, so the rest
 /// is what gets looked up.
-fn skip_len(name: &[u8]) -> usize {
+pub fn skip_len(name: &[u8]) -> usize {
     if name.starts_with(b"2byte-") {
         6
     } else if name.starts_with(b"8bit-") {
@@ -166,18 +131,6 @@ fn skip_len(name: &[u8]) -> usize {
     } else {
         0
     }
-}
-
-/// Past a `2byte-`/`8bit-` prefix, if there is one.
-///
-/// # Safety
-///
-/// `p` must be a NUL-terminated string.
-pub unsafe fn enc_skip(p: *mut c_char) -> *mut c_char {
-    // SAFETY: the caller's obligation.
-    let len = skip_len(unsafe { CStr::from_ptr(p) }.to_bytes());
-    // SAFETY: `len` is at most the string's length.
-    unsafe { p.add(len) }
 }
 
 /// Normalise a spelling: uppercase becomes lowercase and `_` becomes `-`.
@@ -212,14 +165,7 @@ fn normalise_punctuation(name: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Copy `bytes` into an `xmalloc`'d NUL-terminated string, as every caller of
-/// [`enc_canonize`] expects (they `xfree` the result).
-fn to_owned_cstring(bytes: &[u8]) -> *mut c_char {
-    // SAFETY: `bytes` is a live slice; `xmemdupz` appends the NUL.
-    unsafe { xmemdupz(bytes.as_ptr() as *const c_void, bytes.len()) as *mut c_char }
-}
-
-/// Reduce `enc` to a canonical encoding name, in a freshly allocated string.
+/// Reduce `enc` to a canonical encoding name.
 ///
 /// `"default"` is the one name that does not go through this: it means "the
 /// encoding the locale asked for", which was settled at startup.
@@ -227,16 +173,9 @@ fn to_owned_cstring(bytes: &[u8]) -> *mut c_char {
 /// A name that is neither canonical nor an alias comes back *normalised but
 /// unresolved*, prefix included — an unknown encoding is still a name iconv
 /// might accept.
-///
-/// # Safety
-///
-/// `enc` must be a NUL-terminated string. The result is `xmalloc`'d and the
-/// caller owns it.
-pub unsafe fn enc_canonize(enc: *mut c_char) -> *mut c_char {
-    let enc = unsafe { CStr::from_ptr(enc) }.to_bytes();
+pub fn canonize(enc: &[u8]) -> XString {
     if enc == b"default" {
-        let enc = fenc_default.with(|enc| enc.clone().expect("set at startup"));
-        return enc.into_raw();
+        return fenc_default.with(|enc| enc.clone().expect("set at startup"));
     }
 
     let normalised = normalise_spelling(enc);
@@ -245,15 +184,15 @@ pub unsafe fn enc_canonize(enc: *mut c_char) -> *mut c_char {
 
     if find_canonical(&body).is_some() {
         // Canonical without the prefix: the prefix said nothing new.
-        return to_owned_cstring(&body);
+        return XString::from_bytes(&body);
     }
     if let Some(i) = find_alias(&body) {
-        return to_owned_cstring(ENCODINGS[i].name.to_bytes());
+        return XString::from_cstr(ENCODINGS[i].name);
     }
     // Unrecognised: keep the prefix, since it is all anyone knows about it.
     let mut whole = normalised[..skip].to_vec();
     whole.extend_from_slice(&body);
-    to_owned_cstring(&whole)
+    XString::from_bytes(&whole)
 }
 
 /// The encoding the C library says the user's locale uses, canonicalised.
@@ -266,94 +205,76 @@ pub unsafe fn enc_canonize(enc: *mut c_char) -> *mut c_char {
 ///
 /// `None` when the C library names no locale at all.
 pub fn enc_locale() -> Option<XString> {
-    let mut env = env_buf();
-    let mut s = unsafe { nl_langinfo(CODESET) };
-    if s.is_null() || unsafe { *s } == 0 {
-        s = unsafe { setlocale(LC_CTYPE, core::ptr::null()) };
-        if s.is_null() || unsafe { *s } == 0 {
-            // Upstream's chain, reproduced as written: each step
-            // *replaces* `s` rather than keeping what it just found, so
-            // a set `LC_ALL` means `LANG` is what ends up being read.
-            s = unsafe { os_getenv_into(c"LC_ALL".as_ptr(), &mut env) };
-            if !s.is_null() {
-                s = unsafe { os_getenv_into(c"LC_CTYPE".as_ptr(), &mut env) };
-                if !s.is_null() {
-                    s = unsafe { os_getenv_into(c"LANG".as_ptr(), &mut env) };
+    let name: Vec<u8> = match locale_codeset().or_else(ctype_locale) {
+        Some(name) => name,
+        None => {
+            // Upstream's chain, reproduced as written: each step *replaces*
+            // the answer rather than keeping what it just found, so a set
+            // `LC_ALL` means `LANG` is what ends up being read.
+            let mut value = getenv_owned(c"LC_ALL");
+            if value.is_some() {
+                value = getenv_owned(c"LC_CTYPE");
+                if value.is_some() {
+                    value = getenv_owned(c"LANG");
                 }
             }
+            value?.to_vec()
         }
-    }
-    if s.is_null() {
-        return None;
+    };
+
+    let mut copy_from = 0;
+    if let Some(dot) = name.iter().position(|&b| b == b'.') {
+        if is_territory_euc(&name, dot) {
+            // "XY.EUC" is "euc-xy"; a territory character that is not one
+            // ends the name there.
+            let mut euc = b"euc-".to_vec();
+            euc.extend(
+                [name[dot - 2], name[dot - 1]]
+                    .iter()
+                    .map_while(|&b| alnum_lowered(b)),
+            );
+            return Some(canonize(&euc));
+        }
+        copy_from = dot + 1;
     }
 
-    let mut buf = [0 as c_char; 50];
-    let dot = unsafe { vim_strchr(s, '.' as c_int) };
-    let mut copy_from = s;
-    if !dot.is_null() {
-        if unsafe { is_territory_euc(s, dot) } {
-            // "XY.EUC" is "euc-xy".
-            buf[..4].copy_from_slice(&[
-                b'e' as c_char,
-                b'u' as c_char,
-                b'c' as c_char,
-                b'-' as c_char,
-            ]);
-            buf[4] = alnum_lowered(unsafe { *dot.offset(-2) });
-            buf[5] = alnum_lowered(unsafe { *dot.offset(-1) });
-            buf[6] = 0;
-            // SAFETY: a terminated name; the canonical form is allocated.
-            return Some(unsafe { XString::from_raw(enc_canonize(buf.as_mut_ptr())) });
-        }
-        copy_from = unsafe { dot.offset(1) };
-    }
-
-    // Copy the codeset, lowercased, `_`/`-` unified, stopping at the
-    // first character that cannot be part of a name.
-    let mut i = 0;
-    while i < buf.len() - 1 && unsafe { *copy_from.add(i) } != 0 {
-        let b = unsafe { *copy_from.add(i) } as u8;
-        buf[i] = if b == b'_' || b == b'-' {
-            b'-' as c_char
-        } else if b.is_ascii_alphanumeric() {
-            b.to_ascii_lowercase() as c_char
-        } else {
-            break;
-        };
-        i += 1;
-    }
-    buf[i] = 0;
-    // SAFETY: as above.
-    Some(unsafe { XString::from_raw(enc_canonize(buf.as_mut_ptr())) })
+    // Copy the codeset, lowercased, `_`/`-` unified, stopping at the first
+    // character that cannot be part of a name, and at 49 bytes.
+    let codeset: Vec<u8> = name[copy_from..]
+        .iter()
+        .take(49)
+        .map_while(|&b| {
+            if b == b'_' || b == b'-' {
+                Some(b'-')
+            } else if b.is_ascii_alphanumeric() {
+                Some(b.to_ascii_lowercase())
+            } else {
+                None
+            }
+        })
+        .collect();
+    Some(canonize(&codeset))
 }
 
 /// Is this locale name one of the `ja_JP.EUC` family, which names its
-/// encoding by the territory two characters before the dot?
-///
-/// # Safety
-///
-/// `dot` must point at a `.` inside the NUL-terminated string `s`.
-unsafe fn is_territory_euc(s: *const c_char, dot: *const c_char) -> bool {
-    dot > unsafe { s.offset(2) }
-        && unsafe { strncasecmp(dot.offset(1) as *mut c_char, c"EUC".as_ptr() as *mut c_char, 3) } == 0
+/// encoding by the territory two characters before the dot at `dot`?
+fn is_territory_euc(name: &[u8], dot: usize) -> bool {
+    let at = |i: usize| cstr::byte_at(name, i);
+    dot > 2
+        && name[dot + 1..]
+            .get(..3)
+            .is_some_and(|euc| euc.eq_ignore_ascii_case(b"EUC"))
         // Nothing may follow the "EUC" but a separator: "EUC-JP" is
         // already a codeset name and goes down the ordinary path.
-        && unsafe { *(*__ctype_b_loc()).offset(*dot.offset(4) as u8 as c_int as isize) } as c_int
-            & _ISalnum as c_int
-            == 0
-        && unsafe { *dot.offset(4) } as c_int != '-' as c_int
-        && unsafe { *dot.offset(-3) } as c_int == '_' as c_int
+        && c_uint::from(ctype_bits(at(dot + 4))) & _ISalnum == 0
+        && at(dot + 4) != b'-'
+        && name[dot - 3] == b'_'
 }
 
-/// One territory character, lowercased — or NUL if it is not one, which makes
-/// the name unresolvable rather than wrong.
-fn alnum_lowered(c: c_char) -> c_char {
-    let b = c as u8;
-    if b.is_ascii_alphanumeric() {
-        b.to_ascii_lowercase() as c_char
-    } else {
-        0
-    }
+/// One territory character, lowercased — or `None` if it is not one, which
+/// ends the name there and makes it unresolvable rather than wrong.
+fn alnum_lowered(b: u8) -> Option<u8> {
+    b.is_ascii_alphanumeric().then(|| b.to_ascii_lowercase())
 }
 
 /// `:set fileencoding=<Tab>` completion: the `idx`th canonical name.

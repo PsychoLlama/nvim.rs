@@ -1,347 +1,38 @@
 //! Moving around a UTF-8 buffer.
 //!
-//! Everything that takes a pointer into a string and answers another
-//! position: [`utf_head_off`] walks back to the start of the grapheme cluster
-//! covering a byte, [`utfc_next`] steps forward one, [`utf_cp_bounds_len`]
-//! gives both ends of the codepoint at once, and `mb_charlen`/`mb_utflen`
-//! count characters over a span.
+//! Everything that takes a position in a text and answers another one, over
+//! slices: [`head_off`] (in [`utf8`](super::utf8), with the readers it is
+//! built from) walks back to the start of the grapheme cluster covering a
+//! byte, [`cp_bounds`] gives both ends of the codepoint at once, and
+//! [`char_count`] counts the clusters in a span. The cursor
+//! adjusters at the bottom put a window's cursor back on a character start.
 //!
 //! All of it has to survive bytes that are not UTF-8 at all: a buffer can
 //! hold anything, and the cursor can be anywhere in it. The rule throughout
 //! is that a byte which is not part of a valid sequence is its own character,
 //! one byte long — so a walk always terminates and never steps past the
 //! position it was asked about.
+//!
+//! The pointer spellings (`utf_head_off`, `mb_prevptr`, `mb_off_next`,
+//! `mb_utflen`, ...) live in [`utf8`](super::utf8) as shims over these, for
+//! the callers whose cursor is still a pointer.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
+use crate::types::Pos;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
-
-/// The most bytes a UTF-8 sequence can occupy in this port's decoders, which
-/// is how far back a byte's lead can possibly be.
-const MAX_SEQUENCE: isize = 6;
-
-/// Count the characters in `s[..len]`, adding the totals to `codepoints` and
-/// `codeunits`.
-///
-/// The two differ by the UTF-16 surrogate pairs: a character above the BMP is
-/// one codepoint but two UTF-16 code units, which is what the LSP-facing
-/// callers need.
-///
-/// # Safety
-///
-/// `s` must point at `len` readable bytes; both counters must be writable.
-pub unsafe fn mb_utflen(
-    s: *const c_char,
-    len: size_t,
-    codepoints: *mut size_t,
-    codeunits: *mut size_t,
-) {
-    let mut count: size_t = 0;
-    let mut surrogate_pairs: size_t = 0;
-    let mut i: size_t = 0;
-    while i < len {
-        // SAFETY: `i` is inside the caller's `len` bytes.
-        let (c, clen) = unsafe { char_and_len(s.add(i), len - i) };
-        count += 1;
-        if c > 0xffff {
-            surrogate_pairs += 1;
-        }
-        i += clen;
-    }
-    // SAFETY: the caller's counters.
-    unsafe { *codepoints += count };
-    unsafe { *codeunits += count + surrogate_pairs };
-}
-
-/// The byte offset just past the character at index `index`, counted in
-/// codepoints or in UTF-16 code units, or −1 if the string is shorter.
-///
-/// # Safety
-///
-/// `s` must point at `len` readable bytes.
-pub unsafe fn mb_utf_index_to_bytes(
-    s: *const c_char,
-    len: size_t,
-    index: size_t,
-    use_utf16_units: bool,
-) -> ssize_t {
-    if index == 0 {
-        return 0;
-    }
-    let mut count: size_t = 0;
-    let mut i: size_t = 0;
-    while i < len {
-        // SAFETY: `i` is inside the caller's `len` bytes.
-        let (c, clen) = unsafe { char_and_len(s.add(i), len - i) };
-        count += 1;
-        if use_utf16_units && c > 0xffff {
-            count += 1;
-        }
-        if count >= index {
-            return (i + clen) as ssize_t;
-        }
-        i += clen;
-    }
-    -1
-}
-
-/// The codepoint at `p`, and how many bytes it occupies out of the `left`
-/// that remain.
-///
-/// A single byte is taken at face value rather than decoded, which is what
-/// makes an invalid byte count as one character.
-///
-/// **Not a slice walk, deliberately.** A sequence `left` cuts short still
-/// reports its full length, and the decode that follows then reads the rest
-/// of it from *past* `left` -- which is how a four-byte character straddling
-/// the cut is still counted as a UTF-16 surrogate pair, as
-/// `test/functional/lua/vim_spec.lua`'s `str_utfindex` table requires.
-/// Upstream's body does the same. A slice form would answer the lead byte's
-/// own value there and lose the pair.
-///
-/// # Safety
-///
-/// `p` must point at `left` readable bytes, inside a longer string when a
-/// sequence at its end is incomplete.
-unsafe fn char_and_len(p: *const c_char, left: size_t) -> (c_int, size_t) {
-    let clen = unsafe { utf_ptr2len_len(p, left as c_int) } as size_t;
-    let c = if clen > 1 {
-        unsafe { utf_ptr2char(p) }
-    } else {
-        unsafe { *p as u8 as c_int }
-    };
-    (c, clen)
-}
-
-/// Does a cluster always end at this character, whatever precedes it?
-fn always_break(bc: c_int) -> bool {
-    bc == UTF8PROC_BOUNDCLASS_CONTROL as c_int
-}
-
-/// Do these two boundclasses always break between them?
-///
-/// The cheap half of the grapheme-cluster rules, answered from the two
-/// boundclasses alone. `utf8proc_grapheme_break` is the full test; this is
-/// what [`utf_head_off`] can use while walking *backwards*, where the stateful
-/// one cannot be run.
-fn always_break_two(bc1: c_int, bc2: c_int) -> bool {
-    (bc1 != UTF8PROC_BOUNDCLASS_PREPEND as c_int && bc2 == UTF8PROC_BOUNDCLASS_OTHER as c_int)
-        || (bc1 >= UTF8PROC_BOUNDCLASS_CR as c_int && bc1 <= UTF8PROC_BOUNDCLASS_CONTROL as c_int)
-        || (bc2 == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC as c_int
-            && (bc1 == UTF8PROC_BOUNDCLASS_OTHER as c_int
-                || bc1 == UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC as c_int))
-}
-
-/// The boundclass of a decoded codepoint.
-fn boundclass(code: int32_t) -> c_int {
-    utf8proc_get_property(code).boundclass as c_int
-}
-
-/// How far back from byte `at` the grapheme cluster covering it starts.
-///
-/// The slice form of [`utf_head_off`], and the shape a walk that holds a line
-/// and an offset wants. Composing characters count as part of the character
-/// they follow, so this is not just "step back over continuation bytes".
-///
-/// `at` may be `text.len()`: a walk that steps one past the last character is
-/// asking about the terminator, which is ASCII and starts no cluster. That is
-/// also [`utf_head_off`]'s own first test, so the answer is the same one.
-///
-/// `text` is a buffer line's bytes, or a copy that kept the line's
-/// terminator: the backwards walk stays inside the slice, but the decode it
-/// does on the way can look at the bytes of a sequence the slice cuts short.
-pub(crate) fn head_off(text: &[u8], at: usize) -> usize {
-    if crate::cstr::byte_at(text, at) < 0x80 {
-        return 0;
-    }
-    // SAFETY: `at < text.len()` after the test above, so `base` and
-    // `base + at` are in one allocation, and the caller's slice is a line.
-    let base = text.as_ptr().cast::<c_char>();
-    let off = unsafe { utf_head_off(base, base.add(at)) };
-    usize::try_from(off).unwrap_or(0)
-}
-
-/// How far back from `p` the grapheme cluster covering it starts.
-///
-/// Three answers, in the order they are looked for: 0 if `p` is ASCII or part
-/// of an illegal sequence (an illegal byte is its own character); the offset
-/// to the lead byte if the character it starts always breaks; and otherwise
-/// the result of backtracking over the cluster and then walking *forwards*
-/// through it, because a backwards walk can overshoot and only a forwards one
-/// knows where each cluster really ends.
-///
-/// # Safety
-///
-/// `base` must point at the start of a NUL-terminated string and `p` into it.
-pub unsafe fn utf_head_off(base_in: *const c_char, p_in: *const c_char) -> c_int {
-    if (unsafe { *p_in } as u8) < 0x80 {
-        return 0;
-    }
-    let base = base_in as *const u8;
-    let p = p_in as *const u8;
-
-    // Walk back over continuation bytes to the lead byte of a sequence,
-    // stopping at `base` or after a sequence's worth. It may stop *on* a
-    // continuation byte when the sequence is overlong; the caller finds
-    // that out by decoding. A closure, because it inherits this block.
-    let step_back_to_lead = |mut from: *const u8, measure_from: *const u8| {
-        while from > base
-            && utf_is_trail_byte(unsafe { *from })
-            && unsafe { measure_from.offset_from(from) } < MAX_SEQUENCE
-        {
-            from = unsafe { from.offset(-1) };
-        }
-        from
-    };
-
-    let mut start = step_back_to_lead(p, p);
-    let last_len = utf8len_tab[unsafe { *start } as usize];
-    let mut cur_code = unsafe { utf_ptr2char_info_impl(start, last_len as uintptr_t) };
-    if cur_code < 0 || unsafe { p.offset_from(start) } >= last_len as isize {
-        return 0; // `p` is part of an illegal sequence
-    }
-    // Nothing past the character `p` sits in may be read while scanning
-    // forwards: beyond it the bytes have not been validated.
-    let safe_end = unsafe { start.offset(last_len as isize) };
-
-    let mut cur_bc = boundclass(cur_code);
-    if always_break(cur_bc) || start == base {
-        return unsafe { p.offset_from(start) } as c_int;
-    }
-
-    // Backtrack over the cluster. This can go too far -- the backwards
-    // walk cannot see where a cluster *ends* -- which the forwards scan
-    // below corrects.
-    let p_start = start;
-    let mut cur_pos = start;
-    while unsafe { *start.offset(-1) } != 0 {
-        start = unsafe { start.offset(-1) };
-        if unsafe { *start } < 0x80 {
-            break; // ASCII never combines: done
-        }
-        start = step_back_to_lead(start, cur_pos);
-
-        let prev_len = utf8len_tab[unsafe { *start } as usize] as c_int;
-        let prev_code = unsafe { utf_ptr2char_info_impl(start, prev_len as uintptr_t) };
-        if prev_code < 0 || (prev_len as isize) < unsafe { cur_pos.offset_from(start) } {
-            start = cur_pos; // resume at the valid sequence after the junk
-            break;
-        }
-        let prev_bc = boundclass(prev_code);
-        if always_break_two(prev_bc, cur_bc) && !crate::arabic::arabic_combine(prev_code, cur_code)
-        {
-            start = cur_pos; // the previous character is not in this cluster
-            break;
-        }
-        if start == base {
-            break;
-        }
-        cur_pos = start;
-        cur_bc = prev_bc;
-        cur_code = prev_code;
-    }
-
-    // Never moved: `p` is inside the first character looked at.
-    if start == p_start && last_len as isize > unsafe { p.offset_from(start) } {
-        return unsafe { p.offset_from(start) } as c_int;
-    }
-
-    let mut q = start;
-    while q < p {
-        // Where the cluster *ends* does not matter; reaching `p`'s
-        // codepoint is enough.
-        let len = unsafe { utfc_ptr2len_len(q as *const c_char, safe_end.offset_from(q) as c_int) };
-        if unsafe { q.offset(len as isize) } > p {
-            return unsafe { p.offset_from(q) } as c_int;
-        }
-        q = unsafe { q.offset(len as isize) };
-    }
-    0
-}
-
-/// The character after `cur`, when the byte after it is not ASCII.
-///
-/// The slow half of [`utfc_next`]: it has to decode each following character
-/// to find out whether it composes onto this one.
-///
-/// # Safety
-///
-/// `cur` must describe a character in a NUL-terminated string, and the byte
-/// after it must be `>= 0x80` — [`utfc_next`] guarantees both.
-pub unsafe fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo {
-    let mut prev_code = cur.chr.value;
-    let mut next = unsafe { cur.ptr.offset(cur.chr.len as isize) } as *mut u8;
-    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    debug_assert!(unsafe { *next } >= 0x80, "*next >= 0x80");
-    loop {
-        let next_len = utf8len_tab[unsafe { *next } as usize];
-        let next_code = unsafe { utf_ptr2char_info_impl(next, next_len as uintptr_t) };
-        if !unsafe { utf_iscomposing(prev_code, next_code, &raw mut state) } {
-            return StrCharInfo {
-                ptr: next as *mut c_char,
-                chr: CharInfo {
-                    value: next_code,
-                    len: if next_code < 0 { 1 } else { next_len as c_int },
-                },
-            };
-        }
-        prev_code = next_code;
-        next = unsafe { next.offset(next_len as isize) };
-        if unsafe { *next } < 0x80 {
-            return StrCharInfo {
-                ptr: next as *mut c_char,
-                chr: CharInfo {
-                    value: unsafe { *next } as int32_t,
-                    len: 1,
-                },
-            };
-        }
-    }
-}
-
-/// Copy one whole character (composing marks included) from `*fp` to `*to`,
-/// advancing both.
-///
-/// # Safety
-///
-/// `*fp` must point at a NUL-terminated string and `*to` must have room for
-/// the character.
-pub unsafe fn mb_copy_char(from: *mut *const c_char, to: *mut *mut c_char) {
-    let l = unsafe { utfc_ptr2len(*from) } as size_t;
-    unsafe { (*to).cast::<u8>().copy_from((*from).cast(), l) };
-    unsafe { *to = (*to).add(l) };
-    unsafe { *from = (*from).add(l) };
-}
-
-/// How many bytes forward from `p` the next character starts, when `p` is in
-/// the middle of one. Zero when `p` is already at a character start.
-///
-/// # Safety
-///
-/// `base` must point at the start of a NUL-terminated string and `p` into it.
-pub unsafe fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int {
-    let head_off = unsafe { utf_head_off(base, p) };
-    if head_off == 0 {
-        return 0;
-    }
-    unsafe { utfc_ptr2len(p.offset(-(head_off as isize))) - head_off }
-}
 
 /// Both ends of the codepoint covering byte `at` of `bytes`, as offsets from
 /// it.
 ///
 /// The answer for anything that is not a valid sequence is `(0, 1)` -- "this
 /// byte, on its own" -- which is what makes every caller's arithmetic safe on
-/// arbitrary bytes. Unlike [`utf_head_off`] this is about the *codepoint*,
-/// not the cluster: composing characters are separate.
+/// arbitrary bytes. Unlike [`head_off`] this is about the *codepoint*, not
+/// the cluster: composing characters are separate.
 ///
-/// The slice form of [`utf_cp_bounds_len`], and its body. `bytes` is the text
-/// the walk may not leave in either direction: it never looks before its
-/// start, and never past its end.
+/// `bytes` is the text the walk may not leave in either direction: it never
+/// looks before its start, and never past its end.
 ///
 /// # Panics
 ///
@@ -386,161 +77,77 @@ pub fn cp_bounds(bytes: &[u8], at: usize) -> CharBoundsOff {
     }
 }
 
-/// Both ends of the codepoint covering `p`, as offsets from it; see
-/// [`cp_bounds`], which is the body.
-///
-/// # Safety
-///
-/// `base <= p_in`, `p_len > 0`, and `p_in` must have `p_len` readable bytes.
-pub unsafe fn utf_cp_bounds_len(
-    base: *const c_char,
-    p_in: *const c_char,
-    p_len: c_int,
-) -> CharBoundsOff {
-    debug_assert!(base <= p_in && p_len > 0, "base <= p_in && p_len > 0");
-    // SAFETY: the caller's promise. Only a sequence's worth forward is ever
-    // read, so a `p_len` larger than that -- `INT_MAX`, from
-    // [`utf_cp_bounds`] -- may be clamped to it without changing an answer:
-    // the "complete within what is left" test can only fail beyond it.
-    let at = unsafe { p_in.offset_from(base) }.cast_unsigned();
-    let forward = usize::try_from(p_len).unwrap_or(0).min(MB_MAXCHAR);
-    let bytes = unsafe { cstr::slice_at(base, at + forward) };
-    cp_bounds(bytes, at)
+/// How many grapheme clusters `bytes` holds. A NUL inside the slice is an
+/// ordinary byte and counts as a character, rather than ending the count.
+pub fn char_count(bytes: &[u8]) -> usize {
+    clusters(bytes).count()
 }
 
-/// [`utf_cp_bounds_len`] over a NUL-terminated string, where the length does
-/// not bound anything.
+/// Whether a `coladd` of 1 at the character starting `text` is meaningless
+/// and should go.
 ///
-/// # Safety
-///
-/// `base` must point at the start of a NUL-terminated string and `p_in` into
-/// it.
-pub unsafe fn utf_cp_bounds(base: *const c_char, p_in: *const c_char) -> CharBoundsOff {
-    unsafe { utf_cp_bounds_len(base, p_in, INT_MAX) }
+/// `coladd == 1` is `'virtualedit'` saying "one cell into the character".
+/// That is only meaningful for a character that is *drawn* more than one
+/// cell wide; a Tab has its own rules, and an unprintable character is drawn
+/// as an escape whose cells are not the character's.
+fn coladd_drops(text: &[u8]) -> bool {
+    text.first().is_none_or(|&byte| c_int::from(byte) != TAB)
+        && vim_isprintc(char_at(text))
+        && ptr2cells_at(text) > 1
+}
+
+/// `pos` moved off the middle of a character in `buffer`, with a `coladd`
+/// that no longer means anything cleared. Upstream's `mark_mb_adjustpos`.
+pub(crate) fn snap_pos_to_char(buffer: Buf, pos: Pos) -> Pos {
+    let mut adjusted = pos;
+    if adjusted.col <= 0 && adjusted.coladd <= 1 {
+        return adjusted;
+    }
+    let mut lines = buffer.lines();
+    let line = lines.line(adjusted.lnum);
+    let col = usize::try_from(adjusted.col).unwrap_or(0);
+    if line.is_empty() || line.len() < col {
+        adjusted.col = 0;
+    } else {
+        adjusted.col -= ColNr::try_from(head_off(line, col)).expect("a short step back");
+    }
+    let at = usize::try_from(adjusted.col).unwrap_or(0);
+    if adjusted.coladd == 1 && coladd_drops(&line[at.min(line.len())..]) {
+        adjusted.coladd = 0;
+    }
+    adjusted
 }
 
 /// Move the cursor off the middle of a character, if it is in one.
 pub fn mb_adjust_cursor() {
-    let (buffer, cursor) = (Buf::current(), Win::current().cursor().raw());
-    unsafe { mark_mb_adjustpos(buffer, cursor) }
+    let mut window = Win::current();
+    window.w_cursor = snap_pos_to_char(Buf::current(), window.w_cursor);
 }
 
 impl Win {
     /// Pull this window's cursor back onto a character start, and clear a
     /// `coladd` that no longer means anything. Upstream's
     /// `mb_check_adjust_col`.
-    ///
-    /// `coladd == 1` is `'virtualedit'` saying "one cell into the character".
-    /// That is only meaningful for a character that is *drawn* more than one
-    /// cell wide; a Tab has its own rules, and an unprintable character is
-    /// drawn as an escape whose cells are not the character's.
     pub(crate) fn snap_cursor_to_char(mut self) {
         let oldcol = self.w_cursor.col;
         if oldcol == 0 {
             return;
         }
-        // SAFETY: the window's own buffer and cursor line; the pointer is
-        // read before anything else touches the memline.
-        let p = unsafe { ml_get_buf(self.buffer(), self.w_cursor.lnum) };
-        let len = unsafe { cstr::bytes_at(p) }.len() as ColNr;
+        let mut lines = self.buffer().lines();
+        let line = lines.line(self.w_cursor.lnum);
+        let len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
         if len == 0 || oldcol < 0 {
             self.w_cursor.col = 0;
         } else {
             if oldcol > len {
                 self.w_cursor.col = len - 1;
             }
-            self.w_cursor.col -= unsafe { utf_head_off(p, p.offset(self.w_cursor.col as isize)) };
+            let col = usize::try_from(self.w_cursor.col).unwrap_or(0);
+            self.w_cursor.col -= ColNr::try_from(head_off(line, col)).expect("a short step back");
         }
-        let at_cursor = unsafe { p.offset(self.w_cursor.col as isize) };
-        if self.w_cursor.coladd == 1
-            && unsafe { *at_cursor } as c_int != TAB
-            && unsafe { vim_isprintc(utf_ptr2char(at_cursor)) }
-            && unsafe { ptr2cells(at_cursor) } > 1
-        {
+        let at = usize::try_from(self.w_cursor.col).unwrap_or(0);
+        if self.w_cursor.coladd == 1 && coladd_drops(&line[at.min(line.len())..]) {
             self.w_cursor.coladd = 0;
         }
     }
-}
-
-/// The start of the character before `p`, or `p` itself at the start of the
-/// line.
-///
-/// # Safety
-///
-/// `line` must point at the start of a NUL-terminated string and `p` into it.
-pub unsafe fn mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char {
-    if p <= line {
-        return p;
-    }
-    unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) }
-}
-
-/// How many characters a NUL-terminated string holds. A null pointer is zero.
-///
-/// # Safety
-///
-/// `str` must be null or point at a NUL-terminated string.
-pub unsafe fn mb_charlen(str: *const c_char) -> c_int {
-    // SAFETY: the caller's promise; a null string has no characters.
-    let bytes = unsafe { cstr::at_opt(str) }.map_or(&[][..], CStr::to_bytes);
-    c_int::try_from(char_count(bytes)).expect("a count of bytes bounds a count of characters")
-}
-
-/// [`mb_charlen`] over at most `len` bytes.
-///
-/// # Safety
-///
-/// `str` must point at `len` readable bytes.
-pub unsafe fn mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
-    // SAFETY: the caller's promise; `prefix_at` stops at the NUL as the
-    // pointer walk did, so the count is over the same bytes.
-    let bytes = unsafe { cstr::prefix_at(str, usize::try_from(len).unwrap_or(0)) };
-    c_int::try_from(char_count(bytes)).expect("a count of bytes fits a count of characters")
-}
-
-/// How many grapheme clusters `bytes` holds.
-///
-/// The slice form of [`mb_charlen`] and the body of [`mb_charlen_len`]. A NUL
-/// inside the slice is an ordinary byte and counts as a character, rather
-/// than ending the count.
-pub fn char_count(bytes: &[u8]) -> usize {
-    clusters(bytes).count()
-}
-
-/// `text` paired with its codepoint: the start of a character and the
-/// character itself. Composing characters are not consulted.
-///
-/// # Safety
-///
-/// `text` must point into a NUL-terminated string.
-#[inline(always)]
-pub unsafe fn utf_ptr2str_char_info(text: *mut c_char) -> StrCharInfo {
-    StrCharInfo {
-        ptr: text,
-        chr: unsafe { utf_ptr2char_info(text) },
-    }
-}
-
-/// The character after `cur`, treating a following composing character as
-/// part of the *current* one.
-///
-/// The ASCII case is inlined because it is almost all of them; everything
-/// else defers to [`utfc_next_impl`].
-///
-/// # Safety
-///
-/// `cur.ptr` must point into a NUL-terminated string, at a character start.
-#[inline(always)]
-pub unsafe fn utfc_next(cur: StrCharInfo) -> StrCharInfo {
-    let next = unsafe { cur.ptr.offset(cur.chr.len as isize) } as *mut u8;
-    if unsafe { *next } < 0x80 {
-        return StrCharInfo {
-            ptr: next as *mut c_char,
-            chr: CharInfo {
-                value: unsafe { *next } as int32_t,
-                len: 1,
-            },
-        };
-    }
-    unsafe { utfc_next_impl(cur) }
 }

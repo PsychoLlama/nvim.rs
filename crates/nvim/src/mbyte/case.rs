@@ -18,14 +18,11 @@
 //! both sides rather than walk bytes: two characters that fold together can
 //! encode to different numbers of bytes.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
-use crate::os::cshim::{towlower, towupper, wint_t};
-use crate::types::NUL;
-use core::ffi::{c_char, c_int, c_uint};
+use crate::os::cshim::{byte_tolower, byte_toupper, wide_tolower, wide_toupper, wint_t};
+use core::ffi::{c_int, c_uint};
 
 /// The case-folded form of `a`, for matching.
 ///
@@ -70,14 +67,12 @@ pub fn mb_toupper(a: c_int) -> c_int {
         };
     }
     if !casemap_has(kOptCmpFlagInternal as c_uint) {
-        // SAFETY: `towupper` is a pure libc function over one wide character.
-        return unsafe { towupper(a as wint_t) } as c_int;
+        return wide_toupper(a as wint_t) as c_int;
     }
     if a < 128 {
         // Locale-sensitive, which is the point: the locale may map ASCII
         // differently (Turkish dotless i).
-        // SAFETY: `toupper` is a pure libc function over one byte value.
-        return unsafe { toupper(a) };
+        return byte_toupper(a);
     }
     utf8proc_toupper(a as utf8proc_int32_t) as c_int
 }
@@ -92,12 +87,10 @@ pub fn mb_tolower(a: c_int) -> c_int {
         };
     }
     if !casemap_has(kOptCmpFlagInternal as c_uint) {
-        // SAFETY: `towlower` is a pure libc function over one wide character.
-        return unsafe { towlower(a as wint_t) } as c_int;
+        return wide_tolower(a as wint_t) as c_int;
     }
     if a < 128 {
-        // SAFETY: `tolower` is a pure libc function over one byte value.
-        return unsafe { tolower(a) };
+        return byte_tolower(a);
     }
     utf8proc_tolower(a as utf8proc_int32_t) as c_int
 }
@@ -118,7 +111,35 @@ pub fn mb_isalpha(a: c_int) -> bool {
     mb_islower(a) || mb_isupper(a)
 }
 
-/// Compare two strings case-insensitively, at most `n1`/`n2` bytes each.
+/// Read one character off the front of `text`, stepping past it.
+///
+/// Answers 0 when nothing is left (a NUL reads as nothing left, and is
+/// stepped over), and −1 for a byte sequence that is not a character —
+/// including a valid-looking one whose value equals its own first byte,
+/// which is how an overlong encoding is caught. `0xC3 0x83` (Ã) is exempted
+/// because it decodes to 0xC3, the value of its own lead byte, and is a real
+/// character. A sequence that is not read is not stepped over either.
+fn read_char(text: &mut &[u8]) -> c_int {
+    let Some(&first) = text.first() else {
+        return 0;
+    };
+    let len = usize::from(utf8len_tab_zero[usize::from(first)]);
+    if len == 1 {
+        *text = &text[1..];
+        return c_int::from(first);
+    }
+    if len <= text.len() {
+        let c = char_at(text);
+        if c != c_int::from(first) || (c == 0xc3 && text.get(1) == Some(&0x83)) {
+            *text = &text[len..];
+            return c;
+        }
+    }
+    -1
+}
+
+/// Compare two strings case-insensitively, each to its own end. A NUL ends a
+/// string early.
 ///
 /// Characters are compared folded, so the answer does not depend on the case
 /// either side was written in. Once either side runs out or hits a byte
@@ -127,20 +148,11 @@ pub fn mb_isalpha(a: c_int) -> bool {
 /// for malformed input keeps `<?`/`>?` transitive, which a "these are
 /// incomparable" answer would not.
 ///
-/// # Safety
-///
-/// `s1` and `s2` must point at `n1` and `n2` readable bytes.
-pub unsafe fn utf_strnicmp(
-    mut s1: *const c_char,
-    mut s2: *const c_char,
-    mut n1: size_t,
-    mut n2: size_t,
-) -> c_int {
-    // `utf_safe_read_char_adv` answers 0 at the end of its span and -1 for
-    // a sequence it could not decode.
+/// The slice form of `utf_strnicmp`.
+pub(crate) fn strnicmp_in(mut s1: &[u8], mut s2: &[u8]) -> c_int {
     let (c1, c2) = loop {
-        let c1 = unsafe { utf_safe_read_char_adv(&raw mut s1, &raw mut n1) };
-        let c2 = unsafe { utf_safe_read_char_adv(&raw mut s2, &raw mut n2) };
+        let c1 = read_char(&mut s1);
+        let c2 = read_char(&mut s2);
         if c1 <= 0 || c2 <= 0 {
             break (c1, c2);
         }
@@ -166,75 +178,36 @@ pub unsafe fn utf_strnicmp(
     // good side against the bad side's raw bytes, so the answer does not
     // depend on which case the good side was written in. Folding one
     // character is enough: the first byte comparison decides it.
-    let mut folded = [0 as c_char; MB_MAXCHAR];
-    if c1 != -1 && c2 == -1 {
-        n1 = unsafe { utf_char2bytes(utf_fold(c1), folded.as_mut_ptr()) } as size_t;
-        s1 = folded.as_ptr();
+    let mut folded = [0u8; MB_MAXCHAR];
+    let (s1, s2): (&[u8], &[u8]) = if c1 != -1 && c2 == -1 {
+        let len = encode_char(utf_fold(c1), &mut folded);
+        (&folded[..len], s2)
     } else if c2 != -1 && c1 == -1 {
-        n2 = unsafe { utf_char2bytes(utf_fold(c2), folded.as_mut_ptr()) } as size_t;
-        s2 = folded.as_ptr();
-    }
+        let len = encode_char(utf_fold(c2), &mut folded);
+        (s1, &folded[..len])
+    } else {
+        (s1, s2)
+    };
 
-    while n1 > 0 && n2 > 0 && unsafe { *s1 } != NUL as c_char && unsafe { *s2 } != NUL as c_char {
-        let cdiff = unsafe { *s1 } as u8 as c_int - unsafe { *s2 } as u8 as c_int;
+    // Bytewise, each side ending at its end or its first NUL.
+    let end = |s: &[u8]| s.iter().position(|&b| b == 0).unwrap_or(s.len());
+    let (s1, s2) = (&s1[..end(s1)], &s2[..end(s2)]);
+    for (&b1, &b2) in s1.iter().zip(s2) {
+        let cdiff = c_int::from(b1) - c_int::from(b2);
         if cdiff != 0 {
             return cdiff;
         }
-        s1 = unsafe { s1.offset(1) };
-        s2 = unsafe { s2.offset(1) };
-        n1 -= 1;
-        n2 -= 1;
     }
-
-    // A NUL ends a side early, however many bytes were allowed.
-    if n1 > 0 && unsafe { *s1 } == NUL as c_char {
-        n1 = 0;
-    }
-    if n2 > 0 && unsafe { *s2 } == NUL as c_char {
-        n2 = 0;
-    }
-    match (n1 == 0, n2 == 0) {
-        (true, true) => 0,
-        (true, false) => -1,
-        _ => 1,
-    }
+    s1.len().cmp(&s2.len()) as c_int
 }
 
-/// [`utf_strnicmp`] with one length for both sides.
-///
-/// # Safety
-///
-/// Both strings must have `nn` readable bytes.
-pub unsafe fn mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: size_t) -> c_int {
-    unsafe { utf_strnicmp(s1, s2, nn, nn) }
-}
-
-/// [`utf_strnicmp`] over two slices, each compared to its own end.
-pub(crate) fn strnicmp_in(s1: &[u8], s2: &[u8]) -> c_int {
-    let (p1, p2) = (s1.as_ptr().cast::<c_char>(), s2.as_ptr().cast::<c_char>());
-    // SAFETY: each pointer is readable for its slice's length.
-    unsafe { utf_strnicmp(p1, p2, s1.len(), s2.len()) }
-}
-
-/// [`utf_strnicmp`] over two NUL-terminated strings.
-///
-/// # Safety
-///
-/// Both strings must be NUL-terminated.
-pub unsafe fn mb_stricmp(s1: *const c_char, s2: *const c_char) -> c_int {
-    unsafe { mb_strnicmp(s1, s2, MAXCOL as size_t) }
-}
-
-/// `strcmp` or [`mb_stricmp`], whichever `ic` asks for.
-///
-/// # Safety
-///
-/// Both strings must be NUL-terminated.
-pub unsafe fn mb_strcmp_ic(ic: bool, s1: *const c_char, s2: *const c_char) -> c_int {
+/// `strcmp` or [`strnicmp_in`], whichever `ic` asks for. The slice form of
+/// `mb_strcmp_ic`.
+pub(crate) fn strcmp_ic_in(ic: bool, s1: &[u8], s2: &[u8]) -> c_int {
     if ic {
-        unsafe { mb_stricmp(s1, s2) }
+        strnicmp_in(s1, s2)
     } else {
-        unsafe { cstr::cmp(s1, s2) as c_int }
+        s1.cmp(s2) as c_int
     }
 }
 

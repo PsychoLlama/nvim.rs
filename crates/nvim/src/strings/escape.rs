@@ -20,7 +20,7 @@ use core::{ptr, slice};
 
 use crate::charset::rem_backslash;
 use crate::ex_docmd::find_cmdline_var;
-use crate::mbyte::{mb_copy_char, utfc_ptr2len};
+use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xmalloc, xmallocz};
 use crate::option::{csh_like_shell, fish_like_shell};
 use crate::types::size_t;
@@ -244,7 +244,11 @@ pub unsafe fn vim_strsave_shellescape(
             p = unsafe { p.add(1) };
             continue;
         }
-        unsafe { mb_copy_char(&mut p, &mut d) };
+        // One whole character, composing marks included.
+        let l = unsafe { utfc_ptr2len(p) } as usize;
+        unsafe { d.cast::<u8>().copy_from(p.cast(), l) };
+        d = d.wrapping_add(l);
+        p = p.wrapping_add(l);
     }
     unsafe { *d = b'\'' as c_char };
     d = unsafe { d.add(1) };

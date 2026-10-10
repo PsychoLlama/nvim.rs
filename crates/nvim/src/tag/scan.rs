@@ -27,7 +27,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::strings::has_char;
 use crate::strings::vim_strchr;
-use crate::types::{CONV_NONE, Failed, NUL, OK};
+use crate::types::{CONV_NONE, CONV_NONE_INIT, Failed, NUL, OK};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -357,7 +357,7 @@ impl FindTags {
             vimconv: VimConv {
                 vc_type: CONV_NONE,
                 vc_factor: 0,
-                vc_fd: ptr::null_mut(),
+                vc_fd: None,
                 vc_fail: false,
             },
             help_lang: *b"\0\0",
@@ -524,8 +524,7 @@ impl FindTags {
         unsafe { fclose(self.fp) };
         self.fp = ptr::null_mut();
         if self.vimconv.vc_type != CONV_NONE {
-            let _ =
-                unsafe { convert_setup(&raw mut self.vimconv, ptr::null_mut(), ptr::null_mut()) };
+            self.vimconv = CONV_NONE_INIT;
         }
         if margs.sort_error {
             // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.

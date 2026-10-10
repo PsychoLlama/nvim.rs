@@ -16,14 +16,16 @@
 //! encoder: whether a codepoint has a glyph at all, or is a formatting
 //! control, a surrogate half, or a non-character.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::types::NUL;
+use crate::utf8proc::{
+    UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC, UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR,
+};
 use crate::winlayer::Buf;
 use core::cmp::Ordering;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// The three classes every character can have, plus emoji.
 ///
@@ -217,24 +219,19 @@ pub fn utf_printable(c: c_int) -> bool {
         .is_err()
 }
 
-/// The character class of `c`, deciding Latin-1 with `chartab`.
+/// The character class of `c`, deciding Latin-1 with `chartab`, a buffer's
+/// four-word `'iskeyword'` bitmap (`b_chartab`).
 ///
 /// See the module docs for what the answer means. Anything below `0x100` is
 /// `'iskeyword'`'s to decide; above that the answer is fixed by Unicode, so
 /// the table and utf8proc settle it.
-///
-/// # Safety
-///
-/// `chartab` must be a buffer's `b_chartab`, the four-word `'iskeyword'`
-/// bitmap `vim_iswordc_tab` indexes.
-pub unsafe fn utf_class_tab(c: c_int, chartab: *const uint64_t) -> c_int {
+pub fn utf_class_tab(c: c_int, chartab: &[uint64_t; 4]) -> c_int {
     if c < 0x100 {
         // NBSP is a blank here even though 'iskeyword' could claim it.
         if c == ' ' as c_int || c == TAB || c == NUL || c == 0xa0 {
             return CLASS_BLANK;
         }
-        // SAFETY: the caller's obligation, forwarded unchanged.
-        return if unsafe { vim_iswordc_tab(c, chartab) } {
+        return if vim_iswordc_tab(c, chartab) {
             CLASS_WORD
         } else {
             CLASS_PUNCT
@@ -253,67 +250,41 @@ pub unsafe fn utf_class_tab(c: c_int, chartab: *const uint64_t) -> c_int {
 
 /// [`utf_class_tab`] against the current buffer's `'iskeyword'`.
 pub fn utf_class(c: c_int) -> c_int {
-    let buffer = Buf::current_raw();
-    unsafe { utf_class_tab(c, &raw const (*buffer).b_chartab as *const uint64_t) }
+    utf_class_tab(c, &Buf::current().b_chartab)
 }
 
-/// The character class of the character `p` points at.
+/// The character class of a character whose first byte is `first`, judged
+/// against `chartab`; `decode` answers its codepoint, and is only asked when
+/// `first` leads a multibyte sequence.
 ///
 /// A single-byte character is settled without decoding: `'iskeyword'` covers
 /// the whole of Latin-1, which is every value one byte can hold.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string, and `chartab` is
-/// [`utf_class_tab`]'s.
-pub unsafe fn mb_get_class_tab(p: *const c_char, chartab: *const uint64_t) -> c_int {
-    let first = unsafe { *p } as u8;
-    if utf8len_tab[first as usize] == 1 {
-        if first == 0 || ascii_iswhite(first as c_int) {
-            return CLASS_BLANK;
-        }
-        return if unsafe { vim_iswordc_tab(first as c_int, chartab) } {
-            CLASS_WORD
-        } else {
-            CLASS_PUNCT
-        };
-    }
-    unsafe { utf_class_tab(utf_ptr2char(p), chartab) }
-}
-
-/// [`mb_get_class_tab`] against the current buffer's `'iskeyword'`.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
-    let buffer = Buf::current_raw();
-    unsafe { mb_get_class_tab(p, &raw const (*buffer).b_chartab as *const uint64_t) }
-}
-
-/// [`mb_get_class_tab`] over a slice: the class of its first character,
-/// judged against `buffer`'s `'iskeyword'`. An empty slice is `CLASS_BLANK`,
-/// which is what the pointer form answers at a NUL.
-///
-/// A walk resolves the buffer once and hands it to every call, which is
-/// what the pointer form's `chartab` parameter is for. `buffer` must be the
-/// current buffer: a multibyte character is judged against that one.
 #[inline]
-pub(crate) fn class_in(bytes: &[u8], buffer: Buf) -> c_int {
-    let first = bytes.first().copied().unwrap_or(0);
+pub(crate) fn class_of(
+    first: u8,
+    decode: impl FnOnce() -> c_int,
+    chartab: &[uint64_t; 4],
+) -> c_int {
     if utf8len_tab[usize::from(first)] == 1 {
         if first == 0 || ascii_iswhite(c_int::from(first)) {
             return CLASS_BLANK;
         }
-        return if crate::charset::vim_iswordc_buf(c_int::from(first), buffer) {
+        return if vim_iswordc_tab(c_int::from(first), chartab) {
             CLASS_WORD
         } else {
             CLASS_PUNCT
         };
     }
-    // `utf_class` asks the current buffer, which is the one every caller
-    // hands in; a multibyte character is rare enough not to pass it down.
-    utf_class(char_at(bytes))
+    utf_class_tab(decode(), chartab)
+}
+
+/// The class of the first character of `bytes`, judged against `buffer`'s
+/// `'iskeyword'`. An empty slice is `CLASS_BLANK`, which is what the pointer
+/// form answers at a NUL.
+#[inline]
+pub(crate) fn class_in(bytes: &[u8], buffer: Buf) -> c_int {
+    let first = bytes.first().copied().unwrap_or(0);
+    class_of(first, || char_at(bytes), &buffer.b_chartab)
 }
 
 /// `charclass({string})` — the class of the string's first character.
@@ -324,8 +295,7 @@ pub fn f_charclass(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(text) = args[0].string_ref() else {
         return;
     };
-    // SAFETY: the argument's own NUL-terminated string.
-    unsafe { (*result).write_number(mb_get_class(text.as_ptr()) as VarNumber) };
+    result.write_number(class_in(text.to_bytes(), Buf::current()) as VarNumber);
 }
 
 #[cfg(test)]

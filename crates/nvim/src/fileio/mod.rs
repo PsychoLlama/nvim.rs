@@ -35,8 +35,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::allbuf_lock;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::mbyte::{
-    enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,
-    utf_head_off, utf_ptr2char, utf_ptr2len_len,
+    enc_canon_props, enc_canonize, utf_byte2len, utf_char2bytes, utf_char2len, utf_head_off,
+    utf_ptr2char, utf_ptr2len_len,
 };
 use crate::memfile::mf_fullname;
 use crate::memline::{check_need_swap, ml_append, ml_delete, ml_get, ml_get_len, ml_open};

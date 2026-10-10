@@ -31,12 +31,12 @@ pub struct StrCharInfo {
     pub ptr: *mut ::core::ffi::c_char,
     pub chr: CharInfo,
 }
-/// Not `Copy`: `vc_fd` is an iconv descriptor that has to be closed once.
-#[derive(Clone)]
+/// A conversion plan (`VimConv::setup`). Neither `Copy` nor `Clone`: `vc_fd`
+/// owns an iconv descriptor, which dropping the plan closes.
 pub struct VimConv {
     pub vc_type: ::core::ffi::c_int,
     pub vc_factor: ::core::ffi::c_int,
-    pub vc_fd: iconv_t,
+    pub vc_fd: Option<crate::os::iconv::Iconv>,
     pub vc_fail: bool,
 }
 
@@ -75,6 +75,6 @@ pub const CONV_ICONV: ConvFlags = 5;
 pub const CONV_NONE_INIT: VimConv = VimConv {
     vc_type: CONV_NONE,
     vc_factor: 1,
-    vc_fd: ::core::ptr::null_mut(),
+    vc_fd: None,
     vc_fail: false,
 };

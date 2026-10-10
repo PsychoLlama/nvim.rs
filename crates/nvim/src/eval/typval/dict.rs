@@ -24,7 +24,7 @@
 use crate::eval::collect::var_item_copy;
 use crate::eval::userfunc::func_ref_name;
 use crate::eval::vars::{valid_varname_named, var_check_fixed_named, var_check_ro_named};
-use crate::mbyte::string_convert_bytes;
+
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
 use ::core::ffi::CStr;
@@ -392,11 +392,10 @@ pub fn dict_copy(
         let key = item.key();
         let mut new_item = match conv {
             None => DictItem::boxed(key),
-            Some(conv) => match string_convert_bytes(conv, key) {
-                (Some(converted), _) => DictItem::boxed(&converted),
-                // The conversion failed: keep the original key, but at the
-                // length the conversion left behind.
-                (None, len) => DictItem::boxed(&key[..len.min(key.len())]),
+            // A conversion that failed keeps the original key.
+            Some(conv) => match conv.convert(key) {
+                Some(converted) => DictItem::boxed(&converted),
+                None => DictItem::boxed(key),
             },
         };
         if deep {

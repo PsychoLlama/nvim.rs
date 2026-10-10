@@ -28,7 +28,7 @@ use crate::strings::has_char;
 use core::ffi::{c_char, c_int};
 
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_reset};
-use crate::mbyte::{char_at, char_len, encode_char, mb_ptr2char_adv, utf_char2len};
+use crate::mbyte::{char_at, char_len, encode_char, utf_char2len, utf_ptr2char, utfc_ptr2len};
 use crate::memory::handoff::owned_cstr;
 use crate::memory::xfree;
 use crate::message::emsg;
@@ -628,7 +628,8 @@ fn set_spell_charflags(flags: &[u8], fol: &[u8]) {
         // SAFETY: `folded` is NUL-terminated, and the walk stops there.
         if unsafe { *p } as c_int != NUL {
             // SAFETY: as above.
-            let c = unsafe { mb_ptr2char_adv(&raw mut p) };
+            let c = unsafe { utf_ptr2char(p) };
+            p = p.wrapping_add(unsafe { utfc_ptr2len(p) } as usize);
             new_st.st_fold[i + 128] = c as uint8_t;
             // Record the reverse mapping too, when it fits.
             if i as c_int + 128 != c && new_st.st_isu[i + 128] && c < 256 {

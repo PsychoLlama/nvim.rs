@@ -14,7 +14,7 @@
 use super::*;
 use crate::cstr;
 use crate::strings::vim_strchr;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 /// What reading the next line produced.
 pub(crate) enum Line {
@@ -174,13 +174,8 @@ impl FindTags {
                 end += 1;
             }
             unsafe { *line.add(end) = 0 };
-            let _ = p_enc(|value| unsafe {
-                convert_setup(
-                    &raw mut self.vimconv,
-                    line.add(20),
-                    value.as_ptr().cast_mut(),
-                )
-            });
+            let name = unsafe { CStr::from_ptr(line.add(20)) };
+            let _ = p_enc(|value| self.vimconv.setup(Some(name), Some(value)));
         }
         // Read the next line; an unrecognised flag is ignored.
         false

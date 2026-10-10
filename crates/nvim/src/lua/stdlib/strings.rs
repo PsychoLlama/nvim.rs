@@ -11,19 +11,18 @@
 #![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
 
+use crate::cstr;
 use crate::lua::ffi::{
     LUA_TSTRING, lua_createtable, lua_gettop, lua_isnoneornil, lua_pop, lua_pushinteger,
     lua_pushlstring, lua_pushnil, lua_pushnumber, lua_rawseti, lua_toboolean, lua_tolstring,
     lua_tostring, lua_type, luaL_argerror, luaL_checkinteger, luaL_checklstring, luaL_error,
 };
 use crate::mbyte::{
-    convert_setup, convert_setup_ext, enc_canonize, enc_skip, mb_utf_index_to_bytes, mb_utflen,
-    string_convert, utf_cp_bounds_len, utf_ptr2len_len,
+    canonize, mb_utf_index_to_bytes, mb_utflen, skip_len, utf_cp_bounds_len, utf_ptr2len_len,
 };
-use crate::memory::xfree;
-use crate::types::{CONV_NONE, VimConv, intptr_t, lua_Integer, lua_Number, lua_State, size_t};
+
+use crate::types::{CONV_NONE_INIT, intptr_t, lua_Integer, lua_Number, lua_State, size_t};
 use ::libc::{memchr, strcasecmp};
 
 /// `vim.str_utfindex()`: the UTF-32 and UTF-16 lengths of the string at slot 1
@@ -222,29 +221,18 @@ pub(crate) unsafe extern "C-unwind" fn nlua_iconv(lstate: *mut lua_State) -> c_i
         let mut str_len: size_t = 0;
         let str = lua_tolstring(lstate, 1, &raw mut str_len);
 
-        let from = enc_canonize(enc_skip(lua_tostring(lstate, 2).cast_mut()));
-        let to = enc_canonize(enc_skip(lua_tostring(lstate, 3).cast_mut()));
-
-        let mut vimconv = VimConv {
-            vc_type: CONV_NONE,
-            vc_factor: 0,
-            vc_fd: ptr::null_mut(),
-            vc_fail: false,
+        let name = |at: c_int| {
+            let name = cstr::bytes_at(lua_tostring(lstate, at));
+            canonize(&name[skip_len(name)..])
         };
-        let _ = convert_setup_ext(&raw mut vimconv, from, false, to, false);
+        let (from, to) = (name(2), name(3));
 
-        let ret = string_convert(&raw mut vimconv, str.cast_mut(), &raw mut str_len);
-
-        let _ = convert_setup(&raw mut vimconv, ptr::null_mut(), ptr::null_mut());
-
-        xfree(from.cast::<c_void>());
-        xfree(to.cast::<c_void>());
-
-        if ret.is_null() {
-            lua_pushnil(lstate);
-        } else {
-            lua_pushlstring(lstate, ret, str_len);
-            xfree(ret.cast::<c_void>());
+        let mut vimconv = CONV_NONE_INIT;
+        let _ = vimconv.setup_ext(Some(from.as_cstr()), false, Some(to.as_cstr()), false);
+        let text = cstr::slice_at(str, str_len);
+        match vimconv.convert(text) {
+            None => lua_pushnil(lstate),
+            Some(ret) => lua_pushlstring(lstate, ret.as_ptr().cast(), ret.len()),
         }
         1
     }

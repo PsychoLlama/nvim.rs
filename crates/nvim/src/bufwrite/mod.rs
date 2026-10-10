@@ -32,7 +32,7 @@ use crate::fileio::{
 use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
-use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
+use crate::mbyte::{enc_canonize, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
 use crate::message::state::{msg_scroll, msg_silent, no_wait_return};

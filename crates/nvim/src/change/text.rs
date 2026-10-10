@@ -54,9 +54,9 @@ pub unsafe fn ins_bytes(p: *mut c_char) {
 pub unsafe fn ins_bytes_len(p: *mut c_char, len: size_t) {
     let mut i: size_t = 0;
     while i < len {
-        // The `_len` form so that a truncated sequence at the end does not
-        // read past `p[len]`.
-        let n = unsafe { utfc_ptr2len_len(p.add(i), len.wrapping_sub(i) as c_int) } as size_t;
+        // Bounded by the bytes left, so that a truncated sequence at the end
+        // does not read past `p[len]`.
+        let n = cluster_len(unsafe { cstr::slice_at(p.add(i), len - i) });
         unsafe { ins_char_bytes(p.add(i), n) };
         i = i.wrapping_add(n);
     }

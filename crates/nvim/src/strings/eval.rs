@@ -22,8 +22,7 @@ use crate::eval::typval::{
     tv_list_alloc_ret,
 };
 use crate::mbyte::{
-    char_at, char_count, char_len, cluster_len, clusters, head_off, mb_cptr2char_adv,
-    mb_ptr2char_adv, mb_string2cells,
+    char_at, char_count, char_len, cluster_len, clusters, head_off, mb_string2cells,
 };
 use crate::memory::ThinCString;
 use crate::message::e_invarg;
@@ -192,15 +191,16 @@ pub fn f_strlen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// follows; without it each one counts on its own.
 fn strchar_common(args: &[TypVal], result: &mut TypVal, skipcc: bool) {
     let mut numbuf = NumBuf::new();
-    let next_char: unsafe fn(*mut *const c_char) -> c_int = if skipcc {
-        mb_ptr2char_adv
-    } else {
-        mb_cptr2char_adv
-    };
-    let mut s = numbuf.string(&args[0]).as_ptr();
+    let text = numbuf.string(&args[0]).to_bytes();
     let mut len: VarNumber = 0;
-    while unsafe { *s } != 0 {
-        unsafe { next_char(&raw mut s) };
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        at += if skipcc {
+            cluster_len(rest)
+        } else {
+            char_len(rest)
+        };
         len += 1;
     }
     (*result).write_number(len);

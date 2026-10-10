@@ -1,48 +1,25 @@
 //! Converting text between encodings.
 //!
-//! [`convert_setup`] works out *how* to get from one encoding to another and
-//! records it in a `VimConv`; [`string_convert_ext`] runs that plan over a
+//! [`VimConv::setup`] works out *how* to get from one encoding to another and
+//! records it in the `VimConv`; [`VimConv::convert`] runs that plan over a
 //! string. Four pairs are done here directly — Latin-1 and Latin-9 to and
 //! from UTF-8 — because they are the common cases and are pure arithmetic.
-//! Everything else goes through iconv.
-//!
-//! **iconv is a real foreign boundary and the `unsafe` in this file is
-//! genuine.** It is a stateful C library reached through an opaque
-//! descriptor, it writes into caller-owned buffers whose remaining room it
-//! reports back by decrementing a counter, and it signals every one of its
-//! outcomes through `errno`. None of that has a safe Rust shape.
-//! [`my_iconv_open`] also has to *probe* the host's iconv, because a
-//! dynamically loaded one can accept an `iconv_open` and then do nothing.
+//! Everything else goes through iconv, whose descriptor the plan owns
+//! ([`Iconv`], in `os/`, which is the only place iconv itself is called).
 //!
 //! A conversion that cannot represent a character does not fail by default:
 //! it substitutes `?` (or `¿` on the way to Latin-1) and carries on, unless
 //! `vc_fail` asks for an error instead.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::memory::ThinCString;
+use crate::os::iconv::Iconv;
 use crate::types::Failed;
-use ::libc::{EILSEQ, EINVAL};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-
-/// Has the host's iconv been proved to work?
-///
-/// A dynamically loaded iconv can accept `iconv_open` and then convert
-/// nothing, so the first successfully opened descriptor is probed before it
-/// is trusted. The answer is remembered for the process.
-type WorkingStatus = c_uint;
-const kUnknown: WorkingStatus = 0;
-const kWorking: WorkingStatus = 1;
-const kBroken: WorkingStatus = 2;
-
-/// How many bytes the probe conversion is given to write into.
-const ICONV_TESTLEN: usize = 400;
+use ::libc::{E2BIG, EILSEQ, EINVAL};
+use core::ffi::{CStr, c_int};
 
 /// iconv's own `errno` values, which a dynamically loaded library may report
 /// instead of the host's — both spellings are tested at every site. They are
@@ -52,148 +29,66 @@ pub const ICONV_E2BIG: c_int = 7;
 pub const ICONV_EINVAL: c_int = 22;
 pub const ICONV_EILSEQ: c_int = 84;
 
-/// `(iconv_t)-1`: what `iconv_open` answers when it cannot convert a pair.
-fn iconv_failed() -> iconv_t {
-    core::ptr::with_exposed_provenance_mut(-1i32 as usize)
+/// An iconv descriptor converting `from` to `to`, either name past its
+/// `8bit-`/`2byte-` prefix, or `None` when iconv cannot convert the pair.
+pub(crate) fn open_iconv(to: &CStr, from: &CStr) -> Option<Iconv> {
+    fn skip(name: &CStr) -> &CStr {
+        cstr::suffix(name, skip_len(name.to_bytes()))
+    }
+    Iconv::open(skip(to), skip(from))
 }
 
-/// Open an iconv descriptor from `from` to `to`, or [`iconv_failed`].
-///
-/// The first descriptor this ever opens is *probed* — a conversion with no
-/// input, which a working iconv answers by leaving the output pointer alone
-/// and a broken one by nulling it. Once iconv is known broken this never
-/// tries again.
-///
-/// # Safety
-///
-/// Both names must be NUL-terminated strings.
-pub unsafe fn my_iconv_open(to: *mut c_char, from: *mut c_char) -> iconv_t {
-    static iconv_working: GlobalCell<WorkingStatus> = GlobalCell::new(kUnknown);
-    if iconv_working.get() == kBroken {
-        return iconv_failed();
-    }
-
-    let mut fd = unsafe { iconv_open(enc_skip(to), enc_skip(from)) };
-    if fd == iconv_failed() || iconv_working.get() != kUnknown {
-        return fd;
-    }
-
-    let mut tobuf = [0 as c_char; ICONV_TESTLEN];
-    let mut p = tobuf.as_mut_ptr();
-    let mut tolen: size_t = ICONV_TESTLEN;
-    unsafe {
-        iconv(
-            fd,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            &raw mut p,
-            &raw mut tolen,
-        )
-    };
-    if p.is_null() {
-        iconv_working.set(kBroken);
-        unsafe { iconv_close(fd) };
-        fd = iconv_failed();
-    } else {
-        iconv_working.set(kWorking);
-    }
-    fd
-}
-
-/// Convert `str[..slen]` through `vcp`'s open iconv descriptor.
+/// Convert `text` through `fd`.
 ///
 /// The output buffer is grown and the conversion resumed whenever iconv runs
 /// out of room, which is what the `E2BIG` arm is for: it is not an error.
-/// `done` is how much of the result is already final, so a reallocation can
-/// copy it forward and pick up where it left off.
-///
-/// # Safety
-///
-/// `vcp.vc_fd` must be an open descriptor and `str` must have `slen` readable
-/// bytes. The result is `xmalloc`'d, or null when the conversion failed.
-unsafe fn iconv_string(
-    vcp: *const VimConv,
-    str: *const c_char,
-    slen: size_t,
-    unconvlenp: *mut size_t,
-    resultlenp: *mut size_t,
-) -> *mut c_char {
-    // iconv reports every outcome through `errno`, read straight after
-    // the call that set it. A closure, so it inherits this block.
-    let errno = || unsafe { *__errno_location() };
-
-    let fail = unsafe { (*vcp).vc_fail };
-    let mut result: *mut c_char = core::ptr::null_mut();
-    let mut to: *mut c_char;
-    let mut len: size_t = 0;
-    let mut done: size_t = 0;
-    let mut from = str;
-    let mut fromlen = slen;
-
+/// `done` is how much of the result is already final. `None` when iconv
+/// stopped on something other than room or, with `fail`, on a character it
+/// could not convert.
+fn iconv_convert(fd: &Iconv, fail: bool, text: &[u8]) -> Option<Vec<u8>> {
+    let mut result: Vec<u8> = Vec::new();
+    let mut done = 0;
+    let mut from = text;
+    let mut errno = 0;
     loop {
-        if len == 0 || errno() == ICONV_E2BIG {
+        if result.is_empty() || errno == ICONV_E2BIG {
             // Enough for most conversions; on a retry, more than last time.
-            len = len + fromlen * 2 + 40;
-            let p = unsafe { xmalloc(len) } as *mut c_char;
-            if done > 0 {
-                unsafe { p.cast::<u8>().copy_from(result.cast(), done) };
+            let len = result.len() + from.len() * 2 + 40;
+            result.resize(len, 0);
+        }
+        // Two bytes held back: the second `?` an unconvertible wide
+        // character can need, and upstream's NUL.
+        let limit = result.len() - 2;
+        let mut out = &mut result[done..limit];
+        let room = out.len();
+        let stopped = fd.step(&mut from, &mut out);
+        let mut to = done + (room - out.len());
+        match stopped {
+            Ok(()) => {
+                result.truncate(to);
+                return Some(result);
             }
-            unsafe { xfree(result as *mut c_void) };
-            result = p;
+            Err(e) => errno = e,
         }
 
-        to = unsafe { result.add(done) };
-        // Two bytes held back: the NUL, and the second `?` an
-        // unconvertible wide character can need.
-        let mut tolen = len - done - 2;
-        if unsafe {
-            iconv(
-                (*vcp).vc_fd,
-                &raw mut from as *mut c_void as *mut *mut c_char,
-                &raw mut fromlen,
-                &raw mut to,
-                &raw mut tolen,
-            )
-        } != SIZE_MAX as size_t
-        {
-            unsafe { *to = 0 }; // finished
-            break;
-        }
-
-        let e = errno();
-        let incomplete = e == ICONV_EINVAL || e == EINVAL;
-        let illegal = e == ICONV_EILSEQ || e == EILSEQ;
-        if !fail && incomplete && !unconvlenp.is_null() {
-            // A sequence cut off at the end: hand back how much is left
-            // rather than treating it as bad input.
-            unsafe { *to = 0 };
-            unsafe { *unconvlenp = fromlen };
-            break;
-        } else if !fail && (illegal || incomplete) {
-            // Cannot convert: emit `?` and skip one character. This
-            // assumes the input is 'encoding'; nothing else would tell us
-            // how much to skip.
-            unsafe { *to = b'?' as c_char };
-            to = unsafe { to.offset(1) };
-            if unsafe { utf_ptr2cells(from) } > 1 {
-                unsafe { *to = b'?' as c_char };
-                to = unsafe { to.offset(1) };
+        let incomplete = errno == ICONV_EINVAL || errno == EINVAL;
+        let illegal = errno == ICONV_EILSEQ || errno == EILSEQ;
+        if !fail && (illegal || incomplete) {
+            // Cannot convert: emit `?` and skip one character. This assumes
+            // the input is 'encoding'; nothing else would tell us how much
+            // to skip.
+            result[to] = b'?';
+            to += 1;
+            if cells_at(from) > 1 {
+                result[to] = b'?';
+                to += 1;
             }
-            let l = unsafe { utfc_ptr2len_len(from, fromlen as c_int) };
-            from = unsafe { from.add(l as usize) };
-            fromlen -= l as size_t;
-        } else if e != ICONV_E2BIG {
-            unsafe { xfree(result as *mut c_void) };
-            result = core::ptr::null_mut();
-            break;
+            from = &from[cluster_len(from)..];
+        } else if errno != ICONV_E2BIG && errno != E2BIG {
+            return None;
         }
-        done = unsafe { to.offset_from(result) } as size_t;
+        done = to;
     }
-
-    if !resultlenp.is_null() && !result.is_null() {
-        unsafe { *resultlenp = to.offset_from(result) as size_t };
-    }
-    result
 }
 
 /// `iconv({string}, {from}, {to})`.
@@ -203,255 +98,147 @@ pub fn f_iconv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let str = numbuf.string(&args[0]);
     let mut buf1 = NumBuf::new();
-    let from = unsafe { enc_canonize(enc_skip(buf1.string(&args[1]).as_ptr().cast_mut())) };
+    let from = buf1.string(&args[1]).to_bytes();
+    let from = canonize(&from[skip_len(from)..]);
     let mut buf2 = NumBuf::new();
-    let to = unsafe { enc_canonize(enc_skip(buf2.string(&args[2]).as_ptr().cast_mut())) };
+    let to = buf2.string(&args[2]).to_bytes();
+    let to = canonize(&to[skip_len(to)..]);
 
     let mut vimconv = CONV_NONE_INIT;
-    let _ = unsafe { convert_setup(&raw mut vimconv, from, to) };
+    let _ = vimconv.setup(Some(from.as_cstr()), Some(to.as_cstr()));
     result.write_string(if vimconv.vc_type == CONV_NONE {
         // Same encoding both ways: hand back a copy unchanged.
         Some(ThinCString::from_cstr(str))
     } else {
-        // SAFETY: `str` is NUL-terminated and only read; `string_convert`
-        // answers an allocation of its own, or NULL, which the answer takes
-        // over.
-        unsafe {
-            ThinCString::from_raw(string_convert(
-                &raw mut vimconv,
-                str.as_ptr().cast_mut(),
-                core::ptr::null_mut(),
-            ))
-        }
+        vimconv.convert_cstr(str)
     });
-
-    // Closes the descriptor.
-    let _ = unsafe {
-        convert_setup(
-            &raw mut vimconv,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-        )
-    };
-    unsafe { xfree(from as *mut c_void) };
-    unsafe { xfree(to as *mut c_void) };
 }
 
-/// Plan a conversion from `from` to `to`, replacing whatever `vcp` held.
-///
-/// # Safety
-///
-/// `vcp` must be writable and hold either a valid plan or zeroed memory;
-/// `from` and `to` must be null or NUL-terminated.
-pub unsafe fn convert_setup(
-    vcp: *mut VimConv,
-    from: *mut c_char,
-    to: *mut c_char,
-) -> Result<(), Failed> {
-    unsafe { convert_setup_ext(vcp, from, true, to, true) }
-}
-
-/// [`convert_setup`], choosing what "Unicode" means on each side.
-///
-/// `*_unicode_is_utf8` says whether *any* Unicode encoding on that side may
-/// be treated as UTF-8, or only the one whose properties are exactly
-/// `ENC_UNICODE` — which is `utf-8` itself. A reader of a UTF-16 file needs
-/// the strict answer; a caller that has already decoded to UTF-8 wants the
-/// loose one.
-///
-/// # Safety
-///
-/// As [`convert_setup`].
-pub unsafe fn convert_setup_ext(
-    vcp: *mut VimConv,
-    from: *mut c_char,
-    from_unicode_is_utf8: bool,
-    to: *mut c_char,
-    to_unicode_is_utf8: bool,
-) -> Result<(), Failed> {
-    if unsafe { (*vcp).vc_type } == CONV_ICONV && unsafe { (*vcp).vc_fd } != iconv_failed() {
-        unsafe { iconv_close((*vcp).vc_fd) };
-    }
-    unsafe { *vcp = CONV_NONE_INIT };
-
-    // Nothing to do: an unnamed side, or the same encoding twice.
-    if from.is_null()
-        || unsafe { *from } == 0
-        || to.is_null()
-        || unsafe { *to } == 0
-        || unsafe { cstr::eq(from, to) }
-    {
-        return Ok(());
+impl VimConv {
+    /// Plan a conversion from `from` to `to`, replacing whatever this held;
+    /// `None` on either side, or an empty name, plans nothing. `Err` when no
+    /// conversion between the two is possible.
+    pub fn setup(&mut self, from: Option<&CStr>, to: Option<&CStr>) -> Result<(), Failed> {
+        self.setup_ext(from, true, to, true)
     }
 
-    let from_prop = unsafe { enc_canon_props(from) };
-    let to_prop = unsafe { enc_canon_props(to) };
-    let is_utf8 = |prop: EncProps, loose: bool| {
-        if loose {
-            prop & ENC_UNICODE != 0
-        } else {
-            prop == ENC_UNICODE
+    /// [`setup`](Self::setup), choosing what "Unicode" means on each side.
+    ///
+    /// `*_unicode_is_utf8` says whether *any* Unicode encoding on that side
+    /// may be treated as UTF-8, or only the one whose properties are exactly
+    /// `ENC_UNICODE` — which is `utf-8` itself. A reader of a UTF-16 file
+    /// needs the strict answer; a caller that has already decoded to UTF-8
+    /// wants the loose one.
+    pub(crate) fn setup_ext(
+        &mut self,
+        from: Option<&CStr>,
+        from_unicode_is_utf8: bool,
+        to: Option<&CStr>,
+        to_unicode_is_utf8: bool,
+    ) -> Result<(), Failed> {
+        // Closes the descriptor this held, if any.
+        *self = CONV_NONE_INIT;
+
+        // Nothing to do: an unnamed side, or the same encoding twice.
+        let (Some(from), Some(to)) = (from.filter(|s| !s.is_empty()), to.filter(|s| !s.is_empty()))
+        else {
+            return Ok(());
+        };
+        if from == to {
+            return Ok(());
         }
-    };
-    let from_is_utf8 = is_utf8(from_prop, from_unicode_is_utf8);
-    let to_is_utf8 = is_utf8(to_prop, to_unicode_is_utf8);
 
-    // `vc_factor` is how much the output can grow: a Latin-1 byte becomes
-    // at most two UTF-8 bytes, a Latin-9 one at most three, and iconv's
-    // worst case is budgeted at four.
-    if from_prop & ENC_LATIN1 != 0 && to_is_utf8 {
-        unsafe { (*vcp).vc_type = CONV_TO_UTF8 };
-        unsafe { (*vcp).vc_factor = 2 };
-    } else if from_prop & ENC_LATIN9 != 0 && to_is_utf8 {
-        unsafe { (*vcp).vc_type = CONV_9_TO_UTF8 };
-        unsafe { (*vcp).vc_factor = 3 };
-    } else if from_is_utf8 && to_prop & ENC_LATIN1 != 0 {
-        unsafe { (*vcp).vc_type = CONV_TO_LATIN1 };
-    } else if from_is_utf8 && to_prop & ENC_LATIN9 != 0 {
-        unsafe { (*vcp).vc_type = CONV_TO_LATIN9 };
-    } else {
-        // A side already known to be UTF-8 is named as such, whatever
-        // Unicode spelling it arrived under.
-        let named = |is_utf8: bool, name: *mut c_char| {
-            if is_utf8 {
-                c"utf-8".as_ptr().cast_mut()
+        let from_prop = canon_props(from.to_bytes());
+        let to_prop = canon_props(to.to_bytes());
+        let is_utf8 = |prop: EncProps, loose: bool| {
+            if loose {
+                prop & ENC_UNICODE != 0
             } else {
-                name
+                prop == ENC_UNICODE
             }
         };
-        unsafe { (*vcp).vc_fd = my_iconv_open(named(to_is_utf8, to), named(from_is_utf8, from)) };
-        if unsafe { (*vcp).vc_fd } != iconv_failed() {
-            unsafe { (*vcp).vc_type = CONV_ICONV };
-            unsafe { (*vcp).vc_factor = 4 };
+        let from_is_utf8 = is_utf8(from_prop, from_unicode_is_utf8);
+        let to_is_utf8 = is_utf8(to_prop, to_unicode_is_utf8);
+
+        // `vc_factor` is how much the output can grow: a Latin-1 byte becomes
+        // at most two UTF-8 bytes, a Latin-9 one at most three, and iconv's
+        // worst case is budgeted at four.
+        if from_prop & ENC_LATIN1 != 0 && to_is_utf8 {
+            self.vc_type = CONV_TO_UTF8;
+            self.vc_factor = 2;
+        } else if from_prop & ENC_LATIN9 != 0 && to_is_utf8 {
+            self.vc_type = CONV_9_TO_UTF8;
+            self.vc_factor = 3;
+        } else if from_is_utf8 && to_prop & ENC_LATIN1 != 0 {
+            self.vc_type = CONV_TO_LATIN1;
+        } else if from_is_utf8 && to_prop & ENC_LATIN9 != 0 {
+            self.vc_type = CONV_TO_LATIN9;
+        } else {
+            // A side already known to be UTF-8 is named as such, whatever
+            // Unicode spelling it arrived under.
+            fn named(is_utf8: bool, name: &CStr) -> &CStr {
+                if is_utf8 { c"utf-8" } else { name }
+            }
+            let to = named(to_is_utf8, to);
+            let from = named(from_is_utf8, from);
+            if let Some(fd) = open_iconv(to, from) {
+                self.vc_fd = Some(fd);
+                self.vc_type = CONV_ICONV;
+                self.vc_factor = 4;
+            }
+        }
+        if self.vc_type == CONV_NONE {
+            Err(Failed)
+        } else {
+            Ok(())
         }
     }
-    if unsafe { (*vcp).vc_type } == CONV_NONE {
-        Err(Failed)
-    } else {
-        Ok(())
-    }
-}
 
-/// [`string_convert_ext`] without the incomplete-tail report.
-///
-/// # Safety
-///
-/// As [`string_convert_ext`].
-pub unsafe fn string_convert(
-    vcp: *const VimConv,
-    text: *mut c_char,
-    lenp: *mut size_t,
-) -> *mut c_char {
-    unsafe { string_convert_ext(vcp, text, lenp, core::ptr::null_mut()) }
-}
-
-/// [`string_convert`] of a NUL-terminated `text`, answering the converted
-/// string -- the conversion's own block, adopted -- or `None` when the
-/// conversion failed.
-pub(crate) fn string_convert_cstr(vcp: &VimConv, text: &CStr) -> Option<ThinCString> {
-    // SAFETY: `text` is NUL-terminated and only read; the answer is a fresh
-    // `xmalloc` block, NUL-terminated, or null.
-    unsafe {
-        ThinCString::from_raw(string_convert(
-            vcp,
-            text.as_ptr().cast_mut(),
-            core::ptr::null_mut(),
-        ))
-    }
-}
-
-/// [`string_convert`] of `text`, measured: the converted bytes, or `None`
-/// when the conversion failed -- and, either way, the length the conversion
-/// left behind, which a failure need not leave at `text.len()`.
-pub(crate) fn string_convert_bytes(vcp: &VimConv, text: &[u8]) -> (Option<Vec<u8>>, usize) {
-    let mut len = text.len();
-    // SAFETY: `text` is `len` readable bytes, which the conversion only
-    // reads; the answer is a fresh block or null.
-    let converted =
-        unsafe { string_convert(vcp, text.as_ptr().cast::<c_char>().cast_mut(), &raw mut len) };
-    // SAFETY: a block of the `xmalloc` family holding `len` bytes, or null.
-    let bytes = (!converted.is_null()).then(|| unsafe {
-        let bytes = core::slice::from_raw_parts(converted.cast::<u8>(), len).to_vec();
-        xfree(converted.cast());
-        bytes
-    });
-    (bytes, len)
-}
-
-/// Run `vcp`'s plan over `text`, answering a freshly allocated string.
-///
-/// `lenp` is the input length in and the output length out; null means "NUL
-/// terminated". `unconvlenp`, when given, receives the length of an
-/// incomplete sequence left at the end — the caller is reading a stream and
-/// the rest of it has not arrived yet.
-///
-/// Null comes back when the conversion failed: an invalid sequence in the
-/// input, or an unrepresentable character with `vc_fail` set.
-///
-/// # Safety
-///
-/// `text` must have `*lenp` readable bytes, or be NUL-terminated when `lenp`
-/// is null. The result is `xmalloc`'d.
-pub unsafe fn string_convert_ext(
-    vcp: *const VimConv,
-    text: *mut c_char,
-    lenp: *mut size_t,
-    unconvlenp: *mut size_t,
-) -> *mut c_char {
-    let len = if lenp.is_null() {
-        unsafe { cstr::bytes_at(text) }.len()
-    } else {
-        unsafe { *lenp }
-    };
-    if len == 0 {
-        return unsafe { xstrdup(c"".as_ptr()) };
-    }
-    let src = unsafe { core::slice::from_raw_parts(text as *const u8, len) };
-
-    // iconv manages its own buffer and reports its own length.
-    if unsafe { (*vcp).vc_type } == CONV_ICONV {
-        return unsafe { iconv_string(vcp, text, len, unconvlenp, lenp) };
+    /// Run the plan over `text`: the converted bytes, or `None` when the
+    /// conversion failed -- an invalid sequence in the input, an
+    /// unrepresentable character with `vc_fail` set, or no plan at all.
+    pub fn convert(&self, text: &[u8]) -> Option<Vec<u8>> {
+        self.convert_sized(text).map(|(bytes, _)| bytes)
     }
 
-    // The worst-case growth of each conversion, which is what upstream
-    // allocates: it converts *in place* into this buffer. Building the
-    // answer first and copying it in would be tighter, but the allocation
-    // size is observable -- `test/unit/eval/typval_spec.lua` asserts the
-    // exact malloc sizes a converting `list_copy` makes -- and it is
-    // the same bound `VimConv::vc_factor` promises callers.
-    let factor: size_t = match unsafe { (*vcp).vc_type } {
-        CONV_TO_UTF8 => 2,
-        CONV_9_TO_UTF8 => 3,
-        CONV_TO_LATIN1 | CONV_TO_LATIN9 => 1,
-        // CONV_NONE, and anything else: nothing was planned.
-        _ => return core::ptr::null_mut(),
-    };
-    let room = len * factor + 1;
-    let result = unsafe { xmalloc(room) } as *mut u8;
-
-    let out = match unsafe { (*vcp).vc_type } {
-        CONV_TO_UTF8 => Some(latin1_to_utf8(src)),
-        CONV_9_TO_UTF8 => Some(latin9_to_utf8(src)),
-        _ => unsafe {
-            utf8_to_latin(
-                src,
-                (*vcp).vc_type == CONV_TO_LATIN9,
-                (*vcp).vc_fail,
-                unconvlenp,
-            )
-        },
-    };
-    let Some(out) = out else {
-        unsafe { xfree(result as *mut c_void) };
-        return core::ptr::null_mut();
-    };
-    debug_assert!(out.len() < room, "conversion overran vc_factor");
-    unsafe { core::ptr::copy_nonoverlapping(out.as_ptr(), result, out.len()) };
-    unsafe { *result.add(out.len()) = 0 };
-    if !lenp.is_null() {
-        unsafe { *lenp = out.len() };
+    /// [`convert`](Self::convert) of a C string, as one.
+    ///
+    /// The answer for the four arithmetic conversions is a block of the
+    /// conversion's worst-case growth plus a terminator's byte, which is
+    /// what upstream allocates (it converts in place into it): the size is
+    /// observable -- `typval_list.rs` asserts the malloc sizes a converting
+    /// `list_copy` makes -- and it is the bound `vc_factor` promises.
+    pub(crate) fn convert_cstr(&self, text: &CStr) -> Option<ThinCString> {
+        let (bytes, room) = self.convert_sized(text.to_bytes())?;
+        Some(ThinCString::in_block(&bytes, room))
     }
-    result as *mut c_char
+
+    /// The conversion, and the block size upstream allocates for it.
+    fn convert_sized(&self, text: &[u8]) -> Option<(Vec<u8>, usize)> {
+        if text.is_empty() {
+            return Some((Vec::new(), 1));
+        }
+        let factor = match self.vc_type {
+            CONV_ICONV => {
+                let out = iconv_convert(self.vc_fd.as_ref()?, self.vc_fail, text)?;
+                let room = out.len() + 1;
+                return Some((out, room));
+            }
+            CONV_TO_UTF8 => 2,
+            CONV_9_TO_UTF8 => 3,
+            CONV_TO_LATIN1 | CONV_TO_LATIN9 => 1,
+            // CONV_NONE, and anything else: nothing was planned.
+            _ => return None,
+        };
+        let out = match self.vc_type {
+            CONV_TO_UTF8 => latin1_to_utf8(text),
+            CONV_9_TO_UTF8 => latin9_to_utf8(text),
+            _ => utf8_to_latin(text, self.vc_type == CONV_TO_LATIN9, self.vc_fail)?,
+        };
+        let room = text.len() * factor + 1;
+        debug_assert!(out.len() < room, "conversion overran vc_factor");
+        Some((out, room))
+    }
 }
 
 /// Latin-1 to UTF-8: every byte is the codepoint of the same number.
@@ -488,15 +275,14 @@ const LATIN9_REPLACEMENTS: [(u8, c_int); 8] = [
 /// Latin-9 to UTF-8: Latin-1's mapping, with the eight replacements applied.
 fn latin9_to_utf8(src: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(src.len() * 3);
-    let mut buf = [0 as c_char; MB_MAXCHAR];
+    let mut buf = [0u8; MB_MAXCHAR];
     for &b in src {
         let c = LATIN9_REPLACEMENTS
             .iter()
             .find(|&&(byte, _)| byte == b)
             .map_or(b as c_int, |&(_, code)| code);
-        // SAFETY: `buf` is the longest sequence `utf_char2bytes` can write.
-        let n = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) } as usize;
-        out.extend(buf[..n].iter().map(|&b| b as u8));
+        let n = encode_char(c, &mut buf);
+        out.extend_from_slice(&buf[..n]);
     }
     out
 }
@@ -510,42 +296,28 @@ fn latin9_to_utf8(src: &[u8]) -> Vec<u8> {
 ///
 /// Answers `None` when the input is not UTF-8 at all, or when `fail` is set
 /// and a character cannot be represented.
-///
-/// # Safety
-///
-/// `unconvlenp` must be null or writable.
-unsafe fn utf8_to_latin(
-    src: &[u8],
-    to_latin9: bool,
-    fail: bool,
-    unconvlenp: *mut size_t,
-) -> Option<Vec<u8>> {
+fn utf8_to_latin(src: &[u8], to_latin9: bool, fail: bool) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(src.len());
     let mut i = 0;
     while i < src.len() {
-        let p = unsafe { src.as_ptr().add(i) } as *const c_char;
-        let l = unsafe { utf_ptr2len_len(p, (src.len() - i) as c_int) };
-        if l == 0 {
-            // An embedded NUL, which `len` says is part of the string.
+        let rest = &src[i..];
+        let l = promised_char_len(rest);
+        if rest[0] == 0 {
+            // An embedded NUL, which the length says is part of the string.
             out.push(0);
             i += 1;
             continue;
         }
         if l == 1 {
-            if utf8len_tab_zero[src[i] as usize] == 0 {
+            if utf8len_tab_zero[usize::from(rest[0])] == 0 {
                 return None; // not a lead byte: the input is not UTF-8
             }
-            if !unconvlenp.is_null() && utf8len_tab_zero[src[i] as usize] as usize > src.len() - i {
-                // A sequence cut off by the end of the input.
-                unsafe { *unconvlenp = src.len() - i };
-                break;
-            }
-            out.push(src[i]);
+            out.push(rest[0]);
             i += 1;
             continue;
         }
 
-        let mut c = unsafe { utf_ptr2char(p) };
+        let mut c = char_at(rest);
         if to_latin9 {
             c = to_latin9_byte(c);
         }
@@ -561,7 +333,7 @@ unsafe fn utf8_to_latin(
                 }
             }
         }
-        i += l as usize;
+        i += l;
     }
     Some(out)
 }
@@ -626,46 +398,13 @@ impl Converter {
     /// The conversion from `from` to `to`, or `None` when none is needed or
     /// possible.
     pub(crate) fn new(from: &CStr, to: &CStr) -> Option<Converter> {
-        let mut conv = Converter(VimConv {
-            vc_type: CONV_NONE,
-            vc_factor: 0,
-            vc_fd: core::ptr::null_mut(),
-            vc_fail: false,
-        });
-        // SAFETY: a zeroed plan of this value's own, and two NUL-terminated
-        // names the setup only reads.
-        let _ = unsafe {
-            convert_setup(
-                &mut conv.0,
-                from.as_ptr().cast_mut(),
-                to.as_ptr().cast_mut(),
-            )
-        };
+        let mut conv = Converter(CONV_NONE_INIT);
+        let _ = conv.0.setup(Some(from), Some(to));
         (conv.0.vc_type != CONV_NONE).then_some(conv)
     }
 
     /// `text` converted, or `None` when it would not convert.
     pub(crate) fn convert(&self, text: &[u8]) -> Option<Vec<u8>> {
-        let mut copy = text.to_vec();
-        copy.push(0);
-        let mut len = text.len();
-        // SAFETY: `len` readable bytes of a copy this call owns; the answer
-        // is a fresh allocation of `len` bytes, or null.
-        let converted = unsafe { string_convert(&self.0, copy.as_mut_ptr().cast(), &mut len) };
-        if converted.is_null() {
-            return None;
-        }
-        // SAFETY: as above.
-        let bytes = unsafe { core::slice::from_raw_parts(converted.cast::<u8>(), len) }.to_vec();
-        // SAFETY: the allocation just read, given back once.
-        unsafe { xfree(converted.cast()) };
-        Some(bytes)
-    }
-}
-
-impl Drop for Converter {
-    fn drop(&mut self) {
-        // SAFETY: this value's own plan, torn down once.
-        let _ = unsafe { convert_setup(&mut self.0, core::ptr::null_mut(), core::ptr::null_mut()) };
+        self.0.convert(text)
     }
 }

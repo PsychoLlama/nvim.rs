@@ -58,8 +58,8 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 use crate::fileio::vim_fgets;
 use crate::getchar::state::got_int;
 use crate::hashtab::{hash_add, hash_find, hash_init};
-use crate::mbyte::{convert_setup, enc_canonize, string_convert};
-use crate::memory::{xfree, xstrdup};
+use crate::mbyte::enc_canonize;
+use crate::memory::xstrdup;
 use crate::message::msg;
 use crate::message_fmt::{c_str, msg_bytes, msg_cstr, report_msg};
 use crate::option::vars::p_enc;
@@ -354,14 +354,7 @@ pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: &CStr) -> *mut 
         let line: &mut [uint8_t] = if spin.si_conv.vc_type != CONV_NONE {
             // SAFETY: a NUL-terminated line, converted into a fresh
             // allocation this loop then owns and frees.
-            let converted_line = unsafe {
-                string_convert(
-                    &raw mut spin.si_conv,
-                    rline.as_mut_ptr().cast::<c_char>(),
-                    core::ptr::null_mut(),
-                )
-            };
-            if converted_line.is_null() {
+            let Some(converted_line) = spin.si_conv.convert(read_line(&rline)) else {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let fname = msg_cstr(fname);
                 let rline = msg_bytes(read_line(&rline));
@@ -371,11 +364,9 @@ pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: &CStr) -> *mut 
                     lnum
                 );
                 continue;
-            }
+            };
             converted.clear();
-            // SAFETY: as above.
-            converted.extend_from_slice(unsafe { cstr::bytes_at(converted_line) });
-            unsafe { xfree(converted_line.cast()) };
+            converted.extend(converted_line.iter().take_while(|&&b| b != 0));
             converted.push(NUL as uint8_t);
             &mut converted
         } else {
@@ -472,8 +463,9 @@ fn handle_line(
         // SAFETY: an item, which is a live NUL-terminated string.
         aff.af_enc = unsafe { enc_canonize(item_ptr(items[1])) };
         if spin.si_ascii == 0
-            && p_enc(|value| unsafe {
-                convert_setup(&raw mut spin.si_conv, aff.af_enc, value.as_ptr().cast_mut())
+            && p_enc(|value| {
+                spin.si_conv
+                    .setup(Some(unsafe { CStr::from_ptr(aff.af_enc) }), Some(value))
             })
             .is_err()
         {

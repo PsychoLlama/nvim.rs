@@ -57,6 +57,54 @@ pub fn to_white_esc(s: &[u8]) -> usize {
     at
 }
 
+/// The decimal number `s` starts with, read as `strtoimax` reads one --
+/// leading white space, an optional sign, then digits -- and how many bytes
+/// it took; nothing is taken when there are no digits. A value past the
+/// range saturates at `intmax_t`'s bounds, and the flag says it did.
+pub fn decimal(s: &[u8]) -> (i64, usize, bool) {
+    let mut at = s
+        .iter()
+        .take_while(|&&b| matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        .count();
+    let negative = s.get(at) == Some(&b'-');
+    if matches!(s.get(at), Some(b'-' | b'+')) {
+        at += 1;
+    }
+    let digits = count(&s[at..], is_digit);
+    if digits == 0 {
+        return (0, 0, false);
+    }
+    let mut value: i64 = 0;
+    let mut overflow = false;
+    for &digit in &s[at..at + digits] {
+        let digit = i64::from(digit - b'0');
+        let next = value.checked_mul(10).and_then(|v| {
+            if negative {
+                v.checked_sub(digit)
+            } else {
+                v.checked_add(digit)
+            }
+        });
+        match next {
+            Some(next) => value = next,
+            None => {
+                overflow = true;
+                value = if negative { i64::MIN } else { i64::MAX };
+                break;
+            }
+        }
+    }
+    (value, at + digits, overflow)
+}
+
+/// [`decimal`] narrowed to an `int` the way a strict `getdigits_int` narrows
+/// it: a value outside the range saturates.
+pub fn decimal_int(s: &[u8]) -> (i32, usize) {
+    let (value, used, _) = decimal(s);
+    let clamped = value.clamp(i64::from(i32::MIN), i64::from(i32::MAX));
+    (i32::try_from(clamped).expect("clamped into range"), used)
+}
+
 /// How many leading bytes of `s` are decimal digits.
 ///
 /// The slice form of [`skipdigits`](super::skipdigits).

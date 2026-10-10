@@ -54,7 +54,7 @@ use crate::insexpand::ins_compl_active;
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{
     mb_adjust_cursor, utf_char2bytes, utf_composinglike, utf_head_off, utf_iscomposing_first,
-    utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len,
+    utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::memline::{
     ml_add_deleted_len, ml_append, ml_delete_flags, ml_line_alloced, ml_open_file, ml_replace,

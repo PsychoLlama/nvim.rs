@@ -33,9 +33,7 @@ use core::{ptr, slice};
 use crate::ascii::{ascii_isdigit, ascii_isident};
 use crate::charset::{str2nr_in, transchar, vim_isprintc};
 use crate::eval::vars::var_string_value;
-use crate::mbyte::{
-    char_at, cluster_len, utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len_len,
-};
+use crate::mbyte::{char_at, cluster_len, utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::memory::{xmalloc, xrealloc};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_usingsid};
@@ -797,7 +795,7 @@ pub unsafe fn replace_termcodes(
         // Copy one whole character, hiding a literal K_SPECIAL byte.
         let (at, left) = (src.raw(), end.gap(src) as c_int + 1);
         // SAFETY: `at` is inside the caller's buffer with `left` bytes left.
-        let char_len = unsafe { utfc_ptr2len_len(at, left) };
+        let char_len = cluster_len(unsafe { cstr::slice_at(at, left as usize) });
         for _ in 0..char_len {
             if src.byte() == K_SPECIAL as u8 as c_char {
                 let escaped = [K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8];

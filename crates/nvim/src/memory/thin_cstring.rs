@@ -55,7 +55,7 @@ use core::fmt;
 use core::ops::Deref;
 use core::ptr::NonNull;
 
-use super::{XString, xfree, xmemdupz, xrealloc};
+use super::{XString, xfree, xmalloc, xmemdupz, xrealloc};
 
 /// An owned NUL-terminated string in one `xmalloc` block, one pointer wide.
 ///
@@ -74,6 +74,22 @@ impl ThinCString {
         // fresh, terminated block or does not return.
         let block = unsafe { xmemdupz(bytes.as_ptr().cast::<c_void>(), bytes.len()) };
         Self(NonNull::new(block.cast::<c_char>()).expect("xmemdupz never answers null"))
+    }
+
+    /// A copy of `bytes`, terminated, in an `xmalloc` block of `room` bytes
+    /// (or of `bytes.len() + 1`, if that is more): the block a C writer that
+    /// sized for the worst case allocated, where that size is observable.
+    pub fn in_block(bytes: &[u8], room: usize) -> Self {
+        let room = room.max(bytes.len() + 1);
+        // SAFETY: `xmalloc` answers `room` writable bytes or does not return,
+        // and `bytes` plus its terminator fit in them.
+        let block = unsafe {
+            let block = xmalloc(room).cast::<u8>();
+            block.copy_from_nonoverlapping(bytes.as_ptr(), bytes.len());
+            *block.add(bytes.len()) = 0;
+            block
+        };
+        Self(NonNull::new(block.cast::<c_char>()).expect("xmalloc never answers null"))
     }
 
     /// A copy of a C string.
