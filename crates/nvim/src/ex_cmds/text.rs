@@ -17,7 +17,7 @@ use super::{CAR, EOL_MAC, NL, TAB};
 use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
-use crate::charset::{transchar, transchar_nonprint, vim_isprintc};
+use crate::charset::{transchar, transchar_nonprint_form, vim_isprintc};
 use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::digraph::get_digraph_for_char;
 use crate::edit::{BeginlineOpts, beginline};
@@ -115,8 +115,7 @@ fn describe_byte(
     // SAFETY: `nonprint` is 20 bytes and `transchar_nonprint` writes at most
     // seven into `raw` before the `  <%s>` wrapper takes it.
     if vim_isprintc(c) && !(' ' as c_int..='~' as c_int).contains(&c) {
-        let mut raw: [c_char; 7] = [0; 7];
-        unsafe { transchar_nonprint(Buf::current_or_none(), raw.as_mut_ptr(), c) };
+        let raw = transchar_nonprint_form(Buf::current_or_none(), c);
         unsafe {
             vim_snprintf!(
                 nonprint.as_mut_ptr(),

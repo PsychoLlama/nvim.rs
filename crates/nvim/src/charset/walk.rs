@@ -1,21 +1,19 @@
-//! Walking a NUL-terminated string: the pointer forms of the `skip*` family,
-//! and the digit readers built on them.
+//! The pointer spellings of the `charset` family.
 //!
-//! [`skip`](super::skip) is the same set of questions asked of a `&[u8]`,
-//! answering an offset. These are what upstream wrote and what most of the
-//! tree still calls: they take a `*const c_char` and hand back a pointer
-//! into it, so a caller either walks on from there or subtracts to get a
-//! length. Every one of them goes through [`Bytes`], whose *construction* is
-//! the unsafe step, so the walking itself is ordinary safe code.
-//!
-//! The `getdigits` family sits here rather than beside
-//! [`vim_str2nr`](super::vim_str2nr) because it is the same shape: a cursor
-//! the callee advances past what it read. It parses one unprefixed decimal
-//! number through `strtoimax`, where `vim_str2nr` parses the bases.
+//! Every reader in `charset` takes a `&[u8]`: [`skip`](super::skip) answers
+//! offsets, [`skip::decimal`](super::skip::decimal) reads a number, and the
+//! display forms render slices. What is here is what upstream wrote and what
+//! the callers whose own cursor is still a raw pointer call: each takes a
+//! `*const c_char` into a NUL-terminated string and hands back a pointer into
+//! it (or writes through one), and each is a one-line shim over the slice
+//! form. They go as their callers convert. The skippers go through
+//! [`Bytes`], whose *construction* is the unsafe step, so the walk itself
+//! never measures the string.
 //!
 //! Original: `src/nvim/charset.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Raw C strings: the pointer spellings, for callers outside this family.
 #![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
@@ -27,16 +25,84 @@
 
 use core::ffi::{c_char, c_int, c_long};
 
-use ::libc::__errno_location;
+use super::display::{
+    foldcase, mirror_ascii, strnsize, strsize, trans_characters_in, transchar_hex_into,
+    transchar_hex_len, transstr_into, transstr_owned,
+};
+use super::{
+    Str2NrBases, backslash_halved, byte2cells, escapes_next, hexhex_at, is_bdigit, is_digit,
+    is_white, is_word_at, is_xdigit, skip, str2nr_scan,
+};
+use crate::cstr;
+use crate::memory::{ThinCString, XString};
+use crate::types::{UVarNumber, VarNumber, int32_t, intmax_t, intptr_t, size_t, ssize_t, uint8_t};
+use crate::winlayer::{Buf, Win};
+use core::slice;
 
-use super::{Bytes, ERANGE, is_bdigit, is_digit, is_white, is_xdigit, skip};
-use crate::keycodes::Ctrl_V;
-use crate::memory::xstrchrnul;
-use crate::os::cshim::strtoimax;
-use crate::types::{int32_t, intmax_t, intptr_t, size_t, uint8_t};
-use crate::winlayer::Win;
+/// A cursor over the bytes of a NUL-terminated string.
+///
+/// Building one is the unsafe step. Afterwards the cursor only ever steps
+/// over bytes that have already been read as non-NUL, so every read is in
+/// bounds and the walks themselves are ordinary safe code.
+#[derive(Clone, Copy)]
+struct Bytes(*const c_char);
 
-/// The first byte of `p` that is not a space or tab.
+impl Bytes {
+    /// # Safety
+    /// `p` must point into a NUL-terminated string.
+    #[inline(always)]
+    unsafe fn new(p: *const c_char) -> Self {
+        Bytes(p)
+    }
+
+    /// The byte under the cursor.
+    #[inline(always)]
+    fn byte(self) -> uint8_t {
+        // SAFETY: the cursor is inside its string, so this byte is readable.
+        unsafe { *self.0.cast::<uint8_t>() }
+    }
+
+    /// The byte under the cursor together with the one after it. The second
+    /// reads as zero when the first is the terminator — the only case in
+    /// which looking ahead would leave the string.
+    #[inline(always)]
+    fn pair(self) -> (uint8_t, uint8_t) {
+        let byte = self.byte();
+        // SAFETY: a non-NUL byte is never the last one of the string.
+        let next = if byte == 0 {
+            0
+        } else {
+            unsafe { *self.0.add(1).cast::<uint8_t>() }
+        };
+        (byte, next)
+    }
+
+    /// Step over `n` bytes the caller has established are within the string.
+    #[inline(always)]
+    fn advance(&mut self, n: usize) {
+        self.0 = self.0.wrapping_add(n);
+    }
+
+    /// The first byte at or after the cursor that `keep` rejects, or the
+    /// terminator.
+    #[inline(always)]
+    fn skip_while(mut self, keep: impl Fn(uint8_t) -> bool) -> Self {
+        loop {
+            let byte = self.byte();
+            if byte == 0 || !keep(byte) {
+                return self;
+            }
+            self.advance(1);
+        }
+    }
+
+    #[inline(always)]
+    fn raw(self) -> *mut c_char {
+        self.0.cast_mut()
+    }
+}
+
+/// The first byte of `p` that is not a space or tab; [`skip::white`].
 ///
 /// # Safety
 /// `p` must be a NUL-terminated string.
@@ -49,9 +115,8 @@ pub unsafe fn skipwhite(p: *const c_char) -> *mut c_char {
 /// # Safety
 /// `p` must hold `len` readable bytes.
 pub(crate) unsafe fn skipwhite_len(p: *const c_char, len: size_t) -> *mut c_char {
-    // SAFETY: the caller guarantees `len` readable bytes at `p`.
-    let bytes = unsafe { core::slice::from_raw_parts(p.cast::<uint8_t>(), len) };
-    p.wrapping_add(skip::white(bytes)) as *mut c_char
+    p.wrapping_add(skip::white(unsafe { cstr::slice_at(p, len) }))
+        .cast_mut()
 }
 
 /// The indent of the cursor's line, in bytes.
@@ -61,7 +126,7 @@ pub(crate) fn getwhitecols_curline() -> intptr_t {
     intptr_t::try_from(skip::white(lines.line(win.w_cursor.lnum))).unwrap_or(0)
 }
 
-/// The first byte of `q` that is not a decimal digit.
+/// The first byte of `q` that is not a decimal digit; [`skip::digits`].
 ///
 /// # Safety
 /// `q` must be a NUL-terminated string.
@@ -69,7 +134,7 @@ pub unsafe fn skipdigits(q: *const c_char) -> *mut c_char {
     unsafe { Bytes::new(q) }.skip_while(is_digit).raw()
 }
 
-/// The first byte of `q` that is not a binary digit.
+/// The first byte of `q` that is not a binary digit; [`skip::bin`].
 ///
 /// # Safety
 /// `q` must be a NUL-terminated string.
@@ -77,7 +142,7 @@ pub unsafe fn skipbin(q: *const c_char) -> *const c_char {
     unsafe { Bytes::new(q) }.skip_while(is_bdigit).raw()
 }
 
-/// The first byte of `q` that is not a hexadecimal digit.
+/// The first byte of `q` that is not a hexadecimal digit; [`skip::hex`].
 ///
 /// # Safety
 /// `q` must be a NUL-terminated string.
@@ -85,7 +150,7 @@ pub unsafe fn skiphex(q: *mut c_char) -> *mut c_char {
     unsafe { Bytes::new(q) }.skip_while(is_xdigit).raw()
 }
 
-/// The first decimal digit in `q`, or its NUL.
+/// The first decimal digit in `q`, or its NUL; [`skip::to_digit`].
 ///
 /// # Safety
 /// `q` must be a NUL-terminated string.
@@ -95,7 +160,7 @@ pub unsafe fn skiptodigit(q: *mut c_char) -> *mut c_char {
         .raw()
 }
 
-/// The first white space byte in `p`, or its NUL.
+/// The first white space byte in `p`, or its NUL; [`skip::to_white`].
 ///
 /// # Safety
 /// `p` must be a NUL-terminated string.
@@ -105,7 +170,8 @@ pub unsafe fn skiptowhite(p: *const c_char) -> *mut c_char {
         .raw()
 }
 
-/// [`skiptowhite`], but a backslash or CTRL-V hides the byte after it.
+/// [`skiptowhite`], but a backslash or CTRL-V hides the byte after it;
+/// [`skip::to_white_esc`].
 ///
 /// # Safety
 /// `p` must be a NUL-terminated string.
@@ -116,7 +182,7 @@ pub unsafe fn skiptowhite_esc(p: *const c_char) -> *mut c_char {
         if byte == 0 || is_white(byte) {
             return cursor.raw();
         }
-        let escapes = (byte == b'\\' || c_int::from(byte) == Ctrl_V) && next != 0;
+        let escapes = (byte == b'\\' || c_int::from(byte) == crate::keycodes::Ctrl_V) && next != 0;
         cursor.advance(1 + usize::from(escapes));
     }
 }
@@ -126,111 +192,75 @@ pub unsafe fn skiptowhite_esc(p: *const c_char) -> *mut c_char {
 /// # Safety
 /// `p` must be a NUL-terminated string.
 pub(crate) unsafe fn skip_to_newline(p: *const c_char) -> *mut c_char {
-    unsafe { xstrchrnul(p, b'\n'.cast_signed()) }
+    unsafe { Bytes::new(p) }
+        .skip_while(|byte| byte != b'\n')
+        .raw()
 }
 
-/// Read a decimal number at `*pp`, advancing it past the digits. Answers
-/// false when the value did not fit, in which case `*nr` holds the clamped
-/// `strtoimax` result.
+/// Read a decimal number at `*cursor`, advancing it past the digits; see
+/// [`skip::decimal`]. Answers false when the value did not fit, in which
+/// case `*nr` holds the saturated value.
 ///
 /// # Safety
-/// `*pp` must be a NUL-terminated string.
+/// `*cursor` must be a NUL-terminated string, and `nr` writable.
 pub(crate) unsafe fn try_getdigits(cursor: *mut *mut c_char, nr: *mut intmax_t) -> bool {
-    // SAFETY: `*pp` is a NUL-terminated string, `strtoimax` advances it past
-    // whatever it consumed, and `errno` is the C library's own thread-local.
-    let number = unsafe {
-        *__errno_location() = 0;
-        strtoimax(*cursor, cursor, 10)
-    };
-    // SAFETY: the caller's out-argument is writable.
+    let (number, used, overflow) = skip::decimal(unsafe { cstr::bytes_at(*cursor) });
+    unsafe { *cursor = (*cursor).add(used) };
     unsafe { *nr = number };
-    // SAFETY: as above.
-    let out_of_range = unsafe { *__errno_location() } == ERANGE;
-    !(out_of_range && (number == intmax_t::MIN || number == intmax_t::MAX))
+    !overflow
 }
 
-/// [`try_getdigits`], answering `def` when the value did not fit.
+/// [`try_getdigits`], answering `def` when the value did not fit; see
+/// [`getdigits_at`].
+///
+/// # Safety
+/// `*cursor` must be a NUL-terminated string.
+pub unsafe fn getdigits(cursor: *mut *mut c_char, strict: bool, def: intmax_t) -> intmax_t {
+    let (number, used) = getdigits_at(unsafe { cstr::bytes_at(*cursor) }, 0, strict, def);
+    unsafe { *cursor = (*cursor).add(used) };
+    number
+}
+
+/// [`getdigits`] narrowed to an `int`; see [`getdigits_int_at`].
+///
+/// # Safety
+/// `*cursor` must be a NUL-terminated string.
+pub unsafe fn getdigits_int(cursor: *mut *mut c_char, strict: bool, def: c_int) -> c_int {
+    let (number, used) = getdigits_int_at(unsafe { cstr::bytes_at(*cursor) }, 0, strict, def);
+    unsafe { *cursor = (*cursor).add(used) };
+    number
+}
+
+/// The number `text[at..]` starts with, read as `strtoimax` reads one, and
+/// the offset past what it consumed.
 ///
 /// `strict` says the caller has already established that there *are* digits
 /// here, so a value it cannot represent is a bad number rather than a parse
 /// failure, and `def` would be misleading. Every one of those callers is
 /// reading text a user typed -- an option value, a `:sign` id, a `:breakadd`
 /// line number -- so an unrepresentable value **saturates** rather than
-/// failing: `strtoimax` has already clamped it to `INTMAX_MIN`/`INTMAX_MAX`
-/// and that is what comes back. Upstream `abort()`s here instead, which
+/// failing. Upstream `abort()`s here instead, which
 /// `:set breakindentopt=min:99999999999999999999999` reaches from a modeline.
-///
-/// # Safety
-/// `*pp` must be a NUL-terminated string.
-pub unsafe fn getdigits(cursor: *mut *mut c_char, strict: bool, def: intmax_t) -> intmax_t {
-    let mut number: intmax_t = 0;
-    // SAFETY: forwarded to the caller's contract; `number` is a local.
-    let ok = unsafe { try_getdigits(cursor, &raw mut number) };
-    if ok || strict { number } else { def }
-}
-
-/// [`getdigits`] narrowed to an `int`.
-///
-/// A `strict` value outside the range saturates -- see [`getdigits`] for why
-/// it is not an abort.
-///
-/// # Safety
-/// `*pp` must be a NUL-terminated string.
-pub unsafe fn getdigits_int(cursor: *mut *mut c_char, strict: bool, def: c_int) -> c_int {
-    let number = unsafe { getdigits(cursor, strict, intmax_t::from(def)) };
-    narrow_int(number, strict, def)
-}
-
-/// [`getdigits_int`] as an offset walk: the number `buffer[at..]` starts with,
-/// and the offset past what it consumed.
-///
-/// The offset form a converted command-line parse wants. `buffer` is a
-/// writable NUL-terminated buffer the caller owns -- nothing here writes to
-/// it, but a `&mut` is what gives the walk a pointer it may hold -- and this
-/// keeps `strtoimax`'s exact contract, leading blanks and a sign included,
-/// which a hand-written digit scanner would have to guess at.
-///
-/// # Panics
-/// If `buffer` holds no NUL at or after `at`.
-pub(crate) fn getdigits_int_at(
-    buffer: &mut [u8],
-    at: usize,
-    strict: bool,
-    def: c_int,
-) -> (c_int, usize) {
-    let (number, past) = getdigits_at(buffer, at, strict, intmax_t::from(def));
-    (narrow_int(number, strict, def), past)
-}
-
-/// [`getdigits`] as an offset walk, in its full width -- the shape a caller
-/// that wants C's truncating cast rather than [`getdigits_int_at`]'s clamp
-/// reads. See [`getdigits_int_at`] for why the buffer is `&mut`.
-///
-/// # Panics
-/// If `buffer` holds no NUL at or after `at`.
 pub(crate) fn getdigits_at(
-    buffer: &mut [u8],
+    text: &[u8],
     at: usize,
     strict: bool,
     def: intmax_t,
 ) -> (intmax_t, usize) {
-    assert!(
-        buffer[at..].contains(&0),
-        "the walk needs a terminator to stop at"
-    );
-    let base = buffer.as_mut_ptr();
-    // SAFETY: `at` is in bounds of `buffer`, which the assert above says is
-    // NUL-terminated from there.
-    let mut cursor = unsafe { base.add(at) }.cast::<c_char>();
-    // SAFETY: as above; `getdigits` leaves the cursor within the string.
-    let number = unsafe { getdigits(&raw mut cursor, strict, def) };
-    // SAFETY: both pointers are into `buffer`, the base first.
-    let past = unsafe { cursor.cast::<uint8_t>().offset_from(base) };
-    (number, past.cast_unsigned())
+    let (number, used, overflow) = skip::decimal(&text[at..]);
+    (if overflow && !strict { def } else { number }, at + used)
 }
 
-/// [`getdigits_int`]'s narrowing, shared with [`getdigits_int_at`].
-fn narrow_int(number: intmax_t, strict: bool, def: c_int) -> c_int {
+/// [`getdigits_at`] narrowed to an `int`. A `strict` value outside the range
+/// saturates; otherwise one that does not fit answers `def`.
+pub(crate) fn getdigits_int_at(text: &[u8], at: usize, strict: bool, def: c_int) -> (c_int, usize) {
+    let (number, past) = getdigits_at(text, at, strict, intmax_t::from(def));
+    (narrow(number, strict, def), past)
+}
+
+/// A number narrowed to an `int`: clamped when `strict`, `def` when it does
+/// not fit otherwise.
+fn narrow(number: intmax_t, strict: bool, def: c_int) -> c_int {
     if strict {
         let clamped = number.clamp(intmax_t::from(c_int::MIN), intmax_t::from(c_int::MAX));
         return c_int::try_from(clamped).expect("clamped into `c_int`'s range");
@@ -241,23 +271,18 @@ fn narrow_int(number: intmax_t, strict: bool, def: c_int) -> c_int {
 /// [`getdigits`] narrowed to an `int32_t`, with [`getdigits_int`]'s shape.
 ///
 /// # Safety
-/// `*pp` must be a NUL-terminated string.
+/// `*cursor` must be a NUL-terminated string.
 pub unsafe fn getdigits_int32(cursor: *mut *mut c_char, strict: bool, def: int32_t) -> int32_t {
-    let number = unsafe { getdigits(cursor, strict, intmax_t::from(def)) };
-    if strict {
-        let clamped = number.clamp(intmax_t::from(int32_t::MIN), intmax_t::from(int32_t::MAX));
-        return int32_t::try_from(clamped).expect("clamped into `int32_t`'s range");
-    }
-    int32_t::try_from(number).unwrap_or(def)
+    unsafe { getdigits_int(cursor, strict, def) }
 }
 
 /// [`getdigits`] narrowed to a `long`. Note that unlike the `int` forms this
 /// does not range-check, because on this platform it cannot fail.
 ///
 /// # Safety
-/// `*pp` must be a NUL-terminated string.
+/// `*cursor` must be a NUL-terminated string.
 pub(crate) unsafe fn getdigits_long(cursor: *mut *mut c_char, strict: bool, def: c_long) -> c_long {
-    unsafe { getdigits(cursor, strict, intmax_t::from(def)) as c_long }
+    unsafe { getdigits(cursor, strict, intmax_t::from(def)) }
 }
 
 /// Whether `lbuf` holds nothing but white space.
@@ -265,7 +290,233 @@ pub(crate) unsafe fn getdigits_long(cursor: *mut *mut c_char, strict: bool, def:
 /// # Safety
 /// `lbuf` must be a NUL-terminated string.
 pub(crate) unsafe fn vim_isblankline(lbuf: *mut c_char) -> bool {
-    // SAFETY: forwarded to the caller's contract; `skipwhite` stays inside.
-    let byte = unsafe { Bytes::new(skipwhite(lbuf)) }.byte();
-    byte == 0 || byte == b'\r' || byte == b'\n'
+    let text = unsafe { cstr::bytes_at(lbuf) };
+    matches!(cstr::byte_at(text, skip::white(text)), 0 | b'\r' | b'\n')
+}
+
+/// Whether the character at `p` belongs to a word in the current buffer.
+///
+/// # Safety
+/// `p` must point into a NUL-terminated string.
+pub unsafe fn vim_iswordp(p: *const c_char) -> bool {
+    unsafe { vim_iswordp_buf(p, Buf::current()) }
+}
+
+/// Whether the character at `p` belongs to a word in `buffer`; see
+/// [`is_word_at`].
+///
+/// # Safety
+/// `p` must point into a NUL-terminated string.
+pub unsafe fn vim_iswordp_buf(p: *const c_char, buffer: Buf) -> bool {
+    is_word_at(
+        unsafe { cstr::prefix_at(p, crate::types::MB_MAXCHAR) },
+        buffer,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the C signature, kept for its callers"
+)]
+/// Parse the number at `start` into whichever of the out-arguments is not
+/// null; see [`str2nr_scan`].
+///
+/// # Safety
+///
+/// `start` must point at a NUL-terminated string, or at `maxlen` readable
+/// bytes. Each out-argument must be null or point at a writable value of its
+/// own.
+pub unsafe fn vim_str2nr(
+    start: *const c_char,
+    prep: *mut c_int,
+    len: *mut c_int,
+    what: Str2NrBases,
+    nptr: *mut VarNumber,
+    unptr: *mut UVarNumber,
+    maxlen: c_int,
+    strict: bool,
+    overflow: *mut bool,
+) {
+    let text = match usize::try_from(maxlen) {
+        Ok(0) | Err(_) => unsafe { cstr::bytes_at(start) },
+        Ok(maxlen) => unsafe { cstr::prefix_at(start, maxlen) },
+    };
+    let parsed = str2nr_scan(text, maxlen, what, strict, !nptr.is_null());
+    unsafe {
+        if !len.is_null() {
+            *len = c_int::try_from(parsed.len).unwrap_or(c_int::MAX);
+        }
+        if parsed.overflow && !overflow.is_null() {
+            *overflow = true;
+        }
+        if parsed.rejected {
+            return;
+        }
+        if !prep.is_null() {
+            *prep = parsed.prefix;
+        }
+        if !nptr.is_null() {
+            *nptr = parsed.value;
+        }
+        if !unptr.is_null() {
+            *unptr = parsed.magnitude;
+        }
+    }
+}
+
+/// The byte the two hexadecimal digits at `p` spell, or -1; [`hexhex_at`].
+///
+/// # Safety
+/// `p` must hold two readable bytes, or a NUL before them.
+pub unsafe fn hexhex2nr(p: *const c_char) -> c_int {
+    hexhex_at(unsafe { cstr::prefix_at(p, 2) })
+}
+
+/// Whether the backslash at `str` escapes the byte after it; [`escapes_next`].
+///
+/// # Safety
+/// `str` must be a NUL-terminated string.
+pub unsafe fn rem_backslash(str: *const c_char) -> bool {
+    escapes_next(unsafe { cstr::prefix_at(str, 2) })
+}
+
+/// Remove the escaping backslashes from `p`, in place; [`backslash_halved`].
+///
+/// # Safety
+/// `p` must be a writable NUL-terminated string.
+pub unsafe fn backslash_halve(p: *mut c_char) {
+    let len = unsafe { cstr::bytes_at(p) }.len();
+    let halved = backslash_halved(unsafe { cstr::slice_at(p, len) });
+    // The result is never longer than the string, so it and its terminator
+    // fit where the string was.
+    unsafe { p.cast::<u8>().copy_from(halved.as_ptr(), halved.len()) };
+    unsafe { *p.add(halved.len()) = 0 };
+}
+
+/// [`backslash_halve`] into a fresh string the caller owns.
+///
+/// # Safety
+/// `p` must be a NUL-terminated string.
+pub unsafe fn backslash_halve_save(p: *const c_char) -> *mut c_char {
+    XString::from_bytes(&backslash_halved(unsafe { cstr::bytes_at(p) })).into_raw()
+}
+
+/// Replace every unprintable byte in `buf` with its display form, in place;
+/// [`trans_characters_in`].
+///
+/// # Safety
+/// `buf` must be a NUL-terminated string in a writable buffer of `bufsize`
+/// bytes.
+pub unsafe fn trans_characters(buf: *mut c_char, bufsize: c_int) {
+    let bufsize = usize::try_from(bufsize).unwrap_or(0);
+    trans_characters_in(unsafe { slice::from_raw_parts_mut(buf.cast::<u8>(), bufsize) });
+}
+
+/// Copy `s` into `buf` with every unprintable character replaced by its
+/// display form, NUL-terminated; [`transstr_into`]. A negative `slen` means
+/// "to the NUL".
+///
+/// # Safety
+/// `s` must be a NUL-terminated string and `buf` writable for `buflen` bytes,
+/// at least one.
+pub unsafe fn transstr_buf(
+    s: *const c_char,
+    slen: ssize_t,
+    buf: *mut c_char,
+    buflen: size_t,
+    untab: bool,
+) -> size_t {
+    let out = unsafe { slice::from_raw_parts_mut(buf.cast::<u8>(), buflen) };
+    transstr_into(
+        unsafe { cstr::bytes_at(s) },
+        usize::try_from(slen).ok(),
+        out,
+        untab,
+    )
+}
+
+/// [`transstr_buf`] into a fresh string the caller owns; [`transstr_owned`].
+///
+/// # Safety
+/// `s` must be a NUL-terminated string.
+pub unsafe fn transstr(s: *const c_char, untab: bool) -> *mut c_char {
+    transstr_owned(unsafe { cstr::bytes_at(s) }, untab).into_raw()
+}
+
+/// Fold `orglen` bytes of `str` to lowercase; [`foldcase`]. With a null `buf`
+/// the result is a fresh string the caller owns; otherwise it is written
+/// into `buf`, which is answered.
+///
+/// # Safety
+/// `str` must hold `orglen` readable bytes; `buf`, if given, must be writable
+/// for `buflen` bytes, at least one.
+pub unsafe fn str_foldcase(
+    str: *mut c_char,
+    orglen: c_int,
+    buf: *mut c_char,
+    buflen: c_int,
+) -> *mut c_char {
+    let text = unsafe { cstr::slice_at(str, usize::try_from(orglen).unwrap_or(0)) };
+    if buf.is_null() {
+        return ThinCString::from_vec(foldcase(text, None)).into_raw();
+    }
+    let room = usize::try_from(buflen).unwrap_or(0);
+    let folded = foldcase(text, Some(room));
+    unsafe { buf.cast::<u8>().copy_from(folded.as_ptr(), folded.len()) };
+    unsafe { *buf.add(folded.len()) = 0 };
+    buf
+}
+
+/// Write `c`'s `<xx>` form into `buf`; [`transchar_hex_into`].
+///
+/// # Safety
+/// `buf` must have room for the form and its NUL: nine bytes for anything a
+/// buffer can hold.
+pub unsafe fn transchar_hex(buf: *mut c_char, c: c_int) -> size_t {
+    let room = transchar_hex_len(c) + 1;
+    transchar_hex_into(unsafe { slice::from_raw_parts_mut(buf, room) }, c)
+}
+
+/// Reverse the bytes of `str` in place, up to `end` or the NUL;
+/// [`mirror_ascii`].
+///
+/// # Safety
+/// `str` must be NUL-terminated when `end` is null, and reach `end`
+/// otherwise; the bytes must be writable.
+pub unsafe fn rl_mirror_ascii(str: *mut c_char, end: *mut c_char) {
+    let len = if end.is_null() {
+        unsafe { cstr::bytes_at(str) }.len()
+    } else {
+        end.addr() - str.addr()
+    };
+    mirror_ascii(unsafe { slice::from_raw_parts_mut(str.cast::<u8>(), len) });
+}
+
+/// The display width of the character at `p`.
+///
+/// # Safety
+/// `p` must point into a NUL-terminated string.
+pub unsafe fn ptr2cells(p: *const c_char) -> c_int {
+    let byte = unsafe { *p.cast::<uint8_t>() };
+    if byte >= 0x80 {
+        return unsafe { crate::mbyte::utf_ptr2cells(p) };
+    }
+    byte2cells(c_int::from(byte))
+}
+
+/// The display width of the whole string `s`; [`strsize`].
+///
+/// # Safety
+/// `s` must be a NUL-terminated string.
+pub unsafe fn vim_strsize(s: *const c_char) -> c_int {
+    strsize(unsafe { cstr::bytes_at(s) })
+}
+
+/// The display width of the characters starting in the first `len` bytes of
+/// `s`; [`strnsize`].
+///
+/// # Safety
+/// `s` must be a NUL-terminated string.
+pub unsafe fn vim_strnsize(s: *const c_char, len: c_int) -> c_int {
+    strnsize(unsafe { cstr::bytes_at(s) }, len)
 }

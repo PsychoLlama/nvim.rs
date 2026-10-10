@@ -58,7 +58,7 @@ pub use self::slice::{
 };
 pub use self::tables::*;
 use self::text::{
-    NulTerminated, Prefix, Text, ambiguous_width_in, cells_in, char_at_in, char_info_in,
+    CBytes, NulTerminated, Prefix, Text, ambiguous_width_in, cells_in, char_at_in, char_info_in,
     char_len_in, cluster_len_in, head_off_in, next_cluster_in, string_cells_in,
 };
 
@@ -353,6 +353,22 @@ pub unsafe fn utfc_ptr2len(p: *const c_char) -> c_int {
 #[inline]
 pub fn cluster_len(bytes: &[u8]) -> usize {
     cluster_len_in(bytes, 0)
+}
+
+/// [`cluster_len`] of the bytes of a C string: the cluster length the
+/// NUL-terminated string `bytes` came from answers -- 0 at a NUL or the end,
+/// and a composing character the end interrupts is an invalid byte rather
+/// than one still to arrive. For a slice form that stands in for a pointer
+/// form byte for byte.
+#[inline]
+pub(crate) fn c_cluster_len(bytes: &[u8]) -> usize {
+    cluster_len_in(CBytes(bytes), 0)
+}
+
+/// [`cells_at`] of the bytes of a C string; see [`c_cluster_len`].
+#[inline]
+pub(crate) fn c_cells_at(bytes: &[u8]) -> c_int {
+    cells_in(CBytes(bytes), 0)
 }
 
 /// The grapheme clusters of `bytes`, as `(byte offset, codepoint)`.

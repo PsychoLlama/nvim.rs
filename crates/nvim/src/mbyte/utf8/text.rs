@@ -91,6 +91,31 @@ impl Text for &[u8] {
     }
 }
 
+/// The bytes of a C string, held as a slice: the slice's end or a NUL in it
+/// ends the text, and nothing in it is "cut short" -- a sequence its end
+/// interrupts is just not one, as it would be at a NUL. The readers answer
+/// over this exactly what they answer over the [`NulTerminated`] string the
+/// bytes came from.
+#[derive(Clone, Copy)]
+pub(super) struct CBytes<'a>(pub(super) &'a [u8]);
+
+impl Text for CBytes<'_> {
+    #[inline(always)]
+    fn byte(self, i: usize) -> u8 {
+        self.0.get(i).copied().unwrap_or(0)
+    }
+
+    #[inline(always)]
+    fn ends_at(self, i: usize) -> bool {
+        self.byte(i) == 0
+    }
+
+    #[inline(always)]
+    fn left(self, _i: usize) -> Option<usize> {
+        None
+    }
+}
+
 /// A NUL-terminated string, read through a pointer to its start.
 #[derive(Clone, Copy)]
 pub(super) struct NulTerminated(*const u8);

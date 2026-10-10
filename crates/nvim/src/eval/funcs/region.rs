@@ -230,8 +230,7 @@ fn parse_type(spec: &CStr) -> Option<(MotionType, c_int)> {
             if rest.is_empty() {
                 return Some((kMTBlockWise, 0));
             }
-            let mut text = spec.to_bytes_with_nul().to_vec();
-            let (width, past) = getdigits_int_at(&mut text, 1, false, 0);
+            let (width, past) = getdigits_int_at(spec.to_bytes(), 1, false, 0);
             if width <= 0 || past != spec.to_bytes().len() {
                 return bad();
             }

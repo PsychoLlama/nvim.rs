@@ -57,6 +57,20 @@ pub(crate) fn ctype_bits(c: u8) -> ::core::ffi::c_ushort {
     unsafe { *(*__ctype_b_loc()).add(usize::from(c)) }
 }
 
+/// `strtod` over the start of `text`: the value, and how many bytes it took
+/// (none when `text` does not start with a number). The end of the slice
+/// ends the number.
+pub(crate) fn strtod_prefix(text: &[u8]) -> (f64, usize) {
+    let mut terminated = Vec::with_capacity(text.len() + 1);
+    terminated.extend_from_slice(text);
+    terminated.push(0);
+    let start = terminated.as_ptr().cast::<::core::ffi::c_char>();
+    let mut end: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
+    // SAFETY: a NUL-terminated copy; `strtod` leaves `end` inside it.
+    let value = unsafe { ::libc::strtod(start, &raw mut end) };
+    (value, end.addr() - start.addr())
+}
+
 /// `towupper(c)`: the process locale's uppercase of wide character `c`.
 pub(crate) fn wide_toupper(c: wint_t) -> wint_t {
     // SAFETY: a pure function of one wide character.

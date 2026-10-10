@@ -11,7 +11,7 @@ use neovim::charset::{
     Str2NrBases, backslash_halve, backslash_halve_save, getdigits, getdigits_int, getdigits_int32,
     hexhex2nr, ptr2cells, rem_backslash, skipbin, skipdigits, skiphex, skiptodigit, skiptowhite,
     skiptowhite_esc, skipwhite, str_foldcase, trans_characters, transchar_hex, transstr,
-    transstr_buf, transstr_len, vim_iswordp, vim_str2nr, vim_strnsize, vim_strsize,
+    transstr_buf, vim_iswordp, vim_str2nr, vim_strnsize, vim_strsize,
 };
 use neovim::ex_docmd::do_cmdline_cmd;
 use neovim::types::typval::{UVarNumber, VarNumber};
@@ -218,7 +218,9 @@ fn the_display_forms() {
                 d.add(i64::from(vim_strnsize(p, n)));
             }
             for untab in [false, true] {
-                d.add(transstr_len(p, untab) as i64);
+                // `transstr_len`, gone with its one caller: the length
+                // `transstr` allocates for.
+                d.add(take_bytes(transstr(p, untab)).len() as i64);
                 d.bytes(&take_bytes(transstr(p, untab)));
                 for buflen in [1, 2, 5, 9, 64] {
                     let mut out = vec![0x55 as c_char; buflen];

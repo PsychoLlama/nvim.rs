@@ -8,37 +8,30 @@
 //! - `utf8len_tab` and the `utf_*` classifiers in `mbyte.rs`, for anything
 //!   past U+00FF.
 //!
-//! Nearly every function here walks a raw C string, and nearly every one of
-//! them runs per character on a parsing or drawing path. Both facts shape
-//! the code: the pointer walks go through [`Bytes`], a cursor whose
-//! *construction* is the unsafe step and whose reads are then ordinary safe
-//! code, and every one-line helper is `#[inline(always)]`, because the test
-//! suites run unoptimised builds in which nothing else is inlined.
-//!
-//! An `unsafe` block here carries a `SAFETY:` note unless it does nothing
-//! but hand its own function's documented contract straight to a callee
-//! with the same one.
+//! Nearly every function here runs per character on a parsing or drawing
+//! path, which is why every one-line helper is `#[inline(always)]`: the test
+//! suites run unoptimised builds in which nothing else is inlined. The text
+//! they read is a `&[u8]`; the pointer spellings upstream's callers still use
+//! are one-line shims in `walk.rs`, the one file here that allows `unsafe`.
 
+// No `unsafe` here, and none allowed: the crate denies it. Not `forbid`,
+// because a `forbid` reaches the whole subtree and `walk.rs` keeps the
+// pointer shims, which need the allow.
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{
-    char_at, mb_islower, mb_isupper, utf_class_tab, utf_printable, utf_ptr2char, utf8len_tab,
-};
-use crate::memory::xmalloc;
+use crate::mbyte::{char_at, mb_islower, mb_isupper, utf_class_tab, utf_printable, utf8len_tab};
 use crate::option::vars::{breakat_flags, dy_flags, p_isf, p_isi, p_isp};
 use crate::options::kOptDyFlagUhex;
 use crate::optionstr::OptStringRef;
-use crate::path::path_has_wildcard;
-use crate::types::{Failed, NUL, UVarNumber, VarNumber, uint8_t, uint64_t};
-use ::libc::abort;
+use crate::path::has_wildcard;
+use crate::types::{Failed, UVarNumber, VarNumber, uint8_t, uint64_t};
 
 pub mod display;
 pub mod skip;
@@ -49,27 +42,27 @@ pub mod transchar;
 // The display half was split out for size; its callers are spread over three
 // dozen modules and name it as `charset::*`.
 pub(crate) use display::{
-    CharDisplay, transchar, transchar_buf, transchar_byte, transchar_byte_buf,
+    CharDisplay, ptr2cells_at, transchar, transchar_buf, transchar_byte, transchar_byte_buf,
+    transchar_nonprint_form, vim_strsize_cstr,
 };
-pub use display::{
-    byte2cells, char2cells, ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters,
-    transchar_hex, transchar_nonprint, transstr, transstr_buf, transstr_len, vim_strnsize,
-    vim_strsize,
-};
-pub(crate) use display::{ptr2cells_at, vim_strsize_cstr};
+pub use display::{byte2cells, char2cells};
 
-// The pointer walkers were split out for size. The module itself is private:
-// only the names the unit suite reaches by their `charset::` path are
-// re-exported, and the rest stay `pub(crate)`.
+// The pointer spellings, for the callers whose cursor is still a pointer.
+// The module itself is private: its names are re-exported here.
 mod walk;
 
 pub use walk::{
-    getdigits, getdigits_int, getdigits_int32, skipbin, skipdigits, skiphex, skiptodigit,
-    skiptowhite, skiptowhite_esc, skipwhite,
+    backslash_halve, backslash_halve_save, getdigits, getdigits_int, getdigits_int32, hexhex2nr,
+    rem_backslash, skipbin, skipdigits, skiphex, skiptodigit, skiptowhite, skiptowhite_esc,
+    skipwhite, vim_iswordp, vim_iswordp_buf, vim_str2nr,
 };
 pub(crate) use walk::{
     getdigits_at, getdigits_int_at, getdigits_long, getwhitecols_curline, skip_to_newline,
     skipwhite_len, try_getdigits, vim_isblankline,
+};
+pub use walk::{
+    ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters, transchar_hex, transstr,
+    transstr_buf, vim_strnsize, vim_strsize,
 };
 
 /// Bits of a `g_chartab` entry.
@@ -81,39 +74,23 @@ const CT_FNAME_CHAR: uint8_t = 0x40;
 const TAB: c_int = 9;
 const NL: c_int = 10;
 const EOL_MAC: c_int = 2;
-const ERANGE: c_int = 34;
 
 static chartab_initialized: GlobalCell<bool> = GlobalCell::new(false);
 static g_chartab: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
 
 /// The `g_chartab` entry for byte `c`.
 ///
-/// The table is a fixed array of plain bytes that only this module touches,
-/// so reading and writing it through the cell's raw pointer forms no
-/// reference and can alias nothing. That is what lets the rest of the file
-/// treat the table as safe state; these two are the whole unchecked
-/// surface of it.
-/// The character table, by address.
-///
-/// It is asked about once per byte on every draw and edit path, so both
-/// accessors index it directly rather than copying 256 bytes or taking a
-/// tracked borrow. This is the one place its address is taken.
-#[inline(always)]
-fn chartab_table() -> *mut [uint8_t; 256] {
-    g_chartab.ptr()
-}
-
+/// It is asked about once per byte on every draw and edit path, so it reads
+/// the one entry rather than copying 256 bytes or taking a tracked borrow.
 #[inline(always)]
 fn chartab(c: uint8_t) -> uint8_t {
-    // SAFETY: the cell holds a live 256-byte array and `c` indexes it.
-    unsafe { (*chartab_table())[c as usize] }
+    g_chartab.get_field(|table| &table[usize::from(c)])
 }
 
 /// Overwrite the `g_chartab` entry for byte `c`.
 #[inline(always)]
 fn set_chartab(c: uint8_t, value: uint8_t) {
-    // SAFETY: as [`chartab`].
-    unsafe { (*chartab_table())[c as usize] = value }
+    g_chartab.set_field(|table| &table[usize::from(c)], value);
 }
 
 /// Add or remove one of the flag bits of `c`'s entry.
@@ -131,69 +108,6 @@ fn unprintable_width() -> uint8_t {
         4
     } else {
         2
-    }
-}
-
-/// A cursor over the bytes of a NUL-terminated string.
-///
-/// Building one is the unsafe step. Afterwards the cursor only ever steps
-/// over bytes that have already been read as non-NUL, so every read is in
-/// bounds and the walks themselves are ordinary safe code.
-#[derive(Clone, Copy)]
-struct Bytes(*const c_char);
-
-impl Bytes {
-    /// # Safety
-    /// `p` must point into a NUL-terminated string.
-    #[inline(always)]
-    unsafe fn new(p: *const c_char) -> Self {
-        Bytes(p)
-    }
-
-    /// The byte under the cursor.
-    #[inline(always)]
-    fn byte(self) -> uint8_t {
-        // SAFETY: the cursor is inside its string, so this byte is readable.
-        unsafe { *self.0 as uint8_t }
-    }
-
-    /// The byte under the cursor together with the one after it. The second
-    /// reads as zero when the first is the terminator — the only case in
-    /// which looking ahead would leave the string.
-    #[inline(always)]
-    fn pair(self) -> (uint8_t, uint8_t) {
-        let byte = self.byte();
-        // SAFETY: a non-NUL byte is never the last one of the string.
-        let next = if byte == 0 {
-            0
-        } else {
-            unsafe { *self.0.add(1) as uint8_t }
-        };
-        (byte, next)
-    }
-
-    /// Step over `n` bytes the caller has established are within the string.
-    #[inline(always)]
-    fn advance(&mut self, n: usize) {
-        self.0 = self.0.wrapping_add(n);
-    }
-
-    /// The first byte at or after the cursor that `keep` rejects, or the
-    /// terminator.
-    #[inline(always)]
-    fn skip_while(mut self, keep: impl Fn(uint8_t) -> bool) -> Self {
-        loop {
-            let byte = self.byte();
-            if byte == 0 || !keep(byte) {
-                return self;
-            }
-            self.advance(1);
-        }
-    }
-
-    #[inline(always)]
-    fn raw(self) -> *mut c_char {
-        self.0 as *mut c_char
     }
 }
 
@@ -464,25 +378,14 @@ pub fn vim_iswordc_buf(c: c_int, buffer: Buf) -> bool {
     vim_iswordc_tab(c, &buffer.b_chartab)
 }
 
-/// Whether the character at `p` belongs to a word in the current buffer.
-///
-/// # Safety
-/// `p` must point into a NUL-terminated string.
-pub unsafe fn vim_iswordp(p: *const c_char) -> bool {
-    unsafe { vim_iswordp_buf(p, Buf::current()) }
-}
-
-/// Whether the character at `p` belongs to a word in `buffer`.
-///
-/// # Safety
-/// `p` must point into a NUL-terminated string and `buffer` be a valid buffer.
-pub unsafe fn vim_iswordp_buf(p: *const c_char, buffer: Buf) -> bool {
-    let lead = unsafe { Bytes::new(p) }.byte();
-    let c = if utf8len_tab[lead as usize] > 1 {
-        // SAFETY: as above; a lead byte promises the rest of its sequence.
-        unsafe { utf_ptr2char(p) }
+/// Whether the character at the start of `bytes` belongs to a word in
+/// `buffer`. A byte that leads no multibyte sequence is judged as itself.
+pub(crate) fn is_word_at(bytes: &[u8], buffer: Buf) -> bool {
+    let lead = cstr::byte_at(bytes, 0);
+    let c = if utf8len_tab[usize::from(lead)] > 1 {
+        char_at(bytes)
     } else {
-        lead as c_int
+        c_int::from(lead)
     };
     vim_iswordc_buf(c, buffer)
 }
@@ -506,9 +409,7 @@ pub fn vim_is_fname_char(c: c_int) -> bool {
 /// Like [`vim_isfilec`], but also accepts the wildcards a file name pattern
 /// may contain.
 pub fn vim_isfilec_or_wc(c: c_int) -> bool {
-    let buf: [c_char; 2] = [c as c_char, NUL as c_char];
-    // SAFETY: forwarded, and `buf` is a NUL-terminated string of one byte.
-    unsafe { vim_isfilec(c) || c == ']' as c_int || path_has_wildcard(buf.as_ptr()) }
+    vim_isfilec(c) || c == ']' as c_int || has_wildcard(&[c as u8][..usize::from(c as u8 != 0)])
 }
 
 /// Whether `c` displays as itself ('isprint').
@@ -519,36 +420,22 @@ pub fn vim_isprintc(c: c_int) -> bool {
     c > 0 && chartab(c as uint8_t) & CT_PRINT_CHAR != 0
 }
 /// A lazy cursor over the digits of a number, bounded either by `maxlen`
-/// bytes or by the first byte that is not a digit.
-///
-/// As with [`Bytes`], construction is the unsafe step: the cursor is only
-/// ever advanced over bytes already read as digits, and every look-ahead is
-/// guarded by [`Scan::within`], so its reads stay inside the string.
-struct Scan {
-    start: *const c_char,
-    ptr: *const c_char,
+/// bytes or by the first byte that is not a digit. The end of `text` reads
+/// as the NUL a C string would have there.
+struct Scan<'a> {
+    text: &'a [u8],
+    at: usize,
     maxlen: c_int,
 }
 
-impl Scan {
-    /// # Safety
-    /// `start` must be NUL-terminated, or hold `maxlen` readable bytes.
-    #[inline(always)]
-    unsafe fn new(start: *const c_char, at: *const c_char, maxlen: c_int) -> Self {
-        Scan {
-            start,
-            ptr: at,
-            maxlen,
-        }
-    }
-
+impl Scan<'_> {
     #[inline(always)]
     fn consumed(&self) -> c_int {
-        (self.ptr.addr() - self.start.addr()) as c_int
+        c_int::try_from(self.at).unwrap_or(c_int::MAX)
     }
 
     /// Whether `offset` more bytes are still within `maxlen`. A `maxlen` of
-    /// zero means "to the NUL".
+    /// zero means "to the end of the text".
     #[inline(always)]
     fn within(&self, offset: c_int) -> bool {
         self.maxlen == 0 || self.consumed() + offset < self.maxlen
@@ -557,91 +444,12 @@ impl Scan {
     /// The byte `offset` further on.
     #[inline(always)]
     fn at(&self, offset: c_int) -> uint8_t {
-        // SAFETY: the cursor has not passed the terminator, and a bounded
-        // scan only looks `offset` ahead after `within(offset)`.
-        unsafe { *self.ptr.offset(offset as isize) as uint8_t }
+        cstr::byte_at(self.text, self.at + offset as usize)
     }
 
     #[inline(always)]
     fn advance(&mut self, n: isize) {
-        self.ptr = self.ptr.wrapping_offset(n);
-    }
-}
-
-/// Parse the number at `start`, reporting whichever of the out-arguments is
-/// not null: the prefix letter (`prep`), the number of bytes consumed
-/// (`len`), the signed and unsigned values (`nptr`, `unptr`) and whether the
-/// value was clamped (`overflow`).
-///
-/// `what` is a set of [`Str2NrBases`]. `maxlen` bounds the scan (zero means
-/// the whole string), and `strict` makes a trailing letter or digit reject
-/// the parse outright, leaving `len` at zero.
-///
-/// The scan itself lives in [`str2nr::scan`], which is safe code: everything
-/// unchecked about this is the cursor it walks and the out-arguments.
-///
-/// # Safety
-/// `start` must be NUL-terminated, or hold `maxlen` readable bytes.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the C signature, kept for its callers"
-)]
-/// # Safety
-///
-/// `start` must point at a NUL-terminated string. `prep` must point at a
-/// writable `int` the caller owns. `len` must point at a writable `int` the
-/// caller owns. `nptr` must point at a live `VarNumber`, unaliased for the
-/// call. `unptr` must point at a live `UVarNumber`, unaliased for the call.
-/// `overflow` must point at a writable `bool` the caller owns.
-pub unsafe fn vim_str2nr(
-    start: *const c_char,
-    prep: *mut c_int,
-    len: *mut c_int,
-    what: Str2NrBases,
-    nptr: *mut VarNumber,
-    unptr: *mut UVarNumber,
-    maxlen: c_int,
-    strict: bool,
-    overflow: *mut bool,
-) {
-    let negative = unsafe { *start } as c_int == '-' as c_int;
-    // SAFETY: a leading `-` is never the last byte of the caller's string.
-    let mut scan = unsafe { Scan::new(start, if negative { start.add(1) } else { start }, maxlen) };
-    let Some(parsed) = str2nr::scan(&mut scan, what) else {
-        // `what` forces a base its remaining flags do not name.
-        // SAFETY: `abort` never returns.
-        unsafe { abort() };
-    };
-
-    // A strict parse only accepts a number that ends the string (or fills
-    // `maxlen`); anything alphanumeric after it means this was not a number.
-    let rejected = strict && scan.consumed() != maxlen && str2nr::strict_reject(scan.at(0));
-    let (value, clamped) = str2nr::signed(parsed.magnitude, negative);
-    // The C reports a clamp only from the branch that writes `nptr`, so a
-    // rejected or unasked-for signed value never raises the flag; overflow
-    // seen while accumulating is reported either way.
-    let overflowed = parsed.overflowed || (clamped && !rejected && !nptr.is_null());
-
-    // SAFETY: each out-argument is null or points at a writable value.
-    unsafe {
-        if !len.is_null() {
-            *len = if rejected { 0 } else { scan.consumed() };
-        }
-        if overflowed && !overflow.is_null() {
-            *overflow = true;
-        }
-        if rejected {
-            return;
-        }
-        if !prep.is_null() {
-            *prep = parsed.pre;
-        }
-        if !nptr.is_null() {
-            *nptr = value;
-        }
-        if !unptr.is_null() {
-            *unptr = parsed.magnitude;
-        }
+        self.at = self.at.wrapping_add_signed(n);
     }
 }
 
@@ -657,78 +465,89 @@ pub(crate) struct ParsedNumber {
     pub(crate) value: VarNumber,
     pub(crate) magnitude: UVarNumber,
     pub(crate) overflow: bool,
+    /// A strict parse found a letter or digit after the number: nothing but
+    /// `len` (zero) and `overflow` is set.
+    pub(crate) rejected: bool,
 }
 
-/// [`vim_str2nr`] over a slice: the number at the start of `text`, read in
-/// the bases `what` allows. The end of the slice ends the number, as the NUL
-/// did for the pointer form; `strict` rejects one followed by a letter or a
-/// digit.
+/// Parse the number `text` starts with, in the bases `what` allows.
+///
+/// `maxlen` bounds the scan (zero means "to the end of `text`"), and
+/// `strict` makes a trailing letter or digit reject the parse outright,
+/// leaving `len` at zero. `want_signed` says the caller reads the signed
+/// value, which is the only case in which clamping it raises `overflow` --
+/// upstream reports a clamp from the branch that writes `nptr` alone.
+///
+/// The slice form of `vim_str2nr`, whose scan is [`str2nr::scan`].
+pub(crate) fn str2nr_scan(
+    text: &[u8],
+    maxlen: c_int,
+    what: Str2NrBases,
+    strict: bool,
+    want_signed: bool,
+) -> ParsedNumber {
+    let negative = cstr::byte_at(text, 0) == b'-';
+    let mut scan = Scan {
+        text,
+        at: usize::from(negative),
+        maxlen,
+    };
+    let Some(parsed) = str2nr::scan(&mut scan, what) else {
+        // `what` forces a base its remaining flags do not name.
+        std::process::abort();
+    };
+
+    // A strict parse only accepts a number that ends the string (or fills
+    // `maxlen`); anything alphanumeric after it means this was not a number.
+    let rejected = strict && scan.consumed() != maxlen && str2nr::strict_reject(scan.at(0));
+    let (value, clamped) = str2nr::signed(parsed.magnitude, negative);
+    let overflow = parsed.overflowed || (clamped && !rejected && want_signed);
+    if rejected {
+        return ParsedNumber {
+            overflow,
+            rejected,
+            ..ParsedNumber::default()
+        };
+    }
+    ParsedNumber {
+        len: scan.at,
+        prefix: parsed.pre,
+        value,
+        magnitude: parsed.magnitude,
+        overflow,
+        rejected,
+    }
+}
+
+/// The number at the start of `text`, read in the bases `what` allows. The
+/// end of the slice ends the number, as the NUL did for the pointer form;
+/// `strict` rejects one followed by a letter or a digit.
 pub(crate) fn str2nr_in(text: &[u8], what: Str2NrBases, strict: bool) -> ParsedNumber {
-    let mut parsed = ParsedNumber::default();
-    // Zero would mean "to the NUL", and an empty slice has no first byte to
+    // Zero would mean "to the end", and an empty slice has no first byte to
     // read; neither holds a number.
     let Ok(maxlen @ 1..) = c_int::try_from(text.len()) else {
-        return parsed;
+        return ParsedNumber::default();
     };
-    let mut len: c_int = 0;
-    let (start, lenp, prep) = (
-        text.as_ptr().cast::<c_char>(),
-        &raw mut len,
-        &raw mut parsed.prefix,
-    );
-    let (nptr, unptr, overflow) = (
-        &raw mut parsed.value,
-        &raw mut parsed.magnitude,
-        &raw mut parsed.overflow,
-    );
-    // SAFETY: `maxlen` is the slice's own length, so the scan stays inside
-    // it, and every out-parameter is a local of this frame or null.
-    unsafe {
-        vim_str2nr(
-            start, prep, lenp, what, nptr, unptr, maxlen, strict, overflow,
-        )
-    };
-    parsed.len = usize::try_from(len).unwrap_or(0);
-    parsed
+    str2nr_scan(text, maxlen, what, strict, true)
 }
 
 /// Read a Float out of `text`, answering it and how many bytes it consumed.
 /// The three named values are recognised ahead of `strtod`, which does not
-/// know them in every locale.
-///
-/// Upstream writes the value through an out-parameter and returns only the
-/// length; a pair says the same thing without handing anyone the address of
-/// a typval's union arm.
-///
-/// # Safety
-/// `text` must be NUL-terminated.
-pub(crate) unsafe fn string2float(text: *const c_char) -> (crate::types::Float, usize) {
-    for (name, len, value) in [
-        (c"inf", 3, f64::INFINITY),
-        (c"-inf", 4, f64::NEG_INFINITY),
-        (c"nan", 3, f64::NAN),
+/// know them in every locale. The float ends where the slice does.
+pub(crate) fn string2float_in(text: &[u8]) -> (crate::types::Float, usize) {
+    for (name, value) in [
+        (&b"inf"[..], f64::INFINITY),
+        (b"-inf", f64::NEG_INFINITY),
+        (b"nan", f64::NAN),
     ] {
-        let (lhs, rhs) = (text.cast_mut(), name.as_ptr().cast_mut());
-        // SAFETY: the caller's promise -- `text` is NUL-terminated and
-        // `name` is a literal.
-        if unsafe { crate::os::cshim::strncasecmp(lhs, rhs, len) } == 0 {
-            return (value, len);
+        if text
+            .get(..name.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(name))
+        {
+            return (value, name.len());
         }
     }
-    let mut end: *mut c_char = core::ptr::null_mut();
-    // SAFETY: as above; `strtod` leaves `end` inside `text`.
-    let value = unsafe { ::libc::strtod(text, &raw mut end) };
-    (value, end.addr() - text.addr())
-}
-
-/// [`string2float`] over a slice: the float at the start of `text`, which
-/// ends where the slice does.
-pub(crate) fn string2float_in(text: &[u8]) -> (crate::types::Float, usize) {
-    let mut terminated = Vec::with_capacity(text.len() + 1);
-    terminated.extend_from_slice(text);
-    terminated.push(0);
-    // SAFETY: a NUL-terminated copy.
-    unsafe { string2float(terminated.as_ptr().cast::<c_char>()) }
+    crate::os::cshim::strtod_prefix(text)
 }
 
 /// The value of the hexadecimal digit `c`. Anything else is nonsense.
@@ -742,83 +561,36 @@ pub fn hex2nr(c: c_int) -> c_int {
     c - '0' as c_int
 }
 
-/// The byte the two hexadecimal digits at `p` spell, or -1.
-///
-/// # Safety
-/// `p` must hold two readable bytes.
-pub unsafe fn hexhex2nr(p: *const c_char) -> c_int {
-    // SAFETY: the caller guarantees both bytes.
-    let [high, low] = unsafe { *p.cast::<[uint8_t; 2]>() };
+/// The byte the two hexadecimal digits `text` starts with spell, or -1. The
+/// end of the slice reads as a NUL, which is not a digit.
+pub(crate) fn hexhex_at(text: &[u8]) -> c_int {
+    let (high, low) = (cstr::byte_at(text, 0), cstr::byte_at(text, 1));
     if !is_xdigit(high) || !is_xdigit(low) {
         return -1;
     }
     (hex2nr(high as c_int) << 4) + hex2nr(low as c_int)
 }
 
-/// Whether the backslash at `str` escapes the byte after it, i.e. whether
-/// [`backslash_halve`] would remove it.
-///
-/// # Safety
-/// `str` must be a NUL-terminated string.
-pub unsafe fn rem_backslash(str: *const c_char) -> bool {
-    let (byte, next) = unsafe { Bytes::new(str) }.pair();
-    byte == b'\\' && next != 0
+/// Whether the backslash `text` starts with escapes the byte after it, i.e.
+/// whether [`backslash_halved`] would remove it.
+pub(crate) fn escapes_next(text: &[u8]) -> bool {
+    text.first() == Some(&b'\\') && text.get(1).is_some_and(|&next| next != 0)
 }
 
-/// Remove the escaping backslashes from `p`, in place.
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-pub unsafe fn backslash_halve(p: *mut c_char) {
-    // Nothing before the first escaping backslash needs moving.
-    let mut src = unsafe { Bytes::new(p) };
-    while {
-        let (byte, next) = src.pair();
-        byte != 0 && !(byte == b'\\' && next != 0)
-    } {
-        src.advance(1);
-    }
-    if src.byte() == 0 {
-        return;
-    }
-    // SAFETY: `src` is still inside the caller's writable string, and the
-    // destination never runs ahead of it.
-    unsafe { copy_unescaped(src, src.raw()) };
-}
-
-/// [`backslash_halve`] into a fresh string the caller owns.
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-pub unsafe fn backslash_halve_save(p: *const c_char) -> *mut c_char {
-    let res = unsafe { xmalloc(cstr::bytes_at(p).len() + 1) } as *mut c_char;
-    // SAFETY: the allocation is at least as long as the string, and halving
-    // only ever shortens it.
-    unsafe { copy_unescaped(Bytes::new(p), res) };
-    res
-}
-
-/// Copy the string at `src` to `dst`, dropping each backslash that escapes
-/// the byte after it, and terminate it.
-///
-/// # Safety
-/// `dst` must have room for everything from `src` to its NUL, inclusive.
-unsafe fn copy_unescaped(mut src: Bytes, mut dst: *mut c_char) {
-    loop {
-        let (byte, next) = src.pair();
-        if byte == 0 {
-            break;
+/// `text` with each backslash that escapes the byte after it removed, up to
+/// the first NUL.
+pub(crate) fn backslash_halved(text: &[u8]) -> Vec<u8> {
+    let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
+    let mut out = Vec::with_capacity(text.len());
+    let mut at = 0;
+    while at < text.len() {
+        if escapes_next(&text[at..]) {
+            at += 1;
         }
-        if byte == b'\\' && next != 0 {
-            src.advance(1);
-        }
-        // SAFETY: the destination has room for every byte the source has.
-        unsafe { *dst = src.byte() as c_char };
-        dst = dst.wrapping_add(1);
-        src.advance(1);
+        out.push(text[at]);
+        at += 1;
     }
-    // SAFETY: as above, for the terminator.
-    unsafe { *dst = NUL as c_char };
+    out
 }
 
 /// Whether a line may be broken before `c`, per the 'breakat' option.

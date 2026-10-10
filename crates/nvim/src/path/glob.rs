@@ -57,6 +57,11 @@ pub unsafe fn path_has_wildcard(p: *const c_char) -> bool {
     has_any_of(p, b"*?[{`'$", true)
 }
 
+/// [`path_has_wildcard`] over a slice.
+pub(crate) fn has_wildcard(p: &[u8]) -> bool {
+    has_any_of(p, b"*?[{`'$", true)
+}
+
 /// Does `p` hold a character [`do_path_expand`] itself can expand? `~` and
 /// `$` are not among them: those are the shell's and `expand_env`'s.
 ///

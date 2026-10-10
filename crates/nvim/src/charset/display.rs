@@ -8,24 +8,20 @@
 //! `trans_characters` — takes the value and never touches the buffer at
 //! all.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::memory::handoff::owned_cstr;
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
-use core::slice;
+use core::ffi::{c_char, c_int};
 
 use crate::mbyte::{
-    cluster_len, mb_tolower, utf_char2bytes, utf_char2cells, utf_char2len, utf_ptr2cells,
-    utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+    c_cells_at, c_cluster_len, char_at, char_len, cluster_len, encode_char, mb_tolower,
+    utf_char2cells, utf_char2len,
 };
-use crate::memory::{xmalloc, xrealloc};
+use crate::memory::XString;
 use crate::option::get_fileformat;
 use crate::option::vars::dy_flags;
-use crate::types::{NUL, StringBuilder, size_t, ssize_t, uint8_t};
+use crate::types::{NUL, uint8_t};
 use crate::winlayer::Buf;
 
 use super::{
@@ -39,74 +35,75 @@ const CAR: c_int = 13;
 const KS_ZERO: c_int = 255;
 const KS_SPECIAL: c_int = 254;
 
-/// A cursor over the characters of a NUL-terminated string.
+/// A cursor over the characters of a C string's bytes.
 ///
-/// Building one is the unsafe step. Every step is by the length the `utf_*`
-/// measures report, and those never count past a NUL — an incomplete
-/// sequence measures as one byte — so a cursor that starts inside the
-/// string stays inside it, and its reads are then ordinary safe code.
+/// The text is the string's bytes, and its end or a NUL in it ends the walk,
+/// as the terminator did; every step is by the length the multibyte readers
+/// measure, which never runs past either.
 #[derive(Clone, Copy)]
-struct Chars(*const c_char);
+struct Chars<'a> {
+    text: &'a [u8],
+    at: usize,
+}
 
-impl Chars {
-    /// # Safety
-    /// `p` must point into a NUL-terminated string.
+impl<'a> Chars<'a> {
     #[inline(always)]
-    unsafe fn new(p: *const c_char) -> Self {
-        Chars(p)
+    fn new(text: &'a [u8]) -> Self {
+        Chars { text, at: 0 }
     }
 
-    /// The byte under the cursor.
+    #[inline(always)]
+    fn rest(self) -> &'a [u8] {
+        self.text.get(self.at..).unwrap_or_default()
+    }
+
+    /// The byte under the cursor, a NUL at the end.
     #[inline(always)]
     fn byte(self) -> uint8_t {
-        // SAFETY: the cursor is inside its string, so this byte is readable.
-        unsafe { *self.0 as uint8_t }
+        cstr::byte_at(self.text, self.at)
     }
 
     /// The length of the whole character under the cursor, composing
     /// characters included.
     #[inline(always)]
     fn char_len(self) -> usize {
-        // SAFETY: as [`Chars::byte`].
-        unsafe { utfc_ptr2len(self.0) as usize }
+        c_cluster_len(self.rest())
     }
 
     /// The length of just the code point under the cursor.
     #[inline(always)]
     fn code_len(self) -> usize {
-        // SAFETY: as [`Chars::byte`].
-        unsafe { utf_ptr2len(self.0) as usize }
+        if self.byte() == 0 {
+            0
+        } else {
+            char_len(self.rest())
+        }
     }
 
     /// The code point under the cursor.
     #[inline(always)]
     fn code(self) -> c_int {
-        // SAFETY: as [`Chars::byte`].
-        unsafe { utf_ptr2char(self.0) }
+        char_at(self.rest())
     }
 
     /// The `n` bytes at the cursor, which the caller has measured.
     #[inline(always)]
-    fn bytes(self, n: usize) -> &'static [uint8_t] {
-        // SAFETY: `n` came from one of the measures above, so those bytes
-        // are part of the string.
-        unsafe { slice::from_raw_parts(self.0.cast::<uint8_t>(), n) }
+    fn bytes(self, n: usize) -> &'a [uint8_t] {
+        &self.text[self.at..self.at + n]
     }
 
     /// The cursor `n` bytes further on, which the caller has measured.
     #[inline(always)]
     fn skip(self, n: usize) -> Self {
-        Chars(self.0.wrapping_add(n))
+        Chars {
+            text: self.text,
+            at: self.at + n,
+        }
     }
 
     #[inline(always)]
     fn advance(&mut self, n: usize) {
-        self.0 = self.0.wrapping_add(n);
-    }
-
-    #[inline(always)]
-    fn raw(self) -> *const c_char {
-        self.0
+        self.at += n;
     }
 }
 
@@ -127,14 +124,11 @@ fn byte_cells(b: c_int) -> c_int {
 
 /// Replace every unprintable byte in `buf` with its display form, in place.
 ///
-/// Stops early rather than overflowing when the expansions no longer fit in
-/// `bufsize`, leaving the tail untranslated.
-///
-/// # Safety
-/// `buf` must be a NUL-terminated string in a buffer of `bufsize` bytes.
-pub unsafe fn trans_characters(buf: *mut c_char, bufsize: c_int) {
-    // SAFETY: the caller's buffer holds `bufsize` bytes.
-    let bytes = unsafe { slice::from_raw_parts_mut(buf.cast::<uint8_t>(), bufsize as usize) };
+/// `bytes` is the whole buffer, the string NUL-terminated inside it. Stops
+/// early rather than overflowing when the expansions no longer fit, leaving
+/// the tail untranslated.
+pub(crate) fn trans_characters_in(bytes: &mut [u8]) {
+    let bufsize = bytes.len();
     // Bytes of the string still to be translated, and bytes left over after
     // it. Both are counted from the cursor, so their sum is invariant.
     let mut len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
@@ -166,14 +160,10 @@ pub unsafe fn trans_characters(buf: *mut c_char, bufsize: c_int) {
     }
 }
 
-/// How many cells [`transstr_buf`] would need for `s`, excluding the NUL.
-///
-/// # Safety
-/// `s` must be a NUL-terminated string.
-pub unsafe fn transstr_len(s: *const c_char, untab: bool) -> size_t {
-    // SAFETY: forwarded to the caller's contract.
-    let mut cursor = unsafe { Chars::new(s) };
-    let mut len: size_t = 0;
+/// How many bytes [`transstr_into`] would write for `s`, excluding the NUL.
+fn transstr_len_in(s: &[u8], untab: bool) -> usize {
+    let mut cursor = Chars::new(s);
+    let mut len = 0;
     loop {
         let byte = cursor.byte();
         if byte == 0 {
@@ -186,7 +176,7 @@ pub unsafe fn transstr_len(s: *const c_char, untab: bool) -> size_t {
             } else {
                 // An unprintable multibyte character is spelled out one
                 // codepoint at a time, composing characters included.
-                let mut off: size_t = 0;
+                let mut off = 0;
                 while off < l {
                     let at = cursor.skip(off);
                     len += render::hex_form(at.code()).len;
@@ -201,37 +191,25 @@ pub unsafe fn transstr_len(s: *const c_char, untab: bool) -> size_t {
             let cells = byte_cells(byte as c_int);
             cursor.advance(1);
             // A zero width means the table has no entry: `<xx>` is four.
-            len += if cells > 0 { cells } else { 4 } as size_t;
+            len += if cells > 0 { cells } else { 4 } as usize;
         }
     }
 }
 
-/// Copy `s` into `buf` with every unprintable character replaced by its
+/// Copy `s` into `out` with every unprintable character replaced by its
 /// display form, NUL-terminated. Answers the number of bytes written.
 ///
-/// A negative `slen` means "to the NUL". The output is truncated at a
-/// character boundary rather than overrunning `buflen`.
-///
-/// # Safety
-/// `s` must hold `slen` readable bytes (or be NUL-terminated) and `buf` must
-/// have room for `buflen`, which must be at least one: the last of those
-/// bytes is the terminator's.
-pub unsafe fn transstr_buf(
-    s: *const c_char,
-    slen: ssize_t,
-    buf: *mut c_char,
-    buflen: size_t,
-    untab: bool,
-) -> size_t {
-    // SAFETY: the caller's buffer holds `buflen` bytes.
-    let out = unsafe { slice::from_raw_parts_mut(buf.cast::<uint8_t>(), buflen) };
+/// `slen` bounds how much of `s` is read, `None` meaning all of it; a
+/// character that starts inside the bound is taken whole. The output is
+/// truncated at a character boundary rather than overrunning `out`, which
+/// must be at least one byte: the last of them is the terminator's.
+pub(crate) fn transstr_into(s: &[u8], slen: Option<usize>, out: &mut [u8], untab: bool) -> usize {
     // The last byte of the buffer belongs to the terminator.
-    let limit = buflen - 1;
-    // SAFETY: forwarded to the caller's contract.
-    let mut cursor = unsafe { Chars::new(s) };
-    let mut read: size_t = 0;
-    let mut written: size_t = 0;
-    while (slen < 0 || read < slen as size_t) && cursor.byte() != 0 && written < limit {
+    let limit = out.len() - 1;
+    let mut cursor = Chars::new(s);
+    let mut read = 0;
+    let mut written = 0;
+    while slen.is_none_or(|slen| read < slen) && cursor.byte() != 0 && written < limit {
         let l = cursor.char_len();
         if l > 1 {
             if written + l > limit {
@@ -241,7 +219,7 @@ pub unsafe fn transstr_buf(
                 out[written..written + l].copy_from_slice(cursor.bytes(l));
                 written += l;
             } else {
-                let mut off: size_t = 0;
+                let mut off = 0;
                 while off < l {
                     let at = cursor.skip(off);
                     let hex = render::hex_form(at.code());
@@ -276,148 +254,60 @@ pub unsafe fn transstr_buf(
     written
 }
 
-/// [`transstr_buf`] into a freshly allocated string the caller owns.
-///
-/// # Safety
-/// `s` must be a NUL-terminated string.
-pub unsafe fn transstr(s: *const c_char, untab: bool) -> *mut c_char {
-    // SAFETY: forwarded to the caller's contract.
-    let len = unsafe { transstr_len(s, untab) } + 1;
-    // SAFETY: the allocation is exactly what the rendering needs.
-    let buf = unsafe { xmalloc(len) } as *mut c_char;
-    // SAFETY: as above.
-    unsafe { transstr_buf(s, -1, buf, len, untab) };
-    buf
+/// [`transstr_into`] into a freshly allocated string, sized exactly.
+pub(crate) fn transstr_owned(s: &[u8], untab: bool) -> XString {
+    let len = transstr_len_in(s, untab);
+    let mut out = vec![0u8; len + 1];
+    let written = transstr_into(s, None, &mut out, untab);
+    out.truncate(written);
+    XString::from_bytes(&out)
 }
 
-/// Append [`transstr`]'s rendering of `s` to a string builder, growing it to
-/// the next power of two as the kvec macros did. Answers the length added.
+/// `text` folded to lowercase, up to its first NUL.
 ///
-/// # Safety
-/// `str` must be a valid builder; `s` may be null.
-pub unsafe fn kv_transstr(str: *mut StringBuilder, s: *const c_char, untab: bool) -> size_t {
-    if s.is_null() {
-        return 0;
-    }
-    // SAFETY: forwarded to the caller's contract.
-    let len = unsafe { transstr_len(s, untab) };
-    // SAFETY: `str` is a valid builder.
-    let mut builder = unsafe { *str };
-    let needed = builder.size + len + 1;
-    if builder.capacity < needed {
-        builder.capacity = needed.next_power_of_two();
-        // SAFETY: the builder owns `items`, or it is null and this allocates.
-        builder.items =
-            unsafe { xrealloc(builder.items as *mut c_void, builder.capacity) } as *mut c_char;
-    }
-    // SAFETY: the builder now has room for `len + 1` bytes past its length.
-    unsafe { transstr_buf(s, -1, builder.items.add(builder.size), len + 1, untab) };
-    builder.size += len;
-    // SAFETY: `str` is writable.
-    unsafe { *str = builder };
-    len
-}
-
-/// Fold `str` to lowercase.
-///
-/// With a null `buf` the result is a fresh allocation the caller owns;
-/// otherwise it is written into `buf`, truncated to `buflen`, and a
-/// character whose lowercase form no longer fits is left as it was.
-///
-/// # Safety
-/// `str` must hold `orglen` readable bytes; `buf`, if given, must have room
-/// for `buflen`.
-pub unsafe fn str_foldcase(
-    str: *mut c_char,
-    orglen: c_int,
-    buf: *mut c_char,
-    buflen: c_int,
-) -> *mut c_char {
-    // With no `buf`, the folding happens in a copy this call owns: the text
-    // and its terminator, grown as a character's lowercase form gets longer.
-    let mut owned: Vec<u8> = Vec::new();
-    let mut len = orglen;
-    if buf.is_null() {
-        // SAFETY: `str` holds `orglen` readable bytes.
-        owned.extend_from_slice(unsafe { slice::from_raw_parts(str.cast::<u8>(), len as usize) });
-        owned.push(0);
-    } else {
-        if len >= buflen {
-            len = buflen - 1;
-        }
-        // SAFETY: `buf` holds `buflen` bytes and `str` holds `len`.
-        unsafe { ptr::copy(str, buf, len as usize) };
-        // SAFETY: index `len` is inside `buf`.
-        unsafe { *buf.add(len as usize) = NUL as c_char };
-    }
-
-    // From here on `at(i)` is the one place that knows which buffer is in
-    // play; the copy moves whenever it grows.
-    let at = |owned: &mut Vec<u8>, i: c_int| -> *mut c_char {
-        if buf.is_null() {
-            owned
-                .as_mut_ptr()
-                .cast::<c_char>()
-                .wrapping_offset(i as isize)
-        } else {
-            buf.wrapping_offset(i as isize)
-        }
-    };
-
-    let mut i: c_int = 0;
+/// With a `room`, the result is what fits a buffer of that many bytes: the
+/// text is cut to `room - 1` bytes first, and a character whose lowercase
+/// form is longer and no longer fits is left as it was.
+pub(crate) fn foldcase(text: &[u8], room: Option<usize>) -> Vec<u8> {
+    let mut len = room.map_or(text.len(), |room| text.len().min(room - 1));
+    // The folding happens in a copy terminated where the C string was, so a
+    // walk over it stops where upstream's did.
+    let mut work: Vec<u8> = text[..len].to_vec();
+    work.push(0);
+    let mut i = 0;
     loop {
-        // SAFETY: the walk stops at the terminator written above.
-        let cursor = unsafe { Chars::new(at(&mut owned, i)) };
+        let cursor = Chars::new(&work).skip(i);
         if cursor.byte() == 0 {
             break;
         }
         let c = cursor.code();
-        let olen = cursor.code_len() as c_int;
+        let olen = cursor.code_len();
         let mut lc = mb_tolower(c);
         // Only ASCII and real multibyte characters fold; a lone Latin-1 byte
         // has no case in this encoding.
         if (c < 0x80 || olen > 1) && c != lc {
-            let mut nlen = utf_char2len(lc);
-            if olen != nlen {
-                if nlen > olen {
-                    if buf.is_null() {
-                        owned.resize(owned.len() + (nlen - olen) as usize, 0);
-                    } else if len + nlen - olen >= buflen {
-                        // No room to grow: keep the original character.
-                        lc = c;
-                        nlen = olen;
-                    }
-                }
-                if olen != nlen {
-                    // SAFETY: the tail, terminator included, still fits: the
-                    // buffer either grew or the character did not.
-                    unsafe {
-                        let src = at(&mut owned, i + olen);
-                        let dst = at(&mut owned, i + nlen);
-                        ptr::copy(src, dst, cstr::bytes_at(src).len() + 1);
-                    }
-                    if buf.is_null() {
-                        if nlen < olen {
-                            owned.truncate(owned.len() - (olen - nlen) as usize);
-                        }
-                    } else {
-                        len += nlen - olen;
-                    }
-                }
+            let mut nlen = utf_char2len(lc) as usize;
+            if nlen > olen && room.is_some_and(|room| len + nlen - olen >= room) {
+                // No room to grow: keep the original character.
+                lc = c;
+                nlen = olen;
             }
-            // SAFETY: `nlen` bytes were just made available at `i`.
-            unsafe { utf_char2bytes(lc, at(&mut owned, i)) };
+            if olen != nlen {
+                // The tail, terminator included, moves up or down.
+                let tail = work[i + olen..].to_vec();
+                work.truncate(i + nlen.min(olen));
+                work.resize(i + nlen, 0);
+                work.extend_from_slice(&tail);
+                len = len + nlen - olen;
+            }
+            let mut folded = [0u8; 6];
+            let n = encode_char(lc, &mut folded);
+            work[i..i + n].copy_from_slice(&folded[..n]);
         }
-        // SAFETY: the character at `i` is inside the buffer.
-        i += unsafe { Chars::new(at(&mut owned, i)) }.char_len() as c_int;
+        i += Chars::new(&work).skip(i).char_len();
     }
-
-    if buf.is_null() {
-        owned.pop();
-        owned_cstr(owned)
-    } else {
-        buf
-    }
+    work.truncate(work.iter().position(|&b| b == 0).unwrap_or(work.len()));
+    work
 }
 
 /// A character's display form, NUL-terminated within its own storage.
@@ -434,26 +324,11 @@ pub(crate) const CHAR_DISPLAY_LEN: usize = render::MAX_LEN;
 #[inline(always)]
 fn owned(rendered: &render::Rendered) -> CharDisplay {
     let mut out: CharDisplay = [0; render::MAX_LEN];
-    // SAFETY: `out` is `MAX_LEN` bytes, and a rendering with its terminator
-    // is never longer than that.
-    unsafe { write_rendered(out.as_mut_ptr(), rendered) };
+    // A rendering and its terminator are never longer than `MAX_LEN`.
+    for (slot, &byte) in out.iter_mut().zip(&rendered.bytes[..=rendered.len]) {
+        *slot = byte as c_char;
+    }
     out
-}
-
-/// Copy a rendering, and the NUL after it, to `dst`.
-///
-/// # Safety
-/// `dst` must have room for `rendered.len + 1` bytes.
-#[inline(always)]
-unsafe fn write_rendered(dst: *mut c_char, rendered: &render::Rendered) {
-    // SAFETY: the caller guarantees the room.
-    unsafe {
-        ptr::copy_nonoverlapping(
-            rendered.bytes.as_ptr(),
-            dst as *mut uint8_t,
-            rendered.len + 1,
-        )
-    };
 }
 
 /// The display form of the unprintable byte `c`, as a value.
@@ -536,43 +411,30 @@ pub(crate) fn transchar_byte(c: c_int) -> CharDisplay {
     transchar_byte_buf(Buf::current_or_none(), c)
 }
 
-/// Write the display form of the unprintable byte `c` into `charbuf`.
-///
-/// # Safety
-/// `charbuf` must have room for five bytes.
-pub unsafe fn transchar_nonprint(buffer: Option<Buf>, charbuf: *mut c_char, c: c_int) {
-    // SAFETY: forwarded to the caller's contract; a byte's rendering and its
-    // terminator are at most five bytes.
-    unsafe { write_rendered(charbuf, &render_nonprint(buffer, c)) };
+/// The display form of the unprintable byte `c`.
+pub(crate) fn transchar_nonprint_form(buffer: Option<Buf>, c: c_int) -> CharDisplay {
+    owned(&render_nonprint(buffer, c))
 }
 
-/// Write `c`'s `<xx>` form into `buf`. Answers the length, excluding the NUL.
-///
-/// # Safety
-/// `buf` must have room for nine bytes.
-pub unsafe fn transchar_hex(buf: *mut c_char, c: c_int) -> size_t {
+/// How long `c`'s `<xx>` form is, excluding the NUL.
+pub(crate) fn transchar_hex_len(c: c_int) -> usize {
+    render::hex_form(c).len
+}
+
+/// Write `c`'s `<xx>` form into `out`, NUL-terminated. Answers the length,
+/// excluding the NUL; nine bytes hold the widest form.
+pub(crate) fn transchar_hex_into(out: &mut [c_char], c: c_int) -> usize {
     let rendered = render::hex_form(c);
-    // SAFETY: the caller's buffer holds the nine bytes the widest form needs.
-    unsafe { write_rendered(buf, &rendered) };
+    for (slot, &byte) in out.iter_mut().zip(&rendered.bytes[..=rendered.len]) {
+        *slot = byte as c_char;
+    }
     rendered.len
 }
 
-/// Reverse the bytes of `str` in place, up to `end` or the NUL.
-///
-/// This is only correct for single-byte text; the callers use it on
-/// generated ASCII.
-///
-/// # Safety
-/// `str` must be NUL-terminated when `end` is null.
-pub unsafe fn rl_mirror_ascii(str: *mut c_char, end: *mut c_char) {
-    // SAFETY: forwarded to the caller's contract.
-    let len = if end.is_null() {
-        unsafe { cstr::bytes_at(str) }.len()
-    } else {
-        end.addr() - str.addr()
-    };
-    // SAFETY: the caller's buffer holds those bytes.
-    unsafe { slice::from_raw_parts_mut(str, len) }.reverse();
+/// Reverse `bytes` in place. Only correct for single-byte text; the callers
+/// use it on generated ASCII.
+pub(crate) fn mirror_ascii(bytes: &mut [u8]) {
+    bytes.reverse();
 }
 
 /// The display width of the byte `b`, or zero for a multibyte lead byte.
@@ -599,20 +461,6 @@ pub fn char2cells(c: c_int) -> c_int {
     table_cells((c & 0xff) as uint8_t)
 }
 
-/// The display width of the character at `p`.
-///
-/// # Safety
-/// `p` must point into a NUL-terminated string.
-pub unsafe fn ptr2cells(p_in: *const c_char) -> c_int {
-    // SAFETY: forwarded to the caller's contract.
-    let byte = unsafe { *p_in.cast::<uint8_t>() };
-    if byte >= 0x80 {
-        // SAFETY: as above; the rest of the sequence follows it.
-        return unsafe { utf_ptr2cells(p_in) };
-    }
-    table_cells(byte)
-}
-
 /// [`ptr2cells`] over a slice: the cells the character at the start of
 /// `bytes` takes. An empty slice reads as the NUL the pointer form stops at.
 pub(crate) fn ptr2cells_at(bytes: &[u8]) -> c_int {
@@ -623,29 +471,32 @@ pub(crate) fn ptr2cells_at(bytes: &[u8]) -> c_int {
     table_cells(first)
 }
 
-/// The display width of the whole string `s`.
-///
-/// # Safety
-/// `s` must be a NUL-terminated string.
-pub unsafe fn vim_strsize(s: *const c_char) -> c_int {
-    // SAFETY: forwarded to the caller's contract.
-    unsafe { vim_strnsize(s, MAXCOL) }
+/// The display width of the character starting the bytes of a C string,
+/// as the pointer form `ptr2cells` reads it.
+#[inline(always)]
+pub(crate) fn c_ptr2cells(bytes: &[u8]) -> c_int {
+    let first = cstr::byte_at(bytes, 0);
+    if first >= 0x80 {
+        return c_cells_at(bytes);
+    }
+    table_cells(first)
 }
 
-/// [`vim_strsize`] of a string the caller owns.
+/// The display width of the whole of `s`, the bytes of a C string.
+pub(crate) fn strsize(s: &[u8]) -> c_int {
+    strnsize(s, MAXCOL)
+}
+
+/// [`strsize`] of a string the caller owns.
 pub(crate) fn vim_strsize_cstr(s: &CStr) -> c_int {
-    // SAFETY: a NUL-terminated string.
-    unsafe { vim_strsize(s.as_ptr()) }
+    strsize(s.to_bytes())
 }
 
-/// The display width of at most `len` bytes of `s`.
-///
-/// # Safety
-/// `s` must be a NUL-terminated string.
-pub unsafe fn vim_strnsize(s: *const c_char, len: c_int) -> c_int {
-    debug_assert!(!s.is_null(), "s != NULL");
-    // SAFETY: forwarded to the caller's contract.
-    let mut cursor = unsafe { Chars::new(s) };
+/// The display width of the characters starting in the first `len` bytes of
+/// `s`, the bytes of a C string: a character that starts inside the bound is
+/// counted whole.
+pub(crate) fn strnsize(s: &[u8], len: c_int) -> c_int {
+    let mut cursor = Chars::new(s);
     let mut len = len;
     let mut size = 0;
     while cursor.byte() != 0 && {
@@ -653,8 +504,7 @@ pub unsafe fn vim_strnsize(s: *const c_char, len: c_int) -> c_int {
         len >= 0
     } {
         let l = cursor.char_len();
-        // SAFETY: the cursor is inside the string.
-        size += unsafe { ptr2cells(cursor.raw()) };
+        size += c_ptr2cells(cursor.rest());
         cursor.advance(l);
         len -= l as c_int - 1;
     }

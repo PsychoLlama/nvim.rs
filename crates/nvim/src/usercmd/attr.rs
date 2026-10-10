@@ -397,12 +397,9 @@ fn scan_count(
 /// landed exactly on the end of the value; the strictness is the point,
 /// since `-count=3x` must not quietly mean three.
 fn digits(value: &[u8]) -> Option<c_int> {
-    // A terminated copy: the walk reads to a NUL, and `value` is a slice of
-    // the attribute, not a string of its own -- walking it in place read
-    // past its end into the rest of the command line (Miri).
-    let mut text = Vec::with_capacity(value.len() + 1);
-    text.extend_from_slice(value);
-    text.push(0);
-    let (n, past) = getdigits_int_at(&mut text, 0, true, 0);
+    // The walk stops at the end of `value`, a slice of the attribute: the
+    // pointer walk it replaced read past it into the rest of the command
+    // line (Miri).
+    let (n, past) = getdigits_int_at(value, 0, true, 0);
     (past == value.len()).then_some(n)
 }
