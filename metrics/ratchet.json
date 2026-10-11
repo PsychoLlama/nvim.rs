@@ -38,7 +38,7 @@
   "raw_cstr_fields": 300,
   "ml_get_raw": 265,
   "mbyte_raw": 375,
-  "msg_raw": 4,
+  "msg_raw": 0,
   "bytes_at": 432,
   "vval_raw": 0,
   "typval_raw_params": 0,

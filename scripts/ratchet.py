@@ -1438,10 +1438,9 @@ INSTRUMENTS = {
     # it is `emsg` for a caller still holding a pointer, the error channel's
     # exact counterpart to `msg_ptr`, and leaving it out read the *error*
     # half of the family as done. `msg_prt_line` left in the commit that
-    # gave it a `&CStr`.
-    "msg_raw": re.compile(
-        r"\b(?:e?msg_ptr|msg_(?:keep|trunc|may_trunc|strtrunc|progress))\("
-    ),
+    # gave it a `&CStr`, and `msg_progress` when its text became `&CStr` too
+    # (its four calls were all that the needle still matched).
+    "msg_raw": re.compile(r"\b(?:e?msg_ptr|msg_(?:keep|trunc|may_trunc|strtrunc))\("),
     "bytes_at": re.compile(r"\bbytes_at\("),
     "vval_raw": re.compile(r"\.vval\."),
     # The declaration, not the reads: what phase 31 retires is a *cell*, and a
