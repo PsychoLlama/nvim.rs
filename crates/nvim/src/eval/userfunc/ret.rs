@@ -3,8 +3,8 @@
 //! `ex_return`/`do_return` implement returning -- including the case where
 //! a `:finally` is still to run -- and `get_return_cmd` renders a pending
 //! return for the debugger.  `get_func_line` is how `do_cmdline` reads a
-//! function body, and [`FuncCall::has_ended`] what it asks of one.  `:defer` records a call to make on the way out and
-//! `invoke_all_defer` makes them.
+//! function body, and [`FuncCall::has_ended`] what it asks of one.  `:defer`
+//! records a call to make on the way out and `invoke_all_defer` makes them.
 
 #![forbid(unsafe_code)]
 #![deny(
