@@ -1,5 +1,5 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	60	629	69	399	deref:79 compound:35 expr:21 ref:2	other:55 str:17	str:5 other:3 value:1	at:22 CStr::from_ptr:10 xfree:10 c_str:6 from_raw_parts:6 ManuallyDrop::take:5 api_free_luaref:5 bytes_at:5
+api/	*	60	628	69	399	deref:79 compound:35 expr:20 ref:2	other:55 str:17	str:5 other:3 value:1	at:22 CStr::from_ptr:10 xfree:10 from_raw_parts:7 c_str:6 ManuallyDrop::take:5 api_free_luaref:5 bytes_at:5
 api/	api/autocmd/create.rs	1	15	1	13	deref:2	-	-	at:2 autocmd_register:1 do_autocmd_event:1 xfree:1
 api/	api/autocmd/exec.rs	1	6	0	6	-	-	-	apply_autocmds_group:1 augroup_exists:1 augroup_find:1
 api/	api/autocmd/group.rs	1	10	0	10	-	-	-	augroup_del:2 augroup_add:1 augroup_exists:1 augroup_find:1
@@ -50,7 +50,7 @@ api/	api/vim/inspect.rs	1	11	0	10	deref:1	-	-	at:3 nlua_exec:2 schar_cache_clear
 api/	api/vim/marks.rs	1	8	0	5	compound:1 deref:1	-	-	at:2 xfree:2 Object::string:1
 api/	api/vim/paste.rs	1	14	0	8	compound:1	-	other:1	terminal_set_streamed_paste:2 at:1 do_put:1 finish_yankreg_from_object:1 memchrsub:1 nlua_exec:1 prepare_yankreg_from_object:1
 api/	api/vim/redraw.rs	1	3	0	1	compound:1	-	-	-
-api/	api/vim/runtime.rs	1	11	1	7	expr:2 compound:1	-	-	changedir_func:1 do_in_runtimepath:1 do_source:1 mb_string2cells:1 nlua_exec:1
+api/	api/vim/runtime.rs	1	10	1	7	compound:1 expr:1	-	-	do_in_runtimepath:1 do_source:1 from_raw_parts:1 mb_string2cells:1 nlua_exec:1
 api/	api/vim/statusline.rs	1	20	0	13	deref:2 expr:2 compound:1	str:1	-	.offset_from:1 CStr::from_ptr:1 Fmt::borrowed:1 check_stl_option:1 decor_redraw_signs:1 labs:1 pum_set_info:1 snprintf:1
 api/	api/vim/term.rs	1	26	2	15	deref:7 compound:1	-	-	at:3 channel_decref:2 channel_send:2 api_free_luaref:1 channel_alloc:1 channel_incref:1 read_buffer_into:1 terminal_check_size:1
 api/	api/vim/vars.rs	1	1	0	1	-	-	-	script_autoload:1
@@ -204,10 +204,9 @@ ex_cmds/	ex_cmds/write.rs	1	35	5	29	expr:3 deref:1	str:7	str:1	at_opt:4 msg_cstr
 ex_cmds2/	*	2	28	0	13	deref:11 compound:1 expr:1	-	-	buf_check_timestamp:2 check_overwrite:2 apply_autocmds:1 buf_set_name:1 buf_write:1 bytes_at:1 goto_buffer:1 set_arglist:1
 ex_cmds2/	ex_cmds2/listdo.rs	1	6	0	2	compound:1 deref:1	-	-	apply_autocmds:1 goto_buffer:1
 ex_cmds2/	ex_cmds2/mod.rs	1	22	0	11	deref:10 expr:1	-	-	buf_check_timestamp:2 check_overwrite:2 buf_set_name:1 buf_write:1 bytes_at:1 set_arglist:1 set_swapcommand:1 source_runtime_vim_lua:1
-ex_docmd/	*	3	109	4	60	deref:34 expr:6 compound:1 ref:1	str:21 other:4 pp_str:1 value:1 void:1	str:5 value:2 void:1	.add:7 snprintf:4 bytes_at:3 .offset:2 .offset_from:2 CStr::from_ptr:2 eq_bytes:2 .replace:1
+ex_docmd/	*	2	90	3	45	deref:33 expr:4 compound:1	str:15 other:4 pp_str:1 void:1	str:3 void:1	.add:7 snprintf:4 bytes_at:3 .offset:2 .offset_from:2 CStr::from_ptr:2 at:1 backslash_halve:1
 ex_docmd/	ex_docmd/filename.rs	1	89	3	44	deref:33 expr:4 compound:1	str:15 other:4 pp_str:1	str:3 void:1	.add:7 snprintf:4 bytes_at:3 .offset:2 .offset_from:2 CStr::from_ptr:2 at:1 backslash_halve:1
 ex_docmd/	ex_docmd/mod.rs	1	1	0	1	-	void:1	-	-
-ex_docmd/	ex_docmd/path.rs	1	19	1	15	expr:2 deref:1 ref:1	str:6 value:1	str:2 value:2	.replace:1 at_opt:1 bytes_at_or_empty:1 callback_call:1 eq_bytes:1 expand_env:1 free_string_option:1 pathcmp:1
 ex_getln/	*	14	329	19	153	deref:139 expr:24 compound:2 ref:2	other:10	other:3 str:1	utfc_ptr2len:9 bytes_at:7 try_enter:7 try_leave:7 xfree:7 .offset:5 cstr_to_string:5 Cls::new:4
 ex_getln/	ex_getln/buffer.rs	1	27	5	17	expr:7 deref:3	other:2	-	Cc::new:2 XString::from_raw:2 utf_ptr2char:2 .as_mut:1 bytes_at:1 check_abbr:1 get_spec_reg:1 home_replace_save:1
 ex_getln/	ex_getln/cmdpreview.rs	1	15	0	15	-	other:1	-	aucmd_prepbuf:3 aucmd_restbuf:3 Cp::new:2 try_enter:2 try_leave:2 abort:1 bytes_at:1 rename_buffer:1
@@ -231,8 +230,8 @@ extmark/	*	3	11	2	3	deref:3 ref:3 expr:2	other:6	other:1	decor_free:1 marktree_c
 extmark/	extmark/mod.rs	1	9	0	3	ref:3 expr:2 deref:1	other:3	other:1	decor_free:1 marktree_clear:1 xrealloc:1
 extmark/	extmark/set.rs	1	2	1	0	deref:2	other:1	-	-
 extmark/	extmark/undo.rs	1	0	1	0	-	other:2	-	-
-file_search/	*	6	234	39	169	deref:50 expr:5 compound:3 ref:2	str:47 pp_str:8 void:4 other:3 pp:1	str:22 void:1	bytes_at:8 xfree:7 os_isdir:6 path_with_url:4 vim_is_abs_name:4 copy_option_part:3 from_raw_parts:3 os_dirname:3
-file_search/	file_search/chdir.rs	1	17	3	15	deref:2	str:3	-	abort:2 xfree:2 apply_autocmds:1 at_opt:1 bytes_at:1 os_chdir:1 os_dirname:1 pathcmp:1
+file_search/	*	6	230	37	165	deref:50 expr:5 compound:3 ref:2	str:45 pp_str:8 void:4 other:3 pp:1	str:22 void:1	bytes_at:7 xfree:7 os_isdir:6 path_with_url:4 vim_is_abs_name:4 copy_option_part:3 from_raw_parts:3 os_dirname:3
+file_search/	file_search/chdir.rs	1	13	1	11	deref:2	str:1	-	abort:2 xfree:2 apply_autocmds:1 os_chdir:1 os_dirname:1 pathcmp:1 xstrlcpy:1
 file_search/	file_search/cursor.rs	1	59	8	43	deref:14 expr:2	str:8 other:3	str:6	bytes_at:3 path_is_url:3 xfree:3 .offset:2 .sub:2 prefix_eq:2 skipwhite:2 vim_isfilec:2
 file_search/	file_search/init.rs	1	59	9	37	deref:18 expr:3 ref:1	str:11 void:3	str:2 void:1	vim_is_abs_name:3 Box::from_raw:2 vim_strchr:2 .offset_from:1 bytes_at:1 from_raw_parts:1 full_name_save:1 os_dirname:1
 file_search/	file_search/mod.rs	1	34	5	30	deref:1 ref:1	str:3 void:1	str:7	os_isdir:4 path_with_url:2 .offset_from:1 after_pathsep:1 bytes_at:1 copy_option_part:1 os_dirname:1 os_path_exists:1
@@ -463,8 +462,8 @@ optionstr/	optionstr/complete.rs	1	37	0	21	deref:16	-	-	.add:4 CStr::from_ptr:2 
 optionstr/	optionstr/display.rs	1	25	1	20	deref:4 expr:1	str:1	-	eq:2 from:2 .add:1 briopt_check:1 check_colorcolumn:1 fill_culopt_flags:1 getdigits_int:1 parse_winborder:1
 optionstr/	optionstr/flags.rs	1	7	4	7	-	str:5	-	CStr::from_ptr:2 at:1
 optionstr/	optionstr/statusline.rs	1	13	0	12	expr:1	str:1	-	CStr::from_ptr:2 .add:1 .replace:1 from:1 getdigits_int:1 vim_snprintf:1
-path/	*	6	423	57	296	deref:105 expr:10 compound:5	str:64 other:13 pp_str:8 void:2	str:16	CStr::from_ptr:40 .add:21 xfree:18 xstrlcpy:12 at:9 copy:7 os_dirname:6 copy_nonoverlapping:5
-path/	path/compare.rs	1	31	4	26	expr:3 deref:2	str:7	-	CStr::from_ptr:3 xstrlcpy:3 .add:2 os_fileid:2 os_fileinfo_link:2 .offset_from:1 expand_env:1 os_fileid_equal:1
+path/	*	6	424	57	297	deref:105 expr:10 compound:5	str:64 other:13 pp_str:8 void:2	str:16	CStr::from_ptr:40 .add:21 xfree:18 xstrlcpy:12 at:9 copy:7 os_dirname:6 copy_nonoverlapping:5
+path/	path/compare.rs	1	32	4	27	expr:3 deref:2	str:7	-	CStr::from_ptr:3 xstrlcpy:3 .add:2 os_fileid:2 os_fileinfo_link:2 .offset_from:1 expand_env:1 os_fileid_equal:1
 path/	path/expand.rs	1	144	11	80	deref:57 compound:3 expr:1	pp_str:8 str:7 other:6	str:1	xfree:13 CStr::from_ptr:7 copy:4 .add:3 ga_clear_strings:3 os_expand_wildcards:3 copy_nonoverlapping:2 ga_init:2
 path/	path/glob.rs	1	50	11	41	deref:7 expr:2	str:8 other:3 void:2	-	CStr::from_ptr:7 at:4 os_fileinfo_link:2 os_path_exists:2 rem_backslash:2 backslash_halve:1 copy_nonoverlapping:1 copy_option_part:1
 path/	path/mod.rs	1	70	11	61	deref:8 expr:1	str:15	str:3	xstrlcpy:9 CStr::from_ptr:4 xstrlcat:4 os_dirname:3 os_fileinfo:3 .add:2 XString::from_raw:2 xfree:2
@@ -683,11 +682,11 @@ usercmd/	usercmd/list.rs	1	16	1	12	expr:3 deref:1	str:1	-	at:3 printf_string:2 c
 usercmd/	usercmd/mod.rs	1	59	8	40	deref:7 expr:5 compound:3	str:6	str:1	xfree:10 from_raw_parts:3 msg_cstr_opt:2 skipwhite:2 .offset:1 .offset_from:1 api_free_luaref:1 at_opt:1
 version/	*	1	14	0	11	deref:2 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
 version/	version/mod.rs	1	14	0	11	deref:2 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
-window/	*	11	79	4	54	deref:9 compound:5 expr:2	str:15 other:7	str:6	vim_snprintf:5 apply_autocmds:4 clear_virttext:4 xstrdup:3 at:2 delete_fold_recurse:2 event_ignored:2 terminal_check_size:2
+window/	*	11	81	4	56	deref:9 compound:5 expr:2	str:15 other:7	str:7	vim_snprintf:5 apply_autocmds:4 clear_virttext:4 xstrdup:3 at:2 at_opt:2 delete_fold_recurse:2 event_ignored:2
 window/	window/alloc.rs	1	17	1	10	deref:2 compound:1 expr:1	other:2	-	clear_virttext:2 delete_fold_recurse:2 abort:1 alist_unlink:1 buflist_new:1 clear_winopt:1 free_jumplist:1
 window/	window/cmd.rs	1	10	0	10	-	str:5	str:2	vim_snprintf:2 buflist_findname_exp:1 do_ecmd:1 find_ident_under_cursor:1 grab_file_name:1 slice_at:1 xmemdupz:1 xstrlcat:1
 window/	window/config.rs	1	13	2	9	compound:2	other:3	-	clear_virttext:2 emsg:1 textpos2screenpos:1 try_enter:1 try_leave:1 win_text_height:1
-window/	window/goto.rs	1	5	0	5	-	str:3	-	do_autocmd_dirchanged:1 os_chdir:1 os_dirname:1 pathcmp:1 xstrdup:1
+window/	window/goto.rs	1	7	0	7	-	str:3	str:1	at_opt:2 CStr::from_ptr:1 os_chdir:1 os_dirname:1 pathcmp:1 xstrdup:1
 window/	window/mod.rs	1	6	0	6	-	other:1	-	apply_autocmds:2 at:2 terminal_check_size:1 xfree:1
 window/	window/resize.rs	1	3	0	2	deref:1	other:1	-	stl_clear_click_defs:1 terminal_check_size:1
 window/	window/screensize.rs	1	12	0	6	deref:4	-	str:1	apply_autocmds:2 event_ignored:2 vim_snprintf:2

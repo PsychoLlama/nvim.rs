@@ -4,31 +4,39 @@
 //! A directory is remembered at three scopes (window, tab page, global),
 //! and `:cd -` goes back to the previous one *at that scope*. `post_chdir`
 //! is what keeps the three in step after any of them changes.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::callback_copy;
+use crate::file_search::do_autocmd_dirchanged;
 use crate::guard::Lock;
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::emsg;
+use crate::option::callback_from_option;
+use crate::optionstr::did_set_optexpr;
 use crate::os::cshim::gettext;
+use crate::os::env::expand_env_save_opt_of;
+use crate::os::fs::current_dir;
+use crate::path::pathcmp_cstr;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
+use crate::window::DirOwner;
+use crate::window::has_own_dir;
+use crate::window::prev_dir_of;
+use crate::window::set_own_dir;
+use crate::window::set_prev_dir;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::ptr;
+use core::ffi::{c_int, c_uint};
 
 use crate::eval::typval::{
     ListRef, TV_INITIAL_VALUE, callback_free, list_copy, list_find, list_iter, list_len, tv_clear,
 };
 
-use crate::eval::userfunc::scriptlocal_funcname;
 use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
-use crate::ex_docmd::xfree;
 use crate::ex_docmd::{ffu_cb, kCdCauseManual, prev_dir};
 use crate::ex_getln::allbuf_locked;
 use crate::file_search::vim_chdir;
@@ -37,44 +45,43 @@ use crate::fileio::shorten_fnames;
 use crate::getchar::state::KeyTyped;
 use crate::message::{e_failed, e_invalid_return_type_from_findfunc, e_invarg};
 use crate::option::vars::{p_cdh, p_ffu, p_verbose};
-use crate::os::state::{globaldir, last_chdir_reason};
+use crate::os::state::last_chdir_reason;
 use crate::runtime::state::current_sctx;
 
 use crate::message::msg;
-use crate::message_fmt::{msg_cstr, msg_cstr_opt};
+use crate::message_fmt::msg_cstr;
 
 use crate::option::{cpo_has, option_last_set};
 
 use crate::options::kOptFindfunc;
-use crate::optionstr::free_string_option;
-
-use crate::os::env::expand_env;
 
 use crate::optionstr::OptString;
-use crate::path::pathcmp;
 use crate::types::{
-    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, MAXPATHL, NUL, OK, OptError,
-    OptInt, OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
-    kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, size_t,
+    BoolVarValue, Callback, CdScope, CpoFlag, ExArg, Failed, NUL, OK, OptError, OptInt, OptSet,
+    OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse,
+    kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
 };
 
-/// The parsed `'findfunc'`.
-///
-/// The address, because every operation the tree has on a callback —
-/// parsing an option into it, marking it for the collector, copying it,
-/// calling it — takes a `*mut Callback`.
-fn global_findfunc() -> *mut Callback {
-    ffu_cb.ptr()
+/// A copy of the buffer-local 'findfunc' callback if the option is set
+/// there, and of the global one otherwise. A copy, because calling it runs
+/// user code, which may set the option again.
+fn findfunc_callback() -> Callback {
+    let mut cb = Callback::None;
+    let buf = Buf::current();
+    if buf.b_p_ffu.first_byte() != NUL as u8 {
+        callback_copy(&mut cb, &buf.b_ffu_cb);
+    } else {
+        ffu_cb.with(|global| callback_copy(&mut cb, global));
+    }
+    cb
 }
 
-/// The buffer-local 'findfunc' if it is set, and the global one otherwise.
-pub(crate) fn get_findfunc_callback() -> *mut Callback {
-    if byte(Buf::current().b_p_ffu.value_ptr()) != NUL {
-        // SAFETY: `curbuf` is set from startup to exit, and the address
-        // of a field is not a read of the buffer.
-        unsafe { &raw mut (*Buf::current_raw()).b_ffu_cb }
-    } else {
-        global_findfunc()
+/// Replace `slot` with the callback `value` names: cleared for an empty
+/// value, left alone (and `Err`) for one that names none.
+fn set_callback_from_option(slot: &mut Callback, value: Option<Callback>) {
+    callback_free(slot);
+    if let Some(cb) = value {
+        *slot = cb;
     }
 }
 
@@ -92,10 +99,11 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
     // Errors are reported against the script that *set* the option, not
     // against whatever is running now.
     current_sctx.set(option_last_set(kOptFindfunc));
-    let cb = get_findfunc_callback();
+    let mut cb = findfunc_callback();
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_empty(VAR_UNKNOWN);
-    let called = unsafe { callback_call(&*cb, &args, &mut rettv) };
+    let called = callback_call(&cb, &args, &mut rettv);
+    callback_free(&mut cb);
     current_sctx.set(saved_sctx);
     drop(locked);
 
@@ -162,47 +170,52 @@ pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> Option<ThinCSt
 /// The generated option table holds it as an `opt_did_set_cb` fn pointer.
 pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
     let mut buf = args.os_buf;
-    let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        option_set_callback_func(buf.b_p_ffu.value_ptr(), &raw mut buf.b_ffu_cb)
+    let parsed = if args.os_flags.has(OptionSetFlags::LOCAL) {
+        callback_from_option(buf.b_p_ffu.get().as_cstr())
+            .map(|cb| set_callback_from_option(&mut buf.b_ffu_cb, cb))
     } else {
-        let r = p_ffu(|ffu| option_set_callback_func(ffu.as_ptr().cast_mut(), global_findfunc()));
-        // Setting it globally without `:setglobal` clears the local one.
-        if !args.os_flags.has(OptionSetFlags::GLOBAL) {
-            callback_free(&mut buf.b_ffu_cb);
-        }
-        r
+        // Parsed before the slot is lent: the parse evaluates an
+        // expression, which may read the option's callback.
+        let parsed = p_ffu(|ffu| callback_from_option(ffu));
+        parsed.map(|cb| {
+            ffu_cb.with_mut(|slot| set_callback_from_option(slot, cb));
+            // Setting it globally without `:setglobal` clears the local
+            // one.
+            if !args.os_flags.has(OptionSetFlags::GLOBAL) {
+                callback_free(&mut buf.b_ffu_cb);
+            }
+        })
     };
-    if retval.is_err() {
+    if parsed.is_err() {
         return Err((e_invarg).into());
     }
-    let varp = args.os_varp.string_var();
-    // SAFETY: a string option's value is null or NUL-terminated.
-    let value = unsafe { cstr::bytes_at_or_empty(varp.value_ptr()) };
-    let name = scriptlocal_funcname(value).map_or(ptr::null_mut(), XString::into_raw);
-    if !name.is_null() {
-        // Replace and *then* free; see `did_set_optexpr`.
-        let old = unsafe { varp.replace(name) };
-        unsafe { free_string_option(old) };
-    }
-    Ok(())
+    // A script-local function name is shortened to its `<SNR>` form, as
+    // 'operatorfunc' and the other expression options are.
+    did_set_optexpr(args)
 }
 
 /// Mark what the global 'findfunc' callback holds, for the garbage
 /// collector.
 pub fn set_ref_in_findfunc(copy_id: c_int) -> bool {
-    // SAFETY: the global callback slot is live.
-    set_ref_in_callback(unsafe { &*global_findfunc() }, copy_id, None, None)
+    ffu_cb.with(|cb| set_ref_in_callback(cb, copy_id, None, None))
 }
 
-/// The directory `:cd -` would go back to, at this scope.
-pub(crate) fn get_prevdir(scope: CdScope) -> *mut c_char {
+/// A copy of the directory a global `:cd -` goes back to.
+pub(crate) fn global_prev_dir() -> Option<XString> {
+    prev_dir.with(Clone::clone)
+}
+
+/// Replace the directory a global `:cd -` goes back to.
+pub(crate) fn set_global_prev_dir(dir: Option<XString>) {
+    prev_dir.set(dir);
+}
+
+/// Who keeps the directory at `scope`.
+fn owner_of(scope: CdScope) -> DirOwner {
     match scope as c_int {
-        s if s == kCdScopeTabpage as c_int => TabPage::current().tp_prevdir,
-        s if s == kCdScopeWindow as c_int => Win::current().w_prevdir,
-        _ => prev_dir.with(|dir| {
-            dir.as_ref()
-                .map_or(ptr::null_mut(), |dir| dir.as_ptr().cast_mut())
-        }),
+        s if s == kCdScopeTabpage as c_int => DirOwner::TabPage(TabPage::current()),
+        s if s == kCdScopeWindow as c_int => DirOwner::Window(Win::current()),
+        _ => DirOwner::Global,
     }
 }
 
@@ -214,151 +227,91 @@ pub(crate) fn get_prevdir(scope: CdScope) -> *mut c_char {
 /// remembers what the global directory was, so that leaving a local
 /// directory can go back to it.
 pub(crate) fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
-    xfree(Win::current().w_localdir as *mut c_void);
-    Win::current().w_localdir = ptr::null_mut();
+    set_own_dir(DirOwner::Window(Win::current()), None);
     if scope as c_int >= kCdScopeTabpage as c_int {
-        xfree(TabPage::current().tp_localdir as *mut c_void);
-        TabPage::current().tp_localdir = ptr::null_mut();
+        set_own_dir(DirOwner::TabPage(TabPage::current()), None);
     }
-    if (scope as c_int) < kCdScopeGlobal as c_int {
-        let pdir = get_prevdir(scope);
-        if globaldir.get().is_null() && !pdir.is_null() {
-            globaldir.set(xstrdup(pdir));
-        }
+    if (scope as c_int) < kCdScopeGlobal as c_int
+        && !has_own_dir(DirOwner::Global)
+        && let Some(pdir) = prev_dir_of(owner_of(scope))
+    {
+        set_own_dir(DirOwner::Global, Some(pdir));
     }
 
-    let mut cwd: [c_char; 4096] = [0; 4096];
-    if os_dirname(&raw mut cwd as *mut c_char, MAXPATHL as size_t).is_err() {
+    let Some(cwd) = current_dir() else {
         return;
-    }
+    };
     match scope as c_int {
         s if s == kCdScopeGlobal as c_int => {
             // The global directory *is* the process's now, so there is
             // nothing left to remember.
-            xfree(globaldir.get() as *mut c_void);
-            globaldir.set(ptr::null_mut());
+            set_own_dir(DirOwner::Global, None);
         }
         s if s == kCdScopeTabpage as c_int => {
-            TabPage::current().tp_localdir = xstrdup(&raw mut cwd as *mut c_char);
+            set_own_dir(DirOwner::TabPage(TabPage::current()), Some(cwd.clone()));
         }
         s if s == kCdScopeWindow as c_int => {
-            Win::current().w_localdir = xstrdup(&raw mut cwd as *mut c_char);
+            set_own_dir(DirOwner::Window(Win::current()), Some(cwd.clone()));
         }
         // `kCdScopeInvalid`. Upstream aborts here; so does this.
         _ => unreachable!("post_chdir with an invalid scope"),
     }
-    last_chdir_reason.set(ptr::null_mut());
+    last_chdir_reason.set(None);
     shorten_fnames(!cpo_has(CpoFlag::NOSYMLINKS) as c_int);
     if trigger_dirchanged {
-        do_autocmd_dirchanged(&raw mut cwd as *mut c_char, scope, kCdCauseManual, false);
+        do_autocmd_dirchanged(cwd.as_cstr(), scope, kCdCauseManual, false);
     }
 }
 
-/// Change directory at `scope`, remembering where we came from.
+/// Change directory at `scope` to `new_dir`, remembering where we came
+/// from.
 ///
 /// The DirChangedPre autocommand fires *before* the change and may cancel
 /// it by failing; that is why the `chdir` and the event are only reached
 /// when the directory really differs.
-///
-/// # Safety
-///
-/// `new_dir` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
-    let mut new_dir = new_dir;
-    // The DirChangedPre autocommand below runs while `new_dir` may point in
-    // here, which is exactly why it is not the shared `NameBuff`.
-    let mut dir = [0 as c_char; MAXPATHL as usize];
-    if new_dir.is_null() || allbuf_locked() {
+pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> bool {
+    if allbuf_locked() {
         return false;
     }
-    if unsafe { cstr::eq_bytes(new_dir, b"-") } {
-        let pdir = get_prevdir(scope);
-        if pdir.is_null() {
+    let mut new_dir = XString::from_cstr(new_dir);
+    if new_dir.as_cstr() == c"-" {
+        let Some(pdir) = prev_dir_of(owner_of(scope)) else {
             emsg(gettext(c"E186: No previous directory"));
             return false;
-        }
+        };
         new_dir = pdir;
     }
 
-    let pdir = os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t)
-        .is_ok()
-        .then(|| XString::from_cstr(cstr::in_chars(&dir)));
+    let pdir = current_dir();
 
     // `:cd` with no argument means home, when 'cdhome' is set.
-    if byte(new_dir) == NUL && p_cdh() {
-        unsafe { expand_env(c"$HOME".as_ptr() as *mut c_char, dir.as_mut_ptr(), MAXPATHL) };
-        new_dir = dir.as_mut_ptr();
+    if new_dir.is_empty() && p_cdh() {
+        new_dir = expand_env_save_opt_of(c"$HOME", false);
     }
 
     let dir_differs = pdir
         .as_ref()
-        .is_none_or(|pdir| unsafe { pathcmp(pdir.as_ptr(), new_dir, -1) } != 0);
+        .is_none_or(|pdir| pathcmp_cstr(pdir.as_cstr(), new_dir.as_cstr()) != 0);
     if dir_differs {
-        do_autocmd_dirchanged(new_dir, scope, kCdCauseManual, true);
-        if unsafe { vim_chdir(new_dir) } != 0 {
+        do_autocmd_dirchanged(new_dir.as_cstr(), scope, kCdCauseManual, true);
+        if vim_chdir(new_dir.as_cstr()) != 0 {
             emsg(gettext(e_failed));
             return false;
         }
     }
 
-    match scope as c_int {
-        s if s == kCdScopeTabpage as c_int => {
-            let mut tab = TabPage::current();
-            xfree(tab.tp_prevdir as *mut c_void);
-            tab.tp_prevdir = pdir.map_or(ptr::null_mut(), XString::into_raw);
-        }
-        s if s == kCdScopeWindow as c_int => {
-            let mut window = Win::current();
-            xfree(window.w_prevdir as *mut c_void);
-            window.w_prevdir = pdir.map_or(ptr::null_mut(), XString::into_raw);
-        }
-        _ => prev_dir.set(pdir),
-    }
-
+    set_prev_dir(owner_of(scope), pdir);
     post_chdir(scope, dir_differs);
     true
 }
 
-/// [`changedir_func`] for a name the caller holds.
-///
-/// The caller hands over a copy nothing else can reach, because the
-/// DirChangedPre autocommand runs while the name is still being read, and
-/// the directory search cuts the name at a NUL in place (putting the byte
-/// back) on the way.
-pub(crate) fn change_dir(new_dir: std::ffi::CString, scope: CdScope) -> bool {
-    let mut name = new_dir.into_bytes_with_nul();
-    // SAFETY: this frame's own writable NUL-terminated copy, which nothing
-    // else can reach and which outlives the call.
-    unsafe { changedir_func(name.as_mut_ptr().cast(), scope) }
-}
-
-/// Whose own directory [`own_dir`] reads.
-pub(crate) enum DirOwner {
-    Window(Win),
-    TabPage(TabPage),
-    /// What the global directory was before a local one was set.
-    Global,
-}
-
-/// A copy of the directory `owner` has of its own, or `None` when it has
-/// none.
-pub(crate) fn own_dir(owner: DirOwner) -> Option<XString> {
-    let dir = match owner {
-        DirOwner::Window(window) => window.w_localdir,
-        DirOwner::TabPage(tabpage) => tabpage.tp_localdir,
-        DirOwner::Global => globaldir.get(),
-    };
-    // SAFETY: each is null or an allocated NUL-terminated string its owner
-    // keeps, and it is copied before anything can replace it.
-    unsafe { cstr::at_opt(dir) }.map(XString::from_cstr)
-}
-
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
 pub fn ex_cd(excmd: &mut ExArg) {
-    let new_dir = excmd.arg_ptr();
+    // A copy: the DirChangedPre autocommand runs while it is still read.
+    let new_dir = excmd.line.cstr_from(excmd.line.arg).to_owned();
     // Without 'cdhome', a bare `:cd` reports the directory instead of
     // changing it — Vi's behaviour.
-    if byte(new_dir) == NUL && !p_cdh() {
+    if new_dir.is_empty() && !p_cdh() {
         report_working_dir();
         return;
     }
@@ -370,7 +323,7 @@ pub fn ex_cd(excmd: &mut ExArg) {
     } else {
         kCdScopeGlobal
     };
-    if unsafe { changedir_func(new_dir, scope) } && (KeyTyped.get() || p_verbose() >= 5 as OptInt) {
+    if change_dir(&new_dir, scope) && (KeyTyped.get() || p_verbose() >= 5 as OptInt) {
         report_working_dir();
     }
 }
@@ -386,60 +339,23 @@ pub(crate) fn ex_pwd(_excmd: &mut ExArg) {
 /// Split from the handler because a bare `:cd` reports the directory too,
 /// and has its own command to answer for.
 fn report_working_dir() {
-    let mut dir = [0 as c_char; MAXPATHL as usize];
-    if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t).is_err() {
+    let Some(dir) = current_dir() else {
         emsg(gettext(c"E187: Unknown"));
         return;
-    }
+    };
     if p_verbose() > 0 as OptInt {
-        let context = if !last_chdir_reason.get().is_null() {
-            last_chdir_reason.get()
-        } else if !Win::current().w_localdir.is_null() {
-            c"window".as_ptr() as *mut c_char
-        } else if !TabPage::current().tp_localdir.is_null() {
-            c"tabpage".as_ptr() as *mut c_char
+        let context = if let Some(reason) = last_chdir_reason.get() {
+            reason
+        } else if has_own_dir(DirOwner::Window(Win::current())) {
+            c"window"
+        } else if has_own_dir(DirOwner::TabPage(TabPage::current())) {
+            c"tabpage"
         } else {
-            c"global".as_ptr() as *mut c_char
+            c"global"
         };
-        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (context, dir) = unsafe {
-            (
-                msg_cstr_opt(cstr::at_opt(context)),
-                msg_cstr_opt(cstr::at_opt(dir.as_mut_ptr())),
-            )
-        };
+        let (context, dir) = (msg_cstr(context), msg_cstr(dir.as_cstr()));
         smsg!(0, "[{context}] {dir}");
     } else {
-        msg(cstr::in_chars(&dir), 0);
+        msg(dir.as_cstr(), 0);
     }
-}
-
-/// `do_autocmd_dirchanged()` as checked code.
-fn do_autocmd_dirchanged(new_dir: *mut c_char, scope: CdScope, cause: CdCause, pre: bool) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::file_search::do_autocmd_dirchanged(new_dir, scope, cause, pre) }
-}
-
-/// `option_set_callback_func()` as checked code.
-fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> Result<(), Failed> {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::option::option_set_callback_func(optval, optcb) }
-}
-
-/// `os_dirname()` as checked code.
-fn os_dirname(buf: *mut c_char, len: size_t) -> Result<(), Failed> {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::os::fs::os_dirname(buf, len) }
-}
-
-/// `xstrdup()` as checked code.
-fn xstrdup(str: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::memory::xstrdup(str) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
 }

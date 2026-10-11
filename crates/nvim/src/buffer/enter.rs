@@ -444,7 +444,7 @@ fn do_autochdir_now() {
     }
     let fname = Buf::current().name.full_ptr();
     if starting.get() == 0 && !fname.is_null() && chdir_to_file(fname).is_ok() {
-        last_chdir_reason.set(c"autochdir".as_ptr().cast_mut());
+        last_chdir_reason.set(Some(c"autochdir"));
         reshorten_fnames();
     }
 }

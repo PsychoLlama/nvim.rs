@@ -31,7 +31,7 @@ use crate::eval::typval::{tv_check_for_string_arg, tv_get_number_chk};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::eval::window::find_win_by_nr;
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::{DirOwner, change_dir, own_dir, vim_mkdir_emsg};
+use crate::ex_docmd::{change_dir, vim_mkdir_emsg};
 use crate::fileio::{delete_recursive, rename_file, temp_name, vim_copyfile};
 use crate::memory::ThinCString;
 use crate::message::emsg;
@@ -46,6 +46,7 @@ use crate::types::{
     kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, uint64_t,
 };
 use crate::window::find_tabpage;
+use crate::window::{DirOwner, own_dir};
 use crate::winlayer::{TabPage, Win};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -248,7 +249,7 @@ pub fn f_chdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // A copy: the DirChangedPre autocommand runs while the name is read.
     let dir = args[0].string_ref().map(|dir| CString::from(dir.as_cstr()));
-    if !dir.is_some_and(|dir| change_dir(dir, scope)) {
+    if !dir.is_some_and(|dir| change_dir(&dir, scope)) {
         // Directory change failed: answer the empty string after all.
         drop(result.take_string());
     }

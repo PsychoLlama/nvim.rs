@@ -26,8 +26,8 @@ pub(crate) static didset_vim: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static didset_vimruntime: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static globaldir: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub(crate) static last_chdir_reason: GlobalCell<*mut c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<c_char>());
+pub(crate) static last_chdir_reason: GlobalCell<Option<&'static ::core::ffi::CStr>> =
+    GlobalCell::new(None);
 /// The Windows release `windowsversion()` reports. Nothing here writes it,
 /// so it stays the empty string a non-Windows build always answered.
 pub(crate) static windowsVersion: [c_char; 20] = [0 as c_char; 20];

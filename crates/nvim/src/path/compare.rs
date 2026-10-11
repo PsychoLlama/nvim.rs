@@ -175,6 +175,12 @@ pub unsafe fn same_directory(f1: *mut c_char, f2: *mut c_char) -> bool {
     head == head2 && unsafe { pathcmp(full, f2, head as c_int) } == 0
 }
 
+/// [`pathcmp`] of two whole names the caller holds as strings.
+pub(crate) fn pathcmp_cstr(p: &CStr, q: &CStr) -> c_int {
+    // SAFETY: both NUL-terminated; no length limit.
+    unsafe { pathcmp(p.as_ptr(), q.as_ptr(), -1) }
+}
+
 /// Compare the file names `p` and `q`, over at most `maxlen` bytes of each
 /// when `maxlen` is not negative.
 ///

@@ -11,7 +11,6 @@
 use super::*;
 use crate::api::private::helpers::{Reported, api_try};
 use crate::api::private::validate::err_bad_value;
-use crate::types::NUL;
 use crate::winlayer::Live;
 use core::ffi::CStr;
 
@@ -155,17 +154,13 @@ pub fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
     if dir.len() >= 4096 as size_t {
         return Err(too_long(c"directory name"));
     }
-    let mut string: [::core::ffi::c_char; 4096] = [0; 4096];
-    unsafe {
-        (&raw mut string as *mut ::core::ffi::c_char)
-            .cast::<u8>()
-            .copy_from_nonoverlapping(dir.data().cast(), dir.len())
-    };
-    string[dir.len()] = NUL as ::core::ffi::c_char;
+    // SAFETY: `dir` names `len` readable bytes, copied here.
+    let bytes = unsafe { core::slice::from_raw_parts(dir.data().cast::<u8>(), dir.len()) };
+    // Cut at an interior NUL, as upstream's `char *` copy is.
+    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
+    let dir = crate::cstr::owned(bytes);
     api_try(|| {
-        let dir = (&raw mut string).cast::<::core::ffi::c_char>();
-        // SAFETY: `dir` is this frame's own NUL-terminated copy.
-        unsafe { changedir_func(dir, kCdScopeGlobal) };
+        change_dir(&dir, kCdScopeGlobal);
     })?;
     ().reported(error)
 }

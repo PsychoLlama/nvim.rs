@@ -33,16 +33,7 @@ use std::ffi::CStr;
 /// `"window"` — except for an automatic change, which is matched by `"auto"`.
 /// The same words go into `v:event.scope`, alongside the new directory under
 /// the key the event promises (`directory` before the move, `cwd` after).
-///
-/// # Safety
-///
-/// `new_dir` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn do_autocmd_dirchanged(
-    new_dir: *mut c_char,
-    scope: CdScope,
-    cause: CdCause,
-    pre: bool,
-) {
+pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCause, pre: bool) {
     // A DirChanged autocommand that changes directory itself must not
     // fire this again.
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
@@ -75,9 +66,7 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
     let mut saved = SaveVEvent::default();
     let dict = get_v_event(&mut saved);
     let key: &CStr = if pre { c"directory" } else { c"cwd" };
-    let _ = dict
-        .edit()
-        .add_str(key.to_bytes(), unsafe { crate::cstr::at_opt(new_dir) });
+    let _ = dict.edit().add_str(key.to_bytes(), Some(new_dir));
     let _ = dict.edit().add_str(b"scope", Some(scope_name));
     let _ = dict.edit().add_bool(
         b"changed_window",
@@ -89,7 +78,7 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
         apply_autocmds(
             event,
             pattern.as_ptr().cast_mut(),
-            new_dir,
+            new_dir.as_ptr().cast_mut(),
             false,
             Buf::current_or_none(),
         )
@@ -124,29 +113,30 @@ pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result
 
     let announce = cause != kCdCauseOther;
     if announce {
-        unsafe { do_autocmd_dirchanged(dir.as_mut_ptr(), kCdScopeWindow, cause, true) };
+        do_autocmd_dirchanged(cstr::in_chars(&dir), kCdScopeWindow, cause, true);
     }
     if os_chdir(cstr::in_chars(&dir)) != 0 {
         return Err(Failed);
     }
     if announce {
-        unsafe { do_autocmd_dirchanged(dir.as_mut_ptr(), kCdScopeWindow, cause, false) };
+        do_autocmd_dirchanged(cstr::in_chars(&dir), kCdScopeWindow, cause, false);
     }
     Ok(())
 }
 
 /// Change directory to `new_dir`, searching `'cdpath'` for a relative name.
-///
-/// # Safety
-///
-/// `new_dir` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn vim_chdir(new_dir: *mut c_char) -> c_int {
+pub(crate) fn vim_chdir(new_dir: &CStr) -> c_int {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
-    let dir_len = unsafe { cstr::bytes_at(new_dir) }.len();
+    // A copy: the search terminates the name in place, and puts the byte
+    // back.
+    let mut name = new_dir.to_bytes_with_nul().to_vec();
+    let dir_len = name.len() - 1;
+    // SAFETY: a NUL-terminated copy of this frame's own, the current
+    // buffer's name, and the search's two slots, freed below.
     let dir_name = unsafe {
         find_directory_in_path(
-            new_dir,
+            name.as_mut_ptr().cast(),
             dir_len,
             FileNameOpts::MESS,
             Buf::current().name.full_ptr(),
@@ -154,12 +144,14 @@ pub(crate) unsafe fn vim_chdir(new_dir: *mut c_char) -> c_int {
             &raw mut search_ctx,
         )
     };
+    // SAFETY: what the search allocated, or null.
     unsafe { xfree(file_to_find.cast()) };
     unsafe { vim_findfile_cleanup(search_ctx.cast()) };
 
     if dir_name.is_null() {
         return -1;
     }
+    // SAFETY: an allocated NUL-terminated name, freed once read.
     let r = unsafe { os_chdir(cstr::at(dir_name)) };
     unsafe { xfree(dir_name.cast()) };
     r

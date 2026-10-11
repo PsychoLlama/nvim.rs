@@ -31,7 +31,7 @@ use crate::drawscreen::{
 };
 use crate::eval::vars::{globvar_dict, set_vim_var_nr, vimvar_dict};
 use crate::ex_docmd::state::ex_normal_busy;
-use crate::ex_docmd::{changedir_func, exec_normal};
+use crate::ex_docmd::{change_dir, exec_normal};
 use crate::ex_eval::aborting;
 use crate::ex_getln::state::cmdpreview;
 use crate::fold::fold_info;
