@@ -16,7 +16,7 @@ use crate::eval::{
     get_copy_id, set_ref_in_dict_items, set_ref_in_list_items, var_flavour, var_set_global,
 };
 use crate::event::libuv::uv_strerror;
-use crate::ex_cmds::{sub_get_replacement, sub_set_replacement};
+use crate::ex_cmds::{sub_get_replacement, sub_restore_replacement};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::fileio::{modname, vim_rename};
 use crate::global_cell::GlobalCell;
@@ -25,7 +25,7 @@ use crate::mark::{
     mark_jumplist_iter, mark_set_global, mark_set_local, set_last_cursor, setpcmark,
 };
 use crate::mbyte::mb_strnicmp;
-use crate::memory::{xcalloc, xfree, xmalloc, xmemdup, xmemdupz, xrealloc, xstrdup};
+use crate::memory::{XString, xcalloc, xfree, xmalloc, xmemdup, xmemdupz, xrealloc, xstrdup};
 use crate::message::{verbose_enter, verbose_leave};
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_integer, mpack_map, mpack_raw,
@@ -34,8 +34,8 @@ use crate::msgpack_rpc::packer::{
 use crate::msgpack_rpc::unpacker::{
     push_additional_data, unpack_array, unpack_integer, unpack_keydict, unpack_skip, unpack_string,
 };
+use crate::option::copy_option_part;
 use crate::option::vars::{p_enc, p_fs, p_hi, p_shadafile, p_verbose};
-use crate::option::{copy_option_part, magic_isset};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_pid};
 use crate::os::fileio::{
     FileOpenFlags, file_close, file_flush, file_open, file_open_buffer, file_read, file_skip,
@@ -48,7 +48,6 @@ use crate::path::{
     concat_fnames_realloc, path_fnamecmp, path_tail_with_sep, path_try_shorten_fname,
 };
 use crate::pos::MAXLNUM;
-use crate::regexp::regtilde;
 use crate::register::{op_global_reg_iter, op_reg_get, op_reg_index, op_reg_set};
 use crate::registry::{IdMap, IdSet, SlotTable, id_map, id_set};
 use crate::search::state::no_hlsearch;
@@ -60,13 +59,41 @@ use crate::types::{
     AdditionalData, AdditionalDataBuilder, ApiDict, BlnFlags, Buffer, ColNr, FileDescriptor,
     FileInfo, FileMark, FileMarkView, HistoryType, Integer, KeyDict__shada_buflist_item,
     KeyDict__shada_mark, KeyDict__shada_register, KeyDict__shada_search_pat, LineNr, List, MarkGet,
-    MotionType, PackerBuffer, Pos, SearchOffset, SearchPattern, String_0, StringArray,
-    SubReplacementString, Timestamp, TypVal, VarFlavour, XFileMark, YankReg, int64_t, ptrdiff_t,
-    size_t, ssize_t, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    MotionType, PackerBuffer, Pos, SearchOffset, SearchPattern, String_0, StringArray, Timestamp,
+    TypVal, VarFlavour, XFileMark, YankReg, int64_t, ptrdiff_t, size_t, ssize_t, uid_t, uint8_t,
+    uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
 use ::libc::{atoi, getgid, getuid, qsort};
+
+/// A ShaDa entry's extra data, owned: the fields of an entry this version
+/// does not know, kept by whatever record the entry restored so that the
+/// next write can put them back verbatim. Freed when the record lets go.
+pub(crate) struct ShadaExtra(core::ptr::NonNull<AdditionalData>);
+
+impl ShadaExtra {
+    /// Take over `raw`; `None` for null.
+    ///
+    /// # Safety
+    /// `raw` must be null or a live `xmalloc` block of extra data that
+    /// nothing else will free.
+    pub(crate) unsafe fn from_raw(raw: *mut AdditionalData) -> Option<ShadaExtra> {
+        core::ptr::NonNull::new(raw).map(ShadaExtra)
+    }
+
+    /// The block, borrowed for an entry that is written and not freed.
+    pub(crate) fn as_ptr(&self) -> *mut AdditionalData {
+        self.0.as_ptr()
+    }
+}
+
+impl Drop for ShadaExtra {
+    fn drop(&mut self) {
+        // SAFETY: the block this holder took over, freed once.
+        unsafe { xfree(self.0.as_ptr().cast()) };
+    }
+}
 
 // The carve of the transpiled module; see each child's docs.
 mod file;

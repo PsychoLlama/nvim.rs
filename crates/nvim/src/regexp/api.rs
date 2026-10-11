@@ -520,3 +520,95 @@ impl Drop for OwnedMatch {
         unsafe { vim_regfree(self.0.regprog) };
     }
 }
+
+/// A [`RegMMatch`] that owns its program: the buffer-match counterpart of
+/// [`OwnedMatch`], for a command that compiles once and runs the program
+/// over line after line (`:substitute`, `:global`). Freed when dropped --
+/// whatever program the last engine switch left in it.
+///
+/// Reads go through [`Deref`](core::ops::Deref); there is no `DerefMut`,
+/// because a caller that replaced `regprog` would leak this one's program
+/// or free another's.
+pub(crate) struct OwnedMMatch(RegMMatch);
+
+impl OwnedMMatch {
+    /// Take over `prog`, matching with `ignore_case` (an `rmm_ic` value).
+    ///
+    /// # Safety
+    /// `prog` must be a live program from [`vim_regcomp`] that nothing else
+    /// will free.
+    pub(crate) unsafe fn adopt(prog: *mut RegProg, ignore_case: c_int) -> OwnedMMatch {
+        OwnedMMatch(RegMMatch {
+            regprog: prog,
+            rmm_ic: ignore_case,
+            rmm_maxcol: 0,
+            ..RegMMatch::default()
+        })
+    }
+
+    /// Override the case rule the pattern was compiled with: `:s///i`.
+    pub(crate) fn set_ignore_case(&mut self, ignore_case: bool) {
+        self.0.rmm_ic = c_int::from(ignore_case);
+    }
+
+    /// Whether there is still a program -- a failed recompile for the
+    /// backtracking engine can leave none.
+    pub(crate) fn has_program(&self) -> bool {
+        !self.0.regprog.is_null()
+    }
+
+    /// Can the pattern match a line break?
+    pub(crate) fn is_multiline(&self) -> bool {
+        // SAFETY: this holder's live program.
+        self.has_program() && unsafe { super::re_multiline(self.0.regprog) }
+    }
+
+    /// [`vim_regexec_multi`] over `buffer` from line `lnum`, column `col`,
+    /// with no time limit: how many lines the match spans (counting the
+    /// one it starts in), or 0 for no match.
+    pub(crate) fn exec(
+        &mut self,
+        win: Option<Win>,
+        buffer: Buf,
+        lnum: LineNr,
+        col: ColNr,
+    ) -> LineNr {
+        if !self.has_program() {
+            return 0;
+        }
+        // SAFETY: the match record is this holder's own, with its live
+        // program; no time limit. An engine switch replaces the program in
+        // the record, which is what `Drop` then frees.
+        unsafe {
+            vim_regexec_multi(
+                &raw mut self.0,
+                win,
+                buffer,
+                lnum,
+                col,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
+        }
+    }
+
+    /// The match record, for the substitution's two passes.
+    pub(super) fn record(&mut self) -> &mut RegMMatch {
+        &mut self.0
+    }
+}
+
+impl core::ops::Deref for OwnedMMatch {
+    type Target = RegMMatch;
+
+    fn deref(&self) -> &RegMMatch {
+        &self.0
+    }
+}
+
+impl Drop for OwnedMMatch {
+    fn drop(&mut self) {
+        // SAFETY: this holder's program, or null.
+        unsafe { vim_regfree(self.0.regprog) };
+    }
+}

@@ -810,4 +810,4 @@ pub(crate) use lines::{
     plines_m_win, plines_m_win_fill, plines_win, plines_win_col, plines_win_full,
     plines_win_nofill, plines_win_nofold, win_get_fill, win_may_fill, win_text_height,
 };
-pub(crate) use vcol::{getvcol, getvcol_nolist, getvcols, getvvcol};
+pub(crate) use vcol::{getvcol, getvcol_nolist, getvcols, getvvcol, vcols_at};

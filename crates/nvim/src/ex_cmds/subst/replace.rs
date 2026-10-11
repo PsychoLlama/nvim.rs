@@ -15,30 +15,27 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::exec::{Sub, SubArgs, save_undo_once};
 use super::subflags;
 use crate::change::{appended_lines, changed_bytes, deleted_lines};
 use crate::ex_cmds::sub_nsubs;
-use crate::ex_cmds::{
-    CAR, LineData, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo,
-};
+use crate::ex_cmds::{CAR, LineData, REGSUB_BACKSLASH, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo};
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
 use crate::guard::Lock;
 use crate::mark::mark_adjust;
 use crate::mbyte::cluster_len;
-use crate::memline::{Lines, ml_append, ml_delete, ml_get_len, ml_replace};
+use crate::memline::{Lines, ml_append_cstr, ml_delete, ml_get_len, ml_replace_buf_text};
 use crate::option::magic_isset;
 use crate::pos::MAXLNUM;
-use crate::regexp::vim_regsub_multi;
+use crate::regexp::{regsub_multi_into, regsub_multi_len};
 use crate::types::{BCount, ColNr, LPos, LineNr, NUL};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// One line of `:s` text the command owns.
 ///
@@ -52,9 +49,8 @@ use core::ffi::{c_char, c_int};
 /// hand.
 ///
 /// The NUL a buffer line has after it is part of the storage and never part
-/// of [`SubLine::bytes`]: `ml_replace`, `ml_append` and `vim_regsub_multi`
-/// all read a C string, while everything on this side wants the bytes
-/// without it.  The text holds no NUL of its own -- a buffer line cannot
+/// of [`SubLine::bytes`]: `ml_append` reads a C string, while everything on
+/// this side wants the bytes without it.  The text holds no NUL of its own -- a buffer line cannot
 /// contain one, and [`SubLine::append_written`] cuts the replacement at the
 /// first one the expansion wrote -- so the terminator is unambiguous.
 #[derive(Debug)]
@@ -89,9 +85,10 @@ impl SubLine {
         self.0.len() - 1
     }
 
-    /// The text as the NUL-terminated string a pointer-taking callee wants.
-    pub(super) fn as_ptr(&self) -> *mut c_char {
-        self.0.as_ptr().cast::<c_char>().cast_mut()
+    /// The text up to the first terminator -- all of it, or the head a
+    /// [`SubLine::terminate_at`] cut off.
+    fn head_cstr(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0).expect("the storage ends in a NUL")
     }
 
     /// Append `bytes`.
@@ -102,21 +99,20 @@ impl SubLine {
         self.0.push(NUL as u8);
     }
 
-    /// Append what a pointer-taking callee writes past the end.
+    /// Append what `write` writes past the end.
     ///
-    /// `write` is handed a pointer to `room + 1` zeroed bytes and the `room`
-    /// it was promised; the line then ends at the first NUL it left behind.
-    /// That is `vim_regsub_multi`'s two-pass contract: the caller has already
-    /// measured, so `room` is a length the callee agreed to, and the spare
-    /// byte past it covers the one case where the two passes disagree --
-    /// upstream's own buffer is `xcalloc`ed and zero-filled on every growth
-    /// for the same reason, because an expansion that runs out of room or
-    /// walks into a changed line leaves the text *unterminated*.
-    fn append_written(&mut self, room: usize, write: impl FnOnce(*mut c_char, c_int)) {
+    /// `write` is handed the `room` zeroed bytes it was promised, with one
+    /// more zero past them; the line then ends at the first NUL it left
+    /// behind. That is `vim_regsub_multi`'s two-pass contract: the caller
+    /// has already measured, so `room` is a length the callee agreed to, and
+    /// the spare byte past it covers the one case where the two passes
+    /// disagree -- upstream's own buffer is `xcalloc`ed and zero-filled on
+    /// every growth for the same reason, because an expansion that runs out
+    /// of room or walks into a changed line leaves the text *unterminated*.
+    fn append_written(&mut self, room: usize, write: impl FnOnce(&mut [u8])) {
         let base = self.0.len() - 1;
         self.0.resize(base + room + 1, NUL as u8);
-        let room = c_int::try_from(room).unwrap_or(c_int::MAX);
-        write(self.0[base..].as_mut_ptr().cast::<c_char>(), room);
+        write(&mut self.0[base..base + room]);
         let written = self.0[base..]
             .iter()
             .position(|&byte| byte == NUL as u8)
@@ -183,11 +179,8 @@ fn split_carriage_returns(st: &mut Sub, at: usize) {
                 // The text up to the CR becomes a line of its own, and is
                 // then cut off the front of what is being rebuilt.
                 line.terminate_at(at);
-                // SAFETY: `ml_append` copies the `at + 1` bytes just
-                // terminated, and `lnum` is a line of the buffer.
-                let _ = unsafe {
-                    ml_append(st.lnum - 1 as LineNr, line.as_ptr(), at as ColNr + 1, false)
-                };
+                // `ml_append` copies the `at + 1` bytes just terminated.
+                let _ = ml_append_cstr(st.lnum - 1 as LineNr, line.head_cstr());
                 line.drop_head(at + 1);
                 mark_adjust(
                     st.lnum + 1 as LineNr,
@@ -250,28 +243,14 @@ pub(super) fn build_replacement(
     // sublen is zero.
     st.sublen = {
         let _locked = Lock::text();
-        // The measuring pass writes nothing, but `vim_regsub_multi` refuses
-        // a null destination outright, so it is handed the old line -- which
-        // is what upstream passes here, for the same reason.
-        let dest = st.old_line().as_ptr();
-        // SAFETY: the match and the copied line are live; without
-        // `REGSUB_COPY` and with length 0 this only measures.
-        unsafe {
-            vim_regsub_multi(
-                &raw mut st.regmatch,
-                st.sub_firstlnum - st.regmatch.startpos[0].lnum,
-                st.sub,
-                dest,
-                0 as c_int,
-                regsub_flags(),
-            )
-        }
+        let lnum = st.sub_firstlnum - st.regmatch.startpos[0].lnum;
+        regsub_multi_len(&mut st.regmatch, lnum, &mut st.sub, regsub_flags())
+            .map_or(0, |size| c_int::try_from(size).unwrap_or(c_int::MAX))
     };
 
     // If getting the substitute string caused an error, don't do the
     // replacement.  Don't keep flags set by a recursive call.
     subflags.set(subflags_save);
-    // SAFETY: main thread.
     if st.sublen == 0 as c_int || aborting() || subflags.with(|flags| flags.do_count) {
         Buf::current().b_p_ma = save_ma;
         return;
@@ -302,25 +281,15 @@ pub(super) fn build_replacement(
 
     {
         let _locked = Lock::text();
-        let (rmp, lnum, sub) = (
-            &raw mut st.regmatch,
-            st.sub_firstlnum - st.regmatch.startpos[0].lnum,
-            st.sub,
-        );
+        let lnum = st.sub_firstlnum - st.regmatch.startpos[0].lnum;
         let sublen = st.sublen as usize;
-        st.new_line_mut().append_written(sublen, |dest, destlen| {
-            // SAFETY: `dest` has room for `destlen` bytes, which is the
-            // length the measuring pass just answered.
-            unsafe {
-                vim_regsub_multi(
-                    rmp,
-                    lnum,
-                    sub,
-                    dest,
-                    destlen,
-                    REGSUB_COPY as c_int | regsub_flags(),
-                )
-            };
+        let (regmatch, sub, line) = (&mut st.regmatch, &mut st.sub, &mut st.new_line);
+        let line = line
+            .as_mut()
+            .expect("a substitution has been built on this line");
+        line.append_written(sublen, |dest| {
+            // `dest` is the length the measuring pass just answered.
+            regsub_multi_into(regmatch, lnum, sub, dest, regsub_flags());
         });
     }
     sub_nsubs.set(sub_nsubs.get() + 1);
@@ -389,7 +358,6 @@ pub(super) fn build_replacement(
 /// Answers false when undo could not be saved.
 fn delete_matched_lines(st: &mut Sub) -> bool {
     st.lnum += 1;
-    // SAFETY: the lines below `lnum` are the ones the match spanned.
     if u_savedel(st.lnum, st.nmatch_tl).is_err() {
         return false;
     }
@@ -433,13 +401,11 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
     st.matchcol = old_len - st.matchcol;
     st.prev_matchcol = old_len - st.prev_matchcol;
 
-    // SAFETY: `lnum` is a line of the buffer.
     if u_savesub(st.lnum).is_err() {
         return false;
     }
-    // SAFETY: `lnum` is a line of the buffer and the rebuilt line is a live
-    // C string, which `ml_replace` is told to copy.
-    let _ = unsafe { ml_replace(st.lnum, st.new_line().as_ptr(), true) };
+    // `lnum` is a line of the buffer; the memline copies the rebuilt line.
+    let _ = ml_replace_buf_text(Buf::current(), st.lnum, st.new_line().bytes());
 
     // Call extmark_splice for each match on this line.
     for m in &st.line_matches {

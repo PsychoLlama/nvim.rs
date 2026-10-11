@@ -142,6 +142,47 @@ pub(crate) fn skip_regexp_at(text: &[u8], delim: c_int, magic: c_int) -> usize {
     unsafe { skip_regexp(start, delim, magic).offset_from(start) }.cast_unsigned()
 }
 
+/// [`skip_regexp_at`] for a pattern the caller may have rewritten: where
+/// the pattern starting at `text[at]` ends, as an offset into `text`.
+///
+/// With a `?` delimiter an escaped `\?` is unescaped **in place**, the rest
+/// of the string (terminator included) pulled down over the backslash --
+/// what upstream's `skip_regexp_ex(.., &eap->arg, ..)` does to a command
+/// line, since the slot it hands over is never empty and so never asks for
+/// a copy.
+///
+/// # Panics
+/// If `text` holds no NUL at or after `at`.
+pub(crate) fn skip_regexp_in_place(
+    text: &mut [u8],
+    at: usize,
+    delim: c_int,
+    magic: c_int,
+) -> usize {
+    assert!(
+        text[at..].contains(&0),
+        "the walk needs a terminator to stop at"
+    );
+    let start = text[at..].as_mut_ptr().cast::<c_char>();
+    let mut no_copy = start;
+    // SAFETY: `start` begins a NUL-terminated string inside `text`, which
+    // is lent exclusively for the call; a non-null slot means the unescape
+    // happens in place and never past that terminator. The end it answers
+    // is inside the same string.
+    let end = unsafe {
+        skip_regexp_ex(
+            start,
+            delim,
+            magic,
+            &raw mut no_copy,
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+        )
+    };
+    // SAFETY: as above -- both inside `text`, the end not before the start.
+    at + unsafe { end.offset_from(start) }.cast_unsigned()
+}
+
 /// [`skip_regexp`], but complain and return NULL when the delimiter is
 /// missing rather than returning the pattern's end.
 ///

@@ -18,8 +18,7 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -31,7 +30,7 @@ use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
 use crate::cursor::coladvance;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline};
+use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line};
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::global_busy;
@@ -42,7 +41,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::syn_check_group;
 use crate::mark::setpcmark;
 use crate::mbyte::cluster_len;
-use crate::memory::xfree;
+use crate::memory::XString;
 use crate::message::e_interr;
 use crate::message::{emsg, msg};
 use crate::message_fmt::msg_bytes;
@@ -54,20 +53,19 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::pos::MAXCOL;
 use crate::profile::profile_passed_limit;
-use crate::regexp::{vim_regexec_multi, vim_regfree};
+use crate::regexp::OwnedMMatch;
 use crate::search::get_search_pat;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptionSetFlags, Pos, ProfTime,
-    RegMMatch, int64_t, size_t,
+    int64_t, size_t,
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::c_int;
 
 /// The highlight group the preview marks matches with, looked up once.
 static pre_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
@@ -105,9 +103,9 @@ pub(super) struct SubArgs {
 /// Everything the substitute's stages hand one another.
 pub(super) struct Sub {
     /// The compiled pattern and its last match.
-    pub regmatch: RegMMatch,
-    /// The replacement text, owned.
-    pub sub: *mut c_char,
+    pub regmatch: OwnedMMatch,
+    /// The replacement text.
+    pub sub: XString,
 
     // --- the range ---
     /// The line where the start of the match was found.  Can be below the
@@ -180,13 +178,6 @@ impl Sub {
             .expect("a substitution has been built on this line")
     }
 
-    /// [`Sub::new_line`], writable.
-    pub(super) fn new_line_mut(&mut self) -> &mut SubLine {
-        self.new_line
-            .as_mut()
-            .expect("a substitution has been built on this line")
-    }
-
     /// Take a fresh copy of the buffer line `sub_firstlnum` names, so that it
     /// cannot be taken away by a screen update or a multi-line match.
     pub(super) fn load_firstline(&mut self) {
@@ -215,25 +206,18 @@ impl Sub {
     }
 }
 
-/// Does the replacement start with `\=`, so that it is an expression rather
-/// than text?
-///
-/// # Safety
-/// `sub` must be a live C string.
-pub(super) unsafe fn is_expr_sub(sub: *const c_char) -> bool {
-    // SAFETY: caller's contract -- reading the second byte is safe because
-    // the first was not the terminator.
-    unsafe { *sub as c_int == '\\' as c_int && *sub.add(1) as c_int == '=' as c_int }
-}
+impl Sub {
+    /// Does the replacement start with `\=`, so that it is an expression
+    /// rather than text?
+    pub(super) fn is_expr_sub(&self) -> bool {
+        self.sub.starts_with(b"\\=")
+    }
 
-/// Search for the pattern in the current buffer, from `lnum`:`col`.
-///
-/// # Safety
-/// Main thread; `regmatch` must hold a compiled program.
-pub(super) unsafe fn regexec_at(regmatch: *mut RegMMatch, lnum: LineNr, col: ColNr) -> c_int {
-    let (win, buffer) = (Win::current(), Buf::current());
-    let (timeout, timed_out) = (ptr::null_mut(), ptr::null_mut());
-    unsafe { vim_regexec_multi(regmatch, Some(win), buffer, lnum, col, timeout, timed_out) }
+    /// Search for the pattern in the current buffer, from `lnum`:`col`.
+    pub(super) fn regexec_at(&mut self, lnum: LineNr, col: ColNr) -> c_int {
+        self.regmatch
+            .exec(Some(Win::current()), Buf::current(), lnum, col)
+    }
 }
 
 /// Record a match for the `'inccommand'` preview, and how many lines it adds
@@ -298,8 +282,7 @@ fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
         st.did_sub = true;
         // Skip the substitution, unless an expression is used: then it is
         // evaluated in the sandbox.
-        // SAFETY: `sub` is a live C string.
-        if !unsafe { is_expr_sub(st.sub) } {
+        if !st.is_expr_sub() {
             return;
         }
     }
@@ -367,10 +350,9 @@ fn is_last_match(st: &Sub) -> bool {
     // column of a *different* line and can be past this one's end -- which
     // here answers "at the end of the line" rather than reading out of
     // bounds, and is why the answer is a length comparison.
-    // SAFETY: caller's contract -- the compiled program is live.
     st.matchcol as usize >= st.old_line().len()
         && st.nmatch <= 1 as c_int
-        && !unsafe { re_multiline(st.regmatch.regprog) }
+        && !st.regmatch.is_multiline()
 }
 
 /// Loop until there is nothing more to replace on this line.
@@ -404,7 +386,6 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
 
         // The match might be after the last line, for "\n\zs" matching at the
         // end of the last line.
-        // SAFETY: the current buffer is live.
         if st.lnum > Buf::current().b_ml.ml_line_count {
             break;
         }
@@ -414,7 +395,6 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
 
         // Save the line number of the last change for the final cursor
         // position, just like Vi.
-        // SAFETY: the current window is live.
         Win::current().w_cursor.lnum = st.lnum;
         st.do_again = false;
 
@@ -435,8 +415,7 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
         let no_more = if lastone || st.nmatch_tl > 0 as LineNr {
             true
         } else {
-            // SAFETY: the program is compiled.
-            st.nmatch = unsafe { regexec_at(&raw mut st.regmatch, st.sub_firstlnum, st.matchcol) };
+            st.nmatch = st.regexec_at(st.sub_firstlnum, st.matchcol);
             st.nmatch == 0 as c_int || st.regmatch.startpos[0].lnum > 0 as LineNr
         };
 
@@ -445,9 +424,7 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
                 break;
             }
             if st.nmatch == -1 as c_int && !lastone {
-                // SAFETY: the program is compiled.
-                st.nmatch =
-                    unsafe { regexec_at(&raw mut st.regmatch, st.sub_firstlnum, st.matchcol) };
+                st.nmatch = st.regexec_at(st.sub_firstlnum, st.matchcol);
             }
 
             // 5. Break if there isn't another match in this line.
@@ -485,7 +462,6 @@ fn substitute_line(st: &mut Sub, args: &SubArgs) {
 
     // At the first match, remember the current cursor position.
     if !st.got_match {
-        // SAFETY: main thread, live window.
         setpcmark();
         st.got_match = true;
     }
@@ -506,24 +482,20 @@ fn substitute_line(st: &mut Sub, args: &SubArgs) {
 /// enough lines have been collected to fill the preview window.
 fn substitute_range(st: &mut Sub, args: &SubArgs) {
     while st.lnum <= st.line2 && !st.got_quit {
-        // SAFETY: main thread.
         if aborting() {
             break;
         }
         if args.cmdpreview_ns > 0 as c_int
             && st.preview_lines.lines_needed > p_cwh() as LineNr
-            // SAFETY: the current window is live.
             && st.lnum > Win::current().w_botline
         {
             break;
         }
-        // SAFETY: the program is compiled.
-        st.nmatch = unsafe { regexec_at(&raw mut st.regmatch, st.lnum, 0 as ColNr) };
+        st.nmatch = st.regexec_at(st.lnum, 0 as ColNr);
         if st.nmatch != 0 {
             substitute_line(st, args);
         }
         line_breakcheck();
-        // SAFETY: a profile value we were handed.
         if profile_passed_limit(args.timeout) {
             st.got_quit = true;
         }
@@ -534,7 +506,6 @@ fn substitute_range(st: &mut Sub, args: &SubArgs) {
 /// Report what happened, put the cursor and the marks where Vi would, and
 /// draw the preview if this was one.
 fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
-    // SAFETY: the current buffer is live.
     Buf::current().deleted_bytes2 = 0 as size_t;
 
     if st.first_line != 0 as LineNr {
@@ -561,14 +532,12 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
 
     // ":s/pat//n" doesn't move the cursor.
     if subflags.with(|flags| flags.do_count) {
-        // SAFETY: the current window is live.
         Win::current().w_cursor = args.old_cursor;
     }
 
     if sub_nsubs.get() > args.start_nsubs {
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Set the '[ and '] marks.
-            // SAFETY: the current buffer is live.
             Buf::current().b_op_start.lnum = args.range.0;
             Buf::current().b_op_end.lnum = st.line2;
             Buf::current().b_op_end.col = 0 as ColNr;
@@ -578,7 +547,6 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         if global_busy.get() == 0 {
             // When interactive, leave the cursor on the match.
             if !subflags.with(|flags| flags.do_ask) {
-                // SAFETY: the current window is live.
                 if args.endcolumn {
                     coladvance(Win::current(), MAXCOL as c_int);
                 } else {
@@ -623,15 +591,10 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         }
     }
 
-    // SAFETY: the current window is live.
     if subflags.with(|flags| flags.do_ask) && has_any_folding(Win::current()) != 0 {
         // The cursor position may require updating.
         changed_window_setting(Win::current());
     }
-
-    // SAFETY: the compiled program and the replacement text are ours.
-    unsafe { vim_regfree(st.regmatch.regprog) };
-    unsafe { xfree(st.sub as *mut c_void) };
 
     // Restore the flag values: they can be used for ":&&".
     subflags.with_mut(|flags| {
@@ -640,11 +603,9 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     });
 
     // Show the 'inccommand' preview if there are matched lines.
-    // SAFETY: main thread.
     if args.cmdpreview_ns <= 0 as c_int || aborting() {
         return 0 as c_int;
     }
-    // SAFETY: a profile value we were handed.
     if st.got_quit || profile_passed_limit(args.timeout) {
         // Too slow: disable.
         set_option_direct(
@@ -655,12 +616,10 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         );
         return 0 as c_int;
     }
-    // SAFETY: 'inccommand' is a live string option.
     if p_icm(CStr::is_empty) || !args.pat_given {
         return 0 as c_int;
     }
     if pre_hl_id.get() == 0 as c_int {
-        // SAFETY: a literal group name and its length.
         pre_hl_id.set(syn_check_group(b"Substitute"));
     }
     show_sub(
@@ -693,7 +652,6 @@ pub(crate) fn do_sub(
     }
     let start_nsubs = sub_nsubs.get();
     let keeppatterns = cmdmod_has(CmdModFlags::KEEPPATTERNS);
-    // SAFETY: the current window and buffer are live.
     let (old_cursor, old_line_count) = (Win::current().w_cursor, Buf::current().b_ml.ml_line_count);
 
     let Some(setup) = parse_sub(args, cmdpreview_ns, keeppatterns) else {

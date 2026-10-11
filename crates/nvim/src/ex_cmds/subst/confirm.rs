@@ -9,26 +9,23 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::exec::Sub;
 use super::subflags;
-use crate::cstr;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
 use crate::ex_cmds::say;
 use crate::ex_cmds::{ESC, print_line_no_prefix};
 use crate::ex_docmd::state::ex_normal_busy;
-use crate::ex_getln::{getcmdline_prompt, gotocmdline};
+use crate::ex_getln::{getcmdline_prompt_text, gotocmdline};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
-use crate::memline::{ml_get, ml_get_len, ml_replace};
+use crate::memline::{Lines, ml_replace_buf_text};
 use crate::memory::XString;
-use crate::memory::xfree;
 use crate::message::state::{msg_didout, need_wait_return};
 use crate::mouse::setmouse;
 use crate::r#move::{
@@ -37,16 +34,14 @@ use crate::r#move::{
 use crate::option::cpo_has;
 use crate::option::vars::{P_LZ, p_lz};
 use crate::os::cshim::gettext;
-use crate::plines::getvcol;
+use crate::plines::vcols_at;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
 use crate::state::mode::{State, exmode_active};
-use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
-use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, LineNr, NUL, size_t};
+use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, LineNr, NUL};
 use crate::ui::ui_has;
-use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+use crate::winlayer::{Buf, Win};
+use core::ffi::c_int;
 
 /// What the prompt decided for this match.
 pub(super) enum Confirm {
@@ -68,7 +63,6 @@ fn no_callback() -> Callback {
 /// Re-read after the prompt, as upstream does: the user can change the option
 /// from the command line the prompt runs.
 fn cpo_no_undo_sync() -> bool {
-    // SAFETY: 'cpoptions' is a live string option.
     cpo_has(CpoFlag::UNDO)
 }
 
@@ -80,29 +74,15 @@ fn prompt_exmode(st: &Sub) -> c_int {
         subflags.with(|flags| flags.do_list),
     );
 
-    let mut sc = 0 as ColNr;
-    let mut ec = 0 as ColNr;
-    // SAFETY: the cursor is at the start of the match; moving it to the last
-    // byte of the match and back is what gives the match's screen columns.
-    unsafe {
-        getvcol(
-            Win::current(),
-            &raw mut (*Win::current_raw()).w_cursor,
-            &raw mut sc,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    };
+    // The cursor is at the start of the match; moving it to the last byte
+    // of the match and back is what gives the match's screen columns.
+    let mut cursor = Win::current().w_cursor;
+    let (mut sc, _, _) = vcols_at(Win::current(), &mut cursor);
+    Win::current().w_cursor = cursor;
     Win::current().w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
-    unsafe {
-        getvcol(
-            Win::current(),
-            &raw mut (*Win::current_raw()).w_cursor,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            &raw mut ec,
-        )
-    };
+    let mut cursor = Win::current().w_cursor;
+    let (_, _, mut ec) = vcols_at(Win::current(), &mut cursor);
+    Win::current().w_cursor = cursor;
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
     if subflags.with(|flags| flags.do_number) || Win::current().w_onebuf_opt.wo_nu != 0 {
         let numw = number_width(Win::current()) + 1 as c_int;
@@ -117,33 +97,21 @@ fn prompt_exmode(st: &Sub) -> c_int {
     // truncates instead.
     let mut prompt = vec![b' '; sc.max(0) as usize];
     prompt.resize(ec.max(0) as usize + 1, b'^');
-    prompt.push(NUL as u8);
-    // SAFETY: the prompt is this call's own NUL-terminated buffer, and
-    // `getcmdline_prompt` answers an allocation of ours or NULL.
-    let typed = unsafe {
-        let resp = getcmdline_prompt(
-            -1 as c_int,
-            prompt.as_mut_ptr().cast(),
-            0 as c_int,
-            ExpandContext::Nothing,
-            ptr::null(),
-            no_callback(),
-            false,
-            ptr::null_mut(),
-        );
-        if !ui_has(kUIMessages) {
-            say::putchar('\n' as c_int);
-        }
-        if resp.is_null() {
-            // getcmdline_prompt() answers NULL when there is no command line
-            // to return.
-            NUL
-        } else {
-            let typed = *resp as u8 as c_int;
-            xfree(resp as *mut c_void);
-            typed
-        }
-    };
+    let prompt = XString::from_vec(prompt);
+    let resp = getcmdline_prompt_text(
+        -1 as c_int,
+        prompt.as_cstr(),
+        0 as c_int,
+        ExpandContext::Nothing,
+        no_callback(),
+        false,
+    );
+    if !ui_has(kUIMessages) {
+        say::putchar('\n' as c_int);
+    }
+    // getcmdline_prompt() answers NULL when there is no command line to
+    // return.
+    let typed = resp.map_or(NUL, |resp| c_int::from(resp.first().copied().unwrap_or(0)));
 
     // When ":normal" runs out of characters we get an empty line.  Use "q" to
     // get out of the loop.
@@ -156,12 +124,10 @@ fn prompt_exmode(st: &Sub) -> c_int {
 
 /// The screen prompt: highlight the match, ask, then put everything back.
 fn prompt_visual(st: &Sub) -> c_int {
-    let mut orig_line: *mut c_char = ptr::null_mut();
+    let mut orig_line: Option<Vec<u8>> = None;
     let mut len_change = 0 as c_int;
     let save_p_lz = p_lz();
-    // SAFETY: the current window is live.
     let save_p_fen = Win::current().w_onebuf_opt.wo_fen;
-    // SAFETY: as above.
     Win::current().w_onebuf_opt.wo_fen = 0;
 
     // Invert the matched string; the inversion is removed afterwards.
@@ -173,23 +139,18 @@ fn prompt_visual(st: &Sub) -> c_int {
         // There already was a substitution and we would like to show it, but
         // we cannot really update the line -- that would change what matches.
         // Replace it temporarily and change it back afterwards.
-        // SAFETY: `lnum` is a line of the buffer.
-        orig_line = unsafe { xstrnsave(ml_get(st.lnum), ml_get_len(st.lnum) as size_t) };
+        let saved = Lines::current().line(st.lnum).to_vec();
         // The line as it would look: what has been rebuilt so far, and the
         // rest of the old text after it.
         let mut shown = st.new_line().bytes().to_vec();
         shown.extend_from_slice(&st.old_line().bytes()[st.copied..]);
-        shown.push(NUL as u8);
         // Position the cursor relative to the end of the line: the
         // previous substitute may have inserted or deleted characters
         // before it.
-        // SAFETY: the saved text is NUL-terminated.
-        len_change =
-            (shown.len() - 1) as c_int - unsafe { cstr::bytes_at(orig_line) }.len() as c_int;
+        len_change = shown.len() as c_int - saved.len() as c_int;
         Win::current().w_cursor.col += len_change;
-        // SAFETY: `lnum` is a line of the buffer, and `shown` is a live C
-        // string `ml_replace` is told to copy.
-        let _ = unsafe { ml_replace(st.lnum, shown.as_mut_ptr().cast::<c_char>(), true) };
+        let _ = ml_replace_buf_text(Buf::current(), st.lnum, &shown);
+        orig_line = Some(saved);
     }
 
     search_match_lines.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
@@ -200,7 +161,6 @@ fn prompt_visual(st: &Sub) -> c_int {
     }
     highlight_match.set(true);
 
-    // SAFETY: the current window is live.
     update_topline(Win::current());
     validate_cursor(Win::current());
     redraw_later(Win::current(), UPD_SOME_VALID);
@@ -209,8 +169,7 @@ fn prompt_visual(st: &Sub) -> c_int {
     redraw_later(Win::current(), UPD_SOME_VALID);
     Win::current().w_onebuf_opt.wo_fen = save_p_fen;
 
-    // SAFETY: the replacement text, NUL-terminated.
-    let replacement = unsafe { cstr::at(st.sub) };
+    let replacement = st.sub.as_cstr();
     let fmt = gettext(c"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)");
     // Cut where upstream's `IObuff` cut it.
     let prompt = crate::formatted!(IOSIZE as usize, fmt.to_bytes(), replacement);
@@ -224,10 +183,8 @@ fn prompt_visual(st: &Sub) -> c_int {
     drop(redraw);
 
     // Restore the line.
-    if !orig_line.is_null() {
-        // SAFETY: `lnum` is a line of the buffer and `orig_line` its saved
-        // text, which `ml_replace` takes ownership of.
-        let _ = unsafe { ml_replace(st.lnum, orig_line, false) };
+    if let Some(orig_line) = orig_line {
+        let _ = ml_replace_buf_text(Buf::current(), st.lnum, &orig_line);
     }
     typed
 }
@@ -236,7 +193,6 @@ fn prompt_visual(st: &Sub) -> c_int {
 pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
     let mut typed = 0 as c_int;
     let save_state = State.get();
-    // SAFETY: the current window is live.
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
     if Win::current().w_onebuf_opt.wo_crb != 0 {
         do_check_cursorbind();
@@ -279,7 +235,6 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
         }
     }
     State.set(save_state);
-    // SAFETY: main thread.
     setmouse();
     drop(no_sync);
 

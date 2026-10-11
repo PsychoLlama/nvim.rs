@@ -885,3 +885,81 @@ fn copy_capture(rex: Rex, no: c_int, case: &mut Case, backslash: bool, out: &mut
         len -= 1;
     }
 }
+
+/// [`regtilde`] over a replacement the caller owns: `source` with every
+/// `~` expanded into the previous replacement (and remembered as the next
+/// one, unless `preview`), and whether that took a fresh string -- which
+/// is when upstream's caller can tell an expansion from an edit in place
+/// (a `~` with nothing to stand for is dropped from `source` itself).
+pub(crate) fn regtilde_owned(mut source: XString, magic: bool, preview: bool) -> (XString, bool) {
+    let raw = source.as_mut_ptr();
+    // SAFETY: an owned NUL-terminated buffer, lent for the call. The answer
+    // is `raw` itself -- edited in place, where a dropped tilde pulls the
+    // tail and its terminator down -- or a fresh `xmalloc` string that
+    // nothing else holds.
+    let expanded = unsafe { regtilde(raw, c_int::from(magic), preview) };
+    if expanded == raw {
+        // SAFETY: still the caller's terminated buffer, now maybe shorter.
+        let len = unsafe { cstr::bytes_at(raw) }.len();
+        source.truncate(len);
+        (source, false)
+    } else {
+        // SAFETY: as above -- a block of the `xmalloc` family, ours alone.
+        (unsafe { XString::from_raw(expanded) }, true)
+    }
+}
+
+/// [`vim_regsub_multi`]'s measuring pass over `matches`' last match: the
+/// size of what `source` expands to, terminator included, or `None` on an
+/// error.
+///
+/// `source` is lent exclusively because a `\=` replacement is evaluated
+/// in place, and the evaluator may cut it while it runs.
+pub(crate) fn regsub_multi_len(
+    matches: &mut super::OwnedMMatch,
+    lnum: LineNr,
+    source: &mut XString,
+    flags: c_int,
+) -> Option<usize> {
+    // The measuring pass writes nothing, but wants somewhere to not write.
+    let mut nowhere: c_char = 0;
+    // SAFETY: the match record is the holder's, with its live program;
+    // `source` is the caller's terminated buffer; without `REGSUB_COPY`
+    // nothing is written through `nowhere`.
+    let size = unsafe {
+        vim_regsub_multi(
+            matches.record(),
+            lnum,
+            source.as_mut_ptr(),
+            &raw mut nowhere,
+            0,
+            flags & !(REGSUB_COPY as c_int),
+        )
+    };
+    usize::try_from(size).ok().filter(|&size| size > 0)
+}
+
+/// [`vim_regsub_multi`]'s writing pass: expand `source` into `dest`, which
+/// bounds the write. `dest` is the room the measuring pass asked for; an
+/// expansion that no longer fits stops short of its terminator.
+pub(crate) fn regsub_multi_into(
+    matches: &mut super::OwnedMMatch,
+    lnum: LineNr,
+    source: &mut XString,
+    dest: &mut [u8],
+    flags: c_int,
+) {
+    let destlen = c_int::try_from(dest.len()).unwrap_or(c_int::MAX);
+    // SAFETY: as the measuring pass; `dest` is `destlen` writable bytes,
+    // and the expansion bounds every write on that length.
+    unsafe {
+        vim_regsub_multi(
+            matches.record(),
+            lnum,
+            source.as_mut_ptr(),
+            dest.as_mut_ptr().cast(),
+            destlen,
+            flags | REGSUB_COPY as c_int,
+        )
+    };
+}

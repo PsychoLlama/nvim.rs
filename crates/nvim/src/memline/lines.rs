@@ -445,6 +445,15 @@ pub(crate) fn ml_append_text(lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
     unsafe { ml_append(lnum, copy.as_mut_ptr().cast(), len, false) }
 }
 
+/// [`ml_append`] for a terminated line the caller holds: append `line`
+/// after line `lnum` of the current buffer, opening its memline if need be.
+/// The memline copies the text, terminator included, and writes nothing.
+pub(crate) fn ml_append_cstr(lnum: LineNr, line: &CStr) -> Result<(), Failed> {
+    let len = ColNr::try_from(line.count_bytes() + 1).expect("a line shorter than INT_MAX");
+    // SAFETY: `len` readable bytes, the NUL among them; only read.
+    unsafe { ml_append(lnum, line.as_ptr().cast_mut(), len, false) }
+}
+
 /// [`ml_append`] for an arbitrary buffer, which must already have a memline.
 ///
 /// # Safety
@@ -528,15 +537,14 @@ pub unsafe fn ml_replace(
 
 /// [`ml_replace_buf`] for a line the caller holds, which the memline copies.
 pub(crate) fn ml_replace_buf_text(buffer: Buf, lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
-    let mut copy = Vec::with_capacity(line.len() + 1);
-    copy.extend_from_slice(line);
-    copy.push(0);
-    // SAFETY: `line.len()` bytes and a NUL, which the copy duplicates.
+    // SAFETY: `line.len()` readable bytes. Told to copy, the memline
+    // duplicates exactly that many and terminates the duplicate itself, so
+    // it neither reads a terminator nor writes through the pointer.
     unsafe {
         ml_replace_buf_len(
             buffer,
             lnum,
-            copy.as_mut_ptr().cast(),
+            line.as_ptr().cast::<::core::ffi::c_char>().cast_mut(),
             line.len(),
             true,
             false,

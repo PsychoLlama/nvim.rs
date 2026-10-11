@@ -117,6 +117,17 @@ pub(crate) unsafe fn getvcol(
     }
 }
 
+/// [`getvcol`] for a position the caller holds: the first column the
+/// character at `pos` occupies, where the cursor sits on it, and its last
+/// column. `pos.col` past the end of the line is clamped, as there.
+pub(crate) fn vcols_at(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
+    let (mut start, mut cursor, mut end) = (0, 0, 0);
+    // SAFETY: `pos` is the caller's, lent for the call; the three
+    // out-parameters are this frame's.
+    unsafe { getvcol(window, pos, &raw mut start, &raw mut cursor, &raw mut end) };
+    (start, cursor, end)
+}
+
 /// Virtual cursor column in the current window, pretending 'list' is off.
 ///
 /// # Safety

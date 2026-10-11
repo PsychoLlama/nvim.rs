@@ -357,8 +357,7 @@ impl Writing {
             )
         };
 
-        let mut sub: SubReplacementString = unsafe { core::mem::zeroed() };
-        unsafe { sub_get_replacement(&raw mut sub) };
+        let sub = sub_get_replacement();
         // An empty replacement string is not worth storing.
         if !sub.sub.is_null() {
             let entry = ShadaEntry {

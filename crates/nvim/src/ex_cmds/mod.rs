@@ -91,7 +91,6 @@ pub use self::text::*;
 pub use self::write::*;
 
 use crate::global_cell::GlobalCell;
-use crate::regexp::re_multiline;
 use core::ffi::c_int;
 
 pub(crate) static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
@@ -433,13 +432,6 @@ impl Drop for Owned {
     fn drop(&mut self) {
         // SAFETY: the callee's allocation, handed over, or NULL.
         unsafe { xfree(self.0.cast()) };
-    }
-}
-
-impl Owned {
-    /// Hand the pointer on to a caller who owns it from here.
-    pub(crate) fn release(self) -> *mut ::core::ffi::c_char {
-        ::core::mem::ManuallyDrop::new(self).0
     }
 }
 

@@ -726,6 +726,35 @@ pub unsafe fn getcmdline_prompt(
     ret
 }
 
+/// [`getcmdline_prompt`] for a prompt the caller holds, with no completion
+/// argument and no mouse: the line typed, or `None`.
+pub(crate) fn getcmdline_prompt_text(
+    firstc: ::core::ffi::c_int,
+    prompt: &::core::ffi::CStr,
+    hl_id: ::core::ffi::c_int,
+    xp_context: ExpandContext,
+    highlight_callback: Callback,
+    one_key: bool,
+) -> Option<XString> {
+    // SAFETY: a terminated prompt the caller lends for the call, which the
+    // prompt only reads; no completion argument and no mouse flag. The
+    // line answered is an allocation of ours or null.
+    let line = unsafe {
+        getcmdline_prompt(
+            firstc,
+            prompt.as_ptr(),
+            hl_id,
+            xp_context,
+            ::core::ptr::null(),
+            highlight_callback,
+            one_key,
+            ::core::ptr::null_mut(),
+        )
+    };
+    // SAFETY: as above -- an `xmalloc` block nothing else holds.
+    (!line.is_null()).then(|| unsafe { XString::from_raw(line) })
+}
+
 /// `&curbuf->b_p_iminsert`: a field's address, which reads nothing.
 pub(crate) fn cur_buf_iminsert() -> *mut OptInt {
     // SAFETY: a field's address is the object's plus a constant.

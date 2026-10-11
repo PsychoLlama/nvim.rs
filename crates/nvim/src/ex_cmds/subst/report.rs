@@ -9,8 +9,7 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
@@ -18,9 +17,8 @@ use crate::decoration::bufhl_add_hl_pos_offset;
 use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::getchar::state::{KeyTyped, got_int};
-use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_replace_buf};
+use crate::memline::{Lines, ml_append_bytes, ml_replace_buf_text};
 use crate::memory::XString;
-use crate::memory::{xfree, xrealloc};
 use crate::message::e_interr;
 use crate::message::{MSG_BUF_LEN, emsg, messaging, msg, set_keep_msg};
 use crate::r#move::update_topline;
@@ -29,15 +27,13 @@ use crate::option::vars::{P_ICM, p_rdt, p_report, p_shm};
 use crate::options::kOptShortmess;
 use crate::os::cshim::{gettext, ngettext};
 use crate::profile::{profile_setlimit, profile_zero};
-use crate::snprintf;
 use crate::types::OptStr;
 use crate::types::{
-    ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptVal, OptionSetFlags, Pos, int64_t, size_t,
+    ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptVal, OptionSetFlags, Pos, int64_t,
 };
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_ulong};
 use std::ffi::CString;
 
 /// An option value that borrows a static C string, for the two options this
@@ -83,7 +79,6 @@ pub fn do_sub_msg(count_only: bool) -> bool {
     // messages are not disabled.
     let worth_reporting = sub_nsubs.get() as OptInt > p_report()
         && (KeyTyped.get() || sub_nlines.get() > 1 as LineNr || p_report() < 1 as OptInt);
-    // SAFETY: message state.
     if (worth_reporting || count_only) && messaging() {
         let forms = report_forms(count_only);
         let nsubs = sub_nsubs.get();
@@ -126,12 +121,15 @@ struct PreviewBuf {
     linenr_preview: LineNr,
     /// Last line of the original buffer already shown.
     linenr_origbuf: LineNr,
-    /// Scratch holding one formatted line, grown as the lines get longer.
-    str: *mut c_char,
-    old_line_size: ColNr,
-    /// The size the last real line needed.  Deliberately *not* reset for the
-    /// past-the-end line, which formats into whatever the previous one left.
-    line_size: ColNr,
+    /// Scratch holding one formatted line, grown as the lines get longer
+    /// and never shrunk: upstream's `xrealloc`ed `str`, whose length is
+    /// `old_line_size`.
+    scratch: Vec<u8>,
+    /// The size the last real line needed, terminator included.
+    /// Deliberately *not* reset for the past-the-end line, which formats
+    /// into whatever the previous one left -- and is appended at this size,
+    /// so the bytes after its own terminator are the previous line's tail.
+    line_size: usize,
 }
 
 impl PreviewBuf {
@@ -178,47 +176,39 @@ impl PreviewBuf {
 
     /// Put `"|lnum| line"` into the scratch and append it to the preview.
     fn add_line(&mut self, orig_buf: Buf, lnum: LineNr) {
-        // SAFETY: caller's contract.
-        let line = unsafe {
-            if lnum == orig_buf.b_ml.ml_line_count + 1 as LineNr {
-                c"".as_ptr() as *mut c_char
-            } else {
-                let line = ml_get_buf(orig_buf, lnum);
-                self.line_size = ml_get_buf_len(orig_buf, lnum) + self.col_width + 1 as c_int;
-                // Reallocate if the line is not long enough.
-                if self.line_size > self.old_line_size {
-                    self.str =
-                        xrealloc(self.str as *mut c_void, self.line_size as size_t) as *mut c_char;
-                    self.old_line_size = self.line_size;
-                }
-                line
-            }
-        };
-        // SAFETY: the scratch holds `line_size` bytes, which is what bounds
-        // the write; the format takes an `int` width, a line number and a
-        // string.
-        unsafe {
-            snprintf!(
-                self.str,
-                self.line_size as size_t,
-                c"|%*d| %s".as_ptr(),
-                self.col_width - 3 as c_int,
-                lnum,
-                line,
-            )
-        };
-        if self.linenr_preview == 0 as LineNr {
-            let _ = unsafe { ml_replace_buf(self.buf, 1 as LineNr, self.str, true, false) };
+        let line = if lnum == orig_buf.b_ml.ml_line_count + 1 as LineNr {
+            Vec::new()
         } else {
-            let _ = unsafe {
-                ml_append_buf(
-                    self.buf,
-                    self.linenr_preview,
-                    self.str,
-                    self.line_size,
-                    false,
-                )
-            };
+            let line = Lines::in_buffer(orig_buf).line(lnum).to_vec();
+            self.line_size = line.len() + self.col_width as usize + 1;
+            // Grow the scratch if the line is longer than any before it.
+            if self.line_size > self.scratch.len() {
+                self.scratch.resize(self.line_size, 0);
+            }
+            line
+        };
+        if self.line_size == 0 {
+            // Nothing was ever formatted: upstream's scratch is still null.
+            return;
+        }
+        // `snprintf(str, line_size, "|%*d| %s", col_width - 3, lnum, line)`.
+        let width = (self.col_width - 3 as c_int).unsigned_abs() as usize;
+        let mut text = if self.col_width - 3 as c_int >= 0 {
+            format!("|{lnum:>width$}| ").into_bytes()
+        } else {
+            format!("|{lnum:<width$}| ").into_bytes()
+        };
+        text.extend_from_slice(&line);
+        text.truncate(self.line_size - 1);
+        self.scratch[..text.len()].copy_from_slice(&text);
+        self.scratch[text.len()] = 0;
+        if self.linenr_preview == 0 as LineNr {
+            let _ = ml_replace_buf_text(self.buf, 1 as LineNr, &text);
+        } else {
+            // The whole `line_size`, as upstream appends it: past the
+            // terminator just written may lie the previous line's tail.
+            let appended = &self.scratch[..self.line_size - 1];
+            let _ = ml_append_bytes(self.buf, self.linenr_preview, appended);
         }
         self.linenr_preview += 1;
     }
@@ -238,7 +228,6 @@ pub(crate) fn show_sub(
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: Handle,
 ) -> c_int {
-    // SAFETY: 'shortmess' is a live string option value.
     let save_shm: CString = p_shm(CStr::to_owned);
     let orig_buf = Buf::current();
 
@@ -257,13 +246,11 @@ pub(crate) fn show_sub(
         .iter()
         .find(|r| r.start.lnum >= old_cusr.lnum)
     {
-        // SAFETY: the current window is live.
         Win::current().w_cursor.lnum = curres.start.lnum;
         Win::current().w_cursor.col = curres.start.col;
     }
 
     // Update the topline so that the main window is on the correct line.
-    // SAFETY: the current window is live.
     update_topline(Win::current());
 
     // Use the preview window only when inccommand=split and the range is more
@@ -294,9 +281,8 @@ pub(crate) fn show_sub(
                 col_width,
                 linenr_preview: 0 as LineNr,
                 linenr_origbuf: 0 as LineNr,
-                str: ptr::null_mut(),
-                old_line_size: 0 as ColNr,
-                line_size: 0 as ColNr,
+                scratch: Vec::new(),
+                line_size: 0,
             }
         })
     } else {
@@ -319,18 +305,13 @@ pub(crate) fn show_sub(
         bufhl_add_hl_pos_offset(orig_buf, cmdpreview_ns, hl_id, start, end, 0);
     }
 
-    // SAFETY: the scratch and the saved option string are both ours.
-    if let Some(pv) = pv {
-        unsafe { xfree(pv.str as *mut c_void) };
-    }
+    drop(pv);
     // The value borrows rather than copies, so the saved option must
     // outlive the call that puts it back -- which is why it is dropped here
-    // and not before.
-    // SAFETY: `save_shm` is this call's own NUL-terminated copy, and
-    // `set_option_direct` copies what it is given.
+    // and not before. `set_option_direct` copies what it is given.
     set_option_direct(
         kOptShortmess,
-        OptVal::String(unsafe { OptStr::borrowing(save_shm.as_ptr()) }),
+        OptVal::String(OptStr::borrowing_bytes(save_shm.as_bytes())),
         OptionSetFlags::NONE,
         SID_NONE,
     );
@@ -341,7 +322,6 @@ pub(crate) fn show_sub(
 
 /// The `:substitute` command.
 pub fn ex_substitute(excmd: &mut ExArg) {
-    // SAFETY: caller's contract.
     do_sub(excmd, profile_zero(), 0 as c_int, 0 as Handle);
 }
 
@@ -352,7 +332,6 @@ pub fn ex_substitute_preview(
     cmdpreview_bufnr: Handle,
 ) -> c_int {
     // Only preview once the pattern delimiter has been typed.
-    // SAFETY: the argument is NUL-terminated.
     let first = excmd.line.byte_at(excmd.line.arg);
     if first == 0 || first.is_ascii_alphabetic() || ascii_isdigit(first as c_int) {
         return 0 as c_int;

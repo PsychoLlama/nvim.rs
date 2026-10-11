@@ -1,17 +1,16 @@
 //! Reading a `:s` command line, and remembering it for the next one.
 //!
-//! [`skip_substitute`] walks the pattern/replacement/flags off the command
-//! line without interpreting them (`:s` is its own little language, and the
-//! delimiter may be almost any character -- [`check_regexp_delim`] rejects the
-//! ones that would be ambiguous), [`sub_parse_flags`] turns the trailing
-//! letters into `SubFlags`, and [`old_sub`] is the `~` replacement text
-//! carried from the last `:s`.  [`sub_joining_lines`] is the `\n`-in-the-
-//! pattern case, which joins rather than substitutes.
+//! [`skip_substitute`] walks the replacement off the command line without
+//! interpreting it (`:s` is its own little language, and the delimiter may
+//! be almost any character -- [`check_regexp_delim`] rejects the ones that
+//! would be ambiguous), [`sub_parse_flags`] turns the trailing letters into
+//! `SubFlags`, and the previous replacement is the `~` text carried from
+//! the last `:s` (and through ShaDa). [`sub_joining_lines`] is the
+//! `\n`-in-the-pattern case, which joins rather than substitutes.
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -24,31 +23,39 @@ use crate::ex_cmds::{
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::utfc_ptr2len;
-use crate::memory::xfree;
+use crate::mbyte::cluster_len;
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::ops::do_join;
 use crate::option::magic_isset;
 use crate::option::vars::p_gd;
-use crate::os::cshim::{__ctype_b_loc, gettext};
-use crate::regexp::{RE_LAST, RE_SUBST};
-use crate::search::save_re_pat;
-use crate::types::{ExArg, Failed, LineNr, NUL, SubReplacementString, Timestamp, size_t};
+use crate::os::cshim::{ctype_bits, gettext};
+use crate::os::time::os_time;
+use crate::regexp::{RE_LAST, RE_SUBST, regtilde_owned};
+use crate::search::save_re_pat_text;
+use crate::shada::ShadaExtra;
+use crate::types::{
+    AdditionalData, CmdLine, ExArg, Failed, LineNr, NUL, SubReplacementString, Timestamp, size_t,
+};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{ptr, slice};
+use core::ffi::c_int;
+use core::ptr;
 
-/// The previous `:s` replacement string, which a bare `:s` and a `~` in a
-/// replacement both reach for.  Its two pointers are `xmalloc`ed and owned
-/// here; shada reads and writes it through [`sub_get_replacement`] and
-/// [`sub_set_replacement`].
-pub(crate) static old_sub: GlobalCell<SubReplacementString> =
-    GlobalCell::new(SubReplacementString {
-        sub: ptr::null_mut(),
-        timestamp: 0 as Timestamp,
-        additional_data: ptr::null_mut(),
-    });
+/// The previous `:s` replacement: what a bare `:s` repeats and what `~`
+/// stands for, and the one ShaDa saves and restores with whatever extra
+/// data the file carried for it.
+struct LastReplacement {
+    text: Option<XString>,
+    timestamp: Timestamp,
+    extra: Option<ShadaExtra>,
+}
+
+static old_sub: GlobalCell<LastReplacement> = GlobalCell::new(LastReplacement {
+    text: None,
+    timestamp: 0,
+    extra: None,
+});
 
 /// The `:s` flags in force.  Process-wide, because `:&&` and a bare `:s`
 /// reuse the previous command's flags, and because a `\=` replacement can
@@ -69,77 +76,102 @@ pub(crate) static subflags: GlobalCell<SubFlags> = GlobalCell::new(SubFlags {
 /// cursor on the first non-blank once the whole command is done.
 pub(crate) static global_need_beginline: GlobalCell<bool> = GlobalCell::new(false);
 
-/// Copy the old substitute replacement string out.
-///
-/// # Safety
-/// `ret_sub` must be writable.
-pub unsafe fn sub_get_replacement(ret_sub: *mut SubReplacementString) {
-    // SAFETY: caller's contract.
-    unsafe { *ret_sub = old_sub.get() };
+/// The previous replacement as ShaDa writes it out: the text, its
+/// timestamp and its extra data, borrowed from the store. The two pointers
+/// are null when there is nothing, and live until the next
+/// [`sub_set_replacement`] or [`sub_restore_replacement`].
+pub fn sub_get_replacement() -> SubReplacementString {
+    old_sub.with(|last| SubReplacementString {
+        sub: last
+            .text
+            .as_ref()
+            .map_or(ptr::null_mut(), |text| text.as_ptr().cast_mut()),
+        timestamp: last.timestamp,
+        additional_data: last
+            .extra
+            .as_ref()
+            .map_or(ptr::null_mut::<AdditionalData>(), ShadaExtra::as_ptr),
+    })
 }
 
-/// Set the substitute string and its timestamp.
-///
-/// `sub` must already be in allocated memory: it is taken, not copied.
-///
-/// # Safety
-/// Main thread; `sub`'s two pointers must be `xmalloc`ed or null, and no
-/// other owner may hold what this displaces.
-pub unsafe fn sub_set_replacement(sub: SubReplacementString) {
-    let old = old_sub.get();
-    // SAFETY: both pointers were this module's own allocations.
-    unsafe { xfree(old.sub as *mut c_void) };
-    if sub.additional_data != old.additional_data {
-        unsafe { xfree(old.additional_data as *mut c_void) };
-    }
-    old_sub.set(sub);
+/// The previous replacement's text, copied, for a bare `:s`.
+pub(super) fn previous_replacement() -> Option<XString> {
+    old_sub.with(|last| last.text.clone())
+}
+
+/// Remember `text` as the previous replacement, stamped now.
+pub(crate) fn sub_set_replacement(text: XString) {
+    let displaced = old_sub.with_mut(|last| {
+        core::mem::replace(
+            last,
+            LastReplacement {
+                text: Some(text),
+                timestamp: os_time(),
+                extra: None,
+            },
+        )
+    });
+    drop(displaced);
+}
+
+/// Put back the replacement ShaDa read, with its own timestamp and extra
+/// data, and expand its `~` once as upstream does on load -- without that,
+/// `s//~` does not reach it until a `:s` has run. A `~` with nothing to
+/// stand for is dropped from the stored text; an expansion is not stored.
+pub(crate) fn sub_restore_replacement(
+    text: XString,
+    timestamp: Timestamp,
+    extra: Option<ShadaExtra>,
+) {
+    let (expanded, fresh) = regtilde_owned(text.clone(), magic_isset(), false);
+    let stored = if fresh { text } else { expanded };
+    let displaced = old_sub.with_mut(|last| {
+        core::mem::replace(
+            last,
+            LastReplacement {
+                text: Some(stored),
+                timestamp,
+                extra,
+            },
+        )
+    });
+    drop(displaced);
 }
 
 /// Recognise `:%s/\n//` and turn it into a join command, which is much more
 /// efficient.
 ///
 /// The pattern must be exactly `\n`, the replacement empty, and the flags
-/// either absent or one of `g`, `l`, `p`, `#` -- anything else is a real
-/// substitution.  `save` says whether to remember the pattern (a preview
-/// must not).
+/// (everything from `flags_at` on) either absent or one of `g`, `l`, `p`,
+/// `#` -- anything else is a real substitution.  `save` says whether to
+/// remember the pattern (a preview must not).
 ///
 /// Returns true when `:substitute` was handled as a join, including under
 /// `eap->skip`, where nothing is done at all.
-///
-/// # Safety
-/// Main thread; `sub` and `cmd` must be live and `pat` live or null.
-pub(crate) unsafe fn sub_joining_lines(
+pub(crate) fn sub_joining_lines(
     args: &mut ExArg,
-    pat: *mut c_char,
-    patlen: size_t,
-    sub: *const c_char,
-    cmd: *const c_char,
+    pat: Option<&[u8]>,
+    sub: &[u8],
+    flags_at: usize,
     save: bool,
     keeppatterns: bool,
 ) -> bool {
-    // SAFETY: caller's contract -- three NUL-terminated strings.
-    let joins = unsafe {
-        !pat.is_null()
-            && CStr::from_ptr(pat).to_bytes() == b"\\n"
-            && *sub as c_int == NUL
-            && matches!(
-                CStr::from_ptr(cmd).to_bytes(),
-                [] | [b'g' | b'l' | b'p' | b'#']
-            )
-    };
-    if !joins {
+    let flags = args.line.rest_of(flags_at);
+    let joins = pat == Some(b"\\n".as_slice())
+        && sub.is_empty()
+        && matches!(flags, [] | [b'g' | b'l' | b'p' | b'#']);
+    let Some(pat) = pat.filter(|_| joins) else {
         return false;
-    }
+    };
     if args.skip {
         return true;
     }
 
     Win::current().w_cursor.lnum = args.line1;
-    // SAFETY: caller's contract -- `cmd` is a live string.
-    args.flags = match unsafe { *cmd } as u8 {
-        b'l' => EXFLAG_LIST,
-        b'#' => EXFLAG_NR,
-        b'p' => EXFLAG_PRINT,
+    args.flags = match flags.first() {
+        Some(b'l') => EXFLAG_LIST,
+        Some(b'#') => EXFLAG_NR,
+        Some(b'p') => EXFLAG_PRINT,
         _ => args.flags,
     };
     // The number of lines joined is the number of lines in the range, plus
@@ -152,47 +184,30 @@ pub(crate) unsafe fn sub_joining_lines(
         sub_nsubs.set(joined_lines_count - 1 as LineNr);
         sub_nlines.set(1 as LineNr);
         do_sub_msg(false);
-        // SAFETY: the command block is the one borrowed here.
         ex_may_print(args);
     }
 
     if save {
-        // SAFETY: `pat` is `patlen` bytes long, by the caller's contract.
         if !keeppatterns {
-            unsafe { save_re_pat(RE_SUBST as c_int, pat, patlen, magic_isset()) };
+            save_re_pat_text(RE_SUBST as c_int, pat, magic_isset());
         }
         // Put the pattern in the search history.
-        add_to_history(
-            HIST_SEARCH as c_int,
-            unsafe { slice::from_raw_parts(pat as *const u8, patlen) },
-            true,
-            NUL as u8,
-        );
+        add_to_history(HIST_SEARCH as c_int, pat, true, NUL as u8);
     }
     true
 }
 
-/// Read `:substitute`'s trailing `{flags}` into `subflags`, answering where
-/// the flags stopped.
+/// Read `:substitute`'s trailing `{flags}` from `text` into `flags`,
+/// answering how many bytes they took.
 ///
 /// A leading `&` keeps the previous flags; otherwise they are reset from
 /// 'gdefault' and the defaults first.  `g` and `c` toggle, `r` is never a
 /// toggle but redirects `which_pat`, and the first unknown letter ends the
 /// run.
-///
-/// # Safety
-/// Main thread; `cmd` must be a live NUL-terminated string.
-pub(crate) unsafe fn sub_parse_flags(
-    cmd: *mut c_char,
-    flags: &mut SubFlags,
-    which_pat: &mut c_int,
-) -> *mut c_char {
-    // SAFETY: caller's contract.
-    let bytes = unsafe { CStr::from_ptr(cmd) }.to_bytes();
-
+pub(crate) fn sub_parse_flags(text: &[u8], flags: &mut SubFlags, which_pat: &mut c_int) -> usize {
     // Find the trailing options.  When '&' is used, keep the old ones.
     let mut i = 0;
-    if bytes.first() == Some(&b'&') {
+    if text.first() == Some(&b'&') {
         i = 1;
     } else {
         flags.do_all = p_gd();
@@ -204,9 +219,9 @@ pub(crate) unsafe fn sub_parse_flags(
         flags.do_number = false;
         flags.do_ic = kSubHonorOptions;
     }
-    while i < bytes.len() {
+    while i < text.len() {
         // Note that 'g' and 'c' are always inverted, and 'r' never is.
-        match bytes[i] {
+        match text[i] {
             b'g' => flags.do_all = !flags.do_all,
             b'c' => flags.do_ask = !flags.do_ask,
             b'n' => flags.do_count = true,
@@ -230,46 +245,41 @@ pub(crate) unsafe fn sub_parse_flags(
     if flags.do_count {
         flags.do_ask = false;
     }
-    cmd.wrapping_add(i)
+    i
 }
 
-/// Skip the `sub` part of `:s/pat/sub/`, where `delimiter` separates the
-/// parts.
+/// Skip the `sub` part of `:s/pat/sub/` that starts at `start` in `line`,
+/// where `delimiter` separates the parts, and answer where what follows it
+/// starts.
 ///
 /// The closing delimiter is replaced by a NUL in place, so the replacement
 /// ends where it should; an unterminated one simply runs to the end.
-///
-/// # Safety
-/// `start` must be a live, writable, NUL-terminated string.
-pub(crate) unsafe fn skip_substitute(start: *mut c_char, delimiter: c_int) -> *mut c_char {
-    // SAFETY: caller's contract.
-    let bytes = unsafe { CStr::from_ptr(start) }.to_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] as c_int == delimiter {
+pub(crate) fn skip_substitute(line: &mut CmdLine, start: usize, delimiter: c_int) -> usize {
+    let end = line.end_of(start);
+    let mut i = start;
+    while i < end {
+        let byte = line.byte_at(i);
+        if c_int::from(byte) == delimiter {
             // End delimiter found: replace it with a NUL.
-            // SAFETY: `i` indexes the string the caller may write.
-            unsafe { *start.add(i) = NUL as c_char };
-            return start.wrapping_add(i + 1);
+            line.terminate_at(i);
+            return i + 1;
         }
-        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+        if byte == b'\\' && i + 1 < end {
             i += 1; // skip escaped characters
         }
-        // SAFETY: `start + i` is a non-NUL byte of the string, so the
-        // character length is at least one and stops at the terminator.
-        i += unsafe { utfc_ptr2len(start.add(i)) } as usize;
+        // A non-NUL byte of the string, so the character is at least one
+        // byte long and stops at the terminator.
+        i += cluster_len(&line.buffer()[i..end]);
     }
-    start.wrapping_add(bytes.len())
+    end
 }
 
 /// Reject a delimiter that would make the command ambiguous.
 ///
-/// # Safety
-/// Message state.  `c` must be a `char` value (`-128..=255`), which is what
-/// the ctype table is indexed by.
-pub(crate) unsafe fn check_regexp_delim(c: c_int) -> Result<(), Failed> {
-    // SAFETY: caller's contract -- the ctype table covers `-128..=255`.
-    let isalpha = unsafe { *(*__ctype_b_loc()).offset(c as isize) } as c_int & _ISalpha as c_int;
+/// `c` is a `char` value (`-128..=255`), sign-extended from the command
+/// line's byte, which is how the ctype table upstream indexes is read.
+pub(crate) fn check_regexp_delim(c: c_int) -> Result<(), Failed> {
+    let isalpha = c_int::from(ctype_bits(c as u8)) & _ISalpha as c_int;
     if isalpha != 0 {
         emsg(gettext(
             c"E146: Regular expressions can't be delimited by letters",

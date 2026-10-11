@@ -9,12 +9,10 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::say;
 use super::{check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind};
-use crate::cstr;
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
@@ -26,47 +24,31 @@ use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
 use crate::message::state::{msg_col, msg_didout, msg_scrolled};
 use crate::message::{e_backslash, e_interr, e_invcmd};
 use crate::message::{emsg, msg};
-use crate::message_fmt::msg_cstr_opt;
+use crate::message_fmt::msg_bytes;
 use crate::r#move::changed_line_abv_curs;
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::regexp::{
-    RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, skip_regexp_ex, vim_regexec_multi, vim_regfree,
-};
-use crate::search::{SEARCH_HIS, search_regcomp};
+use crate::regexp::{OwnedMMatch, RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, skip_regexp_in_place};
+use crate::search::{SEARCH_HIS, search_regcomp_owned};
 use crate::smsg;
-use crate::types::{ColNr, ExArg, LineNr, NUL, RegMMatch, size_t};
+use crate::types::{ColNr, ExArg, LineNr};
 use crate::winlayer::{Buf, Win};
-use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 /// Run `cmd` on line `lnum`, with the cursor at its start.
 ///
 /// An empty command (or one that is only a line break) means `:print`, which
-/// is what a bare `:g/pat/` does.
-///
-/// # Safety
-/// Main thread; `lnum` must be a line of the current buffer and `cmd` a live
-/// C string.  This re-enters `do_cmdline`, so every global may change.
-unsafe fn global_exe_one(cmd: *mut c_char, lnum: LineNr) {
-    // SAFETY: caller's contract -- the current window is live.
+/// is what a bare `:g/pat/` does. This re-enters `do_cmdline`, so every
+/// global may change.
+fn global_exe_one(cmd: &[u8], lnum: LineNr) {
     Win::current().w_cursor.lnum = lnum;
     Win::current().w_cursor.col = 0 as ColNr;
-    // SAFETY: caller's contract -- `cmd` is NUL-terminated.
-    let first = unsafe { *cmd } as c_int;
-    let cmd = if first == NUL || first == '\n' as c_int {
-        c"p".as_ptr() as *mut c_char
-    } else {
-        cmd
+    let cmd = match cmd.first() {
+        None | Some(b'\n') => b"p".as_slice(),
+        Some(_) => cmd,
     };
-    // SAFETY: a live command string; re-enters the Ex layer.
-    let _ = do_cmdline(
-        Some(unsafe { cstr::bytes_at(cmd) }),
-        None,
-        DoCmdOpts::NOWAIT,
-    );
+    let _ = do_cmdline(Some(cmd), None, DoCmdOpts::NOWAIT);
 }
 
 /// Does the command letter `kind` select a line that (did not) match?
@@ -79,126 +61,94 @@ fn selects(kind: u8, matched: bool) -> bool {
 }
 
 /// Does the pattern match line `lnum`, searching from its first column?
-///
-/// # Safety
-/// Main thread; `regmatch` must hold a compiled program.
-unsafe fn matches_line(regmatch: *mut RegMMatch, lnum: LineNr) -> bool {
-    // SAFETY: caller's contract; `curwin`/`curbuf` are the live pair.
-    unsafe {
-        vim_regexec_multi(
-            regmatch,
-            Some(Win::current()),
-            Buf::current(),
-            lnum,
-            0 as ColNr,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        ) != 0
-    }
+fn matches_line(regmatch: &mut OwnedMMatch, lnum: LineNr) -> bool {
+    regmatch.exec(Some(Win::current()), Buf::current(), lnum, 0 as ColNr) != 0
 }
 
 /// The head of a `:global` argument, parsed.
 struct GlobalPat {
-    /// The pattern text.  Empty for the `\/`, `\?` and `\&` forms, which take
-    /// the remembered pattern that `which_pat` names instead.
-    pat: *mut c_char,
-    patlen: size_t,
+    /// The pattern text, copied out of the line.  Empty for the `\/`, `\?`
+    /// and `\&` forms, which take the remembered pattern that `which_pat`
+    /// names instead.
+    pat: Vec<u8>,
     /// `RE_LAST`, `RE_SEARCH` or `RE_SUBST` -- which previous pattern to fall
     /// back on when `pat` is empty.
     which_pat: c_int,
-    /// The Ex command to run on each selected line.
-    cmd: *mut c_char,
+    /// Where the Ex command to run on each selected line starts, in the
+    /// command line.
+    cmd_at: usize,
 }
 
 /// Split `:g/pat/cmd` into its pattern and its command, reporting the three
 /// ways it can be malformed.
 ///
-/// The closing delimiter is replaced by a NUL in place, so the pattern that
-/// comes back borrows `args`'s argument.
+/// The closing delimiter is replaced by a NUL in place, as upstream does,
+/// so the command that follows is a string of its own in `args`'s line.
 fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
-    let arg = args.arg_ptr();
-    // Nothing below rewrites the argument before the last read of this.
-    let bytes = args.line.arg();
+    let arg = args.line.arg;
+    let first = args.line.byte_at(arg);
 
     // Undocumented vi feature: "\/" and "\?" use the previous search pattern,
     // "\&" the previous substitute pattern.
-    if bytes.first() == Some(&b'\\') {
-        let which_pat = match bytes.get(1) {
-            Some(b'&') => RE_SUBST as c_int,
-            Some(b'/' | b'?') => RE_SEARCH as c_int,
+    if first == b'\\' {
+        let which_pat = match args.line.byte_at(arg + 1) {
+            b'&' => RE_SUBST as c_int,
+            b'/' | b'?' => RE_SEARCH as c_int,
             _ => {
                 emsg(gettext(e_backslash));
                 return None;
             }
         };
         return Some(GlobalPat {
-            pat: c"".as_ptr() as *mut c_char,
-            patlen: 0 as size_t,
+            pat: Vec::new(),
             which_pat,
-            cmd: arg.wrapping_add(2),
+            cmd_at: arg + 2,
         });
     }
 
-    let Some(&delim) = bytes.first() else {
+    if first == 0 {
         emsg(gettext(c"E148: Regular expression missing from global"));
         return None;
-    };
+    }
+    let delim = first;
     // The delimiter is handed on as a `char`, so a high byte arrives
     // sign-extended -- which is what indexes the ctype table upstream.
-    // SAFETY: message state.
-    if unsafe { check_regexp_delim(delim as c_char as c_int) }.is_err() {
+    if check_regexp_delim(c_int::from(delim as c_char)).is_err() {
         return None;
     }
 
-    let pat = arg.wrapping_add(1);
-    // `newp` is where the skip would hand back a *copy* with a `?`
-    // delimiter's `\?` unescaped, and it only makes one when the slot is
-    // empty. Upstream passes `&eap->arg`, which never is, so the unescape
-    // happens in place; the slot's whole job is to say "do not copy".
-    let mut no_copy = pat;
-    // SAFETY: `pat` is the pattern's first byte, inside the NUL-terminated
-    // argument, and the slot is this frame's own.
-    let mut cmd = unsafe {
-        skip_regexp_ex(
-            pat,
-            delim as c_int,
-            magic_isset() as c_int,
-            &raw mut no_copy,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    };
-    // SAFETY: the skip stopped at the delimiter, at the NUL, or in between.
-    if unsafe { *cmd } as u8 == delim {
+    let pat_at = arg + 1;
+    // A `?` delimiter's `\?` is unescaped in the line itself, as upstream's
+    // `&eap->arg` slot does.
+    let mut cmd_at = skip_regexp_in_place(
+        args.line.buffer_mut(),
+        pat_at,
+        c_int::from(delim),
+        c_int::from(magic_isset()),
+    );
+    if args.line.byte_at(cmd_at) == delim {
         // End delimiter found: replace it with a NUL.
-        unsafe { *cmd = NUL as c_char };
-        cmd = unsafe { cmd.add(1) };
+        args.line.terminate_at(cmd_at);
+        cmd_at += 1;
     }
     Some(GlobalPat {
-        pat,
-        // SAFETY: `pat` is NUL-terminated -- by the argument's own terminator
-        // when there was no closing delimiter, by the one just written when
-        // there was.
-        patlen: unsafe { cstr::bytes_at(pat) }.len(),
+        // Terminated by the argument's own NUL when there was no closing
+        // delimiter, by the one just written when there was.
+        pat: args.line.rest_of(pat_at).to_vec(),
         which_pat: RE_LAST as c_int,
-        cmd,
+        cmd_at,
     })
 }
 
 /// Pass 1: mark every line of the range that the pattern (does not) match,
 /// and answer how many were marked.
-///
-/// # Safety
-/// Main thread; `regmatch` must hold a compiled program, and the range must
-/// be lines of the current buffer.
-unsafe fn global_mark(args: &ExArg, regmatch: *mut RegMMatch, kind: u8) -> c_int {
+fn global_mark(args: &ExArg, regmatch: &mut OwnedMMatch, kind: u8) -> c_int {
     let (mut lnum, line2) = (args.line1, args.line2);
     let mut ndone = 0 as c_int;
     while lnum <= line2 && !got_int.get() {
-        // SAFETY: caller's contract.
-        let matched = unsafe { matches_line(regmatch, lnum) };
-        // SAFETY: as above -- re-compiling the program can have failed.
-        if unsafe { (*regmatch).regprog.is_null() } {
+        let matched = matches_line(regmatch, lnum);
+        // Re-compiling the program can have failed.
+        if !regmatch.has_program() {
             break;
         }
         if selects(kind, matched) {
@@ -238,70 +188,54 @@ pub fn ex_global(excmd: &mut ExArg) {
     let kind = if excmd.forceit {
         b'v'
     } else {
-        // SAFETY: `args.cmd` points at the command word.
         excmd.line.byte_at(excmd.line.cmd)
     };
     let Some(parsed) = global_pattern(excmd) else {
         return;
     };
 
-    let mut regmatch = RegMMatch::default();
-    let mut used_pat: *mut c_char = ptr::null_mut();
-    // SAFETY: a pattern and its length, and out-parameters we own.
-    let compiled = unsafe {
-        search_regcomp(
-            parsed.pat,
-            parsed.patlen,
-            &raw mut used_pat,
-            RE_BOTH as c_int,
-            parsed.which_pat,
-            SEARCH_HIS as c_int,
-            &raw mut regmatch,
-        )
-    };
-    if compiled.is_err() {
+    let compiled = search_regcomp_owned(
+        &parsed.pat,
+        RE_BOTH as c_int,
+        parsed.which_pat,
+        SEARCH_HIS as c_int,
+    );
+    let Some((mut regmatch, used_pat)) = compiled else {
         emsg(gettext(e_invcmd));
         return;
-    }
+    };
 
+    // The command is read in place: nothing the walk runs can reach this
+    // command's own line, and `do_cmdline` copies what it is handed.
     if global_busy.get() != 0 {
-        // SAFETY: the program is compiled and the cursor line is in the
-        // buffer.
         let lnum = Win::current().w_cursor.lnum;
-        if selects(kind, unsafe { matches_line(&raw mut regmatch, lnum) }) {
-            unsafe { global_exe_one(parsed.cmd, lnum) };
+        if selects(kind, matches_line(&mut regmatch, lnum)) {
+            global_exe_one(excmd.line.rest_of(parsed.cmd_at), lnum);
         }
     } else {
-        // SAFETY: as above.
-        let ndone = unsafe { global_mark(excmd, &raw mut regmatch, kind) };
+        let ndone = global_mark(excmd, &mut regmatch, kind);
         // Pass 2: execute the command for each line that has been marked.
         if got_int.get() {
             msg(gettext(e_interr), 0 as c_int);
         } else if ndone == 0 as c_int {
-            // SAFETY: `used_pat` is the pattern `search_regcomp` reported.
-            let pat = unsafe { msg_cstr_opt(cstr::at_opt(used_pat)) };
+            let pat = msg_bytes(&used_pat);
             if kind == b'v' {
                 smsg!(0, "Pattern found in every line: {pat}");
             } else {
                 smsg!(0, "Pattern not found: {pat}");
             }
         } else {
-            // SAFETY: `parsed.cmd` is a live C string.
-            // SAFETY: `parsed.cmd` is the NUL-terminated command to run.
-            global_exe(unsafe { cstr::at(parsed.cmd) });
+            global_exe(excmd.line.rest_of(parsed.cmd_at));
         }
         ml_clearmarked(); // clear rest of the marks
     }
-    // SAFETY: the program `search_regcomp` produced, used for the last time.
-    unsafe { vim_regfree(regmatch.regprog) };
 }
 
 /// Execute `cmd` on the lines marked with `ml_setmarked`.
 ///
 /// Every iteration re-enters `do_cmdline`, so nothing may be cached across
 /// the loop.
-pub fn global_exe(cmd: &CStr) {
-    let cmd = cmd.as_ptr().cast_mut();
+pub fn global_exe(cmd: &[u8]) {
     // Remember what buffer we started in.
     let old_buf = Buf::current_raw();
 
@@ -318,7 +252,6 @@ pub fn global_exe(cmd: &CStr) {
     global_need_msg_kind.set(true);
     global_need_beginline.set(false);
     global_busy.set(1 as c_int);
-    // SAFETY: `curbuf` is the live buffer.
     let old_lcount = Buf::current().b_ml.ml_line_count;
 
     while !got_int.get() {
@@ -326,17 +259,14 @@ pub fn global_exe(cmd: &CStr) {
         if lnum == 0 as LineNr || global_busy.get() != 1 as c_int {
             break;
         }
-        // SAFETY: `lnum` is a marked line of the buffer; `cmd` is live.
-        unsafe { global_exe_one(cmd, lnum) };
+        global_exe_one(cmd, lnum);
         os_breakcheck();
     }
 
     global_busy.set(0 as c_int);
     if global_need_beginline.get() {
-        // SAFETY: main thread, live window.
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     } else {
-        // SAFETY: as above -- the cursor may be beyond the end of the line.
         check_cursor(Win::current());
     }
 

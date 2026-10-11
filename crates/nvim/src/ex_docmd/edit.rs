@@ -618,7 +618,7 @@ pub(crate) fn ex_folddo(excmd: &mut ExArg) {
         }
         lnum += 1;
     }
-    global_exe(excmd.line.cstr_from(excmd.line.arg));
+    global_exe(excmd.line.arg());
     ml_clearmarked();
 }
 

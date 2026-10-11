@@ -239,25 +239,24 @@ impl Reading {
     fn apply_sub_string(&self, mut entry: ShadaEntry) {
         let sub_string = *entry.data.sub_string_mut();
         if !self.force {
-            let mut current: SubReplacementString = unsafe { core::mem::zeroed() };
-            unsafe { sub_get_replacement(&raw mut current) };
+            let current = sub_get_replacement();
             if !current.sub.is_null() && current.timestamp >= entry.timestamp {
                 unsafe { shada_free_shada_entry(&raw mut entry) };
                 return;
             }
         }
-        let sub = sub_string.sub;
-        unsafe {
-            sub_set_replacement(SubReplacementString {
-                sub,
-                timestamp: entry.timestamp,
-                additional_data: entry.additional_data,
-            })
+        // SAFETY: the entry's own `xmemdupz` string and extra data, which
+        // the store takes over -- the entry is not freed after this.
+        let (text, extra) = unsafe {
+            (
+                XString::from_raw(sub_string.sub),
+                ShadaExtra::from_raw(entry.additional_data),
+            )
         };
-        // Without a `regtilde` call the restored string is close to
-        // useless: `s//~` does not reach it until one has happened. Vim
-        // did not do this.
-        unsafe { regtilde(sub, magic_isset() as c_int, false) };
+        // The store expands the restored text's `~` once. Without that the
+        // restored string is close to useless: `s//~` does not reach it
+        // until one has happened. Vim did not do this.
+        sub_restore_replacement(text, entry.timestamp, extra);
     }
 
     /// One history entry, handed to the merger for its type.
