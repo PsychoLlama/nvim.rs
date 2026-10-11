@@ -1,24 +1,25 @@
 //! Commands that change the buffer text or the cursor, including
 //! `:normal`, which re-enters the normal-mode state machine.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::getchar::ins_typebuf_text;
 use crate::memline::MlFlags;
 use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
+use crate::ops::run_ex_operator;
 use crate::os::cshim::gettext;
+use crate::os::time::sleep_serving_events;
+use crate::register::put_at_cursor;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
 use crate::charset::getdigits_int_at;
 use crate::cursor::{check_cursor, check_cursor_col};
 
 use crate::drawscreen::{UPD_VALID, redraw_later, setcursor_mayforce};
 use crate::edit::{BeginlineOpts, beginline};
-use crate::event::r#loop::process_events_until;
 use crate::ex_cmds::{do_move, ex_copy, ex_substitute, ex_substitute_preview, global_exe};
 
 use crate::ex_docmd::address::get_address;
@@ -33,12 +34,10 @@ use crate::getchar::{beep_flush, stuff_empty, typeahead, vpeekc};
 
 use crate::ex_docmd::state::{ex_no_reprint, exec_from_reg};
 use crate::getchar::state::got_int;
-use crate::keycodes::Ctrl_O;
 use crate::lua::executor::ex_lua;
 use crate::mark::{checkpcmark, setmark, setpcmark};
 use crate::message::{e_argreq, e_empty_buffer, e_invrange, e_undobang_cannot_redo_or_move_branch};
 use crate::search::state::magic_overruled;
-use crate::startup::main_loop;
 use crate::state::mode::{did_syncbind, virtual_op};
 
 use crate::memline::{goto_byte, ml_clearmarked, ml_setmarked};
@@ -48,17 +47,17 @@ use crate::r#move::{
     validate_cursor,
 };
 use crate::normal::{end_visual_mode, get_vtopline, visual_active};
-use crate::ops::{do_join, op_delete, op_shift};
+use crate::ops::do_join;
 
 use crate::option::{cpo_has, get_scrolloff_value};
 
 use crate::os::input::os_breakcheck;
 use crate::plines::plines_m_win_fill;
 use crate::pos::MAXLNUM;
-use crate::register::{do_execreg, do_put, op_yank};
+use crate::register::do_execreg;
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{
-    ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, NUL, OpArg, OpType, OptMagic, PUT_CURSLINE,
+    ColNr, CpoFlag, ExArg, Handle, LineNr, NUL, OpArg, OpType, OptMagic, PUT_CURSLINE,
     PUT_FIXINDENT, PUT_LINE, Pos, int64_t, size_t, ssize_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
@@ -138,14 +137,7 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
         checkpcmark();
         // The cursor moved with the scroll; CTRL-O puts it back.
         if old_linenr != Win::current().w_cursor.lnum {
-            let ctrl_o: [c_char; 2] = [Ctrl_O as c_char, 0];
-            let _ = ins_typebuf(
-                ctrl_o.as_ptr() as *mut c_char,
-                REMAP_NONE as c_int,
-                0,
-                true,
-                false,
-            );
+            let _ = ins_typebuf_text(c"\x0f", REMAP_NONE as c_int, true, false);
         }
     }
 }
@@ -189,11 +181,7 @@ pub fn do_sleep(msec: int64_t, hide_cursor: bool) {
         ui_busy_start();
     }
     ui_flush();
-    unsafe {
-        process_events_until(main_loop.ptr(), (*main_loop.ptr()).events, msec, || {
-            got_int.get()
-        })
-    };
+    sleep_serving_events(msec);
     if got_int.get() {
         // Take the interrupt out of the typeahead.
         vpeekc();
@@ -206,8 +194,7 @@ pub fn do_sleep(msec: int64_t, hide_cursor: bool) {
 /// `:delete`, `:yank`, `:<` and `:>` — the four normal-mode operators that
 /// have an Ex spelling.
 pub(crate) fn ex_operators(excmd: &mut ExArg) {
-    let mut oa: OpArg = unsafe { core::mem::zeroed() };
-    clear_oparg(&raw mut oa);
+    let mut oa = OpArg::default();
     oa.regname = excmd.regname;
     oa.start.lnum = excmd.line1;
     oa.end.lnum = excmd.line2;
@@ -230,12 +217,9 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
     match excmd.cmdidx {
         CmdIdx::delete => {
             oa.op_type = OpType::Delete;
-            // `:delete` reports its own refusals; nothing more to do.
-            let _ = unsafe { op_delete(&raw mut oa) };
         }
         CmdIdx::yank => {
             oa.op_type = OpType::Yank;
-            unsafe { op_yank(&raw mut oa, true) };
         }
         _ => {
             // In a 'rightleft' window the two shift commands swap.
@@ -247,9 +231,9 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
             } else {
                 OpType::Lshift
             };
-            unsafe { op_shift(&raw mut oa, false, excmd.amount) };
         }
     }
+    run_ex_operator(&mut oa, excmd.amount);
     virtual_op.set(None);
     ex_may_print(excmd);
 }
@@ -275,19 +259,12 @@ fn put_lines(excmd: &mut ExArg, flags: c_int) {
     }
     Win::current().w_cursor.lnum = excmd.line2;
     check_cursor_col(Win::current());
-    unsafe {
-        do_put(
-            excmd.regname,
-            ptr::null_mut(),
-            if excmd.forceit {
-                BACKWARD as c_int
-            } else {
-                FORWARD as c_int
-            },
-            1,
-            flags,
-        )
+    let dir = if excmd.forceit {
+        BACKWARD as c_int
+    } else {
+        FORWARD as c_int
     };
+    put_at_cursor(excmd.regname, dir, 1, flags);
 }
 
 /// `:copy` and `:move` — both take a destination address after the
@@ -467,10 +444,10 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
         Buf::current().b_u_curhead
     };
     let mut count = 0;
-    let mut uhp = ::core::ptr::null_mut();
+    let mut reached = None;
     for header in header_chain(Buf::current(), start, |uh| uh.uh_next) {
         if header.uh_seq as LineNr <= step {
-            uhp = header.raw();
+            reached = Some(header.uh_seq as LineNr);
             break;
         }
         count += 1;
@@ -478,7 +455,7 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     // Running past it, or off the end, means `step` is on another
     // branch. Sequence 0 is the state before any change and is always
     // reachable.
-    if step != 0 && (uhp.is_null() || (unsafe { (*uhp).uh_seq } as LineNr) < step) {
+    if step != 0 && reached.is_none_or(|seq| seq < step) {
         emsg(gettext(e_undobang_cannot_redo_or_move_branch));
         return;
     }
@@ -639,24 +616,6 @@ pub(crate) fn ex_folddo(excmd: &mut ExArg) {
     ml_clearmarked();
 }
 
-/// `clear_oparg()` as checked code.
-pub(super) fn clear_oparg(op: *mut OpArg) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ops::clear_oparg(op) }
-}
-
-/// `ins_typebuf()` as checked code.
-pub(super) fn ins_typebuf(
-    str: *mut c_char,
-    noremap: c_int,
-    offset: c_int,
-    nottyped: bool,
-    silent: bool,
-) -> Result<(), Failed> {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::getchar::ins_typebuf(str, noremap, offset, nottyped, silent) }
-}
-
 /// `print_line()` as checked code.
 fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
     crate::ex_cmds::print_line(lnum, use_number, list, first)
@@ -675,16 +634,4 @@ pub(super) fn ui_cursor_shape() {
 /// `undo_time()` as checked code.
 fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
     crate::undo::undo_time(step, sec, file, absolute)
-}
-
-/// `utfc_ptr2len()` as checked code.
-pub(super) fn utfc_ptr2len(p: *const c_char) -> c_int {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::mbyte::utfc_ptr2len(p) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-pub(super) fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
 }

@@ -647,18 +647,15 @@ pub(crate) fn set_vcount_ca(cmd_arg: &CmdArg, set_prevcount: bool) {
 /// Run exactly one normal-mode command, from an operator the caller owns.
 ///
 /// This is what `:normal` and the operator-pending machinery re-enter through.
-///
-/// # Safety
-///
-/// `op` must point at a live `OpArg`, unaliased for the call.
-pub(crate) unsafe fn normal_cmd(op: *mut OpArg, toplevel: bool) {
+pub(crate) fn normal_cmd(op: &mut OpArg, toplevel: bool) {
     let mut s = new_state();
     s.toplevel = toplevel;
-    // SAFETY: `op` is the caller's live operator, and `s` outlives the call.
-    s.oa = unsafe { *op };
+    s.oa = *op;
+    // SAFETY: `s` is this frame's, and outlives both calls.
     unsafe { normal_prepare(&raw mut s) };
+    // SAFETY: as above.
     unsafe { normal_execute(&raw mut s, safe_vgetc()) };
-    unsafe { *op = s.oa };
+    *op = s.oa;
 }
 
 /// Fire `event` on the current buffer, with no file name to match against.

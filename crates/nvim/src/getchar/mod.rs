@@ -59,7 +59,6 @@ use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
 use crate::r#move::validate_cursor;
 use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
-use crate::ops::clear_oparg;
 use crate::option::vars::{
     p_fs, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
 };

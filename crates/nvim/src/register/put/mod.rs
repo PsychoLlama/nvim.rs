@@ -26,6 +26,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
+use std::ptr;
 
 use super::*;
 use crate::normal::{set_visual_active, visual_active, visual_mode};
@@ -310,6 +311,14 @@ impl Put {
             coladvance_force(to);
         }
     }
+}
+
+/// [`do_put`] of register `regname` at the cursor, which is first put back
+/// on a line of the current buffer if it is not on one.
+pub(crate) fn put_at_cursor(regname: c_int, dir: c_int, count: c_int, flags: c_int) {
+    crate::cursor::check_cursor_lnum(Win::current());
+    // SAFETY: the cursor is on a valid line, just above.
+    unsafe { do_put(regname, ptr::null_mut(), dir, count, flags) };
 }
 
 /// Put the contents of register `regname` into the text.

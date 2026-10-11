@@ -166,14 +166,13 @@ fn select_range(line1: LineNr, line2: LineNr) {
 fn run_now(menu: Menu, bit: usize) {
     let mut state = SaveState::default();
     let _busy = Depth::of(ex_normal_busy);
-    // SAFETY: `state` is a live local for the whole call, and the rhs is a
-    // NUL-terminated string owned by a node that outlives the run.
-    unsafe {
-        if save_current_state(&raw mut state) {
-            exec_normal_cmd(menu.strings[bit], menu.noremap[bit], menu.silent[bit]);
-        }
-        restore_current_state(&raw mut state);
+    if save_current_state(&mut state) {
+        // A copy: the keys may redefine or delete the menu.
+        // SAFETY: the rhs is a NUL-terminated string the node owns.
+        let rhs = unsafe { CStr::from_ptr(menu.strings[bit]) }.to_owned();
+        exec_normal_cmd(&rhs, menu.noremap[bit], menu.silent[bit]);
     }
+    restore_current_state(&mut state);
 }
 
 /// Put the rhs into the typeahead, as if the user had typed it.

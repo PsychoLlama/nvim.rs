@@ -140,6 +140,17 @@ pub fn os_delay(ms: u64, ignoreinput: bool) {
     }
 }
 
+/// Sleep for `ms` milliseconds serving the main loop's own queue, until an
+/// interrupt -- what `:sleep` does.
+pub(crate) fn sleep_serving_events(ms: i64) {
+    // SAFETY: the main loop and its queue are live for the editor's
+    // lifetime.
+    unsafe {
+        let uv_loop = main_loop.ptr();
+        process_events_until(uv_loop, (*uv_loop).events, ms, || got_int.get());
+    }
+}
+
 /// Sleep for `ms` milliseconds without checking for events or interrupts.
 ///
 /// This blocks even "fast" events, which is disruptive; prefer [`os_delay`].

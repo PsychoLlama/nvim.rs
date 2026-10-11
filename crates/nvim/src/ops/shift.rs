@@ -538,3 +538,21 @@ fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     debug_assert!(shifted.new_len - shifted.old_len == new_line_len - old_line_len);
     shifted
 }
+
+/// Run the linewise operator an Ex command spells -- `:delete`, `:yank`,
+/// `:<`, `:>` -- over `op`, whose lines are an Ex range the command line
+/// has already checked against the current buffer.
+pub(crate) fn run_ex_operator(op: &mut OpArg, amount: c_int) {
+    // SAFETY (all three): a live operator over a checked range of the
+    // current buffer.
+    match op.op_type {
+        OpType::Delete => {
+            // `:delete` reports its own refusals.
+            let _ = unsafe { op_delete(op) };
+        }
+        OpType::Yank => {
+            unsafe { op_yank(op, true) };
+        }
+        _ => unsafe { op_shift(op, false, amount) },
+    }
+}

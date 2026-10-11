@@ -29,6 +29,7 @@ use crate::keycodes::ModMask;
 use crate::types::{Failed, MB_MAXBYTES};
 use core::ffi::{c_char, c_int};
 use core::ptr;
+use std::ffi::CStr;
 
 /// Size of the two static initial buffers, upstream's `TYPELEN_INIT`.
 ///
@@ -561,6 +562,18 @@ pub unsafe fn ins_typebuf(
         return Err(Failed);
     }
     Ok(())
+}
+
+/// [`ins_typebuf`] of `text` at the start of the typeahead.
+pub(crate) fn ins_typebuf_text(
+    text: &CStr,
+    noremap: c_int,
+    nottyped: bool,
+    silent: bool,
+) -> Result<(), Failed> {
+    // SAFETY: a NUL-terminated string, which the insert copies (it never
+    // writes through it), at offset 0, which is always in the typeahead.
+    unsafe { ins_typebuf(text.as_ptr().cast_mut(), noremap, 0, nottyped, silent) }
 }
 
 /// Put character `c` back into the typeahead buffer, restoring the flags that

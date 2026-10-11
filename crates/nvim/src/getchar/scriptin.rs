@@ -101,14 +101,13 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
     State.set(MODE_NORMAL);
     msg_scroll.set(0); // no message scrolling in Normal mode
     restart_edit.set(0); // don't go to Insert mode
-    let mut oa: OpArg = unsafe { core::mem::zeroed() };
-    unsafe { clear_oparg(&raw mut oa) };
+    let mut oa = OpArg::default();
     finish_op.set(false);
 
     let started_at = curscript.get();
     while {
         update_topline_cursor(); // cursor position and topline
-        unsafe { normal_cmd(&raw mut oa, false) }; // one command
+        normal_cmd(&mut oa, false); // one command
         vpeekc(); // check for end of file
         curscript.get() >= started_at
     } {}
