@@ -134,6 +134,8 @@ pub(crate) use self::tags::*;
 mod filetype;
 pub use self::filetype::*;
 mod childproc;
+#[cfg(test)]
+mod tests;
 pub(crate) use self::childproc::*;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseManual: CdCause = 0;

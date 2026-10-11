@@ -1556,3 +1556,64 @@ func Test_breakpt_scriptlocal_func()
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab
+
+" A breakpoint inside a loop is stopped at on the first pass, when the line is
+" read, and again on every pass that replays it: in a function body, in a
+" sourced file, and inside a loop nested in either.
+func Test_breakpt_in_loop_func()
+  func F()
+    let s = 0
+    for n in [1, 2]
+      let s += n
+      let i = 0
+      while i < 2
+        let i += 1
+      endwhile
+    endfor
+    return s
+  endfunc
+
+  breakadd func 4 F
+  breakadd func 7 F
+  debuggreedy
+  redir => output
+  call feedkeys(":call F()\<CR>" .. repeat("c\<CR>", 8), "xt")
+  redir END
+  0debuggreedy
+  let stops = map(split(output, "\n")->filter('v:val =~ "^Breakpoint"'),
+        \ 'matchstr(v:val, "line \\d\\+")')
+  " A function's lines count from the one after `:func`: line 4 is `let i =
+  " 0`, line 7 the `:endwhile`, which runs once more than the body.
+  call assert_equal(['line 4', 'line 7', 'line 7', 'line 7',
+        \ 'line 4', 'line 7', 'line 7', 'line 7'], stops)
+  breakdel *
+  delfunc F
+endfunc
+
+func Test_breakpt_in_loop_file()
+  let lines =<< trim END
+    let s = 0
+    for n in [1, 2]
+      let s += n
+      let i = 0
+      while i < 2
+        let i += 1
+      endwhile
+    endfor
+    let g:loop_sum = s
+  END
+  call writefile(lines, 'XbreakLoop.vim', 'D')
+  exe 'breakadd file 3 ' .. fnamemodify('XbreakLoop.vim', ':p')
+  exe 'breakadd file 6 ' .. fnamemodify('XbreakLoop.vim', ':p')
+  debuggreedy
+  redir => output
+  call feedkeys(":source XbreakLoop.vim\<CR>" .. repeat("c\<CR>", 6), "xt")
+  redir END
+  0debuggreedy
+  let stops = map(split(output, "\n")->filter('v:val =~ "^Breakpoint"'),
+        \ 'matchstr(v:val, "line \\d\\+")')
+  call assert_equal(['line 3', 'line 6', 'line 6', 'line 3', 'line 6', 'line 6'], stops)
+  call assert_equal(3, g:loop_sum)
+  unlet g:loop_sum
+  breakdel *
+endfunc
