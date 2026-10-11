@@ -10,9 +10,18 @@
 # corpora are versioned with the tree and a row must always run the corpus
 # it was just edited to run.
 #
-# The cache key is the sha, so a stale cache is impossible: bump BASE and
+# The cache key is the sha *and the battery's own files*: bump BASE and
 # every row misses and re-cuts against the new binary; revert it and the old
-# cut is still there.  `rm -rf target/battery` is always safe.
+# cut is still there.  The stamp records a digest of every script and corpus
+# under test/battery (BASE and the README aside), and a cut whose digest no
+# longer matches is cut again -- keyed on the sha alone, a case added to a
+# sweep was compared against a cut that had never run it, and the row said
+# DIFFERS for every line the edit added.  The whole directory rather than
+# the row's own files, because several rows run another row's harness
+# (`msg` drives `scr`'s) and a prefix match would miss those.  An edit to
+# one row therefore re-cuts every row the next time each runs, which is the
+# price of never comparing against a stale corpus.  `rm -rf target/battery`
+# is always safe.
 #
 # `$<ROW>_BASELINE` still overrides, and `<row>verify.sh` still honours it --
 # that is how a hand-cut baseline is compared against.
@@ -35,11 +44,14 @@ CACHE=$DIR/${ROW}base
 # the directory would compare against them forever.
 STAMP=$CACHE/.cut
 
+CORPUS=$(cd "$HERE" && find . -type f ! -name BASE ! -name README.md -print0 |
+  LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+
 mkdir -p "$DIR"
 exec 9>"$DIR/.$ROW.lock"
 flock 9
 
-if [[ -f $STAMP ]]; then
+if [[ -f $STAMP && $(cat "$STAMP") == "$SHA $CORPUS" ]]; then
   echo "$CACHE"
   exit 0
 fi
@@ -67,5 +79,5 @@ if [[ ${#cut_artifacts[@]} -eq 0 ]]; then
   exit 1
 fi
 
-echo "$SHA" >"$STAMP"
+echo "$SHA $CORPUS" >"$STAMP"
 echo "$CACHE"

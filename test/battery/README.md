@@ -42,9 +42,11 @@ follows from it.
 3. The head run then diffs against that directory exactly as it used to diff
    against a committed one. `$<ROW>_BASELINE` still overrides.
 
-The cache key is the sha, so **a stale cache is impossible**: bump `BASE` and
-every row misses and re-cuts; revert it and the old cut is still there.
-`rm -rf target/battery` is always safe. A cut is stamped only on success
+The cache key is the sha **and a digest of `test/battery/`** (everything but
+`BASE` and this file), so a stale cut is impossible: bump `BASE` and every row
+misses and re-cuts; edit any sweep or corpus and every row re-cuts the next
+time it runs (the whole directory, because rows share harnesses); revert either
+and the old cut is still there. `rm -rf target/battery` is always safe. A cut is stamped only on success
 (`<row>base/.cut`), so an interrupted run re-cuts rather than comparing against
 half-written artifacts.
 
