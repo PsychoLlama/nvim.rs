@@ -62,7 +62,10 @@ pub fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
         return;
     }
     let keys_esc: *mut ::core::ffi::c_char = if escape_ks {
-        crate::keycodes::escape_ks(unsafe { cstr::at(keys.data()) }).into_raw()
+        crate::memory::XString::from_vec(crate::keycodes::escape_ks_bytes(unsafe {
+            cstr::bytes_at(keys.data())
+        }))
+        .into_raw()
     } else {
         keys.data()
     };

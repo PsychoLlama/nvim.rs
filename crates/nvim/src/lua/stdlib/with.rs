@@ -170,7 +170,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
         if status != 0 {
             return lua_error(lstate);
         } else if err.is_set() {
-            nlua_push_errstr(lstate, c"%s".as_ptr(), err.message_or_empty().as_ptr());
+            nlua_push_errstr(lstate, b"", err.message_or_empty());
             err.clear();
             return lua_error(lstate);
         }

@@ -23,7 +23,7 @@ use super::{MAXLNUM, RE_MAGIC, e_interr, e_invarg, e_noprevre, kExtmarkNOOP, kEx
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::Str2NrBases;
-use crate::charset::{skip, vim_str2nr};
+use crate::charset::{skip, str2nr_scan};
 use crate::cstr;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::check_nextcmd;
@@ -477,22 +477,8 @@ unsafe fn number_key(line: &mut [u8], start: ColNr, end: ColNr, spec: &SortSpec)
             // A line without a number sorts before any number.
             SortKey::Number(None)
         } else {
-            let mut value: VarNumber = 0;
-            // SAFETY: as above.
-            unsafe {
-                vim_str2nr(
-                    from[at..].as_ptr().cast(),
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    spec.radix,
-                    &mut value,
-                    ptr::null_mut(),
-                    0,
-                    false,
-                    ptr::null_mut(),
-                )
-            };
-            SortKey::Number(Some(value))
+            let parsed = str2nr_scan(&from[at..], 0, spec.radix, false, true);
+            SortKey::Number(Some(parsed.value))
         }
     };
 

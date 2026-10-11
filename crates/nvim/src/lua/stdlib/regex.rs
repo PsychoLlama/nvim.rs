@@ -214,12 +214,11 @@ pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
         err.absorb(try_leave(&raw mut tstate));
 
         if err.is_set() {
-            let why = err.message_or_empty().as_ptr();
-            nlua_push_errstr(lstate, c"couldn't parse regex: %s".as_ptr(), why);
+            nlua_push_errstr(lstate, b"couldn't parse regex: ", err.message_or_empty());
             err.clear();
             return lua_error(lstate);
         } else if prog.is_null() {
-            nlua_push_errstr(lstate, c"couldn't parse regex".as_ptr());
+            nlua_push_errstr(lstate, b"couldn't parse regex", c"");
             return lua_error(lstate);
         }
 

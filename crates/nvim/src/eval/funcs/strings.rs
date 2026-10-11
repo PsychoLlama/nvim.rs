@@ -11,7 +11,7 @@ use crate::eval::typval::{
 };
 use crate::ex_getln::fnameescape;
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
-use crate::keycodes::escape_ks;
+use crate::keycodes::escape_ks_bytes;
 use crate::mbyte::{Converter, char_at, cluster_len, enc_locale, encode_char};
 use crate::memline::Lines;
 use crate::memory::{ThinCString, XString};
@@ -86,7 +86,7 @@ pub fn f_keytrans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(text) = args[0].string_ref() else {
         return;
     };
-    let escaped = escape_ks(text.as_cstr());
+    let escaped = XString::from_vec(escape_ks_bytes(text.as_cstr().to_bytes()));
     let readable = str2special_bytes(escaped.as_cstr(), true, true);
     result.write_string(Some(readable.into()));
 }

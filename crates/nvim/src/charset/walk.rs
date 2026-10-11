@@ -339,7 +339,7 @@ pub unsafe fn vim_str2nr(
     overflow: *mut bool,
 ) {
     let text = match usize::try_from(maxlen) {
-        Ok(0) | Err(_) => unsafe { cstr::bytes_at(start) },
+        Ok(0) | Err(_) => unsafe { number_text(start) },
         Ok(maxlen) => unsafe { cstr::prefix_at(start, maxlen) },
     };
     let parsed = str2nr_scan(text, maxlen, what, strict, !nptr.is_null());
@@ -363,6 +363,32 @@ pub unsafe fn vim_str2nr(
             *unptr = parsed.magnitude;
         }
     }
+}
+
+/// The bytes at `start` a number can be read from: the run a number is
+/// spelled with (a leading `-`, digits, the letters of a base prefix and of
+/// hex digits, the `'` separator) and the one byte after it, which is all
+/// [`str2nr_scan`]'s strict check and look-aheads read. Not the whole
+/// string: a caller handing `vim_str2nr` a line with no `maxlen` paid a
+/// `strlen` of the line per number.
+///
+/// # Safety
+/// `start` must be a NUL-terminated string.
+unsafe fn number_text<'a>(start: *const c_char) -> &'a [u8] {
+    let mut n = 0;
+    loop {
+        // SAFETY: the caller's string, read up to its NUL at most.
+        let b = unsafe { *start.add(n) }.cast_unsigned();
+        if b == 0 {
+            break;
+        }
+        n += 1;
+        if !(b.is_ascii_alphanumeric() || b == b'\'' || (n == 1 && b == b'-')) {
+            break;
+        }
+    }
+    // SAFETY: the `n` bytes just read.
+    unsafe { slice::from_raw_parts(start.cast::<u8>(), n) }
 }
 
 /// Whether the backslash at `str` escapes the byte after it; [`escapes_next`].

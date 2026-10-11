@@ -76,7 +76,6 @@ pub const fn c_arg<T: CArg>(arg: T) -> T {
 #[doc(hidden)]
 pub mod direct {
     pub use crate::lua::ffi::{lua_pushfstring, luaL_error};
-    pub use crate::lua::stdlib::nlua_push_errstr;
     pub use crate::os::cshim::snprintf;
     pub use ::libc::{fprintf, printf, sscanf};
 }
@@ -112,16 +111,6 @@ macro_rules! printf {
 macro_rules! sscanf {
     ($text:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
         $crate::variadic::direct::sscanf($text, $fmt $(, $crate::variadic::c_arg($arg))*)
-    };
-}
-
-/// `nlua_push_errstr(lstate, fmt, args...)`, each argument bound by [`CArg`].
-#[macro_export]
-macro_rules! nlua_push_errstr {
-    ($lstate:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
-        $crate::variadic::direct::nlua_push_errstr(
-            $lstate, $fmt $(, $crate::variadic::c_arg($arg))*
-        )
     };
 }
 

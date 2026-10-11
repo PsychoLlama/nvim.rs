@@ -42,41 +42,16 @@ pub fn is_user_cmd(cmdidx: CmdIdx) -> bool {
 /// scan that runs per Ex command.
 const ROWS: usize = command_count as usize;
 
-/// Does `cursor` start with at least `len` characters of `cmd`, and end there?
-///
-/// **Advances `*pp` past the word on a match**, which is why the modifier
-/// scan's arms are ordered the way they are: a failed `checkforcmd` leaves
-/// the cursor alone, a successful one does not.
-///
-/// # Safety
-///
-/// `cursor` must point at a writable `*mut c_char` slot the caller owns for
-/// the call. `cmd` must point at `len` readable bytes.
-pub unsafe fn checkforcmd(cursor: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
-    let p = unsafe { *cursor };
-    let mut i = 0isize;
-    while byte_at(cmd, i) != NUL && unsafe { *cmd.offset(i) } == unsafe { *p.offset(i) } {
-        i += 1;
-    }
-    // A letter after the abbreviation means this is a longer word, not
-    // this command: `:silentx` is not `:silent`.
-    if i as c_int >= len && !(ubyte_at(p, i)).is_ascii_alphabetic() {
-        unsafe { *cursor = skipwhite(p.offset(i)) };
-        return true;
-    }
-    false
-}
-
-/// [`checkforcmd`] over a command line, answering where the word ended.
+/// Whether the command line at `at` holds the word `name` (at least `min`
+/// bytes of it), answering where the word ended, past the blanks after it;
+/// [`check_for_word_in`] over the string at `at`.
 ///
 /// `None` is "not this command". `name` is the command spelled out and
 /// `min` the shortest abbreviation of it the parse accepts, so `:sil`,
 /// `:sile`, `:silen` and `:silent` are all `("silent", 3)` -- but `:silentx`
 /// is not, because a letter after the abbreviation makes it a longer word.
 pub(crate) fn check_for_word(line: &CmdLine, at: usize, name: &[u8], min: usize) -> Option<usize> {
-    let matched = line.shared_prefix(at, name);
-    let follows = line.byte_at(at + matched);
-    (matched >= min && !follows.is_ascii_alphabetic()).then(|| line.skip_white(at + matched))
+    check_for_word_in(line.rest_of(at), 0, name, min).map(|end| at + end)
 }
 
 /// [`check_for_word`] over any text: where the word `name` -- at least `min`
@@ -426,20 +401,8 @@ fn prefix_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
     unsafe { cstr::prefix_eq(a, b, n) }
 }
 
-/// `skipwhite()` as checked code.
-fn skipwhite(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::charset::skipwhite(p) }
-}
-
 /// The byte at `p[i]`, as the C's `*(p + i)` reads it.
 fn byte_at(p: *const c_char, i: isize) -> c_int {
     // SAFETY: an offset within the NUL-terminated string `p` points into.
     unsafe { *p.offset(i) as c_int }
-}
-
-/// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
-fn ubyte_at(p: *const c_char, i: isize) -> u8 {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as u8 }
 }

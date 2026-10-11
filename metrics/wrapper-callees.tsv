@@ -2,13 +2,13 @@ count	callee	no_raw	defs	def
 543	xfree	0	1	crates/nvim/src/memory/mod.rs
 444	.add	0	2	crates/nvim/src/getchar/buffers.rs
 343	.offset	0	0	
-312	bytes_at	0	1	crates/nvim/src/cstr.rs
+314	bytes_at	0	1	crates/nvim/src/cstr.rs
 241	CStr::from_ptr	0	2	
-236	at	0	3	
+233	at	0	3	
 180	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 156	.offset_from	0	0	
-125	from_raw_parts	0	0	
+126	from_raw_parts	0	0	
 114	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 98	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 96	xmalloc	0	1	crates/nvim/src/memory/mod.rs
@@ -24,8 +24,8 @@ count	callee	no_raw	defs	def
 56	apply_autocmds	0	1	crates/nvim/src/autocmd/fire.rs
 56	from_raw_parts_mut	0	0	
 49	.as_ref	0	0	
-48	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 47	prefix_eq	0	1	crates/nvim/src/cstr.rs
+47	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 46	copy	0	0	
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 42	fprintf	0	0	
@@ -573,7 +573,6 @@ count	callee	no_raw	defs	def
 4	uv_timer_start	0	0	
 4	valid_word_prefix	0	1	crates/nvim/src/spell/lookup.rs
 4	verbose_try_malloc	0	1	crates/nvim/src/memory/mod.rs
-4	vim_str2nr	0	1	crates/nvim/src/charset/walk.rs
 4	win_linetabsize	0	1	crates/nvim/src/plines/mod.rs
 4	word_chars	0	1	crates/nvim/src/spellsuggest/score.rs
 4	write_bytes	0	0	
@@ -840,6 +839,7 @@ count	callee	no_raw	defs	def
 3	uv_pipe_init	0	0	
 3	uv_timer_stop	0	0	
 3	vim_iswordc	0	0	
+3	vim_str2nr	0	1	crates/nvim/src/charset/walk.rs
 3	vim_unsetenv_ext	0	1	crates/nvim/src/os/env/mod.rs
 3	vterm_get_size	0	1	crates/nvim/src/vterm/vterm.rs
 3	vterm_push_output_bytes	0	1	crates/nvim/src/vterm/vterm.rs
@@ -2064,6 +2064,7 @@ count	callee	no_raw	defs	def
 1	normal_need_redraw_mode_message	0	1	crates/nvim/src/normal/state.rs
 1	notify_internal	0	0	
 1	number_key	1	1	crates/nvim/src/ex_cmds/sort.rs
+1	number_text	0	1	crates/nvim/src/charset/walk.rs
 1	nv_bracket_block	0	1	crates/nvim/src/normal/brackets.rs
 1	nv_gd	0	1	crates/nvim/src/normal/identfind.rs
 1	nv_z_get_count	0	1	crates/nvim/src/normal/scroll/zet.rs

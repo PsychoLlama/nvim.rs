@@ -102,7 +102,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         ) {
             Ok(di) => di,
             Err(e) => {
-                nlua_push_errstr(lstate, c"%s".as_ptr(), e.message_or_empty().as_ptr());
+                nlua_push_errstr(lstate, b"", e.message_or_empty());
                 lua_error(lstate);
                 return 0;
             }

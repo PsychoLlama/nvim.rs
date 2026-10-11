@@ -28,9 +28,9 @@ use crate::cjson::lua_cjson::lua_cjson_new;
 use crate::fold::fold_update;
 use crate::lua::base64::luaopen_base64;
 use crate::lua::ffi::{
-    lua_concat, lua_getfield, lua_getglobal, lua_pop, lua_pushcfunction, lua_pushvalue,
-    lua_pushvfstring, lua_setfield, luaL_checkinteger, luaL_error, luaL_newmetatable,
-    luaL_register, luaL_where,
+    lua_concat, lua_getfield, lua_getglobal, lua_pop, lua_pushcfunction, lua_pushlstring,
+    lua_pushvalue, lua_setfield, luaL_checkinteger, luaL_error, luaL_newmetatable, luaL_register,
+    luaL_where,
 };
 use crate::lua::spell::luaopen_spell;
 use crate::lua::xdiff::nlua_xdl_diff;
@@ -172,20 +172,20 @@ pub unsafe fn nlua_state_add_stdlib(lstate: *mut lua_State, is_thread: bool) {
     }
 }
 
-/// Like `luaL_error`, but leaves the message on the stack instead of throwing,
-/// so the caller can clean up before its own `lua_error`.
+/// Like `luaL_error`, but leaves the message -- the caller's location, then
+/// `prefix` and `message` -- on the stack instead of throwing, so the caller
+/// can clean up before its own `lua_error`.
+///
+/// Upstream formats it with `lua_pushvfstring`; every caller formatted a
+/// fixed prefix and one `%s`, so the text is put together here instead.
 ///
 /// # Safety
-/// `lstate` must be a live Lua state, and `fmt`'s directives must match the
-/// variadic arguments.
-pub unsafe extern "C-unwind" fn nlua_push_errstr(
-    lstate: *mut lua_State,
-    fmt: *const c_char,
-    args: ...
-) {
+/// `lstate` must be a live Lua state with room for two more values.
+pub unsafe fn nlua_push_errstr(lstate: *mut lua_State, prefix: &[u8], message: &CStr) {
+    let text = [prefix, message.to_bytes()].concat();
     unsafe {
         luaL_where(lstate, 1);
-        lua_pushvfstring(lstate, fmt, args.clone());
+        lua_pushlstring(lstate, text.as_ptr().cast::<c_char>(), text.len());
         lua_concat(lstate, 2);
     }
 }

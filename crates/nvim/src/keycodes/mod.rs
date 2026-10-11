@@ -30,7 +30,6 @@ use crate::ascii::{ascii_isdigit, ascii_isident};
 use crate::charset::{str2nr_in, transchar, vim_isprintc};
 use crate::eval::vars::var_string_value;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};
-use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::{e_invarg, e_usingsid};
 use crate::os::cshim::gettext;
@@ -657,11 +656,6 @@ pub fn push_char_escaped(c: c_int, out: &mut Vec<u8>) {
     let mut escaped = KeyBytes::new();
     escape_char_into(c, &mut escaped);
     out.extend_from_slice(escaped.as_bytes());
-}
-
-/// [`escape_ks_bytes`] of `text`, owned.
-pub(crate) fn escape_ks(text: &CStr) -> XString {
-    XString::from_vec(escape_ks_bytes(text.to_bytes()))
 }
 
 /// `text` with every literal `K_SPECIAL` byte escaped, up to its first NUL

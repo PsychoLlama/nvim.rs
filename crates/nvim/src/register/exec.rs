@@ -228,7 +228,7 @@ unsafe fn put_in_typebuf(
     if retval.is_ok() {
         // SAFETY: `s` is NUL-terminated, so the escaped copy is too.
         let p = if esc {
-            escape_ks(unsafe { cstr::at(s) }).into_raw()
+            XString::from_vec(escape_ks_bytes(unsafe { cstr::bytes_at(s) })).into_raw()
         } else {
             s
         };
@@ -483,7 +483,7 @@ pub fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> 
         }
         // SAFETY: `str` is NUL-terminated either way -- a register line, or
         // the joined copy, which is ours to free.
-        let escaped = escape_ks(unsafe { cstr::at(str) }).into_raw();
+        let escaped = XString::from_vec(escape_ks_bytes(unsafe { cstr::bytes_at(str) })).into_raw();
         if free_str {
             unsafe { xfree(str as *mut c_void) };
         }
