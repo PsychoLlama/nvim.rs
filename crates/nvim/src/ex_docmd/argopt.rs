@@ -34,12 +34,12 @@ use crate::ex_docmd::{
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::message::vim_dialog_yesno;
 use crate::message::{e_invarg2, e_invargval, e_invrange};
-use crate::message_fmt::{emsg_text, msg_cstr, msg_cstr_opt};
+use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
 
-use crate::os::fs::{CFile, os_isdir, os_mkdir, os_path_exists, os_strerror};
+use crate::os::fs::{CFile, os_isdir_of, os_mkdir, os_strerror, path_exists};
 
 use crate::types::regexp::RegMatch;
 use crate::types::{
@@ -461,29 +461,20 @@ pub fn vim_mkdir_emsg(name: &CStr, prot: c_int) -> Result<(), Failed> {
 ///
 /// Appending is always allowed; creating over an existing file needs the
 /// command's `!`.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `mode` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: &CStr) -> Option<CFile> {
-    if unsafe { os_isdir(fname) } {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { msg_cstr_opt(cstr::at_opt(fname)) };
+pub fn open_exfile(fname: &CStr, forceit: c_int, mode: &CStr) -> Option<CFile> {
+    if os_isdir_of(fname) {
+        let fname = msg_cstr(fname);
         semsg!("E17: \"{fname}\" is a directory");
         return None;
     }
-    if forceit == 0 && mode.to_bytes().first() != Some(&b'a') && unsafe { os_path_exists(fname) } {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { msg_cstr_opt(cstr::at_opt(fname)) };
+    if forceit == 0 && mode.to_bytes().first() != Some(&b'a') && path_exists(fname) {
+        let fname = msg_cstr(fname);
         semsg!("E189: \"{fname}\" exists (add ! to override)");
         return None;
     }
-    // SAFETY: the caller's NUL-terminated name.
-    let file = CFile::open(unsafe { cstr::at(fname) }, mode);
+    let file = CFile::open(fname, mode);
     if file.is_none() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { msg_cstr_opt(cstr::at_opt(fname)) };
+        let fname = msg_cstr(fname);
         semsg!("E190: Cannot open \"{fname}\" for writing");
     }
     file

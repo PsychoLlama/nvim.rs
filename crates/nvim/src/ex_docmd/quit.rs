@@ -8,19 +8,16 @@
 //!
 //! `exiting` is set *before* the checks and put back by `not_exiting` when
 //! any of them refuses, because the checks themselves look at it.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::autocmd::fire_autocmds;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::snprintf;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
-use crate::window::tab_index;
 use crate::winlayer::TabPage;
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::autocmd::{is_aucmd_win, may_trigger_vim_suspend_resume};
 
@@ -74,16 +71,14 @@ pub(crate) fn ex_bunload(excmd: &mut ExArg) {
     } else {
         DOBUF_UNLOAD
     } as c_int;
-    excmd.errmsg = unsafe {
-        do_bufdel(
-            action,
-            excmd.arg_ptr(),
-            excmd.addr_count,
-            excmd.line1 as c_int,
-            excmd.line2 as c_int,
-            c_int::from(excmd.forceit),
-        )
-    };
+    excmd.errmsg = do_bufdel(
+        action,
+        excmd.line.cstr_from(excmd.line.arg),
+        excmd.addr_count,
+        excmd.line1 as c_int,
+        excmd.line2 as c_int,
+        c_int::from(excmd.forceit),
+    );
 }
 
 /// Run QuitPre, and ExitPre when this really is the last window.
@@ -462,22 +457,11 @@ pub fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
     tabpage.tp_did_tabclosedpre = true;
 
     let mut done = 0;
-    let mut prev_idx: [c_char; 65] = [0; 65];
     loop {
         done += 1;
         if done >= 1000 {
             break;
         }
-        // Written for its side effect on `prev_idx`, which upstream
-        // keeps for a message it no longer prints.
-        unsafe {
-            snprintf!(
-                &raw mut prev_idx as *mut c_char,
-                size_of::<[c_char; 65]>(),
-                c"%i".as_ptr(),
-                tab_index(tabpage),
-            )
-        };
         let wp = tabpage.tp_lastwin;
         if let Some(last) = wp.and_then(WinId::get) {
             ex_win_close(forceit, last, Some(tabpage));

@@ -9,7 +9,7 @@ use crate::api::private::helpers::{
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::charset::{skiptowhite, skipwhite};
 use crate::ex_docmd::{
-    builtin_command_name, excmd_get_argt, execute_cmd, find_ex_command, get_cmd_default_range,
+    builtin_command_cstr, excmd_get_argt, execute_cmd, find_ex_command, get_cmd_default_range,
     getargcmd, getargopt, invalid_range, is_cmd_ni, is_map_cmd, parse_cmdline, replace_makeprg,
     set_cmd_addr_type, set_cmd_count, set_cmd_dflall_range, undo_cmdmod,
 };

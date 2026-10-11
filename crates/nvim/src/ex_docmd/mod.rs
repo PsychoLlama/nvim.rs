@@ -82,7 +82,7 @@ use crate::types::{
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
 use crate::version::{ex_intro, ex_version};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 
 // Generated from `ex_cmds.lua`; see `tools/apigen` and `just apigen`.
 mod cmdtable;
@@ -195,7 +195,7 @@ pub type ExFunc = Option<fn(&mut ExArg)>;
 /// An 'inccommand' preview callback, likewise.
 pub type ExPreviewFunc = Option<fn(&mut ExArg, c_int, Handle) -> c_int>;
 pub struct CommandDefinition {
-    pub cmd_name: *mut c_char,
+    pub cmd_name: &'static CStr,
     pub cmd_func: ExFunc,
     pub cmd_preview_func: ExPreviewFunc,
     pub cmd_argt: ExArgt,

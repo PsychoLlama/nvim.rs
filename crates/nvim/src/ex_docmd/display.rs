@@ -1,12 +1,11 @@
 //! Commands about what is on the screen rather than in the buffer:
 //! redrawing, `:redir`, highlighting and the digraph table.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::guard::{Allow, Saved, Suppress};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 use crate::buffer::maketitle;
 
@@ -21,7 +20,6 @@ use crate::eval::eval_to_string;
 use crate::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
-use crate::ex_docmd::xfree;
 use crate::ex_getln::state::cmdpreview;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::message::state::{
@@ -31,12 +29,13 @@ use crate::option::vars::{P_LZ, p_hls, p_lz};
 use crate::search::state::no_hlsearch;
 use crate::state::mode::State;
 
-use crate::message::msg_ext_set_kind;
+use crate::message::{msg, msg_ext_set_kind};
+use crate::os::cshim::gettext;
 
 use crate::r#move::{update_topline, validate_cursor};
 use crate::normal::visual_active;
 
-use crate::os::env::expand_env_save;
+use crate::os::env::expand_env_save_opt_of;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
@@ -62,15 +61,15 @@ pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
 
     msg_ext_set_kind(c"list_cmd");
     match name {
-        None => msg(c"default".as_ptr(), 0),
-        Some(name) => msg(name.as_ptr(), 0),
+        None => msg(c"default", 0),
+        Some(name) => msg(name.as_cstr(), 0),
     };
 }
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.
 pub(crate) fn ex_highlight(excmd: &mut ExArg) {
     if excmd.line.byte_at(excmd.line.arg) == 0 && excmd.line.byte_at(excmd.line.cmd + 2) == b'!' {
-        msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
+        msg(gettext(c"Greetings, Vim user!"), 0);
     }
     do_highlight(excmd.line.cstr_from(excmd.line.arg), excmd.forceit, false);
 }
@@ -95,14 +94,12 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         };
         at = excmd.line.skip_white(at);
         close_redir();
-        // SAFETY: the rest of the command's own NUL-terminated line.
-        let fname = unsafe { expand_env_save(excmd.line.ptr_at(at)) };
-        if fname.is_null() {
-            return;
-        }
-        // SAFETY: `fname` is the NUL-terminated expansion just made.
-        redir_fd.set(unsafe { open_exfile(fname, c_int::from(excmd.forceit), mode) });
-        xfree(fname as *mut c_void);
+        let fname = expand_env_save_opt_of(excmd.line.cstr_from(at), false);
+        redir_fd.set(open_exfile(
+            fname.as_cstr(),
+            c_int::from(excmd.forceit),
+            mode,
+        ));
     } else if excmd.line.byte_at(at) == b'@' {
         close_redir();
         at += 1;
@@ -273,18 +270,6 @@ pub fn get_pressedreturn() -> bool {
 /// Record whether it did.
 pub fn set_pressedreturn(val: bool) {
     ex_pressedreturn.set(val);
-}
-
-/// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
-}
-
-/// `msg()` as checked code.
-fn msg(s: *const c_char, hl_id: c_int) -> bool {
-    // SAFETY: a NUL-terminated message.
-    crate::message::msg(unsafe { crate::cstr::at(s) }, hl_id)
 }
 
 /// `redraw_all_later()` as checked code.

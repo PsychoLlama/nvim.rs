@@ -53,7 +53,7 @@ pub(crate) use attr::{parse_addr_type_arg, parse_compl_arg};
 pub(crate) use complete::{
     cmdcomplete_str_to_type, cmdcomplete_type_to_str, get_user_cmd_addr_type,
     get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs, get_user_command_name,
-    get_user_commands, set_context_in_user_cmd, set_context_in_user_cmdarg,
+    get_user_commands, set_context_in_user_cmd, set_context_in_user_cmdarg, user_command_name,
 };
 pub(crate) use expand::{
     add_win_cmd_modifiers, do_ucmd, uc_mods, uc_nargs_upper_bound, uc_split_args_iter,

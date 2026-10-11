@@ -506,7 +506,11 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
     let using_vdir = !view_file.is_null();
 
     // SAFETY: `fname` is NUL-terminated, and `fd` is used only while open.
-    if let Some(file) = unsafe { open_exfile(fname, c_int::from(excmd.forceit), c"wb") } {
+    if let Some(file) = open_exfile(
+        unsafe { CStr::from_ptr(fname) },
+        c_int::from(excmd.forceit),
+        c"wb",
+    ) {
         let out = unsafe { SessionFile::new(file.as_ptr()) };
         let failed = unsafe { write_rc(out, excmd, fname, view_session, using_vdir) };
         // The close answers a write error the buffering hid, and must run

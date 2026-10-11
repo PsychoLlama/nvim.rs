@@ -5,11 +5,10 @@
 //! `cmdnames` to decide what it does. `:djump`, `:dlist`, `:dsearch` and
 //! `:dsplit` differ only in their third letter; `:tnext`, `:tprevious`,
 //! `:tselect` and the rest only in their second.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::regexp::skip_regexp_at;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int_at;
@@ -37,12 +36,12 @@ use crate::types::ExArg;
 /// the first says whether the search is for a *definition* or for any
 /// occurrence.
 pub(crate) fn ex_findpat(excmd: &mut ExArg) {
-    let name = cmdnames[excmd.cmdidx.index()].cmd_name;
-    let action = match ubyte_at(name, 2) {
+    let name = cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes_with_nul();
+    let action = match name[2] {
         // `:isearch`/`:dsearch` show the first match; `:psearch` goes
         // to it in the preview window.
         b'e' => {
-            if byte(name) == 'p' as c_int {
+            if name[0] == b'p' {
                 ACTION_GOTO
             } else {
                 ACTION_SHOW
@@ -107,7 +106,10 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
 pub(crate) fn ex_ptag(excmd: &mut ExArg) {
     g_do_tagpreview.set(p_pvh() as c_int);
-    unsafe { ex_tag_cmd(excmd, cmdnames[excmd.cmdidx.index()].cmd_name.add(1)) };
+    ex_tag_cmd(
+        excmd,
+        &cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes()[1..],
+    );
 }
 
 /// `:stag` and friends — the same as `:tag`, in a new window.
@@ -116,14 +118,17 @@ pub(crate) fn ex_stag(excmd: &mut ExArg) {
     postponed_split.set(-1);
     postponed_split_flags.set(cmdmod_split());
     postponed_split_tab.set(cmdmod_tab());
-    unsafe { ex_tag_cmd(excmd, cmdnames[excmd.cmdidx.index()].cmd_name.add(1)) };
+    ex_tag_cmd(
+        excmd,
+        &cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes()[1..],
+    );
     postponed_split_flags.set(0);
     postponed_split_tab.set(0);
 }
 
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
 pub(crate) fn ex_tag(excmd: &mut ExArg) {
-    unsafe { ex_tag_cmd(excmd, cmdnames[excmd.cmdidx.index()].cmd_name) };
+    ex_tag_cmd(excmd, cmdnames[excmd.cmdidx.index()].cmd_name.to_bytes());
 }
 
 /// Run a tag command named by `name`, whose *second* letter says which one
@@ -132,12 +137,8 @@ pub(crate) fn ex_tag(excmd: &mut ExArg) {
 /// `ex_ptag` and `ex_stag` pass the name one byte in, so that `:ptnext`
 /// and `:stselect` read the same letter `:tnext` and `:tselect` do. A
 /// leading `l` overrides everything: it is the location-list form.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-unsafe fn ex_tag_cmd(excmd: &mut ExArg, name: *const c_char) {
-    let mut cmd = match ubyte_at(name, 1) {
+fn ex_tag_cmd(excmd: &mut ExArg, name: &[u8]) {
+    let mut cmd = match name.get(1).copied().unwrap_or(0) {
         b'j' => DT_JUMP,
         b's' => DT_SELECT,
         b'p' | b'N' => DT_PREV,
@@ -147,7 +148,7 @@ unsafe fn ex_tag_cmd(excmd: &mut ExArg, name: *const c_char) {
         b'l' => DT_LAST,
         _ => DT_TAG,
     } as c_int;
-    if byte(name) == 'l' as c_int {
+    if name.first() == Some(&b'l') {
         cmd = DT_LTAG as c_int;
     }
     let tag = excmd.line.cstr_from(excmd.line.arg);
@@ -157,16 +158,4 @@ unsafe fn ex_tag_cmd(excmd: &mut ExArg, name: *const c_char) {
         1
     };
     do_tag(tag, cmd, count, c_int::from(excmd.forceit), true);
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
-}
-
-/// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
-fn ubyte_at(p: *const c_char, i: isize) -> u8 {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as u8 }
 }

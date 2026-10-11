@@ -19,7 +19,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::semsg;
@@ -30,11 +29,10 @@ use core::ptr;
 use std::ffi::CString;
 
 use super::*;
-use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;
 use crate::autocmd::state::au_new_curbuf;
 use crate::buffer::state::{swap_exists_action, swap_exists_did_quit};
-use crate::charset::{getdigits_int, skiptowhite_esc, skipwhite};
+use crate::charset::{getdigits_int_at, skip};
 use crate::drawscreen::state::cmdline_row;
 use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
 use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
@@ -53,7 +51,7 @@ use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
-    Cleanup, CmdModFlags, ExArg, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, int64_t,
+    Cleanup, CmdModFlags, ExArg, FAIL, Failed, LineNr, OptInt, OptionSetFlags, int64_t,
 };
 use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
@@ -153,30 +151,6 @@ fn report_count(one: &'static CStr, many: &'static CStr, n: c_int) {
 /// A translated message, as the owned error this family answers with.
 fn owned_err(msg: &'static CStr) -> Option<CString> {
     Some(ex_msg(msg))
-}
-fn skip_white(arg: *mut c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated argument.
-    unsafe { skipwhite(arg) }
-}
-fn skip_to_white(arg: *mut c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated argument.
-    unsafe { skiptowhite_esc(arg) }
-}
-fn head(arg: *mut c_char) -> c_int {
-    // SAFETY: a NUL-terminated argument, so its first byte is readable.
-    unsafe { *arg as c_int }
-}
-fn take_number(arg: &mut *mut c_char) -> c_int {
-    // SAFETY: a NUL-terminated argument starting with a digit.
-    unsafe { getdigits_int(arg, false, 0) }
-}
-fn find_by_pattern(pattern: *mut c_char, end: *mut c_char, unlisted: bool) -> c_int {
-    // SAFETY: a NUL-terminated pattern and a pointer into it.
-    unsafe { buflist_findpat(pattern, end, unlisted, false, false) }
-}
-fn trailing_arg_error(arg: *mut c_char) -> Option<CString> {
-    // SAFETY: the caller's NUL-terminated argument.
-    Some(ex_errmsg(e_trailing_arg, unsafe { cstr::at(arg) }))
 }
 fn jop_clean() -> bool {
     jop_flags.get() & kOptJopFlagClean as c_int as ::core::ffi::c_uint != 0
@@ -298,23 +272,21 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
 }
 
 /// Delete or unload buffers -- the `:bdelete`/`:bunload`/`:bwipeout` range
-/// form, answering an error message or null.
+/// form, answering an error message or `None`.
 ///
 /// `addr_count` 0 is the current buffer, 1 is `end_bnr` followed by whatever
 /// `arg` names, and 2 is the range `start_bnr` to `end_bnr`;  `command` is
 /// `DOBUF_UNLOAD`, `DOBUF_DEL` or `DOBUF_WIPE`.
-///
-/// # Safety
-/// `arg` must be NUL-terminated.
-pub unsafe fn do_bufdel(
+pub fn do_bufdel(
     command: c_int,
-    arg: *mut c_char,
+    arg: &CStr,
     addr_count: c_int,
     start_bnr: c_int,
     end_bnr: c_int,
     forceit: c_int,
 ) -> Option<CString> {
-    let mut arg = arg;
+    let text = arg.to_bytes();
+    let mut at = 0;
     let mut do_current = 0; // delete current buffer?
     let mut deleted = 0; // number of buffers deleted
 
@@ -330,9 +302,9 @@ pub unsafe fn do_bufdel(
     }
 
     let mut bnr = if addr_count == 2 {
-        if head(arg) != 0 {
+        if !text.is_empty() {
             // both range and argument is not allowed
-            return trailing_arg_error(arg);
+            return Some(ex_errmsg(e_trailing_arg, arg));
         }
         start_bnr
     } else {
@@ -357,19 +329,22 @@ pub unsafe fn do_bufdel(
             }
         } else {
             // addr_count == 1
-            arg = skip_white(arg);
-            if head(arg) == NUL {
+            at += skip::white(&text[at..]);
+            if at == text.len() {
                 break;
             }
-            if ascii_isdigit(head(arg)) {
-                bnr = take_number(&mut arg);
+            if text[at].is_ascii_digit() {
+                (bnr, at) = getdigits_int_at(text, at, false, 0);
             } else {
-                let end = skip_to_white(arg);
-                bnr = find_by_pattern(arg, end, command == DOBUF_WIPE as c_int);
+                let len = skip::to_white_esc(&text[at..]);
+                let rest = CStr::from_bytes_until_nul(&arg.to_bytes_with_nul()[at..])
+                    .expect("a tail of a terminated string");
+                let unlisted = command == DOBUF_WIPE as c_int;
+                bnr = buflist_findpat_prefix(rest, len, unlisted, false, false);
                 if bnr < 0 {
                     break; // failed
                 }
-                arg = end;
+                at += len;
             }
         }
         os_breakcheck();

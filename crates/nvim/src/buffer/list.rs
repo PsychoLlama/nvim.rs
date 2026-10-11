@@ -796,15 +796,17 @@ pub(crate) fn buflist_findname_file_id(
 /// `unlisted` searches the unlisted buffers too, when no listed one matched;
 /// `curtab_only` ignores buffers not open in the current tab page.
 ///
-/// [`buflist_findpat`] of the whole of a pattern the caller holds as a
-/// string.
-pub(crate) fn buflist_findpat_cstr(
-    pattern: &CStr,
+/// The pattern is the first `len` bytes of `text` (panics past its end); a
+/// failure names the whole of `text`, as upstream's message does when the
+/// pattern is a word inside a command line.
+pub(crate) fn buflist_findpat_prefix(
+    text: &CStr,
+    len: usize,
     unlisted: bool,
     diffmode: bool,
     curtab_only: bool,
 ) -> c_int {
-    let range = pattern.to_bytes().as_ptr_range();
+    let range = text.to_bytes()[..len].as_ptr_range();
     // SAFETY: the pattern and its end, inside one terminated string.
     unsafe {
         buflist_findpat(

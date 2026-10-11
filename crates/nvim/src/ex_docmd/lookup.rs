@@ -5,12 +5,10 @@
 //! the linear scan at the first command that could match, rather than at
 //! the head of a 557-row table. Everything else here is a special case the
 //! table cannot express.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::types::CmdIdx;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::eval::typval::NumBuf;
 use crate::ex_docmd::address::skip_range;
@@ -21,10 +19,8 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::startup::getout;
 
-use crate::types::{
-    Candidate, CmdAddr, CmdLine, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, size_t,
-};
-use crate::usercmd::{find_ucmd, get_user_command_name, get_user_commands};
+use crate::types::{Candidate, CmdAddr, CmdLine, EvalFuncData, ExArg, ExArgt, Expand, TypVal};
+use crate::usercmd::{find_ucmd, get_user_commands, user_command_name};
 
 /// Is this index a *user* command rather than a row of `cmdnames`?
 ///
@@ -170,7 +166,7 @@ pub fn find_ex_command(excmd: &mut ExArg, mut full: Option<&mut bool>) -> Option
             let name = cmdnames[row].cmd_name;
             if name_matches(name, word) {
                 if let Some(full) = full.as_deref_mut()
-                    && byte_at(name, len as isize) == NUL
+                    && name.count_bytes() == len
                 {
                     *full = true;
                 }
@@ -197,17 +193,12 @@ pub fn find_ex_command(excmd: &mut ExArg, mut full: Option<&mut bool>) -> Option
     end
 }
 
-/// Do the first `word.len()` bytes of the NUL-terminated `name` spell
-/// `word`? `strncmp(name, word, word.len()) == 0`, with the typed side
-/// already a slice.
-fn name_matches(name: *const c_char, word: &[u8]) -> bool {
-    // SAFETY: `name` is a table entry, NUL-terminated; the walk stops at
-    // the first byte that differs, and the terminator differs from every
-    // byte of `word`, which the caller counted out of a NUL-terminated
-    // line.
-    word.iter()
-        .enumerate()
-        .all(|(i, want)| unsafe { *name.add(i) } as u8 == *want)
+/// Do the first `word.len()` bytes of `name` spell `word`?
+/// `strncmp(name, word, word.len()) == 0`: the terminator is compared too,
+/// and differs from every byte of `word`, which the caller counted out of a
+/// NUL-terminated line.
+fn name_matches(name: &CStr, word: &[u8]) -> bool {
+    name.to_bytes_with_nul().starts_with(word)
 }
 
 /// Where the linear scan over `cmdnames` starts for this name.
@@ -296,14 +287,11 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         return;
     }
     let full = if is_user_cmd(ea.cmdidx) {
-        unsafe { get_user_command_name(ea.useridx, ea.cmdidx) }
+        user_command_name(ea.useridx, ea.cmdidx)
     } else {
-        cmdnames[ea.cmdidx.index()].cmd_name
+        Some(ThinCString::from_cstr(cmdnames[ea.cmdidx.index()].cmd_name))
     };
-    // SAFETY: a command's NUL-terminated name, live for the copy.
-    result.write_string(Some(ThinCString::from_cstr(unsafe {
-        CStr::from_ptr(full)
-    })));
+    result.write_string(full);
 }
 
 /// A zeroed `ExArg` with the two fields a lookup needs set the way
@@ -318,34 +306,7 @@ fn blank_exarg() -> ExArg<'static> {
     }
 }
 
-/// The command index for a name of a known length, without the rest of
-/// `find_ex_command`'s bookkeeping. Used by the API's command parser.
-///
-/// # Safety
-///
-/// `cmd` must point at `len` readable bytes.
-pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> CmdIdx {
-    if len == 3 && prefix_eq(cmd, c"def".as_ptr(), 3) {
-        return CmdIdx::SIZE;
-    }
-    // SAFETY: caller contract -- `cmd` is a NUL-terminated name, and the
-    // walk stops at the terminator.
-    if let Some(idx) = one_letter_cmd(|n| unsafe { *cmd.add(n) } as u8) {
-        return idx;
-    }
-    // A linear scan from the head of the table, not the `cmdidxs`
-    // shortcut: this entry point is not on the hot path.
-    let mut row = 0;
-    while row < ROWS {
-        if prefix_eq(cmdnames[row].cmd_name, cmd, len) {
-            break;
-        }
-        row += 1;
-    }
-    CmdIdx::at_row(row)
-}
-
-/// [`excmd_get_cmdidx`] over a slice: the command whose name `text` starts
+/// The command whose name `text` starts
 /// with, the name being its first `len` bytes. What follows the name is read
 /// for the one-letter commands, as the C read past it; the end of `text`
 /// reads as the NUL.
@@ -381,32 +342,12 @@ pub fn excmd_get_argt(idx: CmdIdx) -> ExArgt {
 /// the built-in table are user commands.
 pub(crate) fn get_command_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     match cmdnames.get(idx) {
-        // SAFETY: the table's names are string literals.
-        Some(row) => Some(Candidate::Borrowed(unsafe { CStr::from_ptr(row.cmd_name) })),
+        Some(row) => Some(Candidate::Borrowed(row.cmd_name)),
         None => get_user_commands(expand, idx - cmdnames.len()),
     }
 }
 
 /// The name of built-in command `idx`, borrowed from the table.
 pub(crate) fn builtin_command_cstr(idx: CmdIdx) -> &'static CStr {
-    // SAFETY: the table's names are NUL-terminated string literals.
-    unsafe { CStr::from_ptr(cmdnames[idx.index()].cmd_name) }
-}
-
-/// The name of built-in command `idx`.
-pub(crate) fn builtin_command_name(idx: CmdIdx) -> *mut c_char {
     cmdnames[idx.index()].cmd_name
-}
-
-/// Whether two NUL-terminated strings agree over their first `n` bytes --
-/// `cstr::prefix_eq(a, b, n)` -- as checked code.
-fn prefix_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
-    // SAFETY: two NUL-terminated strings; each scan stops at its terminator.
-    unsafe { cstr::prefix_eq(a, b, n) }
-}
-
-/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
-fn byte_at(p: *const c_char, i: isize) -> c_int {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as c_int }
 }

@@ -234,7 +234,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
             let fullname = if is_user_cmd(excmd.cmdidx) {
                 get_user_command_name(excmd.useridx, excmd.cmdidx)
             } else {
-                builtin_command_name(excmd.cmdidx)
+                builtin_command_cstr(excmd.cmdidx).as_ptr()
             };
             cstr::starts_with(fullname, cstr::bytes_at(cmdname))
         };

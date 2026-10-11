@@ -27,7 +27,7 @@ use super::{Scope, ucmd_name};
 use crate::charset::skip;
 use crate::mapping::set_context_in_map_cmd;
 use crate::mbyte::cluster_len;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::menu::set_context_in_menu_cmd;
 use crate::types::CmdIdx;
 use crate::types::{Candidate, ExArgt, Expand, ExpandContext, UserCmd};
@@ -224,6 +224,14 @@ pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: CmdIdx) -> *mut c
     unsafe { scope.list() }
         .get(idx as usize)
         .map_or(ptr::null_mut(), |cmd| cmd.uc_name)
+}
+
+/// A copy of the name of user command `idx` in `cmdidx`'s table, or `None`
+/// when there is no such command.
+pub(crate) fn user_command_name(idx: c_int, cmdidx: CmdIdx) -> Option<ThinCString> {
+    // SAFETY: a command's name is null or a NUL-terminated string the table
+    // owns; it is copied before anything can redefine the command.
+    unsafe { crate::cstr::at_opt(get_user_command_name(idx, cmdidx)) }.map(ThinCString::from_cstr)
 }
 
 /// The `idx`th of a fixed list.

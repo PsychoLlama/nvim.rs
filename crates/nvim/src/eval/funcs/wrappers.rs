@@ -11,7 +11,7 @@ use super::{
     FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS,
 };
 use crate::api::private::converter::call_handler_for_vimscript;
-use crate::buffer::{buflist_findpat_cstr, find_buf};
+use crate::buffer::{buflist_findpat_prefix, find_buf};
 use crate::eval::buffer::find_buffer;
 use crate::eval::typval::{
     CallFrame, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
@@ -336,7 +336,13 @@ pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     let _cpo = SavedCpo::empty();
     P_MAGIC.set(true);
     let only = curtab_only != 0;
-    let found = find_buf(buflist_findpat_cstr(name.as_cstr(), true, false, only));
+    let found = find_buf(buflist_findpat_prefix(
+        name.as_cstr(),
+        name.as_cstr().count_bytes(),
+        true,
+        false,
+        only,
+    ));
     P_MAGIC.set(save_magic);
 
     // A name no buffer matches may still be a *file* name we know.

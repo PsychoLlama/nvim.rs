@@ -204,14 +204,14 @@ const HELPERS: &str = r#"
 /// `unsafe fn` pointer but not the other way round, so a handler that
 /// still carries the keyword fails to compile here and the table checks
 /// its own rows.
-const fn cmd<const N: usize>(
-    name: &'static [u8; N],
+const fn cmd(
+    name: &'static CStr,
     func: fn(&mut ExArg),
     argt: ExArgt,
     addr: CmdAddr,
 ) -> CommandDefinition {
     CommandDefinition {
-        cmd_name: name.as_ptr() as *mut c_char,
+        cmd_name: name,
         cmd_func: Some(func),
         cmd_preview_func: None,
         cmd_argt: argt,
@@ -220,15 +220,15 @@ const fn cmd<const N: usize>(
 }
 
 /// A row whose command also has a 'inccommand' preview implementation.
-const fn cmd_pv<const N: usize>(
-    name: &'static [u8; N],
+const fn cmd_pv(
+    name: &'static CStr,
     func: fn(&mut ExArg),
     preview: fn(&mut ExArg, c_int, Handle) -> c_int,
     argt: ExArgt,
     addr: CmdAddr,
 ) -> CommandDefinition {
     CommandDefinition {
-        cmd_name: name.as_ptr() as *mut c_char,
+        cmd_name: name,
         cmd_func: Some(func),
         cmd_preview_func: Some(preview),
         cmd_argt: argt,
@@ -385,9 +385,9 @@ pub fn generate(lua_path: &Path) -> Result<(String, String), String> {
         let addr = spell_addr(&row.addr_type)?;
         table.push_str(&match &row.preview_func {
             Some(preview) => {
-                format!("    cmd_pv(b\"{name}\\0\", {func}, {preview}, {flags}, {addr}),\n")
+                format!("    cmd_pv(c\"{name}\", {func}, {preview}, {flags}, {addr}),\n")
             }
-            None => format!("    cmd(b\"{name}\\0\", {func}, {flags}, {addr}),\n"),
+            None => format!("    cmd(c\"{name}\", {func}, {flags}, {addr}),\n"),
         });
     }
     table.push_str("]);\n");
