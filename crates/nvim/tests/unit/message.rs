@@ -178,3 +178,76 @@ fn a_buffer_too_small_for_the_ellipsis_is_merely_cut() {
     // and the tail have nowhere to go.
     assert_eq!(by_copy(&editor, long, 20, 8), b"abcdefg");
 }
+
+/// The history as `:messages` prints it, one entry a line.
+fn history(probe: &crate::support::Probe<'_>) -> String {
+    probe.output("messages")
+}
+
+/// `:echomsg` and errors land in the history and `:echo` does not; a count
+/// keeps the newest, `:messages clear` empties it, and `'messagesopt'`'s
+/// `history:` caps it, dropping the oldest.
+#[test]
+fn the_history_keeps_what_was_said_and_drops_the_oldest() {
+    let editor = editor_lock();
+    let probe = crate::support::Probe::new(&editor);
+    probe.run("messages clear");
+    probe.run("echomsg 'one'");
+    probe.run("echo 'not kept'");
+    probe.run("echomsg 'two'");
+    // Under `:silent!` an error sets `v:errmsg` and is not kept.
+    probe.run("silent! call nosuchfunction()");
+    probe.run("echomsg \"\\nthree\\n\"");
+    probe.check_output("messages", "\none\ntwo\nthree");
+    probe.check_output("2messages", "\ntwo\nthree");
+    probe.run("set messagesopt=hit-enter,history:2");
+    probe.check_output("messages", "\ntwo\nthree");
+    probe.run("echomsg 'four'");
+    probe.check_output("messages", "\nthree\nfour");
+    probe.run("set messagesopt&");
+    probe.run("messages clear");
+    probe.check_output("messages", "");
+}
+
+/// A message longer than a line is kept whole, a multibyte and a control
+/// byte as themselves: the history holds the text, not its rendering.
+#[test]
+fn the_history_holds_the_text_not_its_rendering() {
+    let editor = editor_lock();
+    let probe = crate::support::Probe::new(&editor);
+    probe.run("messages clear");
+    let long = "x".repeat(300);
+    probe.run(&format!("echomsg '{long}'"));
+    probe.run("echomsg \"caf\\u00e9 \\x01\"");
+    let text = history(&probe);
+    assert_eq!(text, format!("\n{long}\ncafé ^A"));
+    probe.run("messages clear");
+}
+
+/// `'messagesopt'` refuses what it cannot use and leaves the old value.
+#[test]
+fn messagesopt_refuses_what_it_cannot_use() {
+    let editor = editor_lock();
+    let probe = crate::support::Probe::new(&editor);
+    for bad in [
+        "history:500",
+        "hit-enter",
+        "wait:10001,history:5",
+        "hit-enter,history:10001",
+        "hit-enter,history:",
+        "hit-enter,history:5,bogus",
+    ] {
+        probe.check_error(
+            &format!("set messagesopt={bad}"),
+            &format!("E474: Invalid argument: messagesopt={bad}"),
+        );
+    }
+    probe.check_error("set messagesopt=wait:0,history:0,progress:c", "none");
+    probe.check_error("set messagesopt=history:7,hit-enter", "none");
+    // An empty item between two commas is no item at all.
+    probe.check_error("set messagesopt=hit-enter,,history:5", "none");
+    probe.check("&messagesopt", "'hit-enter,,history:5'");
+    probe.run("set messagesopt=history:7,hit-enter");
+    probe.check("&messagesopt", "'history:7,hit-enter'");
+    probe.run("set messagesopt&");
+}

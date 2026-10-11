@@ -51,6 +51,7 @@ mod mbyte_oracle;
 mod memline;
 mod memory;
 mod message;
+mod message_oracle;
 mod r#move;
 mod msgpack;
 mod multiqueue;
