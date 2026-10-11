@@ -2,7 +2,7 @@ count	callee	no_raw	defs	def
 534	xfree	0	1	crates/nvim/src/memory/mod.rs
 430	.add	0	2	crates/nvim/src/getchar/buffers.rs
 338	.offset	0	0	
-311	bytes_at	0	1	crates/nvim/src/cstr.rs
+310	bytes_at	0	1	crates/nvim/src/cstr.rs
 239	CStr::from_ptr	0	2	
 232	at	0	3	
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
@@ -423,6 +423,7 @@ count	callee	no_raw	defs	def
 5	store_aff_word	1	1	crates/nvim/src/spellfile/dic.rs
 5	stream_may_close	0	1	crates/nvim/src/event/stream.rs
 5	string_opt	0	1	crates/nvim/src/startup/args.rs
+5	strnlen	0	2	
 5	table	0	1	crates/nvim/src/mpack/rpc.rs
 5	tabstop_padding	0	1	crates/nvim/src/indent/mod.rs
 5	terminal_running	0	1	crates/nvim/src/terminal/mod.rs
@@ -549,7 +550,6 @@ count	callee	no_raw	defs	def
 4	source_runtime_vim_lua	0	1	crates/nvim/src/runtime/search.rs
 4	start_arrow	0	1	crates/nvim/src/edit/undo.rs
 4	stdpaths_user_state_subpath	0	1	crates/nvim/src/os/stdpaths.rs
-4	strnlen	0	2	
 4	strrchr	0	0	
 4	tabstops	0	1	crates/nvim/src/indent/mod.rs
 4	tagstack_clear_entry	0	0	

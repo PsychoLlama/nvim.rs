@@ -14,6 +14,7 @@
 use crate::cstr;
 use crate::vim_snprintf;
 use core::ffi::{c_char, c_int};
+
 use std::ffi::CStr;
 
 use super::*;
@@ -297,15 +298,20 @@ pub(crate) unsafe fn uniquefy_paths(
             //     /file.txt            /           /file.txt
             let short_name = unsafe { path_shorten_fname(path, curdir.as_mut_ptr()) };
             if !short_name.is_null() && short_name > unsafe { path.add(1) } {
+                // `./` and the short name, in place: the name is a tail of
+                // `path` at least two bytes in, so the result is no longer
+                // than the block `path` is. (Upstream formats into `path`
+                // with `MAXPATHL` of room and a source inside it; the block
+                // is the name's own size.)
+                // SAFETY: `short_name` points into `path` past its first two
+                // bytes, at a NUL-terminated tail; `ptr::copy` handles the
+                // overlap.
                 unsafe {
-                    vim_snprintf!(
-                        path,
-                        MAXPATHL as size_t,
-                        c".%s%s".as_ptr(),
-                        PATHSEPSTR.as_ptr(),
-                        short_name,
-                    )
-                };
+                    let tail = cstr::bytes_at(short_name).len() + 1;
+                    *path = b'.' as c_char;
+                    *path.add(1) = PATHSEPSTR.to_bytes()[0] as c_char;
+                    core::ptr::copy(short_name, path.add(2), tail);
+                }
             }
         }
         os_breakcheck();

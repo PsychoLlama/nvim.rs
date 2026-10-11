@@ -181,16 +181,22 @@ pub unsafe fn vim_snprintf(
 /// # Safety
 ///
 /// As [`vim_snprintf`], and `str` must hold a NUL-terminated string within
-/// its `str_m` bytes; the result is appended to it.
+/// its `str_m` bytes; the result is appended to it. A buffer with no NUL in
+/// its `str_m` bytes is full: nothing is written, and the answer is the
+/// length the appended text would have had, as for a full one.
 pub unsafe fn vim_snprintf_add(
     str: *mut c_char,
     str_m: usize,
     fmt: *const c_char,
     args: &[FmtArg<'_>],
 ) -> c_int {
-    // SAFETY: the caller's terminated string.
-    let len = unsafe { cstr::bytes_at(str) }.len();
-    let space = str_m.saturating_sub(len);
+    // SAFETY: the caller's `str_m` bytes; the scan reads no further.
+    let len = unsafe { strnlen(str, str_m) };
+    if len == str_m {
+        // SAFETY: a measuring call writes nothing.
+        return unsafe { vim_snprintf(ptr::null_mut(), 0, fmt, args) };
+    }
+    let space = str_m - len;
     // SAFETY: the rest of the caller's buffer, past its string.
     unsafe { vim_snprintf(str.add(len), space, fmt, args) }
 }

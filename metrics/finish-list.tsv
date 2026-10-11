@@ -482,13 +482,13 @@ optionstr/	optionstr/complete.rs	1	37	0	21	deref:16	-	-	.add:4 CStr::from_ptr:2 
 optionstr/	optionstr/display.rs	1	25	1	20	deref:4 expr:1	str:1	-	eq:2 from:2 .add:1 briopt_check:1 check_colorcolumn:1 fill_culopt_flags:1 getdigits_int:1 parse_winborder:1
 optionstr/	optionstr/flags.rs	1	7	5	7	-	str:6	-	CStr::from_ptr:2 at:1
 optionstr/	optionstr/statusline.rs	1	13	0	12	expr:1	str:1	-	CStr::from_ptr:2 .add:1 .replace:1 from:1 getdigits_int:1 vim_snprintf:1
-path/	*	6	420	57	297	deref:105 expr:10 compound:4	str:64 other:13 pp_str:8 void:2	str:16	CStr::from_ptr:40 .add:21 xfree:18 xstrlcpy:12 at:9 copy:7 os_dirname:6 copy_nonoverlapping:5
+path/	*	6	423	57	296	deref:105 expr:10 compound:5	str:64 other:13 pp_str:8 void:2	str:16	CStr::from_ptr:40 .add:21 xfree:18 xstrlcpy:12 at:9 copy:7 os_dirname:6 copy_nonoverlapping:5
 path/	path/compare.rs	1	31	4	26	expr:3 deref:2	str:7	-	CStr::from_ptr:3 xstrlcpy:3 .add:2 os_fileid:2 os_fileinfo_link:2 .offset_from:1 expand_env:1 os_fileid_equal:1
 path/	path/expand.rs	1	144	11	80	deref:57 compound:3 expr:1	pp_str:8 str:7 other:6	str:1	xfree:13 CStr::from_ptr:7 copy:4 .add:3 ga_clear_strings:3 os_expand_wildcards:3 copy_nonoverlapping:2 ga_init:2
 path/	path/glob.rs	1	50	11	41	deref:7 expr:2	str:8 other:3 void:2	-	CStr::from_ptr:7 at:4 os_fileinfo_link:2 os_path_exists:2 rem_backslash:2 backslash_halve:1 copy_nonoverlapping:1 copy_option_part:1
 path/	path/mod.rs	1	70	11	61	deref:8 expr:1	str:15	str:3	xstrlcpy:9 CStr::from_ptr:4 xstrlcat:4 os_dirname:3 os_fileinfo:3 .add:2 XString::from_raw:2 xfree:2
 path/	path/names.rs	1	44	11	31	deref:9 expr:2 compound:1	str:15 other:1	str:8	CStr::from_ptr:9 .add:4 .sub:1 copy:1 copy_nonoverlapping:1 mb_strcmp_ic:1 mb_strnicmp:1 os_isdir:1
-path/	path/unique.rs	1	81	9	58	deref:22 expr:1	str:12 other:3	str:4	.add:10 CStr::from_ptr:10 at:3 .sub:2 copy:2 ga_remove_duplicate_strings:2 os_dirname:2 vim_snprintf:2
+path/	path/unique.rs	1	84	9	57	deref:22 compound:1 expr:1	str:12 other:3	str:4	.add:10 CStr::from_ptr:10 at:3 .sub:2 copy:2 ga_remove_duplicate_strings:2 os_dirname:2 xfree:2
 plines/	*	3	117	23	81	deref:31 expr:1	str:19 other:16	str:1	.offset_from:6 utfc_next:6 ptr2cells:5 ml_get_buf:4 utf_ptr2str_char_info:4 decor_virt_lines:2 .offset:1 PosRef::new:1
 plines/	plines/lines.rs	1	21	1	12	deref:9	other:3	-	decor_virt_lines:2 ml_get_buf:2 utfc_next:2 utf_ptr2str_char_info:1
 plines/	plines/mod.rs	1	49	18	46	deref:2 expr:1	str:19	str:1	ptr2cells:4 .offset_from:3 utf_ptr2str_char_info:2 utfc_next:2 .offset:1 Win::new:1 get_breakindent_win:1 tabstop_padding:1
@@ -634,8 +634,8 @@ statusline/	statusline/mod.rs	1	24	8	17	deref:5 expr:2	other:5 str:3	other:2 str
 statusline/	statusline/status.rs	1	3	0	0	compound:1	-	-	-
 statusline/	statusline/stl/mod.rs	1	33	1	23	deref:7 expr:3	str:2	str:1	CStr::from_ptr:5 vim_snprintf_safelen:2 append_arg_number:1 atoi:1 describe_sign_text:1 fill_foldcolumn:1 from_raw_parts_mut:1 get_rel_pos:1
 statusline/	statusline/tabline.rs	1	9	1	5	compound:2	-	-	CStr::from_ptr:1 cstr_to_string:1 vim_snprintf:1
-strings/	*	1	46	11	16	expr:6 compound:2 deref:2	str:15 pp_str:1	str:2	bytes_at:3 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
-strings/	strings/raw.rs	1	46	11	16	expr:6 compound:2 deref:2	str:15 pp_str:1	str:2	bytes_at:3 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
+strings/	*	1	47	11	17	expr:6 compound:2 deref:2	str:15 pp_str:1	str:2	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
+strings/	strings/raw.rs	1	47	11	17	expr:6 compound:2 deref:2	str:15 pp_str:1	str:2	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
 syntax/	*	13	185	18	110	deref:48 expr:16 ref:2 compound:1	other:10 str:5 value:4 void:2	other:5 str:3	at:12 .offset:7 .add:5 vim_regfree:4 bytes_at:3 vim_iswordp_buf:3 xfree:3 .assume_init:2
 syntax/	syntax/attr.rs	1	15	0	11	deref:4	-	-	.offset:3 vim_iswordp_buf:2
 syntax/	syntax/clear.rs	1	19	2	10	compound:1	other:2	-	vim_regfree:2 Box::from_raw:1

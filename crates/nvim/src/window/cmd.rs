@@ -821,7 +821,8 @@ fn write_count(buf: &mut CmdBuf, n: int64_t) {
 /// there.
 fn write_count_at(buf: &mut CmdBuf, at: size_t, n: int64_t) {
     let room = buf.len() as size_t - at;
-    let dst = &raw mut buf[at];
+    // A pointer to the rest of the buffer, not to the one element at `at`.
+    let dst = buf[at..].as_mut_ptr();
     // SAFETY: `at` is within the buffer, which has `room` bytes left.
     unsafe { vim_snprintf!(dst, room, c"%ld".as_ptr(), n) };
 }

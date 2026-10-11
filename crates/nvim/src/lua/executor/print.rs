@@ -143,14 +143,17 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
         drop(msg_text);
         let buff = xmalloc(IOSIZE as size_t).cast::<c_char>();
         let fmt = gettext(c"E5114: Converting print argument #%i: %.*s");
-        let len = crate::vim_snprintf!(
+        // What the buffer holds, not what the message would have been:
+        // upstream pushes the would-be length, and reads past the buffer
+        // when the error is longer than it.
+        let len = crate::vim_snprintf_safelen!(
             buff,
             IOSIZE as size_t,
             fmt.as_ptr(),
             curargidx,
             errmsg_len as c_int,
             errmsg,
-        ) as size_t;
+        );
         lua_pushlstring(lstate, buff, len);
         xfree(buff.cast::<c_void>());
         lua_error(lstate)
