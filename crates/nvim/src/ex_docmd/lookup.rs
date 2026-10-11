@@ -198,7 +198,11 @@ pub fn find_ex_command(excmd: &mut ExArg, mut full: Option<&mut bool>) -> Option
 /// and differs from every byte of `word`, which the caller counted out of a
 /// NUL-terminated line.
 fn name_matches(name: &CStr, word: &[u8]) -> bool {
-    name.to_bytes_with_nul().starts_with(word)
+    // A loop rather than `starts_with`: nearly every row differs in its
+    // first byte or two, and a `memcmp` call per row costs more than the
+    // bytes it compares.
+    let name = name.to_bytes_with_nul();
+    word.len() <= name.len() && word.iter().zip(name).all(|(want, got)| want == got)
 }
 
 /// Where the linear scan over `cmdnames` starts for this name.

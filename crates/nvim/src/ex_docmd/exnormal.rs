@@ -95,12 +95,12 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
         return;
     }
 
-    // A copy: the keys run once per line of the range, and may run
-    // commands of their own in between.
-    let keys = CString::new(
-        escape_k_special(excmd.line.arg()).unwrap_or_else(|| excmd.line.arg().to_vec()),
-    )
-    .expect("a command line argument ends at its NUL");
+    // The keys run once per line of the range; the line is this command's
+    // own, and nothing the keys run can reach it.
+    let arg = excmd.line.cstr_from(excmd.line.arg);
+    let escaped = escape_k_special(arg.to_bytes())
+        .map(|keys| CString::new(keys).expect("a command line argument ends at its NUL"));
+    let keys = escaped.as_deref().unwrap_or(arg);
     let remap = if excmd.forceit {
         REMAP_NONE as c_int
     } else {
@@ -118,7 +118,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
                 Win::current().w_cursor.col = 0 as ColNr;
                 check_cursor_moved(Win::current());
             }
-            exec_normal_cmd(&keys, remap, false);
+            exec_normal_cmd(keys, remap, false);
             if !(excmd.addr_count > 0 && excmd.line1 <= excmd.line2 && !got_int.get()) {
                 break;
             }
@@ -137,6 +137,10 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
 /// Answers `None` -- not a copy -- when there is nothing to escape, which is
 /// the common case; the caller then uses the original.
 fn escape_k_special(src: &[u8]) -> Option<Vec<u8>> {
+    // Only a 0x80 byte can need it.
+    if !src.contains(&(K_SPECIAL as u8)) {
+        return None;
+    }
     // The bytes after the first of each character, which are the ones a
     // 0x80 hides in.
     let trailing = |at: usize| &src[at + 1..at + cluster_len(&src[at..]).max(1)];
