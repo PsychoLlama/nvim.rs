@@ -193,8 +193,9 @@ mod write {
                 old_udir,
                 old_synced,
             };
-            // SAFETY: the buffer is live and `hash` is `UNDO_HASH_SIZE` long.
-            unsafe { u_compute_hash(Buf::new(&raw mut *fixture.buf), fixture.hash.as_mut_ptr()) };
+            // SAFETY: the buffer is live.
+            let buf = unsafe { Buf::new(&raw mut *fixture.buf) };
+            u_compute_hash(buf, &mut fixture.hash);
             fixture
         }
 
@@ -224,15 +225,9 @@ mod write {
         /// `u_write_undo(name, forceit, buf, hash)`.
         fn write(&mut self, name: Option<&std::path::Path>, forceit: bool) {
             let name = name.map(|p| CString::new(p.to_str().unwrap()).unwrap());
-            // SAFETY: the buffer and hash are the fixture's.
-            unsafe {
-                u_write_undo(
-                    name.as_deref(),
-                    forceit,
-                    Buf::new(&raw mut *self.buf),
-                    self.hash.as_mut_ptr(),
-                )
-            };
+            // SAFETY: the buffer is the fixture's, and live.
+            let buf = unsafe { Buf::new(&raw mut *self.buf) };
+            u_write_undo(name.as_deref(), forceit, buf, &self.hash);
         }
     }
 

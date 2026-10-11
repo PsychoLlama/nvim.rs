@@ -373,6 +373,24 @@ pub unsafe fn rpc_send_event(id: uint64_t, name: *const c_char, args: Array) -> 
     true
 }
 
+/// [`rpc_send_call`] of a method named as a string, the answer handed to
+/// `read` before the arena it was decoded into is freed.
+pub(crate) fn rpc_call_with<T>(
+    id: uint64_t,
+    method_name: &CStr,
+    args: Array,
+    read: impl FnOnce(Object) -> T,
+) -> Result<T, Error> {
+    let mut result_mem: ArenaMem = ptr::null_mut();
+    // SAFETY: a NUL-terminated method name, owned arguments and a slot of
+    // this frame's, freed below whatever the call answered.
+    let result = unsafe { rpc_send_call(id, method_name.as_ptr(), args, &raw mut result_mem) };
+    let answer = result.map(read);
+    // SAFETY: the arena the call left in the slot, or null; read is done.
+    unsafe { arena_mem_free(result_mem) };
+    answer
+}
+
 /// Sends a request and runs the event loop until the answer arrives.
 ///
 /// The frame lives on this stack frame; the decoder fills it in when the

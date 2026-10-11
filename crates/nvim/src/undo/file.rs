@@ -24,11 +24,7 @@ use crate::semsg;
 /// This is what an undo file stakes its claim on: a buffer whose hash has
 /// moved is holding different text, and the tree in the file describes text
 /// that is no longer there.
-///
-/// # Safety
-///
-/// `hash` points at [`UNDO_HASH_SIZE`] writable bytes.
-pub unsafe fn u_compute_hash(buffer: Buf, hash: *mut uint8_t) {
+pub fn u_compute_hash(buffer: Buf, hash: &mut [u8; UNDO_HASH_SIZE as usize]) {
     let mut ctx = Sha256::new();
     for lnum in 1..=buffer.b_ml.ml_line_count {
         let mut lines = buffer.lines();
@@ -36,10 +32,7 @@ pub unsafe fn u_compute_hash(buffer: Buf, hash: *mut uint8_t) {
         // The terminating NUL goes in too, as a line separator.
         ctx.update(&[0]);
     }
-    // SAFETY: `hash` points at `UNDO_HASH_SIZE` writable bytes, by the
-    // contract above.
-    let out = unsafe { ::core::slice::from_raw_parts_mut(hash, SHA256_SUM_SIZE) };
-    out.copy_from_slice(&ctx.finish());
+    hash.copy_from_slice(&ctx.finish());
 }
 
 /// The undo file `'undodir'` picks for the file at `buf_ffname`, as a fresh
@@ -247,7 +240,7 @@ pub(crate) unsafe fn u_free_uhp(uhp: *mut UndoHeader) {
 ///
 /// `bi` is open for writing on a live buffer and `hash` points at
 /// [`UNDO_HASH_SIZE`] readable bytes.
-pub(crate) unsafe fn serialize_header(bi: &mut BufInfo, hash: *mut uint8_t) -> bool {
+pub(crate) unsafe fn serialize_header(bi: &mut BufInfo, hash: *const uint8_t) -> bool {
     let buf: Buf = bi.bi_buf;
     if !bi.write(&UF_START_MAGIC) {
         return false;

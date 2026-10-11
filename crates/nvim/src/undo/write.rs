@@ -30,11 +30,13 @@ use core::ptr;
 ///
 /// `None` is "pick the name out of 'undodir'", which is what `:wundo` with
 /// no argument means.
-///
-/// # Safety
-///
-/// `hash` points at [`UNDO_HASH_SIZE`] readable bytes.
-pub unsafe fn u_write_undo(name: Option<&CStr>, forceit: bool, buffer: Buf, hash: *mut uint8_t) {
+pub fn u_write_undo(
+    name: Option<&CStr>,
+    forceit: bool,
+    buffer: Buf,
+    hash: &[u8; UNDO_HASH_SIZE as usize],
+) {
+    let hash = hash.as_ptr();
     let name = name.map_or(ptr::null(), CStr::as_ptr);
     let file_name: *mut c_char = if name.is_null() {
         // SAFETY: `b_ffname` is the buffer's own name or NULL.
@@ -75,7 +77,7 @@ unsafe fn write_undo_file(
     automatic: bool,
     forceit: bool,
     buffer: Buf,
-    hash: *mut uint8_t,
+    hash: *const uint8_t,
 ) {
     // SAFETY: a NUL-terminated path, by the contract above.
     if unsafe { os_path_exists(file_name) } {
@@ -225,7 +227,7 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buffer: Bu
 /// # Safety
 ///
 /// `hash` points at [`UNDO_HASH_SIZE`] readable bytes.
-unsafe fn write_tree(bi: &mut BufInfo, buffer: Buf, hash: *mut uint8_t) -> bool {
+unsafe fn write_tree(bi: &mut BufInfo, buffer: Buf, hash: *const uint8_t) -> bool {
     // SAFETY: an open undo file, and `hash` readable for [`UNDO_HASH_SIZE`]
     // bytes, both by the contract above.
     if !unsafe { serialize_header(bi, hash) } {

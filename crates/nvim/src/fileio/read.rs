@@ -77,6 +77,36 @@ pub(crate) fn read_dummy_file(fname: &CStr) -> Result<Loaded, Failed> {
     }
 }
 
+/// [`readfile`] of names the caller holds as strings, for a command.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn readfile_named(
+    fname: Option<&CStr>,
+    sfname: Option<&CStr>,
+    from: LineNr,
+    lines_to_skip: LineNr,
+    lines_to_read: LineNr,
+    excmd: &mut ExArg,
+    flags: c_int,
+    silent: bool,
+) -> Result<Loaded, Failed> {
+    let fname = fname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    // SAFETY: two NUL-terminated names or null, which the read only reads,
+    // and the caller's command.
+    unsafe {
+        readfile(
+            fname,
+            sfname,
+            from,
+            lines_to_skip,
+            lines_to_read,
+            Some(excmd),
+            flags,
+            silent,
+        )
+    }
+}
+
 /// Read the lines of `fname` into the current buffer, after line `from`.
 ///
 /// The caller must check that `fname` is not NULL unless `READ_STDIN` is
@@ -933,9 +963,9 @@ pub(crate) unsafe fn readfile(
 
         // When opening a new file, locate the undo info and read it.
         if read_undo_file {
-            let mut hash = sha_ctx.finish();
-            // SAFETY: the caller's NUL-terminated name; `hash` is 32 bytes.
-            unsafe { u_read_undo(None, hash.as_mut_ptr(), cstr::at_opt(fname)) };
+            let hash = sha_ctx.finish();
+            // SAFETY: the caller's NUL-terminated name.
+            u_read_undo(None, &hash, unsafe { cstr::at_opt(fname) });
         }
 
         // SAFETY: the name the read used, and the caller's command.

@@ -61,6 +61,46 @@ use super::{
 /// Whether stdio has already been claimed. Only one channel may own it.
 static did_stdio: GlobalCell<bool> = GlobalCell::new(false);
 
+/// [`channel_job_start`] of an owned argument vector, with no working
+/// directory, environment or pty size of its own: answers the new channel's
+/// id, or `None` with `status` set as the start sets it.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn channel_job_start_argv(
+    argv: crate::os::shell::Argv,
+    exepath: Option<&CStr>,
+    on_stdout: CallbackReader,
+    on_stderr: CallbackReader,
+    on_exit: Callback,
+    rpc: bool,
+    overlapped: bool,
+    detach: bool,
+    status: &mut VarNumber,
+) -> Option<uint64_t> {
+    // SAFETY: an owned vector in the shape the start takes over, a name or
+    // null, and a status slot of the caller's.
+    let chan = unsafe {
+        channel_job_start(
+            argv.into_raw(),
+            exepath.map_or(ptr::null(), CStr::as_ptr),
+            on_stdout,
+            on_stderr,
+            on_exit,
+            false,
+            rpc,
+            overlapped,
+            detach,
+            kChannelStdinPipe,
+            ptr::null(),
+            0,
+            0,
+            ptr::null_mut(),
+            status,
+        )
+    };
+    // SAFETY: the channel just started, live until the next event turn.
+    (!chan.is_null()).then(|| unsafe { (*chan).id })
+}
+
 /// `rpcstart()`'s spawn: `argv` (the program first) started as a job that
 /// speaks RPC over its pipes, its channel announced. Answers the channel id,
 /// or why the spawn failed, as `channel_job_start`'s status does.

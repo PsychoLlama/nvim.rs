@@ -38,12 +38,12 @@ use super::*;
 /// is refused rather than applied.
 ///
 /// `None` for `name` is "pick the name out of 'undodir'".
-///
-/// # Safety
-///
-/// A live current buffer, and `hash` points at [`UNDO_HASH_SIZE`] readable
-/// bytes.
-pub unsafe fn u_read_undo(name: Option<&CStr>, hash: *const uint8_t, orig_name: Option<&CStr>) {
+pub fn u_read_undo(
+    name: Option<&CStr>,
+    hash: &[u8; UNDO_HASH_SIZE as usize],
+    orig_name: Option<&CStr>,
+) {
+    let hash = hash.as_ptr();
     let name = name.map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
     let orig_name = orig_name.map_or(ptr::null(), CStr::as_ptr);
     // SAFETY: a live current buffer and NUL-terminated names, by the above.

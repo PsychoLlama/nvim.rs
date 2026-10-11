@@ -647,13 +647,13 @@ impl EcmdCmd {
         self == EcmdCmd::None
     }
 
-    /// The command as a NUL-terminated string, for a callee that takes one.
-    /// Null when there is no `+cmd`.
-    pub fn ptr(self, line: &CmdLine) -> *const ::core::ffi::c_char {
+    /// The command, borrowed from `line` (or the shared `$`); `None` when
+    /// there is no `+cmd`.
+    pub fn cstr(self, line: &CmdLine) -> Option<&::core::ffi::CStr> {
         match self {
-            EcmdCmd::None => ::core::ptr::null(),
-            EcmdCmd::Dollar => EcmdCmd::DOLLAR.as_ptr(),
-            EcmdCmd::At(at) => line.ptr_from(at),
+            EcmdCmd::None => None,
+            EcmdCmd::Dollar => Some(EcmdCmd::DOLLAR),
+            EcmdCmd::At(at) => Some(line.cstr_from(at)),
         }
     }
 }

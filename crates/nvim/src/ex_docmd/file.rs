@@ -1,22 +1,27 @@
 //! Commands that name a file or a buffer: reading, editing, finding,
 //! recovering, and the buffer list.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::do_ecmd_named;
 use crate::ex_cmds::newlnum;
-use crate::fileio::Loaded;
+use crate::file_search::find_nth_file_in_path;
+use crate::fileio::readfile_named;
 use crate::guard::Allow;
+use crate::memfile::buf_swap_name;
 use crate::memline::MlFlags;
+use crate::memline::ml_get_len;
 use crate::memory::XString;
+use crate::message::msg;
 use crate::message_fmt::msg_bytes;
+use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::CmdIdx;
+use crate::undo::UNDO_HASH_SIZE;
+use crate::undo::u_compute_hash;
 use crate::window::valid_win;
 use crate::winlayer::WinId;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use crate::arglist::check_arg_idx;
 use crate::buffer::{buf_is_prompt, current_buf, maketitle, otherfile, setaltfname, setfname};
@@ -28,7 +33,6 @@ use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::ex_docmd::xfree;
 use crate::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
     DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, cmdmod_has, ex_pressedreturn,
@@ -36,7 +40,7 @@ use crate::ex_docmd::{
 };
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
-use crate::file_search::{FileNameOpts, vim_findfile_cleanup};
+use crate::file_search::FileNameOpts;
 
 use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::getchar::stuff_readbuf;
@@ -47,7 +51,7 @@ use crate::option::vars::{P_SHADA, p_awa, p_shada};
 use crate::startup::{readonlymode, recoverymode};
 use crate::state::mode::{exmode_active, pending_exmode_active};
 
-use crate::memline::{ml_delete, ml_get, ml_preserve, ml_recover};
+use crate::memline::{ml_delete, ml_preserve, ml_recover};
 
 use crate::message::emsg;
 
@@ -59,9 +63,7 @@ use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::ui::kUICmdline;
-use crate::types::{
-    Cleanup, CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MemFile, NUL, size_t, uint8_t,
-};
+use crate::types::{Cleanup, CmdModFlags, CpoFlag, ExArg, LineNr};
 use crate::ui::ui_has;
 use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
 
@@ -91,8 +93,7 @@ pub(crate) fn is_other_file(fnum: c_int, ffname: Option<&CStr>) -> bool {
     {
         return path_fnamecmp(ffname, short) != 0;
     }
-    // SAFETY: a NUL-terminated name; `otherfile` only reads it.
-    unsafe { otherfile(ffname.as_ptr().cast_mut()) }
+    otherfile(ffname)
 }
 
 /// `:buffer`.
@@ -126,11 +127,8 @@ pub(crate) fn do_exbuffer(excmd: &mut ExArg) {
 
 /// Run the `+cmd` argument, once the buffer it applies to is current.
 fn run_ecmd_cmd(excmd: &mut ExArg) {
-    if !excmd.do_ecmd_cmd.is_none() {
-        let cmd = excmd.do_ecmd_cmd.ptr(&excmd.line);
-        // SAFETY: a NUL-terminated command, either the line's own or the
-        // shared `$`.
-        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
+    if let Some(cmd) = excmd.do_ecmd_cmd.cstr(&excmd.line) {
+        let _ = do_cmdline_cmd(cmd);
     }
 }
 
@@ -228,63 +226,14 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
     let fname = if !get_findfunc().is_empty() {
         findfunc_find_file(excmd.line.arg(), count)
     } else {
-        find_nth_on_path(
-            excmd.line.cstr_from(excmd.line.arg),
-            excmd.addr_count,
-            excmd.line2,
-        )
+        let nth = if excmd.addr_count > 0 { excmd.line2 } else { 1 };
+        find_nth_file_in_path(excmd.line.arg(), FileNameOpts::MESS, nth)
     };
-    if fname.is_null() {
+    let Some(fname) = fname else {
         return;
-    }
-    // SAFETY: the name the search answered, NUL-terminated and owned here.
-    excmd.set_arg_text(unsafe { cstr::bytes_at(fname) });
-    do_exedit(excmd, None);
-    xfree(fname as *mut c_void);
-}
-
-/// The `count`'th match for `pat` on 'path'.
-///
-/// The search context is what makes the second and later matches cheap:
-/// each `find_file_in_path(NULL, …)` resumes the walk the first one
-/// started.
-///
-fn find_nth_on_path(pat: &CStr, addr_count: c_int, count: LineNr) -> *mut c_char {
-    let mut file_to_find: *mut c_char = ptr::null_mut();
-    let mut search_ctx: *mut c_char = ptr::null_mut();
-    let pat_len = pat.count_bytes();
-    let mut fname = {
-        find_file_in_path(
-            pat.as_ptr().cast_mut(),
-            pat_len,
-            FileNameOpts::MESS,
-            true,
-            Buf::current().name.full_ptr(),
-            &raw mut file_to_find,
-            &raw mut search_ctx,
-        )
     };
-    if addr_count > 0 {
-        let mut n = count;
-        while !fname.is_null() && {
-            n -= 1;
-            n > 0
-        } {
-            xfree(fname as *mut c_void);
-            fname = find_file_in_path(
-                ptr::null_mut(),
-                0 as size_t,
-                FileNameOpts::MESS,
-                false,
-                Buf::current().name.full_ptr(),
-                &raw mut file_to_find,
-                &raw mut search_ctx,
-            );
-        }
-    }
-    xfree(file_to_find as *mut c_void);
-    unsafe { vim_findfile_cleanup(search_ctx as *mut c_void) };
-    fname
+    excmd.set_arg_text(fname.as_bytes());
+    do_exedit(excmd, None);
 }
 
 /// `:edit`, `:enew`, `:view`, `:badd`, `:balt`.
@@ -355,13 +304,14 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
     {
         // A new, empty buffer.
         setpcmark();
-        let _ = do_ecmd(
+        let flags = EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit);
+        let _ = do_ecmd_named(
             0,
             None,
             None,
-            excmd,
+            Some(&mut *excmd),
             newlnum::ONE as LineNr,
-            EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit),
+            flags,
             old_curwin.is_none().then(|| Win::current().id()),
         );
     } else if idx != CmdIdx::split && idx != CmdIdx::vsplit
@@ -386,17 +336,19 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         // autocommands may reallocate, which is the same hazard written
         // down.
         let name = (idx != CmdIdx::enew).then(|| excmd.line.cstr_from(excmd.line.arg).to_owned());
-        let opened = do_ecmd(
+        let flags = EcmdFlags::HIDE.when(buf_hide(Buf::current()))
+            | EcmdFlags::FORCEIT.when(excmd.forceit)
+            | EcmdFlags::OLDBUF.when(old_curwin.is_some())
+            | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
+            | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt);
+        let lnum = excmd.do_ecmd_lnum;
+        let opened = do_ecmd_named(
             0,
             name.as_deref(),
             None,
-            excmd,
-            excmd.do_ecmd_lnum,
-            EcmdFlags::HIDE.when(buf_hide(Buf::current()))
-                | EcmdFlags::FORCEIT.when(excmd.forceit)
-                | EcmdFlags::OLDBUF.when(old_curwin.is_some())
-                | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
-                | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt),
+            Some(&mut *excmd),
+            lnum,
+            flags,
             old_curwin.is_none().then(|| Win::current().id()),
         );
 
@@ -444,12 +396,10 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
 
 /// `:swapname`.
 pub(crate) fn ex_swapname(_excmd: &mut ExArg) {
-    let mfp = Buf::current().b_ml.ml_mfp;
-    if mfp.is_null() || mf_fname(mfp).is_null() {
-        msg(gettext(c"No swap file".as_ptr()), 0);
-    } else {
-        msg(mf_fname(mfp), 0);
-    }
+    match buf_swap_name(Buf::current()) {
+        None => msg(gettext(c"No swap file"), 0),
+        Some(name) => msg(&name, 0),
+    };
 }
 
 /// `:read` — insert a file, or the output of a command.
@@ -471,7 +421,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         // own name is not borrowable across it.
         let full = Buf::current().name.full().map(CStr::to_owned);
         let shown = Buf::current().name.shown().map(CStr::to_owned);
-        readfile(
+        readfile_named(
             full.as_deref(),
             shown.as_deref(),
             excmd.line2,
@@ -489,7 +439,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         }
         // A copy, as `ex_edit`'s: `readfile` takes the command too.
         let name = excmd.line.cstr_from(excmd.line.arg).to_owned();
-        readfile(Some(&name), None, excmd.line2, 0, MAXLNUM, excmd, 0, false)
+        readfile_named(Some(&name), None, excmd.line2, 0, MAXLNUM, excmd, 0, false)
     };
 
     if read.is_err() {
@@ -508,7 +458,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         } else {
             1
         };
-        if byte(ml_get(lnum)) == NUL && u_savedel(lnum, 1).is_ok() {
+        if ml_get_len(lnum) == 0 && u_savedel(lnum, 1).is_ok() {
             let _ = ml_delete(lnum);
             if Win::current().w_cursor.lnum > 1 && Win::current().w_cursor.lnum >= lnum {
                 Win::current().w_cursor.lnum -= 1;
@@ -528,22 +478,17 @@ pub(crate) fn ex_bang(excmd: &mut ExArg) {
 /// `:wundo` — write the undo tree to a file, tagged with a hash of the
 /// buffer text so that reading it back into a different buffer is refused.
 pub(crate) fn ex_wundo(excmd: &mut ExArg) {
-    let mut hash: [uint8_t; 32] = [0; 32];
-    u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
-    let buffer = Buf::current();
-    let hash = hash.as_mut_ptr();
+    let mut hash = [0; UNDO_HASH_SIZE as usize];
+    u_compute_hash(Buf::current(), &mut hash);
     let name = excmd.line.cstr_from(excmd.line.arg);
-    // SAFETY: `hash` is the 32-byte local above.
-    unsafe { u_write_undo(Some(name), excmd.forceit, buffer, hash) };
+    u_write_undo(Some(name), excmd.forceit, Buf::current(), &hash);
 }
 
 /// `:rundo`.
 pub(crate) fn ex_rundo(excmd: &mut ExArg) {
-    let mut hash: [uint8_t; 32] = [0; 32];
-    u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
-    let name = excmd.line.cstr_from(excmd.line.arg);
-    // SAFETY: `hash` is the 32-byte local above.
-    unsafe { u_read_undo(Some(name), &raw mut hash as *mut uint8_t, None) };
+    let mut hash = [0; UNDO_HASH_SIZE as usize];
+    u_compute_hash(Buf::current(), &mut hash);
+    u_read_undo(Some(excmd.line.cstr_from(excmd.line.arg)), &hash, None);
 }
 
 /// `:checkpath` — every file 'path' reaches from the includes of this one.
@@ -602,110 +547,8 @@ fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, do_o
     crate::ex_cmds::do_bang(addr_count, args, forceit, do_in, do_out)
 }
 
-/// `do_ecmd()` as checked code.
-#[allow(clippy::too_many_arguments)]
-fn do_ecmd(
-    fnum: c_int,
-    ffname: Option<&CStr>,
-    sfname: Option<&CStr>,
-    excmd: &mut ExArg,
-    newlnum: LineNr,
-    flags: EcmdFlags,
-    oldwin: Option<WinId>,
-) -> Result<(), Failed> {
-    // SAFETY: two NUL-terminated names, or none; `do_ecmd` replaces the
-    // locals holding them rather than writing through either.
-    let ffname = ffname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    unsafe { crate::ex_cmds::do_ecmd(fnum, ffname, sfname, Some(excmd), newlnum, flags, oldwin) }
-}
-
-/// `find_file_in_path()` as checked code.
-#[allow(clippy::too_many_arguments)]
-fn find_file_in_path(
-    name: *mut c_char,
-    len: size_t,
-    options: FileNameOpts,
-    first: bool,
-    rel_fname: *mut c_char,
-    file_to_find: *mut *mut c_char,
-    search_ctx: *mut *mut c_char,
-) -> *mut c_char {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe {
-        crate::file_search::find_file_in_path(
-            name,
-            len,
-            options,
-            first,
-            rel_fname,
-            file_to_find,
-            search_ctx,
-        )
-    }
-}
-
-/// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
-}
-
 /// `goto_buffer()` as checked code.
 fn goto_buffer(excmd: &mut ExArg, start: c_int, dir: c_int, count: c_int) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     crate::buffer::goto_buffer(excmd, start, dir, count)
-}
-
-/// `mf_fname()` as checked code.
-fn mf_fname(mfp: *const MemFile) -> *const c_char {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::memfile::mf_fname(mfp) }
-}
-
-/// `msg()` as checked code.
-fn msg(s: *const c_char, hl_id: c_int) -> bool {
-    // SAFETY: a NUL-terminated message.
-    crate::message::msg(unsafe { cstr::at(s) }, hl_id)
-}
-
-/// `readfile()` as checked code.
-#[allow(clippy::too_many_arguments)]
-fn readfile(
-    fname: Option<&CStr>,
-    sfname: Option<&CStr>,
-    from: LineNr,
-    lines_to_skip: LineNr,
-    lines_to_read: LineNr,
-    excmd: &mut ExArg,
-    flags: c_int,
-    silent: bool,
-) -> Result<Loaded, Failed> {
-    // SAFETY: two NUL-terminated names, or none.
-    let fname = fname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    unsafe {
-        crate::fileio::readfile(
-            fname,
-            sfname,
-            from,
-            lines_to_skip,
-            lines_to_read,
-            Some(excmd),
-            flags,
-            silent,
-        )
-    }
-}
-
-/// `u_compute_hash()` as checked code.
-fn u_compute_hash(buffer: Buf, hash: *mut uint8_t) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::undo::u_compute_hash(buffer, hash) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
 }

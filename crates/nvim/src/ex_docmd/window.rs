@@ -6,11 +6,12 @@
 //! command's own storage and `winlayer`'s [`Win`]/[`TabPage`] carry the
 //! editor's, which leaves only the calls into modules that are still
 //! transpiled inside an `unsafe` block.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::autocmd::fire_autocmds;
 use crate::charset::{getdigits_at, getdigits_int_at};
-use crate::cstr;
+use crate::file_search::find_nth_file_in_path;
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::msg_display_bytes;
 use crate::message_fmt::msg_bytes;
@@ -20,12 +21,11 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::winlayer::WinId;
 use crate::winlayer::last_used_tab;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::autocmd::apply_autocmds;
-use crate::buffer::{buf_is_quickfix, buf_spname};
+use crate::buffer::{buf_is_quickfix, buf_spname_owned};
 use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{UPD_CLEAR, UPD_VALID, screen_resize};
 use crate::ex_cmds::prepare_tagpreview;
@@ -38,18 +38,17 @@ use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::tags::ex_findpat;
-use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
+use crate::file_search::FileNameOpts;
 use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
-use crate::memory::xfree;
 use crate::message::state::{msg_col, msg_scroll};
 use crate::message::{e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode};
 use crate::message::{emsg, msg_display, msg_ext_set_kind, msg_putchar, msg_start};
 use crate::normal::do_check_scrollbind;
 use crate::option::get_findfunc;
 use crate::option::vars::p_pvh;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::tag::state::{g_do_tagpreview, postponed_split_flags, postponed_split_tab};
@@ -82,25 +81,14 @@ fn count(excmd: &ExArg, def: c_int) -> c_int {
 // ---------------------------------------------------------------------------
 // The neighbours that are still transpiled, one wrapper each.
 
-/// `_()`: the translated message.
-fn tr(msg: *const c_char) -> &'static CStr {
-    // SAFETY: a NUL-terminated message, and `gettext` answers one too.
-    unsafe { CStr::from_ptr(gettext_ptr(msg).as_ptr()) }
-}
-
 /// `_(msg)` as an owned Ex-command error message.
-fn err_msg(msg: *const c_char) -> Option<CString> {
-    Some(tr(msg).to_owned())
+fn err_msg(msg: &'static CStr) -> Option<CString> {
+    Some(gettext(msg).to_owned())
 }
 
 /// `emsg(_(msg))`.
 fn err(msg: &'static CStr) {
     emsg(gettext(msg));
-}
-
-fn free<T>(p: *mut T) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { xfree(p as *mut c_void) };
 }
 
 /// `do_exedit()`: run the `:edit` half of a command that opened a window.
@@ -151,7 +139,7 @@ pub(crate) fn current_tab_nr(tab: Option<TabPage>) -> c_int {
 /// The handler every command modifier carries in the table, for the case
 /// where it was typed as a command in its own right.
 pub(crate) fn ex_wrongmodifier(excmd: &mut ExArg) {
-    excmd.errmsg = err_msg(e_invcmd.as_ptr());
+    excmd.errmsg = err_msg(e_invcmd);
 }
 
 /// `:split`, `:vsplit`, `:new`, `:sfind`, `:tabedit`, `:tabnew`,
@@ -183,14 +171,11 @@ fn splitview(excmd: &mut ExArg) {
 
     // `:sfind`/`:tabfind` resolve the name through 'findfunc' or 'path'
     // before anything is opened.
-    let mut fname = ptr::null_mut();
     if is(excmd, CmdIdx::sfind) || is(excmd, CmdIdx::tabfind) {
-        fname = find_file(excmd.line.arg(), count(excmd, 1));
-        if fname.is_null() {
+        let Some(fname) = find_file(excmd.line.arg(), count(excmd, 1)) else {
             return;
-        }
-        // SAFETY: the name the search answered, NUL-terminated.
-        excmd.set_arg_text(unsafe { cstr::bytes_at(fname) });
+        };
+        excmd.set_arg_text(fname.as_bytes());
     }
 
     if use_tab {
@@ -210,7 +195,6 @@ fn splitview(excmd: &mut ExArg) {
         }
         edit(excmd, Some(old_curwin));
     }
-    free(fname);
 }
 
 /// `WSP_VERT` when the command was spelled with a leading `v`.
@@ -225,23 +209,12 @@ fn reset_binding(mut win: Win) {
     win.w_onebuf_opt.wo_crb = 0;
 }
 
-/// `:sfind`/`:tabfind`: resolve the argument to a file name, or null.
-fn find_file(arg: &[u8], count: c_int) -> *mut c_char {
+/// `:sfind`/`:tabfind`: resolve the argument to a file name.
+fn find_file(arg: &[u8], count: c_int) -> Option<ThinCString> {
     if !get_findfunc().is_empty() {
         return findfunc_find_file(arg, count);
     }
-    let mut file_to_find: *mut c_char = ptr::null_mut();
-    let mut search_ctx: *mut c_char = ptr::null_mut();
-    let (ff, sc) = (&raw mut file_to_find, &raw mut search_ctx);
-    let (mess, from) = (FileNameOpts::MESS, Buf::current().name.full_ptr());
-    let name = arg.as_ptr().cast::<c_char>().cast_mut();
-    // SAFETY: the caller's argument, `arg.len()` bytes of it, and the
-    // search's own two slots.
-    let found = unsafe { find_file_in_path(name, arg.len(), mess, true, from, ff, sc) };
-    free(file_to_find);
-    // SAFETY: the context `find_file_in_path` filled in, or null.
-    unsafe { vim_findfile_cleanup(search_ctx as *mut c_void) };
-    found
+    find_nth_file_in_path(arg, FileNameOpts::MESS, 1)
 }
 
 /// The `:tabedit`/`:tabfind`/`:tabnew` half of [`splitview`].
@@ -261,9 +234,7 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
     }
     edit(excmd, Some(old_curwin));
     let (ev, buf) = (AutoEvent::TabNewEntered, Buf::current_or_none());
-    let (no_fname, no_file) = (ptr::null_mut(), ptr::null_mut());
-    // SAFETY: an event with no file name, over the current buffer.
-    unsafe { apply_autocmds(ev, no_fname, no_file, false, buf) };
+    fire_autocmds(ev, false, buf);
 
     // The window left behind gets the new buffer as its alternate file.
     if Win::current_raw() != old_curwin.raw()
@@ -340,7 +311,7 @@ fn tabnext(excmd: &mut ExArg) {
     } else {
         tab_number = excmd.line2 as c_int;
         if tab_number < 1 {
-            excmd.errmsg = err_msg(e_invrange.as_ptr());
+            excmd.errmsg = err_msg(e_invrange);
             return;
         }
     }
@@ -419,14 +390,15 @@ fn list_tab_windows(tabpage: TabPage, lastused_win: Option<Win>) {
 /// file name with the home directory folded back to `~` -- cut, as upstream's
 /// `IObuff` cut it.
 fn fill_name(buffer: Buf) -> XString {
-    let special = buf_spname(buffer);
-    if special.is_null() {
-        let fname = buffer.name.shown().unwrap_or(c"");
-        home_replace_in(Some(buffer), fname, IOSIZE as usize, true)
-    } else {
-        // SAFETY: a scratch buffer's NUL-terminated special name.
-        let special = unsafe { cstr::bytes_at(special) };
-        XString::from_bytes(&special[..special.len().min(IOSIZE as usize - 1)])
+    match buf_spname_owned(buffer) {
+        None => {
+            let fname = buffer.name.shown().unwrap_or(c"");
+            home_replace_in(Some(buffer), fname, IOSIZE as usize, true)
+        }
+        Some(special) => {
+            let special = special.as_cstr().to_bytes();
+            XString::from_bytes(&special[..special.len().min(IOSIZE as usize - 1)])
+        }
     }
 }
 
@@ -574,7 +546,7 @@ fn wincmd(excmd: &mut ExArg) {
 
 /// The Vim commands that only make sense with a built-in GUI.
 pub(crate) fn ex_nogui(excmd: &mut ExArg) {
-    excmd.errmsg = err_msg(c"E25: Nvim does not have a built-in GUI".as_ptr());
+    excmd.errmsg = err_msg(c"E25: Nvim does not have a built-in GUI");
 }
 
 /// `:popup`.

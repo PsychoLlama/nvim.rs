@@ -498,8 +498,8 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
         if bufref.valid() && buffer.b_p_udf != 0 && !buffer.name.full().is_none() {
             // Any existing undo file is unusable, write it now.
             let mut hash = [0u8; UNDO_HASH_SIZE as usize];
-            unsafe { u_compute_hash(buffer, hash.as_mut_ptr()) };
-            unsafe { u_write_undo(None, false, buffer, hash.as_mut_ptr()) };
+            u_compute_hash(buffer, &mut hash);
+            u_write_undo(None, false, buffer, &hash);
         }
     }
 

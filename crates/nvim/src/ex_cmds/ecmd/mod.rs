@@ -84,6 +84,23 @@ use ::libc::time;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
+/// [`do_ecmd`] of names the caller holds as strings, which it only reads:
+/// the locals holding them are replaced, never written through.
+pub(crate) fn do_ecmd_named(
+    fnum: c_int,
+    ffname: Option<&CStr>,
+    sfname: Option<&CStr>,
+    excmd: Option<&mut ExArg>,
+    newlnum: LineNr,
+    flags: EcmdFlags,
+    oldwin: Option<WinId>,
+) -> Result<(), Failed> {
+    let ffname = ffname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    // SAFETY: two NUL-terminated names or null, and the caller's command.
+    unsafe { do_ecmd(fnum, ffname, sfname, excmd, newlnum, flags, oldwin) }
+}
+
 /// Set `v:swapcommand` for the SwapExists autocommands: `[+cmd]` to be
 /// executed (e.g. `+10`), or a `G` jump to `newlnum` when there is no command.
 ///
@@ -269,9 +286,15 @@ pub(crate) unsafe fn do_ecmd(
     // SAFETY: `curwin` is the live current window, and the handle is used
     // only inside this call.
     let so = ScrollOff::of(Win::current(), ScrollMargin::Lines);
-    let command = excmd.as_deref().map_or(ptr::null_mut(), |asked| {
-        asked.do_ecmd_cmd.ptr(&asked.line).cast_mut()
-    });
+    // A copy: the command line is the caller's, and `excmd` is lent on to
+    // the read below while the command is still wanted.
+    let command_text = excmd
+        .as_deref()
+        .and_then(|asked| asked.do_ecmd_cmd.cstr(&asked.line))
+        .map(CStr::to_owned);
+    let command = command_text
+        .as_ref()
+        .map_or(ptr::null_mut(), |text| text.as_ptr().cast_mut());
     let has_command = excmd.is_some();
 
     let mut old_curbuf = BufRef::of_opt(current_buf());
@@ -539,7 +562,7 @@ unsafe fn resolve_target(
     if !free_fname.is_null() {
         *ffname = *free_fname;
     }
-    Target::Editing(unsafe { otherfile(*ffname) })
+    Target::Editing(otherfile(unsafe { CStr::from_ptr(*ffname) }))
 }
 
 /// Re-edit the current file in the buffer it already has: store the contents

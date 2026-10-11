@@ -162,7 +162,7 @@ unsafe fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
         // SAFETY: caller contract; `fix_fname` hands back an owned name,
         // which is freed once `otherfile` has read it.
         let full = unsafe { fix_fname(arg_name(argn)) };
-        other = unsafe { otherfile(full) };
+        other = otherfile(unsafe { CStr::from_ptr(full) });
         unsafe { xfree(full.cast()) };
         if other {
             return true;

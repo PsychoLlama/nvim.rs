@@ -314,13 +314,11 @@ pub fn buflist_altfpos(win: Win) {
 // Is this the same file?
 
 /// Whether `ffname` (a full path) names a different file from the current
-/// buffer's.
-///
-/// # Safety
-///
-/// `ffname` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn otherfile(ffname: *mut c_char) -> bool {
-    // SAFETY: the current buffer and a NUL-terminated full path.
+/// buffer's. The name is only read.
+pub fn otherfile(ffname: &CStr) -> bool {
+    let ffname = ffname.as_ptr().cast_mut();
+    // SAFETY: the current buffer and a NUL-terminated full path, which
+    // `otherfile_buf` only reads.
     unsafe { otherfile_buf(Buf::current(), ffname, ptr::null_mut(), false) }
 }
 

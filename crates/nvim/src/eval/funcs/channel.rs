@@ -413,7 +413,7 @@ pub fn f_serverstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         ThinCString::from_cstr(numbuf.string(&args[0])).into_raw()
     };
 
-    let status = unsafe { server_start(address) };
+    let status = server_start(unsafe { crate::cstr::at_opt(address) });
     unsafe { xfree(address as *mut c_void) };
     if status != 0 {
         let why = if status > 0 {
@@ -456,7 +456,7 @@ pub fn f_serverstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     // v:_null_string stops nothing.
     if let Some(address) = args[0].string_ref() {
-        result.write_number(unsafe { server_stop(address.as_ptr(), false) } as VarNumber);
+        result.write_number(server_stop(address.as_cstr(), false) as VarNumber);
     }
 }
 

@@ -727,7 +727,10 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
         // Execute [+cmd]. No need to execute [++opts]: those only apply
         // to newly loaded buffers.
         if !excmd.do_ecmd_cmd.is_none() {
-            let cmd = excmd.do_ecmd_cmd.ptr(&excmd.line).cast_mut();
+            let text = excmd.do_ecmd_cmd.cstr(&excmd.line).map(CStr::to_owned);
+            let cmd = text
+                .as_ref()
+                .map_or(ptr::null_mut(), |t| t.as_ptr().cast_mut());
             let did_set_swapcommand = unsafe { set_swapcommand(cmd, 0 as LineNr) };
             let verbose = DoCmdOpts::VERBOSE;
             let _ = do_cmdline(Some(unsafe { cstr::bytes_at(cmd) }), None, verbose);

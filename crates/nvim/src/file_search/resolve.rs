@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::message_fmt::{c_str, emsg_text};
 use crate::narrow::len_as_int;
 use crate::option::vars::P_CDPATH;
@@ -31,6 +31,54 @@ use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
+
+/// The `nth` match (from 1) for `name` along `'path'`, relative to the
+/// current buffer's file; reported when there is none and `options` asks
+/// for it. Each match after the first resumes the walk the first started.
+pub(crate) fn find_nth_file_in_path(
+    name: &[u8],
+    options: FileNameOpts,
+    nth: LineNr,
+) -> Option<ThinCString> {
+    // A copy with room for the terminator the search writes after the name,
+    // and puts back.
+    let mut copy = name.to_vec();
+    copy.push(0);
+    let (mut file_to_find, mut search_ctx) = (ptr::null_mut(), ptr::null_mut());
+    let mut find = |name: *mut c_char, len: usize, first: bool| {
+        let from = Buf::current().name.full_ptr();
+        // SAFETY: `name` is null or `len` writable bytes and a terminator,
+        // the relative name is the current buffer's, and the two slots are
+        // this frame's, null or what the last call left in them.
+        let found = unsafe {
+            find_file_in_path(
+                name,
+                len,
+                options,
+                first,
+                from,
+                &raw mut file_to_find,
+                &raw mut search_ctx,
+            )
+        };
+        // SAFETY: an allocated NUL-terminated name, or null, handed over.
+        unsafe { ThinCString::from_raw(found) }
+    };
+    let mut found = find(copy.as_mut_ptr().cast(), name.len(), true);
+    let mut n = nth;
+    while found.is_some() && {
+        n -= 1;
+        n > 0
+    } {
+        found = find(ptr::null_mut(), 0, false);
+    }
+    // SAFETY: both are null or what the search allocated, freed once.
+    unsafe {
+        xfree(file_to_find.cast());
+        vim_findfile_cleanup(search_ctx.cast());
+    }
+    found
+}
 
 /// Find the file `ptr[len]` in `'path'`. Also finds directory names.
 ///

@@ -39,7 +39,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr};
 
 use crate::eval::typval::callback_free;
@@ -176,6 +176,22 @@ pub(super) fn translated(msg: &'static CStr) -> *const c_char {
 // would invalidate every pointer previously derived from the same storage. All
 // the accessors below are raw projections from the caller's `*mut Channel`, so
 // there is one provenance chain per channel and no aliasing between them.
+
+/// Stop the job behind channel `id` and wait `ms` for it to go: the wait's
+/// answer, or `None` when there is no such channel any more.
+pub(crate) fn channel_job_stop_wait(id: uint64_t, ms: c_int) -> Option<c_int> {
+    let chan = find_channel(id);
+    if chan.is_null() {
+        return None;
+    }
+    // SAFETY: a live job channel, looked up just now; the stop and the wait
+    // are what `:restart` does to the job it started.
+    unsafe {
+        let proc = channel_proc(chan);
+        crate::event::proc::proc_stop(proc);
+        Some(crate::event::proc::proc_wait(proc, ms, ptr::null_mut()))
+    }
+}
 
 /// The child process behind a job channel.
 ///

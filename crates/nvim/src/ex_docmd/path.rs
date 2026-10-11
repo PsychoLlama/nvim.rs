@@ -134,10 +134,8 @@ pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Result<Vec<XString>, Failed
 /// putting the byte back afterwards. A slice says how long the argument is
 /// without borrowing the line's terminator, so the copy here replaces that
 /// whole dance.
-pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> *mut c_char {
-    let mut ret_fname: *mut c_char = ptr::null_mut();
+pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> Option<ThinCString> {
     let findarg = cstr::owned(findarg);
-
     let mut held = call_findfunc(findarg.to_bytes(), kBoolVarFalse);
     let fname_count = list_len(held.as_deref());
     if fname_count == 0 {
@@ -146,19 +144,16 @@ pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> *mut c_char {
     } else if count > fname_count {
         let findarg = msg_cstr(&findarg);
         semsg!("E347: No more file \"{findarg}\" found in path");
-    } else {
-        let li = list_find(held.as_deref_mut(), count - 1);
-        if let Some(li) = li
-            && li.li_tv.v_type() as c_uint == VAR_STRING as c_uint
-        {
-            // The null string, which upstream's `xstrdup` crashed on, reads
-            // as the empty one.
-            let name = li.li_tv.string_cstr().unwrap_or(c"");
-            ret_fname = ThinCString::from_cstr(name).into_raw();
-        }
+    } else if let Some(li) = list_find(held.as_deref_mut(), count - 1)
+        && li.li_tv.v_type() as c_uint == VAR_STRING as c_uint
+    {
+        // The null string, which upstream's `xstrdup` crashed on, reads
+        // as the empty one.
+        return Some(ThinCString::from_cstr(
+            li.li_tv.string_cstr().unwrap_or(c""),
+        ));
     }
-    drop(held);
-    ret_fname
+    None
 }
 
 /// 'findfunc' changed: recompile the callback, and shorten a

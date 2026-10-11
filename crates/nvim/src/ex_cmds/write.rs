@@ -251,7 +251,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
             ffname = free_fname.0;
         }
         // SAFETY: as above.
-        unsafe { otherfile(ffname) }
+        otherfile(unsafe { CStr::from_ptr(ffname) })
     };
 
     // If we have a new file, put its name in the list of alternate file names.
@@ -769,7 +769,7 @@ pub unsafe fn getfile(
         // make ffname full path, set sfname
         // SAFETY: caller's contract; `curbuf` is live.
         unsafe { fname_expand(&raw mut ffname, &raw mut sfname) };
-        other = unsafe { otherfile(ffname) };
+        other = otherfile(unsafe { CStr::from_ptr(ffname) });
         free_me = Owned(ffname);
     } else {
         // SAFETY: `curbuf` is live.

@@ -168,6 +168,14 @@ pub fn buf_hide(buffer: Buf) -> bool {
 // ---------------------------------------------------------------------------
 // The name a buffer without a file is shown under
 
+/// A copy of [`buf_spname`]: the name a special buffer is shown under, or
+/// `None` for an ordinary one.
+pub(crate) fn buf_spname_owned(buffer: Buf) -> Option<XString> {
+    // SAFETY: null, or a NUL-terminated name that lives at least as long as
+    // the buffer, copied before anything can rename it.
+    unsafe { crate::cstr::at_opt(buf_spname(buffer)) }.map(XString::from_cstr)
+}
+
 /// The name to display for a special buffer, or null for an ordinary one.
 pub fn buf_spname(buffer: Buf) -> *mut c_char {
     let b = buffer;

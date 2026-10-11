@@ -105,7 +105,7 @@ pub unsafe fn server_init(
     }
 
     // SAFETY: `listen_addr` is null or NUL-terminated either way.
-    let rv = unsafe { server_start(listen_addr) };
+    let rv = server_start(unsafe { crate::cstr::at_opt(listen_addr) });
 
     // SAFETY: a static name, and a message with no arguments.
     if unsafe { os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), false) } {
@@ -264,10 +264,8 @@ pub unsafe fn server_owns_pipe_address(address: *const c_char) -> bool {
 ///
 /// Returns 0 on success, 1 for an empty address, 2 when this instance is
 /// already listening there, and a negative libuv error otherwise.
-///
-/// # Safety
-/// `addr` is either null or a NUL-terminated string.
-pub unsafe fn server_start(addr: *const c_char) -> c_int {
+pub fn server_start(addr: Option<&CStr>) -> c_int {
+    let addr = addr.map_or(core::ptr::null(), CStr::as_ptr);
     // SAFETY: the caller's address.
     if addr.is_null() || unsafe { *addr == 0 } {
         logmsg!(LOGLVL_WRN, c"server_start", 169, "Empty or NULL address");
@@ -357,10 +355,8 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
 ///
 /// `keep_vservername` is for the restart `:detach` performs, where the name
 /// is about to be reused.
-///
-/// # Safety
-/// `endpoint` is a NUL-terminated string.
-pub unsafe fn server_stop(endpoint: *const c_char, keep_vservername: bool) -> bool {
+pub fn server_stop(endpoint: &CStr, keep_vservername: bool) -> bool {
+    let endpoint = endpoint.as_ptr();
     // Truncated the same way a watcher's own address is, so an over-long
     // endpoint still matches the socket it opened.
     let mut addr = [0 as c_char; SOCKET_ADDR_LEN];

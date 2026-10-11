@@ -23,6 +23,17 @@ pub(crate) unsafe fn mf_fname(mfp: *const MemFile) -> *const c_char {
     }
 }
 
+/// A copy of `buffer`'s swap file name, or `None` when it has none.
+pub(crate) fn buf_swap_name(buffer: Buf) -> Option<CString> {
+    let mfp = buffer.b_ml.ml_mfp;
+    if mfp.is_null() {
+        return None;
+    }
+    // SAFETY: a loaded buffer's memfile is live, and its name is copied
+    // before anything can rename it.
+    unsafe { cstr::at_opt(mf_fname(mfp)) }.map(CStr::to_owned)
+}
+
 /// Take over an allocated C string, which is released.
 ///
 /// # Safety
