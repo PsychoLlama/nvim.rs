@@ -791,6 +791,35 @@ describe('nvim_create_user_command', function()
     assert_alive()
   end)
 
+  it('a Lua command can delete and redefine itself while it runs', function()
+    exec_lua(function()
+      _G.seen = {}
+      vim.api.nvim_create_user_command('SelfDel', function(opts)
+        vim.api.nvim_del_user_command('SelfDel')
+        vim.api.nvim_create_user_command('SelfDel', function(o)
+          table.insert(_G.seen, { 'second', o.name, o.args })
+        end, { nargs = '*' })
+        collectgarbage()
+        table.insert(_G.seen, { 'first', opts.name, opts.args, opts.fargs, opts.count })
+      end, { nargs = '*', count = 7 })
+      vim.api.nvim_buf_create_user_command(0, 'SelfBuf', function(opts)
+        vim.cmd('comclear')
+        vim.cmd('bwipe!')
+        table.insert(_G.seen, { 'buffer', opts.name, opts.args })
+      end, { nargs = 1 })
+    end)
+    command([[SelfDel a\ b c]])
+    command('SelfDel again')
+    command('SelfBuf x')
+    eq({
+      { 'first', 'SelfDel', [[a\ b c]], { 'a b', 'c' }, 7 },
+      { 'second', 'SelfDel', 'again' },
+      { 'buffer', 'SelfBuf', 'x' },
+    }, exec_lua('return _G.seen'))
+    eq(0, fn.exists(':SelfBuf'))
+    assert_alive()
+  end)
+
   it('validation', function()
     eq(
       "Invalid command name (must start with uppercase): 'test'",

@@ -1,125 +1,95 @@
 //! Running a user command: expanding the `<...>` codes of its replacement
 //! text and handing the result to `do_cmdline()`.
 //!
-//! [`do_ucmd`] walks the replacement twice -- once with a null destination
-//! to measure the result, once to write it -- and every helper below is
-//! written to that shape: given a null buffer it answers the length it
-//! *would* have written and touches nothing. [`uc_check_code`] is one
-//! `<code>`, [`uc_mods`] the `<mods>` one (also called on its own, to
-//! reproduce a command line's modifiers), and [`uc_split_args`] the
-//! `<f-args>` splitter.
+//! [`expand_replacement`] builds the expanded body in one `Vec<u8>`.
+//! Upstream walks the replacement twice -- once with a null destination to
+//! measure, once to write into exactly that room -- and every helper here
+//! once followed that shape; now each appends what it expands to.
+//! [`uc_check_code`] is one `<code>`, [`uc_mods`] the `<mods>` one (also
+//! called on its own, to reproduce a command line's modifiers), and
+//! [`uc_split_args`] the `<f-args>` splitter.
 //!
 //! The `q-`/`f-` prefixes are a quoting level rather than a code of their
 //! own: `<q-args>` is the argument as one Vim string literal, `<f-args>` is
 //! it split on unescaped whitespace into a comma-separated list of them.
 //!
-//! # Safety
-//!
-//! Everything here runs on the main thread from the Ex-command dispatcher,
-//! with `eap` the command being executed and `cmd` its live [`UserCmd`]. A
-//! destination buffer is either null or has room for exactly what the
-//! measuring pass answered. That is the contract the `unsafe fn`s share.
+//! The command's entry is read under its table's borrow and nothing from it
+//! survives the borrow but copies: the expanded body (or, for a Lua command,
+//! a [`LuaCommand`]). The body can then redefine or delete the very command
+//! that is running.
 //!
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::Scope;
 use crate::ascii::ascii_iswhite;
-use crate::charset::skipwhite;
 use crate::cstr;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::guard::Script;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
 use crate::lua::executor::nlua_do_ucmd;
-use crate::mbyte::utfc_ptr2len;
-use crate::memory::{xfree, xmalloc};
-use crate::strings::vim_strchr;
+use crate::mbyte::c_cluster_len;
 use crate::types::CmdIdx;
-use crate::types::{CmdLine, CmdMod, CmdModFlags, ExArg, ExArgt, NUL, UserCmd, int64_t, size_t};
+use crate::types::{
+    CmdLine, CmdMod, CmdModFlags, ExArg, ExArgt, LuaRef, ScriptCtx, UserCmd, int64_t,
+};
 use crate::window::tab_index;
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use crate::winlayer::TabPage;
-use ::libc::strcat;
-use core::ffi::{CStr, c_char, c_int};
-use core::fmt::Write as _;
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 /// The second byte of an escaped `K_SPECIAL`.
-const KS_SPECIAL: c_int = 254;
+const KS_SPECIAL: u8 = 254;
 
 /// One argument of the whitespace-separated argument list, unescaped into
-/// `buf`.
+/// `out` (which is cleared first).
 ///
 /// The iteration protocol is upstream's: `end` carries the position the
 /// last call stopped at, and the answer is "that was the last one". Both
 /// `nvim_parse_cmd()` and the Lua command callback split arguments with it.
-///
-/// # Safety
-/// `arg` must be NUL-terminated with `arglen` bytes before the NUL, and
-/// `buf` must have room for the longest single argument -- `arglen` always
-/// is.
-pub(crate) unsafe fn uc_split_args_iter(
-    arg: *const c_char,
-    arglen: size_t,
-    end: *mut size_t,
-    buf: *mut c_char,
-    len: *mut size_t,
-) -> bool {
+pub(crate) fn uc_split_args_iter(arg: &[u8], end: &mut usize, out: &mut Vec<u8>) -> bool {
+    out.clear();
+    let arglen = arg.len();
     if arglen == 0 {
         return true;
     }
-    // SAFETY: caller contract.
-    let (arg, mut pos) = unsafe { (slice::from_raw_parts(arg.cast::<u8>(), arglen), *end) };
+    let mut pos = *end;
     // Upstream looks one byte past the argument, where the NUL is; nothing
     // past the end can be whitespace.
-    let white_at = |i: usize| arg.get(i).is_some_and(|&b| ascii_iswhite(b as c_int));
+    let white_at = |i: usize| arg.get(i).is_some_and(|&b| ascii_iswhite(c_int::from(b)));
 
     while pos < arglen && white_at(pos) {
         pos += 1;
     }
 
-    let mut l = 0;
     while pos < arglen - 1 {
         // A backslash escapes a backslash or a separator, and nothing else.
         if arg[pos] == b'\\' && (arg[pos + 1] == b'\\' || white_at(pos + 1)) {
             pos += 1;
         }
-        // SAFETY: caller contract; `l` never exceeds the bytes consumed.
-        unsafe { *buf.add(l) = arg[pos] as c_char };
-        l += 1;
+        out.push(arg[pos]);
         if white_at(pos + 1) {
-            // SAFETY: caller contract.
-            unsafe { *end = pos + 1 };
-            unsafe { *len = l };
+            *end = pos + 1;
             return false;
         }
         pos += 1;
     }
     if pos < arglen && !white_at(pos) {
-        // SAFETY: as above.
-        unsafe { *buf.add(l) = arg[pos] as c_char };
-        l += 1;
+        out.push(arg[pos]);
     }
-    // SAFETY: caller contract.
-    unsafe { *len = l };
     true
 }
 
 /// At most how many arguments `arg` splits into -- the number of runs of
 /// non-whitespace, which escaped separators can only reduce.
-///
-/// # Safety
-/// `arg` must have `arglen` readable bytes.
-pub(crate) unsafe fn uc_nargs_upper_bound(arg: *const c_char, arglen: size_t) -> size_t {
-    // SAFETY: caller contract.
-    let arg = unsafe { slice::from_raw_parts(arg.cast::<u8>(), arglen) };
+pub(crate) fn uc_nargs_upper_bound(arg: &[u8]) -> usize {
     let mut was_white = true; // space before the first argument
     let mut nargs = 0;
     for &byte in arg {
-        let is_white = ascii_iswhite(byte as c_int);
+        let is_white = ascii_iswhite(c_int::from(byte));
         if was_white && !is_white {
             nargs += 1;
         }
@@ -129,173 +99,97 @@ pub(crate) unsafe fn uc_nargs_upper_bound(arg: *const c_char, arglen: size_t) ->
 }
 
 /// `<f-args>`: the arguments as a comma-separated list of Vim string
-/// literals, allocated for the caller to free. `lenp` is given its length.
-///
-/// Upstream sizes the result in a first pass and fills it in a second; the
-/// two have to agree byte for byte, so this builds the bytes once and takes
-/// the length from them.
-///
-/// # Safety
-/// Either `args`/`arglens` describe `argc` live arguments, or `args` is
-/// null and `arg` is the NUL-terminated whole argument string.
-unsafe fn uc_split_args(line: &CmdLine, lenp: *mut size_t) -> *mut c_char {
+/// literals.
+fn uc_split_args(line: &CmdLine) -> Vec<u8> {
     let mut out = Vec::<u8>::new();
     out.push(b'"');
     if line.args.is_empty() {
-        // SAFETY: caller contract.
-        unsafe { quote_line(line.cstr_from(line.arg).as_ptr(), &mut out) };
+        quote_line(line.rest_of(line.arg), &mut out);
     } else {
         let argc = line.args.len();
         for (i, &(at, len)) in line.args.iter().enumerate() {
-            let start = line.tail(at).as_ptr().cast::<c_char>();
-            // SAFETY: the span is inside the command's own line.
-            unsafe { quote_span(start, start.add(len), &mut out) };
+            // A character is read as the line has it, so a cluster may run
+            // past the span's end.
+            quote_span(line.rest_of(at), len, &mut out);
             if i != argc - 1 {
                 out.extend_from_slice(b"\", \"");
             }
         }
     }
     out.push(b'"');
-
-    // SAFETY: the block is `out.len() + 1` bytes and is written whole.
-    let buf = unsafe { xmalloc(out.len() + 1) }.cast::<c_char>();
-    unsafe { ptr::copy_nonoverlapping(out.as_ptr(), buf.cast::<u8>(), out.len()) };
-    unsafe { *buf.add(out.len()) = NUL as c_char };
-    unsafe { *lenp = out.len() };
-    buf
+    out
 }
 
-/// The whole argument string, split on unescaped whitespace.
-///
-/// # Safety
-/// `arg` must be NUL-terminated.
-unsafe fn quote_line(arg: *const c_char, out: &mut Vec<u8>) {
-    let mut p = arg;
-    // SAFETY: caller contract; every step stays inside the string.
-    while unsafe { *p } != NUL as c_char {
-        let (first, second) = (unsafe { *p } as u8, unsafe { *p.add(1) } as u8);
+/// The whole argument string `arg`, split on unescaped whitespace.
+fn quote_line(arg: &[u8], out: &mut Vec<u8>) {
+    let at = |i: usize| cstr::byte_at(arg, i);
+    let mut p = 0;
+    while at(p) != 0 {
+        let (first, second) = (at(p), at(p + 1));
         if first == b'\\' && second == b'\\' {
             out.extend_from_slice(b"\\\\");
-            p = unsafe { p.add(2) };
-        } else if first == b'\\' && ascii_iswhite(second as c_int) {
+            p += 2;
+        } else if first == b'\\' && ascii_iswhite(c_int::from(second)) {
             // An escaped separator stands for one literal separator.
             out.push(second);
-            p = unsafe { p.add(2) };
+            p += 2;
         } else if first == b'\\' || first == b'"' {
             out.push(b'\\');
             out.push(first);
-            p = unsafe { p.add(1) };
-        } else if ascii_iswhite(first as c_int) {
-            p = unsafe { skipwhite(p) };
-            if unsafe { *p } == NUL as c_char {
+            p += 1;
+        } else if ascii_iswhite(c_int::from(first)) {
+            while ascii_iswhite(c_int::from(at(p))) {
+                p += 1;
+            }
+            if at(p) == 0 {
                 break;
             }
             out.extend_from_slice(b"\", \"");
         } else {
-            p = unsafe { copy_char(p, out) };
+            p += copy_char(&arg[p..], out);
         }
     }
 }
 
-/// One already-split argument, `start..end`, as the body of a literal.
-///
-/// # Safety
-/// `start..end` must be a live range of one string.
-unsafe fn quote_span(start: *const c_char, end: *const c_char, out: &mut Vec<u8>) {
-    let mut p = start;
-    // SAFETY: caller contract.
-    while p < end {
-        if unsafe { *p } == b'\\' as c_char || unsafe { *p } == b'"' as c_char {
+/// One already-split argument, the first `len` bytes of `text`, as the
+/// body of a literal.
+fn quote_span(text: &[u8], len: usize, out: &mut Vec<u8>) {
+    let mut p = 0;
+    while p < len {
+        let byte = cstr::byte_at(text, p);
+        if byte == b'\\' || byte == b'"' {
             out.push(b'\\');
-            out.push(unsafe { *p } as u8);
-            p = unsafe { p.add(1) };
+            out.push(byte);
+            p += 1;
         } else {
-            p = unsafe { copy_char(p, out) };
+            p += copy_char(text.get(p..).unwrap_or_default(), out);
         }
     }
 }
 
-/// Copy the whole character at `p`, combining marks and all, and answer
-/// what follows it.
-///
-/// # Safety
-/// `p` must point at a character of a live string.
-unsafe fn copy_char(p: *const c_char, out: &mut Vec<u8>) -> *const c_char {
-    // SAFETY: caller contract.
-    let len = unsafe { utfc_ptr2len(p) } as usize;
-    out.extend_from_slice(unsafe { slice::from_raw_parts(p.cast::<u8>(), len) });
-    unsafe { p.add(len) }
+/// Copy the whole character `text` starts with, combining marks and all,
+/// and answer how far that moved: at least one byte, so a walk always
+/// advances.
+fn copy_char(text: &[u8], out: &mut Vec<u8>) -> usize {
+    let len = c_cluster_len(text);
+    out.extend_from_slice(&text[..len]);
+    len.max(1)
 }
 
-/// A small fixed buffer that [`write!`] can format into, kept
-/// NUL-terminated so a C callee can read it as a string.
-struct Scratch {
-    bytes: [u8; 24],
-    len: usize,
-}
-
-impl Scratch {
-    fn new() -> Self {
-        Scratch {
-            bytes: [0; 24],
-            len: 0,
-        }
-    }
-
-    fn as_ptr(&self) -> *const c_char {
-        self.bytes.as_ptr().cast::<c_char>()
-    }
-
-    fn as_bytes(&self) -> &[u8] {
-        &self.bytes[..self.len]
-    }
-}
-
-impl core::fmt::Write for Scratch {
-    fn write_str(&mut self, text: &str) -> core::fmt::Result {
-        // One byte is always kept for the terminator.
-        let end = self.len + text.len();
-        if end >= self.bytes.len() {
-            return Err(core::fmt::Error);
-        }
-        self.bytes[self.len..end].copy_from_slice(text.as_bytes());
-        self.len = end;
-        Ok(())
-    }
-}
-
-/// Append one modifier to `buf`, separated from the previous one, and
-/// answer how many bytes that took. A null `buf` only measures.
-///
-/// # Safety
-/// `buf` must be null or NUL-terminated with room for `mod_str`, a
-/// separating space and the NUL; `mod_str` must be NUL-terminated.
-unsafe fn add_cmd_modifier(
-    buf: *mut c_char,
-    mod_str: *const c_char,
-    multi_mods: &mut bool,
-) -> size_t {
-    // SAFETY: caller contract.
-    let mut result = unsafe { cstr::bytes_at(mod_str) }.len();
+/// Append one modifier to `out`, separated from the previous one.
+fn add_cmd_modifier(out: &mut Vec<u8>, name: &[u8], multi_mods: &mut bool) {
     if *multi_mods {
-        result += 1;
+        out.push(b' ');
     }
-    if !buf.is_null() {
-        // SAFETY: caller contract.
-        if *multi_mods {
-            unsafe { strcat(buf, c" ".as_ptr()) };
-        }
-        unsafe { strcat(buf, mod_str) };
-    }
+    out.extend_from_slice(name);
     *multi_mods = true;
-    result
 }
 
 /// The window-placement modifiers of `cmod`, in the order upstream emits
 /// them, one word each.
-pub(crate) fn win_cmd_modifier_words(cmod: &CmdMod) -> Vec<std::ffi::CString> {
+pub(crate) fn win_cmd_modifier_words(cmod: &CmdMod) -> Vec<CString> {
     let split = |flag: u32| cmod.cmod_split & flag as c_int != 0;
-    let mut words: Vec<std::ffi::CString> = Vec::new();
+    let mut words: Vec<CString> = Vec::new();
     let mut add = |name: &CStr, present: bool| {
         if present {
             words.push(name.to_owned());
@@ -312,7 +206,7 @@ pub(crate) fn win_cmd_modifier_words(cmod: &CmdMod) -> Vec<std::ffi::CString> {
         if tabnr == tab_index(TabPage::current()) {
             add(c"tab", true);
         } else {
-            let text = std::ffi::CString::new(format!("{tabnr}tab")).expect("no NUL");
+            let text = CString::new(format!("{tabnr}tab")).expect("no NUL");
             add(&text, true);
         }
     }
@@ -332,103 +226,64 @@ pub(crate) fn win_cmd_modifiers(cmod: &CmdMod) -> Vec<u8> {
         .join(&b' ')
 }
 
-/// The window-placement modifiers of `cmod`, in the order upstream emits
-/// them. Answers how many bytes were added.
-///
-/// # Safety
-/// As [`add_cmd_modifier`]; `multi_mods` must be live.
-pub(crate) unsafe fn add_win_cmd_modifiers(
-    buf: *mut c_char,
-    cmod: &CmdMod,
-    multi_mods: *mut bool,
-) -> size_t {
-    // SAFETY: caller contract.
-    let multi_mods = unsafe { &mut *multi_mods };
-    let mut result = 0;
-    for word in win_cmd_modifier_words(cmod) {
-        // SAFETY: caller contract.
-        result += unsafe { add_cmd_modifier(buf, word.as_ptr(), multi_mods) };
-    }
-    result
-}
-
-/// The modifiers `cmod` carries, as the text that would produce them.
-/// A null `buf` only measures; `quote` wraps the result in `"`.
-///
-/// # Safety
-/// As [`add_cmd_modifier`].
-pub(crate) unsafe fn uc_mods(buf: *mut c_char, cmod: &CmdMod, quote: bool) -> size_t {
+/// The modifiers `cmod` carries, as the text that would produce them,
+/// appended to `out`; `quote` wraps them in `"`.
+pub(crate) fn uc_mods_into(out: &mut Vec<u8>, cmod: &CmdMod, quote: bool) {
     /// The modifiers that are nothing but a flag.
-    static MOD_ENTRIES: [(CmdModFlags, &CStr); 12] = [
-        (CmdModFlags::BROWSE, c"browse"),
-        (CmdModFlags::CONFIRM, c"confirm"),
-        (CmdModFlags::HIDE, c"hide"),
-        (CmdModFlags::KEEPALT, c"keepalt"),
-        (CmdModFlags::KEEPJUMPS, c"keepjumps"),
-        (CmdModFlags::KEEPMARKS, c"keepmarks"),
-        (CmdModFlags::KEEPPATTERNS, c"keeppatterns"),
-        (CmdModFlags::LOCKMARKS, c"lockmarks"),
-        (CmdModFlags::NOSWAPFILE, c"noswapfile"),
-        (CmdModFlags::UNSILENT, c"unsilent"),
-        (CmdModFlags::NOAUTOCMD, c"noautocmd"),
-        (CmdModFlags::SANDBOX, c"sandbox"),
+    static MOD_ENTRIES: [(CmdModFlags, &[u8]); 12] = [
+        (CmdModFlags::BROWSE, b"browse"),
+        (CmdModFlags::CONFIRM, b"confirm"),
+        (CmdModFlags::HIDE, b"hide"),
+        (CmdModFlags::KEEPALT, b"keepalt"),
+        (CmdModFlags::KEEPJUMPS, b"keepjumps"),
+        (CmdModFlags::KEEPMARKS, b"keepmarks"),
+        (CmdModFlags::KEEPPATTERNS, b"keeppatterns"),
+        (CmdModFlags::LOCKMARKS, b"lockmarks"),
+        (CmdModFlags::NOSWAPFILE, b"noswapfile"),
+        (CmdModFlags::UNSILENT, b"unsilent"),
+        (CmdModFlags::NOAUTOCMD, b"noautocmd"),
+        (CmdModFlags::SANDBOX, b"sandbox"),
     ];
     let (flags, verbose) = (cmod.cmod_flags, cmod.cmod_verbose);
     let mut multi_mods = false;
-    let mut result: size_t = if quote { 2 } else { 0 };
-
-    // The opening quote goes in now; the closing one afterwards, at the
-    // offset the total length gives.
-    let body = if buf.is_null() {
-        buf
-    } else {
-        // SAFETY: caller contract.
-        let body = if quote {
-            unsafe { *buf = b'"' as c_char };
-            unsafe { buf.add(1) }
-        } else {
-            buf
-        };
-        unsafe { *body = NUL as c_char };
-        body
-    };
-
+    if quote {
+        out.push(b'"');
+    }
     for &(flag, name) in &MOD_ENTRIES {
         if flags.has(flag) {
-            // SAFETY: caller contract.
-            result += unsafe { add_cmd_modifier(body, name.as_ptr(), &mut multi_mods) };
+            add_cmd_modifier(out, name, &mut multi_mods);
         }
     }
     if flags.has(CmdModFlags::SILENT) {
-        let name = if flags.has(CmdModFlags::ERRSILENT) {
-            c"silent!"
+        let name: &[u8] = if flags.has(CmdModFlags::ERRSILENT) {
+            b"silent!"
         } else {
-            c"silent"
+            b"silent"
         };
-        // SAFETY: caller contract.
-        result += unsafe { add_cmd_modifier(body, name.as_ptr(), &mut multi_mods) };
+        add_cmd_modifier(out, name, &mut multi_mods);
     }
     if verbose > 0 {
         let value = verbose - 1;
-        let mut text = Scratch::new();
         let name = if value == 1 {
-            c"verbose".as_ptr()
+            b"verbose".to_vec()
         } else {
-            let _ = write!(text, "{value}verbose");
-            text.as_ptr()
+            format!("{value}verbose").into_bytes()
         };
-        // SAFETY: caller contract.
-        result += unsafe { add_cmd_modifier(body, name, &mut multi_mods) };
+        add_cmd_modifier(out, &name, &mut multi_mods);
     }
-    // SAFETY: caller contract.
-    result += unsafe { add_win_cmd_modifiers(body, cmod, &raw mut multi_mods) };
+    for word in win_cmd_modifier_words(cmod) {
+        add_cmd_modifier(out, word.to_bytes(), &mut multi_mods);
+    }
+    if quote {
+        out.push(b'"');
+    }
+}
 
-    if quote && !buf.is_null() {
-        // `result` counts both quotes, so the body ends at `result - 1`.
-        // SAFETY: caller contract; that byte is the last one written.
-        unsafe { *buf.add(result - 1) = b'"' as c_char };
-    }
-    result
+/// [`uc_mods_into`] a buffer of its own.
+pub(crate) fn uc_mods(cmod: &CmdMod, quote: bool) -> Vec<u8> {
+    let mut out = Vec::new();
+    uc_mods_into(&mut out, cmod, quote);
+    out
 }
 
 /// The `<...>` codes a replacement string may contain.
@@ -477,42 +332,6 @@ impl Code {
     }
 }
 
-/// The replacement for one code: bytes written, or only counted when the
-/// destination is null.
-struct Replacement {
-    buf: *mut c_char,
-    len: size_t,
-}
-
-impl Replacement {
-    /// # Safety
-    /// The destination must have room for everything put into it.
-    unsafe fn put(&mut self, bytes: &[u8]) {
-        if !self.buf.is_null() {
-            // SAFETY: caller contract.
-            unsafe {
-                ptr::copy_nonoverlapping(bytes.as_ptr(), self.buf.add(self.len).cast(), bytes.len())
-            };
-        }
-        self.len += bytes.len();
-    }
-
-    /// `body` between a pair of `quote` bytes, or `body` alone.
-    ///
-    /// # Safety
-    /// As [`Replacement::put`].
-    unsafe fn quoted(&mut self, quote: Option<u8>, body: &[u8]) {
-        // SAFETY: caller contract.
-        if let Some(q) = quote {
-            unsafe { self.put(&[q]) };
-        }
-        unsafe { self.put(body) };
-        if let Some(q) = quote {
-            unsafe { self.put(&[q]) };
-        }
-    }
-}
-
 /// How a code wants its expansion quoted.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Quote {
@@ -524,96 +343,78 @@ enum Quote {
     Split,
 }
 
-/// Expand one `<code>` into `buf`, answering its length -- or `-1` when it
-/// is not a code, in which case only the `<` has been copied.
+/// `body` between a pair of `quote` bytes, or `body` alone.
+fn put_quoted(out: &mut Vec<u8>, quote: Option<u8>, body: &[u8]) {
+    if let Some(q) = quote {
+        out.push(q);
+    }
+    out.extend_from_slice(body);
+    if let Some(q) = quote {
+        out.push(q);
+    }
+}
+
+/// Expand one `<code>` -- `code` is its text, `<` and `>` included -- onto
+/// `out`. Answers `false` when it is not a code, in which case only the `<`
+/// has been copied.
 ///
-/// # Safety
-/// Module contract; `code` must have `len` readable bytes, and `split_buf`
-/// and `split_len` must be [`do_ucmd`]'s cache.
-unsafe fn uc_check_code(
-    code: *const c_char,
-    len: size_t,
-    buf: *mut c_char,
+/// `split` is the run's `<f-args>` cache: splitting is done once.
+fn uc_check_code(
+    code: &[u8],
+    out: &mut Vec<u8>,
     cmd: &UserCmd,
     args: &ExArg,
-    split_buf: *mut *mut c_char,
-    split_len: *mut size_t,
-) -> size_t {
-    // SAFETY: caller contract.
-    let inner = &unsafe { slice::from_raw_parts(code.cast::<u8>(), len) }[1..];
+    split: &mut Option<Vec<u8>>,
+) -> bool {
+    let inner = &code[1..];
     let (quote, name) = match inner {
         [b'q' | b'Q', b'-', rest @ ..] => (Quote::One, rest),
         [b'f' | b'F', b'-', rest @ ..] => (Quote::Split, rest),
         rest => (Quote::None, rest),
     };
     let quotes = |byte: u8| (quote != Quote::None).then_some(byte);
-    let mut out = Replacement { buf, len: 0 };
 
     match Code::parse(name) {
-        // SAFETY: module contract.
-        Code::Args => unsafe { expand_args(&mut out, args, quote, split_buf, split_len) },
+        Code::Args => expand_args(out, args, quote, split),
         Code::Bang => {
             let body: &[u8] = if args.forceit { b"!" } else { b"" };
-            // SAFETY: caller contract.
-            unsafe { out.quoted(quotes(b'"'), body) };
-            out.len
+            put_quoted(out, quotes(b'"'), body);
         }
         code @ (Code::Line1 | Code::Line2 | Code::Range | Code::Count) => {
             let num: int64_t = match code {
-                Code::Line1 => args.line1 as int64_t,
-                Code::Line2 => args.line2 as int64_t,
-                Code::Range => args.addr_count as int64_t,
+                Code::Line1 => int64_t::from(args.line1),
+                Code::Line2 => int64_t::from(args.line2),
+                Code::Range => int64_t::from(args.addr_count),
                 // `<count>` is the range's end, or the command's default.
-                _ if args.addr_count > 0 => args.line2 as int64_t,
-                _ => cmd.uc_def,
+                _ if args.addr_count > 0 => int64_t::from(args.line2),
+                _ => cmd.default_count,
             };
-            let mut text = Scratch::new();
-            let _ = write!(text, "{num}");
-            // SAFETY: caller contract.
-            unsafe { out.quoted(quotes(b'"'), text.as_bytes()) };
-            out.len
+            put_quoted(out, quotes(b'"'), num.to_string().as_bytes());
         }
-        // SAFETY: caller contract.
-        Code::Mods => cmdmod.with(|cmod| unsafe { uc_mods(buf, cmod, quote != Quote::None) }),
+        Code::Mods => cmdmod.with(|cmod| uc_mods_into(out, cmod, quote != Quote::None)),
         Code::Register => {
-            let register = [args.regname as u8];
+            let register = [u8::try_from(args.regname).unwrap_or_default()];
             let body: &[u8] = if args.regname != 0 { &register } else { b"" };
-            // SAFETY: caller contract.
-            unsafe { out.quoted(quotes(b'\''), body) };
-            out.len
+            put_quoted(out, quotes(b'\''), body);
         }
-        Code::Lt => {
-            // SAFETY: caller contract.
-            unsafe { out.put(b"<") };
-            out.len
-        }
+        Code::Lt => out.push(b'<'),
         Code::None => {
             // Not recognised: copy the `<` and say so.
-            // SAFETY: caller contract.
-            unsafe { out.put(b"<") };
-            !0
+            out.push(b'<');
+            return false;
         }
     }
+    true
 }
 
 /// `<args>`, `<q-args>` or `<f-args>`.
-///
-/// # Safety
-/// Module contract; `split_buf`/`split_len` are [`do_ucmd`]'s cache.
-unsafe fn expand_args(
-    out: &mut Replacement,
-    args: &ExArg,
-    quote: Quote,
-    split_buf: *mut *mut c_char,
-    split_len: *mut size_t,
-) -> size_t {
+fn expand_args(out: &mut Vec<u8>, args: &ExArg, quote: Quote, split: &mut Option<Vec<u8>>) {
     let arg = args.line.arg();
     if arg.is_empty() {
         if quote == Quote::One {
-            // SAFETY: caller contract.
-            unsafe { out.put(b"''") };
+            out.extend_from_slice(b"''");
         }
-        return out.len;
+        return;
     }
     // A command declared to take a single argument does not split it, so
     // that `:Cmd %` works when `%` stands for "a b c".
@@ -622,28 +423,44 @@ unsafe fn expand_args(
     } else {
         quote
     };
-    // SAFETY: caller contract.
     match quote {
-        Quote::None => unsafe { out.put(arg) },
+        Quote::None => out.extend_from_slice(arg),
         Quote::One => {
-            unsafe { out.put(b"\"") };
+            out.push(b'"');
             for &byte in arg {
                 if byte == b'\\' || byte == b'"' {
-                    unsafe { out.put(b"\\") };
+                    out.push(b'\\');
                 }
-                unsafe { out.put(&[byte]) };
+                out.push(byte);
             }
-            unsafe { out.put(b"\"") };
+            out.push(b'"');
         }
         // Splitting is expensive, so it is done once and cached.
         Quote::Split => {
-            if unsafe { *split_buf }.is_null() {
-                unsafe { *split_buf = uc_split_args(&args.line, split_len) };
-            }
-            unsafe { out.put(slice::from_raw_parts((*split_buf).cast::<u8>(), *split_len)) };
+            let split = split.get_or_insert_with(|| uc_split_args(&args.line));
+            out.extend_from_slice(split);
         }
     }
-    out.len
+}
+
+/// What a Lua command's run needs of its entry, copied out of the table:
+/// the callback may redefine or delete the command while it runs.
+pub(crate) struct LuaCommand {
+    pub(crate) name: CString,
+    pub(crate) argt: ExArgt,
+    pub(crate) default_count: int64_t,
+    /// The reference to call: the command's own, or its preview's.
+    pub(crate) luaref: LuaRef,
+}
+
+/// How one run goes, decided under the table's borrow.
+enum Run {
+    Lua(LuaCommand),
+    Vim {
+        body: Vec<u8>,
+        keepscript: bool,
+        script_ctx: ScriptCtx,
+    },
 }
 
 /// Run one user command: expand its replacement text and execute it.
@@ -651,182 +468,124 @@ unsafe fn expand_args(
 /// `preview` runs the `'inccommand'` callback instead, which only a Lua
 /// command can have.
 pub(crate) fn do_ucmd(excmd: &mut ExArg, preview: bool) -> c_int {
-    // SAFETY: module contract; `useridx` was set by `find_ucmd`.
-    // SAFETY: module contract; `useridx` was set by `find_ucmd`.
-    let (cmdidx, useridx) = (excmd.cmdidx, excmd.useridx as usize);
-    let scope = if cmdidx == CmdIdx::USER {
+    let scope = if excmd.cmdidx == CmdIdx::USER {
         Scope::Global
     } else {
         Scope::Buffer
     };
-    // SAFETY: module contract; nothing has added or removed a command since.
-    let cmd = &unsafe { scope.list() }[useridx];
-
-    if preview {
-        debug_assert!(cmd.uc_preview_luaref > 0, "cmd->uc_preview_luaref > 0");
-        // SAFETY: module contract.
-        return unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), excmd, true) };
-    }
-    if cmd.uc_luaref > 0 {
-        // SAFETY: module contract.
-        unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), excmd, false) };
-        return 0;
-    }
-
-    // SAFETY: module contract.
-    let buf = unsafe { expand_replacement(cmd, &*excmd) };
-
-    // The command body runs with the defining script's id, unless it asked
-    // to keep the caller's.
-    let script_ctx =
-        (!cmd.uc_argt.has(ExArgt::KEEPSCRIPT)).then(|| Script::sid(cmd.uc_script_ctx.sc_sid));
-    // Nothing may touch `cmd` past here: the body can define a command,
-    // which reallocates the table it points into.
-    // SAFETY: module contract.
-    let opts = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED;
-    // SAFETY: module contract; `buf` is the expanded body this frame owns.
-    let body = unsafe { cstr::bytes_at(buf) };
-    let _ = do_cmdline(Some(body), excmd.source_mut(), opts);
-    drop(script_ctx);
-    // SAFETY: the block is this function's.
-    unsafe { xfree(buf.cast()) };
-    0
-}
-
-/// `cmd`'s replacement text with every `<code>` expanded, allocated.
-///
-/// # Safety
-/// Module contract.
-unsafe fn expand_replacement(cmd: &UserCmd, args: &ExArg) -> *mut c_char {
-    let mut split_len: size_t = 0;
-    let mut split_buf: *mut c_char = ptr::null_mut();
-    // First round: measure with a null destination. Second: fill it.
-    let mut buf: *mut c_char = ptr::null_mut();
-    loop {
-        // SAFETY: module contract.
-        let pass = unsafe { expand_pass(cmd, args, buf, &raw mut split_buf, &raw mut split_len) };
-        // SAFETY: `tail` points into `uc_rep`, which is NUL-terminated.
-        let tail_len = unsafe { cstr::bytes_at(pass.tail) }.len();
-        if buf.is_null() {
-            // SAFETY: `xmalloc` never answers null.
-            buf = unsafe { xmalloc(pass.total + tail_len + 1) }.cast::<c_char>();
-            continue;
-        }
-        // SAFETY: the measuring pass sized the block for exactly this.
-        unsafe { ptr::copy_nonoverlapping(pass.tail, pass.out, tail_len + 1) };
-        break;
-    }
-    // SAFETY: this function owns it.
-    unsafe { xfree(split_buf.cast()) };
-    buf
-}
-
-/// Where one pass over the replacement text stopped.
-struct Pass {
-    /// The rest of the replacement, which holds no more codes.
-    tail: *mut c_char,
-    /// Where `tail` is to be copied. Null while measuring.
-    out: *mut c_char,
-    /// Bytes accounted for so far. Only meaningful while measuring.
-    total: size_t,
-}
-
-/// One pass over `cmd`'s replacement text, writing into `buf` when it is
-/// not null and only measuring when it is.
-///
-/// # Safety
-/// Module contract.
-unsafe fn expand_pass(
-    cmd: &UserCmd,
-    args: &ExArg,
-    buf: *mut c_char,
-    split_buf: *mut *mut c_char,
-    split_len: *mut size_t,
-) -> Pass {
-    let mut p = cmd.uc_rep;
-    let mut q = buf;
-    let mut totlen: size_t = 0;
-    // SAFETY: module contract; every pointer walks `uc_rep`.
-    loop {
-        let start = unsafe { vim_strchr(p, b'<' as c_int) };
-        let end = if start.is_null() {
-            ptr::null_mut()
-        } else {
-            unsafe { vim_strchr(start.add(1), b'>' as c_int) }
+    let useridx = usize::try_from(excmd.useridx).expect("`find_ucmd` set the index");
+    // Nothing under the borrow runs user code: the expansion only reads the
+    // entry, the command's arguments and its modifiers.
+    let run = scope.with(|cmds| {
+        let cmd = &cmds[useridx];
+        let lua = |luaref| {
+            Run::Lua(LuaCommand {
+                name: cmd.name.clone(),
+                argt: cmd.argt,
+                default_count: cmd.default_count,
+                luaref,
+            })
         };
+        if preview {
+            debug_assert!(cmd.preview_luaref > 0, "cmd->uc_preview_luaref > 0");
+            lua(cmd.preview_luaref)
+        } else if cmd.luaref > 0 {
+            lua(cmd.luaref)
+        } else {
+            Run::Vim {
+                body: expand_replacement(cmd, excmd),
+                keepscript: cmd.argt.has(ExArgt::KEEPSCRIPT),
+                script_ctx: cmd.script_ctx,
+            }
+        }
+    });
 
-        if !buf.is_null() && unsafe { unescape_k_special(&mut p, &mut q, start, end) } {
+    match run {
+        Run::Lua(call) => {
+            let retv = nlua_do_ucmd(&call, excmd, preview);
+            if preview { retv } else { 0 }
+        }
+        Run::Vim {
+            body,
+            keepscript,
+            script_ctx,
+        } => {
+            // The command body runs with the defining script's id, unless it
+            // asked to keep the caller's.
+            let script_ctx = (!keepscript).then(|| Script::sid(script_ctx.sc_sid));
+            let opts = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED;
+            let _ = do_cmdline(Some(cstr::until_nul(&body)), excmd.source_mut(), opts);
+            drop(script_ctx);
+            0
+        }
+    }
+}
+
+/// `cmd`'s replacement text with every `<code>` expanded.
+fn expand_replacement(cmd: &UserCmd, args: &ExArg) -> Vec<u8> {
+    let rep = cmd.replacement.to_bytes();
+    let mut out = Vec::with_capacity(rep.len());
+    let mut split = None;
+    let find = |from: usize, byte: u8| {
+        rep.get(from..)
+            .and_then(|tail| tail.iter().position(|&b| b == byte))
+            .map(|at| from + at)
+    };
+    let mut p = 0;
+    loop {
+        let start = find(p, b'<');
+        let end = start.and_then(|start| find(start + 1, b'>'));
+
+        if unescape_k_special(rep, &mut p, &mut out, start, end) {
             continue;
         }
-        if start.is_null() || end.is_null() {
+        let (Some(start), Some(end)) = (start, end) else {
             break;
-        }
-        let end = unsafe { end.add(1) }; // include the '>'
+        };
+        let end = end + 1; // include the '>'
 
         // Everything up to the '<' is copied as it stands.
-        let len = unsafe { start.offset_from(p) } as size_t;
-        if buf.is_null() {
-            totlen += len;
+        out.extend_from_slice(&rep[p..start]);
+        p = if uc_check_code(&rep[start..end], &mut out, cmd, args, &mut split) {
+            end
         } else {
-            unsafe { q.cast::<u8>().copy_from(p.cast(), len) };
-            q = unsafe { q.add(len) };
-        }
-
-        // SAFETY: module contract; `start..end` is one `<...>` of the body.
-        let code_len = unsafe { end.offset_from(start) } as size_t;
-        // SAFETY: as above; `q` has room for whatever the code expands to.
-        let mut len = unsafe { uc_check_code(start, code_len, q, cmd, args, split_buf, split_len) };
-        if len == !0 {
             // Not a code: carry on after the '<'.
-            p = unsafe { start.add(1) };
-            len = 1;
-        } else {
-            p = end;
-        }
-        if buf.is_null() {
-            totlen += len;
-        } else {
-            q = unsafe { q.add(len) };
-        }
+            start + 1
+        };
     }
-    Pass {
-        tail: p,
-        out: q,
-        total: totlen,
-    }
+    out.extend_from_slice(&rep[p..]);
+    out
 }
 
 /// `K_SPECIAL` is stored escaped, as for a mapping, but `do_cmdline()` does
 /// not undo that -- so undo it here, copying everything up to it and the
 /// byte itself. Answers whether one was found and handled.
 ///
-/// # Safety
-/// Module contract; only called on the writing pass, so `q` is live.
-unsafe fn unescape_k_special(
-    p: &mut *mut c_char,
-    q: &mut *mut c_char,
-    start: *const c_char,
-    end: *const c_char,
+/// Only an escape before the next `<...>` (or with none left) counts, as
+/// upstream's writing pass has it.
+fn unescape_k_special(
+    rep: &[u8],
+    p: &mut usize,
+    out: &mut Vec<u8>,
+    start: Option<usize>,
+    end: Option<usize>,
 ) -> bool {
-    // SAFETY: caller contract.
-    let mut ksp = *p;
-    while unsafe { *ksp } != NUL as c_char && unsafe { *ksp } as u8 as c_int != K_SPECIAL {
-        ksp = unsafe { ksp.add(1) };
-    }
-    if unsafe { *ksp } as u8 as c_int != K_SPECIAL
-        || !(start.is_null() || ksp.cast_const() < start || end.is_null())
-        || unsafe { *ksp.add(1) } as u8 as c_int != KS_SPECIAL
-        || unsafe { *ksp.add(2) } as c_int != KE_FILLER
+    let at = |i: usize| cstr::byte_at(rep, i);
+    let Some(ksp) = rep[*p..]
+        .iter()
+        .position(|&b| c_int::from(b) == K_SPECIAL)
+        .map(|at| *p + at)
+    else {
+        return false;
+    };
+    if !(start.is_none_or(|start| ksp < start) || end.is_none())
+        || at(ksp + 1) != KS_SPECIAL
+        || c_int::from(at(ksp + 2)) != KE_FILLER
     {
         return false;
     }
-    let len = unsafe { ksp.offset_from(*p) } as size_t;
-    if len > 0 {
-        unsafe { (*q).cast::<u8>().copy_from((*p).cast(), len) };
-        *q = unsafe { (*q).add(len) };
-    }
-    unsafe { **q = K_SPECIAL as c_char };
-    *q = unsafe { (*q).add(1) };
-    *p = unsafe { ksp.add(3) };
+    out.extend_from_slice(&rep[*p..ksp]);
+    out.push(rep[ksp]);
+    *p = ksp + 3;
     true
 }

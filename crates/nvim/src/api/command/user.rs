@@ -35,7 +35,7 @@ pub fn nvim_create_user_command(
     cmd: Object,
     opts: &mut KeyDict_user_command,
 ) -> Result<(), Error> {
-    create_user_command(channel_id, name, cmd, opts, 0)
+    create_user_command(channel_id, name, cmd, opts, false)
 }
 
 pub fn nvim_del_user_command(name: String_0) -> Result<(), Error> {
@@ -55,8 +55,7 @@ pub fn nvim_buf_create_user_command(
     // The command is added to whichever buffer is current, so the lookup's
     // answer stands in for the caller's for the length of the call.
     let saved = switch_buffer(target_buf);
-    let flags = UC_BUFFER as ::core::ffi::c_int;
-    let made = create_user_command(channel_id, name, cmd, opts, flags);
+    let made = create_user_command(channel_id, name, cmd, opts, true);
     saved.restore();
     made
 }
@@ -71,17 +70,7 @@ pub fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<()
         };
         Table::Buffer(b)
     };
-    // SAFETY: `table` names the global table or a live buffer's, the borrow
-    // does not outlive the search, and `name` is the caller's C string.
-    let found = unsafe {
-        table
-            .list()
-            .iter()
-            .position(|cmd| cstr::eq(name.data(), cmd.uc_name))
-    };
-    if let Some(idx) = found {
-        // SAFETY: `idx` indexes the table the search just walked.
-        unsafe { uc_del_command(table, idx) };
+    if uc_del_named(table, name.as_cstr()) {
         return ().reported(error);
     }
     let name = msg_cstr(name.as_cstr());
@@ -94,7 +83,7 @@ pub fn create_user_command(
     name: String_0,
     cmd: Object,
     opts: &mut KeyDict_user_command,
-    flags: ::core::ffi::c_int,
+    buffer_local: bool,
 ) -> Result<(), Error> {
     let mut opts = unsafe { UserCmdOpts::new(opts) };
     let force: bool;
@@ -102,24 +91,21 @@ pub fn create_user_command(
     let mut def: int64_t = -1;
     let mut addr_type_arg = CmdAddr::NoRange;
     let mut context = ExpandContext::Nothing;
-    let mut compl_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
-    let rep: *const ::core::ffi::c_char;
+    let mut compl_arg = None;
+    let rep: &[u8];
     let mut luaref: LuaRef = LUA_NOREF;
     let mut compl_luaref: LuaRef = LUA_NOREF;
     let mut preview_luaref: LuaRef = LUA_NOREF;
-    let cmd_name = name.data();
+    let cmd_name = name.as_bytes();
     // The refusal is held rather than returned: the cleanup below has to run
     // whichever way the block left.
     let mut failed = None;
     '_err: {
-        // SAFETY: `cmd_name` is the caller's NUL-terminated command name.
-        let named = !unsafe { uc_validate_name(cmd_name) }.is_null();
-        if !named {
+        if uc_validate_name(cmd_name).is_none() {
             failed = Some(err_bad_value(c"command name", name.as_cstr()));
             break '_err;
         }
-        // SAFETY: the name validated, so it has at least one byte.
-        if mb_islower(unsafe { *cmd_name } as ::core::ffi::c_int) {
+        if mb_islower(::core::ffi::c_int::from(cstr::byte_at(cmd_name, 0))) {
             let what = c"command name (must start with uppercase)";
             failed = Some(err_bad_value(what, name.as_cstr()));
             break '_err;
@@ -217,15 +203,14 @@ pub fn create_user_command(
                 failed = Some(err_expected(c"addr", expected, Some(actual)));
                 break '_err;
             };
-            let value = addr.data();
-            let vallen = addr.len() as ::core::ffi::c_int;
-            let slot = &raw mut addr_type_arg;
-            // SAFETY: `addr` is the caller's string, NUL-terminated with
-            // `vallen` readable bytes, and `slot` is this frame's.
-            let parsed = unsafe { parse_addr_type_arg(value, vallen, slot) };
-            if parsed.is_err() {
-                failed = Some(err_bad_value(c"addr", addr.as_cstr()));
-                break '_err;
+            match parse_addr_type_arg(addr.as_bytes(), addr.as_cstr().to_bytes()) {
+                Ok(parsed) => addr_type_arg = parsed,
+                Err(word) => {
+                    // Upstream cut the caller's string at the word the
+                    // message named, and quotes what is left of it.
+                    failed = Some(err_bad_value(c"addr", &cstr::owned(word)));
+                    break '_err;
+                }
             }
             argt |= ExArgt::RANGE;
             if addr_type_arg != CmdAddr::Lines {
@@ -265,13 +250,8 @@ pub fn create_user_command(
                 .and_then(Object::into_luaref)
                 .expect("the arm above matched a LuaRef");
         } else if let Some(complete) = opts.complete.as_ref().and_then(Object::as_string) {
-            let value = complete.data();
-            let vallen = complete.len() as ::core::ffi::c_int;
-            // SAFETY: `complete` is the caller's string, NUL-terminated with
-            // `vallen` readable bytes; the three out-parameters are this
-            // frame's.
-            let parsed =
-                unsafe { parse_compl_arg(value, vallen, &mut context, &mut argt, &mut compl_arg) };
+            let (value, shown) = (complete.as_bytes(), complete.as_cstr().to_bytes());
+            let parsed = parse_compl_arg(value, shown, &mut context, &mut argt, &mut compl_arg);
             if parsed.is_err() {
                 failed = Some(err_bad_value(c"complete", complete.as_cstr()));
                 break '_err;
@@ -302,11 +282,11 @@ pub fn create_user_command(
         if let Some(body) = cmd.as_luaref() {
             luaref = api_new_luaref(body);
             rep = match opts.desc.as_ref().and_then(Object::as_string) {
-                Some(desc) => desc.data().cast_const(),
-                None => c"".as_ptr(),
+                Some(desc) => desc.as_bytes(),
+                None => b"",
             };
         } else if let Some(body) = cmd.as_string() {
-            rep = body.data().cast_const();
+            rep = body.as_bytes();
         } else {
             let expected = c"Function or String";
             failed = Some(err_expected(c"command", expected, None));
@@ -314,52 +294,31 @@ pub fn create_user_command(
         }
 
         let _sctx = api_set_sctx(channel_id);
-        // SAFETY: `name` and `rep` are the caller's NUL-terminated strings,
-        // `compl_arg` is this frame's allocation, and the three Lua
-        // references are owned by this call -- `uc_add_command` takes all
-        // four over whether it succeeds or fails.
-        let added = unsafe {
-            uc_add_command(
-                name.data(),
-                name.len(),
-                rep,
-                argt,
-                def,
-                flags,
-                context,
-                compl_arg,
-                compl_luaref,
-                preview_luaref,
-                addr_type_arg,
-                luaref,
-                force,
-            )
+        // The definition owns the parsed argument and the three references
+        // from here on, and gives them back if it is never installed.
+        let def = Definition {
+            argt,
+            default_count: def,
+            complete: context,
+            complete_arg: compl_arg.take(),
+            addr_type: addr_type_arg,
+            luaref: ::core::mem::replace(&mut luaref, LUA_NOREF),
+            complete_luaref: ::core::mem::replace(&mut compl_luaref, LUA_NOREF),
+            preview_luaref: ::core::mem::replace(&mut preview_luaref, LUA_NOREF),
         };
-        if added.is_err() {
+        if uc_add_command(cmd_name, name.len(), rep, def, buffer_local, force).is_err() {
             failed = Some(Error::exception(c"Failed to create user command"));
         }
-        // `uc_add_command` owns what it was handed, so nothing below runs.
         return match failed {
             Some(failed) => Err(failed),
             None => Ok(()),
         };
     }
     // Only reached when the command was never added, so this call still owns
-    // the references it took and the argument it parsed.
-    if luaref != LUA_NOREF {
-        // SAFETY: the reference is this call's, taken above.
-        unsafe { api_free_luaref(luaref) };
+    // the references it took.
+    for reference in [luaref, compl_luaref, preview_luaref] {
+        release_luaref(reference);
     }
-    if compl_luaref != LUA_NOREF {
-        // SAFETY: as above.
-        unsafe { api_free_luaref(compl_luaref) };
-    }
-    if preview_luaref != LUA_NOREF {
-        // SAFETY: as above.
-        unsafe { api_free_luaref(preview_luaref) };
-    }
-    // SAFETY: `compl_arg` is null or `parse_compl_arg`'s own allocation.
-    unsafe { xfree(compl_arg.cast()) };
     match failed {
         Some(failed) => Err(failed),
         None => Ok(()),

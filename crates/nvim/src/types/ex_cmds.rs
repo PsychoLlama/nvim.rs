@@ -30,7 +30,7 @@ pub struct SubReplacementString {
 }
 /// What an Ex command's range counts -- upstream's `ADDR_*`, the value
 /// `ExArg::addr_type`, `CommandDefinition::cmd_addr_type` and
-/// `UserCmd::uc_addr_type` carry.
+/// `UserCmd::addr_type` carry.
 ///
 /// A range is `1,5` whatever it addresses; this is what those numbers *are*.
 /// `:1,5delete` is line numbers, `:1,5bdelete` buffer numbers and `:1,5close`

@@ -3,8 +3,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
-    api_dict_to_keydict, api_set_sctx, api_typename, cstr_to_string, cstrn_to_string,
-    find_buffer_by_handle, try_enter, try_leave,
+    api_dict_to_keydict, api_set_sctx, api_typename, cstr_to_string, find_buffer_by_handle,
+    try_enter, try_leave,
 };
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::ex_docmd::{
@@ -15,9 +15,8 @@ use crate::ex_docmd::{
 use crate::ex_eval::aborting;
 use crate::types::AutoEvent;
 
-use crate::lua::executor::{api_free_luaref, api_new_luaref};
+use crate::lua::executor::{api_new_luaref, release_luaref};
 use crate::mbyte::mb_islower;
-use crate::memory::xfree;
 use crate::message::state::{msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
 use crate::regexp::RE_MAGIC;
@@ -26,12 +25,12 @@ use crate::types::{
     ApiDict, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction, Error,
     ExArg, Integer, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter,
     KeyDict_cmd_opts, KeyDict_empty, KeyDict_get_commands, KeyDict_user_command, LineNr, LuaRef,
-    Object, String_0, TryState, UserCmd, int64_t, kErrorTypeException, kErrorTypeValidation,
+    Object, String_0, TryState, int64_t, kErrorTypeException, kErrorTypeValidation,
     kObjectTypeLuaRef, kObjectTypeString, size_t, uint8_t, uint64_t,
 };
 use crate::usercmd::{
-    Table, commands_array, parse_addr_type_arg, parse_compl_arg, uc_add_command, uc_del_command,
-    uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name,
+    Definition, Table, commands_array, parse_addr_type_arg, parse_compl_arg, uc_add_command,
+    uc_del_named, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use ::libc::strtol;
@@ -48,6 +47,5 @@ pub use self::parse::*;
 pub use self::user::*;
 pub const kDirectionNotSet: Direction = 0;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
-pub const UC_BUFFER: ::core::ffi::c_uint = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;

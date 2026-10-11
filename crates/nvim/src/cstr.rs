@@ -405,6 +405,15 @@ pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
     s.get(i).copied().unwrap_or(0)
 }
 
+/// `bytes` up to their first NUL, or all of them: what a C reader handed
+/// them as a string sees.
+pub(crate) fn until_nul(bytes: &[u8]) -> &[u8] {
+    bytes
+        .iter()
+        .position(|&byte| byte == 0)
+        .map_or(bytes, |nul| &bytes[..nul])
+}
+
 /// Run `f` over `bytes` as a C string, up to the first NUL among them.
 ///
 /// For a callee that still reads a NUL-terminated name, handed a slice of a

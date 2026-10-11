@@ -10,20 +10,40 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use std::ffi::CString;
 
-/// Neither `Copy` nor `Clone`. One entry owns its name, its replacement
-/// text, its `-complete=` argument and its three Lua references; nothing may
-/// duplicate one, and the absence of the derives is what says so.
+/// One user command, as `:command` or `nvim_create_user_command()`
+/// defined it.
+///
+/// Neither `Copy` nor `Clone`: an entry owns its name, its replacement
+/// text, its `-complete=` argument and its three Lua references, and
+/// dropping it gives the references back. A table entry is therefore
+/// moved out of its table before it is dropped -- giving a reference back
+/// calls into Lua, which must not happen with the table borrowed.
 pub struct UserCmd {
-    pub uc_name: *mut ::core::ffi::c_char,
-    pub uc_argt: ExArgt,
-    pub uc_rep: *mut ::core::ffi::c_char,
-    pub uc_def: int64_t,
-    pub uc_compl: ExpandContext,
-    pub uc_addr_type: CmdAddr,
-    pub uc_script_ctx: ScriptCtx,
-    pub uc_compl_arg: *mut ::core::ffi::c_char,
-    pub uc_compl_luaref: LuaRef,
-    pub uc_preview_luaref: LuaRef,
-    pub uc_luaref: LuaRef,
+    pub name: CString,
+    pub argt: ExArgt,
+    /// The definition, `<...>` codes unexpanded and key codes already
+    /// replaced; a Lua command keeps its description here.
+    pub replacement: CString,
+    /// `-count=N`/`-range=N`'s default, or -1.
+    pub default_count: int64_t,
+    pub complete: ExpandContext,
+    pub addr_type: CmdAddr,
+    pub script_ctx: ScriptCtx,
+    /// `-complete=custom,{func}`'s function.
+    pub complete_arg: Option<CString>,
+    pub complete_luaref: LuaRef,
+    pub preview_luaref: LuaRef,
+    /// The Lua function a Lua command runs, or `LUA_NOREF`.
+    pub luaref: LuaRef,
+}
+
+impl Drop for UserCmd {
+    fn drop(&mut self) {
+        for reference in [self.complete_luaref, self.preview_luaref, self.luaref] {
+            // A sentinel is a no-op there.
+            crate::lua::executor::release_luaref(reference);
+        }
+    }
 }

@@ -24,20 +24,16 @@ use crate::lua::ffi::{
     lua_isnumber, lua_newtable, lua_pop, lua_pushboolean, lua_pushinteger, lua_pushlstring,
     lua_pushnil, lua_pushstring, lua_pushvalue, lua_rawseti, lua_setfield, lua_tointeger,
 };
-use crate::memory::{xcalloc, xfree, xmalloc};
+use crate::memory::{xfree, xmalloc};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::path::fix_fname;
 use crate::runtime::{find_script_by_name, new_script_item, script_is_lua};
 use crate::types::{
-    CmdModFlags, ExArg, ExArgt, Handle, LineNr, OptInt, ScriptCtx, ScriptId, UserCmd, lua_Integer,
-    size_t,
+    CmdModFlags, ExArg, ExArgt, Handle, LineNr, OptInt, ScriptCtx, ScriptId, lua_Integer, size_t,
 };
-use crate::usercmd::{uc_mods, uc_split_args_iter};
+use crate::usercmd::{LuaCommand, uc_mods, uc_split_args_iter};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
-
-/// How much room `uc_mods` is given to render the modifier prefix.
-const MODS_BUFSIZE: usize = 200;
 
 /// The `smods` flags that are just a bit and a name.
 const MOD_FLAGS: [(CmdModFlags, &CStr); 9] = [
@@ -124,26 +120,20 @@ pub unsafe fn nlua_set_sctx(current: *mut ScriptCtx) {
 /// and buffer — and answers how much of a preview it produced (0 to 2);
 /// anything else is 0.
 ///
-/// # Safety
-/// `cmd` and `eap` must be live, and the command must carry the `LuaRef`
-/// this is being asked for.
-pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) -> c_int {
+/// `cmd` is what the run needs of the command, copied out of its table:
+/// the callback may redefine or delete the command while it runs.
+pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &mut ExArg, preview: bool) -> c_int {
+    // SAFETY: the main state lives as long as the editor, and every push
+    // below is balanced by the table it builds or the call that consumes it.
     unsafe {
         let lstate = get_global_lstate();
-        nlua_pushref(
-            lstate,
-            if preview {
-                (*cmd).uc_preview_luaref
-            } else {
-                (*cmd).uc_luaref
-            },
-        );
+        nlua_pushref(lstate, cmd.luaref);
 
         // The one argument is a table describing the invocation.
         lua_newtable(lstate);
         let set = |name: &CStr| lua_setfield(lstate, -2, name.as_ptr());
 
-        lua_pushstring(lstate, (*cmd).uc_name);
+        lua_pushstring(lstate, cmd.name.as_ptr());
         set(c"name");
         lua_pushboolean(lstate, (excmd.forceit) as c_int);
         set(c"bang");
@@ -158,9 +148,9 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
         lua_pushstring(lstate, excmd.line.cstr_from(excmd.line.arg).as_ptr());
         lua_pushvalue(lstate, -1);
         lua_setfield(lstate, -4, c"args".as_ptr());
-        if (*cmd).uc_argt.has(ExArgt::NOSPC) {
+        if cmd.argt.has(ExArgt::NOSPC) {
             // At most one argument: `fargs` is the whole of it, or empty.
-            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || !excmd.line.arg().is_empty() {
+            if cmd.argt.has(ExArgt::NEEDARG) || !excmd.line.arg().is_empty() {
                 lua_rawseti(lstate, -2, 1);
             } else {
                 lua_pop(lstate, 1);
@@ -169,27 +159,18 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
             lua_pop(lstate, 1);
             // Not pre-split (`:command` rather than `nvim_cmd`): split here,
             // honouring backslash escapes.
-            let length = excmd.line.arg().len();
             let mut end: size_t = 0;
-            let mut len: size_t = 0;
             let mut i: c_int = 1;
-            let buf = xcalloc(length, size_of::<c_char>()).cast::<c_char>();
+            let mut word = Vec::with_capacity(excmd.line.arg().len());
             let mut done = false;
             while !done {
-                done = uc_split_args_iter(
-                    excmd.line.arg().as_ptr().cast(),
-                    length,
-                    &raw mut end,
-                    buf,
-                    &raw mut len,
-                );
-                if len > 0 {
-                    lua_pushlstring(lstate, buf, len);
+                done = uc_split_args_iter(excmd.line.arg(), &mut end, &mut word);
+                if !word.is_empty() {
+                    lua_pushlstring(lstate, word.as_ptr().cast(), word.len());
                     lua_rawseti(lstate, -2, i);
                     i += 1;
                 }
             }
-            xfree(buf.cast::<c_void>());
         } else {
             lua_pop(lstate, 1);
             for (i, &(at, len)) in excmd.line.args.clone().iter().enumerate() {
@@ -207,18 +188,17 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
         if excmd.addr_count > 0 {
             lua_pushinteger(lstate, excmd.line2 as lua_Integer);
         } else {
-            lua_pushinteger(lstate, (*cmd).uc_def as lua_Integer);
+            lua_pushinteger(lstate, cmd.default_count as lua_Integer);
         }
         set(c"count");
 
         // `nargs` as `:command -nargs=` spells it.
-        let nargs = [nargs_char((*cmd).uc_argt), 0];
+        let nargs = [nargs_char(cmd.argt), 0];
         lua_pushstring(lstate, nargs.as_ptr());
         set(c"nargs");
 
-        let mut buf = [0 as c_char; MODS_BUFSIZE];
-        cmdmod.with(|cmod| uc_mods(buf.as_mut_ptr(), cmod, false));
-        lua_pushstring(lstate, buf.as_ptr());
+        let mods = cmdmod.with(|cmod| uc_mods(cmod, false));
+        lua_pushlstring(lstate, mods.as_ptr().cast(), mods.len());
         set(c"mods");
 
         // `smods`: the same modifiers, parsed.

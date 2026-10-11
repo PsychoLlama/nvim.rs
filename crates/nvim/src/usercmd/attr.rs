@@ -4,7 +4,7 @@
 //!
 //! [`uc_scan_attr`] takes one attribute and folds it into the four things a
 //! command definition is made of: the `EX_*` flag word `argt`, the default
-//! count `def`, the `UC_BUFFER` flag, and the completion pair
+//! count `def`, whether it is buffer-local, and the completion pair
 //! (`complp`/`compl_arg`). The two `=`-valued parsers that need a table of
 //! their own are separate, because the API takes the same strings for
 //! `nvim_create_user_command()` and calls them directly.
@@ -15,22 +15,19 @@
 //!
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::complete::{COMMAND_COMPLETE, command_complete_name};
-use super::{FAIL, OK, UC_BUFFER};
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
 use crate::message::emsg;
-use crate::message_fmt::msg_cstr_opt;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::message_fmt::msg_bytes;
+use crate::os::cshim::gettext;
 use crate::semsg;
-use crate::strings::xstrnsave;
-use crate::types::{CmdAddr, ExArgt, ExpandContext, Failed, NUL, size_t};
-use core::ffi::{CStr, c_char, c_int};
-use core::slice;
+use crate::types::{CmdAddr, ExArgt, ExpandContext, Failed};
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 /// The address types `-addr=` names, and the short forms `:command` lists
 /// them under.
@@ -77,39 +74,23 @@ fn abbreviates(attr: &[u8], name: &str) -> bool {
     attr.len() <= name.len() && name.as_bytes()[..attr.len()].eq_ignore_ascii_case(attr)
 }
 
-/// Parse an `-addr=` value, storing the type it names.
+/// Parse an `-addr=` value: the type it names.
 ///
-/// On failure the value is truncated at the first whitespace *in place*, as
-/// upstream does, so that the message names only the offending word.
-///
-/// # Safety
-/// `value` must be writable and NUL-terminated, with at least `vallen`
-/// readable bytes.
-pub(crate) unsafe fn parse_addr_type_arg(
-    value: *mut c_char,
-    vallen: c_int,
-    addr_type_arg: *mut CmdAddr,
-) -> Result<(), Failed> {
-    // SAFETY: caller contract.
-    let typed = unsafe { slice::from_raw_parts(value.cast::<u8>(), vallen as usize) };
-    if let Some(row) = ADDR_TYPES.iter().find(|row| row.name.to_bytes() == typed) {
-        // SAFETY: caller contract.
-        unsafe { *addr_type_arg = row.expand };
-        return Ok(());
+/// `value` is the value; `shown` is the C string it starts (the rest of a
+/// command line, or the API's string). On failure the answer is the word
+/// the message named -- `shown` up to its first whitespace, where upstream
+/// cut it in place -- which the API's own refusal quotes again.
+pub(crate) fn parse_addr_type_arg<'a>(value: &[u8], shown: &'a [u8]) -> Result<CmdAddr, &'a [u8]> {
+    if let Some(row) = ADDR_TYPES.iter().find(|row| row.name.to_bytes() == value) {
+        return Ok(row.expand);
     }
-
-    // SAFETY: caller contract; the walk stops at the NUL.
-    let mut i = 0;
-    while unsafe { *value.add(i) } != NUL as c_char
-        && !ascii_iswhite(unsafe { *value.add(i) } as c_int)
-    {
-        i += 1;
-    }
-    unsafe { *value.add(i) = NUL as c_char };
-    // SAFETY: `value` is now NUL-terminated at the word.
-    let shown = unsafe { msg_cstr_opt(cstr::at_opt(value)) };
-    semsg!("E180: Invalid address type value: {shown}");
-    Err(Failed)
+    let word = shown
+        .iter()
+        .position(|&byte| byte == 0 || ascii_iswhite(c_int::from(byte)))
+        .map_or(shown, |end| &shown[..end]);
+    let shown_word = msg_bytes(word);
+    semsg!("E180: Invalid address type value: {shown_word}");
+    Err(word)
 }
 
 /// Parse a `-complete=` value: a name from [`COMMAND_COMPLETE`], optionally
@@ -117,31 +98,27 @@ pub(crate) unsafe fn parse_addr_type_arg(
 /// need.
 ///
 /// Stores the `EXPAND_*` type in `complp`, may add `ExArgt::BUFNAME`/`ExArgt::XFILE`
-/// to `argt`, and hands `compl_arg` a fresh copy of the argument part.
-///
-/// # Safety
-/// `value` must be NUL-terminated with at least `vallen` readable bytes.
-pub(crate) unsafe fn parse_compl_arg(
-    value: *const c_char,
-    vallen: c_int,
+/// to `argt`, and hands `compl_arg` a copy of the argument part. `shown` is
+/// the C string `value` starts, which an unknown name is reported as.
+pub(crate) fn parse_compl_arg(
+    value: &[u8],
+    shown: &[u8],
     complp: &mut ExpandContext,
     argt: &mut ExArgt,
-    compl_arg: &mut *mut c_char,
+    compl_arg: &mut Option<CString>,
 ) -> Result<(), Failed> {
-    // SAFETY: caller contract.
-    let typed = unsafe { slice::from_raw_parts(value.cast::<u8>(), vallen as usize) };
     // The argument part is whatever follows the first comma.
-    let (name, arg) = match typed.iter().position(|&b| b == b',') {
-        Some(comma) => (&typed[..comma], Some(&typed[comma + 1..])),
-        None => (typed, None),
+    let (name, arg) = match value.iter().position(|&b| b == b',') {
+        Some(comma) => (&value[..comma], Some(&value[comma + 1..])),
+        None => (value, None),
     };
 
-    let found = (0..COMMAND_COMPLETE.len() as c_int)
+    let found = (0..COMMAND_COMPLETE.len())
+        .filter_map(|i| c_int::try_from(i).ok())
         .filter_map(|i| ExpandContext::try_from(i).ok())
         .find(|&i| command_complete_name(i).is_some_and(|n| n.to_bytes() == name));
     let Some(expand) = found else {
-        // SAFETY: caller contract.
-        let value = unsafe { msg_cstr_opt(cstr::at_opt(value)) };
+        let value = msg_bytes(cstr::until_nul(shown));
         semsg!("E180: Invalid complete value: {value}");
         return Err(Failed);
     };
@@ -156,22 +133,20 @@ pub(crate) unsafe fn parse_compl_arg(
     }
 
     let custom = expand == ExpandContext::UserDefined || expand == ExpandContext::UserList;
-    // SAFETY: both messages are literals.
     if !custom && arg.is_some() {
-        let msg = c"E468: Completion argument only allowed for custom completion".as_ptr();
-        // SAFETY: the message is a static string.
-        unsafe { emsg(gettext_ptr(msg)) };
+        emsg(gettext(
+            c"E468: Completion argument only allowed for custom completion",
+        ));
         return Err(Failed);
     }
     if custom && arg.is_none() {
-        let msg = c"E467: Custom completion requires a function argument".as_ptr();
-        // SAFETY: as above.
-        unsafe { emsg(gettext_ptr(msg)) };
+        emsg(gettext(
+            c"E467: Custom completion requires a function argument",
+        ));
         return Err(Failed);
     }
     if let Some(arg) = arg {
-        // SAFETY: `arg` is a sub-slice of `value`, which is live.
-        *compl_arg = unsafe { xstrnsave(arg.as_ptr().cast::<c_char>(), arg.len()) };
+        *compl_arg = Some(cstr::owned(cstr::until_nul(arg)));
     }
     Ok(())
 }
@@ -180,9 +155,9 @@ pub(crate) unsafe fn parse_compl_arg(
 pub(super) struct Attributes<'a> {
     pub(super) argt: &'a mut ExArgt,
     pub(super) def: &'a mut c_int,
-    pub(super) flags: &'a mut c_int,
+    pub(super) buffer_local: &'a mut bool,
     pub(super) complp: &'a mut ExpandContext,
-    pub(super) compl_arg: &'a mut *mut c_char,
+    pub(super) compl_arg: &'a mut Option<CString>,
     pub(super) addr_type_arg: &'a mut CmdAddr,
 }
 
@@ -199,80 +174,75 @@ enum Bad {
 
 /// Fold one `-attribute[=value]` into `into`.
 ///
-/// `attr` is `len` bytes of the command line, not NUL-terminated there --
-/// which is why the "invalid attribute" message writes a NUL over
-/// `attr[len]` and puts the byte back afterwards.
-///
-/// # Safety
-/// `attr` must be writable for `len + 1` bytes.
-pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attributes) -> c_int {
+/// The attribute is the first `len` bytes of `attr`, which runs on to the
+/// end of the command line: a bad `-complete=` value is reported with the
+/// rest of the line after it, as upstream's `%s` of a pointer into the line
+/// shows it.
+pub(super) fn uc_scan_attr(attr: &[u8], len: usize, into: Attributes) -> Result<(), Failed> {
     if len == 0 {
         emsg(gettext(c"E175: No attribute specified"));
-        return FAIL;
+        return Err(Failed);
     }
-    // SAFETY: caller contract.
-    let typed = unsafe { slice::from_raw_parts(attr.cast::<u8>(), len) };
+    let typed = &attr[..len];
 
     // The flag attributes take no value.
     if abbreviates(typed, "bang") {
         *into.argt |= ExArgt::BANG;
-        return OK;
+        return Ok(());
     } else if abbreviates(typed, "buffer") {
-        *into.flags |= UC_BUFFER;
-        return OK;
+        *into.buffer_local = true;
+        return Ok(());
     } else if abbreviates(typed, "register") {
         *into.argt |= ExArgt::REGSTR;
-        return OK;
+        return Ok(());
     } else if abbreviates(typed, "keepscript") {
         *into.argt |= ExArgt::KEEPSCRIPT;
-        return OK;
+        return Ok(());
     } else if abbreviates(typed, "bar") {
         *into.argt |= ExArgt::TRLBAR;
-        return OK;
+        return Ok(());
     }
 
     // Everything else is `name=value`; a bare name leaves `value` unset,
     // which `-range` and `-count` accept and the other two reject.
     let (name, value) = match typed.iter().position(|&b| b == b'=') {
-        Some(eq) => (&typed[..eq], Some(&typed[eq + 1..])),
+        Some(eq) => (&typed[..eq], Some(eq + 1)),
         None => (typed, None),
     };
-    // The value is a sub-slice of `attr`, so this is where it starts.
-    // SAFETY: caller contract.
-    let value_ptr = |v: &[u8]| unsafe { attr.add(len - v.len()) };
+    // The value as a slice, and as the C string it starts.
+    let value_of = |at: usize| (&typed[at..], &attr[at..]);
 
     let outcome = if abbreviates(name, "nargs") {
-        scan_nargs(value, into.argt)
+        scan_nargs(value.map(|at| value_of(at).0), into.argt)
     } else if abbreviates(name, "range") {
-        scan_range(value, into.argt, into.def, into.addr_type_arg)
+        scan_range(
+            value.map(|at| value_of(at).0),
+            into.argt,
+            into.def,
+            into.addr_type_arg,
+        )
     } else if abbreviates(name, "count") {
-        scan_count(value, into.argt, into.def, into.addr_type_arg)
+        scan_count(
+            value.map(|at| value_of(at).0),
+            into.argt,
+            into.def,
+            into.addr_type_arg,
+        )
     } else if abbreviates(name, "complete") {
-        match value {
+        match value.map(value_of) {
             None => Err(Bad::Missing(c"-complete")),
-            Some(v) => {
-                let (text, len) = (value_ptr(v), v.len() as c_int);
-                // SAFETY: caller contract; the three out-parameters are the
-                // caller's own.
-                let got =
-                    unsafe { parse_compl_arg(text, len, into.complp, into.argt, into.compl_arg) };
-                match got {
-                    Err(Failed) => Err(Bad::Reported),
-                    _ => Ok(()),
-                }
-            }
+            Some((v, shown)) => parse_compl_arg(v, shown, into.complp, into.argt, into.compl_arg)
+                .map_err(|Failed| Bad::Reported),
         }
     } else if abbreviates(name, "addr") {
         *into.argt |= ExArgt::RANGE;
-        match value {
+        match value.map(value_of) {
             None => Err(Bad::Missing(c"-addr")),
-            // SAFETY: caller contract.
-            Some(v) => match unsafe {
-                parse_addr_type_arg(value_ptr(v), v.len() as c_int, into.addr_type_arg)
-            } {
-                Err(Failed) => Err(Bad::Reported),
-                _ => {
-                    if *into.addr_type_arg != CmdAddr::Lines {
+            Some((v, shown)) => match parse_addr_type_arg(v, shown) {
+                Err(_) => Err(Bad::Reported),
+                Ok(addr_type) => {
+                    *into.addr_type_arg = addr_type;
+                    if addr_type != CmdAddr::Lines {
                         *into.argt |= ExArgt::ZEROR;
                     }
                     Ok(())
@@ -280,19 +250,12 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
             },
         }
     } else {
-        // SAFETY: caller contract; the byte past the attribute is restored
-        // as soon as the message has been formatted.
-        let ch = unsafe { *attr.add(len) };
-        unsafe { *attr.add(len) = NUL as c_char };
-        // SAFETY: the byte past the attribute was just replaced by a NUL.
-        let shown = unsafe { msg_cstr_opt(cstr::at_opt(attr)) };
+        let shown = msg_bytes(typed);
         semsg!("E181: Invalid attribute: {shown}");
-        unsafe { *attr.add(len) = ch };
-        return FAIL;
+        return Err(Failed);
     };
 
-    let Err(bad) = outcome else { return OK };
-    // SAFETY: every message and argument here is a literal.
+    let Err(bad) = outcome else { return Ok(()) };
     match bad {
         Bad::Nargs => {
             emsg(gettext(c"E176: Invalid number of arguments"));
@@ -309,7 +272,7 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
         }
         Bad::Reported => {}
     }
-    FAIL
+    Err(Failed)
 }
 
 /// `-nargs=`: one of `0`, `1`, `*`, `?`, `+`.

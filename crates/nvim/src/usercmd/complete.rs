@@ -19,8 +19,7 @@
 //!
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::attr::ADDR_TYPES;
 use super::{Scope, ucmd_name};
@@ -31,8 +30,7 @@ use crate::memory::{ThinCString, XString};
 use crate::menu::set_context_in_menu_cmd;
 use crate::types::CmdIdx;
 use crate::types::{Candidate, ExArgt, Expand, ExpandContext, UserCmd};
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 /// The `-complete=` name of each completion context, indexed by the
 /// `EXPAND_*` value. Must stay alphabetical by name: it is offered for
@@ -190,48 +188,34 @@ pub(crate) fn set_context_in_user_cmdarg(
 /// index keeps counting. The built-in command table's own completion
 /// reaches this past its last built-in.
 pub(crate) fn get_user_commands(_expand: &Expand, idx: usize) -> Option<Candidate> {
-    // SAFETY: the borrow ends before anything can add or remove a command.
-    let (local, global) = unsafe { (Scope::Buffer.list(), Scope::Global.list()) };
-    if let Some(cmd) = local.get(idx) {
-        return Some(name_candidate(cmd));
-    }
-    let cmd = global.get(idx - local.len())?;
-    let shadowed = local.iter().any(|l| ucmd_name(l) == ucmd_name(cmd));
-    Some(if shadowed {
-        Candidate::Borrowed(c"")
-    } else {
-        name_candidate(cmd)
+    // Both borrows end before anything can add or remove a command.
+    Scope::Buffer.with(|local| {
+        if let Some(cmd) = local.get(idx) {
+            return Some(name_candidate(cmd));
+        }
+        Scope::Global.with(|global| {
+            let cmd = global.get(idx - local.len())?;
+            let shadowed = local.iter().any(|l| ucmd_name(l) == ucmd_name(cmd));
+            Some(if shadowed {
+                Candidate::Borrowed(c"")
+            } else {
+                name_candidate(cmd)
+            })
+        })
     })
 }
 
 /// A copy of a command's name, which lives no longer than the command.
 fn name_candidate(cmd: &UserCmd) -> Candidate {
-    // SAFETY: `uc_name` is NUL-terminated for the life of the entry.
-    Candidate::Owned(unsafe { CStr::from_ptr(cmd.uc_name) }.to_owned())
-}
-
-/// The name of user command `idx` in the table `cmdidx` names.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: CmdIdx) -> *mut c_char {
-    let scope = match cmdidx {
-        CmdIdx::USER => Scope::Global,
-        CmdIdx::USER_BUF => Scope::Buffer,
-        _ => return ptr::null_mut(),
-    };
-    // SAFETY: module contract.
-    unsafe { scope.list() }
-        .get(idx as usize)
-        .map_or(ptr::null_mut(), |cmd| cmd.uc_name)
+    Candidate::Owned(cmd.name.clone())
 }
 
 /// A copy of the name of user command `idx` in `cmdidx`'s table, or `None`
 /// when there is no such command.
 pub(crate) fn user_command_name(idx: c_int, cmdidx: CmdIdx) -> Option<ThinCString> {
-    // SAFETY: a command's name is null or a NUL-terminated string the table
-    // owns; it is copied before anything can redefine the command.
-    unsafe { crate::cstr::at_opt(get_user_command_name(idx, cmdidx)) }.map(ThinCString::from_cstr)
+    let scope = Scope::of(cmdidx)?;
+    let idx = usize::try_from(idx).ok()?;
+    scope.with(|cmds| cmds.get(idx).map(|cmd| ThinCString::from_cstr(&cmd.name)))
 }
 
 /// The `idx`th of a fixed list.

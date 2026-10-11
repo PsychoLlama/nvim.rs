@@ -3,7 +3,7 @@
 //!
 //! A user command is a [`UserCmd`] -- a name, a replacement string, the
 //! `EX_*` flags its attributes imply, and the completion it wants for its
-//! arguments. They live in two sorted arrays: the global [`ucmds`] and the
+//! arguments. They live in two sorted arrays: the global [`USER_COMMANDS`] and the
 //! current buffer's `b_ucmds`. Everything that walks them looks at the
 //! buffer-local table first and the global one second, so a `-buffer`
 //! command shadows a global one of the same name; [`Scope`] is that walk.
@@ -20,27 +20,18 @@
 //! - [`list`] renders them, for `:command` with no arguments and for
 //!   `nvim_get_commands()`.
 //!
-//! # Safety
+//! # Borrowing a table
 //!
-//! Everything here runs on the main thread with the two command tables
-//! live. `UserCmd` fields are raw C pointers into memory the table owns:
-//! `uc_name`, `uc_rep` and `uc_compl_arg` are NUL-terminated strings valid
-//! until the entry is replaced or deleted, and the Lua references are owned
-//! by the entry. That is the contract the `unsafe fn`s here share; each
-//! states it once by reference rather than restating it.
-//!
-//! The one thing to watch is that a borrow of a table -- [`Table::list`]'s
-//! slice, or a `&UserCmd` taken out of it -- does not survive anything that
-//! can add or remove a command, because growing a `Vec` moves its contents.
-//! In practice only [`uc_add_command`] and [`ex_delcommand`] do that, and
-//! both take their index before touching the table.
+//! A table is lent to a closure ([`Table::with`]), never handed out as a
+//! slice: growing a `Vec` moves its contents, so a borrow must not survive
+//! anything that can add or remove a command. A closure that has to call
+//! out -- to print, to run Lua, to run the command's body -- copies what it
+//! needs first (the listing's rows, a Lua command's facts, a Vim command's
+//! expanded body), and an entry leaves its table before it is dropped.
 //!
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 
 mod attr;
 mod complete;
@@ -49,7 +40,6 @@ mod list;
 #[cfg(test)]
 mod tests;
 
-use crate::message_fmt::msg_cstr;
 pub(crate) use attr::{parse_addr_type_arg, parse_compl_arg};
 pub(crate) use complete::{
     cmdcomplete_str_to_type, cmdcomplete_type_to_str, get_user_cmd_addr_type,
@@ -57,48 +47,44 @@ pub(crate) use complete::{
     set_context_in_user_cmd, set_context_in_user_cmdarg, user_command_name,
 };
 pub(crate) use expand::{
-    do_ucmd, uc_mods, uc_nargs_upper_bound, uc_split_args_iter, win_cmd_modifiers,
+    LuaCommand, do_ucmd, uc_mods, uc_nargs_upper_bound, uc_split_args_iter, win_cmd_modifiers,
 };
 pub(crate) use list::commands_array;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::charset::{skiptowhite, skipwhite};
 use crate::cstr;
 use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::replace_termcodes;
-use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
-use crate::memory::ThinCString;
-use crate::memory::{XString, xfree};
+use crate::lua::executor::set_sctx_from_lua;
+use crate::memory::XString;
 use crate::message::emsg;
-use crate::message_fmt::{emsg_text, msg_cstr_opt};
+use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr};
 use crate::option::vars::p_cpo;
 use crate::os::cshim::gettext;
 use crate::runtime::sourcing_lnum;
 use crate::runtime::state::current_sctx;
 use crate::semsg;
-use crate::strings::xstrnsave;
 use crate::tr_c;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdAddr, ExArg, ExArgt, Expand, ExpandContext, FAIL, Failed, LuaRef, OK, UserCmd, int64_t,
-    size_t,
+    CmdAddr, ExArg, ExArgt, Expand, ExpandContext, Failed, LuaRef, UserCmd, int64_t,
 };
 use crate::window::prevwin_curwin;
 use crate::winlayer::Buf;
 use core::cmp::Ordering;
-use core::ffi::{CStr, c_char, c_int};
-use core::{mem, ptr, slice};
+use core::ffi::{CStr, c_int};
+use core::mem;
+use std::ffi::CString;
 
-pub(crate) const UC_BUFFER: c_int = 1;
 pub(crate) const LUA_NOREF: c_int = -2;
 
 /// The global user commands, sorted by name. A buffer's own live in its
 /// `b_ucmds`, which is the same `Vec`; [`Table`] is the pair.
 ///
 /// The cell's address is never handed out: a read borrows it just long
-/// enough to answer a slice, and a write is a closure that cannot re-enter.
-static ucmds: GlobalCell<Vec<UserCmd>> = GlobalCell::new(Vec::new());
+/// enough to answer a closure, and a write is a closure that cannot re-enter.
+static USER_COMMANDS: GlobalCell<Vec<UserCmd>> = GlobalCell::new(Vec::new());
 
 /// One command table: the global one, or the one inside a buffer.
 ///
@@ -107,42 +93,34 @@ static ucmds: GlobalCell<Vec<UserCmd>> = GlobalCell::new(Vec::new());
 /// *where*; [`Scope`] is the *which of the two the current buffer sees*.
 #[derive(Clone, Copy)]
 pub(crate) enum Table {
-    /// The global [`ucmds`].
+    /// The global [`USER_COMMANDS`].
     Global,
     /// `buf`'s own `b_ucmds`.
     Buffer(Buf),
 }
 
 impl Table {
-    /// The commands in this table, as a slice.
+    /// Run `f` on the commands in this table.
     ///
-    /// # Safety
-    /// As the module docs say, the borrow must not outlive anything that can
-    /// add or remove a command, because growing a `Vec` moves its contents.
-    pub(crate) unsafe fn list<'a>(self) -> &'a [UserCmd] {
-        let (data, len) = match self {
-            Table::Global => ucmds.with(|cmds| (cmds.as_ptr(), cmds.len())),
-            Table::Buffer(buf) => {
-                let cmds = &buf.b_ucmds;
-                (cmds.as_ptr(), cmds.len())
-            }
-        };
-        // SAFETY: `Vec::as_ptr` answers an aligned, non-null pointer to
-        // `len` initialised entries even when the table is empty; the
-        // caller keeps the borrow short enough.
-        unsafe { slice::from_raw_parts(data, len) }
+    /// `f` holds a borrow of the table, so it must not add or remove a
+    /// command -- nor run anything that might: copy out what is needed past
+    /// the borrow.
+    pub(crate) fn with<R>(self, f: impl FnOnce(&[UserCmd]) -> R) -> R {
+        match self {
+            Table::Global => USER_COMMANDS.with(|cmds| f(cmds)),
+            Table::Buffer(buf) => f(&buf.b_ucmds),
+        }
     }
 
     /// Run `f` on this table, mutably.
     ///
     /// `f` holds the only `&mut` to the table, so ruling 6 makes it a leaf:
-    /// it must not re-enter the editor. Releasing what an entry owns calls
-    /// into Lua, so every caller here moves the entry *out* under `f` and
-    /// frees it afterwards.
-    ///
+    /// it must not re-enter the editor. Dropping an entry gives its Lua
+    /// references back, which calls into Lua, so every caller here moves
+    /// the entry *out* under `f` and drops it afterwards.
     fn with_mut<R>(self, f: impl FnOnce(&mut Vec<UserCmd>) -> R) -> R {
         match self {
-            Table::Global => ucmds.with_mut(f),
+            Table::Global => USER_COMMANDS.with_mut(f),
             Table::Buffer(mut buf) => f(&mut buf.b_ucmds),
         }
     }
@@ -158,7 +136,7 @@ impl Table {
 pub(crate) enum Scope {
     /// The current buffer's `b_ucmds`, searched first.
     Buffer,
-    /// The global [`ucmds`], searched second.
+    /// The global [`USER_COMMANDS`], searched second.
     Global,
 }
 
@@ -167,7 +145,6 @@ impl Scope {
     pub(crate) const BOTH: [Scope; 2] = [Scope::Buffer, Scope::Global];
 
     /// The table this scope names.
-    ///
     pub(crate) fn table(self) -> Table {
         match self {
             Scope::Buffer => Table::Buffer(prevwin_curwin().buffer()),
@@ -175,21 +152,24 @@ impl Scope {
         }
     }
 
-    /// The commands this scope names, as a slice.
-    ///
-    /// # Safety
-    /// As [`Scope::table`] and [`Table::list`].
-    unsafe fn list<'a>(self) -> &'a [UserCmd] {
-        // SAFETY: caller contract.
-        unsafe { self.table().list() }
+    /// The scope a user command's `cmdidx` names, or `None` for a built-in.
+    pub(crate) fn of(cmdidx: CmdIdx) -> Option<Scope> {
+        match cmdidx {
+            CmdIdx::USER => Some(Scope::Global),
+            CmdIdx::USER_BUF => Some(Scope::Buffer),
+            _ => None,
+        }
+    }
+
+    /// [`Table::with`] on this scope's table.
+    pub(crate) fn with<R>(self, f: impl FnOnce(&[UserCmd]) -> R) -> R {
+        self.table().with(f)
     }
 }
 
 /// A command's name.
 pub(crate) fn ucmd_name(cmd: &UserCmd) -> &[u8] {
-    // SAFETY: caller contract; `uc_name` is NUL-terminated for the life of
-    // the entry.
-    unsafe { CStr::from_ptr(cmd.uc_name).to_bytes() }
+    cmd.name.to_bytes()
 }
 
 /// Search both tables for a command matching `args.cmd`.
@@ -221,63 +201,64 @@ pub(crate) fn find_ucmd(
     let mut amb_local = false;
 
     for scope in Scope::BOTH {
-        // SAFETY: the slice is only read below, and nothing in the loop can
-        // add or remove a command.
-        let cmds = unsafe { scope.list() };
-        let mut exact = false;
-        for (j, uc) in cmds.iter().enumerate() {
-            let name = ucmd_name(uc);
-            let (k, at_nul) = match_prefix(typed, name);
-            // A match up to a digit means there may be another command
-            // *including* the digit that should be preferred.
-            if !(k == typed.len() || (at_nul && ascii_isdigit(typed[k] as c_int))) {
-                continue;
-            }
-            if k == typed.len() && found && !at_nul {
-                if scope == Scope::Global {
-                    return None;
+        // Nothing in the walk can add or remove a command: it only copies
+        // facts out.
+        let walked = scope.with(|cmds| {
+            for (j, uc) in cmds.iter().enumerate() {
+                let name = ucmd_name(uc);
+                let (k, at_nul) = match_prefix(typed, name);
+                // A match up to a digit means there may be another command
+                // *including* the digit that should be preferred.
+                if !(k == typed.len() || (at_nul && ascii_isdigit(c_int::from(typed[k])))) {
+                    continue;
                 }
-                amb_local = true;
+                if k == typed.len() && found && !at_nul {
+                    if scope == Scope::Global {
+                        return None;
+                    }
+                    amb_local = true;
+                }
+                if found && !(k == typed.len() && at_nul) {
+                    continue;
+                }
+                if k == typed.len() {
+                    found = true;
+                } else {
+                    possible = true;
+                }
+                excmd.cmdidx = if scope == Scope::Global {
+                    CmdIdx::USER
+                } else {
+                    CmdIdx::USER_BUF
+                };
+                excmd.argt = uc.argt;
+                excmd.useridx = c_int::try_from(j).expect("a table index fits");
+                excmd.addr_type = uc.addr_type;
+                if let Some(complp) = complp.as_deref_mut() {
+                    *complp = uc.complete;
+                }
+                if let Some(expand) = expand.as_deref_mut() {
+                    expand.luaref = uc.complete_luaref;
+                    expand.arg = uc.complete_arg.as_deref().map(XString::from_cstr);
+                    expand.script_ctx = uc.script_ctx;
+                    expand.script_ctx.sc_lnum += sourcing_lnum();
+                }
+                // Do not look for further abbreviations of an exact match.
+                matchlen = k;
+                if k == typed.len() && at_nul {
+                    exact_match = true;
+                    amb_local = false;
+                    return Some(true);
+                }
             }
-            if found && !(k == typed.len() && at_nul) {
-                continue;
-            }
-            if k == typed.len() {
-                found = true;
-            } else {
-                possible = true;
-            }
-            excmd.cmdidx = if scope == Scope::Global {
-                CmdIdx::USER
-            } else {
-                CmdIdx::USER_BUF
-            };
-            excmd.argt = uc.uc_argt;
-            excmd.useridx = j as c_int;
-            excmd.addr_type = uc.uc_addr_type;
-            if let Some(complp) = complp.as_deref_mut() {
-                *complp = uc.uc_compl;
-            }
-            if let Some(expand) = expand.as_deref_mut() {
-                expand.luaref = uc.uc_compl_luaref;
-                // SAFETY: a command's completion argument is null or a
-                // NUL-terminated string it owns.
-                expand.arg = unsafe { cstr::at_opt(uc.uc_compl_arg) }.map(XString::from_cstr);
-                expand.script_ctx = uc.uc_script_ctx;
-                expand.script_ctx.sc_lnum += sourcing_lnum();
-            }
-            // Do not look for further abbreviations of an exact match.
-            matchlen = k;
-            if k == typed.len() && at_nul {
-                exact_match = true;
-                amb_local = false;
-                exact = true;
-                break;
-            }
-        }
-        // Stop on a full match; otherwise fall through to the global table.
-        if exact {
-            break;
+            Some(false)
+        });
+        match walked {
+            // An ambiguous global match.
+            None => return None,
+            // Stop on a full match; otherwise fall through to the global table.
+            Some(true) => break,
+            Some(false) => {}
         }
     }
 
@@ -320,290 +301,209 @@ fn match_prefix(typed: &[u8], name: &[u8]) -> (usize, bool) {
     (k, name.len() == k)
 }
 
-/// The end of the command name `name` starts with, or null when what
+/// Where the command name `name` starts with ends, or `None` when what
 /// follows the name is neither whitespace nor the end of the command.
 ///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub(crate) unsafe fn uc_validate_name(name: *mut c_char) -> *mut c_char {
-    let mut name = name;
-    // SAFETY: caller contract; the walk stops at the NUL.
-    if (unsafe { *name } as u8).is_ascii_alphabetic() {
-        while (unsafe { *name } as u8).is_ascii_alphanumeric() {
-            name = unsafe { name.offset(1) };
+/// `name` is read as a C string: past its end is a NUL.
+pub(crate) fn uc_validate_name(name: &[u8]) -> Option<usize> {
+    let at = |i: usize| cstr::byte_at(name, i);
+    let mut end = 0;
+    if at(0).is_ascii_alphabetic() {
+        while at(end).is_ascii_alphanumeric() {
+            end += 1;
         }
     }
-    if ends_excmd(unsafe { *name } as c_int) == 0 && !ascii_iswhite(unsafe { *name } as c_int) {
-        return ptr::null_mut();
-    }
-    name
+    let next = c_int::from(at(end));
+    (ends_excmd(next) != 0 || ascii_iswhite(next)).then_some(end)
 }
 
-/// Define, or redefine, one user command.
+/// Everything a command is defined with bar its name and its replacement.
 ///
-/// Takes ownership of `compl_arg` and of the three Lua references: on
-/// failure they are freed here.
+/// It owns the completion argument and the three Lua references: a
+/// definition that is never installed gives them back when it is dropped.
+pub(crate) struct Definition {
+    pub(crate) argt: ExArgt,
+    pub(crate) default_count: int64_t,
+    pub(crate) complete: ExpandContext,
+    pub(crate) complete_arg: Option<CString>,
+    pub(crate) addr_type: CmdAddr,
+    pub(crate) luaref: LuaRef,
+    pub(crate) complete_luaref: LuaRef,
+    pub(crate) preview_luaref: LuaRef,
+}
+
+impl Drop for Definition {
+    fn drop(&mut self) {
+        for reference in [self.luaref, self.complete_luaref, self.preview_luaref] {
+            crate::lua::executor::release_luaref(reference);
+        }
+    }
+}
+
+impl Definition {
+    /// The entry this definition makes, the references moving into it.
+    fn into_command(mut self, name: CString, replacement: CString) -> UserCmd {
+        let mut script_ctx = current_sctx.get();
+        script_ctx.sc_lnum += sourcing_lnum();
+        set_sctx_from_lua(&mut script_ctx);
+        UserCmd {
+            name,
+            argt: self.argt,
+            replacement,
+            default_count: self.default_count,
+            complete: self.complete,
+            addr_type: self.addr_type,
+            script_ctx,
+            complete_arg: self.complete_arg.take(),
+            complete_luaref: mem::replace(&mut self.complete_luaref, LUA_NOREF),
+            preview_luaref: mem::replace(&mut self.preview_luaref, LUA_NOREF),
+            luaref: mem::replace(&mut self.luaref, LUA_NOREF),
+        }
+    }
+}
+
+/// Define, or redefine, one user command: the first `name_len` bytes of
+/// `text` with replacement text `rep` (each read as a C string),
+/// buffer-local when `buffer_local`. The refusal quotes `text` whole, as
+/// upstream's `%s` of the name's pointer does -- for `:command` that is the
+/// rest of the line.
 ///
-/// # Safety
-/// Module contract; `name` must have `name_len` readable bytes and `rep`
-/// must be NUL-terminated.
-#[expect(clippy::too_many_arguments, reason = "one per UserCmd field")]
-pub(crate) unsafe fn uc_add_command(
-    name: *mut c_char,
-    name_len: size_t,
-    rep: *const c_char,
-    argt: ExArgt,
-    def: int64_t,
-    flags: c_int,
-    context: ExpandContext,
-    compl_arg: *mut c_char,
-    compl_luaref: LuaRef,
-    preview_luaref: LuaRef,
-    addr_type: CmdAddr,
-    luaref: LuaRef,
+/// Takes ownership of `def`: on failure what it owns is given back here.
+pub(crate) fn uc_add_command(
+    text: &[u8],
+    name_len: usize,
+    rep: &[u8],
+    def: Definition,
+    buffer_local: bool,
     force: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: caller contract.
-    let rep_text = unsafe { cstr::bytes_at(rep) };
-    let replaced = p_cpo(|cpo| replace_termcodes(rep_text, 0, 0, None, cpo, None));
-    let rep_buf = ThinCString::from_vec(replaced.unwrap_or_default()).into_raw();
+    let (text, rep) = (cstr::until_nul(text), cstr::until_nul(rep));
+    let name = &text[..name_len.min(text.len())];
+    let replaced = p_cpo(|cpo| replace_termcodes(rep, 0, 0, None, cpo, None));
+    let replacement = cstr::owned(cstr::until_nul(&replaced.unwrap_or_default()));
 
-    let table = if flags & UC_BUFFER != 0 {
+    let table = if buffer_local {
         Table::Buffer(Buf::current())
     } else {
         Table::Global
     };
 
-    // SAFETY: caller contract.
-    let new_name = unsafe { slice::from_raw_parts(name.cast::<u8>(), name_len) };
     // The tables are kept sorted by name, so the walk stops at the first
     // entry that is not smaller: either this very command, or where it goes.
-    let mut idx = 0;
-    let mut replacing = false;
-    // SAFETY: module contract; the borrow ends with the walk.
-    for cmd in unsafe { table.list() } {
-        match new_name.cmp(ucmd_name(cmd)) {
-            Ordering::Equal => {
-                replacing = true;
-                break;
+    let (idx, existing) = table.with(|cmds| {
+        let mut idx = 0;
+        for cmd in cmds {
+            match name.cmp(ucmd_name(cmd)) {
+                Ordering::Equal => return (idx, Some(cmd.script_ctx)),
+                Ordering::Less => break,
+                Ordering::Greater => idx += 1,
             }
-            Ordering::Less => break,
-            Ordering::Greater => idx += 1,
         }
-    }
+        (idx, None)
+    });
 
-    if replacing {
-        // SAFETY: module contract; `idx` indexes the entry the walk just
-        // compared, and the borrow ends with the copy.
-        let existing = unsafe { table.list()[idx].uc_script_ctx };
+    if let Some(existing) = existing
         // A command may replace itself while the same script is still
         // sourcing (`sc_seq` differs), but two different scripts need the
         // bang.
-        if !force
-            && (existing.sc_sid != current_sctx.get().sc_sid
-                || existing.sc_seq == current_sctx.get().sc_seq)
-        {
-            // SAFETY: `name` is the caller's; this call owns the other five.
-            let name = unsafe { msg_cstr_opt(cstr::at_opt(name)) };
-            semsg!("E174: Command already exists: add ! to replace it: {name}");
-            unsafe { free_new_command(rep_buf, compl_arg, luaref, compl_luaref, preview_luaref) };
-            return Err(Failed);
-        }
-        // Everything the old entry owned bar its name, taken out of the
-        // table before it is released: freeing a Lua reference re-enters,
-        // and no borrow of the table may be live when it does.
-        let steal = |cmds: &mut Vec<UserCmd>| {
-            let cmd = &mut cmds[idx];
-            (
-                mem::replace(&mut cmd.uc_rep, ptr::null_mut()),
-                mem::replace(&mut cmd.uc_compl_arg, ptr::null_mut()),
-                [
-                    mem::replace(&mut cmd.uc_luaref, LUA_NOREF),
-                    mem::replace(&mut cmd.uc_compl_luaref, LUA_NOREF),
-                    mem::replace(&mut cmd.uc_preview_luaref, LUA_NOREF),
-                ],
-            )
-        };
-        // SAFETY: module contract; `steal` is a leaf.
-        let (old_rep, old_compl_arg, old_luarefs) = table.with_mut(steal);
-        // SAFETY: the entry owned all five and no longer names any of them.
-        unsafe { xfree(old_rep.cast()) };
-        unsafe { xfree(old_compl_arg.cast()) };
-        for mut luaref in old_luarefs {
-            unsafe { free_luaref(&mut luaref) };
-        }
+        && !force
+        && (existing.sc_sid != current_sctx.get().sc_sid
+            || existing.sc_seq == current_sctx.get().sc_seq)
+    {
+        let name = msg_bytes(text);
+        semsg!("E174: Command already exists: add ! to replace it: {name}");
+        return Err(Failed);
     }
 
-    let mut script_ctx = current_sctx.get();
-    script_ctx.sc_lnum += sourcing_lnum();
-    // SAFETY: the local is live for the call.
-    unsafe { nlua_set_sctx(&raw mut script_ctx) };
-    // A new entry needs a name of its own; a replaced one keeps the name it
-    // was found by, which is the same string.
-    // SAFETY: caller contract; `name` has `name_len` readable bytes.
-    let fresh_name = (!replacing).then(|| unsafe { xstrnsave(name, name_len) });
-
-    let store = |cmds: &mut Vec<UserCmd>| {
-        let entry = |uc_name| UserCmd {
-            uc_name,
-            uc_argt: argt,
-            uc_rep: rep_buf,
-            uc_def: def,
-            uc_compl: context,
-            uc_addr_type: addr_type,
-            uc_script_ctx: script_ctx,
-            uc_compl_arg: compl_arg,
-            uc_compl_luaref: compl_luaref,
-            uc_preview_luaref: preview_luaref,
-            uc_luaref: luaref,
-        };
-        match fresh_name {
-            // `idx` is where the walk stopped, which keeps it sorted.
-            Some(uc_name) => cmds.insert(idx, entry(uc_name)),
-            None => {
-                let uc_name = cmds[idx].uc_name;
-                cmds[idx] = entry(uc_name);
-            }
-        }
+    let entry = def.into_command(cstr::owned(name), replacement);
+    // Both closures are leaves; the entry a redefinition replaces is
+    // dropped -- its references given back -- once the table is free.
+    let replaced = if existing.is_some() {
+        Some(table.with_mut(|cmds| mem::replace(&mut cmds[idx], entry)))
+    } else {
+        // `idx` is where the walk stopped, which keeps it sorted.
+        table.with_mut(|cmds| cmds.insert(idx, entry));
+        None
     };
-    // `store` is a leaf.
-    table.with_mut(store);
+    drop(replaced);
     Ok(())
-}
-
-/// Release a reference and mark the field free. No-op on `LUA_NOREF`.
-///
-/// # Safety
-/// The reference must be owned by whatever holds `slot`.
-unsafe fn free_luaref(slot: &mut LuaRef) {
-    if *slot != LUA_NOREF {
-        // SAFETY: caller contract.
-        unsafe { api_free_luaref(*slot) };
-        *slot = LUA_NOREF;
-    }
-}
-
-/// Everything [`uc_add_command`] was handed but could not install.
-///
-/// # Safety
-/// The caller must own all five.
-unsafe fn free_new_command(
-    rep_buf: *mut c_char,
-    compl_arg: *mut c_char,
-    luaref: LuaRef,
-    compl_luaref: LuaRef,
-    preview_luaref: LuaRef,
-) {
-    // SAFETY: caller contract.
-    unsafe { xfree(rep_buf.cast()) };
-    unsafe { xfree(compl_arg.cast()) };
-    for mut r in [luaref, compl_luaref, preview_luaref] {
-        unsafe { free_luaref(&mut r) };
-    }
 }
 
 /// `:command` -- define one, or list them.
 pub(crate) fn ex_command(excmd: &mut ExArg) {
-    let mut argt = ExArgt::NONE;
-    let mut def: c_int = -1;
-    let mut flags: c_int = 0;
-    let mut context = ExpandContext::Nothing;
-    let mut compl_arg: *mut c_char = ptr::null_mut();
-    let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
+    let mut def = Definition {
+        argt: ExArgt::NONE,
+        default_count: -1,
+        complete: ExpandContext::Nothing,
+        complete_arg: None,
+        addr_type: CmdAddr::NoRange,
+        luaref: LUA_NOREF,
+        complete_luaref: LUA_NOREF,
+        preview_luaref: LUA_NOREF,
+    };
+    let mut default_count: c_int = -1;
+    let mut buffer_local = false;
 
-    // SAFETY: caller contract.
-    let (arg, forceit) = (excmd.arg_ptr(), excmd.forceit);
-    // SAFETY: caller contract; `arg` is NUL-terminated.
-    let has_attr = unsafe { *arg } == b'-' as c_char;
-    let mut p = arg;
-    // SAFETY: module contract; every step stays inside the NUL-terminated
-    // argument.
+    let line = &excmd.line;
+    let has_attr = line.byte_at(line.arg) == b'-';
+    let mut p = line.arg;
     let name_end = loop {
-        // SAFETY: module contract; every step stays inside the argument.
-        if unsafe { *p } != b'-' as c_char {
-            // SAFETY: as above.
-            break unsafe { uc_validate_name(p) };
+        if line.byte_at(p) != b'-' {
+            break uc_validate_name(line.rest_of(p)).map(|len| p + len);
         }
-        // SAFETY: as above -- the byte just read was not the NUL.
-        let (attr_start, attr_end) = unsafe {
-            let start = p.offset(1);
-            (start, skiptowhite(start))
-        };
+        let attr_start = p + 1;
+        let attr_end = line.skip_to_white(attr_start);
         let into = attr::Attributes {
-            argt: &mut argt,
-            def: &mut def,
-            flags: &mut flags,
-            complp: &mut context,
-            compl_arg: &mut compl_arg,
-            addr_type_arg: &mut addr_type_arg,
+            argt: &mut def.argt,
+            def: &mut default_count,
+            buffer_local: &mut buffer_local,
+            complp: &mut def.complete,
+            compl_arg: &mut def.complete_arg,
+            addr_type_arg: &mut def.addr_type,
         };
-        // SAFETY: as above; `into` names this frame's own locals.
-        let len = unsafe { attr_end.offset_from(attr_start) } as size_t;
-        // SAFETY: as above.
-        if unsafe { attr::uc_scan_attr(attr_start, len, into) } == FAIL {
-            // SAFETY: nothing above took `compl_arg`.
-            unsafe { xfree(compl_arg.cast()) };
+        if attr::uc_scan_attr(line.rest_of(attr_start), attr_end - attr_start, into).is_err() {
             return;
         }
-        // SAFETY: as above.
-        p = unsafe { skipwhite(attr_end) };
+        p = line.skip_white(attr_end);
     };
 
     let name = p;
-    if name_end.is_null() {
+    let Some(name_end) = name_end else {
         emsg(gettext(c"E182: Invalid command name"));
-        unsafe { xfree(compl_arg.cast()) };
         return;
-    }
-    // SAFETY: module contract.
-    let (name_len, rest) = unsafe { (name_end.offset_from(name) as size_t, skipwhite(name_end)) };
-    // SAFETY: module contract.
-    let name_bytes = unsafe { slice::from_raw_parts(name.cast::<u8>(), name_len) };
+    };
+    let rest = line.skip_white(name_end);
+    let name_bytes = line.slice_at(name, name_end - name);
     // Not `name_bytes[0]`: an attribute-only line (`:command -nargs=1 |`)
     // leaves the name empty, and upstream still reads the byte there.
-    // SAFETY: module contract; `name` points into the NUL-terminated
-    // argument, so there is always a byte to read.
-    let first = unsafe { *name } as u8;
+    let first = line.byte_at(name);
 
-    // SAFETY: module contract.
-    let complaint = if !has_attr && unsafe { ends_excmd(*rest as c_int) } != 0 {
-        // SAFETY: module contract.
-        unsafe { list::uc_list(name, name_len) };
+    let complaint = if !has_attr && ends_excmd(c_int::from(line.byte_at(rest))) != 0 {
+        list::uc_list(name_bytes);
         None
     } else if !first.is_ascii_uppercase() {
         Some(c"E183: User defined commands must start with an uppercase letter")
     } else if b"Next".starts_with(name_bytes) {
         Some(c"E841: Reserved name, cannot be used for user defined command")
-    } else if context != ExpandContext::Nothing && !argt.has(ExArgt::EXTRA) {
+    } else if def.complete != ExpandContext::Nothing && !def.argt.has(ExArgt::EXTRA) {
         Some(c"E1208: -complete used without allowing arguments")
     } else {
-        let def = def as int64_t;
-        let (no_compl, no_preview, no_cb) = (LUA_NOREF, LUA_NOREF, LUA_NOREF);
-        // SAFETY: module contract; `uc_add_command` takes `compl_arg`.
-        let _ = unsafe {
-            uc_add_command(
-                name,
-                name_len,
-                rest,
-                argt,
-                def,
-                flags,
-                context,
-                compl_arg,
-                no_compl,
-                no_preview,
-                addr_type_arg,
-                no_cb,
-                forceit,
-            )
-        };
+        def.default_count = int64_t::from(default_count);
+        let (text, len) = (line.rest_of(name), name_bytes.len());
+        let _ = uc_add_command(
+            text,
+            len,
+            line.rest_of(rest),
+            def,
+            buffer_local,
+            excmd.forceit,
+        );
         return;
     };
 
     if let Some(message) = complaint {
         emsg(gettext(message));
     }
-    unsafe { xfree(compl_arg.cast()) };
 }
 
 /// `:comclear` -- forget every user command, global and buffer-local.
@@ -614,37 +514,14 @@ pub(crate) fn ex_comclear(_excmd: &mut ExArg) {
     }
 }
 
-/// Release everything one entry owns.
-///
-/// The entry is taken by value, which is what makes the release exactly
-/// once: `UserCmd` is neither `Copy` nor `Clone`, so the caller has had to
-/// move it out of the table to get here.
-///
-/// # Safety
-/// Module contract; `cmd` must be an entry that has been taken out of a
-/// table and is being discarded.
-unsafe fn free_ucmd(mut cmd: UserCmd) {
-    // SAFETY: caller contract; the entry owns all six.
-    unsafe { xfree(cmd.uc_name.cast()) };
-    unsafe { xfree(cmd.uc_rep.cast()) };
-    unsafe { xfree(cmd.uc_compl_arg.cast()) };
-    unsafe { free_luaref(&mut cmd.uc_compl_luaref) };
-    unsafe { free_luaref(&mut cmd.uc_luaref) };
-    unsafe { free_luaref(&mut cmd.uc_preview_luaref) };
-}
-
 /// Empty one command table, leaving it usable again.
 ///
-/// The entries are moved out first and released afterwards: `free_ucmd`
-/// re-enters Lua, so it must not run with the table borrowed, and a table
-/// that has been emptied cannot free the same entry twice.
+/// The entries are moved out first and dropped afterwards: dropping one
+/// re-enters Lua, so it must not happen with the table borrowed, and a
+/// table that has been emptied cannot drop the same entry twice.
 pub(crate) fn uc_clear(table: Table) {
     // `mem::take` cannot re-enter.
-    let cmds = table.with_mut(mem::take);
-    for cmd in cmds {
-        // SAFETY: the entry is out of the table and owns what it names.
-        unsafe { free_ucmd(cmd) };
-    }
+    drop(table.with_mut(mem::take));
 }
 
 /// `:delcommand` -- remove one user command.
@@ -661,24 +538,22 @@ pub(crate) fn ex_delcommand(excmd: &mut ExArg) {
     // Upstream carries `res` across both passes, so an empty table leaves
     // the previous pass's answer standing; an empty table cannot match.
     let mut res = Ordering::Less;
-    let mut idx = 0;
     let mut found = None;
     for scope in Scope::BOTH {
-        // SAFETY: module contract.
-        let (table, cmds) = unsafe {
-            let table = scope.table();
-            (table, table.list())
-        };
-        idx = 0;
-        for cmd in cmds {
-            res = wanted.cmp(ucmd_name(cmd));
-            if res != Ordering::Greater {
-                break;
+        let table = scope.table();
+        let idx = table.with(|cmds| {
+            let mut idx = 0;
+            for cmd in cmds {
+                res = wanted.cmp(ucmd_name(cmd));
+                if res != Ordering::Greater {
+                    break;
+                }
+                idx += 1;
             }
-            idx += 1;
-        }
+            idx
+        });
         if res == Ordering::Equal {
-            found = Some(table);
+            found = Some((table, idx));
             break;
         }
         if buffer_only {
@@ -686,7 +561,7 @@ pub(crate) fn ex_delcommand(excmd: &mut ExArg) {
         }
     }
 
-    let Some(table) = found else {
+    let Some((table, idx)) = found else {
         let untranslated = if buffer_only {
             c"E1237: No such user-defined command in current buffer: %s"
         } else {
@@ -696,23 +571,30 @@ pub(crate) fn ex_delcommand(excmd: &mut ExArg) {
         emsg_text(tr_c!(untranslated, arg));
         return;
     };
-
-    // SAFETY: module contract; `idx` is the entry just matched.
-    unsafe { uc_del_command(table, idx) };
+    uc_del_command(table, idx);
 }
 
-/// Delete the `idx`th entry of `table`, releasing everything it owns.
+/// Delete the `idx`th entry of `table`, giving back everything it owns.
 ///
-/// The entry is moved out under the borrow and freed once the borrow has
-/// ended: `free_ucmd` re-enters Lua, which must not happen while the table
-/// is borrowed, and an entry that has left the table cannot be freed twice.
+/// The entry is moved out under the borrow and dropped once the borrow has
+/// ended: dropping it re-enters Lua, which must not happen while the table
+/// is borrowed.
 ///
-/// # Safety
-/// Module contract; `idx` must index `table`, and a [`Table::Buffer`] must
-/// name a live buffer.
-pub(crate) unsafe fn uc_del_command(table: Table, idx: usize) {
-    // SAFETY: caller contract; the closure is a leaf.
-    let cmd = table.with_mut(|cmds| cmds.remove(idx));
-    // SAFETY: the entry is out of the table and owns what it names.
-    unsafe { free_ucmd(cmd) };
+/// # Panics
+/// If `idx` does not index `table`.
+fn uc_del_command(table: Table, idx: usize) {
+    // The closure is a leaf.
+    drop(table.with_mut(|cmds| cmds.remove(idx)));
+}
+
+/// Delete the command called `name` from `table`; `false` when it has none.
+pub(crate) fn uc_del_named(table: Table, name: &CStr) -> bool {
+    let wanted = name.to_bytes();
+    match table.with(|cmds| cmds.iter().position(|cmd| ucmd_name(cmd) == wanted)) {
+        Some(idx) => {
+            uc_del_command(table, idx);
+            true
+        }
+        None => false,
+    }
 }

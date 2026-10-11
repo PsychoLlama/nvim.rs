@@ -18,7 +18,6 @@ use crate::types::CmdIdx;
 use crate::types::{CmdLine, ExArgt, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 use core::slice;
 
 /// A `:map`-family right-hand side is one opaque string, however much
@@ -60,46 +59,34 @@ fn parse_args(excmd: &mut ExArg) -> Array {
         return args;
     }
 
-    // `uc_split_args_iter` unescapes into `buf`, one NUL-separated argument
-    // per call, so the whole split fits in one `length + 1` block.
-    let mut block = vec![0 as c_char; length + 1];
-    let mut buf = block.as_mut_ptr();
-    // Read only, by both the count and the splitter.
-    let arg = excmd.line.arg().as_ptr().cast::<c_char>();
-    // SAFETY: `length` bytes of the argument; the upper bound is what the
-    // splitter itself computes.
-    let mut args = Array::with_capacity(unsafe { uc_nargs_upper_bound(arg, length) });
-    let (mut end, mut len): (size_t, size_t) = (0, 0);
+    // `uc_split_args_iter` unescapes one argument per call.
+    let arg = excmd.line.arg();
+    debug_assert_eq!(arg.len(), length);
+    let mut args = Array::with_capacity(uc_nargs_upper_bound(arg));
+    let mut end = 0;
+    let mut word = Vec::with_capacity(length);
     let mut done = false;
     while !done {
-        // SAFETY: `end`/`len` are this frame's, and `buf` advances by
-        // exactly what each call wrote, so it stays inside the block.
-        unsafe {
-            done = uc_split_args_iter(arg, length, &raw mut end, buf, &raw mut len);
-            if len > 0 {
-                args.push(Object::string(cstrn_to_string(buf, len)));
-                buf = buf.add(len + 1);
-            }
+        done = uc_split_args_iter(arg, &mut end, &mut word);
+        if !word.is_empty() {
+            args.push(Object::string(String_0::from_bytes(&word)));
         }
     }
     args
 }
 
-/// The name of the command `excmd` names: a user command's own spelling, the
-/// built-in table's, or the empty string where the line named no command.
-///
-/// # Safety
-/// `cmd` must be null or point at a live `UserCmd`.
-unsafe fn command_name(excmd: &ExArg, cmd: *const UserCmd) -> *const c_char {
+/// The name of the command `excmd` names: a user command's own spelling
+/// (`user`), the built-in table's, or the empty string where the line named
+/// no command.
+fn command_name(excmd: &ExArg, user: Option<&CStr>) -> String_0 {
     if excmd.cmdidx == CmdIdx::SIZE {
-        return c"".as_ptr();
+        return String_0::from_cstr(c"");
     }
-    if !cmd.is_null() {
-        // SAFETY: caller contract.
-        return unsafe { (*cmd).uc_name };
+    if let Some(name) = user {
+        return String_0::from_cstr(name);
     }
-    // SAFETY: `cmdidx` is a built-in index, checked against `CmdIdx::SIZE` above.
-    builtin_command_cstr(excmd.cmdidx).as_ptr()
+    // `cmdidx` is a built-in index, checked against `CmdIdx::SIZE` above.
+    String_0::from_cstr(builtin_command_cstr(excmd.cmdidx))
 }
 
 /// How the command's range is counted, as the `addr` field's string.
@@ -213,28 +200,28 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
         return Err(error);
     }
 
-    // The `useridx`th entry of one of the two user-command tables, by
-    // address: what the rest of this reads the command's own facts from.
-    let useridx = excmd.useridx as usize;
-    let nth = |table: Table| {
-        // SAFETY: `useridx` indexes the table the matching `cmdidx` names.
-        unsafe { table.list() }
-            .get(useridx)
-            .map_or(ptr::null_mut(), |cmd| ptr::from_ref(cmd).cast_mut())
+    // The `useridx`th entry of one of the two user-command tables: its
+    // name and its own default count, copied out.
+    let useridx = usize::try_from(excmd.useridx).ok();
+    let facts = |table: Table| {
+        table.with(|cmds| {
+            let cmd = cmds.get(useridx?)?;
+            Some((cmd.name.clone(), cmd.default_count))
+        })
     };
     // The arguments `parse_cmdline` left in `excmd`.
     let args = parse_args(&mut excmd);
-    let cmd: *mut UserCmd = match excmd.cmdidx {
-        CmdIdx::USER => nth(Table::Global),
-        CmdIdx::USER_BUF => nth(Table::Buffer(Buf::current())),
-        _ => ptr::null_mut(),
+    let user = match excmd.cmdidx {
+        CmdIdx::USER => facts(Table::Global),
+        CmdIdx::USER_BUF => facts(Table::Buffer(Buf::current())),
+        _ => None,
     };
     // A user command carries its own default count.
-    // SAFETY: `cmd`, when non-null, points at a live `UserCmd`.
-    let uc_def = (!cmd.is_null()).then(|| unsafe { (*cmd).uc_def });
-
-    // SAFETY: both names are NUL-terminated, and outlive the reply.
-    result.cmd = Some(unsafe { cstr_to_string(command_name(&excmd, cmd)) });
+    let default_count = user.as_ref().map(|(_, def)| *def);
+    result.cmd = Some(command_name(
+        &excmd,
+        user.as_ref().map(|(name, _)| name.as_c_str()),
+    ));
 
     if excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
         // Two addresses give both bounds, one gives only `line2`.
@@ -250,10 +237,10 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
         let count: Integer = if excmd.addr_count > 0 {
             excmd.line2 as Integer
         } else {
-            uc_def.unwrap_or(0) as Integer
+            default_count.unwrap_or(0) as Integer
         };
         // A zero count that nothing asked for is left unset.
-        if excmd.addr_count > 0 || uc_def.is_some_and(|def| def != 0) || count != 0 {
+        if excmd.addr_count > 0 || default_count.is_some_and(|def| def != 0) || count != 0 {
             result.count = Some(count);
         }
     }

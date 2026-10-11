@@ -154,14 +154,13 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     }
 
     let mut xp_type = ExpandContext::Nothing;
-    let mut xp_arg = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut xp_arg = None;
     if !xp_name.is_null() {
         // input() with a third argument: completion
-        let xp_namelen = unsafe { cstr::bytes_at(xp_name) }.len() as ::core::ffi::c_int;
+        // SAFETY: `xp_name` is the third argument's string, live for the call.
+        let name = unsafe { cstr::bytes_at(xp_name) };
         let mut argt = ExArgt::NONE;
-        if unsafe { parse_compl_arg(xp_name, xp_namelen, &mut xp_type, &mut argt, &mut xp_arg) }
-            .is_err()
-        {
+        if parse_compl_arg(name, name, &mut xp_type, &mut argt, &mut xp_arg).is_err() {
             return;
         }
     }
@@ -201,7 +200,9 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             p,
             get_echo_hl_id(),
             xp_type,
-            xp_arg,
+            xp_arg
+                .as_deref()
+                .map_or(::core::ptr::null(), ::core::ffi::CStr::as_ptr),
             // The prompt takes the callback over, and releases it when it
             // returns.
             input_callback,
@@ -219,7 +220,6 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         }
     }
 
-    unsafe { xfree(xp_arg as *mut ::core::ffi::c_void) };
     // Since the user typed this, no need to wait for return.
     need_wait_return.set(false);
     msg_didout.set(false);

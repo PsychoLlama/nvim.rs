@@ -121,7 +121,6 @@ fn commands_are_defined_redefined_and_deleted() {
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "`<mods>` is built with libc's `strcat`")]
 fn arguments_expand_in_every_form() {
     let fx = Fixture::new();
     clean(&fx);
@@ -221,6 +220,83 @@ fn buffer_commands_shadow_global_ones_and_are_listed() {
     fx.check(
         "[exists(':UcBoth'), exists(':UcLocal'), exists(':UcFancy')]",
         "[0, 0, 0]",
+    );
+    clean(&fx);
+}
+
+#[test]
+fn a_running_command_can_redefine_and_delete_itself() {
+    let fx = Fixture::new();
+    clean(&fx);
+    // The body is a copy of the expansion: redefining or deleting the entry
+    // it came from, or clearing the whole table, leaves the run alone.
+    fx.run(
+        "command! -nargs=* UcSelf command! -nargs=* UcSelf call add(g:uc, ['second', <q-args>]) | call add(g:uc, ['first', [<f-args>]])",
+    );
+    fx.run(r"UcSelf a\ b c");
+    fx.run("UcSelf x");
+    fx.run(
+        "command! -nargs=* UcGone delcommand UcGone | call add(g:uc, ['gone', <q-args>, [<f-args>]])",
+    );
+    fx.run(r"UcGone p\\q r\ s");
+    fx.check_error("UcGone", "E492: Not an editor command: silent! UcGone");
+    fx.run(
+        "command! -nargs=* UcClear comclear | command UcAfter call add(g:uc, 'after') | call add(g:uc, ['cleared', <q-args>])",
+    );
+    fx.run("UcClear one two");
+    fx.run("UcAfter");
+    fx.check("exists(':UcClear')", "0");
+    // A buffer-local command that deletes itself from its own table.
+    fx.run("command! -buffer -nargs=? UcLocal delcommand -buffer UcLocal | call add(g:uc, ['local', <q-args>])");
+    fx.run("UcLocal z");
+    fx.check("exists(':UcLocal')", "0");
+    fx.check(
+        GOT,
+        "[['second', 'a\\ b c'], ['first', ['a b', 'c']], ['gone', 'p\\\\q r\\ s', ['p\\q', 'r s']], 'after', ['cleared', 'one two'], ['local', 'z']]",
+    );
+    clean(&fx);
+}
+
+#[test]
+fn custom_completion_survives_the_completer_redefining_the_command() {
+    let fx = Fixture::new();
+    clean(&fx);
+    fx.run("function! UcComp1(...) abort\n  command! -nargs=1 -complete=custom,UcComp2 UcC call add(g:uc, 'redefined')\n  return \"one\\ntwo\"\nendfunction");
+    fx.run("function! UcComp2(...) abort\n  delcommand UcC\n  return \"three\"\nendfunction");
+    fx.run("command! -nargs=1 -complete=custom,UcComp1 UcC call add(g:uc, 'first')");
+    fx.expect_all(&[
+        ("getcompletion('UcC ', 'cmdline')", "['one', 'two']"),
+        ("getcompletion('UcC ', 'cmdline')", "['three']"),
+        ("exists(':UcC')", "0"),
+        ("getcompletion('UcC ', 'cmdline')", "[]"),
+    ]);
+    fx.run("delfunction UcComp1");
+    fx.run("delfunction UcComp2");
+    clean(&fx);
+}
+
+#[test]
+fn f_args_escapes_nest() {
+    let fx = Fixture::new();
+    clean(&fx);
+    fx.run("command! -nargs=* UcF call add(g:uc, [<f-args>])");
+    fx.run("command! -nargs=* UcQ call add(g:uc, <q-args>)");
+    for arg in [
+        r"\\\ a",
+        r"\\\\ b",
+        r"a\\\\\ b",
+        r#"\"x\" "y""#,
+        "\\\t\t",
+        r"trailing\",
+        r"\\",
+        r"é \é",
+    ] {
+        fx.run(&format!("UcF {arg}"));
+        fx.run(&format!("UcQ {arg}"));
+    }
+    fx.check(
+        GOT,
+        "[['\\ a'], '\\\\\\ a', ['\\\\', 'b'], '\\\\\\\\ b', ['a\\\\ b'], 'a\\\\\\\\\\ b', ['\\\"x\\\"', '\"y\"'], '\\\"x\\\" \"y\"', ['\t'], '\\\t\t', ['trailing\\'], 'trailing\\', ['\\'], '\\\\', ['e\u{301}', '\\é'], 'e\u{301} \\é']",
     );
     clean(&fx);
 }
