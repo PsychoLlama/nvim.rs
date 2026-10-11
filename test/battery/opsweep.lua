@@ -106,6 +106,9 @@ local function scrub(text)
     text = text:gsub(vim.pesc(runtime), '<RUNTIME>')
   end
   text = text:gsub('0x%x+', '<ADDR>')
+  -- A filter's temp files live in a per-process directory with a random
+  -- name, which an error about one of them quotes.
+  text = text:gsub('/tmp/nvim%.[^/]+/%w+/%d+', '<TEMPFILE>')
   text = text:gsub('<lambda>%d+', '<lambda>')
   text = text:gsub('<SNR>%d+_', '<SNR>_')
   text = text:gsub('%S*/target/debug/nvim', '<NVIM>')
@@ -2278,6 +2281,489 @@ section('s21-child-updatetime', function()
   emit('ch quiescent', 'hold=' .. ask('g:hold'), 'trace=' .. esc(ask('g:trace')))
 
   pcall(vim.fn.jobstop, chan)
+end)
+
+-- ---------------------------------------------------------------------
+-- s22..s29 -- the Ex commands that edit text by line: :substitute and
+-- its flags, :global, :sort, the shell filters, :append and its
+-- sources, :z and :=, :print and friends, and :write/:read.
+-- ---------------------------------------------------------------------
+
+-- What an Ex case answers besides the buffer: the message history (with
+-- 'report' at 0, so the counts are in it), the last error, the newest
+-- search history entry, and the remembered replacement as `~` sees it.
+local EX_AFTER = [[ [execute('messages'), v:errmsg, histget('/', -1)] ]]
+
+-- Each case clears the messages and the last error, and puts `:s`'s
+-- remembered pattern, replacement and flags into one known state, so
+-- that a bare `:s`, `~`, `&` or `:&&` answers about this case alone.
+local EX_LOAD = {
+  'messages clear',
+  "let v:errmsg = ''",
+  [[silent! s/ZZNOMATCH/RESET/e]],
+  'call histdel("/")',
+  "let @/ = ''",
+}
+
+local function excase(label, lines, pos, keys, opts, extra_load)
+  local load = vim.list_extend(vim.list_extend({}, EX_LOAD), extra_load or {})
+  loaded(label, lines, pos, load, keys, opts, nil, EX_AFTER)
+end
+
+F.sub = {
+  'foo bar foo baz foo',
+  'Foo BAR foo',
+  '\xc3\xa9\xe4\xb8\xad\xe6\x96\x87 foo \xc3\xa9',
+  '',
+  'a/b/c ? d',
+  'line six foo',
+}
+
+section('s22-subst', function()
+  local SUBS = {
+    { 's/foo/X/' },
+    { 's/foo/X/g' },
+    { '%s/foo/X/g' },
+    { '%s/foo/X/gn' },
+    { '%s/foo//gn' },
+    { 's/foo/X/n' },
+    { 's/foo/X/gc', 'yny' },
+    { 's/foo/X/gc', 'nq' },
+    { 's/foo/X/gc', 'a' },
+    { 's/foo/X/gc', 'l' },
+    { 's/foo/X/gc', '<Esc>' },
+    { '%s/foo/X/gc', 'ynyny' },
+    { '%s/foo/X/gc', 'nnna' },
+    { '%s/foo/X/c', 'yyyyyy' },
+    { [[%s/\n//gc]], 'ynq' },
+    { [[%s/o\nF/<>/gc]], 'y' },
+    { '%s/foo/[&]/g' },
+    { [[%s/foo/[\0]/g]] },
+    { [[%s/\(f\)\(o\+\)/\2\1/g]] },
+    { [[%s/foo/\u&/g]] },
+    { [[%s/foo/\U&\E!/g]] },
+    { [[%s/Foo/\l&/]] },
+    { [[%s/\w\+/\L&/g]] },
+    { [[%s/\w\+/\u\L&/g]] },
+    { [[s/foo/X\rY/g]] },
+    { [[s/foo/X\nY/]] },
+    { [[s/foo/X\\rY/]] },
+    { [[s/ /\r/g]] },
+    { "s/ /\\<C-v>\\<C-m>/g" },
+    { [[%s/\n//]] },
+    { [[%s/\n//g]] },
+    { [[%s/\n//p]] },
+    { [[%s/\n/,/]] },
+    { [[1,2s/\n/-/]] },
+    { [[%s/foo\nFoo/JOIN/]] },
+    { [[%s/o\nF/<>/]] },
+    { [[%s/\n\zsFoo/start/]] },
+    { [[%s/foo\zs\nFoo/+/]] },
+    { [[%s/$/;/]] },
+    { [[%s/^/> /]] },
+    { [[%s/x*/-/g]] },
+    { [[%s/\%$/END/]] },
+    { [[%s/\_.*/ALL/]] },
+    { 's/foo/X/ 3' },
+    { 's/foo/X/g 2' },
+    { '2s/foo/X/ 99' },
+    { 's/foo/X/ 0' },
+    { 's/foo/X/ 99999999999' },
+    { 's/foo/X/|s/bar/Y/' },
+    { 's/foo/X/ "comment' },
+    { 's/foo/X/ garbage' },
+    { 's/foo/X/g|' },
+    { 's/foo/X/#' },
+    { 's/foo/X/p' },
+    { 's/foo/X/l' },
+    { 's/foo/X/gp 2' },
+    { 's#foo#X#' },
+    { 's#foo#X' },
+    { 's#foo' },
+    { 's,foo,a\\,b,' },
+    { [[5s?c \? d?Q?]] },
+    { [[5s?c ? d?Q?]] },
+    { [[5s/a\/b/Q/]] },
+    { 'sa/x/' },
+    { [[s\x]] },
+    { 's' },
+    { '&&' },
+    { '~' },
+    { 's/nomatch/X/' },
+    { 's/nomatch/X/e' },
+    { 's/[/X/' },
+    { [[s/\(/X/]] },
+    { '%s/foo/X/i' },
+    { '%s/FOO/X/i' },
+    { '%s/FOO/X/I' },
+    { 's/foo/X/&' },
+    { [[%s/foo/\=line('.')/g]] },
+    { [[%s/foo/\=submatch(0) .. len(submatch(0))/]] },
+    { [[%s/b\(a\)r/\=submatch(1)/g]] },
+    { [[%s/foo/\="a\nb"/]] },
+    { [[%s/foo/\="a\rb"/]] },
+    { [[%s/foo/\="a\\b"/]] },
+    { [[%s/foo/\=['l1', 'l2']/]] },
+    { [[%s/foo/\=nosuch()/]] },
+    { [[%s/foo/\=setline(1, 'x')/]] },
+    { [[%s/foo/\=col('.')/g]] },
+    { [[%s/foo/\=execute('s#bar#B#n')/]] },
+    { [[s/foo/\=execute('s#bar#B#')/]] },
+    { [[%s/foo/\=submatch(0)/gn]] },
+    { [[snomagic/f.o/X/]] },
+    { [[smagic/f.o/X/]] },
+    { [[s/\vf(o+)/<\1>/]] },
+    { [[s/\Vf.o/X/]] },
+    { [[3s/\%xe9/E/g]] },
+    { [[3s/\%u4e2d/[&]/]] },
+    { [[3s/./<&>/g]] },
+    { [[3s/\%3c./X/]] },
+    { [[3s/$/\=strchars(getline('.'))/]] },
+    { [[s/foo\|bar/X/g]] },
+    { [[%s/o/0/g]] },
+    { [[%s/^$/EMPTY/]] },
+    { [[%s/.*/\=toupper(submatch(0))/]] },
+    { [[%s/foo/~/]] },
+    { [[%s/foo/\~/]] },
+    { [[%s/foo/a~b/]] },
+  }
+  for _, c in ipairs(SUBS) do
+    local keys = ':' .. c[1] .. '<CR>' .. (c[2] or '')
+    excase('sub ' .. tag(keys), F.sub, { 1, 0 }, keys, 'report=0')
+  end
+  -- Sequences: the remembered pattern, replacement and flags.
+  local SEQ = {
+    ':s/foo/ONE/<CR>:2s/BAR/~2/<CR>',
+    ':s/foo/ONE/<CR>:2s/BAR/x~y~z/<CR>',
+    ':s/foo/X/<CR>:2s<CR>',
+    ':s/foo/X/g<CR>:2&&<CR>',
+    ':s/foo/X/g<CR>:2&<CR>',
+    ':s/foo/X/g<CR>:%&g<CR>',
+    ':s/foo/X/<CR>/bar<CR>:~<CR>',
+    ':s/foo/X/<CR>/baz<CR>:&r<CR>',
+    ':s/foo/X/<CR>/baz<CR>:s//Y/<CR>',
+    '/bar<CR>:s\\/X/<CR>',
+    '/bar<CR>:s\\?X?<CR>',
+    ':s/foo/A/<CR>:2s\\&B&<CR>',
+    ':s/o/0/<CR>:2s/o/1/<CR>u',
+    ':%s/foo/X/g<CR>u',
+    ':%s/foo/X/g<CR>u<C-r>',
+    ':%s/foo/X\\rY/g<CR>u',
+    ':%s/\\n//<CR>u',
+    ':3s/\\%xe9/E/g<CR>u',
+  }
+  for _, keys in ipairs(SEQ) do
+    excase('subseq ' .. tag(keys), F.sub, { 1, 0 }, keys, 'report=0')
+  end
+  -- 'gdefault' inverts g; 'ignorecase'/'smartcase' against i/I; and
+  -- 'report' deciding whether the count is said at all.
+  for _, opts in ipairs({ 'gdefault', 'ignorecase', 'ignorecase smartcase', 'nomagic', 'report=2' }) do
+    for _, cmd in ipairs({ 's/foo/X/', 's/foo/X/g', '%s/Foo/X/', '%s/foo/X/I', '%s/f.o/X/', '%s/foo/X/gc' }) do
+      local keys = ':' .. cmd .. '<CR>yyyyyy'
+      excase('subopt ' .. tag(opts) .. ' ' .. tag(cmd), F.sub, { 1, 0 }, keys, opts == 'report=2' and opts or ('report=0 ' .. opts))
+    end
+  end
+end)
+
+section('s23-global', function()
+  local CMDS = {
+    'g/foo/d',
+    'g/foo/s//X/g',
+    'v/foo/d',
+    'g!/foo/d',
+    'g/foo/',
+    'g/foo/p',
+    'g/foo/#',
+    'g/foo/normal Ax',
+    'g/foo/m0',
+    'g/^/m0',
+    'g/foo/t.',
+    'g/foo/v/bar/d',
+    'g/foo/s/foo/Y/|s/Y/Z/',
+    'g/foo',
+    'g',
+    'g x',
+    'g/nomatch/d',
+    'v/./d',
+    'v/x*/d',
+    '2,3g/foo/d',
+    'g/foo/g/bar/d',
+    'g/foo/2,3g/x/d',
+    'g/\\%xe9/s/\\%xe9/E/g',
+    'g/foo/exe "norm 0iX"',
+    'g/foo/d|$put =\'tail\'',
+    'g/foo/s/o/0/g|s/0/1/',
+    'g#foo#d',
+    'g?a\\?b?d',
+    'ga/x/d',
+    'g/[/d',
+    'g/foo/call setline(".", getline(".") .. "!")',
+    'g/^$/d',
+    'g/foo/normal dd',
+    'g/foo/j',
+    'g/./,/bar/j',
+    'g/foo/undojoin|s/foo/U/',
+  }
+  for _, cmd in ipairs(CMDS) do
+    local keys = ':' .. cmd .. '<CR>'
+    excase('glob ' .. tag(keys), F.sub, { 1, 0 }, keys, 'report=0')
+  end
+  for _, keys in ipairs({
+    '/bar<CR>:g\\/d<CR>',
+    '/bar<CR>:g\\?d<CR>',
+    ':s/foo/X/<CR>:g\\&d<CR>',
+    ':g/foo/s//X/<CR>u',
+    ':g/foo/d<CR>u<C-r>',
+    ':g/o/s/o/0/gc<CR>yynnyq',
+  }) do
+    excase('globseq ' .. tag(keys), F.sub, { 1, 0 }, keys, 'report=0')
+  end
+end)
+
+F.sort = {
+  'b2',
+  'a10',
+  'B1',
+  'c 0x1F',
+  'a10',
+  '',
+  'x-3',
+  '1.5e2',
+  'b2 dup',
+  '\xc3\xa9',
+  'a9',
+  '  0b101 tail',
+  'z -0.5',
+  'A1',
+}
+
+F.stable = { '3 c', '1 a', '3 a', '1 b', '2', '3 b', 'x', '1 a' }
+
+section('s24-sort', function()
+  local CMDS = {
+    'sort', 'sort!', 'sort i', 'sort n', 'sort! n', 'sort x', 'sort o', 'sort b', 'sort f',
+    'sort u', 'sort iu', 'sort nu', 'sort! u', 'sort r /\\d\\+/', 'sort /\\a/', 'sort /\\a/ r',
+    'sort //', 'sort n /x/', 'sort /[/', 'sort q', 'sort x u', '2,5sort', 'sort b r /0b/',
+    'sort n r /\\d/', 'sort /\\d/ n', 'sort l', 'sort ni', 'sort f u', 'sort /\\S\\+ /',
+    'sort #\\d#', 'sort /\\v(\\d+)/ r', 'sort nx', 'sort n /nomatch/', 'sort r /nomatch/',
+    'sort ! n', 'sort |', 'sort u|$put =\'after\'', '%sort', '1,1sort',
+    'uniq', 'uniq i', 'uniq u', 'uniq /\\a/', 'uniq r /\\d/', 'uniq! ', 'uniq q',
+  }
+  for _, cmd in ipairs(CMDS) do
+    local keys = ':' .. cmd .. '<CR>'
+    excase('sort ' .. tag(keys), F.sort, { 1, 0 }, keys, 'report=0')
+    excase('sortst ' .. tag(keys), F.stable, { 1, 0 }, keys, 'report=0')
+  end
+  excase('sortseq last', F.sort, { 1, 0 }, '/\\d<CR>:sort // r<CR>', 'report=0')
+  excase('sortseq undo', F.sort, { 1, 0 }, ':sort n<CR>u', 'report=0')
+end)
+
+section('s25-filter', function()
+  -- PATH is /usr/bin:/bin and 'shell' is /bin/sh: only its builtins.
+  local LOOP = [[while IFS= read -r l; do echo "<$l>"; done]]
+  local CMDS = {
+    '%!' .. LOOP,
+    '2,3!' .. LOOP,
+    '.!echo replaced',
+    '.!echo \xc3\xa9\xe4\xb8\xad',
+    '2!',
+    '%!exit 3',
+    '1,2!echo a; exit 1',
+    'r !echo read in',
+    '0r !echo top',
+    '$r !echo bottom',
+    [[r !printf 'x\0y\n']],
+    [[r !printf 'no newline']],
+    [[r !printf '\xc3\xa9\n\xe4\xb8\xad\n']],
+    'w !' .. LOOP,
+    '1,2w !read -r a; echo "got $a"',
+    '!echo plain',
+    '!echo first|echo second',
+    '%!echo \\% \\#',
+    '2,3!echo \\!',
+  }
+  for _, opts in ipairs({ 'shelltemp', 'noshelltemp' }) do
+    for _, cmd in ipairs(CMDS) do
+      local keys = ':' .. cmd .. '<CR>'
+      excase('filt ' .. opts .. ' ' .. tag(keys), F.sub, { 1, 0 }, keys, 'report=0 ' .. opts)
+      excase('filtnul ' .. opts .. ' ' .. tag(keys), F.sub, { 1, 0 }, keys, 'report=0 ' .. opts,
+        { [[call setline(2, "a\nb\nc")]] })
+    end
+  end
+  for _, keys in ipairs({
+    ':.!echo one<CR>:2!!<CR>',
+    ':!echo one<CR>:!!<CR>',
+    ':!echo one<CR>:!! two<CR>',
+    ':%!' .. LOOP .. '<CR>u',
+  }) do
+    excase('filtseq ' .. tag(keys), F.sub, { 1, 0 }, keys, 'report=0')
+  end
+end)
+
+section('s26-append', function()
+  local script = work .. '/append.vim'
+  local fd = assert(io.open(script, 'w'))
+  fd:write('2append\nsrc1\n  src2\n.\n$insert\nlast\n.\n1change\nC1\n.\n')
+  fd:close()
+  local CASES = {
+    ':2append<CR>new1<CR>new2<CR>.<CR>',
+    ':0append<CR>top<CR>.<CR>',
+    ':$append<CR>end<CR>.<CR>',
+    ':2insert<CR>ins<CR>.<CR>',
+    ':0insert<CR>ins0<CR>.<CR>',
+    ':$insert<CR>insl<CR>.<CR>',
+    ':2,3change<CR>c1<CR>c2<CR>c3<CR>.<CR>',
+    ':%change<CR>only<CR>.<CR>',
+    ':2append<CR>.<CR>',
+    ':2append<CR>  ind<CR>.<CR>',
+    ':2append!<CR>  ind<CR>more<CR>.<CR>',
+    ':2change!<CR>  ai<CR>x<CR>.<CR>',
+    ':2append<CR>dot.<CR> .<CR>.<CR>',
+    ':2append|abc<CR>',
+    ':2append|abc|def<CR>',
+    ':2a<CR>short<CR>.<CR>',
+    ':2i<CR>short<CR>.<CR>',
+    ':2c<CR>short<CR>.<CR>',
+    ':exe "normal :2append\\<lt>CR>n1\\<lt>CR>n2\\<lt>CR>.\\<lt>CR>"<CR>',
+    ':exe "normal :2append\\<lt>CR>n1"<CR>',
+    ':call execute(["2append", "e1", "e2", "."])<CR>',
+    ':call execute(["2append", "e1"])<CR>',
+    ':call execute(["2change", "e1", ".", "$append", "e2", "."])<CR>',
+    ':source ' .. script .. '<CR>',
+    ':g/foo/append<CR>',
+    ':2append<CR>new1<CR>.<CR>u',
+  }
+  for _, opts in ipairs({ 'noautoindent', 'autoindent' }) do
+    for _, keys in ipairs(CASES) do
+      excase('app ' .. opts .. ' ' .. tag(keys), F.indent, { 1, 0 }, keys, 'report=0 ' .. opts)
+    end
+  end
+  quiet('function! OpsAppend()\n2append\n  fn1\n  fn2\n.\nendfunction')
+  excase('app function', F.indent, { 1, 0 }, ':call OpsAppend()<CR>', 'report=0')
+  quiet('delfunction OpsAppend')
+end)
+
+F.many = {}
+for i = 1, 30 do
+  F.many[i] = 'l' .. i .. (i % 7 == 0 and '\ttab' or '')
+end
+
+section('s27-z-print', function()
+  local CMDS = {
+    'z', '5z', '5z+', '5z-', '5z.', '5z=', '5z^', '5z#', '5z=3', '5z-3', '5z+3', '5z#3',
+    '5z.3', '5z^3', '30z', '30z+', '1z-', '1z^', 'z!', '5z!', '5z=0', 'z x', '5z 3', '5z3',
+    '5z+-', '5z#=', '0z', '$z=',
+    '=', '.=', '5=', '=#', '=l', '=p', '$=', '0=',
+    '1,3p', '1,3#', '1,3l', '1,3nu', '1,3print l', '1,3p #', '1,3number l', '7,8l', '7p', '7#',
+    '7print #', '7z=1', '1,3P',
+  }
+  for _, opts in ipairs({ 'nonumber', 'number', 'list', 'window=10' }) do
+    for _, cmd in ipairs(CMDS) do
+      reset(F.many, { 10, 0 }, opts)
+      local label = 'zp ' .. tag(opts) .. ' ' .. tag(cmd)
+      local ok, res = pcall(vim.fn.execute, cmd)
+      emit(label, 'O', esc(ok and scrub(res) or errtext(res)))
+      local cur = vim.api.nvim_win_get_cursor(0)
+      emit(label, 'C', cur[1] .. ',' .. cur[2])
+    end
+  end
+end)
+
+section('s28-text', function()
+  local CMDS = {
+    'left', 'left 4', '%left 2', 'right', '%right 30', 'right 5', '%center', '%center 40',
+    '%center 3', '2,4retab', '%retab 4', '%retab! 4', '%retab', 'retab 0', 'retab -1',
+    '%retab! 2', 'm0', '2,3m$', '2,3m1', '3m2', '1,3m2', '1t$', '1,2co0', '2,3t3', '1,3>',
+    '%left', 'ascii',
+  }
+  for _, opts in ipairs({ 'expandtab', 'noexpandtab', 'textwidth=20', 'shiftwidth=4 tabstop=4' }) do
+    for _, cmd in ipairs(CMDS) do
+      local keys = ':' .. cmd .. '<CR>'
+      excase('text ' .. tag(opts) .. ' ' .. tag(keys), F.indent, { 2, 0 }, keys, 'report=0 ' .. opts)
+      excase('textu ' .. tag(opts) .. ' ' .. tag(keys), F.utf, { 2, 0 }, keys, 'report=0 ' .. opts)
+    end
+  end
+end)
+
+section('s29-write', function()
+  local function wcase(label, keys, opts, files)
+    reset(F.sub, { 1, 0 }, opts)
+    for _, cmd in ipairs(EX_LOAD) do
+      quiet(cmd)
+    end
+    vim.fn.delete(work .. '/w', 'rf')
+    vim.fn.mkdir(work .. '/w', 'p')
+    local fd = assert(io.open(work .. '/w/exists.txt', 'w'))
+    fd:write('old\n')
+    fd:close()
+    quiet('new')
+    quiet('cd ' .. work .. '/w')
+    quiet([[call setline(1, ['w1', 'w2 é', 'w3'])]])
+    local err = feed(keys)
+    if err then
+      emit(label, '!', esc(err))
+    end
+    local seen = {}
+    for _, name in ipairs(files) do
+      local ok, text = pcall(vim.fn.readfile, work .. '/w/' .. name, 'b')
+      seen[#seen + 1] = name .. '=' .. (ok and table.concat(text, '|') or '<none>')
+    end
+    local ok, res = pcall(vim.fn.eval,
+      [[string([execute('messages'), v:errmsg, bufname(), &modified, line('$'), getline(1, '$')])]])
+    emit(label, 'W', esc(scrub(table.concat(seen, ' '))))
+    emit(label, 'A', ok and esc(scrub(res)) or esc(errtext(res)))
+    quiet('silent! bwipe!')
+    quiet('cd ' .. work)
+    pcall(vim.api.nvim_set_current_buf, BUF)
+  end
+  local FILES = { 'a.txt', 'exists.txt', 'sub/dir/p.txt' }
+  for _, keys in ipairs({
+    ':w a.txt<CR>',
+    ':w exists.txt<CR>',
+    ':w! exists.txt<CR>',
+    ':w >> exists.txt<CR>',
+    ':2w >> exists.txt<CR>',
+    ':1,2w a.txt<CR>',
+    ':1,2w a.txt<CR>:3w! a.txt<CR>',
+    ':w a.txt<CR>:w<CR>',
+    ':w a.txt<CR>:2,3w<CR>',
+    ':w a.txt<CR>:2,3w!<CR>',
+    ':w a.txt<CR>:update<CR>',
+    ':w a.txt<CR>:call setline(1, "chg")<CR>:update<CR>',
+    ':w sub/dir/p.txt<CR>',
+    ':w ++p sub/dir/p.txt<CR>',
+    ':w<CR>',
+    ':saveas a.txt<CR>',
+    ':saveas exists.txt<CR>',
+    ':saveas! exists.txt<CR>',
+    ':saveas<CR>',
+    ':file a.txt<CR>:w<CR>',
+    ':file a.txt<CR>:0file<CR>',
+    ':3file<CR>',
+    ':0file x<CR>',
+    ':r exists.txt<CR>',
+    ':0r exists.txt<CR>',
+    ':r nosuch.txt<CR>',
+    ':w ++ff=dos a.txt<CR>',
+    ':w ++enc=latin1 a.txt<CR>',
+    ':w ++bin a.txt<CR>',
+    ':w !read -r a; echo "[$a]"<CR>',
+    ':w a.txt<CR>:e exists.txt<CR>',
+    ':w a.txt<CR>:e #<CR>',
+    ':w a.txt<CR>:e! a.txt<CR>',
+    ':e +2 exists.txt<CR>',
+    ':e +/old exists.txt<CR>',
+    ':e +$ exists.txt<CR>',
+    ':e + exists.txt<CR>',
+    ':e +set\\ ts=3 exists.txt<CR>',
+    ':w a.txt<CR>:wnext<CR>',
+    ':w a.txt<CR>:wall<CR>',
+    ':w a.txt<CR>:call setline(1, "x")<CR>:wall<CR>',
+    ':w ./<CR>',
+    ':w ' .. work .. '/w<CR>',
+  }) do
+    wcase('write ' .. tag(keys), keys, 'report=0', FILES)
+  end
 end)
 
 -- ---------------------------------------------------------------------

@@ -117,8 +117,9 @@ set -e
 # ago") and a monotonic change number, neither of which the driver can
 # reach from inside a `:normal` sequence.  The age is not reproducible
 # at all; the change number is one counter for the whole run, so it is
-# a function of every case above the one that printed it.
-sed -E 's/#[0-9]+/#N/g; s/[0-9]+ (second|minute|hour|day)s? ago/N ago/g' \
+# a function of every case above the one that printed it.  A filter's
+# temp file is named inside a per-process directory with a random name.
+sed -E 's/#[0-9]+/#N/g; s/[0-9]+ (second|minute|hour|day)s? ago/N ago/g; s#/tmp/nvim\.[^/]*/[A-Za-z0-9]+/[0-9]+#<TEMPFILE>#g' \
   <"$OUT/$LABEL.stderr.raw" >"$OUT/$LABEL.stderr"
 rm -f "$OUT/$LABEL.stderr.raw"
 
