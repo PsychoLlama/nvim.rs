@@ -41,7 +41,7 @@ use crate::ui::state::Columns;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use core::fmt::Write as _;
-use std::ffi::CString;
+use std::rc::Rc;
 
 /// One command, copied out of its table for rendering.
 ///
@@ -49,14 +49,14 @@ use std::ffi::CString;
 /// anything can delete the command, and [`describe`] takes a reference of
 /// its own for the API's answer.
 struct Row {
-    name: CString,
+    name: Rc<CStr>,
     argt: ExArgt,
-    replacement: CString,
+    replacement: Rc<CStr>,
     default_count: int64_t,
     complete: ExpandContext,
     addr_type: CmdAddr,
     script_ctx: ScriptCtx,
-    complete_arg: Option<CString>,
+    complete_arg: Option<Rc<CStr>>,
     complete_luaref: LuaRef,
     preview_luaref: LuaRef,
     luaref: LuaRef,
@@ -80,9 +80,14 @@ impl Row {
     }
 }
 
-/// Every command of `table`, copied.
-fn rows(table: Table) -> Vec<Row> {
-    table.with(|cmds| cmds.iter().map(Row::of).collect())
+/// Every command of `table` whose name starts with `prefix`, copied.
+fn rows(table: Table, prefix: &[u8]) -> Vec<Row> {
+    table.with(|cmds| {
+        cmds.iter()
+            .filter(|cmd| cmd.name.to_bytes().starts_with(prefix))
+            .map(Row::of)
+            .collect()
+    })
 }
 
 /// The `-nargs=` spelling of a command's argument flags.
@@ -147,8 +152,8 @@ pub(super) fn uc_list(wanted: &[u8]) {
 
     for scope in Scope::BOTH {
         let mut interrupted = false;
-        for row in rows(scope.table()) {
-            if !row.name.to_bytes().starts_with(wanted) || message_filtered(&row.name) {
+        for row in rows(scope.table(), wanted) {
+            if message_filtered(&row.name) {
                 continue;
             }
             if !found {
@@ -291,7 +296,7 @@ fn dict_of<const N: usize>(
 /// `nvim_get_commands()`: every user command of `buffer`, or every global one
 /// when `buffer` is `None`, as a map from name to description.
 pub(crate) fn commands_array(buffer: Option<Buf>) -> ApiDict {
-    let rows = rows(buffer.map_or(Table::Global, Table::Buffer));
+    let rows = rows(buffer.map_or(Table::Global, Table::Buffer), b"");
     let mut rv = ApiDict::with_capacity(rows.len());
     for row in &rows {
         rv.insert(row.name.to_bytes(), Object::dict(describe(row)));

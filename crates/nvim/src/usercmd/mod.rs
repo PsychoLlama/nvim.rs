@@ -76,6 +76,7 @@ use core::cmp::Ordering;
 use core::ffi::{CStr, c_int};
 use core::mem;
 use std::ffi::CString;
+use std::rc::Rc;
 
 pub(crate) const LUA_NOREF: c_int = -2;
 
@@ -342,7 +343,7 @@ impl Drop for Definition {
 
 impl Definition {
     /// The entry this definition makes, the references moving into it.
-    fn into_command(mut self, name: CString, replacement: CString) -> UserCmd {
+    fn into_command(mut self, name: Rc<CStr>, replacement: Rc<CStr>) -> UserCmd {
         let mut script_ctx = current_sctx.get();
         script_ctx.sc_lnum += sourcing_lnum();
         set_sctx_from_lua(&mut script_ctx);
@@ -354,7 +355,7 @@ impl Definition {
             complete: self.complete,
             addr_type: self.addr_type,
             script_ctx,
-            complete_arg: self.complete_arg.take(),
+            complete_arg: self.complete_arg.take().map(Rc::from),
             complete_luaref: mem::replace(&mut self.complete_luaref, LUA_NOREF),
             preview_luaref: mem::replace(&mut self.preview_luaref, LUA_NOREF),
             luaref: mem::replace(&mut self.luaref, LUA_NOREF),
@@ -380,7 +381,7 @@ pub(crate) fn uc_add_command(
     let (text, rep) = (cstr::until_nul(text), cstr::until_nul(rep));
     let name = &text[..name_len.min(text.len())];
     let replaced = p_cpo(|cpo| replace_termcodes(rep, 0, 0, None, cpo, None));
-    let replacement = cstr::owned(cstr::until_nul(&replaced.unwrap_or_default()));
+    let replacement = Rc::from(cstr::owned(cstr::until_nul(&replaced.unwrap_or_default())));
 
     let table = if buffer_local {
         Table::Buffer(Buf::current())
@@ -415,7 +416,7 @@ pub(crate) fn uc_add_command(
         return Err(Failed);
     }
 
-    let entry = def.into_command(cstr::owned(name), replacement);
+    let entry = def.into_command(Rc::from(cstr::owned(name)), replacement);
     // Both closures are leaves; the entry a redefinition replaces is
     // dropped -- its references given back -- once the table is free.
     let replaced = if existing.is_some() {

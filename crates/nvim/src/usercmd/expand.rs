@@ -40,6 +40,7 @@ use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+use std::rc::Rc;
 
 /// The second byte of an escaped `K_SPECIAL`.
 const KS_SPECIAL: u8 = 254;
@@ -446,7 +447,7 @@ fn expand_args(out: &mut Vec<u8>, args: &ExArg, quote: Quote, split: &mut Option
 /// What a Lua command's run needs of its entry, copied out of the table:
 /// the callback may redefine or delete the command while it runs.
 pub(crate) struct LuaCommand {
-    pub(crate) name: CString,
+    pub(crate) name: Rc<CStr>,
     pub(crate) argt: ExArgt,
     pub(crate) default_count: int64_t,
     /// The reference to call: the command's own, or its preview's.

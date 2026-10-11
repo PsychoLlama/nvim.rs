@@ -10,29 +10,31 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
-use std::ffi::CString;
+use core::ffi::CStr;
+use std::rc::Rc;
 
 /// One user command, as `:command` or `nvim_create_user_command()`
 /// defined it.
 ///
-/// Neither `Copy` nor `Clone`: an entry owns its name, its replacement
-/// text, its `-complete=` argument and its three Lua references, and
+/// Neither `Copy` nor `Clone`: an entry owns its three Lua references, and
 /// dropping it gives the references back. A table entry is therefore
 /// moved out of its table before it is dropped -- giving a reference back
-/// calls into Lua, which must not happen with the table borrowed.
+/// calls into Lua, which must not happen with the table borrowed. The
+/// strings are shared (`Rc`), so a copy of what a run or a listing needs
+/// costs a count, not an allocation.
 pub struct UserCmd {
-    pub name: CString,
+    pub name: Rc<CStr>,
     pub argt: ExArgt,
     /// The definition, `<...>` codes unexpanded and key codes already
     /// replaced; a Lua command keeps its description here.
-    pub replacement: CString,
+    pub replacement: Rc<CStr>,
     /// `-count=N`/`-range=N`'s default, or -1.
     pub default_count: int64_t,
     pub complete: ExpandContext,
     pub addr_type: CmdAddr,
     pub script_ctx: ScriptCtx,
     /// `-complete=custom,{func}`'s function.
-    pub complete_arg: Option<CString>,
+    pub complete_arg: Option<Rc<CStr>>,
     pub complete_luaref: LuaRef,
     pub preview_luaref: LuaRef,
     /// The Lua function a Lua command runs, or `LUA_NOREF`.

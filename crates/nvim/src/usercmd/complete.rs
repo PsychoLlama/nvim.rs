@@ -207,7 +207,7 @@ pub(crate) fn get_user_commands(_expand: &Expand, idx: usize) -> Option<Candidat
 
 /// A copy of a command's name, which lives no longer than the command.
 fn name_candidate(cmd: &UserCmd) -> Candidate {
-    Candidate::Owned(cmd.name.clone())
+    Candidate::Owned((*cmd.name).to_owned())
 }
 
 /// A copy of the name of user command `idx` in `cmdidx`'s table, or `None`

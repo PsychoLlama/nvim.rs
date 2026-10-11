@@ -218,10 +218,7 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
     };
     // A user command carries its own default count.
     let default_count = user.as_ref().map(|(_, def)| *def);
-    result.cmd = Some(command_name(
-        &excmd,
-        user.as_ref().map(|(name, _)| name.as_c_str()),
-    ));
+    result.cmd = Some(command_name(&excmd, user.as_ref().map(|(name, _)| &**name)));
 
     if excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
         // Two addresses give both bounds, one gives only `line2`.
