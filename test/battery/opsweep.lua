@@ -2426,6 +2426,8 @@ section('s22-subst', function()
     { [[%s/foo/~/]] },
     { [[%s/foo/\~/]] },
     { [[%s/foo/a~b/]] },
+    { '%s\xc3\xa9foo\xc3\xa9X\xc3\xa9g' },
+    { '%s\xc3foo\xc3X\xc3g' },
   }
   for _, c in ipairs(SUBS) do
     local keys = ':' .. c[1] .. '<CR>' .. (c[2] or '')
@@ -2503,6 +2505,8 @@ section('s23-global', function()
     'g/foo/j',
     'g/./,/bar/j',
     'g/foo/undojoin|s/foo/U/',
+    'g\xc3\xa9foo\xc3\xa9d',
+    'g\xc3foo\xc3d',
   }
   for _, cmd in ipairs(CMDS) do
     local keys = ':' .. cmd .. '<CR>'
@@ -2548,6 +2552,9 @@ section('s24-sort', function()
     'sort #\\d#', 'sort /\\v(\\d+)/ r', 'sort nx', 'sort n /nomatch/', 'sort r /nomatch/',
     'sort ! n', 'sort |', 'sort u|$put =\'after\'', '%sort', '1,1sort',
     'uniq', 'uniq i', 'uniq u', 'uniq /\\a/', 'uniq r /\\d/', 'uniq! ', 'uniq q',
+    -- A delimiter outside ASCII: its first byte, sign-extended, ends the
+    -- pattern.
+    'sort \xc3\xa9\\d\xc3\xa9', 'sort \xc3\\d\xc3 r', 'uniq \xc3\\a\xc3',
   }
   for _, cmd in ipairs(CMDS) do
     local keys = ':' .. cmd .. '<CR>'

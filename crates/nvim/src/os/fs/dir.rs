@@ -194,6 +194,15 @@ pub unsafe fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
     }
 }
 
+/// [`os_file_mkdir`] for a name the caller holds: make the directories
+/// `fname`'s head names, and answer whether they exist now (a failure has
+/// been reported). The cut the callee makes in the name is made in a copy.
+pub(crate) fn file_mkdir(fname: &CStr, mode: int32_t) -> bool {
+    let mut copy = fname.to_bytes_with_nul().to_vec();
+    // SAFETY: a writable NUL-terminated copy of our own.
+    unsafe { os_file_mkdir(copy.as_mut_ptr().cast(), mode) >= 0 }
+}
+
 /// Makes a uniquely named temporary directory from `templ`, whose trailing
 /// `XXXXXX` is replaced, and writes its path into `path`.
 ///

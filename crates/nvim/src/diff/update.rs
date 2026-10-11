@@ -292,12 +292,11 @@ unsafe fn diff_write(
         end = start;
         buffer.b_ml.ml_flags |= MlFlags::EMPTY;
     }
-    let name = din.din_fname;
     let req = WriteRequest::filter();
-    let noshort = ::core::ptr::null_mut::<c_char>();
-    // SAFETY: a live buffer and one of this module's temp file names; no
-    // short name and no `ExArg` are wanted.
-    let r = unsafe { buf_write(buffer, name, noshort, start, end, None, req) };
+    // SAFETY: one of this module's temp file names, NUL-terminated and
+    // alive for the call; no short name and no `ExArg` are wanted.
+    let name = unsafe { cstr::at(din.din_fname) };
+    let r = buf_write(buffer, WriteName::Other(name), None, start, end, None, req);
     cmdmod_set_flags(CmdModFlags::SANDBOX.when(save_cmod_flags));
     // The forced "unix" goes when the saved value moves back in.
     buffer.b_p_ff = save_ff;

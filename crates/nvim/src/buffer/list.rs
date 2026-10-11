@@ -660,13 +660,9 @@ pub fn buflist_getfile(
     }
 
     let redraw_off = Suppress::redraw();
-    let (handle, setmark, no_name) = (
-        buf.handle as c_int,
-        options & GETF_SETMARK as c_int != 0,
-        ptr::null_mut(),
-    );
-    // SAFETY: a live buffer's handle, and no file name to load under it.
-    let failed = unsafe { getfile(handle, no_name, no_name, setmark, lnum, forceit != 0) } > 0;
+    let (handle, setmark) = (buf.handle as c_int, options & GETF_SETMARK as c_int != 0);
+    // A live buffer's handle, and no file name to load under it.
+    let failed = getfile(handle, None, None, setmark, lnum, forceit != 0) > 0;
     drop(redraw_off);
     if failed {
         return Err(Failed);
@@ -758,6 +754,12 @@ pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> Option<Buf> {
 pub(crate) fn find_buffer_by_name(fname: &CStr) -> Option<Buf> {
     // SAFETY: a NUL-terminated name, which the lookup only reads.
     unsafe { buflist_findname_exp(fname.as_ptr().cast_mut()) }
+}
+
+/// [`buflist_findname`] for a name the caller holds.
+pub(crate) fn buflist_findname_of(ffname: &CStr) -> Option<Buf> {
+    // SAFETY: a NUL-terminated name, which the lookup only reads.
+    unsafe { buflist_findname(ffname.as_ptr().cast_mut()) }
 }
 
 /// The buffer whose full name is `ffname`, or whose file id matches it.

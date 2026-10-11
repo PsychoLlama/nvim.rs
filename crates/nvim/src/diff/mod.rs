@@ -39,7 +39,7 @@ use crate::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, augroup_exists, block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{buf_get_changedtick, buf_is_empty, buf_is_prompt, current_buf, find_buf};
-use crate::bufwrite::{WriteRequest, buf_write};
+use crate::bufwrite::{WriteName, WriteRequest, buf_write};
 use crate::change::{change_warning, changed_lines};
 use crate::charset::{getdigits_int, getdigits_int32};
 use crate::cursor::check_cursor;

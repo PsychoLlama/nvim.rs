@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::ex_cmds::do_shell_cmd;
+use crate::ex_cmds::do_shell;
 use crate::fileio::temp_name;
 use crate::memory::XString;
 use crate::option::vars::P_GEFM;
@@ -120,7 +120,7 @@ pub fn ex_make(excmd: &mut ExArg) {
     os_remove(fname.as_cstr());
 
     let cmd = make_get_fullcmd(excmd.line.arg(), fname.as_cstr());
-    do_shell_cmd(&cmd, ShellOpts::NONE);
+    do_shell(&cmd, ShellOpts::NONE);
 
     let busy = QuickfixBusy::hold();
 

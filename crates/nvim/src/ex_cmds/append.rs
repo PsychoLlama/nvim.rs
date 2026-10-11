@@ -8,8 +8,7 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -17,48 +16,28 @@ use super::lines::set_op_range;
 use super::say;
 use super::{B_IMODE_LMAP, EXFLAG_LIST, EXFLAG_NR, NL, print_line};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
-use crate::cstr;
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::state::ex_no_reprint;
 use crate::global_cell::GlobalCell;
 use crate::indent::get_indent_lnum;
 use crate::memline::MlFlags;
-use crate::memline::{ml_append, ml_delete};
-use crate::memory::{xfree, xmemdupz, xstrdup};
+use crate::memline::{ml_append_cstr, ml_delete};
 use crate::message::emsg;
 use crate::message::state::{lines_left, msg_scroll, need_wait_return};
 use crate::option::vars::P_WINDOW;
 use crate::os::cshim::gettext;
 use crate::state::mode::State;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
-use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
-use crate::types::{ExArg, LineNr, NUL, OptInt, int64_t, size_t};
+use crate::types::{ExArg, LineNr, NUL, OptInt, int64_t};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::graph::{firstwin, lastwin};
-use ::libc::atol;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
-
-/// One line `:append` read, freed when it goes out of scope.
-///
-/// The seam: all three sources -- the text after a trailing bar, the script's
-/// next line, and the command line's own `getline` callback -- answer an
-/// `xmalloc`ed string, and the last of the three is a C callee's.  A NULL is
-/// allowed and frees nothing; it is `getline` saying the input ended.
-struct Line(*mut c_char);
-
-impl Drop for Line {
-    fn drop(&mut self) {
-        // SAFETY: our own allocation, or NULL.
-        unsafe { xfree(self.0.cast()) };
-    }
-}
+use core::ffi::{CStr, c_int};
 
 /// The indent `:append`/`:insert`/`:change` gives the first line it reads,
 /// taken from the line the command started on.  `-1` once it has been used.
@@ -70,7 +49,6 @@ pub fn ex_append(excmd: &mut ExArg) {
     let (cmdidx, forceit, line2) = (excmd.cmdidx, excmd.forceit, excmd.line2);
     let mut lnum = line2;
     let mut indent = 0;
-    // SAFETY: `curbuf` is the live current buffer.
     let mut empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
 
     // The ! flag toggles autoindent.
@@ -79,9 +57,7 @@ pub fn ex_append(excmd: &mut ExArg) {
     }
 
     // First autoindent comes from the line we start on.
-    // SAFETY: as above.
     if cmdidx != CmdIdx::change && Buf::current().b_p_ai != 0 && lnum > 0 {
-        // SAFETY: `lnum` is a line of the current buffer.
         append_indent.set(get_indent_lnum(lnum));
     }
 
@@ -114,13 +90,13 @@ pub fn ex_append(excmd: &mut ExArg) {
             break;
         };
         lines_left.set(Rows.get() - 1);
-        if theline.0.is_null() {
+        // `getline` saying the input ended.
+        let Some(mut theline) = theline else {
             break;
-        }
+        };
 
         // Look for the "." after the automatic indent.
-        // SAFETY: every source above hands back a NUL-terminated string.
-        let text = unsafe { CStr::from_ptr(theline.0) }.to_bytes();
+        let text = theline.as_slice();
         let mut vcol = 0;
         let mut typed = 0;
         while indent > vcol && typed < text.len() {
@@ -140,14 +116,14 @@ pub fn ex_append(excmd: &mut ExArg) {
         }
 
         // Don't use autoindent if nothing was typed.
-        // SAFETY: as above; `theline` is at least one byte long.
         if text.len() == typed {
-            unsafe { *theline.0 = NUL as c_char };
+            theline.clear();
         }
 
         did_undo = true;
-        // SAFETY: `lnum` is a line of the current buffer, or zero.
-        let _ = unsafe { ml_append(lnum, theline.0, 0, false) };
+        theline.push(NUL as u8);
+        let theline = CStr::from_bytes_until_nul(&theline).expect("just terminated");
+        let _ = ml_append_cstr(lnum, theline);
         if empty {
             // There are no marks below the inserted lines.
             appended_lines(lnum, 1);
@@ -182,7 +158,6 @@ pub fn ex_append(excmd: &mut ExArg) {
     }
     set_op_range(start, if line2 < lnum { lnum } else { start });
 
-    // SAFETY: `curwin` is the live current window.
     Win::current().w_cursor.lnum = lnum;
     check_cursor_lnum(Win::current());
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
@@ -197,46 +172,33 @@ fn toggle_autoindent() {
     Buf::current().b_p_ai = c_int::from(Buf::current().b_p_ai == 0);
 }
 
-/// The next line for `:append` to insert, freshly allocated.
+/// The next line for `:append` to insert.
 ///
 /// There are three sources, in upstream's order: the text after a trailing
 /// bar, the lines that follow the command in the same script, and the command
 /// line's own `getline` callback.  `None` means the second source ran out,
 /// which upstream leaves the loop for *without* resetting `lines_left`;
-/// `Some(NULL)` is the callback saying the input ended.
-fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
-    let arg = args.arg_ptr();
-    // SAFETY: caller's contract.
-    if unsafe { *arg } == '|' as c_char {
-        // Get the text after the trailing bar.
-        let line = unsafe { xstrdup(arg.add(1)) };
-        unsafe { *arg = NUL as c_char };
-        return Some(Line(line));
+/// `Some(None)` is the callback saying the input ended.
+fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Option<Vec<u8>>> {
+    let arg = args.line.arg;
+    if args.line.byte_at(arg) == b'|' {
+        // Get the text after the trailing bar, and end the argument there.
+        let line = args.line.rest_of(arg + 1).to_vec();
+        args.line.terminate_at(arg);
+        return Some(Some(line));
     }
 
     let Some(source) = args.source.as_mut() else {
         // No getline() function: use the lines that follow.  This ends
         // when there is no more.
-        let next = args.nextcmd_ptr();
-        if next.is_null() {
-            return None;
-        }
-        // SAFETY: caller's contract -- the script's remaining text.
-        let (line, rest) = unsafe {
-            let mut end = vim_strchr(next, NL);
-            if end.is_null() {
-                end = next.add(cstr::bytes_at(next).len());
-            }
-            let line = xmemdupz(next.cast(), end.offset_from(next) as size_t).cast::<c_char>();
-            let rest = if *end != NUL as c_char {
-                end.add(1)
-            } else {
-                ptr::null_mut()
-            };
-            (line, rest)
+        let next = args.line.next?;
+        let rest = args.line.rest_of(next);
+        let (line, rest) = match rest.iter().position(|&byte| byte == NL as u8) {
+            Some(end) => (rest[..end].to_vec(), Some(next + end + 1)),
+            None => (rest.to_vec(), None),
         };
-        args.set_nextcmd_ptr(rest);
-        return Some(Line(line));
+        args.line.next = rest;
+        return Some(Some(line));
     };
 
     // Set State to avoid the cursor shape being set to MODE_INSERT state
@@ -246,17 +208,19 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
         .cond_stack
         .is_some_and(|cond| cond.with(|cs| cs.loop_level > 0));
     let first = if in_loop { -1 } else { NUL };
-    let line = source
-        .next_line(first, indent, true)
-        .map_or(ptr::null_mut(), crate::memory::XString::into_raw);
+    // Up to its first NUL, which is where upstream's `char *` ended it.
+    let line = source.next_line(first, indent, true).map(|line| {
+        let mut line = line.into_vec();
+        line.truncate(line.iter().position(|&byte| byte == 0).unwrap_or(0));
+        line
+    });
     State.set(save_state);
-    Some(Line(line))
+    Some(line)
 }
 
 /// `:change` -- delete the range, then append in its place.
 pub fn ex_change(excmd: &mut ExArg) {
     let (forceit, line1, line2) = (excmd.forceit, excmd.line1, excmd.line2);
-    // SAFETY: the range is inside the current buffer.
     if line2 >= line1 && u_save(line1 - 1, line2 + 1).is_err() {
         return;
     }
@@ -268,7 +232,6 @@ pub fn ex_change(excmd: &mut ExArg) {
     } else {
         autoindent != 0
     } {
-        // SAFETY: `line1` is a line of the current buffer.
         append_indent.set(get_indent_lnum(line1));
     }
 
@@ -283,28 +246,20 @@ pub fn ex_change(excmd: &mut ExArg) {
     }
 
     // Make sure the cursor is not beyond the end of the file now.
-    // SAFETY: `curwin` is the live current window.
     check_cursor_lnum(Win::current());
     deleted_lines_mark(line1, line2 - lnum);
     // ":append" on the line above the deleted lines.
     excmd.line2 = line1;
-    // SAFETY: the command block is the one borrowed here.
     ex_append(excmd);
 }
 
 /// `:z` -- print a window of lines around the range's last line.
 pub fn ex_z(excmd: &mut ExArg) {
-    let (arg, forceit, addr_count, flags, lnum) = (
-        excmd.arg_ptr(),
-        excmd.forceit,
-        excmd.addr_count,
-        excmd.flags,
-        excmd.line2,
-    );
+    let (forceit, addr_count, flags, lnum) =
+        (excmd.forceit, excmd.addr_count, excmd.flags, excmd.line2);
     let mut bigness = default_bigness(c_int::from(forceit)).max(1);
 
-    // SAFETY: the command argument is NUL-terminated.
-    let text = unsafe { CStr::from_ptr(arg) }.to_bytes();
+    let text = excmd.line.arg();
     let kind = text.first().copied().unwrap_or(0);
     let mut at = usize::from(matches!(kind, b'-' | b'+' | b'=' | b'^' | b'.'));
     while matches!(text.get(at), Some(b'-' | b'+')) {
@@ -316,8 +271,8 @@ pub fn ex_z(excmd: &mut ExArg) {
             emsg(gettext(c"E144: Non-numeric argument to :z"));
             return;
         }
-        // SAFETY: `at` indexes the argument's own bytes.
-        bigness = unsafe { atol(arg.add(at)) };
+        // `atol`, which saturates.
+        bigness = crate::charset::skip::decimal(&text[at..]).0;
         // `bigness` could be < 0 if atol() overflowed.
         let cap = int64_t::from(Buf::current().b_ml.ml_line_count) * 2;
         if bigness > cap || bigness < 0 {
@@ -386,7 +341,6 @@ pub fn ex_z(excmd: &mut ExArg) {
         }
     }
 
-    // SAFETY: `curwin` is the live current window.
     if Win::current().w_cursor.lnum != curs {
         Win::current().w_cursor.lnum = curs;
         Win::current().w_cursor.col = 0;

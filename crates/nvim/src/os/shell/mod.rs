@@ -360,6 +360,15 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut 
     exitcode
 }
 
+/// [`call_shell`] of a command line the caller holds, with no extra shell
+/// argument, for a caller that reads no exit status. The callee is handed a
+/// writable copy.
+pub(crate) fn call_shell_text(cmd: &CStr, opts: ShellOpts) {
+    let mut copy = cmd.to_bytes_with_nul().to_vec();
+    // SAFETY: a NUL-terminated copy of our own, alive for the call.
+    unsafe { call_shell(copy.as_mut_ptr().cast(), opts, ptr::null_mut()) };
+}
+
 /// [`os_call_shell`] plus the editor-level bookkeeping: `'verbose'`,
 /// `:profile`, `v:shell_error`, and invalidating the cached tags.
 ///

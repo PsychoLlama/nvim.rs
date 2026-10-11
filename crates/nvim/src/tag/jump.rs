@@ -451,7 +451,10 @@ impl Jump {
         } else {
             // Careful: this may trigger autocommands, which can call
             // `jumpto_tag` recursively.
-            unsafe { getfile(0, self.fname(), ptr::null_mut(), true, 0, forceit != 0) }
+            // SAFETY: one of this jump's own NUL-terminated names, alive
+            // until it returns.
+            let fname = unsafe { cstr::at(self.fname()) };
+            getfile(0, Some(fname), None, true, 0, forceit != 0)
         };
         keep_help_flag.set(false);
 

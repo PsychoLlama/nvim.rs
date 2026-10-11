@@ -79,6 +79,20 @@ pub unsafe fn invocation_path_tail(invocation: *const c_char, len: *mut size_t) 
     unsafe { past_head.add(at) }
 }
 
+/// [`invocation_path_tail`] of an invocation the caller holds: everything
+/// from the program name's tail on.
+pub(crate) fn invocation_path_tail_of(invocation: &CStr) -> &[u8] {
+    // SAFETY: a NUL-terminated string; the tail answered is inside it, and
+    // no length is asked for.
+    unsafe {
+        CStr::from_ptr(invocation_path_tail(
+            invocation.as_ptr(),
+            core::ptr::null_mut(),
+        ))
+    }
+    .to_bytes()
+}
+
 /// What is left of `fname` after its first path component: the byte past the
 /// first separator, or the NUL when there is none.
 ///

@@ -7,8 +7,7 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::LineCopy;
 use super::say;
@@ -22,7 +21,7 @@ use crate::extmark::extmark_move_region;
 use crate::fold::fold_move_range;
 use crate::guard::Suppress;
 use crate::mark::mark_adjust_nofold;
-use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset};
+use crate::memline::{ml_append_cstr, ml_delete_flags, ml_find_line_or_offset};
 use crate::message::emsg;
 use crate::message_fmt::report_msg;
 use crate::normal::{visual_active, with_visual_anchor};
@@ -48,7 +47,6 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     // the 'modified' flag from being set without cause.  The cursor still
     // moves as if the lines had, to stay backwards compatible.
     if dest == line1 - 1 || dest == line2 {
-        // SAFETY: `curwin` is the live current window.
         Win::current().w_cursor.lnum = last_moved_line(line1, line2, dest);
         return Ok(());
     }
@@ -63,7 +61,6 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
 
     // First we copy the old text to its new location -- webb
     // Also copy the flag that ":global" command uses.
-    // SAFETY: `dest` is a line of the current buffer, or zero.
     u_save(dest, dest + 1)?;
 
     // How many lines the copies added before `line1`.
@@ -71,7 +68,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     let mut copy = LineCopy::new();
     for l in line1..=line2 {
         copy.fill_line(l + extra);
-        let _ = unsafe { ml_append(dest + l - line1, copy.as_ptr(), 0, false) };
+        let _ = ml_append_cstr(dest + l - line1, copy.as_cstr());
         if dest < line1 {
             extra += 1;
         }
@@ -139,7 +136,6 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     buf_updates_send_changes(Buf::current(), dest + 1, num_lines as int64_t, 0);
 
     // Now we delete the original text -- webb
-    // SAFETY: the original range sits at `line1 + extra` now.
     u_save(line1 + extra - 1, line2 + extra + 1)?;
     for _ in line1..=line2 {
         let _ = ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int);
@@ -165,11 +161,8 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     );
 
     // Leave the cursor on the last of the moved lines.
-    // SAFETY: `curwin` is the live current window.
     Win::current().w_cursor.lnum = last_moved_line(line1, line2, dest);
 
-    // SAFETY: `curbuf` is live; the redrawn span reaches from the first line
-    // that moved to the last, whichever direction the move went.
     if line1 < dest {
         let end = (dest + num_lines + 1).min(Buf::current().b_ml.ml_line_count + 1);
         changed_lines(Buf::current(), line1, 0, end, 0, false);
@@ -204,10 +197,9 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 /// Move the folds of `line1`..`line2` to `dest` in every window showing the
 /// current buffer -- a window on another tab page holds folds of its own.
 fn move_folds_in_windows(line1: LineNr, line2: LineNr, dest: LineNr) {
-    for wp in tab_windows().map(Win::raw) {
-        // SAFETY: `wp` is a live window.
-        if unsafe { (*wp).w_buffer }.is_current() {
-            unsafe { fold_move_range(&raw mut (*wp).w_folds, line1, line2, dest) };
+    for mut win in tab_windows() {
+        if win.w_buffer.is_current() {
+            fold_move_range(&mut win.w_folds, line1, line2, dest);
         }
     }
 }
@@ -238,7 +230,6 @@ pub fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
     // curwin->w_cursor.lnum = destination (while copying)
     // line1 = start of source (while copying)
     // line2 = end of source (while copying)
-    // SAFETY: `n` is a line of the current buffer, or zero.
     if u_save(n, n + 1).is_err() {
         return;
     }
@@ -250,8 +241,7 @@ pub fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
         // `ml_append`.
         copy.fill_line(line1);
         let at = Win::current().w_cursor.lnum;
-        // SAFETY: the text is this call's own NUL-terminated copy.
-        let _ = unsafe { ml_append(at, copy.as_ptr(), 0, false) };
+        let _ = ml_append_cstr(at, copy.as_cstr());
         let cursor = &mut Win::current().w_cursor;
 
         // Situation 2: skip the lines already copied.
@@ -272,6 +262,5 @@ pub fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
     if visual_active() {
         with_visual_anchor(|anchor| check_pos(Buf::current(), anchor));
     }
-    // SAFETY: message state, main thread.
     say::more(count);
 }

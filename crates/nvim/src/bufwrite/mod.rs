@@ -265,6 +265,44 @@ impl WriteRequest {
     }
 }
 
+/// A name [`buf_write`] writes under.
+///
+/// The buffer's own names are *named*, not borrowed: the write's
+/// autocommands may rename the buffer, which frees the old name, and the
+/// write tells "the buffer's own name" from another by address so that it
+/// follows such a rename. Each is resolved to the buffer's name of the moment
+/// on entry, which is the address upstream's caller would have passed.
+#[derive(Clone, Copy)]
+pub(crate) enum WriteName<'a> {
+    /// The buffer's full name, `b_ffname`.
+    Full,
+    /// The buffer's short name, `b_sfname`.
+    Short,
+    /// The name the buffer shows, `b_fname`: its short name or its full one.
+    Shown,
+    /// A name the caller holds for the call, which nothing the write runs
+    /// can free.
+    Other(&'a CStr),
+}
+
+impl WriteName<'_> {
+    /// The name's address, for the pointer walk below: the buffer's own
+    /// storage for its names, or `copy`, filled with a writable copy of a
+    /// caller's name. Null for a buffer name that is not set.
+    fn resolve(self, buffer: Buf, copy: &mut Vec<u8>) -> *mut ::core::ffi::c_char {
+        match self {
+            WriteName::Full => buffer.name.full_ptr(),
+            WriteName::Short => buffer.name.short_ptr(),
+            WriteName::Shown => buffer.name.shown_ptr(),
+            WriteName::Other(name) => {
+                copy.clear();
+                copy.extend_from_slice(name.to_bytes_with_nul());
+                copy.as_mut_ptr().cast()
+            }
+        }
+    }
+}
+
 /// Write lines `start` through `end` of `buf` to `fname`.
 ///
 /// Nvim does its own buffering because `fwrite()` is so slow. In case of an
@@ -276,23 +314,24 @@ impl WriteRequest {
 ///
 /// This function must NOT use `NameBuff`: `autowrite()` calls it.
 ///
-/// `excmd` may be null; it carries a forced `'ff'`/`'fenc'`.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `sfname` must point at a NUL-terminated string, unaliased for the call.
-/// `excmd` must point at the command's `ExArg`. `req` must be an initialized
-/// `WriteRequest` whose pointer fields point at live data for the call.
-pub unsafe fn buf_write(
+/// `sfname` is the short name to report, `None` for the same as `fname`;
+/// `excmd` carries a forced `'ff'`/`'fenc'`.
+pub(crate) fn buf_write(
     buffer: Buf,
-    fname: *mut ::core::ffi::c_char,
-    sfname: *mut ::core::ffi::c_char,
+    fname: WriteName<'_>,
+    sfname: Option<WriteName<'_>>,
     start: LineNr,
     end: LineNr,
     mut excmd: Option<&mut ExArg>,
     req: WriteRequest,
 ) -> Result<(), Failed> {
+    // Writable copies of a caller's names, alive for the whole write: the
+    // walk below holds their addresses.
+    let (mut fname_copy, mut sfname_copy) = (Vec::new(), Vec::new());
+    let fname = fname.resolve(buffer, &mut fname_copy);
+    let sfname = sfname.map_or(::core::ptr::null_mut(), |name| {
+        name.resolve(buffer, &mut sfname_copy)
+    });
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut b = buffer;
     // The quoted file name the failure path reports against.

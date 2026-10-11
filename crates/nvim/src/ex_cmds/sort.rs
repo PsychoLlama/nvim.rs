@@ -14,8 +14,7 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::LineCopy;
 use super::say;
@@ -24,30 +23,25 @@ use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::Str2NrBases;
 use crate::charset::{skip, str2nr_scan};
-use crate::cstr;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::extmark::extmark_splice;
 use crate::getchar::state::got_int;
 use crate::mark::mark_adjust;
-use crate::memline::{Lines, ml_append, ml_delete};
+use crate::memline::{Lines, ml_append_cstr, ml_delete};
 use crate::message::emsg;
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_ic;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{cstr_ncasecmp, gettext, strcoll, strtod_prefix};
 use crate::os::input::fast_breakcheck;
-use crate::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
-use crate::search::last_search_pat;
+use crate::regexp::{OwnedMatch, skip_regexp_at, vim_regexec};
+use crate::search::last_pattern_owned;
 use crate::semsg;
-use crate::types::{
-    BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, RegMatch, VarNumber, size_t,
-};
+use crate::types::{BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, VarNumber, size_t};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use ::libc::{strcasecmp, strcoll, strtod};
 use core::cmp::Ordering;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_char, c_int};
 
 /// How two keys are compared as *text*: `l` asks the locale, `i` folds case,
 /// and `l` wins when both are given because upstream tests it first.  It is a
@@ -66,26 +60,21 @@ impl StringOrder {
         ignore_case: false,
     };
 
-    /// Compare two NUL-terminated keys.
-    ///
-    /// # Safety
-    /// Both must be NUL-terminated.
-    unsafe fn compare(self, s1: *const c_char, s2: *const c_char) -> Ordering {
-        // SAFETY: caller's contract.
-        let sign = if self.locale {
-            unsafe { strcoll(s1, s2) }
+    /// Compare two keys: `strcoll`, `strcasecmp` or `strcmp`.
+    fn compare(self, s1: &CStr, s2: &CStr) -> Ordering {
+        if self.locale {
+            strcoll(s1, s2).cmp(&0)
         } else if self.ignore_case {
-            unsafe { strcasecmp(s1.cast_mut(), s2.cast_mut()) }
+            // `strncasecmp` with no limit is `strcasecmp`.
+            cstr_ncasecmp(s1, s2, usize::MAX).cmp(&0)
         } else {
-            unsafe { cstr::cmp(s1, s2) as c_int }
-        };
-        sign.cmp(&0)
+            s1.to_bytes().cmp(s2.to_bytes())
+        }
     }
 
     /// [`StringOrder::compare`] for two keys that carry their own NUL.
     fn compare_keys(self, k1: &Key, k2: &Key) -> Ordering {
-        // SAFETY: a `Key` is NUL-terminated by construction.
-        unsafe { self.compare(k1.as_ptr(), k2.as_ptr()) }
+        self.compare(k1.as_cstr(), k2.as_cstr())
     }
 }
 
@@ -101,8 +90,8 @@ impl Key {
         Key(owned.into_boxed_slice())
     }
 
-    fn as_ptr(&self) -> *const c_char {
-        self.0.as_ptr().cast()
+    fn as_cstr(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0).expect("a key ends in a NUL")
     }
 }
 
@@ -151,48 +140,41 @@ fn compare_lines(order: StringOrder, l1: &SortLine, l2: &SortLine) -> Ordering {
     keys.then(l1.lnum.cmp(&l2.lnum))
 }
 
-/// A zeroed `RegMatch`; only `regprog` is meaningful before a match.
-fn no_regmatch() -> RegMatch {
-    RegMatch::new(ptr::null_mut(), false)
-}
-
-/// The `/pat/` argument both commands accept in place of a flag letter.
+/// The `/pat/` argument both commands accept in place of a flag letter,
+/// its opening delimiter at `delim_at` in the command line.
 ///
-/// Returns the index of the closing delimiter, which upstream overwrites with
-/// a NUL so the pattern is its own string -- the scan resumes one byte past
+/// Returns where the closing delimiter is, which upstream overwrites with a
+/// NUL so the pattern is its own string -- the scan resumes one byte past
 /// it.  `None` means it failed, with the reason already reported.
-///
-/// # Safety
-/// `arg` must be the command's NUL-terminated argument and `at` must index
-/// the opening delimiter.
-unsafe fn compile_sort_pattern(
-    arg: *mut c_char,
-    at: usize,
-    regmatch: &mut RegMatch,
+fn compile_sort_pattern(
+    args: &mut ExArg,
+    delim_at: usize,
+    regmatch: &mut Option<OwnedMatch>,
 ) -> Option<usize> {
-    // SAFETY: caller's contract.
-    let delim = unsafe { arg.add(at) };
-    let end = unsafe { skip_regexp_err(delim.add(1), *delim as c_int, 1) };
-    if end.is_null() {
+    // The delimiter is handed on as a `char`, sign-extended -- and the skip
+    // compares the pattern's bytes the same way, so a high byte still ends it.
+    let delim = c_int::from(args.line.byte_at(delim_at) as c_char);
+    let start = delim_at + 1;
+    let end = start + skip_regexp_at(args.line.tail(start), delim, 1);
+    if c_int::from(args.line.byte_at(end) as c_char) != delim {
+        let startp = msg_bytes(args.line.rest_of(start));
+        semsg!("E654: Missing delimiter after search pattern: {startp}");
         return None;
     }
-    unsafe { *end = NUL as c_char };
+    args.line.terminate_at(end);
 
     // Use the last search pattern if the sort pattern is empty.
-    regmatch.regprog = if end == unsafe { delim.add(1) } {
-        if last_search_pat().is_null() {
+    let compiled = if end == start {
+        let Some(last) = last_pattern_owned() else {
             emsg(gettext(e_noprevre));
             return None;
-        }
-        vim_regcomp(unsafe { cstr::at(last_search_pat()) }, RE_MAGIC)
+        };
+        OwnedMatch::compile(last.as_cstr(), RE_MAGIC, p_ic())
     } else {
-        vim_regcomp(unsafe { cstr::at(delim.add(1)) }, RE_MAGIC)
+        OwnedMatch::compile(args.line.cstr_from(start), RE_MAGIC, p_ic())
     };
-    if regmatch.regprog.is_null() {
-        return None;
-    }
-    regmatch.rm_ic = p_ic();
-    Some(unsafe { end.offset_from(arg) } as usize)
+    *regmatch = Some(compiled?);
+    Some(end)
 }
 
 /// True for the letters that can only ever be flags, so that anything else is
@@ -282,7 +264,7 @@ fn flag_fallback(
     args: &mut ExArg,
     at: usize,
     byte: u8,
-    regmatch: &mut RegMatch,
+    regmatch: &mut Option<OwnedMatch>,
     keep_nextcmd: bool,
 ) -> Option<Fallback> {
     let base = args.line.arg;
@@ -292,15 +274,12 @@ fn flag_fallback(
         args.line.next = Some(next);
         return Some(Fallback::NextCmd);
     }
-    if is_alpha(byte) || !regmatch.regprog.is_null() {
+    if is_alpha(byte) || regmatch.is_some() {
         let arg0 = msg_cstr(args.line.cstr_from(base + at));
         semsg!("E475: Invalid argument: {arg0}");
         return None;
     }
-    let arg = args.line.buffer_mut()[base..].as_mut_ptr().cast::<c_char>();
-    // SAFETY: the command's own NUL-terminated argument, written in place
-    // and nowhere else for the call; `at` indexes the delimiter.
-    unsafe { compile_sort_pattern(arg, at, regmatch) }.map(Fallback::Pattern)
+    compile_sort_pattern(args, base + at, regmatch).map(|end| Fallback::Pattern(end - base))
 }
 
 /// Read `:sort`'s flags and its optional pattern.  `None` means the command
@@ -308,7 +287,7 @@ fn flag_fallback(
 fn parse_sort_flags(
     args: &mut ExArg,
     spec: &mut SortSpec,
-    regmatch: &mut RegMatch,
+    regmatch: &mut Option<OwnedMatch>,
 ) -> Option<StringOrder> {
     let mut order = StringOrder::BYTES;
     // Only one of 'n', 'b', 'o', 'f' and 'x' is allowed.
@@ -363,7 +342,7 @@ fn parse_uniq_flags(
     args: &mut ExArg,
     mode: &mut UniqMode,
     use_match: &mut bool,
-    regmatch: &mut RegMatch,
+    regmatch: &mut Option<OwnedMatch>,
 ) -> Option<StringOrder> {
     let mut order = StringOrder::BYTES;
     let mut at = 0;
@@ -400,15 +379,15 @@ fn parse_uniq_flags(
 /// match runs over a C string, and the memline's terminator is the only
 /// thing that says where a line's bytes end.
 fn match_range(
-    regmatch: &mut RegMatch,
+    regmatch: &mut Option<OwnedMatch>,
     lines: &mut Lines,
     lnum: LineNr,
     use_match: bool,
 ) -> (ColNr, ColNr) {
     let len = lines.line_len(lnum);
-    if regmatch.regprog.is_null() {
+    let Some(regmatch) = regmatch.as_mut() else {
         return (0, len);
-    }
+    };
     if !vim_regexec(regmatch, lines.line_cstr(lnum, 0), 0) {
         return (0, 0);
     }
@@ -419,27 +398,12 @@ fn match_range(
     if use_match { (start, end) } else { (end, len) }
 }
 
-/// The number or float in `line[start..end]`.
-///
-/// The line is temporarily terminated at `end` so that `vim_str2nr` and
-/// `strtod` cannot read digits past the match -- unless the range already
-/// ends at the line's own NUL, where there is nothing to terminate.
-///
-/// # Safety
-/// `line` must be a buffer line and `start <= end <= line.len()`.
-unsafe fn number_key(line: &mut [u8], start: ColNr, end: ColNr, spec: &SortSpec) -> SortKey {
-    let (start, end) = (start as usize, end as usize);
-    // Terminate the key so the C parsers stop there.  When the range already
-    // reaches the line's last byte, the NUL past it is the line's own.
-    let saved = line.get(end).copied();
-    if let Some(byte) = line.get_mut(end) {
-        *byte = NUL_BYTE;
-    }
-    // The slice stops where the NUL does: a skip over the *slice* would walk
-    // straight past a terminator that only a pointer walk can see.
-    let from = &line[start..end];
+/// The number or float in `line[start..end]`, read so that no digit past
+/// `end` counts -- what upstream terminates the line in place for.
+fn number_key(line: &[u8], start: ColNr, end: ColNr, spec: &SortSpec) -> SortKey {
+    let from = &line[start as usize..end as usize];
 
-    let key = if spec.float {
+    if spec.float {
         let mut at = skip::white(from);
         if from.get(at) == Some(&b'+') {
             at += 1 + skip::white(&from[at + 1..]);
@@ -448,9 +412,7 @@ unsafe fn number_key(line: &mut [u8], start: ColNr, end: ColNr, spec: &SortSpec)
         SortKey::Float(if at == from.len() {
             -Float::MAX
         } else {
-            // SAFETY: `from` is followed by a NUL, written above or the
-            // line's own.
-            unsafe { strtod(from[at..].as_ptr().cast(), ptr::null_mut()) }
+            strtod_prefix(&from[at..]).0
         })
     } else {
         let mut at = if spec.radix.has(Str2NrBases::HEX) {
@@ -472,12 +434,7 @@ unsafe fn number_key(line: &mut [u8], start: ColNr, end: ColNr, spec: &SortSpec)
             let parsed = str2nr_scan(&from[at..], 0, spec.radix, false, true);
             SortKey::Number(Some(parsed.value))
         }
-    };
-
-    if let (Some(byte), Some(saved)) = (line.get_mut(end), saved) {
-        *byte = saved;
     }
-    key
 }
 
 /// Build one [`SortLine`] per line of the range.
@@ -489,23 +446,23 @@ fn collect_sort_keys(
     line1: LineNr,
     line2: LineNr,
     spec: &SortSpec,
-    regmatch: &mut RegMatch,
+    regmatch: &mut Option<OwnedMatch>,
 ) -> Option<Vec<SortLine>> {
     let mut sorted = Vec::with_capacity((line2 - line1 + 1) as usize);
     let mut lines = Lines::current();
 
     for lnum in line1..=line2 {
         let (start, end) = match_range(regmatch, &mut lines, lnum, spec.use_match);
-        let text = lines.line_mut(lnum);
+        let text = lines.line(lnum);
         let key = if spec.numeric || spec.float {
-            // SAFETY: as above; `match_range` answers offsets into `text`.
-            unsafe { number_key(text, start, end, spec) }
+            // `match_range` answers offsets into `text`.
+            number_key(text, start, end, spec)
         } else {
             SortKey::Text(Key::new(&text[start as usize..end as usize]))
         };
         sorted.push(SortLine { lnum, key });
 
-        if !regmatch.regprog.is_null() {
+        if regmatch.is_some() {
             fast_breakcheck();
         }
         if got_int.get() {
@@ -570,13 +527,11 @@ fn append_sorted(
         let bytelen = current.fill_line(get_lnum) as BCount + 1;
         placed.old_bytes += bytelen;
 
-        // SAFETY: both scratch buffers are NUL-terminated.
         let duplicate = unique
             && placed.done > 0
-            && unsafe { order.compare(current.as_ptr(), previous.as_ptr()) } == Ordering::Equal;
+            && order.compare(current.as_cstr(), previous.as_cstr()) == Ordering::Equal;
         if !duplicate {
-            // SAFETY: the text is this call's own NUL-terminated copy.
-            let failed = unsafe { ml_append(placed.lnum, current.as_ptr(), 0, false) }.is_err();
+            let failed = ml_append_cstr(placed.lnum, current.as_cstr()).is_err();
             placed.lnum += 1;
             if failed {
                 return placed;
@@ -597,8 +552,6 @@ fn append_sorted(
 
 /// `:sort`.
 pub fn ex_sort(excmd: &mut ExArg) {
-    // SAFETY: caller's contract.  The dispatcher's `ExArg` outlives the
-    // command and is reached through no other pointer while it runs.
     sort_range(excmd);
 }
 
@@ -610,12 +563,11 @@ fn sort_range(args: &mut ExArg) {
     if line2 - line1 < 1 {
         return;
     }
-    // SAFETY: the range is inside the current buffer.
     if u_save(line1 - 1, line2 + 1).is_err() {
         return;
     }
 
-    let mut regmatch = no_regmatch();
+    let mut regmatch = None;
     let mut spec = SortSpec::new();
     let mut count = (line2 - line1) as size_t + 1;
 
@@ -648,8 +600,7 @@ fn sort_range(args: &mut ExArg) {
         finish_sort(line1, line2, count, &placed);
     }
 
-    // SAFETY: the program is this command's own.
-    unsafe { vim_regfree(regmatch.regprog) };
+    drop(regmatch);
     if got_int.get() {
         emsg(gettext(e_interr));
     }
@@ -767,7 +718,6 @@ impl UniqScan {
 
 /// `:uniq`.
 pub fn ex_uniq(excmd: &mut ExArg) {
-    // SAFETY: caller's contract, as [`ex_sort`].
     uniq_range(excmd);
 }
 
@@ -780,12 +730,11 @@ fn uniq_range(args: &mut ExArg) {
     if count <= 1 {
         return;
     }
-    // SAFETY: the range is inside the current buffer.
     if u_save(line1 - 1, line2 + 1).is_err() {
         return;
     }
 
-    let mut regmatch = no_regmatch();
+    let mut regmatch = None;
     let mut mode = if forceit {
         UniqMode::OnlyRepeated
     } else {
@@ -812,12 +761,10 @@ fn uniq_range(args: &mut ExArg) {
             let get_lnum = line1 + i;
             // Read the key out of the line and compare it with the one
             // before: the delete below invalidates the memline's copy.
-            // SAFETY: `get_lnum` is a line of the current buffer, and the
-            // handle dies before anything else touches the memline.
             {
                 let mut lines = Lines::current();
                 let (start, end) = match_range(&mut regmatch, &mut lines, get_lnum, use_match);
-                let text = lines.line_mut(get_lnum);
+                let text = lines.line(get_lnum);
                 // A line the pattern missed compares its whole text, which is
                 // what upstream's "terminate at `end` only when there is an
                 // end to terminate at" comes to.
@@ -825,9 +772,8 @@ fn uniq_range(args: &mut ExArg) {
                 current.fill(&text[start as usize..stop]);
             }
 
-            // SAFETY: both scratch buffers are NUL-terminated.
-            let is_match = i > 0
-                && unsafe { order.compare(current.as_ptr(), previous.as_ptr()) } == Ordering::Equal;
+            let is_match =
+                i > 0 && order.compare(current.as_cstr(), previous.as_cstr()) == Ordering::Equal;
             let (delete_lnum, keep) = scan.step(mode, i, count, get_lnum, is_match);
             if keep {
                 core::mem::swap(&mut previous, &mut current);
@@ -868,8 +814,7 @@ fn uniq_range(args: &mut ExArg) {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 
-    // SAFETY: the program is this command's own.
-    unsafe { vim_regfree(regmatch.regprog) };
+    drop(regmatch);
     if got_int.get() {
         emsg(gettext(e_interr));
     }

@@ -23,7 +23,7 @@ use crate::normal::{set_visual_active, set_visual_anchor, set_visual_select};
 use crate::strings::has_char;
 use crate::types::{Failed, MB_MAXBYTES, NL, NUL};
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 /// Move the current redo buffer to `old_redobuff` and start a fresh one.
 ///
@@ -81,6 +81,18 @@ pub unsafe fn append_to_redobuff(s: *const c_char) {
         // SAFETY (this body): the caller's promise -- `s` is NUL-terminated.
         unsafe { redobuff().add(s, -1) };
     }
+}
+
+/// [`append_to_redobuff`] of a string the caller holds.
+pub(crate) fn append_to_redobuff_text(s: &CStr) {
+    // SAFETY: a NUL-terminated string, read for the call.
+    unsafe { append_to_redobuff(s.as_ptr()) };
+}
+
+/// [`append_to_redobuff_literally`] of a whole string the caller holds.
+pub(crate) fn append_to_redobuff_literally_text(s: &CStr) {
+    // SAFETY: a NUL-terminated string, read for the call.
+    unsafe { append_to_redobuff_literally(s.as_ptr(), -1) };
 }
 
 /// Append `str` to the redo buffer literally, quoting with CTRL-V whatever

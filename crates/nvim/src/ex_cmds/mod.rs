@@ -470,9 +470,9 @@ impl LineCopy {
         len
     }
 
-    /// The copy as the NUL-terminated string every C neighbour wants.
-    pub(crate) fn as_ptr(&self) -> *mut ::core::ffi::c_char {
-        self.0.as_ptr().cast::<::core::ffi::c_char>().cast_mut()
+    /// The copy as a C string.
+    pub(crate) fn as_cstr(&self) -> &::core::ffi::CStr {
+        ::core::ffi::CStr::from_bytes_until_nul(&self.0).expect("the copy ends in a NUL")
     }
 }
 

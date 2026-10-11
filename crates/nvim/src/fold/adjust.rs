@@ -512,10 +512,8 @@ pub(super) fn truncate_fold(fold: FoldRef, end: LineNr) {
 /// 9. shifted up
 /// 10. not changed
 ///
-/// # Safety
-/// `gap` must be a live fold list.
-pub unsafe fn fold_move_range(gap: *mut GArray, line1: LineNr, line2: LineNr, dest: LineNr) {
-    // SAFETY: the caller's promise.
+pub fn fold_move_range(gap: &mut GArray, line1: LineNr, line2: LineNr, dest: LineNr) {
+    // SAFETY: the caller's fold list, lent for the call.
     let folds = unsafe { FoldList::new(gap) };
     let range_len = line2 - line1 + 1;
     let move_len = dest - line2;
@@ -526,8 +524,9 @@ pub unsafe fn fold_move_range(gap: *mut GArray, line1: LineNr, line2: LineNr, de
                 // 4: the whole move happens inside this one fold.
                 let inner = fold.nested().gap();
                 let (a, b, d) = (line1 - fold.top(), line2 - fold.top(), dest - fold.top());
-                // SAFETY: a live window, and the fold's own nested list.
-                unsafe { fold_move_range(inner, a, b, d) };
+                // SAFETY: the fold's own nested list, which nothing else
+                // holds while the move runs.
+                fold_move_range(unsafe { &mut *inner }, a, b, d);
                 return;
             } else if fold.last() > line2 {
                 // 3: shortened by the lines that left it.

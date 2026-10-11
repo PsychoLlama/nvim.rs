@@ -49,7 +49,7 @@ use crate::buffer::{
     BufRef, buf_hide, buf_is_dontwrite, buf_set_name, buf_spname, find_buf, no_write_message,
     no_write_message_nobang, set_curbuf,
 };
-use crate::bufwrite::{WriteRequest, buf_write};
+use crate::bufwrite::{WriteName, WriteRequest, buf_write};
 use crate::change::unchanged;
 use crate::channel::channel_job_running;
 use crate::cstr;
@@ -57,7 +57,7 @@ use crate::drawscreen::state::cmdline_row;
 use crate::eval::eval_call_provider;
 use crate::eval::typval::tv_list_alloc;
 use crate::eval::vars::{do_unlet, set_internal_string_var, set_vim_var_string, var_string_value};
-use crate::ex_cmds::{check_overwrite, set_swapcommand};
+use crate::ex_cmds::{check_overwrite_own, set_swapcommand};
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{DoCmdOpts, cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::script_get;
@@ -351,7 +351,7 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
             unsafe { buf_set_name(buffer.handle as c_int, c"Untitled".as_ptr().cast_mut()) };
         }
         let target = buffer;
-        if unsafe { check_overwrite(&mut ea, target, buffer.name.shown_ptr(), buffer.name.full_ptr(), false) }.is_ok()
+        if check_overwrite_own(&mut ea, target).is_ok()
             // didn't hit Cancel
             && buf_write_all(buffer, false).is_ok()
         {
@@ -385,18 +385,7 @@ fn write_all_writable() {
     while let Some(target) = cur {
         if buf_is_changed(target) && !target.name.full().is_none() && target.b_p_ro == 0 {
             let bufref = BufRef::of(target);
-            if !target.name.is_unnamed()
-                && unsafe {
-                    check_overwrite(
-                        &mut ea,
-                        target,
-                        target.name.shown_ptr(),
-                        target.name.full_ptr(),
-                        false,
-                    )
-                }
-                .is_ok()
-            {
+            if !target.name.is_unnamed() && check_overwrite_own(&mut ea, target).is_ok() {
                 // didn't hit Cancel
                 let _ = buf_write_all(target, false);
             }
@@ -570,12 +559,11 @@ pub(crate) fn check_fname() -> Result<(), Failed> {
 /// Write out the whole of `buffer`.
 pub(crate) fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Failed> {
     let old_curbuf = Buf::current_raw();
-    // SAFETY: module contract.
-    let retval = unsafe {
+    let retval = {
         buf_write(
             buffer,
-            buffer.name.full_ptr(),
-            buffer.name.shown_ptr(),
+            WriteName::Full,
+            Some(WriteName::Shown),
             1 as LineNr,
             buffer.b_ml.ml_line_count,
             None,

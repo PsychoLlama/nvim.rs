@@ -565,3 +565,28 @@ pub fn ml_close_notmod() {
 }
 
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+
+/// [`makeswapname`](swapname::makeswapname) for names the caller holds: the swap file name for
+/// `fname` under the `'directory'` entry `dir_name`, or `None`. The callee
+/// is handed writable copies.
+pub(crate) fn swap_name_for(
+    fname: &::core::ffi::CStr,
+    ffname: &::core::ffi::CStr,
+    dir_name: &::core::ffi::CStr,
+) -> Option<crate::memory::XString> {
+    let mut fname = fname.to_bytes_with_nul().to_vec();
+    let mut ffname = ffname.to_bytes_with_nul().to_vec();
+    let mut dir_name = dir_name.to_bytes_with_nul().to_vec();
+    // SAFETY: three NUL-terminated copies of our own, alive for the call;
+    // the answer is an `xmalloc` block or null.
+    let name = unsafe {
+        makeswapname(
+            fname.as_mut_ptr().cast(),
+            ffname.as_mut_ptr().cast(),
+            Buf::current_or_none(),
+            dir_name.as_mut_ptr().cast(),
+        )
+    };
+    // SAFETY: as above -- ours alone.
+    (!name.is_null()).then(|| unsafe { crate::memory::XString::from_raw(name) })
+}

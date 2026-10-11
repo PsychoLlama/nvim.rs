@@ -189,9 +189,10 @@ fn write_orig(tmp_orig: *mut c_char) -> Result<(), Failed> {
     let cb = Buf::current();
     let end = Buf::current().b_ml.ml_line_count;
     let req = WriteRequest::filter();
-    // SAFETY: the current buffer is live and the name is our own temp file;
+    // SAFETY: our own temp file's NUL-terminated name, alive for the call;
     // no shortname and no `ExArg` are wanted.
-    unsafe { buf_write(cb, tmp_orig, ptr::null_mut(), 1, end, None, req) }
+    let name = unsafe { cstr::at(tmp_orig) };
+    buf_write(cb, WriteName::Other(name), None, 1, end, None, req)
 }
 
 /// Record the working directory into `dirbuf`, answering whether it can be

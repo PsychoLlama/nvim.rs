@@ -9,8 +9,7 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::say;
 use super::{CAR, EOL_MAC, NL, TAB};
@@ -18,23 +17,22 @@ use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::{transchar, transchar_nonprint_form, vim_isprintc};
 use crate::cstr;
-use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::digraph::get_digraph_for_char;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::indent::{get_indent, set_indent};
-use crate::mbyte::{encode_char, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
+use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_iscomposing_first};
+use crate::memline::Lines;
 use crate::message::{msg, msg_multiline, msg_sb_eol};
 use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
-use crate::plines::linetabsize_str;
+use crate::plines::linetabsize_text;
 use crate::types::CmdIdx;
 use crate::types::MB_MAXCHAR;
 use crate::types::{ExArg, IOSIZE, NUL};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use ::libc::atoi;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// `:ascii`.
 pub fn do_ascii(_excmd: &mut ExArg) {
@@ -48,10 +46,15 @@ pub fn do_ascii(_excmd: &mut ExArg) {
 /// combining character stacked on it. Split from the handler because `ga`
 /// has no Ex command to hand it.
 pub(crate) fn describe_cursor_char() {
-    // SAFETY: caller's contract; the cursor is on a live line.
-    let data = get_cursor_pos_ptr();
-    // SAFETY: `data` points into a NUL-terminated buffer line.
-    let len = unsafe { utfc_ptr2len(data) } as usize;
+    let cursor = Win::current().w_cursor;
+    let mut lines = Lines::current();
+    let line = lines.line(cursor.lnum);
+    let data = &line[(cursor.col.max(0) as usize).min(line.len())..];
+    let len = cluster_len(data);
+    // A copy of the character and its composing ones: the messages below
+    // may redraw, which reads other lines through the same cache.
+    let data = data[..len].to_vec();
+    let data = data.as_slice();
     if len == 0 {
         msg(c"NUL", 0);
         return;
@@ -61,8 +64,7 @@ pub(crate) fn describe_cursor_char() {
     msg_sb_eol();
     say::start();
 
-    // SAFETY: `data` is a live, NUL-terminated line position.
-    let mut c = unsafe { utf_ptr2char(data) };
+    let mut c = char_at(data);
     let mut off = 0;
 
     // TODO(bfredl): merge this with the main loop
@@ -75,21 +77,18 @@ pub(crate) fn describe_cursor_char() {
         let mac = c == CAR && get_fileformat(Buf::current()) == EOL_MAC;
         describe_byte(c, if mac { NL } else { c }, &mut need_clear);
         // needed for overlong ascii?
-        // SAFETY: as above.
-        off += unsafe { utf_ptr2len(data) } as usize;
+        off += char_len(data);
     }
 
     // Repeat for combining characters, also handle multibyte here.
     while off < len {
-        // SAFETY: `off` is a character boundary short of the sequence's end.
-        c = unsafe { utf_ptr2char(data.add(off)) };
+        // `off` is a character boundary short of the sequence's end.
+        c = char_at(&data[off..]);
         describe_char(c, off > 0, &mut need_clear);
-        // SAFETY: as above.
-        off += unsafe { utf_ptr2len(data.add(off)) } as usize;
+        off += char_len(&data[off..]);
     }
 
     if need_clear {
-        // SAFETY: message state, main thread.
         say::clear_eos();
     }
     say::end();
@@ -193,8 +192,8 @@ pub fn ex_align(excmd: &mut ExArg) {
         excmd.cmdidx = cmdidx;
     }
 
-    // SAFETY: the command's NUL-terminated argument, read only.
-    let arg_width = unsafe { atoi(excmd.line.cstr_from(excmd.line.arg).as_ptr()) };
+    // `atoi`: `strtol` cut to an `int`.
+    let arg_width = crate::charset::skip::decimal(excmd.line.arg()).0 as c_int;
     let mut indent = 0;
     let mut width = 0;
     if cmdidx == CmdIdx::left {
@@ -216,17 +215,13 @@ pub fn ex_align(excmd: &mut ExArg) {
         }
     }
 
-    // SAFETY: `curwin` is live; `u_save` takes the range's guard lines.
     let save_curpos = Win::current().w_cursor;
-    // SAFETY: as above.
     if u_save(line1 - 1, line2 + 1).is_err() {
         return;
     }
 
     let mut lnum = line1;
     while lnum <= line2 {
-        // SAFETY: `lnum` is inside the range `u_save` just guarded, and
-        // nothing in the body adds or removes a line.
         Win::current().w_cursor.lnum = lnum;
         if let Some(new_indent) = aligned_indent(cmdidx, indent, width) {
             set_indent(new_indent.max(0), 0);
@@ -234,7 +229,6 @@ pub fn ex_align(excmd: &mut ExArg) {
         lnum += 1;
     }
 
-    // SAFETY: the range is still the one that was just rewritten.
     changed_lines(Buf::current(), line1, 0, line2 + 1, 0, true);
     Win::current().w_cursor = save_curpos;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
@@ -247,7 +241,6 @@ fn aligned_indent(cmdidx: CmdIdx, indent: c_int, width: c_int) -> Option<c_int> 
         return Some(indent);
     }
     let (linewidth, has_tab) = linelen();
-    // SAFETY: as above.
     let len = linewidth - get_indent();
     if len <= 0 {
         // Skip blank lines.
@@ -257,7 +250,6 @@ fn aligned_indent(cmdidx: CmdIdx, indent: c_int, width: c_int) -> Option<c_int> 
         return Some((width - len) / 2);
     }
     if has_tab {
-        // SAFETY: as above.
         return Some(fit_right_indent(width - len, width));
     }
     Some(width - len)
@@ -269,7 +261,6 @@ fn aligned_indent(cmdidx: CmdIdx, indent: c_int, width: c_int) -> Option<c_int> 
 fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
     while indent > 0 {
         set_indent(indent, 0);
-        // SAFETY: as above.
         if linelen().0 > width {
             indent -= 1;
             continue;
@@ -277,9 +268,7 @@ fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
         // It fits: now move it as far right as it will go.
         loop {
             indent += 1;
-            // SAFETY: as above.
             set_indent(indent, 0);
-            // SAFETY: as above.
             if linelen().0 > width {
                 return indent - 1;
             }
@@ -297,9 +286,8 @@ fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
 fn linelen() -> (c_int, bool) {
     // Get the line.  If it's empty bail out early (could be the empty string
     // for an unloaded buffer).
-    let line = get_cursor_line_ptr();
-    // SAFETY: buffer lines are NUL-terminated.
-    let text = unsafe { CStr::from_ptr(line) }.to_bytes();
+    let mut lines = Lines::current();
+    let text = lines.line(Win::current().w_cursor.lnum);
     if text.is_empty() {
         return (0, false);
     }
@@ -315,16 +303,12 @@ fn linelen() -> (c_int, bool) {
         .map_or(first, |i| i + 1);
     let has_tab = text[first..last].contains(&(TAB as u8));
 
-    // Measure with the trailing white space cut off, then put it back.
-    // SAFETY: `last` indexes the line's own bytes, and `linetabsize_str` only
-    // reads up to the NUL just written.
-    let len = unsafe {
-        let end = line.add(last);
-        let saved = *end;
-        *end = NUL as c_char;
-        let len = linetabsize_str(line);
-        *end = saved;
-        len
-    };
+    // Measure with the trailing white space cut off. Upstream writes a NUL
+    // into the buffer line for that and puts the byte back; a copy of the
+    // head is measured instead.
+    let mut head = text[..last].to_vec();
+    head.push(NUL as u8);
+    let head = CStr::from_bytes_until_nul(&head).expect("just terminated");
+    let len = linetabsize_text(0, head);
     (len, has_tab)
 }

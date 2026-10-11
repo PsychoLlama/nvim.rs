@@ -53,7 +53,7 @@ pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
     // Rename the preview buffer.
     let mut aco = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, cmdpreview_buf) };
-    let retv = unsafe { rename_buffer(c"[Preview]".as_ptr().cast_mut()) };
+    let retv = rename_buffer(c"[Preview]");
     unsafe { aucmd_restbuf(&raw mut aco) };
 
     if retv.is_err() {

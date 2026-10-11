@@ -251,6 +251,12 @@ pub unsafe fn augroup_exists(name: *const ::core::ffi::c_char) -> bool {
     unsafe { augroup_find(name) > 0 }
 }
 
+/// [`augroup_exists`] for a name the caller holds.
+pub(crate) fn augroup_exists_of(name: &::core::ffi::CStr) -> bool {
+    // SAFETY: a NUL-terminated name, which the lookup only reads.
+    unsafe { augroup_exists(name.as_ptr()) }
+}
+
 /// `:augroup`: switch to a group, leave one, delete one, or list them.
 pub fn do_augroup(arg: &CStr, del_group: bool) {
     let arg = arg.as_ptr().cast_mut();

@@ -760,9 +760,8 @@ unsafe fn goto_match(
                 };
                 // GETFILE_SUCCESS: anything but a positive answer.
                 let handle = saved.buffer().handle as c_int;
-                let (no_name, no_alt) = (ptr::null_mut(), ptr::null_mut());
-                // SAFETY: jumping to a buffer named by its own handle.
-                let failed = unsafe { getfile(handle, no_name, no_alt, true, walk.lnum, forceit) };
+                // Jumping to a buffer named by its own handle.
+                let failed = getfile(handle, None, None, true, walk.lnum, forceit);
                 if failed > 0 {
                     return After::Stop; // failed to jump to the file
                 }
@@ -773,8 +772,10 @@ unsafe fn goto_match(
             check_cursor(Win::current());
         } else {
             let file = walk.files.innermost();
-            let (name, flnum) = (file.name.as_ptr(), file.lnum);
-            if unsafe { getfile(0, name, ptr::null_mut(), true, flnum, forceit) } > 0 {
+            // A copy: the jump runs autocommands, and the walk's name is
+            // lent for no longer than the call.
+            let (name, flnum) = (file.name.as_cstr().to_owned(), file.lnum);
+            if getfile(0, Some(&name), None, true, flnum, forceit) > 0 {
                 return After::Stop; // failed to jump to the file
             }
             // Autocommands may have changed the line number; that is

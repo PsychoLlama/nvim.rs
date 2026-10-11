@@ -345,6 +345,28 @@ pub(crate) unsafe fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
     p.cast_mut()
 }
 
+/// [`copy_option_part`] over an option value the caller holds: the first
+/// part of `option`, cut to `maxlen - 1` bytes, and where the next part
+/// starts.
+pub(crate) fn option_part(option: &CStr, maxlen: size_t, sep_chars: &CStr) -> (Vec<u8>, usize) {
+    let mut part = vec![0u8; maxlen.max(2)];
+    let start = option.as_ptr().cast_mut();
+    let mut p = start;
+    // SAFETY: the option walks a NUL-terminated string it only reads; the
+    // part buffer has room for `maxlen` bytes (two at least, for a leading
+    // `.`), and the separators are NUL-terminated.
+    let len = unsafe {
+        copy_option_part(
+            &raw mut p,
+            part.as_mut_ptr().cast(),
+            maxlen,
+            sep_chars.as_ptr().cast_mut(),
+        )
+    };
+    part.truncate(len);
+    (part, p.addr() - start.addr())
+}
+
 /// Copy one part of a separated option into `buf` and advance `option` past
 /// it, answering how many bytes it wrote: the part's length, or
 /// `maxlen - 1` when the part is longer than that. A caller may use the

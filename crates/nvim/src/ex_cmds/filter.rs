@@ -11,8 +11,7 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -20,11 +19,10 @@ use super::say;
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
 use crate::memline::Lines;
 use crate::types::AutoEvent;
-use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 
 use crate::autocmd::state::autocmd_busy;
-use crate::bufwrite::{WriteRequest, buf_write};
+use crate::bufwrite::{WriteName, WriteRequest, buf_write};
 use crate::change::{appended_lines_mark, del_lines};
 use crate::cstr;
 use crate::drawscreen::{UPD_VALID, number_width, redraw_curbuf_later};
@@ -34,31 +32,30 @@ use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::{cmdmod, global_busy};
 use crate::ex_eval::aborting;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
-use crate::fileio::{readfile, vim_tempname, write_lnum_adjust};
+use crate::fileio::{readfile_named, temp_name, write_lnum_adjust};
 use crate::fold::fold_update;
 use crate::getchar::state::{bangredo, got_int};
-use crate::getchar::{append_to_redobuff, append_to_redobuff_literally};
+use crate::getchar::{append_to_redobuff_literally_text, append_to_redobuff_text};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::mark::mark_adjust;
-use crate::memline::ml_get;
-use crate::memory::xfree;
+use crate::memory::XString;
 use crate::message::state::{info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent};
 use crate::message::{
     MSG_BUF_LEN, emsg, message_filtered, msg, msg_bytes, msg_display, msg_ext_set_kind,
     msg_prt_line, set_keep_msg, wait_return,
 };
 use crate::message::{e_noprev, e_notmp};
-use crate::message_fmt::{msg_cstr_opt, to_message};
+use crate::message_fmt::{msg_cstr, to_message};
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
 use crate::option::cpo_has;
 use crate::option::vars::{P_SHQ, p_report, p_sh, p_srr, p_stmp, p_warn};
 use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::input::os_breakcheck;
-use crate::os::shell::{ShellOpts, call_shell};
-use crate::path::invocation_path_tail;
+use crate::os::shell::{ShellOpts, call_shell_text};
+use crate::path::invocation_path_tail_of;
 use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::startup::silent_mode;
@@ -70,8 +67,7 @@ use crate::ui::state::Rows;
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
 use crate::winlayer::buffers;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 /// The last `:!` command, so that a later `!` in the argument can stand for
@@ -97,7 +93,6 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
     let (line1, line2) = (args.line1, args.line2);
     let scroll_save = msg_scroll.get();
     // Disallow shell commands in secure mode.
-    // SAFETY: main thread, message state.
     if check_secure() {
         return;
     }
@@ -156,11 +151,8 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
                 break 'theend;
             }
             let escaped = prevcmd.with(|cmd| escaped_bytes(cmd, b"%#"));
-            // SAFETY: two NUL-terminated strings, read for the call.
-            unsafe {
-                append_to_redobuff_literally(escaped.as_ptr(), -1);
-                append_to_redobuff(c"\n".as_ptr());
-            };
+            append_to_redobuff_literally_text(escaped.as_cstr());
+            append_to_redobuff_text(c"\n");
             bangredo.set(false);
         }
 
@@ -177,23 +169,20 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
             newcmd = quoted;
         }
 
-        let cmd = newcmd.as_mut_ptr().cast::<c_char>();
+        let cmd = CStr::from_bytes_until_nul(&newcmd).expect("the command is terminated");
         if addr_count == 0 {
             // Echo the command; it is not remembered in the message history.
             say::start();
-            // SAFETY: main thread, message state; `cmd` is a live string.
             msg_ext_set_kind(c"shell_cmd");
             say::putchar(':' as c_int);
             say::putchar('!' as c_int);
-            msg_display(unsafe { cstr::at(cmd) }, 0, false);
+            msg_display(cmd, 0, false);
             say::clear_eos();
             ui_cursor_goto(msg_row.get(), msg_col.get());
-            // SAFETY: as above.
-            unsafe { do_shell(cmd, ShellOpts::NONE) };
+            do_shell(cmd, ShellOpts::NONE);
         } else {
-            // SAFETY: `cmd` is a live string; the autocommand runs with the
-            // current buffer.
-            unsafe { do_filter(line1, line2, args, cmd, do_in, do_out) };
+            // The autocommand runs with the current buffer.
+            do_filter(line1, line2, args, cmd, do_in, do_out);
             buf_autocmd(AutoEvent::ShellFilterPost, Buf::current());
         }
     }
@@ -220,36 +209,24 @@ fn split_at_bang(text: &mut Vec<u8>, from: usize) -> Option<usize> {
     None
 }
 
-/// A `vim_tempname` allocation: taken off disk and freed when it goes out of
-/// scope, which is what upstream's `filterend` label does by hand.
-struct TempFile(*mut c_char);
+/// A temp file's name: the file is taken off disk when it goes out of scope,
+/// which is what upstream's `filterend` label does by hand.
+struct TempFile(XString);
 
 impl TempFile {
     fn new() -> Option<TempFile> {
-        let name = vim_tempname();
-        (!name.is_null()).then_some(TempFile(name))
+        temp_name().map(TempFile)
     }
 
-    /// The file name, or NULL when there is no such file.
-    fn name(this: &Option<TempFile>) -> *mut c_char {
-        this.as_ref().map_or(ptr::null_mut(), |f| f.0)
-    }
-
-    /// The name as a string, for the callers that no longer take a pointer.
-    ///
-    /// # Safety
-    /// The name is `vim_tempname`'s own NUL-terminated allocation.
-    unsafe fn as_cstr(this: &Option<TempFile>) -> Option<&CStr> {
-        // SAFETY: caller's contract.
-        this.as_ref().map(|f| unsafe { cstr::at(f.0) })
+    /// The file name, if there is such a file.
+    fn name(this: &Option<TempFile>) -> Option<&CStr> {
+        this.as_ref().map(|file| file.0.as_cstr())
     }
 }
 
 impl Drop for TempFile {
     fn drop(&mut self) {
-        // SAFETY: our own `vim_tempname` allocation.
-        unsafe { os_remove(cstr::at(self.0)) };
-        unsafe { xfree(self.0.cast()) };
+        os_remove(self.0.as_cstr());
     }
 }
 
@@ -258,25 +235,20 @@ impl Drop for TempFile {
 /// `do_in` asks for the range on the command's stdin, `do_out` for its stdout
 /// back into the buffer; `:w !cmd` is the first alone, `:r !cmd` the second.
 /// Either side travels through a pipe unless 'shelltemp' asks for files.
-///
-/// # Safety
-/// `cmd` must be live, and the range must be lines of the current
-/// buffer.
-unsafe fn do_filter(
+/// The range must be lines of the current buffer.
+fn do_filter(
     line1: LineNr,
     line2: LineNr,
     args: &mut ExArg,
-    cmd: *mut c_char,
+    cmd: &CStr,
     do_in: bool,
     do_out: bool,
 ) {
-    // SAFETY: caller's contract.
-    if unsafe { *cmd } as c_int == NUL {
+    if cmd.is_empty() {
         return; // no filter command
     }
 
     let old_curbuf = Buf::current_raw();
-    // SAFETY: `curbuf` and `curwin` are the live current buffer and window.
     let (orig_start, orig_end, cursor_save) = (
         Buf::current().b_op_start,
         Buf::current().b_op_end,
@@ -293,7 +265,6 @@ unsafe fn do_filter(
     cmdmod.with_mut(|mods| mods.cmod_flags.clear(CmdModFlags::LOCKMARKS));
 
     let mut linecount = line2 - line1 + 1;
-    // SAFETY: `curwin` is the live current window and `line1` a line of it.
     Win::current().w_cursor.lnum = line1;
     Win::current().w_cursor.col = 0;
     changed_line_abv_curs();
@@ -320,13 +291,11 @@ unsafe fn do_filter(
     if !stmp && (do_in || do_out) {
         if do_in {
             shell_flags |= ShellOpts::WRITE;
-            // SAFETY: `curbuf` is live.
             Buf::current().b_op_start.lnum = line1;
             Buf::current().b_op_end.lnum = line2;
         }
         if do_out {
             shell_flags |= ShellOpts::READ;
-            // SAFETY: `curwin` is live.
             Win::current().w_cursor.lnum = line2;
         }
     } else {
@@ -351,28 +320,25 @@ unsafe fn do_filter(
         // The writing and reading of temp files will not be shown.
         // Vi also doesn't do this and the messages are not very informative.
         no_prompt = Some(Suppress::wait_return()); // don't wait_return() while busy
-        if itmp.is_some()
-            // SAFETY: the range is the current buffer's.
-            && unsafe {
-                buf_write(
-                    Buf::current(),
-                    TempFile::name(&itmp),
-                    ptr::null_mut(),
-                    line1,
-                    line2,
-                    Some(args,),
-                    WriteRequest::filter(),
-                )
-            }.is_err()
+        if let Some(itmp_name) = TempFile::name(&itmp)
+            && buf_write(
+                Buf::current(),
+                WriteName::Other(itmp_name),
+                None,
+                line1,
+                line2,
+                Some(args),
+                WriteRequest::filter(),
+            )
+            .is_err()
         {
             if !ui_has(kUIMessages) {
-                // SAFETY: message state. Keep message from buf_write().
                 say::putchar('\n' as c_int);
             }
             drop(no_prompt.take());
             if !aborting() {
-                // SAFETY: one `%s` for one string. Will call wait_return().
-                let arg0 = unsafe { msg_cstr_opt(cstr::at_opt(TempFile::name(&itmp))) };
+                // Will call wait_return().
+                let arg0 = msg_cstr(TempFile::name(&itmp).unwrap_or_default());
                 semsg!("E482: Can't create file {arg0}");
             }
             break 'filterend;
@@ -382,42 +348,23 @@ unsafe fn do_filter(
         }
 
         if !do_out {
-            // SAFETY: message state.
             say::putchar('\n' as c_int);
         }
 
         'error: {
-            // SAFETY: `cmd` is live and the temp names are ours.
-            let cmd_buf = unsafe {
-                make_filter_cmd(
-                    cstr::at(cmd),
-                    TempFile::as_cstr(&itmp),
-                    TempFile::as_cstr(&otmp),
-                    do_in,
-                )
-            };
+            let cmd_buf = make_filter_cmd(cmd, TempFile::name(&itmp), TempFile::name(&otmp), do_in);
             ui_cursor_goto(Rows.get() - 1, 0);
 
             if do_out {
-                // SAFETY: `line2` is a line of the current buffer.
                 if u_save(line2, line2 + 1).is_err() {
                     break 'error;
                 }
-                // SAFETY: main thread, redraw state.
                 redraw_curbuf_later(UPD_VALID);
             }
-            // SAFETY: `curbuf` is live.
             let mut read_linecount = Buf::current().b_ml.ml_line_count;
 
-            // SAFETY: `cmd_buf` is a live command line and ours to free.
             // Pass on the DO_OUT flag when the output is redirected.
-            unsafe {
-                call_shell(
-                    cmd_buf.as_ptr().cast_mut(),
-                    ShellOpts::FILTER | shell_flags,
-                    ptr::null_mut(),
-                )
-            };
+            call_shell_text(&cmd_buf, ShellOpts::FILTER | shell_flags);
             drop(cmd_buf);
 
             did_check_timestamps.set(false);
@@ -433,26 +380,21 @@ unsafe fn do_filter(
                 break 'error;
             }
 
-            if otmp.is_some() {
-                // SAFETY: `otmp` is a live file name.
-                let read = unsafe {
-                    readfile(
-                        TempFile::name(&otmp),
-                        ptr::null_mut(),
-                        line2,
-                        0,
-                        MAXLNUM,
-                        Some(args),
-                        READ_FILTER as c_int,
-                        false,
-                    )
-                };
+            if let Some(otmp_name) = TempFile::name(&otmp) {
+                let read = readfile_named(
+                    Some(otmp_name),
+                    None,
+                    line2,
+                    0,
+                    MAXLNUM,
+                    args,
+                    READ_FILTER as c_int,
+                    false,
+                );
                 if read.is_err() {
                     if !aborting() {
-                        // SAFETY: message state; one `%s` for one string.
                         say::putchar('\n' as c_int);
-                        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                        let arg0 = unsafe { msg_cstr_opt(cstr::at_opt(TempFile::name(&otmp))) };
+                        let arg0 = msg_cstr(otmp_name);
                         semsg!("E485: Can't read file {arg0}");
                     }
                     break 'error;
@@ -462,11 +404,9 @@ unsafe fn do_filter(
                 }
             }
 
-            // SAFETY: `curbuf` is live.
             read_linecount = Buf::current().b_ml.ml_line_count - read_linecount;
 
             if shell_flags.has(ShellOpts::READ) {
-                // SAFETY: as above; the read appended after `line2`.
                 Buf::current().b_op_start.lnum = line2 + 1;
                 Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum;
                 appended_lines_mark(line2, read_linecount as c_int);
@@ -496,8 +436,6 @@ unsafe fn do_filter(
 
                 // Put cursor on first filtered line for ":range!cmd".
                 // Adjust '[ and '] (set by buf_write()).
-                // SAFETY: the original range is still in the buffer, ahead of
-                // what the filter appended.
                 Win::current().w_cursor.lnum = line1;
                 del_lines(linecount, true);
                 Buf::current().b_op_start.lnum -= linecount;
@@ -511,12 +449,10 @@ unsafe fn do_filter(
                 );
             } else {
                 // Put cursor on last new line for ":r !cmd".
-                // SAFETY: `curbuf`/`curwin` are live.
                 linecount = Buf::current().b_op_end.lnum - Buf::current().b_op_start.lnum + 1;
                 Win::current().w_cursor.lnum = Buf::current().b_op_end.lnum;
             }
 
-            // SAFETY: cursor on first non-blank.
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             drop(no_prompt.take());
 
@@ -524,7 +460,6 @@ unsafe fn do_filter(
                 if do_in {
                     report_filtered(linecount);
                 } else {
-                    // SAFETY: message state.
                     say::more(linecount as c_int);
                 }
             }
@@ -532,10 +467,8 @@ unsafe fn do_filter(
         }
 
         // put cursor back in same position for ":w !cmd"
-        // SAFETY: `curwin` is live and `cursor_save` came from it.
         Win::current().w_cursor = cursor_save;
         drop(no_prompt.take());
-        // SAFETY: message state.
         wait_return(0);
     }
 
@@ -549,7 +482,6 @@ unsafe fn do_filter(
             c"E135: *Filter* Autocommands must not change current buffer",
         ));
     } else if cmdmod_has(CmdModFlags::LOCKMARKS) {
-        // SAFETY: `curbuf` is live and the marks came from it.
         Buf::current().b_op_start = orig_start;
         Buf::current().b_op_end = orig_end;
     }
@@ -567,40 +499,25 @@ fn report_filtered(linecount: LineNr) {
     }
 }
 
-/// [`do_shell`] for a command line the caller holds: run on a copy, which
-/// the shell code may rewrite.
-pub(crate) fn do_shell_cmd(cmd: &CStr, flags: ShellOpts) {
-    let mut copy = cmd.to_bytes_with_nul().to_vec();
-    // SAFETY: a NUL-terminated copy this call owns.
-    unsafe { do_shell(copy.as_mut_ptr().cast(), flags) };
-}
-
-/// Call a shell to execute `cmd`; a NULL `cmd` starts an interactive shell.
+/// Call a shell to execute `cmd`.
 ///
 /// `flags` may be [`ShellOpts::DO_OUT`] when the output is redirected.
-///
-/// # Safety
-/// `cmd` must be a live C string, or NULL.
-pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
-    // SAFETY: main thread, message state.
+pub(crate) fn do_shell(cmd: &CStr, flags: ShellOpts) {
     if check_secure() {
         say::end();
         return;
     }
 
     // For the sake of the terminal, the shell's output starts on a fresh line.
-    // SAFETY: message state.
     say::putchar('\r' as c_int);
     say::putchar('\n' as c_int);
 
     if p_warn() && !autocmd_busy.get() && msg_silent.get() == 0 && buffers().any(buf_is_changed) {
-        // SAFETY: a live message string.
         say::puts(gettext(c"[No write since last change]\n"));
     }
 
     ui_cursor_goto(msg_row.get(), msg_col.get());
-    // SAFETY: `cmd` is the caller's live command line.
-    unsafe { call_shell(cmd, flags, ptr::null_mut()) };
+    call_shell_text(cmd, flags);
 
     if msg_silent.get() == 0 {
         msg_didout.set(true);
@@ -627,13 +544,7 @@ enum Shell {
 
 /// Classify 'shell' by the tail of its invocation path.
 fn shell_kind() -> Shell {
-    // SAFETY: caller's contract; a NULL length asks only for the tail.
-    let tail = p_sh(|value| unsafe {
-        cstr::bytes_at(invocation_path_tail(
-            value.as_ptr().cast_mut(),
-            ptr::null_mut(),
-        ))
-    });
+    let tail = p_sh(|value| invocation_path_tail_of(value).to_vec());
     if tail.starts_with(b"fish") {
         Shell::Fish
     } else if tail.starts_with(b"pwsh") || tail.starts_with(b"powershell") {
@@ -750,25 +661,7 @@ pub(crate) fn append_redir(buf: &mut Vec<u8>, opt: &CStr, fname: &CStr) {
 /// rather than a substitution of our own: whatever it does with a conversion
 /// that is not the `%s` this was written for, it does exactly as before.
 fn push_formatted(buf: &mut Vec<u8>, format: &CStr, fname: &CStr) {
-    // SAFETY: a zero-length destination writes nothing and only measures; the
-    // format is the caller's and `fname` is the one string its `%s` names.
-    let needed = unsafe { vim_snprintf!(ptr::null_mut(), 0, format.as_ptr(), fname.as_ptr()) };
-    let Ok(needed) = usize::try_from(needed) else {
-        return; // a format `vim_snprintf` could not render at all
-    };
-    let at = buf.len();
-    buf.resize(at + needed + 1, 0); // `vim_snprintf` writes its own NUL
-    // SAFETY: `needed + 1` writable bytes at `at`, which is what the
-    // measuring call above asked for.
-    unsafe {
-        vim_snprintf!(
-            buf.as_mut_ptr().add(at).cast(),
-            needed + 1,
-            format.as_ptr(),
-            fname.as_ptr(),
-        )
-    };
-    buf.truncate(at + needed); // the sink carries no terminator of its own
+    buf.extend_from_slice(&crate::formatted!(usize::MAX, format.to_bytes(), fname));
 }
 
 /// Does `opt` carry a `%s` conversion?
@@ -792,7 +685,6 @@ fn has_percent_s(opt: &[u8]) -> bool {
 
 /// Print line `lnum`, without the leading newline `:print` puts out.
 pub fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
-    // SAFETY: `curwin` is the live current window.
     if Win::current().w_onebuf_opt.wo_nu != 0 || use_number {
         // Highlight line nrs, right-aligned in 'numberwidth' columns.
         let width = number_width(Win::current()).max(0) as usize;
@@ -813,8 +705,8 @@ pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
     let save_silent = silent_mode.get();
 
     // apply :filter /pat/
-    // SAFETY: caller's contract.
-    if message_filtered(unsafe { cstr::at(ml_get(lnum)) }) {
+    let line = Lines::current().line_copy(lnum);
+    if message_filtered(line.as_cstr()) {
         return;
     }
 

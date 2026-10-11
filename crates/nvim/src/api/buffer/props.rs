@@ -103,7 +103,8 @@ pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error>
     }
     let mut aco: AcoSave = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, b) };
-    let ren_ret = unsafe { rename_buffer(name.data()) };
+    // SAFETY: the API string is NUL-terminated and outlives the call.
+    let ren_ret = rename_buffer(unsafe { crate::cstr::at(name.data()) });
     unsafe { aucmd_restbuf(&raw mut aco) };
     drop(redraw_off);
     if !is_curbuf {
