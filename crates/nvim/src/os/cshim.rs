@@ -721,6 +721,10 @@ pub(crate) fn is_lower_in_locale(byte: u8) -> bool {
 /// renders it -- `conv` one of `f e E` -- answering the length written,
 /// which the caller's buffer bounds. The format is built here, so it names
 /// exactly the one double it is handed.
+///
+/// Not under Miri, which cannot call the C library: the formatter takes
+/// Rust's exact digits there instead.
+#[cfg(not(miri))]
 pub(crate) fn format_double(
     out: &mut [u8],
     sign: Option<u8>,
