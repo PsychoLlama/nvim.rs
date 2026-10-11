@@ -32,7 +32,7 @@ fn verbosefile_set() -> bool {
     P_VFILE.first_byte() != 0
 }
 
-/// [`msg_keep`] inside a `verbose_enter`/`verbose_leave` pair.
+/// [`msg`] inside a `verbose_enter`/`verbose_leave` pair.
 pub fn verb_msg(s: &CStr) -> c_int {
     verbose_enter();
     let n = c_int::from(msg(s, 0));
