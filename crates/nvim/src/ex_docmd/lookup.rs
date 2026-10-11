@@ -44,14 +44,18 @@ const ROWS: usize = command_count as usize;
 
 /// Whether the command line at `at` holds the word `name` (at least `min`
 /// bytes of it), answering where the word ended, past the blanks after it;
-/// [`check_for_word_in`] over the string at `at`.
+/// [`check_for_word_in`] read off the command line in place. (Not *over*
+/// `rest_of(at)`: that measures the rest of the line to its NUL, once per
+/// modifier tried per Ex command -- +0.2 % of `evalbench` when it did.)
 ///
 /// `None` is "not this command". `name` is the command spelled out and
 /// `min` the shortest abbreviation of it the parse accepts, so `:sil`,
 /// `:sile`, `:silen` and `:silent` are all `("silent", 3)` -- but `:silentx`
 /// is not, because a letter after the abbreviation makes it a longer word.
 pub(crate) fn check_for_word(line: &CmdLine, at: usize, name: &[u8], min: usize) -> Option<usize> {
-    check_for_word_in(line.rest_of(at), 0, name, min).map(|end| at + end)
+    let matched = line.shared_prefix(at, name);
+    let follows = line.byte_at(at + matched);
+    (matched >= min && !follows.is_ascii_alphabetic()).then(|| line.skip_white(at + matched))
 }
 
 /// [`check_for_word`] over any text: where the word `name` -- at least `min`
