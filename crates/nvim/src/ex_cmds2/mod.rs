@@ -733,7 +733,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
                 .map_or(ptr::null_mut(), |t| t.as_ptr().cast_mut());
             let did_set_swapcommand = unsafe { set_swapcommand(cmd, 0 as LineNr) };
             let verbose = DoCmdOpts::VERBOSE;
-            let _ = do_cmdline(Some(unsafe { cstr::bytes_at(cmd) }), None, verbose);
+            let _ = do_cmdline(text.as_deref().map(CStr::to_bytes), None, verbose);
             if did_set_swapcommand {
                 set_vim_var_string(Vv::Swapcommand, None);
             }

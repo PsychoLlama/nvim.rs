@@ -472,9 +472,8 @@ pub(crate) unsafe fn do_ecmd(
 
         // SAFETY: `curbuf` is live and `command` the caller's.
         Buf::current().b_last_used = unsafe { time(ptr::null_mut::<time_t>()) };
-        if !command.is_null() {
-            let command = unsafe { cstr::bytes_at(command) };
-            let _ = do_cmdline(Some(command), None, DoCmdOpts::VERBOSE);
+        if let Some(command) = &command_text {
+            let _ = do_cmdline(Some(command.to_bytes()), None, DoCmdOpts::VERBOSE);
         }
         if Buf::current().b_kmap_state as c_int & KEYMAP_INIT != 0 {
             let _ = keymap_init();

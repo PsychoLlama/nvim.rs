@@ -184,9 +184,9 @@ eval/	eval/funcs/job.rs	1	66	3	47	deref:16 ref:2 expr:1	str:3 other:2 value:1	va
 eval/	eval/funcs/timer.rs	1	28	2	15	deref:11 expr:1 ref:1	other:2 void:2	-	time_watcher_stop:3 time_watcher_close:2 time_watcher_start:2 process_events_until:1 time:1 time_watcher_init:1 xfree:1 xmalloc:1
 eval/	eval/timer.rs	1	28	5	21	deref:5 expr:1 ref:1	other:5 void:2	other:2	time_watcher_start:2 multiqueue_free:1 time_watcher_close:1 time_watcher_init:1 time_watcher_stop:1 xfree:1
 eval/	eval/typval/handle.rs	1	65	10	28	expr:16 ref:9 deref:4 compound:2	value:7	value:7	Box::from_raw:3 api_free_luaref:2 xcalloc:2 xfree:2 hash_add:1 hash_find_len:1 hash_init:1 hash_remove:1
-ex_cmds/	*	16	272	30	174	deref:38 expr:11 compound:8	str:29 other:4 value:1	str:7	CStr::from_ptr:11 bytes_at:9 msg_cstr_opt:8 xfree:8 .add:7 at:7 ml_append:5 at_opt:4
+ex_cmds/	*	16	271	30	173	deref:38 expr:11 compound:8	str:29 other:4 value:1	str:7	CStr::from_ptr:11 bytes_at:8 msg_cstr_opt:8 xfree:8 .add:7 at:7 ml_append:5 at_opt:4
 ex_cmds/	ex_cmds/append.rs	1	16	0	6	deref:3 compound:1	-	-	CStr::from_ptr:2 atol:1 ml_append:1 xfree:1 xstrdup:1
-ex_cmds/	ex_cmds/ecmd/mod.rs	1	20	4	14	deref:4 expr:2	str:7	-	CStr::from_ptr:3 terminal_check_size:2 bytes_at:1 fix_fname:1 time:1 xfree:1
+ex_cmds/	ex_cmds/ecmd/mod.rs	1	19	4	13	deref:4 expr:2	str:7	-	CStr::from_ptr:3 terminal_check_size:2 fix_fname:1 time:1 xfree:1
 ex_cmds/	ex_cmds/ecmd/switch.rs	1	11	0	6	deref:2 expr:1	-	-	buflist_new:2 CStr::from_ptr:1 atol:1 buf_check_timestamp:1 terminal_running:1
 ex_cmds/	ex_cmds/filter.rs	1	21	3	18	compound:1 deref:1	str:2	str:1	at:3 call_shell:2 msg_cstr_opt:2 vim_snprintf:2 buf_write:1 bytes_at:1 os_remove:1 readfile:1
 ex_cmds/	ex_cmds/global.rs	1	19	3	14	deref:4 expr:1	other:2 str:1	-	bytes_at:2 .add:1 at:1 msg_cstr_opt:1 search_regcomp:1 skip_regexp_ex:1 vim_regfree:1
@@ -201,9 +201,9 @@ ex_cmds/	ex_cmds/subst/replace.rs	1	4	0	4	-	str:1	str:1	vim_regsub_multi:2 ml_ap
 ex_cmds/	ex_cmds/subst/report.rs	1	11	0	5	compound:1	-	-	OptStr::borrowing:1 ml_append_buf:1 ml_replace_buf:1 snprintf:1 xfree:1
 ex_cmds/	ex_cmds/text.rs	1	13	0	7	compound:1	-	-	utf_ptr2char:2 utf_ptr2len:2 CStr::from_ptr:1 atoi:1 utfc_ptr2len:1
 ex_cmds/	ex_cmds/write.rs	1	35	5	29	expr:3 deref:1	str:7	str:1	at_opt:4 msg_cstr_opt:4 os_path_exists:3 CStr::from_ptr:2 augroup_exists:1 buf_write:1 buflist_new:1 copy_option_part:1
-ex_cmds2/	*	2	28	0	13	deref:11 compound:1 expr:1	-	-	buf_check_timestamp:2 check_overwrite:2 apply_autocmds:1 buf_set_name:1 buf_write:1 bytes_at:1 goto_buffer:1 set_arglist:1
+ex_cmds2/	*	2	27	0	12	deref:11 compound:1 expr:1	-	-	buf_check_timestamp:2 check_overwrite:2 apply_autocmds:1 buf_set_name:1 buf_write:1 goto_buffer:1 set_arglist:1 set_swapcommand:1
 ex_cmds2/	ex_cmds2/listdo.rs	1	6	0	2	compound:1 deref:1	-	-	apply_autocmds:1 goto_buffer:1
-ex_cmds2/	ex_cmds2/mod.rs	1	22	0	11	deref:10 expr:1	-	-	buf_check_timestamp:2 check_overwrite:2 buf_set_name:1 buf_write:1 bytes_at:1 set_arglist:1 set_swapcommand:1 source_runtime_vim_lua:1
+ex_cmds2/	ex_cmds2/mod.rs	1	21	0	10	deref:10 expr:1	-	-	buf_check_timestamp:2 check_overwrite:2 buf_set_name:1 buf_write:1 set_arglist:1 set_swapcommand:1 source_runtime_vim_lua:1 vim_full_name:1
 ex_getln/	*	14	329	19	153	deref:139 expr:24 compound:2 ref:2	other:10	other:3 str:1	utfc_ptr2len:9 bytes_at:7 try_enter:7 try_leave:7 xfree:7 .offset:5 cstr_to_string:5 Cls::new:4
 ex_getln/	ex_getln/buffer.rs	1	27	5	17	expr:7 deref:3	other:2	-	Cc::new:2 XString::from_raw:2 utf_ptr2char:2 .as_mut:1 bytes_at:1 check_abbr:1 get_spec_reg:1 home_replace_save:1
 ex_getln/	ex_getln/cmdpreview.rs	1	15	0	15	-	other:1	-	aucmd_prepbuf:3 aucmd_restbuf:3 Cp::new:2 try_enter:2 try_leave:2 abort:1 bytes_at:1 rename_buffer:1
