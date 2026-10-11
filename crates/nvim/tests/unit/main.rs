@@ -83,4 +83,5 @@ mod typval_value;
 mod undo;
 mod unpacker;
 mod usercmd;
+mod usercmd_oracle;
 mod users;
