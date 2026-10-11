@@ -218,9 +218,7 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
     // SAFETY: `str` names `len` readable bytes, copied into the line the
     // parse takes over.
     let line = CmdLine::from_bytes(unsafe { slice::from_raw_parts(str.data().cast(), str.len()) });
-    let info = &raw mut cmdinfo;
-    // SAFETY: the two out-parameters are this frame's.
-    let parsed = unsafe { parse_cmdline(line, &mut excmd, info, &mut errormsg) };
+    let parsed = parse_cmdline(line, &mut excmd, &mut cmdinfo, &mut errormsg);
     if !parsed {
         match &errormsg {
             // SAFETY: `err` is live; the message takes no argument.

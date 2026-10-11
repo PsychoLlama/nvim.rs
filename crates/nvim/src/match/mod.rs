@@ -14,11 +14,11 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::regexp::skip_regexp_at;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::ascii_iswhite;
-use crate::charset::{skiptowhite, skipwhite};
 use crate::drawscreen::state::search_hl_has_cursor_lnum;
 use crate::drawscreen::{UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_win_range_later};
 use crate::eval::funcs::get_optional_window;
@@ -27,7 +27,7 @@ use crate::eval::typval::{
     tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::eval::window::find_win_by_nr_or_id;
-use crate::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};
+use crate::ex_docmd::{ends_excmd, ex_errmsg, set_no_hlsearch};
 use crate::fold::has_folding;
 use crate::getchar::state::got_int;
 use crate::highlight::win_hl_attr;
@@ -36,19 +36,20 @@ use crate::highlight_group::{
 };
 use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
-use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
+use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::message::emsg;
 use crate::message::state::called_emsg;
 use crate::message::{e_dictreq, e_invalwindow, e_invcmd, e_listreq, e_trailing_arg};
 use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::option::vars::p_rdt;
-use crate::os::cshim::{gettext, strncasecmp};
+use crate::os::cshim::gettext;
 use crate::profile::{profile_passed_limit, profile_setlimit};
-use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
+use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec_multi, vim_regfree};
 use crate::search::state::{search_first_line, search_last_line};
 use crate::types::{
     ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState,
-    RegProg, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, int64_t, ptrdiff_t, size_t, uint8_t,
+    RegProg, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, int64_t, ptrdiff_t, size_t,
 };
 use crate::winlayer::{Live, Win};
 
@@ -400,66 +401,61 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
         match_delete(Win::current(), id, false);
     }
 
-    let arg = excmd.arg_ptr();
+    let line = &excmd.line;
+    let arg = line.arg;
     let end;
-    if ends_excmd(unsafe { *arg } as c_int) != 0 {
+    if ends_excmd(c_int::from(line.byte_at(arg))) != 0 {
         // `:match` on its own: just clear.
         end = arg;
-    } else if unsafe { strncasecmp(arg, c"none".as_ptr(), 4) } == 0
-        && (ascii_iswhite(unsafe { *arg.offset(4) } as c_int)
-            || ends_excmd(unsafe { *arg.offset(4) } as c_int) != 0)
+    } else if line.slice_at(arg, 4).eq_ignore_ascii_case(b"none")
+        && (ascii_iswhite(c_int::from(line.byte_at(arg + 4)))
+            || ends_excmd(c_int::from(line.byte_at(arg + 4))) != 0)
     {
-        end = unsafe { arg.offset(4) };
+        end = arg + 4;
     } else {
-        let mut p = unsafe { skiptowhite(arg) };
         // The group name, up to the first whitespace.
-        let g = if skip {
-            ::core::ptr::null_mut()
-        } else {
-            unsafe { xmemdupz(arg.cast(), p.offset_from(arg) as size_t) }.cast::<c_char>()
-        };
-        p = unsafe { skipwhite(p) };
-        if unsafe { *p } == 0 {
+        let group_end = line.skip_to_white(arg);
+        let group = (!skip).then(|| cstr::owned(line.slice_at(arg, group_end - arg)));
+        let p = line.skip_white(group_end);
+        if line.byte_at(p) == 0 {
             // There must be two arguments.
-            unsafe { xfree(g.cast()) };
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(arg) };
+            let arg = msg_bytes(line.rest_of(arg));
             semsg!("E475: Invalid argument: {arg}");
             return;
         }
-        // `*p` is the pattern's delimiter, whatever character it is.
-        end = unsafe { skip_regexp(p.offset(1), *p as c_int, 1) };
-        if !skip {
-            if unsafe { *end } != 0
-                && ends_excmd(unsafe { *skipwhite(end.offset(1)) } as c_int) == 0
+        // The pattern's delimiter is whatever character comes first.
+        let delim = line.byte_at(p);
+        end = p + 1 + skip_regexp_at(line.tail(p + 1), c_int::from(delim), 1);
+        if let Some(group) = group {
+            if line.byte_at(end) != 0
+                && ends_excmd(c_int::from(line.byte_at(line.skip_white(end + 1)))) == 0
             {
-                unsafe { xfree(g.cast()) };
-                // SAFETY: `end` is a tail of the command line.
-                excmd.errmsg = Some(ex_errmsg(e_trailing_arg, unsafe { cstr::at(end) }));
+                excmd.errmsg = Some(ex_errmsg(e_trailing_arg, line.cstr_from(end)));
                 return;
             }
-            if unsafe { *end } != unsafe { *p } {
+            if line.byte_at(end) != delim {
                 // The closing delimiter is missing.
-                unsafe { xfree(g.cast()) };
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let p = unsafe { c_str(p) };
+                let p = msg_bytes(line.rest_of(p));
                 semsg!("E475: Invalid argument: {p}");
                 return;
             }
-            // Terminate the pattern in place for the compile, then put
-            // the delimiter back so `find_nextcmd` sees the whole line.
-            let c = unsafe { *end } as uint8_t;
-            unsafe { *end = 0 };
-            // SAFETY: the pattern is NUL-terminated in place just above.
-            let pat = unsafe { p.offset(1) };
+            let pat = cstr::owned(line.slice_at(p + 1, end - (p + 1)));
             let win = Win::current();
             let no_pos = ::core::ptr::null_mut();
             let no_conceal = ::core::ptr::null();
-            // SAFETY: the editor's own window and the group checked above.
-            unsafe { match_add(win, g, pat, DEFAULT_PRIORITY, id, no_pos, no_conceal) };
-            unsafe { xfree(g.cast()) };
-            unsafe { *end = c as c_char };
+            // SAFETY: the editor's own window, and two NUL-terminated copies.
+            unsafe {
+                match_add(
+                    win,
+                    group.as_ptr(),
+                    pat.as_ptr(),
+                    DEFAULT_PRIORITY,
+                    id,
+                    no_pos,
+                    no_conceal,
+                )
+            };
         }
     }
-    unsafe { excmd.set_nextcmd_ptr(find_nextcmd(end)) };
+    excmd.line.next = excmd.line.find_next(end);
 }

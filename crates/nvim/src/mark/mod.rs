@@ -67,7 +67,9 @@ pub use jumplist::{
     free_jumplist, get_changelist, get_jumplist, mark_jumplist_forget_file, mark_jumplist_iter,
     setpcmark,
 };
-pub(crate) use lookup::mark_lookup;
+pub(crate) use lookup::{
+    current_mark, current_visual_mark, mark_checked, mark_lookup, move_to_mark,
+};
 pub use lookup::{
     getnextmark, mark_get, mark_get_global, mark_get_local, mark_get_motion, mark_get_visual,
     mark_move_to,

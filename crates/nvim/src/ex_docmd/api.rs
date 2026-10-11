@@ -7,8 +7,7 @@
 //! present the command machinery with values no command line could spell,
 //! which is why the checks here are spelled out again rather than shared
 //! with `do_one_cmd`.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -17,15 +16,15 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::buffer::buflist_findpat_prefix;
+use crate::charset::skip;
 use crate::ex_docmd::ex_msg;
 use crate::message::emsg;
 use crate::types::CmdIdx;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use std::ffi::CString;
 
 use crate::ascii::ascii_iswhite;
-
-use crate::charset::skiptowhite_esc;
 
 use crate::eval::skip_expr;
 use crate::ex_docmd::address::{correct_range, find_excmd_after_range, parse_cmd_address};
@@ -75,24 +74,18 @@ use crate::winlayer::{Buf, Win};
 ///
 /// `line` is taken over: the parse writes into it, and what it leaves in
 /// `excmd` addresses it by offset.
-///
-/// # Safety
-///
-/// `excmd` must point at the command's `ExArg`, unaliased for the
-/// call. `cmdinfo` must point at the caller's `CmdParseInfo`, unaliased for
-/// the call.
-pub unsafe fn parse_cmdline(
+pub fn parse_cmdline(
     line: CmdLine,
     excmd: &mut ExArg,
-    cmdinfo: *mut CmdParseInfo,
+    cmdinfo: &mut CmdParseInfo,
     errormsg: &mut Option<CString>,
 ) -> bool {
     let save_ex_pressedreturn = ex_pressedreturn.get();
     let save_cursor: Pos = Win::current().w_cursor;
     save_last_search_pattern();
 
-    // SAFETY: the caller's live `CmdParseInfo`, whose old modifiers go.
-    unsafe { *cmdinfo = crate::ex_getln::CMD_PARSE_INFO_INIT };
+    // The caller's old modifiers go.
+    *cmdinfo = crate::ex_getln::CMD_PARSE_INFO_INIT;
     *excmd = fresh_exarg();
     excmd.line = line;
 
@@ -102,8 +95,7 @@ pub unsafe fn parse_cmdline(
         // A modifier that failed to parse is still a modifier: keep
         // going, so that the error is reported against the command
         // rather than against the line.
-        let result =
-            unsafe { parse_command_modifiers(excmd, errormsg, &mut (*cmdinfo).cmdmod, false) };
+        let result = parse_command_modifiers(excmd, errormsg, &mut cmdinfo.cmdmod, false);
         let after_modifier = excmd.line.cmd;
         if result.is_err() && after_modifier == orig_cmd {
             break 'end;
@@ -211,16 +203,16 @@ pub unsafe fn parse_cmdline(
         // Which characters the caller must escape to have them taken
         // literally when the command is handed back.
         if excmd.argt.has(ExArgt::XFILE) {
-            unsafe { (*cmdinfo).magic.file = true };
+            cmdinfo.magic.file = true;
         }
         if excmd.argt.has(ExArgt::TRLBAR) {
-            unsafe { (*cmdinfo).magic.bar = true };
+            cmdinfo.magic.bar = true;
         }
         retval = true;
     }
 
     if !retval {
-        unsafe { undo_cmdmod(&mut (*cmdinfo).cmdmod) };
+        undo_cmdmod(&mut cmdinfo.cmdmod);
     }
     ex_pressedreturn.set(save_ex_pressedreturn);
     Win::current().w_cursor = save_cursor;
@@ -250,41 +242,35 @@ pub(crate) fn execute_cmd0(
         && excmd.addr_count == 0
         && !is_user_cmd(excmd.cmdidx)
     {
+        let unlisted = excmd.argt.has(ExArgt::BUFUNL);
         if excmd.line.args.is_empty() {
             // `:bdelete`, `:bwipeout` and `:bunload` take several
             // space-separated names, so the first one ends at the first
             // unescaped space; every other command takes one name, so
             // only trailing space is dropped.
-            let p = if excmd.cmdidx == CmdIdx::bdelete
+            let arg = excmd.line.arg;
+            let end = if excmd.cmdidx == CmdIdx::bdelete
                 || excmd.cmdidx == CmdIdx::bwipeout
                 || excmd.cmdidx == CmdIdx::bunload
             {
-                unsafe { skiptowhite_esc(excmd.arg_ptr()) }
+                arg + skip::to_white_esc(excmd.line.rest_of(arg))
             } else {
-                let mut at = excmd.line.end_of(excmd.line.arg);
-                while at > excmd.line.arg && ascii_iswhite(c_int::from(excmd.line.byte_at(at - 1)))
-                {
+                let mut at = excmd.line.end_of(arg);
+                while at > arg && ascii_iswhite(c_int::from(excmd.line.byte_at(at - 1))) {
                     at -= 1;
                 }
-                excmd.line.ptr_at(at)
+                at
             };
-            excmd.line2 = buflist_findpat(
-                excmd.arg_ptr(),
-                p,
-                excmd.argt.has(ExArgt::BUFUNL),
-                false,
-                false,
-            ) as LineNr;
+            let name = excmd.line.cstr_from(arg);
+            excmd.line2 = buflist_findpat_prefix(name, end - arg, unlisted, false, false) as LineNr;
             excmd.addr_count = 1;
-            excmd.set_arg_ptr(skipwhite(p));
+            excmd.line.arg = excmd.line.skip_white(end);
         } else {
             // The API gave the argument positions, so the first argument
             // is the name with no scanning at all.
             let (at, len) = excmd.line.args[0];
-            let unlisted = excmd.argt.has(ExArgt::BUFUNL);
-            let (start, end) = (excmd.line.ptr_at(at), excmd.line.ptr_at(at + len));
-            // SAFETY: both name the first argument, in the command's line.
-            excmd.line2 = buflist_findpat(start, end, unlisted, false, false) as LineNr;
+            let name = excmd.line.cstr_from(at);
+            excmd.line2 = buflist_findpat_prefix(name, len, unlisted, false, false) as LineNr;
             excmd.addr_count = 1;
             shift_cmd_args(excmd);
         }
@@ -333,13 +319,7 @@ pub(crate) fn execute_cmd0(
 /// checks about where a command may run (a locked buffer, the command-line
 /// window, a non-'modifiable' buffer) are, because they are about the
 /// editor's state rather than about the text.
-///
-/// # Safety
-///
-/// `excmd` must point at the command's `ExArg`, unaliased for the call.
-/// `cmdinfo` must point at the caller's `CmdParseInfo`, unaliased for the
-/// call.
-pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview: bool) -> c_int {
+pub fn execute_cmd(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, preview: bool) -> c_int {
     let mut retv: c_int = 0;
     if do_cmdline_start().is_err() {
         emsg(gettext(e_command_too_recursive));
@@ -350,7 +330,7 @@ pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview
     // Shallow both ways: the guard owns what the set it took out
     // points at until it goes back, and the caller keeps owning
     // `cmdinfo`.
-    let mods = unsafe { CmdModScope::enter((*cmdinfo).cmdmod.clone()) };
+    let mods = CmdModScope::enter(cmdinfo.cmdmod.clone());
 
     'end: {
         // `:put` is allowed in a terminal buffer, which is not
@@ -422,29 +402,4 @@ pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview
     drop(mods);
     do_cmdline_end();
     retv
-}
-
-/// `buflist_findpat()` as checked code.
-fn buflist_findpat(
-    pattern: *const c_char,
-    pattern_end: *const c_char,
-    unlisted: bool,
-    diffmode: bool,
-    curtab_only: bool,
-) -> c_int {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::buffer::buflist_findpat(pattern, pattern_end, unlisted, diffmode, curtab_only) }
-}
-
-/// `skip_colon_white()` as checked code.
-#[expect(dead_code, reason = "the last pointer-form caller goes with part B")]
-fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::scan::skip_colon_white(p, skipleadingwhite) }
-}
-
-/// `skipwhite()` as checked code.
-fn skipwhite(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::charset::skipwhite(p) }
 }

@@ -192,13 +192,11 @@ pub(crate) fn check_str_opt(
 /// `:read ++ff=…` and `:write ++ff=…` check their argument with this before
 /// touching a buffer, which is why it is reachable without going through
 /// `did_set_*`.
-///
-/// # Safety
-/// `p` is a C string.
-pub unsafe fn check_ff_value(p: *mut c_char) -> c_int {
+pub fn check_ff_value(p: &CStr) -> c_int {
     let values = opt_values(kOptFileformat);
-    // SAFETY: the caller's C string, against the table's own word list.
-    if unsafe { opt_strings_ok(p, values, false) } {
+    // SAFETY: a C string, which the check only reads, against the table's
+    // own word list.
+    if unsafe { opt_strings_ok(p.as_ptr().cast_mut(), values, false) } {
         OK
     } else {
         FAIL

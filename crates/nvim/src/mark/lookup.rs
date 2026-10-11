@@ -33,6 +33,33 @@ use super::store::{Fmark, GlobalMarks, UNSET_POS};
 use super::*;
 use crate::search::{BACKWARD, FORWARD};
 
+/// [`mark_get`] in the current buffer and window, into the caller's own
+/// record: whether `name` named a mark (the record then holds it).
+pub(crate) fn current_mark(slot: &mut FileMark, flag: MarkGet, name: c_int) -> bool {
+    // SAFETY: the current buffer and window are live, and the answer is the
+    // slot itself or null.
+    !unsafe { mark_get(Buf::current(), Win::current(), slot, flag, name) }.is_null()
+}
+
+/// [`mark_get_visual`] of the current buffer into the caller's record.
+pub(crate) fn current_visual_mark(slot: &mut FileMark, name: c_int) -> bool {
+    // SAFETY: the current buffer is live; the answer is the slot or null.
+    !unsafe { mark_get_visual(Buf::current(), slot, name) }.is_null()
+}
+
+/// [`mark_check`] of a record the caller holds, or of none.
+pub(crate) fn mark_checked(fm: Option<&mut FileMark>, errormsg: &mut Option<CString>) -> bool {
+    let fm = fm.map_or(ptr::null_mut(), |fm| fm);
+    // SAFETY: null or the caller's live record.
+    unsafe { mark_check(fm, errormsg) }
+}
+
+/// [`mark_move_to`] a record the caller holds.
+pub(crate) fn move_to_mark(fm: &mut FileMark, flags: MarkMove) -> MarkMoveRes {
+    // SAFETY: the caller's live record.
+    unsafe { mark_move_to(fm, flags) }
+}
+
 /// Resolve a mark of any name.
 ///
 /// `fmp` is the caller's own record, and it serves two purposes. The marks

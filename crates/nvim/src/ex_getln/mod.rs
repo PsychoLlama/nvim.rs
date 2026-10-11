@@ -526,6 +526,13 @@ pub(crate) const CMD_PARSE_INFO_INIT: CmdParseInfo = CmdParseInfo {
     },
 };
 
+impl Default for CmdParseInfo {
+    /// Nothing parsed yet: [`CMD_PARSE_INFO_INIT`].
+    fn default() -> Self {
+        CMD_PARSE_INFO_INIT
+    }
+}
+
 /// An all-zero [`CpUndoInfo`], which `cmdpreview_save_undo` fills.
 pub(crate) const CP_UNDO_INFO_INIT: CpUndoInfo = CpUndoInfo {
     save_b_u_oldhead: UndoLink::NONE,

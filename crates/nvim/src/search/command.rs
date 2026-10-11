@@ -469,6 +469,39 @@ pub(crate) fn search_forward_keep(pattern: &[u8]) -> bool {
     found != 0
 }
 
+/// [`do_search`] once for the pattern that starts `text` and ends at its
+/// first NUL, with no operator and no extra arguments. The pattern may be
+/// terminated in place for the search, and is put back.
+///
+/// # Panics
+/// When `text` holds no NUL.
+pub(crate) fn do_search_in(
+    text: &mut [u8],
+    dirc: c_int,
+    search_delim: c_int,
+    options: c_int,
+) -> c_int {
+    let patlen = text
+        .iter()
+        .position(|byte| *byte == 0)
+        .expect("a NUL-terminated pattern");
+    let pat = text.as_mut_ptr().cast::<c_char>();
+    // SAFETY: a NUL-terminated pattern, writable up to its terminator for
+    // the call, and no operator or extra arguments.
+    unsafe {
+        do_search(
+            ptr::null_mut(),
+            dirc,
+            search_delim,
+            pat,
+            patlen,
+            1,
+            options,
+            ptr::null_mut(),
+        )
+    }
+}
+
 /// Search for `pat`, `count` times, from the cursor.
 ///
 /// `dirc` is `'/'` or `'?'`, or 0 to reuse the direction of the previous

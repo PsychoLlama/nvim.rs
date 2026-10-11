@@ -24,7 +24,6 @@ use crate::charset::{getdigits_int, skipwhite};
 use crate::cstr;
 use crate::ex_cmds::Owned;
 use crate::ex_cmds::{INT_MAX, kSubIgnoreCase, kSubMatchCase};
-use crate::ex_docmd::check_nextcmd;
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
 use crate::message::{e_backslash, e_invcmd, e_modifiable, e_nopresub, e_zerocount};
@@ -317,7 +316,7 @@ pub(super) fn parse_sub(
     if unsafe { *cmd } as c_int != NUL && unsafe { *cmd } as c_int != '"' as c_int {
         // Not end-of-line or comment.
         // SAFETY: as above.
-        args.set_nextcmd_ptr(unsafe { check_nextcmd(cmd) });
+        args.set_nextcmd_ptr(unsafe { next_command_at(cmd) });
         if args.line.next.is_none() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let cmd = unsafe { msg_cstr_opt(cstr::at_opt(cmd)) };
@@ -400,4 +399,21 @@ pub(super) fn parse_sub(
         save_do_all,
         save_do_ask,
     })
+}
+
+/// The command after `p`, if `p` is at the `|` or newline that introduces
+/// one; null otherwise (upstream's `check_nextcmd`).
+///
+/// # Safety
+/// `p` must point into a NUL-terminated string.
+unsafe fn next_command_at(p: *mut c_char) -> *mut c_char {
+    // SAFETY: the caller's string; the separator test stops at its NUL.
+    unsafe {
+        let s = skipwhite(p);
+        if *s == b'|' as c_char || *s == b'\n' as c_char {
+            s.add(1)
+        } else {
+            ptr::null_mut()
+        }
+    }
 }

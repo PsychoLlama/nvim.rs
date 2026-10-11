@@ -26,13 +26,12 @@ use crate::charset::Str2NrBases;
 use crate::charset::{skip, str2nr_scan};
 use crate::cstr;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::ex_docmd::check_nextcmd;
 use crate::extmark::extmark_splice;
 use crate::getchar::state::got_int;
 use crate::mark::mark_adjust;
 use crate::memline::{Lines, ml_append, ml_delete};
 use crate::message::emsg;
-use crate::message_fmt::msg_cstr_opt;
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
@@ -278,30 +277,29 @@ fn shared_flag(byte: u8, order: &mut StringOrder, use_match: &mut bool) -> Flag 
 /// the *first* following command it sees where `:sort` overwrites -- the one
 /// thing the two scans do not share.
 ///
-/// # Safety
-/// `arg` must be the command's NUL-terminated argument and `at` must index
-/// one of its bytes.
-unsafe fn flag_fallback(
+/// `at` indexes a byte of the command's argument.
+fn flag_fallback(
     args: &mut ExArg,
     at: usize,
     byte: u8,
     regmatch: &mut RegMatch,
     keep_nextcmd: bool,
 ) -> Option<Fallback> {
-    let arg = args.arg_ptr();
-    // SAFETY: caller's contract.
-    let next = unsafe { check_nextcmd(arg.add(at)) };
-    if !next.is_null() && !(keep_nextcmd && !args.line.next.is_none()) {
-        args.set_nextcmd_ptr(next);
+    let base = args.line.arg;
+    if let Some(next) = args.line.check_next(base + at)
+        && !(keep_nextcmd && args.line.next.is_some())
+    {
+        args.line.next = Some(next);
         return Some(Fallback::NextCmd);
     }
     if is_alpha(byte) || !regmatch.regprog.is_null() {
-        // SAFETY: as above.
-        let arg0 = unsafe { msg_cstr_opt(cstr::at_opt(arg.add(at))) };
+        let arg0 = msg_cstr(args.line.cstr_from(base + at));
         semsg!("E475: Invalid argument: {arg0}");
         return None;
     }
-    // SAFETY: as above.
+    let arg = args.line.buffer_mut()[base..].as_mut_ptr().cast::<c_char>();
+    // SAFETY: the command's own NUL-terminated argument, written in place
+    // and nowhere else for the call; `at` indexes the delimiter.
     unsafe { compile_sort_pattern(arg, at, regmatch) }.map(Fallback::Pattern)
 }
 
@@ -312,7 +310,6 @@ fn parse_sort_flags(
     spec: &mut SortSpec,
     regmatch: &mut RegMatch,
 ) -> Option<StringOrder> {
-    let arg = args.arg_ptr();
     let mut order = StringOrder::BYTES;
     // Only one of 'n', 'b', 'o', 'f' and 'x' is allowed.
     let mut formats = 0;
@@ -321,8 +318,7 @@ fn parse_sort_flags(
     loop {
         // The pattern arm rewrites the argument as it goes, so each byte is
         // read from the buffer rather than from a slice taken up front.
-        // SAFETY: `at` has not passed the argument's NUL.
-        let byte = unsafe { *arg.add(at) } as u8;
+        let byte = args.line.byte_at(args.line.arg + at);
         let mut radix = |base| {
             spec.radix = base;
             formats += 1;
@@ -343,8 +339,7 @@ fn parse_sort_flags(
             _ => match shared_flag(byte, &mut order, &mut spec.use_match) {
                 Flag::Shared => {}
                 Flag::End => break,
-                // SAFETY: `at` indexes the argument's own bytes.
-                Flag::Other => match unsafe { flag_fallback(args, at, byte, regmatch, false) }? {
+                Flag::Other => match flag_fallback(args, at, byte, regmatch, false)? {
                     Fallback::NextCmd => break,
                     Fallback::Pattern(end) => at = end,
                 },
@@ -370,13 +365,11 @@ fn parse_uniq_flags(
     use_match: &mut bool,
     regmatch: &mut RegMatch,
 ) -> Option<StringOrder> {
-    let arg = args.arg_ptr();
     let mut order = StringOrder::BYTES;
     let mut at = 0;
 
     loop {
-        // SAFETY: `at` has not passed the argument's NUL.
-        let byte = unsafe { *arg.add(at) } as u8;
+        let byte = args.line.byte_at(args.line.arg + at);
         match byte {
             // 'u' is only valid when '!' is not given.
             b'u' => {
@@ -387,8 +380,7 @@ fn parse_uniq_flags(
             _ => match shared_flag(byte, &mut order, use_match) {
                 Flag::Shared => {}
                 Flag::End => break,
-                // SAFETY: `at` indexes the argument's own bytes.
-                Flag::Other => match unsafe { flag_fallback(args, at, byte, regmatch, true) }? {
+                Flag::Other => match flag_fallback(args, at, byte, regmatch, true)? {
                     Fallback::NextCmd => break,
                     Fallback::Pattern(end) => at = end,
                 },

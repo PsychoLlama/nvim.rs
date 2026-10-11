@@ -9,21 +9,25 @@
 //! arm per address kind, and c2rust rendered those arms as bare numbers;
 //! they are named now.
 //!
-//! Each function is a walk over the command line the caller owns, so each
-//! takes one `unsafe` block for its whole body — see `scan.rs`.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+//! Each function is a walk over the command line the caller owns, by
+//! offset.
+#![forbid(unsafe_code)]
 
 use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::cstr::byte_at;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::is_user_cmd;
+use crate::mark::current_mark;
+use crate::mark::current_visual_mark;
+use crate::mark::mark_checked;
+use crate::mark::move_to_mark;
+use crate::search::do_search_in;
+use crate::search::search_last_pattern;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::winlayer::TabPage;
 
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 use std::ffi::CString;
 
 use crate::buffer::get_highest_fnum;
@@ -39,14 +43,13 @@ use crate::ex_docmd::{
 };
 
 use crate::fold::has_folding;
-use crate::mark::{mark_check, mark_get, mark_move_to};
 
 use crate::option::magic_isset;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_valid_size};
 
 use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp_at};
-use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
+use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG};
 use crate::types::{
     CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr, MarkGet,
     MarkMove, OK, Pos, size_t,
@@ -179,18 +182,16 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                 }
                 excmd.line.cmd += 1;
                 if !excmd.skip {
-                    let fm = mark_get_visual(Buf::current(), &raw mut first, '<' as c_int);
-                    if !unsafe { mark_check(fm, errormsg) } {
+                    let found = current_visual_mark(&mut first, '<' as c_int);
+                    if !mark_checked(found.then_some(&mut first), errormsg) {
                         break 'theend;
                     }
-                    debug_assert!(!fm.is_null());
-                    excmd.line1 = unsafe { (*fm).mark.lnum };
-                    let fm = mark_get_visual(Buf::current(), &raw mut last, '>' as c_int);
-                    if !unsafe { mark_check(fm, errormsg) } {
+                    excmd.line1 = first.mark.lnum;
+                    let found = current_visual_mark(&mut last, '>' as c_int);
+                    if !mark_checked(found.then_some(&mut last), errormsg) {
                         break 'theend;
                     }
-                    debug_assert!(!fm.is_null());
-                    excmd.line2 = unsafe { (*fm).mark.lnum };
+                    excmd.line2 = last.mark.lnum;
                     excmd.addr_count += 1;
                 }
             }
@@ -445,19 +446,16 @@ pub fn get_address(
                     // so a mark named with a high byte is a negative
                     // number and matches nothing.
                     let name = c_int::from(byte_at(text, cmd).cast_signed());
-                    let fm = unsafe {
-                        mark_get(Buf::current(), Win::current(), &raw mut slot, flag, name)
-                    };
+                    let found = current_mark(&mut slot, flag, name);
                     cmd += 1;
-                    if !fm.is_null() && unsafe { (*fm).fnum } != Buf::current().handle {
-                        unsafe { mark_move_to(fm, 0 as MarkMove) };
+                    if found && slot.fnum != Buf::current().handle {
+                        move_to_mark(&mut slot, 0 as MarkMove);
                         lnum = Win::current().w_cursor.lnum;
-                    } else if !unsafe { mark_check(fm, errormsg) } {
+                    } else if !mark_checked(found.then_some(&mut slot), errormsg) {
                         failed = true;
                         break;
                     } else {
-                        debug_assert!(!fm.is_null());
-                        lnum = unsafe { (*fm).mark.lnum };
+                        lnum = slot.mark.lnum;
                     }
                 }
             }
@@ -493,29 +491,9 @@ pub fn get_address(
                     } else {
                         SEARCH_HIS as c_int | SEARCH_MSG as c_int
                     };
-                    let tail = &mut text[cmd..];
-                    let patlen = tail
-                        .iter()
-                        .position(|byte| *byte == 0)
-                        .unwrap_or(tail.len());
-                    let pat = tail.as_mut_ptr().cast::<c_char>();
-                    // SAFETY: `pat` is the NUL-terminated pattern the
-                    // caller's own buffer holds, writable for the call --
                     // `do_search` terminates the pattern in place and puts
                     // the byte back.
-                    if unsafe {
-                        do_search(
-                            ptr::null_mut(),
-                            c,
-                            c,
-                            pat,
-                            patlen,
-                            1,
-                            flags,
-                            ptr::null_mut(),
-                        )
-                    } == 0
-                    {
+                    if do_search_in(&mut text[cmd..], c, c, flags) == 0 {
                         Win::current().w_cursor = pos;
                         failed = true;
                         break;
@@ -565,22 +543,7 @@ pub fn get_address(
                     } else {
                         FORWARD as c_int
                     } as Direction;
-                    if unsafe {
-                        searchit(
-                            Some(Win::current()),
-                            Buf::current(),
-                            &raw mut pos,
-                            ptr::null_mut(),
-                            dir,
-                            c"".as_ptr() as *mut c_char,
-                            0,
-                            1,
-                            SEARCH_MSG as c_int,
-                            i,
-                            ptr::null_mut(),
-                        )
-                    } == FAIL
-                    {
+                    if search_last_pattern(&mut pos, dir, SEARCH_MSG as c_int, i) == FAIL {
                         failed = true;
                         break;
                     }
@@ -832,10 +795,4 @@ pub(crate) fn correct_range(excmd: &mut ExArg) {
     if excmd.line2 == 0 {
         excmd.line2 = 1;
     }
-}
-
-/// `mark_get_visual()` as checked code.
-fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::mark::mark_get_visual(buffer, fmp, name) }
 }

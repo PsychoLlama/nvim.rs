@@ -1,9 +1,7 @@
 //! Arguments that are not file names: `++opt=value`, `+cmd`, the tab page
 //! argument, and opening the file a command will write to.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 use crate::cmdexpand::expand_generic;
-use crate::cstr;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::memory::XString;
@@ -18,10 +16,10 @@ use crate::tr_plural;
 use crate::winlayer::{Buf, Win};
 
 /// The completion context, whose caller has promised it outlives the value.
-use core::ffi::{CStr, c_char, c_int, c_ulong};
+use core::ffi::{CStr, c_int, c_ulong};
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
-use crate::charset::getdigits;
+use crate::charset::getdigits_at;
 
 use crate::ex_docmd::lookup::check_for_word;
 
@@ -43,7 +41,7 @@ use crate::os::fs::{CFile, os_isdir_of, os_mkdir, os_strerror, path_exists};
 
 use crate::types::regexp::RegMatch;
 use crate::types::{
-    CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, FAIL, Failed, NUL, OK,
+    CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, FAIL, Failed, OK,
     int32_t, intmax_t,
 };
 use crate::window::{only_one_window, tabpage_index};
@@ -83,21 +81,18 @@ pub fn getargcmd(excmd: &mut ExArg) -> EcmdCmd {
 
 /// Read the value of `++bad=`: `keep`, `drop`, or one single-byte
 /// replacement character.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-pub(crate) unsafe fn get_bad_opt(p: *const c_char, excmd: &mut ExArg) -> Result<(), Failed> {
-    if strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) == 0 {
-        excmd.bad_char = BAD_KEEP;
-    } else if strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) == 0 {
-        excmd.bad_char = BAD_DROP;
-    } else if utf8len_tab[ubyte(p) as usize] == 1 && byte_at(p, 1) == NUL {
-        excmd.bad_char = ubyte(p) as c_int;
+pub(crate) fn get_bad_opt(value: &[u8]) -> Result<c_int, Failed> {
+    if value.eq_ignore_ascii_case(b"keep") {
+        Ok(BAD_KEEP)
+    } else if value.eq_ignore_ascii_case(b"drop") {
+        Ok(BAD_DROP)
+    } else if let [byte] = value
+        && utf8len_tab[usize::from(*byte)] == 1
+    {
+        Ok(c_int::from(*byte))
     } else {
-        return Err(Failed);
+        Err(Failed)
     }
-    Ok(())
 }
 
 /// The completion candidates for `++bad=`.
@@ -185,9 +180,8 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
 
     match opt {
         Opt::FileFormat => {
-            let ff = excmd.line.ptr_at(at);
-            // SAFETY: the value, NUL-terminated by the write just above.
-            if unsafe { check_ff_value(ff) } == FAIL {
+            // The value, NUL-terminated by the write just above.
+            if check_ff_value(excmd.line.cstr_from(at)) == FAIL {
                 return Err(Failed);
             }
             // Only the first letter is kept: 'u', 'd' or 'm'.
@@ -200,11 +194,7 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
             }
         }
         Opt::BadChar => {
-            let bad = excmd.line.ptr_at(at);
-            // SAFETY: as above.
-            if unsafe { get_bad_opt(bad, excmd) }.is_err() {
-                return Err(Failed);
-            }
+            excmd.bad_char = get_bad_opt(excmd.line.rest_of(at))?;
         }
     }
     Ok(())
@@ -225,9 +215,7 @@ enum Opt {
 /// shortens the line -- so the answer is an offset into what the line is
 /// *after* the walk.
 fn skip_arg_at(line: &mut CmdLine, at: usize, rembs: bool) -> usize {
-    let start = line.ptr_at(at);
-    let end = skip_cmd_arg(start, rembs);
-    line.offset_of(end)
+    crate::ex_docmd::scan::skip_cmd_arg(line, at, rembs)
 }
 
 /// The completion candidates for `++`.
@@ -299,27 +287,29 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
 
     'theend: {
         if excmd.line.byte_at(excmd.line.arg) != 0 {
-            let mut p = excmd.line.ptr_at(excmd.line.arg);
+            let mut p = excmd.line.arg;
             // `+N`/`-N` means N places to the right/left of here.
-            let relative = match byte(p) {
-                c if c == '-' as c_int => {
-                    p = unsafe { p.add(1) };
+            let relative = match excmd.line.byte_at(p) {
+                b'-' => {
+                    p += 1;
                     -1
                 }
-                c if c == '+' as c_int => {
-                    p = unsafe { p.add(1) };
+                b'+' => {
+                    p += 1;
                     1
                 }
                 _ => 0,
             };
 
             let p_save = p;
-            tab_number = unsafe { getdigits(&raw mut p, false, tab_number as intmax_t) } as c_int;
+            let (number, past) = getdigits_at(excmd.line.tail(0), p, false, tab_number as intmax_t);
+            tab_number = number as c_int;
+            p = past;
 
             if relative == 0 {
-                if equals(p, b"$") {
+                if excmd.line.rest_of(p) == b"$" {
                     tab_number = last_tab();
-                } else if equals(p, b"#") {
+                } else if excmd.line.rest_of(p) == b"#" {
                     if last_used_tab().is_none() {
                         excmd.errmsg =
                             Some(ex_errmsg(e_invargval, excmd.line.cstr_from(excmd.line.arg)));
@@ -328,8 +318,8 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
                     }
                     tab_number = tabpage_index(last_used_tab());
                 } else if p == p_save
-                    || byte(p_save) == '-' as c_int
-                    || byte(p) != NUL
+                    || excmd.line.byte_at(p_save) == b'-'
+                    || excmd.line.byte_at(p) != 0
                     || tab_number > last_tab()
                 {
                     // Not a number.
@@ -337,12 +327,12 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
                     break 'theend;
                 }
             } else {
-                if byte(p_save) == NUL {
+                if excmd.line.byte_at(p_save) == 0 {
                     // A bare `+` or `-` is one place.
                     tab_number = 1;
                 } else if p == p_save
-                    || byte(p_save) == '-' as c_int
-                    || byte(p) != NUL
+                    || excmd.line.byte_at(p_save) == b'-'
+                    || excmd.line.byte_at(p) != 0
                     || tab_number == 0
                 {
                     invarg2(excmd);
@@ -487,41 +477,4 @@ pub(crate) fn dialog_msg(format: &CStr, fname: Option<&CStr>) -> XString {
     let fname = fname.unwrap_or_else(|| crate::os::cshim::gettext(c"Untitled"));
     let room = DIALOG_MSG_SIZE as usize;
     XString::from_bytes(&crate::formatted!(room, format.to_bytes(), fname))
-}
-
-/// `skip_cmd_arg()` as checked code.
-fn skip_cmd_arg(p: *mut c_char, rembs: bool) -> *mut c_char {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::scan::skip_cmd_arg(p, rembs) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
-}
-
-/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-fn ubyte(p: *const c_char) -> u8 {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as u8 }
-}
-
-/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
-fn byte_at(p: *const c_char, i: isize) -> c_int {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as c_int }
-}
-
-/// Whether the string at `p` is exactly `lit` -- `strcmp(p, lit) == 0` --
-/// as checked code.
-fn equals(p: *const c_char, lit: &[u8]) -> bool {
-    // SAFETY: a NUL-terminated string.
-    unsafe { cstr::eq_bytes(p, lit) }
-}
-
-/// `strcasecmp()` as checked code.
-fn strcasecmp(a: *const c_char, b: *const c_char) -> c_int {
-    // SAFETY: two NUL-terminated strings.
-    unsafe { ::libc::strcasecmp(a, b) }
 }

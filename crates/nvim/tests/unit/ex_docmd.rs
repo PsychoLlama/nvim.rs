@@ -87,20 +87,14 @@ fn text(bytes: &[u8]) -> String {
 /// failure.
 fn parse(_editor: &Editor, line: &str) -> Result<Parsed, String> {
     let mut args = ExArg::default();
-    // SAFETY: `CmdParseInfo` is a `repr(Rust)` aggregate of scalars and
-    // pointers, and `parse_cmdline` zeroes it before its first read anyway.
-    let mut info: CmdParseInfo = unsafe { std::mem::zeroed() };
+    let mut info = CmdParseInfo::default();
     let mut errormsg: Option<CString> = None;
-    // SAFETY: both out-parameters are locals of this frame, unaliased for
-    // the call.
-    let ok = unsafe {
-        parse_cmdline(
-            CmdLine::from_bytes(line.as_bytes()),
-            &mut args,
-            &raw mut info,
-            &mut errormsg,
-        )
-    };
+    let ok = parse_cmdline(
+        CmdLine::from_bytes(line.as_bytes()),
+        &mut args,
+        &mut info,
+        &mut errormsg,
+    );
     if !ok {
         return Err(errormsg.map_or_else(String::new, |m| m.to_string_lossy().into_owned()));
     }
@@ -123,18 +117,14 @@ fn parse(_editor: &Editor, line: &str) -> Result<Parsed, String> {
 /// for.
 fn parse_mods(_editor: &Editor, line: &str) -> (CmdModFlags, c_int) {
     let mut args = ExArg::default();
-    // SAFETY: as in `parse`.
-    let mut info: CmdParseInfo = unsafe { std::mem::zeroed() };
+    let mut info = CmdParseInfo::default();
     let mut errormsg: Option<CString> = None;
-    // SAFETY: as in `parse`.
-    let ok = unsafe {
-        parse_cmdline(
-            CmdLine::from_bytes(line.as_bytes()),
-            &mut args,
-            &raw mut info,
-            &mut errormsg,
-        )
-    };
+    let ok = parse_cmdline(
+        CmdLine::from_bytes(line.as_bytes()),
+        &mut args,
+        &mut info,
+        &mut errormsg,
+    );
     assert!(ok, "{line:?} did not parse");
     (info.cmdmod.cmod_flags, info.cmdmod.cmod_verbose)
 }

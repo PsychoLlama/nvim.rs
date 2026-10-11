@@ -1,19 +1,13 @@
 //! Scanning the rest of a command line: the count, the register, the
 //! `!`, the `:p`-style flags, and where the next command begins.
 //!
-//! Every function here is a walk over the command line the caller owns, so
-//! each takes one `unsafe` block for its whole body rather than one per
-//! dereference: the obligation is the same for all of them — the pointer is
-//! into a NUL-terminated buffer that outlives the call — and stating it once
-//! is both cheaper and more honest than stating it forty times.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+//! Every function here is a walk over the command line the caller owns, by
+//! offset.
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::types::CmdIdx;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 use std::ffi::CString;
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
@@ -21,7 +15,7 @@ use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::charset::getdigits_int_at;
 
 use crate::eval::skip_expr;
-use crate::ex_cmds::skip_vimgrep_pat;
+use crate::ex_cmds::skip_vimgrep_pat_at;
 use crate::ex_docmd::onecmd::shift_cmd_args;
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, INT32_MAX, e_zerocount, ex_msg};
 use crate::keycodes::Ctrl_V;
@@ -36,25 +30,8 @@ use crate::types::pos::LineNr;
 use crate::types::{CmdAddr, CmdLine, CpoFlag, ExArgt, Failed, NUL};
 use crate::winlayer::Buf;
 
-/// Step over a run of `:`, which is how a mapping's `:cmd<CR>` and a leading
-/// `::::print` both reach the command name.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char {
-    let mut p = if skipleadingwhite {
-        skipwhite(p)
-    } else {
-        p as *mut c_char
-    };
-    while byte(p) == ':' as c_int {
-        p = unsafe { skipwhite(p.add(1)) };
-    }
-    p
-}
-
-/// [`skip_colon_white`] over a command line, answering an offset.
+/// Step over a run of `:` at `at`, which is how a mapping's `:cmd<CR>` and a
+/// leading `::::print` both reach the command name.
 pub(crate) fn skip_colons(line: &CmdLine, at: usize, skipleadingwhite: bool) -> usize {
     let mut at = if skipleadingwhite {
         line.skip_white(at)
@@ -216,15 +193,8 @@ pub(crate) fn skip_grep_pat(excmd: &mut ExArg) -> usize {
     if excmd.line.byte_at(excmd.line.arg) == 0 || !is_grep {
         return excmd.line.arg;
     }
-    let arg = excmd.line.ptr_at(excmd.line.arg);
-    // SAFETY: the command's own argument, NUL-terminated; neither
-    // out-parameter is wanted here.
-    let p = unsafe { skip_vimgrep_pat(arg, ptr::null_mut(), ptr::null_mut()) };
-    if p.is_null() {
-        excmd.line.arg
-    } else {
-        excmd.line.offset_of(p)
-    }
+    let arg = excmd.line.arg;
+    skip_vimgrep_pat_at(excmd.line.cstr_from(arg)).map_or(arg, |len| arg + len)
 }
 
 /// Cut the command's argument at the `|`, `"` or newline that ends it, and
@@ -310,37 +280,25 @@ fn ends_argument(excmd: &ExArg, at: usize) -> bool {
 
 /// How many bytes the character at `at` occupies.
 fn utfc_len_at(line: &CmdLine, at: usize) -> usize {
-    // SAFETY: a cursor into the NUL-terminated command line.
-    let len = unsafe { crate::mbyte::utfc_ptr2len(line.ptr_from(at)) };
-    len.max(1).cast_unsigned() as usize
+    crate::mbyte::cluster_len(line.tail(at)).max(1)
 }
 
-/// Delete the byte at `p` by pulling the terminator-inclusive tail over it.
-fn drop_one_byte(p: *mut c_char) {
-    let n_len = unsafe { cstr::bytes_at(p.add(1)) }.len();
-    let into = p.cast::<u8>();
-    unsafe { into.copy_from(p.add(1).cast(), n_len.wrapping_add(1)) };
-}
-
-/// Step to the end of a whitespace-delimited argument, optionally removing
-/// the backslashes that escaped whitespace inside it.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn skip_cmd_arg(p: *mut c_char, rembs: bool) -> *mut c_char {
-    let mut p = p;
-    while byte(p) != 0 && !ascii_isspace(byte(p)) {
-        if byte(p) == '\\' as c_int && byte_at(p, 1) != NUL {
+/// Step to the end of the whitespace-delimited argument at `at` in a
+/// command line, optionally removing -- in place -- the backslashes that
+/// escaped whitespace inside it. The answer is an offset into what the
+/// line is *after* the walk.
+pub(crate) fn skip_cmd_arg(line: &mut CmdLine, mut at: usize, rembs: bool) -> usize {
+    while line.byte_at(at) != 0 && !ascii_isspace(c_int::from(line.byte_at(at))) {
+        if line.byte_at(at) == b'\\' && line.byte_at(at + 1) != 0 {
             if rembs {
-                drop_one_byte(p);
+                line.drop_byte(at);
             } else {
-                p = unsafe { p.add(1) };
+                at += 1;
             }
         }
-        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        at += utfc_len_at(line, at);
     }
-    p
+    at
 }
 
 /// [`skip_cmd_arg`] over a slice, from `at`, removing nothing: where the
@@ -359,58 +317,4 @@ pub(crate) fn skip_cmd_arg_at(text: &[u8], mut at: usize) -> usize {
 /// `bool` because a dozen still-transpiled callers compare it against 0.
 pub fn ends_excmd(c: c_int) -> c_int {
     (c == NUL || c == '|' as c_int || c == '"' as c_int || c == '\n' as c_int) as c_int
-}
-
-/// The command after the next `|` or newline, or null if there is none.
-/// Unlike `check_nextcmd` this searches rather than only looking ahead.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-pub unsafe fn find_nextcmd(p: *const c_char) -> *mut c_char {
-    let mut p = p;
-    while byte(p) != '|' as c_int && byte(p) != '\n' as c_int {
-        if byte(p) == NUL {
-            return ptr::null_mut();
-        }
-        p = unsafe { p.add(1) };
-    }
-    unsafe { (p as *mut c_char).add(1) }
-}
-
-/// The command after `p`, if `p` is at the separator that introduces one.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn check_nextcmd(p: *mut c_char) -> *mut c_char {
-    let s = skipwhite(p);
-    if byte(s) == '|' as c_int || byte(s) == '\n' as c_int {
-        return unsafe { s.add(1) };
-    }
-    ptr::null_mut()
-}
-
-/// `skipwhite()` as checked code.
-fn skipwhite(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::charset::skipwhite(p) }
-}
-
-/// `utfc_ptr2len()` as checked code.
-fn utfc_ptr2len(p: *const c_char) -> c_int {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::mbyte::utfc_ptr2len(p) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
-}
-
-/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
-fn byte_at(p: *const c_char, i: isize) -> c_int {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as c_int }
 }

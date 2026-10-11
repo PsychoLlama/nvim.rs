@@ -12,11 +12,9 @@ use neovim::optionstr::check_ff_value;
 
 use crate::support::cstr;
 
-/// `check_ff_value` takes a mutable C string because the option machinery
-/// hands it one; it does not write through it.
+/// `check_ff_value` of `value`.
 fn check(value: &str) -> c_int {
-    let owned = cstr(value);
-    unsafe { check_ff_value(owned.as_ptr().cast_mut()) }
+    check_ff_value(&cstr(value))
 }
 
 #[test]

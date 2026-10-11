@@ -651,9 +651,7 @@ fn run_cmd(
     }
 
     let sctx = api_set_sctx(channel_id);
-    // SAFETY: `excmd`/`cmdinfo` are fully prepared; this is the call the whole
-    // function exists to make.
-    unsafe { execute_cmd(excmd, cmdinfo, false) };
+    execute_cmd(excmd, cmdinfo, false);
     drop(sctx);
 
     drop(silenced);

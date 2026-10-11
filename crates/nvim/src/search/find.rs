@@ -358,6 +358,34 @@ impl Searcher {
     }
 }
 
+/// [`searchit`] once in the current window for the last pattern `pat_use`
+/// names, from `pos`, answering the match in `pos`.
+pub(crate) fn search_last_pattern(
+    pos: &mut Pos,
+    dir: Direction,
+    options: c_int,
+    pat_use: c_int,
+) -> c_int {
+    // SAFETY: the current window and buffer, the caller's position, and the
+    // empty pattern, which only selects the remembered one and is never
+    // written.
+    unsafe {
+        searchit(
+            Some(Win::current()),
+            Buf::current(),
+            pos,
+            ptr::null_mut(),
+            dir,
+            c"".as_ptr().cast_mut(),
+            0,
+            1,
+            options,
+            pat_use,
+            ptr::null_mut(),
+        )
+    }
+}
+
 /// Search for the `count`th occurrence of `pat` in direction `dir`,
 /// starting at `pos` and answering the position found in `pos`.
 ///
