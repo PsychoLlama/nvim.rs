@@ -383,13 +383,11 @@ fn getting_a_string_renders_a_scalar_into_the_lent_buffer() {
         assert_eq!(s43, (*tv::di_of(d, "te")).di_tv.string());
         log.check(&[]);
 
-        // Rendering a float goes through `vim_snprintf`, which costs two
-        // `free(NULL)`s and nothing else.
+        // Rendering a float goes through `vim_snprintf`, which reaches the
+        // allocator not at all (the C's two `free(NULL)`s are gone with the
+        // `va_list` core).
         assert_eq!(text(get(d, "t", None, &mut buf1)), "44.0");
-        log.check(&[
-            alloc::freed(ptr::null::<u8>()),
-            alloc::freed(ptr::null::<u8>()),
-        ]);
+        log.check(&[]);
 
         drop(DictRef::owning(d));
     }
@@ -402,7 +400,7 @@ fn getting_a_string_with_save_allocates_the_answer() {
     let log = AllocLog::start();
     // SAFETY: every answer with `save` is freed here.
     unsafe {
-        let get = |d: *const Dict, key: &str, msg: Option<&str>, is_float: bool| {
+        let get = |d: *const Dict, key: &str, msg: Option<&str>| {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
@@ -417,11 +415,6 @@ fn getting_a_string_with_save_allocates_the_answer() {
             if msg.is_none() {
                 match &answer {
                     None => log.check(&[]),
-                    Some(s) if is_float => log.check(&[
-                        alloc::freed(ptr::null::<u8>()),
-                        alloc::freed(ptr::null::<u8>()),
-                        alloc::string(ret, s.len()),
-                    ]),
                     Some(s) => log.check(&[alloc::string(ret, s.len())]),
                 }
             }
@@ -431,13 +424,7 @@ fn getting_a_string_with_save_allocates_the_answer() {
 
         let d = tv::new_dict(&[("test", Tv::Dict(vec![]))]);
         assert_eq!(
-            get(
-                d,
-                "test",
-                Some("E731: Using a Dictionary as a String"),
-                false
-            )
-            .as_deref(),
+            get(d, "test", Some("E731: Using a Dictionary as a String"),).as_deref(),
             Some("")
         );
         drop(DictRef::owning(d));
@@ -449,11 +436,11 @@ fn getting_a_string_with_save_allocates_the_answer() {
             ("te", Tv::s("43")),
             ("xx", Tv::Int(45)),
         ]);
-        assert_eq!(get(d, "test", None, false), None);
-        assert_eq!(get(d, "tes", None, false).as_deref(), Some("42"));
-        assert_eq!(get(d, "xx", None, false).as_deref(), Some("45"));
-        assert_eq!(get(d, "te", None, false).as_deref(), Some("43"));
-        assert_eq!(get(d, "t", None, true).as_deref(), Some("44.0"));
+        assert_eq!(get(d, "test", None), None);
+        assert_eq!(get(d, "tes", None).as_deref(), Some("42"));
+        assert_eq!(get(d, "xx", None).as_deref(), Some("45"));
+        assert_eq!(get(d, "te", None).as_deref(), Some("43"));
+        assert_eq!(get(d, "t", None).as_deref(), Some("44.0"));
         drop(DictRef::owning(d));
     }
 }
@@ -469,7 +456,7 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
         // A Number is formatted at the start of the buffer, so its answer's
         // address is the buffer's own.
         let buf: *const c_char = scratch.string(&TypVal::Number(0)).as_ptr();
-        let mut get = |d: *const Dict, key: &str, is_float: bool| -> Option<(String, bool)> {
+        let mut get = |d: *const Dict, key: &str| -> Option<(String, bool)> {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
@@ -479,14 +466,7 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
                 },
                 None,
             );
-            if is_float {
-                log.check(&[
-                    alloc::freed(ptr::null::<u8>()),
-                    alloc::freed(ptr::null::<u8>()),
-                ]);
-            } else {
-                log.check(&[]);
-            }
+            log.check(&[]);
             (!ret.is_null()).then(|| {
                 (
                     CStr::from_ptr(ret).to_string_lossy().into_owned(),
@@ -495,7 +475,7 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
             })
         };
 
-        assert_eq!(get(ptr::null(), "test", false), None);
+        assert_eq!(get(ptr::null(), "test"), None);
 
         let entries: Vec<(&str, Tv)> = vec![
             ("", Tv::Dict(vec![])),
@@ -518,9 +498,9 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
         );
         log.check(&[]);
 
-        assert_eq!(get(d, "test", false), Some(("tset".into(), false)));
-        assert_eq!(get(d, "t", true), Some(("1.0".into(), true)));
-        assert_eq!(get(d, "te", false), Some(("2".into(), true)));
+        assert_eq!(get(d, "test"), Some(("tset".into(), false)));
+        assert_eq!(get(d, "t"), Some(("1.0".into(), true)));
+        assert_eq!(get(d, "te"), Some(("2".into(), true)));
 
         drop(DictRef::owning(d));
         // `scratch` is this frame's own; nothing to free.
@@ -539,41 +519,33 @@ fn getting_a_checked_string_falls_back_to_the_default() {
         // address is the buffer's own.
         let buf: *const c_char = scratch.string(&TypVal::Number(0)).as_ptr();
         let def = xstrdup(cstr("DEFAULT").as_ptr());
-        let mut get =
-            |d: *const Dict, key: &[u8], is_float: bool| -> Option<(String, bool, bool)> {
-                log.clear();
-                let ret = check_emsg(
-                    log.editor(),
-                    || {
-                        dict_get_string_buf_chk(
-                            d.as_ref(),
-                            key,
-                            &mut scratch,
-                            Some(CStr::from_ptr(def)),
-                        )
-                        .map_or(ptr::null(), CStr::as_ptr)
-                    },
-                    None,
-                );
-                if is_float {
-                    log.check(&[
-                        alloc::freed(ptr::null::<u8>()),
-                        alloc::freed(ptr::null::<u8>()),
-                    ]);
-                } else {
-                    log.check(&[]);
-                }
-                (!ret.is_null()).then(|| {
-                    (
-                        CStr::from_ptr(ret).to_string_lossy().into_owned(),
-                        ret == buf,
-                        ret == def.cast_const(),
+        let mut get = |d: *const Dict, key: &[u8]| -> Option<(String, bool, bool)> {
+            log.clear();
+            let ret = check_emsg(
+                log.editor(),
+                || {
+                    dict_get_string_buf_chk(
+                        d.as_ref(),
+                        key,
+                        &mut scratch,
+                        Some(CStr::from_ptr(def)),
                     )
-                })
-            };
+                    .map_or(ptr::null(), CStr::as_ptr)
+                },
+                None,
+            );
+            log.check(&[]);
+            (!ret.is_null()).then(|| {
+                (
+                    CStr::from_ptr(ret).to_string_lossy().into_owned(),
+                    ret == buf,
+                    ret == def.cast_const(),
+                )
+            })
+        };
 
         assert_eq!(
-            get(ptr::null(), b"test", false),
+            get(ptr::null(), b"test"),
             Some(("DEFAULT".into(), false, true))
         );
 
@@ -587,12 +559,12 @@ fn getting_a_checked_string_falls_back_to_the_default() {
         ]);
         log.clear();
 
-        assert_eq!(get(d, b"test", false), Some(("tset".into(), false, false)));
+        assert_eq!(get(d, b"test"), Some(("tset".into(), false, false)));
         // One byte of `test` is the key `t`, whose float goes to the buffer.
-        assert_eq!(get(d, b"t", true), Some(("1.0".into(), true, false)));
-        assert_eq!(get(d, b"te", false), Some(("2".into(), true, false)));
+        assert_eq!(get(d, b"t"), Some(("1.0".into(), true, false)));
+        assert_eq!(get(d, b"te"), Some(("2".into(), true, false)));
         assert_eq!(
-            get(d, b"TEST", false),
+            get(d, b"TEST"),
             Some(("DEFAULT".into(), false, true)),
             "keys are case-sensitive"
         );

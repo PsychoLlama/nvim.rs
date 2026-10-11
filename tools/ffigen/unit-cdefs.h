@@ -3849,7 +3849,6 @@ static const int TIME_CHECK_INTERVAL = 20;
 static const int TIOCSWINSZ = 21524;
 static const int TMP = 350;
 static const int TMPLEN = 70;
-static const int TMP_LEN = 350;
 static const int TOO_MANY_EVENTS = 1000000;
 static const int TOTAL_BLANK_WEIGHT = -30;
 static const int TREE_SITTER_LANGUAGE_VERSION = 15;

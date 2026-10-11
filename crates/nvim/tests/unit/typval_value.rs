@@ -1459,13 +1459,8 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
 
                 if emsg.is_some() {
                     log.clear();
-                } else if v_type == VAR_FLOAT {
-                    // Rendering a float goes through `vim_snprintf`.
-                    log.check(&[
-                        alloc::freed(ptr::null::<u8>()),
-                        alloc::freed(ptr::null::<u8>()),
-                    ]);
                 } else {
+                    // A float too: `vim_snprintf` allocates nothing.
                     log.check(&[]);
                 }
             }

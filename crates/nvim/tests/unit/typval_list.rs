@@ -1828,8 +1828,8 @@ fn finding_a_string_by_index_renders_scalars() {
             (!ret.is_null()).then(|| CStr::from_ptr(ret).to_string_lossy().into_owned())
         };
 
-        // A float is rendered into the shared number buffer, which costs
-        // two `free(NULL)`s in `vim_snprintf`.
+        // A float is rendered into the shared number buffer, without a call
+        // to the allocator.
         let l = tv::new_list(&[Tv::Int(1), f(2.5), Tv::Int(3), Tv::Int(4), Tv::Int(5)]);
         log.clear();
         assert_eq!(find_str(l, -5, None).as_deref(), Some("1"));
@@ -1837,10 +1837,7 @@ fn finding_a_string_by_index_renders_scalars() {
         assert_eq!(find_str(l, 4, None).as_deref(), Some("5"));
         assert_eq!(find_str(l, 2, None).as_deref(), Some("3"));
         assert_eq!(find_str(l, -3, None).as_deref(), Some("3"));
-        log.check(&[
-            alloc::freed(ptr::null::<u8>()),
-            alloc::freed(ptr::null::<u8>()),
-        ]);
+        log.check(&[]);
         drop(ListRef::owning(l));
         // A string item is answered in place.
         let l = tv::new_list(&(1..=5).map(|n| Tv::s(n.to_string())).collect::<Vec<_>>());
