@@ -14,7 +14,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::regexp::skip_regexp_at;
+use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
 use core::ffi::{c_char, c_int};
 
@@ -425,7 +425,7 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
         }
         // The pattern's delimiter is whatever character comes first.
         let delim = line.byte_at(p);
-        end = p + 1 + skip_regexp_at(line.tail(p + 1), c_int::from(delim), 1);
+        end = p + 1 + skip_regexp_at(line.tail(p + 1), char_delim(delim), 1);
         if let Some(group) = group {
             if line.byte_at(end) != 0
                 && ends_excmd(c_int::from(line.byte_at(line.skip_white(end + 1)))) == 0

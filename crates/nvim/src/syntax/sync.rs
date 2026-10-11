@@ -12,7 +12,7 @@
 
 use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
-use crate::regexp::skip_regexp_at;
+use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -542,8 +542,7 @@ fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, LineContError> 
         ));
         return Err(LineContError::Reported);
     }
-    let arg_end =
-        next_arg + 1 + skip_regexp_at(args.line.tail(next_arg + 1), c_int::from(delim), 1);
+    let arg_end = next_arg + 1 + skip_regexp_at(args.line.tail(next_arg + 1), char_delim(delim), 1);
     if args.line.byte_at(arg_end) != delim {
         return Err(LineContError::Illegal); // end delimiter not found
     }

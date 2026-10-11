@@ -68,7 +68,7 @@ use crate::message::state::{did_emsg, emsg_silent};
 use crate::message::{emsg, internal_error};
 use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
-use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING, skip_regexp_err_at};
+use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING, char_delim, skip_regexp_err_at};
 use crate::runtime::do_finish;
 use crate::semsg;
 use crate::types::{Cleanup, CondId, ExArg, Pend, TypVal};
@@ -213,7 +213,8 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
         // No argument: catch everything.
         excmd.line.next = excmd.line.find_next(excmd.line.arg);
     } else {
-        let delim = c_int::from(excmd.line.byte_at(excmd.line.arg));
+        // Upstream hands `*eap->arg` on as a `char`.
+        let delim = char_delim(excmd.line.byte_at(excmd.line.arg));
         let start = excmd.line.arg + 1;
         match skip_regexp_err_at(excmd.line.tail(start), delim, c_int::from(true)) {
             Some(len) => span = Some((start, start + len)),

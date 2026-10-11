@@ -33,7 +33,7 @@ use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_ic;
 use crate::os::cshim::{cstr_ncasecmp, gettext, strcoll, strtod_prefix};
 use crate::os::input::fast_breakcheck;
-use crate::regexp::{OwnedMatch, skip_regexp_at, vim_regexec};
+use crate::regexp::{OwnedMatch, char_delim, skip_regexp_at, vim_regexec};
 use crate::search::last_pattern_owned;
 use crate::semsg;
 use crate::types::{BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, VarNumber, size_t};
@@ -41,7 +41,7 @@ use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::cmp::Ordering;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// How two keys are compared as *text*: `l` asks the locale, `i` folds case,
 /// and `l` wins when both are given because upstream tests it first.  It is a
@@ -153,10 +153,10 @@ fn compile_sort_pattern(
 ) -> Option<usize> {
     // The delimiter is handed on as a `char`, sign-extended -- and the skip
     // compares the pattern's bytes the same way, so a high byte still ends it.
-    let delim = c_int::from(args.line.byte_at(delim_at) as c_char);
+    let delim = char_delim(args.line.byte_at(delim_at));
     let start = delim_at + 1;
     let end = start + skip_regexp_at(args.line.tail(start), delim, 1);
-    if c_int::from(args.line.byte_at(end) as c_char) != delim {
+    if char_delim(args.line.byte_at(end)) != delim {
         let startp = msg_bytes(args.line.rest_of(start));
         semsg!("E654: Missing delimiter after search pattern: {startp}");
         return None;

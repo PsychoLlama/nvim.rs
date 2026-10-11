@@ -122,6 +122,20 @@ pub unsafe fn skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *m
     }
 }
 
+/// `byte` as a delimiter the way upstream's `skip_regexp(p + 1, *p, ..)`
+/// hands it on: a `char`, so a byte at or above 0x80 arrives sign-extended
+/// where `char` is signed -- and the walk compares each pattern byte the
+/// same way, so such a delimiter still ends the pattern.
+///
+/// Upstream is not uniform here. `:global`, `:sort`, `:uniq`, `:catch`,
+/// `:match` and `:syntax` pass `*p`; `:substitute`, `:filter`/`:vimgrep`,
+/// a `/pat/` address and the completion walks pass `(uint8_t)*p`, which
+/// never equals a sign-extended pattern byte, so there a high delimiter
+/// never ends the pattern. Each caller keeps its upstream form.
+pub(crate) fn char_delim(byte: u8) -> c_int {
+    c_int::from(c_char::from_ne_bytes([byte]))
+}
+
 /// [`skip_regexp`] as an offset walk: how many bytes of `text` the pattern
 /// takes, stopping at `delim` or at the NUL that ends the string `text`
 /// starts with.
@@ -208,7 +222,8 @@ pub unsafe fn skip_regexp_err(startp: *mut c_char, delim: c_int, magic: c_int) -
 /// If `text` holds no NUL at all.
 pub(crate) fn skip_regexp_err_at(text: &[u8], delim: c_int, magic: c_int) -> Option<usize> {
     let end = skip_regexp_at(text, delim, magic);
-    if c_int::from(cstr::byte_at(text, end)) != delim {
+    // Upstream's `*p != delim`: the byte promoted as a `char`.
+    if char_delim(cstr::byte_at(text, end)) != delim {
         // The whole string, as the pointer form's `c_str(startp)` showed
         // it -- not just the part the skip consumed.
         let shown = text

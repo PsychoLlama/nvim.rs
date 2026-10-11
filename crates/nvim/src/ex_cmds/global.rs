@@ -29,12 +29,14 @@ use crate::r#move::changed_line_abv_curs;
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::regexp::{OwnedMMatch, RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, skip_regexp_in_place};
+use crate::regexp::{
+    OwnedMMatch, RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, char_delim, skip_regexp_in_place,
+};
 use crate::search::{SEARCH_HIS, search_regcomp_owned};
 use crate::smsg;
 use crate::types::{ColNr, ExArg, LineNr};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use std::ffi::CString;
 
 /// Run `cmd` on line `lnum`, with the cursor at its start.
@@ -114,7 +116,7 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
     let delim = first;
     // The delimiter is handed on as a `char`, so a high byte arrives
     // sign-extended -- which is what indexes the ctype table upstream.
-    if check_regexp_delim(c_int::from(delim as c_char)).is_err() {
+    if check_regexp_delim(char_delim(delim)).is_err() {
         return None;
     }
 
@@ -124,7 +126,7 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
     let mut cmd_at = skip_regexp_in_place(
         args.line.buffer_mut(),
         pat_at,
-        c_int::from(delim),
+        char_delim(delim),
         c_int::from(magic_isset()),
     );
     if args.line.byte_at(cmd_at) == delim {

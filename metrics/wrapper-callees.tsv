@@ -745,7 +745,6 @@ count	callee	no_raw	defs	def
 3	shell_free_argv	0	1	crates/nvim/src/os/shell/mod.rs
 3	sign_find	0	1	crates/nvim/src/sign/store.rs
 3	skip_comment	0	1	crates/nvim/src/ops/join.rs
-3	skip_regexp	0	1	crates/nvim/src/regexp/parse.rs
 3	skipdigits	0	1	crates/nvim/src/charset/walk.rs
 3	slang_clear	0	1	crates/nvim/src/spell/slang.rs
 3	slang_free	0	1	crates/nvim/src/spell/slang.rs
@@ -1235,6 +1234,7 @@ count	callee	no_raw	defs	def
 2	sign_unplace_inner	0	1	crates/nvim/src/sign/place.rs
 2	skip_all	0	1	crates/nvim/src/autocmd/events.rs
 2	skip_anyof	0	1	crates/nvim/src/regexp/parse.rs
+2	skip_regexp	0	1	crates/nvim/src/regexp/parse.rs
 2	skip_tab	0	1	crates/nvim/src/tag/jump.rs
 2	skip_to_end_or_colon	0	1	crates/nvim/src/ops/join.rs
 2	skip_to_option_part	0	1	crates/nvim/src/option/query.rs

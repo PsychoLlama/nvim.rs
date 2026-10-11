@@ -81,8 +81,8 @@ use crate::profile::{
     profile_add, profile_cmp, profile_divide, profile_end, profile_msg, profile_start, profile_zero,
 };
 use crate::regexp::{
-    ExtMatch, ExtMatchIo, ExtMatchRef, skip_regexp, vim_regcomp, vim_regcomp_ext,
-    vim_regcomp_had_eol, vim_regexec, vim_regexec_syntax, vim_regfree,
+    ExtMatch, ExtMatchIo, ExtMatchRef, vim_regcomp, vim_regcomp_ext, vim_regcomp_had_eol,
+    vim_regexec, vim_regexec_syntax, vim_regfree,
 };
 use crate::runtime::{do_source, source_runtime};
 use crate::types::AutoEvent;

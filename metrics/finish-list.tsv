@@ -593,11 +593,11 @@ statusline/	statusline/stl/mod.rs	1	33	1	23	deref:7 expr:3	str:2	str:1	CStr::fro
 statusline/	statusline/tabline.rs	1	9	1	5	compound:2	-	-	CStr::from_ptr:1 cstr_to_string:1 vim_snprintf:1
 strings/	*	1	47	11	17	expr:6 compound:2 deref:2	str:15 pp_str:1	str:2	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
 strings/	strings/raw.rs	1	47	11	17	expr:6 compound:2 deref:2	str:15 pp_str:1	str:2	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
-syntax/	*	13	185	18	110	deref:48 expr:16 ref:2 compound:1	other:10 str:5 value:4 void:2	other:5 str:3	at:12 .offset:7 .add:5 vim_regfree:4 bytes_at:3 vim_iswordp_buf:3 xfree:3 .assume_init:2
+syntax/	*	13	183	18	109	deref:48 expr:15 ref:2 compound:1	other:10 str:5 value:4 void:2	other:5 str:3	at:12 .offset:7 .add:5 vim_regfree:4 bytes_at:3 vim_iswordp_buf:3 xfree:3 .assume_init:2
 syntax/	syntax/attr.rs	1	15	0	11	deref:4	-	-	.offset:3 vim_iswordp_buf:2
 syntax/	syntax/clear.rs	1	19	2	10	compound:1	other:2	-	vim_regfree:2 Box::from_raw:1
 syntax/	syntax/command.rs	1	8	0	7	expr:1	-	-	hash_init:2 .assume_init:1 apply_autocmds:1 at:1 vim_snprintf:1
-syntax/	syntax/define.rs	1	4	0	2	expr:2	-	-	at:1 skip_regexp:1
+syntax/	syntax/define.rs	1	2	0	1	expr:1	-	-	at:1
 syntax/	syntax/endpos.rs	1	26	2	16	deref:7 expr:3	str:2 value:1	other:1 str:1	.offset:4 ml_get_buf:2 hash_find:1 str_foldcase:1 utfc_ptr2len:1 vim_iswordp_buf:1 vim_regexec_syntax:1 xmemcpyz:1
 syntax/	syntax/keyword.rs	1	55	7	30	deref:20 expr:4 ref:1	str:3 other:2 value:2	str:2 other:1	.add:3 xfree:3 bytes_at:2 hash_set_key:2 .offset_from:1 c_str:1 hash_add_item:1 hash_hash:1
 syntax/	syntax/list.rs	1	25	4	13	deref:9 expr:2 ref:1	other:3 value:1	-	at:6

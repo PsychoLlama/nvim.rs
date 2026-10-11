@@ -16,7 +16,7 @@ use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
-use crate::regexp::RE_MAGIC;
+use crate::regexp::{RE_MAGIC, char_delim, skip_regexp_at};
 use crate::runtime::RuntimeOpts;
 use crate::types::{ExArgt, FAIL, NUL};
 
@@ -438,18 +438,14 @@ pub(crate) fn read_pattern(
     }
     let delimiter = body[0];
 
-    // One writable NUL-terminated copy of the rest of the line. `skip_regexp`
-    // and `getdigits_int` are pointer walks with no slice form, and this is
-    // what they walk: offsets into it are offsets into `line[at..]`, and
-    // nothing borrowed from the caller is handed to a raw pointer.
+    // One NUL-terminated copy of the rest of the line, what the walks below
+    // read: offsets into it are offsets into `line[at..]`, and nothing
+    // borrowed from the caller is handed to a raw pointer.
     let mut tail: Vec<u8> = Vec::with_capacity(body.len() + 1);
     tail.extend_from_slice(body);
     tail.push(NUL as u8);
 
-    // SAFETY: `tail` is NUL-terminated and outlives the walk.
-    let stop = unsafe { skip_regexp(tail.as_mut_ptr().add(1).cast(), delimiter as c_int, 1) };
-    // SAFETY: both pointers are into `tail`, the base first.
-    let end = unsafe { stop.cast::<u8>().offset_from(tail.as_ptr()) } as usize;
+    let end = 1 + skip_regexp_at(&tail[1..], char_delim(delimiter), 1);
     if cstr::byte_at(&tail, end) != delimiter {
         let shown = msg_bytes(body);
         semsg!("E401: Pattern delimiter not found: {shown}");
