@@ -812,3 +812,192 @@ fn parse_cmd_reports_a_user_commands_name_and_every_argument() {
 
     run(&editor, "delcommand Parsed");
 }
+
+/// `getargopt` over the spellings the first case does not reach: the long
+/// names, `++bad=` folded for case and refused for more than one byte, a
+/// value with an escaped space (kept: only `+cmd` removes the backslash),
+/// and the near-misses that are not options at all.
+#[test]
+fn every_spelling_of_a_plus_plus_option_is_read_or_refused() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    let bad = |line: &str| argopts(&editor, line).map(|o| o.5);
+    assert_eq!(bad("++bad=keep x"), Ok(-1));
+    assert_eq!(bad("++bad=DROP x"), Ok(-2));
+    assert_eq!(bad("++bad=KeEp"), Ok(-1));
+    assert_eq!(bad("++bad=xy x"), Err(()));
+    assert_eq!(bad("++bad=é x"), Err(()));
+    assert_eq!(bad("++bad= x"), Err(()));
+    assert_eq!(
+        argopts(&editor, "++fileformat=mac ++encoding=UTF-8 ++binary f"),
+        Ok(('m', "utf-8".into(), FORCE_BIN, false, false, 0, "f".into()))
+    );
+    assert_eq!(
+        argopts(&editor, "++nobinary f").map(|o| o.2),
+        Ok(FORCE_NOBIN)
+    );
+    assert_eq!(
+        argopts(&editor, r"++enc=A\ B f").map(|o| (o.1, o.6)),
+        Ok((r"a\ b".into(), "f".into()))
+    );
+    assert_eq!(
+        argopts(&editor, "++ff=dos").map(|o| (o.0, o.6)),
+        Ok(('d', String::new()))
+    );
+    for refused in [
+        "++editx f",
+        "++px f",
+        "++ff f",
+        "++enc",
+        "++binx f",
+        "++ f",
+        "++fileformat:unix",
+    ] {
+        assert_eq!(argopts(&editor, refused), Err(()), "{refused}");
+    }
+    assert_eq!(argopts(&editor, "++edit").map(|o| o.3), Ok(true));
+    assert_eq!(
+        argopts(&editor, "++p\tf").map(|o| (o.4, o.6)),
+        Ok((true, "f".into()))
+    );
+}
+
+/// `+cmd` is the argument up to an unescaped space, the escapes removed in
+/// place; a bare `+` is `$`.
+#[test]
+fn a_plus_command_runs_to_the_first_unescaped_space() {
+    use neovim::ex_docmd::getargcmd;
+    use neovim::types::EcmdCmd;
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    let cmd = |line: &str| {
+        let mut args = ExArg::default();
+        args.line = CmdLine::from_bytes(line.as_bytes());
+        let got = match getargcmd(&mut args) {
+            EcmdCmd::None => "<none>".to_owned(),
+            EcmdCmd::Dollar => "$".to_owned(),
+            EcmdCmd::At(at) => text(args.line.rest_of(at)),
+        };
+        (got, text(args.line.arg()))
+    };
+    assert_eq!(cmd("file"), ("<none>".into(), "file".into()));
+    assert_eq!(cmd("+ file"), ("$".into(), "file".into()));
+    assert_eq!(cmd("+"), ("$".into(), String::new()));
+    assert_eq!(cmd("+10 file"), ("10".into(), "file".into()));
+    assert_eq!(cmd(r"+/a\ b\ c  file"), ("/a b c".into(), "file".into()));
+    assert_eq!(cmd(r"+set\ ts=4\\x f"), (r"set ts=4\x".into(), "f".into()));
+    assert_eq!(cmd("+/é\u{301}x f"), ("/é\u{301}x".into(), "f".into()));
+    assert_eq!(cmd(r"+trail\"), (r"trail\".into(), String::new()));
+}
+
+/// `:normal` with keys that do not finish a command: the pending operator,
+/// count, register or command line is dropped, and nothing after it runs.
+/// And a multibyte character with a 0x80 byte in it reaches the buffer whole,
+/// which is what the `K_SPECIAL` escaping is for.
+#[test]
+fn normal_drops_an_incomplete_command() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    let lines = |editor: &Editor| string(editor, "join(getline(1, '$'), '|')");
+    run(&editor, "call setline(1, ['one two', 'three'])");
+    for keys in [
+        "d", "2d", "\"a", "3", "f", "dt", "c", "g", "z", "[", "\"", "y",
+    ] {
+        run(&editor, &format!("normal! gg0{keys}"));
+        assert_eq!(lines(&editor), "one two|three", "{keys:?}");
+    }
+    // An unfinished command line is abandoned, not run.
+    run(&editor, "let g:edn = 0");
+    run(&editor, "normal! :let g:edn = 1");
+    assert_eq!(num(&editor, "g:edn"), 0);
+    run(&editor, "execute \"normal! :let g:edn = 2\\r\"");
+    assert_eq!(num(&editor, "g:edn"), 2);
+    // Insert mode left open is closed at the end of the keys.
+    run(&editor, "normal! ggIx");
+    assert_eq!(lines(&editor), "xone two|three");
+    assert_eq!(string(&editor, "mode()"), "n");
+    run(&editor, "normal! ggA\u{c0}\u{20ac}\u{100}");
+    assert_eq!(lines(&editor), "xone two\u{c0}\u{20ac}\u{100}|three");
+    // With a range, once per line, from the first column.
+    run(&editor, "%normal! iy");
+    assert_eq!(lines(&editor), "yxone two\u{c0}\u{20ac}\u{100}|ythree");
+    // Without the bang, a mapping applies; with it, none does.
+    run(&editor, "nnoremap <buffer> Q Az<Esc>");
+    run(&editor, "1normal Q");
+    run(&editor, "2normal! Q");
+    assert_eq!(lines(&editor), "yxone two\u{c0}\u{20ac}\u{100}z|ythree");
+    run(&editor, "nunmap <buffer> Q");
+    run(&editor, "unlet g:edn");
+}
+
+/// The tab page argument: absolute, relative, `$`, `#`, a range, and the
+/// spellings `get_tabpage_arg` refuses.
+#[test]
+fn a_tab_page_argument_is_read_or_refused() {
+    use crate::support::Probe;
+    let editor = editor_lock();
+    let probe = Probe::new(&editor);
+    probe.home();
+    probe.run("silent! tabnew | silent! tabnew | silent! tabnew");
+    for (cmd, want) in [
+        ("tabnext 1", "1"),
+        ("tabnext $", "4"),
+        ("tabnext 2 | tabnext #", "4"),
+        ("tabnext 1 | tabnext +2", "3"),
+        ("tabnext -", "2"),
+        ("tabnext +", "3"),
+        ("2tabnext", "2"),
+        ("tabnext", "3"),
+        ("$tabnext", "4"),
+        ("tabnext", "1"),
+    ] {
+        probe.run(cmd);
+        probe.check("tabpagenr()", want);
+    }
+    for (cmd, err) in [
+        ("tabnext 9", "E475: Invalid argument: 9: silent! tabnext 9"),
+        ("tabnext x", "E475: Invalid argument: x: silent! tabnext x"),
+        (
+            "tabnext +x",
+            "E475: Invalid argument: +x: silent! tabnext +x",
+        ),
+        (
+            "tabnext -0",
+            "E475: Invalid argument: -0: silent! tabnext -0",
+        ),
+        ("tabnext 0", "E475: Invalid argument: 0: silent! tabnext 0"),
+        (
+            "tabnext 1x",
+            "E475: Invalid argument: 1x: silent! tabnext 1x",
+        ),
+        (
+            "tabnext --1",
+            "E475: Invalid argument: --1: silent! tabnext --1",
+        ),
+        (
+            "tabclose -9",
+            "E475: Invalid argument: -9: silent! tabclose -9",
+        ),
+    ] {
+        probe.check_error(cmd, err);
+    }
+    probe.run("tabnext 1");
+    for (cmd, want) in [
+        ("tabmove 0", "1"),
+        ("tabmove $", "4"),
+        ("tabmove -1", "3"),
+        ("tabmove +1", "4"),
+        ("tabmove 0", "1"),
+        ("-tabmove", "1"),
+        ("+tabmove", "2"),
+        ("tabmove", "4"),
+    ] {
+        probe.run(cmd);
+        probe.check("tabpagenr()", want);
+    }
+    probe.check_error(
+        "tabmove -2147483648",
+        "E475: Invalid argument: -2147483648: silent! tabmove -2147483648",
+    );
+    probe.home();
+}

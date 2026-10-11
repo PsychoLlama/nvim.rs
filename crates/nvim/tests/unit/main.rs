@@ -32,6 +32,7 @@ mod ex_docmd;
 mod expressions;
 mod fileio;
 mod fileio_names;
+mod filename_oracle;
 mod fold;
 mod fpconv;
 mod fs;

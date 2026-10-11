@@ -462,3 +462,93 @@ fn the_loop_store_reads_through_stores_and_replays_at_depth() {
     assert_eq!(cookie.sourcing_lnum, 2);
     crate::runtime::estack_pop();
 }
+
+/// The items that name where a line came from, asked from every kind of
+/// source: `expand()` (the leading item alone) and a `-complete=file` user
+/// command (the whole argument, through the command line's expansion), plus
+/// the `<sfile>` an autocommand defined in a script has replaced at definition
+/// time. Where there is no script, the user command's `<sfile>` is an error
+/// and adds nothing. Scratch paths are written as `<S>` (its last component
+/// `<s>`) and script numbers as `N`.
+#[test]
+#[cfg_attr(miri, ignore = "`:source` resolves its file through libuv")]
+fn where_a_line_came_from_expands_in_every_source() {
+    let fx = Fixture::new();
+    let scratch = Scratch::new("edwhere");
+    fx.run("command! -nargs=* -complete=file EdWhere call add(g:log, <q-args>)");
+    let probe = [
+        "call add(g:log, [expand('<sfile>'), expand('<slnum>'), expand('<stack>'), expand('<script>'), expand('<sflnum>')])",
+        "EdWhere <sfile>:t <slnum> <sflnum> x<script>:t:r",
+        "call add(g:log, expand('<sfile>:p:h:t') . '|' . expand('<stack>:t'))",
+    ];
+    let norm = |text: String| {
+        let dir = scratch.0.to_str().expect("a UTF-8 path").to_owned();
+        let base = scratch
+            .0
+            .file_name()
+            .and_then(|n| n.to_str())
+            .expect("a name");
+        let mut out = text.replace(&dir, "<S>").replace(base, "<s>");
+        while let Some(at) = out.find("<SNR>") {
+            let digits = out[at + 5..].bytes().take_while(u8::is_ascii_digit).count();
+            if digits == 0 {
+                break;
+            }
+            out.replace_range(at + 5..at + 5 + digits, "N");
+        }
+        out
+    };
+    // Given whole, and through `execute()`'s list.
+    let mut got = Vec::new();
+    fx.run("let g:log = []");
+    for line in probe {
+        fx.run(line);
+    }
+    got.push(norm(fx.eval("g:log")));
+    got.push(norm(logged(&fx, &probe)));
+    // A function body, and a loop inside one.
+    got.push(norm(logged_in_function(&fx, &probe)));
+    let mut looped = vec!["for n in [1, 2]"];
+    looped.extend_from_slice(&probe);
+    looped.push("endfor");
+    got.push(norm(logged_in_function(&fx, &looped)));
+    // A sourced script, a loop in one, and a function it defines.
+    got.push(norm(logged_sourced(&fx, &scratch, &probe)));
+    got.push(norm(logged_sourced(&fx, &scratch, &looped)));
+    let mut defined = vec!["function! g:EdWhereFn()"];
+    defined.extend_from_slice(&probe);
+    defined.extend_from_slice(&["endfunction", "call g:EdWhereFn()"]);
+    got.push(norm(logged_sourced(&fx, &scratch, &defined)));
+    fx.delete(&["g:EdWhereFn"]);
+    // An autocommand defined by a script: its `<sfile>` is the script's,
+    // replaced when the autocommand was defined.
+    let au = [
+        "augroup EdWhereAu | autocmd! | augroup END",
+        "autocmd EdWhereAu User EdWhere call add(g:log, '<sfile>:t') | call add(g:log, expand('<sfile>'))",
+        "autocmd EdWhereAu User EdWhere EdWhere <sfile>:t <amatch> <afile>",
+    ];
+    logged_sourced(&fx, &scratch, &au);
+    fx.run("let g:log = []");
+    fx.run("doautocmd EdWhereAu User EdWhere");
+    got.push(norm(fx.eval("g:log")));
+    fx.run("autocmd! EdWhereAu");
+    fx.run("augroup! EdWhereAu");
+    fx.run("delcommand EdWhere");
+    let want = [
+        "[['', '', '', '', ''], '|']",
+        "[['', '', '', '', ''], '|']",
+        "[['function EdBody', '1', 'function EdBody[1]', '', '1'], 'nvim|function EdBody[3]']",
+        "[['function EdBody', '2', 'function EdBody[2]', '', '2'], 'nvim|function EdBody[4]', \
+         ['function EdBody', '2', 'function EdBody[2]', '', '2'], 'nvim|function EdBody[4]']",
+        "[['<S>/body.vim', '1', '<S>/body.vim[1]', '<S>/body.vim', '1'], 'body.vim 2 2 xbody', \
+         '<s>|body.vim[3]']",
+        "[['<S>/body.vim', '2', '<S>/body.vim[2]', '<S>/body.vim', '2'], 'body.vim 3 3 xbody', \
+         '<s>|body.vim[4]', ['<S>/body.vim', '2', '<S>/body.vim[2]', '<S>/body.vim', '2'], \
+         'body.vim 3 3 xbody', '<s>|body.vim[4]']",
+        "[['<S>/body.vim[6]..function EdWhereFn', '1', '<S>/body.vim[6]..function EdWhereFn[1]', \
+         '<S>/body.vim', '2'], 'body.vim[6]..function\\ EdWhereFn 2 3 xbody', \
+         '<s>|body.vim[6]..function EdWhereFn[3]']",
+        "['body.vim', '<S>/body.vim', 'body.vim EdWhere EdWhere']",
+    ];
+    assert_eq!(got, want);
+}

@@ -140,6 +140,7 @@
 {"path":"neovim::ex_docmd::FORCE_BIN","kind":"const","file":"crates/nvim/src/ex_docmd/mod.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::ex_docmd::FORCE_NOBIN","kind":"const","file":"crates/nvim/src/ex_docmd/mod.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::ex_docmd::do_cmdline_cmd","kind":"fn","file":"crates/nvim/src/ex_docmd/cmdline.rs","tests":["crates/nvim/tests/unit/charset_oracle.rs","crates/nvim/tests/unit/ex_docmd.rs","crates/nvim/tests/unit/mbyte_oracle.rs","crates/nvim/tests/unit/message_oracle.rs","crates/nvim/tests/unit/normal.rs","crates/nvim/tests/unit/options.rs","crates/nvim/tests/unit/regexp.rs","crates/nvim/tests/unit/strings_oracle.rs","crates/nvim/tests/unit/support.rs"]}
+{"path":"neovim::ex_docmd::getargcmd","kind":"fn","file":"crates/nvim/src/ex_docmd/argopt.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::ex_docmd::getargopt","kind":"fn","file":"crates/nvim/src/ex_docmd/argopt.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::ex_docmd::parse_cmdline","kind":"fn","file":"crates/nvim/src/ex_docmd/api.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::ex_docmd::separate_nextcmd","kind":"fn","file":"crates/nvim/src/ex_docmd/scan.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
@@ -587,6 +588,7 @@
 {"path":"neovim::types::Dict","kind":"struct","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_dict.rs"]}
 {"path":"neovim::types::DictItem","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval.rs","crates/nvim/tests/unit/typval_dict.rs"]}
 {"path":"neovim::types::DictKey","kind":"enum","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
+{"path":"neovim::types::EcmdCmd","kind":"enum","file":"crates/nvim/src/types/ex_cmds.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
 {"path":"neovim::types::Error","kind":"struct","file":"crates/nvim/src/types/api_error.rs","tests":["crates/nvim/tests/unit/options.rs","crates/nvim/tests/unit/unpacker.rs"]}
 {"path":"neovim::types::Event","kind":"struct","file":"crates/nvim/src/types/event.rs","tests":["crates/nvim/tests/unit/multiqueue.rs"]}
 {"path":"neovim::types::ExArg","kind":"struct","file":"crates/nvim/src/types/ex_cmds.rs","tests":["crates/nvim/tests/unit/ex_docmd.rs"]}
