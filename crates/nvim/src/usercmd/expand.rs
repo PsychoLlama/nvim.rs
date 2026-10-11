@@ -292,6 +292,47 @@ unsafe fn add_cmd_modifier(
 }
 
 /// The window-placement modifiers of `cmod`, in the order upstream emits
+/// them, one word each.
+pub(crate) fn win_cmd_modifier_words(cmod: &CmdMod) -> Vec<std::ffi::CString> {
+    let split = |flag: u32| cmod.cmod_split & flag as c_int != 0;
+    let mut words: Vec<std::ffi::CString> = Vec::new();
+    let mut add = |name: &CStr, present: bool| {
+        if present {
+            words.push(name.to_owned());
+        }
+    };
+    // `:aboveleft`/`:leftabove`, `:belowright`/`:rightbelow`, `:botright`.
+    add(c"aboveleft", split(WSP_ABOVE as u32));
+    add(c"belowright", split(WSP_BELOW as u32));
+    add(c"botright", split(WSP_BOT as u32));
+    if cmod.cmod_tab > 0 {
+        let tabnr = cmod.cmod_tab - 1;
+        // For compatibility, a tab number that is `:tab`'s own default is
+        // left off.
+        if tabnr == tab_index(TabPage::current()) {
+            add(c"tab", true);
+        } else {
+            let text = std::ffi::CString::new(format!("{tabnr}tab")).expect("no NUL");
+            add(&text, true);
+        }
+    }
+    add(c"topleft", split(WSP_TOP as u32));
+    add(c"vertical", split(WSP_VERT as u32));
+    add(c"horizontal", split(WSP_HOR as u32));
+    words
+}
+
+/// [`win_cmd_modifier_words`] joined by spaces, as a command line spells
+/// them.
+pub(crate) fn win_cmd_modifiers(cmod: &CmdMod) -> Vec<u8> {
+    win_cmd_modifier_words(cmod)
+        .iter()
+        .map(|word| word.to_bytes())
+        .collect::<Vec<_>>()
+        .join(&b' ')
+}
+
+/// The window-placement modifiers of `cmod`, in the order upstream emits
 /// them. Answers how many bytes were added.
 ///
 /// # Safety
@@ -304,48 +345,10 @@ pub(crate) unsafe fn add_win_cmd_modifiers(
     // SAFETY: caller contract.
     let multi_mods = unsafe { &mut *multi_mods };
     let mut result = 0;
-    let mut add = |name: *const c_char, present: bool| {
-        if present {
-            // SAFETY: caller contract.
-            result += unsafe { add_cmd_modifier(buf, name, multi_mods) };
-        }
-    };
-    // `:aboveleft`/`:leftabove`, `:belowright`/`:rightbelow`, `:botright`.
-    add(
-        c"aboveleft".as_ptr(),
-        cmod.cmod_split & WSP_ABOVE as c_int != 0,
-    );
-    add(
-        c"belowright".as_ptr(),
-        cmod.cmod_split & WSP_BELOW as c_int != 0,
-    );
-    add(
-        c"botright".as_ptr(),
-        cmod.cmod_split & WSP_BOT as c_int != 0,
-    );
-
-    if cmod.cmod_tab > 0 {
-        let tabnr = cmod.cmod_tab - 1;
-        let mut text = Scratch::new();
-        // For compatibility, a tab number that is `:tab`'s own default is
-        // left off.
-        if tabnr == tab_index(TabPage::current()) {
-            add(c"tab".as_ptr(), true);
-        } else {
-            let _ = write!(text, "{tabnr}tab");
-            add(text.as_ptr(), true);
-        }
+    for word in win_cmd_modifier_words(cmod) {
+        // SAFETY: caller contract.
+        result += unsafe { add_cmd_modifier(buf, word.as_ptr(), multi_mods) };
     }
-
-    add(c"topleft".as_ptr(), cmod.cmod_split & WSP_TOP as c_int != 0);
-    add(
-        c"vertical".as_ptr(),
-        cmod.cmod_split & WSP_VERT as c_int != 0,
-    );
-    add(
-        c"horizontal".as_ptr(),
-        cmod.cmod_split & WSP_HOR as c_int != 0,
-    );
     result
 }
 

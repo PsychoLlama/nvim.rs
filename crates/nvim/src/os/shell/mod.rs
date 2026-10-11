@@ -169,6 +169,30 @@ impl Argv {
         Argv(ptr::NonNull::new(raw).expect("shell_build_argv never answers null"))
     }
 
+    /// `'shell'` on its own, as an interactive shell runs.
+    pub fn interactive_shell() -> Self {
+        // SAFETY: no command and no extra arguments.
+        let raw = unsafe { shell_build_argv(ptr::null(), ptr::null()) };
+        Argv(ptr::NonNull::new(raw).expect("shell_build_argv never answers null"))
+    }
+
+    /// Every word, the program first.
+    pub fn words(&self) -> impl Iterator<Item = &CStr> {
+        let mut at = self.0.as_ptr();
+        core::iter::from_fn(move || {
+            // SAFETY: a NULL-terminated vector of NUL-terminated words this
+            // value owns; the walk stops at the null.
+            let word = unsafe { *at };
+            if word.is_null() {
+                return None;
+            }
+            // SAFETY: as above -- not past the null.
+            at = unsafe { at.add(1) };
+            // SAFETY: a word of the vector, borrowed for as long as `self`.
+            Some(unsafe { CStr::from_ptr(word) })
+        })
+    }
+
     /// `words`, in order, run as they are.
     ///
     /// # Panics

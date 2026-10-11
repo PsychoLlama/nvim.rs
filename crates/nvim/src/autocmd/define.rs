@@ -27,16 +27,27 @@ const CALLBACK_INIT: Callback = Callback::None;
 /// `:autocmd [group] {event} {pat} [++once] [++nested] {cmd}`, and every
 /// shorter spelling of it: listing, deleting, and `:autocmd *`.
 ///
-/// # Safety
-///
-/// `excmd` must point at the command's `ExArg`. `arg_in` must point at a NUL-
-/// terminated string, unaliased for the call.
-pub unsafe fn do_autocmd(
-    excmd: &mut ExArg,
-    arg_in: *mut ::core::ffi::c_char,
-    forceit: ::core::ffi::c_int,
-) {
-    let mut arg = arg_in;
+/// The argument is walked -- and its pattern terminated -- in place, in the
+/// command's own line; the next command after a `|` is recorded as an
+/// offset into it.
+pub fn do_autocmd(excmd: &mut ExArg, forceit: ::core::ffi::c_int) {
+    let start = excmd.line.arg;
+    let mut empty = [0u8];
+    let text = excmd.line.buffer_mut();
+    // The empty line has no buffer; it reads as the empty string.
+    let (base, start) = if text.is_empty() {
+        (empty.as_mut_ptr().cast::<::core::ffi::c_char>(), 0)
+    } else {
+        (
+            text.as_mut_ptr().cast::<::core::ffi::c_char>(),
+            start.min(text.len() - 1),
+        )
+    };
+    // Where `p`, a cursor into the line, is.
+    let offset = |p: *const ::core::ffi::c_char| p.addr() - base.addr();
+    // SAFETY: the line is NUL-terminated after `arg`, and nothing else
+    // reaches its bytes until this returns.
+    let mut arg = unsafe { base.add(start) };
     let mut envpat: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
     let mut cmd: *mut ::core::ffi::c_char;
     let mut need_free = false;
@@ -44,7 +55,7 @@ pub unsafe fn do_autocmd(
     let mut once = false;
 
     let group = if unsafe { *arg } == b'|' as ::core::ffi::c_char {
-        unsafe { excmd.set_nextcmd_ptr(arg.add(1)) };
+        excmd.line.next = Some(offset(arg) + 1);
         arg = c"".as_ptr().cast_mut();
         AUGROUP_ALL
     } else {
@@ -59,7 +70,7 @@ pub unsafe fn do_autocmd(
 
     pat = unsafe { skipwhite(pat) };
     if unsafe { *pat } == b'|' as ::core::ffi::c_char {
-        unsafe { excmd.set_nextcmd_ptr(pat.add(1)) };
+        excmd.line.next = Some(offset(pat) + 1);
         pat = c"".as_ptr().cast_mut();
         cmd = c"".as_ptr().cast_mut();
     } else {

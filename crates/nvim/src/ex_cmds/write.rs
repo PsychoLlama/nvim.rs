@@ -423,7 +423,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
     // If 'filetype' was empty try detecting it now.
     if Buf::current().b_p_ft.first_byte() as c_int == NUL {
         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
-            let _ = unsafe { do_doautocmd(c"filetypedetect BufRead", true, ptr::null_mut()) };
+            let _ = do_doautocmd(c"filetypedetect BufRead", true, None);
         }
         do_modelines(OptionSetFlags::NONE);
     }

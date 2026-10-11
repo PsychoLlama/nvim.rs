@@ -67,7 +67,7 @@ use crate::option::{copy_option_part, set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{
-    default_lib_dir, expand_env, expand_env_save, home_replace, home_replace_save, os_setenv,
+    default_lib_dir, expand_env, expand_env_save, home_replace, home_replace_save,
     vim_get_prefix_from_exepath, vim_getenv,
 };
 use crate::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
@@ -95,7 +95,6 @@ use crate::types::{
     ScriptItem, String_0, TypVal, UV_MUTEX_INIT, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv,
     XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t, size_t, uv_mutex_t,
 };
-use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
 use std::ffi::CString;
 

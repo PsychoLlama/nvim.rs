@@ -40,21 +40,16 @@ const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
 ///
 /// `Ok` unless the argument was malformed or an autocommand aborted;
 /// `did_something` (when given) says whether any autocommand ran.
-///
-/// # Safety
-///
-/// `did_something` must point at a writable `bool` the caller owns.
-pub unsafe fn do_doautocmd(
+pub fn do_doautocmd(
     arg_start: &CStr,
     do_msg: bool,
-    did_something: *mut bool,
+    mut did_something: Option<&mut bool>,
 ) -> Result<(), Failed> {
     let mut arg = arg_start.as_ptr().cast_mut();
     let mut nothing_done = true;
 
-    if !did_something.is_null() {
-        // SAFETY: a writable `bool`, by the contract above.
-        unsafe { *did_something = false };
+    if let Some(did) = did_something.as_deref_mut() {
+        *did = false;
     }
 
     // A leading word that is not a group name stays part of the events.
@@ -111,9 +106,8 @@ pub unsafe fn do_doautocmd(
         let arg_start = msg_bytes(arg_start.to_bytes());
         smsg!(0, "No matching autocommands: {arg_start}");
     }
-    if !did_something.is_null() {
-        // SAFETY: a writable `bool`, by the contract above.
-        unsafe { *did_something = !nothing_done };
+    if let Some(did) = did_something {
+        *did = !nothing_done;
     }
 
     if aborting() { Err(Failed) } else { Ok(()) }
@@ -144,8 +138,7 @@ pub fn ex_doautoall(excmd: &mut ExArg) {
             unsafe { aucmd_prepbuf(&raw mut aco, buf) };
             let bufref = BufRef::of(buf);
 
-            // SAFETY: `did_aucmd` is this frame's own `bool`.
-            retval = unsafe { do_doautocmd(arg, false, &raw mut did_aucmd) };
+            retval = do_doautocmd(arg, false, Some(&mut did_aucmd));
 
             if call_do_modelines && did_aucmd {
                 // Don't set window-local options when the window we are
@@ -171,7 +164,7 @@ pub fn ex_doautoall(excmd: &mut ExArg) {
 
     if retval.is_ok() {
         // SAFETY: as above.
-        let _ = unsafe { do_doautocmd(arg, false, &raw mut did_aucmd) };
+        let _ = do_doautocmd(arg, false, Some(&mut did_aucmd));
         if call_do_modelines && did_aucmd {
             do_modelines(OptionSetFlags::NONE);
         }

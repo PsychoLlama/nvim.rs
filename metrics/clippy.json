@@ -19,6 +19,7 @@
     "crates/nvim/src/os/env/mod.rs": 1,
     "crates/nvim/src/os/fs/mod.rs": 1,
     "crates/nvim/src/search/command.rs": 1,
-    "crates/nvim/src/search/find.rs": 1
+    "crates/nvim/src/search/find.rs": 1,
+    "crates/nvim/src/usercmd/expand.rs": 6
   }
 }

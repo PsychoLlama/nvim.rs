@@ -20,10 +20,12 @@ use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message_fmt::to_bytes;
 use crate::message_fmt::{c_str, report_msg};
+use crate::os::env::env_set;
 use crate::semsg;
 use crate::smsg;
 use crate::snprintf;
 use crate::tr_c;
+use crate::usercmd::win_cmd_modifiers;
 use crate::winlayer::Buf;
 
 use crate::ex_docmd::{DoCmdOpts, LineSource};
@@ -94,14 +96,9 @@ pub fn ex_source(excmd: &mut ExArg) {
 /// `:options`, which is `:source` of the option window script with the
 /// command modifiers passed along in the environment.
 pub fn ex_options(_excmd: &mut ExArg) {
-    let mut buf = [0 as c_char; 500];
-    let mut multi_mods = false;
-    cmdmod.with(|cmod| {
-        // SAFETY: `buf` is the scratch the modifiers are rendered into.
-        unsafe { add_win_cmd_modifiers(buf.as_mut_ptr(), cmod, &raw mut multi_mods) }
-    });
-    // SAFETY: `buf` is NUL-terminated and `SYS_OPTWIN_FILE` is a constant.
-    unsafe { os_setenv(c"OPTWIN_CMD".as_ptr(), buf.as_ptr(), 1) };
+    let mods = std::ffi::CString::new(cmdmod.with(win_cmd_modifiers)).expect("no NUL in a word");
+    let _ = env_set(c"OPTWIN_CMD", &mods);
+    // SAFETY: `SYS_OPTWIN_FILE` is a constant.
     unsafe { cmd_source(SYS_OPTWIN_FILE.as_ptr().cast_mut(), None) };
 }
 

@@ -307,7 +307,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
     if Buf::current().b_p_ft.first_byte() == 0 {
         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
             // SAFETY: nothing to write through.
-            let _ = unsafe { do_doautocmd(c"filetypedetect BufRead", false, ptr::null_mut()) };
+            let _ = do_doautocmd(c"filetypedetect BufRead", false, None);
         }
         do_modelines(OptionSetFlags::NONE);
     }

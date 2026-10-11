@@ -56,7 +56,7 @@ pub(crate) use complete::{
     get_user_commands, set_context_in_user_cmd, set_context_in_user_cmdarg, user_command_name,
 };
 pub(crate) use expand::{
-    add_win_cmd_modifiers, do_ucmd, uc_mods, uc_nargs_upper_bound, uc_split_args_iter,
+    do_ucmd, uc_mods, uc_nargs_upper_bound, uc_split_args_iter, win_cmd_modifiers,
 };
 pub(crate) use list::commands_array;
 
