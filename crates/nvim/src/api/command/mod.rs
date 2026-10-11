@@ -4,7 +4,7 @@
 
 use crate::api::private::helpers::{
     api_dict_to_keydict, api_set_sctx, api_typename, cstr_to_string, cstrn_to_string,
-    find_buffer_by_handle, string_to_cstr, try_enter, try_leave,
+    find_buffer_by_handle, try_enter, try_leave,
 };
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::charset::{skiptowhite, skipwhite};
@@ -21,7 +21,7 @@ use crate::mbyte::mb_islower;
 use crate::memory::xfree;
 use crate::message::state::{msg_col, redir_off};
 use crate::message::{capture_finish, capture_start};
-use crate::regexp::{RE_MAGIC, vim_regcomp};
+use crate::regexp::RE_MAGIC;
 use crate::register::valid_yank_reg;
 use crate::types::{
     ApiDict, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction, Error,

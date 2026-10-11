@@ -10,24 +10,22 @@
 //! Every exit runs the same epilogue (the C's `doend:` label), which
 //! reports the error, rethrows it as an exception if something is catching,
 //! and unwinds the command modifiers. That is what the `'doend` block is.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::ex_docmd::ex_msg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::autocmd::{apply_autocmds, getnextac, has_event};
+use crate::autocmd::{fire_autocmds_for, has_event};
 
 use crate::debugger::dbg_check_breakpoint;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::eval::userfunc::{current_func_returned, do_return, get_func_line};
+use crate::eval::userfunc::{current_func_returned, do_return};
 use crate::ex_docmd::address::{correct_range, find_excmd_after_range, parse_cmd_address};
 use crate::ex_docmd::addrtype::{set_cmd_addr_type, set_cmd_dflall_range};
-use crate::ex_docmd::xfree;
 
 use crate::ex_docmd::api::execute_cmd0;
 use crate::ex_docmd::argopt::{getargcmd, getargopt};
@@ -38,7 +36,7 @@ use crate::ex_docmd::modifier::CmdModScope;
 use crate::ex_docmd::scan::{
     get_flags, parse_bang, parse_count, parse_register, separate_nextcmd, skip_colons,
 };
-use crate::ex_docmd::source::{ex_errmsg, getline_cookie};
+use crate::ex_docmd::source::{ReadLines, SourceKind, ex_errmsg};
 
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
@@ -70,9 +68,9 @@ use crate::winlayer::graph::cmdwin_type;
 
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::profile::{func_line_exec_cookie, script_line_exec};
-use crate::runtime::{do_finish, getsourceline, source_finished};
-use crate::types::{CmdAddr, CmdLine, CondId, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, size_t};
+use crate::profile::{func_line_exec, script_line_exec};
+use crate::runtime::do_finish;
+use crate::types::{CmdAddr, CmdLine, CondId, ExArg, ExArgt, FAIL, IOSIZE};
 use crate::winlayer::{Buf, Win};
 
 /// A zeroed `ExArg` with the empty range the parsers start from.
@@ -80,7 +78,7 @@ use crate::winlayer::{Buf, Win};
 /// `CmdIdx::append` and `CmdAddr::Lines` are both zero, so the only fields the C's
 /// `(ExArg){ .line1 = 1, .line2 = 1 }` sets to anything else are the two
 /// line numbers.
-pub(crate) fn fresh_exarg() -> ExArg {
+pub(crate) fn fresh_exarg<'s>() -> ExArg<'s> {
     ExArg {
         line1: 1,
         line2: 1,
@@ -192,9 +190,7 @@ fn locate_command(
     excmd.skip = did_emsg.get() != 0 || got_int.get() || did_throw.get() || in_inactive;
 
     let mut p = find_excmd_after_range(excmd);
-    let (fgetline, cookie) = (excmd.ea_getline, excmd.cookie);
-    // SAFETY: the command's own line source.
-    unsafe { profile_cmd(excmd, cond, fgetline, cookie) };
+    profile_cmd(excmd, cond);
 
     if !exiting.get() {
         // May go to debug mode. If the `>quit` debug command is used there,
@@ -245,16 +241,7 @@ fn locate_command(
         let name = excmd.line.slice_at(excmd.line.cmd, end - excmd.line.cmd);
         let cmdname = CString::new(name).expect("a command name holds no NUL");
         let event = AutoEvent::CmdUndefined;
-        // SAFETY: `cmdname` is this frame's own, NUL-terminated.
-        let ret = unsafe {
-            apply_autocmds(
-                event,
-                cmdname.as_ptr().cast_mut(),
-                cmdname.as_ptr().cast_mut(),
-                true,
-                None,
-            )
-        };
+        let ret = fire_autocmds_for(event, Some(&cmdname), Some(&cmdname), true, None, None);
         // Look again only if the autocommands did something and did not
         // fail.
         p = if ret && !aborting() {
@@ -341,10 +328,7 @@ fn check_may_run(
                     *errormsg = Some(ex_msg(c"E493: Backwards range given"));
                     return Err(Refused);
                 }
-                // SAFETY: a static NUL-terminated prompt.
-                if unsafe { ask_yesno(gettext(c"Backwards range given, OK to swap").as_ptr()) }
-                    != 'y' as c_int
-                {
+                if ask_yesno(gettext(c"Backwards range given, OK to swap")) != c_int::from(b'y') {
                     return Err(Refused);
                 }
             }
@@ -513,16 +497,18 @@ fn separate_at_newline(excmd: &mut ExArg) {
 /// stack: a throw, a `:return` or a `:finish`.
 ///
 fn rethrow_from_nested(excmd: &mut ExArg) {
-    let (cond, fgetline, cookie) = (cond_stack_of(excmd), excmd.ea_getline, excmd.cookie);
+    let cond = cond_stack_of(excmd);
     if need_rethrow.get() {
         do_throw(cond);
     } else if check_cstack.get() {
-        // SAFETY: the caller's line source.
-        if unsafe { source_finished(fgetline, cookie) } {
+        let finished = excmd
+            .source
+            .as_ref()
+            .and_then(|source| source.script())
+            .is_some_and(|cookie| cookie.finished);
+        if finished {
             do_finish(excmd, true);
-        } else if getline_equal(fgetline, cookie, Some(get_func_line))
-            && current_func_returned() != 0
-        {
+        } else if excmd.source_kind() == SourceKind::Function && current_func_returned() != 0 {
             do_return(excmd, true, None);
         }
     }
@@ -532,27 +518,23 @@ fn rethrow_from_nested(excmd: &mut ExArg) {
 
 /// Parse and execute one Ex command, and answer where the next one starts.
 ///
-/// `fgetline`/`cookie` are the line source the command may read further
-/// lines from (`:append`, a `:function` body, a sourced file); either may be
-/// null. Re-entrant: a command that calls `do_cmdline` lands back here.
+/// `source` is where the command may read further lines from (`:append`, a
+/// `:function` body, a sourced file), if anywhere. Re-entrant: a command
+/// that calls `do_cmdline` lands back here.
 ///
 /// `line` is taken over for the call and handed back: a command may
 /// *replace* the buffer under itself (`:make` splices in 'makeprg', an
 /// expanded `%` grows it, a continued `:let` swaps in the joined line), and
 /// the answer is the line the caller must go on running.
 ///
-/// # Safety
-///
 /// `in_inactive` says the innermost conditional of `cond` is not active, as
-/// the caller last saw it. `cookie` must be the payload `fgetline` was
-/// registered with, live for the call.
-pub(crate) unsafe fn do_one_cmd(
+/// the caller last saw it.
+pub(crate) fn do_one_cmd(
     line: CmdLine,
     flags: DoCmdOpts,
     cond: CondId,
     in_inactive: bool,
-    fgetline: LineGetter,
-    cookie: *mut c_void,
+    source: Option<&mut dyn ReadLines>,
 ) -> CmdLine {
     let mut errormsg: Option<CString> = None;
     let save_reg_executing = reg_executing.get();
@@ -564,7 +546,10 @@ pub(crate) unsafe fn do_one_cmd(
     // A `'statusline'` function call and an autocommand (QuitPre) both
     // reach here without the user having typed anything, so neither
     // spends the second `:q`.
-    if quitmore_is_pending(fgetline, cookie) {
+    let kind = source
+        .as_ref()
+        .map_or(SourceKind::None, |source| source.kind());
+    if quitmore.get() != 0 && kind != SourceKind::Function && kind != SourceKind::Autocmd {
         quitmore.set(quitmore.get() - 1);
     }
 
@@ -574,8 +559,7 @@ pub(crate) unsafe fn do_one_cmd(
     let mods = CmdModScope::cleared();
 
     excmd.line = line;
-    excmd.ea_getline = fgetline;
-    excmd.cookie = cookie;
+    excmd.source = source;
     excmd.cond_stack = Some(cond);
 
     // Each stage refuses by answering `Err`, having left whatever it has to
@@ -603,9 +587,7 @@ pub(crate) unsafe fn do_one_cmd(
             return Err(Refused);
         }
         let mut retv: c_int = 0;
-        // SAFETY: `retv` is this frame's own.
-        unsafe { execute_cmd0(&raw mut retv, &mut excmd, &mut errormsg, false) }
-            .map_err(|_| Refused)
+        execute_cmd0(&mut retv, &mut excmd, &mut errormsg, false).map_err(|_| Refused)
     })();
     if ran.is_ok() {
         rethrow_from_nested(&mut excmd);
@@ -651,15 +633,6 @@ pub(crate) unsafe fn do_one_cmd(
     excmd.line
 }
 
-/// Does the "type `:q` twice" counter belong to a command the *user* typed?
-fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
-    // SAFETY: `getline_equal` only compares `fgetline` against a known line
-    // getter, walking `cookie` as a `LoopCookie` chain the caller owns.
-    quitmore.get() != 0
-        && !getline_equal(fgetline, cookie, Some(get_func_line))
-        && !getline_equal(fgetline, cookie, Some(getnextac))
-}
-
 /// Count this line for `:profile`, if profiling is on and the line is one
 /// that will really run.
 ///
@@ -667,17 +640,7 @@ fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
 /// to be entered, an `:else` whose branch is about to be taken and a
 /// `:finally` all execute even though the surrounding construct is
 /// inactive, and each is worth a profile sample.
-///
-/// # Safety
-///
-/// `cookie` must be the payload `fgetline` was registered with, live for
-/// the call.
-pub(crate) unsafe fn profile_cmd(
-    excmd: &ExArg,
-    cond: CondId,
-    fgetline: LineGetter,
-    cookie: *mut c_void,
-) {
+pub(crate) fn profile_cmd(excmd: &ExArg, cond: CondId) {
     if do_profiling.get() != PROF_YES {
         return;
     }
@@ -711,10 +674,14 @@ pub(crate) unsafe fn profile_cmd(
     if skip {
         return;
     }
-    if getline_equal(fgetline, cookie, Some(get_func_line)) {
-        func_line_exec_cookie(unsafe { getline_cookie(fgetline, cookie) });
-    } else if getline_equal(fgetline, cookie, Some(getsourceline)) {
-        script_line_exec();
+    match excmd.source.as_ref() {
+        Some(source) if source.kind() == SourceKind::Function => {
+            if let Some(frame) = source.function() {
+                func_line_exec(frame);
+            }
+        }
+        Some(source) if source.kind() == SourceKind::Script => script_line_exec(),
+        _ => {}
     }
 }
 
@@ -843,20 +810,13 @@ pub(crate) fn ex_script_ni(excmd: &mut ExArg) {
     if !excmd.skip {
         ex_ni(excmd);
     } else {
-        let mut len: size_t = 0;
-        unsafe { xfree(script_get(excmd, &raw mut len) as *mut c_void) };
+        drop(script_get(excmd));
     }
 }
 
 /// `curbuf_locked()` as checked code.
 fn curbuf_locked() -> bool {
     crate::ex_getln::curbuf_locked()
-}
-
-/// `getline_equal()` as checked code.
-fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) -> bool {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::source::getline_equal(fgetline, cookie, func) }
 }
 
 /// `invalid_range()` as checked code.

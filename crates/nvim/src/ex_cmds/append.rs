@@ -214,7 +214,7 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
         return Some(Line(line));
     }
 
-    let Some(getline) = args.ea_getline else {
+    let Some(source) = args.source.as_mut() else {
         // No getline() function: use the lines that follow.  This ends
         // when there is no more.
         let next = args.nextcmd_ptr();
@@ -246,8 +246,9 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
         .cond_stack
         .is_some_and(|cond| cond.with(|cs| cs.loop_level > 0));
     let first = if in_loop { -1 } else { NUL };
-    // SAFETY: the cookie is the one the getter was handed with.
-    let line = unsafe { getline(first, args.cookie, indent, true) };
+    let line = source
+        .next_line(first, indent, true)
+        .map_or(ptr::null_mut(), crate::memory::XString::into_raw);
     State.set(save_state);
     Some(Line(line))
 }

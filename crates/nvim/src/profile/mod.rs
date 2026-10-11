@@ -37,7 +37,7 @@ pub(crate) use startuptime::{time_msg_at, time_pop};
 
 use crate::charset::skip;
 use crate::debugger::ex_breakadd;
-use crate::eval::userfunc::{all_funcs, cookie_funccall, current_fc};
+use crate::eval::userfunc::{all_funcs, current_fc};
 use crate::eval::vars::set_vim_var_nr;
 use crate::global_cell::GlobalCell;
 use crate::message::emsg;
@@ -52,7 +52,7 @@ use crate::types::{
     ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, ScriptItem, SnPrl, UserFunc,
     VarNumber, Vv, int64_t,
 };
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 use std::rc::Rc;
 pub(crate) static do_profiling: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -473,24 +473,6 @@ pub(crate) fn func_line_end(frame: &FuncCall) {
         }
         prof.tml_idx = -1;
     }
-}
-
-/// [`func_line_start`] for the function body `cookie` is the
-/// `do_cmdline` cookie of.
-pub fn func_line_start_cookie(cookie: *mut c_void) {
-    func_line_start(&cookie_funccall(cookie));
-}
-
-/// [`func_line_exec`] for the function body `cookie` is the `do_cmdline`
-/// cookie of.
-pub fn func_line_exec_cookie(cookie: *mut c_void) {
-    func_line_exec(&cookie_funccall(cookie));
-}
-
-/// [`func_line_end`] for the function body `cookie` is the `do_cmdline`
-/// cookie of.
-pub fn func_line_end_cookie(cookie: *mut c_void) {
-    func_line_end(&cookie_funccall(cookie));
 }
 
 // ---------------------------------------------------------------------------

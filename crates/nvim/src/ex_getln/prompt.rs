@@ -10,9 +10,8 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{NumBuf, list_iter};
+use crate::eval::typval::NumBuf;
 use crate::memory::ThinCString;
-use crate::memory::handoff::owned_cstr;
 use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT};
 
 /// Read the script body of a command that takes either `:command script` or a
@@ -24,54 +23,27 @@ use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT};
 /// endmarker
 /// ```
 ///
-/// `lenp` receives the length without the trailing NUL (zero while skipping).
-/// Answers an allocated string, or NULL when skipping and on error; it shows
-/// no messages of its own.
-///
-/// # Safety
-///
-/// `excmd` must point at the command's `ExArg`. `lenp` must point at a
-/// writable `size_t` the caller owns.
-pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
+/// Answers the script, or `None` when skipping and on error; it shows no
+/// messages of its own.
+pub fn script_get(excmd: &mut ExArg) -> Option<crate::memory::XString> {
+    let arg = excmd.line.arg();
+    if !arg.starts_with(b"<<") || excmd.source.is_none() {
+        return (!excmd.skip).then(|| crate::memory::XString::from_bytes(arg));
+    }
+
+    let at = excmd.line.arg + 2;
+    let held = heredoc_get(excmd, at, true)?;
+    if excmd.skip {
+        // A skipped here-document is consumed, and answers nothing.
+        return None;
+    }
     let mut numbuf = NumBuf::new();
-    let mut cmd = excmd.arg_ptr();
-    if unsafe { *cmd.offset(0) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-        || unsafe { *cmd.offset(1) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-        || excmd.ea_getline.is_none()
-    {
-        unsafe { *lenp = excmd.line.arg().len() };
-        if excmd.skip {
-            return ::core::ptr::null_mut();
-        }
-        return unsafe { xmemdupz(excmd.arg_ptr() as *const ::core::ffi::c_void, *lenp) }
-            as *mut ::core::ffi::c_char;
-    }
-    cmd = unsafe { cmd.offset(2) };
-
-    let at = excmd.line.offset_of(cmd);
-    let Some(held) = heredoc_get(excmd, at, true) else {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    };
-    let l = held.as_ptr();
-
-    let skip = excmd.skip;
     let mut text = Vec::<u8>::new();
-    for li in list_iter(unsafe { l.as_ref() }) {
-        if !skip {
-            text.extend_from_slice(numbuf.bytes(&li.li_tv));
-            text.push(b'\n');
-        }
+    for li in held.items() {
+        text.extend_from_slice(numbuf.bytes(&li.li_tv));
+        text.push(b'\n');
     }
-
-    // The length is the text without the terminator `owned_cstr` adds.
-    unsafe { *lenp = text.len() as size_t };
-    drop(held);
-    // A skipped here-document answered a garray that was never opened, and
-    // so a null pointer.
-    if skip {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
-    owned_cstr(text)
+    Some(crate::memory::XString::from_vec(text))
 }
 
 /// The `cancelreturn` entry of an `{opts}` dictionary, if it has one.

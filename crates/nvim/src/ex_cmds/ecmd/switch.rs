@@ -58,7 +58,7 @@ pub(super) enum Switch {
 /// Make the target file's buffer the one the current window shows, firing
 /// BufLeave for the old one and closing it when it is no longer wanted.
 pub(super) fn switch_to_other_buffer(
-    args: &mut EcmdArgs<'_>,
+    args: &mut EcmdArgs<'_, '_>,
     oldwin: &mut Option<WinId>,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
@@ -198,7 +198,7 @@ pub(super) fn switch_to_other_buffer(
 /// wanted, and make `buffer` the current window's.
 fn leave_for_buffer(
     mut buffer: Buf,
-    args: &mut EcmdArgs<'_>,
+    args: &mut EcmdArgs<'_, '_>,
     oldwin: Option<WinId>,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,

@@ -91,8 +91,8 @@ pub unsafe fn parse_cmdline(
     let save_cursor: Pos = Win::current().w_cursor;
     save_last_search_pattern();
 
-    let into = cmdinfo.cast::<u8>();
-    unsafe { into.write_bytes(0, size_of::<CmdParseInfo>()) };
+    // SAFETY: the caller's live `CmdParseInfo`, whose old modifiers go.
+    unsafe { *cmdinfo = crate::ex_getln::CMD_PARSE_INFO_INIT };
     *excmd = fresh_exarg();
     excmd.line = line;
 
@@ -233,12 +233,8 @@ pub unsafe fn parse_cmdline(
 /// The last stage both `do_one_cmd` and `execute_cmd` share: everything
 /// before it is validation, everything after it is error reporting.
 ///
-/// # Safety
-///
-/// `retv` must point at a writable `int` the caller owns. `excmd` must point
-/// at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn execute_cmd0(
-    retv: *mut c_int,
+pub(crate) fn execute_cmd0(
+    retv: &mut c_int,
     excmd: &mut ExArg,
     errormsg: &mut Option<CString>,
     preview: bool,
@@ -306,19 +302,17 @@ pub(crate) unsafe fn execute_cmd0(
     }
 
     if is_user_cmd(excmd.cmdidx) {
-        unsafe { *retv = do_ucmd(excmd, preview) };
+        *retv = do_ucmd(excmd, preview);
     } else {
         excmd.errmsg = None;
         if preview {
-            unsafe {
-                *retv = cmdnames[excmd.cmdidx.index()]
-                    .cmd_preview_func
-                    .expect("a command with ExArgt::PREVIEW has a preview callback")(
-                    excmd,
-                    cmdpreview_get_ns(),
-                    cmdpreview_get_bufnr(),
-                )
-            };
+            *retv = cmdnames[excmd.cmdidx.index()]
+                .cmd_preview_func
+                .expect("a command with ExArgt::PREVIEW has a preview callback")(
+                excmd,
+                cmdpreview_get_ns(),
+                cmdpreview_get_bufnr(),
+            );
         } else {
             cmdnames[excmd.cmdidx.index()]
                 .cmd_func
@@ -417,7 +411,7 @@ pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview
         let cond_stack = crate::ex_eval::OwnedCondStack::open();
         excmd.cond_stack = Some(cond_stack.id());
 
-        let _ = unsafe { execute_cmd0(&raw mut retv, excmd, &mut errormsg, preview) };
+        let _ = execute_cmd0(&mut retv, excmd, &mut errormsg, preview);
     }
 
     if let Some(msg) = &errormsg

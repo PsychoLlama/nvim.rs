@@ -1,8 +1,8 @@
 //! What surrounds a `do_cmdline` call: the exception state it saves and
-//! restores for the debugger, the line getter it reads through, the loop
-//! line store `:while` and `:for` replay from, and Ex mode.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+//! restores for the debugger, the sources it reads its lines from -- the
+//! [`LineSource`] arms and the loop line store `:while` and `:for` replay
+//! from -- and Ex mode.
+#![forbid(unsafe_code)]
 use crate::buffer::buf_get_changedtick;
 use crate::eval::vars::{set_vim_var_owned, vim_var_string};
 use crate::message::emsg;
@@ -12,33 +12,36 @@ use crate::getchar::typeahead;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::smsg;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::cell::Cell;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
+use crate::autocmd::getnextac;
 use crate::clipboard::{end_batch_changes, start_batch_changes};
-use crate::cstr;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later, update_screen};
+use crate::eval::funcs::{ListLines, get_list_line};
+use crate::eval::userfunc::get_func_line;
 use crate::eval::vars::set_vim_var_string;
+use crate::getchar::getcmdkeycmd;
+use crate::memory::XString;
+use crate::runtime::{SourceCookie, getsourceline};
+use crate::types::{AutoPatCmd, FuncCall};
 
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::do_cmdline;
-use crate::ex_docmd::sourcing_entry;
-use crate::ex_docmd::xfree;
+use crate::ex_docmd::sourcing_lnum;
 
 use crate::drawscreen::state::cmdline_row;
 use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, global_busy};
 use crate::ex_docmd::{
-    DoCmdOpts, ETYPE_EXCEPT, LoopCookie, MSG_BUF_LEN, SavedDebugState, WhileCmd,
-    cmdline_call_depth, ex_pressedreturn,
+    DoCmdOpts, ETYPE_EXCEPT, MSG_BUF_LEN, SavedDebugState, cmdline_call_depth, ex_pressedreturn,
 };
 use crate::ex_eval::discard_current_exception;
 use crate::ex_eval::state::{
     caught_stack, check_cstack, current_exception, did_throw, force_abort, need_rethrow,
     suppress_errthrow, trylevel,
 };
-use crate::ex_getln::{getcmdline, getexline};
-use crate::garray::ga_append_via_ptr;
+use crate::ex_getln::{cmdline_input, getexline};
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::highlight_group::HLF_E;
 use crate::message::e_empty_buffer;
@@ -54,84 +57,58 @@ use crate::message::{
     emsg_multiline, msg, msg_clr_eos, msg_scroll_flush, msg_str, verbose_enter_scroll,
     verbose_leave_scroll,
 };
-use crate::message_fmt::msg_cstr_opt;
+use crate::message_fmt::msg_bytes;
 
 use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
-use crate::types::{Failed, GArray, IOSIZE, LineGetter, LineNr, OptInt, Vv};
+use crate::types::{CmdLine, ExArg, Failed, IOSIZE, LineNr, OptInt, Vv};
 
-use crate::winlayer::{Buf, Live, Win};
-
-/// The debugger's saved exception environment, whose caller has promised it
-/// outlives the value: `save_dbg_stuff`/`restore_dbg_stuff` are handed a
-/// `SavedDebugState` the debugger's own frame owns.
-type Dbg = Live<SavedDebugState>;
-
-/// The stored lines a `:while`/`:for` body is replayed from, owned by the
-/// frame running the loop.
-type Lc = Live<LoopCookie>;
+use crate::winlayer::{Buf, Win};
 
 /// Take the whole exception environment out of the way, and answer it.
 ///
 /// Used only by the debugger: a `>quit` at a breakpoint must not be
 /// swallowed by whatever `:try` the script had open.
-///
-/// # Safety
-///
-/// `dsp` must point at a live `SavedDebugState`, unaliased for the call.
-pub(crate) unsafe fn save_dbg_stuff(dsp: *mut SavedDebugState) {
-    // SAFETY: the caller's own `SavedDebugState`, live for the call.
-    let mut d = unsafe { Dbg::new(dsp) };
-    d.trylevel = trylevel.get();
-    trylevel.set(0);
-    d.force_abort = force_abort.get() as c_int;
-    force_abort.set(false);
-    d.caught_stack = caught_stack.take();
-    // Copies, which leave the variables as they are: a `:catch` or a
-    // discarded exception in the debugger may replace them, and a pointer to
-    // the variable's own string would not survive that.
-    d.vv_exception = vim_var_string(Vv::Exception);
-    d.vv_throwpoint = vim_var_string(Vv::Throwpoint);
-    d.did_emsg = did_emsg.get();
-    did_emsg.set(0);
-    d.got_int = got_int.get() as c_int;
-    got_int.set(false);
-    d.did_throw = did_throw.get();
-    did_throw.set(false);
-    d.need_rethrow = need_rethrow.get() as c_int;
-    need_rethrow.set(false);
-    d.check_cstack = check_cstack.get() as c_int;
-    check_cstack.set(false);
-    d.current_exception = current_exception.take();
+pub(crate) fn save_dbg_stuff() -> SavedDebugState {
+    SavedDebugState {
+        trylevel: trylevel.replace(0),
+        force_abort: c_int::from(force_abort.replace(false)),
+        caught_stack: caught_stack.take(),
+        // Copies, which leave the variables as they are: a `:catch` or a
+        // discarded exception in the debugger may replace them, and a
+        // pointer to the variable's own string would not survive that.
+        vv_exception: vim_var_string(Vv::Exception),
+        vv_throwpoint: vim_var_string(Vv::Throwpoint),
+        did_emsg: did_emsg.replace(0),
+        got_int: c_int::from(got_int.replace(false)),
+        did_throw: did_throw.replace(false),
+        need_rethrow: c_int::from(need_rethrow.replace(false)),
+        check_cstack: c_int::from(check_cstack.replace(false)),
+        current_exception: current_exception.take(),
+    }
 }
 
 /// Put it all back.
-///
-/// # Safety
-///
-/// `dsp` must point at a live `SavedDebugState`, unaliased for the call.
-pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut SavedDebugState) {
-    // SAFETY: as `save_dbg_stuff`.
-    let mut d = unsafe { Dbg::new(dsp) };
+pub(crate) fn restore_dbg_stuff(saved: SavedDebugState) {
     suppress_errthrow.set(false);
-    trylevel.set(d.trylevel);
-    force_abort.set(d.force_abort != 0);
-    caught_stack.set(core::mem::take(&mut d.caught_stack));
+    trylevel.set(saved.trylevel);
+    force_abort.set(saved.force_abort != 0);
+    caught_stack.set(saved.caught_stack);
     // A null saved value puts nothing back, as upstream's `v_exception(NULL)`
     // is the read half.
-    if let Some(exception) = d.vv_exception.take() {
+    if let Some(exception) = saved.vv_exception {
         set_vim_var_owned(Vv::Exception, Some(exception));
     }
-    if let Some(throwpoint) = d.vv_throwpoint.take() {
+    if let Some(throwpoint) = saved.vv_throwpoint {
         set_vim_var_owned(Vv::Throwpoint, Some(throwpoint));
     }
-    did_emsg.set(d.did_emsg);
-    got_int.set(d.got_int != 0);
-    did_throw.set(d.did_throw);
-    need_rethrow.set(d.need_rethrow != 0);
-    check_cstack.set(d.check_cstack != 0);
-    current_exception.set(d.current_exception);
+    did_emsg.set(saved.did_emsg);
+    got_int.set(saved.got_int != 0);
+    did_throw.set(saved.did_throw);
+    need_rethrow.set(saved.need_rethrow != 0);
+    check_cstack.set(saved.check_cstack != 0);
+    current_exception.set(saved.current_exception);
 }
 
 /// Ex mode: read and run one command line at a time, printing the current
@@ -172,8 +149,7 @@ pub fn do_exmode() {
         let prev_line = Win::current().w_cursor.lnum;
         cmdline_row.set(msg_row.get());
 
-        let plain = DoCmdOpts::NONE;
-        let _ = unsafe { do_cmdline(ptr::null_mut(), Some(getexline), ptr::null_mut(), plain) };
+        let _ = do_cmdline(None, Some(&mut LineSource::Typed), DoCmdOpts::NONE);
         lines_left.set(Rows.get() - 1);
 
         let moved = prev_line != Win::current().w_cursor.lnum
@@ -215,20 +191,13 @@ pub fn do_exmode() {
 
 /// `:verbose` >= 15: report the command about to run, and which line of
 /// which script it is.
-///
-/// # Safety
-///
-/// `cmd` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn msg_verbose_cmd(lnum: LineNr, cmd: *mut c_char) {
+pub(crate) fn msg_verbose_cmd(lnum: LineNr, cmd: &[u8]) {
     let _no_prompt = Suppress::wait_return();
     verbose_enter_scroll();
+    let cmd = msg_bytes(cmd);
     if lnum == 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let cmd = unsafe { msg_cstr_opt(cstr::at_opt(cmd)) };
         smsg!(0, "Executing: {cmd}");
     } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let cmd = unsafe { msg_cstr_opt(cstr::at_opt(cmd)) };
         smsg!(0, "line {}: {cmd}", lnum);
     }
     if msg_silent.get() == 0 {
@@ -296,8 +265,9 @@ pub fn handle_did_throw() {
     });
 
     // Report against where the exception was thrown, not where it was
-    // caught.
-    estack_push(ETYPE_EXCEPT, throw_name.into_raw(), throw_lnum);
+    // caught. The frame names `throw_name` by pointer, and this frame holds
+    // the name until the frame is popped.
+    estack_push(ETYPE_EXCEPT, throw_name.as_ptr().cast_mut(), throw_lnum);
     discard_current_exception();
 
     // `:silent!` makes even an uncaught exception non-fatal.
@@ -314,126 +284,257 @@ pub fn handle_did_throw() {
         emsg(&reported);
     }
 
-    xfree(sourcing_entry().es_name as *mut c_void);
     estack_pop();
+    drop(throw_name);
 }
 
-/// The line getter `do_one_cmd` is handed inside a `:while` or `:for`.
+// ---------------------------------------------------------------------------
+// Where the lines come from.
+
+/// What a line source is, looking through every `:while`/`:for` replaying
+/// around it: the three questions upstream asked `getline_equal` (is this a
+/// function body, a sourced script, the `:` prompt?) and the two more the
+/// command parse asks (an autocommand, or no source at all).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum SourceKind {
+    /// No reader: a line given whole, which a command that wants more of its
+    /// body reads from the command line.
+    None,
+    /// The `:` prompt.
+    Typed,
+    /// The command a `<Cmd>` key carries, read back out of the typeahead.
+    CmdKey,
+    /// `execute()`'s List.
+    List,
+    /// A function body.
+    Function,
+    /// A sourced script, file or buffer or string.
+    Script,
+    /// An autocommand's commands.
+    Autocmd,
+}
+
+/// Where the debugger keeps the breakpoint of a function or a script being
+/// run, and the tick it was looked up at: borrowed from the function's frame
+/// or the script's cookie, so a lookup made through it is the frame's own.
+pub(crate) struct DebugPos<'s> {
+    /// The function's name; `None` for a script, whose name is the execution
+    /// stack's.
+    pub(crate) name: Option<&'s CStr>,
+    pub(crate) breakpoint: &'s Cell<LineNr>,
+    pub(crate) tick: &'s Cell<c_int>,
+}
+
+/// A line source, as a running command and a `:while` around it hold it.
+///
+/// Implemented by [`LineSource`] alone. It exists because a source has to be
+/// wrapped by the loop *inside* the run reading from it: `&mut LineSource<'a>`
+/// is invariant in `'a`, so a `:while` could not lend the run's source to its
+/// loop arm for any shorter borrow than the source's own. A trait object can:
+/// `&'b mut (dyn ReadLines + 'a)` shortens to `+ 'b`. Every method sees
+/// through the loops to the source underneath, but [`is_loop`](Self::is_loop).
+pub(crate) trait ReadLines {
+    /// The next line, or `None` at the end of the input. `c` is the prompt
+    /// character, `indent` the indent to show and `do_concat` whether `\`
+    /// continuation lines are joined -- each source takes what it needs.
+    fn next_line(&mut self, c: c_int, indent: c_int, do_concat: bool) -> Option<XString>;
+    /// Which kind of source this is.
+    fn kind(&self) -> SourceKind;
+    /// Whether this is a `:while`/`:for` replaying, rather than the source
+    /// itself.
+    fn is_loop(&self) -> bool;
+    /// The function this is the body of.
+    fn function(&self) -> Option<&FuncCall>;
+    /// The script this is reading.
+    fn script(&self) -> Option<&SourceCookie>;
+    /// The script this is reading, to write to (`:finish`,
+    /// `:scriptencoding`).
+    fn script_mut(&mut self) -> Option<&mut SourceCookie>;
+    /// Where the breakpoint of the function or script this is reading is
+    /// kept.
+    fn debug(&mut self) -> Option<DebugPos<'_>>;
+}
+
+/// Every source a `do_cmdline` run reads its lines from.
+pub(crate) enum LineSource<'a> {
+    /// No reader: the run has the one line it was given.
+    None,
+    /// The `:` prompt (`getexline`).
+    Typed,
+    /// A `<Cmd>` key's command.
+    CmdKey,
+    /// `execute()`'s List walk.
+    List(&'a mut ListLines),
+    /// A function body, read from its frame.
+    Function(&'a FuncCall),
+    /// A script, read through its cookie.
+    Script(&'a mut SourceCookie),
+    /// An autocommand's commands, one handler per line.
+    Autocmd(&'a mut AutoPatCmd),
+    /// A `:while`/`:for` body being stored and replayed, around another
+    /// source.
+    Loop(LoopLines<'a>),
+}
+
+/// One line of a `:while`/`:for` body, as it was read, and the line number
+/// it was read at.
+pub(crate) struct StoredLine {
+    pub(crate) line: Vec<u8>,
+    pub(crate) lnum: LineNr,
+}
+
+/// The source a command inside a `:while` or `:for` is handed.
 ///
 /// Replays a stored line when there is one, and otherwise reads a new line
-/// from the getter underneath and stores it on the way through. That is
+/// from the source underneath and stores it on the way through. That is
 /// what lets a `:function` be defined inside a loop: its body is read once
-/// and replayed with everything else.
-///
-/// Keeps the raw signature: it is stored as a `LineGetter`.
-///
-/// # Safety
-///
-/// `cookie` must point at the `LoopCookie` the `:while`/`:for` frame set up,
-/// live for as long as the loop it drives -- this is stored as a `LineGetter`
-/// and gets back whatever was registered beside it.
-#[inline(never)]
-pub(crate) unsafe fn get_loop_line(
-    c: c_int,
-    cookie: *mut c_void,
-    indent: c_int,
-    do_concat: bool,
-) -> *mut c_char {
-    // SAFETY: the cookie is the `:while`/`:for` frame's own, live for as
-    // long as the loop it drives.
-    let mut cp = unsafe { Lc::new(cookie as *mut LoopCookie) };
-    if cp.current_line + 1 >= unsafe { (*cp.lines_gap).ga_len } {
-        // Past the end of what was stored. On a repeat pass that means
-        // the loop body is over.
-        if cp.repeating != 0 {
-            return ptr::null_mut();
-        }
-        let line = match cp.lc_getline {
-            Some(get) => unsafe { get(c, cp.cookie, indent, do_concat) },
-            None => getcmdline(c, 0, indent, do_concat),
+/// and replayed with everything else. A loop inside a loop wraps it again.
+pub(crate) struct LoopLines<'a> {
+    /// The body stored so far, and the line last handed out.
+    pub(crate) store: &'a mut Vec<StoredLine>,
+    pub(crate) current_line: &'a mut c_int,
+    /// Replaying: past the end of the store is the end of the body.
+    pub(crate) repeating: bool,
+    pub(crate) inner: &'a mut dyn ReadLines,
+}
+
+impl LoopLines<'_> {
+    fn next_line(&mut self, c: c_int, indent: c_int, do_concat: bool) -> Option<XString> {
+        let next = usize::try_from(*self.current_line + 1).unwrap_or(0);
+        let Some(stored) = self.store.get(next) else {
+            // Past the end of what was stored. On a repeat pass that means
+            // the loop body is over.
+            if self.repeating {
+                return None;
+            }
+            let line = self.inner.next_line(c, indent, do_concat)?;
+            self.store.push(StoredLine {
+                line: line.as_cstr().to_bytes().to_vec(),
+                lnum: sourcing_lnum(),
+            });
+            *self.current_line += 1;
+            return Some(line);
         };
-        if !line.is_null() {
-            unsafe { store_loop_line(cp.lines_gap, line) };
-            cp.current_line += 1;
+        // A replayed line was not typed. It is handed out as a copy: the
+        // store keeps its line, and a command modifies what it is handed.
+        KeyTyped.set(false);
+        *self.current_line += 1;
+        set_sourcing_lnum(stored.lnum);
+        Some(XString::from_bytes(&stored.line))
+    }
+}
+
+impl ReadLines for LineSource<'_> {
+    fn next_line(&mut self, c: c_int, indent: c_int, do_concat: bool) -> Option<XString> {
+        match self {
+            // A command that reads more of its body with no source to read
+            // it from asks the command line.
+            LineSource::None => cmdline_input(c, indent, do_concat),
+            LineSource::Typed => getexline(c, indent, do_concat),
+            LineSource::CmdKey => getcmdkeycmd(),
+            LineSource::List(walk) => get_list_line(walk),
+            LineSource::Function(frame) => get_func_line(frame),
+            LineSource::Script(cookie) => getsourceline(cookie, do_concat),
+            LineSource::Autocmd(walk) => getnextac(walk),
+            LineSource::Loop(lines) => lines.next_line(c, indent, do_concat),
         }
-        return line;
     }
-    // A replayed line was not typed.
-    KeyTyped.set(false);
-    cp.current_line += 1;
-    let wp = unsafe { ((*cp.lines_gap).ga_data as *mut WhileCmd).offset(cp.current_line as isize) };
-    set_sourcing_lnum(unsafe { (*wp).lnum });
-    unsafe { xstrdup((*wp).line) }
-}
 
-/// Remember a line, with the source line number it came from.
-///
-/// # Safety
-///
-/// `gap` must point at a live growable array, unaliased for the call. `line`
-/// must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn store_loop_line(gap: *mut GArray, line: *mut c_char) {
-    let p = unsafe { ga_append_via_ptr(gap, size_of::<WhileCmd>()) } as *mut WhileCmd;
-    unsafe { (*p).line = xstrdup(line) };
-    unsafe { (*p).lnum = sourcing_entry().es_lnum };
-}
+    fn kind(&self) -> SourceKind {
+        match self {
+            LineSource::None => SourceKind::None,
+            LineSource::Typed => SourceKind::Typed,
+            LineSource::CmdKey => SourceKind::CmdKey,
+            LineSource::List(_) => SourceKind::List,
+            LineSource::Function(_) => SourceKind::Function,
+            LineSource::Script(_) => SourceKind::Script,
+            LineSource::Autocmd(_) => SourceKind::Autocmd,
+            LineSource::Loop(lines) => lines.inner.kind(),
+        }
+    }
 
-/// Are these the same line getter? Spelled out so the intent survives the
-/// `unpredictable_function_pointer_comparisons` lint.
-pub(crate) fn line_getter_eq(a: LineGetter, b: LineGetter) -> bool {
-    match (a, b) {
-        (Some(a), Some(b)) => ptr::fn_addr_eq(a, b),
-        (None, None) => true,
-        _ => false,
+    fn is_loop(&self) -> bool {
+        matches!(self, LineSource::Loop(_))
+    }
+
+    fn function(&self) -> Option<&FuncCall> {
+        match self {
+            LineSource::Function(frame) => Some(frame),
+            LineSource::Loop(lines) => lines.inner.function(),
+            _ => None,
+        }
+    }
+
+    fn script(&self) -> Option<&SourceCookie> {
+        match self {
+            LineSource::Script(cookie) => Some(cookie),
+            LineSource::Loop(lines) => lines.inner.script(),
+            _ => None,
+        }
+    }
+
+    fn script_mut(&mut self) -> Option<&mut SourceCookie> {
+        match self {
+            LineSource::Script(cookie) => Some(cookie),
+            LineSource::Loop(lines) => lines.inner.script_mut(),
+            _ => None,
+        }
+    }
+
+    fn debug(&mut self) -> Option<DebugPos<'_>> {
+        match self {
+            LineSource::Function(frame) => Some(DebugPos {
+                name: Some(frame.func.name().as_cstr()),
+                breakpoint: &frame.breakpoint,
+                tick: &frame.dbg_tick,
+            }),
+            LineSource::Script(cookie) => Some(DebugPos {
+                name: None,
+                breakpoint: Cell::from_mut(&mut cookie.breakpoint),
+                tick: Cell::from_mut(&mut cookie.dbg_tick),
+            }),
+            LineSource::Loop(lines) => lines.inner.debug(),
+            _ => None,
+        }
     }
 }
 
-/// Is `fgetline` — or whatever it is wrapping — this line getter?
-///
-/// `get_loop_line` wraps another getter, and a loop inside a loop wraps it
-/// again, so the chain has to be walked before the comparison means
-/// anything.
-///
-/// # Safety
-///
-/// `cookie` must be the payload `fgetline` was registered with, live for the
-/// call.
-pub unsafe fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) -> bool {
-    let (gp, _) = unwrap_loop_getter(fgetline, cookie);
-    line_getter_eq(gp, func)
+impl ExArg<'_> {
+    /// What the command reads its further lines from; [`SourceKind::None`]
+    /// when it was given no source.
+    pub(crate) fn source_kind(&self) -> SourceKind {
+        self.source
+            .as_ref()
+            .map_or(SourceKind::None, |source| source.kind())
+    }
+
+    /// Where the command reads its further lines from, lent for a nested
+    /// `do_cmdline` to read its own through.
+    pub(crate) fn source_mut(&mut self) -> Option<&mut dyn ReadLines> {
+        self.line_and_source().1
+    }
+
+    /// [`source_mut`](Self::source_mut), with the command's own line beside
+    /// it: what `:windo` and friends run on each pass.
+    pub(crate) fn line_and_source(&mut self) -> (&CmdLine, Option<&mut dyn ReadLines>) {
+        let source: Option<&mut dyn ReadLines> = match &mut self.source {
+            Some(source) => Some(&mut **source),
+            None => None,
+        };
+        (&self.line, source)
+    }
+
+    /// The script the command is running in, when it reads its lines from
+    /// one (through any loop).
+    pub(crate) fn sourced_script(&mut self) -> Option<&mut SourceCookie> {
+        self.source.as_mut()?.script_mut()
+    }
 }
 
 /// Whether `excmd` reads its lines from a script being `:source`d -- the
 /// file itself, or a loop inside it.
-pub(crate) fn reads_sourced_lines(excmd: &crate::types::ExArg) -> bool {
-    let sourced = Some(
-        crate::runtime::getsourceline as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
-    );
-    // SAFETY: a running command's getter and its cookie are a live pair.
-    unsafe { getline_equal(excmd.ea_getline, excmd.cookie, sourced) }
-}
-
-/// The cookie at the bottom of that chain — the function or script the
-/// lines really come from.
-///
-/// # Safety
-///
-/// `cookie` must be the payload `fgetline` was registered with, live for the
-/// call.
-pub unsafe fn getline_cookie(fgetline: LineGetter, cookie: *mut c_void) -> *mut c_void {
-    let (_, cp) = unwrap_loop_getter(fgetline, cookie);
-    cp as *mut c_void
-}
-
-/// Walk out of every `get_loop_line` wrapper.
-fn unwrap_loop_getter(fgetline: LineGetter, cookie: *mut c_void) -> (LineGetter, *mut LoopCookie) {
-    let mut gp = fgetline;
-    let mut cp = cookie as *mut LoopCookie;
-    while line_getter_eq(gp, Some(get_loop_line)) {
-        gp = unsafe { (*cp).lc_getline };
-        cp = unsafe { (*cp).cookie } as *mut LoopCookie;
-    }
-    (gp, cp)
+pub(crate) fn reads_sourced_lines(excmd: &ExArg) -> bool {
+    excmd.source_kind() == SourceKind::Script
 }
 
 /// A translated message, copied into an owned Ex-command error message.
@@ -462,27 +563,17 @@ pub fn not_exiting(save_exiting: bool) {
     set_vim_var_string(Vv::Exitreason, None);
 }
 
-/// `xstrdup()` as checked code.
-fn xstrdup(str: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::memory::xstrdup(str) }
-}
-
 /// The next line of the body a running command reads, from wherever the
 /// command reads its own lines: the command line itself when it has no
-/// getter. `None` at the end of input.
+/// source. `None` at the end of input.
 pub(crate) fn read_next_line(
-    excmd: &crate::types::ExArg,
+    excmd: &mut ExArg,
     c: c_int,
     indent: c_int,
     do_concat: bool,
-) -> Option<crate::memory::XString> {
-    let line = match excmd.ea_getline {
-        None => getcmdline(c, 0, indent, do_concat),
-        // SAFETY: a running command's line getter and its cookie are a live
-        // pair.
-        Some(getline) => unsafe { getline(c, excmd.cookie, indent, do_concat) },
-    };
-    // SAFETY: a getter answers null or an allocation of its own.
-    (!line.is_null()).then(|| unsafe { crate::memory::XString::from_raw(line) })
+) -> Option<XString> {
+    match excmd.source.as_mut() {
+        None => cmdline_input(c, indent, do_concat),
+        Some(source) => source.next_line(c, indent, do_concat),
+    }
 }

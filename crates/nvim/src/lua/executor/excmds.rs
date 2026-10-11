@@ -58,12 +58,10 @@ pub fn ex_lua(excmd: &mut ExArg) {
             return;
         }
 
-        let mut len: size_t = 0;
-        let mut code = script_get(excmd, &raw mut len);
-        if excmd.skip || code.is_null() {
-            xfree(code.cast::<c_void>());
+        let Some(code) = script_get(excmd).filter(|_| !excmd.skip) else {
             return;
-        }
+        };
+        let (mut len, mut code): (size_t, *mut c_char) = (code.len(), code.into_raw());
 
         if excmd.cmdidx == CmdIdx::equal || *code == b'=' as c_char {
             // `:=expr` has no `=` to skip; `:lua =expr` does.

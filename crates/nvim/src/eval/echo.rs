@@ -21,7 +21,7 @@ use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::{clear_local, set_var};
 use crate::eval::{Cursor, echo_hl_id, eval1, eval1_emsg};
-use crate::ex_docmd::{DoCmdOpts, do_cmdline_as};
+use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::ex_eval::aborting;
 use crate::ex_eval::state::force_abort;
 use crate::getchar::state::got_int;
@@ -188,7 +188,10 @@ pub fn ex_execute(excmd: &mut ExArg) {
                 did_emsg.set(save_did_emsg);
             }
         } else if excmd.cmdidx == CmdIdx::execute {
-            let _ = do_cmdline_as(excmd, &mut text, DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE);
+            // Any further lines come from wherever this command reads its
+            // own: that is how `:execute` runs what it built.
+            let flags = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE;
+            let _ = do_cmdline(Some(&text), excmd.source_mut(), flags);
         }
     }
     excmd.line.next = excmd.line.check_next(end);

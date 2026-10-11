@@ -682,10 +682,8 @@ pub(crate) fn do_ucmd(excmd: &mut ExArg, preview: bool) -> c_int {
     // SAFETY: module contract.
     let opts = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED;
     // SAFETY: module contract; `buf` is the expanded body this frame owns.
-    unsafe {
-        let (getline, cookie) = (excmd.ea_getline, excmd.cookie);
-        let _ = do_cmdline(buf, getline, cookie, opts);
-    };
+    let body = unsafe { cstr::bytes_at(buf) };
+    let _ = do_cmdline(Some(body), excmd.source_mut(), opts);
     drop(script_ctx);
     // SAFETY: the block is this function's.
     unsafe { xfree(buf.cast()) };

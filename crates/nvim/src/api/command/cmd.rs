@@ -44,7 +44,7 @@ use crate::guard::Suppress;
 use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
 use crate::snprintf;
 use crate::types::CmdIdx;
-use crate::types::{CmdLine, ExArgt, NUL};
+use crate::types::{CmdFilter, CmdLine, ExArgt, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -91,7 +91,7 @@ pub fn nvim_cmd(
     let mut excmd = ExArg::default();
     // SAFETY: a plain C aggregate whose all-zero state is the valid
     // "nothing parsed yet" one, as the C original's CLEAR_FIELD relies on.
-    let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
+    let mut cmdinfo: CmdParseInfo = crate::ex_getln::CMD_PARSE_INFO_INIT;
 
     prepare_cmd(cmd, &mut excmd, &mut cmdinfo).and_then(|prepared| match prepared {
         // SAFETY: `prepare_cmd` answering true means `excmd`/`cmdinfo`
@@ -603,13 +603,10 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Resu
 
     cmdinfo.cmdmod.cmod_filter_force = filter.force.unwrap_or(false);
     // A bare `filter!` with an empty pattern still inverts the match.
-    // SAFETY: `pattern` is a NUL-terminated keydict String.
-    if unsafe { *pattern.data() } as c_int != NUL || cmdinfo.cmdmod.cmod_filter_force {
-        let pat = string_to_cstr(pattern);
-        cmdinfo.cmdmod.cmod_filter_pat = pat;
-        // SAFETY: as above.
-        cmdinfo.cmdmod.cmod_filter_regmatch.regprog =
-            vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC);
+    let pattern = pattern.as_cstr();
+    if !pattern.is_empty() || cmdinfo.cmdmod.cmod_filter_force {
+        let filter = CmdFilter::new(pattern.to_owned(), RE_MAGIC);
+        cmdinfo.cmdmod.cmod_filter = Some(std::rc::Rc::new(filter));
     }
     Ok(())
 }

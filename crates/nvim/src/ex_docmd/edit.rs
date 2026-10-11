@@ -24,10 +24,10 @@ use crate::ex_cmds::{do_move, ex_copy, ex_substitute, ex_substitute_preview, glo
 use crate::ex_docmd::address::get_address;
 use crate::ex_docmd::cmdline::do_cmdline;
 use crate::ex_docmd::scan::get_flags;
+use crate::ex_docmd::source::LineSource;
 use crate::ex_docmd::{
     DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, kMTLineWise,
 };
-use crate::ex_getln::getexline;
 use crate::fold::{fold_create, fold_manual_allowed, has_folding, op_fold_range};
 use crate::getchar::{beep_flush, stuff_empty, typeahead, vpeekc};
 
@@ -430,14 +430,8 @@ pub(crate) fn ex_at(excmd: &mut ExArg) {
     let save_efr = exec_from_reg.get();
     exec_from_reg.set(true);
     while !stuff_empty() || typeahead().len() > prev_len {
-        let _ = unsafe {
-            do_cmdline(
-                ptr::null_mut(),
-                Some(getexline),
-                ptr::null_mut(),
-                DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE,
-            )
-        };
+        let flags = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE;
+        let _ = do_cmdline(None, Some(&mut LineSource::Typed), flags);
     }
     exec_from_reg.set(save_efr);
 }

@@ -141,7 +141,7 @@ pub(crate) fn heredoc_get(excmd: &mut ExArg, at: usize, script_get: bool) -> Opt
     if let Some(nl) = excmd.line.rest_of(at).iter().position(|&b| b == b'\n') {
         excmd.line.set_byte(at + nl, 0);
         line_arg = Some(at + nl + 1);
-    } else if excmd.ea_getline.is_none() {
+    } else if excmd.source.is_none() {
         emsg_static(e_cannot_use_heredoc_here);
         return None;
     }

@@ -31,7 +31,7 @@ use crate::types::{
     CmdArg, Direction, GetFileFlags, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, OpArg, Pos,
     SpellAddType, SpellMoveType, int16_t, uint16_t,
 };
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint};
 
 mod state;
 pub(crate) use self::state::*;
@@ -143,7 +143,6 @@ pub(crate) struct NormalState {
     pub old_col: c_int,
     pub old_pos: Pos,
 }
-pub(crate) const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub(crate) const TAB: c_int = 9;
 pub(crate) const NL: c_int = '\n' as c_int;
 pub(crate) const CAR: c_int = '\r' as c_int;

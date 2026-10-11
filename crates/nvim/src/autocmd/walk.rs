@@ -1,6 +1,6 @@
 //! One step of a firing walk.
 //!
-//! [`getnextac`] is the `do_cmdline` getline callback an autocommand body is
+//! [`getnextac`] is the `do_cmdline` line source an autocommand body is
 //! executed through: each call hands back the next matching command,
 //! advancing [`aucmd_next`] over the pattern list until one matches the file
 //! name being fired for.  `au_callback` is the same step for an autocommand
@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::lua::executor::nlua_call_ref_quiet;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use crate::snprintf;
@@ -226,30 +227,23 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     matches!(result, Object::Boolean(true))
 }
 
-/// The `do_cmdline` getline callback an autocommand body runs through:
-/// one call per matching autocommand.
+/// The next command of an autocommand walk, for `do_cmdline` -- the
+/// [`Autocmd`](crate::ex_docmd::LineSource::Autocmd) arm of its line source:
+/// one line per matching autocommand, `None` when the walk is over.
 ///
-/// The `_c`/`_indent`/`_do_concat` parameters exist for `do_cmdline`'s
-/// signature.  A callback handler has no line to give back, so this
-/// answers an empty allocated string -- "not null, keep going".
+/// A callback handler has no line to give back, so this answers an empty
+/// line for it -- "not the end, keep going".
 ///
-/// # Safety
-///
-/// `cookie` must be the payload this callback was registered with, live for
-/// the call.
-#[inline(never)]
-pub unsafe fn getnextac(
-    _c: ::core::ffi::c_int,
-    cookie: *mut ::core::ffi::c_void,
-    _indent: ::core::ffi::c_int,
-    _do_concat: bool,
-) -> *mut ::core::ffi::c_char {
-    let apc = cookie.cast::<AutoPatCmd>();
+/// Safe: the walk is `apply_autocmds_group`'s own, which is the only maker
+/// of an `AutoPatCmd` and leaves its pattern and event at the walk's live
+/// rows.
+pub fn getnextac(walk: &mut AutoPatCmd) -> Option<XString> {
+    let apc: *mut AutoPatCmd = walk;
     let acs = au_event_vec(unsafe { (*apc).event });
 
     unsafe { aucmd_next(apc) };
     if unsafe { (*apc).lastpat }.is_null() {
-        return ::core::ptr::null_mut();
+        return None;
     }
 
     debug_assert!(unsafe { (*apc).auidx } < unsafe { (*acs).size });
@@ -315,10 +309,10 @@ pub unsafe fn getnextac(
         // Fixing it means either teaching `do_cmdline` to take
         // something other than a string, or looping over the matches
         // here instead of being pulled.
-        retval = unsafe { xcalloc(1, 1) }.cast::<::core::ffi::c_char>();
+        retval = XString::new();
     } else {
-        // SAFETY: the row's command text, which `xstrdup` copies.
-        retval = unsafe { xstrdup((*ac).handler_cmd) };
+        // SAFETY: the row's command text, copied.
+        retval = XString::from_cstr(unsafe { CStr::from_ptr((*ac).handler_cmd) });
     }
 
     // Delete a one-shot autocommand in anticipation of its execution.
@@ -335,5 +329,5 @@ pub unsafe fn getnextac(
         unsafe { (*apc).auidx = SIZE_MAX as size_t };
     }
 
-    retval
+    Some(retval)
 }

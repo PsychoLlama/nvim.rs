@@ -39,7 +39,7 @@ use crate::guard::secure;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_set_sctx;
-use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
+use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, msg_col};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
 use crate::message::{

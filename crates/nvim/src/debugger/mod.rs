@@ -49,8 +49,8 @@ use crate::debugger::state::{
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
+use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_docmd::state::{ex_nesting_level, ex_normal_busy};
-use crate::ex_docmd::{do_cmdline_cmd, do_cmdline_typed};
 use crate::ex_getln::getcmdline_bare;
 use crate::fileio::file_pat_to_regpat;
 use crate::getchar::state::{got_int, ignore_script};

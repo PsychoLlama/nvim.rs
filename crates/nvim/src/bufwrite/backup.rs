@@ -88,9 +88,7 @@ unsafe fn check_mtime(buffer: Buf, file_info: *mut FileInfo) -> bool {
         translate(c"WARNING: The file has been changed since reading it!!!"),
         HLF_E,
     );
-    if unsafe { ask_yesno(translate(c"Do you really want to write to it").as_ptr()) }
-        == 'n' as c_int
-    {
+    if ask_yesno(translate(c"Do you really want to write to it")) == 'n' as c_int {
         return false;
     }
     msg_scroll.set(0); // always overwrite the file message now

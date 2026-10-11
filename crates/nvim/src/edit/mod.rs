@@ -69,7 +69,7 @@ use crate::drawscreen::{
 use crate::eval::vars::{set_vim_var_string, vim_var_bytes, with_vim_var_str};
 use crate::eval::{invoke_prompt_interrupt, prompt_invoke_callback};
 use crate::ex_docmd::state::ex_normal_busy;
-use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, expr_map_locked};
+use crate::ex_docmd::{do_cmdline_cmd, expr_map_locked};
 use crate::fileio::check_timestamps;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fold::{
@@ -81,9 +81,9 @@ use crate::getchar::state::{
 };
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally,
-    append_to_redobuff_number, char_avail, get_inserted, getcmdkeycmd, map_execute_lua,
-    merge_mod_mask, paste_repeat, plain_vgetc, reset_redobuff, start_redo_ins, stop_redo_ins,
-    stuff_empty, stuff_readbuf_char, stuff_readbuf_len, stuff_redo_readbuf, vgetc, vpeekc, vungetc,
+    append_to_redobuff_number, char_avail, get_inserted, map_execute_lua, merge_mod_mask,
+    paste_repeat, plain_vgetc, reset_redobuff, start_redo_ins, stop_redo_ins, stuff_empty,
+    stuff_readbuf_char, stuff_readbuf_len, stuff_redo_readbuf, vgetc, vpeekc, vungetc,
 };
 use crate::global_cell::state_record;
 use crate::grid::{
@@ -255,7 +255,6 @@ pub(crate) const MSCR_LEFT: ::core::ffi::c_int = -1;
 pub(crate) const MSCR_UP: ::core::ffi::c_int = 1;
 pub(crate) const MSCR_DOWN: ::core::ffi::c_int = 0;
 pub(crate) const YREG_PASTE: ::core::ffi::c_int = 0;
-pub(crate) const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub(crate) const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;

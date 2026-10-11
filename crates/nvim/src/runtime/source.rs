@@ -17,6 +17,7 @@
 use super::*;
 use crate::cstr;
 use crate::memory::ThinCString;
+use crate::memory::XString;
 use crate::message_fmt::to_bytes;
 use crate::message_fmt::{c_str, report_msg};
 use crate::semsg;
@@ -25,12 +26,12 @@ use crate::snprintf;
 use crate::tr_c;
 use crate::winlayer::Buf;
 
-use crate::ex_docmd::DoCmdOpts;
+use crate::ex_docmd::{DoCmdOpts, LineSource};
 use crate::guard::Script;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::types::{CONV_NONE_INIT, FAIL, IOSIZE, NUL, OK, READBIN};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 use std::ffi::CString;
 
@@ -102,33 +103,6 @@ pub fn ex_options(_excmd: &mut ExArg) {
     // SAFETY: `buf` is NUL-terminated and `SYS_OPTWIN_FILE` is a constant.
     unsafe { os_setenv(c"OPTWIN_CMD".as_ptr(), buf.as_ptr(), 1) };
     unsafe { cmd_source(SYS_OPTWIN_FILE.as_ptr().cast_mut(), None) };
-}
-
-/// The breakpoint line of the script `cookie` is reading, for the debugger.
-///
-/// # Safety
-/// `cookie` is a live [`SourceCookie`].
-pub unsafe fn source_breakpoint(cookie: *mut c_void) -> *mut LineNr {
-    // SAFETY: the caller's contract.
-    unsafe { &raw mut (*cookie.cast::<SourceCookie>()).breakpoint }
-}
-
-/// The `debug_tick` the script `cookie` is reading last saw.
-///
-/// # Safety
-/// `cookie` is a live [`SourceCookie`].
-pub unsafe fn source_dbg_tick(cookie: *mut c_void) -> *mut c_int {
-    // SAFETY: the caller's contract.
-    unsafe { &raw mut (*cookie.cast::<SourceCookie>()).dbg_tick }
-}
-
-/// The `:if`/`:while` nesting level the script `cookie` is reading started at.
-///
-/// # Safety
-/// `cookie` is a live [`SourceCookie`].
-pub unsafe fn source_level(cookie: *mut c_void) -> c_int {
-    // SAFETY: the caller's contract.
-    unsafe { (*cookie.cast::<SourceCookie>()).level }
 }
 
 /// `fopen` for reading, with the descriptor kept out of child processes.
@@ -344,7 +318,7 @@ enum Origin {
 }
 
 /// One call into [`do_source_ext`], minus the cookie it fills in.
-struct SourceRequest<'a> {
+struct SourceRequest<'a, 'e> {
     origin: Origin,
     /// The name as the caller spelled it -- messages only; the resolved name
     /// is the cookie's.
@@ -358,15 +332,20 @@ struct SourceRequest<'a> {
     /// Where to report the script ID, if the caller wants it.
     ret_sid: *mut c_int,
     /// The command that asked, for [`Origin::Buffer`]'s range.
-    excmd: Option<&'a ExArg>,
+    excmd: Option<&'a ExArg<'e>>,
     /// Source a buffer as Lua regardless of what it looks like.
     ex_lua: bool,
 }
 
-impl<'a> SourceRequest<'a> {
+impl<'a, 'e> SourceRequest<'a, 'e> {
     /// The request `fname`/`str` describe, with the init-file fields at their
     /// defaults; [`do_source`] is the only caller that sets those.
-    fn new(fname: *mut c_char, str: *const c_char, excmd: Option<&'a ExArg>, ex_lua: bool) -> Self {
+    fn new(
+        fname: *mut c_char,
+        str: *const c_char,
+        excmd: Option<&'a ExArg<'e>>,
+        ex_lua: bool,
+    ) -> Self {
         let origin = if fname.is_null() {
             debug_assert!(str.is_null(), "str == NULL");
             Origin::Buffer
@@ -663,14 +642,13 @@ unsafe fn execute_source(
         unsafe { nlua_exec_file(fname_exp) };
         return ptr::null_mut();
     }
-    // SAFETY: `getsourceline` reads the cookie back through the pointer it is
-    // handed, which is derived afresh from the borrow for each call and stays
-    // valid for its duration.
-    let first = unsafe { getsourceline(0, ptr::from_mut(cookie).cast(), 0, true) };
+    let first = getsourceline(cookie, true).map_or(ptr::null_mut(), XString::into_raw);
     let firstline = unsafe { strip_bom(&raw mut cookie.conv, first) };
     let flags = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::REPEAT;
-    let reader = Some(getsourceline as LineGetterFn);
-    let _ = unsafe { do_cmdline(firstline, reader, ptr::from_mut(cookie).cast(), flags) };
+    // SAFETY: null, or the line just read, which this frame owns until
+    // `finish_source` frees it.
+    let first = unsafe { cstr::at_opt(firstline) }.map(CStr::to_bytes);
+    let _ = do_cmdline(first, Some(&mut LineSource::Script(cookie)), flags);
     firstline
 }
 

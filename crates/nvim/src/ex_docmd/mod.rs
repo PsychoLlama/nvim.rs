@@ -39,7 +39,6 @@ use crate::ex_eval::{
     ex_break, ex_catch, ex_continue, ex_else, ex_endfunction, ex_endif, ex_endtry, ex_endwhile,
     ex_eval, ex_finally, ex_if, ex_throw, ex_try, ex_while,
 };
-use crate::ex_getln::getexline;
 use crate::ex_session::{ex_loadview, ex_mkrc};
 use crate::global_cell::GlobalCell;
 use crate::help::{ex_exusage, ex_help, ex_helpclose, ex_helptags, ex_viusage};
@@ -77,8 +76,8 @@ use crate::tag::do_tags;
 use crate::types::ExcId;
 use crate::types::{
     Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufAction, DoBufStart, EStack, EStackArg,
-    EStackType, ExArg, ExArgt, GArray, Handle, LineGetter, LineNr, LuaRetMode, MarkGet, MotionType,
-    OptMagic, RemapValues, uint8_t, uint16_t,
+    EStackType, ExArg, ExArgt, Handle, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic,
+    RemapValues, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -155,7 +154,7 @@ crate::flag_set! {
     const VERBOSE = 1;
     /// Skip `wait_return` and friends.
     const NOWAIT = 2;
-    /// Keep asking `fgetline` until it answers null.
+    /// Keep asking the line source until it runs out.
     const REPEAT = 4;
     /// Leave `KeyTyped` alone.
     const KEYTYPED = 8;
@@ -176,17 +175,12 @@ pub(crate) fn sourcing_entry() -> EStack {
 /// `eap->ea_getline(c, eap->cookie, indent, do_concat)` -- or `None` at the
 /// end of the input, or when the command was given no source.
 pub(crate) fn exarg_getline(
-    excmd: &ExArg,
+    excmd: &mut ExArg,
     c: c_int,
     indent: c_int,
     do_concat: bool,
 ) -> Option<XString> {
-    let getline = excmd.ea_getline?;
-    // SAFETY: a command's getter and cookie are set together, by the frame
-    // that runs it and outlives it.
-    let line = unsafe { getline(c, excmd.cookie, indent, do_concat) };
-    // SAFETY: an allocated line, or null, which this takes over once.
-    (!line.is_null()).then(|| unsafe { XString::from_raw(line) })
+    excmd.source.as_mut()?.next_line(c, indent, do_concat)
 }
 
 /// The line number the message and breakpoint machinery reports.
@@ -242,35 +236,6 @@ pub struct SavedDebugState {
     pub(crate) current_exception: Option<ExcId>,
 }
 
-impl SavedDebugState {
-    /// Nothing saved yet: what `save_dbg_stuff` fills.
-    pub(crate) const fn new() -> SavedDebugState {
-        SavedDebugState {
-            trylevel: 0,
-            force_abort: 0,
-            caught_stack: Vec::new(),
-            vv_exception: None,
-            vv_throwpoint: None,
-            did_emsg: 0,
-            got_int: 0,
-            did_throw: false,
-            need_rethrow: 0,
-            check_cstack: 0,
-            current_exception: None,
-        }
-    }
-}
-pub struct LoopCookie {
-    pub lines_gap: *mut GArray,
-    pub current_line: c_int,
-    pub repeating: c_int,
-    pub lc_getline: LineGetter,
-    pub cookie: *mut c_void,
-}
-pub struct WhileCmd {
-    pub line: *mut c_char,
-    pub lnum: LineNr,
-}
 pub const ETYPE_EXCEPT: EStackType = 5;
 pub const DT_LTAG: c_uint = 11;
 pub const DT_TAG: c_uint = 1;

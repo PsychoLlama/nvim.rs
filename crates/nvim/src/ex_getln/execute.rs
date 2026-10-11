@@ -13,7 +13,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
-use crate::ex_docmd::DoCmdOpts;
+use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::guard::{Keys, Lock, Suppress};
 use crate::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
@@ -183,14 +183,7 @@ pub(crate) unsafe fn command_line_execute(
         if s.c == Key::Event.code() {
             state_handle_k_event();
         } else if s.c == Key::Command.code() {
-            let _ = unsafe {
-                do_cmdline(
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    Some(getcmdkeycmd),
-                    ::core::ptr::null_mut(),
-                    DoCmdOpts::NOWAIT,
-                )
-            };
+            let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NOWAIT);
         } else {
             map_execute_lua(false, false);
         }

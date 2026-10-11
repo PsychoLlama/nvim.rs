@@ -152,8 +152,10 @@ fn dict_of<const N: usize>(entries: [(&'static CStr, Object); N]) -> ApiDict {
 
 /// The `mods` sub-dictionary: every command modifier the line carried.
 fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
-    // SAFETY: `cmod_filter_pat` is null or a NUL-terminated pattern.
-    let pattern = unsafe { cstr_to_string(cmdmod.cmod_filter_pat) };
+    let pattern = cmdmod
+        .cmod_filter
+        .as_ref()
+        .map_or(String_0::NULL, |filter| String_0::from_cstr(&filter.pat));
     let filter = dict_of([
         (c"pattern", Object::string(pattern)),
         (c"force", Object::boolean(cmdmod.cmod_filter_force)),
@@ -210,7 +212,7 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
     let mut excmd = ExArg::default();
     // SAFETY: a plain C aggregate whose all-zero state is the valid
     // "nothing parsed yet" one, as the C original's CLEAR_FIELD relies on.
-    let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
+    let mut cmdinfo: CmdParseInfo = crate::ex_getln::CMD_PARSE_INFO_INIT;
 
     let mut errormsg = None;
     // SAFETY: `str` names `len` readable bytes, copied into the line the

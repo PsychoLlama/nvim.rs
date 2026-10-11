@@ -22,7 +22,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::ex_docmd::DoCmdOpts;
+use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::guard::{Allow, Bump, MsgBump, Saved};
 use crate::message::msg;
 use crate::message::state::MsgField;
@@ -280,7 +280,8 @@ fn debug_prompt(cmd: &CStr) {
 
             // Not a debug command, so run it -- but do not debug it.
             let outer_level = debug_break_level.replace(-1);
-            let _ = do_cmdline_typed(cmdline.as_cstr(), DoCmdOpts::VERBOSE | DoCmdOpts::EXCRESET);
+            let flags = DoCmdOpts::VERBOSE | DoCmdOpts::EXCRESET;
+            let _ = do_cmdline(Some(&cmdline[..]), Some(&mut LineSource::Typed), flags);
             debug_break_level.set(outer_level);
         }
         lines_left.set(Rows.get() - 1);

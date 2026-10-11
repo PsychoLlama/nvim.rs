@@ -333,26 +333,6 @@ impl<T, M> RcTable<T, M> {
     }
 }
 
-impl<T> TableId<T> {
-    /// The id as one integer, for a caller that must carry it through an
-    /// address-sized cookie.
-    pub(crate) fn to_bits(self) -> usize {
-        (usize::try_from(self.generation.get()).expect("32 bits fit") << 32)
-            | usize::try_from(self.index).expect("32 bits fit")
-    }
-
-    /// The id [`TableId::to_bits`] answered `bits` for, if it is one.
-    pub(crate) fn from_bits(bits: usize) -> Option<TableId<T>> {
-        let index = u32::try_from(bits & 0xffff_ffff).ok()?;
-        let generation = NonZeroU32::new(u32::try_from(bits >> 32).ok()?)?;
-        Some(TableId {
-            index,
-            generation,
-            kind: PhantomData,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

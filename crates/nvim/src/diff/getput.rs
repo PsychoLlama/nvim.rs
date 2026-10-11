@@ -70,8 +70,7 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
         bad_char: 0,
         useridx: 0,
         errmsg: None,
-        ea_getline: None,
-        cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+        source: None,
         cond_stack: None,
     };
     if count != 0 as size_t {

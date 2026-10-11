@@ -324,8 +324,6 @@ typedef unsigned int KeyEncoding;
 typedef unsigned int KeyExtra;
 typedef key_value_pair KeyValuePair;
 typedef int LineFlags;
-typedef char *(*LineGetterFn)(int, void *, int, bool);
-typedef LineGetterFn LineGetter;
 typedef int32_t LineNr;
 typedef int ListLenSpecials;
 typedef List *ListRef;

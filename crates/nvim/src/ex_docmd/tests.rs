@@ -109,9 +109,18 @@ fn a_bar_joined_loop_replays_each_command_whole() {
     let fx = Fixture::new();
     assert_eq!(logged(&fx, ONE_LINE), "[1, 2, 3, 'end']");
     assert_eq!(logged_in_function(&fx, ONE_LINE), "[1, 2, 3, 'end']");
-    // A command that rewrites the line it was handed -- `:execute` builds its
-    // own, a heredoc terminates the line at its marker -- leaves the stored
-    // copy alone.
+}
+
+/// A command that rewrites the line it was handed -- `:execute` builds its
+/// own, a heredoc terminates the line at its marker -- leaves the stored copy
+/// alone.
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "a heredoc's marker is classified through libc's ctype table"
+)]
+fn a_command_that_rewrites_its_line_leaves_the_stored_copy_alone() {
+    let fx = Fixture::new();
     let rewrites = [
         "let i = 0",
         "while i < 2",
@@ -292,4 +301,158 @@ fn an_autocommand_runs_each_handler_and_every_command_in_it() {
     );
     fx.run("autocmd! EdAu");
     fx.run("augroup! EdAu");
+}
+
+/// What `getline_equal` used to answer -- is this a function body, a sourced
+/// script, the `:` prompt? -- is `kind()`, and it sees through every loop
+/// wrapped around the source; `is_loop()` is the one question that does not.
+#[test]
+fn a_sources_kind_is_seen_through_the_loops_around_it() {
+    use crate::ex_docmd::{LineSource, LoopLines, ReadLines, SourceKind};
+    use crate::runtime::SourceCookie;
+
+    for (mut base, kind) in [
+        (LineSource::None, SourceKind::None),
+        (LineSource::Typed, SourceKind::Typed),
+        (LineSource::CmdKey, SourceKind::CmdKey),
+    ] {
+        assert_eq!(base.kind(), kind);
+        assert!(!base.is_loop());
+        let (mut outer, mut inner) = (Vec::new(), Vec::new());
+        let (mut at_outer, mut at_inner) = (0, 0);
+        let mut once = LineSource::Loop(LoopLines {
+            store: &mut outer,
+            current_line: &mut at_outer,
+            repeating: false,
+            inner: &mut base,
+        });
+        assert_eq!(once.kind(), kind);
+        assert!(once.is_loop());
+        let twice = LineSource::Loop(LoopLines {
+            store: &mut inner,
+            current_line: &mut at_inner,
+            repeating: false,
+            inner: &mut once,
+        });
+        assert_eq!(twice.kind(), kind);
+        assert!(twice.function().is_none() && twice.script().is_none());
+    }
+
+    // A script is a script through two loops, and what is written through
+    // them is the cookie's.
+    let mut cookie = SourceCookie::new();
+    cookie.level = 7;
+    let mut base = LineSource::Script(&mut cookie);
+    let (mut outer, mut inner) = (Vec::new(), Vec::new());
+    let (mut at_outer, mut at_inner) = (0, 0);
+    let mut once = LineSource::Loop(LoopLines {
+        store: &mut outer,
+        current_line: &mut at_outer,
+        repeating: false,
+        inner: &mut base,
+    });
+    let mut twice = LineSource::Loop(LoopLines {
+        store: &mut inner,
+        current_line: &mut at_inner,
+        repeating: false,
+        inner: &mut once,
+    });
+    assert_eq!(twice.kind(), SourceKind::Script);
+    assert_eq!(twice.script().map(|cookie| cookie.level), Some(7));
+    twice.script_mut().expect("a script").finished = true;
+    let pos = twice.debug().expect("a script has a breakpoint");
+    assert!(pos.name.is_none());
+    pos.breakpoint.set(12);
+    pos.tick.set(3);
+    assert!(cookie.finished);
+    assert_eq!((cookie.breakpoint, cookie.dbg_tick), (12, 3));
+}
+
+/// The loop store, driven directly: a line past the end is read from the
+/// source underneath and stored; a stored line is handed out as a copy with
+/// the line number it was read at; past the end of a replay is the end of
+/// the body. Nested, the inner store reads through the outer one.
+#[test]
+#[cfg_attr(miri, ignore = "reading a script line checks for CTRL-C through libuv")]
+fn the_loop_store_reads_through_stores_and_replays_at_depth() {
+    use crate::ex_docmd::{LineSource, LoopLines, ReadLines, StoredLine};
+    use crate::runtime::SourceCookie;
+    use std::ffi::CString;
+
+    let _fx = Fixture::new();
+    let mut cookie = SourceCookie::new();
+    cookie.source_from_buf_or_str = true;
+    cookie.buflines = ["one", "two", "three"]
+        .into_iter()
+        .map(|line| CString::new(line).expect("no NUL"))
+        .collect();
+    let mut base = LineSource::Script(&mut cookie);
+    let mut outer: Vec<StoredLine> = Vec::new();
+    let mut inner: Vec<StoredLine> = Vec::new();
+    let (mut at_outer, mut at_inner) = (-1, -1);
+    {
+        let mut once = LineSource::Loop(LoopLines {
+            store: &mut outer,
+            current_line: &mut at_outer,
+            repeating: false,
+            inner: &mut base,
+        });
+        let mut twice = LineSource::Loop(LoopLines {
+            store: &mut inner,
+            current_line: &mut at_inner,
+            repeating: false,
+            inner: &mut once,
+        });
+        let read = |source: &mut dyn ReadLines| {
+            source
+                .next_line(0, 0, false)
+                .map(|line| String::from_utf8_lossy(&line).into_owned())
+        };
+        assert_eq!(read(&mut twice).as_deref(), Some("one"));
+        assert_eq!(read(&mut twice).as_deref(), Some("two"));
+    }
+    // Both stores kept both lines, with the lines they were read at.
+    let lines = |store: &[StoredLine]| -> Vec<(String, i64)> {
+        store
+            .iter()
+            .map(|stored| {
+                (
+                    String::from_utf8_lossy(&stored.line).into_owned(),
+                    i64::from(stored.lnum),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(lines(&inner), [("one".into(), 1), ("two".into(), 2)]);
+    assert_eq!(lines(&outer), lines(&inner));
+    assert_eq!((at_outer, at_inner), (1, 1));
+
+    // A replay of the inner store from its start: the copies come back, and
+    // a command that cuts the line it was handed leaves the stored one whole.
+    at_inner = -1;
+    {
+        let mut once = LineSource::Loop(LoopLines {
+            store: &mut outer,
+            current_line: &mut at_outer,
+            repeating: true,
+            inner: &mut base,
+        });
+        let mut twice = LineSource::Loop(LoopLines {
+            store: &mut inner,
+            current_line: &mut at_inner,
+            repeating: true,
+            inner: &mut once,
+        });
+        let mut first = twice
+            .next_line(0, 0, false)
+            .expect("a stored line")
+            .into_vec();
+        first[0] = 0;
+        assert_eq!(twice.next_line(0, 0, false).as_deref(), Some(&b"two"[..]));
+        // Replaying, past the end is the end of the body.
+        assert!(twice.next_line(0, 0, false).is_none());
+    }
+    assert_eq!(lines(&inner)[0].0, "one");
+    // The script itself is still at its second line.
+    assert_eq!(cookie.sourcing_lnum, 2);
 }

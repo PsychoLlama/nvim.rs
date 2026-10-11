@@ -13,7 +13,6 @@
 
 use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, Key};
 use crate::winlayer::{Buf, Win, windows};
-use core::ptr;
 
 use crate::buffer::{buflist_getfile, fileinfo};
 use crate::cursor::check_cursor_col;
@@ -21,18 +20,17 @@ use crate::drawscreen::state::{clear_cmdline, mode_displayed, redraw_mode};
 use crate::drawscreen::{UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_later, showmode};
 use crate::eval::gc::may_garbage_collect;
 use crate::ex_docmd::state::ex_normal_busy;
-use crate::ex_docmd::{DoCmdOpts, do_cmdline, do_cmdline_cmd};
-use crate::ex_getln::{compute_cmdrow, getexline};
+use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline, do_cmdline_cmd};
+use crate::ex_getln::compute_cmdrow;
 use crate::getchar::state::{KeyTyped, got_int, typebuf_was_empty};
 use crate::getchar::{
-    getcmdkeycmd, map_execute_lua, paste_repeat, stuff_readbuf, stuff_readbuf_char,
-    stuff_readbuf_number,
+    map_execute_lua, paste_repeat, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
 };
 use crate::help::open_help;
 use crate::message::state::did_emsg;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{
-    GETF_ALT, GETF_SETMARK, NULL, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
+    GETF_ALT, GETF_SETMARK, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
     end_visual_mode, kMTCharWise, nv_left, nv_operator, nv_pcmark, set_visual_select, v_visop,
     visual_active, visual_select,
 };
@@ -41,7 +39,7 @@ use crate::os::cshim::gettext;
 use crate::state::mode::{finish_op, restart_VIsual_select, restart_edit};
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::{cur_syn_block, syn_stack_free_all};
-use crate::types::{CmdArg, LineGetter, LineNr, NUL, OpType, Outcome};
+use crate::types::{CmdArg, LineNr, NUL, OpType, Outcome};
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
@@ -102,17 +100,17 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
     let cmd_result = if is_lua {
         map_execute_lua(true, false)
     } else {
-        let getline: LineGetter = if is_cmdkey {
-            Some(getcmdkeycmd)
+        let mut source = if is_cmdkey {
+            LineSource::CmdKey
         } else {
-            Some(getexline)
+            LineSource::Typed
         };
         let opts = if op.op_type != OpType::Nop {
             DoCmdOpts::KEEPLINE
         } else {
             DoCmdOpts::NONE
         };
-        unsafe { do_cmdline(ptr::null_mut(), getline, NULL, opts).is_ok() }
+        do_cmdline(None, Some(&mut source), opts).is_ok()
     };
     msg_ext_set_trigger(c"");
     if !cmd_result {

@@ -34,10 +34,10 @@
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, NotAKey};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
-use crate::ex_docmd::DoCmdOpts;
+use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::optionstr::OptString;
 use crate::types::NUL;
 
@@ -255,22 +255,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
         }
         // `<Cmd>command<CR>`.
         Ok(Key::Command) => {
-            let _ = unsafe {
-                do_cmdline(
-                    ::core::ptr::null_mut(),
-                    Some(
-                        getcmdkeycmd
-                            as unsafe fn(
-                                c_int,
-                                *mut ::core::ffi::c_void,
-                                c_int,
-                                bool,
-                            ) -> *mut c_char,
-                    ),
-                    NULL,
-                    DoCmdOpts::NONE,
-                )
-            };
+            let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NONE);
             Next::CheckPum
         }
         Ok(Key::Lua) => {

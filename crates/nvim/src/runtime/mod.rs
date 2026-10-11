@@ -43,7 +43,7 @@ use crate::eval::vars::new_script_vars;
 use crate::eval::{eval_to_number, get_copy_id};
 use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
 use crate::ex_docmd::state::{cmdmod, ex_nesting_level, global_busy, listcmd_busy};
-use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, getline_equal};
+use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit};
 use crate::ex_eval::{
     PendingAction, PendingValue, aborting, cleanup_conditionals, cond_stack_of, report_pending,
 };
@@ -91,9 +91,9 @@ use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, EStack,
     EStackArg, EStackType, Error, EstackInfo, EvalFuncData, ExArg, Expand, FILE, GArray, Integer,
-    LineGetter, LineGetterFn, LineNr, List, LuaRetMode, Object, OptSet, OptVal, ProfTime, RegMatch,
-    ScriptCtx, ScriptId, ScriptItem, String_0, TypVal, UV_MUTEX_INIT, UserFunc, VAR_DICT, VarLock,
-    VarNumber, VimConv, XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t, size_t, uv_mutex_t,
+    LineNr, List, LuaRetMode, Object, OptSet, OptVal, ProfTime, RegMatch, ScriptCtx, ScriptId,
+    ScriptItem, String_0, TypVal, UV_MUTEX_INIT, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv,
+    XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t, size_t, uv_mutex_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};

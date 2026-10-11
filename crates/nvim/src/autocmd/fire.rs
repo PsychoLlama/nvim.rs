@@ -10,7 +10,8 @@
 //! switch.
 //!
 //! **`patcmd` is a stack local whose address escapes** -- into the
-//! `do_cmdline` cookie and the execution stack's frame -- so it cannot move.
+//! execution stack's frame, while `do_cmdline` reads it as its line source
+//! -- so it cannot move.
 //! What upstream also published it for, a handler wiping out the buffer the
 //! walk matches `<buffer=N>` against, goes through the running walks'
 //! numbers in the autocommand state instead: the walk pushes its number when
@@ -32,7 +33,7 @@
 )]
 
 use super::*;
-use crate::ex_docmd::DoCmdOpts;
+use crate::ex_docmd::{DoCmdOpts, LineSource};
 use crate::getchar::KeyBuffer;
 use crate::guard::{Depth, Script, Suppress};
 use crate::memory::XString;
@@ -539,14 +540,11 @@ pub unsafe fn apply_autocmds_group(
 
             // `getnextac` is what iterates: it is pulled once per
             // matching autocommand.
-            let _ = unsafe {
-                do_cmdline(
-                    ::core::ptr::null_mut(),
-                    Some(getnextac),
-                    (&raw mut patcmd).cast::<::core::ffi::c_void>(),
-                    DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT,
-                )
-            };
+            let _ = do_cmdline(
+                None,
+                Some(&mut LineSource::Autocmd(&mut patcmd)),
+                DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT,
+            );
 
             did_emsg.set(did_emsg.get() + save_did_emsg);
             set_pressedreturn(save_ex_pressedreturn);

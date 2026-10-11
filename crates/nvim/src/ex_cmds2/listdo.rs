@@ -304,14 +304,9 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
 
         i += 1;
         if execute {
-            let _ = unsafe {
-                do_cmdline(
-                    excmd.arg_ptr(),
-                    excmd.ea_getline,
-                    excmd.cookie,
-                    DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT,
-                )
-            };
+            let flags = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT;
+            let (line, source) = excmd.line_and_source();
+            let _ = do_cmdline(Some(line.arg()), source, flags);
         }
 
         match list {

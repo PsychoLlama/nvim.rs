@@ -20,7 +20,7 @@
 
 use crate::charset::vim_strsize_cstr;
 use crate::eval::Parsed;
-use crate::ex_docmd::{DoCmdOpts, do_cmdline_getter};
+use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::guard::{Depth, Lock, Suppress};
 use crate::message::cut_middle;
 use crate::message_fmt::msg_bytes;
@@ -333,7 +333,7 @@ pub(crate) fn call_user_func(
     } else {
         // Call do_cmdline() to execute the lines.
         let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT;
-        let _ = do_cmdline_getter(get_func_line, func_line_cookie(&frame), opts);
+        let _ = do_cmdline(None, Some(&mut LineSource::Function(&frame)), opts);
     }
 
     // Invoke functions added with `:defer`.

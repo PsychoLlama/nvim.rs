@@ -113,9 +113,9 @@ pub(crate) fn list_func_head(func: &UserFunc, indent: bool, force: bool) -> Resu
 /// of them it was; dropping the record does the rest.
 ///
 /// The parse walks the command line by offset, `at`.
-struct Definition<'a> {
+struct Definition<'a, 'e> {
     /// The command being run.
-    excmd: &'a mut ExArg,
+    excmd: &'a mut ExArg<'e>,
     /// Where in the command line the parse has got to.
     at: usize,
     /// The name being defined. `None` for a dictionary function until it is
@@ -161,7 +161,7 @@ enum Refusal {
 /// The number the nameless (dictionary) functions are given.
 static func_nr: GlobalCell<c_int> = GlobalCell::new(0);
 
-impl Definition<'_> {
+impl Definition<'_, '_> {
     /// The name being defined, or the empty name.
     fn name_bytes(&self) -> &[u8] {
         self.name.as_deref().unwrap_or_default()

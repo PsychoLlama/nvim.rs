@@ -42,9 +42,8 @@ const CALLBACK_NONE: Callback = Callback::None;
 /// it is always followed by `" (y/n)?"` and repeated until one of the two —
 /// or `CTRL-C`, which answers `n` — is typed.
 ///
-/// # Safety
-/// Main-thread editor call; `str` is NUL-terminated.
-pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
+pub(crate) fn ask_yesno(question: &CStr) -> c_int {
+    let str = question.as_ptr();
     let save_state = State.get();
     let no_prompt = Suppress::wait_return();
 

@@ -28,6 +28,7 @@ use crate::vim_snprintf;
 
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::ex_docmd::SourceKind;
 use crate::ex_eval::CsFlags;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL};
@@ -274,29 +275,6 @@ pub(crate) fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> CString 
     unsafe { CStr::from_ptr(gettext(fixed).as_ptr()) }.to_owned()
 }
 
-/// The line number to report for a message raised under `fgetline`.
-///
-/// A sourced script tracks its own read position, because the execution stack's
-/// number lags behind by the one line `getsourceline` reads ahead.
-///
-/// # Safety
-///
-/// `fgetline` must be an initialized `LineGetter` whose pointer fields point
-/// at live data for the call. `cookie` must be the payload `fgetline` was
-/// registered with, live for the call.
-pub unsafe fn get_sourced_lnum(fgetline: LineGetter, cookie: *mut c_void) -> LineNr {
-    if !getline_is_source(fgetline) {
-        return sourcing_lnum();
-    }
-    // SAFETY: a `getsourceline` reader always carries a `SourceCookie`.
-    unsafe { (*cookie.cast::<SourceCookie>()).sourcing_lnum }
-}
-
-/// Is `fgetline` the reader [`getsourceline`] installs?
-fn getline_is_source(fgetline: LineGetter) -> bool {
-    fgetline.is_some_and(|f| ptr::fn_addr_eq(f, getsourceline as LineGetterFn))
-}
-
 // ---------------------------------------------------------------------------
 // `getscriptinfo()`.
 
@@ -486,20 +464,10 @@ unsafe fn dict_add_bool(d: *mut Dict, key: &CStr, val: BoolVarValue) {
 /// Get one full line from a sourced file, for `do_cmdline()` under
 /// `do_source()`.
 ///
-/// Returns the line in allocated memory, or null at end of file or on error.
-///
-/// # Safety
-///
-/// `cookie` must be the payload this callback was registered with, live for
-/// the call.
-#[inline(never)]
-pub unsafe fn getsourceline(
-    _c: c_int,
-    cookie: *mut c_void,
-    _indent: c_int,
-    do_concat: bool,
-) -> *mut c_char {
-    let sp = cookie.cast::<SourceCookie>();
+/// The [`Script`](crate::ex_docmd::LineSource::Script) arm of its line
+/// source. Answers the line, or `None` at end of file or on error.
+pub(crate) fn getsourceline(cookie: &mut SourceCookie, do_concat: bool) -> Option<XString> {
+    let sp: *mut SourceCookie = cookie;
     // SAFETY: the cookie belongs to the script currently being sourced.
     let from_buf_or_str = unsafe { (*sp).source_from_buf_or_str };
 
@@ -549,7 +517,9 @@ pub unsafe fn getsourceline(
         unsafe { refresh_breakpoint(sp) };
     }
 
-    line
+    // SAFETY: every reader above answers null or an allocated line, which
+    // this takes over once.
+    (!line.is_null()).then(|| unsafe { XString::from_raw(line) })
 }
 
 /// Look up the next breakpoint in the script `source` is reading, and remember the
@@ -763,22 +733,13 @@ fn escaped_newline(line: &[u8]) -> bool {
 // Leaving a script.
 
 /// Are we sourcing a script, from a file or a buffer or a string?
-pub fn sourcing_a_script(excmd: &mut ExArg) -> c_int {
-    // SAFETY: `excmd` is the running command's block.
-    let same = unsafe {
-        getline_equal(
-            excmd.ea_getline,
-            excmd.cookie,
-            Some(getsourceline as LineGetterFn),
-        )
-    };
-    same as c_int
+pub fn sourcing_a_script(excmd: &ExArg) -> bool {
+    excmd.source_kind() == SourceKind::Script
 }
 
 /// `":scriptencoding"`: set encoding conversion for a sourced script.
 pub fn ex_scriptencoding(excmd: &mut ExArg) {
-    // SAFETY: `excmd` is the running command's block.
-    if sourcing_a_script(excmd) == 0 {
+    if !sourcing_a_script(excmd) {
         emsg(gettext(
             c"E167: :scriptencoding used outside of a sourced file",
         ));
@@ -790,8 +751,9 @@ pub fn ex_scriptencoding(excmd: &mut ExArg) {
         excmd.arg_ptr()
     };
     // Set up for conversion from the specified encoding to 'encoding'.
-    let sp = unsafe { getline_cookie(excmd.ea_getline, excmd.cookie) }.cast::<SourceCookie>();
-    let _ = p_enc(|value| unsafe { (*sp).conv.setup(Some(CStr::from_ptr(name)), Some(value)) });
+    let name_ref = unsafe { CStr::from_ptr(name) };
+    let cookie = excmd.sourced_script().expect("checked: a sourced script");
+    let _ = p_enc(|value| cookie.conv.setup(Some(name_ref), Some(value)));
     if name != excmd.arg_ptr() {
         unsafe { xfree(name.cast::<c_void>()) };
     }
@@ -799,8 +761,7 @@ pub fn ex_scriptencoding(excmd: &mut ExArg) {
 
 /// `":finish"`: mark a sourced file as finished.
 pub fn ex_finish(excmd: &mut ExArg) {
-    // SAFETY: `excmd` is the running command's block.
-    if sourcing_a_script(excmd) != 0 {
+    if sourcing_a_script(excmd) {
         do_finish(excmd, false);
     } else {
         emsg(gettext(c"E168: :finish used outside of a sourced file"));
@@ -812,10 +773,8 @@ pub fn ex_finish(excmd: &mut ExArg) {
 /// Also called for a pending finish at the `":endtry"` or after returning from
 /// an extra `do_cmdline()`; `reanimate` says which.
 pub fn do_finish(excmd: &mut ExArg, reanimate: bool) {
-    // SAFETY: `excmd` is the running command's block, and its cookie is a
-    // `SourceCookie` because `ex_finish` checked before calling.
-    if reanimate {
-        unsafe { (*source_cookie(excmd)).finished = false };
+    if reanimate && let Some(cookie) = excmd.sourced_script() {
+        cookie.finished = false;
     }
     // Clean up (and deactivate) conditionals, but stop when a try
     // conditional not in its finally clause -- which then is to be executed
@@ -825,33 +784,9 @@ pub fn do_finish(excmd: &mut ExArg, reanimate: bool) {
     if let Some(at) = cleanup_conditionals(cond, CsFlags::NONE, true) {
         cond.with(|cs| cs.pending[at] = CSTP_FINISH);
         report_pending(PendingAction::Made, CSTP_FINISH, PendingValue::None);
-    } else {
-        unsafe { (*source_cookie(excmd)).finished = true };
+    } else if let Some(cookie) = excmd.sourced_script() {
+        cookie.finished = true;
     }
-}
-
-/// The cookie of the script `excmd` is running under.
-///
-/// # Safety
-///
-/// `excmd`'s reader must be [`getsourceline`].
-unsafe fn source_cookie(excmd: &mut ExArg) -> *mut SourceCookie {
-    unsafe { getline_cookie(excmd.ea_getline, excmd.cookie).cast::<SourceCookie>() }
-}
-
-/// Did a sourced file have the `":finish"` command?  If so, don't give an error
-/// message for a missing `":endif"`.  False when not sourcing a file.
-///
-/// # Safety
-///
-/// `fgetline` must be an initialized `LineGetter` whose pointer fields point
-/// at live data for the call. `cookie` must be the payload `fgetline` was
-/// registered with, live for the call.
-pub unsafe fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool {
-    // SAFETY: `getline_equal` reads the reader's own bookkeeping; the cookie is
-    // only dereferenced once that says it is a sourced script's.
-    let sourced = unsafe { getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)) };
-    sourced && unsafe { (*getline_cookie(fgetline, cookie).cast::<SourceCookie>()).finished }
 }
 
 // ---------------------------------------------------------------------------
@@ -908,12 +843,19 @@ pub(crate) fn script_autoload_named(name: &[u8], reload: bool) -> bool {
     unsafe { script_autoload(name.as_ptr().cast(), name.len(), reload) }
 }
 
-/// The line number a running command's source is at: [`get_sourced_lnum`]
-/// of the command's own getter and cookie.
+/// The line number to report for a message raised by a running command.
+///
+/// A sourced script tracks its own read position, because the execution
+/// stack's number lags behind by the one line `getsourceline` reads ahead.
+/// Only when the command reads the script directly: inside a loop the
+/// stack's number is the replayed line's.
 pub(crate) fn sourced_lnum_of(excmd: &ExArg) -> LineNr {
-    // SAFETY: a running command's line getter and its cookie are a live
-    // pair.
-    unsafe { get_sourced_lnum(excmd.ea_getline, excmd.cookie) }
+    match excmd.source.as_ref() {
+        Some(source) if !source.is_loop() => source
+            .script()
+            .map_or_else(sourcing_lnum, |cookie| cookie.sourcing_lnum),
+        _ => sourcing_lnum(),
+    }
 }
 
 /// If `name` has a package name, try autoloading the script for it.

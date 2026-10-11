@@ -18,14 +18,13 @@ use crate::eval::userfunc::{
 use crate::eval::vars::var_exists;
 use crate::eval::{Cursor, eval_option, eval1, partial_name, script_host_eval};
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::{DoCmdOpts, cmd_exists, do_cmdline_cmd, do_cmdline_getter};
+use crate::ex_docmd::{DoCmdOpts, LineSource, cmd_exists, do_cmdline, do_cmdline_cmd};
 use crate::ex_eval::aborting;
-use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_typval_eval, register_table_as_callable,
 };
-use crate::memory::ThinCString;
+use crate::memory::{ThinCString, XString};
 use crate::message::emsg;
 use crate::message::state::{emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off};
 use crate::message::{capture_finish, capture_start, e_toomanyarg, e_unknown_function_str};
@@ -40,8 +39,7 @@ use crate::types::{
     EvalFuncData, List, NUL, Partial, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_STRING, VarNumber, VarType,
 };
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 /// `call({func}, {arglist} [, {dict}])`
 pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
@@ -132,8 +130,10 @@ pub fn f_eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 }
 
-/// Where an `execute([...])` List walk is up to.
-struct ListLines {
+/// Where an `execute([...])` List walk is up to: the
+/// [`List`](crate::ex_docmd::LineSource::List) arm of `do_cmdline`'s line
+/// source.
+pub(crate) struct ListLines {
     /// The list being walked, held across the run: a command may drop the
     /// variable holding it.
     list: ListRef,
@@ -142,29 +142,13 @@ struct ListLines {
     at: usize,
 }
 
-/// The `execute([...])` walks in progress, innermost last. A walk's line
-/// getter is handed its depth here as its cookie: `execute()` nests when a
-/// command in the list calls it again.
-static LIST_WALKS: GlobalCell<Vec<ListLines>> = GlobalCell::new(Vec::new());
-
-/// `do_cmdline`'s line getter for `execute([...])`: one allocated line per
-/// List item, and null when the List runs out or an item is no String.
-fn get_list_line(_c: c_int, cookie: *mut c_void, _indent: c_int, _do_concat: bool) -> *mut c_char {
-    let depth = cookie.addr();
-    // The item is copied out of the walk's cell: reading it as a String may
-    // report an error, which must not happen under the cell's borrow.
-    let item = LIST_WALKS.with_mut(|walks| {
-        let walk = &mut walks[depth];
-        let item = walk.list.items().get(walk.at)?.li_tv.clone();
-        walk.at += 1;
-        Some(item)
-    });
-    let Some(item) = item else {
-        return ptr::null_mut();
-    };
+/// The next line of an `execute([...])` walk: one line per List item, and
+/// `None` when the List runs out or an item is no String.
+pub(crate) fn get_list_line(walk: &mut ListLines) -> Option<XString> {
+    let item = walk.list.items().get(walk.at)?.li_tv.clone();
+    walk.at += 1;
     let mut buf = NumBuf::new();
-    let line = buf.string_chk(&item).map(ThinCString::from_cstr);
-    line.map_or(ptr::null_mut(), ThinCString::into_raw)
+    buf.string_chk(&item).map(XString::from_cstr)
 }
 
 /// `execute()` and `win_execute()`: run commands with output captured.
@@ -221,16 +205,9 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     {
         let _ = do_cmdline_cmd(numbuf.string(&args[cmd_idx]));
     } else if let Some(list) = args[cmd_idx].list_handle() {
-        let depth = LIST_WALKS.with_mut(|walks| {
-            walks.push(ListLines { list, at: 0 });
-            walks.len() - 1
-        });
+        let mut walk = ListLines { list, at: 0 };
         let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT | DoCmdOpts::KEYTYPED;
-        let _ = do_cmdline_getter(get_list_line, ptr::without_provenance_mut(depth), opts);
-        let walk = LIST_WALKS.with_mut(|walks| walks.pop());
-        debug_assert!(walks_matched(walk.as_ref(), depth), "execute(): walks nest");
-        // The list's reference goes once the cell is no longer borrowed.
-        drop(walk);
+        let _ = do_cmdline(None, Some(&mut LineSource::List(&mut walk)), opts);
     }
 
     emsg_silent.set(save_emsg_silent);
@@ -240,12 +217,6 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
 
     let captured = capture_finish(outer_capture);
     result.write_string(Some(ThinCString::from_bytes(&captured)));
-}
-
-/// Whether the walk popped is the one pushed at `depth`: the stack's own
-/// length says so, since nothing else pushes onto it.
-fn walks_matched(walk: Option<&ListLines>, depth: usize) -> bool {
-    walk.is_some() && LIST_WALKS.with(Vec::len) == depth
 }
 
 /// `execute({command} [, {silent}])`

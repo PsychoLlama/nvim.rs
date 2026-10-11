@@ -17,7 +17,6 @@ use crate::keycodes::{Key, key_unescape};
 use crate::mbyte::char_at;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::c_int;
-use core::ptr;
 
 /// Fold `modifiers` into `c` where a single code stands for the combination.
 ///
@@ -95,9 +94,7 @@ pub fn vgetc() -> c_int {
         // Keys following K_COMMAND/K_LUA/K_PASTE_START are not normally
         // seen by vim.on_key() callbacks, so drop them with this one.
         if c == Key::Command.code() {
-            // SAFETY: `getcmdkeycmd` is callable at any time and answers
-            // either null or a fresh allocation, which is ours to free.
-            unsafe { xfree(getcmdkeycmd(NUL, ptr::null_mut(), 0, false).cast()) };
+            drop(getcmdkeycmd());
         } else if c == Key::Lua.code() {
             map_execute_lua(false, true);
         } else if c == Key::PasteStart.code() {

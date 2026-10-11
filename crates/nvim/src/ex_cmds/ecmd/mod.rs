@@ -173,7 +173,7 @@ struct Ecmd {
 
 /// The immutable half of what [`do_ecmd`] was asked for, once the file name
 /// has been resolved.
-struct EcmdArgs<'a> {
+struct EcmdArgs<'a, 'e> {
     /// The buffer number to switch to, or zero to go by name.
     fnum: c_int,
     /// The full path of the file to edit.
@@ -181,7 +181,7 @@ struct EcmdArgs<'a> {
     /// Its short name.
     sfname: *mut c_char,
     /// The Ex command that asked, when one did.
-    excmd: Option<&'a mut ExArg>,
+    excmd: Option<&'a mut ExArg<'e>>,
     flags: EcmdFlags,
     /// The `+cmd` to run once the file is loaded, or NULL.
     command: *mut c_char,
@@ -450,7 +450,8 @@ pub(crate) unsafe fn do_ecmd(
         // SAFETY: `curbuf` is live and `command` the caller's.
         Buf::current().b_last_used = unsafe { time(ptr::null_mut::<time_t>()) };
         if !command.is_null() {
-            let _ = unsafe { do_cmdline(command, None, ptr::null_mut(), DoCmdOpts::VERBOSE) };
+            let command = unsafe { cstr::bytes_at(command) };
+            let _ = do_cmdline(Some(command), None, DoCmdOpts::VERBOSE);
         }
         if Buf::current().b_kmap_state as c_int & KEYMAP_INIT != 0 {
             let _ = keymap_init();
@@ -613,7 +614,7 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
 /// Set the cursor and initialise the window, then read the file (or fire
 /// BufEnter/BufWinEnter when there is nothing to read).
 fn enter_new_buffer(
-    args: &mut EcmdArgs<'_>,
+    args: &mut EcmdArgs<'_, '_>,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
     retval: &mut Result<(), Failed>,

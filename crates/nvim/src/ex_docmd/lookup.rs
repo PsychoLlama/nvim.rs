@@ -309,7 +309,7 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// A zeroed `ExArg` with the two fields a lookup needs set the way
 /// `find_ex_command` expects: `CmdIdx::append` is index 0, the head of the
 /// table, and no flags have been collected yet.
-fn blank_exarg() -> ExArg {
+fn blank_exarg() -> ExArg<'static> {
     ExArg {
         cmdidx: CmdIdx::append,
         addr_type: CmdAddr::Lines,

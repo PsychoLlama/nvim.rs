@@ -22,18 +22,6 @@ pub struct CmdParseMagic {
     pub file: bool,
     pub bar: bool,
 }
-/// A reader `do_cmdline` pulls its lines from, given a `(c, cookie, indent,
-/// do_concat)` and returning allocated memory or null at the end of input.
-///
-/// Spelled separately from [`LineGetter`] so a caller can name the bare
-/// function type -- comparing two readers means `ptr::fn_addr_eq` on it.
-pub type LineGetterFn = unsafe fn(
-    ::core::ffi::c_int,
-    *mut ::core::ffi::c_void,
-    ::core::ffi::c_int,
-    bool,
-) -> *mut ::core::ffi::c_char;
-pub type LineGetter = Option<LineGetterFn>;
 #[derive(Copy, Clone)]
 pub struct SubReplacementString {
     pub sub: *mut ::core::ffi::c_char,
@@ -181,20 +169,22 @@ crate::flag_set! {
 }
 /// The `:silent`/`:noautocmd`/`:tab`/… run in front of one Ex command.
 ///
-/// Not `Copy`: `cmod_filter_pat` and `cmod_filter_regmatch.regprog` are
-/// allocations the modifier set owns, and the trailing `cmod_*_save`
-/// fields are what `apply_cmdmod` put aside so `undo_cmdmod` can put it
-/// back — a duplicate of those would undo the same suppression twice.
+/// Not `Copy`: the `:filter` pattern and the saved 'eventignore' are the
+/// modifier set's own, and the trailing `cmod_*_save` fields are what
+/// `apply_cmdmod` put aside so `undo_cmdmod` can put it back — a duplicate
+/// of those would undo the same suppression twice. A clone *shares* the
+/// `:filter` pattern, as upstream's struct copy shared the pointers.
 #[derive(Clone)]
 pub struct CmdMod {
     pub cmod_flags: CmdModFlags,
     pub cmod_split: ::core::ffi::c_int,
     pub cmod_tab: ::core::ffi::c_int,
-    pub cmod_filter_pat: *mut ::core::ffi::c_char,
-    pub cmod_filter_regmatch: RegMatch,
+    /// `:filter`'s pattern and its program.
+    pub cmod_filter: Option<::std::rc::Rc<CmdFilter>>,
     pub cmod_filter_force: bool,
     pub cmod_verbose: ::core::ffi::c_int,
-    pub cmod_save_ei: *mut ::core::ffi::c_char,
+    /// The 'eventignore' `:noautocmd` put aside.
+    pub cmod_save_ei: Option<crate::memory::XString>,
     pub cmod_did_sandbox: ::core::ffi::c_int,
     pub cmod_verbose_save: OptInt,
     pub cmod_save_msg_silent: ::core::ffi::c_int,
@@ -210,11 +200,10 @@ impl CmdMod {
         cmod_flags: CmdModFlags::NONE,
         cmod_split: 0,
         cmod_tab: 0,
-        cmod_filter_pat: ::core::ptr::null_mut(),
-        cmod_filter_regmatch: RegMatch::new(::core::ptr::null_mut(), false),
+        cmod_filter: None,
         cmod_filter_force: false,
         cmod_verbose: 0,
-        cmod_save_ei: ::core::ptr::null_mut(),
+        cmod_save_ei: None,
         cmod_did_sandbox: 0,
         cmod_verbose_save: 0,
         cmod_save_msg_silent: 0,
@@ -226,6 +215,35 @@ impl CmdMod {
 impl Default for CmdMod {
     fn default() -> Self {
         Self::NONE
+    }
+}
+
+/// A `:filter` pattern, as the command line spelled it, and the program it
+/// compiled to -- `None` when it did not compile.
+pub struct CmdFilter {
+    pub pat: ::std::ffi::CString,
+    /// Taken out for the length of a match: the engines may replace the
+    /// program (the NFA one falls back to the backtracking one), and a
+    /// message given while matching asks the filter again.
+    pub(crate) prog: ::core::cell::Cell<Option<crate::regexp::OwnedProg>>,
+}
+
+impl CmdFilter {
+    /// The filter for `pat`, compiled with `re_flags`.
+    pub(crate) fn new(pat: ::std::ffi::CString, re_flags: ::core::ffi::c_int) -> CmdFilter {
+        let prog = crate::regexp::OwnedProg::compile(&pat, re_flags);
+        CmdFilter {
+            pat,
+            prog: ::core::cell::Cell::new(prog),
+        }
+    }
+
+    /// Whether the pattern compiled.
+    pub(crate) fn compiled(&self) -> bool {
+        let prog = self.prog.take();
+        let compiled = prog.is_some();
+        self.prog.set(prog);
+        compiled
     }
 }
 /// One Ex command's line, and the cursors into it.
@@ -642,10 +660,9 @@ impl EcmdCmd {
 
 /// One parsed Ex command line.
 ///
-/// Not `Copy`: `line` is the buffer the command is parsed out of, owned for
-/// as long as it runs.
-#[derive(Clone)]
-pub struct ExArg {
+/// Not `Clone`: `line` is the buffer the command is parsed out of, owned for
+/// as long as it runs, and `source` is the run's own, lent for as long.
+pub struct ExArg<'s> {
     /// The command line and the three cursors into it.
     pub line: CmdLine,
     pub cmdidx: CmdIdx,
@@ -677,14 +694,15 @@ pub struct ExArg {
     /// before the first was reported overwrote it. Owning the text removes
     /// the sharing.
     pub errmsg: Option<::std::ffi::CString>,
-    pub ea_getline: LineGetter,
-    pub cookie: *mut ::core::ffi::c_void,
+    /// Where the command reads further lines from (`:append`, a
+    /// `:function` body, a heredoc); `None` for a command given no source.
+    pub(crate) source: Option<&'s mut dyn crate::ex_docmd::ReadLines>,
     /// The condition stack of the command line this command runs in; `None`
     /// for a command run on its own.
     pub(crate) cond_stack: Option<CondId>,
 }
 
-impl ExArg {
+impl ExArg<'_> {
     /// The argument as a writable pointer.
     ///
     /// Transitional: every one of these is a handler that has not been
@@ -775,7 +793,7 @@ impl ExArg {
     }
 }
 
-impl Default for ExArg {
+impl Default for ExArg<'_> {
     /// The all-zero `ExArg` that `CLEAR_FIELD(ea)` produces upstream.
     fn default() -> Self {
         ExArg {
@@ -803,8 +821,7 @@ impl Default for ExArg {
             bad_char: 0,
             useridx: 0,
             errmsg: None,
-            ea_getline: None,
-            cookie: ::core::ptr::null_mut(),
+            source: None,
             cond_stack: None,
         }
     }

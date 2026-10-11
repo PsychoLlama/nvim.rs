@@ -10,27 +10,19 @@
 use super::*;
 use crate::guard::Keys;
 use crate::keycodes::{Key, key_escape, key_unescape};
-use crate::memory::handoff::owned_cstr;
+use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::semsg_multiline;
 use crate::types::NUL;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 use core::ptr;
 
 /// Read the command a `<Cmd>` key introduced out of the typeahead.
 ///
-/// This is a `LineGetter`, handed to `do_cmdline`, which is why it keeps that
-/// signature and the two parameters it does not use. The command runs
-/// to the `<CR>` that must terminate it; a null answer means it was aborted.
-///
-/// # Safety
-/// Callable at any time; reads from the typeahead.
-pub unsafe fn getcmdkeycmd(
-    _promptc: c_int,
-    _cookie: *mut c_void,
-    _indent: c_int,
-    _do_concat: bool,
-) -> *mut c_char {
+/// The [`CmdKey`](crate::ex_docmd::LineSource::CmdKey) arm of `do_cmdline`'s
+/// line source. The command runs to the `<CR>` that must terminate it;
+/// `None` means it was aborted.
+pub fn getcmdkeycmd() -> Option<XString> {
     let mut line = Vec::<u8>::new();
     let mut c1 = -1;
     let mut cmod = 0;
@@ -89,9 +81,9 @@ pub unsafe fn getcmdkeycmd(
     drop(unmapped);
 
     if aborted {
-        return ptr::null_mut();
+        return None;
     }
-    owned_cstr(line)
+    Some(XString::from_vec(line))
 }
 
 /// Read a `<Lua>` key's `LuaRef` out of the typeahead and call it.

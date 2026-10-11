@@ -6,41 +6,38 @@
 //! is what puts it in force and `undo_cmdmod` what takes it back out, and
 //! the two must stay a matched pair — `do_one_cmd` runs the second on
 //! every exit path, including the ones an error takes.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-use crate::cstr;
+#![forbid(unsafe_code)]
 use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::lookup::check_for_word;
 use crate::ex_docmd::scan::ends_excmd;
 use crate::types::CmdIdx;
-use crate::types::OptStr;
+use crate::types::{CmdFilter, CmdLine, OptStr};
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
 
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+use std::rc::Rc;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 
 use crate::buffer::BufFlags;
-use crate::charset::skip;
+use crate::charset::{skip, vim_is_ident_char};
 
 use crate::ex_docmd::address::{get_address, skip_range};
 
 use crate::ex_docmd::onecmd::ex_func_is;
 
-use crate::ex_docmd::source::getline_equal;
+use crate::ex_docmd::source::SourceKind;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    ExFunc, SID_NONE, cmdnames, e_invrange, ex_msg, ex_pressedreturn, getexline,
+    ExFunc, SID_NONE, builtin_command_cstr, cmdnames, e_invrange, ex_msg, ex_pressedreturn,
 };
 use crate::getchar::state::expr_map_lock;
 use crate::guard::sandbox;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
-use crate::memory::xfree;
 use crate::message::state::{did_emsg, emsg_silent, msg_col, msg_scroll, msg_silent};
 use crate::option::vars::{P_EI, P_VERBOSE, p_verbose};
 use crate::state::mode::exmode_active;
@@ -48,13 +45,12 @@ use crate::state::mode::exmode_active;
 use crate::message::redirecting;
 use crate::option::set_option_direct;
 use crate::options::kOptEventignore;
-use crate::optionstr::free_string_option;
 
+use crate::debugger::atoi;
 use crate::pos::MAXLNUM;
-use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
+use crate::regexp::{RE_MAGIC, skip_regexp_at};
 use crate::types::{CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, OptInt, OptVal, OptionSetFlags};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
-use ::libc::atoi;
 
 /// One recognised modifier name, for the two callers that only need to know
 /// *whether* a word is one: `modifier_len` and `cmd_exists`.
@@ -153,7 +149,7 @@ pub(crate) fn parse_command_modifiers(
         // spelled by substituting a `+` command.
         if first == 0
             && exmode_active.get()
-            && unsafe { getline_equal(excmd.ea_getline, excmd.cookie, Some(getexline)) }
+            && excmd.source_kind() == SourceKind::Typed
             && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
         {
             // An Ex-mode empty line *becomes* a `+` command: the line the
@@ -230,7 +226,6 @@ pub(crate) fn parse_command_modifiers(
             b'f' => {
                 // `:filter` insists on a pattern *and* something after
                 // it: the whole point is the command it wraps.
-                let mut reg_pat: *mut c_char = ptr::null_mut();
                 let Some(after) = check_for_word(&excmd.line, at, b"filter", 4) else {
                     break;
                 };
@@ -249,24 +244,20 @@ pub(crate) fn parse_command_modifiers(
                         break;
                     }
                 }
-                let start = excmd.line.ptr_at(at);
-                let past = if skip_only {
-                    skip_vimgrep_pat(start, ptr::null_mut(), ptr::null_mut())
-                } else {
-                    skip_vimgrep_pat(start, &raw mut reg_pat, ptr::null_mut())
-                };
-                if past.is_null() {
+                let Some((pattern, past)) = filter_pattern(&mut excmd.line, at, !skip_only) else {
                     break;
-                }
-                at = excmd.line.offset_of(past);
+                };
+                at = past;
                 if excmd.line.byte_at(at) == 0 {
                     break;
                 }
                 if !skip_only {
-                    cm.cmod_filter_pat = xstrdup(reg_pat);
-                    cm.cmod_filter_regmatch.regprog =
-                        vim_regcomp(unsafe { cstr::at(reg_pat) }, RE_MAGIC);
-                    if cm.cmod_filter_regmatch.regprog.is_null() {
+                    let pat = CString::new(excmd.line.slice_at(pattern.0, pattern.1 - pattern.0))
+                        .expect("a pattern ends at its first NUL");
+                    let filter = Rc::new(CmdFilter::new(pat, RE_MAGIC));
+                    let compiled = filter.compiled();
+                    cm.cmod_filter = Some(filter);
+                    if !compiled {
                         break;
                     }
                 }
@@ -389,11 +380,9 @@ pub(crate) fn parse_command_modifiers(
                     // Saturating: the count is whatever the user typed,
                     // so `:2147483647verbose set` would otherwise add one
                     // to `INT_MAX` and end the process.  C wraps here.
-                    let count = excmd.line.ptr_at(excmd.line.cmd);
                     cm.cmod_verbose =
                         if ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.cmd))) {
-                            // SAFETY: the command word, NUL-terminated.
-                            unsafe { atoi(count) }.saturating_add(1)
+                            atoi(excmd.line.cmd()).saturating_add(1)
                         } else {
                             2
                         };
@@ -534,12 +523,14 @@ pub(crate) fn cmdmod_report() -> (c_int, c_int, c_int, CmdModFlags) {
 /// backtracking one and frees what it had), and a `\=` inside the pattern
 /// re-enters the editor, so no borrow may be held across the match.
 pub(crate) fn cmdmod_filters_out(msg: &CStr) -> bool {
-    let mut regmatch = cmdmod.with(|mods| mods.cmod_filter_regmatch.clone());
-    if regmatch.regprog.is_null() {
+    let Some(filter) = cmdmod.with(|mods| mods.cmod_filter.clone()) else {
         return false;
-    }
-    let matched = vim_regexec(&mut regmatch, msg, 0);
-    cmdmod.with_mut(|mods| mods.cmod_filter_regmatch = regmatch);
+    };
+    let Some(mut prog) = filter.prog.take() else {
+        return false;
+    };
+    let matched = prog.exec(msg, 0, false).is_some();
+    filter.prog.set(Some(prog));
     if cmdmod.with(|mods| mods.cmod_filter_force) {
         matched
     } else {
@@ -588,9 +579,9 @@ fn apply_cmdmod() {
         emsg_silent.set(emsg_silent.get() + 1);
         cmdmod.with_mut(|cm| cm.cmod_did_esilent += 1);
     }
-    if mods.has(CmdModFlags::NOAUTOCMD) && cmdmod.with(|cm| cm.cmod_save_ei).is_null() {
-        let save_ei = P_EI.get().into_raw();
-        cmdmod.with_mut(|cm| cm.cmod_save_ei = save_ei);
+    if mods.has(CmdModFlags::NOAUTOCMD) && cmdmod.with(|cm| cm.cmod_save_ei.is_none()) {
+        let save_ei = P_EI.get();
+        cmdmod.with_mut(|cm| cm.cmod_save_ei = Some(save_ei));
         set_option_direct(
             kOptEventignore,
             eventignore_all(),
@@ -616,20 +607,17 @@ pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
         sandbox.set(sandbox.get() - 1);
         cm.cmod_did_sandbox = 0;
     }
-    if !cm.cmod_save_ei.is_null() {
+    if let Some(saved) = cm.cmod_save_ei.take() {
         set_option_direct(
             kOptEventignore,
-            // SAFETY: the saved value is NUL-terminated and freed just
-            // below, after `set_option_direct` has copied it.
-            OptVal::String(unsafe { OptStr::borrowing(cm.cmod_save_ei) }),
+            // A borrow: `set_option_direct` copies.
+            OptVal::String(OptStr::borrowing_bytes(saved.as_cstr().to_bytes())),
             OptionSetFlags::NONE,
             SID_NONE,
         );
-        unsafe { free_string_option(cm.cmod_save_ei) };
-        cm.cmod_save_ei = ptr::null_mut();
     }
-    unsafe { xfree(cm.cmod_filter_pat as *mut c_void) };
-    unsafe { vim_regfree(cm.cmod_filter_regmatch.regprog) };
+    // The pattern and its program go with the last set holding them.
+    cm.cmod_filter = None;
     if cm.cmod_save_msg_silent > 0 {
         // A command that raised an error may have wanted the message
         // level it left behind; only restore over it when nothing did.
@@ -782,7 +770,7 @@ pub fn is_loclist_cmd(cmdidx: CmdIdx) -> bool {
     if is_user_cmd(cmdidx) || cmdidx == CmdIdx::SIZE {
         return false;
     }
-    unsafe { *cmdnames[cmdidx.index()].cmd_name as c_int == 'l' as c_int }
+    builtin_command_cstr(cmdidx).to_bytes().first() == Some(&b'l')
 }
 
 /// Is this one of the mapping commands? Asked by the argument scan, which
@@ -811,18 +799,41 @@ fn takes(excmd: &mut ExArg, name: &[u8], min: usize) -> bool {
     }
 }
 
-/// `skip_vimgrep_pat()` as checked code.
-fn skip_vimgrep_pat(
-    p: *mut ::core::ffi::c_char,
-    s: *mut *mut ::core::ffi::c_char,
-    flags: *mut ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_cmds::skip_vimgrep_pat(p, s, flags) }
-}
-
-/// `xstrdup()` as checked code.
-fn xstrdup(str: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::memory::xstrdup(str) }
+/// `:filter`'s pattern argument at `at`: a bare word, or a pattern between
+/// two delimiters followed by any `g`/`j`/`f` flags -- `skip_vimgrep_pat`'s
+/// walk over the command line. Answers where the pattern is and where the
+/// argument ends, or `None` when the closing delimiter is missing. With
+/// `terminate` the pattern is cut in place, as upstream's walk does (an
+/// error message quoting the line shows it cut).
+fn filter_pattern(
+    line: &mut CmdLine,
+    at: usize,
+    terminate: bool,
+) -> Option<((usize, usize), usize)> {
+    let word = line.rest_of(at);
+    let first = word.first().copied().unwrap_or(0);
+    if vim_is_ident_char(c_int::from(first)) {
+        // A bare word, ending at the first white space.
+        let len = skip::to_white(word);
+        let mut past = at + len;
+        if terminate && len < word.len() {
+            line.set_byte(past, 0);
+            past += 1;
+        }
+        return Some(((at, at + len), past));
+    }
+    // A delimited pattern. The delimiter is whatever byte opened it.
+    let end = at + 1 + skip_regexp_at(line.tail(at + 1), c_int::from(first), 1);
+    if line.byte_at(end) != first {
+        return None;
+    }
+    if terminate {
+        line.set_byte(end, 0);
+    }
+    let flags = line
+        .rest_of(end + 1)
+        .iter()
+        .take_while(|&&byte| matches!(byte, b'g' | b'j' | b'f'))
+        .count();
+    Some(((at + 1, end), end + 1 + flags))
 }

@@ -83,7 +83,7 @@ use crate::startup::exiting;
 use crate::types::CmdIdx;
 use crate::types::TypVal;
 use crate::types::{
-    CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t, size_t, uint64_t,
+    CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t, uint64_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
@@ -188,11 +188,10 @@ pub(crate) fn ex_perldo(excmd: &mut ExArg) {
 fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
     // SAFETY: module contract; `script_get` returns an owned string that
     // the argument list takes over.
-    let mut len: size_t = 0;
-    let script = unsafe { script_get(excmd, &raw mut len) };
-    if script.is_null() {
+    let Some(script) = script_get(excmd) else {
         return;
-    }
+    };
+    let script = script.into_raw();
     let argv = tv_list_alloc(3 as ptrdiff_t);
     let into = argv.as_ptr();
     unsafe { (*into).push(TypVal::string(ThinCString::from_raw(script))) };
@@ -731,7 +730,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
             let cmd = excmd.do_ecmd_cmd.ptr(&excmd.line).cast_mut();
             let did_set_swapcommand = unsafe { set_swapcommand(cmd, 0 as LineNr) };
             let verbose = DoCmdOpts::VERBOSE;
-            let _ = unsafe { do_cmdline(cmd, None, ptr::null_mut(), verbose) };
+            let _ = do_cmdline(Some(unsafe { cstr::bytes_at(cmd) }), None, verbose);
             if did_set_swapcommand {
                 set_vim_var_string(Vv::Swapcommand, None);
             }

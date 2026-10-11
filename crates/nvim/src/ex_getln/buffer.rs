@@ -257,22 +257,36 @@ fn stuff_char(c: ::core::ffi::c_int) {
 /// Get an Ex command line for the `:` command.
 ///
 /// `c` is normally `:`, and NUL for `:append`; `indent` is the indent for
-/// inside conditionals.  Registered as a `LineGetter` in several tables, so
-/// this one keeps its C ABI.
-#[inline(never)]
+/// inside conditionals. The [`Typed`](crate::ex_docmd::LineSource::Typed)
+/// arm of `do_cmdline`'s line source; `None` when the line was abandoned.
 pub fn getexline(
     c: ::core::ffi::c_int,
-    _cookie: *mut ::core::ffi::c_void,
     indent: ::core::ffi::c_int,
     do_concat: bool,
-) -> *mut ::core::ffi::c_char {
+) -> Option<XString> {
     // When executing a register, remove the ':' in front of each line.
     // SAFETY: peeks at the typeahead.
     if exec_from_reg.get() && vpeekc() == ':' as ::core::ffi::c_int {
         // SAFETY: consumes the byte `vpeekc` just reported.
         vgetc();
     }
-    getcmdline(c, 1, indent, do_concat)
+    owned_cmdline(getcmdline(c, 1, indent, do_concat))
+}
+
+/// A command line read for a command that wants more of its body and has no
+/// source to read it from: `getcmdline` with no count, owned.
+pub(crate) fn cmdline_input(
+    c: ::core::ffi::c_int,
+    indent: ::core::ffi::c_int,
+    do_concat: bool,
+) -> Option<XString> {
+    owned_cmdline(getcmdline(c, 0, indent, do_concat))
+}
+
+/// What `getcmdline` answered, taken over.
+fn owned_cmdline(line: *mut ::core::ffi::c_char) -> Option<XString> {
+    // SAFETY: `getcmdline` answers null or a line allocated for its caller.
+    (!line.is_null()).then(|| unsafe { XString::from_raw(line) })
 }
 
 pub fn cmdline_overstrike() -> bool {

@@ -62,7 +62,11 @@ unsafe fn global_exe_one(cmd: *mut c_char, lnum: LineNr) {
         cmd
     };
     // SAFETY: a live command string; re-enters the Ex layer.
-    let _ = unsafe { do_cmdline(cmd, None, ptr::null_mut(), DoCmdOpts::NOWAIT) };
+    let _ = do_cmdline(
+        Some(unsafe { cstr::bytes_at(cmd) }),
+        None,
+        DoCmdOpts::NOWAIT,
+    );
 }
 
 /// Does the command letter `kind` select a line that (did not) match?

@@ -49,16 +49,16 @@ use crate::ex_docmd::state::{
     cmdmod, ex_normal_busy, exec_from_reg, global_busy, new_last_cmdline,
 };
 use crate::ex_docmd::{
-    do_cmdline, execute_cmd, expr_map_locked, parse_cmd_address, parse_cmdline,
-    parse_command_modifiers, set_no_hlsearch, skip_range, undo_cmdmod,
+    execute_cmd, expr_map_locked, parse_cmd_address, parse_cmdline, parse_command_modifiers,
+    set_no_hlsearch, skip_range, undo_cmdmod,
 };
 use crate::ex_eval::aborting;
 use crate::ex_getln::state::{cmdline_star, cmdline_was_last_drawn, cmdpreview, redrawing_cmdline};
 use crate::extmark::extmark_clear;
 use crate::getchar::state::{KeyStuffed, KeyTyped, got_int, mod_mask};
 use crate::getchar::{
-    beep_flush, char_avail, getcmdkeycmd, ins_typebuf, map_execute_lua, plain_vgetc, stuff_empty,
-    stuff_readbuf, stuff_readbuf_char, stuff_readbuf_one_line, vgetc, vpeekc, vpeekc_any, vungetc,
+    beep_flush, char_avail, ins_typebuf, map_execute_lua, plain_vgetc, stuff_empty, stuff_readbuf,
+    stuff_readbuf_char, stuff_readbuf_one_line, vgetc, vpeekc, vpeekc_any, vungetc,
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::{allbuf_lock, textlock};
@@ -72,7 +72,7 @@ use crate::mbyte::{
     utfc_ptr2len,
 };
 use crate::memline::{decl, incl, ml_append, ml_replace};
-use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
+use crate::memory::{xfree, xmalloc, xmallocz, xstrdup};
 use crate::message::state::{
     cmd_silent, cmdmsg_rl, did_emsg, emsg_on_display, lines_left, msg_col, msg_didout, msg_no_more,
     msg_row, msg_scroll, msg_scrolled, need_wait_return, quit_more, redir_off,
@@ -488,7 +488,7 @@ pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
 }
 
 /// An all-zero [`ExArg`]; `parse_cmdline` fills it.
-pub(crate) const EXARG_T_INIT: ExArg = ExArg {
+pub(crate) const EXARG_T_INIT: ExArg<'static> = ExArg {
     line: CmdLine::EMPTY,
     cmdidx: CmdIdx::append,
     argt: ExArgt::NONE,
@@ -513,8 +513,7 @@ pub(crate) const EXARG_T_INIT: ExArg = ExArg {
     bad_char: 0,
     useridx: 0,
     errmsg: None,
-    ea_getline: None,
-    cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
+    source: None,
     cond_stack: None,
 };
 

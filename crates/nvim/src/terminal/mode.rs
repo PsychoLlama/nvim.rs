@@ -35,9 +35,9 @@ use crate::drawscreen::{
     UPD_SOME_VALID, UPD_VALID, redraw_statuslines, setcursor, show_cursor_info_later, showmode,
     unshowmode, update_screen,
 };
-use crate::ex_docmd::{DoCmdOpts, do_cmdline};
+use crate::ex_docmd::{DoCmdOpts, LineSource, do_cmdline};
 use crate::getchar::state::{got_int, mapped_ctrl_c, mod_mask};
-use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repeat};
+use crate::getchar::{map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, Key};
 use crate::memory::XString;
@@ -53,7 +53,7 @@ use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::vterm::state::entry::{vterm_state_focus_in, vterm_state_focus_out};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
 use crate::winlayer::{Buf, Win, WinId};
-use core::ffi::{c_int, c_void};
+use core::ffi::c_int;
 use core::ops::{Deref, DerefMut};
 
 use super::input::{is_mouse_key, send_mouse_event, terminal_send_key};
@@ -575,10 +575,9 @@ pub(crate) unsafe fn terminal_execute(state: *mut TerminalState, key: c_int) -> 
             return 1;
         }
         Ok(Key::Command) => {
-            let (none, data) = (::core::ptr::null_mut(), ::core::ptr::null_mut::<c_void>());
-            // SAFETY: runs the command the key carries, which is read back
-            // by `getcmdkeycmd` rather than passed here.
-            let _ = unsafe { do_cmdline(none, Some(getcmdkeycmd), data, DoCmdOpts::NONE) };
+            // Runs the command the key carries, which is read back out of
+            // the typeahead rather than passed here.
+            let _ = do_cmdline(None, Some(&mut LineSource::CmdKey), DoCmdOpts::NONE);
             return 1;
         }
         Ok(Key::Lua) => {

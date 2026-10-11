@@ -25,18 +25,17 @@
 
 use crate::global_cell::{GlobalCell, state_record};
 use crate::memory::XString;
-use crate::types::{CmdMod, CmdModFlags, RegMatch, RegProg};
-use core::ffi::{CStr, c_char, c_int};
+use crate::types::{CmdMod, CmdModFlags};
+use core::ffi::{CStr, c_int};
 
 pub static cmdmod: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {
     cmod_flags: CmdModFlags::NONE,
     cmod_split: 0,
     cmod_tab: 0,
-    cmod_filter_pat: ::core::ptr::null_mut::<c_char>(),
-    cmod_filter_regmatch: RegMatch::new(::core::ptr::null_mut::<RegProg>(), false),
+    cmod_filter: None,
     cmod_filter_force: false,
     cmod_verbose: 0,
-    cmod_save_ei: ::core::ptr::null_mut::<c_char>(),
+    cmod_save_ei: None,
     cmod_did_sandbox: 0,
     cmod_verbose_save: 0,
     cmod_save_msg_silent: 0,
