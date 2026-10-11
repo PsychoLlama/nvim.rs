@@ -60,21 +60,25 @@ impl StringOrder {
         ignore_case: false,
     };
 
-    /// Compare two keys: `strcoll`, `strcasecmp` or `strcmp`.
-    fn compare(self, s1: &CStr, s2: &CStr) -> Ordering {
+    /// Compare two keys, each its bytes and one NUL and no other:
+    /// `strcoll`, `strcasecmp` or `strcmp`. The byte order is the slices'
+    /// own, which needs no measuring -- this runs once per comparison of the
+    /// sort, and finding the terminator again each time was most of it.
+    fn compare(self, s1: &[u8], s2: &[u8]) -> Ordering {
+        let cstr = |s| CStr::from_bytes_until_nul(s).expect("a key ends in a NUL");
         if self.locale {
-            strcoll(s1, s2).cmp(&0)
+            strcoll(cstr(s1), cstr(s2)).cmp(&0)
         } else if self.ignore_case {
             // `strncasecmp` with no limit is `strcasecmp`.
-            cstr_ncasecmp(s1, s2, usize::MAX).cmp(&0)
+            cstr_ncasecmp(cstr(s1), cstr(s2), usize::MAX).cmp(&0)
         } else {
-            s1.to_bytes().cmp(s2.to_bytes())
+            s1.cmp(s2)
         }
     }
 
     /// [`StringOrder::compare`] for two keys that carry their own NUL.
     fn compare_keys(self, k1: &Key, k2: &Key) -> Ordering {
-        self.compare(k1.as_cstr(), k2.as_cstr())
+        self.compare(&k1.0, &k2.0)
     }
 }
 
@@ -88,10 +92,6 @@ impl Key {
         owned.extend_from_slice(bytes);
         owned.push(NUL as u8);
         Key(owned.into_boxed_slice())
-    }
-
-    fn as_cstr(&self) -> &CStr {
-        CStr::from_bytes_until_nul(&self.0).expect("a key ends in a NUL")
     }
 }
 
@@ -529,7 +529,7 @@ fn append_sorted(
 
         let duplicate = unique
             && placed.done > 0
-            && order.compare(current.as_cstr(), previous.as_cstr()) == Ordering::Equal;
+            && order.compare(current.with_nul(), previous.with_nul()) == Ordering::Equal;
         if !duplicate {
             let failed = ml_append_cstr(placed.lnum, current.as_cstr()).is_err();
             placed.lnum += 1;
@@ -773,7 +773,7 @@ fn uniq_range(args: &mut ExArg) {
             }
 
             let is_match =
-                i > 0 && order.compare(current.as_cstr(), previous.as_cstr()) == Ordering::Equal;
+                i > 0 && order.compare(current.with_nul(), previous.with_nul()) == Ordering::Equal;
             let (delete_lnum, keep) = scan.step(mode, i, count, get_lnum, is_match);
             if keep {
                 core::mem::swap(&mut previous, &mut current);

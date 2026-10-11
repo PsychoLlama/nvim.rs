@@ -154,10 +154,12 @@ pub(crate) fn sub_joining_lines(
     save: bool,
     keeppatterns: bool,
 ) -> bool {
-    let flags = args.line.rest_of(flags_at);
-    let joins = pat == Some(b"\\n".as_slice())
-        && sub.is_empty()
-        && matches!(flags, [] | [b'g' | b'l' | b'p' | b'#']);
+    // The flags are only looked at once the rest has the shape: measuring
+    // them is a scan of the rest of the line, for every `:s`.
+    let flags =
+        (pat == Some(b"\\n".as_slice()) && sub.is_empty()).then(|| args.line.rest_of(flags_at));
+    let joins = matches!(flags, Some([] | [b'g' | b'l' | b'p' | b'#']));
+    let flags = flags.unwrap_or_default();
     let Some(pat) = pat.filter(|_| joins) else {
         return false;
     };
@@ -247,12 +249,16 @@ pub(crate) fn sub_parse_flags(text: &[u8], flags: &mut SubFlags, which_pat: &mut
 }
 
 /// Skip the `sub` part of `:s/pat/sub/` that starts at `start` in `line`,
-/// where `delimiter` separates the parts, and answer where what follows it
-/// starts.
+/// where `delimiter` separates the parts, and answer where it ends and
+/// where what follows it starts.
 ///
 /// The closing delimiter is replaced by a NUL in place, so the replacement
 /// ends where it should; an unterminated one simply runs to the end.
-pub(crate) fn skip_substitute(line: &mut CmdLine, start: usize, delimiter: c_int) -> usize {
+pub(crate) fn skip_substitute(
+    line: &mut CmdLine,
+    start: usize,
+    delimiter: c_int,
+) -> (usize, usize) {
     let end = line.end_of(start);
     let mut i = start;
     while i < end {
@@ -260,7 +266,7 @@ pub(crate) fn skip_substitute(line: &mut CmdLine, start: usize, delimiter: c_int
         if c_int::from(byte) == delimiter {
             // End delimiter found: replace it with a NUL.
             line.terminate_at(i);
-            return i + 1;
+            return (i, i + 1);
         }
         if byte == b'\\' && i + 1 < end {
             i += 1; // skip escaped characters
@@ -269,7 +275,7 @@ pub(crate) fn skip_substitute(line: &mut CmdLine, start: usize, delimiter: c_int
         // byte long and stops at the terminator.
         i += cluster_len(&line.buffer()[i..end]);
     }
-    end
+    (end, end)
 }
 
 /// Reject a delimiter that would make the command ambiguous.

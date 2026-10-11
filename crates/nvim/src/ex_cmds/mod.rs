@@ -406,6 +406,11 @@ impl LineCopy {
         len
     }
 
+    /// The copy's bytes and its one NUL.
+    pub(crate) fn with_nul(&self) -> &[u8] {
+        &self.0
+    }
+
     /// The copy as a C string.
     pub(crate) fn as_cstr(&self) -> &::core::ffi::CStr {
         ::core::ffi::CStr::from_bytes_until_nul(&self.0).expect("the copy ends in a NUL")

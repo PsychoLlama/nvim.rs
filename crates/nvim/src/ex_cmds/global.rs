@@ -35,6 +35,7 @@ use crate::smsg;
 use crate::types::{ColNr, ExArg, LineNr};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
+use std::ffi::CString;
 
 /// Run `cmd` on line `lnum`, with the cursor at its start.
 ///
@@ -70,7 +71,7 @@ struct GlobalPat {
     /// The pattern text, copied out of the line.  Empty for the `\/`, `\?`
     /// and `\&` forms, which take the remembered pattern that `which_pat`
     /// names instead.
-    pat: Vec<u8>,
+    pat: CString,
     /// `RE_LAST`, `RE_SEARCH` or `RE_SUBST` -- which previous pattern to fall
     /// back on when `pat` is empty.
     which_pat: c_int,
@@ -100,7 +101,7 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
             }
         };
         return Some(GlobalPat {
-            pat: Vec::new(),
+            pat: CString::default(),
             which_pat,
             cmd_at: arg + 2,
         });
@@ -134,7 +135,7 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
     Some(GlobalPat {
         // Terminated by the argument's own NUL when there was no closing
         // delimiter, by the one just written when there was.
-        pat: args.line.rest_of(pat_at).to_vec(),
+        pat: args.line.cstr_from(pat_at).to_owned(),
         which_pat: RE_LAST as c_int,
         cmd_at,
     })
@@ -199,8 +200,9 @@ pub fn ex_global(excmd: &mut ExArg) {
         RE_BOTH as c_int,
         parsed.which_pat,
         SEARCH_HIS as c_int,
+        true,
     );
-    let Some((mut regmatch, used_pat)) = compiled else {
+    let Some((mut regmatch, Some(used_pat))) = compiled else {
         emsg(gettext(e_invcmd));
         return;
     };

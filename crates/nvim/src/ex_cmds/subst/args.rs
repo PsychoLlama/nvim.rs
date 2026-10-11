@@ -40,7 +40,8 @@ use crate::types::CmdIdx;
 use crate::types::{ExArg, LineNr, NUL};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
+use std::ffi::CString;
 
 /// What `do_sub` needs from the command line before it can start matching.
 pub(super) struct SubSetup {
@@ -68,7 +69,7 @@ struct Parsed {
     /// The pattern, copied out of the line. `None` reuses the previous one
     /// (upstream's null `pat`); the `\/`, `\?` and `\&` forms give an empty
     /// one, which also reuses it but counts as given.
-    pat: Option<Vec<u8>>,
+    pat: Option<CString>,
     /// None only when `eap->skip` is set and no new pattern was given.
     sub: Option<XString>,
     which_pat: c_int,
@@ -146,7 +147,7 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
         if which != b'&' {
             which_pat = RE_SEARCH as c_int; // use last '/' pattern
         }
-        pat = Vec::new(); // empty search pattern
+        pat = CString::default(); // empty search pattern
         delimiter = c_int::from(which);
         at += 1;
         has_second_delim = true;
@@ -170,14 +171,15 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
             at += 1;
             has_second_delim = true;
         }
-        pat = args.line.rest_of(start).to_vec();
+        pat = args.line.cstr_from(start).to_owned();
     }
 
     // Small incompatibility: vi sees '\n' as end of the command, but we want
     // to use '\n' to find/substitute a NUL.
     let start = at;
-    at = skip_substitute(&mut args.line, at, delimiter);
-    let sub = XString::from_bytes(args.line.rest_of(start));
+    let sub_end;
+    (sub_end, at) = skip_substitute(&mut args.line, at, delimiter);
+    let sub = XString::from_bytes(args.line.slice_at(start, sub_end - start));
 
     if !args.skip && !keeppatterns && cmdpreview_ns <= 0 as c_int {
         sub_set_replacement(sub.clone());
@@ -240,7 +242,7 @@ pub(super) fn parse_sub(
     if let Some(sub) = sub.as_ref() {
         let joined = sub_joining_lines(
             args,
-            pat.as_deref(),
+            pat.as_deref().map(CStr::to_bytes),
             sub,
             flags_at,
             cmdpreview_ns <= 0 as c_int,
@@ -299,6 +301,7 @@ pub(super) fn parse_sub(
         RE_SUBST as c_int,
         which_pat,
         options,
+        false,
     );
     let Some((mut regmatch, _)) = compiled else {
         if SUB_FLAGS.with(|flags| flags.do_error) {

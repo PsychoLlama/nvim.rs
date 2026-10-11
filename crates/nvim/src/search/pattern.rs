@@ -236,27 +236,27 @@ pub unsafe fn search_regcomp(
 }
 
 /// [`search_regcomp`] over a pattern the caller holds -- empty for the
-/// remembered one `pat_use` names: the compiled match, owned, and the
-/// pattern that was compiled, copied out (what `:global` reports when
-/// nothing matched). `None` when it does not compile or there is no
-/// remembered pattern, which has been reported.
+/// remembered one `pat_use` names: the compiled match, owned, and when
+/// `want_used` the pattern that was compiled, copied out (what `:global`
+/// reports when nothing matched). `None` when it does not compile or there
+/// is no remembered pattern, which has been reported.
 pub(crate) fn search_regcomp_owned(
-    pat: &[u8],
+    pat: &CStr,
     pat_save: c_int,
     pat_use: c_int,
     options: c_int,
-) -> Option<(crate::regexp::OwnedMMatch, XString)> {
-    let mut copy = Vec::with_capacity(pat.len() + 1);
-    copy.extend_from_slice(pat);
-    copy.push(0);
+    want_used: bool,
+) -> Option<(crate::regexp::OwnedMMatch, Option<XString>)> {
     let mut used: *mut c_char = ptr::null_mut();
     let mut regmatch = RegMMatch::default();
-    // SAFETY: `copy` is `pat.len()` bytes and a terminator, lent for the
-    // call; the out-parameters are this frame's own.
+    // SAFETY: a terminated pattern, lent for the call: the compile reads it
+    // -- for the history, the remembered copy, the case rule and the
+    // program -- and writes nothing through it. The out-parameters are this
+    // frame's own.
     unsafe {
         search_regcomp(
-            copy.as_mut_ptr().cast(),
-            pat.len(),
+            pat.as_ptr().cast_mut(),
+            pat.count_bytes(),
             &raw mut used,
             pat_save,
             pat_use,
@@ -265,9 +265,9 @@ pub(crate) fn search_regcomp_owned(
         )
     }
     .ok()?;
-    // SAFETY: `used` points into `copy` or into the remembered pattern,
+    // SAFETY: `used` points into `pat` or into the remembered pattern,
     // both live and terminated until the next compile.
-    let used = XString::from_cstr(unsafe { cstr::at(used) });
+    let used = want_used.then(|| XString::from_cstr(unsafe { cstr::at(used) }));
     // SAFETY: the program `search_regcomp` just compiled, which the caller
     // owns.
     let owned = unsafe { crate::regexp::OwnedMMatch::adopt(regmatch.regprog, regmatch.rmm_ic) };
