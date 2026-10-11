@@ -533,16 +533,12 @@ pub(crate) fn cmdmod_report() -> (c_int, c_int, c_int, CmdModFlags) {
 /// place: the engines may *replace* it (the NFA one falls back to the
 /// backtracking one and frees what it had), and a `\=` inside the pattern
 /// re-enters the editor, so no borrow may be held across the match.
-///
-/// # Safety
-/// `msg` is NUL-terminated, and this is a main-thread editor call.
-pub(crate) unsafe fn cmdmod_filters_out(msg: *const c_char) -> bool {
+pub(crate) fn cmdmod_filters_out(msg: &CStr) -> bool {
     let mut regmatch = cmdmod.with(|mods| mods.cmod_filter_regmatch.clone());
     if regmatch.regprog.is_null() {
         return false;
     }
-    // SAFETY: the caller's contract -- a NUL-terminated message.
-    let matched = vim_regexec(&mut regmatch, unsafe { cstr::at(msg) }, 0);
+    let matched = vim_regexec(&mut regmatch, msg, 0);
     cmdmod.with_mut(|mods| mods.cmod_filter_regmatch = regmatch);
     if cmdmod.with(|mods| mods.cmod_filter_force) {
         matched

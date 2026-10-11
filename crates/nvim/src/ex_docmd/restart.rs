@@ -6,7 +6,7 @@
 use crate::cstr;
 use crate::memory::ThinCString;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::types::{Channel, Proc};
 
 use crate::semsg;
@@ -299,7 +299,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
     // The address was released for a server that is not going to use it.
     if server_stopped && unsafe { server_start(listen_arg) } != 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let listen_arg = unsafe { c_str(listen_arg) };
+        let listen_arg = unsafe { msg_cstr_opt(cstr::at_opt(listen_arg)) };
         semsg!("couldn't resume listening on {listen_arg}");
     }
 }

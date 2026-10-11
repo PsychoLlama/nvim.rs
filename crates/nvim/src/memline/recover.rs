@@ -416,14 +416,8 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
         if !ui_has(kUIMessages) {
             msg_putchar('\n' as c_int);
         }
-        let nr = unsafe {
-            prompt_for_input(
-                Some(gettext(c"Enter number of swap file to use (0 to quit): ")),
-                0,
-                false,
-                core::ptr::null_mut(),
-            )
-        };
+        let question = gettext(c"Enter number of swap file to use (0 to quit): ");
+        let nr = prompt_for_input(Some(question), 0, false, None);
         if nr < 1 || nr > count {
             return None;
         }

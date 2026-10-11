@@ -637,6 +637,33 @@ fn install_defaults(chars: &mut [u8], tab: &[Field]) {
     }
 }
 
+/// A "multispace:" run, copied out of the struct that owns it: the
+/// characters before its terminator, or `None` for an unset field.
+fn run_of(run: *const ScreenChar) -> Option<Vec<ScreenChar>> {
+    if run.is_null() {
+        return None;
+    }
+    let mut out = Vec::new();
+    // SAFETY: a non-null run is one `alloc_run` made, terminated by a NUL
+    // character; the window owns it and only this module replaces it.
+    loop {
+        let c = unsafe { *run.add(out.len()) };
+        if c == NUL as ScreenChar {
+            return Some(out);
+        }
+        out.push(c);
+    }
+}
+
+impl LcsChars {
+    /// The "multispace:" and "leadmultispace:" runs, copied: `None` for a
+    /// field that is not set. A copy, so a caller that prints with them
+    /// holds no borrow of the window.
+    pub(crate) fn multispace_runs(&self) -> (Option<Vec<ScreenChar>>, Option<Vec<ScreenChar>>) {
+        (run_of(self.multispace), run_of(self.leadmultispace))
+    }
+}
+
 /// Allocate the run of characters a "multispace:" field fills, terminated
 /// like a string. A zero-length run is no allocation at all.
 ///

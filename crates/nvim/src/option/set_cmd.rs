@@ -40,7 +40,7 @@ use crate::guard::sandbox;
 use crate::memory::xstrlcpy;
 use crate::message::state::info_message;
 use crate::message::{e_invarg, e_sandbox, e_trailing};
-use crate::message::{emsg_ptr, msg_ext_set_kind, msg_putchar};
+use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
 use crate::option::vars::{p_mle, p_verbose};
 use crate::options::{kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap};
 use crate::os::cshim::gettext_ptr;
@@ -645,7 +645,8 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
     // The message is the whole report; do not make the user acknowledge
     // the half of it that has already scrolled past.
     let _no_prompt = Suppress::wait_return();
-    unsafe { emsg_ptr(buf) };
+    // SAFETY: the report just built in `buf`, NUL-terminated.
+    emsg(unsafe { cstr::at(buf) });
 }
 
 /// The key `arg` names, given that it is `len` bytes long and, with

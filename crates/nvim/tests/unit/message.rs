@@ -1,9 +1,11 @@
-//! Fitting a message into the columns there are: `trunc_string`.
+//! Fitting a message into the columns there are: `cut_middle`, upstream's
+//! `trunc_string`.
 //!
 //! Every `:` command that reports a long file name goes through this, via
-//! `msg_strtrunc`, and the shape it produces — head, `...`, tail — is what
+//! `fit_middle`, and the shape it produces — head, `...`, tail — is what
 //! the user reads. `test/unit/message_spec.lua` covered five ASCII strings
-//! against one room and one buffer size, in place and by copy.
+//! against one room and one buffer size, in place and by copy; the copy is
+//! the only form now.
 //!
 //! The truncation reads the display width of each character out of the
 //! global `chartab`, so every case takes the editor lock rather than
@@ -11,9 +13,9 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::c_int;
 
-use neovim::message::trunc_string;
+use neovim::message::cut_middle;
 
 use crate::support::{Editor, editor_lock};
 
@@ -21,50 +23,18 @@ use crate::support::{Editor, editor_lock};
 /// "cannot even fit the `...`" arm unless a case asks for it.
 const BUFLEN: usize = 40;
 
-/// Truncate `s` into a *separate* buffer of `buflen` bytes.
+/// Truncate `s` into a buffer of `buflen` bytes.
 fn by_copy(_editor: &Editor, s: &str, room: c_int, buflen: usize) -> Vec<u8> {
-    let source: Vec<c_char> = s
-        .bytes()
-        .chain(std::iter::once(0))
-        .map(|b| b as c_char)
-        .collect();
-    let mut buf = vec![0 as c_char; buflen];
-    unsafe { trunc_string(source.as_ptr(), buf.as_mut_ptr(), room, buflen as c_int) };
-    read(&buf)
+    cut_middle(s.as_bytes(), room, buflen)
 }
 
-/// Truncate `s` in place, which is what `msg_strtrunc`'s callers mostly do:
-/// `s` and `buf` are the same pointer.
-fn in_place(_editor: &Editor, s: &str, room: c_int, buflen: usize) -> Vec<u8> {
-    assert!(s.len() < buflen, "the fixture has to fit in the buffer");
-    let mut buf = vec![0 as c_char; buflen];
-    for (slot, byte) in buf.iter_mut().zip(s.bytes()) {
-        *slot = byte as c_char;
-    }
-    unsafe { trunc_string(buf.as_ptr(), buf.as_mut_ptr(), room, buflen as c_int) };
-    read(&buf)
-}
-
-/// The NUL-terminated string sitting in `buf`.
-fn read(buf: &[c_char]) -> Vec<u8> {
-    buf.iter()
-        .take_while(|&&c| c != 0)
-        .map(|&c| c as u8)
-        .collect()
-}
-
-/// Both ways of calling it, so a case never has to say which.
+/// Every case through the one form, so a case never has to say which.
 #[track_caller]
 fn both(editor: &Editor, s: &str, room: c_int, expected: &str) {
     assert_eq!(
         String::from_utf8_lossy(&by_copy(editor, s, room, BUFLEN)),
         expected,
-        "by copy: {s:?} in {room} cells"
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&in_place(editor, s, room, BUFLEN)),
-        expected,
-        "in place: {s:?} in {room} cells"
+        "{s:?} in {room} cells"
     );
 }
 
@@ -161,7 +131,7 @@ fn a_composing_character_is_not_separated_from_its_base() {
 }
 
 /// When even the head plus `...` will not fit in the *buffer*, the answer is
-/// whatever fits, NUL-terminated — never a write past the end.
+/// whatever fits, at most `buflen - 1` bytes — never a write past the end.
 #[test]
 fn a_buffer_too_small_for_the_ellipsis_is_merely_cut() {
     let editor = editor_lock();
@@ -250,4 +220,34 @@ fn messagesopt_refuses_what_it_cannot_use() {
     probe.run("set messagesopt=history:7,hit-enter");
     probe.check("&messagesopt", "'history:7,hit-enter'");
     probe.run("set messagesopt&");
+}
+
+/// Two cases upstream got wrong, fixed: a text that fits the room but not the
+/// buffer was copied without a terminator (so the reader ran on past the
+/// buffer), and a character straddling the end of the buffer made the head
+/// loop step one past it and write the terminator there. Both answer the
+/// first `buflen - 1` bytes of what the buffer would hold.
+#[test]
+fn a_buffer_smaller_than_the_text_is_never_overrun() {
+    let editor = editor_lock();
+    // Fits twenty cells, not five bytes.
+    assert_eq!(by_copy(&editor, "abcdefgh", 20, 5), b"abcd");
+    // Three-byte characters, one cell each: the head wants ten cells and the
+    // buffer has room for four bytes, so the second character straddles it.
+    let wide = "\u{2026}".repeat(30);
+    for buflen in 1..=12 {
+        let out = by_copy(&editor, &wide, 23, buflen);
+        assert!(
+            out.len() < buflen,
+            "buflen {buflen} produced {} bytes",
+            out.len()
+        );
+    }
+    // Every room and size: nothing past the buffer, ever.
+    for room in -1..40 {
+        for buflen in 1..40 {
+            let out = by_copy(&editor, &wide, room, buflen);
+            assert!(out.len() < buflen, "{room}/{buflen}: {} bytes", out.len());
+        }
+    }
 }

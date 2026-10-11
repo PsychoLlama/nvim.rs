@@ -51,7 +51,7 @@ use crate::message::{
     msg_prt_line, set_keep_msg, wait_return,
 };
 use crate::message::{e_noprev, e_notmp};
-use crate::message_fmt::{c_str, to_message};
+use crate::message_fmt::{msg_cstr_opt, to_message};
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
 use crate::option::cpo_has;
 use crate::option::vars::{P_SHQ, p_report, p_sh, p_srr, p_stmp, p_warn};
@@ -371,7 +371,7 @@ unsafe fn do_filter(
             drop(no_prompt.take());
             if !aborting() {
                 // SAFETY: one `%s` for one string. Will call wait_return().
-                let arg0 = unsafe { c_str(TempFile::name(&itmp)) };
+                let arg0 = unsafe { msg_cstr_opt(cstr::at_opt(TempFile::name(&itmp))) };
                 semsg!("E482: Can't create file {arg0}");
             }
             break 'filterend;
@@ -451,7 +451,7 @@ unsafe fn do_filter(
                         // SAFETY: message state; one `%s` for one string.
                         say::putchar('\n' as c_int);
                         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                        let arg0 = unsafe { c_str(TempFile::name(&otmp)) };
+                        let arg0 = unsafe { msg_cstr_opt(cstr::at_opt(TempFile::name(&otmp))) };
                         semsg!("E485: Can't read file {arg0}");
                     }
                     break 'error;

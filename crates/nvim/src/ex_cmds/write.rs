@@ -45,11 +45,11 @@ use crate::memline::makeswapname;
 use crate::message::state::emsg_silent;
 use crate::message::{e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly};
 use crate::message::{emsg, vim_dialog_yesno};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::{P_DIR, p_confirm, p_dir, p_wa, p_write};
 use crate::option::{copy_option_part, cpo_has, shortmess};
 use crate::optionstr::OptString;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;
 use crate::semsg;
@@ -68,9 +68,6 @@ use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-/// The buffer `dialog_msg` formats a prompt into.
-const DIALOG_MSG_SIZE: usize = 1000;
-
 /// Is a `:confirm` dialog wanted here -- either from 'confirm' or from the
 /// command's own modifier?
 fn confirming() -> bool {
@@ -78,18 +75,9 @@ fn confirming() -> bool {
 }
 
 /// Put `name` into the one-`%s` message `fmt` and ask the user to confirm it.
-///
-/// # Safety
-/// `fmt` must be a format taking exactly one string, and `name` must be live.
-unsafe fn dialog_yesno_about(fmt: *mut c_char, name: *mut c_char) -> bool {
-    let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
-    // SAFETY: caller's contract; `buff` is the `DIALOG_MSG_SIZE` upstream
-    // sizes its own prompt buffers to.
-    unsafe { dialog_msg(buff.as_mut_ptr(), fmt, name) };
-    unsafe {
-        vim_dialog_yesno(VIM_QUESTION as c_int, ptr::null_mut(), buff.as_mut_ptr(), 2)
-            == VIM_YES as c_int
-    }
+fn dialog_yesno_about(fmt: &CStr, name: Option<&CStr>) -> bool {
+    let question = dialog_msg(fmt, name);
+    vim_dialog_yesno(VIM_QUESTION as c_int, None, question.as_cstr(), 2) == VIM_YES as c_int
 }
 
 /// Give the current buffer the name `new_fname`, moving the old name into a
@@ -213,7 +201,7 @@ unsafe fn check_writable(fname: *const c_char) -> Result<(), Failed> {
     // SAFETY: caller's contract; one `%s` for one string.
     if unsafe { os_nodetype(cstr::at(fname)) } == NODE_OTHER {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = unsafe { msg_cstr_opt(cstr::at_opt(fname)) };
         semsg!("E503: \"{fname}\" is not a file or writable device");
         return Err(Failed);
     }
@@ -379,14 +367,12 @@ fn confirm_partial_write(args: &mut ExArg) -> bool {
         emsg(gettext(c"E140: Use ! to write partial buffer"));
         return false;
     }
-    if unsafe {
-        vim_dialog_yesno(
-            VIM_QUESTION as c_int,
-            ptr::null_mut(),
-            gettext(c"Write partial file?").as_ptr().cast_mut(),
-            2,
-        )
-    } != VIM_YES as c_int
+    if vim_dialog_yesno(
+        VIM_QUESTION as c_int,
+        None,
+        gettext(c"Write partial file?"),
+        2,
+    ) != VIM_YES as c_int
     {
         return false;
     }
@@ -480,7 +466,7 @@ pub unsafe fn check_overwrite(
         // SAFETY: as above; one `%s` for one string.
         if unsafe { os_isdir(ffname) } {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let ffname = unsafe { c_str(ffname) };
+            let ffname = unsafe { msg_cstr_opt(cstr::at_opt(ffname)) };
             semsg!("E17: \"{ffname}\" is a directory");
             return Err(Failed);
         }
@@ -488,15 +474,9 @@ pub unsafe fn check_overwrite(
             emsg(gettext(e_exists));
             return Err(Failed);
         }
-        // SAFETY: one `%s` for `fname`.
-        if !unsafe {
-            dialog_yesno_about(
-                gettext(c"Overwrite existing file \"%s\"?")
-                    .as_ptr()
-                    .cast_mut(),
-                fname,
-            )
-        } {
+        // SAFETY: `fname` is the caller's NUL-terminated name, or null.
+        let name = unsafe { cstr::at_opt(fname) };
+        if !dialog_yesno_about(gettext(c"Overwrite existing file \"%s\"?"), name) {
             return Err(Failed);
         }
         args.forceit = true;
@@ -524,19 +504,13 @@ pub unsafe fn check_overwrite(
     }
     if !confirming() {
         // SAFETY: one `%s` for one string.
-        let arg0 = unsafe { c_str(swapname.0) };
+        let arg0 = unsafe { msg_cstr_opt(cstr::at_opt(swapname.0)) };
         semsg!("E768: Swap file exists: {arg0} (:silent! overrides)");
         return Err(Failed);
     }
-    // SAFETY: one `%s` for `swapname`.
-    if !unsafe {
-        dialog_yesno_about(
-            gettext(c"Swap file \"%s\" exists, overwrite anyway?")
-                .as_ptr()
-                .cast_mut(),
-            swapname.0,
-        )
-    } {
+    // SAFETY: the swap file's NUL-terminated name, or null.
+    let name = unsafe { cstr::at_opt(swapname.0) };
+    if !dialog_yesno_about(gettext(c"Swap file \"%s\" exists, overwrite anyway?"), name) {
         return Err(Failed);
     }
     args.forceit = true;
@@ -740,20 +714,20 @@ fn check_readonly(forceit: &mut bool, buffer: Buf) -> bool {
             emsg(gettext(e_readonly));
         } else {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let name = unsafe { c_str(name) };
+            let name = unsafe { msg_cstr_opt(cstr::at_opt(name)) };
             semsg!("E505: \"{name}\" is read-only (add ! to override)");
         }
         return true;
     }
 
     let prompt = if is_ro {
-        c"'readonly' option is set for \"%s\".\nDo you wish to write anyway?".as_ptr()
+        c"'readonly' option is set for \"%s\".\nDo you wish to write anyway?"
     } else {
         c"File permissions of \"%s\" are read-only.\nIt may still be possible to write it.\nDo you wish to try?"
-            .as_ptr()
     };
-    // SAFETY: one `%s` for `name`.
-    if !unsafe { dialog_yesno_about(gettext_ptr(prompt).as_ptr().cast_mut(), name) } {
+    // SAFETY: the caller's NUL-terminated name, or null.
+    let name = unsafe { cstr::at_opt(name) };
+    if !dialog_yesno_about(gettext(prompt), name) {
         return true;
     }
     // Set forceit, to force the writing of a readonly file.

@@ -37,7 +37,7 @@ use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preser
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
 use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
 use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
-use crate::message::{emsg, emsg_ptr, msg, msg_progress, msg_str_hl, set_keep_msg};
+use crate::message::{emsg, msg_progress, msg_str_hl, set_keep_msg};
 use crate::message_fmt::{c_str, emsg_text, msg_cstr};
 use crate::option::vars::{P_BSK, P_CCV, P_PM, p_bk, p_bsk, p_fs, p_pm, p_wb};
 use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
@@ -173,7 +173,8 @@ impl WriteError {
                 emsg_text(tr_plural!(template, why));
             }
             (None, _) => {
-                unsafe { emsg_ptr(msg) };
+                // SAFETY: `msg` is this error's own NUL-terminated text.
+                emsg(unsafe { cstr::at(msg) });
             }
         }
     }

@@ -25,7 +25,7 @@ use crate::lua::ffi::{
     lua_setfield, lua_settop, lua_toboolean, lua_tocfunction, lua_tolstring, luaL_checkstring,
     luaL_loadbuffer,
 };
-use crate::memory::{ThinCString, xfree, xmalloc, xrealloc};
+use crate::memory::{ThinCString, xfree, xmalloc};
 use crate::message::{msg_multihl, msg_putchar};
 use crate::os::cshim::{gettext, snprintf};
 use crate::profile::startup_timing;
@@ -33,8 +33,7 @@ use crate::profile::{time_msg, time_pop, time_push};
 use crate::startup::main_loop;
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Event, HlMessage, HlMessageChunk, IOSIZE, MessageData, Object, ProfTime, String_0, TypVal,
-    intptr_t, lua_State, size_t,
+    Event, HlMessageChunk, IOSIZE, Object, ProfTime, String_0, TypVal, intptr_t, lua_State, size_t,
 };
 use crate::ui::ui_has;
 
@@ -58,27 +57,15 @@ unsafe extern "C" fn nlua_print_event(argv: *mut *mut c_void) {
             ),
             hl_id: 0,
         };
-        // One chunk, so one allocation: upstream's `kv_push` onto an empty
-        // `HlMessage`.
-        let msg = HlMessage {
-            size: 1,
-            capacity: 8,
-            items: xrealloc(ptr::null_mut(), size_of::<HlMessageChunk>() * 8)
-                .cast::<HlMessageChunk>(),
-        };
-        // The block is `xrealloc`'s, so the chunk is *written* into it: a
-        // plain assignment would release whatever the allocator left there.
-        msg.items.write(chunk);
-
         let mut needs_clear = false;
         msg_multihl(
             Object::Nil,
-            msg,
+            &[chunk],
             Some(LUA_PRINT_KIND),
             true,
             false,
-            ptr::null_mut::<MessageData>(),
-            &raw mut needs_clear,
+            None,
+            &mut needs_clear,
         );
     }
 }

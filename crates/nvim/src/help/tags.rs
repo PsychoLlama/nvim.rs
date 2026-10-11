@@ -31,9 +31,9 @@ use crate::fprintf;
 use crate::getchar::state::got_int;
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::e_fnametoolong;
-use crate::message::{emsg, emsg_ptr};
-use crate::message_fmt::c_str;
+use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
+use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::P_RTP;
 use crate::os::cshim::{gettext, putc, strchr};
 use crate::os::fs::dir_exists;
@@ -151,7 +151,7 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
     }
     let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let namebuff = unsafe { c_str(namebuff) };
+        let namebuff = unsafe { msg_cstr_opt(cstr::at_opt(namebuff)) };
         semsg!("E151: No match: {namebuff}");
         return;
     };
@@ -297,7 +297,7 @@ unsafe fn helptags_one(
     let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
         if !got_int.get() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let namebuff = unsafe { c_str(namebuff) };
+            let namebuff = unsafe { msg_cstr_opt(cstr::at_opt(namebuff)) };
             semsg!("E151: No match: {namebuff}");
         }
         return;
@@ -320,7 +320,7 @@ unsafe fn helptags_one(
     if fd_tags.is_null() {
         if !ignore_writeerr {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let namebuff = unsafe { c_str(namebuff) };
+            let namebuff = unsafe { msg_cstr_opt(cstr::at_opt(namebuff)) };
             semsg!("E152: Cannot open {namebuff} for writing");
         }
         return;
@@ -348,7 +348,7 @@ unsafe fn helptags_one(
         let fd = unsafe { os_fopen(path, c"r".as_ptr()) };
         if fd.is_null() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let path = unsafe { c_str(path) };
+            let path = unsafe { msg_cstr_opt(cstr::at_opt(path)) };
             semsg!("E153: Unable to open {path} for reading");
             continue;
         }
@@ -489,7 +489,8 @@ unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
             let (tag, rest) = (pair[1], unsafe { p2.offset(1) });
             let cap = MAXPATHL as size_t;
             unsafe { vim_snprintf!(namebuff, cap, fmt, tag, dir, rest) };
-            unsafe { emsg_ptr(namebuff) };
+            // SAFETY: the message just formatted into `namebuff`.
+            emsg(unsafe { cstr::at(namebuff) });
             unsafe { *p2 = b'\t' as c_char };
             break;
         }

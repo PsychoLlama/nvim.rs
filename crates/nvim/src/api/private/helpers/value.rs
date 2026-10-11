@@ -26,7 +26,6 @@ use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, highlight_num_groups, syn_check_group};
 use crate::lua::executor::{api_free_luaref, api_new_luaref};
-use crate::memory::xrealloc;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::narrow::number_as_int;
 use crate::types::{
@@ -270,26 +269,6 @@ pub(crate) fn object_to_hl_id(obj: &Object, what: &CStr) -> Result<c_int, Error>
     Err(err_bad_value(c"hl_group", what))
 }
 
-/// `kv_push` for a plain kvec, which starts empty and doubles from 8.
-fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
-    if msg.size == msg.capacity {
-        msg.capacity = if msg.capacity != 0 {
-            msg.capacity * 2
-        } else {
-            8
-        };
-        let bytes = size_of::<HlMessageChunk>() * msg.capacity;
-        // SAFETY: `items` is null with a zero capacity, or the allocation
-        // this function made last time.
-        msg.items = unsafe { xrealloc(msg.items.cast(), bytes) }.cast();
-    }
-    // SAFETY: the grow above left room for one more chunk, which is
-    // *uninitialised* -- a plain assignment would release whatever the
-    // allocator left in the slot's owning string.
-    unsafe { msg.items.add(msg.size).write(chunk) };
-    msg.size += 1;
-}
-
 /// Parse `[[text, hl], …]` — the shape `nvim_echo` and friends take — into
 /// `hl_msg`, refusing at the first bad chunk. What it managed to push before
 /// refusing stays in `hl_msg`, which the caller owns and frees either way.
@@ -317,7 +296,7 @@ pub(crate) fn parse_hl_msg(
         } else {
             0
         };
-        push_chunk(hl_msg, HlMessageChunk { text, hl_id });
+        hl_msg.push(HlMessageChunk { text, hl_id });
     }
     Ok(())
 }

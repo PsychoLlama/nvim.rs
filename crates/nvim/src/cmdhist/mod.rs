@@ -19,13 +19,12 @@
 mod ring;
 
 use crate::cstr;
-use crate::snprintf;
 use crate::types::Candidate;
 use ring::{EMPTY_RING, to_cstring};
 pub use ring::{HistEntry, Ring};
 use std::ffi::CString;
 
-use crate::charset::vim_strsize;
+use crate::charset::strsize;
 use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::cmdmod_has;
@@ -33,9 +32,9 @@ use crate::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::getchar::state::{got_int, maptick};
 use crate::global_cell::GlobalCell;
 use crate::memory::ThinCString;
-use crate::memory::{xfree, xstrlcpy};
+use crate::memory::xfree;
 use crate::message::{
-    message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_title, trunc_string,
+    cut_middle, message_filtered, msg, msg_display_bytes, msg_ext_set_kind, msg_putchar, msg_title,
 };
 use crate::option::vars::p_hi;
 use crate::os::cshim::gettext;
@@ -43,7 +42,7 @@ use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{
     AdditionalData, CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt,
-    RegMatch, Timestamp, TypVal, VAR_NUMBER, VarNumber, size_t,
+    RegMatch, Timestamp, TypVal, VAR_NUMBER, VarNumber,
 };
 use crate::ui::state::Columns;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -530,23 +529,19 @@ fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
 /// One `:history` row: `>` on the newest entry, the sequence number, and the
 /// text truncated to the window width.
 fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
-    let mut row = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `entry.text` is NUL-terminated and outlives the call; `row` is
-    // `IOSIZE` bytes, and the number prefix `snprintf` reports is the offset
-    // both writers continue from, each with the remaining room.
-    unsafe {
-        msg_putchar('\n' as c_int);
-        let buf = row.as_mut_ptr();
-        let marker = if newest { '>' } else { ' ' } as c_int;
-        let len = snprintf!(buf, IOSIZE as size_t, c"%c%6d  ".as_ptr(), marker, num);
-        let text = buf.offset(len as isize);
-        if vim_strsize(entry.text) > Columns.get() - 10 {
-            trunc_string(entry.text, text, Columns.get() - 10, IOSIZE - len);
-        } else {
-            xstrlcpy(text, entry.text, (IOSIZE - len) as size_t);
-        }
-        msg_display(cstr::at(buf), 0, false);
+    msg_putchar('\n' as c_int);
+    // SAFETY: `entry.text` is NUL-terminated and outlives the call.
+    let text = unsafe { cstr::bytes_at(entry.text) };
+    // Upstream builds the row in `IObuff`: the marker, the number, and the
+    // text in what is left.
+    let mut row = format!("{}{num:6}  ", if newest { '>' } else { ' ' }).into_bytes();
+    let left = IOSIZE as usize - row.len();
+    if strsize(text) > Columns.get() - 10 {
+        row.extend_from_slice(&cut_middle(text, Columns.get() - 10, left));
+    } else {
+        row.extend_from_slice(&text[..text.len().min(left - 1)]);
     }
+    msg_display_bytes(&row, 0, false);
 }
 
 /// Completion source for `:history` arguments: the one-character names,

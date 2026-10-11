@@ -284,7 +284,7 @@ fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
 /// `msg()` as checked code.
 fn msg(s: *const c_char, hl_id: c_int) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::msg_ptr(s, hl_id) }
+    crate::message::msg(unsafe { crate::cstr::at(s) }, hl_id)
 }
 
 /// `redraw_all_later()` as checked code.

@@ -129,6 +129,29 @@ pub fn format_into(out: &mut [u8], fmt: &[u8], args: &[FmtArg<'_>]) -> usize {
     format(out, fmt, Source::Values(Values::new(args)))
 }
 
+/// `fmt` formatted with `args`, as a `room`-byte buffer would hold it: the
+/// text cut to `room - 1` bytes, without its terminator. Upstream formatted
+/// these into a fixed scratch array; this is that array's contents, owned.
+///
+/// The text is measured first, so the answer is allocated at its own size
+/// however large `room` is.
+pub(crate) fn formatted(room: usize, fmt: &[u8], args: &[FmtArg<'_>]) -> Vec<u8> {
+    let keep = format_into(&mut [], fmt, args).min(room.saturating_sub(1));
+    let mut out = vec![0; keep + 1];
+    format_into(&mut out, fmt, args);
+    out.truncate(keep);
+    out
+}
+
+/// [`formatted`] with its arguments spelled inline, gathered through
+/// `FmtArg::from` as [`vim_snprintf!`](crate::vim_snprintf!) gathers them.
+#[macro_export]
+macro_rules! formatted {
+    ($room:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
+        $crate::strings::formatted($room, $fmt, &[$($crate::strings::FmtArg::from($arg)),*])
+    };
+}
+
 /// A formatted length as the C `int` it travelled in: the low 32 bits, so a
 /// result past 2 GiB reads as negative, as upstream's did.
 pub(in crate::strings) fn length_as_int(len: usize) -> c_int {

@@ -810,8 +810,7 @@ pub(crate) fn check_elapsed_time() {
 /// # Safety
 /// `msg` is a NUL-terminated string.
 pub(crate) unsafe fn scan_progress(msg: *mut c_char) {
-    let kind = c"completion".as_ptr().cast_mut();
-    let state = c"running".as_ptr().cast_mut();
-    // SAFETY: the caller's message, and two static kind/state names.
-    unsafe { msg_progress(msg, kind, state, HLF_R, false, true) };
+    // SAFETY: the caller's message.
+    let msg = unsafe { cstr::at(msg) };
+    msg_progress(msg, c"completion", c"running", HLF_R, false, true);
 }

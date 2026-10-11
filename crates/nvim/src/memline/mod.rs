@@ -80,9 +80,8 @@ use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     BlockHdr, BlockNr, Buffer, CmdModFlags, ColNr, Dict, Failed, FileComparison, FileInfo,
-    FileOffset, FlushBuffers, InfoPtr, LineNr, List, MemFile, NUL, OptVal, Pos, String_0,
-    Timestamp, VarNumber, int16_t, int64_t, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
-    uv_uid_t,
+    FileOffset, FlushBuffers, InfoPtr, LineNr, List, MemFile, NUL, OptVal, Pos, Timestamp,
+    VarNumber, int16_t, int64_t, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;

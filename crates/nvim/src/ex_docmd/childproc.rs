@@ -136,8 +136,7 @@ pub(crate) fn ex_lsp(excmd: &mut ExArg) {
     const CHUNK: &CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
     let ran = unsafe { nlua_exec(&String_0::from_cstr(CHUNK), ptr::null(), excmd, kRetNilBool) };
     if let Err(e) = ran {
-        let why = e.message_or_empty().as_ptr();
-        unsafe { emsg_multiline(why, Some(c"lua_error"), HLF_E, true) };
+        emsg_multiline(e.message_or_empty(), Some(c"lua_error"), HLF_E, true);
     }
 }
 

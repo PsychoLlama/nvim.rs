@@ -239,7 +239,8 @@ pub(crate) fn do_mouse(
     if !visual_active() || mouse_can_visual {
         let inclusive = op.map_or(ptr::null_mut(), op_inclusive);
         // SAFETY: `inclusive` is a field of the live operator, or null.
-        jump_flags = unsafe { jump_to_mouse(jump_flags, inclusive, which_button) };
+        let inclusive = unsafe { inclusive.as_mut() };
+        jump_flags = jump_to_mouse(jump_flags, inclusive, which_button);
     }
 
     let moved = jump_flags & CURSOR_MOVED != 0;

@@ -40,8 +40,8 @@ use crate::option::vars::{p_cdh, p_ffu, p_verbose};
 use crate::os::state::{globaldir, last_chdir_reason};
 use crate::runtime::state::current_sctx;
 
-use crate::message::msg_ptr;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message::msg;
+use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 
 use crate::option::{cpo_has, option_last_set};
 
@@ -407,10 +407,15 @@ fn report_working_dir() {
             c"global".as_ptr() as *mut c_char
         };
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (context, dir) = unsafe { (c_str(context), c_str(dir.as_mut_ptr())) };
+        let (context, dir) = unsafe {
+            (
+                msg_cstr_opt(cstr::at_opt(context)),
+                msg_cstr_opt(cstr::at_opt(dir.as_mut_ptr())),
+            )
+        };
         smsg!(0, "[{context}] {dir}");
     } else {
-        unsafe { msg_ptr(dir.as_mut_ptr(), 0) };
+        msg(cstr::in_chars(&dir), 0);
     }
 }
 

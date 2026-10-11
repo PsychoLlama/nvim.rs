@@ -5,7 +5,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::snprintf;
+use crate::memory::XString;
 use core::ffi::CStr;
 use core::ptr;
 
@@ -62,27 +62,11 @@ pub fn inindent(extra: c_int) -> bool {
     col >= Win::current().w_cursor.col as c_int + extra
 }
 
-/// Writes `fmt` with `n` into a buffer of its own and shows it as
-/// `:indent` progress. Upstream shares `IObuff` for it, which
-/// `msg_progress` writes again.
-///
-/// # Safety
-/// `fmt` must be a NUL-terminated format string taking one `int64_t`.
-unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
-    let mut line = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `line` is `IOSIZE` bytes, which is what bounds the format, and
-    // the two labels are NUL-terminated constants.
-    unsafe { snprintf!(line.as_mut_ptr(), IOSIZE as size_t, fmt, n) };
-    unsafe {
-        msg_progress(
-            line.as_mut_ptr(),
-            c"indent".as_ptr().cast_mut(),
-            status.as_ptr().cast_mut(),
-            0,
-            true,
-            false,
-        )
-    };
+/// Shows `fmt` formatted with `n` as `:indent` progress, cut where
+/// upstream's shared `IObuff` would cut it.
+fn indent_progress(fmt: &CStr, n: int64_t, status: &CStr) {
+    let line = XString::from_bytes(&crate::formatted!(IOSIZE as usize, fmt.to_bytes(), n));
+    msg_progress(line.as_cstr(), c"indent", status, 0, true, false);
 }
 
 /// Reindents `op`'s lines with `how`, one of the three indent engines.
@@ -125,13 +109,11 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
                 // does not redraw `curwin`.
                 let save_lnum = win.w_cursor.lnum;
                 win.w_cursor.lnum = start_lnum;
-                unsafe {
-                    indent_progress(
-                        gettext(c"%ld lines to indent... ").as_ptr(),
-                        i as int64_t,
-                        c"running",
-                    )
-                };
+                indent_progress(
+                    gettext(c"%ld lines to indent... "),
+                    i as int64_t,
+                    c"running",
+                );
                 win.w_cursor.lnum = save_lnum;
             }
             // Vi-compatible: with Lisp indenting the first line is not
@@ -177,18 +159,15 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
     }
     if line_count as OptInt > p_report() {
         let done = (line_count - (i as LineNr + 1)) as c_int;
-        unsafe {
-            indent_progress(
-                ngettext(
-                    c"%ld line indented ",
-                    c"%ld lines indented ",
-                    done as ::core::ffi::c_ulong,
-                )
-                .as_ptr(),
-                done as int64_t,
-                c"success",
-            )
-        };
+        indent_progress(
+            ngettext(
+                c"%ld line indented ",
+                c"%ld lines indented ",
+                done as ::core::ffi::c_ulong,
+            ),
+            done as int64_t,
+            c"success",
+        );
     }
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Set the '[ and '] marks.

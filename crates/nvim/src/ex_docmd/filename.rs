@@ -48,7 +48,7 @@ use crate::message::e_usingsid;
 use crate::option::vars::{P_GP, P_MP, p_wic};
 use crate::runtime::state::current_sctx;
 
-use crate::message::{emsg_ptr, msg_make};
+use crate::message::{emsg, msg_make};
 use crate::normal::find_ident_under_cursor;
 
 use crate::os::env::{expand_env_esc, expand_env_save};
@@ -748,7 +748,8 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
         };
         if !errormsg.is_null() {
             if unsafe { *errormsg } != 0 {
-                unsafe { emsg_ptr(errormsg) };
+                // SAFETY: the expansion's NUL-terminated error text.
+                emsg(unsafe { cstr::at(errormsg) });
             }
             xfree(result as *mut c_void);
             return ptr::null_mut();

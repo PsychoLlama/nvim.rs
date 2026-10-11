@@ -706,6 +706,20 @@ pub(crate) fn strcoll(a: &::core::ffi::CStr, b: &::core::ffi::CStr) -> ::core::f
     }
 }
 
+/// Write `bytes` to the C library's `stdout`, through its own buffer -- so
+/// the order against every other write to the stream in the process is
+/// the order of the calls, as `printf("%s", ..)` kept it.
+pub(crate) fn write_c_stdout(bytes: &[u8]) {
+    // SAFETY: the process's own stream, and `bytes.len()` readable bytes.
+    unsafe { ::libc::fwrite(bytes.as_ptr().cast(), 1, bytes.len(), stdout) };
+}
+
+/// [`write_c_stdout`] for `stderr`, which the C library does not buffer.
+pub(crate) fn write_c_stderr(bytes: &[u8]) {
+    // SAFETY: as above.
+    unsafe { ::libc::fwrite(bytes.as_ptr().cast(), 1, bytes.len(), stderr) };
+}
+
 /// The C library's `islower()` of `byte`, under the current locale -- which
 /// in a non-C locale covers more than `a`-`z`.
 pub(crate) fn is_lower_in_locale(byte: u8) -> bool {

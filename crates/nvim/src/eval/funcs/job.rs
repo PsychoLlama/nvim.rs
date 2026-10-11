@@ -27,8 +27,8 @@ use crate::ex_cmds::check_secure;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::memline::ml_open;
 use crate::memory::{xcalloc, xfree};
+use crate::message::emsg;
 use crate::message::{e_channotpty, e_invarg};
-use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_tgc;
 use crate::os::cshim::gettext;
@@ -146,7 +146,8 @@ pub fn f_jobstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Reported as a success even when closing the RPC half complained.
     result.write_number(1);
     if !error.is_null() {
-        unsafe { emsg_ptr(error) };
+        // SAFETY: the channel's NUL-terminated error text.
+        emsg(unsafe { cstr::at(error) });
     }
 }
 

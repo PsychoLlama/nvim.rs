@@ -14,7 +14,8 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::message_fmt::c_str_len;
+use crate::cstr;
+use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_LANGMAP;
 use crate::optionstr::frame::formatted;
 use crate::snprintf;
@@ -176,8 +177,8 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
                         swmsg!(
                             true,
                             "'langmap': Mapping from {} to {} will not work properly",
-                            c_str_len(a, utf_ptr2len(a) as usize),
-                            c_str_len(b, utf_ptr2len(b) as usize)
+                            msg_bytes(cstr::slice_at(a, utf_ptr2len(a) as usize)),
+                            msg_bytes(cstr::slice_at(b, utf_ptr2len(b) as usize))
                         );
                     }
                 }

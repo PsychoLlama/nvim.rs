@@ -9,7 +9,6 @@ use crate::ex_docmd::source::ex_errmsg;
 use crate::memory::XString;
 use crate::types::Candidate;
 use crate::types::CmdIdx;
-use crate::vim_snprintf;
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
 use crate::winlayer::last_used_tab;
@@ -20,7 +19,6 @@ use crate::winlayer::{Buf, Win};
 
 /// The completion context, whose caller has promised it outlives the value.
 use core::ffi::{CStr, c_char, c_int, c_ulong};
-use core::ptr;
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::charset::getdigits;
@@ -36,7 +34,7 @@ use crate::ex_docmd::{
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::message::vim_dialog_yesno;
 use crate::message::{e_invarg2, e_invargval, e_invrange};
-use crate::message_fmt::{c_str, emsg_text, msg_cstr};
+use crate::message_fmt::{emsg_text, msg_cstr, msg_cstr_opt};
 use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
@@ -46,7 +44,7 @@ use crate::os::fs::{CFile, os_isdir, os_mkdir, os_path_exists, os_strerror};
 use crate::types::regexp::RegMatch;
 use crate::types::{
     CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, FAIL, Failed, NUL, OK,
-    int32_t, intmax_t, size_t,
+    int32_t, intmax_t,
 };
 use crate::window::{only_one_window, tabpage_index};
 
@@ -428,29 +426,14 @@ pub(crate) fn check_more(message: bool, forceit: bool) -> c_int {
         return FAIL;
     }
     if (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && !Buf::current().name.is_unnamed() {
-        let mut buff: [c_char; 1000] = [0; 1000];
         let fmt = ngettext(
             c"%d more file to edit.  Quit anyway?",
             c"%d more files to edit.  Quit anyway?",
             n as c_ulong,
-        )
-        .as_ptr();
-        unsafe {
-            vim_snprintf!(
-                &raw mut buff as *mut c_char,
-                DIALOG_MSG_SIZE as size_t,
-                fmt,
-                n,
-            )
-        };
-        let answer = unsafe {
-            vim_dialog_yesno(
-                VIM_QUESTION as c_int,
-                ptr::null_mut(),
-                &raw mut buff as *mut c_char,
-                1,
-            )
-        };
+        );
+        let room = DIALOG_MSG_SIZE as usize;
+        let question = XString::from_bytes(&crate::formatted!(room, fmt.to_bytes(), n));
+        let answer = vim_dialog_yesno(VIM_QUESTION as c_int, None, question.as_cstr(), 1);
         return if answer == VIM_YES as c_int { OK } else { FAIL };
     }
     let fmt = ngettext(
@@ -486,13 +469,13 @@ pub fn vim_mkdir_emsg(name: &CStr, prot: c_int) -> Result<(), Failed> {
 pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: &CStr) -> Option<CFile> {
     if unsafe { os_isdir(fname) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = unsafe { msg_cstr_opt(cstr::at_opt(fname)) };
         semsg!("E17: \"{fname}\" is a directory");
         return None;
     }
     if forceit == 0 && mode.to_bytes().first() != Some(&b'a') && unsafe { os_path_exists(fname) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = unsafe { msg_cstr_opt(cstr::at_opt(fname)) };
         semsg!("E189: \"{fname}\" exists (add ! to override)");
         return None;
     }
@@ -500,32 +483,19 @@ pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: &CStr) -> Op
     let file = CFile::open(unsafe { cstr::at(fname) }, mode);
     if file.is_none() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = unsafe { msg_cstr_opt(cstr::at_opt(fname)) };
         semsg!("E190: Cannot open \"{fname}\" for writing");
     }
     file
 }
 
-/// Fill in a dialog message with the file name it is about, or `Untitled`.
-///
-/// # Safety
-///
-/// `buff` must point at a NUL-terminated string, unaliased for the call.
-/// `format` must point at a NUL-terminated string, unaliased for the call.
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn dialog_msg(buff: *mut c_char, format: *mut c_char, fname: *mut c_char) {
-    let fname = if fname.is_null() {
-        gettext(c"Untitled".as_ptr())
-    } else {
-        fname
-    };
-    unsafe { vim_snprintf!(buff, DIALOG_MSG_SIZE as size_t, format, fname) };
-}
-
-/// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
+/// A dialog message: the one-`%s` `format` filled in with the file name it
+/// is about, or `Untitled`, cut where upstream's `DIALOG_MSG_SIZE` buffer
+/// cut it.
+pub(crate) fn dialog_msg(format: &CStr, fname: Option<&CStr>) -> XString {
+    let fname = fname.unwrap_or_else(|| crate::os::cshim::gettext(c"Untitled"));
+    let room = DIALOG_MSG_SIZE as usize;
+    XString::from_bytes(&crate::formatted!(room, format.to_bytes(), fname))
 }
 
 /// `skip_cmd_arg()` as checked code.

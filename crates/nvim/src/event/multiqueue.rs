@@ -319,6 +319,16 @@ pub unsafe fn multiqueue_move_events(dest: *mut MultiQueue, src: *mut MultiQueue
     }
 }
 
+/// [`multiqueue_process_events`] over the queue `cell` holds, if it holds
+/// one: the editor's own child queues, which live as long as their cell.
+pub(crate) fn process_events_in(cell: &GlobalCell<Option<ChildQueue>>) {
+    let queue = queue_in(cell);
+    if !queue.is_null() {
+        // SAFETY: the queue the cell owns; its handlers are the editor's.
+        unsafe { multiqueue_process_events(queue) };
+    }
+}
+
 /// Run every queued handler, including any the handlers queue themselves.
 ///
 /// # Safety

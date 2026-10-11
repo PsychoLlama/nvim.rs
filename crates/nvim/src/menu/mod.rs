@@ -47,7 +47,7 @@ use crate::guard::Lock;
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::e_cannot_change_menus_while_listing;
-use crate::message::{emsg, str2special_save};
+use crate::message::{emsg, special_keys_text};
 use crate::normal::{visual_active, visual_select};
 use crate::os::cshim::gettext;
 use crate::popupmenu::pum_show_popupmenu;
@@ -601,7 +601,8 @@ pub(crate) fn list_append_str(list: *mut List, value: &CStr) {
 /// Dict takes over.
 pub(crate) fn special_text(rhs: *const c_char) -> *mut c_char {
     // SAFETY: a node's rhs: NUL-terminated and live.
-    unsafe { str2special_save(rhs, false, false) }
+    let rhs = unsafe { cstr::bytes_at(rhs) };
+    crate::memory::handoff::owned_cstr(special_keys_text(rhs, false, false))
 }
 
 /// One codepoint as an owned string -- the mnemonic, for the two Dicts.

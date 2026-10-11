@@ -126,7 +126,9 @@ pub fn fire_autocmds(event: AutoEvent, force: bool, buffer: Option<Buf>) -> bool
 }
 
 /// Fire `event`, in every group, matching the patterns against `pattern`
-/// (or the buffer's name, for `None`) with `afile` as `<afile>`.
+/// (or the buffer's name, for `None`) with `afile` as `<afile>`, and `data`
+/// as the handlers' `data` -- `nvim_exec_autocmds`' `data`, a `Progress`
+/// message's fields.
 ///
 /// Both names are copied before any autocommand runs, so the caller may
 /// hand in a name an autocommand could change.
@@ -136,11 +138,25 @@ pub(crate) fn fire_autocmds_for(
     afile: Option<&CStr>,
     force: bool,
     buffer: Option<Buf>,
+    data: Option<&mut Object>,
 ) -> bool {
     let name = |s: Option<&CStr>| s.map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut());
-    // SAFETY: two NUL-terminated names or null; `apply_autocmds_group`
-    // copies both before it runs anything, and writes to neither.
-    unsafe { apply_autocmds(event, name(pattern), name(afile), force, buffer) }
+    let data = data.map_or(::core::ptr::null_mut(), ::core::ptr::from_mut);
+    // SAFETY: two NUL-terminated names or null, which `apply_autocmds_group`
+    // copies before it runs anything and writes to neither; `data` is the
+    // caller's live object or null.
+    unsafe {
+        apply_autocmds_group(
+            event,
+            name(pattern),
+            name(afile),
+            force,
+            AUGROUP_ALL,
+            buffer,
+            None,
+            data,
+        )
+    }
 }
 
 /// Fire `event`, in every group.

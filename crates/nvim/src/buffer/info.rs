@@ -35,7 +35,7 @@ use crate::mbyte::utf_cp_bounds;
 use crate::memory::{XString, xstrlcpy};
 use crate::message::state::{msg_col, msg_scroll, msg_scrolled, need_wait_return, no_lines_msg};
 use crate::message::{
-    message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_start, msg_trunc,
+    message_filtered, msg, msg_display, msg_ext_set_kind, msg_fit_head, msg_putchar, msg_start,
     set_keep_msg,
 };
 use crate::r#move::validate_virtcol;
@@ -465,14 +465,12 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         msg(out.as_cstr(), 0);
         msg_scroll.set(n);
     } else {
-        // SAFETY: a NUL-terminated message; the answer is the kept copy.
-        let p = unsafe { msg_trunc(out.as_mut_ptr(), false, 0) };
+        let p = msg_fit_head(out.as_cstr(), false, 0);
         // Repeat the message after redrawing when 'restart_edit' is set
         // (otherwise there is a delay before redrawing), or when the screen
         // scrolled but there is no wait-return prompt.
         if restart_edit.get() != 0 || msg_scrolled.get() != 0 && !need_wait_return.get() {
-            // SAFETY: null, or the NUL-terminated message `msg_trunc` showed.
-            set_keep_msg((!p.is_null()).then(|| unsafe { cstr::at(p) }), 0);
+            set_keep_msg(p.as_ref().map(XString::as_cstr), 0);
         }
     }
 }
@@ -514,10 +512,6 @@ impl Msg {
     /// The message written so far, as the string it is.
     fn as_cstr(&self) -> &CStr {
         cstr::in_bytes(&self.buf)
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut c_char {
-        self.buf.as_mut_ptr().cast::<c_char>()
     }
 
     fn put_int(&mut self, fmt: &CStr, n: c_int) {

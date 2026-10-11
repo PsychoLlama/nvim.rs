@@ -21,7 +21,7 @@
 use super::*;
 use crate::guard::Suppress;
 use crate::kvec::Kvec;
-use crate::message::{emsg_ptr, msg_ptr};
+use crate::message::{emsg, msg};
 use crate::types::NUL;
 use crate::types::builders::ArrayBuf;
 
@@ -79,9 +79,9 @@ fn write_msg(message: String_0, to_err: bool, writeln: bool) {
         // SAFETY: as `push`; the buffer is NUL-terminated by the push above.
         unsafe {
             if to_err {
-                emsg_ptr((*line_buf).items);
+                emsg(crate::cstr::at((*line_buf).items));
             } else {
-                msg_ptr((*line_buf).items, 0 as ::core::ffi::c_int);
+                msg(crate::cstr::at((*line_buf).items), 0 as ::core::ffi::c_int);
             }
         }
         if msg_silent.get() == 0 as ::core::ffi::c_int {

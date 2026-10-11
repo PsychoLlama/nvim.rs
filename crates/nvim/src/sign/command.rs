@@ -20,7 +20,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::semsg;
 use crate::smsg;
 use crate::types::FAIL;
@@ -154,7 +154,7 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
 /// The `:sign list` report for one definition.
 pub(crate) fn sign_list_defined(sign: SignRef) {
     // SAFETY: a definition's name, icon and cells are its own.
-    let sn_name = unsafe { c_str(sign.sn_name) };
+    let sn_name = unsafe { msg_cstr_opt(cstr::at_opt(sign.sn_name)) };
     smsg!(0, "sign {sn_name}");
     if !sign.sn_icon.is_null() {
         msg_str(c" icon=");
@@ -196,7 +196,7 @@ unsafe fn sign_list_by_name(name: *mut c_char) {
         Some(sp) => sign_list_defined(sp),
         None => {
             // SAFETY: the caller's name, and a format the message takes.
-            let name = unsafe { c_str(name) };
+            let name = unsafe { msg_cstr_opt(cstr::at_opt(name)) };
             semsg!("E155: Unknown sign: {name}");
         }
     }
@@ -248,7 +248,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
             prio = unsafe { atoi(v) };
         } else {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(arg) };
+            let arg = unsafe { msg_cstr_opt(cstr::at_opt(arg)) };
             semsg!("E475: Invalid argument: {arg}");
             return;
         }
@@ -469,7 +469,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
             // out with whatever buffer it found.
             if unsafe { *skipwhite(p) } != 0 {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let p = unsafe { c_str(p) };
+                let p = unsafe { msg_cstr_opt(cstr::at_opt(p)) };
                 semsg!("E488: Trailing characters: {p}");
             }
             break;
@@ -482,7 +482,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
 
     if !filename.is_null() && out.buf.is_none() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let filename = unsafe { c_str(filename) };
+        let filename = unsafe { msg_cstr_opt(cstr::at_opt(filename)) };
         semsg!("E158: Invalid buffer name: {filename}");
         return None;
     }
@@ -504,7 +504,7 @@ pub(crate) fn ex_sign(excmd: &mut ExArg) {
     let idx = unsafe { sign_cmd_idx(arg, p) };
     if idx == SIGNCMD_LAST {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
+        let arg = unsafe { msg_cstr_opt(cstr::at_opt(arg)) };
         semsg!("E160: Unknown sign command: {arg}");
         return;
     }

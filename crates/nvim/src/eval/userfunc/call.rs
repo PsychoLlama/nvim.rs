@@ -22,7 +22,7 @@ use crate::charset::vim_strsize_cstr;
 use crate::eval::Parsed;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline_getter};
 use crate::guard::{Depth, Lock, Suppress};
-use crate::message::trunc_to;
+use crate::message::cut_middle;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::smsg;
@@ -55,8 +55,8 @@ fn verbose_report(body: impl FnOnce()) {
 /// cells.
 fn quoted_value(text: &CStr) -> Vec<u8> {
     if vim_strsize_cstr(text) > MSG_BUF_CLEN {
-        trunc_to(
-            text,
+        cut_middle(
+            text.to_bytes(),
             MSG_BUF_CLEN,
             usize::try_from(MSG_BUF_LEN).unwrap_or(0),
         )

@@ -47,7 +47,7 @@ use crate::memory::XString;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::e_noident;
 use crate::message::{emsg, emsg_multiline};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::option::set_option_direct;
 use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
@@ -196,11 +196,16 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
         // they go through vim's own printf rather than `format_args!`.
         if lang.is_null() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(arg) };
+            let arg = unsafe { msg_cstr_opt(cstr::at_opt(arg)) };
             semsg!("E149: No help for {arg}");
         } else {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (lang, arg) = unsafe { (c_str(lang), c_str(arg)) };
+            let (lang, arg) = unsafe {
+                (
+                    msg_cstr_opt(cstr::at_opt(lang)),
+                    msg_cstr_opt(cstr::at_opt(arg)),
+                )
+            };
             semsg!("E661: No '{lang}' help for {arg}");
         }
         if n.is_ok() {
@@ -352,8 +357,8 @@ fn enter_help_window() -> Option<HelpWindow> {
     // No help window yet: check that 'helpfile' can be read at all.
     let helpfd = p_hf(|value| unsafe { os_fopen(value.as_ptr().cast_mut(), c"rb".as_ptr()) });
     if helpfd.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = p_hf(|value| unsafe { c_str(value.as_ptr().cast_mut()) });
+        let helpfile = p_hf(CStr::to_owned);
+        let arg0 = msg_cstr(&helpfile);
         smsg!(0, "Help file \"{arg0}\" not found");
         return None;
     }
@@ -526,8 +531,7 @@ pub(crate) unsafe fn find_help_tags(
 
     // SAFETY: `err` is our slot and `res` the chunk's answer.
     if err.is_set() {
-        let why = err.message_or_empty().as_ptr();
-        unsafe { emsg_multiline(why, Some(c"lua_error"), HLF_E, true) };
+        emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
         err.clear();
         return Err(Failed);
     }
@@ -692,8 +696,7 @@ pub(crate) fn get_local_additions() {
         }
     };
     if err.is_set() {
-        let why = err.message_or_empty().as_ptr();
-        unsafe { emsg_multiline(why, Some(c"lua_error"), HLF_E, true) };
+        emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
     }
     drop(res);
     err.clear();

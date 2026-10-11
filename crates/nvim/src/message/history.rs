@@ -13,15 +13,21 @@
 //! history unborrowed, and asks for the next number after it -- so an
 //! eviction under its feet skips what is gone rather than reading it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
+use crate::charset::getdigits_int_at;
 use crate::option::vars::P_MOPT;
 use crate::options::OptMoptFlags;
 use crate::types::Failed;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use std::collections::VecDeque;
 
 /// One message in the history. Owns its chunks.
@@ -36,14 +42,6 @@ pub(crate) struct Entry {
     /// Only `g<` shows it; the next real message displaces it.
     temp: bool,
     append: bool,
-}
-
-impl Drop for Entry {
-    fn drop(&mut self) {
-        let msg = core::mem::replace(&mut self.msg, EMPTY_HL_MESSAGE);
-        // SAFETY: the entry owns its chunks, and nothing else holds them.
-        unsafe { hl_msg_free(msg) };
-    }
 }
 
 /// The history itself.
@@ -93,12 +91,10 @@ impl History {
 pub fn last_message() -> Option<(u64, Vec<u8>)> {
     HISTORY.with(|history| {
         history.entries.back().map(|entry| {
-            let text = if entry.msg.size == 0 {
-                Vec::new()
-            } else {
-                // SAFETY: the entry owns `size` live chunks.
-                unsafe { (*entry.msg.items).text.as_bytes().to_vec() }
-            };
+            let text = entry
+                .msg
+                .first()
+                .map_or_else(Vec::new, |chunk| chunk.text.as_bytes().to_vec());
             (entry.seq, text)
         })
     })
@@ -109,27 +105,6 @@ const OPT_HIT_ENTER: &CStr = c"hit-enter";
 const OPT_WAIT: &CStr = c"wait:";
 const OPT_HISTORY: &CStr = c"history:";
 const OPT_PROGRESS: &CStr = c"progress:";
-
-/// Free a message's chunks and the array holding them.
-///
-/// # Safety
-/// `hl_msg` must own its chunks; nothing else may hold them afterwards.
-pub unsafe fn hl_msg_free(hl_msg: HlMessage) {
-    for i in 0..hl_msg.size {
-        unsafe { xfree((*hl_msg.items.add(i)).text.data().cast()) };
-    }
-    unsafe { xfree(hl_msg.items.cast()) };
-}
-
-/// A message made of `chunks`, which it owns.
-pub(crate) fn hl_msg_from(chunks: impl IntoIterator<Item = HlMessageChunk>) -> HlMessage {
-    let mut msg = EMPTY_HL_MESSAGE;
-    for chunk in chunks {
-        // SAFETY: `msg` started empty and is only pushed to here.
-        unsafe { hl_msg_push(&mut msg, chunk) };
-    }
-    msg
-}
 
 /// Add `bytes` to the history, as one chunk in highlight `hl_id`.
 pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
@@ -154,24 +129,19 @@ pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
 
 /// [`msg_hist_add_multihl`] for a message given as its chunks.
 pub(crate) fn msg_hist_add_chunks(chunks: impl IntoIterator<Item = HlMessageChunk>, temp: bool) {
-    // SAFETY: a message `hl_msg_from` just built owns its chunks.
-    unsafe { msg_hist_add_multihl(hl_msg_from(chunks), temp, ptr::null_mut()) };
+    msg_hist_add_multihl(chunks.into_iter().collect(), temp);
 }
 
 /// Append an already-chunked message to the history, taking ownership of it.
 ///
 /// A `temp` entry is one only `g<` shows; the next real message displaces it.
-///
-/// # Safety
-/// `msg` must own its chunks.
-pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data: *mut MessageData) {
+pub(crate) fn msg_hist_add_multihl(msg: HlMessage, temp: bool) {
     if do_clear_hist_temp.get() {
         HISTORY.with_mut(History::clear_temp);
         do_clear_hist_temp.set(false);
     }
 
     if msg_hist_off.get() || msg_silent.get() != 0 {
-        unsafe { hl_msg_free(msg) };
         return;
     }
 
@@ -205,13 +175,12 @@ fn msg_hist_clear(keep: c_int) {
     HISTORY.with_mut(|history| history.clear(keep));
 }
 
-/// Does `p` start with `word`, and with a digit after it if `digit` is set?
-///
-/// # Safety
-/// `p` must be a valid C string.
-unsafe fn at_opt(p: *const c_char, word: &CStr, digit: bool) -> bool {
-    let matched = unsafe { strnequal(p, word.as_ptr(), word.count_bytes()) };
-    matched && (!digit || ascii_isdigit(unsafe { *p.add(word.count_bytes()) as c_int }))
+/// Does `text` start with `word` at `at`, and with a digit after it if
+/// `digit` is set?
+fn item_at(text: &[u8], at: usize, word: &CStr, digit: bool) -> bool {
+    let word = word.to_bytes();
+    text[at..].starts_with(word)
+        && (!digit || cstr::byte_at(text, at + word.len()).is_ascii_digit())
 }
 
 /// `'messagesopt'` was set: validate it and adopt it.
@@ -223,35 +192,33 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
     let mut history = 0;
     let mut progress_target = 0;
 
-    // A copy: the cursor below walks past the end of a projection's borrow.
+    // A copy: the walk below would otherwise hold the option's borrow.
     let mopt = P_MOPT.get();
-    let mut p = mopt.as_ptr().cast_mut();
-    while unsafe { *p } != 0 {
-        if unsafe { at_opt(p, OPT_HIT_ENTER, false) } {
-            p = unsafe { p.add(OPT_HIT_ENTER.count_bytes()) };
+    let text = mopt.as_cstr().to_bytes();
+    let mut at = 0;
+    while at < text.len() {
+        if item_at(text, at, OPT_HIT_ENTER, false) {
+            at += OPT_HIT_ENTER.count_bytes();
             flags |= kOptMoptFlagHitEnter;
-        } else if unsafe { at_opt(p, OPT_WAIT, true) } {
-            p = unsafe { p.add(OPT_WAIT.count_bytes()) };
-            wait = unsafe { getdigits_int(&raw mut p, false, INT_MAX) };
+        } else if item_at(text, at, OPT_WAIT, true) {
+            (wait, at) = getdigits_int_at(text, at + OPT_WAIT.count_bytes(), false, INT_MAX);
             flags |= kOptMoptFlagWait;
-        } else if unsafe { at_opt(p, OPT_HISTORY, true) } {
-            p = unsafe { p.add(OPT_HISTORY.count_bytes()) };
-            history = unsafe { getdigits_int(&raw mut p, false, INT_MAX) };
+        } else if item_at(text, at, OPT_HISTORY, true) {
+            (history, at) = getdigits_int_at(text, at + OPT_HISTORY.count_bytes(), false, INT_MAX);
             flags |= kOptMoptFlagHistory;
-        } else if unsafe { at_opt(p, OPT_PROGRESS, false) } {
-            p = unsafe { p.add(OPT_PROGRESS.count_bytes()) };
+        } else if item_at(text, at, OPT_PROGRESS, false) {
+            at += OPT_PROGRESS.count_bytes();
             flags |= kOptMoptFlagProgress;
-            if unsafe { *p } == b'c' as c_char {
+            if cstr::byte_at(text, at) == b'c' {
                 progress_target |= PROGRESS_TARGET_CMD;
-                p = unsafe { p.add(1) };
+                at += 1;
             }
         }
-        // An unrecognised item leaves `p` where it was, so this rejects it.
-        if unsafe { *p } != b',' as c_char && unsafe { *p } != 0 {
-            return Err(Failed);
-        }
-        if unsafe { *p } == b',' as c_char {
-            p = unsafe { p.add(1) };
+        // An unrecognised item leaves `at` where it was, so this rejects it.
+        match cstr::byte_at(text, at) {
+            b',' => at += 1,
+            0 => {}
+            _ => return Err(Failed),
         }
     }
 
@@ -301,10 +268,7 @@ fn entry_from(seq: u64) -> Option<Shown> {
         let at = history.entries.partition_point(|entry| entry.seq < seq);
         history.entries.get(at).map(|entry| Shown {
             seq: entry.seq,
-            // SAFETY: the entry owns `size` live chunks.
-            chunks: (0..entry.msg.size)
-                .map(|i| unsafe { (*entry.msg.items.add(i)).clone() })
-                .collect(),
+            chunks: entry.msg.clone(),
             kind: entry.kind.clone(),
             temp: entry.temp,
             append: entry.append,
@@ -391,24 +355,17 @@ pub fn ex_messages(excmd: &mut ExArg) {
             // the event loop, which can service a UI attach or detach.
             msg_silent.set(msg_silent.get() + c_int::from(ui_has(kUIMessages)));
             let mut needs_clear = false;
-            let text = hl_msg_from(entry.chunks);
-            let clear = &raw mut needs_clear;
             let kind = (!entry.kind.is_null()).then(|| entry.kind.as_cstr());
-            // SAFETY: `text` is this frame's own copy, and `clear` a live
-            // `bool`.
-            unsafe {
-                msg_multihl(
-                    Object::Nil,
-                    text.clone(),
-                    kind,
-                    false,
-                    false,
-                    ptr::null_mut(),
-                    clear,
-                )
-            };
-            // SAFETY: not kept (`history` is false), so still this frame's.
-            unsafe { hl_msg_free(text) };
+            let shown = &entry.chunks;
+            msg_multihl(
+                Object::Nil,
+                shown,
+                kind,
+                false,
+                false,
+                None,
+                &mut needs_clear,
+            );
             msg_silent.set(msg_silent.get() - c_int::from(ui_has(kUIMessages)));
         }
     }
@@ -435,7 +392,7 @@ mod tests {
             history.next_seq += 1;
             history.entries.push_back(Entry {
                 seq,
-                msg: EMPTY_HL_MESSAGE,
+                msg: Vec::new(),
                 kind: String_0::NULL,
                 temp,
                 append: false,

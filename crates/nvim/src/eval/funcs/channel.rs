@@ -25,8 +25,8 @@ use crate::lua::executor::nlua_exec;
 use crate::memory::{ThinCString, XString};
 use crate::memory::{arena_mem_free, xfree, xmemdup};
 use crate::message::e_invarg;
+use crate::message::emsg;
 use crate::message::on_print_cb;
-use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::{get_client_info, rpc_send_call, rpc_send_event};
 use crate::msgpack_rpc::server::{
@@ -99,7 +99,8 @@ pub fn f_chanclose(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         channel_close(args[0].number_or_zero() as uint64_t, part, &raw mut error)
     } as VarNumber);
     if result.number_or_zero() == 0 {
-        unsafe { emsg_ptr(error) };
+        // SAFETY: the channel's NUL-terminated error text.
+        emsg(unsafe { crate::cstr::at(error) });
     }
 }
 
@@ -150,7 +151,8 @@ pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let sent = unsafe { channel_send(id, input, len, true, err) };
     result.write_number(sent as VarNumber);
     if !error.is_null() {
-        unsafe { emsg_ptr(error) };
+        // SAFETY: the channel's NUL-terminated error text.
+        emsg(unsafe { crate::cstr::at(error) });
     }
 }
 

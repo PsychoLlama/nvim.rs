@@ -16,7 +16,7 @@ use crate::mbyte::{Converter, char_at, cluster_len, enc_locale, encode_char};
 use crate::memline::Lines;
 use crate::memory::{ThinCString, XString};
 use crate::message::e_no_spell;
-use crate::message::{emsg, str2special_bytes};
+use crate::message::{emsg, special_keys_text};
 use crate::option::SavedCpo;
 use crate::option::vars::p_enc;
 use crate::optionstr::OptString;
@@ -87,7 +87,7 @@ pub fn f_keytrans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
     let escaped = XString::from_vec(escape_ks_bytes(text.as_cstr().to_bytes()));
-    let readable = str2special_bytes(escaped.as_cstr(), true, true);
+    let readable = special_keys_text(escaped.as_cstr().to_bytes(), true, true);
     result.write_string(Some(readable.into()));
 }
 

@@ -13,6 +13,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::vim_snprintf_add;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -243,11 +244,8 @@ pub(crate) unsafe fn report_written(
             (false, false) => c" written",
         });
     }
-    let (tag, state) = (
-        c"bufwrite".as_ptr().cast_mut(),
-        c"success".as_ptr().cast_mut(),
-    );
-    let shown = unsafe { msg_progress(iobuff, tag, state, 0, true, true) };
-    // SAFETY: null, or the NUL-terminated message `msg_progress` showed.
-    set_keep_msg((!shown.is_null()).then(|| unsafe { cstr::at(shown) }), 0);
+    // SAFETY: `iobuff` is this report's NUL-terminated buffer.
+    let text = unsafe { cstr::at(iobuff) };
+    let shown = XString::from_bytes(&msg_progress(text, c"bufwrite", c"success", 0, true, true));
+    set_keep_msg(Some(shown.as_cstr()), 0);
 }

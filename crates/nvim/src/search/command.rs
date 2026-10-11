@@ -343,7 +343,8 @@ unsafe fn echo_search_cmd(
         }
 
         // SAFETY: the echo buffer is this frame's NUL-terminated string.
-        if let Some(truncated) = unsafe { msg_strtrunc(echo.buf.as_ptr(), 1) } {
+        let text = unsafe { cstr::bytes_at(echo.buf.as_ptr()) };
+        if let Some(truncated) = fit_middle(text, true) {
             echo.len = truncated.len();
             // SAFETY: `into_raw` hands over an `xmalloc`ed block.
             unsafe { echo.buf.replace(truncated.into_raw()) };

@@ -28,7 +28,7 @@ use crate::ex_docmd::check_nextcmd;
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
 use crate::message::{e_backslash, e_invcmd, e_modifiable, e_nopresub, e_zerocount};
-use crate::message_fmt::{c_str, c_str_len};
+use crate::message_fmt::{msg_bytes, msg_cstr_opt};
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
 use crate::os::time::os_time;
@@ -245,7 +245,12 @@ unsafe fn read_count(args: &mut ExArg, cmd: &mut *mut c_char) -> bool {
     // Upstream writes `i >= INT_MAX`, which for a `c_int` is `==`.
     if i == INT_MAX {
         // SAFETY: `count_arg` is the digits just read, `cmd` their end.
-        let count_arg = unsafe { c_str_len(count_arg, (*cmd).offset_from(count_arg) as usize) };
+        let count_arg = unsafe {
+            msg_bytes(cstr::slice_at(
+                count_arg,
+                (*cmd).offset_from(count_arg) as usize,
+            ))
+        };
         semsg!("E1510: Value too large: {count_arg}");
         return false;
     }
@@ -315,7 +320,7 @@ pub(super) fn parse_sub(
         args.set_nextcmd_ptr(unsafe { check_nextcmd(cmd) });
         if args.line.next.is_none() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let cmd = unsafe { c_str(cmd) };
+            let cmd = unsafe { msg_cstr_opt(cstr::at_opt(cmd)) };
             semsg!("E488: Trailing characters: {cmd}");
             return None;
         }

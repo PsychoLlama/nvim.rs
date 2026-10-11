@@ -66,8 +66,7 @@ use crate::message::state::{
     did_emsg, lines_left, msg_didany, msg_no_more, msg_scroll, need_wait_return,
 };
 use crate::message::{
-    do_autocmd_progress, hl_msg_free, msg_id_exists, msg_multihl, verbose_enter, verbose_leave,
-    verbose_stop,
+    do_autocmd_progress, msg_id_exists, msg_multihl, verbose_enter, verbose_leave, verbose_stop,
 };
 use crate::message::{e_cmdwin, e_invchan};
 use crate::r#move::{changed_window_setting, update_topline, validate_cursor};

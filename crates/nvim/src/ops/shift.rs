@@ -18,7 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::vim_snprintf;
+use crate::memory::XString;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
@@ -40,8 +40,6 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
     // The loop walks the region, so every line it reaches is one of it, and
     // the cursor is on that line throughout.
     let op = unsafe { Op::new(op) };
-    // The "N lines >ed M times" report; upstream shares `IObuff` for it.
-    let mut report = [0 as c_char; IOSIZE as usize];
     let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
     if u_save(above, below).is_err() {
         return;
@@ -87,9 +85,9 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
         // "time"/"times" on the shift count, which is why the outer
         // `ngettext` chooses between two already-translated formats.
         let op_char = if op.op_type == OpType::Rshift {
-            c">".as_ptr()
+            c">"
         } else {
-            c"<".as_ptr()
+            c"<"
         };
         let lines = op.line_count as c_ulong;
         let single = ngettext(
@@ -103,18 +101,16 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
             amount as c_ulong,
         );
         let fmt = ngettext(single, plural, lines);
-        let out = report.as_mut_ptr();
-        unsafe {
-            vim_snprintf!(
-                out,
-                IOSIZE as size_t,
-                fmt.as_ptr(),
-                op.line_count as int64_t,
-                op_char,
-                amount,
-            )
-        };
-        unsafe { msg_keep(out, 0, true, false) };
+        // The "N lines >ed M times" report, cut where upstream's shared
+        // `IObuff` would cut it.
+        let report = crate::formatted!(
+            IOSIZE as usize,
+            fmt.to_bytes(),
+            op.line_count as int64_t,
+            op_char,
+            amount,
+        );
+        msg_keep_text(XString::from_bytes(&report).as_cstr(), 0);
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {

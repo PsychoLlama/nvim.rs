@@ -11,7 +11,7 @@ use super::*;
 use crate::guard::Keys;
 use crate::keycodes::{Key, key_escape, key_unescape};
 use crate::memory::handoff::owned_cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::semsg_multiline;
 use crate::types::NUL;
 use core::ffi::{c_char, c_int, c_void};
@@ -131,8 +131,7 @@ pub fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
 
     let called = unsafe { nlua_call_ref(luaref, ptr::null(), ARRAY_DICT_INIT, kRetNilBool) };
     if let Err(e) = called {
-        // SAFETY: the refusal owns its message as a NUL-terminated string.
-        let msg = unsafe { c_str(e.message_or_empty().as_ptr()) };
+        let msg = msg_cstr(e.message_or_empty());
         semsg_multiline!(c"emsg", "E5108: {msg}");
     }
 

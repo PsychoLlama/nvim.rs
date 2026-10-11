@@ -24,7 +24,7 @@ use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
 use crate::highlight_group::HLF_E;
-use crate::message::msg_ptr;
+use crate::message::{emsg, msg};
 use crate::message_fmt::c_str;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL};
@@ -84,8 +84,10 @@ unsafe fn check_mtime(buffer: Buf, file_info: *mut FileInfo) -> bool {
     msg_scroll.set(1); // don't overwrite messages here
     msg_silent.set(0); // must give this prompt
     // Not emsg(): that would flush the buffers.
-    let warning = translate(c"WARNING: The file has been changed since reading it!!!").as_ptr();
-    unsafe { msg_ptr(warning, HLF_E) };
+    msg(
+        translate(c"WARNING: The file has been changed since reading it!!!"),
+        HLF_E,
+    );
     if unsafe { ask_yesno(translate(c"Do you really want to write to it").as_ptr()) }
         == 'n' as c_int
     {
@@ -665,8 +667,9 @@ pub(crate) unsafe fn apply_patchmode(
             }
         };
         if empty_fd < 0 {
-            let why = translate(c"E206: Patchmode: can't touch empty original file").as_ptr();
-            unsafe { emsg_ptr(why) };
+            emsg(translate(
+                c"E206: Patchmode: can't touch empty original file",
+            ));
         } else {
             unsafe { close(empty_fd) };
         }

@@ -371,7 +371,7 @@ pub(crate) fn call_func_with(
                 // Trigger FuncUndefined, which may load the function.
                 let event = AutoEvent::FuncUndefined;
                 if func.is_none()
-                    && fire_autocmds_for(event, Some(rfname_c), Some(rfname_c), true, None)
+                    && fire_autocmds_for(event, Some(rfname_c), Some(rfname_c), true, None, None)
                     && !aborting()
                 {
                     func = find_func(rfname);

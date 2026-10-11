@@ -22,8 +22,9 @@ use super::complete::{COMMAND_COMPLETE, command_complete_name};
 use super::{FAIL, OK, UC_BUFFER};
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
+use crate::cstr;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::semsg;
 use crate::strings::xstrnsave;
@@ -106,7 +107,7 @@ pub(crate) unsafe fn parse_addr_type_arg(
     }
     unsafe { *value.add(i) = NUL as c_char };
     // SAFETY: `value` is now NUL-terminated at the word.
-    let shown = unsafe { c_str(value) };
+    let shown = unsafe { msg_cstr_opt(cstr::at_opt(value)) };
     semsg!("E180: Invalid address type value: {shown}");
     Err(Failed)
 }
@@ -140,7 +141,7 @@ pub(crate) unsafe fn parse_compl_arg(
         .find(|&i| command_complete_name(i).is_some_and(|n| n.to_bytes() == name));
     let Some(expand) = found else {
         // SAFETY: caller contract.
-        let value = unsafe { c_str(value) };
+        let value = unsafe { msg_cstr_opt(cstr::at_opt(value)) };
         semsg!("E180: Invalid complete value: {value}");
         return Err(Failed);
     };
@@ -284,7 +285,7 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
         let ch = unsafe { *attr.add(len) };
         unsafe { *attr.add(len) = NUL as c_char };
         // SAFETY: the byte past the attribute was just replaced by a NUL.
-        let shown = unsafe { c_str(attr) };
+        let shown = unsafe { msg_cstr_opt(cstr::at_opt(attr)) };
         semsg!("E181: Invalid attribute: {shown}");
         unsafe { *attr.add(len) = ch };
         return FAIL;

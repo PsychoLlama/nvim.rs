@@ -20,6 +20,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::cstr;
 use crate::highlight_group::{HLF_SE, HLF_SO};
 use crate::mbyte::{cluster_len, utf8len_tab_zero};
 use crate::memory::{xfree, xmemdupz};
@@ -27,7 +28,7 @@ use crate::message::{msg_ext_set_append, msg_ext_set_kind, msg_multiline, msg_pu
 use crate::os::time::os_hrtime;
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kUIMessages;
-use crate::types::{Event, RStream, String_0, intptr_t, uint64_t};
+use crate::types::{Event, RStream, intptr_t, uint64_t};
 use crate::ui::{ui_flush, ui_has};
 
 /// One second, in nanoseconds.
@@ -171,9 +172,9 @@ unsafe extern "C" fn out_data_event(argv: *mut *mut c_void) {
         });
         msg_ext_set_append(true);
         let mut need_clear = true;
+        // SAFETY: the caller's buffer holds `count` readable bytes.
         msg_multiline(
-            // SAFETY: the caller's buffer holds `count` readable bytes.
-            String_0::from_raw_bytes(text, count),
+            cstr::slice_at(text, count),
             hl,
             false,
             false,

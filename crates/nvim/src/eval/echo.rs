@@ -37,7 +37,6 @@ use crate::message::{
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
-use crate::types::String_0;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     ExArg, LineNr, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA,
@@ -99,8 +98,8 @@ pub fn ex_echo(excmd: &mut ExArg) {
                 // `:echo` separates its arguments; `:echon` does not.
                 msg_str_hl(c" ", echo_hl_id.get(), false);
             }
-            let text = String_0::from_bytes(&tv2echo_bytes(&rettv));
-            msg_multiline(text, echo_hl_id.get(), true, false, &mut need_clear);
+            let text = tv2echo_bytes(&rettv);
+            msg_multiline(&text, echo_hl_id.get(), true, false, &mut need_clear);
         }
         clear_local(&mut rettv);
         cursor.skip_white();

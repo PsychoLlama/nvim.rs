@@ -666,7 +666,7 @@ fn mf_fname(mfp: *const MemFile) -> *const c_char {
 /// `msg()` as checked code.
 fn msg(s: *const c_char, hl_id: c_int) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::msg_ptr(s, hl_id) }
+    crate::message::msg(unsafe { cstr::at(s) }, hl_id)
 }
 
 /// `readfile()` as checked code.

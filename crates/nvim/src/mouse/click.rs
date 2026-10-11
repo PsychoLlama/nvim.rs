@@ -122,7 +122,7 @@ pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: Pos) -> c_
 
     if jump_flags != 0 {
         // SAFETY: `inclusive` is allowed to be null.
-        jump_flags = unsafe { jump_to_mouse(jump_flags, ptr::null_mut(), which_button) };
+        jump_flags = jump_to_mouse(jump_flags, None, which_button);
         let redraw = if visual_active() {
             UPD_INVERTED
         } else {

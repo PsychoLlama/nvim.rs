@@ -26,7 +26,7 @@ use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
 use crate::message::state::{msg_col, msg_didout, msg_scrolled};
 use crate::message::{e_backslash, e_interr, e_invcmd};
 use crate::message::{emsg, msg};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::r#move::changed_line_abv_curs;
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
@@ -275,7 +275,7 @@ pub fn ex_global(excmd: &mut ExArg) {
             msg(gettext(e_interr), 0 as c_int);
         } else if ndone == 0 as c_int {
             // SAFETY: `used_pat` is the pattern `search_regcomp` reported.
-            let pat = unsafe { c_str(used_pat) };
+            let pat = unsafe { msg_cstr_opt(cstr::at_opt(used_pat)) };
             if kind == b'v' {
                 smsg!(0, "Pattern found in every line: {pat}");
             } else {

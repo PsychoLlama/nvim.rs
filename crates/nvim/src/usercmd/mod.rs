@@ -70,7 +70,7 @@ use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
 use crate::memory::ThinCString;
 use crate::memory::{XString, xfree};
 use crate::message::emsg;
-use crate::message_fmt::{c_str, emsg_text};
+use crate::message_fmt::{emsg_text, msg_cstr_opt};
 use crate::option::vars::p_cpo;
 use crate::os::cshim::gettext;
 use crate::runtime::sourcing_lnum;
@@ -403,7 +403,7 @@ pub(crate) unsafe fn uc_add_command(
                 || existing.sc_seq == current_sctx.get().sc_seq)
         {
             // SAFETY: `name` is the caller's; this call owns the other five.
-            let name = unsafe { c_str(name) };
+            let name = unsafe { msg_cstr_opt(cstr::at_opt(name)) };
             semsg!("E174: Command already exists: add ! to replace it: {name}");
             unsafe { free_new_command(rep_buf, compl_arg, luaref, compl_luaref, preview_luaref) };
             return Err(Failed);
@@ -697,7 +697,7 @@ pub(crate) fn ex_delcommand(excmd: &mut ExArg) {
             c"E184: No such user-defined command: %s"
         };
         // SAFETY: module contract -- `arg` is NUL-terminated.
-        let arg = unsafe { c_str(arg) };
+        let arg = unsafe { msg_cstr_opt(cstr::at_opt(arg)) };
         emsg_text(tr_c!(untranslated, arg));
         return;
     };

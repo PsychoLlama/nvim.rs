@@ -20,8 +20,8 @@ use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_expected, err_out_of_range, err_required};
 use crate::api_error;
 use crate::guard::Suppress;
-use crate::message::EMPTY_HL_MESSAGE;
 use crate::message_fmt::msg_cstr_opt;
+use crate::types::HlMessage;
 use crate::winlayer::Live;
 use core::ffi::CStr;
 
@@ -60,13 +60,8 @@ pub fn nvim_echo(
     let data = opts.data.as_ref().unwrap_or(&no_dict);
     let given_id = opts.id.as_ref().unwrap_or(&nil);
     let mut id = Object::integer(-1);
-    let mut hl_msg = EMPTY_HL_MESSAGE;
-    // SAFETY: the caller's chunk array, and `hl_msg` is this frame's own.
-    if let Err(e) = parse_hl_msg(&mut hl_msg, &chunks, err) {
-        // SAFETY: the message this frame just built and nothing else owns.
-        unsafe { hl_msg_free(hl_msg) };
-        return Err(e);
-    }
+    let mut hl_msg = HlMessage::new();
+    parse_hl_msg(&mut hl_msg, &chunks, err)?;
 
     let given_kind = opts.kind.as_ref().unwrap_or(&no_string);
     if verbose {
@@ -123,7 +118,7 @@ pub fn nvim_echo(
     };
 
     if !rejected {
-        let mut msg_data = MessageData {
+        let msg_data = MessageData {
             source: source.clone(),
             percent,
             title: title.clone(),
@@ -139,19 +134,15 @@ pub fn nvim_echo(
             msg_didany.set(true);
             msg_no_more.set(true);
         }
-        // SAFETY: `msg_data` and `needs_clear` are this frame's own, and the
-        // message is the one built above.
-        id = unsafe {
-            msg_multihl(
-                given_id.clone(),
-                hl_msg.clone(),
-                kind,
-                history,
-                err,
-                &raw mut msg_data,
-                &raw mut needs_clear,
-            )
-        };
+        id = msg_multihl(
+            given_id.clone(),
+            &hl_msg,
+            kind,
+            history,
+            err,
+            Some(&msg_data),
+            &mut needs_clear,
+        );
         if truncate {
             msg_no_more.set(false);
             msg_didany.set(save_msg_didany);
@@ -164,15 +155,9 @@ pub fn nvim_echo(
             verbose_stop();
         }
         if is_progress {
-            // SAFETY: `msg_data` is this frame's own, live for the call.
-            unsafe { do_autocmd_progress(id.clone(), hl_msg.clone(), &raw mut msg_data) };
-        }
-        if !needs_clear {
-            return id.reported(error);
+            do_autocmd_progress(id.clone(), &hl_msg, Some(&msg_data));
         }
     }
-    // SAFETY: the message this frame built and nothing else owns.
-    unsafe { hl_msg_free(hl_msg) };
     id.reported(error)
 }
 

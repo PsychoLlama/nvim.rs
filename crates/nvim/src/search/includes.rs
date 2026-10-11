@@ -16,7 +16,7 @@ use crate::cstr;
 use crate::file_search::FileNameOpts;
 use crate::highlight_group::{HLF_D, HLF_R};
 use crate::memory::XString;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::P_DEF;
 use crate::option::vars::P_INC;
 use crate::optionstr::{OptString, local_or_global};
@@ -24,7 +24,6 @@ use crate::regexp::RE_MAGIC;
 use crate::smsg;
 use crate::strings::has_bytes;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
-use crate::vim_snprintf;
 use crate::window::valid_win;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
@@ -385,7 +384,6 @@ unsafe fn handle_include(
     action: c_int,
     silent: bool,
 ) {
-    let mut progress = [0 as c_char; IOSIZE as usize];
     // A relative name is resolved against the file the line is in.
     let p_fname = if walk.curr_fname == Buf::current().name.shown_ptr() {
         Buf::current().name.full_ptr()
@@ -445,21 +443,18 @@ unsafe fn handle_include(
         lnum: 0,
         matched: false,
     });
-    let name = walk.files.innermost().name.as_ptr();
+    // SAFETY: the name the walk just pushed, NUL-terminated.
+    let name = unsafe { cstr::at(walk.files.innermost().name.as_ptr()) };
     if action == ACTION_EXPAND && !shortmess(ShmFlag::COMPLETIONSCAN) && !silent {
-        msg_hist_off.set(true); // reset in msg_trunc()
-        let (out, room) = (progress.as_mut_ptr(), IOSIZE as size_t);
-        // SAFETY: formatting a NUL-terminated file name into a buffer of
-        // `IOSIZE` bytes, whose size is passed with it.
-        unsafe {
-            let fmt = gettext(c"Scanning included file: %s");
-            vim_snprintf!(out, room, fmt.as_ptr(), name)
-        };
-        unsafe { msg_trunc(progress.as_mut_ptr(), true, HLF_R) };
+        msg_hist_off.set(true); // reset in msg_fit_head()
+        // Upstream formats into `IObuff`, and the name is cut there.
+        let fmt = gettext(c"Scanning included file: %s");
+        let progress =
+            XString::from_bytes(&crate::formatted!(IOSIZE as usize, fmt.to_bytes(), name));
+        msg_fit_head(progress.as_cstr(), true, HLF_R);
     } else if p_verbose() >= 5 {
         verbose_enter();
-        // SAFETY: a static, translated message and a NUL-terminated name.
-        let name = unsafe { c_str(name) };
+        let name = msg_cstr(name);
         smsg!(0, "Searching included file {name}");
         verbose_leave();
     }

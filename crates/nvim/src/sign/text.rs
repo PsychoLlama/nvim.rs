@@ -17,7 +17,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::semsg;
 use crate::types::Failed;
 
@@ -147,7 +147,7 @@ pub(crate) unsafe fn init_sign_text(
     if s != endp || cells > width_limit {
         if from_define {
             // SAFETY: the caller's text, and a format the message takes.
-            let text = unsafe { c_str(text) };
+            let text = unsafe { msg_cstr_opt(cstr::at_opt(text)) };
             semsg!("E239: Invalid sign text: {text}");
         }
         return Err(Failed);

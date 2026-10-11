@@ -6,17 +6,14 @@
 //! when `'more'` says to. [`msg_bytes_to_stdio`] is the same job for a process
 //! with no UI at all.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::ex_docmd::cmdmod_filters_out;
-use crate::fprintf;
 use crate::grid::default_grid_ref;
 use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
-use crate::printf;
+use crate::os::cshim::{write_c_stderr, write_c_stdout};
 use crate::types::{Callback, NUL};
 use core::ffi::{c_int, c_uint};
 use std::borrow::Cow;
@@ -247,9 +244,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
         return;
     }
 
-    let print_attr =
-        // SAFETY: `hl_attr_table` answers the active attribute table.
-        unsafe { hl_combine_attr(*hl_attr_table().offset(HLF_MSG as isize), attr) };
+    let print_attr = hl_combine_attr(hl_attr(HLF_MSG as c_int), attr);
     msg_grid_validate();
     cmdline_was_last_drawn.set(redrawing_cmdline.get());
 
@@ -312,7 +307,6 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                     && !msg_no_more.get()
                     && !exmode_active.get()
                 {
-                    // SAFETY: main-thread editor call.
                     if do_more_prompt(NUL) {
                         // The pager jumped ahead to the dialog buttons, so
                         // the rest of the caller's text is not shown and
@@ -351,9 +345,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
             if cw > 1 && msg_col.get() == Columns.get() - 1 {
                 // Doesn't fit: fill the last column with a highlighted '>'
                 // and let the wrap put the character on the next line.
-                // SAFETY: `hl_attr_table` answers the active table.
-                let at = unsafe { *hl_attr_table().offset(HLF_AT as isize) };
-                grid_line_puts(msg_col.get(), b">", at);
+                grid_line_puts(msg_col.get(), b">", hl_attr(HLF_AT as c_int));
                 cw = 1;
             } else {
                 grid_line_puts(msg_col.get(), &text[at..at + len], print_attr);
@@ -405,8 +397,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
 
 /// Whether `:filter pattern` was used and `msg` does not match it.
 pub(crate) fn message_filtered(msg: &CStr) -> bool {
-    // SAFETY: a `CStr` is a valid C string, which is the whole contract.
-    unsafe { cmdmod_filters_out(msg.as_ptr()) }
+    cmdmod_filters_out(msg)
 }
 
 /// Whether messages should be printed to stdout/stderr rather than drawn:
@@ -420,9 +411,9 @@ pub fn msg_use_printf() -> c_int {
 /// Also keeps `msg_col`/`msg_didout` roughly in step, so that the code that
 /// decides whether a newline is needed still works with no grid to measure.
 pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
-    // `vim.on_print` takes the whole message instead, if it is set.
-    // SAFETY: the cell holds a live callback.
-    if unsafe { &*on_print_cb() }.is_set() {
+    // `vim.on_print` takes the whole message instead, if it is set. A
+    // second reference, so the call holds no borrow of the cell.
+    if let Some(mut callback) = on_print.with(|cb| cb.is_set().then(|| cb.duplicate())) {
         // The callback wants a C string, and `bytes` is a span of one; the
         // copy is what gives it a terminator of its own. Upstream handed
         // over the *pointer* instead, so a caller that asked for a prefix
@@ -430,9 +421,9 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
         // The array owns the copy and releases it.
         let argv = [TypVal::string_from(bytes)];
         let mut rettv = TV_INITIAL_VALUE;
-        // SAFETY: one argument, and `rettv` is a live unset value.
-        unsafe { callback_call(&*on_print_cb(), &argv, &mut rettv) };
+        callback_call(&callback, &argv, &mut rettv);
         tv_clear(&mut rettv);
+        callback.clear();
         return;
     }
 
@@ -450,13 +441,13 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
                 used += 1;
             }
             buf[used..used + len].copy_from_slice(&rest[..len]);
-            let text = cstr::in_bytes(&buf);
+            // Up to a NUL, as the `%s` this was printed through read it.
+            let text = &buf[..used + len];
+            let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
             if info_message.get() {
-                // SAFETY: a `%s` format and one NUL-terminated string.
-                unsafe { printf!(c"%s".as_ptr(), text.as_ptr()) };
+                write_c_stdout(text);
             } else {
-                // SAFETY: as above.
-                unsafe { fprintf!(stderr, c"%s".as_ptr(), text.as_ptr()) };
+                write_c_stderr(text);
             }
         }
 

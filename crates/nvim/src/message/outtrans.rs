@@ -4,19 +4,17 @@
 //! sequences as themselves; the `str2special*` half renders key codes as
 //! `<C-X>` notation, which is what mapping listings and `keytrans()` show.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::charset::{CharDisplay, skip};
 use crate::cstr;
 use crate::keycodes::ModMask;
-use crate::keycodes::{Key, MAX_KEY_NAME_LEN, SpecialKeyName, termcap_key, termcap_name};
-use crate::mbyte::{cells_at, char_at, cluster_len};
-use crate::memory::handoff::owned_cstr;
+use crate::keycodes::{Key, termcap_key, termcap_name};
+use crate::mbyte::{cells_at, char_at, cluster_len, encode_char, unescape_at};
+use crate::os::env::home_replace_in;
 use crate::types::MB_MAXCHAR;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 /// The `<xx>` form of an unprintable byte gets its own highlight so it can be
 /// told apart from the same characters typed literally.
@@ -33,20 +31,19 @@ pub fn msg_putchar(c: c_int) {
 /// as, because that is what [`msg_display_bytes`] and `str2special` downstream
 /// know how to read.
 pub fn msg_putchar_hl(c: c_int, hl_id: c_int) {
-    let mut buf = [0 as c_char; MB_MAXCHAR + 1];
+    let mut buf = [0u8; MB_MAXCHAR + 1];
     if c < 0 {
         // `K_SECOND`/`K_THIRD`, less their `c == K_SPECIAL`/`c == NUL`
         // arms: both of those codes are positive, so neither is reachable
         // here.
         let name = termcap_name(c);
-        buf[0] = K_SPECIAL as c_char;
-        buf[1] = name[0] as c_char;
-        buf[2] = name[1] as c_char;
+        buf[0] = K_SPECIAL as u8;
+        buf[1] = name[0];
+        buf[2] = name[1];
     } else {
-        let len = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
-        buf[len as usize] = 0;
+        encode_char(c, &mut buf);
     }
-    msg_str_hl(cstr::in_chars(&buf), hl_id, false)
+    msg_str_hl(cstr::in_bytes(&buf), hl_id, false)
 }
 
 /// Show a number in decimal.
@@ -78,13 +75,9 @@ pub fn msg_home_replace(fname: &CStr) {
 
 /// [`msg_home_replace`] with a highlight id.
 pub(crate) fn msg_home_replace_hl(fname: &CStr, hl_id: c_int) {
-    // SAFETY: a `CStr` is a valid C string, and the answer is an allocation
-    // of this function's own.
-    let name = unsafe { home_replace_save(None, fname.as_ptr()) };
-    // SAFETY: as above.
-    msg_display(unsafe { cstr::at(name) }, hl_id, false);
-    // SAFETY: as above.
-    unsafe { xfree(name.cast()) };
+    // Room for the name, a `~/` and the terminator, as upstream sized it.
+    let name = home_replace_in(None, fname, fname.count_bytes() + 3, true);
+    msg_display(name.as_cstr(), hl_id, false);
 }
 
 /// Show a NUL-terminated string, translating what cannot be displayed.
@@ -271,153 +264,92 @@ pub fn msg_make(arg: &CStr) {
 ///
 /// @param from  true for the left-hand side of a mapping
 pub fn msg_display_keys(text: &CStr, from: bool, maxlen: c_int) -> c_int {
-    let strstart = text.as_ptr();
-    let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
-    let mut display: CharDisplay;
-    let mut str = strstart;
+    let bytes = text.to_bytes();
+    // One key's rendering at a time, the buffer reused across them.
+    let mut piece = Vec::new();
+    let mut at = 0;
     let mut cells = 0;
-    while unsafe { *str } != 0 {
-        let mut text = if unsafe { *str } == b' ' as c_char
-            && (str == strstart || unsafe { *str.add(1) } == 0)
-        {
-            str = unsafe { str.add(1) };
-            c"<Space>".as_ptr()
+    while at < bytes.len() {
+        piece.clear();
+        if bytes[at] == b' ' && (at == 0 || at + 1 == bytes.len()) {
+            at += 1;
+            piece.extend_from_slice(b"<Space>");
         } else {
-            unsafe { str2special(&raw mut str, from, false, &mut piece) }
-        };
-        if unsafe { *text } != 0 && unsafe { *text.add(1) } == 0 {
-            // Single-byte character, or an illegal byte.
-            display = unsafe { transchar_byte_buf(None, *text as u8 as c_int) };
-            text = display.as_ptr();
+            special_key_into(bytes, &mut at, from, false, &mut piece);
         }
-        let len = unsafe { vim_strsize(text) };
+        // Single-byte character, or an illegal byte.
+        let display: CharDisplay;
+        let shown: &[u8] = if piece.len() == 1 {
+            display = transchar_byte_buf(None, c_int::from(piece[0]));
+            cstr::in_chars(&display).to_bytes()
+        } else {
+            &piece
+        };
+        let len = strsize(shown);
         if maxlen > 0 && cells + len >= maxlen {
             break;
         }
         // Highlight the ones that came out as a `<>` name.
-        let hl_id = if len > 1 && unsafe { utfc_ptr2len(text) } <= 1 {
+        let hl_id = if len > 1 && c_cluster_len(shown) <= 1 {
             SPECIAL_HL
         } else {
             0
         };
-        // SAFETY: `str2special` and `transchar` both answer a
-        // NUL-terminated rendering.
-        msg_str_hl(unsafe { cstr::at(text) }, hl_id, false);
+        msg_bytes(shown, hl_id, false);
         cells += len;
     }
     cells
 }
 
-/// [`str2special`] over a whole string, into a freshly allocated one.
-///
-/// The caller owns the result and frees it with `xfree`.
-///
-/// # Safety
-///
-/// `str` must point at a NUL-terminated string.
-pub unsafe fn str2special_save(
-    str: *const c_char,
-    replace_spaces: bool,
-    replace_lt: bool,
-) -> *mut c_char {
-    // SAFETY: the caller's promise.
-    let text = unsafe { CStr::from_ptr(str) };
-    owned_cstr(str2special_bytes(text, replace_spaces, replace_lt))
-}
-
-/// [`str2special`] over the whole of `text`: the readable spelling of every
-/// key in it, as bytes.
-pub(crate) fn str2special_bytes(text: &CStr, replace_spaces: bool, replace_lt: bool) -> Vec<u8> {
-    let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
-    let mut out = Vec::<u8>::new();
-    let mut p = text.as_ptr();
-    // SAFETY: `p` walks the terminated `text`, which `str2special` advances
-    // through one key at a time and never past the NUL; each rendering it
-    // answers is terminated.
-    unsafe {
-        while *p != 0 {
-            let piece = str2special(&raw mut p, replace_spaces, replace_lt, &mut piece);
-            out.extend_from_slice(cstr::bytes_at(piece));
-        }
+/// The readable spelling of every key in `text`: [`special_key_into`] over
+/// the whole of it. A NUL ends it, as it ended the C string.
+pub fn special_keys_text(text: &[u8], replace_spaces: bool, replace_lt: bool) -> Vec<u8> {
+    let mut out = Vec::with_capacity(text.len());
+    let mut at = 0;
+    while at < text.len() && text[at] != 0 {
+        special_key_into(text, &mut at, replace_spaces, replace_lt, &mut out);
     }
     out
 }
 
-/// [`str2special`] over a whole string, into `arena`.
-///
-/// Measures first and copies second, so that the arena is asked for the
-/// exact size once.
-///
-/// # Safety
-///
-/// `str` must point at a NUL-terminated string. `arena` must point at a live
-/// arena, which the memory this answers with is taken from and must outlive.
-pub unsafe fn str2special_arena(
-    str: *const c_char,
-    replace_spaces: bool,
-    replace_lt: bool,
-    arena: *mut Arena,
-) -> *mut c_char {
-    let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
-    let mut len: size_t = 0;
-    let mut p = str;
-    while unsafe { *p } != 0 {
-        let text = unsafe { str2special(&raw mut p, replace_spaces, replace_lt, &mut piece) };
-        len += unsafe { cstr::bytes_at(text) }.len();
-    }
-
-    let buf: *mut c_char = unsafe { arena_alloc(arena, len + 1, false) }.cast();
-    let mut at: size_t = 0;
-    p = str;
-    while unsafe { *p } != 0 {
-        let text = unsafe { str2special(&raw mut p, replace_spaces, replace_lt, &mut piece) };
-        let piece_len = unsafe { cstr::bytes_at(text) }.len();
-        unsafe { ptr::copy_nonoverlapping(text, buf.add(at), piece_len) };
-        at += piece_len;
-    }
-    unsafe { *buf.add(at) = 0 };
-    buf
-}
-
-/// Render one key code as printable text, advancing `*sp` past it.
+/// Render the key at `text[*at..]` as printable text onto `out`, advancing
+/// `*at` past it. Upstream's `str2special`.
 ///
 /// Special keys and C0 control characters come out in `<>` form;
 /// `replace_spaces` and `replace_lt` extend that to `<Space>` and `<lt>`,
 /// which is what a mapping's left-hand side and `keytrans()` want and its
-/// right-hand side does not.
-///
-/// The answer is written into `out` and answered as a pointer to it; an
-/// illegal byte comes back as itself. Upstream answers one shared static
-/// buffer, which is why `str2special_arena` cannot hold two answers.
-///
-/// # Safety
-/// `cursor` must point at a readable pointer into a NUL-terminated string.
-pub(crate) unsafe fn str2special(
-    cursor: *mut *const c_char,
+/// right-hand side does not. An illegal byte comes out as itself. The end of
+/// `text` reads as the NUL the C string ended at.
+pub(crate) fn special_key_into(
+    text: &[u8],
+    at: &mut usize,
     replace_spaces: bool,
     replace_lt: bool,
-    out: &mut SpecialKeyName,
-) -> *const c_char {
-    let mut ch = [0 as c_char; MB_MAXCHAR];
+    out: &mut Vec<u8>,
+) {
+    let byte = |i: usize| cstr::byte_at(text, i);
     // A multi-byte character escaped into the stream comes back whole.
-    if !unsafe { mb_unescape(cursor, &mut ch) }.is_null() {
-        out[..MB_MAXCHAR].copy_from_slice(&ch);
-        return out.as_ptr();
+    if byte(*at) >= 0x80
+        && let Some((ch, used)) = unescape_at(&text[*at..])
+    {
+        out.extend_from_slice(cstr::in_bytes(&ch).to_bytes());
+        *at += used;
+        return;
     }
 
-    let mut str = unsafe { *cursor };
-    let mut c = unsafe { *str as u8 as c_int };
+    let mut str = *at;
+    let mut c = c_int::from(byte(str));
     let mut modifiers = ModMask::NONE;
     let mut special = false;
-    if c == K_SPECIAL && unsafe { *str.add(1) } != 0 && unsafe { *str.add(2) } != 0 {
-        if unsafe { *str.add(1) as u8 as c_int } == KS_MODIFIER {
-            modifiers = ModMask::from_bits(unsafe { *str.add(2) as u8 as c_int });
-            str = unsafe { str.add(3) };
-            c = unsafe { *str as u8 as c_int };
+    if c == K_SPECIAL && byte(str + 1) != 0 && byte(str + 2) != 0 {
+        if c_int::from(byte(str + 1)) == KS_MODIFIER {
+            modifiers = ModMask::from_bits(c_int::from(byte(str + 2)));
+            str += 3;
+            c = c_int::from(byte(str));
         }
-        if c == K_SPECIAL && unsafe { *str.add(1) } != 0 && unsafe { *str.add(2) } != 0 {
-            c = to_special(unsafe { *str.add(1) as u8 }, unsafe { *str.add(2) as u8 });
-            str = unsafe { str.add(2) };
+        if c == K_SPECIAL && byte(str + 1) != 0 && byte(str + 2) != 0 {
+            c = to_special(byte(str + 1), byte(str + 2));
+            str += 2;
         }
         if c < 0 || !modifiers.is_empty() {
             special = true;
@@ -425,19 +357,19 @@ pub(crate) unsafe fn str2special(
     }
 
     if c >= 0 && utf8len_tab[c as usize] > 1 {
-        unsafe { *cursor = str };
         // Try to un-escape a multi-byte character after the modifiers.
-        let unescaped = unsafe { mb_unescape(cursor, &mut ch) };
-        if unescaped.is_null() {
+        match unescape_at(&text[str.min(text.len())..]) {
             // Illegal byte.
-            unsafe { *cursor = str.add(1) };
-        } else {
-            // `special` is set, so get_special_key_name() renders it.
-            c = unsafe { utf_ptr2char(unescaped) };
+            None => *at = str + 1,
+            Some((ch, used)) => {
+                // `special` is set, so get_special_key_name() renders it.
+                c = char_at(cstr::in_bytes(&ch).to_bytes());
+                *at = str + used;
+            }
         }
     } else {
         // Single-byte character, NUL or illegal byte.
-        unsafe { *cursor = str.add(usize::from(*str != 0)) };
+        *at = str + usize::from(byte(str) != 0);
     }
 
     if special
@@ -445,12 +377,13 @@ pub(crate) unsafe fn str2special(
         || (replace_spaces && c == b' ' as c_int)
         || (replace_lt && c == b'<' as c_int)
     {
-        *out = get_special_key_name(c, modifiers);
-        return out.as_ptr();
+        let name = get_special_key_name(c, modifiers);
+        out.extend_from_slice(cstr::in_chars(&name).to_bytes());
+        return;
     }
-    out[0] = c as c_char;
-    out[1] = 0;
-    out.as_ptr()
+    // Below 256 here: a multibyte character either came back whole above or
+    // made the key special.
+    out.push(c as u8);
 }
 
 /// The key code a two-byte termcap name stands for (C's `TO_SPECIAL`).

@@ -75,10 +75,6 @@ impl Filling {
 /// text the user typed rather than as a `str2special` rendering, `<script>`
 /// is not told apart from `:noremap`, and there is no `"buf"` key.
 /// `lhsrawalt` is the other spelling of a simplified LHS, or null.
-///
-/// The arena here is this call's own scratch: `str2special_arena` and the
-/// mode buffer are intermediates the dictionary copies out of, so the whole
-/// chain is released before the answer leaves.
 pub(crate) fn mapblock_fill_dict(
     mp: Mb,
     lhsrawalt: Option<&MapStr>,
@@ -86,18 +82,9 @@ pub(crate) fn mapblock_fill_dict(
     abbr: bool,
     compatible: bool,
 ) -> ApiDict {
-    let mut scratch = ARENA_EMPTY;
-    let arena = &raw mut scratch;
-    // SAFETY: the caller's promise — `mp` is a live mapblock, so `m_keys` is
-    // its NUL-terminated LHS.  `arena_alloc` answers seven writable bytes,
-    // which is the width `map_mode_to_chars` fills.
-    let (dict, lhs, mapmode) = unsafe {
-        let dict = ApiDict::with_capacity(MAPARG_DICT_KEYS);
-        let lhs = str2special_arena(mp.m_keys.as_ptr(), compatible, !compatible, arena);
-        let mapmode: *mut c_char = arena_alloc(arena, 7, false).cast();
-        mapmode.copy_from_nonoverlapping(map_mode_to_chars(mp.m_mode).as_ptr(), 7);
-        (dict, lhs, mapmode)
-    };
+    let dict = ApiDict::with_capacity(MAPARG_DICT_KEYS);
+    let lhs = special_keys_text(mp.m_keys.as_cstr().to_bytes(), compatible, !compatible);
+    let mapmode = map_mode_to_chars(mp.m_mode);
     let rhs = &mp.m_rhs;
     let mut out = Filling::new(dict);
 
@@ -115,14 +102,14 @@ pub(crate) fn mapblock_fill_dict(
         let luaref = api_new_luaref(rhs.luaref());
         out.put(c"callback", Object::LuaRef(luaref));
     } else {
-        // SAFETY: `orig_str` and `str` are the mapping's own NUL-terminated
-        // strings, and `arena` is this call's scratch.
-        let text = unsafe {
-            cstr_to_string(if compatible {
-                rhs.orig_str.as_ptr()
-            } else {
-                str2special_arena(rhs.str.as_ptr(), false, true, arena)
-            })
+        let text = if compatible {
+            String_0::from_cstr(rhs.orig_str.as_cstr())
+        } else {
+            String_0::from_bytes(&special_keys_text(
+                rhs.str.as_cstr().to_bytes(),
+                false,
+                true,
+            ))
         };
         out.put(c"rhs", Object::string(text));
     }
@@ -131,14 +118,10 @@ pub(crate) fn mapblock_fill_dict(
         let desc = String_0::from_cstr(desc.as_cstr());
         out.put(c"desc", Object::string(desc));
     }
-    // SAFETY: `lhs` is `str2special_arena`'s answer and `m_keys` the mapping's
-    // own LHS; both are NUL-terminated.
-    let (lhs, lhsraw) = unsafe {
-        (
-            cstr_to_string(lhs),
-            String_0::from_cstr(mp.m_keys.as_cstr()),
-        )
-    };
+    let (lhs, lhsraw) = (
+        String_0::from_bytes(&lhs),
+        String_0::from_cstr(mp.m_keys.as_cstr()),
+    );
     out.put(c"lhs", Object::string(lhs));
     out.put(c"lhsraw", Object::string(lhsraw));
     if let Some(alt) = lhsrawalt {
@@ -166,16 +149,11 @@ pub(crate) fn mapblock_fill_dict(
         c"replace_keycodes",
         Object::integer(Integer::from(mp.m_replace_keycodes)),
     );
-    // SAFETY: `mapmode` is the seven-byte NUL-terminated copy made above.
-    let mode = unsafe { cstr_to_string(mapmode) };
+    let mode = String_0::from_cstr(cstr::in_chars(&mapmode));
     out.put(c"mode", Object::string(mode));
     out.put(c"abbr", Object::integer(Integer::from(abbr)));
     out.put(c"mode_bits", Object::integer(mp.m_mode.into()));
 
-    // Every string above was copied out of the scratch, so nothing the
-    // answer holds points into it.
-    // SAFETY: the chain is this call's own.
-    unsafe { arena_mem_free(arena_finish(arena)) };
     out.finish()
 }
 
@@ -257,9 +235,8 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
             } else if rhs.str.is_empty() {
                 Some(ThinCString::from_bytes(b"<Nop>"))
             } else {
-                // SAFETY: the matching mapping's NUL-terminated RHS; the
-                // answer is an `xmalloc`ed block the value takes over.
-                unsafe { ThinCString::from_raw(str2special_save(rhs.str.as_ptr(), false, false)) }
+                let text = special_keys_text(rhs.str.as_cstr().to_bytes(), false, false);
+                Some(ThinCString::from_bytes(&text))
             });
         }
     } else if let Some((mp, local)) = found {
@@ -292,20 +269,9 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
             let mut did_simplify = false;
 
-            let mut arena = ARENA_EMPTY;
-            // SAFETY: `m_keys` is the mapping's own NUL-terminated LHS, and
-            // `arena`, `keys_buf` and `did_simplify` are this frame's locals;
-            // the allocation `keys_buf` takes over is the guard's.
-            let lhs = unsafe {
-                cstr::bytes_at(str2special_arena(
-                    mp.m_keys.as_ptr(),
-                    true,
-                    false,
-                    &raw mut arena,
-                ))
-            };
+            let lhs = special_keys_text(mp.m_keys.as_cstr().to_bytes(), true, false);
             let simplify = Some(&mut did_simplify);
-            let keys = replace_termcodes(lhs, 0, flags, simplify, cpo.as_cstr(), None);
+            let keys = replace_termcodes(&lhs, 0, flags, simplify, cpo.as_cstr(), None);
             let alt = keys
                 .filter(|_| did_simplify)
                 .map(|keys| MapStr::new(keys.split(|&b| b == 0).next().unwrap_or_default()));
@@ -317,7 +283,6 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 let mut d = TypVal::from(Object::dict(dict));
                 debug_assert_eq!(d.v_type(), VAR_DICT);
                 (*(*result).list_or_null()).push_dict(d.take_dict());
-                arena_mem_free(arena_finish(&raw mut arena));
             }
             None
         };

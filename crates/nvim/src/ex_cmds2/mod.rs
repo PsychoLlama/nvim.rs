@@ -52,6 +52,7 @@ use crate::buffer::{
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::unchanged;
 use crate::channel::channel_job_running;
+use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::eval::eval_call_provider;
 use crate::eval::typval::tv_list_alloc;
@@ -71,8 +72,8 @@ use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
     vim_dialog_yesnocancel, wait_return,
 };
-use crate::message_fmt::c_str;
 use crate::message_fmt::msg_bytes;
+use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::{p_aw, p_awa, p_confirm, p_write};
 use crate::os::cshim::gettext;
 use crate::path::vim_full_name;
@@ -92,8 +93,8 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use flag::{
-    CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DIALOG_MSG_SIZE, DOBUF_GOTO,
-    DOBUF_UNLOAD, VIM_QUESTION,
+    CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DOBUF_GOTO, DOBUF_UNLOAD,
+    VIM_QUESTION,
 };
 
 pub(crate) use listdo::ex_listdo;
@@ -117,9 +118,6 @@ mod flag {
 
     /// `do_dialog` types; the answers live in `message.rs`.
     pub(super) const VIM_QUESTION: c_int = 4;
-
-    /// The buffer `dialog_msg` formats into.
-    pub(super) const DIALOG_MSG_SIZE: usize = 1000;
 }
 
 // -- List walks -------------------------------------------------------------
@@ -221,7 +219,7 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
 
     let argv = tv_list_alloc(3 as ptrdiff_t);
     let into = argv.as_ptr();
-    unsafe { (*into).push_str(crate::cstr::at_opt(buffer.as_ptr())) };
+    unsafe { (*into).push_str(cstr::at_opt(buffer.as_ptr())) };
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
     eval_call_provider(name, c"execute_file", Some(argv), true);
@@ -237,7 +235,7 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     let into = argv.as_ptr();
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
-    unsafe { (*into).push_str(crate::cstr::at_opt(excmd.arg_ptr())) };
+    unsafe { (*into).push_str(cstr::at_opt(excmd.arg_ptr())) };
     eval_call_provider(name, c"do_range", Some(argv), true);
 }
 
@@ -338,23 +336,14 @@ pub(crate) fn check_changed(buffer: Buf, flags: c_int) -> bool {
 /// have checked 'write' first. `checkall` offers to deal with every changed
 /// buffer at once.
 pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
-    let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // `check_overwrite` needs an ExArg; upstream hands it an all-zero one.
     let mut ea = ExArg::default();
 
-    // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes, as
-    // `dialog_msg` requires.
-    unsafe {
-        dialog_msg(
-            buff.as_mut_ptr(),
-            c"Save changes to \"%s\"?".as_ptr().cast_mut(),
-            buffer.name.shown_ptr(),
-        )
-    };
+    let question = dialog_msg(c"Save changes to \"%s\"?", buffer.name.shown());
     let ret = if checkall {
-        unsafe { vim_dialog_yesnoallcancel(VIM_QUESTION, ptr::null_mut(), buff.as_mut_ptr(), 1) }
+        vim_dialog_yesnoallcancel(VIM_QUESTION, None, question.as_cstr(), 1)
     } else {
-        unsafe { vim_dialog_yesnocancel(VIM_QUESTION, ptr::null_mut(), buff.as_mut_ptr(), 1) }
+        vim_dialog_yesnocancel(VIM_QUESTION, None, question.as_cstr(), 1)
     };
 
     if ret == VIM_YES as c_int {
@@ -422,24 +411,9 @@ fn write_all_writable() {
 
 /// Ask whether to close the terminal buffer `buffer`.
 pub(crate) fn dialog_close_terminal(buffer: Buf) -> bool {
-    let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
-    // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes.
-    let name = if buffer.name.is_unnamed() {
-        c"?".as_ptr().cast_mut()
-    } else {
-        buffer.name.shown_ptr()
-    };
-    unsafe {
-        dialog_msg(
-            buff.as_mut_ptr(),
-            c"Close \"%s\"?".as_ptr().cast_mut(),
-            name,
-        )
-    };
-    unsafe {
-        vim_dialog_yesnocancel(VIM_QUESTION, ptr::null_mut(), buff.as_mut_ptr(), 1)
-            == VIM_YES as c_int
-    }
+    let name = buffer.name.shown().unwrap_or(c"?");
+    let question = dialog_msg(c"Close \"%s\"?", Some(name));
+    vim_dialog_yesnocancel(VIM_QUESTION, None, question.as_cstr(), 1) == VIM_YES as c_int
 }
 
 /// Whether `buffer` can be abandoned -- by hiding it, autowriting it or
@@ -559,12 +533,10 @@ fn report_unwritten(buffer: Buf) {
     // SAFETY: module contract.
     let shown = if !buffer.terminal.is_null() && channel_job_running(buffer.b_p_channel as uint64_t)
     {
-        unsafe {
-            semsg!(
-                "E947: Job still running in buffer \"{}\"",
-                c_str(buffer.name.shown_ptr())
-            )
-        }
+        semsg!(
+            "E947: Job still running in buffer \"{}\"",
+            msg_cstr_opt(buffer.name.shown())
+        )
     } else {
         let name = if buf_spname(buffer).is_null() {
             buffer.name.shown_ptr()
@@ -574,7 +546,7 @@ fn report_unwritten(buffer: Buf) {
         unsafe {
             semsg!(
                 "E162: No write since last change for buffer \"{}\"",
-                c_str(name)
+                msg_cstr_opt(cstr::at_opt(name))
             )
         }
     };

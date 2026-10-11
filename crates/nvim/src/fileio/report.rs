@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
@@ -119,14 +120,15 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
     unsafe { msg_add_lines(&mut report, noted as c_int, out.linecnt, out.filesize) };
 
     keep_msg.set(None);
-    let mut shown: *mut c_char = ptr::null_mut();
+    let mut shown = None;
     msg_scrolled_ign.set(true);
 
     if !how.stdin && !how.buffer {
         if msg_col.get() > 0 {
             msg_putchar(b'\r' as c_int); // overwrite previous message
         }
-        shown = unsafe { msg_trunc(io, false, 0) };
+        // SAFETY: `io` is this report's NUL-terminated buffer.
+        shown = msg_fit_head(unsafe { cstr::at(io) }, false, 0);
     }
 
     // The message has to be repeated after redrawing when reading from
@@ -138,8 +140,7 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
         || restart_edit.get() != 0
         || (msg_scrolled.get() != 0 && !need_wait_return.get())
     {
-        // SAFETY: null, or the NUL-terminated message `msg_trunc` showed.
-        set_keep_msg((!shown.is_null()).then(|| unsafe { cstr::at(shown) }), 0);
+        set_keep_msg(shown.as_ref().map(XString::as_cstr), 0);
     }
     msg_scrolled_ign.set(false);
 }

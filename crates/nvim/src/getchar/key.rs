@@ -283,14 +283,7 @@ fn modified_key(shifted: c_int, control: c_int, plain: c_int) -> c_int {
 /// editor; it may block waiting for input.
 pub fn safe_vgetc() -> c_int {
     let c = vgetc();
-    if c == NUL {
-        // SAFETY: a main-thread editor call with a null event queue, which
-        // is the "nothing to drain while waiting" case `get_keystroke`
-        // documents.
-        unsafe { get_keystroke(ptr::null_mut()) }
-    } else {
-        c
-    }
+    if c == NUL { get_keystroke(None) } else { c }
 }
 
 /// Like [`safe_vgetc`], but loops past `K_IGNORE` and scrollbar events.

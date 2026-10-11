@@ -237,6 +237,7 @@ pub(crate) fn fire_qf_autocmd(event: AutoEvent, name: &CStr, on_fname: bool) -> 
         fname.as_deref(),
         on_fname,
         Buf::current_or_none(),
+        None,
     )
 }
 

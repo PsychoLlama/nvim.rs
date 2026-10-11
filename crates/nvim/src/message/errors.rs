@@ -17,18 +17,24 @@
 //! The shared message text -- upstream's `errors.h`, every `e_*` wording
 //! raised from more than one place -- sits at the end of the file.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
-use crate::cstr;
+use crate::event::r#loop::schedule_deferred_job;
 use crate::guard::Suppress;
 use crate::log::logmsg;
-use crate::message_fmt::{c_str, msg_cstr};
-use crate::snprintf;
+use crate::message_fmt::{msg_bytes as text_arg, msg_cstr};
+use crate::runtime::{estack_sfile_owned, sourcing_lnum, sourcing_name_copy};
 use crate::strings::has_char;
-use core::ffi::{CStr, c_char, c_int, c_long, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_long};
+use std::ffi::CString;
 
 /// Forget where the last error came from, so the next one names its source
 /// again.
@@ -37,65 +43,49 @@ pub fn reset_last_sourcing() {
     last_sourcing_lnum.set(0);
 }
 
+/// The innermost script or function's name, when it has one.
+fn sourcing_name_text() -> Option<Vec<u8>> {
+    sourcing_name_copy()
+}
+
 /// Is the innermost script/function a different one from the last error's?
-fn other_sourcing_name() -> bool {
-    if exestack_has_name() {
-        return last_sourcing_name.with(|last| match last.as_deref() {
-            // SAFETY: an exec-stack entry's name is NUL-terminated.
-            Some(last) => (unsafe { cstr::at(sourcing_top().es_name) }).to_bytes() != last,
-            None => true,
-        });
+fn other_sourcing_name(name: Option<&[u8]>) -> bool {
+    match name {
+        Some(name) => last_sourcing_name.with(|last| last.as_deref() != Some(name)),
+        None => false,
     }
-    false
 }
 
-/// Is there an innermost exec-stack entry, and does it name a source?
-fn exestack_has_name() -> bool {
-    crate::runtime::innermost().is_some_and(|entry| !entry.es_name.is_null())
-}
-
-/// An allocated "Error in <script>:" line, or null when the source has
-/// already been reported.
-///
-/// # Safety
-/// Only that the exec stack is well formed.
-unsafe fn get_emsg_source() -> *mut c_char {
-    if !exestack_has_name() || !other_sourcing_name() {
-        return ptr::null_mut();
+/// The "Error in <script>:" line, or `None` when the source has already been
+/// reported.
+fn emsg_source_line() -> Option<CString> {
+    let name = sourcing_name_text();
+    if !other_sourcing_name(name.as_deref()) {
+        return None;
     }
-    let tofree = estack_sfile(ESTACK_NONE);
-    let sname = if tofree.is_null() {
-        sourcing_top().es_name
-    } else {
-        tofree
+    let sname = match estack_sfile_owned(ESTACK_NONE) {
+        Some(stack) => stack.as_cstr().to_bytes().to_vec(),
+        None => name?,
     };
-    let p = gettext(c"Error in %s:");
-    let buf_len = unsafe { cstr::bytes_at(sname) }.len() + p.count_bytes() + 1;
-    let buf: *mut c_char = unsafe { xmalloc(buf_len) }.cast();
-    unsafe { snprintf!(buf, buf_len, p.as_ptr(), sname) };
-    unsafe { xfree(tofree.cast()) };
-    buf
+    let text = crate::formatted!(usize::MAX, gettext(c"Error in %s:").to_bytes(), &sname[..]);
+    Some(CString::new(text).unwrap_or_default())
 }
 
-/// An allocated "line NNNN:" line, or null when the line has already been
-/// reported (or there is none).
-///
-/// # Safety
-/// Only that the exec stack is well formed.
-unsafe fn get_emsg_lnum() -> *mut c_char {
+/// The "line NNNN:" line, or `None` when the line has already been reported
+/// (or there is none).
+fn emsg_lnum_line() -> Option<CString> {
     // Show the source of the error, but not if it is the same as the last
     // time.
-    if sourcing_top().es_name.is_null()
-        || !(other_sourcing_name() || sourcing_top().es_lnum != last_sourcing_lnum.get())
-        || sourcing_top().es_lnum == 0
+    let name = sourcing_name_text();
+    let lnum = sourcing_lnum();
+    if name.is_none()
+        || !(other_sourcing_name(name.as_deref()) || lnum != last_sourcing_lnum.get())
+        || lnum == 0
     {
-        return ptr::null_mut();
+        return None;
     }
-    let p = gettext(c"line %4d:");
-    let buf_len = 20 + p.count_bytes();
-    let buf: *mut c_char = unsafe { xmalloc(buf_len) }.cast();
-    unsafe { snprintf!(buf, buf_len, p.as_ptr(), sourcing_top().es_lnum) };
-    buf
+    let text = crate::formatted!(usize::MAX, gettext(c"line %4d:").to_bytes(), lnum);
+    Some(CString::new(text).unwrap_or_default())
 }
 
 /// Display the source of an error message, if it has not been shown already.
@@ -106,29 +96,24 @@ pub fn msg_source(hl_id: c_int) {
     msg_source_busy.set(true);
 
     let no_prompt = Suppress::wait_return();
-    let p = unsafe { get_emsg_source() };
-    if !p.is_null() {
+    if let Some(line) = emsg_source_line() {
         msg_scroll.set(1);
-        unsafe { msg_ptr(p, hl_id) };
-        unsafe { xfree(p.cast()) };
+        msg(&line, hl_id);
     }
-    let p = unsafe { get_emsg_lnum() };
-    if !p.is_null() {
-        unsafe { msg_ptr(p, HLF_N) };
-        unsafe { xfree(p.cast()) };
-        last_sourcing_lnum.set(sourcing_top().es_lnum as c_int);
+    if let Some(line) = emsg_lnum_line() {
+        msg(&line, HLF_N);
+        last_sourcing_lnum.set(sourcing_lnum() as c_int);
     }
 
     // Remember the source name and line number, so we can tell when
     // the message changes.
-    if sourcing_top().es_name.is_null() || other_sourcing_name() {
+    let name = sourcing_name_text();
+    if name.is_none() || other_sourcing_name(name.as_deref()) {
         last_sourcing_name.set(None);
-        if !sourcing_top().es_name.is_null() {
-            // SAFETY: an exec-stack entry's name is NUL-terminated.
-            let name = unsafe { cstr::at(sourcing_top().es_name) };
-            last_sourcing_name.set(Some(XString::from_cstr(name)));
+        if let Some(name) = name {
+            last_sourcing_name.set(Some(XString::from_bytes(&name)));
             if !redirecting() {
-                msg_putchar_hl(b'\n' as c_int, hl_id);
+                msg_putchar_hl(c_int::from(b'\n'), hl_id);
             }
         }
     }
@@ -139,8 +124,8 @@ pub fn msg_source(hl_id: c_int) {
 /// Is this a bad time to show an error?
 pub(crate) fn emsg_not_now() -> bool {
     (emsg_off.get() > 0
-        && !p_debug(|value| has_char(value, b'm' as c_int))
-        && !p_debug(|value| has_char(value, b't' as c_int)))
+        && !p_debug(|value| has_char(value, c_int::from(b'm')))
+        && !p_debug(|value| has_char(value, c_int::from(b't'))))
         || emsg_skip.get() > 0
 }
 
@@ -149,15 +134,7 @@ pub(crate) fn emsg_not_now() -> bool {
 /// Answers true when the message was shown (or deliberately swallowed).
 /// `kind` is the `ext_messages` kind; `multiline` keeps embedded newlines
 /// rather than escaping them.
-///
-/// # Safety
-/// `s` must be a valid C string.
-pub unsafe fn emsg_multiline(
-    s: *const c_char,
-    kind: Option<&CStr>,
-    hl_id: c_int,
-    multiline: bool,
-) -> bool {
+pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bool) -> bool {
     if emsg_not_now() {
         return true;
     }
@@ -167,13 +144,11 @@ pub unsafe fn emsg_multiline(
     let severe = emsg_severe.get();
     emsg_severe.set(false);
 
-    if emsg_off.get() == 0 || p_debug(|value| has_char(value, b't' as c_int)) {
+    if emsg_off.get() == 0 || p_debug(|value| has_char(value, c_int::from(b't'))) {
         // Cause a throw of an error exception if appropriate. Don't display
         // the error message in this case.
         let mut ignore = false;
-        // SAFETY: the caller's NUL-terminated message.
-        let mesg = unsafe { CStr::from_ptr(s) };
-        if cause_errthrow(mesg, multiline, is_multihl.get() > 1, severe, &mut ignore) {
+        if cause_errthrow(s, multiline, is_multihl.get() > 1, severe, &mut ignore) {
             if !ignore {
                 did_emsg.set(did_emsg.get() + 1);
             }
@@ -181,22 +156,14 @@ pub unsafe fn emsg_multiline(
         }
 
         if in_assert_fails.get() && emsg_assert_fails_msg.with(Option::is_none) {
-            // SAFETY: the caller's message, and the exec stack's own name for
-            // where it came from -- both NUL-terminated.
-            emsg_assert_fails_msg.set(Some(XString::from_cstr(unsafe { cstr::at(s) })));
-            emsg_assert_fails_lnum.set(sourcing_top().es_lnum as c_long);
-            let name = sourcing_top().es_name;
-            let context = if name.is_null() {
-                c""
-            } else {
-                unsafe { cstr::at(name) }
-            };
-            emsg_assert_fails_context.set(Some(XString::from_cstr(context)));
+            emsg_assert_fails_msg.set(Some(XString::from_cstr(s)));
+            emsg_assert_fails_lnum.set(c_long::from(sourcing_lnum()));
+            let context = sourcing_name_text().unwrap_or_default();
+            emsg_assert_fails_context.set(Some(XString::from_bytes(&context)));
         }
 
         // set "v:errmsg", also when using ":silent! cmd"
-        // SAFETY: the caller's obligation -- a valid C string.
-        set_vim_var_string(Vv::Errmsg, unsafe { cstr::at_opt(s) }.map(CStr::to_bytes));
+        set_vim_var_string(Vv::Errmsg, Some(s.to_bytes()));
 
         // When using ":silent! cmd" don't display the error message, but
         // do write it to the redirection and the log.
@@ -204,56 +171,56 @@ pub unsafe fn emsg_multiline(
             if !emsg_noredir.get() {
                 msg_start();
                 // Each source line is redirected with a newline appended.
-                // Both helpers size their buffer for one byte more than
-                // the text, so the terminator's slot takes it.
                 //
                 // Called one at a time rather than collected first: the
                 // redirection in between can reach `:redir => var`, and
-                // `get_emsg_lnum`'s answer depends on state a redirection
+                // the line number's answer depends on state a redirection
                 // could in principle move.
-                let write_line = |line: *mut c_char| {
-                    if !line.is_null() {
-                        let len = unsafe { cstr::bytes_at(line) }.len();
-                        unsafe { *line.add(len) = b'\n' as c_char };
-                        redir_write(unsafe { cstr::slice_at(line, len + 1) });
-                        unsafe { xfree(line.cast()) };
+                let write_line = |line: Option<CString>| {
+                    if let Some(line) = line {
+                        let mut text = line.into_bytes();
+                        text.push(b'\n');
+                        redir_write(&text);
                     }
                 };
-                write_line(unsafe { get_emsg_source() });
-                write_line(unsafe { get_emsg_lnum() });
-                redir_write(unsafe { cstr::bytes_at(s) });
+                write_line(emsg_source_line());
+                write_line(emsg_lnum_line());
+                redir_write(s.to_bytes());
             }
-            // SAFETY: the message being reported, and the exec stack's own
-            // name for where it came from -- both NUL-terminated.
-            let text = unsafe { c_str(s) };
-            if !sourcing_top().es_name.is_null() && sourcing_top().es_lnum != 0 {
-                let name = unsafe { c_str(sourcing_top().es_name) };
-                let lnum = sourcing_top().es_lnum;
-                logmsg!(
-                    LOGLVL_DBG,
-                    c"emsg_multiline",
-                    845,
-                    "(:silent) {text} ({name} (line {lnum}))"
-                );
-            } else {
-                logmsg!(LOGLVL_DBG, c"emsg_multiline", 847, "(:silent) {text}");
+            let text = msg_cstr(s);
+            let lnum = sourcing_lnum();
+            match sourcing_name_text() {
+                Some(name) if lnum != 0 => {
+                    let name = text_arg(&name);
+                    logmsg!(
+                        LOGLVL_DBG,
+                        c"emsg_multiline",
+                        845,
+                        "(:silent) {text} ({name} (line {lnum}))"
+                    );
+                }
+                _ => {
+                    logmsg!(LOGLVL_DBG, c"emsg_multiline", 847, "(:silent) {text}");
+                }
             }
             return true;
         }
 
-        // SAFETY: as above.
-        let text = unsafe { c_str(s) };
-        if !sourcing_top().es_name.is_null() && sourcing_top().es_lnum != 0 {
-            let name = unsafe { c_str(sourcing_top().es_name) };
-            let lnum = sourcing_top().es_lnum;
-            logmsg!(
-                LOGLVL_INF,
-                c"emsg_multiline",
-                855,
-                "{text} ({name} (line {lnum}))"
-            );
-        } else {
-            logmsg!(LOGLVL_INF, c"emsg_multiline", 857, "{text}");
+        let text = msg_cstr(s);
+        let lnum = sourcing_lnum();
+        match sourcing_name_text() {
+            Some(name) if lnum != 0 => {
+                let name = text_arg(&name);
+                logmsg!(
+                    LOGLVL_INF,
+                    c"emsg_multiline",
+                    855,
+                    "{text} ({name} (line {lnum}))"
+                );
+            }
+            _ => {
+                logmsg!(LOGLVL_INF, c"emsg_multiline", 857, "{text}");
+            }
         }
 
         ex_exitval.set(1);
@@ -289,30 +256,21 @@ pub unsafe fn emsg_multiline(
     msg_ext_skip_flush.set(true);
     msg_source(hl_id);
     msg_nowait.set(false); // wait for this msg
-    let rv = unsafe { msg_keep(s, hl_id, false, multiline) };
+    let rv = show_message(s, hl_id, false, multiline);
     msg_ext_skip_flush.set(save_msg_skip_flush);
     rv
 }
 
 /// Show an error message.
 pub fn emsg(s: &CStr) -> bool {
-    // SAFETY: a `CStr` is a valid C string, which is the whole contract.
-    unsafe { emsg_multiline(s.as_ptr(), Some(c"emsg"), HLF_E, false) }
-}
-
-/// [`emsg`] for a message still held as a raw pointer.
-///
-/// # Safety
-/// `s` must be a valid C string.
-pub(crate) unsafe fn emsg_ptr(s: *const c_char) -> bool {
-    // SAFETY: the caller's contract.
-    unsafe { emsg_multiline(s, Some(c"emsg"), HLF_E, false) }
+    emsg_multiline(s, Some(c"emsg"), HLF_E, false)
 }
 
 /// "E354: Invalid register name" for register `name`.
 pub fn emsg_invreg(name: c_int) {
     let display = transchar_buf(None, name);
-    unsafe { crate::semsg!("E354: Invalid register name: '{}'", c_str(display.as_ptr())) };
+    let display = msg_cstr(cstr::in_chars(&display));
+    crate::semsg!("E354: Invalid register name: '{}'", display);
 }
 
 /// How much of an error message [`semsg!`](crate::semsg) keeps: the size of
@@ -341,8 +299,7 @@ pub fn internal_error(where_0: &CStr) {
 /// its embedded newlines. [`semsg_multiline!`](crate::semsg_multiline)'s tail.
 #[doc(hidden)]
 pub(crate) fn emsg_multiline_text(text: &CStr, kind: &CStr) -> bool {
-    // SAFETY: both are valid C strings, which is the whole contract.
-    unsafe { emsg_multiline(text.as_ptr(), Some(kind), HLF_E, true) }
+    emsg_multiline(text, Some(kind), HLF_E, true)
 }
 
 /// Show `text` as a warning. [`swmsg!`](crate::swmsg)'s tail.
@@ -355,38 +312,10 @@ pub(crate) fn swmsg_text(text: &CStr, hl: bool) {
 /// newlines. [`msg_schedule_semsg!`](crate::msg_schedule_semsg)'s tail.
 #[doc(hidden)]
 pub(crate) fn msg_schedule_semsg_text(text: &CStr, multiline: bool) {
-    let handler = if multiline {
-        msg_semsg_multiline_event
-    } else {
-        msg_semsg_event
-    };
-    // SAFETY: `text` is a valid C string; the copy is owned by the event,
-    // whose handler frees it, and the main loop is live wherever a message
-    // can be scheduled.
-    unsafe {
-        let event = Event::new(Some(handler), [xstrdup(text.as_ptr()).cast::<c_void>()]);
-        loop_schedule_deferred(main_loop.ptr(), event);
-    }
-}
-
-/// Deferred-event handler for [`msg_schedule_semsg`].
-///
-/// # Safety
-/// `argv[0]` must be an allocated C string this call takes ownership of.
-pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
-    let s: *mut c_char = unsafe { (*argv).cast() };
-    unsafe { emsg_ptr(s) };
-    unsafe { xfree(s.cast()) };
-}
-
-/// Deferred-event handler for [`msg_schedule_semsg_multiline`].
-///
-/// # Safety
-/// As [`msg_semsg_event`].
-pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void) {
-    let s: *mut c_char = unsafe { (*argv).cast() };
-    unsafe { emsg_multiline(s, Some(c"emsg"), HLF_E, true) };
-    unsafe { xfree(s.cast()) };
+    let text = text.to_owned();
+    schedule_deferred_job(Box::new(move || {
+        emsg_multiline(&text, Some(c"emsg"), HLF_E, multiline);
+    }));
 }
 
 /// Show a warning, which `'warningmsg'` highlighting and `v:warningmsg` pick

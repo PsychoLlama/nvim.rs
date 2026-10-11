@@ -15,7 +15,7 @@ use crate::getchar::typeahead;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
 use crate::memory::XString;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::semsg_multiline;
 use crate::types::{MB_MAXBYTES, NUL};
 use crate::winlayer::Buf;
@@ -239,11 +239,8 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
             answer
         };
         if err.is_set() {
-            // SAFETY: `err.msg` is the NUL-terminated text the call set.
-            unsafe {
-                semsg_multiline!(c"emsg", "E5108: {}", c_str(err.message_or_empty().as_ptr()));
-                err.clear();
-            }
+            semsg_multiline!(c"emsg", "E5108: {}", msg_cstr(err.message_or_empty()));
+            err.clear();
         }
         answer
     } else {

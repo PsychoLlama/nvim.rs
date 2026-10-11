@@ -12,7 +12,7 @@
 
 use crate::cstr;
 use crate::message::emsg;
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::message_fmt::{msg_bytes, msg_cstr, msg_cstr_opt};
 use crate::os::cshim::gettext;
 use crate::runtime::source_runtime;
 use crate::semsg;
@@ -148,27 +148,18 @@ pub(crate) fn ex_filetype(excmd: &mut ExArg) {
 /// is off, because nothing will ever ask them to run.
 fn report_filetype_state() {
     let detecting = filetype_detect.get() == Some(true);
-    let state = |on: bool| -> *const c_char {
+    let state = |on: bool| -> &'static str {
         if !on {
-            c"OFF".as_ptr()
+            "OFF"
         } else if detecting {
-            c"ON".as_ptr()
+            "ON"
         } else {
-            c"(on)".as_ptr()
+            "(on)"
         }
     };
-    // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-    let (arg0, arg1, arg2) = unsafe {
-        (
-            c_str(if detecting {
-                c"ON".as_ptr()
-            } else {
-                c"OFF".as_ptr()
-            }),
-            c_str(state(filetype_plugin.get() == Some(true))),
-            c_str(state(filetype_indent.get() == Some(true))),
-        )
-    };
+    let arg0 = if detecting { "ON" } else { "OFF" };
+    let arg1 = state(filetype_plugin.get() == Some(true));
+    let arg2 = state(filetype_indent.get() == Some(true));
     smsg!(0, "filetype detection:{arg0}  plugin:{arg1}  indent:{arg2}");
 }
 
@@ -266,13 +257,12 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
         // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
         // the invalid one. Left alone — it is a message, not behaviour.
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let vimruntime = unsafe { c_str(vimruntime) };
+        let vimruntime = unsafe { msg_cstr_opt(cstr::at_opt(vimruntime)) };
         semsg!("E5009: Invalid $VIMRUNTIME: {vimruntime}");
     } else {
         emsg(gettext(c"E5009: Invalid 'runtimepath'"));
     }
-    // SAFETY: the refusal's own NUL-terminated message.
-    let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
+    let msg = msg_cstr(err.message_or_empty());
     semsg_multiline!(c"emsg", "{msg}");
 }
 

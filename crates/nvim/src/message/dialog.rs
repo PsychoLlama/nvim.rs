@@ -4,30 +4,19 @@
 //! hotkey letters ([`render_buttons`]) and reads a keystroke until one of
 //! them matches.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::guard::{Allow, Suppress};
 use crate::keycodes::Ctrl_C;
 use crate::keycodes::ModMask;
 use crate::mbyte::{char_at, cluster_len};
 use crate::types::NUL;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 /// How many buttons can carry a hotkey. Buttons past this share the default.
 const HAS_HOTKEY_LEN: usize = 30;
 
-/// Ask the user to pick one of `buttons`, answering its 1-based index.
-///
-/// Answers 0 if the dialog was cancelled, and `dfltbutton` if there is no UI
-/// to ask through -- without one Nvim would wait for input forever.
-///
-/// `buttons` is `"Button1\nButton2\n..."`, with `&` marking a hotkey letter.
-/// `ex_cmd` allows `:` to dismiss the dialog and start an Ex command.
-///
 /// [`do_dialog`] with no title, text field or Ex command: `confirm()`.
 pub(crate) fn confirm_dialog(
     kind: c_int,
@@ -35,31 +24,25 @@ pub(crate) fn confirm_dialog(
     buttons: &CStr,
     dfltbutton: c_int,
 ) -> c_int {
-    let (message, buttons) = (message.as_ptr(), buttons.as_ptr());
-    // SAFETY: two terminated strings, only read.
-    unsafe {
-        do_dialog(
-            kind,
-            ptr::null(),
-            message,
-            buttons,
-            dfltbutton,
-            ptr::null(),
-            0,
-        )
-    }
+    do_dialog(kind, None, message, buttons, dfltbutton, None, false)
 }
 
-/// # Safety
-/// `message` and `buttons` must be valid C strings.
-pub unsafe fn do_dialog(
+/// Ask the user to pick one of `buttons`, answering its 1-based index.
+///
+/// Answers 0 if the dialog was cancelled, and `dfltbutton` if there is no UI
+/// to ask through -- without one Nvim would wait for input forever.
+///
+/// `buttons` is `"Button1\nButton2\n..."`, with `&` marking a hotkey letter.
+/// `ex_cmd` allows `:` to dismiss the dialog and start an Ex command. The
+/// title and text field are a GUI's; the console dialog shows neither.
+pub fn do_dialog(
     _type_0: c_int,
-    _title: *const c_char,
-    message: *const c_char,
-    buttons: *const c_char,
+    _title: Option<&CStr>,
+    message: &CStr,
+    buttons: &CStr,
     dfltbutton: c_int,
-    _textfield: *const c_char,
-    ex_cmd: c_int,
+    _textfield: Option<&CStr>,
+    ex_cmd: bool,
 ) -> c_int {
     if silent_mode.get() {
         return dfltbutton;
@@ -71,8 +54,6 @@ pub unsafe fn do_dialog(
     // We wait for a keypress, so don't make the user press RETURN as well.
     let no_prompt = Suppress::wait_return();
 
-    // SAFETY: the caller's NUL-terminated strings.
-    let (message, buttons) = unsafe { (cstr::at(message), cstr::at(buttons)) };
     let hotkeys = msg_show_console_dialog(message.to_bytes(), buttons.to_bytes(), dfltbutton);
     let retval;
     loop {
@@ -86,8 +67,7 @@ pub unsafe fn do_dialog(
         // copy: a dialog the typing reaches renders its own buttons.
         let prompt = confirm_buttons.with(Clone::clone).unwrap_or_default();
         // SAFETY: a main-thread prompt, with no mouse flag.
-        let mut c =
-            unsafe { prompt_for_input(Some(prompt.as_cstr()), HLF_M, true, ptr::null_mut()) };
+        let mut c = prompt_for_input(Some(prompt.as_cstr()), HLF_M, true, None);
         match c {
             CAR | NUL => {
                 // User accepts the default option.
@@ -104,7 +84,7 @@ pub unsafe fn do_dialog(
                 msg_didany.set(false);
                 msg_didout.set(false);
             }
-            _ if c == b':' as c_int && ex_cmd != 0 => {
+            _ if c == b':' as c_int && ex_cmd => {
                 retval = dfltbutton;
                 ins_char_typebuf(b':' as c_int, ModMask::NONE, false);
                 break;
@@ -273,46 +253,25 @@ pub(crate) fn display_confirm_msg() {
 }
 
 /// A yes/no dialog.
-///
-/// # Safety
-/// `title` may be null; `message` must be a valid C string.
-pub unsafe fn vim_dialog_yesno(
-    type_0: c_int,
-    title: *mut c_char,
-    message: *mut c_char,
-    dflt: c_int,
-) -> c_int {
-    let title = if title.is_null() {
-        gettext(c"Question").as_ptr().cast_mut()
-    } else {
-        title
-    };
+pub fn vim_dialog_yesno(type_0: c_int, title: Option<&CStr>, message: &CStr, dflt: c_int) -> c_int {
+    let title = title.unwrap_or_else(|| gettext(c"Question"));
     let buttons = gettext(c"&Yes\n&No");
-    let nul = ptr::null();
-    if unsafe { do_dialog(type_0, title, message, buttons.as_ptr(), dflt, nul, 0) } == 1 {
+    if do_dialog(type_0, Some(title), message, buttons, dflt, None, false) == 1 {
         return VIM_YES as c_int;
     }
     VIM_NO as c_int
 }
 
 /// A yes/no/cancel dialog.
-///
-/// # Safety
-/// As [`vim_dialog_yesno`].
-pub unsafe fn vim_dialog_yesnocancel(
+pub fn vim_dialog_yesnocancel(
     type_0: c_int,
-    title: *mut c_char,
-    message: *mut c_char,
+    title: Option<&CStr>,
+    message: &CStr,
     dflt: c_int,
 ) -> c_int {
-    let title = if title.is_null() {
-        gettext(c"Question").as_ptr().cast_mut()
-    } else {
-        title
-    };
+    let title = title.unwrap_or_else(|| gettext(c"Question"));
     let buttons = gettext(c"&Yes\n&No\n&Cancel");
-    let nul = ptr::null();
-    match unsafe { do_dialog(type_0, title, message, buttons.as_ptr(), dflt, nul, 0) } {
+    match do_dialog(type_0, Some(title), message, buttons, dflt, None, false) {
         1 => VIM_YES as c_int,
         2 => VIM_NO as c_int,
         _ => VIM_CANCEL as c_int,
@@ -320,24 +279,16 @@ pub unsafe fn vim_dialog_yesnocancel(
 }
 
 /// A yes/no/all/discard/cancel dialog, for `:wq` over several changed buffers.
-///
-/// # Safety
-/// As [`vim_dialog_yesno`].
-pub unsafe fn vim_dialog_yesnoallcancel(
+pub fn vim_dialog_yesnoallcancel(
     type_0: c_int,
-    title: *mut c_char,
-    message: *mut c_char,
+    title: Option<&CStr>,
+    message: &CStr,
     dflt: c_int,
 ) -> c_int {
     // Note: unlike its two siblings, this default title is not translated.
-    let title = if title.is_null() {
-        c"Question".as_ptr()
-    } else {
-        title.cast_const()
-    };
+    let title = title.unwrap_or(c"Question");
     let buttons = gettext(c"&Yes\n&No\nSave &All\n&Discard All\n&Cancel");
-    let nul = ptr::null();
-    match unsafe { do_dialog(type_0, title, message, buttons.as_ptr(), dflt, nul, 0) } {
+    match do_dialog(type_0, Some(title), message, buttons, dflt, None, false) {
         1 => VIM_YES as c_int,
         2 => VIM_NO as c_int,
         3 => VIM_ALL as c_int,

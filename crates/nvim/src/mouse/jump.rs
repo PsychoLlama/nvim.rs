@@ -87,20 +87,11 @@ static did_drag: GlobalCell<c_int> = GlobalCell::new(0);
 ///
 /// If flags has `MOUSE_SETPOS`, nothing is done, only the current position is
 /// remembered.
-///
-/// # Safety
-/// `inclusive` must be writable or null.
-pub(crate) unsafe fn jump_to_mouse(
-    flags: c_int,
-    inclusive: *mut bool,
+pub(crate) fn jump_to_mouse(
+    mut flags: c_int,
+    inclusive: Option<&mut bool>,
     which_button: c_int,
 ) -> c_int {
-    // SAFETY: the caller's promise.
-    let inclusive = unsafe { inclusive.as_mut() };
-    jump(flags, inclusive, which_button)
-}
-
-fn jump(mut flags: c_int, inclusive: Option<&mut bool>, which_button: c_int) -> c_int {
     let keep_focus = flags & MOUSE_FOCUS != 0;
 
     mouse_past_bottom.set(false);

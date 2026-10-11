@@ -298,14 +298,11 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
 
     if can_reload {
         append(c"\n%s");
-        let text = tbuf.as_ptr();
+        let text = cstr::in_chars(&tbuf);
         let warn = VIM_WARNING as c_int;
-        let title = gettext(c"Warning").as_ptr();
-        let buttons = gettext(c"&OK\n&Load File\nLoad File &and Options").as_ptr();
-        // SAFETY: `tbuf` is this frame's NUL-terminated message, and the
-        // title and buttons are translations of static strings.
-        let answer =
-            unsafe { do_dialog(warn, title, text, buttons, 1, ptr::null(), true as c_int) };
+        let title = gettext(c"Warning");
+        let buttons = gettext(c"&OK\n&Load File\nLoad File &and Options");
+        let answer = do_dialog(warn, Some(title), text, buttons, 1, None, true);
         return (
             match answer {
                 2 => Reload::Text,

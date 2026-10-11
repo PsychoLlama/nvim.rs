@@ -68,7 +68,6 @@ use crate::types::{
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::CStr;
-use core::ptr;
 
 // The carve of the transpiled module; see each child's docs.
 mod append;
@@ -373,7 +372,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
 
     quit_more.set(false);
     // SAFETY: main thread; no prompt text and no "did the user cancel" flag.
-    let nr = unsafe { prompt_for_input(None, 0, false, ptr::null_mut::<bool>()) };
+    let nr = prompt_for_input(None, 0, false, None);
     say::starthere();
     if nr <= 0 || nr > list_len(Some(&list)) {
         return;

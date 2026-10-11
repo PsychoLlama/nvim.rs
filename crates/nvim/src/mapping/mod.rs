@@ -30,9 +30,7 @@
 use crate::types::{NL, ScriptCtx};
 use core::ffi::{CStr, c_int};
 
-use crate::api::private::helpers::{
-    api_set_sctx, cstr_to_string, find_buffer_by_handle, string_to_cstr,
-};
+use crate::api::private::helpers::{api_set_sctx, find_buffer_by_handle, string_to_cstr};
 use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::charset::{skipwhite, transchar, vim_iswordp};
 use crate::cmdexpand::cmdline_fuzzy_complete;
@@ -65,11 +63,10 @@ use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, no_abbr};
 
 use crate::mbyte::{cluster_len, mb_prevptr, mb_unescape, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
-use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree};
+use crate::memory::xfree;
 use crate::message::{
     emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_display, msg_display_keys,
-    msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, str2special_arena,
-    str2special_save,
+    msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, special_keys_text,
 };
 use crate::os::cshim::{gettext, putc};
 use crate::regexp::vim_regexec;

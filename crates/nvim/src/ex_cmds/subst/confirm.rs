@@ -227,7 +227,7 @@ fn prompt_visual(st: &Sub) -> c_int {
     };
     let prompt = CStr::from_bytes_with_nul(&prompt).expect("the prompt's own terminator");
     // SAFETY: main-thread editor call, with no mouse slot.
-    let typed = unsafe { prompt_for_input(Some(prompt), HLF_R, true, ptr::null_mut()) };
+    let typed = prompt_for_input(Some(prompt), HLF_R, true, None);
     highlight_match.set(false);
 
     msg_didout.set(false); // don't scroll up

@@ -45,7 +45,7 @@ use crate::option::vars::{p_awa, p_confirm, p_write};
 use crate::startup::exiting;
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type, firstwin, lastwin, topframe};
 
-use crate::message::msg_ptr;
+use crate::message::msg;
 
 use crate::types::{CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, OK, Vv};
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
@@ -389,7 +389,7 @@ pub(crate) fn ex_tabonly(excmd: &mut ExArg) {
         return;
     }
     if only_tab() {
-        unsafe { msg_ptr(gettext(c"Already only one tab page").as_ptr(), 0) };
+        msg(gettext(c"Already only one tab page"), 0);
         return;
     }
     if window_layout_locked(CmdIdx::tabonly) {

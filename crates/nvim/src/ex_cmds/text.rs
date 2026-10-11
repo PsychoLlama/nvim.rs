@@ -14,10 +14,10 @@
 
 use super::say;
 use super::{CAR, EOL_MAC, NL, TAB};
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::{transchar, transchar_nonprint_form, vim_isprintc};
+use crate::cstr;
 use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::digraph::get_digraph_for_char;
 use crate::edit::{BeginlineOpts, beginline};
@@ -220,9 +220,7 @@ fn describe_char(
 /// `line` must hold a NUL-terminated string and message state must be
 /// started.
 unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool) {
-    // SAFETY: caller's contract.
-    let text = unsafe { cstr_to_string(line.as_mut_ptr()) };
-    msg_multiline(text, 0, true, false, need_clear);
+    msg_multiline(cstr::in_chars(line).to_bytes(), 0, true, false, need_clear);
 }
 
 /// `:left`, `:center` and `:right` -- re-indent every line of the range.

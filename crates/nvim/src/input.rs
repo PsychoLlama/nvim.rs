@@ -10,9 +10,11 @@
 #![allow(unsafe_code)]
 
 use crate::drawscreen::state::cmdline_row;
+use crate::event::multiqueue::{ChildQueue, queue_in};
 use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::state::{mapped_ctrl_c, mod_mask};
 use crate::getchar::{fix_input_buffer, merge_modifiers};
+use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::keycodes::ModMask;
@@ -27,7 +29,7 @@ use crate::os::input::input_get;
 use crate::snprintf;
 use crate::state::mode::State;
 use crate::types::ui::kUIMessages;
-use crate::types::{Callback, ExpandContext, IOSIZE, MultiQueue, NUL};
+use crate::types::{Callback, ExpandContext, IOSIZE, NUL};
 use crate::ui::{ui_flush, ui_has};
 use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -61,14 +63,7 @@ pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
     while r != 'y' as c_int && r != 'n' as c_int {
         // Same highlighting as for wait_return().
         // SAFETY: `prompt` is the owned NUL-terminated question.
-        r = unsafe {
-            prompt_for_input(
-                Some(crate::cstr::at(prompt)),
-                HLF_R,
-                true,
-                core::ptr::null_mut(),
-            )
-        };
+        r = prompt_for_input(Some(unsafe { crate::cstr::at(prompt) }), HLF_R, true, None);
         if r == Ctrl_C || r == ESC {
             r = 'n' as c_int;
             if !ui_has(kUIMessages) {
@@ -102,10 +97,9 @@ fn is_swallowed_key(first: u8, key: c_int) -> bool {
 /// scrollbar events (except a left click). The interrupt character comes
 /// back as `ESC` on unix.
 ///
-/// # Safety
-/// Main-thread editor call; `events` is null or a live queue to drain while
-/// waiting.
-pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
+/// `events` names the queue to drain while waiting, if any.
+pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue>>>) -> c_int {
+    let events = events.map_or(core::ptr::null_mut(), queue_in);
     let save_mapped_ctrl_c = mapped_ctrl_c.get();
     mod_mask.set(ModMask::NONE);
     mapped_ctrl_c.set(0); // Mappings are not used here.
@@ -201,21 +195,17 @@ pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
 /// [`prompt_for_input`] for a number from a list on screen, which a mouse
 /// click may pick instead of a typed number: `mouse_used` says which.
 pub(crate) fn prompt_for_number(mouse_used: &mut bool) -> c_int {
-    // SAFETY: a main-thread prompt with the caller's own flag.
-    unsafe { prompt_for_input(None, 0, false, mouse_used) }
+    prompt_for_input(None, 0, false, Some(mouse_used))
 }
 
-/// `one_key` returns after a single key press; `mouse_used`, when non-null,
-/// lets the user click a number instead of typing it. A null `prompt` gets
-/// the default "type a number" wording, which depends on `mouse_used`.
-///
-/// # Safety
-/// Main-thread editor call; `mouse_used` is null or writable.
-pub(crate) unsafe fn prompt_for_input(
+/// `one_key` returns after a single key press; `mouse_used`, when given,
+/// lets the user click a number instead of typing it. No `prompt` gets the
+/// default "type a number" wording, which depends on `mouse_used`.
+pub(crate) fn prompt_for_input(
     prompt: Option<&CStr>,
     hl_id: c_int,
     one_key: bool,
-    mouse_used: *mut bool,
+    mouse_used: Option<&mut bool>,
 ) -> c_int {
     let mut ret = if one_key { ESC } else { 0 };
     // A copy: the prompt's own messages replace the kept one.
@@ -223,7 +213,7 @@ pub(crate) unsafe fn prompt_for_input(
 
     let prompt = match prompt {
         Some(prompt) => prompt,
-        None if !mouse_used.is_null() => {
+        None if mouse_used.is_some() => {
             gettext(c"Type number and <Enter> or click with the mouse (q or empty cancels): ")
         }
         None => gettext(c"Type number and <Enter> (q or empty cancels): "),
@@ -245,7 +235,7 @@ pub(crate) unsafe fn prompt_for_input(
             core::ptr::null(),
             CALLBACK_NONE,
             one_key,
-            mouse_used,
+            mouse_used.map_or(core::ptr::null_mut(), core::ptr::from_mut),
         )
     };
     drop(raw_key);

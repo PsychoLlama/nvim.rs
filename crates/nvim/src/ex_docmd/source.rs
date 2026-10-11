@@ -52,10 +52,10 @@ use crate::state::mode::{State, exmode_active};
 use crate::ui::state::Rows;
 
 use crate::message::{
-    emsg_multiline, msg_clr_eos, msg_ptr, msg_scroll_flush, msg_str, verbose_enter_scroll,
+    emsg_multiline, msg, msg_clr_eos, msg_scroll_flush, msg_str, verbose_enter_scroll,
     verbose_leave_scroll,
 };
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 
 use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
@@ -151,12 +151,10 @@ pub fn do_exmode() {
     let save_msg_scroll = msg_scroll.get();
     let redraw_off = Suppress::redraw();
     let no_prompt = Suppress::wait_return();
-    unsafe {
-        msg_ptr(
-            gettext(c"Entering Ex mode.  Type \"visual\" to go to Normal mode.").as_ptr(),
-            0,
-        )
-    };
+    msg(
+        gettext(c"Entering Ex mode.  Type \"visual\" to go to Normal mode."),
+        0,
+    );
 
     while exmode_active.get() {
         // `:normal` that ran out of keys leaves Ex mode rather than
@@ -227,11 +225,11 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: LineNr, cmd: *mut c_char) {
     verbose_enter_scroll();
     if lnum == 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let cmd = unsafe { c_str(cmd) };
+        let cmd = unsafe { msg_cstr_opt(cstr::at_opt(cmd)) };
         smsg!(0, "Executing: {cmd}");
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let cmd = unsafe { c_str(cmd) };
+        let cmd = unsafe { msg_cstr_opt(cstr::at_opt(cmd)) };
         smsg!(0, "line {}: {cmd}", lnum);
     }
     if msg_silent.get() == 0 {
@@ -311,8 +309,7 @@ pub fn handle_did_throw() {
 
     if !messages.entries.is_empty() {
         for m in &messages.entries {
-            // SAFETY: the message's own NUL-terminated text.
-            unsafe { emsg_multiline(m.msg.as_ptr(), Some(c"emsg"), HLF_E, m.multiline) };
+            emsg_multiline(m.msg.as_cstr(), Some(c"emsg"), HLF_E, m.multiline);
         }
     } else if let Some(reported) = reported {
         emsg(&reported);

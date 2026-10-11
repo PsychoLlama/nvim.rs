@@ -15,7 +15,6 @@ use crate::guard::{Allow, Lock};
 use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message::msg;
-use crate::message::msg_ptr;
 use crate::tr;
 use crate::types::{IOSIZE, NUL, ShmFlag};
 use crate::vim_snprintf;
@@ -596,7 +595,7 @@ pub(crate) fn ins_compl_show_filename() {
             ellipsis,
             s,
         );
-        msg_ptr(buf, 0);
+        msg(crate::cstr::at(buf), 0);
     }
     msg_hist_off.set(false);
     redraw_cmdline.set(false);

@@ -6,15 +6,12 @@
 //! and [`msg_scroll_flush`] move that grid; [`msg_reset_scroll`] puts it back
 //! once the message is gone.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::grid::{MAX_SCHAR_SIZE, default_grid_ref, default_gridview, schar_text};
-use crate::vim_snprintf_safelen;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 
 /// The message grid, as a handle.
 ///
@@ -296,25 +293,16 @@ pub(crate) fn inc_msg_scrolled() {
     if with_vim_var_str(Vv::Scrollstart, CStr::is_empty) {
         // v:scrollstart is empty: set it to the script/function name and
         // line number the scrolling started at.
-        // SAFETY: the innermost frame's name is null or NUL-terminated.
-        let mut p = unsafe { cstr_to_string(sourcing_top().es_name) };
-        if p.data().is_null() {
-            p = unsafe { cstr_to_string(gettext(c"Unknown").as_ptr()) };
-        } else {
-            let tofreesize = unsafe { cstr::bytes_at(p.data()) }.len() + 40;
-            let tofree: *mut c_char = unsafe { xmalloc(tofreesize) }.cast();
-            let fmt = gettext(c"%s line %ld");
-            let name = p.data();
-            let lnum = sourcing_top().es_lnum as int64_t;
-            let len =
-                unsafe { vim_snprintf_safelen!(tofree, tofreesize, fmt.as_ptr(), name, lnum) };
-            // The formatted text replaces the name, and the buffer it was
-            // formatted into becomes the string's own.
-            // SAFETY: `tofree` is `len` bytes plus the terminator
-            // `vim_snprintf_safelen` wrote, and nothing else names it.
-            p = unsafe { String_0::from_owned_parts(tofree, len) };
-        }
-        set_vim_var_string(Vv::Scrollstart, Some(p.as_bytes()));
+        let start = match crate::runtime::sourcing_name_copy() {
+            None => gettext(c"Unknown").to_bytes().to_vec(),
+            Some(name) => {
+                // Upstream sizes the buffer for the name and forty bytes.
+                let room = name.len() + 40;
+                let lnum = int64_t::from(sourcing_top().es_lnum);
+                crate::formatted!(room, gettext(c"%s line %ld").to_bytes(), &name[..], lnum)
+            }
+        };
+        set_vim_var_string(Vv::Scrollstart, Some(&start));
     }
     msg_scrolled.set(msg_scrolled.get() + 1);
     set_must_redraw(UPD_VALID);

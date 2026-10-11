@@ -9,9 +9,10 @@
 
 use super::*;
 use crate::api_error;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::FuncFlags;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
@@ -333,7 +334,7 @@ pub fn modify_keymap(
             // string, and `err` the caller's slot.
             unsafe {
                 failed = Some(if parsed_args.rhs_len() != 0 {
-                    let rhs = c_str(parsed_args.rhs().str.as_ptr());
+                    let rhs = msg_cstr_opt(cstr::at_opt(parsed_args.rhs().str.as_ptr()));
                     api_error!(
                         kErrorTypeValidation,
                         "Gave nonempty RHS in unmap command: {rhs}"

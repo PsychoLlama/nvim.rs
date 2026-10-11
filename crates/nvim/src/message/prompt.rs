@@ -11,8 +11,7 @@
 //! child does run the pager, while `wait_return` bails without an attached
 //! UI whatever else is true. See docket O-B13-2.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -22,16 +21,14 @@
 )]
 
 use super::*;
-use crate::event::multiqueue::queue_in;
+use crate::event::multiqueue::process_events_in;
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, Key, NotAKey};
 use crate::log::logmsg;
-use crate::message_fmt::c_str;
 use crate::strings::has_char;
 use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
-use core::ptr;
 
 /// The pager's and hit-enter prompt's own keys, as `c_int` so they can share
 /// a `match` with the `K_*` codes -- which are negative, so a `u8` match
@@ -69,9 +66,7 @@ pub fn wait_return(redraw: c_int) {
     }
 
     if ui_has(kUIMessages) {
-        let text = c"Press any key to continue".as_ptr().cast_mut();
-        let no_cb = ptr::null_mut();
-        unsafe { prompt_for_input(Some(cstr::at(text)), HLF_M, true, no_cb) };
+        prompt_for_input(Some(c"Press any key to continue"), HLF_M, true, None);
         return;
     }
 
@@ -222,7 +217,7 @@ pub fn wait_return(redraw: c_int) {
                     | Key::X1mouse
                     | Key::X2mouse)
             ) {
-                unsafe { jump_to_mouse(MOUSE_SETPOS as c_int, ptr::null_mut(), 0) };
+                jump_to_mouse(MOUSE_SETPOS as c_int, None, 0);
             } else if !has_char(c"\r\n ", c) && c != Ctrl_C && c != KEY_Q {
                 // Put the character back in the typeahead buffer. Not the
                 // stuff buffer, because lmaps wouldn't work.
@@ -261,10 +256,9 @@ pub fn wait_return(redraw: c_int) {
     lines_left.set(-1); // reset lines_left at next msg_start()
     reset_last_sourcing();
     let room = (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get();
-    // SAFETY: an owned, NUL-terminated string.
     if keep_msg.with(|kept| {
         kept.as_ref()
-            .is_some_and(|kept| unsafe { vim_strsize(kept.as_ptr()) } >= room)
+            .is_some_and(|kept| vim_strsize_cstr(kept.as_cstr()) >= room)
     }) {
         // Don't redisplay the message, it's too long.
         keep_msg.set(None);
@@ -350,7 +344,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
             used_typed_char = NUL;
             c
         } else {
-            unsafe { get_keystroke(queue_in(&resize_events)) }
+            get_keystroke(Some(&resize_events))
         };
 
         let mut toscroll = 0;
@@ -404,7 +398,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                 }
                 Ok(Key::Event) => {
                     // Process the event on the main loop's queue.
-                    unsafe { multiqueue_process_events(queue_in(&resize_events)) };
+                    process_events_in(&resize_events);
                     to_redraw = true;
                     break 'scroll;
                 }
@@ -579,12 +573,10 @@ pub fn msg_delay(ms: uint64_t, ignoreinput: bool) {
     // Under the test harness a real delay would just be slow.
     let ms = if nvim_testing.get() { 100 } else { ms };
     let note = if nvim_testing.get() {
-        c" (skipped by NVIM_TEST)".as_ptr()
+        " (skipped by NVIM_TEST)"
     } else {
-        c"".as_ptr()
+        ""
     };
-    // SAFETY: one of the two literals just above.
-    let note = unsafe { c_str(note) };
     logmsg!(LOGLVL_DBG, c"msg_delay", 4047, "{ms} ms{note}");
     ui_flush();
     os_delay(ms, ignoreinput);

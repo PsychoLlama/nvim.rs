@@ -22,7 +22,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::semsg;
 use crate::types::Failed;
 
@@ -354,7 +354,7 @@ pub(crate) unsafe fn sign_undefine_by_name(name: *const c_char) -> Result<(), Fa
     });
     let Some(entry) = entry else {
         // SAFETY: the caller's name, and a format the message takes.
-        let name = unsafe { c_str(name) };
+        let name = unsafe { msg_cstr_opt(cstr::at_opt(name)) };
         semsg!("E155: Unknown sign: {name}");
         return Err(Failed);
     };

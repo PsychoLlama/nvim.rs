@@ -498,6 +498,31 @@ pub unsafe fn loop_schedule_deferred(uv_loop: *mut Loop, event: Event) {
     unsafe { loop_schedule_fast(uv_loop, wrapper) };
 }
 
+/// Run `job` once, later, from the main loop's deferred queue: the safe
+/// spelling of an [`Event`] whose one argument is the work to do.
+///
+/// For a caller that cannot do the work where it is -- an error raised
+/// where it cannot be shown, say. The job owns what it needs, so there is
+/// no argument array to keep alive; a job the loop never runs is dropped
+/// unrun with the process, as an unrun event's arguments always were.
+pub(crate) fn schedule_deferred_job(job: Box<dyn FnOnce() + Send>) {
+    let job = Box::into_raw(Box::new(job)).cast::<c_void>();
+    let event = Event::new(Some(run_deferred_job), [job]);
+    // SAFETY: the editor's own main loop, which lives for the process; the
+    // handler takes back the job packed just above.
+    unsafe { loop_schedule_deferred(crate::startup::main_loop.ptr(), event) };
+}
+
+/// The deferred queue reached a [`schedule_deferred_job`] event: run it.
+///
+/// # Safety
+/// `argv[0]` is the boxed job that function packed, taken back once here.
+unsafe extern "C" fn run_deferred_job(argv: *mut *mut c_void) {
+    // SAFETY: the caller's promise.
+    let job = unsafe { Box::from_raw((*argv).cast::<Box<dyn FnOnce() + Send>>()) };
+    job();
+}
+
 /// The fast queue reached the wrapper [`loop_schedule_deferred`] made:
 /// unpack the caller's event onto the deferred queue.
 ///

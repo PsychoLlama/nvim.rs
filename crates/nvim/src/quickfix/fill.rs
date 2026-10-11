@@ -307,6 +307,7 @@ fn finish_qf_buffer() {
         None,
         false,
         buffer,
+        None,
     );
     let buffer = Buf::current_or_none();
     fire_autocmds_for(
@@ -315,6 +316,7 @@ fn finish_qf_buffer() {
         None,
         false,
         buffer,
+        None,
     );
     Buf::current().b_keep_filetype = false;
     Buf::current().b_ro_locked -= 1;

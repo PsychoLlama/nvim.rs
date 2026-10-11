@@ -19,6 +19,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::guard::{Lock, Suppress};
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
+use crate::memory::XString;
 use crate::memory::xstrlcpy;
 use crate::message_fmt::c_str;
 use crate::option::vars::P_DIR;
@@ -522,19 +523,20 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
         msg.extend_from_slice(unsafe { cstr::bytes_at(fhname) });
         push_tr(&mut msg, c"\" already exists!");
         // "Delete it" is not offered while the owning process is alive.
-        let run_but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort").as_ptr();
-        let but =
-            gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort").as_ptr();
+        let run_but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort");
+        let but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort");
         let running = proc_running.get() != 0;
         let buttons = if running { run_but } else { but };
-        let (title, warn) = (gettext(c"VIM - ATTENTION").as_ptr(), VIM_WARNING as c_int);
-        let none = core::ptr::null();
-        // `do_dialog` reads the message as a C string; the vector's own
-        // terminator is what the `vsnprintf` behind `kv_printf` used to
-        // leave there.
-        msg.push(NUL as u8);
-        let text = msg.as_mut_ptr().cast::<c_char>();
-        choice = unsafe { do_dialog(warn, title, text, buttons, 1, none, 0) } as SwapExistsChoice;
+        let (title, warn) = (gettext(c"VIM - ATTENTION"), VIM_WARNING as c_int);
+        // `do_dialog` reads the message as a C string, which ends at the
+        // first NUL, as the `vsnprintf` behind `kv_printf` left it.
+        let end = msg
+            .iter()
+            .position(|&byte| byte == NUL as u8)
+            .unwrap_or(msg.len());
+        let text = XString::from_bytes(&msg[..end]);
+        let text = text.as_cstr();
+        choice = do_dialog(warn, Some(title), text, buttons, 1, None, false) as SwapExistsChoice;
         // Compensate for the missing "Delete it" button.
         choice = choice.wrapping_add((running && choice >= 4) as SwapExistsChoice);
         // Pretend the screen did not scroll; it needs a redraw anyway.
@@ -542,8 +544,7 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
     } else {
         let mut need_clear = false;
         msg_ext_set_kind(c"wmsg");
-        let text = String_0::from_bytes(&msg);
-        msg_multiline(text, 0, false, false, &mut need_clear);
+        msg_multiline(&msg, 0, false, false, &mut need_clear);
     }
 
     drop(no_prompt);
@@ -905,8 +906,7 @@ pub unsafe fn recover_names(
                     let mut msg_buf: Vec<u8> = Vec::with_capacity(IOSIZE as usize);
                     unsafe { swapfile_info(name, &mut msg_buf) };
                     let mut need_clear = false;
-                    let text = String_0::from_bytes(&msg_buf);
-                    msg_multiline(text, 0, false, false, &mut need_clear);
+                    msg_multiline(&msg_buf, 0, false, false, &mut need_clear);
                 }
             }
             ui_flush();

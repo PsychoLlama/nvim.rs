@@ -7,7 +7,7 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, c_char, c_int};
+use std::ffi::{CString, c_int};
 
 use neovim::ex_docmd::do_cmdline_cmd;
 use neovim::keycodes::escape_ks_bytes;
@@ -18,34 +18,17 @@ use crate::support::editor_lock;
 /// `text` cut to `room` cells with a `...` in the middle, into a buffer of
 /// `capacity` bytes.
 fn middle_cut(text: &[u8], room: c_int, capacity: usize) -> Vec<u8> {
-    let source = CString::new(text).expect("the corpus holds no NUL");
-    let mut buf = vec![0 as c_char; capacity];
-    let len = c_int::try_from(capacity).expect("small");
-    unsafe { neovim::message::trunc_string(source.as_ptr(), buf.as_mut_ptr(), room, len) };
-    buf.iter()
-        .take_while(|&&c| c != 0)
-        .map(|&c| c as u8)
-        .collect()
+    neovim::message::cut_middle(text, room, capacity)
 }
 
 /// `text` with its head dropped to fit the message area, marked with `<`.
 fn head_cut(text: &[u8], force: bool) -> Vec<u8> {
-    let source = CString::new(text).expect("the corpus holds no NUL");
-    let raw = source.into_raw();
-    let out = unsafe { neovim::message::msg_may_trunc(force, raw) };
-    let kept = unsafe { std::ffi::CStr::from_ptr(out) }.to_bytes().to_vec();
-    drop(unsafe { CString::from_raw(raw) });
-    kept
+    neovim::message::fit_head(text, force).into_owned()
 }
 
 /// The `<>` rendering of every key in `text`.
 fn keys_shown(text: &[u8], replace_spaces: bool, replace_lt: bool) -> Vec<u8> {
-    let source = CString::new(text).expect("the corpus holds no NUL");
-    let out =
-        unsafe { neovim::message::str2special_save(source.as_ptr(), replace_spaces, replace_lt) };
-    let shown = unsafe { std::ffi::CStr::from_ptr(out) }.to_bytes().to_vec();
-    unsafe { neovim::memory::xfree(out.cast()) };
-    shown
+    neovim::message::special_keys_text(text, replace_spaces, replace_lt)
 }
 
 /// The corpus, some long lines, and key-code text: the corpus with its

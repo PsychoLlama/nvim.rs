@@ -32,7 +32,7 @@ use crate::getchar::state::got_int;
 use crate::mark::mark_adjust;
 use crate::memline::{Lines, ml_append, ml_delete};
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
@@ -297,7 +297,7 @@ unsafe fn flag_fallback(
     }
     if is_alpha(byte) || !regmatch.regprog.is_null() {
         // SAFETY: as above.
-        let arg0 = unsafe { c_str(arg.add(at)) };
+        let arg0 = unsafe { msg_cstr_opt(cstr::at_opt(arg.add(at))) };
         semsg!("E475: Invalid argument: {arg0}");
         return None;
     }

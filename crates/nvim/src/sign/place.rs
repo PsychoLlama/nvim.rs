@@ -18,7 +18,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::semsg;
 use crate::snprintf;
 use crate::types::Failed;
@@ -325,7 +325,7 @@ pub(crate) unsafe fn sign_place(
     // SAFETY: the caller's name.
     let Some(def) = (unsafe { sign_find(name) }) else {
         // SAFETY: as above, and a format the message takes.
-        let name = unsafe { c_str(name) };
+        let name = unsafe { msg_cstr_opt(cstr::at_opt(name)) };
         semsg!("E155: Unknown sign: {name}");
         return Err(Failed);
     };
@@ -346,7 +346,7 @@ pub(crate) unsafe fn sign_place(
     };
     if lnum <= 0 {
         // SAFETY: the caller's name.
-        let name = unsafe { c_str(name) };
+        let name = unsafe { msg_cstr_opt(cstr::at_opt(name)) };
         semsg!("E885: Not possible to change sign {name}");
         return Err(Failed);
     }

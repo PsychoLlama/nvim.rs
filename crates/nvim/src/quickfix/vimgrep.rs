@@ -29,7 +29,7 @@ use crate::ex_cmds::split_vimgrep_pat;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::Name;
 use crate::memory::XString;
-use crate::message::msg_strtrunc_text;
+use crate::message::fit_middle;
 use crate::message_fmt::msg_bytes;
 use crate::optionstr::OptString;
 use crate::os::fs::current_dir;
@@ -136,7 +136,7 @@ fn compile_pattern(spat: &XString) -> Option<OwnedProg> {
 /// waiting for a keypress.
 fn display_fname(fname: &CStr) {
     msg_start();
-    match msg_strtrunc_text(fname, 1) {
+    match fit_middle(fname.to_bytes(), true) {
         None => msg_display(fname, 0, false),
         Some(truncated) => msg_display(truncated.as_cstr(), 0, false),
     };
@@ -470,6 +470,7 @@ fn keep_or_drop_dummy(
         name.as_deref(),
         true,
         Some(buffer),
+        None,
     );
     do_modelines(OptionSetFlags::NOWIN);
     drop(aco);

@@ -64,7 +64,7 @@ use crate::memline::{
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz};
 use crate::message::state::{msg_scroll, no_lines_msg};
 use crate::message::{e_invarg, e_modifiable};
-use crate::message::{emsg, msg, msg_keep, msg_start, msgmore};
+use crate::message::{emsg, msg, msg_keep_text, msg_start, msgmore};
 use crate::mouse::setmouse;
 use crate::mouse::state::mouse_dragging;
 use crate::r#move::validate_virtcol;

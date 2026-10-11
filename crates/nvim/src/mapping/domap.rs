@@ -12,7 +12,7 @@ use super::*;
 use crate::cstr;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
-use crate::message_fmt::{c_str, emsg_text};
+use crate::message_fmt::{emsg_text, msg_cstr_opt};
 use crate::os::cshim::gettext_ptr;
 use crate::tr_c;
 use crate::types::NUL;
@@ -606,7 +606,7 @@ fn do_exmap(excmd: &mut ExArg, isabbrev: bool) {
                 (_, false) => E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR,
             };
             // SAFETY: the parse's own NUL-terminated left-hand side.
-            let lhs = unsafe { c_str(lhs) };
+            let lhs = unsafe { msg_cstr_opt(cstr::at_opt(lhs)) };
             emsg_text(tr_c!(which, lhs));
         }
         _ => {}

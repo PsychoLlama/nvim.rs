@@ -220,15 +220,9 @@ pub struct ExtmarkInfoArray {
     pub items: *mut MTPair,
 }
 pub type HLGroupID = Integer;
-/// Not `Copy`: a kvec of chunks, each owning its text. A `clone` aliases
-/// the same array — which several message paths do deliberately, handing
-/// ownership on exactly once.
-#[derive(Clone)]
-pub struct HlMessage {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut HlMessageChunk,
-}
+/// A message made of chunks, each with its own highlight, each owning its
+/// text. Upstream's kvec of `HlMessageChunk`.
+pub type HlMessage = Vec<HlMessageChunk>;
 pub type Integer = int64_t;
 pub type KeyValuePair = key_value_pair;
 pub type LuaRef = ::core::ffi::c_int;

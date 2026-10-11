@@ -49,9 +49,8 @@ use crate::message::state::{
     msg_scrolled, msg_scrolled_ign, msg_silent, need_fileinfo, need_wait_return, no_wait_return,
 };
 use crate::message::{
-    do_dialog, emsg, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_display, msg_end,
-    msg_may_trunc, msg_progress, msg_putchar, msg_start, msg_str, msg_str_hl, msg_trunc,
-    set_keep_msg,
+    do_dialog, emsg, fit_head, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_display_bytes,
+    msg_end, msg_fit_head, msg_progress, msg_putchar, msg_start, msg_str, msg_str_hl, set_keep_msg,
 };
 use crate::r#move::update_topline;
 use crate::option::vars::{P_FFS, p_ar, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose};
@@ -226,14 +225,14 @@ pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
     }
     msg_scroll.set(msg_scroll_save);
     msg_scrolled_ign.set(true);
+    // SAFETY: `io` is this frame's report buffer, NUL-terminated by
+    // `xstrlcat`.
+    let text = unsafe { cstr::at(io) };
     if unsafe { *s } == 0 {
-        let (id, status) = (c"bufwrite".as_ptr(), c"running".as_ptr());
-        // SAFETY: `io` is this frame's report buffer, NUL-terminated by
-        // `xstrlcat`; the two tags are static strings.
-        unsafe { msg_progress(io, id.cast_mut(), status.cast_mut(), 0, false, true) };
+        msg_progress(text, c"bufwrite", c"running", 0, false, true);
     } else {
         // May truncate the message to avoid a hit-return prompt.
-        msg_display(unsafe { cstr::at(msg_may_trunc(false, io)) }, 0, false);
+        msg_display_bytes(&fit_head(text.to_bytes(), false), 0, false);
     }
     msg_clr_eos();
     msg_scrolled_ign.set(false);

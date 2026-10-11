@@ -313,6 +313,7 @@ typedef Integer HLGroupID;
 typedef size_t HashValue;
 typedef int HistoryType;
 typedef unsigned int HlKind;
+typedef struct HlMessage HlMessage;
 typedef unsigned int HlMode;
 typedef int Hlf;
 typedef int (*IndentGetter)(void);

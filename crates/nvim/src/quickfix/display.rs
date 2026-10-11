@@ -21,7 +21,7 @@ use super::*;
 use crate::cstr;
 use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
 use crate::memory::XString;
-use crate::message::trunc_to;
+use crate::message::cut_middle;
 use crate::message_fmt::msg_bytes;
 use crate::path::tail_index;
 use crate::semsg;
@@ -340,7 +340,7 @@ fn qf_msg(qi: Qi, which: c_int, lead: &str) {
     }
     // Upstream builds this in an `IOSIZE` buffer.
     line.truncate(IOSIZE as usize - 1);
-    let text = trunc_to(&owned_cstr(&line), Columns.get() - 1, IOSIZE as usize);
+    let text = cut_middle(&line, Columns.get() - 1, IOSIZE as usize);
     msg(&owned_cstr(&text), 0);
 }
 

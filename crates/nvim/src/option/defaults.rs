@@ -37,7 +37,7 @@ use crate::log::{LOGLVL_INF, logmsg};
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::{P_CH, P_HLG, P_ICON, P_TITLE, P_WINDOW, fenc_default};
 use crate::option::vars::{mark_option_defaults_set, p_enc, p_rtp, p_sh};
 use crate::options::{
@@ -493,7 +493,7 @@ pub(crate) fn set_init_2(_headless: bool) {
         c"set_init_2",
         613,
         "startup runtimepath/packpath value: {}",
-        p_rtp(|value| unsafe { c_str(value.as_ptr().cast_mut()) })
+        msg_cstr(&p_rtp(CStr::to_owned))
     );
     // 'scroll' is half the window height, so it could not be defaulted
     // before there was a window.

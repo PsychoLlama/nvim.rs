@@ -19,9 +19,10 @@ use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_replace_buf};
+use crate::memory::XString;
 use crate::memory::{xfree, xrealloc};
 use crate::message::e_interr;
-use crate::message::{MSG_BUF_LEN, emsg, messaging, msg_ptr, set_keep_msg};
+use crate::message::{MSG_BUF_LEN, emsg, messaging, msg, set_keep_msg};
 use crate::r#move::update_topline;
 use crate::option::set_option_direct;
 use crate::option::vars::{P_ICM, p_rdt, p_report, p_shm};
@@ -31,12 +32,10 @@ use crate::profile::{profile_setlimit, profile_zero};
 use crate::snprintf;
 use crate::types::OptStr;
 use crate::types::{
-    ColNr, ExArg, Handle, LPos, LineNr, NUL, OptInt, OptVal, OptionSetFlags, Pos, int64_t, size_t,
+    ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptVal, OptionSetFlags, Pos, int64_t, size_t,
 };
-use crate::vim_snprintf_add;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -86,34 +85,28 @@ pub fn do_sub_msg(count_only: bool) -> bool {
         && (KeyTyped.get() || sub_nlines.get() > 1 as LineNr || p_report() < 1 as OptInt);
     // SAFETY: message state.
     if (worth_reporting || count_only) && messaging() {
-        let mut scratch = [0 as c_char; MSG_BUF_LEN as usize];
-        let buf = scratch.as_mut_ptr();
         let forms = report_forms(count_only);
         let nsubs = sub_nsubs.get();
         let nlines = sub_nlines.get();
-        // SAFETY: `scratch` is `MSG_BUF_LEN` bytes and outlives the call;
-        // the format strings come from the catalogue and take
-        // exactly the two `int64_t` given.
-        if got_int.get() {
-            unsafe { strcpy(buf, gettext(c"(Interrupted) ").as_ptr()) };
+        // Upstream builds the report in a `MSG_BUF_LEN` buffer: the count
+        // is cut to what the interruption note leaves of it.
+        let room = MSG_BUF_LEN as usize;
+        let mut report = if got_int.get() {
+            gettext(c"(Interrupted) ").to_bytes().to_vec()
         } else {
-            unsafe { *buf = NUL as c_char };
-        }
+            Vec::new()
+        };
+        report.truncate(room - 1);
         let single = ngettext(forms[0][0], forms[0][1], nsubs as c_ulong);
         let plural = ngettext(forms[1][0], forms[1][1], nsubs as c_ulong);
-        unsafe {
-            vim_snprintf_add!(
-                buf,
-                MSG_BUF_LEN as size_t,
-                ngettext(single, plural, nlines as c_ulong).as_ptr(),
-                nsubs as int64_t,
-                nlines as int64_t,
-            )
-        };
-        if unsafe { msg_ptr(buf, 0 as c_int) } {
+        let fmt = ngettext(single, plural, nlines as c_ulong);
+        let left = room - report.len();
+        let counts = crate::formatted!(left, fmt.to_bytes(), nsubs as int64_t, nlines as int64_t);
+        report.extend_from_slice(&counts);
+        let report = XString::from_bytes(&report);
+        if msg(report.as_cstr(), 0) {
             // Save the message to display it after a redraw.
-            // SAFETY: the message just formatted into `scratch`.
-            set_keep_msg(Some(unsafe { crate::cstr::at(buf) }), 0);
+            set_keep_msg(Some(report.as_cstr()), 0);
         }
         return true;
     }
