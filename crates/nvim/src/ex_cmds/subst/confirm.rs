@@ -27,6 +27,7 @@ use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
+use crate::memory::XString;
 use crate::memory::xfree;
 use crate::message::state::{msg_didout, need_wait_return};
 use crate::mouse::setmouse;
@@ -38,14 +39,13 @@ use crate::option::vars::{P_LZ, p_lz};
 use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
-use crate::snprintf;
 use crate::state::mode::{State, exmode_active};
 use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, LineNr, NUL, size_t};
 use crate::ui::ui_has;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 /// What the prompt decided for this match.
@@ -209,25 +209,13 @@ fn prompt_visual(st: &Sub) -> c_int {
     redraw_later(Win::current(), UPD_SOME_VALID);
     Win::current().w_onebuf_opt.wo_fen = save_p_fen;
 
-    let mut ask = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `ask` is `IOSIZE` bytes and the format takes one string.
-    let prompt = unsafe {
-        snprintf!(
-            ask.as_mut_ptr(),
-            IOSIZE as size_t,
-            gettext(c"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)")
-                .as_ptr(),
-            st.sub,
-        );
-        // Upstream hands the prompt on as a fresh copy, because there it is
-        // the shared `IObuff` that a nested command line could overwrite.
-        let mut prompt = cstr::bytes_at(ask.as_ptr()).to_vec();
-        prompt.push(NUL as u8);
-        prompt
-    };
-    let prompt = CStr::from_bytes_with_nul(&prompt).expect("the prompt's own terminator");
-    // SAFETY: main-thread editor call, with no mouse slot.
-    let typed = prompt_for_input(Some(prompt), HLF_R, true, None);
+    // SAFETY: the replacement text, NUL-terminated.
+    let replacement = unsafe { cstr::at(st.sub) };
+    let fmt = gettext(c"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)");
+    // Cut where upstream's `IObuff` cut it.
+    let prompt = crate::formatted!(IOSIZE as usize, fmt.to_bytes(), replacement);
+    let prompt = XString::from_bytes(&prompt);
+    let typed = prompt_for_input(Some(prompt.as_cstr()), HLF_R, true, None);
     highlight_match.set(false);
 
     msg_didout.set(false); // don't scroll up

@@ -22,17 +22,15 @@ use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::digraph::get_digraph_for_char;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::indent::{get_indent, set_indent};
-use crate::mbyte::{
-    utf_char2bytes, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
-};
+use crate::mbyte::{encode_char, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::message::{msg, msg_multiline, msg_sb_eol};
 use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_str;
 use crate::types::CmdIdx;
+use crate::types::MB_MAXCHAR;
 use crate::types::{ExArg, IOSIZE, NUL};
 use crate::undo::u_save;
-use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use ::libc::atoi;
@@ -60,9 +58,6 @@ pub(crate) fn describe_cursor_char() {
     }
 
     let mut need_clear = true;
-    // The line being described. Upstream assembles it in `IObuff`, which
-    // `msg_multiline` reads again as it re-enters the message machinery.
-    let mut line = [0 as c_char; IOSIZE as usize];
     msg_sb_eol();
     say::start();
 
@@ -78,7 +73,7 @@ pub(crate) fn describe_cursor_char() {
         }
         // NL is stored as CR.
         let mac = c == CAR && get_fileformat(Buf::current()) == EOL_MAC;
-        describe_byte(c, if mac { NL } else { c }, &mut need_clear, &mut line);
+        describe_byte(c, if mac { NL } else { c }, &mut need_clear);
         // needed for overlong ascii?
         // SAFETY: as above.
         off += unsafe { utf_ptr2len(data) } as usize;
@@ -88,7 +83,7 @@ pub(crate) fn describe_cursor_char() {
     while off < len {
         // SAFETY: `off` is a character boundary short of the sequence's end.
         c = unsafe { utf_ptr2char(data.add(off)) };
-        describe_char(c, off > 0, &mut need_clear, &mut line);
+        describe_char(c, off > 0, &mut need_clear);
         // SAFETY: as above.
         off += unsafe { utf_ptr2len(data.add(off)) } as usize;
     }
@@ -104,31 +99,21 @@ pub(crate) fn describe_cursor_char() {
 /// value decimal, hex and octal, and its digraph if it has one.
 ///
 /// `cval` is the value to report, which differs from `c` only for a CR in a
-/// 'fileformat' of "mac".
-fn describe_byte(
-    c: c_int,
-    cval: c_int,
-    need_clear: &mut bool,
-    line: &mut [c_char; IOSIZE as usize],
-) {
-    let mut nonprint: [c_char; 20] = [0; 20];
-    // SAFETY: `nonprint` is 20 bytes and `transchar_nonprint` writes at most
-    // seven into `raw` before the `  <%s>` wrapper takes it.
-    if vim_isprintc(c) && !(' ' as c_int..='~' as c_int).contains(&c) {
+/// 'fileformat' of "mac". Upstream assembles the line in `IObuff`; it is cut
+/// where that would cut it.
+fn describe_byte(c: c_int, cval: c_int, need_clear: &mut bool) {
+    // The `  <x>` form of a printable character outside ASCII, in the
+    // twenty bytes upstream gives it.
+    let nonprint = if vim_isprintc(c) && !(' ' as c_int..='~' as c_int).contains(&c) {
         let raw = transchar_nonprint_form(Buf::current_or_none(), c);
-        unsafe {
-            vim_snprintf!(
-                nonprint.as_mut_ptr(),
-                nonprint.len(),
-                c"  <%s>".as_ptr(),
-                raw.as_ptr(),
-            )
-        };
-    }
+        crate::formatted!(20, b"  <%s>", cstr::in_chars(&raw))
+    } else {
+        Vec::new()
+    };
 
     // Upstream keeps a second, permanently empty buffer here and prints it
     // between the two; it has been dead since the multi-byte rewrite.
-    let empty: [c_char; 1] = [0];
+    let empty: &[u8] = b"";
     // The digraph is always passed: the format without a `Digr %s` simply
     // never reads that argument, as any unused trailing vararg.
     let digraph = get_digraph_for_char(cval);
@@ -137,55 +122,39 @@ fn describe_byte(
         None => c"<%s>%s%s  %d,  Hex %02x,  Octal %03o",
     };
     let digraph = digraph.unwrap_or([0; 3]);
-    // SAFETY: `line` is `IOSIZE` bytes and `vim_snprintf` bounds itself by
-    // the length it is given; `transchar` returns a static NUL-terminated
-    // string.
-    unsafe {
-        vim_snprintf!(
-            line.as_mut_ptr(),
-            IOSIZE as usize,
-            gettext(fmt).as_ptr(),
-            transchar(c).as_ptr(),
-            nonprint.as_ptr(),
-            empty.as_ptr(),
-            cval,
-            cval,
-            cval,
-            digraph.as_ptr(),
-        )
-    };
-    // SAFETY: `line` now holds a NUL-terminated string.
-    unsafe { emit_line(line, need_clear) };
+    let shown = transchar(c);
+    let line = crate::formatted!(
+        IOSIZE as usize,
+        gettext(fmt).to_bytes(),
+        cstr::in_chars(&shown),
+        &nonprint[..],
+        empty,
+        cval,
+        cval,
+        cval,
+        cstr::in_bytes(&digraph),
+    );
+    emit_line(&line, need_clear);
 }
 
 /// The `:ascii` line for one character of a multi-byte or combining sequence.
 ///
 /// `spaced` asks for the separating space upstream writes before every
 /// character but the first.
-fn describe_char(
-    c: c_int,
-    spaced: bool,
-    need_clear: &mut bool,
-    line: &mut [c_char; IOSIZE as usize],
-) {
+fn describe_char(c: c_int, spaced: bool, need_clear: &mut bool) {
     // This assumes every multi-byte char is printable...
-    let used = {
-        let buf = &mut *line;
-        let mut len = 0;
-        if spaced {
-            buf[len] = b' ' as c_char;
-            len += 1;
-        }
-        buf[len] = b'<' as c_char;
-        len += 1;
-        if utf_iscomposing_first(c) {
-            // Draw composing char on top of a space.
-            buf[len] = b' ' as c_char;
-            len += 1;
-        }
-        // SAFETY: at most four bytes go in, with 1020 left.
-        len + unsafe { utf_char2bytes(c, buf.as_mut_ptr().add(len)) } as usize
-    };
+    let mut line = Vec::with_capacity(64);
+    if spaced {
+        line.push(b' ');
+    }
+    line.push(b'<');
+    if utf_iscomposing_first(c) {
+        // Draw composing char on top of a space.
+        line.push(b' ');
+    }
+    let mut ch = [0u8; MB_MAXCHAR];
+    let len = encode_char(c, &mut ch);
+    line.extend_from_slice(&ch[..len]);
 
     // Four formats: with and without a digraph, and hex in four or eight
     // digits.  The digraph argument goes out either way (see `describe_byte`).
@@ -197,30 +166,16 @@ fn describe_char(
         (false, false) => c"> %d, Hex %08x, Octal %o",
     };
     let digraph = digraph.unwrap_or([0; 3]);
-    // SAFETY: `used` bytes of `line` are written and `vim_snprintf` bounds
-    // itself by the room reported left.
-    unsafe {
-        vim_snprintf!(
-            line.as_mut_ptr().add(used),
-            IOSIZE as usize - used,
-            gettext(fmt).as_ptr(),
-            c,
-            c,
-            c,
-            digraph.as_ptr(),
-        )
-    };
-    // SAFETY: `line` now holds a NUL-terminated string.
-    unsafe { emit_line(line, need_clear) };
+    let room = IOSIZE as usize - line.len();
+    let fmt = gettext(fmt).to_bytes();
+    let rest = crate::formatted!(room, fmt, c, c, c, cstr::in_bytes(&digraph));
+    line.extend_from_slice(&rest);
+    emit_line(&line, need_clear);
 }
 
-/// Print what `line` holds as one `:ascii` line.
-///
-/// # Safety
-/// `line` must hold a NUL-terminated string and message state must be
-/// started.
-unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool) {
-    msg_multiline(cstr::in_chars(line).to_bytes(), 0, true, false, need_clear);
+/// Print `line` as one `:ascii` line; message state must be started.
+fn emit_line(line: &[u8], need_clear: &mut bool) {
+    msg_multiline(line, 0, true, false, need_clear);
 }
 
 /// `:left`, `:center` and `:right` -- re-indent every line of the range.

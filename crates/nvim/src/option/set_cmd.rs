@@ -18,20 +18,20 @@
 #![allow(non_upper_case_globals)]
 
 use crate::charset::Str2NrBases;
+use crate::charset::trans_characters_in;
 use crate::cstr;
 use crate::keycodes::Key;
 use crate::keycodes::special_key_at;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::OptStr;
-use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::{OptSlot, SetOp, boolean_optval, option_last_set, ui_refresh_options};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::charset::{skiptowhite_esc, skipwhite, trans_characters, vim_str2nr};
+use crate::charset::{skiptowhite_esc, skipwhite, vim_str2nr};
 use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
@@ -624,29 +624,31 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> Resu
 /// `errmsg` must be NUL-terminated and `start..=end` one argument of the
 /// command line.
 unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
-    let mut report = [0 as c_char; IOSIZE as usize];
-    // SAFETY: the caller's strings, and `report` is `IOSIZE` writable bytes.
-    let buf = report.as_mut_ptr();
-    // Two past the message, leaving room for the ": " written back over
-    // its terminator.
+    // Upstream builds the report in `IObuff`, and translates its unprintable
+    // characters in place within that room: the buffer is the room.
+    let room = IOSIZE as usize;
+    let mut report = vec![0u8; room];
     // SAFETY: `errmsg` is the caller's NUL-terminated message.
-    let n = IOSIZE as size_t;
-    let at = unsafe { vim_snprintf!(buf, n, c"%s".as_ptr(), gettext_ptr(errmsg).as_ptr()) } + 2;
+    let msg = unsafe { gettext_ptr(errmsg) }.to_bytes();
+    let kept = msg.len().min(room - 1);
+    report[..kept].copy_from_slice(&msg[..kept]);
+    // Two past the message, leaving room for the ": " written back over
+    // its terminator -- measured on the whole message, as the formatter's
+    // answer was.
+    let at = msg.len() + 2;
     debug_assert!(end >= start);
-    let arglen = unsafe { end.offset_from(start) };
-    if at as isize + arglen < IOSIZE as isize {
-        let room = (IOSIZE - at + 2) as size_t;
-        unsafe { xstrlcpy(buf.offset(at as isize - 2), c": ".as_ptr(), room) };
-        let dst = unsafe { buf.offset(at as isize) }.cast::<c_void>();
-        unsafe { dst.cast::<u8>().copy_from(start.cast(), arglen as size_t) };
-        unsafe { *buf.offset(at as isize + arglen) = NUL as c_char };
+    // SAFETY: `start..end` is one argument of the caller's command line.
+    let arg = unsafe { cstr::slice_at(start, end.offset_from(start).unsigned_abs()) };
+    if at + arg.len() < room {
+        report[at - 2..at].copy_from_slice(b": ");
+        report[at..at + arg.len()].copy_from_slice(arg);
+        report[at + arg.len()] = NUL as u8;
     }
-    unsafe { trans_characters(buf, IOSIZE) };
+    trans_characters_in(&mut report);
     // The message is the whole report; do not make the user acknowledge
     // the half of it that has already scrolled past.
     let _no_prompt = Suppress::wait_return();
-    // SAFETY: the report just built in `buf`, NUL-terminated.
-    emsg(unsafe { cstr::at(buf) });
+    emsg(cstr::in_bytes(&report));
 }
 
 /// The key `arg` names, given that it is `len` bytes long and, with

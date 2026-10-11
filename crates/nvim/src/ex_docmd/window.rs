@@ -11,11 +11,13 @@
 
 use crate::charset::{getdigits_at, getdigits_int_at};
 use crate::cstr;
+use crate::memory::XString;
+use crate::message::msg_display_bytes;
 use crate::message_fmt::msg_bytes;
+use crate::os::env::home_replace_in;
 use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
-use crate::vim_snprintf;
 use crate::winlayer::WinId;
 use crate::winlayer::last_used_tab;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -40,7 +42,7 @@ use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
-use crate::memory::{xfree, xstrlcpy};
+use crate::memory::xfree;
 use crate::message::state::{msg_col, msg_scroll};
 use crate::message::{e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode};
 use crate::message::{emsg, msg_display, msg_ext_set_kind, msg_putchar, msg_start};
@@ -48,11 +50,10 @@ use crate::normal::do_check_scrollbind;
 use crate::option::get_findfunc;
 use crate::option::vars::p_pvh;
 use crate::os::cshim::{gettext, gettext_ptr};
-use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::tag::state::{g_do_tagpreview, postponed_split_flags, postponed_split_tab};
-use crate::types::{CmdLine, CmdModFlags, ExArg, IOSIZE, NUL, size_t};
+use crate::types::{CmdLine, CmdModFlags, ExArg, IOSIZE, NUL};
 use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -366,9 +367,6 @@ pub(crate) fn ex_tabs(_excmd: &mut ExArg) {
     msg_scroll.set(1);
 
     let lastused_win = last_used_tab().and_then(TabPage::current_window);
-    // The listing's scratch line. Upstream assembles it in `IObuff`, which
-    // `msg_display` reads again as it re-enters the message machinery.
-    let mut line = [0 as c_char; IOSIZE as usize];
 
     for (tabcount, tp) in tabs().enumerate() {
         if got_int.get() {
@@ -377,21 +375,18 @@ pub(crate) fn ex_tabs(_excmd: &mut ExArg) {
         if msg_col.get() > 0 {
             msg_char('\n' as c_int);
         }
-        let (fmt, nr) = (tr(c"Tab page %d".as_ptr()).as_ptr(), tabcount as c_int + 1);
-        // SAFETY: a message with one `%d`, into this frame's own buffer.
-        unsafe { vim_snprintf!(line.as_mut_ptr(), IOSIZE as size_t, fmt, nr) };
-        msg_line(&line, HLF_T);
+        // Upstream assembles the line in `IObuff`; it is cut where that
+        // would cut it.
+        let nr = tabcount as c_int + 1;
+        let line = crate::formatted!(IOSIZE as usize, gettext(c"Tab page %d").to_bytes(), nr);
+        msg_display_bytes(&line, HLF_T, false);
         os_breakcheck();
-        list_tab_windows(tp, lastused_win, &mut line);
+        list_tab_windows(tp, lastused_win);
     }
 }
 
 /// The `:tabs` entry for each window of `tabpage`.
-fn list_tab_windows(
-    tabpage: TabPage,
-    lastused_win: Option<Win>,
-    line: &mut [c_char; IOSIZE as usize],
-) {
+fn list_tab_windows(tabpage: TabPage, lastused_win: Option<Win>) {
     for wp in windows_in_tab(tabpage) {
         if got_int.get() {
             break;
@@ -415,37 +410,28 @@ fn list_tab_windows(
             ' ' as c_int
         });
         msg_char(' ' as c_int);
-        fill_name(wp.buffer(), line);
-        msg_line(line, 0);
+        msg_display(fill_name(wp.buffer()).as_cstr(), 0, false);
         os_breakcheck();
     }
 }
 
-/// `buffer`'s display name in `out`: the special name a scratch buffer has, or
-/// its file name with the home directory folded back to `~`.
-fn fill_name(buffer: Buf, out: &mut [c_char; IOSIZE as usize]) {
+/// `buffer`'s display name: the special name a scratch buffer has, or its
+/// file name with the home directory folded back to `~` -- cut, as upstream's
+/// `IObuff` cut it.
+fn fill_name(buffer: Buf) -> XString {
     let special = buf_spname(buffer);
-    let fname = buffer.name.shown_ptr();
-    let (out, size) = (out.as_mut_ptr(), IOSIZE as size_t);
     if special.is_null() {
-        // SAFETY: a live buffer and its own file name, into the buffer.
-        unsafe { home_replace(Some(buffer), fname, out, size, true) };
+        let fname = buffer.name.shown().unwrap_or(c"");
+        home_replace_in(Some(buffer), fname, IOSIZE as usize, true)
     } else {
-        // SAFETY: a NUL-terminated name, into the buffer.
-        unsafe { xstrlcpy(out, special, size) };
+        // SAFETY: a scratch buffer's NUL-terminated special name.
+        let special = unsafe { cstr::bytes_at(special) };
+        XString::from_bytes(&special[..special.len().min(IOSIZE as usize - 1)])
     }
 }
 
 fn msg_char(c: c_int) {
     msg_putchar(c);
-}
-
-/// Print what [`fill_name`] and friends left in `line`.
-fn msg_line(line: &[c_char; IOSIZE as usize], hl_id: c_int) {
-    // SAFETY: NUL-terminated by whatever filled it, and `msg_display` only
-    // reads it — the re-entry into the message machinery no longer reaches
-    // the same buffer, because this one belongs to `ex_tabs`.
-    msg_display(unsafe { cstr::at(line.as_ptr().cast_mut()) }, hl_id, false);
 }
 
 fn is_changed(buffer: Buf) -> bool {

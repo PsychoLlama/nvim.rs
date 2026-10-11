@@ -110,6 +110,17 @@ impl<'a> From<&'a CStr> for FmtArg<'a> {
     }
 }
 
+/// `None` is the null pointer a C caller would have passed, which `%s`
+/// prints as `[NULL]`.
+impl<'a> From<Option<&'a CStr>> for FmtArg<'a> {
+    #[inline(always)]
+    fn from(value: Option<&'a CStr>) -> Self {
+        value.map_or(FmtArg::Ptr(core::ptr::null()), |text| {
+            FmtArg::Str(text.to_bytes())
+        })
+    }
+}
+
 impl<'a> From<&'a [u8]> for FmtArg<'a> {
     #[inline(always)]
     fn from(value: &'a [u8]) -> Self {

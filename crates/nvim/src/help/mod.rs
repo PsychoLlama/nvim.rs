@@ -44,7 +44,7 @@ use crate::getchar::state::KeyTyped;
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
 use crate::memory::XString;
-use crate::memory::{xfree, xstrdup, xstrlcpy};
+use crate::memory::{xfree, xstrdup};
 use crate::message::e_noident;
 use crate::message::{emsg, emsg_multiline};
 use crate::message_fmt::{msg_cstr, msg_cstr_opt};
@@ -511,10 +511,6 @@ pub(crate) unsafe fn find_help_tags(
     keep_lang: bool,
 ) -> Result<(), Failed> {
     let mut err = Error::none();
-    // The search pattern lives here between the two calls below. Upstream
-    // uses the shared `IObuff`, and `find_tags` runs a tag function.
-    let mut pattern = [0 as c_char; IOSIZE as usize];
-    let iobuff = pattern.as_mut_ptr();
     let mut args = ArrayBuf::<1>::new();
     // SAFETY: `arg` is NUL-terminated and outlives the call, which only
     // reads it.
@@ -539,7 +535,12 @@ pub(crate) unsafe fn find_help_tags(
     let escaped = res
         .as_string()
         .expect("`vim._core.help.escape_subject()` answers with a string");
-    unsafe { xstrlcpy(iobuff, escaped.data(), IOSIZE as usize) };
+    // The search pattern, owned here: `find_tags` runs a tag function, and
+    // upstream's copy in the shared `IObuff` is cut to its size.
+    let escaped = escaped.as_bytes();
+    let mut pattern = escaped[..escaped.len().min(IOSIZE as usize - 1)].to_vec();
+    pattern.push(NUL as u8);
+    let iobuff = pattern.as_mut_ptr().cast::<c_char>();
     drop(res);
 
     let mut flags = (TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC) as c_int;

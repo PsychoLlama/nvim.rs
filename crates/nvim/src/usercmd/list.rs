@@ -26,6 +26,7 @@ use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, nlua_funcref_str};
 use crate::memory::xfree;
+use crate::message::msg_display_bytes;
 use crate::message::{
     message_filtered, msg, msg_display, msg_display_keys, msg_ext_set_kind, msg_putchar, msg_str,
     msg_str_hl, msg_title,
@@ -35,7 +36,7 @@ use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::line_breakcheck;
 use crate::printf_string;
 use crate::types::String_0;
-use crate::types::{ApiDict, ExArgt, IOSIZE, LuaRef, NUL, Object, UserCmd, int64_t, size_t};
+use crate::types::{ApiDict, ExArgt, LuaRef, NUL, Object, UserCmd, int64_t, size_t};
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -63,15 +64,13 @@ fn nargs_str(argt: ExArgt) -> &'static CStr {
 /// `over` is how far the name column overran; every following column is
 /// pulled left by it, and a column that would then start before the text
 /// already written still gets its one separating space.
-struct Cols<'a> {
-    buf: &'a mut [c_char],
-    len: usize,
+struct Cols {
+    buf: Vec<u8>,
 }
 
-impl Cols<'_> {
+impl Cols {
     fn push(&mut self, byte: u8) {
-        self.buf[self.len] = byte as c_char;
-        self.len += 1;
+        self.buf.push(byte);
     }
 
     fn put(&mut self, bytes: &[u8]) {
@@ -84,14 +83,14 @@ impl Cols<'_> {
     fn pad_to(&mut self, col: int64_t, over: int64_t) {
         loop {
             self.push(b' ');
-            if self.len as int64_t >= col - over {
+            if self.buf.len() as int64_t >= col - over {
                 return;
             }
         }
     }
 }
 
-impl core::fmt::Write for Cols<'_> {
+impl core::fmt::Write for Cols {
     fn write_str(&mut self, text: &str) -> core::fmt::Result {
         self.put(text.as_bytes());
         Ok(())
@@ -151,7 +150,6 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
 
 /// One command's row, from the flag column to the definition.
 fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
-    let mut middle = [0 as c_char; IOSIZE as usize];
     let a = cmd.uc_argt;
     // The flag column is right-aligned in four cells.
     let mut blank = 4;
@@ -184,10 +182,10 @@ fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
     let over = len as int64_t - 22;
 
     // The middle columns are assembled in one buffer and printed once.
-    {
+    // Upstream uses `IObuff`; the columns are a few dozen bytes.
+    let middle = {
         let mut cols = Cols {
-            buf: &mut middle[..],
-            len: 0,
+            buf: Vec::with_capacity(32),
         };
         cols.put(nargs_str(a).to_bytes());
         cols.pad_to(5, over);
@@ -216,11 +214,9 @@ fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
             cols.put(name.to_bytes());
         }
         cols.pad_to(25, over);
-
-        let end = cols.len;
-        cols.buf[end] = NUL as c_char;
-    }
-    msg_display(unsafe { cstr::at(middle.as_mut_ptr()) }, 0, false);
+        cols.buf
+    };
+    msg_display_bytes(&middle, 0, false);
 
     if cmd.uc_luaref != LUA_NOREF {
         let text = unsafe { nlua_funcref_str(cmd.uc_luaref) };

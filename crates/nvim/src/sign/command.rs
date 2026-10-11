@@ -20,33 +20,28 @@
 
 use super::*;
 use crate::cstr;
+use crate::message::msg_bytes;
 use crate::message_fmt::msg_cstr_opt;
 use crate::semsg;
 use crate::smsg;
 use crate::types::FAIL;
-use crate::vim_snprintf;
 use crate::winlayer::Win;
 
 /// The `"*"` group's only byte, and the leading zero a sign name may carry.
 const STAR: c_char = b'*'.cast_signed();
 const ZERO: c_char = b'0'.cast_signed();
 
-/// A `vim_snprintf` into a fresh [`MSG_BUF_LEN`] buffer, kept as bytes so the
-/// caller can hand the result straight back to `msg_str`.
+/// The translated `$fmt` formatted with the arguments, cut to what a
+/// [`MSG_BUF_LEN`] buffer holds.
 ///
 /// Every message in this module is bounded that way upstream; `MSG_BUF_LEN`
 /// is 480, and the format arguments (a file name, a group name, a sign name)
 /// can all exceed it, so the truncation is load-bearing rather than
 /// defensive.
 macro_rules! msg_buf {
-    ($fmt:expr $(, $arg:expr)* $(,)?) => {{
-        let mut buf = [0 as c_char; MSG_BUF_LEN as usize];
-        // SAFETY: the buffer is exactly the length passed, and the format
-        // string and arguments are the caller's. Every expansion is inside
-        // the caller's own `unsafe` block, so this carries none of its own.
-        unsafe { vim_snprintf!(buf.as_mut_ptr(), MSG_BUF_LEN as size_t, gettext($fmt).as_ptr() $(, $arg)*) };
-        buf
-    }};
+    ($fmt:expr $(, $arg:expr)* $(,)?) => {
+        $crate::formatted!(MSG_BUF_LEN as usize, gettext($fmt).to_bytes() $(, $arg)*)
+    };
 }
 
 /// The `:sign place` report for `rbuf`, or for every buffer when it is null.
@@ -68,10 +63,8 @@ pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
         }
         if buf_has_signs(cbuf) {
             msg_putchar('\n' as c_int);
-            // A live buffer's name is a NUL-terminated string, and the
-            // formatting happens inside `msg_buf!`'s own region.
-            let lbuf = msg_buf!(c"Signs for %s:", cbuf.name.shown_ptr());
-            msg_str_hl(cstr::in_chars(&lbuf), HLF_D, false);
+            let lbuf = msg_buf!(c"Signs for %s:", cbuf.name.shown());
+            msg_bytes(&lbuf, HLF_D, false);
         }
 
         // A group that names no namespace matches nothing, but still prints
@@ -98,30 +91,29 @@ fn report_signs(signs: &[MTKey]) {
     for (i, mark) in signs.iter().enumerate() {
         // SAFETY: the caller promised every mark carries a live sign.
         let sh = unsafe { Sh::new(decor_find_sign(mt_decor(*mark))) };
-        // Every `msg_buf!` expansion is inside the macro's own region, its
-        // arguments included.
         let namebuf = if sh.sign_name.is_null() {
-            [0; MSG_BUF_LEN as usize]
+            Vec::new()
         } else {
-            msg_buf!(c"  name=%s", sign_get_name(sh.raw()))
+            // SAFETY: the sign's own NUL-terminated name.
+            let name = unsafe { cstr::at(sign_get_name(sh.raw())) };
+            msg_buf!(c"  name=%s", name)
         };
         let groupbuf = if mark.ns == 0 {
-            [0; MSG_BUF_LEN as usize]
+            Vec::new()
         } else {
-            msg_buf!(
-                c"  group=%s",
-                describe_ns(mark.ns.cast_signed(), c"".as_ptr()),
-            )
+            // SAFETY: a namespace's NUL-terminated name, or the literal.
+            let group = unsafe { cstr::at(describe_ns(mark.ns.cast_signed(), c"".as_ptr())) };
+            msg_buf!(c"  group=%s", group)
         };
         let lbuf = msg_buf!(
             c"    line=%d  id=%u%s%s  priority=%d",
             mark.pos.row + 1,
             mark.id,
-            groupbuf.as_ptr(),
-            namebuf.as_ptr(),
+            &groupbuf[..],
+            &namebuf[..],
             c_int::from(sh.priority),
         );
-        msg_str(cstr::in_chars(&lbuf));
+        msg_bytes(&lbuf, 0, false);
         if i + 1 < signs.len() {
             msg_putchar('\n' as c_int);
         }
@@ -169,7 +161,7 @@ pub(crate) fn sign_list_defined(sign: SignRef) {
     }
     if sign.sn_priority > 0 {
         let lbuf = msg_buf!(c" priority=%d", sign.sn_priority);
-        msg_str(cstr::in_chars(&lbuf));
+        msg_bytes(&lbuf, 0, false);
     }
     let labels = [c" linehl=", c" texthl=", c" culhl=", c" numhl="];
     let ids = [

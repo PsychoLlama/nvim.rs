@@ -7,7 +7,6 @@ use crate::buffer::buf_get_changedtick;
 use crate::eval::vars::{set_vim_var_owned, vim_var_string};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::vim_snprintf;
 
 use crate::getchar::typeahead;
 use crate::guard::Suppress;
@@ -60,7 +59,7 @@ use crate::message_fmt::msg_cstr_opt;
 use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
-use crate::types::{Failed, GArray, IOSIZE, LineGetter, LineNr, OptInt, Vv, size_t};
+use crate::types::{Failed, GArray, IOSIZE, LineGetter, LineNr, OptInt, Vv};
 
 use crate::winlayer::{Buf, Live, Win};
 
@@ -449,14 +448,12 @@ pub(crate) fn ex_msg(msg: &'static CStr) -> CString {
 }
 
 /// [`ex_msg`] for a message with one `%s` in it.
+///
+/// Cut where upstream's `MSG_BUF_LEN` buffer cut it; an interior NUL in
+/// `arg` ends the message, as it did there.
 pub(crate) fn ex_errmsg(msg: &'static CStr, arg: &CStr) -> CString {
-    let mut buf = [0 as c_char; MSG_BUF_LEN as usize];
-    let size = MSG_BUF_LEN as size_t;
-    // SAFETY: a format holding one `%s`, its argument, and the whole of
-    // `buf` to write into. Both pointers are spelled out rather than left
-    // to a variadic's coercion.
-    unsafe { vim_snprintf!(buf.as_mut_ptr(), size, gettext(msg).as_ptr(), arg.as_ptr()) };
-    cstr::in_chars(&buf).to_owned()
+    let text = crate::formatted!(MSG_BUF_LEN as usize, gettext(msg).to_bytes(), arg);
+    CString::new(text).unwrap_or_default()
 }
 
 /// Cancel an exit that a QuitPre or ExitPre autocommand called off.

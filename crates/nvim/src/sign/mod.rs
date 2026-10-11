@@ -66,7 +66,7 @@ use crate::marktree::{marktree_itr_current, marktree_itr_next};
 use crate::mbyte::{MAX_SCHAR_SIZE, utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{e_argreq, e_dictreq, e_invarg, e_listreq};
-use crate::message::{emsg, msg_display, msg_putchar, msg_str, msg_str_hl, msg_title};
+use crate::message::{emsg, msg_display, msg_putchar, msg_str, msg_title};
 use crate::os::cshim::gettext;
 use crate::types::{
     DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText, Dict,
