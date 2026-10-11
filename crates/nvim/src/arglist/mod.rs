@@ -66,7 +66,8 @@ use crate::winlayer::{Buf, Live, Win, tab_windows};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-pub use all::{arg_all, ex_all};
+pub(crate) use all::arg_all_bytes;
+pub use all::ex_all;
 pub use command::{
     do_argfile, ex_argadd, ex_argdedupe, ex_argdelete, ex_argedit, ex_args, ex_argument, ex_last,
     ex_next, ex_previous, ex_rewind, get_arglist_name,

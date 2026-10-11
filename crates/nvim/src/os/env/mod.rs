@@ -26,10 +26,10 @@ pub use dirs::{
     vim_getenv,
 };
 pub(crate) use dirs::{home_replace_in, vim_getenv_owned};
-pub(crate) use expand::expand_env_save_opt_of;
 pub use expand::{
     expand_env, expand_env_esc, expand_env_into, expand_env_save, expand_env_save_opt,
 };
+pub(crate) use expand::{expand_env_esc_of, expand_env_save_opt_of};
 
 use crate::charset::skipwhite;
 use crate::cstr;

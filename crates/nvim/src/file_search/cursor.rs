@@ -13,7 +13,7 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Script;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::message_fmt::c_str;
 use crate::normal::visual_active;
 use crate::optionstr::OptString;
@@ -95,6 +95,15 @@ pub(crate) unsafe fn file_name_at_cursor(
             file_lnum,
         )
     }
+}
+
+/// [`file_name_at_cursor`], owned, with no line number wanted.
+pub(crate) fn file_name_at_cursor_owned(
+    options: FileNameOpts,
+    count: c_int,
+) -> Option<ThinCString> {
+    // SAFETY: no line-number slot; the answer is a fresh block or null.
+    unsafe { ThinCString::from_raw(file_name_at_cursor(options, count, ptr::null_mut())) }
 }
 
 /// The start of the file name around `line[col]`, or NULL when the rest of

@@ -552,3 +552,43 @@ fn where_a_line_came_from_expands_in_every_source() {
     ];
     assert_eq!(got, want);
 }
+
+/// `eval_vars` over the answers that need no file, no script and no
+/// cursor: what is not an item, a quoted item, and the items that fail
+/// with nothing to name. Runs under Miri, unlike the sourcing cases above.
+#[test]
+fn an_item_with_nothing_to_stand_for_says_why() {
+    use crate::ex_docmd::{Expansion, eval_vars, expand_sfile};
+    let _fx = Fixture::new();
+    let failed = |text: &std::ffi::CStr, at: usize| match eval_vars(text, at, None, true) {
+        Expansion::Refused(msg) => msg.to_string_lossy().into_owned(),
+        other => format!("{other:?}"),
+    };
+    assert_eq!(eval_vars(c"abc", 0, None, true), Expansion::Skip(1));
+    assert_eq!(eval_vars(c"<nosuch>", 0, None, true), Expansion::Skip(1));
+    assert_eq!(eval_vars(c"\\%", 1, None, true), Expansion::Quoted);
+    assert_eq!(eval_vars(c"\\%", 0, None, true), Expansion::Skip(1));
+    // The bare buffer has no name: `%` needs `:p:h` to be anything.
+    assert!(failed(c"%", 0).starts_with("E499:"), "{}", failed(c"%", 0));
+    assert_eq!(eval_vars(c"%", 0, None, false), Expansion::Skip(1));
+    assert_eq!(eval_vars(c"%:t", 0, None, false), Expansion::Skip(3));
+    assert!(failed(c"#9999", 0).starts_with("E194:"));
+    assert!(failed(c"<abuf>", 0).starts_with("E496:"));
+    assert!(failed(c"<afile>", 0).starts_with("E495:"));
+    assert!(failed(c"<amatch>", 0).starts_with("E497:"));
+    assert!(failed(c"<sfile>", 0).starts_with("E498:"));
+    // `<SID>` outside a script.
+    assert!(
+        failed(c"<SID>", 0).starts_with("E81:"),
+        "{}",
+        failed(c"<SID>", 0)
+    );
+    // `<sfile>` in an autocommand's command, read outside any script: the
+    // quoted one stays, without its backslash; the bare one fails.
+    assert_eq!(expand_sfile(b"echo 1"), Some(b"echo 1".to_vec()));
+    assert_eq!(
+        expand_sfile(b"x \\<sfile> y"),
+        Some(b"x <sfile> y".to_vec())
+    );
+    assert_eq!(expand_sfile(b"x <sfile>"), None);
+}

@@ -56,6 +56,25 @@ pub(crate) fn expand_env_save_opt_of(src: &CStr, one: bool) -> XString {
     unsafe { XString::from_raw(expand_env_save_opt(owned.as_mut_ptr().cast(), one)) }
 }
 
+/// [`expand_env_esc`] of a string the caller holds, into a `MAXPATHL`
+/// result of its own (cut where that buffer cuts it).
+pub(crate) fn expand_env_esc_of(src: &CStr, esc: bool, one: bool) -> XString {
+    let mut out = vec![0 as c_char; MAXPATHL as usize];
+    // SAFETY: a NUL-terminated source, a `MAXPATHL` buffer of this frame's,
+    // and no prefix.
+    unsafe {
+        expand_env_esc(
+            src.as_ptr(),
+            out.as_mut_ptr(),
+            MAXPATHL as c_int,
+            esc,
+            one,
+            ptr::null_mut(),
+        )
+    };
+    XString::from_cstr(crate::cstr::in_chars(&out))
+}
+
 /// Expand `$VAR` and a leading `~` in a path.
 ///
 /// # Safety

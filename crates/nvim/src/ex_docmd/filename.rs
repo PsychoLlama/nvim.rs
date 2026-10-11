@@ -1,39 +1,29 @@
 //! What a command's file argument stands for: `%`, `#`, the `<…>` family,
 //! wildcards, and the backtick form.
 //!
-//! Expansion rewrites the command line in place — every replacement is a
-//! fresh allocation the whole `ExArg` is repointed into, which is what
-//! `repl_cmdline` does and why it is the only place allowed to free the
-//! old line.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+//! Expansion rewrites the command line in place: every replacement is
+//! spliced into the `ExArg`'s own line by [`repl_cmdline`], which moves the
+//! cursors past it.
+#![forbid(unsafe_code)]
+use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::cstr;
 use crate::ex_cmds::newlnum;
-use crate::memory::{ThinCString, XString};
 use crate::optionstr::{OptString, local_or_global};
-use crate::snprintf;
-use crate::types::CmdIdx;
-use crate::types::EcmdCmd;
-
-use crate::cmdexpand::{WildMode, WildOpts};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use crate::types::{CmdIdx, EcmdCmd};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use crate::arglist::arg_all;
+use crate::arglist::arg_all_bytes;
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::buffer::find_buf;
-use crate::charset::{backslash_halve, getdigits_int};
-use crate::cmdexpand::expand_one;
+use crate::charset::{backslash_halved, getdigits_int_at};
 use crate::eval::fs::modify_fname;
 use crate::eval::skip_expr;
-use crate::eval::typval::NumBuf;
-use crate::eval::typval::list_find_str;
+use crate::eval::typval::{NumBuf, list_find_str};
 use crate::eval::vars::get_vim_var_list_handle;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::sourcing_entry;
 use crate::ex_docmd::state::ESCAPE_CHARS;
-use crate::ex_docmd::xfree;
 use crate::ex_docmd::{
     ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING, VALID_HEAD,
     VALID_PATH, e_no_autocommand_buffer_number_to_substitute_for_abuf,
@@ -42,28 +32,19 @@ use crate::ex_docmd::{
     e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
     e_no_script_file_name_to_substitute_for_script, e_no_source_file_name_to_substitute_for_sfile,
 };
-use crate::file_search::{FileNameOpts, file_name_at_cursor};
-use crate::memory::{xmemdupz, xstrdup};
-use crate::message::e_usingsid;
+use crate::file_search::{FileNameOpts, file_name_at_cursor_owned};
+use crate::message::{e_usingsid, emsg, msg_make};
+use crate::normal::ident_under_cursor;
 use crate::option::vars::{P_GP, P_MP, p_wic};
-use crate::runtime::state::current_sctx;
-
-use crate::message::{emsg, msg_make};
-use crate::normal::find_ident_under_cursor;
-
-use crate::os::env::{expand_env_esc, expand_env_save};
-use crate::path::{full_name_save, path_tail, path_try_shorten_fname};
-
+use crate::os::cshim::gettext;
+use crate::os::env::{expand_env_esc_of, expand_env_save_opt_of};
+use crate::path::{full_name_of, has_wildcard, tail_index, try_shorten_fname};
 use crate::quickfix::grep_internal;
-use crate::runtime::estack_sfile;
-use crate::strings::replaced_all;
-
-use crate::types::{
-    CmdLine, ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, MAXPATHL, Vv, size_t, ssize_t,
-    uint8_t,
-};
+use crate::runtime::estack_sfile_owned;
+use crate::runtime::state::current_sctx;
+use crate::strings::{escaped_bytes, replaced_all};
+use crate::types::{CmdLine, ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, MAXPATHL, Vv};
 use crate::winlayer::Buf;
-use ::libc::{strcat, strcpy, strpbrk, strrchr};
 
 /// `:make` and `:grep` are 'makeprg'/'grepprg' with `$*` replaced by the
 /// argument — spliced in here, before `%` and `#` are expanded, so that
@@ -120,21 +101,15 @@ pub fn replace_makeprg(excmd: &mut ExArg) -> bool {
 ///
 /// Every cursor into the line is re-read from the `CmdLine` after each
 /// replacement: an expansion *grows the buffer*, so an offset held across
-/// one is stale and a pointer held across one is worse.
+/// one is stale.
 pub(crate) fn expand_filename(
     excmd: &mut ExArg,
     errormsgp: &mut Option<CString>,
 ) -> Result<(), Failed> {
-    // `eval_vars` answers a static message or the empty marker, never a
-    // shared buffer, so the copy below is the whole of what owning it costs.
-    let mut msg: *const c_char = ptr::null();
-    // Where the environment variables in a file argument are expanded;
-    // upstream shares `NameBuff`.
-    let mut expanded = [0 as c_char; MAXPATHL as usize];
     // A `:vimgrep` pattern is not a file name, so the scan starts after
     // it.
     let mut at = skip_grep_pat(excmd);
-    let mut has_wildcards = path_has_wildcard(excmd.line.ptr_from(at));
+    let mut has_wildcards = has_wildcard(excmd.line.rest_of(at));
 
     while excmd.line.byte_at(at) != 0 {
         if excmd.line.byte_at(at) == b'`' && excmd.line.byte_at(at + 1) == b'=' {
@@ -146,42 +121,44 @@ pub(crate) fn expand_filename(
             }
             continue;
         }
-        if !has_char(c"%#<".as_ptr(), c_int::from(excmd.line.byte_at(at))) {
+        if !b"%#<".contains(&excmd.line.byte_at(at)) {
             at += 1;
             continue;
         }
 
-        let mut srclen: size_t = 0;
-        let mut escaped: c_int = 0;
-        let (src, arg) = (excmd.line.ptr_at(at), excmd.line.ptr_at(excmd.line.arg));
-        // SAFETY: both are cursors into the command's own line, and the
-        // three out-parameters are this frame's.
-        let mut repl = unsafe {
-            eval_vars(
-                src,
-                arg,
-                &raw mut srclen,
-                &raw mut excmd.do_ecmd_lnum,
-                &raw mut msg,
-                &raw mut escaped,
-                true,
-            )
+        // The items are read relative to the argument: a backslash before
+        // one quotes it, but only from inside the argument.
+        let base = excmd.line.arg;
+        let found = eval_vars(
+            excmd.line.cstr_from(base),
+            at - base,
+            Some(&mut excmd.do_ecmd_lnum),
+            true,
+        );
+        let (mut repl, srclen, escaped) = match found {
+            Expansion::Refused(msg) => {
+                *errormsgp = Some(msg.to_owned());
+                return Err(Failed);
+            }
+            Expansion::Skip(len) => {
+                at += len;
+                continue;
+            }
+            Expansion::Quoted => {
+                // Take the backslash out; the item stays, and the scan
+                // resumes on the byte after its first.
+                excmd.line.drop_byte(at - 1);
+                continue;
+            }
+            Expansion::Text {
+                text,
+                used,
+                escaped,
+            } => (text, used, escaped),
         };
-        if !msg.is_null() {
-            // SAFETY: `eval_vars` answers a NUL-terminated static message.
-            *errormsgp = Some(unsafe { CStr::from_ptr(msg) }.to_owned());
-            return Err(Failed);
-        }
-        if repl.is_null() {
-            at += srclen;
-            continue;
-        }
 
-        if has_char(repl, '$' as c_int) || has_char(repl, '~' as c_int) {
-            let old = repl;
-            // SAFETY: `repl` is the NUL-terminated block `eval_vars` gave.
-            repl = unsafe { expand_env_save(repl) };
-            xfree(old as *mut c_void);
+        if repl.contains(&b'$') || repl.contains(&b'~') {
+            repl = expand_env_save_opt_of(&cstr::owned(&repl), false).to_vec();
         }
 
         // A name that will be handed to a *file* argument gets the
@@ -189,8 +166,9 @@ pub(crate) fn expand_filename(
         // that hand the whole argument to a shell themselves, and not
         // for a name that came back already escaped (`##`).
         let idx = excmd.cmdidx;
+        let escape_chars = ESCAPE_CHARS.to_bytes();
         if !excmd.usefilter
-            && escaped == 0
+            && !escaped
             && idx != CmdIdx::bang
             && idx != CmdIdx::grep
             && idx != CmdIdx::grepadd
@@ -200,33 +178,19 @@ pub(crate) fn expand_filename(
             && idx != CmdIdx::make
             && idx != CmdIdx::terminal
             && !excmd.argt.has(ExArgt::NOSPC)
+            && repl.iter().any(|byte| escape_chars.contains(byte))
         {
-            let mut l = repl;
-            // SAFETY: `l` walks the NUL-terminated replacement.
-            while unsafe { *l } != 0 {
-                if has_char(ESCAPE_CHARS.as_ptr(), byte(l) as uint8_t as c_int) {
-                    let escaped_repl = vim_strsave_escaped(repl, ESCAPE_CHARS.as_ptr());
-                    xfree(repl as *mut c_void);
-                    repl = escaped_repl;
-                    break;
-                }
-                l = unsafe { l.add(1) };
-            }
+            repl = escaped_bytes(&repl, escape_chars).to_vec();
         }
         // A `!` in the replacement would be read as "the previous
         // command" by the shell-command line parser.
-        // SAFETY: `repl` is NUL-terminated.
         if (excmd.usefilter || idx == CmdIdx::bang || idx == CmdIdx::terminal)
-            && !unsafe { strpbrk(repl, c"!".as_ptr()) }.is_null()
+            && repl.contains(&b'!')
         {
-            let escaped_repl = vim_strsave_escaped(repl, c"!".as_ptr());
-            xfree(repl as *mut c_void);
-            repl = escaped_repl;
+            repl = escaped_bytes(&repl, b"!").to_vec();
         }
 
-        // SAFETY: as above -- the replacement is NUL-terminated.
-        at = repl_cmdline(excmd, at, srclen, unsafe { cstr::bytes_at(repl) });
-        xfree(repl as *mut c_void);
+        at = repl_cmdline(excmd, at, srclen, &repl);
     }
 
     // `ExArgt::NOSPC` means the argument is one file name, so wildcards in
@@ -235,26 +199,24 @@ pub(crate) fn expand_filename(
         return Ok(());
     }
 
+    let (start, len) = (excmd.line.arg, excmd.line.rest_of(excmd.line.arg).len());
     if has_wildcards {
         // Environment variables first: they may hold the wildcards, or
         // may be all that looked like one.
-        let arg = excmd.line.ptr_at(excmd.line.arg);
-        if has_char(arg, '$' as c_int) || has_char(arg, '~' as c_int) {
-            let out = expanded.as_mut_ptr();
-            // SAFETY: `out` is this frame's `MAXPATHL` buffer and `arg` is
-            // the command's own argument.
-            unsafe { expand_env_esc(arg, out, MAXPATHL, true, true, ptr::null_mut()) };
-            has_wildcards = path_has_wildcard(out);
-            // SAFETY: `expand_env_esc` leaves `out` NUL-terminated.
-            let out = unsafe { cstr::bytes_at(out) }.to_vec();
-            let (start, len) = (excmd.line.arg, excmd.line.rest_of(excmd.line.arg).len());
+        let arg = excmd.line.rest_of(start);
+        if arg.contains(&b'$') || arg.contains(&b'~') {
+            let out = expand_env_esc_of(excmd.line.cstr_from(start), true, true);
+            has_wildcards = has_wildcard(&out);
             repl_cmdline(excmd, start, len, &out);
         }
     }
     if !has_wildcards {
-        let arg = excmd.line.ptr_at(excmd.line.arg);
-        // SAFETY: the command's own argument, NUL-terminated.
-        unsafe { backslash_halve(arg) };
+        // The backslashes go, in place: the argument only gets shorter.
+        let halved = backslash_halved(excmd.line.rest_of(excmd.line.arg));
+        let at = excmd.line.arg;
+        let text = excmd.line.buffer_mut();
+        text[at..at + halved.len()].copy_from_slice(&halved);
+        text[at + halved.len()] = 0;
         return Ok(());
     }
 
@@ -314,21 +276,21 @@ const SPECIALS: [&CStr; 15] = [
     c"<SID>",    // the script ID, as `<SNR>123_`
 ];
 
-const SPEC_PERC: ssize_t = 0;
-const SPEC_HASH: ssize_t = 1;
-const SPEC_CWORD: ssize_t = 2;
-const SPEC_CCWORD: ssize_t = 3;
-const SPEC_CEXPR: ssize_t = 4;
-const SPEC_CFILE: ssize_t = 5;
-const SPEC_SFILE: ssize_t = 6;
-const SPEC_SLNUM: ssize_t = 7;
-const SPEC_STACK: ssize_t = 8;
-const SPEC_SCRIPT: ssize_t = 9;
-const SPEC_AFILE: ssize_t = 10;
-const SPEC_ABUF: ssize_t = 11;
-const SPEC_AMATCH: ssize_t = 12;
-const SPEC_SFLNUM: ssize_t = 13;
-const SPEC_SID: ssize_t = 14;
+const SPEC_PERC: usize = 0;
+const SPEC_HASH: usize = 1;
+const SPEC_CWORD: usize = 2;
+const SPEC_CCWORD: usize = 3;
+const SPEC_CEXPR: usize = 4;
+const SPEC_CFILE: usize = 5;
+const SPEC_SFILE: usize = 6;
+const SPEC_SLNUM: usize = 7;
+const SPEC_STACK: usize = 8;
+const SPEC_SCRIPT: usize = 9;
+const SPEC_AFILE: usize = 10;
+const SPEC_ABUF: usize = 11;
+const SPEC_AMATCH: usize = 12;
+const SPEC_SFLNUM: usize = 13;
+const SPEC_SID: usize = 14;
 
 /// The special item `text` starts with, as its index in `SPECIALS` and its
 /// length; the slice form of [`find_cmdline_var`].
@@ -339,506 +301,293 @@ pub(crate) fn cmdline_var_at(text: &[u8]) -> Option<(usize, usize)> {
     })
 }
 
-/// Does `src` start with one of the special items? Answers its index and
-/// sets `*usedlen` to its length, or answers −1.
-///
-/// # Safety
-///
-/// `src` must point at a NUL-terminated string. `usedlen` must point at a
-/// writable `size_t` the caller owns.
-pub unsafe fn find_cmdline_var(src: *const c_char, usedlen: *mut size_t) -> ssize_t {
-    for (i, spec) in SPECIALS.iter().enumerate() {
-        let len = spec.to_bytes().len() as size_t;
-        if starts_with(src, spec.to_bytes()) {
-            unsafe { *usedlen = len };
-            return i as ssize_t;
-        }
-    }
-    -1
+/// What [`eval_vars`] found at an offset.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Expansion {
+    /// Nothing to substitute: the caller steps over this many bytes.
+    Skip(usize),
+    /// A backslash before the item quotes it: the caller deletes the
+    /// backslash, and the item stays as it is.
+    Quoted,
+    /// What the item stands for, and how many bytes of the source it
+    /// replaces, its modifiers included. `escaped` is `##`, whose names come
+    /// back escaped already.
+    Text {
+        text: Vec<u8>,
+        used: usize,
+        escaped: bool,
+    },
+    /// The expansion failed; the message is empty when there is nothing to
+    /// say (a `<cword>` with no word, say), and the caller stops.
+    Refused(&'static CStr),
 }
 
-/// [`eval_vars`] of the special item `text` opens with (`%`, `#`,
-/// `<cword>`, ...) with nothing before it, which is `expand()`'s question:
-/// the expansion, and the error message -- which may be empty -- when it
-/// failed.
-pub(crate) fn eval_vars_leading(text: &CStr) -> (Option<ThinCString>, Option<CString>) {
-    // A copy, because `eval_vars` is handed a writable cursor.
-    let mut copy = text.to_bytes_with_nul().to_vec();
-    let src = copy.as_mut_ptr().cast::<c_char>();
-    let (mut used, mut errormsg): (size_t, *const c_char) = (0, ptr::null());
-    let none = (ptr::null_mut(), ptr::null_mut());
-    // SAFETY: `src` is this frame's NUL-terminated copy and also the start
-    // of the line, so nothing before it is touched; the two out-parameters
-    // are locals, and the other two are not asked for. The answer is a fresh
-    // block or null, and the message a NUL-terminated static one or null;
-    // both are taken over or copied here.
-    unsafe {
-        let expanded = eval_vars(
-            src,
-            src,
-            &raw mut used,
-            none.0,
-            &raw mut errormsg,
-            none.1,
-            false,
-        );
-        (
-            ThinCString::from_raw(expanded),
-            cstr::at_opt(errormsg).map(CStr::to_owned),
-        )
-    }
-}
+/// The empty message an expansion that failed quietly answers.
+const QUIET: &CStr = c"";
 
-/// Expand one special item at `src` into a freshly allocated string.
+/// Expand the special item at `at` in `src` (`%`, `#`, `<cword>`, ...),
+/// with any `:p:h`-style modifiers after it.
 ///
-/// `*usedlen` comes back as how much of `src` was consumed, which includes
-/// any `:p:h`-style modifiers. A null answer with `*errormsg` unset means
-/// "nothing here": the caller steps over `*usedlen` bytes and carries on.
-///
-/// `empty_is_error` is what tells an expansion that produced nothing from
-/// one that is not allowed to.
-///
-/// # Safety
-///
-/// `src` must point at a NUL-terminated string, unaliased for the call.
-/// `srcstart` must point at a NUL-terminated string. `usedlen` must point at
-/// a writable `size_t` the caller owns. `lnump` must point at a writable line
-/// number the caller owns. `errormsg` must point at a writable `*const
-/// c_char` slot the caller owns for the call. `escaped` must point at a
-/// writable `int` the caller owns.
-pub unsafe fn eval_vars(
-    src: *mut c_char,
-    srcstart: *const c_char,
-    usedlen: *mut size_t,
-    lnump: *mut LineNr,
-    errormsg: *mut *const c_char,
-    escaped: *mut c_int,
+/// `src` is the whole string the item is read from: the byte before `at`
+/// is what says a backslash quotes it. `lnum` is set to `newlnum::LAST` by
+/// `#`, which means "the alternate file's last position". With
+/// `empty_is_error`, an expansion that produced nothing is
+/// [`Expansion::Refused`] rather than [`Expansion::Skip`].
+pub(crate) fn eval_vars(
+    src: &CStr,
+    at: usize,
+    lnum: Option<&mut LineNr>,
     empty_is_error: bool,
-) -> *mut c_char {
-    let mut result: *mut c_char = c"".as_ptr() as *mut c_char;
-    let mut resultbuf: *mut c_char = ptr::null_mut();
-    // The name the filename modifiers made, which `result` points into.
-    let mut modified: Vec<u8>;
-    let mut resultlen: size_t;
-    let mut valid = VALID_HEAD as c_int | VALID_PATH as c_int;
-    let mut tilde_file = false;
-    let mut skip_mod = false;
-    let mut strbuf: [c_char; 30] = [0; 30];
-    let mut numbuf = NumBuf::new();
-    unsafe { *errormsg = ptr::null() };
-    if !escaped.is_null() {
-        unsafe { *escaped = 0 };
+) -> Expansion {
+    let whole = src.to_bytes();
+    let text = &whole[at..];
+    // The item and what follows it, as `modify_fname` reads its modifiers.
+    let mods = CStr::from_bytes_until_nul(&src.to_bytes_with_nul()[at..])
+        .expect("a tail of a terminated string");
+    let byte = |i: usize| text.get(i).copied().unwrap_or(0);
+
+    let Some((spec_idx, mut used)) = cmdline_var_at(text) else {
+        return Expansion::Skip(1);
+    };
+    // A backslash before it means "take it literally".
+    if at > 0 && whole[at - 1] == b'\\' {
+        return Expansion::Quoted;
     }
 
-    let spec_idx = unsafe { find_cmdline_var(src, usedlen) };
-    if spec_idx < 0 {
-        unsafe { *usedlen = 1 };
-        return ptr::null_mut();
-    }
-
-    // A backslash before it means "take it literally": remove the
-    // backslash and answer nothing.
-    if src > srcstart as *mut c_char && byte_at(src, -1) == '\\' as c_int {
-        unsafe { *usedlen = 0 };
-        // SAFETY: the byte before `src` is the backslash just tested for.
-        move_bytes(unsafe { src.offset(-1) }, src, len_of(src) + 1);
-        return ptr::null_mut();
-    }
-
-    if spec_idx == SPEC_CWORD || spec_idx == SPEC_CCWORD || spec_idx == SPEC_CEXPR {
+    if matches!(spec_idx, SPEC_CWORD | SPEC_CCWORD | SPEC_CEXPR) {
         let what = match spec_idx {
             SPEC_CWORD => FIND_IDENT as c_int | FIND_STRING as c_int,
             SPEC_CEXPR => FIND_IDENT as c_int | FIND_STRING as c_int | FIND_EVAL as c_int,
             _ => FIND_STRING as c_int,
         };
-        resultlen = unsafe { find_ident_under_cursor(&raw mut result, what, ptr::null_mut()) };
-        if resultlen == 0 {
-            // An empty message: the caller reports nothing, but stops.
-            unsafe { *errormsg = c"".as_ptr() };
-            return ptr::null_mut();
+        // No modifiers: `<cword>:t` leaves the `:t` where it is.
+        let ident = ident_under_cursor(what);
+        if ident.is_empty() {
+            return Expansion::Refused(QUIET);
         }
-    } else {
-        match spec_idx {
-            SPEC_PERC => {
-                if Buf::current().name.is_unnamed() {
-                    result = c"".as_ptr() as *mut c_char;
-                    valid = 0;
-                } else {
-                    result = Buf::current().name.shown_ptr();
-                    tilde_file = equals(result, b"~");
-                }
-            }
-            SPEC_HASH => {
-                if byte_at(src, 1) == '#' as c_int {
-                    // `##` is the whole argument list, already escaped.
-                    result = arg_all();
-                    resultbuf = result;
-                    unsafe { *usedlen = 2 };
-                    if !escaped.is_null() {
-                        unsafe { *escaped = 1 };
-                    }
-                    skip_mod = true;
-                } else {
-                    let mut s = unsafe { src.add(1) };
-                    if byte(s) == '<' as c_int {
-                        s = unsafe { s.add(1) };
-                    }
-                    let i = unsafe { getdigits_int(&raw mut s, false, 0) };
-                    // `#-` is not a negative buffer number; give the `-`
-                    // back.
-                    if s == unsafe { src.add(2) } && byte_at(src, 1) == '-' as c_int {
-                        s = unsafe { s.offset(-1) };
-                    }
-                    unsafe { *usedlen = s.offset_from(src) as size_t };
-
-                    if byte_at(src, 1) == '<' as c_int && i != 0 {
-                        // `#<3` is the third entry of `v:oldfiles`.
-                        if unsafe { *usedlen } < 2 {
-                            unsafe { *usedlen = 1 };
-                            return ptr::null_mut();
-                        }
-                        let oldfiles = get_vim_var_list_handle(Vv::Oldfiles);
-                        result = list_find_str(oldfiles.as_deref(), i - 1, &mut numbuf)
-                            .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
-                        if result.is_null() {
-                            unsafe { *errormsg = c"".as_ptr() };
-                            return ptr::null_mut();
-                        }
-                    } else {
-                        if i == 0 && byte_at(src, 1) == '<' as c_int && unsafe { *usedlen } > 1 {
-                            unsafe { *usedlen = 1 };
-                        }
-                        let Some(buf) = find_buf(i) else {
-                            unsafe {
-                                *errormsg = gettext(
-                                    c"E194: No alternate file name to substitute for '#'".as_ptr(),
-                                )
-                            };
-                            return ptr::null_mut();
-                        };
-                        if !lnump.is_null() {
-                            unsafe { *lnump = newlnum::LAST as LineNr };
-                        }
-                        if buf.name.is_unnamed() {
-                            result = c"".as_ptr() as *mut c_char;
-                            valid = 0;
-                        } else {
-                            result = buf.name.shown_ptr();
-                            tilde_file = equals(result, b"~");
-                        }
-                    }
-                }
-            }
-            SPEC_CFILE => {
-                result = unsafe {
-                    file_name_at_cursor(FileNameOpts::MESS | FileNameOpts::HYP, 1, ptr::null_mut())
-                };
-                if result.is_null() {
-                    unsafe { *errormsg = c"".as_ptr() };
-                    return ptr::null_mut();
-                }
-                resultbuf = result;
-            }
-            SPEC_AFILE => {
-                // The autocommand's file name is shortened on first use
-                // and the shortened form is kept.
-                if autocmd_fname.with(Option::is_some) && !autocmd_fname_full.get() {
-                    autocmd_fname_full.set(true);
-                    let short = autocmd_fname.with(|name| name.clone().unwrap_or_default());
-                    // SAFETY: a NUL-terminated copy of the name.
-                    let full = unsafe { full_name_save(short.as_ptr(), false) };
-                    // SAFETY: `full_name_save` answers a NUL-terminated copy.
-                    let mut name = XString::from_cstr(unsafe { CStr::from_ptr(full) });
-                    // Cut as upstream's `xstrlcpy` into the MAXPATHL buffer.
-                    name.truncate(MAXPATHL as usize - 1);
-                    autocmd_fname.set(Some(name));
-                    xfree(full as *mut c_void);
-                }
-                // Points into the cell, which nothing writes before the
-                // caller has copied the expansion out.
-                result = autocmd_fname.with(|name| {
-                    name.as_ref()
-                        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
-                });
-                if result.is_null() {
-                    unsafe {
-                        *errormsg =
-                            gettext(e_no_autocommand_file_name_to_substitute_for_afile.as_ptr())
-                    };
-                    return ptr::null_mut();
-                }
-                result = unsafe { path_try_shorten_fname(result) };
-            }
-            SPEC_ABUF => {
-                if autocmd_bufnr.get() <= 0 {
-                    unsafe {
-                        *errormsg =
-                            gettext(e_no_autocommand_buffer_number_to_substitute_for_abuf.as_ptr())
-                    };
-                    return ptr::null_mut();
-                }
-                unsafe {
-                    snprintf!(
-                        &raw mut strbuf as *mut c_char,
-                        size_of::<[c_char; 30]>(),
-                        c"%d".as_ptr(),
-                        autocmd_bufnr.get(),
-                    )
-                };
-                result = &raw mut strbuf as *mut c_char;
-            }
-            SPEC_AMATCH => {
-                // As `<afile>`'s, a pointer into the cell.
-                result = autocmd_match.with(|name| {
-                    name.as_ref()
-                        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
-                });
-                if result.is_null() {
-                    unsafe {
-                        *errormsg =
-                            gettext(e_no_autocommand_match_name_to_substitute_for_amatch.as_ptr())
-                    };
-                    return ptr::null_mut();
-                }
-            }
-            SPEC_SFILE | SPEC_STACK | SPEC_SCRIPT => {
-                let (which, msg) = match spec_idx {
-                    SPEC_SFILE => (
-                        ESTACK_SFILE,
-                        e_no_source_file_name_to_substitute_for_sfile.as_ptr(),
-                    ),
-                    SPEC_STACK => (
-                        ESTACK_STACK,
-                        e_no_call_stack_to_substitute_for_stack.as_ptr(),
-                    ),
-                    _ => (
-                        ESTACK_SCRIPT,
-                        e_no_script_file_name_to_substitute_for_script.as_ptr(),
-                    ),
-                };
-                result = estack_sfile(which);
-                if result.is_null() {
-                    unsafe { *errormsg = gettext(msg as *const c_char) };
-                    return ptr::null_mut();
-                }
-                resultbuf = result;
-            }
-            SPEC_SLNUM => {
-                let entry = &sourcing_entry();
-                if entry.es_name.is_null() || entry.es_lnum == 0 {
-                    unsafe { *errormsg = gettext(e_no_line_number_to_use_for_slnum.as_ptr()) };
-                    return ptr::null_mut();
-                }
-                unsafe {
-                    snprintf!(
-                        &raw mut strbuf as *mut c_char,
-                        size_of::<[c_char; 30]>(),
-                        c"%d".as_ptr(),
-                        entry.es_lnum,
-                    )
-                };
-                result = &raw mut strbuf as *mut c_char;
-            }
-            SPEC_SFLNUM => {
-                // The line the *script* is on, which is the script's own
-                // offset plus the line inside it.
-                let lnum = current_sctx.get().sc_lnum + sourcing_entry().es_lnum;
-                if lnum == 0 {
-                    unsafe { *errormsg = gettext(e_no_line_number_to_use_for_sflnum.as_ptr()) };
-                    return ptr::null_mut();
-                }
-                unsafe {
-                    snprintf!(
-                        &raw mut strbuf as *mut c_char,
-                        size_of::<[c_char; 30]>(),
-                        c"%d".as_ptr(),
-                        lnum,
-                    )
-                };
-                result = &raw mut strbuf as *mut c_char;
-            }
-            SPEC_SID => {
-                if current_sctx.get().sc_sid <= 0 {
-                    unsafe { *errormsg = gettext(e_usingsid.as_ptr()) };
-                    return ptr::null_mut();
-                }
-                unsafe {
-                    snprintf!(
-                        &raw mut strbuf as *mut c_char,
-                        size_of::<[c_char; 30]>(),
-                        c"<SNR>%d_".as_ptr(),
-                        current_sctx.get().sc_sid,
-                    )
-                };
-                result = &raw mut strbuf as *mut c_char;
-            }
-            _ => {
-                unsafe { *errormsg = c"".as_ptr() };
-            }
-        }
-
-        resultlen = len_of(result);
-        if byte_at(src, unsafe { *usedlen } as isize) == '<' as c_int {
-            // A trailing `<` drops the extension.
-            unsafe { *usedlen += 1 };
-            let dot = unsafe { strrchr(result, '.' as c_int) };
-            if !dot.is_null() && dot >= unsafe { path_tail(result) } {
-                resultlen = unsafe { dot.offset_from(result) } as size_t;
-            }
-        } else if !skip_mod {
-            // SAFETY: the caller's text and the NUL-terminated name `result`
-            // points at; `usedlen` is the caller's.
-            let (mods, name, used) =
-                unsafe { (CStr::from_ptr(src), CStr::from_ptr(result), &mut *usedlen) };
-            let reached;
-            (reached, modified) = modify_fname(mods, used, tilde_file, name, resultlen);
-            valid |= reached;
-            result = modified.as_mut_ptr().cast();
-            resultlen = modified.len();
-        }
+        return Expansion::Text {
+            text: ident,
+            used,
+            escaped: false,
+        };
     }
 
-    if resultlen == 0 || valid != VALID_HEAD as c_int + VALID_PATH as c_int {
-        if empty_is_error {
-            unsafe {
-                *errormsg = if valid != VALID_HEAD as c_int + VALID_PATH as c_int {
-                    gettext(
-                        c"E499: Empty file name for '%' or '#', only works with \":p:h\"".as_ptr(),
-                    )
-                } else {
-                    gettext(c"E500: Evaluates to an empty string".as_ptr())
+    let mut valid = VALID_HEAD as c_int | VALID_PATH as c_int;
+    let mut tilde_file = false;
+    let mut skip_mod = false;
+    let mut escaped = false;
+    let name: CString = match spec_idx {
+        SPEC_PERC => match Buf::current().name.shown() {
+            None => {
+                valid = 0;
+                CString::default()
+            }
+            Some(name) => {
+                tilde_file = name == c"~";
+                name.to_owned()
+            }
+        },
+        SPEC_HASH if byte(1) == b'#' => {
+            // `##` is the whole argument list, already escaped.
+            used = 2;
+            escaped = true;
+            skip_mod = true;
+            cstr::owned(&arg_all_bytes())
+        }
+        SPEC_HASH => {
+            let start = if byte(1) == b'<' { 2 } else { 1 };
+            let (i, mut past) = getdigits_int_at(text, start, false, 0);
+            // `#-` is not a negative buffer number; give the `-` back.
+            if past == 2 && byte(1) == b'-' {
+                past -= 1;
+            }
+            used = past;
+            if byte(1) == b'<' && i != 0 {
+                // `#<3` is the third entry of `v:oldfiles`.
+                if used < 2 {
+                    return Expansion::Skip(1);
                 }
+                let oldfiles = get_vim_var_list_handle(Vv::Oldfiles);
+                let mut numbuf = NumBuf::new();
+                match list_find_str(oldfiles.as_deref(), i - 1, &mut numbuf) {
+                    None => return Expansion::Refused(QUIET),
+                    Some(name) => name.to_owned(),
+                }
+            } else {
+                if i == 0 && byte(1) == b'<' && used > 1 {
+                    used = 1;
+                }
+                let Some(buf) = find_buf(i) else {
+                    return Expansion::Refused(gettext(
+                        c"E194: No alternate file name to substitute for '#'",
+                    ));
+                };
+                if let Some(lnum) = lnum {
+                    *lnum = newlnum::LAST as LineNr;
+                }
+                match buf.name.shown() {
+                    None => {
+                        valid = 0;
+                        CString::default()
+                    }
+                    Some(name) => {
+                        tilde_file = name == c"~";
+                        name.to_owned()
+                    }
+                }
+            }
+        }
+        SPEC_CFILE => match file_name_at_cursor_owned(FileNameOpts::MESS | FileNameOpts::HYP, 1) {
+            None => return Expansion::Refused(QUIET),
+            Some(name) => name.as_cstr().to_owned(),
+        },
+        SPEC_AFILE => {
+            // The autocommand's file name is shortened on first use and the
+            // shortened form is kept.
+            if autocmd_fname.with(Option::is_some) && !autocmd_fname_full.get() {
+                autocmd_fname_full.set(true);
+                let short = autocmd_fname.with(|name| name.clone().unwrap_or_default());
+                let mut name = full_name_of(short.as_cstr(), false);
+                // Cut as upstream's `xstrlcpy` into the MAXPATHL buffer.
+                name.truncate(MAXPATHL as usize - 1);
+                autocmd_fname.set(Some(name));
+            }
+            let Some(name) =
+                autocmd_fname.with(|name| name.as_ref().map(|n| n.as_cstr().to_owned()))
+            else {
+                return Expansion::Refused(gettext(
+                    e_no_autocommand_file_name_to_substitute_for_afile,
+                ));
             };
+            try_shorten_fname(&name).to_owned()
         }
-        result = ptr::null_mut();
-    } else {
-        result = unsafe { xmemdupz(result as *const c_void, resultlen) } as *mut c_char;
+        SPEC_ABUF => {
+            if autocmd_bufnr.get() <= 0 {
+                return Expansion::Refused(gettext(
+                    e_no_autocommand_buffer_number_to_substitute_for_abuf,
+                ));
+            }
+            number(autocmd_bufnr.get())
+        }
+        SPEC_AMATCH => {
+            match autocmd_match.with(|name| name.as_ref().map(|n| n.as_cstr().to_owned())) {
+                None => {
+                    return Expansion::Refused(gettext(
+                        e_no_autocommand_match_name_to_substitute_for_amatch,
+                    ));
+                }
+                Some(name) => name,
+            }
+        }
+        SPEC_SFILE | SPEC_STACK | SPEC_SCRIPT => {
+            let (which, msg) = match spec_idx {
+                SPEC_SFILE => (ESTACK_SFILE, e_no_source_file_name_to_substitute_for_sfile),
+                SPEC_STACK => (ESTACK_STACK, e_no_call_stack_to_substitute_for_stack),
+                _ => (
+                    ESTACK_SCRIPT,
+                    e_no_script_file_name_to_substitute_for_script,
+                ),
+            };
+            match estack_sfile_owned(which) {
+                None => return Expansion::Refused(gettext(msg)),
+                Some(name) => name.as_cstr().to_owned(),
+            }
+        }
+        SPEC_SLNUM => {
+            let entry = &sourcing_entry();
+            if entry.es_name.is_null() || entry.es_lnum == 0 {
+                return Expansion::Refused(gettext(e_no_line_number_to_use_for_slnum));
+            }
+            number(entry.es_lnum)
+        }
+        SPEC_SFLNUM => {
+            // The line the *script* is on, which is the script's own
+            // offset plus the line inside it.
+            let lnum = current_sctx.get().sc_lnum + sourcing_entry().es_lnum;
+            if lnum == 0 {
+                return Expansion::Refused(gettext(e_no_line_number_to_use_for_sflnum));
+            }
+            number(lnum)
+        }
+        SPEC_SID => {
+            let sid = current_sctx.get().sc_sid;
+            if sid <= 0 {
+                return Expansion::Refused(gettext(e_usingsid));
+            }
+            cstr::owned(format!("<SNR>{sid}_").as_bytes())
+        }
+        _ => unreachable!("an index into `SPECIALS`"),
+    };
+
+    let mut result = name.into_bytes();
+    if byte(used) == b'<' {
+        // A trailing `<` drops the extension.
+        used += 1;
+        if let Some(dot) = result.iter().rposition(|&b| b == b'.')
+            && dot >= tail_index(&result)
+        {
+            result.truncate(dot);
+        }
+    } else if !skip_mod {
+        let name = cstr::owned(&result);
+        let (reached, modified) = modify_fname(mods, &mut used, tilde_file, &name, result.len());
+        valid |= reached;
+        result = modified;
     }
-    xfree(resultbuf as *mut c_void);
-    result
+
+    if result.is_empty() || valid != VALID_HEAD as c_int + VALID_PATH as c_int {
+        if !empty_is_error {
+            return Expansion::Skip(used);
+        }
+        return Expansion::Refused(if valid != VALID_HEAD as c_int + VALID_PATH as c_int {
+            gettext(c"E499: Empty file name for '%' or '#', only works with \":p:h\"")
+        } else {
+            gettext(c"E500: Evaluates to an empty string")
+        });
+    }
+    Expansion::Text {
+        text: result,
+        used,
+        escaped,
+    }
+}
+
+/// A number, as the items that are one spell it.
+fn number(n: impl core::fmt::Display) -> CString {
+    cstr::owned(n.to_string().as_bytes())
 }
 
 /// Expand every `<sfile>` in `arg`, in a fresh copy.
 ///
-/// Answers null after reporting, when an expansion failed.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
-    let mut result = unsafe { xstrdup(arg) };
-    let mut p = result;
-    while unsafe { *p } != 0 {
-        if !starts_with(p, b"<sfile>") {
-            p = unsafe { p.add(1) };
+/// Answers `None` after reporting, when an expansion failed.
+pub(crate) fn expand_sfile(arg: &[u8]) -> Option<Vec<u8>> {
+    let mut result = arg.to_vec();
+    result.push(0);
+    let mut p = 0;
+    while result[p] != 0 {
+        if !result[p..].starts_with(b"<sfile>") {
+            p += 1;
             continue;
         }
-        let mut srclen: size_t = 0;
-        let mut errormsg: *const c_char = ptr::null();
-        let repl = unsafe {
-            eval_vars(
-                p,
-                result,
-                &raw mut srclen,
-                ptr::null_mut(),
-                &raw mut errormsg,
-                ptr::null_mut(),
-                true,
-            )
-        };
-        if !errormsg.is_null() {
-            if unsafe { *errormsg } != 0 {
-                // SAFETY: the expansion's NUL-terminated error text.
-                emsg(unsafe { cstr::at(errormsg) });
+        let src = CStr::from_bytes_until_nul(&result).expect("terminated just above");
+        match eval_vars(src, p, None, true) {
+            Expansion::Refused(msg) => {
+                if !msg.is_empty() {
+                    emsg(msg);
+                }
+                return None;
             }
-            xfree(result as *mut c_void);
-            return ptr::null_mut();
+            Expansion::Skip(len) => p += len,
+            // The backslash goes; the item stays.
+            Expansion::Quoted => {
+                result.remove(p - 1);
+            }
+            Expansion::Text { text, used, .. } => {
+                result.splice(p..p + used, text.iter().copied());
+                p += text.len();
+            }
         }
-        if repl.is_null() {
-            p = unsafe { p.add(srclen as usize) };
-            continue;
-        }
-        let size = len_of(result) - srclen + len_of(repl) + 1;
-        let newres = xmalloc(size) as *mut c_char;
-        // SAFETY: `p` points into `result`.
-        let head = unsafe { p.offset_from(result) } as size_t;
-        move_bytes(newres, result, head);
-        unsafe { strcpy(newres.offset(p.offset_from(result)), repl) };
-        let used = len_of(newres);
-        unsafe { strcat(newres, p.add(srclen as usize)) };
-        xfree(repl as *mut c_void);
-        xfree(result as *mut c_void);
-        result = newres;
-        p = unsafe { newres.add(used as usize) };
     }
-    result
-}
-
-/// `strncmp()`'s prefix test as checked code.
-fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
-    // SAFETY: a NUL-terminated string; the scan stops at its terminator.
-    unsafe { cstr::starts_with(p, prefix) }
-}
-
-/// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
-}
-
-/// `memmove()`'s byte copy as checked code: `n` bytes, overlap allowed.
-fn move_bytes(dest: *mut c_char, src: *const c_char, n: size_t) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { dest.cast::<u8>().copy_from(src.cast(), n) };
-}
-
-/// `path_has_wildcard()` as checked code.
-fn path_has_wildcard(p: *const c_char) -> bool {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::path::path_has_wildcard(p) }
-}
-
-/// `vim_strchr()`'s membership test as checked code.
-fn has_char(set: *const c_char, c: c_int) -> bool {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::strings::has_char(cstr::at(set), c) }
-}
-
-/// `vim_strsave_escaped()` as checked code.
-fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
-    // SAFETY: two NUL-terminated strings.
-    let (string, esc_chars) = unsafe { (cstr::bytes_at(string), cstr::bytes_at(esc_chars)) };
-    crate::strings::escaped_bytes(string, esc_chars).into_raw()
-}
-
-/// `xmalloc()` as checked code.
-fn xmalloc(size: usize) -> *mut c_void {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::memory::xmalloc(size) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
-}
-
-/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
-fn byte_at(p: *const c_char, i: isize) -> c_int {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as c_int }
-}
-
-/// The length of the string at `s` -- `strlen`, as the slice's own `len()`
-/// -- as checked code.
-fn len_of(s: *const c_char) -> usize {
-    // SAFETY: a NUL-terminated string.
-    unsafe { cstr::bytes_at(s) }.len()
-}
-
-/// Whether the string at `p` is exactly `lit` -- `strcmp(p, lit) == 0` --
-/// as checked code.
-fn equals(p: *const c_char, lit: &[u8]) -> bool {
-    // SAFETY: a NUL-terminated string.
-    unsafe { cstr::eq_bytes(p, lit) }
+    result.pop();
+    Some(result)
 }

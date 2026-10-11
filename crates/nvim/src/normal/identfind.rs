@@ -88,6 +88,22 @@ pub(crate) unsafe fn find_is_eval_item(
     false
 }
 
+/// A copy of the identifier or string under the cursor -- empty when there
+/// is none -- as [`find_ident_under_cursor`] finds it.
+pub(crate) fn ident_under_cursor(find_type: c_int) -> Vec<u8> {
+    let mut text: *mut c_char = ptr::null_mut();
+    // SAFETY: a slot of this frame's own and no offset wanted; the answer
+    // is `len` bytes of the cursor's line, copied before anything can
+    // change it.
+    unsafe {
+        let len = find_ident_under_cursor(&raw mut text, find_type, ptr::null_mut());
+        if len == 0 {
+            return Vec::new();
+        }
+        core::slice::from_raw_parts(text.cast::<u8>(), len).to_vec()
+    }
+}
+
 /// The identifier or string under the cursor. Answers its length and, through
 /// `text`, a pointer into the line; `offset` gets the cursor's offset in it.
 ///

@@ -12,7 +12,9 @@
 
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::ex_docmd::Expansion;
 use crate::garray::ga_append_owned;
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::option::vars::{P_CDPATH, P_PATH, P_WIG};
 use crate::optionstr::{OptString, local_or_global};
@@ -580,25 +582,19 @@ pub unsafe fn expand_wildcards_eval(
     let mut ret = Err(Failed);
     let mut eval_pat = core::ptr::null_mut();
     let mut exp_pat = unsafe { *pat };
-    let mut ignored_msg: *const c_char = core::ptr::null();
-    let mut usedlen: size_t = 0;
+    let mut usedlen: usize = 0;
     let is_cur_alt_file =
         unsafe { *exp_pat } == b'%' as c_char || unsafe { *exp_pat } == b'#' as c_char;
     let mut star_follows = false;
 
     if is_cur_alt_file || unsafe { *exp_pat } == b'<' as c_char {
         let no_emsg = Suppress::emsg();
-        eval_pat = unsafe {
-            eval_vars(
-                exp_pat,
-                exp_pat,
-                &raw mut usedlen,
-                core::ptr::null_mut(),
-                &raw mut ignored_msg,
-                core::ptr::null_mut(),
-                true,
-            )
-        };
+        if let Expansion::Text { text, used, .. } =
+            eval_vars(unsafe { CStr::from_ptr(exp_pat) }, 0, None, true)
+        {
+            eval_pat = ThinCString::from_vec(text).into_raw();
+            usedlen = used;
+        }
         drop(no_emsg);
         if !eval_pat.is_null() {
             let rest = unsafe { exp_pat.add(usedlen as usize) };

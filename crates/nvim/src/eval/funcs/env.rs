@@ -10,7 +10,7 @@ use super::{
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_one};
 use crate::eval::typval::{NumBuf, dict_get_bool, dict_has_key, tv_list_alloc_ret};
 use crate::ex_cmds::check_secure;
-use crate::ex_docmd::{eval_vars_leading, expand_filename};
+use crate::ex_docmd::{Expansion, eval_vars, expand_filename};
 use crate::guard::Suppress;
 use crate::memline::{list_swap_files, swapfile_dict};
 use crate::memory::ThinCString;
@@ -82,7 +82,11 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // whose own errors are suppressed unless 'verbose' is set.
         let quiet = p_verbose() == 0 as OptInt;
         let no_emsg = quiet.then(Suppress::emsg);
-        let (expanded, errormsg) = eval_vars_leading(s);
+        let (expanded, errormsg) = match eval_vars(s, 0, None, false) {
+            Expansion::Text { text, .. } => (Some(ThinCString::from_vec(text)), None),
+            Expansion::Refused(msg) => (None, Some(msg)),
+            Expansion::Skip(_) | Expansion::Quoted => (None, None),
+        };
         drop(no_emsg);
         if !quiet && let Some(msg) = &errormsg {
             emsg(msg);

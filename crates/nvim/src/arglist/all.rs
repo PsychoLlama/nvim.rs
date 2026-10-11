@@ -15,7 +15,6 @@ use crate::buffer::BufRef;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::guard::{Allow, Lock, Suppress};
-use crate::memory::xstrdup;
 use crate::types::CmdIdx;
 use crate::window::valid_tab;
 use crate::window::valid_win;
@@ -491,7 +490,7 @@ pub fn ex_all(excmd: &mut ExArg) {
 /// Every argument, space separated, in one owned string. Spaces,
 /// backslashes and backticks in a name are escaped with a backslash, since
 /// the result goes back through argument splitting (`##` on a command line).
-pub fn arg_all() -> *mut c_char {
+pub(crate) fn arg_all_bytes() -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     for idx in 0..argcount() {
         let p = arg_name(idx);
@@ -511,7 +510,5 @@ pub fn arg_all() -> *mut c_char {
             out.push(byte);
         }
     }
-    out.push(0);
-    // SAFETY: `out` is NUL-terminated; the copy is the caller's to free.
-    unsafe { xstrdup(out.as_ptr() as *const c_char) }
+    out
 }

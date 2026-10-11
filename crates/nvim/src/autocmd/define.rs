@@ -118,10 +118,10 @@ pub fn do_autocmd(excmd: &mut ExArg, forceit: ::core::ffi::c_int) {
         }
 
         if unsafe { *cmd } != 0 {
-            cmd = unsafe { expand_sfile(cmd) };
-            if cmd.is_null() {
+            let Some(expanded) = expand_sfile(unsafe { cstr::bytes_at(cmd) }) else {
                 return;
-            }
+            };
+            cmd = crate::memory::ThinCString::from_vec(expanded).into_raw();
             need_free = true;
         }
     }
