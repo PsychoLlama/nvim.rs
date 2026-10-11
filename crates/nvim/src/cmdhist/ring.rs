@@ -10,9 +10,9 @@
 
 #![forbid(unsafe_code)]
 
-use super::ExtraData;
+use crate::shada::ShadaExtra;
 use crate::types::Timestamp;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 /// One history entry.
@@ -21,7 +21,7 @@ pub struct HistEntry {
     pub(super) text: CString,
     pub(super) sep: u8,
     pub(super) timestamp: Timestamp,
-    pub(super) extra: ExtraData,
+    pub(super) extra: Option<ShadaExtra>,
 }
 
 impl HistEntry {
@@ -44,8 +44,9 @@ impl HistEntry {
         self.timestamp
     }
 
-    pub(super) fn c_ptr(&self) -> *const c_char {
-        self.text.as_ptr()
+    /// The text as the C string it is stored as.
+    pub(super) fn cstr(&self) -> &CStr {
+        &self.text
     }
 }
 
@@ -161,7 +162,7 @@ impl Ring {
             text: to_cstring(text),
             sep,
             timestamp: now,
-            extra: ExtraData::NONE,
+            extra: None,
         });
     }
 
@@ -203,7 +204,7 @@ impl Ring {
         self.num += 1;
         entry.number = self.num;
         entry.timestamp = now;
-        entry.extra = ExtraData::NONE;
+        entry.extra = None;
         self.entries[start as usize] = Some(entry);
         true
     }

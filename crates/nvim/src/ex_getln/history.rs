@@ -3,13 +3,13 @@
 //! [`command_line_browse_history`] is the recall itself and
 //! [`command_line_next_histidx`] the index walk it drives, matching the
 //! typed prefix where `'wildoptions'` asks for it.  [`get_list_range`] parses
-//! the `:history` and `:clist` style range arguments.
+//! the `:history` style range argument.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::charset::Str2NrBases;
+use crate::charset::{Str2NrBases, skip, str2nr_scan};
 use crate::cstr;
 use crate::keycodes::{Ctrl_N, Key};
 use crate::types::{ExpandContext, Failed, NUL};
@@ -51,13 +51,15 @@ pub(crate) unsafe fn command_line_next_histidx(s: *mut CommandLineState, next_ma
             unsafe { (*s).hiscnt += 1 };
         }
 
-        let Some(entry) = hist_entry_ref(unsafe { (*s).histype }, unsafe { (*s).hiscnt }) else {
+        let Some(entry) = hist_entry_text(unsafe { (*s).histype }, unsafe { (*s).hiscnt }) else {
             unsafe { (*s).hiscnt = (*s).save_hiscnt };
             break;
         };
         if (unsafe { (*s).c } != Key::Up.code() && unsafe { (*s).c } != Key::Down.code())
             || unsafe { (*s).hiscnt } == unsafe { (*s).save_hiscnt }
-            || unsafe { cstr::prefix_eq(entry.text, (*s).lookfor, (*s).lookforlen as size_t) }
+            || unsafe {
+                cstr::prefix_eq(entry.text.as_ptr(), (*s).lookfor, (*s).lookforlen as size_t)
+            }
         {
             break;
         }
@@ -101,6 +103,8 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
     let p: *mut ::core::ffi::c_char;
     let plen: ::core::ffi::c_int;
     let mut hist_sep = NUL;
+    // The entry recalled, copied: `p` reads it until the command line holds it.
+    let mut browsed = None;
 
     dealloc_cmdbuff();
     unsafe { (*s).xpc.context = ExpandContext::Nothing };
@@ -108,11 +112,14 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
         p = unsafe { (*s).lookfor }; // back to the old one
         plen = unsafe { (*s).lookforlen };
     } else {
-        let entry = hist_entry_ref(unsafe { (*s).histype }, unsafe { (*s).hiscnt })
-            .expect("browsed slot is occupied");
-        p = entry.text as *mut ::core::ffi::c_char;
-        plen = entry.len as ::core::ffi::c_int;
-        hist_sep = entry.sep as ::core::ffi::c_int;
+        let entry = browsed.insert(
+            hist_entry_text(unsafe { (*s).histype }, unsafe { (*s).hiscnt })
+                .expect("browsed slot is occupied"),
+        );
+        // Only read through: the copy is this frame's, and lives to the end.
+        p = entry.text.as_ptr().cast_mut();
+        plen = entry.text.count_bytes() as ::core::ffi::c_int;
+        hist_sep = ::core::ffi::c_int::from(entry.sep);
     }
 
     let old_firstc = hist_sep;
@@ -179,80 +186,62 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
     KeyOutcome::Changed
 }
 
-/// Parse a `[N][,[M]]` range argument, as `:history` and `:clist` take.
+/// Parse a `[N][,[M]]` range argument, as `:history` takes, from
+/// `text[*at..]` (`text` read as a C string).
 ///
-/// `str` is advanced past what was parsed; `num1` and `num2` are only written
+/// `at` is advanced past what was parsed; `num1` and `num2` are only written
 /// when the corresponding number was present.  Answers `Err` on a malformed
 /// range or one whose numbers do not fit an `int`.
-///
-/// # Safety
-///
-/// `str` must point at a writable `*mut c_char` slot the caller owns for the
-/// call. `num1` must point at a writable `int` the caller owns. `num2` must
-/// point at a writable `int` the caller owns.
-pub unsafe fn get_list_range(
-    str: *mut *mut ::core::ffi::c_char,
-    num1: *mut ::core::ffi::c_int,
-    num2: *mut ::core::ffi::c_int,
+pub(crate) fn get_list_range(
+    text: &[u8],
+    at: &mut usize,
+    num1: &mut ::core::ffi::c_int,
+    num2: &mut ::core::ffi::c_int,
 ) -> Result<(), Failed> {
-    let mut len: ::core::ffi::c_int = 0;
-    let mut num: VarNumber = 0;
+    let skipwhite = |i: usize| i + skip::white(text.get(i..).unwrap_or_default());
+    // `vim_str2nr` with no other bases: how long the number at `i` is, and
+    // its value.
+    let number = |i: usize| {
+        let parsed = str2nr_scan(
+            text.get(i..).unwrap_or_default(),
+            0,
+            Str2NrBases::NONE,
+            false,
+            true,
+        );
+        (parsed.len, parsed.value)
+    };
     let mut first = false;
 
-    unsafe { *str = skipwhite(*str) };
-    if unsafe { **str } as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-        || ascii_isdigit(unsafe { **str } as ::core::ffi::c_int)
-    {
-        unsafe {
-            vim_str2nr(
-                *str,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                &raw mut len,
-                Str2NrBases::NONE,
-                &raw mut num,
-                ::core::ptr::null_mut::<UVarNumber>(),
-                0,
-                false,
-                ::core::ptr::null_mut::<bool>(),
-            )
-        };
-        unsafe { *str = (*str).offset(len as isize) };
+    *at = skipwhite(*at);
+    let c = cstr::byte_at(text, *at);
+    if c == b'-' || c.is_ascii_digit() {
+        let (len, num) = number(*at);
+        *at += len;
         if num > INT_MAX as VarNumber {
             return Err(Failed);
         }
-        unsafe { *num1 = num as ::core::ffi::c_int };
+        *num1 = num as ::core::ffi::c_int;
         first = true;
     }
 
-    unsafe { *str = skipwhite(*str) };
-    if unsafe { **str } as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+    *at = skipwhite(*at);
+    if cstr::byte_at(text, *at) == b',' {
         // parse "to" part of range
-        unsafe { *str = skipwhite((*str).offset(1)) };
-        unsafe {
-            vim_str2nr(
-                *str,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                &raw mut len,
-                Str2NrBases::NONE,
-                &raw mut num,
-                ::core::ptr::null_mut::<UVarNumber>(),
-                0,
-                false,
-                ::core::ptr::null_mut::<bool>(),
-            )
-        };
+        *at = skipwhite(*at + 1);
+        let (len, num) = number(*at);
         if len > 0 {
-            unsafe { *str = skipwhite((*str).offset(len as isize)) };
+            *at = skipwhite(*at + len);
             if num > INT_MAX as VarNumber {
                 return Err(Failed);
             }
-            unsafe { *num2 = num as ::core::ffi::c_int };
+            *num2 = num as ::core::ffi::c_int;
         } else if !first {
             return Err(Failed);
         }
     } else if first {
         // only one number given
-        unsafe { *num2 = *num1 };
+        *num2 = *num1;
     }
     Ok(())
 }

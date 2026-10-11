@@ -9,18 +9,17 @@
 //! and deletions) must behave exactly like the C arrays did.
 //!
 //! Shada interaction: [`hist_shada_view`] lends entries out for writing,
-//! [`hist_shada_take`]/[`hist_shada_replace`] move ownership out and back
-//! in for the read-merge. Strings crossing that boundary are C allocations
-//! (the Rust global allocator is malloc-backed, so either side may free).
+//! [`hist_shada_take`] moves them out for the read-merge as C allocations
+//! (the Rust global allocator is malloc-backed, so either side may free),
+//! and [`hist_shada_replace`] takes the merged result back in, owned.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 mod ring;
 
 use crate::cstr;
 use crate::types::Candidate;
-use ring::{EMPTY_RING, to_cstring};
+use ring::EMPTY_RING;
 pub use ring::{HistEntry, Ring};
 use std::ffi::CString;
 
@@ -32,20 +31,20 @@ use crate::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::getchar::state::{got_int, maptick};
 use crate::global_cell::GlobalCell;
 use crate::memory::ThinCString;
-use crate::memory::xfree;
 use crate::message::{
     cut_middle, message_filtered, msg, msg_display_bytes, msg_ext_set_kind, msg_putchar, msg_title,
 };
 use crate::option::vars::p_hi;
 use crate::os::cshim::gettext;
 use crate::os::time::os_time;
-use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
+use crate::regexp::{OwnedMatch, RE_MAGIC, RE_STRING, vim_regexec};
+use crate::shada::ShadaExtra;
 use crate::types::{
     AdditionalData, CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt,
-    RegMatch, Timestamp, TypVal, VAR_NUMBER, VarNumber,
+    Timestamp, TypVal, VAR_NUMBER, VarNumber,
 };
 use crate::ui::state::Columns;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 
 pub const HIST_DEFAULT: HistoryType = -2;
 pub const HIST_INVALID: HistoryType = -1;
@@ -63,27 +62,6 @@ const HISTORY_NAMES: [&[u8]; HIST_COUNT] =
     [b"cmd\0", b"search\0", b"expr\0", b"input\0", b"debug\0"];
 /// One-character history names: `:` `=` `@` `>` and the search separators.
 const SHORT_NAMES: &[u8] = b":=@>?/";
-
-/// Owned `*mut AdditionalData` (opaque extra shada payload on an entry);
-/// freed on drop. Null means none.
-struct ExtraData(*mut AdditionalData);
-
-impl ExtraData {
-    const NONE: ExtraData = ExtraData(core::ptr::null_mut());
-
-    /// Move the pointer out, leaving none behind.
-    fn take(&mut self) -> *mut AdditionalData {
-        core::mem::replace(&mut self.0, core::ptr::null_mut())
-    }
-}
-
-impl Drop for ExtraData {
-    fn drop(&mut self) {
-        // SAFETY: the pointer is either null or a live malloc-family
-        // allocation this entry owns.
-        unsafe { xfree(self.0.cast::<c_void>()) };
-    }
-}
 
 /// The five history rings. All the same length; resized together by
 /// [`init_history`].
@@ -111,26 +89,23 @@ pub fn get_hisidx(histype: c_int) -> c_int {
     HISTORY.with(|h| h[histype as usize].newest_idx())
 }
 
-/// Borrowed view of the entry at raw ring index `idx`.
-pub struct HistEntryRef {
-    /// NUL-terminated entry text; valid until the entry is removed or
-    /// overwritten.
-    pub text: *const c_char,
-    /// Text length in bytes, excluding the terminator.
-    pub len: usize,
+/// A copy of the entry at raw ring index `idx`: what a caller keeps while it
+/// runs code that may add to or delete from the history.
+pub struct HistEntryText {
+    /// The entry's text.
+    pub text: CString,
     /// Separator character (search history only; NUL elsewhere).
     pub sep: u8,
 }
 
-/// The entry at raw slot `idx` of history `histype`, if occupied.
-pub fn hist_entry_ref(histype: c_int, idx: c_int) -> Option<HistEntryRef> {
+/// The entry at raw slot `idx` of history `histype`, if occupied, copied.
+pub fn hist_entry_text(histype: c_int, idx: c_int) -> Option<HistEntryText> {
     if !valid_histype(histype) {
         return None;
     }
     HISTORY.with(|h| {
-        h[histype as usize].get(idx).map(|e| HistEntryRef {
-            text: e.c_ptr(),
-            len: e.text().len(),
+        h[histype as usize].get(idx).map(|e| HistEntryText {
+            text: e.text.clone(),
             sep: e.sep,
         })
     })
@@ -257,31 +232,16 @@ fn clr_history(histype: c_int) -> Result<(), Failed> {
 }
 
 /// Delete all entries of `histype` matching the vim regex `pat`.
-///
-/// # Safety
-///
-/// `pat` must be a valid NUL-terminated string.
-unsafe fn del_history_entry(histype: c_int, pat: *const c_char) -> bool {
-    // SAFETY: caller contract; `pat` points at at least its terminator.
-    let empty = unsafe { *pat } == 0;
-    if get_hislen() == 0 || !valid_histype(histype) || empty || get_hisidx(histype) < 0 {
+fn del_history_entry(histype: c_int, pat: &CStr) -> bool {
+    if get_hislen() == 0 || !valid_histype(histype) || pat.is_empty() || get_hisidx(histype) < 0 {
         return false;
     }
-    // SAFETY: caller contract; the compiled program is ours to free below.
-    let regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
-    if regprog.is_null() {
+    let Some(mut regmatch) = OwnedMatch::compile(pat, RE_MAGIC + RE_STRING, false) else {
         return false;
-    }
-    let mut regmatch = RegMatch::new(regprog, false);
-    let found = HISTORY.with_mut(|h| {
-        h[histype as usize].delete_matching(|e| {
-            // SAFETY: entry text is NUL-terminated and outlives the call.
-            vim_regexec(&mut regmatch, unsafe { cstr::at(e.c_ptr()) }, 0)
-        })
-    });
-    // SAFETY: the program was compiled above and nothing references it now.
-    unsafe { vim_regfree(regmatch.regprog) };
-    found
+    };
+    HISTORY.with_mut(|h| {
+        h[histype as usize].delete_matching(|e| vim_regexec(&mut regmatch, e.cstr(), 0))
+    })
 }
 
 /// Delete the entry of `histype` with history number `num`.
@@ -352,8 +312,7 @@ pub fn f_histdel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             } else {
                 // Delete by regex.
                 let mut buf = NumBuf::new();
-                // SAFETY: a NUL-terminated pattern, live for the call.
-                c_int::from(unsafe { del_history_entry(histype, buf.string(arg).as_ptr()) })
+                c_int::from(del_history_entry(histype, buf.string(arg)))
             }
         } else {
             0
@@ -374,11 +333,9 @@ pub fn f_histget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             tv_get_number_chk(&args[1]).unwrap_or(-1) as c_int
         };
         let idx = calc_hist_idx(histype, num);
-        match hist_entry_ref(histype, idx) {
+        match hist_entry_text(histype, idx) {
             None => ThinCString::empty(),
-            // SAFETY: the entry's text is `len` readable bytes, copied
-            // before anything can remove the entry.
-            Some(e) => ThinCString::from_bytes(unsafe { cstr::slice_at(e.text, e.len) }),
+            Some(e) => ThinCString::from_cstr(&e.text),
         }
     });
     result.write_string(text);
@@ -401,14 +358,11 @@ pub fn f_histnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// history name ("cmd", ":", "all", ...) and a number range.
 pub fn ex_history(excmd: &mut ExArg) {
     msg_ext_set_kind(c"list_cmd");
-    let mut arg = excmd.line.arg_copy();
-    let arg = arg.as_mut_ptr().cast();
     if get_hislen() == 0 {
         msg(gettext(c"'history' option is zero"), 0);
         return;
     }
-    // SAFETY: an ex-command argument is NUL-terminated.
-    let Some((histypes, first, last)) = (unsafe { parse_history_arg(arg) }) else {
+    let Some((histypes, first, last)) = parse_history_arg(excmd.line.arg()) else {
         return;
     };
     for histype in histypes {
@@ -422,15 +376,9 @@ pub fn ex_history(excmd: &mut ExArg) {
 /// Parse `:history`'s argument: an optional history name (or an abbreviation
 /// of "all") followed by an optional `[first][,last]` range. Reports its own
 /// errors and answers `None` when it did.
-///
-/// # Safety
-///
-/// `arg` must be a NUL-terminated ex-command argument.
-unsafe fn parse_history_arg(
-    arg: *mut c_char,
+fn parse_history_arg(
+    bytes: &[u8],
 ) -> Option<(core::ops::RangeInclusive<HistoryType>, c_int, c_int)> {
-    // SAFETY: caller contract; the argument outlives this call.
-    let bytes = unsafe { CStr::from_ptr(arg).to_bytes() };
     // A leading digit, '-' or ',' starts the range: the history is the
     // default one and there is no name to read.
     let named = !bytes
@@ -461,15 +409,11 @@ unsafe fn parse_history_arg(
             histype => histype..=histype,
         }
     };
-    let mut end = unsafe { arg.add(name_len) };
+    let mut end = name_len;
     let mut first: c_int = 1;
     let mut last: c_int = -1;
-    // SAFETY: `end` points into the argument, and `get_list_range` advances
-    // it over what it parsed, never past the terminator.
-    let (parsed, rest) = unsafe {
-        let parsed = get_list_range(&raw mut end, &raw mut first, &raw mut last);
-        (parsed, CStr::from_ptr(end).to_bytes())
-    };
+    let parsed = get_list_range(bytes, &mut end, &mut first, &mut last);
+    let rest = bytes.get(end..).unwrap_or_default();
     if parsed.is_ok() && rest.is_empty() {
         return Some((histypes, first, last));
     }
@@ -512,12 +456,10 @@ fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
         if i == hislen {
             i = 0;
         }
-        if let Some(entry) = hist_entry_ref(histype, i) {
+        if let Some(entry) = hist_entry_text(histype, i) {
             let num = number_at(i);
-            // SAFETY: the entry text is NUL-terminated and stays valid while
-            // it is printed.
-            if num >= first && num <= last && !message_filtered(unsafe { cstr::at(entry.text) }) {
-                print_history_entry(entry, num, i == idx);
+            if num >= first && num <= last && !message_filtered(&entry.text) {
+                print_history_entry(entry.text.to_bytes(), num, i == idx);
             }
         }
         if i == idx {
@@ -529,10 +471,8 @@ fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
 
 /// One `:history` row: `>` on the newest entry, the sequence number, and the
 /// text truncated to the window width.
-fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
+fn print_history_entry(text: &[u8], num: c_int, newest: bool) {
     msg_putchar('\n' as c_int);
-    // SAFETY: `entry.text` is NUL-terminated and outlives the call.
-    let text = unsafe { cstr::bytes_at(entry.text) };
     // Upstream builds the row in `IObuff`: the marker, the number, and the
     // text in what is left.
     let mut row = format!("{}{num:6}  ", if newest { '>' } else { ' ' }).into_bytes();
@@ -562,11 +502,11 @@ pub fn get_history_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     (i == HIST_COUNT).then_some(Candidate::Borrowed(c"all"))
 }
 
-/// One history entry crossing the shada boundary.
+/// One history entry lent to, or taken by, the shada writer and merger.
 pub struct HistShadaEntry {
     /// NUL-terminated text. Borrowed from the ring for
     /// [`hist_shada_view`]; a malloc-family allocation owned by the holder
-    /// for [`hist_shada_take`]/[`hist_shada_replace`].
+    /// for [`hist_shada_take`].
     pub text: *mut c_char,
     /// Separator character (search history only; NUL elsewhere).
     pub sep: c_char,
@@ -575,9 +515,18 @@ pub struct HistShadaEntry {
     pub additional_data: *mut AdditionalData,
 }
 
+/// One entry of the merged history the shada reader hands back, owned.
+pub(crate) struct HistRestored {
+    pub text: CString,
+    /// Separator character (search history only; NUL elsewhere).
+    pub sep: u8,
+    pub timestamp: Timestamp,
+    pub extra: Option<ShadaExtra>,
+}
+
 fn shada_sep(histype: c_int, sep: u8) -> c_char {
     if histype == HIST_SEARCH {
-        sep as c_char
+        c_char::from_ne_bytes([sep])
     } else {
         0
     }
@@ -593,10 +542,13 @@ pub fn hist_shada_view(histype: c_int) -> Vec<HistShadaEntry> {
             .map(|i| {
                 let e = ring.get(i).expect("index of occupied slot");
                 HistShadaEntry {
-                    text: e.c_ptr() as *mut c_char,
+                    text: e.cstr().as_ptr().cast_mut(),
                     sep: shada_sep(histype, e.sep),
                     timestamp: e.timestamp,
-                    additional_data: e.extra.0,
+                    additional_data: e
+                        .extra
+                        .as_ref()
+                        .map_or(core::ptr::null_mut(), ShadaExtra::as_ptr),
                 }
             })
             .collect()
@@ -622,10 +574,13 @@ pub fn hist_shada_take(histype: c_int) -> Vec<HistShadaEntry> {
                 buf.push(0);
                 buf.push(e.sep);
                 HistShadaEntry {
-                    text: Box::into_raw(buf.into_boxed_slice()) as *mut c_char,
+                    text: Box::into_raw(buf.into_boxed_slice()).cast::<c_char>(),
                     sep: shada_sep(histype, e.sep),
                     timestamp: e.timestamp,
-                    additional_data: e.extra.take(),
+                    additional_data: e
+                        .extra
+                        .take()
+                        .map_or(core::ptr::null_mut(), ShadaExtra::into_raw),
                 }
             })
             .collect();
@@ -635,45 +590,23 @@ pub fn hist_shada_take(histype: c_int) -> Vec<HistShadaEntry> {
 }
 
 /// Replace the contents of `histype` with `entries` (oldest first, as
-/// produced by the shada merge), renumbering from 1. Takes ownership of
-/// each entry's text (freed after copying) and additional data. Entries
-/// beyond the ring capacity are discarded oldest-first.
-///
-/// # Safety
-///
-/// Every `text` must be a valid NUL-terminated malloc-family allocation
-/// and every `additional_data` null or owned, as [`HistShadaEntry`]
-/// documents; the caller must not use them afterwards.
-pub unsafe fn hist_shada_replace(histype: c_int, entries: Vec<HistShadaEntry>) {
+/// produced by the shada merge), renumbering from 1. Entries beyond the
+/// ring capacity are discarded oldest-first.
+pub(crate) fn hist_shada_replace(histype: c_int, entries: Vec<HistRestored>) {
     init_history();
     HISTORY.with_mut(|h| {
         let ring = &mut h[histype as usize];
         ring.clear();
         let skip = entries.len().saturating_sub(ring.len());
         let mut n: c_int = 0;
-        for (k, se) in entries.into_iter().enumerate() {
-            if k < skip {
-                // SAFETY: caller contract; both allocations are owned here.
-                unsafe {
-                    xfree(se.text.cast::<c_void>());
-                    xfree(se.additional_data.cast::<c_void>());
-                }
-                continue;
-            }
-            // SAFETY: caller contract; `text` is a NUL-terminated allocation
-            // owned here, copied out before it is freed.
-            let text = unsafe {
-                let text = to_cstring(CStr::from_ptr(se.text).to_bytes());
-                xfree(se.text.cast::<c_void>());
-                text
-            };
+        for entry in entries.into_iter().skip(skip) {
             n += 1;
             ring.entries[(n - 1) as usize] = Some(HistEntry {
                 number: n,
-                text,
-                sep: se.sep as u8,
-                timestamp: se.timestamp,
-                extra: ExtraData(se.additional_data),
+                text: entry.text,
+                sep: entry.sep,
+                timestamp: entry.timestamp,
+                extra: entry.extra,
             });
         }
         ring.num = n;

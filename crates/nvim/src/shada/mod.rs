@@ -6,7 +6,7 @@
 use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_is_quickfix, buf_is_terminal, buflist_new, buflist_setfpos, find_buf};
-use crate::cmdhist::{HistShadaEntry, hist_shada_replace, hist_shada_take, hist_shada_view};
+use crate::cmdhist::{HistRestored, hist_shada_replace, hist_shada_take, hist_shada_view};
 use crate::eval::decode::{decode_string, unpack_typval};
 use crate::eval::encode::encode_vim_to_msgpack;
 use crate::eval::typval::TV_INITIAL_VALUE;
@@ -85,6 +85,13 @@ impl ShadaExtra {
     /// The block, borrowed for an entry that is written and not freed.
     pub(crate) fn as_ptr(&self) -> *mut AdditionalData {
         self.0.as_ptr()
+    }
+
+    /// Give the block up to a holder that frees it with `xfree`.
+    pub(crate) fn into_raw(self) -> *mut AdditionalData {
+        let raw = self.0.as_ptr();
+        core::mem::forget(self);
+        raw
     }
 }
 

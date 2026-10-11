@@ -247,9 +247,8 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
                 if i == get_hislen() {
                     i = 0;
                 }
-                if let Some(entry) = hist_entry_ref(histtype, i) {
-                    let text = entry.text as *mut ::core::ffi::c_char;
-                    let _ = unsafe { ml_append(lnum, text, 0, false) };
+                if let Some(entry) = hist_entry_text(histtype, i) {
+                    let _ = ml_append_cstr(lnum, &entry.text);
                     lnum += 1;
                 }
                 if i == get_hisidx(histtype) {

@@ -6,7 +6,7 @@ pub(crate) mod state;
 use crate::api::extmark::nvim_create_namespace;
 use crate::api::private::helpers::{cstr_to_string, try_enter, try_leave};
 use crate::api::vim::nvim_create_buf;
-use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_isspace, ascii_iswhite};
+use crate::ascii::{ascii_isalpha, ascii_isspace, ascii_iswhite};
 use crate::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
 };
@@ -14,9 +14,7 @@ use crate::buffer::{
     buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid, close_buffer,
     do_buffer, find_buf,
 };
-use crate::charset::{
-    ptr2cells, skipwhite, vim_is_ident_char, vim_isprintc, vim_iswordc, vim_str2nr,
-};
+use crate::charset::{ptr2cells, skipwhite, vim_is_ident_char, vim_isprintc, vim_iswordc};
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::cmdexpand::{
     clear_cmdline_orig, cmdline_pum_active, cmdline_pum_cleanup, cmdline_pum_remove,
@@ -24,7 +22,7 @@ use crate::cmdexpand::{
     wildmenu_process_key, wildmenu_translate_key,
 };
 use crate::cmdhist::{
-    add_to_history, get_hisidx, get_hislen, hist_char2type, hist_entry_ref, init_history,
+    add_to_history, get_hisidx, get_hislen, hist_char2type, hist_entry_text, init_history,
 };
 use crate::cursor::{
     coladvance, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_ptr,
@@ -71,7 +69,7 @@ use crate::mbyte::{
     utf_iscomposing_first, utf_ptr2cells, utf_ptr2char, utf_ptr2len, utf8len_tab_zero,
     utfc_ptr2len,
 };
-use crate::memline::{decl, incl, ml_append, ml_replace};
+use crate::memline::{decl, incl, ml_append_cstr, ml_replace};
 use crate::memory::{xfree, xmalloc, xmallocz, xstrdup};
 use crate::message::state::{
     cmd_silent, cmdmsg_rl, did_emsg, emsg_on_display, lines_left, msg_col, msg_didout, msg_no_more,
@@ -151,8 +149,8 @@ use crate::types::{
     ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
     ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, Magic, MotionType, Object,
     OpArg, OptInt, OptMagic, OptSet, OptVal, ParserState, Pos, ProfTime, RemapValues, SaveVEvent,
-    SearchItArg, String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber,
-    size_t, time_t, uint8_t, uint32_t,
+    SearchItArg, String_0, TryState, TypVal, UndoLink, UndoObjectType, VarNumber, size_t, time_t,
+    uint8_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -188,7 +186,7 @@ pub(crate) use self::handlekey::*;
 mod wildchar;
 pub use self::wildchar::*;
 mod history;
-pub use self::history::*;
+pub(crate) use self::history::*;
 mod cmdpreview;
 pub use self::cmdpreview::*;
 mod color;

@@ -24,7 +24,7 @@
 use crate::cstr;
 use crate::winlayer::Win;
 use core::cmp::Ordering;
-use core::ffi::{c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 
 use super::*;
 use crate::mark::global_mark_timestamp;
@@ -339,18 +339,28 @@ pub(crate) unsafe fn hms_insert_whole_neovim_history(hms_p: *mut HistoryMergerSt
 ///
 /// `hms_p` must point at a live `HistoryMergerState`.
 pub(crate) unsafe fn hms_to_history(hms_p: *const HistoryMergerState) {
-    let mut merged: Vec<HistShadaEntry> = Vec::new();
+    let mut merged: Vec<HistRestored> = Vec::new();
     let mut cur = unsafe { (*hms_p).hmll.first };
     while !cur.is_null() {
-        merged.push(HistShadaEntry {
-            text: unsafe { (*cur).data.data.history() }.string,
-            sep: unsafe { (*cur).data.data.history() }.sep,
-            timestamp: unsafe { (*cur).data.timestamp },
-            additional_data: unsafe { (*cur).data.additional_data },
+        let entry = unsafe { &(*cur).data };
+        let item = entry.data.history();
+        // SAFETY: the merged ring owns each entry's string and extra data,
+        // and gives both up here: the history copies the text and takes the
+        // extra data over, and nothing frees either after this.
+        let (text, extra) = unsafe {
+            let text = CStr::from_ptr(item.string).to_owned();
+            xfree(item.string.cast());
+            (text, ShadaExtra::from_raw(entry.additional_data))
+        };
+        merged.push(HistRestored {
+            text,
+            sep: item.sep.to_ne_bytes()[0],
+            timestamp: entry.timestamp,
+            extra,
         });
         cur = unsafe { (*cur).next };
     }
-    unsafe { hist_shada_replace((*hms_p).history_type as c_int, merged) };
+    hist_shada_replace(unsafe { (*hms_p).history_type } as c_int, merged);
 }
 
 /// Release the merger.

@@ -316,4 +316,25 @@ func Test_history_max_val()
   set history&
 endfunc
 
+" The range forms of :history, and how a bad one is reported.
+func Test_history_range_forms()
+  let save_hi = &history
+  set history=10
+  call histdel(':')
+  for i in range(1, 12) | call histadd(':', 'cmd' . i) | endfor
+  call assert_equal("\n      #  cmd history\n      4  cmd4\n      5  cmd5\n      6  cmd6",
+        \ execute('history  4 , 6 '))
+  call assert_equal("\n      #  cmd history\n     10  cmd10\n     11  cmd11\n>    12  cmd12",
+        \ execute('history -3,-1'))
+  call assert_equal("\n      #  cmd history", execute('history - '))
+  call assert_equal("\n      #  cmd history", execute('history -99999999999'))
+  call assert_fails('history ,', 'E1510: Value too large: ,')
+  call assert_fails('history 1,99999999999', 'E1510: Value too large: 1,99999999999')
+  call assert_fails('history , x', 'E488: Trailing characters: x')
+  call assert_fails('history 3x', 'E488: Trailing characters: x')
+  call assert_fails('history 1, 2 x', 'E488: Trailing characters: x')
+  call histdel(':')
+  let &history = save_hi
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab
