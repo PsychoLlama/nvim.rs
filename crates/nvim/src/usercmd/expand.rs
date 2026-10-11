@@ -302,9 +302,9 @@ pub(crate) fn win_cmd_modifier_words(cmod: &CmdMod) -> Vec<std::ffi::CString> {
         }
     };
     // `:aboveleft`/`:leftabove`, `:belowright`/`:rightbelow`, `:botright`.
-    add(c"aboveleft", split(WSP_ABOVE as u32));
-    add(c"belowright", split(WSP_BELOW as u32));
-    add(c"botright", split(WSP_BOT as u32));
+    add(c"aboveleft", split(WSP_ABOVE));
+    add(c"belowright", split(WSP_BELOW));
+    add(c"botright", split(WSP_BOT));
     if cmod.cmod_tab > 0 {
         let tabnr = cmod.cmod_tab - 1;
         // For compatibility, a tab number that is `:tab`'s own default is
@@ -316,9 +316,9 @@ pub(crate) fn win_cmd_modifier_words(cmod: &CmdMod) -> Vec<std::ffi::CString> {
             add(&text, true);
         }
     }
-    add(c"topleft", split(WSP_TOP as u32));
-    add(c"vertical", split(WSP_VERT as u32));
-    add(c"horizontal", split(WSP_HOR as u32));
+    add(c"topleft", split(WSP_TOP));
+    add(c"vertical", split(WSP_VERT));
+    add(c"horizontal", split(WSP_HOR));
     words
 }
 

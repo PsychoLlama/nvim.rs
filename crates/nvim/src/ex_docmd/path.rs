@@ -176,7 +176,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
     } else {
         // Parsed before the slot is lent: the parse evaluates an
         // expression, which may read the option's callback.
-        let parsed = p_ffu(|ffu| callback_from_option(ffu));
+        let parsed = p_ffu(callback_from_option);
         parsed.map(|cb| {
             ffu_cb.with_mut(|slot| set_callback_from_option(slot, cb));
             // Setting it globally without `:setglobal` clears the local

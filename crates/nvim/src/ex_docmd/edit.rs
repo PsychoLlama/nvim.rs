@@ -194,12 +194,18 @@ pub fn do_sleep(msec: int64_t, hide_cursor: bool) {
 /// `:delete`, `:yank`, `:<` and `:>` — the four normal-mode operators that
 /// have an Ex spelling.
 pub(crate) fn ex_operators(excmd: &mut ExArg) {
-    let mut oa = OpArg::default();
-    oa.regname = excmd.regname;
-    oa.start.lnum = excmd.line1;
-    oa.end.lnum = excmd.line2;
-    oa.line_count = excmd.line2 - excmd.line1 + 1;
-    oa.motion_type = kMTLineWise;
+    let line = |lnum| Pos {
+        lnum,
+        ..Pos::default()
+    };
+    let mut oa = OpArg {
+        regname: excmd.regname,
+        start: line(excmd.line1),
+        end: line(excmd.line2),
+        line_count: excmd.line2 - excmd.line1 + 1,
+        motion_type: kMTLineWise,
+        ..OpArg::default()
+    };
     // An Ex range is whole lines, so 'virtualedit' must not apply.
     virtual_op.set(Some(false));
 

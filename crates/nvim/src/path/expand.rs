@@ -597,7 +597,7 @@ pub unsafe fn expand_wildcards_eval(
         }
         drop(no_emsg);
         if !eval_pat.is_null() {
-            let rest = unsafe { exp_pat.add(usedlen as usize) };
+            let rest = unsafe { exp_pat.add(usedlen) };
             star_follows = unsafe { cstr::eq_bytes(rest, b"*") };
             exp_pat = unsafe { concat(cstr::bytes_at(eval_pat), cstr::bytes_at(rest)) }.into_raw();
         }
