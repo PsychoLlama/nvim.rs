@@ -839,3 +839,45 @@ pub unsafe fn find_tags(
     drop(saved_pat);
     retval
 }
+
+/// A help match's two fields: the tag as offered (`{name}@{lang}`) and the
+/// heuristic score `find_tags` wrote after its NUL.
+pub(crate) type HelpTagMatch = (Vec<u8>, Vec<u8>);
+
+/// [`find_tags`] of a help pattern the caller holds, each match taken over as
+/// its two fields.
+pub(crate) fn find_help_tag_matches(
+    pat: &CStr,
+    flags: c_int,
+    mincount: c_int,
+) -> Result<Vec<HelpTagMatch>, Failed> {
+    // A copy: the search takes the pattern as a writable string.
+    let mut pat = pat.to_bytes_with_nul().to_vec();
+    let mut count: c_int = 0;
+    let mut matches: *mut *mut c_char = ptr::null_mut();
+    let no_buf = ptr::null_mut();
+    // SAFETY: a NUL-terminated pattern and two locals to fill in.
+    let found = unsafe {
+        find_tags(
+            pat.as_mut_ptr().cast(),
+            &raw mut count,
+            &raw mut matches,
+            flags,
+            mincount,
+            no_buf,
+        )
+    };
+    found?;
+    let taken = (0..usize::try_from(count).unwrap_or(0))
+        .map(|at| {
+            // SAFETY: every help match is a name and a score, each
+            // NUL-terminated, the second right after the first.
+            let tag = unsafe { CStr::from_ptr(*matches.add(at)) }.to_bytes();
+            let score = unsafe { CStr::from_ptr(matches.add(at).read().add(tag.len() + 1)) };
+            (tag.to_vec(), score.to_bytes().to_vec())
+        })
+        .collect();
+    // SAFETY: the array and the matches the search answered, given back once.
+    unsafe { free_wild(count, matches) };
+    Ok(taken)
+}

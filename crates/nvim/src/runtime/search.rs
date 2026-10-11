@@ -360,6 +360,58 @@ unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const
     verbose_leave();
 }
 
+/// [`do_in_path`] with a closure for the callback: `visit` is handed each
+/// batch of names the walk finds and whether the walk wants every match, and
+/// answers whether it used one. The names live in the walk's own buffers for
+/// the call.
+pub(crate) fn do_in_path_visit(
+    path: XString,
+    path_name: &'static CStr,
+    prefix: &CStr,
+    name: Option<&CStr>,
+    flags: RuntimeOpts,
+    mut visit: &mut dyn FnMut(&[&CStr], bool) -> bool,
+) -> c_int {
+    /// The callback: the cookie is `visit`.
+    ///
+    /// # Safety
+    /// `cookie` is the `&mut dyn FnMut` below and `fnames` holds `num_fnames`
+    /// NUL-terminated names.
+    unsafe fn trampoline(
+        num_fnames: c_int,
+        fnames: *mut *mut c_char,
+        all: bool,
+        cookie: *mut c_void,
+    ) -> bool {
+        // SAFETY: the caller's contract.
+        let visit = unsafe { &mut *cookie.cast::<&mut dyn FnMut(&[&CStr], bool) -> bool>() };
+        let names: Vec<&CStr> = unsafe { matches(num_fnames, fnames) }
+            .iter()
+            .map(|&name| unsafe { CStr::from_ptr(name) })
+            .collect();
+        visit(&names, all)
+    }
+    // A copy: the walk takes the name as a writable string.
+    let mut name = name.map(|name| name.to_bytes_with_nul().to_vec());
+    let name = name
+        .as_mut()
+        .map_or(ptr::null_mut(), |name| name.as_mut_ptr().cast());
+    let cookie = (&raw mut visit).cast::<c_void>();
+    // SAFETY: `prefix` and `name` are NUL-terminated (or null), and the
+    // cookie is the closure the trampoline expects, alive for the walk.
+    unsafe {
+        do_in_path(
+            path,
+            path_name,
+            prefix.as_ptr(),
+            name,
+            flags,
+            Some(trampoline),
+            cookie,
+        )
+    }
+}
+
 /// Find the patterns in `name` in all directories in `path` and invoke
 /// `callback` for each match.  `prefix` is prepended to each pattern.
 ///

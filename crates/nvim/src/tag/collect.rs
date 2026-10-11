@@ -110,13 +110,8 @@ impl FindTags {
         out[len] = b'@';
         out[len + 1..len + 3].copy_from_slice(&self.help_lang);
 
-        let score = unsafe {
-            help_heuristic(
-                tagp.tagname,
-                if margs.match_re { margs.matchoff } else { 0 },
-                !margs.match_no_ic,
-            )
-        } + self.help_pri;
+        let offset = if margs.match_re { margs.matchoff } else { 0 };
+        let score = help_heuristic(name, offset, !margs.match_no_ic) + self.help_pri;
         let at = len + 1 + ML_EXTRA;
         let printed = format!("{score:06}");
         // What `snprintf` would have had room for: everything left in

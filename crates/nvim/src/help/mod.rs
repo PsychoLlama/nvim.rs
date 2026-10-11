@@ -15,26 +15,21 @@
 //! - **Generating tags files**, which is [`tags`]'s: `:helptags` walks a
 //!   `doc` directory and writes the tags file a lookup then searches.
 //!
-//! The first two work in `NameBuff` and `IObuff`, the editor's two shared
-//! scratch buffers. That is upstream's choice, kept: the search pattern goes
-//! into `IObuff` and `find_tags` reads it straight back out. Nothing reached
-//! from here wants either buffer meanwhile, which is why they are taken as
-//! raw pointers rather than borrowed.
+//! A subject, its matches and the tag jumped to are owned values: the
+//! search pattern is built by Lua, cut to upstream's `IObuff` room, and
+//! handed to `find_tags`, whose matches come back as `(tag, score)` pairs.
 //!
 //! Original: `src/nvim/help.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![forbid(unsafe_code)]
+// The constants here keep upstream's spelling.
 #![allow(non_upper_case_globals)]
 
 mod tags;
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isalpha, ascii_iswhite};
 use crate::buffer::{buf_is_help, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
-use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds::newlnum;
@@ -42,39 +37,37 @@ use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::getchar::state::KeyTyped;
 use crate::highlight_group::HLF_E;
-use crate::lua::executor::nlua_exec;
+use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::XString;
-use crate::memory::{xfree, xstrdup};
 use crate::message::e_noident;
 use crate::message::{emsg, emsg_multiline};
-use crate::message_fmt::{msg_cstr, msg_cstr_opt};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::set_option_direct;
 use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
-use crate::optionstr::OptString;
+use crate::optionstr::OptStringRef;
 use crate::optionstr::check_buf_options;
 use crate::os::cshim::gettext;
-use crate::os::fs::os_fopen;
-use crate::path::free_wild;
-use crate::path::take_wild;
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
 use crate::state::mode::restart_edit;
-use crate::tag::{do_tag, find_tags};
+use crate::tag::{HelpTagMatch, do_tag, find_help_tag_matches};
 use crate::types::String_0;
 use crate::types::{
-    Array, ArrayBuf, CmdModFlags, Error, ExArg, Failed, FileComparison, IOSIZE, LuaRetMode, NUL,
-    Object, OptInt, OptVal, OptionSetFlags, size_t,
+    Array, ArrayBuf, CmdModFlags, ExArg, Failed, FileComparison, IOSIZE, LuaRetMode, Object,
+    OptInt, OptVal, OptionSetFlags,
 };
 use crate::ui::state::Columns;
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::windows;
-use ::libc::{fclose, qsort, strcasecmp};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::cmp::Ordering;
+use core::ffi::{CStr, c_int};
+use std::ffi::OsStr;
+use std::fs::File;
+use std::os::unix::ffi::OsStrExt;
 
 pub(crate) use tags::ex_helptags;
 
@@ -135,103 +128,62 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
     let old_key_typed = KeyTyped.get();
 
     let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
-    // The subject, owned: the lookup below strips a `@xx` from it in place.
-    let mut subject: Vec<u8>;
-    let mut arg = match excmd {
-        None => c"".as_ptr().cast_mut(),
+    // The subject, owned: a `@xx` is split off it below.
+    let mut subject = match excmd {
+        None => Vec::new(),
         Some(command) => {
             split_off_next_cmd(command);
             if command.skip {
                 return;
             }
-            subject = trimmed_subject(command.line.arg());
-            subject.push(0);
-            subject.as_mut_ptr().cast::<c_char>()
+            trimmed_subject(command.line.arg())
         }
     };
+    let lang = split_help_lang(&mut subject);
 
-    // SAFETY: `arg` is NUL-terminated, and writable whenever `excmd` is set --
-    // which is the only case where `check_help_lang` can find a `@xx` to
-    // strip.
-    let lang = unsafe { check_help_lang(arg) };
-
-    // SAFETY: `arg` is NUL-terminated.
-    let helpbang = forceit && unsafe { *arg } == NUL as c_char;
-    if unsafe { *arg == NUL as c_char } && !helpbang {
-        arg = c"help.txt".as_ptr().cast_mut();
+    let helpbang = forceit && subject.is_empty();
+    if subject.is_empty() && !helpbang {
+        subject = b"help.txt".to_vec();
     }
 
     // `:help!` asks Lua for the best tag at the cursor.
-    let mut allocated_arg: *mut c_char = ptr::null_mut();
     if helpbang {
-        // SAFETY: a static chunk, no arguments, and our own error slot.
-        allocated_arg = unsafe { resolve_tag_at_cursor() };
-        if allocated_arg.is_null() {
+        let Some(tag) = resolve_tag_at_cursor() else {
             emsg(gettext(e_noident));
             return;
-        }
-        arg = allocated_arg;
+        };
+        subject = tag;
     }
 
-    let mut num_matches: c_int = 0;
-    let mut matches: *mut *mut c_char = ptr::null_mut();
-    let (out_n, out_m) = (&raw mut num_matches, &raw mut matches);
-    let n = unsafe { find_help_tags(arg, out_n, out_m, forceit) };
-
+    let found = find_help_tags(&subject, forceit);
     // The first match in the requested language is the best match.
-    let mut i: c_int = 0;
-    if n.is_ok() && !lang.is_null() {
-        while i < num_matches {
-            // SAFETY: `matches` holds `num_matches` NUL-terminated strings.
-            let m = unsafe { *matches.offset(i as isize) };
-            let len = unsafe { cstr::bytes_at(m) }.len() as c_int;
-            if len > 3
-                && unsafe { *m.offset((len - 3) as isize) } == b'@' as c_char
-                && unsafe { strcasecmp(m.offset((len - 2) as isize), lang) } == 0
-            {
-                break;
+    let best = found.as_ref().ok().and_then(|matches| match lang {
+        None => matches.first(),
+        Some(lang) => matches.iter().find(|tag| {
+            let len = tag.len();
+            len > 3 && tag[len - 3] == b'@' && tag[len - 2..].eq_ignore_ascii_case(&lang)
+        }),
+    });
+    let Some(tag) = best.map(|tag| XString::from_bytes(tag)) else {
+        let arg = msg_bytes(&subject);
+        match lang {
+            None => semsg!("E149: No help for {arg}"),
+            Some(lang) => {
+                let lang = msg_bytes(&lang);
+                semsg!("E661: No '{lang}' help for {arg}")
             }
-            i += 1;
-        }
-    }
-    if i >= num_matches || n.is_err() {
-        // SAFETY: `lang` and `arg` are NUL-terminated; both carry bytes, so
-        // they go through vim's own printf rather than `format_args!`.
-        if lang.is_null() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { msg_cstr_opt(cstr::at_opt(arg)) };
-            semsg!("E149: No help for {arg}");
-        } else {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (lang, arg) = unsafe {
-                (
-                    msg_cstr_opt(cstr::at_opt(lang)),
-                    msg_cstr_opt(cstr::at_opt(arg)),
-                )
-            };
-            semsg!("E661: No '{lang}' help for {arg}");
-        }
-        if n.is_ok() {
-            unsafe { free_wild(num_matches, matches) };
-        }
-        unsafe { xfree(allocated_arg.cast::<c_void>()) };
+        };
         return;
-    }
+    };
+    drop(found);
 
-    // SAFETY: `i` is below `num_matches`.
-    let tag = unsafe { xstrdup(*matches.offset(i as isize)) };
-    // SAFETY: `matches` is `find_tags`'s allocation.
-    unsafe { free_wild(num_matches, matches) };
-
-    // SAFETY: the window list is live on the main thread; `tag` is owned.
     if let Some(opened) = enter_help_window() {
         restart_edit.set(0);
         // Restore KeyTyped: setting 'filetype=help' may have reset it,
         // and `do_tag` needs it to open folds under the cursor.
         KeyTyped.set(old_key_typed);
 
-        // SAFETY: `tag` is the owned NUL-terminated name.
-        do_tag(unsafe { cstr::at(tag) }, DT_HELP as c_int, 1, 0, true);
+        do_tag(tag.as_cstr(), DT_HELP as c_int, 1, 0, true);
 
         // Delete the empty buffer if we are not using it. Careful:
         // autocommands may have jumped to another window, so check that
@@ -250,8 +202,6 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
             Win::current().w_alt_fnum = opened.alt_fnum;
         }
     }
-    unsafe { xfree(tag.cast::<c_void>()) };
-    unsafe { xfree(allocated_arg.cast::<c_void>()) };
 }
 
 /// A `:help` command ends at the first LF, or at a `|` followed by some
@@ -281,30 +231,19 @@ fn trimmed_subject(arg: &[u8]) -> Vec<u8> {
 }
 
 /// The tag `vim._core.help.resolve_tag()` picks for the cursor position, as
-/// an owned string, or null when it declines to pick one.
-///
-/// # Safety
-/// Runs Lua: main thread only.
-unsafe fn resolve_tag_at_cursor() -> *mut c_char {
-    let mut err = Error::none();
-    let chunk = String_0::from_cstr(c"return require'vim._core.help'.resolve_tag()");
-    let name = ptr::null();
-    let res = match unsafe { nlua_exec(&chunk, name, Array::EMPTY, kRetObject) } {
-        Ok(value) => value,
-        Err(e) => {
-            err = e;
-            Object::Nil
-        }
-    };
-    let named = res.as_string().filter(|tag| !tag.is_empty());
-    let tag = match named.filter(|_| !err.is_set()) {
-        // SAFETY: the answer's own NUL-terminated bytes; the copy outlives
-        // `res`, which is released with this frame.
-        Some(tag_name) => unsafe { xstrdup(tag_name.data()) },
-        None => ptr::null_mut(),
-    };
-    err.clear();
-    tag
+/// owned bytes, or `None` when it declines to pick one.
+fn resolve_tag_at_cursor() -> Option<Vec<u8>> {
+    let chunk = c"return require'vim._core.help'.resolve_tag()";
+    let res = nlua_exec_cstr(chunk, Array::EMPTY, kRetObject).ok()?;
+    let tag = res.as_string().filter(|tag| !tag.is_empty())?;
+    // Upstream copied the answer as a C string: up to a NUL.
+    Some(
+        tag.as_bytes()
+            .split(|&b| b == 0)
+            .next()
+            .unwrap_or_default()
+            .to_vec(),
+    )
 }
 
 /// The buffer numbers [`ex_help`] must undo if the jump lands elsewhere.
@@ -343,16 +282,14 @@ fn enter_help_window() -> Option<HelpWindow> {
         return Some(opened);
     }
 
-    // SAFETY: the window list is a live intrusive list on the main thread.
     // No help window yet: check that 'helpfile' can be read at all.
-    let helpfd = p_hf(|value| unsafe { os_fopen(value.as_ptr().cast_mut(), c"rb".as_ptr()) });
-    if helpfd.is_null() {
+    let readable = p_hf(|value| File::open(OsStr::from_bytes(value.to_bytes())).is_ok());
+    if !readable {
         let helpfile = p_hf(CStr::to_owned);
         let arg0 = msg_cstr(&helpfile);
         smsg!(0, "Help file \"{arg0}\" not found");
         return None;
     }
-    unsafe { fclose(helpfd) };
 
     // Split off a help window; put it at the far top when no position
     // was given and the current window is vertically split and narrow.
@@ -406,48 +343,40 @@ pub(crate) fn ex_viusage(_excmd: &mut ExArg) {
 
 // -- Finding a subject -----------------------------------------------------
 
-/// Look for a `@xx` language specifier at the end of `arg`. When there is
-/// one, cut it off — the `@` becomes the terminator — and answer the two
-/// language letters; otherwise answer null.
-///
-/// # Safety
-/// `arg` is NUL-terminated, and writable if it can end in `@xx`.
-pub(crate) unsafe fn check_help_lang(arg: *mut c_char) -> *mut c_char {
-    // SAFETY: caller contract.
-    let len = unsafe { cstr::bytes_at(arg) }.len() as isize;
+/// Look for a `@xx` language specifier at the end of `subject`. When there
+/// is one, cut it off and answer the two language letters.
+fn split_help_lang(subject: &mut Vec<u8>) -> Option<[u8; 2]> {
+    let len = subject.len();
     if len >= 3
-        && unsafe { *arg.offset(len - 3) } == b'@' as c_char
-        && ascii_isalpha(unsafe { *arg.offset(len - 2) } as c_int)
-        && ascii_isalpha(unsafe { *arg.offset(len - 1) } as c_int)
+        && subject[len - 3] == b'@'
+        && ascii_isalpha(c_int::from(subject[len - 2]))
+        && ascii_isalpha(c_int::from(subject[len - 1]))
     {
-        unsafe { *arg.offset(len - 3) = NUL as c_char };
-        return unsafe { arg.offset(len - 2) };
+        let lang = [subject[len - 2], subject[len - 1]];
+        subject.truncate(len - 3);
+        return Some(lang);
     }
-    ptr::null_mut()
+    None
 }
 
-/// How well `matched_string` matches, smaller being better. In order of
-/// priority: fewer alphanumeric characters, then fewer characters overall,
-/// then a match nearer the start; a match starting with `+` is worse, since
-/// that is a feature name rather than a command.
+/// How well `tag` matches, smaller being better. In order of priority:
+/// fewer alphanumeric characters, then fewer characters overall, then a
+/// match nearer the start; a match starting with `+` is worse, since that is
+/// a feature name rather than a command.
 ///
-/// The string is assumed to already match the requested subject.
-///
-/// # Safety
-/// `matched_string` is NUL-terminated with at least `offset + 1` bytes.
-pub(crate) unsafe fn help_heuristic(
-    matched_string: *mut c_char,
-    offset: c_int,
-    wrong_case: bool,
-) -> c_int {
-    // SAFETY: caller contract.
-    let tag = unsafe { CStr::from_ptr(matched_string) }.to_bytes();
+/// The tag is assumed to already match the requested subject, at `offset`.
+pub(crate) fn help_heuristic(tag: &[u8], offset: c_int, wrong_case: bool) -> c_int {
     let num_letters = tag.iter().filter(|c| c.is_ascii_alphanumeric()).count() as c_int;
 
     // Weight the letter count far above the character count. A match
     // starting in the middle of a word goes in the last half; a match more
     // than two characters in goes after the ones at the start.
-    let at = |i: c_int| tag.get(i as usize).is_some_and(u8::is_ascii_alphanumeric);
+    let at = |i: c_int| {
+        usize::try_from(i)
+            .ok()
+            .and_then(|i| tag.get(i))
+            .is_some_and(u8::is_ascii_alphanumeric)
+    };
     let mut offset = if offset > 0 && at(offset) && at(offset - 1) {
         offset + 10000
     } else if offset > 2 {
@@ -465,149 +394,87 @@ pub(crate) unsafe fn help_heuristic(
     100 * num_letters + tag.len() as c_int + offset
 }
 
-/// `qsort` comparator over the match list: by the heuristic number
-/// `find_tags` stored after each tag's NUL, then by the tag itself so that
-/// equal scores order the same way every run.
-///
-/// # Safety
-/// Both arguments point at a `char *` whose target is NUL-terminated and
-/// followed by a second NUL-terminated string.
-unsafe extern "C" fn help_compare(s1: *const c_void, s2: *const c_void) -> c_int {
-    // SAFETY: caller contract.
-    let t1 = unsafe { *s1.cast::<*mut c_char>() };
-    let t2 = unsafe { *s2.cast::<*mut c_char>() };
-    let t1_len = unsafe { cstr::bytes_at(t1) }.len();
-    let t2_len = unsafe { cstr::bytes_at(t2) }.len();
-    let cmp = unsafe { cstr::cmp(t1.add(t1_len).offset(1), t2.add(t2_len).offset(1)) as c_int };
-    if cmp != 0 {
-        return cmp;
-    }
-    unsafe { cstr::cmp(t1, t2) as c_int }
+/// The order of the match list: by the heuristic score `find_tags` stored
+/// with each tag, then by the tag itself so that equal scores order the same
+/// way every run.
+fn help_compare(a: &HelpTagMatch, b: &HelpTagMatch) -> Ordering {
+    a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0))
 }
 
-/// Find every help tag matching `arg`, best match first, and hand the list
-/// back through `matches`/`num_matches`. With `keep_lang` set, prefer the
-/// language of the current buffer.
-///
-/// # Safety
-/// `arg` is NUL-terminated; `num_matches` and `matches` are writable. Runs
-/// Lua, so main thread only.
-pub(crate) unsafe fn find_help_tags(
-    arg: *const c_char,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-    keep_lang: bool,
-) -> Result<(), Failed> {
-    let mut err = Error::none();
+/// Every help tag matching `subject`, best match first, at most
+/// `TAG_MANY` of them. With `keep_lang` set, prefer the language of the
+/// current buffer.
+fn find_help_tags(subject: &[u8], keep_lang: bool) -> Result<Vec<Vec<u8>>, Failed> {
     let mut args = ArrayBuf::<1>::new();
-    // SAFETY: `arg` is NUL-terminated and outlives the call, which only
-    // reads it.
-    args.push(Object::string(unsafe { cstr_to_string(arg) }));
-    let chunk = String_0::from_cstr(c"return require'vim._core.help'.escape_subject(...)");
-    let name = ptr::null();
-    let res = match unsafe { nlua_exec(&chunk, name, args.array(), kRetObject) } {
+    args.push(Object::string(String_0::from_bytes(subject)));
+    let chunk = c"return require'vim._core.help'.escape_subject(...)";
+    let res = match nlua_exec_cstr(chunk, args.array(), kRetObject) {
         Ok(value) => value,
-        Err(e) => {
-            err = e;
-            Object::Nil
+        Err(mut err) => {
+            emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
+            err.clear();
+            return Err(Failed);
         }
     };
-
-    // SAFETY: `err` is our slot and `res` the chunk's answer.
-    if err.is_set() {
-        emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
-        err.clear();
-        return Err(Failed);
-    }
-    err.clear();
     let escaped = res
         .as_string()
         .expect("`vim._core.help.escape_subject()` answers with a string");
-    // The search pattern, owned here: `find_tags` runs a tag function, and
-    // upstream's copy in the shared `IObuff` is cut to its size.
+    // The search pattern, cut to the size upstream's copy in the shared
+    // `IObuff` had, and read as the C string it was there.
     let escaped = escaped.as_bytes();
-    let mut pattern = escaped[..escaped.len().min(IOSIZE as usize - 1)].to_vec();
-    pattern.push(NUL as u8);
-    let iobuff = pattern.as_mut_ptr().cast::<c_char>();
+    let escaped = &escaped[..escaped.len().min(IOSIZE as usize - 1)];
+    let pattern = XString::from_bytes(escaped.split(|&b| b == 0).next().unwrap_or_default());
     drop(res);
 
     let mut flags = (TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC) as c_int;
     if keep_lang {
         flags |= TAG_KEEP_LANG as c_int;
     }
-    // SAFETY: the out-parameters are the caller's, and `pattern` holds the
-    // NUL-terminated text written just above.
-    unsafe { *matches = ptr::null_mut() };
-    unsafe { *num_matches = 0 };
-    let (mincount, buf) = (MAXCOL as c_int, ptr::null_mut());
-    let found = unsafe { find_tags(iobuff, num_matches, matches, flags, mincount, buf) };
-    if found.is_ok() && unsafe { *num_matches } > 0 {
-        // Sort on the heuristic number `find_tags` put after the tag.
-        let base = unsafe { (*matches).cast::<c_void>() };
-        let (count, width) = (unsafe { *num_matches } as size_t, size_of::<*mut c_char>());
-        unsafe { qsort(base, count, width, Some(help_compare)) };
-        // Drop everything past TAG_MANY to keep the listing short.
-        while unsafe { *num_matches } > TAG_MANY as c_int {
-            unsafe { *num_matches -= 1 };
-            unsafe { xfree((*(*matches).offset(*num_matches as isize)).cast::<c_void>()) };
-        }
-    }
-    Ok(())
+    let mut matches = find_help_tag_matches(pattern.as_cstr(), flags, MAXCOL as c_int)?;
+    // Sort on the heuristic number `find_tags` put after the tag.
+    matches.sort_unstable_by(help_compare);
+    // Drop everything past TAG_MANY to keep the listing short.
+    matches.truncate(TAG_MANY as usize);
+    Ok(matches.into_iter().map(|(tag, _)| tag).collect())
 }
 
 /// Tidy the match list for display: strip `@ab` where `ab` is the head of
 /// 'helplang', and strip `@en` from any tag that exists in English only.
-///
-/// # Safety
-/// `file` holds `num_file` writable NUL-terminated strings.
-pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) {
-    // The preferred language as a `@ab` suffix, or empty for English.
-    let mut suffix = [NUL as c_char; 4];
-    // SAFETY: 'helplang' is a NUL-terminated option string; a non-empty one
-    // always has at least two bytes, since it is a comma-separated list of
-    // two-letter codes.
-    p_hlg(|hlg| {
+fn cleanup_help_tags(tags: &mut [Vec<u8>]) {
+    // The preferred language as a `@ab` suffix, or none for English.
+    let suffix = p_hlg(|hlg| {
         let hlg = hlg.to_bytes();
-        if !hlg.is_empty() && hlg[..2.min(hlg.len())] != *b"en" {
-            suffix[0] = b'@' as c_char;
-            suffix[1] = hlg[0].cast_signed();
-            suffix[2] = hlg[1].cast_signed();
-        }
+        // A non-empty 'helplang' is a comma-separated list of two-letter
+        // codes, so it always has two bytes.
+        (!hlg.is_empty() && hlg[..2.min(hlg.len())] != *b"en")
+            .then(|| [b'@', hlg[0], hlg.get(1).copied().unwrap_or(0)])
     });
 
-    // SAFETY: caller contract; every truncation writes inside a string.
-    for i in 0..num_file {
-        let tag = unsafe { *file.offset(i as isize) };
-        let len = unsafe { cstr::bytes_at(tag) }.len() as c_int - 3;
-        if len <= 0 || unsafe { !cstr::eq_bytes(tag.offset(len as isize), b"@en") } {
+    for i in 0..tags.len() {
+        let Some(len) = tags[i].len().checked_sub(3).filter(|&len| len > 0) else {
+            continue;
+        };
+        if tags[i][len..] != *b"@en" {
             continue;
         }
         // Sorting on priority means the same item in another language
         // may be anywhere; search all of them for a match up to the
         // "@en".
-        let mut j = 0;
-        while j < num_file {
-            let other = unsafe { *file.offset(j as isize) };
-            if j != i
-                && unsafe { cstr::bytes_at(other) }.len() as c_int == len + 3
-                && unsafe { cstr::prefix_eq(tag, other, len as size_t + 1) }
-            {
-                break;
-            }
-            j += 1;
-        }
-        if j == num_file {
+        let tag = &tags[i];
+        let elsewhere = tags
+            .iter()
+            .enumerate()
+            .any(|(j, other)| j != i && other.len() == len + 3 && other[..=len] == tag[..=len]);
+        if !elsewhere {
             // The item exists only with "@en": drop the suffix.
-            unsafe { *tag.offset(len as isize) = NUL as c_char };
+            tags[i].truncate(len);
         }
     }
 
-    if suffix[0] != NUL as c_char {
-        for i in 0..num_file {
-            let tag = unsafe { *file.offset(i as isize) };
-            let len = unsafe { cstr::bytes_at(tag) }.len() as c_int - 3;
-            if len > 0 && unsafe { cstr::eq(tag.offset(len as isize), suffix.as_ptr()) } {
-                unsafe { *tag.offset(len as isize) = NUL as c_char };
+    if let Some(suffix) = suffix {
+        for tag in tags.iter_mut() {
+            if tag.len() > 3 && tag.ends_with(&suffix) {
+                tag.truncate(tag.len() - 3);
             }
         }
     }
@@ -616,15 +483,9 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
 /// The help tags `arg` matches, cleaned up the way the command line offers
 /// them -- [`find_help_tags`] then [`cleanup_help_tags`], owned.
 pub(crate) fn help_tag_matches(arg: &CStr) -> Result<Vec<XString>, Failed> {
-    let mut count: c_int = 0;
-    let mut files: *mut *mut c_char = ptr::null_mut();
-    // SAFETY: a NUL-terminated pattern and two locals to fill in; the
-    // matches are cleaned up in place, then taken over once.
-    unsafe {
-        find_help_tags(arg.as_ptr(), &raw mut count, &raw mut files, false)?;
-        cleanup_help_tags(count, files);
-        Ok(take_wild(count, files))
-    }
+    let mut tags = find_help_tags(arg.to_bytes(), false)?;
+    cleanup_help_tags(&mut tags);
+    Ok(tags.into_iter().map(XString::from_vec).collect())
 }
 
 // -- The help buffer -------------------------------------------------------
@@ -640,7 +501,7 @@ pub(crate) fn prepare_help_buffer() {
     // '*', '"' and '|', plus the latin1 word characters translated help
     // files use. Only set it when needed: `buf_init_chartab` is work.
     let isk = c"!-~,^*,^|,^\",192-255";
-    if !unsafe { cstr::eq(Buf::current().b_p_isk.value_ptr(), isk.as_ptr()) } {
+    if Buf::current().b_p_isk.bytes() != isk.to_bytes() {
         set_option_direct(kOptIskeyword, cstr_optval(isk), OptionSetFlags::LOCAL, 0);
         check_buf_options(Buf::current());
         buf_init_chartab(Buf::current(), false);
@@ -657,38 +518,29 @@ pub(crate) fn prepare_help_buffer() {
     Buf::current().b_p_ts = 8;
     Buf::current().b_p_ma = 0; // not modifiable
     Buf::current().b_p_bin = 0; // reset 'bin' before reading the file
-    let wo = unsafe { &raw mut (*Win::current_raw()).w_onebuf_opt };
-    unsafe { (*wo).wo_list = 0 };
-    unsafe { (*wo).wo_nu = 0 };
-    unsafe { (*wo).wo_rnu = 0 };
-    unsafe { (*wo).wo_scb = 0 }; // no scroll binding
-    unsafe { (*wo).wo_crb = 0 }; // no cursor binding
-    unsafe { (*wo).wo_arab = 0 };
-    unsafe { (*wo).wo_rl = 0 }; // help windows are left-to-right
-    unsafe { (*wo).wo_fen = 0 }; // no folding
-    unsafe { (*wo).wo_diff = 0 };
-    unsafe { (*wo).wo_spell = 0 };
+    let mut win = Win::current();
+    let wo = &mut win.w_onebuf_opt;
+    wo.wo_list = 0;
+    wo.wo_nu = 0;
+    wo.wo_rnu = 0;
+    wo.wo_scb = 0; // no scroll binding
+    wo.wo_crb = 0; // no cursor binding
+    wo.wo_arab = 0;
+    wo.wo_rl = 0; // help windows are left-to-right
+    wo.wo_fen = 0; // no folding
+    wo.wo_diff = 0;
+    wo.wo_spell = 0;
 
     set_buflisted(0);
 }
 
 /// Populate `*local-additions*` in `help.txt`.
 pub(crate) fn get_local_additions() {
-    let mut err = Error::none();
-    let chunk = String_0::from_cstr(c"return require'vim._core.help'.local_additions()");
-    let name = ptr::null();
-    let res = match unsafe { nlua_exec(&chunk, name, Array::EMPTY, kRetNilBool) } {
-        Ok(value) => value,
-        Err(e) => {
-            err = e;
-            Object::Nil
-        }
-    };
-    if err.is_set() {
+    let chunk = c"return require'vim._core.help'.local_additions()";
+    if let Err(mut err) = nlua_exec_cstr(chunk, Array::EMPTY, kRetNilBool) {
         emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
+        err.clear();
     }
-    drop(res);
-    err.clear();
 }
 
 #[cfg(test)]
@@ -738,10 +590,7 @@ mod tests {
     }
 
     fn score(name: &[u8], offset: c_int, wrong_case: bool) -> c_int {
-        let mut owned = name.to_vec();
-        owned.push(0);
-        // SAFETY: a NUL-terminated copy this frame owns.
-        unsafe { help_heuristic(owned.as_mut_ptr().cast(), offset, wrong_case) }
+        help_heuristic(name, offset, wrong_case)
     }
 
     #[test]
@@ -764,7 +613,6 @@ mod tests {
 
     /// The sort `find_help_tags` gives its matches: score first, then name.
     #[test]
-    #[cfg_attr(miri, ignore = "libc's qsort is a foreign call")]
     fn matches_sort_by_score_then_name() {
         let rows: &[(&[u8], &[u8])] = &[
             (b"b@en", b"000300"),
@@ -775,28 +623,12 @@ mod tests {
             (b"z@en", b"000099"),
             (b"a@en", b"000300"),
         ];
-        let mut owned: Vec<Vec<u8>> = rows
+        let mut owned: Vec<HelpTagMatch> = rows
             .iter()
-            .map(|(tag, score)| [*tag, b"\0", *score, b"\0"].concat())
+            .map(|(tag, score)| (tag.to_vec(), score.to_vec()))
             .collect();
-        let mut ptrs: Vec<*mut c_char> = owned
-            .iter_mut()
-            .map(|row| row.as_mut_ptr().cast())
-            .collect();
-        // SAFETY: each pointer is a tag, its NUL, a score and its NUL.
-        unsafe {
-            qsort(
-                ptrs.as_mut_ptr().cast(),
-                ptrs.len(),
-                size_of::<*mut c_char>(),
-                Some(help_compare),
-            )
-        };
-        // SAFETY: as above.
-        let sorted: Vec<&[u8]> = ptrs
-            .iter()
-            .map(|&p| unsafe { CStr::from_ptr(p) }.to_bytes())
-            .collect();
+        owned.sort_unstable_by(help_compare);
+        let sorted: Vec<&[u8]> = owned.iter().map(|(tag, _)| tag.as_slice()).collect();
         let want: &[&[u8]] = &[
             b"z@en",
             b"c@cn",
@@ -813,25 +645,17 @@ mod tests {
     #[test]
     fn a_language_suffix_is_split_off() {
         for (subject, rest, lang) in [
-            (&b"demo@cn"[..], &b"demo"[..], Some(&b"cn"[..])),
-            (b"@en", b"", Some(b"en")),
+            (&b"demo@cn"[..], &b"demo"[..], Some(*b"cn")),
+            (b"@en", b"", Some(*b"en")),
             (b"demo@c1", b"demo@c1", None),
             (b"demo@", b"demo@", None),
-            (b"x@EN", b"x", Some(b"EN")),
+            (b"x@EN", b"x", Some(*b"EN")),
             (b"ab", b"ab", None),
-            (b"demo@@cn", b"demo@", Some(b"cn")),
+            (b"demo@@cn", b"demo@", Some(*b"cn")),
         ] {
             let mut owned = subject.to_vec();
-            owned.push(0);
-            // SAFETY: a NUL-terminated writable copy.
-            let found = unsafe { check_help_lang(owned.as_mut_ptr().cast()) };
-            // SAFETY: the answer points into `owned`, NUL-terminated.
-            let found =
-                (!found.is_null()).then(|| unsafe { CStr::from_ptr(found) }.to_bytes().to_vec());
-            let left = CStr::from_bytes_until_nul(&owned)
-                .expect("terminated")
-                .to_bytes();
-            assert_eq!((left, found.as_deref()), (rest, lang), "{subject:?}");
+            let found = split_help_lang(&mut owned);
+            assert_eq!((owned.as_slice(), found), (rest, lang), "{subject:?}");
         }
     }
 

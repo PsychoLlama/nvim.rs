@@ -3179,6 +3179,7 @@ static const int MtFlags_REAL = 1;
 static const int MtFlags_RIGHT_GRAVITY = 16384;
 static const int NAME_LIMIT = 100;
 static const int NAME_MAX = 255;
+static const int NAME_ROOM = 4096;
 static const int NBOOL = 44;
 static const int NEWLINE_OFFSET = 30;
 static const int NFA_ENGINE = 2;

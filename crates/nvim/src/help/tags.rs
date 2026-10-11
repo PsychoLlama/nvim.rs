@@ -13,44 +13,40 @@
 //! (`help-tags\t<tagfile>\t1\n`), which is built in final form and written
 //! verbatim.
 //!
-//! Each step owns the buffer it works in: the glob goes into a local,
-//! `gen_expand_wildcards` reads it back out, and the same buffer becomes the
-//! output path. Upstream uses the shared `NameBuff`/`IObuff` for all of it.
+//! Every name is an owned `Vec<u8>` measured against `MAXPATHL` the way
+//! upstream's fixed `NameBuff` was, and a help file is read a line at a time
+//! the way `vim_fgets` reads one into `IObuff`: [`read_help_line`] keeps
+//! the 1024-byte cut, so a tag past it is not seen, exactly as before.
 //!
 //! Original: `src/nvim/help.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_iswhite};
+use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::cmdexpand::{WildMode, WildOpts, expand_one};
-use crate::cstr;
-use crate::fileio::vim_fgets;
-use crate::fprintf;
 use crate::getchar::state::got_int;
-use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
+use crate::memory::XString;
 use crate::message::e_fnametoolong;
 use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
-use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::P_RTP;
-use crate::os::cshim::{gettext, putc, strchr};
+use crate::os::cshim::gettext;
 use crate::os::fs::dir_exists;
-use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
-use crate::path::{ExpandFlags, add_pathsep, free_wild, gen_expand_wildcards, path_full_compare};
-use crate::runtime::{RuntimeOpts, do_in_path};
+use crate::path::{ExpandFlags, expand_wildcards_list, path_full_compare_of};
+use crate::runtime::{RuntimeOpts, do_in_path_visit};
 use crate::semsg;
-use crate::snprintf;
-use crate::strings::has_char;
-use crate::strings::{sort_strings, vim_strchr};
-use crate::types::{ExArg, Expand, ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, size_t, uint8_t};
-use crate::vim_snprintf;
-use ::libc::{fclose, fputs, strcasecmp};
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+use crate::types::{ExArg, Expand, ExpandContext, IOSIZE, MAXPATHL};
+use core::ffi::c_int;
+use std::ffi::OsStr;
+use std::fs::File;
+use std::io::{BufRead, BufReader, BufWriter, ErrorKind, Write};
+use std::os::unix::ffi::OsStrExt;
 
 use super::flag::kEqualFiles;
+
+/// The room upstream's `NameBuff` had, terminator included.
+const NAME_ROOM: usize = MAXPATHL as usize;
 
 /// `:helptags [++t] {dir}`, or `:helptags ALL` for every `doc` directory in
 /// 'runtimepath'.
@@ -64,25 +60,25 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     }
 
     if excmd.line.arg() == b"ALL" {
-        // A copy: the walk sources nothing, but it outlives a projection's
-        // borrow and `do_in_path` keeps the cursor.
+        // A copy: the walk outlives a projection's borrow.
         let rtp = P_RTP.get();
-        let (none, doc) = (c"".as_ptr(), c"doc".as_ptr().cast_mut());
         let opts = RuntimeOpts::ALL | RuntimeOpts::DIR;
-        let flag = (&raw mut add_help_tags).cast::<c_void>();
-        // SAFETY: `flag` outlives the walk, which is the callback's only
-        // argument; the rest are static strings and the runtimepath.
-        unsafe {
-            do_in_path(
-                rtp,
-                c"runtimepath",
-                none,
-                doc,
-                opts,
-                Some(helptags_cb),
-                flag,
-            )
-        };
+        do_in_path_visit(
+            rtp,
+            c"runtimepath",
+            c"",
+            Some(c"doc"),
+            opts,
+            &mut |dirs, all| {
+                for dir in dirs {
+                    do_helptags(dir.to_bytes(), add_help_tags, true);
+                    if !all {
+                        return true;
+                    }
+                }
+                !dirs.is_empty()
+            },
+        );
         return;
     }
 
@@ -93,9 +89,7 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     let dirname = expand_one(&mut xpc, Some(arg), None, opts, WildMode::ExpandFree);
     match dirname {
         Some(dirname) if dir_exists(dirname.as_cstr()) => {
-            let mut dirname = dirname.into_vec();
-            // SAFETY: a NUL-terminated directory name this frame owns.
-            unsafe { do_helptags(dirname.as_mut_ptr().cast(), add_help_tags, false) };
+            do_helptags(dirname.as_cstr().to_bytes(), add_help_tags, false);
         }
         _ => {
             let arg = msg_bytes(excmd.line.arg());
@@ -104,159 +98,93 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     }
 }
 
-/// `do_in_path` callback for `:helptags ALL`: generate tags in each `doc`
-/// directory it hands us.
-///
-/// # Safety
-/// `fnames` holds `num_fnames` NUL-terminated directory names and `cookie`
-/// points at the caller's `bool`.
-unsafe fn helptags_cb(
-    num_fnames: c_int,
-    fnames: *mut *mut c_char,
-    all: bool,
-    cookie: *mut c_void,
-) -> bool {
-    // SAFETY: caller contract.
-    for i in 0..num_fnames {
-        unsafe { do_helptags(*fnames.offset(i as isize), *cookie.cast::<bool>(), true) };
-        if !all {
-            return true;
-        }
+/// Append a path separator to `name` unless it already ends in one --
+/// upstream's `add_pathsep` over `NameBuff`, which refuses when the
+/// separator and its terminator would not fit.
+fn push_pathsep(name: &mut Vec<u8>) -> bool {
+    if name.is_empty() || name.ends_with(b"/") {
+        return true;
     }
-    num_fnames > 0
+    if name.len() + 2 > NAME_ROOM {
+        return false;
+    }
+    name.push(b'/');
+    true
 }
 
 /// Generate the tags files for one help directory, one per language found
 /// in it. English uses `.txt` and `tags`; a language `ab` uses `.abx` and
 /// `tags-ab`.
-///
-/// # Safety
-/// `dirname` is NUL-terminated. Main thread.
-unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr: bool) {
-    let mut glob = [0 as c_char; MAXPATHL as usize];
-    let namebuff = glob.as_mut_ptr();
-    // SAFETY: `glob` is `MAXPATHL` bytes and outlives the expansion below,
-    // and `dirname` is the caller's NUL-terminated string.
-    unsafe { xstrlcpy(namebuff, dirname, MAXPATHL as usize) };
-    let too_long = !unsafe { add_pathsep(namebuff) }
-        || unsafe { xstrlcat(namebuff, c"**".as_ptr(), MAXPATHL as usize) } >= MAXPATHL as usize;
-    if too_long {
+fn do_helptags(dirname: &[u8], add_help_tags: bool, ignore_writeerr: bool) {
+    // `xstrlcpy` into `NameBuff` cut the name to the room, silently.
+    let mut glob = dirname[..dirname.len().min(NAME_ROOM - 1)].to_vec();
+    if !push_pathsep(&mut glob) || glob.len() + 2 >= NAME_ROOM {
         emsg(gettext(e_fnametoolong));
         return;
     }
-    let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let namebuff = unsafe { msg_cstr_opt(cstr::at_opt(namebuff)) };
-        semsg!("E151: No match: {namebuff}");
+    glob.extend_from_slice(b"**");
+    let Some(files) = expand_help_files(&glob) else {
+        let glob = msg_bytes(&glob);
+        semsg!("E151: No match: {glob}");
         return;
     };
 
     // Which languages does the directory hold?
-    let mut langs: Vec<[c_char; 2]> = Vec::new();
-    // SAFETY: `files` holds NUL-terminated names.
-    for i in 0..files.count {
-        if let Some(lang) = unsafe { help_file_lang(*files.names.offset(i as isize)) }
+    let mut langs: Vec<[u8; 2]> = Vec::new();
+    for file in &files {
+        if let Some(lang) = help_file_lang(file.as_cstr().to_bytes())
             && !langs.contains(&lang)
         {
             langs.push(lang);
         }
     }
+    drop(files);
 
     for lang in langs {
-        let mut fname = *b"tags-xx\0";
-        let mut ext = *b".xxx\0";
-        if lang == [b'e' as c_char, b'n' as c_char] {
+        let (ext, tagfname) = if lang == *b"en" {
             // English is the exception: ".txt" and "tags".
-            fname[4] = 0;
-            ext = *b".txt\0";
+            (b".txt".to_vec(), b"tags".to_vec())
         } else {
-            fname[5] = lang[0] as u8;
-            fname[6] = lang[1] as u8;
-            ext[1] = lang[0] as u8;
-            ext[2] = lang[1] as u8;
-        }
-        // SAFETY: both buffers are NUL-terminated by construction, and
-        // `dirname` by the caller.
-        let ext = ext.as_ptr().cast::<c_char>();
-        let fname = fname.as_ptr().cast::<c_char>();
-        unsafe { helptags_one(dirname, ext, fname, add_help_tags, ignore_writeerr) };
+            let ext = [b'.', lang[0], lang[1], b'x'];
+            let tagfname = [b't', b'a', b'g', b's', b'-', lang[0], lang[1]];
+            (ext.to_vec(), tagfname.to_vec())
+        };
+        helptags_one(dirname, &ext, &tagfname, add_help_tags, ignore_writeerr);
     }
-    drop(files);
 }
 
 /// The language a help file's name says it is in: `.txt` is English, and
 /// `.abx` is the language `ab`. Anything else has no language.
-///
-/// # Safety
-/// `name` is NUL-terminated.
-unsafe fn help_file_lang(name: *const c_char) -> Option<[c_char; 2]> {
-    // SAFETY: caller contract; every read is within the name's length.
-    let len = unsafe { cstr::bytes_at(name) }.len() as isize;
-    if len <= 4 {
+fn help_file_lang(name: &[u8]) -> Option<[u8; 2]> {
+    if name.len() <= 4 {
         return None;
     }
-    let tail = unsafe { name.offset(len - 4) };
-    if unsafe { strcasecmp(tail, c".txt".as_ptr()) } == 0 {
-        return Some([b'e' as c_char, b'n' as c_char]);
+    let tail = &name[name.len() - 4..];
+    if tail.eq_ignore_ascii_case(b".txt") {
+        return Some(*b"en");
     }
-    let (a, b, x) = (
-        unsafe { *tail.offset(1) },
-        unsafe { *tail.offset(2) },
-        unsafe { *tail.offset(3) },
-    );
-    if unsafe { *tail } == b'.' as c_char
-        && ascii_isalpha(a as c_int)
-        && ascii_isalpha(b as c_int)
-        && to_lower(x) == b'x' as c_char
+    let (a, b, x) = (tail[1], tail[2], tail[3]);
+    if tail[0] == b'.'
+        && a.is_ascii_alphabetic()
+        && b.is_ascii_alphabetic()
+        && x.eq_ignore_ascii_case(&b'x')
     {
-        return Some([to_lower(a), to_lower(b)]);
+        return Some([a.to_ascii_lowercase(), b.to_ascii_lowercase()]);
     }
     None
 }
 
-/// `TOLOWER_ASC`: lowercase an ASCII letter, leaving everything else alone.
-fn to_lower(c: c_char) -> c_char {
-    if c >= b'A' as c_char && c <= b'Z' as c_char {
-        c + (b'a' - b'A') as c_char
-    } else {
-        c
-    }
-}
-
-/// A `gen_expand_wildcards` result, freed with `free_wild` when dropped.
-struct Wildcards {
-    count: c_int,
-    names: *mut *mut c_char,
-}
-
-impl Drop for Wildcards {
-    fn drop(&mut self) {
-        // SAFETY: `names` is `gen_expand_wildcards`'s own allocation of
-        // `count` strings, and nothing else owns it.
-        unsafe { free_wild(self.count, self.names) };
-    }
-}
-
 /// Expand the glob in `pattern`, or `None` when it matched nothing. The
 /// caller reports the failure: the two callers word it differently.
-///
-/// # Safety
-/// `pattern` is NUL-terminated.
-unsafe fn expand_help_files(pattern: *mut c_char) -> Option<Wildcards> {
-    let mut count: c_int = 0;
-    let mut names: *mut *mut c_char = ptr::null_mut();
-    // Note: the pattern is passed as a one-element array, not as `&pattern`,
-    // because in C `NameBuff` and `&NameBuff` are the same address.
-    let mut list = [pattern];
+fn expand_help_files(pattern: &[u8]) -> Option<Vec<XString>> {
+    let pattern = XString::from_bytes(pattern);
     let flags = ExpandFlags::FILE | ExpandFlags::SILENT;
-    let (out_count, out_names) = (&raw mut count, &raw mut names);
-    // SAFETY: caller contract; the out-parameters are ours.
-    let res = unsafe { gen_expand_wildcards(1, list.as_mut_ptr(), out_count, out_names, flags) };
-    if res.is_err() {
-        return None;
-    }
-    let found = Wildcards { count, names };
-    if count == 0 { None } else { Some(found) }
+    expand_wildcards_list(pattern.as_cstr(), flags).filter(|files| !files.is_empty())
+}
+
+/// A path as the file system takes it.
+fn os_path(name: &[u8]) -> &OsStr {
+    OsStr::from_bytes(name)
 }
 
 /// Generate one tags file.
@@ -266,107 +194,132 @@ unsafe fn expand_help_files(pattern: *mut c_char) -> Option<Wildcards> {
 /// `add_help_tags` adds the `help-tags` tag, which `$VIMRUNTIME/doc` gets
 /// anyway; `ignore_writeerr` silences the "cannot open for writing" error,
 /// which `:helptags ALL` wants for read-only runtime directories.
-///
-/// # Safety
-/// All three strings are NUL-terminated. Main thread.
-unsafe fn helptags_one(
-    dir: *mut c_char,
-    ext: *const c_char,
-    tagfname: *const c_char,
+fn helptags_one(
+    dir: &[u8],
+    ext: &[u8],
+    tagfname: &[u8],
     add_help_tags: bool,
     ignore_writeerr: bool,
 ) {
-    let mut glob = [0 as c_char; MAXPATHL as usize];
-    let namebuff = glob.as_mut_ptr();
     // Find all the help files: "<dir>/**/*<ext>".
-    // SAFETY: `glob` is `MAXPATHL` bytes and outlives the expansion below,
-    // and `dir`/`ext` are the caller's NUL-terminated strings.
-    let dirlen = unsafe { xstrlcpy(namebuff, dir, MAXPATHL as usize) };
-    let too_long = dirlen >= MAXPATHL as usize
-        || unsafe { xstrlcat(namebuff, c"/**/*".as_ptr(), MAXPATHL as usize) } >= MAXPATHL as usize
-        || unsafe { xstrlcat(namebuff, ext, MAXPATHL as usize) } >= MAXPATHL as usize;
-    if too_long {
+    let mut glob = dir.to_vec();
+    glob.extend_from_slice(b"/**/*");
+    glob.extend_from_slice(ext);
+    if glob.len() >= NAME_ROOM {
         emsg(gettext(e_fnametoolong));
         return;
     }
-    let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
+    let Some(files) = expand_help_files(&glob) else {
         if !got_int.get() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let namebuff = unsafe { msg_cstr_opt(cstr::at_opt(namebuff)) };
-            semsg!("E151: No match: {namebuff}");
+            let glob = msg_bytes(&glob);
+            semsg!("E151: No match: {glob}");
         }
         return;
     };
 
     // Open the tags file for writing before scanning, so that a directory
     // we cannot write to costs nothing.
-    let (into, from, n) = (namebuff, dir, dirlen as size_t + 1);
-    // SAFETY: `dir` is `dirlen` bytes plus its NUL, so the copy fits;
-    // `namebuff` stays NUL-terminated for the two appends after it.
-    unsafe { into.cast::<u8>().copy_from_nonoverlapping(from.cast(), n) };
-    let too_long = !unsafe { add_pathsep(namebuff) }
-        || unsafe { xstrlcat(namebuff, tagfname, MAXPATHL as usize) } >= MAXPATHL as usize;
-    if too_long {
+    let mut tags_path = dir.to_vec();
+    if !push_pathsep(&mut tags_path) || tags_path.len() + tagfname.len() >= NAME_ROOM {
         emsg(gettext(e_fnametoolong));
-        // Upstream leaks `files` here; the `Wildcards` drop frees it.
         return;
     }
-    let fd_tags = unsafe { os_fopen(namebuff, c"w".as_ptr()) };
-    if fd_tags.is_null() {
+    tags_path.extend_from_slice(tagfname);
+    let Ok(tags_file) = File::create(os_path(&tags_path)) else {
         if !ignore_writeerr {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let namebuff = unsafe { msg_cstr_opt(cstr::at_opt(namebuff)) };
-            semsg!("E152: Cannot open {namebuff} for writing");
+            let tags_path = msg_bytes(&tags_path);
+            semsg!("E152: Cannot open {tags_path} for writing");
         }
         return;
-    }
+    };
 
     // Every tag, as an owned "<tag>\t<file>" line.
-    let mut tags: Vec<*mut c_char> = Vec::new();
-    // SAFETY: `tagfname` is NUL-terminated and `dir` a directory name.
+    let mut tags: Vec<Vec<u8>> = Vec::new();
+    let dir_name = XString::from_bytes(dir);
     if add_help_tags
-        || unsafe { path_full_compare(c"$VIMRUNTIME/doc".as_ptr().cast_mut(), dir, false, true) }
-            == kEqualFiles
+        || path_full_compare_of(c"$VIMRUNTIME/doc", dir_name.as_cstr(), false, true) == kEqualFiles
     {
-        let len = 18 + unsafe { cstr::bytes_at(tagfname) }.len();
-        let entry = unsafe { xmalloc(len) }.cast::<c_char>();
-        unsafe { snprintf!(entry, len, c"help-tags\t%s\t1\n".as_ptr(), tagfname) };
-        tags.push(entry);
+        tags.push([b"help-tags\t", tagfname, b"\t1\n"].concat());
     }
 
-    // SAFETY: `files` holds NUL-terminated names all starting with `dir`.
-    for fi in 0..files.count {
+    for path in &files {
         if got_int.get() {
             break;
         }
-        let path = unsafe { *files.names.offset(fi as isize) };
-        let fd = unsafe { os_fopen(path, c"r".as_ptr()) };
-        if fd.is_null() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let path = unsafe { msg_cstr_opt(cstr::at_opt(path)) };
+        let path = path.as_cstr().to_bytes();
+        let Ok(file) = File::open(os_path(path)) else {
+            let path = msg_bytes(path);
             semsg!("E153: Unable to open {path} for reading");
             continue;
-        }
-        unsafe { scan_help_file(fd, path.add(dirlen).offset(1), &mut tags) };
-        unsafe { fclose(fd) };
+        };
+        // The name as the tags file records it: past the directory and the
+        // separator after it.
+        let fname = path.get(dir.len() + 1..).unwrap_or_default();
+        scan_help_file(&mut BufReader::new(file), fname, &mut tags);
     }
     drop(files);
 
+    let mut out = BufWriter::new(tags_file);
     if !got_int.get() && !tags.is_empty() {
-        // SAFETY: every entry is an owned NUL-terminated line, and
-        // `fd_tags` is open for writing.
-        unsafe { sort_strings(tags.as_mut_ptr(), tags.len() as c_int) };
-        unsafe { report_duplicates(&tags, dir) };
-        unsafe { write_tags(fd_tags, &tags) };
+        tags.sort_unstable();
+        report_duplicates(&tags, dir);
+        // There is no check for a write error, as upstream.
+        let _ = write_tags(&mut out, &tags);
     }
+    let _ = out.flush();
+}
 
-    for entry in tags {
-        // SAFETY: each entry was allocated by `xmalloc` above.
-        unsafe { xfree(entry.cast::<c_void>()) };
+/// `fgets(3)` into `line`: up to `size - 1` bytes, through the first `\n`.
+/// Answers false -- `fgets`' null -- when nothing could be read.
+fn fgets(reader: &mut impl BufRead, line: &mut Vec<u8>, size: usize) -> bool {
+    line.clear();
+    while line.len() < size - 1 {
+        let available = match reader.fill_buf() {
+            Ok([]) => break,
+            Ok(available) => available,
+            Err(err) if err.kind() == ErrorKind::Interrupted => continue,
+            Err(_) => break,
+        };
+        let want = (size - 1 - line.len()).min(available.len());
+        let take = available[..want]
+            .iter()
+            .position(|&byte| byte == b'\n')
+            .map_or(want, |at| at + 1);
+        line.extend_from_slice(&available[..take]);
+        reader.consume(take);
+        if line.last() == Some(&b'\n') {
+            break;
+        }
     }
-    // There is no check for a write error, as upstream.
-    // SAFETY: `fd_tags` is open and nothing else holds it.
-    unsafe { fclose(fd_tags) };
+    !line.is_empty()
+}
+
+/// One line of a help file into `line`, as `vim_fgets` reads it into
+/// `IObuff`: a line longer than the buffer is cut at 1024 bytes and the rest
+/// of it thrown away. Answers false at the end of the file -- which, as
+/// upstream's, includes running into it while throwing a cut line's rest
+/// away in 199-byte steps.
+fn read_help_line(reader: &mut impl BufRead, line: &mut Vec<u8>) -> bool {
+    let size = IOSIZE as usize;
+    let mut got = fgets(reader, line, size);
+    // `vim_fgets` looks at the next-to-last byte of its buffer: anything but
+    // a NUL or a newline there means the line did not fit.
+    let filled = |text: &[u8], last: usize| text.len() > last && !matches!(text[last], 0 | b'\n');
+    if got && filled(line, size - 2) {
+        let mut rest = Vec::new();
+        loop {
+            got = fgets(reader, &mut rest, 200);
+            if !got || !filled(&rest, 198) {
+                break;
+            }
+        }
+    }
+    got
+}
+
+/// Is `byte` one of the white characters a tag may border on: `" \t\n\r"`?
+fn borders_tag(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | b'\n' | b'\r')
 }
 
 /// Read one help file, appending a `"<tag>\t<fname>"` entry to `tags` for
@@ -376,58 +329,41 @@ unsafe fn helptags_one(
 /// whitespace or the line start before it, and whitespace or the line end
 /// after it. Lines inside an example — everything indented after a line
 /// ending in `>` — are skipped.
-///
-/// # Safety
-/// `fd` is open for reading and `fname` NUL-terminated. Uses `IObuff`.
-unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mut c_char>) {
-    let mut line = [0 as c_char; IOSIZE as usize];
-    let iobuff = line.as_mut_ptr();
+fn scan_help_file(reader: &mut impl BufRead, fname: &[u8], tags: &mut Vec<Vec<u8>>) {
+    let mut buf = Vec::with_capacity(IOSIZE as usize);
     let mut in_example = false;
-    // SAFETY: `vim_fgets` NUL-terminates `line` within `IOSIZE` bytes, and
-    // every pointer below stays between its start and that NUL.
-    while !unsafe { vim_fgets(iobuff, IOSIZE, fd) } && !got_int.get() {
+    while read_help_line(reader, &mut buf) && !got_int.get() {
+        // The line as the C string functions saw it: up to a NUL.
+        let line = buf.split(|&byte| byte == 0).next().unwrap_or_default();
         if in_example {
             // Skip the example; a non-white in the first column ends it.
-            if has_char(c" \t\n\r", unsafe { *iobuff } as uint8_t as c_int) {
+            if line.first().copied().is_some_and(borders_tag) {
                 continue;
             }
             in_example = false;
         }
 
-        let mut p1 = unsafe { vim_strchr(iobuff, b'*' as c_int) };
-        while !p1.is_null() {
-            let mut p2 = unsafe { strchr(p1.offset(1), b'*' as c_int) };
+        // Where the first accepted tag ends. Upstream terminates the line
+        // there, so the example test below sees only what comes before it.
+        let mut cut = None;
+        let star = |from: usize| line[from.min(line.len())..].iter().position(|&b| b == b'*');
+        let mut p1 = star(0);
+        while let Some(open) = p1 {
+            let mut p2 = star(open + 1).map(|at| open + 1 + at);
             // Skip "*" and "**".
-            if !p2.is_null() && p2 > unsafe { p1.offset(1) } {
-                let mut s = unsafe { p1.offset(1) };
-                while s < p2
-                    && unsafe { *s } != b' ' as c_char
-                    && unsafe { *s } != b'\t' as c_char
-                    && unsafe { *s } != b'|' as c_char
-                {
-                    s = unsafe { s.offset(1) };
-                }
-                // Only accept a *tag* made of valid characters, with
-                // white space before it and a white character or the end
-                // of the line after it. The order matters: `p1[-1]` is
-                // only in bounds once `p1 != iobuff` has been ruled out.
-                if s == p2
-                    && (p1 == iobuff
-                        || unsafe { *p1.offset(-1) } == b' ' as c_char
-                        || unsafe { *p1.offset(-1) } == b'\t' as c_char)
-                    && (has_char(c" \t\n\r", unsafe { *s.offset(1) } as uint8_t as c_int)
-                        || unsafe { *s.offset(1) } == NUL as c_char)
-                {
-                    unsafe { *p2 = NUL as c_char };
-                    p1 = unsafe { p1.offset(1) };
-                    let len = unsafe { p2.offset_from(p1) } as size_t
-                        + unsafe { cstr::bytes_at(fname) }.len()
-                        + 2;
-                    let entry = unsafe { xmalloc(len) }.cast::<c_char>();
-                    tags.push(entry);
-                    unsafe { snprintf!(entry, len, c"%s\t%s".as_ptr(), p1, fname) };
+            if let Some(close) = p2.filter(|&close| close > open + 1) {
+                let name = &line[open + 1..close];
+                let plain = !name.iter().any(|&b| matches!(b, b' ' | b'\t' | b'|'));
+                // Only accept a *tag* made of valid characters, with white
+                // space before it and a white character or the end of the
+                // line after it.
+                let before = open == 0 || matches!(line[open - 1], b' ' | b'\t');
+                let after = line.get(close + 1).is_none_or(|&b| borders_tag(b));
+                if plain && before && after {
+                    tags.push([name, b"\t", fname].concat());
+                    cut.get_or_insert(close);
                     // Find the next '*'.
-                    p2 = unsafe { vim_strchr(p2.offset(1), b'*' as c_int) };
+                    p2 = star(close + 1).map(|at| close + 1 + at);
                 }
             }
             p1 = p2;
@@ -435,18 +371,16 @@ unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mu
 
         // A line ending in ">" — optionally with a `:lang` tail — opens
         // an example.
-        let mut off = unsafe { cstr::bytes_at(iobuff) }.len();
-        if off >= 2 && unsafe { *iobuff.add(off - 1) } == b'\n' as c_char {
+        let line = &line[..cut.unwrap_or(line.len())];
+        let mut off = line.len();
+        if off >= 2 && line[off - 1] == b'\n' {
             off -= 2;
             while off > 0
-                && (is_lower(unsafe { *iobuff.add(off) })
-                    || ascii_isdigit(unsafe { *iobuff.add(off) } as c_int))
+                && (line[off].is_ascii_lowercase() || ascii_isdigit(c_int::from(line[off])))
             {
                 off -= 1;
             }
-            if unsafe { *iobuff.add(off) } == b'>' as c_char
-                && (off == 0 || unsafe { *iobuff.add(off - 1) } == b' ' as c_char)
-            {
+            if line[off] == b'>' && (off == 0 || line[off - 1] == b' ') {
                 in_example = true;
             }
         }
@@ -454,67 +388,49 @@ unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mu
     }
 }
 
-/// ASCII lowercase letter, the `ASCII_ISLOWER` of the C.
-fn is_lower(c: c_char) -> bool {
-    c >= b'a' as c_char && c <= b'z' as c_char
-}
-
 /// Report every tag defined twice. The entries are sorted, so duplicates
-/// are adjacent; two entries are the same tag when they agree up to the tab
-/// that separates the tag from its file name.
-///
-/// # Safety
-/// Every entry is a NUL-terminated `"<tag>\t<file>"` line; `dir` is
-/// NUL-terminated.
-unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
-    let mut path = [0 as c_char; MAXPATHL as usize];
-    let namebuff = path.as_mut_ptr();
-    // SAFETY: caller contract. The tab is restored before returning, so the
-    // entry is still a whole line for the writer below.
+/// are adjacent; two entries are the same tag when they agree up to and
+/// including the tab that separates the tag from its file name.
+fn report_duplicates(tags: &[Vec<u8>], dir: &[u8]) {
     for pair in tags.windows(2) {
-        let (mut p1, mut p2) = (pair[0], pair[1]);
-        while unsafe { *p1 } == unsafe { *p2 } {
-            if unsafe { *p2 } != b'\t' as c_char {
-                p1 = unsafe { p1.offset(1) };
-                p2 = unsafe { p2.offset(1) };
-                continue;
-            }
-            unsafe { *p2 = NUL as c_char };
-            let fmt = c"E154: Duplicate tag \"%s\" in file %s/%s".as_ptr();
-            let (tag, rest) = (pair[1], unsafe { p2.offset(1) });
-            let cap = MAXPATHL as size_t;
-            unsafe { vim_snprintf!(namebuff, cap, fmt, tag, dir, rest) };
-            // SAFETY: the message just formatted into `namebuff`.
-            emsg(unsafe { cstr::at(namebuff) });
-            unsafe { *p2 = b'\t' as c_char };
-            break;
+        let (first, second) = (&pair[0], &pair[1]);
+        let Some(tab) = second.iter().position(|&b| b == b'\t') else {
+            continue;
+        };
+        if first.get(..=tab) != Some(&second[..=tab]) {
+            continue;
         }
+        let mut message = b"E154: Duplicate tag \"".to_vec();
+        message.extend_from_slice(&second[..tab]);
+        message.extend_from_slice(b"\" in file ");
+        message.extend_from_slice(dir);
+        message.push(b'/');
+        message.extend_from_slice(&second[tab + 1..]);
+        // Upstream formatted it into `NameBuff`, cut to the room.
+        message.truncate(NAME_ROOM - 1);
+        emsg(XString::from_vec(message).as_cstr());
     }
 }
 
 /// Write the sorted entries out as a tags file. Each becomes
 /// `"<tag>\t<file>\t/*<tag>*\n"`, with `\` and `/` escaped inside the
 /// search pattern; the `help-tags` entry was built in final form already.
-///
-/// # Safety
-/// `fd` is open for writing and every entry a NUL-terminated
-/// `"<tag>\t<file>"` line.
-unsafe fn write_tags(fd: *mut FILE, tags: &[*mut c_char]) {
-    // SAFETY: caller contract.
-    for &entry in tags {
-        if unsafe { cstr::starts_with(entry, b"help-tags\t") } {
-            unsafe { fputs(entry, fd) };
+fn write_tags(out: &mut impl Write, tags: &[Vec<u8>]) -> std::io::Result<()> {
+    for entry in tags {
+        if entry.starts_with(b"help-tags\t") {
+            out.write_all(entry)?;
             continue;
         }
-        unsafe { fprintf!(fd, c"%s\t/*".as_ptr(), entry) };
-        let mut p = entry;
-        while unsafe { *p } != b'\t' as c_char {
-            if unsafe { *p } == b'\\' as c_char || unsafe { *p } == b'/' as c_char {
-                unsafe { putc(b'\\' as c_int, fd) };
+        out.write_all(entry)?;
+        out.write_all(b"\t/*")?;
+        let name = entry.split(|&b| b == b'\t').next().unwrap_or_default();
+        for &byte in name {
+            if byte == b'\\' || byte == b'/' {
+                out.write_all(b"\\")?;
             }
-            unsafe { putc(*p as c_int, fd) };
-            p = unsafe { p.offset(1) };
+            out.write_all(&[byte])?;
         }
-        unsafe { fprintf!(fd, c"*\n".as_ptr()) };
+        out.write_all(b"*\n")?;
     }
+    Ok(())
 }

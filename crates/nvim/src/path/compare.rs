@@ -19,6 +19,25 @@ use std::ffi::CStr;
 use super::*;
 use crate::types::{MAXPATHL, NUL};
 
+/// [`path_full_compare`] of two names the caller holds. Neither is written:
+/// the walk copies `s1` before expanding it and only reads `s2`.
+pub(crate) fn path_full_compare_of(
+    s1: &CStr,
+    s2: &CStr,
+    checkname: bool,
+    expandenv: bool,
+) -> FileComparison {
+    // SAFETY: two NUL-terminated names, read only.
+    unsafe {
+        path_full_compare(
+            s1.as_ptr().cast_mut(),
+            s2.as_ptr().cast_mut(),
+            checkname,
+            expandenv,
+        )
+    }
+}
+
 /// Compare two file names, by identity where the file system can say and by
 /// name where it cannot.
 ///
