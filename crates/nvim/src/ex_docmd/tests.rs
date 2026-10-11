@@ -381,6 +381,10 @@ fn the_loop_store_reads_through_stores_and_replays_at_depth() {
     use std::ffi::CString;
 
     let _fx = Fixture::new();
+    // A frame of the case's own: reading and replaying move the innermost
+    // frame's line number, which the next case would otherwise inherit.
+    let name = c"edstore";
+    crate::runtime::estack_push(crate::runtime::ETYPE_SCRIPT, name.as_ptr().cast_mut(), 0);
     let mut cookie = SourceCookie::new();
     cookie.source_from_buf_or_str = true;
     cookie.buflines = ["one", "two", "three"]
@@ -456,4 +460,5 @@ fn the_loop_store_reads_through_stores_and_replays_at_depth() {
     assert_eq!(lines(&inner)[0].0, "one");
     // The script itself is still at its second line.
     assert_eq!(cookie.sourcing_lnum, 2);
+    crate::runtime::estack_pop();
 }
