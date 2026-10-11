@@ -165,6 +165,21 @@ pub(crate) fn sourcing_name_copy() -> Option<Vec<u8>> {
     (!name.is_null()).then(|| unsafe { cstr::bytes_at(name) }.to_vec())
 }
 
+/// Run `f` over the innermost frame's name, borrowed -- `None` when nothing
+/// is executing or the frame has no name. For a reader that only compares
+/// or prints it, which [`sourcing_name_copy`] would make allocate.
+///
+/// `f` must not push onto or pop the execution stack: the stack is borrowed
+/// for the call, and the cell catches a nested borrow.
+pub(crate) fn with_sourcing_name<R>(f: impl FnOnce(Option<&[u8]>) -> R) -> R {
+    exestack.with(|stack| {
+        let name = stack.last().map_or(ptr::null_mut(), |entry| entry.es_name);
+        // SAFETY: a frame's name is null or a NUL-terminated string the
+        // frame owns, live while the frame is -- for this call.
+        f(unsafe { cstr::at_opt(name) }.map(CStr::to_bytes))
+    })
+}
+
 /// Move the innermost frame to `lnum`.
 pub(crate) fn set_sourcing_lnum(lnum: LineNr) {
     exestack.with_mut(|stack| {

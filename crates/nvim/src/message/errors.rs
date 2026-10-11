@@ -31,7 +31,7 @@ use crate::event::r#loop::schedule_deferred_job;
 use crate::guard::Suppress;
 use crate::log::logmsg;
 use crate::message_fmt::{msg_bytes as text_arg, msg_cstr};
-use crate::runtime::{estack_sfile_owned, sourcing_lnum, sourcing_name_copy};
+use crate::runtime::{estack_sfile_owned, sourcing_lnum, sourcing_name_copy, with_sourcing_name};
 use crate::strings::has_char;
 use core::ffi::{CStr, c_int, c_long};
 use std::ffi::CString;
@@ -49,23 +49,22 @@ fn sourcing_name_text() -> Option<Vec<u8>> {
 }
 
 /// Is the innermost script/function a different one from the last error's?
-fn other_sourcing_name(name: Option<&[u8]>) -> bool {
-    match name {
-        Some(name) => last_sourcing_name.with(|last| last.as_deref() != Some(name)),
-        None => false,
-    }
+/// False when it has no name.
+fn other_sourcing_name() -> bool {
+    with_sourcing_name(|name| {
+        name.is_some_and(|name| last_sourcing_name.with(|last| last.as_deref() != Some(name)))
+    })
 }
 
 /// The "Error in <script>:" line, or `None` when the source has already been
 /// reported.
 fn emsg_source_line() -> Option<CString> {
-    let name = sourcing_name_text();
-    if !other_sourcing_name(name.as_deref()) {
+    if !other_sourcing_name() {
         return None;
     }
     let sname = match estack_sfile_owned(ESTACK_NONE) {
         Some(stack) => stack.as_cstr().to_bytes().to_vec(),
-        None => name?,
+        None => sourcing_name_text()?,
     };
     let text = crate::formatted!(usize::MAX, gettext(c"Error in %s:").to_bytes(), &sname[..]);
     Some(CString::new(text).unwrap_or_default())
@@ -76,10 +75,9 @@ fn emsg_source_line() -> Option<CString> {
 fn emsg_lnum_line() -> Option<CString> {
     // Show the source of the error, but not if it is the same as the last
     // time.
-    let name = sourcing_name_text();
     let lnum = sourcing_lnum();
-    if name.is_none()
-        || !(other_sourcing_name(name.as_deref()) || lnum != last_sourcing_lnum.get())
+    if !with_sourcing_name(|name| name.is_some())
+        || !(other_sourcing_name() || lnum != last_sourcing_lnum.get())
         || lnum == 0
     {
         return None;
@@ -102,15 +100,14 @@ pub fn msg_source(hl_id: c_int) {
     }
     if let Some(line) = emsg_lnum_line() {
         msg(&line, HLF_N);
-        last_sourcing_lnum.set(sourcing_lnum() as c_int);
+        last_sourcing_lnum.set(sourcing_lnum());
     }
 
     // Remember the source name and line number, so we can tell when
     // the message changes.
-    let name = sourcing_name_text();
-    if name.is_none() || other_sourcing_name(name.as_deref()) {
+    if !with_sourcing_name(|name| name.is_some()) || other_sourcing_name() {
         last_sourcing_name.set(None);
-        if let Some(name) = name {
+        if let Some(name) = sourcing_name_text() {
             last_sourcing_name.set(Some(XString::from_bytes(&name)));
             if !redirecting() {
                 msg_putchar_hl(c_int::from(b'\n'), hl_id);
@@ -189,9 +186,9 @@ pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bo
             }
             let text = msg_cstr(s);
             let lnum = sourcing_lnum();
-            match sourcing_name_text() {
+            with_sourcing_name(|name| match name {
                 Some(name) if lnum != 0 => {
-                    let name = text_arg(&name);
+                    let name = text_arg(name);
                     logmsg!(
                         LOGLVL_DBG,
                         c"emsg_multiline",
@@ -202,15 +199,15 @@ pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bo
                 _ => {
                     logmsg!(LOGLVL_DBG, c"emsg_multiline", 847, "(:silent) {text}");
                 }
-            }
+            });
             return true;
         }
 
         let text = msg_cstr(s);
         let lnum = sourcing_lnum();
-        match sourcing_name_text() {
+        with_sourcing_name(|name| match name {
             Some(name) if lnum != 0 => {
-                let name = text_arg(&name);
+                let name = text_arg(name);
                 logmsg!(
                     LOGLVL_INF,
                     c"emsg_multiline",
@@ -221,7 +218,7 @@ pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bo
             _ => {
                 logmsg!(LOGLVL_INF, c"emsg_multiline", 857, "{text}");
             }
-        }
+        });
 
         ex_exitval.set(1);
 

@@ -544,9 +544,9 @@ register/	register/put/mod.rs	1	25	1	20	compound:1 deref:1	other:1	-	from:3 .off
 register/	register/special.rs	1	10	2	6	deref:3 expr:1	other:1 pp_str:1	str:1	XString::from_raw:1 file_name_at_cursor:1 find_ident_under_cursor:1 get_last_insert_save:1 xfree:1
 register/	register/store.rs	1	48	10	18	deref:29 ref:1	other:8 str:2 void:2 pp:1	other:5 void:2	.offset_from:3 .add:2 xfree:2 adjust_clipboard_name:1 get_clipboard:1 mb_string2cells_len:1 xmalloc:1
 register/	register/yank.rs	1	70	6	27	deref:25 compound:3 ref:2 expr:1	other:10	-	.offset:4 .copy_from:1 .write_bytes:1 abort:1 apply_autocmds:1 block_prep:1 bytes_at:1 c_str:1
-runtime/	*	8	548	90	349	deref:127 expr:21 compound:12 ref:2	str:70 other:19 void:18 pp_str:17 value:7	str:19 other:8 void:1	xfree:26 bytes_at:18 CStr::from_ptr:12 xstrdup:12 .offset_from:10 c_str:9 from_raw_parts:9 snprintf:9
+runtime/	*	8	549	90	350	deref:127 expr:21 compound:12 ref:2	str:70 other:19 void:18 pp_str:17 value:7	str:19 other:8 void:1	xfree:26 bytes_at:18 CStr::from_ptr:12 xstrdup:12 .offset_from:10 c_str:9 from_raw_parts:9 snprintf:9
 runtime/	runtime/cache.rs	1	55	9	46	deref:6 compound:1	str:5 void:1	other:1	.offset_from:3 CStr::from_ptr:3 bytes_at:3 c_str:3 copy_option_part:3 xstrdup:2 xstrlcpy:2 String_0::from_raw_bytes:1
-runtime/	runtime/estack.rs	1	23	5	15	deref:8	str:6 value:4	str:5	xstrdup:3 bytes_at:2 XString::from_raw:1 at_opt:1
+runtime/	runtime/estack.rs	1	24	5	16	deref:8	str:6 value:4	str:5	xstrdup:3 at_opt:2 bytes_at:2 XString::from_raw:1
 runtime/	runtime/expand.rs	1	69	9	45	deref:18 compound:3	str:11 other:7 pp_str:6	str:1	bytes_at:4 ga_append_owned:4 snprintf:3 .add:2 .copy_from:2 .offset_from:2 .sub:2 from_raw_parts:2
 runtime/	runtime/pack.rs	1	80	12	56	deref:14 expr:8 compound:1	str:10 void:5 pp_str:4	str:1 void:1	bytes_at:5 xfree:5 fix_fname:3 xstrlcat:3 .add:2 .offset_from:2 copy_option_part:2 xstrdup:2
 runtime/	runtime/rtp.rs	1	22	2	22	-	str:1	str:2	xfree:6 xstrdup:2 CStr::from_ptr:1 append_path:1 bytes_at:1 copy_nonoverlapping:1 os_isdir:1 vim_get_prefix_from_exepath:1
