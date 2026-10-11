@@ -281,6 +281,7 @@ fn a_sourced_script_is_a_script_inside_its_loops() {
 /// An autocommand's commands are read one handler at a time; a `|` joins
 /// commands in one handler, and a handler may run a multi-line `:execute`.
 #[test]
+#[cfg_attr(miri, ignore = "an event name is looked up with libc's `strcasecmp`")]
 fn an_autocommand_runs_each_handler_and_every_command_in_it() {
     let fx = Fixture::new();
     fx.run("augroup EdAu | autocmd! | augroup END");
