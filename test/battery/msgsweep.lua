@@ -658,6 +658,134 @@ section('s9-ext-messages', function()
   msgvars('vars end s9')
 end)
 
+-- ============================================================== reports
+
+-- The reports the editor assembles in a scratch line before showing it
+-- (upstream's `IObuff`/`msg_buf`): `msgmore`, `:print`/`:list` under
+-- 'listchars', `:ascii`, `:tabs`, `:command`, `:sign`, `:history`, the
+-- `:set` rejection, an error's "Error detected while processing"/"line N:"
+-- source lines from a sourced script, and `keytrans()`/maparg() over the
+-- `str2special` rendering.
+section('s10-reports', function()
+  plain()
+  run('set report=0')
+  run('call setline(1, range(1, 12))')
+  cap('msgmore fewer', '3,5d')
+  cap('msgmore one less', '1d')
+  cap('msgmore more', 'normal! 3yyP')
+  cap('msgmore one more', 'normal! yyp')
+  cap('msgmore undo', 'undo')
+  run('set report=5')
+  cap('msgmore under report', '2,3d')
+  run('set report&')
+  run('%d _')
+  run('call setline(1, ["\tlead tab", "  two  spaces  ", "x y z", "ctl\x01\x80\x7f",'
+    .. ' "wide 日本 é", "    ", "", "a\t\tb", "trail\t "])')
+  for _, lcs in ipairs({
+    'eol:$', 'tab:>-,trail:~', 'tab:<->,space:.', 'nbsp:+,eol:$', 'multispace:ab,lead:L',
+    'leadmultispace:xy,tab:>-', 'tab:>-,leadtab:+-', 'trail:-,space:_,eol:¶',
+  }) do
+    run('set listchars=' .. lcs)
+    cap('list ' .. lcs, '%list')
+    cap('print ' .. lcs, '%print')
+    cap('number list ' .. lcs, 'set list | %number | set nolist')
+  end
+  run('set listchars&')
+  for _, ch in ipairs({ 'a', '\\x01', '\\x7f', '\\x80', '\\u00e9', '\\u65e5', 'e\\u0301\\u0316',
+    '\\U0001F600', '\\u00a0', '\\t', ' ', '\\u2026' }) do
+    run('call setline(1, "' .. ch .. '") | 1 | normal! 0')
+    cap('ascii ' .. ch, 'ascii')
+  end
+  run('tabnew | file one | tabnew | vsplit | file two | call setline(1, "x") | tabnew')
+  cap('tabs', 'tabs')
+  run('tabonly! | only!')
+  run('command! -bang -bar -count=3 -nargs=* -complete=file Aaa echo 1')
+  run('command! -range=% -nargs=* -addr=lines Bbb echo 2')
+  run('command! -buffer -nargs=1 -complete=customlist,Foo Ccc echo 3')
+  run('command! LongCommandNameThatPushesTheColumns echo "' .. string.rep('d', 60) .. '"')
+  run('command! -register -nargs=? -range Ddd echo <q-args>')
+  cap('command list', 'command')
+  cap('command one', 'command Bbb')
+  cap('command none', 'command Zzz')
+  run('sign define S1 text=>> texthl=Error linehl=Search')
+  run('sign define S2 text=é! numhl=Todo priority=20')
+  run('call setline(1, ["a", "b", "c"])')
+  run('exe "sign place 5 line=2 name=S1 buffer=" .. bufnr()')
+  run('exe "sign place 6 line=3 group=grp name=S2 priority=30 buffer=" .. bufnr()')
+  cap('sign list', 'sign list')
+  cap('sign list one', 'sign list S2')
+  cap('sign place listing', 'sign place')
+  cap('sign place group', 'sign place group=*')
+  cap('sign unknown', 'sign list Nope')
+  run('call sign_unplace("*") | sign undefine S1 | sign undefine S2')
+  for _, h in ipairs({ 'echo "short"', 'echo "' .. string.rep('h', 120) .. '"',
+    'echo "' .. string.rep('\\u65e5', 60) .. '"', 'echo "mixed \\u00e9\\u0301 ' .. string.rep('m', 90) .. '"' }) do
+    run("call histadd(':', '" .. h:gsub("'", "''") .. "')")
+  end
+  cap('history', 'history')
+  cap('history range', 'history : -2,')
+  for _, a in ipairs({ 'fileformat=bogus', 'tabstop=-1', 'display=\\x01x', 'nosuchopt=1' }) do
+    cap('set reject ' .. a, 'exe "set ' .. a .. '"')
+  end
+  run('call writefile(["echo \\"one\\"", "call nosuch()", "echo \\"two\\"", "call nosuch2()"], "errs.vim")')
+  cap('source errors', 'source errs.vim')
+  run('redir => g:srcerr | silent! source errs.vim | redir END')
+  ev('source errors silent redir', 'g:srcerr')
+  run('redir => g:srcerr | silent! source errs.vim | redir END')
+  ev('source errors silent redir again', 'g:srcerr')
+  msgvars('vars after source errors')
+  run('nnoremap <S-F3> :<C-u>echo "\\u00e9"<CR><Space><lt>')
+  run('nnoremap <expr> <C-k>z "x\\<Tab>"')
+  for _, e in ipairs({ 'maparg("<S-F3>", "n")', 'maparg("<S-F3>", "n", 0, 1).lhs',
+    'maparg("<S-F3>", "n", 0, 1).rhs', 'maparg("<C-k>z", "n", 0, 1)', 'maplist()->len()',
+    'map(maplist(), "v:val.lhs")', 'keytrans("\\<S-F3>\\<M-\\u00e9>")' }) do
+    ev(e, e)
+  end
+  cap('map listing special', 'nmap <S-F3>')
+end)
+
+-- The same reports where the screen shapes them: `:s///c`'s prompt, the
+-- `v:scrollstart` a scrolled message leaves, and `:history` and `:tabs`
+-- cut to a narrow screen.
+section('s11-screen-reports', function()
+  start(40, 8)
+  n.command('call setline(1, ["one apple", "two apples"])')
+  feed(':%s/apple/pear/gc<CR>')
+  snap('substitute confirm prompt')
+  feed('y')
+  snap('substitute confirm after y')
+  feed('q')
+  settle()
+  ev('substitute confirm result', 'getline(1, "$")')
+  n.command('let v:scrollstart = ""')
+  feed(':for i in range(12) | echo "scroll" i | endfor<CR>')
+  snap('scrolled')
+  settle()
+  ev('scrollstart typed', 'v:scrollstart')
+  n.command('function! Scroller()\nfor i in range(12)\necho "f" i\nendfor\nendfunction')
+  n.command('let v:scrollstart = ""')
+  feed(':call Scroller()<CR>')
+  settle()
+  ev('scrollstart function', 'v:scrollstart')
+  n.command('call histadd(":", "echo \\"' .. string.rep('\\u00e9', 50) .. '\\"")')
+  n.command('call histadd(":", "echo \\"' .. string.rep('k', 70) .. '\\"")')
+  feed(':history<CR>')
+  snap('history narrow')
+  settle()
+  feed(':file ' .. string.rep('n', 30) .. '<CR>')
+  settle()
+  feed(':tabnew<CR>:tabs<CR>')
+  snap('tabs narrow')
+  settle()
+  n.command('call writefile(["echo \\"one\\"", "call nosuch()", "echo \\"two\\"", "call nosuch2()"], "errs2.vim")')
+  feed(':source errs2.vim<CR>')
+  snap('source errors drawn')
+  settle()
+  feed(':source errs2.vim<CR>')
+  snap('source errors drawn again')
+  settle()
+end)
+
 -- ------------------------------------------------------------------- run
 
 local only = os.getenv('MSGSWEEP_ONLY')

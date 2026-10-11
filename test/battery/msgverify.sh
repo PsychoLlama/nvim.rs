@@ -16,7 +16,7 @@
 # TAKES ~30 s debug per side; a cold run cuts the base first.
 set -uo pipefail
 
-EXPECTED_CASES=618
+EXPECTED_CASES=697
 
 here=$(dirname "$(realpath "$0")")
 root=${MSGSWEEP_REPO:-$(dirname "$(dirname "$here")")}
