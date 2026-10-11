@@ -235,46 +235,34 @@ pub fn grid_line_put_schar(col: c_int, schar: ScreenChar, attr: c_int) {
 }
 
 /// Put `text` at `col`, answering the number of cells used. Only ever writes
-/// within the one row.
+/// within the one row, and stops at a NUL as well as at the end of `text`.
 ///
-/// `textlen` of -1 means "to the NUL".
-///
-/// # Safety
-/// A batch must be in progress and `text` must hold `textlen` readable bytes
-/// (or be NUL-terminated).
-pub unsafe fn grid_line_puts(
-    col: c_int,
-    text: *const c_char,
-    textlen: c_int,
-    attr: c_int,
-) -> c_int {
+/// Draws into the batch in progress; with none there is no room
+/// (`maxcol` is zero) and nothing is drawn.
+pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
     let mut buf = linebuf();
     let (chars, attrs, vcols) = buf.parts_mut();
     let mut b = batch();
-    // SAFETY: the caller's promise, for the batch and for `text`.
     debug_assert!(b.grid.is_some(), "grid_line_grid");
 
     let max_col = b.maxcol;
     let start_col = col;
     let mut col = col;
-    let mut ptr = text;
+    let mut at = 0;
 
-    while col < max_col
-        && (textlen < 0 || (unsafe { ptr.offset_from(text) } as c_int) < textlen)
-        && unsafe { *ptr } != NUL as c_char
-    {
+    while col < max_col && at < text.len() && text[at] != NUL as u8 {
+        let rest = &text[at..];
         // How many bytes is this character, composing marks included?
-        let mbyte_blen = if textlen >= 0 {
-            let maxlen = unsafe { text.offset(textlen as isize).offset_from(ptr) } as c_int;
-            let blen = cluster_len(unsafe { crate::cstr::slice_at(ptr, maxlen as usize) }) as c_int;
-            if blen > maxlen { 1 } else { blen }
-        } else {
-            unsafe { utfc_ptr2len(ptr) }
-        };
+        let mbyte_blen = cluster_len(rest).min(rest.len()).max(1);
+        let ptr = rest.as_ptr().cast::<c_char>();
+        let blen = mbyte_blen as c_int;
 
         let mut firstc = 0;
-        let mut schar = unsafe { utfc_ptrlen2schar(ptr, mbyte_blen, &raw mut firstc) };
-        let mut mbyte_cells = unsafe { utf_ptr2cells_len(ptr, mbyte_blen) };
+        // SAFETY: `blen` bytes of `text` start at `ptr`, and the readers
+        // look no further.
+        let mut schar = unsafe { utfc_ptrlen2schar(ptr, blen, &raw mut firstc) };
+        // SAFETY: as above.
+        let mut mbyte_cells = unsafe { utf_ptr2cells_len(ptr, blen) };
         if mbyte_cells > 2 || schar == 0 {
             mbyte_cells = 1;
             schar = schar_from_char(0xfffd);
@@ -289,7 +277,7 @@ pub unsafe fn grid_line_puts(
 
         // At the start of the text, overwriting the right half of a
         // two-cell character already in this batch truncates it to '>'.
-        if ptr == text && col > b.first && col < b.last && chars[col as size_t] == 0 {
+        if at == 0 && col > b.first && col < b.last && chars[col as size_t] == 0 {
             chars[(col - 1) as size_t] = schar_from_ascii(b'>');
         }
 
@@ -303,7 +291,7 @@ pub unsafe fn grid_line_puts(
         }
 
         col += mbyte_cells;
-        ptr = unsafe { ptr.offset(mbyte_blen as isize) };
+        at += mbyte_blen;
     }
 
     if col > start_col {
@@ -312,15 +300,6 @@ pub unsafe fn grid_line_puts(
     }
 
     col - start_col
-}
-
-/// [`grid_line_puts`] of `text`, which need not be terminated. Answers the
-/// width drawn.
-pub(crate) fn grid_line_puts_bytes(col: c_int, text: &[u8], attr: c_int) -> c_int {
-    let len = c_int::try_from(text.len()).expect("a screen line fits a c_int");
-    // SAFETY: `len` readable bytes; a line is being drawn, which is the
-    // batch's own promise.
-    unsafe { grid_line_puts(col, text.as_ptr().cast(), len, attr) }
 }
 
 /// Fill `start_col..end_col` with one glyph, answering where it stopped.
@@ -751,18 +730,16 @@ pub unsafe fn grid_put_linebuf(
             // "clear" event.
             start_dirty = cleared.start;
         } else {
-            unsafe {
-                ui_line(
-                    grid,
-                    row,
-                    invalid_row,
-                    coloff + cleared.start,
-                    coloff + cleared.start,
-                    coloff + clear_end,
-                    clear_attr,
-                    flags & SLF_WRAP != 0,
-                )
-            };
+            ui_line(
+                grid,
+                row,
+                invalid_row,
+                coloff + cleared.start,
+                coloff + cleared.start,
+                coloff + clear_end,
+                clear_attr,
+                flags & SLF_WRAP != 0,
+            );
         }
         clear_end = end_dirty;
     } else if start_dirty == -1 {
@@ -778,18 +755,16 @@ pub unsafe fn grid_put_linebuf(
 
     if clear_end > start_dirty {
         if !grid.throttled {
-            unsafe {
-                ui_line(
-                    grid,
-                    row,
-                    invalid_row,
-                    coloff + start_dirty,
-                    coloff + end_dirty,
-                    coloff + clear_end,
-                    clear_attr,
-                    flags & SLF_WRAP != 0,
-                )
-            };
+            ui_line(
+                grid,
+                row,
+                invalid_row,
+                coloff + start_dirty,
+                coloff + end_dirty,
+                coloff + clear_end,
+                clear_attr,
+                flags & SLF_WRAP != 0,
+            );
         } else if grid.tracks_dirty_cols() {
             // TODO(bfredl): really get rid of the extra pseudo terminal
             // in message.c by using a line-buffer copy for the

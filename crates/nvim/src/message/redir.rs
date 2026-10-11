@@ -4,16 +4,22 @@
 //! tee the message stream; [`redir_write`] is the tee, and the `verbose_*`
 //! pair brackets the sections of code that write to it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::P_VFILE;
 use crate::os::fs::CFile;
 use crate::semsg;
 use crate::types::Failed;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// The `msg_ext` kind a verbose message carries.
 ///
@@ -29,7 +35,7 @@ fn verbosefile_set() -> bool {
 /// [`msg_keep`] inside a `verbose_enter`/`verbose_leave` pair.
 pub fn verb_msg(s: &CStr) -> c_int {
     verbose_enter();
-    let n = msg(s, 0) as c_int;
+    let n = c_int::from(msg(s, 0));
     verbose_leave();
     n
 }
@@ -49,11 +55,9 @@ pub(crate) fn redir_write(bytes: &[u8]) {
         return;
     }
     // If 'verbosefile' is set prepare for writing in that file.
-    // SAFETY: `p_vfile` holds a valid option string.
     if verbosefile_set() && verbose_fd.with(Option::is_none) {
         let _ = verbose_open();
     }
-    // SAFETY: as above.
     if !redirecting() {
         return;
     }
@@ -62,8 +66,7 @@ pub(crate) fn redir_write(bytes: &[u8]) {
     let pad = || {
         capture_bytes(b" ");
         if redir_reg.get() != 0 {
-            // SAFETY: a one-byte literal.
-            unsafe { write_reg_contents(redir_reg.get(), c" ".as_ptr(), 1, 1) };
+            write_reg_contents(redir_reg.get(), b" ", true);
         } else if redir_vname.get() {
             var_redir_str(b" ");
         } else {
@@ -80,12 +83,9 @@ pub(crate) fn redir_write(bytes: &[u8]) {
         }
     }
 
-    let text = bytes.as_ptr().cast::<c_char>();
-    let len = bytes.len();
     capture_bytes(bytes);
     if redir_reg.get() != 0 {
-        // SAFETY: as above.
-        unsafe { write_reg_contents(redir_reg.get(), text, len as ssize_t, 1) };
+        write_reg_contents(redir_reg.get(), bytes, true);
     }
     if redir_vname.get() {
         var_redir_str(bytes);
@@ -209,9 +209,9 @@ pub fn verbose_open() -> Result<(), Failed> {
         verbose_did_open.set(true);
         verbose_fd.set(p_vfile(|value| CFile::open(value, c"a")));
         if verbose_fd.with(Option::is_none) {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = p_vfile(|value| unsafe { c_str(value.as_ptr().cast_mut()) });
-            semsg!("E484: Can't open file {arg0}");
+            let name = p_vfile(CStr::to_owned);
+            let name = msg_cstr(&name);
+            semsg!("E484: Can't open file {name}");
             return Err(Failed);
         }
     }

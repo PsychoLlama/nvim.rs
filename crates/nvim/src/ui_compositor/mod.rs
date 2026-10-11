@@ -67,7 +67,7 @@ fn msg_layer() -> GridRef {
 }
 
 /// The window's own grid.
-fn win_layer(mut window: Win) -> GridRef {
+pub(crate) fn win_grid(mut window: Win) -> GridRef {
     // SAFETY: a live window owns its `w_grid_alloc` outright.
     unsafe { GridRef::new(&raw mut window.w_grid_alloc) }
 }
@@ -203,11 +203,8 @@ pub fn ui_comp_layers_adjust(mut layer_idx: usize, raise: bool) {
 
 /// Places `grid` at (`col`, `row`) with a `width` × `height` size, adding it
 /// as a new layer if it is not one already. Answers whether it moved.
-///
-/// # Safety
-/// `grid` must satisfy [`GridRef`]'s contract.
-pub unsafe fn ui_comp_put_grid(
-    grid: *mut ScreenGrid,
+pub fn ui_comp_put_grid(
+    grid: GridRef,
     row: c_int,
     col: c_int,
     height: c_int,
@@ -215,8 +212,7 @@ pub unsafe fn ui_comp_put_grid(
     valid: bool,
     on_top: bool,
 ) -> bool {
-    // SAFETY: the caller's obligation.
-    let mut grid = unsafe { GridRef::new(grid) };
+    let mut grid = grid;
     let moved;
     grid.pending_comp_index_update = true;
 
@@ -265,7 +261,7 @@ pub unsafe fn ui_comp_put_grid(
             && !on_top
         {
             let below = layer_at(insert_at - 1);
-            let curwin_grid = win_layer(win);
+            let curwin_grid = win_grid(win);
             if below.same(curwin_grid) && below.zindex == grid.zindex {
                 insert_at -= 1;
             }
@@ -290,11 +286,9 @@ pub unsafe fn ui_comp_put_grid(
     moved
 }
 
-/// # Safety
-/// `grid` must satisfy [`GridRef`]'s contract.
-pub unsafe fn ui_comp_remove_grid(grid: *mut ScreenGrid) {
-    // SAFETY: the caller's obligation.
-    let mut grid = unsafe { GridRef::new(grid) };
+/// Take `grid` off the layer stack, if it is on it.
+pub fn ui_comp_remove_grid(grid: GridRef) {
+    let mut grid = grid;
     debug_assert!(!grid.same(default_layer()), "grid != &default_grid");
     if grid.comp_index == 0 {
         return; // The grid was not a layer.
@@ -390,7 +384,7 @@ pub unsafe fn ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut ScreenGrid {
         // With `ext_multigrid` a window's grid is not composed and so has no
         // `comp_row`/`comp_col`; the window's own position stands in.
         for wp in windows_in_curtab() {
-            let grid = win_layer(wp);
+            let grid = win_grid(wp);
             let (winrow, wincol) = (wp.w_winrow, wp.w_wincol);
             if grid.mouse_enabled
                 && row >= winrow
@@ -411,7 +405,7 @@ pub fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> GridRef {
         return grid;
     }
     for wp in windows_in_curtab() {
-        let grid = win_layer(wp);
+        let grid = win_grid(wp);
         let hidden = wp.w_config.hide;
         if grid.covers(row, col) && !hidden {
             return grid;

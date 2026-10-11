@@ -277,7 +277,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         // registry rather than being forgotten by a free path.
         forget_window(auc.handle);
         if auc.w_grid_alloc.is_allocated() {
-            unsafe { ui_comp_remove_grid(&raw mut (*auc.raw()).w_grid_alloc) };
+            ui_comp_remove_grid(crate::ui_compositor::win_grid(auc));
             ui_call_win_hide(auc.w_grid_alloc.handle as Integer);
             auc.w_grid_alloc.free();
         }

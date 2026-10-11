@@ -457,27 +457,11 @@ unsafe fn finish_write_reg(name: c_int, reg: *mut YankReg, old_y_previous: Optio
     }
 }
 
-/// [`write_reg_contents`] of `text`.
-pub(crate) fn write_reg_contents_bytes(name: c_int, text: &[u8], must_append: bool) {
+/// Write `text` to register `name`, working out the motion type from it.
+pub fn write_reg_contents(name: c_int, text: &[u8], must_append: bool) {
     let len = ssize_t::try_from(text.len()).expect("a register fits in memory");
     // SAFETY: `text` names its own bytes, and the length is given.
-    unsafe { write_reg_contents(name, text.as_ptr().cast(), len, c_int::from(must_append)) }
-}
-
-/// Write `str` to register `name`, working out the motion type from the text.
-///
-/// `len` may be -1 for a NUL-terminated string.
-///
-/// # Safety
-/// `str` must hold `len` bytes, or be NUL-terminated when `len` is negative.
-pub unsafe fn write_reg_contents(
-    name: c_int,
-    str: *const c_char,
-    len: ssize_t,
-    must_append: c_int,
-) {
-    // SAFETY: the caller's promise about `str` and `len` carries through.
-    unsafe { write_reg_contents_ex(name, str, len, must_append != 0, kMTUnknown, 0) };
+    unsafe { write_reg_contents_ex(name, text.as_ptr().cast(), len, must_append, kMTUnknown, 0) };
 }
 
 /// Write `lines` to register `name`, one line apiece.

@@ -25,8 +25,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::encode_char;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::grid::default_grid_ref;
@@ -192,9 +193,9 @@ pub(crate) fn edit_putchar(c: c_int, highlight: bool) {
         pc_status.set(PutChar::Set);
     }
 
-    let mut buf: [c_char; MB_MAXCHAR + 1] = [0; MB_MAXCHAR + 1];
-    let p = buf.as_mut_ptr();
-    unsafe { grid_line_puts(pc_col.get(), p, utf_char2bytes(c, p), attr) };
+    let mut buf = [0u8; MB_MAXCHAR + 1];
+    let len = encode_char(c, &mut buf);
+    grid_line_puts(pc_col.get(), &buf[..len], attr);
     grid_line_flush();
 }
 

@@ -46,7 +46,7 @@ use crate::option::{
 };
 use crate::os::cshim::gettext_owned;
 use crate::os::env::{vim_getenv_owned, vim_setenv_named};
-use crate::register::{get_reg_contents_owned, write_reg_contents_bytes};
+use crate::register::{get_reg_contents_owned, write_reg_contents};
 use crate::types::{ExArg, Failed, OptInt, OptVal, TypVal, VAR_LIST, VarNumber};
 
 /// The compound assignment operators, as they appear before the `=`.
@@ -558,7 +558,7 @@ fn ex_let_register(
         joined = join(&old, value);
         value = joined.to_bytes();
     }
-    write_reg_contents_bytes(regname, value, false);
+    write_reg_contents(regname, value, false);
     Some(past)
 }
 

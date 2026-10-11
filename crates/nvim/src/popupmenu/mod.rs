@@ -482,7 +482,7 @@ pub fn pum_check_clear() {
     if pum_external.get() {
         ui_call_popupmenu_hide();
     } else {
-        unsafe { ui_comp_remove_grid(grid.raw()) };
+        ui_comp_remove_grid(grid);
         if ui_has(kUIMultigrid) {
             ui_call_win_close(grid.handle as Integer);
             ui_call_grid_destroy(grid.handle as Integer);

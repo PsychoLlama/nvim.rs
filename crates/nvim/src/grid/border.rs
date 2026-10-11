@@ -45,7 +45,7 @@ unsafe fn grid_draw_bordertext(
     };
 
     if overflow > 0 {
-        unsafe { grid_line_puts(1, c"<".as_ptr(), -1, hl_apply_winblend(winbl, default_attr)) };
+        grid_line_puts(1, b"<", hl_apply_winblend(winbl, default_attr));
         col += 1;
         overflow += 1;
     }
@@ -80,7 +80,10 @@ unsafe fn grid_draw_bordertext(
             text = p;
         }
 
-        col += unsafe { grid_line_puts(col, text, -1, hl_apply_winblend(winbl, attr)) };
+        // SAFETY: `text` is the chunk's NUL-terminated string, or a cursor
+        // into it.
+        let text = unsafe { crate::cstr::bytes_at(text) };
+        col += grid_line_puts(col, text, hl_apply_winblend(winbl, attr));
     }
 }
 

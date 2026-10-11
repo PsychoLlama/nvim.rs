@@ -479,8 +479,7 @@ pub(crate) fn paint_schar(col: c_int, sc: ScreenChar, attr: c_int) {
 
 /// Put `text` in the open batch, answering how many cells it took.
 pub(crate) fn paint_text(col: c_int, text: &[c_char], attr: c_int) -> c_int {
-    // SAFETY: `text` holds its own length in readable bytes.
-    unsafe { grid_line_puts(col, text.as_ptr(), text.len() as c_int, attr) }
+    grid_line_puts(col, crate::cstr::as_bytes(text), attr)
 }
 
 /// [`paint_text`] up to the string's NUL rather than to a byte count.
@@ -489,8 +488,7 @@ pub(crate) fn paint_text(col: c_int, text: &[c_char], attr: c_int) -> c_int {
 /// against what is left of the slice, without one it measures against the
 /// terminator.
 pub(crate) fn paint_cstr(col: c_int, text: &CStr, attr: c_int) -> c_int {
-    // SAFETY: `text` is NUL-terminated.
-    unsafe { grid_line_puts(col, text.as_ptr(), -1, attr) }
+    grid_line_puts(col, text.to_bytes(), attr)
 }
 
 /// Fill `col..end_col` with one glyph, answering where it stopped.

@@ -45,7 +45,9 @@ use crate::ui::{
     ui_call_win_external_pos, ui_call_win_float_pos, ui_call_win_hide, ui_call_win_pos,
     ui_call_win_viewport, ui_check_cursor_grid, ui_has,
 };
-use crate::ui_compositor::{ui_comp_layers_adjust, ui_comp_put_grid, ui_comp_remove_grid};
+use crate::ui_compositor::{
+    ui_comp_layers_adjust, ui_comp_put_grid, ui_comp_remove_grid, win_grid,
+};
 use crate::window::state::float_anchor_str;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::{Buf, Win};
@@ -262,17 +264,11 @@ fn ext_win_position(window: Win, validate: bool) {
         if ui_has(kUIMultigrid) {
             ui_call_win_hide(wp.w_grid_alloc.handle as Integer);
         }
-        // SAFETY: the window's own grid.
-        unsafe { ui_comp_remove_grid(&raw mut wp.w_grid_alloc) };
+        ui_comp_remove_grid(win_grid(wp));
         return;
     }
-    let (own, h, w) = (
-        &raw mut wp.w_grid_alloc,
-        wp.w_height_outer,
-        wp.w_width_outer,
-    );
-    // SAFETY: the window's own grid.
-    unsafe { ui_comp_put_grid(own, comp_row, comp_col, h, w, valid, false) };
+    let (h, w) = (wp.w_height_outer, wp.w_width_outer);
+    ui_comp_put_grid(win_grid(wp), comp_row, comp_col, h, w, valid, false);
     if ui_has(kUIMultigrid) {
         // SAFETY: `float_anchor_str` is an array of static strings indexed by
         // the anchor, and `grid` is a live grid.

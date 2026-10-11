@@ -77,19 +77,19 @@ pub mod line;
 pub mod schar;
 
 pub use border::grid_draw_border;
+pub(crate) use line::linebuf;
 pub use line::{
     LineAttrs, LineSpan, grid_clear, grid_line_clear_end, grid_line_cursor_goto, grid_line_fill,
     grid_line_flush, grid_line_flush_if_valid_row, grid_line_getchar, grid_line_mirror,
     grid_line_put_schar, grid_line_puts, grid_line_start, grid_put_linebuf, linebuf_mirror,
     screengrid_line_start,
 };
-pub(crate) use line::{grid_line_puts_bytes, linebuf};
-pub(crate) use schar::schar_bytes;
 pub use schar::{
     MAX_SCHAR_SIZE, line_do_arabic_shape, schar_cache_clear, schar_cache_clear_if_full,
     schar_cells, schar_from_ascii, schar_from_buf, schar_from_char, schar_from_str, schar_get,
     schar_get_adv, schar_get_ascii, schar_get_first_codepoint, schar_high, schar_len,
 };
+pub(crate) use schar::{schar_bytes, schar_text};
 
 pub(crate) static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 

@@ -40,7 +40,7 @@ use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
-use crate::types::{ExArg, Failed, VarNumber, Vv, ssize_t};
+use crate::types::{ExArg, Failed, VarNumber, Vv};
 
 use crate::winlayer::Win;
 
@@ -120,7 +120,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
                 // A lower-case register name overwrites, so empty it
                 // now; an upper-case one always appends.
                 if excmd.line.byte_at(at) == 0 && !(redir_reg.get() as u8).is_ascii_uppercase() {
-                    unsafe { write_reg_contents(redir_reg.get(), c"".as_ptr(), 0 as ssize_t, 0) };
+                    write_reg_contents(redir_reg.get(), b"", false);
                 }
             }
         }

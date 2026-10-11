@@ -483,7 +483,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
                     frame_attr
                 };
             }
-            col += unsafe { grid_line_puts(col, byte_at(at), clen, attr) };
+            col += grid_line_puts(col, &text[at..at + clen as usize], attr);
             at += clen as usize;
         }
         grid_line_flush();
@@ -501,8 +501,9 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
         let attr = attr_of(if is_sep { c"NonText" } else { c"String" });
         let mut at = 0;
         while at < text.len() {
-            col += unsafe { grid_line_puts(col, byte_at(at), clen, attr) };
-            at += clen as usize;
+            let end = (at + clen).min(text.len());
+            col += grid_line_puts(col, &text[at..end], attr);
+            at += clen;
         }
         grid_line_flush();
         return;
@@ -523,18 +524,17 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
         let colon_at = text[at..at + len].iter().position(|&byte| byte == b':');
         match colon_at {
             _ if text[at] == b'<' => {
-                col += unsafe { grid_line_puts(col, byte_at(at), len as c_int, special_attr) };
+                col += grid_line_puts(col, &text[at..at + len], special_attr);
             }
             // `:command` immediately before a `<Key>`: the colon reads as
             // punctuation, the command as an identifier.
             Some(colon_at) if text.get(at + len) == Some(&b'<') => {
-                col += unsafe { grid_line_puts(col, byte_at(at), colon_at as c_int, 0) };
-                col += unsafe { grid_line_puts(col, byte_at(at + colon_at), 1, special_attr) };
-                let rest = byte_at(at + colon_at + 1);
-                let (n, attr) = ((len - colon_at - 1) as c_int, attr_of(c"Identifier"));
-                col += unsafe { grid_line_puts(col, rest, n, attr) };
+                col += grid_line_puts(col, &text[at..at + colon_at], 0);
+                col += grid_line_puts(col, &text[at + colon_at..at + colon_at + 1], special_attr);
+                let rest = &text[at + colon_at + 1..at + len];
+                col += grid_line_puts(col, rest, attr_of(c"Identifier"));
             }
-            _ => col += unsafe { grid_line_puts(col, byte_at(at), len as c_int, 0) },
+            _ => col += grid_line_puts(col, &text[at..at + len], 0),
         }
         at += len;
     }

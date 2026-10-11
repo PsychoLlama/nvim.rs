@@ -445,13 +445,13 @@ fn draw_on_last_line(clear: bool) {
     let attr = unsafe { *hl_attr_table().offset(HLF_MSG as isize) };
     let mut len = 0;
     if !clear {
-        len = unsafe { grid_line_puts(sc_col.get(), sc.as_cstr().as_ptr(), -1, attr) };
+        len = grid_line_puts(sc_col.get(), sc.as_cstr().to_bytes(), attr);
     }
     // The padding is the same ten spaces every time; only the tail past
     // what was written is drawn.
-    let pad = c"          ".as_ptr().cast_mut();
-    // SAFETY: `pad` is ten spaces and a terminator, and `len` is at most ten.
-    let tail = unsafe { pad.offset(len as isize) };
-    unsafe { grid_line_puts(sc_col.get() + len, tail, -1, attr) };
+    let pad = b"          ";
+    // `len` is at most ten: the shown command is cut to that.
+    let tail = &pad[usize::try_from(len).unwrap_or(0).min(pad.len())..];
+    grid_line_puts(sc_col.get() + len, tail, attr);
     grid_line_flush();
 }

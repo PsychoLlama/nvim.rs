@@ -516,13 +516,10 @@ pub unsafe fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: boo
     }
 }
 
-/// Sends one drawn screen line.
-///
-/// # Safety
-///
-/// `grid` must be live and `row` within it.
+/// Sends one drawn screen line. `row` must be within `grid`, which is
+/// asserted.
 #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
-pub unsafe fn ui_line(
+pub fn ui_line(
     grid: GridRef,
     row: c_int,
     invalid_row: bool,

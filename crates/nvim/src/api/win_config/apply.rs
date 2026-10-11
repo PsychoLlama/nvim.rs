@@ -532,8 +532,7 @@ impl Refloat {
         if !tp.is_current() && tp.tp_curwin == Some(self.win.id()) {
             tp.tp_curwin = self.altwin.map(Win::id);
         }
-        // SAFETY: the window's own grid, which is live with it.
-        unsafe { ui_comp_remove_grid(&raw mut self.win.w_grid_alloc) };
+        ui_comp_remove_grid(crate::ui_compositor::win_grid(self.win));
         redraw_later(self.win, UPD_NOT_VALID);
         set_must_redraw(UPD_NOT_VALID);
     }

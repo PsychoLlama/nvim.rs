@@ -18,7 +18,7 @@ use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::win_redraw_last_status;
 use crate::ex_getln::cmd_screencol;
 use crate::grid::{
-    default_gridview, grid_line_fill, grid_line_flush, grid_line_puts_bytes, grid_line_start,
+    default_gridview, grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start,
 };
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::HLF_WM;
@@ -403,11 +403,11 @@ pub(crate) fn redraw_wildmenu(
             row,
         );
 
-        grid_line_puts_bytes(0, &buf, attr);
+        grid_line_puts(0, &buf, attr);
         if let Some((selstart, selstart_col)) = selection
             && highlight
         {
-            grid_line_puts_bytes(
+            grid_line_puts(
                 selstart_col,
                 &buf[selstart..selend],
                 hl_attr(HLF_WM as c_int),

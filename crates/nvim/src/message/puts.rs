@@ -353,20 +353,10 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                 // and let the wrap put the character on the next line.
                 // SAFETY: `hl_attr_table` answers the active table.
                 let at = unsafe { *hl_attr_table().offset(HLF_AT as isize) };
-                // SAFETY: a line is open and the literal is one byte.
-                unsafe { grid_line_puts(msg_col.get(), c">".as_ptr(), 1, at) };
+                grid_line_puts(msg_col.get(), b">", at);
                 cw = 1;
             } else {
-                // SAFETY: a line is open and `len` bytes of `text` follow
-                // `at`.
-                unsafe {
-                    grid_line_puts(
-                        msg_col.get(),
-                        text[at..].as_ptr().cast(),
-                        len as c_int,
-                        print_attr,
-                    )
-                };
+                grid_line_puts(msg_col.get(), &text[at..at + len], print_attr);
                 at += len;
             }
             msg_didout.set(true); // remember that the line is not empty
@@ -393,8 +383,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                 // Translate a tab into spaces, up to the next multiple of
                 // eight or the end of the line.
                 loop {
-                    // SAFETY: a line is open and the literal is one byte.
-                    unsafe { grid_line_puts(msg_col.get(), c" ".as_ptr(), 1, print_attr) };
+                    grid_line_puts(msg_col.get(), b" ", print_attr);
                     msg_col.set(msg_col.get() + 1);
                     if msg_col.get() == Columns.get() || msg_col.get() & 7 == 0 {
                         break;

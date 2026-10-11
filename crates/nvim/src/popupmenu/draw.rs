@@ -256,7 +256,9 @@ unsafe fn pum_grid_puts_with_attrs(col: c_int, cells: c_int, text: *const c_char
         } else {
             col - col_start
         };
-        unsafe { grid_line_puts(col, ptr, char_len, attrs[at as usize]) };
+        // SAFETY: `char_len` bytes of the caller's string start at `ptr`.
+        let char_bytes = unsafe { cstr::slice_at(ptr, char_len as usize) };
+        grid_line_puts(col, char_bytes, attrs[at as usize]);
         col += unsafe { utf_ptr2cells(ptr) };
         ptr = unsafe { ptr.offset(char_len as isize) };
     }
@@ -416,7 +418,9 @@ impl PumRow {
 
             match attrs {
                 None => {
-                    unsafe { grid_line_puts(self.grid_col - cells + 1, rt, -1, attr) };
+                    // SAFETY: `rt` is a cursor into the run's NUL-terminated text.
+                    let rt = unsafe { cstr::bytes_at(rt) };
+                    grid_line_puts(self.grid_col - cells + 1, rt, attr);
                 }
                 Some(attrs) => {
                     unsafe {
@@ -446,7 +450,9 @@ impl PumRow {
 
             match attrs {
                 None => {
-                    unsafe { grid_line_puts(self.grid_col, text, -1, attr) };
+                    // SAFETY: `text` is the run's NUL-terminated text.
+                    let text = unsafe { cstr::bytes_at(text) };
+                    grid_line_puts(self.grid_col, text, attr);
                 }
                 Some(attrs) => {
                     unsafe { pum_grid_puts_with_attrs(self.grid_col, cells, text, attrs) };
@@ -534,10 +540,10 @@ impl PumRow {
 
             // A Tab shows as two spaces, and the walk starts a new run.
             if pum_rl.get() {
-                unsafe { grid_line_puts(self.grid_col - 1, c"  ".as_ptr(), 2, attr) };
+                grid_line_puts(self.grid_col - 1, b"  ", attr);
                 self.grid_col -= 2;
             } else {
-                unsafe { grid_line_puts(self.grid_col, c"  ".as_ptr(), 2, attr) };
+                grid_line_puts(self.grid_col, b"  ", attr);
                 self.grid_col += 2;
             }
             self.totwidth += 2;
@@ -585,7 +591,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
         } else {
             style.col_off - 1
         };
-        unsafe { grid_line_puts(col, c" ".as_ptr(), 1, attr) };
+        grid_line_puts(col, b" ", attr);
     }
 
     let order = pum_align_order();
@@ -747,17 +753,15 @@ pub fn pum_redraw() {
 
     pum_left_col.set(pum_col.get() - col_off);
     pum_right_col.set(pum_left_col.get() + grid_width);
-    let moved = unsafe {
-        ui_comp_put_grid(
-            grid.raw(),
-            pum_row.get(),
-            pum_left_col.get(),
-            pum_height.get() + border.width,
-            grid_width + border.width,
-            false,
-            true,
-        )
-    };
+    let moved = ui_comp_put_grid(
+        grid,
+        pum_row.get(),
+        pum_left_col.get(),
+        pum_height.get() + border.width,
+        grid_width + border.width,
+        false,
+        true,
+    );
     let invalid_grid = moved || pum_invalid.get();
     pum_invalid.set(false);
     must_redraw_pum.set(false);

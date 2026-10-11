@@ -163,7 +163,7 @@ use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     Arena, Array, ColNr, EStack, EStackArg, Event, ExArg, FlushBuffers, GridView, HlMessage,
     HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr,
-    ScreenChar, ShmFlag, String_0, TypVal, Vv, int64_t, size_t, ssize_t, uint64_t,
+    ScreenChar, ShmFlag, String_0, TypVal, Vv, int64_t, size_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::{

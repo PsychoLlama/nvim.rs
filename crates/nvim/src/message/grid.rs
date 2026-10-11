@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::grid::{default_grid_ref, default_gridview};
+use crate::grid::{MAX_SCHAR_SIZE, default_grid_ref, default_gridview, schar_text};
 use crate::vim_snprintf_safelen;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
@@ -59,13 +59,8 @@ pub fn msg_id_exists(id: int64_t) -> bool {
 /// Tell the UI where the message grid now sits.
 pub(crate) fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
     let mut grid = msg_grid_ref();
-    let mut sep = [0 as c_char; 32];
-    // SAFETY: the caller's promise -- a live window, whose 'fillchars' this
-    // reads; `schar_get` writes at most `MAX_SCHAR_SIZE` bytes plus a NUL.
-    let sep = unsafe {
-        let size = schar_get(sep.as_mut_ptr(), Win::current().w_p_fcs_chars.msgsep);
-        String_0::from_raw_bytes(sep.as_ptr(), size)
-    };
+    let mut sep = [0; MAX_SCHAR_SIZE as usize];
+    let sep = String_0::from_bytes(schar_text(Win::current().w_p_fcs_chars.msgsep, &mut sep));
     ui_call_msg_set_pos(
         grid.handle.into(),
         row.into(),
@@ -119,7 +114,7 @@ pub fn msg_grid_validate() {
         grid.throttled = false; // don't throttle in 'cmdheight' area
         msg_grid_set_pos(pos, msg_scrolled.get() != 0);
         let (rows, cols) = (grid.rows, grid.cols);
-        unsafe { ui_comp_put_grid(grid.raw(), pos, 0, rows, cols, false, true) };
+        ui_comp_put_grid(grid, pos, 0, rows, cols, false, true);
         ui_call_grid_resize(grid.handle.into(), cols.into(), rows.into());
 
         msg_scrolled_at_flush.set(msg_scrolled.get());
@@ -127,7 +122,7 @@ pub fn msg_grid_validate() {
     } else if !should_alloc && grid.is_allocated() {
         // Note: we run this both on moving to ext_messages, and on
         // resizing the screen while ext_messages is active.
-        unsafe { ui_comp_remove_grid(grid.raw()) };
+        ui_comp_remove_grid(grid);
         grid.free();
         grid.forget_dirty_cols();
         ui_call_grid_destroy(grid.handle.into());
@@ -243,7 +238,7 @@ pub fn msg_scroll_flush() {
             debug_assert!(row >= 0);
             let (dirty, cols) = (grid.take_dirty_col(row), grid.cols);
             let attr = hl_attr(HLF_MSG as c_int);
-            unsafe { ui_line(grid, row, false, 0, dirty, cols, attr, false) };
+            ui_line(grid, row, false, 0, dirty, cols, attr, false);
             i += 1;
         }
     }
