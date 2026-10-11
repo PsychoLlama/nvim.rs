@@ -706,10 +706,10 @@ pub struct ExArg<'s> {
 impl ExArg<'_> {
     /// The argument as a writable pointer.
     ///
-    /// Transitional: what is left of the pointer layer is the four
-    /// accessors here, for the handlers in `ex_cmds`, `usercmd`, `sign`
-    /// and `mapping` that still walk their argument by pointer (each
-    /// rewritten with its own module); they go with the last of them.
+    /// Transitional: what is left of the pointer layer is the two
+    /// accessors here, for the handlers in `usercmd`, `sign` and `mapping`
+    /// that still walk their argument by pointer (each rewritten with its
+    /// own module); they go with the last of them.
     pub fn arg_ptr(&mut self) -> *mut ::core::ffi::c_char {
         self.line.ptr_at(self.line.arg)
     }
@@ -717,20 +717,6 @@ impl ExArg<'_> {
     /// The command word as a writable pointer. Transitional.
     pub fn cmd_ptr(&mut self) -> *mut ::core::ffi::c_char {
         self.line.ptr_at(self.line.cmd)
-    }
-
-    /// The next command as a writable pointer, null when there is none.
-    /// Transitional.
-    pub fn nextcmd_ptr(&mut self) -> *mut ::core::ffi::c_char {
-        match self.line.next {
-            Some(at) => self.line.ptr_at(at),
-            None => ::core::ptr::null_mut(),
-        }
-    }
-
-    /// Say where the next command is, or that there is none. Transitional.
-    pub fn set_nextcmd_ptr(&mut self, p: *const ::core::ffi::c_char) {
-        self.line.next = (!p.is_null()).then(|| self.line.offset_of(p));
     }
 
     /// Make `text` the command's whole line, with `arg` at its start.
