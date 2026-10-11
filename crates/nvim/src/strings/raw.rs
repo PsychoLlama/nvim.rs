@@ -253,7 +253,7 @@ macro_rules! vim_snprintf {
     };
 }
 
-/// `vim_snprintf_add(buf, len, fmt, args...)`; see [`vim_snprintf!`].
+/// `vim_snprintf_add(buf, len, fmt, args...)`; see [`vim_snprintf!`](crate::vim_snprintf!).
 #[macro_export]
 macro_rules! vim_snprintf_add {
     ($buf:expr, $len:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
@@ -263,7 +263,7 @@ macro_rules! vim_snprintf_add {
     };
 }
 
-/// `vim_snprintf_safelen(buf, len, fmt, args...)`; see [`vim_snprintf!`].
+/// `vim_snprintf_safelen(buf, len, fmt, args...)`; see [`vim_snprintf!`](crate::vim_snprintf!).
 #[macro_export]
 macro_rules! vim_snprintf_safelen {
     ($buf:expr, $len:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
@@ -273,7 +273,7 @@ macro_rules! vim_snprintf_safelen {
     };
 }
 
-/// `printf_string(fmt, args...)`; see [`vim_snprintf!`].
+/// `printf_string(fmt, args...)`; see [`vim_snprintf!`](crate::vim_snprintf!).
 #[macro_export]
 macro_rules! printf_string {
     ($fmt:expr $(, $arg:expr)* $(,)?) => {
