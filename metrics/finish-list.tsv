@@ -646,8 +646,8 @@ statusline/	statusline/mod.rs	1	26	8	19	deref:5 expr:2	other:5 str:3	other:2 str
 statusline/	statusline/status.rs	1	3	0	0	compound:1	-	-	-
 statusline/	statusline/stl/mod.rs	1	33	1	23	deref:7 expr:3	str:2	str:1	CStr::from_ptr:5 vim_snprintf_safelen:2 append_arg_number:1 atoi:1 describe_sign_text:1 fill_foldcolumn:1 from_raw_parts_mut:1 get_rel_pos:1
 statusline/	statusline/tabline.rs	1	9	1	5	compound:2	-	-	CStr::from_ptr:1 cstr_to_string:1 vim_snprintf:1
-strings/	*	1	24	11	14	expr:3 deref:2 compound:1	str:14 pp_str:1	str:2	bytes_at:3 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
-strings/	strings/raw.rs	1	24	11	14	expr:3 deref:2 compound:1	str:14 pp_str:1	str:2	bytes_at:3 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
+strings/	*	1	46	11	16	expr:6 compound:2 deref:2	str:15 pp_str:1	str:2	bytes_at:3 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
+strings/	strings/raw.rs	1	46	11	16	expr:6 compound:2 deref:2	str:15 pp_str:1	str:2	bytes_at:3 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 from_raw_parts:1 strchr:1
 syntax/	*	13	185	18	110	deref:48 expr:16 ref:2 compound:1	other:10 str:5 value:4 void:2	other:5 str:3	at:12 .offset:7 .add:5 vim_regfree:4 bytes_at:3 vim_iswordp_buf:3 xfree:3 .assume_init:2
 syntax/	syntax/attr.rs	1	15	0	11	deref:4	-	-	.offset:3 vim_iswordp_buf:2
 syntax/	syntax/clear.rs	1	19	2	10	compound:1	other:2	-	vim_regfree:2 Box::from_raw:1

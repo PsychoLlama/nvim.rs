@@ -717,6 +717,57 @@ pub(crate) fn is_lower_in_locale(byte: u8) -> bool {
     class & IS_LOWER != 0
 }
 
+/// One double as `snprintf(out, .., "%<sign>.<precision><conv>", value)`
+/// renders it -- `conv` one of `f e E` -- answering the length written,
+/// which the caller's buffer bounds. The format is built here, so it names
+/// exactly the one double it is handed.
+pub(crate) fn format_double(
+    out: &mut [u8],
+    sign: Option<u8>,
+    precision: usize,
+    conv: u8,
+    value: f64,
+) -> usize {
+    debug_assert!(matches!(conv, b'f' | b'e' | b'E') && matches!(sign, None | Some(b'+' | b' ')));
+    let mut fmt = [0u8; 16];
+    let mut len = 0;
+    for byte in [Some(b'%'), sign, Some(b'.')].into_iter().flatten() {
+        fmt[len] = byte;
+        len += 1;
+    }
+    // The precision's digits, most significant first; the caller bounds it
+    // well below the five this has room for.
+    let mut digits = [0u8; 5];
+    let mut n = 0;
+    let mut rest = precision.min(99_999);
+    loop {
+        digits[n] = b'0' + u8::try_from(rest % 10).unwrap_or(0);
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    for &digit in digits[..n].iter().rev() {
+        fmt[len] = digit;
+        len += 1;
+    }
+    fmt[len] = conv;
+    // SAFETY: `fmt` is NUL-terminated (the array's tail) and names one
+    // double, which is what is passed; `out` bounds the write.
+    let written = unsafe {
+        crate::snprintf!(
+            out.as_mut_ptr().cast(),
+            out.len(),
+            fmt.as_ptr().cast(),
+            value,
+        )
+    };
+    usize::try_from(written)
+        .unwrap_or(0)
+        .min(out.len().saturating_sub(1))
+}
+
 /// The translation of `msgid` in the current message catalogue -- C's `_()`.
 ///
 /// Answers `msgid` itself when the catalogue has no entry for it, which is

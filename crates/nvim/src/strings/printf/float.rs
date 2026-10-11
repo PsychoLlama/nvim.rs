@@ -3,20 +3,19 @@
 //! `%f`, `%F`, `%e`, `%E`, `%g` and `%G`, and the two trims `%g` needs
 //! afterwards.  Split out of [`super::emit`] for the file-size cap.
 //!
-//! The digits are Rust's: `{:.N}` and `{:.Ne}` are exact (correctly rounded
-//! from the double's binary value, ties to even), which is what glibc's
-//! `printf` prints, so the rendering is libc's byte for byte -- the
-//! formatter's oracle holds every flag, width and precision of ~250
-//! awkward doubles to the answers libc gave, and a scratch comparison held
-//! 300,000 more at precisions up to 340. What Rust spells differently is
-//! only the exponent (`1.5e3` for C's `1.5e+03`), which [`render_exponent`]
-//! rewrites.
+//! The digits are libc's, through `os::cshim::format_double` -- the one
+//! conversion the formatter still hands the C library, because glibc renders
+//! them more cheaply than Rust does; under Miri they are Rust's, which are
+//! the same (see `render_digits`).
 
 #![forbid(unsafe_code)]
 
+#[cfg(miri)]
 use core::fmt::Write as _;
 
-use super::emit::{Args, Body, Conversion, TMP, TmpWriter};
+#[cfg(miri)]
+use super::emit::TmpWriter;
+use super::emit::{Args, Body, Conversion, TMP};
 use super::infinity_str;
 use crate::ascii::ascii_isdigit;
 
@@ -84,20 +83,12 @@ pub(super) fn render_float(
         6 // C's default
     };
 
-    let mut out = TmpWriter { buf: tmp, len: 0 };
-    // The sign flag: a value whose sign bit is clear gains a `+` or a space.
-    if c.force_sign && f.is_sign_positive() {
-        out.buf[0] = if c.space_for_positive { b' ' } else { b'+' };
-        out.len = 1;
-    }
-    let mut str_arg_l = if matches!(c.fmt_spec, b'f' | b'F') {
-        // libc has no `%F` for finite values that differs from `%f`.
-        let written = write!(out, "{f:.precision$}");
-        debug_assert!(written.is_ok());
-        out.len
-    } else {
-        render_exponent(out, f, precision, c.fmt_spec == b'E')
-    };
+    let sign = c
+        .force_sign
+        .then_some(if c.space_for_positive { b' ' } else { b'+' });
+    // libc has no `%F` for finite values that differs from `%f`.
+    let conv = if c.fmt_spec == b'F' { b'f' } else { c.fmt_spec };
+    let mut str_arg_l = render_digits(tmp, sign, precision, conv, f);
     debug_assert!(str_arg_l < TMP);
 
     if remove_trailing_zeroes {
@@ -114,9 +105,56 @@ pub(super) fn render_float(
     Body::Tmp(str_arg_l)
 }
 
+/// `f` as C's `%<sign>.<precision><conv>` renders it, into `tmp`; answers
+/// the length. libc's digits: glibc's `printf` is markedly cheaper than
+/// Rust's exact formatter for the six-digit `%g` that `string()` of every
+/// Float pays (Rust falls back to its bignum Dragon for most of them,
+/// +0.3 % of `evalbench`), and the digits are the same either way.
+#[cfg(not(miri))]
+fn render_digits(
+    tmp: &mut [u8; TMP],
+    sign: Option<u8>,
+    precision: usize,
+    conv: u8,
+    f: f64,
+) -> usize {
+    crate::os::cshim::format_double(tmp, sign, precision, conv, f)
+}
+
+/// Under Miri, which cannot call the C library, the same digits from Rust's
+/// exact formatter: `{:.N}` and `{:.Ne}` are correctly rounded, ties to even,
+/// which is what glibc prints (held to libc by the formatter's oracle and a
+/// scratch comparison of 300,000 doubles at precisions up to 340); only the
+/// exponent is spelled differently, and [`render_exponent`] respells it.
+#[cfg(miri)]
+fn render_digits(
+    tmp: &mut [u8; TMP],
+    sign: Option<u8>,
+    precision: usize,
+    conv: u8,
+    f: f64,
+) -> usize {
+    let mut out = TmpWriter { buf: tmp, len: 0 };
+    // The sign flag: a value whose sign bit is clear gains a `+` or a space.
+    if let Some(sign) = sign
+        && f.is_sign_positive()
+    {
+        out.buf[0] = sign;
+        out.len = 1;
+    }
+    if conv == b'f' {
+        let written = write!(out, "{f:.precision$}");
+        debug_assert!(written.is_ok());
+        out.len
+    } else {
+        render_exponent(out, f, precision, conv == b'E')
+    }
+}
+
 /// `f` as C's `%.{precision}e` (or `%E`) spells it, appended to `out`;
 /// answers the length written. Rust writes the mantissa C does but the
 /// exponent bare (`e3`, `e-7`); C writes a sign and at least two digits.
+#[cfg(miri)]
 fn render_exponent(mut out: TmpWriter, f: f64, precision: usize, upper: bool) -> usize {
     let start = out.len;
     let written = write!(out, "{f:.precision$e}");

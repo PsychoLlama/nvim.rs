@@ -128,6 +128,7 @@ count	callee	no_raw	defs	def
 13	notify	0	1	crates/nvim/src/mpack/lmpack/session.rs
 13	prefix_at	0	1	crates/nvim/src/cstr.rs
 13	vim_full_name	0	1	crates/nvim/src/path/mod.rs
+13	vim_snprintf_safelen	0	1	crates/nvim/src/strings/raw.rs
 13	vterm_dealloc	0	1	crates/nvim/src/vterm/vterm.rs
 12	.put	0	2	
 12	String_0::from_owned_parts	0	1	crates/nvim/src/api/private/helpers/text.rs
@@ -144,7 +145,6 @@ count	callee	no_raw	defs	def
 12	schar_get	0	1	crates/nvim/src/grid/schar.rs
 12	spell_iswordp_nmw	0	1	crates/nvim/src/spell/chartab.rs
 12	vim_iswordp	0	1	crates/nvim/src/charset/walk.rs
-12	vim_snprintf_safelen	0	1	crates/nvim/src/strings/raw.rs
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 11	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
 11	PosRef::new	0	1	crates/nvim/src/winlayer.rs
@@ -839,6 +839,7 @@ count	callee	no_raw	defs	def
 3	uv_pipe_init	0	0	
 3	uv_timer_stop	0	0	
 3	vim_iswordc	0	0	
+3	vim_snprintf_add	0	1	crates/nvim/src/strings/raw.rs
 3	vim_str2nr	0	1	crates/nvim/src/charset/walk.rs
 3	vim_unsetenv_ext	0	1	crates/nvim/src/os/env/mod.rs
 3	vterm_get_size	0	1	crates/nvim/src/vterm/vterm.rs
@@ -1422,7 +1423,6 @@ count	callee	no_raw	defs	def
 2	vim_regsub	0	1	crates/nvim/src/regexp/substitute.rs
 2	vim_regsub_both	0	1	crates/nvim/src/regexp/substitute.rs
 2	vim_regsub_multi	0	1	crates/nvim/src/regexp/substitute.rs
-2	vim_snprintf_add	0	1	crates/nvim/src/strings/raw.rs
 2	vim_strsave_fnameescape	0	1	crates/nvim/src/ex_getln/buffer.rs
 2	vterm_keyboard_end_paste	0	1	crates/nvim/src/vterm/keyboard.rs
 2	vterm_keyboard_start_paste	0	1	crates/nvim/src/vterm/keyboard.rs

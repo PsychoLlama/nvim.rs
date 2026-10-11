@@ -355,3 +355,149 @@ pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {
     // SAFETY: each slot holds a NUL-terminated string.
     files.sort_unstable_by(|&a, &b| unsafe { CStr::from_ptr(a).cmp(CStr::from_ptr(b)) });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{sort_strings, vim_snprintf_add, vim_snprintf_safelen, vim_strchr, xstrnsave};
+    use crate::memory::xfree;
+    use crate::strings::{FmtArg, format_into};
+    use core::ffi::{CStr, c_char, c_int, c_long};
+
+    /// `vim_snprintf!` into an allocation of exactly `size` bytes, so a
+    /// write past it is a Miri error; answers the return and the bytes up
+    /// to the NUL.
+    fn into_exact(size: usize, f: impl Fn(*mut c_char, usize) -> c_int) -> (c_int, Vec<u8>) {
+        let mut buf = vec![0xa5u8; size].into_boxed_slice();
+        let ret = f(buf.as_mut_ptr().cast(), size);
+        let text = buf.iter().take_while(|&&b| b != 0).copied().collect();
+        (ret, text)
+    }
+
+    #[test]
+    fn the_pointer_front_formats_and_truncates_at_every_size() {
+        let name = c"na\u{ef}ve";
+        let want = "[na\u{ef}ve|   42|ff  |3.14|x|%|0x10|-1.0e21]";
+        for size in 0..=want.len() + 1 {
+            let (ret, text) = into_exact(size, |b, n| unsafe {
+                crate::vim_snprintf!(
+                    b,
+                    n,
+                    c"[%s|%5d|%-4x|%.2f|%c|%%|%p|%g]".as_ptr(),
+                    name.as_ptr(),
+                    42 as c_int,
+                    255 as c_int,
+                    3.14159,
+                    b'x' as c_int,
+                    core::ptr::without_provenance::<u8>(16),
+                    -1e21,
+                )
+            });
+            assert_eq!(ret as usize, want.len());
+            let keep = want.len().min(size.saturating_sub(1));
+            assert_eq!(text, &want.as_bytes()[..keep], "size {size}");
+        }
+    }
+
+    #[test]
+    fn a_precision_bounds_how_far_a_pointer_is_read() {
+        // Three bytes and no terminator: `%.3s` and `%.2s` may read them,
+        // and must not read a fourth.
+        let bytes = Box::new(*b"abc");
+        let at = bytes.as_ptr().cast::<c_char>();
+        for (fmt, want) in [(c"<%.3s>", "<abc>"), (c"<%.2s>", "<ab>"), (c"<%.0s>", "<>")] {
+            let (_, text) = into_exact(16, |b, n| unsafe {
+                crate::vim_snprintf!(b, n, fmt.as_ptr(), at)
+            });
+            assert_eq!(text, want.as_bytes());
+        }
+        // A precision past a shorter terminated string stops at its NUL.
+        let short = c"hi";
+        let (_, text) = into_exact(16, |b, n| unsafe {
+            crate::vim_snprintf!(
+                b,
+                n,
+                c"<%.40s|%.*S>".as_ptr(),
+                short.as_ptr(),
+                9 as c_int,
+                short.as_ptr()
+            )
+        });
+        assert_eq!(text, b"<hi|hi>");
+    }
+
+    #[test]
+    fn add_appends_and_safelen_answers_what_fits() {
+        let mut buf = *b"ab\0\0\0\0\0\0";
+        let ret = unsafe {
+            vim_snprintf_add(
+                buf.as_mut_ptr().cast(),
+                buf.len(),
+                c"%s%ld".as_ptr(),
+                &[FmtArg::from(c"cd".as_ptr()), FmtArg::from(7 as c_long)],
+            )
+        };
+        assert_eq!(ret, 3);
+        assert_eq!(&buf, b"abcd7\0\0\0");
+        let mut small = [0xa5u8; 4];
+        let fitted = unsafe {
+            vim_snprintf_safelen(
+                small.as_mut_ptr().cast(),
+                small.len(),
+                c"%s".as_ptr(),
+                &[FmtArg::from(c"wxyz".as_ptr())],
+            )
+        };
+        assert_eq!((fitted, &small), (3, b"wxy\0"));
+    }
+
+    #[test]
+    fn the_safe_form_never_reads_a_raw_pointer() {
+        let mut out = [0u8; 32];
+        let n = format_into(
+            &mut out,
+            b"%s %s %d",
+            &[
+                FmtArg::from(c"x".as_ptr()),
+                FmtArg::Str(b"bytes"),
+                FmtArg::from(-3 as c_int),
+            ],
+        );
+        assert_eq!(&out[..n], b"[NULL] bytes -3");
+        assert_eq!(out[n], 0);
+    }
+
+    #[test]
+    fn the_string_shims_read_no_further_than_they_may() {
+        unsafe {
+            let exact = Box::new(*b"abcd");
+            let copy = xstrnsave(exact.as_ptr().cast(), 3);
+            assert_eq!(CStr::from_ptr(copy).to_bytes(), b"abc");
+            xfree(copy.cast());
+            let copy = xstrnsave(c"ab".as_ptr(), 2);
+            assert_eq!(CStr::from_ptr(copy).to_bytes(), b"ab");
+            xfree(copy.cast());
+
+            let text = c"a\u{ab}b";
+            let at = vim_strchr(text.as_ptr(), 0xab);
+            assert_eq!(at.addr() - text.as_ptr().addr(), 1);
+            assert!(vim_strchr(text.as_ptr(), i32::from(b'z')).is_null());
+            assert_eq!(
+                vim_strchr(text.as_ptr(), i32::from(b'b')).addr() - text.as_ptr().addr(),
+                3
+            );
+
+            let (b, a, c) = (c"b", c"a", c"c");
+            let mut names = [
+                b.as_ptr().cast_mut(),
+                a.as_ptr().cast_mut(),
+                c.as_ptr().cast_mut(),
+            ];
+            sort_strings(names.as_mut_ptr(), 3);
+            let sorted: Vec<&[u8]> = names
+                .iter()
+                .map(|&p| CStr::from_ptr(p).to_bytes())
+                .collect();
+            assert_eq!(sorted, [b"a", b"b", b"c"]);
+        }
+    }
+}

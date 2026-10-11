@@ -755,9 +755,8 @@ plus these whole-tree metrics, which are not per-file:
                         every site is outside a module that does not exist.
                         Phase 33.
                       raw_variadic_calls  direct calls to the C printf-family
-                        variadics (`vim_snprintf*`, `snprintf`, `printf`,
-                        `fprintf`, `sscanf`, `printf_string`, `luaL_error`,
-                        `lua_pushfstring`, `nlua_push_errstr`). A variadic
+                        variadics (`snprintf`, `printf`, `fprintf`,
+                        `sscanf`, `luaL_error`, `lua_pushfstring`). A variadic
                         argument is not type-checked: a `&CStr` or an
                         `XString` handed to `%s` compiles and reads garbage,
                         which shipped twice. Each callee has a macro of the
@@ -1388,18 +1387,25 @@ API_DIR = "crates/nvim/src/api/"
 
 # The C printf-family variadics: `raw_variadic_calls` counts a direct call to
 # one, and `variadic.rs` gives each a CArg-checked macro of the same name.
+# `vim_snprintf*`/`printf_string` left when they stopped being variadics (their
+# macros build a typed argument array), and `nlua_push_errstr` when it began
+# taking its message whole.
 VARIADIC_CALLEES = (
-    "vim_snprintf",
-    "vim_snprintf_add",
-    "vim_snprintf_safelen",
     "snprintf",
     "fprintf",
     "printf",
     "sscanf",
-    "printf_string",
-    "nlua_push_errstr",
     "lua_pushfstring",
     "luaL_error",
+)
+# The macros whose `unsafe { name!(..) }` is a wrapper of the callee `name`:
+# the variadics', and the editor formatter's, whose macros build the typed
+# argument array for the pointer fronts of the same name.
+ARGUMENT_MACROS = VARIADIC_CALLEES + (
+    "vim_snprintf",
+    "vim_snprintf_add",
+    "vim_snprintf_safelen",
+    "printf_string",
 )
 
 # Counted over every masked file, tree-wide.
@@ -2508,7 +2514,7 @@ def wrapper_callee(body):
                 if head:
                     return callee_key(head.group(1))
                 head = VARIADIC_MACRO_CALL.match(text[: i + 1])
-                if head and head.group(1) in VARIADIC_CALLEES:
+                if head and head.group(1) in ARGUMENT_MACROS:
                     return head.group(1)
                 return None
     return None
@@ -4508,12 +4514,12 @@ SELF_TEST_INSTRUMENTS = [
     # name, the declaration and the macros' own expansion do not.
     (
         {
-            "crates/nvim/src/a.rs": 'unsafe extern "C" fn vim_snprintf(s: *mut c_char) {}\n'
+            "crates/nvim/src/a.rs": 'unsafe extern "C" fn snprintf(s: *mut c_char) {}\n'
             "fn f() {\n"
-            "    vim_snprintf(buf, n, fmt, a);\n    libc::fprintf(f, fmt);\n"
-            "    vim_snprintf!(buf, n, fmt, a);\n    self.printf(s);\n"
+            "    snprintf(buf, n, fmt, a);\n    libc::fprintf(f, fmt);\n"
+            "    snprintf!(buf, n, fmt, a);\n    self.printf(s);\n"
             "    $crate::variadic::direct::snprintf(buf, n, fmt);\n"
-            "    vim_snprintf_safelen(buf, n, fmt);\n"
+            "    sscanf(buf, fmt, a);\n    vim_snprintf(buf, n, fmt, &[]);\n"
             "}\n",
         },
         {"raw_variadic_calls": 3},
