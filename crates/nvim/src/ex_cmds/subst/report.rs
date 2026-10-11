@@ -15,7 +15,7 @@ use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
 use crate::decoration::bufhl_add_hl_pos_offset;
 use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
-use crate::ex_cmds::{sub_nlines, sub_nsubs};
+use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::memline::{Lines, ml_append_bytes, ml_replace_buf_text};
 use crate::memory::XString;
@@ -77,12 +77,12 @@ pub fn do_sub_msg(count_only: bool) -> bool {
     // Only report substitutions when there were more than 'report' of them,
     // the command was typed by the user or more than one line changed, and
     // messages are not disabled.
-    let worth_reporting = sub_nsubs.get() as OptInt > p_report()
-        && (KeyTyped.get() || sub_nlines.get() > 1 as LineNr || p_report() < 1 as OptInt);
+    let worth_reporting = SUB_NSUBS.get() as OptInt > p_report()
+        && (KeyTyped.get() || SUB_NLINES.get() > 1 as LineNr || p_report() < 1 as OptInt);
     if (worth_reporting || count_only) && messaging() {
         let forms = report_forms(count_only);
-        let nsubs = sub_nsubs.get();
-        let nlines = sub_nlines.get();
+        let nsubs = SUB_NSUBS.get();
+        let nlines = SUB_NLINES.get();
         // Upstream builds the report in a `MSG_BUF_LEN` buffer: the count
         // is cut to what the interruption note leaves of it.
         let room = MSG_BUF_LEN as usize;

@@ -17,10 +17,10 @@
 
 #![forbid(unsafe_code)]
 
+use super::SUB_FLAGS;
 use super::exec::{Sub, SubArgs, save_undo_once};
-use super::subflags;
 use crate::change::{appended_lines, changed_bytes, deleted_lines};
-use crate::ex_cmds::sub_nsubs;
+use crate::ex_cmds::SUB_NSUBS;
 use crate::ex_cmds::{CAR, LineData, REGSUB_BACKSLASH, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo};
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
@@ -189,7 +189,7 @@ fn split_carriage_returns(st: &mut Sub, at: usize) {
                     0 as LineNr,
                     kExtmarkNOOP,
                 );
-                if subflags.with(|flags| flags.do_ask) {
+                if SUB_FLAGS.with(|flags| flags.do_ask) {
                     appended_lines(st.lnum - 1 as LineNr, 1 as LineNr);
                 } else {
                     if st.first_line == 0 as LineNr {
@@ -226,7 +226,7 @@ pub(super) fn build_replacement(
 ) {
     st.lnum_start = st.lnum; // save the start lnum
     let save_ma = Buf::current().b_p_ma;
-    let counting = subflags.with(|flags| flags.do_count);
+    let counting = SUB_FLAGS.with(|flags| flags.do_count);
     if counting {
         // Prevent a function from accidentally changing the buffer.
         Buf::current().b_p_ma = 0;
@@ -236,7 +236,7 @@ pub(super) fn build_replacement(
     let _sandboxed = counting.then(Lock::sandbox);
     // Save the flags for recursion: they can change for e.g.
     // ":s/^/\=execute("s#^##gn")".
-    let subflags_save = subflags.get();
+    let subflags_save = SUB_FLAGS.get();
 
     // Disallow changing text or switching window in an expression, and get
     // the length of the substitution part including the NUL.  When it fails
@@ -250,8 +250,8 @@ pub(super) fn build_replacement(
 
     // If getting the substitute string caused an error, don't do the
     // replacement.  Don't keep flags set by a recursive call.
-    subflags.set(subflags_save);
-    if st.sublen == 0 as c_int || aborting() || subflags.with(|flags| flags.do_count) {
+    SUB_FLAGS.set(subflags_save);
+    if st.sublen == 0 as c_int || aborting() || SUB_FLAGS.with(|flags| flags.do_count) {
         Buf::current().b_p_ma = save_ma;
         return;
     }
@@ -292,7 +292,7 @@ pub(super) fn build_replacement(
             regsub_multi_into(regmatch, lnum, sub, dest, regsub_flags());
         });
     }
-    sub_nsubs.set(sub_nsubs.get() + 1);
+    SUB_NSUBS.set(SUB_NSUBS.get() + 1);
     st.did_sub = true;
 
     // Move the cursor to the start of the line, to avoid it being beyond the
@@ -373,7 +373,7 @@ fn delete_matched_lines(st: &mut Sub) -> bool {
         -st.nmatch_tl,
         kExtmarkNOOP,
     );
-    if subflags.with(|flags| flags.do_ask) {
+    if SUB_FLAGS.with(|flags| flags.do_ask) {
         deleted_lines(st.lnum, st.nmatch_tl);
     }
     st.lnum -= 1;
@@ -431,7 +431,7 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
 
     // When asking, undo is saved each time, so the changed flag must be set
     // each time too.
-    if subflags.with(|flags| flags.do_ask) {
+    if SUB_FLAGS.with(|flags| flags.do_ask) {
         changed_bytes(st.lnum, 0 as ColNr);
     } else {
         if st.first_line == 0 as LineNr {

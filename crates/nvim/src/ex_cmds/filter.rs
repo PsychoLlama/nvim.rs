@@ -1,7 +1,7 @@
 //! Handing buffer text to a shell -- `:!cmd`, `:range!cmd` and `:shell`.
 //!
 //! [`do_bang`] is the command-line half: it expands `!` to the previous command
-//! ([`prevcmd`]), applies 'shellquote', and decides whether this is a filter (a
+//! ([`PREVCMD`]), applies 'shellquote', and decides whether this is a filter (a
 //! range was given) or a plain `:!`.  `do_filter` is the buffer half: write the
 //! range to a temp file, run the command with the file redirected in and its
 //! output redirected out, read the output back over the range, and fix the
@@ -12,8 +12,6 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::say;
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
@@ -74,11 +72,11 @@ use std::ffi::CString;
 /// it.  Owned, without a terminator; empty means there has not been one --
 /// which is upstream's NULL, and is not reachable any other way, because an
 /// empty command is never remembered.
-static prevcmd: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
+static PREVCMD: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 
-/// Check that [`prevcmd`] is set; if it is not, report it.
+/// Check that [`PREVCMD`] is set; if it is not, report it.
 fn prevcmd_is_set() -> bool {
-    if prevcmd.with(Vec::is_empty) {
+    if PREVCMD.with(Vec::is_empty) {
         emsg(gettext(e_noprev));
         return false;
     }
@@ -119,7 +117,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
         }
         let mut text = head;
         if ins_prevcmd {
-            prevcmd.with(|cmd| text.extend_from_slice(cmd));
+            PREVCMD.with(|cmd| text.extend_from_slice(cmd));
         }
         // Only the newly appended argument is scanned for a bang, but the
         // escape test may look one byte back into what came before it.
@@ -137,9 +135,9 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
     };
 
     // An empty command is not worth remembering, and upstream's NULL
-    // `prevcmd` is exactly "nothing has been".
+    // `PREVCMD` is exactly "nothing has been".
     if !assembled.is_empty() {
-        prevcmd.set(assembled.clone());
+        PREVCMD.set(assembled.clone());
     }
     let mut newcmd = assembled;
     newcmd.push(NUL as u8);
@@ -150,7 +148,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
             if !prevcmd_is_set() {
                 break 'theend;
             }
-            let escaped = prevcmd.with(|cmd| escaped_bytes(cmd, b"%#"));
+            let escaped = PREVCMD.with(|cmd| escaped_bytes(cmd, b"%#"));
             append_to_redobuff_literally_text(escaped.as_cstr());
             append_to_redobuff_text(c"\n");
             bangredo.set(false);
@@ -160,10 +158,10 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
         let shellquote = P_SHQ.get();
         let shq = &*shellquote;
         if !shq.is_empty() {
-            // `prevcmd` is set -- either `prevcmd_is_set` passed above, or
+            // `PREVCMD` is set -- either `prevcmd_is_set` passed above, or
             // the assembled command was just stored in it.
             let mut quoted = shq.to_vec();
-            prevcmd.with(|cmd| quoted.extend_from_slice(cmd));
+            PREVCMD.with(|cmd| quoted.extend_from_slice(cmd));
             quoted.extend_from_slice(shq);
             quoted.push(NUL as u8);
             newcmd = quoted;
@@ -698,7 +696,7 @@ pub fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
 }
 
 /// Start a new message only once during `:global`.
-pub(crate) static global_need_msg_kind: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static GLOBAL_NEED_MSG_KIND: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Print a text line.  Also in silent mode (`ex -s`).
 pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
@@ -712,10 +710,10 @@ pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
 
     silent_mode.set(false);
     info_message.set(true); // use stdout, not stderr
-    if (global_busy.get() == 0 || global_need_msg_kind.get()) && first {
+    if (global_busy.get() == 0 || GLOBAL_NEED_MSG_KIND.get()) && first {
         say::start();
         msg_ext_set_kind(c"list_cmd");
-        global_need_msg_kind.set(false);
+        GLOBAL_NEED_MSG_KIND.set(false);
     } else if !save_silent {
         // don't want trailing newline with regular messaging
         say::putchar('\n' as c_int);

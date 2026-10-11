@@ -11,8 +11,8 @@
 
 #![forbid(unsafe_code)]
 
+use super::SUB_FLAGS;
 use super::exec::Sub;
-use super::subflags;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
@@ -70,8 +70,8 @@ fn cpo_no_undo_sync() -> bool {
 fn prompt_exmode(st: &Sub) -> c_int {
     print_line_no_prefix(
         st.lnum,
-        subflags.with(|flags| flags.do_number),
-        subflags.with(|flags| flags.do_list),
+        SUB_FLAGS.with(|flags| flags.do_number),
+        SUB_FLAGS.with(|flags| flags.do_list),
     );
 
     // The cursor is at the start of the match; moving it to the last byte
@@ -84,7 +84,7 @@ fn prompt_exmode(st: &Sub) -> c_int {
     let (_, _, mut ec) = vcols_at(Win::current(), &mut cursor);
     Win::current().w_cursor = cursor;
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
-    if subflags.with(|flags| flags.do_number) || Win::current().w_onebuf_opt.wo_nu != 0 {
+    if SUB_FLAGS.with(|flags| flags.do_number) || Win::current().w_onebuf_opt.wo_nu != 0 {
         let numw = number_width(Win::current()) + 1 as c_int;
         sc += numw;
         ec += numw;
@@ -203,7 +203,7 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
     let no_sync = cpo_no_undo_sync().then(Suppress::undo_sync);
 
     // Loop until 'y', 'n', 'q', CTRL-E or CTRL-Y is typed.
-    while subflags.with(|flags| flags.do_ask) {
+    while SUB_FLAGS.with(|flags| flags.do_ask) {
         typed = if exmode_active.get() {
             prompt_exmode(st)
         } else {
@@ -220,12 +220,12 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
         }
         if typed == 'l' as c_int {
             // Last: replace and then stop.
-            subflags.with_mut(|flags| flags.do_all = false);
+            SUB_FLAGS.with_mut(|flags| flags.do_all = false);
             st.line2 = st.lnum;
             break;
         }
         if typed == 'a' as c_int {
-            subflags.with_mut(|flags| flags.do_ask = false);
+            SUB_FLAGS.with_mut(|flags| flags.do_ask = false);
             break;
         }
         if typed == Ctrl_E {

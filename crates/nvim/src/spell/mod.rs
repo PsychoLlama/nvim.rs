@@ -46,7 +46,7 @@ use core::slice;
 use crate::change::inserted_bytes;
 use crate::cursor::get_cursor_line_ptr;
 use crate::ex_cmds::do_sub_msg;
-use crate::ex_cmds::{sub_nlines, sub_nsubs};
+use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::memline::ml_replace;
@@ -365,8 +365,8 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     let frompatlen = frompat.len();
     P_WS.set(false);
 
-    sub_nsubs.set(0);
-    sub_nlines.set(0);
+    SUB_NSUBS.set(0);
+    SUB_NLINES.set(0);
     Win::current().w_cursor.lnum = 0;
     while !got_int.get() {
         let slash = '/' as c_int;
@@ -414,10 +414,10 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
             inserted_bytes(lnum, col, was, now);
 
             if Win::current().w_cursor.lnum != prev_lnum {
-                sub_nlines.set(sub_nlines.get() + 1);
+                SUB_NLINES.set(SUB_NLINES.get() + 1);
                 prev_lnum = Win::current().w_cursor.lnum;
             }
-            sub_nsubs.set(sub_nsubs.get() + 1);
+            SUB_NSUBS.set(SUB_NSUBS.get() + 1);
         }
         Win::current().w_cursor.col += repl_to_len as ColNr;
     }
@@ -425,7 +425,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     P_WS.set(save_ws);
     Win::current().w_cursor = pos;
 
-    if sub_nsubs.get() == 0 {
+    if SUB_NSUBS.get() == 0 {
         let arg0 = msg_bytes(&repl_from);
         semsg!("E753: Not found: {arg0}");
     } else {

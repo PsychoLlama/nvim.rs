@@ -1,7 +1,7 @@
 //! Adding lines -- `:append`, `:insert`, `:change` and `:z`.
 //!
 //! [`ex_append`] reads lines from the command line's input stream until a lone
-//! `.`, honouring 'autoindent' ([`append_indent`]) and the `:change` variant
+//! `.`, honouring 'autoindent' ([`APPEND_INDENT`]) and the `:change` variant
 //! ([`ex_change`]) that deletes the range first.  [`ex_z`] is the paging
 //! command: print a window of lines around a position, with the `+`/`-`/`=`/
 //! `.`/`^` forms picking which window and `:z#` numbering it.
@@ -9,8 +9,6 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::lines::set_op_range;
 use super::say;
@@ -41,7 +39,7 @@ use core::ffi::{CStr, c_int};
 
 /// The indent `:append`/`:insert`/`:change` gives the first line it reads,
 /// taken from the line the command started on.  `-1` once it has been used.
-static append_indent: GlobalCell<c_int> = GlobalCell::new(0);
+static APPEND_INDENT: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// `:insert` and `:append`, also used by [`ex_change`].
 pub fn ex_append(excmd: &mut ExArg) {
@@ -58,7 +56,7 @@ pub fn ex_append(excmd: &mut ExArg) {
 
     // First autoindent comes from the line we start on.
     if cmdidx != CmdIdx::change && Buf::current().b_p_ai != 0 && lnum > 0 {
-        append_indent.set(get_indent_lnum(lnum));
+        APPEND_INDENT.set(get_indent_lnum(lnum));
     }
 
     if cmdidx != CmdIdx::append {
@@ -79,8 +77,8 @@ pub fn ex_append(excmd: &mut ExArg) {
         msg_scroll.set(1);
         need_wait_return.set(false);
         if Buf::current().b_p_ai != 0 {
-            if append_indent.get() >= 0 {
-                indent = append_indent.replace(-1);
+            if APPEND_INDENT.get() >= 0 {
+                indent = APPEND_INDENT.replace(-1);
             } else if lnum > 0 {
                 indent = get_indent_lnum(lnum);
             }
@@ -232,7 +230,7 @@ pub fn ex_change(excmd: &mut ExArg) {
     } else {
         autoindent != 0
     } {
-        append_indent.set(get_indent_lnum(line1));
+        APPEND_INDENT.set(get_indent_lnum(line1));
     }
 
     let mut lnum = line2;

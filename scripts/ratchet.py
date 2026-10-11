@@ -1037,7 +1037,8 @@ CELL_COPY_OWNER = (
     # generation check exists precisely because the pointer is borrowed --
     # and since S11 the buffer's owner is a named one, the buffer registry's
     # `Owned<Buffer>`. A `get` on this cell copies a reference, not an owner.
-    "old_sub",
+    # `old_sub` left once the previous `:s` replacement came to own its text
+    # and its ShaDa extra data, so the cell is not `Copy` and has no `get`.
     # ccline is done: `cmdline_block` and `restart_args` retired in phase 22's
     # S14 behind `CmdlineBlock`/`RestartArgs`, two owned newtypes over the
     # `Array` with a `Drop`. Neither is `Copy`, so there is no `get` on either

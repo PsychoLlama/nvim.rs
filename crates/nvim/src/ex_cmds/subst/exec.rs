@@ -19,19 +19,17 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::args::{SubSetup, parse_sub};
 use super::confirm::{Confirm, ask_confirm};
 use super::replace::{SubLine, build_replacement, commit_line};
-use super::{do_sub_msg, global_need_beginline, show_sub, static_cstr_optval, subflags};
+use super::{GLOBAL_NEED_BEGINLINE, SUB_FLAGS, do_sub_msg, show_sub, static_cstr_optval};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
 use crate::cursor::coladvance;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line};
-use crate::ex_cmds::{sub_nlines, sub_nsubs};
+use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_eval::aborting;
@@ -68,7 +66,7 @@ use core::ffi::CStr;
 use core::ffi::c_int;
 
 /// The highlight group the preview marks matches with, looked up once.
-static pre_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
+static PRE_HL_ID: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// What the whole command was asked for, and never changes while it runs.
 pub(super) struct SubArgs {
@@ -92,7 +90,7 @@ pub(super) struct SubArgs {
     pub endcolumn: bool,
     pub old_cursor: Pos,
     pub old_line_count: LineNr,
-    /// `sub_nsubs` before this command, so that a `:global` can tell whether
+    /// `SUB_NSUBS` before this command, so that a `:global` can tell whether
     /// *this* `:s` did anything.
     pub start_nsubs: c_int,
     /// The user's `g` and `c` flags, put back for `:&&`.
@@ -194,7 +192,7 @@ impl Sub {
             if self.sub_firstlnum <= self.line2 {
                 self.do_again = true;
             } else {
-                subflags.with_mut(|flags| flags.do_all = false);
+                SUB_FLAGS.with_mut(|flags| flags.do_all = false);
             }
         }
         if self.skip_match {
@@ -269,7 +267,7 @@ fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
     st.prev_matchcol = st.matchcol;
 
     // 2. With the "n" flag only increase the counter.  With "c", ask.
-    if subflags.with(|flags| flags.do_count) {
+    if SUB_FLAGS.with(|flags| flags.do_count) {
         // For a multi-line match, put matchcol at the NUL at the end of the
         // line and set nmatch to one, so that we continue looking for a match
         // on the next line.  Avoids that ":s/\nB\@=//gc" gets stuck.
@@ -278,7 +276,7 @@ fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
             st.nmatch = 1 as c_int;
             st.skip_match = true;
         }
-        sub_nsubs.set(sub_nsubs.get() + 1);
+        SUB_NSUBS.set(SUB_NSUBS.get() + 1);
         st.did_sub = true;
         // Skip the substitution, unless an expression is used: then it is
         // evaluated in the sandbox.
@@ -287,7 +285,7 @@ fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
         }
     }
 
-    if subflags.with(|flags| flags.do_ask) && args.cmdpreview_ns <= 0 as c_int {
+    if SUB_FLAGS.with(|flags| flags.do_ask) && args.cmdpreview_ns <= 0 as c_int {
         match ask_confirm(st) {
             Confirm::Replace => {}
             Confirm::Skip | Confirm::Quit => return,
@@ -341,7 +339,7 @@ fn is_last_match(st: &Sub) -> bool {
     if st.skip_match || got_int.get() || st.got_quit || st.lnum > st.line2 {
         return true;
     }
-    if !(subflags.with(|flags| flags.do_all) || st.do_again) {
+    if !(SUB_FLAGS.with(|flags| flags.do_all) || st.do_again) {
         return true;
     }
     // Upstream only reads the byte at `matchcol` once the tests above have
@@ -469,7 +467,7 @@ fn substitute_line(st: &mut Sub, args: &SubArgs) {
     match_loop(st, args);
 
     if st.did_sub {
-        sub_nlines.set(sub_nlines.get() + 1);
+        SUB_NLINES.set(SUB_NLINES.get() + 1);
     }
     // The rebuilt line is only still here when the substitution was
     // cancelled, and the old line is this line's.
@@ -531,11 +529,11 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     st.old_line = None;
 
     // ":s/pat//n" doesn't move the cursor.
-    if subflags.with(|flags| flags.do_count) {
+    if SUB_FLAGS.with(|flags| flags.do_count) {
         Win::current().w_cursor = args.old_cursor;
     }
 
-    if sub_nsubs.get() > args.start_nsubs {
+    if SUB_NSUBS.get() > args.start_nsubs {
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Set the '[ and '] marks.
             Buf::current().b_op_start.lnum = args.range.0;
@@ -546,7 +544,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
 
         if global_busy.get() == 0 {
             // When interactive, leave the cursor on the match.
-            if !subflags.with(|flags| flags.do_ask) {
+            if !SUB_FLAGS.with(|flags| flags.do_ask) {
                 if args.endcolumn {
                     coladvance(Win::current(), MAXCOL as c_int);
                 } else {
@@ -557,20 +555,20 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             // preview -- and upstream's `&&` means it is not even *computed*
             // for one.
             if args.cmdpreview_ns <= 0 as c_int
-                && !do_sub_msg(subflags.with(|flags| flags.do_count))
-                && subflags.with(|flags| flags.do_ask)
+                && !do_sub_msg(SUB_FLAGS.with(|flags| flags.do_count))
+                && SUB_FLAGS.with(|flags| flags.do_ask)
                 && p_ch() > 0 as OptInt
             {
                 msg(c"", 0 as c_int);
             }
         } else {
-            global_need_beginline.set(true);
+            GLOBAL_NEED_BEGINLINE.set(true);
         }
-        if subflags.with(|flags| flags.do_print) {
+        if SUB_FLAGS.with(|flags| flags.do_print) {
             print_line(
                 Win::current().w_cursor.lnum,
-                subflags.with(|flags| flags.do_number),
-                subflags.with(|flags| flags.do_list),
+                SUB_FLAGS.with(|flags| flags.do_number),
+                SUB_FLAGS.with(|flags| flags.do_list),
                 true,
             );
         }
@@ -583,7 +581,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             if p_ch() > 0 as OptInt && !ui_has(kUIMessages) {
                 msg(c"", 0 as c_int);
             }
-        } else if subflags.with(|flags| flags.do_error) {
+        } else if SUB_FLAGS.with(|flags| flags.do_error) {
             // Nothing found.
             let pattern = get_search_pat();
             let arg0 = msg_bytes(&pattern);
@@ -591,13 +589,13 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         }
     }
 
-    if subflags.with(|flags| flags.do_ask) && has_any_folding(Win::current()) != 0 {
+    if SUB_FLAGS.with(|flags| flags.do_ask) && has_any_folding(Win::current()) != 0 {
         // The cursor position may require updating.
         changed_window_setting(Win::current());
     }
 
     // Restore the flag values: they can be used for ":&&".
-    subflags.with_mut(|flags| {
+    SUB_FLAGS.with_mut(|flags| {
         flags.do_all = args.save_do_all;
         flags.do_ask = args.save_do_ask;
     });
@@ -619,14 +617,14 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     if p_icm(CStr::is_empty) || !args.pat_given {
         return 0 as c_int;
     }
-    if pre_hl_id.get() == 0 as c_int {
-        pre_hl_id.set(syn_check_group(b"Substitute"));
+    if PRE_HL_ID.get() == 0 as c_int {
+        PRE_HL_ID.set(syn_check_group(b"Substitute"));
     }
     show_sub(
         args.range,
         args.old_cursor,
         &st.preview_lines,
-        pre_hl_id.get(),
+        PRE_HL_ID.get(),
         args.cmdpreview_ns,
         args.cmdpreview_bufnr,
     )
@@ -647,10 +645,10 @@ pub(crate) fn do_sub(
     cmdpreview_bufnr: Handle,
 ) -> c_int {
     if global_busy.get() == 0 {
-        sub_nsubs.set(0 as c_int);
-        sub_nlines.set(0 as LineNr);
+        SUB_NSUBS.set(0 as c_int);
+        SUB_NLINES.set(0 as LineNr);
     }
-    let start_nsubs = sub_nsubs.get();
+    let start_nsubs = SUB_NSUBS.get();
     let keeppatterns = cmdmod_has(CmdModFlags::KEEPPATTERNS);
     let (old_cursor, old_line_count) = (Win::current().w_cursor, Buf::current().b_ml.ml_line_count);
 

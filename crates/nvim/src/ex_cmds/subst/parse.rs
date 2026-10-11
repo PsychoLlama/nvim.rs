@@ -11,8 +11,6 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::do_sub_msg;
 use crate::cmdhist::add_to_history;
@@ -20,7 +18,7 @@ use crate::ex_cmds::{
     _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, SubFlags, kSubHonorOptions,
     kSubIgnoreCase, kSubMatchCase,
 };
-use crate::ex_cmds::{sub_nlines, sub_nsubs};
+use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::cluster_len;
@@ -51,7 +49,7 @@ struct LastReplacement {
     extra: Option<ShadaExtra>,
 }
 
-static old_sub: GlobalCell<LastReplacement> = GlobalCell::new(LastReplacement {
+static OLD_SUB: GlobalCell<LastReplacement> = GlobalCell::new(LastReplacement {
     text: None,
     timestamp: 0,
     extra: None,
@@ -61,7 +59,7 @@ static old_sub: GlobalCell<LastReplacement> = GlobalCell::new(LastReplacement {
 /// reuse the previous command's flags, and because a `\=` replacement can
 /// run another `:s` that must not leave its own flags behind (`do_sub` saves
 /// and restores this around the expression).
-pub(crate) static subflags: GlobalCell<SubFlags> = GlobalCell::new(SubFlags {
+pub(crate) static SUB_FLAGS: GlobalCell<SubFlags> = GlobalCell::new(SubFlags {
     do_all: false,
     do_ask: false,
     do_count: false,
@@ -74,14 +72,14 @@ pub(crate) static subflags: GlobalCell<SubFlags> = GlobalCell::new(SubFlags {
 
 /// Set by `do_sub` when a `:global` is running, so that `global_exe` puts the
 /// cursor on the first non-blank once the whole command is done.
-pub(crate) static global_need_beginline: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static GLOBAL_NEED_BEGINLINE: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The previous replacement as ShaDa writes it out: the text, its
 /// timestamp and its extra data, borrowed from the store. The two pointers
 /// are null when there is nothing, and live until the next
 /// [`sub_set_replacement`] or [`sub_restore_replacement`].
 pub fn sub_get_replacement() -> SubReplacementString {
-    old_sub.with(|last| SubReplacementString {
+    OLD_SUB.with(|last| SubReplacementString {
         sub: last
             .text
             .as_ref()
@@ -96,12 +94,12 @@ pub fn sub_get_replacement() -> SubReplacementString {
 
 /// The previous replacement's text, copied, for a bare `:s`.
 pub(super) fn previous_replacement() -> Option<XString> {
-    old_sub.with(|last| last.text.clone())
+    OLD_SUB.with(|last| last.text.clone())
 }
 
 /// Remember `text` as the previous replacement, stamped now.
 pub(crate) fn sub_set_replacement(text: XString) {
-    let displaced = old_sub.with_mut(|last| {
+    let displaced = OLD_SUB.with_mut(|last| {
         core::mem::replace(
             last,
             LastReplacement {
@@ -125,7 +123,7 @@ pub(crate) fn sub_restore_replacement(
 ) {
     let (expanded, fresh) = regtilde_owned(text.clone(), magic_isset(), false);
     let stored = if fresh { text } else { expanded };
-    let displaced = old_sub.with_mut(|last| {
+    let displaced = OLD_SUB.with_mut(|last| {
         core::mem::replace(
             last,
             LastReplacement {
@@ -181,8 +179,8 @@ pub(crate) fn sub_joining_lines(
         + LineNr::from(args.line2 < Buf::current().b_ml.ml_line_count);
     if joined_lines_count > 1 as LineNr {
         let _ = do_join(joined_lines_count as size_t, false, true, false, true);
-        sub_nsubs.set(joined_lines_count - 1 as LineNr);
-        sub_nlines.set(1 as LineNr);
+        SUB_NSUBS.set(joined_lines_count - 1 as LineNr);
+        SUB_NLINES.set(1 as LineNr);
         do_sub_msg(false);
         ex_may_print(args);
     }

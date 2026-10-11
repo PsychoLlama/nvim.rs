@@ -12,10 +12,10 @@
 #![forbid(unsafe_code)]
 
 use super::say;
-use super::{check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind};
+use super::{GLOBAL_NEED_BEGINLINE, GLOBAL_NEED_MSG_KIND, check_regexp_delim, do_sub_msg};
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::ex_cmds::{sub_nlines, sub_nsubs};
+use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::ex_docmd::state::global_busy;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::state::got_int;
@@ -247,10 +247,10 @@ pub fn global_exe(cmd: &[u8]) {
     // When the command writes a message, don't overwrite the command.
     msg_didout.set(true);
 
-    sub_nsubs.set(0 as c_int);
-    sub_nlines.set(0 as LineNr);
-    global_need_msg_kind.set(true);
-    global_need_beginline.set(false);
+    SUB_NSUBS.set(0 as c_int);
+    SUB_NLINES.set(0 as LineNr);
+    GLOBAL_NEED_MSG_KIND.set(true);
+    GLOBAL_NEED_BEGINLINE.set(false);
     global_busy.set(1 as c_int);
     let old_lcount = Buf::current().b_ml.ml_line_count;
 
@@ -264,7 +264,7 @@ pub fn global_exe(cmd: &[u8]) {
     }
 
     global_busy.set(0 as c_int);
-    if global_need_beginline.get() {
+    if GLOBAL_NEED_BEGINLINE.get() {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     } else {
         check_cursor(Win::current());

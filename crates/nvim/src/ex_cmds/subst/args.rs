@@ -18,8 +18,8 @@
 #![forbid(unsafe_code)]
 
 use super::{
-    check_regexp_delim, skip_substitute, sub_joining_lines, sub_parse_flags, sub_set_replacement,
-    subflags,
+    SUB_FLAGS, check_regexp_delim, skip_substitute, sub_joining_lines, sub_parse_flags,
+    sub_set_replacement,
 };
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int_at;
@@ -204,7 +204,7 @@ fn read_count(args: &mut ExArg, at: &mut usize) -> bool {
     let count_at = *at;
     let (i, past) = getdigits_int_at(args.line.buffer(), count_at, false, INT_MAX);
     *at = past;
-    if i <= 0 as c_int && !args.skip && subflags.with(|flags| flags.do_error) {
+    if i <= 0 as c_int && !args.skip && SUB_FLAGS.with(|flags| flags.do_error) {
         emsg(gettext(e_zerocount));
         return false;
     }
@@ -254,9 +254,9 @@ pub(super) fn parse_sub(
     // Find the trailing options.  This updates the *static* flags, which is
     // what lets ":&&" and ":s" with no flags reuse them.
     let flags = args.line.rest_of(flags_at);
-    flags_at += subflags.with_mut(|state| sub_parse_flags(flags, state, &mut which_pat));
+    flags_at += SUB_FLAGS.with_mut(|state| sub_parse_flags(flags, state, &mut which_pat));
     // Remember the user's "g" and "c" flags for ":&&".
-    let (save_do_all, save_do_ask) = subflags.with(|flags| (flags.do_all, flags.do_ask));
+    let (save_do_all, save_do_ask) = SUB_FLAGS.with(|flags| (flags.do_all, flags.do_ask));
 
     let mut at = args.line.skip_white(flags_at);
     if !read_count(args, &mut at) {
@@ -284,7 +284,7 @@ pub(super) fn parse_sub(
     let sub = sub?;
 
     // Substitution is not allowed in a non-'modifiable' buffer.
-    if !subflags.with(|flags| flags.do_count) && Buf::current().b_p_ma == 0 {
+    if !SUB_FLAGS.with(|flags| flags.do_count) && Buf::current().b_p_ma == 0 {
         emsg(gettext(e_modifiable));
         return None;
     }
@@ -301,14 +301,14 @@ pub(super) fn parse_sub(
         options,
     );
     let Some((mut regmatch, _)) = compiled else {
-        if subflags.with(|flags| flags.do_error) {
+        if SUB_FLAGS.with(|flags| flags.do_error) {
             emsg(gettext(e_invcmd));
         }
         return None;
     };
 
     // The 'i' or 'I' flag overrules 'ignorecase' and 'smartcase'.
-    match subflags.with(|flags| flags.do_ic) {
+    match SUB_FLAGS.with(|flags| flags.do_ic) {
         kSubIgnoreCase => regmatch.set_ignore_case(true),
         kSubMatchCase => regmatch.set_ignore_case(false),
         _ => {}

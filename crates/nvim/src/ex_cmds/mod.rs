@@ -20,9 +20,9 @@
 //! that belong to no one command and that other modules import by name.
 //!
 //! The family's process-wide state lives with the code that drives it:
-//! `prevcmd` and `global_need_msg_kind` in [`filter`], the seven `sort_*`
-//! flags in [`sort`], `append_indent` in [`append`], and `old_sub` plus
-//! `global_need_beginline` in [`subst`] -- the last two are the only ones
+//! `PREVCMD` and `GLOBAL_NEED_MSG_KIND` in [`filter`], the seven `sort_*`
+//! flags in [`sort`], `APPEND_INDENT` in [`append`], and `OLD_SUB` plus
+//! `GLOBAL_NEED_BEGINLINE` in [`subst`] -- the last two are the only ones
 //! read from outside their own child.
 
 #![forbid(unsafe_code)]
@@ -91,8 +91,8 @@ pub use self::write::*;
 use crate::global_cell::GlobalCell;
 use core::ffi::c_int;
 
-pub(crate) static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
-pub(crate) static sub_nlines: GlobalCell<LineNr> = GlobalCell::new(0);
+pub(crate) static SUB_NSUBS: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static SUB_NLINES: GlobalCell<LineNr> = GlobalCell::new(0);
 
 /// `:vimgrep`'s pattern argument at the start of a command line's string.
 struct VimgrepPat<'a> {
