@@ -10,16 +10,33 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::memory::XString;
 
-#[derive(Copy, Clone)]
+/// One argument: the name it was given, owned, and the buffer it was listed
+/// as (0 when none).
+#[derive(Clone)]
 pub struct ArgEntry {
-    pub ae_fname: *mut ::core::ffi::c_char,
-    pub ae_fnum: ::core::ffi::c_int,
+    pub name: XString,
+    pub fnum: ::core::ffi::c_int,
 }
+
+/// Which argument list a window uses: the key the registry in
+/// `arglist::state` finds the list by, and what `arglistid()` answers. Zero is
+/// the global list, so a window allocated zeroed starts out on it.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
+#[repr(transparent)]
+pub struct ArgListId(pub ::core::ffi::c_int);
+
+impl ArgListId {
+    /// The global argument list, the one nvim starts with.
+    pub const GLOBAL: ArgListId = ArgListId(0);
+}
+
+/// An argument list: the global one, or a window-local one shared by
+/// reference count between the windows that use it.
 pub struct ArgList {
-    /// The entries, each owning its `ae_fname`. Not a `Drop` impl: a list is
-    /// released through `alist_unlink`, which frees the names first.
-    pub al_ga: Vec<ArgEntry>,
-    pub al_refcount: Refcount,
-    pub id: ::core::ffi::c_int,
+    pub entries: Vec<ArgEntry>,
+    /// The windows (and `:all` walks) holding the list. The global list's
+    /// count is kept but never consulted: it is never freed.
+    pub refcount: Refcount,
 }

@@ -3,9 +3,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::arglist::get_arglist_exp;
+use crate::arglist::expand_arglist;
 use crate::ascii::ascii_isdigit;
-use crate::charset::{getdigits_int, skipwhite};
+use crate::charset::getdigits_int;
 use crate::cstr;
 use crate::getchar::state::got_int;
 use crate::hashtab::{hash_clear_all, hash_init};
@@ -17,7 +17,7 @@ use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::{p_msm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_isdir, os_path_exists};
-use crate::path::{free_wild, path_tail};
+use crate::path::path_tail;
 use crate::semsg;
 use crate::spell::SpellBuf;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
@@ -448,25 +448,22 @@ unsafe fn digits_then(
 
 /// `:mkspell[!] [-ascii] {outfile} {infile} ...`
 pub fn ex_mkspell(excmd: &mut ExArg) {
-    // A copy, which the split below cuts into words in place.
-    let mut text = excmd.line.arg().to_vec();
-    text.push(0);
-    // SAFETY: `get_arglist_exp` fills in the count and the vector, which
-    // `free_wild` then releases.
-    let mut arg = text.as_mut_ptr().cast::<::core::ffi::c_char>();
+    let mut arg = excmd.line.arg();
     let mut ascii = false;
-    if unsafe { cstr::starts_with(arg, b"-ascii") } {
+    if arg.starts_with(b"-ascii") {
         ascii = true;
-        arg = unsafe { skipwhite(arg.add(6)) };
+        arg = &arg[6..];
+        arg = &arg[crate::charset::skip::white(arg)..];
     }
 
-    let mut fcount = 0;
-    let mut fnames = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-    if unsafe { get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, false) }.is_err() {
+    let Ok(mut names) = expand_arglist(arg, false) else {
         return;
-    }
-    unsafe { mkspell(fcount, fnames, ascii, excmd.forceit, false) };
-    unsafe { free_wild(fcount, fnames) };
+    };
+    let mut fnames: Vec<*mut ::core::ffi::c_char> =
+        names.iter_mut().map(XString::as_mut_ptr).collect();
+    let fcount = ::core::ffi::c_int::try_from(fnames.len()).unwrap_or(::core::ffi::c_int::MAX);
+    // SAFETY: `fcount` NUL-terminated names this frame owns.
+    unsafe { mkspell(fcount, fnames.as_mut_ptr(), ascii, excmd.forceit, false) };
 }
 
 /// Read `.aff`/`.dic` pairs or word lists and write the `.spl` they make.

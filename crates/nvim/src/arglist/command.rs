@@ -3,15 +3,13 @@
 //! the `:next`/`:previous`/`:first`/`:last`/`:argument` family that walks
 //! it, each in its window-splitting `:s…` form too.
 //!
-//! Every entry point here takes the live command block `ex_docmd` hands it.
-//! That is their whole safety contract, and it is stated here rather than
-//! repeated on each of them.
+//! A command that changes the list hands [`do_arglist`] a copy of its
+//! argument: the autocommands adding a file runs must not find the command
+//! line borrowed.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::memline::MlFlags;
@@ -23,44 +21,37 @@ use crate::winlayer::{Buf, Win};
 
 /// `:args`, `:arglocal` and `:argglobal`.
 pub fn ex_args(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
     let cmdidx = excmd.cmdidx;
     if cmdidx != CmdIdx::args {
         if arglist_is_locked() {
             return;
         }
-        // SAFETY: curwin always has an argument list, and dropping the
-        // reference to it is what makes room for the new one.
-        unsafe { alist_unlink(win_alist(Win::current())) };
+        // Dropping the window's reference is what makes room for the new
+        // list.
+        alist_unlink(cur_alist());
         if cmdidx == CmdIdx::argglobal {
-            Win::current().w_alist = global_arglist();
+            Win::current().w_alist = ArgListId::GLOBAL;
         } else {
             alist_new();
         }
     }
     // ":args file ..": define a new argument list, handled like ":next".
     // Also for ":arglocal file .." and ":argglobal file ..".
-    // SAFETY: an ex-command argument is NUL-terminated.
     if c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL {
         if arglist_is_locked() {
             return;
         }
-        // SAFETY: caller contract.
         ex_next(excmd);
         return;
     }
     if cmdidx == CmdIdx::args {
-        // SAFETY: every entry of the current list has a name.
         list_args();
     } else if cmdidx == CmdIdx::arglocal {
-        // SAFETY: both lists are valid.
         copy_global_arglist();
     }
 }
 
 /// `:args` with no argument: list the arguments, the current one bracketed.
-///
-/// Safe: every window always has an argument list.
 fn list_args() {
     if argcount() <= 0 {
         // Empty argument list.
@@ -69,37 +60,21 @@ fn list_args() {
     // Overwrite the command: for a short list no scrolling and hence no
     // wait_return() is needed.
     gotocmdline(true);
-    let items: Vec<&CStr> = (0..argcount())
-        .map(|i| unsafe { CStr::from_ptr(arg_name(i)) })
-        .collect();
+    // Copies: a more-prompt may wait in the middle of the listing.
+    let names = arg_names(cur_alist());
+    let items: Vec<&CStr> = names.iter().map(XString::as_cstr).collect();
     list_in_columns(&items, cur_arg_idx());
 }
 
 /// `:arglocal` with no argument: copy the global list into the window's own,
-/// skipping entries that have lost their name.
-///
-/// Safe: both lists always exist -- every window has one, and the global
-/// list lives from startup to exit.
+/// which is never the global one here.
 fn copy_global_arglist() {
-    let al = win_alist(Win::current());
-    // SAFETY: both lists are live, and each name is copied into an
-    // allocation the new entry owns. The copies are collected before any of
-    // them joins the window's list, which is never the global one here.
-    let copies: Vec<ArgEntry> = unsafe { &(*global_arglist()).al_ga }
-        .iter()
-        .filter(|entry| !entry.ae_fname.is_null())
-        .map(|entry| ArgEntry {
-            ae_fname: unsafe { xstrdup(entry.ae_fname) },
-            ae_fnum: entry.ae_fnum,
-        })
-        .collect();
-    unsafe { (*al).al_ga.extend(copies) };
+    let copies = with_list(ArgListId::GLOBAL, |al| al.entries.clone()).unwrap_or_default();
+    with_list(cur_alist(), |al| al.entries.extend(copies));
 }
 
 /// `:previous`, `:sprevious`, `:Next` and `:sNext`.
 pub fn ex_previous(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    // SAFETY: caller contract; the count is the command's range.
     let back = cur_arg_idx() - excmd.line2 as c_int;
     // If already past the last one, go to the last one.
     let argn = if back >= argcount() {
@@ -107,32 +82,26 @@ pub fn ex_previous(excmd: &mut ExArg) {
     } else {
         back
     };
-    // SAFETY: caller contract.
     do_argfile(excmd, argn);
 }
 
 /// `:rewind`, `:first`, `:sfirst` and `:srewind`.
 pub fn ex_rewind(excmd: &mut ExArg) {
-    // SAFETY: caller contract.
     do_argfile(excmd, 0);
 }
 
 /// `:last` and `:slast`.
 pub fn ex_last(excmd: &mut ExArg) {
-    // SAFETY: caller contract.
     do_argfile(excmd, argcount() - 1);
 }
 
 /// `:argument` and `:sargument`.
 pub fn ex_argument(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    // SAFETY: caller contract; the argument number is the command's range.
     let argn = if excmd.addr_count > 0 {
         excmd.line2 as c_int - 1
     } else {
         cur_arg_idx()
     };
-    // SAFETY: caller contract.
     do_argfile(excmd, argn);
 }
 
@@ -150,20 +119,14 @@ fn report_no_such_arg(argn: c_int) {
 /// May the current buffer be left to edit argument `argn`? With 'hidden' it
 /// may, unless this is a re-edit of the same file; otherwise the buffer must
 /// be unchanged, written, or abandoned by force.
-///
-/// # Safety
-///
-/// `argn` must be a valid argument index.
-unsafe fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
+fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
     let mut other = true;
-    // SAFETY: reads the current buffer's 'hidden' state.
     if buf_hide(Buf::current()) {
-        // SAFETY: caller contract; `fix_fname` hands back an owned name.
-        // SAFETY: caller contract; `fix_fname` hands back an owned name,
-        // which is freed once `otherfile` has read it.
-        let full = unsafe { fix_fname(arg_name(argn)) };
-        other = otherfile(unsafe { CStr::from_ptr(full) });
-        unsafe { xfree(full.cast()) };
+        // A copy: the name is resolved and compared, and the buffer may go.
+        if let Some(name) = arg_name(cur_alist(), argn) {
+            let full = fixed_fname(name.as_cstr()).unwrap_or(name);
+            other = otherfile(full.as_cstr());
+        }
         if other {
             return true;
         }
@@ -178,9 +141,6 @@ unsafe fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
 /// Edit argument `argn`. A `:s…` command splits a window first; `:tab` opens
 /// a tab page.
 pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    // SAFETY: caller contract.
-    // SAFETY: `cmd` points at the command's own text, which is not empty.
     let is_split_cmd = c_int::from(excmd.line.byte_at(excmd.line.cmd)) == 's' as c_int;
     let forceit = excmd.forceit;
     let cmdidx = excmd.cmdidx;
@@ -189,18 +149,13 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
         report_no_such_arg(argn);
         return;
     }
-    // SAFETY: `argn` is in range and curbuf is valid.
-    // SAFETY: `argn` is in range, checked a statement ago; reading the
-    // entry outside the chain is safe because that check, not the
-    // short-circuit, is what bounds it.
-    let entry_fnum = unsafe { (*arg(argn)).ae_fnum };
+    let entry_fnum = entry_fnum(cur_alist(), argn).unwrap_or(0);
     let refused = !is_split_cmd
         && entry_fnum != Buf::current().handle
         && !check_can_set_curbuf_forceit(c_int::from(excmd.forceit));
     if refused {
         return;
     }
-    // SAFETY: plain mark bookkeeping over the current position.
     setpcmark();
     if is_split_cmd || cmdmod.with(|m| m.cmod_tab) != 0 {
         // Split the window, or create a new tab page, first.
@@ -208,32 +163,25 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
             return;
         }
         // RESET_BINDING: the new window scrolls and cursors on its own.
-        // SAFETY: curwin is the window just created.
         Win::current().w_onebuf_opt.wo_scb = c_int::from(false);
         Win::current().w_onebuf_opt.wo_crb = c_int::from(false);
-    } else {
-        // SAFETY: `argn` is in range.
-        if !unsafe { can_leave_curbuf(argn, forceit) } {
-            return;
-        }
+    } else if !can_leave_curbuf(argn, forceit) {
+        return;
     }
     set_cur_arg_idx(argn);
-    if argn == argcount() - 1 && win_alist(Win::current()) == global_arglist() {
-        arg_had_last.set(true);
+    if argn == argcount() - 1 && cur_alist() == ArgListId::GLOBAL {
+        ARG_HAD_LAST.set(true);
     }
     // Edit the file, always at the last known line number.
-    // SAFETY: the argument name outlives `do_ecmd`'s use of it, and `excmd` is
-    // the caller's own live command block.
     let wp = Win::current();
     let hidden = buf_hide(wp.buffer());
     let flags = EcmdFlags::HIDE.when(hidden) | EcmdFlags::FORCEIT.when(forceit);
     // A copy: `do_ecmd` may fire autocommands that change the list.
-    // SAFETY: the entry's NUL-terminated name, or null.
-    let name = unsafe { cstr::at_opt(arg_name(cur_arg_idx())) }.map(CStr::to_owned);
+    let name = arg_name(cur_alist(), cur_arg_idx());
     let last = newlnum::LAST as LineNr;
     let opened = do_ecmd(
         0,
-        name.as_deref(),
+        name.as_ref().map(XString::as_cstr),
         None,
         Some(excmd),
         last,
@@ -252,14 +200,11 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
 
 /// `:next` and the commands that behave like it.
 pub fn ex_next(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
     let forceit = excmd.forceit;
     let is_snext = excmd.cmdidx == CmdIdx::snext;
-    // SAFETY: `arg` points at the command's own text.
     let has_arg = c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL;
     // Check for a changed buffer now: if this fails the argument list is not
     // redefined.
-    // SAFETY: curbuf is valid; `check_changed` only reads it and may prompt.
     let flags = CCGD_AW as c_int | CCGD_EXCMD as c_int | flag_if(forceit, CCGD_FORCEIT);
     let buffer = Buf::current();
     let blocked = !buf_hide(buffer) && !is_snext && check_changed(buffer, flags);
@@ -268,44 +213,36 @@ pub fn ex_next(excmd: &mut ExArg) {
     }
     let argn = if has_arg {
         // Redefine the file list.
-        // SAFETY: caller contract.
-        if !unsafe {
-            do_arglist(
-                excmd.line.arg_copy().as_mut_ptr().cast(),
-                ArgListOp::Set,
-                0,
-                true,
-            )
-        } {
+        let arg = excmd.line.arg().to_vec();
+        if !do_arglist(&arg, ArgListOp::Set, 0, true) {
             return;
         }
         0
     } else {
-        // SAFETY: caller contract; the count is the command's range.
         cur_arg_idx() + excmd.line2 as c_int
     };
-    // SAFETY: caller contract.
     do_argfile(excmd, argn);
+}
+
+/// The name entry `n` of the current list was given -- not its buffer's --
+/// expanded to a full path.
+fn full_arg_name(n: c_int) -> Option<XString> {
+    let n = usize::try_from(n).ok()?;
+    let name = with_list(cur_alist(), |al| {
+        al.entries.get(n).map(|entry| entry.name.clone())
+    })??;
+    Some(full_name_of(name.as_cstr(), false))
 }
 
 /// `:argdedupe` — drop every later argument naming the same file.
 pub fn ex_argdedupe(_excmd: &mut ExArg) {
     let mut i = 0;
-    while i < argcount() {
+    while let Some(first) = full_arg_name(i) {
         // Expand each argument to a full path, to catch different paths
         // leading to the same file.
-        // SAFETY: `i` is in range; `full_name_save` hands back an owned name.
-        let first = unsafe { full_name_save((*arg(i)).ae_fname, false) };
         let mut j = i + 1;
-        while j < argcount() {
-            // SAFETY: `j` is in range, and the second name is freed as soon
-            // as the comparison is done with it.
-            // SAFETY: `j` is in range; `full_name_save` hands back an
-            // owned name, freed once it has been compared.
-            let second = unsafe { full_name_save((*arg(j)).ae_fname, false) };
-            let duplicate = unsafe { path_fnamecmp(cstr::at(first), cstr::at(second)) } == 0;
-            unsafe { xfree(second.cast()) };
-            if !duplicate {
+        while let Some(second) = full_arg_name(j) {
+            if path_fnamecmp(first.as_cstr(), second.as_cstr()) != 0 {
                 j += 1;
                 continue;
             }
@@ -317,16 +254,12 @@ pub fn ex_argdedupe(_excmd: &mut ExArg) {
                 set_cur_arg_idx(idx - 1);
             }
         }
-        // SAFETY: `first` is ours to free and nothing refers to it now.
-        unsafe { xfree(first as *mut c_void) };
         i += 1;
     }
 }
 
 /// `:argedit` — add the file to the list and edit it.
 pub fn ex_argedit(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    // SAFETY: caller contract; the insertion point is the command's range.
     let mut argn = if excmd.addr_count != 0 {
         excmd.line2 as c_int
     } else {
@@ -334,19 +267,11 @@ pub fn ex_argedit(excmd: &mut ExArg) {
     };
     // Whether curbuf will be reused, in which case b_ffname will be set.
     let curbuf_is_reusable = curbuf_reusable();
-    // SAFETY: caller contract; the argument is NUL-terminated.
-    if !unsafe {
-        do_arglist(
-            excmd.line.arg_copy().as_mut_ptr().cast(),
-            ArgListOp::Add,
-            argn,
-            true,
-        )
-    } {
+    let arg = excmd.line.arg().to_vec();
+    if !do_arglist(&arg, ArgListOp::Add, argn, true) {
         return;
     }
     maketitle();
-    // SAFETY: curbuf is valid.
     let empty_curbuf = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY)
         && (Buf::current().name.full().is_none() || curbuf_is_reusable);
     if cur_arg_idx() == 0 && empty_curbuf {
@@ -354,53 +279,34 @@ pub fn ex_argedit(excmd: &mut ExArg) {
     }
     // Edit the argument.
     if argn < argcount() {
-        // SAFETY: caller contract.
         do_argfile(excmd, argn);
     }
 }
 
 /// `:argadd` — add the files to the list without editing them.
 pub fn ex_argadd(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    // SAFETY: caller contract; the insertion point is the command's range.
     let after = if excmd.addr_count > 0 {
         excmd.line2 as c_int
     } else {
         cur_arg_idx() + 1
     };
-    // SAFETY: caller contract; the argument is NUL-terminated.
-    unsafe {
-        do_arglist(
-            excmd.line.arg_copy().as_mut_ptr().cast(),
-            ArgListOp::Add,
-            after,
-            false,
-        )
-    };
+    let arg = excmd.line.arg().to_vec();
+    do_arglist(&arg, ArgListOp::Add, after, false);
     maketitle();
 }
 
 /// `:argdelete` — by range (`:2,3argdelete`, or bare for the current entry)
 /// or by file pattern.
 pub fn ex_argdelete(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
     if arglist_is_locked() {
         return;
     }
-    // SAFETY: caller contract; the argument is NUL-terminated.
     let by_range = excmd.addr_count > 0 || excmd.line.byte_at(excmd.line.arg) == 0;
-    // SAFETY: caller contract.
     if by_range {
         delete_arg_range(excmd);
     } else {
-        unsafe {
-            do_arglist(
-                excmd.line.arg_copy().as_mut_ptr().cast(),
-                ArgListOp::Delete,
-                0,
-                false,
-            )
-        };
+        let arg = excmd.line.arg().to_vec();
+        do_arglist(&arg, ArgListOp::Delete, 0, false);
     }
     maketitle();
 }
@@ -408,8 +314,6 @@ pub fn ex_argdelete(excmd: &mut ExArg) {
 /// The range half of `:argdelete`. Without a range it deletes the current
 /// entry; a range reaching past the end is clamped to it.
 fn delete_arg_range(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    // SAFETY: caller contract; the argument is NUL-terminated.
     let (addr_count, has_arg) = (excmd.addr_count, excmd.line.byte_at(excmd.line.arg) != 0);
     if addr_count == 0 {
         // ":argdel" works like ":.argdel".
@@ -437,11 +341,8 @@ fn delete_arg_range(excmd: &mut ExArg) {
         }
         return;
     }
-    // SAFETY: the range sits inside the list, and every entry in it owns
-    // its name.
-    for gone in unsafe { cur_arglist() }.drain(as_count(line1 - 1)..as_count(line2)) {
-        unsafe { xfree(gone.ae_fname.cast()) };
-    }
+    let range = as_count(line1 - 1)..as_count(line2);
+    with_list(cur_alist(), |al| al.entries.drain(range).for_each(drop));
     let idx = cur_arg_idx();
     if idx >= line2 {
         set_cur_arg_idx(idx - count);
@@ -457,7 +358,6 @@ fn delete_arg_range(excmd: &mut ExArg) {
 
 /// Completion source for `:argedit` and `:argdelete`: the argument names.
 pub fn get_arglist_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
-    let idx = c_int::try_from(idx).ok().filter(|&idx| idx < argcount())?;
-    // SAFETY: an argument's name, NUL-terminated while the list stands.
-    unsafe { cstr::at_opt(arg_name(idx)) }.map(|name| Candidate::Owned(name.to_owned()))
+    let idx = c_int::try_from(idx).ok()?;
+    arg_name(cur_alist(), idx).map(|name| Candidate::Owned(name.as_cstr().to_owned()))
 }

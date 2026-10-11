@@ -23,7 +23,7 @@ use crate::charset::getdigits_at;
 
 use crate::ex_docmd::lookup::check_for_word;
 
-use crate::arglist::state::arg_had_last;
+use crate::arglist::state::ARG_HAD_LAST;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
     BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, VIM_QUESTION, VIM_YES, cmdmod_has,
@@ -406,7 +406,7 @@ pub(crate) fn check_more(message: bool, forceit: bool) -> c_int {
     if forceit
         || !only_one_window()
         || crate::arglist::argcount() <= 1
-        || arg_had_last.get()
+        || ARG_HAD_LAST.get()
         || n <= 0
         || quitmore.get() != 0
     {

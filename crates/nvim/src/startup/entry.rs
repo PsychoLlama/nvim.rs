@@ -14,14 +14,14 @@
 use crate::event::multiqueue::ChildQueue;
 use crate::fprintf;
 use crate::memory::ThinCString;
+use crate::types::ArgListId;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
 use crate::api::ui::remote_ui_wait_for_attach;
-use crate::arglist::alist_init;
-use crate::arglist::global_arglist;
+use crate::arglist::alist_count;
 use crate::autocmd::{apply_autocmds, autocmd_init};
 use crate::buffer::do_autochdir;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
@@ -80,7 +80,7 @@ use crate::startup::args::{
     set_window_layout,
 };
 use crate::startup::buffers::{
-    create_windows, edit_buffers, get_fname, handle_quickfix, handle_tag, read_stdin, set_argf_var,
+    create_windows, edit_buffers, handle_quickfix, handle_tag, read_stdin, set_argf_var,
 };
 use crate::startup::config::{exe_commands, exe_pre_commands, source_startup_scripts};
 use crate::startup::exit::{getout, os_exit};
@@ -174,8 +174,6 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
     win_alloc_first();
     time_msg_at(c"init first window");
 
-    unsafe { alist_init(global_arglist()) };
-    unsafe { (*global_arglist()).id = 0 };
     init_homedir();
     set_init_1(!paramp.is_null() && unsafe { (*paramp).clean });
     log_init();
@@ -255,11 +253,10 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         }
     }
 
-    let mut fname: *mut c_char = ptr::null_mut();
-    if unsafe { (*global_arglist()).al_ga.len() as c_int } > 0 {
-        fname = get_fname(&raw mut params);
-    }
-    if recoverymode.get() && fname.is_null() {
+    // The first file argument decides whether `-r` lists the swap files or
+    // recovers one.
+    let has_fname = alist_count(ArgListId::GLOBAL) > 0;
+    if recoverymode.get() && !has_fname {
         // `-r` with no file only lists the swap files.
         headless_mode.set(true);
     }
@@ -404,7 +401,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     load_plugins();
     unsafe { set_window_layout(&raw mut params) };
 
-    if recoverymode.get() && fname.is_null() {
+    if recoverymode.get() && !has_fname {
         // `-r` with no file: list the swap files and leave.
         let (no_name, no_list) = (ptr::null_mut(), ptr::null_mut::<List>());
         unsafe { recover_names(no_name, true, no_list, 0, ptr::null_mut()) };

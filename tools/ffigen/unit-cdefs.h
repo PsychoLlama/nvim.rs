@@ -234,6 +234,7 @@ typedef struct uv_write_s uv_write_s;
 typedef unsigned int AlignTextPos;
 typedef struct ApiDispatchFn ApiDispatchFn;
 typedef ConsumedBlk *ArenaMem;
+typedef int ArgListId;
 typedef struct ArgvFunc ArgvFunc;
 typedef unsigned int AutoEvent;
 typedef ptrdiff_t BCount;

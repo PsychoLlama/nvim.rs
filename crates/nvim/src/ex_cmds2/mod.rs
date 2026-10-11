@@ -39,7 +39,7 @@
 
 mod listdo;
 
-use crate::arglist::{ex_all, ex_rewind, set_arglist_text, warg_fnum};
+use crate::arglist::{ex_all, ex_rewind, set_arglist, warg_fnum};
 use crate::buffer::{
     BufRef, buf_hide, buf_is_dontwrite, buf_set_name_of, buf_spname_owned, find_buf,
     no_write_message, no_write_message_nobang, set_curbuf,
@@ -643,7 +643,8 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
     // window and jump there if so. Checking all of them would be
     // complicated and mostly only one file is dropped. Wildcards are
     // ignored too, since a file name containing one is very unlikely.
-    set_arglist_text(excmd.line.arg());
+    let arg = excmd.line.arg().to_vec();
+    set_arglist(&arg);
 
     // Expanding wildcards may leave the argument list empty, e.g. when
     // editing "foo.pyc" with ".pyc" in 'wildignore'. Assume an error

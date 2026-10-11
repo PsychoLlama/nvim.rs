@@ -22,7 +22,7 @@
 )]
 
 use super::*;
-use crate::arglist::expand_file_args;
+use crate::arglist::expand_arglist;
 use crate::autocmd::AucmdBuf;
 use crate::buffer::{BufFlags, find_buffer_by_name};
 use crate::ex_cmds::split_vimgrep_pat;
@@ -100,8 +100,8 @@ impl Search {
             qf_emsg(c"E683: File name missing or invalid pattern");
             return None;
         }
-        let files = match expand_file_args(XString::from_bytes(files).as_cstr()) {
-            Some(files) if !files.is_empty() => files,
+        let files = match expand_arglist(files, true) {
+            Ok(files) if !files.is_empty() => files,
             _ => {
                 qf_emsg(e_nomatch);
                 return None;

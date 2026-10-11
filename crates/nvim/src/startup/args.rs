@@ -16,9 +16,11 @@
 
 use crate::cstr;
 use crate::fprintf;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::snprintf;
+use crate::types::ArgListId;
 use crate::types::OptStr;
 use crate::vim_snprintf;
 use crate::winlayer::Buf;
@@ -27,8 +29,7 @@ use core::mem::{size_of, size_of_val};
 use core::ptr;
 
 use crate::api::private::helpers::api_metadata_raw;
-use crate::arglist::global_arglist;
-use crate::arglist::{alist_add, alist_name};
+use crate::arglist::{alist_add, arg_name};
 use crate::ascii::ascii_isdigit;
 use crate::diff::diffopt_horizontal;
 use crate::eval::vars::set_vim_var_string;
@@ -610,17 +611,15 @@ impl Scan {
         }
         self.parm.edit_type = EDIT_FILE as c_int;
 
-        let alist = global_arglist();
         let mut path = unsafe { xstrdup(self.arg()) };
 
         // `nvim -d dir file` diffs `dir/file` against `file`.
+        let first = arg_name(ArgListId::GLOBAL, 0);
         if self.parm.diff_mode != 0
             && unsafe { os_isdir(path) }
-            && unsafe { (*alist).al_ga.len() as c_int } > 0
-            && !unsafe { os_isdir(alist_name((*alist).al_ga.as_mut_ptr())) }
+            && let Some(first) = first.filter(|first| !crate::os::fs::os_isdir_of(first.as_cstr()))
         {
-            let first = unsafe { alist_name((*alist).al_ga.as_mut_ptr()) };
-            let joined = unsafe { concat_fnames(path, path_tail(first), true) };
+            let joined = unsafe { concat_fnames(path, path_tail(first.as_ptr()), true) };
             unsafe { xfree(path as *mut c_void) };
             path = joined;
         }
@@ -633,7 +632,12 @@ impl Scan {
         } else {
             2
         };
-        unsafe { alist_add(alist, path, alist_fnum_flag) };
+        // SAFETY: `path` is this frame's own allocation, handed over.
+        alist_add(
+            ArgListId::GLOBAL,
+            unsafe { XString::from_raw(path) },
+            alist_fnum_flag,
+        );
     }
 }
 

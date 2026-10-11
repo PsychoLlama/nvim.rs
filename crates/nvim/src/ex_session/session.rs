@@ -31,7 +31,6 @@ use super::{
     SessionFile, SessionOpts, did_lcd, ses_arglist, ses_do_win, ses_escape_fname, ses_fname,
     ses_put_fname,
 };
-use crate::arglist::global_arglist;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
@@ -47,6 +46,7 @@ use crate::options::{
 use crate::os::env::home_replace_save;
 use crate::os::state::globaldir;
 use crate::strings::escaped_bytes;
+use crate::types::ArgListId;
 use crate::types::{
     TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window, int64_t,
 };
@@ -118,15 +118,8 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
         return false;
     }
 
-    // SAFETY: the global argument list is live for the call.
-    if !unsafe {
-        ses_arglist(
-            out,
-            c"argglobal",
-            &(*global_arglist()).al_ga,
-            !opts.has(kOptSsopFlagCurdir),
-        )
-    } {
+    let names = crate::arglist::arg_names(ArgListId::GLOBAL);
+    if !ses_arglist(out, c"argglobal", &names, !opts.has(kOptSsopFlagCurdir)) {
         return false;
     }
 

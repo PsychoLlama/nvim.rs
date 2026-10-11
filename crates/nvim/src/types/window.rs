@@ -280,7 +280,7 @@ pub struct Window {
     pub w_stl_visual_mode: ::core::ffi::c_int,
     pub w_stl_visual_pos: Pos,
     pub w_alt_fnum: ::core::ffi::c_int,
-    pub w_alist: *mut ArgList,
+    pub w_alist: ArgListId,
     pub w_arg_idx: ::core::ffi::c_int,
     /// Whether `w_arg_idx` no longer names the argument the window shows.
     pub w_arg_idx_invalid: bool,

@@ -43,7 +43,6 @@
 mod session;
 mod view;
 
-use crate::arglist::alist_name;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
@@ -79,9 +78,7 @@ use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::PATHSEPSTR;
-use crate::types::{
-    ArgEntry, CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, size_t,
-};
+use crate::types::{CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, size_t};
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};
 use ::libc::fputs;
@@ -326,16 +323,13 @@ unsafe fn ses_put_fname(out: SessionFile, name: *mut c_char) -> bool {
 /// Write an argument list: the `cmd` that selects which one, `%argdel` to
 /// empty it, then one `$argadd` per entry. Entries with no name are skipped
 /// (which only happens out of memory).
-fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[ArgEntry], fullname: bool) -> bool {
+fn ses_arglist(out: SessionFile, cmd: &CStr, names: &[XString], fullname: bool) -> bool {
     if !out.puts(cmd) || !out.eol() || !out.line(c"%argdel") {
         return false;
     }
-    // SAFETY: caller contract; each entry's name is NUL-terminated.
-    for entry in entries {
-        let mut name = unsafe { alist_name(ptr::from_ref(entry).cast_mut()) };
-        if name.is_null() {
-            continue;
-        }
+    // SAFETY: each name is a NUL-terminated copy, only read.
+    for name in names {
+        let mut name = name.as_ptr().cast_mut();
         let mut full = ptr::null_mut::<c_char>();
         if fullname {
             full = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();

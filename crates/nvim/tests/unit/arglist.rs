@@ -83,7 +83,9 @@ fn only_space_and_tab_separate_arguments() {
 /// builds it; local and global lists across `:split`/`:tabnew`/
 /// `:arglocal`/`:argglobal`, with `argv()`/`argc()`/`arglistid()` aimed at
 /// each and at windows that do not exist; `:all` under an autocommand that
-/// tries to empty the list; `:argdedupe`; the `:args` listing; `##`.
+/// tries to empty the list, and `:all` closing a window that held the last
+/// reference to its own list (upstream's E1156 there is kept); `:argdedupe`;
+/// the `:args` listing; `##`.
 ///
 /// The expected text is upstream nvim 0.12.5's own answer to the same
 /// script, byte for byte.
@@ -129,6 +131,17 @@ for f in ['a', 'b', 'c', 'd', 'e']\n\
 endfor\n\
 \n\
 \" :argdo whose body deletes the rest\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b c d\n\
 let g:seen = []\n\
@@ -136,6 +149,17 @@ silent! argdo call add(g:seen, bufname()) | if bufname() == 'b' | 3,$argdelete |
 call Log('argdo-del', g:seen)\n\
 \n\
 \" :argdo whose body adds\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b\n\
 let g:seen = []\n\
@@ -143,6 +167,17 @@ silent! argdo call add(g:seen, bufname()) | if len(g:seen) < 4 | $argadd e | end
 call Log('argdo-add', g:seen)\n\
 \n\
 \" :argdo whose body wipes everything\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b c\n\
 let g:seen = []\n\
@@ -150,6 +185,17 @@ silent! argdo call add(g:seen, bufname()) | %argdelete\n\
 call Log('argdo-wipe', g:seen)\n\
 \n\
 \" :argdo whose body deletes the current and earlier ones\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b c d\n\
 let g:seen = []\n\
@@ -157,6 +203,17 @@ silent! argdo call add(g:seen, bufname()) | 1argdelete\n\
 call Log('argdo-del-first', g:seen)\n\
 \n\
 \" :next with an autocommand that wipes the list\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b c\n\
 autocmd T BufEnter b %argdelete | call Log('in-autocmd', argv())\n\
@@ -165,6 +222,17 @@ call Log('next-wipe')\n\
 autocmd! T\n\
 \n\
 \" :next with an autocommand that replaces the list\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b c\n\
 autocmd T BufEnter b args d e | call Log('in-autocmd2', argv(0))\n\
@@ -173,6 +241,17 @@ call Log('next-replace')\n\
 autocmd! T\n\
 \n\
 \" BufLeave wipe\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b c\n\
 autocmd T BufLeave a %argdelete\n\
@@ -181,6 +260,17 @@ call Log('next-leave-wipe')\n\
 autocmd! T\n\
 \n\
 \" BufAdd recursion -> E1156\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a\n\
 autocmd T BufAdd * argadd c\n\
@@ -189,6 +279,17 @@ call Log('argadd-recursive')\n\
 autocmd! T\n\
 \n\
 \" BufNew while :args sets\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 autocmd T BufNew * call Log('bufnew', argv())\n\
 silent! args a b\n\
@@ -196,6 +297,17 @@ call Log('args-bufnew')\n\
 autocmd! T\n\
 \n\
 \" argedit with an autocmd deleting\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b\n\
 autocmd T BufEnter d 1argdelete\n\
@@ -204,6 +316,17 @@ call Log('argedit-del')\n\
 autocmd! T\n\
 \n\
 \" local vs global\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b c\n\
 split\n\
@@ -230,6 +353,17 @@ argglobal\n\
 call Log('back-global')\n\
 \n\
 \" :all with an autocommand changing the list\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b c\n\
 autocmd T BufEnter b %argdelete\n\
@@ -239,52 +373,112 @@ autocmd! T\n\
 only!\n\
 \n\
 \" :argdedupe\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b a ./a c b\n\
 argdedupe\n\
 call Log('dedupe')\n\
 \n\
 \" :args listing\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a b c\n\
 next\n\
 call add(g:out, 'list: ' . execute('args'))\n\
 \n\
 \" ## expansion\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
+\n\
 call Reset()\n\
 args a\\ b c\n\
 call add(g:out, 'hashhash: ' . expand('##'))\n\
+\n\
+\" :all closing a window that holds the last reference to its own list\n\
+call Reset()\n\
+call writefile(['x'], 'x')\n\
+args a\n\
+split\n\
+arglocal x\n\
+wincmd w\n\
+let v:errmsg = ''\n\
+all\n\
+call add(g:out, 'all-local: ' . winnr('$') . ' ' . v:errmsg . ' ' . string(argv()) . arglistid())\n\
 \n\
 call Reset()\n\
 ";
 
 /// Upstream's log of [`SCRIPT`].
-const EXPECTED: &str = "argdo-del: ['a', 'b'] args=['a', 'b'] idx=1 id=0 buf=b err=\n\
+const EXPECTED: &str = "all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
+argdo-del: ['a', 'b'] args=['a', 'b'] idx=1 id=0 buf=b err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 argdo-add: ['a', 'b'] args=['a', 'b', 'e', 'e'] idx=1 id=0 buf=b err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 argdo-wipe: ['a'] args=[] idx=0 id=0 buf=a err=E163: There is only one file to edit\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 argdo-del-first: ['a', 'c'] args=['c', 'd'] idx=0 id=0 buf=c err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 in-autocmd: [] args=[] idx=0 id=0 buf=b err=\n\
 next-wipe: '' args=[] idx=0 id=0 buf=b err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 in-autocmd2: 'd' args=['d', 'e'] idx=0 id=0 buf=d err=\n\
 next-replace: '' args=['d', 'e'] idx=0 id=0 buf=d err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 next-leave-wipe: '' args=[] idx=0 id=0 buf=b err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 argadd-recursive: '' args=['a', 'b'] idx=0 id=0 buf=a err=E1156: Cannot change the argument list recursively\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 bufnew: ['a'] args=['a'] idx=0 id=0 buf=a err=\n\
 args-bufnew: '' args=['a', 'b'] idx=0 id=0 buf=a err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 argedit-del: '' args=['d', 'b'] idx=0 id=0 buf=d err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 split-shares: '' args=['a', 'b', 'c'] idx=0 id=0 buf=a err=\n\
-arglocal-copy: '' args=['a', 'b', 'c'] idx=0 id=1 buf=a err=\n\
-local-add: '' args=['a', 'd', 'b', 'c'] idx=0 id=1 buf=a err=\n\
+arglocal-copy: '' args=['a', 'b', 'c'] idx=0 id=12 buf=a err=\n\
+local-add: '' args=['a', 'd', 'b', 'c'] idx=0 id=12 buf=a err=\n\
 other-global: '' args=['a', 'b', 'c'] idx=0 id=0 buf=a err=\n\
-tabnew-inherits: '' args=['a', 'd', 'b', 'c'] idx=0 id=1 buf= err=\n\
+tabnew-inherits: '' args=['a', 'd', 'b', 'c'] idx=0 id=12 buf= err=\n\
 argglobal: '' args=['a', 'b', 'c'] idx=0 id=0 buf= err=\n\
-arglocal-args: '' args=['x', 'y'] idx=0 id=2 buf=x err=\n\
+arglocal-args: '' args=['x', 'y'] idx=0 id=13 buf=x err=\n\
 argv-1: ['a', 'b', 'c']3'a'\n\
 winid: ['x', 'y']2-1[]''\n\
-arglistid: -1 2\n\
+arglistid: -1 13\n\
 back-global: '' args=['a', 'b', 'c'] idx=0 id=0 buf=x err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 all: 3 ['a', 'b', 'c']\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 dedupe: '' args=['a', 'b', 'c'] idx=0 id=0 buf=a err=\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 list: \0a   [b] c   \n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 hashhash: a\\ b c\n\
+all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 ";

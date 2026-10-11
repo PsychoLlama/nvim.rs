@@ -24,7 +24,6 @@ use super::{
     SessionFile, SessionOpts, did_lcd, ses_arglist, ses_escape_fname, ses_fname, ses_get_fname,
     ses_put_fname,
 };
-use crate::arglist::global_arglist;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_normal, buf_is_terminal, find_buf};
 use crate::fold::put_folds;
 use crate::fprintf;
@@ -37,6 +36,7 @@ use crate::options::{
     kOptSsopFlagOptions, kOptSsopFlagTerminal,
 };
 use crate::pos::MAXCOL;
+use crate::types::ArgListId;
 use crate::types::{NUL, OptionSetFlags, int64_t};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{TabPage, Win};
@@ -65,7 +65,7 @@ pub(crate) fn put_view(
     // SAFETY: caller contract; a window always has a buffer and an argument
     // list.
     // The argument list: the global one, or a local copy written out.
-    if window.w_alist == global_arglist() {
+    if window.w_alist == ArgListId::GLOBAL {
         if !out.line(c"argglobal") {
             return false;
         }
@@ -76,7 +76,8 @@ pub(crate) fn put_view(
             || !opts.has(kOptSsopFlagCurdir)
             || !tabpage.tp_localdir.is_null()
             || !window.w_localdir.is_null();
-        if !unsafe { ses_arglist(out, c"arglocal", &(*window.w_alist).al_ga, fullname) } {
+        let names = crate::arglist::arg_names(window.w_alist);
+        if !ses_arglist(out, c"arglocal", &names, fullname) {
             return false;
         }
     }

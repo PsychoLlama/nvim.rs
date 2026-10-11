@@ -15,14 +15,16 @@ use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::guard::Suppress;
+use crate::memory::XString;
 use crate::semsg;
+use crate::types::ArgListId;
 use crate::types::OptStr;
 use crate::vim_snprintf;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-use crate::arglist::alist_name;
-use crate::arglist::state::arg_had_last;
+use crate::arglist::state::ARG_HAD_LAST;
+use crate::arglist::{alist_count, arg_name, arg_names};
 use crate::buffer::state::{
     BLN_LISTED, SEA_DIALOG, SEA_NONE, SEA_QUIT, swap_exists_action, swap_exists_did_quit,
 };
@@ -63,7 +65,6 @@ use crate::window::{
     win_equal,
 };
 
-use crate::arglist::global_arglist;
 use crate::pos::MAXLNUM;
 use crate::startup::exit::os_exit;
 use crate::winlayer::{Buf, Live, TabPage, Win, first_window};
@@ -89,23 +90,13 @@ pub(crate) fn set_argf_var() {
     let mut full = [0 as c_char; MAXPATHL as usize];
     let held = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
     let list = held.as_ptr();
-    let alist = global_arglist();
-    for i in 0..unsafe { (*alist).al_ga.len() as c_int } {
-        let fname = unsafe { alist_name(((*alist).al_ga.as_mut_ptr()).offset(i as isize)) };
-        if !fname.is_null() {
-            let _ = unsafe { vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false) };
-            unsafe { (*list).push_str(cstr::at_opt(full.as_ptr())) };
-        }
+    for fname in arg_names(ArgListId::GLOBAL) {
+        let fname = fname.as_ptr();
+        let _ = unsafe { vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false) };
+        unsafe { (*list).push_str(cstr::at_opt(full.as_ptr())) };
     }
     list_set_lock(unsafe { list.as_mut() }, VarLock::Fixed);
     set_vim_var_list(Vv::Argf, Some(held));
-}
-
-/// The first file argument, which is what decides whether `-r` lists the swap
-/// files or recovers one.
-pub(crate) fn get_fname(_parmp: *mut MainParams) -> *mut c_char {
-    // SAFETY: only reached when the argument list is non-empty.
-    unsafe { alist_name((*global_arglist()).al_ga.as_mut_ptr()) }
 }
 
 /// `-q`: read the errorfile and set up the quickfix list.
@@ -244,7 +235,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
     }
     if parm.window_count == 0 {
         // `-o`/`-O`/`-p` with no count: one per file.
-        unsafe { parm.window_count = (*global_arglist()).al_ga.len() as c_int };
+        parm.window_count = alist_count(ArgListId::GLOBAL);
     }
     if parm.window_count > 1 {
         // Leave the layout alone if a vimrc command already split it.
@@ -410,18 +401,12 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
         if first_win().w_buffer.is_current() || Buf::current().name.full().is_none() {
             Win::current().w_arg_idx = arg_idx;
             swap_exists_did_quit.set(false);
-            let alist = global_arglist();
             // A copy: the edit's autocommands may change the argument list.
-            let name = if arg_idx < unsafe { (*alist).al_ga.len() as c_int } {
-                let entries = unsafe { (*alist).al_ga.as_mut_ptr() };
-                unsafe { cstr::at_opt(alist_name(entries.offset(arg_idx as isize))) }
-                    .map(CStr::to_owned)
-            } else {
-                None
-            };
+            let name = arg_name(ArgListId::GLOBAL, arg_idx);
             let (last, hide) = (newlnum::LASTL as LineNr, EcmdFlags::HIDE);
             let win = Win::current().id();
-            let _ = do_ecmd(0, name.as_deref(), None, None, last, hide, Some(win));
+            let name = name.as_ref().map(XString::as_cstr);
+            let _ = do_ecmd(0, name, None, None, last, hide, Some(win));
             if swap_exists_did_quit.get() {
                 if got_int.get() || only_one_window() {
                     quit_on_swap_exists(true);
@@ -429,8 +414,8 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                 win_close(Win::current(), true, false);
                 advance = false;
             }
-            if arg_idx == unsafe { (*alist).al_ga.len() as c_int } - 1 {
-                arg_had_last.set(true);
+            if arg_idx == alist_count(ArgListId::GLOBAL) - 1 {
+                ARG_HAD_LAST.set(true);
             }
             arg_idx += 1;
         }

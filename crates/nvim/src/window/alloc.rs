@@ -13,12 +13,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::types::ArgListId;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
 use crate::arglist::alist_unlink;
-use crate::arglist::global_arglist;
 use crate::autocmd::aucmd_wins;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
@@ -151,7 +151,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
             win.w_buffer = buf;
             win.w_s = buf.syntax_block();
             buf.b_nwindows = 1;
-            win.w_alist = global_arglist();
+            win.w_alist = ArgListId::GLOBAL;
             curwin_init();
         }
         Some(oldwin) => {
@@ -268,8 +268,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     let mut window = window;
     // SAFETY: a live window; reduces the reference count to its argument list.
     clear_folding(window);
-    // SAFETY: the window's own argument list.
-    unsafe { alist_unlink(window.w_alist) };
+    alist_unlink(window.w_alist);
     // Don't execute autocommands while the window is halfway deleted.
     block_autocmds();
     // The window's memory goes back with `free` below, which runs no

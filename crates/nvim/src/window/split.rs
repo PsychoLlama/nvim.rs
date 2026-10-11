@@ -819,8 +819,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     // The options and the argument list, which `win_new_tabpage` also copies
     // on its own (upstream's `win_init_some`).
     newp.w_alist = oldp.w_alist;
-    // SAFETY: the argument list the two windows now share.
-    unsafe { (*newp.w_alist).al_refcount.retain() };
+    crate::arglist::alist_retain(newp.w_alist);
     newp.w_arg_idx = oldp.w_arg_idx;
     win_copy_options(oldp, newp);
     newp.w_winbar_height = oldp.w_winbar_height;

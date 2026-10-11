@@ -447,6 +447,66 @@ pub(crate) fn expand_wildcards_one(
     }
 }
 
+/// One of the two expansions over several patterns.
+type ExpandFn = unsafe fn(
+    c_int,
+    *mut *mut c_char,
+    *mut c_int,
+    *mut *mut *mut c_char,
+    ExpandFlags,
+) -> Result<(), Failed>;
+
+/// `expand` of several patterns the caller holds, into names the caller
+/// owns. The patterns are handed over as writable, terminated copies.
+fn expand_patterns(
+    expand: ExpandFn,
+    patterns: &[XString],
+    flags: ExpandFlags,
+) -> Result<Vec<XString>, Failed> {
+    let mut copies: Vec<Vec<u8>> = patterns
+        .iter()
+        .map(|pattern| pattern.as_cstr().to_bytes_with_nul().to_vec())
+        .collect();
+    let mut pats: Vec<*mut c_char> = copies
+        .iter_mut()
+        .map(|copy| copy.as_mut_ptr().cast())
+        .collect();
+    let num_pat = c_int::try_from(pats.len()).unwrap_or(c_int::MAX);
+    let mut count: c_int = 0;
+    let mut files: *mut *mut c_char = ::core::ptr::null_mut();
+    // SAFETY: `num_pat` NUL-terminated copies this frame owns, and two locals
+    // to fill in; whatever the expansion answered is taken over once.
+    unsafe {
+        let expanded = expand(
+            num_pat,
+            pats.as_mut_ptr(),
+            &raw mut count,
+            &raw mut files,
+            flags,
+        );
+        let names = take_wild(count, files);
+        expanded.map(|()| names)
+    }
+}
+
+/// [`gen_expand_wildcards`] of several patterns the caller holds, into names
+/// the caller owns.
+pub(crate) fn gen_expand_wildcards_of(
+    patterns: &[XString],
+    flags: ExpandFlags,
+) -> Result<Vec<XString>, Failed> {
+    expand_patterns(gen_expand_wildcards, patterns, flags)
+}
+
+/// [`expand_wildcards`] -- 'wildignore' and 'suffixes' applied -- of several
+/// patterns the caller holds, into names the caller owns.
+pub(crate) fn expand_wildcards_of(
+    patterns: &[XString],
+    flags: ExpandFlags,
+) -> Result<Vec<XString>, Failed> {
+    expand_patterns(expand_wildcards, patterns, flags)
+}
+
 /// [`expand_wildcards_eval`] of one pattern, into names the caller owns.
 pub(crate) fn expand_wildcards_eval_list(
     pattern: &CStr,

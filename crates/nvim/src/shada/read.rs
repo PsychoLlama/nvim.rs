@@ -46,9 +46,7 @@ fn wanted_kinds(flags: c_int, want_marks: bool, get_old_files: bool) -> c_uint {
         }
         // The buffer list is only restored into an Nvim that was not
         // given files to edit.
-        if find_shada_parameter('%' as c_int).is_some()
-            && unsafe { (*Win::current().w_alist).al_ga.len() as c_int } == 0
-        {
+        if find_shada_parameter('%' as c_int).is_some() && crate::arglist::argcount() == 0 {
             kinds |= kSDReadBufferList;
         }
     }
