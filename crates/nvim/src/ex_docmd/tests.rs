@@ -362,7 +362,7 @@ fn a_sources_kind_is_seen_through_the_loops_around_it() {
     assert_eq!(twice.script().map(|cookie| cookie.level), Some(7));
     twice.script_mut().expect("a script").finished = true;
     let pos = twice.debug().expect("a script has a breakpoint");
-    assert!(pos.name.is_none());
+    assert_eq!(pos.name, c"");
     pos.breakpoint.set(12);
     pos.tick.set(3);
     assert!(cookie.finished);

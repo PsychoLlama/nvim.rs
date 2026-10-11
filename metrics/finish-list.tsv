@@ -540,13 +540,13 @@ register/	register/put/mod.rs	1	25	1	20	compound:1 deref:1	other:1	-	from:3 .off
 register/	register/special.rs	1	10	2	6	deref:3 expr:1	other:1 pp_str:1	str:1	XString::from_raw:1 file_name_at_cursor:1 find_ident_under_cursor:1 get_last_insert_save:1 xfree:1
 register/	register/store.rs	1	48	10	18	deref:29 ref:1	other:8 str:2 void:2 pp:1	other:5 void:2	.offset_from:3 .add:2 xfree:2 adjust_clipboard_name:1 get_clipboard:1 mb_string2cells_len:1 xmalloc:1
 register/	register/yank.rs	1	70	6	27	deref:25 compound:3 ref:2 expr:1	other:10	-	.offset:4 .copy_from:1 .write_bytes:1 abort:1 apply_autocmds:1 block_prep:1 bytes_at:1 c_str:1
-runtime/	*	8	537	83	347	deref:121 expr:18 compound:12 ref:2	str:70 other:19 pp_str:17 void:12 value:7	str:18 other:5 void:1	xfree:26 bytes_at:18 CStr::from_ptr:13 xstrdup:12 .offset_from:10 c_str:9 from_raw_parts:9 snprintf:9
+runtime/	*	8	538	83	348	deref:121 expr:18 compound:12 ref:2	str:70 other:19 pp_str:17 void:12 value:7	str:18 other:5 void:1	xfree:26 bytes_at:18 CStr::from_ptr:13 xstrdup:12 .offset_from:10 c_str:9 from_raw_parts:9 snprintf:9
 runtime/	runtime/cache.rs	1	55	9	46	deref:6 compound:1	str:5 void:1	other:1	.offset_from:3 CStr::from_ptr:3 bytes_at:3 c_str:3 copy_option_part:3 xstrdup:2 xstrlcpy:2 String_0::from_raw_bytes:1
 runtime/	runtime/estack.rs	1	24	5	16	deref:8	str:6 value:4	str:5	xstrdup:3 at_opt:2 bytes_at:2 XString::from_raw:1
 runtime/	runtime/expand.rs	1	69	9	45	deref:18 compound:3	str:11 other:7 pp_str:6	str:1	bytes_at:4 ga_append_owned:4 snprintf:3 .add:2 .copy_from:2 .offset_from:2 .sub:2 from_raw_parts:2
 runtime/	runtime/pack.rs	1	80	12	56	deref:14 expr:8 compound:1	str:10 void:5 pp_str:4	str:1 void:1	bytes_at:5 xfree:5 fix_fname:3 xstrlcat:3 .add:2 .offset_from:2 copy_option_part:2 xstrdup:2
 runtime/	runtime/rtp.rs	1	22	2	22	-	str:1	str:2	xfree:6 xstrdup:2 CStr::from_ptr:1 append_path:1 bytes_at:1 copy_nonoverlapping:1 os_isdir:1 vim_get_prefix_from_exepath:1
-runtime/	runtime/script.rs	1	101	13	47	deref:38 compound:3 expr:3 ref:1	other:6 str:5 value:3 pp_str:1	str:4 other:1	xfree:7 CStr::from_ptr:5 at:4 XString::from_raw:2 bytes_at:2 from_raw_parts:2 snprintf:2 .set_len:1
+runtime/	runtime/script.rs	1	102	13	48	deref:38 compound:3 expr:3 ref:1	other:6 str:5 value:3 pp_str:1	str:4 other:1	xfree:7 CStr::from_ptr:5 at:4 XString::from_raw:2 at_opt:2 bytes_at:2 from_raw_parts:2 snprintf:2
 runtime/	runtime/search.rs	1	76	16	46	deref:11 expr:6 compound:2	str:16 pp_str:6 void:6 other:1	str:1	copy_option_part:2 cstr_to_string:2 snprintf:2 .add:1 .offset_from:1 at:1 c_str:1 callback:1
 runtime/	runtime/source.rs	1	110	17	69	deref:26 compound:2 expr:1 ref:1	str:16 other:5	str:4 other:3	c_str:5 CStr::from_ptr:4 apply_autocmds:4 xfree:4 from_raw_parts:3 xstrdup:3 .offset_from:2 snprintf:2
 search/	*	9	368	41	223	deref:123 expr:12 compound:2	str:32 other:18 value:2 pp_str:1	str:8 other:2	.offset:24 at:13 bytes_at:11 utf_ptr2char:9 xfree:9 .offset_from:8 .add:7 xstrnsave:6

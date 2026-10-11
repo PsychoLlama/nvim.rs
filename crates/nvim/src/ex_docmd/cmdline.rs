@@ -18,7 +18,6 @@ use crate::ex_getln::ui_ext_cmdline_block_append;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use core::ffi::{CStr, c_int};
-use std::ffi::CString;
 
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, do_debug};
 
@@ -27,7 +26,7 @@ use crate::ex_docmd::source::{
     LineSource, LoopLines, ReadLines, SourceKind, StoredLine, do_cmdline_end, do_cmdline_start,
     handle_did_throw, msg_verbose_cmd, restore_dbg_stuff, save_dbg_stuff,
 };
-use crate::ex_docmd::{DoCmdOpts, sourcing_lnum};
+use crate::ex_docmd::{DoCmdOpts, sourcing_entry, sourcing_lnum};
 
 use crate::ex_docmd::{PROF_YES, SavedDebugState};
 use crate::ex_eval::flag::{CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW};
@@ -58,7 +57,7 @@ use crate::message::{msg_start, wait_return};
 
 use crate::os::input::line_breakcheck;
 use crate::profile::{script_line_end, script_line_start};
-use crate::runtime::{set_sourcing_lnum, sourcing_name_bytes};
+use crate::runtime::set_sourcing_lnum;
 
 use crate::memory::XString;
 use crate::types::ui::kUICmdline;
@@ -137,35 +136,21 @@ impl Source<'_, '_> {
         })
     }
 
-    /// The name breakpoints are looked up by: the function's, or the
-    /// script's as the execution stack has it.
-    fn breakpoint_name(&mut self) -> Option<CString> {
-        let pos = self.lines.debug()?;
-        Some(match pos.name {
-            Some(name) => name.to_owned(),
-            None => CString::new(sourcing_name_bytes().unwrap_or_default())
-                .expect("a frame's name holds no NUL"),
-        })
-    }
-
     /// Look up the next breakpoint at or after `after`, and stamp it with
     /// the tick it was read at.
     fn read_breakpoint(&mut self, after: LineNr) {
-        let Some(name) = self.breakpoint_name() else {
-            return;
-        };
         let is_script = self.is_script();
         if let Some(pos) = self.lines.debug() {
             pos.breakpoint
-                .set(dbg_find_breakpoint_named(is_script, &name, after));
+                .set(dbg_find_breakpoint_named(is_script, pos.name, after));
             pos.tick.set(debug_tick.get());
         }
     }
 
     /// Stop at the breakpoint due at `lnum`, and look up the next one.
     fn stop_at_breakpoint(&mut self, lnum: LineNr) {
-        if let Some(name) = self.breakpoint_name() {
-            dbg_breakpoint(&name, lnum);
+        if let Some(pos) = self.lines.debug() {
+            dbg_breakpoint(pos.name, lnum);
         }
         self.read_breakpoint(lnum);
     }
@@ -716,7 +701,7 @@ impl Run {
         }
         self.count += 1;
 
-        if p_verbose() >= 15 && sourcing_name_bytes().is_some() || p_verbose() >= 16 as OptInt {
+        if p_verbose() >= 15 && !sourcing_entry().es_name.is_null() || p_verbose() >= 16 as OptInt {
             let line = self
                 .pending
                 .as_ref()

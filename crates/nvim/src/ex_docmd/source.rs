@@ -318,9 +318,8 @@ pub(crate) enum SourceKind {
 /// run, and the tick it was looked up at: borrowed from the function's frame
 /// or the script's cookie, so a lookup made through it is the frame's own.
 pub(crate) struct DebugPos<'s> {
-    /// The function's name; `None` for a script, whose name is the execution
-    /// stack's.
-    pub(crate) name: Option<&'s CStr>,
+    /// The function's or the script's name, which a breakpoint names.
+    pub(crate) name: &'s CStr,
     pub(crate) breakpoint: &'s Cell<LineNr>,
     pub(crate) tick: &'s Cell<c_int>,
 }
@@ -484,15 +483,11 @@ impl ReadLines for LineSource<'_> {
     fn debug(&mut self) -> Option<DebugPos<'_>> {
         match self {
             LineSource::Function(frame) => Some(DebugPos {
-                name: Some(frame.func.name().as_cstr()),
+                name: frame.func.name().as_cstr(),
                 breakpoint: &frame.breakpoint,
                 tick: &frame.dbg_tick,
             }),
-            LineSource::Script(cookie) => Some(DebugPos {
-                name: None,
-                breakpoint: Cell::from_mut(&mut cookie.breakpoint),
-                tick: Cell::from_mut(&mut cookie.dbg_tick),
-            }),
+            LineSource::Script(cookie) => Some(cookie.debug_pos()),
             LineSource::Loop(lines) => lines.inner.debug(),
             _ => None,
         }

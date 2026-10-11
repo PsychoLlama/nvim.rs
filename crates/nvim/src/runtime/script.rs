@@ -28,10 +28,11 @@ use crate::vim_snprintf;
 
 use crate::cstr;
 use crate::eval::typval::NumBuf;
-use crate::ex_docmd::SourceKind;
+use crate::ex_docmd::{DebugPos, SourceKind};
 use crate::ex_eval::CsFlags;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL};
+use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -520,6 +521,21 @@ pub(crate) fn getsourceline(cookie: &mut SourceCookie, do_concat: bool) -> Optio
     // SAFETY: every reader above answers null or an allocated line, which
     // this takes over once.
     (!line.is_null()).then(|| unsafe { XString::from_raw(line) })
+}
+
+impl SourceCookie {
+    /// Where the debugger keeps this script's breakpoint, for `do_cmdline`'s
+    /// replay of a loop body.
+    pub(crate) fn debug_pos(&mut self) -> DebugPos<'_> {
+        // SAFETY: `fname` is null or the script's resolved name, which
+        // `do_source` keeps for as long as the script is being read.
+        let name = unsafe { cstr::at_opt(self.fname) }.unwrap_or(c"");
+        DebugPos {
+            name,
+            breakpoint: Cell::from_mut(&mut self.breakpoint),
+            tick: Cell::from_mut(&mut self.dbg_tick),
+        }
+    }
 }
 
 /// Look up the next breakpoint in the script `source` is reading, and remember the
