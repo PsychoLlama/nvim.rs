@@ -10,6 +10,8 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::buffer::buflist_findpat_prefix;
+use crate::charset::skip;
 use crate::message_fmt::msg_bytes;
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext_ptr;
@@ -129,28 +131,25 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             }
         }
     } else {
-        // The argument names the other buffer, by number or by pattern.
-        // SAFETY: the command's own NUL-terminated argument; `p` walks back
-        // over its own bytes and stops at its start.
-        let mut at = excmd.line.end_of(excmd.line.arg);
-        while at > excmd.line.arg && ascii_iswhite(c_int::from(excmd.line.byte_at(at - 1))) {
-            at -= 1;
+        // The argument names the other buffer, by number or by pattern,
+        // its trailing white space dropped.
+        let arg = excmd.line.arg;
+        let mut end = excmd.line.end_of(arg);
+        while end > arg && ascii_iswhite(c_int::from(excmd.line.byte_at(end - 1))) {
+            end -= 1;
         }
-        let p = excmd.line.ptr_at(at);
-        let mut digits = 0;
-        // SAFETY: the walk stops at `p`, which is inside the argument.
-        while unsafe {
-            ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.arg + digits)))
-                && excmd.arg_ptr().add(digits) < p
-        } {
-            digits += 1;
-        }
-        let nr = if excmd.arg_ptr().wrapping_add(digits) == p {
-            // SAFETY: a NUL-terminated decimal number.
-            unsafe { atol(excmd.arg_ptr()) as c_int }
+        let digits = excmd
+            .line
+            .slice_at(arg, end - arg)
+            .iter()
+            .take_while(|b| b.is_ascii_digit())
+            .count();
+        let nr = if arg + digits == end {
+            // `atol`'s answer, cut to an `int` as upstream's cast cuts it.
+            skip::decimal(excmd.line.rest_of(arg)).0 as c_int
         } else {
-            // SAFETY: the argument and the end of it.
-            let found = unsafe { buflist_findpat(excmd.arg_ptr(), p, false, true, false) };
+            let found =
+                buflist_findpat_prefix(excmd.line.cstr_from(arg), end - arg, false, true, false);
             if found < 0 {
                 return;
             }

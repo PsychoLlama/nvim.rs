@@ -38,12 +38,9 @@ use core::{ptr, slice};
 use std::ffi::CString;
 
 /// `:source` with `fname`, or without it when `fname` is empty.
-///
-/// # Safety
-/// `fname` is NUL-terminated.
-unsafe fn cmd_source(fname: *mut c_char, excmd: Option<&mut ExArg>) {
-    // SAFETY: the caller's contract -- `fname` is NUL-terminated.
-    let named = unsafe { *fname } as c_int != NUL;
+fn cmd_source(fname: &CStr, excmd: Option<&mut ExArg>) {
+    let named = !fname.is_empty();
+    let fname = fname.as_ptr().cast_mut();
     let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
     if named
         && excmd
@@ -89,8 +86,10 @@ unsafe fn cmd_source(fname: *mut c_char, excmd: Option<&mut ExArg>) {
 
 /// `:source`.
 pub fn ex_source(excmd: &mut ExArg) {
-    // SAFETY: the caller's contract.
-    unsafe { cmd_source(excmd.arg_ptr(), Some(excmd)) };
+    // A copy: the command is lent on with it, and `:source` of a buffer
+    // reads the command's own line.
+    let fname = excmd.line.cstr_from(excmd.line.arg).to_owned();
+    cmd_source(&fname, Some(excmd));
 }
 
 /// `:options`, which is `:source` of the option window script with the
@@ -98,8 +97,7 @@ pub fn ex_source(excmd: &mut ExArg) {
 pub fn ex_options(_excmd: &mut ExArg) {
     let mods = std::ffi::CString::new(cmdmod.with(win_cmd_modifiers)).expect("no NUL in a word");
     let _ = env_set(c"OPTWIN_CMD", &mods);
-    // SAFETY: `SYS_OPTWIN_FILE` is a constant.
-    unsafe { cmd_source(SYS_OPTWIN_FILE.as_ptr().cast_mut(), None) };
+    cmd_source(SYS_OPTWIN_FILE, None);
 }
 
 /// `fopen` for reading, with the descriptor kept out of child processes.

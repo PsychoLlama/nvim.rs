@@ -151,7 +151,7 @@ pub fn ex_file(excmd: &mut ExArg) {
 
     if !no_arg || excmd.addr_count == 1 {
         // SAFETY: as above.
-        if unsafe { rename_buffer(excmd.arg_ptr()) }.is_err() {
+        if unsafe { rename_buffer(excmd.line.arg_copy().as_mut_ptr().cast()) }.is_err() {
             return;
         }
         redraw_tabline.set(true);

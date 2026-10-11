@@ -3,6 +3,7 @@
 
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
+use crate::mbyte::canonize;
 use crate::memline::MlFlags;
 use crate::narrow::len_as_int;
 use crate::semsg;
@@ -32,7 +33,7 @@ use crate::fileio::{
 use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
-use crate::mbyte::{enc_canonize, utf_ptr2char, utf_ptr2len_len};
+use crate::mbyte::{utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
 use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
@@ -547,13 +548,9 @@ pub unsafe fn buf_write(
                     .filter(|command| command.force_enc != 0)
                     .map(|command| command.line.cmd + command.force_enc as usize);
                 let fenc = if let Some(at) = forced_enc {
-                    let name = excmd
-                        .as_ref()
-                        .expect("the command is there")
-                        .line
-                        .ptr_from(at);
-                    // SAFETY: `force_enc` is an offset into the command's line.
-                    fenc_tofree = unsafe { enc_canonize(name.cast_mut()) };
+                    // `force_enc` is an offset into the command's line.
+                    let line = &excmd.as_ref().expect("the command is there").line;
+                    fenc_tofree = canonize(line.rest_of(at)).into_raw();
                     fenc_tofree
                 } else {
                     b.b_p_fenc.value_ptr()

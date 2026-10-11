@@ -17,7 +17,6 @@
 //! `ExArg *` the command table hands it. Below it everything runs on
 //! the Lua stack, which stays raw.
 
-use crate::charset::{skiptowhite, skipwhite};
 use crate::lua::executor::{get_global_lstate, nlua_error, nlua_pcall};
 use crate::lua::ffi::{
     lua_createtable, lua_getfield, lua_gettop, lua_pushnumber, lua_pushstring, lua_settable,
@@ -25,8 +24,8 @@ use crate::lua::ffi::{
 };
 use crate::os::cshim::gettext;
 use crate::types::ExArg;
-use core::ffi::{CStr, c_char};
-use core::{ptr, slice};
+use core::ffi::CStr;
+use core::ptr;
 
 /// Lua's pseudo-index for the globals table.
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002;
@@ -128,16 +127,9 @@ fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
 /// `:trust [++deny|++remove] [path]`. Without a path it acts on the
 /// current buffer.
 pub fn ex_trust(excmd: &mut ExArg) {
-    // SAFETY: the caller's `ExArg`; `arg` is the NUL-terminated command
-    // line, so the first word is inside it.
-    let (arg, word) = unsafe {
-        let arg = excmd.arg_ptr();
-        let rest = skiptowhite(arg);
-        (
-            rest,
-            slice::from_raw_parts(arg.cast::<u8>(), rest.addr() - arg.addr()),
-        )
-    };
+    let arg = excmd.line.arg;
+    let rest = excmd.line.skip_to_white(arg);
+    let word = excmd.line.slice_at(arg, rest - arg);
     let action = match word {
         b"++deny" => TrustAction::Deny,
         b"++remove" => TrustAction::Remove,
@@ -147,11 +139,7 @@ pub fn ex_trust(excmd: &mut ExArg) {
             return;
         }
     };
-    // SAFETY: as above -- whatever follows the first word is still inside
-    // the same NUL-terminated line.
-    let path = unsafe {
-        let path = skipwhite(arg);
-        (*path != 0).then(|| CStr::from_ptr(path.cast::<c_char>()))
-    };
+    let path = excmd.line.skip_white(rest);
+    let path = (excmd.line.byte_at(path) != 0).then(|| excmd.line.cstr_from(path));
     nlua_trust(action, path);
 }

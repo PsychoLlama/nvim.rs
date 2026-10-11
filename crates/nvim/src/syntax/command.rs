@@ -347,7 +347,10 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
     let buffer = Buf::current();
-    let (fname, arg) = (buffer.name.shown_ptr(), excmd.line.ptr_at(excmd.line.arg));
+    // A copy of the name: the autocommand runs commands of its own.
+    let mut name = excmd.line.arg().to_vec();
+    name.push(0);
+    let (fname, arg) = (buffer.name.shown_ptr(), name.as_mut_ptr().cast());
     // SAFETY: a live buffer, and the command's own NUL-terminated argument.
     unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, Some(buffer)) };
 

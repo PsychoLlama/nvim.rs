@@ -49,11 +49,12 @@ mod list;
 #[cfg(test)]
 mod tests;
 
+use crate::message_fmt::msg_cstr;
 pub(crate) use attr::{parse_addr_type_arg, parse_compl_arg};
 pub(crate) use complete::{
     cmdcomplete_str_to_type, cmdcomplete_type_to_str, get_user_cmd_addr_type,
-    get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs, get_user_command_name,
-    get_user_commands, set_context_in_user_cmd, set_context_in_user_cmdarg, user_command_name,
+    get_user_cmd_complete, get_user_cmd_flags, get_user_cmd_nargs, get_user_commands,
+    set_context_in_user_cmd, set_context_in_user_cmdarg, user_command_name,
 };
 pub(crate) use expand::{
     do_ucmd, uc_mods, uc_nargs_upper_bound, uc_split_args_iter, win_cmd_modifiers,
@@ -648,19 +649,14 @@ pub(crate) fn uc_clear(table: Table) {
 
 /// `:delcommand` -- remove one user command.
 pub(crate) fn ex_delcommand(excmd: &mut ExArg) {
-    // SAFETY: caller contract; `args.arg` is NUL-terminated.
-    let (mut arg, buffer_only) = unsafe {
-        let arg = excmd.arg_ptr().cast_const();
-        let local = CStr::from_ptr(arg).to_bytes().starts_with(b"-buffer")
-            && ascii_iswhite(*arg.add(7) as c_int);
-        (arg, local)
-    };
+    let mut at = excmd.line.arg;
+    let buffer_only = excmd.line.arg().starts_with(b"-buffer")
+        && ascii_iswhite(c_int::from(excmd.line.byte_at(at + 7)));
     if buffer_only {
-        // SAFETY: the seven bytes were just matched.
-        arg = unsafe { skipwhite(arg.add(7)) };
+        at = excmd.line.skip_white(at + 7);
     }
-    // SAFETY: module contract.
-    let wanted = unsafe { CStr::from_ptr(arg).to_bytes() };
+    let arg = excmd.line.cstr_from(at);
+    let wanted = arg.to_bytes();
 
     // Upstream carries `res` across both passes, so an empty table leaves
     // the previous pass's answer standing; an empty table cannot match.
@@ -696,8 +692,7 @@ pub(crate) fn ex_delcommand(excmd: &mut ExArg) {
         } else {
             c"E184: No such user-defined command: %s"
         };
-        // SAFETY: module contract -- `arg` is NUL-terminated.
-        let arg = unsafe { msg_cstr_opt(cstr::at_opt(arg)) };
+        let arg = msg_cstr(arg);
         emsg_text(tr_c!(untranslated, arg));
         return;
     };

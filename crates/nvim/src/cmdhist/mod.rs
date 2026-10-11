@@ -401,7 +401,8 @@ pub fn f_histnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// history name ("cmd", ":", "all", ...) and a number range.
 pub fn ex_history(excmd: &mut ExArg) {
     msg_ext_set_kind(c"list_cmd");
-    let arg = excmd.arg_ptr();
+    let mut arg = excmd.line.arg_copy();
+    let arg = arg.as_mut_ptr().cast();
     if get_hislen() == 0 {
         msg(gettext(c"'history' option is zero"), 0);
         return;

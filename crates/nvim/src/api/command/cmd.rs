@@ -41,10 +41,11 @@ use crate::api_error;
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
-use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::snprintf;
 use crate::types::CmdIdx;
 use crate::types::{CmdFilter, CmdLine, ExArgt, NUL};
+use crate::usercmd::user_command_name;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -52,13 +53,6 @@ const EMPTY_ARRAY: Array = Array::EMPTY;
 
 // Two locals over `api::private::validate`'s family: the ones whose argument
 // is still a pointer into the caller's own text rather than a literal.
-
-/// [`err_bad_value`] where the offending value is a pointer.
-fn err_invalid_at(name: &CStr, value: *const c_char) -> Error {
-    // SAFETY: `value` is null or a NUL-terminated string of the caller's.
-    let value = unsafe { cstr::at_opt(value) };
-    err_bad_value(name, value.unwrap_or(c""))
-}
 
 /// [`err_expected`] where what arrived is a pointer.
 fn err_expected_at(name: &CStr, expected: &CStr, actual: *const c_char) -> Error {
@@ -177,7 +171,9 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
     // `find_ex_command` reads the command word, so the name is the whole of
     // the line until `build_cmdline_str` renders the real one.
     excmd.line = CmdLine::from_bytes(name.as_bytes());
-    let cmdname = excmd.line.ptr_at(0);
+    // The name as the messages below spell it: up to a NUL, as upstream's
+    // `char *` reads it. A copy, since the lookups take the line.
+    let cmdname = excmd.line.rest_of(0).to_vec();
     let mut found = find_ex_command(excmd, None);
 
     // An unknown capitalised name plus a CmdUndefined autocommand is a lazily
@@ -209,8 +205,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
     }
 
     if !(found.is_some() && excmd.cmdidx != CmdIdx::SIZE) && !range_only {
-        // SAFETY: `cmdname` is the caller's NUL-terminated name.
-        let name = unsafe { c_str(cmdname) };
+        let name = msg_bytes(&cmdname);
         return Err(api_error!(
             kErrorTypeValidation,
             "Command not found: {name}"
@@ -219,8 +214,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
 
     // SAFETY: `excmd.cmdidx` came out of `find_ex_command`.
     if !range_only && is_cmd_ni(excmd.cmdidx) {
-        // SAFETY: `cmdname` is the caller's NUL-terminated name.
-        let name = unsafe { c_str(cmdname) };
+        let name = msg_bytes(&cmdname);
         return Err(api_error!(
             kErrorTypeValidation,
             "Command not implemented: {name}"
@@ -229,18 +223,16 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
 
     if !range_only {
         // The Dict may abbreviate the name; it still has to be a prefix.
-        // SAFETY: both names are NUL-terminated.
-        let matched = unsafe {
-            let fullname = if is_user_cmd(excmd.cmdidx) {
-                get_user_command_name(excmd.useridx, excmd.cmdidx)
-            } else {
-                builtin_command_cstr(excmd.cmdidx).as_ptr()
-            };
-            cstr::starts_with(fullname, cstr::bytes_at(cmdname))
+        let matched = if is_user_cmd(excmd.cmdidx) {
+            user_command_name(excmd.useridx, excmd.cmdidx)
+                .is_some_and(|full| full.as_bytes().starts_with(&cmdname))
+        } else {
+            builtin_command_cstr(excmd.cmdidx)
+                .to_bytes()
+                .starts_with(&cmdname)
         };
         if !matched {
-            // SAFETY: `cmdname` is the caller's NUL-terminated name.
-            let name = unsafe { c_str(cmdname) };
+            let name = msg_bytes(&cmdname);
             return Err(api_error!(
                 kErrorTypeValidation,
                 "Invalid command: \"{name}\""
@@ -622,9 +614,9 @@ fn apply_argopt(excmd: &mut ExArg) -> Result<(), Error> {
         if !opt {
             return Ok(());
         }
-        let orig_arg = excmd.arg_ptr();
+        let orig_arg = excmd.line.arg;
         if getargopt(excmd).is_err() && !is_cmd_ni(excmd.cmdidx) {
-            return Err(err_invalid_at(c"argument ", orig_arg));
+            return Err(err_bad_value(c"argument ", excmd.line.cstr_from(orig_arg)));
         }
     }
 }

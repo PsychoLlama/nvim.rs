@@ -143,11 +143,11 @@ unsafe fn uc_split_args(line: &CmdLine, lenp: *mut size_t) -> *mut c_char {
     out.push(b'"');
     if line.args.is_empty() {
         // SAFETY: caller contract.
-        unsafe { quote_line(line.ptr_from(line.arg), &mut out) };
+        unsafe { quote_line(line.cstr_from(line.arg).as_ptr(), &mut out) };
     } else {
         let argc = line.args.len();
         for (i, &(at, len)) in line.args.iter().enumerate() {
-            let start = line.ptr_from(at);
+            let start = line.tail(at).as_ptr().cast::<c_char>();
             // SAFETY: the span is inside the command's own line.
             unsafe { quote_span(start, start.add(len), &mut out) };
             if i != argc - 1 {

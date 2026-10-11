@@ -448,9 +448,12 @@ unsafe fn digits_then(
 
 /// `:mkspell[!] [-ascii] {outfile} {infile} ...`
 pub fn ex_mkspell(excmd: &mut ExArg) {
-    // SAFETY: the caller promises the excommand; `get_arglist_exp` fills in
-    // the count and the vector, which `free_wild` then releases.
-    let mut arg = excmd.arg_ptr();
+    // A copy, which the split below cuts into words in place.
+    let mut text = excmd.line.arg().to_vec();
+    text.push(0);
+    // SAFETY: `get_arglist_exp` fills in the count and the vector, which
+    // `free_wild` then releases.
+    let mut arg = text.as_mut_ptr().cast::<::core::ffi::c_char>();
     let mut ascii = false;
     if unsafe { cstr::starts_with(arg, b"-ascii") } {
         ascii = true;
@@ -774,8 +777,12 @@ pub(super) fn spell_message_fmt(spin: &SpellInfo, args: core::fmt::Arguments<'_>
 
 /// `:spellgood`, `:spellwrong`, `:spellrare` and their `:spell*undo` forms.
 pub fn ex_spell(excmd: &mut ExArg) {
-    // SAFETY: the caller promises the excommand.
-    let (cmdidx, forceit, line2, arg) = (excmd.cmdidx, excmd.forceit, excmd.line2, excmd.arg_ptr());
+    let (cmdidx, forceit, line2) = (excmd.cmdidx, excmd.forceit, excmd.line2);
+    // A copy of the word: adding it writes files and may run autocommands.
+    let mut word = excmd.line.arg().to_vec();
+    let len = word.len() as ::core::ffi::c_int;
+    word.push(0);
+    let arg = word.as_mut_ptr().cast::<::core::ffi::c_char>();
 
     let kind = if cmdidx == CmdIdx::spellwrong {
         SPELL_ADD_BAD
@@ -792,8 +799,6 @@ pub fn ex_spell(excmd: &mut ExArg) {
         line2 as ::core::ffi::c_int
     };
 
-    // SAFETY: `arg` is the excommand's NUL-terminated argument.
-    let len = unsafe { cstr::bytes_at(arg) }.len() as ::core::ffi::c_int;
     let undo = cmdidx == CmdIdx::spellundo;
     unsafe { spell_add_word(arg, len, kind as SpellAddType, which, undo) };
 }

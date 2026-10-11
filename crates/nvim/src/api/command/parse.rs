@@ -12,7 +12,7 @@
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api_error;
-use crate::cstr;
+use crate::charset::skip;
 use crate::message_fmt::msg_cstr;
 use crate::types::CmdIdx;
 use crate::types::{CmdLine, ExArgt, NUL};
@@ -23,33 +23,14 @@ use core::slice;
 
 /// A `:map`-family right-hand side is one opaque string, however much
 /// whitespace it contains, so the arguments are exactly "lhs" and "rhs".
-///
-/// # Safety
-///
-/// `arg_str` must point at a NUL-terminated string.
-unsafe fn parse_map_cmd(arg_str: *const c_char) -> Array {
+fn parse_map_cmd(arg: &[u8]) -> Array {
     let mut args: Array = Array::with_capacity(2);
-    let lhs_start: *mut c_char = arg_str.cast_mut();
-    // SAFETY: the caller's promise -- `arg_str` is NUL-terminated, so the
-    // two scans and the difference between them stay inside it.
-    let (lhs_end, lhs_len) = unsafe {
-        let end = skiptowhite(lhs_start);
-        (end, end.offset_from(lhs_start) as size_t)
-    };
-    // SAFETY: `args` was reserved for two, and the left-hand side holds
-    // `lhs_len` bytes.
-    args.push(Object::string(unsafe {
-        cstrn_to_string(lhs_start, lhs_len)
-    }));
-    // SAFETY: as above.
-    let rhs_start: *mut c_char = unsafe { skipwhite(lhs_end) };
-    // SAFETY: `rhs_start` is inside the string, at worst at its terminator.
-    if unsafe { *rhs_start } != NUL as c_char {
-        // SAFETY: as above -- the rest of the line is one opaque argument.
-        unsafe {
-            let rhs_len = cstr::bytes_at(rhs_start).len();
-            args.push(Object::string(cstrn_to_string(rhs_start, rhs_len)));
-        }
+    let lhs_len = skip::to_white(arg);
+    args.push(Object::string(String_0::from_bytes(&arg[..lhs_len])));
+    let rhs = &arg[lhs_len + skip::white(&arg[lhs_len..])..];
+    if !rhs.is_empty() {
+        // The rest of the line is one opaque argument.
+        args.push(Object::string(String_0::from_bytes(rhs)));
     }
     args
 }
@@ -67,8 +48,7 @@ fn parse_args(excmd: &mut ExArg) -> Array {
     // guard has to stay in front of it rather than be hoisted alongside.
     // SAFETY: `cmdidx` is in range, checked immediately to its left.
     if excmd.cmdidx != CmdIdx::SIZE && is_map_cmd(excmd.cmdidx) && !empty {
-        // SAFETY: the argument runs to the line's NUL.
-        return unsafe { parse_map_cmd(excmd.arg_ptr()) };
+        return parse_map_cmd(excmd.line.arg());
     }
     if excmd.argt.has(ExArgt::NOSPC) {
         // One argument, whitespace and all.
@@ -76,10 +56,7 @@ fn parse_args(excmd: &mut ExArg) -> Array {
             return Array::EMPTY;
         }
         let mut args: Array = Array::with_capacity(1);
-        // SAFETY: room for the one item was just reserved.
-        args.push(Object::string(unsafe {
-            cstrn_to_string(excmd.arg_ptr(), length)
-        }));
+        args.push(Object::string(String_0::from_bytes(excmd.line.arg())));
         return args;
     }
 
@@ -87,15 +64,18 @@ fn parse_args(excmd: &mut ExArg) -> Array {
     // per call, so the whole split fits in one `length + 1` block.
     let mut block = vec![0 as c_char; length + 1];
     let mut buf = block.as_mut_ptr();
-    // SAFETY: the upper bound is what the splitter itself computes.
-    let mut args = Array::with_capacity(unsafe { uc_nargs_upper_bound(excmd.arg_ptr(), length) });
+    // Read only, by both the count and the splitter.
+    let arg = excmd.line.arg().as_ptr().cast::<c_char>();
+    // SAFETY: `length` bytes of the argument; the upper bound is what the
+    // splitter itself computes.
+    let mut args = Array::with_capacity(unsafe { uc_nargs_upper_bound(arg, length) });
     let (mut end, mut len): (size_t, size_t) = (0, 0);
     let mut done = false;
     while !done {
         // SAFETY: `end`/`len` are this frame's, and `buf` advances by
         // exactly what each call wrote, so it stays inside the block.
         unsafe {
-            done = uc_split_args_iter(excmd.arg_ptr(), length, &raw mut end, buf, &raw mut len);
+            done = uc_split_args_iter(arg, length, &raw mut end, buf, &raw mut len);
             if len > 0 {
                 args.push(Object::string(cstrn_to_string(buf, len)));
                 buf = buf.add(len + 1);

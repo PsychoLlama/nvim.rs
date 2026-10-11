@@ -135,6 +135,8 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
     let old_key_typed = KeyTyped.get();
 
     let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
+    // The subject, owned: the lookup below strips a `@xx` from it in place.
+    let mut subject: Vec<u8>;
     let mut arg = match excmd {
         None => c"".as_ptr().cast_mut(),
         Some(command) => {
@@ -142,8 +144,9 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
             if command.skip {
                 return;
             }
-            // SAFETY: as above.
-            unsafe { trim_trailing_blanks(command.arg_ptr()) }
+            subject = trimmed_subject(command.line.arg());
+            subject.push(0);
+            subject.as_mut_ptr().cast::<c_char>()
         }
     };
 
@@ -254,40 +257,27 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
 /// A `:help` command ends at the first LF, or at a `|` followed by some
 /// text. Terminate the argument there and point `nextcmd` at the rest.
 fn split_off_next_cmd(excmd: &mut ExArg) {
-    let mut arg = excmd.arg_ptr();
-    while unsafe { *arg } != NUL as c_char {
-        if unsafe { *arg } == b'\n' as c_char
-            || unsafe { *arg } == b'\r' as c_char
-            || (unsafe { *arg } == b'|' as c_char
-                && unsafe { *arg.offset(1) } != NUL as c_char
-                && unsafe { *arg.offset(1) } != b'|' as c_char)
-        {
-            unsafe { *arg = NUL as c_char };
-            arg = unsafe { arg.offset(1) };
-            excmd.set_nextcmd_ptr(arg);
+    let mut at = excmd.line.arg;
+    while excmd.line.byte_at(at) != 0 {
+        let (c, next) = (excmd.line.byte_at(at), excmd.line.byte_at(at + 1));
+        if c == b'\n' || c == b'\r' || (c == b'|' && next != 0 && next != b'|') {
+            excmd.line.terminate_at(at);
+            excmd.line.next = Some(at + 1);
             return;
         }
-        arg = unsafe { arg.offset(1) };
+        at += 1;
     }
 }
 
-/// Terminate `arg` before its trailing whitespace, except where a backslash
-/// escapes it, and return it.
-///
-/// # Safety
-/// `arg` is writable and NUL-terminated.
-unsafe fn trim_trailing_blanks(arg: *mut c_char) -> *mut c_char {
-    // SAFETY: caller contract. `p` starts one before the NUL, which is `arg`
-    // itself for an empty string, so the loop never steps below `arg`.
-    let mut p = unsafe { arg.add(cstr::bytes_at(arg).len()).offset(-1) };
-    while p > arg
-        && ascii_iswhite(unsafe { *p } as c_int)
-        && unsafe { *p.offset(-1) } != b'\\' as c_char
-    {
-        unsafe { *p = NUL as c_char };
-        p = unsafe { p.offset(-1) };
+/// `arg` without its trailing whitespace, except where a backslash escapes
+/// it.
+fn trimmed_subject(arg: &[u8]) -> Vec<u8> {
+    let mut end = arg.len();
+    // The first byte is never dropped, as upstream's walk stops at it.
+    while end > 1 && ascii_iswhite(c_int::from(arg[end - 1])) && arg[end - 2] != b'\\' {
+        end -= 1;
     }
-    arg
+    arg[..end].to_vec()
 }
 
 /// The tag `vim._core.help.resolve_tag()` picks for the cursor position, as

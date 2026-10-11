@@ -155,7 +155,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
         // `excmd` is the raw argument text; `fargs` the split one. The raw
         // string is pushed once and stored twice.
         lua_newtable(lstate);
-        lua_pushstring(lstate, excmd.arg_ptr());
+        lua_pushstring(lstate, excmd.line.cstr_from(excmd.line.arg).as_ptr());
         lua_pushvalue(lstate, -1);
         lua_setfield(lstate, -4, c"args".as_ptr());
         if (*cmd).uc_argt.has(ExArgt::NOSPC) {
@@ -176,7 +176,13 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
             let buf = xcalloc(length, size_of::<c_char>()).cast::<c_char>();
             let mut done = false;
             while !done {
-                done = uc_split_args_iter(excmd.arg_ptr(), length, &raw mut end, buf, &raw mut len);
+                done = uc_split_args_iter(
+                    excmd.line.arg().as_ptr().cast(),
+                    length,
+                    &raw mut end,
+                    buf,
+                    &raw mut len,
+                );
                 if len > 0 {
                     lua_pushlstring(lstate, buf, len);
                     lua_rawseti(lstate, -2, i);
@@ -187,7 +193,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
         } else {
             lua_pop(lstate, 1);
             for (i, &(at, len)) in excmd.line.args.clone().iter().enumerate() {
-                lua_pushlstring(lstate, excmd.line.ptr_from(at), len);
+                lua_pushlstring(lstate, excmd.line.tail(at).as_ptr().cast(), len);
                 lua_rawseti(lstate, -2, i as c_int + 1);
             }
         }

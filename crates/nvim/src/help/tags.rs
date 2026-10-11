@@ -23,7 +23,6 @@
 #![allow(unsafe_code)]
 
 use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_iswhite};
-use crate::charset::skipwhite;
 use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::cstr;
 use crate::fileio::vim_fgets;
@@ -48,7 +47,6 @@ use crate::strings::{sort_strings, vim_strchr};
 use crate::types::{ExArg, Expand, ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, size_t, uint8_t};
 use crate::vim_snprintf;
 use ::libc::{fclose, fputs, strcasecmp};
-use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -58,16 +56,14 @@ use super::flag::kEqualFiles;
 /// 'runtimepath'.
 pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     let mut add_help_tags = false;
-    // SAFETY: caller contract.
-    if unsafe { cstr::starts_with(excmd.arg_ptr(), b"++t") }
+    if excmd.line.arg().starts_with(b"++t")
         && ascii_iswhite(c_int::from(excmd.line.byte_at(excmd.line.arg + 3)))
     {
         add_help_tags = true;
-        let arg = excmd.arg_ptr();
-        unsafe { excmd.set_arg_ptr(skipwhite(arg.offset(3))) };
+        excmd.line.arg = excmd.line.skip_white(excmd.line.arg + 3);
     }
 
-    if unsafe { cstr::eq_bytes(excmd.arg_ptr(), b"ALL") } {
+    if excmd.line.arg() == b"ALL" {
         // A copy: the walk sources nothing, but it outlives a projection's
         // borrow and `do_in_path` keeps the cursor.
         let rtp = P_RTP.get();
@@ -92,8 +88,7 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
 
     let mut xpc = Expand::new();
     xpc.context = ExpandContext::Directories;
-    // SAFETY: the command's own NUL-terminated argument.
-    let arg = unsafe { CStr::from_ptr(excmd.arg_ptr()) };
+    let arg = excmd.line.cstr_from(excmd.line.arg);
     let opts = WildOpts::LIST_NOTFOUND | WildOpts::SILENT;
     let dirname = expand_one(&mut xpc, Some(arg), None, opts, WildMode::ExpandFree);
     match dirname {

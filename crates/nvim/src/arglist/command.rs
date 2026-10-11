@@ -262,7 +262,14 @@ pub fn ex_next(excmd: &mut ExArg) {
     let argn = if has_arg {
         // Redefine the file list.
         // SAFETY: caller contract.
-        if !unsafe { do_arglist(excmd.arg_ptr(), ArgListOp::Set, 0, true) } {
+        if !unsafe {
+            do_arglist(
+                excmd.line.arg_copy().as_mut_ptr().cast(),
+                ArgListOp::Set,
+                0,
+                true,
+            )
+        } {
             return;
         }
         0
@@ -321,7 +328,14 @@ pub fn ex_argedit(excmd: &mut ExArg) {
     // Whether curbuf will be reused, in which case b_ffname will be set.
     let curbuf_is_reusable = curbuf_reusable();
     // SAFETY: caller contract; the argument is NUL-terminated.
-    if !unsafe { do_arglist(excmd.arg_ptr(), ArgListOp::Add, argn, true) } {
+    if !unsafe {
+        do_arglist(
+            excmd.line.arg_copy().as_mut_ptr().cast(),
+            ArgListOp::Add,
+            argn,
+            true,
+        )
+    } {
         return;
     }
     maketitle();
@@ -348,7 +362,14 @@ pub fn ex_argadd(excmd: &mut ExArg) {
         cur_arg_idx() + 1
     };
     // SAFETY: caller contract; the argument is NUL-terminated.
-    unsafe { do_arglist(excmd.arg_ptr(), ArgListOp::Add, after, false) };
+    unsafe {
+        do_arglist(
+            excmd.line.arg_copy().as_mut_ptr().cast(),
+            ArgListOp::Add,
+            after,
+            false,
+        )
+    };
     maketitle();
 }
 
@@ -365,7 +386,14 @@ pub fn ex_argdelete(excmd: &mut ExArg) {
     if by_range {
         delete_arg_range(excmd);
     } else {
-        unsafe { do_arglist(excmd.arg_ptr(), ArgListOp::Delete, 0, false) };
+        unsafe {
+            do_arglist(
+                excmd.line.arg_copy().as_mut_ptr().cast(),
+                ArgListOp::Delete,
+                0,
+                false,
+            )
+        };
     }
     maketitle();
 }

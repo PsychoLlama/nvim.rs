@@ -7,7 +7,6 @@ use crate::api::private::helpers::{
     find_buffer_by_handle, try_enter, try_leave,
 };
 use crate::autocmd::{apply_autocmds, has_event};
-use crate::charset::{skiptowhite, skipwhite};
 use crate::ex_docmd::{
     builtin_command_cstr, excmd_get_argt, execute_cmd, find_ex_command, get_cmd_default_range,
     getargcmd, getargopt, invalid_range, is_cmd_ni, is_map_cmd, parse_cmdline, replace_makeprg,
@@ -31,8 +30,8 @@ use crate::types::{
     kObjectTypeLuaRef, kObjectTypeString, size_t, uint8_t, uint64_t,
 };
 use crate::usercmd::{
-    Table, commands_array, get_user_command_name, parse_addr_type_arg, parse_compl_arg,
-    uc_add_command, uc_del_command, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name,
+    Table, commands_array, parse_addr_type_arg, parse_compl_arg, uc_add_command, uc_del_command,
+    uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use ::libc::strtol;

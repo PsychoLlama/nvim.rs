@@ -854,7 +854,10 @@ pub fn ex_retab(excmd: &mut ExArg) {
     let buf = Buf::current();
     let save_list = win.w_onebuf_opt.wo_list;
     win.w_onebuf_opt.wo_list = 0; // 'list' mode is not wanted here
-    let __v = unsafe { parse_retab_arg(excmd.arg_ptr()) };
+    let mut arg = excmd.line.arg().to_vec();
+    arg.push(0);
+    // SAFETY: a NUL-terminated copy of the argument.
+    let __v = unsafe { parse_retab_arg(arg.as_mut_ptr().cast()) };
     let Some(tabs) = __v else {
         // Upstream returns here without restoring 'list', which it has
         // already cleared. Kept: a `:retab` with a malformed tabstop

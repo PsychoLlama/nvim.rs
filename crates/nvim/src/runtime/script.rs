@@ -17,10 +17,12 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::mbyte::canonize;
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::msg_cstr;
+use crate::os::env::expand_env_save_opt_of;
 use crate::os::env::home_replace_in;
 use crate::semsg;
 use crate::snprintf;
@@ -187,7 +189,6 @@ pub fn ex_scriptnames(excmd: &mut ExArg) {
 
 /// `":script {id}"` / `":script {file}"`: open the named script in a window.
 fn edit_script(excmd: &mut ExArg, by_number: bool) {
-    let mut path = [0 as c_char; MAXPATHL as usize];
     if by_number {
         if !script_id_valid(excmd.line2 as c_int) {
             emsg(gettext(e_invarg));
@@ -197,15 +198,8 @@ fn edit_script(excmd: &mut ExArg, by_number: bool) {
         let name = unsafe { cstr::bytes_at((*script_item(excmd.line2 as ScriptId)).sn_name) };
         excmd.set_arg_text(name);
     } else {
-        let namebuff = path.as_mut_ptr();
-        let arg = excmd.arg_ptr();
-        // SAFETY: `namebuff` holds the `MAXPATHL` bytes the expansion is
-        // told about, and it leaves the name NUL-terminated.
-        let expanded = unsafe {
-            expand_env(arg, namebuff, MAXPATHL);
-            cstr::bytes_at(namebuff)
-        };
-        excmd.set_arg_text(expanded);
+        let expanded = expand_env_save_opt_of(excmd.line.cstr_from(excmd.line.arg), false);
+        excmd.set_arg_text(&expanded);
     }
     do_exedit(excmd, None);
 }
@@ -761,18 +755,14 @@ pub fn ex_scriptencoding(excmd: &mut ExArg) {
         ));
         return;
     }
-    let name = if excmd.line.byte_at(excmd.line.arg) != 0 {
-        unsafe { enc_canonize(excmd.arg_ptr()) }
+    let name = if excmd.line.arg().is_empty() {
+        XString::new()
     } else {
-        excmd.arg_ptr()
+        canonize(excmd.line.arg())
     };
     // Set up for conversion from the specified encoding to 'encoding'.
-    let name_ref = unsafe { CStr::from_ptr(name) };
     let cookie = excmd.sourced_script().expect("checked: a sourced script");
-    let _ = p_enc(|value| cookie.conv.setup(Some(name_ref), Some(value)));
-    if name != excmd.arg_ptr() {
-        unsafe { xfree(name.cast::<c_void>()) };
-    }
+    let _ = p_enc(|value| cookie.conv.setup(Some(name.as_cstr()), Some(value)));
 }
 
 /// `":finish"`: mark a sourced file as finished.

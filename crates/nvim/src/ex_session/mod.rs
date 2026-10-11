@@ -475,9 +475,13 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
 
     // ":mkview" or ":mkview 9": the name comes from 'viewdir'.
     let mut view_file = ptr::null_mut::<c_char>();
-    // SAFETY: caller contract; `args.arg` is NUL-terminated.
+    // A copy of the name: the command is lent on to the writer with it.
+    let mut name = excmd.line.arg().to_vec();
+    name.push(0);
+    // SAFETY: `arg` is that NUL-terminated copy, alive to the end of the
+    // command.
     let fname = unsafe {
-        let arg = excmd.arg_ptr();
+        let arg = name.as_mut_ptr().cast::<c_char>();
         if cmdidx == CmdIdx::mkview
             && (*arg == NUL as c_char
                 || (ascii_isdigit(*arg as c_int) && *arg.offset(1) == NUL as c_char))

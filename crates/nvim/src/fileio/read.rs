@@ -13,6 +13,7 @@
 
 use crate::cstr;
 use crate::fileio::Loaded;
+use crate::mbyte::canonize;
 use crate::memline::MlFlags;
 use crate::option::vars::{P_CCV, P_FENCS};
 use crate::winlayer::{Buf, Win};
@@ -273,11 +274,11 @@ pub(crate) unsafe fn readfile(
         if let Some(command) = excmd.as_deref()
             && command.force_enc != 0
         {
+            // `force_enc` is an offset into the command's own line.
             let name = command
                 .line
-                .ptr_from(command.line.cmd + command.force_enc as usize);
-            // SAFETY: `force_enc` is an offset into the command's own line.
-            fenc = unsafe { enc_canonize(name.cast_mut()) };
+                .rest_of(command.line.cmd + command.force_enc as usize);
+            fenc = canonize(name).into_raw();
             fenc_alloced = true;
             keep_dest_enc = true;
         } else if Buf::current().b_p_bin != 0 {

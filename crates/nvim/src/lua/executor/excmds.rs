@@ -9,7 +9,6 @@
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::types::CmdIdx;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -93,8 +92,8 @@ pub fn ex_luado(excmd: &mut ExArg) {
             emsg(gettext(c"cannot save undo information"));
             return;
         }
-        let cmd = excmd.arg_ptr();
-        let cmd_len = cstr::bytes_at(cmd).len();
+        let cmd = excmd.line.arg().as_ptr();
+        let cmd_len = excmd.line.arg().len();
         let lstate = get_global_lstate();
 
         let head = DOSTART.count_bytes();
@@ -172,7 +171,7 @@ pub fn ex_luado(excmd: &mut ExArg) {
 /// `:luafile {path}`.
 pub fn ex_luafile(excmd: &mut ExArg) {
     unsafe {
-        nlua_exec_file(excmd.arg_ptr());
+        nlua_exec_file(excmd.line.cstr_from(excmd.line.arg).as_ptr());
     }
 }
 

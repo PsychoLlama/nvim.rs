@@ -19,6 +19,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::charset::skip;
 use crate::cstr;
 use crate::memory::XString;
 use crate::message_fmt::{c_str, msg_cstr};
@@ -58,38 +59,45 @@ const WHERE_FLAGS: [(&CStr, RuntimeOpts); 4] = [
 /// `*argp` must be a NUL-terminated string with at least `where_len` bytes
 /// before its terminator.
 unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> RuntimeOpts {
-    if where_len == 0 {
-        return RuntimeOpts::NONE;
-    }
     // SAFETY: the caller's out-parameter holds the argument to look at.
     let arg = unsafe { *argp };
+    // SAFETY: the caller's NUL-terminated argument.
+    let (flags, skip) = runtime_cmd_flags(unsafe { cstr::bytes_at(arg) }, where_len);
+    if skip > 0 {
+        // SAFETY: `skip` is inside the argument.
+        unsafe { *argp = arg.add(skip) };
+    }
+    flags
+}
+
+/// [`get_runtime_cmd_flags`] over a slice: what the `[where]` word, the
+/// first `where_len` bytes of `arg`, names, and where the name after it
+/// starts -- 0 when it names nothing.
+fn runtime_cmd_flags(arg: &[u8], where_len: usize) -> (RuntimeOpts, usize) {
+    if where_len == 0 {
+        return (RuntimeOpts::NONE, 0);
+    }
     for (keyword, flags) in WHERE_FLAGS {
-        // SAFETY: both strings are NUL-terminated and `arg` has `where_len`
-        // bytes; `skipwhite` stops at the terminator.
-        if unsafe { cstr::prefix_eq(arg, keyword.as_ptr(), where_len) } {
-            unsafe { *argp = skipwhite(arg.add(where_len)) };
-            return flags;
+        // `strncmp`: the word may abbreviate the keyword, not run past it.
+        let keyword = keyword.to_bytes();
+        if where_len <= keyword.len() && arg[..where_len] == keyword[..where_len] {
+            return (flags, where_len + skip::white(&arg[where_len..]));
         }
     }
-    RuntimeOpts::NONE
+    (RuntimeOpts::NONE, 0)
 }
 
 /// `:runtime[!] [where] {name}`.
 pub fn ex_runtime(excmd: &mut ExArg) {
-    // SAFETY: `excmd` is the live command being executed; `arg` is its
-    // NUL-terminated argument text.
-    let mut arg = excmd.arg_ptr();
     let mut flags = if excmd.forceit {
         RuntimeOpts::ALL
     } else {
         RuntimeOpts::NONE
     };
-    // SAFETY: `skiptowhite` answers a pointer into `arg` itself.
-    let where_len = unsafe { skiptowhite(arg).offset_from(arg) } as size_t;
-    flags |= unsafe { get_runtime_cmd_flags(&raw mut arg, where_len) };
-    debug_assert!(!arg.is_null(), "arg != NULL");
-    // SAFETY: `arg` is the command's NUL-terminated argument.
-    let _ = source_runtime(unsafe { cstr::at(arg) }, flags);
+    let arg = excmd.line.arg();
+    let (where_flags, skip) = runtime_cmd_flags(arg, skip::to_white(arg));
+    flags |= where_flags;
+    let _ = source_runtime(excmd.line.cstr_from(excmd.line.arg + skip), flags);
 }
 
 /// Set the completion context for the `:runtime` command, whose argument

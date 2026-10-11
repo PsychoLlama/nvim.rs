@@ -154,7 +154,14 @@ pub unsafe fn parse_pattern_and_range(
 
     // Skip over the range to find the command.
     let at_cmd = ea.line.cmd + skip_range(ea.line.tail(ea.line.cmd), None);
-    let cmd = ea.line.ptr_at(at_cmd);
+    // The walk below is by pointer, over the line's own bytes, and ends
+    // before anything else reaches the line; what outlives it is offsets.
+    let base = ea
+        .line
+        .buffer_mut()
+        .as_mut_ptr()
+        .cast::<::core::ffi::c_char>();
+    let cmd = base.wrapping_add(at_cmd);
     if !has_char(c"sgvlu", at(cmd) as uint8_t as ::core::ffi::c_int) {
         return false;
     }
@@ -263,7 +270,7 @@ pub unsafe fn parse_pattern_and_range(
     }
 
     // Found a non-empty pattern, or "//".
-    *skiplen = ea.line.offset_of(p) as ::core::ffi::c_int;
+    *skiplen = p.addr().wrapping_sub(base.addr()) as ::core::ffi::c_int;
     *patlen = end.addr().wrapping_sub(p.addr()) as ::core::ffi::c_int;
 
     // Parse the address range.
@@ -276,9 +283,7 @@ pub unsafe fn parse_pattern_and_range(
         // Allow for a reverse match.
         search_first_line.set(ea.line2.min(ea.line1));
         search_last_line.set(ea.line2.max(ea.line1));
-    } else if at(cmd) == 's' as ::core::ffi::c_int
-        && at(cmd.wrapping_offset(1)) != 'o' as ::core::ffi::c_int
-    {
+    } else if ea.line.byte_at(at_cmd) == b's' && ea.line.byte_at(at_cmd + 1) != b'o' {
         // :s defaults to the current line.
         search_last_line.set(Win::current().w_cursor.lnum);
         search_first_line.set(search_last_line.get());

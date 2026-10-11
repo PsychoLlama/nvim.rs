@@ -26,7 +26,6 @@ use crate::winlayer::{Buf, Win};
 use crate::autocmd::state::autocmd_busy;
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{appended_lines_mark, del_lines};
-use crate::charset::skipwhite;
 use crate::cstr;
 use crate::drawscreen::{UPD_VALID, number_width, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline};
@@ -95,7 +94,7 @@ fn prevcmd_is_set() -> bool {
 /// Bangs in the argument stand for the previously entered command, which this
 /// then remembers.
 pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, do_out: bool) {
-    let (arg, line1, line2) = (args.arg_ptr(), args.line1, args.line2);
+    let (line1, line2) = (args.line1, args.line2);
     let scroll_save = msg_scroll.get();
     // Disallow shell commands in secure mode.
     // SAFETY: main thread, message state.
@@ -114,8 +113,10 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
     // Assemble the command out of the argument's `!`-separated pieces, each
     // bang standing for the whole of the previous command.
     let mut ins_prevcmd = forceit;
-    // SAFETY: `arg` is the command's NUL-terminated argument.
-    let mut trail = unsafe { cstr::bytes_at(skipwhite(arg)) }.to_vec();
+    let mut trail = args
+        .line
+        .rest_of(args.line.skip_white(args.line.arg))
+        .to_vec();
     let mut head: Vec<u8> = Vec::new();
     let assembled = loop {
         if ins_prevcmd && !prevcmd_is_set() {

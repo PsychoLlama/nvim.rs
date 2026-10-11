@@ -52,7 +52,10 @@ static TRANSLATIONS: GlobalCell<Vec<Translation>> = GlobalCell::new(Vec::new());
 pub(crate) fn ex_menutranslate(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation; `arg` names the command line, which
     // this takes apart in place.
-    let arg = unsafe { CText::new(excmd.arg_ptr()) };
+    let mut text = excmd.line.arg_copy();
+    // SAFETY: a NUL-terminated copy of the argument, alive to the end of
+    // the command.
+    let arg = unsafe { CText::new(text.as_mut_ptr().cast()) };
 
     if arg.starts_with(b"clear") && ends_of_command(skip_white(arg.at(5))) {
         TRANSLATIONS.with_mut(Vec::clear);

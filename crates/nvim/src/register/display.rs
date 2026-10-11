@@ -176,9 +176,11 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
 /// The argument, if any, is a set of register names to restrict the listing
 /// to.
 pub fn ex_display(excmd: &mut ExArg) {
-    // SAFETY: the caller promises a live `ExArg`, whose `arg` is null or a
-    // NUL-terminated string.
-    let mut arg = excmd.arg_ptr();
+    // A copy of the filter: listing a register may run the clipboard
+    // provider.
+    let mut filter = excmd.line.arg().to_vec();
+    filter.push(0);
+    let mut arg = filter.as_mut_ptr().cast::<::core::ffi::c_char>();
     // SAFETY: as above, and tested non-null.
     if !arg.is_null() && unsafe { c_int::from(*arg) } == NUL {
         arg = ::core::ptr::null_mut();

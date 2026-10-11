@@ -96,10 +96,9 @@ fn current_win() -> Win {
 
 /// Whether `arg` contains the flag character `c` -- `:ls`'s argument is a
 /// set of them.
-fn has_flag(arg: *const c_char, c: u8) -> bool {
-    // SAFETY: `:ls`'s argument, a NUL-terminated string. `has_char` takes a
-    // codepoint, which every flag letter is.
-    has_char(unsafe { cstr::at(arg) }, c as c_int)
+fn has_flag(arg: &CStr, c: u8) -> bool {
+    // `has_char` takes a codepoint, which every flag letter is.
+    has_char(arg, c_int::from(c))
 }
 
 fn buf_changed(buffer: Buf) -> bool {
@@ -125,8 +124,7 @@ fn remembered_lnum(buffer: Buf) -> LineNr {
 
 /// List the buffers, one line each, as `:ls` and `:files` do.
 pub fn buflist_list(excmd: &mut ExArg) {
-    // SAFETY: the caller's promise -- the command being executed.
-    let arg = excmd.arg_ptr();
+    let arg = excmd.line.cstr_from(excmd.line.arg);
     // SAFETY: as above.
     let forceit = excmd.forceit;
     // SAFETY: a NUL-terminated literal naming the message kind.
@@ -219,7 +217,7 @@ fn nth(list: &[Buf], at: usize) -> Option<Buf> {
 }
 
 /// Whether the `:ls` flags in `arg` say to skip this buffer.
-fn skip(buffer: Buf, arg: *const c_char, forceit: c_int) -> bool {
+fn skip(buffer: Buf, arg: &CStr, forceit: c_int) -> bool {
     let is_terminal = !buffer.terminal.is_null();
     let job_running = job_running(buffer);
     let loaded = !buffer.b_ml.ml_mfp.is_null();

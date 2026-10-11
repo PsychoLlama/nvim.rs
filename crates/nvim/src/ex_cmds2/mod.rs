@@ -209,7 +209,7 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
     let mut buffer: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
     let _ = unsafe {
         vim_full_name(
-            excmd.arg_ptr(),
+            excmd.line.cstr_from(excmd.line.arg).as_ptr(),
             buffer.as_mut_ptr(),
             MAXPATHL as usize,
             false,
@@ -234,7 +234,7 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     let into = argv.as_ptr();
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
-    unsafe { (*into).push_str(cstr::at_opt(excmd.arg_ptr())) };
+    unsafe { (*into).push_str(Some(excmd.line.cstr_from(excmd.line.arg))) };
     eval_call_provider(name, c"do_range", Some(argv), true);
 }
 
@@ -684,7 +684,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
     // window and jump there if so. Checking all of them would be
     // complicated and mostly only one file is dropped. Wildcards are
     // ignored too, since a file name containing one is very unlikely.
-    unsafe { set_arglist(excmd.arg_ptr()) };
+    unsafe { set_arglist(excmd.line.arg_copy().as_mut_ptr().cast()) };
 
     // Expanding wildcards may leave the argument list empty, e.g. when
     // editing "foo.pyc" with ".pyc" in 'wildignore'. Assume an error

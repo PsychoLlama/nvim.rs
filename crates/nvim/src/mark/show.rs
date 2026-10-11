@@ -49,8 +49,11 @@ use crate::highlight_group::HLF_D;
 
 /// print the marks
 pub fn ex_marks(excmd: &mut ExArg) {
-    // SAFETY: the caller promised a live command.
-    let mut arg = excmd.arg_ptr();
+    // A copy of the filter: listing a mark reads buffers, and runs nothing
+    // that may not reach the command line.
+    let mut filter = excmd.line.arg().to_vec();
+    filter.push(0);
+    let mut arg = filter.as_mut_ptr().cast::<c_char>();
     // An empty argument is the same as none: `:marks` with a trailing space
     // must not filter everything out.
     // SAFETY: `arg` is a NUL-terminated string or null.
@@ -212,9 +215,10 @@ pub(super) unsafe fn show_one_mark(
 
 /// `:delmarks[!] [marks]`
 pub fn ex_delmarks(excmd: &mut ExArg) {
-    // SAFETY: the caller promised a live command whose `arg` is a
-    // NUL-terminated string.
-    let (arg, forceit) = (excmd.arg_ptr(), excmd.forceit);
+    // A copy, which the messages below point into.
+    let mut names = excmd.line.arg().to_vec();
+    names.push(0);
+    let (arg, forceit) = (names.as_mut_ptr().cast::<c_char>(), excmd.forceit);
     let mut buf = Buf::current();
     // SAFETY: `arg` is a NUL-terminated string.
     let empty = c_int::from(unsafe { *arg }) == NUL;

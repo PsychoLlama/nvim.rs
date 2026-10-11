@@ -34,6 +34,7 @@ use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::guard::allbuf_lock;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
+use crate::mbyte::canonize;
 use crate::mbyte::{
     canon_props, enc_canonize, utf_byte2len, utf_char2bytes, utf_char2len, utf_head_off,
     utf_ptr2char, utf_ptr2len_len,
@@ -693,7 +694,12 @@ pub fn set_forced_fenc(excmd: &mut ExArg) {
     if excmd.force_enc == 0 {
         return;
     }
-    let fenc = unsafe { enc_canonize(excmd.cmd_ptr().offset(excmd.force_enc as isize)) };
+    let fenc = canonize(
+        excmd
+            .line
+            .rest_of(excmd.line.cmd + excmd.force_enc as usize),
+    )
+    .into_raw();
     // A borrow: `set_option_direct` copies, and `fenc` is freed just below.
     // SAFETY: `fenc` is NUL-terminated and outlives the call.
     set_option_direct(

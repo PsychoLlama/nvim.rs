@@ -34,13 +34,11 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, augroup_exists, block_autocmds, unblock_autocmds,
 };
-use crate::buffer::{
-    buf_get_changedtick, buf_is_empty, buf_is_prompt, buflist_findpat, current_buf, find_buf,
-};
+use crate::buffer::{buf_get_changedtick, buf_is_empty, buf_is_prompt, current_buf, find_buf};
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{change_warning, changed_lines};
 use crate::charset::{getdigits_int, getdigits_int32};
@@ -85,7 +83,6 @@ use crate::os::cshim::gettext;
 use crate::os::env::{os_env_exists, os_unsetenv};
 use crate::os::fs::{os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_fopen, os_remove};
 use crate::os::shell::{ShellOpts, call_shell};
-use crate::path::full_name_save;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::shellescape;
@@ -107,7 +104,7 @@ use crate::xdiff::xtypes::{
     XDF_IGNORE_WHITESPACE_AT_EOL, XDF_IGNORE_WHITESPACE_CHANGE, XDF_INDENT_HEURISTIC,
     XDF_NEED_MINIMAL, XDF_PATIENCE_DIFF,
 };
-use ::libc::{atol, fclose, fwrite, tolower};
+use ::libc::{fclose, fwrite, tolower};
 
 // The carve of the transpiled module; see each child's docs.
 mod block;

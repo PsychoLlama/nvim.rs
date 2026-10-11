@@ -53,7 +53,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
-use crate::mbyte::{enc_canonize, utf_head_off, utfc_ptr2len};
+use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::memory::{try_malloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy};
 use crate::message::state::msg_col;
@@ -67,8 +67,8 @@ use crate::option::{copy_option_part, set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{
-    default_lib_dir, expand_env, expand_env_save, home_replace, home_replace_save,
-    vim_get_prefix_from_exepath, vim_getenv,
+    default_lib_dir, expand_env_save, home_replace, home_replace_save, vim_get_prefix_from_exepath,
+    vim_getenv,
 };
 use crate::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
 use crate::os::input::line_breakcheck;

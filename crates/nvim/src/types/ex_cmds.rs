@@ -412,6 +412,15 @@ impl CmdLine {
         self.rest_of(self.arg)
     }
 
+    /// A NUL-terminated copy of the argument, for a callee that walks a
+    /// `char *` of its own -- and may cut it into words in place -- while the
+    /// command is lent on or the line changes under it.
+    pub fn arg_copy(&self) -> Vec<u8> {
+        let mut copy = self.arg().to_vec();
+        copy.push(0);
+        copy
+    }
+
     /// The command after the `|`, if there is one.
     pub fn next_cmd(&self) -> Option<&[u8]> {
         self.next.map(|at| self.rest_of(at))
@@ -593,14 +602,6 @@ impl CmdLine {
         self.text[at..].as_mut_ptr().cast()
     }
 
-    /// A readable pointer at `at`, for a callee that still takes one.
-    pub fn ptr_from(&self, at: usize) -> *const ::core::ffi::c_char {
-        if self.text.is_empty() {
-            return EMPTY_LINE.as_ptr().cast();
-        }
-        self.text[at.min(self.text.len())..].as_ptr().cast()
-    }
-
     /// Does `p` point into the live buffer?
     pub fn contains(&self, p: *const ::core::ffi::c_char) -> bool {
         let base = self.text.as_ptr().addr();
@@ -705,27 +706,17 @@ pub struct ExArg<'s> {
 impl ExArg<'_> {
     /// The argument as a writable pointer.
     ///
-    /// Transitional: every one of these is a handler that has not been
-    /// moved onto [`CmdLine::arg`] yet, and the accessor goes when the last
-    /// of them has.
+    /// Transitional: what is left of the pointer layer is the four
+    /// accessors here, for the handlers in `ex_cmds`, `usercmd`, `sign`
+    /// and `mapping` that still walk their argument by pointer (each
+    /// rewritten with its own module); they go with the last of them.
     pub fn arg_ptr(&mut self) -> *mut ::core::ffi::c_char {
         self.line.ptr_at(self.line.arg)
-    }
-
-    /// Put the argument cursor where `p`, which must point into the line,
-    /// is. Transitional, as [`arg_ptr`](ExArg::arg_ptr).
-    pub fn set_arg_ptr(&mut self, p: *const ::core::ffi::c_char) {
-        self.line.arg = self.line.offset_of(p);
     }
 
     /// The command word as a writable pointer. Transitional.
     pub fn cmd_ptr(&mut self) -> *mut ::core::ffi::c_char {
         self.line.ptr_at(self.line.cmd)
-    }
-
-    /// Put the command cursor where `p` is. Transitional.
-    pub fn set_cmd_ptr(&mut self, p: *const ::core::ffi::c_char) {
-        self.line.cmd = self.line.offset_of(p);
     }
 
     /// The next command as a writable pointer, null when there is none.
@@ -740,30 +731,6 @@ impl ExArg<'_> {
     /// Say where the next command is, or that there is none. Transitional.
     pub fn set_nextcmd_ptr(&mut self, p: *const ::core::ffi::c_char) {
         self.line.next = (!p.is_null()).then(|| self.line.offset_of(p));
-    }
-
-    /// Lend the command cursor to a callee that advances a
-    /// `*mut *mut c_char`, and take back where it left off. Transitional,
-    /// as [`cmd_ptr`](ExArg::cmd_ptr).
-    pub fn with_cmd_cursor<T>(
-        &mut self,
-        walk: impl FnOnce(*mut *mut ::core::ffi::c_char) -> T,
-    ) -> T {
-        let mut cursor = self.cmd_ptr();
-        let answer = walk(&raw mut cursor);
-        self.set_cmd_ptr(cursor);
-        answer
-    }
-
-    /// Lend the argument cursor, as [`with_cmd_cursor`](ExArg::with_cmd_cursor).
-    pub fn with_arg_cursor<T>(
-        &mut self,
-        walk: impl FnOnce(*mut *mut ::core::ffi::c_char) -> T,
-    ) -> T {
-        let mut cursor = self.arg_ptr();
-        let answer = walk(&raw mut cursor);
-        self.set_arg_ptr(cursor);
-        answer
     }
 
     /// Make `text` the command's whole line, with `arg` at its start.
@@ -784,12 +751,6 @@ impl ExArg<'_> {
     /// typed. `prep_exarg`'s `:e ++enc=…` is the one caller.
     pub fn set_cmd_text(&mut self, text: &[u8]) {
         self.line = CmdLine::from_bytes(text);
-    }
-
-    /// The whole line as a writable pointer -- upstream's
-    /// `*eap->cmdlinep`. Transitional.
-    pub fn line_ptr(&mut self) -> *mut ::core::ffi::c_char {
-        self.line.ptr_at(0)
     }
 }
 

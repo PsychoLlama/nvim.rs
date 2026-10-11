@@ -63,7 +63,10 @@ pub(crate) fn ex_menu(excmd: &mut ExArg) {
     let ranged = (excmd.addr_count != 0 && excmd.line2 != 0).then_some(excmd.line2 as c_int);
     // SAFETY: the caller's obligation. `arg` names the command line, which
     // `ex_docmd` lets a command edit.
-    let arg = unsafe { CText::new(excmd.arg_ptr()) };
+    let mut text = excmd.line.arg_copy();
+    // SAFETY: a NUL-terminated copy of the argument, alive to the end of
+    // the command.
+    let arg = unsafe { CText::new(text.as_mut_ptr().cast()) };
     do_menu(arg, modes, noremap, unmenu, ranged);
 }
 

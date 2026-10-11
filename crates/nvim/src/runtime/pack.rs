@@ -768,10 +768,8 @@ pub fn load_plugins() {
 
 /// `:packadd[!] {name}`.
 pub fn ex_packadd(excmd: &mut ExArg) {
-    // SAFETY: `excmd` is the live command.
-    let arg = excmd.arg_ptr();
     // `pack/*/{start,opt}/{name}` — where `:packadd` looks.
-    let name = unsafe { cstr::bytes_at(arg) }.to_vec();
+    let name = excmd.line.arg().to_vec();
     let under = |which: &[u8]| cstr::owned(&[b"pack/*/", which, b"/", &name[..]].concat());
     let cookie = if excmd.forceit {
         PackWork::AddDir
