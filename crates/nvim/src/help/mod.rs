@@ -377,10 +377,8 @@ fn enter_help_window() -> Option<HelpWindow> {
     // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
     // 'readonly'. The buffer is still open, so don't store info.
     opened.alt_fnum = Buf::current().handle;
-    let (fnum, fname, sfname) = (0, ptr::null_mut(), ptr::null_mut());
     let (lnum, flags) = (newlnum::LASTL, EcmdFlags::HIDE | EcmdFlags::SET_HELP);
-    // SAFETY: the editor's own current window and buffer.
-    let _ = unsafe { do_ecmd(fnum, fname, sfname, None, lnum, flags, None) };
+    let _ = do_ecmd(0, None, None, None, lnum, flags, None);
     if keepalt_is_off() {
         Win::current().w_alt_fnum = opened.alt_fnum;
     }

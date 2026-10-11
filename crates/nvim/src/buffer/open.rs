@@ -542,10 +542,9 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
 /// # Safety
 /// `bufname` must be null or NUL-terminated, and `curwin` be set.
 pub unsafe fn buf_open_scratch(bufnr: Handle, bufname: *mut c_char) -> Result<(), Failed> {
-    let none = ptr::null_mut::<c_char>();
     let one = newlnum::ONE as LineNr;
     let hide = EcmdFlags::HIDE;
-    edit_file(bufnr, none, none, None, one, hide, Win::current())?;
+    edit_file(bufnr, None, one, hide, Win::current())?;
     if !bufname.is_null() {
         fire(AutoEvent::BufFilePre, Buf::current());
         // SAFETY: the caller's NUL-terminated name.

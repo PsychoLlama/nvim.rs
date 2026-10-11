@@ -53,7 +53,7 @@ use crate::ex_cmds::EcmdFlags;
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::winlayer::BufId;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 
 use crate::autocmd::{apply_autocmds, apply_autocmds_retval, block_autocmds, unblock_autocmds};
@@ -478,15 +478,12 @@ pub(crate) fn is_changed(buffer: Buf) -> bool {
 /// Re-enters the whole edit path; nothing held survives it.
 pub(crate) fn edit_file(
     fnum: c_int,
-    ffname: *mut c_char,
-    sfname: *mut c_char,
     excmd: Option<&mut ExArg>,
     newlnum: LineNr,
     flags: EcmdFlags,
     win: Win,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's own arguments passed on.
-    unsafe { do_ecmd(fnum, ffname, sfname, excmd, newlnum, flags, Some(win.id())) }
+    do_ecmd(fnum, None, None, excmd, newlnum, flags, Some(win.id()))
 }
 
 fn layout_lock() {

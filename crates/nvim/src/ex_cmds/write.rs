@@ -31,7 +31,7 @@ use crate::cursor::check_cursor_lnum;
 use crate::drawscreen::state::redraw_tabline;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::EcmdFlags;
-use crate::ex_cmds::ecmd::do_ecmd_named;
+use crate::ex_cmds::ecmd::do_ecmd;
 use crate::ex_cmds2::{autowrite, buf_write_all, check_fname, dialog_changed};
 use crate::ex_docmd::{before_quit_all, cmdmod_has, dialog_msg, not_exiting};
 use crate::ex_eval::aborting;
@@ -762,7 +762,7 @@ pub fn getfile(
     } else {
         ffname_arg
     };
-    let opened = do_ecmd_named(
+    let opened = do_ecmd(
         fnum,
         ffname,
         sfname,

@@ -569,6 +569,20 @@ pub(crate) unsafe fn terminal_set_state(term: *mut Terminal, suspended: bool) {
     term.suspended = suspended;
 }
 
+/// [`terminal_check_size`] for the terminal `buffer` holds, if it holds one.
+pub(crate) fn buf_terminal_check_size(buffer: Buf) {
+    if !buffer.terminal.is_null() {
+        // SAFETY: a live buffer's own terminal.
+        unsafe { terminal_check_size(buffer.terminal) };
+    }
+}
+
+/// Whether `buffer` holds a terminal whose job is still running.
+pub(crate) fn buf_terminal_running(buffer: Buf) -> bool {
+    // SAFETY: a live buffer's own terminal.
+    !buffer.terminal.is_null() && unsafe { terminal_running(buffer.terminal) }
+}
+
 /// Resize the emulator to fit the windows showing it.
 ///
 /// The largest of them, not the smallest: a narrower window scrolls

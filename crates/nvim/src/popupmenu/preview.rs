@@ -316,17 +316,7 @@ unsafe fn pum_show_info(
             buf_clear();
         } else {
             let no_sync = Suppress::undo_sync();
-            res = unsafe {
-                do_ecmd(
-                    0,
-                    ::core::ptr::null_mut(),
-                    ::core::ptr::null_mut(),
-                    None,
-                    newlnum::ONE,
-                    EcmdFlags::NONE,
-                    None,
-                )
-            };
+            res = do_ecmd(0, None, None, None, newlnum::ONE, EcmdFlags::NONE, None);
             drop(no_sync);
 
             if res.is_ok() {

@@ -756,6 +756,14 @@ pub fn source_runtime(name: &CStr, flags: RuntimeOpts) -> Result<(), Failed> {
     }
 }
 
+/// [`source_runtime_vim_lua`] of a name the caller holds; the walk is
+/// handed a writable copy.
+pub(crate) fn source_runtime_vim_lua_of(name: &CStr, flags: RuntimeOpts) -> Result<(), Failed> {
+    let mut copy = name.to_bytes_with_nul().to_vec();
+    // SAFETY: a NUL-terminated copy of our own, alive for the call.
+    unsafe { source_runtime_vim_lua(copy.as_mut_ptr().cast(), flags) }
+}
+
 /// [`source_runtime`], but only `.vim` and `.lua` files.
 ///
 /// # Safety

@@ -234,6 +234,12 @@ pub unsafe fn buf_set_name(fnum: c_int, name: *mut c_char) {
     unsafe { adopt_names(&mut b.name, ffname, sfname) };
 }
 
+/// [`buf_set_name`] of a name the caller holds, which it only copies.
+pub(crate) fn buf_set_name_of(fnum: c_int, name: &CStr) {
+    // SAFETY: a NUL-terminated name; `dup` copies it before anything runs.
+    unsafe { buf_set_name(fnum, name.as_ptr().cast_mut()) };
+}
+
 /// What has to happen once a buffer's name has changed.
 pub fn buf_name_changed(b: Buf) {
     if !b.b_ml.ml_mfp.is_null() {
@@ -250,6 +256,25 @@ pub fn buf_name_changed(b: Buf) {
     status_redraw_all();
     fmarks_check_names(b);
     ml_timestamp(b);
+}
+
+/// [`buflist_new`](super::buflist_new) for names the caller holds, either or both absent.
+pub(crate) fn buflist_new_named(
+    ffname: Option<&CStr>,
+    sfname: Option<&CStr>,
+    lnum: LineNr,
+    flags: c_int,
+) -> Option<Buf> {
+    let name = |name: Option<&CStr>| name.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    // SAFETY: NUL-terminated names or null; `fname_expand` makes the copies
+    // the list keeps before anything can run, and writes to neither.
+    unsafe { buflist_new(name(ffname), name(sfname), lnum, flags) }
+}
+
+/// [`buflist_findname`](super::buflist_findname) for a name the caller holds.
+pub(crate) fn buflist_findname_of(ffname: &CStr) -> Option<Buf> {
+    // SAFETY: a NUL-terminated name, which the lookup only reads.
+    unsafe { buflist_findname(ffname.as_ptr().cast_mut()) }
 }
 
 // ---------------------------------------------------------------------------

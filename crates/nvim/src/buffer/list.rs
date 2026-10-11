@@ -756,12 +756,6 @@ pub(crate) fn find_buffer_by_name(fname: &CStr) -> Option<Buf> {
     unsafe { buflist_findname_exp(fname.as_ptr().cast_mut()) }
 }
 
-/// [`buflist_findname`] for a name the caller holds.
-pub(crate) fn buflist_findname_of(ffname: &CStr) -> Option<Buf> {
-    // SAFETY: a NUL-terminated name, which the lookup only reads.
-    unsafe { buflist_findname(ffname.as_ptr().cast_mut()) }
-}
-
 /// The buffer whose full name is `ffname`, or whose file id matches it.
 ///
 /// # Safety

@@ -110,8 +110,7 @@ fn load_current_buffer() {
 
 /// Warn if the file changed on disk since the buffer was read.
 fn check_timestamp(buffer: Buf) {
-    // SAFETY: a live buffer, which survives the autocommands it fires.
-    unsafe { buf_check_timestamp(buffer) };
+    buf_check_timestamp(buffer);
 }
 
 /// Whether the cursor is in the indent of its line.

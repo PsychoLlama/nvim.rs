@@ -24,7 +24,7 @@ use crate::ex_cmds::newlnum;
 use crate::semsg;
 use crate::tr_plural;
 use crate::types::CmdIdx;
-use core::ffi::{CStr, c_char, c_int, c_ulong};
+use core::ffi::{CStr, c_int, c_ulong};
 use core::ptr;
 use std::ffi::CString;
 
@@ -414,10 +414,9 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
     }
 
     set_pcmark();
-    let none = ptr::null_mut::<c_char>();
     let one = newlnum::ONE as LineNr;
     let flags = EcmdFlags::FORCEIT.when(forceit != 0);
-    let retval = edit_file(0, none, none, None, one, flags, Win::current());
+    let retval = edit_file(0, None, one, flags, Win::current());
 
     // do_ecmd() may create a new buffer, then we have to delete the old one.
     // But do_ecmd() may have done that already, check if the buffer still

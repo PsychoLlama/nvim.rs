@@ -25,8 +25,7 @@
 //! `global_need_beginline` in [`subst`] -- the last two are the only ones
 //! read from outside their own child.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -40,7 +39,6 @@ use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::getchar::state::got_int;
 use crate::guard::{sandbox, secure};
 use crate::input::prompt_for_input;
-use crate::memory::xfree;
 use crate::message::state::{msg_scroll, quit_more};
 use crate::message::{e_curdir, e_interr, e_invarg, e_noprevre, e_sandbox};
 use crate::message::{
@@ -50,10 +48,10 @@ use crate::message::{
 use crate::option::set_option_direct;
 use crate::options::kOptFoldcolumn;
 use crate::os::cshim::gettext;
-use crate::os::env::expand_env_save;
+use crate::os::env::expand_env_save_opt_of;
 use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
-use crate::regexp::{RE_MAGIC, skip_regexp};
+use crate::regexp::{RE_MAGIC, skip_regexp_at};
 use crate::tag::state::g_do_tagpreview;
 use crate::types::AutoEvent;
 use crate::types::CAR;
@@ -63,7 +61,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     BCount, BfaFlags, BlnFlags, CmdModFlags, DoBufAction, ExArg, ExtmarkOp, GetFileRet, LPos,
-    LineNr, List, NUL, OptVal, OptionSetFlags, UndoObjectType, Vv, uint8_t,
+    LineNr, List, NUL, OptVal, OptionSetFlags, UndoObjectType, Vv,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -96,30 +94,72 @@ use core::ffi::c_int;
 pub(crate) static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
 pub(crate) static sub_nlines: GlobalCell<LineNr> = GlobalCell::new(0);
 
-/// [`skip_vimgrep_pat`] over a copy of `arg`: the pattern, the `g`/`j`/`f`
+/// `:vimgrep`'s pattern argument at the start of a command line's string.
+struct VimgrepPat<'a> {
+    /// The pattern: the bare word, or what is between the delimiters.
+    pattern: &'a [u8],
+    /// The `g`/`j`/`f` flags after a delimited one.
+    flags: ::core::ffi::c_int,
+    /// Where the argument ends: at the white space after a bare word, past
+    /// the flags after a delimited one.
+    end: usize,
+    /// Where what follows starts: past that white space, which upstream
+    /// writes its NUL over when it is asked for the pattern.
+    rest: usize,
+}
+
+/// Split `:vimgrep`'s pattern argument off the start of `text`, which stops
+/// at its first NUL. `None` when a delimited pattern is not closed -- or
+/// when there is no argument at all, where upstream's walk starts past the
+/// terminator.
+fn vimgrep_pat(text: &[u8]) -> Option<VimgrepPat<'_>> {
+    let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
+    let &first = text.first()?;
+    if vim_is_ident_char(::core::ffi::c_int::from(first)) {
+        // A bare word, ending at the first white space.
+        let at = skip::to_white(text);
+        return Some(VimgrepPat {
+            pattern: &text[..at],
+            flags: 0,
+            end: at,
+            rest: (at + 1).min(text.len()),
+        });
+    }
+
+    // A delimited pattern.  The delimiter is whatever byte opened it.
+    let delim = ::core::ffi::c_int::from(first);
+    let mut terminated = text.to_vec();
+    terminated.push(0);
+    let close = 1 + skip_regexp_at(&terminated[1..], delim, 1);
+    if ::core::ffi::c_int::from(cstr::byte_at(text, close)) != delim {
+        return None;
+    }
+    let mut flags = 0;
+    let mut n = 0;
+    for &byte in &text[close + 1..] {
+        flags |= match byte {
+            b'g' => VGR_GLOBAL,
+            b'j' => VGR_NOJUMP,
+            b'f' => VGR_FUZZY,
+            _ => break,
+        } as ::core::ffi::c_int;
+        n += 1;
+    }
+    let end = close + 1 + n;
+    Some(VimgrepPat {
+        pattern: &text[1..close],
+        flags,
+        end,
+        rest: end,
+    })
+}
+
+/// `:vimgrep`'s pattern argument at the start of `arg`: the pattern, the
 /// flags after it, and where in `arg` what follows starts. `None` when the
 /// closing delimiter is missing.
 pub(crate) fn split_vimgrep_pat(arg: &[u8]) -> Option<(Vec<u8>, ::core::ffi::c_int, usize)> {
-    let mut copy = arg.to_vec();
-    copy.push(0);
-    let base: *mut ::core::ffi::c_char = copy.as_mut_ptr().cast();
-    let mut pattern: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
-    let mut flags = 0;
-    // SAFETY: a NUL-terminated copy this call owns and may have terminated
-    // in place, and two locals.
-    let end = unsafe { skip_vimgrep_pat(base, &raw mut pattern, &raw mut flags) };
-    if end.is_null() {
-        return None;
-    }
-    // SAFETY: both answers point into the copy, the pattern at a string the
-    // walk terminated.
-    let (pattern, rest) = unsafe {
-        (
-            ::core::ffi::CStr::from_ptr(pattern).to_bytes().to_vec(),
-            end.offset_from(base),
-        )
-    };
-    Some((pattern, flags, usize::try_from(rest).ok()?))
+    let pat = vimgrep_pat(arg)?;
+    Some((pat.pattern.to_vec(), pat.flags, pat.rest))
 }
 
 pub const _ISalpha: ::core::ffi::c_uint = 1024;
@@ -268,87 +308,10 @@ pub fn prepare_tagpreview(undo_sync: bool) -> bool {
     );
     true
 }
-/// Step over `:vimgrep`'s pattern argument: a bare word, or a pattern between
-/// two delimiters followed by any of the `g`/`j`/`f` flags.
-///
-/// Answers where the argument ends, or NULL when the closing delimiter is
-/// missing.  When `s` is given it receives the pattern's first byte and the
-/// pattern is NUL-terminated in place; when `flags` is given the trailing
-/// letters are OR-ed into it.
-///
-/// # Safety
-/// `p` must be a NUL-terminated pattern, writable when `s` is given, and `s`
-/// and `flags` must be live or NULL.
-pub unsafe fn skip_vimgrep_pat(
-    p: *mut ::core::ffi::c_char,
-    s: *mut *mut ::core::ffi::c_char,
-    flags: *mut ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
-    // SAFETY: caller's contract.
-    let bytes = unsafe { cstr::bytes_at(p) };
-    let first = bytes.first().copied().unwrap_or(NUL as uint8_t);
-    // SAFETY: an ASCII byte widened, which is what the ctype table indexes.
-    if vim_is_ident_char(first as ::core::ffi::c_int) {
-        // A bare word, ending at the first white space.
-        let mut at = skip::to_white(bytes);
-        if !s.is_null() {
-            // SAFETY: caller's contract.
-            unsafe { *s = p };
-            if at < bytes.len() {
-                // Terminate the word in place and resume past the space.
-                unsafe { *p.add(at) = NUL as ::core::ffi::c_char };
-                at += 1;
-            }
-        }
-        return p.wrapping_add(at);
-    }
-
-    // A delimited pattern.  The delimiter is whatever byte opened it.
-    let delim = first as ::core::ffi::c_int;
-    if !s.is_null() {
-        // SAFETY: caller's contract; the pattern starts past the delimiter.
-        unsafe { *s = p.add(1) };
-    }
-    // SAFETY: as above.
-    let mut end = unsafe { skip_regexp(p.add(1), delim, 1) };
-    // SAFETY: the skip stopped inside the pattern or at its NUL.
-    if unsafe { *end } as ::core::ffi::c_int != delim {
-        return ::core::ptr::null_mut();
-    }
-    if !s.is_null() {
-        // SAFETY: caller's contract -- the closing delimiter is writable.
-        unsafe { *end = NUL as ::core::ffi::c_char };
-    }
-    end = end.wrapping_add(1);
-
-    // SAFETY: one past the closing delimiter is still inside the string.
-    let tail = unsafe { cstr::bytes_at(end) };
-    let mut n = 0;
-    for &byte in tail {
-        let flag = match byte {
-            b'g' => VGR_GLOBAL,
-            b'j' => VGR_NOJUMP,
-            b'f' => VGR_FUZZY,
-            _ => break,
-        };
-        if !flags.is_null() {
-            // SAFETY: caller's contract.
-            unsafe { *flags |= flag as ::core::ffi::c_int };
-        }
-        n += 1;
-    }
-    end.wrapping_add(n)
-}
-
-/// [`skip_vimgrep_pat`] of a pattern the caller owns, writing nothing:
-/// how many bytes the pattern and its flags take, or `None` when a
-/// delimited pattern is not closed.
+/// How many bytes `:vimgrep`'s pattern argument and its flags take at the
+/// start of `text`, or `None` when a delimited pattern is not closed.
 pub(crate) fn skip_vimgrep_pat_at(text: &CStr) -> Option<usize> {
-    let start = text.as_ptr().cast_mut();
-    // SAFETY: a NUL-terminated string; with no out-parameters nothing is
-    // written, and the answer is inside the string or null.
-    let end = unsafe { skip_vimgrep_pat(start, ::core::ptr::null_mut(), ::core::ptr::null_mut()) };
-    (!end.is_null()).then(|| end.addr() - start.addr())
+    vimgrep_pat(text.to_bytes()).map(|pat| pat.end)
 }
 /// `:oldfiles` -- list `v:oldfiles`, numbered; under `:browse`, then ask for
 /// a number and edit that file.
@@ -362,15 +325,13 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
 
     say::start();
     msg_scroll.set(1);
-    // SAFETY: a live list, whose items are its own.
-    unsafe { list_oldfiles(list.as_ptr()) };
+    list_oldfiles(&list);
     got_int.set(false);
     if !cmdmod_has(CmdModFlags::BROWSE) {
         return;
     }
 
     quit_more.set(false);
-    // SAFETY: main thread; no prompt text and no "did the user cancel" flag.
     let nr = prompt_for_input(None, 0, false, None);
     say::starthere();
     if nr <= 0 || nr > list_len(Some(&list)) {
@@ -381,27 +342,19 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     let Some(picked) = list_find_str(Some(&list), nr - 1, &mut numbuf) else {
         return;
     };
-    // SAFETY: `picked` is a live string, and the expansion is ours to free.
-    let expanded = Owned(unsafe { expand_env_save(picked.as_ptr().cast_mut()) });
-    // SAFETY: the expansion is a NUL-terminated block this frame owns.
-    excmd.set_arg_text(unsafe { cstr::bytes_at(expanded.0) });
+    let expanded = expand_env_save_opt_of(picked, false);
+    excmd.set_arg_text(&expanded);
     excmd.cmdidx = CmdIdx::edit;
     cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
-    // SAFETY: the command block is the one borrowed here; the argument it
-    // points at outlives the call.
     do_exedit(excmd, None);
 }
 
 /// Number and print every entry of `list`, stopping on an interrupt.
-///
-/// # Safety
-/// `list` must be a live list of strings.
-unsafe fn list_oldfiles(list: *mut List) {
+fn list_oldfiles(list: &List) {
     let mut number = NumBuf::new();
     let mut text = NumBuf::new();
     let mut nr = 0;
-    // SAFETY: caller's contract: a live list.
-    for item in list_iter(unsafe { list.as_ref() }) {
+    for item in list_iter(Some(list)) {
         if got_int.get() {
             break;
         }
@@ -415,23 +368,6 @@ unsafe fn list_oldfiles(list: *mut List) {
             say::putchar('\n' as ::core::ffi::c_int);
             os_breakcheck();
         }
-    }
-}
-
-/// An `xmalloc`ed C string that frees itself.
-///
-/// The family's one documented allocator seam: a C callee (`fix_fname`,
-/// `fname_expand`, `makeswapname`, `make_filter_cmd`, `xstrdup` of an option
-/// or of the previous replacement) answers an allocation that ends its life
-/// with `xfree`, and upstream releases it at every `goto` out. A NULL is
-/// allowed and frees nothing, which stands in for the `char *x = NULL; ...
-/// xfree(x)` shape around a conditional allocation.
-pub(crate) struct Owned(pub(crate) *mut ::core::ffi::c_char);
-
-impl Drop for Owned {
-    fn drop(&mut self) {
-        // SAFETY: the callee's allocation, handed over, or NULL.
-        unsafe { xfree(self.0.cast()) };
     }
 }
 

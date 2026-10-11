@@ -10,8 +10,7 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::{Ecmd, EcmdArgs};
 use crate::ex_cmds::EcmdFlags;
@@ -26,8 +25,8 @@ use std::ffi::CString;
 use crate::autocmd::state::au_new_curbuf;
 use crate::buffer::current_buf;
 use crate::buffer::{
-    BufRef, buf_valid, buflist_altfpos, buflist_findfmark, buflist_new, close_buffer, find_buf,
-    get_winopts,
+    BufRef, buf_valid, buflist_altfpos, buflist_findfmark_pos, buflist_new_named, close_buffer,
+    find_buf, get_winopts,
 };
 use crate::ex_cmds::{BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, buf_autocmd};
 use crate::ex_docmd::cmdmod_has;
@@ -38,13 +37,12 @@ use crate::message::emsg;
 use crate::option::buf_copy_options;
 use crate::os::cshim::gettext;
 use crate::semsg;
-use crate::terminal::terminal_running;
+use crate::terminal::buf_terminal_running;
 use crate::types::{CmdModFlags, LineNr};
 use crate::undo::u_sync;
 use crate::window::win_valid_any_tab;
 use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win};
 use crate::winlayer::{Buf, Win};
-use ::libc::atol;
 use core::ffi::c_int;
 
 /// What the "edit another file" stage decided.
@@ -70,11 +68,9 @@ pub(super) fn switch_to_other_buffer(
         args.flags,
         args.command,
     );
-    // SAFETY: `curwin` is live.
     let prev_alt_fnum = Win::current().w_alt_fnum;
 
     if !flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
-        // SAFETY: `curwin`/`curbuf` are live, and `oldwin` was validated.
         if !cmdmod_has(CmdModFlags::KEEPALT) {
             Win::current().w_alt_fnum = Buf::current().handle;
         }
@@ -89,41 +85,36 @@ pub(super) fn switch_to_other_buffer(
     } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
         // Default the line number to zero to avoid that a wininfo item is
         // added for the current window.  Add BLN_NOCURWIN for the same reason.
-        // SAFETY: `command` and the names are live when non-NULL.
         let mut tlnum = 0;
-        if !command.is_null() {
-            tlnum = unsafe { atol(command) } as LineNr;
+        if let Some(command) = command {
+            // `atol`, which saturates, cut to a line number.
+            tlnum = crate::charset::skip::decimal(command.to_bytes()).0 as LineNr;
             if tlnum <= 0 {
                 tlnum = 1;
             }
         }
-        let newbuf = unsafe {
-            buflist_new(
-                ffname,
-                sfname,
-                tlnum,
-                BLN_LISTED as c_int | BLN_NOCURWIN as c_int,
-            )
-        };
+        let newbuf = buflist_new_named(
+            ffname,
+            sfname,
+            tlnum,
+            BLN_LISTED as c_int | BLN_NOCURWIN as c_int,
+        );
         if let Some(newbuf) = newbuf.filter(|_| flags.has(EcmdFlags::ALTBUF)) {
             Win::current().w_alt_fnum = newbuf.handle;
         }
         return Switch::Abandon;
     } else {
-        // SAFETY: the names are live when non-NULL.
-        buf = unsafe {
-            buflist_new(
-                ffname,
-                sfname,
-                0,
-                BLN_CURBUF as c_int
-                    | (if flags.has(EcmdFlags::SET_HELP) {
-                        0
-                    } else {
-                        BLN_LISTED as c_int
-                    }),
-            )
-        };
+        buf = buflist_new_named(
+            ffname,
+            sfname,
+            0,
+            BLN_CURBUF as c_int
+                | (if flags.has(EcmdFlags::SET_HELP) {
+                    0
+                } else {
+                    BLN_LISTED as c_int
+                }),
+        );
         // Autocmds may change curwin and curbuf.
         if oldwin.is_some() {
             *oldwin = Win::current_or_none().map(Win::id);
@@ -162,7 +153,7 @@ pub(super) fn switch_to_other_buffer(
         // Existing memfile.
         state.oldbuf = true;
         let bufref = BufRef::of(buffer);
-        unsafe { buf_check_timestamp(buffer) };
+        buf_check_timestamp(buffer);
         // Check if autocommands made the buffer invalid or changed the
         // current buffer; they may also abort script processing.
         if !bufref.valid() || !old_curbuf.is(Buf::current_or_none()) || aborting() {
@@ -175,10 +166,9 @@ pub(super) fn switch_to_other_buffer(
     if (state.oldbuf && state.newlnum == newlnum::LASTL as LineNr)
         || state.newlnum == newlnum::LAST as LineNr
     {
-        // SAFETY: the mark list of a live buffer.
-        let pos = unsafe { &raw mut (*buflist_findfmark(buffer)).mark };
-        state.newlnum = unsafe { (*pos).lnum };
-        state.solcol = unsafe { (*pos).col };
+        let pos = buflist_findfmark_pos(buffer);
+        state.newlnum = pos.lnum;
+        state.solcol = pos.col;
     }
 
     // Make the (new) buffer the one used by the current window.  If the old
@@ -228,10 +218,7 @@ fn leave_for_buffer(
     // The buffer's name, kept for the message an autocommand that deletes it
     // earns.  Upstream `xstrdup`s it and frees it at five exits and inside
     // `delbuf_msg`; owning it is one `Drop`.
-    // SAFETY: the buffer's own file name is NUL-terminated.
-    let new_name = (!buffer.name.is_unnamed())
-        .then(|| unsafe { CStr::from_ptr(buffer.name.shown_ptr()) }.into());
-    let new_name: Option<CString> = new_name;
+    let new_name: Option<CString> = buffer.name.shown().map(CStr::to_owned);
     let save_au_new_curbuf = au_new_curbuf.get();
     au_new_curbuf.set(BufRef::of(buffer).record());
     buf_autocmd(AutoEvent::BufLeave, Buf::current());
@@ -264,7 +251,6 @@ fn leave_for_buffer(
 
     // Set w_locked to avoid that autocommands close the window.  Set
     // b_locked for the same reason.
-    // SAFETY: the window is the editor's own and live.
     Win::current().w_locked = true;
     buffer.b_locked += 1;
 
@@ -273,10 +259,7 @@ fn leave_for_buffer(
     }
 
     // A terminal buffer that is still running is hidden, never unloaded.
-    // SAFETY: the current buffer is live, and its terminal is its own.
-    let unload = !(flags.has(EcmdFlags::HIDE)
-        || !Buf::current().terminal.is_null()
-            && unsafe { terminal_running(Buf::current().terminal) });
+    let unload = !(flags.has(EcmdFlags::HIDE) || buf_terminal_running(Buf::current()));
 
     // Close the link to the current buffer.  This will set
     // oldwin->w_buffer to NULL.
@@ -292,7 +275,6 @@ fn leave_for_buffer(
     buffer.b_locked -= 1;
 
     // autocmds may abort script processing
-    // SAFETY: `curwin` is live.
     if aborting() && !Win::current().w_buffer.is_null() {
         au_new_curbuf.set(save_au_new_curbuf);
         return Switch::Abandon;
@@ -343,7 +325,6 @@ fn leave_for_buffer(
         if !state.oldbuf
             && let Some(asked) = args.excmd.as_deref_mut()
         {
-            // SAFETY: the command's `++ff=`/`++enc=` offsets into its own line.
             set_file_options(true, Some(asked));
             set_forced_fenc(asked);
         }

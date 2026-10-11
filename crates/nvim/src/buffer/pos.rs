@@ -407,6 +407,14 @@ pub fn get_winopts(mut buffer: Buf) {
 
 /// The mark for `buffer` in the current window, or a pointer to `no_position`
 /// when there is none.
+/// Where [`buflist_findfmark`] says `buffer` was last left in the current
+/// window, copied out.
+pub(crate) fn buflist_findfmark_pos(buffer: Buf) -> Pos {
+    // SAFETY: the buffer's own window record, or the static fallback; either
+    // lives past the read.
+    unsafe { (*buflist_findfmark(buffer)).mark }
+}
+
 pub fn buflist_findfmark(mut buffer: Buf) -> *mut FileMark {
     static no_position: GlobalCell<FileMark> = GlobalCell::new(FileMark {
         mark: Pos {

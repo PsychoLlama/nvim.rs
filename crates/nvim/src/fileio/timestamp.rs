@@ -156,8 +156,7 @@ pub fn check_timestamps(focus: c_int) -> c_int {
         // Only check buffers in a window.
         if buf.b_nwindows > 0 {
             let bufref = BufRef::of(buf);
-            // SAFETY: a live buffer.
-            let n = unsafe { buf_check_timestamp(buf) };
+            let n = buf_check_timestamp(buf);
             didit = didit.max(n);
             if n > 0 && !bufref.valid() {
                 // Autocommands have removed the buffer. Upstream's
@@ -342,11 +341,10 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
 /// @return  1 if a changed buffer was found, 2 if a message has been
 ///          displayed, 0 otherwise.
 ///
-/// # Safety
-/// The autocommands this fires may wipe `buffer`, which must survive them: the
-/// `bufref` it takes guards the calls it makes afterwards, but not the fields
-/// it reads.
-pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
+/// The autocommands this fires may wipe `buffer`: the `bufref` it takes
+/// guards the calls it makes afterwards, but not every field it reads --
+/// which is no promise a caller could make for it, and so no contract.
+pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
     let orig_size = buffer.b_orig_size;
     let orig_mode = buffer.b_orig_mode;
 

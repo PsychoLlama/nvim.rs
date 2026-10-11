@@ -411,6 +411,18 @@ pub(crate) fn simplify_name(name: &mut [u8]) -> usize {
     s.end
 }
 
+/// [`vim_full_name`] of a name the caller holds, into a `len`-byte buffer
+/// of its own: what that buffer holds afterwards -- the absolute path, or
+/// the name itself (cut to fit) when it cannot be made absolute.
+pub(crate) fn full_name_into(fname: &CStr, len: usize, force: bool) -> Vec<u8> {
+    let mut buf = vec![0u8; len.max(1)];
+    // SAFETY: `buf` is `len` writable bytes (one at least, for the
+    // terminator the callee always writes), `fname` NUL-terminated.
+    let _ = unsafe { vim_full_name(fname.as_ptr(), buf.as_mut_ptr().cast(), len.max(1), force) };
+    buf.truncate(buf.iter().position(|&b| b == 0).unwrap_or(buf.len()));
+    buf
+}
+
 /// Put the full path of `fname` in `buf`, which holds `len` bytes.
 ///
 /// `buf` gets `fname` truncated when it does not fit, `fname` unchanged when

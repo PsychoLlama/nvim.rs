@@ -17,8 +17,7 @@
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 // The buffer-swap machinery, carved out so that neither half is over the
 // line cap; see its own docs.
@@ -30,7 +29,6 @@ use super::{
     READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
 };
 use crate::arglist::check_arg_idx;
-use crate::cstr;
 use crate::ex_cmds::say;
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;
@@ -43,8 +41,8 @@ use crate::buffer::{
     handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, setaltfname,
 };
 use crate::buffer::{current_buf, fire_retval};
-use crate::charset::skipwhite;
-use crate::cursor::{check_cursor, check_cursor_col, check_cursor_lnum, get_cursor_line_ptr};
+use crate::charset::skip;
+use crate::cursor::{check_cursor, check_cursor_col, check_cursor_lnum};
 use crate::diff::{diff_buf_add, diff_invalidate};
 use crate::digraph::keymap_init;
 use crate::drawscreen::state::skip_redraw;
@@ -58,7 +56,7 @@ use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::mark::set_last_cursor;
-use crate::memory::xfree;
+use crate::memline::Lines;
 use crate::message::msg_check_for_delay;
 use crate::message::state::{msg_listdo_overwrite, msg_scroll, msg_scrolled_ign};
 use crate::r#move::{changed_line_abv_curs, update_topline};
@@ -66,62 +64,34 @@ use crate::normal::reset_visual;
 use crate::option::vars::{p_awa, p_sol, p_ur, p_verbose};
 use crate::option::{ScrollMargin, ScrollOff, shortmess};
 use crate::optionstr::OptString;
-use crate::path::fix_fname;
+use crate::os::time::os_time_raw;
+use crate::path::fixed_fname;
 use crate::plines::plines_m_win_fill;
 use crate::pos::equalpos;
 use crate::spell::parse_spelllang;
 use crate::startup::exiting;
 use crate::state::mode::exmode_active;
 use crate::tag::state::keep_help_flag;
-use crate::terminal::terminal_check_size;
-use crate::types::{ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, Vv, time_t};
+use crate::terminal::buf_terminal_check_size;
+use crate::types::{ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, Vv};
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::tab_windows;
-use ::libc::time;
-use core::ffi::{c_char, c_int};
-use core::ptr;
-
-/// [`do_ecmd`] of names the caller holds as strings, which it only reads:
-/// the locals holding them are replaced, never written through.
-pub(crate) fn do_ecmd_named(
-    fnum: c_int,
-    ffname: Option<&CStr>,
-    sfname: Option<&CStr>,
-    excmd: Option<&mut ExArg>,
-    newlnum: LineNr,
-    flags: EcmdFlags,
-    oldwin: Option<WinId>,
-) -> Result<(), Failed> {
-    let ffname = ffname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    // SAFETY: two NUL-terminated names or null, and the caller's command.
-    unsafe { do_ecmd(fnum, ffname, sfname, excmd, newlnum, flags, oldwin) }
-}
+use core::ffi::c_int;
 
 /// Set `v:swapcommand` for the SwapExists autocommands: `[+cmd]` to be
 /// executed (e.g. `+10`), or a `G` jump to `newlnum` when there is no command.
 ///
 /// Returns true if `v:swapcommand` was actually set.
-///
-/// # Safety
-/// `command` must be live, or NULL.
-pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: LineNr) -> bool {
-    if command.is_null() && newlnum <= 0 || !with_vim_var_str(Vv::Swapcommand, CStr::is_empty) {
+pub fn set_swapcommand(command: Option<&CStr>, newlnum: LineNr) -> bool {
+    if command.is_none() && newlnum <= 0 || !with_vim_var_str(Vv::Swapcommand, CStr::is_empty) {
         return false;
     }
-    let val = if command.is_null() {
-        format!("{newlnum}G").into_bytes()
-    } else {
-        // SAFETY: caller's contract -- a live, NUL-terminated command.
-        [
-            &b":"[..],
-            unsafe { CStr::from_ptr(command) }.to_bytes(),
-            b"\r",
-        ]
-        .concat()
+    let val = match command {
+        None => format!("{newlnum}G").into_bytes(),
+        Some(command) => [&b":"[..], command.to_bytes(), b"\r"].concat(),
     };
     set_vim_var_string(Vv::Swapcommand, Some(&val));
     true
@@ -194,14 +164,14 @@ struct EcmdArgs<'a, 'e> {
     /// The buffer number to switch to, or zero to go by name.
     fnum: c_int,
     /// The full path of the file to edit.
-    ffname: *mut c_char,
+    ffname: Option<&'a CStr>,
     /// Its short name.
-    sfname: *mut c_char,
+    sfname: Option<&'a CStr>,
     /// The Ex command that asked, when one did.
     excmd: Option<&'a mut ExArg<'e>>,
     flags: EcmdFlags,
-    /// The `+cmd` to run once the file is loaded, or NULL.
-    command: *mut c_char,
+    /// The `+cmd` to run once the file is loaded.
+    command: Option<&'a CStr>,
 }
 
 /// What resolving the target file decided.
@@ -222,18 +192,7 @@ pub(crate) fn edit_buffer_number(
     flags: EcmdFlags,
     oldwin: Option<WinId>,
 ) -> Result<(), Failed> {
-    // SAFETY: both names null, which the callee reads as "none".
-    unsafe {
-        do_ecmd(
-            fnum,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            None,
-            newlnum,
-            flags,
-            oldwin,
-        )
-    }
+    do_ecmd(fnum, None, None, None, newlnum, flags, oldwin)
 }
 
 /// Start editing a new file.
@@ -250,24 +209,23 @@ pub(crate) fn edit_buffer_number(
 ///
 /// Answers `Err` for failure.
 ///
-/// # Safety
-/// The names and `eap` must be live, or NULL where that is allowed above.
-/// `oldwin` is a handle: an autocommand may close that window, and `win_valid`
-/// below is what asks -- the one case `winlayer`'s docs reserve for an
-/// identity rather than a [`Win`].
-pub(crate) unsafe fn do_ecmd(
+/// `oldwin` is a handle: an autocommand may close that window, and
+/// `win_valid` below is what asks -- the one case `winlayer`'s docs reserve
+/// for an identity rather than a [`Win`]. The names are copied on entry:
+/// the autocommands this runs may free whatever the caller's borrow of them
+/// pointed into.
+pub(crate) fn do_ecmd(
     fnum: c_int,
-    ffname: *mut c_char,
-    sfname: *mut c_char,
+    ffname: Option<&CStr>,
+    sfname: Option<&CStr>,
     excmd: Option<&mut ExArg>,
     newlnum: LineNr,
     flags: EcmdFlags,
     oldwin: Option<WinId>,
 ) -> Result<(), Failed> {
-    let mut ffname = ffname;
-    let mut sfname = sfname;
+    let mut ffname: Option<CString> = ffname.map(CStr::to_owned);
+    let mut sfname: Option<CString> = sfname.map(CStr::to_owned);
     let mut oldwin = oldwin;
-    let mut free_fname = ptr::null_mut::<c_char>();
     let mut retval = Err(Failed);
     // Held from "the buffer is settled" to "the cursor is in the right
     // line", which is past the block below on one path and inside it on the
@@ -283,8 +241,6 @@ pub(crate) unsafe fn do_ecmd(
         did_get_winopts: false,
         readfile_flags: 0,
     };
-    // SAFETY: `curwin` is the live current window, and the handle is used
-    // only inside this call.
     let so = ScrollOff::of(Win::current(), ScrollMargin::Lines);
     // A copy: the command line is the caller's, and `excmd` is lent on to
     // the read below while the command is still wanted.
@@ -292,27 +248,22 @@ pub(crate) unsafe fn do_ecmd(
         .as_deref()
         .and_then(|asked| asked.do_ecmd_cmd.cstr(&asked.line))
         .map(CStr::to_owned);
-    let command = command_text
-        .as_ref()
-        .map_or(ptr::null_mut(), |text| text.as_ptr().cast_mut());
+    let command = command_text.as_deref();
     let has_command = excmd.is_some();
 
     let mut old_curbuf = BufRef::of_opt(current_buf());
     let mut did_set_swapcommand = false;
 
     'theend: {
-        // SAFETY: the names are the caller's.
-        let other_file =
-            match unsafe { resolve_target(fnum, &mut ffname, &mut sfname, flags, &mut free_fname) }
-            {
-                Target::AlreadyHere => return Ok(()),
-                Target::Nothing => break 'theend,
-                Target::Editing(other) => other,
-            };
+        let other_file = match resolve_target(fnum, &mut ffname, &mut sfname, flags) {
+            Target::AlreadyHere => return Ok(()),
+            Target::Nothing => break 'theend,
+            Target::Editing(other) => other,
+        };
         let mut ecmd = EcmdArgs {
             fnum,
-            ffname,
-            sfname,
+            ffname: ffname.as_deref(),
+            sfname: sfname.as_deref(),
             excmd,
             flags,
             command,
@@ -349,13 +300,10 @@ pub(crate) unsafe fn do_ecmd(
         if has_command {
             ccgd |= CCGD_EXCMD as c_int;
         }
-        // SAFETY: as above.
         if must_ask && check_changed(Buf::current(), ccgd) {
-            if fnum == 0 && other_file && !ffname.is_null() {
+            if fnum == 0 && other_file && ecmd.ffname.is_some() {
                 let lnum = state.newlnum.max(0);
-                // SAFETY: the names are live.
-                let (ff, sf) = unsafe { (cstr::at_opt(ffname), cstr::at_opt(sfname)) };
-                setaltfname(ff, sf, lnum);
+                setaltfname(ecmd.ffname, ecmd.sfname, lnum);
             }
             break 'theend;
         }
@@ -369,8 +317,7 @@ pub(crate) unsafe fn do_ecmd(
         // A stale id answers `None`, which is what this check is for.
         oldwin = oldwin.filter(|&w| win_valid(w));
 
-        // SAFETY: `command` is live when non-NULL.
-        did_set_swapcommand = unsafe { set_swapcommand(command, state.newlnum) };
+        did_set_swapcommand = set_swapcommand(command, state.newlnum);
 
         // If we are starting to edit another file, open a (new) buffer.
         // Otherwise we re-use the current buffer.
@@ -379,7 +326,6 @@ pub(crate) unsafe fn do_ecmd(
                 Switch::Abandon => break 'theend,
                 Switch::Ready => {}
             }
-            // SAFETY: `curwin` is live.
             Win::current().w_pcmark.lnum = 1;
             Win::current().w_pcmark.col = 0;
         } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) || check_fname().is_err() {
@@ -393,7 +339,6 @@ pub(crate) unsafe fn do_ecmd(
         redraw_off = Some(Suppress::redraw());
 
         let buf = Buf::current_raw();
-        // SAFETY: `curbuf` is live.
         if flags.has(EcmdFlags::SET_HELP) || keep_help_flag.get() {
             prepare_help_buffer();
         } else if !Buf::current().b_help {
@@ -428,12 +373,10 @@ pub(crate) unsafe fn do_ecmd(
         // If the file name was changed, reset the not-edit flag so that
         // ":write" works.
         if !other_file {
-            // SAFETY: `curbuf` is live.
             Buf::current().b_flags.clear(BufFlags::NOTEDITED);
         }
 
         // Check if we are editing the w_arg_idx file in the argument list.
-        // SAFETY: `curwin` is live.
         check_arg_idx(Win::current());
 
         if !state.auto_buf {
@@ -443,7 +386,6 @@ pub(crate) unsafe fn do_ecmd(
         // Tell the diff stuff that this buffer is new and/or needs updating.
         // Also needed when re-editing the same buffer, because unloading will
         // have removed it as a diff buffer.
-        // SAFETY: `curwin`/`curbuf` are live.
         if Win::current().w_onebuf_opt.wo_diff != 0 {
             diff_buf_add(Buf::current());
             diff_invalidate(Buf::current());
@@ -452,12 +394,12 @@ pub(crate) unsafe fn do_ecmd(
         // language.  Can only be done once the buffer is properly set up.
         if state.did_get_winopts
             && Win::current().w_onebuf_opt.wo_spell != 0
-            && unsafe { (*Win::current().w_s).b_p_spl.first_byte() } as c_int != NUL
+            && Win::current().syntax().b_p_spl.first_byte() as c_int != NUL
         {
             let _ = parse_spelllang(Win::current());
         }
 
-        if command.is_null() {
+        if command.is_none() {
             place_cursor(&state);
         }
 
@@ -470,8 +412,7 @@ pub(crate) unsafe fn do_ecmd(
             report_file_info();
         }
 
-        // SAFETY: `curbuf` is live and `command` the caller's.
-        Buf::current().b_last_used = unsafe { time(ptr::null_mut::<time_t>()) };
+        Buf::current().b_last_used = os_time_raw();
         if let Some(command) = &command_text {
             let _ = do_cmdline(Some(command.to_bytes()), None, DoCmdOpts::VERBOSE);
         }
@@ -481,48 +422,34 @@ pub(crate) unsafe fn do_ecmd(
 
         drop(redraw_off.take());
         if !skip_redraw.get() {
-            // SAFETY: `so_ptr` points into the current window or at the global
-            // 'scrolloff', both live for this call.
-            unsafe { recenter(so, state.topline, command) };
+            recenter(so, state.topline, command.is_some());
         }
 
         // Change directories when the 'acd' option is set.
         do_autochdir();
     }
 
-    // SAFETY: the old buffer is live when its bufref says so.
-    if let Some(old) = old_curbuf.get()
-        && !old.terminal.is_null()
-    {
-        unsafe { terminal_check_size(old.terminal) };
+    if let Some(old) = old_curbuf.get() {
+        buf_terminal_check_size(old);
     }
-    if (!old_curbuf.valid() || !old_curbuf.is(Buf::current_or_none()))
-        && !Buf::current().terminal.is_null()
-    {
-        unsafe { terminal_check_size(Buf::current().terminal) };
+    if !old_curbuf.valid() || !old_curbuf.is(Buf::current_or_none()) {
+        buf_terminal_check_size(Buf::current());
     }
 
     drop(redraw_off.take());
     if did_set_swapcommand {
         set_vim_var_string(Vv::Swapcommand, None);
     }
-    // SAFETY: our own allocation, or NULL.
-    unsafe { xfree(free_fname.cast()) };
     retval
 }
 
 /// Work out whether `do_ecmd` is being asked for another file, expanding the
 /// name it was given on the way.
-///
-/// # Safety
-/// The names must be live, or NULL; `free_fname` receives an allocation the
-/// caller must free.
-unsafe fn resolve_target(
+fn resolve_target(
     fnum: c_int,
-    ffname: &mut *mut c_char,
-    sfname: &mut *mut c_char,
+    ffname: &mut Option<CString>,
+    sfname: &mut Option<CString>,
     flags: EcmdFlags,
-    free_fname: &mut *mut c_char,
 ) -> Target {
     if fnum != 0 {
         if fnum == Buf::current().handle {
@@ -533,35 +460,34 @@ unsafe fn resolve_target(
     }
 
     // if no short name given, use ffname for short name
-    if sfname.is_null() {
-        *sfname = *ffname;
+    if sfname.is_none() {
+        sfname.clone_from(ffname);
     }
 
-    // SAFETY: `ffname` is live when non-NULL.
     if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF)
-        && (ffname.is_null() || unsafe { **ffname } as c_int == NUL)
+        && ffname.as_deref().is_none_or(CStr::is_empty)
     {
         return Target::Nothing;
     }
-    if ffname.is_null() {
+    let Some(name) = ffname.as_deref() else {
         return Target::Editing(true);
-    }
-    // SAFETY: as above; `curbuf` is live.
-    if unsafe { **ffname } as c_int == NUL && Buf::current().name.full().is_none() {
-        // there is no file name
-        return Target::Editing(false);
-    }
-    if unsafe { **ffname } as c_int == NUL {
+    };
+    if name.is_empty() {
+        let current = &Buf::current().name;
+        if current.full().is_none() {
+            // there is no file name
+            return Target::Editing(false);
+        }
         // re-edit with same file name
-        *ffname = Buf::current().name.full_ptr();
-        *sfname = Buf::current().name.shown_ptr();
+        *ffname = current.full().map(CStr::to_owned);
+        *sfname = current.shown().map(CStr::to_owned);
     }
     // may expand to full path name
-    *free_fname = unsafe { fix_fname(*ffname) };
-    if !free_fname.is_null() {
-        *ffname = *free_fname;
+    let name = ffname.as_deref().unwrap_or_default();
+    if let Some(full) = fixed_fname(name) {
+        *ffname = Some(full.as_cstr().to_owned());
     }
-    Target::Editing(otherfile(unsafe { CStr::from_ptr(*ffname) }))
+    Target::Editing(otherfile(ffname.as_deref().unwrap_or_default()))
 }
 
 /// Re-edit the current file in the buffer it already has: store the contents
@@ -575,12 +501,9 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
         state.solcol = Win::current().w_cursor.col;
     }
     let buf = Buf::current();
-    // The buffer's own file name, NUL-terminated; see [`switch`]'s copy for
-    // why it is owned rather than borrowed.
-    let name = buf.name.shown_ptr();
-    // SAFETY: as above.
-    let new_name: Option<CString> =
-        (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.into());
+    // The buffer's own file name; see [`switch`]'s copy for why it is owned
+    // rather than borrowed.
+    let new_name: Option<CString> = buf.name.shown().map(CStr::to_owned);
     let bufref = BufRef::of(buf);
 
     // If the buffer was used before, store the current contents so that
@@ -650,7 +573,6 @@ fn enter_new_buffer(
     // automatic folding for all windows where it's used.
     for win in tab_windows() {
         if win.w_buffer.is_current() {
-            // SAFETY: `win` is a live window.
             fold_update_all(win);
         }
     }
@@ -660,14 +582,12 @@ fn enter_new_buffer(
 
     // Careful: open_buffer() and apply_autocmds() may change the current
     // buffer and window.
-    // SAFETY: `curwin` is live.
     let orig_pos = Win::current().w_cursor;
     state.topline = Win::current().w_topline;
     if !state.oldbuf {
         // need to read the file
         swap_exists_action.set(SEA_DIALOG);
         // set/reset 'ro' flag
-        // SAFETY: `curbuf` is live and `eap` the caller's.
         Buf::current().b_flags |= BufFlags::CHECK_RO;
         // Open the buffer and read the file.
         if flags.has(EcmdFlags::NOWINENTER) {
@@ -691,18 +611,15 @@ fn enter_new_buffer(
             fire_retval(AutoEvent::BufWinEnter, Buf::current(), retval);
         }
     }
-    // SAFETY: `curwin` is live.
     check_arg_idx(Win::current());
 
     // If autocommands change the cursor position or topline, we should keep
     // it.  Also when it moves within a line.  But not when it moves to the
     // first non-blank.
-    // SAFETY: `curwin` is live and the cursor is on a line of its buffer.
     if !equalpos(Win::current().w_cursor, orig_pos) {
-        let text = get_cursor_line_ptr();
-        if Win::current().w_cursor.lnum != orig_pos.lnum
-            || Win::current().w_cursor.col != unsafe { skipwhite(text).offset_from(text) } as c_int
-        {
+        let cursor = Win::current().w_cursor;
+        let first_nonblank = skip::white(Lines::current().line(cursor.lnum)) as c_int;
+        if cursor.lnum != orig_pos.lnum || cursor.col != first_nonblank {
             state.newlnum = Win::current().w_cursor.lnum;
             state.newcol = Win::current().w_cursor.col;
         }
@@ -761,7 +678,6 @@ fn report_file_info() {
         // wait a bit when overwriting an error msg
         msg_check_for_delay(false);
     }
-    // SAFETY: as above.
     say::start();
     msg_scroll.set(msg_scroll_save);
     msg_scrolled_ign.set(true);
@@ -775,20 +691,16 @@ fn report_file_info() {
 
 /// Recompute the scroll position for the new cursor line, centring it when the
 /// autocommands left the window's top line alone and there is no `+cmd`.
-///
-/// # Safety
-/// `curwin` must be live, and `so` its scroll margin.
-unsafe fn recenter(so: ScrollOff, topline: LineNr, command: *mut c_char) {
+/// `so` is the current window's scroll margin.
+fn recenter(so: ScrollOff, topline: LineNr, has_command: bool) {
     let n = so.get();
-    if topline == 0 && command.is_null() {
+    if topline == 0 && !has_command {
         // force the cursor to be vertically centered in the window
         so.set(999);
     }
-    // SAFETY: caller's contract; `curwin` is live.
     update_topline(Win::current());
     Win::current().w_scbind_pos = plines_m_win_fill(Win::current(), 1, Win::current().w_topline);
     so.set(n);
     // redraw this buffer later
-    // SAFETY: no argument beyond the redraw type.
     redraw_curbuf_later(UPD_NOT_VALID);
 }

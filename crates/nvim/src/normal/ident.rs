@@ -527,8 +527,17 @@ pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
     let hide = EcmdFlags::HIDE.when(hidden);
     let last = newlnum::LAST as LineNr;
     let win = Some(Win::current().id());
-    // SAFETY: `name` is a NUL-terminated file name.
-    let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), None, last, hide, win) };
+    // SAFETY: `name` is this call's own NUL-terminated file name, freed
+    // after the edit.
+    let opened = do_ecmd(
+        0,
+        Some(unsafe { cstr::at(name) }),
+        None,
+        None,
+        last,
+        hide,
+        win,
+    );
     if opened.is_ok() && cmd_arg.nchar == 'F' as c_int && lnum >= 0 {
         Win::current().w_cursor.lnum = lnum;
         check_cursor_lnum(Win::current());

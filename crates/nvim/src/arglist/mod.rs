@@ -164,6 +164,16 @@ pub(crate) fn argcount() -> c_int {
     wargcount(Win::current())
 }
 
+/// The buffer number of entry `n` of `window`'s argument list, if there is
+/// such an entry.
+pub(crate) fn warg_fnum(window: Win, n: c_int) -> Option<c_int> {
+    // SAFETY: `n` is checked against the list's own length, so the entry
+    // is one of its live ones.
+    (0..wargcount(window))
+        .contains(&n)
+        .then(|| unsafe { (*warg(window, n)).ae_fnum })
+}
+
 /// The current window's argument list, for the handful of places that
 /// change it in place.
 ///
@@ -714,6 +724,16 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
 pub unsafe fn set_arglist(str: *mut c_char) {
     // SAFETY: caller contract.
     unsafe { do_arglist(str, ArgListOp::Set, 0, true) };
+}
+
+/// [`set_arglist`] from a command argument the caller holds; the walk cuts
+/// a copy into words.
+pub(crate) fn set_arglist_text(arg: &[u8]) {
+    let mut copy = Vec::with_capacity(arg.len() + 1);
+    copy.extend_from_slice(arg);
+    copy.push(0);
+    // SAFETY: a NUL-terminated writable copy of our own.
+    unsafe { set_arglist(copy.as_mut_ptr().cast()) };
 }
 
 // ---------------------------------------------------------------------------

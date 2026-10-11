@@ -18,7 +18,7 @@ use crate::guard::Suppress;
 use crate::semsg;
 use crate::types::OptStr;
 use crate::vim_snprintf;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::arglist::alist_name;
@@ -411,16 +411,17 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
             Win::current().w_arg_idx = arg_idx;
             swap_exists_did_quit.set(false);
             let alist = global_arglist();
+            // A copy: the edit's autocommands may change the argument list.
             let name = if arg_idx < unsafe { (*alist).al_ga.len() as c_int } {
                 let entries = unsafe { (*alist).al_ga.as_mut_ptr() };
-                unsafe { alist_name(entries.offset(arg_idx as isize)) }
+                unsafe { cstr::at_opt(alist_name(entries.offset(arg_idx as isize))) }
+                    .map(CStr::to_owned)
             } else {
-                ptr::null_mut()
+                None
             };
             let (last, hide) = (newlnum::LASTL as LineNr, EcmdFlags::HIDE);
-            let _null_ea = ptr::null_mut::<ExArg>();
             let win = Win::current().id();
-            let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), None, last, hide, Some(win)) };
+            let _ = do_ecmd(0, name.as_deref(), None, None, last, hide, Some(win));
             if swap_exists_did_quit.get() {
                 if got_int.get() || only_one_window() {
                     quit_on_swap_exists(true);

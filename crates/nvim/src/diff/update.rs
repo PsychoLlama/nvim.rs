@@ -348,7 +348,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
                 // turn's autocommands; the slot's id answers `None` for it,
                 // and a valid buffer is what `buf_check_timestamp` wants.
                 if let Some(buf) = tp.diffbuf(idx) {
-                    unsafe { buf_check_timestamp(buf) };
+                    buf_check_timestamp(buf);
                 }
             }
         }

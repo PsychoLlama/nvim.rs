@@ -227,12 +227,19 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
     let wp = Win::current();
     let hidden = buf_hide(wp.buffer());
     let flags = EcmdFlags::HIDE.when(hidden) | EcmdFlags::FORCEIT.when(forceit);
-    let name = arg_name(cur_arg_idx());
+    // A copy: `do_ecmd` may fire autocommands that change the list.
+    // SAFETY: the entry's NUL-terminated name, or null.
+    let name = unsafe { cstr::at_opt(arg_name(cur_arg_idx())) }.map(CStr::to_owned);
     let last = newlnum::LAST as LineNr;
-    let none = ptr::null_mut();
-    // SAFETY: as above; `do_ecmd` may fire autocommands, and nothing here
-    // is held across it.
-    let opened = unsafe { do_ecmd(0, name, none, Some(excmd), last, flags, Some(wp.id())) };
+    let opened = do_ecmd(
+        0,
+        name.as_deref(),
+        None,
+        Some(excmd),
+        last,
+        flags,
+        Some(wp.id()),
+    );
     if opened.is_err() {
         // It failed (Abort for an already-edited file, say): restore the
         // argument index of whichever window is current now.

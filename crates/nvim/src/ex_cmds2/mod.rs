@@ -21,13 +21,9 @@
 //! constant at a dozen separate points; [`ListDo`] makes that decision once,
 //! at the top, and the rest of the walk asks the enum.
 //!
-//! # Safety
-//!
-//! Every function here takes editor state by raw pointer -- the `ExArg` of
-//! the command being executed, or a `Buffer`/`Window`/`Tabpage` out of one
-//! of the editor's own lists -- and every one of them runs on the main
-//! thread with those lists live. That is the contract the `unsafe fn`s below
-//! share; each states it once by reference and does not restate it.
+//! The walks over the editor's lists run arbitrary commands, which can
+//! delete the buffer, window or tab page being walked; every step re-reads
+//! what it is about to touch rather than holding it across a command.
 //!
 //! What the contract does *not* buy is stability. Nearly everything here can
 //! run autocommands -- a write, a buffer switch, the command `:argdo` was
@@ -39,20 +35,18 @@
 //!
 //! Original: `src/nvim/ex_cmds2.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 mod listdo;
 
-use crate::arglist::{ex_all, ex_rewind, set_arglist};
+use crate::arglist::{ex_all, ex_rewind, set_arglist_text, warg_fnum};
 use crate::buffer::{
-    BufRef, buf_hide, buf_is_dontwrite, buf_set_name, buf_spname, find_buf, no_write_message,
-    no_write_message_nobang, set_curbuf,
+    BufRef, buf_hide, buf_is_dontwrite, buf_set_name_of, buf_spname_owned, find_buf,
+    no_write_message, no_write_message_nobang, set_curbuf,
 };
 use crate::bufwrite::{WriteName, WriteRequest, buf_write};
 use crate::change::unchanged;
 use crate::channel::channel_job_running;
-use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::eval::eval_call_provider;
 use crate::eval::typval::tv_list_alloc;
@@ -66,7 +60,7 @@ use crate::getchar::state::vgetc_busy;
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::memline::MlFlags;
-use crate::memory::ThinCString;
+use crate::memory::XString;
 use crate::message::state::{msg_col, msg_didany, msg_didout, msg_row};
 use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
@@ -76,12 +70,11 @@ use crate::message_fmt::msg_bytes;
 use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::{p_aw, p_awa, p_confirm, p_write};
 use crate::os::cshim::gettext;
-use crate::path::vim_full_name;
-use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
+use crate::path::full_name_into;
+use crate::runtime::{RuntimeOpts, source_runtime_vim_lua_of};
 use crate::semsg;
 use crate::startup::exiting;
 use crate::types::CmdIdx;
-use crate::types::TypVal;
 use crate::types::{
     CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t, uint64_t,
 };
@@ -89,8 +82,7 @@ use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, tabs, windows, windows_in_tab};
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use flag::{
     CCGD_ALLBUF, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, DOBUF_GOTO, DOBUF_UNLOAD,
@@ -186,55 +178,47 @@ pub(crate) fn ex_perldo(excmd: &mut ExArg) {
 
 /// Hand the command's own text to the provider, with the range.
 fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
-    // SAFETY: module contract; `script_get` returns an owned string that
-    // the argument list takes over.
     let Some(script) = script_get(excmd) else {
         return;
     };
-    let script = script.into_raw();
     let argv = tv_list_alloc(3 as ptrdiff_t);
-    let into = argv.as_ptr();
-    unsafe { (*into).push(TypVal::string(ThinCString::from_raw(script))) };
-    unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
-    unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
+    let into = argv.edit();
+    into.push_str(Some(script.as_cstr()));
+    into.push_number(excmd.line1 as c_int as VarNumber);
+    into.push_number(excmd.line2 as c_int as VarNumber);
     eval_call_provider(name, c"execute", Some(argv), true);
 }
 
 /// Hand the argument, as a full path, to the provider.
 fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
-    // SAFETY: module contract; `buffer` is `MAXPATHL` bytes as promised.
     if excmd.skip {
         return;
     }
-    let mut buffer: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    let _ = unsafe {
-        vim_full_name(
-            excmd.line.cstr_from(excmd.line.arg).as_ptr(),
-            buffer.as_mut_ptr(),
-            MAXPATHL as usize,
-            false,
-        )
-    };
+    let full = full_name_into(
+        excmd.line.cstr_from(excmd.line.arg),
+        MAXPATHL as usize,
+        false,
+    );
+    let full = std::ffi::CString::new(full).expect("a name stops at its NUL");
 
     let argv = tv_list_alloc(3 as ptrdiff_t);
-    let into = argv.as_ptr();
-    unsafe { (*into).push_str(cstr::at_opt(buffer.as_ptr())) };
-    unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
-    unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
+    let into = argv.edit();
+    into.push_str(Some(&full));
+    into.push_number(excmd.line1 as c_int as VarNumber);
+    into.push_number(excmd.line2 as c_int as VarNumber);
     eval_call_provider(name, c"execute_file", Some(argv), true);
 }
 
 /// Hand the range and the command's text to the provider, range first.
 fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
-    // SAFETY: module contract.
     if excmd.skip {
         return;
     }
     let argv = tv_list_alloc(3 as ptrdiff_t);
-    let into = argv.as_ptr();
-    unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
-    unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
-    unsafe { (*into).push_str(Some(excmd.line.cstr_from(excmd.line.arg))) };
+    let into = argv.edit();
+    into.push_number(excmd.line1 as c_int as VarNumber);
+    into.push_number(excmd.line2 as c_int as VarNumber);
+    into.push_str(Some(excmd.line.cstr_from(excmd.line.arg)));
     eval_call_provider(name, c"do_range", Some(argv), true);
 }
 
@@ -269,9 +253,6 @@ pub(crate) fn autowrite_all() {
     if !(p_aw() || p_awa()) || !p_write() {
         return;
     }
-    // SAFETY: module contract. A write's autocommands can delete the buffer
-    // being walked, which is why this is not `buffers()`: upstream resumes
-    // from `firstbuf` when that happens.
     let mut cur = first_buffer();
     while let Some(b) = cur {
         if buf_is_changed(b) && b.b_p_ro == 0 && !buf_is_dontwrite(Some(b)) {
@@ -289,7 +270,6 @@ pub(crate) fn autowrite_all() {
 /// the `CCGD_*` values.
 pub(crate) fn check_changed(buffer: Buf, flags: c_int) -> bool {
     let forceit = flags & CCGD_FORCEIT != 0;
-    // SAFETY: module contract, here and at every `unsafe` below.
     let bufref = BufRef::of(buffer);
 
     let blocked = !forceit
@@ -348,7 +328,7 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
     if ret == VIM_YES as c_int {
         let empty_bufname = buffer.name.is_unnamed();
         if empty_bufname {
-            unsafe { buf_set_name(buffer.handle as c_int, c"Untitled".as_ptr().cast_mut()) };
+            buf_set_name_of(buffer.handle as c_int, c"Untitled");
         }
         let target = buffer;
         if check_overwrite_own(&mut ea, target).is_ok()
@@ -379,8 +359,6 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
 /// Readonly ones are skipped, since those need confirming individually.
 fn write_all_writable() {
     let mut ea = ExArg::default();
-    // SAFETY: module contract. As in `autowrite_all`, a write's
-    // autocommands can delete the buffer being walked.
     let mut cur = first_buffer();
     while let Some(target) = cur {
         if buf_is_changed(target) && !target.name.full().is_none() && target.b_p_ro == 0 {
@@ -425,7 +403,6 @@ fn changed_check_order() -> Vec<c_int> {
         }
     }
 
-    // SAFETY: caller contract; none of these walks runs editor code.
     let mut nrs = Vec::new();
     nrs.push(Buf::current().handle as c_int);
     for wp in windows() {
@@ -518,7 +495,6 @@ fn report_unwritten(buffer: Buf) {
         msg_col.set(0);
         msg_didout.set(false);
     }
-    // SAFETY: module contract.
     let shown = if !buffer.terminal.is_null() && channel_job_running(buffer.b_p_channel as uint64_t)
     {
         semsg!(
@@ -526,17 +502,15 @@ fn report_unwritten(buffer: Buf) {
             msg_cstr_opt(buffer.name.shown())
         )
     } else {
-        let name = if buf_spname(buffer).is_null() {
-            buffer.name.shown_ptr()
-        } else {
-            buf_spname(buffer)
-        };
-        unsafe {
-            semsg!(
-                "E162: No write since last change for buffer \"{}\"",
-                msg_cstr_opt(cstr::at_opt(name))
-            )
-        }
+        let special = buf_spname_owned(buffer);
+        let name = special
+            .as_ref()
+            .map(XString::as_cstr)
+            .or_else(|| buffer.name.shown());
+        semsg!(
+            "E162: No write since last change for buffer \"{}\"",
+            msg_cstr_opt(name)
+        )
     };
     // Only makes sense if the error is shown, which `cause_errthrow` may
     // prevent.
@@ -596,7 +570,6 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     const CURRENT_COMPILER: &CStr = c"g:current_compiler";
     const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
 
-    // SAFETY: module contract; `args.arg` is NUL-terminated.
     if excmd.line.byte_at(excmd.line.arg) == 0 {
         // List all compiler scripts.
         let _ = do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')");
@@ -625,8 +598,8 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     pattern.extend_from_slice(b"compiler/");
     pattern.extend_from_slice(excmd.line.arg());
     pattern.extend_from_slice(b".*\0");
-    if unsafe { source_runtime_vim_lua(pattern.as_mut_ptr().cast(), RuntimeOpts::ALL) }.is_err() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    let pattern = CStr::from_bytes_with_nul(&pattern).expect("one terminator, at the end");
+    if source_runtime_vim_lua_of(pattern, RuntimeOpts::ALL).is_err() {
         let arg = msg_bytes(excmd.line.arg());
         semsg!("E666: Compiler not supported: {arg}");
     }
@@ -652,14 +625,13 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
 /// `:checktime [buffer]`
 pub(crate) fn ex_checktime(excmd: &mut ExArg) {
     let _checked = Allow::timestamp_checks();
-    // SAFETY: module contract.
     if excmd.addr_count == 0 {
         // The default is all buffers.
         check_timestamps(0);
     } else {
         if let Some(buf) = find_buf(excmd.line2 as c_int) {
             // Cannot happen?
-            unsafe { buf_check_timestamp(buf) };
+            buf_check_timestamp(buf);
         }
     }
 }
@@ -667,12 +639,11 @@ pub(crate) fn ex_checktime(excmd: &mut ExArg) {
 /// `:drop`: open the first argument in a window, redefining the argument
 /// list.
 pub(crate) fn ex_drop(excmd: &mut ExArg) {
-    // SAFETY: module contract.
     // Check whether the first argument is already being edited in a
     // window and jump there if so. Checking all of them would be
     // complicated and mostly only one file is dropped. Wildcards are
     // ignored too, since a file name containing one is very unlikely.
-    unsafe { set_arglist(excmd.line.arg_copy().as_mut_ptr().cast()) };
+    set_arglist_text(excmd.line.arg());
 
     // Expanding wildcards may leave the argument list empty, e.g. when
     // editing "foo.pyc" with ".pyc" in 'wildignore'. Assume an error
@@ -694,10 +665,10 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
     // ":drop file ...": edit the first argument, jumping to an existing
     // window if there is one, editing in the current window if its
     // buffer can be abandoned, and otherwise opening a new window.
-    let buf = find_buf(unsafe { (*((*Win::current().w_alist).al_ga.as_mut_ptr())).ae_fnum })
-        .map_or(ptr::null_mut(), |b| b.raw());
+    // The list is not empty, so it has a first entry.
+    let buf = warg_fnum(Win::current(), 0).and_then(find_buf);
     for (tp, wp) in tab_windows() {
-        if wp.buffer().raw() != buf {
+        if Some(wp.buffer()) != buf {
             continue;
         }
         goto_tabpage_win(tp, wp);
@@ -706,7 +677,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
             // Reload the file if it is newer.
             let save_ar = Buf::current().b_p_ar;
             Buf::current().b_p_ar = 1;
-            unsafe { buf_check_timestamp(Buf::current()) };
+            buf_check_timestamp(Buf::current());
             Buf::current().b_p_ar = save_ar;
         }
         if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
@@ -716,10 +687,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
         // to newly loaded buffers.
         if !excmd.do_ecmd_cmd.is_none() {
             let text = excmd.do_ecmd_cmd.cstr(&excmd.line).map(CStr::to_owned);
-            let cmd = text
-                .as_ref()
-                .map_or(ptr::null_mut(), |t| t.as_ptr().cast_mut());
-            let did_set_swapcommand = unsafe { set_swapcommand(cmd, 0 as LineNr) };
+            let did_set_swapcommand = set_swapcommand(text.as_deref(), 0 as LineNr);
             let verbose = DoCmdOpts::VERBOSE;
             let _ = do_cmdline(text.as_deref().map(CStr::to_bytes), None, verbose);
             if did_set_swapcommand {

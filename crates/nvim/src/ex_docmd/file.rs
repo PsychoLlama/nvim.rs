@@ -3,7 +3,7 @@
 #![forbid(unsafe_code)]
 
 use crate::ex_cmds::EcmdFlags;
-use crate::ex_cmds::do_ecmd_named;
+use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds::newlnum;
 use crate::file_search::find_nth_file_in_path;
 use crate::fileio::readfile_named;
@@ -305,7 +305,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         // A new, empty buffer.
         setpcmark();
         let flags = EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit);
-        let _ = do_ecmd_named(
+        let _ = do_ecmd(
             0,
             None,
             None,
@@ -342,7 +342,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
             | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt);
         let lnum = excmd.do_ecmd_lnum;
-        let opened = do_ecmd_named(
+        let opened = do_ecmd(
             0,
             name.as_deref(),
             None,

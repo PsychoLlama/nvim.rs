@@ -19,15 +19,12 @@
 //!
 //! Original: `src/nvim/ex_cmds2.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::flag::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_FIRST};
 use super::{buffers, check_changed};
-use crate::arglist::{do_argfile, editing_arg_idx};
-use crate::autocmd::{
-    apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf, aucmd_restbuf,
-};
+use crate::arglist::{do_argfile, editing_arg_idx, wargcount};
+use crate::autocmd::{AucmdBuf, au_event_disable, au_event_restore, fire_autocmds_for};
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::state::listcmd_busy;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
@@ -44,12 +41,11 @@ use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
-use crate::types::{AcoSave, ExArg, LineNr, size_t};
+use crate::types::{ExArg, LineNr, size_t};
 use crate::window::{goto_tab, valid_tab, valid_win, win_goto, win_split, win_valid};
 use crate::winlayer::prev_window;
 use crate::winlayer::{Buf, TabId, TabPage, Win, WinId, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_int};
-use core::ptr;
 
 /// Which list [`ex_listdo`] walks.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -92,7 +88,6 @@ impl ListDo {
 /// `:argdo`, `:windo`, `:bufdo`, `:tabdo`, `:cdo`, `:ldo`, `:cfdo` and
 /// `:lfdo`.
 pub(crate) fn ex_listdo(excmd: &mut ExArg) {
-    // SAFETY: module contract.
     let (cmdidx, forceit) = (excmd.cmdidx, excmd.forceit);
     let Some(list) = ListDo::from_cmdidx(cmdidx) else {
         return;
@@ -122,7 +117,6 @@ pub(crate) fn ex_listdo(excmd: &mut ExArg) {
             CCGD_AW | if forceit { CCGD_FORCEIT } else { 0 } | CCGD_EXCMD,
         );
     if may_run {
-        // SAFETY: module contract.
         listdo_walk(excmd, list);
     }
 
@@ -164,8 +158,6 @@ fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
 /// Position the walk at `args.line1`, then run `args.arg` once per item
 /// until the list runs out, the range does, or something goes wrong.
 fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
-    // SAFETY: module contract. The command being run can do anything at all,
-    // which is why every step re-validates what it is about to touch.
     let mut i: c_int = 0;
     // Start at the eap->line1'th argument/window/tab page.
     // Identities, not addresses: the command run for each entry can close the
@@ -196,7 +188,9 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         _ => {}
     }
 
-    let mut buf = Buf::current_raw();
+    // Upstream's `buf`, which only ever says whether there is anything to
+    // walk.
+    let mut buf = Some(Buf::current());
     let mut qf_size: size_t = 0;
     match list {
         ListDo::Buffers => {
@@ -210,26 +204,24 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                 }
                 cur = b.next();
             }
-            buf = cur.map_or(ptr::null_mut(), Buf::raw);
-            if !buf.is_null() {
-                unsafe {
-                    goto_buffer(
-                        excmd,
-                        DOBUF_FIRST as c_int,
-                        FORWARD as c_int,
-                        (*buf).handle as c_int,
-                    )
-                };
+            buf = cur;
+            if let Some(first) = buf {
+                goto_buffer(
+                    excmd,
+                    DOBUF_FIRST as c_int,
+                    FORWARD as c_int,
+                    first.handle as c_int,
+                );
             }
         }
         ListDo::Quickfix { .. } => {
             qf_size = qf_get_valid_size(excmd.cmdidx);
             debug_assert!(excmd.line1 >= 0 as LineNr, "eap->line1 >= 0");
             if qf_size == 0 || excmd.line1 as size_t > qf_size {
-                buf = ptr::null_mut();
+                buf = None;
             } else {
                 ex_cc(excmd);
-                buf = Buf::current_raw();
+                buf = Some(Buf::current());
                 i = excmd.line1 as c_int - 1;
                 if excmd.addr_count <= 0 {
                     // Default to every quickfix/location list entry.
@@ -246,12 +238,12 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
     // Avoids setting the previous-context mark for every step below.
     listcmd_busy.set(true);
     let mut next_fnum: c_int = 0;
-    while !got_int.get() && !buf.is_null() {
+    while !got_int.get() && buf.is_some() {
         let mut execute = true;
         match list {
             ListDo::Args => {
                 // Go to argument "i".
-                if i == unsafe { (*Win::current().w_alist).al_ga.len() as c_int } {
+                if i == wargcount(Win::current()) {
                     break;
                 }
                 // Don't call `do_argfile` when already there, it would
@@ -371,7 +363,6 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
 /// `apply_autocmds` can do anything to the buffer list, so the walk starts
 /// over whenever it has run.
 fn restore_syntax_events(save_ei: Option<XString>) {
-    let mut aco = AcoSave::default();
     au_event_restore(save_ei);
 
     let mut cur = first_buffer();
@@ -379,28 +370,17 @@ fn restore_syntax_events(save_ei: Option<XString>) {
         let mut bnext = buf.next();
         if buf.b_nwindows > 0 && buf.b_flags.has(BufFlags::SYN_SET) {
             buf.b_flags.clear(BufFlags::SYN_SET);
+            // Copies, read before the switch: the autocommands may change
+            // either.
+            let (syn, name) = (buf.b_p_syn.get(), buf.name.shown().map(CStr::to_owned));
+            let (syn, name) = (Some(syn.as_cstr()), name.as_deref());
             if buf.raw() == Buf::current_raw() {
-                // SAFETY: the current buffer is live, and 'syntax' and the
-                // file name are its own NUL-terminated fields.
-                unsafe {
-                    apply_autocmds(
-                        AutoEvent::Syntax,
-                        Buf::current().b_p_syn.value_ptr(),
-                        Buf::current().name.shown_ptr(),
-                        true,
-                        Buf::current_or_none(),
-                    )
-                };
+                let current = Buf::current_or_none();
+                fire_autocmds_for(AutoEvent::Syntax, syn, name, true, current, None);
             } else {
-                let (syn, name) = (buf.b_p_syn.value_ptr(), buf.name.shown_ptr());
-                // SAFETY: `aco` is this frame's, `buf` is live, and the two
-                // strings are its own NUL-terminated fields -- read before
-                // the switch, which does not touch them.
-                unsafe {
-                    aucmd_prepbuf(&raw mut aco, buf);
-                    apply_autocmds(AutoEvent::Syntax, syn, name, true, Some(buf));
-                    aucmd_restbuf(&raw mut aco);
-                }
+                let entered = AucmdBuf::enter(buf);
+                fire_autocmds_for(AutoEvent::Syntax, syn, name, true, Some(buf), None);
+                drop(entered);
             }
             // Start over, in case autocommands messed things up.
             bnext = first_buffer();

@@ -335,11 +335,11 @@ fn open_window_for_arg(
     let buf = Win::current().buffer();
     let hide = buf_hide(buf) || buf_is_changed(buf);
     let flags = EcmdFlags::HIDE.when(hide) | EcmdFlags::OLDBUF;
-    let ffname = unsafe { alist_name(alist_arg(aall.alist, i)) };
-    let sfname = ptr::null_mut();
+    // A copy: the edit's autocommands may change the argument list.
+    let ffname = unsafe { cstr::at_opt(alist_name(alist_arg(aall.alist, i))) }.map(CStr::to_owned);
     let newlnum = newlnum::ONE as LineNr;
     let here = Some(Win::current().id());
-    let _ = unsafe { do_ecmd(0, ffname, sfname, None, newlnum, flags, here) };
+    let _ = do_ecmd(0, ffname.as_deref(), None, None, newlnum, flags, here);
     aall.use_firstwin = false;
     Ok(())
 }
