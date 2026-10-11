@@ -159,7 +159,7 @@ pub(crate) fn concat_pattern_with_buffer_match(
     let mut out = pat.to_vec();
     if !word.is_empty() {
         if lowercase {
-            let lower = strcase_copy(&CString::new(word).unwrap_or_default(), false);
+            let lower = strcase_copy(word, false);
             out.extend_from_slice(&lower);
         } else {
             out.extend_from_slice(word);

@@ -84,7 +84,7 @@ use crate::search::state::{
 };
 use crate::state::MODE_SHOWMATCH;
 use crate::state::mode::State;
-use crate::strings::{reverse_text, reversed_text, xstrnsave};
+use crate::strings::{reversed_text, xstrnsave};
 use crate::tag::state::g_do_tagpreview;
 use crate::types::AutoEvent;
 use crate::types::TAB;

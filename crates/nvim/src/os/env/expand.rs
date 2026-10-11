@@ -18,8 +18,8 @@ use crate::eval::skip_expr;
 use crate::memory::XString;
 use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;
+use crate::strings::escaped_bytes;
 use crate::strings::has_char;
-use crate::strings::vim_strsave_escaped;
 use crate::types::{Expand, ExpandContext, MAXPATHL};
 
 /// [`expand_env`] into a newly allocated `MAXPATHL` buffer.
@@ -265,7 +265,7 @@ pub unsafe fn expand_env_esc(
                 // Whitespace inside the value has to be escaped, or the
                 // caller's ' '-separated list would gain an entry.
                 if esc && !var.is_null() && !strpbrk(var, c" \t".as_ptr()).is_null() {
-                    let p = vim_strsave_escaped(var, c" \t".as_ptr());
+                    let p = escaped_bytes(cstr::bytes_at(var), b" \t").into_raw();
                     if mustfree {
                         xfree(var.cast());
                     }

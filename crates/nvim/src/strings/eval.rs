@@ -7,40 +7,40 @@
 //! `strcharlen()` share, differing only in whether composing characters count
 //! separately.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::semsg;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
-use super::{strcase_save, strict_bool_arg};
-use crate::charset::{Str2NrBases, skipwhite, transstr, vim_str2nr};
+use super::{find_bytes, strcase_copy, strict_bool_arg};
+use crate::charset::display::transstr_owned;
+use crate::charset::{Str2NrBases, skip, str2nr_scan};
+use crate::cstr::byte_at;
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
     NumBuf, tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
     tv_list_alloc_ret,
 };
 use crate::mbyte::{
-    char_at, char_count, char_len, cluster_len, clusters, head_off, mb_string2cells,
+    c_string_cells, char_at, char_count, char_len, cluster_len, clusters, head_off,
 };
 use crate::memory::ThinCString;
 use crate::message::e_invarg;
 use crate::message::emsg;
 use crate::message_fmt::msg_cstr;
-use crate::os::cshim::{gettext, strstr};
-use crate::plines::linetabsize_col;
+use crate::os::cshim::gettext;
+use crate::plines::linetabsize_text;
 use crate::types::{EvalFuncData, TypVal, VarNumber, kListLenUnknown, ptrdiff_t};
 
 /// "str2list()" function: the string as a list of code points.
 pub fn f_str2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
     let bytes = numbuf.bytes(&args[0]);
     let mut at = 0;
     while at < bytes.len() {
         let rest = &bytes[at..];
-        unsafe { (*(*result).list_or_null()).push_number(VarNumber::from(char_at(rest))) };
+        list.push_number(VarNumber::from(char_at(rest)));
         at += char_len(rest);
     }
 }
@@ -65,10 +65,12 @@ pub fn f_str2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    let mut p = unsafe { skipwhite(numbuf.string(&args[0]).as_ptr()) };
-    let isneg = unsafe { *p } == b'-' as c_char;
-    if unsafe { *p } == b'+' as c_char || unsafe { *p } == b'-' as c_char {
-        p = unsafe { skipwhite(p.add(1)) };
+    let text = numbuf.string(&args[0]).to_bytes();
+    let mut at = skip::white(text);
+    let isneg = byte_at(text, at) == b'-';
+    if matches!(byte_at(text, at), b'+' | b'-') {
+        at += 1;
+        at += skip::white(&text[at..]);
     }
 
     // An explicit base forces that radix; base 10 accepts none.
@@ -79,16 +81,9 @@ pub fn f_str2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         _ => Str2NrBases::NONE,
     };
 
-    let mut n: VarNumber = 0;
-    // Only the number and the base matter here: every other output --
-    // the prefix length, the digit count, the unsigned value and the
-    // overflow flag -- is one `vim_str2nr` may skip.
-    let out = &raw mut n;
-    let pre = ptr::null_mut();
-    let len = ptr::null_mut();
-    let uns = ptr::null_mut();
-    let ovf = ptr::null_mut();
-    unsafe { vim_str2nr(p, pre, len, what, out, uns, 0, false, ovf) };
+    // Only the number matters here: the prefix length, the digit count,
+    // the unsigned value and the overflow flag go unread.
+    let n = str2nr_scan(&text[at..], 0, what, false, true).value;
     result.write_number(if isneg { -n } else { n });
 }
 
@@ -99,31 +94,27 @@ pub fn f_stridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut buf = NumBuf::new();
     let needle = numbuf.string_chk(&args[1]);
-    let haystack_text = buf.string_chk(&args[0]);
-    let (Some(needle), Some(haystack_text)) = (needle, haystack_text) else {
+    let haystack = buf.string_chk(&args[0]);
+    let (Some(needle), Some(haystack)) = (needle, haystack) else {
         return;
     };
-    let (needle, haystack_start) = (needle.as_ptr(), haystack_text.as_ptr());
-    let mut haystack = haystack_start;
+    let (needle, haystack) = (needle.to_bytes(), haystack.to_bytes());
+    let mut start = 0;
 
     if args.len() > 2 {
         let Ok(start_idx) = tv_get_number_chk(&args[2]) else {
             return;
         };
-        let start_idx = start_idx as ptrdiff_t;
-        if start_idx >= haystack_text.to_bytes().len() as ptrdiff_t {
+        if start_idx >= haystack.len() as VarNumber {
             return;
         }
         // A negative start is ignored, not counted from the end.
-        if start_idx >= 0 {
-            haystack = unsafe { haystack.offset(start_idx as isize) };
-        }
+        start = usize::try_from(start_idx).unwrap_or(0);
     }
 
-    let pos = unsafe { strstr(haystack, needle) };
-    if !pos.is_null() {
+    if let Some(pos) = find_bytes(&haystack[start..], needle) {
         // Reported against the whole string, not against the start.
-        unsafe { (*result).write_number(pos.offset_from(haystack_start) as VarNumber) };
+        result.write_number((start + pos) as VarNumber);
     }
 }
 
@@ -135,42 +126,42 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut buf = NumBuf::new();
     let needle = numbuf.string_chk(&args[1]);
-    let haystack_text = buf.string_chk(&args[0]);
-    let (Some(needle), Some(haystack_text)) = (needle, haystack_text) else {
+    let haystack = buf.string_chk(&args[0]);
+    let (Some(needle), Some(haystack)) = (needle, haystack) else {
         return;
     };
-    let (needle, haystack) = (needle.as_ptr(), haystack_text.as_ptr());
+    let (needle, haystack) = (needle.to_bytes(), haystack.to_bytes());
 
-    let end_idx = if args.len() > 2 {
-        let idx = tv_get_number_chk(&args[2]).unwrap_or(-1) as ptrdiff_t;
-        if idx < 0 {
+    let last_allowed = if args.len() > 2 {
+        let Ok(idx) = usize::try_from(tv_get_number_chk(&args[2]).unwrap_or(-1)) else {
             return;
-        }
+        };
         idx
     } else {
-        haystack_text.to_bytes().len() as ptrdiff_t
+        haystack.len()
     };
-    let last_allowed = unsafe { haystack.offset(end_idx) };
 
-    let lastmatch = if unsafe { *needle } == 0 {
-        // The empty needle matches at the end of the range.
-        last_allowed
+    let lastmatch = if needle.is_empty() {
+        // The empty needle matches at the end of the range -- which may lie
+        // past the string's end.
+        Some(last_allowed)
     } else {
-        let mut found = ptr::null();
-        let mut rest = haystack;
-        while unsafe { *rest } != 0 {
-            rest = unsafe { strstr(rest, needle) };
-            if rest.is_null() || rest > last_allowed {
-                break;
+        let mut found = None;
+        let mut rest = 0;
+        while rest < haystack.len() {
+            match find_bytes(&haystack[rest..], needle) {
+                Some(at) if rest + at <= last_allowed => {
+                    found = Some(rest + at);
+                    rest += at + 1;
+                }
+                _ => break,
             }
-            found = rest;
-            rest = unsafe { rest.add(1) };
         }
         found
     };
 
-    if !lastmatch.is_null() {
-        unsafe { (*result).write_number(lastmatch.offset_from(haystack) as VarNumber) };
+    if let Some(at) = lastmatch {
+        result.write_number(at as VarNumber);
     }
 }
 
@@ -229,45 +220,41 @@ pub fn f_strchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// optional starting column.
 pub fn f_strdisplaywidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let s = numbuf.string(&args[0]).as_ptr();
+    let text = numbuf.string(&args[0]);
     let col = if args.len() > 1 {
         tv_get_number(&args[1]) as c_int
     } else {
         0
     };
-    unsafe { (*result).write_number((linetabsize_col(col, s as *mut c_char) - col) as VarNumber) };
+    result.write_number(VarNumber::from(linetabsize_text(col, text) - col));
 }
 
 /// "strwidth()" function: screen cells, with a tab counting as one.
 pub fn f_strwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let text = numbuf.string(&args[0]).as_ptr();
-    result.write_number(unsafe { mb_string2cells(text) } as VarNumber);
+    let text = numbuf.string(&args[0]).to_bytes();
+    result.write_number(c_string_cells(text) as VarNumber);
 }
 
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
 pub fn f_strtrans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let text = numbuf.string(&args[0]).as_ptr();
-    // SAFETY: a NUL-terminated argument; the answer is `xmalloc`ed and the
-    // result adopts it.
-    result.write_string(unsafe { ThinCString::from_raw(transstr(text, true)) });
+    let text = numbuf.string(&args[0]).to_bytes();
+    result.write_string(Some(transstr_owned(text, true).into()));
 }
 
 /// "tolower()" function.
 pub fn f_tolower(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let text = numbuf.string(&args[0]).as_ptr();
-    // SAFETY: as `f_strtrans`.
-    result.write_string(unsafe { ThinCString::from_raw(strcase_save(text, false)) });
+    let text = numbuf.string(&args[0]).to_bytes();
+    result.write_string(Some(strcase_copy(text, false).into()));
 }
 
 /// "toupper()" function.
 pub fn f_toupper(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let text = numbuf.string(&args[0]).as_ptr();
-    // SAFETY: as `f_strtrans`.
-    result.write_string(unsafe { ThinCString::from_raw(strcase_save(text, true)) });
+    let text = numbuf.string(&args[0]).to_bytes();
+    result.write_string(Some(strcase_copy(text, true).into()));
 }
 
 /// "tr()" function: character-wise translation.

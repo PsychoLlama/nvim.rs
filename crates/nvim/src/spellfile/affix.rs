@@ -31,7 +31,7 @@ use crate::hashtab::{hash_add, hash_find};
 use crate::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xstrlcpy;
 use crate::spell::{onecap_copy, spelltab_upper};
-use crate::strings::{has_non_ascii, vim_strchr};
+use crate::strings::{any_non_ascii, vim_strchr};
 use crate::types::{HashTab, NUL, size_t};
 use ::libc::{atoi, strcpy};
 
@@ -194,7 +194,8 @@ pub(super) fn handle_affix_entry(
 
     // With 'ascii' set, an affix that needs more than ASCII is dropped.
     if spin.si_ascii != 0
-        && (unsafe { has_non_ascii((*entry).ae_chop) } || unsafe { has_non_ascii((*entry).ae_add) })
+        && (any_non_ascii(unsafe { cstr::bytes_at_or_empty((*entry).ae_chop) })
+            || any_non_ascii(unsafe { cstr::bytes_at_or_empty((*entry).ae_add) }))
     {
         return;
     }

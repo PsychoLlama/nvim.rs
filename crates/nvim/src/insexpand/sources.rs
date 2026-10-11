@@ -16,7 +16,7 @@ use crate::guard::Suppress;
 use crate::mbyte::{char_at, cluster_len};
 use crate::memline::Lines;
 use crate::path::ExpandFlags;
-use crate::strings::has_char;
+use crate::strings::{escaped_bytes, has_char};
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
 use crate::vim_snprintf;
 use crate::winlayer::BufId;
@@ -67,7 +67,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
         // pattern to only match at the start of a line.  Otherwise just
         // match the pattern.  Also need to double backslashes.
         if ctrl_x_mode_line_or_eval() {
-            let pat_esc = unsafe { vim_strsave_escaped(pat, c"\\".as_ptr()) };
+            let pat_esc = unsafe { escaped_bytes(cstr::bytes_at(pat), b"\\") }.into_raw();
             let len = unsafe { cstr::bytes_at(pat_esc) }.len() + 10;
             let ptr = unsafe { xmalloc(len) }.cast::<c_char>();
             unsafe { vim_snprintf!(ptr, len, c"^\\s*\\zs\\V%s".as_ptr(), pat_esc) };

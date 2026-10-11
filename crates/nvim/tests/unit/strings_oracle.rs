@@ -6,12 +6,12 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, c_char, c_int};
+use std::ffi::{CString, c_int};
 
 use neovim::ex_docmd::do_cmdline_cmd;
 use neovim::strings::{
-    concat_str, del_trailing_spaces, reverse_text, strcase_save, strrep, vim_strchr,
-    vim_strnsave_unquoted, vim_strsave_escaped_ext, vim_strsave_shellescape, xstrnsave,
+    concat, escaped_with, replaced_all, reversed_text, shellescape, strcase_copy,
+    trailing_spaces_start, unquoted, vim_strchr, xstrnsave,
 };
 
 use crate::support::corpus::{Digest, corpus};
@@ -72,10 +72,7 @@ fn escapers_and_quote_resolver() {
         for text in texts() {
             let s = c(&text);
             for (special, newline) in [(false, false), (true, false), (false, true), (true, true)] {
-                // SAFETY: a terminated string; the answer is the caller's.
-                d.bytes(&unsafe {
-                    take_bytes(vim_strsave_shellescape(s.as_ptr(), special, newline))
-                });
+                d.bytes(&shellescape(s.as_bytes(), special, newline));
             }
         }
     }
@@ -84,20 +81,11 @@ fn escapers_and_quote_resolver() {
         let s = c(&text);
         for esc in [c"", c" \t\\", c"\"'", c"%#!", c"\xc3\xa9"] {
             for (cc, bsl) in [(b'\\', false), (b'\\', true), (b'^', false), (b'^', true)] {
-                // SAFETY: as above.
-                d.bytes(&unsafe {
-                    take_bytes(vim_strsave_escaped_ext(
-                        s.as_ptr(),
-                        esc.as_ptr(),
-                        cc as c_char,
-                        bsl,
-                    ))
-                });
+                d.bytes(&escaped_with(s.as_bytes(), esc.to_bytes(), cc, bsl));
             }
         }
         for len in 0..=text.len() {
-            // SAFETY: `len` bytes of a terminated string.
-            d.bytes(&unsafe { take_bytes(vim_strnsave_unquoted(s.as_ptr(), len)) });
+            d.bytes(&unquoted(&text[..len]));
         }
     }
     assert_eq!(d.value(), 0x81fcd9d3482c73a6, "escapers");
@@ -112,28 +100,28 @@ fn copiers_and_case_folders() {
         let s = c(text);
         // SAFETY: terminated strings throughout; every answer is owned.
         unsafe {
-            d.bytes(&take_bytes(strcase_save(s.as_ptr(), true)));
-            d.bytes(&take_bytes(strcase_save(s.as_ptr(), false)));
-            d.bytes(&take_bytes(reverse_text(s.as_ptr().cast_mut())));
+            d.bytes(&strcase_copy(text, true));
+            d.bytes(&strcase_copy(text, false));
+            d.bytes(&reversed_text(text));
             for n in 0..=text.len() {
                 d.bytes(&take_bytes(xstrnsave(s.as_ptr(), n)));
             }
+            // The C zero-filled the trailing blanks in place.
             let mut copy = s.as_bytes_with_nul().to_vec();
-            del_trailing_spaces(copy.as_mut_ptr().cast());
+            let end = trailing_spaces_start(text);
+            copy[end..text.len()].fill(0);
             d.bytes(&copy);
-            d.bytes(&take_bytes(concat_str(s.as_ptr(), c"<>".as_ptr())));
-            d.bytes(&take_bytes(concat_str(c"<>".as_ptr(), s.as_ptr())));
+            d.bytes(&concat(text, b"<>"));
+            d.bytes(&concat(b"<>", text));
             for (what, rep) in [
                 (c"a", c"XYZ"),
                 (c"'", c"''"),
                 (c"\\", c""),
                 (c"\xcc\x81", c"+"),
             ] {
-                let got = strrep(s.as_ptr(), what.as_ptr(), rep.as_ptr());
-                if got.is_null() {
-                    d.add(-1);
-                } else {
-                    d.bytes(&take_bytes(got));
+                match replaced_all(text, what.to_bytes(), rep.to_bytes()) {
+                    None => d.add(-1),
+                    Some(got) => d.bytes(&got),
                 }
             }
             for ch in [

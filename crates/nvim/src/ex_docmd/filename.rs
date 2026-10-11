@@ -56,7 +56,7 @@ use crate::path::{full_name_save, path_tail, path_try_shorten_fname};
 
 use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile;
-use crate::strings::strrep;
+use crate::strings::replaced_all;
 
 use crate::types::{
     CmdLine, ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, MAXPATHL, Vv, size_t, ssize_t,
@@ -97,20 +97,16 @@ pub fn replace_makeprg(excmd: &mut ExArg) -> bool {
 
     excmd.line.arg = excmd.line.skip_white(excmd.line.arg);
     let arg = excmd.line.arg;
-    // SAFETY: `arg` is a tail of the command's own line.
-    let replaced = unsafe { strrep(program.as_ptr(), c"$*".as_ptr(), excmd.line.ptr_at(arg)) };
-    let mut line: Vec<u8> = if replaced.is_null() {
+    let replaced = replaced_all(&program, b"$*", excmd.line.rest_of(arg));
+    let mut line: Vec<u8> = if let Some(replaced) = replaced {
+        replaced.to_vec()
+    } else {
         // No `$*`: the argument goes on the end.
         let mut line = Vec::with_capacity(program.len() + excmd.line.rest_of(arg).len() + 2);
         line.extend_from_slice(&program);
         line.push(b' ');
         line.extend_from_slice(excmd.line.rest_of(arg));
         line
-    } else {
-        // SAFETY: `strrep` answers a NUL-terminated block this call owns.
-        let copy = unsafe { cstr::bytes_at(replaced) }.to_vec();
-        xfree(replaced as *mut c_void);
-        copy
     };
     line.push(0);
 
@@ -333,6 +329,15 @@ const SPEC_ABUF: ssize_t = 11;
 const SPEC_AMATCH: ssize_t = 12;
 const SPEC_SFLNUM: ssize_t = 13;
 const SPEC_SID: ssize_t = 14;
+
+/// The special item `text` starts with, as its index in `SPECIALS` and its
+/// length; the slice form of [`find_cmdline_var`].
+pub(crate) fn cmdline_var_at(text: &[u8]) -> Option<(usize, usize)> {
+    SPECIALS.iter().enumerate().find_map(|(i, spec)| {
+        let spec = spec.to_bytes();
+        text.starts_with(spec).then_some((i, spec.len()))
+    })
+}
 
 /// Does `src` start with one of the special items? Answers its index and
 /// sets `*usedlen` to its length, or answers −1.
@@ -801,7 +806,8 @@ fn has_char(set: *const c_char, c: c_int) -> bool {
 /// `vim_strsave_escaped()` as checked code.
 fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
     // SAFETY: two NUL-terminated strings.
-    unsafe { crate::strings::vim_strsave_escaped(string, esc_chars) }
+    let (string, esc_chars) = unsafe { (cstr::bytes_at(string), cstr::bytes_at(esc_chars)) };
+    crate::strings::escaped_bytes(string, esc_chars).into_raw()
 }
 
 /// `xmalloc()` as checked code.

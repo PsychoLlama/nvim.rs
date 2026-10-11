@@ -39,7 +39,7 @@ use crate::os::env::{expand_env_save_opt_of, home_replace_in};
 use crate::os::fs::{dirname_text, os_isdir_of};
 use crate::path::{full_name_of, path_fnamencmp, tail_index, vim_is_abs_name};
 use crate::strings::find_char;
-use crate::strings::shellescape_of;
+use crate::strings::shellescape;
 use crate::types::{EvalFuncData, MAXPATHL, TypVal};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -384,7 +384,7 @@ fn shell_stage(mods: &mut Mods<'_>, f: &mut Fname<'_>) {
     if !mods.is(b'S') {
         return;
     }
-    let escaped = shellescape_of(&owned_copy(f.bytes()), false, false);
+    let escaped = shellescape(f.bytes(), false, false);
     f.len = escaped.len();
     f.adopt(escaped);
     mods.advance(2);

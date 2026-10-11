@@ -56,7 +56,7 @@ use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
-use crate::strings::has_non_ascii;
+use crate::strings::any_non_ascii;
 use crate::types::{CONV_NONE, Failed, HashTab, HashValue, NUL, Timestamp, size_t, uint8_t};
 use crate::ui::ui_flush;
 use ::libc::fclose;
@@ -167,7 +167,7 @@ pub(super) fn spell_read_dic(
             p = unsafe { p.add(utfc_ptr2len(p) as usize) };
         }
 
-        if spin.si_ascii != 0 && unsafe { has_non_ascii(w) } {
+        if spin.si_ascii != 0 && any_non_ascii(unsafe { cstr::bytes_at_or_empty(w) }) {
             non_ascii += 1;
             unsafe { xfree(pc.cast()) };
             continue;

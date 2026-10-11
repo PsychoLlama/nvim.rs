@@ -144,5 +144,6 @@ pub(crate) fn ex_lsp(excmd: &mut ExArg) {
 /// `vim_strsave_escaped()` as checked code.
 fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
     // SAFETY: two NUL-terminated strings.
-    unsafe { crate::strings::vim_strsave_escaped(string, esc_chars) }
+    let (string, esc_chars) = unsafe { (cstr::bytes_at(string), cstr::bytes_at(esc_chars)) };
+    crate::strings::escaped_bytes(string, esc_chars).into_raw()
 }

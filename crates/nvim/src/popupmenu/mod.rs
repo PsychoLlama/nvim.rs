@@ -58,7 +58,7 @@ use crate::plines::{plines_m_win, win_linetabsize};
 use crate::popupmenu::state::{PumWant, must_redraw_pum, pum_grid, pum_want};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
-use crate::strings::reverse_text;
+use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{

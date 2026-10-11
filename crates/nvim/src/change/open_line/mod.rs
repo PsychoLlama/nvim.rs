@@ -84,7 +84,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     cmdmod_add_flags(CmdModFlags::LOCKMARKS);
     // SAFETY: our own NUL-terminated line, which the buffer takes over.
     let _ = unsafe { ml_replace(lnum, rest.into_raw(), false) };
-    unsafe { concat_str(prompt, p_extra) }
+    concat(prompt_bytes, unsafe { cstr::bytes_at(p_extra) }).into_raw()
 }
 
 /// Put `p_extra` in the buffer as the new line.

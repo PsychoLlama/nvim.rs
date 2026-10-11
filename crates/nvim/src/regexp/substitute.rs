@@ -46,7 +46,7 @@ use crate::message::{e_null, e_re_damg, e_resulting_text_too_long};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
-use crate::strings::vim_strsave_escaped;
+use crate::strings::escaped_bytes;
 use crate::types::{
     LineNr, NUL, RegMMatch, RegMatch, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VarLock,
     ptrdiff_t, uint8_t,
@@ -567,7 +567,7 @@ unsafe fn eval_replacement(
         if unsafe { line_breaks_to_cr(text) } && flags & REGSUB_BACKSLASH as c_int != 0 {
             // The backslashes will be consumed downstream; double them
             // so they survive.
-            let doubled = unsafe { vim_strsave_escaped(text, c"\\".as_ptr()) };
+            let doubled = unsafe { escaped_bytes(cstr::bytes_at(text), b"\\") }.into_raw();
             unsafe { xfree(text.cast()) };
             text = doubled;
         }

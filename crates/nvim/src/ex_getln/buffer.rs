@@ -575,8 +575,9 @@ fn escaped(
     s: *const ::core::ffi::c_char,
     esc_chars: *const ::core::ffi::c_char,
 ) -> *mut ::core::ffi::c_char {
-    // SAFETY: two NUL-terminated strings; the answer is `xmalloc`ed.
-    unsafe { vim_strsave_escaped(s, esc_chars) }
+    // SAFETY: two NUL-terminated strings.
+    let (s, esc_chars) = unsafe { (cstr::bytes_at(s), cstr::bytes_at(esc_chars)) };
+    escaped_bytes(s, esc_chars).into_raw()
 }
 
 /// Put a backslash before the file name in `fname`, which is allocated memory.

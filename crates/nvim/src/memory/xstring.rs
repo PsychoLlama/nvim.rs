@@ -147,10 +147,6 @@ impl XString {
         self.0.len() == 1
     }
 
-    /// The string as a C string, stopping at the first NUL.
-    ///
-    /// Never fails: the buffer always ends with a terminator. With an
-    /// interior NUL the answer is the prefix a C consumer would read, which
     /// The buffer back as a `Vec<u8>`, terminator included.
     ///
     /// For a caller that wants the vector's own API over the whole block --
@@ -160,6 +156,10 @@ impl XString {
         self.0
     }
 
+    /// The string as a C string, stopping at the first NUL.
+    ///
+    /// Never fails: the buffer always ends with a terminator. With an
+    /// interior NUL the answer is the prefix a C consumer would read, which
     /// is what [`as_ptr`](Self::as_ptr) hands out.
     pub fn as_cstr(&self) -> &CStr {
         CStr::from_bytes_until_nul(&self.0).expect("an XString always ends with a NUL")

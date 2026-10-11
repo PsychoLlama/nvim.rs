@@ -83,7 +83,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
             fullname
         };
         // SAFETY: a NUL-terminated file name.
-        esc_name = unsafe { vim_strsave_shellescape(name, true, true) };
+        esc_name = shellescape(unsafe { cstr::bytes_at(name) }, true, true).into_raw();
         // Run the patch from the temp directory, so its `.orig`/`.rej`
         // droppings do not land in the user's.
         let mut dirbuf: [c_char; 4096] = [0; 4096];

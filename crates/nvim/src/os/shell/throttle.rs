@@ -245,7 +245,7 @@ pub(crate) unsafe fn out_data_cb(
         return count;
     }
     // SAFETY: the caller's contract.
-    let data = unsafe { core::slice::from_raw_parts(data.cast::<u8>(), count) };
+    let data = unsafe { slice::from_raw_parts(data.cast::<u8>(), count) };
     if out_data_decide_throttle(count) {
         // Above the threshold: save it, and show it later if it turns out to
         // have been the last chunk.

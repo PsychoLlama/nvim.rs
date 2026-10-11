@@ -30,7 +30,7 @@ use crate::memory::XString;
 use crate::option::cpo_has;
 use crate::quickfix::grep_internal;
 use crate::register::{set_expr_line, valid_yank_reg};
-use crate::strings::del_trailing_spaces;
+use crate::strings::trailing_spaces_start;
 use crate::types::ex_cmds::ExArg;
 use crate::types::pos::LineNr;
 use crate::types::{CmdAddr, CmdLine, CpoFlag, ExArgt, Failed, NUL};
@@ -278,9 +278,11 @@ pub fn separate_nextcmd(excmd: &mut ExArg) {
         at += utfc_len_at(&excmd.line, at);
     }
     if !excmd.argt.has(ExArgt::NOTRLCOM) {
-        let arg = excmd.line.ptr_at(excmd.line.arg);
-        // SAFETY: the command's own argument, NUL-terminated.
-        unsafe { del_trailing_spaces(arg) };
+        let arg = excmd.line.arg;
+        let len = excmd.line.rest_of(arg).len();
+        let text = &mut excmd.line.buffer_mut()[arg..arg + len];
+        let end = trailing_spaces_start(text);
+        text[end..].fill(0);
     }
 }
 

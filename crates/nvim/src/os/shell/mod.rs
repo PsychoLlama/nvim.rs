@@ -58,7 +58,7 @@ use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::startup::main_loop;
 use crate::state::MODE_EXTERNCMD;
 use crate::state::mode::State;
-use crate::strings::{vim_strnsave_unquoted, vim_strsave_escaped_ext};
+use crate::strings::{escaped_with, unquoted};
 use crate::tag::tag_freematch;
 use crate::types::ui::kUIMessages;
 use crate::types::{
@@ -68,7 +68,7 @@ use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Buf;
 use ::libc::{fclose, fopen, fread, fseek, ftell, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::{ptr, slice};
 use std::ffi::CString;
 
 crate::flag_set! {
@@ -462,7 +462,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         }
         if ret_len.is_null() {
             // A NUL would truncate the string, so it becomes SOH instead.
-            let bytes = core::slice::from_raw_parts_mut(buffer.cast::<u8>(), len);
+            let bytes = slice::from_raw_parts_mut(buffer.cast::<u8>(), len);
             for b in bytes.iter_mut() {
                 if *b == 0 {
                     *b = 1;
@@ -490,7 +490,7 @@ unsafe fn tokenize(str: *const c_char, argv: *mut *mut c_char) -> usize {
         while *p != 0 {
             let len = word_length(p);
             if !argv.is_null() {
-                *argv.add(argc) = vim_strnsave_unquoted(p, len);
+                *argv.add(argc) = unquoted(slice::from_raw_parts(p.cast::<u8>(), len)).into_raw();
             }
             argc += 1;
             p = skipwhite(p.add(len).cast_mut());
@@ -626,7 +626,7 @@ unsafe fn shell_xescape_xquote(cmd: *const c_char) -> *mut c_char {
     unsafe {
         let mut ecmd = cmd;
         if !sxe.is_empty() && sxq == c"(" {
-            ecmd = vim_strsave_escaped_ext(cmd, sxe.as_ptr().cast_mut(), '^' as c_char, false);
+            ecmd = escaped_with(cstr::bytes_at(cmd), &sxe, b'^', false).into_raw();
         }
         let ncmd_size = cstr::bytes_at(ecmd).len() + sxq.len() * 2 + 1;
         let ncmd = xmalloc(ncmd_size) as *mut c_char;

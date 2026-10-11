@@ -63,7 +63,7 @@ use crate::path::invocation_path_tail;
 use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::startup::silent_mode;
-use crate::strings::vim_strsave_escaped;
+use crate::strings::escaped_bytes;
 use crate::tr;
 use crate::types::ui::kUIMessages;
 use crate::types::{CmdModFlags, CpoFlag, ExArg, LineNr, NUL, OptInt};
@@ -154,14 +154,10 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
             if !prevcmd_is_set() {
                 break 'theend;
             }
-            let mut remembered = prevcmd.with(Vec::clone);
-            remembered.push(NUL as u8);
-            // SAFETY: `remembered` is this call's own NUL-terminated copy,
-            // and the escaped answer is ours to free.
+            let escaped = prevcmd.with(|cmd| escaped_bytes(cmd, b"%#"));
+            // SAFETY: two NUL-terminated strings, read for the call.
             unsafe {
-                let escaped = vim_strsave_escaped(remembered.as_ptr().cast(), c"%#".as_ptr());
-                append_to_redobuff_literally(escaped, -1);
-                xfree(escaped.cast());
+                append_to_redobuff_literally(escaped.as_ptr(), -1);
                 append_to_redobuff(c"\n".as_ptr());
             };
             bangredo.set(false);

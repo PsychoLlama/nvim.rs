@@ -703,6 +703,12 @@ pub unsafe fn mb_string2cells(str: *const c_char) -> size_t {
     string_cells_in(unsafe { NulTerminated::new(str) }, 0)
 }
 
+/// [`string_cells`] of the bytes of a C string, as [`mb_string2cells`] reads
+/// them: a sequence the end cuts short is an invalid byte.
+pub(crate) fn c_string_cells(bytes: &[u8]) -> usize {
+    string_cells_in(CBytes(bytes), 0)
+}
+
 /// The total width of `bytes`. A NUL inside the slice is an ordinary byte,
 /// one cell wide, rather than the end of the string.
 pub fn string_cells(bytes: &[u8]) -> usize {

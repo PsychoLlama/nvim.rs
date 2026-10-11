@@ -1,7 +1,10 @@
 //! The pointer fronts: `vim_snprintf` and friends as the rest of the tree
 //! still calls them, into a raw buffer, with a raw format and raw `%s`
 //! pointers, and the `vim_snprintf!` macros that build their argument
-//! arrays.
+//! arrays; and the four string helpers whose callers (in the buffer, regexp,
+//! spell, edit and Lua modules) still hold raw strings -- `vim_strchr`,
+//! `xstrnsave`, `striequal`, `sort_strings`, each a shim over a slice form or
+//! libc. They go as their callers convert.
 //!
 //! This is the one file of `strings` that reads through a pointer. The
 //! formatter itself (`emit`) takes slices; what it cannot check -- that the
@@ -39,12 +42,13 @@
 )]
 
 use core::ffi::{CStr, c_char, c_int};
-use core::slice;
+use core::{ptr, slice};
 
-use super::FmtArg;
 use super::printf::{Source, format, length_as_int};
+use super::{FmtArg, find_char};
 use crate::cstr;
-use crate::memory::xmemscan;
+use crate::memory::xmallocz;
+use crate::os::cshim::strchr;
 use crate::types::String_0;
 
 /// The value arguments of one call, and whether the caller vouched for the
@@ -89,8 +93,7 @@ impl<'a> Values<'a> {
                         // SAFETY: as above, and under a precision the
                         // promise is `cap` readable bytes or a NUL first,
                         // which is what the scan reads.
-                        let end = unsafe { xmemscan(at.cast(), 0, cap) };
-                        let len = end.addr() - at.addr();
+                        let len = unsafe { strnlen(at, cap) };
                         // SAFETY: the `len` bytes the scan just read.
                         unsafe { slice::from_raw_parts(at.cast::<u8>(), len) }
                     }
@@ -99,6 +102,22 @@ impl<'a> Values<'a> {
             _ => None,
         }
     }
+}
+
+/// `strnlen`: the bytes before the terminator, reading at most `maxlen` and
+/// never one past a NUL -- so a string shorter than `maxlen` is read only up
+/// to its end, which a slice of `maxlen` bytes would not promise.
+///
+/// # Safety
+///
+/// `s` must point at `maxlen` readable bytes, or at a NUL-terminated string.
+unsafe fn strnlen(s: *const c_char, maxlen: usize) -> usize {
+    let mut n = 0;
+    // SAFETY: the caller's bytes, each read only while no NUL came before.
+    while n < maxlen && unsafe { *s.add(n) } != 0 {
+        n += 1;
+    }
+    n
 }
 
 /// The `str_m` bytes at `str` as a slice; empty when there are none, so a
@@ -213,7 +232,7 @@ pub unsafe fn vim_snprintf_safelen(
 /// As [`vim_snprintf`] for `fmt` and `args`.
 pub unsafe fn printf_string(fmt: *const c_char, args: &[FmtArg<'_>]) -> String_0 {
     // SAFETY: the caller's promises; a measuring pass writes nothing.
-    let len = unsafe { vim_snprintf(core::ptr::null_mut(), 0, fmt, args) };
+    let len = unsafe { vim_snprintf(ptr::null_mut(), 0, fmt, args) };
     let Ok(len) = usize::try_from(len) else {
         return String_0::NULL;
     };
@@ -260,4 +279,79 @@ macro_rules! printf_string {
     ($fmt:expr $(, $arg:expr)* $(,)?) => {
         $crate::strings::printf_string($fmt, &[$($crate::strings::FmtArg::from($arg)),*])
     };
+}
+
+/// Find character `c` (a codepoint, not a byte) in `string`; [`find_char`]
+/// over a C string.
+///
+/// The ASCII half keeps libc's `strchr`, which [`find_char`] cannot match:
+/// one early-exiting SIMD pass against a `strlen` over the *whole* string
+/// plus a scalar scan. Measured at +0.4 % of `inbench` when this body was
+/// routed through the slice form, with sixty-odd cursor callers still on
+/// the command-line path.
+///
+/// # Safety
+///
+/// `string` must point at a NUL-terminated string.
+pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
+    if c <= 0 {
+        return ptr::null_mut();
+    }
+    if c < 0x80 {
+        // SAFETY: the caller's NUL-terminated string.
+        return unsafe { strchr(string, c) };
+    }
+    // SAFETY: the caller's NUL-terminated string, and an offset `find_char`
+    // answered from within it.
+    match find_char(unsafe { cstr::bytes_at(string) }, c) {
+        Some(at) => unsafe { string.add(at) }.cast_mut(),
+        None => ptr::null_mut(),
+    }
+}
+
+/// Copy at most `len` bytes of `string` into a fresh NUL-terminated block of
+/// `len + 1` bytes, zero-filling the remainder (`strncpy` semantics).
+///
+/// # Safety
+///
+/// `string` must point at `len` readable bytes, or at a NUL-terminated
+/// string.
+pub unsafe fn xstrnsave(string: *const c_char, len: usize) -> *mut c_char {
+    // SAFETY: the caller's bytes, read up to `len` or the NUL; `xmallocz`
+    // answers `len + 1` bytes, the last a NUL, and the copy and the fill
+    // write the `len` before it.
+    unsafe {
+        let n = strnlen(string, len);
+        let ret = xmallocz(len).cast::<c_char>();
+        ptr::copy_nonoverlapping(string, ret, n);
+        ptr::write_bytes(ret.add(n), 0, len - n);
+        ret
+    }
+}
+
+/// Case-insensitive `strcmp` equality where NULL only equals NULL.
+/// `strcasecmp` is locale-aware, so the libc call stays.
+///
+/// # Safety
+///
+/// `a` and `b` must each be null or point at a NUL-terminated string.
+pub unsafe fn striequal(a: *const c_char, b: *const c_char) -> bool {
+    (a.is_null() && b.is_null())
+        || (!a.is_null() && !b.is_null() && unsafe { ::libc::strcasecmp(a, b) } == 0)
+}
+
+/// Sort `count` strings at `files` bytewise, as `strcmp` orders them.
+///
+/// # Safety
+///
+/// `files` must point at `count` writable slots, each holding a NUL-terminated
+/// string.
+pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {
+    let Ok(count @ 1..) = usize::try_from(count) else {
+        return;
+    };
+    // SAFETY: the caller's `count` slots.
+    let files = unsafe { slice::from_raw_parts_mut(files, count) };
+    // SAFETY: each slot holds a NUL-terminated string.
+    files.sort_unstable_by(|&a, &b| unsafe { CStr::from_ptr(a).cmp(CStr::from_ptr(b)) });
 }

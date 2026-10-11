@@ -257,7 +257,11 @@ fn echo_size(plen: size_t, off_len: size_t, with_stats: bool) -> size_t {
 /// # Safety
 /// `echo.buf` must be an `xmalloc`ed NUL-terminated string of `echo.len`.
 unsafe fn reverse_echo(echo: &mut Echo) {
-    unsafe { echo.buf.replace(reverse_text(echo.buf.as_ptr())) };
+    let reversed = reversed_text(unsafe { cstr::bytes_at(echo.buf.as_ptr()) });
+    unsafe {
+        echo.buf
+            .replace(crate::memory::XString::from_vec(reversed).into_raw())
+    };
     echo.len = unsafe { cstr::bytes_at(echo.buf.as_ptr()) }.len();
     let base = echo.buf.as_ptr();
     // Move the reversed text to the beginning of the buffer.

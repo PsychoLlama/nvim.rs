@@ -90,7 +90,7 @@ use crate::regexp::RE_SEARCH;
 use crate::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};
 use crate::state::REPLACE_FLAG;
 use crate::state::mode::{State, restart_edit};
-use crate::strings::vim_strsave_escaped_ext;
+use crate::strings::escaped_with;
 use crate::terminal::terminal_paste;
 use crate::types::AutoEvent;
 use crate::types::CAR;

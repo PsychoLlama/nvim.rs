@@ -1,29 +1,40 @@
 //! Escaping and quoting.
 //!
-//! `vim_strsave_escaped_ext` is the general one -- a copy with a chosen escape
+//! [`escaped_with`] is the general one -- a copy with a chosen escape
 //! character inserted before every byte in a set, optionally including the
-//! backslashes `rem_backslash()` would eat -- and `vim_strsave_shellescape` the
+//! backslashes `rem_backslash()` would eat -- and [`shellescape`] the
 //! specialised one, which wraps a string in single quotes for `system()` and
-//! knows what csh and fish need escaped on top of that.  `vim_strnsave_unquoted`
-//! is the inverse used by `shell_build_argv`: it resolves shell double-quoting,
-//! `unquote` being the byte walk both of its passes share.
+//! knows what csh and fish need escaped on top of that. [`unquoted`] is the
+//! inverse used by `shell_build_argv`: it resolves shell double-quoting,
+//! [`unquote`] being the byte walk it shares with its tests.
+//!
+//! Every input is the bytes of a C string: each walk reads up to the end of
+//! the slice or a NUL, whichever comes first, and measures characters as the
+//! pointer forms did (`c_cluster_len`), so a sequence the end cuts short is
+//! an invalid byte rather than one still to come.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::cstr;
+use core::ffi::c_int;
+
+use super::find_char;
+use crate::charset::escapes_next;
+use crate::ex_docmd::cmdline_var_at;
+use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
-use crate::strings::has_char;
-use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
-use core::{ptr, slice};
-
-use crate::charset::rem_backslash;
-use crate::ex_docmd::find_cmdline_var;
-use crate::mbyte::utfc_ptr2len;
-use crate::memory::{xmalloc, xmallocz};
 use crate::option::{csh_like_shell, fish_like_shell};
-use crate::types::size_t;
+
+/// The bytes of `text` up to its first NUL.
+fn until_nul(text: &[u8]) -> &[u8] {
+    &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())]
+}
 
 /// Walk `src` as `vim_strnsave_unquoted` reads it, feeding kept bytes to
 /// `emit`: unescaped double quotes toggle quote mode and vanish; inside
@@ -46,212 +57,96 @@ pub(crate) fn unquote(src: &[u8], emit: &mut impl FnMut(u8)) {
     }
 }
 
-/// # Safety
+/// `src` with shell-style double-quoting resolved (see [`unquote`]).
 ///
-/// `string` must point at a NUL-terminated string. `esc_chars` must point at
-/// a NUL-terminated string.
-pub unsafe fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
-    unsafe { vim_strsave_escaped_ext(string, esc_chars, b'\\' as c_char, false) }
+/// Every byte of `src` is read, a NUL included: the C was handed a length.
+pub fn unquoted(src: &[u8]) -> XString {
+    let mut out = Vec::with_capacity(src.len());
+    unquote(src, &mut |b| out.push(b));
+    // A NUL among the bytes ends the string, as it did the C's copy.
+    out.truncate(until_nul(&out).len());
+    XString::from_vec(out)
 }
 
-/// [`vim_strsave_escaped`] of a string the caller owns: a copy of `text`
-/// with a backslash before every byte in `chars`, multibyte characters
-/// copied whole.
-pub(crate) fn escaped_bytes(text: &CStr, chars: &CStr) -> XString {
-    // SAFETY: two NUL-terminated strings; the answer is owned and taken
-    // over once.
-    unsafe { XString::from_raw(vim_strsave_escaped(text.as_ptr(), chars.as_ptr())) }
+/// A copy of `text` with a backslash before every byte in `chars`,
+/// multibyte characters copied whole; [`escaped_with`] with `\` and no
+/// backslash rule.
+pub fn escaped_bytes(text: &[u8], chars: &[u8]) -> XString {
+    escaped_with(text, chars, b'\\', false)
 }
 
-/// Copy `string`, prefixing `cc` to every byte in `esc_chars` (and, with
-/// `bsl`, to the backslashes `rem_backslash` flags). Multibyte characters
-/// are copied whole and never escaped.
+/// A copy of `text`, prefixing `cc` to every byte in `chars` (and, with
+/// `bsl`, to the backslashes [`escapes_next`] flags). A multibyte character
+/// is copied whole and never escaped.
 ///
-/// # Safety
-///
-/// `string` must point at a NUL-terminated string. `esc_chars` must point at
-/// a NUL-terminated string.
-pub unsafe fn vim_strsave_escaped_ext(
-    string: *const c_char,
-    esc_chars: *const c_char,
-    cc: c_char,
-    bsl: bool,
-) -> *mut c_char {
-    // First pass: measure (1 for the terminating NUL).
-    let mut length: size_t = 1;
-    let mut p = string;
-    while unsafe { *p } != 0 {
-        let l = unsafe { utfc_ptr2len(p) as size_t };
-        if l > 1 {
-            length = length.wrapping_add(l);
-            p = unsafe { p.add(l) };
+/// A byte is a member of `chars` the way `vim_strchr` answers it: as a
+/// codepoint, so a lone `0xE9` byte matches an `é` in the set.
+pub fn escaped_with(text: &[u8], chars: &[u8], cc: u8, bsl: bool) -> XString {
+    let (text, chars) = (until_nul(text), until_nul(chars));
+    let mut out = Vec::with_capacity(text.len() + text.len() / 4 + 1);
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        let len = c_cluster_len(rest);
+        if len > 1 {
+            out.extend_from_slice(&rest[..len]);
+            at += len;
             continue;
         }
-        if has_char(unsafe { cstr::at(esc_chars) }, unsafe { *p } as u8 as c_int)
-            || (bsl && unsafe { rem_backslash(p) })
-        {
-            length = length.wrapping_add(1);
+        if find_char(chars, c_int::from(rest[0])).is_some() || (bsl && escapes_next(rest)) {
+            out.push(cc);
         }
-        length = length.wrapping_add(1);
-        p = unsafe { p.add(1) };
+        out.push(rest[0]);
+        at += 1;
     }
-
-    let escaped_string = unsafe { xmalloc(length) as *mut c_char };
-    let mut p2 = escaped_string;
-    let mut p = string;
-    while unsafe { *p } != 0 {
-        let l = unsafe { utfc_ptr2len(p) as size_t };
-        if l > 1 {
-            unsafe { ptr::copy_nonoverlapping(p, p2, l) };
-            p2 = unsafe { p2.add(l) };
-            p = unsafe { p.add(l) };
-            continue;
-        }
-        if has_char(unsafe { cstr::at(esc_chars) }, unsafe { *p } as u8 as c_int)
-            || (bsl && unsafe { rem_backslash(p) })
-        {
-            unsafe { *p2 = cc };
-            p2 = unsafe { p2.add(1) };
-        }
-        unsafe { *p2 = *p };
-        p2 = unsafe { p2.add(1) };
-        p = unsafe { p.add(1) };
-    }
-    unsafe { *p2 = 0 };
-    escaped_string
+    XString::from_vec(out)
 }
 
-/// Copy `length` bytes of `string` with shell-style double-quoting
-/// resolved (see `unquote`), NUL-terminated.
-///
-/// # Safety
-///
-/// `string` must point at a NUL-terminated string.
-pub unsafe fn vim_strnsave_unquoted(string: *const c_char, length: size_t) -> *mut c_char {
-    if length == 0 {
-        return unsafe { xmallocz(0) as *mut c_char };
-    }
-    let src = unsafe { slice::from_raw_parts(string as *const u8, length) };
-    let mut n: size_t = 0;
-    unquote(src, &mut |_| n += 1);
-    let ret = unsafe { xmallocz(n) as *mut c_char };
-    let out = unsafe { slice::from_raw_parts_mut(ret as *mut u8, n) };
-    let mut o = 0;
-    unquote(src, &mut |b| {
-        out[o] = b;
-        o += 1;
-    });
-    ret
-}
-
-/// [`vim_strsave_shellescape`] of a string the caller holds, owned.
-pub(crate) fn shellescape_of(string: &CStr, do_special: bool, do_newline: bool) -> XString {
-    // SAFETY: `string` is NUL-terminated; the answer is an allocation of its
-    // own, taken over once.
-    unsafe {
-        XString::from_raw(vim_strsave_shellescape(
-            string.as_ptr(),
-            do_special,
-            do_newline,
-        ))
-    }
-}
-
-/// Single-quote `string` for the shell, doubling embedded quotes
-/// (`'` → `'\''`) and — depending on the shell flavor and flags — escaping
-/// newlines, `!`, `\`, and `%`/`#` cmdline specials.
-///
-/// # Safety
-///
-/// `string` must point at a NUL-terminated string.
-pub unsafe fn vim_strsave_shellescape(
-    string: *const c_char,
-    do_special: bool,
-    do_newline: bool,
-) -> *mut c_char {
+/// Single-quote `text` for the shell, doubling embedded quotes
+/// (`'` → `'\''`) and -- depending on the shell flavor and flags --
+/// escaping newlines, `!`, `\`, and `%`/`#` cmdline specials.
+pub fn shellescape(text: &[u8], do_special: bool, do_newline: bool) -> XString {
+    let text = until_nul(text);
     let csh_like = csh_like_shell();
     let fish_like = fish_like_shell();
-    let mut l: size_t = 0;
-
-    // First pass: measure (3 = the surrounding quotes plus NUL).
-    let mut length: size_t = unsafe { cstr::bytes_at(string) }.len().wrapping_add(3);
-    let mut p = string;
-    while unsafe { *p } != 0 {
-        if unsafe { *p } == b'\'' as c_char {
-            length = length.wrapping_add(3);
-        }
-        if (unsafe { *p } == b'\n' as c_char && (csh_like || do_newline))
-            || (unsafe { *p } == b'!' as c_char && (csh_like || do_special))
-        {
-            length = length.wrapping_add(1);
-            if csh_like && do_special {
-                length = length.wrapping_add(1);
-            }
-        }
-        if do_special && unsafe { find_cmdline_var(p, &mut l) } >= 0 {
-            length = length.wrapping_add(1); // insert backslash
-            p = unsafe { p.add(l.wrapping_sub(1)) };
-        }
-        if unsafe { *p } == b'\\' as c_char && fish_like {
-            length = length.wrapping_add(1);
-        }
-        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
-    }
-
-    let escaped_string = unsafe { xmalloc(length) as *mut c_char };
-    let mut d = escaped_string;
-    unsafe { *d = b'\'' as c_char };
-    d = unsafe { d.add(1) };
-    let mut p = string;
-    while unsafe { *p } != 0 {
-        if unsafe { *p } == b'\'' as c_char {
+    let mut out = Vec::with_capacity(text.len() + 3);
+    out.push(b'\'');
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        let b = rest[0];
+        if b == b'\'' {
             // A single-quoted string cannot contain a quote: close it,
             // emit an escaped quote, and reopen.
-            for &b in b"'\\''" {
-                unsafe { *d = b as c_char };
-                d = unsafe { d.add(1) };
-            }
-            p = unsafe { p.add(1) };
+            out.extend_from_slice(b"'\\''");
+            at += 1;
             continue;
         }
-        if (unsafe { *p } == b'\n' as c_char && (csh_like || do_newline))
-            || (unsafe { *p } == b'!' as c_char && (csh_like || do_special))
-        {
-            unsafe { *d = b'\\' as c_char };
-            d = unsafe { d.add(1) };
+        if (b == b'\n' && (csh_like || do_newline)) || (b == b'!' && (csh_like || do_special)) {
+            out.push(b'\\');
             if csh_like && do_special {
-                unsafe { *d = b'\\' as c_char };
-                d = unsafe { d.add(1) };
+                out.push(b'\\');
             }
-            unsafe { *d = *p };
-            d = unsafe { d.add(1) };
-            p = unsafe { p.add(1) };
+            out.push(b);
+            at += 1;
             continue;
         }
-        if do_special && unsafe { find_cmdline_var(p, &mut l) } >= 0 {
-            unsafe { *d = b'\\' as c_char }; // insert backslash
-            d = unsafe { d.add(1) };
-            unsafe { ptr::copy_nonoverlapping(p, d, l) }; // copy the var
-            d = unsafe { d.add(l) };
-            p = unsafe { p.add(l) };
+        if do_special && let Some((_, len)) = cmdline_var_at(rest) {
+            out.push(b'\\'); // insert backslash
+            out.extend_from_slice(&rest[..len]); // copy the var
+            at += len;
             continue;
         }
-        if unsafe { *p } == b'\\' as c_char && fish_like {
-            unsafe { *d = b'\\' as c_char };
-            d = unsafe { d.add(1) };
-            unsafe { *d = *p };
-            d = unsafe { d.add(1) };
-            p = unsafe { p.add(1) };
+        if b == b'\\' && fish_like {
+            out.extend_from_slice(b"\\\\");
+            at += 1;
             continue;
         }
         // One whole character, composing marks included.
-        let l = unsafe { utfc_ptr2len(p) } as usize;
-        unsafe { d.cast::<u8>().copy_from(p.cast(), l) };
-        d = d.wrapping_add(l);
-        p = p.wrapping_add(l);
+        let len = c_cluster_len(rest);
+        out.extend_from_slice(&rest[..len]);
+        at += len;
     }
-    unsafe { *d = b'\'' as c_char };
-    d = unsafe { d.add(1) };
-    unsafe { *d = 0 };
-    escaped_string
+    out.push(b'\'');
+    XString::from_vec(out)
 }

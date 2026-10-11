@@ -24,7 +24,7 @@ use crate::memory::xfree;
 use crate::option::vars::p_enc;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
-use crate::strings::{has_non_ascii, vim_strchr};
+use crate::strings::{any_non_ascii, vim_strchr};
 use crate::types::{CONV_NONE, Failed, LineNr, NUL, size_t, uint8_t};
 use ::libc::{fclose, strcpy};
 
@@ -136,7 +136,7 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
         }
 
         let none = core::ptr::null();
-        if spin.si_ascii != 0 && unsafe { has_non_ascii(line) } {
+        if spin.si_ascii != 0 && any_non_ascii(unsafe { cstr::bytes_at_or_empty(line) }) {
             non_ascii += 1;
         } else if unsafe { store_word(&mut *spin, line, flags, regionmask, none, false) }.is_err() {
             retval = Err(Failed);

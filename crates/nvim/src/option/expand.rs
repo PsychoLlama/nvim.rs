@@ -456,7 +456,7 @@ pub(crate) fn expand_settings(
 
 /// A value escaped the way the command line needs it back.
 pub(crate) fn escape_option_str_cmdline(var: &CStr) -> XString {
-    escaped_bytes(var, ESCAPE_CHARS)
+    escaped_bytes(var.to_bytes(), ESCAPE_CHARS.to_bytes())
 }
 
 /// Offer the option's current value as the one completion.

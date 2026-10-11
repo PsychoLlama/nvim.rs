@@ -30,7 +30,7 @@ use crate::semsg;
 use crate::sha256::hex_digest;
 use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check_text, spell_move_to};
 use crate::spellsuggest::spell_suggest_list;
-use crate::strings::{escaped_bytes, format_typvals, shellescape_of};
+use crate::strings::{escaped_bytes, format_typvals, shellescape};
 use crate::types::{
     EvalFuncData, Hlf, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow,
     time_t, tm,
@@ -54,7 +54,9 @@ pub fn f_escape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = NumBuf::new();
     let text = numbuf.string(&args[0]);
     let chars = buf.string(&args[1]);
-    result.write_string(Some(escaped_bytes(text, chars).into()));
+    result.write_string(Some(
+        escaped_bytes(text.to_bytes(), chars.to_bytes()).into(),
+    ));
 }
 
 /// `fnameescape({string})`.
@@ -204,7 +206,9 @@ pub fn f_shellescape(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut numbuf = NumBuf::new();
     let do_special = args.get(1).is_some_and(non_zero_arg);
     let text = numbuf.string(&args[0]);
-    result.write_string(Some(shellescape_of(text, do_special, do_special).into()));
+    result.write_string(Some(
+        shellescape(text.to_bytes(), do_special, do_special).into(),
+    ));
 }
 
 /// `soundfold({word})`.

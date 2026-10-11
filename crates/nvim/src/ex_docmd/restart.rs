@@ -32,7 +32,7 @@ use crate::ui::state::current_ui;
 
 use crate::msgpack_rpc::server::{server_start, server_stop};
 
-use crate::strings::{concat_str, has_bytes};
+use crate::strings::{concat, has_bytes};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair,
@@ -253,7 +253,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
             };
             let mut quit_cmd_copy: *mut c_char = ptr::null_mut();
             if cmdmod_has(CmdModFlags::CONFIRM) {
-                quit_cmd_copy = unsafe { concat_str(c"confirm ".as_ptr(), quit_cmd) };
+                quit_cmd_copy = concat(b"confirm ", unsafe { cstr::bytes_at(quit_cmd) }).into_raw();
                 quit_cmd = quit_cmd_copy;
             }
             if let Err(e) = nvim_command(cstr_to_string(quit_cmd)) {

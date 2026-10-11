@@ -2,17 +2,13 @@
 
 use std::ffi::{c_char, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong};
 
-use neovim::strings::{
-    reverse_text, strcase_save, vim_strchr, vim_strnsave_unquoted, vim_strsave_escaped,
-};
+use neovim::strings::{escaped_bytes, reversed_text, strcase_copy, vim_strchr};
 use neovim::types::typval::UVarNumber;
 
-use crate::support::{cstr, internalize, take_bytes};
+use crate::support::cstr;
 
 fn escaped(s: &str, chars: &str) -> String {
-    let s = cstr(s);
-    let chars = cstr(chars);
-    unsafe { internalize(vim_strsave_escaped(s.as_ptr(), chars.as_ptr())) }
+    String::from_utf8(escaped_bytes(s.as_bytes(), chars.as_bytes()).to_vec()).unwrap()
 }
 
 #[test]
@@ -41,8 +37,7 @@ fn vim_strsave_escaped_returns_a_copy_if_it_does_not_contain_chars_from_2nd_argu
 }
 
 fn unquoted_n(s: &str, len: usize) -> String {
-    let s = cstr(s);
-    unsafe { internalize(vim_strnsave_unquoted(s.as_ptr(), len)) }
+    String::from_utf8(neovim::strings::unquoted(&s.as_bytes()[..len]).to_vec()).unwrap()
 }
 
 fn unquoted(s: &str) -> String {
@@ -313,18 +308,13 @@ fn vim_snprintf_zd_and_zu() {
 #[test]
 fn strcase_save_decodes_overlong_encoded_characters() {
     // 0xC1 0x81 is an overlong encoding of 'A'.
-    let overlong = cstr(&b"\xC1\x81"[..]);
-    unsafe {
-        assert_eq!("A", internalize(strcase_save(overlong.as_ptr(), true)));
-        assert_eq!("a", internalize(strcase_save(overlong.as_ptr(), false)));
-    }
+    let overlong = b"\xC1\x81";
+    assert_eq!(b"A", &strcase_copy(overlong, true)[..]);
+    assert_eq!(b"a", &strcase_copy(overlong, false)[..]);
 }
 
 fn reversed(s: &[u8]) -> Vec<u8> {
-    // reverse_text takes a mutable pointer; give it its own copy.
-    let mut buf = s.to_vec();
-    buf.push(0);
-    unsafe { take_bytes(reverse_text(buf.as_mut_ptr().cast())) }
+    reversed_text(s)
 }
 
 #[test]

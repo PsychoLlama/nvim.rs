@@ -42,7 +42,7 @@ use crate::os::cshim::gettext;
 use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
 use crate::state::mode::restart_edit;
-use crate::strings::{vim_strsave_shellescape, xstrnsave};
+use crate::strings::{shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::tag::state::g_tag_at_cursor;
 use crate::types::{CmdArg, ColNr, LineNr, NUL, OpArg, int64_t, size_t, uint8_t};
@@ -444,7 +444,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         let quoted = if kp_ex {
             unsafe { vim_strsave_fnameescape(owned, VSE_NONE as c_int) }
         } else {
-            unsafe { vim_strsave_shellescape(owned, true, true) }
+            shellescape(unsafe { cstr::bytes_at(owned) }, true, true).into_raw()
         };
         // SAFETY: `owned` and `quoted` came from the allocations above, and
         // `quoted` is NUL-terminated.

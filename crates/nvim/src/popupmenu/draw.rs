@@ -517,9 +517,12 @@ impl PumRow {
             };
 
             if pum_rl.get() {
-                let rt = unsafe { reverse_text(st) };
+                // `emit` writes into the text it is lent: a `<` over a cut
+                // character and a NUL at the truncation point.
+                let mut rt = reversed_text(unsafe { cstr::bytes_at(st) });
+                rt.push(0);
+                let rt = rt.as_mut_ptr().cast::<c_char>();
                 unsafe { self.emit(style, rt, width, attrs.as_deref(), attr, next_isempty) };
-                unsafe { xfree(rt.cast()) };
             } else {
                 unsafe { self.emit(style, st, width, attrs.as_deref(), attr, next_isempty) };
             }

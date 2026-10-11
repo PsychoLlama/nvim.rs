@@ -38,7 +38,7 @@ use crate::types::{
 };
 use crate::winlayer::{Buf, Win};
 
-use core::ffi::{c_char, c_int, c_long};
+use core::ffi::{CStr, c_char, c_int, c_long};
 
 /// Cells a byte that is not part of a valid UTF-8 sequence occupies: it is
 /// shown as `<xx>`.
@@ -141,6 +141,12 @@ pub(crate) unsafe fn linetabsize_col(startvcol: c_int, s: *mut c_char) -> c_int 
     // SAFETY: `curwin` is live from startup to exit, and `s` is the caller's
     // NUL-terminated string.
     unsafe { win_linetabsize_col(Win::current(), 0, s, startvcol, MAXCOL) }
+}
+
+/// [`linetabsize_col`] of a string the caller holds.
+pub(crate) fn linetabsize_text(startvcol: c_int, s: &CStr) -> c_int {
+    // SAFETY: a NUL-terminated string, which the measure only reads.
+    unsafe { linetabsize_col(startvcol, s.as_ptr().cast_mut()) }
 }
 
 /// The screen width of a whole line, starting from virtual column zero.

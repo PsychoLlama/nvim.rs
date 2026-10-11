@@ -1,17 +1,20 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+//! The string helpers, over slices.
+//!
+//! Every function here takes the bytes of a string and answers an owned one
+//! or an offset. The pointer spellings the rest of the tree still calls are
+//! one-line shims in `raw.rs`, the one file of `strings` that reads through a
+//! pointer; a family whose shim file must allow `unsafe` keeps this `mod.rs`
+//! at `deny(unsafe_op_in_unsafe_fn)` (a `forbid` here would reach it).
 
-use crate::cstr;
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use crate::eval::typval::tv_get_bool_chk;
 use crate::keycodes::Ctrl_V;
 use crate::mbyte::{cluster_len, encode_char};
-use crate::memory::{xmalloc, xmallocz};
-use crate::os::cshim::strchr;
+use crate::memory::XString;
 use crate::semsg;
-use crate::types::{KeyValue, MB_MAXCHAR, TypVal, size_t};
-use ::libc::strcasecmp;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{ptr, slice};
+use crate::types::{MB_MAXCHAR, TypVal};
+use core::ffi::{CStr, c_int};
 
 // The carve of the transpiled module; see each child's docs.
 mod case;
@@ -43,27 +46,15 @@ pub(crate) fn strict_bool_arg(tv: &TypVal) -> Option<bool> {
     Some(value != 0)
 }
 
-/// `strnlen`: bytes before the terminator, reading at most `maxlen` bytes.
-///
-/// # Safety
-///
-/// `s` must point at `maxlen` readable bytes.
-unsafe fn strnlen(s: *const c_char, maxlen: size_t) -> size_t {
-    let mut n = 0;
-    while n < maxlen && unsafe { *s.add(n) } != 0 {
-        n += 1;
-    }
-    n
-}
-
 /// Any byte outside 7-bit ASCII?
-fn any_non_ascii(s: &[u8]) -> bool {
+pub(crate) fn any_non_ascii(s: &[u8]) -> bool {
     s.iter().any(|&b| b >= 0x80)
 }
 
 /// Index where removable trailing whitespace starts: spaces/tabs not
 /// preceded by a backslash or Ctrl-V, never including the first byte.
-fn trailing_spaces_start(s: &[u8]) -> usize {
+/// Upstream's `del_trailing_spaces` zero-fills from here.
+pub fn trailing_spaces_start(s: &[u8]) -> usize {
     let mut end = s.len();
     while end > 1
         && matches!(s[end - 1], b' ' | b'\t')
@@ -73,83 +64,6 @@ fn trailing_spaces_start(s: &[u8]) -> usize {
         end -= 1;
     }
     end
-}
-
-/// ASCII-case-insensitive `strncmp`. Bytes fold exactly as the C code's
-/// signed chars did: only A–Z map (down) to lowercase, and bytes ≥ 0x80
-/// compare negative.
-fn strnicmp_asc(a: &[u8], b: &[u8], len: size_t) -> c_int {
-    let fold = |c: u8| -> c_int {
-        let c = c as i8 as c_int;
-        if !('A' as c_int..='Z' as c_int).contains(&c) {
-            c
-        } else {
-            c + 0x20
-        }
-    };
-    let mut diff = 0;
-    for k in 0..len {
-        let ca = a.get(k).copied().unwrap_or(0);
-        let cb = b.get(k).copied().unwrap_or(0);
-        diff = fold(ca) - fold(cb);
-        if diff != 0 || ca == 0 {
-            break;
-        }
-    }
-    diff
-}
-
-/// Copy at most `len` bytes of `string` into a fresh NUL-terminated
-/// buffer, zero-filling the remainder (strncpy semantics).
-///
-/// # Safety
-///
-/// `string` must point at `len` readable bytes.
-pub unsafe fn xstrnsave(string: *const c_char, len: size_t) -> *mut c_char {
-    let n = unsafe { strnlen(string, len) };
-    let ret = unsafe { xmallocz(len) as *mut c_char };
-    let out = unsafe { slice::from_raw_parts_mut(ret as *mut u8, len) };
-    if n != 0 {
-        out[..n].copy_from_slice(unsafe { slice::from_raw_parts(string as *const u8, n) });
-    }
-    out[n..].fill(0);
-    ret
-}
-
-/// Truncate unescaped trailing spaces and tabs in place.
-///
-/// # Safety
-///
-/// `text` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn del_trailing_spaces(text: *mut c_char) {
-    let len = unsafe { CStr::from_ptr(text) }.to_bytes().len();
-    let s = unsafe { slice::from_raw_parts_mut(text as *mut u8, len) };
-    let end = trailing_spaces_start(s);
-    s[end..].fill(0);
-}
-
-/// Case-insensitive `strcmp` equality where NULL only equals NULL.
-/// strcasecmp is locale-aware, so the libc call stays.
-///
-/// # Safety
-///
-/// `a` must point at a NUL-terminated string. `b` must point at a NUL-
-/// terminated string.
-pub unsafe fn striequal(a: *const c_char, b: *const c_char) -> bool {
-    (a.is_null() && b.is_null())
-        || (!a.is_null() && !b.is_null() && unsafe { strcasecmp(a, b) } == 0)
-}
-
-/// # Safety
-///
-/// `s1` must point at a NUL-terminated string. `s2` must point at `len`
-/// readable bytes.
-pub unsafe fn vim_strnicmp_asc(s1: *const c_char, s2: *const c_char, len: size_t) -> c_int {
-    strnicmp_asc(
-        unsafe { CStr::from_ptr(s1) }.to_bytes(),
-        unsafe { CStr::from_ptr(s2) }.to_bytes(),
-        len,
-    )
 }
 
 /// The byte offset of codepoint `c` in `haystack`, or `None`.
@@ -204,80 +118,20 @@ pub(crate) fn has_bytes(haystack: &CStr, needle: &[u8]) -> bool {
     find_bytes(haystack.to_bytes(), needle).is_some()
 }
 
-/// Find character `c` (a codepoint, not a byte) in `string`.
-///
-/// The ASCII half keeps libc's `strchr`, which [`find_char`] cannot match:
-/// one early-exiting SIMD pass against a `strlen` over the *whole* string
-/// plus a scalar scan. Measured at +0.4 % of `inbench` when this body was
-/// routed through the slice form, with sixty-odd cursor callers still on
-/// the command-line path.
-///
-/// # Safety
-///
-/// `string` must point at a NUL-terminated string.
-pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
-    if c <= 0 {
-        return ptr::null_mut();
-    }
-    if c < 0x80 {
-        // SAFETY: the caller's NUL-terminated string.
-        return unsafe { strchr(string, c) };
-    }
-    // SAFETY: the caller's NUL-terminated string, and an offset `find_char`
-    // answered from within it.
-    match find_char(unsafe { cstr::bytes_at(string) }, c) {
-        Some(at) => unsafe { string.add(at) }.cast_mut(),
-        None => ptr::null_mut(),
-    }
+/// `a ++ b`, owned; upstream's `concat_str`.
+pub fn concat(a: &[u8], b: &[u8]) -> XString {
+    let mut out = Vec::with_capacity(a.len() + b.len() + 1);
+    out.extend_from_slice(a);
+    out.extend_from_slice(b);
+    XString::from_vec(out)
 }
 
-/// Sort `count` strings at `files` bytewise, as `strcmp` orders them.
-///
-/// # Safety
-///
-/// `files` must point at `count` writable slots, each holding a NUL-terminated
-/// string.
-pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {
-    let Ok(count) = usize::try_from(count) else {
-        return;
-    };
-    if count == 0 {
-        return;
-    }
-    // SAFETY: the caller's `count` slots.
-    let files = unsafe { slice::from_raw_parts_mut(files, count) };
-    // SAFETY: each slot holds a NUL-terminated string.
-    files.sort_unstable_by(|&a, &b| unsafe { CStr::from_ptr(a).cmp(CStr::from_ptr(b)) });
-}
-
-/// # Safety
-///
-/// `s` must point at a NUL-terminated string.
-pub unsafe fn has_non_ascii(s: *const c_char) -> bool {
-    unsafe { !s.is_null() && any_non_ascii(CStr::from_ptr(s).to_bytes()) }
-}
-
-/// Freshly allocated `str1 ++ str2`, NUL-terminated.
-///
-/// # Safety
-///
-/// `str1` must point at a NUL-terminated string. `str2` must point at a NUL-
-/// terminated string.
-pub unsafe fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char {
-    let a = unsafe { CStr::from_ptr(str1) }.to_bytes();
-    let b = unsafe { CStr::from_ptr(str2) }.to_bytes_with_nul();
-    let dest = unsafe { xmalloc(a.len() + b.len()) as *mut c_char };
-    let out = unsafe { slice::from_raw_parts_mut(dest as *mut u8, a.len() + b.len()) };
-    out[..a.len()].copy_from_slice(a);
-    out[a.len()..].copy_from_slice(b);
-    dest
-}
 /// `text` reversed character by character.
 ///
 /// Composing sequences move as a unit — [`cluster_len`] gives the length of
 /// the whole character at each position — so the source is walked forwards
 /// while the destination is filled from the back.
-pub(crate) fn reversed_text(text: &[u8]) -> Vec<u8> {
+pub fn reversed_text(text: &[u8]) -> Vec<u8> {
     let len = text.len();
     let mut out = vec![0; len];
     let mut at = len;
@@ -291,90 +145,28 @@ pub(crate) fn reversed_text(text: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Reverse `s` character by character into freshly allocated memory; see
-/// [`reversed_text`].
-///
-/// # Safety
-///
-/// `s` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
-    let src = unsafe { CStr::from_ptr(s) }.to_bytes();
-    let reversed = reversed_text(src);
-    // `xmallocz` writes the terminator the C wrote by hand.
-    let rev = unsafe { xmallocz(reversed.len()) as *mut c_char };
-    unsafe { slice::from_raw_parts_mut(rev as *mut u8, reversed.len()) }.copy_from_slice(&reversed);
-    rev
+/// Every occurrence of `what` in `src` replaced by `rep`, or `None` when
+/// `what` does not occur at all; upstream's `strrep`. An empty `what` --
+/// which upstream loops forever on -- occurs nowhere.
+pub fn replaced_all(src: &[u8], what: &[u8], rep: &[u8]) -> Option<XString> {
+    if what.is_empty() || find_bytes(src, what).is_none() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(src.len() + rep.len());
+    let mut rest = src;
+    while let Some(at) = find_bytes(rest, what) {
+        out.extend_from_slice(&rest[..at]);
+        out.extend_from_slice(rep);
+        rest = &rest[at + what.len()..];
+    }
+    out.extend_from_slice(rest);
+    Some(XString::from_vec(out))
 }
 
-/// Every occurrence of `what` in `src` replaced by `rep`, freshly
-/// allocated, or NULL when `what` does not occur at all.
-///
-/// # Safety
-///
-/// `src` must point at a NUL-terminated string. `what` must point at a NUL-
-/// terminated string. `rep` must point at a NUL-terminated string.
-pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's NUL-terminated strings; `find_bytes` answers an
-    // offset inside `rest`, and the walk only ever moves forward in it.
-    let (mut rest, what_bytes) = unsafe { (cstr::bytes_at(src), cstr::bytes_at(what)) };
-    let what_len = what_bytes.len();
-    let mut count: size_t = 0;
-    while let Some(at) = find_bytes(rest, what_bytes) {
-        count += 1;
-        rest = &rest[at + what_len..];
-    }
-    if count == 0 {
-        return ptr::null_mut();
-    }
-
-    // `replen - whatlen` underflows when the replacement is shorter;
-    // the product then wraps back to the right (smaller) total.
-    let rep_len = unsafe { cstr::bytes_at(rep) }.len();
-    let size = unsafe { cstr::bytes_at(src) }
-        .len()
-        .wrapping_add(count.wrapping_mul(rep_len.wrapping_sub(what_len)))
-        .wrapping_add(1);
-    let ret = unsafe { xmalloc(size) as *mut c_char };
-
-    let mut src = src;
-    let mut out = ret;
-    // SAFETY: as above for `src`; `ret` is the `size` bytes just allocated,
-    // and the loop writes exactly the prefix and replacement it measured.
-    while let Some(prefix) = find_bytes(unsafe { cstr::bytes_at(src) }, what_bytes) {
-        unsafe { ptr::copy_nonoverlapping(src, out, prefix) };
-        out = unsafe { out.add(prefix) };
-        unsafe { ptr::copy_nonoverlapping(rep, out, rep_len) };
-        out = unsafe { out.add(rep_len) };
-        src = unsafe { src.add(prefix + what_len) };
-    }
-    let tail = unsafe { cstr::bytes_at(src) }.len();
-    unsafe { ptr::copy_nonoverlapping(src, out, tail + 1) };
-    ret
-}
-
-/// `qsort` comparator: two `KeyValue` by value, case-sensitively.
-///
-/// The comparison length is the *longer* of the two, so a prefix sorts
-/// before the string it prefixes — `strncmp` stops at the shorter one's
-/// terminator either way.
-///
-/// # Safety
-///
-/// As `qsort`'s comparator over an array of `KeyValue`: `a` and `b` must each
-/// point at one of those elements, whose `value` must be a NUL-terminated
-/// string.
-pub unsafe fn cmp_keyvalue_value_n(a: *const c_void, b: *const c_void) -> ::core::ffi::c_int {
-    let kv1 = unsafe { &*(a as *const KeyValue) };
-    let kv2 = unsafe { &*(b as *const KeyValue) };
-    let n = kv1.length.max(kv2.length);
-    // SAFETY: two NUL-terminated keys of the caller's table.
-    unsafe { cstr::prefix_cmp(kv1.value, kv2.value, n) as c_int }
-}
 #[cfg(test)]
 mod tests {
     use super::{
-        any_non_ascii, ascii_upcase, find_bytes, find_char, has_bytes, has_char, strnicmp_asc,
-        trailing_spaces_start, unquote,
+        any_non_ascii, find_bytes, find_char, has_bytes, has_char, trailing_spaces_start, unquote,
     };
 
     #[test]
@@ -464,17 +256,6 @@ mod tests {
     }
 
     #[test]
-    fn strnicmp_folds_only_ascii_and_stops_at_len_diff_or_nul() {
-        assert_eq!(strnicmp_asc(b"abc", b"ABC", 3), 0);
-        assert!(strnicmp_asc(b"abc", b"abd", 3) < 0);
-        assert_eq!(strnicmp_asc(b"abX", b"abY", 2), 0); // len clamps the compare
-        assert!(strnicmp_asc(b"ab", b"abc", 5) < 0); // terminator vs 'c'
-        assert_eq!(strnicmp_asc(b"", b"", 4), 0);
-        // Bytes >= 0x80 compare as signed chars, exactly like the C code.
-        assert!(strnicmp_asc(b"\x80", b"\x7f", 1) < 0);
-    }
-
-    #[test]
     fn trailing_spaces_respect_escapes_and_never_take_byte_zero() {
         assert_eq!(trailing_spaces_start(b"ab  "), 2);
         assert_eq!(trailing_spaces_start(b"ab\t "), 2);
@@ -485,10 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn upcase_and_ascii_scan() {
-        let mut buf = *b"aZ9\x80!";
-        ascii_upcase(&mut buf);
-        assert_eq!(&buf, b"AZ9\x80!");
+    fn ascii_scan() {
         assert!(any_non_ascii(b"caf\xc3\xa9"));
         assert!(!any_non_ascii(b"cafe"));
     }

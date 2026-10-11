@@ -198,7 +198,7 @@ pub fn expand_generic(
         }
 
         let mut text = if escaped {
-            escaped_bytes(&candidate, c" \t\\.")
+            escaped_bytes(candidate.to_bytes(), b" \t\\.")
         } else {
             XString::from_cstr(&candidate)
         };

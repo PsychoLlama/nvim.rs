@@ -58,7 +58,7 @@ use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::startup::starting;
-use crate::strings::{concat_str, vim_strchr, xstrnsave};
+use crate::strings::{concat, vim_strchr, xstrnsave};
 use crate::types::{
     Failed, GArray, LangP, MAXPATHL, NUL, OptError, RegProg, SPL_FNAME_TMPL, SpellLang, SynBlock,
     size_t,
@@ -709,7 +709,10 @@ pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Result<(), OptError> 
     if unsafe { (*synblock).b_p_spc.bytes() }.is_empty() {
         unsafe { (*synblock).b_cap_prog = core::ptr::null_mut() };
     } else {
-        let re = unsafe { concat_str(c"^".as_ptr(), (*synblock).b_p_spc.value_ptr()) };
+        let re = concat(b"^", unsafe {
+            cstr::bytes_at((*synblock).b_p_spc.value_ptr())
+        })
+        .into_raw();
         unsafe { (*synblock).b_cap_prog = vim_regcomp(cstr::at(re), RE_MAGIC as c_int) };
         unsafe { xfree(re as *mut c_void) };
         if unsafe { (*synblock).b_cap_prog }.is_null() {

@@ -93,14 +93,14 @@ pub(crate) fn wildescape(expand: &mut Expand, pattern: &[u8], matches: &mut [XSt
         for slot in matches.iter_mut() {
             // For ":set path=" we need to escape spaces twice.
             if expand.backslash.has(BackslashEscape::THREE) {
-                let chars = if expand.backslash.has(BackslashEscape::COMMA) {
-                    c" ,"
+                let chars: &[u8] = if expand.backslash.has(BackslashEscape::COMMA) {
+                    b" ,"
                 } else {
-                    c" "
+                    b" "
                 };
-                *slot = escaped_bytes(slot.as_cstr(), chars);
+                *slot = escaped_bytes(slot, chars);
             } else if expand.backslash.has(BackslashEscape::COMMA) && slot.contains(&b',') {
-                *slot = escaped_bytes(slot.as_cstr(), c",");
+                *slot = escaped_bytes(slot, b",");
             }
             *slot = fnameescape(
                 slot.as_cstr(),
@@ -124,7 +124,7 @@ pub(crate) fn wildescape(expand: &mut Expand, pattern: &[u8], matches: &mut [XSt
         // Insert a backslash before characters in a tag name that would
         // terminate the ":tag" command.
         for slot in matches.iter_mut() {
-            *slot = escaped_bytes(slot.as_cstr(), c"\\|\"");
+            *slot = escaped_bytes(slot, b"\\|\"");
         }
     }
 }

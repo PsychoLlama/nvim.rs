@@ -37,7 +37,7 @@ use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::globvar_dict;
 use crate::fprintf;
-use crate::memory::xfree;
+use crate::memory::{XString, xfree};
 use crate::option::vars::{p_shm, p_stal, p_wh, p_wiw};
 use crate::options::{
     kOptSsopFlagBuffers, kOptSsopFlagCurdir, kOptSsopFlagGlobals, kOptSsopFlagHelp,
@@ -46,9 +46,9 @@ use crate::options::{
 };
 use crate::os::env::home_replace_save;
 use crate::os::state::globaldir;
-use crate::strings::vim_strsave_escaped;
+use crate::strings::escaped_bytes;
 use crate::types::{
-    NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window, int64_t,
+    TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window, int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::tab_index;
@@ -592,26 +592,24 @@ unsafe fn put_session_global(
     tv: &mut TypVal,
 ) -> bool {
     let mut numbuf = NumBuf::new();
-    // SAFETY: caller contract; `escaped` is owned and freed here.
-    let escaped = unsafe { vim_strsave_escaped(numbuf.string(tv).as_ptr(), c"\\\"\n\r".as_ptr()) };
-    let mut t = escaped;
-    while unsafe { *t } != NUL as c_char {
-        if unsafe { *t } == b'\n' as c_char {
-            unsafe { *t = b'n' as c_char };
-        } else if unsafe { *t } == b'\r' as c_char {
-            unsafe { *t = b'r' as c_char };
+    let mut escaped = escaped_bytes(numbuf.string(tv).to_bytes(), b"\\\"\n\r").into_vec();
+    escaped.pop(); // the terminator
+    for byte in &mut escaped {
+        match *byte {
+            b'\n' => *byte = b'n',
+            b'\r' => *byte = b'r',
+            _ => {}
         }
-        t = unsafe { t.offset(1) };
     }
+    let escaped = XString::from_vec(escaped);
     // A String is quoted; a Number is surrounded by spaces instead.
     let quote = if kind == VAR_STRING { c"\"" } else { c" " };
     let ok = out.puts(c"let ")
         && unsafe { out.bytes(key) }
         && out.puts(c" = ")
         && out.puts(quote)
-        && unsafe { out.bytes(escaped) }
+        && out.puts(escaped.as_cstr())
         && out.puts(quote)
         && out.eol();
-    unsafe { xfree(escaped.cast::<c_void>()) };
     ok
 }
