@@ -376,7 +376,7 @@ mod tests {
     #[test]
     fn the_pointer_front_formats_and_truncates_at_every_size() {
         let name = c"na\u{ef}ve";
-        let want = "[na\u{ef}ve|   42|ff  |3.14|x|%|0x10|-1.0e21]";
+        let want = "[na\u{ef}ve|   42|ff  |2.72|x|%|0x10|-1.0e21]";
         for size in 0..=want.len() + 1 {
             let (ret, text) = into_exact(size, |b, n| unsafe {
                 crate::vim_snprintf!(
@@ -386,13 +386,13 @@ mod tests {
                     name.as_ptr(),
                     42 as c_int,
                     255 as c_int,
-                    3.14159,
-                    b'x' as c_int,
+                    2.71875,
+                    c_int::from(b'x'),
                     core::ptr::without_provenance::<u8>(16),
                     -1e21,
                 )
             });
-            assert_eq!(ret as usize, want.len());
+            assert_eq!(usize::try_from(ret), Ok(want.len()));
             let keep = want.len().min(size.saturating_sub(1));
             assert_eq!(text, &want.as_bytes()[..keep], "size {size}");
         }

@@ -47,7 +47,7 @@
   "global_cells": 768,
   "cell_raw_ptr": 13,
   "api_err_params": 0,
-  "char_as_c_int": 1721,
+  "char_as_c_int": 1720,
   "failed_uses": 1266,
   "labeled_blocks": 118,
   "lua_raw_stack": 836,
