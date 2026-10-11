@@ -690,3 +690,151 @@ pub(crate) fn get_local_additions() {
     drop(res);
     err.clear();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Tag names chosen for every scoring rule: alphanumerics against
+    /// punctuation, `+feature` and a bare `+`, a match mid-word, multibyte
+    /// letters (not alphanumeric to the ASCII test), and the empty name.
+    const NAMES: &[&[u8]] = &[
+        b"",
+        b"+",
+        b"+a",
+        b"+demofeature",
+        b"a",
+        b"ab",
+        b":demo",
+        b":democmd",
+        b"'dm'",
+        b"'demoopt'",
+        b"CTRL-X",
+        b"i_CTRL-X_demo",
+        b"i_<Esc>",
+        b"v_demo",
+        b"demo()",
+        b"demo.txt",
+        b"demo-intro@en",
+        b"g:demo_var",
+        b"E9999",
+        b"Demo-Upper",
+        b"xdemo",
+        b"quote\"",
+        b"|",
+        b"*",
+        b"multi-\xc3\xa9",
+        b"\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e",
+        b"a b\tc",
+        b"0123456789",
+    ];
+
+    /// FNV-1a, as `tests/unit/support/corpus.rs`'s `Digest`.
+    fn fold(digest: &mut u64, value: i64) {
+        for byte in value.to_le_bytes() {
+            *digest ^= u64::from(byte);
+            *digest = digest.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+
+    fn score(name: &[u8], offset: c_int, wrong_case: bool) -> c_int {
+        let mut owned = name.to_vec();
+        owned.push(0);
+        // SAFETY: a NUL-terminated copy this frame owns.
+        unsafe { help_heuristic(owned.as_mut_ptr().cast(), offset, wrong_case) }
+    }
+
+    #[test]
+    fn heuristic_scores_are_the_recorded_ones() {
+        let mut digest = 0xcbf2_9ce4_8422_2325_u64;
+        for name in NAMES {
+            let len = c_int::try_from(name.len()).expect("short");
+            for offset in 0..=len + 2 {
+                for wrong_case in [false, true] {
+                    fold(&mut digest, i64::from(score(name, offset, wrong_case)));
+                }
+            }
+        }
+        assert_eq!(digest, HEURISTIC, "help_heuristic scores moved");
+        // A few by hand, so a moved digest has something to read.
+        assert_eq!(score(b"+demofeature", 0, false), 100 * 11 + 12 + 100);
+        assert_eq!(score(b"demo-intro", 5, false), 100 * 9 + 10 + 5 * 200);
+        assert_eq!(score(b"xdemo", 1, true), 100 * 5 + 5 + 1 + 10000 + 5000);
+    }
+
+    /// The sort `find_help_tags` gives its matches: score first, then name.
+    #[test]
+    #[cfg_attr(miri, ignore = "libc's qsort is a foreign call")]
+    fn matches_sort_by_score_then_name() {
+        let rows: &[(&[u8], &[u8])] = &[
+            (b"b@en", b"000300"),
+            (b"a@en", b"000300"),
+            (b"c@cn", b"000100"),
+            (b"a@cn", b"001000"),
+            (b"\xc3\xa9@en", b"000300"),
+            (b"z@en", b"000099"),
+            (b"a@en", b"000300"),
+        ];
+        let mut owned: Vec<Vec<u8>> = rows
+            .iter()
+            .map(|(tag, score)| [*tag, b"\0", *score, b"\0"].concat())
+            .collect();
+        let mut ptrs: Vec<*mut c_char> = owned
+            .iter_mut()
+            .map(|row| row.as_mut_ptr().cast())
+            .collect();
+        // SAFETY: each pointer is a tag, its NUL, a score and its NUL.
+        unsafe {
+            qsort(
+                ptrs.as_mut_ptr().cast(),
+                ptrs.len(),
+                size_of::<*mut c_char>(),
+                Some(help_compare),
+            )
+        };
+        // SAFETY: as above.
+        let sorted: Vec<&[u8]> = ptrs
+            .iter()
+            .map(|&p| unsafe { CStr::from_ptr(p) }.to_bytes())
+            .collect();
+        let want: &[&[u8]] = &[
+            b"z@en",
+            b"c@cn",
+            b"a@en",
+            b"a@en",
+            b"b@en",
+            b"\xc3\xa9@en",
+            b"a@cn",
+        ];
+        assert_eq!(sorted, want);
+    }
+
+    /// `@xx` at the end of a subject is cut off and answered.
+    #[test]
+    fn a_language_suffix_is_split_off() {
+        for (subject, rest, lang) in [
+            (&b"demo@cn"[..], &b"demo"[..], Some(&b"cn"[..])),
+            (b"@en", b"", Some(b"en")),
+            (b"demo@c1", b"demo@c1", None),
+            (b"demo@", b"demo@", None),
+            (b"x@EN", b"x", Some(b"EN")),
+            (b"ab", b"ab", None),
+            (b"demo@@cn", b"demo@", Some(b"cn")),
+        ] {
+            let mut owned = subject.to_vec();
+            owned.push(0);
+            // SAFETY: a NUL-terminated writable copy.
+            let found = unsafe { check_help_lang(owned.as_mut_ptr().cast()) };
+            // SAFETY: the answer points into `owned`, NUL-terminated.
+            let found =
+                (!found.is_null()).then(|| unsafe { CStr::from_ptr(found) }.to_bytes().to_vec());
+            let left = CStr::from_bytes_until_nul(&owned)
+                .expect("terminated")
+                .to_bytes();
+            assert_eq!((left, found.as_deref()), (rest, lang), "{subject:?}");
+        }
+    }
+
+    /// Recorded on the pointer form.
+    const HEURISTIC: u64 = 18_163_768_497_455_475_670;
+}

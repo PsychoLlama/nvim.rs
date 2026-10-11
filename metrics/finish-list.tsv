@@ -255,8 +255,8 @@ grid/	grid/mod.rs	1	23	1	2	deref:17 ref:3 expr:1	other:1	other:1	xfree:1
 grid/	grid/schar.rs	1	45	15	34	deref:7 expr:4	str:4 pp_str:1	other:2 str:1	bytes_at:3 utf_char2bytes:3 utf_ptr2char:3 .copy_from_nonoverlapping:2 strnlen:2 abort:1 from_raw_parts:1 mh_clear:1
 hashtab.rs	*	1	24	16	15	ref:6 deref:1	value:11 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
 hashtab.rs	hashtab.rs	1	24	16	15	ref:6 deref:1	value:11 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
-help/	*	2	164	14	96	deref:59 expr:6 compound:1	str:14 other:3 pp_str:3 void:3	str:2	bytes_at:11 .offset:10 msg_cstr_opt:5 xfree:5 xstrlcat:4 fclose:3 free_wild:3 nlua_exec:3
-help/	help/mod.rs	1	74	6	34	deref:32 expr:5 compound:1	str:3 pp_str:2 void:2 other:1	str:2	bytes_at:7 xfree:4 nlua_exec:3 eq:2 free_wild:2 xstrdup:2 .offset:1 CStr::from_ptr:1
+help/	*	2	169	14	101	deref:59 expr:6 compound:1	str:14 other:3 pp_str:3 void:3	str:2	bytes_at:11 .offset:10 msg_cstr_opt:5 xfree:5 xstrlcat:4 CStr::from_ptr:3 fclose:3 free_wild:3
+help/	help/mod.rs	1	79	6	39	deref:32 expr:5 compound:1	str:3 pp_str:2 void:2 other:1	str:2	bytes_at:7 xfree:4 CStr::from_ptr:3 nlua_exec:3 eq:2 free_wild:2 qsort:2 xstrdup:2
 help/	help/tags.rs	1	90	8	62	deref:27 expr:1	str:11 other:2 pp_str:1 void:1	-	.offset:9 bytes_at:4 msg_cstr_opt:4 xstrlcat:4 add_pathsep:2 fclose:2 fprintf:2 os_fopen:2
 highlight/	*	3	33	5	13	deref:8 compound:2	str:2 other:1	other:3 str:1	cstr_to_string:2 CStr::from_ptr:1 bytes_at:1 nlua_call_ref:1 remote_ui_hl_attr_define:1 remote_ui_hl_group_set:1 strcasecmp:1
 highlight/	highlight/dict.rs	1	2	2	2	-	-	-	strcasecmp:1

@@ -3,7 +3,7 @@ count	callee	no_raw	defs	def
 392	.add	0	2	crates/nvim/src/getchar/buffers.rs
 329	.offset	0	0	
 287	bytes_at	0	1	crates/nvim/src/cstr.rs
-230	CStr::from_ptr	0	2	
+232	CStr::from_ptr	0	2	
 211	at	0	3	
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 148	.offset_from	0	0	
@@ -197,6 +197,7 @@ count	callee	no_raw	defs	def
 9	path_is_absolute	0	0	
 9	push_call	0	1	crates/nvim/src/api/ui/packer.rs
 9	put_str	0	2	
+9	qsort	0	0	
 9	rpc_send_event	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 9	schar_get_first_codepoint	1	1	crates/nvim/src/grid/schar.rs
 9	shada_key	0	1	crates/nvim/src/shada/mod.rs
@@ -228,7 +229,6 @@ count	callee	no_raw	defs	def
 8	opt_strings_mask	0	1	crates/nvim/src/optionstr/flags.rs
 8	os_fileinfo_id_equal	0	1	crates/nvim/src/os/fs/meta.rs
 8	pos_to_mark	0	1	crates/nvim/src/mark/mod.rs
-8	qsort	0	0	
 8	send	0	3	
 8	strncasecmp	0	1	crates/nvim/src/os/cshim.rs
 8	uv_close	0	0	
@@ -881,6 +881,7 @@ count	callee	no_raw	defs	def
 2	charwise_block_prep	0	1	crates/nvim/src/ops/block.rs
 2	check_abbr	0	1	crates/nvim/src/mapping/abbrev.rs
 2	check_cur_search_hl	0	1	crates/nvim/src/match/searchhl.rs
+2	check_help_lang	0	1	crates/nvim/src/help/mod.rs
 2	clear_autocmd	0	1	crates/nvim/src/api/autocmd/create.rs
 2	clear_diffin	0	1	crates/nvim/src/diff/update.rs
 2	clear_float_config	0	1	crates/nvim/src/window/config.rs
@@ -1005,6 +1006,7 @@ count	callee	no_raw	defs	def
 2	hash_set_key	0	1	crates/nvim/src/hashtab.rs
 2	hash_unlock	0	1	crates/nvim/src/hashtab.rs
 2	header_adopt	0	1	crates/nvim/src/undo/store.rs
+2	help_heuristic	0	1	crates/nvim/src/help/mod.rs
 2	hl_add_url	0	1	crates/nvim/src/highlight/mod.rs
 2	hl_combine_attr	0	0	
 2	hmll_remove	0	1	crates/nvim/src/shada/merge.rs
@@ -1531,7 +1533,6 @@ count	callee	no_raw	defs	def
 1	charsize_nowrap	0	1	crates/nvim/src/plines/mod.rs
 1	check_ei	0	1	crates/nvim/src/autocmd/events.rs
 1	check_external_diff	0	1	crates/nvim/src/diff/engine.rs
-1	check_help_lang	0	1	crates/nvim/src/help/mod.rs
 1	check_map	0	1	crates/nvim/src/mapping/table.rs
 1	check_mtime	0	1	crates/nvim/src/bufwrite/backup.rs
 1	choose_swapfile	0	1	crates/nvim/src/memline/recover.rs
@@ -1736,7 +1737,6 @@ count	callee	no_raw	defs	def
 1	header_chain	0	0	
 1	header_free	0	1	crates/nvim/src/undo/store.rs
 1	help_file_lang	0	1	crates/nvim/src/help/tags.rs
-1	help_heuristic	0	1	crates/nvim/src/help/mod.rs
 1	helptags_one	0	1	crates/nvim/src/help/tags.rs
 1	hidden_sibling	0	1	crates/nvim/src/undo/file.rs
 1	hmll_dealloc	0	1	crates/nvim/src/shada/merge.rs

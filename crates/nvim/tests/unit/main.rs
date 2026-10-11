@@ -40,6 +40,7 @@ mod fuzzy;
 mod garray;
 mod hashtab;
 mod help;
+mod help_oracle;
 mod indent;
 mod keycodes;
 mod keycodes_oracle;

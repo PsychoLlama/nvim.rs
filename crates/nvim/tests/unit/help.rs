@@ -215,3 +215,88 @@ fn helplang_prefers_a_translation_and_at_xx_forces_one() {
     fx.check(at, "['demo.txt', 3]");
     close_help(&fx);
 }
+
+/// `:helptags ALL` over a 'runtimepath' with a read-only `doc` (no error,
+/// no file); subjects holding `|`, `*`, `"`, spaces and multibyte text, for
+/// completion and for `:help`; a `@xx` and a 'helplang' with no docs in that
+/// language. The expected text is upstream nvim 0.12.5's own answer to the
+/// same script.
+#[test]
+fn hostile_subjects_and_helptags_all() {
+    let sandbox = Sandbox::dir("help_hostile");
+    let fx = Probe::new(sandbox.editor());
+    sandbox.write("hp.vim", SCRIPT.as_bytes());
+    fx.run("source hp.vim");
+    fx.run("call writefile(g:out, 'out.txt') | unlet g:out");
+    let got = std::fs::read(sandbox.path("out.txt")).expect("the script's log");
+    let got = String::from_utf8_lossy(&got);
+    for (row, (got, want)) in got.lines().zip(EXPECTED.lines()).enumerate() {
+        assert_eq!(got, want, "row {row}");
+    }
+    assert_eq!(got.lines().count(), EXPECTED.lines().count());
+    close_help(&fx);
+}
+
+/// The script, run from the sandbox.
+const SCRIPT: &str = "let g:out = []\n\
+let s:root = getcwd() . '/tree'\n\
+call mkdir(s:root . '/doc', 'p')\n\
+call mkdir(s:root . '/ro/doc', 'p')\n\
+call writefile([\"*mb.txt*\\tMultibyte\", '', '*multi-é* *日本語* *a|b* *star*x* *q\"q* *pipe|*', '*sp ace* *tab\tx*'], s:root . '/doc/mb.txt')\n\
+call writefile(['*ro-tag*'], s:root . '/ro/doc/ro.txt')\n\
+call setfperm(s:root . '/ro/doc', 'r-xr-xr-x')\n\
+exe 'set runtimepath=' . s:root . ',' . s:root . '/ro helpfile=' . s:root . '/doc/mb.txt helplang='\n\
+let v:errmsg = ''\n\
+helptags ALL\n\
+call add(g:out, 'all: ' . string(sort(readdir(s:root . '/doc'))) . string(sort(readdir(s:root . '/ro/doc'))) . v:errmsg)\n\
+for s in ['multi-é', '日本語', 'a|b', 'star*x', 'q\"q', 'pipe|', '*', '|', '\"', 'é', '本', 'sp ace', 'tab']\n\
+  call add(g:out, 'comp ' . s . ': ' . string(getcompletion(s, 'help')))\n\
+endfor\n\
+for s in ['multi-é', '日本語', 'q\"q', 'star*x', 'mb.txt', 'a|b', 'pipe|']\n\
+  let v:errmsg = ''\n\
+  silent! exe 'help ' . s\n\
+  call add(g:out, 'help ' . s . ': ' . fnamemodify(bufname(), ':t') . ' ' . line('.') . ' ' . col('.') . ' ' . v:errmsg)\n\
+  silent! helpclose\n\
+endfor\n\
+let v:errmsg = ''\n\
+silent! help multi-é@de\n\
+call add(g:out, 'nolang: ' . v:errmsg)\n\
+set helplang=de\n\
+let v:errmsg = ''\n\
+silent! help multi-é\n\
+call add(g:out, 'helplang de: ' . fnamemodify(bufname(), ':t') . v:errmsg . string(getcompletion('multi', 'help')))\n\
+silent! helpclose\n\
+set helplang=\n\
+let v:errmsg = ''\n\
+silent! help ro-tag\n\
+call add(g:out, 'ro: ' . fnamemodify(bufname(), ':t') . ' ' . v:errmsg)\n\
+silent! helpclose\n\
+call setfperm(s:root . '/ro/doc', 'rwxr-xr-x')\n\
+";
+
+/// Upstream's log of [`SCRIPT`].
+const EXPECTED: &str = "all: ['mb.txt', 'tags']['ro.txt']\n\
+comp multi-é: ['multi-é']\n\
+comp 日本語: ['日本語']\n\
+comp a|b: []\n\
+comp star*x: []\n\
+comp q\"q: []\n\
+comp pipe|: []\n\
+comp *: []\n\
+comp |: []\n\
+comp \": []\n\
+comp é: ['multi-é']\n\
+comp 本: ['日本語']\n\
+comp sp ace: []\n\
+comp tab: []\n\
+help multi-é: mb.txt 3 1 \n\
+help 日本語: mb.txt 3 12 \n\
+help q\"q:  1 1 E149: No help for q\"q\n\
+help star*x:  1 1 E149: No help for star*x\n\
+help mb.txt: mb.txt 1 1 \n\
+help a|b:  1 1 \n\
+help pipe|:  1 1 E149: No help for pipe|\n\
+nolang: E661: No 'de' help for multi-é\n\
+helplang de: mb.txt['multi-é']\n\
+ro:  E149: No help for ro-tag\n\
+";
