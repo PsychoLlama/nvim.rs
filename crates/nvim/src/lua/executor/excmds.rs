@@ -32,7 +32,6 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
-use crate::strings::vim_snprintf;
 use crate::types::{Buffer, ColNr, ExArg, FileDescriptor, IOSIZE, LineNr, lua_Number, size_t};
 use crate::undo::u_save;
 
@@ -71,7 +70,7 @@ pub fn ex_lua(excmd: &mut ExArg) {
             let off: size_t = if excmd.cmdidx == CmdIdx::equal { 0 } else { 1 };
             len += PRINT_WRAPPER.count_bytes() - 2 - off;
             let code_buf = xmallocz(len).cast::<c_char>();
-            vim_snprintf(code_buf, len + 1, PRINT_WRAPPER.as_ptr(), code.add(off));
+            crate::vim_snprintf!(code_buf, len + 1, PRINT_WRAPPER.as_ptr(), code.add(off));
             xfree(code.cast::<c_void>());
             code = code_buf;
         }

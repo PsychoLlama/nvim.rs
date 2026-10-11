@@ -19,12 +19,14 @@ mod charindex;
 mod escape;
 mod eval;
 mod printf;
+mod raw;
 
 pub use self::case::*;
 pub use self::charindex::*;
 pub use self::escape::*;
 pub use self::eval::*;
 pub use self::printf::*;
+pub use self::raw::*;
 
 /// Read an optional boolean argument that must be spelled `0` or `1`.
 ///

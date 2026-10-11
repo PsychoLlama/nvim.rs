@@ -3,8 +3,7 @@
 use std::ffi::{c_char, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong};
 
 use neovim::strings::{
-    reverse_text, strcase_save, vim_snprintf, vim_strchr, vim_strnsave_unquoted,
-    vim_strsave_escaped,
+    reverse_text, strcase_save, vim_strchr, vim_strnsave_unquoted, vim_strsave_escaped,
 };
 use neovim::types::typval::UVarNumber;
 
@@ -168,7 +167,7 @@ macro_rules! snp {
         let expected: &str = $expected;
         let bsize: usize = $bsize;
         let fmt = cstr($fmt);
-        let n = unsafe { vim_snprintf($buf, bsize, fmt.as_ptr() $(, $arg)*) };
+        let n = unsafe { neovim::vim_snprintf!($buf, bsize, fmt.as_ptr() $(, $arg)*) };
         let ctx = format!("snprintf(buf, {}, {:?})", bsize, $fmt);
         assert_eq!(expected.len() as c_int, n, "{ctx}");
         if bsize > 0 {

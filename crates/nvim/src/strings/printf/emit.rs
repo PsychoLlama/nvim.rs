@@ -1,4 +1,4 @@
-//! `vim_vsnprintf_typval()`: the formatter itself.
+//! The formatter itself.
 //!
 //! printf's whole output side.  The format is walked once; every run of
 //! literal text is copied through, and every conversion is parsed into a
@@ -9,42 +9,39 @@
 //!
 //! - [`Sink`] is the destination.  The return value is the length the result
 //!   *would* have had, so counting continues after the buffer is full; that
-//!   is the whole reason `str_l` and `avail` are separate.
-//! - [`Args`] is where a conversion's argument comes from -- a C `va_list`,
-//!   or the `TypVal` array Vimscript's `printf()` passes instead.  Only the
-//!   `va_list` needs positioning, which is why `%N$` costs a whole pre-pass
-//!   (see [`super::spec`]).
+//!   is the whole reason `produced` and the buffer's length are separate.
+//! - [`Args`] is where a conversion's argument comes from -- an array of
+//!   typed values, or the `TypVal` array Vimscript's `printf()` passes
+//!   instead.  Both are indexed, so `%N$` only moves the index; the
+//!   positional pre-pass (see [`super::spec`]) is there to reject a format
+//!   that uses one position at two types.
 //! - [`Body`] is where a rendered conversion ended up: in the scratch buffer,
-//!   or at a pointer the caller already has (the format string itself for
-//!   `%%`, the argument for `%s`).
+//!   in the format string itself (`%%`), or in the argument (`%s`).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::snprintf;
-use core::ffi::{
-    CStr, VaList, c_char, c_double, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong, c_void,
-};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint};
+use core::fmt::Write as _;
+use std::borrow::Cow;
 
 use super::float::render_float;
 use super::spec::{
-    MAX_ALLOWED_STRING_WIDTH, format_overflow_error, get_unsigned_int, parse_fmt_types, skip_to_arg,
+    MAX_ALLOWED_STRING_WIDTH, PosTypes, byte_at, format_overflow_error, get_unsigned_int,
+    parse_fmt_types,
 };
-use super::{TMP_LEN, tv_float, tv_nr, tv_ptr, tv_str};
+use super::{FmtArg, tv_float, tv_nr, tv_ptr, tv_str};
 use crate::ascii::ascii_isdigit;
 use crate::eval::typval::NumBuf;
 use crate::mbyte::{cells_at, cluster_len};
-use crate::memory::{xfree, xmemscan, xstrchrnul};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::{TypVal, int16_t, intmax_t, ptrdiff_t, size_t, uint16_t, uintmax_t};
+use crate::strings::raw::Values;
+use crate::types::TypVal;
 
 const E_TOO_MANY_ARGS: &CStr = c"E767: Too many arguments to printf()";
 
 /// The scratch buffer one conversion is rendered into.
-pub(super) const TMP: usize = TMP_LEN as usize;
+pub(super) const TMP: usize = 350;
 
 // ---------------------------------------------------------------------
 // The destination
@@ -56,80 +53,59 @@ pub(super) const TMP: usize = TMP_LEN as usize;
 /// value `vim_snprintf` documents -- so it is not an index. `fits` records
 /// whether the *last* write stayed inside the buffer; once it is false
 /// nothing more is written, but `produced` still grows.
-struct Sink {
-    buf: *mut c_char,
-    capacity: size_t,
-    produced: size_t,
+struct Sink<'o> {
+    buf: &'o mut [u8],
+    produced: usize,
     fits: bool,
 }
 
-impl Sink {
-    /// A sink over the `capacity` bytes at `buf`.
-    ///
-    /// # Safety
-    ///
-    /// `buf` must point at `capacity` writable bytes the caller owns,
-    /// unaliased for the sink's lifetime. Nothing below checks the buffer --
-    /// only the count it was given -- so this pair *is* the bound, and the
-    /// safe writers below are safe only because it was established here.
-    unsafe fn new(buf: *mut c_char, capacity: size_t) -> Self {
+impl<'o> Sink<'o> {
+    fn new(buf: &'o mut [u8]) -> Self {
+        let fits = !buf.is_empty();
         Sink {
             buf,
-            capacity,
             produced: 0,
-            fits: 0 < capacity,
+            fits,
         }
     }
 
     /// Room left in the buffer. Only meaningful while `fits` holds --
-    /// `produced` runs past `capacity` once the output is truncated.
-    fn avail(&self) -> size_t {
-        self.capacity - self.produced
+    /// `produced` runs past the buffer once the output is truncated.
+    fn avail(&self) -> usize {
+        self.buf.len() - self.produced
     }
 
     /// Account for `n` bytes of output, whether or not they were written.
-    fn advance(&mut self, n: size_t) {
-        debug_assert!(n <= size_t::MAX - self.produced);
+    fn advance(&mut self, n: usize) {
+        debug_assert!(n <= usize::MAX - self.produced);
         self.produced += n;
     }
 
-    /// Append `n` bytes from `src`, truncating at the end of the buffer.
-    ///
-    /// # Safety
-    ///
-    /// `src` must point at `n` readable bytes.
-    unsafe fn copy(&mut self, src: *const c_char, n: size_t) {
+    /// Append `src`, truncating at the end of the buffer.
+    fn copy(&mut self, src: &[u8]) {
         if self.fits {
             let avail = self.avail();
-            unsafe {
-                self.buf
-                    .add(self.produced)
-                    .cast::<u8>()
-                    .copy_from(src.cast(), n.min(avail))
-            };
-            self.fits = n < avail;
+            let n = src.len().min(avail);
+            self.buf[self.produced..self.produced + n].copy_from_slice(&src[..n]);
+            self.fits = src.len() < avail;
         }
-        self.advance(n);
+        self.advance(src.len());
     }
 
     /// Append `n` copies of `byte`, truncating at the end of the buffer.
-    fn fill(&mut self, byte: u8, n: size_t) {
+    fn fill(&mut self, byte: u8, n: usize) {
         if self.fits {
             let avail = self.avail();
-            // SAFETY: `fits` holds, so `produced <= capacity` and the write
-            // stops at `avail` -- inside the window `Sink::new` was given.
-            unsafe { ptr::write_bytes(self.buf.add(self.produced), byte, n.min(avail)) };
+            self.buf[self.produced..self.produced + n.min(avail)].fill(byte);
             self.fits = n < avail;
         }
         self.advance(n);
     }
 
     /// NUL-terminate, at the end of the output or of the buffer.
-    fn terminate(&self) {
-        if self.capacity > 0 {
-            // SAFETY: the offset is clamped to the last byte of the window
-            // `Sink::new` was given.
-            unsafe { *self.buf.add(self.produced.min(self.capacity - 1)) = 0 };
+    fn terminate(&mut self) {
+        if let Some(last) = self.buf.len().checked_sub(1) {
+            self.buf[self.produced.min(last)] = 0;
         }
     }
 }
@@ -138,143 +114,101 @@ impl Sink {
 // The arguments
 // ---------------------------------------------------------------------
 
-/// Where a conversion's argument comes from.
-///
-/// A `tvs` slice means Vimscript's `printf()`, whose arguments can be
-/// indexed; otherwise it is a C `va_list`, which can only be read forwards --
-/// hence `position`, `ap_start` and the recorded `ap_types`.
-pub(super) struct Args<'f> {
-    tvs: Option<&'f [TypVal]>,
-    ap: VaList<'f>,
-    ap_start: VaList<'f>,
-    ap_types: *mut *const c_char,
-    /// One-based index of the argument to read next.
+/// Where a conversion's arguments come from.
+pub(in crate::strings) enum Source<'a> {
+    /// Values a Rust caller passed (the `vim_snprintf!` macros).
+    Values(Values<'a>),
+    /// Vimscript's `printf()` arguments, read with its type checks and its
+    /// errors.
+    Typvals(&'a [TypVal]),
+}
+
+/// The arguments of one `printf`, and the one-based index of the next.
+pub(super) struct Args<'a> {
+    src: Source<'a>,
     arg_idx: c_int,
-    /// Where the `va_list` actually is.
-    arg_cur: c_int,
-    fmt: *const c_char,
 }
 
-impl<'f> Args<'f> {
-    /// The arguments of one `printf`, ready to be walked against `fmt`.
-    ///
-    /// # Safety
-    ///
-    /// `fmt` must be NUL-terminated, and `ap_types` the table
-    /// `parse_fmt_types` filled in for exactly that format. With no `tvs`,
-    /// `ap_start` must hold exactly the arguments `fmt` names at exactly
-    /// those types -- a `va_list` carries no length, so reading one against
-    /// the wrong format is what this constructor exists to make visible.
-    unsafe fn new(
-        tvs: Option<&'f [TypVal]>,
-        ap_start: VaList<'f>,
-        ap_types: *mut *const c_char,
-        fmt: *const c_char,
-    ) -> Self {
-        Args {
-            tvs,
-            ap: ap_start.clone(),
-            ap_start,
-            ap_types,
-            arg_idx: 1,
-            arg_cur: 0,
-            fmt,
+impl<'a> Args<'a> {
+    fn typvals(&self) -> Option<&'a [TypVal]> {
+        match self.src {
+            Source::Typvals(tvs) => Some(tvs),
+            Source::Values(_) => None,
         }
     }
 
-    fn typvals(&self) -> Option<&'f [TypVal]> {
-        self.tvs
+    /// The value argument `arg_idx` names, moving the index on.
+    fn next_value(&mut self) -> Option<FmtArg<'a>> {
+        let Source::Values(values) = &self.src else {
+            return None;
+        };
+        let at = usize::try_from(self.arg_idx - 1).ok();
+        self.arg_idx += 1;
+        values.get(at?)
     }
 
-    /// Move the `va_list` onto argument `arg_idx`.
-    ///
-    /// # Safety
-    ///
-    /// `self` must be an `Args` built for the format it is being walked against:
-    /// its `ap_types` table must be the one `parse_fmt_types` filled in for
-    /// `fmt`, its `arg_cur` must say where `ap` really is, and reaching an
-    /// argument behind the cursor re-reads every argument in between at the
-    /// recorded types.
-    unsafe fn position(&mut self) {
-        // Bound in the order the call would have evaluated them: the clone
-        // reads `ap_start` before the three field addresses are taken, and
-        // those three address disjoint fields.
-        let types = self.ap_types;
-        let start = self.ap_start.clone();
-        let ap = &raw mut self.ap;
-        let idx = &raw mut self.arg_idx;
-        let cur = &raw mut self.arg_cur;
-        let fmt = self.fmt;
-        unsafe { skip_to_arg(types, start, ap, idx, cur, fmt) };
+    /// The next argument's 64 bits, as an integer conversion reads them;
+    /// the caller narrows to the width its length modifier names, as the C
+    /// narrowed what it read out of the `va_list`.
+    fn next_bits(&mut self) -> u64 {
+        if let Some(tvs) = self.typvals() {
+            return tv_nr(tvs, &mut self.arg_idx) as u64;
+        }
+        match self.next_value() {
+            Some(FmtArg::Int(n)) => n as u64,
+            Some(FmtArg::UInt(n)) => n,
+            Some(FmtArg::Str(text)) => text.as_ptr().addr() as u64,
+            Some(FmtArg::Ptr(at)) => at.addr() as u64,
+            Some(FmtArg::Float(_)) | None => 0,
+        }
     }
 
-    /// `numbuf` is scratch a Number argument is rendered into; it must
-    /// outlive the answer.
-    ///
-    /// # Safety
-    ///
-    /// `self` must be an `Args` built for the format it is being walked
-    /// against; see [`Args::next_pointer`].
-    unsafe fn next_string(
+    pub(super) fn next_float(&mut self) -> f64 {
+        if let Some(tvs) = self.typvals() {
+            return tv_float(tvs, &mut self.arg_idx);
+        }
+        match self.next_value() {
+            Some(FmtArg::Float(f)) => f,
+            Some(FmtArg::Int(n)) => n as f64,
+            Some(FmtArg::UInt(n)) => n as f64,
+            _ => 0.0,
+        }
+    }
+
+    /// The next argument's address, for `%p`.
+    fn next_address(&mut self) -> usize {
+        if let Some(tvs) = self.typvals() {
+            return tv_ptr(tvs, &mut self.arg_idx);
+        }
+        match self.next_value() {
+            Some(FmtArg::Ptr(at)) => at.addr(),
+            Some(FmtArg::Str(text)) => text.as_ptr().addr(),
+            Some(FmtArg::Int(n)) => n as usize,
+            Some(FmtArg::UInt(n)) => n as usize,
+            Some(FmtArg::Float(_)) | None => 0,
+        }
+    }
+
+    /// The next argument's text, `None` for a null one. `max` bounds how far
+    /// a C string may be read (the precision of `%.Ns`); the answer may run
+    /// past it otherwise. A Number is rendered into `numbuf`.
+    fn next_string<'b>(
         &mut self,
-        tofree: &mut *mut c_char,
-        numbuf: &mut NumBuf,
-    ) -> *const c_char {
+        numbuf: &'b mut NumBuf,
+        max: Option<usize>,
+    ) -> Option<Cow<'b, [u8]>>
+    where
+        'a: 'b,
+    {
         if let Some(tvs) = self.typvals() {
-            tv_str(tvs, &mut self.arg_idx, tofree, numbuf)
-        } else {
-            unsafe { self.position() };
-            unsafe { self.ap.next_arg::<*const c_char>() }
+            return tv_str(tvs, &mut self.arg_idx, numbuf);
         }
+        let arg = self.next_value()?;
+        let Source::Values(values) = &self.src else {
+            return None;
+        };
+        values.text(arg, max).map(Cow::Borrowed)
     }
-
-    /// # Safety
-    ///
-    /// `self` must be an `Args` built for the format it is being walked against:
-    /// its `ap_types` table must be the one `parse_fmt_types` filled in for
-    /// `fmt`, its `arg_cur` must say where `ap` really is, and the argument it
-    /// reaches must have been passed as a pointer.
-    unsafe fn next_pointer(&mut self) -> *const c_void {
-        if let Some(tvs) = self.typvals() {
-            tv_ptr(tvs, &mut self.arg_idx)
-        } else {
-            unsafe { self.position() };
-            unsafe { self.ap.next_arg::<*mut c_void>() as *const c_void }
-        }
-    }
-
-    /// # Safety
-    ///
-    /// `self` must be an `Args` built for the format it is being walked against:
-    /// its `ap_types` table must be the one `parse_fmt_types` filled in for
-    /// `fmt`, its `arg_cur` must say where `ap` really is, and the argument it
-    /// reaches must have been passed as a `double`.
-    pub(super) unsafe fn next_float(&mut self) -> c_double {
-        if let Some(tvs) = self.typvals() {
-            tv_float(tvs, &mut self.arg_idx)
-        } else {
-            unsafe { self.position() };
-            unsafe { self.ap.next_arg::<c_double>() }
-        }
-    }
-}
-
-/// One argument, read at the C type `$ty`.
-///
-/// Only the `va_list` side has a type to read at; the typval side hands
-/// back a Number and the C narrows it with a cast, which is what the `as`
-/// here reproduces. A length modifier is therefore *unobservable* through
-/// `printf()` for everything wider than the Number -- `%llu` and `%zu` read
-/// the same 64-bit field.
-macro_rules! next_number {
-    ($args:expr, $ty:ty) => {
-        if let Some(tvs) = $args.typvals() {
-            tv_nr(tvs, &mut $args.arg_idx) as $ty
-        } else {
-            unsafe { $args.position() };
-            unsafe { $args.ap.next_arg::<$ty>() }
-        }
-    };
 }
 
 // ---------------------------------------------------------------------
@@ -284,8 +218,8 @@ macro_rules! next_number {
 /// A parsed `%` conversion: everything between the `%` and the end of the
 /// specifier, plus the two padding counts the render step fills in.
 pub(super) struct Conversion {
-    pub(super) min_field_width: size_t,
-    pub(super) precision: size_t,
+    pub(super) min_field_width: usize,
+    pub(super) precision: usize,
     pub(super) precision_specified: bool,
     pub(super) zero_padding: bool,
     pub(super) justify_left: bool,
@@ -298,43 +232,37 @@ pub(super) struct Conversion {
     pub(super) length_modifier: u8,
     pub(super) fmt_spec: u8,
     /// Zeros inserted between the sign/prefix and the digits.
-    pub(super) zeros_to_pad: size_t,
+    pub(super) zeros_to_pad: usize,
     /// How far into the rendered text those zeros go.
-    pub(super) zero_insertion_ind: size_t,
+    pub(super) zero_insertion_ind: usize,
 }
 
 /// Where a rendered conversion ended up.
-pub(super) enum Body {
+pub(super) enum Body<'b> {
     /// The first `n` bytes of the caller's scratch buffer.
-    Tmp(size_t),
-    /// `n` bytes at a pointer the caller does not own.
-    At(*const c_char, size_t),
+    Tmp(usize),
+    /// Bytes the caller does not own: the format's own, or a literal.
+    At(&'b [u8]),
+    /// The first `n` bytes of an argument's text.
+    Text(Cow<'b, [u8]>, usize),
 }
 
 /// Read the number a `*` field width or precision refers to.
 ///
 /// `digstart` is only used to quote the offending digits in `E1510`; the
-/// `va_list` spelling clamps instead of raising, because an internal
+/// value-array spelling clamps instead of raising, because an internal
 /// `vim_snprintf` has no user to blame.
-///
-/// # Safety
-///
-/// `digstart` must point at a NUL-terminated string.
-unsafe fn star_argument(
-    args: &mut Args,
-    p: &mut *const c_char,
-    digstart: *const c_char,
-) -> Result<c_int, ()> {
+fn star_argument(args: &mut Args, fmt: &[u8], p: &mut usize, digstart: usize) -> Result<c_int, ()> {
+    let typed = args.typvals().is_some();
     // `*N$` addresses the width argument positionally.
-    if ascii_isdigit(unsafe { **p as c_int }) {
-        args.arg_idx =
-            unsafe { get_unsigned_int(digstart, p, args.typvals().is_some()) }.ok_or(())? as c_int;
-        *p = unsafe { p.add(1) }; // step over the '$'
+    if ascii_isdigit(c_int::from(byte_at(fmt, *p))) {
+        args.arg_idx = get_unsigned_int(fmt, digstart, p, typed).ok_or(())? as c_int;
+        *p += 1; // step over the '$'
     }
-    let mut j = next_number!(args, c_int);
+    let mut j = args.next_bits() as c_int;
     if j > MAX_ALLOWED_STRING_WIDTH {
-        if args.typvals().is_some() {
-            unsafe { format_overflow_error(digstart) };
+        if typed {
+            format_overflow_error(fmt, digstart);
             return Err(());
         }
         j = MAX_ALLOWED_STRING_WIDTH;
@@ -344,20 +272,11 @@ unsafe fn star_argument(
 
 /// Parse one conversion, leaving `*p` on its final character.
 ///
-/// Reads arguments as it goes: a `*` width or precision consumes one before
-/// the conversion's own argument.
-///
-/// # Safety
-///
-/// `p` must point at a cursor standing on the `%` of a conversion in the NUL-
-/// terminated format `args` was built for; it is advanced past what is
-/// parsed. `args` carries the same obligation as `Args::next`: its argument
-/// list and type table must match that format.
-unsafe fn parse_conversion(
-    args: &mut Args,
-    p: &mut *const c_char,
-    tvs_present: bool,
-) -> Result<Conversion, ()> {
+/// `*p` stands on the `%` of a conversion in `fmt`. Reads arguments as it
+/// goes: a `*` width or precision consumes one before the conversion's own
+/// argument.
+fn parse_conversion(args: &mut Args, fmt: &[u8], p: &mut usize) -> Result<Conversion, ()> {
+    let typed = args.typvals().is_some();
     let mut c = Conversion {
         min_field_width: 0,
         precision: 0,
@@ -372,23 +291,25 @@ unsafe fn parse_conversion(
         zeros_to_pad: 0,
         zero_insertion_ind: 0,
     };
+    let at = |i: usize| byte_at(fmt, i);
+    let digit = |i: usize| ascii_isdigit(c_int::from(byte_at(fmt, i)));
 
-    *p = unsafe { p.add(1) }; // step over the '%'
+    *p += 1; // step over the '%'
 
     // A leading run of digits followed by '$' names the argument.
     let mut pos_arg = -1;
     let mut ptype = *p;
-    while ascii_isdigit(unsafe { *ptype as c_int }) {
-        ptype = unsafe { ptype.add(1) };
+    while digit(ptype) {
+        ptype += 1;
     }
-    if unsafe { *ptype as u8 } == b'$' {
+    if at(ptype) == b'$' {
         let digstart = *p;
-        pos_arg = unsafe { get_unsigned_int(digstart, p, tvs_present) }.ok_or(())? as c_int;
-        *p = unsafe { p.add(1) }; // step over the '$'
+        pos_arg = get_unsigned_int(fmt, digstart, p, typed).ok_or(())? as c_int;
+        *p += 1; // step over the '$'
     }
 
     loop {
-        match unsafe { **p as u8 } {
+        match at(*p) {
             b'0' => c.zero_padding = true,
             b'-' => c.justify_left = true,
             b'+' => {
@@ -400,42 +321,38 @@ unsafe fn parse_conversion(
             b'\'' => {} // accepted and ignored
             _ => break,
         }
-        *p = unsafe { p.add(1) };
+        *p += 1;
     }
 
     // Field width. A negative `*` width means left-justified.
-    if unsafe { **p as u8 } == b'*' {
-        let digstart = unsafe { p.add(1) };
-        *p = unsafe { p.add(1) };
-        let j = unsafe { star_argument(args, p, digstart) }?;
-        if j >= 0 {
-            c.min_field_width = j as size_t;
-        } else {
-            c.min_field_width = -j as size_t;
+    if at(*p) == b'*' {
+        let digstart = *p + 1;
+        *p += 1;
+        let j = star_argument(args, fmt, p, digstart)?;
+        c.min_field_width = j.unsigned_abs() as usize;
+        if j < 0 {
             c.justify_left = true;
         }
-    } else if ascii_isdigit(unsafe { **p as c_int }) {
+    } else if digit(*p) {
         let digstart = *p;
-        c.min_field_width =
-            unsafe { get_unsigned_int(digstart, p, tvs_present) }.ok_or(())? as size_t;
+        c.min_field_width = get_unsigned_int(fmt, digstart, p, typed).ok_or(())? as usize;
     }
 
     // Precision. A negative `*` precision is as good as none.
-    if unsafe { **p as u8 } == b'.' {
-        *p = unsafe { p.add(1) };
+    if at(*p) == b'.' {
+        *p += 1;
         c.precision_specified = true;
-        if ascii_isdigit(unsafe { **p as c_int }) {
+        if digit(*p) {
             let digstart = *p;
-            c.precision =
-                unsafe { get_unsigned_int(digstart, p, tvs_present) }.ok_or(())? as size_t;
-        } else if unsafe { **p as u8 } == b'*' {
+            c.precision = get_unsigned_int(fmt, digstart, p, typed).ok_or(())? as usize;
+        } else if at(*p) == b'*' {
             // Note the asymmetry with the width above: this `digstart`
             // includes the `*`, so `E1510` quotes it too.
             let digstart = *p;
-            *p = unsafe { p.add(1) };
-            let j = unsafe { star_argument(args, p, digstart) }?;
+            *p += 1;
+            let j = star_argument(args, fmt, p, digstart)?;
             if j >= 0 {
-                c.precision = j as size_t;
+                c.precision = j as usize;
             } else {
                 c.precision_specified = false;
                 c.precision = 0;
@@ -443,17 +360,17 @@ unsafe fn parse_conversion(
         }
     }
 
-    if matches!(unsafe { **p as u8 }, b'h' | b'l' | b'z') {
-        c.length_modifier = unsafe { **p as u8 };
-        *p = unsafe { p.add(1) };
-        if c.length_modifier == b'l' && unsafe { **p as u8 } == b'l' {
+    if matches!(at(*p), b'h' | b'l' | b'z') {
+        c.length_modifier = at(*p);
+        *p += 1;
+        if c.length_modifier == b'l' && at(*p) == b'l' {
             c.length_modifier = b'L'; // ll
-            *p = unsafe { p.add(1) };
+            *p += 1;
         }
     }
 
     // Synonyms, each implying a length modifier of its own.
-    c.fmt_spec = unsafe { **p as u8 };
+    c.fmt_spec = at(*p);
     match c.fmt_spec {
         b'i' => c.fmt_spec = b'd',
         b'D' => {
@@ -473,10 +390,7 @@ unsafe fn parse_conversion(
 
     // Every Vimscript Number is 64-bit, so an integer conversion with
     // no length modifier still has to be read at the widest type.
-    if tvs_present
-        && c.length_modifier == 0
-        && matches!(c.fmt_spec, b'd' | b'u' | b'o' | b'x' | b'X')
-    {
+    if typed && c.length_modifier == 0 && matches!(c.fmt_spec, b'd' | b'u' | b'o' | b'x' | b'X') {
         c.length_modifier = b'L';
     }
 
@@ -490,59 +404,52 @@ unsafe fn parse_conversion(
 // Rendering
 // ---------------------------------------------------------------------
 
-/// `%%`, `%c`, `%s` and `%S`.
+/// `%%`, `%c`, `%s` and `%S`, the conversion's character at `fmt[p]`.
 ///
 /// `%S` is the one conversion that measures in *display cells*: its
 /// precision bounds the cell count, and the field width is then corrected
 /// by the difference between bytes and cells so that padding still lines
 /// up on screen.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-unsafe fn render_string(
+fn render_string<'b, 'a: 'b>(
     c: &mut Conversion,
-    args: &mut Args,
-    p: *const c_char,
-    tmp: &mut [c_char; TMP],
-    numbuf: &mut NumBuf,
-    tofree: &mut *mut c_char,
-) -> Body {
+    args: &mut Args<'a>,
+    fmt: &'b [u8],
+    p: usize,
+    tmp: &mut [u8; TMP],
+    numbuf: &'b mut NumBuf,
+) -> Body<'b> {
     match c.fmt_spec {
-        b'%' => Body::At(p, 1),
+        b'%' => Body::At(&fmt[p..=p]),
         b'c' => {
             // The C points at a `uchar` local; the scratch buffer is
             // the same one byte.
-            tmp[0] = next_number!(args, c_int) as u8 as c_char;
+            tmp[0] = args.next_bits() as u8;
             Body::Tmp(1)
         }
         // b's' | b'S'
         _ => {
-            // SAFETY: the caller's obligation, forwarded.
-            let str_arg = unsafe { args.next_string(tofree, numbuf) };
-            if str_arg.is_null() {
-                return Body::At(c"[NULL]".as_ptr(), 6);
-            }
+            // Never look past the precision -- except that `%S` walks the
+            // whole string for its cells. (The 2^31 clamp is upstream's,
+            // for a `memchr` that disliked more.)
+            let cap = c.precision.min(0x7fffffff);
+            let max = (c.precision_specified && c.fmt_spec == b's').then_some(cap);
+            let Some(text) = args.next_string(numbuf, max) else {
+                return Body::At(b"[NULL]");
+            };
             let mut str_arg_l = if !c.precision_specified {
-                unsafe { cstr::bytes_at(str_arg) }.len()
+                text.len()
             } else if c.precision == 0 {
                 0
             } else {
-                // Never look past the precision. (The 2^31 clamp is
-                // upstream's, for a `memchr` that disliked more.)
-                let cap = c.precision.min(0x7fffffff);
-                let end = unsafe { xmemscan(str_arg.cast(), 0, cap) }.cast::<c_char>();
-                unsafe { end.offset_from(str_arg) as size_t }
+                text.len().min(cap)
             };
 
             if c.fmt_spec == b'S' {
-                // SAFETY: the caller's argument is a NUL-terminated string.
-                let bytes = unsafe { cstr::bytes_at(str_arg) };
-                let mut cells: size_t = 0;
+                let mut cells: usize = 0;
                 let mut at = 0;
-                while at < bytes.len() {
-                    let rest = &bytes[at..];
-                    let cell = cells_at(rest).cast_unsigned() as size_t;
+                while at < text.len() {
+                    let rest = &text[at..];
+                    let cell = cells_at(rest).cast_unsigned() as usize;
                     if c.precision_specified && cells + cell > c.precision {
                         break;
                     }
@@ -568,46 +475,57 @@ unsafe fn render_string(
                         .saturating_add_signed(str_arg_l as isize - cells as isize);
                 }
             }
-            Body::At(str_arg, str_arg_l)
+            Body::Text(text, str_arg_l)
         }
+    }
+}
+
+/// Text rendered into the scratch buffer, from an offset on.
+pub(super) struct TmpWriter<'t> {
+    pub(super) buf: &'t mut [u8; TMP],
+    pub(super) len: usize,
+}
+
+impl core::fmt::Write for TmpWriter<'_> {
+    fn write_str(&mut self, text: &str) -> core::fmt::Result {
+        let end = self.len + text.len();
+        let room = self.buf.get_mut(self.len..end).ok_or(core::fmt::Error)?;
+        room.copy_from_slice(text.as_bytes());
+        self.len = end;
+        Ok(())
     }
 }
 
 /// `%d`, `%u`, `%b`, `%B`, `%o`, `%x`, `%X` and `%p`.
 ///
 /// The argument is read at the width its length modifier names, rendered
-/// into `tmp` through libc's `snprintf` (or, for `%b`, bit by bit), and
-/// then `zero_insertion_ind` is moved past whatever must stay in front of
-/// the zeros -- a `-` sign, or an alternate-form `0x` prefix.
-///
-/// # Safety
-///
-/// The argument `args` reaches next must have been passed at the type `c`'s
-/// conversion and length modifier name -- a `va_list` is read blind, and
-/// reading a `double` as an `int` is undefined behaviour.
-unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; TMP]) -> Body {
+/// into `tmp` as libc's `%ld`/`%lu`/`%lo`/`%lx`/`%p` would (or, for `%b`,
+/// bit by bit), and then `zero_insertion_ind` is moved past whatever must
+/// stay in front of the zeros -- a `-` sign, or an alternate-form `0x`
+/// prefix.
+fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [u8; TMP]) -> Body<'static> {
     // `arg_sign` is 0 for zero, 1 for positive, -1 for negative; an
     // unsigned value is never negative.
     let mut arg_sign = 0;
-    let mut arg: intmax_t = 0;
-    let mut uarg: uintmax_t = 0;
-    let mut ptr_arg = ptr::null::<c_void>();
+    let mut arg: i64 = 0;
+    let mut uarg: u64 = 0;
+    let mut address = 0usize;
 
     if c.fmt_spec == b'p' {
-        ptr_arg = unsafe { args.next_pointer() };
-        if !ptr_arg.is_null() {
+        address = args.next_address();
+        if address != 0 {
             arg_sign = 1;
         }
     } else if matches!(c.fmt_spec, b'b' | b'B') {
-        uarg = next_number!(args, c_ulonglong) as uintmax_t;
+        uarg = args.next_bits();
         arg_sign = c_int::from(uarg != 0);
     } else if c.fmt_spec == b'd' {
+        let bits = args.next_bits();
         arg = match c.length_modifier {
-            b'h' => next_number!(args, c_int) as int16_t as intmax_t,
-            b'l' => next_number!(args, c_long) as intmax_t,
-            b'L' => next_number!(args, c_longlong) as intmax_t,
-            b'z' => next_number!(args, ptrdiff_t) as intmax_t,
-            _ => next_number!(args, c_int) as intmax_t,
+            b'h' => i64::from(bits as c_int as i16),
+            b'l' | b'L' => bits as i64,
+            b'z' => bits as isize as i64,
+            _ => i64::from(bits as c_int),
         };
         arg_sign = match arg {
             0 => 0,
@@ -615,17 +533,17 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
             _ => -1,
         };
     } else {
+        let bits = args.next_bits();
         uarg = match c.length_modifier {
-            b'h' => next_number!(args, c_uint) as uint16_t as uintmax_t,
-            b'l' => next_number!(args, c_ulong) as uintmax_t,
-            b'L' => next_number!(args, c_ulonglong) as uintmax_t,
-            b'z' => next_number!(args, size_t) as uintmax_t,
-            _ => next_number!(args, c_uint) as uintmax_t,
+            b'h' => u64::from(bits as c_uint as u16),
+            b'l' | b'L' => bits,
+            b'z' => bits as usize as u64,
+            _ => u64::from(bits as c_uint),
         };
         arg_sign = c_int::from(uarg != 0);
     }
 
-    let mut str_arg_l: size_t = 0;
+    let mut str_arg_l: usize = 0;
     // A precision on an integer means "at least this many digits", so
     // the zero flag has nothing left to do.
     if c.precision_specified {
@@ -635,12 +553,12 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
     // Whatever has to precede the digits goes in first.
     if c.fmt_spec == b'd' {
         if c.force_sign && arg_sign >= 0 {
-            tmp[str_arg_l] = if c.space_for_positive { b' ' } else { b'+' } as c_char;
+            tmp[str_arg_l] = if c.space_for_positive { b' ' } else { b'+' };
             str_arg_l += 1;
         }
     } else if c.alternate_form && arg_sign != 0 && matches!(c.fmt_spec, b'x' | b'X' | b'b' | b'B') {
-        tmp[str_arg_l] = b'0' as c_char;
-        tmp[str_arg_l + 1] = c.fmt_spec as c_char;
+        tmp[str_arg_l] = b'0';
+        tmp[str_arg_l + 1] = c.fmt_spec;
         str_arg_l += 2;
     }
 
@@ -651,53 +569,44 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
 
     // `%.0d` of zero prints nothing at all.
     if !(c.precision == 0 && arg_sign == 0) {
-        match c.fmt_spec {
-            b'p' => {
-                let out = unsafe { tmp.as_mut_ptr().add(str_arg_l) };
-                let room = TMP - str_arg_l;
-                str_arg_l += unsafe { snprintf!(out, room, c"%p".as_ptr(), ptr_arg) as size_t };
-            }
-            b'd' => {
-                let out = unsafe { tmp.as_mut_ptr().add(str_arg_l) };
-                let room = TMP - str_arg_l;
-                str_arg_l += unsafe { snprintf!(out, room, c"%ld".as_ptr(), arg) as size_t };
-            }
+        let mut out = TmpWriter {
+            buf: tmp,
+            len: str_arg_l,
+        };
+        let written = match c.fmt_spec {
+            // glibc's `%p`.
+            b'p' if address == 0 => out.write_str("(nil)"),
+            b'p' => write!(out, "{address:#x}"),
+            b'd' => write!(out, "{arg}"),
             b'b' | b'B' => {
                 // Binary has no libc conversion: skip the leading
                 // zeros, then emit one character per remaining bit.
-                let mut bits = uintmax_t::BITS as usize;
+                let mut bits = u64::BITS;
                 while bits > 0 && uarg >> (bits - 1) & 1 == 0 {
                     bits -= 1;
                 }
                 while bits > 0 {
                     bits -= 1;
-                    tmp[str_arg_l] = if uarg >> bits & 1 != 0 { b'1' } else { b'0' } as c_char;
-                    str_arg_l += 1;
+                    out.buf[out.len] = if uarg >> bits & 1 != 0 { b'1' } else { b'0' };
+                    out.len += 1;
                 }
+                Ok(())
             }
-            _ => {
-                // `PRIuMAX` is "lu", so the conversion character is the
-                // last byte and any of u/o/x/X can be dropped in.
-                let mut f = *b"%lu\0";
-                f[2] = c.fmt_spec;
-                let out = unsafe { tmp.as_mut_ptr().add(str_arg_l) };
-                let room = TMP - str_arg_l;
-                str_arg_l +=
-                    unsafe { snprintf!(out, room, f.as_ptr().cast::<c_char>(), uarg) as size_t };
-            }
-        }
-        debug_assert!(str_arg_l < TMP);
+            b'o' => write!(out, "{uarg:o}"),
+            b'x' => write!(out, "{uarg:x}"),
+            b'X' => write!(out, "{uarg:X}"),
+            _ => write!(out, "{uarg}"),
+        };
+        debug_assert!(written.is_ok() && out.len < TMP);
+        str_arg_l = out.len;
 
         // Zeros go after the sign and after an `0x`/`0b` prefix.
-        if c.zero_insertion_ind < str_arg_l && tmp[c.zero_insertion_ind] as u8 == b'-' {
+        if c.zero_insertion_ind < str_arg_l && tmp[c.zero_insertion_ind] == b'-' {
             c.zero_insertion_ind += 1;
         }
         if c.zero_insertion_ind + 1 < str_arg_l
-            && tmp[c.zero_insertion_ind] as u8 == b'0'
-            && matches!(
-                tmp[c.zero_insertion_ind + 1] as u8,
-                b'x' | b'X' | b'b' | b'B'
-            )
+            && tmp[c.zero_insertion_ind] == b'0'
+            && matches!(tmp[c.zero_insertion_ind + 1], b'x' | b'X' | b'b' | b'B')
         {
             c.zero_insertion_ind += 2;
         }
@@ -707,7 +616,7 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
     // `%#o` guarantees a leading zero, which it buys with precision.
     if c.alternate_form
         && c.fmt_spec == b'o'
-        && !(c.zero_insertion_ind < str_arg_l && tmp[c.zero_insertion_ind] as u8 == b'0')
+        && !(c.zero_insertion_ind < str_arg_l && tmp[c.zero_insertion_ind] == b'0')
         && (!c.precision_specified || c.precision < num_of_digits + 1)
     {
         c.precision = num_of_digits + 1;
@@ -718,10 +627,8 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
     // With `%0`, the field width is made up of zeros rather than
     // spaces — so it is the *zero* count that grows.
     if !c.justify_left && c.zero_padding {
-        let n = c.min_field_width as ptrdiff_t - (str_arg_l + c.zeros_to_pad) as ptrdiff_t;
-        if n > 0 {
-            c.zeros_to_pad += n as size_t;
-        }
+        let used = str_arg_l + c.zeros_to_pad;
+        c.zeros_to_pad += c.min_field_width.saturating_sub(used);
     }
 
     Body::Tmp(str_arg_l)
@@ -736,13 +643,10 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
 /// Three pieces in order: the field-width padding when right-justified, the
 /// zeros (which go *inside* the rendered text, after its sign or `0x`
 /// prefix), the text itself, and the field-width padding when left-justified.
-///
-/// # Safety
-///
-/// `body` must point at `len` readable bytes.
-unsafe fn emit_conversion(sink: &mut Sink, c: &Conversion, body: *const c_char, len: size_t) {
+fn emit_conversion(sink: &mut Sink, c: &Conversion, body: &[u8]) {
+    let len = body.len();
     let padding = || {
-        debug_assert!(len <= size_t::MAX - c.zeros_to_pad);
+        debug_assert!(len <= usize::MAX - c.zeros_to_pad);
         c.min_field_width.saturating_sub(len + c.zeros_to_pad)
     };
 
@@ -756,14 +660,14 @@ unsafe fn emit_conversion(sink: &mut Sink, c: &Conversion, body: *const c_char, 
         0
     } else {
         if c.zero_insertion_ind > 0 {
-            unsafe { sink.copy(body, c.zero_insertion_ind) };
+            sink.copy(&body[..c.zero_insertion_ind]);
         }
         sink.fill(b'0', c.zeros_to_pad);
         c.zero_insertion_ind
     };
 
     if len > split {
-        unsafe { sink.copy(body.add(split), len - split) };
+        sink.copy(&body[split..]);
     }
 
     if c.justify_left {
@@ -771,98 +675,84 @@ unsafe fn emit_conversion(sink: &mut Sink, c: &Conversion, body: *const c_char, 
     }
 }
 
-/// The formatter.
+/// The formatter: `fmt` (which holds no NUL) with the arguments `src` holds,
+/// into `out`.
 ///
-/// Returns the length the result *would* have had, excluding the NUL, so a
-/// return value at or past `str_m` means the output was truncated.
-///
-/// # Safety
-///
-/// `fmt` must point at a NUL-terminated format. Either `tvs` points at an
-/// array of initialized typvals long enough for the conversions `fmt` names,
-/// or it is null and `ap_start` holds exactly those arguments at exactly
-/// those types -- neither list carries its own length. `str` must point at
-/// `str_m` writable bytes the caller owns, unaliased for the call.
-pub unsafe fn vim_vsnprintf_typval<'f>(
-    str: *mut c_char,
-    str_m: size_t,
-    fmt: *const c_char,
-    ap_start: VaList<'f>,
-    tvs: Option<&[TypVal]>,
-) -> c_int {
-    let mut ap_types = ptr::null_mut::<*const c_char>();
-    let mut num_posarg = 0;
-    if unsafe { parse_fmt_types(&mut ap_types, &mut num_posarg, fmt, tvs) }.is_err() {
+/// Returns the length the result *would* have had, excluding the NUL, so an
+/// answer at or past `out.len()` means the output was truncated. A format the
+/// positional pass rejects answers 0 and leaves `out` alone; one a conversion
+/// rejects midway (an `E1510`) leaves what was written so far, unterminated.
+pub(in crate::strings) fn format(out: &mut [u8], fmt: &[u8], src: Source<'_>) -> usize {
+    let tvs = match src {
+        Source::Typvals(tvs) => Some(tvs),
+        Source::Values(_) => None,
+    };
+    let mut types = PosTypes::new();
+    if parse_fmt_types(&mut types, fmt, tvs.is_some(), tvs.map(<[TypVal]>::len)).is_err() {
         return 0;
     }
+    let num_posarg = types.len();
 
-    // SAFETY: the caller's promise about `fmt`/`tvs`/`ap_start`, and
-    // `ap_types` is the table `parse_fmt_types` just filled in for `fmt`.
-    let mut args = unsafe { Args::new(tvs, ap_start, ap_types, fmt) };
-    // SAFETY: the caller's promise -- `str_m` writable bytes at `str`.
-    let mut sink = unsafe { Sink::new(str, str_m) };
-    let mut p = if fmt.is_null() { c"".as_ptr() } else { fmt };
+    let mut args = Args { src, arg_idx: 1 };
+    let mut sink = Sink::new(out);
+    let mut tmp = [0u8; TMP];
+    let mut numbuf = NumBuf::new();
+    let mut p = 0;
 
-    'error: {
-        while unsafe { *p } != 0 {
-            if unsafe { *p as u8 } != b'%' {
-                // A run of literal text, copied through in one step.
-                let n = unsafe { xstrchrnul(p.add(1), b'%' as c_char).offset_from(p) as size_t };
-                unsafe { sink.copy(p, n) };
-                p = unsafe { p.add(n) };
-                continue;
-            }
-
-            let Ok(mut c) = (unsafe { parse_conversion(&mut args, &mut p, tvs.is_some()) }) else {
-                break 'error;
-            };
-            let mut tmp = [0 as c_char; TMP];
-            let mut numbuf = NumBuf::new();
-            let mut tofree = ptr::null_mut::<c_char>();
-
-            let body = match c.fmt_spec {
-                b'%' | b'c' | b's' | b'S' => unsafe {
-                    render_string(&mut c, &mut args, p, &mut tmp, &mut numbuf, &mut tofree)
-                },
-                b'd' | b'u' | b'b' | b'B' | b'o' | b'x' | b'X' | b'p' => unsafe {
-                    render_integer(&mut c, &mut args, &mut tmp)
-                },
-                b'f' | b'F' | b'e' | b'E' | b'g' | b'G' => unsafe {
-                    render_float(&mut c, &mut args, &mut tmp)
-                },
-                _ => {
-                    // Not a conversion at all: the character is copied
-                    // through, flags and width discarded.
-                    c.zero_padding = false;
-                    c.justify_left = true;
-                    c.min_field_width = 0;
-                    Body::At(p, size_t::from(unsafe { *p } != 0))
-                }
-            };
-            let (body, len) = match body {
-                Body::Tmp(len) => (tmp.as_ptr(), len),
-                Body::At(at, len) => (at, len),
-            };
-
-            if unsafe { *p } != 0 {
-                p = unsafe { p.add(1) }; // step over the conversion character
-            }
-            unsafe { emit_conversion(&mut sink, &c, body, len) };
-            unsafe { xfree(tofree.cast()) };
+    while p < fmt.len() {
+        if fmt[p] != b'%' {
+            // A run of literal text, copied through in one step.
+            let end = fmt[p + 1..]
+                .iter()
+                .position(|&b| b == b'%')
+                .map_or(fmt.len(), |at| p + 1 + at);
+            sink.copy(&fmt[p..end]);
+            p = end;
+            continue;
         }
 
-        sink.terminate();
-        // `printf()` complains about arguments it was not asked for.
-        let unused = if num_posarg != 0 {
-            num_posarg
-        } else {
-            args.arg_idx - 1
+        let Ok(mut c) = parse_conversion(&mut args, fmt, &mut p) else {
+            return sink.produced;
         };
-        if tvs.is_some_and(|tvs| usize::try_from(unused).is_ok_and(|n| n < tvs.len())) {
-            emsg(gettext(E_TOO_MANY_ARGS));
+
+        let body = match c.fmt_spec {
+            b'%' | b'c' | b's' | b'S' => {
+                render_string(&mut c, &mut args, fmt, p, &mut tmp, &mut numbuf)
+            }
+            b'd' | b'u' | b'b' | b'B' | b'o' | b'x' | b'X' | b'p' => {
+                render_integer(&mut c, &mut args, &mut tmp)
+            }
+            b'f' | b'F' | b'e' | b'E' | b'g' | b'G' => render_float(&mut c, &mut args, &mut tmp),
+            _ => {
+                // Not a conversion at all: the character is copied
+                // through, flags and width discarded.
+                c.zero_padding = false;
+                c.justify_left = true;
+                c.min_field_width = 0;
+                Body::At(&fmt[p.min(fmt.len())..(p + 1).min(fmt.len())])
+            }
+        };
+        let text: &[u8] = match &body {
+            Body::Tmp(len) => &tmp[..*len],
+            Body::At(at) => at,
+            Body::Text(text, len) => &text[..*len],
+        };
+
+        if p < fmt.len() {
+            p += 1; // step over the conversion character
         }
+        emit_conversion(&mut sink, &c, text);
     }
 
-    unsafe { xfree(ap_types.cast()) };
-    sink.produced as c_int
+    sink.terminate();
+    // `printf()` complains about arguments it was not asked for.
+    let unused = if num_posarg != 0 {
+        num_posarg
+    } else {
+        usize::try_from(args.arg_idx - 1).unwrap_or(usize::MAX)
+    };
+    if tvs.is_some_and(|tvs| unused < tvs.len()) {
+        emsg(gettext(E_TOO_MANY_ARGS));
+    }
+    sink.produced
 }

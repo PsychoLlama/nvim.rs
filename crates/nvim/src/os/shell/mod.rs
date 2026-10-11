@@ -58,7 +58,7 @@ use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::startup::main_loop;
 use crate::state::MODE_EXTERNCMD;
 use crate::state::mode::State;
-use crate::strings::{vim_snprintf, vim_strnsave_unquoted, vim_strsave_escaped_ext};
+use crate::strings::{vim_strnsave_unquoted, vim_strsave_escaped_ext};
 use crate::tag::tag_freematch;
 use crate::types::ui::kUIMessages;
 use crate::types::{
@@ -633,12 +633,12 @@ unsafe fn shell_xescape_xquote(cmd: *const c_char) -> *mut c_char {
 
         // 'shellxquote' of "(" appends ")", of "\"(" appends ")\"".
         if sxq == c"(" {
-            vim_snprintf(ncmd, ncmd_size, c"(%s)".as_ptr(), ecmd);
+            crate::vim_snprintf!(ncmd, ncmd_size, c"(%s)".as_ptr(), ecmd);
         } else if sxq == c"\"(" {
-            vim_snprintf(ncmd, ncmd_size, c"\"(%s)\"".as_ptr(), ecmd);
+            crate::vim_snprintf!(ncmd, ncmd_size, c"\"(%s)\"".as_ptr(), ecmd);
         } else {
             let q = sxq.as_ptr();
-            vim_snprintf(ncmd, ncmd_size, c"%s%s%s".as_ptr(), q, ecmd, q);
+            crate::vim_snprintf!(ncmd, ncmd_size, c"%s%s%s".as_ptr(), q, ecmd, q);
         }
 
         if ecmd != cmd {

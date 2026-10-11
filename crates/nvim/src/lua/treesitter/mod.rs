@@ -26,7 +26,6 @@ use crate::memory::{memchrsub, strequal, xcalloc, xfree, xmalloc, xrealloc, xstr
 use crate::os::cshim::{__ctype_b_loc, snprintf};
 use crate::os::time::os_hrtime;
 use crate::registry::{IdMap, id_map};
-use crate::strings::vim_snprintf;
 use crate::types::{
     Handle, LineNr, LuaRef, int32_t, lua_Integer, lua_Number, lua_State, luaL_Reg, size_t, uint8_t,
     uint16_t, uint32_t, uint64_t, uv_lib_t,

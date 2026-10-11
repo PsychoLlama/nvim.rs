@@ -1,6 +1,6 @@
-{"path":"neovim::vim_snprintf","kind":"macro","file":"crates/nvim/src/variadic.rs","tests":["crates/nvim/tests/unit/printf_oracle.rs"]}
-{"path":"neovim::vim_snprintf_add","kind":"macro","file":"crates/nvim/src/variadic.rs","tests":["crates/nvim/tests/unit/printf_oracle.rs"]}
-{"path":"neovim::vim_snprintf_safelen","kind":"macro","file":"crates/nvim/src/variadic.rs","tests":["crates/nvim/tests/unit/printf_oracle.rs"]}
+{"path":"neovim::vim_snprintf","kind":"macro","file":"crates/nvim/src/strings/raw.rs","tests":["crates/nvim/tests/unit/printf_oracle.rs","crates/nvim/tests/unit/strings.rs"]}
+{"path":"neovim::vim_snprintf_add","kind":"macro","file":"crates/nvim/src/strings/raw.rs","tests":["crates/nvim/tests/unit/printf_oracle.rs"]}
+{"path":"neovim::vim_snprintf_safelen","kind":"macro","file":"crates/nvim/src/strings/raw.rs","tests":["crates/nvim/tests/unit/printf_oracle.rs"]}
 {"path":"neovim::api::extmark::describe_ns","kind":"fn","file":"crates/nvim/src/api/extmark/ns.rs","tests":["crates/nvim/tests/unit/namespace.rs"]}
 {"path":"neovim::api::extmark::nvim_create_namespace","kind":"fn","file":"crates/nvim/src/api/extmark/ns.rs","tests":["crates/nvim/tests/unit/namespace.rs"]}
 {"path":"neovim::api::extmark::nvim_get_namespaces","kind":"fn","file":"crates/nvim/src/api/extmark/ns.rs","tests":["crates/nvim/tests/unit/namespace.rs"]}
@@ -502,7 +502,6 @@
 {"path":"neovim::strings::reverse_text","kind":"fn","file":"crates/nvim/src/strings/mod.rs","tests":["crates/nvim/tests/unit/strings.rs","crates/nvim/tests/unit/strings_oracle.rs"]}
 {"path":"neovim::strings::strcase_save","kind":"fn","file":"crates/nvim/src/strings/case.rs","tests":["crates/nvim/tests/unit/strings.rs","crates/nvim/tests/unit/strings_oracle.rs"]}
 {"path":"neovim::strings::strrep","kind":"fn","file":"crates/nvim/src/strings/mod.rs","tests":["crates/nvim/tests/unit/strings_oracle.rs"]}
-{"path":"neovim::strings::vim_snprintf","kind":"fn","file":"crates/nvim/src/strings/printf/mod.rs","tests":["crates/nvim/tests/unit/strings.rs"]}
 {"path":"neovim::strings::vim_strchr","kind":"fn","file":"crates/nvim/src/strings/mod.rs","tests":["crates/nvim/tests/unit/strings.rs","crates/nvim/tests/unit/strings_oracle.rs"]}
 {"path":"neovim::strings::vim_strnsave_unquoted","kind":"fn","file":"crates/nvim/src/strings/escape.rs","tests":["crates/nvim/tests/unit/strings.rs","crates/nvim/tests/unit/strings_oracle.rs"]}
 {"path":"neovim::strings::vim_strsave_escaped","kind":"fn","file":"crates/nvim/src/strings/escape.rs","tests":["crates/nvim/tests/unit/strings.rs"]}

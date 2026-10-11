@@ -197,7 +197,7 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
                 // buffer the registry answered stays live for all of it.
                 let Some(mut buf) = winlayer::buffer(bufnr as ::core::ffi::c_int) else {
                     let mut ebuf: [::core::ffi::c_char; 256] = [0; 256];
-                    vim_snprintf(
+                    crate::vim_snprintf!(
                         &raw mut ebuf as *mut ::core::ffi::c_char,
                         BUFSIZE_0 as size_t,
                         c"invalid buffer handle: %d".as_ptr(),

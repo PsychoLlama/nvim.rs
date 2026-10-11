@@ -37,7 +37,6 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::e_fast_api_disabled;
 use crate::message::state::did_emsg;
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
-use crate::strings::vim_snprintf;
 use crate::types::{
     Arena, ArenaMem, Array, ConsumedBlk, Error, kErrorTypeException, kErrorTypeValidation,
     lua_State, size_t, uint64_t,
@@ -66,7 +65,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
 
         if !nlua_is_deferred_safe() && !viml_func_is_fast(name) {
             let length = cstr::bytes_at(name).len().min(NAME_LIMIT) + QUOTED_FMT_LEN;
-            vim_snprintf(
+            crate::vim_snprintf!(
                 refused.as_mut_ptr(),
                 length,
                 c"Vimscript function \"%s\"".as_ptr(),

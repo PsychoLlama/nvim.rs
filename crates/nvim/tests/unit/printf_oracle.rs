@@ -314,7 +314,11 @@ fn float_conversions() {
         let fp = fc.as_ptr();
         for &v in &values[..60] {
             let label = || format!("{f} {v:e}");
-            if f.starts_with("%2$") || f.starts_with("%*") {
+            if f.starts_with("%*") {
+                r.case(label, &|b, n| unsafe {
+                    vim_snprintf!(b, n, fp, 14 as c_int, 5 as c_int, v)
+                });
+            } else if f.starts_with("%2$") {
                 r.case(label, &|b, n| unsafe {
                     vim_snprintf!(b, n, fp, 14 as c_int, v)
                 });
@@ -329,7 +333,7 @@ fn float_conversions() {
             }
         }
     }
-    assert_eq!(r.digest.value(), 0x14596030ccb7140b, "float conversions");
+    assert_eq!(r.digest.value(), 0xeaca050400d1e242, "float conversions");
 }
 
 #[test]

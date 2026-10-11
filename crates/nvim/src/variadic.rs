@@ -10,20 +10,14 @@
 //! `aucmd_next` handed `snprintf` a `&CStr` (a fault in a debug build). The
 //! compiler said nothing either time.
 //!
-//! Every variadic the tree calls has a macro here of the same name, which
+//! Every libc and Lua variadic the tree calls has a macro here of the same
+//! name, which
 //! binds each variadic argument through [`c_arg`] and so through [`CArg`]:
 //! the thin scalars and raw pointers a `printf` conversion actually consumes.
+//! (The editor's own formatter, `vim_snprintf`, is not a variadic: its
+//! macros build a typed argument array instead -- see `strings::printf`.)
 //! Anything else is a compile error at the call site, where the fix is
 //! `.as_ptr()`:
-//!
-//! ```compile_fail,E0277
-//! // `spell_load_lang`'s shape: the owner, not its bytes.
-//! use core::ffi::c_char;
-//! use neovim::{memory::XString, vim_snprintf};
-//! fn spell_file(buf: *mut c_char, room: usize, lang: *const c_char, enc: &XString) {
-//!     unsafe { vim_snprintf!(buf, room, c"spell/%s.%s.spl".as_ptr(), lang, enc) };
-//! }
-//! ```
 //!
 //! ```compile_fail,E0277
 //! // `aucmd_next`'s shape: a `&CStr` is a fat reference.
@@ -84,39 +78,7 @@ pub mod direct {
     pub use crate::lua::ffi::{lua_pushfstring, luaL_error};
     pub use crate::lua::stdlib::nlua_push_errstr;
     pub use crate::os::cshim::snprintf;
-    pub use crate::strings::{printf_string, vim_snprintf, vim_snprintf_add, vim_snprintf_safelen};
     pub use ::libc::{fprintf, printf, sscanf};
-}
-
-/// `vim_snprintf(buf, len, fmt, args...)`, each argument bound by [`CArg`].
-#[macro_export]
-macro_rules! vim_snprintf {
-    ($buf:expr, $len:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
-        $crate::variadic::direct::vim_snprintf(
-            $buf, $len, $fmt $(, $crate::variadic::c_arg($arg))*
-        )
-    };
-}
-
-/// `vim_snprintf_add(buf, len, fmt, args...)`, each argument bound by [`CArg`].
-#[macro_export]
-macro_rules! vim_snprintf_add {
-    ($buf:expr, $len:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
-        $crate::variadic::direct::vim_snprintf_add(
-            $buf, $len, $fmt $(, $crate::variadic::c_arg($arg))*
-        )
-    };
-}
-
-/// `vim_snprintf_safelen(buf, len, fmt, args...)`, each argument bound by
-/// [`CArg`].
-#[macro_export]
-macro_rules! vim_snprintf_safelen {
-    ($buf:expr, $len:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
-        $crate::variadic::direct::vim_snprintf_safelen(
-            $buf, $len, $fmt $(, $crate::variadic::c_arg($arg))*
-        )
-    };
 }
 
 /// libc's `snprintf(buf, len, fmt, args...)`, each argument bound by [`CArg`].
@@ -150,14 +112,6 @@ macro_rules! printf {
 macro_rules! sscanf {
     ($text:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
         $crate::variadic::direct::sscanf($text, $fmt $(, $crate::variadic::c_arg($arg))*)
-    };
-}
-
-/// `printf_string(fmt, args...)`, each argument bound by [`CArg`].
-#[macro_export]
-macro_rules! printf_string {
-    ($fmt:expr $(, $arg:expr)* $(,)?) => {
-        $crate::variadic::direct::printf_string($fmt $(, $crate::variadic::c_arg($arg))*)
     };
 }
 

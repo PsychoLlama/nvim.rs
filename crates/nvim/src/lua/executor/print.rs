@@ -31,7 +31,6 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::profile::startup_timing;
 use crate::profile::{time_msg, time_pop, time_push};
 use crate::startup::main_loop;
-use crate::strings::vim_snprintf;
 use crate::types::ui::kUICmdline;
 use crate::types::{
     Event, HlMessage, HlMessageChunk, IOSIZE, MessageData, Object, ProfTime, String_0, TypVal,
@@ -157,7 +156,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
         drop(msg_text);
         let buff = xmalloc(IOSIZE as size_t).cast::<c_char>();
         let fmt = gettext(c"E5114: Converting print argument #%i: %.*s");
-        let len = vim_snprintf(
+        let len = crate::vim_snprintf!(
             buff,
             IOSIZE as size_t,
             fmt.as_ptr(),

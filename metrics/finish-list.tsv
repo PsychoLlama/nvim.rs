@@ -646,16 +646,13 @@ statusline/	statusline/mod.rs	1	26	8	19	deref:5 expr:2	other:5 str:3	other:2 str
 statusline/	statusline/status.rs	1	3	0	0	compound:1	-	-	-
 statusline/	statusline/stl/mod.rs	1	33	1	23	deref:7 expr:3	str:2	str:1	CStr::from_ptr:5 vim_snprintf_safelen:2 append_arg_number:1 atoi:1 describe_sign_text:1 fill_foldcolumn:1 from_raw_parts_mut:1 get_rel_pos:1
 statusline/	statusline/tabline.rs	1	9	1	5	compound:2	-	-	CStr::from_ptr:1 cstr_to_string:1 vim_snprintf:1
-strings/	*	9	393	53	214	deref:135 expr:40 ref:2	str:63 pp_str:6 other:3 void:2	str:15 void:2	.add:61 bytes_at:12 from_raw_parts_mut:10 CStr::from_ptr:8 c_str:6 copy_nonoverlapping:5 from_raw_parts:4 xfree:4
+strings/	*	6	166	29	103	deref:41 expr:20 ref:2	str:40 void:2 pp_str:1	str:12	.add:29 from_raw_parts_mut:11 CStr::from_ptr:9 bytes_at:9 copy_nonoverlapping:5 from_raw_parts:5 ThinCString::from_raw:3 XString::from_raw:3
 strings/	strings/case.rs	1	23	7	16	expr:4 deref:3	str:10	str:3	from_raw_parts_mut:4 CStr::from_ptr:2 from_raw_parts:2 .add:1 XString::from_raw:1 bytes_at:1 utf_char2bytes:1 utf_ptr2char_info:1
 strings/	strings/charindex.rs	1	0	0	0	-	-	-	-
 strings/	strings/escape.rs	1	72	4	38	deref:27 expr:7	str:6	str:4	.add:23 XString::from_raw:2 at:2 copy_nonoverlapping:2 find_cmdline_var:2 rem_backslash:2 bytes_at:1 from_raw_parts:1
 strings/	strings/eval.rs	1	21	0	12	deref:9	-	-	ThinCString::from_raw:3 .offset:2 skipwhite:2 strstr:2 .add:1 mb_string2cells:1 vim_str2nr:1
 strings/	strings/mod.rs	1	38	12	27	expr:8 ref:2 deref:1	str:15 void:2 pp_str:1	str:5	CStr::from_ptr:6 bytes_at:5 from_raw_parts_mut:5 .add:4 copy_nonoverlapping:3 from_raw_parts:1 strcasecmp:1 strchr:1
-strings/	strings/printf/emit.rs	1	75	13	45	deref:18 expr:12	str:12 pp_str:1	str:1 void:1	.add:13 bytes_at:2 xfree:2 .next_arg::<*const c_char>:1 .next_arg::<c_double>:1 write_bytes:1 xmemscan:1
-strings/	strings/printf/float.rs	1	30	4	16	deref:9 expr:5	str:1	-	.sub:2 bytes_at:2 .add:1 .copy_from:1 xstrlcpy:1
-strings/	strings/printf/mod.rs	1	17	5	13	deref:1 expr:1	str:10	str:1 void:1	vsnprintf:2 String_0::from_owned_parts:1 bytes_at:1 transmute:1 xfree:1 xmalloc:1
-strings/	strings/printf/spec.rs	1	117	8	47	deref:67 expr:3	str:9 pp_str:4 other:3	str:1	.add:18 c_str:6 .offset_from:1 c_str_len:1 xcalloc:1 xfree:1 xrealloc:1 xstrchrnul:1
+strings/	strings/raw.rs	1	12	6	10	deref:1 expr:1	str:9	-	bytes_at:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 xmemscan:1
 syntax/	*	13	185	18	110	deref:48 expr:16 ref:2 compound:1	other:10 str:5 value:4 void:2	other:5 str:3	at:12 .offset:7 .add:5 vim_regfree:4 bytes_at:3 vim_iswordp_buf:3 xfree:3 .assume_init:2
 syntax/	syntax/attr.rs	1	15	0	11	deref:4	-	-	.offset:3 vim_iswordp_buf:2
 syntax/	syntax/clear.rs	1	19	2	10	compound:1	other:2	-	vim_regfree:2 Box::from_raw:1

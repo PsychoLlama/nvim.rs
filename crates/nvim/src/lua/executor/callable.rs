@@ -38,7 +38,7 @@ use crate::lua::ffi::{
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;
-use crate::strings::{printf_string, vim_snprintf};
+
 use crate::types::{Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST};
 
 /// An all-zero [`lua_Debug`], which `lua_getinfo` fills.
@@ -206,8 +206,12 @@ pub unsafe fn nlua_funcref_str(ref_0: LuaRef) -> *mut c_char {
                     && ar.linedefined >= 0
                 {
                     let src = home_replace_save(None, ar.source.add(1));
-                    let str: String_0 =
-                        printf_string(c"<Lua %d: %s:%d>".as_ptr(), ref_0, src, ar.linedefined);
+                    let str: String_0 = crate::printf_string!(
+                        c"<Lua %d: %s:%d>".as_ptr(),
+                        ref_0,
+                        src,
+                        ar.linedefined
+                    );
                     xfree(src.cast::<c_void>());
                     // The caller frees the rendering, so the string gives
                     // its block up rather than releasing it here.
@@ -215,7 +219,7 @@ pub unsafe fn nlua_funcref_str(ref_0: LuaRef) -> *mut c_char {
                 }
             }
         }
-        printf_string(c"<Lua %d>".as_ptr(), ref_0).into_raw()
+        crate::printf_string!(c"<Lua %d>".as_ptr(), ref_0).into_raw()
     }
 }
 
@@ -229,7 +233,7 @@ pub fn nlua_func_exists(lua_funcname: &CStr) -> bool {
         // expression rather than looked up, so `v:lua.pkg.fn` works.
         let length = cstr::bytes_at(lua_funcname).len().wrapping_add(8);
         let str = xmalloc(length).cast::<c_char>();
-        vim_snprintf(str, length, c"return %s".as_ptr(), lua_funcname);
+        crate::vim_snprintf!(str, length, c"return %s".as_ptr(), lua_funcname);
 
         let args = Array::from(vec![Object::string(cstr_to_string(str))]);
 
