@@ -659,8 +659,9 @@ pub struct file_buffer_update_channels {
 }
 pub type GetFileRet = ::core::ffi::c_int;
 pub type GetFileFlags = ::core::ffi::c_uint;
-/// Not `Copy`: `multispace` and `leadmultispace` are owned runs, allocated
-/// by 'listchars' and freed when the window's value is replaced.
+/// Not `Copy`: `multispace` and `leadmultispace` are owned runs, made by
+/// 'listchars' and dropped when the window's value is replaced. A zeroed
+/// struct holds neither, which is what a zeroed window starts with.
 #[derive(Clone)]
 pub struct LcsChars {
     pub eol: ScreenChar,
@@ -676,8 +677,11 @@ pub struct LcsChars {
     pub leadtab3: ScreenChar,
     pub lead: ScreenChar,
     pub trail: ScreenChar,
-    pub multispace: *mut ScreenChar,
-    pub leadmultispace: *mut ScreenChar,
+    /// 'listchars' "multispace:": the run of characters a run of spaces
+    /// cycles through, `None` when the field is not set. Never empty.
+    pub multispace: Option<Box<[ScreenChar]>>,
+    /// 'listchars' "leadmultispace:", the same for leading spaces.
+    pub leadmultispace: Option<Box<[ScreenChar]>>,
     pub conceal: ScreenChar,
 }
 pub struct LLPos {

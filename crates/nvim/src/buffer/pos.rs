@@ -76,7 +76,7 @@ impl Entry {
     /// A fresh, zeroed entry, as upstream's `xcalloc(1, sizeof(WinInfo))`,
     /// with its option set's string values written: all-zero bytes are not
     /// a valid `Option<XString>`, for the reason
-    /// `optionstr::init_buf_string_options` states.
+    /// `optionstr::BUF_STRING_OPTIONS` states.
     pub(crate) fn new() -> Self {
         // SAFETY: `xcalloc` aborts rather than answering null, and a zeroed
         // `WinInfo` is otherwise the initial value upstream gives one; the

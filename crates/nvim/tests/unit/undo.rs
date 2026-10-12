@@ -114,7 +114,7 @@ mod write {
 
     use neovim::memory::{XString, xfree};
     use neovim::option::vars::P_UDIR;
-    use neovim::optionstr::init_buf_string_options;
+    use neovim::optionstr::BUF_STRING_OPTIONS;
     use neovim::types::{BufName, Buffer};
     use neovim::undo::format::UF_START_MAGIC;
     use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
@@ -165,7 +165,10 @@ mod write {
                 unsafe {
                     (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
                     (&raw mut (*storage.as_mut_ptr()).name).write(BufName::default());
-                    init_buf_string_options(storage.as_mut_ptr());
+                    for field in BUF_STRING_OPTIONS {
+                        let at = storage.as_mut_ptr().wrapping_byte_add(field.field_offset());
+                        at.cast::<Option<XString>>().write(None);
+                    }
                     storage.assume_init()
                 }
             };

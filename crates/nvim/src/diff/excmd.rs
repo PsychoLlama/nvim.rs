@@ -347,7 +347,6 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     window.redraw_later(UPD_NOT_VALID);
 }
 
-/// `free_string_option`, for one of the window's own option strings.
 /// `:diffoff[!]`: leave diff mode in this window, or with `!` in every
 /// window of the tabpage.
 ///

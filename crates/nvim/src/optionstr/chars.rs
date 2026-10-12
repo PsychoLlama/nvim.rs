@@ -25,8 +25,7 @@
 //! because a double-width character cannot go in one cell, so the box-drawing
 //! defaults degrade to ASCII when the encoding cannot render them narrow.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -35,36 +34,34 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
+use crate::formatted;
 use crate::global_cell::field;
 use crate::types::Candidate;
-use crate::vim_snprintf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::mem::offset_of;
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int, c_uint};
 
-use crate::charset::{char2cells, hexhex_at, ptr2cells};
+use crate::charset::{char2cells, hexhex_at, ptr2cells_at};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
-use crate::grid::{schar_from_char, schar_from_str};
-use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
-use crate::memory::{XString, xfree, xmalloc};
+use crate::grid::schar_from_char;
+use crate::mbyte::{c_cluster_len, c_cluster_schar};
+use crate::memory::XString;
 use crate::message::{e_invarg, e_leadtab_requires_tab};
 use crate::narrow::number_as_int;
-use crate::option::vars::{P_FCS, P_LCS, p_fcs, p_lcs};
+use crate::option::vars::{P_FCS, P_LCS};
 use crate::option::{StrVar, option_var};
 use crate::options::kOptListchars as kOptListcharsIdx;
-use crate::os::cshim::gettext_ptr;
+use crate::os::cshim::gettext;
 use crate::types::{
     CharsOption, Expand, FcsChars, LcsChars, NUL, OptError, OptSet, OptionSetFlags, ScreenChar,
-    WinOpt, int64_t, size_t,
+    WinOpt, int64_t,
 };
 use crate::winlayer;
 
+use super::frame::new_bytes;
 use super::{
-    OptString, OptStringRef, e_conflicts_with_value_of_fillchars,
-    e_conflicts_with_value_of_listchars, e_wrong_character_width_for_field_str,
-    e_wrong_number_of_characters_for_field_str, kFillchars, kListchars,
+    OptStringRef, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
+    e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str, kFillchars,
+    kListchars,
 };
 
 /// A 'fillchars' struct with every field blank -- what the assignment round
@@ -108,8 +105,8 @@ const NO_LIST_CHARS: LcsChars = LcsChars {
     leadtab3: 0,
     lead: 0,
     trail: 0,
-    multispace: ::core::ptr::null_mut::<ScreenChar>(),
-    leadmultispace: ::core::ptr::null_mut::<ScreenChar>(),
+    multispace: None,
+    leadmultispace: None,
     conceal: 0,
 };
 
@@ -133,12 +130,52 @@ enum Shape {
     LeadMultispace,
 }
 
+/// Where a field's character lands: the `ScreenChar` of the option's
+/// character struct it fills.
+#[derive(Clone, Copy)]
+enum Slot {
+    /// A field of a window's 'fillchars' characters.
+    Fill(fn(&mut FcsChars) -> &mut ScreenChar),
+    /// A field of a window's 'listchars' characters.
+    List(fn(&mut LcsChars) -> &mut ScreenChar),
+}
+
+/// The two character structs a parse fills, one of which it hands over.
+struct Chars {
+    fill: FcsChars,
+    list: LcsChars,
+}
+
+impl Chars {
+    /// Write `c` into the field `slot` names.
+    fn store(&mut self, slot: Slot, c: ScreenChar) {
+        match slot {
+            Slot::Fill(field) => *field(&mut self.fill) = c,
+            Slot::List(field) => *field(&mut self.list) = c,
+        }
+    }
+}
+
+/// A 'fillchars' slot, by field name.
+macro_rules! fill {
+    ($field:ident) => {
+        Slot::Fill(|chars| &mut chars.$field)
+    };
+}
+
+/// A 'listchars' slot, by field name.
+macro_rules! list {
+    ($field:ident) => {
+        Slot::List(|chars| &mut chars.$field)
+    };
+}
+
 /// One field of 'fillchars' or 'listchars'.
 struct Field {
     name: &'static CStr,
-    /// Byte offset of the `ScreenChar` this field's character fills, within
-    /// the option's character struct. The two run-valued fields have none.
-    slot: Option<usize>,
+    /// The `ScreenChar` this field's character fills. The two run-valued
+    /// fields have none.
+    slot: Option<Slot>,
     /// The preferred default, used only when it fits in one screen cell.
     def: Option<&'static CStr>,
     /// The default to use when `def` is too wide.
@@ -150,7 +187,7 @@ struct Field {
 /// spells one.
 const fn one(
     name: &'static CStr,
-    slot: usize,
+    slot: Slot,
     def: Option<&'static CStr>,
     fallback: Option<&'static CStr>,
 ) -> Field {
@@ -166,116 +203,71 @@ const fn one(
 /// The fields of 'fillchars', with the defaults that make a box-drawing
 /// terminal look right and the ASCII fallbacks for one that cannot.
 static FCS_TAB: [Field; 21] = [
-    one(c"stl", offset_of!(FcsChars, stl), Some(c" "), None),
-    one(c"stlnc", offset_of!(FcsChars, stlnc), Some(c" "), None),
-    one(c"wbr", offset_of!(FcsChars, wbr), Some(c" "), None),
-    one(
-        c"horiz",
-        offset_of!(FcsChars, horiz),
-        Some(c"\u{2500}"),
-        Some(c"-"),
-    ),
-    one(
-        c"horizup",
-        offset_of!(FcsChars, horizup),
-        Some(c"\u{2534}"),
-        Some(c"-"),
-    ),
+    one(c"stl", fill!(stl), Some(c" "), None),
+    one(c"stlnc", fill!(stlnc), Some(c" "), None),
+    one(c"wbr", fill!(wbr), Some(c" "), None),
+    one(c"horiz", fill!(horiz), Some(c"\u{2500}"), Some(c"-")),
+    one(c"horizup", fill!(horizup), Some(c"\u{2534}"), Some(c"-")),
     one(
         c"horizdown",
-        offset_of!(FcsChars, horizdown),
+        fill!(horizdown),
         Some(c"\u{252c}"),
         Some(c"-"),
     ),
-    one(
-        c"vert",
-        offset_of!(FcsChars, vert),
-        Some(c"\u{2502}"),
-        Some(c"|"),
-    ),
-    one(
-        c"vertleft",
-        offset_of!(FcsChars, vertleft),
-        Some(c"\u{2524}"),
-        Some(c"|"),
-    ),
+    one(c"vert", fill!(vert), Some(c"\u{2502}"), Some(c"|")),
+    one(c"vertleft", fill!(vertleft), Some(c"\u{2524}"), Some(c"|")),
     one(
         c"vertright",
-        offset_of!(FcsChars, vertright),
+        fill!(vertright),
         Some(c"\u{251c}"),
         Some(c"|"),
     ),
     one(
         c"verthoriz",
-        offset_of!(FcsChars, verthoriz),
+        fill!(verthoriz),
         Some(c"\u{253c}"),
         Some(c"+"),
     ),
-    one(
-        c"fold",
-        offset_of!(FcsChars, fold),
-        Some(c"\u{b7}"),
-        Some(c"-"),
-    ),
-    one(
-        c"foldopen",
-        offset_of!(FcsChars, foldopen),
-        Some(c"-"),
-        None,
-    ),
+    one(c"fold", fill!(fold), Some(c"\u{b7}"), Some(c"-")),
+    one(c"foldopen", fill!(foldopen), Some(c"-"), None),
     // Note the name: the field is "foldclose", the struct member
     // `foldclosed`.
-    one(
-        c"foldclose",
-        offset_of!(FcsChars, foldclosed),
-        Some(c"+"),
-        None,
-    ),
-    one(
-        c"foldsep",
-        offset_of!(FcsChars, foldsep),
-        Some(c"\u{2502}"),
-        Some(c"|"),
-    ),
-    one(c"foldinner", offset_of!(FcsChars, foldinner), None, None),
-    one(c"diff", offset_of!(FcsChars, diff), Some(c"-"), None),
-    one(c"msgsep", offset_of!(FcsChars, msgsep), Some(c" "), None),
-    one(c"eob", offset_of!(FcsChars, eob), Some(c"~"), None),
-    one(
-        c"lastline",
-        offset_of!(FcsChars, lastline),
-        Some(c"@"),
-        None,
-    ),
-    one(c"trunc", offset_of!(FcsChars, trunc), Some(c">"), None),
-    one(c"truncrl", offset_of!(FcsChars, truncrl), Some(c"<"), None),
+    one(c"foldclose", fill!(foldclosed), Some(c"+"), None),
+    one(c"foldsep", fill!(foldsep), Some(c"\u{2502}"), Some(c"|")),
+    one(c"foldinner", fill!(foldinner), None, None),
+    one(c"diff", fill!(diff), Some(c"-"), None),
+    one(c"msgsep", fill!(msgsep), Some(c" "), None),
+    one(c"eob", fill!(eob), Some(c"~"), None),
+    one(c"lastline", fill!(lastline), Some(c"@"), None),
+    one(c"trunc", fill!(trunc), Some(c">"), None),
+    one(c"truncrl", fill!(truncrl), Some(c"<"), None),
 ];
 
 /// The fields of 'listchars'. None of them has a default: an unmentioned
 /// field draws nothing.
 static LCS_TAB: [Field; 12] = [
-    one(c"eol", offset_of!(LcsChars, eol), None, None),
-    one(c"extends", offset_of!(LcsChars, ext), None, None),
-    one(c"nbsp", offset_of!(LcsChars, nbsp), None, None),
-    one(c"precedes", offset_of!(LcsChars, prec), None, None),
-    one(c"space", offset_of!(LcsChars, space), None, None),
+    one(c"eol", list!(eol), None, None),
+    one(c"extends", list!(ext), None, None),
+    one(c"nbsp", list!(nbsp), None, None),
+    one(c"precedes", list!(prec), None, None),
+    one(c"space", list!(space), None, None),
     Field {
         name: c"tab",
-        slot: Some(offset_of!(LcsChars, tab2)),
+        slot: Some(list!(tab2)),
         def: None,
         fallback: None,
         shape: Shape::Tab,
     },
     Field {
         name: c"leadtab",
-        slot: Some(offset_of!(LcsChars, leadtab2)),
+        slot: Some(list!(leadtab2)),
         def: None,
         fallback: None,
         shape: Shape::LeadTab,
     },
-    one(c"lead", offset_of!(LcsChars, lead), None, None),
-    one(c"trail", offset_of!(LcsChars, trail), None, None),
-    one(c"conceal", offset_of!(LcsChars, conceal), None, None),
+    one(c"lead", list!(lead), None, None),
+    one(c"trail", list!(trail), None, None),
+    one(c"conceal", list!(conceal), None, None),
     Field {
         name: c"multispace",
         slot: None,
@@ -303,14 +295,12 @@ fn is_listchars(what: CharsOption) -> bool {
 /// anything else is one (possibly composed) character. Answers 0 — which
 /// every caller treats as a rejection — for invalid hex, for an invalid
 /// UTF-8 byte, and for a character too wide to sit in one screen cell.
-fn take_encoded_char(value: &CStr, at: &mut usize) -> ScreenChar {
-    let bytes = value.to_bytes();
+///
+/// `at` never passes the end of `bytes`: the hex reader gives up at the
+/// first byte that is not a hex digit, and the character reader steps by
+/// the length of the character it just read.
+fn take_encoded_char(bytes: &[u8], at: &mut usize) -> ScreenChar {
     debug_assert!(*at <= bytes.len());
-    // SAFETY: `value` is NUL-terminated, so every read below stops at the
-    // terminator at the latest; `at` never passes it, because the hex
-    // reader gives up at the first byte that is not a hex digit and the
-    // character reader steps by the length of the character it just read.
-    let start = unsafe { value.as_ptr().add(*at) };
     let pairs = match (bytes.get(*at), bytes.get(*at + 1)) {
         (Some(b'\\'), Some(b'x')) => 1,
         (Some(b'\\'), Some(b'u')) => 2,
@@ -335,10 +325,10 @@ fn take_encoded_char(value: &CStr, at: &mut usize) -> ScreenChar {
         };
     }
 
-    let clen = unsafe { utfc_ptr2len(start) };
-    let mut firstc: c_int = 0;
-    let c = unsafe { utfc_ptr2schar(start, &raw mut firstc) };
-    *at += usize::try_from(clen).expect("a character is at least one byte");
+    let rest = bytes.get(*at..).unwrap_or_default();
+    let clen = c_cluster_len(rest);
+    let (c, firstc) = c_cluster_schar(rest);
+    *at += clen;
     // An invalid UTF-8 byte, or a double-width character.
     if (clen == 1 && firstc > 127) || char2cells(firstc) > 1 {
         0
@@ -348,37 +338,10 @@ fn take_encoded_char(value: &CStr, at: &mut usize) -> ScreenChar {
 }
 
 /// "E1511: Wrong number of characters for field \"x\"" and its width
-/// sibling, naming the field they did not like.
-///
-/// # Safety
-/// `fmt` takes one string argument.
-unsafe fn field_value_err(fmt: *const c_char, field: &CStr) -> OptError {
-    // SAFETY: `message` is the buffer the formatter is told the size of,
-    // and the caller's format takes the one argument it is given.
-    OptError::Owned(XString::filled(OptError::ROOM, |buf| unsafe {
-        vim_snprintf!(
-            buf,
-            OptError::ROOM as size_t,
-            gettext_ptr(fmt).as_ptr(),
-            field.as_ptr(),
-        );
-    }))
-}
-
-/// A character struct as raw bytes, for the fields the table addresses by
-/// `offset_of!` rather than by name.
-///
-/// Derived fresh at each use rather than held: the named fields are written
-/// directly, and a pointer kept across such a write would be stale.
-fn chars_bytes<T>(chars: &mut T) -> &mut [u8] {
-    // SAFETY: any value is readable and writable as its own bytes, and the
-    // exclusive borrow is what keeps this the only way in while it lasts.
-    unsafe { slice::from_raw_parts_mut(ptr::from_mut(chars).cast::<u8>(), size_of::<T>()) }
-}
-
-/// Write `value` into the `ScreenChar` field at byte offset `slot`.
-fn store_field(chars: &mut [u8], slot: usize, value: ScreenChar) {
-    chars[slot..slot + size_of::<ScreenChar>()].copy_from_slice(&value.to_ne_bytes());
+/// sibling, naming the field they did not like. `fmt` takes one string.
+fn field_value_err(fmt: &'static CStr, field: &CStr) -> OptError {
+    let message = formatted!(OptError::ROOM, gettext(fmt).to_bytes(), field);
+    OptError::Owned(XString::from_vec(message))
 }
 
 /// [`set_chars_option`] over the window's own 'fillchars' or 'listchars',
@@ -388,52 +351,64 @@ pub(crate) fn set_window_chars_option(
     what: CharsOption,
     apply: bool,
 ) -> Result<(), OptError> {
-    let value = if what == crate::option::kFillchars {
-        window.w_onebuf_opt.wo_fcs.value_ptr()
-    } else {
-        window.w_onebuf_opt.wo_lcs.value_ptr()
-    };
-    // SAFETY: the live window's own value, a C string nothing below writes.
-    unsafe { set_chars_option(window, value, what, apply) }
+    set_chars_option(window, None, what, apply)
 }
 
 /// Set 'fillchars' or 'listchars' for one window.
 ///
-/// `value` points at either the global or the window-local value; an empty
-/// window-local value means "use the global one". With `apply` false only
-/// the check runs, which is how `check_chars_options` asks whether a value
-/// would be accepted without disturbing anything.
+/// `value` is the global or the window-local value, or `None` for the
+/// window's own; an empty window-local value means "use the global one".
+/// With `apply` false only the check runs, which is how
+/// `check_chars_options` asks whether a value would be accepted without
+/// disturbing anything.
 ///
 /// Returns an error message when the value is not good.
-///
-/// # Safety
-/// `window` is a live window and `value` a C string.
-pub unsafe fn set_chars_option(
+pub fn set_chars_option(
     mut window: Win,
-    value: *const c_char,
+    value: Option<&[u8]>,
     what: CharsOption,
     apply: bool,
 ) -> Result<(), OptError> {
     let listchars = is_listchars(what);
+    // The value is read -- the window's own copy borrowed, the global one
+    // copied, since this runs at `:set` rate -- and parsed before anything
+    // writes the window.
+    let parsed = {
+        let local = if listchars {
+            window.w_onebuf_opt.wo_lcs.bytes()
+        } else {
+            window.w_onebuf_opt.wo_fcs.bytes()
+        };
+        if local.is_empty() {
+            // An empty local value defers to the global one.
+            let global = if listchars { P_LCS.get() } else { P_FCS.get() };
+            parse_chars(&global, listchars, apply)
+        } else {
+            parse_chars(value.unwrap_or(local), listchars, apply)
+        }
+    }?;
+    if let Some(chars) = parsed {
+        // The runs the window held go with the struct they were in.
+        if listchars {
+            window.w_p_lcs_chars = chars.list;
+        } else {
+            window.w_p_fcs_chars = chars.fill;
+        }
+    }
+    Ok(())
+}
+
+/// Walk a 'fillchars' (or 'listchars') value: once to validate and, when
+/// `apply` and only if that succeeded, a second time to fill the character
+/// struct, which is the answer.
+fn parse_chars(bytes: &[u8], listchars: bool, apply: bool) -> Result<Option<Chars>, OptError> {
     let tab: &[Field] = if listchars { &LCS_TAB } else { &FCS_TAB };
-    let local = if listchars {
-        &window.w_onebuf_opt.wo_lcs
-    } else {
-        &window.w_onebuf_opt.wo_fcs
+    // The struct this call fills in and, when `apply`, hands back. Only one
+    // of the two is ever used; which one is `listchars`.
+    let mut chars = Chars {
+        fill: NO_FILL_CHARS,
+        list: NO_LIST_CHARS,
     };
-    // An empty local value defers to the global one. A copy, so that the
-    // global outlives the projection: this runs at `:set` rate.
-    let global = if listchars { P_LCS.get() } else { P_FCS.get() };
-    let value = if local.bytes().is_empty() {
-        global.as_cstr()
-    } else {
-        // SAFETY: an option value is a C string.
-        unsafe { cstr::at(value) }
-    };
-    // The struct this call fills in and, when `apply`, hands to the window.
-    // Only one of the two is ever used; which one is `listchars`.
-    let mut lcs = NO_LIST_CHARS;
-    let mut fcs = NO_FILL_CHARS;
 
     // The offset of the last "multispace:"/"leadmultispace:" field in the
     // value, and how many characters it names. The first round works these
@@ -450,21 +425,17 @@ pub unsafe fn set_chars_option(
         let mut has_leadtab = false;
 
         if round > 0 {
+            install_defaults(&mut chars, tab);
             if listchars {
-                install_defaults(chars_bytes(&mut lcs), tab);
-                lcs.tab1 = NUL as ScreenChar;
-                lcs.tab3 = NUL as ScreenChar;
-                lcs.leadtab1 = NUL as ScreenChar;
-                lcs.leadtab3 = NUL as ScreenChar;
-                // SAFETY: both runs are handed to the window with the struct.
-                lcs.multispace = unsafe { alloc_run(multispace_len) };
-                lcs.leadmultispace = unsafe { alloc_run(lead_multispace_len) };
-            } else {
-                install_defaults(chars_bytes(&mut fcs), tab);
+                chars.list.tab1 = NUL as ScreenChar;
+                chars.list.tab3 = NUL as ScreenChar;
+                chars.list.leadtab1 = NUL as ScreenChar;
+                chars.list.leadtab3 = NUL as ScreenChar;
+                chars.list.multispace = new_run(multispace_len);
+                chars.list.leadmultispace = new_run(lead_multispace_len);
             }
         }
 
-        let bytes = value.to_bytes();
         let mut p = 0;
         while p < bytes.len() {
             let Some(i) = tab
@@ -475,13 +446,9 @@ pub unsafe fn set_chars_option(
             };
             let field = &tab[i];
             let mut s = p + field.name.to_bytes().len() + 1;
-            // SAFETY (both): each format takes the one string it is given.
-            let width_err = |name| unsafe {
-                field_value_err(e_wrong_character_width_for_field_str.as_ptr(), name)
-            };
-            let count_err = |name| unsafe {
-                field_value_err(e_wrong_number_of_characters_for_field_str.as_ptr(), name)
-            };
+            let width_err = |name| field_value_err(e_wrong_character_width_for_field_str, name);
+            let count_err =
+                |name| field_value_err(e_wrong_number_of_characters_for_field_str, name);
 
             match field.shape {
                 Shape::Multispace | Shape::LeadMultispace => {
@@ -495,7 +462,7 @@ pub unsafe fn set_chars_option(
                         *last = Some(p);
                         *len = 0;
                         while !at_field_end(bytes, s) {
-                            if take_encoded_char(value, &mut s) == 0 {
+                            if take_encoded_char(bytes, &mut s) == 0 {
                                 return Err(width_err(field.name));
                             }
                             *len += 1;
@@ -509,19 +476,18 @@ pub unsafe fn set_chars_option(
                         // any earlier one is walked past and dropped.
                         let fills = *last == Some(p);
                         let run = if lead {
-                            lcs.leadmultispace
+                            &mut chars.list.leadmultispace
                         } else {
-                            lcs.multispace
+                            &mut chars.list.multispace
                         };
                         let mut into = 0;
                         while !at_field_end(bytes, s) {
-                            let c = take_encoded_char(value, &mut s);
-                            if fills {
-                                // SAFETY: the run was allocated for exactly
-                                // the count the first round arrived at, and
-                                // this is the same walk over the same
-                                // field.
-                                unsafe { *run.add(into) = c };
+                            let c = take_encoded_char(bytes, &mut s);
+                            if fills && let Some(run) = run.as_deref_mut() {
+                                // The run was made for exactly the count the
+                                // first round arrived at, and this is the
+                                // same walk over the same field.
+                                run[into] = c;
                                 into += 1;
                             }
                         }
@@ -532,7 +498,7 @@ pub unsafe fn set_chars_option(
                     if at_end(bytes, s) {
                         return Err(count_err(field.name));
                     }
-                    let c1 = take_encoded_char(value, &mut s);
+                    let c1 = take_encoded_char(bytes, &mut s);
                     if c1 == 0 {
                         return Err(width_err(field.name));
                     }
@@ -542,13 +508,13 @@ pub unsafe fn set_chars_option(
                         if at_end(bytes, s) {
                             return Err(count_err(field.name));
                         }
-                        c2 = take_encoded_char(value, &mut s);
+                        c2 = take_encoded_char(bytes, &mut s);
                         if c2 == 0 {
                             return Err(width_err(field.name));
                         }
                         // The third character is optional.
                         if !at_field_end(bytes, s) {
-                            c3 = take_encoded_char(value, &mut s);
+                            c3 = take_encoded_char(bytes, &mut s);
                             if c3 == 0 {
                                 return Err(width_err(field.name));
                             }
@@ -565,22 +531,18 @@ pub unsafe fn set_chars_option(
                     if round > 0 {
                         match field.shape {
                             Shape::Tab => {
-                                lcs.tab1 = c1;
-                                lcs.tab2 = c2;
-                                lcs.tab3 = c3;
+                                chars.list.tab1 = c1;
+                                chars.list.tab2 = c2;
+                                chars.list.tab3 = c3;
                             }
                             Shape::LeadTab => {
-                                lcs.leadtab1 = c1;
-                                lcs.leadtab2 = c2;
-                                lcs.leadtab3 = c3;
+                                chars.list.leadtab1 = c1;
+                                chars.list.leadtab2 = c2;
+                                chars.list.leadtab3 = c3;
                             }
                             _ => {
                                 if let Some(slot) = field.slot {
-                                    if listchars {
-                                        store_field(chars_bytes(&mut lcs), slot, c1);
-                                    } else {
-                                        store_field(chars_bytes(&mut fcs), slot, c1);
-                                    }
+                                    chars.store(slot, c1);
                                 }
                             }
                         }
@@ -599,18 +561,7 @@ pub unsafe fn set_chars_option(
         }
     }
 
-    if apply {
-        // SAFETY: the caller's window; the two runs it held are this
-        // module's to free, and the new ones move into the struct with it.
-        if listchars {
-            unsafe { xfree(window.w_p_lcs_chars.multispace.cast::<c_void>()) };
-            unsafe { xfree(window.w_p_lcs_chars.leadmultispace.cast::<c_void>()) };
-            window.w_p_lcs_chars = lcs;
-        } else {
-            window.w_p_fcs_chars = fcs;
-        }
-    }
-    Ok(())
+    Ok(apply.then_some(chars))
 }
 
 /// Does the field named `name` start at `p`? A field name is followed by a
@@ -635,39 +586,18 @@ fn at_end(value: &[u8], at: usize) -> bool {
 /// ones the value mentions. A default that does not fit in one screen cell
 /// is not used; the field falls back, and a field with neither ends up
 /// blank.
-///
-/// `chars` is the character struct `tab`'s slots were taken from, as bytes.
-fn install_defaults(chars: &mut [u8], tab: &[Field]) {
+fn install_defaults(chars: &mut Chars, tab: &[Field]) {
     for field in tab {
         let Some(slot) = field.slot else {
             continue;
         };
-        // SAFETY: `ptr2cells` only reads the C string it is given.
         let narrow = field
             .def
-            .is_some_and(|def| unsafe { ptr2cells(def.as_ptr()) } == 1);
+            .is_some_and(|def| ptr2cells_at(def.to_bytes()) == 1);
         let text = if narrow { field.def } else { field.fallback };
-        let text = text.map_or(ptr::null(), CStr::as_ptr);
-        // SAFETY: `schar_from_str` accepts a null pointer as "nothing".
-        store_field(chars, slot, unsafe { schar_from_str(text) });
-    }
-}
-
-/// A "multispace:" run, copied out of the struct that owns it: the
-/// characters before its terminator, or `None` for an unset field.
-fn run_of(run: *const ScreenChar) -> Option<Vec<ScreenChar>> {
-    if run.is_null() {
-        return None;
-    }
-    let mut out = Vec::new();
-    // SAFETY: a non-null run is one `alloc_run` made, terminated by a NUL
-    // character; the window owns it and only this module replaces it.
-    loop {
-        let c = unsafe { *run.add(out.len()) };
-        if c == NUL as ScreenChar {
-            return Some(out);
-        }
-        out.push(c);
+        // Each default is one character, packed as the screen packs it.
+        let c = text.map_or(0, |text| c_cluster_schar(text.to_bytes()).0);
+        chars.store(slot, c);
     }
 }
 
@@ -676,27 +606,17 @@ impl LcsChars {
     /// field that is not set. A copy, so a caller that prints with them
     /// holds no borrow of the window.
     pub(crate) fn multispace_runs(&self) -> (Option<Vec<ScreenChar>>, Option<Vec<ScreenChar>>) {
-        (run_of(self.multispace), run_of(self.leadmultispace))
+        (
+            self.multispace.as_deref().map(<[_]>::to_vec),
+            self.leadmultispace.as_deref().map(<[_]>::to_vec),
+        )
     }
 }
 
-/// Allocate the run of characters a "multispace:" field fills, terminated
-/// like a string. A zero-length run is no allocation at all.
-///
-/// # Safety
-/// The result is handed to the window along with the rest of the character
-/// struct, and freed there.
-unsafe fn alloc_run(len: c_int) -> *mut ScreenChar {
-    if len <= 0 {
-        return ptr::null_mut();
-    }
-    let len = usize::try_from(len).expect("the guard above leaves a positive length");
-    let count = len + 1;
-    // SAFETY: `xmalloc` returns an allocation of that size or aborts.
-    let run = unsafe { xmalloc(count * size_of::<ScreenChar>()) }.cast::<ScreenChar>();
-    // SAFETY: the last element of the allocation just made.
-    unsafe { *run.add(len) = NUL as ScreenChar };
-    run
+/// The run of characters a "multispace:" field fills, `len` of them. A
+/// zero-length run is no run at all.
+fn new_run(len: usize) -> Option<Box<[ScreenChar]>> {
+    (len > 0).then(|| vec![0; len].into_boxed_slice())
 }
 
 /// Set the global 'fillchars' or 'listchars', and re-derive every window's
@@ -706,46 +626,39 @@ unsafe fn alloc_run(len: c_int) -> *mut ScreenChar {
 /// that the window follows the global one again. Every other window that
 /// has no local value of its own is refreshed too, because they were all
 /// drawing from the value that just changed.
-///
-/// # Safety
-/// `win` is a live window and `val` a C string.
-pub(crate) unsafe fn did_set_global_chars_option(
-    win: Win,
-    val: *mut c_char,
+fn did_set_global_chars_option(
+    mut win: Win,
+    val: &[u8],
     what: CharsOption,
     opt_flags: OptionSetFlags,
 ) -> Result<(), OptError> {
     let listchars = is_listchars(what);
-    let local = |mut wp: Win| -> *mut Option<XString> {
+    let local_is_empty = |wp: Win| {
         if listchars {
-            &raw mut wp.w_onebuf_opt.wo_lcs
+            wp.w_onebuf_opt.wo_lcs.bytes().is_empty()
         } else {
-            &raw mut wp.w_onebuf_opt.wo_fcs
+            wp.w_onebuf_opt.wo_fcs.bytes().is_empty()
         }
     };
-    // SAFETY: the caller's window.
-    let local_is_empty = unsafe { &*local(win) }.bytes().is_empty();
-    let for_this_window = local_is_empty || !opt_flags.has(OptionSetFlags::GLOBAL);
+    let for_this_window = local_is_empty(win) || !opt_flags.has(OptionSetFlags::GLOBAL);
 
-    // SAFETY: the caller's window and value.
-    unsafe { set_chars_option(win, val, what, for_this_window) }?;
+    set_chars_option(win, Some(val), what, for_this_window)?;
 
     if !opt_flags.has(OptionSetFlags::GLOBAL) {
-        // SAFETY: the window's own option variable.
-        drop(unsafe { (*local(win)).take() });
+        let local = if listchars {
+            win.w_onebuf_opt.wo_lcs.take()
+        } else {
+            win.w_onebuf_opt.wo_fcs.take()
+        };
+        drop(local);
     }
 
-    // SAFETY: `for_each_window` only visits live windows, and the pointer
-    // is the window's own field, read and handed straight on.
-    unsafe {
-        for_each_window(|wp| {
-            let opt = &*local(wp);
-            if opt.bytes().is_empty() {
-                let _ = set_chars_option(wp, opt.value_ptr(), what, true);
-            }
-            None
-        })
-    };
+    for_each_window(|wp| {
+        if local_is_empty(wp) {
+            let _ = set_chars_option(wp, None, what, true);
+        }
+        None
+    });
     redraw_all_later(UPD_NOT_VALID);
     Ok(())
 }
@@ -769,11 +682,11 @@ pub fn did_set_chars_option(args: &mut OptSet) -> Result<(), OptError> {
     };
     // Which variable it is, not what it says.
     if varp == option_var(idx).string_var() {
-        unsafe { did_set_global_chars_option(win, varp.value_ptr(), which, flags) }
+        did_set_global_chars_option(win, new_bytes(args), which, flags)
     } else if varp == StrVar::of_window(win, field!(WinOpt, wo_lcs))
         || varp == StrVar::of_window(win, field!(WinOpt, wo_fcs))
     {
-        unsafe { set_chars_option(win, varp.value_ptr(), which, true) }
+        set_chars_option(win, Some(new_bytes(args)), which, true)
     } else {
         Ok(())
     }
@@ -801,9 +714,8 @@ fn field_name(tab: &'static [Field], idx: usize) -> Option<Candidate> {
 /// render — a new 'encoding', say — and reports which of the two options
 /// the new state conflicts with.
 pub fn check_chars_options() -> Result<(), OptError> {
-    let check = |wp, value, what, apply| {
-        // SAFETY: a live window and a C string.
-        if unsafe { set_chars_option(wp, value, what, apply) }.is_ok() {
+    let check = |wp, value: Option<&[u8]>, what, apply| {
+        if set_chars_option(wp, value, what, apply).is_ok() {
             None
         } else if is_listchars(what) {
             Some(e_conflicts_with_value_of_listchars)
@@ -812,15 +724,16 @@ pub fn check_chars_options() -> Result<(), OptError> {
         }
     };
 
-    if let Some(global) = p_lcs(|lcs| check(Win::current(), lcs.as_ptr(), kListchars, false)) {
+    // Copies: the check reads the global value again for a window that has
+    // none of its own.
+    if let Some(global) = check(Win::current(), Some(&P_LCS.get()[..]), kListchars, false) {
         return Err((global).into());
     }
-    if let Some(global) = p_fcs(|fcs| check(Win::current(), fcs.as_ptr(), kFillchars, false)) {
+    if let Some(global) = check(Win::current(), Some(&P_FCS.get()[..]), kFillchars, false) {
         return Err((global).into());
     }
     let per_window = for_each_window(|wp| {
-        check(wp, wp.w_onebuf_opt.wo_lcs.value_ptr(), kListchars, true)
-            .or_else(|| check(wp, wp.w_onebuf_opt.wo_fcs.value_ptr(), kFillchars, true))
+        check(wp, None, kListchars, true).or_else(|| check(wp, None, kFillchars, true))
     });
     match per_window {
         Some(errmsg) => Err(errmsg.into()),

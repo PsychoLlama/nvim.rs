@@ -36,7 +36,7 @@ use crate::memline::{Lines, ml_replace};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_positive;
 use crate::message::emsg;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::gettext;
 use crate::plines::getvcol;
@@ -120,57 +120,59 @@ unsafe fn tabstops<'a>(vts: *const ColNr) -> Option<tabstop::TabStops<'a>> {
     tabstop::TabStops::new(unsafe { ::core::slice::from_raw_parts(vts, count as usize + 1) })
 }
 
-/// Parse a 'vartabstop'-style option value into `array`, reporting the
-/// message the option code expects when it is malformed.
+/// Parse a 'vartabstop'-style option value into a fresh tab-stop array,
+/// reporting the message the option code expects when it is malformed.
 ///
-/// # Safety
-/// `var` must be NUL-terminated and `array` must own its current value.
-pub unsafe fn tabstop_set(var: *mut c_char, array: *mut *mut ColNr) -> bool {
-    let text = unsafe { CStr::from_ptr(var) }.to_bytes();
+/// `None` for a value that does not parse; `Some(null)` for one that names
+/// no stops. The array is the caller's, an `xmalloc` block, because that is
+/// what the buffer's option arrays hold.
+pub fn tabstop_set(text: &[u8]) -> Option<*mut ColNr> {
     let parsed = match tabstop::parse(text) {
         Ok(parsed) => parsed,
         Err(tabstop::ParseError::NotPositive(_)) => {
             emsg(gettext(e_positive));
-            return false;
+            return None;
         }
         Err(tabstop::ParseError::Malformed(at) | tabstop::ParseError::OutOfRange(at)) => {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(var.add(at)) };
+            let arg0 = msg_bytes(&text[at..]);
             semsg!("E475: Invalid argument: {arg0}");
-            return false;
+            return None;
         }
     };
     // The option owns a malloc'd array, so hand one over rather than a Vec.
-    unsafe {
-        *array = match parsed {
-            None => ::core::ptr::null_mut(),
-            Some(stops) => {
-                let out = xmalloc(size_of::<ColNr>() * stops.len()) as *mut ColNr;
-                ::core::ptr::copy_nonoverlapping(stops.as_ptr(), out, stops.len());
-                out
-            }
-        }
-    };
-    true
+    Some(match parsed {
+        None => ::core::ptr::null_mut(),
+        // SAFETY: `xmalloc` answers room for `stops.len()` stops or aborts,
+        // and the copy fills exactly that.
+        Some(stops) => unsafe {
+            let out = xmalloc(size_of::<ColNr>() * stops.len()) as *mut ColNr;
+            ::core::ptr::copy_nonoverlapping(stops.as_ptr(), out, stops.len());
+            out
+        },
+    })
 }
 
 /// The tab-stop array a 'vartabstop'-style value describes, or null for a
 /// value that names none -- or does not parse, which [`tabstop_set`] has
 /// then reported.
 pub(crate) fn tabstop_array_of(value: &CStr) -> *mut ColNr {
-    let mut array: *mut ColNr = ::core::ptr::null_mut();
-    // SAFETY: a NUL-terminated value the parse only reads, and an array
-    // slot of this frame's that owns nothing yet.
-    unsafe { tabstop_set(value.as_ptr().cast_mut(), &raw mut array) };
-    array
+    tabstop_set(value.to_bytes()).unwrap_or(::core::ptr::null_mut())
 }
 
 /// Give `slot` the tab-stop array `value` describes, freeing the one it
 /// held. A value that does not parse leaves it null rather than dangling.
 pub(crate) fn replace_tabstop_array(slot: &mut *mut ColNr, value: Option<&CStr>) {
+    install_tabstop_array(
+        slot,
+        value.map_or(::core::ptr::null_mut(), tabstop_array_of),
+    );
+}
+
+/// Give `slot` the array [`tabstop_set`] answered, freeing the one it held.
+pub(crate) fn install_tabstop_array(slot: &mut *mut ColNr, array: *mut ColNr) {
     // SAFETY: a buffer's tab-stop array is its own `xmalloc` block, or null.
     unsafe { xfree((*slot).cast::<c_void>()) };
-    *slot = value.map_or(::core::ptr::null_mut(), tabstop_array_of);
+    *slot = array;
 }
 
 /// How many columns from `col` to the next tabstop.

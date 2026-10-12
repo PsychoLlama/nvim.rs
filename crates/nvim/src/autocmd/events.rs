@@ -121,10 +121,10 @@ pub unsafe fn event_ignored(
 /// `win` says the value is 'eventignorewin', which accepts only the
 /// window-local events.
 ///
-/// # Safety
-///
-/// `ei` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char, win: bool) -> Result<(), Failed> {
+/// The walk only reads the value; the cursor is mutable because the
+/// event-name reader's out-parameter is.
+pub fn check_ei(value: &CStr, win: bool) -> Result<(), Failed> {
+    let mut ei = value.as_ptr().cast_mut();
     // SAFETY: as in `event_ignored` -- `ei` is a NUL-terminated option
     // value, and every step below stays within it.
     while unsafe { *ei } != 0 {

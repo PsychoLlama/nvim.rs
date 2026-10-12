@@ -24,7 +24,7 @@ use crate::option::StrVar;
 
 use crate::memory::XString;
 use crate::message::e_invarg;
-use crate::types::{OptError, OptSet, WinOpt};
+use crate::types::{OptError, OptSet, OptStr, WinOpt};
 
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.
@@ -69,13 +69,28 @@ pub(crate) fn local_window(
     (varp == StrVar::of_window(window, field)).then_some(window)
 }
 
-/// The value the option held before this set, as a C string.
+/// The value being set: what the option's variable holds when the callback
+/// is entered, as the frame's own copy. Reading it borrows the frame, not
+/// the variable, so a callback that runs user code -- which may set the
+/// same option again -- still holds the value it was handed.
 ///
-/// Every option in this module is a string one, so the frame's old value
-/// is a string too; the accessor says so.
-pub(crate) fn old_value(args: &OptSet) -> *const c_char {
+/// Every option in this module is a string one, so the frame's values are
+/// strings too; the accessor says so.
+pub(crate) fn new_value(args: &OptSet) -> &OptStr {
+    args.os_newval
+        .as_string()
+        .expect("the table installs this callback on a string option only")
+}
+
+/// [`new_value`]'s bytes, not counting the terminator.
+pub(crate) fn new_bytes(args: &OptSet) -> &[u8] {
+    new_value(args).as_bytes()
+}
+
+/// The bytes of the value the option held before this set.
+pub(crate) fn old_bytes(args: &OptSet) -> &[u8] {
     args.os_oldval
         .as_string()
         .expect("the table installs this callback on a string option only")
-        .data()
+        .as_bytes()
 }

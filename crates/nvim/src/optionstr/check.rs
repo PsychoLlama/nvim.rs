@@ -3,22 +3,16 @@
 //!
 //! Two things live here that the rest of the tree leans on.
 //!
-//! The **empty string option**. A string option's variable is never null:
-//! out of memory, `xstrdup` may hand back null, and everything downstream
-//! dereferences the variable, so a null one is replaced by the shared
-//! [`empty_option`]. That one allocation is aliased by every option holding
-//! "", which is why freeing a string option has to go through
-//! [`free_string_option`] rather than `xfree`, and why "does this option own
-//! its value" is [`is_empty_option`] rather than a pointer comparison
-//! spelled out at each of the three dozen places that ask.
+//! The **string options a buffer holds**, [`BUF_STRING_OPTIONS`]: the
+//! fields a freshly allocated buffer has to have written before anything
+//! reads them.
 //!
 //! The **rejection message**. A check that has to name what it disliked
 //! formats an owned [`OptError`]; upstream formatted into a caller-supplied
 //! `errbuf` and let the caller decline one by passing null, which is how a
 //! set could fail and report nothing.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -27,17 +21,17 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::vim_snprintf;
+use crate::cstr;
+use crate::formatted;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::transchar;
-use crate::global_cell::GlobalCell;
+use crate::global_cell::{Field, field};
 use crate::guard::secure;
-use crate::indent_c::parse_cino;
-use crate::memory::{XString, xfree};
+use crate::indent_c::parse_cino_for;
+use crate::memory::XString;
 use crate::option::{kOptFlagNDname, kOptFlagNFname, valid_name};
 use crate::options::{
     kOptBackupcopy, kOptBelloff, kOptCasemap, kOptClipboard, kOptCompleteopt, kOptDisplay,
@@ -46,9 +40,10 @@ use crate::options::{
     kOptWildoptions, opt_scl_values,
 };
 use crate::os::cshim::gettext;
-use crate::types::{Buffer, Failed, NUL, OptError, StlOpt, size_t, uint32_t};
+use crate::types::{Buffer, Failed, NUL, OptError, StlOpt, uint32_t};
 
-use super::OptString;
+use super::OptStringRef;
+
 use super::{
     SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
     e_unclosed_expression_sequence, opt_strings_ok,
@@ -85,136 +80,96 @@ pub fn didset_string_options() {
 /// "E539: Illegal character <x>", naming the byte it did not like.
 pub fn illegal_char(c: c_int) -> OptError {
     let fmt = gettext(c"E539: Illegal character <%s>");
-    // SAFETY: `message` is the buffer the formatter is told the size of,
-    // and `transchar` answers a C string.
-    OptError::Owned(XString::filled(OptError::ROOM, |buf| unsafe {
-        vim_snprintf!(
-            buf,
-            OptError::ROOM as size_t,
-            fmt.as_ptr(),
-            transchar(c).as_ptr(),
-        );
-    }))
+    let shown = transchar(c);
+    let message = formatted!(OptError::ROOM, fmt.to_bytes(), cstr::in_chars(&shown));
+    OptError::Owned(XString::from_vec(message))
 }
 
 /// "E535: Illegal character after <%c>", for the options that spell a field
 /// as a character followed by a value.
 pub(crate) fn illegal_char_after_chr(c: c_int) -> OptError {
     let fmt = gettext(e_illegal_character_after_chr);
-    // SAFETY: `message` is the buffer the formatter is told the size of,
-    // and the format takes one `int`.
-    OptError::Owned(XString::filled(OptError::ROOM, |buf| unsafe {
-        vim_snprintf!(buf, OptError::ROOM as size_t, fmt.as_ptr(), c);
-    }))
+    let message = formatted!(OptError::ROOM, fmt.to_bytes(), c);
+    OptError::Owned(XString::from_vec(message))
 }
 
-/// Give a freshly allocated buffer's string options their initial value.
+/// Every string option a buffer holds, by selector: what a freshly
+/// allocated buffer has to have written before anything reads or drops it.
 ///
 /// A buffer is allocated **zeroed**, and all-zero bytes are not a valid
 /// `Option<XString>`: the niche the `Option` uses is the vector's capacity,
-/// so a zeroed field reads as `Some` over a null pointer. Every string
-/// option is therefore written -- with `write`, which drops nothing --
-/// before anything can read or drop it. That includes the five in the
-/// buffer's own syntax block, which is part of the buffer;
+/// so a zeroed field reads as `Some` over a null pointer. The allocator
+/// (`buffer::list`) writes `None` into each of these -- with `write`, which
+/// drops nothing -- before the block is a `Buffer` at all. That includes the
+/// five in the buffer's own syntax block, which is part of the buffer;
 /// `crate::syntax::init_synblock` writes the same five for the standalone
 /// block `:ownsyntax` allocates, and writing `None` twice costs nothing.
 ///
 /// This is where upstream's "replace each null option value with the shared
 /// empty string" sweep went: `None` *is* that shared empty string, so the
-/// value a fresh buffer starts with is written once here instead of patched
-/// up on every `buf_copy_options`.
-///
-/// # Safety
-///
-/// `at` must point at a freshly allocated buffer whose string options have
-/// not been read, written or dropped.
-///
-/// # Why the parameter is a raw pointer
-///
-/// This is the tree's **only** `*mut Buffer` in a signature outside
-/// `winlayer/` -- the whole of the ratchet's `raw_win_buf_sigs`, which is 1
-/// rather than 0 because of this one function -- so it owes an explanation.
-///
-/// A `&mut Buffer` asserts that the whole buffer is a valid `Buffer`, and at
-/// this point it is not: `buflist_new` is part-way through writing the fields
-/// a zeroed block cannot stand in for, and this call sits among seven sibling
-/// `(&raw mut (*at).field).write(..)` lines that have the same problem for the
-/// same reason. Taking a reference here would be the precise kind of claim
-/// that `Option<XString>`'s niche punishes -- a zeroed one reads as `Some`
-/// over a null pointer -- so the reference would be unsound *before* the
-/// function that fixes it had run.
-///
-/// A `&mut MaybeUninit<Buffer>` would satisfy the needle and would be a
-/// different lie: the buffer is *partly* initialised by the time this runs,
-/// not wholly uninitialised, and singling out one step of an eight-step
-/// sequence to speak a different language than its neighbours makes the
-/// sequence harder to read, not easier. The floor retires when buffer
-/// allocation stops handing out a half-built block at all -- when a `Buffer`
-/// is built as a value and moved into place -- and not before.
-pub unsafe fn init_buf_string_options(at: *mut Buffer) {
-    // SAFETY: the caller's promise -- each address is one of the buffer's
-    // own fields, and `write` does not drop what was there.
-    unsafe {
-        (&raw mut (*at).b_p_bkc).write(None);
-        (&raw mut (*at).b_p_bh).write(None);
-        (&raw mut (*at).b_p_bt).write(None);
-        (&raw mut (*at).b_p_cino).write(None);
-        (&raw mut (*at).b_p_cink).write(None);
-        (&raw mut (*at).b_p_cinw).write(None);
-        (&raw mut (*at).b_p_cinsd).write(None);
-        (&raw mut (*at).b_p_com).write(None);
-        (&raw mut (*at).b_p_cms).write(None);
-        (&raw mut (*at).b_p_cot).write(None);
-        (&raw mut (*at).b_p_cpt).write(None);
-        (&raw mut (*at).b_p_cfu).write(None);
-        (&raw mut (*at).b_p_ofu).write(None);
-        (&raw mut (*at).b_p_tfu).write(None);
-        (&raw mut (*at).b_p_ffu).write(None);
-        (&raw mut (*at).b_p_fenc).write(None);
-        (&raw mut (*at).b_p_ff).write(None);
-        (&raw mut (*at).b_p_ft).write(None);
-        (&raw mut (*at).b_p_fo).write(None);
-        (&raw mut (*at).b_p_flp).write(None);
-        (&raw mut (*at).b_p_isk).write(None);
-        (&raw mut (*at).b_p_def).write(None);
-        (&raw mut (*at).b_p_inc).write(None);
-        (&raw mut (*at).b_p_inex).write(None);
-        (&raw mut (*at).b_p_inde).write(None);
-        (&raw mut (*at).b_p_indk).write(None);
-        (&raw mut (*at).b_p_fp).write(None);
-        (&raw mut (*at).b_p_fex).write(None);
-        (&raw mut (*at).b_p_kp).write(None);
-        (&raw mut (*at).b_p_lop).write(None);
-        (&raw mut (*at).b_p_menc).write(None);
-        (&raw mut (*at).b_p_mps).write(None);
-        (&raw mut (*at).b_p_nf).write(None);
-        (&raw mut (*at).b_p_qe).write(None);
-        (&raw mut (*at).b_p_sua).write(None);
-        (&raw mut (*at).b_p_syn).write(None);
-        (&raw mut (*at).b_p_vsts).write(None);
-        (&raw mut (*at).b_p_vsts_nopaste).write(None);
-        (&raw mut (*at).b_p_vts).write(None);
-        (&raw mut (*at).b_p_keymap).write(None);
-        (&raw mut (*at).b_p_gefm).write(None);
-        (&raw mut (*at).b_p_gp).write(None);
-        (&raw mut (*at).b_p_mp).write(None);
-        (&raw mut (*at).b_p_efm).write(None);
-        (&raw mut (*at).b_p_ep).write(None);
-        (&raw mut (*at).b_p_path).write(None);
-        (&raw mut (*at).b_p_tags).write(None);
-        (&raw mut (*at).b_p_tc).write(None);
-        (&raw mut (*at).b_p_dict).write(None);
-        (&raw mut (*at).b_p_dia).write(None);
-        (&raw mut (*at).b_p_tsr).write(None);
-        (&raw mut (*at).b_p_tsrfu).write(None);
-        (&raw mut (*at).b_p_lw).write(None);
-        (&raw mut (*at).b_s.b_p_spc).write(None);
-        (&raw mut (*at).b_s.b_p_spf).write(None);
-        (&raw mut (*at).b_s.b_p_spl).write(None);
-        (&raw mut (*at).b_s.b_p_spo).write(None);
-        (&raw mut (*at).b_s.b_syn_isk).write(None);
-    }
-}
+/// value a fresh buffer starts with is written once instead of patched up
+/// on every `buf_copy_options`. A selector, not an address, so the list is
+/// checked against the fields' types and costs nothing to hold.
+pub const BUF_STRING_OPTIONS: [Field<Buffer, Option<XString>>; 58] = [
+    field!(Buffer, b_p_bkc),
+    field!(Buffer, b_p_bh),
+    field!(Buffer, b_p_bt),
+    field!(Buffer, b_p_cino),
+    field!(Buffer, b_p_cink),
+    field!(Buffer, b_p_cinw),
+    field!(Buffer, b_p_cinsd),
+    field!(Buffer, b_p_com),
+    field!(Buffer, b_p_cms),
+    field!(Buffer, b_p_cot),
+    field!(Buffer, b_p_cpt),
+    field!(Buffer, b_p_cfu),
+    field!(Buffer, b_p_ofu),
+    field!(Buffer, b_p_tfu),
+    field!(Buffer, b_p_ffu),
+    field!(Buffer, b_p_fenc),
+    field!(Buffer, b_p_ff),
+    field!(Buffer, b_p_ft),
+    field!(Buffer, b_p_fo),
+    field!(Buffer, b_p_flp),
+    field!(Buffer, b_p_isk),
+    field!(Buffer, b_p_def),
+    field!(Buffer, b_p_inc),
+    field!(Buffer, b_p_inex),
+    field!(Buffer, b_p_inde),
+    field!(Buffer, b_p_indk),
+    field!(Buffer, b_p_fp),
+    field!(Buffer, b_p_fex),
+    field!(Buffer, b_p_kp),
+    field!(Buffer, b_p_lop),
+    field!(Buffer, b_p_menc),
+    field!(Buffer, b_p_mps),
+    field!(Buffer, b_p_nf),
+    field!(Buffer, b_p_qe),
+    field!(Buffer, b_p_sua),
+    field!(Buffer, b_p_syn),
+    field!(Buffer, b_p_vsts),
+    field!(Buffer, b_p_vsts_nopaste),
+    field!(Buffer, b_p_vts),
+    field!(Buffer, b_p_keymap),
+    field!(Buffer, b_p_gefm),
+    field!(Buffer, b_p_gp),
+    field!(Buffer, b_p_mp),
+    field!(Buffer, b_p_efm),
+    field!(Buffer, b_p_ep),
+    field!(Buffer, b_p_path),
+    field!(Buffer, b_p_tags),
+    field!(Buffer, b_p_tc),
+    field!(Buffer, b_p_dict),
+    field!(Buffer, b_p_dia),
+    field!(Buffer, b_p_tsr),
+    field!(Buffer, b_p_tsrfu),
+    field!(Buffer, b_p_lw),
+    field!(Buffer, b_s.b_p_spc),
+    field!(Buffer, b_s.b_p_spf),
+    field!(Buffer, b_s.b_p_spl),
+    field!(Buffer, b_s.b_p_spo),
+    field!(Buffer, b_s.b_syn_isk),
+];
 
 /// Rebuild what a buffer derives from its string options.
 ///
@@ -224,46 +179,7 @@ pub unsafe fn init_buf_string_options(at: *mut Buffer) {
 /// bytes now and `None` is the shared empty string, so nothing is left to
 /// patch up and the cache is the whole of it.
 pub fn check_buf_options(buffer: Buf) {
-    // SAFETY: the caller's buffer, whose 'cinoptions' this re-reads.
-    unsafe { parse_cino(buffer) };
-}
-
-/// The value every string option with nothing of its own points at.
-///
-/// Upstream declares it `char empty_string_option[]` and lets thirty-odd
-/// places compare an option variable against that address by hand. Here the
-/// static is private and [`empty_option`]/[`is_empty_option`] are the only
-/// way to reach it, so the sentinel is a question callers ask by name.
-///
-/// It keeps a cell rather than becoming a `ConstTable`: upstream's array is
-/// writable, and putting one byte in `.rodata` would turn a write nobody has
-/// proved impossible into a fault. Nothing dereferences the cell — both
-/// accessors only want the address — so `as_raw` is the whole of its use.
-static EMPTY_OPTION: GlobalCell<[c_char; 1]> = GlobalCell::new([0]);
-
-/// The shared value to give a string option that has none of its own.
-pub(crate) const fn empty_option() -> *mut c_char {
-    EMPTY_OPTION.as_raw().cast::<c_char>()
-}
-
-/// Whether a string option's value is that shared one, which answers two
-/// questions at once: the option owns no allocation, so it must not be
-/// freed, and it holds no value of its own, so a global-local one falls
-/// back and a `:setlocal` reads as unset.
-pub(crate) fn is_empty_option(value: *const c_char) -> bool {
-    ptr::eq(value, empty_option().cast_const())
-}
-
-/// Free a string option's value, unless it is the shared empty string every
-/// option holding "" points at.
-///
-/// # Safety
-/// `p` is null, the shared empty string, or an allocation this owns.
-pub unsafe fn free_string_option(p: *mut c_char) {
-    if !is_empty_option(p) {
-        // SAFETY: as documented above.
-        unsafe { xfree(p.cast::<c_void>()) };
-    }
+    parse_cino_for(buffer);
 }
 
 /// Is `val` a name 'filetype', 'syntax' or 'keymap' will accept?
@@ -273,70 +189,66 @@ pub(crate) fn valid_filetype(val: &CStr) -> bool {
 
 /// [`check_signcolumn`] over the window's own 'signcolumn'.
 pub(crate) fn check_window_signcolumn(window: Win) -> Result<(), Failed> {
-    // SAFETY: null asks for the live window's own value.
-    unsafe { check_signcolumn(ptr::null_mut(), Some(window)) }
+    check_signcolumn(None, Some(window))
 }
 
 /// Parse 'signcolumn' and, given a window, store the width range it asks
 /// for.
 ///
-/// `scl` overrides the window's own value; a null `window` only validates. The
+/// `scl` overrides the window's own value; no `window` only validates. The
 /// two halves are separate grammars: everything the generated table lists
 /// ("no", "yes", "yes:1".."yes:9", "auto", "auto:1".."auto:9", "number"),
 /// and then the `auto:<min>-<max>` range, which the table cannot enumerate
 /// and which is parsed by hand.
-///
-/// # Safety
-/// `scl` is null or a C string; `window` is null or a live window.
-pub unsafe fn check_signcolumn(scl: *mut c_char, window: Option<Win>) -> Result<(), Failed> {
-    let val = match (scl.is_null(), window) {
-        (false, _) => scl.cast_const(),
-        (true, Some(w)) => w.w_onebuf_opt.wo_scl.value_ptr(),
-        (true, None) => empty_option(),
-    };
-    // SAFETY: an option value is a C string.
-    let val = unsafe { CStr::from_ptr(val) }.to_bytes();
-    if val.is_empty() {
-        return Err(Failed);
-    }
-
-    // SAFETY: the table's own array, and no mask is wanted.
-    let listed = unsafe { opt_strings_ok(val.as_ptr().cast::<c_char>(), &opt_scl_values, false) };
-
-    let (min, max) = if listed {
-        let Some(w) = window else {
-            return Ok(());
-        };
-        // 'number' only wins when the window is actually showing numbers.
-        let numbered = w.w_onebuf_opt.wo_nu != 0 || w.w_onebuf_opt.wo_rnu != 0;
-        match val {
-            [b'n', b'o', ..] => (SCL_NO, SCL_NO),
-            [b'n', b'u', ..] if numbered => (SCL_NUM, SCL_NUM),
-            [b'y', b'e', b's', b':', n, ..] => (digit(*n), digit(*n)),
-            [b'y', ..] => (1, 1),
-            [b'a', b'u', b't', b'o', b':', n, ..] => (0, digit(*n)),
-            _ => (0, 1),
+pub fn check_signcolumn(scl: Option<&[u8]>, window: Option<Win>) -> Result<(), Failed> {
+    // The range is worked out while the value is borrowed -- from the
+    // caller, or from the window itself -- and the window written after:
+    // `None` for a value that is not good, `Some(None)` for one that is
+    // with no window to store it in.
+    let range = |val: &[u8]| -> Option<Option<(c_int, c_int)>> {
+        if val.is_empty() {
+            return None;
         }
-    } else {
+        if opt_strings_ok(val, &opt_scl_values, false) {
+            let Some(w) = window else {
+                return Some(None);
+            };
+            // 'number' only wins when the window is actually showing numbers.
+            let numbered = w.w_onebuf_opt.wo_nu != 0 || w.w_onebuf_opt.wo_rnu != 0;
+            return Some(Some(match val {
+                [b'n', b'o', ..] => (SCL_NO, SCL_NO),
+                [b'n', b'u', ..] if numbered => (SCL_NUM, SCL_NUM),
+                [b'y', b'e', b's', b':', n, ..] => (digit(*n), digit(*n)),
+                [b'y', ..] => (1, 1),
+                [b'a', b'u', b't', b'o', b':', n, ..] => (0, digit(*n)),
+                _ => (0, 1),
+            }));
+        }
         // "auto:<min>-<max>", the one spelling the table cannot list.
         let [b'a', b'u', b't', b'o', b':', min, b'-', max] = val else {
-            return Err(Failed);
+            return None;
         };
         if !ascii_isdigit(c_int::from(*min)) || !ascii_isdigit(c_int::from(*max)) {
-            return Err(Failed);
+            return None;
         }
         let (min, max) = (digit(*min), digit(*max));
         if min < 1 || max < 2 || min > 8 || min >= max {
-            return Err(Failed);
+            return None;
         }
-        if window.is_none() {
-            return Ok(());
-        }
-        (min, max)
+        Some(window.is_some().then_some((min, max)))
     };
-
-    // The two `return`s above rule out an absent window.
-    let mut window = window.expect("a window to set 'signcolumn' on");
+    let found = match (scl, window) {
+        (Some(scl), _) => range(scl),
+        (None, Some(w)) => range(w.w_onebuf_opt.wo_scl.bytes()),
+        (None, None) => range(b""),
+    };
+    let Some(found) = found else {
+        return Err(Failed);
+    };
+    // A range is only worked out for a window.
+    let (Some((min, max)), Some(mut window)) = (found, window) else {
+        return Ok(());
+    };
     window.w_minscwidth = min;
     window.w_maxscwidth = max;
     // Keep the width the window is currently drawing inside the new
@@ -364,13 +276,11 @@ fn digit(byte: u8) -> c_int {
 /// answer has to outlive the call and the caller passes no buffer. The
 /// answer is owned instead, so two checks in flight cannot collide.
 ///
-/// # Safety
-/// `s` is a C string.
-pub(crate) unsafe fn check_stl_option(s: *mut c_char) -> Result<(), OptError> {
+/// `format` is the value's bytes; its end is where the C string's NUL was.
+pub(crate) fn check_stl_option(format: &[u8]) -> Result<(), OptError> {
     let illegal = |c: c_int| Err(illegal_char(c));
 
-    // SAFETY: the caller's C string.
-    let mut rest = unsafe { CStr::from_ptr(s) }.to_bytes();
+    let mut rest = format;
     let mut groupdepth: c_int = 0;
 
     while let Some(at) = rest.iter().position(|&b| b == b'%') {

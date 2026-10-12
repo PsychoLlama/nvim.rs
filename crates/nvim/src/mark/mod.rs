@@ -191,6 +191,14 @@ pub unsafe fn clear_fmark(fm: *mut FileMark, timestamp: Timestamp) {
     unsafe { Fmark::new(fm) }.clear(timestamp);
 }
 
+/// Put `mark` at `pos` in file `fnum`, stamped now, releasing what it held:
+/// upstream's `RESET_FMARK` for a mark the caller holds in place.
+pub(crate) fn reset_fmark(mark: &mut FileMark, pos: Pos, fnum: c_int, view: FileMarkView) {
+    // SAFETY: a mark held by `&mut` is live and writable, and a mark in place
+    // owns the `additional_data` it carries.
+    unsafe { Fmark::new(mark) }.replace(pos, fnum, view);
+}
+
 /// Schedules "MarkSet" event.
 ///
 /// `c` — The name of the mark, e.g., 'a'.

@@ -4,8 +4,7 @@
 //! They are `pub` only so the generated option table can name them; see
 //! [`super::frame`] for what they are handed.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -15,13 +14,11 @@
 )]
 
 use crate::cstr;
-use crate::optionstr::OptString;
-use crate::strings::has_char;
-use crate::vim_snprintf;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use crate::formatted;
+use core::ffi::{c_int, c_uint};
 
 use crate::ascii::ascii_isdigit;
-use crate::charset::{getdigits_int, transchar_byte};
+use crate::charset::{getdigits_int_at, transchar_byte};
 use crate::drawscreen::comp_col;
 use crate::drawscreen::state::ru_wid;
 use crate::memory::XString;
@@ -33,10 +30,10 @@ use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::statusline::state::stl_syntax;
-use crate::types::{LineNr, NUL, OptError, OptSet, OptionSetFlags, StlSyntax, size_t};
+use crate::types::{LineNr, OptError, OptSet, OptionSetFlags, StlSyntax};
 use crate::winfloat::win_config_float;
 
-use super::frame::{formatted, invalid, old_value, varp, win};
+use super::frame::{invalid, new_bytes, old_bytes, varp, win};
 use super::{
     SHM_ALL, check_stl_option, did_set_option_listflag, did_set_str_generic, illegal_char,
     opt_strings_mask,
@@ -54,11 +51,8 @@ pub fn did_set_titlestring(args: &mut OptSet) -> Result<(), OptError> {
 /// when they contain a `%` *and* that format is valid; otherwise they are
 /// shown literally, so a bad format is not an error here.
 pub(crate) fn did_set_titleiconstring(args: &OptSet, flagval: StlSyntax) -> Result<(), OptError> {
-    // SAFETY: the frame's value is a C string.
-    let value = varp(args).value_ptr();
-    // SAFETY: as above; the checker walks it to its terminator.
-    let formatted =
-        unsafe { has_char(cstr::at(value), c_int::from(b'%')) && check_stl_option(value).is_ok() };
+    let value = new_bytes(args);
+    let formatted = value.contains(&b'%') && check_stl_option(value).is_ok();
     let mut syntax = stl_syntax.get();
     if formatted {
         syntax |= flagval;
@@ -70,19 +64,9 @@ pub(crate) fn did_set_titleiconstring(args: &OptSet, flagval: StlSyntax) -> Resu
     Ok(())
 }
 
-/// An option's value as bytes.
-///
-/// Safe because every option of string type holds a NUL-terminated string
-/// from the moment the option table is initialised.
-fn opt_bytes<'a>(s: *const c_char) -> &'a [u8] {
-    // SAFETY: the invariant above.
-    unsafe { CStr::from_ptr(s) }.to_bytes()
-}
-
 /// Check `'rulerformat'` as a whole.
 fn check_ruf() -> Result<(), OptError> {
-    // SAFETY: the option's own value.
-    p_ruf(|value| unsafe { check_stl_option(value.as_ptr().cast_mut()) })
+    p_ruf(|value| check_stl_option(value.to_bytes()))
 }
 
 pub fn did_set_rulerformat(args: &mut OptSet) -> Result<(), OptError> {
@@ -124,36 +108,36 @@ pub(crate) fn did_set_statustabline_rulerformat(
         wp.w_nrwidth_line_count = 0 as LineNr;
     }
 
-    // SAFETY: the frame and its C string value.
-    let mut s = varp.value_ptr();
     let (idx, flags) = (args.os_idx, args.os_flags);
     let is_stl = idx as c_int == kOptStatusline as c_int;
     let global = flags.has(OptionSetFlags::GLOBAL) || !flags.has(OptionSetFlags::LOCAL);
-    if is_stl && global && unsafe { c_int::from(*s) } == NUL {
-        let default = get_option_default(idx, flags);
-        let default = default
+    // What is checked is what the variable holds: the frame's copy of the
+    // new value, or the default an empty global 'statusline' is given.
+    let default;
+    let text = if is_stl && global && new_bytes(args).is_empty() {
+        default = get_option_default(idx, flags)
             .as_string()
-            .expect("every option reaching here is a string option");
-        varp.set(XString::from_cstr(default.as_cstr()));
-        s = varp.value_ptr();
-    }
+            .expect("every option reaching here is a string option")
+            .clone()
+            .into_xstring();
+        varp.set(default.clone());
+        &default[..]
+    } else {
+        new_bytes(args)
+    };
     // A floating window's status line is part of its frame.
     if is_stl && wp.w_floating {
         win_config_float(wp, wp.w_config.clone());
     }
 
     let mut errmsg = Ok(());
-    let text = opt_bytes(s);
     if rulerformat && text.first() == Some(&b'%') {
         // Step past the `%` and an optional `-`; the width itself is read
-        // with `getdigits_int`, whose overflow behaviour is what decides
-        // that an absurd width is no width at all.
+        // as `getdigits_int` reads it, whose overflow behaviour is what
+        // decides that an absurd width is no width at all.
         let at = 1 + usize::from(text.get(1) == Some(&b'-'));
-        // SAFETY: `at` is at most the terminator's index.
-        let mut p = unsafe { s.add(at) };
-        // SAFETY: `p` is a C string, and the walk stops at its terminator.
-        let wid = unsafe { getdigits_int(&raw mut p, true, 0) };
-        if wid != 0 && opt_bytes(p).first() == Some(&b'(') && {
+        let (wid, past) = getdigits_int_at(text, at, true, 0);
+        if wid != 0 && text.get(past) == Some(&b'(') && {
             errmsg = check_ruf();
             errmsg.is_ok()
         } {
@@ -164,8 +148,7 @@ pub(crate) fn did_set_statustabline_rulerformat(
             errmsg = check_ruf();
         }
     } else if rulerformat || text.first() != Some(&b'%') || text.get(1) != Some(&b'!') {
-        // SAFETY: the frame's own C string value.
-        errmsg = unsafe { check_stl_option(s) };
+        errmsg = check_stl_option(text);
     }
     if rulerformat && errmsg.is_ok() {
         // The ruler's width decides where the last line's columns start.
@@ -185,8 +168,7 @@ pub fn did_set_sessionoptions(args: &mut OptSet) -> Result<(), OptError> {
     if ssop_flags.get() & both == both {
         // The caller only restores the string, so put the old value's mask
         // back here. A value that does not parse leaves the mask alone.
-        // SAFETY: the frame's old value is a C string.
-        if let Some(mask) = unsafe { opt_strings_mask(old_value(args), &opt_ssop_values, true) } {
+        if let Some(mask) = opt_strings_mask(old_bytes(args), &opt_ssop_values, true) {
             ssop_flags.set(mask);
         }
         return invalid();
@@ -212,7 +194,6 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
     while at(i) != 0 {
         let item = at(i);
         if !SHADA_ITEMS.contains(&item) {
-            // SAFETY: the frame's error buffer, with its own length.
             return Err(illegal_char(c_int::from(item)));
         }
         if item == b'n' {
@@ -240,16 +221,9 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
             if !ascii_isdigit(c_int::from(at(i - 1))) {
                 let byte = c_int::from(at(i - 1));
                 let fmt = gettext(c"E526: Missing number after <%s>");
-                // SAFETY: `formatted` hands the closure a buffer of the
-                // size it passes on, and the format takes one string.
-                return formatted(|buf| unsafe {
-                    vim_snprintf!(
-                        buf,
-                        OptError::ROOM as size_t,
-                        fmt.as_ptr(),
-                        transchar_byte(byte).as_ptr(),
-                    );
-                });
+                let shown = transchar_byte(byte);
+                let message = formatted!(OptError::ROOM, fmt.to_bytes(), cstr::in_chars(&shown));
+                return Err(XString::from_vec(message).into());
             }
         }
         if at(i) == b',' {
@@ -268,12 +242,7 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
 /// 'shellpipe' and 'shellredir' are printf-style: at most one `%s`, and a
 /// `%` has to be followed by something.
 pub fn did_set_shellpipe_redir(args: &mut OptSet) -> Result<(), OptError> {
-    // SAFETY: the caller's frame, and its new value is a C string.
-    let new = args
-        .os_newval
-        .as_string()
-        .expect("the table installs this callback on a string option only");
-    let value = unsafe { CStr::from_ptr(new.data()) }.to_bytes();
+    let value = new_bytes(args);
     let bad = || Err(e_invalid_format_string_single_percent_s.into());
     let mut seen = false;
     let mut at = 0;
@@ -295,8 +264,7 @@ pub fn did_set_shellpipe_redir(args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_shortmess(args: &mut OptSet) -> Result<(), OptError> {
-    // SAFETY: the frame's own C string value.
-    unsafe { did_set_option_listflag(varp(args).value_ptr(), SHM_ALL.as_ptr()) }
+    did_set_option_listflag(new_bytes(args), SHM_ALL)
 }
 
 pub fn did_set_verbosefile(_args: &mut OptSet) -> Result<(), OptError> {

@@ -29,9 +29,20 @@
 
 use core::ffi::{CStr, c_char};
 
-use super::empty_option;
 use crate::memory::XString;
 use crate::options::vars::StrOpt;
+
+/// What [`OptString::value_ptr`] answers for a variable that owns nothing:
+/// the empty C string.
+///
+/// Upstream points every such option at one writable `char[1]` and compares
+/// addresses against it. Nothing here compares -- [`OptString::is_unset`]
+/// asks the variable -- and nothing writes through a value pointer either: a
+/// variable that owns its bytes lends them through a shared borrow, so a
+/// write was never one the protocol allowed. A literal says so.
+pub(crate) const fn empty_option() -> *mut c_char {
+    c"".as_ptr().cast_mut()
+}
 
 /// The questions every string option's value answers, wherever it lives.
 pub(crate) trait OptString {

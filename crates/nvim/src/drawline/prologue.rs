@@ -639,8 +639,8 @@ impl LineSetup {
     /// "trail" marks apply to.
     fn listchars_columns(&mut self, window: Win, lnum: LineNr) {
         if window.w_p_lcs_chars.space != 0
-            || !window.w_p_lcs_chars.multispace.is_null()
-            || !window.w_p_lcs_chars.leadmultispace.is_null()
+            || window.w_p_lcs_chars.multispace.is_some()
+            || window.w_p_lcs_chars.leadmultispace.is_some()
             || window.w_p_lcs_chars.trail != 0
             || window.w_p_lcs_chars.lead != 0
             || window.w_p_lcs_chars.nbsp != 0
@@ -659,7 +659,7 @@ impl LineSetup {
             self.trailcol = trailcol + unsafe { self.ptr.offset_from(self.line) } as ColNr;
         }
         if window.w_p_lcs_chars.lead != 0
-            || !window.w_p_lcs_chars.leadmultispace.is_null()
+            || window.w_p_lcs_chars.leadmultispace.is_some()
             || window.w_p_lcs_chars.leadtab1 != 0
         {
             let mut leadcol: ColNr = 0;
@@ -777,16 +777,18 @@ impl LineSetup {
             return;
         }
         let lead = unsafe { self.line.offset(self.leadcol as isize) };
+        let lcs = &window.w_p_lcs_chars;
         let pattern = if next_ptr >= lead {
-            window.w_p_lcs_chars.multispace
+            lcs.multispace.as_deref()
         } else {
-            window.w_p_lcs_chars.leadmultispace
+            lcs.leadmultispace.as_deref()
         };
-        if pattern.is_null() {
+        let Some(pattern) = pattern else {
             return;
-        }
+        };
         self.multispace_pos += 1;
-        if unsafe { *pattern.offset(self.multispace_pos as isize) } == 0 {
+        // Past the run's end is where upstream's terminator stops it.
+        if usize::try_from(self.multispace_pos).is_ok_and(|pos| pos >= pattern.len()) {
             self.multispace_pos = 0;
         }
     }

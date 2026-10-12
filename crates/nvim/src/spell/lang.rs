@@ -52,7 +52,7 @@ use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrlcpy};
 use crate::message::e_invarg;
 use crate::option::vars::{P_ENC, p_enc};
-use crate::option::{copy_option_part, valid_name};
+use crate::option::{copy_option_part, split_option_part, valid_name};
 use crate::os::fs::os_remove;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
@@ -651,31 +651,22 @@ pub fn valid_spelllang(val: &CStr) -> bool {
     valid_name(val, b".-_,@")
 }
 
-/// Whether `val` is a usable `'spellfile'` value: a comma-separated list of
-/// file names, each ending in `.add` and made of file-name characters.
+/// Whether `value` is a usable `'spellfile'` value: a comma-separated list
+/// of file names, each ending in `.add` and made of file-name characters.
 ///
-/// # Safety
-///
-/// `val` must point at a NUL-terminated string.
-pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
-    let mut spf_name = [0 as c_char; MAXPATHL as usize];
-    let mut spf = val as *mut c_char;
-    while unsafe { *spf } != 0 {
-        let (buf, room) = (spf_name.as_mut_ptr(), MAXPATHL as size_t);
-        let sep = c",".as_ptr() as *mut c_char;
-        let l = unsafe { copy_option_part(&raw mut spf, buf, room, sep) };
-        if l >= MAXPATHL as size_t - 4
-            || l < 4
-            || unsafe { !cstr::eq_bytes(spf_name.as_ptr().add(l - 4), b".add") }
-        {
+/// Each part is measured as upstream copies it, into a `MAXPATHL` buffer:
+/// a longer one is cut there, and then fails the length test.
+pub fn valid_spellfile(value: &[u8]) -> bool {
+    let mut rest = value;
+    while !rest.is_empty() {
+        let (name, after) = split_option_part(rest, MAXPATHL as usize, b",");
+        rest = after;
+        let l = name.len();
+        if l >= MAXPATHL as usize - 4 || l < 4 || !name.ends_with(b".add") {
             return false;
         }
-        let mut s = spf_name.as_ptr();
-        while unsafe { *s } != 0 {
-            if !unsafe { vim_is_fname_char(*s as u8 as c_int) } {
-                return false;
-            }
-            s = unsafe { s.offset(1) };
+        if !name.iter().all(|&c| vim_is_fname_char(c_int::from(c))) {
+            return false;
         }
     }
     true

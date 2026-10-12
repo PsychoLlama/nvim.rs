@@ -44,7 +44,7 @@ use crate::message_fmt::c_str;
 use crate::option::vars::{jop_flags, p_sol, swb_flags};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
-use crate::optionstr::init_buf_string_options;
+use crate::optionstr::BUF_STRING_OPTIONS;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_fileid;
 use crate::path::full_name_save;
@@ -422,10 +422,12 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
     unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
     unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
-    // ... and the string options, which are `Option<XString>`: see
-    // `init_buf_string_options`.
-    // SAFETY: a fresh allocation nothing has read or dropped.
-    unsafe { init_buf_string_options(at) };
+    // ... and the string options, which are `Option<XString>`s.
+    for field in BUF_STRING_OPTIONS {
+        let slot = at.wrapping_byte_add(field.field_offset());
+        // SAFETY: as above; the selector names one such field of the block.
+        unsafe { slot.cast::<Option<XString>>().write(None) };
+    }
     // ... and the file name, for the same reason: `BufName` holds two of
     // those `Option<XString>`s and an enum whose niche is one of them.
     // SAFETY: as above.

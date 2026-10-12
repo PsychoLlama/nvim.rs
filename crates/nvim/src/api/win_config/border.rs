@@ -351,6 +351,17 @@ pub unsafe fn parse_winborder(
     unsafe { parse_border_style(&style, fconfig) }.map(|()| true)
 }
 
+/// [`parse_winborder`] into a configuration the caller holds, over a value
+/// the parse only reads.
+pub(crate) fn parse_winborder_in(
+    fconfig: &mut WinConfig,
+    border_opt: &CStr,
+) -> Result<bool, Error> {
+    // SAFETY: a live configuration, unaliased by its `&mut`, and a
+    // NUL-terminated value nothing below writes.
+    unsafe { parse_winborder(fconfig, border_opt.as_ptr().cast_mut()) }
+}
+
 /// The eight comma-separated cells of a `'winborder'` value, or `None` when
 /// it does not hold exactly eight non-empty ones.
 ///

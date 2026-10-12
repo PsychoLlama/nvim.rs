@@ -60,9 +60,10 @@ pub fn nvim_eval_statusline(
     let named_expr = str.len() >= 2
         && unsafe { *str.data() == b'%' as c_char && *str.data().add(1) == b'!' as c_char };
     if !named_expr {
-        // SAFETY: `str.data` is NUL-terminated, and the message is the
-        // checker's own static text.
-        if let Err(errmsg) = unsafe { check_stl_option(str.data()) } {
+        // The format is checked as the C string it is: to its first NUL.
+        let format = str.as_bytes();
+        let format = &format[..format.iter().position(|&b| b == 0).unwrap_or(format.len())];
+        if let Err(errmsg) = check_stl_option(format) {
             error = Error::validation(errmsg.as_cstr());
             return empty.reported(error);
         }

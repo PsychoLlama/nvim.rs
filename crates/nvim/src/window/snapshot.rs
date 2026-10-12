@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::mem::size_of;
 use core::{ptr, slice};
 
@@ -267,26 +267,23 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
 
 /// [`check_colorcolumn`] over the window's own 'colorcolumn'.
 pub(crate) fn check_window_colorcolumn(window: Win) -> Result<(), OptError> {
-    // SAFETY: null asks for the window's own value, which the check reads
-    // in place.
-    unsafe { check_colorcolumn(::core::ptr::null_mut(), Some(window)) }
+    check_colorcolumn(None, Some(window))
 }
 
-/// # Safety
+/// Parse 'colorcolumn' -- `cc`, or the window's own value when there is
+/// none -- and, given a window, store the columns it names.
 ///
-/// `cc` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Result<(), OptError> {
-    // The caller's promise: a NUL-terminated string or null.
+/// The walk only reads the value, and it is done before the window is
+/// written; the cursor is mutable because the digit reader's is.
+pub fn check_colorcolumn(cc: Option<&CStr>, window: Option<Win>) -> Result<(), OptError> {
     let win = window;
     if win.is_some_and(|w| w.w_buffer.is_null()) {
         return Ok(()); // buffer was closed
     }
-    let mut s = match () {
-        _ if !cc.is_null() => cc,
-        _ => match win {
-            Some(w) => w.w_onebuf_opt.wo_cc.value_ptr(),
-            None => empty_option(),
-        },
+    let mut s = match (cc, win) {
+        (Some(cc), _) => cc.as_ptr().cast_mut(),
+        (None, Some(w)) => w.w_onebuf_opt.wo_cc.value_ptr(),
+        (None, None) => empty_option(),
     };
     let tw = win.map_or(0 as OptInt, |w| w.buffer().b_p_tw);
 

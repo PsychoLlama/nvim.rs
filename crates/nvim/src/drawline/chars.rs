@@ -564,18 +564,14 @@ impl Cells {
                 && lcs.nbsp != 0)
                 || (self.char_code == ' ' as ::core::ffi::c_int
                     && self.char_len == 1
-                    && (lcs.space != 0 || (self.in_multispace && !lcs.multispace.is_null()))
+                    && (lcs.space != 0 || (self.in_multispace && lcs.multispace.is_some()))
                     && at >= self.leadcol as isize
                     && at <= self.trailcol as isize))
         {
-            if self.in_multispace && !lcs.multispace.is_null() {
-                self.cell_char = unsafe { *lcs.multispace.offset(self.multispace_pos as isize) };
-                self.multispace_pos += 1;
-                if unsafe { *lcs.multispace.offset(self.multispace_pos as isize) }
-                    == NUL as ScreenChar
-                {
-                    self.multispace_pos = 0;
-                }
+            if self.in_multispace
+                && let Some(run) = lcs.multispace.as_deref()
+            {
+                self.cell_char = cycle_run(run, &mut self.multispace_pos);
             } else {
                 self.cell_char = if self.char_code == ' ' as ::core::ffi::c_int {
                     lcs.space
@@ -599,16 +595,9 @@ impl Cells {
             if self.leadcol != 0
                 && self.in_multispace
                 && at < self.leadcol as isize
-                && !lcs.leadmultispace.is_null()
+                && let Some(run) = lcs.leadmultispace.as_deref()
             {
-                self.cell_char =
-                    unsafe { *lcs.leadmultispace.offset(self.multispace_pos as isize) };
-                self.multispace_pos += 1;
-                if unsafe { *lcs.leadmultispace.offset(self.multispace_pos as isize) }
-                    == NUL as ScreenChar
-                {
-                    self.multispace_pos = 0;
-                }
+                self.cell_char = cycle_run(run, &mut self.multispace_pos);
             } else if at > self.trailcol as isize && lcs.trail != 0 {
                 self.cell_char = lcs.trail;
             } else if at < self.leadcol as isize && lcs.lead != 0 {
@@ -622,4 +611,17 @@ impl Cells {
             self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
         }
     }
+}
+
+/// The character of a 'listchars' "multispace:"/"leadmultispace:" run at
+/// `pos`, stepping `pos` on and back to the start past the run's end --
+/// where upstream's terminator stops it.
+fn cycle_run(run: &[ScreenChar], pos: &mut ::core::ffi::c_int) -> ScreenChar {
+    let at = usize::try_from(*pos).unwrap_or(0);
+    let c = run.get(at).copied().unwrap_or(run[0]);
+    *pos += 1;
+    if usize::try_from(*pos).is_ok_and(|next| next >= run.len()) {
+        *pos = 0;
+    }
+    c
 }

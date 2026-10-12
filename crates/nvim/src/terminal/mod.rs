@@ -919,19 +919,20 @@ pub(crate) unsafe fn terminal_suspended(term: *const Terminal) -> bool {
     unsafe { (*term).suspended }
 }
 
-/// Tell a child that asked for theme updates that `'background'` changed.
-///
-/// # Safety
-///
-/// `term` must point at a live `Terminal`, unaliased for the call.
-pub(crate) unsafe fn terminal_notify_theme(term: *mut Terminal, dark: bool) {
-    // SAFETY: the caller hands over a live terminal.
-    if !unsafe { Term::new(term) }.theme_updates {
+/// Tell the child of `buffer`'s terminal, if it has one and asked for theme
+/// updates, that `'background'` changed.
+pub(crate) fn terminal_notify_theme(buffer: Buf, dark: bool) {
+    let term = buffer.terminal;
+    if term.is_null() {
+        return;
+    }
+    // SAFETY: a live buffer's terminal is live until the buffer closes it.
+    let term = unsafe { Term::new(term) };
+    if !term.theme_updates {
         return;
     }
     let report: &[u8] = if dark { b"\x1b[997;1n" } else { b"\x1b[997;2n" };
-    // SAFETY: as above.
-    terminal_send(unsafe { Term::new(term) }, report);
+    terminal_send(term, report);
 }
 
 /// The buffer line an emulator row appears on, counting the scrollback

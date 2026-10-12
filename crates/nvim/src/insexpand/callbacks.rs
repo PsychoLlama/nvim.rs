@@ -466,11 +466,9 @@ pub fn set_buflocal_cpt_callbacks(buffer: Buf) {
 /// Parse `'complete'` and (re)build the `F{func}` callbacks; entries other
 /// than `F{func}` are counted but leave their slot empty.
 ///
-/// # Safety
-///
-/// `args` must point at a live `OptSet`, unaliased for the call.
-pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
-    let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
+/// `local` says the set was a `:setlocal`, which leaves the cached global
+/// array alone.
+pub fn set_cpt_callbacks(local: bool) -> Result<(), Failed> {
     if Buf::current_or_none().is_none() {
         return Err(Failed);
     }

@@ -613,10 +613,7 @@ unsafe fn parse_retab_arg(arg: *mut c_char) -> Option<RetabTabs> {
         ptr = unsafe { skipwhite(ptr.offset(11)) };
     }
     let ts_start = ptr;
-    let mut vts: *mut ColNr = ptr::null_mut();
-    if !unsafe { tabstop_set(ptr, &raw mut vts) } {
-        return None;
-    }
+    let vts = tabstop_set(unsafe { cstr::bytes_at(ptr) })?;
     while ascii_isdigit(unsafe { *ptr } as c_int) || unsafe { *ptr } == b',' as c_char {
         ptr = unsafe { ptr.add(1) };
     }

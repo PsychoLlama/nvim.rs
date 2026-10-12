@@ -7,7 +7,7 @@
 //! 'display', …) carries an array of accepted spellings in the generated
 //! table. Matching a word sets its bit in the option's `flags_var`, so the
 //! rest of the editor tests a bitmask instead of re-parsing the string.
-//! [`opt_strings_flags`] is that check, and it is also the only thing that
+//! [`opt_strings_mask`] is that check, and it is also the only thing that
 //! keeps the mask in step with the value.
 //!
 //! A **flag letter** option ('formatoptions', 'cpoptions', 'shortmess',
@@ -15,8 +15,7 @@
 //! value as a string. [`did_set_option_listflag`] only rejects a letter
 //! outside that set; nothing derives a mask from it here.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -27,10 +26,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
-use crate::optionstr::OptString;
-use crate::strings::has_char;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 use crate::message::e_invarg;
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
@@ -73,34 +69,8 @@ fn opens_with(value: &[u8], word: &[u8], list: bool) -> bool {
 /// value names nothing and is fine — the loop simply does not run. A
 /// single-word option still takes one pass, which looks `""` up among the
 /// accepted words like any other spelling; no option accepts it, so
-/// `:set fileformat=` fails. That forced pass is the whole reason this is a
-/// `loop` rather than a `while`.
-///
-/// # Safety
-/// `val` is a C string, from the option table or from an option's variable.
-pub(crate) unsafe fn opt_strings_mask(
-    val: *const c_char,
-    values: &[&CStr],
-    list: bool,
-) -> Option<c_uint> {
-    // SAFETY: the caller guarantees a C string.
-    let value = unsafe { CStr::from_ptr(val) };
-    words_mask(value.to_bytes(), values, list)
-}
-
-/// Whether every word in `val` is one the option accepts — the question the
-/// callers that keep no mask are asking.
-///
-/// # Safety
-/// As [`opt_strings_mask`].
-pub(crate) unsafe fn opt_strings_ok(val: *const c_char, values: &[&CStr], list: bool) -> bool {
-    // SAFETY: the caller's obligation.
-    unsafe { opt_strings_mask(val, values, list) }.is_some()
-}
-
-/// The bitmask [`opt_strings_flags`] stores, or `None` for a value naming a
-/// word that is not accepted.
-fn words_mask(mut rest: &[u8], values: &[&CStr], list: bool) -> Option<c_uint> {
+/// `:set fileformat=` fails. That forced pass is what `once` is for.
+pub(crate) fn opt_strings_mask(mut rest: &[u8], values: &[&CStr], list: bool) -> Option<c_uint> {
     let once = rest.is_empty() && !list;
     let mut mask: c_uint = 0;
     while !rest.is_empty() || once {
@@ -120,17 +90,20 @@ fn words_mask(mut rest: &[u8], values: &[&CStr], list: bool) -> Option<c_uint> {
     Some(mask)
 }
 
-/// [`opt_strings_flags`] as an option-table callback reports it: null when
+/// Whether every word in `value` is one the option accepts — the question
+/// the callers that keep no mask are asking.
+pub(crate) fn opt_strings_ok(value: &[u8], values: &[&CStr], list: bool) -> bool {
+    opt_strings_mask(value, values, list).is_some()
+}
+
+/// [`opt_strings_ok`] as an option-table callback reports it: nothing when
 /// the value is good, "E474: Invalid argument" when it is not.
-///
-/// # Safety
-/// As [`opt_strings_flags`].
-pub(crate) unsafe fn did_set_opt_flags(
-    val: *const c_char,
+pub(crate) fn did_set_opt_flags(
+    value: &[u8],
     values: &[&CStr],
     list: bool,
 ) -> Result<(), OptError> {
-    if unsafe { opt_strings_ok(val, values, list) } {
+    if opt_strings_ok(value, values, list) {
         Ok(())
     } else {
         Err(e_invarg.into())
@@ -148,22 +121,12 @@ pub fn did_set_str_generic(args: &mut OptSet) -> Result<(), OptError> {
     }
 }
 
-/// Reject the first letter of `val` that is not in `flags`.
-///
-/// # Safety
-/// `val` and `flags` are C strings.
-pub(crate) unsafe fn did_set_option_listflag(
-    val: *const c_char,
-    flags: *const c_char,
-) -> Result<(), OptError> {
-    // SAFETY: the caller guarantees a C string.
-    for &byte in unsafe { CStr::from_ptr(val) }.to_bytes() {
-        // SAFETY: `flags` is a C string, only read here.
-        if !has_char(unsafe { cstr::at(flags) }, c_int::from(byte)) {
-            return Err(illegal_char(c_int::from(byte)));
-        }
+/// Reject the first letter of `value` that is not in `flags`.
+pub(crate) fn did_set_option_listflag(value: &[u8], flags: &CStr) -> Result<(), OptError> {
+    match value.iter().find(|byte| !flags.to_bytes().contains(byte)) {
+        Some(&byte) => Err(illegal_char(c_int::from(byte))),
+        None => Ok(()),
     }
-    Ok(())
 }
 
 /// Re-run an option's word-list check against its current value, refreshing
@@ -176,8 +139,7 @@ pub(crate) fn check_str_opt(
     let opt = get_option(idx);
     let varp = varp.unwrap_or_else(|| option_var(idx).string_var());
     let list = opt.flags & (kOptFlagComma | kOptFlagOneComma) != 0;
-    // SAFETY: an option variable answers its own NUL-terminated buffer.
-    let Some(mask) = (unsafe { opt_strings_mask(varp.value_ptr(), opt_values(idx), list) }) else {
+    let Some(mask) = varp.with_bytes(|value| opt_strings_mask(value, opt_values(idx), list)) else {
         return Err(Failed);
     };
     // The table names the mask cell itself; an option with no mask has none.
@@ -194,9 +156,7 @@ pub(crate) fn check_str_opt(
 /// `did_set_*`.
 pub fn check_ff_value(p: &CStr) -> c_int {
     let values = opt_values(kOptFileformat);
-    // SAFETY: a C string, which the check only reads, against the table's
-    // own word list.
-    if unsafe { opt_strings_ok(p.as_ptr().cast_mut(), values, false) } {
+    if opt_strings_ok(p.to_bytes(), values, false) {
         OK
     } else {
         FAIL
@@ -205,7 +165,34 @@ pub fn check_ff_value(p: &CStr) -> c_int {
 
 #[cfg(test)]
 mod tests {
-    use super::opens_with;
+    use super::{opens_with, opt_strings_mask};
+
+    const WORDS: &[&core::ffi::CStr] = &[c"menu", c"menuone", c"popup"];
+
+    #[test]
+    fn a_list_sets_one_bit_per_word_named_and_repeats_are_harmless() {
+        assert_eq!(opt_strings_mask(b"menu,popup", WORDS, true), Some(0b101));
+        assert_eq!(
+            opt_strings_mask(b"menuone,menu,menuone", WORDS, true),
+            Some(0b011)
+        );
+        assert_eq!(opt_strings_mask(b"", WORDS, true), Some(0));
+    }
+
+    #[test]
+    fn a_word_that_is_not_accepted_rejects_the_value() {
+        assert_eq!(opt_strings_mask(b"menu,bogus", WORDS, true), None);
+        assert_eq!(opt_strings_mask(b"menu,", WORDS, true), Some(0b001));
+        assert_eq!(opt_strings_mask(b",menu", WORDS, true), None);
+        assert_eq!(opt_strings_mask(b"menu,popup", WORDS, false), None);
+    }
+
+    #[test]
+    fn a_single_word_option_looks_the_empty_value_up() {
+        assert_eq!(opt_strings_mask(b"", WORDS, false), None);
+        assert_eq!(opt_strings_mask(b"", &[c"", c"x"], false), Some(0b01));
+        assert_eq!(opt_strings_mask(b"popup", WORDS, false), Some(0b100));
+    }
 
     #[test]
     fn a_word_can_end_the_value_in_either_shape() {

@@ -116,27 +116,23 @@ unsafe fn parse_briopt(value: *const c_char) -> Option<Briopt> {
 
 /// [`briopt_check`] over the window's own 'breakindentopt'.
 pub(crate) fn check_window_briopt(window: Win) -> bool {
-    // SAFETY: null asks for the window's own value.
-    unsafe { briopt_check(core::ptr::null_mut(), Some(window)) }
+    briopt_check(None, Some(window))
 }
 
 /// Checks `briopt` as 'breakindentopt' and, when `window` is not null, writes
 /// what it says onto that window. Called when the option is set and when a
 /// window is initialised.
 ///
-/// A null `briopt` reads the window's own value; a null `window` only checks.
-///
-/// # Safety
-/// `briopt` must be null or a NUL-terminated string, and `window` null or a
-/// window.
-pub unsafe fn briopt_check(briopt: *mut c_char, window: Option<Win>) -> bool {
-    // The caller's option string, or the window's own copy of it.
-    let value = match (briopt.is_null(), window) {
-        (false, _) => briopt.cast_const(),
-        (true, Some(w)) => w.w_onebuf_opt.wo_briopt.value_ptr().cast_const(),
+/// No `briopt` reads the window's own value; no `window` only checks.
+pub fn briopt_check(briopt: Option<&CStr>, window: Option<Win>) -> bool {
+    // The caller's option string, or the window's own copy of it, which the
+    // parse reads before anything below writes the window.
+    let value = match (briopt, window) {
+        (Some(briopt), _) => briopt.as_ptr(),
+        (None, Some(w)) => w.w_onebuf_opt.wo_briopt.value_ptr().cast_const(),
         // Upstream reads `empty_string_option` here, which is only ever
         // the empty string and is never written through.
-        (true, None) => c"".as_ptr(),
+        (None, None) => c"".as_ptr(),
     };
     // SAFETY: `value` is one of three NUL-terminated strings.
     let Some(opt) = (unsafe { parse_briopt(value) }) else {

@@ -55,7 +55,7 @@ use ::libc::abort;
 /// All-zero bytes are not a valid `ScreenGrid` -- its cell buffers are
 /// `Vec`s, whose pointers are never null -- nor a valid `w_ns_set`, which is
 /// a `HashSet` and carries a hasher, nor either `WinOpt`'s string options,
-/// for the reason `optionstr::init_buf_string_options` states. All four are
+/// for the reason `optionstr::BUF_STRING_OPTIONS` states. All four are
 /// written before anything can read or drop them.
 fn zeroed_window() -> Win {
     Win::alloc_zeroed(|wp| {
@@ -281,8 +281,9 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     drop(core::mem::take(&mut window.w_ns_set));
     clear_options(&raw mut window.w_onebuf_opt);
     clear_options(&raw mut window.w_allbuf_opt);
-    free(window.w_p_lcs_chars.multispace);
-    free(window.w_p_lcs_chars.leadmultispace);
+    // Like the set above: the block is freed without its destructors.
+    window.w_p_lcs_chars.multispace = None;
+    window.w_p_lcs_chars.leadmultispace = None;
     if let Some(vars) = window.w_winvar.di_tv.dict_handle() {
         vars_clear(&vars);
     }
