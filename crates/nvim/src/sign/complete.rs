@@ -8,8 +8,7 @@
 //! `expand_generic` callback that then enumerates whichever list that answer
 //! named.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -91,9 +90,10 @@ pub(crate) fn get_sign_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
         ExpandWhat::SignNames => sign_nth_name(idx).map(Candidate::Owned),
         ExpandWhat::SignGroups => {
             let ns = number_as_int(sign_nth_group(idx)?);
-            // SAFETY: a namespace's name, or the empty literal; NUL-terminated.
-            let name = unsafe { CStr::from_ptr(describe_ns(ns, c"".as_ptr())) };
-            Some(Candidate::Owned(name.to_owned()))
+            let name = describe_ns(ns, b"");
+            Some(Candidate::Owned(
+                CString::new(name).expect("a namespace name is a C string's bytes"),
+            ))
         }
         ExpandWhat::Nothing => None,
     }

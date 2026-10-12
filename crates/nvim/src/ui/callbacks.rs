@@ -32,7 +32,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Allow;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
@@ -127,9 +127,8 @@ pub fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     update_ext();
     ui_refresh();
     if checkerr {
-        let ns = describe_ns(ns_id.cast_signed(), c"(UNKNOWN PLUGIN)".as_ptr());
-        // SAFETY: the one `%s` spends the namespace name.
-        let ns = unsafe { c_str(ns) };
+        let ns = describe_ns(ns_id.cast_signed(), b"(UNKNOWN PLUGIN)");
+        let ns = msg_bytes(&ns);
         msg_schedule_semsg!("Excessive errors in vim.ui_attach() callback (ns={ns})");
     }
 }
@@ -253,9 +252,10 @@ fn is_fast(name: &CStr, args: &Array) -> bool {
 ///
 /// `name` and `msg` must be valid C strings.
 unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
-    let ns = describe_ns(ns_id.cast_signed(), c"(UNKNOWN PLUGIN)".as_ptr());
-    // SAFETY: the caller's two strings and the namespace name just built.
-    let (shown_name, shown_ns, shown_msg) = unsafe { (c_str(name), c_str(ns), c_str(msg)) };
+    let ns = describe_ns(ns_id.cast_signed(), b"(UNKNOWN PLUGIN)");
+    let shown_ns = msg_bytes(&ns);
+    // SAFETY: the caller's two strings.
+    let (shown_name, shown_msg) = unsafe { (c_str(name), c_str(msg)) };
     logmsg!(
         LOGLVL_ERR,
         c"report_error",

@@ -261,6 +261,34 @@ pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScreenChar
     unsafe { schar_from_buf_first(p, len, first_compose) }
 }
 
+/// [`utfc_ptr2schar`] over the bytes of a C string: the cluster at the start
+/// of `bytes` packed into a `ScreenChar`, and its base codepoint. The slice's
+/// end or a NUL in it ends the text, so over the bytes of a NUL-terminated
+/// string this answers what the pointer form answers over the string.
+pub(crate) fn c_cluster_schar(bytes: &[u8]) -> (ScreenChar, c_int) {
+    let text = CBytes(bytes);
+    let c = char_at_in(text, 0);
+    let first_compose = utf_iscomposing_first(c);
+    let maxlen = (MAX_SCHAR_SIZE - 1) as usize - usize::from(first_compose);
+    let len = cluster_len_in(Prefix::new(text, 0, maxlen), 0);
+    if len == 1 && text.byte(0) >= 0x80 {
+        return (0, c);
+    }
+    // SAFETY: a cluster never runs past the end of the text it is read
+    // from, so `len` bytes of `bytes` are readable, and `maxlen` left room
+    // for the space a leading composing character takes.
+    (
+        unsafe { schar_from_buf_first(bytes.as_ptr().cast(), len, first_compose) },
+        c,
+    )
+}
+
+/// [`utf_ptr2cells`] over the bytes of a C string, the way
+/// [`c_cluster_schar`] reads them.
+pub(crate) fn c_cells_at(bytes: &[u8]) -> c_int {
+    cells_in(CBytes(bytes), 0)
+}
+
 /// [`utfc_ptr2schar`] for a cluster whose length is already known.
 ///
 /// # Safety

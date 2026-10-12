@@ -8,8 +8,7 @@
 //! parent. [`sign_list_placed`] and [`sign_list_defined`] are the
 //! `:sign place` / `:sign list` reports.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,17 +18,16 @@
 )]
 
 use super::*;
-use crate::cstr;
-use crate::message::msg_bytes;
-use crate::message_fmt::msg_cstr_opt;
+use crate::buffer::find_buffer_by_name;
+use crate::charset::getdigits_int_at;
+use crate::charset::skip;
+use crate::debugger::atoi;
+use crate::message::{msg_bytes, msg_display_bytes};
+use crate::message_fmt::msg_bytes as shown;
 use crate::semsg;
 use crate::smsg;
 use crate::types::FAIL;
 use crate::winlayer::Win;
-
-/// The `"*"` group's only byte, and the leading zero a sign name may carry.
-const STAR: c_char = b'*'.cast_signed();
-const ZERO: c_char = b'0'.cast_signed();
 
 /// The translated `$fmt` formatted with the arguments, cut to what a
 /// [`MSG_BUF_LEN`] buffer holds.
@@ -44,13 +42,28 @@ macro_rules! msg_buf {
     };
 }
 
-/// The `:sign place` report for `rbuf`, or for every buffer when it is null.
-///
-/// # Safety
-/// `rbuf` must be null or live; `group` must be null or NUL-terminated.
-pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
-    // SAFETY: the caller's group name.
-    let ns = unsafe { group_get_ns(group) };
+/// `text` past its leading spaces and tabs.
+fn skip_white(text: &[u8]) -> &[u8] {
+    &text[skip::white(text)..]
+}
+
+/// `text` up to its first space or tab, and what follows from there.
+fn split_white(text: &[u8]) -> (&[u8], &[u8]) {
+    text.split_at(skip::to_white(text))
+}
+
+/// A sign name with its leading zeroes stripped, so "099" and "99" name the
+/// same sign -- but a bare "0" is kept.
+fn strip_zeroes(mut name: &[u8]) -> &[u8] {
+    while name.len() > 1 && name[0] == b'0' {
+        name = &name[1..];
+    }
+    name
+}
+
+/// The `:sign place` report for `rbuf`, or for every buffer when it is `None`.
+pub(crate) fn sign_list_placed(rbuf: Option<Buf>, group: Option<&[u8]>) {
+    let ns = group_get_ns(group);
     msg_title(gettext(c"\n--- Signs ---"));
 
     let mut cur = match rbuf {
@@ -89,21 +102,16 @@ pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
 fn report_signs(signs: &[MTKey]) {
     msg_putchar('\n' as c_int);
     for (i, mark) in signs.iter().enumerate() {
-        // SAFETY: the caller promised every mark carries a live sign.
-        let sh = unsafe { Sh::new(decor_find_sign(mt_decor(*mark))) };
-        let namebuf = if sh.sign_name.is_null() {
+        let sh = sign_of(*mark);
+        let namebuf = if sh.sign_name_cstr().is_none() {
             Vec::new()
         } else {
-            // SAFETY: the sign's own NUL-terminated name.
-            let name = unsafe { cstr::at(sign_get_name(sh.raw())) };
-            msg_buf!(c"  name=%s", name)
+            msg_buf!(c"  name=%s", placed_sign_name(&sh))
         };
         let groupbuf = if mark.ns == 0 {
             Vec::new()
         } else {
-            // SAFETY: a namespace's NUL-terminated name, or the literal.
-            let group = unsafe { cstr::at(describe_ns(mark.ns.cast_signed(), c"".as_ptr())) };
-            msg_buf!(c"  group=%s", group)
+            msg_buf!(c"  group=%s", &describe_ns(mark.ns.cast_signed(), b"")[..])
         };
         let lbuf = msg_buf!(
             c"    line=%d  id=%u%s%s  priority=%d",
@@ -120,56 +128,34 @@ fn report_signs(signs: &[MTKey]) {
     }
 }
 
-/// The index of the `:sign` subcommand named between `begin_cmd` and
-/// `end_cmd`, or [`SIGNCMD_LAST`] for one that is not a subcommand.
-///
-/// `end_cmd` is terminated in place for the comparison and put back, which
-/// is why the command line has to be writable.
-///
-/// # Safety
-/// `begin_cmd` must be NUL-terminated and `end_cmd` a writable position
-/// within it.
-pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) -> c_int {
-    // SAFETY: the caller's command line.
-    let save = unsafe { *end_cmd };
-    unsafe { *end_cmd = 0 };
-    let idx = CMDS
-        .iter()
-        .position(|cmd| unsafe { cstr::eq(begin_cmd, cmd.as_ptr()) })
+/// The index of the `:sign` subcommand `word` names, or [`SIGNCMD_LAST`]
+/// for one that is not a subcommand.
+pub(crate) fn sign_cmd_idx(word: &[u8]) -> c_int {
+    CMDS.iter()
+        .position(|cmd| cmd.to_bytes() == word)
         .map_or(SIGNCMD_LAST, |i| {
             c_int::try_from(i).expect("six subcommands")
-        });
-    unsafe { *end_cmd = save };
-    idx
+        })
 }
 
 /// The `:sign list` report for one definition.
-pub(crate) fn sign_list_defined(sign: SignRef) {
-    // SAFETY: a definition's name, icon and cells are its own.
-    let sn_name = unsafe { msg_cstr_opt(cstr::at_opt(sign.sn_name)) };
-    smsg!(0, "sign {sn_name}");
-    if !sign.sn_icon.is_null() {
+pub(crate) fn sign_list_defined(sign: &Sign) {
+    smsg!(0, "sign {}", shown(sign.name.as_bytes()));
+    if let Some(icon) = &sign.icon {
         msg_str(c" icon=");
-        msg_display(unsafe { cstr::at(sign.sn_icon) }, 0, false);
+        msg_display_bytes(icon, 0, false);
         msg_str(gettext(c" (not supported)"));
     }
-    if sign.sn_text[0] != 0 {
+    if sign.text[0] != 0 {
         msg_str(c" text=");
-        let mut buf = [0 as c_char; SIGN_TEXT_BUF];
-        unsafe { describe_sign_text(buf.as_mut_ptr(), sign.cells()) };
-        msg_display(cstr::in_chars(&buf), 0, false);
+        msg_display_bytes(&sign_text_bytes(&sign.text), 0, false);
     }
-    if sign.sn_priority > 0 {
-        let lbuf = msg_buf!(c" priority=%d", sign.sn_priority);
+    if sign.priority > 0 {
+        let lbuf = msg_buf!(c" priority=%d", sign.priority);
         msg_bytes(&lbuf, 0, false);
     }
     let labels = [c" linehl=", c" texthl=", c" culhl=", c" numhl="];
-    let ids = [
-        sign.sn_line_hl,
-        sign.sn_text_hl,
-        sign.sn_cul_hl,
-        sign.sn_num_hl,
-    ];
+    let ids = [sign.line_hl, sign.text_hl, sign.cul_hl, sign.num_hl];
     for (label, id) in labels.into_iter().zip(ids) {
         if id > 0 {
             msg_str(label);
@@ -179,114 +165,89 @@ pub(crate) fn sign_list_defined(sign: SignRef) {
 }
 
 /// `:sign list {name}`.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-unsafe fn sign_list_by_name(name: *mut c_char) {
-    // SAFETY: the caller's name.
-    match unsafe { sign_find(name) } {
-        Some(sp) => sign_list_defined(sp),
+fn sign_list_by_name(name: &[u8]) {
+    match sign_find(name) {
+        Some(sign) => sign_list_defined(&sign),
         None => {
-            // SAFETY: the caller's name, and a format the message takes.
-            let name = unsafe { msg_cstr_opt(cstr::at_opt(name)) };
-            semsg!("E155: Unknown sign: {name}");
+            semsg!("E155: Unknown sign: {}", shown(name));
         }
     }
 }
 
 /// `:sign define {name} {args}...`.
 ///
-/// The arguments are `key=value` pairs in any order; an unrecognised key is
-/// E474 and abandons the rest of the line, having already applied the ones
-/// before it.
-///
-/// # Safety
-/// `name` and `cmdline` must be writable NUL-terminated strings; this
-/// terminates each argument in place.
-unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
-    let null = ::core::ptr::null_mut();
-    let (mut icon, mut text) = (null, null);
-    let (mut linehl, mut texthl, mut culhl, mut numhl) = (null, null, null, null);
-    let mut prio = -1;
-
-    let mut cmdline = cmdline;
+/// The arguments are `key=value` pairs in any order, each running to the
+/// next white space a backslash does not escape. An unrecognised key is
+/// E475 and defines nothing.
+fn sign_define_cmd(name: &[u8], args: &[u8]) {
+    let mut attrs = SignAttrs {
+        prio: -1,
+        ..Default::default()
+    };
+    let mut rest = args;
     loop {
-        let arg = unsafe { skipwhite(cmdline) };
-        if unsafe { *arg } == 0 {
+        let arg = skip_white(rest);
+        if arg.is_empty() {
             break;
         }
-        cmdline = unsafe { skiptowhite_esc(arg) };
-
-        let after = |lit: &CStr| {
-            if unsafe { cstr::prefix_eq(arg, lit.as_ptr(), lit.count_bytes()) } {
-                Some(unsafe { arg.add(lit.count_bytes()) })
-            } else {
-                None
-            }
-        };
-        if let Some(v) = after(c"icon=") {
-            icon = v;
-        } else if let Some(v) = after(c"text=") {
-            text = v;
-        } else if let Some(v) = after(c"linehl=") {
-            linehl = v;
-        } else if let Some(v) = after(c"texthl=") {
-            texthl = v;
-        } else if let Some(v) = after(c"culhl=") {
-            culhl = v;
-        } else if let Some(v) = after(c"numhl=") {
-            numhl = v;
-        } else if let Some(v) = after(c"priority=") {
-            prio = unsafe { atoi(v) };
+        let end = skip::to_white_esc(arg);
+        let value = |key: &[u8]| arg[..end].strip_prefix(key).map(<[u8]>::to_vec);
+        if let Some(v) = value(b"icon=") {
+            attrs.icon = Some(v);
+        } else if let Some(v) = value(b"text=") {
+            attrs.text = Some(v);
+        } else if let Some(v) = value(b"linehl=") {
+            attrs.linehl = Some(v);
+        } else if let Some(v) = value(b"texthl=") {
+            attrs.texthl = Some(v);
+        } else if let Some(v) = value(b"culhl=") {
+            attrs.culhl = Some(v);
+        } else if let Some(v) = value(b"numhl=") {
+            attrs.numhl = Some(v);
+        } else if arg.starts_with(b"priority=") {
+            // `atoi` reads on past the value's end, as upstream's does: the
+            // value is only cut off after it is read.
+            attrs.prio = atoi(&arg[b"priority=".len()..]);
         } else {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { msg_cstr_opt(cstr::at_opt(arg)) };
-            semsg!("E475: Invalid argument: {arg}");
+            // Upstream quotes the argument before cutting it off, so the
+            // message runs to the end of the line.
+            semsg!("E475: Invalid argument: {}", shown(arg));
             return;
         }
-
-        if unsafe { *cmdline } == 0 {
-            break;
-        }
-        // Terminate this argument's value; the next one starts after it.
-        unsafe { *cmdline = 0 };
-        cmdline = unsafe { cmdline.add(1) };
+        // The next argument starts after the one white byte that ended this
+        // one; skipping white space at the top of the loop covers it.
+        rest = &arg[end..];
     }
 
-    let _ = unsafe { sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) };
+    let _ = sign_define_by_name(name, attrs);
 }
 
 /// `:sign place`, which both places a sign and — with no id — lists them.
-///
-/// # Safety
-/// `buffer` must be null or live; `name` and `group` must be null or
-/// NUL-terminated.
-unsafe fn sign_place_cmd(
-    buffer: Option<Buf>,
-    lnum: LineNr,
-    name: *mut c_char,
-    id: c_int,
-    group: *const c_char,
-    prio: c_int,
-) {
-    // SAFETY: the caller's buffer, name and group.
-    let empty_group = !group.is_null() && unsafe { *group } == 0;
-    if id <= 0 {
+fn sign_place_cmd(args: &SignCmdArgs) {
+    let empty_group = args.group.as_deref().is_some_and(<[u8]>::is_empty);
+    if args.id <= 0 {
         // The listing forms: `:sign place [group=X] [file=Y|buffer=N]`.
         // A `line=` or a `name=` means a placement was intended.
-        if lnum >= 0 || !name.is_null() || empty_group {
+        if args.lnum >= 0 || args.name.is_some() || empty_group {
             emsg(gettext(e_invarg));
         } else {
-            unsafe { sign_list_placed(buffer, group) };
+            sign_list_placed(args.buf, args.group.as_deref());
         }
         return;
     }
-    let (false, Some(buffer), false) = (name.is_null(), buffer, empty_group) else {
+    let (Some(name), Some(buffer), false) = (&args.name, args.buf, empty_group) else {
         emsg(gettext(e_invarg));
         return;
     };
-    let mut uid = id.cast_unsigned();
-    let _ = unsafe { sign_place(&raw mut uid, group, name, buffer, lnum, prio) };
+    let mut uid = args.id.cast_unsigned();
+    let _ = sign_place(
+        &mut uid,
+        args.group.as_deref(),
+        name,
+        buffer,
+        args.lnum,
+        args.prio,
+    );
 }
 
 /// `:sign unplace`.
@@ -294,58 +255,39 @@ unsafe fn sign_place_cmd(
 /// With no id at all it removes the highest-priority sign on the *cursor*
 /// line of the current buffer — the only spelling that reaches
 /// `buf_delete_signs`' single-line form, since an explicit `line=` is E474.
-///
-/// # Safety
-/// `buf` must be null or live; `name` and `group` must be null or
-/// NUL-terminated.
-unsafe fn sign_unplace_cmd(
-    buffer: Option<Buf>,
-    lnum: LineNr,
-    name: *const c_char,
-    id: c_int,
-    group: *const c_char,
-) {
-    // SAFETY: the caller's buffer, name and group.
-    if lnum >= 0 || !name.is_null() || (!group.is_null() && unsafe { *group } == 0) {
+fn sign_unplace_cmd(args: &SignCmdArgs) {
+    let empty_group = args.group.as_deref().is_some_and(<[u8]>::is_empty);
+    if args.lnum >= 0 || args.name.is_some() || empty_group {
         emsg(gettext(e_invarg));
         return;
     }
 
-    let (buf, lnum) = if id == -1 {
+    let (buf, lnum) = if args.id == -1 {
         (Some(Win::current().buffer()), Win::current().w_cursor.lnum)
     } else {
-        (buffer, lnum)
+        (args.buf, args.lnum)
     };
 
-    if unsafe { sign_unplace(buf, id.max(0), group, lnum) } == FAIL && lnum > 0 {
+    if sign_unplace(buf, args.id.max(0), args.group.as_deref(), lnum) == FAIL && lnum > 0 {
         emsg(gettext(c"E159: Missing sign number"));
     }
 }
 
 /// `:sign jump {id} [group={group}] file={fname}|buffer={nr}`.
-///
-/// # Safety
-/// `buffer` must be null or live; `name` and `group` must be null or
-/// NUL-terminated.
-unsafe fn sign_jump_cmd(
-    buffer: Option<Buf>,
-    lnum: LineNr,
-    name: *const c_char,
-    id: c_int,
-    group: *const c_char,
-) {
-    if name.is_null() && group.is_null() && id == -1 {
+fn sign_jump_cmd(args: &SignCmdArgs) {
+    if args.name.is_none() && args.group.is_none() && args.id == -1 {
         emsg(gettext(e_argreq));
         return;
     }
     // No buffer, an empty group, or a `line=`/`name=` that jumping has
     // no use for.
-    let bad = (!group.is_null() && unsafe { *group } == 0) || lnum >= 0 || !name.is_null();
-    let (Some(buffer), false) = (buffer, bad) else {
+    let empty_group = args.group.as_deref().is_some_and(<[u8]>::is_empty);
+    let bad = empty_group || args.lnum >= 0 || args.name.is_some();
+    let (Some(buffer), false) = (args.buf, bad) else {
         emsg(gettext(e_invarg));
         return;
     };
-    unsafe { sign_jump(id, group, buffer) };
+    sign_jump(args.id, args.group.as_deref(), buffer);
 }
 
 /// What [`parse_sign_cmd_args`] read off a `:sign place`/`unplace`/`jump`
@@ -355,9 +297,11 @@ unsafe fn sign_jump_cmd(
 /// against, and they are not all zero: `id` and `lnum` are −1 so that an
 /// explicit `0` can be told from no argument at all.
 struct SignCmdArgs {
-    name: *mut c_char,
+    /// Leading zeroes already stripped.
+    name: Option<Vec<u8>>,
     id: c_int,
-    group: *const c_char,
+    /// `Some` of an empty group for a `group=` with no value.
+    group: Option<Vec<u8>>,
     prio: c_int,
     /// Found while parsing and used by the command straight after.
     buf: Option<Buf>,
@@ -367,9 +311,9 @@ struct SignCmdArgs {
 impl Default for SignCmdArgs {
     fn default() -> Self {
         Self {
-            name: ::core::ptr::null_mut(),
+            name: None,
             id: -1,
-            group: ::core::ptr::null_mut(),
+            group: None,
             prio: -1,
             buf: None,
             lnum: -1,
@@ -379,109 +323,90 @@ impl Default for SignCmdArgs {
 
 /// Parses the arguments `:sign place`, `:sign unplace` and `:sign jump`
 /// share: an optional leading id, then `line=`, `name=`, `group=`,
-/// `priority=` and one of `file=`/`buffer=`.
+/// `priority=` and one of `file=`/`buffer=`, which ends the line.
 ///
-/// Answers `FAIL` after diagnosing; `OK` otherwise, including when nothing
-/// was given.
-///
-/// # Safety
-/// `arg` must be a writable NUL-terminated string; the `name=` and `group=`
-/// values are terminated in place and pointed into.
-unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArgs> {
+/// Answers `None` after diagnosing; `Some` otherwise, including when
+/// nothing was given.
+fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Option<SignCmdArgs> {
     let mut out = SignCmdArgs::default();
-    let arg1 = arg;
-    let mut arg = arg;
-    let mut filename: *mut c_char = ::core::ptr::null_mut();
+    let mut arg = line;
+    // Whether a `file=` or `buffer=` was given.
+    let mut filename: Option<&[u8]> = None;
     let mut lnum_arg = false;
 
     // A leading number is the sign id — but only if a separator follows,
     // so that `:sign unplace 3name=x` is not read as id 3.
-    if ascii_isdigit(c_int::from(unsafe { *arg })) {
-        out.id = unsafe { getdigits_int(&raw mut arg, true, 0) };
-        if !ascii_iswhite(c_int::from(unsafe { *arg })) && unsafe { *arg } != 0 {
+    if arg.first().is_some_and(u8::is_ascii_digit) {
+        let (id, past) = getdigits_int_at(arg, 0, true, 0);
+        if arg
+            .get(past)
+            .is_some_and(|&b| !ascii_iswhite(c_int::from(b)))
+        {
             out.id = -1;
-            arg = arg1;
         } else {
-            arg = unsafe { skipwhite(arg) };
+            out.id = id;
+            arg = skip_white(&arg[past..]);
         }
     }
 
-    while unsafe { *arg } != 0 {
-        let after = |lit: &CStr| {
-            if unsafe { cstr::prefix_eq(arg, lit.as_ptr(), lit.count_bytes()) } {
-                Some(unsafe { arg.add(lit.count_bytes()) })
-            } else {
-                None
-            }
-        };
-        if let Some(v) = after(c"line=") {
-            out.lnum = unsafe { atoi(v) };
-            arg = unsafe { skiptowhite(v) };
+    while !arg.is_empty() {
+        if let Some(v) = arg.strip_prefix(b"line=") {
+            out.lnum = atoi(v);
+            arg = split_white(v).1;
             lnum_arg = true;
-        } else if cmd == SIGNCMD_UNPLACE && unsafe { *arg } == STAR {
+        } else if cmd == SIGNCMD_UNPLACE && arg[0] == b'*' {
             // `:sign unplace *`: every sign, and not with an id too.
             if out.id != -1 {
                 emsg(gettext(e_invarg));
                 return None;
             }
             out.id = -2;
-            arg = unsafe { skiptowhite(arg.add(1)) };
-        } else if let Some(v) = after(c"name=") {
-            let mut namep = v;
-            arg = unsafe { skiptowhite(v) };
-            if unsafe { *arg } != 0 {
-                unsafe { *arg = 0 };
-                arg = unsafe { arg.add(1) };
-            }
-            // Leading zeroes are stripped, so "099" and "99" name the
-            // same sign — but a bare "0" is kept.
-            while unsafe { *namep } == ZERO && unsafe { *namep.add(1) } != 0 {
-                namep = unsafe { namep.add(1) };
-            }
-            out.name = namep;
-        } else if let Some(v) = after(c"group=") {
-            out.group = v;
-            arg = unsafe { skiptowhite(v) };
-            if unsafe { *arg } != 0 {
-                unsafe { *arg = 0 };
-                arg = unsafe { arg.add(1) };
-            }
-        } else if let Some(v) = after(c"priority=") {
-            out.prio = unsafe { atoi(v) };
-            arg = unsafe { skiptowhite(v) };
-        } else if let Some(v) = after(c"file=") {
-            filename = v;
-            out.buf = unsafe { buflist_findname_exp(v) };
+            arg = split_white(&arg[1..]).1;
+        } else if let Some(v) = arg.strip_prefix(b"name=") {
+            let (name, after) = split_white(v);
+            out.name = Some(strip_zeroes(name).to_vec());
+            arg = after;
+        } else if let Some(v) = arg.strip_prefix(b"group=") {
+            let (group, after) = split_white(v);
+            out.group = Some(group.to_vec());
+            arg = after;
+        } else if let Some(v) = arg.strip_prefix(b"priority=") {
+            out.prio = atoi(v);
+            arg = split_white(v).1;
+        } else if let Some(v) = arg.strip_prefix(b"file=") {
+            // The rest of the line, white space and all, is the name.
+            filename = Some(v);
+            out.buf = CString::new(v)
+                .ok()
+                .and_then(|name| find_buffer_by_name(&name));
             break;
-        } else if let Some(v) = after(c"buffer=") {
-            filename = v;
-            let mut p = v;
-            out.buf = find_buf(unsafe { getdigits_int(&raw mut p, true, 0) });
+        } else if let Some(v) = arg.strip_prefix(b"buffer=") {
+            filename = Some(v);
+            let (nr, past) = getdigits_int_at(v, 0, true, 0);
+            out.buf = find_buf(nr);
             // Diagnosed but not fatal, which is why this still breaks
             // out with whatever buffer it found.
-            if unsafe { *skipwhite(p) } != 0 {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let p = unsafe { msg_cstr_opt(cstr::at_opt(p)) };
-                semsg!("E488: Trailing characters: {p}");
+            if !skip_white(&v[past..]).is_empty() {
+                semsg!("E488: Trailing characters: {}", shown(&v[past..]));
             }
             break;
         } else {
             emsg(gettext(e_invarg));
             return None;
         }
-        arg = unsafe { skipwhite(arg) };
+        arg = skip_white(arg);
     }
 
-    if !filename.is_null() && out.buf.is_none() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let filename = unsafe { msg_cstr_opt(cstr::at_opt(filename)) };
-        semsg!("E158: Invalid buffer name: {filename}");
+    if let Some(filename) = filename
+        && out.buf.is_none()
+    {
+        semsg!("E158: Invalid buffer name: {}", shown(filename));
         return None;
     }
 
     // `:sign place line=N` and `:sign jump` default to the current
     // buffer; `:sign unplace` deliberately does not.
-    if filename.is_null() && ((cmd == SIGNCMD_PLACE && lnum_arg) || cmd == SIGNCMD_JUMP) {
+    if filename.is_none() && ((cmd == SIGNCMD_PLACE && lnum_arg) || cmd == SIGNCMD_JUMP) {
         out.buf = Win::current().buffer_or_none();
     }
     Some(out)
@@ -489,64 +414,51 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
 
 /// `:sign`.
 pub(crate) fn ex_sign(excmd: &mut ExArg) {
-    // SAFETY: the caller's command.
-    let mut arg = excmd.arg_ptr();
-
-    let p = unsafe { skiptowhite(arg) };
-    let idx = unsafe { sign_cmd_idx(arg, p) };
+    // A copy: `:sign jump` runs autocommands.
+    let line = excmd.line.arg().to_vec();
+    let (word, after) = split_white(&line);
+    let idx = sign_cmd_idx(word);
     if idx == SIGNCMD_LAST {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { msg_cstr_opt(cstr::at_opt(arg)) };
-        semsg!("E160: Unknown sign command: {arg}");
+        semsg!("E160: Unknown sign command: {}", shown(&line));
         return;
     }
-    arg = unsafe { skipwhite(p) };
+    let arg = skip_white(after);
 
     if idx > SIGNCMD_LIST {
         // Place, unplace or jump: a shared argument parser first.
-        let __v = unsafe { parse_sign_cmd_args(idx, arg) };
-        let Some(a) = __v else {
+        let Some(args) = parse_sign_cmd_args(idx, arg) else {
             return;
         };
         match idx {
-            SIGNCMD_PLACE => unsafe {
-                sign_place_cmd(a.buf, a.lnum, a.name, a.id, a.group, a.prio)
-            },
-            SIGNCMD_UNPLACE => unsafe { sign_unplace_cmd(a.buf, a.lnum, a.name, a.id, a.group) },
-            SIGNCMD_JUMP => unsafe { sign_jump_cmd(a.buf, a.lnum, a.name, a.id, a.group) },
+            SIGNCMD_PLACE => sign_place_cmd(&args),
+            SIGNCMD_UNPLACE => sign_unplace_cmd(&args),
+            SIGNCMD_JUMP => sign_jump_cmd(&args),
             _ => {}
         }
         return;
     }
 
     // Define, undefine or list.
-    if idx == SIGNCMD_LIST && unsafe { *arg } == 0 {
-        for sp in sign_defs() {
-            sign_list_defined(sp);
+    if idx == SIGNCMD_LIST && arg.is_empty() {
+        for sign in sign_defs() {
+            sign_list_defined(&sign);
         }
         return;
     }
-    if unsafe { *arg } == 0 {
+    if arg.is_empty() {
         emsg(gettext(c"E156: Missing sign name"));
         return;
     }
 
-    // Isolate the sign name. Leading zeroes are stripped so "099" and
-    // "99" are the same sign, but a bare "0" is kept.
-    let mut p = unsafe { skiptowhite(arg) };
-    if unsafe { *p } != 0 {
-        unsafe { *p = 0 };
-        p = unsafe { p.add(1) };
-    }
-    while unsafe { *arg } == ZERO && unsafe { *arg.add(1) } != 0 {
-        arg = unsafe { arg.add(1) };
-    }
-
+    // Isolate the sign name; the arguments start after the white byte that
+    // ends it.
+    let (name, rest) = split_white(arg);
+    let name = strip_zeroes(name);
     match idx {
-        SIGNCMD_DEFINE => unsafe { sign_define_cmd(arg, p) },
-        SIGNCMD_LIST => unsafe { sign_list_by_name(arg) },
+        SIGNCMD_DEFINE => sign_define_cmd(name, rest.get(1..).unwrap_or_default()),
+        SIGNCMD_LIST => sign_list_by_name(name),
         _ => {
-            let _ = unsafe { sign_undefine_by_name(arg) };
+            let _ = sign_undefine_by_name(name);
         }
     }
 }

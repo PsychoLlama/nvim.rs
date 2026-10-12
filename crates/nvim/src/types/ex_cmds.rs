@@ -707,9 +707,8 @@ impl ExArg<'_> {
     /// The argument as a writable pointer.
     ///
     /// Transitional: what is left of the pointer layer is the two
-    /// accessors here, for the handlers in `usercmd`, `sign` and `mapping`
-    /// that still walk their argument by pointer (each rewritten with its
-    /// own module); they go with the last of them.
+    /// accessors here, for the `mapping` handlers that still walk their
+    /// argument by pointer; they go when that module is rewritten.
     pub fn arg_ptr(&mut self) -> *mut ::core::ffi::c_char {
         self.line.ptr_at(self.line.arg)
     }

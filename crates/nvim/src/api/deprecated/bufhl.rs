@@ -52,25 +52,10 @@ unsafe fn set_decor(
     decor: DecorInline,
     flags: MtFlags,
 ) {
-    // SAFETY: the caller's promise. The mark is new, so it is given no id
-    // slot; a null error slot is what upstream passes here too.
-    unsafe {
-        extmark_set(
-            buffer,
-            ns,
-            ::core::ptr::null_mut::<uint32_t>(),
-            line,
-            col,
-            end_line,
-            end_col,
-            decor,
-            flags,
-            true,
-            false,
-            false,
-            false,
-        );
-    }
+    // The mark is new, so it is given no id slot.
+    extmark_set(
+        buffer, ns, None, line, col, end_line, end_col, decor, flags, true, false, false, false,
+    );
 }
 
 pub fn nvim_buf_clear_highlight(

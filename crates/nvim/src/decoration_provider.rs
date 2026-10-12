@@ -34,7 +34,7 @@ use crate::highlight::hl_check_ns;
 use crate::highlight::state::ns_hl_active;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::builders::ArrayBuf;
@@ -101,9 +101,10 @@ fn set_state(idx: usize, state: DecorProvider_state) {
 /// # Safety
 /// `name` and `msg` must be NUL-terminated.
 unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_char) {
-    let ns = describe_ns(ns_id, c"(UNKNOWN PLUGIN)".as_ptr());
-    // SAFETY: the caller's strings and the namespace name.
-    let (shown_name, shown_ns, shown_msg) = unsafe { (c_str(name), c_str(ns), c_str(msg)) };
+    let ns = describe_ns(ns_id, b"(UNKNOWN PLUGIN)");
+    let shown_ns = msg_bytes(&ns);
+    // SAFETY: the caller's strings.
+    let (shown_name, shown_msg) = unsafe { (c_str(name), c_str(msg)) };
     logmsg!(
         LOGLVL_ERR,
         c"decor_provider_error",

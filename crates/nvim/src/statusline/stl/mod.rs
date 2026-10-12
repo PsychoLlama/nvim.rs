@@ -81,7 +81,7 @@ use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::env::home_replace;
 use crate::path::path_tail;
 use crate::quickfix::{msg_loclist, msg_qflist};
-use crate::sign::describe_sign_text;
+use crate::sign::push_sign_text;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::types::{
@@ -376,21 +376,12 @@ impl Env {
     pub(super) fn sign_text(&self, i: usize, text: &mut Vec<u8>) -> Option<c_int> {
         // SAFETY: `stcp` is non-null here, and `sattrs` holds at least
         // `w_scwidth` entries -- which is the loop bound the caller uses.
-        let mut sattr = unsafe { *(*self.stcp).sattrs.add(i) };
+        let sattr = unsafe { *(*self.stcp).sattrs.add(i) };
         if sattr.text[0] == 0 || vim_var(Vv::Virtnum) != 0 {
             text.extend_from_slice(b"  ");
             return None;
         }
-        let mut buf = [0u8; TMPLEN as usize];
-        // SAFETY: `buf` is this frame's and far longer than a sign text;
-        // `sattr` is a copy this frame owns.
-        let len = unsafe {
-            describe_sign_text(
-                buf.as_mut_ptr().cast::<c_char>(),
-                &raw mut sattr.text as *mut ScreenChar,
-            )
-        };
-        text.extend_from_slice(&buf[..(len as usize).min(buf.len())]);
+        push_sign_text(&sattr.text, text);
         // SAFETY: `stcp` is non-null here.
         let cul = unsafe { (*self.stcp).sign_cul_id };
         Some(-if cul != 0 { cul } else { sattr.hl_id })

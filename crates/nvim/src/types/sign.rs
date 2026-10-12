@@ -20,14 +20,21 @@ pub struct SignTextAttrs {
     pub text: [ScreenChar; 2],
     pub hl_id: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone, Default)]
+/// One `:sign define` entry: what a placement copies when it is made.
+///
+/// Owns its strings; the highlight groups are the ids `syn_check_group`
+/// answered for them, as upstream keeps them.
+#[derive(Clone, Default)]
 pub struct Sign {
-    pub sn_name: *mut ::core::ffi::c_char,
-    pub sn_icon: *mut ::core::ffi::c_char,
-    pub sn_text: [ScreenChar; 2],
-    pub sn_line_hl: ::core::ffi::c_int,
-    pub sn_text_hl: ::core::ffi::c_int,
-    pub sn_cul_hl: ::core::ffi::c_int,
-    pub sn_num_hl: ::core::ffi::c_int,
-    pub sn_priority: ::core::ffi::c_int,
+    pub name: ::std::ffi::CString,
+    /// The `icon=` path, backslashes already halved; never drawn.
+    pub icon: Option<Vec<u8>>,
+    pub text: [ScreenChar; 2],
+    pub line_hl: ::core::ffi::c_int,
+    pub text_hl: ::core::ffi::c_int,
+    pub cul_hl: ::core::ffi::c_int,
+    pub num_hl: ::core::ffi::c_int,
+    /// `-1` when the definition names none -- or still 0, when a fresh
+    /// definition's `text=` failed before the priority was reached.
+    pub priority: ::core::ffi::c_int,
 }

@@ -31,7 +31,7 @@ use crate::types::{
     SignTextAttrs, uint32_t,
 };
 use crate::winlayer::{Buf, Win, tab_windows};
-use core::ffi::c_int;
+use core::ffi::{CStr, c_int};
 use core::{ptr, slice};
 
 /// Marktree filters: which meta counts a walk is allowed to descend into.
@@ -148,7 +148,7 @@ fn row_signs(buffer: Buf, window: Win, row: c_int) -> Vec<SignItem> {
     while let Some(pair) = walk.step_overlap() {
         if !mt_invalid(pair.start) && mt_decor_sign(pair.start) && ns_in_win(pair.start.ns, window)
         {
-            let sh = decor_find_sign(mt_decor(pair.start));
+            let sh = decor_sign(mt_decor(pair.start)).map_or(ptr::null_mut(), Sh::raw);
             signs.push(SignItem {
                 sh,
                 id: pair.start.id,
@@ -163,7 +163,7 @@ fn row_signs(buffer: Buf, window: Win, row: c_int) -> Vec<SignItem> {
             break;
         }
         if !mt_invalid(mark) && !mt_end(mark) && mt_decor_sign(mark) && ns_in_win(mark.ns, window) {
-            let sh = decor_find_sign(mt_decor(mark));
+            let sh = decor_sign(mt_decor(mark)).map_or(ptr::null_mut(), Sh::raw);
             signs.push(SignItem { sh, id: mark.id });
         }
         walk.step_filter(row + 1, 0, &SIGN_FILTER);
@@ -258,14 +258,21 @@ impl Buf {
     }
 }
 
-/// The first sign item in `decor`'s chain, or null if it has none.
+/// The first sign item in `decor`'s chain, if it has one.
 ///
-/// Safe: the chain is indices into the decoration store, which checks them,
-/// and the answer is a pointer — dereferencing it is what needs a promise.
-pub fn decor_find_sign(decor: DecorInline) -> *mut DecorSignHighlight {
-    Sh::chain(decor)
-        .find(|sh| sh.is_sign())
-        .map_or(ptr::null_mut(), Sh::raw)
+/// Safe: the chain is indices into the decoration store, which checks them.
+pub fn decor_sign(decor: DecorInline) -> Option<Sh> {
+    Sh::chain(decor).find(|sh| sh.is_sign())
+}
+
+impl DecorSignHighlight {
+    /// The name of the `:sign` definition this placement was copied from;
+    /// `None` for a sign `nvim_buf_set_extmark` placed.
+    pub fn sign_name_cstr(&self) -> Option<&CStr> {
+        // SAFETY: a sign item's name is null or the NUL-terminated copy it
+        // owns until the item is freed, which also nulls it.
+        unsafe { crate::cstr::at_opt(self.sign_name) }
+    }
 }
 
 /// Which half of a sign re-count a [`buf_signcols_count_range`] call does.

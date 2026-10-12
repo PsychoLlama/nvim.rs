@@ -74,11 +74,8 @@ fn namespaces_are_listed_in_creation_order() {
 fn describe_ns_answers_the_interned_name() {
     let _editor = editor_lock();
     let id = nvim_create_namespace(String_0::from_cstr(c"unit-describe"));
-    let name = describe_ns(id.try_into().unwrap(), c"(none)".as_ptr());
-    // SAFETY: the answer points into the table's own key, which is a `Box`
-    // the table never moves and never frees.
-    assert_eq!(unsafe { CStr::from_ptr(name) }, c"unit-describe");
-    let missing = describe_ns(1 << 30, c"(none)".as_ptr());
-    // SAFETY: as above; here it is the caller's own literal.
-    assert_eq!(unsafe { CStr::from_ptr(missing) }, c"(none)");
+    let name = describe_ns(id.try_into().unwrap(), b"(none)");
+    assert_eq!(name, b"unit-describe");
+    let missing = describe_ns(1 << 30, b"(none)");
+    assert_eq!(missing, b"(none)");
 }

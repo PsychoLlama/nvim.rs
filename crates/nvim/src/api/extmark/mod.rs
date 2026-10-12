@@ -32,9 +32,9 @@ use crate::types::{
     DecorInlineData, DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
     DecorVirtText_data, Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark,
     KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark,
-    LineNr, LuaRef, MTKey, MTPair, NS, Object, ScreenChar, String_0, VirtLines, VirtText,
-    VirtTextChunk, Window, WindowHandle, int32_t, kObjectTypeArray, size_t, uint8_t, uint16_t,
-    uint32_t, virt_line,
+    LineNr, LuaRef, MTKey, MTPair, NS, Object, String_0, VirtLines, VirtText, VirtTextChunk,
+    Window, WindowHandle, int32_t, kObjectTypeArray, size_t, uint8_t, uint16_t, uint32_t,
+    virt_line,
 };
 
 // The carve of the transpiled module; see each child's docs.

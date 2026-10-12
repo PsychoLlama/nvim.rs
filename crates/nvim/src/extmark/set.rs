@@ -9,8 +9,7 @@
 //!
 //! Original: `src/nvim/extmark.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -35,17 +34,14 @@ use crate::types::{ColNr, DecorInline, MTKey, MTPos, MarkTreeIter, uint32_t, uin
 
 /// Create or update an extmark.
 ///
-/// Must not be used during iteration.
-///
-/// # Safety
-///
-/// `idp` must be null, or point at a writable `uint32_t` the caller owns: an
-/// id of zero asks for a fresh one, which is written back. The mark tree must
-/// not be under iteration.
-pub unsafe fn extmark_set(
+/// `idp` names the mark: `None`, or an id of zero, asks for a fresh one, and
+/// the id the mark gets is written back through it. Must not be used during
+/// iteration -- as with every other edit of the tree, a walk over it starts
+/// again after one.
+pub fn extmark_set(
     mut buffer: Buf,
     ns_id: uint32_t,
-    idp: *mut uint32_t,
+    idp: Option<&mut uint32_t>,
     row: c_int,
     col: ColNr,
     end_row: c_int,
@@ -57,17 +53,10 @@ pub unsafe fn extmark_set(
     no_undo: bool,
     invalidate: bool,
 ) {
-    // SAFETY: the caller's promise -- a live buffer, and an `idp` that is
-    // NULL or points at a mark id.
     // Registers the namespace at 0 if it had none, which `extmark_clear`
     // reads as "this buffer has marks in it".
     ns_counter(buffer.extmark_ns(), ns_id);
-    let mut id = if idp.is_null() {
-        0
-    } else {
-        // SAFETY: the caller's promise, as above.
-        unsafe { *idp }
-    };
+    let mut id = idp.as_deref().copied().unwrap_or(0);
 
     let flags = mt_flags(right_gravity, no_undo, invalidate, decor.ext) | decor_flags;
     let mut revised = false;
@@ -130,9 +119,8 @@ pub unsafe fn extmark_set(
         redraw_decor(buffer, row, last_row, col, decor);
     }
 
-    if !idp.is_null() {
-        // SAFETY: the caller's promise, as above.
-        unsafe { *idp = id };
+    if let Some(idp) = idp {
+        *idp = id;
     }
 }
 

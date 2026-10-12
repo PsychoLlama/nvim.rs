@@ -3553,7 +3553,6 @@ static const int SIGNCMD_UNDEFINE = 1;
 static const int SIGNCMD_UNPLACE = 4;
 static const int SIGN_DEF_PRIO = 10;
 static const int SIGN_SHOW_MAX = 9;
-static const int SIGN_TEXT_BUF = 64;
 static const int SIGN_WIDTH = 2;
 static const int SIGPIPE = 13;
 static const int SIGPWR = 30;

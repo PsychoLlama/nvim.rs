@@ -79,24 +79,24 @@ fn the_function_forms_take_dictionaries_and_lists() {
     clean(&fx);
 }
 
-/// The dictionary a sign is defined from is the caller's. Today unescaping
-/// its `text` writes the result back into it, in place, through the
-/// dictionary's own string -- as upstream does, and undefined behaviour in
-/// this port (a write through a `&CStr`; Miri reports it here).
+/// The dictionary a sign is defined from is the caller's: unescaping its
+/// `text` must not write the result back into it. Upstream does, in place,
+/// through the dictionary's own string -- and so did this port, as a write
+/// through a `&CStr` (Miri reported it here).
 #[test]
-fn defining_from_a_dictionary_writes_its_text_back() {
+fn defining_from_a_dictionary_leaves_it_alone() {
     let fx = Fixture::new();
     clean(&fx);
     fx.run("let g:d = {'text': 'a\\b', 'icon': 'x\\\\y'}");
     fx.run("call sign_define('Dm', g:d)");
-    fx.check("g:d", "{'icon': 'x\\\\y', 'text': 'ab'}");
+    fx.check("g:d", "{'icon': 'x\\\\y', 'text': 'a\\b'}");
     fx.check(
         "sign_getdefined('Dm')",
         "[{'name': 'Dm', 'icon': 'x\\y', 'text': 'ab'}]",
     );
     fx.run("let g:l = [{'name': 'Dl', 'text': '\\ x'}]");
     fx.run("call sign_define(g:l)");
-    fx.check("g:l", "[{'name': 'Dl', 'text': ' x'}]");
+    fx.check("g:l", "[{'name': 'Dl', 'text': '\\ x'}]");
     fx.check("sign_getdefined('Dl')", "[{'name': 'Dl', 'text': ' x'}]");
     fx.run("unlet g:d g:l");
     clean(&fx);

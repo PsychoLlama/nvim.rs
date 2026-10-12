@@ -268,10 +268,9 @@ impl Decoration {
             return Ok(());
         };
         self.sign.text[0] = 0;
-        let into = (&raw mut self.sign.text).cast::<ScreenChar>();
-        // SAFETY: the keyset's own NUL-terminated bytes, into this call's own
-        // two-cell array.
-        if unsafe { init_sign_text(given.data(), into, false) }.is_err() {
+        // Up to a NUL, as upstream's `strlen` reads it; no unescaping.
+        let text = crate::cstr::until_nul(given.as_bytes());
+        if init_sign_text(text, &mut self.sign.text).is_err() {
             return Err(err_invalid(c"sign_text", Bad::Unsaid));
         }
         self.sign.flags |= kSHIsSign as uint16_t;
@@ -443,25 +442,22 @@ impl Decoration {
         if self.has_hl {
             decor_flags |= MtFlags::DECOR_HL;
         }
-        // SAFETY: the caller's buffer, and a decoration this call owns until
-        // the mark takes it over.
-        unsafe {
-            extmark_set(
-                buffer,
-                ns_id as uint32_t,
-                id,
-                at.line as ::core::ffi::c_int,
-                at.col as ColNr,
-                at.line2,
-                at.col2,
-                decor,
-                decor_flags,
-                right_gravity,
-                opts.end_right_gravity.unwrap_or(false),
-                !opts.undo_restore.unwrap_or(true),
-                opts.invalidate.unwrap_or(false),
-            );
-        }
+        // The mark takes over the decoration this call owned.
+        extmark_set(
+            buffer,
+            ns_id as uint32_t,
+            Some(id),
+            at.line as ::core::ffi::c_int,
+            at.col as ColNr,
+            at.line2,
+            at.col2,
+            decor,
+            decor_flags,
+            right_gravity,
+            opts.end_right_gravity.unwrap_or(false),
+            !opts.undo_restore.unwrap_or(true),
+            opts.invalidate.unwrap_or(false),
+        );
     }
 }
 

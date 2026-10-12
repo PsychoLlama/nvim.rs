@@ -22,13 +22,12 @@ use super::{
 use crate::api::extmark::virt_text_to_array;
 use crate::api::private::helpers::cstr_to_string;
 use crate::decoration::{
-    SIGN_WIDTH, kVLLeftcol, kVLScroll, kVPosWinCol, kVTHide, kVTIsLines, kVTLinesAbove,
-    kVTRepeatLinebreak,
+    kVLLeftcol, kVLScroll, kVPosWinCol, kVTHide, kVTIsLines, kVTLinesAbove, kVTRepeatLinebreak,
 };
 use crate::grid::{MAX_SCHAR_SIZE, schar_get};
 use crate::highlight::dict::put;
 use crate::highlight_group::syn_id2name;
-use crate::sign::describe_sign_text;
+use crate::sign::sign_text_bytes;
 use crate::types::{
     ApiDict, Array, DecorInline, DecorSignHighlight, DecorVirtText, Object, String_0, uint16_t,
     uint32_t,
@@ -222,17 +221,16 @@ unsafe fn put_virt_lines(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) 
 /// The sign half of [`decor_to_dict_legacy`].
 fn put_sign(dict: &mut ApiDict, sh: &mut DecorSignHighlight, hl_name: bool) {
     if sh.text[0] != 0 {
-        let mut buf = [0 as c_char; SIGN_WIDTH as usize * MAX_SCHAR_SIZE as usize];
-        unsafe { describe_sign_text(buf.as_mut_ptr(), sh.text.as_mut_ptr()) };
-        // SAFETY: the string the decoration owns, live for the copy.
-        let value = unsafe { Object::string(cstr_to_string(buf.as_ptr())) };
+        let value = Object::string(String_0::from_bytes(&sign_text_bytes(&sh.text)));
         put(dict, c"sign_text", value);
     }
 
-    if !sh.sign_name.is_null() {
-        // SAFETY: the string the decoration owns, live for the copy.
-        let value = unsafe { Object::string(cstr_to_string(sh.sign_name)) };
-        put(dict, c"sign_name", value);
+    if let Some(name) = sh.sign_name_cstr() {
+        put(
+            dict,
+            c"sign_name",
+            Object::string(String_0::from_bytes(name.to_bytes())),
+        );
     }
 
     for (key, id) in [

@@ -18,7 +18,7 @@
 //! module's shared vocabulary: its constants and the `use` list every child
 //! takes with `use super::*`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -27,23 +27,18 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ops::{Deref, DerefMut};
-use core::slice;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use crate::api::extmark::namespace_id_for;
 use crate::api::extmark::{describe_ns, nvim_create_namespace};
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::buffer::{buflist_findname_exp, find_buf};
-use crate::charset::{
-    backslash_halve, getdigits_int, skiptowhite, skiptowhite_esc, skipwhite, vim_isprintc,
-};
+use crate::buffer::find_buf;
+use crate::charset::vim_isprintc;
 use crate::cursor::check_cursor_lnum;
 use crate::decoration::{
-    DECOR_SIGN_HIGHLIGHT_INIT, SIGN_WIDTH, Sh, decor_find_sign, decor_items, decor_put_sh,
-    kMTMetaSignHL, kMTMetaSignText, kSHIsSign, sign_item_cmp,
+    DECOR_SIGN_HIGHLIGHT_INIT, Sh, decor_items, decor_put_sh, kMTMetaSignHL, kMTMetaSignText,
+    kSHIsSign, sign_item_cmp,
 };
 use crate::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
 use crate::edit::{BeginlineOpts, beginline};
@@ -58,24 +53,21 @@ use crate::extmark::{self, extmark_del_id, extmark_set};
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::grid::schar_get;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
-use crate::marktree::cursor::{Cursor, lookup_ns, tree_of};
+use crate::marktree::cursor::{Cursor, lookup_ns};
 use crate::marktree::key::{MtFlags, mt_decor, mt_decor_sign, mt_end};
-use crate::marktree::{marktree_itr_current, marktree_itr_next};
-use crate::mbyte::{MAX_SCHAR_SIZE, utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
-use crate::memory::{xfree, xstrdup};
+use crate::marktree::marktree_itr_current;
+use crate::mbyte::MAX_SCHAR_SIZE;
 use crate::message::{e_argreq, e_dictreq, e_invarg, e_listreq};
-use crate::message::{emsg, msg_display, msg_putchar, msg_str, msg_title};
+use crate::message::{emsg, msg_putchar, msg_str, msg_title};
 use crate::os::cshim::gettext;
 use crate::types::{
     DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText, Dict,
     EvalFuncData, ExArg, Expand, FAIL, Integer, LineNr, List, MTKey, MarkTreeIter, OK, ScreenChar,
-    Sign, SignItem, TypVal, VarNumber, int32_t, int64_t, ptrdiff_t, size_t, uint32_t,
+    Sign, SignItem, String_0, TypVal, VarNumber, int32_t, int64_t, ptrdiff_t, uint32_t,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};
-use ::libc::atoi;
 
 mod command;
 pub(crate) use self::command::*;

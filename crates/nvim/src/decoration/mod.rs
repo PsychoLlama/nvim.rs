@@ -583,17 +583,13 @@ pub fn bufhl_add_hl_pos_offset(
         };
 
         let ns = u32::try_from(src_id).expect("a namespace id fits its own handle type");
-        let no_id = ptr::null_mut();
         let (row, end_row) = (lnum as c_int - 1, lnum as c_int - 1 + end_off);
         let flags = MtFlags::DECOR_HL;
-        // SAFETY: `buffer` is the caller's live buffer and `decor` is the
-        // inline decoration built above, which the mark takes over.
-        unsafe {
-            extmark_set(
-                buffer, ns, no_id, row, hl_start, end_row, hl_end, decor, flags, true, false, true,
-                false,
-            )
-        };
+        // The mark takes over the inline decoration built above.
+        extmark_set(
+            buffer, ns, None, row, hl_start, end_row, hl_end, decor, flags, true, false, true,
+            false,
+        );
     }
 }
 

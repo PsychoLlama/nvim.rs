@@ -104,19 +104,19 @@ pub fn nvim_get_namespaces() -> ApiDict {
     })
 }
 
-/// The name namespace `ns_id` was created under, or `unknown`.
-///
-/// The answer points into the table's own key, which is a `Box` the table
-/// never moves and -- names are interned, never removed -- never frees.
-pub fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::core::ffi::c_char {
+/// The name namespace `ns_id` was created under, or `unknown` when it was
+/// created nameless or not at all.
+pub fn describe_ns(ns_id: NS, unknown: &[u8]) -> Vec<u8> {
     namespace_ids.with(|ids| {
         for (name, id) in ids.entries() {
-            // `ns_key`'s terminator is the whole of an empty name's key.
+            // `ns_key`'s terminator is the whole of an empty name's key, and
+            // a name with an interior NUL reads as far as the first one, as
+            // it did when the answer was a C string.
             if *id == ns_id && name.len() > 1 {
-                return name.as_ptr().cast::<::core::ffi::c_char>();
+                return crate::cstr::until_nul(name).to_vec();
             }
         }
-        unknown
+        unknown.to_vec()
     })
 }
 
