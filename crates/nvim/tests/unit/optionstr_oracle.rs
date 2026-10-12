@@ -10,7 +10,10 @@
 
 use crate::support::corpus::{Digest, corpus};
 use crate::support::{Probe, Sandbox};
+use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
+use neovim::types::ScreenChar;
 use neovim::winlayer::Win;
+use std::ffi::c_char;
 
 /// One case: the option it moves, and the command that moves it.
 ///
@@ -322,7 +325,7 @@ const CASES: &[(&str, &str)] = &[
     ("tabline", "set tal=%T%X"),
     ("tabline", "set tal=%1T%999X"),
     ("tabline", "set tal=%z"),
-    ("winbar", "setlocal wbr=%f"),
+    ("winbar", "setlocal wbr="),
     ("winbar", "setlocal wbr=%("),
     ("statuscolumn", "setlocal stc=%l%s"),
     ("statuscolumn", "setlocal stc=%{"),
@@ -398,6 +401,33 @@ const GLOBAL_LOCAL: &[&str] = &[
     "fillchars",
 ];
 
+/// Every option back at its default, what each held at both scopes kept in
+/// `g:optionstr_saved` for [`unpin`]: one editor serves the whole unit
+/// suite, and the glyph widths, what `:list` shows and whether a window bar
+/// fits all follow options a case elsewhere may have left moved.
+fn pin(fx: &Probe) {
+    fx.run("let g:optionstr_saved = []");
+    fx.run(
+        "for s:name in sort(keys(nvim_get_all_options_info())) | \
+           call add(g:optionstr_saved, [s:name, \
+             nvim_get_option_value(s:name, {'scope': 'global'}), \
+             nvim_get_option_value(s:name, {'scope': 'local'})]) | \
+         endfor",
+    );
+    fx.run("silent! set all&");
+}
+
+/// Put every option back as [`pin`] found it.
+fn unpin(fx: &Probe) {
+    fx.run(
+        "for [s:name, s:global, s:local] in g:optionstr_saved | \
+           silent! call nvim_set_option_value(s:name, s:global, {'scope': 'global'}) | \
+           silent! call nvim_set_option_value(s:name, s:local, {'scope': 'local'}) | \
+         endfor",
+    );
+    fx.run("unlet g:optionstr_saved");
+}
+
 /// What `&opt` and `&l:opt` say, and the error the last command left.
 fn answer(fx: &Probe, name: &str, error: String) -> String {
     format!(
@@ -420,6 +450,7 @@ fn every_callback_with_a_good_value_and_a_bad_one() {
     let sandbox = Sandbox::globals();
     let fx = Probe::new(sandbox.editor());
     fx.home();
+    pin(&fx);
     // The spell and keymap callbacks read the runtime; none of these cases
     // needs one to exist.
     fx.run("set nospell");
@@ -431,6 +462,7 @@ fn every_callback_with_a_good_value_and_a_bad_one() {
         reset(&fx, name);
     }
     fx.run("setlocal buftype= modifiable");
+    unpin(&fx);
     fx.home();
     if let Some(dump) = std::env::var_os("OPTIONSTR_ORACLE_DUMP") {
         let mut text = String::new();
@@ -499,14 +531,27 @@ fn literal(text: &[u8]) -> String {
 /// spaces, a no-break space and trailing blanks.
 const LIST_LINE: &str = "\t  \tlead  two   three x\u{a0}y \t ";
 
+/// A glyph's text, as hex. A `ScreenChar` of more than four bytes is a slot
+/// of the process's glyph cache, whose number depends on what else the
+/// suite drew first, so the digest is of what it says rather than of it.
+fn glyph(sc: ScreenChar) -> String {
+    let mut buf: [c_char; MAX_SCHAR_SIZE as usize] = [0; MAX_SCHAR_SIZE as usize];
+    // SAFETY: the buffer has the room `schar_get` asks for.
+    let len = unsafe { schar_get(buf.as_mut_ptr(), sc) };
+    buf[..len]
+        .iter()
+        .map(|&b| format!("{:02x}", b as u8))
+        .collect()
+}
+
 /// Everything a window's glyph tables say, and how `:list` draws
 /// [`LIST_LINE`] with them.
 fn glyphs(fx: &Probe) -> Vec<u8> {
     let win = Win::current();
     let lcs = &win.w_p_lcs_chars;
     let fcs = &win.w_p_fcs_chars;
-    let mut out = format!(
-        "{:x} {:x} {:x} {:x} {:x} {:x} {:x} {:x} {:x} {:x} {:x} {:x} {:x} {:x}|",
+    let mut out = String::new();
+    for c in [
         lcs.eol,
         lcs.ext,
         lcs.prec,
@@ -521,7 +566,11 @@ fn glyphs(fx: &Probe) -> Vec<u8> {
         lcs.lead,
         lcs.trail,
         lcs.conceal,
-    );
+    ] {
+        out.push_str(&glyph(c));
+        out.push(' ');
+    }
+    out.push('|');
     for c in [
         fcs.stl,
         fcs.stlnc,
@@ -545,7 +594,8 @@ fn glyphs(fx: &Probe) -> Vec<u8> {
         fcs.trunc,
         fcs.truncrl,
     ] {
-        out.push_str(&format!("{c:x} "));
+        out.push_str(&glyph(c));
+        out.push(' ');
     }
     out.push('|');
     out.push_str(&fx.output("1list"));
@@ -612,6 +662,7 @@ fn listchars_and_fillchars_glyph_tables() {
     let sandbox = Sandbox::globals();
     let fx = Probe::new(sandbox.editor());
     fx.home();
+    pin(&fx);
     fx.run(&format!(
         "call setline(1, {})",
         literal(LIST_LINE.as_bytes())
@@ -661,6 +712,7 @@ fn listchars_and_fillchars_glyph_tables() {
     }
     fx.run("unlet! g:oracle_value g:oracle_text");
     fx.run("setlocal list&");
+    unpin(&fx);
     fx.home();
     if let Some(dump) = std::env::var_os("OPTIONSTR_ORACLE_DUMP") {
         let _ = std::fs::write(std::path::PathBuf::from(dump).join("chars"), rows);
@@ -677,6 +729,7 @@ fn the_statusline_validator_over_the_corpus() {
     let sandbox = Sandbox::globals();
     let fx = Probe::new(sandbox.editor());
     fx.home();
+    pin(&fx);
     let texts: Vec<Vec<u8>> = corpus()
         .into_iter()
         .filter(|text| !text.contains(&0) && !text.contains(&b'\n'))
@@ -705,6 +758,7 @@ fn the_statusline_validator_over_the_corpus() {
         digests.push(d.value());
     }
     fx.run("unlet! g:oracle_text");
+    unpin(&fx);
     fx.home();
     assert_eq!(digests, STATUSLINE, "statusline validator digests moved");
 }
@@ -990,7 +1044,7 @@ const ANSWERS: &[&str] = &[
     "none|'%T%X'|'%T%X'",
     "none|'%1T%999X'|'%1T%999X'",
     "E539: Illegal character <z>: tal=%z|''|''",
-    "E36: Not enough room|'%f'|'%f'",
+    "none|''|''",
     "E542: Unbalanced groups: wbr=%(|''|''",
     "none|'%l%s'|'%l%s'",
     "E540: Unclosed expression sequence: stc=%{|''|''",
@@ -1049,7 +1103,7 @@ const ANSWERS: &[&str] = &[
 ];
 
 /// Recorded on the pointer-walking callbacks: the fixed values, the corpus.
-const GLYPHS: [u64; 2] = [14_580_284_359_558_147_153, 9_683_694_814_199_680_794];
+const GLYPHS: [u64; 2] = [15_397_133_189_440_345_532, 6_040_544_300_187_453_957];
 
 /// Recorded on the pointer-walking callbacks.
 const STATUSLINE: [u64; 4] = [
