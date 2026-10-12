@@ -79,7 +79,7 @@ pub(crate) fn map_hash(mode: c_int, c1: c_int) -> usize {
 impl MapTables {
     /// One list in storage order -- oldest first.  `hash` is ignored for the
     /// abbreviation list.
-    pub(crate) fn list(&self, hash: usize, abbr: bool) -> &[MapBlock] {
+    pub(crate) fn list(&self, hash: usize, abbr: bool) -> &[Box<MapBlock>] {
         if abbr {
             &self.abbr
         } else {
@@ -89,7 +89,8 @@ impl MapTables {
 
     /// [`MapTables::list`] for writing, allocating the buckets on the first
     /// mapping.
-    pub(crate) fn list_mut(&mut self, hash: usize, abbr: bool) -> &mut Vec<MapBlock> {
+    #[expect(clippy::vec_box, reason = "the lists' own type, see `MapTables`")]
+    pub(crate) fn list_mut(&mut self, hash: usize, abbr: bool) -> &mut Vec<Box<MapBlock>> {
         if abbr {
             return &mut self.abbr;
         }
@@ -103,7 +104,7 @@ impl MapTables {
     /// order: the buckets in turn, each newest first.
     pub(crate) fn walk(&self, abbr: bool) -> impl Iterator<Item = &MapBlock> {
         let lists = if abbr { 1 } else { MAX_MAPHASH };
-        (0..lists).flat_map(move |hash| self.list(hash, abbr).iter().rev())
+        (0..lists).flat_map(move |hash| self.list(hash, abbr).iter().rev().map(|mp| &**mp))
     }
 
     /// Where `twin` is: its list and index.  The twin of a pair lives in the
@@ -125,7 +126,7 @@ impl MapTables {
     /// The entry `twin` names, if it is still there.
     pub(crate) fn find(&self, abbr: bool, twin: MapTwin) -> Option<&MapBlock> {
         let (hash, at) = self.locate(abbr, twin)?;
-        self.list(hash, abbr).get(at)
+        self.list(hash, abbr).get(at).map(|mp| &**mp)
     }
 
     /// The LHS of `mp`'s twin, if it has one.
@@ -278,16 +279,31 @@ impl MapAt {
     }
 }
 
-/// Lend the maphash bucket `table` keeps for `state` and first byte `c`,
-/// oldest entry first.
-pub(crate) fn with_maphash_list<R>(
-    table: MapTable,
+/// Lend the maphash buckets for `state` and first byte `c`: the current
+/// buffer's, then the global one, each oldest entry first, with the table it
+/// came from.
+///
+/// The typeahead asks once per key, so both are lent in one borrow, and a
+/// buffer without local mappings costs one test.
+#[inline(always)]
+pub(crate) fn with_maphash_lists<R>(
     state: c_int,
     c: c_int,
-    f: impl FnOnce(usize, &[MapBlock]) -> R,
+    f: impl FnOnce(usize, [(MapTable, &[Box<MapBlock>]); 2]) -> R,
 ) -> R {
     let hash = map_hash(state, c);
-    table.with(|tables| f(hash, tables.list(hash, false)))
+    let buf = Buf::current();
+    GLOBAL_MAPS.with(|global| {
+        let local = buf
+            .b_maps
+            .as_deref()
+            .map_or(&[][..], |tables| tables.list(hash, false));
+        let lists = [
+            (MapTable::Buffer(buf), local),
+            (MapTable::Global, global.list(hash, false)),
+        ];
+        f(hash, lists)
+    })
 }
 
 /// Put a new mapping at the front of its list and answer how its twin will
@@ -348,7 +364,7 @@ pub(crate) fn map_add(
     // Add the new entry in front of the abbrlist or of its maphash bucket.
     let first = keys.first().copied().unwrap_or(0);
     let hash = map_hash(mode, c_int::from(first));
-    table.with_mut(|tables| tables.list_mut(hash, is_abbr).push(mp));
+    table.with_mut(|tables| tables.list_mut(hash, is_abbr).push(Box::new(mp)));
     twin
 }
 
@@ -465,10 +481,13 @@ pub(crate) fn check_map<R>(
     let matches = |mp: &MapBlock| {
         // Skip entries with the wrong mode, the wrong length, and the ones
         // that do not match.
-        if mp.m_mode & mode == 0 || (exact && mp.m_keys.len() != keys.len()) {
+        if mp.m_mode & mode == 0 {
             return false;
         }
         let mut lhs = mp.keys();
+        if exact && lhs.len() != keys.len() {
+            return false;
+        }
         // A three-byte modifier escape at the front of the stored LHS is
         // skipped when the caller asked for it.
         let modifier = matches!(lhs, [a, b, _, ..]
@@ -485,7 +504,11 @@ pub(crate) fn check_map<R>(
         (false, MapTable::Global),
     ] {
         let answer = table.with(|tables| {
-            let mp = tables.walk(abbr).find(|mp| matches(mp))?;
+            let lists = if abbr { 1 } else { MAX_MAPHASH };
+            let mp = (0..lists).find_map(|hash| {
+                let list = tables.list(hash, abbr);
+                list.iter().rev().find(|mp| matches(mp))
+            })?;
             Some(found.take().expect("lent once")(mp, local))
         });
         if answer.is_some() {

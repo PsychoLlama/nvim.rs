@@ -38,9 +38,7 @@ use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
 use crate::keycodes::{K_SPECIAL, special_key_bytes};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
-use crate::mapping::{
-    MapAt, MapExpr, MapTable, eval_map_expr, langmap_adjust_mb, with_maphash_list,
-};
+use crate::mapping::{MapAt, MapExpr, eval_map_expr, langmap_adjust_mb, with_maphash_lists};
 use crate::mbyte::{
     mb_unescape, utf_char2bytes, utf_head_off, utf_ptr2cells, utf_ptr2char, utf_ptr2len,
     utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,

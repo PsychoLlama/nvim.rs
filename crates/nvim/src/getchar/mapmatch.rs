@@ -17,7 +17,6 @@ use crate::option::vars::P_LANGMAP;
 use crate::types::MB_MAXCHAR;
 use crate::types::MapStr;
 use crate::types::{Failed, MB_MAXBYTES, NUL};
-use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -26,6 +25,7 @@ use core::ptr;
 ///
 /// `'langmap'` only applies to *typed* keys, and `'langremap'` decides
 /// whether it also applies to the result of a mapping.
+#[inline(always)]
 fn langmap_adjust(c: c_int, condition: bool) -> c_int {
     // Upstream's operand order, short-circuiting exactly as the macro
     // does. Evaluating `typeahead().maplen()` up front would be pure, but it
@@ -249,8 +249,8 @@ unsafe fn search_maphash(
     let mut mp_match: Option<Candidate> = None;
     // Buffer-local mappings first, then the global ones; each bucket newest
     // first, as upstream's lists run.
-    for table in [MapTable::Buffer(Buf::current()), MapTable::Global] {
-        let partial = with_maphash_list(table, local_state, tb_c1, |hash, list| {
+    let partial = with_maphash_lists(local_state, tb_c1, |hash, lists| {
+        for (table, list) in lists {
             for (index, mp) in list.iter().enumerate().rev() {
                 // The LHS as a pointer and a length rather than as a slice.
                 // This is the innermost loop of the whole editor's mapping
@@ -398,11 +398,11 @@ unsafe fn search_maphash(
                     found.mp_match_len = found.keylen;
                 }
             }
-            false
-        });
-        if partial {
-            return finish_search(found, mp_match);
         }
+        false
+    });
+    if partial {
+        return finish_search(found, mp_match);
     }
 
     found.mp = None; // the lists are exhausted

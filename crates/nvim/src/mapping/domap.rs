@@ -281,7 +281,12 @@ pub(crate) fn buf_do_map(
                         let keep = |mp: &&MapBlock| {
                             mp.m_mode & mode != 0 && !mp.m_simplified && agrees(mp.keys(), lhs)
                         };
-                        list.iter().rev().filter(keep).cloned().collect()
+                        list.iter()
+                            .rev()
+                            .map(|mp| &**mp)
+                            .filter(keep)
+                            .cloned()
+                            .collect()
                     })
                 } else {
                     listed(table, is_abbrev, |mp| {
@@ -432,14 +437,32 @@ impl Step<'_> {
         // a re-hash at it, so the walk can go on from there.
         let mut at = tables.list(hash, abbr).len();
         while at > 0 {
-            at -= 1;
+            // Find the next entry, newest first, in the mode whose keys
+            // agree: the scan reads the list once, so a long bucket that
+            // holds no match costs one pass.
+            let list = tables.list(hash, abbr);
+            let found = list[..at].iter().rposition(|entry| {
+                // 'q' typed at a `--More--` prompt stops the walk where it
+                // is, as upstream tests it per entry.
+                got_int.get()
+                    || (entry.m_mode & self.mode != 0
+                        && agrees(
+                            if self.round != 0 {
+                                entry.rhs()
+                            } else {
+                                entry.keys()
+                            },
+                            lhs,
+                        ))
+            });
+            let Some(found) = found else {
+                break;
+            };
+            at = found;
             if got_int.get() {
                 break;
             }
             let entry = &mut tables.list_mut(hash, abbr)[at];
-            if entry.m_mode & self.mode == 0 {
-                continue; // skip the wrong mode
-            }
             // Do we have a match? On the second round, try to unmap the
             // "rhs" string.
             let keys = if self.round != 0 {
@@ -447,9 +470,6 @@ impl Step<'_> {
             } else {
                 entry.keys()
             };
-            if !agrees(keys, lhs) {
-                continue;
-            }
             let n = keys.len();
 
             if self.is_unmap {

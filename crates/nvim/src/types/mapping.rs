@@ -49,10 +49,12 @@ impl MapStr {
     }
 
     /// The content, without the trailing NUL.
+    #[inline]
     pub(crate) fn as_bytes(&self) -> &[u8] {
-        self.as_bytes_with_nul()
-            .split_last()
-            .map_or(&[], |(_nul, text)| text)
+        match &self.0 {
+            Some(owned) => &owned[..owned.len() - 1],
+            None => &[],
+        }
     }
 
     /// The content *with* its NUL, which is how an index-for-pointer
@@ -235,11 +237,16 @@ impl MapBlock {
 ///
 /// Each list keeps its entries oldest first, so a new mapping is a `push` and
 /// upstream's head-first walk -- newest first, which is the order `:map`
-/// lists in -- is a reverse iteration. The buckets are allocated on the first
+/// lists in -- is a reverse iteration. The entries are boxed so that
+/// deleting one from a long bucket shifts pointers, not mappings. The buckets are allocated on the first
 /// mapping, so a buffer without any costs two empty vectors.
+#[expect(
+    clippy::vec_box,
+    reason = "boxed so that deleting from a 5,000-entry bucket shifts pointers"
+)]
 pub(crate) struct MapTables {
-    pub(crate) hash: Vec<Vec<MapBlock>>,
-    pub(crate) abbr: Vec<MapBlock>,
+    pub(crate) hash: Vec<Vec<Box<MapBlock>>>,
+    pub(crate) abbr: Vec<Box<MapBlock>>,
     /// The id the next mapping gets, kept by the global table for every
     /// table: ids are never reused, so one kept across user code can only
     /// find the mapping it was taken from.
