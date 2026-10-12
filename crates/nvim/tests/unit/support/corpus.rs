@@ -133,6 +133,12 @@ impl XorShift {
     }
 }
 
+/// The pieces themselves, for an oracle that builds its own combinations.
+#[allow(dead_code, reason = "not every oracle combines tokens")]
+pub(crate) fn tokens() -> &'static [&'static [u8]] {
+    TOKENS
+}
+
 /// The corpus: every token on its own, every token after an ASCII letter and
 /// before one, then strings of up to eight random tokens.
 pub(crate) fn corpus() -> Vec<Vec<u8>> {

@@ -70,6 +70,8 @@ mod regexp;
 mod search;
 mod sha256;
 mod shell;
+mod sign;
+mod sign_oracle;
 mod spellfile;
 mod statusline;
 mod strings;

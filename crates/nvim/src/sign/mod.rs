@@ -87,6 +87,8 @@ mod store;
 pub(crate) use self::store::*;
 mod text;
 pub(crate) use self::text::*;
+#[cfg(test)]
+mod tests;
 mod vimscript;
 pub(crate) use self::vimscript::*;
 
