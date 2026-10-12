@@ -170,16 +170,10 @@ pub fn do_record(c: c_int) -> Result<(), Failed> {
     }
 
     // Stop recording.
-    // SAFETY: main thread; the recording buffer is this thread's own.
-    let p = unsafe { get_recorded() };
-    if !p.is_null() {
-        // SAFETY: `get_recorded` answered an allocated NUL-terminated
-        // string, unescaped in place -- which only ever shortens it.
-        unsafe {
-            let text = slice::from_raw_parts_mut(p.cast::<u8>(), cstr::bytes_at(p).len());
-            *p.add(unescape_ks_in(text)) = 0;
-        }
-    }
+    let mut recorded = get_recorded();
+    let unescaped = unescape_ks_in(&mut recorded);
+    recorded.truncate(unescaped);
+    let p = XString::from_vec(recorded).into_raw();
     // SAFETY: `p` is null or that NUL-terminated string; the autocommands
     // this fires are the ones the caller allows.
     unsafe { fire_recording_leave(regname.get(), p) };
@@ -221,33 +215,23 @@ unsafe fn put_in_typebuf(
 
     // Pushed backwards: the `<CR>` first, then the text, then the `:`.
     if colon {
-        let nl = c"\n".as_ptr().cast_mut();
-        // SAFETY: a NUL-terminated literal, copied into the typeahead.
-        retval = unsafe { ins_typebuf(nl, REMAP_NONE, 0, true, silent != 0) };
+        retval = ins_typebuf(b"\n", REMAP_NONE, 0, true, silent != 0);
     }
     if retval.is_ok() {
-        // SAFETY: `s` is NUL-terminated, so the escaped copy is too.
-        let p = if esc {
-            XString::from_vec(escape_ks_bytes(unsafe { cstr::bytes_at(s) })).into_raw()
+        // SAFETY: `s` is NUL-terminated.
+        let text = unsafe { cstr::bytes_at(s) };
+        let escaped;
+        let p: &[u8] = if esc {
+            escaped = escape_ks_bytes(text);
+            &escaped
         } else {
-            s
+            text
         };
-        if p.is_null() {
-            retval = Err(Failed);
-        } else {
-            let remap = if esc { REMAP_NONE } else { REMAP_YES };
-            // SAFETY: `p` is NUL-terminated either way, and is copied.
-            retval = unsafe { ins_typebuf(p, remap, 0, true, silent != 0) };
-        }
-        if esc {
-            // SAFETY: the escaped copy is ours, and has been queued.
-            unsafe { xfree(p as *mut c_void) };
-        }
+        let remap = if esc { REMAP_NONE } else { REMAP_YES };
+        retval = ins_typebuf(p, remap, 0, true, silent != 0);
     }
     if colon && retval.is_ok() {
-        let colon_key = c":".as_ptr().cast_mut();
-        // SAFETY: a NUL-terminated literal, copied into the typeahead.
-        retval = unsafe { ins_typebuf(colon_key, REMAP_NONE, 0, true, silent != 0) };
+        retval = ins_typebuf(b":", REMAP_NONE, 0, true, silent != 0);
     }
     retval
 }
@@ -276,10 +260,8 @@ fn put_reedit_in_typebuf(silent: c_int) {
         };
         buf[1] = NUL as u8;
     }
-    let keys = buf.as_mut_ptr() as *mut c_char;
-    // SAFETY: `buf` is a local the branches above left NUL-terminated, and
-    // `ins_typebuf` copies it into the typeahead buffer.
-    let queued = unsafe { ins_typebuf(keys, REMAP_NONE, 0, true, silent != 0) };
+    // `ins_typebuf` reads `buf` up to the NUL the branches above left.
+    let queued = ins_typebuf(&buf, REMAP_NONE, 0, true, silent != 0);
     if queued.is_ok() {
         restart_edit.set(NUL);
     }
@@ -457,9 +439,8 @@ pub fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> 
         // tests decide whether `ins_typebuf` runs at all, so the chain stays
         // whole. The key is a NUL-terminated literal, which is copied.
         let nl_failed = unsafe {
-            ((*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1) || addcr != 0)
-                && ins_typebuf(c"\n".as_ptr().cast_mut(), remap, 0, true, silent != 0).is_err()
-        };
+            (*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1) || addcr != 0
+        } && ins_typebuf(b"\n", remap, 0, true, silent != 0).is_err();
         if nl_failed {
             return Err(Failed);
         }
@@ -483,20 +464,13 @@ pub fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> 
         }
         // SAFETY: `str` is NUL-terminated either way -- a register line, or
         // the joined copy, which is ours to free.
-        let escaped = XString::from_vec(escape_ks_bytes(unsafe { cstr::bytes_at(str) })).into_raw();
+        let escaped = escape_ks_bytes(unsafe { cstr::bytes_at(str) });
         if free_str {
             unsafe { xfree(str as *mut c_void) };
         }
-        // SAFETY: `escaped` is a fresh NUL-terminated copy, which
-        // `ins_typebuf` copies again, leaving it ours to free.
-        retval = unsafe { ins_typebuf(escaped, remap, 0, true, silent != 0) };
-        unsafe { xfree(escaped as *mut c_void) };
+        retval = ins_typebuf(&escaped, remap, 0, true, silent != 0);
         retval?;
-        // SAFETY: a NUL-terminated literal, copied into the typeahead.
-        if colon != 0
-            && unsafe { ins_typebuf(c":".as_ptr().cast_mut(), remap, 0, true, silent != 0) }
-                .is_err()
-        {
+        if colon != 0 && ins_typebuf(b":", remap, 0, true, silent != 0).is_err() {
             return Err(Failed);
         }
     }
@@ -546,7 +520,7 @@ pub unsafe fn insert_reg(
         }
         // SAFETY: `arg` is non-null and NUL-terminated, and is copied into
         // the read buffer; it is ours to free only when it was allocated.
-        unsafe { stuffescaped(arg, literally) };
+        stuffescaped(unsafe { cstr::bytes_at(arg) }, literally);
         if allocated {
             unsafe { xfree(arg as *mut c_void) };
         }
@@ -603,7 +577,7 @@ pub unsafe fn insert_reg(
         } else {
             // SAFETY: a non-null `y_array` holds `y_size` NUL-terminated
             // lines and `i` is below that count, so this is one of them.
-            unsafe { stuffescaped((*(*reg).y_array.add(i)).data(), literally) };
+            stuffescaped(unsafe { (*(*reg).y_array.add(i)).as_bytes() }, literally);
             // SAFETY: `reg` is live, so its type and size are there to read.
             if unsafe { (*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1) } {
                 stuff_readbuf_char('\n' as c_int);

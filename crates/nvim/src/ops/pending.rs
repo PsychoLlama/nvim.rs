@@ -29,6 +29,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::keycodes::Key;
 use crate::option::vars::{P_FP, P_SEL};
 use crate::winlayer::{Buf, Win};
@@ -251,9 +252,9 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
         // A search: without 'cpoptions' `r` the pattern goes in too, so
         // that the repeat really is the same command.
         if !cpo_has(CpoFlag::REDO) {
-            unsafe { append_to_redobuff_literally(cmd_arg.searchbuf, -1) };
+            append_to_redobuff_literally(unsafe { cstr::bytes_at(cmd_arg.searchbuf) });
         }
-        unsafe { append_to_redobuff(c"\n".as_ptr()) };
+        append_to_redobuff(b"\n");
     } else if is_ex_cmdchar(cmd_arg) {
         // `do_cmdline` stored the first typed line in `repeat_cmdline`.
         // When several lines were typed, repeating is not possible.
@@ -262,16 +263,16 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
             Some(line) => {
                 // SAFETY: NUL-terminated by its type.
                 if cmd_arg.cmdchar == ':' as c_int {
-                    unsafe { append_to_redobuff_literally(line.as_ptr(), -1) };
+                    append_to_redobuff_literally(line.as_cstr().to_bytes());
                 } else {
-                    unsafe { append_to_redobuff_keys(line.as_ptr()) };
+                    append_to_redobuff_keys(line.as_cstr().to_bytes());
                 }
-                unsafe { append_to_redobuff(c"\n".as_ptr()) };
+                append_to_redobuff(b"\n");
             }
         }
     } else if cmd_arg.cmdchar == Key::Lua.code() {
         append_to_redobuff_number(repeat_luaref.get() as c_int);
-        unsafe { append_to_redobuff(c"\n".as_ptr()) };
+        append_to_redobuff(b"\n");
     }
 }
 
@@ -686,7 +687,7 @@ fn run_operator(
         OpType::Filter => {
             if cpo_has(CpoFlag::FILTER) {
                 // Use whichever `!cmd` was last used.
-                unsafe { append_to_redobuff(c"!\r".as_ptr()) };
+                append_to_redobuff(b"!\r");
             } else {
                 // `do_bang` will put the command in the redo buffer.
                 bangredo.set(true);

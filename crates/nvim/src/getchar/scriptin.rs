@@ -5,8 +5,7 @@
 //! EOF, when [`closescript`] pops it. [`updatescript`] is the other
 //! direction: the `'scriptout'` copy of what was typed.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -18,36 +17,36 @@
 )]
 
 use super::*;
-use crate::cstr;
-use crate::fprintf;
-use crate::message_fmt::msg_cstr_opt;
+use crate::message_fmt::msg_cstr;
+use crate::os::env::expand_env_into;
+use crate::os::fileio::ReadFile;
+use crate::os::fs::os_strerror;
 use crate::semsg;
 use crate::types::MAXPATHL;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
+use std::io::Write;
 
-/// The `scriptin` entry `curscript` names.
-///
-/// # Safety
-/// `at` must be a valid index into the stack.
-pub(crate) unsafe fn script_at(at: c_int) -> *mut FileDescriptor {
-    // SAFETY (this body): the caller's promise -- `at` is a valid index into
-    // the fifteen-entry stack.
-    unsafe { scriptin.ptr().cast::<FileDescriptor>().offset(at as isize) }
+/// Streams to read script (`-s` / `:source!`) input from, innermost last;
+/// `curscript` names the innermost open one.
+static scriptin: GlobalCell<[Option<ReadFile>; NSCRIPT as usize]> =
+    GlobalCell::new([const { None }; NSCRIPT as usize]);
+
+/// The stack slot of script `at`, which is in range of the stack.
+fn slot(at: c_int) -> usize {
+    usize::try_from(at).expect("a script on the stack")
+}
+
+/// Read into `buf` from script `at`: what [`ReadFile::read`] answers, or -1
+/// when nothing is open there.
+pub(crate) fn read_script(at: c_int, buf: &mut [u8]) -> ptrdiff_t {
+    scriptin.with_mut(|stack| stack[slot(at)].as_mut().map_or(-1, |file| file.read(buf)))
 }
 
 /// Open a script file for `:source!`, and with `directly` run its commands
 /// there and then.
-///
-/// # Safety
-/// `name` must point at a NUL-terminated file name.
-pub unsafe fn openscript(name: *mut c_char, directly: bool) {
-    // The expanded name; upstream shares `NameBuff`, which the error path
-    // below reaches the message machinery through.
-    let mut expanded = [0 as c_char; MAXPATHL as usize];
+pub fn openscript(name: &CStr, directly: bool) {
     if curscript.get() + 1 == NSCRIPT.cast_signed() {
-        // SAFETY (this body): `expanded` is this frame's own `MAXPATHL`
-        // buffer, and `curscript` was just checked to be in range of the
-        // stack.
         emsg(gettext(e_nesting));
         return;
     }
@@ -62,26 +61,18 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
     }
 
     curscript.set(curscript.get() + 1);
-    unsafe { expand_env(name, expanded.as_mut_ptr(), MAXPATHL) };
-    let error = unsafe {
-        file_open(
-            script_at(curscript.get()),
-            expanded.as_ptr(),
-            kFileReadOnly.cast_signed(),
-            0,
-        )
-    };
-    if error != 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (name, arg1) = unsafe {
-            (
-                msg_cstr_opt(cstr::at_opt(name)),
-                msg_cstr_opt(cstr::at_opt(uv_strerror(error))),
-            )
-        };
-        semsg!("E484: Can't open file {name}: {arg1}");
-        curscript.set(curscript.get() - 1);
-        return;
+    // The expanded name; upstream expands into `NameBuff`, cut to
+    // `MAXPATHL`.
+    let expanded = CString::new(expand_env_into(name, MAXPATHL as usize + 1))
+        .expect("an expansion up to its NUL");
+    match ReadFile::open(&expanded, kFileReadOnly) {
+        Ok(file) => scriptin.with_mut(|stack| stack[slot(curscript.get())] = Some(file)),
+        Err(error) => {
+            let (name, why) = (msg_cstr(name), msg_cstr(os_strerror(error)));
+            semsg!("E484: Can't open file {name}: {why}");
+            curscript.set(curscript.get() - 1);
+            return;
+        }
     }
     save_typebuf();
 
@@ -121,11 +112,11 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
 /// Close the innermost script and put back the typeahead it displaced.
 pub(crate) fn closescript() {
     debug_assert!(curscript.get() >= 0);
-    // SAFETY (this body): `curscript` names an open entry of the stack.
-    unsafe { free_typebuf() };
     restore_saved_typebuf(curscript.get());
 
-    unsafe { file_close(script_at(curscript.get()), false) };
+    if let Some(file) = scriptin.with_mut(|stack| stack[slot(curscript.get())].take()) {
+        let _ = file.close();
+    }
     curscript.set(curscript.get() - 1);
 }
 
@@ -133,40 +124,44 @@ pub(crate) fn closescript() {
 ///
 /// The name `-` means standard input. Answers false, with a message on
 /// stderr, when the file cannot be read.
-///
-/// # Safety
-/// `scriptin_name` must point at a NUL-terminated file name.
-pub unsafe fn open_scriptin(scriptin_name: *mut c_char) -> bool {
+pub fn open_scriptin(scriptin_name: &CStr) -> bool {
     debug_assert!(curscript.get() == -1);
     curscript.set(curscript.get() + 1);
 
-    // SAFETY (this body): as [`openscript`] -- the stack entry is in range.
-    let error = if unsafe { strequal(scriptin_name, c"-".as_ptr()) } {
-        unsafe { file_open_stdin(script_at(0)) }
+    let opened = if scriptin_name.to_bytes() == b"-" {
+        ReadFile::stdin()
     } else {
-        unsafe {
-            file_open(
-                script_at(0),
-                scriptin_name,
-                kFileReadOnly.cast_signed() | kFileNonBlocking.cast_signed(),
-                0,
-            )
-        }
+        ReadFile::open(scriptin_name, kFileReadOnly | kFileNonBlocking)
     };
-    if error != 0 {
-        unsafe {
-            fprintf!(
-                stderr,
-                gettext(c"Cannot open for reading: \"%s\": %s\n").as_ptr(),
-                scriptin_name,
-                uv_strerror(error),
-            )
-        };
-        curscript.set(curscript.get() - 1);
-        return false;
+    match opened {
+        Ok(file) => scriptin.with_mut(|stack| stack[0] = Some(file)),
+        Err(error) => {
+            let message = printf_s(
+                gettext(c"Cannot open for reading: \"%s\": %s\n").to_bytes(),
+                &[scriptin_name.to_bytes(), os_strerror(error).to_bytes()],
+            );
+            let _ = std::io::stderr().write_all(&message);
+            curscript.set(curscript.get() - 1);
+            return false;
+        }
     }
     save_typebuf();
     true
+}
+
+/// `template` with each `%s` replaced by the next of `args`: the one
+/// conversion the translated `-s` message has.
+fn printf_s(template: &[u8], args: &[&[u8]]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(template.len() + 64);
+    let mut args = args.iter();
+    let mut rest = template;
+    while let Some(at) = rest.windows(2).position(|pair| pair == b"%s") {
+        out.extend_from_slice(&rest[..at]);
+        out.extend_from_slice(args.next().copied().unwrap_or_default());
+        rest = &rest[at + 2..];
+    }
+    out.extend_from_slice(rest);
+    out
 }
 
 /// Whether keys are being read from a script file.

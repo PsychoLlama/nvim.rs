@@ -184,7 +184,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     }
     cmdline_row.set(msg_row.get());
 
-    unsafe { stuff_readbuf_one_line(defstr) };
+    stuff_readbuf_one_line(unsafe { cstr::bytes_at(defstr) });
 
     let save_ex_normal_busy = ex_normal_busy.get();
     ex_normal_busy.set(0);

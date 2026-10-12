@@ -2,7 +2,7 @@
 //! `:normal`, which re-enters the normal-mode state machine.
 #![forbid(unsafe_code)]
 
-use crate::getchar::ins_typebuf_text;
+use crate::getchar::ins_typebuf;
 use crate::memline::MlFlags;
 use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
@@ -137,7 +137,7 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
         checkpcmark();
         // The cursor moved with the scroll; CTRL-O puts it back.
         if old_linenr != Win::current().w_cursor.lnum {
-            let _ = ins_typebuf_text(c"\x0f", REMAP_NONE as c_int, true, false);
+            let _ = ins_typebuf(b"\x0f", REMAP_NONE as c_int, 0, true, false);
         }
     }
 }

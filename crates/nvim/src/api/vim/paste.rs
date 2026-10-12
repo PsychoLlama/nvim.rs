@@ -88,17 +88,14 @@ pub fn nvim_paste(
         }
         // The paste is recorded for `.` even when the handler declined it,
         // so that the redo carries the same text.
-        // SAFETY: `data` names its own bytes.
-        unsafe {
-            if !CANCELLED.get() && starting {
-                paste_store(channel_id, PastePhase::Start, String_0::NULL, crlf);
-            }
-            if !CANCELLED.get() {
-                paste_store(channel_id, PastePhase::Chunk, data, crlf);
-            }
-            if phase == 3 || phase == if CANCELLED.get() { 2 } else { -1 } {
-                paste_store(channel_id, PastePhase::End, String_0::NULL, crlf);
-            }
+        if !CANCELLED.get() && starting {
+            paste_store(channel_id, PastePhase::Start, &[], crlf);
+        }
+        if !CANCELLED.get() {
+            paste_store(channel_id, PastePhase::Chunk, data.as_bytes(), crlf);
+        }
+        if phase == 3 || phase == if CANCELLED.get() { 2 } else { -1 } {
+            paste_store(channel_id, PastePhase::End, &[], crlf);
         }
     }
     let retval = !CANCELLED.get();

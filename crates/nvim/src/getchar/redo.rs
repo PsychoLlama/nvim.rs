@@ -6,8 +6,7 @@
 //! `old_redobuff` keeps the previous one so that `CTRL-O .` in Insert mode can
 //! repeat the command before the insert rather than the insert itself.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,12 +17,12 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};
-use crate::mbyte::char_at;
+use crate::mbyte::{char_at, char_len};
 use crate::normal::{set_visual_active, set_visual_anchor, set_visual_select};
 use crate::strings::has_char;
 use crate::types::{Failed, MB_MAXBYTES, NL, NUL};
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_int;
 
 /// Move the current redo buffer to `old_redobuff` and start a fresh one.
 ///
@@ -32,9 +31,7 @@ pub fn reset_redobuff() {
     if block_redo.get() {
         return;
     }
-    // SAFETY (this body): the two redo buffers are statics, and nothing holds
-    // a pointer into the chain being freed.
-    unsafe { old_redobuff().free() };
+    old_redobuff().free();
     old_redobuff().set(redobuff().take());
 }
 
@@ -43,8 +40,7 @@ pub fn cancel_redo() {
     if block_redo.get() {
         return;
     }
-    // SAFETY (this body): as [`reset_redobuff`].
-    unsafe { redobuff().free() };
+    redobuff().free();
     redobuff().set(old_redobuff().take());
     start_stuff();
     while read_readbuffers(true) != NUL {}
@@ -64,129 +60,90 @@ pub fn save_redobuff(save_redo: &mut SaveRedo) {
 
 /// Put back what [`save_redobuff`] moved aside.
 pub fn restore_redobuff(save_redo: &mut SaveRedo) {
-    // SAFETY: as [`reset_redobuff`].
-    unsafe { redobuff().free() };
+    redobuff().free();
     redobuff().set(core::mem::take(&mut save_redo.sr_redobuff));
-    // SAFETY: as above.
-    unsafe { old_redobuff().free() };
+    old_redobuff().free();
     old_redobuff().set(core::mem::take(&mut save_redo.sr_old_redobuff));
 }
 
-/// Append `s` to the redo buffer. `K_SPECIAL` must already be escaped.
-///
-/// # Safety
-/// `s` must point at a NUL-terminated string.
-pub unsafe fn append_to_redobuff(s: *const c_char) {
+/// Append `s` to the redo buffer, up to its first NUL. `K_SPECIAL` must
+/// already be escaped.
+pub fn append_to_redobuff(s: &[u8]) {
     if !block_redo.get() {
-        // SAFETY (this body): the caller's promise -- `s` is NUL-terminated.
-        unsafe { redobuff().add(s, -1) };
+        redobuff().add_bytes(up_to_nul(s));
     }
 }
 
-/// [`append_to_redobuff`] of a string the caller holds.
-pub(crate) fn append_to_redobuff_text(s: &CStr) {
-    // SAFETY: a NUL-terminated string, read for the call.
-    unsafe { append_to_redobuff(s.as_ptr()) };
-}
-
-/// [`append_to_redobuff_literally`] of a whole string the caller holds.
-pub(crate) fn append_to_redobuff_literally_text(s: &CStr) {
-    // SAFETY: a NUL-terminated string, read for the call.
-    unsafe { append_to_redobuff_literally(s.as_ptr(), -1) };
-}
-
-/// Append `str` to the redo buffer literally, quoting with CTRL-V whatever
+/// Append `s` to the redo buffer literally, quoting with CTRL-V whatever
 /// would otherwise act as a command. `K_SPECIAL` is escaped as well.
 ///
-/// `len` is the length, or -1 for up to the NUL.
-///
-/// # Safety
-/// `str` must point at `len` readable bytes, or at a NUL-terminated string
-/// when `len` is negative.
-pub unsafe fn append_to_redobuff_literally(str: *const c_char, len: c_int) {
+/// `s` is read up to its first NUL, and its end is where upstream's NUL
+/// was: a `0` or `^` there is quoted too.
+pub fn append_to_redobuff_literally(s: &[u8]) {
     if block_redo.get() {
         return;
     }
-
-    // How much of `str` is still to be appended, honouring both the
-    // explicit length and the NUL terminator.
-    let more = |s: *const c_char| {
-        if len < 0 {
-            // SAFETY (this body): the caller's promise -- `str` is `len`
-            // readable bytes, or NUL-terminated when `len` is negative -- and
-            // both walks stop at whichever of the two ends first.
-            c_int::from(unsafe { *s }) != NUL
-        } else {
-            (unsafe { s.offset_from(str) }) < len as isize
-        }
-    };
-
-    let mut s = str;
-    while more(s) {
+    let s = up_to_nul(s);
+    let mut at = 0;
+    while at < s.len() {
         // Append a run of ordinary characters in one go; that is faster.
-        let start = s;
-        while c_int::from(unsafe { *s }) >= ' ' as c_int
-            && c_int::from(unsafe { *s }) < DEL
-            && more(s)
-        {
-            s = unsafe { s.add(1) };
+        let start = at;
+        while at < s.len() && (b' '..DEL_BYTE).contains(&s[at]) {
+            at += 1;
         }
         // Don't leave a '0' or '^' last, just in case a CTRL-D is typed
-        // next -- both delete the indent rather than being inserted.
-        // `s > start` here whenever `*s` is the NUL, so the look-back is
-        // in bounds.
-        if c_int::from(unsafe { *s }) == NUL
-            && (c_int::from(unsafe { *s.sub(1) }) == '0' as c_int
-                || c_int::from(unsafe { *s.sub(1) }) == '^' as c_int)
-        {
-            s = unsafe { s.sub(1) };
+        // next -- both delete the indent rather than being inserted. The
+        // run reached the end only by taking at least one byte, so the
+        // look-back is in bounds.
+        if at == s.len() && matches!(s[at - 1], b'0' | b'^') {
+            at -= 1;
         }
-        if s > start {
-            unsafe { redobuff().add(start, s.offset_from(start)) };
+        if at > start {
+            redobuff().add_bytes(&s[start..at]);
         }
-        if c_int::from(unsafe { *s }) == NUL || !more(s) {
+        if at == s.len() {
             break;
         }
 
         // Then the special or multibyte character that stopped the run.
         // Composing characters are handled separately, one at a time.
-        let c = unsafe { utf_ptr2char(s) };
-        s = s.wrapping_add(unsafe { utf_ptr2len(s) }.unsigned_abs() as usize);
-        let last = c_int::from(unsafe { *s }) == NUL;
-        if c < ' ' as c_int || c == DEL || (last && (c == '0' as c_int || c == '^' as c_int)) {
+        let rest = &s[at..];
+        let c = char_at(rest);
+        at += char_len(rest);
+        let last = at == s.len();
+        if c < c_int::from(b' ')
+            || c == DEL
+            || (last && (c == c_int::from(b'0') || c == c_int::from(b'^')))
+        {
             redobuff().add_char(Ctrl_V);
         }
-        if last && c == '0' as c_int {
+        if last && c == c_int::from(b'0') {
             // CTRL-V '0' must be inserted as CTRL-V 048.
-            unsafe { redobuff().add(c"048".as_ptr(), 3) };
+            redobuff().add_bytes(b"048");
         } else {
             redobuff().add_char(c);
         }
     }
 }
 
-/// Append `s` to the redo buffer, passing three-byte key codes through
-/// unmodified and escaping every other `K_SPECIAL` byte.
-///
-/// # Safety
-/// `s` must point at a NUL-terminated string.
-pub unsafe fn append_to_redobuff_keys(mut s: *const c_char) {
+/// `DEL` as the byte that ends a run of ordinary characters.
+const DEL_BYTE: u8 = 0x7f;
+
+/// Append `s` to the redo buffer, up to its first NUL, passing three-byte
+/// key codes through unmodified and escaping every other `K_SPECIAL` byte.
+pub fn append_to_redobuff_keys(s: &[u8]) {
     if block_redo.get() {
         return;
     }
-    // SAFETY (this body): `buf` is this frame's own array, sized for the
-    // longest key escape.
-    while c_int::from(unsafe { *s }) != NUL {
-        if c_int::from(unsafe { *s }.cast_unsigned()) == K_SPECIAL
-            && c_int::from(unsafe { *s.add(1) }) != NUL
-            && c_int::from(unsafe { *s.add(2) }) != NUL
-        {
+    let mut s = up_to_nul(s);
+    while let Some(&first) = s.first() {
+        if c_int::from(first) == K_SPECIAL && s.len() >= 3 {
             // Insert the special key literally.
-            unsafe { redobuff().add(s, 3) };
-            s = unsafe { s.add(3) };
+            redobuff().add_bytes(&s[..3]);
+            s = &s[3..];
         } else {
-            let c = unsafe { utf_ptr2char(s) };
-            s = s.wrapping_add(unsafe { utf_ptr2len(s) }.unsigned_abs() as usize);
+            let c = char_at(s);
+            s = &s[char_len(s)..];
             redobuff().add_char(c);
         }
     }

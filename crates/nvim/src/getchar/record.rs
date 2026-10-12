@@ -11,17 +11,16 @@
 //! state machine that reassembles them, and each caller keeps its own copy of
 //! that state.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::keycodes::ModMask;
 use crate::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
-use crate::types::MB_MAXCHAR;
+use crate::mbyte::{char_at, unescape_at};
 use crate::types::{MB_MAXBYTES, NUL};
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 
 impl Default for GotcharsState {
     fn default() -> Self {
@@ -87,20 +86,14 @@ pub(crate) fn gotchars_add_byte(state: &mut GotcharsState, byte: u8) -> bool {
     whole
 }
 
-/// Record `len` bytes of typed input.
+/// Record typed input.
 ///
-/// They go to the `'scriptout'` file, to the `vim.on_key()` buffer and, when
-/// a register is being recorded into, to that.
-///
-/// # Safety
-/// `chars` must point at `len` readable bytes. It stays a raw pointer rather
-/// than a slice because the loop calls `updatescript` and `add` between
-/// reads, and neither is provably unable to reach the buffer it points into.
-pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
-    for i in 0..len {
-        // SAFETY (this body): the caller's promise -- `chars` is `len`
-        // readable bytes.
-        let byte = unsafe { *chars.add(i) };
+/// It goes to the `'scriptout'` file, to the `vim.on_key()` buffer and, when
+/// a register is being recorded into, to that. `chars` is the caller's own
+/// copy, never a borrow of the typeahead: the loop reaches `'scriptout'` and
+/// the swap files between bytes.
+pub(crate) fn gotchars(chars: &[u8]) {
+    for &byte in chars {
         if !gotchars_pending.with_mut(|st| gotchars_add_byte(st, byte)) {
             continue;
         }
@@ -125,9 +118,7 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
         }
 
         if reg_recording.get() != 0 {
-            let mut bytes = key.buf;
-            bytes[buflen] = 0;
-            unsafe { recordbuff().add(bytes.as_ptr().cast(), buflen as ptrdiff_t) };
+            recordbuff().add_bytes(&key.buf[..buflen]);
             // Remember how many characters were recorded last, so that
             // `get_recorded` can drop the keys that stopped the recording.
             last_recorded_len.set(last_recorded_len.get().wrapping_add(buflen));
@@ -153,14 +144,12 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
 pub fn gotchars_ignore() {
     let nop = [K_SPECIAL as u8, KS_EXTRA as u8, KE_IGNORE as u8];
     on_key_ignore_len.set(on_key_ignore_len.get() + 3);
-    // SAFETY (this body): a fixed three-byte `K_IGNORE` sequence.
-    unsafe { gotchars(nop.as_ptr(), 3) };
+    gotchars(&nop);
 }
 
 /// Add one byte to `'showcmd'` for a partially matched mapping, and show the
 /// key once all of its bytes are in.
 pub(crate) fn add_byte_to_showcmd(byte: u8) {
-    let mut ch = [0 as c_char; MB_MAXCHAR];
     if !p_sc() || msg_silent.get() != 0 {
         return;
     }
@@ -168,34 +157,34 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
         return;
     }
     // A copy of the finished key: `add_to_showcmd` below can reach the
-    // screen, and the walk wants a stable buffer to point into.
-    let mut key = showcmd_pending.get();
-    let buflen = key.buflen;
-    key.buf[buflen] = 0;
+    // screen.
+    let pending = showcmd_pending.get();
+    let buflen = pending.buflen;
     showcmd_pending.with_mut(|st| st.buflen = 0);
 
-    // Split the key into its modifier prefix and the key itself.
-    let mut ptr: *const c_char = key.buf.as_ptr().cast();
+    // Split the key into its modifier prefix and the key itself. The key
+    // is read up to its first NUL, as upstream's string is.
+    let key = &pending.buf[..buflen];
+    let mut key = &key[..key.iter().position(|&b| b == 0).unwrap_or(key.len())];
     let mut modifiers = ModMask::NONE;
-    // SAFETY (this body): `showcmd_buf` is this module's own fixed-size array,
-    // and every write below is bounded by `SHOWCMD_COLS`.
-    if c_int::from(unsafe { *ptr } as u8) == K_SPECIAL
-        && c_int::from(unsafe { *ptr.add(1) } as u8) == KS_MODIFIER
-        && c_int::from(unsafe { *ptr.add(2) } as u8) != NUL
+    if let [first, KS_MODIFIER_U8, bits, rest @ ..] = key
+        && c_int::from(*first) == K_SPECIAL
     {
-        modifiers = ModMask::from_bits(c_int::from(unsafe { *ptr.add(2) } as u8));
-        ptr = unsafe { ptr.add(3) };
+        modifiers = ModMask::from_bits(c_int::from(*bits));
+        key = rest;
     }
 
     let mut c = NUL;
-    if c_int::from(unsafe { *ptr } as u8) != NUL {
-        let mb_ptr = unsafe { mb_unescape(&raw mut ptr, &mut ch) };
-        c = if !mb_ptr.is_null() {
-            unsafe { utf_ptr2char(mb_ptr) }
-        } else {
-            let byte = unsafe { *ptr } as u8;
-            ptr = unsafe { ptr.add(1) };
-            c_int::from(byte)
+    if let Some(&first) = key.first() {
+        c = match unescape_at(key).filter(|_| first >= 0x80) {
+            Some((ch, used)) => {
+                key = &key[used..];
+                char_at(&ch)
+            }
+            None => {
+                key = &key[1..];
+                c_int::from(first)
+            }
         };
         if c <= 0x7f {
             // Fold the modifiers into the key where that has a spelling,
@@ -219,8 +208,10 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
     if c != NUL {
         add_to_showcmd(c);
     }
-    while c_int::from(unsafe { *ptr } as u8) != NUL {
-        add_to_showcmd(c_int::from(unsafe { *ptr } as u8));
-        ptr = unsafe { ptr.add(1) };
+    for &byte in key {
+        add_to_showcmd(c_int::from(byte));
     }
 }
+
+/// `KS_MODIFIER` as the byte a key escape carries.
+const KS_MODIFIER_U8: u8 = KS_MODIFIER as u8;

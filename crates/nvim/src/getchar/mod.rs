@@ -5,8 +5,6 @@
 pub mod state;
 use crate::api::vim::nvim_paste;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::charset::{ptr2cells, skipwhite};
-use crate::cursor::get_cursor_line_ptr;
 use crate::debugger::state::debug_did_msg;
 use crate::drawscreen::state::{cmdline_row, mode_displayed, must_redraw, redraw_cmdline};
 use crate::drawscreen::{setcursor, showmode, unshowmode, update_screen};
@@ -17,8 +15,6 @@ use crate::eval::typval::{
     dict_get_bool, dict_has_key, tv_check_for_opt_dict_arg, tv_get_number_chk,
 };
 use crate::eval::vars::set_vim_var_nr;
-use crate::event::libuv::uv_strerror;
-use crate::event::multiqueue::multiqueue_empty;
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::update_topline_cursor;
@@ -37,22 +33,18 @@ use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
 use crate::keycodes::{K_SPECIAL, special_key_bytes};
-use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
+use crate::lua::executor::nlua_execute_on_key;
 use crate::mapping::{MapAt, MapExpr, eval_map_expr, langmap_adjust_mb, with_maphash_lists};
-use crate::mbyte::{
-    mb_unescape, utf_char2bytes, utf_head_off, utf_ptr2cells, utf_ptr2char, utf_ptr2len,
-    utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
-};
+use crate::mbyte::utf8len_tab;
 use crate::memfile::did_swapwrite_msg;
 use crate::memline::ml_sync_all;
 use crate::memory::did_outofmem_msg;
-use crate::memory::{strequal, xfree, xmalloc, xmemcpyz};
 use crate::message::state::{
     called_emsg, cmd_silent, did_emsg, emsg_silent, msg_col, msg_didout, msg_row, msg_scroll,
     msg_silent, need_wait_return,
 };
 use crate::message::{e_nesting, e_toocompl};
-use crate::message::{emsg, iemsg, internal_error};
+use crate::message::{emsg, iemsg};
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
 use crate::r#move::validate_cursor;
@@ -61,12 +53,9 @@ use crate::option::vars::{
     p_fs, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
 };
 use crate::options::kOptBoFlagError;
-use crate::os::cshim::{gettext, stderr};
-use crate::os::env::expand_env;
-use crate::os::fileio::{FileOpenFlags, file_close, file_open, file_open_stdin, file_read};
+use crate::os::cshim::gettext;
+use crate::os::fileio::FileOpenFlags;
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
-use crate::plines::{init_charsize_arg, win_charsize};
-use crate::startup::main_loop;
 use crate::state::mode::{
     State, VIsual_reselect, arrow_used, did_ai, exmode_active, finish_op, pending_exmode_active,
     redo_VIsual_busy, restart_edit,
@@ -82,14 +71,13 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Array, CharsizeArg, ColNr, Error, EvalFuncData, FileDescriptor, FlushBuffers, Integer, LuaRef,
-    LuaRetMode, MotionType, MultiQueue, OpArg, OptInt, RemapValues, SaveRedo, String_0, TypVal,
-    TypeaheadSave, VarNumber, Vv, ptrdiff_t, size_t, uint8_t, uint64_t,
+    Array, ColNr, Error, EvalFuncData, FlushBuffers, Integer, LuaRef, LuaRetMode, MotionType,
+    OpArg, OptInt, RemapValues, SaveRedo, String_0, TypVal, TypeaheadSave, VarNumber, Vv,
+    ptrdiff_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
 use crate::winlayer::graph::cmdwin_type;
-use ::libc::atoi;
 
 // The carve of the transpiled module; see each child's docs.
 mod buffers;
@@ -164,23 +152,6 @@ pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 fn is_internal_call(channel_id: uint64_t) -> bool {
     channel_id & INTERNAL_CALL_MASK != 0
 }
-/// Streams to read script (`-s` / `:source!`) input from, innermost last.
-static scriptin: GlobalCell<[FileDescriptor; NSCRIPT as usize]> =
-    GlobalCell::new([EMPTY_FILE; NSCRIPT as usize]);
-
-/// A `FileDescriptor` that has never been opened. Upstream's array is a
-/// zero-initialised C static; this spells the same bytes once instead of
-/// fifteen times.
-const EMPTY_FILE: FileDescriptor = FileDescriptor {
-    fd: 0,
-    buffer: ::core::ptr::null_mut(),
-    read_pos: ::core::ptr::null_mut(),
-    write_pos: ::core::ptr::null_mut(),
-    wr: false,
-    eof: false,
-    non_blocking: false,
-    bytes_read: 0,
-};
 // The five key buffers. Each is reached through the `KeyBufferRef` its
 // accessor answers (`redobuff()`, ...), never by name: the accessor is what
 // keeps every operation to one short borrow of the cell.

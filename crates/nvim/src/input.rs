@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::drawscreen::state::cmdline_row;
-use crate::event::multiqueue::{ChildQueue, queue_in};
+use crate::event::multiqueue::ChildQueue;
 use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::state::{mapped_ctrl_c, mod_mask};
 use crate::getchar::{fix_input_buffer, merge_modifiers};
@@ -25,7 +25,7 @@ use crate::message::state::{keep_msg, keep_msg_hl_id, msg_row, msg_scrolled, nee
 use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
 use crate::os::cshim::gettext;
-use crate::os::input::input_get;
+use crate::os::input::{InputEvents, input_get};
 use crate::snprintf;
 use crate::state::mode::State;
 use crate::types::ui::kUIMessages;
@@ -98,7 +98,7 @@ fn is_swallowed_key(first: u8, key: c_int) -> bool {
 ///
 /// `events` names the queue to drain while waiting, if any.
 pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue>>>) -> c_int {
-    let events = events.map_or(core::ptr::null_mut(), queue_in);
+    let events = events.map_or(InputEvents::None, InputEvents::Queue);
     let save_mapped_ctrl_c = mapped_ctrl_c.get();
     mod_mask.set(ModMask::NONE);
     mapped_ctrl_c.set(0); // Mappings are not used here.
@@ -127,21 +127,15 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
         // First time: blocking wait. Second time: wait up to 100ms for a
         // terminal code to complete.
         let timeout = if len == 0 { -1 } else { 100 };
-        // SAFETY: `buf[len..]` has at least `maxlen` bytes of room by the
-        // arithmetic above, and `fix_input_buffer` rewrites in place within
-        // the tripling headroom that leaves.
-        let mut n = unsafe {
-            input_get(
-                buf.as_mut_ptr().add(len as usize),
-                maxlen,
-                timeout,
-                0,
-                events,
-            )
-        };
+        // `buf[len..]` has at least `maxlen` bytes of room by the arithmetic
+        // above, and `fix_input_buffer` rewrites in place within the
+        // tripling headroom that leaves.
+        let at = len as usize;
+        let read = &mut buf[at..at + maxlen.max(0) as usize];
+        let mut n = input_get(read, timeout, 0, events) as c_int;
         if n > 0 {
             // Replace zero and K_SPECIAL by a special key code.
-            n = unsafe { fix_input_buffer(buf.as_mut_ptr().add(len as usize), n) };
+            n = fix_input_buffer(&mut buf[at..], n);
             len += n;
         }
         if n > 0 {

@@ -53,13 +53,15 @@ use crate::normal::{
 };
 use crate::option::get_ve_flags;
 use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
-use crate::os::input::{input_available, input_get, os_breakcheck};
+use crate::os::input::{
+    InputEvents, input_available, input_get, main_loop_has_events, os_breakcheck,
+};
 use crate::state::mode::{
     State, exmode_active, finish_op, last_mode, motion_force, restart_VIsual_select, restart_edit,
     virtual_op,
 };
 use crate::terminal::{TerminalState, terminal_check, terminal_execute};
-use crate::types::{Direction, HashTab, NUL, ProcType, SaveVEvent, uint8_t};
+use crate::types::{Direction, HashTab, NUL, ProcType, SaveVEvent};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 
@@ -218,7 +220,7 @@ fn next_key() -> c_int {
         if vpeekc() != NUL || !typeahead().is_empty() {
             return safe_vgetc();
         }
-        if !unsafe { multiqueue_empty(main_loop_events()) } {
+        if main_loop_has_events() {
             ui_flush();
             return Key::Event.code();
         }
@@ -228,11 +230,9 @@ fn next_key() -> c_int {
             setcursor();
         }
         ui_flush();
-        let (buf, maxlen, ms) = (ptr::null_mut::<uint8_t>(), 0, -1);
-        let (tb_change_cnt, events) = (typeahead().change_cnt(), main_loop_events());
-        unsafe { input_get(buf, maxlen, ms, tb_change_cnt, events) };
+        input_get(&mut [], -1, typeahead().change_cnt(), InputEvents::MainLoop);
         // A wakeup with neither input nor queued work is spurious.
-        if input_available() != 0 || unsafe { multiqueue_empty(main_loop_events()) } {
+        if input_available() != 0 || !main_loop_has_events() {
             continue;
         }
         return Key::Event.code();

@@ -67,8 +67,11 @@ fn cmd_source(fname: &CStr, excmd: Option<&mut ExArg>) {
                 || command
                     .cond_stack
                     .is_some_and(|cond| cond.with(|cs| cs.idx >= 0));
+            // A copy: with `busy` the script's keys run before this
+            // returns, and the name is the caller's command line.
             // SAFETY: the caller's NUL-terminated name.
-            unsafe { openscript(fname, busy) };
+            let name = unsafe { cstr::at(fname) }.to_owned();
+            openscript(&name, busy);
             true
         } else {
             false

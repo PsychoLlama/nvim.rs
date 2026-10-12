@@ -1,28 +1,28 @@
 //! The `<Cmd>` and `<Lua>` pseudo-keys.
 //!
 //! A `<Cmd>` mapping puts its command into the typeahead terminated by `<CR>`
-//! and [`getcmdkeycmd`] reads it back out for `do_cmdline`; a `<Lua>` key
+//! and [`read_cmd_key_line`] reads it back out for `do_cmdline`; a `<Lua>` key
 //! carries a `LuaRef` in decimal that [`map_execute_lua`] calls.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::debugger::atoi;
 use crate::guard::Keys;
 use crate::keycodes::{Key, key_escape, key_unescape};
+use crate::lua::executor::nlua_call_ref_reporting;
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::semsg_multiline;
 use crate::types::NUL;
 use core::ffi::c_int;
-use core::ptr;
 
 /// Read the command a `<Cmd>` key introduced out of the typeahead.
 ///
 /// The [`CmdKey`](crate::ex_docmd::LineSource::CmdKey) arm of `do_cmdline`'s
 /// line source. The command runs to the `<CR>` that must terminate it;
 /// `None` means it was aborted.
-pub fn getcmdkeycmd() -> Option<XString> {
+pub fn read_cmd_key_line() -> Option<XString> {
     let mut line = Vec::<u8>::new();
     let mut c1 = -1;
     let mut cmod = 0;
@@ -114,14 +114,12 @@ pub fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
         return !aborted;
     }
 
-    line.push(NUL as u8);
-    // SAFETY: `line` is this frame's own buffer and now NUL-terminated.
-    let luaref: LuaRef = unsafe { atoi(line.as_ptr().cast()) };
+    let luaref: LuaRef = atoi(&line);
     if may_repeat {
         repeat_luaref.set(luaref);
     }
 
-    let called = unsafe { nlua_call_ref(luaref, ptr::null(), ARRAY_DICT_INIT, kRetNilBool) };
+    let called = nlua_call_ref_reporting(luaref, None, ARRAY_DICT_INIT, kRetNilBool);
     if let Err(e) = called {
         let msg = msg_cstr(e.message_or_empty());
         semsg_multiline!(c"emsg", "E5108: {msg}");

@@ -243,7 +243,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     if !arrow_used.get() {
         // Don't append the ESC for `r<CR>` and `grx`.
         if !single_char_insert {
-            unsafe { append_to_redobuff(ESC_STR.as_ptr()) };
+            append_to_redobuff(ESC_STR.to_bytes());
         }
 
         // Repeating an insert may take a long time; check for an
@@ -264,7 +264,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
             }
             let _ = start_redo_ins();
             if single_char_insert {
-                unsafe { stuff_redo_readbuf(ESC_STR.as_ptr()) }; // no ESC in the redo buffer
+                stuff_redo_readbuf(ESC_STR.to_bytes()); // no ESC in the redo buffer
             }
             RedrawingDisabled.set(RedrawingDisabled.get() + 1);
             disabled_redraw.set(true);

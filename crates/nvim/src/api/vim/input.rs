@@ -61,16 +61,18 @@ pub fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
     if keys.len() == 0 as size_t && !execute {
         return;
     }
-    let keys_esc: *mut ::core::ffi::c_char = if escape_ks {
-        crate::memory::XString::from_vec(crate::keycodes::escape_ks_bytes(unsafe {
-            cstr::bytes_at(keys.data())
-        }))
-        .into_raw()
+    // Up to the NUL, as upstream's `char *` is read.
+    let keys = keys.as_bytes();
+    let keys = &keys[..keys.iter().position(|&b| b == 0).unwrap_or(keys.len())];
+    let escaped;
+    let keys_esc: &[u8] = if escape_ks {
+        escaped = crate::keycodes::escape_ks_bytes(keys);
+        &escaped
     } else {
-        keys.data()
+        keys
     };
     if lowlevel {
-        unsafe { input_enqueue_raw(keys_esc, cstr::bytes_at(keys_esc).len()) };
+        input_enqueue_raw(keys_esc);
     } else {
         let remap_flag = if remap {
             REMAP_YES as ::core::ffi::c_int
@@ -80,14 +82,10 @@ pub fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
         // `insert` puts the keys at the front of the typeahead; without it
         // they go after whatever is already queued.
         let offset = if insert { 0 } else { typeahead().len() };
-        // SAFETY: `keys_esc` is the escaped copy, or the caller's own string.
-        let _ = unsafe { ins_typebuf(keys_esc, remap_flag, offset, !typed, false) };
+        let _ = ins_typebuf(keys_esc, remap_flag, offset, !typed, false);
         if vgetc_busy.get() != 0 {
             typebuf_was_filled.set(true);
         }
-    }
-    if escape_ks {
-        unsafe { xfree(keys_esc as *mut ::core::ffi::c_void) };
     }
     if execute {
         let save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();

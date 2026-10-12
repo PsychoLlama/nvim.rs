@@ -831,37 +831,6 @@ pub unsafe fn mb_strcmp_ic(ic: bool, s1: *const c_char, s2: *const c_char) -> c_
     strcmp_ic_in(ic, s1, s2)
 }
 
-/// Decode one character out of a key-encoded string, advancing `*cursor` past
-/// it; [`unescape_at`] over the string. Answers null when there is no
-/// multibyte character there, or `into`, holding it NUL-terminated.
-///
-/// # Safety
-///
-/// `*cursor` must point at a NUL-terminated string.
-pub(crate) unsafe fn mb_unescape(
-    cursor: *mut *const c_char,
-    into: &mut [c_char; MB_MAXCHAR],
-) -> *const c_char {
-    // ASCII (a NUL included) is never the start of a multibyte character,
-    // and is almost every byte this is asked about: the typeahead's mapping
-    // match calls it per candidate.
-    if unsafe { **cursor }.cast_unsigned() < 0x80 {
-        return core::ptr::null();
-    }
-    // Four characters, each at most three bytes escaped, and the NUL: the
-    // most `unescape_at` looks at.
-    let text = unsafe { cstr::prefix_at(*cursor, 13) };
-    let Some((bytes, used)) = unescape_at(text) else {
-        return core::ptr::null();
-    };
-    *into = [0; MB_MAXCHAR];
-    for (slot, &byte) in into.iter_mut().zip(&bytes) {
-        *slot = byte as c_char;
-    }
-    unsafe { *cursor = (*cursor).add(used) };
-    into.as_ptr()
-}
-
 /// The canonical spelling of encoding name `enc`, `xmalloc`'d;
 /// [`canonize`] over the string.
 ///

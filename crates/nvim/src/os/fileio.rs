@@ -576,6 +576,75 @@ impl WriteFile {
     }
 }
 
+/// A [`FileDescriptor`] [`file_open`] or [`file_open_stdin`] opened for
+/// reading, held as a value: the read half of [`WriteFile`]. `-s` and
+/// `:source!` read their keys through one.
+///
+/// The only ways to make one are [`ReadFile::open`] and
+/// [`ReadFile::stdin`], so its block and its positions are always the ones
+/// `file_open_fd` set up. Closing is not a `Drop`, as for `WriteFile`.
+pub(crate) struct ReadFile(FileDescriptor);
+
+impl ReadFile {
+    /// A descriptor nothing is open in, for `file_open` to fill in.
+    const fn unopened() -> FileDescriptor {
+        FileDescriptor {
+            fd: -1,
+            buffer: ptr::null_mut(),
+            read_pos: ptr::null_mut(),
+            write_pos: ptr::null_mut(),
+            wr: false,
+            eof: false,
+            non_blocking: false,
+            bytes_read: 0,
+        }
+    }
+
+    /// Open `fname` with the [`FileOpenFlags`] `flags` (which must not ask
+    /// for writing), or the libuv error code saying why not.
+    pub(crate) fn open(fname: &CStr, flags: FileOpenFlags) -> Result<Self, c_int> {
+        debug_assert!(!has(flags.cast_signed(), WRITING));
+        let mut file = Self::unopened();
+        // SAFETY: a NUL-terminated name, and a descriptor this frame owns
+        // for the callee to fill in.
+        let error = unsafe { file_open(&raw mut file, fname.as_ptr(), flags.cast_signed(), 0) };
+        if error == 0 {
+            Ok(Self(file))
+        } else {
+            Err(error)
+        }
+    }
+
+    /// Open standard input, or the libuv error code saying why not.
+    pub(crate) fn stdin() -> Result<Self, c_int> {
+        let mut file = Self::unopened();
+        // SAFETY: a descriptor this frame owns for the callee to fill in.
+        let error = unsafe { file_open_stdin(&raw mut file) };
+        if error == 0 {
+            Ok(Self(file))
+        } else {
+            Err(error)
+        }
+    }
+
+    /// Read into `buf`: how many bytes came (fewer than asked only at EOF,
+    /// or on a non-blocking file), or a negative libuv error code.
+    pub(crate) fn read(&mut self, buf: &mut [u8]) -> ptrdiff_t {
+        // SAFETY: a descriptor `file_open_fd` set up for reading, and a live
+        // slice that is not inside its block.
+        unsafe { file_read(&raw mut self.0, buf.as_mut_ptr().cast(), buf.len()) }
+    }
+
+    /// Close, or the libuv error code saying what went wrong.
+    pub(crate) fn close(mut self) -> Result<(), c_int> {
+        // SAFETY: a descriptor `file_open_fd` set up, spent here exactly once.
+        match unsafe { file_close(&raw mut self.0, false) } {
+            0 => Ok(()),
+            error => Err(error),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -29,7 +29,7 @@ use super::*;
 use crate::cursor::{check_cursor, gchar_cursor};
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state};
-use crate::getchar::ins_typebuf_text;
+use crate::getchar::ins_typebuf;
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
 use crate::pos::MAXCOL;
 use crate::runtime::state::current_sctx;
@@ -162,7 +162,7 @@ fn run_now(rhs: &Rc<CStr>, noremap: c_int, silent: bool) {
 
 /// Put the rhs into the typeahead, as if the user had typed it.
 fn feed_typeahead(rhs: &Rc<CStr>, noremap: c_int, silent: bool) {
-    let _ = ins_typebuf_text(rhs, noremap, true, silent);
+    let _ = ins_typebuf(rhs.to_bytes(), noremap, 0, true, silent);
 }
 
 /// Why [`menu_getbyname`] found nothing: what it reports first, and whether

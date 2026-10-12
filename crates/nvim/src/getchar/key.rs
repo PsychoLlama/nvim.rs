@@ -5,8 +5,7 @@
 //! into a single key: a `K_SPECIAL` escape back into its key code, a modifier
 //! prefix into `mod_mask`, a UTF-8 sequence into a codepoint.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -86,15 +85,18 @@ pub fn vgetc() -> c_int {
     // internally are not freed under a caller.
     may_garbage_collect.set(false);
 
-    // Hand the key's bytes to the Lua on_key callbacks.
-    // SAFETY: `on_key_bytes` hands back this buffer's own NUL-terminated
-    // bytes, and the main state exists whenever a key is being read.
-    let discarded = unsafe { nlua_execute_on_key(c, on_key_bytes().cast()) };
+    // Hand the key's bytes to the Lua on_key callbacks. The buffer is moved
+    // out for the call: a callback can read keys, which append to it, and
+    // all of that is cleared below anyway.
+    let mut typed = on_key_buf.take();
+    let discarded = nlua_execute_on_key(c, &mut typed);
+    typed.clear();
+    on_key_buf.set(typed);
     if discarded {
         // Keys following K_COMMAND/K_LUA/K_PASTE_START are not normally
         // seen by vim.on_key() callbacks, so drop them with this one.
         if c == Key::Command.code() {
-            drop(getcmdkeycmd());
+            drop(read_cmd_key_line());
         } else if c == Key::Lua.code() {
             map_execute_lua(false, true);
         } else if c == Key::PasteStart.code() {
@@ -370,20 +372,6 @@ pub fn check_end_reg_executing(advance: bool) {
             pending_end_reg_executing.set(true);
         }
     }
-}
-
-/// The bytes of the key being reported to the `vim.on_key()` callbacks,
-/// NUL-terminated as they expect.
-///
-/// The borrow is taken and released *before* the callbacks run: one can
-/// re-enter `vgetc`, and a live borrow across the call would be exactly the
-/// overlap `GlobalCell` forbids. The bytes stay valid as long as nothing
-/// re-entrant grows the buffer, which is what upstream assumes too.
-fn on_key_bytes() -> *mut u8 {
-    on_key_buf.with_mut(|buf| {
-        buf.push(0);
-        buf.as_mut_ptr()
-    })
 }
 
 /// Take the last `len` bytes back off the `vim.on_key()` buffer, for keys

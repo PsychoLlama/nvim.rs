@@ -358,7 +358,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if unsafe { edit_stdin(&raw mut params) } {
         params.edit_type = EDIT_STDIN as c_int;
     }
-    if !params.scriptin.is_null() && !unsafe { open_scriptin(params.scriptin) } {
+    if !params.scriptin.is_null() && !open_scriptin(unsafe { cstr::at(params.scriptin) }) {
         os_exit(2);
     }
     if !params.scriptout.is_null() {

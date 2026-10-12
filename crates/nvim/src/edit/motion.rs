@@ -19,6 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
 use crate::strings::has_char;
@@ -61,7 +62,7 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
             NUL as c_char,
         ];
         // SAFETY: `buf` is a live four-byte array and 3 of it is read.
-        unsafe { stuff_readbuf_len(buf.as_ptr(), 3) };
+        stuff_readbuf_len(&cstr::as_bytes(&buf)[..3]);
     }
     stuff_readbuf_char(c);
     true

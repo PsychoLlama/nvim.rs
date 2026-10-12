@@ -277,7 +277,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             // the line and Ex mode resumes afterwards.
             if global_busy.get() != 0 {
                 if let Some(next) = excmd.line.next {
-                    stuff_readbuf(excmd.line.cstr_from(next));
+                    stuff_readbuf(excmd.line.cstr_from(next).to_bytes());
                     excmd.line.next = None;
                 }
                 let _redraw = Allow::redraw();

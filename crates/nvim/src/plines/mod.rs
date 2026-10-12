@@ -205,6 +205,14 @@ pub(crate) fn linetabsize(window: Win, lnum: LineNr) -> c_int {
     unsafe { win_linetabsize(window, lnum, line.raw(), MAXCOL) }
 }
 
+/// Cells the first `len` bytes of line `lnum` take in `window`, counting
+/// inline virtual text: the virtual column `len` starts at.
+pub(crate) fn win_line_prefix_cells(window: Win, lnum: LineNr, len: ColNr) -> ColNr {
+    let line = window.buffer().line_raw(lnum);
+    // SAFETY: line `lnum` of `window`'s own buffer.
+    unsafe { win_linetabsize(window, lnum, line.raw(), len) }
+}
+
 /// Like [`linetabsize`], but counts the 'listchars' "eol".
 pub(crate) fn linetabsize_eol(window: Win, lnum: LineNr) -> c_int {
     let eol = window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.eol != 0;

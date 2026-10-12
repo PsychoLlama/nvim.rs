@@ -21,7 +21,6 @@
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-use core::slice;
 
 use super::{get_global_lstate, kRetNilBool, lua_Debug, lua_getinfo, nlua_error, nlua_exec};
 use crate::api::private::helpers::cstr_to_string;
@@ -32,8 +31,8 @@ use crate::keycodes::{special_key_bytes, unescape_ks_in};
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
     LUA_NOREF, LUA_TBOOLEAN, LUA_TFUNCTION, lua_checkstack, lua_getfield, lua_getglobal,
-    lua_getmetatable, lua_gettop, lua_pcall, lua_pop, lua_pushlstring, lua_pushstring,
-    lua_toboolean, lua_type, luaL_checktype,
+    lua_getmetatable, lua_gettop, lua_pcall, lua_pop, lua_pushlstring, lua_toboolean, lua_type,
+    luaL_checktype,
 };
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
@@ -123,23 +122,26 @@ pub unsafe fn nlua_register_table_as_callable(arg: &TypVal) -> *mut c_char {
 /// it swallows any interrupt a callback raised, restoring whatever `got_int`
 /// was before.
 ///
-/// # Safety
-/// `typed_buf` must be a NUL-terminated buffer the caller owns, and the main
-/// state must exist.
-pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
-    unsafe {
-        static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
-        if RECURSIVE.get() {
-            return false;
-        }
-        RECURSIVE.set(true);
+/// `typed` is the bytes that were typed for the key, still escaped; they are
+/// unescaped in place, and read up to the first NUL as upstream's string
+/// is. The main state exists whenever a key is being read.
+pub fn nlua_execute_on_key(c: c_int, typed: &mut Vec<u8>) -> bool {
+    static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
+    if RECURSIVE.get() {
+        return false;
+    }
+    RECURSIVE.set(true);
 
-        let key = special_key_bytes(c, mod_mask.get(), false);
-        let (buf, buf_len) = (key.as_bytes(), key.as_bytes().len());
-        let typed =
-            slice::from_raw_parts_mut(typed_buf.cast::<u8>(), cstr::bytes_at(typed_buf).len());
-        *typed_buf.add(unescape_ks_in(typed)) = 0;
-
+    let key = special_key_bytes(c, mod_mask.get(), false);
+    let (buf, buf_len) = (key.as_bytes(), key.as_bytes().len());
+    let up_to_nul = |bytes: &[u8]| bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    typed.truncate(up_to_nul(typed));
+    let unescaped = unescape_ks_in(typed);
+    typed.truncate(unescaped);
+    let typed = &typed[..up_to_nul(typed)];
+    // SAFETY: the main state, which exists while keys are read; both strings
+    // are pushed as copies before anything runs.
+    let discard = unsafe {
         let lstate = get_global_lstate();
         let top = lua_gettop(lstate);
 
@@ -147,7 +149,7 @@ pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
         lua_getfield(lstate, -1, c"_on_key".as_ptr());
         luaL_checktype(lstate, -1, LUA_TFUNCTION);
         lua_pushlstring(lstate, buf.as_ptr().cast(), buf_len);
-        lua_pushstring(lstate, typed_buf);
+        lua_pushlstring(lstate, typed.as_ptr().cast(), typed.len());
 
         let save_got_int = got_int.get();
         got_int.set(false);
@@ -163,10 +165,10 @@ pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
         got_int.set(got_int.get() || save_got_int);
         lua_pop(lstate, 1);
         debug_assert!(top == lua_gettop(lstate));
-
-        RECURSIVE.set(false);
         discard
-    }
+    };
+    RECURSIVE.set(false);
+    discard
 }
 
 /// [`nlua_register_table_as_callable`], answering the name owned.

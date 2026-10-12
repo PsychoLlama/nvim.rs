@@ -22,7 +22,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later, update_screen};
 use crate::eval::funcs::{ListLines, get_list_line};
 use crate::eval::userfunc::get_func_line;
 use crate::eval::vars::set_vim_var_string;
-use crate::getchar::getcmdkeycmd;
+use crate::getchar::read_cmd_key_line;
 use crate::memory::XString;
 use crate::runtime::{SourceCookie, getsourceline};
 use crate::types::{AutoPatCmd, FuncCall};
@@ -430,7 +430,7 @@ impl ReadLines for LineSource<'_> {
             // it from asks the command line.
             LineSource::None => cmdline_input(c, indent, do_concat),
             LineSource::Typed => getexline(c, indent, do_concat),
-            LineSource::CmdKey => getcmdkeycmd(),
+            LineSource::CmdKey => read_cmd_key_line(),
             LineSource::List(walk) => get_list_line(walk),
             LineSource::Function(frame) => get_func_line(frame),
             LineSource::Script(cookie) => getsourceline(cookie, do_concat),

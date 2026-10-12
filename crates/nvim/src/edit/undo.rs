@@ -73,7 +73,7 @@ unsafe fn start_arrow_common(end_insert_pos: *mut Pos, end_change: bool) {
     // `stop_insert` asks of it; `ESC_STR` is a static string.
     if !arrow_used.get() && end_change {
         // Something has been inserted: close the block.
-        unsafe { append_to_redobuff(ESC_STR.as_ptr()) };
+        append_to_redobuff(ESC_STR.to_bytes());
         unsafe { stop_insert(end_insert_pos, 0, 0) };
         arrow_used.set(true);
     }
@@ -117,7 +117,7 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
             vr_lines_changed.set(1);
         }
         reset_redobuff();
-        unsafe { append_to_redobuff(c"1i".as_ptr()) }; // pretend we start an insertion
+        append_to_redobuff(b"1i"); // pretend we start an insertion
         new_insert_skip.set(2);
     } else if ins_need_undo.get() && save_cursor_line().is_ok() {
         ins_need_undo.set(false);
@@ -152,7 +152,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
     // Save the inserted text for a later `.`/CTRL-@/CTRL-A.  Not when
     // `restart_edit` was set and nothing was inserted, or `CTRL-O w`
     // followed by `<Left>` would clear `last_insert`.
-    let inserted = unsafe { get_inserted() };
+    let inserted = get_inserted();
     let added = if inserted.data().is_null() {
         0
     } else {

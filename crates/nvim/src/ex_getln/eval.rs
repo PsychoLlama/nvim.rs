@@ -278,20 +278,11 @@ pub fn f_wildtrigger(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData
         || cmd_type == '?' as ::core::ffi::c_int
     {
         // K_WILD as a single special key, pushed into the typeahead.
-        let mut key_string: [uint8_t; 4] = [
+        let key_string = [
             K_SPECIAL as uint8_t,
             KS_EXTRA as uint8_t,
             KE_WILD as uint8_t,
-            NUL as uint8_t,
         ];
-        let _ = unsafe {
-            ins_typebuf(
-                key_string.as_mut_ptr() as *mut ::core::ffi::c_char,
-                REMAP_NONE,
-                0,
-                true,
-                false,
-            )
-        };
+        let _ = ins_typebuf(&key_string, REMAP_NONE, 0, true, false);
     }
 }

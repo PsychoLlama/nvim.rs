@@ -98,7 +98,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
                 // would add. CTRL-U on its own would go back to the
                 // previous line under 'nobackspace'-`eol`, so it is given
                 // a space to consume.
-                stuff_readbuf(c"\n ");
+                stuff_readbuf(b"\n ");
                 stuff_readbuf_char(Ctrl_U);
             }
             count -= 1;
@@ -111,7 +111,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
     // motion commands stuffed after the insert do it instead.
     if flags & PUT_CURSEND as c_int != 0 {
         if flags & PUT_LINE as c_int != 0 {
-            stuff_readbuf(c"j0");
+            stuff_readbuf(b"j0");
         } else {
             // Stuffing `l` would ring the bell at the end of a line, so
             // only do it when the cursor can actually move right:
@@ -138,7 +138,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
             }
         }
     } else if flags & PUT_LINE as c_int != 0 {
-        stuff_readbuf(c"g'[");
+        stuff_readbuf(b"g'[");
     }
 
     // Save the cursor position now (though no text), so that `u` after

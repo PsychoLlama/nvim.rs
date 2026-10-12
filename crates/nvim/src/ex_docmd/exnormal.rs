@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use super::edit::{ui_cursor_shape, update_topline_cursor};
-use crate::getchar::ins_typebuf_text;
+use crate::getchar::ins_typebuf;
 use crate::guard::Depth;
 use crate::mbyte::cluster_len;
 use crate::message::emsg;
@@ -214,7 +214,7 @@ pub(crate) fn ex_stopinsert(_excmd: &mut ExArg) {
 
 /// Put `cmd` into the typeahead and run it as normal-mode keys.
 pub fn exec_normal_cmd(cmd: &CStr, remap: c_int, silent: bool) {
-    let _ = ins_typebuf_text(cmd, remap, true, silent);
+    let _ = ins_typebuf(cmd.to_bytes(), remap, 0, true, silent);
     exec_normal(false, false);
 }
 

@@ -141,7 +141,7 @@ pub const SIZE_MAX: ::core::ffi::c_ulong = usize::MAX as ::core::ffi::c_ulong;
 pub const INT_MAX: c_int = c_int::MAX;
 /// How many bytes a `ScreenChar` can hold, NUL included.
 pub const MAX_SCHAR_SIZE: c_int = 32;
-/// The second byte of an escaped literal `K_SPECIAL`; see [`mb_unescape`].
+/// The second byte of an escaped literal `K_SPECIAL`; see [`unescape_at`].
 pub const KS_SPECIAL: c_int = 254;
 /// The cursor line from the cursor on, as `get_cursor_pos_ptr` reads it.
 fn with_cursor_text<R>(f: impl FnOnce(&[u8]) -> R) -> R {

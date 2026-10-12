@@ -21,19 +21,22 @@
 //!   `read_error_exit()` -> `getout(0)`. That is upstream's designed exit for
 //!   batch mode, not a tty-dependent accident.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::charset::display::ptr2cells_at;
 use crate::guard::Depth;
 use crate::keycodes::{Ctrl_C, key_escape};
+use crate::mbyte::{cells_at, head_off};
+use crate::memline::Lines;
+use crate::os::input::InputEvents;
+use crate::plines::win_line_prefix_cells;
 use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_long};
-use core::ptr;
 
 /// Longest partial mapping `'showcmd'` will display.
 const SHOWCMD_COLS: c_int = 10;
@@ -65,11 +68,7 @@ struct Partial {
 /// key does arrive after all the display is simply redrawn. Answers the
 /// cursor position to draw `'showcmd'` at, and whether the mode message was
 /// removed.
-///
-/// # Safety
-/// The typeahead must have room for three more bytes: this pushes an
-/// `<Esc>` back into it without growing it first.
-unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
+fn esc_leaves_insert(at: &mut CursorAt) -> bool {
     let deleted = mode_displayed.get();
     if deleted {
         unshowmode(true);
@@ -78,35 +77,35 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
     let mut win = Win::current();
     let old_wcol = win.w_wcol;
     let old_wrow = win.w_wrow;
+    let lnum = win.w_cursor.lnum;
+    let cursor_col = usize::try_from(win.w_cursor.col).unwrap_or(0);
 
     // Move the cursor left, if that is possible.
-    if win.w_cursor.col != 0 {
+    if cursor_col != 0 {
         let mut col: ColNr = 0;
         if win.w_wcol > 0 {
-            if did_ai.get()
-                && c_int::from(unsafe {
-                    *skipwhite(get_cursor_line_ptr().offset(win.w_cursor.col as isize))
-                }) == NUL
-            {
+            let trailing_white = {
+                let mut lines = Lines::current();
+                let line = lines.line(lnum);
+                line.get(cursor_col..)
+                    .unwrap_or_default()
+                    .iter()
+                    .all(|&b| ascii_iswhite(c_int::from(b)))
+            };
+            if did_ai.get() && trailing_white {
                 // After auto-indenting with no text following, the
                 // trailing white space is about to be truncated, so the
-                // cursor belongs after the last non-white character.
-                win.w_wcol = 0;
-                let ptr = get_cursor_line_ptr();
-                let endptr = unsafe { ptr.offset(win.w_cursor.col as isize) };
-
-                let mut csarg = CharsizeArg::default();
-                let cstype = unsafe { init_charsize_arg(&mut csarg, win, win.w_cursor.lnum, ptr) };
-                let mut ci = unsafe { utf_ptr2str_char_info(ptr) };
-                let mut vcol = 0;
-                while ci.ptr < endptr {
-                    if !ascii_iswhite(ci.chr.value as c_int) {
-                        win.w_wcol = vcol;
-                    }
-                    vcol += unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }
-                        .width;
-                    ci = unsafe { utfc_next(ci) };
-                }
+                // cursor belongs after the last non-white character: at the
+                // virtual column where the last cluster before the cursor
+                // that is not white starts.
+                let start = {
+                    let mut lines = Lines::current();
+                    last_non_white_start(lines.line(lnum), cursor_col)
+                };
+                win.w_wcol = start.map_or(0, |start| {
+                    let len = ColNr::try_from(start).expect("a column");
+                    win_line_prefix_cells(win, lnum, len)
+                });
 
                 win.w_wrow = win.w_cline_row + win.w_wcol / win.w_view_width;
                 win.w_wcol %= win.w_view_width;
@@ -124,9 +123,11 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
         if col > 0 && win.w_wcol > 0 {
             // Correct for the cursor sitting on the right half of a
             // double-width character.
-            let ptr = get_cursor_line_ptr();
-            col -= unsafe { utf_head_off(ptr, ptr.offset(col as isize)) };
-            if unsafe { utf_ptr2cells(ptr.offset(col as isize)) } > 1 {
+            let mut lines = Lines::current();
+            let line = lines.line(lnum);
+            let at = usize::try_from(col).expect("a column");
+            let start = at - head_off(line, at);
+            if cells_at(line.get(start..).unwrap_or_default()) > 1 {
                 win.w_wcol -= 1;
             }
         }
@@ -139,6 +140,24 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
     win.w_wcol = old_wcol;
     win.w_wrow = old_wrow;
     deleted
+}
+
+/// Where the last grapheme cluster in `line[..end]` that is not white space
+/// starts, if there is one: upstream walks the clusters forwards and
+/// remembers each non-white one's column, which is this.
+fn last_non_white_start(line: &[u8], end: usize) -> Option<usize> {
+    let mut end = end.min(line.len());
+    loop {
+        let last = line[..end]
+            .iter()
+            .rposition(|&b| !ascii_iswhite(c_int::from(b)))?;
+        let start = last - head_off(line, last);
+        if !ascii_iswhite(c_int::from(line[start])) {
+            return Some(start);
+        }
+        // A white character carrying a composing one is white too.
+        end = start;
+    }
 }
 
 /// Show the partially matched keys with `'showcmd'` while we wait for the
@@ -154,9 +173,9 @@ fn show_partial_key(at: CursorAt) -> Partial {
         && State.get() != MODE_HITRETURN
     {
         let last = tb.byte(tb.len() - 1);
-        // SAFETY: the last valid byte of the typeahead is readable, and
-        // `edit_putchar` copies what it is given.
-        if State.get() & MODE_INSERT != 0 && unsafe { ptr2cells(tb.at(tb.len() - 1).cast()) } == 1 {
+        // The last byte on its own, as upstream reads it: the typeahead's
+        // NUL follows it.
+        if State.get() & MODE_INSERT != 0 && last_byte_is_one_cell(last) {
             // This looks nice when typing a dead-character mapping.
             edit_putchar(last, false);
             setcursor(); // put the cursor back where it belongs
@@ -184,15 +203,19 @@ fn show_partial_key(at: CursorAt) -> Partial {
 
     // The same on the command line, where `get_number()` has none.
     if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() && cmdline_star.get() == 0 {
-        let p = tb.at(tb.len() - 1);
         let byte = tb.byte(tb.len() - 1);
-        // SAFETY: the last valid byte of the typeahead is readable.
-        if unsafe { ptr2cells(p.cast()) } == 1 && byte < 128 {
+        if last_byte_is_one_cell(byte) && byte < 128 {
             putcmdline(byte as c_char, false);
             partial.showing = true;
         }
     }
     partial
+}
+
+/// Whether the typeahead's last byte takes one cell as the start of a
+/// character, with the end of the typeahead after it.
+fn last_byte_is_one_cell(byte: c_int) -> bool {
+    ptr2cells_at(&[u8::try_from(byte).expect("the typeahead holds bytes")]) == 1
 }
 
 /// Take back what [`show_partial_key`] drew.
@@ -229,10 +252,10 @@ fn wait_time_for(advance: bool, keylen: c_int) -> c_long {
 /// Everything that got read after a CTRL-C, and the key to answer with.
 fn interrupted(advance: bool) -> c_int {
     let tb = typeahead();
-    // Flush all input.
-    // SAFETY (this body): the typeahead's own storage, and the room left in
-    // it.
-    let got = unsafe { inchar(tb.storage(), tb.buflen() - 1, 0) };
+    // Flush all input, into a buffer as long as the typeahead's storage,
+    // which is what upstream reads into.
+    let mut drain = vec![0; tb.buflen()];
+    let got = inchar(&mut drain, 0);
 
     // If `inchar` answered true (a script file was active) or we are
     // inside a mapping, get out of Insert mode; otherwise behave as if a
@@ -248,8 +271,7 @@ fn interrupted(advance: bool) -> c_int {
     if advance {
         // Record this character too; it may be needed to get out of
         // Insert mode.
-        unsafe { *tb.storage() = c as u8 };
-        unsafe { gotchars(tb.storage(), 1) };
+        gotchars(&[u8::try_from(c).expect("ESC or CTRL-C")]);
     }
     cmd_silent.set(false);
     c
@@ -286,7 +308,7 @@ fn read_from_typeahead(
             return interrupted(advance);
         } else if !typeahead().is_empty() {
             // Check for a mapping in the typeahead.
-            match unsafe { handle_mapping(&raw mut keylen, timedout, mapdepth) } as MapResult {
+            match handle_mapping(&mut keylen, *timedout, mapdepth) as MapResult {
                 map_result_retry => continue, // try mapping again
                 map_result_fail => return -1, // failed; use the outer loop
                 map_result_get => {
@@ -300,10 +322,10 @@ fn read_from_typeahead(
                         } else {
                             KeyTyped.set(true);
                             // Write the character to the script file(s).
-                            unsafe { gotchars(tb.at(0), 1) };
+                            gotchars(&[u8::try_from(c).expect("the typeahead holds bytes")]);
                         }
                         KeyNoremap.set(tb.noremap(0));
-                        unsafe { del_typebuf(1, 0) };
+                        del_typebuf(1, 0);
                     }
                     return c;
                 }
@@ -320,12 +342,14 @@ fn read_from_typeahead(
         // redisplayed; that the cursor is in the wrong place until then
         // does not matter.
         let mut c = 0;
-        let win = Win::current_raw();
+        let win = Win::current();
         let mut at = CursorAt {
-            wcol: unsafe { (*win).w_wcol },
-            wrow: unsafe { (*win).w_wrow },
+            wcol: win.w_wcol,
+            wrow: win.w_wrow,
         };
         let tb = typeahead();
+        // What the 25ms peek read, appended to the typeahead below.
+        let mut peeked = [0u8; 4];
         if advance
             && tb.len() == 1
             && tb.byte(0) == ESC
@@ -335,10 +359,10 @@ fn read_from_typeahead(
             && State.get() & MODE_INSERT != 0
             && (p_timeout() || (keylen == KEYLEN_PART_KEY && p_ttimeout()))
             && {
-                c = unsafe { inchar(tb.tail(), 3, 25) };
+                c = inchar(&mut peeked, 25);
                 c == 0
             }
-            && unsafe { esc_leaves_insert(&mut at) }
+            && esc_leaves_insert(&mut at)
         {
             *mode_deleted = true;
         }
@@ -348,10 +372,9 @@ fn read_from_typeahead(
 
         // Allow mapping for the characters just typed. `c` is the number
         // of extra bytes and `tb_len` is 1.
-        for n in 1..=c {
-            tb.set_noremap(n, RM_YES as u8);
+        if c > 0 {
+            tb.append_typed(&peeked[..read_len(c)]);
         }
-        tb.grow(c);
 
         if tb.len() >= tb.maplen() + MAXMAPLEN as c_int {
             // The buffer is full, so don't map.
@@ -424,30 +447,45 @@ fn read_from_typeahead(
         }
 
         let wait_tb_len = tb.len();
-        c = unsafe { inchar(tb.tail(), tb.room(), wait_time_for(advance, keylen)) };
+        // Read into a buffer of the typeahead's own, as long as the room
+        // behind its valid bytes: `inchar` waits, and what runs meanwhile
+        // can move the storage.
+        let mut read = READ_BUF.take();
+        read.resize(read_len(tb.room()) + 1, 0);
+        c = inchar(&mut read, wait_time_for(advance, keylen));
 
         unshow_partial_key(&partial);
 
+        if c > 0 {
+            // Allow mapping for the characters just typed -- up to the
+            // first NUL, as upstream's walk over them stops there.
+            let got = &read[..read_len(c)];
+            let end = got.iter().position(|&b| b == 0).unwrap_or(got.len());
+            tb.append_typed(&got[..end]);
+        }
+        READ_BUF.set(read);
         if c < 0 {
             continue; // end of the input script reached
         }
-        if c == NUL {
+        if c == NUL && !advance {
             // No character is available.
-            if !advance {
-                return NUL;
-            }
-            if wait_tb_len > 0 {
-                *timedout = true; // timed out
-                continue;
-            }
-        } else {
-            // Allow mapping for the characters just typed.
-            while c_int::from(unsafe { *tb.tail() }) != NUL {
-                tb.set_noremap(tb.len(), RM_YES as u8);
-                tb.grow(1);
-            }
+            return NUL;
+        }
+        if c == NUL && wait_tb_len > 0 {
+            *timedout = true; // timed out
+            continue;
         }
     }
+}
+
+/// The buffer the blocking read in [`read_from_typeahead`] reads into,
+/// kept between reads so that a key costs no allocation. Taken out for the
+/// read: a nested one (a timer's `getchar()`) gets a buffer of its own.
+static READ_BUF: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
+
+/// A byte count `inchar` answered (or a room it was given), as a length.
+fn read_len(n: c_int) -> usize {
+    usize::try_from(n).unwrap_or(0)
 }
 
 /// Get a byte from the stuff buffer, the typeahead buffer, or the user.
@@ -547,19 +585,17 @@ pub(crate) fn vgetorpeek(advance: bool) -> c_int {
     c
 }
 
-/// Read up to `maxlen` bytes from a script file or the keyboard into `buf`.
+/// Read up to `buf.len() - 1` bytes from a script file or the keyboard into
+/// `buf`, NUL-terminated.
 ///
-/// `buf` must have room for `maxlen + 1` bytes and is NUL-terminated;
-/// `maxlen` must be at least 3, because `fix_input_buffer` can triple a byte.
-/// `wait_time` is in milliseconds: 0 does not wait, -1 waits forever.
+/// `buf` must be at least 4 long, because `fix_input_buffer` can triple a
+/// byte. `wait_time` is in milliseconds: 0 does not wait, -1 waits forever.
 ///
 /// Answers the number of bytes obtained, or -1 at the end of an input script
-/// — which is a distinct answer because closing the script frees
-/// `typebuf.tb_buf`, and `buf` may point inside it.
-///
-/// # Safety
-/// `buf` must point at `maxlen + 1` writable bytes.
-pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c_int {
+/// — which is a distinct answer because closing the script puts back the
+/// typeahead it displaced, and the caller has to start over with that one.
+pub(crate) fn inchar(buf: &mut [u8], wait_time: c_long) -> c_int {
+    let maxlen = c_int::try_from(buf.len() - 1).unwrap_or(c_int::MAX);
     let mut len = 0;
     let mut retesc = false; // answer ESC with got_int
     let tb_change_cnt = typeahead().change_cnt();
@@ -580,28 +616,27 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
     // interrupt, stop reading script files and close them all.
     let mut read_size: ptrdiff_t = -1;
     while curscript.get() >= 0 && read_size <= 0 && !ignore_script.get() {
-        let mut script_char: c_char = 0;
+        let mut script_char = [0u8; 1];
         // Short-circuit deliberately: once interrupted, no further read
         // is attempted and `read_size` keeps the value it had.
         let failed = got_int.get() || {
-            read_size = unsafe { file_read(script_at(curscript.get()), &raw mut script_char, 1) };
+            read_size = read_script(curscript.get(), &mut script_char);
             read_size != 1
         };
         if failed {
-            // EOF, or some error. Careful: closescript() frees
-            // typebuf.tb_buf and buf may point inside it, so buf must not
-            // be used after this.
+            // EOF, or some error: close the script, which puts back the
+            // typeahead it displaced.
             closescript();
             if got_int.get() {
                 // Reading the script was interrupted: answer an ESC to
                 // get back to Normal mode.
                 retesc = true;
             } else {
-                // Otherwise -1, because typebuf.tb_buf has changed.
+                // Otherwise -1, because the typeahead has changed.
                 return -1;
             }
         } else {
-            unsafe { *buf = script_char as u8 };
+            buf[0] = script_char[0];
             len = 1;
         }
     }
@@ -610,22 +645,12 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
         // Nothing came from a script.
         //
         // On an interrupt, skip everything typed so far and answer
-        // whether reading a script file was quit. Don't use buf here:
-        // closescript() may have freed typebuf.tb_buf and buf may point
-        // inside it.
+        // whether reading a script file was quit.
         if got_int.get() {
             const DUM_LEN: usize = MAXMAPLEN as usize * 3 + 3;
-            let mut dum = [0u8; DUM_LEN + 1];
+            let mut dum = [0u8; DUM_LEN];
             loop {
-                let got = unsafe {
-                    input_get(
-                        dum.as_mut_ptr(),
-                        DUM_LEN as c_int,
-                        0,
-                        0,
-                        ptr::null_mut::<MultiQueue>(),
-                    )
-                };
+                let got = input_get(&mut dum, 0, 0, InputEvents::None);
                 if got == 0 || (got == 1 && c_int::from(dum[0]) == Ctrl_C) {
                     break;
                 }
@@ -641,15 +666,15 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
 
         // Fill up to a third of the buffer: `fix_input_buffer` can triple
         // each character.
-        len = unsafe {
-            input_get(
-                buf,
-                maxlen / 3,
-                wait_time as c_int,
-                tb_change_cnt,
-                ptr::null_mut::<MultiQueue>(),
-            )
-        };
+        let third = usize::try_from(maxlen / 3).unwrap_or(0);
+        let wait = c_int::try_from(wait_time).unwrap_or(c_int::MAX);
+        len = c_int::try_from(input_get(
+            &mut buf[..third],
+            wait,
+            tb_change_cnt,
+            InputEvents::None,
+        ))
+        .expect("a read shorter than the buffer");
     }
 
     // If the typeahead was changed further down it is as if nothing was
@@ -664,57 +689,40 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
         typeahead().note_change();
     }
 
-    unsafe { fix_input_buffer(buf, len) }
+    fix_input_buffer(buf, len)
 }
 
 /// Escape the bytes that cannot appear literally in the typeahead, and answer
-/// the new length.
+/// the new length; `buf` is NUL-terminated after it.
 ///
 /// Only input read from a *script* needs this: keys from the user have
-/// already been through `input_enqueue`, which escapes them. `buf` must have
-/// room to triple the number of bytes.
-///
-/// # Safety
-/// `buf` must point at `len` readable and `3 * len + 1` writable bytes.
-pub unsafe fn fix_input_buffer(buf: *mut u8, mut len: c_int) -> c_int {
+/// already been through `input_enqueue`, which escapes them. `buf` holds
+/// `len` bytes read and must have room to triple them, plus the NUL.
+pub fn fix_input_buffer(buf: &mut [u8], len: c_int) -> c_int {
+    let mut len = usize::try_from(len).unwrap_or(0);
     if using_script() == 0 {
         // K_SPECIAL should not be escaped for input from the user: the
         // key codes are processed in input.c/input_enqueue.
-        // SAFETY (this body): the caller's promise -- `buf` holds `len`
-        // readable bytes and `3 * len + 1` writable ones.
-        unsafe { *buf.offset(len as isize) = 0 };
-        return len;
+        buf[len] = 0;
+        return c_int::try_from(len).expect("a read fits an int");
     }
 
     // Two bytes are special: NUL and K_SPECIAL. Both are replaced by
     // their three-byte escape.
-    let mut p = buf;
+    let mut p = 0;
     let mut i = len;
     while i > 0 {
         i -= 1;
-        // SAFETY (this loop): the caller's promise — `buf` holds `len`
-        // readable bytes and `3 * len + 1` writable ones, so every byte a
-        // replacement pushes two further along still has room, and `p` never
-        // walks past what is left to scan.
-        let c = c_int::from(unsafe { *p });
-        let escaped =
-            c == NUL || (c == K_SPECIAL && (i < 2 || unsafe { *p.add(1) } != KS_EXTRA_U8));
+        let c = c_int::from(buf[p]);
+        let escaped = c == NUL || (c == K_SPECIAL && (i < 2 || buf[p + 1] != KS_EXTRA_U8));
         if escaped {
-            let escape = key_escape(c);
-            // SAFETY: as above.
-            unsafe {
-                ptr::copy(p.add(1), p.add(3), i as usize);
-                *p = escape[0];
-                *p.add(1) = escape[1];
-                *p.add(2) = escape[2];
-                p = p.add(2);
-            }
+            buf.copy_within(p + 1..p + 1 + i, p + 3);
+            buf[p..p + 3].copy_from_slice(&key_escape(c));
+            p += 2;
             len += 2;
         }
-        // SAFETY: as above.
-        p = unsafe { p.add(1) };
+        p += 1;
     }
-    // SAFETY: as above — the byte one past the last is writable.
-    unsafe { *p = 0 }; // add the trailing NUL
-    len
+    buf[p] = 0; // add the trailing NUL
+    c_int::try_from(len).expect("a read fits an int")
 }

@@ -108,12 +108,12 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
     }
 
     loop {
-        unsafe { stuff_readbuf_len(insert.data(), insert.len() as ptrdiff_t) };
+        stuff_readbuf_len(insert.as_bytes());
         // The quoted forms: `0` as `<C-V>048`, `^` as `<C-V>^`.
         if last == b'0' as c_char {
-            unsafe { stuff_readbuf_len(c"\x16048".as_ptr(), 4) };
+            stuff_readbuf_len(b"\x16048");
         } else if last == b'^' as c_char {
-            unsafe { stuff_readbuf_len(c"\x16^".as_ptr(), 2) };
+            stuff_readbuf_len(b"\x16^");
         }
         count -= 1;
         if count <= 0 {

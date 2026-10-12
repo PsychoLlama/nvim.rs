@@ -16,6 +16,7 @@
 
 use crate::autocmd::state::did_cursorhold;
 use crate::charset::vim_isprintc;
+use crate::cstr;
 use crate::digraph::get_digraph;
 use crate::drawscreen::showmode;
 use crate::drawscreen::state::{clear_cmdline, mode_displayed};
@@ -750,7 +751,7 @@ pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
     );
     // A character with a combining tail is replayed as its whole encoding.
     if cmd_arg.nchar_len > 0 {
-        unsafe { append_to_redobuff(cmd_arg.nchar_composing.as_mut_ptr()) };
+        append_to_redobuff(cstr::as_bytes(&cmd_arg.nchar_composing));
     } else {
         append_to_redobuff_char(cmd_arg.nchar);
     }

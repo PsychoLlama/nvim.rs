@@ -27,7 +27,7 @@ use crate::autocmd::trigger_cursorhold;
 use crate::cstr;
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{loop_poll_events, process_events_until};
-use crate::event::multiqueue::queue_in;
+use crate::event::multiqueue::{ChildQueue, queue_in};
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_process_events, multiqueue_put_event};
 use crate::event::rstream::{rstream_init_fd, rstream_may_close, rstream_start, rstream_stop};
 use crate::getchar::state::{ctrl_c_interrupts, got_int, mapped_ctrl_c, typebuf_was_filled};
@@ -151,11 +151,8 @@ fn create_cursorhold_event(events_enabled: bool) {
     unsafe {
         // If events are enabled and the queue has any items, this should not
         // have been reached — `inbuf_poll` would have answered `Ready`.
-        debug_assert!(!events_enabled || multiqueue_empty((*main_loop.ptr()).events));
-        multiqueue_put_event(
-            (*main_loop.ptr()).events,
-            Event::new(Some(cursorhold_event), []),
-        );
+        debug_assert!(!events_enabled || multiqueue_empty(main_events()));
+        multiqueue_put_event(main_events(), Event::new(Some(cursorhold_event), []));
     }
 }
 
@@ -186,20 +183,71 @@ unsafe fn try_read(buf: *mut uint8_t, maxlen: c_int, tb_change_cnt: c_int) -> Op
     Some(to_read as c_int)
 }
 
+/// Which event queue [`input_get`] processes while it waits.
+#[derive(Clone, Copy)]
+pub(crate) enum InputEvents {
+    /// None: only input wakes the wait.
+    None,
+    /// The main loop's.
+    MainLoop,
+    /// A child queue, for as long as its cell holds one.
+    Queue(&'static GlobalCell<Option<ChildQueue>>),
+}
+
+impl InputEvents {
+    /// The queue as the poll takes it: null, or a live queue.
+    fn queue(self) -> *mut MultiQueue {
+        match self {
+            InputEvents::None => ptr::null_mut(),
+            // SAFETY: `main_loop` is the process's event loop, always live.
+            InputEvents::MainLoop => main_events(),
+            InputEvents::Queue(cell) => queue_in(cell),
+        }
+    }
+}
+
+/// The main loop's event queue.
+fn main_events() -> *mut MultiQueue {
+    // SAFETY: `main_loop` is the process's event loop, always live.
+    unsafe { (*main_loop.ptr()).events }
+}
+
+/// Whether the main loop's event queue holds anything.
+pub(crate) fn main_loop_has_events() -> bool {
+    // SAFETY: the main loop's queue, always live.
+    unsafe { !multiqueue_empty(main_events()) }
+}
+
 /// Read OS input into `buf`, consuming pending events while waiting (when
-/// `ms != 0`).
+/// `ms != 0`), and answer how many bytes came.
 ///
 /// Consumes available OS input and pending events, manages CursorHold, and
-/// handles EOF. Originally based on Vim's `mch_inchar`.
+/// handles EOF. Originally based on Vim's `mch_inchar`. An empty `buf` only
+/// waits.
 ///
 /// `ms` is a timeout in milliseconds: -1 waits indefinitely, 0 does not wait.
-/// `tb_change_cnt` is how typeahead changes are detected, and `events` is an
-/// optional queue to process.
+/// `tb_change_cnt` is how typeahead changes are detected, and `events` the
+/// queue to process.
+pub(crate) fn input_get(
+    buf: &mut [u8],
+    ms: c_int,
+    tb_change_cnt: c_int,
+    events: InputEvents,
+) -> usize {
+    let maxlen = c_int::try_from(buf.len()).unwrap_or(c_int::MAX);
+    let (buf, events) = (buf.as_mut_ptr(), events.queue());
+    // SAFETY: `buf` is the slice's own `maxlen` writable bytes, and `events`
+    // null or a live queue.
+    let got = unsafe { input_get_raw(buf, maxlen, ms, tb_change_cnt, events) };
+    usize::try_from(got).unwrap_or(0)
+}
+
+/// [`input_get`] over the pointer and the length.
 ///
 /// # Safety
 /// `buf` must be writable for `maxlen` bytes, and `events` NULL or a live
 /// queue.
-pub unsafe fn input_get(
+unsafe fn input_get_raw(
     buf: *mut uint8_t,
     maxlen: c_int,
     ms: c_int,
@@ -242,7 +290,7 @@ pub unsafe fn input_get(
                 }
                 reset_cursorhold_wait(tb_change_cnt);
                 if trigger_cursorhold() && !typebuf_changed(tb_change_cnt) {
-                    create_cursorhold_event(events == (*main_loop.ptr()).events);
+                    create_cursorhold_event(events == main_events());
                 } else {
                     before_blocking();
                     result = inbuf_poll(-1, events);
@@ -372,17 +420,7 @@ fn input_space() -> usize {
 }
 
 /// Append `data` to the input buffer, dropping whatever does not fit.
-///
-/// # Safety
-/// `data` must be readable for `size` bytes.
-pub unsafe fn input_enqueue_raw(data: *const c_char, size: size_t) {
-    // SAFETY: the caller's contract.
-    let data = unsafe { core::slice::from_raw_parts(data.cast::<u8>(), size) };
-    enqueue(data);
-}
-
-/// The safe half of [`input_enqueue_raw`].
-fn enqueue(data: &[u8]) {
+pub fn input_enqueue_raw(data: &[u8]) {
     input_buffer.with_mut(|input| {
         let (read, write) = (input_read_pos.get(), input_write_pos.get());
         // Reclaim the room already consumed by moving the unread run to the
@@ -434,7 +472,7 @@ pub unsafe fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
             if new_size > 0 {
                 let new_size = handle_mouse_event(&mut ptr, end, &mut buf, new_size);
                 if new_size > 0 {
-                    enqueue(&buf[..new_size as usize]);
+                    input_enqueue_raw(&buf[..new_size as usize]);
                 }
                 continue;
             }
@@ -460,9 +498,9 @@ pub unsafe fn input_enqueue(chan_id: uint64_t, keys: String_0) -> size_t {
 
             // Copy the character across, escaping K_SPECIAL.
             if byte as c_int == K_SPECIAL {
-                enqueue(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
+                input_enqueue_raw(&[K_SPECIAL as u8, KS_SPECIAL as u8, KE_FILLER as u8]);
             } else {
-                enqueue(&[byte]);
+                input_enqueue_raw(&[byte]);
             }
             ptr = ptr.add(1);
         }
@@ -685,7 +723,7 @@ pub fn input_enqueue_mouse(code: c_int, modifier: uint8_t, grid: c_int, row: c_i
     mouse_row.set(row);
     mouse_col.set(col);
 
-    enqueue(&buf[..at + 3]);
+    input_enqueue_raw(&buf[..at + 3]);
 }
 
 /// What [`inbuf_poll`] found.
@@ -724,7 +762,7 @@ fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> InputAvail {
             prof_input_start();
         }
 
-        if (ms == -1 || ms > 0) && events != (*main_loop.ptr()).events && !input_eof.get() {
+        if (ms == -1 || ms > 0) && events != main_events() && !input_eof.get() {
             // The pending input provoked a blocking wait. Do special events
             // now. #6247
             blocking.set(true);
@@ -779,8 +817,8 @@ unsafe fn input_read_cb(
     }
     // The stream's own buffer is smaller than ours, so a read always fits.
     debug_assert!(input_space() >= count);
-    // SAFETY: the caller's contract.
-    unsafe { input_enqueue_raw(buf, count) };
+    // SAFETY: the caller's contract -- `buf` is `count` readable bytes.
+    input_enqueue_raw(unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), count) });
     count
 }
 

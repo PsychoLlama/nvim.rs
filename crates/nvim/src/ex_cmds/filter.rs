@@ -33,7 +33,7 @@ use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fileio::{readfile_named, temp_name, write_lnum_adjust};
 use crate::fold::fold_update;
 use crate::getchar::state::{bangredo, got_int};
-use crate::getchar::{append_to_redobuff_literally_text, append_to_redobuff_text};
+use crate::getchar::{append_to_redobuff, append_to_redobuff_literally};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
@@ -149,8 +149,8 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
                 break 'theend;
             }
             let escaped = PREVCMD.with(|cmd| escaped_bytes(cmd, b"%#"));
-            append_to_redobuff_literally_text(escaped.as_cstr());
-            append_to_redobuff_text(c"\n");
+            append_to_redobuff_literally(escaped.as_cstr().to_bytes());
+            append_to_redobuff(b"\n");
             bangredo.set(false);
         }
 

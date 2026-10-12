@@ -49,7 +49,7 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
     let op = unsafe { Op::new(op) };
     stuff_readbuf_char(':' as c_int);
     if op.is_visual {
-        stuff_readbuf(c"'<,'>");
+        stuff_readbuf(b"'<,'>");
     } else {
         // Make the range look nice, so it can be repeated.
         if op.start.lnum == Win::current().w_cursor.lnum {
@@ -73,7 +73,7 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
                 // folded lines twice.
                 && !Win::current().fold_span(op.end.lnum).0
             {
-                stuff_readbuf(c".+");
+                stuff_readbuf(b".+");
                 stuff_readbuf_number(op.line_count as c_int - 1);
             } else {
                 stuff_readbuf_number(op.end.lnum as c_int);
@@ -81,22 +81,22 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
         }
     }
     if op.op_type != OpType::Colon {
-        stuff_readbuf(c"!");
+        stuff_readbuf(b"!");
     }
     if op.op_type == OpType::Indent {
-        stuff_readbuf(get_equalprg().as_cstr());
-        stuff_readbuf(c"\n");
+        stuff_readbuf(get_equalprg().as_cstr().to_bytes());
+        stuff_readbuf(b"\n");
     } else if op.op_type == OpType::Format {
         if c_int::from(Buf::current().b_p_fp.first_byte()) != NUL {
-            stuff_readbuf(Buf::current().b_p_fp.cstr());
+            stuff_readbuf(Buf::current().b_p_fp.cstr().to_bytes());
         } else if P_FP.first_byte() != 0 {
-            p_fp(stuff_readbuf);
+            p_fp(|fp| stuff_readbuf(fp.to_bytes()));
         } else {
-            stuff_readbuf(c"fmt");
+            stuff_readbuf(b"fmt");
         }
         // The trailing `']` puts the cursor back at the end of the range
         // once the filter has replaced it.
-        stuff_readbuf(c"\n']");
+        stuff_readbuf(b"\n']");
     }
 }
 

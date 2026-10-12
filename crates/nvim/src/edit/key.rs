@@ -31,6 +31,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, NotAKey};
 use crate::winlayer::{Buf, Win};
@@ -603,7 +604,7 @@ fn insert_normal_char(s: &mut InsertState) {
                     }
                     p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
                 }
-                unsafe { append_to_redobuff_literally(str, -1) };
+                append_to_redobuff_literally(unsafe { cstr::bytes_at(str) });
             }
             unsafe { xfree(str.cast::<::core::ffi::c_void>()) };
             s.c = NUL;

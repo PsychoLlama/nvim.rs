@@ -331,7 +331,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
             } else {
                 // First need to cancel what we were doing.
                 stuff_readbuf_char(':' as ::core::ffi::c_int);
-                stuff_readbuf(p);
+                stuff_readbuf(p.to_bytes());
                 stuff_readbuf_char(CAR);
             }
         } else if cmdwin_result.get() == Ctrl_C {

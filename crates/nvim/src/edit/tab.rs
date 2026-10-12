@@ -117,7 +117,7 @@ pub(crate) fn ins_tab() -> bool {
     can_si.set(false);
     can_si_back.set(false);
     // SAFETY: a static one-byte string.
-    unsafe { append_to_redobuff(c"\t".as_ptr()) };
+    append_to_redobuff(b"\t");
 
     // How many columns to the next stop, from whichever option owns it.
     let mut temp = if p_sta() && ind {
@@ -377,7 +377,7 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
         Win::current().w_cursor.col += get_cursor_pos_len();
     }
 
-    unsafe { append_to_redobuff(NL_STR.as_ptr()) };
+    append_to_redobuff(NL_STR.to_bytes());
     let comments = if has_format_option(FoFlag::RET_COMS) {
         OPENLINE_DO_COM
     } else {

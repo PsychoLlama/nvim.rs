@@ -7,35 +7,33 @@
 //! and `no_abbr_cnt` consistent, which is why both are methods on the type
 //! rather than field pokes spread over four files.
 //!
-//! The storage is deliberately not a `Vec`. It has room in *front* of the
-//! valid bytes (`off`) so that a mapping's RHS can be pushed without moving
-//! what follows, and both arrays are addressed by raw pointers that
-//! `vgetorpeek` holds across calls that can reallocate them — which is what
-//! `change_cnt` exists to detect.
+//! The two arrays are owned `Vec<u8>`s of one length, the storage's
+//! `buflen`, and the valid bytes are a window into them: there is room in
+//! *front* of the window (`off`) so that a mapping's RHS can be pushed
+//! without moving what follows, and room behind it for what `inchar` reads.
+//! The geometry is upstream's, number for number -- where the window sits,
+//! when the storage is reallocated and how long it then is -- because how
+//! much `inchar` may read at once is the room left behind the window.
 //!
 //! Everything outside this module reaches the buffer through [`typeahead`],
 //! a `Copy` handle that *names* the cell. Each of its methods takes its own
-//! short borrow and answers a value or a raw pointer, never a reference, so
-//! that a call-out in between always sees — and can move — the current
-//! storage. A snapshot would be actively wrong here: `inchar` can reallocate
-//! the storage under its caller.
+//! short borrow and answers a value or a copy, never a reference that could
+//! outlive a call-out: user code run by a mapping, an autocommand or a timer
+//! can reshape the typeahead under any caller, and `change_cnt` is how a
+//! caller that waited tells.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::keycodes::ModMask;
-use crate::types::{Failed, MB_MAXBYTES};
-use core::ffi::{c_char, c_int};
-use core::ptr;
-use std::ffi::CStr;
+use crate::types::Failed;
+use core::ffi::c_int;
 
-/// Size of the two static initial buffers, upstream's `TYPELEN_INIT`.
+/// Size of the initial storage, upstream's `TYPELEN_INIT`.
 ///
 /// The storage has three parts: room in front for the result of mappings, the
 /// middle for typeahead, and room at the end for new characters.
-const TYPELEN_INIT: c_int = 5 * (MAXMAPLEN as c_int + 3);
+const TYPELEN_INIT: usize = 5 * (MAXMAPLEN as usize + 3);
 
 /// Where the valid bytes start in a freshly allocated buffer: enough room in
 /// front that a mapping's RHS can be inserted without moving anything.
@@ -43,16 +41,15 @@ const HEAD_ROOM: c_int = MAXMAPLEN as c_int + 4;
 
 /// The queue `vgetc` reads from.
 ///
-/// Not `Copy`: `buf` and `noremap` are owned allocations (or, before the
-/// first reallocation, the two static initial buffers), so a copy would be a
-/// second owner of them. `GlobalCell::take` moves one out; `save_typeahead`
-/// and `:source!` are the two callers that do.
+/// Not `Copy`: `buf` and `noremap` are owned allocations. `GlobalCell::take`
+/// moves one out; `save_typeahead` and `:source!` are the two callers that
+/// do.
 pub(crate) struct TypeAhead {
-    /// The bytes, NUL-terminated at `off + len`.
-    buf: *mut u8,
-    /// How much remapping each byte of `buf` is still allowed; no terminator.
-    noremap: *mut u8,
-    /// How long both allocations are.
+    /// The bytes; the valid ones are `off..off + len`.
+    buf: Vec<u8>,
+    /// How much remapping each byte of `buf` is still allowed.
+    noremap: Vec<u8>,
+    /// How long both are, as upstream's `int`.
     buflen: c_int,
     /// Where the valid bytes start.
     off: c_int,
@@ -65,18 +62,18 @@ pub(crate) struct TypeAhead {
     silent: c_int,
     /// How many bytes at the start may not trigger an abbreviation.
     no_abbr_cnt: c_int,
-    /// Bumped by every change, so that a caller holding a pointer into the
-    /// storage across a call that can reallocate it can tell.
+    /// Bumped by every change, so that a caller that waited (or ran user
+    /// code) can tell the typeahead moved under it.
     change_cnt: c_int,
 }
 
 impl TypeAhead {
     /// A typeahead with no storage at all: what [`init_typebuf`] looks for
-    /// when it decides to hand out the static initial buffers, and what
-    /// `GlobalCell::take` leaves behind.
+    /// when it decides to give it some, and what `GlobalCell::take` leaves
+    /// behind.
     pub(crate) const EMPTY: Self = TypeAhead {
-        buf: ptr::null_mut(),
-        noremap: ptr::null_mut(),
+        buf: Vec::new(),
+        noremap: Vec::new(),
         buflen: 0,
         off: 0,
         len: 0,
@@ -100,6 +97,20 @@ impl TypeAhead {
             self.change_cnt = 1;
         }
     }
+
+    /// The index of valid byte `offset` in the storage.
+    fn index(&self, offset: c_int) -> usize {
+        usize::try_from(self.off + offset).expect("an offset inside the typeahead")
+    }
+
+    /// Fresh storage of the initial length, empty, with room in front.
+    fn fresh_storage(&mut self) {
+        self.buf = vec![0; TYPELEN_INIT];
+        self.noremap = vec![0; TYPELEN_INIT];
+        self.buflen = TYPELEN_INIT as c_int;
+        self.off = HEAD_ROOM;
+        self.len = 0;
+    }
 }
 
 impl Default for TypeAhead {
@@ -115,28 +126,6 @@ static TYPEBUF: GlobalCell<TypeAhead> = GlobalCell::new(TypeAhead::EMPTY);
 static SAVED_TYPEBUF: GlobalCell<[TypeAhead; NSCRIPT as usize]> =
     GlobalCell::new([const { TypeAhead::EMPTY }; NSCRIPT as usize]);
 
-/// The initial storage, used until the first reallocation.
-///
-/// `xmalloc` is not usable for it: out of memory it would be impossible to
-/// type anything, which is the one situation where typing has to keep
-/// working. Freeing it would be a bug, which is why [`free_typebuf`] and the
-/// reallocation path compare against these two addresses.
-static TYPEBUF_INIT: GlobalCell<[u8; TYPELEN_INIT as usize]> =
-    GlobalCell::new([0; TYPELEN_INIT as usize]);
-/// The initial `noremap` array; see [`TYPEBUF_INIT`].
-static NOREMAPBUF_INIT: GlobalCell<[u8; TYPELEN_INIT as usize]> =
-    GlobalCell::new([0; TYPELEN_INIT as usize]);
-
-/// The address of the static initial storage.
-fn static_buf() -> *mut u8 {
-    TYPEBUF_INIT.ptr().cast()
-}
-
-/// The address of the static initial `noremap` array.
-fn static_noremap() -> *mut u8 {
-    NOREMAPBUF_INIT.ptr().cast()
-}
-
 /// The typeahead buffer, *named* rather than pointed at.
 ///
 /// See the module docs: every method takes its own short borrow, so nothing
@@ -147,6 +136,26 @@ pub struct TypeAheadRef(&'static GlobalCell<TypeAhead>);
 /// The typeahead buffer.
 pub fn typeahead() -> TypeAheadRef {
     TypeAheadRef(&TYPEBUF)
+}
+
+/// The most bytes [`TypeAheadRef::copy_out`] answers without allocating:
+/// more than any key, and than any mapping's LHS but a pathological one.
+const COPY_INLINE: usize = 64;
+
+/// Bytes copied out of the typeahead: on the stack when they fit, which is
+/// every key and nearly every mapping.
+pub(crate) enum KeyBytes {
+    Inline([u8; COPY_INLINE], usize),
+    Heap(Vec<u8>),
+}
+
+impl KeyBytes {
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        match self {
+            KeyBytes::Inline(bytes, len) => &bytes[..*len],
+            KeyBytes::Heap(bytes) => bytes,
+        }
+    }
 }
 
 impl TypeAheadRef {
@@ -162,15 +171,9 @@ impl TypeAheadRef {
         self.len() == 0
     }
 
-    /// Note `by` more valid bytes, which `vgetorpeek` just read into the room
-    /// past the end.
-    pub(crate) fn grow(self, by: c_int) {
-        self.0.with_mut(|tb| tb.len += by);
-    }
-
     /// How long the storage is.
-    pub(crate) fn buflen(self) -> c_int {
-        self.0.with(|tb| tb.buflen)
+    pub(crate) fn buflen(self) -> usize {
+        self.0.with(|tb| tb.buf.len())
     }
 
     /// How many bytes at the start came from a mapping rather than the
@@ -204,65 +207,89 @@ impl TypeAheadRef {
         self.0.with(|tb| tb.change_cnt)
     }
 
-    /// Note that the storage changed under whoever holds a pointer into it.
+    /// Note that the typeahead changed under whoever is waiting on it.
     pub(crate) fn note_change(self) {
         self.0.with_mut(TypeAhead::note_change);
     }
 
     // -- the bytes ---------------------------------------------------------
 
-    /// The whole storage, from byte zero rather than from `off`. Wanted only
-    /// by the flush paths, which fill it from the front.
-    pub(crate) fn storage(self) -> *mut u8 {
-        self.0.with(|tb| tb.buf)
-    }
-
-    /// The valid byte at `offset`, as a pointer.
-    pub(crate) fn at(self, offset: c_int) -> *mut u8 {
-        // SAFETY: `offset` is within the typeahead, the caller's obligation
-        // exactly as it was through the raw pointer this replaces.
-        self.0
-            .with(|tb| unsafe { tb.buf.offset((tb.off + offset) as isize) })
-    }
-
     /// The valid byte at `offset`.
     pub(crate) fn byte(self, offset: c_int) -> c_int {
-        // SAFETY: as `at`.
-        c_int::from(unsafe { *self.at(offset) })
-    }
-
-    /// One past the last valid byte: where `inchar` reads new bytes into.
-    pub(crate) fn tail(self) -> *mut u8 {
-        // SAFETY: as `at`; `len` is in range by construction.
-        self.0
-            .with(|tb| unsafe { tb.buf.offset((tb.off + tb.len) as isize) })
-    }
-
-    /// How many bytes `inchar` may read into [`tail`](Self::tail), leaving
-    /// room for the terminating NUL.
-    pub(crate) fn room(self) -> c_int {
-        self.0.with(|tb| tb.buflen - tb.off - tb.len - 1)
+        self.0.with(|tb| c_int::from(tb.buf[tb.index(offset)]))
     }
 
     /// Say what the valid byte at `offset` is.
     pub(crate) fn set_byte(self, offset: c_int, value: u8) {
-        // SAFETY: as `at`.
-        self.0
-            .with_mut(|tb| unsafe { *tb.buf.offset((tb.off + offset) as isize) = value });
+        self.0.with_mut(|tb| {
+            let at = tb.index(offset);
+            tb.buf[at] = value;
+        });
+    }
+
+    /// Overwrite the valid bytes from `offset` on with `bytes`.
+    pub(crate) fn set_bytes(self, offset: c_int, bytes: &[u8]) {
+        self.0.with_mut(|tb| {
+            let at = tb.index(offset);
+            tb.buf[at..at + bytes.len()].copy_from_slice(bytes);
+        });
+    }
+
+    /// A copy of `len` valid bytes from `offset` on, for a caller about to
+    /// run code that may change the typeahead.
+    pub(crate) fn copy_out(self, offset: c_int, len: usize) -> KeyBytes {
+        self.0.with(|tb| {
+            let at = tb.index(offset);
+            let bytes = &tb.buf[at..at + len];
+            if len <= COPY_INLINE {
+                let mut inline = [0; COPY_INLINE];
+                inline[..len].copy_from_slice(bytes);
+                KeyBytes::Inline(inline, len)
+            } else {
+                KeyBytes::Heap(bytes.to_vec())
+            }
+        })
+    }
+
+    /// Lend the valid bytes and their `noremap` flags, front first.
+    ///
+    /// The closure must not reach the typeahead; it is for the walks that
+    /// read it whole without calling out, the mapping match among them.
+    pub(crate) fn with_valid<R>(self, f: impl FnOnce(&[u8], &[u8]) -> R) -> R {
+        self.0.with(|tb| {
+            let (from, to) = (tb.index(0), tb.index(tb.len));
+            f(&tb.buf[from..to], &tb.noremap[from..to])
+        })
+    }
+
+    /// How many bytes `inchar` may read past the end, leaving room for the
+    /// terminating NUL upstream writes there.
+    pub(crate) fn room(self) -> c_int {
+        self.0.with(|tb| tb.buflen - tb.off - tb.len - 1)
+    }
+
+    /// Append `bytes`, just read from the user, as remappable. The caller
+    /// has made sure they fit in [`room`](Self::room) -- `inchar` never
+    /// answers more -- and the storage only grows when they do not.
+    pub(crate) fn append_typed(self, bytes: &[u8]) {
+        self.0.with_mut(|tb| {
+            let at = tb.index(tb.len);
+            if at + bytes.len() + 1 > tb.buf.len() {
+                // Only reachable when a caller read more than the room it
+                // was given; keep every byte rather than lose one.
+                tb.buf.resize(at + bytes.len() + 1, 0);
+                tb.noremap.resize(at + bytes.len() + 1, 0);
+                tb.buflen = c_int::try_from(tb.buf.len()).expect("a typeahead shorter than an int");
+            }
+            tb.buf[at..at + bytes.len()].copy_from_slice(bytes);
+            tb.noremap[at..at + bytes.len()].fill(RM_YES as u8);
+            tb.len += c_int::try_from(bytes.len()).expect("a read fits an int");
+        });
     }
 
     /// How much remapping the valid byte at `offset` is still allowed.
     pub(crate) fn noremap(self, offset: c_int) -> c_int {
-        // SAFETY: as `at`.
-        self.0
-            .with(|tb| c_int::from(unsafe { *tb.noremap.offset((tb.off + offset) as isize) }))
-    }
-
-    /// Say how much remapping the valid byte at `offset` is allowed.
-    pub(crate) fn set_noremap(self, offset: c_int, flags: u8) {
-        // SAFETY: as `at`.
-        self.0
-            .with_mut(|tb| unsafe { *tb.noremap.offset((tb.off + offset) as isize) = flags });
+        self.0.with(|tb| c_int::from(tb.noremap[tb.index(offset)]))
     }
 
     // -- the whole buffer --------------------------------------------------
@@ -272,24 +299,19 @@ impl TypeAheadRef {
         self.0.take()
     }
 
-    /// Install `tb`. Whatever the cell held is dropped on the floor, so it
-    /// must have been freed or moved out first.
+    /// Install `tb`, dropping what the cell held.
     pub(crate) fn set(self, tb: TypeAhead) {
         self.0.with_mut(|slot| *slot = tb);
     }
 }
 
-/// Point the typeahead at the static initial buffers, if it has none.
+/// Give the typeahead its initial storage, if it has none.
 pub(crate) fn init_typebuf() {
     TYPEBUF.with_mut(|tb| {
-        if !tb.buf.is_null() {
+        if !tb.buf.is_empty() {
             return;
         }
-        tb.buf = static_buf();
-        tb.noremap = static_noremap();
-        tb.buflen = TYPELEN_INIT;
-        tb.len = 0;
-        tb.off = HEAD_ROOM;
+        tb.fresh_storage();
         tb.change_cnt = 1;
     });
 }
@@ -300,105 +322,64 @@ pub fn noremap_keys() -> bool {
 }
 
 impl TypeAhead {
-    /// Insert `str`'s `addlen` bytes at `offset`, marking them with
-    /// `noremap`. Answers false when the buffer would overflow an `int`,
-    /// which is upstream's `e_toocompl`; the message is the caller's to emit,
-    /// because emitting it flushes the buffers and this runs inside the
-    /// cell's borrow.
+    /// Insert `s` at `offset`, marking its bytes with `noremap`. Answers
+    /// false when the buffer would overflow an `int`, which is upstream's
+    /// `e_toocompl`; the message is the caller's to emit, because emitting it
+    /// flushes the buffers and this runs inside the cell's borrow.
     ///
-    /// # Safety
-    /// `str` must point at `addlen` readable bytes, and `offset` must be
-    /// within the current typeahead.
-    unsafe fn insert(
+    /// `offset` must be within the current typeahead.
+    fn insert(
         &mut self,
-        str: *mut c_char,
-        addlen: c_int,
+        s: &[u8],
         offset: c_int,
         noremap: c_int,
         nottyped: bool,
         silent: bool,
     ) -> bool {
-        let src = str.cast::<u8>();
-        let head = offset as usize;
-        let added = addlen as usize;
+        let Ok(addlen) = c_int::try_from(s.len()) else {
+            return false;
+        };
+        let head = usize::try_from(offset).expect("an offset inside the typeahead");
         if offset == 0 && addlen <= self.off {
             // Easy case: there is room in front of the valid bytes.
             self.off -= addlen;
-            // SAFETY: `addlen <= off`, so the bytes fit in front of the valid
-            // ones, and `str` is `addlen` readable bytes by the caller's
-            // promise.
-            unsafe {
-                let dst = self.buf.offset(self.off as isize);
-                ptr::copy_nonoverlapping(src, dst, added);
-            }
-        } else if self.len == 0 && self.buflen >= addlen + 3 * HEAD_ROOM {
+            let at = self.index(0);
+            self.buf[at..at + s.len()].copy_from_slice(s);
+        } else if self.len == 0 && self.buflen >= addlen.saturating_add(3 * HEAD_ROOM) {
             // Buffer is empty and the string fits: centre it, leaving
             // room before and after.
             self.off = (self.buflen - addlen - 3 * HEAD_ROOM) / 2;
-            // SAFETY: `off` was just placed so that `addlen` bytes fit after
-            // it, and `str` is that many readable bytes.
-            unsafe {
-                let dst = self.buf.offset(self.off as isize);
-                ptr::copy_nonoverlapping(src, dst, added);
-            }
+            let at = self.index(0);
+            self.buf[at..at + s.len()].copy_from_slice(s);
         } else {
             // Reallocate. There must always be room for 3 * HEAD_ROOM
             // bytes, and some extra so this does not happen every time.
-            let extra = addlen + HEAD_ROOM + 4 * HEAD_ROOM;
-            if self.len > c_int::MAX - extra {
+            let Some(newlen) = addlen
+                .checked_add(5 * HEAD_ROOM)
+                .and_then(|extra| self.len.checked_add(extra))
+            else {
                 // The string is getting too long for a 32-bit int.
                 return false;
-            }
-            let newlen = self.len + extra;
-            let size = newlen as usize;
-            // SAFETY: `xmalloc` never returns null, and `newlen` covers
-            // `HEAD_ROOM` in front, the old bytes with the new ones spliced in
-            // at `offset`, and the room the next insert wants at the end.
-            let buf = unsafe { xmalloc(size) }.cast::<u8>();
-            // SAFETY: as above.
-            let noremaps = unsafe { xmalloc(size) }.cast::<u8>();
-            self.buflen = newlen;
+            };
+            let size = usize::try_from(newlen).expect("a positive length");
+            let (from, to) = (self.index(0), self.index(self.len));
+            let room = usize::try_from(HEAD_ROOM).expect("a positive offset");
 
             // Old bytes before the insertion point, then the new ones,
-            // then the old bytes after it -- including the NUL at the end.
-            let tail = self.len - offset + 1;
-            debug_assert!(tail > 0);
-            // SAFETY: `offset` is within the old typeahead by the caller's
-            // promise, so the three runs together are `len + addlen + 1`
-            // bytes, which `newlen` has room for after `HEAD_ROOM`; source and
-            // destination are separate allocations, so none of them overlap.
-            unsafe {
-                let old = self.buf.offset(self.off as isize);
-                let at = buf.offset(HEAD_ROOM as isize);
-                ptr::copy_nonoverlapping(old, at, head);
-                ptr::copy_nonoverlapping(src, at.add(head), added);
-                let rest = at.add(head).add(added);
-                ptr::copy_nonoverlapping(old.add(head), rest, tail as usize);
-            }
-            if self.buf != static_buf() {
-                // SAFETY: the previous storage, which the test just showed is
-                // not the static initial buffer.
-                unsafe { xfree(self.buf.cast()) };
-            }
+            // then the old bytes after it. The new `noremap` flags are
+            // written below.
+            let mut buf = vec![0; size];
+            buf[room..room + head].copy_from_slice(&self.buf[from..from + head]);
+            buf[room + head..room + head + s.len()].copy_from_slice(s);
+            let rest = room + head + s.len();
+            buf[rest..rest + (to - from - head)].copy_from_slice(&self.buf[from + head..to]);
+            let mut noremaps = vec![0; size];
+            noremaps[room..room + head].copy_from_slice(&self.noremap[from..from + head]);
+            noremaps[rest..rest + (to - from - head)]
+                .copy_from_slice(&self.noremap[from + head..to]);
             self.buf = buf;
-
-            // The same for `noremap`, which has no terminator to carry.
-            let kept = (self.len - offset) as usize;
-            // SAFETY: as the copy above, one byte shorter for the missing
-            // terminator; the `addlen` flags in the gap are written below.
-            unsafe {
-                let old = self.noremap.offset(self.off as isize);
-                let at = noremaps.offset(HEAD_ROOM as isize);
-                ptr::copy_nonoverlapping(old, at, head);
-                let rest = at.add(head).add(added);
-                ptr::copy_nonoverlapping(old.add(head), rest, kept);
-            }
-            if self.noremap != static_noremap() {
-                // SAFETY: as the `xfree` above.
-                unsafe { xfree(self.noremap.cast()) };
-            }
             self.noremap = noremaps;
-
+            self.buflen = newlen;
             self.off = HEAD_ROOM;
         }
         self.len += addlen;
@@ -406,24 +387,22 @@ impl TypeAhead {
         // What the characters that may not be remapped are marked with,
         // and how many of them there are.
         let val = if noremap == REMAP_SCRIPT {
-            RM_SCRIPT as c_int
+            RM_SCRIPT
         } else if noremap == REMAP_SKIP {
-            RM_ABBR as c_int
+            RM_ABBR
         } else {
-            RM_NONE as c_int
-        };
+            RM_NONE
+        } as u8;
         let noremapped = if noremap == REMAP_SKIP {
             1
         } else if noremap < 0 {
-            addlen
+            s.len()
         } else {
-            noremap
+            usize::try_from(noremap).expect("a positive count")
         };
-        for i in 0..addlen {
-            let flags = if i < noremapped { val } else { RM_YES as c_int };
-            // SAFETY (this body): the two arrays were just sized for `off +
-            // len + addlen`, so every flag written below is in range.
-            unsafe { *self.noremap.offset((self.off + i + offset) as isize) = flags as u8 };
+        let at = self.index(offset);
+        for (i, flags) in self.noremap[at..at + s.len()].iter_mut().enumerate() {
+            *flags = if i < noremapped { val } else { RM_YES as u8 };
         }
 
         // `maplen` and `silent` only remember the length of the mapped
@@ -444,11 +423,9 @@ impl TypeAhead {
         true
     }
 
-    /// Remove `len` bytes at `offset`.
-    ///
-    /// # Safety
-    /// `offset + len` must be within the current typeahead.
-    unsafe fn delete(&mut self, len: c_int, offset: c_int) {
+    /// Remove `len` bytes at `offset`, which must be within the current
+    /// typeahead.
+    fn delete(&mut self, len: c_int, offset: c_int) {
         self.len -= len;
 
         if offset == 0 && self.buflen - (self.off + len) >= 3 * MAXMAPLEN as c_int + 3 {
@@ -456,34 +433,24 @@ impl TypeAhead {
             self.off += len;
         } else {
             // Otherwise both arrays have to be moved down.
-            let from = self.off + offset;
-            let head = offset as usize;
+            let from = self.index(offset);
+            let head = usize::try_from(offset).expect("an offset inside the typeahead");
             if self.off > MAXMAPLEN as c_int {
                 // Leave some extra room at the end to avoid a
                 // reallocation.
-                // SAFETY: `off > MAXMAPLEN`, so the destination is below the
-                // source and both runs are inside the two arrays.
-                unsafe {
-                    let (buf, noremap) = (self.buf, self.noremap);
-                    let keep = MAXMAPLEN as usize;
-                    ptr::copy(buf.offset(self.off as isize), buf.add(keep), head);
-                    ptr::copy(noremap.offset(self.off as isize), noremap.add(keep), head);
-                }
+                let (old, keep) = (self.index(0), MAXMAPLEN as usize);
+                self.buf.copy_within(old..old + head, keep);
+                self.noremap.copy_within(old..old + head, keep);
                 self.off = MAXMAPLEN as c_int;
             }
-            // Include the NUL at the end for `buf`; `noremap` has none.
-            let tail = self.len - offset + 1;
-            debug_assert!(tail > 0);
-            let kept = (self.len - offset) as usize;
-            let (src, dst) = ((from + len) as isize, (self.off + offset) as isize);
-            // SAFETY: the caller's promise — `offset + len` is within the
-            // typeahead, so both runs are inside the two arrays; the copies
-            // move bytes down, which `ptr::copy` allows to overlap.
-            unsafe {
-                ptr::copy(self.buf.offset(src), self.buf.offset(dst), tail as usize);
-                let noremap = self.noremap;
-                ptr::copy(noremap.offset(src), noremap.offset(dst), kept);
-            }
+            // `from` is where the deleted run started *before* the move
+            // above, which is upstream's arithmetic too.
+            let gone = usize::try_from(len).expect("a positive length");
+            let kept = usize::try_from(self.len - offset).expect("the run after the deletion");
+            let dst = self.index(offset);
+            self.buf.copy_within(from + gone..from + gone + kept, dst);
+            self.noremap
+                .copy_within(from + gone..from + gone + kept, dst);
         }
 
         // Each of the three run lengths shrinks only by the part of the
@@ -524,7 +491,7 @@ impl TypeAhead {
     }
 }
 
-/// Insert `str` into the typeahead buffer at `offset`.
+/// Insert `text` into the typeahead buffer at `offset`.
 ///
 /// `noremap` says how much of it may be mapped again: `REMAP_YES` all of it,
 /// `REMAP_NONE` none, `REMAP_SCRIPT` only script-local mappings,
@@ -533,13 +500,11 @@ impl TypeAhead {
 ///
 /// With `nottyped` the string does not set `KeyTyped` — do not use it with a
 /// non-zero `offset`. With `silent`, `cmd_silent` is set when the characters
-/// are read back. Answers `Err` when the buffer would overflow an `int`.
-///
-/// # Safety
-/// `str` must point at a NUL-terminated string, and `offset` must be within
-/// the current typeahead.
-pub unsafe fn ins_typebuf(
-    str: *mut c_char,
+/// are read back. `text` is read up to its first NUL, as upstream's `char *`
+/// is, and `offset` must be within the current typeahead. Answers `Err` when
+/// the buffer would overflow an `int`.
+pub fn ins_typebuf(
+    text: &[u8],
     noremap: c_int,
     offset: c_int,
     nottyped: bool,
@@ -547,13 +512,10 @@ pub unsafe fn ins_typebuf(
 ) -> Result<(), Failed> {
     init_typebuf();
     typeahead().note_change();
-    // SAFETY (this body): the caller's promise -- `str` is NUL-terminated and
-    // `offset` within the current typeahead.
     state_no_longer_safe(Some(c"ins_typebuf()"));
 
-    let addlen = unsafe { cstr::bytes_at(str) }.len() as c_int;
-    let inserted =
-        TYPEBUF.with_mut(|tb| unsafe { tb.insert(str, addlen, offset, noremap, nottyped, silent) });
+    let text = up_to_nul(text);
+    let inserted = TYPEBUF.with_mut(|tb| tb.insert(text, offset, noremap, nottyped, silent));
     if !inserted {
         // Outside the borrow: `emsg` also flushes the buffers, i.e.
         // reaches the typeahead itself.
@@ -564,18 +526,6 @@ pub unsafe fn ins_typebuf(
     Ok(())
 }
 
-/// [`ins_typebuf`] of `text` at the start of the typeahead.
-pub(crate) fn ins_typebuf_text(
-    text: &CStr,
-    noremap: c_int,
-    nottyped: bool,
-    silent: bool,
-) -> Result<(), Failed> {
-    // SAFETY: a NUL-terminated string, which the insert copies (it never
-    // writes through it), at offset 0, which is always in the typeahead.
-    unsafe { ins_typebuf(text.as_ptr().cast_mut(), noremap, 0, nottyped, silent) }
-}
-
 /// Put character `c` back into the typeahead buffer, restoring the flags that
 /// belong to it from `cmd_silent`, `KeyTyped` and `KeyNoremap`.
 ///
@@ -583,47 +533,40 @@ pub(crate) fn ins_typebuf_text(
 /// consume. With `on_key_ignore` the bytes are not reported to `vim.on_key()`.
 /// Answers how many bytes went in.
 pub fn ins_char_typebuf(c: c_int, modifiers: ModMask, on_key_ignore: bool) -> c_int {
-    // Room for the modifier prefix plus a K_SPECIAL-escaped character.
+    // The modifier prefix plus a K_SPECIAL-escaped character.
     let key = special_key_bytes(c, modifiers, true);
     let len = key.as_bytes().len();
-    let mut buf = [0u8; MB_MAXBYTES * 3 + 5];
-    buf[..len].copy_from_slice(key.as_bytes());
-    let _ = unsafe {
-        ins_typebuf(
-            buf.as_mut_ptr().cast(),
-            KeyNoremap.get(),
-            0,
-            !KeyTyped.get(),
-            cmd_silent.get(),
-        )
-    };
+    let _ = ins_typebuf(
+        key.as_bytes(),
+        KeyNoremap.get(),
+        0,
+        !KeyTyped.get(),
+        cmd_silent.get(),
+    );
     if KeyTyped.get() && on_key_ignore {
         on_key_ignore_len.set(on_key_ignore_len.get() + len);
     }
-    len as c_int
+    c_int::try_from(len).expect("a key is a few bytes")
 }
 
 /// Whether the typeahead buffer changed while waiting for a character —
 /// which happens when a message arrives from a client or from `feedkeys()`.
 ///
-/// The test is deliberately generic: when the storage changed it was
-/// reallocated and the old pointer is dead, and `off` may have moved so that
-/// a write through the old one would land on bytes that were just added.
+/// The test is deliberately generic: when the storage changed it may have
+/// been reallocated, and `off` may have moved so that what was read for the
+/// old window would land on bytes that were just added.
 pub fn typebuf_changed(change_cnt: c_int) -> bool {
     change_cnt != 0 && (typeahead().change_cnt() != change_cnt || typebuf_was_filled.get())
 }
 
-/// Remove `len` characters at `offset` from the typeahead buffer.
-///
-/// # Safety
-/// `offset + len` must be within the current typeahead.
-pub unsafe fn del_typebuf(len: c_int, offset: c_int) {
+/// Remove `len` characters at `offset` from the typeahead buffer. `offset +
+/// len` must be within the current typeahead.
+pub fn del_typebuf(len: c_int, offset: c_int) {
     if len == 0 {
         return; // nothing to do
     }
     TYPEBUF.with_mut(|tb| {
-        // SAFETY: the caller's obligation, forwarded.
-        unsafe { tb.delete(len, offset) };
+        tb.delete(len, offset);
         tb.note_change();
     });
     // Text received from a client or from feedkeys() is no longer what is in
@@ -656,16 +599,17 @@ pub fn ungetchars(len: c_int) {
     // Wrapping, as the C's `size_t -=` is: `delete_tail` gives up when the
     // bytes are not all in the last block, and the counter then goes below
     // zero rather than tracking what was really removed.
-    last_recorded_len.set(last_recorded_len.get().wrapping_sub(len as usize));
+    last_recorded_len.set(
+        last_recorded_len
+            .get()
+            .wrapping_sub(len.unsigned_abs() as usize),
+    );
 }
 
 /// Sync undo, as reading typed characters out of the typeahead should.
 ///
 /// Not in Insert or Cmdline mode unless a cursor key was used, and not while
 /// reading a script file — in both cases the keys are one edit, not several.
-///
-/// Safe: callable at any time; it only reads the editor's own mode and
-/// script state, and `u_sync` is itself safe.
 pub(crate) fn may_sync_undo() {
     if (State.get() & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used.get()) && curscript.get() < 0
     {
@@ -673,7 +617,7 @@ pub(crate) fn may_sync_undo() {
     }
 }
 
-/// Empty the typeahead and give it freshly allocated buffers.
+/// Empty the typeahead and give it fresh storage.
 ///
 /// `was` is the change counter of the typeahead being replaced, which the
 /// fresh one carries on from: both callers have just *moved* the old
@@ -681,16 +625,7 @@ pub(crate) fn may_sync_undo() {
 /// snapshot taken before the swap still has to compare unequal afterwards.
 pub(crate) fn alloc_typebuf(was: c_int) {
     TYPEBUF.with_mut(|tb| {
-        // SAFETY: `xmalloc` either answers an allocation or aborts.
-        (tb.buf, tb.noremap) = unsafe {
-            (
-                xmalloc(TYPELEN_INIT as usize).cast(),
-                xmalloc(TYPELEN_INIT as usize).cast(),
-            )
-        };
-        tb.buflen = TYPELEN_INIT;
-        tb.off = HEAD_ROOM; // can insert without reallocating
-        tb.len = 0;
+        tb.fresh_storage(); // can insert without reallocating
         tb.maplen = 0;
         tb.silent = 0;
         tb.no_abbr_cnt = 0;
@@ -700,42 +635,6 @@ pub(crate) fn alloc_typebuf(was: c_int) {
     typebuf_was_filled.set(false);
 }
 
-/// Free the typeahead's buffers.
-///
-/// Freeing the two *static* initial buffers would be a bug, so that is
-/// reported rather than done.
-///
-/// # Safety
-/// Nothing may hold a pointer into either buffer.
-pub(crate) unsafe fn free_typebuf() {
-    // Which of the two was static, so that `internal_error` -- which reaches
-    // the message machinery -- is called outside the borrow.
-    let (buf_static, noremap_static) = TYPEBUF.with_mut(|tb| {
-        let buf_static = tb.buf == static_buf();
-        if !buf_static {
-            // SAFETY: the caller's obligation, and the buffer was
-            // `xmalloc`ed by `alloc_typebuf` or `insert`.
-            unsafe { xfree(tb.buf.cast()) };
-            tb.buf = ptr::null_mut();
-        }
-        let noremap_static = tb.noremap == static_noremap();
-        if !noremap_static {
-            // SAFETY: as above.
-            unsafe { xfree(tb.noremap.cast()) };
-            tb.noremap = ptr::null_mut();
-        }
-        (buf_static, noremap_static)
-    });
-    if buf_static {
-        // SAFETY: a static string.
-        internal_error(c"Free typebuf 1");
-    }
-    if noremap_static {
-        // SAFETY: a static string.
-        internal_error(c"Free typebuf 2");
-    }
-}
-
 /// Put the current typeahead aside for the script `:source!` is about to
 /// read, and start a fresh one.
 pub(crate) fn save_typebuf() {
@@ -743,14 +642,20 @@ pub(crate) fn save_typebuf() {
     init_typebuf();
     let saved = typeahead().take();
     let was = saved.change_cnt();
-    SAVED_TYPEBUF.with_mut(|slots| slots[curscript.get() as usize] = saved);
+    SAVED_TYPEBUF.with_mut(|slots| slots[script_slot(curscript.get())] = saved);
     alloc_typebuf(was);
 }
 
-/// Put back the typeahead [`save_typebuf`] displaced for script `script`.
+/// Put back the typeahead [`save_typebuf`] displaced for script `script`,
+/// dropping the one read since.
 pub(crate) fn restore_saved_typebuf(script: c_int) {
-    let saved = SAVED_TYPEBUF.with_mut(|slots| core::mem::take(&mut slots[script as usize]));
+    let saved = SAVED_TYPEBUF.with_mut(|slots| core::mem::take(&mut slots[script_slot(script)]));
     typeahead().set(saved);
+}
+
+/// The stack slot of script `script`, which must be open.
+fn script_slot(script: c_int) -> usize {
+    usize::try_from(script).expect("an open script")
 }
 
 /// Whether the character `vungetc` put back can be handed out now.
@@ -776,21 +681,15 @@ pub fn save_typeahead(save: &mut TypeaheadSave) {
     save.save_readbuf2 = readbuf2().take();
 }
 
-/// Put back what [`save_typeahead`] saved in `save`, freeing what was read
+/// Put back what [`save_typeahead`] saved in `save`, dropping what was read
 /// in the meantime. Can only be called once per save.
 pub fn restore_typeahead(save: &mut TypeaheadSave) {
     if save.typebuf_valid {
-        // SAFETY: the typeahead read since the save, replaced just below.
-        unsafe { free_typebuf() };
         typeahead().set(core::mem::take(&mut save.save_typebuf));
     }
     ungot.set(save.ungot.take());
 
-    // SAFETY: the read buffers filled since the save, replaced just below.
-    unsafe { readbuf1().free() };
     readbuf1().set(core::mem::take(&mut save.save_readbuf1));
-    // SAFETY: as above.
-    unsafe { readbuf2().free() };
     readbuf2().set(core::mem::take(&mut save.save_readbuf2));
 }
 
@@ -883,6 +782,87 @@ mod tests {
         assert!(typeahead().is_empty());
     }
 
+    /// The valid bytes with their `noremap` flags, front first.
+    fn flagged() -> Vec<(u8, u8)> {
+        typeahead()
+            .with_valid(|bytes, flags| bytes.iter().copied().zip(flags.iter().copied()).collect())
+    }
+
+    /// What `noremap` marks the first `count` inserted bytes with, and how
+    /// many it marks.
+    fn marks(noremap: c_int, len: usize) -> (u8, usize) {
+        match noremap {
+            REMAP_SCRIPT => (RM_SCRIPT as u8, len),
+            REMAP_SKIP => (RM_ABBR as u8, 1),
+            REMAP_NONE => (RM_NONE as u8, len),
+            n => (RM_NONE as u8, usize::try_from(n).expect("a count")),
+        }
+    }
+
+    #[test]
+    fn insert_and_delete_at_every_offset_keep_bytes_and_flags() {
+        let _fresh = Fresh::new();
+        let base = b"abcdefgh";
+        // Short and long inserts: the long one cannot fit in front or in an
+        // empty buffer, so it reallocates.
+        let long: Vec<u8> = (0..300u16)
+            .map(|i| b'A' + u8::try_from(i % 26).expect("small"))
+            .collect();
+        for insert in [&b"XYZ"[..], &long] {
+            for noremap in [REMAP_YES, REMAP_NONE, REMAP_SCRIPT, REMAP_SKIP, 2] {
+                for offset in 0..=base.len() {
+                    flush_typebuf(false);
+                    ins_typebuf(base, REMAP_YES, 0, false, false).unwrap();
+                    let at = c_int::try_from(offset).expect("small");
+                    ins_typebuf(insert, noremap, at, false, false).unwrap();
+                    let mut model: Vec<(u8, u8)> =
+                        base.iter().map(|&b| (b, RM_YES as u8)).collect();
+                    let (flag, count) = if noremap == REMAP_YES {
+                        (0, 0)
+                    } else {
+                        marks(noremap, insert.len())
+                    };
+                    for (i, &b) in insert.iter().enumerate() {
+                        model.insert(offset + i, (b, if i < count { flag } else { RM_YES as u8 }));
+                    }
+                    assert_eq!(flagged(), model, "insert at {offset}, noremap {noremap}");
+
+                    // Delete two bytes at every offset in turn, front to back.
+                    let mut from = 0;
+                    while from + 2 <= model.len() {
+                        del_typebuf(2, c_int::try_from(from).expect("small"));
+                        model.drain(from..from + 2);
+                        assert_eq!(flagged(), model, "delete at {from}");
+                        from += 3;
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_mapped_run_tracks_inserts_and_deletes() {
+        let _fresh = Fresh::new();
+        // Typed keys, then a mapping's RHS in front of them.
+        ins_typebuf(b"typed", REMAP_YES, 0, false, false).unwrap();
+        ins_typebuf(b"rhs", REMAP_YES, 0, true, true).unwrap();
+        assert_eq!((typeahead().maplen(), typeahead().silent()), (3, 3));
+        // Inside the run: it grows.
+        ins_typebuf(b"in", REMAP_YES, 1, false, false).unwrap();
+        assert_eq!(typeahead().maplen(), 5);
+        // Past it: it does not.
+        ins_typebuf(b"out", REMAP_YES, 7, false, false).unwrap();
+        assert_eq!(typeahead().maplen(), 5);
+        // A delete straddling its end cuts it at the delete's start.
+        del_typebuf(3, 4);
+        assert_eq!(typeahead().maplen(), 4);
+        del_typebuf(2, 0);
+        assert_eq!(typeahead().maplen(), 2);
+        flush_typebuf(true);
+        assert_eq!(typeahead().maplen(), 0);
+        assert_eq!(bytes(), b"outped");
+    }
+
     #[test]
     fn an_ungotten_key_is_peeked_before_the_typeahead() {
         let _fresh = Fresh::new();
@@ -892,7 +872,7 @@ mod tests {
         assert_eq!(vpeekc(), c_int::from(b'u'));
         // A typed key waits for the stuff buffer to empty; a stuffed one
         // does not.
-        stuff_readbuf(c"s");
+        stuff_readbuf(b"s");
         assert!(!ungot_key_ready());
         KeyStuffed.set(1);
         vungetc(c_int::from(b'u'));

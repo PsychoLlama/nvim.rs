@@ -522,8 +522,7 @@ pub(crate) fn ins_compl_fix_redo_buf_for_leader(known: Option<&CStr>) {
     // so it is handed the rest of the terminated string.
     let rest = CStr::from_bytes_with_nul(&text.to_bytes_with_nul()[len..])
         .expect("a tail of a C string is one");
-    // SAFETY: a NUL-terminated string.
-    unsafe { append_to_redobuff_literally(rest.as_ptr(), -1) };
+    append_to_redobuff_literally(rest.to_bytes());
 }
 
 /// While collecting matches, watch for a key that should change what is shown

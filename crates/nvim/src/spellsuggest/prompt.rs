@@ -400,12 +400,15 @@ unsafe fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: *mut c_char) {
 
     // Redo is a change-word command.
     reset_redobuff();
-    unsafe { append_to_redobuff(c"ciw".as_ptr()) };
+    append_to_redobuff(b"ciw");
     // SAFETY: the replacement starts at `col` in `newline` and is that many
     // bytes long, all of them inside the buffer sized above.
     let replaced = unsafe { newline.offset(col as isize) };
     let replaced_len = stp.st_wordlen + sug.su_badlen - stp.st_orglen;
-    unsafe { append_to_redobuff_literally(replaced, replaced_len) };
+    // SAFETY: as above -- `replaced_len` bytes inside `newline`.
+    let replaced =
+        unsafe { core::slice::from_raw_parts(replaced.cast::<u8>(), replaced_len as usize) };
+    append_to_redobuff_literally(replaced);
     append_to_redobuff_char(ESC);
 
     // `newline` may be freed here.

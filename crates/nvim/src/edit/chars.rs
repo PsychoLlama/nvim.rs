@@ -133,7 +133,7 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
             0
         };
         if buf[redo_from] as c_int != NUL {
-            unsafe { append_to_redobuff_literally(buf.as_mut_ptr().add(redo_from), -1) };
+            append_to_redobuff_literally(&cstr::as_bytes(&buf)[redo_from..]);
         }
     } else {
         let cc = utf_char2len(c);

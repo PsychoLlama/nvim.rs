@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::charset::is_word_at;
-use crate::getchar::{ins_typebuf_text, typeahead};
+use crate::getchar::{ins_typebuf, typeahead};
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_RSB, Ctrl_V, key_escape};
 use crate::lua::executor::nlua_call_ref_reporting;
@@ -182,7 +182,7 @@ pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
         typed.push(NUL as u8);
         // Insert the last typed char.
         let keys = CStr::from_bytes_until_nul(&typed).expect("terminated just above");
-        let _ = ins_typebuf_text(keys, 1, true, found.silent);
+        let _ = ins_typebuf(keys.to_bytes(), 1, 0, true, found.silent);
         typed.pop();
     }
 
@@ -195,7 +195,7 @@ pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
     };
     if let Some(s) = to {
         // Insert the "to" string.
-        let _ = ins_typebuf_text(s.as_cstr(), found.noremap, true, found.silent);
+        let _ = ins_typebuf(s.as_bytes(), found.noremap, 0, true, found.silent);
         // No abbreviation for these chars.
         let count = s.len() + typed.len() + 1;
         typeahead().add_no_abbr_cnt(c_int::try_from(count).unwrap_or(c_int::MAX));
@@ -203,7 +203,7 @@ pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
 
     // Delete the "from" string: characters, not bytes.
     for _ in 0..clen {
-        let _ = ins_typebuf_text(c"\x08", 1, true, found.silent); // CTRL-H
+        let _ = ins_typebuf(b"\x08", 1, 0, true, found.silent); // CTRL-H
     }
     true
 }

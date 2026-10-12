@@ -4,20 +4,20 @@
 //! it reads one key with mappings disabled, optionally without blocking, and
 //! renders it as a number, a string or a modifier mask.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::eval::typval::{NumBuf, Unconvertible};
 use crate::guard::{Keys, Suppress};
 use crate::keycodes::{Key, key_escape};
+use crate::mbyte::encode_char;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_cstr;
+use crate::os::input::{InputEvents, main_loop_has_events};
 use crate::semsg;
 use crate::types::{NUL, VAR_DICT, VAR_STRING};
 use crate::winlayer::windows;
 use core::ffi::c_int;
-use core::ptr;
 
 /// What the `cursor` option asked for while the key is awaited.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,17 +62,15 @@ fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
         return None;
     }
     if !args.is_empty() && args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) {
-        let d = args[1].dict_or_null();
+        let d = args[1].dict_ref();
 
         if opts.allow_number {
-            opts.allow_number = dict_get_bool(unsafe { (d).as_ref() }, b"number", 1) != 0;
-        } else if dict_has_key(unsafe { (d).as_ref() }, b"number") {
+            opts.allow_number = dict_get_bool(d, b"number", 1) != 0;
+        } else if dict_has_key(d, b"number") {
             // getcharstr() never answers a number, so asking is an error.
             semsg!("E475: Invalid argument: {}", "number");
         }
 
-        // SAFETY: the argument's own dictionary.
-        let d = unsafe { d.as_ref() };
         opts.simplify = dict_get_bool(d, b"simplify", 1) != 0;
 
         if let Some(cursor) = numbuf.dict_string(d, b"cursor") {
@@ -116,17 +114,8 @@ fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
             // TODO(bfredl): deduplicate the shared logic with state_enter?
             if !char_avail() {
                 ui_flush(); // flush screen updates before blocking
-                unsafe {
-                    input_get(
-                        ptr::null_mut(),
-                        0,
-                        -1,
-                        typeahead().change_cnt(),
-                        (*main_loop.ptr()).events,
-                    )
-                };
-                if input_available() == 0 && !unsafe { multiqueue_empty((*main_loop.ptr()).events) }
-                {
+                input_get(&mut [], -1, typeahead().change_cnt(), InputEvents::MainLoop);
+                if input_available() == 0 && main_loop_has_events() {
                     state_handle_k_event();
                     continue;
                 }
@@ -221,7 +210,7 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
             temp[i..i + 3].copy_from_slice(&key_escape(n as c_int));
             i += 3;
         } else {
-            i += unsafe { utf_char2bytes(n as c_int, temp.as_mut_ptr().add(i).cast()) } as usize;
+            i += encode_char(n as c_int, &mut temp[i..]);
         }
         debug_assert!(i < temp.len());
 

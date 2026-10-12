@@ -5,14 +5,13 @@
 //! stream is bracketed by `K_PASTE_START`/`K_PASTE_END` so that the repeat
 //! knows where it ends.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::guard::Keys;
 use crate::keycodes::{Key, key_unescape};
 use crate::types::NUL;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// Which part of a paste stream a [`paste_store`] call is carrying.
 ///
@@ -30,13 +29,9 @@ pub enum PastePhase {
 
 /// Record a piece of a paste into the redo and/or record buffers.
 ///
-/// `str` is read only for [`PastePhase::Chunk`]; `K_SPECIAL` and NUL bytes
+/// `text` is read only for [`PastePhase::Chunk`]; `K_SPECIAL` and NUL bytes
 /// in the content are escaped.
-///
-/// # Safety
-/// On [`PastePhase::Chunk`], `str`'s `data` is read for `size` bytes; a
-/// [`String_0`] does not keep them alive.
-pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0, crlf: bool) {
+pub fn paste_store(channel_id: uint64_t, phase: PastePhase, text: &[u8], crlf: bool) {
     if State.get() & MODE_CMDLINE != 0 {
         return;
     }
@@ -64,37 +59,34 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
         return;
     }
 
-    let mut s: *const c_char = str.data();
-    let end = unsafe { str.data().add(str.len()) };
-    while s < end {
+    let mut s = text;
+    while !s.is_empty() {
         // A run of bytes that need no escaping goes in one piece.
-        let start = s;
-        while s < end
-            && c_int::from(unsafe { *s } as u8) != K_SPECIAL
-            && c_int::from(unsafe { *s }) != NUL
-            && c_int::from(unsafe { *s }) != NL
-            && !(crlf && c_int::from(unsafe { *s }) == CAR)
-        {
-            s = unsafe { s.add(1) };
-        }
-        if s > start {
-            let len = unsafe { s.offset_from(start) };
+        let run = s
+            .iter()
+            .position(|&b| {
+                let b = c_int::from(b);
+                b == K_SPECIAL || b == NUL || b == NL || (crlf && b == CAR)
+            })
+            .unwrap_or(s.len());
+        if run > 0 {
             if need_redo {
-                unsafe { redobuff().add(start, len) };
+                redobuff().add_bytes(&s[..run]);
             }
             if need_record {
-                unsafe { recordbuff().add(start, len) };
+                recordbuff().add_bytes(&s[..run]);
             }
         }
+        s = &s[run..];
 
         // Then the byte that stopped it, escaped as one key.
-        if s < end {
-            let mut c = c_int::from(unsafe { *s } as u8);
-            s = unsafe { s.add(1) };
+        if let Some((&first, rest)) = s.split_first() {
+            let mut c = c_int::from(first);
+            s = rest;
             if crlf && c == CAR {
                 // A CRLF pair counts as one newline.
-                if s < end && c_int::from(unsafe { *s }) == NL {
-                    s = unsafe { s.add(1) };
+                if s.first().is_some_and(|&b| c_int::from(b) == NL) {
+                    s = &s[1..];
                 }
                 c = NL;
             }
