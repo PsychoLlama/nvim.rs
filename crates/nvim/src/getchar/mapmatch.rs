@@ -251,11 +251,14 @@ fn search_maphash(
                     // not a modifier bit at all (they start at 0x02); it is
                     // a separate flag here.
                     let mut modifier_next = false;
-                    let mut mlen = 1;
-                    // Pairwise, so that neither slice is bounds-checked per
-                    // byte: the typeahead after its first byte against the
-                    // LHS after its first, the NUL included.
-                    for (&typed, &key) in tb[1..].iter().zip(&lhs[1..]) {
+                    // The typeahead against the LHS, the NUL included, from
+                    // their second bytes; both cut to the shorter, so that
+                    // neither index is bounds-checked per byte.
+                    let limit = tb.len().min(lhs.len());
+                    let (typed_bytes, lhs_bytes) = (&tb[..limit], &lhs[..limit]);
+                    let mut at = 1;
+                    while at < limit {
+                        let (typed, key) = (typed_bytes[at], lhs_bytes[at]);
                         let mut c2 = c_int::from(typed);
                         if nomap > 0 {
                             if nomap == 2 && c2 == KS_MODIFIER {
@@ -288,8 +291,9 @@ fn search_maphash(
                         if key != c2.to_le_bytes()[0] {
                             break;
                         }
-                        mlen += 1;
+                        at += 1;
                     }
+                    let mut mlen = at as c_int;
 
                     // Don't allow mapping the first byte(s) of a multibyte
                     // character, which happens after mapping <M-a> and then
