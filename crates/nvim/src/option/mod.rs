@@ -59,6 +59,8 @@ mod show;
 mod slot;
 mod state;
 mod stropt;
+#[cfg(test)]
+mod tests;
 mod validate;
 mod value;
 pub mod vars;

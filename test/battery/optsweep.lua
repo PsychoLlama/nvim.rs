@@ -1078,6 +1078,175 @@ if want("o91/groups") then
   say(string.format("%-40s cases=%d aborted=%d", "o91/groups", #PROBES, aborted))
 end
 
+-- =====================================================================
+section("o92-parse")
+-- The corners of `do_set`'s argument parser and of the `+= ^= -=` splice
+-- that o9 does not reach: `&vi`/`&vim`, `<` on global-local options,
+-- duplicates and escapes in comma and flag lists, the backslash rules
+-- (`\ `, `\\`, `\,`, `\|`), several arguments on one line with a refusal
+-- in the middle, `:setlocal`/`:setglobal` on the global-local options,
+-- the show forms, and an `OptionSet` autocommand that sets the option it
+-- fired for.  Each row reads the value back at all three scopes.
+do
+  local function scopes(name)
+    local function get(prefix)
+      local ok, v = pcall(vim.api.nvim_eval, "&" .. prefix .. name)
+      return ok and ser(v) or "!ERR"
+    end
+    return string.format("[%s|%s|%s]", get(""), get("g:"), get("l:"))
+  end
+
+  local PARSE = {
+    { "amp-string", "statusline", { "=x", "&", "=y", "&vim", "=z", "&vi", "&vix" } },
+    { "amp-number", "shiftwidth", { "=5", "&vi", "=6", "&vim", "=7", "&" } },
+    { "amp-bool", "wrapscan", { "no", "&vi", "no", "&vim" } },
+    { "lt-gl-string", "path", { "=g", "=l@local", "<@local", "=both", "<", "<@global" } },
+    { "lt-gl-number", "undolevels", { "=33", "=7@local", "<", "=8@local", "<@local" } },
+    { "lt-gl-bool", "autoread", { "no", "@local", "<", "!@local", "<@local", "&" } },
+    { "lt-gl-scrolloff", "scrolloff", { "=4", "=9@local", "<@local", "=2@local", "<" } },
+    { "lt-local-only", "shiftwidth", { "=3", "=5@local", "<@local", "<" } },
+    { "dup-comma", "path", { "=a,b,a", "+=a", "^=b", "-=a", "-=a", "+=,", "+=,", "-=," } },
+    { "dup-nodup", "wildignore", { "=*.o,*.a", "+=*.o", "^=*.a", "+=*.b,*.o", "-=*.o", "-=*.b" } },
+    { "dup-flag", "cpoptions", { "=aA", "+=aaA", "^=AB", "-=AB", "-=Aa", "+=" } },
+    { "dup-shm", "shortmess", { "=ab", "+=ba", "^=cc", "-=b", "-=xyz", "=" } },
+    { "dup-commaflag", "whichwrap", { "=b,s", "+=s,b", "^=h", "-=s", "+=<,>", "-=<,>" } },
+    { "keyed-lcs", "listchars", { "=eol:$", "+=eol:%", "^=tab:>-", "+=tab:ab,trail:-", "-=tab:ab", "-=eol:" } },
+    { "keyed-mps", "matchpairs", { "=(:)", "+=(:),<:>", "^=[:]", "-=<:>", "-=(:)" } },
+    { "esc-space", "titlestring", { [[=a\ b]], [[=a\\b]], [[=a\,b]], [[=a\|b]], [[=a\"b]], [[=\ lead]], [[=trail\ ]], [[+=\ more]] } },
+    { "esc-comma", "path", { [[=a\,b,c]], [[+=d\,e]], [[-=a\,b]], [[^=x\\y]], [[-=x\\y]], [[=\,]], [[+=\\]] } },
+    { "esc-tags", "tags", { [[=a\ b,c]], [[+=d\ e]], [[-=c]], [[=./tags;,tags]] } },
+    { "multi", "shiftwidth", { "=2 tabstop=3", "=4 nosuch tabstop=5", "=6 tabstop=x", "=7 ts=8 sts=-1" } },
+    { "show", "path", { "?", "", "!", "=x", "?", "&" } },
+    { "show-bool", "number", { "?", "", "!", "inv", "no", "?", "&" } },
+    { "show-num", "tabstop", { "?", "", "!", "inv", "no", "=4", "?", "&" } },
+    { "keys", "wildchar", { "=<Tab>", "=^X", "=<C-A>", "=<Esc>", "=x", "=<Nosuch>", "=<t_k1>", "=t_k1", "&" } },
+    { "keys-m", "wildcharm", { "=<C-Z>", "=26", "=<S-Tab>", "&" } },
+    { "tty", "t_Co", { "?", "=8", "=", "&" } },
+    { "tty2", "t_k1", { "?", "=x", "&" } },
+    { "tty3", "<t_k1>", { "?", "=x" } },
+    { "tty4", "term", { "?", "=dumb", "&" } },
+    { "kp", "keywordprg", { "=", "=man@local", "=@local", "=@global", "&" } },
+    { "gl-string-scopes", "makeprg", { "=gmake@global", "=lmake@local", "+=\\ -j@local", "^=x@global", "<@local", "&" } },
+    { "gl-stl", "statusline", { "=global@global", "=local@local", "<@local", "&" } },
+  }
+
+  for _, p in ipairs(PARSE) do
+    local shape, name, steps = p[1], p[2], p[3]
+    for si, step in ipairs(steps) do
+      local tag = string.format("o92/%s/%d", shape, si)
+      if want(tag) then
+        local verb = "set"
+        local arg = step
+        if arg:find("@local$") then
+          verb, arg = "setlocal", arg:gsub("@local$", "")
+        elseif arg:find("@global$") then
+          verb, arg = "setglobal", arg:gsub("@global$", "")
+        end
+        local cmd
+        if arg == "no" or arg == "inv" then
+          cmd = verb .. " " .. arg .. name
+        else
+          cmd = verb .. " " .. name .. arg
+        end
+        vim.v.errmsg = ""
+        local ok, out = ex(cmd)
+        row(
+          tag,
+          string.format(
+            "cmd=%-36s ok=%-5s out=%-28s val=%-40s err=%s",
+            esc(cmd),
+            tostring(ok),
+            ok and out:gsub("^%s+", "") or "-",
+            name:match("^[a-z]+$") and scopes(name) or "-",
+            ok and esc(vim.v.errmsg) or out
+          )
+        )
+      end
+    end
+    vim.cmd("silent! set " .. name .. "&")
+    pcall(vim.cmd, "silent! setlocal " .. name .. "<")
+    harness()
+  end
+
+  -- `OptionSet` firing for the option it then sets again, at each scope.
+  if want("o92/optionset") then
+    vim.g.optseen = {}
+    vim.cmd([[
+      augroup o92
+        autocmd!
+        autocmd OptionSet path,shortmess,shiftwidth,statusline call add(g:optseen, [expand('<amatch>'), v:option_type, v:option_command, v:option_old, v:option_new, v:option_oldlocal, v:option_oldglobal])
+        autocmd OptionSet path if v:option_new !~ 'z$' | set path+=z | endif
+        autocmd OptionSet shortmess if v:option_new !~ 'q' | setlocal shortmess+=q | endif
+        autocmd OptionSet statusline let &l:statusline = 'au:' . v:option_new
+      augroup END
+    ]])
+    for i, cmd in ipairs({
+      "set path=a,b",
+      "setlocal path=l",
+      "setglobal path=g",
+      "set shortmess=s",
+      "set shiftwidth=3",
+      "setlocal statusline=x",
+      "set statusline=y",
+    }) do
+      vim.g.optseen = {}
+      local ok, out = ex(cmd)
+      row(
+        string.format("o92/optionset/%d", i),
+        string.format(
+          "cmd=%-24s ok=%-5s path=%-24s shm=%-12s stl=%-16s seen=%s",
+          cmd,
+          tostring(ok),
+          scopes("path"),
+          ser(vim.o.shortmess),
+          scopes("statusline"),
+          ser(vim.fn.string(vim.g.optseen))
+        )
+      )
+    end
+    vim.cmd("autocmd! o92 | augroup! o92")
+    vim.cmd("silent! set path& shiftwidth& statusline&")
+    harness()
+  end
+
+  -- `:mkvimrc` and `:mkview`: the `:set` lines a session writes.
+  if want("o92/mkvimrc") then
+    for _, cmd in ipairs({
+      "set nowrapscan ignorecase shiftwidth=3 wildcharm=<C-Z>",
+      [[let &titlestring = "tab\there quote\" back\\slash bar| ctl\x01 hi\xff utfé"]],
+      [[set statusline=%f\ %m%=%l listchars=tab:>-,trail:~]],
+      "let &tags = $HOME . '/tags,./tags'",
+      "let &path = '.,' . repeat('/long/directory/name,', 220) . '/end'",
+      "setlocal path=local undolevels=40 number foldmethod=marker syntax=c filetype=c",
+    }) do
+      vim.cmd("silent! " .. cmd)
+    end
+    local function written(make, file)
+      vim.cmd("silent! " .. make .. "! " .. file)
+      local lines = vim.fn.readfile(file, "b")
+      local keep = {}
+      for _, l in ipairs(lines) do
+        if l:match("^set") or l:match("^if &") or l:match("^endif") then
+          keep[#keep + 1] = l
+        end
+      end
+      local text = table.concat(keep, "\n")
+      dump_lines[#dump_lines + 1] = "== " .. make
+      for _, l in ipairs(keep) do
+        dump_lines[#dump_lines + 1] = "   " .. esc(norm(l))
+      end
+      return string.format("lines=%d bytes=%d d=%s", #keep, #text, digest(text))
+    end
+    row("o92/mkvimrc", written("mkvimrc", WORK .. "/o92.vimrc"))
+    vim.cmd("set viewoptions=options,folds")
+    row("o92/mkview", written("mkview", WORK .. "/o92.view"))
+    vim.cmd("silent! set all&")
+    vim.cmd("silent! setlocal syntax= filetype= path< undolevels<")
+    harness()
+  end
+end
+vim.v.errmsg = ""
+
 -- ---------------------------------------------------------------- output
 local tail = {}
 for _, s in ipairs(section_order) do

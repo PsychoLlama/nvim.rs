@@ -60,6 +60,7 @@ mod multiqueue;
 mod namespace;
 mod normal;
 mod options;
+mod options_oracle;
 mod optionstr;
 mod packer;
 mod parser;
