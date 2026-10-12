@@ -3,8 +3,8 @@ count	callee	no_raw	defs	def
 348	.add	0	2	crates/nvim/src/getchar/buffers.rs
 316	.offset	0	0	
 249	bytes_at	0	1	crates/nvim/src/cstr.rs
-227	CStr::from_ptr	0	2	
-195	at	0	3	
+225	CStr::from_ptr	0	2	
+192	at	0	3	
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 142	.offset_from	0	0	
 126	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
@@ -1116,7 +1116,6 @@ count	callee	no_raw	defs	def
 2	reserve	0	1	crates/nvim/src/msgpack_rpc/unpacker/keydict.rs
 2	resize	0	1	crates/nvim/src/vterm/screen/resize.rs
 2	resize_buffer	0	1	crates/nvim/src/vterm/screen/resize.rs
-2	resolve_option	0	1	crates/nvim/src/api/deprecated/options.rs
 2	row_cells	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	rpc_send_call	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 2	run	0	3	

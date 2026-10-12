@@ -395,3 +395,23 @@ fn an_unknown_option_is_a_refusal_and_not_a_default() {
         "the message says what was wanted: {wrong_kind}"
     );
 }
+
+/// The deprecated per-window accessors resolve the name and then report it
+/// or write through it: the name has to outlive the lookup. Reading a
+/// global-only option through a window is refused with the option named;
+/// a window option written the old way reads back the new way.
+#[test]
+fn the_deprecated_window_accessors_keep_the_name_they_report() {
+    let editor = editor_lock();
+    let fx = crate::support::Probe::new(&editor);
+    fx.run("let v:errmsg = ''");
+    fx.run("silent! call nvim_win_get_option(0, 'hidden')");
+    fx.check(
+        "v:errmsg",
+        "'E5555: API call: Invalid option name: ''hidden'''",
+    );
+    fx.run("let g:saved_winblend = &l:winblend");
+    fx.run("call nvim_win_set_option(0, 'winblend', 30)");
+    fx.check("&l:winblend", "30");
+    fx.run("let &l:winblend = g:saved_winblend | unlet g:saved_winblend");
+}

@@ -5,8 +5,7 @@
 //! between `OptVal` and the api's Object -- and the seven entry points differ
 //! only in which scope they fix and whether they read or write.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,11 +17,9 @@
 use super::*;
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
 use crate::api::private::validate::{err_bad_value, err_expected};
-use crate::cstr;
 use crate::option::OptionTarget;
 use crate::types::OptionSetFlags;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char};
 
 pub fn nvim_get_option_info(name: String_0) -> Result<ApiDict, Error> {
     let (buf, win) = (Buf::current(), Win::current());
@@ -75,31 +72,26 @@ pub fn nvim_win_set_option(
     set_option_to(channel_id, Some(OptionTarget::Win(win)), name, value)
 }
 
-/// The option `name` names, as its C string and its index, or `None` after
-/// answering why it is not the name of one.
+/// The option `name` names, or the error saying why it is not the name of
+/// one.
 ///
-/// # Safety
-/// `name` must name its own bytes.
-unsafe fn resolve_option(name: String_0) -> Result<(*const c_char, OptIndex), Error> {
+/// `name` is borrowed: the caller goes on to report it. Taking it by value
+/// freed it here while the caller still held a pointer to its bytes -- an
+/// error naming a scope the option lacks read freed memory.
+fn resolve_option(name: &String_0) -> Result<OptIndex, Error> {
     if name.is_empty() {
-        let empty = c"<empty>".as_ptr();
-        // SAFETY: the names and values are NUL-terminated strings.
-        return Err(err_bad_value(c"option name", unsafe { cstr::at(empty) }));
+        return Err(err_bad_value(c"option name", c"<empty>"));
     }
-    let opt_name = name.data();
-    // SAFETY: an API string is NUL-terminated.
-    let opt_idx: OptIndex = find_option(unsafe { CStr::from_ptr(opt_name) });
+    let opt_idx: OptIndex = find_option(name.as_cstr());
     if opt_idx == kOptInvalid as OptIndex {
-        // SAFETY: the names and values are NUL-terminated strings.
-        return Err(err_bad_value(c"option name", unsafe { cstr::at(opt_name) }));
+        return Err(err_bad_value(c"option name", name.as_cstr()));
     }
-    Ok((opt_name, opt_idx))
+    Ok(opt_idx)
 }
 
 /// The value of `name` as `from` sees it; `None` is the global scope.
 fn get_option_from(from: Option<OptionTarget>, name: String_0) -> Result<Object, Error> {
-    // SAFETY: an API string names its own bytes.
-    let (opt_name, opt_idx) = unsafe { resolve_option(name) }?;
+    let opt_idx = resolve_option(&name)?;
     let scope = OptionTarget::scope_of(from);
     let mut value: OptVal = OptVal::Nil;
     if option_has_scope(opt_idx, scope) {
@@ -113,8 +105,7 @@ fn get_option_from(from: Option<OptionTarget>, name: String_0) -> Result<Object,
     // An option the scope does not have reads as the unset value, which is
     // the same answer as a name that is not an option's at all.
     if value.is_nil() {
-        // SAFETY: the names and values are NUL-terminated strings.
-        return Err(err_bad_value(c"option name", unsafe { cstr::at(opt_name) }));
+        return Err(err_bad_value(c"option name", name.as_cstr()));
     }
     Ok(optval_as_object(value))
 }
@@ -126,8 +117,7 @@ fn set_option_to(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    // SAFETY: an API string names its own bytes.
-    let (opt_name, opt_idx) = unsafe { resolve_option(name) }?;
+    let opt_idx = resolve_option(&name)?;
     let scope = OptionTarget::scope_of(to);
     let got = api_typename(value.kind());
     let Some(optval) = object_as_optval(value) else {
@@ -145,7 +135,5 @@ fn set_option_to(
             OptionSetFlags::LOCAL
         };
     let _sctx = api_set_sctx(channel_id);
-    // SAFETY: `opt_name` is the API string's own NUL-terminated bytes.
-    let opt_name = unsafe { CStr::from_ptr(opt_name) }.to_bytes();
-    set_option_value_for(opt_name, opt_idx, optval, opt_flags, to)
+    set_option_value_for(name.as_bytes(), opt_idx, optval, opt_flags, to)
 }

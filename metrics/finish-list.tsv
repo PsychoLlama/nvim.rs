@@ -1,5 +1,5 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	60	586	67	374	deref:75 compound:31 expr:19 ref:2	other:54 str:15	str:4 other:3 value:1	at:23 CStr::from_ptr:11 xfree:9 from_raw_parts:7 ManuallyDrop::take:5 bytes_at:5 nlua_exec:5 abort:3
+api/	*	59	579	66	367	deref:75 compound:31 expr:19 ref:2	other:54 str:15	other:3 str:3 value:1	at:20 CStr::from_ptr:9 xfree:9 from_raw_parts:7 ManuallyDrop::take:5 bytes_at:5 nlua_exec:5 abort:3
 api/	api/autocmd/create.rs	1	15	1	13	deref:2	-	-	at:2 autocmd_register:1 do_autocmd_event:1 xfree:1
 api/	api/autocmd/exec.rs	1	6	0	6	-	-	-	apply_autocmds_group:1 augroup_exists:1 augroup_find:1
 api/	api/autocmd/group.rs	1	10	0	10	-	-	-	augroup_del:2 augroup_add:1 augroup_exists:1 augroup_find:1
@@ -17,7 +17,6 @@ api/	api/command/user.rs	1	3	0	1	deref:2	-	-	-
 api/	api/deprecated/bufhl.rs	1	9	1	4	compound:1 deref:1 expr:1	-	-	at:2
 api/	api/deprecated/eval.rs	1	7	0	1	compound:1	-	-	-
 api/	api/deprecated/lines.rs	1	2	0	2	-	-	-	-
-api/	api/deprecated/options.rs	1	7	1	7	-	-	str:1	at:3 CStr::from_ptr:2
 api/	api/deprecated/vars.rs	1	0	0	0	-	-	-	-
 api/	api/deprecated/write.rs	1	11	0	1	deref:5 compound:1 expr:1	-	-	nlua_exec:1
 api/	api/events.rs	1	2	0	2	-	-	-	c_str:1 do_termresponse_autocmd:1
