@@ -146,8 +146,7 @@ fn free_garray(ga: &mut GArray) {
 
 /// Drop every buffer-local mapping (`abbrev` picks the abbreviation table).
 fn clear_mappings(buffer: Buf, abbrev: bool) {
-    // SAFETY: a live buffer.
-    unsafe { map_clear_mode(buffer, MAP_ALL_MODES, true, abbrev) };
+    map_clear_mode(buffer, MAP_ALL_MODES, true, abbrev);
 }
 
 fn free_callback(cb: &mut Callback) {

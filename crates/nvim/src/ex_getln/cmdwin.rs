@@ -217,14 +217,8 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     let histtype = hist_char2type(cmdwin_type.get());
     if histtype == HIST_CMD || histtype == HIST_DEBUG {
         if p_wc() == TAB as OptInt {
-            let tab = c"<Tab>".as_ptr().cast_mut();
-            let (ins, nrm) = (
-                c"<C-X><C-V>".as_ptr().cast_mut(),
-                c"a<C-X><C-V>".as_ptr().cast_mut(),
-            );
-            // SAFETY: four static NUL-terminated strings.
-            unsafe { add_map(tab, ins, MODE_INSERT, true) };
-            unsafe { add_map(tab, nrm, MODE_NORMAL, true) };
+            add_map(b"<Tab>", b"<C-X><C-V>", MODE_INSERT, true);
+            add_map(b"<Tab>", b"a<C-X><C-V>", MODE_NORMAL, true);
         }
         set_option_value_give_err(kOptFiletype, static_optval(c"vim"), OptionSetFlags::LOCAL);
     }

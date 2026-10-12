@@ -28,7 +28,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::Key;
-use crate::mapping::do_map_line;
+use crate::mapping::do_map;
 use crate::mbyte::{char_at, char_len, encode_char, utf_iscomposing_first};
 use crate::memory::ThinCString;
 use crate::message::state::msg_col;
@@ -662,13 +662,13 @@ fn apply_keymap_entries(buffer: Buf) {
         .iter()
         .map(|entry| keymap_map_cmd(&entry.from, Some(&entry.to)))
         .collect();
-    for mut cmd in cmds {
-        do_map_line(MAPTYPE_MAP, &mut cmd, MODE_LANGMAP, false);
+    for cmd in cmds {
+        do_map(MAPTYPE_MAP, &cmd, MODE_LANGMAP, false);
     }
 }
 
 /// The `:lmap`/`:lunmap` argument for one keymap entry: `<buffer> {from}`,
-/// plus ` {to}` when mapping. NUL-terminated for `do_map`.
+/// plus ` {to}` when mapping.
 fn keymap_map_cmd(from: &[u8], to: Option<&[u8]>) -> Vec<u8> {
     let mut cmd = Vec::with_capacity(KMAP_LLEN + 11);
     cmd.extend_from_slice(b"<buffer> ");
@@ -677,7 +677,6 @@ fn keymap_map_cmd(from: &[u8], to: Option<&[u8]>) -> Vec<u8> {
         cmd.push(b' ');
         cmd.extend_from_slice(to);
     }
-    cmd.push(0);
     cmd
 }
 
@@ -696,8 +695,8 @@ fn keymap_unload() {
         .iter()
         .map(|entry| keymap_map_cmd(&entry.from, None))
         .collect();
-    for mut cmd in cmds {
-        do_map_line(MAPTYPE_UNMAP, &mut cmd, MODE_LANGMAP, false);
+    for cmd in cmds {
+        do_map(MAPTYPE_UNMAP, &cmd, MODE_LANGMAP, false);
     }
     // The entries own their two strings.
     buf.b_kmap_ga = Vec::new();

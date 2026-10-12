@@ -236,8 +236,7 @@ impl std::io::Write for SessionFile {
     }
 }
 
-/// `put_eol()`, for the option and mapping writers that still take a raw
-/// handle.
+/// `put_eol()`, for the fold writer, which still takes a raw handle.
 ///
 /// # Safety
 /// `fd` is open for writing.
@@ -247,25 +246,6 @@ pub(crate) unsafe fn put_eol(fd: *mut FILE) -> Result<(), Failed> {
         return Err(Failed);
     }
     Ok(())
-}
-
-/// [`put_eol`] with the write error dropped, answering `true` regardless --
-/// which is the value the check upstream writes has always had.
-///
-/// `option.c` and `mapping.c` spell their newline check `put_eol(fd) < 0`,
-/// and `put_eol` answers `OK` or `FAIL`, 1 or 0: never negative. So those
-/// seven sites have never reported a failed newline, and `:mkexrc`,
-/// `:mkvimrc`, `:mksession` and `:mkview` claim success even when the file
-/// could not be written. That is upstream's bug and reporting it would be a
-/// behaviour change, so the sites keep it -- through a name that says what
-/// they do, rather than a comparison that looks like it checks something.
-///
-/// # Safety
-/// `fd` is open for writing.
-pub(crate) unsafe fn put_eol_unchecked(fd: *mut FILE) -> bool {
-    // SAFETY: caller contract.
-    let _ = unsafe { put_eol(fd) };
-    true
 }
 
 /// `put_line()`: `s` followed by a newline.
@@ -593,10 +573,8 @@ unsafe fn write_rc(
         if cmdidx == CmdIdx::mksession && opts.has(kOptSsopFlagSkiprtp) {
             flags |= OptionSetFlags::SKIPRTP;
         }
-        // SAFETY: the mapping writer takes the open handle and nothing else.
         let mut writer = out;
-        failed |=
-            unsafe { makemap(out.raw(), None) }.is_err() || makeset(&mut writer, flags, 0).is_err();
+        failed |= makemap(&mut writer, None).is_err() || makeset(&mut writer, flags, 0).is_err();
     }
 
     if !failed && view_session {

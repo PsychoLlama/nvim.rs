@@ -484,10 +484,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         if cmdchar == 'K' as c_int && !kp_ex && !kp_help {
             // The terminal 'keywordprg' opened above: let <Esc> close it.
             restart_edit.set('i' as c_int);
-            let lhs = c"<esc>".as_ptr() as *mut c_char;
-            let rhs = c"<Cmd>bdelete!<CR>".as_ptr() as *mut c_char;
-            // SAFETY: both sides are NUL-terminated literals.
-            unsafe { add_map(lhs, rhs, MODE_TERMINAL, true) };
+            add_map(b"<esc>", b"<Cmd>bdelete!<CR>", MODE_TERMINAL, true);
         }
     }
     out.free();

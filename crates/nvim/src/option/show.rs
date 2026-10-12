@@ -230,7 +230,8 @@ fn put(out: &mut dyn Write, bytes: &[u8]) -> Result<(), Failed> {
 }
 
 /// End the line, dropping a write error: upstream's `put_eol(fd) < 0` was
-/// never true. See `crate::ex_session::put_eol_unchecked`.
+/// never true: `put_eol` answers `OK` or `FAIL`, 1 or 0, and upstream
+/// claims success when the file could not be written.
 fn put_eol_unchecked(out: &mut dyn Write) {
     let _ = out.write_all(b"\n");
 }

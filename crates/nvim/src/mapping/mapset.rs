@@ -4,21 +4,19 @@
 //! [`f_mapset`] a `maparg()` dict, [`modify_keymap`] an API keyset — and both
 //! end in [`buf_do_map`] or [`map_add`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api_error;
-use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::FuncFlags;
-use crate::message_fmt::{msg_cstr, msg_cstr_opt};
+use crate::lua::executor::release_luaref;
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::P_CPO;
 use crate::semsg;
-use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
+use crate::types::{MapTwin, VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
-use core::ptr;
 
 /// The two `nvim_set_keymap` validation messages that carry a quote, hoisted
 /// out of the bodies that raise them.
@@ -100,12 +98,9 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
     let (Some(lhs), Some(lhsraw), Some(orig_rhs)) = (lhs, lhsraw, orig_rhs) else {
-        // SAFETY: a static NUL-terminated message, and `rhs_lua` is the
-        // reference taken just above, if any.
-        unsafe {
-            emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT));
-            api_free_luaref(rhs_lua);
-        }
+        emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT));
+        // The reference taken just above, if any.
+        release_luaref(rhs_lua);
         return;
     };
 
@@ -140,78 +135,33 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // A copy, because the unmap below is past the end of a projection's
     // borrow.
     let cpo = P_CPO.get();
-    let rhs_len = orig_rhs.count_bytes();
-    // SAFETY: `orig_rhs` is NUL-terminated.
-    unsafe {
-        set_maparg_rhs(
-            orig_rhs.as_ptr(),
-            rhs_len,
-            rhs_lua,
-            sid,
-            cpo.as_cstr(),
-            &mut args,
-        );
-    }
-
-    // SAFETY: `curbuf` is set from startup to exit; `&raw` reads nothing, and
-    // both addresses come off the one cell pointer rather than off a `&mut`.
-    let (buf_maps, buf_abbrs) = unsafe {
-        let cur = Buf::current_raw();
-        (
-            (&raw mut (*cur).b_maphash).cast::<*mut MapBlock>(),
-            &raw mut (*cur).b_first_abbr,
-        )
-    };
-    let map_table = if buffer { buf_maps } else { global_map_heads() };
-    let abbr_table = if buffer {
-        buf_abbrs
-    } else {
-        global_abbr_head()
-    };
+    set_maparg_rhs(orig_rhs.to_bytes(), rhs_lua, sid, cpo.as_cstr(), &mut args);
 
     // Delete any existing mapping for this lhs and mode.
     let mut unmap_args = MapArguments::default();
-    let lhs_len = lhs.count_bytes();
-    // SAFETY: `lhs` is NUL-terminated.
-    unsafe {
-        set_maparg_lhs_rhs(
-            lhs.as_ptr(),
-            lhs_len,
-            c"".as_ptr(),
-            0,
-            LUA_NOREF,
-            cpo.as_cstr(),
-            &mut unmap_args,
-        );
-    }
+    set_maparg_lhs_rhs(
+        lhs.to_bytes(),
+        b"",
+        LUA_NOREF,
+        cpo.as_cstr(),
+        &mut unmap_args,
+    );
     unmap_args.buffer = buffer;
     let unmap_lhs = MAPTYPE_UNMAP_LHS as c_int;
     let cur = Buf::current();
     buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur);
     drop(unmap_args);
 
-    let mut mp_result: [*mut MapBlock; 2] = [ptr::null_mut(); 2];
+    let table = MapTable::of(buffer, cur);
     let add = |keys: &[u8], simplified| {
-        // SAFETY: both tables name live storage.
-        unsafe {
-            let (m, a) = (map_table, abbr_table);
-            map_add(
-                cur, m, a, keys, &args, noremap, mode, is_abbr, sid, lnum, simplified,
-            )
-        }
+        map_add(
+            table, keys, &args, noremap, mode, is_abbr, sid, lnum, simplified,
+        )
     };
-    let (lhsraw, lhsrawalt) = (lhsraw.to_bytes(), lhsrawalt.map(CStr::to_bytes));
-    mp_result[0] = add(lhsraw, false);
+    let first: MapTwin = add(lhsraw.to_bytes(), false);
     if let Some(alt) = lhsrawalt {
-        mp_result[1] = add(alt, true);
-    }
-
-    if !mp_result[0].is_null() && !mp_result[1].is_null() {
-        // SAFETY: both are entries `map_add` just linked into a live table.
-        unsafe {
-            (*mp_result[0]).m_alt = mp_result[1];
-            (*mp_result[1]).m_alt = mp_result[0];
-        }
+        let second = add(alt.to_bytes(), true);
+        table.with_mut(|tables| tables.pair(is_abbr, first, second));
     }
 }
 
@@ -259,8 +209,10 @@ pub fn modify_keymap(
             lua_funcref = reference;
         }
         if let Some(desc) = o.desc.as_ref() {
-            // SAFETY: the keyset's own API string, which this copies out of.
-            parsed_args.desc = unsafe { COwned::new(string_to_cstr(desc)) }.to_map_str();
+            // Copied out of the keyset, as far as a C reader of it sees.
+            let text = desc.as_bytes();
+            let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
+            parsed_args.desc = Some(MapStr::new(&text[..end]));
         }
     }
     parsed_args.buffer = !global;
@@ -274,11 +226,14 @@ pub fn modify_keymap(
             break 'fail_and_free;
         }
 
-        // SAFETY: `lhs` and `rhs` are live API strings.
-        let ok = p_cpo(|cpo| unsafe {
-            let (l, ll) = (lhs.data(), lhs.len());
-            let (r, rl) = (rhs.data(), rhs.len());
-            set_maparg_lhs_rhs(l, ll, r, rl, lua_funcref, cpo, &mut parsed_args)
+        let ok = p_cpo(|cpo| {
+            set_maparg_lhs_rhs(
+                lhs.as_bytes(),
+                rhs.as_bytes(),
+                lua_funcref,
+                cpo,
+                &mut parsed_args,
+            )
         });
         if !ok
             || parsed_args.lhs_len > MAXMAPLEN as size_t
@@ -292,15 +247,10 @@ pub fn modify_keymap(
             break 'fail_and_free;
         }
 
-        // SAFETY: `mode` is a live API string.
-        let (mode_val, is_abbrev, mut p) = unsafe { parse_shortname_mode(&mode) };
+        let (mode_val, is_abbrev, mut consumed) = parse_shortname_mode(&mode);
         if is_abbrev {
-            // SAFETY: `parse_shortname_mode` left `p` on the `a` it found.
-            p = unsafe { p.add(1) };
+            consumed += 1; // the `a` it found
         }
-        // SAFETY: `p` walks `mode`'s own bytes, so the difference is how much
-        // of it was consumed.
-        let consumed = unsafe { p.offset_from(mode.data()) } as size_t;
         if !mode.is_empty() && consumed != mode.len() {
             let mode = msg_cstr(mode.as_cstr());
             failed = Some(api_error!(
@@ -326,23 +276,18 @@ pub fn modify_keymap(
                 // Assume the caller wants the RHS to be a <Nop>.
                 parsed_args.rhs_is_noop = true;
             } else {
-                // SAFETY: `abort` never returns and reads nothing of ours.
-                unsafe { abort() }; // should never happen
+                unreachable!("a non-empty RHS replaced by nothing is a <Nop>");
             }
         } else if is_unmap && (parsed_args.rhs_len() != 0 || parsed_args.rhs_lua() != LUA_NOREF) {
-            // SAFETY: `parsed_args.rhs` is this frame's own NUL-terminated
-            // string, and `err` the caller's slot.
-            unsafe {
-                failed = Some(if parsed_args.rhs_len() != 0 {
-                    let rhs = msg_cstr_opt(cstr::at_opt(parsed_args.rhs().str.as_ptr()));
-                    api_error!(
-                        kErrorTypeValidation,
-                        "Gave nonempty RHS in unmap command: {rhs}"
-                    )
-                } else {
-                    Error::validation(c"Gave nonempty RHS for unmap")
-                });
-            }
+            failed = Some(if parsed_args.rhs_len() != 0 {
+                let rhs = msg_bytes(parsed_args.rhs().str.as_bytes());
+                api_error!(
+                    kErrorTypeValidation,
+                    "Gave nonempty RHS in unmap command: {rhs}"
+                )
+            } else {
+                Error::validation(c"Gave nonempty RHS for unmap")
+            });
             break 'fail_and_free;
         }
 
@@ -388,8 +333,7 @@ pub fn modify_keymap(
     if parsed_args.rhs.is_none() && lua_funcref != LUA_NOREF {
         // The parse never got as far as building an RHS, so nothing adopted
         // the callback.
-        // SAFETY: a reference this frame took over and nothing else owns.
-        unsafe { api_free_luaref(lua_funcref) };
+        release_luaref(lua_funcref);
     }
     // Everything else goes with `parsed_args`: the two strings are its own,
     // and whatever a mapblock took is holding its own share of the `Rc`.

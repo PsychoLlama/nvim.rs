@@ -5,38 +5,32 @@
 //! [`get_maparg`] backs `maparg()`/`mapcheck()` and [`keymap_array`] backs
 //! `nvim_get_keymap`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::lua::executor::funcref_description;
 use crate::memory::ThinCString;
 use crate::option::vars::P_CPO;
 use crate::types::{VAR_DICT, kListLenUnknown};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// `hasmapto()`: whether any mapping in the named modes has `{name}` in its
 /// RHS.
 pub fn f_hasmapto(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = NumBuf::new();
-    // `numbuf` outlives the string it lends back.
-    let name = numbuf.string(&args[0]).as_ptr();
+    let name = numbuf.string(&args[0]).to_bytes();
     let mode = match args.get(1) {
         // `buf` is the scratch `tv_get_string_buf` may answer with.
-        Some(tv) => buf.string(tv).as_ptr(),
-        None => c"nvo".as_ptr(),
+        Some(tv) => buf.string(tv).to_bytes(),
+        None => b"nvo",
     };
     let number = |n: usize| args.get(n).map(tv_get_number);
     let abbr = number(2).is_some_and(|n| n != 0);
-    // SAFETY: both strings are NUL-terminated, and `result` is the caller's
-    // writable answer slot.
-    unsafe {
-        let found = map_to_exists(name, mode, abbr);
-        (*result).write_number(VarNumber::from(found));
-    }
+    let found = map_to_exists(name, mode, abbr);
+    result.write_number(VarNumber::from(found));
 }
 
 /// How many entries [`mapblock_fill_dict`] can write.
@@ -74,9 +68,9 @@ impl Filling {
 /// `compatible` selects the old `maparg()` shape: the RHS comes back as the
 /// text the user typed rather than as a `str2special` rendering, `<script>`
 /// is not told apart from `:noremap`, and there is no `"buf"` key.
-/// `lhsrawalt` is the other spelling of a simplified LHS, or null.
+/// `lhsrawalt` is the other spelling of a simplified LHS, if there is one.
 pub(crate) fn mapblock_fill_dict(
-    mp: Mb,
+    mp: &MapBlock,
     lhsrawalt: Option<&MapStr>,
     buffer_value: c_int,
     abbr: bool,
@@ -114,7 +108,6 @@ pub(crate) fn mapblock_fill_dict(
         out.put(c"rhs", Object::string(text));
     }
     if let Some(desc) = &rhs.desc {
-        // SAFETY: the mapping's own NUL-terminated text.
         let desc = String_0::from_cstr(desc.as_cstr());
         out.put(c"desc", Object::string(desc));
     }
@@ -126,7 +119,6 @@ pub(crate) fn mapblock_fill_dict(
     out.put(c"lhsraw", Object::string(lhsraw));
     if let Some(alt) = lhsrawalt {
         // Also add the value for the simplified entry.
-        // SAFETY: a `MapStr` is NUL-terminated by its own invariant.
         let alt = String_0::from_cstr(alt.as_cstr());
         out.put(c"lhsrawalt", Object::string(alt));
     }
@@ -149,7 +141,7 @@ pub(crate) fn mapblock_fill_dict(
         c"replace_keycodes",
         Object::integer(Integer::from(mp.m_replace_keycodes)),
     );
-    let mode = String_0::from_cstr(cstr::in_chars(&mapmode));
+    let mode = String_0::from_cstr(mapmode.as_cstr());
     out.put(c"mode", Object::string(mode));
     out.put(c"abbr", Object::integer(Integer::from(abbr)));
     out.put(c"mode_bits", Object::integer(mp.m_mode.into()));
@@ -160,19 +152,15 @@ pub(crate) fn mapblock_fill_dict(
 /// The body of `maparg()` and `mapcheck()`: `exact` is what tells them apart.
 fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's promise — `result` is the writable answer slot.
-    let mut ret = unsafe { Live::new(result) };
     // Return an empty string on failure.
-    ret.write_string(None);
+    result.write_string(None);
 
-    let keys = numbuf.string(&args[0]);
+    let keys = numbuf.string(&args[0]).to_bytes();
     if keys.is_empty() {
         return;
     }
-    let keys = keys.as_ptr();
 
     let mut buf = NumBuf::new();
-    // SAFETY: as above.
     let number = |n: usize| args.get(n).map(tv_get_number);
     let abbr = number(2).is_some_and(|n| n != 0);
     let get_dict = number(3).is_some_and(|n| n != 0);
@@ -184,70 +172,76 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     let Some(which) = which else {
         return;
     };
-    // `get_map_mode` only steps the pointer along; it writes nothing.
-    let mut which: *mut c_char = which.as_ptr().cast_mut();
 
     let mut did_simplify = false;
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
     let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
-    // SAFETY: `which` is a NUL-terminated mode string.
-    let mode = unsafe { get_map_mode(&raw mut which, false) };
+    let (mode, _) = get_map_mode(which.to_bytes(), false);
 
-    // SAFETY: `keys` is NUL-terminated, and both `*_buf` slots are locals that
-    // outlive the calls; the allocations they take over are the guards'.
     // A copy, because the second `replace_termcodes` below is past the end
     // of a projection's borrow.
     let cpo = P_CPO.get();
-    let terminated = |mut keys: Vec<u8>| {
-        keys.push(0);
-        keys
+    let c_prefix = |bytes: Option<Vec<u8>>| {
+        let mut bytes = bytes.unwrap_or_default();
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        bytes.truncate(end);
+        bytes
     };
-    let keys = unsafe { cstr::bytes_at(keys) };
     let simplify = Some(&mut did_simplify);
-    let replaced = replace_termcodes(keys, 0, flags, simplify, cpo.as_cstr(), None);
-    let keys_simplified = terminated(replaced.unwrap_or_default());
-    let mut found = unsafe { check_map(keys_simplified.as_ptr().cast(), mode, exact, false, abbr) };
-    // SAFETY: as above.
-    unsafe {
-        if did_simplify {
-            // When the lhs is being simplified the not-simplified keys are
-            // preferred for printing, like in do_map(). Upstream leaves the
-            // previous `mp` in place when this second look-up fails, but it
-            // clears both `rhs` and `rhs_lua`, and every reader of `mp` is
-            // behind a test on one of those -- so dropping the whole match
-            // is the same answer.
-            let alt = replace_termcodes(keys, 0, nosimp, None, cpo.as_cstr(), None);
-            let alt = terminated(alt.unwrap_or_default());
-            found = check_map(alt.as_ptr().cast(), mode, exact, false, abbr);
-        }
-    }
+    let keys_simplified = c_prefix(replace_termcodes(
+        keys,
+        0,
+        flags,
+        simplify,
+        cpo.as_cstr(),
+        None,
+    ));
+    // When the lhs is being simplified the not-simplified keys are preferred
+    // for printing, like in do_map(). Upstream looks the simplified keys up
+    // first and then replaces the match with this one's -- leaving the
+    // previous `mp` in place when it fails, but clearing both `rhs` and
+    // `rhs_lua`, and every reader of `mp` is behind a test on one of those --
+    // so looking up only the one it ends with is the same answer.
+    let lookup = if did_simplify {
+        c_prefix(replace_termcodes(
+            keys,
+            0,
+            nosimp,
+            None,
+            cpo.as_cstr(),
+            None,
+        ))
+    } else {
+        keys_simplified.clone()
+    };
 
-    // SAFETY: a match names a still-linked mapping.
-    let found = found.map(|found| (unsafe { Mb::new(found.mp) }, found.local));
-    if !get_dict {
-        // Return a string.
-        if let Some((mp, _)) = found {
+    let found = check_map(&lookup, mode, exact, false, abbr, |mp, local| {
+        if !get_dict {
+            // Return a string.
             let rhs = &mp.m_rhs;
-            ret.write_string(if rhs.luaref() != LUA_NOREF {
-                // SAFETY: `mp` is the matching mapping, still linked; the
-                // answer is an `xmalloc`ed block the value takes over.
-                unsafe { ThinCString::from_raw(nlua_funcref_str(rhs.luaref())) }
+            let text = if rhs.luaref() != LUA_NOREF {
+                funcref_description(rhs.luaref())
             } else if rhs.str.is_empty() {
                 Some(ThinCString::from_bytes(b"<Nop>"))
             } else {
-                let text = special_keys_text(rhs.str.as_cstr().to_bytes(), false, false);
+                let text = special_keys_text(rhs.str.as_bytes(), false, false);
                 Some(ThinCString::from_bytes(&text))
-            });
+            };
+            TypVal::string(text)
+        } else {
+            // Return a dictionary.
+            let alt = did_simplify.then(|| MapStr::new(&keys_simplified));
+            let dict = mapblock_fill_dict(mp, alt.as_ref(), c_int::from(local), abbr, true);
+            TypVal::from(Object::dict(dict))
         }
-    } else if let Some((mp, local)) = found {
-        // Return a dictionary.
-        let alt = did_simplify.then(|| MapStr::new(cstr::in_bytes(&keys_simplified).to_bytes()));
-        let dict = mapblock_fill_dict(mp, alt.as_ref(), c_int::from(local), abbr, true);
-        *result = TypVal::from(Object::dict(dict));
-    } else {
-        // Return an empty dictionary.
-        // SAFETY: the caller's writable answer slot.
-        tv_dict_alloc_ret(result);
+    });
+    match found {
+        Some(answer) => *result = answer,
+        None if get_dict => {
+            // Return an empty dictionary.
+            tv_dict_alloc_ret(result);
+        }
+        None => {}
     }
 }
 
@@ -257,38 +251,31 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // A copy: the walk below hands each mapping to a closure.
     let cpo = P_CPO.get();
     let abbr = args.first().is_some_and(|tv| tv_get_bool(tv) != 0);
-    // SAFETY: as above.
-    tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
+    let list = tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
     let cur = Buf::current();
 
     // Do it twice: once for global maps and once for local maps.
     for (buffer_local, table) in [(0, MapTable::Global), (1, MapTable::Buffer(cur))] {
-        let collect = |mp: Mb| {
+        let collect = |mp: &MapBlock| {
             if mp.m_simplified {
                 return None;
             }
             let mut did_simplify = false;
 
-            let lhs = special_keys_text(mp.m_keys.as_cstr().to_bytes(), true, false);
+            let lhs = special_keys_text(mp.m_keys.as_bytes(), true, false);
             let simplify = Some(&mut did_simplify);
             let keys = replace_termcodes(&lhs, 0, flags, simplify, cpo.as_cstr(), None);
             let alt = keys
                 .filter(|_| did_simplify)
                 .map(|keys| MapStr::new(keys.split(|&b| b == 0).next().unwrap_or_default()));
 
-            // SAFETY: `mp` is a live entry of the table being walked and
-            // `result`'s list was allocated above.
-            unsafe {
-                let dict = mapblock_fill_dict(mp, alt.as_ref(), buffer_local, abbr, true);
-                let mut d = TypVal::from(Object::dict(dict));
-                debug_assert_eq!(d.v_type(), VAR_DICT);
-                (*(*result).list_or_null()).push_dict(d.take_dict());
-            }
-            None
+            let dict = mapblock_fill_dict(mp, alt.as_ref(), buffer_local, abbr, true);
+            let mut d = TypVal::from(Object::dict(dict));
+            debug_assert_eq!(d.v_type(), VAR_DICT);
+            list.push_dict(d.take_dict());
+            None::<()>
         };
-        // SAFETY: the tables are live, and `collect` neither unlinks nor frees
-        // an entry.
-        unsafe { map_walk::<()>(table, abbr, collect) };
+        map_walk(table, abbr, collect);
     }
 }
 
@@ -302,33 +289,27 @@ pub fn f_mapcheck(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     get_maparg(args, result, false)
 }
 
-/// The mode a mode-shortname string names, and how much of it was consumed.
+/// The mode a mode-shortname string names, whether it asked for the
+/// abbreviation form, and how much of it was consumed.
 ///
 /// `nvim_get_keymap` and `nvim_set_keymap` take the same shortnames as
 /// `:map`'s command names, optionally with a `!` in front and an `a` after
-/// for the abbreviation form.
-///
-/// # Safety
-/// `mode` must be a live API string.
-pub(crate) unsafe fn parse_shortname_mode(mode: &String_0) -> (c_int, bool, *mut c_char) {
-    let mut p = if !mode.is_empty() {
-        mode.data()
+/// for the abbreviation form.  The `a` is not counted as consumed.
+pub(crate) fn parse_shortname_mode(mode: &String_0) -> (c_int, bool, usize) {
+    let text: &[u8] = if mode.is_empty() {
+        b"m"
     } else {
-        c"m".as_ptr().cast_mut()
+        mode.as_bytes()
     };
-    // SAFETY: the caller's promise — `mode` is a live API string, so `p` is
-    // NUL-terminated and every step below stays inside it.
-    let forceit = unsafe { c_int::from(*p) } == c_int::from(b'!');
-    // SAFETY: as above.
-    let int_mode = unsafe { get_map_mode(&raw mut p, forceit) };
+    let forceit = text.first() == Some(&b'!');
+    let (int_mode, mut used) = get_map_mode(text, forceit);
     if forceit {
-        debug_assert_eq!(p, mode.data());
-        // SAFETY: `get_map_mode` put `p` back at the `!` it did not consume.
-        p = unsafe { p.add(1) };
+        debug_assert_eq!(used, 0);
+        // `get_map_mode` left the `!` it did not consume.
+        used = 1;
     }
-    // SAFETY: as above.
-    let is_abbrev = int_mode & (MODE_INSERT | MODE_CMDLINE) != 0 && unsafe { *p } == b'a' as c_char;
-    (int_mode, is_abbrev, p)
+    let is_abbrev = int_mode & (MODE_INSERT | MODE_CMDLINE) != 0 && text.get(used) == Some(&b'a');
+    (int_mode, is_abbrev, used)
 }
 
 /// Every mapping in `mode`, as `maparg()`-like dicts: `nvim_get_keymap`.
@@ -336,8 +317,7 @@ pub(crate) unsafe fn parse_shortname_mode(mode: &String_0) -> (c_int, bool, *mut
 /// `buf` is the buffer whose local mappings to report, or `None` for the
 /// global ones.
 pub fn keymap_array(mode: String_0, buffer: Option<Buf>) -> Array {
-    // SAFETY: the caller's promise — `mode` is a live API string.
-    let (int_mode, is_abbrev, _) = unsafe { parse_shortname_mode(&mode) };
+    let (int_mode, is_abbrev, _) = parse_shortname_mode(&mode);
     let buffer_value = buffer.map_or(0, |buf| buf.handle as c_int);
     let table = match buffer {
         Some(buf) => MapTable::Buffer(buf),
@@ -345,25 +325,15 @@ pub fn keymap_array(mode: String_0, buffer: Option<Buf>) -> Array {
     };
 
     let mut mappings = Array::EMPTY;
-    {
-        let collect = |mp: Mb| {
+    table.with(|tables| {
+        for mp in tables.walk(is_abbrev) {
             if mp.m_simplified || int_mode & mp.m_mode == 0 {
-                return None;
+                continue;
             }
-            let alt = mp.m_alt;
-            // SAFETY: a non-null `m_alt` is the live twin of this entry, whose
-            // `m_keys` is its own LHS.
-            let dict = unsafe {
-                let twin = (!alt.is_null()).then(|| Mb::new(alt));
-                let lhsrawalt = twin.as_ref().map(|twin| &twin.m_keys);
-                mapblock_fill_dict(mp, lhsrawalt, buffer_value, is_abbrev, false)
-            };
+            let lhsrawalt = tables.twin_keys(is_abbrev, mp);
+            let dict = mapblock_fill_dict(mp, lhsrawalt, buffer_value, is_abbrev, false);
             mappings.push(Object::dict(dict));
-            None
-        };
-        // SAFETY: the tables are live, and `collect` neither unlinks nor frees
-        // an entry.
-        unsafe { map_walk::<()>(table, is_abbrev, collect) };
-    }
+        }
+    });
     mappings
 }

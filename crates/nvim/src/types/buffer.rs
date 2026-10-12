@@ -411,8 +411,9 @@ pub struct Buffer {
     pub b_changelistlen: ::core::ffi::c_int,
     pub b_new_change: bool,
     pub b_chartab: [uint64_t; 4],
-    pub b_maphash: [*mut MapBlock; 256],
-    pub b_first_abbr: *mut MapBlock,
+    /// The buffer-local mappings and abbreviations; `None` until the first
+    /// one, which is also what a zeroed buffer holds.
+    pub(crate) b_maps: Option<Box<MapTables>>,
     /// The buffer-local user commands, sorted by name. A `-buffer` command
     /// shadows a global one; `usercmd`'s `Table` is the walk over both.
     pub b_ucmds: Vec<UserCmd>,

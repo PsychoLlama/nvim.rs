@@ -246,28 +246,6 @@ impl CmdFilter {
         compiled
     }
 }
-/// One Ex command's line, and the cursors into it.
-///
-/// Upstream threads four raw pointers for this. `eap->cmdlinep` names the
-/// line and is a `char **` rather than a `char *` because expanding `%` and
-/// `` `cmd` `` *reallocates* the line mid-command; `eap->cmd`, `eap->arg`
-/// and `eap->nextcmd` point into whatever it currently is, and every one of
-/// them is silently stale the moment it does not. An offset into an owner
-/// survives that reallocation, so the line is owned here and the cursors
-/// are offsets.
-///
-/// The buffer is not one string. [`separate_nextcmd`] writes a NUL over the
-/// `|` that ended the command, so `next` addresses a *second*
-/// NUL-terminated string inside the same allocation, and the argument
-/// expansion appends a third. [`rest_of`](CmdLine::rest_of) is what reads
-/// one of them: from an offset to the next NUL, which is exactly what a C
-/// consumer handed `eap->arg` sees.
-///
-/// [`separate_nextcmd`]: crate::ex_docmd::separate_nextcmd
-/// The terminator a line with no buffer hands out, so that a cursor into it
-/// reads as the empty string. See [`CmdLine::ptr_at`].
-static EMPTY_LINE: [u8; 1] = [0];
-
 /// Where the first NUL in `bytes` is, or their length when there is none.
 ///
 /// Sixteen bytes a step, as a fixed-size fold the compiler turns into one
@@ -289,6 +267,24 @@ fn nul_at(bytes: &[u8]) -> usize {
         .unwrap_or(tail.len())
 }
 
+/// One Ex command's line, and the cursors into it.
+///
+/// Upstream threads four raw pointers for this. `eap->cmdlinep` names the
+/// line and is a `char **` rather than a `char *` because expanding `%` and
+/// `` `cmd` `` *reallocates* the line mid-command; `eap->cmd`, `eap->arg`
+/// and `eap->nextcmd` point into whatever it currently is, and every one of
+/// them is silently stale the moment it does not. An offset into an owner
+/// survives that reallocation, so the line is owned here and the cursors
+/// are offsets.
+///
+/// The buffer is not one string. [`separate_nextcmd`] writes a NUL over the
+/// `|` that ended the command, so `next` addresses a *second*
+/// NUL-terminated string inside the same allocation, and the argument
+/// expansion appends a third. [`rest_of`](CmdLine::rest_of) is what reads
+/// one of them: from an offset to the next NUL, which is exactly what a C
+/// consumer handed `eap->arg` sees.
+///
+/// [`separate_nextcmd`]: crate::ex_docmd::separate_nextcmd
 #[derive(Clone, Default)]
 pub struct CmdLine {
     /// The line's bytes, empty or ending in a NUL.
@@ -589,19 +585,6 @@ impl CmdLine {
         self.retired = Some(::core::mem::replace(&mut self.text, new));
     }
 
-    /// A writable pointer at `at`, for a callee that still takes one.
-    ///
-    /// A line with no buffer at all answers the shared terminator, because
-    /// a cursor into the empty line must still *read* as the empty string;
-    /// a caller that writes through one is wrong either way.
-    pub fn ptr_at(&mut self, at: usize) -> *mut ::core::ffi::c_char {
-        if self.text.is_empty() {
-            return EMPTY_LINE.as_ptr().cast::<::core::ffi::c_char>().cast_mut();
-        }
-        let at = at.min(self.text.len());
-        self.text[at..].as_mut_ptr().cast()
-    }
-
     /// Does `p` point into the live buffer?
     pub fn contains(&self, p: *const ::core::ffi::c_char) -> bool {
         let base = self.text.as_ptr().addr();
@@ -704,20 +687,6 @@ pub struct ExArg<'s> {
 }
 
 impl ExArg<'_> {
-    /// The argument as a writable pointer.
-    ///
-    /// Transitional: what is left of the pointer layer is the two
-    /// accessors here, for the `mapping` handlers that still walk their
-    /// argument by pointer; they go when that module is rewritten.
-    pub fn arg_ptr(&mut self) -> *mut ::core::ffi::c_char {
-        self.line.ptr_at(self.line.arg)
-    }
-
-    /// The command word as a writable pointer. Transitional.
-    pub fn cmd_ptr(&mut self) -> *mut ::core::ffi::c_char {
-        self.line.ptr_at(self.line.cmd)
-    }
-
     /// Make `text` the command's whole line, with `arg` at its start.
     ///
     /// What a handler does when it rewrites its own argument into a buffer

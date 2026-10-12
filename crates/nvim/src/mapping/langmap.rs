@@ -10,18 +10,17 @@
 //! job for everything at or above U+0100, searched by [`langmap_adjust_mb`].
 //! [`did_set_langmap`] parses the option into both.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
+use crate::formatted;
+use crate::mbyte::{char_at, char_len};
+use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_LANGMAP;
-use crate::optionstr::frame::formatted;
-use crate::snprintf;
 use crate::swmsg;
 use crate::types::{NUL, OptError};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// One `'langmap'` pair for a character that does not fit `langmap_mapchar`.
 struct LangmapEntry {
@@ -78,22 +77,17 @@ pub(crate) fn langmap_init() {
 /// `from` characters and then all the `to` characters.
 ///
 /// Upstream walks the option with two `char *`; here they are two indices
-/// into the same slice, and the three pointer primitives it needs are the
-/// closures below — the whole unchecked surface of the parse.
-///
+/// into the same slice.
 pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
     langmap_init(); // back to a one-to-one map
     // A copy: the walk below outlives a projection's borrow.
     let langmap = P_LANGMAP.get();
-    let base = langmap.as_ptr().cast_mut();
     let opt = langmap.as_cstr().to_bytes();
     // The byte at `at`, with the option's own NUL past the end.
     let byte = |at: usize| opt.get(at).copied().unwrap_or(0);
-    // SAFETY: `at` is an index inside the option, so `base.add(at)` is a byte
-    // of it and both callees stop at the NUL.
-    let char_at = |at: usize| unsafe { utf_ptr2char(base.add(at)) };
-    // SAFETY: as above.
-    let len_at = |at: usize| unsafe { utfc_ptr2len(base.add(at)) } as usize;
+    let tail = |at: usize| opt.get(at..).unwrap_or_default();
+    let char_at = |at: usize| char_at(tail(at));
+    let len_at = |at: usize| cluster_len(tail(at));
     // Advance past one character, honouring a `\` escape.
     let skip = |at: usize| {
         let at = if byte(at) == b'\\' && byte(at + 1) != 0 {
@@ -103,16 +97,11 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
         };
         at + len_at(at)
     };
-    // The error texts, which both name the character they did not like.
-    //
-    // # Safety
-    // `fmt` must hold exactly one `%s`, which `arg` fills.
-    let fail = |fmt: &'static CStr, arg: *const c_char| {
-        // SAFETY: `formatted` hands the closure a buffer of the size it
-        // passes on, and the format's one conversion is `arg`.
-        formatted(|buf| unsafe {
-            snprintf!(buf, OptError::ROOM, gettext(fmt).as_ptr(), arg);
-        })
+    // The error texts, which both name what they did not like through
+    // their one `%s`.
+    let fail = |fmt: &'static CStr, arg: &[u8]| {
+        let message = formatted!(OptError::ROOM, gettext(fmt).to_bytes(), arg);
+        Err(OptError::Owned(XString::from_vec(message)))
     };
 
     let mut at = 0;
@@ -162,7 +151,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
             }
             if to == NUL {
                 let missing = c"E357: 'langmap': Matching character missing for %s";
-                return fail(missing, transchar(from).as_ptr());
+                return fail(missing, crate::cstr::in_chars(&transchar(from)).to_bytes());
             }
 
             if from >= 256 {
@@ -170,17 +159,14 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
             } else {
                 if to > UCHAR_MAX {
                     let to_at = to_at.unwrap_or(from_at);
-                    // SAFETY: both `%.*s` pairs are a length and the bytes it
-                    // counts, taken off the option string itself.
-                    unsafe {
-                        let (a, b) = (base.add(from_at), base.add(to_at));
-                        swmsg!(
-                            true,
-                            "'langmap': Mapping from {} to {} will not work properly",
-                            msg_bytes(cstr::slice_at(a, utf_ptr2len(a) as usize)),
-                            msg_bytes(cstr::slice_at(b, utf_ptr2len(b) as usize))
-                        );
-                    }
+                    // Each `%.*s` is the one character at its offset.
+                    let one = |at: usize| &tail(at)[..char_len(tail(at))];
+                    swmsg!(
+                        true,
+                        "'langmap': Mapping from {} to {} will not work properly",
+                        msg_bytes(one(from_at)),
+                        msg_bytes(one(to_at))
+                    );
                 }
                 // The closure is a store; it cannot re-enter the cell.
                 langmap_mapchar.with_mut(|map| map[(from & 255) as usize] = to as u8);
@@ -201,8 +187,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
             if byte(at) != 0 {
                 if byte(at) != b',' {
                     let extra = c"E358: 'langmap': Extra characters after semicolon: %s";
-                    // SAFETY: `at` is an index inside the option string.
-                    return fail(extra, unsafe { base.add(at) });
+                    return fail(extra, tail(at));
                 }
                 at += 1;
             }

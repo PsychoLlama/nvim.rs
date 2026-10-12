@@ -26,6 +26,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memline::Lines;
 use crate::memory::ThinCString;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
@@ -281,9 +282,14 @@ pub(crate) fn echeck_abbr(c: c_int) -> bool {
     } else {
         0
     };
-    let col = Win::current().w_cursor.col;
-    // SAFETY: `curwin`/`curbuf` are live, so the cursor's line is too.
-    unsafe { check_abbr(c, get_cursor_line_ptr(), col, start_col) }
+    let cursor = Win::current().w_cursor;
+    let col = usize::try_from(cursor.col).unwrap_or(0);
+    // A copy of the line before the cursor: the expansion can run user code,
+    // which may change the line.
+    let mut lines = Lines::current();
+    let line = lines.line(cursor.lnum);
+    let line = line[..col.min(line.len())].to_vec();
+    check_abbr(c, line, start_col)
 }
 
 /// Run the `InsertCharPre` autocommand for `c`.

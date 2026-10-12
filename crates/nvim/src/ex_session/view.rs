@@ -109,7 +109,7 @@ pub(crate) fn put_view(
 
     // Local mappings and abbreviations.
     if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions)
-        && unsafe { makemap(out.raw(), window.buffer_or_none()) }.is_err()
+        && makemap(&mut { out }, window.buffer_or_none()).is_err()
     {
         return false;
     }

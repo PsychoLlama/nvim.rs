@@ -17,7 +17,6 @@
 )]
 
 use crate::winlayer::Win;
-use core::ffi::c_char;
 
 use crate::global_cell::Field;
 use crate::option::StrVar;
@@ -30,14 +29,6 @@ use crate::types::{OptError, OptSet, OptStr, WinOpt};
 /// reports when it has nothing more specific to say.
 pub(crate) fn invalid() -> Result<(), OptError> {
     Err(e_invarg.into())
-}
-
-/// A rejection the callback formats itself, naming what it disliked.
-///
-/// `fill` is handed [`OptError::ROOM`] bytes plus a terminator, which is the
-/// buffer upstream's `errbuf`/`errbuflen` pair named.
-pub(crate) fn formatted(fill: impl FnOnce(*mut c_char)) -> Result<(), OptError> {
-    Err(XString::filled(OptError::ROOM, fill).into())
 }
 
 /// The option's value variable — a string one, since every option here is.

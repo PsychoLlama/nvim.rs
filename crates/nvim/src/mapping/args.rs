@@ -7,16 +7,13 @@
 //! modes a command name or a `maparg()`-style mode string names, and how a
 //! set of modes is spelled back.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::keycodes::{Ctrl_V, KE_LUA};
 use crate::option::cpo_has;
 use crate::types::CpoFlag;
-use crate::vim_snprintf;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// The modes `:map!` covers.
 const MASK_BANG: c_int = MODE_INSERT | MODE_CMDLINE;
@@ -25,17 +22,28 @@ const MASK_MAP: c_int = MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDIN
 /// The modes `:vmap` covers.
 const MASK_V: c_int = MODE_VISUAL | MODE_SELECT;
 
-/// The mode letters for `mode`, NUL-terminated.
+/// The mode letters [`map_mode_to_chars`] spells a mode set with: at most six
+/// letters, NUL-terminated.
+pub(crate) struct ModeChars([u8; 7]);
+
+impl ModeChars {
+    /// The letters as a C string.
+    pub(crate) fn as_cstr(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0).expect("the seventh byte is a NUL")
+    }
+}
+
+/// The mode letters for `mode`.
 ///
 /// This is what `:map`'s first column and `maparg()`'s `"mode"` key show, and
-/// it is at most six letters plus the NUL: `!`, `i`, `l` and `c` each stand
-/// alone, a plain `:map` mode set is one space, and anything else is spelled
-/// out letter by letter.
-pub(crate) fn map_mode_to_chars(mode: c_int) -> [c_char; 7] {
-    let mut buf = [0 as c_char; 7];
+/// it is at most six letters: `!`, `i`, `l` and `c` each stand alone, a plain
+/// `:map` mode set is one space, and anything else is spelled out letter by
+/// letter.
+pub(crate) fn map_mode_to_chars(mode: c_int) -> ModeChars {
+    let mut buf = [0u8; 7];
     let mut at = 0;
     let mut put = |ch: u8| {
-        buf[at] = ch as c_char;
+        buf[at] = ch;
         at += 1;
     };
 
@@ -70,7 +78,7 @@ pub(crate) fn map_mode_to_chars(mode: c_int) -> [c_char; 7] {
             }
         }
     }
-    buf
+    ModeChars(buf)
 }
 
 /// Replace termcodes in `orig_lhs` and `orig_rhs` and store the results in
@@ -83,14 +91,9 @@ pub(crate) fn map_mode_to_chars(mode: c_int) -> [c_char; 7] {
 /// If `<C-H>`-style simplification happened, `alt_lhs` holds the
 /// unsimplified spelling and `alt_lhs_len` is non-zero; otherwise
 /// `alt_lhs_len` is 0.
-///
-/// # Safety
-/// The three input strings must be live.
-pub(crate) unsafe fn set_maparg_lhs_rhs(
-    orig_lhs: *const c_char,
-    orig_lhs_len: size_t,
-    orig_rhs: *const c_char,
-    orig_rhs_len: size_t,
+pub(crate) fn set_maparg_lhs_rhs(
+    orig_lhs: &[u8],
+    orig_rhs: &[u8],
     rhs_lua: LuaRef,
     cpo: &CStr,
     args: &mut MapArguments,
@@ -107,8 +110,7 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
     let mut did_simplify = false;
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
     let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
-    // SAFETY: the caller's promise — `orig_lhs` is `orig_lhs_len` live bytes.
-    let lhs = unsafe { cstr::slice_at(orig_lhs, orig_lhs_len) };
+    let lhs = orig_lhs;
     let simplify = Some(&mut did_simplify);
     let Some(replaced) = replace_termcodes(lhs, 0, flags, simplify, cpo, Some(LHS_ROOM)) else {
         return false;
@@ -127,8 +129,7 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
         args.alt_lhs_len = 0;
     }
 
-    // SAFETY: as above — the caller's live strings.
-    unsafe { set_maparg_rhs(orig_rhs, orig_rhs_len, rhs_lua, 0, cpo, args) };
+    set_maparg_rhs(orig_rhs, rhs_lua, 0, cpo, args);
     true
 }
 
@@ -139,12 +140,8 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
 /// RHS strings and the Lua reference are bundled into the one [`MapRhs`] every
 /// mapblock the parse goes on to create will share.  `args.desc` is folded in
 /// here, so a caller that wants a `desc` must set it *first*.
-///
-/// # Safety
-/// `orig_rhs` and `cpo` must be live.
-pub(crate) unsafe fn set_maparg_rhs(
-    orig_rhs: *const c_char,
-    orig_rhs_len: size_t,
+pub(crate) fn set_maparg_rhs(
+    orig_rhs: &[u8],
     rhs_lua: LuaRef,
     sid: ScriptId,
     cpo: &CStr,
@@ -156,18 +153,10 @@ pub(crate) unsafe fn set_maparg_rhs(
     if rhs_lua != LUA_NOREF {
         // orig_rhs is not used for Lua mappings, but still has to be a
         // string; the rhs stores <Lua>ref_no<CR> for the key loop.
-        let mut tmp_buf = [0 as c_char; 64];
-        let at = tmp_buf.as_mut_ptr();
-        let cap = (tmp_buf.len() - 1) as size_t;
-        let fmt = c"%c%c%c%d\r".as_ptr();
-        // SAFETY: `tmp_buf` is 64 bytes and `cap` leaves room for the NUL; the
-        // format string names exactly the four arguments that follow it, and
-        // the answer is NUL-terminated.
-        let str = unsafe {
-            let ke_lua = KE_LUA as c_int;
-            vim_snprintf!(at, cap, fmt, K_SPECIAL, KS_EXTRA, ke_lua, rhs_lua);
-            MapStr::new(cstr::bytes_at(at))
-        };
+        let mut text = vec![K_SPECIAL as u8, KS_EXTRA as u8, KE_LUA as u8];
+        text.extend_from_slice(rhs_lua.to_string().as_bytes());
+        text.push(b'\r');
+        let str = MapStr::new(&text);
         args.rhs = Some(MapRhs {
             str,
             orig_str: MapStr::empty(),
@@ -177,9 +166,7 @@ pub(crate) unsafe fn set_maparg_rhs(
         return;
     }
 
-    // SAFETY: the caller's promise — `orig_rhs` is `orig_rhs_len` live bytes.
-    let orig_str =
-        unsafe { MapStr::new(core::slice::from_raw_parts(orig_rhs.cast(), orig_rhs_len)) };
+    let orig_str = MapStr::new(orig_rhs);
     // `strcasecmp` against an ASCII needle, up to the first NUL as it read:
     // ASCII case-folding, which Miri can run and libc's cannot be.
     let up_to_nul = orig_str
@@ -191,16 +178,14 @@ pub(crate) unsafe fn set_maparg_rhs(
         // "<Nop>" means nothing.
         MapStr::empty()
     } else {
-        let dolt = REPTERM_DO_LT as c_int;
-        // SAFETY: as above.
-        let rhs = unsafe { cstr::slice_at(orig_rhs, orig_rhs_len) };
-        let replaced = replace_termcodes(rhs, sid, dolt, None, cpo, None).unwrap_or_default();
+        let dolt = REPTERM_DO_LT.cast_signed();
+        let replaced = replace_termcodes(orig_rhs, sid, dolt, None, cpo, None).unwrap_or_default();
         MapStr::new(c_prefix(&replaced))
     };
     // "<Nop>" is a noop, and so is a single ^V: `replace_termcodes` may
     // produce an empty string even when `orig_rhs` is not -- see
     // :h map-empty-rhs.
-    args.rhs_is_noop = orig_rhs_len != 0 && str.is_empty();
+    args.rhs_is_noop = !orig_rhs.is_empty() && str.is_empty();
     args.rhs = Some(MapRhs {
         str,
         orig_str,
@@ -228,20 +213,8 @@ pub(crate) fn take_map_arg(to_parse: &mut &[u8], word: &[u8]) -> bool {
 /// spaces included: `:unmap` has no separate `{rhs}`.
 ///
 /// Answers 0 on success and 1 if the arguments are invalid.
-///
-/// # Safety
-/// `strargs` must be live and NUL-terminated.
-pub(crate) unsafe fn str_to_mapargs(
-    strargs: *const c_char,
-    is_unmap: bool,
-    args: &mut MapArguments,
-) -> c_int {
-    // SAFETY: the caller's promise — `strargs` is NUL-terminated, and so is
-    // whatever `skipwhite` leaves inside it.
-    let (base, all) = unsafe {
-        let base = skipwhite(strargs);
-        (base, cstr::bytes_at(base))
-    };
+pub(crate) fn str_to_mapargs(strargs: &[u8], is_unmap: bool, args: &mut MapArguments) -> c_int {
+    let all = skip_white(strargs);
     let mut rest = all;
 
     // Accept <buffer>, <nowait>, <silent>, <expr>, <script> and <unique>
@@ -265,7 +238,6 @@ pub(crate) unsafe fn str_to_mapargs(
             break;
         }
     }
-    let consumed = all.len() - rest.len();
 
     // The next whitespace character ends {lhs} -- unless it is preceded
     // by a CTRL-V, or by a backslash when 'cpoptions' has no 'B'.
@@ -286,30 +258,14 @@ pub(crate) unsafe fn str_to_mapargs(
     let orig_lhs_len = at;
 
     // The given {lhs} may be longer than MAXMAPLEN before termcodes are
-    // replaced ("<Space>" is longer than ' '), so copy it out first.
+    // replaced ("<Space>" is longer than ' '); upstream copies it into a
+    // fixed buffer of 256 first.
     if orig_lhs_len >= 256 {
         return 1;
     }
-    let mut lhs_to_replace = [0 as c_char; 256];
-    for (slot, &byte) in lhs_to_replace.iter_mut().zip(&rest[..orig_lhs_len]) {
-        *slot = byte as c_char;
-    }
-
-    // SAFETY: `consumed + orig_lhs_len` is an index inside `base`'s own
-    // NUL-terminated bytes, and `lhs` names the local copy just made.
-    let ok = p_cpo(|cpo| unsafe {
-        let rhs_start = skipwhite(base.add(consumed + orig_lhs_len));
-        let orig_rhs_len = cstr::bytes_at(rhs_start).len();
-        set_maparg_lhs_rhs(
-            lhs_to_replace.as_ptr(),
-            orig_lhs_len,
-            rhs_start,
-            orig_rhs_len,
-            LUA_NOREF,
-            cpo,
-            args,
-        )
-    });
+    let lhs = &rest[..orig_lhs_len];
+    let rhs = skip_white(&rest[orig_lhs_len..]);
+    let ok = p_cpo(|cpo| set_maparg_lhs_rhs(lhs, rhs, LUA_NOREF, cpo, args));
     if !ok {
         return 1;
     }
@@ -319,45 +275,27 @@ pub(crate) unsafe fn str_to_mapargs(
     0
 }
 
-/// The mapping mode a command name asks for, stepping `cmdp` past the mode
-/// letter it consumed.
+/// The mapping mode a command name asks for, and how many bytes of the name
+/// the mode letter took (0 or 1).
 ///
 /// A leading `n` only means `:nmap` when the next letter is not `o`, which is
 /// what keeps `:noremap` out of Normal mode.
-///
-/// # Safety
-/// `cmdp` must point at a live, NUL-terminated command name.
-pub(crate) unsafe fn get_map_mode(cmdp: *mut *mut c_char, forceit: bool) -> c_int {
-    // SAFETY: the caller's promise — `cmdp` holds a live, NUL-terminated
-    // command name, so its first byte and the one after it are readable.
-    let (mut p, modec) = unsafe {
-        let p = *cmdp;
-        (p.add(1), *p as u8)
+pub(crate) fn get_map_mode(cmd: &[u8], forceit: bool) -> (c_int, usize) {
+    let at = |i: usize| cmd.get(i).copied().unwrap_or(0);
+    let mode = match at(0) {
+        b'i' => MODE_INSERT,                   // :imap
+        b'l' => MODE_LANGMAP,                  // :lmap
+        b'c' => MODE_CMDLINE,                  // :cmap
+        b'n' if at(1) != b'o' => MODE_NORMAL,  // :nmap, avoiding :noremap
+        b'v' => MASK_V,                        // :vmap
+        b'x' => MODE_VISUAL,                   // :xmap
+        b's' => MODE_SELECT,                   // :smap
+        b'o' => MODE_OP_PENDING,               // :omap
+        b't' => MODE_TERMINAL,                 // :tmap
+        _ if forceit => return (MASK_BANG, 0), // :map!
+        _ => return (MASK_MAP, 0),             // :map
     };
-    let mode = match modec {
-        b'i' => MODE_INSERT,  // :imap
-        b'l' => MODE_LANGMAP, // :lmap
-        b'c' => MODE_CMDLINE, // :cmap
-        // SAFETY: `modec` is `n`, so `p` is still inside the name.
-        b'n' if unsafe { *p } != b'o' as c_char => MODE_NORMAL, // :nmap, avoiding :noremap
-        b'v' => MASK_V,                                         // :vmap
-        b'x' => MODE_VISUAL,                                    // :xmap
-        b's' => MODE_SELECT,                                    // :smap
-        b'o' => MODE_OP_PENDING,                                // :omap
-        b't' => MODE_TERMINAL,                                  // :tmap
-        _ => {
-            // SAFETY: `p` was stepped forward once off the name's first byte.
-            p = unsafe { p.sub(1) };
-            if forceit {
-                MASK_BANG // :map!
-            } else {
-                MASK_MAP // :map
-            }
-        }
-    };
-    // SAFETY: the caller's writable slot.
-    unsafe { *cmdp = p };
-    mode
+    (mode, 1)
 }
 
 /// The mapping mode a `maparg()`-style mode string asks for, or 0 if it is
@@ -367,7 +305,6 @@ pub(crate) unsafe fn get_map_mode(cmdp: *mut *mut c_char, forceit: bool) -> c_in
 /// each a whole set.  A combination is only legal when it is one bit, or when
 /// every bit of it lies inside a single one of those two sets; an
 /// abbreviation may only ask for Insert and Cmdline.
-///
 pub(crate) fn get_map_mode_string(mode_string: &[u8], abbr: bool) -> c_int {
     let chars = if mode_string.is_empty() {
         b" ".as_slice() // compatibility

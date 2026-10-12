@@ -17,6 +17,7 @@ use crate::option::vars::P_LANGMAP;
 use crate::types::MB_MAXCHAR;
 use crate::types::MapStr;
 use crate::types::{Failed, MB_MAXBYTES, NUL};
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -184,10 +185,19 @@ pub(crate) fn check_simplify_modifier(max_offset: c_int) -> c_int {
     0
 }
 
+/// A mapping the walk is considering: where it is, and the two flags the
+/// walk compares against later candidates.
+#[derive(Copy, Clone)]
+struct Candidate {
+    at: MapAt,
+    nowait: bool,
+    mode: c_int,
+}
+
 /// What the maphash walk found.
 struct MapSearch {
     /// The best candidate, or `None` when there is none.
-    mp: Option<Mb>,
+    mp: Option<Candidate>,
     /// The match length, or `KEYLEN_PART_MAP` when a longer mapping might
     /// still match once more is typed.
     keylen: c_int,
@@ -234,168 +244,164 @@ unsafe fn search_maphash(
         0
     };
 
-    // Buffer-local mappings first, then the global ones.
-    let mut head = get_buf_maphash_list(local_state, tb_c1);
-    let mut head2 = get_maphash_list(local_state, tb_c1);
-    if head.is_null() {
-        head = head2;
-        head2 = ptr::null_mut();
-    }
+    // SAFETY: the caller's promise — `timedout` is readable.
+    let waited = unsafe { *timedout };
+    let mut mp_match: Option<Candidate> = None;
+    // Buffer-local mappings first, then the global ones; each bucket newest
+    // first, as upstream's lists run.
+    for table in [MapTable::Buffer(Buf::current()), MapTable::Global] {
+        let partial = with_maphash_list(table, local_state, tb_c1, |hash, list| {
+            for (index, mp) in list.iter().enumerate().rev() {
+                // The LHS as a pointer and a length rather than as a slice.
+                // This is the innermost loop of the whole editor's mapping
+                // match -- 5,000 entries walked per resolved key in
+                // `inbench`'s `mapresolve`, which is 10 million entry visits
+                // for the phase -- and the slice form's per-byte bounds check
+                // measured at 10% of it.  The bound the slice carried is not
+                // lost: the walk stops at the LHS's NUL, because no typeahead
+                // byte is one.
+                let keys = mp.m_keys.as_ptr().cast::<u8>();
+                let keylen = mp.m_keys.len() as c_int;
+                // SAFETY: a `MapStr` always has a first byte -- its NUL, at
+                // worst.
+                let first = unsafe { *keys };
+                // Only consider an entry whose first character matches and
+                // that is for the current state. Skip `:lmap` mappings when
+                // keys were mapped.
+                if c_int::from(first) != tb_c1
+                    || mp.m_mode & local_state == 0
+                    || (mp.m_mode & MODE_LANGMAP != 0 && typeahead().maplen() != 0)
+                {
+                    continue;
+                }
 
-    let mut mp_match: Option<Mb> = None;
-    while !head.is_null() {
-        // SAFETY: a non-null entry of one of the two live maphash buckets;
-        // this walk only reads, so nothing unlinks or frees an entry under
-        // it.  Every `m_keys` read below is inside the entry's own
-        // NUL-terminated LHS, whose length is `m_keylen`.
-        let mp = unsafe { Mb::new(head) };
-        // The LHS as a pointer and a length rather than as a slice.  This is
-        // the innermost loop of the whole editor's mapping match -- 5,000
-        // entries walked per resolved key in `inbench`'s `mapresolve`, which
-        // is 10 million entry visits for the phase -- and the slice form's
-        // per-byte bounds check measured at 10% of it.  The bound the slice
-        // carried is not lost: the walk stops at the LHS's NUL, because no
-        // typeahead byte is one.
-        let keys = mp.m_keys.as_ptr().cast::<u8>();
-        let keylen = mp.m_keys.len() as c_int;
-        // SAFETY: a `MapStr` always has a first byte -- its NUL, at worst.
-        let first = unsafe { *keys };
-        'entry: {
-            // Only consider an entry whose first character matches and
-            // that is for the current state. Skip `:lmap` mappings when
-            // keys were mapped.
-            if c_int::from(first) != tb_c1
-                || mp.m_mode & local_state == 0
-                || (mp.m_mode & MODE_LANGMAP != 0 && typeahead().maplen() != 0)
-            {
-                break 'entry;
-            }
-
-            // How many bytes of the typeahead this mapping agrees with.
-            let mut nomap = nolmaplen;
-            let mut modifiers = ModMask::NONE;
-            // Upstream keeps `modifiers == 1` as the marker for "the byte
-            // after this one is the modifier byte", which is not a modifier
-            // bit at all (they start at 0x02); it is a separate flag here.
-            let mut modifier_next = false;
-            let tb = typeahead();
-            let mut mlen = 1;
-            while mlen < tb.len() {
-                let mut c2 = tb.byte(mlen);
-                if nomap > 0 {
-                    if nomap == 2 && c2 == KS_MODIFIER {
-                        modifier_next = true;
-                    } else if nomap == 1 && modifier_next {
-                        modifiers = ModMask::from_bits(c2);
+                // How many bytes of the typeahead this mapping agrees with.
+                let mut nomap = nolmaplen;
+                let mut modifiers = ModMask::NONE;
+                // Upstream keeps `modifiers == 1` as the marker for "the byte
+                // after this one is the modifier byte", which is not a
+                // modifier bit at all (they start at 0x02); it is a separate
+                // flag here.
+                let mut modifier_next = false;
+                let tb = typeahead();
+                let mut mlen = 1;
+                while mlen < tb.len() {
+                    let mut c2 = tb.byte(mlen);
+                    if nomap > 0 {
+                        if nomap == 2 && c2 == KS_MODIFIER {
+                            modifier_next = true;
+                        } else if nomap == 1 && modifier_next {
+                            modifiers = ModMask::from_bits(c2);
+                        }
+                        nomap -= 1;
+                    } else {
+                        if c2 == K_SPECIAL {
+                            nomap = 2;
+                        } else if merge_modifiers(c2, &mut modifiers) == c2 {
+                            // Only apply 'langmap' when merging the modifiers
+                            // into the key would not produce another
+                            // character, so that 'langmap' behaves the same
+                            // in different terminals and GUIs.
+                            c2 = langmap_adjust(c2, true);
+                        }
+                        modifiers = ModMask::NONE;
+                        modifier_next = false;
                     }
-                    nomap -= 1;
-                } else {
-                    if c2 == K_SPECIAL {
-                        nomap = 2;
-                    } else if merge_modifiers(c2, &mut modifiers) == c2 {
-                        // Only apply 'langmap' when merging the modifiers
-                        // into the key would not produce another
-                        // character, so that 'langmap' behaves the same
-                        // in different terminals and GUIs.
-                        c2 = langmap_adjust(c2, true);
+                    // SAFETY: `mlen` has only got here by matching every byte
+                    // before it, so it is at most the index of the LHS's own
+                    // NUL, which no typeahead byte equals.
+                    if unsafe { *keys.add(mlen as usize) } != c2 as u8 {
+                        break;
                     }
-                    modifiers = ModMask::NONE;
-                    modifier_next = false;
+                    mlen += 1;
                 }
-                // SAFETY: `mlen` has only got here by matching every byte
-                // before it, so it is at most the index of the LHS's own NUL,
-                // which no typeahead byte equals.
-                if unsafe { *keys.add(mlen as usize) } != c2 as u8 {
-                    break;
+
+                // Don't allow mapping the first byte(s) of a multibyte
+                // character, which happens after mapping <M-a> and then
+                // changing 'encoding'. Beware that 0x80 is escaped.
+                let mut p1: *const c_char = keys.cast();
+                // SAFETY: the LHS's own NUL-terminated bytes.
+                let p2 = unsafe { mb_unescape(&raw mut p1, &mut ch) };
+                if !p2.is_null()
+                    && c_int::from(utf8len_tab[tb_c1 as usize]) > unsafe { utfc_ptr2len(p2) }
+                {
+                    mlen = 0;
                 }
-                mlen += 1;
-            }
 
-            // Don't allow mapping the first byte(s) of a multibyte
-            // character, which happens after mapping <M-a> and then
-            // changing 'encoding'. Beware that 0x80 is escaped.
-            let mut p1: *const c_char = keys.cast();
-            let p2 = unsafe { mb_unescape(&raw mut p1, &mut ch) };
-            if !p2.is_null()
-                && c_int::from(utf8len_tab[tb_c1 as usize]) > unsafe { utfc_ptr2len(p2) }
-            {
-                mlen = 0;
-            }
-
-            // A full match is `mlen == keylen`; a partial one is the
-            // whole typeahead agreeing with a longer mapping.
-            found.keylen = keylen;
-            if mlen != found.keylen && !(mlen == tb.len() && tb.len() < found.keylen) {
-                // No match; a termcode may still match at the next
-                // character, so remember how far this one agreed.
-                found.max_mlen = found.max_mlen.max(mlen);
-                break 'entry;
-            }
-
-            // When only script-local mappings are allowed, the mapping
-            // has to start with K_SNR.
-            let snr = || {
-                matches!(mp.keys(), [a, b, c, ..] if c_int::from(*a) == K_SPECIAL
-                    && c_int::from(*b) == KS_EXTRA
-                    && c_int::from(*c as c_char) == KE_SNR as c_int)
-            };
-            if tb.noremap(0) == RM_SCRIPT as c_int && !snr() {
-                break 'entry;
-            }
-
-            // Skip the entry when one of the typed keys may not be
-            // remapped. `n` is left at the index that stopped the scan,
-            // or -1 when every byte was remappable.
-            let mut n = mlen;
-            let mut at = 0;
-            loop {
-                n -= 1;
-                if n < 0 {
-                    break;
+                // A full match is `mlen == keylen`; a partial one is the
+                // whole typeahead agreeing with a longer mapping.
+                found.keylen = keylen;
+                if mlen != found.keylen && !(mlen == tb.len() && tb.len() < found.keylen) {
+                    // No match; a termcode may still match at the next
+                    // character, so remember how far this one agreed.
+                    found.max_mlen = found.max_mlen.max(mlen);
+                    continue;
                 }
-                let flags = tb.noremap(at);
-                at += 1;
-                if flags & (RM_NONE as c_int | RM_ABBR as c_int) != 0 {
-                    break;
+
+                // When only script-local mappings are allowed, the mapping
+                // has to start with K_SNR.
+                let snr = || {
+                    matches!(mp.keys(), [a, b, c, ..] if c_int::from(*a) == K_SPECIAL
+                        && c_int::from(*b) == KS_EXTRA
+                        && c_int::from(*c as c_char) == KE_SNR as c_int)
+                };
+                if tb.noremap(0) == RM_SCRIPT as c_int && !snr() {
+                    continue;
+                }
+
+                // Skip the entry when one of the typed keys may not be
+                // remapped. `n` is left at the index that stopped the scan,
+                // or -1 when every byte was remappable.
+                let mut n = mlen;
+                let mut at = 0;
+                loop {
+                    n -= 1;
+                    if n < 0 {
+                        break;
+                    }
+                    let flags = tb.noremap(at);
+                    at += 1;
+                    if flags & (RM_NONE as c_int | RM_ABBR as c_int) != 0 {
+                        break;
+                    }
+                }
+                if !is_plug_map && n >= 0 {
+                    continue;
+                }
+
+                let here = Candidate {
+                    at: MapAt::new(table, hash, index, mp),
+                    nowait: mp.m_nowait,
+                    mode: mp.m_mode,
+                };
+                if found.keylen > tb.len() {
+                    // `<nowait>` is order-dependent, and upstream is the
+                    // same: `mp_match` is only set by an *earlier* iteration
+                    // of this walk, and `map_add` pushes each new mapping to
+                    // the front of its bucket. So a `<nowait>` mapping only
+                    // cuts the wait short when it was defined *after* the
+                    // longer candidate it is ambiguous with. Measured both
+                    // ways -- see the divergence docket, O-B13-1.
+                    if !waited && !mp_match.is_some_and(|m| m.nowait) {
+                        // Stop at a partial match and wait for more input.
+                        found.keylen = KEYLEN_PART_MAP;
+                        found.mp = Some(here);
+                        return true;
+                    }
+                } else if found.keylen > found.mp_match_len
+                    || (found.keylen == found.mp_match_len
+                        && mp_match.is_some_and(|m| m.mode & MODE_LANGMAP == 0)
+                        && mp.m_mode & MODE_LANGMAP != 0)
+                {
+                    // A longer match, or a langmap one at the same length.
+                    mp_match = Some(here);
+                    found.mp_match_len = found.keylen;
                 }
             }
-            if !is_plug_map && n >= 0 {
-                break 'entry;
-            }
-
-            if found.keylen > tb.len() {
-                // `<nowait>` is order-dependent, and upstream is the
-                // same: `mp_match` is only set by an *earlier* iteration
-                // of this walk, and `map_add` pushes each new mapping to
-                // the front of its bucket. So a `<nowait>` mapping only
-                // cuts the wait short when it was defined *after* the
-                // longer candidate it is ambiguous with. Measured both
-                // ways -- see the divergence docket, O-B13-1.
-                // SAFETY: the caller's promise — `timedout` is readable.
-                let waited = unsafe { *timedout };
-                if !waited && !mp_match.is_some_and(|m| m.m_nowait) {
-                    // Stop at a partial match and wait for more input.
-                    found.keylen = KEYLEN_PART_MAP;
-                    found.mp = Some(mp);
-                    return finish_search(found, mp_match);
-                }
-            } else if found.keylen > found.mp_match_len
-                || (found.keylen == found.mp_match_len
-                    && mp_match.is_some_and(|m| m.m_mode & MODE_LANGMAP == 0)
-                    && mp.m_mode & MODE_LANGMAP != 0)
-            {
-                // A longer match, or a langmap one at the same length.
-                mp_match = Some(mp);
-                found.mp_match_len = found.keylen;
-            }
-        }
-
-        // Advance: the buffer-local list first, then the global one.
-        if mp.m_next.is_null() {
-            head = head2;
-            head2 = ptr::null_mut();
-        } else {
-            head = mp.m_next;
+            false
+        });
+        if partial {
+            return finish_search(found, mp_match);
         }
     }
 
@@ -404,12 +410,39 @@ unsafe fn search_maphash(
 }
 
 /// With no partial match, the longest full match is the answer.
-fn finish_search(mut found: MapSearch, mp_match: Option<Mb>) -> MapSearch {
+fn finish_search(mut found: MapSearch, mp_match: Option<Candidate>) -> MapSearch {
     if found.keylen != KEYLEN_PART_MAP && mp_match.is_some() {
         found.mp = mp_match;
         found.keylen = found.mp_match_len;
     }
     found
+}
+
+/// What [`apply_mapping`] reads off the mapping it applies, copied out
+/// before anything runs: evaluating an `<expr>` mapping can invoke a function
+/// that redefines the mapping, which deletes it.
+struct Applied {
+    mode: c_int,
+    noremap: c_int,
+    silent: bool,
+    /// The expression of an `<expr>` mapping.
+    expr: Option<MapExpr>,
+    /// The RHS of any other.
+    rhs: MapStr,
+    /// The LHS spellings the inserted text is compared with: this one, cut
+    /// to the `keylen` bytes that matched, and the twin's whole, if there is
+    /// one.
+    keys: Vec<u8>,
+    alt_keys: Option<Vec<u8>>,
+}
+
+impl Applied {
+    /// Whether `text` starts with one of the two LHS spellings.
+    fn starts_with_lhs(&self, text: &MapStr) -> bool {
+        let text = text.as_bytes_with_nul();
+        let starts_with = |lhs: &[u8]| lhs.len() <= text.len() && text[..lhs.len()] == *lhs;
+        starts_with(&self.keys) || self.alt_keys.as_deref().is_some_and(starts_with)
+    }
 }
 
 /// Replace a matched mapping's LHS in the typeahead with its RHS.
@@ -418,17 +451,46 @@ fn finish_search(mut found: MapSearch, mp_match: Option<Mb>) -> MapSearch {
 /// table in turn, or `map_result_fail`.
 ///
 /// # Safety
-/// `mp` must be a live mapping that matched `keylen` bytes of the typeahead.
-unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
+/// `mapdepth` must point at the caller's counter, and `at` name a mapping
+/// that matched `keylen` bytes of the typeahead.
+unsafe fn apply_mapping(at: MapAt, keylen: c_int, mapdepth: *mut c_int) -> c_int {
+    let applied = at.with(|tables, mp| {
+        // Upstream compares `keylen` bytes, which is never more than the LHS
+        // it matched. Only a `:map` asks, so a `:noremap` copies nothing.
+        let compares = mp.m_noremap == REMAP_YES;
+        let keys = mp.keys();
+        Applied {
+            mode: mp.m_mode,
+            noremap: mp.m_noremap,
+            silent: mp.m_silent,
+            expr: mp.m_expr.then(|| MapExpr::of(mp)),
+            rhs: if mp.m_expr {
+                MapStr::empty()
+            } else {
+                mp.m_rhs.str.clone()
+            },
+            keys: if compares {
+                keys[..keys.len().min(keylen as usize)].to_vec()
+            } else {
+                Vec::new()
+            },
+            alt_keys: tables
+                .twin_keys(false, mp)
+                .filter(|_| compares)
+                .map(|keys| keys.as_bytes().to_vec()),
+        }
+    });
+    // The match ran no user code, so the mapping is still there.
+    let Some(applied) = applied else {
+        return map_result_fail as c_int;
+    };
     let tb = typeahead();
 
     // Write the keys to the script file(s). Note that `:lmap` mappings
     // are written *after* being applied. #5658
-    if keylen > tb.maplen() && mp.m_mode & MODE_LANGMAP == 0 {
-        // SAFETY (this body): `mp` is a live mapping that matched `keylen`
-        // bytes of the typeahead, `mapdepth` is the caller's counter, and the
-        // strings copied out of `mp` before the `<expr>` evaluation are what
-        // keeps this correct when that evaluation frees the mapping.
+    if keylen > tb.maplen() && applied.mode & MODE_LANGMAP == 0 {
+        // SAFETY (this body): `at` matched `keylen` bytes of the typeahead,
+        // and `mapdepth` is the caller's counter.
         unsafe { gotchars(tb.at(tb.maplen()), (keylen - tb.maplen()) as usize) };
     }
 
@@ -451,34 +513,13 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
 
     // In Select mode with a Visual-mode mapping: switch to Visual mode
     // for the duration, and append K_SELECT to switch back.
-    if visual_active() && visual_select() && mp.m_mode & MODE_VISUAL != 0 {
+    if visual_active() && visual_select() && applied.mode & MODE_VISUAL != 0 {
         set_visual_select(false);
-        let _ = unsafe {
-            ins_typebuf(
-                K_SELECT_STRING.as_ptr().cast_mut(),
-                REMAP_NONE,
-                0,
-                true,
-                false,
-            )
-        };
+        let _ = ins_typebuf_text(K_SELECT_STRING, REMAP_NONE, true, false);
     }
 
-    // Copy the fields of *mp that are used below: evaluating an <expr>
-    // mapping can invoke a function that redefines the mapping, which
-    // frees *mp.
-    let save_m_expr = mp.m_expr;
-    let save_m_noremap = mp.m_noremap;
-    let save_m_silent = mp.m_silent;
-    let alt = mp.m_alt;
-    // The two LHS spellings are copied across the evaluation below, which can
-    // redefine -- and so free -- the mapping.  Upstream keeps them for the
-    // `strncmp`s at the end; the stored RHS is only borrowed on the path
-    // where no Vimscript runs at all.
-    let mut save_keys: Vec<Vec<u8>> = Vec::new();
-
     // `:map <expr>`: the RHS is an expression to evaluate.
-    let evaluated = if save_m_expr {
+    let evaluated = if let Some(expr) = &applied.expr {
         let save_vgetc_busy = vgetc_busy.get();
         let save_may_garbage_collect = may_garbage_collect.get();
         let prev_did_emsg = did_emsg.get();
@@ -486,12 +527,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
         vgetc_busy.set(0);
         may_garbage_collect.set(false);
 
-        save_keys.push(mp.keys().to_vec());
-        if !alt.is_null() {
-            // SAFETY: a non-null `m_alt` is this mapping's live twin.
-            save_keys.push(unsafe { (*alt).keys() }.to_vec());
-        }
-        let mut map_str = eval_map_expr(mp, NUL);
+        let mut map_str = eval_map_expr(expr, NUL);
 
         if map_str.as_ref().is_none_or(MapStr::is_empty) {
             if prev_did_emsg != did_emsg.get() {
@@ -517,10 +553,10 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
     } else {
         None
     };
-    let map_str = if save_m_expr {
+    let map_str = if applied.expr.is_some() {
         evaluated.as_ref()
     } else {
-        Some(&mp.m_rhs.str)
+        Some(&applied.rhs)
     };
 
     // Insert the RHS into the typeahead. When the LHS is a prefix of the
@@ -528,54 +564,30 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
     // apply); when m_noremap says so, none of it is.
     let inserted = if let Some(map_str) = map_str {
         // A LANGMAP mapping's keys were not recorded above, so they are
-        // recorded here instead.
-        if keylen > tb.maplen() && mp.m_mode & MODE_LANGMAP != 0 {
+        // recorded here instead. The mode is the copy taken before the
+        // expression ran, which may have deleted the mapping.
+        if keylen > tb.maplen() && applied.mode & MODE_LANGMAP != 0 {
             unsafe { gotchars(map_str.as_ptr().cast(), map_str.len()) };
         }
 
         // Whether the RHS starts with the LHS, which is what decides
-        // between remapping all of it and skipping the first byte. Kept
-        // as a closure rather than a `let`, because upstream only
-        // evaluates it for a `:map` -- for a `:noremap` the two
-        // `strncmp`s are skipped, and `mapresolve` notices.
-        let starts_with = |lhs: &[u8]| {
-            let rhs = map_str.as_bytes_with_nul();
-            lhs.len() <= rhs.len() && rhs[..lhs.len()] == *lhs
-        };
-        // Upstream compares `keylen` bytes, which is never more than the LHS
-        // it matched.
-        let matched = |lhs: &[u8]| lhs.len().min(keylen as usize);
-        let starts_with_lhs = || {
-            if save_m_expr {
-                let lhs = &save_keys[0];
-                starts_with(&lhs[..matched(lhs)])
-                    || save_keys.get(1).is_some_and(|alt| starts_with(alt))
-            } else {
-                // SAFETY: `m_keys` and the twin's are the two LHS spellings;
-                // the mapping is still linked here, because nothing above
-                // evaluated Vimscript.
-                let lhs = mp.keys();
-                starts_with(&lhs[..matched(lhs)])
-                    || (!alt.is_null() && starts_with(unsafe { (*alt).keys() }))
-            }
-        };
-        let noremap = if save_m_noremap != REMAP_YES {
-            save_m_noremap
-        } else if starts_with_lhs() {
+        // between remapping all of it and skipping the first byte; upstream
+        // only asks for a `:map` -- for a `:noremap` the two `strncmp`s are
+        // skipped, and `mapresolve` notices.
+        let noremap = if applied.noremap != REMAP_YES {
+            applied.noremap
+        } else if applied.starts_with_lhs(map_str) {
             REMAP_SKIP
         } else {
             REMAP_YES
         };
 
-        unsafe {
-            ins_typebuf(
-                map_str.as_mut_ptr(),
-                noremap,
-                0,
-                true,
-                cmd_silent.get() || save_m_silent,
-            )
-        }
+        ins_typebuf_text(
+            map_str.as_cstr(),
+            noremap,
+            true,
+            cmd_silent.get() || applied.silent,
+        )
     } else {
         Err(Failed)
     };
@@ -633,7 +645,7 @@ pub(crate) unsafe fn handle_mapping(
         && State.get() != MODE_ASKMORE
         && !at_ins_compl_key();
 
-    let mut mp: Option<Mb> = None;
+    let mut mp: Option<Candidate> = None;
     let mut mp_match_len = 0;
     let mut max_mlen = 0;
     if mappable {
@@ -689,9 +701,9 @@ pub(crate) unsafe fn handle_mapping(
         // A non-negative `keylen` only survives the block above with a
         // mapping to apply; the `else` is the `KEYLEN_PART_*` cases.
         Some(mp) if keylen >= 0 && keylen <= tb.len() => {
-            // SAFETY: `mp` matched `keylen` bytes of the typeahead and is
-            // still linked, and `mapdepth` is the caller's counter.
-            unsafe { apply_mapping(mp, keylen, mapdepth) }
+            // SAFETY: `mp` matched `keylen` bytes of the typeahead, and
+            // `mapdepth` is the caller's counter.
+            unsafe { apply_mapping(mp.at, keylen, mapdepth) }
         }
         _ => map_result_nomatch as c_int,
     }

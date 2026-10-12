@@ -39,7 +39,7 @@ use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_
 use crate::keycodes::{K_SPECIAL, special_key_bytes};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::mapping::{
-    Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
+    MapAt, MapExpr, MapTable, eval_map_expr, langmap_adjust_mb, with_maphash_list,
 };
 use crate::mbyte::{
     mb_unescape, utf_char2bytes, utf_head_off, utf_ptr2cells, utf_ptr2char, utf_ptr2len,

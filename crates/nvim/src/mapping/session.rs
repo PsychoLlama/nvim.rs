@@ -5,8 +5,7 @@
 //! single command name can express, and [`put_escstr`] writes an LHS or RHS
 //! with whatever escaping makes it read back identically.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,13 +15,14 @@
 )]
 
 use super::*;
-use crate::fprintf;
+use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_V, KE_SNR, key_unescape};
-use crate::types::MB_MAXCHAR;
-use crate::types::{Failed, NUL};
+use crate::mbyte::{char_at, unescape_at};
+use crate::types::Failed;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_int;
+use std::io::Write;
 
 /// The command-name prefix letters that reproduce each mode set a `:map`
 /// command can express.
@@ -70,7 +70,7 @@ fn is_cpo_forcing(b: u8) -> bool {
 ///
 /// Script-local and Lua mappings are skipped, as is anything whose RHS
 /// mentions `<SNR>`: none of the three would work when read back.
-fn is_writable_map(mp: Mb) -> bool {
+fn is_writable_map(mp: &MapBlock) -> bool {
     if mp.m_noremap == REMAP_SCRIPT || mp.luaref() != LUA_NOREF {
         return false;
     }
@@ -84,58 +84,78 @@ fn is_writable_map(mp: Mb) -> bool {
     })
 }
 
-/// The session or `.exrc` file being written, whose caller has promised the
-/// stream stays open for as long as the value is used.
+/// The `:map` commands that recreate `mp`, appended to `out` a line each.
 ///
-/// Every method answers `false` on a write error, which is what upstream's
-/// `< 0` tests come to.  The promise is discharged by the `:mksession` /
-/// `:mkexrc` frame that opened the file: it outlives every write made out of
-/// it.  Construction is the unsafe step, once; every write after it is
-/// ordinary checked code, which is what makes this worth a newtype.
-#[derive(Copy, Clone)]
-struct Out(*mut FILE);
+/// It is possible to create a mapping and then `:unmap` certain modes; that
+/// is recreated here by mapping the individual modes, which takes up to
+/// three commands.  `did_cpo` says whether the `'cpo'` reset has been written
+/// yet.  Answers `Err` for a mode set no command can express.
+fn put_map(
+    out: &mut Vec<Vec<u8>>,
+    mp: &MapBlock,
+    abbr: bool,
+    local: bool,
+    did_cpo: &mut bool,
+) -> Result<(), Failed> {
+    let bang = mp.m_mode == MODE_CMDLINE | MODE_INSERT;
+    let cmd: &[u8] = if abbr {
+        b"abbr"
+    } else if bang {
+        b"map!"
+    } else {
+        b"map"
+    };
+    let Some(&(_, letters)) = MODE_COMMANDS.iter().find(|(mode, _)| *mode == mp.m_mode) else {
+        return Err(Failed);
+    };
 
-impl Out {
-    /// # Safety
-    /// `fd` must stay an open stream for as long as the value is used.
-    unsafe fn new(fd: *mut FILE) -> Self {
-        Self(fd)
-    }
+    let mut letters = letters.iter().copied();
+    let mut c1 = letters.next().unwrap_or(0);
+    loop {
+        // When writing the <> form, 'cpo' has to be the Vim default; say so
+        // once, the first time it can matter.
+        if !*did_cpo {
+            let forcing = |bytes: &[u8]| bytes.iter().copied().any(is_cpo_forcing);
+            if mp.rhs().is_empty() || forcing(mp.rhs()) || forcing(mp.keys()) {
+                *did_cpo = true; // an empty RHS will use <Nop>
+                out.push(b"let s:cpo_save=&cpo".to_vec());
+                out.push(b"set cpo&vim".to_vec());
+            }
+        }
 
-    /// Write a NUL-terminated string.
-    fn puts(self, s: &CStr) -> bool {
-        // SAFETY: the constructor's promise — an open stream — and `s` is
-        // NUL-terminated by its type.
-        unsafe { fputs(s.as_ptr(), self.0) >= 0 }
-    }
+        let mut line = Vec::new();
+        if c1 != 0 {
+            line.push(c1);
+        }
+        if mp.m_noremap != REMAP_YES {
+            line.extend_from_slice(b"nore");
+        }
+        line.extend_from_slice(cmd);
+        if local {
+            line.extend_from_slice(b" <buffer>");
+        }
+        if mp.m_nowait {
+            line.extend_from_slice(b" <nowait>");
+        }
+        if mp.m_silent {
+            line.extend_from_slice(b" <silent>");
+        }
+        if mp.m_expr {
+            line.extend_from_slice(b" <expr>");
+        }
 
-    /// Write a literal through `fprintf`, as upstream does.
-    fn printf(self, s: &CStr) -> bool {
-        // SAFETY: as [`Out::puts`]; every caller passes a literal with no
-        // conversion in it, so there are no arguments to check.
-        unsafe { fprintf!(self.0, s.as_ptr()) >= 0 }
-    }
+        line.push(b' ');
+        put_escstr(&mut line, mp.keys(), EscTarget::MapLhs);
+        line.push(b' ');
+        put_escstr(&mut line, mp.rhs(), EscTarget::MapRhs);
+        out.push(line);
 
-    /// Write one byte through `putc`.
-    fn putc(self, c: c_int) -> bool {
-        // SAFETY: as [`Out::puts`].
-        unsafe { putc(c, self.0) >= 0 }
+        c1 = letters.next().unwrap_or(0);
+        if c1 == 0 {
+            break;
+        }
     }
-
-    /// Write one byte through `fputc`.
-    fn fputc(self, c: c_int) -> bool {
-        // SAFETY: as [`Out::puts`].
-        unsafe { fputc(c, self.0) >= 0 }
-    }
-
-    /// End the line, honouring `'sessionoptions'`'s line-ending choice.
-    ///
-    /// The one method that never answers `false`: see
-    /// [`put_eol_unchecked`] for the upstream check this preserves.
-    fn eol(self) -> bool {
-        // SAFETY: as [`Out::puts`].
-        unsafe { put_eol_unchecked(self.0) }
-    }
+    Ok(())
 }
 
 /// Write map commands for the current mappings to an `.exrc` file.
@@ -143,12 +163,11 @@ impl Out {
 /// `buf` names the buffer whose local mappings to write, or is `None` for
 /// the global ones.  Answers `Err` on a write error.
 ///
-/// # Safety
-/// `fd` must be an open stream.
-pub unsafe fn makemap(fd: *mut FILE, buffer: Option<Buf>) -> Result<(), Failed> {
-    // SAFETY: the caller's promise — `fd` is an open stream for the whole of
-    // this body.
-    let out = unsafe { Out::new(fd) };
+/// The commands are rendered first, out of the table's borrow, and then
+/// written a line at a time.  A newline's write error is not reported:
+/// upstream's `put_eol(fd) < 0` never fires.
+pub fn makemap(out: &mut dyn Write, buffer: Option<Buf>) -> Result<(), Failed> {
+    let mut text = Vec::new();
     let mut did_cpo = false;
     let table = match buffer {
         Some(buf) => MapTable::Buffer(buf),
@@ -156,106 +175,29 @@ pub unsafe fn makemap(fd: *mut FILE, buffer: Option<Buf>) -> Result<(), Failed> 
     };
 
     // Do the loop twice: once for mappings, once for abbreviations.
+    let mut illegal = false;
     for abbr in [false, true] {
-        let write = |mp: Mb| {
-            if !is_writable_map(mp) {
-                return None;
-            }
-
-            // It is possible to create a mapping and then `:unmap`
-            // certain modes; that is recreated here by mapping the
-            // individual modes, which takes up to three commands.
-            let bang = mp.m_mode == MODE_CMDLINE | MODE_INSERT;
-            let cmd = if abbr {
-                c"abbr"
-            } else if bang {
-                c"map!"
-            } else {
-                c"map"
-            };
-            let Some(&(_, letters)) = MODE_COMMANDS.iter().find(|(mode, _)| *mode == mp.m_mode)
-            else {
-                iemsg(gettext(c"E228: makemap: Illegal mode"));
-                return Some(Failed);
-            };
-
-            let mut letters = letters.iter().copied();
-            let mut c1 = letters.next().unwrap_or(0);
-            loop {
-                // When writing the <> form, 'cpo' has to be the Vim
-                // default; say so once, the first time it can matter.
-                if !did_cpo {
-                    let forcing = |bytes: &[u8]| bytes.iter().copied().any(is_cpo_forcing);
-                    if mp.rhs().is_empty() {
-                        did_cpo = true; // will use <Nop>
-                    } else if forcing(mp.rhs()) || forcing(mp.keys()) {
-                        did_cpo = true;
-                    }
-                    if did_cpo
-                        && !(out.printf(c"let s:cpo_save=&cpo")
-                            && out.eol()
-                            && out.printf(c"set cpo&vim")
-                            && out.eol())
-                    {
-                        return Some(Failed);
-                    }
-                }
-
-                if c1 != 0 && !out.putc(c_int::from(c1)) {
-                    return Some(Failed);
-                }
-                if mp.m_noremap != REMAP_YES && !out.printf(c"nore") {
-                    return Some(Failed);
-                }
-                if !out.puts(cmd) {
-                    return Some(Failed);
-                }
-                if buffer.is_some() && !out.puts(c" <buffer>") {
-                    return Some(Failed);
-                }
-                if mp.m_nowait && !out.puts(c" <nowait>") {
-                    return Some(Failed);
-                }
-                if mp.m_silent && !out.puts(c" <silent>") {
-                    return Some(Failed);
-                }
-                if mp.m_expr && !out.puts(c" <expr>") {
-                    return Some(Failed);
-                }
-
-                // SAFETY: `m_keys` and `m_str` are the mapping's own
-                // NUL-terminated strings and `out` an open stream.
-                let wrote = unsafe {
-                    out.putc(c_int::from(b' '))
-                        && put_escstr(fd, mp.m_keys.as_ptr(), EscTarget::MapLhs).is_ok()
-                        && out.putc(c_int::from(b' '))
-                        && put_escstr(fd, mp.m_rhs.str.as_ptr(), EscTarget::MapRhs).is_ok()
-                        && out.eol()
-                };
-                if !wrote {
-                    return Some(Failed);
-                }
-
-                c1 = letters.next().unwrap_or(0);
-                if c1 == 0 {
-                    break;
-                }
-            }
-            None
-        };
-        // SAFETY: the tables are live, and `write` neither unlinks nor frees
-        // an entry.
-        if let Some(failed) = unsafe { map_walk(table, abbr, write) } {
-            return Err(failed);
+        illegal = table.with(|tables| {
+            tables
+                .walk(abbr)
+                .filter(|mp| is_writable_map(mp))
+                .any(|mp| put_map(&mut text, mp, abbr, buffer.is_some(), &mut did_cpo).is_err())
+        });
+        if illegal {
+            break;
         }
     }
 
-    if did_cpo
-        && !(out.printf(c"let &cpo=s:cpo_save")
-            && out.eol()
-            && out.printf(c"unlet s:cpo_save")
-            && out.eol())
-    {
+    if !illegal && did_cpo {
+        text.push(b"let &cpo=s:cpo_save".to_vec());
+        text.push(b"unlet s:cpo_save".to_vec());
+    }
+    for line in &text {
+        out.write_all(line).map_err(|_| Failed)?;
+        let _ = out.write_all(b"\n");
+    }
+    if illegal {
+        iemsg(gettext(c"E228: makemap: Illegal mode"));
         return Err(Failed);
     }
     Ok(())
@@ -273,151 +215,90 @@ pub enum EscTarget {
     SetValue,
 }
 
-/// Write `strstart` to `fd` with the escaping `what` calls for.
-///
-/// Answers `Err` on a write error.
-///
-/// # Safety
-/// `fd` must be an open stream and `strstart` live and NUL-terminated.
-pub unsafe fn put_escstr(
-    fd: *mut FILE,
-    strstart: *const c_char,
-    what: EscTarget,
-) -> Result<(), Failed> {
-    let mut ch = [0 as c_char; MB_MAXCHAR];
-    // SAFETY: the caller's promise -- `fd` is an open stream.
-    let out = unsafe { Out::new(fd) };
-    let start = strstart.cast::<u8>().cast_mut();
-    let mut str = start;
-
+/// Append `text` to `out` with the escaping `what` calls for.
+pub(crate) fn put_escstr(out: &mut Vec<u8>, text: &[u8], what: EscTarget) {
     // :map xx <Nop>
-    // SAFETY: the caller's promise -- `strstart` is live and NUL-terminated.
-    if unsafe { c_int::from(*str) } == NUL && what == EscTarget::MapRhs {
-        if !out.printf(c"<Nop>") {
-            return Err(Failed);
-        }
-        return Ok(());
+    if text.is_empty() && what == EscTarget::MapRhs {
+        out.extend_from_slice(b"<Nop>");
+        return;
     }
 
-    loop {
-        // SAFETY: as above; the walk stops at the NUL.
-        if unsafe { c_int::from(*str) } == NUL {
-            break;
-        }
+    let at = |i: usize| cstr::byte_at(text, i);
+    let mut i = 0;
+    while i < text.len() {
         // Check for a multi-byte character, which may contain escaped
         // K_SPECIAL bytes.
-        // SAFETY: `mb_unescape` reads `str`'s NUL-terminated tail and steps
-        // `str` past whatever it consumed.
-        let mut p = unsafe { mb_unescape((&raw mut str).cast(), &mut ch) };
-        'next: {
-            if !p.is_null() {
-                loop {
-                    // SAFETY: `p` is `mb_unescape`'s NUL-terminated answer.
-                    let c = unsafe { c_int::from(*p) };
-                    if c == NUL {
-                        break;
-                    }
-                    if !out.fputc(c) {
-                        return Err(Failed);
-                    }
-                    // SAFETY: as above.
-                    p = unsafe { p.add(1) };
-                }
-                // SAFETY: `mb_unescape` stepped `str` past at least one byte.
-                str = unsafe { str.sub(1) };
-                break 'next;
-            }
+        if let Some((bytes, used)) = unescape_at(&text[i..]) {
+            out.extend_from_slice(cstr::in_bytes(&bytes).to_bytes());
+            i += used;
+            continue;
+        }
 
-            // SAFETY: `str` is on a non-NUL byte of the caller's string.
-            let mut c = unsafe { c_int::from(*str) };
-            // Special key codes have to be translated to make sense when
-            // they are read back.
-            if c == K_SPECIAL && what != EscTarget::SetValue {
-                let mut modifiers = ModMask::NONE;
-                // SAFETY: a `K_SPECIAL` escape is three bytes long, so
-                // `str[1]` and `str[2]` are inside the same string.
-                if unsafe { c_int::from(*str.add(1)) } == KS_MODIFIER {
-                    // SAFETY: as above.
-                    unsafe {
-                        modifiers = ModMask::from_bits(c_int::from(*str.add(2)));
-                        str = str.add(3);
-                    }
+        let mut c = c_int::from(text[i]);
+        // Special key codes have to be translated to make sense when they
+        // are read back.
+        if c == K_SPECIAL && what != EscTarget::SetValue {
+            let mut modifiers = ModMask::NONE;
+            // A `K_SPECIAL` escape is three bytes long.
+            if c_int::from(at(i + 1)) == KS_MODIFIER {
+                modifiers = ModMask::from_bits(c_int::from(at(i + 2)));
+                i += 3;
 
-                    // Modifiers can apply to multi-byte characters too.
-                    // SAFETY: as the first `mb_unescape` above.
-                    p = unsafe { mb_unescape((&raw mut str).cast(), &mut ch) };
-                    if p.is_null() {
-                        // SAFETY: `str` is still inside the caller's string.
-                        c = unsafe { c_int::from(*str) };
-                    } else {
+                // Modifiers can apply to multi-byte characters too.
+                match unescape_at(&text[i.min(text.len())..]) {
+                    None => c = c_int::from(at(i)),
+                    Some((bytes, used)) => {
                         // Retrieve the codepoint from the unescaped text.
-                        // SAFETY: `p` is `mb_unescape`'s NUL-terminated answer.
-                        c = unsafe { utf_ptr2char(p) };
-                        // SAFETY: as above.
-                        str = unsafe { str.sub(1) };
+                        c = char_at(cstr::in_bytes(&bytes).to_bytes());
+                        i += used - 1;
                     }
                 }
-                if c == K_SPECIAL {
-                    // SAFETY: as above -- the escape's two trailing bytes.
-                    unsafe {
-                        c = key_unescape(*str.add(1), *str.add(2));
-                        str = str.add(2);
-                    }
-                }
-                if c < 0 || !modifiers.is_empty() {
-                    // A special key.
-                    let name = get_special_key_name(c, modifiers);
-                    // SAFETY: a NUL-terminated rendering that outlives the
-                    // call, written to the open stream.
-                    if unsafe { fputs(name.as_ptr(), fd) } < 0 {
-                        return Err(Failed);
-                    }
-                    break 'next;
-                }
             }
-
-            // A '\n' in a map command is written as <NL>; in a set
-            // command as \^V^J.
-            if c == NL {
-                let form = if what == EscTarget::SetValue {
-                    c"\\\x16\n"
-                } else {
-                    c"<NL>"
-                };
-                if !out.printf(form) {
-                    return Err(Failed);
-                }
-                break 'next;
+            if c == K_SPECIAL {
+                // The escape's two trailing bytes.
+                c = key_unescape(at(i + 1), at(i + 2));
+                i += 2;
             }
-
-            // Some characters have to be escaped with CTRL-V to keep
-            // DoOneCmd() from misreading them; a space, Tab or '"' needs
-            // a backslash to keep do_set() from misreading it. A '<'
-            // needs a CTRL-V or it starts a special key name, a space
-            // needs one in a :map lhs, and in a :map rhs one does only at
-            // the very start.
-            if what == EscTarget::SetValue
-                && (ascii_iswhite(c) || c == c_int::from(b'"') || c == c_int::from(b'\\'))
-            {
-                if !out.putc(c_int::from(b'\\')) {
-                    return Err(Failed);
-                }
-            } else if (!(c_int::from(b' ')..=c_int::from(b'~')).contains(&c)
-                || c == c_int::from(b'|')
-                || (what == EscTarget::MapLhs && c == c_int::from(b' '))
-                || (what == EscTarget::MapRhs && str == start && c == c_int::from(b' '))
-                || (what != EscTarget::SetValue && c == c_int::from(b'<')))
-                && !out.putc(Ctrl_V)
-            {
-                return Err(Failed);
-            }
-            if !out.putc(c) {
-                return Err(Failed);
+            if c < 0 || !modifiers.is_empty() {
+                // A special key.
+                let name = get_special_key_name(c, modifiers);
+                out.extend_from_slice(cstr::in_chars(&name).to_bytes());
+                i += 1;
+                continue;
             }
         }
-        // SAFETY: `str` is on a non-NUL byte, so the next one is in the
-        // caller's string.
-        str = unsafe { str.add(1) };
+
+        // A '\n' in a map command is written as <NL>; in a set command as
+        // \^V^J.
+        if c == NL {
+            out.extend_from_slice(if what == EscTarget::SetValue {
+                b"\\\x16\n"
+            } else {
+                b"<NL>"
+            });
+            i += 1;
+            continue;
+        }
+
+        // Some characters have to be escaped with CTRL-V to keep
+        // DoOneCmd() from misreading them; a space, Tab or '"' needs a
+        // backslash to keep do_set() from misreading it. A '<' needs a
+        // CTRL-V or it starts a special key name, a space needs one in a
+        // :map lhs, and in a :map rhs one does only at the very start.
+        if what == EscTarget::SetValue
+            && (ascii_iswhite(c) || c == c_int::from(b'"') || c == c_int::from(b'\\'))
+        {
+            out.push(b'\\');
+        } else if !(c_int::from(b' ')..=c_int::from(b'~')).contains(&c)
+            || c == c_int::from(b'|')
+            || (what == EscTarget::MapLhs && c == c_int::from(b' '))
+            || (what == EscTarget::MapRhs && i == 0 && c == c_int::from(b' '))
+            || (what != EscTarget::SetValue && c == c_int::from(b'<'))
+        {
+            out.push(Ctrl_V.to_le_bytes()[0]);
+        }
+        // `putc` writes the low byte.
+        out.push(c.to_le_bytes()[0]);
+        i += 1;
     }
-    Ok(())
 }

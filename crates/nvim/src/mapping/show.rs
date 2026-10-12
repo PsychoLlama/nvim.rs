@@ -4,8 +4,7 @@
 //! [`translate_mapping`] is the same rendering for completion, which
 //! [`expand_mappings`] runs over the whole table for `:map <Tab>`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cmdexpand::Scored;
@@ -13,6 +12,7 @@ use crate::cmdexpand::fuzzy_sorted;
 use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_J, Ctrl_V, Key, key_unescape};
+use crate::lua::executor::funcref_description;
 use crate::memory::XString;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
@@ -30,7 +30,7 @@ static EXPAND_BUFFER: GlobalCell<bool> = GlobalCell::new(false);
 /// Print one mapping in `:map`'s four columns: modes, LHS, flags, RHS.
 ///
 /// `local` marks a buffer-local mapping with `@`.
-pub(crate) fn showmap(mp: Mb, local: bool) {
+pub(crate) fn showmap(mp: &MapBlock, local: bool) {
     let rhs = &mp.m_rhs;
     let filtered = message_filtered(mp.m_keys.as_cstr())
         && message_filtered(rhs.str.as_cstr())
@@ -50,7 +50,7 @@ pub(crate) fn showmap(mp: Mb, local: bool) {
     }
 
     let mapchars = map_mode_to_chars(mp.m_mode);
-    let modes = cstr::in_chars(&mapchars);
+    let modes = mapchars.as_cstr();
     msg_str(modes);
     let mut len = modes.count_bytes();
     len += 1;
@@ -82,10 +82,9 @@ pub(crate) fn showmap(mp: Mb, local: bool) {
     // `false` below would show only things like <Up> as such on the rhs
     // and not M-x etc; `true` gets both -- webb
     if rhs.luaref() != LUA_NOREF {
-        // SAFETY: the mapping's own reference; the rendering is the guard's.
-        let text = unsafe { COwned::new(nlua_funcref_str(rhs.luaref())) };
-        // SAFETY: a NUL-terminated rendering that outlives the call.
-        msg_str_hl(unsafe { cstr::at(text.as_c_ptr()) }, HLF_8, false);
+        if let Some(text) = funcref_description(rhs.luaref()) {
+            msg_str_hl(text.as_cstr(), HLF_8, false);
+        }
     } else if rhs.str.is_empty() {
         msg_str_hl(c"<Nop>", HLF_8, false);
     } else {
@@ -137,9 +136,7 @@ pub(crate) fn translate_mapping(str_in: &[u8], cpo: &CStr) -> Vec<u8> {
                 if c < 0 || !modifiers.is_empty() {
                     // A special key.
                     let name = get_special_key_name(c, modifiers);
-                    // SAFETY: `name` is a NUL-terminated rendering that
-                    // outlives the call.
-                    out.extend_from_slice(unsafe { cstr::bytes_at(name.as_ptr()) });
+                    out.extend_from_slice(cstr::in_chars(&name).to_bytes());
                     break 'next;
                 }
             }
@@ -198,9 +195,7 @@ pub fn set_context_in_map_cmd(
     }
 
     if isunmap {
-        let mut name = cmd.as_ptr().cast_mut();
-        // SAFETY: a NUL-terminated command name, which the walk only reads.
-        let mode = unsafe { get_map_mode(&raw mut name, forceit || isabbrev) };
+        let (mode, _) = get_map_mode(cmd.to_bytes(), forceit || isabbrev);
         EXPAND_MAPMODES.set(mode);
     } else {
         let mut modes = MODE_INSERT | MODE_CMDLINE;
@@ -298,13 +293,21 @@ pub fn expand_mappings(pat: &CStr, regmatch: &mut RegMatch) -> Result<Vec<XStrin
     } else {
         MapTable::Global
     };
-    let collect = |mp: Mb| {
-        if mp.m_simplified || mp.m_mode & EXPAND_MAPMODES.get() == 0 {
-            return None;
-        }
-        let mut rendering = p_cpo(|cpo| translate_mapping(mp.keys(), cpo));
+    // The names first, out of the table's borrow: the matcher runs a regexp.
+    let modes = EXPAND_MAPMODES.get();
+    let names: Vec<Vec<u8>> = table.with(|tables| {
+        let shown = |mp: &&MapBlock| !mp.m_simplified && mp.m_mode & modes != 0;
+        p_cpo(|cpo| {
+            tables
+                .walk(abbr)
+                .filter(shown)
+                .map(|mp| translate_mapping(mp.keys(), cpo))
+                .collect()
+        })
+    });
+    for mut rendering in names {
         if rendering.is_empty() {
-            return None; // nothing to match against
+            continue; // nothing to match against
         }
         // Matched as a C string, which stops at a NUL the keys may hold.
         rendering.push(0);
@@ -312,11 +315,7 @@ pub fn expand_mappings(pat: &CStr, regmatch: &mut RegMatch) -> Result<Vec<XStrin
         if let Some(score) = matched(regmatch, text.as_cstr()) {
             push(&mut scored, &mut plain, text, score);
         }
-        None
-    };
-    // SAFETY: the tables are live and `collect` neither unlinks nor frees an
-    // entry.
-    unsafe { map_walk::<()>(table, abbr, collect) };
+    }
 
     let mut found = if fuzzy {
         // Fuzzy matching sorts them by score.

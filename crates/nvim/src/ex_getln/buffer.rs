@@ -537,9 +537,12 @@ pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
         spos = 0;
     }
 
-    let (buff, col, mincol) = (cc.text(), cc.cmdpos, spos as ::core::ffi::c_int);
-    // SAFETY: the live command line, and two offsets inside it.
-    unsafe { check_abbr(c, buff, col, mincol) }
+    // A copy of the line before the cursor: the expansion can run user code,
+    // which may change the command line.
+    let col = usize::try_from(cc.cmdpos).unwrap_or(0);
+    let text = cc.text_bytes();
+    let text = text[..col.min(text.len())].to_vec();
+    check_abbr(c, text, spos as ::core::ffi::c_int)
 }
 
 // ---------------------------------------------------------------------------

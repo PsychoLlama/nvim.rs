@@ -346,6 +346,20 @@ pub fn nlua_call_ref_quiet(
     unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, false) }.unwrap_or(Object::Nil)
 }
 
+/// [`nlua_call_ref`] answering a failure to the caller, who reports it.
+pub(crate) fn nlua_call_ref_reporting(
+    ref_0: LuaRef,
+    name: Option<&CStr>,
+    args: Array,
+    mode: LuaRetMode,
+) -> Result<Object, Error> {
+    let name = name.map_or(ptr::null(), CStr::as_ptr);
+    // SAFETY: as [`nlua_call_ref_quiet`] -- `name` is null or a terminated
+    // string that outlives the call, and a reference that names nothing
+    // pushes nil, which the protected call reports.
+    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, true) }
+}
+
 /// How many results `mode` wants off the call.
 fn mode_ret(mode: LuaRetMode) -> c_int {
     if mode == kRetMulti { LUA_MULTRET } else { 1 }

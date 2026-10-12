@@ -99,7 +99,7 @@ pub(crate) fn command_line_toggle_langmap(s: Cls) {
     } else {
         ::core::ptr::null_mut::<OptInt>()
     };
-    if unsafe { map_to_exists_mode(c"".as_ptr(), MODE_LANGMAP, false) } {
+    if map_to_exists_mode(b"", MODE_LANGMAP, false) {
         // ":lmap" mappings exist; toggle the use of mappings.
         State.set(State.get() ^ MODE_LANGMAP);
         if !b_im_ptr.is_null() {

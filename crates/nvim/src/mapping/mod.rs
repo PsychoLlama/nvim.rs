@@ -9,19 +9,19 @@
 //!
 //! # Ownership
 //!
-//! Nothing in this module is freed by hand.  A mapping's four strings are
-//! owned: the LHS is a [`MapStr`] and the three RHS ones a [`MapRhs`], both
-//! held by value on the entry.  Upstream keeps *one* RHS per `<C-H>`-style
-//! pair and leaves it owned by whichever of the two is freed second, using
-//! `m_alt` as the "the other one still owns them" flag; here the twin gets
-//! its own copy — the pair is rare, and a shared box would be an allocation
-//! and an indirection on every entry of every bucket walk.  Only the Lua
-//! callback is shared (an [`Rc<MapCallback>`], `None` when there is none),
-//! because a registry reference cannot be duplicated; `m_alt` is now no more
-//! than the twin's address.
-//! The entry itself is a `Box` its list holds by raw pointer, so a mapping
-//! keeps the stable address `getchar`'s match loop and the delete-walk need,
-//! and [`mapblock_free`] is `Box::from_raw` plus one unlink.
+//! Nothing in this module is freed by hand.  A table owns its entries by
+//! value (see [`MapTables`](crate::types::MapTables)); a mapping's four
+//! strings are owned: the LHS is a [`MapStr`] and the three RHS ones a
+//! [`MapRhs`], both held by value on the entry.  Upstream keeps *one* RHS per
+//! `<C-H>`-style pair and leaves it owned by whichever of the two is freed
+//! second, using `m_alt` as the "the other one still owns them" flag; here
+//! the twin gets its own copy — the pair is rare.  Only the Lua callback is
+//! shared (an [`Rc<MapCallback>`], `None` when there is none), because a
+//! registry reference cannot be duplicated; `m_alt` names the twin by id.
+//!
+//! Nothing outside a table's borrow holds an address into it: what has to
+//! outlive one -- the match the typeahead found, which an `<expr>` RHS can
+//! delete -- holds a [`MapAt`], an id the table re-finds.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
@@ -30,9 +30,9 @@
 use crate::types::{NL, ScriptCtx};
 use core::ffi::{CStr, c_int};
 
-use crate::api::private::helpers::{api_set_sctx, find_buffer_by_handle, string_to_cstr};
+use crate::api::private::helpers::{api_set_sctx, find_buffer_by_handle};
 use crate::ascii::{ascii_isspace, ascii_iswhite};
-use crate::charset::{skipwhite, transchar, vim_iswordp};
+use crate::charset::transchar;
 use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::eval::typval::{
     dict_find, dict_get_bool, dict_get_number, dict_get_string_buf, tv_check_for_dict_arg,
@@ -42,10 +42,9 @@ use crate::eval::userfunc::find_func;
 use crate::eval::vars::set_vim_var_char;
 use crate::eval::{eval_to_string, last_set_msg};
 use crate::ex_cmds::check_secure;
-use crate::ex_session::put_eol_unchecked;
 use crate::fuzzy::fuzzy_match_str;
+use crate::getchar::noremap_keys;
 use crate::getchar::state::{got_int, langmap_mapchar, mapped_ctrl_c};
-use crate::getchar::{ins_typebuf, noremap_keys};
 use crate::global_cell::GlobalCell;
 use crate::guard::secure;
 use crate::highlight_group::HLF_8;
@@ -53,35 +52,29 @@ use crate::keycodes::{
     K_SPECIAL, escape_ks_bytes, get_special_key_name, push_char_escaped, replace_termcodes,
     unescape_ks, unescape_ks_in,
 };
-use crate::lua::executor::{
-    api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,
-};
+use crate::lua::executor::api_new_luaref;
+use crate::mbyte::cluster_len;
 use crate::message::state::{msg_col, msg_row, msg_silent};
 use crate::message::{e_invarg, e_noabbr, e_nomap};
-use crate::option::vars::{p_cpo, p_verbose};
-use crate::runtime::state::current_sctx;
-use crate::state::mode::{State, no_abbr};
-
-use crate::mbyte::{cluster_len, mb_prevptr, mb_unescape, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
-use crate::memory::xfree;
 use crate::message::{
     emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_display, msg_display_keys,
     msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, special_keys_text,
 };
-use crate::os::cshim::{gettext, putc};
+use crate::option::vars::{p_cpo, p_verbose};
+use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
+use crate::runtime::state::current_sctx;
+use crate::state::mode::{State, no_abbr};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
     MODE_TERMINAL, MODE_VISUAL,
 };
 use crate::types::{
-    ApiDict, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, FILE, Integer,
+    ApiDict, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, Integer,
     KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs, MapStr, Object,
     OptSet, RegMatch, RemapValues, ScriptId, String_0, TypVal, VarNumber, ptrdiff_t, size_t,
     uint64_t,
 };
-use crate::winlayer::Live;
-use ::libc::{abort, fputc, fputs};
 use std::rc::Rc;
 
 // The carve of the transpiled module; see each child's docs.
@@ -114,15 +107,6 @@ pub const REPTERM_NO_SIMPLIFY: ::core::ffi::c_uint = 8;
 pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
 pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetObject: LuaRetMode = 0;
-/// One mapping or abbreviation, whose caller has promised it is still linked.
-///
-/// The promise is discharged by the mapping tables: an entry lives until
-/// [`mapblock_free`] takes it off its list, so a handle derived during a walk
-/// is good until the walk unlinks something.  The two functions that *delete*
-/// while walking hold a [`Cursor`] instead — the address of an entry's own
-/// `m_next`, which [`Live`]'s `DerefMut` would invalidate.
-pub(crate) type Mb = Live<MapBlock>;
-
 /// The `:map` arguments being parsed, and the owner of everything a parse
 /// allocates.
 ///
@@ -214,7 +198,6 @@ pub const MAPTYPE_UNMAP: ::core::ffi::c_uint = 1;
 pub const MAPTYPE_NOREMAP: ::core::ffi::c_uint = 2;
 pub const MAPTYPE_UNMAP_LHS: ::core::ffi::c_uint = 3;
 pub const MAPTYPE_MAP: ::core::ffi::c_uint = 0;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = Array::EMPTY;
 /// How many hash buckets the mapping table has.

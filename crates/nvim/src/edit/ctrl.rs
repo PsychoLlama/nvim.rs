@@ -206,8 +206,7 @@ pub(crate) fn ins_ctrl_g() {
 
 /// CTRL-^ in Insert mode: toggle the `:lmap` mappings.
 pub(crate) fn ins_ctrl_hat() {
-    // SAFETY: a static empty mode string, and `curbuf` is live.
-    if unsafe { map_to_exists_mode(c"".as_ptr(), MODE_LANGMAP, false) } {
+    if map_to_exists_mode(b"", MODE_LANGMAP, false) {
         // `:lmap` mappings exist, so the key toggles their use.
         if State.get() & MODE_LANGMAP != 0 {
             Buf::current().b_p_iminsert = B_IMODE_NONE as OptInt;

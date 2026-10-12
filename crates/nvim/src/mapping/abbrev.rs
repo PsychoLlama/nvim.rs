@@ -6,29 +6,27 @@
 //! evaluates an `<expr>` mapping's RHS, which both this and the mapping match
 //! need.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
-use crate::getchar::typeahead;
+use crate::charset::is_word_at;
+use crate::getchar::{ins_typebuf_text, typeahead};
 use crate::guard::Lock;
-use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
-use crate::memory::XString;
+use crate::keycodes::{Ctrl_RSB, Ctrl_V, key_escape};
+use crate::lua::executor::nlua_call_ref_reporting;
+use crate::mbyte::head_off;
 use crate::message_fmt::msg_cstr;
 use crate::semsg_multiline;
-use crate::types::{MB_MAXBYTES, NUL};
+use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
-/// Whether `mp`'s LHS is exactly the bytes at `word`, in a mode that is
-/// current.
+/// Whether `mp`'s LHS is exactly `word`, in a mode that is current.
 ///
 /// The stored LHS may carry `K_SPECIAL` escapes, which the text in the buffer
 /// does not, so it is unescaped into a scratch copy first.
-fn abbr_matches(mp: Mb, word: &[u8]) -> bool {
+fn abbr_matches(mp: &MapBlock, word: &[u8]) -> bool {
     if mp.m_mode & State.get() == 0 {
         return false;
     }
@@ -39,22 +37,63 @@ fn abbr_matches(mp: Mb, word: &[u8]) -> bool {
     unescape_ks(keys) == word
 }
 
-/// Check for an abbreviation before `ptr[col]` and, if there is one, feed its
-/// expansion into the typeahead.
+/// What an `<expr>` mapping or abbreviation evaluates, copied out of the
+/// entry before any of it runs: the evaluation is user code, which can
+/// delete or redefine the entry.
+pub(crate) struct MapExpr {
+    /// The RHS with its `K_SPECIAL` escaping removed: `m_str` is in the
+    /// format used for typeahead, not the one the expression is written in.
+    text: Vec<u8>,
+    /// The Lua callback, held for the call.
+    lua: Option<Rc<MapCallback>>,
+    replace_keycodes: bool,
+}
+
+impl MapExpr {
+    /// The expression `mp` evaluates.
+    pub(crate) fn of(mp: &MapBlock) -> Self {
+        let mut text = mp.rhs().to_vec();
+        let len = unescape_ks_in(&mut text);
+        text.truncate(len);
+        Self {
+            text,
+            lua: mp.m_rhs.lua.clone(),
+            replace_keycodes: mp.m_replace_keycodes,
+        }
+    }
+}
+
+/// What [`check_abbr`] needs of the abbreviation it found, copied out of the
+/// table: an `<expr>` one can delete itself.
+struct Found {
+    noremap: c_int,
+    silent: bool,
+    /// The expression of an `<expr>` abbreviation, or else the RHS.
+    expr: Option<MapExpr>,
+    rhs: MapStr,
+}
+
+/// The start of the character before byte `at` of `text` -- C's
+/// `mb_prevptr`.
+fn prev(text: &[u8], at: usize) -> usize {
+    at - 1 - head_off(text, at - 1)
+}
+
+/// Check for an abbreviation ending at the end of `text` and, if there is
+/// one, feed its expansion into the typeahead.
 ///
-/// When inserting, `mincol` is where the insert started; on the command line
-/// it is what is to be skipped over.  `c` is the character typed just before
-/// the call, possibly with `ABBR_OFF` added to say that it needs no CTRL-V.
+/// `text` is a copy of the line up to the cursor: the expansion can run user
+/// code, which may change the line it came from.  When inserting, `mincol`
+/// is where the insert started; on the command line it is what is to be
+/// skipped over.  `c` is the character typed just before the call, possibly
+/// with `ABBR_OFF` added to say that it needs no CTRL-V.
 ///
 /// Historic vi practice: the last character of an abbreviation must be an id
 /// character, and the ones in front of it must be all id characters or all
 /// non-id characters, which is what lets `#i` stand for `#include`.  Vim adds
 /// abbreviations ending in a non-keyword character, which instead need white
 /// space in front.
-///
-/// # Safety
-/// `text` must be readable for at least `col` bytes and `curbuf`/`curwin` live.
-pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int) -> bool {
+pub fn check_abbr(c: c_int, text: Vec<u8>, mincol: c_int) -> bool {
     if typeahead().no_abbr_cnt() != 0 {
         return false; // abbreviations are not recursive
     }
@@ -62,6 +101,7 @@ pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int)
     if noremap_keys() && c != Ctrl_RSB {
         return false;
     }
+    let col = text.len();
     if col == 0 {
         return false; // cannot be an abbreviation
     }
@@ -70,54 +110,48 @@ pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int)
     // character every character before it must be a keyword character or
     // all of them must not be, but never white space; if it ends in a
     // non-keyword character anything but white space is accepted.
+    let buffer = Buf::current();
+    let is_word = |at: usize| is_word_at(&text[at..], buffer);
+    let start = usize::try_from(mincol).unwrap_or(0);
     let mut clen = 1; // length of the word in characters
-    // SAFETY (every region below): the caller's promise — `text` is readable
-    // for `col` bytes, and `mb_prevptr`/`utfc_ptr2len`/`vim_iswordp` stay
-    // inside `ptr..ptr+col` given that.
-    let start = unsafe { text.offset(mincol as isize) };
-    let mut p = unsafe { mb_prevptr(text, text.offset(col as isize)) };
-    let vim_abbr = !unsafe { vim_iswordp(p) };
+    let mut p = prev(&text, col);
+    let vim_abbr = !is_word(p);
     let mut is_id = true;
-    if !vim_abbr && p > text {
-        is_id = unsafe { vim_iswordp(mb_prevptr(text, p)) };
+    if !vim_abbr && p > 0 {
+        is_id = is_word(prev(&text, p));
     }
     while p > start {
-        p = unsafe { mb_prevptr(text, p) };
-        let stop = unsafe { ascii_isspace(c_int::from(*p)) }
-            || (!vim_abbr && is_id != unsafe { vim_iswordp(p) });
+        p = prev(&text, p);
+        let stop = ascii_isspace(c_int::from(text[p])) || (!vim_abbr && is_id != is_word(p));
         if stop {
-            p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+            p += cluster_len(&text[p..]);
             break;
         }
         clen += 1;
     }
-    let mut scol = unsafe { p.offset_from(text) } as c_int;
-    if scol < mincol {
-        scol = mincol;
-    }
+    let scol = p.max(start);
     if scol >= col {
         return false; // no word in front of the cursor
     }
 
-    // SAFETY: `mincol <= scol < col`, so this stays inside the caller's text.
-    let word = unsafe { text.offset(scol as isize) };
-    let len = col - scol;
     // Buffer-local abbreviations first, then the global ones.
-    let mut found = None;
-    let cur = Buf::current();
-    // SAFETY: `mincol <= scol < col`, so this names `len` bytes of the
-    // caller's text.
-    let word = unsafe { core::slice::from_raw_parts(word.cast::<u8>(), len as usize) };
-    let matches = |mp: Mb| abbr_matches(mp, word).then_some(mp);
-    for table in [MapTable::Buffer(cur), MapTable::Global] {
-        // SAFETY: the abbrlists are live, and `abbr_matches` only reads them.
-        let hit = unsafe { map_walk(table, true, matches) };
-        if hit.is_some() {
-            found = hit;
-            break;
-        }
-    }
-    let Some(mp) = found else {
+    let word = &text[scol..];
+    let snapshot = |mp: &MapBlock| {
+        abbr_matches(mp, word).then(|| Found {
+            noremap: mp.m_noremap,
+            silent: mp.m_silent,
+            expr: mp.m_expr.then(|| MapExpr::of(mp)),
+            rhs: if mp.m_expr {
+                MapStr::empty()
+            } else {
+                mp.m_rhs.str.clone()
+            },
+        })
+    };
+    let found = [MapTable::Buffer(buffer), MapTable::Global]
+        .into_iter()
+        .find_map(|table| map_walk(table, true, snapshot));
+    let Some(found) = found else {
         return false;
     };
 
@@ -129,69 +163,47 @@ pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int)
     // needs its K_SPECIAL escape; anything carrying ABBR_OFF wants no
     // CTRL-V. CTRL-] is special: it completes the abbreviation but is not
     // inserted into the input stream.
-    let mut tb = [0u8; MB_MAXBYTES + 4];
-    let mut j = 0usize;
+    let mut typed = Vec::new();
     if c != Ctrl_RSB {
         if c < 0 || c == K_SPECIAL {
             // A special key code, split up.
-            tb[..3].copy_from_slice(&key_escape(c));
-            j = 3;
+            typed.extend_from_slice(&key_escape(c));
         } else {
             let mut c = c;
             if c < ABBR_OFF && !(c_int::from(b' ')..=c_int::from(b'~')).contains(&c) {
-                tb[j] = Ctrl_V as u8; // a special char needs CTRL-V
-                j += 1;
+                typed.push(Ctrl_V as u8); // a special char needs CTRL-V
             }
             if c >= ABBR_OFF {
                 c -= ABBR_OFF; // remove the ABBR_OFF added by the caller
             }
-            // The character, with K_SPECIAL escaped. `j` is at most 1 here
-            // and `tb` has room for the longest escaped character.
-            let mut escaped = Vec::new();
-            push_char_escaped(c, &mut escaped);
-            tb[j..j + escaped.len()].copy_from_slice(&escaped);
-            j += escaped.len();
+            // The character, with K_SPECIAL escaped.
+            push_char_escaped(c, &mut typed);
         }
-        tb[j] = NUL as u8;
+        typed.push(NUL as u8);
         // Insert the last typed char.
-        let keys = tb.as_mut_ptr().cast();
-        let silent = mp.m_silent;
-        // SAFETY: `tb` is NUL-terminated at `j` and outlives the call, which
-        // copies out of it.
-        let _ = unsafe { ins_typebuf(keys, 1, 0, true, silent) };
+        let keys = CStr::from_bytes_until_nul(&typed).expect("terminated just above");
+        let _ = ins_typebuf_text(keys, 1, true, found.silent);
+        typed.pop();
     }
 
-    // Copy the values out here: eval_map_expr() may make "mp" invalid.
-    let noremap = mp.m_noremap;
-    let silent = mp.m_silent;
-    let expr = mp.m_expr;
-
     // An `<expr>` evaluation can redefine -- and so free -- the abbreviation,
-    // which is why nothing below reads `mp` once it has run; the stored text
-    // is only borrowed on the path where no Vimscript runs at all.
-    let evaluated = if expr { eval_map_expr(mp, c) } else { None };
-    if let Some(s) = if expr {
-        evaluated.as_ref()
-    } else {
-        Some(&mp.m_rhs.str)
-    } {
+    // which is why everything it needs was copied out above.
+    let evaluated = found.expr.as_ref().map(|expr| eval_map_expr(expr, c));
+    let to = match evaluated {
+        Some(evaluated) => evaluated,
+        None => Some(found.rhs),
+    };
+    if let Some(s) = to {
         // Insert the "to" string.
-        // SAFETY: `s` is NUL-terminated by `MapStr`'s own invariant and
-        // outlives the call, which copies out of it.
-        unsafe {
-            let _ = ins_typebuf(s.as_mut_ptr(), noremap, 0, true, silent);
-            // No abbreviation for these chars.
-            typeahead().add_no_abbr_cnt(s.len() as c_int + j as c_int + 1);
-        }
+        let _ = ins_typebuf_text(s.as_cstr(), found.noremap, true, found.silent);
+        // No abbreviation for these chars.
+        let count = s.len() + typed.len() + 1;
+        typeahead().add_no_abbr_cnt(c_int::try_from(count).unwrap_or(c_int::MAX));
     }
 
     // Delete the "from" string: characters, not bytes.
-    tb[0] = Ctrl_H as u8;
-    tb[1] = NUL as u8;
-    let keys = tb.as_mut_ptr().cast();
     for _ in 0..clen {
-        // SAFETY: as the `ins_typebuf` above — a NUL-terminated `tb`.
-        let _ = unsafe { ins_typebuf(keys, 1, 0, true, silent) };
+        let _ = ins_typebuf_text(c"\x08", 1, true, found.silent); // CTRL-H
     }
     true
 }
@@ -199,19 +211,8 @@ pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int)
 /// Evaluate the RHS of an `<expr>` mapping or abbreviation, escaping the
 /// result so it can be used as typeahead.
 ///
-/// Careful: after this `mp` is invalid if the mapping was deleted.  `c` is
-/// NUL, or the typed character for an abbreviation.
-pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
-    let luaref = mp.luaref();
-    // Remove the escaping of K_SPECIAL: `m_str` is in the format used for
-    // typeahead, not the one the expression is written in.  `vim_unescape_ks`
-    // rewrites in place and only shortens, so the copy is room enough.
-    let mut expr = mp.m_rhs.str.as_bytes_with_nul().to_vec();
-    let text = expr.len() - 1;
-    let len = unescape_ks_in(&mut expr[..text]);
-    expr[len] = NUL as u8;
-    let replace_keycodes = mp.m_replace_keycodes;
-
+/// `c` is NUL, or the typed character for an abbreviation.
+pub(crate) fn eval_map_expr(expr: &MapExpr, c: c_int) -> Option<MapStr> {
     // Forbid changing text or using ":normal", which rules out most of the bad
     // side effects, and restore the cursor position afterwards.
     let locked = Lock::expr_map();
@@ -220,35 +221,20 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     let save_msg_col = msg_col.get();
     let save_msg_row = msg_row.get();
 
-    let answer = if luaref != LUA_NOREF {
-        let mut err = Error::none();
-        // SAFETY: `luaref` is the mapping's own reference.
-        let ret = unsafe { nlua_call_ref(luaref, ptr::null(), ARRAY_DICT_INIT, kRetObject) }
-            .unwrap_or_else(|e| {
-                err = e;
-                Object::Nil
-            });
-        // SAFETY: the string the call handed back, then the object it came
-        // out of, which is ours to release.
-        let answer = unsafe {
-            let answer = match ret.as_string() {
-                Some(s) => COwned::new(string_to_cstr(s)),
-                None => COwned::new(ptr::null_mut()),
-            };
-            drop(ret);
-            answer
-        };
-        if err.is_set() {
-            semsg_multiline!(c"emsg", "E5108: {}", msg_cstr(err.message_or_empty()));
-            err.clear();
+    let answer: Option<Vec<u8>> = if let Some(lua) = &expr.lua {
+        match nlua_call_ref_reporting(lua.0, None, ARRAY_DICT_INIT, kRetObject) {
+            Ok(ret) => ret.as_string().map(|s| c_prefix(s.as_bytes()).to_vec()),
+            Err(mut err) => {
+                semsg_multiline!(c"emsg", "E5108: {}", msg_cstr(err.message_or_empty()));
+                err.clear();
+                None
+            }
         }
-        answer
     } else {
-        // `expr` is the unescaped copy made above: what user code does to
-        // the mapping cannot reach it.
-        let value = eval_to_string(cstr::in_bytes(&expr).to_bytes(), false, false);
-        // SAFETY: an owned NUL-terminated string, or null.
-        unsafe { COwned::new(value.map_or(ptr::null_mut(), XString::into_raw)) }
+        // `text` is the unescaped copy made before any of this ran: what user
+        // code does to the mapping cannot reach it.
+        let value = eval_to_string(c_prefix(&expr.text), false, false);
+        value.map(|value| value.as_cstr().to_bytes().to_vec())
     };
 
     drop(locked);
@@ -256,15 +242,18 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     msg_col.set(save_msg_col);
     msg_row.set(save_msg_row);
 
-    let bytes = answer.as_bytes()?;
-    if !replace_keycodes {
+    let bytes = answer?;
+    if !expr.replace_keycodes {
         // Escape K_SPECIAL so the result can be used as typeahead.
-        return Some(MapStr::new(&escape_ks_bytes(bytes)));
+        return Some(MapStr::new(&escape_ks_bytes(&bytes)));
     }
-    let dolt = REPTERM_DO_LT as c_int;
-    let replaced = p_cpo(|cpo| replace_termcodes(bytes, 0, dolt, None, cpo, None));
+    let dolt = REPTERM_DO_LT.cast_signed();
+    let replaced = p_cpo(|cpo| replace_termcodes(&bytes, 0, dolt, None, cpo, None));
     let replaced = replaced.unwrap_or_default();
-    Some(MapStr::new(
-        replaced.split(|&b| b == 0).next().unwrap_or_default(),
-    ))
+    Some(MapStr::new(c_prefix(&replaced)))
+}
+
+/// The bytes a C reader of `bytes` sees: up to the first NUL.
+fn c_prefix(bytes: &[u8]) -> &[u8] {
+    bytes.split(|&b| b == 0).next().unwrap_or_default()
 }

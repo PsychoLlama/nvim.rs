@@ -71,12 +71,6 @@ impl MapStr {
         self.as_bytes_with_nul().as_ptr().cast()
     }
 
-    /// A C string for the callees whose signature says `*mut` but that only
-    /// read (`ins_typebuf`, `msg_display_keys`).
-    pub(crate) fn as_mut_ptr(&self) -> *mut c_char {
-        self.as_ptr().cast_mut()
-    }
-
     /// How many bytes the content is.
     pub(crate) fn len(&self) -> usize {
         self.0.as_deref().map_or(0, |owned| owned.len() - 1)
@@ -143,18 +137,35 @@ impl MapRhs {
     }
 }
 
+/// A mapping's identity, which no other mapping ever takes, even after it
+/// is deleted.
+///
+/// What a holder keeps instead of an address: a mapping can be deleted
+/// under anything that lets user code run (an `<expr>` that `:unmap`s
+/// itself), and a lookup by id then answers `None` where an address would
+/// dangle.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct MapId(pub(crate) u64);
+
+/// The unsimplified twin of a simplified mapping (or the other way round):
+/// its id, and the first byte of its LHS, which is what names the two hash
+/// buckets it can be in.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct MapTwin {
+    pub(crate) id: MapId,
+    pub(crate) first: u8,
+}
+
 /// One mapping or abbreviation.
 ///
-/// The two `*mut MapBlock` are the intrusive list links, not ownership: an
-/// entry is a `Box` its list holds by raw pointer, because both the
-/// delete-walk and `getchar`'s match loop keep the address of a link across
-/// calls.  Everything else the entry owns is typed — see [`MapStr`] and
-/// [`MapRhs`].
+/// Owned by the list it is on -- a hash bucket of a [`MapTables`], or its
+/// abbreviation list -- by value. The twin of a `<C-H>`-style pair is named
+/// by id, not by address; everything else the entry holds is its own.
 pub struct MapBlock {
-    /// The next entry on the same hash bucket or abbreviation list.
-    pub(crate) m_next: *mut MapBlock,
-    /// The unsimplified twin of a simplified mapping, or null.
-    pub(crate) m_alt: *mut MapBlock,
+    /// This entry's identity.
+    pub(crate) m_id: MapId,
+    /// The unsimplified twin of a simplified mapping, or the other way round.
+    pub(crate) m_alt: Option<MapTwin>,
     /// The LHS, in typeahead form.
     pub(crate) m_keys: MapStr,
     /// The RHS: three strings and, when there is one, a shared callback.
@@ -172,6 +183,27 @@ pub struct MapBlock {
     pub(crate) m_replace_keycodes: bool,
 }
 
+/// A copy for a listing that has to let go of the table before it prints:
+/// the strings are duplicated, the callback is shared, the identity kept.
+impl Clone for MapBlock {
+    fn clone(&self) -> Self {
+        Self {
+            m_id: self.m_id,
+            m_alt: self.m_alt,
+            m_keys: self.m_keys.clone(),
+            m_rhs: self.m_rhs.dup(),
+            m_mode: self.m_mode,
+            m_simplified: self.m_simplified,
+            m_noremap: self.m_noremap,
+            m_silent: self.m_silent,
+            m_nowait: self.m_nowait,
+            m_expr: self.m_expr,
+            m_script_ctx: self.m_script_ctx,
+            m_replace_keycodes: self.m_replace_keycodes,
+        }
+    }
+}
+
 impl MapBlock {
     /// The LHS, without its NUL.
     pub(crate) fn keys(&self) -> &[u8] {
@@ -186,5 +218,47 @@ impl MapBlock {
     /// The Lua callback, or `LUA_NOREF`.
     pub(crate) fn luaref(&self) -> LuaRef {
         self.m_rhs.luaref()
+    }
+
+    /// How this entry is named from its twin.
+    pub(crate) fn as_twin(&self) -> MapTwin {
+        MapTwin {
+            id: self.m_id,
+            first: self.keys().first().copied().unwrap_or(0),
+        }
+    }
+}
+
+/// One mapping table: [`MAX_MAPHASH`](crate::mapping::MAX_MAPHASH) hash
+/// buckets and the abbreviation list. The editor has one globally and one per
+/// buffer (`b_maps`).
+///
+/// Each list keeps its entries oldest first, so a new mapping is a `push` and
+/// upstream's head-first walk -- newest first, which is the order `:map`
+/// lists in -- is a reverse iteration. The buckets are allocated on the first
+/// mapping, so a buffer without any costs two empty vectors.
+pub(crate) struct MapTables {
+    pub(crate) hash: Vec<Vec<MapBlock>>,
+    pub(crate) abbr: Vec<MapBlock>,
+    /// The id the next mapping gets, kept by the global table for every
+    /// table: ids are never reused, so one kept across user code can only
+    /// find the mapping it was taken from.
+    pub(crate) next_id: u64,
+}
+
+impl MapTables {
+    /// No mappings at all.
+    pub(crate) const fn new() -> Self {
+        Self {
+            hash: Vec::new(),
+            abbr: Vec::new(),
+            next_id: 1,
+        }
+    }
+}
+
+impl Default for MapTables {
+    fn default() -> Self {
+        Self::new()
     }
 }
