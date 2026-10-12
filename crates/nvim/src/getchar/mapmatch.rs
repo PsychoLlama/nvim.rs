@@ -18,24 +18,20 @@ use crate::types::MapStr;
 use crate::types::{Failed, MB_MAXBYTES, NUL};
 use core::ffi::c_int;
 
-/// C's `LANGMAP_ADJUST`: map `c` through `'langmap'` when `condition` holds
-/// and the key is one `'langmap'` applies to.
+/// Whether C's `LANGMAP_ADJUST` maps keys through `'langmap'` now: the
+/// half of the macro that does not depend on the key, which nothing in a
+/// mapping walk changes -- so the walk asks once, not per typeahead byte
+/// per candidate mapping.
 ///
 /// `'langmap'` only applies to *typed* keys, and `'langremap'` decides
 /// whether it also applies to the result of a mapping. `maplen` is the
-/// typeahead's, which the caller reads once for its whole walk: nothing in
-/// the walk changes it.
-#[inline(always)]
-fn langmap_adjust(c: c_int, condition: bool, maplen: c_int) -> c_int {
-    // Upstream's operand order, short-circuiting exactly as the macro
-    // does.
-    //
+/// typeahead's.
+fn langmap_applies(maplen: c_int) -> bool {
     // `first_byte` and not the projecting `p_langmap(|value| ...)` reader:
     // the projection has to find the value's NUL to hand out a `&CStr`, and
     // asking that here cost 616 M instructions on `inbench` (`mapresolve`
     // +24%). This is upstream's `*p_langmap`.
-    if P_LANGMAP.first_byte() != 0
-        && condition
+    P_LANGMAP.first_byte() != 0
         && (p_lrm()
             || if vgetc_busy.get() != 0 {
                 maplen == 0
@@ -43,14 +39,16 @@ fn langmap_adjust(c: c_int, condition: bool, maplen: c_int) -> c_int {
                 KeyTyped.get()
             })
         && KeyStuffed.get() == 0
-        && c >= 0
-    {
-        match usize::try_from(c) {
-            Ok(byte) if byte < 256 => langmap_mapchar.with(|map| c_int::from(map[byte])),
-            _ => langmap_adjust_mb(c),
-        }
-    } else {
-        c
+}
+
+/// The other half of `LANGMAP_ADJUST`: `c` through `'langmap'`, for a key
+/// [`langmap_applies`] said it applies to.
+#[inline(always)]
+fn langmap_map(c: c_int) -> c_int {
+    match usize::try_from(c) {
+        Ok(byte) if byte < 256 => langmap_mapchar.with(|map| c_int::from(map[byte])),
+        Ok(_) => langmap_adjust_mb(c),
+        Err(_) => c,
     }
 }
 
@@ -202,19 +200,22 @@ fn search_maphash(
         mp_match_len: 0,
         max_mlen: 0,
     };
-    // Nothing in the walk changes the typeahead: read its run length once.
+    // Nothing in the walk changes the typeahead or the 'langmap' state:
+    // read them once.
     let maplen = typeahead().maplen();
+    let langmap = langmap_applies(maplen);
 
     // How many bytes at the start of a key are not subject to 'langmap':
     // the two that follow a K_SPECIAL.
     let nolmaplen = if tb_c1 == K_SPECIAL {
         2
     } else {
-        tb_c1 = langmap_adjust(
-            tb_c1,
-            State.get() & (MODE_CMDLINE | MODE_INSERT) == 0 && get_real_state() != MODE_SELECT,
-            maplen,
-        );
+        if langmap
+            && State.get() & (MODE_CMDLINE | MODE_INSERT) == 0
+            && get_real_state() != MODE_SELECT
+        {
+            tb_c1 = langmap_map(tb_c1);
+        }
         0
     };
 
@@ -266,13 +267,18 @@ fn search_maphash(
                         } else {
                             if c2 == K_SPECIAL {
                                 nomap = 2;
-                            } else if merge_modifiers(c2, &mut modifiers) == c2 {
+                            } else if langmap
+                                && (!modifiers.has(ModMask::CTRL)
+                                    || merge_modifiers(c2, &mut modifiers) == c2)
+                            {
                                 // Only apply 'langmap' when merging the
                                 // modifiers into the key would not produce
                                 // another character, so that 'langmap'
                                 // behaves the same in different terminals and
-                                // GUIs.
-                                c2 = langmap_adjust(c2, true, maplen);
+                                // GUIs. (Only CTRL merges into anything, and
+                                // `modifiers` is reset below whatever the
+                                // merge left in it.)
+                                c2 = langmap_map(c2);
                             }
                             modifiers = ModMask::NONE;
                             modifier_next = false;

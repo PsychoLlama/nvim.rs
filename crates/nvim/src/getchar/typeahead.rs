@@ -432,25 +432,7 @@ impl TypeAhead {
             // Easy case: just leave the bytes in front and step over them.
             self.off += len;
         } else {
-            // Otherwise both arrays have to be moved down.
-            let from = self.index(offset);
-            let head = usize::try_from(offset).expect("an offset inside the typeahead");
-            if self.off > MAXMAPLEN as c_int {
-                // Leave some extra room at the end to avoid a
-                // reallocation.
-                let (old, keep) = (self.index(0), MAXMAPLEN as usize);
-                self.buf.copy_within(old..old + head, keep);
-                self.noremap.copy_within(old..old + head, keep);
-                self.off = MAXMAPLEN as c_int;
-            }
-            // `from` is where the deleted run started *before* the move
-            // above, which is upstream's arithmetic too.
-            let gone = usize::try_from(len).expect("a positive length");
-            let kept = usize::try_from(self.len - offset).expect("the run after the deletion");
-            let dst = self.index(offset);
-            self.buf.copy_within(from + gone..from + gone + kept, dst);
-            self.noremap
-                .copy_within(from + gone..from + gone + kept, dst);
+            self.move_down(len, offset);
         }
 
         // Each of the three run lengths shrinks only by the part of the
@@ -464,6 +446,31 @@ impl TypeAhead {
                 };
             }
         }
+    }
+
+    /// The hard case of [`delete`](Self::delete): both arrays moved down
+    /// over the deleted run. Out of line, so that the easy case -- every
+    /// key read off the front -- stays a few instructions.
+    #[cold]
+    #[inline(never)]
+    fn move_down(&mut self, len: c_int, offset: c_int) {
+        let from = self.index(offset);
+        let head = usize::try_from(offset).expect("an offset inside the typeahead");
+        if self.off > MAXMAPLEN as c_int {
+            // Leave some extra room at the end to avoid a reallocation.
+            let (old, keep) = (self.index(0), MAXMAPLEN as usize);
+            self.buf.copy_within(old..old + head, keep);
+            self.noremap.copy_within(old..old + head, keep);
+            self.off = MAXMAPLEN as c_int;
+        }
+        // `from` is where the deleted run started *before* the move above,
+        // which is upstream's arithmetic too.
+        let gone = usize::try_from(len).expect("a positive length");
+        let kept = usize::try_from(self.len - offset).expect("the run after the deletion");
+        let dst = self.index(offset);
+        self.buf.copy_within(from + gone..from + gone + kept, dst);
+        self.noremap
+            .copy_within(from + gone..from + gone + kept, dst);
     }
 
     /// Throw away the mapped characters at the start, or everything.
