@@ -414,12 +414,13 @@ fn parse_sign_cmd_args(cmd: c_int, line: &[u8]) -> Option<SignCmdArgs> {
 
 /// `:sign`.
 pub(crate) fn ex_sign(excmd: &mut ExArg) {
-    // A copy: `:sign jump` runs autocommands.
-    let line = excmd.line.arg().to_vec();
-    let (word, after) = split_white(&line);
+    // Borrowed: what `:sign jump` keeps across its autocommands is the
+    // parser's own copy.
+    let line = excmd.line.arg();
+    let (word, after) = split_white(line);
     let idx = sign_cmd_idx(word);
     if idx == SIGNCMD_LAST {
-        semsg!("E160: Unknown sign command: {}", shown(&line));
+        semsg!("E160: Unknown sign command: {}", shown(line));
         return;
     }
     let arg = skip_white(after);

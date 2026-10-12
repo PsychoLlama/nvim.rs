@@ -24,13 +24,16 @@ use crate::charset::backslash_halved;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::Failed;
+use std::rc::Rc;
 
 /// Every defined sign, in definition order.
 ///
-/// Deleting swap-removes, which is what the `Map(cstr_t, ptr_t)` upstream
+/// Shared, so a reader's copy is a count (`:sign place` takes one per
+/// placement, `:sign list` one per definition) and an update clones only a
+/// definition some snapshot still holds. Deleting swap-removes, which is what the `Map(cstr_t, ptr_t)` upstream
 /// uses does to its dense key array -- and that order is observable in
 /// `:sign list`, `sign_getdefined()` and `:sign` completion.
-static SIGNS: GlobalCell<Vec<Sign>> = GlobalCell::new(Vec::new());
+static SIGNS: GlobalCell<Vec<Rc<Sign>>> = GlobalCell::new(Vec::new());
 
 /// The namespaces `:sign place group=` has created, in creation order — the
 /// list `:sign` completion offers as group names.
@@ -43,24 +46,24 @@ static SIGN_GROUPS: GlobalCell<Vec<Integer>> = GlobalCell::new(Vec::new());
 ///
 /// `f` must not reach the table again; nothing in this module that runs
 /// user code, or reports, does so inside it.
-fn with_sign<R>(name: &[u8], f: impl FnOnce(&mut Sign) -> R) -> Option<R> {
+fn with_sign<R>(name: &[u8], f: impl FnOnce(&mut Rc<Sign>) -> R) -> Option<R> {
     SIGNS.with_mut(|signs| signs.iter_mut().find(|s| s.name.as_bytes() == name).map(f))
 }
 
-/// A copy of the definition `:sign define` recorded under `name`.
-pub(crate) fn sign_find(name: &[u8]) -> Option<Sign> {
-    with_sign(name, |s| s.clone())
+/// The definition `:sign define` recorded under `name`, as it is now.
+pub(crate) fn sign_find(name: &[u8]) -> Option<Rc<Sign>> {
+    SIGNS.with(|signs| signs.iter().find(|s| s.name.as_bytes() == name).cloned())
 }
 
 /// Whether a sign is still defined under `name`.
 fn sign_is_defined(name: &[u8]) -> bool {
-    with_sign(name, |_| ()).is_some()
+    SIGNS.with(|signs| signs.iter().any(|s| s.name.as_bytes() == name))
 }
 
 /// Copies of every defined sign, in definition order: `:sign list` and
 /// `sign_getdefined()` format each entry as they walk, and formatting can
 /// re-enter.
-pub(crate) fn sign_defs() -> Vec<Sign> {
+pub(crate) fn sign_defs() -> Vec<Rc<Sign>> {
     SIGNS.with(Clone::clone)
 }
 
@@ -136,52 +139,66 @@ pub(crate) struct SignAttrs {
 /// fails (E239) still leaves it defined -- with the cells it got through and
 /// nothing after them, as upstream's does.
 pub(crate) fn sign_define_by_name(name: &[u8], attrs: SignAttrs) -> Result<(), Failed> {
-    let new_sign = !sign_is_defined(name);
-    if new_sign {
-        let name = CString::new(name).expect("a sign name is a C string's bytes");
-        SIGNS.with_mut(|signs| {
-            signs.push(Sign {
-                name,
-                ..Default::default()
-            });
-        });
-    }
-
-    if let Some(icon) = attrs.icon {
-        let icon = backslash_halved(&icon);
-        with_sign(name, |s| s.icon = Some(icon));
-    }
-
-    if let Some(text) = attrs.text {
-        let text = unescape(&text);
-        // The sign was defined above, so the lookup finds it.
-        if let Some(Err(failed)) = with_sign(name, |s| init_sign_text(&text, &mut s.text)) {
-            semsg!("E239: Invalid sign text: {}", msg_bytes(&text));
+    // Everything up to the highlight groups is this module's own work, done
+    // in one visit of the table; the groups go through `syn_check_group`
+    // outside it and land in a second.
+    let icon = attrs.icon.map(|icon| backslash_halved(&icon));
+    let text = attrs.text.map(|text| unescape(&text));
+    let mut new_sign = false;
+    let parsed = SIGNS.with_mut(|signs| {
+        let at = match signs.iter().position(|s| s.name.as_bytes() == name) {
+            Some(at) => at,
+            None => {
+                new_sign = true;
+                let name = CString::new(name).expect("a sign name is a C string's bytes");
+                signs.push(Rc::new(Sign {
+                    name,
+                    ..Default::default()
+                }));
+                signs.len() - 1
+            }
+        };
+        let s = Rc::make_mut(&mut signs[at]);
+        if let Some(icon) = icon {
+            s.icon = Some(icon);
+        }
+        if let Some(text) = &text
+            && let Err(failed) = init_sign_text(text, &mut s.text)
+        {
             return Err(failed);
         }
+        s.priority = attrs.prio;
+        Ok(())
+    });
+    if let Err(failed) = parsed {
+        semsg!(
+            "E239: Invalid sign text: {}",
+            msg_bytes(text.as_deref().unwrap_or_default())
+        );
+        return Err(failed);
     }
-
-    with_sign(name, |s| s.priority = attrs.prio);
 
     let groups = [attrs.linehl, attrs.texthl, attrs.culhl, attrs.numhl];
-    for (which, group) in groups.into_iter().enumerate() {
-        let Some(group) = group else {
-            continue;
-        };
-        let hl = if group.is_empty() {
-            0
-        } else {
-            syn_check_group(&group)
-        };
-        with_sign(name, |s| match which {
-            0 => s.line_hl = hl,
-            1 => s.text_hl = hl,
-            2 => s.cul_hl = hl,
-            _ => s.num_hl = hl,
-        });
-    }
+    let ids = groups.map(|group| {
+        group.map(|group| {
+            if group.is_empty() {
+                0
+            } else {
+                syn_check_group(&group)
+            }
+        })
+    });
+    let def = with_sign(name, |s| {
+        let def = Rc::make_mut(s);
+        let [line, text, cul, num] = ids;
+        def.line_hl = line.unwrap_or(def.line_hl);
+        def.text_hl = text.unwrap_or(def.text_hl);
+        def.cul_hl = cul.unwrap_or(def.cul_hl);
+        def.num_hl = num.unwrap_or(def.num_hl);
+        Rc::clone(s)
+    });
 
-    if !new_sign && let Some(def) = sign_find(name) {
+    if !new_sign && let Some(def) = def {
         update_placements(&def);
     }
     Ok(())
