@@ -264,3 +264,73 @@ fn translations_rename_what_is_defined_after_them() {
     fx.expect_all(&[(TOPS, "['Before', 'Fichier']")]);
     clean(&fx);
 }
+
+#[test]
+fn amenu_fans_out_per_mode_with_its_prefixes() {
+    let fx = Fixture::new();
+    clean(&fx);
+    fx.run("amenu 5.5 Fan.Item :echo<CR>");
+    fx.run("amenu Fan.Nop <Nop>");
+    fx.run("tmenu Fan.Item the tip");
+    fx.run("amenu PopUp.Cut d");
+    fx.run("menu Fan.Sub.Deep x");
+    fx.run("amenu Fan.-Sep- :");
+    fx.expect_all(&[
+        ("map(['n', 'v', 's', 'o', 'i', 'c', 'tl'], 'menu_info(\"Fan.Item\", v:val)->get(\"rhs\", \"-\")')", "[':echo<CR>', '<C-C>:echo<CR><C-\\><C-G>', '<C-C>:echo<CR><C-\\><C-G>', '<C-C>:echo<CR><C-\\><C-G>', '<C-\\><C-O>:echo<CR>', '<C-C>:echo<CR><C-\\><C-G>', '-']"),
+        ("menu_info('Fan.Item').modes", "'a'"),
+        ("menu_get('Fan.Item')[0].tooltip", "'the tip'"),
+        ("sort(keys(menu_get('Fan.Item')[0].mappings))", "['c', 'i', 'n', 'o', 's', 'v']"),
+        ("menu_get('Fan.Nop')[0].mappings.i.rhs", "''"),
+        ("menu_info('Fan.Nop', 'i').rhs", "'<Nop>'"),
+        (TOPS, "['Fan', 'PopUpc', 'PopUpi', 'PopUpo', 'PopUps', 'PopUpv', 'PopUpn', 'PopUp']"),
+        ("map(menu_get(''), 'v:val.hidden')", "[0, 1, 1, 1, 1, 1, 1, 0]"),
+        ("menu_info('PopUpi.Cut', 'i').rhs", "'<C-\\><C-O>d'"),
+        ("getcompletion('Fan.', 'menu')", "['Item', 'Nop', 'Sub.', '-Sep-']"),
+        ("getcompletion('', 'menu')", "['Fan.', 'PopUp.']"),
+    ]);
+    fx.check_output(
+        "tmenu",
+        "\n--- Menus ---\n5 Fan\n  5 Item\n      t    the tip",
+    );
+    // A `*` component is a literal name, not "everything": only a whole
+    // path of `*` is.
+    fx.run("silent! aunmenu Fan.Sub.*");
+    fx.expect_all(&[(
+        "map(menu_get('Fan.Sub')[0].submenus, 'v:val.name')",
+        "['Deep']",
+    )]);
+    fx.run("tunmenu Fan.Item");
+    fx.expect_all(&[("has_key(menu_get('Fan.Item')[0], 'tooltip')", "0")]);
+    fx.run("iunmenu PopUp");
+    fx.expect_all(&[(
+        TOPS,
+        "['Fan', 'PopUpc', 'PopUpo', 'PopUps', 'PopUpv', 'PopUpn', 'PopUp']",
+    )]);
+    fx.run("silent! aunmenu Fan.*");
+    fx.expect_all(&[(
+        TOPS,
+        "['Fan', 'PopUpc', 'PopUpo', 'PopUps', 'PopUpv', 'PopUpn', 'PopUp']",
+    )]);
+    fx.run("aunmenu PopUp");
+    fx.expect_all(&[(TOPS, "['Fan']")]);
+    for (cmd, err) in [
+        ("amenu Fan x", "E330: Menu path must not lead to a sub-menu"),
+        (
+            "amenu Bar x",
+            "E331: Must not add menu items directly to menu bar",
+        ),
+        (
+            "amenu Top.-Sep-.X x",
+            "E332: Separator cannot be part of a menu path",
+        ),
+        ("amenu Top.& x", "none"),
+        ("amenu Top.\\& x", "none"),
+        ("popup NoSuch", "E337: Menu not found - check menu names"),
+        ("aunmenu! Nope", "E477: No ! allowed: silent! aunmenu! Nope"),
+        ("unmenu! Nope", "E329: No menu \"Nope\""),
+    ] {
+        fx.check_error(cmd, err);
+    }
+    clean(&fx);
+    fx.expect_all(&[(TOPS, "[]")]);
+}

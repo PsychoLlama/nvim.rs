@@ -364,3 +364,63 @@ fn special_keys_are_kept_and_listed_by_name() {
     fx.check_output("imap", "\n\ni  <C-K>e        é");
     clean(&fx);
 }
+
+#[test]
+fn simplified_pairs_are_one_mapping_with_two_spellings() {
+    let fx = Fixture::new();
+    clean(&fx);
+    fx.run("nmap <C-H> ctrl-h");
+    fx.run("nmap <C-I> ctrl-i");
+    fx.run("nmap <Tab> tab");
+    fx.expect_all(&[
+        ("maparg('<C-H>', 'n')", "'ctrl-h'"),
+        ("maparg(\"\\<C-H>\", 'n')", "'ctrl-h'"),
+        ("maparg('<BS>', 'n')", "''"),
+        (
+            "maparg('<C-H>', 'n', 0, 1).lhsraw == \"\\x80\\xfc\\x04H\"",
+            "1",
+        ),
+        ("maparg('<C-H>', 'n', 0, 1).lhsrawalt", "'\u{08}'"),
+        ("has_key(maparg('<Tab>', 'n', 0, 1), 'lhsrawalt')", "0"),
+        (
+            "map(maplist(), '[v:val.lhs, get(v:val, \"lhsrawalt\", \"-\")]')",
+            "[['<Tab>', '-'], ['<C-I>', '\t'], ['<C-H>', '\u{08}']]",
+        ),
+        // The API reads the twin link, which a `<C-I>` has none of: its
+        // simplified spelling is `<Tab>`'s own entry.
+        (
+            "map(nvim_get_keymap('n'), '[v:val.lhs, get(v:val, \"lhsrawalt\", \"-\")]')",
+            "[['<Tab>', '-'], ['<C-I>', '-'], ['<C-H>', '\u{08}']]",
+        ),
+    ]);
+    fx.check_output(
+        "nmap",
+        "\n\nn  <Tab>         tab\nn  <C-I>         ctrl-i\nn  <C-H>         ctrl-h",
+    );
+    // Redefining one spelling cuts the pair; the other keeps its rhs.
+    fx.run("nmap <C-H> again");
+    fx.expect_all(&[
+        ("maparg('<C-H>', 'n')", "'again'"),
+        ("maparg('<C-H>', 'n', 0, 1).lhsrawalt", "'\u{08}'"),
+    ]);
+    fx.run("nunmap <C-H>");
+    fx.expect_all(&[
+        ("maparg('<C-H>', 'n')", "''"),
+        ("map(maplist(), 'v:val.lhs')", "['<Tab>', '<C-I>']"),
+    ]);
+    // A mapset() of a pair puts both spellings back.
+    fx.run("let g:mp_pair = maparg('<C-I>', 'n', 0, 1)");
+    fx.run("nunmap <C-I>");
+    fx.run("call mapset(g:mp_pair)");
+    fx.expect_all(&[
+        ("maparg('<C-I>', 'n', 0, 1) == g:mp_pair", "1"),
+        (
+            "map(maplist(), '[v:val.lhs, get(v:val, \"lhsrawalt\", \"-\")]')",
+            "[['<Tab>', '-'], ['<C-I>', '\t']]",
+        ),
+    ]);
+    fx.run("nmapclear");
+    fx.expect_all(&[("maplist()", "[]")]);
+    fx.run("unlet g:mp_pair");
+    clean(&fx);
+}

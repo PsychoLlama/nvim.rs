@@ -252,3 +252,117 @@ describe('Screen', function()
     ]])
   end)
 end)
+
+describe(':map <expr> that edits the mapping table while it runs', function()
+  before_each(clear)
+
+  -- In every mode, and for abbreviations, :lmap, Lua callbacks,
+  -- buffer-local entries and a simplified <C-H> pair: the expression unmaps
+  -- itself, clears its whole table, or redefines its own lhs, and the keys
+  -- it answers still go where they should. Expected output is upstream
+  -- 0.12.5's.
+  it('unmaps, clears or redefines itself in every mode', function()
+    exec([==[
+let g:log = []
+func! Act(cmd, ret)
+  call add(g:log, strtrans(a:cmd))
+  exe a:cmd
+  return a:ret
+endfunc
+func! Run(name, setup, keys)
+  silent! mapclear | silent! mapclear! | silent! abclear | silent! lmapclear | silent! tmapclear
+  let g:log = []
+  unlet! g:c
+  %delete _
+  call setline(1, ['abcdef', 'ghijkl'])
+  call cursor(1, 1)
+  for s in a:setup | exe s | endfor
+  let err = ''
+  try
+    if a:name =~ '^lmap'
+      call feedkeys(a:keys, 'xt')
+    else
+      exe "normal " . a:keys
+    endif
+  catch
+    let err = v:exception
+  endtry
+  call add(g:out, a:name . ': ' . string(getline(1, '$')) . ' ' . string(g:log) . ' ' . err . ' maps=' . string(map(maplist(), 'v:val.mode . v:val.lhs . "=" . get(v:val, "rhs", "")')) . ' c=' . get(g:, 'c', '-') . ' ab=' . string(map(maplist(1), 'v:val.mode . v:val.lhs . "=" . get(v:val, "rhs", "")')))
+endfunc
+let g:out = []
+for [mode, keys] in [['n', ',q'], ['x', "v,q"], ['o', "d,q"], ['i', "i,q\<Esc>"], ['c', ":let g:c='" . ',q' . "'\<CR>"]]
+  call Run(mode . '-unmap', [mode . "noremap <expr> ,q Act('" . mode . "unmap ,q', 'x')"], keys)
+  call Run(mode . '-clear', [mode . "noremap <expr> ,q Act('" . mode . "mapclear', 'x')", mode . "noremap ,z zz"], keys)
+  call Run(mode . '-redef', [mode . "noremap <expr> ,q Act('" . mode . "noremap ,q y', 'x')"], keys . keys)
+  call Run(mode . '-remap', [mode . "map <expr> ,q Act('" . mode . "unmap ,q', ',r')", mode . "noremap ,r X"], keys)
+  call Run(mode . '-simp', [mode . "noremap <expr> <C-H> Act('" . mode . "unmap <C-H>', 'x')"], substitute(keys, ',q', "\<C-H>", ''))
+  call Run(mode . '-simp2', [mode . "noremap <expr> <C-H> Act('" . mode . "unmap <lt>C-H>', 'x')"], substitute(keys, ',q', "\<C-H>", ''))
+  call Run(mode . '-simp3', [mode . "noremap <expr> <C-H> Act('" . mode . "mapclear', 'x')"], substitute(keys, ',q', "\<C-H>", ''))
+  call Run(mode . '-buf', [mode . "noremap <buffer> <expr> ,q Act('" . mode . "mapclear <buffer>', 'x')", mode . "noremap ,q G"], keys . keys)
+endfor
+call Run('s-unmap', ["snoremap <expr> ,q Act('sunmap ,q', 'x')"], "gh,q")
+call Run('ab-unab', ["inoreabbrev <expr> qq Act('iunabbrev qq', 'ZZ')"], "Aqq \<Esc>")
+call Run('ab-clear', ["inoreabbrev <expr> qq Act('abclear', 'ZZ')", "iabbrev ww WW"], "Aqq ww \<Esc>")
+call Run('ab-redef', ["inoreabbrev <expr> qq Act('inoreabbrev qq YY', 'ZZ')"], "Aqq qq \<Esc>")
+call Run('ab-cmd', ["cnoreabbrev <expr> qq Act('cunabbrev qq', 'ZZ')"], ":qq\<C-R>=''\<CR>\<Esc>")
+call Run('ab-ctrlrsb', ["inoreabbrev <expr> qq Act('iunabbrev qq', 'ZZ')"], "Aqq\<C-]>\<Esc>")
+call Run('lmap', ["set iminsert=1", "lnoremap <expr> q Act('lunmap q', 'Q')"], "Aqq\<Esc>")
+call Run('lmap-clear', ["set iminsert=1", "lnoremap <expr> q Act('lmapclear', 'Q')"], "Aqq\<Esc>")
+set iminsert=0
+call Run('lua', ["lua vim.keymap.set('n', ',q', function() vim.keymap.del('n', ',q') return 'x' end, {expr=true})"], ',q')
+call Run('lua-clear', ["lua vim.keymap.set('n', ',q', function() vim.cmd('mapclear') return 'x' end, {expr=true})"], ',q,q')
+    ]==])
+    eq({
+      [=[n-unmap: ['bcdef', 'ghijkl'] ['nunmap ,q']  maps=[] c=- ab=[]]=],
+      [=[n-clear: ['bcdef', 'ghijkl'] ['nmapclear']  maps=[] c=- ab=[]]=],
+      [=[n-redef: ['bcdef', 'ghijkl'] ['nnoremap ,q y']  maps=['n,q=y'] c=- ab=[]]=],
+      [=[n-remap: ['abcdef', 'ghijkl'] ['nunmap ,q']  maps=['n,r=X'] c=- ab=[]]=],
+      [=[n-simp: ['bcdef', 'ghijkl'] ['nunmap ^H']  maps=['n<C-H>=Act(''nunmap <C-H>'', ''x'')'] c=- ab=[]]=],
+      [=[n-simp2: ['bcdef', 'ghijkl'] ['nunmap <C-H>']  maps=[] c=- ab=[]]=],
+      [=[n-simp3: ['bcdef', 'ghijkl'] ['nmapclear']  maps=[] c=- ab=[]]=],
+      [=[n-buf: ['bcdef', 'ghijkl'] ['nmapclear <buffer>']  maps=['n,q=G'] c=- ab=[]]=],
+      [=[x-unmap: ['bcdef', 'ghijkl'] ['xunmap ,q']  maps=[] c=- ab=[]]=],
+      [=[x-clear: ['bcdef', 'ghijkl'] ['xmapclear']  maps=[] c=- ab=[]]=],
+      [=[x-redef: ['bcdef', 'ghijkl'] ['xnoremap ,q y']  maps=['x,q=y'] c=- ab=[]]=],
+      [=[x-remap: ['ghijkl'] ['xunmap ,q']  maps=['x,r=X'] c=- ab=[]]=],
+      [=[x-simp: ['bcdef', 'ghijkl'] ['xunmap ^H']  maps=['x<C-H>=Act(''xunmap <C-H>'', ''x'')'] c=- ab=[]]=],
+      [=[x-simp2: ['bcdef', 'ghijkl'] ['xunmap <C-H>']  maps=[] c=- ab=[]]=],
+      [=[x-simp3: ['bcdef', 'ghijkl'] ['xmapclear']  maps=[] c=- ab=[]]=],
+      [=[x-buf: ['bcdef', 'ghijkl'] ['xmapclear <buffer>']  maps=['x,q=G'] c=- ab=[]]=],
+      [=[o-unmap: ['abcdef', 'ghijkl'] ['ounmap ,q']  maps=[] c=- ab=[]]=],
+      [=[o-clear: ['abcdef', 'ghijkl'] ['omapclear']  maps=[] c=- ab=[]]=],
+      [=[o-redef: ['abcdef', 'ghijkl'] ['onoremap ,q y']  maps=['o,q=y'] c=- ab=[]]=],
+      [=[o-remap: ['abcdef', 'ghijkl'] ['ounmap ,q']  maps=['o,r=X'] c=- ab=[]]=],
+      [=[o-simp: ['abcdef', 'ghijkl'] ['ounmap ^H']  maps=['o<C-H>=Act(''ounmap <C-H>'', ''x'')'] c=- ab=[]]=],
+      [=[o-simp2: ['abcdef', 'ghijkl'] ['ounmap <C-H>']  maps=[] c=- ab=[]]=],
+      [=[o-simp3: ['abcdef', 'ghijkl'] ['omapclear']  maps=[] c=- ab=[]]=],
+      [=[o-buf: ['abcdef', 'ghijkl'] ['omapclear <buffer>']  maps=['o,q=G'] c=- ab=[]]=],
+      [=[i-unmap: ['xabcdef', 'ghijkl'] ['iunmap ,q']  maps=[] c=- ab=[]]=],
+      [=[i-clear: ['xabcdef', 'ghijkl'] ['imapclear']  maps=[] c=- ab=[]]=],
+      [=[i-redef: ['yxabcdef', 'ghijkl'] ['inoremap ,q y']  maps=['i,q=y'] c=- ab=[]]=],
+      [=[i-remap: ['Xabcdef', 'ghijkl'] ['iunmap ,q']  maps=['i,r=X'] c=- ab=[]]=],
+      [=[i-simp: ['xabcdef', 'ghijkl'] ['iunmap ^H']  maps=['i<C-H>=Act(''iunmap <C-H>'', ''x'')'] c=- ab=[]]=],
+      [=[i-simp2: ['xabcdef', 'ghijkl'] ['iunmap <C-H>']  maps=[] c=- ab=[]]=],
+      [=[i-simp3: ['xabcdef', 'ghijkl'] ['imapclear']  maps=[] c=- ab=[]]=],
+      [=[i-buf: ['Gxabcdef', 'ghijkl'] ['imapclear <buffer>']  maps=['i,q=G'] c=- ab=[]]=],
+      [=[c-unmap: ['abcdef', 'ghijkl'] ['cunmap ,q']  maps=[] c=x ab=[]]=],
+      [=[c-clear: ['abcdef', 'ghijkl'] ['cmapclear']  maps=[] c=x ab=[]]=],
+      [=[c-redef: ['abcdef', 'ghijkl'] ['cnoremap ,q y']  maps=['c,q=y'] c=y ab=[]]=],
+      [=[c-remap: ['abcdef', 'ghijkl'] ['cunmap ,q']  maps=['c,r=X'] c=X ab=[]]=],
+      [=[c-simp: ['abcdef', 'ghijkl'] ['cunmap ^H']  maps=['c<C-H>=Act(''cunmap <C-H>'', ''x'')'] c=x ab=[]]=],
+      [=[c-simp2: ['abcdef', 'ghijkl'] ['cunmap <C-H>']  maps=[] c=x ab=[]]=],
+      [=[c-simp3: ['abcdef', 'ghijkl'] ['cmapclear']  maps=[] c=x ab=[]]=],
+      [=[c-buf: ['abcdef', 'ghijkl'] ['cmapclear <buffer>']  maps=['c,q=G'] c=G ab=[]]=],
+      [=[s-unmap: ['xbcdef', 'ghijkl'] ['sunmap ,q']  maps=[] c=- ab=[]]=],
+      [=[ab-unab: ['abcdefZZ ', 'ghijkl'] ['iunabbrev qq']  maps=[] c=- ab=[]]=],
+      [=[ab-clear: ['abcdefZZ ww ', 'ghijkl'] ['abclear']  maps=[] c=- ab=[]]=],
+      [=[ab-redef: ['abcdefZZ YY ', 'ghijkl'] ['inoreabbrev qq YY']  maps=[] c=- ab=['iqq=YY']]=],
+      [=[ab-cmd: ['abcdef', 'ghijkl'] ['cunabbrev qq'] Vim:E492: Not an editor command: ZZ maps=[] c=- ab=[]]=],
+      [=[ab-ctrlrsb: ['abcdefZZ', 'ghijkl'] ['iunabbrev qq']  maps=[] c=- ab=[]]=],
+      [=[lmap: ['abcdefQq', 'ghijkl'] ['lunmap q']  maps=[] c=- ab=[]]=],
+      [=[lmap-clear: ['abcdefQq', 'ghijkl'] ['lmapclear']  maps=[] c=- ab=[]]=],
+      [=[lua: ['bcdef', 'ghijkl'] []  maps=[] c=- ab=[]]=],
+      [=[lua-clear: ['bcdef', 'ghijkl'] []  maps=[] c=- ab=[]]=],
+    }, eval('g:out'))
+  end)
+end)

@@ -47,6 +47,8 @@ mod keycodes_oracle;
 mod linematch;
 mod log;
 mod map;
+mod mapping;
+mod mapping_oracle;
 mod marktree;
 mod mbyte;
 mod mbyte_oracle;
