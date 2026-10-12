@@ -63,12 +63,12 @@ impl CompleteFuncCb {
 
     /// Compile `value` into this callback, freeing what was there. C's
     /// `option_set_callback_func`, answering whether the value was accepted.
-    ///
-    /// # Safety
-    /// `value` must be a live NUL-terminated option string, or null.
-    pub(crate) unsafe fn set_from_option(self, value: *mut c_char) -> Result<(), Failed> {
-        // SAFETY: the caller's promise; the slot is this cell's own.
-        unsafe { option_set_callback_func(value, self.slot()) }
+    pub(crate) fn set_from_option(self, value: &CStr) -> Result<(), Failed> {
+        let cb = callback_from_option(value)?;
+        // SAFETY: the slot is this cell's own, reached once the value has
+        // been evaluated, and nothing else borrows it meanwhile.
+        install_callback(unsafe { &mut *self.slot() }, cb);
+        Ok(())
     }
 
     /// Copy this callback into a buffer-local slot, freeing what was there.
@@ -347,11 +347,11 @@ pub fn did_set_completefunc(args: &mut OptSet) -> Result<(), OptError> {
         .os_newval
         .as_string()
         .expect("the table installs this callback on a string option only")
-        .data();
+        .as_cstr();
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        unsafe { option_set_callback_func(value, &raw mut buf.b_cfu_cb) }
+        callback_from_option(value).map(|cb| install_callback(&mut buf.b_cfu_cb, cb))
     } else {
-        let retval = unsafe { cfu_cb().set_from_option(value) };
+        let retval = cfu_cb().set_from_option(value);
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
             set_buflocal_cfu_callback(buf);
         }
@@ -380,11 +380,11 @@ pub fn did_set_omnifunc(args: &mut OptSet) -> Result<(), OptError> {
         .os_newval
         .as_string()
         .expect("the table installs this callback on a string option only")
-        .data();
+        .as_cstr();
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        unsafe { option_set_callback_func(value, &raw mut buf.b_ofu_cb) }
+        callback_from_option(value).map(|cb| install_callback(&mut buf.b_ofu_cb, cb))
     } else {
-        let retval = unsafe { ofu_cb().set_from_option(value) };
+        let retval = ofu_cb().set_from_option(value);
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
             set_buflocal_ofu_callback(buf);
         }
@@ -496,13 +496,13 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
             // Drop the `^N` max-matches suffix.
             let end = part.iter().position(|&b| b == b'^').unwrap_or(part.len());
             let name = XString::from_bytes(&part[1..end]);
+            let cb = callback_from_option(name.as_cstr());
             // SAFETY: `idx` counts the entries, which is the array's length.
             let slot = unsafe { Buf::current().b_p_cpt_cb.add(idx) };
-            // SAFETY: a NUL-terminated name, and a slot of the array just
-            // allocated.
-            if unsafe { option_set_callback_func(name.as_ptr().cast_mut(), slot) }.is_err() {
-                // SAFETY: as above.
-                unsafe { *slot = Callback::None };
+            // SAFETY: a slot of the array just allocated.
+            match cb {
+                Ok(cb) => install_callback(unsafe { &mut *slot }, cb),
+                Err(_) => unsafe { *slot = Callback::None },
             }
         }
     }
@@ -520,14 +520,12 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
     let mut buf = args.os_buf;
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         // Buffer-local option set.
-        {
-            let value = buf.b_p_tsrfu.value_ptr();
-            unsafe { option_set_callback_func(value, &raw mut buf.b_tsrfu_cb) }
-        }
+        // A copy: evaluating the value may set the option again.
+        let value = buf.b_p_tsrfu.get();
+        callback_from_option(value.as_cstr()).map(|cb| install_callback(&mut buf.b_tsrfu_cb, cb))
     } else {
-        // Global option set.
-        let retval =
-            p_tsrfu(|value| unsafe { tsrfu_cb().set_from_option(value.as_ptr().cast_mut()) });
+        // Global option set. A copy, as above.
+        let retval = tsrfu_cb().set_from_option(P_TSRFU.get().as_cstr());
         // When using :set, free the local callback.
         if !args.os_flags.has(OptionSetFlags::GLOBAL) {
             callback_free(&mut buf.b_tsrfu_cb);

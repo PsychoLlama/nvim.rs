@@ -18,9 +18,8 @@ use crate::guard::Suppress;
 use crate::memory::XString;
 use crate::semsg;
 use crate::types::ArgListId;
-use crate::types::OptStr;
 use crate::vim_snprintf;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::arglist::state::ARG_HAD_LAST;
@@ -116,8 +115,8 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
     if !parm.use_ef.is_null() {
         set_option_direct(
             kOptErrorfile,
-            // SAFETY: NUL-terminated and outlives the call, which copies.
-            OptVal::String(unsafe { OptStr::borrowing(parm.use_ef) }),
+            // SAFETY: NUL-terminated; the value is a copy.
+            OptVal::from_cstr(unsafe { CStr::from_ptr(parm.use_ef) }),
             OptionSetFlags::NONE,
             SID_CARG,
         );
@@ -464,11 +463,10 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 ///
 /// `value` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn set_shortmess(value: *mut c_char) {
-    // SAFETY: `value` is a NUL-terminated string that outlives the call; the
-    // option layer copies it.
+    // SAFETY: `value` is a NUL-terminated string; the value is a copy.
     set_option_value_give_err(
         kOptShortmess,
-        OptVal::String(unsafe { OptStr::borrowing(value) }),
+        OptVal::from_cstr(unsafe { CStr::from_ptr(value) }),
         OptionSetFlags::NONE,
     );
 }

@@ -715,7 +715,7 @@ unsafe fn source_bracket(
     }
     if req.is_vimrc == DOSO_VIMRC {
         // SAFETY: the resolved name.
-        unsafe { vimrc_found(*fname_exp, c"MYVIMRC".as_ptr().cast_mut()) };
+        vimrc_found(unsafe { CStr::from_ptr(*fname_exp) }, c"MYVIMRC");
     }
 
     // SAFETY: as above.

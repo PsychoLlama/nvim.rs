@@ -107,6 +107,12 @@ pub fn get_mess_lang() -> *mut c_char {
     }
 }
 
+/// [`get_mess_lang`], copied out: the messages language, if there is one.
+pub(crate) fn mess_lang_of() -> Option<crate::memory::XString> {
+    // SAFETY: the locale's own NUL-terminated name or null, copied at once.
+    unsafe { cstr::at_opt(get_mess_lang()) }.map(crate::memory::XString::from_cstr)
+}
+
 /// The language messages are shown in.
 ///
 /// On POSIX this is just `LC_MESSAGES`; upstream's fallback chain through
@@ -264,7 +270,7 @@ pub fn ex_language(excmd: &mut ExArg) {
             }
             if what != LC_CTYPE {
                 os_setenv(c"LC_MESSAGES".as_ptr(), name, 1);
-                set_helplang_default(name);
+                set_helplang_default(CStr::from_ptr(name).to_bytes());
             }
         }
         set_lang_var();

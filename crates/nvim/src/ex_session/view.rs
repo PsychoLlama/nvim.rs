@@ -228,13 +228,14 @@ fn put_local_options(out: SessionFile, window: Win, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `curwin`/`curbuf` are restored before
     // returning either way.
     let saved = switch_to(window);
+    let mut writer = out;
     let f = if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
         // Store only the local values for a view, and for a session
         // whose 'sessionoptions' has no "options".
         let local_only = !opts.is_session() || !opts.has(kOptSsopFlagOptions);
-        unsafe { makeset(out.raw(), OptionSetFlags::LOCAL, local_only as c_int) }
+        makeset(&mut writer, OptionSetFlags::LOCAL, local_only as c_int)
     } else if opts.has(kOptSsopFlagFolds) {
-        unsafe { makefoldset(out.raw()) }
+        makefoldset(&mut writer)
     } else {
         Ok(())
     };

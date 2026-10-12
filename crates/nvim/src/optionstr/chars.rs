@@ -381,6 +381,22 @@ fn store_field(chars: &mut [u8], slot: usize, value: ScreenChar) {
     chars[slot..slot + size_of::<ScreenChar>()].copy_from_slice(&value.to_ne_bytes());
 }
 
+/// [`set_chars_option`] over the window's own 'fillchars' or 'listchars',
+/// read where it is used.
+pub(crate) fn set_window_chars_option(
+    window: Win,
+    what: CharsOption,
+    apply: bool,
+) -> Result<(), OptError> {
+    let value = if what == crate::option::kFillchars {
+        window.w_onebuf_opt.wo_fcs.value_ptr()
+    } else {
+        window.w_onebuf_opt.wo_lcs.value_ptr()
+    };
+    // SAFETY: the live window's own value, a C string nothing below writes.
+    unsafe { set_chars_option(window, value, what, apply) }
+}
+
 /// Set 'fillchars' or 'listchars' for one window.
 ///
 /// `value` points at either the global or the window-local value; an empty

@@ -459,7 +459,7 @@ pub fn did_set_pumborder(_args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_winhighlight(args: &mut OptSet) -> Result<(), OptError> {
     let (wp, varp) = (win(args), varp(args));
     let local = field!(WinOpt, wo_winhl);
-    if !unsafe { parse_winhl_opt(varp.value_ptr(), local_window(varp, wp, local)) } {
+    if !parse_winhl_opt(Some(&varp.get()), local_window(varp, wp, local)) {
         return invalid();
     }
     Ok(())

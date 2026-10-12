@@ -146,5 +146,6 @@ fn set_option_to(
         };
     let _sctx = api_set_sctx(channel_id);
     // SAFETY: `opt_name` is the API string's own NUL-terminated bytes.
-    unsafe { set_option_value_for(opt_name, opt_idx, optval, opt_flags, to) }
+    let opt_name = unsafe { CStr::from_ptr(opt_name) }.to_bytes();
+    set_option_value_for(opt_name, opt_idx, optval, opt_flags, to)
 }

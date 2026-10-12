@@ -10,18 +10,16 @@
 //! Those cells are the state this module keeps between the two halves;
 //! nothing else reads them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::optionstr::OptString;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_uint};
+use core::ffi::{CStr, c_uint};
 use std::ffi::CString;
 
 use crate::cmdexpand::{Scored, cmdline_fuzzy_complete, fuzzy_sorted};
-use crate::cstr;
 use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::fuzzy::fuzzy_match_str;
 use crate::global_cell::GlobalCell;
@@ -32,57 +30,53 @@ use crate::options::{
     kOptKeymap, kOptPackpath, kOptPath, kOptRuntimepath, kOptSpellsuggest, kOptSyntax, kOptTags,
     kOptViewdir,
 };
-use crate::os::env::expand_env_esc;
+use crate::os::env::expand_env_esc_of;
 use crate::regexp::vim_regexec;
 use crate::strings::escaped_bytes;
 use crate::types::{
     BackslashEscape, Expand, ExpandContext, Failed, MAXPATHL, OptExpand, OptIndex, OptionSetFlags,
-    RegMatch, XpPrefix, size_t, uint32_t,
+    RegMatch, XpPrefix, uint32_t,
 };
 
 use super::{
-    FUZZY_SCORE_NONE, find_option, find_option_len, get_option, get_varp_scope_from,
-    is_option_hidden, kOptFlagColon, kOptFlagComma, kOptFlagExpand, kOptFlagFlagList,
-    kOptValTypeBoolean, kOptValTypeNumber, option_has_type, option_value2string, option_var,
+    FUZZY_SCORE_NONE, find_option_len, get_option, get_varp_scope_from, is_option_hidden,
+    kOptFlagColon, kOptFlagComma, kOptFlagExpand, kOptFlagFlagList, kOptValTypeBoolean,
+    kOptValTypeNumber, option_has_type, option_value_text, option_var,
 };
 
 /// What [`set_context_in_set_cmd`] worked out, for the `Expand*` half.
 ///
 /// `IDX` is `kOptInvalid` for a terminal option, whose two-letter name is
-/// spelled into `NAME` instead — the whole five bytes at a time, since the
-/// first two are always `t_` and the last is the terminator.
+/// spelled into `NAME` instead — the whole four bytes at a time, since the
+/// first two are always `t_`; a zero byte ends the name early.
 static IDX: GlobalCell<OptIndex> = GlobalCell::new(kOptInvalid);
-static NAME: GlobalCell<[c_char; 5]> = GlobalCell::new([b't' as c_char, b'_' as c_char, 0, 0, 0]);
+static NAME: GlobalCell<[u8; 4]> = GlobalCell::new(*b"t_\0\0");
 static START_COL: GlobalCell<usize> = GlobalCell::new(0);
 static FLAGS: GlobalCell<OptionSetFlags> = GlobalCell::new(OptionSetFlags::NONE);
 /// Whether the operator was `+=` or `^=`, which means the current value is
 /// not a candidate to offer back.
 static APPEND: GlobalCell<bool> = GlobalCell::new(false);
 
-/// The option's value with `$VAR` and `~` expanded, or `None` when there
-/// was nothing to expand.
+/// The option's value -- `val`, or the option's own global value -- with
+/// `$VAR` and `~` expanded, or `None` when there was nothing to expand.
 ///
 /// Upstream expands into the shared `NameBuff` and answers its address;
 /// every caller copies the answer out at once, so it is owned here.
-///
-/// # Safety
-///
-/// `val`, if not null, must be NUL-terminated.
-pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Option<CString> {
-    let mut expanded = [0 as c_char; MAXPATHL as usize];
-    // SAFETY: the option table is a plain array, `var` is the option's own
-    // variable, and the caller's `val` is NUL-terminated.
+pub(crate) fn option_expand(opt_idx: OptIndex, val: Option<&CStr>) -> Option<XString> {
     let opt = get_option(opt_idx);
     if opt.flags & kOptFlagExpand as uint32_t == 0 || is_option_hidden(opt_idx) {
         return None;
     }
-    let val = if val.is_null() {
-        option_var(opt_idx).string_var().value_ptr()
-    } else {
-        val
+    let own;
+    let val = match val {
+        Some(val) => val,
+        None => {
+            own = option_var(opt_idx).string_var().get();
+            own.as_cstr()
+        }
     };
     // The buffer the expansion lands in is `MAXPATHL` bytes.
-    if val.is_null() || unsafe { cstr::bytes_at(val) }.len() > MAXPATHL as size_t {
+    if val.count_bytes() > MAXPATHL as usize {
         return None;
     }
     // 'path' and 'tags' hold escaped file names, so their separators
@@ -90,15 +84,9 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Opt
     let esc = matches!(opt_idx, kOptTags | kOptPath);
     // 'spellsuggest' items are `file:<name>`; only that prefix's tail
     // is a path.
-    let one_prefix = match opt_idx {
-        kOptSpellsuggest => c"file:".as_ptr() as *mut c_char,
-        _ => core::ptr::null_mut(),
-    };
-    unsafe { expand_env_esc(val, expanded.as_mut_ptr(), MAXPATHL, esc, false, one_prefix) };
-    if unsafe { cstr::eq(expanded.as_ptr(), val) } {
-        return None;
-    }
-    Some(cstr::in_chars(&expanded).to_owned())
+    let one_prefix = (opt_idx == kOptSpellsuggest).then_some(c"file:");
+    let expanded = expand_env_esc_of(val, esc, false, one_prefix);
+    (expanded.as_cstr() != val).then_some(expanded)
 }
 
 /// Work out what the cursor is sitting on in a `:set` command line whose
@@ -272,9 +260,9 @@ fn take_option_name(
         *p += 1;
         let nextchar = at(*p);
         // The two termcap bytes the key code packs.
-        let lo = (-key & 0xff) as c_char;
-        let hi = ((-key) as c_uint >> 8 & 0xff) as c_char;
-        NAME.set([b't' as c_char, b'_' as c_char, lo, hi, 0]);
+        let lo = (-key & 0xff) as u8;
+        let hi = ((-key) as c_uint >> 8 & 0xff) as u8;
+        NAME.set([b't', b'_', lo, hi]);
         return Some((nextchar, kOptAleph, 0, true));
     }
 
@@ -289,13 +277,7 @@ fn take_option_name(
         }
         *p += 1;
         let nextchar = at(*p);
-        NAME.set([
-            b't' as c_char,
-            b'_' as c_char,
-            at(*p - 2) as c_char,
-            at(*p - 1) as c_char,
-            0,
-        ]);
+        NAME.set([b't', b'_', at(*p - 2), at(*p - 1)]);
         return Some((nextchar, kOptAleph, 0, true));
     }
 
@@ -464,16 +446,17 @@ pub(crate) fn expand_old_setting() -> Result<Vec<XString>, Failed> {
     // A terminal option has no table row, so it is looked up by the
     // name `set_context_in_set_cmd` spelled out.
     if IDX.get() == kOptInvalid {
-        IDX.set(NAME.with(|name| find_option(cstr::in_chars(name))));
+        IDX.set(NAME.with(|name| {
+            let end = name.iter().position(|&b| b == 0).unwrap_or(name.len());
+            find_option_len(&name[..end])
+        }));
     }
-    let mut rendered = [0 as c_char; MAXPATHL as usize];
     let var = if IDX.get() == kOptInvalid {
-        c""
+        XString::new()
     } else {
-        option_value2string(IDX.get(), FLAGS.get(), &mut rendered);
-        cstr::in_chars(&rendered)
+        option_value_text(IDX.get(), FLAGS.get())
     };
-    Ok(vec![escape_option_str_cmdline(var)])
+    Ok(vec![escape_option_str_cmdline(var.as_cstr())])
 }
 
 /// Complete a value through the option's own `opt_expand_cb`.
@@ -489,9 +472,7 @@ pub(crate) fn expand_string_setting(
         return Err(Failed);
     };
 
-    let mut rendered = [0 as c_char; MAXPATHL as usize];
-    option_value2string(opt_idx, FLAGS.get(), &mut rendered);
-    let value = escape_option_str_cmdline(cstr::in_chars(&rendered));
+    let value = escape_option_str_cmdline(option_value_text(opt_idx, FLAGS.get()).as_cstr());
 
     let set_arg = START_COL.get();
     let mut args = OptExpand {

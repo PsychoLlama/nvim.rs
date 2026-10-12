@@ -6,8 +6,7 @@
 //! are only taken on the transition *into* 'paste'. Setting it again while
 //! it is already on must not overwrite them with the suppressed values.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -18,13 +17,10 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::c_void;
-use core::ptr;
-
 use crate::drawscreen::status_redraw_all;
 use crate::global_cell::GlobalCell;
-use crate::indent::tabstop_set;
-use crate::memory::{XString, xfree};
+use crate::indent::replace_tabstop_array;
+use crate::memory::XString;
 use crate::option::vars::{
     P_AI, P_ET, P_RI, P_RU, P_SM, P_STA, P_STS, P_TW, P_VSTS, P_WM, p_ai, p_et, p_paste, p_ri,
     p_ru, p_sm, p_sta, p_sts, p_tw, p_wm,
@@ -33,12 +29,11 @@ use crate::options::{
     kOptAutoindent, kOptExpandtab, kOptRevins, kOptRuler, kOptShowmatch, kOptSmarttab,
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
-use crate::types::{ColNr, OptError, OptIndex, OptInt, OptSet, OptionSetFlags};
+use crate::types::{OptError, OptIndex, OptInt, OptSet, OptionSetFlags};
 
-use crate::types::Buffer;
 use crate::winlayer::buffers;
 
-use super::{didset_options_sctx, field_ptr};
+use super::didset_options_sctx;
 
 /// What 'paste' overrode, so that switching it off again restores the
 /// values the user set. The per-buffer copies live in `Buffer`; this is the
@@ -121,13 +116,7 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 
 /// 'paste': switch off everything that would reformat pasted text, and
 /// remember what to switch back on.
-/// Where a buffer keeps its parsed 'varsofttabstop' stops.
-const VSTS_ARRAY: usize = core::mem::offset_of!(Buffer, b_p_vsts_array);
-
 pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
-    // SAFETY: the buffer list is the editor's own, and every string handled
-    // here is either the shared empty string or an allocation this option
-    // owns.
     if p_paste() {
         if !SAVED.get().on {
             for mut buf in buffers() {
@@ -161,8 +150,7 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
             buf.b_p_ai = 0;
             buf.b_p_et = 0;
             buf.b_p_vsts = None;
-            unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };
-            buf.b_p_vsts_array = ptr::null_mut();
+            replace_tabstop_array(&mut buf.b_p_vsts_array, None);
         }
         P_SM.set(false);
         P_STA.set(false);
@@ -184,16 +172,9 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
             buf.b_p_sts = buf.b_p_sts_nopaste;
             buf.b_p_ai = buf.b_p_ai_nopaste;
             buf.b_p_et = buf.b_p_et_nopaste;
-            buf.b_p_vsts = buf.b_p_vsts_nopaste.clone();
-            unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };
-            if let Some(vsts) = buf.b_p_vsts.as_ref() {
-                // The array's address is the buffer's plus a constant, so
-                // naming it reads nothing.
-                let array = field_ptr(buf.raw(), VSTS_ARRAY, |b: &Buffer| &b.b_p_vsts_array);
-                unsafe { tabstop_set(vsts.as_ptr().cast_mut(), array) };
-            } else {
-                buf.b_p_vsts_array = ptr::null_mut::<ColNr>();
-            }
+            let vsts = buf.b_p_vsts_nopaste.clone();
+            replace_tabstop_array(&mut buf.b_p_vsts_array, vsts.as_ref().map(XString::as_cstr));
+            buf.b_p_vsts = vsts;
         }
         let saved = SAVED.get();
         P_SM.set(saved.sm);

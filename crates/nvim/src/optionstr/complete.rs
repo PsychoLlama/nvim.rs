@@ -12,7 +12,6 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::eval::userfunc::scriptlocal_funcname;
 use crate::insexpand::set_cpt_callbacks;
-use crate::memory::XString;
 use crate::option::copy_option_part;
 use crate::option::vars::{P_CIA, P_COT, P_HLG, P_TC, cia_flags, cot_flags, spo_flags, tc_flags};
 use crate::options::{opt_cot_values, opt_spo_values, opt_tc_values};
@@ -22,13 +21,11 @@ use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, vali
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::types::{NUL, OptError, OptSet, OptionSetFlags};
-use core::ptr;
 
 use super::OptString;
 use super::frame::{invalid, varp, win};
 use super::{
-    CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, free_string_option, illegal_char, illegal_char_after_chr,
-    opt_strings_mask,
+    CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, illegal_char, illegal_char_after_chr, opt_strings_mask,
 };
 
 /// The sources 'complete' accepts, one letter each.
@@ -248,12 +245,8 @@ pub fn did_set_optexpr(args: &mut OptSet) -> Result<(), OptError> {
     let varp = varp(args);
     // SAFETY: a string option's value is null or NUL-terminated.
     let value = unsafe { cstr::bytes_at_or_empty(varp.value_ptr()) };
-    let resolved = scriptlocal_funcname(value).map_or(ptr::null_mut(), XString::into_raw);
-    if !resolved.is_null() {
-        // Replace and *then* free: a global value's string is the option
-        // record's, so freeing it before the write would release it twice.
-        let old = unsafe { varp.replace(resolved) };
-        unsafe { free_string_option(old) };
+    if let Some(resolved) = scriptlocal_funcname(value) {
+        varp.set(resolved);
     }
     Ok(())
 }
@@ -284,7 +277,7 @@ pub fn did_set_spelllang(args: &mut OptSet) -> Result<(), OptError> {
 /// The window's mask lives in its *syntax block*, which a diff or preview
 /// window may share with another window.
 pub fn did_set_spelloptions(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut wp, opt_flags, new) = (win(args), args.os_flags, args.os_newval);
+    let (mut wp, opt_flags, new) = (win(args), args.os_flags, &args.os_newval);
     let value = new
         .as_string()
         .expect("the table installs this callback on a string option only")

@@ -9,28 +9,24 @@
 //!
 //! * the callback runs with the *new* value already in the variable, because
 //!   most of them read it back through `args->os_varp`;
-//! * the old value is freed only once the callback has accepted it, and the
-//!   copies handed to the `OptionSet` autocommand outlive both, because that
-//!   autocommand may close the buffer the variable lives in;
+//! * the old value is the setter's own from the moment the new one goes in:
+//!   it is moved out of the variable, not viewed in it, so a callback or an
+//!   `OptionSet` autocommand that sets the same option again cannot free it,
+//!   and a rejection puts it back exactly;
 //! * `secure` is raised around the callback for a value that came from a
 //!   modeline, the sandbox, or an option previously marked insecure, and
 //!   lowered again whatever the callback did.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::optionstr::OptString;
-use crate::snprintf;
 use crate::tr;
 use crate::types::AutoEvent;
-use crate::types::OptStr;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
-use crate::autocmd::{apply_autocmds, do_filetype_autocmd};
+use crate::autocmd::{do_filetype_autocmd, fire_autocmds_for};
 use crate::charset::buf_init_chartab;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, redraw_all_later};
 use crate::eval::vars::{
@@ -38,11 +34,10 @@ use crate::eval::vars::{
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
-use crate::lua::executor::nlua_set_sctx;
-use crate::memory::{XString, xmalloc, xstrdup};
+use crate::lua::executor::nlua_set_sctx_in;
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
-use crate::message_fmt::msg_cstr;
 use crate::mouse::setmouse;
 use crate::option::optval_as_tv;
 use crate::runtime::state::current_sctx;
@@ -58,19 +53,19 @@ use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, gettext_owned};
 use crate::types::{
     OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0, VimOption,
-    Vv, size_t, uint32_t,
+    Vv, uint32_t,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
 
 use super::{
-    NO_LOCAL_UNDOLEVEL, NUMBUFLEN, OptSlot, SID_NONE, boolean_optval, check_redraw,
+    NO_LOCAL_UNDOLEVEL, OptSlot, Replaced, SID_NONE, boolean_optval, check_redraw,
     do_spelllang_source, do_syntax_autocmd, get_varp, get_varp_scope, insecure_flag,
     is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagRedrAll, kOptFlagSecure,
     kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, kOptValTypeString, mark_option_was_set,
     option_has_scope, option_has_type, option_is_global_local, option_is_global_only,
-    option_scope_idx, option_var, optval_copy, optval_equal, optval_free, optval_from_varp,
-    set_option_last_set, set_option_varp, tty_option_end, validate_option_value,
+    option_scope_idx, option_var, replace_slot, restore_slot, set_option_last_set, slot_holds,
+    slot_value, tty_option_end, validate_option_value, write_slot,
 };
 use crate::pos::MAXCOL;
 use crate::winlayer::Buf;
@@ -89,8 +84,7 @@ pub(crate) fn set_option_sctx(
         // while anything can set an option.
         script_ctx.sc_lnum += crate::runtime::innermost_frame().es_lnum;
     }
-    // SAFETY: `nlua_set_sctx` only reads and rewrites the context in place.
-    unsafe { nlua_set_sctx(&raw mut script_ctx) };
+    nlua_set_sctx_in(&mut script_ctx);
 
     if both || opt_flags.has(OptionSetFlags::GLOBAL) || option_is_global_only(opt_idx) {
         set_option_last_set(opt_idx, script_ctx);
@@ -98,8 +92,7 @@ pub(crate) fn set_option_sctx(
     if !both && !opt_flags.has(OptionSetFlags::LOCAL) {
         return;
     }
-    // SAFETY: `curbuf`/`curwin` are live for as long as the editor is, and
-    // the scope index the table gives is in range of the per-scope array.
+    // The scope index the table gives is in range of the per-scope array.
     if option_has_scope(opt_idx, kOptScopeBuf) {
         let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
         Buf::current().b_p_script_ctx[at] = script_ctx;
@@ -129,8 +122,8 @@ fn apply_optionset_autocmd(
         return;
     }
 
-    // Each holds a copy of its `OptVal`'s string -- the caller `optval_free`s
-    // the four values -- and `set_vim_var_tv` copies again.
+    // Each typval takes its value's string over, and `set_vim_var_tv`
+    // copies again.
     let mut oldval_tv = optval_as_tv(oldval, false);
     let mut oldval_g_tv = optval_as_tv(oldval_g, false);
     let mut oldval_l_tv = optval_as_tv(oldval_l, false);
@@ -168,66 +161,44 @@ fn apply_optionset_autocmd(
         set_vim_var_tv(Vv::OptionOldlocal, &mut oldval_tv);
     }
 
-    unsafe {
-        apply_autocmds(
-            AutoEvent::OptionSet,
-            get_option(opt_idx).fullname.as_ptr().cast_mut(),
-            ptr::null_mut(),
-            false,
-            None,
-        )
-    };
+    // The name is the table's own literal, which nothing frees.
+    let name = get_option(opt_idx).fullname;
+    fire_autocmds_for(AutoEvent::OptionSet, Some(name), None, false, None, None);
     reset_v_option_vars();
 }
 
 /// Whether the name is one of the terminal options nvim keeps only to stay
 /// compatible with scripts that set them.
-///
 pub(crate) fn is_tty_option(name: &[u8]) -> bool {
     tty_option_end(name).is_some()
 }
 
 /// What a terminal option reads back as. Only `t_Co`, `term` and `ttytype`
 /// have anything to say; the rest answer with the empty string.
-///
 pub(crate) fn get_tty_option(name: &[u8]) -> OptVal {
-    // SAFETY: every arm allocates its answer.
-    let value = unsafe {
-        if name == b"t_Co" {
-            if t_colors.get() <= 1 {
-                xstrdup(c"".as_ptr())
-            } else {
-                let buf = xmalloc(NUMBUFLEN as size_t).cast::<c_char>();
-                snprintf!(buf, NUMBUFLEN as size_t, c"%d".as_ptr(), t_colors.get());
-                buf
-            }
-        } else if name == b"term" {
-            TERM.or(c"nvim").into_raw()
-        } else if name == b"ttytype" {
-            TTYTYPE.or(c"nvim").into_raw()
-        } else if is_tty_option(name) {
-            xstrdup(c"".as_ptr())
+    if name == b"t_Co" {
+        if t_colors.get() <= 1 {
+            OptVal::static_string(c"")
         } else {
-            return OptVal::Nil;
+            OptVal::from_bytes(t_colors.get().to_string().as_bytes())
         }
-    };
-    // SAFETY: every arm above allocated a NUL-terminated string, which the
-    // value takes over.
-    OptVal::String(unsafe { OptStr::owning(value) })
+    } else if name == b"term" {
+        OptVal::from_xstring(TERM.or(c"nvim"))
+    } else if name == b"ttytype" {
+        OptVal::from_xstring(TTYTYPE.or(c"nvim"))
+    } else if is_tty_option(name) {
+        OptVal::static_string(c"")
+    } else {
+        OptVal::Nil
+    }
 }
 
 /// Remember what a script set `term` or `ttytype` to, so it reads back.
 /// Nothing else is stored, and `false` says so.
-///
-/// # Safety
-///
-/// On success the option takes ownership of `value`, which must be an
-/// allocation the option module may free.
-pub(crate) unsafe fn set_tty_option(name: &CStr, value: *mut c_char) -> bool {
+pub(crate) fn set_tty_option(name: &CStr, value: XString) -> bool {
     for (spelling, cell) in [(c"term", &TERM), (c"ttytype", &TTYTYPE)] {
         if name == spelling {
-            // SAFETY: `value` is ours now.
-            cell.0.set(Some(unsafe { XString::from_raw(value) }));
+            cell.0.set(Some(value));
             return true;
         }
     }
@@ -264,16 +235,13 @@ pub(crate) fn find_option(name: &CStr) -> OptIndex {
     find_option_len(name.to_bytes())
 }
 
-/// An owned copy of the option's value in the scope the flags name. An
-/// unknown option answers nil rather than failing.
+/// A copy of the option's value in the scope the flags name. An unknown
+/// option answers nil rather than failing.
 pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
     if opt_idx == kOptInvalid {
         return OptVal::Nil;
     }
-    optval_copy(&optval_from_varp(
-        opt_idx,
-        get_varp_scope(opt_idx, opt_flags),
-    ))
+    slot_value(opt_idx, get_varp_scope(opt_idx, opt_flags))
 }
 
 /// The option table's row for an option: everything the option *is*, all
@@ -293,11 +261,11 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
     debug_assert!(opt_idx != kOptInvalid);
 
     if !option_is_global_local(opt_idx) {
-        return optval_from_varp(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::GLOBAL));
+        return slot_value(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::GLOBAL));
     }
     // A string global-local option is unset when it is empty.
     if option_has_type(opt_idx, kOptValTypeString) {
-        return OptVal::string(String_0::from_cstr(c""));
+        return OptVal::static_string(c"");
     }
     match opt_idx {
         kOptAutocomplete | kOptAutoread | kOptFsync => boolean_optval(None),
@@ -313,50 +281,45 @@ pub(crate) fn is_option_local_value_unset(opt_idx: OptIndex) -> bool {
     if !option_is_global_local(opt_idx) {
         return false;
     }
-    let local = optval_from_varp(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::LOCAL));
-    optval_equal(&local, &get_option_unset_value(opt_idx))
+    let local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
+    slot_holds(opt_idx, local, &get_option_unset_value(opt_idx))
 }
 
 /// React to an option whose variable already holds its new value: run the
-/// option's own callback, and on rejection put `old_value` back.
+/// option's own callback, and on rejection put `old` back.
 ///
-/// `set_sid` is the script the change is attributed to — 0 for the one
-/// currently running, `SID_NONE` to leave the attribution alone. `direct`
-/// skips every side effect, `value_replaced` says the whole value was
-/// written rather than amended.
+/// `old` is what [`replace_slot`] took out of `varp`, and the caller's own;
+/// `new_value` is a copy of what went in, which the callback is shown and
+/// which comes back with the answer for the `OptionSet` autocommand (nil
+/// for `direct`, which shows nobody anything). `set_sid` is the script the
+/// change is attributed to — 0 for the one currently running, `SID_NONE`
+/// to leave the attribution alone. `direct` skips every side effect,
+/// `value_replaced` says the whole value was written rather than amended.
 ///
-/// Returns an untranslated error message.
-///
-/// # Safety
-///
-/// `old_value` is what the caller read out of `varp` before writing the new
-/// value in without freeing it, so its string now owns the bytes the
-/// variable held: this frees it, or on a rejection hands it back to the
-/// variable.
+/// The error message is untranslated.
 #[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn did_set_option(
+pub(crate) fn did_set_option(
     opt_idx: OptIndex,
     varp: OptSlot,
-    old_value: OptVal,
+    old: Replaced,
     new_value: OptVal,
     opt_flags: OptionSetFlags,
     set_sid: ScriptId,
     direct: bool,
     value_replaced: bool,
-) -> Result<(), OptError> {
+) -> (Result<(), OptError>, OptVal) {
     let opt = get_option(opt_idx);
     let mut errmsg = Ok(());
     let mut restore_chartab = false;
     let mut value_changed = false;
     let mut value_checked = false;
+    let old_unset = old.unset;
 
-    // SAFETY: the caller's `varp` is this option's variable and `opt` a row
-    // of the table.
     let mut args = OptSet {
         os_varp: varp,
         os_idx: opt_idx,
         os_flags: opt_flags,
-        os_oldval: old_value,
+        os_oldval: old.value,
         os_newval: new_value,
         os_value_checked: false,
         os_value_changed: false,
@@ -367,21 +330,20 @@ pub(crate) unsafe fn did_set_option(
 
     if direct {
         // Nothing to vet: the caller is putting a value back.
-    } else if opt.immutable && !optval_equal(&old_value, &new_value) {
+    } else if opt.immutable && args.os_oldval != args.os_newval {
         errmsg = Err(e_unsupportedoption.into());
     } else if (secure.get() != 0 || sandbox.get() != 0)
         && opt.flags & kOptFlagSecure as uint32_t != 0
     {
         errmsg = Err(e_secure.into());
-    } else if new_value.as_string().is_some()
-        && check_illegal_path_names(
-            unsafe { CStr::from_ptr(varp.string_var().value_ptr()) },
-            opt.flags,
-        )
+    } else if args
+        .os_newval
+        .as_string()
+        .is_some_and(|value| check_illegal_path_names(value.as_cstr(), opt.flags))
     {
         errmsg = Err(e_invarg.into());
     } else if let Some(did_set_cb) = opt.opt_did_set_cb {
-        errmsg = unsafe { did_set_cb(&mut args) };
+        errmsg = did_set_cb(&mut args);
         // 'filetype' and 'syntax' report whether the value really moved;
         // they, 'keymap' and the character-class options report whether
         // they have vetted it themselves; and the character-class
@@ -390,18 +352,24 @@ pub(crate) unsafe fn did_set_option(
         value_checked = args.os_value_checked;
         restore_chartab = args.os_restore_chartab;
     }
+    let OptSet {
+        os_oldval: old_value,
+        os_newval: new_value,
+        ..
+    } = args;
 
     if let Err(errmsg) = errmsg {
-        unsafe { set_option_varp(opt_idx, varp, old_value, true) };
+        let old = Replaced {
+            value: old_value,
+            unset: old_unset,
+        };
+        restore_slot(opt_idx, varp, old);
         if restore_chartab {
             buf_init_chartab(Buf::current(), true);
         }
-        return Err(errmsg);
+        return (Err(errmsg), new_value);
     }
-
-    // The callback may have freed or rewritten what it was handed, so
-    // read the value back rather than trusting `new_value`.
-    let new_value = optval_from_varp(opt_idx, varp);
+    drop(old_value);
 
     if set_sid != SID_NONE {
         let script_ctx = if set_sid == 0 {
@@ -417,24 +385,23 @@ pub(crate) unsafe fn did_set_option(
         set_option_sctx(opt_idx, opt_flags, script_ctx);
     }
 
-    optval_free(old_value);
-
     let scope_both = !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL);
     if scope_both {
         if option_is_global_local(opt_idx) {
             // A bare `:set` on a global-local option drops the local
             // value rather than assigning it too.
             let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
-            let unset = optval_copy(&get_option_unset_value(opt_idx));
-            unsafe { set_option_varp(opt_idx, varp_local, unset, true) };
+            write_slot(opt_idx, varp_local, get_option_unset_value(opt_idx));
         } else {
+            // The callback may have rewritten what it was handed, so the
+            // value is read back rather than taken from `new_value`.
             let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
-            unsafe { set_option_varp(opt_idx, varp_global, optval_copy(&new_value), true) };
+            write_slot(opt_idx, varp_global, slot_value(opt_idx, varp));
         }
     }
 
     if direct {
-        return errmsg;
+        return (Ok(()), new_value);
     }
 
     // The autocommands go last, once every flag they might read is set.
@@ -493,7 +460,16 @@ pub(crate) unsafe fn did_set_option(
         }
     }
 
-    errmsg
+    (Ok(()), new_value)
+}
+
+/// What an `OptionSet` autocommand is told the option held before.
+struct OldValues {
+    /// What was in effect: for `:setlocal` on a global-local option with no
+    /// local value, whatever the option read through.
+    used: OptVal,
+    global: OptVal,
+    local: OptVal,
 }
 
 /// Give an option a new value, with everything that entails.
@@ -512,9 +488,8 @@ pub(crate) fn set_option(
 ) -> Result<(), OptError> {
     debug_assert!(opt_idx != kOptInvalid);
 
-    if !direct && let Err(errmsg) = validate_option_value(opt_idx, &mut value, opt_flags) {
-        optval_free(value);
-        return Err(errmsg);
+    if !direct {
+        validate_option_value(opt_idx, &mut value, opt_flags)?;
     }
 
     let opt = get_option(opt_idx);
@@ -524,7 +499,6 @@ pub(crate) fn set_option(
     // True only for a global-local option, by construction.
     let is_opt_local_unset = is_option_local_value_unset(opt_idx);
 
-    // SAFETY: every pointer below comes from the option table.
     // `:set opt=val` on a global-local option resets the local value, so
     // it is the global variable that is being written.
     let varp = if scope_both && option_is_global_local(opt_idx) {
@@ -532,32 +506,31 @@ pub(crate) fn set_option(
     } else {
         get_varp_scope(opt_idx, opt_flags)
     };
-    let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
-    let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
 
-    let old_value = optval_from_varp(opt_idx, varp);
-    let old_global_value = optval_from_varp(opt_idx, varp_global);
-    // An unset local value reads as the global one.
-    let old_local_value = if is_opt_local_unset {
-        old_global_value
-    } else {
-        optval_from_varp(opt_idx, varp_local)
-    };
-    // What was actually in effect, which is what `OptionSet` reports as
-    // `v:option_old`: for `:setlocal` on a global-local option with no
-    // local value, that is whatever the option reads through.
-    let used_old_value = if scope_local && is_opt_local_unset {
-        optval_from_varp(opt_idx, get_varp(opt_idx))
-    } else {
-        old_value
-    };
-
-    // The autocommand may close the buffer these live in, so it gets
-    // copies that outlive the variables.
-    let saved_used_value = optval_copy(&used_old_value);
-    let saved_old_global_value = optval_copy(&old_global_value);
-    let saved_old_local_value = optval_copy(&old_local_value);
-    let saved_new_value = optval_copy(&value);
+    // Copies of what the variables hold now, for the autocommand: it may
+    // close the buffer they live in. A direct set fires none, and is shown
+    // nothing.
+    let old_values = (!direct).then(|| {
+        let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
+        let global = slot_value(opt_idx, varp_global);
+        // An unset local value reads as the global one.
+        let local = if is_opt_local_unset {
+            global.clone()
+        } else {
+            slot_value(opt_idx, get_varp_scope(opt_idx, OptionSetFlags::LOCAL))
+        };
+        let used = if scope_local && is_opt_local_unset {
+            slot_value(opt_idx, get_varp(opt_idx))
+        } else {
+            slot_value(opt_idx, varp)
+        };
+        OldValues {
+            used,
+            global,
+            local,
+        }
+    });
+    let new_value = if direct { OptVal::Nil } else { value.clone() };
 
     let insecure = insecure_flag(Win::current_or_none(), opt_idx, opt_flags).is_set();
     let secure_saved = secure.get();
@@ -570,56 +543,48 @@ pub(crate) fn set_option(
         secure.set(1);
     }
 
-    unsafe { set_option_varp(opt_idx, varp, value, false) };
-    let errmsg = unsafe {
-        did_set_option(
-            opt_idx,
-            varp,
-            old_value,
-            value,
-            opt_flags,
-            set_sid,
-            direct,
-            value_replaced,
-        )
-    };
+    let old = replace_slot(opt_idx, varp, value);
+    let (errmsg, new_value) = did_set_option(
+        opt_idx,
+        varp,
+        old,
+        new_value,
+        opt_flags,
+        set_sid,
+        direct,
+        value_replaced,
+    );
 
     secure.set(secure_saved);
 
-    if errmsg.is_ok() && !direct {
+    if errmsg.is_ok()
+        && let Some(old_values) = old_values
+    {
+        let for_ui = (opt.flags & kOptFlagUIOption as uint32_t != 0).then(|| new_value.clone());
         if starting.get() == 0 {
             apply_optionset_autocmd(
                 opt_idx,
                 opt_flags,
-                saved_used_value,
-                saved_old_global_value,
-                saved_old_local_value,
-                saved_new_value,
+                old_values.used,
+                old_values.global,
+                old_values.local,
+                new_value,
             );
         }
-        if opt.flags & kOptFlagUIOption as uint32_t != 0 {
+        if let Some(new_value) = for_ui {
             ui_call_option_set(
                 String_0::from_cstr(opt.fullname),
-                super::optval_as_object(saved_new_value),
+                super::optval_as_object(new_value),
             );
         }
     }
-
-    optval_free(saved_used_value);
-    optval_free(saved_old_local_value);
-    optval_free(saved_old_global_value);
-    optval_free(saved_new_value);
 
     errmsg
 }
 
 /// Write a value with no side effects at all: no callback, no autocommand,
-/// no validation. Only for values the editor itself computed.
-///
-/// **Takes ownership of nothing, and copies what it is given**, which is
-/// why every caller here hands it a *borrow* — `OptVal::static_string`, or
-/// `OptStr::borrowing` over a buffer the caller goes on owning. Building an
-/// owned value to pass in allocates the same bytes twice.
+/// no validation. Only for values the editor itself computed. Takes
+/// ownership of `value`.
 pub(crate) fn set_option_direct(
     opt_idx: OptIndex,
     value: OptVal,
@@ -631,12 +596,12 @@ pub(crate) fn set_option_direct(
     }
     // Nothing can report an error on this path, which is what the assertion
     // says.
-    let errmsg = set_option(opt_idx, optval_copy(&value), opt_flags, set_sid, true, true);
+    let errmsg = set_option(opt_idx, value, opt_flags, set_sid, true, true);
     debug_assert!(errmsg.is_ok());
 }
 
 /// Give an option a new value the way a script would. Takes ownership of
-/// nothing: the caller keeps `value`.
+/// `value`.
 ///
 /// Returns an untranslated error message.
 ///
@@ -652,11 +617,9 @@ pub(crate) fn set_option_value(
     debug_assert!(opt_idx != kOptInvalid);
 
     if sandbox.get() > 0 && get_option(opt_idx).flags & kOptFlagSecure != 0 {
-        // SAFETY: a NUL-terminated message static.
-        let sandboxed = unsafe { CStr::from_ptr(gettext(e_sandbox).as_ptr()) };
-        return Err(OptError::Owned(XString::from_cstr(sandboxed)));
+        return Err(OptError::Owned(XString::from_cstr(gettext(e_sandbox))));
     }
-    set_option(opt_idx, optval_copy(&value), opt_flags, 0, false, true)
+    set_option(opt_idx, value, opt_flags, 0, false, true)
 }
 
 /// Drop a global-local option's local value, so it reads through to the
@@ -672,32 +635,7 @@ pub(crate) fn unset_option_local_value(opt_idx: OptIndex) -> Result<(), OptError
 
 /// [`set_option_value`] for a name that may be one of the terminal options,
 /// which are accepted and discarded rather than reported as unknown.
-///
-/// # Safety
-///
-/// `name` must be a NUL-terminated string.
-pub(crate) unsafe fn set_option_value_handle_tty(
-    name: *const c_char,
-    opt_idx: OptIndex,
-    value: OptVal,
-    opt_flags: OptionSetFlags,
-) -> Result<(), OptError> {
-    if opt_idx != kOptInvalid {
-        return set_option_value(opt_idx, value, opt_flags);
-    }
-    // SAFETY: the caller's `name` is NUL-terminated.
-    let name = unsafe { CStr::from_ptr(name) };
-    if is_tty_option(name.to_bytes()) {
-        return Ok(());
-    }
-    let name = msg_cstr(name);
-    Err(OptError::Owned(XString::from_bytes(
-        tr!("E355: Unknown option: {name}").as_bytes(),
-    )))
-}
-
-/// [`set_option_value_handle_tty`] for the option `name` spells.
-pub(crate) fn set_option_value_handle_tty_named(
+pub(crate) fn set_option_value_handle_tty(
     name: &[u8],
     opt_idx: OptIndex,
     value: OptVal,

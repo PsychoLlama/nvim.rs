@@ -38,7 +38,7 @@ use crate::global_cell::GlobalCell;
 use crate::mark::mark_view_make;
 use crate::memory::{xcalloc, xrealloc};
 use crate::option::vars::p_fdls;
-use crate::option::{clear_winopt, copy_winopt, didset_window_options, init_winopt_strings};
+use crate::option::{clear_winopt, copy_winopt, didset_window_options};
 use crate::pos::MAXLNUM;
 use crate::types::{
     AdditionalData, Buffer, ColNr, FileMark, FileMarkView, GArray, LineNr, OptInt, Pos, Timestamp,
@@ -82,7 +82,7 @@ impl Entry {
         // `WinInfo` is otherwise the initial value upstream gives one; the
         // option strings are written before anything can read or drop them.
         let at = unsafe { xcalloc(1, size_of::<WinInfo>()) }.cast::<WinInfo>();
-        unsafe { init_winopt_strings(&raw mut (*at).wi_opt) };
+        unsafe { (&raw mut (*at).wi_opt).write(WinOpt::UNSET) };
         Entry(at)
     }
 
@@ -200,12 +200,14 @@ impl<'a> WinInfos<'a> {
 
 fn clear_options(opt: *mut WinOpt) {
     // SAFETY: an option block inside a live entry or window.
-    unsafe { clear_winopt(opt) };
+    clear_winopt(unsafe { &mut *opt });
 }
 
 fn copy_options(from: *mut WinOpt, to: *mut WinOpt) {
-    // SAFETY: two option blocks inside a live entry or window.
-    unsafe { copy_winopt(from, to) };
+    // SAFETY: two option blocks inside live entries or windows, and two
+    // different ones.
+    let (from, to) = unsafe { (&*from, &mut *to) };
+    copy_winopt(from, to);
 }
 
 fn delete_folds(folds: *mut GArray) {

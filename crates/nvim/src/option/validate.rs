@@ -12,30 +12,28 @@
 //! one means the value is good. The two that need a number in the text are
 //! formatted into the caller's `errbuf`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::snprintf;
-use crate::vim_snprintf;
+use crate::formatted;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
-use crate::memory::{XString, xfree};
+use crate::memory::XString;
 use crate::message::{e_invarg, e_positive, e_scroll, e_winheight, e_winwidth};
 use crate::option::vars::{p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::*;
 use crate::os::cshim::gettext;
 use crate::startup::full_screen;
-use crate::types::{MAX_MCO, OptError, OptIndex, OptInt, OptVal, OptionSetFlags, size_t};
+use crate::types::{MAX_MCO, OptError, OptIndex, OptInt, OptVal, OptionSetFlags};
 use crate::ui::state::Rows;
 use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
 
 use super::{
     INT_MAX, INT_MIN, MAX_NUMBERWIDTH, MIN_COLUMNS, SB_MAX, TABSTOP_MAX, get_option,
-    get_option_unset_value, option_has_type, option_is_global_local, optval_copy, optval_equal,
-    optval_to_cstr, optval_type_name,
+    get_option_unset_value, option_has_type, option_is_global_local, optval_to_text,
+    optval_type_name,
 };
 
 /// The two messages the quickfix-stack bounds report.
@@ -88,17 +86,13 @@ pub(crate) fn check_num_option_bounds(
     newval: &mut OptInt,
 ) -> Result<(), OptError> {
     let mut errmsg = Ok(());
-    // SAFETY (both `vim_snprintf`s): `message` is the buffer the formatter
-    // is told the size of, and `curwin` is live.
     match opt_idx {
         kOptLines => {
             let least = min_rows_for_all_tabpages();
             if *newval < least as OptInt && full_screen.get() {
                 let fmt = gettext(c"E593: Need at least %d lines");
-                let message = XString::filled(OptError::ROOM, |buf| unsafe {
-                    vim_snprintf!(buf, OptError::ROOM as size_t, fmt.as_ptr(), least);
-                });
-                errmsg = Err(message.into());
+                let message = formatted!(OptError::ROOM, fmt.to_bytes(), least);
+                errmsg = Err(XString::from_vec(message).into());
                 *newval = least as OptInt;
             }
             *newval = (*newval).min(INT_MAX as OptInt);
@@ -106,15 +100,8 @@ pub(crate) fn check_num_option_bounds(
         kOptColumns => {
             if *newval < MIN_COLUMNS as OptInt && full_screen.get() {
                 let fmt = gettext(c"E594: Need at least %d columns");
-                let message = XString::filled(OptError::ROOM, |buf| unsafe {
-                    vim_snprintf!(
-                        buf,
-                        OptError::ROOM as size_t,
-                        fmt.as_ptr(),
-                        MIN_COLUMNS as c_int,
-                    );
-                });
-                errmsg = Err(message.into());
+                let message = formatted!(OptError::ROOM, fmt.to_bytes(), MIN_COLUMNS as c_int);
+                errmsg = Err(XString::from_vec(message).into());
                 *newval = MIN_COLUMNS as OptInt;
             }
             *newval = (*newval).min(INT_MAX as OptInt);
@@ -226,7 +213,7 @@ pub(crate) fn validate_option_value(
     // unset; nothing else needs to look at the value.
     if option_is_global_local(opt_idx)
         && opt_flags.has(OptionSetFlags::LOCAL)
-        && optval_equal(newval, &get_option_unset_value(opt_idx))
+        && *newval == get_option_unset_value(opt_idx)
     {
         return Ok(());
     }
@@ -236,31 +223,23 @@ pub(crate) fn validate_option_value(
         if opt_flags == OptionSetFlags::GLOBAL {
             return Err(gettext(c"Cannot unset global option value").into());
         }
-        *newval = optval_copy(&get_option_unset_value(opt_idx));
+        *newval = get_option_unset_value(opt_idx);
         Ok(())
     } else if !option_has_type(opt_idx, newval.kind()) {
-        let rep = optval_to_cstr(newval);
+        let rep = optval_to_text(newval);
         let fmt = c"Invalid value for option '%s': expected %s, got %s %s";
         let fmt = gettext(fmt);
-        let want = optval_type_name(opt.type_0).as_ptr();
-        let got = optval_type_name(newval.kind()).as_ptr();
-        let name = opt.fullname.as_ptr();
-        // SAFETY: `message` is the buffer the formatter is told the size
-        // of, and every argument is a NUL-terminated string.
-        let message = XString::filled(OptError::ROOM, |buf| unsafe {
-            snprintf!(
-                buf,
-                OptError::ROOM as size_t,
-                fmt.as_ptr(),
-                name,
-                want,
-                got,
-                rep,
-            );
-        });
-        // SAFETY: `optval_to_cstr` answered an allocation this owns.
-        unsafe { xfree(rep.cast::<c_void>()) };
-        Err(message.into())
+        let want = optval_type_name(opt.type_0);
+        let got = optval_type_name(newval.kind());
+        let message = formatted!(
+            OptError::ROOM,
+            fmt.to_bytes(),
+            opt.fullname,
+            want,
+            got,
+            rep.as_cstr(),
+        );
+        Err(XString::from_vec(message).into())
     } else if let OptVal::Number(number) = newval {
         // The check clamps in place, so it is handed the value's own word.
         validate_num_option(opt_idx, number)

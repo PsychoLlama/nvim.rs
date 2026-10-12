@@ -11,7 +11,7 @@ use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::lookup::check_for_word;
 use crate::ex_docmd::scan::ends_excmd;
 use crate::types::CmdIdx;
-use crate::types::{CmdFilter, CmdLine, OptStr};
+use crate::types::{CmdFilter, CmdLine};
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
 
@@ -610,8 +610,7 @@ pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
     if let Some(saved) = cm.cmod_save_ei.take() {
         set_option_direct(
             kOptEventignore,
-            // A borrow: `set_option_direct` copies.
-            OptVal::String(OptStr::borrowing_bytes(saved.as_cstr().to_bytes())),
+            OptVal::from_cstr(saved.as_cstr()),
             OptionSetFlags::NONE,
             SID_NONE,
         );

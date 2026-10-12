@@ -46,7 +46,7 @@ use crate::memline::{ml_append, ml_delete};
 use crate::memory::xstrlcpy;
 use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_start, msg_str};
 use crate::option::vars::p_ic;
-use crate::option::{boolean_optval, get_option_value, optval_free, set_option_value_give_err};
+use crate::option::{boolean_optval, get_option_value, set_option_value_give_err};
 use crate::options::{kOptSpell, kOptSpelllang};
 use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
@@ -117,7 +117,6 @@ pub fn ex_spelldump(excmd: &mut ExArg) {
     // mean anything.
     set_option_value_give_err(kOptSpell, boolean_optval(Some(true)), OptionSetFlags::LOCAL);
     set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
-    optval_free(spl);
 
     if !buf_is_empty(Buf::current()) {
         return;

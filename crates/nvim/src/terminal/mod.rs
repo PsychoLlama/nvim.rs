@@ -101,7 +101,7 @@ use crate::state::MODE_TERMINAL;
 pub(crate) use input::{terminal_paste, terminal_set_streamed_paste};
 pub(crate) use mode::{TerminalState, terminal_check, terminal_enter, terminal_execute};
 pub(crate) use refresh::{
-    on_scrollback_option_changed, terminal_check_refresh, terminal_init, terminal_teardown,
+    on_scrollback_changed_in, terminal_check_refresh, terminal_init, terminal_teardown,
 };
 
 /// The largest `'scrollback'` that means anything; the option's negative

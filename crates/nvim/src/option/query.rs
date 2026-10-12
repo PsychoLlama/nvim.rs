@@ -6,42 +6,41 @@
 //! 'virtualedit' and 'cursorlineopt' are read as parsed flag words, and
 //! 'scrolloff' is forced to zero in a terminal buffer.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::optionstr::{OptString, local_or_global};
-use crate::strings::has_bytes;
-use crate::strings::has_char;
+use crate::strings::find_bytes;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::buffer::{buf_is_prompt, current_buf};
-use crate::cstr;
 use crate::drawscreen::redraw_buf_status_later;
 use crate::drawscreen::state::{need_maketitle, redraw_tabline};
 use crate::eval::typval::{DictRef, callback_free, tv_dict_alloc};
 use crate::eval::{callback_from_typval, eval_expr};
-use crate::memory::{XString, xfree};
+use crate::memory::XString;
 use crate::option::vars::{
     P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, bkc_flags, p_magic, p_sh, p_siso, p_so, ve_flags,
 };
 use crate::options::*;
 use crate::optionstr::{OptStringRef, empty_option};
-use crate::os::env::{os_setenv, vim_getenv};
-use crate::path::{full_name_save, path_tail};
+use crate::os::env::{env_set, vim_getenv_owned};
+use crate::path::{full_name_of, tail_index};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
 use crate::search::state::magic_overruled;
 use crate::state::mode::State;
 use crate::types::{
-    BsFlag, Callback, CpoFlag, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
-    ShmFlag, TypVal, int64_t, size_t, uint8_t,
+    BsFlag, Callback, CpoFlag, ExArg, Failed, OptInt, OptVal, OptionSetFlags, ScriptId, ShmFlag,
+    TypVal, int64_t, uint8_t,
 };
 
 use super::{
     EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,
-    option_has_scope, optval_as_tv, optval_from_varp, set_option_direct,
+    option_has_scope, optval_as_tv, set_option_direct, slot_value,
 };
+
 use crate::state::MODE_TERMINAL;
+pub(crate) use crate::strings::{copy_option_part, skip_to_option_part};
 use crate::winlayer::Win;
 
 /// 'equalprg', local where set.
@@ -69,67 +68,57 @@ pub(crate) fn cpo_has(flag: CpoFlag) -> bool {
 
 /// Record where a vimrc was found in `$MYVIMRC`/`$MYVIMDIR`, unless the
 /// environment variable is already set.
-///
-/// # Safety
-///
-/// `fname` and `envname`, when non-null, must be NUL-terminated.
-pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
-    if fname.is_null() || envname.is_null() {
+pub(crate) fn vimrc_found(fname: &CStr, envname: &CStr) {
+    if vim_getenv_owned(envname).is_some() {
         return;
     }
-    // SAFETY: the caller's strings are NUL-terminated.
-    let existing = unsafe { vim_getenv(envname) };
-    if !existing.is_null() {
-        unsafe { xfree(existing.cast::<c_void>()) };
-        return;
+    let _ = env_set(envname, full_name_of(fname, false).as_cstr());
+}
+
+/// What a 'cursorlineopt' value asks for, as `w_p_culopt_flags` bits, or
+/// `Err` for a value that does not parse.
+fn culopt_flags(value: &[u8]) -> Result<uint8_t, Failed> {
+    const WORDS: [(&[u8], c_int); 4] = [
+        (b"line", kOptCuloptFlagLine as c_int),
+        (
+            b"both",
+            (kOptCuloptFlagLine | kOptCuloptFlagNumber) as c_int,
+        ),
+        (b"number", kOptCuloptFlagNumber as c_int),
+        (b"screenline", kOptCuloptFlagScreenline as c_int),
+    ];
+    let mut flags: c_int = 0;
+    let mut rest = value;
+    while let Some(&first) = rest.first() {
+        if let Some(&(word, bits)) = WORDS.iter().find(|(word, _)| rest.starts_with(word)) {
+            rest = &rest[word.len()..];
+            flags |= bits;
+        } else if first != b',' {
+            // Anything the words above did not consume is a syntax error.
+            return Err(Failed);
+        }
+        match rest.first() {
+            None => {}
+            Some(b',') => rest = &rest[1..],
+            Some(_) => return Err(Failed),
+        }
     }
-    let full = unsafe { full_name_save(fname, false) };
-    if !full.is_null() {
-        unsafe { os_setenv(envname, full, 1) };
-        unsafe { xfree(full.cast::<c_void>()) };
+    // "line" and "screenline" are mutually exclusive; "both" implies
+    // "line", so it collides with "screenline" too.
+    if flags & kOptCuloptFlagLine as c_int != 0 && flags & kOptCuloptFlagScreenline as c_int != 0 {
+        return Err(Failed);
     }
+    Ok(uint8_t::try_from(flags).expect("four flag bits"))
 }
 
 /// Parse 'cursorlineopt' into `window.w_p_culopt_flags`, from `val` or from the
 /// window's own value. `Err` for a value that does not parse; the flags are
 /// only stored on success.
 pub(crate) fn fill_culopt_flags(val: Option<&CStr>, mut window: Win) -> Result<(), Failed> {
-    let mut p = match val {
-        Some(val) => val.as_ptr().cast_mut(),
-        None => window.w_onebuf_opt.wo_culopt.value_ptr(),
-    };
-    let mut flags: uint8_t = 0;
-    while unsafe { *p } != 0 {
-        for (word, bits) in [
-            (c"line".to_bytes(), kOptCuloptFlagLine),
-            (
-                c"both".to_bytes(),
-                kOptCuloptFlagLine | kOptCuloptFlagNumber,
-            ),
-            (c"number".to_bytes(), kOptCuloptFlagNumber),
-            (c"screenline".to_bytes(), kOptCuloptFlagScreenline),
-        ] {
-            if unsafe { cstr::prefix_eq(p, word.as_ptr().cast::<c_char>(), word.len() as size_t) } {
-                p = unsafe { p.add(word.len()) };
-                flags |= bits as uint8_t;
-                break;
-            }
-        }
-        // Anything the words above did not consume is a syntax error.
-        if unsafe { *p } != b',' as c_char && unsafe { *p } != 0 {
-            return Err(Failed);
-        }
-        if unsafe { *p } == b',' as c_char {
-            p = unsafe { p.add(1) };
-        }
-    }
-    // "line" and "screenline" are mutually exclusive; "both" implies
-    // "line", so it collides with "screenline" too.
-    if flags as c_int & kOptCuloptFlagLine as c_int != 0
-        && flags as c_int & kOptCuloptFlagScreenline as c_int != 0
-    {
-        return Err(Failed);
-    }
+    let flags = match val {
+        Some(val) => culopt_flags(val.to_bytes()),
+        None => culopt_flags(window.w_onebuf_opt.wo_culopt.bytes()),
+    }?;
     window.w_p_culopt_flags = flags;
     Ok(())
 }
@@ -147,37 +136,16 @@ pub(crate) fn magic_isset() -> bool {
 /// The callback a function option's value names: `Ok(None)` for an empty
 /// value, which clears the option's callback, and `Err` — the option keeping
 /// the one it has — when the value names none.
+///
+/// A lambda, `function(...)` or `funcref(...)` is an expression, and is
+/// evaluated: user code, which may set this very option. The text is
+/// copied first, and the answer is a value the caller installs only once
+/// the evaluation is over ([`install_callback`]).
 pub(crate) fn callback_from_option(optval: &CStr) -> Result<Option<Callback>, Failed> {
     if optval.is_empty() {
         return Ok(None);
     }
-    let mut cb = Callback::None;
-    // SAFETY: a NUL-terminated value the parse only reads, and a fresh
-    // slot of this call's own.
-    unsafe { option_set_callback_func(optval.as_ptr().cast_mut(), &mut cb) }?;
-    Ok(Some(cb))
-}
-
-/// Parse a `'*func'` option's value into `optcb`. An empty value clears the
-/// callback; anything that does not resolve to one leaves `optcb` alone.
-///
-/// # Safety
-///
-/// `optval`, when non-null, must be NUL-terminated; `optcb` must point at a
-/// live `Callback` this call may replace.
-pub(crate) unsafe fn option_set_callback_func(
-    optval: *mut c_char,
-    optcb: *mut Callback,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's pointers are valid for the call.
-    if optval.is_null() || unsafe { *optval } == 0 {
-        unsafe { callback_free(&mut *optcb) };
-        return Ok(());
-    }
-    // A lambda, `function(...)` or `funcref(...)` is an expression; a
-    // bare name is the function's name.
-    // A copy: evaluating it may reach the option.
-    let text = XString::from_cstr(unsafe { CStr::from_ptr(optval) });
+    let text = XString::from_cstr(optval);
     let tv = if text.starts_with(b"{")
         || text.starts_with(b"function(")
         || text.starts_with(b"funcref(")
@@ -190,9 +158,16 @@ pub(crate) unsafe fn option_set_callback_func(
     if !callback_from_typval(&mut cb, &tv) || !cb.is_set() {
         return Err(Failed);
     }
-    unsafe { callback_free(&mut *optcb) };
-    unsafe { *optcb = cb };
-    Ok(())
+    Ok(Some(cb))
+}
+
+/// Install what [`callback_from_option`] answered: the slot's old callback
+/// goes, and the new one -- if the value named one -- takes its place.
+pub(crate) fn install_callback(slot: &mut Callback, cb: Option<Callback>) {
+    callback_free(slot);
+    if let Some(cb) = cb {
+        *slot = cb;
+    }
 }
 
 /// Whether 'backspace' allows backspacing over `what`. A prompt buffer never
@@ -328,99 +303,76 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
     need_maketitle.set(true);
 }
 
-/// Step over the separator and any padding between two parts of a
-/// comma-separated option.
+/// One part of a separated option value and the rest after it: what
+/// [`copy_option_part`] copies and where it leaves its cursor, over a slice
+/// whose end reads as the terminator.
 ///
-/// # Safety
-///
-/// `p` must be NUL-terminated.
-pub(crate) unsafe fn skip_to_option_part(mut p: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's string is NUL-terminated.
-    if unsafe { *p } == b',' as c_char {
-        p = unsafe { p.add(1) };
-    }
-    while unsafe { *p } == b' ' as c_char {
-        p = unsafe { p.add(1) };
-    }
-    p.cast_mut()
-}
-
-/// [`copy_option_part`] over an option value the caller holds: the first
-/// part of `option`, cut to `maxlen - 1` bytes, and where the next part
-/// starts.
-pub(crate) fn option_part(option: &CStr, maxlen: size_t, sep_chars: &CStr) -> (Vec<u8>, usize) {
-    let mut part = vec![0u8; maxlen.max(2)];
-    let start = option.as_ptr().cast_mut();
-    let mut p = start;
-    // SAFETY: the option walks a NUL-terminated string it only reads; the
-    // part buffer has room for `maxlen` bytes (two at least, for a leading
-    // `.`), and the separators are NUL-terminated.
-    let len = unsafe {
-        copy_option_part(
-            &raw mut p,
-            part.as_mut_ptr().cast(),
-            maxlen,
-            sep_chars.as_ptr().cast_mut(),
-        )
-    };
-    part.truncate(len);
-    (part, p.addr() - start.addr())
-}
-
-/// Copy one part of a separated option into `buf` and advance `option` past
-/// it, answering how many bytes it wrote: the part's length, or
-/// `maxlen - 1` when the part is longer than that. A caller may use the
-/// answer as the length of what is in the buffer.
-///
-/// The one exception is a leading `'.'`, which is written and counted
-/// without a bound test — a `maxlen` below 2 is not usable here. No caller
-/// passes one.
-///
-/// # Safety
-///
-/// `option` must point at a NUL-terminated string; `buf` must have room for
-/// `maxlen` bytes; `sep_chars` must be NUL-terminated.
-pub(crate) unsafe fn copy_option_part(
-    option: *mut *mut c_char,
-    buf: *mut c_char,
-    maxlen: size_t,
-    sep_chars: *mut c_char,
-) -> size_t {
-    // SAFETY: the caller's pointers are valid for the lengths documented.
-    let mut len: size_t = 0;
-    let mut p = unsafe { *option };
-    let seps = unsafe { cstr::at(sep_chars) };
-    // A leading '.' is copied without being tested against the
-    // separators, so `.` can start a path entry.
-    if unsafe { *p } == b'.' as c_char {
-        unsafe { *buf = *p };
-        p = unsafe { p.add(1) };
-        len = 1;
+/// The part is cut to `maxlen - 1` bytes. A leading `'.'` is taken without
+/// being tested against the separators, so `.` can start a path entry; a
+/// backslash before a separator makes it a literal and is dropped. The
+/// separator ending the part is stepped over -- unless it is a comma, which
+/// goes with the blanks after it, as `skip_to_option_part` steps.
+pub(crate) fn split_option_part<'a>(
+    option: &'a [u8],
+    maxlen: usize,
+    sep_chars: &[u8],
+) -> (Vec<u8>, &'a [u8]) {
+    let at = |i: usize| option.get(i).copied().unwrap_or(0);
+    let is_sep = |c: u8| c != 0 && sep_chars.contains(&c);
+    let mut part = Vec::new();
+    let mut i = 0;
+    if at(0) == b'.' {
+        part.push(b'.');
+        i = 1;
     }
     loop {
-        let c = unsafe { *p };
-        if c == 0 || has_char(seps, c_int::from(c as uint8_t)) {
+        let c = at(i);
+        if c == 0 || is_sep(c) {
             break;
         }
-        // A backslash escapes a separator, and is dropped. Reading the byte
-        // after `c` is in bounds because `c` is not the terminator.
-        if c == b'\\' as c_char && has_char(seps, c_int::from(unsafe { *p.add(1) } as uint8_t)) {
-            p = unsafe { p.add(1) };
+        if c == b'\\' && is_sep(at(i + 1)) {
+            i += 1;
         }
-        if len < maxlen.wrapping_sub(1) {
-            unsafe { *buf.add(len) = *p };
-            len += 1;
+        if part.len() < maxlen.wrapping_sub(1) {
+            part.push(at(i));
         }
-        p = unsafe { p.add(1) };
+        i += 1;
     }
-    unsafe { *buf.add(len) = NUL as c_char };
-    // Step over the separator we stopped on — unless it is a comma,
-    // which `skip_to_option_part` handles along with the padding.
-    if unsafe { *p } != 0 && unsafe { *p } != b',' as c_char {
-        p = unsafe { p.add(1) };
+    if at(i) != 0 && at(i) != b',' {
+        i += 1;
     }
-    unsafe { *option = skip_to_option_part(p) };
-    len
+    (part, skip_option_separator(&option[i.min(option.len())..]))
+}
+
+/// The rest of an option value past the separator a part ended on: a comma,
+/// then any spaces -- upstream's `skip_to_option_part`.
+pub(crate) fn skip_option_separator(rest: &[u8]) -> &[u8] {
+    let rest = rest.strip_prefix(b",").unwrap_or(rest);
+    let blanks = rest.iter().take_while(|&&b| b == b' ').count();
+    &rest[blanks..]
+}
+
+/// The parts of a comma-separated option value, each as [`split_option_part`]
+/// copies it with no length limit.
+pub(crate) fn option_parts(option: &[u8]) -> impl Iterator<Item = Vec<u8>> + '_ {
+    let mut rest = option;
+    core::iter::from_fn(move || {
+        if rest.is_empty() {
+            return None;
+        }
+        let (part, after) = split_option_part(rest, usize::MAX, b",");
+        rest = after;
+        Some(part)
+    })
+}
+
+/// [`split_option_part`] over an option value the caller holds: the first
+/// part of `option`, cut to `maxlen - 1` bytes, and where the next part
+/// starts.
+pub(crate) fn option_part(option: &CStr, maxlen: usize, sep_chars: &CStr) -> (Vec<u8>, usize) {
+    let bytes = option.to_bytes();
+    let (part, rest) = split_option_part(bytes, maxlen.max(2), sep_chars.to_bytes());
+    (part, bytes.len() - rest.len())
 }
 
 /// One part of a comma-separated option, appended to `part`, with the rest of
@@ -457,24 +409,17 @@ pub(crate) fn next_option_part<'a>(option: &'a [u8], part: &mut Vec<u8>) -> &'a 
 
 /// Whether 'shell' is a csh derivative, which needs its own quoting.
 pub(crate) fn csh_like_shell() -> bool {
-    // SAFETY: an option value is a C string, and `path_tail` answers a
-    // position inside it.
     p_sh(|sh| {
-        has_bytes(
-            unsafe { cstr::at(path_tail(sh.as_ptr().cast_mut())) },
-            b"csh",
-        )
+        let sh = sh.to_bytes();
+        find_bytes(&sh[tail_index(sh)..], b"csh").is_some()
     })
 }
 
 /// Whether 'shell' is fish, which needs its own quoting.
 pub(crate) fn fish_like_shell() -> bool {
-    // SAFETY: as [`csh_like_shell`].
     p_sh(|sh| {
-        has_bytes(
-            unsafe { cstr::at(path_tail(sh.as_ptr().cast_mut())) },
-            b"fish",
-        )
+        let sh = sh.to_bytes();
+        find_bytes(&sh[tail_index(sh)..], b"fish").is_some()
     })
 }
 
@@ -494,7 +439,7 @@ pub(crate) fn get_winbuf_options(buffer: bool) -> DictRef {
             continue;
         }
         // A copy of the option's value; the dictionary takes its own.
-        let tv = optval_as_tv(optval_from_varp(opt_idx, varp), true);
+        let tv = optval_as_tv(slot_value(opt_idx, varp), true);
         let name = get_option(opt_idx).fullname;
         let _ = dict.edit().add_tv(name.to_bytes(), &tv);
     }

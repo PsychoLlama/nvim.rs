@@ -24,7 +24,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::getchar::VIML_INTERNAL_CALL;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::K_SPECIAL;
-use crate::option::{get_option_value, optval_free, set_option_value};
+use crate::option::{get_option_value, set_option_value};
 use crate::options::kOptShada;
 use crate::shada::{
     shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
@@ -173,7 +173,6 @@ pub fn ctx_restore(ctx: Option<&Context>, flags: c_int) -> bool {
     }
 
     let _ = set_option_value(kOptShada, op_shada, OptionSetFlags::GLOBAL);
-    optval_free(op_shada);
     true
 }
 

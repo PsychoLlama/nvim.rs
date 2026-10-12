@@ -11,21 +11,16 @@
 //! The generated option table holds them as `OptDidSetCb` function
 //! pointers, which is the only reason they are `pub`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::autocmd::fire_autocmds;
-use crate::cstr;
+use crate::autocmd::{fire_autocmds, fire_autocmds_for};
 use crate::keycodes::{Ctrl_C, Key};
 use crate::types::AutoEvent;
-use crate::vim_snprintf;
 use crate::winlayer::TabPage;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
-use crate::autocmd::apply_autocmds;
 use crate::buffer::{BufFlags, do_autochdir};
 use crate::change::save_file_ff;
 use crate::charset::buf_init_chartab;
@@ -43,7 +38,7 @@ use crate::fold::{
 use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::highlight::hl_invalidate_blends;
-use crate::indent_c::parse_cino;
+use crate::indent_c::parse_cino_for;
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
 use crate::message::e_invarg;
@@ -56,21 +51,21 @@ use crate::option::vars::{
     p_window, p_wiw,
 };
 use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
-use crate::optionstr::{OptString, OptStringRef, check_signcolumn};
+use crate::optionstr::{OptString, OptStringRef, check_window_signcolumn};
 use crate::os::cshim::gettext;
 use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::qf_resize_stack;
-use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
+use crate::runtime::{RuntimeOpts, source_runtime_vim_lua_of};
 use crate::spell::parse_spelllang;
 use crate::startup::{full_screen, readonlymode, starting};
-use crate::terminal::on_scrollback_option_changed;
+use crate::terminal::on_scrollback_changed_in;
 use crate::types::{
     Buffer, ColNr, LineNr, OptError, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv, uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
-    check_colorcolumn, command_height, global_stl_height, last_status, min_rows, new_height,
+    check_window_colorcolumn, command_height, global_stl_height, last_status, min_rows, new_height,
     tabline_height, win_comp_pos, win_equal, win_new_screen_rows, win_setheight, win_setwidth,
 };
 use crate::winfloat::win_float_update_statusline;
@@ -79,10 +74,11 @@ use crate::winlayer::graph::{firstwin, lastwin};
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, check_blending,
-    did_set_title, option_var, option_was_set, redraw_titles, set_option_value, set_option_varp,
-    set_options_bin,
+    did_set_title, option_var, option_was_set, redraw_titles, set_option_value, set_options_bin,
+    write_slot,
 };
 use crate::highlight_group::HLF_W;
+use crate::memory::XString;
 use crate::winlayer::{self, Buf, Win};
 
 use super::Local;
@@ -103,8 +99,12 @@ struct Frame {
     varp: OptSlot,
     idx: OptIndex,
     flags: OptionSetFlags,
-    old: OptVal,
-    new: OptVal,
+    /// The numeric or boolean halves of the two values: the callbacks here
+    /// are all on numbers and booleans.
+    old_number: Option<OptInt>,
+    new_number: Option<OptInt>,
+    old_boolean: Option<bool>,
+    new_boolean: Option<bool>,
     /// The window the set is happening in.
     win: Win,
     /// The buffer the set is happening in.
@@ -120,32 +120,32 @@ impl Frame {
             varp: args.os_varp,
             idx: args.os_idx,
             flags: args.os_flags,
-            old: args.os_oldval,
-            new: args.os_newval,
+            old_number: args.os_oldval.as_number(),
+            new_number: args.os_newval.as_number(),
+            old_boolean: args.os_oldval.as_boolean(),
+            new_boolean: args.os_newval.as_boolean(),
             win: args.os_win,
             buf: args.os_buf,
         }
     }
 
     fn old_number(self) -> OptInt {
-        self.old
-            .as_number()
+        self.old_number
             .expect("the table declares this option numeric")
     }
 
     fn new_number(self) -> OptInt {
-        self.new
-            .as_number()
+        self.new_number
             .expect("the table declares this option numeric")
     }
 
     /// `None` is the unset global-local marker, not "false".
     fn old_boolean(self) -> Option<bool> {
-        self.old.as_boolean()
+        self.old_boolean
     }
 
     fn new_boolean(self) -> Option<bool> {
-        self.new.as_boolean()
+        self.new_boolean
     }
 }
 
@@ -177,7 +177,7 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
             redraw_all_later(UPD_NOT_VALID);
         }
     }
-    if p_enc(|value| unsafe { !cstr::eq_bytes(value.as_ptr().cast_mut(), b"utf-8") }) {
+    if p_enc(|value| value.to_bytes() != b"utf-8") {
         let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
         msg_source(HLF_W);
         msg(gettext(warning), HLF_W);
@@ -372,7 +372,7 @@ pub(crate) fn did_set_lines_or_columns(args: &mut OptSet) -> Result<(), OptError
     let f = Frame::read(args);
     if p_lines() != Rows.get() as OptInt || p_columns() != Columns.get() as OptInt {
         if updating_screen.get() {
-            unsafe { set_option_varp(f.idx, f.varp, f.old, false) };
+            write_slot(f.idx, f.varp, OptVal::Number(f.old_number()));
         } else if full_screen.get() {
             screen_resize(p_columns() as c_int, p_lines() as c_int);
         } else {
@@ -430,7 +430,7 @@ pub(crate) fn did_set_number_relativenumber(args: &mut OptSet) -> Result<(), Opt
     if !win.w_onebuf_opt.wo_stc.bytes().is_empty() {
         win.w_nrwidth_line_count = 0 as LineNr;
     }
-    let _ = unsafe { check_signcolumn(ptr::null_mut(), Some(win)) };
+    let _ = check_window_signcolumn(win);
     Ok(())
 }
 
@@ -481,8 +481,8 @@ pub(crate) fn did_set_readonly(args: &mut OptSet) -> Result<(), OptError> {
 /// 'scrollback': only shrinking one has anything for the terminal to do.
 pub(crate) fn did_set_scrollback(args: &mut OptSet) -> Result<(), OptError> {
     let f = Frame::read(args);
-    if !f.buf.terminal.is_null() && f.new_number() < f.old_number() {
-        unsafe { on_scrollback_option_changed(f.buf.terminal) };
+    if f.new_number() < f.old_number() {
+        on_scrollback_changed_in(f.buf);
     }
     Ok(())
 }
@@ -508,7 +508,7 @@ pub(crate) fn did_set_shiftwidth_tabstop(args: &mut OptSet) -> Result<(), OptErr
     // C indent options too.
     let own_sw = OptSlot::from(Local::Buf(f.buf, field!(Buffer, b_p_sw)));
     if f.varp == own_sw || f.buf.b_p_sw == 0 {
-        unsafe { parse_cino(f.buf) };
+        parse_cino_for(f.buf);
     }
     Ok(())
 }
@@ -551,8 +551,7 @@ pub(crate) fn did_set_swapfile(args: &mut OptSet) -> Result<(), OptError> {
 /// 'textwidth': a 'colorcolumn' entry may be relative to it, in any window.
 pub(crate) fn did_set_textwidth(_args: &mut OptSet) -> Result<(), OptError> {
     for wp in winlayer::tab_windows() {
-        // SAFETY: `wp` is a live window of the editor's own list.
-        let _ = unsafe { check_colorcolumn(ptr::null_mut(), Some(wp)) };
+        let _ = check_window_colorcolumn(wp);
     }
     Ok(())
 }
@@ -702,16 +701,18 @@ pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
 
     let _syn_recursive = Depth::of(&syn_recursive);
     buffer.b_flags |= BufFlags::SYN_SET;
-    let syn = buffer.b_p_syn.value_ptr();
-    unsafe {
-        apply_autocmds(
-            AutoEvent::Syntax,
-            syn,
-            buffer.name.shown_ptr(),
-            value_changed || syn_recursive.get() == 1,
-            Some(buffer),
-        )
-    };
+    // Copies: the autocommands may set 'syntax' again, or rename or wipe
+    // the buffer.
+    let syn = buffer.b_p_syn.get();
+    let name = buffer.name.shown().map(XString::from_cstr);
+    fire_autocmds_for(
+        AutoEvent::Syntax,
+        Some(syn.as_cstr()),
+        name.as_ref().map(XString::as_cstr),
+        value_changed || syn_recursive.get() == 1,
+        Some(buffer),
+        None,
+    );
 }
 
 /// Source `spell/<lang>.vim` for a window whose 'spelllang' just changed.
@@ -719,15 +720,10 @@ pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
 /// Only the leading language name is used, and only the letters, digits and
 /// hyphens of it — the rest of the value is regions and file names.
 pub(crate) fn do_spelllang_source(win: Win) {
-    let mut fname: [c_char; 200] = [0; 200];
-
-    // SAFETY: the caller's window is live, so its syntax block is.
-    let value = unsafe { &(*win.w_s).b_p_spl };
+    // A copy: sourcing runs user code, which may set 'spelllang' again.
+    let value = win.syntax().b_p_spl.get();
     // "cjk" is a modifier, not a language.
-    let rest = value
-        .bytes()
-        .strip_prefix(b"cjk,".as_slice())
-        .unwrap_or_else(|| value.bytes());
+    let rest = value.strip_prefix(b"cjk,".as_slice()).unwrap_or(&value);
     let name_len = rest
         .iter()
         .take_while(|&&b| b.is_ascii_alphanumeric() || b == b'-')
@@ -735,17 +731,10 @@ pub(crate) fn do_spelllang_source(win: Win) {
     if name_len == 0 {
         return;
     }
-    // SAFETY: `fname` is the buffer the formatter is told the size of, and
-    // the format's two arguments are a length and the bytes it measures.
-    unsafe {
-        vim_snprintf!(
-            fname.as_mut_ptr(),
-            size_of::<[c_char; 200]>(),
-            c"spell/%.*s.*".as_ptr(),
-            name_len as c_int,
-            rest.as_ptr().cast::<c_char>(),
-        );
-    };
-    // SAFETY: the formatter left a NUL-terminated name in `fname`.
-    let _ = unsafe { source_runtime_vim_lua(fname.as_mut_ptr(), RuntimeOpts::ALL) };
+    // Upstream formats `spell/%.*s.*` into a 200-byte buffer; a name cut
+    // there is the same cut.
+    let mut fname = [&b"spell/"[..], &rest[..name_len], b".*"].concat();
+    fname.truncate(199);
+    let fname = XString::from_vec(fname);
+    let _ = source_runtime_vim_lua_of(fname.as_cstr(), RuntimeOpts::ALL);
 }

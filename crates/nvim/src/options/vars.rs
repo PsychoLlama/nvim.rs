@@ -179,6 +179,20 @@ impl StrOpt {
         })
     }
 
+    /// `f` over the value's bytes, the terminator left out, borrowed for
+    /// exactly that long -- the read that neither walks the string (as the
+    /// `&CStr` projection does) nor copies it (as [`get`](Self::get) does).
+    /// `f` must not set an option: the record is borrowed while it runs.
+    pub fn with_bytes<R>(self, f: impl FnOnce(&[u8]) -> R) -> R {
+        OPTIONS.with_at(self, |value| match value.as_deref() {
+            Some(bytes) => f(bytes),
+            None => {
+                self.read_nothing();
+                f(b"")
+            }
+        })
+    }
+
     /// A copy of the value, for a caller that needs it to outlive the
     /// borrow.
     pub fn get(self) -> XString {

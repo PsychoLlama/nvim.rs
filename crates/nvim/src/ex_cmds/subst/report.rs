@@ -27,7 +27,6 @@ use crate::option::vars::{P_ICM, p_rdt, p_report, p_shm};
 use crate::options::kOptShortmess;
 use crate::os::cshim::{gettext, ngettext};
 use crate::profile::{profile_setlimit, profile_zero};
-use crate::types::OptStr;
 use crate::types::{
     ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptVal, OptionSetFlags, Pos, int64_t,
 };
@@ -306,12 +305,9 @@ pub(crate) fn show_sub(
     }
 
     drop(pv);
-    // The value borrows rather than copies, so the saved option must
-    // outlive the call that puts it back -- which is why it is dropped here
-    // and not before. `set_option_direct` copies what it is given.
     set_option_direct(
         kOptShortmess,
-        OptVal::String(OptStr::borrowing_bytes(save_shm.as_bytes())),
+        OptVal::from_bytes(save_shm.as_bytes()),
         OptionSetFlags::NONE,
         SID_NONE,
     );

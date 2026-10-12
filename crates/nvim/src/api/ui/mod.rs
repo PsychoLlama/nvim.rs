@@ -42,7 +42,7 @@ use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::channel::find_channel;
 use crate::event::r#loop::process_events_until;
 use crate::global_cell::GlobalCell;
-use crate::memory::{strequal, xfree};
+use crate::memory::{XString, strequal, xfree};
 use crate::option::set_tty_option;
 use crate::startup::{main_loop, starting, stdin_fd, stdin_isatty, stdout_isatty};
 use crate::types::builders::{ArrayBuf, DictBuf};
@@ -401,8 +401,7 @@ unsafe fn ui_set_option(
         // 'term' is global, so the last UI to say what terminal it is
         // wins; the copy on the UI is what `nvim_list_uis` reports. Each
         // side gets its own allocation, since both are freed separately.
-        // SAFETY: `term` is the caller's string, live for the call.
-        unsafe { set_tty_option(c"term", string_to_cstr(&term)) };
+        let _ = set_tty_option(c"term", XString::from_bytes(term.as_bytes()));
         ui.term_name = string_to_cstr(&term);
         return Ok(());
     }

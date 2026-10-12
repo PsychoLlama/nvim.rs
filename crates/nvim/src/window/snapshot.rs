@@ -265,6 +265,13 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
 // ---------------------------------------------------------------------------
 // 'colorcolumn'
 
+/// [`check_colorcolumn`] over the window's own 'colorcolumn'.
+pub(crate) fn check_window_colorcolumn(window: Win) -> Result<(), OptError> {
+    // SAFETY: null asks for the window's own value, which the check reads
+    // in place.
+    unsafe { check_colorcolumn(::core::ptr::null_mut(), Some(window)) }
+}
+
 /// # Safety
 ///
 /// `cc` must point at a NUL-terminated string, unaliased for the call.

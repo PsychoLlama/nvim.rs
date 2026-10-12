@@ -42,7 +42,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::message::{e_invarg, e_listreq, emsg, internal_error};
 use crate::option::{
     boolean_optval, get_option_value, get_tty_option, is_option_hidden, is_tty_option,
-    optval_concat, optval_free, set_option_value_handle_tty_named,
+    optval_concat, set_option_value_handle_tty,
 };
 use crate::os::cshim::gettext_owned;
 use crate::os::env::{vim_getenv_owned, vim_setenv_named};
@@ -430,7 +430,6 @@ fn ex_let_option(
     } else {
         get_option_value(opt_idx, opt_flags)
     };
-    let mut newval = OptVal::Nil;
     let mut arg_end = None;
 
     'theend: {
@@ -446,8 +445,7 @@ fn ex_let_option(
             break 'theend;
         }
 
-        let error;
-        (newval, error) = tv_to_optval(tv, opt_idx, name);
+        let (mut newval, error) = tv_to_optval(tv, opt_idx, name);
         if error {
             break 'theend;
         }
@@ -458,9 +456,9 @@ fn ex_let_option(
             // A Number or Boolean `OptVal` as a number. Only those two
             // variants get this far: the `if` just below is the guard that
             // keeps a String or a Nil out, and both calls are inside it.
-            let as_int = |v: OptVal| -> OptInt {
+            let as_int = |v: &OptVal| -> OptInt {
                 match v {
-                    OptVal::Number(number) => number,
+                    OptVal::Number(number) => *number,
                     // The tri-state word itself, as upstream's union read
                     // of the `boolean` arm answered.
                     OptVal::Boolean(_) => OptInt::from(v.tristate().expect("the arm is Boolean")),
@@ -470,8 +468,8 @@ fn ex_let_option(
                 }
             };
             if matches!(curval, OptVal::Number(_) | OptVal::Boolean(_)) {
-                let cur_n = as_int(curval);
-                let new_n = as_int(newval);
+                let cur_n = as_int(&curval);
+                let new_n = as_int(&newval);
                 let new_n = match op.unwrap_or(b'=') {
                     b'+' => cur_n + new_n,
                     b'-' => cur_n - new_n,
@@ -488,20 +486,17 @@ fn ex_let_option(
                     boolean_optval(tristate_from_int(new_n))
                 };
             } else if let Some(joined) = optval_concat(&curval, &newval) {
-                optval_free(newval);
                 newval = joined;
             }
         }
 
-        let err = set_option_value_handle_tty_named(name, opt_idx, newval, opt_flags);
+        let err = set_option_value_handle_tty(name, opt_idx, newval, opt_flags);
         arg_end = Some(end);
         if let Err(err) = err {
             emsg(&gettext_owned(err.as_cstr()));
         }
     }
 
-    optval_free(curval);
-    optval_free(newval);
     arg_end
 }
 

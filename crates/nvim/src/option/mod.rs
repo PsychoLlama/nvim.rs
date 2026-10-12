@@ -14,7 +14,7 @@
 //!
 //! | child | what |
 //! | --- | --- |
-//! | [`value`] | the `OptVal` union: free, copy, compare, convert |
+//! | [`value`] | `OptVal`: read out of a variable, written back, compared, converted |
 //! | [`scope`] | which variable a scope reaches |
 //! | [`query`] | the accessors the rest of the editor reads through |
 //! | [`validate`] | vetting a value before anything sees it |
@@ -38,7 +38,6 @@
 #![allow(non_upper_case_globals)]
 
 use crate::highlight::HlAttrFlags;
-use crate::optionstr::set_chars_option;
 use crate::types::{CharsOption, HlAttrs, OptScope, OptValType, RgbValue, int16_t, int32_t};
 use core::ffi::{c_int, c_uint};
 
@@ -84,7 +83,6 @@ pub(crate) use self::state::*;
 pub(crate) use self::stropt::*;
 pub(crate) use self::validate::*;
 pub(crate) use self::value::*;
-pub(crate) const NUMBUFLEN: c_uint = 65;
 /// What the generated table's `flags` column can say about an option.
 pub(crate) type OptFlags = c_uint;
 pub(crate) const kOptFlagColon: OptFlags = 33554432;

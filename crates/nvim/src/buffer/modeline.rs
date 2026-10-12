@@ -74,12 +74,13 @@ fn version_at(line: &[u8], off: usize) -> Option<(intmax_t, usize)> {
     ok.then(|| (vers, p as usize - base as usize))
 }
 
-/// `do_set` over the option list at `text[off..]`, which it may write into.
+/// `do_set` over the option list at `text[off..]`, up to its terminator.
 fn set_options(text: &mut [u8], off: usize, flags: OptionSetFlags) -> Result<(), Failed> {
-    let arg = text[off..].as_mut_ptr().cast::<c_char>();
-    // SAFETY: a NUL-terminated option list inside a buffer this function
-    // owns, which is what `do_set` parses and truncates in place.
-    unsafe { do_set(arg, flags) }
+    let list = &text[off..];
+    do_set(
+        &list[..list.iter().position(|&b| b == 0).unwrap_or(list.len())],
+        flags,
+    )
 }
 
 fn push_estack(lnum: LineNr) {

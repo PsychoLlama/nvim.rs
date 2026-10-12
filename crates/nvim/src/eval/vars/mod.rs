@@ -54,7 +54,7 @@ use crate::message::{
 use crate::option::vars::{p_ccv, p_dex, p_pex, p_verbose};
 use crate::option::{
     find_option, get_option, get_winbuf_options, is_tty_option, kOptFlagFunc, option_has_type,
-    option_last_set, optval_free,
+    option_last_set,
 };
 use crate::options::{kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest};
 use crate::os::cshim::gettext;

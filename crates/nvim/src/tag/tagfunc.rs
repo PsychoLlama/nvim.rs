@@ -54,11 +54,15 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
         .os_newval
         .as_string()
         .expect("the table installs this callback on a string option only")
-        .data();
+        .as_cstr();
+    // Evaluated before either slot is reached: the value may be an
+    // expression, and evaluating it may set the option again.
+    let cb = callback_from_option(value);
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        unsafe { option_set_callback_func(value, &raw mut buf.b_tfu_cb) }
+        cb.map(|cb| install_callback(&mut buf.b_tfu_cb, cb))
     } else {
-        let retval = unsafe { option_set_callback_func(value, global_tagfunc()) };
+        // SAFETY: the global slot, which nothing borrows across this.
+        let retval = cb.map(|cb| install_callback(unsafe { &mut *global_tagfunc() }, cb));
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
             // `:set` without a scope sets the buffer-local copy too.
             set_buflocal_tfu_callback(buf);

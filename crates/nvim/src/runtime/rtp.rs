@@ -26,6 +26,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 
 use crate::types::MAXPATHL;
 use core::ffi::{CStr, c_char};
@@ -207,6 +208,15 @@ pub fn get_lib_dir() -> *mut c_char {
         return unsafe { xstrdup(exe_name.as_ptr()) };
     }
     ptr::null_mut()
+}
+
+/// [`runtimepath_default`], owned: `None` when nothing contributed a
+/// directory.
+pub(crate) fn runtimepath_default_of(clean_arg: bool) -> Option<XString> {
+    // SAFETY: startup runs on the main thread; the answer is an allocation
+    // of its own or null, taken over once.
+    let value = unsafe { runtimepath_default(clean_arg) };
+    (!value.is_null()).then(|| unsafe { XString::from_raw(value) })
 }
 
 /// The startup value of 'runtimepath'.

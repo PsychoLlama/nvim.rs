@@ -94,7 +94,7 @@ pub(crate) fn derive_cedit_key() -> Result<(), OptError> {
     if p_cedit(CStr::is_empty) {
         cedit_key.set(-1);
     } else {
-        let n = p_cedit(|value| unsafe { string_to_key(value.as_ptr().cast_mut()) });
+        let n = p_cedit(|value| string_to_key(value.to_bytes()));
         if n == 0 || vim_isprintc(n) {
             return Err(e_invarg.into());
         }

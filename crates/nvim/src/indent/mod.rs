@@ -60,6 +60,7 @@ use crate::optionstr::OptString;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::state::MODE_INSERT;
 use crate::winlayer::Win;
+pub(crate) use breakindent::check_window_briopt;
 pub use breakindent::{briopt_check, get_breakindent_win};
 pub use edit::{
     change_indent, copy_indent, ex_retab, inindent, ins_try_si, may_do_si, op_reindent,
@@ -151,6 +152,25 @@ pub unsafe fn tabstop_set(var: *mut c_char, array: *mut *mut ColNr) -> bool {
         }
     };
     true
+}
+
+/// The tab-stop array a 'vartabstop'-style value describes, or null for a
+/// value that names none -- or does not parse, which [`tabstop_set`] has
+/// then reported.
+pub(crate) fn tabstop_array_of(value: &CStr) -> *mut ColNr {
+    let mut array: *mut ColNr = ::core::ptr::null_mut();
+    // SAFETY: a NUL-terminated value the parse only reads, and an array
+    // slot of this frame's that owns nothing yet.
+    unsafe { tabstop_set(value.as_ptr().cast_mut(), &raw mut array) };
+    array
+}
+
+/// Give `slot` the tab-stop array `value` describes, freeing the one it
+/// held. A value that does not parse leaves it null rather than dangling.
+pub(crate) fn replace_tabstop_array(slot: &mut *mut ColNr, value: Option<&CStr>) {
+    // SAFETY: a buffer's tab-stop array is its own `xmalloc` block, or null.
+    unsafe { xfree((*slot).cast::<c_void>()) };
+    *slot = value.map_or(::core::ptr::null_mut(), tabstop_array_of);
 }
 
 /// How many columns from `col` to the next tabstop.

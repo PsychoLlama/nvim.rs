@@ -1,15 +1,19 @@
-//! [`OptVal`]: freeing, copying, comparing, and converting to and from the
-//! option variable, an API [`Object`] and a C string.
+//! [`OptVal`]: reading it out of an option variable and writing it back,
+//! comparing it, and converting it to and from an API [`Object`], a typval
+//! and the text a message shows.
 //!
-//! It is an enum, so the payload cannot be read under the wrong kind at all
-//! and the `unreachable!()` arms the transpile needed for the tag values the
-//! union had no payload for are gone. What is left is the *pairing* between
-//! a value and the option row it belongs to, which the type system cannot
-//! see: [`set_option_varp`] asserts it, and [`optval_from_varp`] relies on
-//! the table having pinned it for every row.
+//! It is an enum, so the payload cannot be read under the wrong kind at all.
+//! What is left is the *pairing* between a value and the option row it
+//! belongs to, which the type system cannot see: [`write_slot`] asserts it,
+//! and [`slot_value`] relies on the table having pinned it for every row.
+//!
+//! A value owns its string (see [`OptVal`]): a read answers a copy, a write
+//! moves the value into the variable, and nothing here frees anything by
+//! hand. The two reads that only *compare* ([`slot_holds`],
+//! [`optval_is_default`]) borrow instead, so listing every option copies
+//! none of them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -20,24 +24,19 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::optionstr::OptString;
-use crate::snprintf;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
-use crate::cstr;
-use crate::memory::ThinCString;
-use crate::memory::{xmalloc, xstrdup};
-use crate::optionstr::{free_string_option, is_empty_option};
+use crate::memory::{ThinCString, XString};
 use crate::types::{BoolVarValue, TypVal, VarNumber, kSpecialVarNull};
 use crate::types::{
     Object, OptIndex, OptStr, OptVal, OptValType, String_0, kObjectTypeBoolean, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, size_t,
+    kObjectTypeNil, kObjectTypeString,
 };
 use crate::undo::curbuf_is_changed;
 
 use super::{
-    NUMBUFLEN, OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil,
-    kOptValTypeNumber, kOptValTypeString, option_default, option_has_type,
+    OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber,
+    kOptValTypeString, option_has_type, with_option_default,
 };
 
 /// The `Option<bool>` an option variable's tri-state word stands for: a
@@ -71,127 +70,22 @@ pub(crate) fn optval_type_name(type_0: OptValType) -> &'static CStr {
 }
 
 impl OptVal {
-    /// A string value that **takes over** `string`'s allocation:
-    /// [`optval_free`] is what releases it now.
+    /// A string value copying an API string, up to its first NUL.
     pub(crate) fn string(string: String_0) -> Self {
-        let size = string.len();
-        OptVal::String(OptStr::from_raw_parts(string.into_raw(), size))
+        OptVal::from_bytes(string.as_bytes())
     }
 }
 
-impl OptStr {
-    /// The bytes, not counting the terminator.
-    ///
-    /// # Safety
-    /// The pair must still name live bytes -- it is `Copy`, so a value
-    /// released through [`optval_free`] leaves copies of itself behind.
-    pub(crate) unsafe fn as_bytes<'a>(&self) -> &'a [u8] {
-        // An option variable that has never been set is a null pointer,
-        // which no slice may be built over even at zero length.
-        if self.data().is_null() {
-            return &[];
-        }
-        // SAFETY: the caller's promise.
-        unsafe { core::slice::from_raw_parts(self.data().cast::<u8>(), self.len()) }
-    }
-
-    /// Take over a NUL-terminated allocation the option module will free.
-    ///
-    /// # Safety
-    /// `value` is NUL-terminated and has one owner, which the value this
-    /// ends up in becomes.
-    pub(crate) unsafe fn owning(value: *mut c_char) -> Self {
-        // SAFETY: the caller's NUL-terminated string.
-        let len = unsafe { cstr::bytes_at(value) }.len();
-        OptStr::from_raw_parts(value, len)
-    }
-
-    /// A view of a NUL-terminated string the caller goes on owning.
-    ///
-    /// # Safety
-    /// `value` is NUL-terminated and outlives every use of the answer, and
-    /// nothing passes the value it ends up in to [`optval_free`] --
-    /// `set_option_direct` and `set_option_value` both copy.
-    pub(crate) unsafe fn borrowing(value: *const c_char) -> Self {
-        // SAFETY: the caller's NUL-terminated string.
-        let len = unsafe { cstr::bytes_at(value) }.len();
-        OptStr::from_raw_parts(value.cast_mut(), len)
-    }
-
-    /// [`borrowing`](OptStr::borrowing) for a caller that already has the
-    /// bytes, which is the whole of what that one measures.
-    ///
-    /// The borrow's lifetime is the caller's obligation just as it is
-    /// there, but nothing here has to be told where the string ends.
-    pub(crate) fn borrowing_bytes(value: &[u8]) -> Self {
-        OptStr::from_raw_parts(value.as_ptr().cast::<c_char>().cast_mut(), value.len())
-    }
-
-    /// An owned copy of the bytes, for the API layer.
-    ///
-    /// # Safety
-    /// As [`OptStr::as_bytes`].
-    pub(crate) unsafe fn to_owned_string(self) -> String_0 {
-        // SAFETY: the caller's promise.
-        String_0::from_bytes(unsafe { self.as_bytes() })
-    }
-}
-
-/// `cur` and `new` joined, when both are strings with storage: the `.=` of
-/// a string option. `None` leaves `new` as it is.
+/// `cur` and `new` joined, when both are strings: the `.=` of a string
+/// option. `None` leaves `new` as it is.
 pub(crate) fn optval_concat(cur: &OptVal, new: &OptVal) -> Option<OptVal> {
     let (OptVal::String(cur), OptVal::String(new)) = (cur, new) else {
         return None;
     };
-    if cur.data().is_null() || new.data().is_null() {
-        return None;
-    }
-    // SAFETY: two live values' strings name live bytes.
-    let (cur, new) = unsafe { (cur.as_bytes(), new.as_bytes()) };
     let mut joined = Vec::with_capacity(cur.len() + new.len());
-    joined.extend_from_slice(cur);
-    joined.extend_from_slice(new);
-    Some(OptVal::string(String_0::from_bytes(&joined)))
-}
-
-/// Release what a value owns. Only a string owns anything, and the shared
-/// empty string every unset string option points at is not ours to free.
-///
-/// This is the *only* release path: an [`OptVal`]'s string sits in a
-/// `ManuallyDrop`, so a value that merely goes out of scope frees nothing.
-pub(crate) fn optval_free(value: OptVal) {
-    let Some(string) = value.as_string() else {
-        return;
-    };
-    if is_empty_option(string.data()) {
-        // The shared empty string is nobody's to free.
-        return;
-    }
-    // SAFETY: the caller's promise -- this value's bytes are one allocation
-    // with one owner, and this is it.
-    drop(unsafe { String_0::from_owned_parts(string.data(), string.len()) });
-}
-
-/// A value that owns its own copy of whatever the original owned.
-pub(crate) fn optval_copy(value: &OptVal) -> OptVal {
-    match value.as_string() {
-        // SAFETY: a live value's string names live bytes.
-        Some(string) => OptVal::string(unsafe { string.to_owned_string() }),
-        None => *value,
-    }
-}
-
-/// Whether two values are the same. Two strings of the same length are
-/// compared byte-wise, so an option holding a NUL still compares correctly.
-pub(crate) fn optval_equal(o1: &OptVal, o2: &OptVal) -> bool {
-    match (o1, o2) {
-        (OptVal::Nil, OptVal::Nil) => true,
-        (OptVal::Boolean(a), OptVal::Boolean(b)) => a == b,
-        (OptVal::Number(a), OptVal::Number(b)) => a == b,
-        // SAFETY: both values are live, so both pairs name live bytes.
-        (OptVal::String(s1), OptVal::String(s2)) => unsafe { s1.as_bytes() == s2.as_bytes() },
-        _ => false,
-    }
+    joined.extend_from_slice(cur.as_bytes());
+    joined.extend_from_slice(new.as_bytes());
+    Some(OptVal::from_xstring(XString::from_vec(joined)))
 }
 
 /// The type the table declares for an option.
@@ -199,12 +93,9 @@ pub(crate) fn option_get_type(opt_idx: OptIndex) -> OptValType {
     get_option(opt_idx).type_0
 }
 
-/// Read the option variable `slot` names as a value of `opt_idx`'s type.
-///
-/// A string value is a *borrow* of the variable's own buffer, which is what
-/// makes `optval_free` of this value free the variable's string -- the
-/// protocol [`set_option_varp`]'s `free_oldval` relies on.
-pub(crate) fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
+/// A copy of what the option variable `slot` names holds, as a value of
+/// `opt_idx`'s type.
+pub(crate) fn slot_value(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
     // 'modified' has no variable of its own worth reading: `b_changed` alone
     // misses a buffer whose undo state says it is unchanged after all.
     if slot.is_current_modified() {
@@ -216,18 +107,7 @@ pub(crate) fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
         // above 1 reads as true and a negative one is "not set here".
         OptSlot::Boolean(var) => boolean_optval(tristate(var.get())),
         OptSlot::Number(var) => OptVal::Number(var.get()),
-        OptSlot::String(var) => {
-            let data = var.value_ptr();
-            // SAFETY: an option variable answers its own NUL-terminated
-            // buffer, or the shared empty string. Null is an immutable
-            // option's default before startup has installed one.
-            let len = if data.is_null() {
-                0
-            } else {
-                unsafe { cstr::bytes_at(data) }.len()
-            };
-            OptVal::String(OptStr::from_raw_parts(data, len))
-        }
+        OptSlot::String(var) => var.with_bytes(OptVal::from_bytes),
     };
     // The C read the row's declared type and stamped it on the payload; the
     // slot answers the same thing, so this is where the two are tied.
@@ -235,91 +115,112 @@ pub(crate) fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
     value
 }
 
-/// Write `value` into the option variable `slot` names, taking ownership
-/// of whatever it holds. With `free_oldval` the value already there is freed
-/// first; without it the caller has kept a copy and will free it later.
-///
-/// # Safety
-///
-/// A string `value` must be the shared empty string or one allocation with
-/// one owner, which the variable takes over; without `free_oldval`, the
-/// caller must hold the value it read out of the variable, which now owns
-/// the bytes the variable held.
-pub(crate) unsafe fn set_option_varp(
-    opt_idx: OptIndex,
-    slot: OptSlot,
-    value: OptVal,
-    free_oldval: bool,
-) {
+/// Whether the variable `slot` names holds `value` -- [`slot_value`]'s
+/// answer compared, without the copy.
+pub(crate) fn slot_holds(opt_idx: OptIndex, slot: OptSlot, value: &OptVal) -> bool {
+    match (slot, value) {
+        (OptSlot::String(var), OptVal::String(text)) => {
+            var.with_bytes(|bytes| bytes == text.as_bytes())
+        }
+        (OptSlot::String(_), _) => false,
+        _ => slot_value(opt_idx, slot) == *value,
+    }
+}
+
+/// What a variable held before [`replace_slot`] wrote it, which
+/// [`restore_slot`] puts back exactly: a string variable that owned no
+/// string of its own goes back to owning none.
+pub(crate) struct Replaced {
+    /// The value as the setter's callbacks see it.
+    pub(crate) value: OptVal,
+    /// For a string variable, whether it owned no string of its own.
+    pub(crate) unset: bool,
+}
+
+/// Write `value` into the option variable `slot` names, and answer what was
+/// there -- the setter's own, so that whatever runs before it is put back
+/// or dropped cannot free it.
+pub(crate) fn replace_slot(opt_idx: OptIndex, slot: OptSlot, value: OptVal) -> Replaced {
+    debug_assert!(option_has_type(opt_idx, value.kind()));
+    if let OptSlot::String(var) = slot {
+        let OptVal::String(text) = value else {
+            unreachable!("an option's slot is not the type its value is")
+        };
+        return match var.put(text) {
+            Some(old) => Replaced {
+                value: OptVal::String(old),
+                unset: false,
+            },
+            None => Replaced {
+                value: OptVal::static_string(c""),
+                unset: true,
+            },
+        };
+    }
+    let old = slot_value(opt_idx, slot);
+    write_slot(opt_idx, slot, value);
+    Replaced {
+        value: old,
+        unset: false,
+    }
+}
+
+/// Put back what [`replace_slot`] answered.
+pub(crate) fn restore_slot(opt_idx: OptIndex, slot: OptSlot, old: Replaced) {
+    match (slot, old.value) {
+        (OptSlot::String(var), OptVal::String(text)) => {
+            var.restore((!old.unset).then_some(text));
+        }
+        (_, value) => write_slot(opt_idx, slot, value),
+    }
+}
+
+/// Write `value` into the option variable `slot` names, dropping what it
+/// held.
+pub(crate) fn write_slot(opt_idx: OptIndex, slot: OptSlot, value: OptVal) {
     debug_assert!(option_has_type(opt_idx, value.kind()));
     match (slot, value) {
         (OptSlot::Boolean(var), OptVal::Boolean(boolean)) => {
             var.set(boolean.map_or(-1, c_int::from));
         }
         (OptSlot::Number(var), OptVal::Number(n)) => var.set(n),
-        // The variable takes the allocation over, and hands back the one it
-        // held. Only a string owns anything, which is why `free_oldval` is
-        // decided here rather than by an `optval_free` in front of the
-        // match: a global value's own string is the record's, and freeing it
-        // *and* overwriting the field would release it twice.
-        (OptSlot::String(var), OptVal::String(s)) => {
-            // SAFETY: the caller's promise -- one owner, or the shared empty
-            // string.
-            let old = unsafe { var.replace(s.data()) };
-            if free_oldval {
-                // SAFETY: what the variable held was its own allocation, or
-                // the shared empty string, and nothing else holds it now.
-                unsafe { free_string_option(old) };
-            }
-        }
+        (OptSlot::String(var), OptVal::String(text)) => drop(var.put(text)),
         _ => unreachable!("an option's slot is not the type its value is"),
     }
 }
 
-/// The value as a freshly allocated C string, the way `:set` reports it in a
-/// message: a string is quoted, a boolean spelled out. The caller owns it.
-pub(crate) fn optval_to_cstr(value: &OptVal) -> *mut c_char {
+/// The value as the text `:set` reports it with in a message: a string is
+/// quoted, a boolean spelled out.
+pub(crate) fn optval_to_text(value: &OptVal) -> XString {
     match value {
-        // SAFETY (every arm): the literal is NUL-terminated, and `buf` is
-        // the allocation the arm just made.
-        OptVal::Nil => unsafe { xstrdup(c"".as_ptr()) },
-        OptVal::Boolean(boolean) => {
-            let word = if *boolean == Some(true) {
-                c"true"
-            } else {
-                c"false"
-            };
-            unsafe { xstrdup(word.as_ptr()) }
-        }
-        OptVal::Number(n) => {
-            let len = NUMBUFLEN as size_t;
-            let buf = unsafe { xmalloc(len) }.cast::<c_char>();
-            unsafe { snprintf!(buf, len, c"%ld".as_ptr(), *n) };
-            buf
-        }
-        OptVal::String(s) => {
-            // Two quotes and the terminator.
-            let len = s.len().wrapping_add(3);
-            let buf = unsafe { xmalloc(len) }.cast::<c_char>();
-            unsafe { snprintf!(buf, len, c"\"%s\"".as_ptr(), s.data()) };
-            buf
+        OptVal::Nil => XString::new(),
+        OptVal::Boolean(boolean) => XString::from_cstr(if *boolean == Some(true) {
+            c"true"
+        } else {
+            c"false"
+        }),
+        OptVal::Number(n) => XString::from_vec(n.to_string().into_bytes()),
+        OptVal::String(text) => {
+            let mut quoted = Vec::with_capacity(text.len() + 2);
+            quoted.push(b'"');
+            quoted.extend_from_slice(text.as_bytes());
+            quoted.push(b'"');
+            XString::from_vec(quoted)
         }
     }
 }
 
 /// An option's value as a typval.  `numbool` renders a Boolean option as a
-/// Number, which is what the old spelling of the accessors answered.
+/// Number, which is what the old spelling of the accessors answered. A
+/// string moves into the answer.
 pub(crate) fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
-    // The string arm copies the `OptVal`'s bytes: the value is a borrowed
-    // view (an option's own storage, or a copy its caller frees), and the
-    // answer owns what it holds.
     let mut rettv = TypVal::Special(kSpecialVarNull);
     match value {
-        OptVal::Boolean(_) => {
+        OptVal::Boolean(boolean) => {
             if numbool {
                 let word = value.tristate().expect("the arm is Boolean");
                 rettv.write_number(VarNumber::from(word));
-            } else if let Some(boolean) = value.as_boolean() {
+            } else if let Some(boolean) = boolean {
                 // An unset global-local boolean has no Vimscript
                 // spelling and stays the `v:null` this started as.
                 rettv.write_boolean(BoolVarValue::from(boolean));
@@ -328,11 +229,8 @@ pub(crate) fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
         OptVal::Number(number) => {
             rettv.write_number(number as VarNumber);
         }
-        OptVal::String(string) => {
-            // SAFETY: the option value's NUL-terminated block, or null,
-            // live for the call.
-            let text = unsafe { cstr::at_opt(string.data()) };
-            rettv.write_string(text.map(ThinCString::from_cstr));
+        OptVal::String(text) => {
+            rettv.write_string(Some(ThinCString::from(text.into_xstring())));
         }
         OptVal::Nil => {}
     }
@@ -340,30 +238,23 @@ pub(crate) fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
 }
 
 /// The value as the API reports it. A tri-state boolean that is neither true
-/// nor false comes back as nil.
-///
-/// **The string is copied**, and the value goes on owning its own: an option
-/// value may be borrowing the option variable's buffer (`optval_from_varp`)
-/// or a `.rodata` default, neither of which an owning `Object` may hold.
-/// A caller whose value *did* own its bytes still has to `optval_free` it.
+/// nor false comes back as nil; a string moves into the answer.
 pub(crate) fn optval_as_object(value: OptVal) -> Object {
     match value {
         OptVal::Nil => Object::Nil,
         // A global-local option with no local value has no API spelling but
         // nil, which is what `as_boolean` answers `None` for.
-        OptVal::Boolean(_) => match value.as_boolean() {
+        OptVal::Boolean(boolean) => match boolean {
             Some(boolean) => Object::Boolean(boolean),
             None => Object::Nil,
         },
         OptVal::Number(n) => Object::Integer(n),
-        // SAFETY: the value is live, so its pair names live bytes; the
-        // object gets a copy, because the option layer goes on owning its.
-        OptVal::String(s) => Object::string(unsafe { s.to_owned_string() }),
+        OptVal::String(text) => Object::string(String_0::from_xstring(text.into_xstring())),
     }
 }
 
 /// The API value as an option value, or `None` for an `Object` no option can
-/// hold. The object's string moves into the answer.
+/// hold.
 pub(crate) fn object_as_optval(o: Object) -> Option<OptVal> {
     Some(match o.kind() {
         kObjectTypeNil => OptVal::Nil,
@@ -380,5 +271,17 @@ pub(crate) fn optval_is_default(opt_idx: OptIndex, slot: OptSlot) -> bool {
     if is_option_hidden(opt_idx) {
         return true;
     }
-    optval_equal(&optval_from_varp(opt_idx, slot), &option_default(opt_idx))
+    match slot {
+        // Two borrows of two different cells: the variable's holder and the
+        // option state.
+        OptSlot::String(var) => var.with_bytes(|bytes| {
+            with_option_default(opt_idx, |default| {
+                default.as_string().map(OptStr::as_bytes) == Some(bytes)
+            })
+        }),
+        _ => {
+            let value = slot_value(opt_idx, slot);
+            with_option_default(opt_idx, |default| value == *default)
+        }
+    }
 }

@@ -21,7 +21,6 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::snprintf;
 use crate::types::ArgListId;
-use crate::types::OptStr;
 use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -88,9 +87,8 @@ const READONLY_UPDATECOUNT: OptInt = 10000;
 ///
 /// `value` must point at a NUL-terminated string.
 unsafe fn string_opt(value: *const c_char) -> OptVal {
-    // SAFETY: `value` is NUL-terminated and outlives the call, which
-    // copies it.
-    OptVal::String(unsafe { OptStr::borrowing(value) })
+    // SAFETY: `value` is NUL-terminated; the answer is a copy.
+    OptVal::from_cstr(unsafe { CStr::from_ptr(value) })
 }
 
 /// A number option value.

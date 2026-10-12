@@ -204,6 +204,14 @@ impl SessionFile {
         unsafe { fputs(text.as_ptr().cast::<c_char>(), self.0) >= 0 }
     }
 
+    /// Write `bytes` verbatim -- the [`std::io::Write`] the option writers
+    /// render into.
+    pub(crate) fn put_bytes(self, bytes: &[u8]) -> bool {
+        // SAFETY: as above; `bytes` is live for the call, and `fwrite` reads
+        // exactly its length.
+        unsafe { ::libc::fwrite(bytes.as_ptr().cast(), 1, bytes.len(), self.0) == bytes.len() }
+    }
+
     /// Write a C string's bytes verbatim.
     ///
     /// # Safety
@@ -211,6 +219,20 @@ impl SessionFile {
     pub(crate) unsafe fn bytes(self, p: *const c_char) -> bool {
         // SAFETY: as above, plus the caller's contract on `p`.
         unsafe { fputs(p, self.0) >= 0 }
+    }
+}
+
+impl std::io::Write for SessionFile {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.put_bytes(buf) {
+            Ok(buf.len())
+        } else {
+            Err(std::io::Error::other("write to the session file failed"))
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
@@ -571,9 +593,10 @@ unsafe fn write_rc(
         if cmdidx == CmdIdx::mksession && opts.has(kOptSsopFlagSkiprtp) {
             flags |= OptionSetFlags::SKIPRTP;
         }
-        // SAFETY: both writers take the open handle and nothing else.
+        // SAFETY: the mapping writer takes the open handle and nothing else.
+        let mut writer = out;
         failed |=
-            unsafe { makemap(out.raw(), None).is_err() || makeset(out.raw(), flags, 0).is_err() };
+            unsafe { makemap(out.raw(), None) }.is_err() || makeset(&mut writer, flags, 0).is_err();
     }
 
     if !failed && view_session {

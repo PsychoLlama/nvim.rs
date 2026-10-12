@@ -2271,6 +2271,7 @@ static const int EOL_UNKNOWN = -1;
 static const int EOVERFLOW = 75;
 static const int EPERM = 1;
 static const int ERANGE = 34;
+static const int ERRBUF_LEN = 80;
 static const int ESC = 27;
 static const int ESCAPE_BASE = 63232;
 static const int ESTACK_NONE = 0;

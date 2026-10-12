@@ -37,8 +37,7 @@ use crate::memory::XString;
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::{
     OptionTarget, find_option, get_all_vimoptions, get_option_value_for, get_vimoption,
-    object_as_optval, option_has_scope, optval_as_object, optval_free, set_option_direct,
-    set_option_value_for,
+    object_as_optval, option_has_scope, optval_as_object, set_option_direct, set_option_value_for,
 };
 use crate::types::{
     AcoSave, ApiDict, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
@@ -326,7 +325,6 @@ pub fn nvim_get_option_value(name: String_0, opts: &mut KeyDict_option) -> Resul
     if !value.is_nil() {
         return Ok(optval_as_object(value));
     }
-    optval_free(value);
     // SAFETY: the caller's option name is NUL-terminated.
     Err(err_bad_value(c"option", name.as_cstr()))
 }
@@ -356,9 +354,8 @@ pub fn nvim_set_option_value(
     // Whoever made this API call owns the write, so that `:verbose set` names
     // them rather than whatever ran last.
     let _sctx = api_set_sctx(channel_id);
-    let (key, idx) = (name.data(), target.opt_idx);
-    // SAFETY: `name` is the caller's NUL-terminated string.
-    unsafe { set_option_value_for(key, idx, optval, opt_flags, target.target()) }
+    let idx = target.opt_idx;
+    set_option_value_for(name.as_bytes(), idx, optval, opt_flags, target.target())
 }
 
 /// Every option's metadata, keyed by name.

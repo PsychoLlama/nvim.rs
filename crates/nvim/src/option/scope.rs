@@ -48,19 +48,6 @@ use super::{
     kOptValTypeString,
 };
 
-/// The address of one field of a live object, computed rather than read.
-///
-/// A field's address is the object's plus a constant, so naming one needs no
-/// dereference: `wrapping_byte_add` produces the address
-/// `&raw mut (*base).field` would, in ordinary checked code and with the
-/// whole object's provenance rather than the field's.
-///
-/// `witness` is never called. It is there so the field's *type* comes from
-/// the field, which `offset_of!` erases.
-pub(crate) fn field_ptr<T, F>(base: *mut T, offset: usize, _witness: fn(&T) -> &F) -> *mut F {
-    base.wrapping_byte_add(offset).cast::<F>()
-}
-
 /// The [`OptSlot`] naming one field of `$buf`.
 macro_rules! buf_var {
     ($buf:expr, $field:ident) => {

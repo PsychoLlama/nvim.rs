@@ -220,6 +220,23 @@ pub unsafe fn stdpaths_user_conf_subpath(fname: *const c_char) -> *mut c_char {
     unsafe { concat_fnames_realloc(get_xdg_home(kXDGConfigHome), fname, true) }
 }
 
+/// [`stdpaths_user_state_subpath`] of a name the caller holds, owned.
+pub(crate) fn stdpaths_user_state_subpath_of(
+    fname: &CStr,
+    trailing_pathseps: size_t,
+    escape_commas: bool,
+) -> XString {
+    // SAFETY: a NUL-terminated name; the answer is an allocation of its
+    // own, taken over once.
+    unsafe {
+        XString::from_raw(stdpaths_user_state_subpath(
+            fname.as_ptr(),
+            trailing_pathseps,
+            escape_commas,
+        ))
+    }
+}
+
 /// `$XDG_STATE_HOME/$NVIM_APPNAME/{fname}`, with `trailing_pathseps` path
 /// separators appended and — when `escape_commas` — every comma
 /// backslash-escaped, for the options that take comma-separated lists.

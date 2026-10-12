@@ -234,6 +234,18 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
     }
 }
 
+/// [`aucmd_prepbuf`] into scratch space the caller holds.
+pub(crate) fn aucmd_prepbuf_in(aco: &mut AcoSave, buffer: Buf) {
+    // SAFETY: a live `AcoSave`, unaliased for the call by its `&mut`.
+    unsafe { aucmd_prepbuf(aco, buffer) }
+}
+
+/// [`aucmd_restbuf`] from scratch space [`aucmd_prepbuf_in`] filled.
+pub(crate) fn aucmd_restbuf_in(aco: &mut AcoSave) {
+    // SAFETY: as [`aucmd_prepbuf_in`].
+    unsafe { aucmd_restbuf(aco) }
+}
+
 /// Undo [`aucmd_prepbuf`], restoring the window layout as far as what the
 /// autocommand did to it allows.
 ///

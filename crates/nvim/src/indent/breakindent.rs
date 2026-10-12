@@ -114,6 +114,12 @@ unsafe fn parse_briopt(value: *const c_char) -> Option<Briopt> {
     Some(opt)
 }
 
+/// [`briopt_check`] over the window's own 'breakindentopt'.
+pub(crate) fn check_window_briopt(window: Win) -> bool {
+    // SAFETY: null asks for the window's own value.
+    unsafe { briopt_check(core::ptr::null_mut(), Some(window)) }
+}
+
 /// Checks `briopt` as 'breakindentopt' and, when `window` is not null, writes
 /// what it says onto that window. Called when the option is set and when a
 /// window is initialised.

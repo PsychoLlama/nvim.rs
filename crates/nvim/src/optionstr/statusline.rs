@@ -24,7 +24,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int, transchar_byte};
 use crate::drawscreen::comp_col;
 use crate::drawscreen::state::ru_wid;
-use crate::memory::xstrdup;
+use crate::memory::XString;
 use crate::message::e_invalid_format_string_single_percent_s;
 use crate::message::{verbose_open, verbose_stop};
 use crate::option::vars::{P_SHADA, P_VFILE, p_ruf, ssop_flags};
@@ -37,7 +37,6 @@ use crate::types::{LineNr, NUL, OptError, OptSet, OptionSetFlags, StlSyntax, siz
 use crate::winfloat::win_config_float;
 
 use super::frame::{formatted, invalid, old_value, varp, win};
-use super::free_string_option;
 use super::{
     SHM_ALL, check_stl_option, did_set_option_listflag, did_set_str_generic, illegal_char,
     opt_strings_mask,
@@ -131,14 +130,11 @@ pub(crate) fn did_set_statustabline_rulerformat(
     let is_stl = idx as c_int == kOptStatusline as c_int;
     let global = flags.has(OptionSetFlags::GLOBAL) || !flags.has(OptionSetFlags::LOCAL);
     if is_stl && global && unsafe { c_int::from(*s) } == NUL {
-        let mut expansion = None;
-        let default = get_option_default(idx, flags, &mut expansion)
+        let default = get_option_default(idx, flags);
+        let default = default
             .as_string()
             .expect("every option reaching here is a string option");
-        // SAFETY: the option's own variable. Replace and *then* free; see
-        // `crate::optionstr::did_set_optexpr`.
-        let old = unsafe { varp.replace(xstrdup(default.data())) };
-        unsafe { free_string_option(old) };
+        varp.set(XString::from_cstr(default.as_cstr()));
         s = varp.value_ptr();
     }
     // A floating window's status line is part of its frame.

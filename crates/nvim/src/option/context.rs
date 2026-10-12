@@ -7,8 +7,7 @@
 //! autocommand window and can fire autocommands, so the choice of when to
 //! do it is a decision of its own.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -19,9 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::c_char;
-
-use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
+use crate::autocmd::{aucmd_prepbuf_in, aucmd_restbuf_in};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::types::{
     AcoSave, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin,
@@ -122,8 +119,7 @@ impl OptionContext {
             }
             Some(OptionTarget::Buf(buf)) => {
                 let mut aco = AcoSave::default();
-                // SAFETY: `aco` is this frame's, and `buf` live as above.
-                unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+                aucmd_prepbuf_in(&mut aco, buf);
                 Ok(Some(OptionContext::Buf(aco)))
             }
         }
@@ -133,9 +129,9 @@ impl OptionContext {
     fn leave(mut self) {
         match &mut self {
             OptionContext::Win(switchwin) => restore_win_noblock(switchwin, true),
-            // SAFETY: the scratch space `enter` filled, and nothing else has
-            // moved the current buffer since.
-            OptionContext::Buf(aco) => unsafe { aucmd_restbuf(aco) },
+            // The scratch space `enter` filled; nothing else has moved the
+            // current buffer since.
+            OptionContext::Buf(aco) => aucmd_restbuf_in(aco),
         }
     }
 }
@@ -155,20 +151,15 @@ pub(crate) fn get_option_value_for(
 }
 
 /// [`set_option_value_handle_tty`] on `target`; `None` is the global scope.
-///
-/// # Safety
-///
-/// `name` must be NUL-terminated.
-pub(crate) unsafe fn set_option_value_for(
-    name: *const c_char,
+pub(crate) fn set_option_value_for(
+    name: &[u8],
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
     target: Option<OptionTarget>,
 ) -> Result<(), Error> {
     let ctx = OptionContext::enter(target)?;
-    // SAFETY: the caller's `name` is NUL-terminated.
-    let errmsg = unsafe { set_option_value_handle_tty(name, opt_idx, value, opt_flags) };
+    let errmsg = set_option_value_handle_tty(name, opt_idx, value, opt_flags);
     if let Some(ctx) = ctx {
         ctx.leave();
     }

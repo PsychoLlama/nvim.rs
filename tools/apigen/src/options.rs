@@ -940,6 +940,20 @@ impl StrOpt {
         })
     }
 
+    /// `f` over the value's bytes, the terminator left out, borrowed for
+    /// exactly that long -- the read that neither walks the string (as the
+    /// `&CStr` projection does) nor copies it (as [`get`](Self::get) does).
+    /// `f` must not set an option: the record is borrowed while it runs.
+    pub fn with_bytes<R>(self, f: impl FnOnce(&[u8]) -> R) -> R {
+        OPTIONS.with_at(self, |value| match value.as_deref() {
+            Some(bytes) => f(bytes),
+            None => {
+                self.read_nothing();
+                f(b"")
+            }
+        })
+    }
+
     /// A copy of the value, for a caller that needs it to outlive the
     /// borrow.
     pub fn get(self) -> XString {
@@ -1308,18 +1322,18 @@ const fn scope_idx(
     [global as ssize_t, win as ssize_t, buf as ssize_t]
 }
 
-const fn boolean(value: bool) -> OptVal {
+const fn boolean(value: bool) -> OptDefault {
     // A default is never the third state -- an option's own default is
     // always a value, never "not set in this scope".
-    OptVal::Boolean(Some(value))
+    OptDefault::Boolean(value)
 }
 
-const fn number(value: OptInt) -> OptVal {
-    OptVal::Number(value)
+const fn number(value: OptInt) -> OptDefault {
+    OptDefault::Number(value)
 }
 
-const fn string(value: &'static CStr) -> OptVal {
-    OptVal::static_string(value)
+const fn string(value: &'static CStr) -> OptDefault {
+    OptDefault::String(value)
 }
 
 /// Copy one generated part into the table under construction.
@@ -1379,10 +1393,10 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
         .unwrap();
     }
     let types = [
+        "OptDefault",
         "OptIndex",
         "OptInt",
         "OptScopeFlags",
-        "OptVal",
         "OptVar",
         "ssize_t",
         "VimOption",

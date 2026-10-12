@@ -28,7 +28,6 @@ use crate::option::vars::P_EFM;
 use crate::option::vars::P_MENC;
 use crate::optionstr::{OptString, local_or_global};
 use crate::types::CmdIdx;
-use crate::types::OptStr;
 use crate::types::{Failed, NUL, OptionSetFlags, VAR_LIST};
 use core::ffi::{CStr, c_int};
 
@@ -59,7 +58,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
     if c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL {
         set_option_direct(
             kOptErrorfile,
-            OptVal::String(OptStr::borrowing_bytes(excmd.line.arg())),
+            OptVal::from_bytes(excmd.line.arg()),
             OptionSetFlags::NONE,
             0 as ScriptId,
         );

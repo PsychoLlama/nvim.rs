@@ -5,33 +5,35 @@
 //! it to a session file, and [`ui_refresh_options`] hands the ones a UI
 //! cares about over the RPC channel.
 //!
-//! [`option_value2string`] is the shared bottom of the first two. Upstream
+//! [`option_value_text`] is the shared bottom of the first two. Upstream
 //! renders into the shared `NameBuff`, so nothing there could hold a
-//! previous rendering across a call to it; here the caller passes the
-//! buffer it wants filled.
+//! previous rendering across a call to it; here the rendering is the
+//! caller's own, cut where that buffer would have cut it.
+//!
+//! The session writers render each line into bytes and hand them to an
+//! [`std::io::Write`]: the bytes are exactly the ones upstream's `fprintf`s
+//! wrote, and a write error is a `Failed` where upstream's was a negative
+//! count.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
-use crate::fprintf;
 use crate::global_cell::field;
-use crate::keycodes::ModMask;
+use crate::keycodes::{Ctrl_V, ModMask};
+use crate::mbyte::unescape_at;
 use crate::option::vars::P_MOUSE;
 use crate::optionstr::OptString;
-use crate::snprintf;
-use crate::strings::has_char;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
+use std::io::Write;
 
-use crate::charset::{transchar, vim_strsize};
-use crate::ex_session::{put_eol, put_eol_unchecked, put_line};
+use crate::ascii::ascii_iswhite;
+use crate::charset::{transchar, vim_strsize_cstr};
 use crate::getchar::state::got_int;
 use crate::keycodes::{get_special_key_name, has_key_name};
-use crate::mapping::{EscTarget, put_escstr};
-use crate::memory::{xfree, xmalloc, xstrlcpy};
+use crate::memory::XString;
 use crate::message::state::info_message;
 use crate::message::{
     message_filtered, msg_advance, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
@@ -43,24 +45,22 @@ use crate::options::{
     kOptRuntimepath, kOptSyntax, kOptWildchar, kOptWildcharm,
 };
 use crate::os::cshim::gettext;
-use crate::os::env::home_replace;
+use crate::os::env::home_replace_in;
 use crate::os::input::os_breakcheck;
 use crate::startup::silent_mode;
 use crate::types::{
-    FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, WinOpt,
-    size_t, uint32_t,
+    Failed, MAXPATHL, NL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, WinOpt, uint32_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
-use ::libc::fputs;
 
 use super::{
-    Local, OptSlot, WinOptSet, copy_option_part, get_option, get_option_unset_value, get_varp,
-    get_varp_scope, kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
+    Local, OptSlot, WinOptSet, get_option, get_option_unset_value, get_varp, get_varp_scope,
+    kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
     kOptFlagUIOption, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
-    option_is_global_local, option_is_global_only, option_is_window_local, option_var,
-    optval_as_object, optval_equal, optval_from_varp, optval_is_default,
+    option_is_global_local, option_is_global_only, option_is_window_local, option_parts,
+    option_var, optval_as_object, optval_is_default, slot_holds, slot_value,
 };
 
 /// The column width one option gets in the multi-column listing, and the
@@ -79,9 +79,6 @@ fn all_options() -> impl Iterator<Item = OptIndex> {
 /// ones get a line each; the first pass collects everything that fits in a
 /// column, the second everything that does not.
 pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
-    let mut rendered = [0 as c_char; MAXPATHL as usize];
-    // SAFETY: the option table, the message area, and the current window
-    // and buffer.
     let mut items: Vec<OptIndex> = Vec::with_capacity(kOptCount as usize);
 
     msg_ext_set_kind(c"list_cmd");
@@ -124,9 +121,10 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
             } else if option_has_type(opt_idx, kOptValTypeBoolean) {
                 1
             } else {
-                option_value2string(opt_idx, opt_flags, &mut rendered);
-                let fullname_len = opt.fullname.count_bytes();
-                unsafe { fullname_len as c_int + vim_strsize(rendered.as_mut_ptr()) + 1 }
+                let rendered = option_value_text(opt_idx, opt_flags);
+                let fullname_len =
+                    c_int::try_from(opt.fullname.count_bytes()).expect("an option name is short");
+                fullname_len + vim_strsize_cstr(rendered.as_cstr()) + 1
             };
             let fits = len <= INC - GAP;
             if fits == (run == 1) {
@@ -134,11 +132,12 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
             }
         }
 
+        let count = c_int::try_from(items.len()).expect("one entry per option");
         let rows = if run == 1 {
             let cols = ((Columns.get() + GAP - 3) / INC).max(1);
-            (items.len() as c_int + cols - 1) / cols
+            (count + cols - 1) / cols
         } else {
-            items.len() as c_int
+            count
         };
 
         // Down the first column, then the second: item `i` of row `r`
@@ -150,12 +149,13 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
                 break;
             }
             let mut col = 0;
-            let mut i = row as usize;
+            let step = usize::try_from(rows).expect("a positive row count");
+            let mut i = usize::try_from(row).expect("a row index");
             while i < items.len() {
                 msg_advance(col);
                 showoneopt(items[i], opt_flags);
                 col += INC;
-                i += rows as usize;
+                i += step;
             }
             os_breakcheck();
             row += 1;
@@ -165,15 +165,13 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
 
 /// Tell the UI every option it declared an interest in.
 pub(crate) fn ui_refresh_options() {
-    // SAFETY: the option table is a plain array, and each `var` is the
-    // option's own global variable.
     for opt_idx in all_options() {
         let opt = get_option(opt_idx);
         if opt.flags & kOptFlagUIOption as uint32_t == 0 {
             continue;
         }
         let name = String_0::from_cstr(opt.fullname);
-        let value = optval_as_object(optval_from_varp(opt_idx, option_var(opt_idx)));
+        let value = optval_as_object(slot_value(opt_idx, option_var(opt_idx)));
         ui_call_option_set(name, value);
     }
     // 'mouse' is not a UI option, but the UI has to be told about it
@@ -190,9 +188,7 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     let save_silent = silent_mode.get();
     silent_mode.set(false);
     info_message.set(true);
-    let mut rendered = [0 as c_char; MAXPATHL as usize];
 
-    // SAFETY: the current window and buffer.
     let opt = get_option(opt_idx);
     let varp = get_varp_scope(opt_idx, opt_flags);
     let boolean = option_has_type(opt_idx, kOptValTypeBoolean);
@@ -218,9 +214,9 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
 
     if !boolean {
         msg_putchar('=' as c_int);
-        option_value2string(opt_idx, opt_flags, &mut rendered);
-        if rendered[0] != NUL as c_char {
-            msg_display(cstr::in_chars(&rendered), 0, false);
+        let rendered = option_value_text(opt_idx, opt_flags);
+        if !rendered.is_empty() {
+            msg_display(rendered.as_cstr(), 0, false);
         }
     }
 
@@ -228,21 +224,27 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     info_message.set(false);
 }
 
+/// Write `bytes`, a write error being a `Failed`.
+fn put(out: &mut dyn Write, bytes: &[u8]) -> Result<(), Failed> {
+    out.write_all(bytes).map_err(|_| Failed)
+}
+
+/// End the line, dropping a write error: upstream's `put_eol(fd) < 0` was
+/// never true. See `crate::ex_session::put_eol_unchecked`.
+fn put_eol_unchecked(out: &mut dyn Write) {
+    let _ = out.write_all(b"\n");
+}
+
 /// Write the `:set` commands that would restore the current options to a
 /// session or vimrc file.
 ///
 /// Two priority passes: `kOptFlagPriMkrc` options are written first,
 /// because the others may depend on them.
-///
-/// # Safety
-///
-/// `fd` must be an open file, and the current window and buffer live.
-pub(crate) unsafe fn makeset(
-    fd: *mut FILE,
+pub(crate) fn makeset(
+    out: &mut dyn Write,
     opt_flags: OptionSetFlags,
     local_only: c_int,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's file, and the option table.
     for priority_pass in [true, false] {
         for opt_idx in all_options() {
             let flags = get_option(opt_idx).flags;
@@ -297,28 +299,28 @@ pub(crate) unsafe fn makeset(
             }
 
             while round <= 2 {
-                let cmd = if round == 1 || opt_flags.has(OptionSetFlags::GLOBAL) {
-                    c"set".as_ptr() as *mut c_char
+                let cmd: &[u8] = if round == 1 || opt_flags.has(OptionSetFlags::GLOBAL) {
+                    b"set"
                 } else {
-                    c"setlocal".as_ptr() as *mut c_char
+                    b"setlocal"
                 };
                 // 'syntax' and 'filetype' fire autocommands that would
                 // undo the rest of the session, so they are only set
                 // when they are not already right.
                 let guarded = opt_idx == kOptSyntax || opt_idx == kOptFiletype;
-                let (guard, name) = (
-                    c"if &%s != '%s'".as_ptr(),
-                    get_option(opt_idx).fullname.as_ptr(),
-                );
-                if guarded
-                    && (unsafe { fprintf!(fd, guard, name, varp.string_var().value_ptr()) } < 0
-                        || !unsafe { put_eol_unchecked(fd) })
-                {
-                    return Err(Failed);
-                }
-                unsafe { put_set(fd, cmd, opt_idx, varp) }?;
                 if guarded {
-                    unsafe { put_line(fd, c"endif".as_ptr() as *mut c_char) }?;
+                    let mut line = b"if &".to_vec();
+                    line.extend_from_slice(get_option(opt_idx).fullname.to_bytes());
+                    line.extend_from_slice(b" != '");
+                    varp.string_var()
+                        .with_bytes(|value| line.extend_from_slice(value));
+                    line.push(b'\'');
+                    put(out, &line)?;
+                    put_eol_unchecked(out);
+                }
+                put_set(out, cmd, opt_idx, varp)?;
+                if guarded {
+                    put(out, b"endif\n")?;
                 }
                 varp = varp_local;
                 round += 1;
@@ -329,11 +331,7 @@ pub(crate) unsafe fn makeset(
 }
 
 /// Write the current window's fold settings, for `:mksession`.
-///
-/// # Safety
-///
-/// `fd` must be an open file and the current window live.
-pub(crate) unsafe fn makefoldset(fd: *mut FILE) -> Result<(), Failed> {
+pub(crate) fn makefoldset(out: &mut dyn Write) -> Result<(), Failed> {
     let win = Win::current();
     let one = WinOptSet::One;
     let fields: [(OptIndex, OptSlot); 8] = [
@@ -370,205 +368,196 @@ pub(crate) unsafe fn makefoldset(fd: *mut FILE) -> Result<(), Failed> {
             Local::Win(win, one, field!(WinOpt, wo_fen)).into(),
         ),
     ];
-    // SAFETY: the caller's open file.
     for (opt_idx, varp) in fields {
-        unsafe { put_set(fd, c"setlocal".as_ptr() as *mut c_char, opt_idx, varp) }?;
+        put_set(out, b"setlocal", opt_idx, varp)?;
     }
     Ok(())
 }
 
 /// Write one `<cmd> <option>=<value>` line.
-///
-/// # Safety
-///
-/// `fd` must be an open file, `cmd` NUL-terminated, and `varp` the option's
-/// variable in some scope.
-pub(crate) unsafe fn put_set(
-    fd: *mut FILE,
-    cmd: *mut c_char,
+pub(crate) fn put_set(
+    out: &mut dyn Write,
+    cmd: &[u8],
     opt_idx: OptIndex,
     varp: OptSlot,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's file and variable, and the option table.
-    let value: OptVal = optval_from_varp(opt_idx, varp);
     let opt = get_option(opt_idx);
-    let name = opt.fullname.as_ptr().cast_mut();
+    let name = opt.fullname.to_bytes();
     let flags = opt.flags;
 
     // A global-local option with no local value has nothing to say.
     if option_is_global_local(opt_idx)
         && varp != option_var(opt_idx)
-        && optval_equal(&value, &get_option_unset_value(opt_idx))
+        && slot_holds(opt_idx, varp, &get_option_unset_value(opt_idx))
     {
         return Ok(());
     }
 
-    match value {
-        OptVal::Boolean(_) => {
-            debug_assert!(value.as_boolean().is_some());
-            let prefix = if value.as_boolean() == Some(true) {
-                c"".as_ptr()
-            } else {
-                c"no".as_ptr()
-            };
-            if unsafe { fprintf!(fd, c"%s %s%s".as_ptr(), cmd, prefix, name) } < 0 {
-                return Err(Failed);
+    let mut line = cmd.to_vec();
+    line.push(b' ');
+    match slot_value(opt_idx, varp) {
+        OptVal::Boolean(boolean) => {
+            debug_assert!(boolean.is_some());
+            if boolean != Some(true) {
+                line.extend_from_slice(b"no");
             }
+            line.extend_from_slice(name);
+            put(out, &line)?;
         }
         OptVal::Number(number) => {
-            if unsafe { fprintf!(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
-                return Err(Failed);
-            }
+            line.extend_from_slice(name);
+            line.push(b'=');
             // 'wildchar' and 'wildcharm' hold a key, which reads back
             // as its name.
             let mut wc: OptInt = 0;
             if wc_use_keyname(opt_idx, varp, &mut wc) {
-                let name = get_special_key_name(wc as c_int, ModMask::NONE);
-                if unsafe { fputs(name.as_ptr(), fd) } < 0 {
-                    return Err(Failed);
-                }
-            } else if unsafe { fprintf!(fd, c"%ld".as_ptr(), number) } < 0 {
-                return Err(Failed);
+                let key = c_int::try_from(wc).expect("a key code fits an int");
+                let key_name = get_special_key_name(key, ModMask::NONE);
+                line.extend_from_slice(
+                    cstr::as_bytes(&key_name)
+                        .split(|&b| b == 0)
+                        .next()
+                        .unwrap_or_default(),
+                );
+            } else {
+                line.extend_from_slice(number.to_string().as_bytes());
             }
+            put(out, &line)?;
         }
-        OptVal::String(string) => {
-            if unsafe { fprintf!(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
-                return Err(Failed);
-            }
-            let value_str = string.data();
-            if !value_str.is_null() {
-                match unsafe { put_string_value(fd, cmd, name, value_str, flags) } {
-                    Written::Failed => return Err(Failed),
-                    // Each `+=` line already carries its terminator.
-                    Written::Lines => return Ok(()),
-                    Written::Value => {}
-                }
+        OptVal::String(value) => {
+            line.extend_from_slice(name);
+            line.push(b'=');
+            put(out, &line)?;
+            match put_string_value(out, cmd, name, value.as_bytes(), flags)? {
+                // Each `+=` line already carries its terminator.
+                Written::Lines => return Ok(()),
+                Written::Value => {}
             }
         }
         OptVal::Nil => unreachable!("an option with no type has no value to write"),
     }
 
     // The newline's write error is dropped, as upstream drops it.
-    unsafe { put_eol_unchecked(fd) };
+    put_eol_unchecked(out);
     Ok(())
 }
 
-/// What [`put_string_value`] managed to write.
+/// What [`put_string_value`] wrote.
 enum Written {
     /// The value is on the current line, which still needs its terminator.
     Value,
     /// The value went out as a run of `+=` lines, each already terminated.
     Lines,
-    Failed,
 }
 
 /// Whether a `kOptFlagExpand` value is too long to write in one line, so
 /// that it has to go out as a run of `+=` commands.
-///
-/// # Safety
-///
-/// `value_str` must be NUL-terminated.
-unsafe fn needs_splitting(value_str: *const c_char, flags: uint32_t) -> bool {
-    // SAFETY: the caller's string.
-    unsafe { cstr::bytes_at(value_str) }.len().wrapping_add(1) >= MAXPATHL as size_t
+fn needs_splitting(value: &[u8], flags: uint32_t) -> bool {
+    value.len() + 1 >= MAXPATHL as usize
         && flags & kOptFlagComma as uint32_t != 0
-        && has_char(unsafe { cstr::at(value_str) }, ',' as c_int)
+        && value.contains(&b',')
 }
 
 /// Write a string option's value, with `$HOME` folded back to `~` for the
 /// path-like ones, splitting a long comma list into `+=` lines.
-///
-/// # Safety
-///
-/// `fd` must be an open file and the strings NUL-terminated.
-unsafe fn put_string_value(
-    fd: *mut FILE,
-    cmd: *mut c_char,
-    name: *mut c_char,
-    value_str: *const c_char,
+fn put_string_value(
+    out: &mut dyn Write,
+    cmd: &[u8],
+    name: &[u8],
+    value: &[u8],
     flags: uint32_t,
-) -> Written {
-    // SAFETY: the caller's file and strings.
+) -> Result<Written, Failed> {
     if flags & kOptFlagExpand as uint32_t == 0 {
-        return if unsafe { put_escstr(fd, value_str, EscTarget::SetValue) }.is_err() {
-            Written::Failed
-        } else {
-            Written::Value
-        };
+        put(out, &escaped_set_value(value))?;
+        return Ok(Written::Value);
     }
 
-    let size = unsafe { cstr::bytes_at(value_str) }.len().wrapping_add(1);
-    let buf = unsafe { xmalloc(size) }.cast::<c_char>();
-    unsafe { home_replace(None, value_str, buf, size, false) };
+    let size = value.len() + 1;
+    let replaced = home_replace_in(None, cstr::in_bytes(&[value, b"\0"].concat()), size, false);
 
-    if !unsafe { needs_splitting(value_str, flags) } {
-        let failed = unsafe { put_escstr(fd, buf, EscTarget::SetValue) }.is_err();
-        unsafe { xfree(buf.cast::<c_void>()) };
-        return if failed {
-            Written::Failed
-        } else {
-            Written::Value
-        };
+    if !needs_splitting(value, flags) {
+        put(out, &escaped_set_value(&replaced))?;
+        return Ok(Written::Value);
     }
 
     // Too long for one line: end this one and write an item per `+=`.
-    let part = unsafe { xmalloc(size) }.cast::<c_char>();
-    let mut result = Written::Lines;
-    if unsafe { put_eol(fd) }.is_err() {
-        result = Written::Failed;
-    } else {
-        let mut p = buf;
-        while unsafe { *p } != NUL as c_char {
-            if unsafe { fprintf!(fd, c"%s %s+=".as_ptr(), cmd, name) } < 0 {
-                result = Written::Failed;
-                break;
-            }
-            unsafe { copy_option_part(&raw mut p, part, size, c",".as_ptr() as *mut c_char) };
-            if unsafe { put_escstr(fd, part, EscTarget::SetValue) }.is_err()
-                || unsafe { put_eol(fd) }.is_err()
-            {
-                result = Written::Failed;
-                break;
-            }
-        }
+    put(out, b"\n")?;
+    for part in option_parts(&replaced) {
+        let mut line = cmd.to_vec();
+        line.push(b' ');
+        line.extend_from_slice(name);
+        line.extend_from_slice(b"+=");
+        put(out, &line)?;
+        put(out, &escaped_set_value(&part))?;
+        put(out, b"\n")?;
     }
-    unsafe { xfree(buf.cast::<c_void>()) };
-    unsafe { xfree(part.cast::<c_void>()) };
-    result
+    Ok(Written::Lines)
 }
 
-/// Render an option's value into `out`.
-pub(crate) fn option_value2string(
-    opt_idx: OptIndex,
-    opt_flags: OptionSetFlags,
-    out: &mut [c_char; MAXPATHL as usize],
-) {
-    // SAFETY: the current window and buffer, and `out` is `MAXPATHL` bytes.
+/// `value` escaped for a `:set` command line, as `put_escstr` writes a
+/// `:set` value: a multibyte character as itself (a `K_SPECIAL` escape
+/// inside it undone), a newline as `\^V^J`, white space, `"` and `\`
+/// behind a backslash, and a control character, `|` or a byte that is not
+/// a character behind a CTRL-V.
+pub(crate) fn escaped_set_value(value: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(value.len());
+    let mut i = 0;
+    while i < value.len() && value[i] != 0 {
+        let c = value[i];
+        if c >= 0x80
+            && let Some((bytes, used)) = unescape_at(&value[i..])
+        {
+            out.extend(bytes.iter().copied().take_while(|&b| b != 0));
+            i += used;
+            continue;
+        }
+        let code = c_int::from(c);
+        if code == NL {
+            out.extend_from_slice(b"\\\x16\n");
+        } else {
+            if ascii_iswhite(code) || c == b'"' || c == b'\\' {
+                out.push(b'\\');
+            } else if !(b' '..=b'~').contains(&c) || c == b'|' {
+                out.push(u8::try_from(Ctrl_V).expect("CTRL-V is a byte"));
+            }
+            out.push(c);
+        }
+        i += 1;
+    }
+    out
+}
+
+/// An option's value as `:set opt?` shows it: a key's name for
+/// 'wildchar'-like options, `$HOME` folded to `~` for the path-like ones,
+/// and cut where upstream's `MAXPATHL` buffer cut it.
+pub(crate) fn option_value_text(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> XString {
     let varp = get_varp_scope(opt_idx, opt_flags);
     debug_assert!(!varp.is_none());
-    let buf = out.as_mut_ptr();
-    let cap = out.len();
+    let room = MAXPATHL as usize;
 
     if option_has_type(opt_idx, kOptValTypeNumber) {
         let mut wc: OptInt = 0;
-        if wc_use_keyname(opt_idx, varp, &mut wc) {
-            let name = get_special_key_name(wc as c_int, ModMask::NONE);
-            unsafe { xstrlcpy(buf, name.as_ptr(), cap) };
+        let shown = if wc_use_keyname(opt_idx, varp, &mut wc) {
+            let key = c_int::try_from(wc).expect("a key code fits an int");
+            cstr::in_chars(&get_special_key_name(key, ModMask::NONE))
+                .to_bytes()
+                .to_vec()
         } else if wc != 0 {
             // A 'wildchar' that is not a named key still shows as the
             // character rather than as its code.
-            unsafe { xstrlcpy(buf, transchar(wc as c_int).as_ptr(), cap) };
+            let key = c_int::try_from(wc).expect("a key code fits an int");
+            cstr::in_chars(&transchar(key)).to_bytes().to_vec()
         } else {
-            unsafe { snprintf!(buf, cap, c"%ld".as_ptr(), varp.number_var().get()) };
-        }
-        return;
+            varp.number_var().get().to_string().into_bytes()
+        };
+        return XString::from_bytes(&shown[..shown.len().min(room - 1)]);
     }
 
-    let value = varp.string_var().value_ptr();
+    let value = varp.string_var().get();
     if get_option(opt_idx).flags & kOptFlagExpand as uint32_t != 0 {
-        unsafe { home_replace(None, value, buf, MAXPATHL as size_t, false) };
+        home_replace_in(None, value.as_cstr(), room, false)
     } else {
-        unsafe { xstrlcpy(buf, value, MAXPATHL as size_t) };
+        XString::from_bytes(&value[..value.len().min(room - 1)])
     }
 }
 

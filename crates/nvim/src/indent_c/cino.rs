@@ -22,6 +22,14 @@ use crate::optionstr::OptString;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
+/// [`parse_cino`] for the option code, which reaches the buffer only
+/// through its handle and holds no reference into it across the call.
+pub(crate) fn parse_cino_for(buffer: Buf) {
+    // SAFETY: the callers -- the option callbacks and the startup pass --
+    // hold no borrow of the buffer while this runs.
+    unsafe { parse_cino(buffer) }
+}
+
 /// Set every `b_ind_*` on `buffer` from its 'cinoptions'.
 ///
 /// Must be called when 'cinoptions', 'shiftwidth' or 'tabstop' changes: the

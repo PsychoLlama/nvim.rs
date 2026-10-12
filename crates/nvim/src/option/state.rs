@@ -9,8 +9,8 @@
 //! with `.ptr()`:
 //!
 //! - the **default**, which startup rewrites once it can expand `$VIMRUNTIME`
-//!   and read the environment, and which `alloc_options_default` gives an
-//!   allocation of its own so the computed ones can free what they replace;
+//!   and read the environment -- `None` until then, which reads as the
+//!   literal the table declares;
 //! - **`kOptFlagWasSet`**, raised the first time anything sets the option, so
 //!   that a computed default does not overwrite what a script chose;
 //! - **`kOptFlagInsecure`**, raised when the value came from a modeline, the
@@ -39,43 +39,36 @@
 )]
 
 use crate::global_cell::GlobalCell;
-use crate::options::{kOptCount, kOptInvalid};
-use crate::types::{OptIndex, OptVal, ScriptCtx, VimOption, uint32_t};
+use crate::options::{kOptCount, kOptInvalid, options};
+use crate::types::{OptIndex, OptVal, ScriptCtx, uint32_t};
 
 use super::{kOptFlagInsecure, kOptFlagWasSet};
 
 /// One option's mutable state. See the module docs.
-#[derive(Copy, Clone)]
 struct OptionState {
     /// `kOptFlagWasSet` and `kOptFlagInsecure`, in their table positions so
     /// that the shared word and a window's or buffer's own read alike.
     flags: uint32_t,
-    /// What `:set opt&` installs — the table's declared default until
-    /// startup replaces it with an expanded, owned copy.
-    default: OptVal,
+    /// What `:set opt&` installs, once something has given the option a
+    /// default of its own; `None` is the table's declared one.
+    default: Option<OptVal>,
     /// Where the global value was last set from.
     script_ctx: ScriptCtx,
 }
 
-/// Every option's state, indexed by `OptIndex`.
-static STATE: GlobalCell<[OptionState; kOptCount as usize]> = GlobalCell::new(initial());
-
-/// The state every option starts in: no flags, no script context, and the
-/// default its generated row declares.
-const fn initial() -> [OptionState; kOptCount as usize] {
-    let table: [VimOption; kOptCount as usize] = crate::options::table();
-    let mut state = [OptionState {
+impl OptionState {
+    /// The state every option starts in: no flags, no script context, and
+    /// the default its generated row declares.
+    const INITIAL: OptionState = OptionState {
         flags: 0,
-        default: table[0].def_val,
+        default: None,
         script_ctx: ScriptCtx::NONE,
-    }; kOptCount as usize];
-    let mut i = 0;
-    while i < state.len() {
-        state[i].default = table[i].def_val;
-        i += 1;
-    }
-    state
+    };
 }
+
+/// Every option's state, indexed by `OptIndex`.
+static STATE: GlobalCell<[OptionState; kOptCount as usize]> =
+    GlobalCell::new([OptionState::INITIAL; kOptCount as usize]);
 
 /// An option index as a slot in the array above. Every `OptIndex` that
 /// reaches this module names a row, so the conversion cannot fail.
@@ -84,16 +77,25 @@ fn slot(opt_idx: OptIndex) -> usize {
     usize::try_from(opt_idx).expect("an option index is never negative")
 }
 
-/// The default `:set opt&` would install, as the option currently holds it.
-pub(crate) fn option_default(opt_idx: OptIndex) -> OptVal {
-    STATE.with(|state| state[slot(opt_idx)].default)
+/// `f` over the default `:set opt&` would install, as the option currently
+/// holds it, borrowed for that long. `f` must not touch an option's state.
+pub(crate) fn with_option_default<R>(opt_idx: OptIndex, f: impl FnOnce(&OptVal) -> R) -> R {
+    STATE.with(|state| match &state[slot(opt_idx)].default {
+        Some(default) => f(default),
+        None => f(&options[slot(opt_idx)].def_val.value()),
+    })
 }
 
-/// Install a default, without freeing the one it replaces —
-/// [`crate::option::change_option_default`] is the owning spelling and the
-/// one everything outside startup wants.
-pub(crate) fn store_option_default(opt_idx: OptIndex, value: OptVal) {
-    STATE.with_mut(|state| state[slot(opt_idx)].default = value);
+/// A copy of the default `:set opt&` would install.
+pub(crate) fn option_default(opt_idx: OptIndex) -> OptVal {
+    with_option_default(opt_idx, OptVal::clone)
+}
+
+/// Give the option a default of its own, and answer the one it replaces.
+/// [`crate::option::change_option_default`] is the spelling that drops it.
+pub(crate) fn replace_option_default(opt_idx: OptIndex, value: OptVal) -> OptVal {
+    let old = STATE.with_mut(|state| state[slot(opt_idx)].default.replace(value));
+    old.unwrap_or_else(|| options[slot(opt_idx)].def_val.value())
 }
 
 /// Where the option's global value was last set from.

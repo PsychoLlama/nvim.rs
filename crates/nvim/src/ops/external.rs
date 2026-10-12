@@ -25,7 +25,7 @@
 )]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::option::vars::P_FP;
+use crate::option::vars::{P_FP, P_OPFUNC};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
@@ -114,14 +114,13 @@ fn global_opfunc() -> *mut Callback {
 
 /// Parse a new 'operatorfunc' value; `E474` if it names nothing callable.
 pub fn did_set_operatorfunc(_args: &mut OptSet) -> Result<(), OptError> {
-    // SAFETY: an option's value is a valid C string.
-    if p_opfunc(|value| unsafe {
-        option_set_callback_func(value.as_ptr().cast_mut(), global_opfunc())
-    })
-    .is_err()
-    {
+    // A copy: evaluating the value may set the option again.
+    let value = P_OPFUNC.get();
+    let Ok(cb) = callback_from_option(value.as_cstr()) else {
         return Err((e_invarg).into());
-    }
+    };
+    // SAFETY: the cell's own slot, which nothing borrows across this.
+    install_callback(unsafe { &mut *global_opfunc() }, cb);
     Ok(())
 }
 

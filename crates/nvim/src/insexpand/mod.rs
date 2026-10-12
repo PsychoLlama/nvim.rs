@@ -75,7 +75,9 @@ use crate::option::vars::{
     P_IC, P_SCS, P_WS, cot_flags, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js,
     p_paste, p_scs, p_smd, p_tsr, p_tsrfu, p_wic, p_ws,
 };
-use crate::option::{can_bs, copy_option_part, magic_isset, option_set_callback_func, shortmess};
+use crate::option::{
+    callback_from_option, can_bs, copy_option_part, install_callback, magic_isset, shortmess,
+};
 use crate::options::{
     kOptBoFlagComplete, kOptCotFlagFuzzy, kOptCotFlagLongest, kOptCotFlagMenu, kOptCotFlagMenuone,
     kOptCotFlagNearest, kOptCotFlagNoinsert, kOptCotFlagNoselect, kOptCotFlagNosort,

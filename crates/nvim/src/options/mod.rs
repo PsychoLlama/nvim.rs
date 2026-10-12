@@ -104,7 +104,7 @@ use crate::quickfix::did_set_quickfixtextfunc;
 use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
 use crate::types::option::MAX_MCO;
-use crate::types::{OptIndex, OptInt, OptScopeFlags, OptVal, OptVar, VimOption, ssize_t};
+use crate::types::{OptDefault, OptIndex, OptInt, OptScopeFlags, OptVar, VimOption, ssize_t};
 use crate::window::{did_set_winminheight, did_set_winminwidth};
 
 /// `scope_flags` bits.
@@ -135,18 +135,18 @@ const fn scope_idx(global: GlobalOptIndex, win: WinOptIndex, buf: BufOptIndex) -
     [global as ssize_t, win as ssize_t, buf as ssize_t]
 }
 
-const fn boolean(value: bool) -> OptVal {
+const fn boolean(value: bool) -> OptDefault {
     // A default is never the third state -- an option's own default is
     // always a value, never "not set in this scope".
-    OptVal::Boolean(Some(value))
+    OptDefault::Boolean(value)
 }
 
-const fn number(value: OptInt) -> OptVal {
-    OptVal::Number(value)
+const fn number(value: OptInt) -> OptDefault {
+    OptDefault::Number(value)
 }
 
-const fn string(value: &'static CStr) -> OptVal {
-    OptVal::static_string(value)
+const fn string(value: &'static CStr) -> OptDefault {
+    OptDefault::String(value)
 }
 
 /// Copy one generated part into the table under construction.

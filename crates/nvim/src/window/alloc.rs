@@ -29,8 +29,8 @@ use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
 use crate::grid::grid_assign_handle;
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
+use crate::option::clear_winopt;
 use crate::option::vars::p_ch;
-use crate::option::{clear_winopt, init_winopt_strings};
 use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
@@ -64,8 +64,8 @@ fn zeroed_window() -> Win {
         unsafe {
             (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty());
             (&raw mut (*wp).w_ns_set).write(id_set());
-            init_winopt_strings(&raw mut (*wp).w_onebuf_opt);
-            init_winopt_strings(&raw mut (*wp).w_allbuf_opt);
+            (&raw mut (*wp).w_onebuf_opt).write(WinOpt::UNSET);
+            (&raw mut (*wp).w_allbuf_opt).write(WinOpt::UNSET);
         }
     })
 }
@@ -97,7 +97,7 @@ pub(crate) fn free_bare_window(win: Win) {
 /// Free a window's option block and the folds saved with it.
 fn clear_options(opt: *mut WinOpt) {
     // SAFETY: an option block inside a live window or entry.
-    unsafe { clear_winopt(opt) };
+    clear_winopt(unsafe { &mut *opt });
 }
 
 // ---------------------------------------------------------------------------

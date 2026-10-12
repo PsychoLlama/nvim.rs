@@ -58,10 +58,16 @@ pub(crate) fn expand_env_save_opt_of(src: &CStr, one: bool) -> XString {
 
 /// [`expand_env_esc`] of a string the caller holds, into a `MAXPATHL`
 /// result of its own (cut where that buffer cuts it).
-pub(crate) fn expand_env_esc_of(src: &CStr, esc: bool, one: bool) -> XString {
+pub(crate) fn expand_env_esc_of(
+    src: &CStr,
+    esc: bool,
+    one: bool,
+    prefix: Option<&CStr>,
+) -> XString {
     let mut out = vec![0 as c_char; MAXPATHL as usize];
+    let prefix = prefix.map_or(ptr::null_mut(), |prefix| prefix.as_ptr().cast_mut());
     // SAFETY: a NUL-terminated source, a `MAXPATHL` buffer of this frame's,
-    // and no prefix.
+    // and a NUL-terminated prefix or null, which the expansion only reads.
     unsafe {
         expand_env_esc(
             src.as_ptr(),
@@ -69,7 +75,7 @@ pub(crate) fn expand_env_esc_of(src: &CStr, esc: bool, one: bool) -> XString {
             MAXPATHL as c_int,
             esc,
             one,
-            ptr::null_mut(),
+            prefix,
         )
     };
     XString::from_cstr(crate::cstr::in_chars(&out))

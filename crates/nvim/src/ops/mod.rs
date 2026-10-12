@@ -75,7 +75,9 @@ use crate::normal::{
 use crate::option::vars::{
     P_RI, P_SBR, P_SHM, p_ch, p_fp, p_js, p_opfunc, p_report, p_ri, p_sol, p_sr,
 };
-use crate::option::{get_equalprg, get_fileformat, get_ve_flags, option_set_callback_func};
+use crate::option::{
+    callback_from_option, get_equalprg, get_fileformat, get_ve_flags, install_callback,
+};
 use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::os::cshim::{__ctype_b_loc, gettext, ngettext};
 use crate::os::input::{line_breakcheck, os_breakcheck};

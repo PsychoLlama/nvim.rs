@@ -101,6 +101,12 @@ fn init_users() {
     COMPLETION_USERS.set(all_usernames());
 }
 
+/// The process's real user id.
+pub(crate) fn os_getuid() -> libc::uid_t {
+    // SAFETY: `getuid` takes nothing and always succeeds.
+    unsafe { libc::getuid() }
+}
+
 /// Given to `expand_generic()` to obtain user names. NULL past the end.
 pub fn get_users(_expand: &Expand, idx: usize) -> Option<Candidate> {
     init_users();

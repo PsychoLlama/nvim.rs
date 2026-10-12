@@ -12,7 +12,7 @@ use crate::cstr;
 use crate::eval::window::WinSwitch;
 use crate::guard::Suppress;
 use crate::message_fmt::msg_bytes;
-use crate::option::set_option_value_handle_tty_named;
+use crate::option::set_option_value_handle_tty;
 use crate::semsg;
 use crate::types::String_0;
 use core::ffi::c_int;
@@ -208,12 +208,11 @@ fn set_option_from_tv(name: &[u8], value: &TypVal) {
     let (optval, error) = tv_to_optval(value, opt_idx, name);
     if !error {
         let local = OptionSetFlags::LOCAL;
-        let set = set_option_value_handle_tty_named(name, opt_idx, optval, local);
+        let set = set_option_value_handle_tty(name, opt_idx, optval, local);
         if let Err(errmsg) = set {
             emsg(errmsg.as_cstr());
         }
     }
-    optval_free(optval);
 }
 
 /// `setwinvar()`, and `settabwinvar()` with `off` 1.

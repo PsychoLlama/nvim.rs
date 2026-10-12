@@ -263,7 +263,7 @@ fn resume_autocmds() {
 }
 fn parse_winhl(win: Win) {
     // SAFETY: a live window; a null pattern means "use the window's option".
-    unsafe { parse_winhl_opt(ptr::null(), Some(win)) };
+    parse_winhl_opt(None, Some(win));
 }
 fn adjust_for_grid(win: &mut Win, row: &mut c_int, col: &mut c_int) {
     grid_adjust(win.w_grid, row, col);

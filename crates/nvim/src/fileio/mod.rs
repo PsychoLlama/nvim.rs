@@ -89,8 +89,8 @@ use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, BlnFlags, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo, FileOffset, IOSIZE,
-    LineNr, OK, OptInt, OptStr, OptVal, OptionSetFlags, RegMatch, RegProg, ScriptId, ShmFlag,
-    iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    LineNr, OK, OptInt, OptVal, OptionSetFlags, RegMatch, RegProg, ScriptId, ShmFlag, iconv_t,
+    int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -102,7 +102,7 @@ use ::libc::{
     __errno_location, close, dup, feof, ferror, fgets, fwrite, iconv, iconv_close, lseek, memchr,
     read, readlink, symlink, umask, write,
 };
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 // The carve of the transpiled module; see each child's docs.
@@ -700,11 +700,11 @@ pub fn set_forced_fenc(excmd: &mut ExArg) {
             .rest_of(excmd.line.cmd + excmd.force_enc as usize),
     )
     .into_raw();
-    // A borrow: `set_option_direct` copies, and `fenc` is freed just below.
-    // SAFETY: `fenc` is NUL-terminated and outlives the call.
+    // `fenc` is copied, and freed just below.
+    // SAFETY: `fenc` is NUL-terminated.
     set_option_direct(
         kOptFileencoding,
-        OptVal::String(unsafe { OptStr::borrowing(fenc) }),
+        OptVal::from_cstr(unsafe { CStr::from_ptr(fenc) }),
         OptionSetFlags::LOCAL,
         0 as ScriptId,
     );

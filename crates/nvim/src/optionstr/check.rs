@@ -271,6 +271,12 @@ pub(crate) fn valid_filetype(val: &CStr) -> bool {
     valid_name(val, b".-_")
 }
 
+/// [`check_signcolumn`] over the window's own 'signcolumn'.
+pub(crate) fn check_window_signcolumn(window: Win) -> Result<(), Failed> {
+    // SAFETY: null asks for the live window's own value.
+    unsafe { check_signcolumn(ptr::null_mut(), Some(window)) }
+}
+
 /// Parse 'signcolumn' and, given a window, store the width range it asks
 /// for.
 ///

@@ -203,6 +203,15 @@ fn refresh_size(mut term: Term) -> bool {
     true
 }
 
+/// [`on_scrollback_option_changed`] for the terminal a buffer shows, if it
+/// shows one.
+pub(crate) fn on_scrollback_changed_in(buffer: Buf) {
+    if !buffer.terminal.is_null() {
+        // SAFETY: a buffer's terminal lives as long as the buffer does.
+        unsafe { on_scrollback_option_changed(buffer.terminal) };
+    }
+}
+
 /// `'scrollback'` changed; trim or extend to match, but only once the
 /// scrollback has been sized at all.
 ///

@@ -786,6 +786,13 @@ pub(crate) fn format_double(
         .min(out.len().saturating_sub(1))
 }
 
+/// `bind_textdomain_codeset` for a domain and a codeset the caller holds:
+/// messages of `domain` are converted to `codeset` from now on.
+pub(crate) fn bind_textdomain_codeset_of(domain: &::core::ffi::CStr, codeset: &::core::ffi::CStr) {
+    // SAFETY: two NUL-terminated strings, which gettext copies.
+    unsafe { bind_textdomain_codeset(domain.as_ptr(), codeset.as_ptr()) };
+}
+
 /// The translation of `msgid` in the current message catalogue -- C's `_()`.
 ///
 /// Answers `msgid` itself when the catalogue has no entry for it, which is

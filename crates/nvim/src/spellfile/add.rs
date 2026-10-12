@@ -34,7 +34,6 @@ use crate::semsg;
 use crate::smsg;
 use crate::strings::has_bytes;
 use crate::strings::has_char;
-use crate::types::OptStr;
 use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
@@ -374,9 +373,8 @@ fn init_spellfile() {
 
     set_option_value_give_err(
         kOptSpellfile,
-        // SAFETY: `buf` is NUL-terminated and freed just below, after the
-        // option layer has copied it.
-        OptVal::String(unsafe { OptStr::borrowing(buf) }),
+        // SAFETY: `buf` is NUL-terminated; it is copied, and freed just below.
+        OptVal::from_cstr(unsafe { CStr::from_ptr(buf) }),
         OptionSetFlags::LOCAL,
     );
     unsafe { xfree(buf as *mut c_void) };

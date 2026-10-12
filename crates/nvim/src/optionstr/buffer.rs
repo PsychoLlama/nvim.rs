@@ -31,7 +31,7 @@ use crate::indent_c::parse_cino;
 use crate::mark::free_fmark;
 use crate::mbyte::{enc_canonize, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_setflags;
-use crate::memory::xfree;
+use crate::memory::{XString, xfree};
 use crate::message::{e_modifiable, e_unsupportedoption};
 use crate::option::option_var;
 use crate::option::vars::{P_BKC, P_BS, bkc_flags, p_bex, p_enc, p_pm};
@@ -53,7 +53,6 @@ use crate::types::{
 use crate::window::global_stl_height;
 
 use super::frame::{invalid, old_value, varp, win};
-use super::free_string_option;
 use super::{
     B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FO_ALL, SID_NONE,
     did_set_opt_flags, did_set_optexpr, did_set_option_listflag, did_set_str_generic,
@@ -295,10 +294,8 @@ pub fn did_set_encoding(args: &mut OptSet) -> Result<(), OptError> {
 
     // SAFETY: the option's own variable; `enc_canonize` allocates the
     // replacement and the old value is freed here.
-    let canonical = unsafe { enc_canonize(varp.value_ptr()) };
-    // Replace and *then* free; see `crate::optionstr::did_set_optexpr`.
-    let old = unsafe { varp.replace(canonical) };
-    unsafe { free_string_option(old) };
+    let canonical = unsafe { XString::from_raw(enc_canonize(varp.value_ptr())) };
+    varp.set(canonical);
     if idx == kOptEncoding {
         if p_enc(|value| unsafe { !cstr::eq_bytes(value.as_ptr().cast_mut(), b"utf-8") }) {
             return Err((e_unsupportedoption).into());

@@ -205,7 +205,7 @@ pub(crate) fn expand_filename(
         // may be all that looked like one.
         let arg = excmd.line.rest_of(start);
         if arg.contains(&b'$') || arg.contains(&b'~') {
-            let out = expand_env_esc_of(excmd.line.cstr_from(start), true, true);
+            let out = expand_env_esc_of(excmd.line.cstr_from(start), true, true, None);
             has_wildcards = has_wildcard(&out);
             repl_cmdline(excmd, start, len, &out);
         }

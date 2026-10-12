@@ -62,7 +62,12 @@ pub type OptScopeFlags = uint8_t;
 /// Distinct from [`OptValType`], which is what the option *table* declares a
 /// row to be: [`OptVal::kind`] is how the two are compared. A value and its
 /// row agree everywhere except [`OptVal::Nil`], which no row declares.
-#[derive(Copy, Clone)]
+///
+/// **A value owns its string.** Reading an option answers a copy, writing
+/// one moves the value into the variable, and a setter's old value is its
+/// own: a `did_set_*` callback or an `OptionSet` autocommand that sets the
+/// same option again cannot free what the setter is holding.
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum OptVal {
     /// A global-local option with no value in this scope, and what the API
     /// reports as nil. `kOptValTypeNil`.
@@ -79,65 +84,97 @@ pub enum OptVal {
     String(OptStr),
 }
 
-/// The bytes of a string option's value: a pointer and a length, with
-/// ownership carried by the option protocol rather than by the type.
+/// A string option's value: a literal it borrows, or bytes of its own.
 ///
-/// **Deliberately not [`String_0`].** An API string owns its bytes; a string
-/// option's value may be the generated table's `.rodata` default, the shared
-/// empty string every unset string option points at, or an allocation the
-/// option variable is about to take over -- which is why
-/// [`optval_free`](crate::option::optval_free) exists and why this pair is
-/// `Copy`. The option table is a `const` in `.rodata` and names its string
-/// defaults there, so a value that allocated could not be one of its rows.
-#[derive(Copy, Clone)]
-pub struct OptStr {
-    data: *mut ::core::ffi::c_char,
-    size: size_t,
+/// **Deliberately not [`String_0`]**: the option table names its defaults
+/// as `.rodata` literals, and a value set from one (`:set opt&`, the names
+/// the editor sets itself) need not copy it until a variable takes it
+/// over. Either way the bytes are what an option variable holds, so the
+/// text stops at its first NUL.
+#[derive(Clone, Debug)]
+pub enum OptStr {
+    /// A literal: the generated table's defaults, and the names the editor
+    /// sets itself.
+    Static(&'static ::core::ffi::CStr),
+    /// Bytes of its own.
+    Owned(XString),
 }
 
 impl OptStr {
-    /// A view of a `.rodata` string: the generated option table's defaults,
-    /// which `alloc_options_default` replaces with owned copies at startup.
-    /// Nothing may free one of these.
+    /// A view of a `.rodata` string.
     pub const fn borrowed(text: &'static ::core::ffi::CStr) -> Self {
-        Self {
-            data: text.as_ptr().cast_mut(),
-            size: text.count_bytes(),
+        OptStr::Static(text)
+    }
+
+    /// The value as a C string.
+    pub fn as_cstr(&self) -> &::core::ffi::CStr {
+        match self {
+            OptStr::Static(text) => text,
+            OptStr::Owned(text) => text.as_cstr(),
         }
     }
 
-    /// The pair, for the option variables and the C callees that hold a
-    /// `char *` and a length separately.
-    ///
-    /// Building one is safe -- an `OptStr` releases nothing by itself. The
-    /// obligation is on whoever passes the value it ends up in to
-    /// [`optval_free`](crate::option::optval_free): `data` must by then be
-    /// the shared empty string, a `.rodata` default, or one allocation with
-    /// one owner.
-    pub const fn from_raw_parts(data: *mut ::core::ffi::c_char, size: size_t) -> Self {
-        Self { data, size }
+    /// The bytes, not counting the terminator.
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            OptStr::Static(text) => text.to_bytes(),
+            OptStr::Owned(text) => text,
+        }
     }
 
-    /// The pointer. Never null: an unset string option holds the shared
-    /// empty string rather than nothing.
-    pub const fn data(&self) -> *mut ::core::ffi::c_char {
-        self.data
+    /// The bytes as a pointer, for the C-signature callees that still take
+    /// one. It points into this value and lives as long as it does.
+    pub fn data(&self) -> *const ::core::ffi::c_char {
+        self.as_cstr().as_ptr()
     }
 
-    /// The byte count, not counting the terminator every option value has.
-    pub const fn len(&self) -> size_t {
-        self.size
+    /// The byte count, not counting the terminator.
+    pub fn len(&self) -> usize {
+        self.as_bytes().len()
     }
 
-    pub const fn is_empty(&self) -> bool {
-        self.size == 0
+    pub fn is_empty(&self) -> bool {
+        self.as_bytes().is_empty()
+    }
+
+    /// The bytes as a string of their own, copying a literal.
+    pub fn into_xstring(self) -> XString {
+        match self {
+            OptStr::Static(text) => XString::from_cstr(text),
+            OptStr::Owned(text) => text,
+        }
     }
 }
+
+impl PartialEq for OptStr {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_bytes() == other.as_bytes()
+    }
+}
+
+impl Eq for OptStr {}
 
 impl OptVal {
     /// A string value over a `.rodata` literal. See [`OptStr::borrowed`].
     pub const fn static_string(text: &'static ::core::ffi::CStr) -> Self {
         OptVal::String(OptStr::borrowed(text))
+    }
+
+    /// A string value of its own, copying `bytes` up to their first NUL --
+    /// all of them an option variable could hold.
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        OptVal::String(OptStr::Owned(XString::from_bytes(&bytes[..end])))
+    }
+
+    /// A string value taking `text` over.
+    pub fn from_xstring(text: XString) -> Self {
+        OptVal::String(OptStr::Owned(text))
+    }
+
+    /// A string value copying `text`.
+    pub fn from_cstr(text: &::core::ffi::CStr) -> Self {
+        OptVal::String(OptStr::Owned(XString::from_cstr(text)))
     }
 
     /// The type this value is, as the option table spells one.
@@ -182,11 +219,32 @@ impl OptVal {
         }
     }
 
-    /// The string pair, for a string value.
-    pub const fn as_string(&self) -> Option<OptStr> {
+    /// The string, for a string value.
+    pub const fn as_string(&self) -> Option<&OptStr> {
         match self {
-            OptVal::String(s) => Some(*s),
+            OptVal::String(s) => Some(s),
             _ => None,
+        }
+    }
+}
+
+/// What the option table declares as an option's default: a value fixed at
+/// compile time, which [`OptDefault::value`] turns into an [`OptVal`]
+/// without copying the literal. `Copy`, so the table stays a `const`.
+#[derive(Copy, Clone)]
+pub enum OptDefault {
+    Boolean(bool),
+    Number(OptInt),
+    String(&'static ::core::ffi::CStr),
+}
+
+impl OptDefault {
+    /// The default as a value.
+    pub const fn value(self) -> OptVal {
+        match self {
+            OptDefault::Boolean(boolean) => OptVal::Boolean(Some(boolean)),
+            OptDefault::Number(number) => OptVal::Number(number),
+            OptDefault::String(text) => OptVal::static_string(text),
         }
     }
 }
@@ -238,7 +296,7 @@ impl From<XString> for OptError {
 
 /// What the option table names for an option that has just been set: a
 /// callback that vets the new value and reports why it does not like it.
-pub type OptDidSetCb = Option<unsafe fn(&mut OptSet) -> Result<(), OptError>>;
+pub type OptDidSetCb = Option<fn(&mut OptSet) -> Result<(), OptError>>;
 /// A string option's completer: the option table's `opt_expand_cb`, which
 /// answers the matches for what has been typed after `:set {option}=`.
 pub type OptExpandCb = Option<fn(&mut OptExpand<'_>) -> Result<Vec<XString>, Failed>>;
@@ -372,10 +430,10 @@ pub struct VimOption {
     pub values: &'static [&'static ::core::ffi::CStr],
     pub opt_did_set_cb: OptDidSetCb,
     pub opt_expand_cb: OptExpandCb,
-    /// The default the table declares — the seed for
-    /// `crate::option::state`'s copy, which is the one `:set opt&` reads
-    /// and the one startup rewrites once it can expand the environment.
-    pub def_val: OptVal,
+    /// The default the table declares — what `crate::option::state`
+    /// answers until startup (or `-M`) gives the option one of its own, which
+    /// is the one `:set opt&` then reads.
+    pub def_val: OptDefault,
 }
 
 crate::char_flags! {

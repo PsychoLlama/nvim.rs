@@ -694,6 +694,12 @@ pub fn did_set_spell_option() -> Result<(), OptError> {
     errmsg
 }
 
+/// [`compile_cap_prog`] over a syntax block the caller holds.
+pub(crate) fn compile_cap_prog_in(synblock: &mut SynBlock) -> Result<(), OptError> {
+    // SAFETY: a live block, unaliased for the call by its `&mut`.
+    unsafe { compile_cap_prog(synblock) }
+}
+
 /// Compile `'spellcapcheck'` into `b_cap_prog`, anchored so that it can
 /// only match at one column.
 ///

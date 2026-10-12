@@ -81,6 +81,7 @@ pub use check::{
     spell_expand_check_cap, spell_to_word_end, spell_valid_case, spell_word_start,
 };
 pub use dump::{ex_spelldump, ex_spellinfo, spell_dump_compl};
+pub(crate) use lang::compile_cap_prog_in;
 pub use lang::{
     compile_cap_prog, did_set_spell_option, parse_spelllang, spell_delete_wordlist, spell_enc,
     spell_free_all, spell_reload, valid_spellfile, valid_spelllang,
