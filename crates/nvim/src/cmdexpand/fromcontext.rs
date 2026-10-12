@@ -15,7 +15,6 @@ use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
 use crate::help::help_tag_matches;
 use crate::lua::executor::nlua_expand_matches;
 use crate::mapping::expand_mappings;
-use crate::menu::get_menu_names;
 use crate::option::{
     expand_old_setting, expand_setting_subtract, expand_settings, expand_string_setting,
     magic_isset,
@@ -203,9 +202,10 @@ pub fn expand_generic(
             XString::from_cstr(&candidate)
         };
 
-        if core::ptr::fn_addr_eq(func, get_menu_names as CompleteListItemGetter)
-            && text.last() == Some(&1)
-        {
+        // Upstream asks whether `func` is `get_menu_names`; the context is
+        // what chose it, and a function pointer's address is not an
+        // identity Rust promises (Miri hands out a fresh one per cast).
+        if expand.context == ExpandContext::Menunames && text.last() == Some(&1) {
             // Undo the separator get_menu_names() added, in the copy that
             // is kept.
             text.truncate(text.len() - 1);
