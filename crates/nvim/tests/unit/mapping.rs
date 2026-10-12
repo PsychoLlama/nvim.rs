@@ -51,7 +51,9 @@ fn mkexrc_writes_maps_that_read_back() {
     }
     fx.run(&format!("mkexrc! {file}"));
     fx.run(&format!("let g:mo_exrc = '{file}'"));
-    fx.expect_all(&[("readfile(g:mo_exrc)", "['nmap ,\u{16}  sp', 'let s:cpo_save=&cpo', 'set cpo&vim', 'nmap ,h <Nop>', 'tmap ,f \u{16}\u{1c}\u{16}\u{e}', 'nmap ,b \u{16}\t', 'xmap ,b \u{16}\t', 'omap ,b \u{16}\t', 'nnoremap <nowait> <silent> ,a :echo ''a''\u{16}', 'nmap <M-x> é', 'lmap ,g g', 'noremap! ,d \\ d', 'imap <expr> ,c ''c''', 'cnoreabbr W w', 'iabbr teh the', 'let &cpo=s:cpo_save', 'unlet s:cpo_save', 'set helplang=en', '\" vim: set ft=vim :']")]);
+    // The map lines and the 'cpo' guard: the options written after them
+    // are whatever the suite around this test left set.
+    fx.expect_all(&[(r"filter(readfile(g:mo_exrc), 'v:val =~# ''map\|abbr\|cpo''')", "['nmap ,\u{16}  sp', 'let s:cpo_save=&cpo', 'set cpo&vim', 'nmap ,h <Nop>', 'tmap ,f \u{16}\u{1c}\u{16}\u{e}', 'nmap ,b \u{16}\t', 'xmap ,b \u{16}\t', 'omap ,b \u{16}\t', 'nnoremap <nowait> <silent> ,a :echo ''a''\u{16}', 'nmap <M-x> é', 'lmap ,g g', 'noremap! ,d \\ d', 'imap <expr> ,c ''c''', 'cnoreabbr W w', 'iabbr teh the', 'let &cpo=s:cpo_save', 'unlet s:cpo_save']")]);
     clean(&fx);
     fx.run(&format!("source {file}"));
     // What reads back: `<CR>` was written as CTRL-V CTRL-M, whose CR the
