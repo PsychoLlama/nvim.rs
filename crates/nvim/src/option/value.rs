@@ -107,7 +107,11 @@ pub(crate) fn slot_value(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
         // above 1 reads as true and a negative one is "not set here".
         OptSlot::Boolean(var) => boolean_optval(tristate(var.get())),
         OptSlot::Number(var) => OptVal::Number(var.get()),
-        OptSlot::String(var) => var.with_bytes(OptVal::from_bytes),
+        // A variable's bytes hold no NUL, so they are copied whole: no
+        // scan for one.
+        OptSlot::String(var) => {
+            var.with_bytes(|bytes| OptVal::from_xstring(XString::from_bytes(bytes)))
+        }
     };
     // The C read the row's declared type and stamped it on the payload; the
     // slot answers the same thing, so this is where the two are tied.

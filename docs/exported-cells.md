@@ -58,10 +58,6 @@ binary as well as the default one.
 - `neovim::drawscreen::state::need_maketitle`
 - `neovim::drawscreen::state::redraw_tabline`
 
-## `ex_cmds`
-
-- `neovim::ex_cmds::subst::parse::old_sub`
-
 ## `ex_docmd`
 
 - `neovim::ex_docmd::ex_pressedreturn`

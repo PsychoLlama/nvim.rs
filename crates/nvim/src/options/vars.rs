@@ -183,7 +183,7 @@ impl StrOpt {
     /// exactly that long -- the read that neither walks the string (as the
     /// `&CStr` projection does) nor copies it (as [`get`](Self::get) does).
     /// `f` must not set an option: the record is borrowed while it runs.
-    pub fn with_bytes<R>(self, f: impl FnOnce(&[u8]) -> R) -> R {
+    pub(crate) fn with_bytes<R>(self, f: impl FnOnce(&[u8]) -> R) -> R {
         OPTIONS.with_at(self, |value| match value.as_deref() {
             Some(bytes) => f(bytes),
             None => {
