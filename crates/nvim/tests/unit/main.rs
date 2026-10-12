@@ -62,6 +62,7 @@ mod normal;
 mod options;
 mod options_oracle;
 mod optionstr;
+mod optionstr_oracle;
 mod packer;
 mod parser;
 mod path;
