@@ -224,32 +224,35 @@ pub fn ex_next(excmd: &mut ExArg) {
     do_argfile(excmd, argn);
 }
 
-/// The name entry `n` of the current list was given -- not its buffer's --
-/// expanded to a full path.
-fn full_arg_name(n: c_int) -> Option<XString> {
-    let n = usize::try_from(n).ok()?;
-    let name = with_list(cur_alist(), |al| {
-        al.entries.get(n).map(|entry| entry.name.clone())
-    })??;
-    Some(full_name_of(name.as_cstr(), false))
-}
-
 /// `:argdedupe` — drop every later argument naming the same file.
 pub fn ex_argdedupe(_excmd: &mut ExArg) {
+    // Each argument's own name (not its buffer's) expanded to a full path,
+    // to catch different paths leading to the same file. Nothing here runs
+    // user code, so the names are resolved once rather than per comparison.
+    let mut full: Vec<XString> = with_list(cur_alist(), |al| {
+        al.entries
+            .iter()
+            .map(|entry| entry.name.clone())
+            .collect::<Vec<_>>()
+    })
+    .unwrap_or_default()
+    .iter()
+    .map(|name| full_name_of(name.as_cstr(), false))
+    .collect();
     let mut i = 0;
-    while let Some(first) = full_arg_name(i) {
-        // Expand each argument to a full path, to catch different paths
-        // leading to the same file.
+    while i < full.len() {
         let mut j = i + 1;
-        while let Some(second) = full_arg_name(j) {
-            if path_fnamecmp(first.as_cstr(), second.as_cstr()) != 0 {
+        while j < full.len() {
+            if path_fnamecmp(full[i].as_cstr(), full[j].as_cstr()) != 0 {
                 j += 1;
                 continue;
             }
+            full.remove(j);
+            let j = count_of(j);
             remove_arg(j);
             let idx = cur_arg_idx();
             if idx == j {
-                set_cur_arg_idx(i);
+                set_cur_arg_idx(count_of(i));
             } else if idx > j {
                 set_cur_arg_idx(idx - 1);
             }

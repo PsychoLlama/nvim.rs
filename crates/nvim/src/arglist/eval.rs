@@ -50,14 +50,19 @@ pub fn f_arglistid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(id);
 }
 
-/// The names `names` as a List in `result`. No names still allocates the
-/// (empty) List, which is what `argv(-1)` on a window that does not exist
-/// answers.
-fn arglist_as_rettv(names: &[XString], result: &mut TypVal) {
-    let len = ptrdiff_t::try_from(names.len()).unwrap_or(ptrdiff_t::MAX);
-    let list = tv_list_alloc_ret(result, len);
-    for name in names {
-        list.push_str(Some(name.as_cstr()));
+/// The names list `alist` shows as a List in `result`. No list still
+/// allocates the (empty) List, which is what `argv(-1)` on a window that
+/// does not exist answers. The names are copied straight into the List:
+/// nothing in between runs user code.
+fn arglist_as_rettv(alist: Option<ArgListId>, result: &mut TypVal) {
+    let len = alist.map_or(0, alist_count);
+    let list = tv_list_alloc_ret(result, ptrdiff_t::try_from(len).unwrap_or(0));
+    if let Some(alist) = alist {
+        with_list(alist, |al| {
+            for entry in &al.entries {
+                with_entry_name(entry, |name| list.push_str(Some(name)));
+            }
+        });
     }
 }
 
@@ -65,7 +70,7 @@ fn arglist_as_rettv(names: &[XString], result: &mut TypVal) {
 pub fn f_argv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args.is_empty() {
         // No index: the whole current argument list.
-        arglist_as_rettv(&arg_names(cur_alist()), result);
+        arglist_as_rettv(Some(cur_alist()), result);
         return;
     }
     // A window that does not exist leaves no list, so every index is out of
@@ -76,7 +81,6 @@ pub fn f_argv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if let Some(name) = alist.and_then(|alist| arg_name(alist, idx)) {
         result.write_string(Some(ThinCString::from_cstr(name.as_cstr())));
     } else if idx == -1 {
-        let names = alist.map(arg_names).unwrap_or_default();
-        arglist_as_rettv(&names, result);
+        arglist_as_rettv(alist, result);
     }
 }

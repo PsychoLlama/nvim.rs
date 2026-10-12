@@ -40,7 +40,7 @@ use crate::types::{ExArg, Expand, ExpandContext, IOSIZE, MAXPATHL};
 use core::ffi::c_int;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, ErrorKind, Write};
+use std::io::{BufWriter, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 
 use super::flag::kEqualFiles;
@@ -247,7 +247,7 @@ fn helptags_one(
             break;
         }
         let path = path.as_cstr().to_bytes();
-        let Ok(file) = File::open(os_path(path)) else {
+        let Ok(mut file) = File::open(os_path(path)) else {
             let path = msg_bytes(path);
             semsg!("E153: Unable to open {path} for reading");
             continue;
@@ -255,7 +255,11 @@ fn helptags_one(
         // The name as the tags file records it: past the directory and the
         // separator after it.
         let fname = path.get(dir.len() + 1..).unwrap_or_default();
-        scan_help_file(&mut BufReader::new(file), fname, &mut tags);
+        // A read that fails part way (a directory named `*.txt`, say) leaves
+        // what was read, as `fgets` did.
+        let mut data = Vec::new();
+        let _ = file.read_to_end(&mut data);
+        scan_help_file(data, fname, &mut tags);
     }
     drop(files);
 
@@ -269,52 +273,77 @@ fn helptags_one(
     let _ = out.flush();
 }
 
-/// `fgets(3)` into `line`: up to `size - 1` bytes, through the first `\n`.
-/// Answers false -- `fgets`' null -- when nothing could be read.
-fn fgets(reader: &mut impl BufRead, line: &mut Vec<u8>, size: usize) -> bool {
-    line.clear();
-    while line.len() < size - 1 {
-        let available = match reader.fill_buf() {
-            Ok([]) => break,
-            Ok(available) => available,
-            Err(err) if err.kind() == ErrorKind::Interrupted => continue,
-            Err(_) => break,
-        };
-        let want = (size - 1 - line.len()).min(available.len());
-        let take = available[..want]
+/// Where `needle` first occurs in `haystack`. A byte loop with an early exit
+/// does not vectorise; a test over a fixed 32-byte block with none does, and
+/// the help files are megabytes of text searched for `*` and `\n` -- this
+/// is what keeps the scan near upstream's `strchr`.
+fn find_byte(haystack: &[u8], needle: u8) -> Option<usize> {
+    const BLOCK: usize = 32;
+    let (blocks, remainder) = haystack.as_chunks::<BLOCK>();
+    for (n, block) in blocks.iter().enumerate() {
+        let hit = block
             .iter()
-            .position(|&byte| byte == b'\n')
-            .map_or(want, |at| at + 1);
-        line.extend_from_slice(&available[..take]);
-        reader.consume(take);
-        if line.last() == Some(&b'\n') {
-            break;
+            .fold(false, |hit, &byte| hit | (byte == needle));
+        if hit {
+            return block
+                .iter()
+                .position(|&byte| byte == needle)
+                .map(|i| n * BLOCK + i);
         }
     }
-    !line.is_empty()
+    let at = blocks.len() * BLOCK;
+    remainder
+        .iter()
+        .position(|&byte| byte == needle)
+        .map(|i| at + i)
 }
 
-/// One line of a help file into `line`, as `vim_fgets` reads it into
-/// `IObuff`: a line longer than the buffer is cut at 1024 bytes and the rest
-/// of it thrown away. Answers false at the end of the file -- which, as
-/// upstream's, includes running into it while throwing a cut line's rest
-/// away in 199-byte steps.
-fn read_help_line(reader: &mut impl BufRead, line: &mut Vec<u8>) -> bool {
-    let size = IOSIZE as usize;
-    let mut got = fgets(reader, line, size);
-    // `vim_fgets` looks at the next-to-last byte of its buffer: anything but
-    // a NUL or a newline there means the line did not fit.
-    let filled = |text: &[u8], last: usize| text.len() > last && !matches!(text[last], 0 | b'\n');
-    if got && filled(line, size - 2) {
-        let mut rest = Vec::new();
-        loop {
-            got = fgets(reader, &mut rest, 200);
-            if !got || !filled(&rest, 198) {
-                break;
+/// A help file read the way `fgets(3)` reads one: [`HelpReader::fgets`]
+/// answers the next stretch of at most `size - 1` bytes, through the first
+/// `\n`. The whole file is read up front, so a line is a range of it.
+struct HelpReader {
+    data: Vec<u8>,
+    at: usize,
+}
+
+impl HelpReader {
+    /// The next `fgets(size)` worth of the file, or `None` -- `fgets`' null --
+    /// at its end.
+    fn fgets(&mut self, size: usize) -> Option<core::ops::Range<usize>> {
+        let rest = &self.data[self.at..];
+        if rest.is_empty() {
+            return None;
+        }
+        let room = rest.len().min(size - 1);
+        let len = find_byte(&rest[..room], b'\n').map_or(room, |nl| nl + 1);
+        let start = self.at;
+        self.at += len;
+        Some(start..self.at)
+    }
+
+    /// One line as `vim_fgets` reads it into `IObuff`: a line longer than
+    /// the buffer is cut at 1024 bytes and the rest of it thrown away.
+    /// Answers `None` at the end of the file -- which, as upstream's, includes
+    /// running into it while throwing a cut line's rest away in 199-byte
+    /// steps.
+    fn help_line(&mut self) -> Option<&[u8]> {
+        let size = IOSIZE as usize;
+        let line = self.fgets(size)?;
+        // `vim_fgets` looks at the next-to-last byte of its buffer: anything
+        // but a NUL or a newline there means the line did not fit.
+        let filled = |data: &[u8], at: &core::ops::Range<usize>, last: usize| {
+            at.len() > last && !matches!(data[at.start + last], 0 | b'\n')
+        };
+        if filled(&self.data, &line, size - 2) {
+            loop {
+                let rest = self.fgets(200)?;
+                if !filled(&self.data, &rest, 198) {
+                    break;
+                }
             }
         }
+        Some(&self.data[line])
     }
-    got
 }
 
 /// Is `byte` one of the white characters a tag may border on: `" \t\n\r"`?
@@ -329,12 +358,14 @@ fn borders_tag(byte: u8) -> bool {
 /// whitespace or the line start before it, and whitespace or the line end
 /// after it. Lines inside an example — everything indented after a line
 /// ending in `>` — are skipped.
-fn scan_help_file(reader: &mut impl BufRead, fname: &[u8], tags: &mut Vec<Vec<u8>>) {
-    let mut buf = Vec::with_capacity(IOSIZE as usize);
+fn scan_help_file(data: Vec<u8>, fname: &[u8], tags: &mut Vec<Vec<u8>>) {
+    let mut reader = HelpReader { data, at: 0 };
     let mut in_example = false;
-    while read_help_line(reader, &mut buf) && !got_int.get() {
+    while let Some(buf) = reader.help_line()
+        && !got_int.get()
+    {
         // The line as the C string functions saw it: up to a NUL.
-        let line = buf.split(|&byte| byte == 0).next().unwrap_or_default();
+        let line = &buf[..find_byte(buf, 0).unwrap_or(buf.len())];
         if in_example {
             // Skip the example; a non-white in the first column ends it.
             if line.first().copied().is_some_and(borders_tag) {
@@ -346,7 +377,7 @@ fn scan_help_file(reader: &mut impl BufRead, fname: &[u8], tags: &mut Vec<Vec<u8
         // Where the first accepted tag ends. Upstream terminates the line
         // there, so the example test below sees only what comes before it.
         let mut cut = None;
-        let star = |from: usize| line[from.min(line.len())..].iter().position(|&b| b == b'*');
+        let star = |from: usize| find_byte(&line[from.min(line.len())..], b'*');
         let mut p1 = star(0);
         while let Some(open) = p1 {
             let mut p2 = star(open + 1).map(|at| open + 1 + at);
@@ -433,4 +464,49 @@ fn write_tags(out: &mut impl Write, tags: &[Vec<u8>]) -> std::io::Result<()> {
         out.write_all(b"*\n")?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `find_byte` is `position` at every length and offset around the
+    /// 32-byte block.
+    #[test]
+    fn find_byte_is_position() {
+        for len in 0..80 {
+            for at in 0..=len {
+                let mut hay = vec![b'a'; len];
+                if at < len {
+                    hay[at] = b'*';
+                }
+                let want = hay.iter().position(|&b| b == b'*');
+                assert_eq!(find_byte(&hay, b'*'), want, "{len} {at}");
+            }
+        }
+    }
+
+    /// A line past the 1024-byte read is cut, its rest thrown away, and the
+    /// end of the file met while throwing it away ends the file.
+    #[test]
+    fn help_lines_are_read_as_vim_fgets_reads_them() {
+        let lines = |data: Vec<u8>| {
+            let mut reader = HelpReader { data, at: 0 };
+            let mut out = Vec::new();
+            while let Some(line) = reader.help_line() {
+                out.push(line.len());
+            }
+            out
+        };
+        let mut long = vec![b'x'; 2000];
+        long.push(b'\n');
+        long.extend_from_slice(b"next\n");
+        assert_eq!(lines(long), [1024, 5]);
+        let mut exact = vec![b'y'; 1023];
+        exact.extend_from_slice(b"\nz");
+        assert_eq!(lines(exact), [1024, 1]);
+        // 1024 + 199 bytes and no newline: the discard runs into the end.
+        assert_eq!(lines(vec![b'w'; 1024 + 199]), Vec::<usize>::new());
+        assert_eq!(lines(vec![b'w'; 1024 + 198]), [1024]);
+    }
 }
