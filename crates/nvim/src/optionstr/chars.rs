@@ -40,7 +40,7 @@ use crate::types::Candidate;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
 
-use crate::charset::{char2cells, hexhex_at, ptr2cells_at};
+use crate::charset::{char2cells, hexhex_at};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::grid::schar_from_char;
 use crate::mbyte::{c_cluster_len, c_cluster_schar};
@@ -177,20 +177,15 @@ struct Field {
     /// fields have none.
     slot: Option<Slot>,
     /// The preferred default, used only when it fits in one screen cell.
-    def: Option<&'static CStr>,
+    def: Option<char>,
     /// The default to use when `def` is too wide.
-    fallback: Option<&'static CStr>,
+    fallback: Option<char>,
     shape: Shape,
 }
 
 /// A single-character field, spelled the way upstream's `CHARSTAB_ENTRY`
 /// spells one.
-const fn one(
-    name: &'static CStr,
-    slot: Slot,
-    def: Option<&'static CStr>,
-    fallback: Option<&'static CStr>,
-) -> Field {
+const fn one(name: &'static CStr, slot: Slot, def: Option<char>, fallback: Option<char>) -> Field {
     Field {
         name,
         slot: Some(slot),
@@ -203,44 +198,29 @@ const fn one(
 /// The fields of 'fillchars', with the defaults that make a box-drawing
 /// terminal look right and the ASCII fallbacks for one that cannot.
 static FCS_TAB: [Field; 21] = [
-    one(c"stl", fill!(stl), Some(c" "), None),
-    one(c"stlnc", fill!(stlnc), Some(c" "), None),
-    one(c"wbr", fill!(wbr), Some(c" "), None),
-    one(c"horiz", fill!(horiz), Some(c"\u{2500}"), Some(c"-")),
-    one(c"horizup", fill!(horizup), Some(c"\u{2534}"), Some(c"-")),
-    one(
-        c"horizdown",
-        fill!(horizdown),
-        Some(c"\u{252c}"),
-        Some(c"-"),
-    ),
-    one(c"vert", fill!(vert), Some(c"\u{2502}"), Some(c"|")),
-    one(c"vertleft", fill!(vertleft), Some(c"\u{2524}"), Some(c"|")),
-    one(
-        c"vertright",
-        fill!(vertright),
-        Some(c"\u{251c}"),
-        Some(c"|"),
-    ),
-    one(
-        c"verthoriz",
-        fill!(verthoriz),
-        Some(c"\u{253c}"),
-        Some(c"+"),
-    ),
-    one(c"fold", fill!(fold), Some(c"\u{b7}"), Some(c"-")),
-    one(c"foldopen", fill!(foldopen), Some(c"-"), None),
+    one(c"stl", fill!(stl), Some(' '), None),
+    one(c"stlnc", fill!(stlnc), Some(' '), None),
+    one(c"wbr", fill!(wbr), Some(' '), None),
+    one(c"horiz", fill!(horiz), Some('\u{2500}'), Some('-')),
+    one(c"horizup", fill!(horizup), Some('\u{2534}'), Some('-')),
+    one(c"horizdown", fill!(horizdown), Some('\u{252c}'), Some('-')),
+    one(c"vert", fill!(vert), Some('\u{2502}'), Some('|')),
+    one(c"vertleft", fill!(vertleft), Some('\u{2524}'), Some('|')),
+    one(c"vertright", fill!(vertright), Some('\u{251c}'), Some('|')),
+    one(c"verthoriz", fill!(verthoriz), Some('\u{253c}'), Some('+')),
+    one(c"fold", fill!(fold), Some('\u{b7}'), Some('-')),
+    one(c"foldopen", fill!(foldopen), Some('-'), None),
     // Note the name: the field is "foldclose", the struct member
     // `foldclosed`.
-    one(c"foldclose", fill!(foldclosed), Some(c"+"), None),
-    one(c"foldsep", fill!(foldsep), Some(c"\u{2502}"), Some(c"|")),
+    one(c"foldclose", fill!(foldclosed), Some('+'), None),
+    one(c"foldsep", fill!(foldsep), Some('\u{2502}'), Some('|')),
     one(c"foldinner", fill!(foldinner), None, None),
-    one(c"diff", fill!(diff), Some(c"-"), None),
-    one(c"msgsep", fill!(msgsep), Some(c" "), None),
-    one(c"eob", fill!(eob), Some(c"~"), None),
-    one(c"lastline", fill!(lastline), Some(c"@"), None),
-    one(c"trunc", fill!(trunc), Some(c">"), None),
-    one(c"truncrl", fill!(truncrl), Some(c"<"), None),
+    one(c"diff", fill!(diff), Some('-'), None),
+    one(c"msgsep", fill!(msgsep), Some(' '), None),
+    one(c"eob", fill!(eob), Some('~'), None),
+    one(c"lastline", fill!(lastline), Some('@'), None),
+    one(c"trunc", fill!(trunc), Some('>'), None),
+    one(c"truncrl", fill!(truncrl), Some('<'), None),
 ];
 
 /// The fields of 'listchars'. None of them has a default: an unmentioned
@@ -587,17 +567,15 @@ fn at_end(value: &[u8], at: usize) -> bool {
 /// is not used; the field falls back, and a field with neither ends up
 /// blank.
 fn install_defaults(chars: &mut Chars, tab: &[Field]) {
+    // A default's codepoint, as the cell functions take one.
+    let codepoint = |c: char| c_int::try_from(u32::from(c)).expect("a char is below 0x110000");
     for field in tab {
         let Some(slot) = field.slot else {
             continue;
         };
-        let narrow = field
-            .def
-            .is_some_and(|def| ptr2cells_at(def.to_bytes()) == 1);
+        let narrow = field.def.is_some_and(|def| char2cells(codepoint(def)) == 1);
         let text = if narrow { field.def } else { field.fallback };
-        // Each default is one character, packed as the screen packs it.
-        let c = text.map_or(0, |text| c_cluster_schar(text.to_bytes()).0);
-        chars.store(slot, c);
+        chars.store(slot, text.map_or(0, |c| schar_from_char(codepoint(c))));
     }
 }
 
