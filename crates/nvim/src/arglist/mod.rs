@@ -182,6 +182,16 @@ pub(crate) fn arg_names(id: ArgListId) -> Vec<XString> {
     .unwrap_or_default()
 }
 
+/// Run `f` over the name every entry of list `id` shows, in order, inside
+/// the registry's borrow: `f` must not run user code or reach a list.
+pub(crate) fn with_arg_names(id: ArgListId, mut f: impl FnMut(&CStr)) {
+    with_list(id, |al| {
+        for entry in &al.entries {
+            with_entry_name(entry, &mut f);
+        }
+    });
+}
+
 /// `curwin->w_arg_idx`: which argument the current window is on. It is not
 /// an index into anything in particular — it can point past the end after a
 /// deletion, which is what [`check_arg_idx`] exists to notice.
@@ -398,9 +408,9 @@ pub(crate) fn expand_arglist(text: &[u8], wildignore: bool) -> Result<Vec<XStrin
         .or(ExpandFlags::NOTWILD);
     let args = split_arglist(text, true);
     if wildignore {
-        expand_wildcards_of(&args, EXPAND)
+        expand_wildcards_of(args, EXPAND)
     } else {
-        gen_expand_wildcards_of(&args, EXPAND)
+        gen_expand_wildcards_of(args, EXPAND)
     }
 }
 
@@ -527,7 +537,7 @@ fn do_arglist(arg: &[u8], op: ArgListOp, after: c_int, will_edit: bool) -> bool 
     if op == ArgListOp::Delete {
         arglist_del_files(&new_args);
     } else {
-        let files = match expand_wildcards_of(&new_args, ANY_NAME) {
+        let files = match expand_wildcards_of(new_args, ANY_NAME) {
             Ok(files) if !files.is_empty() => files,
             _ => {
                 crate::semsg!("E479: No match");

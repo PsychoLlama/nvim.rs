@@ -24,7 +24,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::arglist::state::ARG_HAD_LAST;
-use crate::arglist::{alist_count, arg_name, arg_names};
+use crate::arglist::{alist_count, arg_name, with_arg_names};
 use crate::buffer::state::{
     BLN_LISTED, SEA_DIALOG, SEA_NONE, SEA_QUIT, swap_exists_action, swap_exists_did_quit,
 };
@@ -90,11 +90,12 @@ pub(crate) fn set_argf_var() {
     let mut full = [0 as c_char; MAXPATHL as usize];
     let held = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
     let list = held.as_ptr();
-    for fname in arg_names(ArgListId::GLOBAL) {
+    // Inside the list's borrow: resolving a name runs no user code.
+    with_arg_names(ArgListId::GLOBAL, |fname| {
         let fname = fname.as_ptr();
         let _ = unsafe { vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false) };
         unsafe { (*list).push_str(cstr::at_opt(full.as_ptr())) };
-    }
+    });
     list_set_lock(unsafe { list.as_mut() }, VarLock::Fixed);
     set_vim_var_list(Vv::Argf, Some(held));
 }

@@ -58,11 +58,7 @@ fn arglist_as_rettv(alist: Option<ArgListId>, result: &mut TypVal) {
     let len = alist.map_or(0, alist_count);
     let list = tv_list_alloc_ret(result, ptrdiff_t::try_from(len).unwrap_or(0));
     if let Some(alist) = alist {
-        with_list(alist, |al| {
-            for entry in &al.entries {
-                with_entry_name(entry, |name| list.push_str(Some(name)));
-            }
-        });
+        with_arg_names(alist, |name| list.push_str(Some(name)));
     }
 }
 
