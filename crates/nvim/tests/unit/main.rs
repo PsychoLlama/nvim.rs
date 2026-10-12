@@ -38,6 +38,7 @@ mod fpconv;
 mod fs;
 mod fuzzy;
 mod garray;
+mod getchar_oracle;
 mod hashtab;
 mod help;
 mod help_oracle;
