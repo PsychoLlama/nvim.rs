@@ -379,9 +379,11 @@ pub(crate) fn bare_buffer() -> Buf {
     register_buffer(HANDLE, owned)
 }
 
-/// Give back what [`bare_buffer`] made.
+/// Give back what [`bare_buffer`] made, with the option values a case gave
+/// it: the buffer is freed as a block, which drops none of its fields.
 #[cfg(test)]
 pub(crate) fn free_bare_buffer(buffer: Buf) {
+    free_buf_options(buffer, true);
     drop(crate::winlayer::forget_buffer(buffer.handle));
 }
 

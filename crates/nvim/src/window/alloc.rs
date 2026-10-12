@@ -87,9 +87,12 @@ pub(crate) fn bare_window() -> Win {
     win
 }
 
-/// Give back what [`bare_window`] made.
+/// Give back what [`bare_window`] made, with the option values a case gave
+/// it: the window is freed as a block, which drops none of its fields.
 #[cfg(test)]
-pub(crate) fn free_bare_window(win: Win) {
+pub(crate) fn free_bare_window(mut win: Win) {
+    clear_winopt(&mut win.w_onebuf_opt);
+    clear_winopt(&mut win.w_allbuf_opt);
     forget_window(win.handle());
     free(win.raw());
 }

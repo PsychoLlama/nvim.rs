@@ -315,6 +315,11 @@ fn the_parse_reports_what_it_refuses() {
             "E518: Unknown option: nosuch ",
         ),
     ] {
+        // `:set path!` shows the value, folding `$HOME` through libuv: not
+        // under Miri.
+        if cfg!(miri) && cmd == "set path!" {
+            continue;
+        }
         fx.check_error(cmd, want);
     }
     fx.check("&shiftwidth", "4");
