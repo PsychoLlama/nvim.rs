@@ -1,7 +1,7 @@
 //! Menu names as text -- parsing a path, matching one, and the mode
 //! letters.
 //!
-//! [`skip_component`] steps over one `\`-escaped path component;
+//! [`take_component`] takes one `\`-escaped path component apart;
 //! [`name_equal`] compares a component against a node, ignoring the `&`
 //! mnemonic marker and everything past a TAB. [`cmd_modes`] maps
 //! the command name (`nmenu`, `vnoremenu`, `amenu!`, ...) onto the mode
@@ -27,6 +27,7 @@ use std::ffi::CString;
 use super::*;
 use crate::cstr;
 use crate::keycodes::Ctrl_V;
+use crate::mbyte::cluster_len;
 
 /// The accelerator separator inside a menu name. `\t` in a `:menu` argument
 /// is a backslash escaping the letter `t`; only a literal `<Tab>`, which
@@ -40,46 +41,46 @@ fn at(bytes: &[u8], i: usize) -> u8 {
     bytes.get(i).copied().unwrap_or(0)
 }
 
-/// Consume one `.`-separated component of `name`, in place, and answer where
-/// the next one starts.
+/// One `.`-separated component of `name`, with its own `\\` and `^V`
+/// escapes taken out, and the rest of the path after the `.` that ends it.
 ///
-/// The component's own `\` and `^V` escapes are squeezed out and the `.`
-/// that ends it becomes a NUL, so `name` is left naming just the component
-/// and the answer names the rest. An escape squeezed at the very end stops
-/// the walk, leaving the answer on the terminator.
-pub(crate) fn skip_component(name: CText) -> CText {
+/// The escaped character is taken whole, so an escaped `.` does not end the
+/// component; an escape at the very end is dropped, leaving the rest empty.
+pub(crate) fn take_component(name: &[u8]) -> (Vec<u8>, &[u8]) {
+    let mut component = Vec::with_capacity(name.len());
     let mut i = 0;
-    while name.byte(i) != 0 && name.byte(i) != b'.' {
-        if name.byte(i) == b'\\' || c_int::from(name.byte(i)) == Ctrl_V {
-            name.squeeze(i, 1);
-            if name.byte(i) == 0 {
+    while i < name.len() && name[i] != b'.' {
+        if name[i] == b'\\' || c_int::from(name[i]) == Ctrl_V {
+            i += 1;
+            if i == name.len() {
                 break;
             }
         }
-        // The escaped character is stepped over whole, so an escaped `.`
-        // does not end the component.
-        i += name.char_len(i);
+        let len = cluster_len(&name[i..]);
+        component.extend_from_slice(&name[i..i + len]);
+        i += len;
     }
-    if name.byte(i) != 0 {
-        name.set(i, 0);
-        i += 1;
+    if i < name.len() {
+        i += 1; // the `.`
     }
-    name.at(i)
+    (component, &name[i..])
 }
 
 /// Whether `name` names `menu`, compared four ways: the raw name and the
 /// display name, each in the menu's own language and -- for a node
 /// `:menutranslate` renamed -- in English.
-pub(crate) fn name_equal(name: &CStr, menu: Menu) -> bool {
-    let name = name.to_bytes();
-    if let Some(en_name) = menu.en_name() {
+pub(crate) fn name_equal(name: &[u8], menu: &VimMenu) -> bool {
+    if let Some(en_name) = &menu.en_name {
         // `add_menu_path` sets the two English names together.
-        let en_dname = menu.en_dname().expect("en_dname accompanies en_name");
-        if namecmp(name, en_name.to_bytes()) || namecmp(name, en_dname.to_bytes()) {
+        let en_dname = menu
+            .en_dname
+            .as_ref()
+            .expect("en_dname accompanies en_name");
+        if namecmp(name, en_name.as_bytes()) || namecmp(name, en_dname.as_bytes()) {
             return true;
         }
     }
-    namecmp(name, menu.name().to_bytes()) || namecmp(name, menu.dname().to_bytes())
+    namecmp(name, menu.name.as_bytes()) || namecmp(name, menu.dname.as_bytes())
 }
 
 /// Whether two names agree up to the end of either -- where "the end" is the
@@ -161,15 +162,15 @@ pub(crate) fn menu_mode_str(modes: c_int) -> &'static CStr {
 ///
 /// Only reached for a name [`is_popup`] accepted, so the first five bytes
 /// are there to split after.
-pub(crate) fn popup_mode_name(name: &CStr, idx: c_int) -> CString {
-    let (head, tail) = name.to_bytes().split_at(5);
+pub(crate) fn popup_mode_name(name: &[u8], idx: c_int) -> Vec<u8> {
+    let (head, tail) = name.split_at(5);
     let idx = usize::try_from(idx).expect("a menu mode index is never negative");
     let mode = MODE_CHARS[idx].to_bytes();
     let mut out = Vec::with_capacity(head.len() + mode.len() + tail.len());
     out.extend_from_slice(head);
     out.extend_from_slice(mode);
     out.extend_from_slice(tail);
-    CString::new(out).expect("a menu name holds no interior NUL")
+    out
 }
 
 /// A menu name taken apart: what is displayed, the `&` mnemonic, and the
@@ -187,8 +188,8 @@ pub(crate) struct MenuText {
 /// what is left, each `&` is dropped and the character behind it taken
 /// whole, so `&&` reduces to one `&` and contributes no mnemonic; a
 /// trailing `&` is kept as text. The *last* mnemonic wins.
-pub(crate) fn menu_text(name: &CStr) -> MenuText {
-    let bytes = name.to_bytes();
+pub(crate) fn menu_text(name: &[u8]) -> MenuText {
+    let bytes = name;
     let (head, actext) = match bytes.iter().position(|&b| b == TAB) {
         Some(tab) => (&bytes[..tab], Some(cstr::owned(&bytes[tab + 1..]))),
         None => (bytes, None),

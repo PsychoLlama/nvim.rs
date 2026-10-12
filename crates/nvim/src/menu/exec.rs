@@ -9,8 +9,7 @@
 //!
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,19 +19,17 @@
 )]
 
 use crate::guard::Depth;
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_SEL;
 use crate::tr;
-use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::rc::Rc;
 
 use super::*;
-use crate::ascii::ascii_iswhite;
 use crate::cursor::{check_cursor, gchar_cursor};
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state};
-use crate::getchar::ins_typebuf;
+use crate::getchar::ins_typebuf_text;
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
 use crate::pos::MAXCOL;
 use crate::runtime::state::current_sctx;
@@ -41,36 +38,21 @@ use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_re
 use crate::types::{Buffer, ColNr, ExArg, LineNr, Pos, SaveState};
 use crate::winlayer::Win;
 
-/// The `:emenu` range, when there was one: `eap != NULL` and `addr_count`.
-type Range = Option<(LineNr, LineNr)>;
+/// The `:emenu` range, when there was one: `addr_count` and the two lines.
+pub(crate) type Range = Option<(LineNr, LineNr)>;
 
-/// Run `menu`'s right-hand side. Used by `:emenu`, `:popup` and the window
-/// toolbar.
-///
-/// `mode_idx` names a `MENU_INDEX_*` value, or [`MENU_INDEX_INVALID`] to use
-/// whichever mode the editor is in.
-///
-/// # Safety
-/// `menu` must name a live node; `eap` must be null (the window toolbar) or
-/// name a live `ExArg`.
-pub(crate) unsafe fn execute_menu(excmd: &ExArg, menu: *mut VimMenu, mode_idx: c_int) {
-    // SAFETY: the caller's obligation. The range is copied out rather than
-    // borrowed, because running the rhs re-enters the editor.
-    let (menu, from_command, range) = unsafe {
-        let menu = Menu::new(menu);
-        match Some(excmd) {
-            None => (menu, false, None),
-            Some(eap) => (
-                menu,
-                true,
-                (eap.addr_count != 0).then_some((eap.line1, eap.line2)),
-            ),
-        }
-    };
-    run_menu(menu, mode_idx, from_command, range);
+/// The range `excmd` gave, if any.
+pub(crate) fn range_of(excmd: &ExArg) -> Range {
+    (excmd.addr_count != 0).then_some((excmd.line1, excmd.line2))
 }
 
-fn run_menu(menu: Menu, mode_idx: c_int, from_command: bool, range: Range) {
+/// Run the right-hand side of the menu item `menu`. Used by `:emenu` and
+/// `:popup`.
+///
+/// `mode_idx` names a `MENU_INDEX_*` value, or [`MENU_INDEX_INVALID`] to use
+/// whichever mode the editor is in. Nothing happens when the item has been
+/// deleted in the meantime.
+pub(crate) fn execute_menu(range: Range, menu: MenuId, mode_idx: c_int) {
     let mut idx = mode_idx;
     if idx < 0 {
         idx = if State.get() & MODE_TERMINAL != 0 {
@@ -93,31 +75,37 @@ fn run_menu(menu: Menu, mode_idx: c_int, from_command: bool, range: Range) {
             MENU_INDEX_INVALID
         };
     }
-    if idx == MENU_INDEX_INVALID || !from_command {
+    if idx == MENU_INDEX_INVALID {
         idx = MENU_INDEX_NORMAL;
     }
     let bit = usize::try_from(idx).expect("a menu mode index is never negative");
 
-    if !menu.strings[bit].is_null() && menu.modes & (1 << idx) != 0 {
-        if !from_command || script_id() != 0 {
-            // Executing a script or a function, or the window toolbar: run
-            // the commands right now.
-            run_now(menu, bit);
+    // A copy of what is run: the keys may redefine or delete the menu.
+    let rhs = with_menu(menu, |node| {
+        let rhs = node.strings[bit]
+            .clone()
+            .filter(|_| node.modes & (1 << idx) != 0)?;
+        Some((rhs, node.noremap[bit], node.silent[bit]))
+    })
+    .flatten();
+    if let Some((rhs, noremap, silent)) = rhs {
+        if script_id() != 0 {
+            // Executing a script or a function: run the commands right now.
+            run_now(&rhs, noremap, silent);
         } else {
-            feed_typeahead(menu, bit);
+            feed_typeahead(&rhs, noremap, silent);
         }
-    } else if from_command {
+    } else {
         let mode = match idx {
-            MENU_INDEX_VISUAL => c"Visual",
-            MENU_INDEX_SELECT => c"Select",
-            MENU_INDEX_OP_PENDING => c"Op-pending",
-            MENU_INDEX_TERMINAL => c"Terminal",
-            MENU_INDEX_INSERT => c"Insert",
-            MENU_INDEX_CMDLINE => c"Cmdline",
+            MENU_INDEX_VISUAL => "Visual",
+            MENU_INDEX_SELECT => "Select",
+            MENU_INDEX_OP_PENDING => "Op-pending",
+            MENU_INDEX_TERMINAL => "Terminal",
+            MENU_INDEX_INSERT => "Insert",
+            MENU_INDEX_CMDLINE => "Cmdline",
             // MENU_INDEX_TIP cannot happen.
-            _ => c"Normal",
+            _ => "Normal",
         };
-        let mode = mode.to_string_lossy();
         semsg_name(tr!("E335: Menu not defined for {mode} mode"));
     }
 }
@@ -163,84 +151,60 @@ fn select_range(line1: LineNr, line2: LineNr) {
 }
 
 /// Run the rhs immediately, inside a saved editor state.
-fn run_now(menu: Menu, bit: usize) {
+fn run_now(rhs: &Rc<CStr>, noremap: c_int, silent: bool) {
     let mut state = SaveState::default();
     let _busy = Depth::of(ex_normal_busy);
     if save_current_state(&mut state) {
-        // A copy: the keys may redefine or delete the menu.
-        // SAFETY: the rhs is a NUL-terminated string the node owns.
-        let rhs = unsafe { CStr::from_ptr(menu.strings[bit]) }.to_owned();
-        exec_normal_cmd(&rhs, menu.noremap[bit], menu.silent[bit]);
+        exec_normal_cmd(rhs, noremap, silent);
     }
     restore_current_state(&mut state);
 }
 
 /// Put the rhs into the typeahead, as if the user had typed it.
-fn feed_typeahead(menu: Menu, bit: usize) {
-    // SAFETY: the rhs is NUL-terminated and `ins_typebuf` copies it.
-    let _ = unsafe {
-        ins_typebuf(
-            menu.strings[bit],
-            menu.noremap[bit],
-            0,
-            true,
-            menu.silent[bit],
-        )
-    };
+fn feed_typeahead(rhs: &Rc<CStr>, noremap: c_int, silent: bool) {
+    let _ = ins_typebuf_text(rhs, noremap, true, silent);
 }
 
-/// Find the node `path_name` names, which must be a menu *item*.
-fn menu_getbyname(path_name: &CStr) -> Option<Menu> {
-    let mut buf = scratch(path_name);
-    let mut name = text_of(&mut buf);
-    let mut menu = root_first();
-    let mut reported = false;
+/// Why [`menu_getbyname`] found nothing: what it reports first, and whether
+/// it goes on to say the path was not found.
+type NotFound = (Option<&'static CStr>, bool);
 
-    while !name.is_empty() {
-        let rest = skip_component(name);
-        let mut matched = None;
-        for node in menu.into_iter().flat_map(Menu::siblings) {
-            if !name_equal(name.as_cstr(), node) {
-                continue;
-            }
-            if rest.is_empty() && node.children().is_some() {
-                emsg_c(c"E333: Menu path must lead to a menu item");
-                reported = true;
-            } else if !rest.is_empty() && node.children().is_none() {
-                emsg_c(E_NOTSUBMENU);
-            } else {
-                matched = Some(node);
-            }
-            break;
-        }
-        menu = matched;
-        let Some(node) = matched.filter(|_| !rest.is_empty()) else {
-            break;
+/// The item `path` names, which must be a menu *item*. An empty path names
+/// the first top-level menu, as upstream's walk never starts.
+fn menu_getbyname(tree: &[VimMenu], path: &[u8]) -> Result<MenuId, NotFound> {
+    let mut list = tree;
+    let mut name = path;
+    if name.is_empty() {
+        return tree.first().map(|node| node.id).ok_or((None, true));
+    }
+    loop {
+        let (component, rest) = take_component(name);
+        let Some(node) = list.iter().find(|node| name_equal(&component, node)) else {
+            return Err((None, true));
         };
-        menu = node.children();
+        if rest.is_empty() && !node.children.is_empty() {
+            return Err((Some(c"E333: Menu path must lead to a menu item"), false));
+        }
+        if !rest.is_empty() && node.children.is_empty() {
+            return Err((Some(E_NOTSUBMENU), true));
+        }
+        if rest.is_empty() {
+            return Ok(node.id);
+        }
+        list = &node.children;
         name = rest;
     }
-
-    if menu.is_none() && !reported {
-        let path = msg_cstr(path_name);
-        semsg_name(tr!("E334: Menu not found: {path}"));
-    }
-    menu
 }
 
 /// `:emenu` -- find the menu a descriptor like `File.New` names and run it.
 pub(crate) fn ex_emenu(excmd: &mut ExArg) {
-    // SAFETY: the caller's obligation; `arg` names the command line.
-    let mut text = excmd.line.arg_copy();
-    // SAFETY: a NUL-terminated copy of the argument, alive to the end of
-    // the command.
-    let arg = unsafe { CText::new(text.as_mut_ptr().cast()) };
+    let text = excmd.line.arg().to_vec();
+    let mut arg = &text[..];
 
     // An optional leading mode letter, e.g. ":emenu i File.New".
     let mut mode_idx = MENU_INDEX_INVALID;
-    let mut arg = arg;
-    if arg.byte(0) != 0 && ascii_iswhite(c_int::from(arg.byte(1))) {
-        mode_idx = match arg.byte(0) {
+    if !arg.is_empty() && ascii_iswhite(c_int::from(crate::cstr::byte_at(arg, 1))) {
+        mode_idx = match arg[0] {
             b'n' => MENU_INDEX_NORMAL,
             b'v' => MENU_INDEX_VISUAL,
             b's' => MENU_INDEX_SELECT,
@@ -249,75 +213,75 @@ pub(crate) fn ex_emenu(excmd: &mut ExArg) {
             b'i' => MENU_INDEX_INSERT,
             b'c' => MENU_INDEX_CMDLINE,
             _ => {
-                let arg = msg_cstr(arg.as_cstr());
+                let arg = msg_bytes(arg);
                 semsg_name(tr!("E475: Invalid argument: {arg}"));
                 return;
             }
         };
-        arg = skip_white(arg.at(2));
+        arg = skip_white(&arg[2..]);
     }
 
-    let Some(menu) = menu_getbyname(arg.as_cstr()) else {
-        return;
-    };
-    // SAFETY: a live node, and the command's own `ExArg`.
-    unsafe { execute_menu(excmd, menu.raw(), mode_idx) };
+    match with_tree(|tree| menu_getbyname(tree, arg)) {
+        Ok(menu) => execute_menu(range_of(excmd), menu, mode_idx),
+        Err((first, not_found)) => {
+            if let Some(msg) = first {
+                emsg_c(msg);
+            }
+            if not_found {
+                let path = msg_bytes(arg);
+                semsg_name(tr!("E334: Menu not found: {path}"));
+            }
+        }
+    }
 }
 
-/// Find the sub-menu `path_name` names -- what `:popup` and the window
-/// toolbar want, as opposed to [`menu_getbyname`]'s item.
-///
-/// # Safety
-/// `path_name` must name a NUL-terminated string.
-pub(crate) unsafe fn menu_find(path_name: *const c_char) -> *mut VimMenu {
-    // SAFETY: the caller's obligation.
-    let path = unsafe { CStr::from_ptr(path_name) };
-    let mut buf = scratch(path);
-    let mut name = text_of(&mut buf);
-    let mut menu = root_first();
-
-    while !name.is_empty() {
-        let rest = skip_component(name);
-        let mut matched = None;
-        for node in menu.into_iter().flat_map(Menu::siblings) {
-            if !name_equal(name.as_cstr(), node) {
-                continue;
-            }
-            if node.children().is_none() {
+/// Find the sub-menu `path` names -- what `:popup` wants, as opposed to
+/// [`menu_getbyname`]'s item -- reporting why there is none.
+pub(crate) fn menu_find(path: &CStr) -> Option<MenuId> {
+    let found = with_tree(|tree| {
+        let mut list = tree;
+        let mut name = path.to_bytes();
+        if name.is_empty() {
+            // Upstream's walk never starts: the first top-level menu.
+            return tree.first().map(|node| Ok(node.id));
+        }
+        while !name.is_empty() {
+            let (component, rest) = take_component(name);
+            let node = list.iter().find(|node| name_equal(&component, node))?;
+            if node.children.is_empty() {
                 // A menu item where a sub-menu was wanted.
-                emsg_c(if rest.is_empty() {
+                return Some(Err(if rest.is_empty() {
                     c"E336: Menu path must lead to a sub-menu"
                 } else {
                     E_NOTSUBMENU
-                });
-                return ptr::null_mut();
+                }));
             }
             if rest.is_empty() {
-                return node.raw();
+                return Some(Ok(node.id));
             }
-            matched = Some(node);
-            break;
+            list = &node.children;
+            name = rest;
         }
-        let Some(node) = matched else {
-            menu = None;
-            break;
-        };
-        menu = node.children();
-        name = rest;
+        None
+    });
+    match found {
+        Some(Ok(menu)) => Some(menu),
+        Some(Err(msg)) => {
+            emsg_c(msg);
+            None
+        }
+        None => {
+            emsg_c(c"E337: Menu not found - check menu names");
+            None
+        }
     }
-
-    if menu.is_none() {
-        emsg_c(c"E337: Menu not found - check menu names");
-    }
-    menu.map_or(ptr::null_mut(), Menu::raw)
 }
 
 // The editor state this module reads and writes. Each hands out a reference
 // for exactly one statement, so none can span the rhs being run.
 
 fn with_curbuf<R>(f: impl FnOnce(&Buffer) -> R) -> R {
-    // SAFETY: `curbuf` always names a live buffer on the main thread.
-    unsafe { f(&*Buf::current_raw()) }
+    f(&Buf::current())
 }
 
 /// The script id of whatever is running, 0 for the user's own typing.
@@ -334,7 +298,6 @@ fn check_cursor_now() {
 }
 
 fn char_at_cursor() -> c_int {
-    // SAFETY: reads the current line at the cursor, which is in bounds.
     gchar_cursor()
 }
 

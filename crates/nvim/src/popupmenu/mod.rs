@@ -62,10 +62,10 @@ use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    AlignTextPos, Array, BufferHandle, Dict, ExArg, Float, Handle, Hlf, Integer, LPos, LineNr,
-    Object, OptInt, OptVal, PumItem, ScreenAttr, ScreenChar, String_0, VarNumber, VimMenu,
-    VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle, kBoolVarFalse,
-    kBoolVarTrue, size_t, uint32_t,
+    AlignTextPos, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LPos, LineNr, Object,
+    OptInt, OptVal, PumItem, ScreenAttr, ScreenChar, String_0, VarNumber, VimMenu, VirtText,
+    VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle, kBoolVarFalse, kBoolVarTrue,
+    size_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

@@ -10,23 +10,23 @@
 //!
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::memory::ThinCString;
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::msg_bytes;
 use crate::tr;
-use core::ffi::{CStr, c_int};
-use core::ptr;
+use core::ffi::c_int;
+use std::ffi::CString;
+use std::rc::Rc;
 
 use super::*;
-use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::charset::getdigits_int;
+use crate::ascii::ascii_isdigit;
+use crate::charset::getdigits_int_at;
+use crate::cstr;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_G, Ctrl_O, replace_termcodes};
-use crate::memory::xcalloc;
+use crate::mbyte::cluster_len;
 use crate::menu::sys_menu;
 use crate::option::vars::p_cpo;
-use crate::types::{ExArg, VimMenu};
+use crate::types::ExArg;
 use crate::ui::ui_call_update_menu;
 
 /// The default priority: what an unnumbered component gets, and what a
@@ -55,34 +55,33 @@ struct MenuArg {
 /// `:menu` and its forty-odd relatives -- every mode prefix, `:noremenu`,
 /// `:unmenu` and `:menu enable`/`disable`.
 pub(crate) fn ex_menu(excmd: &mut ExArg) {
-    // The command name is read before the argument pointer is taken: each
-    // pointer accessor reborrows the whole line mutably, so a command-name
-    // pointer taken first would be retired by the argument's (Miri).
     let forceit = excmd.forceit;
     let (modes, noremap, unmenu) = cmd_modes(excmd.line.cmd(), forceit);
     let ranged = (excmd.addr_count != 0 && excmd.line2 != 0).then_some(excmd.line2 as c_int);
-    // SAFETY: the caller's obligation. `arg` names the command line, which
-    // `ex_docmd` lets a command edit.
-    let mut text = excmd.line.arg_copy();
-    // SAFETY: a NUL-terminated copy of the argument, alive to the end of
-    // the command.
-    let arg = unsafe { CText::new(text.as_mut_ptr().cast()) };
-    do_menu(arg, modes, noremap, unmenu, ranged);
+    // A copy: the listing can stop at a `--More--` prompt.
+    let text = excmd.line.arg().to_vec();
+    do_menu(&text, modes, noremap, unmenu, ranged);
+}
+
+/// The byte at `i`, or a NUL past the end.
+fn at(bytes: &[u8], i: usize) -> u8 {
+    cstr::byte_at(bytes, i)
 }
 
 /// The body of [`ex_menu`], once the command name has been read.
-fn do_menu(mut arg: CText, modes: c_int, mut noremap: c_int, unmenu: bool, ranged: Option<c_int>) {
+fn do_menu(arg: &[u8], modes: c_int, mut noremap: c_int, unmenu: bool, ranged: Option<c_int>) {
+    let mut arg = arg;
     let mut silent = false;
     loop {
         if arg.starts_with(b"<script>") {
             noremap = REMAP_SCRIPT;
-            arg = skip_white(arg.at(8));
+            arg = skip_white(&arg[8..]);
         } else if arg.starts_with(b"<silent>") {
             silent = true;
-            arg = skip_white(arg.at(8));
+            arg = skip_white(&arg[8..]);
         } else if arg.starts_with(b"<special>") {
             // Obsolete, and ignored.
-            arg = skip_white(arg.at(9));
+            arg = skip_white(&arg[9..]);
         } else {
             break;
         }
@@ -92,55 +91,52 @@ fn do_menu(mut arg: CText, modes: c_int, mut noremap: c_int, unmenu: bool, range
     let pri_tab = take_priorities(&mut arg, ranged);
 
     let mut enable = Enable::Unchanged;
-    if arg.starts_with(b"enable") && white(arg.byte(6)) {
+    if arg.starts_with(b"enable") && white(at(arg, 6)) {
         enable = Enable::On;
-        arg = skip_white(arg.at(6));
-    } else if arg.starts_with(b"disable") && white(arg.byte(7)) {
+        arg = skip_white(&arg[6..]);
+    } else if arg.starts_with(b"disable") && white(at(arg, 7)) {
         enable = Enable::Off;
-        arg = skip_white(arg.at(7));
+        arg = skip_white(&arg[7..]);
     }
 
     // No argument at all: list every menu.
     if arg.is_empty() {
-        show_menus(c"", modes);
+        show_menus(b"", modes);
         return;
     }
 
-    let menu_path = arg;
-    if menu_path.byte(0) == b'.' {
-        let path = msg_cstr(menu_path.as_cstr());
+    if arg[0] == b'.' {
+        let path = msg_bytes(arg);
         semsg_name(tr!("E475: Invalid argument: {path}"));
         return;
     }
 
-    // Careful from here on: the name is NUL-terminated in place, and the
-    // three consumers below all edit it further.
-    let map_to = menu_translate_tab_and_shift(arg);
+    let (menu_path, map_to) = menu_translate_tab_and_shift(arg);
 
     if map_to.is_empty() && !unmenu && enable == Enable::Unchanged {
         // Only a menu name: display the menus with that name.
-        show_menus(menu_path.as_cstr(), modes);
+        show_menus(&menu_path, modes);
         return;
     }
     if !map_to.is_empty() && (unmenu || enable != Enable::Unchanged) {
-        let rest = msg_cstr(map_to.as_cstr());
+        let rest = msg_bytes(map_to);
         semsg_name(tr!("E488: Trailing characters: {rest}"));
         return;
     }
 
     if enable != Enable::Unchanged {
-        change_sensitivity(menu_path, modes, enable == Enable::On);
+        change_sensitivity(&menu_path, modes, enable == Enable::On);
     } else if unmenu {
         if is_menus_locked() {
             return;
         }
-        delete_menus(menu_path, modes);
+        delete_menus(&menu_path, modes);
     } else {
         if is_menus_locked() {
             return;
         }
         add_menus(
-            menu_path,
+            &menu_path,
             map_to,
             &MenuArg {
                 modes,
@@ -160,56 +156,55 @@ fn white(byte: u8) -> bool {
 
 /// Step over an optional `icon=filename` argument.
 ///
-/// It is parsed and dropped: upstream has never handed it to a UI, and the
-/// `\`-escapes are still squeezed out of the command line on the way past.
-fn skip_icon(arg: CText) -> CText {
-    if !arg.starts_with(b"icon=") {
+/// It is parsed and dropped: upstream has never handed it to a UI.
+fn skip_icon(arg: &[u8]) -> &[u8] {
+    let Some(arg) = arg.strip_prefix(b"icon=") else {
         return arg;
-    }
-    let arg = arg.at(5);
+    };
     let mut i = 0;
-    while arg.byte(i) != 0 && arg.byte(i) != b' ' {
-        if arg.byte(i) == b'\\' {
-            arg.squeeze(i, 1);
+    while i < arg.len() && arg[i] != b' ' {
+        if arg[i] == b'\\' {
+            i += 1; // upstream squeezes the backslash out
         }
-        i += arg.char_len(i);
+        i += cluster_len(&arg[i.min(arg.len())..]);
     }
-    if arg.byte(i) == 0 {
-        return arg.at(i);
+    if i >= arg.len() {
+        return &arg[arg.len()..];
     }
-    arg.set(i, 0);
-    skip_white(arg.at(i + 1))
+    skip_white(&arg[i + 1..])
 }
 
 /// Read the leading `10.20.30` priority list, if there is one, and advance
 /// `arg` past it.
 ///
 /// Every level not named takes [`PRIORITY_DEFAULT`], and so does a level
-/// written as `0` -- or as a number too large for an `int`, since
-/// [`take_digits`] answers 0 for those. A `:123menu` range counts as the
-/// first level.
-fn take_priorities(arg: &mut CText, ranged: Option<c_int>) -> [c_int; MENUDEPTH + 1] {
+/// written as `0` -- or as a number too large for an `int`, since the digits
+/// answer 0 for those. A `:123menu` range counts as the first level.
+fn take_priorities(arg: &mut &[u8], ranged: Option<c_int>) -> [c_int; MENUDEPTH + 1] {
     let mut pri_tab = [PRIORITY_DEFAULT; MENUDEPTH + 1];
     pri_tab[MENUDEPTH] = PRIORITY_END;
 
-    let mut i = 0;
-    while arg.byte(i) != 0 && (ascii_isdigit(c_int::from(arg.byte(i))) || arg.byte(i) == b'.') {
-        i += 1;
-    }
-    if white(arg.byte(i)) {
+    let digits = arg
+        .iter()
+        .take_while(|&&b| ascii_isdigit(c_int::from(b)) || b == b'.')
+        .count();
+    if white(at(arg, digits)) {
         for slot in pri_tab.iter_mut().take(MENUDEPTH) {
-            if white(arg.byte(0)) {
+            if white(at(arg, 0)) {
                 break;
             }
-            *slot = take_digits(arg);
-            if *slot == 0 {
-                *slot = PRIORITY_DEFAULT;
-            }
-            if arg.byte(0) == b'.' {
-                *arg = arg.at(1);
+            let (number, past) = getdigits_int_at(arg, 0, false, 0);
+            *arg = &arg[past..];
+            *slot = if number == 0 {
+                PRIORITY_DEFAULT
+            } else {
+                number
+            };
+            if at(arg, 0) == b'.' {
+                *arg = &arg[1..];
             }
         }
-        *arg = skip_white(*arg);
+        *arg = skip_white(arg);
     } else if let Some(line2) = ranged {
         pri_tab[0] = line2;
     }
@@ -218,114 +213,103 @@ fn take_priorities(arg: &mut CText, ranged: Option<c_int>) -> [c_int; MENUDEPTH 
 
 /// `:menu enable`/`:menu disable`. `*` means every menu, and the `PopUp`
 /// menu is flipped one mode at a time because each mode has its own copy.
-fn change_sensitivity(menu_path: CText, modes: c_int, enable: bool) {
+fn change_sensitivity(menu_path: &[u8], modes: c_int, enable: bool) {
     let menu_path = all_menus_if_star(menu_path);
-    if is_popup(menu_path.as_cstr()) {
+    if is_popup(menu_path) {
         for i in 0..MENU_INDEX_TIP {
             if modes & (1 << i) != 0 {
-                let mut buf = scratch(&popup_mode_name(menu_path.as_cstr(), i));
-                menu_enable_recurse(root_first(), text_of(&mut buf), MENU_ALL_MODES, enable);
+                let name = popup_mode_name(menu_path, i);
+                let done = with_tree_mut(|tree| {
+                    menu_enable_recurse(&mut tree.menus, &name, MENU_ALL_MODES, enable)
+                });
+                if let Err(err) = done {
+                    err.report();
+                }
             }
         }
     }
-    // Careful: menu_enable_recurse() edits menu_path.
-    menu_enable_recurse(root_first(), menu_path, modes, enable);
+    let done = with_tree_mut(|tree| menu_enable_recurse(&mut tree.menus, menu_path, modes, enable));
+    if let Err(err) = done {
+        err.report();
+    }
 }
 
-/// `:unmenu`, in the same shape as [`change_sensitivity`].
-fn delete_menus(menu_path: CText, modes: c_int) {
+/// `:unmenu`, in the same shape as [`change_sensitivity`]; the per-mode
+/// `PopUp` copies are removed silently.
+fn delete_menus(menu_path: &[u8], modes: c_int) {
     let menu_path = all_menus_if_star(menu_path);
-    if is_popup(menu_path.as_cstr()) {
+    if is_popup(menu_path) {
         for i in 0..MENU_INDEX_TIP {
             if modes & (1 << i) != 0 {
-                let mut buf = scratch(&popup_mode_name(menu_path.as_cstr(), i));
-                remove_menu(root_link(), text_of(&mut buf), MENU_ALL_MODES, true);
+                let name = popup_mode_name(menu_path, i);
+                let _ = with_tree_mut(|tree| remove_menu(&mut tree.menus, &name, MENU_ALL_MODES));
             }
         }
     }
-    // Careful: remove_menu() edits menu_path.
-    remove_menu(root_link(), menu_path, modes, false);
+    if let Err(err) = with_tree_mut(|tree| remove_menu(&mut tree.menus, menu_path, modes)) {
+        err.report();
+    }
 }
 
 /// `*` as a menu path means all of them, which the walkers spell as the
-/// empty name. Truncating in place is exactly C's `menu_path = ""`.
-fn all_menus_if_star(menu_path: CText) -> CText {
-    if menu_path.as_cstr() == c"*" {
-        menu_path.set(0, 0);
-    }
-    menu_path
+/// empty name.
+fn all_menus_if_star(menu_path: &[u8]) -> &[u8] {
+    if menu_path == b"*" { b"" } else { menu_path }
 }
 
 /// `:menu path rhs`, and the per-mode `PopUp` copies of it.
-fn add_menus(menu_path: CText, map_to: CText, arg: &MenuArg, pri_tab: &[c_int; MENUDEPTH + 1]) {
+fn add_menus(menu_path: &[u8], map_to: &[u8], arg: &MenuArg, pri_tab: &[c_int; MENUDEPTH + 1]) {
     // Replace special key codes, unless this is a tooltip (plain text) or
     // "<Nop>" (which means nothing at all).
     let translated;
-    let rhs = if map_to.bytes().eq_ignore_ascii_case(b"<nop>") {
-        c""
+    let rhs = if map_to.eq_ignore_ascii_case(b"<nop>") {
+        &b""[..]
     } else if arg.modes & MENU_TIP_MODE != 0 {
-        map_to.as_cstr()
+        map_to
     } else {
-        translated = translate_termcodes(map_to.as_cstr());
-        translated.as_cstr()
+        translated = translate_termcodes(map_to);
+        &translated
     };
 
-    add_menu_path(menu_path.as_cstr(), arg, pri_tab, Some(rhs));
-    if is_popup(menu_path.as_cstr()) {
+    add_menu_path(menu_path, arg, pri_tab, Some(rhs));
+    if is_popup(menu_path) {
         for i in 0..MENU_INDEX_TIP {
             if arg.modes & (1 << i) != 0 {
                 // All the modes, so that ":amenu" works.
-                let name = popup_mode_name(menu_path.as_cstr(), i);
+                let name = popup_mode_name(menu_path, i);
                 add_menu_path(&name, arg, pri_tab, Some(rhs));
             }
         }
     }
 }
 
-/// `replace_termcodes()`: `<C-x>` and its kind become the keys they name.
-fn translate_termcodes(rhs: &CStr) -> ThinCString {
-    let translated =
-        p_cpo(|cpo| replace_termcodes(rhs.to_bytes(), 0, REPTERM_DO_LT, None, cpo, None));
-    ThinCString::from_vec(translated.unwrap_or_default())
+/// `replace_termcodes()`: `<C-x>` and its kind become the keys they name, up
+/// to the first NUL a C reader would stop at.
+fn translate_termcodes(rhs: &[u8]) -> Vec<u8> {
+    let mut translated =
+        p_cpo(|cpo| replace_termcodes(rhs, 0, REPTERM_DO_LT, None, cpo, None)).unwrap_or_default();
+    let end = translated
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(translated.len());
+    translated.truncate(end);
+    translated
 }
 
-/// `getdigits_int(&p, false, 0)`: the number `p` starts with, advancing `p`
-/// past it. A value too big for an `int` answers 0, which the caller turns
-/// into [`PRIORITY_DEFAULT`] -- which is why this is not a plain parse.
-fn take_digits(p: &mut CText) -> c_int {
-    let mut raw = p.raw();
-    // SAFETY: `raw` names a live NUL-terminated buffer and `getdigits_int`
-    // only advances it over that string's own digits.
-    let digits = unsafe { getdigits_int(&raw mut raw, false, 0) };
-    // SAFETY: still inside the same buffer.
-    *p = unsafe { CText::new(raw) };
-    digits
-}
-
-/// A fresh zeroed node, as C's `xcalloc(1, sizeof(VimMenu))` gives it.
-/// The caller fills `name` and `dname` before the node is linked in, which
-/// is what completes [`Menu`]'s invariant.
-fn alloc_node() -> Menu {
-    // SAFETY: `xcalloc` never answers null and zeroes the whole struct.
-    unsafe { Menu::new(xcalloc(1, size_of::<VimMenu>()) as *mut VimMenu) }
-}
-
-/// Store `rhs` for every mode in `modes`, freeing whatever was there.
+/// Store `rhs` for every mode in `modes`, replacing whatever was there.
 ///
-/// The one copy of the rhs is shared by every mode that takes it verbatim --
-/// `free_menu_string` counts the sharers before freeing, which is what makes
-/// that safe -- while the modes an `:amenu` has to prefix get one buffer
-/// each.
-fn set_rhs(mut menu: Menu, modes: c_int, arg: &MenuArg, amenu: bool, call_data: Option<&CStr>) {
-    let shared = call_data.map_or(ptr::null_mut(), dup);
+/// The one copy of the rhs is shared by every mode that takes it verbatim,
+/// while the modes an `:amenu` has to prefix get one string each.
+fn set_rhs(menu: &mut VimMenu, modes: c_int, arg: &MenuArg, amenu: bool, call_data: Option<&[u8]>) {
+    let owned = |bytes: &[u8]| Rc::<CStr>::from(CString::new(bytes).expect("an rhs holds no NUL"));
+    let shared = call_data.map(owned);
     for i in 0..MENU_MODES {
         if modes & (1 << i) == 0 {
             continue;
         }
-        free_menu_string(menu, i);
         // ":amenu" inserts the keys that get from the mode it is invoked in
         // back to Normal mode, and back again afterwards. Not for "<Nop>".
-        let prefix = match call_data.map(CStr::to_bytes) {
+        let prefix = match call_data {
             Some(rhs) if amenu && !rhs.is_empty() => match 1 << i {
                 MENU_VISUAL_MODE | MENU_SELECT_MODE | MENU_OP_PENDING_MODE | MENU_CMDLINE_MODE => {
                     Some(vec![Ctrl_C as u8])
@@ -335,21 +319,26 @@ fn set_rhs(mut menu: Menu, modes: c_int, arg: &MenuArg, amenu: bool, call_data: 
             },
             _ => None,
         };
-        menu.strings[i] = match prefix {
-            None => shared,
-            Some(mut buf) => {
+        menu.strings[i] = match (prefix, call_data) {
+            (Some(mut buf), Some(rhs)) => {
                 let restore = buf[0] == Ctrl_C as u8;
-                buf.extend_from_slice(call_data.expect("prefixed only with an rhs").to_bytes());
+                buf.extend_from_slice(rhs);
                 if restore {
                     // CTRL-C left Visual mode; CTRL-\ CTRL-G returns to it.
                     buf.extend_from_slice(&[Ctrl_BSL as u8, Ctrl_G as u8]);
                 }
-                dup_bytes(&buf)
+                Some(owned(&buf))
             }
+            _ => shared.clone(),
         };
         menu.noremap[i] = arg.noremap;
         menu.silent[i] = arg.silent;
     }
+}
+
+/// The sibling list `path` (indices from the top level) leads into.
+fn list_at<'a>(tree: &'a mut Vec<VimMenu>, path: &[usize]) -> &'a mut Vec<VimMenu> {
+    path.iter().fold(tree, |list, &at| &mut list[at].children)
 }
 
 /// Add `menu_path` to the tree, creating every component that is missing,
@@ -359,16 +348,43 @@ fn set_rhs(mut menu: Menu, modes: c_int, arg: &MenuArg, amenu: bool, call_data: 
 /// last sibling whose priority is no higher, which is what makes
 /// `:menu 10.20 …` order the menubar.
 fn add_menu_path(
-    menu_path: &CStr,
+    menu_path: &[u8],
     arg: &MenuArg,
     pri_tab: &[c_int; MENUDEPTH + 1],
-    call_data: Option<&CStr>,
+    call_data: Option<&[u8]>,
 ) {
-    let mut buf = scratch(menu_path);
-    let mut name = text_of(&mut buf);
-    let mut menup = root_link();
-    let mut parent: Option<Menu> = None;
-    let mut menu: Option<Menu> = None;
+    let failed = with_tree_mut(|tree| {
+        // The nodes walked so far, as indices from the top level.
+        let mut path: Vec<usize> = Vec::new();
+        let added = add_into(tree, &mut path, menu_path, arg, pri_tab, call_data);
+        if added.is_err() {
+            unwind_empty(&mut tree.menus, &mut path);
+        }
+        added.err().flatten()
+    });
+    if let Some(err) = failed {
+        err.report();
+    }
+}
+
+/// [`add_menu_path`] inside the tree's borrow, answering why it failed --
+/// `Err(None)` for a failure the system menus keep quiet about.
+fn add_into(
+    tree: &mut MenuTree,
+    path: &mut Vec<usize>,
+    menu_path: &[u8],
+    arg: &MenuArg,
+    pri_tab: &[c_int; MENUDEPTH + 1],
+    call_data: Option<&[u8]>,
+) -> Result<(), Option<MenuError>> {
+    let quiet = |msg| {
+        if sys_menu.get() {
+            None
+        } else {
+            Some(MenuError::Msg(msg))
+        }
+    };
+    let mut name = menu_path;
     let mut pri_idx = 0;
     let mut old_modes = 0;
     let mut modes = arg.modes;
@@ -377,92 +393,89 @@ fn add_menu_path(
         // The name of this component, and the simplified name the tree is
         // also keyed by. A translation swaps the name and keeps the English
         // one alongside.
-        let next_name = skip_component(name);
-        let translated = menutrans_lookup(name);
-        let (en_name, name_now) = match translated.as_deref() {
-            Some(to) => (Some(name.as_cstr().to_owned()), to.to_owned()),
-            None => (None, name.as_cstr().to_owned()),
+        let (component, next_name) = take_component(name);
+        let (en_name, name_now) = match menutrans_lookup(&component) {
+            Some(to) => (Some(component), to.into_bytes()),
+            None => (None, component),
         };
         let text = menu_text(&name_now);
         if text.display.as_bytes().is_empty() {
             // Only a mnemonic or accelerator is not a name.
-            emsg_c(c"E792: Empty menu name");
-            return unwind_empty(parent);
+            return Err(Some(MenuError::Msg(c"E792: Empty menu name")));
         }
 
         // See if it is already there, remembering the last sibling this one
         // outranks so a new node can be spliced in after it.
-        let mut lower_pri = menup;
-        menu = None;
-        let mut cursor = menup.get();
-        while let Some(node) = cursor {
-            if name_equal(&name_now, node) || name_equal(&text.display, node) {
-                if next_name.is_empty() && node.children().is_some() {
-                    if !sys_menu.get() {
-                        emsg_c(c"E330: Menu path must not lead to a sub-menu");
-                    }
-                    return unwind_empty(parent);
+        let top = path.is_empty();
+        let id = tree.new_id();
+        let list = list_at(&mut tree.menus, path);
+        let mut insert_at = 0;
+        let mut found = None;
+        for (at, node) in list.iter().enumerate() {
+            if name_equal(&name_now, node) || name_equal(text.display.as_bytes(), node) {
+                if next_name.is_empty() && !node.children.is_empty() {
+                    return Err(quiet(c"E330: Menu path must not lead to a sub-menu"));
                 }
-                if !next_name.is_empty() && node.children().is_none() {
-                    if !sys_menu.get() {
-                        emsg_c(E_NOTSUBMENU);
-                    }
-                    return unwind_empty(parent);
+                if !next_name.is_empty() && node.children.is_empty() {
+                    return Err(quiet(E_NOTSUBMENU));
                 }
-                menu = Some(node);
+                found = Some(at);
                 break;
             }
-            menup = node.next_link();
             // Menus outside the menubar (PopUp, ToolBar) do not take part in
             // the ordering.
-            if (parent.is_some() || is_menubar(node.name())) && node.priority <= pri_tab[pri_idx] {
-                lower_pri = menup;
+            if (!top || is_menubar(node.name.as_bytes())) && node.priority <= pri_tab[pri_idx] {
+                insert_at = at + 1;
             }
-            cursor = node.next();
         }
 
-        let node = match menu {
-            Some(node) => {
+        let at = match found {
+            Some(at) => {
+                let node = &mut list[at];
                 old_modes = node.modes;
                 // Available in this mode too now, and enabled either way.
-                let mut node = node;
                 node.modes |= modes;
                 node.enabled |= modes;
-                node
+                at
             }
             None => {
-                if next_name.is_empty() && parent.is_none() {
-                    emsg_c(c"E331: Must not add menu items directly to menu bar");
-                    return unwind_empty(parent);
+                if next_name.is_empty() && top {
+                    return Err(Some(MenuError::Msg(
+                        c"E331: Must not add menu items directly to menu bar",
+                    )));
                 }
-                if is_separator(&text.display) && !next_name.is_empty() {
-                    emsg_c(c"E332: Separator cannot be part of a menu path");
-                    return unwind_empty(parent);
+                if is_separator(text.display.as_bytes()) && !next_name.is_empty() {
+                    return Err(Some(MenuError::Msg(
+                        c"E332: Separator cannot be part of a menu path",
+                    )));
                 }
 
-                let mut node = alloc_node();
-                node.modes = modes;
-                node.enabled = MENU_ALL_MODES;
-                node.name = dup(&name_now);
-                node.dname = dup(&text.display);
-                node.mnemonic = text.mnemonic.unwrap_or(0);
-                node.actext = text.actext.as_deref().map_or(ptr::null_mut(), dup);
-                if let Some(en_name) = &en_name {
-                    node.en_name = dup(en_name);
-                    node.en_dname = dup(&menu_text(en_name).display);
-                }
-                node.priority = pri_tab[pri_idx];
-                node.parent = parent.map_or(ptr::null_mut(), Menu::raw);
-                // Insert after the last sibling of no higher priority.
-                node.next = lower_pri.get().map_or(ptr::null_mut(), Menu::raw);
-                lower_pri.set(Some(node));
+                let en_dname = en_name.as_deref().map(|en| menu_text(en).display);
+                let owned = |bytes: Vec<u8>| CString::new(bytes).expect("a menu name holds no NUL");
+                list.insert(
+                    insert_at,
+                    VimMenu {
+                        id,
+                        modes,
+                        enabled: MENU_ALL_MODES,
+                        name: owned(name_now),
+                        dname: text.display,
+                        en_name: en_name.map(owned),
+                        en_dname,
+                        mnemonic: text.mnemonic.unwrap_or(0),
+                        actext: text.actext,
+                        priority: pri_tab[pri_idx],
+                        strings: Default::default(),
+                        noremap: [0; MENU_MODES],
+                        silent: [false; MENU_MODES],
+                        children: Vec::new(),
+                    },
+                );
                 old_modes = 0;
-                node
+                insert_at
             }
         };
-        menu = Some(node);
-        menup = node.children_link();
-        parent = Some(node);
+        path.push(at);
         name = next_name;
         if pri_tab[pri_idx + 1] != PRIORITY_END {
             pri_idx += 1;
@@ -477,30 +490,24 @@ fn add_menu_path(
         // Only add system menu items that have not been defined yet.
         modes &= !old_modes;
     }
-    if let Some(menu) = menu.filter(|_| modes != 0) {
+    if let Some((&last, parents)) = path.split_last()
+        && modes != 0
+    {
+        let menu = &mut list_at(&mut tree.menus, parents)[last];
         set_rhs(menu, modes, arg, amenu, call_data);
     }
+    Ok(())
 }
 
 /// Delete the empty submenus a failed [`add_menu_path`] created on its way
 /// down, innermost first.
-fn unwind_empty(mut parent: Option<Menu>) {
-    while let Some(node) = parent.filter(|node| node.children().is_none()) {
-        let mut menup = match node.parent() {
-            Some(grandparent) => grandparent.children_link(),
-            None => root_link(),
-        };
-        while let Some(sibling) = menup.get() {
-            if sibling.same(node) {
-                break;
-            }
-            menup = sibling.next_link();
-        }
-        if menup.get().is_none() {
-            // Safety check: not in the list its parent names.
+fn unwind_empty(tree: &mut Vec<VimMenu>, path: &mut Vec<usize>) {
+    while let Some((&last, parents)) = path.split_last() {
+        let list = list_at(tree, parents);
+        if !list[last].children.is_empty() {
             break;
         }
-        parent = node.parent();
-        free_menu(menup);
+        list.remove(last);
+        path.pop();
     }
 }

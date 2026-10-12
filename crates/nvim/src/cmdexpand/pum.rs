@@ -198,7 +198,7 @@ pub(crate) fn wildmenu_match_len(expand: &Expand, s: &CStr) -> c_int {
     let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
 
     // Check for menu separators - replace with '|'.
-    if emenu && is_separator(s) {
+    if emenu && is_separator(s.to_bytes()) {
         return 1;
     }
 
@@ -321,7 +321,7 @@ pub(crate) fn redraw_wildmenu(
         // Check for menu separators - replace with '|'.
         let ctx = expand.context;
         let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
-        if emenu && is_separator(s) {
+        if emenu && is_separator(s.to_bytes()) {
             let bar = transchar(c_int::from(b'|'));
             let bar = cstr::in_chars(&bar).to_bytes();
             buf.extend_from_slice(bar);

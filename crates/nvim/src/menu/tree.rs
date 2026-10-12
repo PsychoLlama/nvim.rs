@@ -10,8 +10,7 @@
 //!
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,23 +19,18 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
-use crate::tr;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_8, HLF_D};
-use crate::memory::xfree;
 use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::{
     msg_display, msg_display_keys, msg_outnum, msg_putchar, msg_str, msg_str_hl, msg_title,
 };
-use crate::message_fmt::msg_cstr;
 use crate::types::{List, VarNumber};
 
-/// Enable or disable the (sub)menus `name` reaches, recursively.
+/// Enable or disable the (sub)menus `name` reaches in `list`, recursively.
 ///
 /// An empty name -- which is what `:menu enable *` becomes -- or a `*`
 /// component means "every sibling at this level", and then the walk does not
@@ -48,31 +42,28 @@ use crate::types::{List, VarNumber};
 /// marker needs an rhs), so `:menu disable Foo` and `:menu disable *` change
 /// nothing observable. That is upstream's shape, not an omission here.
 pub(crate) fn menu_enable_recurse(
-    menu: Option<Menu>,
-    name: CText,
+    list: &mut [VimMenu],
+    name: &[u8],
     modes: c_int,
     enable: bool,
-) -> bool {
-    let Some(first) = menu else {
+) -> Result<(), MenuError> {
+    if list.is_empty() {
         // Bottom of the hierarchy.
-        return true;
-    };
-    let rest = skip_component(name);
-    let every = name.is_empty() || name.byte(0) == b'*';
+        return Ok(());
+    }
+    let (component, rest) = take_component(name);
+    let every = component.first().is_none_or(|&b| b == b'*');
 
     let mut found = false;
-    for mut node in first.siblings() {
-        if !every && !name_equal(name.as_cstr(), node) {
+    for node in list.iter_mut() {
+        if !every && !name_equal(&component, node) {
             continue;
         }
         if !rest.is_empty() {
-            let Some(children) = node.children() else {
-                emsg_c(E_NOTSUBMENU);
-                return false;
-            };
-            if !menu_enable_recurse(Some(children), rest, modes, enable) {
-                return false;
+            if node.children.is_empty() {
+                return Err(MenuError::Msg(E_NOTSUBMENU));
             }
+            menu_enable_recurse(&mut node.children, rest, modes, enable)?;
         } else if enable {
             node.enabled |= modes;
         } else {
@@ -85,354 +76,293 @@ pub(crate) fn menu_enable_recurse(
     }
 
     if !every && !found {
-        let shown = msg_cstr(name.as_cstr());
-        semsg_name(tr!("E329: No menu \"{shown}\""));
-        return false;
+        return Err(MenuError::NoMenu(component));
     }
-    true
+    Ok(())
 }
 
-/// Remove the (sub)menu `name` reaches from the modes in `modes`,
-/// recursively, and free whatever is left in no mode at all.
+/// Remove the (sub)menu `name` reaches in `list` from the modes in `modes`,
+/// recursively, and delete whatever is left in no mode at all.
 ///
 /// An empty name means "every sibling at this level"; `:unmenu *` reaches
 /// it that way.
-pub(crate) fn remove_menu(menup: Link, name: CText, modes: c_int, silent: bool) -> bool {
-    if menup.get().is_none() {
+pub(crate) fn remove_menu(
+    list: &mut Vec<VimMenu>,
+    name: &[u8],
+    modes: c_int,
+) -> Result<(), MenuError> {
+    if list.is_empty() {
         // Bottom of the hierarchy.
-        return true;
+        return Ok(());
     }
-    let rest = skip_component(name);
-    let named = !name.is_empty();
+    let (component, rest) = take_component(name);
+    let named = !component.is_empty();
 
-    let mut menup = menup;
+    let mut at = 0;
     let mut found = None;
-    while let Some(mut node) = menup.get() {
-        if named && !name_equal(name.as_cstr(), node) {
-            menup = node.next_link();
+    while at < list.len() {
+        let node = &mut list[at];
+        if named && !name_equal(&component, node) {
+            at += 1;
             continue;
         }
-        if !rest.is_empty() && node.children().is_none() {
-            if !silent {
-                emsg_c(E_NOTSUBMENU);
-            }
-            return false;
+        if !rest.is_empty() && node.children.is_empty() {
+            return Err(MenuError::Msg(E_NOTSUBMENU));
         }
-        if node.in_modes(modes) {
-            if !remove_menu(node.children_link(), rest, modes, silent) {
-                return false;
-            }
+        if node.modes & modes != 0 {
+            remove_menu(&mut node.children, rest, modes)?;
         } else if named {
-            if !silent {
-                emsg_shared(e_menu_only_exists_in_another_mode);
-            }
-            return false;
+            return Err(MenuError::Msg(e_menu_only_exists_in_another_mode));
         }
         if named {
-            found = Some(node);
+            found = Some(at);
             break;
         }
 
         // Drop these modes; when none are left the node goes with them.
         node.modes &= !modes;
         if modes & MENU_TIP_MODE != 0 {
-            free_menu_string(node, MENU_INDEX_TIP as usize);
+            node.strings[MENU_INDEX_TIP as usize] = None;
         }
         if node.modes & MENU_ALL_MODES == 0 {
-            free_menu(menup);
+            list.remove(at);
         } else {
-            menup = node.next_link();
+            at += 1;
         }
     }
 
     if named {
-        let Some(mut node) = found else {
-            if !silent {
-                let shown = msg_cstr(name.as_cstr());
-                semsg_name(tr!("E329: No menu \"{shown}\""));
-            }
-            return false;
+        let Some(at) = found else {
+            return Err(MenuError::NoMenu(component));
         };
+        let node = &mut list[at];
         // Recalculate the modes from the children that survived.
         node.modes &= !modes;
-        let children = node.children();
-        for child in children.into_iter().flat_map(Menu::siblings) {
-            node.modes |= child.modes;
-        }
+        node.modes |= node.children.iter().fold(0, |all, child| all | child.modes);
         if modes & MENU_TIP_MODE != 0 {
-            free_menu_string(node, MENU_INDEX_TIP as usize);
+            node.strings[MENU_INDEX_TIP as usize] = None;
         }
         if node.modes & MENU_ALL_MODES == 0 {
-            // Upstream re-stores `node` into `menup` here; the loop only
-            // broke out without advancing, so the slot already holds it.
-            free_menu(menup);
+            list.remove(at);
         }
     }
-    true
+    Ok(())
 }
 
-/// Unlink the node in `menup` and release it.
-pub(crate) fn free_menu(menup: Link) {
-    let menu = menup.get().expect("free_menu wants an occupied slot");
-    menup.set(menu.next());
-    free_str(menu.name);
-    free_str(menu.dname);
-    free_str(menu.en_name);
-    free_str(menu.en_dname);
-    free_str(menu.actext);
-    for idx in 0..MENU_MODES {
-        free_menu_string(menu, idx);
-    }
-    // SAFETY: the node came from `alloc_node`, is now unlinked, and nothing
-    // else holds it -- its children were freed before it could get here.
-    unsafe { xfree(menu.raw().cast()) };
-}
-
-/// Clear the right-hand side stored for one mode.
-///
-/// Several modes commonly share one buffer (see `set_rhs`), so it is only
-/// freed once this is the last mode holding it.
-pub(crate) fn free_menu_string(mut menu: Menu, idx: usize) {
-    let rhs = menu.strings[idx];
-    if menu.strings.iter().filter(|s| **s == rhs).count() == 1 {
-        free_str(rhs);
-    }
-    menu.strings[idx] = ptr::null_mut();
-}
-
-/// One node as the nested Dict `menu_get()` answers with, or null when the
+/// One node as the nested Dict `menu_get()` answers with, or `None` when the
 /// node is in none of `modes`.
-fn menu_get_recursive(menu: Menu, modes: c_int) -> Option<DictRef> {
-    if !menu.in_modes(modes) {
+fn menu_get_recursive(menu: &VimMenu, modes: c_int) -> Option<DictRef> {
+    if menu.modes & modes == 0 {
         return None;
     }
 
     let dict_held = dict_alloc();
-    let dict = dict_held.as_ptr();
-    dict_add_str(dict, c"name", menu.dname());
-    dict_add_nr(dict, c"priority", VarNumber::from(menu.priority));
-    dict_add_nr(dict, c"hidden", VarNumber::from(is_hidden(menu.dname())));
+    let dict = dict_held.edit();
+    let _ = dict.add_str(b"name", Some(&menu.dname));
+    let _ = dict.add_number(b"priority", VarNumber::from(menu.priority));
+    let _ = dict.add_number(b"hidden", VarNumber::from(is_hidden(menu.dname.as_bytes())));
     if menu.mnemonic != 0 {
-        dict_add_str(dict, c"shortcut", &char_as_text(menu.mnemonic));
+        let _ = dict.add_str(b"shortcut", Some(&char_as_text(menu.mnemonic)));
     }
-    if let Some(actext) = menu.actext() {
-        dict_add_str(dict, c"actext", actext);
+    if let Some(actext) = &menu.actext {
+        let _ = dict.add_str(b"actext", Some(actext));
     }
     if menu.modes & MENU_TIP_MODE != 0
-        && let Some(tooltip) = menu.rhs(MENU_INDEX_TIP as usize)
+        && let Some(tooltip) = &menu.strings[MENU_INDEX_TIP as usize]
     {
-        dict_add_str(dict, c"tooltip", tooltip);
+        let _ = dict.add_str(b"tooltip", Some(tooltip));
     }
 
-    match menu.children() {
-        None => {
-            let commands_held = dict_alloc();
-            let commands = commands_held.as_ptr();
-            dict_add_dict(dict, c"mappings".to_bytes(), Some(commands_held));
-            for (bit, mode) in MODE_CHARS.iter().enumerate() {
-                if menu.modes & modes & (1 << bit) == 0 {
-                    continue;
-                }
-                let mapping_held = dict_alloc();
-                let mapping = mapping_held.as_ptr();
-                dict_add_allocated_str(mapping, c"rhs", special_text(menu.strings[bit]));
-                dict_add_nr(mapping, c"silent", VarNumber::from(menu.silent[bit]));
-                dict_add_nr(
-                    mapping,
-                    c"enabled",
-                    VarNumber::from(menu.enabled & (1 << bit) != 0),
-                );
-                // `noremap` holds 0, REMAP_NONE (-1) or REMAP_SCRIPT (-2),
-                // and these two report it as *bit tests* on values that
-                // overlap -- so a `:noremenu` entry answers `sid` 1 as well.
-                // `menu_info()` next door compares for equality and does not
-                // agree; the documented `menu_get()` example carries the bit
-                // tests' answer.
-                dict_add_nr(
-                    mapping,
-                    c"noremap",
-                    VarNumber::from(menu.noremap[bit] & REMAP_NONE != 0),
-                );
-                dict_add_nr(
-                    mapping,
-                    c"sid",
-                    VarNumber::from(menu.noremap[bit] & REMAP_SCRIPT != 0),
-                );
-                // One byte of the mode letters, so `tl` files under `t`.
-                dict_add_dict(commands, &mode.to_bytes()[..1], Some(mapping_held));
+    if menu.children.is_empty() {
+        let commands_held = dict_alloc();
+        let _ = dict.add_dict(b"mappings", Some(commands_held.clone()));
+        let commands = commands_held.edit();
+        for (bit, mode) in MODE_CHARS.iter().enumerate() {
+            if menu.modes & modes & (1 << bit) == 0 {
+                continue;
+            }
+            let mapping_held = dict_alloc();
+            let mapping = mapping_held.edit();
+            let rhs = menu.strings[bit].as_deref().map(special_text);
+            let _ = mapping.add_allocated_str(b"rhs", rhs);
+            let _ = mapping.add_number(b"silent", VarNumber::from(menu.silent[bit]));
+            let enabled = menu.enabled & (1 << bit) != 0;
+            let _ = mapping.add_number(b"enabled", VarNumber::from(enabled));
+            // `noremap` holds 0, REMAP_NONE (-1) or REMAP_SCRIPT (-2), and
+            // these two report it as *bit tests* on values that overlap --
+            // so a `:noremenu` entry answers `sid` 1 as well. `menu_info()`
+            // next door compares for equality and does not agree; the
+            // documented `menu_get()` example carries the bit tests' answer.
+            let noremap = menu.noremap[bit];
+            let _ = mapping.add_number(b"noremap", VarNumber::from(noremap & REMAP_NONE != 0));
+            let _ = mapping.add_number(b"sid", VarNumber::from(noremap & REMAP_SCRIPT != 0));
+            // One byte of the mode letters, so `tl` files under `t`.
+            let _ = commands.add_dict(&mode.to_bytes()[..1], Some(mapping_held));
+        }
+    } else {
+        let mut list = list_alloc();
+        for child in &menu.children {
+            let entry = menu_get_recursive(child, modes);
+            if entry.as_ref().is_some_and(|d| !d.is_empty()) {
+                list.push_dict(entry);
             }
         }
-        Some(children) => {
-            let list = list_alloc();
-            for child in children.siblings() {
-                let entry = menu_get_recursive(child, modes);
-                if entry.as_ref().is_some_and(|d| !d.is_empty()) {
-                    list_append_dict(list.as_ptr(), entry);
-                }
-            }
-            dict_add_list(dict, c"submenus", Some(list));
-        }
+        let _ = dict.add_list(b"submenus", Some(list));
     }
     Some(dict_held)
 }
 
-/// Export the menus matching `path_name` into `list` -- the `menu_get()`
-/// builtin. An empty path exports every top-level menu.
+/// Export the menus matching `path` into `list` -- the `menu_get()` builtin.
+/// An empty path exports every top-level menu.
 pub(crate) fn menu_get(path: &CStr, modes: c_int, list: &mut List) -> bool {
-    let mut menu = root_first();
-    if !path.is_empty() {
-        menu = find_menu(menu, path, modes);
-        if menu.is_none() {
-            return false;
-        }
-    }
-    for node in menu.into_iter().flat_map(Menu::siblings) {
-        let entry = menu_get_recursive(node, modes);
-        if entry.as_ref().is_some_and(|d| !d.is_empty()) {
-            list.push_dict(entry);
-        }
-        if !path.is_empty() {
+    let found = with_tree(|tree| {
+        let nodes: Vec<&VimMenu> = if path.is_empty() {
+            tree.iter().collect()
+        } else {
             // A non-empty query only wants the node `find_menu` reached.
-            break;
+            vec![find_menu(tree, path.to_bytes(), modes)?]
+        };
+        for node in nodes {
+            let entry = menu_get_recursive(node, modes);
+            if entry.as_ref().is_some_and(|d| !d.is_empty()) {
+                list.push_dict(entry);
+            }
         }
-    }
-    true
+        Ok(())
+    });
+    found.map_err(|err: MenuError| err.report()).is_ok()
 }
 
-/// Resolve `path_name` against `menu`'s sibling list, reporting why it
+/// Resolve `path` against the top-level menus `tree`, reporting why it
 /// failed. Does not handle an empty path.
-fn find_menu(menu: Option<Menu>, path_name: &CStr, modes: c_int) -> Option<Menu> {
-    debug_assert!(!path_name.is_empty(), "find_menu wants a path");
-    let mut buf = scratch(path_name);
-    let mut name = text_of(&mut buf);
-    let mut menu = menu;
+fn find_menu<'a>(tree: &'a [VimMenu], path: &[u8], modes: c_int) -> Result<&'a VimMenu, MenuError> {
+    debug_assert!(!path.is_empty(), "find_menu wants a path");
+    let mut list = tree;
+    let mut name = path;
 
-    while !name.is_empty() {
-        let rest = skip_component(name);
-        let mut matched = None;
-        for node in menu.into_iter().flat_map(Menu::siblings) {
-            if !name_equal(name.as_cstr(), node) {
-                continue;
-            }
-            if !rest.is_empty() && node.children().is_none() {
-                emsg_c(E_NOTSUBMENU);
-                return None;
-            }
-            if !node.in_modes(modes) {
-                emsg_shared(e_menu_only_exists_in_another_mode);
-                return None;
-            }
-            if rest.is_empty() {
-                return Some(node);
-            }
-            matched = Some(node);
-            break;
-        }
-        let Some(node) = matched else {
-            let shown = msg_cstr(name.as_cstr());
-            semsg_name(tr!("E329: No menu \"{shown}\""));
-            return None;
+    loop {
+        let (component, rest) = take_component(name);
+        let Some(node) = list.iter().find(|node| name_equal(&component, node)) else {
+            return Err(MenuError::NoMenu(component));
         };
+        if !rest.is_empty() && node.children.is_empty() {
+            return Err(MenuError::Msg(E_NOTSUBMENU));
+        }
+        if node.modes & modes == 0 {
+            return Err(MenuError::Msg(e_menu_only_exists_in_another_mode));
+        }
+        if rest.is_empty() {
+            return Ok(node);
+        }
         // Found a match; search its sub-menu.
         name = rest;
-        menu = node.children();
+        list = &node.children;
     }
-    menu
 }
 
 /// The `:menu` listing: the mappings of one menu, or of the whole tree.
-pub(crate) fn show_menus(path_name: &CStr, modes: c_int) -> bool {
-    let mut menu = None;
-    if !path_name.is_empty() {
-        menu = find_menu(root_first(), path_name, modes);
-        if menu.is_none() {
+pub(crate) fn show_menus(path: &[u8], modes: c_int) -> bool {
+    // A copy of what is listed: the listing can stop at a `--More--` prompt,
+    // which holds nothing of the tree.
+    let listed = with_tree(|tree| {
+        if path.is_empty() {
+            Ok(None)
+        } else {
+            find_menu(tree, path, modes).map(|node| Some(node.clone()))
+        }
+    });
+    let listed = match listed {
+        Ok(listed) => listed,
+        Err(err) => {
+            err.report();
             return false;
         }
-    }
+    };
+    let roots = if listed.is_none() {
+        with_tree(<[VimMenu]>::to_vec)
+    } else {
+        Vec::new()
+    };
 
-    // Hold the tree still while it is walked.
+    // Hold the tree still while it is listed.
     with_menus_locked(|| {
         put_title(c"\n--- Menus ---");
-        show_menus_recursive(menu, modes, 0);
+        match &listed {
+            Some(node) => show_menus_recursive(node, modes, 0),
+            None => show_children(&roots, modes, 0),
+        }
     });
     true
 }
 
-/// Print `menu` and everything under it, indented by `depth`. A `None`
-/// menu means the root list, which is printed one level further out.
-fn show_menus_recursive(menu: Option<Menu>, modes: c_int, depth: c_int) {
-    if let Some(node) = menu {
-        if !node.in_modes(modes) {
-            return;
+/// Print `node` and everything under it, indented by `depth`.
+fn show_menus_recursive(node: &VimMenu, modes: c_int, depth: c_int) {
+    if node.modes & modes == 0 {
+        return;
+    }
+    put_char(b'\n');
+    if got_int.get() {
+        // "q" hit at the --more-- prompt.
+        return;
+    }
+    for _ in 0..depth {
+        put(c"  ");
+    }
+    if node.priority != 0 {
+        put_num(node.priority);
+        put(c" ");
+    }
+    // The same highlighting as for directories.
+    put_trans(&node.name, HLF_D);
+
+    if !node.children.is_empty() {
+        show_children(&node.children, modes, depth + 1);
+        return;
+    }
+    for (bit, &mode) in MODE_CHARS.iter().enumerate() {
+        if node.modes & modes & (1 << bit) == 0 {
+            continue;
         }
         put_char(b'\n');
         if got_int.get() {
-            // "q" hit at the --more-- prompt.
             return;
         }
-        for _ in 0..depth {
+        for _ in 0..depth + 2 {
             put(c"  ");
         }
-        if node.priority != 0 {
-            put_num(node.priority);
-            put(c" ");
-        }
-        // The same highlighting as for directories.
-        put_trans(node.name(), HLF_D);
-    }
-
-    let leaf = menu.filter(|node| node.children().is_none());
-    if let Some(node) = leaf {
-        for (bit, &mode) in MODE_CHARS.iter().enumerate() {
-            if node.modes & modes & (1 << bit) == 0 {
-                continue;
-            }
-            put_char(b'\n');
-            if got_int.get() {
-                return;
-            }
-            for _ in 0..depth + 2 {
-                put(c"  ");
-            }
-            put(mode);
-            put_char(match node.noremap[bit] {
-                REMAP_NONE => b'*',
-                REMAP_SCRIPT => b'&',
-                _ => b' ',
-            });
-            put_char(if node.silent[bit] { b's' } else { b' ' });
-            put_char(if node.modes & node.enabled & (1 << bit) == 0 {
-                b'-'
-            } else {
-                b' '
-            });
-            put(c" ");
-            let rhs = node.strings[bit];
-            match node.rhs(bit).map(CStr::is_empty) {
-                Some(true) | None => put_hl(c"<Nop>", HLF_8),
-                Some(false) => put_special(rhs),
-            }
-        }
-        return;
-    }
-
-    // Recursively show the children, skipping PopUp[nvoci].
-    let (start, depth) = match menu {
-        Some(node) => (node.children(), depth + 1),
-        None => (root_first(), depth),
-    };
-    for child in start.into_iter().flat_map(Menu::siblings) {
-        if got_int.get() {
-            break;
-        }
-        if !is_hidden(child.dname()) {
-            show_menus_recursive(Some(child), modes, depth);
+        put(mode);
+        put_char(match node.noremap[bit] {
+            REMAP_NONE => b'*',
+            REMAP_SCRIPT => b'&',
+            _ => b' ',
+        });
+        put_char(if node.silent[bit] { b's' } else { b' ' });
+        put_char(if node.modes & node.enabled & (1 << bit) == 0 {
+            b'-'
+        } else {
+            b' '
+        });
+        put(c" ");
+        match node.strings[bit].as_deref() {
+            Some(rhs) if !rhs.is_empty() => put_special(rhs),
+            _ => put_hl(c"<Nop>", HLF_8),
         }
     }
 }
 
-// The message entry points this listing is built from. Each hands the
-// message layer a `'static` literal or a string owned by a live node.
+/// Recursively show `children`, skipping PopUp[nvoci].
+fn show_children(children: &[VimMenu], modes: c_int, depth: c_int) {
+    for child in children {
+        if got_int.get() {
+            break;
+        }
+        if !is_hidden(child.dname.as_bytes()) {
+            show_menus_recursive(child, modes, depth);
+        }
+    }
+}
+
+// The message entry points this listing is built from.
 
 fn put(s: &CStr) {
     msg_str(s);
@@ -458,7 +388,6 @@ fn put_trans(s: &CStr, hl_id: c_int) {
     msg_display(s, hl_id, false);
 }
 
-fn put_special(s: *const c_char) {
-    // SAFETY: a node's rhs, NUL-terminated and live.
-    msg_display_keys(unsafe { cstr::at(s) }, false, 0);
+fn put_special(s: &CStr) {
+    msg_display_keys(s, false, 0);
 }

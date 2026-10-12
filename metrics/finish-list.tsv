@@ -329,13 +329,6 @@ memline/	memline/offsets.rs	1	15	2	12	expr:3	-	-	Db::new:3
 memline/	memline/recover.rs	1	105	4	74	deref:25 ref:3 expr:1	other:3 str:3	str:1	c_str:7 at:5 mf_need_trans:3 mf_put:3 mf_sync:3 os_fileinfo:3 xfree:3 zeroed:3
 memline/	memline/swapname.rs	1	137	12	110	deref:21 expr:2 compound:1	str:20 pp_str:5 other:2 value:1	str:5	xfree:16 bytes_at:14 concat_fnames:8 modname:4 os_path_exists:3 xstrlcpy:3 .add:2 after_pathsep:2
 memline/	memline/tree.rs	1	43	7	36	deref:6 expr:1	other:3 str:1	other:5 str:3	mf_put:6 Db::new:4 Pb::new:3 Pe::new:3 copy:2 mf_get:2 mf_new:2 xfree:2
-menu/	*	6	61	6	40	deref:11 expr:4 ref:2 compound:1	value:10 str:7 other:3 pp:1	str:4 other:2	CStr::from_ptr:5 at_opt:5 xfree:2 apply_autocmds:1 bytes_at:1 copy:1 f:1 getdigits_int:1
-menu/	menu/complete.rs	1	2	0	2	-	-	-	at_opt:1
-menu/	menu/define.rs	1	4	0	4	-	-	-	getdigits_int:1
-menu/	menu/exec.rs	1	10	2	6	compound:1	other:1 str:1	other:1	CStr::from_ptr:2 f:1 ins_typebuf:1
-menu/	menu/info.rs	1	1	0	1	-	value:1	-	-
-menu/	menu/mod.rs	1	42	4	25	deref:11 expr:4 ref:2	value:9 str:5 other:2 pp:1	str:4 other:1	at_opt:4 CStr::from_ptr:3 apply_autocmds:1 bytes_at:1 copy:1 pum_show_popupmenu:1 utf_char2bytes:1 xfree:1
-menu/	menu/tree.rs	1	2	0	2	-	str:1	-	xfree:1
 message_fmt/	*	1	2	2	2	-	other:1 str:1	str:3	at_opt:1 from_raw_parts:1
 message_fmt/	message_fmt/mod.rs	1	2	2	2	-	other:1 str:1	str:3	at_opt:1 from_raw_parts:1
 mouse/	*	6	46	3	34	deref:8 compound:2	other:2	other:1	do_put:2 insert_reg:2 start_arrow:2 yank_register_mline:2 .as_mut:1 .ended:1 .next_char:1 .offset:1
@@ -404,10 +397,10 @@ plines/	*	3	118	23	82	deref:31 expr:1	str:19 other:16	str:1	.offset_from:6 utfc_
 plines/	plines/lines.rs	1	21	1	12	deref:9	other:3	-	decor_virt_lines:2 ml_get_buf:2 utfc_next:2 utf_ptr2str_char_info:1
 plines/	plines/mod.rs	1	49	18	46	deref:2 expr:1	str:19	str:1	ptr2cells:4 .offset_from:3 utf_ptr2str_char_info:2 utfc_next:2 .offset:1 Win::new:1 get_breakindent_win:1 tabstop_padding:1
 plines/	plines/vcol.rs	1	48	4	24	deref:20	other:13	-	.offset_from:3 ml_get_buf:2 utfc_next:2 PosRef::new:1 ml_get_buf_len:1 ptr2cells:1 utf_ptr2char:1 utf_ptr2str_char_info:1
-popupmenu/	*	5	87	16	62	deref:20 expr:4 ref:1	str:7 other:3	str:2	.offset:8 bytes_at:4 utf_ptr2cells:4 vim_strsize:4 cstr_to_string:2 Menu::new:1 arena_mem_free:1 execute_menu:1
+popupmenu/	*	5	83	15	58	deref:20 expr:4 ref:1	str:7 other:2	str:2	.offset:8 bytes_at:4 utf_ptr2cells:4 vim_strsize:4 cstr_to_string:2 arena_mem_free:1 grid_draw_border:1 mb_string2cells:1
 popupmenu/	popupmenu/draw.rs	1	55	7	39	deref:14 expr:2	str:3	str:1	.offset:7 bytes_at:4 utf_ptr2cells:4 grid_draw_border:1 mb_string2cells:1 mb_strnicmp:1 parse_winborder:1 ptr2cells:1
 popupmenu/	popupmenu/layout.rs	1	4	0	4	-	-	-	vim_strsize:3
-popupmenu/	popupmenu/menu.rs	1	6	1	4	deref:2	other:1	-	Menu::new:1 execute_menu:1 menu_find:1
+popupmenu/	popupmenu/menu.rs	1	2	0	0	deref:2	-	-	-
 popupmenu/	popupmenu/mod.rs	1	9	3	5	expr:2 deref:1 ref:1	other:2	-	arena_mem_free:1 cstr_to_string:1 ui_pum_get_pos:1
 popupmenu/	popupmenu/preview.rs	1	13	5	10	deref:3	str:4	str:1	.offset:1 cstr_to_string:1 strchr:1 win_linetabsize:1
 regexp/	*	34	874	57	346	deref:441 expr:69 ref:10 compound:1	other:116 str:77 pp:1 pp_str:1	str:26 other:24 pp_str:4 pp:2	.add:59 .offset:28 utf_ptr2char:24 utfc_ptr2len:16 .offset_from:10 xfree:10 bytes_at:9 from_raw_parts_mut:8

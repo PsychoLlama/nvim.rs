@@ -10,9 +10,10 @@
 //! key loop runs; a mapping run from `vgetc` can call `pum_undisplay`, which is
 //! why the loop re-checks that the menu is still up on every key.
 //!
-//! The tree itself is read through [`Menu`], the menu family's own wrapper,
-//! and the mouse position through [`MousePos`]: both walks are then safe
-//! code and the only unsafe left is the editor entry points they call.
+//! The tree is the menu family's own, lent for one closure at a time: the key
+//! loop holds the menu by [`MenuId`] and re-finds it after every key, since
+//! a mapping run from `vgetc` can delete it. The mouse position is read
+//! through [`MousePos`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -26,8 +27,9 @@ use std::ffi::CString;
 
 use super::*;
 use crate::grid::default_grid_ref;
-use crate::menu::{Menu, is_separator};
+use crate::menu::{is_separator, with_menu};
 use crate::mouse::{MousePos, find_win_outer};
+use crate::types::MenuId;
 use crate::winlayer::Win;
 
 /// The width `:popup` asks for even when the entries are narrower.
@@ -85,30 +87,31 @@ pub(crate) fn pum_select_mouse_pos() {
 /// A separator counts and takes a row; anything else has to be enabled in
 /// `mode`. Both tests read the node's own flags, so this is the one walk the
 /// numbering, the drawing and the dispatch all agree on.
-fn shown_entries(menu: Menu, mode: c_int) -> impl Iterator<Item = Menu> {
-    menu.children()
-        .into_iter()
-        .flat_map(Menu::siblings)
-        .filter(move |mp| is_separator(mp.dname()) || mp.modes & mp.enabled & mode != 0)
+fn shown_entries(menu: &VimMenu, mode: c_int) -> impl Iterator<Item = &VimMenu> {
+    menu.children
+        .iter()
+        .filter(move |mp| is_separator(mp.dname.as_bytes()) || mp.modes & mp.enabled & mode != 0)
 }
 
-/// Run the selected entry of `menu`.
-fn pum_execute_menu(menu: Menu, mode: c_int) {
+/// Run the selected entry of `menu`, if the menu is still there.
+fn pum_execute_menu(menu: MenuId, mode: c_int) {
     // A separator is not selectable, so only the enabled entries are
     // numbered here -- which is why this is not `shown_entries`.
-    let enabled = menu
-        .children()
-        .into_iter()
-        .flat_map(Menu::siblings)
-        .filter(|mp| mp.modes & mp.enabled & mode != 0);
-    for (idx, mp) in enabled.enumerate() {
-        if idx as c_int == pum_selected.get() {
-            let ea = ExArg::default();
-            // SAFETY: a live node and this frame's own `ExArg`. The call
-            // may redefine the tree, which is why the walk stops here.
-            unsafe { execute_menu(&ea, mp.raw(), -1) };
-            return;
-        }
+    let selected = with_menu(menu, |menu| {
+        let enabled = menu
+            .children
+            .iter()
+            .filter(|mp| mp.modes & mp.enabled & mode != 0);
+        enabled
+            .enumerate()
+            .find(|(idx, _)| *idx as c_int == pum_selected.get())
+            .map(|(_, mp)| mp.id)
+    })
+    .flatten();
+    if let Some(item) = selected {
+        // The call may redefine the tree, which is why it runs after the
+        // walk.
+        execute_menu(None, item, -1);
     }
 }
 
@@ -116,13 +119,13 @@ fn pum_execute_menu(menu: Menu, mode: c_int) {
 ///
 /// The text is copied because a callback can redefine the menu while the key
 /// loop below is running.
-fn pum_menu_entries(menu: Menu, mode: c_int) -> Vec<CString> {
+fn pum_menu_entries(menu: &VimMenu, mode: c_int) -> Vec<CString> {
     shown_entries(menu, mode)
         .map(|mp| {
-            if is_separator(mp.dname()) {
+            if is_separator(mp.dname.as_bytes()) {
                 CString::default()
             } else {
-                mp.dname().to_owned()
+                mp.dname.clone()
             }
         })
         .collect()
@@ -195,15 +198,11 @@ fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
 
 /// Show `menu` as a terminal popup and do not return until it is closed.
 ///
-/// # Safety
-/// `menu` must be live. This pumps the event loop, so nothing may be held
-/// across it.
-pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
-    // SAFETY: the caller's promise.
-    let menu = unsafe { Menu::new(menu) };
+/// This pumps the event loop, so the menu is held by id.
+pub(crate) fn pum_show_popupmenu(menu: MenuId) {
     pum_undisplay(true);
     let mode = get_menu_mode_flag();
-    let entries = pum_menu_entries(menu, mode);
+    let entries = with_menu(menu, |menu| pum_menu_entries(menu, mode)).unwrap_or_default();
 
     // "popup Edit" with only Terminal-mode entries lands here.
     pum_size.set(entries.len() as c_int);
@@ -301,10 +300,7 @@ pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
         }
     }
 
-    // SAFETY: a NUL-terminated path; `menu_find` answers a live menu or null.
-    let menu = unsafe { menu_find(path_name.as_ptr()) };
-    if !menu.is_null() {
-        // SAFETY: a live menu; this pumps the event loop.
-        unsafe { pum_show_popupmenu(menu) };
+    if let Some(menu) = menu_find(path_name) {
+        pum_show_popupmenu(menu);
     }
 }

@@ -13,41 +13,36 @@
 //!
 //! What stays here is what the six share: the mode alphabet (`MENU_*_MODE`,
 //! `MENU_INDEX_*`, [`MODE_CHARS`]), the `menus_locked` guard, the
-//! `menu_is_*` predicates that classify a node, [`get_menu_mode`] -- "which
-//! mode is the editor in?" for the executing side -- and the two newtypes
-//! everything else is written in terms of.
+//! `is_*` predicates that classify a name, [`get_menu_mode`] -- "which mode
+//! is the editor in?" for the executing side -- and the tree itself.
 //!
-//! [`Menu`] wraps a `*mut VimMenu` and [`Link`] wraps the `next`,
-//! `children` or root slot that points at one. Each has a single unsafe
-//! constructor carrying the invariant; every other method, and so almost
-//! all of the six children, is safe code. [`CText`] does the same for the
-//! NUL-terminated buffers a menu path is taken apart in.
+//! The tree is [`MENU_TREE`]: the top-level menus, each [`VimMenu`] owning
+//! its children in display order. It is lent for one closure; what has to
+//! outlive a borrow -- `:popup`'s menu, which its key loop holds across user
+//! code -- is a [`MenuId`], re-found with [`with_menu`].
 //!
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
-use core::mem::offset_of;
-use core::ops::{Deref, DerefMut};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use crate::autocmd::apply_autocmds;
-use crate::charset::skipwhite;
-use crate::cstr;
+use crate::ascii::ascii_iswhite;
+use crate::autocmd::fire_autocmds_for;
 use crate::eval::typval::{DictRef, ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
-use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
-use crate::memory::{xfree, xmemdupz, xstrdup};
+pub(crate) use crate::mapping::skip_white;
+use crate::mbyte::encode_char;
+use crate::memory::ThinCString;
 use crate::message::e_cannot_change_menus_while_listing;
 use crate::message::{emsg, special_keys_text};
+use crate::message_fmt::msg_bytes;
 use crate::normal::{visual_active, visual_select};
 use crate::os::cshim::gettext;
 use crate::popupmenu::pum_show_popupmenu;
@@ -56,7 +51,8 @@ use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
     MODE_TERMINAL,
 };
-use crate::types::{Dict, List, VarNumber, VimMenu, kListLenMayKnow, ptrdiff_t};
+use crate::tr;
+use crate::types::{MenuId, VimMenu, kListLenMayKnow, ptrdiff_t};
 
 // The carve of the transpiled module; see each child's docs.
 mod complete;
@@ -75,17 +71,75 @@ pub(crate) use self::info::*;
 pub(crate) use self::name::*;
 pub(crate) use self::tree::*;
 
-/// The menu tree: the head of the top-level sibling list, each node owning
-/// its `children` list in turn. A record rather than a bare pointer so the
-/// tree has an owner to name; the nodes stay the intrusive `VimMenu` lists
-/// the whole layer walks through [`Link`]s.
+/// The menu tree: the top-level menus, in menubar order, each owning its
+/// children in turn.
 pub(crate) struct MenuTree {
-    first: *mut VimMenu,
+    pub(crate) menus: Vec<VimMenu>,
+    /// The id the next node gets; never reused.
+    next_id: u64,
 }
 
-pub(crate) static root_menu: GlobalCell<MenuTree> = GlobalCell::new(MenuTree {
-    first: ptr::null_mut(),
+impl MenuTree {
+    /// A fresh node id.
+    pub(crate) fn new_id(&mut self) -> MenuId {
+        let id = self.next_id;
+        self.next_id += 1;
+        MenuId(id)
+    }
+}
+
+pub(crate) static MENU_TREE: GlobalCell<MenuTree> = GlobalCell::new(MenuTree {
+    menus: Vec::new(),
+    next_id: 1,
 });
+
+/// Lend the top-level menus for reading. `f` must not reach the tree itself.
+pub(crate) fn with_tree<R>(f: impl FnOnce(&[VimMenu]) -> R) -> R {
+    MENU_TREE.with(|tree| f(&tree.menus))
+}
+
+/// Lend the tree for writing; the same rule as [`with_tree`].
+pub(crate) fn with_tree_mut<R>(f: impl FnOnce(&mut MenuTree) -> R) -> R {
+    MENU_TREE.with_mut(f)
+}
+
+/// The node `id` names, anywhere under `list`.
+pub(crate) fn find_id(list: &[VimMenu], id: MenuId) -> Option<&VimMenu> {
+    list.iter().find_map(|node| {
+        if node.id == id {
+            Some(node)
+        } else {
+            find_id(&node.children, id)
+        }
+    })
+}
+
+/// Lend the node `id` names, or answer `None` when it has been deleted.
+pub(crate) fn with_menu<R>(id: MenuId, f: impl FnOnce(&VimMenu) -> R) -> Option<R> {
+    with_tree(|tree| find_id(tree, id).map(f))
+}
+
+/// Why a walk of the tree gave up, reported once it has let go of the tree.
+pub(crate) enum MenuError {
+    /// One of the fixed messages, untranslated.
+    Msg(&'static CStr),
+    /// "E329: No menu", naming the component that was not found.
+    NoMenu(Vec<u8>),
+}
+
+impl MenuError {
+    /// Print the message.
+    pub(crate) fn report(&self) {
+        match self {
+            MenuError::Msg(msg) => emsg_c(msg),
+            MenuError::NoMenu(name) => {
+                let shown = msg_bytes(name);
+                semsg_name(tr!("E329: No menu \"{shown}\""));
+            }
+        }
+    }
+}
+
 pub(crate) static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
 
 /// How deep a menu path may go, and so how many priority components
@@ -198,411 +252,20 @@ pub(crate) fn with_menus_locked<R>(f: impl FnOnce() -> R) -> R {
 }
 
 // ---------------------------------------------------------------------------
-// The tree as a pair of newtypes
-// ---------------------------------------------------------------------------
-
-/// One node of the menu tree.
-///
-/// # Invariant
-/// The pointer names a live `VimMenu` -- one `add_menu_path` allocated and
-/// `free_menu` has not yet released -- whose `name` and `dname` are
-/// NUL-terminated strings, whose `en_name`/`en_dname`/`actext` are null or
-/// NUL-terminated strings, and whose `next`, `children` and `parent` are
-/// null or name another such node.
-#[derive(Copy, Clone)]
-pub(crate) struct Menu(*mut VimMenu);
-
-impl Menu {
-    /// # Safety
-    /// `raw` must satisfy the invariant above.
-    pub(crate) const unsafe fn new(raw: *mut VimMenu) -> Self {
-        Menu(raw)
-    }
-
-    /// The node `raw` names, or `None` for C's `NULL`.
-    ///
-    /// # Safety
-    /// A non-null `raw` must satisfy the invariant above.
-    pub(crate) unsafe fn opt(raw: *const VimMenu) -> Option<Self> {
-        (!raw.is_null()).then(|| {
-            // SAFETY: the caller's obligation, minus the null case.
-            unsafe { Menu::new(raw.cast_mut()) }
-        })
-    }
-
-    pub(crate) fn raw(self) -> *mut VimMenu {
-        self.0
-    }
-
-    /// Whether both name the same node.
-    pub(crate) fn same(self, other: Menu) -> bool {
-        ptr::eq(self.0, other.0)
-    }
-
-    pub(crate) fn next(self) -> Option<Menu> {
-        // SAFETY: the invariant covers the whole sibling list.
-        unsafe { Menu::opt(self.next) }
-    }
-
-    pub(crate) fn children(self) -> Option<Menu> {
-        // SAFETY: the invariant covers the whole subtree.
-        unsafe { Menu::opt(self.children) }
-    }
-
-    pub(crate) fn parent(self) -> Option<Menu> {
-        // SAFETY: the invariant covers the parent chain.
-        unsafe { Menu::opt(self.parent) }
-    }
-
-    /// This node and every sibling after it.
-    pub(crate) fn siblings(self) -> impl Iterator<Item = Menu> {
-        core::iter::successors(Some(self), |m| m.next())
-    }
-
-    /// The slot holding the pointer to the next sibling.
-    pub(crate) fn next_link(self) -> Link {
-        // SAFETY: the invariant; the field is live for as long as the node.
-        unsafe { Link::new(&raw mut (*self.0).next) }
-    }
-
-    /// The slot holding the pointer to the first child.
-    pub(crate) fn children_link(self) -> Link {
-        // SAFETY: as [`Menu::next_link`].
-        unsafe { Link::new(&raw mut (*self.0).children) }
-    }
-
-    /// The name as `:menu` spelled it, mnemonic and accelerator included.
-    pub(crate) fn name(&self) -> &CStr {
-        // SAFETY: the invariant; `name` is never null on a live node.
-        unsafe { CStr::from_ptr(self.name) }
-    }
-
-    /// The displayed name: no `&` mnemonic marker, no accelerator.
-    pub(crate) fn dname(&self) -> &CStr {
-        // SAFETY: the invariant; `dname` is never null on a live node.
-        unsafe { CStr::from_ptr(self.dname) }
-    }
-
-    /// The pre-translation name, for a node `:menutranslate` renamed.
-    pub(crate) fn en_name(&self) -> Option<&CStr> {
-        // SAFETY: the invariant; null unless a translation applied.
-        unsafe { cstr::at_opt(self.en_name) }
-    }
-
-    /// The pre-translation displayed name.
-    pub(crate) fn en_dname(&self) -> Option<&CStr> {
-        // SAFETY: as [`Menu::en_name`]; the two are set together.
-        unsafe { cstr::at_opt(self.en_dname) }
-    }
-
-    /// The accelerator text, i.e. whatever followed the name's `<Tab>`.
-    pub(crate) fn actext(&self) -> Option<&CStr> {
-        // SAFETY: the invariant; null unless the name carried a TAB.
-        unsafe { cstr::at_opt(self.actext) }
-    }
-
-    /// The right-hand side stored for one mode.
-    pub(crate) fn rhs(&self, idx: usize) -> Option<&CStr> {
-        // SAFETY: the invariant; unset modes hold null.
-        unsafe { cstr::at_opt(self.strings[idx]) }
-    }
-
-    /// Whether the node is available in any of `modes`.
-    pub(crate) fn in_modes(&self, modes: c_int) -> bool {
-        self.modes & modes != 0
-    }
-}
-
-impl Deref for Menu {
-    type Target = VimMenu;
-
-    fn deref(&self) -> &VimMenu {
-        // SAFETY: the invariant; the reference never spans a free.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for Menu {
-    fn deref_mut(&mut self) -> &mut VimMenu {
-        // SAFETY: as [`Menu::deref`]; each write finishes in its statement.
-        unsafe { &mut *self.0 }
-    }
-}
-
-/// The slot a node is reached through: C's `VimMenu **`.
-///
-/// Unlinking a node means writing its successor into the slot that named it,
-/// which is either the root list head or another node's `next`/`children`.
-///
-/// # Invariant
-/// The pointer names a live slot -- the root cell, or a field of a node
-/// satisfying [`Menu`]'s invariant.
-#[derive(Copy, Clone)]
-pub(crate) struct Link(*mut *mut VimMenu);
-
-impl Link {
-    /// # Safety
-    /// `slot` must satisfy the invariant above.
-    pub(crate) const unsafe fn new(slot: *mut *mut VimMenu) -> Self {
-        Link(slot)
-    }
-
-    /// The node in the slot, if any.
-    pub(crate) fn get(self) -> Option<Menu> {
-        // SAFETY: the invariant; the slot holds null or a live node.
-        unsafe { Menu::opt(*self.0) }
-    }
-
-    /// Put `menu` in the slot.
-    pub(crate) fn set(self, menu: Option<Menu>) {
-        let value = menu.map_or(ptr::null_mut(), Menu::raw);
-        // SAFETY: the invariant; the write finishes in this statement.
-        unsafe { *self.0 = value }
-    }
-}
-
-/// The list head every menu path is resolved from.
-///
-/// C's `get_root_menu()` takes the path and ignores it: there was one root
-/// per window toolbar once, and there has been a single tree since. The
-/// escape hatch stays because the layer *writes* through the slot when the
-/// first top-level menu is created or the last one is removed.
-pub(crate) fn root_link() -> Link {
-    // SAFETY: a static list head, live for the whole process.
-    // A field's address is the record's plus a constant; nothing is read.
-    let head = root_menu
-        .ptr()
-        .wrapping_byte_add(offset_of!(MenuTree, first))
-        .cast();
-    unsafe { Link::new(head) }
-}
-
-/// The first top-level menu, if there is one.
-pub(crate) fn root_first() -> Option<Menu> {
-    root_link().get()
-}
-
-// ---------------------------------------------------------------------------
-// Menu names as C text
-// ---------------------------------------------------------------------------
-
-/// A position in a NUL-terminated buffer the menu code is taking apart.
-///
-/// A menu path arrives as one string and is consumed component by component:
-/// `\`-escapes are squeezed out in place, and the `.` ending a component is
-/// overwritten with a NUL so the component can be handed on as its own C
-/// string. Callers keep several of these into one buffer at once, which is
-/// why this is a raw pointer rather than a slice.
-///
-/// # Invariant
-/// The pointer names a byte of a live, writable, NUL-terminated buffer, at
-/// or before that buffer's terminator.
-#[derive(Copy, Clone)]
-pub(crate) struct CText(*mut c_char);
-
-impl CText {
-    /// # Safety
-    /// `raw` must satisfy the invariant above.
-    pub(crate) const unsafe fn new(raw: *mut c_char) -> Self {
-        CText(raw)
-    }
-
-    pub(crate) fn raw(self) -> *mut c_char {
-        self.0
-    }
-
-    /// The `i`th byte from here, which may be the terminator itself.
-    pub(crate) fn byte(self, i: usize) -> u8 {
-        // SAFETY: the invariant; callers index at or before the terminator,
-        // exactly as the C read `p[1]` only after testing `*p`.
-        unsafe { *self.0.add(i) as u8 }
-    }
-
-    /// Everything from here to the terminator.
-    pub(crate) fn bytes(&self) -> &[u8] {
-        // SAFETY: the invariant; the terminator bounds the read.
-        unsafe { CStr::from_ptr(self.0).to_bytes() }
-    }
-
-    /// Everything from here to the terminator, terminator included.
-    pub(crate) fn as_cstr(&self) -> &CStr {
-        // SAFETY: the invariant.
-        unsafe { CStr::from_ptr(self.0) }
-    }
-
-    pub(crate) fn is_empty(self) -> bool {
-        self.byte(0) == 0
-    }
-
-    /// The position `i` bytes further on.
-    pub(crate) fn at(self, i: usize) -> CText {
-        // SAFETY: the invariant; callers only step within the buffer.
-        unsafe { CText::new(self.0.add(i)) }
-    }
-
-    /// How far apart two positions in one buffer are.
-    pub(crate) fn offset_from(self, start: CText) -> usize {
-        // SAFETY: both name bytes of the same buffer, `self` the later.
-        unsafe { self.0.offset_from(start.0) as usize }
-    }
-
-    /// Overwrite the `i`th byte.
-    pub(crate) fn set(self, i: usize, byte: u8) {
-        // SAFETY: the invariant; `i` is at or before the terminator, and the
-        // buffer is one the caller owns (a `xstrdup` of the command line, or
-        // the command line itself, which `ex_docmd` lets commands edit).
-        unsafe { *self.0.add(i) = byte as c_char }
-    }
-
-    /// C's `STRMOVE(p + i, p + i + count)`: drop `count` bytes at `i`,
-    /// shifting the rest of the string -- terminator included -- down over
-    /// them.
-    pub(crate) fn squeeze(self, i: usize, count: usize) {
-        let rest = self.at(i + count).bytes().len() + 1;
-        // SAFETY: the invariant; source and destination are `rest` bytes of
-        // one buffer, and `copy` allows them to overlap as `memmove` did.
-        unsafe { ptr::copy(self.0.add(i + count), self.0.add(i), rest) }
-    }
-
-    /// The length of the character at `i`, composing characters included --
-    /// C's `MB_PTR_ADV` step. Zero at the terminator, which is what stops
-    /// the walks that squeeze the string as they go.
-    pub(crate) fn char_len(self, i: usize) -> usize {
-        // SAFETY: the invariant; `utfc_ptr2len` stops at the terminator.
-        unsafe { utfc_ptr2len(self.0.add(i)) as usize }
-    }
-
-    /// Whether both name the same position.
-    pub(crate) fn same(self, other: CText) -> bool {
-        ptr::eq(self.0, other.0)
-    }
-
-    /// Whether the text starts with `prefix` -- C's `strncmp(p, …, n) == 0`.
-    pub(crate) fn starts_with(&self, prefix: &[u8]) -> bool {
-        self.bytes().starts_with(prefix)
-    }
-}
-
-/// A writable copy of `s` for the parsers that take a name apart in place.
-/// Hold the `Vec` for as long as the [`CText`] over it is used.
-pub(crate) fn scratch(s: &CStr) -> Vec<u8> {
-    s.to_bytes_with_nul().to_vec()
-}
-
-/// [`scratch`] over bytes that are not yet a C string.
-pub(crate) fn scratch_bytes(bytes: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(bytes.len() + 1);
-    buf.extend_from_slice(bytes);
-    buf.push(0);
-    buf
-}
-
-/// A [`CText`] over a [`scratch`] buffer.
-pub(crate) fn text_of(buf: &mut [u8]) -> CText {
-    debug_assert_eq!(buf.last(), Some(&0), "scratch buffers are NUL-terminated");
-    // SAFETY: a live, writable, NUL-terminated buffer.
-    unsafe { CText::new(buf.as_mut_ptr().cast()) }
-}
-
-/// Skip the whitespace at `p`.
-pub(crate) fn skip_white(p: CText) -> CText {
-    // SAFETY: `skipwhite` walks within the string, stopping at its
-    // terminator at the latest.
-    unsafe { CText::new(skipwhite(p.raw())) }
-}
-
-/// An `xfree`-able copy of `s`, for the fields of a node.
-pub(crate) fn dup(s: &CStr) -> *mut c_char {
-    // SAFETY: `s` is NUL-terminated and live for the call.
-    unsafe { xstrdup(s.as_ptr()) }
-}
-
-/// [`dup`] for bytes that are not yet a C string.
-pub(crate) fn dup_bytes(bytes: &[u8]) -> *mut c_char {
-    // SAFETY: a live slice; `xmemdupz` copies it and adds the terminator.
-    unsafe { xmemdupz(bytes.as_ptr().cast(), bytes.len()) as *mut c_char }
-}
-
-/// `xfree()` for a string field, which may be null.
-pub(crate) fn free_str(s: *mut c_char) {
-    // SAFETY: null or a pointer this module got from the same allocator.
-    unsafe { xfree(s.cast()) }
-}
-
-// ---------------------------------------------------------------------------
 // The Dicts `menu_get()` and `menu_info()` answer with
 // ---------------------------------------------------------------------------
-//
-// One wrapper per `tv_dict_*`/`tv_list_*` entry point, so that the two
-// builders themselves are safe code. Every `dict`/`list` here is one this
-// module has just allocated and still owns; the keys are `'static` literals
-// and the values are copied or taken over by the callee.
 
 pub(crate) fn dict_alloc() -> DictRef {
     tv_dict_alloc()
-}
-
-pub(crate) fn dict_add_str(dict: *mut Dict, key: &CStr, value: &CStr) {
-    dict_add_str_raw(dict, key, value.as_ptr());
-}
-
-/// [`dict_add_str`] for a value that is still a raw pointer.
-pub(crate) fn dict_add_str_raw(dict: *mut Dict, key: &CStr, value: *const c_char) {
-    // SAFETY: see the section note; `tv_dict_add_str` copies `value`.
-    let _ = unsafe { (*dict).add_str(key.to_bytes(), cstr::at_opt(value)) };
-}
-
-/// [`dict_add_str`] handing over an allocation the Dict then owns.
-pub(crate) fn dict_add_allocated_str(dict: *mut Dict, key: &CStr, value: *mut c_char) {
-    // SAFETY: see the section note; the Dict takes over `value`.
-    let _ = unsafe {
-        (*dict).add_allocated_str(key.to_bytes(), crate::memory::ThinCString::from_raw(value))
-    };
-}
-
-pub(crate) fn dict_add_nr(dict: *mut Dict, key: &CStr, value: VarNumber) {
-    // SAFETY: see the section note.
-    let _ = unsafe { (*dict).add_number(key.to_bytes(), value) };
-}
-
-pub(crate) fn dict_add_bool(dict: *mut Dict, key: &CStr, value: bool) {
-    // SAFETY: see the section note.
-    let _ = unsafe { (*dict).add_bool(key.to_bytes(), value.into()) };
-}
-
-pub(crate) fn dict_add_list(dict: *mut Dict, key: &CStr, value: Option<ListRef>) {
-    // SAFETY: see the section note; the Dict takes the list over.
-    let _ = unsafe { (*dict).add_list(key.to_bytes(), value) };
-}
-
-/// A nested Dict under a key given as raw bytes -- `menu_get()` files each
-/// mapping under a mode letter, and takes only the *first* byte of one, so
-/// terminal mode lands under `t` rather than `tl`.
-pub(crate) fn dict_add_dict(dict: *mut Dict, key: &[u8], value: Option<DictRef>) {
-    // SAFETY: see the section note; `key` is a live slice of `key.len()`.
-    let _ = unsafe { (*dict).add_dict(key, value) };
 }
 
 pub(crate) fn list_alloc() -> ListRef {
     tv_list_alloc(kListLenMayKnow as ptrdiff_t)
 }
 
-pub(crate) fn list_append_dict(list: *mut List, dict: Option<DictRef>) {
-    // SAFETY: see the section note.
-    unsafe { (*list).push_dict(dict) };
-}
-
-pub(crate) fn list_append_str(list: *mut List, value: &CStr) {
-    // SAFETY: see the section note; a negative length means "to the NUL".
-    unsafe { (*list).push_str(Some(value)) };
-}
-
-/// A right-hand side with its special keys spelled out, as an allocation the
-/// Dict takes over.
-pub(crate) fn special_text(rhs: *const c_char) -> *mut c_char {
-    // SAFETY: a node's rhs: NUL-terminated and live.
-    let rhs = unsafe { cstr::bytes_at(rhs) };
-    crate::memory::handoff::owned_cstr(special_keys_text(rhs, false, false))
+/// A right-hand side with its special keys spelled out.
+pub(crate) fn special_text(rhs: &CStr) -> ThinCString {
+    ThinCString::from_vec(special_keys_text(rhs.to_bytes(), false, false))
 }
 
 /// One codepoint as an owned string -- the mnemonic, for the two Dicts.
@@ -610,8 +273,7 @@ pub(crate) fn special_text(rhs: *const c_char) -> *mut c_char {
 /// `buf[utf_char2bytes(0, buf)] = NUL` leaves an empty buffer.
 pub(crate) fn char_as_text(c: c_int) -> CString {
     let mut buf = [0u8; 8];
-    // SAFETY: `utf_char2bytes` writes at most `MB_MAXCHAR` (6) bytes.
-    let len = unsafe { utf_char2bytes(c, buf.as_mut_ptr().cast()) } as usize;
+    let len = encode_char(c, &mut buf);
     let bytes = &buf[..len];
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(len);
     CString::new(&bytes[..end]).expect("truncated at the first NUL")
@@ -623,41 +285,39 @@ pub(crate) fn char_as_text(c: c_int) -> CString {
 
 /// Whether `name` can appear in the menubar -- everything that is not one of
 /// the three special roots or explicitly hidden.
-pub(crate) fn is_menubar(name: &CStr) -> bool {
+pub(crate) fn is_menubar(name: &[u8]) -> bool {
     !is_popup(name)
         && !is_toolbar(name)
         && !is_winbar(name)
-        && name.to_bytes().first() != Some(&MNU_HIDDEN_CHAR)
+        && name.first() != Some(&MNU_HIDDEN_CHAR)
 }
 
 /// Whether `name` names the right-click menu, whose per-mode copies
 /// `PopUpn`, `PopUpi`, ... all match too.
-pub(crate) fn is_popup(name: &CStr) -> bool {
-    name.to_bytes().starts_with(b"PopUp")
+pub(crate) fn is_popup(name: &[u8]) -> bool {
+    name.starts_with(b"PopUp")
 }
 
-fn is_toolbar(name: &CStr) -> bool {
-    name.to_bytes().starts_with(b"ToolBar")
+fn is_toolbar(name: &[u8]) -> bool {
+    name.starts_with(b"ToolBar")
 }
 
 /// Whether `name` names a window toolbar menu.
-fn is_winbar(name: &CStr) -> bool {
-    name.to_bytes().starts_with(b"WinBar")
+fn is_winbar(name: &[u8]) -> bool {
+    name.starts_with(b"WinBar")
 }
 
 /// Whether `name` is a separator: it both starts and ends with `-`.
 ///
 /// A one-byte `"-"` satisfies both, as it does in C.
-pub(crate) fn is_separator(name: &CStr) -> bool {
-    let bytes = name.to_bytes();
-    bytes.first() == Some(&b'-') && bytes.last() == Some(&b'-')
+pub(crate) fn is_separator(name: &[u8]) -> bool {
+    name.first() == Some(&b'-') && name.last() == Some(&b'-')
 }
 
 /// Whether `name` is kept out of the menubar and the listing: the hidden
 /// marker, or one of `PopUp`'s per-mode copies (plain `PopUp` is shown).
-pub(crate) fn is_hidden(name: &CStr) -> bool {
-    let bytes = name.to_bytes();
-    bytes.first() == Some(&MNU_HIDDEN_CHAR) || (is_popup(name) && bytes.len() > 5)
+pub(crate) fn is_hidden(name: &[u8]) -> bool {
+    name.first() == Some(&MNU_HIDDEN_CHAR) || (is_popup(name) && name.len() > 5)
 }
 
 // ---------------------------------------------------------------------------
@@ -717,33 +377,30 @@ pub(crate) fn show_popupmenu() {
     }
     let mode = MODE_CHARS[menu_mode as usize];
 
-    // SAFETY: `mode` is a `'static` string and the event takes no buffer of
-    // its own; the autocmd may redefine menus, which is why the search below
-    // runs afterwards.
-    unsafe {
-        apply_autocmds(
-            AutoEvent::MenuPopup,
-            mode.as_ptr().cast_mut(),
-            ptr::null_mut(),
-            false,
-            Buf::current_or_none(),
-        )
-    };
+    // The autocmd may redefine menus, which is why the search below runs
+    // afterwards.
+    fire_autocmds_for(
+        AutoEvent::MenuPopup,
+        Some(mode),
+        None,
+        false,
+        Buf::current_or_none(),
+        None,
+    );
 
     // "PopUp" followed by this mode's letters; a longer name still matches,
-    // as the C prefix compare did.
-    let found = root_first()
-        .into_iter()
-        .flat_map(Menu::siblings)
-        .find(|menu| {
-            let name = menu.name().to_bytes();
-            name.starts_with(b"PopUp") && name[5..].starts_with(mode.to_bytes())
-        });
-
-    // Only show a popup when it is defined and has entries.
-    let Some(menu) = found.filter(|menu| menu.children().is_some()) else {
-        return;
-    };
-    // SAFETY: a live node, and the caller's main-loop obligation.
-    unsafe { pum_show_popupmenu(menu.raw()) };
+    // as the C prefix compare did. Only show a popup when it is defined and
+    // has entries.
+    let found = with_tree(|tree| {
+        tree.iter()
+            .find(|menu| {
+                let name = menu.name.as_bytes();
+                name.starts_with(b"PopUp") && name[5..].starts_with(mode.to_bytes())
+            })
+            .filter(|menu| !menu.children.is_empty())
+            .map(|menu| menu.id)
+    });
+    if let Some(menu) = found {
+        pum_show_popupmenu(menu);
+    }
 }

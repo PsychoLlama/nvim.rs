@@ -11,8 +11,7 @@
 //!
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,18 +20,18 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_int};
+use core::ffi::c_int;
 use std::ffi::CString;
 
 use super::*;
-use crate::ascii::ascii_iswhite;
 use crate::eval::typval::{NumBuf, tv_dict_alloc_ret};
 use crate::eval::vars::del_menutrans_vars;
 use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
+use crate::mbyte::cluster_len;
 use crate::message::e_invarg;
-use crate::types::{Dict, EvalFuncData, ExArg, TypVal};
+use crate::types::{Dict, EvalFuncData, ExArg, TypVal, VarNumber};
 
 /// One `:menutranslate from to` entry.
 struct Translation {
@@ -50,64 +49,55 @@ static TRANSLATIONS: GlobalCell<Vec<Translation>> = GlobalCell::new(Vec::new());
 
 /// `:menutranslate from to`, and `:menutranslate clear`.
 pub(crate) fn ex_menutranslate(excmd: &mut ExArg) {
-    // SAFETY: the caller's obligation; `arg` names the command line, which
-    // this takes apart in place.
-    let mut text = excmd.line.arg_copy();
-    // SAFETY: a NUL-terminated copy of the argument, alive to the end of
-    // the command.
-    let arg = unsafe { CText::new(text.as_mut_ptr().cast()) };
+    let arg = excmd.line.arg();
 
-    if arg.starts_with(b"clear") && ends_of_command(skip_white(arg.at(5))) {
+    if let Some(rest) = arg.strip_prefix(b"clear")
+        && ends_of_command(skip_white(rest))
+    {
         TRANSLATIONS.with_mut(Vec::clear);
         // And every "menutrans_" global variable with them.
         clear_menutrans_vars();
         return;
     }
 
-    let from = arg;
     let from_end = menu_skip_part(arg);
-    let to = skip_white(from_end);
-    from_end.set(0, 0);
+    let to = skip_white(&arg[from_end..]);
     let to_end = menu_skip_part(to);
-    if to_end.same(to) {
+    if to_end == 0 {
         emsg_shared(e_invarg);
         return;
     }
+    let (from, to) = (&arg[..from_end], &to[..to_end]);
 
     // The `&`-free form is taken before the name is unescaped, so that
     // `menutrans_lookup`'s second pass compares like with like.
-    let from_noamp = menu_text(from.as_cstr()).display;
+    let from_noamp = menu_text(from).display;
 
-    let mut from_buf = scratch(from.as_cstr());
-    let from = text_of(&mut from_buf);
-    let mut to_buf = scratch_bytes(&to.bytes()[..to_end.offset_from(to)]);
-    let to = text_of(&mut to_buf);
+    let from = menu_unescape_name(&menu_translate_tab_and_shift(from).0);
+    let to = menu_unescape_name(&menu_translate_tab_and_shift(to).0);
 
-    menu_translate_tab_and_shift(from);
-    menu_translate_tab_and_shift(to);
-    menu_unescape_name(from);
-    menu_unescape_name(to);
-
+    let owned = |bytes: Vec<u8>| CString::new(bytes).expect("a menu name holds no NUL");
     TRANSLATIONS.with_mut(|table| {
         table.push(Translation {
-            from: from.as_cstr().to_owned(),
+            from: owned(from),
             from_noamp,
-            to: to.as_cstr().to_owned(),
+            to: owned(to),
         });
     });
 }
 
-/// The character just after one part of a menu name.
-fn menu_skip_part(p: CText) -> CText {
+/// How long the part of a menu name at the start of `p` is: up to a `.` or
+/// white space that is not escaped.
+fn menu_skip_part(p: &[u8]) -> usize {
     let mut i = 0;
-    while p.byte(i) != 0 && p.byte(i) != b'.' && !ascii_iswhite(c_int::from(p.byte(i))) {
-        let escaped = p.byte(i) == b'\\' || c_int::from(p.byte(i)) == Ctrl_V;
-        if escaped && p.byte(i + 1) != 0 {
+    while i < p.len() && p[i] != b'.' && !ascii_iswhite(c_int::from(p[i])) {
+        let escaped = p[i] == b'\\' || c_int::from(p[i]) == Ctrl_V;
+        if escaped && i + 1 < p.len() {
             i += 1;
         }
         i += 1;
     }
-    p.at(i)
+    i
 }
 
 /// What `name` has been translated to, if anything.
@@ -115,18 +105,18 @@ fn menu_skip_part(p: CText) -> CText {
 /// Matched twice: against the name as typed, then -- so that `&F&ile` finds a
 /// translation registered for `File` -- against the name with its mnemonic
 /// markers removed. Both compares ignore case.
-pub(crate) fn menutrans_lookup(name: CText) -> Option<CString> {
+pub(crate) fn menutrans_lookup(name: &[u8]) -> Option<CString> {
     let direct = TRANSLATIONS.with(|table| {
         table
             .iter()
-            .find(|entry| entry.from.as_bytes().eq_ignore_ascii_case(name.bytes()))
+            .find(|entry| entry.from.as_bytes().eq_ignore_ascii_case(name))
             .map(|entry| entry.to.clone())
     });
     if direct.is_some() {
         return direct;
     }
 
-    let dname = menu_text(name.as_cstr()).display;
+    let dname = menu_text(name).display;
     TRANSLATIONS.with(|table| {
         table
             .iter()
@@ -140,100 +130,110 @@ pub(crate) fn menutrans_lookup(name: CText) -> Option<CString> {
     })
 }
 
-/// Take the `\`-escapes out of a translation table name.
-fn menu_unescape_name(name: CText) {
+/// A translation table name with its `\`-escapes taken out -- up to its
+/// first `.`, as upstream's walk stops there.
+fn menu_unescape_name(name: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(name.len());
     let mut i = 0;
-    while name.byte(i) != 0 && name.byte(i) != b'.' {
-        if name.byte(i) == b'\\' {
-            name.squeeze(i, 1);
+    while i < name.len() && name[i] != b'.' {
+        if name[i] == b'\\' {
+            i += 1;
         }
-        i += name.char_len(i);
+        let len = cluster_len(&name[i..]);
+        out.extend_from_slice(&name[i..i + len]);
+        i += len;
     }
+    out.extend_from_slice(&name[i..]);
+    out
 }
 
-/// Isolate the menu name at `arg_start`, turning `<Tab>` into a real TAB,
-/// and answer what follows it.
+/// Isolate the menu name at the start of `arg`, turning `<Tab>` into a real
+/// TAB, and answer it with what follows it.
 ///
 /// This is what makes the accelerator separator a TAB byte: a `\t` in a
 /// `:menu` argument is a backslash escaping the letter `t` and stays two
 /// characters.
-pub(crate) fn menu_translate_tab_and_shift(arg_start: CText) -> CText {
+pub(crate) fn menu_translate_tab_and_shift(arg: &[u8]) -> (Vec<u8>, &[u8]) {
+    let mut name = Vec::with_capacity(arg.len());
     let mut i = 0;
-    while arg_start.byte(i) != 0 && !ascii_iswhite(c_int::from(arg_start.byte(i))) {
-        let escaped = arg_start.byte(i) == b'\\' || c_int::from(arg_start.byte(i)) == Ctrl_V;
-        if escaped && arg_start.byte(i + 1) != 0 {
-            i += 1;
-        } else if arg_start
-            .at(i)
-            .bytes()
+    while i < arg.len() && !ascii_iswhite(c_int::from(arg[i])) {
+        let escaped = arg[i] == b'\\' || c_int::from(arg[i]) == Ctrl_V;
+        if escaped && i + 1 < arg.len() {
+            name.extend_from_slice(&arg[i..i + 2]);
+            i += 2;
+        } else if arg[i..]
             .get(..5)
             .is_some_and(|head| head.eq_ignore_ascii_case(b"<TAB>"))
         {
-            arg_start.set(i, b'\t');
-            arg_start.squeeze(i + 1, 4);
+            name.push(b'\t');
+            i += 5;
+        } else {
+            name.push(arg[i]);
+            i += 1;
         }
-        i += 1;
     }
-    if arg_start.byte(i) != 0 {
-        arg_start.set(i, 0);
-        i += 1;
-    }
-    skip_white(arg_start.at(i))
+    let rest = arg.get(i + 1..).unwrap_or_default();
+    (name, skip_white(rest))
 }
 
 /// Describe one menu item, or -- for an empty name -- list the top-level
-/// menus.
-fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut Dict) {
+/// menus `tree` holds.
+fn menuitem_getinfo(
+    menu_name: &[u8],
+    menu: &VimMenu,
+    tree: &[VimMenu],
+    modes: c_int,
+    dict: &mut Dict,
+) {
     if menu_name.is_empty() {
         // All the top-level menus, skipping PopUp[nvoci].
-        let list = list_alloc();
-        let into = list.as_ptr();
-        dict_add_list(dict, c"submenus", Some(list));
-        for top in menu.siblings() {
-            if !is_hidden(top.dname()) {
-                list_append_str(into, top.dname());
+        let mut list = list_alloc();
+        for top in tree {
+            if !is_hidden(top.dname.as_bytes()) {
+                list.push_str(Some(&top.dname));
             }
         }
+        let _ = dict.add_list(b"submenus", Some(list));
         return;
     }
 
-    dict_add_str(dict, c"name", menu.name());
-    dict_add_str(dict, c"display", menu.dname());
-    if let Some(accel) = menu.actext() {
-        dict_add_str(dict, c"accel", accel);
+    let _ = dict.add_str(b"name", Some(&menu.name));
+    let _ = dict.add_str(b"display", Some(&menu.dname));
+    if let Some(accel) = &menu.actext {
+        let _ = dict.add_str(b"accel", Some(accel));
     }
-    dict_add_nr(dict, c"priority", VarNumber::from(menu.priority));
-    dict_add_str(dict, c"modes", menu_mode_str(menu.modes));
-    dict_add_str(dict, c"shortcut", &char_as_text(menu.mnemonic));
+    let _ = dict.add_number(b"priority", VarNumber::from(menu.priority));
+    let _ = dict.add_str(b"modes", Some(menu_mode_str(menu.modes)));
+    let _ = dict.add_str(b"shortcut", Some(&char_as_text(menu.mnemonic)));
 
-    let Some(children) = menu.children() else {
+    if menu.children.is_empty() {
         // A leaf: describe the first mode it is available in. There is
         // always one, but Coverity does not know that.
         let Some(bit) = (0..MENU_MODES).find(|bit| (1 << bit) & modes != 0) else {
             return;
         };
-        if let Some(rhs) = menu.rhs(bit) {
+        if let Some(rhs) = menu.strings[bit].as_deref() {
             let text = if rhs.is_empty() {
-                dup(c"<Nop>")
+                ThinCString::from_bytes(b"<Nop>")
             } else {
-                special_text(rhs.as_ptr())
+                special_text(rhs)
             };
-            dict_add_allocated_str(dict, c"rhs", text);
+            let _ = dict.add_allocated_str(b"rhs", Some(text));
         }
-        dict_add_bool(dict, c"noremenu", menu.noremap[bit] == REMAP_NONE);
-        dict_add_bool(dict, c"script", menu.noremap[bit] == REMAP_SCRIPT);
-        dict_add_bool(dict, c"silent", menu.silent[bit]);
-        dict_add_bool(dict, c"enabled", menu.enabled & (1 << bit) != 0);
+        let flag = |on: bool| crate::types::BoolVarValue::from(on);
+        let _ = dict.add_bool(b"noremenu", flag(menu.noremap[bit] == REMAP_NONE));
+        let _ = dict.add_bool(b"script", flag(menu.noremap[bit] == REMAP_SCRIPT));
+        let _ = dict.add_bool(b"silent", flag(menu.silent[bit]));
+        let _ = dict.add_bool(b"enabled", flag(menu.enabled & (1 << bit) != 0));
         return;
-    };
+    }
 
     // Otherwise all the submenu display names.
-    let list = list_alloc();
-    let into = list.as_ptr();
-    dict_add_list(dict, c"submenus", Some(list));
-    for child in children.siblings() {
-        list_append_str(into, child.dname());
+    let mut list = list_alloc();
+    for child in &menu.children {
+        list.push_str(Some(&child.dname));
     }
+    let _ = dict.add_list(b"submenus", Some(list));
 }
 
 /// `menu_info({name} [, {mode}])`: everything known about a menu, its child
@@ -242,8 +242,7 @@ pub(crate) fn f_menu_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     tv_dict_alloc_ret(result);
-    let (retdict, menu_name) = (result.dict_or_null(), numbuf.string_chk(&args[0]));
-    let Some(menu_name) = menu_name else {
+    let Some(menu_name) = numbuf.string_chk(&args[0]) else {
         // Before the second argument is looked at: `tv_get_string_chk`
         // answers a shared scratch buffer, so converting one argument can
         // invalidate the other, and a bad first argument must report once.
@@ -259,41 +258,44 @@ pub(crate) fn f_menu_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     };
 
     let modes = cmd_modes(which.to_bytes(), which.to_bytes().first() == Some(&b'!')).0;
-    if let Some(menu) = find_by_name(menu_name)
-        && menu.in_modes(modes)
-    {
-        menuitem_getinfo(menu_name, menu, modes, retdict);
-    }
+    let Some(dict) = result.dict_mut() else {
+        return;
+    };
+    let menu_name = menu_name.to_bytes();
+    with_tree(|tree| {
+        if let Some(menu) = find_by_name(tree, menu_name)
+            && menu.modes & modes != 0
+        {
+            menuitem_getinfo(menu_name, menu, tree, modes, dict);
+        }
+    });
 }
 
 /// Locate the menu or menu item `menu_name` names, silently.
 ///
 /// An empty name answers the first top-level menu, which is what
 /// [`menuitem_getinfo`] walks to list them all.
-fn find_by_name(menu_name: &CStr) -> Option<Menu> {
-    let mut menu = root_first();
+fn find_by_name<'a>(tree: &'a [VimMenu], menu_name: &[u8]) -> Option<&'a VimMenu> {
+    let mut list = tree;
     if menu_name.is_empty() {
-        return menu;
+        return list.first();
     }
-    let mut buf = scratch(menu_name);
-    let mut name = text_of(&mut buf);
-    while !name.is_empty() {
-        let rest = skip_component(name);
-        menu = menu
-            .into_iter()
-            .flat_map(Menu::siblings)
-            .find(|node| name_equal(name.as_cstr(), *node));
-        let Some(node) = menu.filter(|_| !rest.is_empty()) else {
-            break;
-        };
-        menu = node.children();
-        name = rest;
+    let mut name = menu_name;
+    loop {
+        let (component, rest) = take_component(name);
+        let menu = list.iter().find(|node| name_equal(&component, node));
+        match menu {
+            Some(node) if !rest.is_empty() => {
+                list = &node.children;
+                name = rest;
+            }
+            found => return found,
+        }
     }
-    menu
 }
 
-fn ends_of_command(p: CText) -> bool {
-    ends_excmd(c_int::from(p.byte(0))) != 0
+fn ends_of_command(p: &[u8]) -> bool {
+    ends_excmd(c_int::from(crate::cstr::byte_at(p, 0))) != 0
 }
 
 fn clear_menutrans_vars() {
