@@ -5,6 +5,13 @@
 //! the linear scan at the first command that could match, rather than at
 //! the head of a 557-row table. Everything else here is a special case the
 //! table cannot express.
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::types::CmdIdx;

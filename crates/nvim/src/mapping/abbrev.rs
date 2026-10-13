@@ -247,7 +247,7 @@ pub(crate) fn eval_map_expr(expr: &MapExpr, c: c_int) -> Option<MapStr> {
         // Escape K_SPECIAL so the result can be used as typeahead.
         return Some(MapStr::new(&escape_ks_bytes(&bytes)));
     }
-    let dolt = REPTERM_DO_LT.cast_signed();
+    let dolt = REPTERM_DO_LT;
     let replaced = p_cpo(|cpo| replace_termcodes(&bytes, 0, dolt, None, cpo, None));
     let replaced = replaced.unwrap_or_default();
     Some(MapStr::new(c_prefix(&replaced)))

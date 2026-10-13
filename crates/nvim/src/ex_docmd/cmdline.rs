@@ -12,6 +12,13 @@
 //! `|`. Ordering is
 //! load-bearing throughout, and [`Run::keep_going`] is the specification of
 //! when a script stops on an error.
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::ex_getln::ui_ext_cmdline_block_append;

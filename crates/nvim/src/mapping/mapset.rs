@@ -16,7 +16,7 @@ use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::{MapTwin, VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 /// The two `nvim_set_keymap` validation messages that carry a quote, hoisted
 /// out of the bodies that raise them.
@@ -147,7 +147,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         &mut unmap_args,
     );
     unmap_args.buffer = buffer;
-    let unmap_lhs = MAPTYPE_UNMAP_LHS as c_int;
+    let unmap_lhs = MAPTYPE_UNMAP_LHS;
     let cur = Buf::current();
     buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur);
     drop(unmap_args);
@@ -293,11 +293,11 @@ pub fn modify_keymap(
 
         // buf_do_map() reads noremap/unmap as its own argument.
         let maptype_val = if is_unmap {
-            MAPTYPE_UNMAP as c_int
+            MAPTYPE_UNMAP
         } else if is_noremap {
-            MAPTYPE_NOREMAP as c_int
+            MAPTYPE_NOREMAP
         } else {
-            MAPTYPE_MAP as c_int
+            MAPTYPE_MAP
         };
 
         let answer = buf_do_map(maptype_val, &parsed_args, mode_val, is_abbrev, target_buf);

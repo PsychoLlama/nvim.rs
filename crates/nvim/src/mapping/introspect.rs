@@ -5,6 +5,13 @@
 //! [`get_maparg`] backs `maparg()`/`mapcheck()` and [`keymap_array`] backs
 //! `nvim_get_keymap`.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -174,8 +181,8 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     };
 
     let mut did_simplify = false;
-    let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
-    let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
+    let flags = REPTERM_FROM_PART | REPTERM_DO_LT;
+    let nosimp = flags | REPTERM_NO_SIMPLIFY;
     let (mode, _) = get_map_mode(which.to_bytes(), false);
 
     // A copy, because the second `replace_termcodes` below is past the end
@@ -247,7 +254,7 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
 
 /// `maplist()`: every mapping, global then buffer-local, as a list of dicts.
 pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
+    let flags = REPTERM_FROM_PART | REPTERM_DO_LT;
     // A copy: the walk below hands each mapping to a closure.
     let cpo = P_CPO.get();
     let abbr = args.first().is_some_and(|tv| tv_get_bool(tv) != 0);

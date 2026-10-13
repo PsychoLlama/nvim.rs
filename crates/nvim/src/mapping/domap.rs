@@ -5,6 +5,13 @@
 //! parsing wrappers, and the `ex_*` entry points are what the command table
 //! dispatches to.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -171,16 +178,16 @@ pub(crate) fn buf_do_map(
     let local = table.is_local();
     let mut mp_result: [Option<MapTwin>; 2] = [None; 2];
 
-    let unmap_lhs_only = maptype == MAPTYPE_UNMAP_LHS as c_int;
+    let unmap_lhs_only = maptype == MAPTYPE_UNMAP_LHS;
     if unmap_lhs_only {
-        maptype = MAPTYPE_UNMAP as c_int;
+        maptype = MAPTYPE_UNMAP;
     }
-    let is_unmap = maptype == MAPTYPE_UNMAP as c_int;
+    let is_unmap = maptype == MAPTYPE_UNMAP;
 
     // For ":noremap" don't remap, otherwise do remap.
     let noremap = if args.script {
         REMAP_SCRIPT
-    } else if maptype == MAPTYPE_NOREMAP as c_int {
+    } else if maptype == MAPTYPE_NOREMAP {
         REMAP_NONE
     } else {
         REMAP_YES
@@ -557,7 +564,7 @@ impl Step<'_> {
 /// [`buf_do_map`].
 pub(crate) fn do_map(maptype: c_int, arg: &[u8], mode: c_int, is_abbrev: bool) -> c_int {
     let mut args = MapArguments::default();
-    let is_unmap = maptype == MAPTYPE_UNMAP as c_int;
+    let is_unmap = maptype == MAPTYPE_UNMAP;
     let mut result = str_to_mapargs(arg, is_unmap, &mut args);
     if result == 0 {
         result = buf_do_map(maptype, &args, mode, is_abbrev, Buf::current());
@@ -580,7 +587,7 @@ fn do_mapclear(excmd: &mut ExArg, forceit: bool, abbr: bool) {
 /// Add a mapping, copying both strings so that read-only ones can be used.
 pub fn add_map(lhs: &[u8], rhs: &[u8], mode: c_int, buffer: bool) {
     let mut args = MapArguments::default();
-    let noremap = MAPTYPE_NOREMAP as c_int;
+    let noremap = MAPTYPE_NOREMAP;
     p_cpo(|cpo| set_maparg_lhs_rhs(lhs, rhs, LUA_NOREF, cpo, &mut args));
     args.buffer = buffer;
 
@@ -594,12 +601,12 @@ fn do_exmap(excmd: &mut ExArg, isabbrev: bool) {
     let cmd = excmd.line.cmd();
     let (mode, consumed) = get_map_mode(cmd, excmd.forceit || isabbrev);
     let maptype = match cmd.get(consumed).copied().unwrap_or(0) {
-        b'n' => MAPTYPE_NOREMAP as c_int,
-        b'u' => MAPTYPE_UNMAP as c_int,
-        _ => MAPTYPE_MAP as c_int,
+        b'n' => MAPTYPE_NOREMAP,
+        b'u' => MAPTYPE_UNMAP,
+        _ => MAPTYPE_MAP,
     };
     let mut parsed = MapArguments::default();
-    let is_unmap = maptype == MAPTYPE_UNMAP as c_int;
+    let is_unmap = maptype == MAPTYPE_UNMAP;
     if str_to_mapargs(excmd.line.arg(), is_unmap, &mut parsed) != 0 {
         emsg(gettext(e_invarg)); // invalid arguments
         return;

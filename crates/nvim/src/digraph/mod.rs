@@ -28,7 +28,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::Key;
-use crate::mapping::do_map;
+use crate::mapping::{MAPTYPE_MAP, MAPTYPE_UNMAP, do_map};
 use crate::mbyte::{char_at, char_len, encode_char, utf_iscomposing_first};
 use crate::memory::ThinCString;
 use crate::message::state::msg_col;
@@ -568,8 +568,6 @@ const KEYMAP_LOADED: c_int = 2;
 const B_IMODE_LMAP: OptInt = 1;
 /// Maximum length of `from` plus `to` in one keymap entry.
 const KMAP_LLEN: usize = 200;
-const MAPTYPE_MAP: c_int = 0;
-const MAPTYPE_UNMAP: c_int = 1;
 
 /// Source the keymap file for the current buffer's 'keymap' (or unload
 /// language mappings when it is empty). Answers an error message.

@@ -108,8 +108,8 @@ pub(crate) fn set_maparg_lhs_rhs(
     // The fixed buffer upstream reads a mapping's lhs into.
     const LHS_ROOM: usize = 128;
     let mut did_simplify = false;
-    let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
-    let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
+    let flags = REPTERM_FROM_PART | REPTERM_DO_LT;
+    let nosimp = flags | REPTERM_NO_SIMPLIFY;
     let lhs = orig_lhs;
     let simplify = Some(&mut did_simplify);
     let Some(replaced) = replace_termcodes(lhs, 0, flags, simplify, cpo, Some(LHS_ROOM)) else {
@@ -178,7 +178,7 @@ pub(crate) fn set_maparg_rhs(
         // "<Nop>" means nothing.
         MapStr::empty()
     } else {
-        let dolt = REPTERM_DO_LT.cast_signed();
+        let dolt = REPTERM_DO_LT;
         let replaced = replace_termcodes(orig_rhs, sid, dolt, None, cpo, None).unwrap_or_default();
         MapStr::new(c_prefix(&replaced))
     };

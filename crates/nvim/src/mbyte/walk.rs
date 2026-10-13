@@ -17,6 +17,13 @@
 //! `mb_utflen`, ...) live in [`utf8`](super::utf8) as shims over these, for
 //! the callers whose cursor is still a pointer.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;

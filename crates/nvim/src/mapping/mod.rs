@@ -103,9 +103,7 @@ pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
-pub const REPTERM_NO_SIMPLIFY: ::core::ffi::c_uint = 8;
-pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
-pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
+pub use crate::keycodes::{REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SIMPLIFY};
 pub const kRetObject: LuaRetMode = 0;
 /// The `:map` arguments being parsed, and the owner of everything a parse
 /// allocates.
@@ -194,10 +192,12 @@ impl MapArguments {
     }
 }
 
-pub const MAPTYPE_UNMAP: ::core::ffi::c_uint = 1;
-pub const MAPTYPE_NOREMAP: ::core::ffi::c_uint = 2;
-pub const MAPTYPE_UNMAP_LHS: ::core::ffi::c_uint = 3;
-pub const MAPTYPE_MAP: ::core::ffi::c_uint = 0;
+/// What a `:map`-family command does: `do_map`'s `maptype`.
+pub const MAPTYPE_MAP: c_int = 0;
+pub const MAPTYPE_UNMAP: c_int = 1;
+pub const MAPTYPE_NOREMAP: c_int = 2;
+/// `:unmap` of a LHS only, not a RHS that happens to match (`mapset()`).
+pub const MAPTYPE_UNMAP_LHS: c_int = 3;
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = Array::EMPTY;
 /// How many hash buckets the mapping table has.

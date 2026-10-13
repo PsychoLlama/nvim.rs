@@ -421,7 +421,7 @@ const MODE_CHARS: [(u8, c_int); 8] = [
 ///
 /// Termcap codes are recognised in `text`.  Buffer-local mappings count.
 pub(crate) fn map_to_exists(text: &[u8], modechars: &[u8], abbr: bool) -> bool {
-    let dolt = REPTERM_DO_LT.cast_signed();
+    let dolt = REPTERM_DO_LT;
     let rhs = p_cpo(|cpo| replace_termcodes(text, 0, dolt, None, cpo, None)).unwrap_or_default();
 
     let mut mode = 0;
