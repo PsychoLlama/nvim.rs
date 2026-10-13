@@ -88,7 +88,7 @@ pub fn ex_append(excmd: &mut ExArg) {
             break;
         };
         lines_left.set(Rows.get() - 1);
-        // `getline` saying the input ended.
+        // The line source saying the input ended.
         let Some(mut theline) = theline else {
             break;
         };
@@ -173,10 +173,10 @@ fn toggle_autoindent() {
 /// The next line for `:append` to insert.
 ///
 /// There are three sources, in upstream's order: the text after a trailing
-/// bar, the lines that follow the command in the same script, and the command
-/// line's own `getline` callback.  `None` means the second source ran out,
-/// which upstream leaves the loop for *without* resetting `lines_left`;
-/// `Some(None)` is the callback saying the input ended.
+/// bar, the lines that follow the command in the same script, and the
+/// command's own line source ([`ExArg::source`]).  `None` means the second
+/// source ran out, which upstream leaves the loop for *without* resetting
+/// `lines_left`; `Some(None)` is the line source saying the input ended.
 fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Option<Vec<u8>>> {
     let arg = args.line.arg;
     if args.line.byte_at(arg) == b'|' {
@@ -187,7 +187,7 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Option<Vec<u8>>> 
     }
 
     let Some(source) = args.source.as_mut() else {
-        // No getline() function: use the lines that follow.  This ends
+        // No line source: use the lines that follow.  This ends
         // when there is no more.
         let next = args.line.next?;
         let rest = args.line.rest_of(next);
@@ -200,7 +200,7 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Option<Vec<u8>>> 
     };
 
     // Set State to avoid the cursor shape being set to MODE_INSERT state
-    // when getline() returns.
+    // when the line source returns.
     let save_state = State.replace(MODE_CMDLINE);
     let in_loop = args
         .cond_stack
