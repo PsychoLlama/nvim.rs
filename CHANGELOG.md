@@ -7,6 +7,22 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the Ex commands, options, messages, mappings, menus and typeahead
+  over text and tables they own: `:set` and every option value, `:map` and
+  `:menu` entries, the typeahead and redo buffers, user commands, signs, the
+  argument lists and the command-history all keep their own copies, so a
+  mapping, autocommand or option callback that deletes or redefines what is
+  running now sees its own copy instead of freed memory. A pattern delimiter
+  above 0x7F ends a `:g`, `:catch`, `:match` or `:syntax` pattern as it does
+  upstream, and `sign_define()` no longer rewrites the dictionary it is given.
+
+### Fixed
+
+- `setreg()` of text ending in an incomplete UTF-8 sequence stored bytes past
+  the end of the text; `CTRL-R` then inserted a NUL and a random character.
+
 ## [2026.10.08-4261f9c37a]
 
 ### Changed
