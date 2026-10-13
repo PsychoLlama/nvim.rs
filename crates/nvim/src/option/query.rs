@@ -317,31 +317,69 @@ pub(crate) fn split_option_part<'a>(
     maxlen: usize,
     sep_chars: &[u8],
 ) -> (Vec<u8>, &'a [u8]) {
+    // Sized to the first separator, which is the part's length unless a
+    // backslash escapes one: a part pushed byte by byte into an empty
+    // vector reallocated three or four times.
+    let room = option
+        .iter()
+        .position(|&c| c == 0 || sep_chars.contains(&c))
+        .unwrap_or(option.len());
+    let mut part = Vec::with_capacity(room.min(maxlen));
+    let rest = split_option_part_with(option, maxlen, sep_chars, |run| part.extend_from_slice(run));
+    (part, rest)
+}
+
+/// [`split_option_part`] handing the part to `put` a run at a time instead of
+/// collecting it: the bytes `copy_option_part`'s buffer gets, in order, with
+/// no copy in between. Answers the rest after the part.
+///
+/// A run is everything up to the next backslash, separator or terminator;
+/// the byte a backslash keeps (itself, or the separator it escapes) is a run
+/// of its own.
+pub(crate) fn split_option_part_with<'a>(
+    option: &'a [u8],
+    maxlen: usize,
+    sep_chars: &[u8],
+    mut put: impl FnMut(&[u8]),
+) -> &'a [u8] {
     let at = |i: usize| option.get(i).copied().unwrap_or(0);
     let is_sep = |c: u8| c != 0 && sep_chars.contains(&c);
-    let mut part = Vec::new();
+    // What the part may hold; the leading `.` is not counted against it.
+    let room = maxlen.wrapping_sub(1);
+    let mut len = 0;
     let mut i = 0;
     if at(0) == b'.' {
-        part.push(b'.');
+        put(b".");
+        len = 1;
         i = 1;
     }
     loop {
-        let c = at(i);
-        if c == 0 || is_sep(c) {
+        let end = option[i..]
+            .iter()
+            .position(|&c| c == 0 || c == b'\\' || is_sep(c))
+            .map_or(option.len(), |n| i + n);
+        let take = (end - i).min(room.saturating_sub(len));
+        put(&option[i..i + take]);
+        len += take;
+        i = end;
+        if at(i) != b'\\' {
             break;
         }
-        if c == b'\\' && is_sep(at(i + 1)) {
+        // A backslash before a separator keeps the separator; any other
+        // backslash keeps itself.
+        if is_sep(at(i + 1)) {
             i += 1;
         }
-        if part.len() < maxlen.wrapping_sub(1) {
-            part.push(at(i));
+        if len < room {
+            put(&option[i..=i]);
+            len += 1;
         }
         i += 1;
     }
     if at(i) != 0 && at(i) != b',' {
         i += 1;
     }
-    (part, skip_option_separator(&option[i.min(option.len())..]))
+    skip_option_separator(&option[i.min(option.len())..])
 }
 
 /// The rest of an option value past the separator a part ended on: a comma,
@@ -524,6 +562,117 @@ impl ScrollOff {
             Self::Window(mut win, ScrollMargin::Columns) => win.w_onebuf_opt.wo_siso = value,
             Self::Global(ScrollMargin::Lines) => P_SO.set(value),
             Self::Global(ScrollMargin::Columns) => P_SISO.set(value),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! The run-at-a-time option-part split and backslash halving against
+    //! the byte-at-a-time walks they replaced, over every short string of a
+    //! small alphabet that holds each byte the walks branch on.
+
+    use super::{split_option_part, split_option_part_with};
+    use crate::charset::backslash_halved;
+
+    /// The byte walk `split_option_part` was, verbatim.
+    fn split_by_bytes<'a>(
+        option: &'a [u8],
+        maxlen: usize,
+        sep_chars: &[u8],
+    ) -> (Vec<u8>, &'a [u8]) {
+        let at = |i: usize| option.get(i).copied().unwrap_or(0);
+        let is_sep = |c: u8| c != 0 && sep_chars.contains(&c);
+        let mut part = Vec::new();
+        let mut i = 0;
+        if at(0) == b'.' {
+            part.push(b'.');
+            i = 1;
+        }
+        loop {
+            let c = at(i);
+            if c == 0 || is_sep(c) {
+                break;
+            }
+            if c == b'\\' && is_sep(at(i + 1)) {
+                i += 1;
+            }
+            if part.len() < maxlen.wrapping_sub(1) {
+                part.push(at(i));
+            }
+            i += 1;
+        }
+        if at(i) != 0 && at(i) != b',' {
+            i += 1;
+        }
+        (
+            part,
+            super::skip_option_separator(&option[i.min(option.len())..]),
+        )
+    }
+
+    /// `backslash_halved` as it was, a byte at a time.
+    fn halved_by_bytes(text: &[u8]) -> Vec<u8> {
+        let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
+        let mut out = Vec::new();
+        let mut at = 0;
+        while at < text.len() {
+            if text[at] == b'\\' && at + 1 < text.len() {
+                at += 1;
+            }
+            out.push(text[at]);
+            at += 1;
+        }
+        out
+    }
+
+    /// Every string of up to `len` bytes over `alphabet` (shorter under Miri,
+    /// where the full set takes minutes).
+    fn strings(alphabet: &[u8], len: usize) -> Vec<Vec<u8>> {
+        let mut all = vec![Vec::new()];
+        let mut last = vec![Vec::new()];
+        for _ in 0..len {
+            let next: Vec<Vec<u8>> = last
+                .iter()
+                .flat_map(|s: &Vec<u8>| {
+                    alphabet.iter().map(move |&b| {
+                        let mut t = s.clone();
+                        t.push(b);
+                        t
+                    })
+                })
+                .collect();
+            all.extend(next.iter().cloned());
+            last = next;
+        }
+        all
+    }
+
+    #[test]
+    fn a_part_split_by_runs_is_the_byte_walk() {
+        for text in strings(b".\\, :a\0", if cfg!(miri) { 3 } else { 6 }) {
+            for maxlen in [0, 1, 2, 3, 5, usize::MAX] {
+                for seps in [&b","[..], b", ", b":", b""] {
+                    let want = split_by_bytes(&text, maxlen, seps);
+                    assert_eq!(
+                        split_option_part(&text, maxlen, seps),
+                        want,
+                        "{text:?} {maxlen} {seps:?}"
+                    );
+                    let mut runs = Vec::new();
+                    let rest = split_option_part_with(&text, maxlen, seps, |run| {
+                        runs.extend_from_slice(run)
+                    });
+                    assert_eq!((runs, rest), want, "{text:?} {maxlen} {seps:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn halving_by_runs_is_the_byte_walk() {
+        for text in strings(b"\\a\0", if cfg!(miri) { 4 } else { 7 }) {
+            assert_eq!(backslash_halved(&text), halved_by_bytes(&text), "{text:?}");
         }
     }
 }

@@ -589,16 +589,24 @@ pub(crate) fn backslash_halved(text: &[u8]) -> Vec<u8> {
     let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
     // Room for a terminator too, for a caller that hands the result to C.
     let mut out = Vec::with_capacity(text.len() + 1);
-    let mut at = 0;
-    while at < text.len() {
+    // Copied a run at a time: most names hold no backslash at all.
+    let mut rest = text;
+    while let Some(n) = rest.iter().position(|&b| b == b'\\') {
+        out.extend_from_slice(&rest[..n]);
         // A backslash escapes the byte after it, when there is one: no NUL
         // is left in `text` for it to stand before.
-        if text[at] == b'\\' && at + 1 < text.len() {
-            at += 1;
+        match rest.get(n + 1) {
+            Some(&escaped) => {
+                out.push(escaped);
+                rest = &rest[n + 2..];
+            }
+            None => {
+                out.push(b'\\');
+                rest = &[];
+            }
         }
-        out.push(text[at]);
-        at += 1;
     }
+    out.extend_from_slice(rest);
     out
 }
 

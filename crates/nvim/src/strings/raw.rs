@@ -335,19 +335,24 @@ pub(crate) unsafe fn copy_option_part(
     maxlen: size_t,
     sep_chars: *mut c_char,
 ) -> size_t {
-    // SAFETY: the caller's cursor, separators and buffer; the rest the
-    // split answers is a tail of the string the cursor points into, and
-    // the part it copies is at most `maxlen - 1` bytes (a leading `.`
-    // aside), which leaves room for the terminator.
+    // SAFETY: the caller's cursor and separators, both terminated.
+    let (text, seps) = unsafe { (cstr::bytes_at(*option), cstr::bytes_at(sep_chars)) };
+    // The part goes straight into `buf`: at most `maxlen - 1` bytes (a
+    // leading `.` aside), which leaves room for the terminator.
+    let mut len = 0;
+    let rest = crate::option::split_option_part_with(text, maxlen, seps, |run| {
+        // SAFETY: the runs add up to at most `maxlen - 1` bytes (a leading
+        // `.` aside), and the caller promised `buf` that much room.
+        unsafe { ptr::copy_nonoverlapping(run.as_ptr(), buf.cast::<u8>().add(len), run.len()) };
+        len += run.len();
+    });
+    // SAFETY: as above, `len < maxlen`; the rest is a tail of the string
+    // the cursor points into.
     unsafe {
-        let text = cstr::bytes_at(*option);
-        let (part, rest) =
-            crate::option::split_option_part(text, maxlen, cstr::bytes_at(sep_chars));
-        ptr::copy_nonoverlapping(part.as_ptr().cast::<c_char>(), buf, part.len());
-        *buf.add(part.len()) = 0;
+        *buf.add(len) = 0;
         *option = (*option).add(text.len() - rest.len());
-        part.len()
     }
+    len
 }
 
 /// Step over the separator and any padding between two parts of a
