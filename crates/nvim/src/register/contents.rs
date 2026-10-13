@@ -370,8 +370,13 @@ unsafe fn str_to_reg(
                 if c_int::from(unsafe { *line_end }) == NUL {
                     line_end = unsafe { line_end.add(1) };
                 } else {
+                    // A sequence `str`'s end cuts short is as long as the
+                    // lead byte promised, so the step stops at `end`:
+                    // upstream's walked past it and copied the bytes after.
                     let left = unsafe { end.offset_from(line_end) } as c_int;
-                    line_end = unsafe { line_end.offset(utf_ptr2len_len(line_end, left) as isize) };
+                    line_end = unsafe {
+                        line_end.offset(utf_ptr2len_len(line_end, left).min(left) as isize)
+                    };
                 }
             }
             debug_assert!(line_end >= start);

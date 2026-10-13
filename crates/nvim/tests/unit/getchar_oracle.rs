@@ -2,8 +2,10 @@
 //! mode and repeated with `.` (the redo buffer), recorded into a register
 //! with `q` and replayed (the record buffer), inserted from a register
 //! with `CTRL-R` and `CTRL-R CTRL-R` (the stuff buffer, plain and literal;
-//! padded, because a register ending in a lone lead byte inserts a random
-//! byte, upstream as here -- `insert-register-lone-lead-byte-garbage.md`),
+//! padded, because `setreg()` of text ending in a lone lead byte took the
+//! bytes after it, upstream as here until the fix the case at the end pins --
+//! `insert-register-lone-lead-byte-garbage.md` -- and the digests were
+//! recorded padded),
 //! pasted with `nvim_paste()` and repeated (with six `z`s after it: the
 //! redo walk takes a lead byte's count of bytes whatever they are, so a
 //! paste ending in an incomplete UTF-8 sequence eats the end-of-paste key and
@@ -327,6 +329,47 @@ fn key_buffers_over_the_corpus() {
         fx.run(&format!("call setreg('{reg}', [])"));
     }
     fx.run("set all&");
+    fx.home();
+}
+
+/// A register set to text that ends inside a UTF-8 sequence holds that text
+/// and nothing after it, so `CTRL-R` inserts exactly it.
+///
+/// `setreg()` split its string into lines stepping by the length each lead
+/// byte *promised*, so the last step went past the string and the line took
+/// the bytes behind it: a NUL and whatever followed, a different byte per run
+/// (upstream as well -- `insert-register-lone-lead-byte-garbage.md`). The
+/// corpus run above pads its registers for that reason; its digests were
+/// recorded that way and stay so.
+#[test]
+fn a_register_ending_inside_a_sequence_holds_only_its_text() {
+    let sandbox = Sandbox::dir("getchar_lone_lead");
+    let fx = Probe::new(sandbox.editor());
+    fx.home();
+    // The text as a Vim string literal, the lines it should become, and
+    // what `CTRL-R` inserts: each byte of a broken sequence is the
+    // character of that number (stuffed and read back as UTF-8).
+    for (text, lines, inserted) in [
+        (r#""\xe2""#, r#"["\xe2"]"#, r#"["\u00e2"]"#),
+        (r#""\xc3""#, r#"["\xc3"]"#, r#"["\u00c3"]"#),
+        (r#""x\xe9""#, r#"["x\xe9"]"#, r#"["x\u00e9"]"#),
+        (r#""\xe2\x82""#, r#"["\xe2\x82"]"#, r#"["\u00e2\u0082"]"#),
+        (
+            r#""\xf0\x9f\x98""#,
+            r#"["\xf0\x9f\x98"]"#,
+            r#"["\u00f0\u009f\u0098"]"#,
+        ),
+        // After a line break the rest goes in as the bytes it is.
+        (r#""a\nb\xf0""#, r#"["a", "b\xf0"]"#, r#"["a", "b\xf0"]"#),
+    ] {
+        fx.run(&format!("call setreg('a', {text})"));
+        fx.check(&format!("getreg('a', 1, 1) ==# {lines}"), "1");
+        fx.run("silent! %delete _");
+        fx.run(r#"exe "normal! i\<C-R>a\<Esc>""#);
+        fx.check(&format!("getline(1, '$') ==# {inserted}"), "1");
+    }
+    fx.run("silent! %delete _");
+    fx.run("call setreg('a', [])");
     fx.home();
 }
 
