@@ -40,10 +40,15 @@ is the item: `Owner::name` for a method — a bare name does not excuse a
 method, or the row would quietly cover every type that grows one — and `name`
 for a free function.
 
+The file column is checked too: a row excuses its item only in the file it
+names (a private helper defined in two files lists both, comma-separated), and
+a row naming a file that does not define the item fails the run.
+
 The list prunes itself. `check_unsafe_fn_allowlist` fails the run when a row
-excuses nothing: its function is gone, or it now carries a raw pointer or a C
-ABI and the needle would skip it anyway. A row that stops being needed has to
-leave in the same commit, the way a `PERIMETER` entry does.
+excuses nothing: its function is gone, it moved out of the file the row names,
+or it now carries a raw pointer or a C ABI and the needle would skip it anyway.
+A row that stops being needed has to leave in the same commit, the way a
+`PERIMETER` entry does.
 
 The phase exit is `unsafe_fns_without_raw_params` = 0 with this list as the
 floor. Adding a row lowers the count, so a row is a claim a reviewer reads:

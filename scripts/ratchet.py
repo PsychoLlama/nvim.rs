@@ -2607,14 +2607,23 @@ ALLOW_CLASSES = ("alloc:", "cap:", "ffi:", "field:")
 ALLOW_ROW = re.compile(r"^\|([^|]*)\|([^|]*)\|(.*)\|\s*$")
 
 
+# A parsed allowlist row: the files it says the item lives in (repo-relative,
+# as the tree keys files; a private helper defined twice lists both, comma-
+# separated) and the reason.
+AllowRow = collections.namedtuple("AllowRow", "files reason")
+
+
 def unsafe_fn_allowlist():
-    """key -> reason, read from docs/unsafe-fn-allowlist.md.
+    """key -> `AllowRow`, read from docs/unsafe-fn-allowlist.md.
 
     The keys are `unsafe_fn_key`'s: `Owner::name` for a method, `name` for a
     free function. A bare name does *not* excuse a method of that name -- the
     row would then quietly cover every type that grows one -- so a method's
     row has to spell its owner, and `check_unsafe_fn_allowlist` says so when
-    a row matches nothing.
+    a row matches nothing. The file column is part of the claim: a row
+    excuses its item only in the file it names, so a function that moves
+    takes its row's file with it or the run fails. A name defined in more
+    than one file lists each one, comma-separated.
     """
     allow = {}
     if not UNSAFE_FN_ALLOW_DOC.exists():
@@ -2628,6 +2637,9 @@ def unsafe_fn_allowlist():
         if not row:
             continue
         name = row.group(1).strip().strip("`").strip()
+        files = frozenset(
+            part.strip().strip("`").strip() for part in row.group(2).split(",")
+        )
         reason = row.group(3).strip()
         if not name or set(name) <= set("-: ") or name == "item":
             continue  # the header and its separator
@@ -2637,14 +2649,20 @@ def unsafe_fn_allowlist():
                 f"for `{name}` opens with no reason class. Every row starts "
                 "with one of " + ", ".join(ALLOW_CLASSES) + "."
             )
-        allow[name] = reason
+        allow[name] = AllowRow(files, reason)
     return allow
+
+
+def allow_excuses(allow, item):
+    """Whether `item` has an allowlist row naming its own file."""
+    row = allow.get(unsafe_fn_key(item))
+    return row is not None and item.file in row.files
 
 
 def unsafe_fns_without_raw(masked, file, allow, aliases=frozenset()):
     """`unsafe fn`s the needle counts in one file. See the doc block."""
     return sum(
-        not (item.has_raw or item.extern) and unsafe_fn_key(item) not in allow
+        not (item.has_raw or item.extern or allow_excuses(allow, item))
         for item in unsafe_fn_defs(masked, file, aliases)
     )
 
@@ -2655,13 +2673,21 @@ def check_unsafe_fn_allowlist(index, allow):
     A row whose function is gone, or that now carries a raw pointer (or an
     `extern "C"` ABI), excuses nothing: it would sit there propping the floor
     up, and would quietly excuse the name again if it came back. The list
-    prunes itself the way PERIMETER and CELL_PTR_KEEPERS do.
+    prunes itself the way PERIMETER and CELL_PTR_KEEPERS do. A row whose file
+    column names a file that does not define the item is stale the same way:
+    the column is how a reader finds the contract, so it has to be true.
     """
     stale = []
     for name in sorted(allow):
-        matched = [item for item in index.get(name, ()) if unsafe_fn_key(item) == name]
-        if not matched:
+        named = [item for item in index.get(name, ()) if unsafe_fn_key(item) == name]
+        matched = [item for item in named if item.file in allow[name].files]
+        if not named:
             stale.append(f"{name}: no `unsafe fn` of that name")
+        elif absent := allow[name].files - {item.file for item in named}:
+            where = ", ".join(sorted({item.file for item in named}))
+            stale.append(
+                f"{name}: not in {', '.join(sorted(absent))} (defined in {where})"
+            )
         elif all(item.has_raw or item.extern for item in matched):
             stale.append(f"{name}: carries a raw pointer or a C ABI now")
     if stale:
@@ -2669,7 +2695,8 @@ def check_unsafe_fn_allowlist(index, allow):
             "ratchet: these rows of "
             f"{UNSAFE_FN_ALLOW_DOC.relative_to(ROOT)} excuse nothing:\n  "
             + "\n  ".join(stale)
-            + "\nDrop each row and run `just refresh` to lock the progress in."
+            + "\nDrop each row (or correct its file column) and run `just "
+            "refresh` to lock the progress in."
         )
 
 
@@ -4054,33 +4081,49 @@ SELF_TEST_NO_RAW = [
     ("fn f(tv: &TypVal) {\n}\n", (), 0),
     ("type F = unsafe fn(tv: &TypVal);\n", (), 0),
     # An allowlist row excuses exactly its own item.
-    ("unsafe fn f(tv: &TypVal) {\n}\n", ("f",), 0),
-    ("unsafe fn f(tv: &TypVal) {\n}\n", ("g",), 1),
+    ("unsafe fn f(tv: &TypVal) {\n}\n", (("f", "t.rs"),), 0),
+    ("unsafe fn f(tv: &TypVal) {\n}\n", (("g", "t.rs"),), 1),
+    # ... in its own file: a row naming another file excuses nothing.
+    ("unsafe fn f(tv: &TypVal) {\n}\n", (("f", "u.rs"),), 1),
     # A method's row has to spell its owner; a bare name does not excuse it.
     (
         "impl Slots {\n    unsafe fn at(&self, i: usize) {\n    }\n}\n",
-        ("Slots::at",),
+        (("Slots::at", "t.rs"),),
         0,
     ),
-    ("impl Slots {\n    unsafe fn at(&self, i: usize) {\n    }\n}\n", ("at",), 1),
+    (
+        "impl Slots {\n    unsafe fn at(&self, i: usize) {\n    }\n}\n",
+        (("at", "t.rs"),),
+        1,
+    ),
     # ... and a trait impl is keyed by the type, not the trait.
     (
         "impl Sink for Slots {\n    unsafe fn at(&self, i: usize) {\n    }\n}\n",
-        ("Slots::at",),
+        (("Slots::at", "t.rs"),),
         0,
     ),
 ]
 # (tree, allowlist, whether check_unsafe_fn_allowlist rejects it). A row that
 # excuses nothing has to leave the list.
 SELF_TEST_NO_RAW_CHECK = [
-    ({"a.rs": "unsafe fn f(tv: &TypVal) {\n}\n"}, ("f",), False),
-    ({"a.rs": "unsafe fn f(tv: &TypVal) {\n}\n"}, ("gone",), True),
+    ({"a.rs": "unsafe fn f(tv: &TypVal) {\n}\n"}, (("f", "a.rs"),), False),
+    ({"a.rs": "unsafe fn f(tv: &TypVal) {\n}\n"}, (("gone", "a.rs"),), True),
     # The function is still there, but the needle would skip it now.
-    ({"a.rs": "unsafe fn f(p: *mut u8) {\n}\n"}, ("f",), True),
-    ({"a.rs": 'unsafe extern "C" fn f(x: u8) {\n}\n'}, ("f",), True),
+    ({"a.rs": "unsafe fn f(p: *mut u8) {\n}\n"}, (("f", "a.rs"),), True),
+    ({"a.rs": 'unsafe extern "C" fn f(x: u8) {\n}\n'}, (("f", "a.rs"),), True),
     # A method row, spelled with its owner.
-    ({"a.rs": "impl S {\n    unsafe fn f(&self) {\n    }\n}\n"}, ("S::f",), False),
-    ({"a.rs": "impl S {\n    unsafe fn f(&self) {\n    }\n}\n"}, ("f",), True),
+    (
+        {"a.rs": "impl S {\n    unsafe fn f(&self) {\n    }\n}\n"},
+        (("S::f", "a.rs"),),
+        False,
+    ),
+    (
+        {"a.rs": "impl S {\n    unsafe fn f(&self) {\n    }\n}\n"},
+        (("f", "a.rs"),),
+        True,
+    ),
+    # The file column is checked: a row naming the wrong file excuses nothing.
+    ({"a.rs": "unsafe fn f(tv: &TypVal) {\n}\n"}, (("f", "b.rs"),), True),
 ]
 
 # (tree, expected unsafe_fns_without_raw_params over the whole tree). An alias
@@ -4751,7 +4794,8 @@ def self_test():
         got = [callee for callee in got if callee]
         assert got == expected, f"wrappers={got}, want {expected}, for {source!r}"
     for source, allow, expected in SELF_TEST_NO_RAW:
-        got = unsafe_fns_without_raw(mask(source), "t.rs", set(allow))
+        rows = {name: AllowRow({file}, "cap: a fixture") for name, file in allow}
+        got = unsafe_fns_without_raw(mask(source), "t.rs", rows)
         assert got == expected, (
             f"unsafe_fns_without_raw_params={got}, want {expected}, "
             f"for {source!r} with {allow!r}"
@@ -4760,8 +4804,7 @@ def self_test():
         tree = {f: mask(text) for f, text in sources.items()}
         aliases = raw_aliases(tree)
         got = sum(
-            unsafe_fns_without_raw(masked, f, set(), aliases)
-            for f, masked in tree.items()
+            unsafe_fns_without_raw(masked, f, {}, aliases) for f, masked in tree.items()
         )
         assert got == expected, (
             f"unsafe_fns_without_raw_params={got}, want {expected}, for {sources!r}"
@@ -4769,7 +4812,10 @@ def self_test():
     for sources, allow, expected in SELF_TEST_NO_RAW_CHECK:
         index = unsafe_fn_index({f: mask(text) for f, text in sources.items()})
         try:
-            check_unsafe_fn_allowlist(index, dict.fromkeys(allow, "cap: a fixture"))
+            check_unsafe_fn_allowlist(
+                index,
+                {name: AllowRow({file}, "cap: a fixture") for name, file in allow},
+            )
             got = False
         except SystemExit:
             got = True
